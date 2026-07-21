@@ -3,6 +3,7 @@ package com.point.executors
 import com.point.core.flow.Exporter
 import com.point.core.flow.LlmClient
 import com.point.core.flow.ObjectStore
+import com.point.core.flow.PdfTextExtractor
 import com.point.core.flow.Sharer
 import com.point.core.flow.UrlOpener
 import com.point.core.model.Feature
@@ -41,15 +42,18 @@ class DefaultExecutorRegistryTest {
     private val fakeOpener = object : UrlOpener {
         override suspend fun open(url: String) = Unit
     }
+    private val fakePdfText = object : PdfTextExtractor {
+        override suspend fun extractText(obj: PointObject) = ""
+    }
 
     private val registry = DefaultExecutorRegistry(
         setOf(
             ShareExecutor(fakeSharer),
             SaveExecutor(fakeExporter),
-            PdfExecutor(fakeStore),
+            PdfExecutor(fakeStore, fakePdfText),
             ImageExecutor(fakeStore),
             ZipExecutor(fakeStore),
-            TranslateExecutor(fakeLlm),
+            TranslateExecutor(fakeLlm, fakePdfText),
             AiExecutor(fakeLlm),
             OpenUrlExecutor(fakeOpener),
         ),

@@ -23,3 +23,8 @@ interface Exporter {
 interface UrlOpener {
     suspend fun open(url: String)
 }
+
+/** Extracts plain text from a PDF object (empty if it has none, e.g. a scan). */
+interface PdfTextExtractor {
+    suspend fun extractText(obj: PointObject): String
+}

@@ -5,6 +5,7 @@ import android.graphics.Paint
 import android.graphics.pdf.PdfDocument
 import com.point.core.flow.Executor
 import com.point.core.flow.ObjectStore
+import com.point.core.flow.PdfTextExtractor
 import com.point.core.model.ExecutorId
 import com.point.core.model.ExecutorResult
 import com.point.core.model.ObjectKind
@@ -20,6 +21,7 @@ import javax.inject.Inject
 /** Bidirectional: image/text -> PDF, and PDF -> extracted text. */
 class PdfExecutor @Inject constructor(
     private val store: ObjectStore,
+    private val pdfText: PdfTextExtractor,
 ) : Executor {
     override val id = ExecutorId("pdf")
     override val icon = "pdf"
@@ -39,10 +41,7 @@ class PdfExecutor @Inject constructor(
                 when (input.state.kind) {
                     ObjectKind.IMAGE -> imageToPdf(input)
                     ObjectKind.TEXT -> textToPdf(input)
-                    ObjectKind.PDF -> ExecutorResult.Failure(
-                        "Извлечение текста из PDF требует библиотеки-парсера — следующий шаг",
-                        recoverable = true,
-                    )
+                    ObjectKind.PDF -> pdfToText(input)
                     else -> ExecutorResult.Failure("PDF: неподдерживаемый вход", recoverable = false)
                 }
             }.getOrElse { ExecutorResult.Failure(it.message ?: "Ошибка PDF", recoverable = true) }
@@ -82,6 +81,21 @@ class PdfExecutor @Inject constructor(
 
         val ref = write(document)
         return ExecutorResult.Success(ResultObject(ObjectKind.PDF, "application/pdf", ref))
+    }
+
+    private suspend fun pdfToText(input: PointObject): ExecutorResult {
+        val text = pdfText.extractText(input)
+        if (text.isBlank()) {
+            return ExecutorResult.Failure(
+                "В PDF не найден текст (возможно, это скан — нужен OCR)",
+                recoverable = true,
+            )
+        }
+        val ref = store.newScratchFile("txt")
+        File(ref.value).writeText(text)
+        return ExecutorResult.Success(
+            ResultObject(ObjectKind.TEXT, "text/plain", ref, mapOf("op" to "pdf-extract")),
+        )
     }
 
     private suspend fun write(document: PdfDocument): ScratchRef {

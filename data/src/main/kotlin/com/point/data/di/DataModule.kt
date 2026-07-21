@@ -6,6 +6,7 @@ import com.point.core.flow.Exporter
 import com.point.core.flow.LlmClient
 import com.point.core.flow.ObjectClassifier
 import com.point.core.flow.ObjectStore
+import com.point.core.flow.PdfTextExtractor
 import com.point.core.flow.Sharer
 import com.point.core.flow.UrlOpener
 import com.point.data.AndroidSharer
@@ -13,6 +14,7 @@ import com.point.data.AndroidUrlOpener
 import com.point.data.DefaultEnrichment
 import com.point.data.GeminiLlmClient
 import com.point.data.MediaStoreExporter
+import com.point.data.PdfBoxTextExtractor
 import com.point.data.ScratchObjectStore
 import com.point.data.TextUrlEnricher
 import com.point.data.ZipImagesEnricher
@@ -44,6 +46,9 @@ abstract class DataModule {
 
     @Binds
     abstract fun enrichment(impl: DefaultEnrichment): Enrichment
+
+    @Binds
+    abstract fun pdfTextExtractor(impl: PdfBoxTextExtractor): PdfTextExtractor
 
     @Binds @IntoSet
     abstract fun textUrlEnricher(e: TextUrlEnricher): Enricher

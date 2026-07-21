@@ -50,6 +50,7 @@ dependencies {
 
     implementation(libs.androidx.core.ktx) // FileProvider
     implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.pdfbox.android) // PDF text extraction
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
 
