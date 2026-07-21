@@ -20,6 +20,8 @@ composeBom = "2024.12.01"
 hilt = "2.53.1"
 pdfboxAndroid = "2.0.27.0"
 commonsCompress = "1.27.1"
+tukaaniXz = "1.10"
+junrar = "7.5.5"
 junit = "4.13.2"
 
 [libraries]
@@ -51,6 +53,8 @@ pdfbox-android = { group = "com.tom-roush", name = "pdfbox-android", version.ref
 
 # Broad archive extraction (tar, gz, bz2, xz — beyond built-in zip).
 commons-compress = { group = "org.apache.commons", name = "commons-compress", version.ref = "commonsCompress" }
+tukaani-xz = { group = "org.tukaani", name = "xz", version.ref = "tukaaniXz" } # 7z/xz (LZMA)
+junrar = { group = "com.github.junrar", name = "junrar", version.ref = "junrar" } # rar
 
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 

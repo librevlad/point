@@ -66,7 +66,11 @@ class ObjectClassifier {
             "application/x-gzip",
             "application/x-bzip2",
             "application/x-xz",
+            "application/x-7z-compressed",
+            "application/vnd.rar",
+            "application/x-rar-compressed",
+            "application/x-rar",
         )
-        val ARCHIVE_EXTS = setOf("zip", "tar", "gz", "tgz", "bz2", "xz")
+        val ARCHIVE_EXTS = setOf("zip", "tar", "gz", "tgz", "bz2", "xz", "7z", "rar")
     }
 }

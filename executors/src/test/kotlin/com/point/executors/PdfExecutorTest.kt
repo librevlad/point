@@ -1,6 +1,7 @@
 package com.point.executors
 
 import com.point.core.flow.ObjectStore
+import com.point.core.flow.OfficeTextExtractor
 import com.point.core.flow.PdfTextExtractor
 import com.point.core.model.ExecutorResult
 import com.point.core.model.ObjectKind
@@ -32,6 +33,10 @@ class PdfExecutorTest {
         override suspend fun extractText(obj: PointObject) = text
     }
 
+    private val noOffice = object : OfficeTextExtractor {
+        override suspend fun extractText(obj: PointObject) = ""
+    }
+
     private fun pdfObject() = PointObject(
         id = "id",
         mime = "application/pdf",
@@ -41,7 +46,7 @@ class PdfExecutorTest {
 
     @Test
     fun `pdf with text extracts to a TEXT object`() = runTest {
-        val executor = PdfExecutor(store, extractorReturning("Привет из PDF"))
+        val executor = PdfExecutor(store, extractorReturning("Привет из PDF"), noOffice)
         val result = executor.execute(pdfObject())
 
         assertTrue(result is ExecutorResult.Success)
@@ -52,7 +57,7 @@ class PdfExecutorTest {
 
     @Test
     fun `scanned pdf with no text is a recoverable failure`() = runTest {
-        val executor = PdfExecutor(store, extractorReturning("   "))
+        val executor = PdfExecutor(store, extractorReturning("   "), noOffice)
         val result = executor.execute(pdfObject())
 
         assertTrue(result is ExecutorResult.Failure)

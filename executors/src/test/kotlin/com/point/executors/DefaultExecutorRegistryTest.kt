@@ -58,7 +58,7 @@ class DefaultExecutorRegistryTest {
         setOf(
             ShareExecutor(fakeSharer),
             SaveExecutor(fakeExporter),
-            PdfExecutor(fakeStore, fakePdfText),
+            PdfExecutor(fakeStore, fakePdfText, fakeOfficeText),
             ImageExecutor(fakeStore),
             ZipExecutor(fakeArchive),
             TranslateExecutor(fakeLlm, fakePdfText),
@@ -106,9 +106,10 @@ class DefaultExecutorRegistryTest {
     @Test
     fun `office offers extract-text plus the universal actions`() {
         val ids = idsFor(ObjectState(ObjectKind.OFFICE))
-        assertTrue(ids.containsAll(setOf("office", "share", "save", "ai")))
-        // Text-only actions are not offered until text is extracted.
-        assertTrue(setOf("translate", "pdf", "image", "zip").none { it in ids })
+        // Office -> extract text, and office -> PDF, plus the universal actions.
+        assertTrue(ids.containsAll(setOf("office", "pdf", "share", "save", "ai")))
+        // Translate/image/zip do not apply to an office document.
+        assertTrue(setOf("translate", "image", "zip").none { it in ids })
     }
 
     @Test

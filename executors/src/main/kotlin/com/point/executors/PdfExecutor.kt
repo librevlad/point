@@ -5,6 +5,7 @@ import android.graphics.Paint
 import android.graphics.pdf.PdfDocument
 import com.point.core.flow.Executor
 import com.point.core.flow.ObjectStore
+import com.point.core.flow.OfficeTextExtractor
 import com.point.core.flow.PdfTextExtractor
 import com.point.core.model.ExecutorId
 import com.point.core.model.ExecutorResult
@@ -18,10 +19,11 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import javax.inject.Inject
 
-/** Bidirectional: image/text -> PDF, and PDF -> extracted text. */
+/** image/text/office -> PDF, and PDF -> extracted text. */
 class PdfExecutor @Inject constructor(
     private val store: ObjectStore,
     private val pdfText: PdfTextExtractor,
+    private val officeText: OfficeTextExtractor,
 ) : Executor {
     override val id = ExecutorId("pdf")
     override val icon = "pdf"
@@ -30,7 +32,7 @@ class PdfExecutor @Inject constructor(
         if (state.kind == ObjectKind.PDF) "Извлечь текст" else "В PDF"
 
     override fun accepts(state: ObjectState) =
-        state.kind in setOf(ObjectKind.IMAGE, ObjectKind.TEXT, ObjectKind.PDF)
+        state.kind in setOf(ObjectKind.IMAGE, ObjectKind.TEXT, ObjectKind.PDF, ObjectKind.OFFICE)
 
     override fun produces(state: ObjectState) =
         if (state.kind == ObjectKind.PDF) ObjectState(ObjectKind.TEXT) else ObjectState(ObjectKind.PDF)
@@ -40,8 +42,9 @@ class PdfExecutor @Inject constructor(
             runCatching {
                 when (input.state.kind) {
                     ObjectKind.IMAGE -> imageToPdf(input)
-                    ObjectKind.TEXT -> textToPdf(input)
+                    ObjectKind.TEXT -> renderTextToPdf(File(input.uri.value).readText())
                     ObjectKind.PDF -> pdfToText(input)
+                    ObjectKind.OFFICE -> officeToPdf(input)
                     else -> ExecutorResult.Failure("PDF: неподдерживаемый вход", recoverable = false)
                 }
             }.getOrElse { ExecutorResult.Failure(it.message ?: "Ошибка PDF", recoverable = true) }
@@ -58,8 +61,16 @@ class PdfExecutor @Inject constructor(
         return ExecutorResult.Success(ResultObject(ObjectKind.PDF, "application/pdf", ref))
     }
 
-    private suspend fun textToPdf(input: PointObject): ExecutorResult {
-        val text = File(input.uri.value).readText()
+    private suspend fun officeToPdf(input: PointObject): ExecutorResult {
+        val text = officeText.extractText(input)
+        return if (text.isBlank()) {
+            ExecutorResult.Failure("Не удалось извлечь текст из документа", recoverable = true)
+        } else {
+            renderTextToPdf(text)
+        }
+    }
+
+    private suspend fun renderTextToPdf(text: String): ExecutorResult {
         val paint = Paint().apply { textSize = 12f }
         val lines = wrap(text, paint, PAGE_WIDTH - 2 * MARGIN)
 
