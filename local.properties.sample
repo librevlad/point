@@ -1,0 +1,9 @@
+# Copy this file to `local.properties` (which is git-ignored) and fill it in.
+# Android Studio also writes sdk.dir here automatically on first open.
+
+# Android SDK location:
+sdk.dir=C\:\\Users\\User\\AppData\\Local\\Android\\Sdk
+
+# Gemini API key — surfaced to code via BuildConfig.GEMINI_API_KEY (see :data).
+# Never hard-code this in source and never commit the real local.properties.
+GEMINI_API_KEY=PUT_YOUR_KEY_HERE
