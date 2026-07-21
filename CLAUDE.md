@@ -45,7 +45,7 @@ export JAVA_HOME="C:/Program Files/Android/Android Studio/jbr"   # для каж
 ./gradlew test assembleDebug          # всё + unit-тесты + debug APK  ← основная проверка
 ./gradlew :app:installDebug           # установить на устройство/эмулятор
 ./gradlew test                        # только unit-тесты (быстро, без эмулятора)
-./gradlew :executors:test --tests "com.point.executors.DefaultExecutorRegistryTest"  # один класс
+./gradlew :executors:test --tests "com.point.executors.DefaultCapabilityRegistryTest"  # один класс
 ./gradlew clean
 ```
 
@@ -79,18 +79,25 @@ Android SDK: `C:\Users\User\AppData\Local\Android\Sdk`. Установлена �
 
 - `:core:model` — **чистый Kotlin, без единого Android API.** Модель, состояния,
   результаты. Тестируется напрямую.
-- `:core:flow` — **чистый Kotlin.** Контракты `Executor`, `ExecutorRegistry`,
-  `ObjectStore`, `LlmClient` + вывод Flow Graph.
+- `:core:flow` — **чистый Kotlin.** Контракты `Capability` (что), `Realizer`
+  (как), `Resolver`, `CapabilityRegistry`, `BubblePolicy`, `ObjectStore`,
+  `LlmClient` + вывод Flow Graph.
 - `:core:ui` — Compose Bubble UI, дизайн-система. Ноль бизнес-логики.
-- `:data` — реализации `ObjectStore` (scratch) и `LlmClient` (Gemini).
-- `:executors` — все Executor'ы пакетами; регистрация через Hilt `@IntoSet`.
+- `:data` — реализации `ObjectStore` (scratch) и `LlmClient` (Gemini/OpenAI+fallback).
+- `:executors` — каждое действие = `*Capability` (декларация) + `*Realizer`
+  (поведение); регистрация через Hilt `@IntoSet`.
 - `:app` — Share Activity, Compose host, стек-навигация, DI-wiring.
 
 ## Инварианты, которые легко нарушить
 
-- **Flow Graph выводится, не хранится.** Пузырьки для состояния = Executor'ы, у
-  кого `accepts(state) == true`. Никакой отдельной таблицы переходов не заводи —
-  добавление Executor'а само расширяет граф.
+- **Capability ≠ Realizer.** `Capability` = *что можно* (декларация: accepts/
+  produces/meta) — её видят UI/FlowGraph/BubblePolicy. `Realizer` = *как* (за
+  `Resolver`'ом) — сюда завтра встанут AI/cloud/ICG-реализации, UI не меняется.
+  Никогда не тащи `execute`/реализацию в то, что видит UI.
+- **Flow Graph выводится, не хранится.** Пузырьки для состояния = Capability, у
+  кого `accepts(state) == true`, отранжированные `BubblePolicy`. Таблицы переходов
+  нет — добавил Capability, граф расширился. `produces` — только подсказка;
+  истинное следующее состояние переклассифицируется из реального выхода.
 - **`:core:model` и `:core:flow` держи Android-free.** Поэтому scratch-ссылка —
   `ScratchRef(String)`, а `ObjectStore.ingest` берёт `String`, а не
   `android.net.Uri` (Uri стрингуется на границе `:app`, парсится обратно в
@@ -106,15 +113,15 @@ Android SDK: `C:\Users\User\AppData\Local\Android\Sdk`. Установлена �
   флоу — обязательный `ObjectStore.clear()`, даже при потере флоу на process death.
 - **Первый экран ≤ 300 мс, без I/O** — только нулевые сигналы (MIME/расширение/
   размер). Обогащение признаков (peek в PDF/ZIP) — async, дополняет пузырьки позже.
-  **LLM никогда не на первом экране** — Gemini только внутри `AiExecutor` после
-  выбора действия.
-- **Результат шага — sealed `ExecutorResult`** (`Success`/`Done`/`Failure(recoverable)`/
+  **LLM никогда не на первом экране** — `AiRealizer` только после выбора действия
+  (`CapabilityMeta.network=true` держит его вне ≤300 мс).
+- **Результат шага — sealed `ActionResult`** (`Success`/`Done`/`Failure(recoverable)`/
   `NeedsInput`). `Done` — терминальное действие без нового объекта (Share/Save).
   Не глотай ошибки: невидимая цепочка без явного канала ошибки — ловушка доверия.
 - **Терминальные действия — без Activity.** Share/Save работают через
   `@ApplicationContext` (FileProvider + `startActivity(NEW_TASK)` для Share,
   MediaStore для Save) за контрактами `Sharer`/`Exporter`. Не тащи Activity/Context
-  в executors — инжектируй контракт.
+  в realizer — инжектируй контракт.
 
 ## Секреты
 
@@ -123,6 +130,7 @@ Android SDK: `C:\Users\User\AppData\Local\Android\Sdk`. Установлена �
 Никогда не хардкодь ключ и не коммить `local.properties`. Шаблон —
 `local.properties.sample`.
 
-Сейчас ключ **пустой** — сборка работает, но `AiExecutor` и `TranslateExecutor`
-вернут понятную ошибку (`GEMINI_API_KEY не задан…`) до вписания реального ключа.
-Модель — `gemini-2.0-flash` (в `GeminiLlmClient`).
+Без ключей `AI`/`Перевод` вернут понятную ошибку. Провайдеры — `GeminiLlmClient`
+(`gemini-2.0-flash`) → `OpenAiLlmClient` (OpenAI-совместимый), связанные
+`FallbackLlmClient` (первый успех выигрывает, чинит 429). Ключи/URL/модель — в
+`local.properties` (см. `local.properties.sample`).

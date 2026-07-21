@@ -49,6 +49,38 @@ graph TD
 
 ---
 
+## Capability-слой (разрез v0.3) — «что» отделено от «как»
+
+Центральная абстракция платформы. UI / Flow Graph / Bubble Policy знают только
+**Capability** (декларацию), но никогда — реализацию.
+
+```
+   UI · FlowGraph · BubblePolicy   ← знают только Capability
+                │
+        CapabilityRegistry (auto @IntoSet)
+                │  Capability{ id, icon, meta{priority,cost,latency,network,auth}, accepts, produces? }
+                ▼
+             Resolver              ← выбирает реализацию (MVP: одна локальная)
+                ▼
+   LocalRealizer · AiRealizer · CloudRealizer · IcgRealizer(завтра)
+```
+
+- **`Capability`** — декларация без `execute` (в `:core:flow`). Набор capability,
+  чьи `accepts(state)==true`, и есть Flow Graph.
+- **`Realizer`** — поведение (`perform`), привязано к `capabilityId`. Одна
+  capability может иметь несколько realizer'ов; `Resolver` выбирает. Это точка
+  входа для cloud / Internet Capability Graph — UI/граф не меняются.
+- **`produces` — подсказка (nullable).** Истинное следующее состояние
+  переклассифицируется из реального выходного объекта (закрывает непредсказуемый
+  выход AI).
+- **`BubblePolicy`** — чистая функция `(state, candidates) → ранжированный список`.
+  Сейчас детерминированная сортировка `(priority, id)`; завтра ML/LLM без правок.
+- **`CapabilityMeta`** — одни поля для четырёх задач: ранжирование, выбор
+  реализации, paywall (Pro-capability), бюджет первого экрана (`network` вне 300 мс).
+
+Каждое из 9 действий = `*Capability` (dep-free) + `*Realizer` (поведение). Тест
+реестра поэтому не нуждается в фейках — декларации без зависимостей.
+
 ## Flow Graph выводится, а не хранится
 
 Отдельной таблицы переходов нет. Каждый `Executor` декларирует контракт входа
