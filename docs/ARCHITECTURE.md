@@ -171,6 +171,8 @@ sequenceDiagram
 | `ImageExecutor` | image → конвертация/сжатие |
 | `ZipExecutor` | распаковка / архивирование |
 | `TranslateExecutor` | text/pdf → перевод |
+| `OpenUrlExecutor` | url / текст с `HAS_URL` → открыть в браузере |
+| `OfficeExecutor` | docx/xlsx/pptx → извлечь текст |
 | `AiExecutor` | аварийный, Gemini |
 
 Поддерживаемые типы MVP: `image/*`, `text/plain`, `application/pdf`,
@@ -230,6 +232,16 @@ Robolectric. Это практический выхлоп принципа «max
   `Failure(recoverable)`); `TranslateExecutor`: PDF→извлечь→перевести.
 - Цена: PdfBox тянет шрифтовые ресурсы → debug-APK ~15.8 → 24.5 МБ.
 
-**Отложено:** распаковка zip как флоу нескольких объектов, `IS_IMAGE_PDF`/
-`HAS_TEXT`-энричер для PDF (теперь можно на PdfBox), OCR для сканов, персист стека
-на process death.
+**Срез «Офис + архивы» — реализован (BUILD SUCCESSFUL, 20 тестов):**
+- Новый `ObjectKind.OFFICE`; классификатор распознаёт docx/xlsx/pptx (+ legacy
+  doc/xls/ppt) по mime и расширению (office проверяется до архивов, т.к. OOXML —
+  это zip). Архивы расширены: tar/gz/bz2/xz помимо zip.
+- `OfficeTextExtractor` (контракт) + `OoxmlOfficeTextExtractor` (`:data`,
+  **без зависимостей** — распаковка OOXML + вытяжка текста из XML-частей) →
+  `OfficeExecutor` даёт TEXT-объект (→ перевод/PDF/AI). Legacy binary → `Failure`.
+- `ArchiveExtractor` (контракт) + `CommonsArchiveExtractor` (Apache Commons
+  Compress) → `ZipExecutor` распаковывает zip/tar/gz/bz2/xz.
+
+**Отложено:** распаковка как флоу нескольких объектов, `IS_IMAGE_PDF`/`HAS_TEXT`-
+энричер для PDF, OCR для сканов, 7z/rar (нужны доп. библиотеки), детерминированный
+порядок пузырьков, персист стека на process death.
