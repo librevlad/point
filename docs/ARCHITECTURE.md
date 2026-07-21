@@ -242,6 +242,17 @@ Robolectric. Это практический выхлоп принципа «max
 - `ArchiveExtractor` (контракт) + `CommonsArchiveExtractor` (Apache Commons
   Compress) → `ZipExecutor` распаковывает zip/tar/gz/bz2/xz.
 
+**Срез «полировка + расширения» — реализован (24 теста):**
+- **Детерминированный порядок пузырьков**: `Executor.order` (по умолч. 50, тай-брейк
+  по id); `bubblesFor` сортирует по `(order, id)`. AI всегда последним.
+- **7z/rar**: 7z через `SevenZFile`+tukaani-xz, rar через junrar; детект по магическим
+  байтам. **office→PDF**: `PdfExecutor` принимает OFFICE (извлечь текст → PDF).
+- **UI**: своя индиго-палитра (light+dark) вместо baseline M3; пузырьки появляются
+  со ступенчатой анимацией (новый пузырёк обогащения «влетает» отдельно); баннер
+  сообщения анимируется; `PointHost` кроссфейдит между объектами (по id).
+- **Альтернативный ИИ**: `OpenAiLlmClient` (OpenAI-совместимый: OpenAI/OpenRouter/
+  локальный) + `FallbackLlmClient` — Gemini → OpenAI, первый успех выигрывает
+  (прозрачно чинит 429). Ключ/URL/модель — из `local.properties`.
+
 **Отложено:** распаковка как флоу нескольких объектов, `IS_IMAGE_PDF`/`HAS_TEXT`-
-энричер для PDF, OCR для сканов, 7z/rar (нужны доп. библиотеки), детерминированный
-порядок пузырьков, персист стека на process death.
+энричер для PDF, OCR для сканов, персист стека на process death.
