@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- GeminiLlmClient makes HTTPS calls; merged into the app manifest. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <application>
         <!-- Exposes scratch files to other apps for Share as content:// Uris.
              Authority resolves to "<applicationId>.fileprovider" at manifest merge. -->
