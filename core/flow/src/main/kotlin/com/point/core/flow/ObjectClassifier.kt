@@ -23,29 +23,50 @@ class ObjectClassifier {
 
     private fun kindOf(mime: String, fileName: String?): ObjectKind {
         val m = mime.lowercase().substringBefore(';').trim()
+        val ext = fileName?.substringAfterLast('.', "")?.lowercase().orEmpty()
         return when {
+            // Office is checked before archives: OOXML files are zip containers and
+            // are often shared as application/zip or octet-stream — the extension wins.
+            m in OFFICE_MIMES || ext in OFFICE_EXTS -> ObjectKind.OFFICE
             m.startsWith("image/") -> ObjectKind.IMAGE
             m == "application/pdf" -> ObjectKind.PDF
-            m == "application/zip" || m == "application/x-zip-compressed" -> ObjectKind.ZIP
+            m in ARCHIVE_MIMES || ext in ARCHIVE_EXTS -> ObjectKind.ZIP
             m == "text/uri-list" -> ObjectKind.URL
             m.startsWith("text/") -> ObjectKind.TEXT
-            else -> kindFromExtension(fileName)
+            else -> kindFromExtension(ext)
         }
     }
 
-    private fun kindFromExtension(fileName: String?): ObjectKind {
-        val ext = fileName?.substringAfterLast('.', "")?.lowercase().orEmpty()
-        return when (ext) {
-            "png", "jpg", "jpeg", "webp", "gif", "bmp" -> ObjectKind.IMAGE
-            "pdf" -> ObjectKind.PDF
-            "zip" -> ObjectKind.ZIP
-            "txt", "md" -> ObjectKind.TEXT
-            else -> ObjectKind.UNKNOWN
-        }
+    private fun kindFromExtension(ext: String): ObjectKind = when (ext) {
+        "png", "jpg", "jpeg", "webp", "gif", "bmp" -> ObjectKind.IMAGE
+        "pdf" -> ObjectKind.PDF
+        "txt", "md" -> ObjectKind.TEXT
+        else -> ObjectKind.UNKNOWN
     }
 
-    companion object {
+    private companion object {
         /** Above this size, async enrichment is deferred (e.g. a 200 MB zip). */
         const val LARGE_THRESHOLD_BYTES = 20L * 1024 * 1024
+
+        val OFFICE_MIMES = setOf(
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            "application/msword",
+            "application/vnd.ms-excel",
+            "application/vnd.ms-powerpoint",
+        )
+        val OFFICE_EXTS = setOf("docx", "xlsx", "pptx", "doc", "xls", "ppt")
+
+        val ARCHIVE_MIMES = setOf(
+            "application/zip",
+            "application/x-zip-compressed",
+            "application/x-tar",
+            "application/gzip",
+            "application/x-gzip",
+            "application/x-bzip2",
+            "application/x-xz",
+        )
+        val ARCHIVE_EXTS = setOf("zip", "tar", "gz", "tgz", "bz2", "xz")
     }
 }

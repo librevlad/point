@@ -9,6 +9,9 @@ enum class ObjectKind {
     TEXT,
     PDF,
     ZIP,
+
+    /** Office document (docx / xlsx / pptx, and legacy doc/xls/ppt). */
+    OFFICE,
     URL,
     UNKNOWN,
 }

@@ -55,6 +55,7 @@ class AiExecutor @Inject constructor(
         ObjectKind.PDF -> "Кратко изложи содержимое этого PDF."
         ObjectKind.TEXT -> "Проанализируй и кратко изложи текст."
         ObjectKind.ZIP -> "Это архив. Подскажи, что с ним можно сделать."
+        ObjectKind.OFFICE -> "Это офисный документ. Кратко изложи его содержимое."
         ObjectKind.URL -> "Это ссылка. Кратко скажи, о чём она."
         ObjectKind.UNKNOWN -> "Помоги разобраться с этим объектом."
     }

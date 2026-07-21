@@ -5,6 +5,7 @@ import com.point.core.flow.ExecutorRegistry
 import com.point.executors.AiExecutor
 import com.point.executors.DefaultExecutorRegistry
 import com.point.executors.ImageExecutor
+import com.point.executors.OfficeExecutor
 import com.point.executors.OpenUrlExecutor
 import com.point.executors.PdfExecutor
 import com.point.executors.SaveExecutor
@@ -37,4 +38,5 @@ abstract class ExecutorModule {
     @Binds @IntoSet abstract fun translate(e: TranslateExecutor): Executor
     @Binds @IntoSet abstract fun ai(e: AiExecutor): Executor
     @Binds @IntoSet abstract fun openUrl(e: OpenUrlExecutor): Executor
+    @Binds @IntoSet abstract fun office(e: OfficeExecutor): Executor
 }

@@ -1,6 +1,7 @@
 package com.point.core.ui
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Article
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Compress
@@ -26,6 +27,7 @@ fun bubbleIcon(key: String): ImageVector = when (key) {
     "translate" -> Icons.Filled.Translate
     "ai" -> Icons.Filled.AutoAwesome
     "link" -> Icons.Filled.Link
+    "office" -> Icons.Filled.Article
     else -> Icons.Filled.Bolt
 }
 
@@ -35,6 +37,7 @@ fun kindIcon(kind: ObjectKind): ImageVector = when (kind) {
     ObjectKind.TEXT -> Icons.Filled.Description
     ObjectKind.PDF -> Icons.Filled.PictureAsPdf
     ObjectKind.ZIP -> Icons.Filled.FolderZip
+    ObjectKind.OFFICE -> Icons.Filled.Article
     ObjectKind.URL -> Icons.Filled.Link
     ObjectKind.UNKNOWN -> Icons.Filled.HelpOutline
 }

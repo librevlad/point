@@ -1,8 +1,10 @@
 package com.point.executors
 
+import com.point.core.flow.ArchiveExtractor
 import com.point.core.flow.Exporter
 import com.point.core.flow.LlmClient
 import com.point.core.flow.ObjectStore
+import com.point.core.flow.OfficeTextExtractor
 import com.point.core.flow.PdfTextExtractor
 import com.point.core.flow.Sharer
 import com.point.core.flow.UrlOpener
@@ -45,6 +47,12 @@ class DefaultExecutorRegistryTest {
     private val fakePdfText = object : PdfTextExtractor {
         override suspend fun extractText(obj: PointObject) = ""
     }
+    private val fakeOfficeText = object : OfficeTextExtractor {
+        override suspend fun extractText(obj: PointObject) = ""
+    }
+    private val fakeArchive = object : ArchiveExtractor {
+        override suspend fun extract(obj: PointObject) = 0
+    }
 
     private val registry = DefaultExecutorRegistry(
         setOf(
@@ -52,10 +60,11 @@ class DefaultExecutorRegistryTest {
             SaveExecutor(fakeExporter),
             PdfExecutor(fakeStore, fakePdfText),
             ImageExecutor(fakeStore),
-            ZipExecutor(fakeStore),
+            ZipExecutor(fakeArchive),
             TranslateExecutor(fakeLlm, fakePdfText),
             AiExecutor(fakeLlm),
             OpenUrlExecutor(fakeOpener),
+            OfficeExecutor(fakeStore, fakeOfficeText),
         ),
     )
 
@@ -85,6 +94,14 @@ class DefaultExecutorRegistryTest {
     fun `byId round-trips`() {
         val bubble = registry.bubblesFor(ObjectState(ObjectKind.TEXT)).first()
         assertEquals(bubble.executorId, registry.byId(bubble.executorId).id)
+    }
+
+    @Test
+    fun `office offers extract-text plus the universal actions`() {
+        val ids = idsFor(ObjectState(ObjectKind.OFFICE))
+        assertTrue(ids.containsAll(setOf("office", "share", "save", "ai")))
+        // Text-only actions are not offered until text is extracted.
+        assertTrue(setOf("translate", "pdf", "image", "zip").none { it in ids })
     }
 
     @Test

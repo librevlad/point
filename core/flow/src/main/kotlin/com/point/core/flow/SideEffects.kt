@@ -28,3 +28,15 @@ interface UrlOpener {
 interface PdfTextExtractor {
     suspend fun extractText(obj: PointObject): String
 }
+
+/** Extracts text from an OOXML office document (docx/xlsx/pptx). Empty if none
+ *  (e.g. a legacy binary .doc/.xls/.ppt which needs a heavier parser). */
+interface OfficeTextExtractor {
+    suspend fun extractText(obj: PointObject): String
+}
+
+/** Unpacks an archive (zip/tar/gz/bz2/xz) into the scratch store. */
+interface ArchiveExtractor {
+    /** @return the number of files written (0 if unsupported / empty). */
+    suspend fun extract(obj: PointObject): Int
+}

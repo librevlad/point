@@ -4,16 +4,20 @@ import com.point.core.flow.Enricher
 import com.point.core.flow.Enrichment
 import com.point.core.flow.Exporter
 import com.point.core.flow.LlmClient
+import com.point.core.flow.ArchiveExtractor
 import com.point.core.flow.ObjectClassifier
 import com.point.core.flow.ObjectStore
+import com.point.core.flow.OfficeTextExtractor
 import com.point.core.flow.PdfTextExtractor
 import com.point.core.flow.Sharer
 import com.point.core.flow.UrlOpener
 import com.point.data.AndroidSharer
 import com.point.data.AndroidUrlOpener
+import com.point.data.CommonsArchiveExtractor
 import com.point.data.DefaultEnrichment
 import com.point.data.GeminiLlmClient
 import com.point.data.MediaStoreExporter
+import com.point.data.OoxmlOfficeTextExtractor
 import com.point.data.PdfBoxTextExtractor
 import com.point.data.ScratchObjectStore
 import com.point.data.TextUrlEnricher
@@ -49,6 +53,12 @@ abstract class DataModule {
 
     @Binds
     abstract fun pdfTextExtractor(impl: PdfBoxTextExtractor): PdfTextExtractor
+
+    @Binds
+    abstract fun officeTextExtractor(impl: OoxmlOfficeTextExtractor): OfficeTextExtractor
+
+    @Binds
+    abstract fun archiveExtractor(impl: CommonsArchiveExtractor): ArchiveExtractor
 
     @Binds @IntoSet
     abstract fun textUrlEnricher(e: TextUrlEnricher): Enricher
