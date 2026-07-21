@@ -20,6 +20,7 @@ class DefaultExecutorRegistry @Inject constructor(
     override fun bubblesFor(state: ObjectState): List<Bubble> =
         executors
             .filter { it.accepts(state) }
+            .sortedWith(compareBy({ it.order }, { it.id.value })) // deterministic order
             .map { e ->
                 Bubble(
                     icon = e.icon,

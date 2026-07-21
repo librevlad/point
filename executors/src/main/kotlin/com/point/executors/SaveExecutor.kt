@@ -13,6 +13,7 @@ class SaveExecutor @Inject constructor(
     private val exporter: Exporter,
 ) : Executor {
     override val id = ExecutorId("save")
+    override val order = 70
     override val icon = "save"
     override fun title(state: ObjectState) = "Сохранить"
     override fun accepts(state: ObjectState) = true

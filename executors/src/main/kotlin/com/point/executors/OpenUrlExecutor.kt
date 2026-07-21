@@ -22,6 +22,7 @@ class OpenUrlExecutor @Inject constructor(
     private val opener: UrlOpener,
 ) : Executor {
     override val id = ExecutorId("open-url")
+    override val order = 20
     override val icon = "link"
     override fun title(state: ObjectState) = "Открыть"
 

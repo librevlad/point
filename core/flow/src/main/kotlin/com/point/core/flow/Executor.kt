@@ -21,6 +21,14 @@ interface Executor {
 
     val id: ExecutorId
 
+    /**
+     * Display order of the bubble (lower = earlier). Ties are broken by [id] so
+     * the bubble order is deterministic regardless of DI set iteration.
+     * Default 50 places an executor among the contextual transforms; storage/
+     * share sit later and the AI fallback last.
+     */
+    val order: Int get() = 50
+
     /** Icon key for the bubble; resolved to a vector by :core:ui. */
     val icon: String
 

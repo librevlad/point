@@ -91,6 +91,13 @@ class DefaultExecutorRegistryTest {
     }
 
     @Test
+    fun `bubble order is deterministic and AI comes last`() {
+        val order = registry.bubblesFor(ObjectState(ObjectKind.IMAGE)).map { it.executorId.value }
+        // contextual transforms (default order, id tie-break) -> storage -> share -> ai
+        assertEquals(listOf("image", "pdf", "save", "share", "ai"), order)
+    }
+
+    @Test
     fun `byId round-trips`() {
         val bubble = registry.bubblesFor(ObjectState(ObjectKind.TEXT)).first()
         assertEquals(bubble.executorId, registry.byId(bubble.executorId).id)

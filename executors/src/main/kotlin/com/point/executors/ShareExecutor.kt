@@ -13,6 +13,7 @@ class ShareExecutor @Inject constructor(
     private val sharer: Sharer,
 ) : Executor {
     override val id = ExecutorId("share")
+    override val order = 80
     override val icon = "share"
     override fun title(state: ObjectState) = "Поделиться"
     override fun accepts(state: ObjectState) = true

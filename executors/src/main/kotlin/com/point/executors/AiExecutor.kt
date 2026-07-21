@@ -22,6 +22,7 @@ class AiExecutor @Inject constructor(
     private val llm: LlmClient,
 ) : Executor {
     override val id = ExecutorId("ai")
+    override val order = 100 // emergency fallback — always last
     override val icon = "ai"
     override fun title(state: ObjectState) = "AI"
     override fun accepts(state: ObjectState) = true
