@@ -23,11 +23,14 @@ android {
         if (localFile.exists()) {
             localFile.inputStream().use { localProps.load(it) }
         }
-        buildConfigField(
-            "String",
-            "GEMINI_API_KEY",
-            "\"${localProps.getProperty("GEMINI_API_KEY", "")}\"",
-        )
+        fun prop(key: String, default: String = "") =
+            "\"${localProps.getProperty(key, default)}\""
+
+        buildConfigField("String", "GEMINI_API_KEY", prop("GEMINI_API_KEY"))
+        // Alternative provider (OpenAI-compatible: OpenAI, OpenRouter, local...).
+        buildConfigField("String", "OPENAI_API_KEY", prop("OPENAI_API_KEY"))
+        buildConfigField("String", "OPENAI_BASE_URL", prop("OPENAI_BASE_URL", "https://api.openai.com/v1"))
+        buildConfigField("String", "OPENAI_MODEL", prop("OPENAI_MODEL", "gpt-4o-mini"))
     }
 
     buildFeatures {

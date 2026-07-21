@@ -1,0 +1,46 @@
+package com.point.data
+
+import com.point.core.flow.LlmClient
+import com.point.core.model.ObjectKind
+import com.point.core.model.ObjectState
+import com.point.core.model.PointObject
+import com.point.core.model.ResultObject
+import com.point.core.model.ScratchRef
+import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class FallbackLlmClientTest {
+
+    private val obj = PointObject("id", "text/plain", ScratchRef("/x"), ObjectState(ObjectKind.TEXT))
+
+    private fun ok(tag: String) = object : LlmClient {
+        override suspend fun run(obj: PointObject, prompt: String) =
+            ResultObject(ObjectKind.TEXT, "text/markdown", ScratchRef("/out/$tag"))
+    }
+
+    private fun failing(message: String) = object : LlmClient {
+        override suspend fun run(obj: PointObject, prompt: String): ResultObject = error(message)
+    }
+
+    @Test
+    fun `returns the first provider that succeeds`() = runTest {
+        val client = FallbackLlmClient(listOf(ok("primary"), ok("secondary")))
+        assertEquals("/out/primary", client.run(obj, "hi").uri.value)
+    }
+
+    @Test
+    fun `falls back to the next provider when the first fails (e g 429)`() = runTest {
+        val client = FallbackLlmClient(listOf(failing("Gemini HTTP 429"), ok("openai")))
+        assertEquals("/out/openai", client.run(obj, "hi").uri.value)
+    }
+
+    @Test
+    fun `surfaces combined errors when all providers fail`() = runTest {
+        val client = FallbackLlmClient(listOf(failing("Gemini HTTP 429"), failing("OPENAI_API_KEY не задан")))
+        val error = runCatching { client.run(obj, "hi") }.exceptionOrNull()
+        assertTrue(error?.message?.contains("Gemini HTTP 429") == true)
+        assertTrue(error?.message?.contains("OPENAI_API_KEY") == true)
+    }
+}

@@ -4,6 +4,13 @@
 # Android SDK location:
 sdk.dir=C\:\\Users\\User\\AppData\\Local\\Android\\Sdk
 
-# Gemini API key — surfaced to code via BuildConfig.GEMINI_API_KEY (see :data).
+# Primary AI — Gemini. Surfaced via BuildConfig.GEMINI_API_KEY (see :data).
 # Never hard-code this in source and never commit the real local.properties.
 GEMINI_API_KEY=PUT_YOUR_KEY_HERE
+
+# Alternative AI (fallback if Gemini is unavailable, e.g. quota/429).
+# OpenAI-compatible: works with OpenAI, OpenRouter, or a local server.
+# Leave OPENAI_API_KEY blank to disable the fallback.
+OPENAI_API_KEY=
+OPENAI_BASE_URL=https://api.openai.com/v1
+OPENAI_MODEL=gpt-4o-mini

@@ -15,9 +15,11 @@ import com.point.data.AndroidSharer
 import com.point.data.AndroidUrlOpener
 import com.point.data.CommonsArchiveExtractor
 import com.point.data.DefaultEnrichment
+import com.point.data.FallbackLlmClient
 import com.point.data.GeminiLlmClient
 import com.point.data.MediaStoreExporter
 import com.point.data.OoxmlOfficeTextExtractor
+import com.point.data.OpenAiLlmClient
 import com.point.data.PdfBoxTextExtractor
 import com.point.data.ScratchObjectStore
 import com.point.data.TextUrlEnricher
@@ -42,8 +44,9 @@ abstract class DataModule {
     @Binds
     abstract fun exporter(impl: MediaStoreExporter): Exporter
 
+    /** The public LlmClient is the fallback chain (Gemini -> OpenAI-compatible). */
     @Binds
-    abstract fun llmClient(impl: GeminiLlmClient): LlmClient
+    abstract fun llmClient(impl: FallbackLlmClient): LlmClient
 
     @Binds
     abstract fun urlOpener(impl: AndroidUrlOpener): UrlOpener
@@ -70,5 +73,12 @@ abstract class DataModule {
         /** Pure classifier lives in :core:flow (no DI annotations there). */
         @Provides
         fun objectClassifier(): ObjectClassifier = ObjectClassifier()
+
+        /** Ordered AI providers the fallback tries: Gemini first, then OpenAI. */
+        @Provides
+        fun llmProviders(
+            gemini: GeminiLlmClient,
+            openAi: OpenAiLlmClient,
+        ): List<@JvmSuppressWildcards LlmClient> = listOf(gemini, openAi)
     }
 }
