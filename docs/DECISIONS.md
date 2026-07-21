@@ -102,11 +102,15 @@ Executors инжектируют контракты `Sharer`/`Exporter` (в `:co
 идёт через тот же Gemini с промптом. Executor остаётся независимым — просто
 использует контракт `LlmClient`.
 
-### PDF→текст — отложено
+### PDF→текст — реализовано (срез A) через PdfBox-Android
 В Android нет встроенного извлечения текста из PDF (`PdfRenderer` даёт только
-растровые страницы). Тащить парсер-lib (PdfBox-Android/iText) в этот срез не стал —
-`PdfExecutor` для входа PDF возвращает `Failure(recoverable)` с пояснением.
-Направления image/text→PDF работают на встроенном `PdfDocument`.
+растровые страницы). Взял **PdfBox-Android** (`com.tom-roush`) за контрактом
+`PdfTextExtractor` (в стиле прочих side-effect'ов): `PdfExecutor` для PDF извлекает
+текст, `TranslateExecutor` — извлекает и переводит. Скан без текста → `Failure(
+recoverable)` с подсказкой про OCR.
+**Компромисс:** PdfBox бандлит шрифтовые ресурсы → debug-APK вырос ~15.8 → 24.5 МБ.
+Приемлемо; при желании ужать R8/shrinkResources в release или сузить набор
+ресурсов. iText не взял из-за AGPL.
 
 ---
 

@@ -224,6 +224,12 @@ Robolectric. Это практический выхлоп принципа «max
 - VM: после первого кадра `enrichInBackground` обновляет состояние верхнего фрейма
   и пересобирает пузырьки in-place (только если объект всё ещё на вершине стека).
 
-**Отложено:** извлечение текста из PDF (нужен парсер-lib), перевод PDF, распаковка
-как флоу нескольких объектов, IS_IMAGE_PDF/HAS_TEXT для PDF (нужен парсер), персист
-стека на process death.
+**Срез A — реализован (PDF-текст, BUILD SUCCESSFUL):**
+- Контракт `PdfTextExtractor` (`:core:flow`), реализация `PdfBoxTextExtractor`
+  (`:data`, PdfBox-Android). `PdfExecutor`: PDF→текст (скан без текста →
+  `Failure(recoverable)`); `TranslateExecutor`: PDF→извлечь→перевести.
+- Цена: PdfBox тянет шрифтовые ресурсы → debug-APK ~15.8 → 24.5 МБ.
+
+**Отложено:** распаковка zip как флоу нескольких объектов, `IS_IMAGE_PDF`/
+`HAS_TEXT`-энричер для PDF (теперь можно на PdfBox), OCR для сканов, персист стека
+на process death.
