@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  DEBUG-ONLY overlay. Adds a launcher icon (SandboxActivity) so you can drive the
+  real flow from sample objects without sharing a file. Not present in release.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+        <activity
+            android:name=".SandboxActivity"
+            android:exported="true"
+            android:icon="@android:drawable/sym_def_app_icon"
+            android:label="Point Sandbox">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

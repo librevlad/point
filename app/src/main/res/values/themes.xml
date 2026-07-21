@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Window-level theme only (no ActionBar). Actual colors come from the
+         Compose PointTheme; this just keeps the system window frame clean. -->
+    <style name="Theme.Point" parent="@android:style/Theme.DeviceDefault.NoActionBar" />
+</resources>

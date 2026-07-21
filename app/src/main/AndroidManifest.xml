@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application
+        android:name=".PointApplication"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Point">
+
+        <!--
+          ShareActivity is the app's ONLY entry point — no launcher icon.
+          It receives Android Share for the MVP object types.
+          (A debug-only SandboxActivity with a launcher icon is added by the
+          `debug` source set for testing without re-sharing / re-flashing.)
+        -->
+        <activity
+            android:name=".ShareActivity"
+            android:exported="true"
+            android:launchMode="singleTop">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+                <data android:mimeType="text/plain" />
+                <data android:mimeType="text/uri-list" />
+                <data android:mimeType="application/pdf" />
+                <data android:mimeType="application/zip" />
+            </intent-filter>
+        </activity>
+
+    </application>
+</manifest>
