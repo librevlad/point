@@ -1,5 +1,12 @@
 package com.point.core.ui
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -22,12 +29,15 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -41,7 +51,8 @@ import com.point.core.model.PointObject
  *
  * When [inputPrompt] is non-null an executor is awaiting free-text input; the
  * bubbles are replaced by a text field. [message] shows a transient result
- * (a Failure reason or a Done confirmation).
+ * (a Failure reason or a Done confirmation). Bubbles fade/scale in with a stagger
+ * — so newly disclosed bubbles (progressive disclosure) visibly appear.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -78,23 +89,41 @@ fun FirstScreen(
                 horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                bubbles.forEach { bubble ->
-                    BubbleItem(bubble = bubble, onClick = { onBubble(bubble) })
+                bubbles.forEachIndexed { index, bubble ->
+                    key(bubble.executorId.value) {
+                        BubbleItem(bubble = bubble, index = index, onClick = { onBubble(bubble) })
+                    }
                 }
             }
         }
 
-        if (message != null) {
+        MessageBanner(message)
+    }
+}
+
+@Composable
+private fun MessageBanner(message: String?) {
+    // Hold the last message so it stays visible while the banner animates out.
+    var shown by remember { mutableStateOf("") }
+    LaunchedEffect(message) { if (message != null) shown = message }
+
+    AnimatedVisibility(
+        visible = message != null,
+        enter = fadeIn() + expandVertically(),
+        exit = fadeOut() + shrinkVertically(),
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Spacer(Modifier.height(32.dp))
             Surface(
                 shape = RoundedCornerShape(12.dp),
                 color = MaterialTheme.colorScheme.errorContainer,
             ) {
                 Text(
-                    text = message,
+                    text = shown,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
                     color = MaterialTheme.colorScheme.onErrorContainer,
                     style = MaterialTheme.typography.bodyMedium,
+                    textAlign = TextAlign.Center,
                 )
             }
         }
@@ -136,14 +165,30 @@ private fun ObjectHeader(obj: PointObject) {
 @Composable
 private fun BubbleItem(
     bubble: Bubble,
+    index: Int,
     onClick: () -> Unit,
 ) {
+    var appeared by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { appeared = true }
+    val progress by animateFloatAsState(
+        targetValue = if (appeared) 1f else 0f,
+        animationSpec = tween(durationMillis = 260, delayMillis = index * 45),
+        label = "bubble-in",
+    )
+
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(20.dp),
         color = MaterialTheme.colorScheme.surfaceVariant,
         tonalElevation = 2.dp,
-        modifier = Modifier.width(100.dp),
+        modifier = Modifier
+            .width(100.dp)
+            .graphicsLayer {
+                alpha = progress
+                val scale = 0.85f + 0.15f * progress
+                scaleX = scale
+                scaleY = scale
+            },
     ) {
         Column(
             modifier = Modifier.padding(vertical = 16.dp, horizontal = 8.dp),

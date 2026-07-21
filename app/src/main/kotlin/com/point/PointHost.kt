@@ -1,5 +1,11 @@
 package com.point
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -15,7 +21,9 @@ import com.point.core.ui.FirstScreen
 
 /**
  * Chooses what to render from the current [FlowUiState]. Stateless — the Activity
- * collects the state and forwards intents, so this stays trivial to reason about.
+ * collects the state and forwards intents. Object changes cross-fade/scale in via
+ * [AnimatedContent] (keyed by object id), so the flow feels like moving between
+ * states rather than snapping.
  */
 @Composable
 fun PointHost(
@@ -26,18 +34,29 @@ fun PointHost(
     modifier: Modifier = Modifier,
 ) {
     Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        val frame = state.frame
         when {
             state.loading -> CircularProgressIndicator()
 
-            state.frame != null -> FirstScreen(
-                obj = state.frame.obj,
-                bubbles = state.frame.bubbles,
-                onBubble = onBubble,
-                message = state.message,
-                inputPrompt = state.inputPrompt,
-                onSubmitInput = onSubmitInput,
-                onCancelInput = onCancelInput,
-            )
+            frame != null -> AnimatedContent(
+                targetState = frame,
+                contentKey = { it.obj.id },
+                transitionSpec = {
+                    (fadeIn(tween(260)) + scaleIn(tween(260), initialScale = 0.94f)) togetherWith
+                        fadeOut(tween(140))
+                },
+                label = "frame",
+            ) { current ->
+                FirstScreen(
+                    obj = current.obj,
+                    bubbles = current.bubbles,
+                    onBubble = onBubble,
+                    message = state.message,
+                    inputPrompt = state.inputPrompt,
+                    onSubmitInput = onSubmitInput,
+                    onCancelInput = onCancelInput,
+                )
+            }
 
             else -> Text(
                 text = "Поделитесь объектом в Point",
