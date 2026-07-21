@@ -1,7 +1,7 @@
 package com.point.executors
 
 import com.point.core.flow.LlmClient
-import com.point.core.model.ExecutorResult
+import com.point.core.model.ActionResult
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
@@ -10,9 +10,9 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-class AiExecutorTest {
+class AiRealizerTest {
 
-    private val ai = AiExecutor(object : LlmClient {
+    private val ai = AiRealizer(object : LlmClient {
         override suspend fun run(obj: PointObject, prompt: String) = error("must not be called")
     })
 
@@ -25,7 +25,7 @@ class AiExecutorTest {
 
     @Test
     fun `first tap asks the user for input instead of calling the LLM`() = runTest {
-        val result = ai.execute(obj, amendment = null)
-        assertTrue(result is ExecutorResult.NeedsInput)
+        val result = ai.perform(obj, amendment = null)
+        assertTrue(result is ActionResult.NeedsInput)
     }
 }

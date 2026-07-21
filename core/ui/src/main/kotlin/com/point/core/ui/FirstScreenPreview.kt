@@ -3,7 +3,7 @@ package com.point.core.ui
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.tooling.preview.Preview
 import com.point.core.model.Bubble
-import com.point.core.model.ExecutorId
+import com.point.core.model.CapabilityId
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
@@ -26,26 +26,26 @@ private fun sampleObject(kind: ObjectKind, mime: String, name: String) = PointOb
 )
 
 private fun universalBubbles(kind: ObjectKind) = listOf(
-    Bubble("share", "Поделиться", ExecutorId("share"), ObjectState(kind)),
-    Bubble("save", "Сохранить", ExecutorId("save"), ObjectState(kind)),
-    Bubble("ai", "AI", ExecutorId("ai"), ObjectState(ObjectKind.TEXT)),
+    Bubble("share", "Поделиться", CapabilityId("share"), ObjectState(kind)),
+    Bubble("save", "Сохранить", CapabilityId("save"), ObjectState(kind)),
+    Bubble("ai", "AI", CapabilityId("ai"), ObjectState(ObjectKind.TEXT)),
 )
 
 private fun sampleBubbles(kind: ObjectKind): List<Bubble> = universalBubbles(kind) + when (kind) {
     ObjectKind.IMAGE -> listOf(
-        Bubble("compress", "Сжать", ExecutorId("image"), ObjectState(ObjectKind.IMAGE)),
-        Bubble("pdf", "В PDF", ExecutorId("pdf"), ObjectState(ObjectKind.PDF)),
+        Bubble("compress", "Сжать", CapabilityId("image"), ObjectState(ObjectKind.IMAGE)),
+        Bubble("pdf", "В PDF", CapabilityId("pdf"), ObjectState(ObjectKind.PDF)),
     )
     ObjectKind.PDF -> listOf(
-        Bubble("pdf", "Извлечь текст", ExecutorId("pdf"), ObjectState(ObjectKind.TEXT)),
-        Bubble("translate", "Перевести", ExecutorId("translate"), ObjectState(ObjectKind.TEXT)),
+        Bubble("pdf", "Извлечь текст", CapabilityId("pdf"), ObjectState(ObjectKind.TEXT)),
+        Bubble("translate", "Перевести", CapabilityId("translate"), ObjectState(ObjectKind.TEXT)),
     )
     ObjectKind.TEXT -> listOf(
-        Bubble("pdf", "В PDF", ExecutorId("pdf"), ObjectState(ObjectKind.PDF)),
-        Bubble("translate", "Перевести", ExecutorId("translate"), ObjectState(ObjectKind.TEXT)),
+        Bubble("pdf", "В PDF", CapabilityId("pdf"), ObjectState(ObjectKind.PDF)),
+        Bubble("translate", "Перевести", CapabilityId("translate"), ObjectState(ObjectKind.TEXT)),
     )
     ObjectKind.ZIP -> listOf(
-        Bubble("unzip", "Распаковать", ExecutorId("zip"), ObjectState(ObjectKind.UNKNOWN)),
+        Bubble("unzip", "Распаковать", CapabilityId("zip"), ObjectState(ObjectKind.UNKNOWN)),
     )
     else -> emptyList()
 }

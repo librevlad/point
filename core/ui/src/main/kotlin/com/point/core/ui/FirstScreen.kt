@@ -90,7 +90,7 @@ fun FirstScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 bubbles.forEachIndexed { index, bubble ->
-                    key(bubble.executorId.value) {
+                    key(bubble.capabilityId.value) {
                         BubbleItem(bubble = bubble, index = index, onClick = { onBubble(bubble) })
                     }
                 }

@@ -1,9 +1,11 @@
 package com.point.executors
 
-import com.point.core.flow.Executor
+import com.point.core.flow.Capability
+import com.point.core.flow.CapabilityMeta
+import com.point.core.flow.Realizer
 import com.point.core.flow.UrlOpener
-import com.point.core.model.ExecutorId
-import com.point.core.model.ExecutorResult
+import com.point.core.model.ActionResult
+import com.point.core.model.CapabilityId
 import com.point.core.model.Feature
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
@@ -14,30 +16,33 @@ import java.io.File
 import javax.inject.Inject
 
 /**
- * Opens a link. Accepts a `text/uri-list` object outright, or a TEXT object once
- * async enrichment has flagged [Feature.HAS_URL] — a progressive-disclosure
- * bubble that appears AFTER the first paint.
+ * Opens a link. Accepts a `text/uri-list` outright, or a TEXT object once async
+ * enrichment flags [Feature.HAS_URL] — a progressive-disclosure bubble.
  */
-class OpenUrlExecutor @Inject constructor(
-    private val opener: UrlOpener,
-) : Executor {
-    override val id = ExecutorId("open-url")
-    override val order = 20
+class OpenUrlCapability @Inject constructor() : Capability {
+    override val id = ID
     override val icon = "link"
-    override fun title(state: ObjectState) = "Открыть"
-
+    override val meta = CapabilityMeta(priority = 20)
+    override fun label(state: ObjectState) = "Открыть"
     override fun accepts(state: ObjectState) =
         state.kind == ObjectKind.URL || state.has(Feature.HAS_URL)
-
     override fun produces(state: ObjectState) = state // terminal
 
-    override suspend fun execute(input: PointObject, amendment: String?): ExecutorResult =
+    companion object { val ID = CapabilityId("open-url") }
+}
+
+class OpenUrlRealizer @Inject constructor(
+    private val opener: UrlOpener,
+) : Realizer {
+    override val capabilityId = OpenUrlCapability.ID
+
+    override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
             runCatching {
                 val url = firstUrl(input) ?: error("Ссылка не найдена")
                 opener.open(url)
-                ExecutorResult.Done("Открываю: $url")
-            }.getOrElse { ExecutorResult.Failure(it.message ?: "Не удалось открыть", recoverable = true) }
+                ActionResult.Done("Открываю: $url")
+            }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось открыть", recoverable = true) }
         }
 
     private fun firstUrl(input: PointObject): String? {

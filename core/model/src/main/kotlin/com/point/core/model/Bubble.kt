@@ -12,6 +12,6 @@ package com.point.core.model
 data class Bubble(
     val icon: String,
     val title: String,
-    val executorId: ExecutorId,
+    val capabilityId: CapabilityId,
     val expectedNextState: ObjectState,
 )

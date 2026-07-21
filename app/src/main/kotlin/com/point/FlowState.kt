@@ -13,7 +13,7 @@ data class FlowFrame(
 data class FlowUiState(
     val loading: Boolean = false,
     val frame: FlowFrame? = null,
-    /** Transient text from the ExecutorResult channel (Failure / Done). */
+    /** Transient text from the ActionResult channel (Failure / Done). */
     val message: String? = null,
     /** Non-null while an executor awaits free-text input (NeedsInput). */
     val inputPrompt: String? = null,

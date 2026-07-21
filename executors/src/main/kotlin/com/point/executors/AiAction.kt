@@ -1,9 +1,13 @@
 package com.point.executors
 
-import com.point.core.flow.Executor
+import com.point.core.flow.Capability
+import com.point.core.flow.CapabilityMeta
+import com.point.core.flow.Cost
+import com.point.core.flow.Latency
 import com.point.core.flow.LlmClient
-import com.point.core.model.ExecutorId
-import com.point.core.model.ExecutorResult
+import com.point.core.flow.Realizer
+import com.point.core.model.ActionResult
+import com.point.core.model.CapabilityId
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
@@ -13,29 +17,35 @@ import java.io.File
 import javax.inject.Inject
 
 /**
- * Emergency universal executor. Accepts any object; on the first tap it asks the
- * user what to do (NeedsInput), then routes object + prompt to the LLM and
- * materialises the answer (markdown -> `.md`) as a new TEXT object. The user
- * never sees a chat — only a new object.
+ * Emergency universal capability. Accepts any object; asks the user what to do
+ * (NeedsInput), routes object + prompt to the LLM, materialises the answer
+ * (markdown -> `.md`). `produces` is null — the AI output type is unknown until
+ * the result is classified.
  */
-class AiExecutor @Inject constructor(
-    private val llm: LlmClient,
-) : Executor {
-    override val id = ExecutorId("ai")
-    override val order = 100 // emergency fallback — always last
+class AiCapability @Inject constructor() : Capability {
+    override val id = ID
     override val icon = "ai"
-    override fun title(state: ObjectState) = "AI"
+    override val meta = CapabilityMeta(priority = 100, cost = Cost.PAID, latency = Latency.SLOW, network = true, auth = true)
+    override fun label(state: ObjectState) = "AI"
     override fun accepts(state: ObjectState) = true
-    override fun produces(state: ObjectState) = ObjectState(ObjectKind.TEXT)
+    override fun produces(state: ObjectState): ObjectState? = null // unknown until classified
 
-    override suspend fun execute(input: PointObject, amendment: String?): ExecutorResult {
+    companion object { val ID = CapabilityId("ai") }
+}
+
+class AiRealizer @Inject constructor(
+    private val llm: LlmClient,
+) : Realizer {
+    override val capabilityId = AiCapability.ID
+
+    override suspend fun perform(input: PointObject, amendment: String?): ActionResult {
         if (amendment == null) {
-            return ExecutorResult.NeedsInput("Что сделать с объектом? (пусто = авто-анализ)")
+            return ActionResult.NeedsInput("Что сделать с объектом? (пусто = авто-анализ)")
         }
         return withContext(Dispatchers.IO) {
             runCatching {
-                ExecutorResult.Success(llm.run(input, buildPrompt(input, amendment)))
-            }.getOrElse { ExecutorResult.Failure(it.message ?: "Ошибка AI", recoverable = true) }
+                ActionResult.Success(llm.run(input, buildPrompt(input, amendment)))
+            }.getOrElse { ActionResult.Failure(it.message ?: "Ошибка AI", recoverable = true) }
         }
     }
 

@@ -2,11 +2,12 @@ package com.point
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.point.core.flow.CapabilityRegistry
 import com.point.core.flow.Enrichment
-import com.point.core.flow.ExecutorRegistry
 import com.point.core.flow.ObjectStore
+import com.point.core.flow.Resolver
 import com.point.core.model.Bubble
-import com.point.core.model.ExecutorResult
+import com.point.core.model.ActionResult
 import com.point.core.model.PointObject
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -23,13 +24,14 @@ import javax.inject.Inject
 @HiltViewModel
 class FlowViewModel @Inject constructor(
     private val store: ObjectStore,
-    private val registry: ExecutorRegistry,
+    private val registry: CapabilityRegistry,
+    private val resolver: Resolver,
     private val enrichment: Enrichment,
 ) : ViewModel() {
 
     private val stack = ArrayDeque<FlowFrame>()
 
-    /** The bubble whose executor returned NeedsInput and is awaiting a reply. */
+    /** The bubble whose capability returned NeedsInput and is awaiting a reply. */
     private var pendingBubble: Bubble? = null
 
     private val _ui = MutableStateFlow(FlowUiState())
@@ -52,7 +54,7 @@ class FlowViewModel @Inject constructor(
     fun onBubble(bubble: Bubble) {
         val top = stack.lastOrNull()?.obj ?: return
         _ui.update { it.copy(loading = true, message = null, inputPrompt = null) }
-        dispatch(bubble) { registry.byId(bubble.executorId).execute(top, null) }
+        dispatch(bubble) { resolver.realizerFor(bubble.capabilityId).perform(top, null) }
     }
 
     /** User answered a NeedsInput prompt. */
@@ -61,7 +63,7 @@ class FlowViewModel @Inject constructor(
         val top = stack.lastOrNull()?.obj ?: return
         pendingBubble = null
         _ui.update { it.copy(loading = true, inputPrompt = null) }
-        dispatch(bubble) { registry.byId(bubble.executorId).execute(top, text) }
+        dispatch(bubble) { resolver.realizerFor(bubble.capabilityId).perform(top, text) }
     }
 
     fun cancelInput() {
@@ -69,7 +71,7 @@ class FlowViewModel @Inject constructor(
         _ui.update { it.copy(inputPrompt = null, loading = false) }
     }
 
-    private fun dispatch(bubble: Bubble, action: suspend () -> ExecutorResult) {
+    private fun dispatch(bubble: Bubble, action: suspend () -> ActionResult) {
         viewModelScope.launch {
             runCatching { action() }
                 .onSuccess { result -> handleResult(result, bubble) }
@@ -77,12 +79,12 @@ class FlowViewModel @Inject constructor(
         }
     }
 
-    private suspend fun handleResult(result: ExecutorResult, bubble: Bubble) {
+    private suspend fun handleResult(result: ActionResult, bubble: Bubble) {
         when (result) {
-            is ExecutorResult.Success -> pushFrame(store.put(result.result))
-            is ExecutorResult.Done -> _ui.update { it.copy(loading = false, message = result.message) }
-            is ExecutorResult.Failure -> _ui.update { it.copy(loading = false, message = result.reason) }
-            is ExecutorResult.NeedsInput -> {
+            is ActionResult.Success -> pushFrame(store.put(result.result))
+            is ActionResult.Done -> _ui.update { it.copy(loading = false, message = result.message) }
+            is ActionResult.Failure -> _ui.update { it.copy(loading = false, message = result.reason) }
+            is ActionResult.NeedsInput -> {
                 pendingBubble = bubble
                 _ui.update { it.copy(loading = false, inputPrompt = result.prompt) }
             }
