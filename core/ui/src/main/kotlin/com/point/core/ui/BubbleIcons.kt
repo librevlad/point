@@ -4,6 +4,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Article
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.Collections
 import androidx.compose.material.icons.filled.Compress
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.DocumentScanner
@@ -32,6 +33,7 @@ fun bubbleIcon(key: String): ImageVector = when (key) {
     "pdf" -> Icons.Filled.PictureAsPdf
     "compress" -> Icons.Filled.Compress
     "unzip" -> Icons.Filled.FolderZip
+    "pages" -> Icons.Filled.Collections
     "translate" -> Icons.Filled.Translate
     "ai" -> Icons.Filled.AutoAwesome
     "link" -> Icons.Filled.Link
@@ -59,6 +61,7 @@ fun bubbleColor(key: String): Color = when (key) {
     "ocr" -> Color(0xFF16A34A)      // green — recognise text
     "office" -> Color(0xFF16A34A)   // green — documents/data
     "unzip" -> Color(0xFFF2994A)    // amber — archive
+    "pages" -> Color(0xFF2F80ED)    // blue — PDF pages
     "translate" -> Color(0xFFEC4899) // pink — translate
     else -> Color(0xFF9AA0A6)       // grey — everything else
 }

@@ -12,6 +12,7 @@ import com.point.core.flow.ArchiveExtractor
 import com.point.core.flow.ObjectClassifier
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.OfficeTextExtractor
+import com.point.core.flow.PdfRasterizer
 import com.point.core.flow.PdfTextExtractor
 import com.point.core.flow.Sharer
 import com.point.core.flow.TextRecognizer
@@ -31,6 +32,7 @@ import com.point.data.MediaStoreExporter
 import com.point.data.OoxmlOfficeTextExtractor
 import com.point.data.OpenAiLlmClient
 import com.point.data.PdfBoxTextExtractor
+import com.point.data.PdfRendererRasterizer
 import com.point.data.ScratchObjectStore
 import com.point.data.TesseractTextRecognizer
 import com.point.data.TextUrlEnricher
@@ -70,6 +72,9 @@ abstract class DataModule {
 
     @Binds
     abstract fun pdfTextExtractor(impl: PdfBoxTextExtractor): PdfTextExtractor
+
+    @Binds
+    abstract fun pdfRasterizer(impl: PdfRendererRasterizer): PdfRasterizer
 
     @Binds
     abstract fun officeTextExtractor(impl: OoxmlOfficeTextExtractor): OfficeTextExtractor

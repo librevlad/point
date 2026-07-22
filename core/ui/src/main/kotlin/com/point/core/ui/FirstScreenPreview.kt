@@ -45,6 +45,7 @@ private fun sampleBubbles(kind: ObjectKind): List<Bubble> =
     )
     ObjectKind.PDF -> listOf(
         Bubble("pdf", "Извлечь текст", CapabilityId("pdf"), ObjectState(ObjectKind.TEXT)),
+        Bubble("pages", "Страницы", CapabilityId("pdf-pages"), ObjectState(ObjectKind.COLLECTION)),
         Bubble("translate", "Перевести", CapabilityId("translate"), ObjectState(ObjectKind.TEXT)),
     )
     ObjectKind.TEXT -> listOf(

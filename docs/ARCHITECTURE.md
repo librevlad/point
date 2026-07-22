@@ -357,6 +357,12 @@ Robolectric. Это практический выхлоп принципа «max
   выделением/копированием (`SelectionContainer`) — читается в Point, без внешнего
   приложения. См. `DECISIONS.md`.
 
+**Срез «PDF-страницы как коллекция» — реализован (BUILD SUCCESSFUL):**
+- `PdfRasterizer` (контракт) + `PdfRendererRasterizer` (`:data`, нативный
+  `PdfRenderer`, JPEG/страница) → `PagesCapability`/`PagesRealizer`: PDF → `COLLECTION`
+  страниц (тот же шов, что распаковка архива). Дальше — существующий просмотр
+  коллекции (страницы = IMAGE-элементы). Закрывает роадмап #2 и для PDF.
+
 **Отложено:** `IS_IMAGE_PDF`/`HAS_TEXT`-
 энричер для PDF, персист стека на process death; шрифты Manrope/Unbounded и
 отдельные дизайн-экраны (AI / «Ещё» / результат / поток); проверка OCR на

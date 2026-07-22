@@ -38,6 +38,13 @@ interface PdfTextExtractor {
     suspend fun extractText(obj: PointObject): String
 }
 
+/** Renders each page of a PDF to an image in a fresh scratch directory. */
+interface PdfRasterizer {
+    /** @return the scratch directory holding the page images (page-001.jpg …),
+     *  which may be empty if the PDF has no pages / cannot be rendered. */
+    suspend fun rasterize(obj: PointObject): ScratchRef
+}
+
 /** Extracts text from an OOXML office document (docx/xlsx/pptx). Empty if none
  *  (e.g. a legacy binary .doc/.xls/.ppt which needs a heavier parser). */
 interface OfficeTextExtractor {

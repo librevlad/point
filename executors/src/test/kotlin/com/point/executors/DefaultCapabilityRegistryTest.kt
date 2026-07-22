@@ -23,6 +23,7 @@ class DefaultCapabilityRegistryTest {
             ShareAllCapability(),
             OpenCapability(),
             PdfCapability(),
+            PagesCapability(),
             ImageCapability(),
             ArchiveCapability(),
             TranslateCapability(),
@@ -50,6 +51,12 @@ class DefaultCapabilityRegistryTest {
         val order = registry.bubblesFor(ObjectState(ObjectKind.IMAGE)).map { it.capabilityId.value }
         // priority 50 ties by id (image/ocr/pdf/scan), then open(65), save(70), share(80), ai(100)
         assertEquals(listOf("image", "ocr", "pdf", "scan", "open", "save", "share", "ai"), order)
+    }
+
+    @Test
+    fun `pdf can be split into a pages collection`() {
+        assertTrue("pdf-pages" in idsFor(ObjectState(ObjectKind.PDF)))
+        assertFalse("pdf-pages" in idsFor(ObjectState(ObjectKind.IMAGE)))
     }
 
     @Test

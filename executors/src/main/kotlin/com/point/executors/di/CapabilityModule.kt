@@ -22,6 +22,8 @@ import com.point.executors.OpenCapability
 import com.point.executors.OpenRealizer
 import com.point.executors.OpenUrlCapability
 import com.point.executors.OpenUrlRealizer
+import com.point.executors.PagesCapability
+import com.point.executors.PagesRealizer
 import com.point.executors.PdfCapability
 import com.point.executors.PdfRealizer
 import com.point.executors.ScanCapability
@@ -64,6 +66,7 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun openUrlCap(c: OpenUrlCapability): Capability
     @Binds @IntoSet abstract fun imageCap(c: ImageCapability): Capability
     @Binds @IntoSet abstract fun pdfCap(c: PdfCapability): Capability
+    @Binds @IntoSet abstract fun pagesCap(c: PagesCapability): Capability
     @Binds @IntoSet abstract fun officeCap(c: OfficeCapability): Capability
     @Binds @IntoSet abstract fun archiveCap(c: ArchiveCapability): Capability
     @Binds @IntoSet abstract fun translateCap(c: TranslateCapability): Capability
@@ -80,6 +83,7 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun openUrlR(r: OpenUrlRealizer): Realizer
     @Binds @IntoSet abstract fun imageR(r: ImageRealizer): Realizer
     @Binds @IntoSet abstract fun pdfR(r: PdfRealizer): Realizer
+    @Binds @IntoSet abstract fun pagesR(r: PagesRealizer): Realizer
     @Binds @IntoSet abstract fun officeR(r: OfficeRealizer): Realizer
     @Binds @IntoSet abstract fun archiveR(r: ArchiveRealizer): Realizer
     @Binds @IntoSet abstract fun translateR(r: TranslateRealizer): Realizer
