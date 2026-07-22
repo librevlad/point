@@ -30,6 +30,8 @@ import com.point.executors.SaveAllCapability
 import com.point.executors.SaveAllRealizer
 import com.point.executors.SaveCapability
 import com.point.executors.SaveRealizer
+import com.point.executors.ShareAllCapability
+import com.point.executors.ShareAllRealizer
 import com.point.executors.ShareCapability
 import com.point.executors.ShareRealizer
 import com.point.executors.TranslateCapability
@@ -57,6 +59,7 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun shareCap(c: ShareCapability): Capability
     @Binds @IntoSet abstract fun saveCap(c: SaveCapability): Capability
     @Binds @IntoSet abstract fun saveAllCap(c: SaveAllCapability): Capability
+    @Binds @IntoSet abstract fun shareAllCap(c: ShareAllCapability): Capability
     @Binds @IntoSet abstract fun openCap(c: OpenCapability): Capability
     @Binds @IntoSet abstract fun openUrlCap(c: OpenUrlCapability): Capability
     @Binds @IntoSet abstract fun imageCap(c: ImageCapability): Capability
@@ -72,6 +75,7 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun shareR(r: ShareRealizer): Realizer
     @Binds @IntoSet abstract fun saveR(r: SaveRealizer): Realizer
     @Binds @IntoSet abstract fun saveAllR(r: SaveAllRealizer): Realizer
+    @Binds @IntoSet abstract fun shareAllR(r: ShareAllRealizer): Realizer
     @Binds @IntoSet abstract fun openR(r: OpenRealizer): Realizer
     @Binds @IntoSet abstract fun openUrlR(r: OpenUrlRealizer): Realizer
     @Binds @IntoSet abstract fun imageR(r: ImageRealizer): Realizer

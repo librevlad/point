@@ -12,6 +12,9 @@ import com.point.core.model.ScratchRef
 /** Launches the system share sheet for an object. */
 interface Sharer {
     suspend fun share(obj: PointObject)
+
+    /** Share several objects at once in one sheet (ACTION_SEND_MULTIPLE). */
+    suspend fun shareAll(objs: List<PointObject>)
 }
 
 /** Opens an object in an external app (the system "open with" / ACTION_VIEW). */

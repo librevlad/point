@@ -20,6 +20,7 @@ class DefaultCapabilityRegistryTest {
             ShareCapability(),
             SaveCapability(),
             SaveAllCapability(),
+            ShareAllCapability(),
             OpenCapability(),
             PdfCapability(),
             ImageCapability(),
@@ -76,11 +77,11 @@ class DefaultCapabilityRegistryTest {
     }
 
     @Test
-    fun `a collection offers save-all and hides single-object actions`() {
+    fun `a collection offers save-all and share-all but hides single-object actions`() {
         val ids = idsFor(ObjectState(ObjectKind.COLLECTION))
-        assertTrue("save-all" in ids)
-        // Share / Save / AI operate on one object — they must not target a collection.
-        assertTrue(setOf("share", "save", "ai").none { it in ids })
+        assertTrue(ids.containsAll(setOf("save-all", "share-all")))
+        // Single-object Share / Save / AI / Open must not target a collection.
+        assertTrue(setOf("share", "save", "ai", "open").none { it in ids })
     }
 
     @Test

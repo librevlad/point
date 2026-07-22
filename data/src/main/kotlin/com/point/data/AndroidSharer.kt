@@ -32,4 +32,19 @@ class AndroidSharer @Inject constructor(
         }
         context.startActivity(chooser)
     }
+
+    override suspend fun shareAll(objs: List<PointObject>) {
+        val authority = "${context.packageName}.fileprovider"
+        val uris = ArrayList(objs.map { FileProvider.getUriForFile(context, authority, File(it.uri.value)) })
+
+        val send = Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+            type = "*/*" // mixed types — the receiver picks what it can take
+            putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        val chooser = Intent.createChooser(send, "Поделиться").apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        context.startActivity(chooser)
+    }
 }

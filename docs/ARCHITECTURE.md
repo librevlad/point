@@ -346,6 +346,9 @@ Robolectric. Это практический выхлоп принципа «max
   `FlowViewModel.onItem` → `pushFrame(item)` (элемент уже в scratch, без ре-ingest),
   дальше обычный флоу на элементе (Открыть/Сохранить/OCR/…). `Back` возвращает к
   коллекции. Роадмап #2 (Collection-as-Object) — «множественность + UI».
+- «Поделиться всем» (`ShareAll` → `Sharer.shareAll` → `ACTION_SEND_MULTIPLE`) —
+  вторая коллекционная симметрия к «Сохранить всё»; одиночные Share/Save/Open/AI для
+  COLLECTION по-прежнему скрыты.
 
 **Срез «встроенный просмотр текста» — реализован (BUILD SUCCESSFUL):**
 - `ObjectStore.readText(obj, limit)` (`:core:flow` + `ScratchObjectStore`) — bounded
