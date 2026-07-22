@@ -4,6 +4,7 @@ import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
 import com.point.core.flow.Enricher
 import com.point.core.flow.Enrichment
+import com.point.core.flow.Entitlements
 import com.point.core.flow.Exporter
 import com.point.core.flow.FavoritesStore
 import com.point.core.flow.HistoryStore
@@ -24,6 +25,7 @@ import com.point.data.AndroidViewer
 import com.point.data.ClaudeLlmClient
 import com.point.data.CommonsArchiveExtractor
 import com.point.data.DefaultEnrichment
+import com.point.data.DefaultEntitlements
 import com.point.data.FallbackLlmClient
 import com.point.data.FileFavoritesStore
 import com.point.data.FileHistoryStore
@@ -69,6 +71,9 @@ abstract class DataModule {
 
     @Binds
     abstract fun enrichment(impl: DefaultEnrichment): Enrichment
+
+    @Binds
+    abstract fun entitlements(impl: DefaultEntitlements): Entitlements
 
     @Binds
     abstract fun pdfTextExtractor(impl: PdfBoxTextExtractor): PdfTextExtractor

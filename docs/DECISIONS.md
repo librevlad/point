@@ -355,6 +355,19 @@ JPEG (нативный `PdfRenderer`, ~144 DPI, белый фон) в свежи
 из архива; переиспользует весь UI/флоу. `PdfRenderer` — платформенный, без новой
 зависимости (в отличие от PdfBox для текста).
 
+### Paywall — это Realizer, выбираемый Resolver'ом (роадмап #3)
+**Решение:** гейт Pro-функций (`CapabilityMeta.cost == PAID`) реализован как выбор
+реализации: `DefaultResolver` для PAID-capability, если пользователь не entitled,
+возвращает `PaywallRealizer` (recoverable-апселл) вместо настоящего realizer'а.
+Контракт `Entitlements` (`:core:flow`); дефолт `DefaultEntitlements` — всё разрешено
+(пока ничего не продаём). Capability/Flow Graph/пузырьки не трогаем — Pro-действие
+остаётся видимым, тап объясняет, что оно Pro.
+**Развилки:** (1) гейт в `Resolver` («как» выбирается), а не фильтр в `BubblePolicy`
+(«что» показывается) — сохраняем discovery Pro-функций. (2) Признак Pro — существующий
+`cost == PAID` (уже на `AiCapability`), без нового поля в meta.
+**Зачем:** первый монетизационный шов, ядро не тронуто; включается заменой
+`DefaultEntitlements` на реальную проверку подписки (Play Billing / серверный чек).
+
 ---
 
 ## Решения по среде и бренду

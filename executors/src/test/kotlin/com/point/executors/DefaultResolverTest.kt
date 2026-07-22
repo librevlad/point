@@ -1,67 +1,109 @@
 package com.point.executors
 
+import com.point.core.flow.Entitlements
 import com.point.core.flow.Realizer
 import com.point.core.flow.RealizerKind
 import com.point.core.flow.RealizerMeta
 import com.point.core.model.ActionResult
 import com.point.core.model.CapabilityId
+import com.point.core.model.ObjectKind
+import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
+import com.point.core.model.ScratchRef
+import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** Pure-JVM: the multi-realizer selection seam (local/cloud/ICG). */
+/** Pure-JVM: the multi-realizer selection seam (local/cloud/ICG) and the paywall
+ *  gate (a PAID capability resolves to an upsell when the user is not entitled). */
 class DefaultResolverTest {
+
+    // Registry with the real capabilities, so the paywall gate can read their cost.
+    private val registry = DefaultCapabilityRegistry(
+        capabilities = setOf(AiCapability(), SaveCapability()),
+        policy = DefaultBubblePolicy(),
+    )
 
     private fun realizer(
         id: String,
         priority: Int = 50,
         kind: RealizerKind = RealizerKind.LOCAL,
         available: Boolean = true,
+        done: String = "x",
     ) = object : Realizer {
         override val capabilityId = CapabilityId(id)
         override val meta = RealizerMeta(priority, kind)
         override fun isAvailable() = available
-        override suspend fun perform(input: PointObject, amendment: String?) = ActionResult.Done("x")
+        override suspend fun perform(input: PointObject, amendment: String?) = ActionResult.Done(done)
     }
+
+    /** entitled = true keeps the paywall transparent, so selection tests are unchanged. */
+    private fun resolver(realizers: Set<Realizer>, entitled: Boolean = true) =
+        DefaultResolver(realizers, registry, Entitlements { entitled })
+
+    private fun obj() = PointObject("x", "text/plain", ScratchRef("/x"), ObjectState(ObjectKind.TEXT))
+
+    // --- multi-realizer selection ---
 
     @Test
     fun `lowest priority wins among available`() {
         val local = realizer("ocr", priority = 10)
         val cloud = realizer("ocr", priority = 90, kind = RealizerKind.CLOUD)
-        val resolver = DefaultResolver(setOf(cloud, local))
-        assertSame(local, resolver.realizerFor(CapabilityId("ocr")))
+        assertSame(local, resolver(setOf(cloud, local)).realizerFor(CapabilityId("ocr")))
     }
 
     @Test
     fun `preferred but unavailable falls through to the next available`() {
         val local = realizer("ocr", priority = 10, available = false)
         val cloud = realizer("ocr", priority = 90, kind = RealizerKind.CLOUD, available = true)
-        val resolver = DefaultResolver(setOf(local, cloud))
-        assertSame(cloud, resolver.realizerFor(CapabilityId("ocr")))
+        assertSame(cloud, resolver(setOf(local, cloud)).realizerFor(CapabilityId("ocr")))
     }
 
     @Test
     fun `kind breaks priority ties — local before cloud`() {
         val local = realizer("ai", kind = RealizerKind.LOCAL)
         val cloud = realizer("ai", kind = RealizerKind.CLOUD)
-        val resolver = DefaultResolver(setOf(cloud, local))
-        assertSame(local, resolver.realizerFor(CapabilityId("ai")))
+        assertSame(local, resolver(setOf(cloud, local)).realizerFor(CapabilityId("ai")))
     }
 
     @Test
     fun `when none is available it returns the top-ranked so perform surfaces the error`() {
         val local = realizer("ocr", priority = 10, available = false)
         val cloud = realizer("ocr", priority = 90, kind = RealizerKind.CLOUD, available = false)
-        val resolver = DefaultResolver(setOf(cloud, local))
-        assertSame(local, resolver.realizerFor(CapabilityId("ocr")))
+        assertSame(local, resolver(setOf(cloud, local)).realizerFor(CapabilityId("ocr")))
     }
 
     @Test
     fun `unknown capability id throws`() {
-        val resolver = DefaultResolver(setOf(realizer("ocr")))
         assertThrows(IllegalStateException::class.java) {
-            resolver.realizerFor(CapabilityId("nope"))
+            resolver(setOf(realizer("ocr"))).realizerFor(CapabilityId("nope"))
         }
+    }
+
+    // --- paywall gate ---
+
+    @Test
+    fun `a paid capability resolves to an upsell when not entitled`() = runTest {
+        val r = resolver(setOf(realizer("ai", done = "real AI")), entitled = false)
+        val result = r.realizerFor(AiCapability.ID).perform(obj())
+        assertTrue(result is ActionResult.Failure)
+        assertTrue((result as ActionResult.Failure).recoverable)
+    }
+
+    @Test
+    fun `a paid capability passes through to the real realizer when entitled`() = runTest {
+        val r = resolver(setOf(realizer("ai", done = "real AI")), entitled = true)
+        val result = r.realizerFor(AiCapability.ID).perform(obj())
+        assertEquals("real AI", (result as ActionResult.Done).message)
+    }
+
+    @Test
+    fun `a free capability is never gated`() = runTest {
+        val r = resolver(setOf(realizer("save", done = "saved")), entitled = false)
+        val result = r.realizerFor(SaveCapability.ID).perform(obj())
+        assertEquals("saved", (result as ActionResult.Done).message)
     }
 }

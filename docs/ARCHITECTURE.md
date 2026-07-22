@@ -363,6 +363,12 @@ Robolectric. Это практический выхлоп принципа «max
   страниц (тот же шов, что распаковка архива). Дальше — существующий просмотр
   коллекции (страницы = IMAGE-элементы). Закрывает роадмап #2 и для PDF.
 
+**Срез «paywall-шов (Entitlements)» — реализован (BUILD SUCCESSFUL):**
+- `Entitlements` (контракт) + `DefaultEntitlements` (`:data`, всё разрешено). Гейт в
+  `DefaultResolver`: PAID-capability без entitlement → `PaywallRealizer` (апселл)
+  вместо реального realizer'а — как выбор реализации, UI/граф не трогаем. Роадмап #3;
+  включается заменой дефолта на реальную проверку подписки. См. `DECISIONS.md`.
+
 **Отложено:** `IS_IMAGE_PDF`/`HAS_TEXT`-
 энричер для PDF, персист стека на process death; шрифты Manrope/Unbounded и
 отдельные дизайн-экраны (AI / «Ещё» / результат / поток); проверка OCR на
