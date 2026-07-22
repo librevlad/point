@@ -17,6 +17,8 @@ import com.point.executors.ExcelRealizer
 import com.point.executors.LearningBubblePolicy
 import com.point.executors.ImageCapability
 import com.point.executors.ImageRealizer
+import com.point.executors.MergePdfCapability
+import com.point.executors.MergePdfRealizer
 import com.point.executors.OcrCapability
 import com.point.executors.OcrRealizer
 import com.point.executors.OfficeCapability
@@ -65,6 +67,7 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun saveCap(c: SaveCapability): Capability
     @Binds @IntoSet abstract fun saveAllCap(c: SaveAllCapability): Capability
     @Binds @IntoSet abstract fun shareAllCap(c: ShareAllCapability): Capability
+    @Binds @IntoSet abstract fun mergePdfCap(c: MergePdfCapability): Capability
     @Binds @IntoSet abstract fun openCap(c: OpenCapability): Capability
     @Binds @IntoSet abstract fun openUrlCap(c: OpenUrlCapability): Capability
     @Binds @IntoSet abstract fun imageCap(c: ImageCapability): Capability
@@ -83,6 +86,7 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun saveR(r: SaveRealizer): Realizer
     @Binds @IntoSet abstract fun saveAllR(r: SaveAllRealizer): Realizer
     @Binds @IntoSet abstract fun shareAllR(r: ShareAllRealizer): Realizer
+    @Binds @IntoSet abstract fun mergePdfR(r: MergePdfRealizer): Realizer
     @Binds @IntoSet abstract fun openR(r: OpenRealizer): Realizer
     @Binds @IntoSet abstract fun openUrlR(r: OpenUrlRealizer): Realizer
     @Binds @IntoSet abstract fun imageR(r: ImageRealizer): Realizer

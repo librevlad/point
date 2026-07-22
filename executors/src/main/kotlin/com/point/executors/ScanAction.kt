@@ -5,6 +5,7 @@ import android.graphics.BitmapFactory
 import com.point.core.flow.Capability
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.Realizer
+import com.point.core.flow.RealizerMeta
 import com.point.core.model.ActionResult
 import com.point.core.model.CapabilityId
 import com.point.core.model.ObjectKind
@@ -32,6 +33,12 @@ class ScanRealizer @Inject constructor(
     private val store: ObjectStore,
 ) : Realizer {
     override val capabilityId = ScanCapability.ID
+
+    // Fallback tier: the pure-filter scan (grayscale + Otsu), always available. A
+    // preferred OpenCV realizer (auto edge-detection + perspective, isAvailable-gated,
+    // lower priority number) drops in as a Capability Pack and the Resolver prefers
+    // it — falling back here automatically when the pack is absent or OpenCV fails.
+    override val meta = RealizerMeta(priority = 90)
 
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {

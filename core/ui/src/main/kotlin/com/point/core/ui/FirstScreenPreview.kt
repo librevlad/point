@@ -37,6 +37,7 @@ private fun sampleBubbles(kind: ObjectKind): List<Bubble> =
         listOf(
             Bubble("save-all", "Сохранить всё", CapabilityId("save-all"), ObjectState(ObjectKind.COLLECTION)),
             Bubble("share", "Поделиться всем", CapabilityId("share-all"), ObjectState(ObjectKind.COLLECTION)),
+            Bubble("pdf", "Объединить в PDF", CapabilityId("merge-pdf"), ObjectState(ObjectKind.PDF)),
         )
     else universalBubbles(kind) + when (kind) {
     ObjectKind.IMAGE -> listOf(
