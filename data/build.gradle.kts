@@ -61,6 +61,7 @@ dependencies {
     implementation(libs.commons.compress) // tar/gz/bz2/xz archives
     implementation(libs.tukaani.xz) // 7z / xz (LZMA) support for commons-compress
     implementation(libs.junrar) // rar archives
+    implementation(libs.tess.two) // on-device OCR (Tesseract via tess-two, rus+eng)
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
 

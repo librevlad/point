@@ -14,6 +14,7 @@ import com.point.core.flow.ObjectStore
 import com.point.core.flow.OfficeTextExtractor
 import com.point.core.flow.PdfTextExtractor
 import com.point.core.flow.Sharer
+import com.point.core.flow.TextRecognizer
 import com.point.core.flow.UrlOpener
 import com.point.data.AndroidSharer
 import com.point.data.AndroidUrlOpener
@@ -29,6 +30,7 @@ import com.point.data.OoxmlOfficeTextExtractor
 import com.point.data.OpenAiLlmClient
 import com.point.data.PdfBoxTextExtractor
 import com.point.data.ScratchObjectStore
+import com.point.data.TesseractTextRecognizer
 import com.point.data.TextUrlEnricher
 import com.point.data.ZipImagesEnricher
 import dagger.Binds
@@ -75,6 +77,9 @@ abstract class DataModule {
 
     @Binds
     abstract fun favoritesStore(impl: FileFavoritesStore): FavoritesStore
+
+    @Binds
+    abstract fun textRecognizer(impl: TesseractTextRecognizer): TextRecognizer
 
     @Binds @IntoSet
     abstract fun textUrlEnricher(e: TextUrlEnricher): Enricher
