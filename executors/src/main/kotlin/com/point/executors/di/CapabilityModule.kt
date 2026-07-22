@@ -12,6 +12,7 @@ import com.point.executors.ArchiveRealizer
 import com.point.executors.DefaultBubblePolicy
 import com.point.executors.DefaultCapabilityRegistry
 import com.point.executors.DefaultResolver
+import com.point.executors.LearningBubblePolicy
 import com.point.executors.ImageCapability
 import com.point.executors.ImageRealizer
 import com.point.executors.OcrCapability
@@ -55,7 +56,7 @@ abstract class CapabilityModule {
 
     @Binds abstract fun registry(impl: DefaultCapabilityRegistry): CapabilityRegistry
     @Binds abstract fun resolver(impl: DefaultResolver): Resolver
-    @Binds abstract fun bubblePolicy(impl: DefaultBubblePolicy): BubblePolicy
+    @Binds abstract fun bubblePolicy(impl: LearningBubblePolicy): BubblePolicy
 
     // --- Capabilities (declarations) ---
     @Binds @IntoSet abstract fun shareCap(c: ShareCapability): Capability

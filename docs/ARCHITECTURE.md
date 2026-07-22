@@ -369,6 +369,13 @@ Robolectric. Это практический выхлоп принципа «max
   вместо реального realizer'а — как выбор реализации, UI/граф не трогаем. Роадмап #3;
   включается заменой дефолта на реальную проверку подписки. См. `DECISIONS.md`.
 
+**Срез «обучаемая BubblePolicy» — реализован (BUILD SUCCESSFUL):**
+- `CapabilityUsage` (контракт) + `FileCapabilityUsage` (`:data`, `@Singleton`,
+  Properties-персист, снимок в памяти) — счётчики применений; VM пишет `record` на
+  каждом действии. `LearningBubblePolicy` (`:executors`) сортирует по
+  `priority − min(использований, 25)` — часто используемое вперёд, при нуле == старый
+  порядок. Биндится вместо `DefaultBubblePolicy` (тот оставлен для тестов). Роадмап #4.
+
 **Отложено:** `IS_IMAGE_PDF`/`HAS_TEXT`-
 энричер для PDF, персист стека на process death; шрифты Manrope/Unbounded и
 отдельные дизайн-экраны (AI / «Ещё» / результат / поток); проверка OCR на

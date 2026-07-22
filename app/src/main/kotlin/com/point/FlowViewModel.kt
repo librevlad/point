@@ -3,6 +3,7 @@ package com.point
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.point.core.flow.CapabilityRegistry
+import com.point.core.flow.CapabilityUsage
 import com.point.core.flow.Enrichment
 import com.point.core.flow.FavoritesStore
 import com.point.core.flow.HistoryStore
@@ -37,6 +38,7 @@ class FlowViewModel @Inject constructor(
     private val enrichment: Enrichment,
     private val history: HistoryStore,
     private val favorites: FavoritesStore,
+    private val usage: CapabilityUsage,
 ) : ViewModel() {
 
     private val stack = ArrayDeque<FlowFrame>()
@@ -166,6 +168,7 @@ class FlowViewModel @Inject constructor(
 
     private fun dispatch(bubble: Bubble, action: suspend () -> ActionResult) {
         viewModelScope.launch {
+            runCatching { usage.record(bubble.capabilityId) } // learning signal for BubblePolicy
             runCatching { action() }
                 .onSuccess { result -> handleResult(result, bubble) }
                 .onFailure { e -> _ui.update { it.copy(loading = false, message = e.message ?: "Ошибка") } }

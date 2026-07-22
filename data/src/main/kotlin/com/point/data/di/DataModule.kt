@@ -2,6 +2,7 @@ package com.point.data.di
 
 import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
+import com.point.core.flow.CapabilityUsage
 import com.point.core.flow.Enricher
 import com.point.core.flow.Enrichment
 import com.point.core.flow.Entitlements
@@ -27,6 +28,7 @@ import com.point.data.CommonsArchiveExtractor
 import com.point.data.DefaultEnrichment
 import com.point.data.DefaultEntitlements
 import com.point.data.FallbackLlmClient
+import com.point.data.FileCapabilityUsage
 import com.point.data.FileFavoritesStore
 import com.point.data.FileHistoryStore
 import com.point.data.GeminiLlmClient
@@ -92,6 +94,9 @@ abstract class DataModule {
 
     @Binds
     abstract fun favoritesStore(impl: FileFavoritesStore): FavoritesStore
+
+    @Binds
+    abstract fun capabilityUsage(impl: FileCapabilityUsage): CapabilityUsage
 
     @Binds
     abstract fun textRecognizer(impl: TesseractTextRecognizer): TextRecognizer
