@@ -16,8 +16,10 @@ import com.point.core.flow.PdfTextExtractor
 import com.point.core.flow.Sharer
 import com.point.core.flow.TextRecognizer
 import com.point.core.flow.UrlOpener
+import com.point.core.flow.Viewer
 import com.point.data.AndroidSharer
 import com.point.data.AndroidUrlOpener
+import com.point.data.AndroidViewer
 import com.point.data.ClaudeLlmClient
 import com.point.data.CommonsArchiveExtractor
 import com.point.data.DefaultEnrichment
@@ -59,6 +61,9 @@ abstract class DataModule {
 
     @Binds
     abstract fun urlOpener(impl: AndroidUrlOpener): UrlOpener
+
+    @Binds
+    abstract fun viewer(impl: AndroidViewer): Viewer
 
     @Binds
     abstract fun enrichment(impl: DefaultEnrichment): Enrichment

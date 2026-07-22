@@ -7,12 +7,15 @@ import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Compress
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.DocumentScanner
+import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.FolderZip
 import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.SaveAlt
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.Translate
@@ -24,6 +27,8 @@ import com.point.core.model.ObjectKind
 fun bubbleIcon(key: String): ImageVector = when (key) {
     "share" -> Icons.Filled.Share
     "save" -> Icons.Filled.Save
+    "save-all" -> Icons.Filled.SaveAlt
+    "open" -> Icons.Filled.OpenInNew
     "pdf" -> Icons.Filled.PictureAsPdf
     "compress" -> Icons.Filled.Compress
     "unzip" -> Icons.Filled.FolderZip
@@ -44,6 +49,8 @@ fun bubbleIcon(key: String): ImageVector = when (key) {
 fun bubbleColor(key: String): Color = when (key) {
     "share" -> Color(0xFFF5610F)    // orange — brand "send"
     "save" -> Color(0xFF64748B)     // slate — neutral universal
+    "save-all" -> Color(0xFF64748B) // slate — neutral universal (collection)
+    "open" -> Color(0xFF2F80ED)     // blue — open externally
     "ai" -> Color(0xFF7C4DFF)       // purple — intelligence
     "pdf" -> Color(0xFF2F80ED)      // blue — documents
     "link" -> Color(0xFF2F80ED)     // blue — open link
@@ -64,5 +71,6 @@ fun kindIcon(kind: ObjectKind): ImageVector = when (kind) {
     ObjectKind.ZIP -> Icons.Filled.FolderZip
     ObjectKind.OFFICE -> Icons.Filled.Article
     ObjectKind.URL -> Icons.Filled.Link
+    ObjectKind.COLLECTION -> Icons.Filled.FolderOpen
     ObjectKind.UNKNOWN -> Icons.Filled.HelpOutline
 }

@@ -4,6 +4,7 @@ import com.github.junrar.Archive
 import com.point.core.flow.ArchiveExtractor
 import com.point.core.flow.ObjectStore
 import com.point.core.model.PointObject
+import com.point.core.model.ScratchRef
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.apache.commons.compress.archivers.ArchiveEntry
@@ -26,7 +27,7 @@ class CommonsArchiveExtractor @Inject constructor(
     private val store: ObjectStore,
 ) : ArchiveExtractor {
 
-    override suspend fun extract(obj: PointObject): Int = withContext(Dispatchers.IO) {
+    override suspend fun extract(obj: PointObject): ScratchRef = withContext(Dispatchers.IO) {
         val dir = File(store.newScratchFile("unpacked").value).apply { mkdirs() }
         val source = File(obj.uri.value)
 
@@ -35,6 +36,7 @@ class CommonsArchiveExtractor @Inject constructor(
             Format.RAR -> extractRar(source, dir)
             Format.OTHER -> extractStream(source, dir)
         }
+        ScratchRef(dir.absolutePath)
     }
 
     private fun extractStream(source: File, dir: File): Int {

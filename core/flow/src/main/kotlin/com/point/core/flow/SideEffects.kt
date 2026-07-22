@@ -1,6 +1,7 @@
 package com.point.core.flow
 
 import com.point.core.model.PointObject
+import com.point.core.model.ScratchRef
 
 /**
  * Activity-free side-effect contracts for terminal executors. Implemented in
@@ -11,6 +12,11 @@ import com.point.core.model.PointObject
 /** Launches the system share sheet for an object. */
 interface Sharer {
     suspend fun share(obj: PointObject)
+}
+
+/** Opens an object in an external app (the system "open with" / ACTION_VIEW). */
+interface Viewer {
+    suspend fun view(obj: PointObject)
 }
 
 /** Exports an object to shared storage. */
@@ -37,6 +43,7 @@ interface OfficeTextExtractor {
 
 /** Unpacks an archive (zip/tar/gz/bz2/xz) into the scratch store. */
 interface ArchiveExtractor {
-    /** @return the number of files written (0 if unsupported / empty). */
-    suspend fun extract(obj: PointObject): Int
+    /** Unpacks into a fresh scratch directory. @return that directory (may be
+     *  empty if the archive was unsupported / empty — the caller checks). */
+    suspend fun extract(obj: PointObject): ScratchRef
 }

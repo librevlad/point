@@ -25,6 +25,9 @@ class ObjectClassifier {
         val m = mime.lowercase().substringBefore(';').trim()
         val ext = fileName?.substringAfterLast('.', "")?.lowercase().orEmpty()
         return when {
+            // A directory in scratch (e.g. an unpacked archive) is a COLLECTION.
+            // ArchiveRealizer materialises the unpacked dir with this synthetic mime.
+            m == "inode/directory" -> ObjectKind.COLLECTION
             // Office is checked before archives: OOXML files are zip containers and
             // are often shared as application/zip or octet-stream — the extension wins.
             m in OFFICE_MIMES || ext in OFFICE_EXTS -> ObjectKind.OFFICE

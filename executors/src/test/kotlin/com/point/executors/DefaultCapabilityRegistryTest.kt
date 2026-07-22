@@ -19,6 +19,8 @@ class DefaultCapabilityRegistryTest {
         capabilities = setOf(
             ShareCapability(),
             SaveCapability(),
+            SaveAllCapability(),
+            OpenCapability(),
             PdfCapability(),
             ImageCapability(),
             ArchiveCapability(),
@@ -45,8 +47,8 @@ class DefaultCapabilityRegistryTest {
     @Test
     fun `bubble order is deterministic and AI comes last`() {
         val order = registry.bubblesFor(ObjectState(ObjectKind.IMAGE)).map { it.capabilityId.value }
-        // priority 50 ties broken by id (alphabetical), then save(70), share(80), ai(100)
-        assertEquals(listOf("image", "ocr", "pdf", "scan", "save", "share", "ai"), order)
+        // priority 50 ties by id (image/ocr/pdf/scan), then open(65), save(70), share(80), ai(100)
+        assertEquals(listOf("image", "ocr", "pdf", "scan", "open", "save", "share", "ai"), order)
     }
 
     @Test
@@ -62,6 +64,23 @@ class DefaultCapabilityRegistryTest {
         val ids = idsFor(ObjectState(ObjectKind.OFFICE))
         assertTrue(ids.containsAll(setOf("office", "pdf", "share", "save", "ai")))
         assertTrue(setOf("translate", "image", "archive").none { it in ids })
+    }
+
+    @Test
+    fun `open is offered for files but not for urls or collections`() {
+        assertTrue("open" in idsFor(ObjectState(ObjectKind.PDF)))
+        assertTrue("open" in idsFor(ObjectState(ObjectKind.UNKNOWN)))
+        // URL has its own «Открыть ссылку»; a collection is a directory — no external viewer.
+        assertFalse("open" in idsFor(ObjectState(ObjectKind.URL)))
+        assertFalse("open" in idsFor(ObjectState(ObjectKind.COLLECTION)))
+    }
+
+    @Test
+    fun `a collection offers save-all and hides single-object actions`() {
+        val ids = idsFor(ObjectState(ObjectKind.COLLECTION))
+        assertTrue("save-all" in ids)
+        // Share / Save / AI operate on one object — they must not target a collection.
+        assertTrue(setOf("share", "save", "ai").none { it in ids })
     }
 
     @Test

@@ -27,7 +27,7 @@ class AiCapability @Inject constructor() : Capability {
     override val icon = "ai"
     override val meta = CapabilityMeta(priority = 100, cost = Cost.PAID, latency = Latency.SLOW, network = true, auth = true)
     override fun label(state: ObjectState) = "AI"
-    override fun accepts(state: ObjectState) = true
+    override fun accepts(state: ObjectState) = state.kind != ObjectKind.COLLECTION
     override fun produces(state: ObjectState): ObjectState? = null // unknown until classified
 
     companion object { val ID = CapabilityId("ai") }
@@ -68,6 +68,9 @@ class AiRealizer @Inject constructor(
         ObjectKind.ZIP -> "Это архив. Подскажи, что с ним можно сделать."
         ObjectKind.OFFICE -> "Это офисный документ. Кратко изложи его содержимое."
         ObjectKind.URL -> "Это ссылка. Кратко скажи, о чём она."
+        // AI is not offered for collections (accepts excludes them), but the
+        // when stays exhaustive so a new kind forces a review here too.
+        ObjectKind.COLLECTION -> "Это набор файлов. Подскажи, что с ними можно сделать."
         ObjectKind.UNKNOWN -> "Помоги разобраться с этим объектом."
     }
 }

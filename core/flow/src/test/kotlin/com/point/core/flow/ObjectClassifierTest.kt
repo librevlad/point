@@ -52,6 +52,13 @@ class ObjectClassifierTest {
     }
 
     @Test
+    fun `classifies an unpacked directory as a COLLECTION`() {
+        // ArchiveRealizer materialises the unpacked dir with this synthetic mime;
+        // ObjectStore.put reclassifies from it, so the COLLECTION kind must survive.
+        assertEquals(ObjectKind.COLLECTION, classifier.classify("inode/directory").kind)
+    }
+
+    @Test
     fun `flags large objects for deferred enrichment`() {
         val small = classifier.classify("application/zip", sizeBytes = 1_000)
         val large = classifier.classify("application/zip", sizeBytes = 200L * 1024 * 1024)

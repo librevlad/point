@@ -13,5 +13,9 @@ enum class ObjectKind {
     /** Office document (docx / xlsx / pptx, and legacy doc/xls/ppt). */
     OFFICE,
     URL,
+
+    /** A set of objects — e.g. an unpacked archive. Its [PointObject.uri] is a
+     *  scratch directory; collection-level actions (save all…) operate on it. */
+    COLLECTION,
     UNKNOWN,
 }

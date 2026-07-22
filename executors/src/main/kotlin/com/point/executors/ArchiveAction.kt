@@ -8,15 +8,19 @@ import com.point.core.model.CapabilityId
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
+import com.point.core.model.ResultObject
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.io.File
 import javax.inject.Inject
 
-/** Archive (zip/tar/gz/bz2/xz/7z/rar) -> unpacked contents in scratch. */
+/** Archive (zip/tar/gz/bz2/xz/7z/rar) -> a COLLECTION of the unpacked files. */
 class ArchiveCapability @Inject constructor() : Capability {
     override val id = ID
     override val icon = "unzip"
     override fun label(state: ObjectState) = "Распаковать"
     override fun accepts(state: ObjectState) = state.kind == ObjectKind.ZIP
-    override fun produces(state: ObjectState) = ObjectState(ObjectKind.UNKNOWN)
+    override fun produces(state: ObjectState) = ObjectState(ObjectKind.COLLECTION)
 
     companion object { val ID = CapabilityId("archive") }
 }
@@ -27,12 +31,23 @@ class ArchiveRealizer @Inject constructor(
     override val capabilityId = ArchiveCapability.ID
 
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
-        runCatching {
-            val count = archive.extract(input)
-            if (count == 0) {
-                ActionResult.Failure("Пустой или неподдерживаемый архив", recoverable = true)
-            } else {
-                ActionResult.Done("Распаковано файлов: $count")
-            }
-        }.getOrElse { ActionResult.Failure(it.message ?: "Ошибка распаковки", recoverable = true) }
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val dir = archive.extract(input)
+                val count = File(dir.value).walkTopDown().count { it.isFile }
+                if (count == 0) {
+                    ActionResult.Failure("Пустой или неподдерживаемый архив", recoverable = true)
+                } else {
+                    // A first-class collection object — the flow continues on it.
+                    ActionResult.Success(
+                        ResultObject(
+                            ObjectKind.COLLECTION,
+                            "inode/directory",
+                            dir,
+                            mapOf("op" to "unpack", "count" to count.toString()),
+                        ),
+                    )
+                }
+            }.getOrElse { ActionResult.Failure(it.message ?: "Ошибка распаковки", recoverable = true) }
+        }
 }

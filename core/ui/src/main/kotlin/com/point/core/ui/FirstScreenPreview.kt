@@ -26,12 +26,16 @@ private fun sampleObject(kind: ObjectKind, mime: String, name: String) = PointOb
 )
 
 private fun universalBubbles(kind: ObjectKind) = listOf(
+    Bubble("open", "Открыть", CapabilityId("open"), ObjectState(kind)),
     Bubble("share", "Поделиться", CapabilityId("share"), ObjectState(kind)),
     Bubble("save", "Сохранить", CapabilityId("save"), ObjectState(kind)),
     Bubble("ai", "AI", CapabilityId("ai"), ObjectState(ObjectKind.TEXT)),
 )
 
-private fun sampleBubbles(kind: ObjectKind): List<Bubble> = universalBubbles(kind) + when (kind) {
+private fun sampleBubbles(kind: ObjectKind): List<Bubble> =
+    if (kind == ObjectKind.COLLECTION)
+        listOf(Bubble("save-all", "Сохранить всё", CapabilityId("save-all"), ObjectState(ObjectKind.COLLECTION)))
+    else universalBubbles(kind) + when (kind) {
     ObjectKind.IMAGE -> listOf(
         Bubble("compress", "Сжать", CapabilityId("image"), ObjectState(ObjectKind.IMAGE)),
         Bubble("pdf", "В PDF", CapabilityId("pdf"), ObjectState(ObjectKind.PDF)),
@@ -69,6 +73,20 @@ private fun PreviewPdf() = PointTheme {
 private fun PreviewZip() = PointTheme {
     val obj = sampleObject(ObjectKind.ZIP, "application/zip", "album.zip")
     FirstScreen(obj = obj, bubbles = sampleBubbles(ObjectKind.ZIP), onBubble = {})
+}
+
+@Preview(name = "Collection · unpacked archive", showBackground = true)
+@Composable
+private fun PreviewCollection() = PointTheme {
+    val obj = sampleObject(ObjectKind.COLLECTION, "inode/directory", "album (распаковано)")
+    FirstScreen(obj = obj, bubbles = sampleBubbles(ObjectKind.COLLECTION), onBubble = {})
+}
+
+@Preview(name = "Unknown file · Открыть", showBackground = true)
+@Composable
+private fun PreviewUnknownOpen() = PointTheme {
+    val obj = sampleObject(ObjectKind.UNKNOWN, "application/octet-stream", "data.bin")
+    FirstScreen(obj = obj, bubbles = sampleBubbles(ObjectKind.UNKNOWN), onBubble = {})
 }
 
 @Preview(name = "Text + Failure message", showBackground = true)

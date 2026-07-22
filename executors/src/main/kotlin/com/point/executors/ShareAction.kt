@@ -6,17 +6,18 @@ import com.point.core.flow.Realizer
 import com.point.core.flow.Sharer
 import com.point.core.model.ActionResult
 import com.point.core.model.CapabilityId
+import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
 import javax.inject.Inject
 
-/** Any object -> system Share sheet. Terminal (no new object). */
+/** Any single object -> system Share sheet. Terminal (no new object). */
 class ShareCapability @Inject constructor() : Capability {
     override val id = ID
     override val icon = "share"
     override val meta = CapabilityMeta(priority = 80)
     override fun label(state: ObjectState) = "Поделиться"
-    override fun accepts(state: ObjectState) = true
+    override fun accepts(state: ObjectState) = state.kind != ObjectKind.COLLECTION
     override fun produces(state: ObjectState) = state
 
     companion object { val ID = CapabilityId("share") }

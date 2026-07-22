@@ -18,12 +18,16 @@ import com.point.executors.OcrCapability
 import com.point.executors.OcrRealizer
 import com.point.executors.OfficeCapability
 import com.point.executors.OfficeRealizer
+import com.point.executors.OpenCapability
+import com.point.executors.OpenRealizer
 import com.point.executors.OpenUrlCapability
 import com.point.executors.OpenUrlRealizer
 import com.point.executors.PdfCapability
 import com.point.executors.PdfRealizer
 import com.point.executors.ScanCapability
 import com.point.executors.ScanRealizer
+import com.point.executors.SaveAllCapability
+import com.point.executors.SaveAllRealizer
 import com.point.executors.SaveCapability
 import com.point.executors.SaveRealizer
 import com.point.executors.ShareCapability
@@ -52,6 +56,8 @@ abstract class CapabilityModule {
     // --- Capabilities (declarations) ---
     @Binds @IntoSet abstract fun shareCap(c: ShareCapability): Capability
     @Binds @IntoSet abstract fun saveCap(c: SaveCapability): Capability
+    @Binds @IntoSet abstract fun saveAllCap(c: SaveAllCapability): Capability
+    @Binds @IntoSet abstract fun openCap(c: OpenCapability): Capability
     @Binds @IntoSet abstract fun openUrlCap(c: OpenUrlCapability): Capability
     @Binds @IntoSet abstract fun imageCap(c: ImageCapability): Capability
     @Binds @IntoSet abstract fun pdfCap(c: PdfCapability): Capability
@@ -65,6 +71,8 @@ abstract class CapabilityModule {
     // --- Realizers (behaviour) ---
     @Binds @IntoSet abstract fun shareR(r: ShareRealizer): Realizer
     @Binds @IntoSet abstract fun saveR(r: SaveRealizer): Realizer
+    @Binds @IntoSet abstract fun saveAllR(r: SaveAllRealizer): Realizer
+    @Binds @IntoSet abstract fun openR(r: OpenRealizer): Realizer
     @Binds @IntoSet abstract fun openUrlR(r: OpenUrlRealizer): Realizer
     @Binds @IntoSet abstract fun imageR(r: ImageRealizer): Realizer
     @Binds @IntoSet abstract fun pdfR(r: PdfRealizer): Realizer

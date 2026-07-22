@@ -319,7 +319,26 @@ Robolectric. Это практический выхлоп принципа «max
   экран «Обработка». Launcher-иконка — adaptive-icon вектором из SVG-пути макета
   (ink-градиент + белый пузырь + оранжевая точка; monochrome для тем Android 13+).
 
-**Отложено:** распаковка как флоу нескольких объектов, `IS_IMAGE_PDF`/`HAS_TEXT`-
+**Срез «коллекции: распаковка → объект-набор» — реализован (BUILD SUCCESSFUL):**
+- Новый `ObjectKind.COLLECTION`: «Распаковать» больше не терминальна —
+  `ArchiveRealizer` отдаёт `Success(ResultObject(COLLECTION, "inode/directory",
+  <scratch-dir>))`, флоу продолжается на самой коллекции. `ArchiveExtractor.extract`
+  теперь возвращает каталог (`ScratchRef`), а не число файлов.
+- Первое коллекционное действие `SaveAll` («Сохранить всё») экспортирует каждый
+  файл каталога через `Exporter`; одиночные Share/Save/AI для COLLECTION скрыты
+  (`accepts(kind != COLLECTION)`). Классификатор маппит `inode/directory → COLLECTION`
+  (kind переживает переклассификацию в `ObjectStore.put`). См. `DECISIONS.md`.
+
+**Срез «Открыть во внешнем приложении» — реализован (BUILD SUCCESSFUL):**
+- Контракт `Viewer` (`:core:flow`) + `AndroidViewer` (`:data`) — `ACTION_VIEW` через
+  тот же FileProvider, что и Share (scratch уже экспонирован); нет приложения →
+  чистый `Failure(recoverable)`. `OpenCapability`/`OpenRealizer` — терминальные, как
+  `OpenUrl`; `accepts` = файловые объекты (кроме `URL`/`COLLECTION`), `priority=65`.
+- Старое `OpenUrl` переименовано «Открыть» → «Открыть ссылку» (чтобы TEXT c `HAS_URL`
+  не дублировал пузырёк). Иконка `open` → `OpenInNew`. См. `DECISIONS.md`.
+
+**Отложено:** встроенный просмотр текста (сейчас «Открыть» уходит во внешнее
+приложение), `IS_IMAGE_PDF`/`HAS_TEXT`-
 энричер для PDF, персист стека на process death; шрифты Manrope/Unbounded и
 отдельные дизайн-экраны (AI / «Ещё» / результат / поток); проверка OCR на
 устройстве; несколько Realizer'ов на одну Capability (cloud/ICG-шов).

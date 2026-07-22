@@ -23,7 +23,7 @@ class OpenUrlCapability @Inject constructor() : Capability {
     override val id = ID
     override val icon = "link"
     override val meta = CapabilityMeta(priority = 20)
-    override fun label(state: ObjectState) = "Открыть"
+    override fun label(state: ObjectState) = "Открыть ссылку"
     override fun accepts(state: ObjectState) =
         state.kind == ObjectKind.URL || state.has(Feature.HAS_URL)
     override fun produces(state: ObjectState) = state // terminal
