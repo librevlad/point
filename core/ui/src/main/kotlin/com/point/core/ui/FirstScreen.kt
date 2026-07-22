@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
@@ -82,6 +83,7 @@ fun FirstScreen(
     onSaveChain: () -> Unit = {},
     items: List<PointObject> = emptyList(),
     onItem: (PointObject) -> Unit = {},
+    textPreview: String? = null,
 ) {
     Column(
         modifier = modifier
@@ -96,6 +98,11 @@ fun FirstScreen(
 
         if (items.isNotEmpty() && inputPrompt == null) {
             CollectionItems(items = items, onItem = onItem)
+            Spacer(Modifier.height(28.dp))
+        }
+
+        if (textPreview != null && inputPrompt == null) {
+            TextPreview(text = textPreview)
             Spacer(Modifier.height(28.dp))
         }
 
@@ -249,6 +256,37 @@ private fun CollectionItems(items: List<PointObject>, onItem: (PointObject) -> U
                     )
                 }
             }
+        }
+    }
+}
+
+/** For a TEXT object: its content, readable in-app — scroll + native select/copy. */
+@Composable
+private fun TextPreview(text: String) {
+    Text(
+        text = "Текст",
+        style = MaterialTheme.typography.labelMedium,
+        fontWeight = FontWeight.SemiBold,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Spacer(Modifier.height(12.dp))
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        tonalElevation = 1.dp,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        SelectionContainer {
+            Text(
+                text = text,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 320.dp)
+                    .verticalScroll(rememberScrollState())
+                    .padding(16.dp),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
         }
     }
 }

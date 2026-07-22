@@ -27,6 +27,10 @@ interface ObjectStore {
      *  copy). Empty for a non-collection or an empty directory. */
     suspend fun children(collection: PointObject): List<PointObject>
 
+    /** Read up to [limit] characters of a text object's scratch content (UTF-8),
+     *  for an in-app preview. Empty if it is not a readable file. */
+    suspend fun readText(obj: PointObject, limit: Int): String
+
     /** Allocate a fresh, empty file in scratch for an executor to write into.
      *  @param extension without the dot (e.g. "pdf", "jpg", "md"). */
     suspend fun newScratchFile(extension: String): ScratchRef

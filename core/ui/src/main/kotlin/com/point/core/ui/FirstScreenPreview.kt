@@ -113,6 +113,20 @@ private fun PreviewTextWithMessage() = PointTheme {
     )
 }
 
+@Preview(name = "Text · встроенный просмотр", showBackground = true)
+@Composable
+private fun PreviewTextRead() = PointTheme {
+    val obj = sampleObject(ObjectKind.TEXT, "text/plain", "notes.txt")
+    FirstScreen(
+        obj = obj,
+        bubbles = sampleBubbles(ObjectKind.TEXT),
+        onBubble = {},
+        textPreview = "Заголовок заметки\n\nАбзац текста, который прокручивается, " +
+            "выделяется и копируется прямо в Point — не выходя во внешнее приложение.\n\n" +
+            "• пункт один\n• пункт два\n• пункт три\n\nЕщё строка для объёма.",
+    )
+}
+
 @Preview(name = "Image · dark", showBackground = true)
 @Composable
 private fun PreviewImageDark() = PointTheme(darkTheme = true) {

@@ -89,6 +89,23 @@ class ScratchObjectStore @Inject constructor(
         return MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext) ?: "application/octet-stream"
     }
 
+    override suspend fun readText(obj: PointObject, limit: Int): String =
+        withContext(Dispatchers.IO) {
+            val file = File(obj.uri.value)
+            if (!file.isFile) return@withContext ""
+            // Bounded read: never pull a huge file fully into memory for a preview.
+            val out = StringBuilder()
+            val buffer = CharArray(8192)
+            file.bufferedReader().use { reader ->
+                while (out.length < limit) {
+                    val n = reader.read(buffer)
+                    if (n < 0) break
+                    out.append(buffer, 0, minOf(n, limit - out.length))
+                }
+            }
+            out.toString()
+        }
+
     override suspend fun newScratchFile(extension: String): ScratchRef =
         withContext(Dispatchers.IO) {
             val ext = extension.trimStart('.')

@@ -82,6 +82,7 @@ fun PointHost(
                     onSaveChain = onSaveChain,
                     items = current.items,
                     onItem = onItem,
+                    textPreview = current.textPreview,
                 )
             }
 

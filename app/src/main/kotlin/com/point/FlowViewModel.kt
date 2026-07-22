@@ -212,6 +212,25 @@ class FlowViewModel @Inject constructor(
         refreshFavorites()
         enrichInBackground(obj)
         loadChildrenIfCollection(obj)
+        loadTextPreviewIfText(obj)
+    }
+
+    /** For a TEXT frame, read a bounded preview of its content and attach it to the
+     *  frame (only while that object is still on top). Mirrors [enrichInBackground]. */
+    private fun loadTextPreviewIfText(obj: PointObject) {
+        if (obj.state.kind != ObjectKind.TEXT) return
+        viewModelScope.launch {
+            val text = runCatching { store.readText(obj, limit = 100_000) }.getOrDefault("")
+            if (text.isBlank()) return@launch
+
+            val topIndex = stack.lastIndex
+            val top = stack.getOrNull(topIndex) ?: return@launch
+            if (top.obj.id != obj.id) return@launch
+
+            val refreshed = top.copy(textPreview = text)
+            stack[topIndex] = refreshed
+            _ui.update { if (it.frame?.obj?.id == obj.id) it.copy(frame = refreshed) else it }
+        }
     }
 
     /** For a COLLECTION frame, list its items async and attach them to the frame

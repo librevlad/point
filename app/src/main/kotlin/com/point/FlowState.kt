@@ -17,6 +17,8 @@ data class FlowFrame(
     val viaTitle: String? = null,
     /** For a COLLECTION: its items (files), loaded async after the frame is pushed. */
     val items: List<PointObject> = emptyList(),
+    /** For a TEXT object: a bounded preview of its content, loaded async. */
+    val textPreview: String? = null,
 )
 
 /** Immutable UI state rendered by the host. */

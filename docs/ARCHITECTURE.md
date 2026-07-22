@@ -347,8 +347,14 @@ Robolectric. Это практический выхлоп принципа «max
   дальше обычный флоу на элементе (Открыть/Сохранить/OCR/…). `Back` возвращает к
   коллекции. Роадмап #2 (Collection-as-Object) — «множественность + UI».
 
-**Отложено:** встроенный просмотр текста (сейчас «Открыть» уходит во внешнее
-приложение), `IS_IMAGE_PDF`/`HAS_TEXT`-
+**Срез «встроенный просмотр текста» — реализован (BUILD SUCCESSFUL):**
+- `ObjectStore.readText(obj, limit)` (`:core:flow` + `ScratchObjectStore`) — bounded
+  чтение содержимого (100k символов). Грузится async, кладётся в `FlowFrame.textPreview`.
+- `FirstScreen` для TEXT рисует прокручиваемую панель с содержимым и родным
+  выделением/копированием (`SelectionContainer`) — читается в Point, без внешнего
+  приложения. См. `DECISIONS.md`.
+
+**Отложено:** `IS_IMAGE_PDF`/`HAS_TEXT`-
 энричер для PDF, персист стека на process death; шрифты Manrope/Unbounded и
 отдельные дизайн-экраны (AI / «Ещё» / результат / поток); проверка OCR на
 устройстве; несколько Realizer'ов на одну Capability (cloud/ICG-шов).
