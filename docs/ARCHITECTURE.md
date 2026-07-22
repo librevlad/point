@@ -376,6 +376,13 @@ Robolectric. Это практический выхлоп принципа «max
   `priority − min(использований, 25)` — часто используемое вперёд, при нуле == старый
   порядок. Биндится вместо `DefaultBubblePolicy` (тот оставлен для тестов). Роадмап #4.
 
+**Срез «Парсинг в Excel» — реализован (BUILD SUCCESSFUL):**
+- `SpreadsheetWriter` (контракт) + `OoxmlSpreadsheetWriter` (`:data`, минимальный
+  OOXML-zip **без зависимостей**, inline-строки) — пишет строки в `.xlsx`.
+- `ExcelCapability`/`ExcelRealizer` (IMAGE/PDF/TEXT → OFFICE, PAID/сеть → Pro под
+  paywall): LLM извлекает таблицу как TSV (табы/переносы надёжнее CSV) → парсинг →
+  `.xlsx`. Дальше — Открыть/Извлечь текст/Сохранить/Поделиться. См. `DECISIONS.md`.
+
 **Отложено:** `IS_IMAGE_PDF`/`HAS_TEXT`-
 энричер для PDF, персист стека на process death; шрифты Manrope/Unbounded и
 отдельные дизайн-экраны (AI / «Ещё» / результат / поток); проверка OCR на

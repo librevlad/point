@@ -42,15 +42,18 @@ private fun sampleBubbles(kind: ObjectKind): List<Bubble> =
     ObjectKind.IMAGE -> listOf(
         Bubble("compress", "Сжать", CapabilityId("image"), ObjectState(ObjectKind.IMAGE)),
         Bubble("pdf", "В PDF", CapabilityId("pdf"), ObjectState(ObjectKind.PDF)),
+        Bubble("excel", "В Excel", CapabilityId("excel"), ObjectState(ObjectKind.OFFICE)),
     )
     ObjectKind.PDF -> listOf(
         Bubble("pdf", "Извлечь текст", CapabilityId("pdf"), ObjectState(ObjectKind.TEXT)),
         Bubble("pages", "Страницы", CapabilityId("pdf-pages"), ObjectState(ObjectKind.COLLECTION)),
         Bubble("translate", "Перевести", CapabilityId("translate"), ObjectState(ObjectKind.TEXT)),
+        Bubble("excel", "В Excel", CapabilityId("excel"), ObjectState(ObjectKind.OFFICE)),
     )
     ObjectKind.TEXT -> listOf(
         Bubble("pdf", "В PDF", CapabilityId("pdf"), ObjectState(ObjectKind.PDF)),
         Bubble("translate", "Перевести", CapabilityId("translate"), ObjectState(ObjectKind.TEXT)),
+        Bubble("excel", "В Excel", CapabilityId("excel"), ObjectState(ObjectKind.OFFICE)),
     )
     ObjectKind.ZIP -> listOf(
         Bubble("unzip", "Распаковать", CapabilityId("zip"), ObjectState(ObjectKind.UNKNOWN)),

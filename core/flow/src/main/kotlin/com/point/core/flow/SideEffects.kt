@@ -38,6 +38,13 @@ interface PdfTextExtractor {
     suspend fun extractText(obj: PointObject): String
 }
 
+/** Writes rows of cells to a minimal .xlsx in the scratch store (no dependency —
+ *  a hand-rolled OOXML package, mirroring the dependency-free OOXML reader). */
+interface SpreadsheetWriter {
+    /** @return the scratch .xlsx file holding [rows] on one sheet. */
+    suspend fun write(rows: List<List<String>>): ScratchRef
+}
+
 /** Renders each page of a PDF to an image in a fresh scratch directory. */
 interface PdfRasterizer {
     /** @return the scratch directory holding the page images (page-001.jpg …),

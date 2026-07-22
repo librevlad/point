@@ -17,6 +17,7 @@ import com.point.core.flow.OfficeTextExtractor
 import com.point.core.flow.PdfRasterizer
 import com.point.core.flow.PdfTextExtractor
 import com.point.core.flow.Sharer
+import com.point.core.flow.SpreadsheetWriter
 import com.point.core.flow.TextRecognizer
 import com.point.core.flow.UrlOpener
 import com.point.core.flow.Viewer
@@ -34,6 +35,7 @@ import com.point.data.FileHistoryStore
 import com.point.data.GeminiLlmClient
 import com.point.data.MediaStoreExporter
 import com.point.data.OoxmlOfficeTextExtractor
+import com.point.data.OoxmlSpreadsheetWriter
 import com.point.data.OpenAiLlmClient
 import com.point.data.PdfBoxTextExtractor
 import com.point.data.PdfRendererRasterizer
@@ -82,6 +84,9 @@ abstract class DataModule {
 
     @Binds
     abstract fun pdfRasterizer(impl: PdfRendererRasterizer): PdfRasterizer
+
+    @Binds
+    abstract fun spreadsheetWriter(impl: OoxmlSpreadsheetWriter): SpreadsheetWriter
 
     @Binds
     abstract fun officeTextExtractor(impl: OoxmlOfficeTextExtractor): OfficeTextExtractor
