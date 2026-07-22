@@ -6,16 +6,27 @@ import com.point.core.model.CapabilityId
 import javax.inject.Inject
 
 /**
- * MVP resolver: one realizer per capability (the local one). The seam for the
- * future — where a capability has several realizers (local / AI / cloud / ICG)
- * chosen by CapabilityMeta + availability — lives exactly here, invisible to UI.
+ * Chooses a realizer for a capability. Several realizers may implement the same
+ * capability (local / AI / cloud / ICG); candidates are ranked by
+ * `meta.priority` then `meta.kind` (local before cloud before remote), and the
+ * first **available** one wins. This is the seam for cloud/ICG — invisible to UI.
+ * Today each capability has exactly one local realizer, so selection is a no-op.
  */
 class DefaultResolver @Inject constructor(
     realizers: Set<@JvmSuppressWildcards Realizer>,
 ) : Resolver {
 
-    private val byCapability: Map<CapabilityId, Realizer> = realizers.associateBy { it.capabilityId }
+    private val byCapability: Map<CapabilityId, List<Realizer>> =
+        realizers.groupBy { it.capabilityId }
+            .mapValues { (_, candidates) ->
+                candidates.sortedWith(compareBy({ it.meta.priority }, { it.meta.kind.ordinal }))
+            }
 
-    override fun realizerFor(capabilityId: CapabilityId): Realizer =
-        byCapability[capabilityId] ?: error("No realizer for capability=${capabilityId.value}")
+    override fun realizerFor(capabilityId: CapabilityId): Realizer {
+        val candidates = byCapability[capabilityId]
+            ?: error("No realizer for capability=${capabilityId.value}")
+        // Prefer the first available candidate; fall back to the top-ranked one so
+        // the failure surfaces from perform() with a real message, not here.
+        return candidates.firstOrNull { it.isAvailable() } ?: candidates.first()
+    }
 }
