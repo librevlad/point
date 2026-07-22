@@ -27,6 +27,10 @@ android {
             "\"${localProps.getProperty(key, default)}\""
 
         buildConfigField("String", "GEMINI_API_KEY", prop("GEMINI_API_KEY"))
+        // Claude (Anthropic) — fallback after Gemini. Native Messages API.
+        buildConfigField("String", "ANTHROPIC_API_KEY", prop("ANTHROPIC_API_KEY"))
+        buildConfigField("String", "ANTHROPIC_BASE_URL", prop("ANTHROPIC_BASE_URL", "https://api.anthropic.com"))
+        buildConfigField("String", "CLAUDE_MODEL", prop("CLAUDE_MODEL", "claude-opus-4-8"))
         // Alternative provider (OpenAI-compatible: OpenAI, OpenRouter, local...).
         buildConfigField("String", "OPENAI_API_KEY", prop("OPENAI_API_KEY"))
         buildConfigField("String", "OPENAI_BASE_URL", prop("OPENAI_BASE_URL", "https://api.openai.com/v1"))

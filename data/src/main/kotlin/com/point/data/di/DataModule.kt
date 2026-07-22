@@ -17,6 +17,7 @@ import com.point.core.flow.Sharer
 import com.point.core.flow.UrlOpener
 import com.point.data.AndroidSharer
 import com.point.data.AndroidUrlOpener
+import com.point.data.ClaudeLlmClient
 import com.point.data.CommonsArchiveExtractor
 import com.point.data.DefaultEnrichment
 import com.point.data.FallbackLlmClient
@@ -86,12 +87,13 @@ abstract class DataModule {
         @Provides
         fun objectClassifier(): ObjectClassifier = ObjectClassifier()
 
-        /** Ordered AI providers the fallback tries: Gemini first, then OpenAI. */
+        /** Ordered AI providers the fallback tries: Gemini -> Claude -> OpenAI. */
         @Provides
         fun llmProviders(
             gemini: GeminiLlmClient,
+            claude: ClaudeLlmClient,
             openAi: OpenAiLlmClient,
-        ): List<@JvmSuppressWildcards LlmClient> = listOf(gemini, openAi)
+        ): List<@JvmSuppressWildcards LlmClient> = listOf(gemini, claude, openAi)
 
         @Provides
         @HistoryDir

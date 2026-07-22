@@ -8,9 +8,15 @@ sdk.dir=C\:\\Users\\User\\AppData\\Local\\Android\\Sdk
 # Never hard-code this in source and never commit the real local.properties.
 GEMINI_API_KEY=PUT_YOUR_KEY_HERE
 
-# Alternative AI (fallback if Gemini is unavailable, e.g. quota/429).
-# OpenAI-compatible: works with OpenAI, OpenRouter, or a local server.
-# Leave OPENAI_API_KEY blank to disable the fallback.
+# Fallback #1 — Claude (Anthropic), tried after Gemini. Native Messages API.
+# Leave ANTHROPIC_API_KEY blank to disable. Model defaults to claude-opus-4-8;
+# set CLAUDE_MODEL=claude-haiku-4-5 (or claude-sonnet-5) for a cheaper option.
+ANTHROPIC_API_KEY=
+ANTHROPIC_BASE_URL=https://api.anthropic.com
+CLAUDE_MODEL=claude-opus-4-8
+
+# Fallback #2 — OpenAI-compatible (OpenAI, OpenRouter, or a local server).
+# Leave OPENAI_API_KEY blank to disable.
 OPENAI_API_KEY=
 OPENAI_BASE_URL=https://api.openai.com/v1
 OPENAI_MODEL=gpt-4o-mini
