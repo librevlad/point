@@ -52,6 +52,8 @@ class ShareActivity : ComponentActivity() {
                         onBubble = viewModel::onBubble,
                         onSubmitInput = viewModel::submitAmendment,
                         onCancelInput = viewModel::cancelInput,
+                        onApplyFavorite = viewModel::applyFavorite,
+                        onSaveChain = viewModel::saveCurrentChain,
                     )
                 }
             }

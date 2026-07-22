@@ -42,6 +42,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.point.core.model.Bubble
+import com.point.core.model.FavoriteChain
 import com.point.core.model.PointObject
 
 /**
@@ -65,6 +66,10 @@ fun FirstScreen(
     inputPrompt: String? = null,
     onSubmitInput: (String) -> Unit = {},
     onCancelInput: () -> Unit = {},
+    favorites: List<FavoriteChain> = emptyList(),
+    onApplyFavorite: (FavoriteChain) -> Unit = {},
+    canSaveChain: Boolean = false,
+    onSaveChain: () -> Unit = {},
 ) {
     Column(
         modifier = modifier
@@ -97,7 +102,51 @@ fun FirstScreen(
             }
         }
 
+        if (inputPrompt == null && (favorites.isNotEmpty() || canSaveChain)) {
+            Spacer(Modifier.height(20.dp))
+            ChainSection(favorites, onApplyFavorite, canSaveChain, onSaveChain)
+        }
+
         MessageBanner(message)
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ChainSection(
+    favorites: List<FavoriteChain>,
+    onApply: (FavoriteChain) -> Unit,
+    canSave: Boolean,
+    onSave: () -> Unit,
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        if (favorites.isNotEmpty()) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)) {
+                favorites.forEach { chain ->
+                    Surface(
+                        onClick = { onApply(chain) },
+                        shape = RoundedCornerShape(50),
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        tonalElevation = 1.dp,
+                    ) {
+                        Text(
+                            text = "▸ ${chain.name}",
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
+        }
+        if (canSave) {
+            TextButton(onClick = onSave) { Text("★ Сохранить цепочку") }
+        }
     }
 }
 

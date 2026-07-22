@@ -17,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.point.core.model.Bubble
+import com.point.core.model.FavoriteChain
 import com.point.core.ui.FirstScreen
 
 /**
@@ -31,6 +32,8 @@ fun PointHost(
     onBubble: (Bubble) -> Unit,
     onSubmitInput: (String) -> Unit,
     onCancelInput: () -> Unit,
+    onApplyFavorite: (FavoriteChain) -> Unit = {},
+    onSaveChain: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -55,6 +58,10 @@ fun PointHost(
                     inputPrompt = state.inputPrompt,
                     onSubmitInput = onSubmitInput,
                     onCancelInput = onCancelInput,
+                    favorites = state.favorites,
+                    onApplyFavorite = onApplyFavorite,
+                    canSaveChain = state.canSaveChain,
+                    onSaveChain = onSaveChain,
                 )
             }
 

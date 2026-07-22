@@ -5,6 +5,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import com.point.core.flow.Enricher
 import com.point.core.flow.Enrichment
 import com.point.core.flow.Exporter
+import com.point.core.flow.FavoritesStore
 import com.point.core.flow.HistoryStore
 import com.point.core.flow.LlmClient
 import com.point.core.flow.ArchiveExtractor
@@ -19,6 +20,7 @@ import com.point.data.AndroidUrlOpener
 import com.point.data.CommonsArchiveExtractor
 import com.point.data.DefaultEnrichment
 import com.point.data.FallbackLlmClient
+import com.point.data.FileFavoritesStore
 import com.point.data.FileHistoryStore
 import com.point.data.GeminiLlmClient
 import com.point.data.MediaStoreExporter
@@ -70,6 +72,9 @@ abstract class DataModule {
     @Binds
     abstract fun historyStore(impl: FileHistoryStore): HistoryStore
 
+    @Binds
+    abstract fun favoritesStore(impl: FileFavoritesStore): FavoritesStore
+
     @Binds @IntoSet
     abstract fun textUrlEnricher(e: TextUrlEnricher): Enricher
 
@@ -92,5 +97,10 @@ abstract class DataModule {
         @HistoryDir
         fun historyDir(@ApplicationContext context: Context): java.io.File =
             java.io.File(context.filesDir, "history")
+
+        @Provides
+        @FavoritesDir
+        fun favoritesDir(@ApplicationContext context: Context): java.io.File =
+            java.io.File(context.filesDir, "favorites")
     }
 }

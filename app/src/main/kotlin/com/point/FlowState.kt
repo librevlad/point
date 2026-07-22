@@ -1,12 +1,20 @@
 package com.point
 
 import com.point.core.model.Bubble
+import com.point.core.model.CapabilityId
+import com.point.core.model.FavoriteChain
 import com.point.core.model.PointObject
 
-/** One entry on the navigation stack: an object and the bubbles it offers. */
+/**
+ * One entry on the navigation stack: an object, the bubbles it offers, and the
+ * capability that produced it (null for the root). The `via*` provenance is the
+ * flow journal from which a favorite chain is built.
+ */
 data class FlowFrame(
     val obj: PointObject,
     val bubbles: List<Bubble>,
+    val viaCapability: CapabilityId? = null,
+    val viaTitle: String? = null,
 )
 
 /** Immutable UI state rendered by the host. */
@@ -15,6 +23,10 @@ data class FlowUiState(
     val frame: FlowFrame? = null,
     /** Transient text from the ActionResult channel (Failure / Done). */
     val message: String? = null,
-    /** Non-null while an executor awaits free-text input (NeedsInput). */
+    /** Non-null while a capability awaits free-text input (NeedsInput). */
     val inputPrompt: String? = null,
+    /** Saved chains applicable to the current object (first step accepts it). */
+    val favorites: List<FavoriteChain> = emptyList(),
+    /** True when the current flow has ≥1 applied step that can be saved. */
+    val canSaveChain: Boolean = false,
 )

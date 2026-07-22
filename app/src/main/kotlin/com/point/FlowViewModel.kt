@@ -4,11 +4,14 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.point.core.flow.CapabilityRegistry
 import com.point.core.flow.Enrichment
+import com.point.core.flow.FavoritesStore
 import com.point.core.flow.HistoryStore
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.Resolver
 import com.point.core.model.ActionResult
 import com.point.core.model.Bubble
+import com.point.core.model.CapabilityId
+import com.point.core.model.FavoriteChain
 import com.point.core.model.HistoryEntry
 import com.point.core.model.PointObject
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -22,6 +25,8 @@ import javax.inject.Inject
 /**
  * Owns the flow as a stack of [FlowFrame]s (the whole navigation model). The top
  * frame is rendered. Back pops; the scratch store is cleared when the flow ends.
+ * Records each object into History and each capability into the frame provenance,
+ * from which Favorite chains are saved and replayed.
  */
 @HiltViewModel
 class FlowViewModel @Inject constructor(
@@ -30,12 +35,12 @@ class FlowViewModel @Inject constructor(
     private val resolver: Resolver,
     private val enrichment: Enrichment,
     private val history: HistoryStore,
+    private val favorites: FavoritesStore,
 ) : ViewModel() {
 
     private val stack = ArrayDeque<FlowFrame>()
-
-    /** The bubble whose capability returned NeedsInput and is awaiting a reply. */
     private var pendingBubble: Bubble? = null
+    private var allFavorites: List<FavoriteChain> = emptyList()
 
     private val _ui = MutableStateFlow(FlowUiState())
     val ui: StateFlow<FlowUiState> = _ui.asStateFlow()
@@ -43,30 +48,32 @@ class FlowViewModel @Inject constructor(
     private val _recent = MutableStateFlow<List<HistoryEntry>>(emptyList())
     val recent: StateFlow<List<HistoryEntry>> = _recent.asStateFlow()
 
-    /** Entry point: a Share source (Uri stringified) + its MIME. */
+    init {
+        viewModelScope.launch { loadFavorites() }
+    }
+
     fun onShared(sourceUri: String, mime: String) {
         _ui.update { it.copy(loading = true, message = null, inputPrompt = null) }
         viewModelScope.launch {
             val obj = runCatching {
-                store.clear() // drop any prior/leaked flow before copy-in
+                store.clear()
                 store.ingest(sourceUri, mime)
             }.getOrElse { e ->
                 _ui.update { it.copy(loading = false, message = "Не удалось открыть: ${e.message}") }
                 return@launch
             }
-            runCatching { history.record(obj) } // best-effort; never blocks the flow
+            runCatching { history.record(obj) }
+            stack.clear()
             pushFrame(obj)
         }
     }
 
-    /** Load recent history for the home screen. */
     fun loadRecent() {
         viewModelScope.launch {
             _recent.value = runCatching { history.recent() }.getOrDefault(emptyList())
         }
     }
 
-    /** Re-open a history entry as a fresh flow (no need to re-share). */
     fun openFromHistory(entry: HistoryEntry) {
         _ui.update { it.copy(loading = true, message = null, inputPrompt = null) }
         viewModelScope.launch {
@@ -87,7 +94,6 @@ class FlowViewModel @Inject constructor(
         dispatch(bubble) { resolver.realizerFor(bubble.capabilityId).perform(top, null) }
     }
 
-    /** User answered a NeedsInput prompt. */
     fun submitAmendment(text: String) {
         val bubble = pendingBubble ?: return
         val top = stack.lastOrNull()?.obj ?: return
@@ -101,6 +107,55 @@ class FlowViewModel @Inject constructor(
         _ui.update { it.copy(inputPrompt = null, loading = false) }
     }
 
+    /** Save the capabilities applied so far as a favorite chain (auto-named). */
+    fun saveCurrentChain() {
+        val steps = stack.mapNotNull { it.viaCapability }
+        if (steps.isEmpty()) return
+        val name = stack.mapNotNull { it.viaTitle }.joinToString(" → ").ifBlank { "Цепочка" }
+        viewModelScope.launch {
+            runCatching { favorites.save(name, steps) }
+            loadFavorites()
+            _ui.update { it.copy(message = "Цепочка сохранена: $name") }
+        }
+    }
+
+    /** Replay a saved chain on the current object — one tap for a whole workflow. */
+    fun applyFavorite(chain: FavoriteChain) {
+        val start = stack.lastOrNull()?.obj ?: return
+        _ui.update { it.copy(loading = true, message = null, inputPrompt = null) }
+        viewModelScope.launch {
+            var current = start
+            for (capId in chain.steps) {
+                val realizer = runCatching { resolver.realizerFor(capId) }.getOrNull()
+                if (realizer == null) {
+                    _ui.update { it.copy(loading = false, message = "Шаг цепочки недоступен") }
+                    return@launch
+                }
+                val label = runCatching { registry.byId(capId).label(current.state) }.getOrDefault("")
+                val result = runCatching { realizer.perform(current, null) }
+                    .getOrElse { ActionResult.Failure(it.message ?: "Ошибка", recoverable = true) }
+                when (result) {
+                    is ActionResult.Success -> {
+                        current = store.put(result.result)
+                        pushFrame(current, capId, label)
+                    }
+                    is ActionResult.Done -> {
+                        _ui.update { it.copy(loading = false, message = result.message) }
+                        return@launch
+                    }
+                    is ActionResult.Failure -> {
+                        _ui.update { it.copy(loading = false, message = "Цепочка прервана: ${result.reason}") }
+                        return@launch
+                    }
+                    is ActionResult.NeedsInput -> {
+                        _ui.update { it.copy(loading = false, message = "Цепочка требует ввода — прервана") }
+                        return@launch
+                    }
+                }
+            }
+        }
+    }
+
     private fun dispatch(bubble: Bubble, action: suspend () -> ActionResult) {
         viewModelScope.launch {
             runCatching { action() }
@@ -111,7 +166,7 @@ class FlowViewModel @Inject constructor(
 
     private suspend fun handleResult(result: ActionResult, bubble: Bubble) {
         when (result) {
-            is ActionResult.Success -> pushFrame(store.put(result.result))
+            is ActionResult.Success -> pushFrame(store.put(result.result), bubble.capabilityId, bubble.title)
             is ActionResult.Done -> _ui.update { it.copy(loading = false, message = result.message) }
             is ActionResult.Failure -> _ui.update { it.copy(loading = false, message = result.reason) }
             is ActionResult.NeedsInput -> {
@@ -121,7 +176,6 @@ class FlowViewModel @Inject constructor(
         }
     }
 
-    /** @return true if a frame was popped; false if already at the first frame. */
     fun onBack(): Boolean {
         if (_ui.value.inputPrompt != null) {
             cancelInput()
@@ -130,12 +184,12 @@ class FlowViewModel @Inject constructor(
         if (stack.size <= 1) return false
         stack.removeLast()
         _ui.update { it.copy(frame = stack.last(), message = null) }
+        refreshFavorites()
         return true
     }
 
     fun hasFlow(): Boolean = stack.isNotEmpty()
 
-    /** Abandon the flow and wipe scratch (also used on Activity finish). */
     fun endFlow() {
         stack.clear()
         pendingBubble = null
@@ -143,18 +197,35 @@ class FlowViewModel @Inject constructor(
         viewModelScope.launch { runCatching { store.clear() } }
     }
 
-    private fun pushFrame(obj: PointObject) {
-        val frame = FlowFrame(obj, registry.bubblesFor(obj.state))
+    private fun pushFrame(obj: PointObject, via: CapabilityId? = null, viaTitle: String? = null) {
+        val frame = FlowFrame(obj, registry.bubblesFor(obj.state), via, viaTitle)
         stack.addLast(frame)
         _ui.update { it.copy(loading = false, frame = frame, message = null, inputPrompt = null) }
+        refreshFavorites()
         enrichInBackground(obj)
     }
 
-    /**
-     * Progressive disclosure: after the first paint, peek the object's content
-     * off the main path and, if new features surface, refine the top frame's
-     * bubbles in place. Only applies while that same object is still on top.
-     */
+    /** Recompute which saved chains apply to the top object + whether the current
+     *  path is savable. Pure/synchronous — reads the in-memory favorites. */
+    private fun refreshFavorites() {
+        val top = stack.lastOrNull()
+        if (top == null) {
+            _ui.update { it.copy(favorites = emptyList(), canSaveChain = false) }
+            return
+        }
+        val applicable = allFavorites.filter { chain ->
+            chain.steps.isNotEmpty() &&
+                runCatching { registry.byId(chain.steps.first()).accepts(top.obj.state) }.getOrDefault(false)
+        }
+        val canSave = stack.any { it.viaCapability != null }
+        _ui.update { it.copy(favorites = applicable, canSaveChain = canSave) }
+    }
+
+    private suspend fun loadFavorites() {
+        allFavorites = runCatching { favorites.all() }.getOrDefault(emptyList())
+        refreshFavorites()
+    }
+
     private fun enrichInBackground(obj: PointObject) {
         viewModelScope.launch {
             val extra = runCatching { enrichment.enrich(obj) }.getOrDefault(emptySet())
@@ -162,15 +233,16 @@ class FlowViewModel @Inject constructor(
 
             val topIndex = stack.lastIndex
             val top = stack.getOrNull(topIndex) ?: return@launch
-            if (top.obj.id != obj.id) return@launch // user already moved on
+            if (top.obj.id != obj.id) return@launch
 
             val enrichedState = extra.fold(top.obj.state) { state, feature -> state.with(feature) }
             if (enrichedState == top.obj.state) return@launch
 
             val enrichedObj = top.obj.copy(state = enrichedState)
-            val refreshed = FlowFrame(enrichedObj, registry.bubblesFor(enrichedState))
+            val refreshed = top.copy(obj = enrichedObj, bubbles = registry.bubblesFor(enrichedState))
             stack[topIndex] = refreshed
             _ui.update { if (it.frame === top) it.copy(frame = refreshed) else it }
+            refreshFavorites()
         }
     }
 }
