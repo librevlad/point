@@ -53,6 +53,7 @@ class HomeActivity : ComponentActivity() {
                             onCancelInput = viewModel::cancelInput,
                             onApplyFavorite = viewModel::applyFavorite,
                             onSaveChain = viewModel::saveCurrentChain,
+                            onItem = viewModel::onItem,
                         )
                     }
                 }

@@ -22,6 +22,11 @@ interface ObjectStore {
     /** Wrap an executor's already-materialised [ResultObject] as the next object. */
     suspend fun put(result: ResultObject): PointObject
 
+    /** The items of a COLLECTION — the files under its scratch directory, wrapped
+     *  as objects ready to continue the flow (they are already in scratch, so no
+     *  copy). Empty for a non-collection or an empty directory. */
+    suspend fun children(collection: PointObject): List<PointObject>
+
     /** Allocate a fresh, empty file in scratch for an executor to write into.
      *  @param extension without the dot (e.g. "pdf", "jpg", "md"). */
     suspend fun newScratchFile(extension: String): ScratchRef

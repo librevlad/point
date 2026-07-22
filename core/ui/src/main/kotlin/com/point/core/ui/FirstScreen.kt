@@ -19,11 +19,14 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -77,6 +80,8 @@ fun FirstScreen(
     onApplyFavorite: (FavoriteChain) -> Unit = {},
     canSaveChain: Boolean = false,
     onSaveChain: () -> Unit = {},
+    items: List<PointObject> = emptyList(),
+    onItem: (PointObject) -> Unit = {},
 ) {
     Column(
         modifier = modifier
@@ -88,6 +93,11 @@ fun FirstScreen(
         ObjectHeader(obj)
 
         Spacer(Modifier.height(40.dp))
+
+        if (items.isNotEmpty() && inputPrompt == null) {
+            CollectionItems(items = items, onItem = onItem)
+            Spacer(Modifier.height(28.dp))
+        }
 
         if (inputPrompt != null) {
             AmendmentInput(
@@ -188,6 +198,56 @@ private fun MessageBanner(message: String?) {
                     style = MaterialTheme.typography.bodyMedium,
                     textAlign = TextAlign.Center,
                 )
+            }
+        }
+    }
+}
+
+/** For a COLLECTION: a scrollable list of its items. Tapping one drills in — the
+ *  normal flow continues on that object (its own bubbles: Открыть/Сохранить/…). */
+@Composable
+private fun CollectionItems(items: List<PointObject>, onItem: (PointObject) -> Unit) {
+    Text(
+        text = "Содержимое · ${items.size}",
+        style = MaterialTheme.typography.labelMedium,
+        fontWeight = FontWeight.SemiBold,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Spacer(Modifier.height(12.dp))
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(max = 260.dp)
+            .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        items.forEach { item ->
+            Surface(
+                onClick = { onItem(item) },
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                tonalElevation = 1.dp,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Icon(
+                        imageVector = kindIcon(item.state.kind),
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(22.dp),
+                    )
+                    Text(
+                        text = item.metadata["name"] ?: item.mime,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
         }
     }

@@ -15,6 +15,8 @@ data class FlowFrame(
     val bubbles: List<Bubble>,
     val viaCapability: CapabilityId? = null,
     val viaTitle: String? = null,
+    /** For a COLLECTION: its items (files), loaded async after the frame is pushed. */
+    val items: List<PointObject> = emptyList(),
 )
 
 /** Immutable UI state rendered by the host. */

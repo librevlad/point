@@ -337,6 +337,16 @@ Robolectric. Это практический выхлоп принципа «max
 - Старое `OpenUrl` переименовано «Открыть» → «Открыть ссылку» (чтобы TEXT c `HAS_URL`
   не дублировал пузырёк). Иконка `open` → `OpenInNew`. См. `DECISIONS.md`.
 
+**Срез «коллекция: просмотр + вход в элементы» — реализован (BUILD SUCCESSFUL):**
+- `ObjectStore.children(collection)` (`:core:flow` + `ScratchObjectStore`) — файлы
+  scratch-каталога как `PointObject`'ы без копии (mime по расширению через
+  `MimeTypeMap`, kind — классификатором). Загрузка async, как `enrichInBackground`;
+  результат кладётся в `FlowFrame.items`.
+- `FirstScreen` для COLLECTION рисует скроллируемый список содержимого; тап →
+  `FlowViewModel.onItem` → `pushFrame(item)` (элемент уже в scratch, без ре-ingest),
+  дальше обычный флоу на элементе (Открыть/Сохранить/OCR/…). `Back` возвращает к
+  коллекции. Роадмап #2 (Collection-as-Object) — «множественность + UI».
+
 **Отложено:** встроенный просмотр текста (сейчас «Открыть» уходит во внешнее
 приложение), `IS_IMAGE_PDF`/`HAS_TEXT`-
 энричер для PDF, персист стека на process death; шрифты Manrope/Unbounded и

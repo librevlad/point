@@ -3,6 +3,7 @@ package com.point.data
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
+import android.webkit.MimeTypeMap
 import com.point.core.flow.ObjectClassifier
 import com.point.core.flow.ObjectStore
 import com.point.core.model.PointObject
@@ -62,6 +63,31 @@ class ScratchObjectStore @Inject constructor(
                 metadata = result.metadata,
             )
         }
+
+    override suspend fun children(collection: PointObject): List<PointObject> =
+        withContext(Dispatchers.IO) {
+            val root = File(collection.uri.value)
+            if (!root.isDirectory) return@withContext emptyList()
+            root.walkTopDown()
+                .filter { it.isFile }
+                .map { file ->
+                    val mime = mimeOf(file.name)
+                    PointObject(
+                        id = UUID.randomUUID().toString(),
+                        mime = mime,
+                        uri = ScratchRef(file.absolutePath),
+                        state = classifier.classify(mime, file.length(), file.name),
+                        metadata = mapOf("name" to file.name),
+                    )
+                }
+                .sortedBy { it.metadata["name"]?.lowercase() }
+                .toList()
+        }
+
+    private fun mimeOf(name: String): String {
+        val ext = name.substringAfterLast('.', "").lowercase()
+        return MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext) ?: "application/octet-stream"
+    }
 
     override suspend fun newScratchFile(extension: String): ScratchRef =
         withContext(Dispatchers.IO) {

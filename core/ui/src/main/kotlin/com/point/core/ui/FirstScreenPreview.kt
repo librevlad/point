@@ -79,7 +79,19 @@ private fun PreviewZip() = PointTheme {
 @Composable
 private fun PreviewCollection() = PointTheme {
     val obj = sampleObject(ObjectKind.COLLECTION, "inode/directory", "album (распаковано)")
-    FirstScreen(obj = obj, bubbles = sampleBubbles(ObjectKind.COLLECTION), onBubble = {})
+    val items = listOf(
+        sampleObject(ObjectKind.IMAGE, "image/jpeg", "photo-1.jpg"),
+        sampleObject(ObjectKind.IMAGE, "image/png", "photo-2.png"),
+        sampleObject(ObjectKind.PDF, "application/pdf", "readme.pdf"),
+        sampleObject(ObjectKind.TEXT, "text/plain", "notes.txt"),
+    )
+    FirstScreen(
+        obj = obj,
+        bubbles = sampleBubbles(ObjectKind.COLLECTION),
+        onBubble = {},
+        items = items,
+        onItem = {},
+    )
 }
 
 @Preview(name = "Unknown file · Открыть", showBackground = true)

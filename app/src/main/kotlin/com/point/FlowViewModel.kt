@@ -13,6 +13,7 @@ import com.point.core.model.Bubble
 import com.point.core.model.CapabilityId
 import com.point.core.model.FavoriteChain
 import com.point.core.model.HistoryEntry
+import com.point.core.model.ObjectKind
 import com.point.core.model.PointObject
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -92,6 +93,13 @@ class FlowViewModel @Inject constructor(
         val top = stack.lastOrNull()?.obj ?: return
         _ui.update { it.copy(loading = true, message = null, inputPrompt = null) }
         dispatch(bubble) { resolver.realizerFor(bubble.capabilityId).perform(top, null) }
+    }
+
+    /** Drill into a collection item — continue the normal flow on that object.
+     *  The item is already materialised in scratch, so there is no re-ingest. */
+    fun onItem(item: PointObject) {
+        if (stack.lastOrNull()?.obj?.state?.kind != ObjectKind.COLLECTION) return
+        pushFrame(item)
     }
 
     fun submitAmendment(text: String) {
@@ -203,6 +211,25 @@ class FlowViewModel @Inject constructor(
         _ui.update { it.copy(loading = false, frame = frame, message = null, inputPrompt = null) }
         refreshFavorites()
         enrichInBackground(obj)
+        loadChildrenIfCollection(obj)
+    }
+
+    /** For a COLLECTION frame, list its items async and attach them to the frame
+     *  (only while that object is still on top). Mirrors [enrichInBackground]. */
+    private fun loadChildrenIfCollection(obj: PointObject) {
+        if (obj.state.kind != ObjectKind.COLLECTION) return
+        viewModelScope.launch {
+            val items = runCatching { store.children(obj) }.getOrDefault(emptyList())
+            if (items.isEmpty()) return@launch
+
+            val topIndex = stack.lastIndex
+            val top = stack.getOrNull(topIndex) ?: return@launch
+            if (top.obj.id != obj.id) return@launch
+
+            val refreshed = top.copy(items = items)
+            stack[topIndex] = refreshed
+            _ui.update { if (it.frame?.obj?.id == obj.id) it.copy(frame = refreshed) else it }
+        }
     }
 
     /** Recompute which saved chains apply to the top object + whether the current

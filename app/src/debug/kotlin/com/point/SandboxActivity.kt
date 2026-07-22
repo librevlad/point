@@ -66,6 +66,7 @@ class SandboxActivity : ComponentActivity() {
                             onBubble = viewModel::onBubble,
                             onSubmitInput = viewModel::submitAmendment,
                             onCancelInput = viewModel::cancelInput,
+                            onItem = viewModel::onItem,
                         )
                     }
                 }
