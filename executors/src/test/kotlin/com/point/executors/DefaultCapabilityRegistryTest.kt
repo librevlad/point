@@ -26,6 +26,8 @@ class DefaultCapabilityRegistryTest {
             AiCapability(),
             OpenUrlCapability(),
             OfficeCapability(),
+            ScanCapability(),
+            OcrCapability(),
         ),
         policy = DefaultBubblePolicy(),
     )
@@ -34,16 +36,17 @@ class DefaultCapabilityRegistryTest {
         registry.bubblesFor(state).map { it.capabilityId.value }.toSet()
 
     @Test
-    fun `image offers image-capable bubbles and the universal ones`() {
+    fun `image offers image tools (incl scan and OCR) and the universal ones`() {
         val ids = idsFor(ObjectState(ObjectKind.IMAGE))
-        assertTrue(ids.containsAll(setOf("share", "save", "ai", "image", "pdf")))
+        assertTrue(ids.containsAll(setOf("share", "save", "ai", "image", "pdf", "scan", "ocr")))
         assertTrue(setOf("archive", "translate", "office").none { it in ids })
     }
 
     @Test
     fun `bubble order is deterministic and AI comes last`() {
         val order = registry.bubblesFor(ObjectState(ObjectKind.IMAGE)).map { it.capabilityId.value }
-        assertEquals(listOf("image", "pdf", "save", "share", "ai"), order)
+        // priority 50 ties broken by id (alphabetical), then save(70), share(80), ai(100)
+        assertEquals(listOf("image", "ocr", "pdf", "scan", "save", "share", "ai"), order)
     }
 
     @Test

@@ -6,6 +6,7 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Compress
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.DocumentScanner
 import androidx.compose.material.icons.filled.FolderZip
 import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.Image
@@ -13,6 +14,7 @@ import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.point.core.model.ObjectKind
@@ -28,6 +30,8 @@ fun bubbleIcon(key: String): ImageVector = when (key) {
     "ai" -> Icons.Filled.AutoAwesome
     "link" -> Icons.Filled.Link
     "office" -> Icons.Filled.Article
+    "scan" -> Icons.Filled.DocumentScanner
+    "ocr" -> Icons.Filled.TextFields
     else -> Icons.Filled.Bolt
 }
 

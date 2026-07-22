@@ -14,12 +14,16 @@ import com.point.executors.DefaultCapabilityRegistry
 import com.point.executors.DefaultResolver
 import com.point.executors.ImageCapability
 import com.point.executors.ImageRealizer
+import com.point.executors.OcrCapability
+import com.point.executors.OcrRealizer
 import com.point.executors.OfficeCapability
 import com.point.executors.OfficeRealizer
 import com.point.executors.OpenUrlCapability
 import com.point.executors.OpenUrlRealizer
 import com.point.executors.PdfCapability
 import com.point.executors.PdfRealizer
+import com.point.executors.ScanCapability
+import com.point.executors.ScanRealizer
 import com.point.executors.SaveCapability
 import com.point.executors.SaveRealizer
 import com.point.executors.ShareCapability
@@ -54,6 +58,8 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun officeCap(c: OfficeCapability): Capability
     @Binds @IntoSet abstract fun archiveCap(c: ArchiveCapability): Capability
     @Binds @IntoSet abstract fun translateCap(c: TranslateCapability): Capability
+    @Binds @IntoSet abstract fun scanCap(c: ScanCapability): Capability
+    @Binds @IntoSet abstract fun ocrCap(c: OcrCapability): Capability
     @Binds @IntoSet abstract fun aiCap(c: AiCapability): Capability
 
     // --- Realizers (behaviour) ---
@@ -65,5 +71,7 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun officeR(r: OfficeRealizer): Realizer
     @Binds @IntoSet abstract fun archiveR(r: ArchiveRealizer): Realizer
     @Binds @IntoSet abstract fun translateR(r: TranslateRealizer): Realizer
+    @Binds @IntoSet abstract fun scanR(r: ScanRealizer): Realizer
+    @Binds @IntoSet abstract fun ocrR(r: OcrRealizer): Realizer
     @Binds @IntoSet abstract fun aiR(r: AiRealizer): Realizer
 }
