@@ -8,45 +8,55 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
 /**
- * Point's design system — an intentional indigo/violet palette (not the M3
- * baseline default) so the app reads as its own thing. Only the roles the Bubble
- * UI actually uses are overridden; the rest fall back to sensible M3 defaults.
+ * Point's brand palette (from the Point.dc.html design): ink `#0F1626` + orange
+ * accent `#F5610F` on a light `#F4F5F7` surface. White cards, muted grey
+ * secondary text. Only the roles the Bubble UI uses are set; the rest fall back
+ * to M3 defaults. Per-capability bubble colours live in BubbleIcons.bubbleColor.
  */
 
+// Brand anchors
+private val Ink = Color(0xFF0F1626)
+private val Orange = Color(0xFFF5610F)
+private val Purple = Color(0xFF7C4DFF)
+
 private val LightColors = lightColorScheme(
-    primary = Color(0xFF5A4AE3),
+    primary = Orange,
     onPrimary = Color(0xFFFFFFFF),
-    primaryContainer = Color(0xFFE6DEFF),
-    onPrimaryContainer = Color(0xFF17008A),
-    secondary = Color(0xFF615A8A),
-    secondaryContainer = Color(0xFFE9DEFF),
-    onSecondaryContainer = Color(0xFF1D1147),
-    tertiary = Color(0xFFB4436C),
-    background = Color(0xFFFDFAFF),
-    onBackground = Color(0xFF1B1B22),
-    surface = Color(0xFFFDFAFF),
-    onSurface = Color(0xFF1B1B22),
-    surfaceVariant = Color(0xFFEBE6F3),
-    onSurfaceVariant = Color(0xFF615B70),
+    primaryContainer = Color(0xFFFFE9DB),
+    onPrimaryContainer = Color(0xFFB15A1E),
+    secondary = Ink,
+    onSecondary = Color(0xFFFFFFFF),
+    secondaryContainer = Color(0xFFE4E7EC),
+    onSecondaryContainer = Ink,
+    tertiary = Purple,
+    background = Color(0xFFF4F5F7),
+    onBackground = Ink,
+    surface = Color(0xFFFFFFFF),
+    onSurface = Ink,
+    surfaceVariant = Color(0xFFEEF0F3),
+    onSurfaceVariant = Color(0xFF8A93A0),
+    outline = Color(0xFFCFD3DA),
     errorContainer = Color(0xFFFFDAD6),
     onErrorContainer = Color(0xFF410002),
 )
 
 private val DarkColors = darkColorScheme(
-    primary = Color(0xFFCBBEFF),
-    onPrimary = Color(0xFF2B1A76),
-    primaryContainer = Color(0xFF42319E),
-    onPrimaryContainer = Color(0xFFE6DEFF),
-    secondary = Color(0xFFC8BFF3),
-    secondaryContainer = Color(0xFF484068),
-    onSecondaryContainer = Color(0xFFE9DEFF),
-    tertiary = Color(0xFFF7B1C8),
-    background = Color(0xFF141218),
-    onBackground = Color(0xFFE6E1E9),
-    surface = Color(0xFF141218),
-    onSurface = Color(0xFFE6E1E9),
-    surfaceVariant = Color(0xFF48455A),
-    onSurfaceVariant = Color(0xFFCAC3DC),
+    primary = Orange,
+    onPrimary = Color(0xFF3A1500),
+    primaryContainer = Color(0xFF7A3300),
+    onPrimaryContainer = Color(0xFFFFDCC7),
+    secondary = Color(0xFFCBD3E1),
+    onSecondary = Ink,
+    secondaryContainer = Color(0xFF232838),
+    onSecondaryContainer = Color(0xFFE6E9F0),
+    tertiary = Color(0xFFB39DFF),
+    background = Color(0xFF0F1116),
+    onBackground = Color(0xFFE6E9F0),
+    surface = Color(0xFF171A21),
+    onSurface = Color(0xFFE6E9F0),
+    surfaceVariant = Color(0xFF242833),
+    onSurfaceVariant = Color(0xFF9AA3B2),
+    outline = Color(0xFF3A4152),
     errorContainer = Color(0xFF93000A),
     onErrorContainer = Color(0xFFFFDAD6),
 )

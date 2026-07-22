@@ -7,7 +7,10 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -37,7 +40,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -89,10 +96,17 @@ fun FirstScreen(
                 onCancel = onCancelInput,
             )
         } else {
+            Text(
+                text = "Следующее действие",
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(20.dp))
             FlowRow(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(20.dp, Alignment.CenterHorizontally),
+                verticalArrangement = Arrangement.spacedBy(20.dp),
             ) {
                 bubbles.forEachIndexed { index, bubble ->
                     key(bubble.capabilityId.value) {
@@ -183,23 +197,25 @@ private fun MessageBanner(message: String?) {
 private fun ObjectHeader(obj: PointObject) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Surface(
-            shape = CircleShape,
-            color = MaterialTheme.colorScheme.secondaryContainer,
+            shape = RoundedCornerShape(26.dp),
+            color = MaterialTheme.colorScheme.secondary,
+            shadowElevation = 14.dp,
             modifier = Modifier.size(96.dp),
         ) {
             Icon(
                 imageVector = kindIcon(obj.state.kind),
                 contentDescription = obj.state.kind.name,
-                tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                tint = MaterialTheme.colorScheme.onSecondary,
                 modifier = Modifier
-                    .padding(24.dp)
+                    .padding(26.dp)
                     .fillMaxSize(),
             )
         }
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(14.dp))
         Text(
             text = obj.metadata["name"] ?: obj.mime,
             style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
@@ -225,38 +241,43 @@ private fun BubbleItem(
         label = "bubble-in",
     )
 
-    Surface(
-        onClick = onClick,
-        shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        tonalElevation = 2.dp,
+    val color = bubbleColor(bubble.icon)
+    Column(
         modifier = Modifier
-            .width(100.dp)
+            .width(84.dp)
             .graphicsLayer {
                 alpha = progress
-                val scale = 0.85f + 0.15f * progress
+                val scale = 0.7f + 0.3f * progress
                 scaleX = scale
                 scaleY = scale
-            },
+            }
+            .clickable(onClick = onClick),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Column(
-            modifier = Modifier.padding(vertical = 16.dp, horizontal = 8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
+        Box(
+            modifier = Modifier
+                .size(62.dp)
+                .shadow(10.dp, CircleShape, clip = false, ambientColor = color, spotColor = color)
+                .clip(CircleShape)
+                .background(color),
+            contentAlignment = Alignment.Center,
         ) {
             Icon(
                 imageVector = bubbleIcon(bubble.icon),
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(32.dp),
-            )
-            Spacer(Modifier.height(8.dp))
-            Text(
-                text = bubble.title,
-                style = MaterialTheme.typography.labelLarge,
-                textAlign = TextAlign.Center,
-                maxLines = 2,
+                tint = Color.White,
+                modifier = Modifier.size(28.dp),
             )
         }
+        Spacer(Modifier.height(9.dp))
+        Text(
+            text = bubble.title,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onBackground,
+            textAlign = TextAlign.Center,
+            maxLines = 2,
+        )
     }
 }
 

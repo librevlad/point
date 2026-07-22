@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.Translate
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.point.core.model.ObjectKind
 
@@ -33,6 +34,26 @@ fun bubbleIcon(key: String): ImageVector = when (key) {
     "scan" -> Icons.Filled.DocumentScanner
     "ocr" -> Icons.Filled.TextFields
     else -> Icons.Filled.Bolt
+}
+
+/**
+ * The vivid circle colour for a bubble, from the Point.dc.html palette. The
+ * universal trio (share/save/ai) gets distinct anchors so it never collides with
+ * the type-specific actions it always sits beside.
+ */
+fun bubbleColor(key: String): Color = when (key) {
+    "share" -> Color(0xFFF5610F)    // orange — brand "send"
+    "save" -> Color(0xFF64748B)     // slate — neutral universal
+    "ai" -> Color(0xFF7C4DFF)       // purple — intelligence
+    "pdf" -> Color(0xFF2F80ED)      // blue — documents
+    "link" -> Color(0xFF2F80ED)     // blue — open link
+    "compress" -> Color(0xFF0EA5A5) // teal — image
+    "scan" -> Color(0xFF6366F1)     // indigo — scan
+    "ocr" -> Color(0xFF16A34A)      // green — recognise text
+    "office" -> Color(0xFF16A34A)   // green — documents/data
+    "unzip" -> Color(0xFFF2994A)    // amber — archive
+    "translate" -> Color(0xFFEC4899) // pink — translate
+    else -> Color(0xFF9AA0A6)       // grey — everything else
 }
 
 /** Icon representing the current object's kind, shown in the screen header. */
