@@ -1,0 +1,18 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Themed-icon silhouette (Android 13+): the bubble with the point punched
+         out via even-odd fill, so the mark survives when the system re-tints it. -->
+    <group
+        android:scaleX="1.65"
+        android:scaleY="1.65"
+        android:translateX="21"
+        android:translateY="21.8">
+        <path
+            android:fillColor="#000000"
+            android:fillType="evenOdd"
+            android:pathData="M8 6h24a6 6 0 0 1 6 6v14a6 6 0 0 1-6 6H18l-8 7v-7H8a6 6 0 0 1-6-6V12a6 6 0 0 1 6-6Z M15,19 A7,7 0 1 0 29,19 A7,7 0 1 0 15,19 Z" />
+    </group>
+</vector>

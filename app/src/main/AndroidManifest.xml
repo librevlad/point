@@ -3,6 +3,8 @@
 
     <application
         android:name=".PointApplication"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.Point">
@@ -20,8 +22,8 @@
         </activity>
 
         <!--
-          ShareActivity is the app's ONLY entry point — no launcher icon.
-          It receives Android Share for the MVP object types.
+          ShareActivity receives Android Share for the MVP object types — the
+          other entry point beside the HomeActivity launcher above.
           (A debug-only SandboxActivity with a launcher icon is added by the
           `debug` source set for testing without re-sharing / re-flashing.)
         -->
