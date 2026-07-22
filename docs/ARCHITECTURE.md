@@ -286,5 +286,40 @@ Robolectric. Это практический выхлоп принципа «max
   локальный) + `FallbackLlmClient` — Gemini → OpenAI, первый успех выигрывает
   (прозрачно чинит 429). Ключ/URL/модель — из `local.properties`.
 
+**Срез «платформа: Capability ≠ Realizer» — реализован (BUILD SUCCESSFUL):**
+- `Executor` разрезан на `Capability` (декларация: id/icon/meta/accepts/produces) +
+  `Realizer` (поведение, за `Resolver`'ом) + `BubblePolicy` + `CapabilityRegistry`.
+  UI/граф зависят только от Capability; cloud/ICG встанут как ещё один Realizer.
+- `produces` → nullable-подсказка (истина переклассифицируется из выхода);
+  `CapabilityMeta(priority/cost/latency/network/auth)` — seam ранжирования / paywall /
+  бюджета первого экрана. Реестр тестируется без фейков (декларации без зависимостей).
+
+**Срез «История + Избранное» — реализован (метрика: минус переключения):**
+- `HistoryStore` (контракт) + `FileHistoryStore` (`:data`, JSONL, `@HistoryDir`,
+  без Room): копия каждого объекта + журнал. `HomeActivity` — launcher-домашний
+  экран с недавним; объект переоткрывается **без повторного шаринга**.
+- `FavoritesStore` + провенанс `FlowFrame(viaCapability/viaTitle)`: сохранить
+  последовательность capability и применить к новому объекту в один тап (реплей
+  через `Resolver`, стоп на `Done/Failure/NeedsInput`).
+
+**Срез «офлайн + Claude» — реализован (37 тестов):**
+- Цепочка провайдеров `Gemini → Claude → OpenAI`. `ClaudeLlmClient` — нативный
+  Anthropic Messages API (`HttpURLConnection`+`org.json`, без SDK), картинки/PDF
+  base64. Модель — `CLAUDE_MODEL` (по умолч. `claude-opus-4-8`).
+- **Офлайн-OCR**: `TextRecognizer` (контракт) + `TesseractTextRecognizer` (`:data`,
+  tesseract4android / Tesseract 5, модели rus+eng в assets → filesDir). `OcrRealizer`
+  пробует устройство первым, облако — фолбэком → развязывает «Распознать текст» от
+  Gemini-квоты. ABI ограничен `arm64-v8a`+`armeabi-v7a`.
+- **Фото→скан**: чистый `ScanFilter` (grayscale + Otsu, юнит-тест) + `ScanRealizer`
+  (тонкая Bitmap-обвязка) → IMAGE (дальше «В PDF»/Save/Share).
+
+**Срез «бренд из Point.dc.html» — реализован (BUILD SUCCESSFUL):**
+- Тема ink `#0F1626` + оранжевый `#F5610F` на светлом `#F4F5F7` (вместо индиго M3);
+  круглые цветные пузыри (`bubbleColor` на действие), подпись «Следующее действие»,
+  экран «Обработка». Launcher-иконка — adaptive-icon вектором из SVG-пути макета
+  (ink-градиент + белый пузырь + оранжевая точка; monochrome для тем Android 13+).
+
 **Отложено:** распаковка как флоу нескольких объектов, `IS_IMAGE_PDF`/`HAS_TEXT`-
-энричер для PDF, OCR для сканов, персист стека на process death.
+энричер для PDF, персист стека на process death; шрифты Manrope/Unbounded и
+отдельные дизайн-экраны (AI / «Ещё» / результат / поток); проверка OCR на
+устройстве; несколько Realizer'ов на одну Capability (cloud/ICG-шов).
