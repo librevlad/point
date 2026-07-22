@@ -4,10 +4,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.point.core.flow.CapabilityRegistry
 import com.point.core.flow.Enrichment
+import com.point.core.flow.HistoryStore
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.Resolver
-import com.point.core.model.Bubble
 import com.point.core.model.ActionResult
+import com.point.core.model.Bubble
+import com.point.core.model.HistoryEntry
 import com.point.core.model.PointObject
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,6 +29,7 @@ class FlowViewModel @Inject constructor(
     private val registry: CapabilityRegistry,
     private val resolver: Resolver,
     private val enrichment: Enrichment,
+    private val history: HistoryStore,
 ) : ViewModel() {
 
     private val stack = ArrayDeque<FlowFrame>()
@@ -37,17 +40,44 @@ class FlowViewModel @Inject constructor(
     private val _ui = MutableStateFlow(FlowUiState())
     val ui: StateFlow<FlowUiState> = _ui.asStateFlow()
 
+    private val _recent = MutableStateFlow<List<HistoryEntry>>(emptyList())
+    val recent: StateFlow<List<HistoryEntry>> = _recent.asStateFlow()
+
     /** Entry point: a Share source (Uri stringified) + its MIME. */
     fun onShared(sourceUri: String, mime: String) {
         _ui.update { it.copy(loading = true, message = null, inputPrompt = null) }
         viewModelScope.launch {
-            runCatching {
+            val obj = runCatching {
                 store.clear() // drop any prior/leaked flow before copy-in
                 store.ingest(sourceUri, mime)
-            }.onSuccess { pushFrame(it) }
-                .onFailure { e ->
-                    _ui.update { it.copy(loading = false, message = "Не удалось открыть: ${e.message}") }
-                }
+            }.getOrElse { e ->
+                _ui.update { it.copy(loading = false, message = "Не удалось открыть: ${e.message}") }
+                return@launch
+            }
+            runCatching { history.record(obj) } // best-effort; never blocks the flow
+            pushFrame(obj)
+        }
+    }
+
+    /** Load recent history for the home screen. */
+    fun loadRecent() {
+        viewModelScope.launch {
+            _recent.value = runCatching { history.recent() }.getOrDefault(emptyList())
+        }
+    }
+
+    /** Re-open a history entry as a fresh flow (no need to re-share). */
+    fun openFromHistory(entry: HistoryEntry) {
+        _ui.update { it.copy(loading = true, message = null, inputPrompt = null) }
+        viewModelScope.launch {
+            val obj = runCatching { history.open(entry.id) }.getOrNull()
+            if (obj == null) {
+                _ui.update { it.copy(loading = false, message = "Объект недоступен") }
+                return@launch
+            }
+            runCatching { store.clear() }
+            stack.clear()
+            pushFrame(obj)
         }
     }
 

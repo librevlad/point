@@ -7,6 +7,18 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Point">
 
+        <!-- Home / launcher: recent objects (History). Point is now a place you
+             open to continue working with an object, not only a share target. -->
+        <activity
+            android:name=".HomeActivity"
+            android:exported="true"
+            android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
         <!--
           ShareActivity is the app's ONLY entry point — no launcher icon.
           It receives Android Share for the MVP object types.

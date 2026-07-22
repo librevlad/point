@@ -62,4 +62,5 @@ dependencies {
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.json) // real org.json so history/journal tests run on JVM
 }

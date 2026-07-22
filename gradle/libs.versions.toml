@@ -58,6 +58,7 @@ tukaani-xz = { group = "org.tukaani", name = "xz", version.ref = "tukaaniXz" } #
 junrar = { group = "com.github.junrar", name = "junrar", version.ref = "junrar" } # rar
 
 junit = { group = "junit", name = "junit", version.ref = "junit" }
+json = { group = "org.json", name = "json", version = "20240303" } # real org.json for JVM unit tests
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

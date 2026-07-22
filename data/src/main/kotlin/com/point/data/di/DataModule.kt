@@ -1,8 +1,11 @@
 package com.point.data.di
 
+import android.content.Context
+import dagger.hilt.android.qualifiers.ApplicationContext
 import com.point.core.flow.Enricher
 import com.point.core.flow.Enrichment
 import com.point.core.flow.Exporter
+import com.point.core.flow.HistoryStore
 import com.point.core.flow.LlmClient
 import com.point.core.flow.ArchiveExtractor
 import com.point.core.flow.ObjectClassifier
@@ -16,6 +19,7 @@ import com.point.data.AndroidUrlOpener
 import com.point.data.CommonsArchiveExtractor
 import com.point.data.DefaultEnrichment
 import com.point.data.FallbackLlmClient
+import com.point.data.FileHistoryStore
 import com.point.data.GeminiLlmClient
 import com.point.data.MediaStoreExporter
 import com.point.data.OoxmlOfficeTextExtractor
@@ -63,6 +67,9 @@ abstract class DataModule {
     @Binds
     abstract fun archiveExtractor(impl: CommonsArchiveExtractor): ArchiveExtractor
 
+    @Binds
+    abstract fun historyStore(impl: FileHistoryStore): HistoryStore
+
     @Binds @IntoSet
     abstract fun textUrlEnricher(e: TextUrlEnricher): Enricher
 
@@ -80,5 +87,10 @@ abstract class DataModule {
             gemini: GeminiLlmClient,
             openAi: OpenAiLlmClient,
         ): List<@JvmSuppressWildcards LlmClient> = listOf(gemini, openAi)
+
+        @Provides
+        @HistoryDir
+        fun historyDir(@ApplicationContext context: Context): java.io.File =
+            java.io.File(context.filesDir, "history")
     }
 }
