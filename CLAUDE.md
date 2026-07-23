@@ -46,7 +46,7 @@ export JAVA_HOME="C:/Program Files/Android/Android Studio/jbr"   # для каж
 ./gradlew test assembleDebug          # всё + unit-тесты + debug APK  ← основная проверка
 ./gradlew :app:installDebug           # установить на устройство/эмулятор
 ./gradlew test                        # только unit-тесты (быстро, без эмулятора)
-./gradlew :executors:test --tests "com.point.executors.DefaultCapabilityRegistryTest"  # один класс
+./gradlew :executors:testDebugUnitTest --tests "com.point.executors.DefaultCapabilityRegistryTest"  # один класс (не :executors:test — тот не берёт --tests)
 ./gradlew clean
 ```
 

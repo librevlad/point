@@ -60,7 +60,7 @@ graph TD
         CapabilityRegistry (auto @IntoSet)
                 │  Capability{ id, icon, meta{priority,cost,latency,network,auth}, accepts, produces? }
                 ▼
-             Resolver              ← выбирает реализацию (MVP: одна локальная)
+             Resolver              ← выбирает реализацию; несколько → фолбэк-цепочка
                 ▼
    LocalRealizer · AiRealizer · CloudRealizer · IcgRealizer(завтра)
 ```
@@ -391,7 +391,19 @@ Robolectric. Это практический выхлоп принципа «max
   страницы» без тяжёлых зависимостей. OpenCV-пак — отдельный сфокусированный шаг
   (+~40 МБ, качество детекции — только на устройстве). См. `DECISIONS.md`.
 
+**Срез «OCR: два реализатора через фолбэк-цепочку» — реализован (BUILD SUCCESSFUL):**
+- Пункт #1 роадмапа в проде: device-first/cloud-fallback OCR вынесен из одного
+  реализатора в два (`DeviceOcrRealizer` LOCAL `priority=10`, `CloudOcrRealizer` CLOUD
+  `priority=90`) одной `OcrCapability`, выбираемых `Resolver`'ом. «Readied» шов
+  «несколько Realizer на одну Capability» стал нагруженным.
+- `Resolver` обобщён с «выбрать один доступный» до **output-based фолбэк-цепочки**
+  (`FallbackRealizer`): каждый реализатор передаёт следующему только на
+  `Failure(recoverable=true)`. Устройство распознало пусто → recoverable-Failure →
+  облако. Заодно строго улучшает scan-шов (рантайм-сбой OpenCV → фильтр). Capability с
+  одним реализатором — напрямую, без обёртки. Интеграционный `OcrChainTest`. См.
+  `DECISIONS.md`.
+
 **Отложено:** OpenCV-скан-пак (авто-геометрия), `IS_IMAGE_PDF`/`HAS_TEXT`-
 энричер для PDF, персист стека на process death; шрифты Manrope/Unbounded и
 отдельные дизайн-экраны (AI / «Ещё» / результат / поток); проверка OCR на
-устройстве; несколько Realizer'ов на одну Capability (cloud/ICG-шов).
+устройстве.

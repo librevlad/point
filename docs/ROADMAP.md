@@ -70,8 +70,11 @@ UI, Flow Graph и Bubble Policy знают только **что можно** (`
 
 ## Ближайшие архитектурные шаги (не по срочности)
 
-1. **Несколько `Realizer` на одну `Capability`** — `Resolver` выбирает по
-   `CapabilityMeta` + доступности. Первый настоящий выход к cloud/ICG.
+1. **Несколько `Realizer` на одну `Capability`** — ✅ реализовано (OCR: device→cloud
+   фолбэк-цепочка через `Resolver`/`FallbackRealizer`, см. `ARCHITECTURE.md`). `Resolver`
+   выбирает по `CapabilityMeta` + доступности; несколько доступных → output-based
+   фолбэк-цепочка. Первый настоящий выход к cloud/ICG. Следующий носитель шва —
+   OpenCV-скан-пак.
 2. **Collection-as-Object** — распаковка архива / страницы PDF = *коллекция*
    объектов как гражданин первого класса (сейчас `ArchiveRealizer` возвращает
    `Done` со счётчиком). Нужна модель множественности + UI.

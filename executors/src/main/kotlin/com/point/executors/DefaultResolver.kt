@@ -13,8 +13,10 @@ import javax.inject.Inject
 /**
  * Chooses a realizer for a capability. Several realizers may implement the same
  * capability (local / AI / cloud / ICG); candidates are ranked by `meta.priority`
- * then `meta.kind` (local before cloud before remote), and the first **available**
- * one wins. This is the seam for cloud/ICG — invisible to UI.
+ * then `meta.kind` (local before cloud before remote). One available realizer is
+ * returned directly; several are wrapped in a [FallbackRealizer] output-based chain —
+ * each defers to the next on a recoverable failure (e.g. on-device OCR that recognises
+ * nothing hands off to the cloud). This is the seam for cloud/ICG — invisible to UI.
  *
  * It is also the paywall seam: a PAID capability the user is not entitled to
  * resolves to a [PaywallRealizer] upsell instead of the real realizer. Gating is a
@@ -37,9 +39,17 @@ class DefaultResolver @Inject constructor(
         if (isPaywalled(capabilityId)) return PaywallRealizer(capabilityId)
         val candidates = byCapability[capabilityId]
             ?: error("No realizer for capability=${capabilityId.value}")
-        // Prefer the first available candidate; fall back to the top-ranked one so
-        // the failure surfaces from perform() with a real message, not here.
-        return candidates.firstOrNull { it.isAvailable() } ?: candidates.first()
+        val available = candidates.filter { it.isAvailable() }
+        return when {
+            // None available: return the top-ranked one so the failure surfaces from
+            // perform() with a real message, not here.
+            available.isEmpty() -> candidates.first()
+            // One available: no wrapper — behaviour of single-realizer capabilities is
+            // exactly as before.
+            available.size == 1 -> available.first()
+            // Several available: an output-based fallback chain (ranked, available).
+            else -> FallbackRealizer(capabilityId, available)
+        }
     }
 
     /** A PAID capability blocks only when the user is not entitled. An unknown id

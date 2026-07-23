@@ -7,6 +7,8 @@ import com.point.core.flow.Latency
 import com.point.core.flow.LlmClient
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.Realizer
+import com.point.core.flow.RealizerKind
+import com.point.core.flow.RealizerMeta
 import com.point.core.flow.TextRecognizer
 import com.point.core.model.ActionResult
 import com.point.core.model.CapabilityId
@@ -37,33 +39,57 @@ class OcrCapability @Inject constructor() : Capability {
     companion object { val ID = CapabilityId("ocr") }
 }
 
-class OcrRealizer @Inject constructor(
+/**
+ * On-device OCR — the chain's **preferred** realizer (local, priority 10, always
+ * selectable). Runs Tesseract (rus+eng): free, offline, no key or quota. A blank
+ * recognition (hard scan) or an engine failure is a **recoverable** Failure, which the
+ * Resolver's fallback chain hands off to [CloudOcrRealizer]. A hit is a TEXT object, so
+ * it chains into translate / to-PDF / save.
+ */
+class DeviceOcrRealizer @Inject constructor(
     private val store: ObjectStore,
     private val recognizer: TextRecognizer,
-    private val llm: LlmClient,
 ) : Realizer {
     override val capabilityId = OcrCapability.ID
+    override val meta = RealizerMeta(priority = 10, kind = RealizerKind.LOCAL)
 
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
+            val text = runCatching { recognizer.recognize(input) }.getOrDefault("")
+            if (text.isBlank()) {
+                return@withContext ActionResult.Failure("На устройстве текст не распознан", recoverable = true)
+            }
             runCatching {
-                val onDevice = runCatching { recognizer.recognize(input) }.getOrDefault("")
-                if (onDevice.isNotBlank()) {
-                    val ref = store.newScratchFile("txt")
-                    File(ref.value).writeText(onDevice)
-                    ActionResult.Success(
-                        ResultObject(
-                            ObjectKind.TEXT,
-                            "text/plain",
-                            ref,
-                            mapOf("op" to "ocr", "engine" to "on-device"),
-                        ),
-                    )
-                } else {
-                    // On-device recognised nothing — fall back to the cloud LLM.
-                    ActionResult.Success(llm.run(input, PROMPT))
-                }
-            }.getOrElse { ActionResult.Failure(it.message ?: "Ошибка распознавания", recoverable = true) }
+                val ref = store.newScratchFile("txt")
+                File(ref.value).writeText(text)
+                ActionResult.Success(
+                    ResultObject(
+                        ObjectKind.TEXT,
+                        "text/plain",
+                        ref,
+                        mapOf("op" to "ocr", "engine" to "on-device"),
+                    ),
+                )
+            }.getOrElse { ActionResult.Failure(it.message ?: "Ошибка записи результата", recoverable = true) }
+        }
+}
+
+/**
+ * Cloud OCR — the chain's **fallback** realizer (network vision via [LlmClient],
+ * priority 90). Reached only after on-device recognised nothing. A missing key /
+ * provider failure surfaces as a recoverable Failure — as the last link in the chain,
+ * this is what the user sees when nothing could read the image.
+ */
+class CloudOcrRealizer @Inject constructor(
+    private val llm: LlmClient,
+) : Realizer {
+    override val capabilityId = OcrCapability.ID
+    override val meta = RealizerMeta(priority = 90, kind = RealizerKind.CLOUD)
+
+    override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
+        withContext(Dispatchers.IO) {
+            runCatching { ActionResult.Success(llm.run(input, PROMPT)) }
+                .getOrElse { ActionResult.Failure(it.message ?: "Ошибка распознавания в облаке", recoverable = true) }
         }
 
     private companion object {

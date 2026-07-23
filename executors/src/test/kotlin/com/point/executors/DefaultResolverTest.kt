@@ -33,11 +33,13 @@ class DefaultResolverTest {
         kind: RealizerKind = RealizerKind.LOCAL,
         available: Boolean = true,
         done: String = "x",
+        result: ActionResult? = null,
     ) = object : Realizer {
         override val capabilityId = CapabilityId(id)
         override val meta = RealizerMeta(priority, kind)
         override fun isAvailable() = available
-        override suspend fun perform(input: PointObject, amendment: String?) = ActionResult.Done(done)
+        override suspend fun perform(input: PointObject, amendment: String?) =
+            result ?: ActionResult.Done(done)
     }
 
     /** entitled = true keeps the paywall transparent, so selection tests are unchanged. */
@@ -49,10 +51,20 @@ class DefaultResolverTest {
     // --- multi-realizer selection ---
 
     @Test
-    fun `lowest priority wins among available`() {
-        val local = realizer("ocr", priority = 10)
-        val cloud = realizer("ocr", priority = 90, kind = RealizerKind.CLOUD)
-        assertSame(local, resolver(setOf(cloud, local)).realizerFor(CapabilityId("ocr")))
+    fun `the lowest-priority available realizer is tried first`() = runTest {
+        val local = realizer("ocr", priority = 10, done = "local")
+        val cloud = realizer("ocr", priority = 90, kind = RealizerKind.CLOUD, done = "cloud")
+        val result = resolver(setOf(cloud, local)).realizerFor(CapabilityId("ocr")).perform(obj())
+        assertEquals("local", (result as ActionResult.Done).message)
+    }
+
+    @Test
+    fun `multiple available realizers fall through a recoverable failure to the next`() = runTest {
+        val local = realizer("ocr", priority = 10, result = ActionResult.Failure("miss", recoverable = true))
+        val cloud = realizer("ocr", priority = 90, kind = RealizerKind.CLOUD, done = "cloud")
+        val result = resolver(setOf(local, cloud)).realizerFor(CapabilityId("ocr")).perform(obj())
+        assertTrue(result is ActionResult.Done)
+        assertEquals("cloud", (result as ActionResult.Done).message)
     }
 
     @Test
@@ -63,10 +75,11 @@ class DefaultResolverTest {
     }
 
     @Test
-    fun `kind breaks priority ties — local before cloud`() {
-        val local = realizer("ai", kind = RealizerKind.LOCAL)
-        val cloud = realizer("ai", kind = RealizerKind.CLOUD)
-        assertSame(local, resolver(setOf(cloud, local)).realizerFor(CapabilityId("ai")))
+    fun `kind breaks priority ties — local is tried before cloud`() = runTest {
+        val local = realizer("ai", kind = RealizerKind.LOCAL, done = "local")
+        val cloud = realizer("ai", kind = RealizerKind.CLOUD, done = "cloud")
+        val result = resolver(setOf(cloud, local)).realizerFor(CapabilityId("ai")).perform(obj())
+        assertEquals("local", (result as ActionResult.Done).message)
     }
 
     @Test

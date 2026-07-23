@@ -19,8 +19,9 @@ import com.point.executors.ImageCapability
 import com.point.executors.ImageRealizer
 import com.point.executors.MergePdfCapability
 import com.point.executors.MergePdfRealizer
+import com.point.executors.CloudOcrRealizer
+import com.point.executors.DeviceOcrRealizer
 import com.point.executors.OcrCapability
-import com.point.executors.OcrRealizer
 import com.point.executors.OfficeCapability
 import com.point.executors.OfficeRealizer
 import com.point.executors.OpenCapability
@@ -97,6 +98,9 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun translateR(r: TranslateRealizer): Realizer
     @Binds @IntoSet abstract fun excelR(r: ExcelRealizer): Realizer
     @Binds @IntoSet abstract fun scanR(r: ScanRealizer): Realizer
-    @Binds @IntoSet abstract fun ocrR(r: OcrRealizer): Realizer
+    // OCR has two realizers behind one capability — the Resolver ranks device before
+    // cloud and chains them (device recognises nothing -> cloud). Roadmap #1 in prod.
+    @Binds @IntoSet abstract fun deviceOcrR(r: DeviceOcrRealizer): Realizer
+    @Binds @IntoSet abstract fun cloudOcrR(r: CloudOcrRealizer): Realizer
     @Binds @IntoSet abstract fun aiR(r: AiRealizer): Realizer
 }
