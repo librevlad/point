@@ -34,18 +34,30 @@ class GeminiLlmClient @Inject constructor(
             require(key.isNotBlank()) {
                 "GEMINI_API_KEY не задан в local.properties — AI недоступен"
             }
-            val answer = request(key, obj, prompt)
-            val ref = store.newScratchFile("md")
-            File(ref.value).writeText(answer)
-            ResultObject(
-                type = ObjectKind.TEXT,
-                mime = "text/markdown",
-                uri = ref,
-                metadata = mapOf("source" to "gemini", "model" to MODEL),
-            )
+            // Several models tried in order: a stale/zero-quota one (e.g. gemini-2.0-flash
+            // 429s on the free tier) falls through to the next. Aliases like
+            // gemini-flash-latest track a currently-serving free model.
+            val models = BuildConfig.GEMINI_MODELS.split(',').map(String::trim).filter(String::isNotBlank)
+            val errors = StringBuilder()
+            for (model in models) {
+                try {
+                    val answer = request(key, model, obj, prompt)
+                    val ref = store.newScratchFile("md")
+                    File(ref.value).writeText(answer)
+                    return@withContext ResultObject(
+                        type = ObjectKind.TEXT,
+                        mime = "text/markdown",
+                        uri = ref,
+                        metadata = mapOf("source" to "gemini", "model" to model),
+                    )
+                } catch (e: Exception) {
+                    errors.append(model).append(": ").append(e.message ?: "error").append("; ")
+                }
+            }
+            error("Gemini недоступен — $errors")
         }
 
-    private fun request(key: String, obj: PointObject, prompt: String): String {
+    private fun request(key: String, model: String, obj: PointObject, prompt: String): String {
         val parts = JSONArray().put(JSONObject().put("text", prompt))
         maybeAttachFile(obj)?.let { parts.put(it) }
 
@@ -54,7 +66,7 @@ class GeminiLlmClient @Inject constructor(
             JSONArray().put(JSONObject().put("parts", parts)),
         )
 
-        val url = URL("https://generativelanguage.googleapis.com/v1beta/models/$MODEL:generateContent?key=$key")
+        val url = URL("https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$key")
         val conn = (url.openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
             doOutput = true
@@ -97,7 +109,6 @@ class GeminiLlmClient @Inject constructor(
     }
 
     companion object {
-        private const val MODEL = "gemini-2.0-flash"
         private const val MAX_INLINE_BYTES = 15L * 1024 * 1024
     }
 }

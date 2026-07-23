@@ -27,6 +27,9 @@ android {
             "\"${localProps.getProperty(key, default)}\""
 
         buildConfigField("String", "GEMINI_API_KEY", prop("GEMINI_API_KEY"))
+        // Gemini models tried in order (aliases track a serving free model; the pinned
+        // gemini-2.0-flash 429s with zero free quota, so it is NOT the default).
+        buildConfigField("String", "GEMINI_MODELS", prop("GEMINI_MODELS", "gemini-flash-latest,gemini-flash-lite-latest"))
         // Claude (Anthropic) — fallback after Gemini. Native Messages API.
         buildConfigField("String", "ANTHROPIC_API_KEY", prop("ANTHROPIC_API_KEY"))
         buildConfigField("String", "ANTHROPIC_BASE_URL", prop("ANTHROPIC_BASE_URL", "https://api.anthropic.com"))
@@ -52,6 +55,10 @@ android {
         buildConfigField("String", "CEREBRAS_API_KEY", prop("CEREBRAS_API_KEY"))
         buildConfigField("String", "CEREBRAS_BASE_URL", prop("CEREBRAS_BASE_URL", "https://api.cerebras.ai/v1"))
         buildConfigField("String", "CEREBRAS_MODELS", prop("CEREBRAS_MODELS", "gpt-oss-120b,gemma-4-31b"))
+        // GitHub Models — free during preview, generous; needs a GitHub PAT (models scope).
+        buildConfigField("String", "GITHUB_API_KEY", prop("GITHUB_API_KEY"))
+        buildConfigField("String", "GITHUB_BASE_URL", prop("GITHUB_BASE_URL", "https://models.github.ai/inference"))
+        buildConfigField("String", "GITHUB_MODELS", prop("GITHUB_MODELS", "openai/gpt-4o-mini,openai/gpt-4o"))
     }
 
     buildFeatures {
