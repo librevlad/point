@@ -15,14 +15,15 @@ import com.point.core.model.PointObject
 import com.point.core.model.ResultObject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import java.io.File
 import javax.inject.Inject
 
 /**
  * image / pdf / text -> a spreadsheet. The LLM does the hard part (understanding a
- * real-world table); we ask for TSV — tabs and newlines are far more robust than CSV
- * quoting — and materialise a real .xlsx. Paid/network, so it is a Pro action off the
- * first screen (and gated by the paywall seam when entitlements say so).
+ * real-world table); we ask for a **structured JSON** array-of-arrays — far more
+ * reliable than parsing delimited text — and materialise a real .xlsx. Paid/network,
+ * so it is a Pro action off the first screen (gated by the paywall seam).
  */
 class ExcelCapability @Inject constructor() : Capability {
     override val id = ID
@@ -45,15 +46,14 @@ class ExcelRealizer @Inject constructor(
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
             runCatching {
-                // For image/pdf the file is inlined by the LLM client; for text we
-                // pass the content in the prompt.
+                // For image/pdf the file is inlined by the LLM client; for text we pass content in the prompt.
                 val extra = if (input.state.kind == ObjectKind.TEXT) {
                     "\n\nТекст:\n" + File(input.uri.value).readText().take(MAX_TEXT)
                 } else {
                     ""
                 }
                 val answer = llm.run(input, PROMPT + extra)
-                val rows = parseTsv(File(answer.uri.value).readText())
+                val rows = parseTable(File(answer.uri.value).readText())
                 if (rows.isEmpty()) {
                     ActionResult.Failure("Не удалось распознать таблицу", recoverable = true)
                 } else {
@@ -70,22 +70,44 @@ class ExcelRealizer @Inject constructor(
             }.getOrElse { ActionResult.Failure(it.message ?: "Ошибка разбора в Excel", recoverable = true) }
         }
 
-    /** Tab/newline split, tolerant of a stray ``` fence the model may wrap around it. */
-    private fun parseTsv(raw: String): List<List<String>> = raw
-        .trim()
-        .removePrefix("```tsv").removePrefix("```").removeSuffix("```")
-        .trim()
-        .lineSequence()
-        .filter { it.isNotBlank() }
-        .map { line -> line.split('\t').map { it.trim() } }
-        .toList()
-
     private companion object {
         const val XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         const val MAX_TEXT = 20_000
         const val PROMPT =
-            "Извлеки табличные данные из документа. Верни ТОЛЬКО таблицу в формате TSV: " +
-                "строки разделены переносами строк, ячейки внутри строки — символом табуляции. " +
-                "Без пояснений, без markdown, без ограждений ```. Первая строка — заголовки, если они есть."
+            "Извлеки табличные данные из документа. Верни ТОЛЬКО JSON: массив строк таблицы, " +
+                "где каждая строка — массив ячеек-строк, например [[\"Имя\",\"Сумма\"],[\"Приказ\",\"42\"]]. " +
+                "Первая строка — заголовки, если они есть. Без пояснений, без markdown, без ограждений ```."
     }
+}
+
+/**
+ * Robust table parse: a structured JSON array-of-arrays first (what the model is now
+ * asked for — reliable), falling back to TSV so a model that still answers in the old
+ * delimited format keeps working. Tolerant of a stray code fence around either.
+ */
+internal fun parseTable(raw: String): List<List<String>> {
+    val cleaned = raw.trim()
+        .removePrefix("```json").removePrefix("```tsv").removePrefix("```")
+        .removeSuffix("```")
+        .trim()
+
+    parseJsonTable(cleaned)?.let { return it }
+
+    return cleaned.lineSequence()
+        .filter { it.isNotBlank() }
+        .map { line -> line.split('\t').map { it.trim() } }
+        .toList()
+}
+
+/** A JSON array-of-arrays → rows, or null if it is not that shape (→ TSV fallback). */
+private fun parseJsonTable(s: String): List<List<String>>? {
+    if (!s.startsWith("[")) return null
+    return runCatching {
+        val arr = JSONArray(s)
+        (0 until arr.length()).mapNotNull { i ->
+            (arr.opt(i) as? JSONArray)?.let { row ->
+                (0 until row.length()).map { j -> row.get(j).toString() }
+            }
+        }
+    }.getOrNull()?.takeIf { it.isNotEmpty() }
 }

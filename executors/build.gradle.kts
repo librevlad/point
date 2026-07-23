@@ -38,4 +38,5 @@ dependencies {
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.json) // real org.json for JVM unit tests (structured-table parse)
 }

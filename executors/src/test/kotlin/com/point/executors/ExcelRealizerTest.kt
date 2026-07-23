@@ -56,4 +56,24 @@ class ExcelRealizerTest {
         assertTrue(result is ActionResult.Failure)
         assertTrue((result as ActionResult.Failure).recoverable)
     }
+
+    @Test
+    fun `parses a structured JSON table (issue 22)`() = runTest {
+        val result = ExcelRealizer(llm("""[["Имя","Сумма"],["Приказ","42"]]"""), writer).perform(image)
+        assertTrue(result is ActionResult.Success)
+        assertEquals(listOf(listOf("Имя", "Сумма"), listOf("Приказ", "42")), lastRows)
+    }
+
+    @Test
+    fun `tolerates a json code fence`() = runTest {
+        ExcelRealizer(llm("```json\n[[\"A\",\"B\"],[\"1\",\"2\"]]\n```"), writer).perform(image)
+        assertEquals(listOf(listOf("A", "B"), listOf("1", "2")), lastRows)
+    }
+
+    @Test
+    fun `falls back to TSV when the model answers in the old delimited format`() {
+        // parseTable prefers JSON but keeps working on plain TSV.
+        assertEquals(listOf(listOf("A", "B"), listOf("1", "2")), parseTable("A\tB\n1\t2"))
+        assertEquals(emptyList<List<String>>(), parseTable("   "))
+    }
 }
