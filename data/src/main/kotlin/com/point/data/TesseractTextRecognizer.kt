@@ -1,6 +1,7 @@
 package com.point.data
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.Log
 import com.googlecode.tesseract.android.TessBaseAPI
@@ -26,7 +27,7 @@ class TesseractTextRecognizer @Inject constructor(
 
     override suspend fun recognize(obj: PointObject): String = withContext(Dispatchers.IO) {
         if (!obj.mime.startsWith("image/")) return@withContext ""
-        val bitmap = BitmapFactory.decodeFile(obj.uri.value)
+        val bitmap = decodeBounded(obj.uri.value, OCR_MAX_PX)
         if (bitmap == null) {
             Log.w(TAG, "bitmap decode failed: ${obj.mime} @ ${obj.uri.value}")
             return@withContext ""
@@ -53,6 +54,23 @@ class TesseractTextRecognizer @Inject constructor(
         }
     }
 
+    /**
+     * Bounded decode so OCR of a huge photo can't OOM (#18): subsample the long edge to
+     * under 2×[maxPx]. Tesseract does its own orientation detection, so no EXIF rotation here.
+     */
+    private fun decodeBounded(path: String, maxPx: Int): Bitmap? {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(path, bounds)
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+        var sample = 1
+        var edge = maxOf(bounds.outWidth, bounds.outHeight)
+        while (edge / 2 >= maxPx) {
+            edge /= 2
+            sample *= 2
+        }
+        return BitmapFactory.decodeFile(path, BitmapFactory.Options().apply { inSampleSize = sample })
+    }
+
     /** @return the dir that CONTAINS `tessdata/` (what TessBaseAPI.init expects). */
     private fun ensureTessData(): File {
         val base = File(context.filesDir, "tesseract")
@@ -71,6 +89,7 @@ class TesseractTextRecognizer @Inject constructor(
     private companion object {
         const val TAG = "PointOCR"
         const val LANG = "rus+eng"
+        const val OCR_MAX_PX = 2048 // enough for legible text; bounds memory on huge photos (#18)
         val MODELS = listOf("rus.traineddata", "eng.traineddata")
     }
 }

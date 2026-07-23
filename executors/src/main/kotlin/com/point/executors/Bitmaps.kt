@@ -14,16 +14,21 @@ import android.media.ExifInterface
  */
 object Bitmaps {
 
-    /** Full-size, upright decode — for scans and PDF pages. */
-    fun decodeUpright(path: String): Bitmap? =
-        BitmapFactory.decodeFile(path)?.let { uprighted(it, path) }
+    /** Working cap for full processing (scan / PDF / compress): the long edge is subsampled
+     *  to under 2× this before decode, so a 48 MP photo can't OOM a weak device (#18). */
+    const val PROCESS_MAX_PX = 1600
+
+    /** Upright decode, subsampled to at most ~[maxPx] on the long edge (default: the
+     *  processing cap) — for scans, PDF pages and compression. Bounds peak memory (#18). */
+    fun decodeUpright(path: String, maxPx: Int = PROCESS_MAX_PX): Bitmap? = decodeBounded(path, maxPx)
 
     /**
-     * Downsampled, upright decode for a thumbnail: never loads more than ~[maxPx] on the
-     * long edge, so a 12 MP photo costs a few hundred KB instead of tens of MB — the Home
-     * history list can show real previews without OOM or jank (#56).
+     * Small upright preview for lists — the same bounded decode with a thumbnail cap, so a
+     * 12 MP photo costs a few hundred KB instead of tens of MB (#56).
      */
-    fun decodeThumbnail(path: String, maxPx: Int): Bitmap? {
+    fun decodeThumbnail(path: String, maxPx: Int): Bitmap? = decodeBounded(path, maxPx)
+
+    private fun decodeBounded(path: String, maxPx: Int): Bitmap? {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeFile(path, bounds)
         if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
