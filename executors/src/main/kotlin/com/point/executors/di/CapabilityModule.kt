@@ -46,8 +46,11 @@ import com.point.executors.ShareCapability
 import com.point.executors.ShareRealizer
 import com.point.executors.TranslateCapability
 import com.point.executors.TranslateRealizer
+import com.point.core.flow.ObjectStore
+import com.point.executors.OpenCvScanRealizer
 import dagger.Binds
 import dagger.Module
+import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import dagger.multibindings.IntoSet
@@ -107,4 +110,12 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun deviceOcrR(r: DeviceOcrRealizer): Realizer
     @Binds @IntoSet abstract fun cloudOcrR(r: CloudOcrRealizer): Realizer
     @Binds @IntoSet abstract fun aiR(r: AiRealizer): Realizer
+
+    companion object {
+        // @Provides (not @Binds) keeps the concrete OpenCV realizer out of the binding
+        // signature, so Dagger's KSP aggregation never has to resolve the native OpenCV AAR
+        // types (which it can't, even though kotlinc can) — the pack still lands @IntoSet (#45).
+        @Provides @IntoSet
+        fun openCvScanR(store: ObjectStore): Realizer = OpenCvScanRealizer(store)
+    }
 }
