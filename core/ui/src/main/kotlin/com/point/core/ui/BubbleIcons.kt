@@ -120,3 +120,16 @@ fun kindIcon(kind: ObjectKind): ImageVector = when (kind) {
     ObjectKind.COLLECTION -> Icons.Filled.FolderOpen
     ObjectKind.UNKNOWN -> Icons.Filled.HelpOutline
 }
+
+/** Friendly Russian title for an object kind — used when the object has no name, instead of the
+ *  raw MIME (an AI/text result would otherwise read "text/markdown", #77). */
+fun kindLabel(kind: ObjectKind): String = when (kind) {
+    ObjectKind.IMAGE -> "Изображение"
+    ObjectKind.TEXT -> "Текст"
+    ObjectKind.PDF -> "PDF"
+    ObjectKind.ZIP -> "Архив"
+    ObjectKind.OFFICE -> "Документ"
+    ObjectKind.URL -> "Ссылка"
+    ObjectKind.COLLECTION -> "Коллекция"
+    ObjectKind.UNKNOWN -> "Объект"
+}
