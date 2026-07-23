@@ -13,9 +13,9 @@ class ObjectStateTest {
     @Test
     fun `with adds a feature and is immutable`() {
         val base = ObjectState(ObjectKind.PDF)
-        val enriched = base.with(Feature.HAS_TEXT)
+        val enriched = base.with(Feature.HAS_URL)
 
-        assertTrue(enriched.has(Feature.HAS_TEXT))
-        assertFalse("original state must not be mutated", base.has(Feature.HAS_TEXT))
+        assertTrue(enriched.has(Feature.HAS_URL))
+        assertFalse("original state must not be mutated", base.has(Feature.HAS_URL))
     }
 }
