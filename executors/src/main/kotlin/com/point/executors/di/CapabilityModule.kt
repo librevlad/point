@@ -7,6 +7,12 @@ import com.point.core.flow.Realizer
 import com.point.core.flow.Resolver
 import com.point.executors.AiCapability
 import com.point.executors.AiRealizer
+import com.point.executors.CallCapability
+import com.point.executors.CallRealizer
+import com.point.executors.EmailCapability
+import com.point.executors.EmailRealizer
+import com.point.executors.SmsCapability
+import com.point.executors.SmsRealizer
 import com.point.executors.ArchiveCapability
 import com.point.executors.ArchiveRealizer
 import com.point.executors.DefaultBubblePolicy
@@ -77,6 +83,10 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun scanPdfCap(c: ScanPdfCapability): Capability
     @Binds @IntoSet abstract fun openCap(c: OpenCapability): Capability
     @Binds @IntoSet abstract fun openUrlCap(c: OpenUrlCapability): Capability
+    // Entity actions (on-device detection → targeted action) — "right-click" for text.
+    @Binds @IntoSet abstract fun callCap(c: CallCapability): Capability
+    @Binds @IntoSet abstract fun smsCap(c: SmsCapability): Capability
+    @Binds @IntoSet abstract fun emailCap(c: EmailCapability): Capability
     @Binds @IntoSet abstract fun imageCap(c: ImageCapability): Capability
     @Binds @IntoSet abstract fun pdfCap(c: PdfCapability): Capability
     @Binds @IntoSet abstract fun pagesCap(c: PagesCapability): Capability
@@ -97,6 +107,9 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun scanPdfR(r: ScanPdfRealizer): Realizer
     @Binds @IntoSet abstract fun openR(r: OpenRealizer): Realizer
     @Binds @IntoSet abstract fun openUrlR(r: OpenUrlRealizer): Realizer
+    @Binds @IntoSet abstract fun callR(r: CallRealizer): Realizer
+    @Binds @IntoSet abstract fun smsR(r: SmsRealizer): Realizer
+    @Binds @IntoSet abstract fun emailR(r: EmailRealizer): Realizer
     @Binds @IntoSet abstract fun imageR(r: ImageRealizer): Realizer
     @Binds @IntoSet abstract fun pdfR(r: PdfRealizer): Realizer
     @Binds @IntoSet abstract fun pagesR(r: PagesRealizer): Realizer

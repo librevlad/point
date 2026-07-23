@@ -12,6 +12,10 @@ enum class Feature {
     ZIP_OF_IMAGES,
     HAS_URL,
 
+    /** Actionable entities discovered in text (on-device) — each lights up a targeted action. */
+    HAS_PHONE,
+    HAS_EMAIL,
+
     /** Size above the async-enrichment threshold (e.g. a 200 MB zip). */
     LARGE,
 }

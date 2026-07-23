@@ -5,9 +5,11 @@ import androidx.compose.material.icons.filled.Article
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.AutoFixHigh
 import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Collections
 import androidx.compose.material.icons.filled.Compress
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.DocumentScanner
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.FolderZip
@@ -21,6 +23,7 @@ import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.SaveAlt
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Sms
 import androidx.compose.material.icons.filled.TableChart
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.Translate
@@ -46,6 +49,9 @@ fun bubbleIcon(key: String): ImageVector = when (key) {
     "excel" -> Icons.Filled.TableChart
     "scan" -> Icons.Filled.DocumentScanner
     "ocr" -> Icons.Filled.TextFields
+    "call" -> Icons.Filled.Call
+    "message" -> Icons.Filled.Sms
+    "email" -> Icons.Filled.Email
     else -> Icons.Filled.Bolt
 }
 
@@ -70,7 +76,10 @@ fun bubbleColor(key: String): Color = when (key) {
     "unzip" -> Color(0xFFF2994A)    // amber — archive
     "pages" -> Color(0xFF2F80ED)    // blue — PDF pages
     "translate" -> Color(0xFFEC4899) // pink — translate
-    else -> Color(0xFF9AA0A6)       // grey — everything else
+    "call" -> Color(0xFF16A34A)      // green — call
+    "message" -> Color(0xFF2F80ED)   // blue — message
+    "email" -> Color(0xFF2F80ED)     // blue — email
+    else -> Color(0xFF9AA0A6)        // grey — everything else
 }
 
 /** Icon for a user [Intent] — the intent-first surface (Понять / Подготовить / Отправить). */

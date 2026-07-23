@@ -86,6 +86,8 @@ dependencies {
     implementation(libs.tukaani.xz) // 7z / xz (LZMA) support for commons-compress
     implementation(libs.junrar) // rar archives
     implementation(libs.tesseract4android) // on-device OCR (Tesseract 5, rus+eng)
+    implementation(libs.mlkit.entity.extraction) // on-device entity detection (phone/email/…)
+    implementation(libs.kotlinx.coroutines.play.services) // await() for ML Kit Tasks
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
 
