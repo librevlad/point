@@ -20,6 +20,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.point.core.flow.UserAiConfig
 import com.point.core.model.Bubble
 import com.point.core.model.FavoriteChain
 import com.point.core.model.Intent
@@ -42,11 +43,19 @@ fun PointHost(
     onSaveChain: () -> Unit = {},
     onItem: (PointObject) -> Unit = {},
     onIntent: (Intent) -> Unit = {},
+    onSaveAiConfig: (UserAiConfig) -> Unit = {},
+    onCloseKeySettings: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         val frame = state.frame
         when {
+            state.keyScreen != null -> KeyScreen(
+                config = state.keyScreen,
+                onSave = onSaveAiConfig,
+                onCancel = onCloseKeySettings,
+            )
+
             state.busy != null -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 CircularProgressIndicator(
                     color = MaterialTheme.colorScheme.primary,

@@ -42,9 +42,13 @@ class HomeActivity : ComponentActivity() {
             PointTheme {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     val state by viewModel.ui.collectAsStateWithLifecycle()
-                    if (state.frame == null && state.busy == null && state.message == null) {
+                    if (state.frame == null && state.busy == null && state.message == null && state.keyScreen == null) {
                         val recent by viewModel.recent.collectAsStateWithLifecycle()
-                        HomeScreen(recent = recent, onOpen = viewModel::openFromHistory)
+                        HomeScreen(
+                            recent = recent,
+                            onOpen = viewModel::openFromHistory,
+                            onSettings = viewModel::openKeySettings,
+                        )
                     } else {
                         PointHost(
                             state = state,
@@ -55,6 +59,8 @@ class HomeActivity : ComponentActivity() {
                             onApplyFavorite = viewModel::applyFavorite,
                             onSaveChain = viewModel::saveCurrentChain,
                             onItem = viewModel::onItem,
+                            onSaveAiConfig = viewModel::saveAiConfig,
+                            onCloseKeySettings = viewModel::closeKeySettings,
                         )
                     }
                 }

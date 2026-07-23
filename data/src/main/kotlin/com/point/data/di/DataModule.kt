@@ -20,6 +20,7 @@ import com.point.core.flow.Sharer
 import com.point.core.flow.SpreadsheetWriter
 import com.point.core.flow.TextRecognizer
 import com.point.core.flow.UrlOpener
+import com.point.core.flow.UserKeyStore
 import com.point.core.flow.Viewer
 import com.point.data.AndroidSharer
 import com.point.data.AndroidUrlOpener
@@ -45,6 +46,8 @@ import com.point.data.configured
 import com.point.data.openAiModels
 import com.point.data.PdfBoxTextExtractor
 import com.point.data.PdfImageEnricher
+import com.point.data.PrefsUserKeyStore
+import com.point.data.UserKeyLlmClient
 import com.point.data.PdfRendererRasterizer
 import com.point.data.ScratchObjectStore
 import com.point.data.TesseractTextRecognizer
@@ -117,6 +120,10 @@ abstract class DataModule {
     @Binds
     abstract fun httpJson(impl: UrlConnectionHttpJson): HttpJson
 
+    /** The user's own AI key (BYO), stored on-device. */
+    @Binds
+    abstract fun userKeyStore(impl: PrefsUserKeyStore): UserKeyStore
+
     @Binds @IntoSet
     abstract fun textUrlEnricher(e: TextUrlEnricher): Enricher
 
@@ -142,6 +149,7 @@ abstract class DataModule {
         fun llmProviders(
             http: HttpJson,
             store: ObjectStore,
+            userKey: UserKeyLlmClient,
             gemini: GeminiLlmClient,
             claude: ClaudeLlmClient,
         ): List<@JvmSuppressWildcards LlmClient> {
@@ -150,7 +158,8 @@ abstract class DataModule {
                 if (BuildConfig.GEMINI_API_KEY.isNotBlank()) add(gemini)
                 if (BuildConfig.ANTHROPIC_API_KEY.isNotBlank()) add(claude)
             }
-            return free + native
+            // The user's own key leads the chain; when unset it steps aside to the built-ins.
+            return listOf<LlmClient>(userKey) + free + native
         }
 
         /** Gemini is built here (not @Inject) so its key + model list — from BuildConfig —
