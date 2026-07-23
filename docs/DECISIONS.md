@@ -654,3 +654,18 @@ OCR (Tesseract в :data, который не видит :executors) — со с�
 модели. (3) Если ни один провайдер не подходит — понятная ошибка, а не ложный ответ.
 **Почему маркер, а не эвристика по фразам:** детерминированно и не даёт ложных срабатываний на
 коротком легит-ответе (см. память prefer-strict-format-over-output-matching).
+
+### OpenCV-скан как preferred-реализатор с fallback (#45)
+**Решение:** «Скан» получил CamScanner-пайплайн на OpenCV (`OpenCvScan`: детект документа →
+коррекция перспективы → адаптивный порог), обёрнутый в `OpenCvScanRealizer` (`priority=20`,
+`isAvailable()=OpenCV загружен`). Делит capability `scan` с чистым `ScanRealizer` (90); Resolver
+предпочитает OpenCV, а на recoverable-провал/недоступность падает на Otsu-фильтр — так пак
+никогда не тупикует. Чистая геометрия углов (`orderCorners`) покрыта JVM-тестом.
+**Грабли KSP (важно):** `@Binds @IntoSet fun(r: OpenCvScanRealizer)` рушил ВЕСЬ Hilt-модуль
+(`error.NonExistentClass` на всех биндингах) — Dagger при аггрегации не может резолвить типы
+нативного OpenCV-AAR, хотя kotlinc их видит. Обход: **`@Provides @IntoSet` в companion** —
+конкретный тип только в теле метода, вне сигнатуры биндинга. См. память
+[[ksp-provides-for-native-aar-types]].
+**Осталось (следующий срез):** визуальная проверка качества **на эмуляторе** (картинки из
+сети) + тюнинг порога/детекции; размер APK (OpenCV тащит нативные .so под все ABI) — вынести в
+on-demand pack / ограничить `abiFilters` (созвучно #23).
