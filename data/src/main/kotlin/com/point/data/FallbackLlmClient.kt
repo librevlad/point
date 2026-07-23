@@ -6,25 +6,44 @@ import com.point.core.model.ResultObject
 import javax.inject.Inject
 
 /**
- * Runs an ordered list of providers, returning the first success. If a provider
- * is unconfigured or fails (e.g. Gemini returns HTTP 429 "quota exceeded"), the
- * next one is tried. If all fail, the combined errors are surfaced so the user
- * sees why. This is what makes the alternative AI an actual fallback.
+ * Runs an ordered list of providers, returning the first success. If a provider is
+ * unconfigured or fails (e.g. HTTP 429), the next is tried. When all fail the errors
+ * are **summarised** (#48): a shared cause — no network, or no key at all — becomes
+ * one plain line, and otherwise duplicates collapse, so the user never sees a wall
+ * of repeated "Unable to resolve host …" text from every provider × model.
  */
 class FallbackLlmClient @Inject constructor(
     private val providers: List<@JvmSuppressWildcards LlmClient>,
 ) : LlmClient {
 
     override suspend fun run(obj: PointObject, prompt: String): ResultObject {
-        require(providers.isNotEmpty()) { "Нет настроенных AI-провайдеров" }
-        val errors = StringBuilder()
+        if (providers.isEmpty()) error("AI не настроен — задайте свой ключ")
+        val errors = mutableListOf<String>()
         for (provider in providers) {
             try {
                 return provider.run(obj, prompt)
             } catch (e: Exception) {
-                errors.append(e.message ?: e.javaClass.simpleName).append("; ")
+                errors += e.message ?: e.javaClass.simpleName
             }
         }
-        error("AI недоступен — $errors")
+        error(summarise(errors))
+    }
+
+    /** One human line instead of every provider's raw error concatenated. */
+    private fun summarise(errors: List<String>): String = when {
+        errors.isNotEmpty() && errors.all { it.isNetworkError() } ->
+            "AI недоступен — нет подключения к интернету"
+        else -> "AI недоступен — " +
+            errors.map { it.substringBefore('\n').take(120) }.distinct().take(2).joinToString("; ")
+    }
+
+    private fun String.isNetworkError(): Boolean = NETWORK_HINTS.any { contains(it, ignoreCase = true) }
+
+    private companion object {
+        val NETWORK_HINTS = listOf(
+            "resolve host", "No address associated", "Unable to resolve",
+            "connection abort", "Network is unreachable", "Failed to connect",
+            "timed out", "timeout",
+        )
     }
 }
