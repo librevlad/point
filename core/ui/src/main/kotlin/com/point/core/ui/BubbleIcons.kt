@@ -7,6 +7,7 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.AutoFixHigh
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Call
+import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Collections
 import androidx.compose.material.icons.filled.Compress
 import androidx.compose.material.icons.filled.Description
@@ -51,6 +52,7 @@ fun bubbleIcon(key: String): ImageVector = when (key) {
     "excel" -> Icons.Filled.TableChart
     "scan" -> Icons.Filled.DocumentScanner
     "ocr" -> Icons.Filled.TextFields
+    "ocr-cloud" -> Icons.Filled.Cloud
     "call" -> Icons.Filled.Call
     "message" -> Icons.Filled.Sms
     "email" -> Icons.Filled.Email
@@ -75,6 +77,7 @@ fun bubbleColor(key: String): Color = when (key) {
     "compress" -> Color(0xFF0EA5A5) // teal — image
     "scan" -> Color(0xFF6366F1)     // indigo — scan
     "ocr" -> Color(0xFF16A34A)      // green — recognise text
+    "ocr-cloud" -> Color(0xFF2F80ED) // blue — recognise in the cloud
     "office" -> Color(0xFF16A34A)   // green — documents/data
     "excel" -> Color(0xFF15803D)    // deeper green — spreadsheet
     "unzip" -> Color(0xFFF2994A)    // amber — archive

@@ -27,6 +27,8 @@ import com.point.executors.ImageCapability
 import com.point.executors.ImageRealizer
 import com.point.executors.MergePdfCapability
 import com.point.executors.MergePdfRealizer
+import com.point.executors.CloudOcrCapability
+import com.point.executors.CloudOcrDirectRealizer
 import com.point.executors.CloudOcrRealizer
 import com.point.executors.DeviceOcrRealizer
 import com.point.executors.OcrCapability
@@ -102,6 +104,7 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun excelCap(c: ExcelCapability): Capability
     @Binds @IntoSet abstract fun scanCap(c: ScanCapability): Capability
     @Binds @IntoSet abstract fun ocrCap(c: OcrCapability): Capability
+    @Binds @IntoSet abstract fun cloudOcrCap(c: CloudOcrCapability): Capability
     @Binds @IntoSet abstract fun aiCap(c: AiCapability): Capability
 
     // --- Realizers (behaviour) ---
@@ -130,6 +133,7 @@ abstract class CapabilityModule {
     // cloud and chains them (device recognises nothing -> cloud). Roadmap #1 in prod.
     @Binds @IntoSet abstract fun deviceOcrR(r: DeviceOcrRealizer): Realizer
     @Binds @IntoSet abstract fun cloudOcrR(r: CloudOcrRealizer): Realizer
+    @Binds @IntoSet abstract fun cloudOcrDirectR(r: CloudOcrDirectRealizer): Realizer
     @Binds @IntoSet abstract fun aiR(r: AiRealizer): Realizer
 
     companion object {

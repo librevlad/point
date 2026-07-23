@@ -21,6 +21,12 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import javax.inject.Inject
 
+/** The one prompt for cloud (vision) OCR — shared by the automatic fallback realizer and the
+ *  explicit "Распознать в облаке" escalation. */
+internal const val OCR_CLOUD_PROMPT =
+    "Извлеки весь текст с изображения дословно, сохраняя порядок строк. " +
+        "Таблицы оформи в Markdown. Верни только текст, без комментариев."
+
 /**
  * photo -> recognised text. Tries on-device OCR first (Tesseract, rus+eng — free,
  * offline, no key or quota), and only falls back to the cloud LLM vision path
@@ -90,15 +96,39 @@ class CloudOcrRealizer @Inject constructor(
 
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
-            runCatching { ActionResult.Success(llm.run(input, PROMPT)) }
+            runCatching { ActionResult.Success(llm.run(input, OCR_CLOUD_PROMPT)) }
                 .getOrElse { ActionResult.Failure(it.message ?: "Ошибка распознавания в облаке", recoverable = true) }
         }
+}
 
-    private companion object {
-        const val PROMPT =
-            "Извлеки весь текст с изображения дословно, сохраняя порядок строк. " +
-                "Таблицы оформи в Markdown. Верни только текст, без комментариев."
-    }
+/**
+ * Explicit cloud OCR — the escalation for a hard document photo where on-device Tesseract returns
+ * gibberish (phone photos: low contrast, shadows, skew, handwriting). A separate, always-cloud
+ * bubble the user taps when "Распознать текст" produced junk; the vision LLM reads such photos far
+ * better. Distinct capability (not the fallback realizer) so it shows as its own choice.
+ */
+class CloudOcrCapability @Inject constructor() : Capability {
+    override val id = ID
+    override val icon = "ocr-cloud"
+    override val meta = CapabilityMeta(cost = Cost.PAID, latency = Latency.SLOW, network = true, auth = true)
+    override fun label(state: ObjectState) = "Распознать в облаке"
+    override fun accepts(state: ObjectState) = state.kind == ObjectKind.IMAGE
+    override fun produces(state: ObjectState) = ObjectState(ObjectKind.TEXT)
+
+    companion object { val ID = CapabilityId("ocr-cloud") }
+}
+
+class CloudOcrDirectRealizer @Inject constructor(
+    private val llm: LlmClient,
+) : Realizer {
+    override val capabilityId = CloudOcrCapability.ID
+    override val meta = RealizerMeta(priority = 10, kind = RealizerKind.CLOUD)
+
+    override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
+        withContext(Dispatchers.IO) {
+            runCatching { ActionResult.Success(llm.run(input, OCR_CLOUD_PROMPT)) }
+                .getOrElse { ActionResult.Failure(it.message ?: "Ошибка распознавания в облаке", recoverable = true) }
+        }
 }
 
 /**
