@@ -19,6 +19,8 @@ class UserKeyLlmClient @Inject constructor(
     private val store: ObjectStore,
 ) : LlmClient {
 
+    override val strongVision = true // the user's own model is their choice — trust it for vision too
+
     override suspend fun run(obj: PointObject, prompt: String): ResultObject {
         val config = userKeys.read() ?: error("задайте свой ключ (шестерёнка на домашнем экране)")
         return OpenAiCompatibleClient(
