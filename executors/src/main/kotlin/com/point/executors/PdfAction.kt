@@ -10,6 +10,7 @@ import com.point.core.flow.PdfTextExtractor
 import com.point.core.flow.Realizer
 import com.point.core.model.ActionResult
 import com.point.core.model.CapabilityId
+import com.point.core.model.Feature
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
@@ -27,7 +28,9 @@ class PdfCapability @Inject constructor() : Capability {
     override fun label(state: ObjectState) =
         if (state.kind == ObjectKind.PDF) "Извлечь текст" else "В PDF"
     override fun accepts(state: ObjectState) =
-        state.kind in setOf(ObjectKind.IMAGE, ObjectKind.TEXT, ObjectKind.PDF, ObjectKind.OFFICE)
+        state.kind in setOf(ObjectKind.IMAGE, ObjectKind.TEXT, ObjectKind.OFFICE) ||
+            // A scan (image-only PDF) has no text layer — "Извлечь текст" would only dead-end.
+            (state.kind == ObjectKind.PDF && !state.has(Feature.IS_IMAGE_PDF))
     override fun produces(state: ObjectState) =
         if (state.kind == ObjectKind.PDF) ObjectState(ObjectKind.TEXT) else ObjectState(ObjectKind.PDF)
 

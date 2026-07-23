@@ -38,6 +38,7 @@ import com.point.data.OoxmlOfficeTextExtractor
 import com.point.data.OoxmlSpreadsheetWriter
 import com.point.data.OpenAiLlmClient
 import com.point.data.PdfBoxTextExtractor
+import com.point.data.PdfImageEnricher
 import com.point.data.PdfRendererRasterizer
 import com.point.data.ScratchObjectStore
 import com.point.data.TesseractTextRecognizer
@@ -111,6 +112,9 @@ abstract class DataModule {
 
     @Binds @IntoSet
     abstract fun zipImagesEnricher(e: ZipImagesEnricher): Enricher
+
+    @Binds @IntoSet
+    abstract fun pdfImageEnricher(e: PdfImageEnricher): Enricher
 
     companion object {
         /** Pure classifier lives in :core:flow (no DI annotations there). */
