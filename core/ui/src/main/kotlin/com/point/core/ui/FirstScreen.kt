@@ -268,7 +268,7 @@ private fun CollectionItems(items: List<PointObject>, onItem: (PointObject) -> U
                         modifier = Modifier.size(22.dp),
                     )
                     Text(
-                        text = item.metadata["name"] ?: item.mime,
+                        text = item.metadata["name"] ?: kindLabel(item.state.kind),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
@@ -331,7 +331,7 @@ private fun ObjectHeader(obj: PointObject) {
         }
         Spacer(Modifier.height(14.dp))
         Text(
-            text = obj.metadata["name"] ?: obj.mime,
+            text = obj.metadata["name"] ?: kindLabel(obj.state.kind),
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
             maxLines = 1,
