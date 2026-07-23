@@ -33,6 +33,8 @@ import com.point.data.FileCapabilityUsage
 import com.point.data.FileFavoritesStore
 import com.point.data.FileHistoryStore
 import com.point.data.GeminiLlmClient
+import com.point.data.HttpJson
+import com.point.data.UrlConnectionHttpJson
 import com.point.data.MediaStoreExporter
 import com.point.data.OoxmlOfficeTextExtractor
 import com.point.data.OoxmlSpreadsheetWriter
@@ -111,6 +113,10 @@ abstract class DataModule {
     @Binds
     abstract fun textRecognizer(impl: TesseractTextRecognizer): TextRecognizer
 
+    /** The one real HTTP transport; LLM clients depend on the [HttpJson] interface. */
+    @Binds
+    abstract fun httpJson(impl: UrlConnectionHttpJson): HttpJson
+
     @Binds @IntoSet
     abstract fun textUrlEnricher(e: TextUrlEnricher): Enricher
 
@@ -134,17 +140,29 @@ abstract class DataModule {
          */
         @Provides
         fun llmProviders(
+            http: HttpJson,
             store: ObjectStore,
             gemini: GeminiLlmClient,
             claude: ClaudeLlmClient,
         ): List<@JvmSuppressWildcards LlmClient> {
-            val free = openAiProviders().configured().map { OpenAiCompatibleClient(store, it) }
+            val free = openAiProviders().configured().map { OpenAiCompatibleClient(http, store, it) }
             val native = buildList {
                 if (BuildConfig.GEMINI_API_KEY.isNotBlank()) add(gemini)
                 if (BuildConfig.ANTHROPIC_API_KEY.isNotBlank()) add(claude)
             }
             return free + native
         }
+
+        /** Gemini is built here (not @Inject) so its key + model list — from BuildConfig —
+         *  are constructor-injected, keeping the client itself BuildConfig-free and testable. */
+        @Provides
+        fun geminiClient(http: HttpJson, store: ObjectStore): GeminiLlmClient =
+            GeminiLlmClient(
+                http,
+                store,
+                BuildConfig.GEMINI_API_KEY,
+                BuildConfig.GEMINI_MODELS.split(',').map(String::trim).filter(String::isNotBlank),
+            )
 
         /** Known OpenAI-compatible endpoints, each expanded into one entry per model in
          *  its comma-separated *_MODELS list; [configured] drops the ones without a key. */

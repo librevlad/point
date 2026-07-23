@@ -11,37 +11,34 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
-import java.net.HttpURLConnection
-import java.net.URL
-import javax.inject.Inject
 
 /**
- * Minimal Gemini (Generative Language API) client over HttpURLConnection — no
- * extra networking dependency. The model's text answer is materialised into a
- * scratch `.md` file and returned as a TEXT [ResultObject]. Small image/PDF
- * objects are attached inline (base64); larger ones are skipped (size guard).
+ * Minimal Gemini (Generative Language API) client over [HttpJson] — no SDK. The
+ * model's text answer is materialised into a scratch `.md` file and returned as a
+ * TEXT [ResultObject]. Small image/PDF objects are attached inline (base64); larger
+ * ones are skipped (size guard).
  *
- * The key comes from BuildConfig.GEMINI_API_KEY (local.properties). A blank key
- * fails fast with a clear message the executor surfaces as a recoverable error.
+ * Key and [models] are injected (from BuildConfig, in DataModule) rather than read
+ * from BuildConfig here — so the multi-model fallback is unit-testable regardless of
+ * the build's keys. [models] are tried in order, so a stale/zero-quota model (e.g.
+ * gemini-2.0-flash 429s on the free tier) falls through to the next.
  */
-class GeminiLlmClient @Inject constructor(
+class GeminiLlmClient(
+    private val http: HttpJson,
     private val store: ObjectStore,
+    private val apiKey: String,
+    private val models: List<String>,
 ) : LlmClient {
 
     override suspend fun run(obj: PointObject, prompt: String): ResultObject =
         withContext(Dispatchers.IO) {
-            val key = BuildConfig.GEMINI_API_KEY
-            require(key.isNotBlank()) {
+            require(apiKey.isNotBlank()) {
                 "GEMINI_API_KEY не задан в local.properties — AI недоступен"
             }
-            // Several models tried in order: a stale/zero-quota one (e.g. gemini-2.0-flash
-            // 429s on the free tier) falls through to the next. Aliases like
-            // gemini-flash-latest track a currently-serving free model.
-            val models = BuildConfig.GEMINI_MODELS.split(',').map(String::trim).filter(String::isNotBlank)
             val errors = StringBuilder()
             for (model in models) {
                 try {
-                    val answer = request(key, model, obj, prompt)
+                    val answer = fetch(model, obj, prompt)
                     val ref = store.newScratchFile("md")
                     File(ref.value).writeText(answer)
                     return@withContext ResultObject(
@@ -57,30 +54,17 @@ class GeminiLlmClient @Inject constructor(
             error("Gemini недоступен — $errors")
         }
 
-    private fun request(key: String, model: String, obj: PointObject, prompt: String): String {
+    private suspend fun fetch(model: String, obj: PointObject, prompt: String): String {
         val parts = JSONArray().put(JSONObject().put("text", prompt))
         maybeAttachFile(obj)?.let { parts.put(it) }
+        val body = JSONObject()
+            .put("contents", JSONArray().put(JSONObject().put("parts", parts)))
+            .toString()
 
-        val body = JSONObject().put(
-            "contents",
-            JSONArray().put(JSONObject().put("parts", parts)),
-        )
-
-        val url = URL("https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$key")
-        val conn = (url.openConnection() as HttpURLConnection).apply {
-            requestMethod = "POST"
-            doOutput = true
-            connectTimeout = 30_000
-            readTimeout = 60_000
-            setRequestProperty("Content-Type", "application/json; charset=utf-8")
-        }
-        conn.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
-
-        val code = conn.responseCode
-        val text = (if (code in 200..299) conn.inputStream else conn.errorStream)
-            ?.bufferedReader()?.use { it.readText() }.orEmpty()
-        if (code !in 200..299) error("Gemini HTTP $code: ${text.take(300)}")
-        return parseAnswer(text)
+        val url = "https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$apiKey"
+        val res = http.post(url, emptyMap(), body) // Gemini authenticates via the ?key= query param
+        if (res.code !in 200..299) error("Gemini HTTP ${res.code}: ${res.body.take(300)}")
+        return parseAnswer(res.body)
     }
 
     private fun maybeAttachFile(obj: PointObject): JSONObject? {
@@ -108,7 +92,7 @@ class GeminiLlmClient @Inject constructor(
         return out.ifBlank { error("Gemini вернул пустой текст") }
     }
 
-    companion object {
-        private const val MAX_INLINE_BYTES = 15L * 1024 * 1024
+    private companion object {
+        const val MAX_INLINE_BYTES = 15L * 1024 * 1024
     }
 }

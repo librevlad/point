@@ -1,0 +1,88 @@
+package com.point.data
+
+import com.point.core.flow.ObjectStore
+import com.point.core.model.ObjectKind
+import com.point.core.model.ObjectState
+import com.point.core.model.PointObject
+import com.point.core.model.ResultObject
+import com.point.core.model.ScratchRef
+import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import java.io.File
+import java.net.SocketTimeoutException
+
+/** The OpenAI-compatible provider over a fake [HttpJson] — response parsing, errors,
+ *  timeouts. Pure JVM: a TEXT object avoids android.util.Base64. */
+class OpenAiCompatibleClientTest {
+
+    private val provider = OpenAiProvider("openrouter", "https://x/v1", "sk-key", "some-model")
+    private val textObj = PointObject("id", "text/plain", ScratchRef("/x"), ObjectState(ObjectKind.TEXT))
+    private val okBody = """{"choices":[{"message":{"content":"привет"}}]}"""
+
+    private fun http(code: Int, body: String, capture: ((String) -> Unit)? = null) = object : HttpJson {
+        override suspend fun post(url: String, headers: Map<String, String>, body2: String): HttpResult {
+            capture?.invoke(body2)
+            return HttpResult(code, body)
+        }
+    }
+
+    private val store = object : ObjectStore {
+        override suspend fun ingest(sourceUri: String, mime: String) = error("unused")
+        override suspend fun ingestMultiple(sources: List<String>) = error("unused")
+        override suspend fun put(result: ResultObject) = error("unused")
+        override suspend fun children(collection: PointObject) = error("unused")
+        override suspend fun readText(obj: PointObject, limit: Int) = error("unused")
+        override suspend fun newScratchFile(extension: String) =
+            ScratchRef(File.createTempFile("point-", ".$extension").apply { deleteOnExit() }.absolutePath)
+        override suspend fun clear() = Unit
+    }
+
+    private fun client(http: HttpJson) = OpenAiCompatibleClient(http, store, provider)
+
+    @Test
+    fun `parses the assistant content on 200 and tags the source`() = runTest {
+        val res = client(http(200, okBody)).run(textObj, "hi")
+        assertEquals("openrouter", res.metadata["source"])
+        assertEquals("some-model", res.metadata["model"])
+        assertEquals("привет", File(res.uri.value).readText())
+    }
+
+    @Test
+    fun `maps a non-2xx to an error carrying the code and provider`() = runTest {
+        val e = runCatching { client(http(429, "rate limit")).run(textObj, "hi") }.exceptionOrNull()
+        assertTrue(e?.message?.contains("openrouter HTTP 429") == true)
+    }
+
+    @Test
+    fun `errors on empty choices`() = runTest {
+        val e = runCatching { client(http(200, """{"choices":[]}""")).run(textObj, "hi") }.exceptionOrNull()
+        assertTrue(e?.message?.contains("пустой ответ") == true)
+    }
+
+    @Test
+    fun `errors on malformed json`() = runTest {
+        val e = runCatching { client(http(200, "<html>oops")).run(textObj, "hi") }.exceptionOrNull()
+        assertNotNull(e)
+    }
+
+    @Test
+    fun `propagates a transport timeout so the fallback chain can continue`() = runTest {
+        val timeout = object : HttpJson {
+            override suspend fun post(url: String, headers: Map<String, String>, body: String): HttpResult =
+                throw SocketTimeoutException("read timed out")
+        }
+        val e = runCatching { client(timeout).run(textObj, "hi") }.exceptionOrNull()
+        assertTrue(e is SocketTimeoutException)
+    }
+
+    @Test
+    fun `sends the model and prompt in the request body`() = runTest {
+        var sent = ""
+        client(http(200, okBody) { sent = it }).run(textObj, "переведи это")
+        assertTrue(sent.contains("some-model"))
+        assertTrue(sent.contains("переведи это"))
+    }
+}
