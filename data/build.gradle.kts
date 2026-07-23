@@ -42,7 +42,7 @@ android {
         // Vision-capable models lead so "Понять" works on a photo.
         buildConfigField("String", "OPENROUTER_API_KEY", prop("OPENROUTER_API_KEY"))
         buildConfigField("String", "OPENROUTER_BASE_URL", prop("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"))
-        buildConfigField("String", "OPENROUTER_MODELS", prop("OPENROUTER_MODELS", "meta-llama/llama-3.2-11b-vision-instruct:free,google/gemini-2.0-flash-exp:free,meta-llama/llama-3.3-70b-instruct:free"))
+        buildConfigField("String", "OPENROUTER_MODELS", prop("OPENROUTER_MODELS", "google/gemma-4-31b-it:free,google/gemma-4-26b-a4b-it:free,openai/gpt-oss-20b:free"))
         buildConfigField("String", "GROQ_API_KEY", prop("GROQ_API_KEY"))
         buildConfigField("String", "GROQ_BASE_URL", prop("GROQ_BASE_URL", "https://api.groq.com/openai/v1"))
         buildConfigField("String", "GROQ_MODELS", prop("GROQ_MODELS", "llama-3.3-70b-versatile"))
