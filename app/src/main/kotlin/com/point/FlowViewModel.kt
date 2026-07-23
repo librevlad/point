@@ -9,6 +9,8 @@ import com.point.core.flow.FavoritesStore
 import com.point.core.flow.HistoryStore
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.Resolver
+import com.point.core.flow.UserAiConfig
+import com.point.core.flow.UserKeyStore
 import com.point.core.model.ActionResult
 import com.point.core.model.Bubble
 import com.point.core.model.CapabilityId
@@ -40,6 +42,7 @@ class FlowViewModel @Inject constructor(
     private val history: HistoryStore,
     private val favorites: FavoritesStore,
     private val usage: CapabilityUsage,
+    private val userKeys: UserKeyStore,
 ) : ViewModel() {
 
     private val stack = ArrayDeque<FlowFrame>()
@@ -149,6 +152,25 @@ class FlowViewModel @Inject constructor(
         _ui.update { it.copy(inputPrompt = null, busy = null) }
     }
 
+    // --- Bring-your-own AI key (#19). Summoned on demand or from the Home gear. ---
+
+    fun openKeySettings() {
+        // A tiny prefs read; the store is warmed when it's created (Activity start), so it
+        // is in-memory by the time the gear or an AI-no-key failure summons the screen.
+        _ui.update {
+            it.copy(keyScreen = userKeys.read() ?: UserAiConfig.DEFAULT, busy = null, message = null, inputPrompt = null)
+        }
+    }
+
+    fun closeKeySettings() = _ui.update { it.copy(keyScreen = null) }
+
+    fun saveAiConfig(config: UserAiConfig) {
+        viewModelScope.launch {
+            runCatching { userKeys.save(config) }
+            _ui.update { it.copy(keyScreen = null, message = "Ключ AI сохранён") }
+        }
+    }
+
     /** Save the capabilities applied so far as a favorite chain (auto-named). */
     fun saveCurrentChain() {
         val steps = stack.mapNotNull { it.viaCapability }
@@ -211,7 +233,10 @@ class FlowViewModel @Inject constructor(
         when (result) {
             is ActionResult.Success -> pushFrame(store.put(result.result), bubble.capabilityId, bubble.title)
             is ActionResult.Done -> _ui.update { it.copy(busy = null, message = result.message) }
-            is ActionResult.Failure -> _ui.update { it.copy(busy = null, message = result.reason) }
+            is ActionResult.Failure ->
+                // A "no AI key" failure summons the key screen on demand instead of just erroring.
+                if (result.reason.contains("задайте свой ключ")) openKeySettings()
+                else _ui.update { it.copy(busy = null, message = result.reason) }
             is ActionResult.NeedsInput -> {
                 pendingBubble = bubble
                 _ui.update { it.copy(busy = null, inputPrompt = result.prompt) }
@@ -220,6 +245,10 @@ class FlowViewModel @Inject constructor(
     }
 
     fun onBack(): Boolean {
+        if (_ui.value.keyScreen != null) {
+            closeKeySettings()
+            return true
+        }
         if (_ui.value.inputPrompt != null) {
             cancelInput()
             return true

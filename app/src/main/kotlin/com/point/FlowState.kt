@@ -1,5 +1,6 @@
 package com.point
 
+import com.point.core.flow.UserAiConfig
 import com.point.core.model.Bubble
 import com.point.core.model.CapabilityId
 import com.point.core.model.FavoriteChain
@@ -42,4 +43,6 @@ data class FlowUiState(
     val selectedIntent: Intent? = null,
     /** Capabilities serving [selectedIntent] (shown when it is non-null). */
     val intentBubbles: List<Bubble> = emptyList(),
+    /** Non-null while the bring-your-own AI-key screen is shown (its prefilled values). */
+    val keyScreen: UserAiConfig? = null,
 )

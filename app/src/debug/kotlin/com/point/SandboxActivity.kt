@@ -68,6 +68,8 @@ class SandboxActivity : ComponentActivity() {
                             onSubmitInput = viewModel::submitAmendment,
                             onCancelInput = viewModel::cancelInput,
                             onItem = viewModel::onItem,
+                            onSaveAiConfig = viewModel::saveAiConfig,
+                            onCloseKeySettings = viewModel::closeKeySettings,
                         )
                     }
                 }

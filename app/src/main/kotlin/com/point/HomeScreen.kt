@@ -12,7 +12,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -25,43 +28,57 @@ import com.point.core.model.HistoryEntry
 import com.point.core.ui.kindIcon
 
 /**
- * Point's home: the recent objects you brought in. Tap one to keep working with
- * it — no going back to the source app to share again (the metric: fewer switches).
+ * Point's home: the recent objects you brought in. Tap one to keep working with it —
+ * no going back to the source app to share again (the metric: fewer switches). A
+ * single key affordance opens the bring-your-own AI-key screen; there is no menu.
  */
 @Composable
 fun HomeScreen(
     recent: List<HistoryEntry>,
     onOpen: (HistoryEntry) -> Unit,
+    onSettings: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    if (recent.isEmpty()) {
-        Box(modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("Point", style = MaterialTheme.typography.headlineMedium)
-                Text(
-                    "Поделитесь объектом — он появится здесь",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+    Box(modifier.fillMaxSize()) {
+        if (recent.isEmpty()) {
+            Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("Point", style = MaterialTheme.typography.headlineMedium)
+                    Text(
+                        "Поделитесь объектом — он появится здесь",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(20.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                item {
+                    Text(
+                        "Недавнее",
+                        style = MaterialTheme.typography.titleLarge,
+                        modifier = Modifier.padding(bottom = 6.dp),
+                    )
+                }
+                items(recent, key = { it.id }) { entry ->
+                    HistoryRow(entry = entry, onClick = { onOpen(entry) })
+                }
             }
         }
-        return
-    }
 
-    LazyColumn(
-        modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(20.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        item {
-            Text(
-                "Недавнее",
-                style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.padding(bottom = 6.dp),
+        IconButton(
+            onClick = onSettings,
+            modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Settings,
+                contentDescription = "Ваш AI-ключ",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-        }
-        items(recent, key = { it.id }) { entry ->
-            HistoryRow(entry = entry, onClick = { onOpen(entry) })
         }
     }
 }
