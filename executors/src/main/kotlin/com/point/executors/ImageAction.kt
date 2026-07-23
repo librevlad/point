@@ -1,7 +1,6 @@
 package com.point.executors
 
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import com.point.core.flow.Capability
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.Realizer
@@ -35,7 +34,7 @@ class ImageRealizer @Inject constructor(
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
             runCatching {
-                val bitmap = BitmapFactory.decodeFile(input.uri.value)
+                val bitmap = Bitmaps.decodeUpright(input.uri.value)
                     ?: error("Не удалось прочитать изображение")
                 val ref = store.newScratchFile("jpg")
                 File(ref.value).outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, 70, it) }

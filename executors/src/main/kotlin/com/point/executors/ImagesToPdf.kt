@@ -1,7 +1,6 @@
 package com.point.executors
 
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.pdf.PdfDocument
 import com.point.core.flow.ObjectStore
 import com.point.core.model.ActionResult
@@ -30,7 +29,7 @@ internal suspend fun imagesToPdf(
     val document = PdfDocument()
     var pages = 0
     for (file in files) {
-        val src = BitmapFactory.decodeFile(file.absolutePath) ?: continue // skip non-images
+        val src = Bitmaps.decodeUpright(file.absolutePath) ?: continue // skip non-images
         val bitmap = if (clean == null) {
             src
         } else {

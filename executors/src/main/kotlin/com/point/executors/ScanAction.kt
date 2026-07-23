@@ -1,7 +1,6 @@
 package com.point.executors
 
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import com.point.core.flow.Capability
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.Realizer
@@ -43,7 +42,7 @@ class ScanRealizer @Inject constructor(
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
             runCatching {
-                val src = BitmapFactory.decodeFile(input.uri.value)
+                val src = Bitmaps.decodeUpright(input.uri.value)
                     ?: error("Не удалось прочитать изображение")
                 val width = src.width
                 val height = src.height

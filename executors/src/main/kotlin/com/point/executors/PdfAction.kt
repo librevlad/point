@@ -1,6 +1,5 @@
 package com.point.executors
 
-import android.graphics.BitmapFactory
 import android.graphics.Paint
 import android.graphics.pdf.PdfDocument
 import com.point.core.flow.Capability
@@ -58,7 +57,7 @@ class PdfRealizer @Inject constructor(
         }
 
     private suspend fun imageToPdf(input: PointObject): ActionResult {
-        val bitmap = BitmapFactory.decodeFile(input.uri.value) ?: error("Не удалось прочитать изображение")
+        val bitmap = Bitmaps.decodeUpright(input.uri.value) ?: error("Не удалось прочитать изображение")
         val document = PdfDocument()
         val page = document.startPage(PdfDocument.PageInfo.Builder(bitmap.width, bitmap.height, 1).create())
         page.canvas.drawBitmap(bitmap, 0f, 0f, null)
