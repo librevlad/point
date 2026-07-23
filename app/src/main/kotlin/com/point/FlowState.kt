@@ -29,6 +29,9 @@ data class FlowUiState(
     /** Non-null while an action runs: a short label of WHAT is happening (e.g. the
      *  action's title), so the busy screen shows progress instead of a blank spinner. */
     val busy: String? = null,
+    /** True when the running action is a cloud/AI call — the busy screen then reassures with
+     *  cloud-flavoured, time-advancing stages instead of a frozen wheel (#62). */
+    val busyNetwork: Boolean = false,
     val frame: FlowFrame? = null,
     /** Transient text from the ActionResult channel (Failure / Done). */
     val message: String? = null,

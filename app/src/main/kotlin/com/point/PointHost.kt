@@ -16,6 +16,11 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -26,6 +31,7 @@ import com.point.core.model.FavoriteChain
 import com.point.core.model.Intent
 import com.point.core.model.PointObject
 import com.point.core.ui.FirstScreen
+import kotlinx.coroutines.delay
 
 /**
  * Chooses what to render from the current [FlowUiState]. Stateless — the Activity
@@ -68,19 +74,7 @@ fun PointHost(
                 onToggleUsage = onToggleUsage,
             )
 
-            state.busy != null -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                CircularProgressIndicator(
-                    color = MaterialTheme.colorScheme.primary,
-                    strokeWidth = 4.dp,
-                )
-                Spacer(Modifier.height(22.dp))
-                Text(
-                    text = state.busy, // WHAT is running — not a faceless wheel
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onBackground,
-                )
-            }
+            state.busy != null -> BusyScreen(title = state.busy, network = state.busyNetwork)
 
             frame != null -> AnimatedContent(
                 targetState = frame,
@@ -140,5 +134,45 @@ fun PointHost(
                 modifier = Modifier.padding(24.dp),
             )
         }
+    }
+}
+
+private val NETWORK_STAGES = listOf("Отправляю в облако…", "Модель обрабатывает запрос…", "Собираю ответ…")
+private val LOCAL_STAGES = listOf("Обрабатываю…")
+
+/**
+ * The working screen — alive, not a frozen wheel (#62). A ticking elapsed counter proves it is
+ * running, and for a cloud/AI call the sub-line advances through honest stages so a multi-second
+ * wait reads as progress, not a hang. No fake percentages — only what we truly know.
+ */
+@Composable
+private fun BusyScreen(title: String, network: Boolean) {
+    var elapsed by remember(title) { mutableIntStateOf(0) }
+    LaunchedEffect(title) {
+        while (true) {
+            delay(1000)
+            elapsed++
+        }
+    }
+    val stages = if (network) NETWORK_STAGES else LOCAL_STAGES
+    val stage = stages[minOf(elapsed / 4, stages.lastIndex)]
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        CircularProgressIndicator(
+            color = MaterialTheme.colorScheme.primary,
+            strokeWidth = 4.dp,
+        )
+        Spacer(Modifier.height(22.dp))
+        Text(
+            text = title, // WHAT is running — not a faceless wheel
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onBackground,
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = if (elapsed >= 3) "$stage · $elapsed с" else stage,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
