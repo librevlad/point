@@ -59,6 +59,8 @@ class ShareActivity : ComponentActivity() {
                         onSaveAiConfig = viewModel::saveAiConfig,
                         onCloseKeySettings = viewModel::closeKeySettings,
                         onToggleUsage = viewModel::setUsageEnabled,
+                        onConfirmCloud = viewModel::confirmCloud,
+                        onDeclineCloud = viewModel::declineCloud,
                     )
                 }
             }

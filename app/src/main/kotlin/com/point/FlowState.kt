@@ -44,6 +44,8 @@ data class FlowUiState(
     val selectedIntent: Intent? = null,
     /** Capabilities serving [selectedIntent] (shown when it is non-null). */
     val intentBubbles: List<Bubble> = emptyList(),
+    /** True while a cloud action waits for one-time privacy consent (#10). */
+    val cloudConsent: Boolean = false,
     /** Non-null while the bring-your-own AI-key screen is shown (its prefilled values). */
     val keyScreen: UserAiConfig? = null,
     /** On the key screen: whether the private usage journal is on, and its current tally. */

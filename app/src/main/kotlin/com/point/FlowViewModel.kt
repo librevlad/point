@@ -8,6 +8,7 @@ import com.point.core.flow.Enrichment
 import com.point.core.flow.FavoritesStore
 import com.point.core.flow.HistoryStore
 import com.point.core.flow.ObjectStore
+import com.point.core.flow.PrivacyConsent
 import com.point.core.flow.Resolver
 import com.point.core.flow.UsageEvent
 import com.point.core.flow.UsageEventType
@@ -47,10 +48,13 @@ class FlowViewModel @Inject constructor(
     private val usage: CapabilityUsage,
     private val userKeys: UserKeyStore,
     private val journal: UsageJournal,
+    private val consent: PrivacyConsent,
 ) : ViewModel() {
 
     private val stack = ArrayDeque<FlowFrame>()
     private var pendingBubble: Bubble? = null
+    /** A cloud action deferred until the user grants consent (#10); run on confirm. */
+    private var pendingCloud: (() -> Unit)? = null
     private var allFavorites: List<FavoriteChain> = emptyList()
 
     private val _ui = MutableStateFlow(FlowUiState())
@@ -121,8 +125,36 @@ class FlowViewModel @Inject constructor(
 
     fun onBubble(bubble: Bubble) {
         val top = stack.lastOrNull()?.obj ?: return
+        if (isCloud(bubble.capabilityId)) {
+            // Nothing leaves the device before the user agrees, even once (#10).
+            requireCloudConsent { runOnObject(bubble, top) }
+            return
+        }
+        runOnObject(bubble, top)
+    }
+
+    private fun runOnObject(bubble: Bubble, top: PointObject) {
         _ui.update { it.copy(busy = bubble.title, message = null, inputPrompt = null, selectedIntent = null, intentBubbles = emptyList()) }
         dispatch(bubble) { resolver.realizerFor(bubble.capabilityId).perform(top, null) }
+    }
+
+    private fun isCloud(id: CapabilityId) =
+        runCatching { registry.byId(id).meta.network }.getOrDefault(false)
+
+    /**
+     * Runs [onGranted] at once if cloud consent is already given; otherwise shows the consent
+     * gate and defers it (#10). Reads the on-device flag directly (no cached copy) — so there
+     * is no init race, and a saved-chain replay or a single action is held the same way.
+     */
+    private fun requireCloudConsent(onGranted: () -> Unit) {
+        viewModelScope.launch {
+            if (runCatching { consent.cloudAllowed() }.getOrDefault(false)) {
+                onGranted()
+            } else {
+                pendingCloud = onGranted
+                _ui.update { it.copy(cloudConsent = true, selectedIntent = null, intentBubbles = emptyList()) }
+            }
+        }
     }
 
     /** Intent-first: the user picks a goal (Понять / Подготовить / Отправить). If exactly
@@ -187,6 +219,23 @@ class FlowViewModel @Inject constructor(
 
     fun closeKeySettings() = _ui.update { it.copy(keyScreen = null) }
 
+    // --- Cloud consent (#10): nothing leaves the device before the user agrees once. ---
+
+    fun confirmCloud() {
+        val run = pendingCloud ?: return
+        pendingCloud = null
+        _ui.update { it.copy(cloudConsent = false) }
+        viewModelScope.launch {
+            runCatching { consent.allowCloud() } // remember, so we ask only once
+            run()
+        }
+    }
+
+    fun declineCloud() {
+        pendingCloud = null
+        _ui.update { it.copy(cloudConsent = false) }
+    }
+
     fun saveAiConfig(config: UserAiConfig) {
         viewModelScope.launch {
             runCatching { userKeys.save(config) }
@@ -209,6 +258,16 @@ class FlowViewModel @Inject constructor(
     /** Replay a saved chain on the current object — one tap for a whole workflow. */
     fun applyFavorite(chain: FavoriteChain) {
         val start = stack.lastOrNull()?.obj ?: return
+        // A saved chain can hide a cloud step — gate the whole replay on consent (#10),
+        // so a favorite is not a back door around the privacy prompt.
+        if (chain.steps.any { isCloud(it) }) {
+            requireCloudConsent { replayChain(chain, start) }
+            return
+        }
+        replayChain(chain, start)
+    }
+
+    private fun replayChain(chain: FavoriteChain, start: PointObject) {
         _ui.update { it.copy(busy = "Выполняю цепочку…", message = null, inputPrompt = null) }
         viewModelScope.launch {
             var current = start
@@ -273,6 +332,10 @@ class FlowViewModel @Inject constructor(
     }
 
     fun onBack(): Boolean {
+        if (_ui.value.cloudConsent) {
+            declineCloud()
+            return true
+        }
         if (_ui.value.keyScreen != null) {
             closeKeySettings()
             return true

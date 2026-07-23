@@ -46,11 +46,19 @@ fun PointHost(
     onSaveAiConfig: (UserAiConfig) -> Unit = {},
     onCloseKeySettings: () -> Unit = {},
     onToggleUsage: (Boolean) -> Unit = {},
+    onConfirmCloud: () -> Unit = {},
+    onDeclineCloud: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         val frame = state.frame
         when {
+            // Cloud consent is a gate: it must be answered before anything else renders (#10).
+            state.cloudConsent -> ConsentScreen(
+                onAllow = onConfirmCloud,
+                onDecline = onDeclineCloud,
+            )
+
             state.keyScreen != null -> KeyScreen(
                 config = state.keyScreen,
                 onSave = onSaveAiConfig,

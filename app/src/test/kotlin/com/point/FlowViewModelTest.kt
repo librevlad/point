@@ -1,12 +1,14 @@
 package com.point
 
 import com.point.core.flow.Capability
+import com.point.core.flow.CapabilityMeta
 import com.point.core.flow.CapabilityRegistry
 import com.point.core.flow.CapabilityUsage
 import com.point.core.flow.Enrichment
 import com.point.core.flow.FavoritesStore
 import com.point.core.flow.HistoryStore
 import com.point.core.flow.ObjectStore
+import com.point.core.flow.PrivacyConsent
 import com.point.core.flow.Realizer
 import com.point.core.flow.Resolver
 import com.point.core.flow.UsageEvent
@@ -59,13 +61,17 @@ class FlowViewModelTest {
     private val usage = FakeUsage()
     private val userKeys = FakeUserKeys()
     private val journal = FakeUsageJournal()
+    private val consent = FakePrivacyConsent()
 
     @Before fun setUp() = Dispatchers.setMain(dispatcher)
     @After fun tearDown() = Dispatchers.resetMain()
 
-    /** A view model over the fakes, whose registry offers [caps] (id → the intents it serves). */
-    private fun vm(caps: Map<CapabilityId, Set<Intent>> = mapOf(CapabilityId("a") to setOf(Intent.PREPARE))) =
-        FlowViewModel(store, FakeRegistry(caps), resolver, enrichment, history, favorites, usage, userKeys, journal)
+    /** A view model over the fakes, whose registry offers [caps] (id → the intents it serves)
+     *  and treats the ids in [cloud] as network capabilities (gated by consent). */
+    private fun vm(
+        caps: Map<CapabilityId, Set<Intent>> = mapOf(CapabilityId("a") to setOf(Intent.PREPARE)),
+        cloud: Set<CapabilityId> = emptySet(),
+    ) = FlowViewModel(store, FakeRegistry(caps, cloud), resolver, enrichment, history, favorites, usage, userKeys, journal, consent)
 
     private fun bubble(id: String = "a", title: String = "Действие") =
         Bubble("x", title, CapabilityId(id), ObjectState(ObjectKind.TEXT))
@@ -313,6 +319,75 @@ class FlowViewModelTest {
         assertTrue(types.contains(UsageEventType.ACTION))
         assertTrue(types.contains(UsageEventType.COMPLETED))
     }
+
+    // --- Cloud privacy consent (#10) ---
+
+    private fun cloudVm() = vm(
+        caps = mapOf(CapabilityId("ai") to setOf(Intent.UNDERSTAND)),
+        cloud = setOf(CapabilityId("ai")),
+    )
+
+    @Test fun `a cloud action asks for consent before anything leaves the device`() = runTest(dispatcher) {
+        resolver.result = ActionResult.Done("готово")
+        val vm = cloudVm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.onBubble(bubble(id = "ai")); advanceUntilIdle()
+
+        assertTrue(vm.ui.value.cloudConsent)                  // asked
+        assertNull(vm.ui.value.message)                       // nothing ran
+        assertEquals("__unset__", resolver.lastAmendment)     // the realizer was never invoked
+    }
+
+    @Test fun `confirming consent runs the pending cloud action and persists the grant`() = runTest(dispatcher) {
+        resolver.result = ActionResult.Done("готово")
+        val vm = cloudVm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        vm.onBubble(bubble(id = "ai")); advanceUntilIdle()
+
+        vm.confirmCloud(); advanceUntilIdle()
+
+        assertEquals("готово", vm.ui.value.message)           // the gated action finally ran
+        assertEquals(false, vm.ui.value.cloudConsent)         // prompt dismissed
+        assertTrue(consent.granted)                           // remembered for next time
+    }
+
+    @Test fun `declining consent cancels the cloud action and sends nothing`() = runTest(dispatcher) {
+        resolver.result = ActionResult.Done("готово")
+        val vm = cloudVm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        vm.onBubble(bubble(id = "ai")); advanceUntilIdle()
+
+        vm.declineCloud()
+
+        assertNull(vm.ui.value.message)
+        assertEquals("__unset__", resolver.lastAmendment)     // never ran
+        assertEquals(false, vm.ui.value.cloudConsent)
+        assertEquals(false, consent.granted)                  // not persisted — asks again next time
+    }
+
+    @Test fun `an already-granted consent lets a cloud action run without asking`() = runTest(dispatcher) {
+        resolver.result = ActionResult.Done("готово")
+        consent.granted = true
+        val vm = cloudVm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle() // init caches cloudAllowed = true
+
+        vm.onBubble(bubble(id = "ai")); advanceUntilIdle()
+
+        assertEquals("готово", vm.ui.value.message)
+        assertEquals(false, vm.ui.value.cloudConsent)         // no prompt
+    }
+
+    @Test fun `a favorite chain hiding a cloud step is gated too — not a back door`() = runTest(dispatcher) {
+        val vm = cloudVm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.applyFavorite(FavoriteChain("c", "Цепочка", listOf(CapabilityId("ai"))))
+        advanceUntilIdle()
+
+        assertTrue(vm.ui.value.cloudConsent)                  // asked before replaying
+        assertEquals("__unset__", resolver.lastAmendment)     // no step reached the cloud
+    }
 }
 
 // --- Fakes ---
@@ -343,20 +418,28 @@ private class FakeResolver : Resolver {
     }
 }
 
-private class FakeCapability(override val id: CapabilityId, private val served: Set<Intent>) : Capability {
+private class FakeCapability(
+    override val id: CapabilityId,
+    private val served: Set<Intent>,
+    network: Boolean = false,
+) : Capability {
     override val icon = "x"
+    override val meta = CapabilityMeta(network = network)
     override fun label(state: ObjectState) = "Action ${id.value}"
     override fun accepts(state: ObjectState) = true
     override fun produces(state: ObjectState) = ObjectState(ObjectKind.TEXT)
     override fun intents(state: ObjectState) = served
 }
 
-private class FakeRegistry(private val caps: Map<CapabilityId, Set<Intent>>) : CapabilityRegistry {
+private class FakeRegistry(
+    private val caps: Map<CapabilityId, Set<Intent>>,
+    private val cloud: Set<CapabilityId> = emptySet(),
+) : CapabilityRegistry {
     override fun bubblesFor(state: ObjectState): List<Bubble> =
         caps.keys.map { Bubble("x", "Action ${it.value}", it, ObjectState(ObjectKind.TEXT)) }
     override fun intentsFor(state: ObjectState): List<Intent> =
         Intent.entries.filter { intent -> caps.values.any { intent in it } }
-    override fun byId(id: CapabilityId): Capability = FakeCapability(id, caps[id] ?: emptySet())
+    override fun byId(id: CapabilityId): Capability = FakeCapability(id, caps[id] ?: emptySet(), id in cloud)
 }
 
 private class FakeEnrichment(var features: Set<Feature> = emptySet()) : Enrichment {
@@ -388,6 +471,11 @@ private class FakeUserKeys(var config: UserAiConfig? = null) : UserKeyStore {
     override fun read() = config
     override suspend fun save(config: UserAiConfig) { saved = config; this.config = config }
     override suspend fun clear() { config = null }
+}
+
+private class FakePrivacyConsent(var granted: Boolean = false) : PrivacyConsent {
+    override suspend fun cloudAllowed() = granted
+    override suspend fun allowCloud() { granted = true }
 }
 
 private class FakeUsageJournal(private var enabled: Boolean = true) : UsageJournal {
