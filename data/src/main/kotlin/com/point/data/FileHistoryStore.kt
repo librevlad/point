@@ -47,9 +47,13 @@ class FileHistoryStore @Inject constructor(
     }
 
     override suspend fun recent(limit: Int): List<HistoryEntry> = withContext(Dispatchers.IO) {
+        // Order by journal recency, not by the millisecond timestamp: several records
+        // in the same millisecond tie on `t` and a stable sort then falls back to
+        // insertion (oldest-first) order — wrong, and flaky on a fast machine.
+        // readEntries() yields entries oldest→newest (latest occurrence last), so reverse.
         readEntries().values
             .filter { File(it.ref.value).exists() }
-            .sortedByDescending { it.epochMillis }
+            .reversed()
             .take(limit)
     }
 
@@ -79,6 +83,7 @@ class FileHistoryStore @Inject constructor(
             runCatching {
                 val json = JSONObject(line)
                 val id = json.getString("id")
+                result.remove(id) // re-record moves the id to the end: latest occurrence = newest
                 result[id] = HistoryEntry(
                     id = id,
                     mime = json.getString("mime"),
