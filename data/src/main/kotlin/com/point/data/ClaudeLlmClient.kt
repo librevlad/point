@@ -30,6 +30,8 @@ class ClaudeLlmClient @Inject constructor(
     private val model: String get() = BuildConfig.CLAUDE_MODEL.ifBlank { DEFAULT_MODEL }
     private val baseUrl: String get() = BuildConfig.ANTHROPIC_BASE_URL.ifBlank { DEFAULT_BASE_URL }.trimEnd('/')
 
+    override val strongVision = true // Claude is a strong vision model — lead with it on images
+
     override suspend fun run(obj: PointObject, prompt: String): ResultObject =
         withContext(Dispatchers.IO) {
             val key = BuildConfig.ANTHROPIC_API_KEY

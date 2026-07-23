@@ -81,4 +81,17 @@ class FallbackLlmClientTest {
         val error = runCatching { FallbackLlmClient(listOf(textOnly())).run(image, "опиши") }.exceptionOrNull()
         assertTrue(error?.message?.contains("нет подходящей AI-модели") == true)
     }
+
+    private fun strong(tag: String) = object : LlmClient {
+        override suspend fun run(obj: PointObject, prompt: String) =
+            ResultObject(ObjectKind.TEXT, "text/markdown", ScratchRef("/out/$tag"))
+        override val strongVision = true
+    }
+
+    @Test
+    fun `an image leads with a strong vision model, but text keeps the original order`() = runTest {
+        val client = FallbackLlmClient(listOf(ok("weak"), strong("strong"))) // weak listed first
+        assertEquals("/out/strong", client.run(image, "опиши").uri.value) // image → strong wins
+        assertEquals("/out/weak", client.run(obj, "hi").uri.value)        // text → original order
+    }
 }

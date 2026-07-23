@@ -30,6 +30,8 @@ class GeminiLlmClient(
     private val models: List<String>,
 ) : LlmClient {
 
+    override val strongVision = true // Gemini reads dense/handwritten tables far better than free models
+
     override suspend fun run(obj: PointObject, prompt: String): ResultObject =
         withContext(Dispatchers.IO) {
             require(apiKey.isNotBlank()) {

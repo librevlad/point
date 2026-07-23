@@ -18,9 +18,16 @@ class FallbackLlmClient @Inject constructor(
 
     override suspend fun run(obj: PointObject, prompt: String): ResultObject {
         if (providers.isEmpty()) error("AI не настроен — задайте свой ключ")
+        // For an image, lead with strong vision models — the free ones garble dense/handwritten
+        // /rotated tables (#22). Stable sort, so within each group the original order holds.
+        val ordered = if (obj.mime.startsWith("image/")) {
+            providers.sortedByDescending { it.strongVision }
+        } else {
+            providers
+        }
         val errors = mutableListOf<String>()
         var considered = 0
-        for (provider in providers) {
+        for (provider in ordered) {
             if (!provider.canHandle(obj)) continue // e.g. a photo to a text-only model (#60)
             considered++
             try {
