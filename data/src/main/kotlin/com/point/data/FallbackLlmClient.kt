@@ -19,12 +19,18 @@ class FallbackLlmClient @Inject constructor(
     override suspend fun run(obj: PointObject, prompt: String): ResultObject {
         if (providers.isEmpty()) error("AI не настроен — задайте свой ключ")
         val errors = mutableListOf<String>()
+        var considered = 0
         for (provider in providers) {
+            if (!provider.canHandle(obj)) continue // e.g. a photo to a text-only model (#60)
+            considered++
             try {
                 return provider.run(obj, prompt)
             } catch (e: Exception) {
                 errors += e.message ?: e.javaClass.simpleName
             }
+        }
+        if (considered == 0) {
+            error("Для этого объекта нет подходящей AI-модели — задайте свой ключ с поддержкой изображений")
         }
         error(summarise(errors))
     }
