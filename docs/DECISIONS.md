@@ -544,3 +544,14 @@ Cerebras (+ generic OpenAI). `FallbackLlmClient` перебирает их по 
 поля BuildConfig; новый код не нужен.
 **Тест:** `configured()` — чистая, покрыта (безключевые выпадают, порядок сохраняется);
 fallback-логика уже покрыта `FallbackLlmClientTest` (first-success / 429-fallback / all-fail).
+
+### AI-сеть за одним тестируемым интерфейсом (#21)
+**Решение:** HTTP вынесен за `HttpJson` (единственный реальный `UrlConnectionHttpJson`,
+фейки в тестах). Три провайдера — `OpenAiCompatibleClient`, `GeminiLlmClient`,
+`ClaudeLlmClient` — строят запрос и разбирают ответ поверх шва; сетевой boilerplate
+больше не копируется в каждом. `Gemini` и `OpenAiCompatible` — config-injected
+(ключ/модели через конструктор, не `BuildConfig`), поэтому unit-тестируемы
+детерминированно даже на CI без ключей.
+**Покрыто тестами:** разбор ответа, `4xx/5xx → ошибка`, пустой/битый JSON, таймаут
+(пробрасывается, чтобы fallback продолжил), переключение моделей (`GeminiLlmClientTest`)
+и провайдеров (`FallbackLlmClientTest`).

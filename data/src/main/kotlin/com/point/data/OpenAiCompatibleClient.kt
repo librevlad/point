@@ -11,8 +11,6 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
-import java.net.HttpURLConnection
-import java.net.URL
 
 /** Endpoint config for one OpenAI-compatible provider (OpenRouter, Groq, Cerebras, Mistral, OpenAI, …). */
 data class OpenAiProvider(
@@ -37,11 +35,12 @@ fun openAiModels(label: String, baseUrl: String, apiKey: String, models: String)
 /**
  * Any provider speaking the OpenAI Chat Completions API — OpenRouter, Groq,
  * Cerebras, Mistral, OpenAI, or a local server — behind one [OpenAiProvider]
- * config (base URL, key, model). No SDK: HttpURLConnection + org.json. Small
- * images are attached as a data-URL; the answer is materialised to `.md`. One
- * instance per configured provider; FallbackLlmClient chains them for reliability.
+ * config (base URL, key, model). The network lives behind [HttpJson], so request
+ * building and response parsing are unit-testable with a fake. Small images are
+ * attached as a data-URL; the answer is materialised to `.md`.
  */
 class OpenAiCompatibleClient(
+    private val http: HttpJson,
     private val store: ObjectStore,
     private val provider: OpenAiProvider,
 ) : LlmClient {
@@ -51,7 +50,13 @@ class OpenAiCompatibleClient(
     override suspend fun run(obj: PointObject, prompt: String): ResultObject =
         withContext(Dispatchers.IO) {
             require(provider.apiKey.isNotBlank()) { "${provider.label}: ключ не задан" }
-            val answer = request(obj, prompt)
+            val res = http.post(
+                "$baseUrl/chat/completions",
+                mapOf("Authorization" to "Bearer ${provider.apiKey}"),
+                requestBody(obj, prompt),
+            )
+            if (res.code !in 200..299) error("${provider.label} HTTP ${res.code}: ${res.body.take(300)}")
+            val answer = parseAnswer(res.body)
             val ref = store.newScratchFile("md")
             File(ref.value).writeText(answer)
             ResultObject(
@@ -62,7 +67,7 @@ class OpenAiCompatibleClient(
             )
         }
 
-    private fun request(obj: PointObject, prompt: String): String {
+    private fun requestBody(obj: PointObject, prompt: String): String {
         val message = JSONObject().put("role", "user")
         val image = maybeImage(obj)
         if (image != null) {
@@ -75,26 +80,10 @@ class OpenAiCompatibleClient(
         } else {
             message.put("content", prompt) // plain string — maximal compatibility
         }
-
-        val body = JSONObject()
+        return JSONObject()
             .put("model", provider.model)
             .put("messages", JSONArray().put(message))
-
-        val conn = (URL("$baseUrl/chat/completions").openConnection() as HttpURLConnection).apply {
-            requestMethod = "POST"
-            doOutput = true
-            connectTimeout = 30_000
-            readTimeout = 60_000
-            setRequestProperty("Content-Type", "application/json; charset=utf-8")
-            setRequestProperty("Authorization", "Bearer ${provider.apiKey}")
-        }
-        conn.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
-
-        val code = conn.responseCode
-        val text = (if (code in 200..299) conn.inputStream else conn.errorStream)
-            ?.bufferedReader()?.use { it.readText() }.orEmpty()
-        if (code !in 200..299) error("${provider.label} HTTP $code: ${text.take(300)}")
-        return parseAnswer(text)
+            .toString()
     }
 
     private fun maybeImage(obj: PointObject): JSONObject? {

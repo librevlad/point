@@ -11,21 +11,19 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
-import java.net.HttpURLConnection
-import java.net.URL
 import javax.inject.Inject
 
 /**
- * Anthropic (Claude) provider over the native Messages API — HttpURLConnection +
- * org.json, no SDK (consistent with the Gemini/OpenAI clients; keeps the APK
- * lean). Images and PDFs are attached inline as base64 content blocks; the text
- * answer is materialised to a scratch `.md` file.
+ * Anthropic (Claude) provider over the native Messages API, on [HttpJson] (no SDK,
+ * keeps the APK lean). Images and PDFs are attached inline as base64 content
+ * blocks; the text answer is materialised to a scratch `.md` file.
  *
  * Key/model/base URL come from BuildConfig (local.properties). A blank key fails
- * fast so the [FallbackLlmClient] moves on to the next provider. Model defaults
- * to `claude-opus-4-8`; override with CLAUDE_MODEL.
+ * fast so the [FallbackLlmClient] moves on. Model defaults to `claude-opus-4-8`;
+ * override with CLAUDE_MODEL.
  */
 class ClaudeLlmClient @Inject constructor(
+    private val http: HttpJson,
     private val store: ObjectStore,
 ) : LlmClient {
 
@@ -36,7 +34,13 @@ class ClaudeLlmClient @Inject constructor(
         withContext(Dispatchers.IO) {
             val key = BuildConfig.ANTHROPIC_API_KEY
             require(key.isNotBlank()) { "ANTHROPIC_API_KEY не задан" }
-            val answer = request(key, obj, prompt)
+            val res = http.post(
+                "$baseUrl/v1/messages",
+                mapOf("x-api-key" to key, "anthropic-version" to ANTHROPIC_VERSION),
+                requestBody(obj, prompt),
+            )
+            if (res.code !in 200..299) error("Claude HTTP ${res.code}: ${res.body.take(300)}")
+            val answer = parseAnswer(res.body)
             val ref = store.newScratchFile("md")
             File(ref.value).writeText(answer)
             ResultObject(
@@ -47,33 +51,17 @@ class ClaudeLlmClient @Inject constructor(
             )
         }
 
-    private fun request(key: String, obj: PointObject, prompt: String): String {
+    private fun requestBody(obj: PointObject, prompt: String): String {
         // content: attachment first (Anthropic's recommended ordering), then the prompt text.
         val content = JSONArray()
         maybeAttachment(obj)?.let { content.put(it) }
         content.put(JSONObject().put("type", "text").put("text", prompt))
 
-        val body = JSONObject()
+        return JSONObject()
             .put("model", model)
             .put("max_tokens", MAX_TOKENS)
             .put("messages", JSONArray().put(JSONObject().put("role", "user").put("content", content)))
-
-        val conn = (URL("$baseUrl/v1/messages").openConnection() as HttpURLConnection).apply {
-            requestMethod = "POST"
-            doOutput = true
-            connectTimeout = 30_000
-            readTimeout = 60_000
-            setRequestProperty("Content-Type", "application/json; charset=utf-8")
-            setRequestProperty("x-api-key", key)
-            setRequestProperty("anthropic-version", ANTHROPIC_VERSION)
-        }
-        conn.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
-
-        val code = conn.responseCode
-        val text = (if (code in 200..299) conn.inputStream else conn.errorStream)
-            ?.bufferedReader()?.use { it.readText() }.orEmpty()
-        if (code !in 200..299) error("Claude HTTP $code: ${text.take(300)}")
-        return parseAnswer(text)
+            .toString()
     }
 
     /** Image mimes become an image block; application/pdf a document block; others skipped. */
