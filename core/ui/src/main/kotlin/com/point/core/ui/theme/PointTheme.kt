@@ -68,6 +68,7 @@ fun PointTheme(
 ) {
     MaterialTheme(
         colorScheme = if (darkTheme) DarkColors else LightColors,
+        typography = PointTypography,
         content = content,
     )
 }
