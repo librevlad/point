@@ -255,13 +255,15 @@ class FlowViewModel @Inject constructor(
         val bubble = pendingBubble ?: return
         val top = stack.lastOrNull()?.obj ?: return
         pendingBubble = null
-        _ui.update { it.copy(busy = bubble.title, busyNetwork = isCloud(bubble.capabilityId), inputPrompt = null) }
+        _ui.update {
+            it.copy(busy = bubble.title, busyNetwork = isCloud(bubble.capabilityId), inputPrompt = null, inputSuggestions = emptyList())
+        }
         dispatch(bubble) { resolver.realizerFor(bubble.capabilityId).perform(top, text) }
     }
 
     fun cancelInput() {
         pendingBubble = null
-        _ui.update { it.copy(inputPrompt = null, busy = null) }
+        _ui.update { it.copy(inputPrompt = null, inputSuggestions = emptyList(), busy = null) }
     }
 
     // --- Bring-your-own AI key (#19). Summoned on demand or from the Home gear. ---
@@ -473,7 +475,7 @@ class FlowViewModel @Inject constructor(
                 else _ui.update { it.copy(busy = null, message = result.reason) }
             is ActionResult.NeedsInput -> {
                 pendingBubble = bubble
-                _ui.update { it.copy(busy = null, inputPrompt = result.prompt) }
+                _ui.update { it.copy(busy = null, inputPrompt = result.prompt, inputSuggestions = result.suggestions) }
             }
         }
     }
@@ -531,8 +533,8 @@ class FlowViewModel @Inject constructor(
         stack.addLast(frame)
         _ui.update {
             it.copy(
-                busy = null, frame = frame, message = null, inputPrompt = null, preview = null,
-                intents = registry.intentsFor(obj.state), selectedIntent = null, intentBubbles = emptyList(),
+                busy = null, frame = frame, message = null, inputPrompt = null, inputSuggestions = emptyList(),
+                preview = null, intents = registry.intentsFor(obj.state), selectedIntent = null, intentBubbles = emptyList(),
             )
         }
         refreshFavorites()

@@ -18,6 +18,10 @@ sealed interface ActionResult {
     /** [recoverable] == true means the user can retry / amend the same step. */
     data class Failure(val reason: String, val recoverable: Boolean) : ActionResult
 
-    /** The executor needs more input from the user before it can proceed. */
-    data class NeedsInput(val prompt: String) : ActionResult
+    /**
+     * The executor needs more input before it can proceed. [suggestions] are optional ready-made
+     * answers (e.g. the 3 most likely AI prompts for this object, #86) the user can tap instead of
+     * typing.
+     */
+    data class NeedsInput(val prompt: String, val suggestions: List<String> = emptyList()) : ActionResult
 }

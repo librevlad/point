@@ -39,6 +39,8 @@ data class FlowUiState(
     val message: String? = null,
     /** Non-null while a capability awaits free-text input (NeedsInput). */
     val inputPrompt: String? = null,
+    /** Ready-made answers for [inputPrompt] — the 3 likely AI prompts to tap instead of typing (#86). */
+    val inputSuggestions: List<String> = emptyList(),
     /** Saved chains applicable to the current object (first step accepts it). */
     val favorites: List<FavoriteChain> = emptyList(),
     /** True when the current flow has ≥1 applied step that can be saved. */
