@@ -61,6 +61,7 @@ import com.point.data.PdfRendererRasterizer
 import com.point.data.ScratchObjectStore
 import com.point.data.TesseractTextRecognizer
 import com.point.data.TextUrlEnricher
+import com.point.data.VCardEnricher
 import com.point.data.ZipImagesEnricher
 import dagger.Binds
 import dagger.Module
@@ -151,6 +152,9 @@ abstract class DataModule {
 
     @Binds @IntoSet
     abstract fun entityEnricher(e: EntityEnricher): Enricher
+
+    @Binds @IntoSet
+    abstract fun vcardEnricher(e: VCardEnricher): Enricher
 
     @Binds @IntoSet
     abstract fun zipImagesEnricher(e: ZipImagesEnricher): Enricher

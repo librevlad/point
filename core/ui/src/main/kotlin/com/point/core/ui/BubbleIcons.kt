@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.OpenInNew
+import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.SaveAlt
@@ -53,6 +54,7 @@ fun bubbleIcon(key: String): ImageVector = when (key) {
     "call" -> Icons.Filled.Call
     "message" -> Icons.Filled.Sms
     "email" -> Icons.Filled.Email
+    "contact" -> Icons.Filled.PersonAdd
     "open-in" -> Icons.Filled.Apps
     else -> Icons.Filled.Bolt
 }
@@ -81,6 +83,7 @@ fun bubbleColor(key: String): Color = when (key) {
     "call" -> Color(0xFF16A34A)      // green — call
     "message" -> Color(0xFF2F80ED)   // blue — message
     "email" -> Color(0xFF2F80ED)     // blue — email
+    "contact" -> Color(0xFF16A34A)   // green — add contact
     "open-in" -> Color(0xFF2F80ED)   // blue — open externally
     else -> Color(0xFF9AA0A6)        // grey — everything else
 }

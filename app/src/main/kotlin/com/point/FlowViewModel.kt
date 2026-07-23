@@ -505,8 +505,9 @@ class FlowViewModel @Inject constructor(
     private fun loadTextPreviewIfText(obj: PointObject) {
         if (obj.state.kind != ObjectKind.TEXT) return
         viewModelScope.launch {
-            val text = runCatching { store.readText(obj, limit = 100_000) }.getOrDefault("")
-            if (text.isBlank()) return@launch
+            val raw = runCatching { store.readText(obj, limit = 100_000) }.getOrDefault("")
+            if (raw.isBlank()) return@launch
+            val text = sanitizeTextPreview(raw) // strip base64 blobs (e.g. a vCard's inline photo)
 
             val topIndex = stack.lastIndex
             val top = stack.getOrNull(topIndex) ?: return@launch
