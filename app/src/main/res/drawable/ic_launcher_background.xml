@@ -4,15 +4,15 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Point brand ink, with the subtle diagonal sheen of the phone shell. -->
+    <!-- Deep navy field the speech bubble sits on, with a faint diagonal sheen. -->
     <path android:pathData="M0,0h108v108h-108z">
         <aapt:attr name="android:fillColor">
             <gradient
                 android:type="linear"
-                android:startX="8" android:startY="4"
-                android:endX="100" android:endY="104">
-                <item android:offset="0" android:color="#FF171A22" />
-                <item android:offset="1" android:color="#FF0A0C12" />
+                android:startX="10" android:startY="6"
+                android:endX="98" android:endY="102">
+                <item android:offset="0" android:color="#FF2E4A82" />
+                <item android:offset="1" android:color="#FF203868" />
             </gradient>
         </aapt:attr>
     </path>
