@@ -45,6 +45,7 @@ fun PointHost(
     onIntent: (Intent) -> Unit = {},
     onSaveAiConfig: (UserAiConfig) -> Unit = {},
     onCloseKeySettings: () -> Unit = {},
+    onToggleUsage: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -54,6 +55,9 @@ fun PointHost(
                 config = state.keyScreen,
                 onSave = onSaveAiConfig,
                 onCancel = onCloseKeySettings,
+                usageEnabled = state.usageEnabled,
+                usageSummary = state.usageSummary,
+                onToggleUsage = onToggleUsage,
             )
 
             state.busy != null -> Column(horizontalAlignment = Alignment.CenterHorizontally) {

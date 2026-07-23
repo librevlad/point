@@ -58,6 +58,7 @@ class ShareActivity : ComponentActivity() {
                         onItem = viewModel::onItem,
                         onSaveAiConfig = viewModel::saveAiConfig,
                         onCloseKeySettings = viewModel::closeKeySettings,
+                        onToggleUsage = viewModel::setUsageEnabled,
                     )
                 }
             }

@@ -9,6 +9,9 @@ import com.point.core.flow.FavoritesStore
 import com.point.core.flow.HistoryStore
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.Resolver
+import com.point.core.flow.UsageEvent
+import com.point.core.flow.UsageEventType
+import com.point.core.flow.UsageJournal
 import com.point.core.flow.UserAiConfig
 import com.point.core.flow.UserKeyStore
 import com.point.core.model.ActionResult
@@ -43,6 +46,7 @@ class FlowViewModel @Inject constructor(
     private val favorites: FavoritesStore,
     private val usage: CapabilityUsage,
     private val userKeys: UserKeyStore,
+    private val journal: UsageJournal,
 ) : ViewModel() {
 
     private val stack = ArrayDeque<FlowFrame>()
@@ -70,6 +74,7 @@ class FlowViewModel @Inject constructor(
                 return@launch
             }
             runCatching { history.record(obj) }
+            runCatching { journal.record(UsageEvent(UsageEventType.SHARED, obj.state.kind.name)) }
             stack.clear()
             pushFrame(obj)
         }
@@ -88,6 +93,7 @@ class FlowViewModel @Inject constructor(
                 return@launch
             }
             // A collection is a transient scratch directory — History copies a single file, so skip it.
+            runCatching { journal.record(UsageEvent(UsageEventType.SHARED, obj.state.kind.name)) }
             stack.clear()
             pushFrame(obj)
         }
@@ -160,6 +166,23 @@ class FlowViewModel @Inject constructor(
         _ui.update {
             it.copy(keyScreen = userKeys.read() ?: UserAiConfig.DEFAULT, busy = null, message = null, inputPrompt = null)
         }
+        refreshUsage()
+    }
+
+    /** Load the usage journal's on/off state and tally for the key screen. */
+    private fun refreshUsage() {
+        viewModelScope.launch {
+            val enabled = journal.isEnabled()
+            val summary = if (enabled) runCatching { journal.summary() }.getOrNull() else null
+            _ui.update { it.copy(usageEnabled = enabled, usageSummary = summary) }
+        }
+    }
+
+    fun setUsageEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            runCatching { journal.setEnabled(enabled) }
+            refreshUsage()
+        }
     }
 
     fun closeKeySettings() = _ui.update { it.copy(keyScreen = null) }
@@ -223,6 +246,7 @@ class FlowViewModel @Inject constructor(
     private fun dispatch(bubble: Bubble, action: suspend () -> ActionResult) {
         viewModelScope.launch {
             runCatching { usage.record(bubble.capabilityId) } // learning signal for BubblePolicy
+            runCatching { journal.record(UsageEvent(UsageEventType.ACTION, bubble.capabilityId.value)) }
             runCatching { action() }
                 .onSuccess { result -> handleResult(result, bubble) }
                 .onFailure { e -> _ui.update { it.copy(busy = null, message = e.message ?: "Ошибка") } }
@@ -232,7 +256,11 @@ class FlowViewModel @Inject constructor(
     private suspend fun handleResult(result: ActionResult, bubble: Bubble) {
         when (result) {
             is ActionResult.Success -> pushFrame(store.put(result.result), bubble.capabilityId, bubble.title)
-            is ActionResult.Done -> _ui.update { it.copy(busy = null, message = result.message) }
+            is ActionResult.Done -> {
+                // A flow carried to a terminal (Share/Save/Open) — a task handled in Point.
+                runCatching { journal.record(UsageEvent(UsageEventType.COMPLETED, bubble.capabilityId.value)) }
+                _ui.update { it.copy(busy = null, message = result.message) }
+            }
             is ActionResult.Failure ->
                 // A "no AI key" failure summons the key screen on demand instead of just erroring.
                 if (result.reason.contains("задайте свой ключ")) openKeySettings()
