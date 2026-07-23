@@ -68,7 +68,7 @@ class FlowViewModel @Inject constructor(
     }
 
     fun onShared(sourceUri: String, mime: String) {
-        _ui.update { it.copy(busy = "Открываю…", message = null, inputPrompt = null) }
+        _ui.update { it.copy(busy = "Открываю…", busyNetwork = false, message = null, inputPrompt = null) }
         viewModelScope.launch {
             val obj = runCatching {
                 store.clear()
@@ -87,7 +87,7 @@ class FlowViewModel @Inject constructor(
     /** Several shared files → one COLLECTION (the inbound half of collections;
      *  e.g. several photos to merge into a PDF). */
     fun onSharedMultiple(sources: List<String>) {
-        _ui.update { it.copy(busy = "Открываю…", message = null, inputPrompt = null) }
+        _ui.update { it.copy(busy = "Открываю…", busyNetwork = false, message = null, inputPrompt = null) }
         viewModelScope.launch {
             val obj = runCatching {
                 store.clear()
@@ -118,7 +118,7 @@ class FlowViewModel @Inject constructor(
     }
 
     fun openFromHistory(entry: HistoryEntry) {
-        _ui.update { it.copy(busy = "Открываю…", message = null, inputPrompt = null) }
+        _ui.update { it.copy(busy = "Открываю…", busyNetwork = false, message = null, inputPrompt = null) }
         viewModelScope.launch {
             val obj = runCatching { history.open(entry.id) }.getOrNull()
             if (obj == null) {
@@ -142,7 +142,7 @@ class FlowViewModel @Inject constructor(
     }
 
     private fun runOnObject(bubble: Bubble, top: PointObject) {
-        _ui.update { it.copy(busy = bubble.title, message = null, inputPrompt = null, selectedIntent = null, intentBubbles = emptyList()) }
+        _ui.update { it.copy(busy = bubble.title, busyNetwork = isCloud(bubble.capabilityId), message = null, inputPrompt = null, selectedIntent = null, intentBubbles = emptyList()) }
         dispatch(bubble) { resolver.realizerFor(bubble.capabilityId).perform(top, null) }
     }
 
@@ -189,7 +189,7 @@ class FlowViewModel @Inject constructor(
         val bubble = pendingBubble ?: return
         val top = stack.lastOrNull()?.obj ?: return
         pendingBubble = null
-        _ui.update { it.copy(busy = bubble.title, inputPrompt = null) }
+        _ui.update { it.copy(busy = bubble.title, busyNetwork = isCloud(bubble.capabilityId), inputPrompt = null) }
         dispatch(bubble) { resolver.realizerFor(bubble.capabilityId).perform(top, text) }
     }
 
@@ -276,7 +276,7 @@ class FlowViewModel @Inject constructor(
     }
 
     private fun replayChain(chain: FavoriteChain, start: PointObject) {
-        _ui.update { it.copy(busy = "Выполняю цепочку…", message = null, inputPrompt = null) }
+        _ui.update { it.copy(busy = "Выполняю цепочку…", busyNetwork = false, message = null, inputPrompt = null) }
         viewModelScope.launch {
             var current = start
             for (capId in chain.steps) {
