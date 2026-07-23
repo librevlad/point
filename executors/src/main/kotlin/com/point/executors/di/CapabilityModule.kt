@@ -11,6 +11,8 @@ import com.point.executors.CallCapability
 import com.point.executors.CallRealizer
 import com.point.executors.EmailCapability
 import com.point.executors.EmailRealizer
+import com.point.executors.OpenInCapability
+import com.point.executors.OpenInRealizer
 import com.point.executors.SmsCapability
 import com.point.executors.SmsRealizer
 import com.point.executors.ArchiveCapability
@@ -82,6 +84,7 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun mergePdfCap(c: MergePdfCapability): Capability
     @Binds @IntoSet abstract fun scanPdfCap(c: ScanPdfCapability): Capability
     @Binds @IntoSet abstract fun openCap(c: OpenCapability): Capability
+    @Binds @IntoSet abstract fun openInCap(c: OpenInCapability): Capability
     @Binds @IntoSet abstract fun openUrlCap(c: OpenUrlCapability): Capability
     // Entity actions (on-device detection → targeted action) — "right-click" for text.
     @Binds @IntoSet abstract fun callCap(c: CallCapability): Capability
@@ -106,6 +109,7 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun mergePdfR(r: MergePdfRealizer): Realizer
     @Binds @IntoSet abstract fun scanPdfR(r: ScanPdfRealizer): Realizer
     @Binds @IntoSet abstract fun openR(r: OpenRealizer): Realizer
+    @Binds @IntoSet abstract fun openInR(r: OpenInRealizer): Realizer
     @Binds @IntoSet abstract fun openUrlR(r: OpenUrlRealizer): Realizer
     @Binds @IntoSet abstract fun callR(r: CallRealizer): Realizer
     @Binds @IntoSet abstract fun smsR(r: SmsRealizer): Realizer

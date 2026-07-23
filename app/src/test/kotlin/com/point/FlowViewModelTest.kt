@@ -1,5 +1,7 @@
 package com.point
 
+import com.point.core.flow.AppLauncher
+import com.point.core.flow.AppTarget
 import com.point.core.flow.Capability
 import com.point.core.flow.CapabilityMeta
 import com.point.core.flow.CapabilityRegistry
@@ -29,6 +31,7 @@ import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
 import com.point.core.model.ResultObject
 import com.point.core.model.ScratchRef
+import com.point.executors.OpenInCapability
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -62,6 +65,7 @@ class FlowViewModelTest {
     private val userKeys = FakeUserKeys()
     private val journal = FakeUsageJournal()
     private val consent = FakePrivacyConsent()
+    private val appLauncher = FakeAppLauncher()
 
     @Before fun setUp() = Dispatchers.setMain(dispatcher)
     @After fun tearDown() = Dispatchers.resetMain()
@@ -71,7 +75,7 @@ class FlowViewModelTest {
     private fun vm(
         caps: Map<CapabilityId, Set<Intent>> = mapOf(CapabilityId("a") to setOf(Intent.PREPARE)),
         cloud: Set<CapabilityId> = emptySet(),
-    ) = FlowViewModel(store, FakeRegistry(caps, cloud), resolver, enrichment, history, favorites, usage, userKeys, journal, consent)
+    ) = FlowViewModel(store, FakeRegistry(caps, cloud), resolver, enrichment, history, favorites, usage, userKeys, journal, consent, appLauncher)
 
     private fun bubble(id: String = "a", title: String = "Действие") =
         Bubble("x", title, CapabilityId(id), ObjectState(ObjectKind.TEXT))
@@ -388,6 +392,42 @@ class FlowViewModelTest {
         assertTrue(vm.ui.value.cloudConsent)                  // asked before replaying
         assertEquals("__unset__", resolver.lastAmendment)     // no step reached the cloud
     }
+
+    // --- Device actions: inline app picker (#66) ---
+
+    @Test fun `open-in shows the device's installed apps`() = runTest(dispatcher) {
+        appLauncher.apps = listOf(AppTarget("Chrome", "com.chrome", "A"), AppTarget("Firefox", "org.ff", "B"))
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.onBubble(bubble(id = "open-in")); advanceUntilIdle()
+
+        assertEquals(2, vm.ui.value.appPicker?.size)
+    }
+
+    @Test fun `picking an app launches it and closes the picker`() = runTest(dispatcher) {
+        val chrome = AppTarget("Chrome", "com.chrome", "A")
+        appLauncher.apps = listOf(chrome)
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        vm.onBubble(bubble(id = "open-in")); advanceUntilIdle()
+
+        vm.onPickApp(chrome); advanceUntilIdle()
+
+        assertEquals(chrome, appLauncher.launched)
+        assertNull(vm.ui.value.appPicker)
+    }
+
+    @Test fun `open-in with no handler shows a plain message, not an empty picker`() = runTest(dispatcher) {
+        appLauncher.apps = emptyList()
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.onBubble(bubble(id = "open-in")); advanceUntilIdle()
+
+        assertNull(vm.ui.value.appPicker)
+        assertTrue(vm.ui.value.message?.contains("Нет приложения") == true)
+    }
 }
 
 // --- Fakes ---
@@ -476,6 +516,12 @@ private class FakeUserKeys(var config: UserAiConfig? = null) : UserKeyStore {
 private class FakePrivacyConsent(var granted: Boolean = false) : PrivacyConsent {
     override suspend fun cloudAllowed() = granted
     override suspend fun allowCloud() { granted = true }
+}
+
+private class FakeAppLauncher(var apps: List<AppTarget> = emptyList()) : AppLauncher {
+    var launched: AppTarget? = null
+    override suspend fun handlers(obj: PointObject) = apps
+    override suspend fun launch(target: AppTarget, obj: PointObject) { launched = target }
 }
 
 private class FakeUsageJournal(private var enabled: Boolean = true) : UsageJournal {

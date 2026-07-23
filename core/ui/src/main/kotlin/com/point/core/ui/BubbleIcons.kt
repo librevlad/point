@@ -1,6 +1,7 @@
 package com.point.core.ui
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Article
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.AutoFixHigh
@@ -52,6 +53,7 @@ fun bubbleIcon(key: String): ImageVector = when (key) {
     "call" -> Icons.Filled.Call
     "message" -> Icons.Filled.Sms
     "email" -> Icons.Filled.Email
+    "open-in" -> Icons.Filled.Apps
     else -> Icons.Filled.Bolt
 }
 
@@ -79,6 +81,7 @@ fun bubbleColor(key: String): Color = when (key) {
     "call" -> Color(0xFF16A34A)      // green — call
     "message" -> Color(0xFF2F80ED)   // blue — message
     "email" -> Color(0xFF2F80ED)     // blue — email
+    "open-in" -> Color(0xFF2F80ED)   // blue — open externally
     else -> Color(0xFF9AA0A6)        // grey — everything else
 }
 

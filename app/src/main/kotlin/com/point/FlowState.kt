@@ -1,5 +1,6 @@
 package com.point
 
+import com.point.core.flow.AppTarget
 import com.point.core.flow.UsageSummary
 import com.point.core.flow.UserAiConfig
 import com.point.core.model.Bubble
@@ -49,6 +50,9 @@ data class FlowUiState(
     val intentBubbles: List<Bubble> = emptyList(),
     /** True while a cloud action waits for one-time privacy consent (#10). */
     val cloudConsent: Boolean = false,
+    /** Non-null while the inline "Открыть в…" app-picker is shown — the installed apps that can
+     *  open the current object (#66 device actions). */
+    val appPicker: List<AppTarget>? = null,
     /** Non-null while the bring-your-own AI-key screen is shown (its prefilled values). */
     val keyScreen: UserAiConfig? = null,
     /** On the key screen: whether the private usage journal is on, and its current tally. */
