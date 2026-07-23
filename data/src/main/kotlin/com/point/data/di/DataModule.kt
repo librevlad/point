@@ -16,6 +16,7 @@ import com.point.core.flow.ObjectStore
 import com.point.core.flow.OfficeTextExtractor
 import com.point.core.flow.PdfRasterizer
 import com.point.core.flow.PdfTextExtractor
+import com.point.core.flow.PrivacyConsent
 import com.point.core.flow.Sharer
 import com.point.core.flow.SpreadsheetWriter
 import com.point.core.flow.TextRecognizer
@@ -48,6 +49,7 @@ import com.point.data.configured
 import com.point.data.openAiModels
 import com.point.data.PdfBoxTextExtractor
 import com.point.data.PdfImageEnricher
+import com.point.data.PrefsPrivacyConsent
 import com.point.data.PrefsUserKeyStore
 import com.point.data.UserKeyLlmClient
 import com.point.data.PdfRendererRasterizer
@@ -129,6 +131,10 @@ abstract class DataModule {
     /** Private, consent-gated usage journal (North Star measurement). */
     @Binds
     abstract fun usageJournal(impl: FileUsageJournal): UsageJournal
+
+    /** Consent to send objects to a cloud service (#10). */
+    @Binds
+    abstract fun privacyConsent(impl: PrefsPrivacyConsent): PrivacyConsent
 
     @Binds @IntoSet
     abstract fun textUrlEnricher(e: TextUrlEnricher): Enricher
