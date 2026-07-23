@@ -12,8 +12,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -21,10 +23,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import com.point.core.flow.UsageSummary
 import com.point.core.flow.UserAiConfig
 
 /**
@@ -37,6 +41,9 @@ fun KeyScreen(
     config: UserAiConfig,
     onSave: (UserAiConfig) -> Unit,
     onCancel: () -> Unit,
+    usageEnabled: Boolean,
+    usageSummary: UsageSummary?,
+    onToggleUsage: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var key by remember(config) { mutableStateOf(config.apiKey) }
@@ -88,6 +95,30 @@ fun KeyScreen(
                 onClick = { onSave(UserAiConfig(key.trim(), baseUrl.trim(), model.trim())) },
                 enabled = key.isNotBlank(),
             ) { Text("Сохранить") }
+        }
+
+        Spacer(Modifier.height(16.dp))
+        HorizontalDivider()
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text("Приватная статистика", style = MaterialTheme.typography.titleSmall)
+                Text(
+                    "Обезличенно, только на устройстве — мерит, экономит ли Point переключения между приложениями.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(checked = usageEnabled, onCheckedChange = onToggleUsage)
+        }
+        if (usageEnabled && usageSummary != null) {
+            Text(
+                "Объектов: ${usageSummary.objects} · действий: ${usageSummary.actions} · завершено в Point: ${usageSummary.completed}",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }

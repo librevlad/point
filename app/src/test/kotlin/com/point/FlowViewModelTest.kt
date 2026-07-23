@@ -9,6 +9,10 @@ import com.point.core.flow.HistoryStore
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.Realizer
 import com.point.core.flow.Resolver
+import com.point.core.flow.UsageEvent
+import com.point.core.flow.UsageEventType
+import com.point.core.flow.UsageJournal
+import com.point.core.flow.UsageSummary
 import com.point.core.flow.UserAiConfig
 import com.point.core.flow.UserKeyStore
 import com.point.core.model.ActionResult
@@ -54,13 +58,14 @@ class FlowViewModelTest {
     private val favorites = FakeFavorites()
     private val usage = FakeUsage()
     private val userKeys = FakeUserKeys()
+    private val journal = FakeUsageJournal()
 
     @Before fun setUp() = Dispatchers.setMain(dispatcher)
     @After fun tearDown() = Dispatchers.resetMain()
 
     /** A view model over the fakes, whose registry offers [caps] (id → the intents it serves). */
     private fun vm(caps: Map<CapabilityId, Set<Intent>> = mapOf(CapabilityId("a") to setOf(Intent.PREPARE))) =
-        FlowViewModel(store, FakeRegistry(caps), resolver, enrichment, history, favorites, usage, userKeys)
+        FlowViewModel(store, FakeRegistry(caps), resolver, enrichment, history, favorites, usage, userKeys, journal)
 
     private fun bubble(id: String = "a", title: String = "Действие") =
         Bubble("x", title, CapabilityId(id), ObjectState(ObjectKind.TEXT))
@@ -296,6 +301,18 @@ class FlowViewModelTest {
         assertEquals(config, userKeys.saved)
         assertNull(vm.ui.value.keyScreen)
     }
+
+    @Test fun `records usage events for the North Star (shared, action, completed)`() = runTest(dispatcher) {
+        resolver.result = ActionResult.Done("готово") // a terminal → COMPLETED
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        vm.onBubble(bubble()); advanceUntilIdle()
+
+        val types = journal.events.map { it.type }
+        assertTrue(types.contains(UsageEventType.SHARED))
+        assertTrue(types.contains(UsageEventType.ACTION))
+        assertTrue(types.contains(UsageEventType.COMPLETED))
+    }
 }
 
 // --- Fakes ---
@@ -371,4 +388,17 @@ private class FakeUserKeys(var config: UserAiConfig? = null) : UserKeyStore {
     override fun read() = config
     override suspend fun save(config: UserAiConfig) { saved = config; this.config = config }
     override suspend fun clear() { config = null }
+}
+
+private class FakeUsageJournal(private var enabled: Boolean = true) : UsageJournal {
+    val events = mutableListOf<UsageEvent>()
+    override suspend fun isEnabled() = enabled
+    override suspend fun setEnabled(enabled: Boolean) { this.enabled = enabled }
+    override suspend fun record(event: UsageEvent) { if (enabled) events += event }
+    override suspend fun summary() = UsageSummary(
+        events.count { it.type == UsageEventType.SHARED },
+        events.count { it.type == UsageEventType.ACTION },
+        events.count { it.type == UsageEventType.COMPLETED },
+    )
+    override suspend fun clear() { events.clear() }
 }

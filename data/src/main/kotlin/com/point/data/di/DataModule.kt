@@ -20,6 +20,7 @@ import com.point.core.flow.Sharer
 import com.point.core.flow.SpreadsheetWriter
 import com.point.core.flow.TextRecognizer
 import com.point.core.flow.UrlOpener
+import com.point.core.flow.UsageJournal
 import com.point.core.flow.UserKeyStore
 import com.point.core.flow.Viewer
 import com.point.data.AndroidSharer
@@ -30,6 +31,7 @@ import com.point.data.CommonsArchiveExtractor
 import com.point.data.DefaultEnrichment
 import com.point.data.DefaultEntitlements
 import com.point.data.FallbackLlmClient
+import com.point.data.FileUsageJournal
 import com.point.data.FileCapabilityUsage
 import com.point.data.FileFavoritesStore
 import com.point.data.FileHistoryStore
@@ -124,6 +126,10 @@ abstract class DataModule {
     @Binds
     abstract fun userKeyStore(impl: PrefsUserKeyStore): UserKeyStore
 
+    /** Private, consent-gated usage journal (North Star measurement). */
+    @Binds
+    abstract fun usageJournal(impl: FileUsageJournal): UsageJournal
+
     @Binds @IntoSet
     abstract fun textUrlEnricher(e: TextUrlEnricher): Enricher
 
@@ -192,5 +198,10 @@ abstract class DataModule {
         @FavoritesDir
         fun favoritesDir(@ApplicationContext context: Context): java.io.File =
             java.io.File(context.filesDir, "favorites")
+
+        @Provides
+        @UsageDir
+        fun usageDir(@ApplicationContext context: Context): java.io.File =
+            java.io.File(context.filesDir, "usage")
     }
 }
