@@ -4,9 +4,11 @@
 # Android SDK location:
 sdk.dir=C\:\\Users\\User\\AppData\\Local\\Android\\Sdk
 
-# Primary AI — Gemini. Surfaced via BuildConfig.GEMINI_API_KEY (see :data).
-# Never hard-code this in source and never commit the real local.properties.
+# Gemini (Google AI Studio). Key: https://aistudio.google.com/apikey — never commit
+# the real local.properties. GEMINI_MODELS is a comma-separated fallback list; the
+# pinned gemini-2.0-flash has zero free quota (429), so serving aliases lead.
 GEMINI_API_KEY=PUT_YOUR_KEY_HERE
+GEMINI_MODELS=gemini-flash-latest,gemini-flash-lite-latest
 
 # Fallback #1 — Claude (Anthropic), tried after Gemini. Native Messages API.
 # Leave ANTHROPIC_API_KEY blank to disable. Model defaults to claude-opus-4-8;
@@ -30,19 +32,25 @@ OPENAI_MODELS=gpt-4o-mini
 # OpenRouter — one key, many free models (…:free).  https://openrouter.ai/keys
 OPENROUTER_API_KEY=
 OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
-OPENROUTER_MODELS=meta-llama/llama-3.2-11b-vision-instruct:free,google/gemini-2.0-flash-exp:free,meta-llama/llama-3.3-70b-instruct:free
+OPENROUTER_MODELS=google/gemma-4-31b-it:free,google/gemma-4-26b-a4b-it:free,openai/gpt-oss-20b:free
 
 # Groq — very fast, generous free tier.  https://console.groq.com/keys
 GROQ_API_KEY=
 GROQ_BASE_URL=https://api.groq.com/openai/v1
-GROQ_MODELS=llama-3.3-70b-versatile
+GROQ_MODELS=llama-3.3-70b-versatile,openai/gpt-oss-120b,llama-3.1-8b-instant
 
 # Mistral — free tier, pixtral is multimodal.  https://console.mistral.ai
 MISTRAL_API_KEY=
 MISTRAL_BASE_URL=https://api.mistral.ai/v1
-MISTRAL_MODELS=pixtral-12b-2409,mistral-small-latest
+MISTRAL_MODELS=mistral-small-latest,pixtral-12b-2409
 
-# Cerebras — very fast, text-only.  https://cloud.cerebras.ai
+# Cerebras — very fast. Free tier needs a plan enabled in the billing tab.  https://cloud.cerebras.ai
 CEREBRAS_API_KEY=
 CEREBRAS_BASE_URL=https://api.cerebras.ai/v1
-CEREBRAS_MODELS=llama-3.3-70b
+CEREBRAS_MODELS=gpt-oss-120b,gemma-4-31b
+
+# GitHub Models — free during preview, generous, vision (gpt-4o). Token with the
+# "models" permission: https://github.com/settings/tokens  (fine-grained or classic)
+GITHUB_API_KEY=
+GITHUB_BASE_URL=https://models.github.ai/inference
+GITHUB_MODELS=openai/gpt-4o-mini,openai/gpt-4o
