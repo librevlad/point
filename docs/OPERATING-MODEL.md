@@ -32,8 +32,9 @@
 2. **Приоритет + «go».** ChatGPT упорядочивает «Up next». Человек даёт **«go»** на
    верхний issue (`roadmap #N` — это *идентичность*, не приоритет).
 3. **Сборка.** Claude: issue → In progress; ветка `feat/N-slug`; реализация; инварианты;
-   при спорной развилке — `DECISIONS.md`; гейт `./gradlew test assembleDebug`; **PR**
-   (Conventional-title, `Closes #N`, чеклист) → In review.
+   при спорной развилке — `DECISIONS.md`; гейт `./gradlew test assembleDebug`; независимое
+   AI-ревью `bash scripts/gemini-review.sh`; **PR** (Conventional-title, `Closes #N`,
+   чеклист) → In review.
 4. **Суд.** Человек смотрит diff (вкус + Северная звезда), ждёт **зелёный CI**,
    **squash-merge**. Issue авто-закрыт → Done.
 5. **Релиз (периодически).** Прошёл milestone по Северной звезде → человек режет тег.
@@ -69,6 +70,16 @@
 
 Один workflow `.github/workflows/ci.yml`: `./gradlew test assembleDebug` на каждый push
 в `main` и на PR. Билд keyless (без секретов) — гард в `data/build.gradle.kts`.
+
+## Ревьювер (Gemini CLI)
+
+Независимый AI-ревьювер — второе мнение помимо CTO/dev, локально и read-only.
+`bash scripts/gemini-review.sh [base]` (база по умолчанию `origin/main`) берёт дифф
+ветки и шлёт в **Gemini CLI** (`--approval-mode plan` — только чтение; модель
+`gemini-flash-latest`, т.к. дефолтная `gemini-2.5-pro` недоступна на free-tier), печатает
+ревью с упором на инварианты проекта. Ключ — из `local.properties` (`GEMINI_API_KEY`),
+в репозиторий не попадает. Claude прогоняет его перед PR; вывод **информативный, не гейт**
+(гейт — зелёный CI + вкус человека).
 
 ## Релизы
 
