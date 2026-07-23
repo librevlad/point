@@ -13,39 +13,47 @@ import org.json.JSONObject
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
-import javax.inject.Inject
+
+/** Endpoint config for one OpenAI-compatible provider (OpenRouter, Groq, Cerebras, Mistral, OpenAI, …). */
+data class OpenAiProvider(
+    val label: String,
+    val baseUrl: String,
+    val apiKey: String,
+    val model: String,
+)
+
+/** The active providers, order preserved — a blank key means "not signed up", so skip it. */
+fun List<OpenAiProvider>.configured(): List<OpenAiProvider> = filter { it.apiKey.isNotBlank() }
 
 /**
- * Alternative provider speaking the OpenAI Chat Completions API — works with
- * OpenAI, OpenRouter, or a local server via a configurable base URL and model
- * (BuildConfig, from local.properties). No SDK: HttpURLConnection + org.json.
- * Small images are attached as a data-URL; the answer is materialised to `.md`.
+ * Any provider speaking the OpenAI Chat Completions API — OpenRouter, Groq,
+ * Cerebras, Mistral, OpenAI, or a local server — behind one [OpenAiProvider]
+ * config (base URL, key, model). No SDK: HttpURLConnection + org.json. Small
+ * images are attached as a data-URL; the answer is materialised to `.md`. One
+ * instance per configured provider; FallbackLlmClient chains them for reliability.
  */
-class OpenAiLlmClient @Inject constructor(
+class OpenAiCompatibleClient(
     private val store: ObjectStore,
+    private val provider: OpenAiProvider,
 ) : LlmClient {
 
-    private val model: String get() = BuildConfig.OPENAI_MODEL.ifBlank { "gpt-4o-mini" }
-    private val baseUrl: String get() = BuildConfig.OPENAI_BASE_URL.ifBlank { DEFAULT_BASE_URL }.trimEnd('/')
-
-    fun isConfigured(): Boolean = BuildConfig.OPENAI_API_KEY.isNotBlank()
+    private val baseUrl: String = provider.baseUrl.ifBlank { DEFAULT_BASE_URL }.trimEnd('/')
 
     override suspend fun run(obj: PointObject, prompt: String): ResultObject =
         withContext(Dispatchers.IO) {
-            val key = BuildConfig.OPENAI_API_KEY
-            require(key.isNotBlank()) { "OPENAI_API_KEY не задан" }
-            val answer = request(key, obj, prompt)
+            require(provider.apiKey.isNotBlank()) { "${provider.label}: ключ не задан" }
+            val answer = request(obj, prompt)
             val ref = store.newScratchFile("md")
             File(ref.value).writeText(answer)
             ResultObject(
                 type = ObjectKind.TEXT,
                 mime = "text/markdown",
                 uri = ref,
-                metadata = mapOf("source" to "openai", "model" to model),
+                metadata = mapOf("source" to provider.label, "model" to provider.model),
             )
         }
 
-    private fun request(key: String, obj: PointObject, prompt: String): String {
+    private fun request(obj: PointObject, prompt: String): String {
         val message = JSONObject().put("role", "user")
         val image = maybeImage(obj)
         if (image != null) {
@@ -60,7 +68,7 @@ class OpenAiLlmClient @Inject constructor(
         }
 
         val body = JSONObject()
-            .put("model", model)
+            .put("model", provider.model)
             .put("messages", JSONArray().put(message))
 
         val conn = (URL("$baseUrl/chat/completions").openConnection() as HttpURLConnection).apply {
@@ -69,14 +77,14 @@ class OpenAiLlmClient @Inject constructor(
             connectTimeout = 30_000
             readTimeout = 60_000
             setRequestProperty("Content-Type", "application/json; charset=utf-8")
-            setRequestProperty("Authorization", "Bearer $key")
+            setRequestProperty("Authorization", "Bearer ${provider.apiKey}")
         }
         conn.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
 
         val code = conn.responseCode
         val text = (if (code in 200..299) conn.inputStream else conn.errorStream)
             ?.bufferedReader()?.use { it.readText() }.orEmpty()
-        if (code !in 200..299) error("OpenAI HTTP $code: ${text.take(300)}")
+        if (code !in 200..299) error("${provider.label} HTTP $code: ${text.take(300)}")
         return parseAnswer(text)
     }
 
@@ -92,10 +100,10 @@ class OpenAiLlmClient @Inject constructor(
 
     private fun parseAnswer(json: String): String {
         val choices = JSONObject(json).optJSONArray("choices")
-            ?: error("OpenAI не вернул choices")
-        if (choices.length() == 0) error("OpenAI вернул пустой ответ")
+            ?: error("${provider.label}: ответ без choices")
+        if (choices.length() == 0) error("${provider.label}: пустой ответ")
         val content = choices.getJSONObject(0).getJSONObject("message").optString("content")
-        return content.ifBlank { error("OpenAI вернул пустой текст") }
+        return content.ifBlank { error("${provider.label}: пустой текст") }
     }
 
     private companion object {

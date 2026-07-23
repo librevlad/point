@@ -35,6 +35,21 @@ android {
         buildConfigField("String", "OPENAI_API_KEY", prop("OPENAI_API_KEY"))
         buildConfigField("String", "OPENAI_BASE_URL", prop("OPENAI_BASE_URL", "https://api.openai.com/v1"))
         buildConfigField("String", "OPENAI_MODEL", prop("OPENAI_MODEL", "gpt-4o-mini"))
+
+        // Free OpenAI-compatible providers (#32 — "все бесплатные по максимуму"). Each
+        // activates only when its key is present. Vision-capable ones lead the chain.
+        buildConfigField("String", "OPENROUTER_API_KEY", prop("OPENROUTER_API_KEY"))
+        buildConfigField("String", "OPENROUTER_BASE_URL", prop("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"))
+        buildConfigField("String", "OPENROUTER_MODEL", prop("OPENROUTER_MODEL", "meta-llama/llama-3.2-11b-vision-instruct:free"))
+        buildConfigField("String", "GROQ_API_KEY", prop("GROQ_API_KEY"))
+        buildConfigField("String", "GROQ_BASE_URL", prop("GROQ_BASE_URL", "https://api.groq.com/openai/v1"))
+        buildConfigField("String", "GROQ_MODEL", prop("GROQ_MODEL", "llama-3.3-70b-versatile"))
+        buildConfigField("String", "MISTRAL_API_KEY", prop("MISTRAL_API_KEY"))
+        buildConfigField("String", "MISTRAL_BASE_URL", prop("MISTRAL_BASE_URL", "https://api.mistral.ai/v1"))
+        buildConfigField("String", "MISTRAL_MODEL", prop("MISTRAL_MODEL", "pixtral-12b-2409"))
+        buildConfigField("String", "CEREBRAS_API_KEY", prop("CEREBRAS_API_KEY"))
+        buildConfigField("String", "CEREBRAS_BASE_URL", prop("CEREBRAS_BASE_URL", "https://api.cerebras.ai/v1"))
+        buildConfigField("String", "CEREBRAS_MODEL", prop("CEREBRAS_MODEL", "llama-3.3-70b"))
     }
 
     buildFeatures {
