@@ -49,5 +49,21 @@
             </intent-filter>
         </activity>
 
+        <!--
+          "Right-click for text": PROCESS_TEXT puts Point in the text-selection toolbar of
+          every app. Selecting text anywhere and tapping Point opens the flow on that text.
+        -->
+        <activity
+            android:name=".ProcessTextActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:launchMode="singleTop">
+            <intent-filter>
+                <action android:name="android.intent.action.PROCESS_TEXT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
+
     </application>
 </manifest>
