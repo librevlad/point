@@ -19,6 +19,11 @@ interface ObjectStore {
     /** Copy the shared source into scratch and wrap it as a [PointObject]. */
     suspend fun ingest(sourceUri: String, mime: String): PointObject
 
+    /** Copy several shared sources into one scratch directory and wrap it as a
+     *  COLLECTION object (items read via [children]) — the inbound half of
+     *  collections, e.g. several photos → one PDF. */
+    suspend fun ingestMultiple(sources: List<String>): PointObject
+
     /** Wrap an executor's already-materialised [ResultObject] as the next object. */
     suspend fun put(result: ResultObject): PointObject
 

@@ -51,6 +51,26 @@ class ScratchObjectStore @Inject constructor(
             )
         }
 
+    override suspend fun ingestMultiple(sources: List<String>): PointObject =
+        withContext(Dispatchers.IO) {
+            val id = UUID.randomUUID().toString()
+            val dir = File(scratchDir, id).apply { mkdirs() }
+            sources.forEachIndexed { index, source ->
+                val uri = Uri.parse(source)
+                val name = displayName(uri) ?: "file-${index + 1}"
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    uniqueFile(dir, name).outputStream().use { output -> input.copyTo(output) }
+                }
+            }
+            PointObject(
+                id = id,
+                mime = "inode/directory",
+                uri = ScratchRef(dir.absolutePath),
+                state = classifier.classify("inode/directory", 0),
+                metadata = mapOf("name" to "Набор (${sources.size})"),
+            )
+        }
+
     override suspend fun put(result: ResultObject): PointObject =
         withContext(Dispatchers.IO) {
             // The executor already wrote the result into scratch; just wrap it.
@@ -87,6 +107,20 @@ class ScratchObjectStore @Inject constructor(
     private fun mimeOf(name: String): String {
         val ext = name.substringAfterLast('.', "").lowercase()
         return MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext) ?: "application/octet-stream"
+    }
+
+    /** A non-colliding file in [dir] for [name] (appends -1, -2… on collision). */
+    private fun uniqueFile(dir: File, name: String): File {
+        var candidate = File(dir, name)
+        if (!candidate.exists()) return candidate
+        val base = name.substringBeforeLast('.', name)
+        val ext = name.substringAfterLast('.', "")
+        var i = 1
+        do {
+            candidate = File(dir, if (ext.isBlank()) "$base-$i" else "$base-$i.$ext")
+            i++
+        } while (candidate.exists())
+        return candidate
     }
 
     override suspend fun readText(obj: PointObject, limit: Int): String =

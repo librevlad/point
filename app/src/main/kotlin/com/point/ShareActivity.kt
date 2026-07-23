@@ -68,17 +68,24 @@ class ShareActivity : ComponentActivity() {
     }
 
     private fun handleShare(intent: Intent) {
-        if (intent.action != Intent.ACTION_SEND) return
         val mime = intent.type ?: "application/octet-stream"
+        when (intent.action) {
+            Intent.ACTION_SEND -> {
+                val stream = IntentCompat.getParcelableExtra(intent, Intent.EXTRA_STREAM, Uri::class.java)
+                when {
+                    stream != null -> viewModel.onShared(stream.toString(), mime)
 
-        val stream = IntentCompat.getParcelableExtra(intent, Intent.EXTRA_STREAM, Uri::class.java)
-        when {
-            stream != null -> viewModel.onShared(stream.toString(), mime)
+                    intent.hasExtra(Intent.EXTRA_TEXT) -> {
+                        val text = intent.getStringExtra(Intent.EXTRA_TEXT).orEmpty()
+                        val uri = Uri.fromFile(cacheTextFile(text))
+                        viewModel.onShared(uri.toString(), "text/plain")
+                    }
+                }
+            }
 
-            intent.hasExtra(Intent.EXTRA_TEXT) -> {
-                val text = intent.getStringExtra(Intent.EXTRA_TEXT).orEmpty()
-                val uri = Uri.fromFile(cacheTextFile(text))
-                viewModel.onShared(uri.toString(), "text/plain")
+            Intent.ACTION_SEND_MULTIPLE -> {
+                val streams = IntentCompat.getParcelableArrayListExtra(intent, Intent.EXTRA_STREAM, Uri::class.java)
+                if (!streams.isNullOrEmpty()) viewModel.onSharedMultiple(streams.map { it.toString() })
             }
         }
     }

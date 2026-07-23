@@ -72,6 +72,24 @@ class FlowViewModel @Inject constructor(
         }
     }
 
+    /** Several shared files → one COLLECTION (the inbound half of collections;
+     *  e.g. several photos to merge into a PDF). */
+    fun onSharedMultiple(sources: List<String>) {
+        _ui.update { it.copy(loading = true, message = null, inputPrompt = null) }
+        viewModelScope.launch {
+            val obj = runCatching {
+                store.clear()
+                store.ingestMultiple(sources)
+            }.getOrElse { e ->
+                _ui.update { it.copy(loading = false, message = "Не удалось открыть: ${e.message}") }
+                return@launch
+            }
+            // A collection is a transient scratch directory — History copies a single file, so skip it.
+            stack.clear()
+            pushFrame(obj)
+        }
+    }
+
     fun loadRecent() {
         viewModelScope.launch {
             _recent.value = runCatching { history.recent() }.getOrDefault(emptyList())

@@ -40,6 +40,13 @@
                 <data android:mimeType="application/pdf" />
                 <data android:mimeType="application/zip" />
             </intent-filter>
+            <!-- Several files at once (e.g. multi-photo) -> a COLLECTION in Point. -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+                <data android:mimeType="application/pdf" />
+            </intent-filter>
         </activity>
 
     </application>
