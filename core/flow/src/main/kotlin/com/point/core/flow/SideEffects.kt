@@ -22,6 +22,22 @@ interface Viewer {
     suspend fun view(obj: PointObject)
 }
 
+/** One installed app that can act on an object. Strings only — Android-free. */
+data class AppTarget(val label: String, val packageName: String, val activity: String)
+
+/**
+ * The device's *real* capabilities: the installed apps that can handle an object, enumerated from
+ * `PackageManager.queryIntentActivities`, and a launch of the chosen one. This is what lets Point
+ * show your actual apps inline as actions (#66) — hard for a generic OCR/LLM app to reproduce.
+ */
+interface AppLauncher {
+    /** Installed apps that can open [obj], most-relevant first; empty if none. */
+    suspend fun handlers(obj: PointObject): List<AppTarget>
+
+    /** Open [obj] in the chosen [target] app. */
+    suspend fun launch(target: AppTarget, obj: PointObject)
+}
+
 /** Exports an object to shared storage. */
 interface Exporter {
     /** @return a short, user-facing location (e.g. "Downloads/report.pdf"). */

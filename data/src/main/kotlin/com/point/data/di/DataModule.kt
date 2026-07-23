@@ -2,6 +2,7 @@ package com.point.data.di
 
 import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
+import com.point.core.flow.AppLauncher
 import com.point.core.flow.CapabilityUsage
 import com.point.core.flow.Enricher
 import com.point.core.flow.Enrichment
@@ -25,6 +26,7 @@ import com.point.core.flow.UrlOpener
 import com.point.core.flow.UsageJournal
 import com.point.core.flow.UserKeyStore
 import com.point.core.flow.Viewer
+import com.point.data.AndroidAppLauncher
 import com.point.data.AndroidSharer
 import com.point.data.AndroidUrlOpener
 import com.point.data.AndroidViewer
@@ -90,6 +92,10 @@ abstract class DataModule {
 
     @Binds
     abstract fun viewer(impl: AndroidViewer): Viewer
+
+    /** Installed apps that can handle an object (#66 device actions). */
+    @Binds
+    abstract fun appLauncher(impl: AndroidAppLauncher): AppLauncher
 
     @Binds
     abstract fun enrichment(impl: DefaultEnrichment): Enrichment

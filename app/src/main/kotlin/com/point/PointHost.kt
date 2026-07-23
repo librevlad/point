@@ -6,15 +6,21 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -25,6 +31,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.point.core.flow.AppTarget
 import com.point.core.flow.UserAiConfig
 import com.point.core.model.Bubble
 import com.point.core.model.FavoriteChain
@@ -54,6 +61,8 @@ fun PointHost(
     onToggleUsage: (Boolean) -> Unit = {},
     onConfirmCloud: () -> Unit = {},
     onDeclineCloud: () -> Unit = {},
+    onPickApp: (AppTarget) -> Unit = {},
+    onDismissAppPicker: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -63,6 +72,12 @@ fun PointHost(
             state.cloudConsent -> ConsentScreen(
                 onAllow = onConfirmCloud,
                 onDecline = onDeclineCloud,
+            )
+
+            state.appPicker != null -> AppPickerScreen(
+                apps = state.appPicker,
+                onPick = onPickApp,
+                onDismiss = onDismissAppPicker,
             )
 
             state.keyScreen != null -> KeyScreen(
@@ -174,5 +189,50 @@ private fun BusyScreen(title: String, network: Boolean) {
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+    }
+}
+
+/**
+ * The inline app-picker (#66): the device's real installed handlers for the object, chosen in Point
+ * itself rather than bounced to a system dialog.
+ */
+@Composable
+private fun AppPickerScreen(apps: List<AppTarget>, onPick: (AppTarget) -> Unit, onDismiss: () -> Unit) {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(24.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            text = "Открыть в",
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onBackground,
+        )
+        Spacer(Modifier.height(16.dp))
+        LazyColumn(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            items(apps, key = { it.packageName }) { app ->
+                Surface(
+                    onClick = { onPick(app) },
+                    shape = MaterialTheme.shapes.large,
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        text = app.label,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(16.dp),
+                    )
+                }
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        TextButton(onClick = onDismiss) {
+            Text("Отмена", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
     }
 }

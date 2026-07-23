@@ -60,6 +60,8 @@ class ShareActivity : ComponentActivity() {
                         onToggleUsage = viewModel::setUsageEnabled,
                         onConfirmCloud = viewModel::confirmCloud,
                         onDeclineCloud = viewModel::declineCloud,
+                        onPickApp = viewModel::onPickApp,
+                        onDismissAppPicker = viewModel::dismissAppPicker,
                     )
                 }
             }

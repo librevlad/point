@@ -2,6 +2,8 @@ package com.point
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.point.core.flow.AppLauncher
+import com.point.core.flow.AppTarget
 import com.point.core.flow.CapabilityRegistry
 import com.point.core.flow.CapabilityUsage
 import com.point.core.flow.Enrichment
@@ -23,6 +25,7 @@ import com.point.core.model.HistoryEntry
 import com.point.core.model.Intent
 import com.point.core.model.ObjectKind
 import com.point.core.model.PointObject
+import com.point.executors.OpenInCapability
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -49,6 +52,7 @@ class FlowViewModel @Inject constructor(
     private val userKeys: UserKeyStore,
     private val journal: UsageJournal,
     private val consent: PrivacyConsent,
+    private val appLauncher: AppLauncher,
 ) : ViewModel() {
 
     private val stack = ArrayDeque<FlowFrame>()
@@ -133,6 +137,11 @@ class FlowViewModel @Inject constructor(
 
     fun onBubble(bubble: Bubble) {
         val top = stack.lastOrNull()?.obj ?: return
+        if (bubble.capabilityId == OpenInCapability.ID) {
+            // "Открыть в…" opens an inline picker of the device's real handlers (#66).
+            showAppPicker(top)
+            return
+        }
         if (isCloud(bubble.capabilityId)) {
             // Nothing leaves the device before the user agrees, even once (#10).
             requireCloudConsent { runOnObject(bubble, top) }
@@ -244,6 +253,31 @@ class FlowViewModel @Inject constructor(
         _ui.update { it.copy(cloudConsent = false) }
     }
 
+    // --- Device actions (#66): the installed apps that can open the object, shown inline. ---
+
+    private fun showAppPicker(obj: PointObject) {
+        _ui.update { it.copy(busy = "Ищу приложения…", message = null, inputPrompt = null, selectedIntent = null, intentBubbles = emptyList()) }
+        viewModelScope.launch {
+            val apps = runCatching { appLauncher.handlers(obj) }.getOrDefault(emptyList())
+            _ui.update {
+                if (apps.isEmpty()) it.copy(busy = null, message = "Нет приложения для этого объекта")
+                else it.copy(busy = null, appPicker = apps)
+            }
+        }
+    }
+
+    fun onPickApp(target: AppTarget) {
+        val obj = stack.lastOrNull()?.obj ?: return
+        _ui.update { it.copy(appPicker = null) }
+        viewModelScope.launch {
+            runCatching { appLauncher.launch(target, obj) }
+                .onSuccess { _ui.update { it.copy(message = "Открываю в ${target.label}") } }
+                .onFailure { e -> _ui.update { it.copy(message = e.message ?: "Не удалось открыть") } }
+        }
+    }
+
+    fun dismissAppPicker() = _ui.update { it.copy(appPicker = null) }
+
     fun saveAiConfig(config: UserAiConfig) {
         viewModelScope.launch {
             runCatching { userKeys.save(config) }
@@ -340,6 +374,10 @@ class FlowViewModel @Inject constructor(
     }
 
     fun onBack(): Boolean {
+        if (_ui.value.appPicker != null) {
+            dismissAppPicker()
+            return true
+        }
         if (_ui.value.cloudConsent) {
             declineCloud()
             return true
