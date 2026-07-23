@@ -28,6 +28,24 @@ Share: пользователь «шарит» объект (image / text / pdf 
   `.gitignore`), плюс `CLAUDE.md`, спека и `docs/`. Временные файлы, черновики,
   логи, эксперименты — в системный temp/scratch, не в репозиторий.
 
+## Операционная модель и flow
+
+Разработку ведут три «кресла» (подробно — `docs/OPERATING-MODEL.md`):
+**ChatGPT = ко-фаундер** (что/зачем → GitHub Issues, приоритет), **Claude Code =
+CTO/dev** (как → ветка/PR/тесты/`DECISIONS.md`), **человек = owner** (вкус, «go»,
+merge, тег).
+
+- **«go» = переход доски `Up next → In progress`.** Правило «не начинай срез без
+  явного го» (выше) остаётся дословно — просто триггер теперь конкретный: верхний
+  issue с «go» от человека. Claude не создаёт ветку и не пишет код без него.
+- **GitHub flow:** ветка `<type>/<issue#>-<slug>` + PR на существенное (новый
+  Capability/Realizer, архитектура, всё, что трогает инвариант, мультифайловое);
+  тривиальное (`docs:`/`chore:` вне `src/main`) — прямо в `main`. **Squash-merge**
+  только при зелёном CI; PR-title = Conventional-Commit subject + `Closes #N`.
+- **Трекер:** GitHub Issues + Projects-доска; бэклог = issues (`roadmap #N == issue #N`).
+  `ROADMAP.md` держит нарратив (Северная звезда / фазы / швы), не статус.
+- **CI:** `./gradlew test assembleDebug` на каждый push/PR (`.github/workflows/ci.yml`).
+
 ## Сборка и тесты
 
 Тулчейн настроен и сборка проверена (BUILD SUCCESSFUL, APK собирается):

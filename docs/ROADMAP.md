@@ -70,17 +70,19 @@ UI, Flow Graph и Bubble Policy знают только **что можно** (`
 
 ## Ближайшие архитектурные шаги (не по срочности)
 
+> Отслеживается как GitHub issues #1–#6 (`roadmap #N == issue #N`); статус — на
+> Projects-доске, не здесь. См. `docs/OPERATING-MODEL.md`.
+
 1. **Несколько `Realizer` на одну `Capability`** — ✅ реализовано (OCR: device→cloud
-   фолбэк-цепочка через `Resolver`/`FallbackRealizer`, см. `ARCHITECTURE.md`). `Resolver`
-   выбирает по `CapabilityMeta` + доступности; несколько доступных → output-based
-   фолбэк-цепочка. Первый настоящий выход к cloud/ICG. Следующий носитель шва —
-   OpenCV-скан-пак.
-2. **Collection-as-Object** — распаковка архива / страницы PDF = *коллекция*
-   объектов как гражданин первого класса (сейчас `ArchiveRealizer` возвращает
-   `Done` со счётчиком). Нужна модель множественности + UI.
-3. **Paywall через `CapabilityMeta`** — гейт Pro-capability в `Resolver`/
-   `BubblePolicy`, ядро не трогаем.
-4. **Обучаемая `BubblePolicy`** — ранжирование пузырьков на данных журнала.
+   фолбэк-цепочка через `Resolver`/`FallbackRealizer`, см. `ARCHITECTURE.md`). Первый
+   настоящий выход к cloud/ICG. Следующий носитель шва — OpenCV-скан-пак.
+2. **Collection-as-Object** — ✅ реализовано (распаковка архива и страницы PDF →
+   `COLLECTION` как гражданин первого класса: просмотр, вход в элемент, save/share-all;
+   см. `ARCHITECTURE.md`).
+3. **Paywall через `CapabilityMeta`** — ✅ реализовано (гейт PAID-capability в
+   `DefaultResolver` → `PaywallRealizer`, контракт `Entitlements`; см. `DECISIONS.md`).
+4. **Обучаемая `BubblePolicy`** — ✅ реализовано (`LearningBubblePolicy`: приоритет −
+   частота применений через `CapabilityUsage`; см. `DECISIONS.md`).
 5. **Валидация Floating Bubble** (Accessibility) — политический риск Google Play;
    проверить до вложений, держать фолбэк (QS-tile / sideload / enterprise).
 6. **Проверка OCR на устройстве** и полировка дизайна (шрифты, экраны).
