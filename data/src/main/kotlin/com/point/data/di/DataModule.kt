@@ -19,6 +19,7 @@ import com.point.core.flow.OfficeTextExtractor
 import com.point.core.flow.PdfRasterizer
 import com.point.core.flow.PdfTextExtractor
 import com.point.core.flow.PrivacyConsent
+import com.point.core.flow.QrEncoder
 import com.point.core.flow.Sharer
 import com.point.core.flow.SpreadsheetWriter
 import com.point.core.flow.TextRecognizer
@@ -62,6 +63,7 @@ import com.point.data.ScratchObjectStore
 import com.point.data.TesseractTextRecognizer
 import com.point.data.TextUrlEnricher
 import com.point.data.VCardEnricher
+import com.point.data.ZxingQrEncoder
 import com.point.data.ZipImagesEnricher
 import dagger.Binds
 import dagger.Module
@@ -112,6 +114,9 @@ abstract class DataModule {
 
     @Binds
     abstract fun spreadsheetWriter(impl: OoxmlSpreadsheetWriter): SpreadsheetWriter
+
+    @Binds
+    abstract fun qrEncoder(impl: ZxingQrEncoder): QrEncoder
 
     @Binds
     abstract fun officeTextExtractor(impl: OoxmlOfficeTextExtractor): OfficeTextExtractor
