@@ -6,6 +6,7 @@ import com.point.core.flow.Realizer
 import com.point.core.flow.Viewer
 import com.point.core.model.ActionResult
 import com.point.core.model.CapabilityId
+import com.point.core.model.Intent
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
@@ -27,6 +28,8 @@ class OpenCapability @Inject constructor() : Capability {
     override fun accepts(state: ObjectState) =
         state.kind != ObjectKind.URL && state.kind != ObjectKind.COLLECTION
     override fun produces(state: ObjectState) = state // terminal
+    // Opening/viewing here is its own goal — NOT «Отправить» (which sends out).
+    override fun intents(state: ObjectState) = setOf(Intent.OPEN)
 
     companion object { val ID = CapabilityId("open") }
 }

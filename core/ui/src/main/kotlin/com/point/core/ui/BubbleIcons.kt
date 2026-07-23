@@ -77,6 +77,7 @@ fun bubbleColor(key: String): Color = when (key) {
 fun intentIcon(intent: Intent): ImageVector = when (intent) {
     Intent.UNDERSTAND -> Icons.Filled.Lightbulb
     Intent.PREPARE -> Icons.Filled.AutoFixHigh
+    Intent.OPEN -> Icons.Filled.OpenInNew
     Intent.SEND -> Icons.Filled.Send
 }
 
@@ -84,6 +85,7 @@ fun intentIcon(intent: Intent): ImageVector = when (intent) {
 fun intentTitle(intent: Intent): String = when (intent) {
     Intent.UNDERSTAND -> "Понять"
     Intent.PREPARE -> "Подготовить"
+    Intent.OPEN -> "Открыть"
     Intent.SEND -> "Отправить"
 }
 
@@ -91,6 +93,7 @@ fun intentTitle(intent: Intent): String = when (intent) {
 fun intentColor(intent: Intent): Color = when (intent) {
     Intent.UNDERSTAND -> Color(0xFF7C4DFF) // purple — understanding
     Intent.PREPARE -> Color(0xFF0EA5A5)    // teal — prepare / transform
+    Intent.OPEN -> Color(0xFF2F80ED)       // blue — open externally
     Intent.SEND -> Color(0xFFF5610F)       // orange — brand "send"
 }
 

@@ -7,6 +7,7 @@ import com.point.core.flow.UrlOpener
 import com.point.core.model.ActionResult
 import com.point.core.model.CapabilityId
 import com.point.core.model.Feature
+import com.point.core.model.Intent
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
@@ -27,6 +28,7 @@ class OpenUrlCapability @Inject constructor() : Capability {
     override fun accepts(state: ObjectState) =
         state.kind == ObjectKind.URL || state.has(Feature.HAS_URL)
     override fun produces(state: ObjectState) = state // terminal
+    override fun intents(state: ObjectState) = setOf(Intent.OPEN)
 
     companion object { val ID = CapabilityId("open-url") }
 }

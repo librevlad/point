@@ -111,9 +111,9 @@ class DefaultCapabilityRegistryTest {
     // --- Intent layer (Object → Intent → … → Object) ---
 
     @Test
-    fun `an image offers all three intents`() {
+    fun `an image offers understand, prepare, open and send`() {
         assertEquals(
-            listOf(Intent.UNDERSTAND, Intent.PREPARE, Intent.SEND),
+            listOf(Intent.UNDERSTAND, Intent.PREPARE, Intent.OPEN, Intent.SEND),
             registry.intentsFor(ObjectState(ObjectKind.IMAGE)),
         )
     }
@@ -134,10 +134,13 @@ class DefaultCapabilityRegistryTest {
     }
 
     @Test
-    fun `default intent derives from produces — ai understands, share sends`() {
+    fun `intent derives from produces — ai understands, share sends, open opens`() {
         // AI produces an unknown object -> UNDERSTAND; a terminal (produces === state) -> SEND.
         assertEquals(setOf(Intent.UNDERSTAND), AiCapability().intents(ObjectState(ObjectKind.IMAGE)))
         assertEquals(setOf(Intent.SEND), ShareCapability().intents(ObjectState(ObjectKind.IMAGE)))
+        // «Открыть» is its own goal, not «Отправить» (#42).
+        assertEquals(setOf(Intent.OPEN), OpenCapability().intents(ObjectState(ObjectKind.IMAGE)))
+        assertEquals(setOf(Intent.OPEN), OpenUrlCapability().intents(ObjectState(ObjectKind.URL)))
     }
 
     @Test
