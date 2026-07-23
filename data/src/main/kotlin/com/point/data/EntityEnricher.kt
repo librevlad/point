@@ -34,7 +34,9 @@ class EntityEnricher @Inject constructor(
     private fun feature(type: EntityType): Feature? = when (type) {
         EntityType.PHONE -> Feature.HAS_PHONE
         EntityType.EMAIL -> Feature.HAS_EMAIL
-        else -> null // address/date/card land in a later slice
+        EntityType.ADDRESS -> Feature.HAS_ADDRESS
+        EntityType.DATE_TIME -> Feature.HAS_DATE
+        else -> null // url handled by TextUrlEnricher; payment-card/money have no action yet
     }
 
     private companion object {

@@ -1,5 +1,6 @@
 package com.point.executors
 
+import com.point.core.flow.CalendarInserter
 import com.point.core.flow.Entity
 import com.point.core.flow.EntityExtractor
 import com.point.core.flow.EntityType
@@ -32,6 +33,11 @@ class EntityActionsTest {
         override suspend fun open(url: String) { opened = url }
     }
 
+    private class FakeCalendar : CalendarInserter {
+        var title: String? = null
+        override suspend fun insertEvent(title: String) { this.title = title }
+    }
+
     @Test
     fun `call opens a tel URI with only the dialable characters`() = runTest {
         val opener = FakeOpener()
@@ -53,6 +59,22 @@ class EntityActionsTest {
         val opener = FakeOpener()
         EmailRealizer(extractor(Entity(EntityType.EMAIL, "ivan@x.com")), opener).perform(obj("x"))
         assertEquals("mailto:ivan@x.com", opener.opened)
+    }
+
+    @Test
+    fun `map opens a geo URI with the encoded address`() = runTest {
+        val opener = FakeOpener()
+        val address = "ул. Крещатик, 12"
+        MapRealizer(extractor(Entity(EntityType.ADDRESS, address)), opener).perform(obj("x"))
+        assertEquals("geo:0,0?q=" + java.net.URLEncoder.encode(address, "UTF-8"), opener.opened)
+    }
+
+    @Test
+    fun `event inserts a calendar entry titled from the first non-blank line`() = runTest {
+        val cal = FakeCalendar()
+        val result = EventRealizer(cal).perform(obj("\nВстреча с командой\nзавтра 18:00"))
+        assertTrue(result is ActionResult.Done)
+        assertEquals("Встреча с командой", cal.title)
     }
 
     @Test

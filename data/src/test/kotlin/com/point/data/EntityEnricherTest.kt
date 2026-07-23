@@ -43,6 +43,20 @@ class EntityEnricherTest {
     }
 
     @Test
+    fun `maps address and date to features`() = runTest {
+        val enricher = EntityEnricher(
+            extractor(
+                Entity(EntityType.ADDRESS, "ул. Крещатик, 12"),
+                Entity(EntityType.DATE_TIME, "завтра 18:00"),
+            ),
+        )
+        val features = enricher.enrich(obj("встреча завтра 18:00 ул. Крещатик, 12"))
+        assertTrue(Feature.HAS_ADDRESS in features)
+        assertTrue(Feature.HAS_DATE in features)
+        assertEquals(2, features.size)
+    }
+
+    @Test
     fun `applies only to text objects`() {
         val enricher = EntityEnricher(extractor())
         assertTrue(enricher.appliesTo(ObjectState(ObjectKind.TEXT)))

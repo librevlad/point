@@ -1,11 +1,13 @@
 package com.point.executors
 
+import com.point.core.flow.CalendarInserter
 import com.point.core.flow.Capability
 import com.point.core.flow.CapabilityMeta
 import com.point.core.flow.EntityExtractor
 import com.point.core.flow.EntityType
 import com.point.core.flow.Realizer
 import com.point.core.flow.UrlOpener
+import java.net.URLEncoder
 import com.point.core.model.ActionResult
 import com.point.core.model.CapabilityId
 import com.point.core.model.Feature
@@ -114,4 +116,65 @@ class EmailRealizer @Inject constructor(
                 ActionResult.Done("Письмо: $email")
             }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось открыть почту", recoverable = true) }
         }
+}
+
+// --- Открыть на карте ---
+class MapCapability @Inject constructor() : Capability {
+    override val id = ID
+    override val icon = "map"
+    override val meta = CapabilityMeta(priority = 15)
+    override fun label(state: ObjectState) = "Открыть на карте"
+    override fun accepts(state: ObjectState) = state.has(Feature.HAS_ADDRESS)
+    override fun produces(state: ObjectState) = state
+    override fun intents(state: ObjectState) = setOf(Intent.OPEN)
+
+    companion object { val ID = CapabilityId("map") }
+}
+
+class MapRealizer @Inject constructor(
+    private val extractor: EntityExtractor,
+    private val opener: UrlOpener,
+) : Realizer {
+    override val capabilityId = MapCapability.ID
+    override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val address = firstEntity(extractor, input, EntityType.ADDRESS) ?: error("Адрес не найден")
+                opener.open("geo:0,0?q=" + URLEncoder.encode(address, "UTF-8"))
+                ActionResult.Done("Открываю на карте: $address")
+            }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось открыть карту", recoverable = true) }
+        }
+}
+
+// --- Создать событие ---
+class EventCapability @Inject constructor() : Capability {
+    override val id = ID
+    override val icon = "event"
+    override val meta = CapabilityMeta(priority = 16)
+    override fun label(state: ObjectState) = "Создать событие"
+    override fun accepts(state: ObjectState) = state.has(Feature.HAS_DATE)
+    override fun produces(state: ObjectState) = state
+    override fun intents(state: ObjectState) = setOf(Intent.OPEN)
+
+    companion object { val ID = CapabilityId("event") }
+}
+
+class EventRealizer @Inject constructor(
+    private val calendar: CalendarInserter,
+) : Realizer {
+    override val capabilityId = EventCapability.ID
+    override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                calendar.insertEvent(eventTitle(input))
+                ActionResult.Done("Создаю событие")
+            }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось создать событие", recoverable = true) }
+        }
+
+    /** The first non-blank line is the most sensible event title; the calendar screen lets the user
+     *  set the time (ML Kit gives us that a date exists, not yet a parsed timestamp). */
+    private fun eventTitle(input: PointObject): String {
+        val text = File(input.uri.value).takeIf { it.isFile }?.readText().orEmpty()
+        return text.lineSequence().map { it.trim() }.firstOrNull { it.isNotBlank() }?.take(100) ?: "Событие"
+    }
 }
