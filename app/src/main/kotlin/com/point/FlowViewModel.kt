@@ -67,6 +67,11 @@ class FlowViewModel @Inject constructor(
     private val _recent = MutableStateFlow<List<HistoryEntry>>(emptyList())
     val recent: StateFlow<List<HistoryEntry>> = _recent.asStateFlow()
 
+    private val _clipboard = MutableStateFlow<String?>(null)
+    /** Actionable text sitting in the clipboard when Point opened — a dismissible Home suggestion (#72). */
+    val clipboard: StateFlow<String?> = _clipboard.asStateFlow()
+    private var lastClipboard: String? = null
+
     init {
         viewModelScope.launch { loadFavorites() }
     }
@@ -119,6 +124,24 @@ class FlowViewModel @Inject constructor(
             runCatching { history.clearAll() }
             _recent.value = emptyList()
         }
+    }
+
+    /**
+     * Offer to act on clipboard text when Point opens — only if it looks actionable (a phone/email/
+     * URL) and is new. The Activity reads the clipboard **foreground-only** (Android 10+ rule); Point
+     * never watches the clipboard in the background (#72). Reaches messengers: copy → open Point → act.
+     */
+    fun offerClipboard(text: String?) {
+        val t = text?.trim().orEmpty()
+        _clipboard.value = t.takeIf {
+            it.isNotBlank() && it.length <= MAX_CLIP && it != lastClipboard && ACTIONABLE_CLIP.containsMatchIn(it)
+        }
+    }
+
+    /** Dismiss the clipboard suggestion and remember it, so the same text is not re-offered. */
+    fun dismissClipboard() {
+        lastClipboard = _clipboard.value
+        _clipboard.value = null
     }
 
     fun openFromHistory(entry: HistoryEntry) {
@@ -510,3 +533,8 @@ class FlowViewModel @Inject constructor(
         }
     }
 }
+
+private const val MAX_CLIP = 2000
+
+/** Clipboard text worth offering an action for: a URL, an email, or a phone-ish number. */
+private val ACTIONABLE_CLIP = Regex("""(https?://\S+)|([\w.+-]+@[\w-]+\.[\w.-]+)|(\+?\d[\d\s()-]{6,}\d)""")
