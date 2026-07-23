@@ -9,6 +9,7 @@
 *.toml        text eol=lf
 *.pro         text eol=lf
 *.properties  text eol=lf
+*.sh          text eol=lf
 gradlew       text eol=lf
 
 # Windows batch scripts need CRLF.
