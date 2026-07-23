@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.PictureAsPdf
+import androidx.compose.material.icons.filled.QrCode2
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.SaveAlt
 import androidx.compose.material.icons.filled.Send
@@ -53,6 +54,7 @@ fun bubbleIcon(key: String): ImageVector = when (key) {
     "scan" -> Icons.Filled.DocumentScanner
     "ocr" -> Icons.Filled.TextFields
     "ocr-cloud" -> Icons.Filled.Cloud
+    "qr" -> Icons.Filled.QrCode2
     "call" -> Icons.Filled.Call
     "message" -> Icons.Filled.Sms
     "email" -> Icons.Filled.Email
@@ -78,6 +80,7 @@ fun bubbleColor(key: String): Color = when (key) {
     "scan" -> Color(0xFF6366F1)     // indigo — scan
     "ocr" -> Color(0xFF16A34A)      // green — recognise text
     "ocr-cloud" -> Color(0xFF2F80ED) // blue — recognise in the cloud
+    "qr" -> Color(0xFF0EA5A5)       // teal — produces an image
     "office" -> Color(0xFF16A34A)   // green — documents/data
     "excel" -> Color(0xFF15803D)    // deeper green — spreadsheet
     "unzip" -> Color(0xFFF2994A)    // amber — archive

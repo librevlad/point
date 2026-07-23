@@ -74,6 +74,13 @@ interface SpreadsheetWriter {
     suspend fun write(rows: List<List<String>>): ScratchRef
 }
 
+/** Encodes text into a QR-code PNG in the scratch store — a pure on-device type transform
+ *  (text/url → image) that opens the whole image action set (save / share / open). */
+interface QrEncoder {
+    /** @return the scratch .png holding a QR code for [text]. Throws if [text] is too long to fit. */
+    suspend fun encode(text: String): ScratchRef
+}
+
 /** Renders each page of a PDF to an image in a fresh scratch directory. */
 interface PdfRasterizer {
     /** @return the scratch directory holding the page images (page-001.jpg …),
