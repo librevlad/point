@@ -16,32 +16,33 @@ ANTHROPIC_BASE_URL=https://api.anthropic.com
 CLAUDE_MODEL=claude-opus-4-8
 
 # Fallback #2 — OpenAI-compatible (OpenAI, OpenRouter, or a local server).
-# Leave OPENAI_API_KEY blank to disable.
+# Leave OPENAI_API_KEY blank to disable. *_MODELS is a comma-separated fallback list.
 OPENAI_API_KEY=
 OPENAI_BASE_URL=https://api.openai.com/v1
-OPENAI_MODEL=gpt-4o-mini
+OPENAI_MODELS=gpt-4o-mini
 
-# Free OpenAI-compatible providers (#32). Fill any/all — each activates when its
-# key is set, and the chain tries them before Gemini (which rate-limits). Sign-up
-# is ~a minute each. Vision-capable ones (OpenRouter/Groq/Mistral) lead the chain
-# so "Понять" works on a photo; models below are sensible defaults — override freely.
+# Free OpenAI-compatible providers (#32). Fill any/all — each activates when its key
+# is set, and the chain tries them before Gemini (which rate-limits). Sign-up is ~a
+# minute each. *_MODELS is comma-separated, so ONE key (esp. OpenRouter) chains
+# several free models — if one is rate-limited, the next is tried. Vision-capable
+# models lead so "Понять" works on a photo; defaults are sensible — override freely.
 
 # OpenRouter — one key, many free models (…:free).  https://openrouter.ai/keys
 OPENROUTER_API_KEY=
 OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
-OPENROUTER_MODEL=meta-llama/llama-3.2-11b-vision-instruct:free
+OPENROUTER_MODELS=meta-llama/llama-3.2-11b-vision-instruct:free,google/gemini-2.0-flash-exp:free,meta-llama/llama-3.3-70b-instruct:free
 
 # Groq — very fast, generous free tier.  https://console.groq.com/keys
 GROQ_API_KEY=
 GROQ_BASE_URL=https://api.groq.com/openai/v1
-GROQ_MODEL=llama-3.3-70b-versatile
+GROQ_MODELS=llama-3.3-70b-versatile
 
 # Mistral — free tier, pixtral is multimodal.  https://console.mistral.ai
 MISTRAL_API_KEY=
 MISTRAL_BASE_URL=https://api.mistral.ai/v1
-MISTRAL_MODEL=pixtral-12b-2409
+MISTRAL_MODELS=pixtral-12b-2409,mistral-small-latest
 
 # Cerebras — very fast, text-only.  https://cloud.cerebras.ai
 CEREBRAS_API_KEY=
 CEREBRAS_BASE_URL=https://api.cerebras.ai/v1
-CEREBRAS_MODEL=llama-3.3-70b
+CEREBRAS_MODELS=llama-3.3-70b

@@ -40,6 +40,7 @@ import com.point.data.BuildConfig
 import com.point.data.OpenAiCompatibleClient
 import com.point.data.OpenAiProvider
 import com.point.data.configured
+import com.point.data.openAiModels
 import com.point.data.PdfBoxTextExtractor
 import com.point.data.PdfImageEnricher
 import com.point.data.PdfRendererRasterizer
@@ -145,14 +146,14 @@ abstract class DataModule {
             return free + native
         }
 
-        /** Known OpenAI-compatible endpoints; [configured] drops the ones without a key. */
-        private fun openAiProviders(): List<OpenAiProvider> = listOf(
-            OpenAiProvider("openrouter", BuildConfig.OPENROUTER_BASE_URL, BuildConfig.OPENROUTER_API_KEY, BuildConfig.OPENROUTER_MODEL),
-            OpenAiProvider("groq", BuildConfig.GROQ_BASE_URL, BuildConfig.GROQ_API_KEY, BuildConfig.GROQ_MODEL),
-            OpenAiProvider("mistral", BuildConfig.MISTRAL_BASE_URL, BuildConfig.MISTRAL_API_KEY, BuildConfig.MISTRAL_MODEL),
-            OpenAiProvider("cerebras", BuildConfig.CEREBRAS_BASE_URL, BuildConfig.CEREBRAS_API_KEY, BuildConfig.CEREBRAS_MODEL),
-            OpenAiProvider("openai", BuildConfig.OPENAI_BASE_URL, BuildConfig.OPENAI_API_KEY, BuildConfig.OPENAI_MODEL),
-        )
+        /** Known OpenAI-compatible endpoints, each expanded into one entry per model in
+         *  its comma-separated *_MODELS list; [configured] drops the ones without a key. */
+        private fun openAiProviders(): List<OpenAiProvider> =
+            openAiModels("openrouter", BuildConfig.OPENROUTER_BASE_URL, BuildConfig.OPENROUTER_API_KEY, BuildConfig.OPENROUTER_MODELS) +
+                openAiModels("groq", BuildConfig.GROQ_BASE_URL, BuildConfig.GROQ_API_KEY, BuildConfig.GROQ_MODELS) +
+                openAiModels("mistral", BuildConfig.MISTRAL_BASE_URL, BuildConfig.MISTRAL_API_KEY, BuildConfig.MISTRAL_MODELS) +
+                openAiModels("cerebras", BuildConfig.CEREBRAS_BASE_URL, BuildConfig.CEREBRAS_API_KEY, BuildConfig.CEREBRAS_MODELS) +
+                openAiModels("openai", BuildConfig.OPENAI_BASE_URL, BuildConfig.OPENAI_API_KEY, BuildConfig.OPENAI_MODELS)
 
         @Provides
         @HistoryDir

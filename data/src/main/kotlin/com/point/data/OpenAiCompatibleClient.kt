@@ -26,6 +26,15 @@ data class OpenAiProvider(
 fun List<OpenAiProvider>.configured(): List<OpenAiProvider> = filter { it.apiKey.isNotBlank() }
 
 /**
+ * One [OpenAiProvider] per model in the comma-separated [models] — same endpoint and
+ * key. So a single key (e.g. OpenRouter) chains several free models as fallbacks:
+ * if one is rate-limited or down, the next model on the same key is tried.
+ */
+fun openAiModels(label: String, baseUrl: String, apiKey: String, models: String): List<OpenAiProvider> =
+    models.split(',').map(String::trim).filter(String::isNotBlank)
+        .map { OpenAiProvider(label, baseUrl, apiKey, it) }
+
+/**
  * Any provider speaking the OpenAI Chat Completions API — OpenRouter, Groq,
  * Cerebras, Mistral, OpenAI, or a local server — behind one [OpenAiProvider]
  * config (base URL, key, model). No SDK: HttpURLConnection + org.json. Small
