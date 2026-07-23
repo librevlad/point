@@ -183,6 +183,18 @@ class FlowViewModelTest {
         assertEquals("готово", vm.ui.value.message)
     }
 
+    @Test fun `NeedsInput surfaces its prompt suggestions, cleared on submit`() = runTest(dispatcher) {
+        resolver.result = ActionResult.NeedsInput("Что сделать?", listOf("Опиши", "Переведи"))
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        vm.onBubble(bubble()); advanceUntilIdle()
+        assertEquals(listOf("Опиши", "Переведи"), vm.ui.value.inputSuggestions)
+
+        resolver.result = ActionResult.Done("готово")
+        vm.submitAmendment("Опиши"); advanceUntilIdle()
+        assertTrue(vm.ui.value.inputSuggestions.isEmpty())
+    }
+
     @Test fun `the busy label is the action title while it runs`() = runTest(dispatcher) {
         val vm = vm()
         vm.onShared("uri", "image/png"); advanceUntilIdle()

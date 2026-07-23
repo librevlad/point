@@ -180,6 +180,7 @@ private fun PreviewNeedsInput() = PointTheme {
         bubbles = sampleBubbles(ObjectKind.IMAGE),
         onBubble = {},
         inputPrompt = "Что сделать с объектом? (пусто = авто-анализ)",
+        inputSuggestions = listOf("Что на изображении?", "Извлеки весь текст", "Переведи текст с картинки"),
     )
 }
 

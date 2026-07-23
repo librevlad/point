@@ -32,6 +32,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -78,6 +79,7 @@ fun FirstScreen(
     modifier: Modifier = Modifier,
     message: String? = null,
     inputPrompt: String? = null,
+    inputSuggestions: List<String> = emptyList(),
     onSubmitInput: (String) -> Unit = {},
     onCancelInput: () -> Unit = {},
     favorites: List<FavoriteChain> = emptyList(),
@@ -117,6 +119,7 @@ fun FirstScreen(
                 prompt = inputPrompt,
                 onSubmit = onSubmitInput,
                 onCancel = onCancelInput,
+                suggestions = inputSuggestions,
             )
         } else {
             val showingIntents = selectedIntent == null
@@ -416,10 +419,12 @@ private fun ActionBubble(
 }
 
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 private fun AmendmentInput(
     prompt: String,
     onSubmit: (String) -> Unit,
     onCancel: () -> Unit,
+    suggestions: List<String> = emptyList(),
 ) {
     var text by remember { mutableStateOf("") }
     Column(
@@ -432,6 +437,20 @@ private fun AmendmentInput(
             style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center,
         )
+        if (suggestions.isNotEmpty()) {
+            // The 3 most-likely prompts (#86): tap one to run it instead of typing.
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                suggestions.forEach { suggestion ->
+                    SuggestionChip(
+                        onClick = { onSubmit(suggestion) },
+                        label = { Text(suggestion) },
+                    )
+                }
+            }
+        }
         OutlinedTextField(
             value = text,
             onValueChange = { text = it },

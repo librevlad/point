@@ -118,6 +118,7 @@ fun PointHost(
                     onBubble = onBubble,
                     message = state.message,
                     inputPrompt = state.inputPrompt,
+                    inputSuggestions = state.inputSuggestions,
                     onSubmitInput = onSubmitInput,
                     onCancelInput = onCancelInput,
                     favorites = state.favorites,

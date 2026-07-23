@@ -16,6 +16,18 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import javax.inject.Inject
 
+/** The 3 most-likely AI prompts for an object of [kind] (#86) — tappable so the user rarely has to
+ *  type. Kept short and imperative; the LLM gets the object's content alongside. */
+internal fun aiSuggestions(kind: ObjectKind): List<String> = when (kind) {
+    ObjectKind.IMAGE -> listOf("Что на изображении?", "Извлеки весь текст", "Переведи текст с картинки")
+    ObjectKind.TEXT -> listOf("Кратко перескажи", "Исправь ошибки и стиль", "Ответь на это")
+    ObjectKind.PDF -> listOf("Краткое содержание", "Главные тезисы", "О чём документ?")
+    ObjectKind.OFFICE -> listOf("Краткое содержание", "Извлеки ключевые данные", "Главные тезисы")
+    ObjectKind.URL -> listOf("О чём эта ссылка?", "Краткое содержание страницы", "Главные тезисы")
+    ObjectKind.ZIP, ObjectKind.COLLECTION -> listOf("Что внутри?", "Что можно сделать?")
+    ObjectKind.UNKNOWN -> listOf("Что это?", "Что можно сделать?")
+}
+
 /**
  * Emergency universal capability. Accepts any object; asks the user what to do
  * (NeedsInput), routes object + prompt to the LLM, materialises the answer
@@ -40,7 +52,10 @@ class AiRealizer @Inject constructor(
 
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult {
         if (amendment == null) {
-            return ActionResult.NeedsInput("Что сделать с объектом? (пусто = авто-анализ)")
+            return ActionResult.NeedsInput(
+                "Что сделать с объектом? (пусто = авто-анализ)",
+                suggestions = aiSuggestions(input.state.kind),
+            )
         }
         return withContext(Dispatchers.IO) {
             runCatching {
