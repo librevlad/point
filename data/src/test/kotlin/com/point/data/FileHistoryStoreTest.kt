@@ -41,6 +41,17 @@ class FileHistoryStoreTest {
     }
 
     @Test
+    fun `recent is newest-first even when records share a timestamp`() = runTest {
+        // Six rapid records almost certainly land in the same millisecond; ordering
+        // must still be strictly newest-first (journal recency, not timestamp ties).
+        repeat(6) { i -> store.record(textObject("id$i", "c$i", "$i.txt")) }
+        assertEquals(
+            listOf("id5", "id4", "id3", "id2", "id1", "id0"),
+            store.recent().map { it.id },
+        )
+    }
+
+    @Test
     fun `open re-materialises the persisted copy`() = runTest {
         store.record(textObject("a", "hello", "a.txt"))
         val reopened = store.open("a")!!
