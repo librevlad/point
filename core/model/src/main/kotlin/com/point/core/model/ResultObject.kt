@@ -8,6 +8,6 @@ package com.point.core.model
 data class ResultObject(
     val type: ObjectKind,
     val mime: String,
-    val uri: ScratchRef,
+    val uri: ObjectRef,
     val metadata: Map<String, String> = emptyMap(),
 )

@@ -12,5 +12,5 @@ data class HistoryEntry(
     val kind: ObjectKind,
     val name: String?,
     val epochMillis: Long,
-    val ref: ScratchRef,
+    val ref: ObjectRef,
 )
