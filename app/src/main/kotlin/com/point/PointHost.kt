@@ -47,14 +47,14 @@ fun PointHost(
     Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         val frame = state.frame
         when {
-            state.loading -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            state.busy != null -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 CircularProgressIndicator(
                     color = MaterialTheme.colorScheme.primary,
                     strokeWidth = 4.dp,
                 )
                 Spacer(Modifier.height(22.dp))
                 Text(
-                    text = "Point выполняет действие",
+                    text = state.busy, // WHAT is running — not a faceless wheel
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onBackground,
@@ -88,6 +88,27 @@ fun PointHost(
                     intents = state.intents,
                     selectedIntent = state.selectedIntent,
                     onIntent = onIntent,
+                )
+            }
+
+            state.message != null -> Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.padding(24.dp),
+            ) {
+                // An ingest/open error before any object exists: show it plainly instead
+                // of the empty hint that used to mask it — so it never reads as a silent
+                // dead-end (#12).
+                Text(
+                    text = state.message,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.error,
+                )
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    text = "Попробуйте поделиться объектом в Point ещё раз",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
 

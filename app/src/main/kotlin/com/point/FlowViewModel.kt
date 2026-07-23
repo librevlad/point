@@ -57,13 +57,13 @@ class FlowViewModel @Inject constructor(
     }
 
     fun onShared(sourceUri: String, mime: String) {
-        _ui.update { it.copy(loading = true, message = null, inputPrompt = null) }
+        _ui.update { it.copy(busy = "Открываю…", message = null, inputPrompt = null) }
         viewModelScope.launch {
             val obj = runCatching {
                 store.clear()
                 store.ingest(sourceUri, mime)
             }.getOrElse { e ->
-                _ui.update { it.copy(loading = false, message = "Не удалось открыть: ${e.message}") }
+                _ui.update { it.copy(busy = null, message = "Не удалось открыть: ${e.message}") }
                 return@launch
             }
             runCatching { history.record(obj) }
@@ -75,13 +75,13 @@ class FlowViewModel @Inject constructor(
     /** Several shared files → one COLLECTION (the inbound half of collections;
      *  e.g. several photos to merge into a PDF). */
     fun onSharedMultiple(sources: List<String>) {
-        _ui.update { it.copy(loading = true, message = null, inputPrompt = null) }
+        _ui.update { it.copy(busy = "Открываю…", message = null, inputPrompt = null) }
         viewModelScope.launch {
             val obj = runCatching {
                 store.clear()
                 store.ingestMultiple(sources)
             }.getOrElse { e ->
-                _ui.update { it.copy(loading = false, message = "Не удалось открыть: ${e.message}") }
+                _ui.update { it.copy(busy = null, message = "Не удалось открыть: ${e.message}") }
                 return@launch
             }
             // A collection is a transient scratch directory — History copies a single file, so skip it.
@@ -97,11 +97,11 @@ class FlowViewModel @Inject constructor(
     }
 
     fun openFromHistory(entry: HistoryEntry) {
-        _ui.update { it.copy(loading = true, message = null, inputPrompt = null) }
+        _ui.update { it.copy(busy = "Открываю…", message = null, inputPrompt = null) }
         viewModelScope.launch {
             val obj = runCatching { history.open(entry.id) }.getOrNull()
             if (obj == null) {
-                _ui.update { it.copy(loading = false, message = "Объект недоступен") }
+                _ui.update { it.copy(busy = null, message = "Объект недоступен") }
                 return@launch
             }
             runCatching { store.clear() }
@@ -112,7 +112,7 @@ class FlowViewModel @Inject constructor(
 
     fun onBubble(bubble: Bubble) {
         val top = stack.lastOrNull()?.obj ?: return
-        _ui.update { it.copy(loading = true, message = null, inputPrompt = null, selectedIntent = null, intentBubbles = emptyList()) }
+        _ui.update { it.copy(busy = bubble.title, message = null, inputPrompt = null, selectedIntent = null, intentBubbles = emptyList()) }
         dispatch(bubble) { resolver.realizerFor(bubble.capabilityId).perform(top, null) }
     }
 
@@ -140,13 +140,13 @@ class FlowViewModel @Inject constructor(
         val bubble = pendingBubble ?: return
         val top = stack.lastOrNull()?.obj ?: return
         pendingBubble = null
-        _ui.update { it.copy(loading = true, inputPrompt = null) }
+        _ui.update { it.copy(busy = bubble.title, inputPrompt = null) }
         dispatch(bubble) { resolver.realizerFor(bubble.capabilityId).perform(top, text) }
     }
 
     fun cancelInput() {
         pendingBubble = null
-        _ui.update { it.copy(inputPrompt = null, loading = false) }
+        _ui.update { it.copy(inputPrompt = null, busy = null) }
     }
 
     /** Save the capabilities applied so far as a favorite chain (auto-named). */
@@ -164,13 +164,13 @@ class FlowViewModel @Inject constructor(
     /** Replay a saved chain on the current object — one tap for a whole workflow. */
     fun applyFavorite(chain: FavoriteChain) {
         val start = stack.lastOrNull()?.obj ?: return
-        _ui.update { it.copy(loading = true, message = null, inputPrompt = null) }
+        _ui.update { it.copy(busy = "Выполняю цепочку…", message = null, inputPrompt = null) }
         viewModelScope.launch {
             var current = start
             for (capId in chain.steps) {
                 val realizer = runCatching { resolver.realizerFor(capId) }.getOrNull()
                 if (realizer == null) {
-                    _ui.update { it.copy(loading = false, message = "Шаг цепочки недоступен") }
+                    _ui.update { it.copy(busy = null, message = "Шаг цепочки недоступен") }
                     return@launch
                 }
                 val label = runCatching { registry.byId(capId).label(current.state) }.getOrDefault("")
@@ -182,15 +182,15 @@ class FlowViewModel @Inject constructor(
                         pushFrame(current, capId, label)
                     }
                     is ActionResult.Done -> {
-                        _ui.update { it.copy(loading = false, message = result.message) }
+                        _ui.update { it.copy(busy = null, message = result.message) }
                         return@launch
                     }
                     is ActionResult.Failure -> {
-                        _ui.update { it.copy(loading = false, message = "Цепочка прервана: ${result.reason}") }
+                        _ui.update { it.copy(busy = null, message = "Цепочка прервана: ${result.reason}") }
                         return@launch
                     }
                     is ActionResult.NeedsInput -> {
-                        _ui.update { it.copy(loading = false, message = "Цепочка требует ввода — прервана") }
+                        _ui.update { it.copy(busy = null, message = "Цепочка требует ввода — прервана") }
                         return@launch
                     }
                 }
@@ -203,18 +203,18 @@ class FlowViewModel @Inject constructor(
             runCatching { usage.record(bubble.capabilityId) } // learning signal for BubblePolicy
             runCatching { action() }
                 .onSuccess { result -> handleResult(result, bubble) }
-                .onFailure { e -> _ui.update { it.copy(loading = false, message = e.message ?: "Ошибка") } }
+                .onFailure { e -> _ui.update { it.copy(busy = null, message = e.message ?: "Ошибка") } }
         }
     }
 
     private suspend fun handleResult(result: ActionResult, bubble: Bubble) {
         when (result) {
             is ActionResult.Success -> pushFrame(store.put(result.result), bubble.capabilityId, bubble.title)
-            is ActionResult.Done -> _ui.update { it.copy(loading = false, message = result.message) }
-            is ActionResult.Failure -> _ui.update { it.copy(loading = false, message = result.reason) }
+            is ActionResult.Done -> _ui.update { it.copy(busy = null, message = result.message) }
+            is ActionResult.Failure -> _ui.update { it.copy(busy = null, message = result.reason) }
             is ActionResult.NeedsInput -> {
                 pendingBubble = bubble
-                _ui.update { it.copy(loading = false, inputPrompt = result.prompt) }
+                _ui.update { it.copy(busy = null, inputPrompt = result.prompt) }
             }
         }
     }
@@ -255,7 +255,7 @@ class FlowViewModel @Inject constructor(
         stack.addLast(frame)
         _ui.update {
             it.copy(
-                loading = false, frame = frame, message = null, inputPrompt = null,
+                busy = null, frame = frame, message = null, inputPrompt = null,
                 intents = registry.intentsFor(obj.state), selectedIntent = null, intentBubbles = emptyList(),
             )
         }

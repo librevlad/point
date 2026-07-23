@@ -58,7 +58,7 @@ class SandboxActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background,
                 ) {
                     val state by viewModel.ui.collectAsStateWithLifecycle()
-                    if (state.frame == null && !state.loading) {
+                    if (state.frame == null && state.busy == null && state.message == null) {
                         SandboxMenu(onPick = ::start)
                     } else {
                         PointHost(
