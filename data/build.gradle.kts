@@ -45,13 +45,13 @@ android {
         buildConfigField("String", "OPENROUTER_MODELS", prop("OPENROUTER_MODELS", "google/gemma-4-31b-it:free,google/gemma-4-26b-a4b-it:free,openai/gpt-oss-20b:free"))
         buildConfigField("String", "GROQ_API_KEY", prop("GROQ_API_KEY"))
         buildConfigField("String", "GROQ_BASE_URL", prop("GROQ_BASE_URL", "https://api.groq.com/openai/v1"))
-        buildConfigField("String", "GROQ_MODELS", prop("GROQ_MODELS", "llama-3.3-70b-versatile"))
+        buildConfigField("String", "GROQ_MODELS", prop("GROQ_MODELS", "llama-3.3-70b-versatile,openai/gpt-oss-120b,llama-3.1-8b-instant"))
         buildConfigField("String", "MISTRAL_API_KEY", prop("MISTRAL_API_KEY"))
         buildConfigField("String", "MISTRAL_BASE_URL", prop("MISTRAL_BASE_URL", "https://api.mistral.ai/v1"))
-        buildConfigField("String", "MISTRAL_MODELS", prop("MISTRAL_MODELS", "pixtral-12b-2409,mistral-small-latest"))
+        buildConfigField("String", "MISTRAL_MODELS", prop("MISTRAL_MODELS", "mistral-small-latest,pixtral-12b-2409"))
         buildConfigField("String", "CEREBRAS_API_KEY", prop("CEREBRAS_API_KEY"))
         buildConfigField("String", "CEREBRAS_BASE_URL", prop("CEREBRAS_BASE_URL", "https://api.cerebras.ai/v1"))
-        buildConfigField("String", "CEREBRAS_MODELS", prop("CEREBRAS_MODELS", "llama-3.3-70b"))
+        buildConfigField("String", "CEREBRAS_MODELS", prop("CEREBRAS_MODELS", "gpt-oss-120b,gemma-4-31b"))
     }
 
     buildFeatures {
