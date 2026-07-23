@@ -12,30 +12,29 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.core.content.IntentCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.point.core.ui.theme.PointTheme
 import dagger.hilt.android.AndroidEntryPoint
 
 /**
- * The app's only entry point (no launcher icon): receives an Android Share and
- * hands the source to [FlowViewModel]. The `content://` Uri is stringified here,
- * at the boundary, so nothing below :app touches Android Uri types.
+ * The "right-click for text" entry point: Point registers for ACTION_PROCESS_TEXT, so selecting text
+ * in ANY app shows "Point" in the selection toolbar. The selected text enters the flow through the
+ * same `onShared(fileUri, "text/plain")` path as a shared object — no permissions, API 23+.
  */
 @AndroidEntryPoint
-class ShareActivity : ComponentActivity() {
+class ProcessTextActivity : ComponentActivity() {
 
     private val viewModel: FlowViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        if (savedInstanceState == null) handleShare(intent)
+        if (savedInstanceState == null) handleProcessText(intent)
 
         onBackPressedDispatcher.addCallback(this) {
             if (!viewModel.onBack()) {
                 isEnabled = false
-                this@ShareActivity.onBackPressedDispatcher.onBackPressed()
+                this@ProcessTextActivity.onBackPressedDispatcher.onBackPressed()
             }
         }
 
@@ -71,26 +70,17 @@ class ShareActivity : ComponentActivity() {
         super.onDestroy()
     }
 
-    private fun handleShare(intent: Intent) {
-        val mime = intent.type ?: "application/octet-stream"
-        when (intent.action) {
-            Intent.ACTION_SEND -> {
-                val stream = IntentCompat.getParcelableExtra(intent, Intent.EXTRA_STREAM, Uri::class.java)
-                when {
-                    stream != null -> viewModel.onShared(stream.toString(), mime)
-
-                    intent.hasExtra(Intent.EXTRA_TEXT) -> {
-                        val text = intent.getStringExtra(Intent.EXTRA_TEXT).orEmpty()
-                        val uri = Uri.fromFile(cacheTextFile(cacheDir, text))
-                        viewModel.onShared(uri.toString(), "text/plain")
-                    }
-                }
-            }
-
-            Intent.ACTION_SEND_MULTIPLE -> {
-                val streams = IntentCompat.getParcelableArrayListExtra(intent, Intent.EXTRA_STREAM, Uri::class.java)
-                if (!streams.isNullOrEmpty()) viewModel.onSharedMultiple(streams.map { it.toString() })
-            }
+    private fun handleProcessText(intent: Intent) {
+        // EXTRA_PROCESS_TEXT is the editable selection; the READONLY variant is the fallback.
+        val text = (
+            intent.getCharSequenceExtra(Intent.EXTRA_PROCESS_TEXT)
+                ?: intent.getCharSequenceExtra(Intent.EXTRA_PROCESS_TEXT_READONLY)
+            )?.toString().orEmpty()
+        if (text.isBlank()) {
+            finish()
+            return
         }
+        val uri = Uri.fromFile(cacheTextFile(cacheDir, text))
+        viewModel.onShared(uri.toString(), "text/plain")
     }
 }
