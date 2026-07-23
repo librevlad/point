@@ -3,6 +3,7 @@ package com.point
 import com.point.core.model.Bubble
 import com.point.core.model.CapabilityId
 import com.point.core.model.FavoriteChain
+import com.point.core.model.Intent
 import com.point.core.model.PointObject
 
 /**
@@ -33,4 +34,10 @@ data class FlowUiState(
     val favorites: List<FavoriteChain> = emptyList(),
     /** True when the current flow has ≥1 applied step that can be saved. */
     val canSaveChain: Boolean = false,
+    /** Applicable user intents for the current object — the intent-first surface. */
+    val intents: List<Intent> = emptyList(),
+    /** A selected intent shows its capabilities; null shows the intents. */
+    val selectedIntent: Intent? = null,
+    /** Capabilities serving [selectedIntent] (shown when it is non-null). */
+    val intentBubbles: List<Bubble> = emptyList(),
 )

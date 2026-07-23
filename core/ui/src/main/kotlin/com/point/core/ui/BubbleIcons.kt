@@ -3,6 +3,7 @@ package com.point.core.ui
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Article
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.AutoFixHigh
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Collections
 import androidx.compose.material.icons.filled.Compress
@@ -12,17 +13,20 @@ import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.FolderZip
 import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.SaveAlt
+import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.TableChart
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import com.point.core.model.Intent
 import com.point.core.model.ObjectKind
 
 /** Resolves a [com.point.core.model.Bubble.icon] key to a vector. */
@@ -67,6 +71,27 @@ fun bubbleColor(key: String): Color = when (key) {
     "pages" -> Color(0xFF2F80ED)    // blue — PDF pages
     "translate" -> Color(0xFFEC4899) // pink — translate
     else -> Color(0xFF9AA0A6)       // grey — everything else
+}
+
+/** Icon for a user [Intent] — the intent-first surface (Понять / Подготовить / Отправить). */
+fun intentIcon(intent: Intent): ImageVector = when (intent) {
+    Intent.UNDERSTAND -> Icons.Filled.Lightbulb
+    Intent.PREPARE -> Icons.Filled.AutoFixHigh
+    Intent.SEND -> Icons.Filled.Send
+}
+
+/** Russian label for a user [Intent]. */
+fun intentTitle(intent: Intent): String = when (intent) {
+    Intent.UNDERSTAND -> "Понять"
+    Intent.PREPARE -> "Подготовить"
+    Intent.SEND -> "Отправить"
+}
+
+/** Circle colour for a user [Intent], from the Point palette. */
+fun intentColor(intent: Intent): Color = when (intent) {
+    Intent.UNDERSTAND -> Color(0xFF7C4DFF) // purple — understanding
+    Intent.PREPARE -> Color(0xFF0EA5A5)    // teal — prepare / transform
+    Intent.SEND -> Color(0xFFF5610F)       // orange — brand "send"
 }
 
 /** Icon representing the current object's kind, shown in the screen header. */

@@ -471,6 +471,23 @@ Flow**; всё ниже Intent (Capability/Executor/Resolver/ICG/модели) �
 `ObjectStore`**, а не дереференсом `value` как пути. Полный резолвер схем сейчас НЕ строим
 (YAGNI) — введён только шов.
 
+### Intent — средний член модели (пользователь выбирает намерение, не механизм)
+**Решение:** введён `enum Intent { UNDERSTAND, PREPARE, SEND }` (`:core:model`) — «Понять /
+Подготовить / Отправить». `Capability.intents(state)` объявляет обслуживаемые намерения,
+`CapabilityRegistry.intentsFor(state)` даёт применимые. UI стал **intent-first**: экран
+показывает 2–3 намерения; тап → одна capability запускается сразу, несколько — раскрываются
+тем же bubble-UI. Путь: `Object → Intent → Resolver → Capability → Object`.
+**Умный дефолт вместо 17 правок:** `intents(state)` выводится из уже объявленного
+`produces(state)` — терминал (`produces==state`) → SEND; TEXT/неизвестный-AI выход →
+UNDERSTAND; иначе → PREPARE. Поэтому 17 классов capability **не тронуты**; `pdf` корректно
+идёт в UNDERSTAND на PDF (извлечь текст) и в PREPARE на картинке (в PDF) — через свой
+state-зависимый `produces`.
+**Зачем (стабильность UX под ICG):** Intent — контракт того, что видит пользователь; всё
+ниже (Capability/Realizer/Resolver/ICG/модели) сменяемо без изменения экрана. Это и есть
+инвариант проекта (см. `ARCHITECTURE.md`).
+**Компромисс:** `translate` по дефолту попадает в UNDERSTAND (produces TEXT); осознанно
+оставлено (перевести = понять на своём языке), переопределяемо одной строкой при желании.
+
 ---
 
 ## Решения по среде и бренду

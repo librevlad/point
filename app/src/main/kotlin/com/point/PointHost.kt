@@ -22,6 +22,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.point.core.model.Bubble
 import com.point.core.model.FavoriteChain
+import com.point.core.model.Intent
 import com.point.core.model.PointObject
 import com.point.core.ui.FirstScreen
 
@@ -40,6 +41,7 @@ fun PointHost(
     onApplyFavorite: (FavoriteChain) -> Unit = {},
     onSaveChain: () -> Unit = {},
     onItem: (PointObject) -> Unit = {},
+    onIntent: (Intent) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -70,7 +72,7 @@ fun PointHost(
             ) { current ->
                 FirstScreen(
                     obj = current.obj,
-                    bubbles = current.bubbles,
+                    bubbles = state.intentBubbles,
                     onBubble = onBubble,
                     message = state.message,
                     inputPrompt = state.inputPrompt,
@@ -83,6 +85,9 @@ fun PointHost(
                     items = current.items,
                     onItem = onItem,
                     textPreview = current.textPreview,
+                    intents = state.intents,
+                    selectedIntent = state.selectedIntent,
+                    onIntent = onIntent,
                 )
             }
 

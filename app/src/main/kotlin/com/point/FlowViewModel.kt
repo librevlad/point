@@ -14,6 +14,7 @@ import com.point.core.model.Bubble
 import com.point.core.model.CapabilityId
 import com.point.core.model.FavoriteChain
 import com.point.core.model.HistoryEntry
+import com.point.core.model.Intent
 import com.point.core.model.ObjectKind
 import com.point.core.model.PointObject
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -93,8 +94,21 @@ class FlowViewModel @Inject constructor(
 
     fun onBubble(bubble: Bubble) {
         val top = stack.lastOrNull()?.obj ?: return
-        _ui.update { it.copy(loading = true, message = null, inputPrompt = null) }
+        _ui.update { it.copy(loading = true, message = null, inputPrompt = null, selectedIntent = null, intentBubbles = emptyList()) }
         dispatch(bubble) { resolver.realizerFor(bubble.capabilityId).perform(top, null) }
+    }
+
+    /** Intent-first: the user picks a goal (Понять / Подготовить / Отправить). If exactly
+     *  one capability serves it for this object, run it; otherwise reveal that intent's
+     *  capabilities as the next choice. */
+    fun onIntent(intent: Intent) {
+        val top = stack.lastOrNull() ?: return
+        val caps = top.bubbles.filter { intent in registry.byId(it.capabilityId).intents(top.obj.state) }
+        when (caps.size) {
+            0 -> return
+            1 -> onBubble(caps.first())
+            else -> _ui.update { it.copy(selectedIntent = intent, intentBubbles = caps) }
+        }
     }
 
     /** Drill into a collection item — continue the normal flow on that object.
@@ -192,9 +206,19 @@ class FlowViewModel @Inject constructor(
             cancelInput()
             return true
         }
+        if (_ui.value.selectedIntent != null) {
+            _ui.update { it.copy(selectedIntent = null, intentBubbles = emptyList()) }
+            return true
+        }
         if (stack.size <= 1) return false
         stack.removeLast()
-        _ui.update { it.copy(frame = stack.last(), message = null) }
+        val top = stack.last()
+        _ui.update {
+            it.copy(
+                frame = top, message = null,
+                intents = registry.intentsFor(top.obj.state), selectedIntent = null, intentBubbles = emptyList(),
+            )
+        }
         refreshFavorites()
         return true
     }
@@ -211,7 +235,12 @@ class FlowViewModel @Inject constructor(
     private fun pushFrame(obj: PointObject, via: CapabilityId? = null, viaTitle: String? = null) {
         val frame = FlowFrame(obj, registry.bubblesFor(obj.state), via, viaTitle)
         stack.addLast(frame)
-        _ui.update { it.copy(loading = false, frame = frame, message = null, inputPrompt = null) }
+        _ui.update {
+            it.copy(
+                loading = false, frame = frame, message = null, inputPrompt = null,
+                intents = registry.intentsFor(obj.state), selectedIntent = null, intentBubbles = emptyList(),
+            )
+        }
         refreshFavorites()
         enrichInBackground(obj)
         loadChildrenIfCollection(obj)
@@ -290,7 +319,9 @@ class FlowViewModel @Inject constructor(
             val enrichedObj = top.obj.copy(state = enrichedState)
             val refreshed = top.copy(obj = enrichedObj, bubbles = registry.bubblesFor(enrichedState))
             stack[topIndex] = refreshed
-            _ui.update { if (it.frame === top) it.copy(frame = refreshed) else it }
+            _ui.update {
+                if (it.frame === top) it.copy(frame = refreshed, intents = registry.intentsFor(enrichedState)) else it
+            }
             refreshFavorites()
         }
     }
