@@ -1,6 +1,8 @@
 package com.point.core.flow
 
 import com.point.core.model.CapabilityId
+import com.point.core.model.Intent
+import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 
 /**
@@ -36,4 +38,23 @@ interface Capability {
      * object. `null` means unknown (e.g. AI can produce anything).
      */
     fun produces(state: ObjectState): ObjectState?
+
+    /**
+     * Which user [Intent]s this capability serves for [state] — the middle term of
+     * `Object → Intent → … → Object`. The UI shows *intents*, not capabilities; a
+     * capability is one way to fulfil an intent.
+     *
+     * Default derives from [produces]: a terminal (produces == state) SENDs; a TEXT
+     * (or an unknown AI) output helps you UNDERSTAND; anything else PREPAREs a new
+     * artifact. Override only when the derived intent is wrong.
+     */
+    fun intents(state: ObjectState): Set<Intent> {
+        val next = produces(state)
+        return when {
+            next == null -> setOf(Intent.UNDERSTAND)
+            next == state -> setOf(Intent.SEND)
+            next.kind == ObjectKind.TEXT -> setOf(Intent.UNDERSTAND)
+            else -> setOf(Intent.PREPARE)
+        }
+    }
 }
