@@ -3,6 +3,7 @@ package com.point.data.di
 import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
 import com.point.core.flow.AppLauncher
+import com.point.core.flow.CalendarInserter
 import com.point.core.flow.CapabilityUsage
 import com.point.core.flow.Enricher
 import com.point.core.flow.Enrichment
@@ -28,6 +29,7 @@ import com.point.core.flow.UsageJournal
 import com.point.core.flow.UserKeyStore
 import com.point.core.flow.Viewer
 import com.point.data.AndroidAppLauncher
+import com.point.data.AndroidCalendarInserter
 import com.point.data.AndroidSharer
 import com.point.data.AndroidUrlOpener
 import com.point.data.AndroidViewer
@@ -92,6 +94,9 @@ abstract class DataModule {
 
     @Binds
     abstract fun urlOpener(impl: AndroidUrlOpener): UrlOpener
+
+    @Binds
+    abstract fun calendarInserter(impl: AndroidCalendarInserter): CalendarInserter
 
     @Binds
     abstract fun viewer(impl: AndroidViewer): Viewer

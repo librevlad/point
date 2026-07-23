@@ -12,6 +12,7 @@ import androidx.compose.material.icons.filled.Collections
 import androidx.compose.material.icons.filled.Compress
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.DocumentScanner
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.FolderZip
@@ -22,6 +23,7 @@ import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.PictureAsPdf
+import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.QrCode2
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.SaveAlt
@@ -58,6 +60,8 @@ fun bubbleIcon(key: String): ImageVector = when (key) {
     "call" -> Icons.Filled.Call
     "message" -> Icons.Filled.Sms
     "email" -> Icons.Filled.Email
+    "map" -> Icons.Filled.Place
+    "event" -> Icons.Filled.Event
     "contact" -> Icons.Filled.PersonAdd
     "open-in" -> Icons.Filled.Apps
     else -> Icons.Filled.Bolt
@@ -89,6 +93,8 @@ fun bubbleColor(key: String): Color = when (key) {
     "call" -> Color(0xFF16A34A)      // green — call
     "message" -> Color(0xFF2F80ED)   // blue — message
     "email" -> Color(0xFF2F80ED)     // blue — email
+    "map" -> Color(0xFFEA4335)       // red — map pin
+    "event" -> Color(0xFF6366F1)     // indigo — calendar event
     "contact" -> Color(0xFF16A34A)   // green — add contact
     "open-in" -> Color(0xFF2F80ED)   // blue — open externally
     else -> Color(0xFF9AA0A6)        // grey — everything else

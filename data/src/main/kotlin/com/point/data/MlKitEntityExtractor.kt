@@ -21,18 +21,29 @@ import com.google.mlkit.nl.entityextraction.Entity as MlEntity
  */
 class MlKitEntityExtractor : EntityExtractor {
 
-    private val client = EntityExtraction.getClient(
-        EntityExtractorOptions.Builder(EntityExtractorOptions.ENGLISH).build(),
-    )
+    // One client per language model, created lazily. The model is language-specific: dates and
+    // addresses in Cyrillic text are missed by the English model, so route by the text's script
+    // (Cyrillic → Russian) — otherwise «Открыть на карте»/«Создать событие» never fire on Russian.
+    private val clients = HashMap<String, com.google.mlkit.nl.entityextraction.EntityExtractor>()
 
     override suspend fun extract(text: String): List<Entity> = withContext(Dispatchers.IO) {
         runCatching {
+            val lang = languageOf(text)
+            val client = clients.getOrPut(lang) {
+                EntityExtraction.getClient(EntityExtractorOptions.Builder(lang).build())
+            }
             client.downloadModelIfNeeded().await()
             val params = EntityExtractionParams.Builder(text).build()
             client.annotate(params).await().flatMap { annotation: EntityAnnotation ->
                 annotation.entities.mapNotNull { map(it, annotation.annotatedText) }
             }
         }.getOrDefault(emptyList())
+    }
+
+    private fun languageOf(text: String): String {
+        val cyrillic = text.count { it in 'а'..'я' || it in 'А'..'Я' || it == 'ё' || it == 'Ё' }
+        val latin = text.count { it in 'a'..'z' || it in 'A'..'Z' }
+        return if (cyrillic > latin) EntityExtractorOptions.RUSSIAN else EntityExtractorOptions.ENGLISH
     }
 
     private fun map(entity: MlEntity, matched: String): Entity? = when (entity.type) {

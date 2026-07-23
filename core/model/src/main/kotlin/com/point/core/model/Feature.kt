@@ -15,6 +15,8 @@ enum class Feature {
     /** Actionable entities discovered in text (on-device) — each lights up a targeted action. */
     HAS_PHONE,
     HAS_EMAIL,
+    HAS_ADDRESS,
+    HAS_DATE,
 
     /** The text is a vCard (.vcf contact) — offer "add to contacts", not raw-text actions. */
     HAS_VCARD,
