@@ -16,6 +16,17 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import javax.inject.Inject
 
+/**
+ * The target language when the user gives none: Russian text → English, everything else →
+ * Russian. Without this a one-tap "Перевести" always went to Russian, so Russian input came back
+ * unchanged and looked like "nothing happened". A manual amendment still overrides it.
+ */
+internal fun translateDefaultTarget(text: String): String {
+    val cyrillic = text.count { it in 'а'..'я' || it in 'А'..'Я' || it == 'ё' || it == 'Ё' }
+    val latin = text.count { it in 'a'..'z' || it in 'A'..'Z' }
+    return if (cyrillic > latin) "английский" else "русский"
+}
+
 /** text / pdf -> translated text via the LLM (PDF text extracted first). */
 class TranslateCapability @Inject constructor() : Capability {
     override val id = ID
@@ -46,7 +57,7 @@ class TranslateRealizer @Inject constructor(
                 if (text.isBlank()) {
                     ActionResult.Failure("Нет текста для перевода", recoverable = true)
                 } else {
-                    val target = amendment?.takeIf { it.isNotBlank() } ?: "русский"
+                    val target = amendment?.takeIf { it.isNotBlank() } ?: translateDefaultTarget(text)
                     val prompt = "Переведи текст на $target. Верни только перевод, без пояснений.\n\n$text"
                     ActionResult.Success(llm.run(input, prompt))
                 }
