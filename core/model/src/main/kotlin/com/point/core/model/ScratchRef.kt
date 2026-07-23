@@ -1,11 +1,13 @@
 package com.point.core.model
 
 /**
- * Opaque, platform-neutral reference to a file inside the private scratch store.
+ * A local reference — a path inside the private scratch store, and today's sole
+ * [ObjectRef] implementation.
  *
- * Deliberately NOT an `android.net.Uri`: keeping it a plain value keeps
- * :core:model (and the whole domain) free of Android types and trivially
- * unit-testable. The data layer maps a [ScratchRef] to a real file / content Uri.
+ * Deliberately NOT an `android.net.Uri`: keeping it a plain value keeps :core:model
+ * (and the whole domain) free of Android types and trivially unit-testable. The data
+ * layer maps [value] to a real file. Future schemes (content://, point://, icg://)
+ * are other [ObjectRef] implementations, not extensions of this one.
  */
 @JvmInline
-value class ScratchRef(val value: String)
+value class ScratchRef(override val value: String) : ObjectRef
