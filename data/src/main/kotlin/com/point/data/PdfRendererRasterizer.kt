@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.pdf.PdfRenderer
 import android.os.ParcelFileDescriptor
+import android.util.Log
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.PdfRasterizer
 import com.point.core.model.PointObject
@@ -30,7 +31,13 @@ class PdfRendererRasterizer @Inject constructor(
         ParcelFileDescriptor.open(src, ParcelFileDescriptor.MODE_READ_ONLY).use { pfd ->
             val renderer = PdfRenderer(pfd)
             try {
-                for (i in 0 until renderer.pageCount) {
+                // A fat PDF (hundreds of pages) would blow up memory and disk — cap it and
+                // say so rather than fail silently (#18).
+                val pages = minOf(renderer.pageCount, MAX_PAGES)
+                if (renderer.pageCount > MAX_PAGES) {
+                    Log.w(TAG, "PDF has ${renderer.pageCount} pages; rasterising the first $MAX_PAGES")
+                }
+                for (i in 0 until pages) {
                     val page = renderer.openPage(i)
                     try {
                         val w = (page.width * SCALE).coerceIn(1, MAX_DIM)
@@ -54,7 +61,9 @@ class PdfRendererRasterizer @Inject constructor(
     }
 
     private companion object {
+        const val TAG = "PointPdf"
         const val SCALE = 2          // ~144 DPI — readable without ballooning memory
         const val MAX_DIM = 2400     // clamp a runaway page dimension
+        const val MAX_PAGES = 100    // sane page limit for a fat PDF (memory + disk)
     }
 }

@@ -28,4 +28,12 @@ class BitmapsTest {
         assertEquals(1, Bitmaps.sampleSize(0, 0, 96))
         assertEquals(1, Bitmaps.sampleSize(4000, 3000, 0)) // non-positive target → no subsample
     }
+
+    @Test
+    fun `the processing cap subsamples large photos so they never load whole`() {
+        // At the processing cap, a 12 MP photo (4000×3000) halves once and a 48 MP photo
+        // (8000×6000) twice — decoded at ~2000 px, not 12/48 MP, so a weak device survives (#18).
+        assertEquals(2, Bitmaps.sampleSize(4000, 3000, Bitmaps.PROCESS_MAX_PX))
+        assertEquals(4, Bitmaps.sampleSize(8000, 6000, Bitmaps.PROCESS_MAX_PX))
+    }
 }
