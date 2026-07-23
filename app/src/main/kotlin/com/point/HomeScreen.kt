@@ -25,8 +25,21 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.Image
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import com.point.core.model.HistoryEntry
+import com.point.core.model.ObjectKind
 import com.point.core.ui.kindIcon
+import com.point.executors.Bitmaps
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * Point's home: the recent objects you brought in. Tap one to keep working with it —
@@ -107,14 +120,7 @@ private fun HistoryRow(entry: HistoryEntry, onClick: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Surface(shape = CircleShape, color = MaterialTheme.colorScheme.secondaryContainer, modifier = Modifier.size(44.dp)) {
-                Icon(
-                    imageVector = kindIcon(entry.kind),
-                    contentDescription = entry.kind.name,
-                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                    modifier = Modifier.padding(10.dp).fillMaxSize(),
-                )
-            }
+            HistoryAvatar(entry)
             Column(Modifier.fillMaxWidth()) {
                 Text(
                     text = entry.name ?: entry.mime,
@@ -128,6 +134,43 @@ private fun HistoryRow(entry: HistoryEntry, onClick: () -> Unit) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+        }
+    }
+}
+
+private const val THUMB_PX = 96
+
+/**
+ * Row avatar: a real downsampled preview for images (loaded off-main, EXIF-upright),
+ * falling back to the object-kind icon while it loads, for non-images, or on failure (#56).
+ */
+@Composable
+private fun HistoryAvatar(entry: HistoryEntry) {
+    val isImage = entry.kind == ObjectKind.IMAGE || entry.mime.startsWith("image/")
+    var thumb by remember(entry.id) { mutableStateOf<ImageBitmap?>(null) }
+    if (isImage) {
+        LaunchedEffect(entry.id) {
+            thumb = withContext(Dispatchers.IO) {
+                runCatching { Bitmaps.decodeThumbnail(entry.ref.value, THUMB_PX)?.asImageBitmap() }.getOrNull()
+            }
+        }
+    }
+    Surface(shape = CircleShape, color = MaterialTheme.colorScheme.secondaryContainer, modifier = Modifier.size(44.dp)) {
+        val bmp = thumb
+        if (bmp != null) {
+            Image(
+                bitmap = bmp,
+                contentDescription = entry.name ?: entry.kind.name,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+        } else {
+            Icon(
+                imageVector = kindIcon(entry.kind),
+                contentDescription = entry.kind.name,
+                tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                modifier = Modifier.padding(10.dp).fillMaxSize(),
+            )
         }
     }
 }
