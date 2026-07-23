@@ -428,6 +428,25 @@ class FlowViewModelTest {
         assertNull(vm.ui.value.appPicker)
         assertTrue(vm.ui.value.message?.contains("Нет приложения") == true)
     }
+
+    // --- Clipboard-on-open (#72): only actionable, new text is offered ---
+
+    @Test fun `offers actionable clipboard text, ignores plain and re-dismissed text`() {
+        val vm = vm()
+
+        vm.offerClipboard("позвони +380671234567") // has a phone → offered
+        assertEquals("позвони +380671234567", vm.clipboard.value)
+
+        vm.offerClipboard("просто заметка без ничего") // no entity → not offered
+        assertNull(vm.clipboard.value)
+
+        vm.offerClipboard("напиши на a@b.com") // has an email → offered
+        assertEquals("напиши на a@b.com", vm.clipboard.value)
+        vm.dismissClipboard()
+        assertNull(vm.clipboard.value)
+        vm.offerClipboard("напиши на a@b.com") // same as dismissed → not re-offered
+        assertNull(vm.clipboard.value)
+    }
 }
 
 // --- Fakes ---

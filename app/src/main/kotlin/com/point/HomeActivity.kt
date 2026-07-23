@@ -1,5 +1,8 @@
 package com.point
 
+import android.content.ClipboardManager
+import android.content.Context
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.addCallback
@@ -44,11 +47,15 @@ class HomeActivity : ComponentActivity() {
                     val state by viewModel.ui.collectAsStateWithLifecycle()
                     if (state.frame == null && state.busy == null && state.message == null && state.keyScreen == null) {
                         val recent by viewModel.recent.collectAsStateWithLifecycle()
+                        val clipboard by viewModel.clipboard.collectAsStateWithLifecycle()
                         HomeScreen(
                             recent = recent,
                             onOpen = viewModel::openFromHistory,
                             onSettings = viewModel::openKeySettings,
                             onClear = viewModel::clearHistory,
+                            clipboard = clipboard,
+                            onUseClipboard = ::useClipboard,
+                            onDismissClipboard = viewModel::dismissClipboard,
                         )
                     } else {
                         PointHost(
@@ -76,6 +83,23 @@ class HomeActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        if (!viewModel.hasFlow()) viewModel.loadRecent()
+        if (!viewModel.hasFlow()) {
+            viewModel.loadRecent()
+            // Foreground-only clipboard read (Android 10+): offer to act on copied text (#72).
+            viewModel.offerClipboard(readClipboardText())
+        }
+    }
+
+    /** The current clipboard text, or null. Only ever called while Point is in the foreground. */
+    private fun readClipboardText(): String? {
+        val cm = getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager ?: return null
+        val clip = cm.primaryClip ?: return null
+        if (clip.itemCount == 0) return null
+        return clip.getItemAt(0).coerceToText(this)?.toString()
+    }
+
+    private fun useClipboard(text: String) {
+        viewModel.dismissClipboard()
+        viewModel.onShared(Uri.fromFile(cacheTextFile(cacheDir, text)).toString(), "text/plain")
     }
 }

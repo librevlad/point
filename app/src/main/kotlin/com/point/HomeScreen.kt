@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -13,6 +14,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -52,11 +54,31 @@ fun HomeScreen(
     onOpen: (HistoryEntry) -> Unit,
     onSettings: () -> Unit,
     onClear: () -> Unit = {},
+    clipboard: String? = null,
+    onUseClipboard: (String) -> Unit = {},
+    onDismissClipboard: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
-    Box(modifier.fillMaxSize()) {
+    Column(modifier.fillMaxSize()) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.End,
+        ) {
+            IconButton(onClick = onSettings) {
+                Icon(
+                    imageVector = Icons.Filled.Settings,
+                    contentDescription = "Ваш AI-ключ",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+
+        if (clipboard != null) {
+            ClipboardBanner(clipboard, onUse = { onUseClipboard(clipboard) }, onDismiss = onDismissClipboard)
+        }
+
         if (recent.isEmpty()) {
-            Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+            Box(Modifier.weight(1f).fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("Point", style = MaterialTheme.typography.headlineMedium)
                     Text(
@@ -68,7 +90,7 @@ fun HomeScreen(
             }
         } else {
             LazyColumn(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.weight(1f).fillMaxWidth(),
                 contentPadding = PaddingValues(20.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
@@ -92,16 +114,47 @@ fun HomeScreen(
                 }
             }
         }
+    }
+}
 
-        IconButton(
-            onClick = onSettings,
-            modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
+/**
+ * A dismissible suggestion when Point opens with actionable text in the clipboard (#72) — the
+ * trigger that reaches messengers (copy in the app → open Point → act). Read foreground-only.
+ */
+@Composable
+private fun ClipboardBanner(text: String, onUse: () -> Unit, onDismiss: () -> Unit) {
+    Surface(
+        onClick = onUse,
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        shape = MaterialTheme.shapes.large,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+    ) {
+        Row(
+            modifier = Modifier.padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Icon(
-                imageVector = Icons.Filled.Settings,
-                contentDescription = "Ваш AI-ключ",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Column(Modifier.weight(1f)) {
+                Text(
+                    "Действие из буфера",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                )
+                Text(
+                    text,
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                )
+            }
+            IconButton(onClick = onDismiss) {
+                Icon(
+                    imageVector = Icons.Filled.Close,
+                    contentDescription = "Скрыть",
+                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                )
+            }
         }
     }
 }
