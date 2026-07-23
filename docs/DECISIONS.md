@@ -528,3 +528,19 @@ AI/«Ещё»/результат/поток.
 **Чистка — fallback-тир:** `ScanFilter` (Otsu) всегда доступен; преимущественный
 OpenCV-реализатор (авто-контур + перспектива) встанет позже как on-demand Capability
 Pack (решение office-hours), Resolver предпочтёт его — UI не меняется.
+
+---
+
+## Решения по AI-провайдерам
+
+### «Все бесплатные по максимуму» — самоактивирующаяся цепочка (#32)
+**Проблема:** Gemini постоянно 429-ит и «ни разу не отработал»; падать было не на что.
+**Решение:** один `OpenAiCompatibleClient` (config-driven: label + baseUrl + key + model)
+размножен на бесплатных OpenAI-совместимых провайдеров — OpenRouter, Groq, Mistral,
+Cerebras (+ generic OpenAI). `FallbackLlmClient` перебирает их по порядку. Каждый
+включается сам, когда его ключ появляется в `local.properties` (`configured()` отбрасывает
+безключевые). Порядок: vision-способные free первыми (для «Понять» по фото), Gemini —
+последним (он и есть источник 429). Добавить провайдера = строка в `openAiProviders()` +
+поля BuildConfig; новый код не нужен.
+**Тест:** `configured()` — чистая, покрыта (безключевые выпадают, порядок сохраняется);
+fallback-логика уже покрыта `FallbackLlmClientTest` (first-success / 429-fallback / all-fail).

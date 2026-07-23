@@ -36,7 +36,11 @@ import com.point.data.GeminiLlmClient
 import com.point.data.MediaStoreExporter
 import com.point.data.OoxmlOfficeTextExtractor
 import com.point.data.OoxmlSpreadsheetWriter
-import com.point.data.OpenAiLlmClient
+import com.point.data.BuildConfig
+import com.point.data.OpenAiCompatibleClient
+import com.point.data.OpenAiProvider
+import com.point.data.configured
+import com.point.data.openAiModels
 import com.point.data.PdfBoxTextExtractor
 import com.point.data.PdfImageEnricher
 import com.point.data.PdfRendererRasterizer
@@ -121,13 +125,35 @@ abstract class DataModule {
         @Provides
         fun objectClassifier(): ObjectClassifier = ObjectClassifier()
 
-        /** Ordered AI providers the fallback tries: Gemini -> Claude -> OpenAI. */
+        /**
+         * The AI fallback chain — "all free providers, max": every OpenAI-compatible
+         * free provider first (vision-capable ones lead, so "Понять" on a photo works),
+         * then the native providers. Each is included only if its key is set, so the
+         * chain self-activates as keys land in local.properties. Gemini is intentionally
+         * last — it rate-limits hard (HTTP 429), which is the whole reason for #32.
+         */
         @Provides
         fun llmProviders(
+            store: ObjectStore,
             gemini: GeminiLlmClient,
             claude: ClaudeLlmClient,
-            openAi: OpenAiLlmClient,
-        ): List<@JvmSuppressWildcards LlmClient> = listOf(gemini, claude, openAi)
+        ): List<@JvmSuppressWildcards LlmClient> {
+            val free = openAiProviders().configured().map { OpenAiCompatibleClient(store, it) }
+            val native = buildList {
+                if (BuildConfig.GEMINI_API_KEY.isNotBlank()) add(gemini)
+                if (BuildConfig.ANTHROPIC_API_KEY.isNotBlank()) add(claude)
+            }
+            return free + native
+        }
+
+        /** Known OpenAI-compatible endpoints, each expanded into one entry per model in
+         *  its comma-separated *_MODELS list; [configured] drops the ones without a key. */
+        private fun openAiProviders(): List<OpenAiProvider> =
+            openAiModels("openrouter", BuildConfig.OPENROUTER_BASE_URL, BuildConfig.OPENROUTER_API_KEY, BuildConfig.OPENROUTER_MODELS) +
+                openAiModels("groq", BuildConfig.GROQ_BASE_URL, BuildConfig.GROQ_API_KEY, BuildConfig.GROQ_MODELS) +
+                openAiModels("mistral", BuildConfig.MISTRAL_BASE_URL, BuildConfig.MISTRAL_API_KEY, BuildConfig.MISTRAL_MODELS) +
+                openAiModels("cerebras", BuildConfig.CEREBRAS_BASE_URL, BuildConfig.CEREBRAS_API_KEY, BuildConfig.CEREBRAS_MODELS) +
+                openAiModels("openai", BuildConfig.OPENAI_BASE_URL, BuildConfig.OPENAI_API_KEY, BuildConfig.OPENAI_MODELS)
 
         @Provides
         @HistoryDir
