@@ -29,6 +29,7 @@ import com.point.core.model.Intent
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
+import com.point.core.model.Preview
 import com.point.core.model.ResultObject
 import com.point.core.model.ScratchRef
 import com.point.executors.OpenInCapability
@@ -139,6 +140,32 @@ class FlowViewModelTest {
 
         assertEquals("Не удалось распознать", vm.ui.value.message)
         assertNull(vm.ui.value.busy)
+    }
+
+    @Test fun `a previewed action shows the preview first, then confirm runs it`() = runTest(dispatcher) {
+        resolver.previews = mapOf(CapabilityId("a") to Preview("Добавить в контакты", listOf("Иван")))
+        resolver.result = ActionResult.Done("Открываю контакт…")
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.onBubble(bubble()); advanceUntilIdle()
+        assertEquals("Добавить в контакты", vm.ui.value.preview?.title)
+        assertNull(vm.ui.value.message) // not run yet
+
+        vm.confirmPreview(); advanceUntilIdle()
+        assertNull(vm.ui.value.preview)
+        assertEquals("Открываю контакт…", vm.ui.value.message) // ran only on confirm
+    }
+
+    @Test fun `cancelling a preview runs nothing`() = runTest(dispatcher) {
+        resolver.previews = mapOf(CapabilityId("a") to Preview("X"))
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.onBubble(bubble()); advanceUntilIdle()
+        vm.cancelPreview(); advanceUntilIdle()
+        assertNull(vm.ui.value.preview)
+        assertNull(vm.ui.value.message)
     }
 
     @Test fun `NeedsInput asks for input, then submit runs with that text`() = runTest(dispatcher) {
@@ -511,12 +538,14 @@ private class FakeStore : ObjectStore {
 private class FakeResolver : Resolver {
     var result: ActionResult = ActionResult.Done("done")
     var lastAmendment: String? = "__unset__"
+    var previews: Map<CapabilityId, Preview> = emptyMap()
     override fun realizerFor(capabilityId: CapabilityId): Realizer = object : Realizer {
         override val capabilityId = capabilityId
         override suspend fun perform(input: PointObject, amendment: String?): ActionResult {
             lastAmendment = amendment
             return result
         }
+        override suspend fun preview(input: PointObject): Preview? = previews[capabilityId]
     }
 }
 

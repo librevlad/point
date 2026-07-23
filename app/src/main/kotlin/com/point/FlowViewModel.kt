@@ -59,6 +59,8 @@ class FlowViewModel @Inject constructor(
     private var pendingBubble: Bubble? = null
     /** A cloud action deferred until the user grants consent (#10); run on confirm. */
     private var pendingCloud: (() -> Unit)? = null
+    /** A bubble whose preview is shown, deferred until the user confirms it (#97). */
+    private var pendingPreviewBubble: Bubble? = null
     private var allFavorites: List<FavoriteChain> = emptyList()
 
     private val _ui = MutableStateFlow(FlowUiState())
@@ -165,10 +167,44 @@ class FlowViewModel @Inject constructor(
         }
         if (isCloud(bubble.capabilityId)) {
             // Nothing leaves the device before the user agrees, even once (#10).
-            requireCloudConsent { runOnObject(bubble, top) }
+            requireCloudConsent { maybePreview(bubble, top) }
             return
         }
+        maybePreview(bubble, top)
+    }
+
+    /** If the chosen realizer offers a preview (#97), show it and wait for confirm; otherwise run
+     *  straight away. Busy is shown immediately (so feedback is instant and the preview computation —
+     *  e.g. ML Kit for an address — is covered); the coroutine then reveals the preview or runs. */
+    private fun maybePreview(bubble: Bubble, top: PointObject) {
+        _ui.update {
+            it.copy(
+                busy = bubble.title, busyNetwork = isCloud(bubble.capabilityId), message = null,
+                inputPrompt = null, selectedIntent = null, intentBubbles = emptyList(),
+            )
+        }
+        viewModelScope.launch {
+            val preview = runCatching { resolver.realizerFor(bubble.capabilityId).preview(top) }.getOrNull()
+            if (preview == null) {
+                dispatch(bubble) { resolver.realizerFor(bubble.capabilityId).perform(top, null) }
+            } else {
+                pendingPreviewBubble = bubble
+                _ui.update { it.copy(busy = null, preview = preview) }
+            }
+        }
+    }
+
+    fun confirmPreview() {
+        val bubble = pendingPreviewBubble ?: return
+        val top = stack.lastOrNull()?.obj ?: return
+        pendingPreviewBubble = null
+        _ui.update { it.copy(preview = null) }
         runOnObject(bubble, top)
+    }
+
+    fun cancelPreview() {
+        pendingPreviewBubble = null
+        _ui.update { it.copy(preview = null) }
     }
 
     private fun runOnObject(bubble: Bubble, top: PointObject) {
@@ -443,6 +479,10 @@ class FlowViewModel @Inject constructor(
     }
 
     fun onBack(): Boolean {
+        if (_ui.value.preview != null) {
+            cancelPreview()
+            return true
+        }
         if (_ui.value.appPicker != null) {
             dismissAppPicker()
             return true
@@ -481,6 +521,7 @@ class FlowViewModel @Inject constructor(
     fun endFlow() {
         stack.clear()
         pendingBubble = null
+        pendingPreviewBubble = null
         _ui.update { FlowUiState() }
         viewModelScope.launch { runCatching { store.clear() } }
     }
@@ -490,7 +531,7 @@ class FlowViewModel @Inject constructor(
         stack.addLast(frame)
         _ui.update {
             it.copy(
-                busy = null, frame = frame, message = null, inputPrompt = null,
+                busy = null, frame = frame, message = null, inputPrompt = null, preview = null,
                 intents = registry.intentsFor(obj.state), selectedIntent = null, intentBubbles = emptyList(),
             )
         }

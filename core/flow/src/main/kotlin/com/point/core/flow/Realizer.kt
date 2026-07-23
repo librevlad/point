@@ -3,6 +3,7 @@ package com.point.core.flow
 import com.point.core.model.ActionResult
 import com.point.core.model.CapabilityId
 import com.point.core.model.PointObject
+import com.point.core.model.Preview
 
 /**
  * One concrete way to perform a [Capability] — the **how**. Today every
@@ -26,4 +27,10 @@ interface Realizer {
 
     /** Cancellable work. [amendment] is the user's optional free-text addition. */
     suspend fun perform(input: PointObject, amendment: String? = null): ActionResult
+
+    /**
+     * Optional pre-execution preview of the outcome (#97) — the parsed contact card, the event, the
+     * address. Null (default) = run immediately with no confirm. Must be side-effect free.
+     */
+    suspend fun preview(input: PointObject): Preview? = null
 }

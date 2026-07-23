@@ -10,9 +10,22 @@ import com.point.core.model.Feature
 import com.point.core.model.Intent
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
+import com.point.core.model.Preview
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.File
 import javax.inject.Inject
+
+/** Pull the readable fields from a vCard for the preview card: full name (FN) then phone numbers. */
+internal fun vCardSummary(text: String): List<String> {
+    val name = Regex("(?im)^FN:(.*)$").find(text)?.groupValues?.get(1)?.trim()
+    val phones = Regex("(?im)^[^:\\n]*TEL[^:\\n]*:(.*)$").findAll(text)
+        .map { it.groupValues[1].trim() }.filter { it.isNotBlank() }.toList()
+    return buildList {
+        name?.takeIf { it.isNotBlank() }?.let(::add)
+        addAll(phones)
+    }.ifEmpty { listOf("Контакт") }
+}
 
 /**
  * A shared contact card (`.vcf`) → the system Contacts app's import screen. Lit up once
@@ -37,6 +50,13 @@ class VCardRealizer @Inject constructor(
     private val viewer: Viewer,
 ) : Realizer {
     override val capabilityId = VCardCapability.ID
+
+    override suspend fun preview(input: PointObject): Preview {
+        val text = withContext(Dispatchers.IO) {
+            File(input.uri.value).takeIf { it.isFile }?.readText().orEmpty()
+        }
+        return Preview("Добавить в контакты", vCardSummary(text), confirmLabel = "Добавить")
+    }
 
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
