@@ -134,8 +134,21 @@ class DefaultCapabilityRegistryTest {
 
     @Test
     fun `default intent derives from produces — ai understands, share sends`() {
-        // AI produces an unknown object -> UNDERSTAND; a terminal (produces == state) -> SEND.
+        // AI produces an unknown object -> UNDERSTAND; a terminal (produces === state) -> SEND.
         assertEquals(setOf(Intent.UNDERSTAND), AiCapability().intents(ObjectState(ObjectKind.IMAGE)))
         assertEquals(setOf(Intent.SEND), ShareCapability().intents(ObjectState(ObjectKind.IMAGE)))
+    }
+
+    @Test
+    fun `a same-kind transform prepares, not sends — scan and compress a photo (issue 33)`() {
+        // #33: scan/compress produce a *fresh* image (same kind), so the naive
+        // `produces == state` wrongly bucketed them under SEND and "Скан" disappeared
+        // from "Подготовить". A terminal returns the *same* state object; a transform a
+        // new one — so intent splits on identity, not value.
+        assertEquals(setOf(Intent.PREPARE), ScanCapability().intents(ObjectState(ObjectKind.IMAGE)))
+        assertEquals(setOf(Intent.PREPARE), ImageCapability().intents(ObjectState(ObjectKind.IMAGE)))
+        // terminals on the same image still SEND
+        assertEquals(setOf(Intent.SEND), ShareCapability().intents(ObjectState(ObjectKind.IMAGE)))
+        assertEquals(setOf(Intent.SEND), SaveCapability().intents(ObjectState(ObjectKind.IMAGE)))
     }
 }
