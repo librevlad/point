@@ -41,4 +41,11 @@ class VCardActionTest {
         assertTrue(result is ActionResult.Done)
         assertEquals("text/x-vcard", viewer.viewed?.mime)
     }
+
+    @Test
+    fun `vCardSummary pulls the name then the phone numbers`() {
+        val vcard = "BEGIN:VCARD\nVERSION:3.0\nFN:Александр Лаврон\n" +
+            "item1.TEL;waid=380972905258:+380 97 290 5258\nEND:VCARD"
+        assertEquals(listOf("Александр Лаврон", "+380 97 290 5258"), vCardSummary(vcard))
+    }
 }

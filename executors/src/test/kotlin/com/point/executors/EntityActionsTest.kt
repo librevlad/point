@@ -78,6 +78,20 @@ class EntityActionsTest {
     }
 
     @Test
+    fun `map preview shows the address`() = runTest {
+        val preview = MapRealizer(extractor(Entity(EntityType.ADDRESS, "ул. Крещатик, 12")), FakeOpener())
+            .preview(obj("встреча ул. Крещатик, 12"))
+        assertEquals(listOf("ул. Крещатик, 12"), preview?.lines)
+    }
+
+    @Test
+    fun `event preview shows the title from the first line`() = runTest {
+        val preview = EventRealizer(FakeCalendar()).preview(obj("Встреча с командой\nзавтра 18:00"))
+        assertEquals("Создать событие", preview.title)
+        assertEquals(listOf("Встреча с командой"), preview.lines)
+    }
+
+    @Test
     fun `no matching entity is a recoverable failure`() = runTest {
         val result = CallRealizer(extractor(), FakeOpener()).perform(obj("no phone here"))
         assertTrue(result is ActionResult.Failure)

@@ -14,6 +14,7 @@ import com.point.core.model.Feature
 import com.point.core.model.Intent
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
+import com.point.core.model.Preview
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -136,6 +137,11 @@ class MapRealizer @Inject constructor(
     private val opener: UrlOpener,
 ) : Realizer {
     override val capabilityId = MapCapability.ID
+
+    override suspend fun preview(input: PointObject): Preview? =
+        firstEntity(extractor, input, EntityType.ADDRESS)
+            ?.let { Preview("Открыть на карте", listOf(it), confirmLabel = "Открыть") }
+
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
             runCatching {
@@ -163,6 +169,11 @@ class EventRealizer @Inject constructor(
     private val calendar: CalendarInserter,
 ) : Realizer {
     override val capabilityId = EventCapability.ID
+
+    override suspend fun preview(input: PointObject): Preview = withContext(Dispatchers.IO) {
+        Preview("Создать событие", listOf(eventTitle(input)), confirmLabel = "Создать")
+    }
+
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
             runCatching {

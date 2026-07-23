@@ -74,6 +74,8 @@ class HomeActivity : ComponentActivity() {
                             onDeclineCloud = viewModel::declineCloud,
                             onPickApp = viewModel::onPickApp,
                             onDismissAppPicker = viewModel::dismissAppPicker,
+                            onConfirmPreview = viewModel::confirmPreview,
+                            onCancelPreview = viewModel::cancelPreview,
                         )
                     }
                 }

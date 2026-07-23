@@ -8,6 +8,7 @@ import com.point.core.model.CapabilityId
 import com.point.core.model.FavoriteChain
 import com.point.core.model.Intent
 import com.point.core.model.PointObject
+import com.point.core.model.Preview
 
 /**
  * One entry on the navigation stack: an object, the bubbles it offers, and the
@@ -50,6 +51,8 @@ data class FlowUiState(
     val intentBubbles: List<Bubble> = emptyList(),
     /** True while a cloud action waits for one-time privacy consent (#10). */
     val cloudConsent: Boolean = false,
+    /** Non-null while a capability's pre-execution preview awaits confirm (#97). */
+    val preview: Preview? = null,
     /** Non-null while the inline "Открыть в…" app-picker is shown — the installed apps that can
      *  open the current object (#66 device actions). */
     val appPicker: List<AppTarget>? = null,
