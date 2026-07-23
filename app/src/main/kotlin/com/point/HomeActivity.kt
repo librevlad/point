@@ -42,7 +42,7 @@ class HomeActivity : ComponentActivity() {
             PointTheme {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     val state by viewModel.ui.collectAsStateWithLifecycle()
-                    if (state.frame == null && !state.loading) {
+                    if (state.frame == null && state.busy == null && state.message == null) {
                         val recent by viewModel.recent.collectAsStateWithLifecycle()
                         HomeScreen(recent = recent, onOpen = viewModel::openFromHistory)
                     } else {

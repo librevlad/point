@@ -24,7 +24,9 @@ data class FlowFrame(
 
 /** Immutable UI state rendered by the host. */
 data class FlowUiState(
-    val loading: Boolean = false,
+    /** Non-null while an action runs: a short label of WHAT is happening (e.g. the
+     *  action's title), so the busy screen shows progress instead of a blank spinner. */
+    val busy: String? = null,
     val frame: FlowFrame? = null,
     /** Transient text from the ActionResult channel (Failure / Done). */
     val message: String? = null,
