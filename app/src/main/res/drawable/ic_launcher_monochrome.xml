@@ -3,16 +3,11 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Themed-icon silhouette (Android 13+): the bubble with the point punched
-         out via even-odd fill, so the mark survives when the system re-tints it. -->
-    <group
-        android:scaleX="1.65"
-        android:scaleY="1.65"
-        android:translateX="21"
-        android:translateY="21.8">
-        <path
-            android:fillColor="#000000"
-            android:fillType="evenOdd"
-            android:pathData="M8 6h24a6 6 0 0 1 6 6v14a6 6 0 0 1-6 6H18l-8 7v-7H8a6 6 0 0 1-6-6V12a6 6 0 0 1 6-6Z M15,19 A7,7 0 1 0 29,19 A7,7 0 1 0 15,19 Z" />
-    </group>
+    <!-- Themed-icon silhouette (Android 13+): the bubble (tail integrated into the
+         outline) with the point punched out via even-odd, so the mark survives the
+         system re-tint. -->
+    <path
+        android:fillColor="#000000"
+        android:fillType="evenOdd"
+        android:pathData="M37,16 L71,16 Q90,16 90,35 L90,61 Q90,80 71,80 L58,80 L35,98 L41,80 L37,80 Q18,80 18,61 L18,35 Q18,16 37,16 Z M36.5,46 a17.5,17.5 0 1,0 35,0 a17.5,17.5 0 1,0 -35,0 Z" />
 </vector>

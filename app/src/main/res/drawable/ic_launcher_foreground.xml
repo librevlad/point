@@ -1,21 +1,32 @@
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- The Point mark from Point.dc.html (viewBox 44x44), scaled 1.65x and
-         centred into the adaptive-icon safe zone. White speech bubble + the
-         orange "point". -->
-    <group
-        android:scaleX="1.65"
-        android:scaleY="1.65"
-        android:translateX="21"
-        android:translateY="21.8">
-        <path
-            android:fillColor="#FFFFFF"
-            android:pathData="M8 6h24a6 6 0 0 1 6 6v14a6 6 0 0 1-6 6H18l-8 7v-7H8a6 6 0 0 1-6-6V12a6 6 0 0 1 6-6Z" />
-        <path
-            android:fillColor="#F5610F"
-            android:pathData="M15,19 A7,7 0 1 0 29,19 A7,7 0 1 0 15,19 Z" />
-    </group>
+    <!-- The Point mark: a speech bubble (dark-navy border + white interior) with
+         the orange "point" at its heart. Drawn natively in the safe zone. -->
+
+    <!-- Dark-navy bubble = the border. Body + downward tail as one filled shape. -->
+    <path
+        android:fillColor="#FF172440"
+        android:pathData="M37,16 L71,16 Q90,16 90,35 L90,61 Q90,80 71,80 L37,80 Q18,80 18,61 L18,35 Q18,16 37,16 Z M41,71 L58,71 L35,98 Z" />
+
+    <!-- White interior, inset ~9 so the navy reads as an even border. -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M39,25 L69,25 Q81,25 81,37 L81,59 Q81,71 69,71 L39,71 Q27,71 27,59 L27,37 Q27,25 39,25 Z M45,64 L55,64 L38,90 Z" />
+
+    <!-- The point: an orange disc with a soft top-left highlight. -->
+    <path android:pathData="M36.5,46 a17.5,17.5 0 1,0 35,0 a17.5,17.5 0 1,0 -35,0 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="radial"
+                android:centerX="48" android:centerY="40"
+                android:gradientRadius="23">
+                <item android:offset="0" android:color="#FFFFA457" />
+                <item android:offset="1" android:color="#FFEC5A16" />
+            </gradient>
+        </aapt:attr>
+    </path>
 </vector>
