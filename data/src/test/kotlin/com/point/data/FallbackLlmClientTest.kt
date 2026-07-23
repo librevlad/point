@@ -8,6 +8,7 @@ import com.point.core.model.ResultObject
 import com.point.core.model.ScratchRef
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -42,5 +43,21 @@ class FallbackLlmClientTest {
         val error = runCatching { client.run(obj, "hi") }.exceptionOrNull()
         assertTrue(error?.message?.contains("Gemini HTTP 429") == true)
         assertTrue(error?.message?.contains("OPENAI_API_KEY") == true)
+    }
+
+    @Test
+    fun `collapses a wall of network errors into one line (issue 48)`() = runTest {
+        val client = FallbackLlmClient(
+            List(8) { failing("""Unable to resolve host "api.groq.com": No address associated with hostname""") },
+        )
+        val error = runCatching { client.run(obj, "hi") }.exceptionOrNull()
+        assertTrue(error?.message?.contains("нет подключения к интернету") == true)
+        assertFalse(error?.message?.contains("resolve host") == true) // no wall of raw errors
+    }
+
+    @Test
+    fun `no providers asks the user to set a key`() = runTest {
+        val error = runCatching { FallbackLlmClient(emptyList()).run(obj, "hi") }.exceptionOrNull()
+        assertTrue(error?.message?.contains("задайте свой ключ") == true)
     }
 }
