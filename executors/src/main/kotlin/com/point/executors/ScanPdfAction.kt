@@ -16,8 +16,9 @@ import javax.inject.Inject
 /**
  * COLLECTION of photos → one clean, black-and-white PDF — the killer loop in a
  * single gesture: photograph the pages, share them all to Point, get one tidy
- * scan. Each page is cleaned with [ScanFilter] (grayscale + Otsu, the same
- * fallback as the single-image "Скан") and the pages are assembled by [imagesToPdf].
+ * scan. Each page runs through [scanPage] — OpenCV detect + perspective + adaptive threshold
+ * when available (deskewed like the single "Скан", #45), else the pure Otsu [ScanFilter] — and
+ * the pages are assembled by [imagesToPdf].
  */
 class ScanPdfCapability @Inject constructor() : Capability {
     override val id = ID
@@ -42,7 +43,7 @@ class ScanPdfRealizer @Inject constructor(
                     File(input.uri.value),
                     name = "скан.pdf",
                     op = "scan-pdf",
-                    clean = ScanFilter::apply,
+                    process = ::scanPage,
                 )
             }.getOrElse { ActionResult.Failure(it.message ?: "Ошибка сканирования в PDF", recoverable = true) }
         }
