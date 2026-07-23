@@ -7,6 +7,7 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.AutoFixHigh
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Call
+import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Collections
 import androidx.compose.material.icons.filled.Compress
 import androidx.compose.material.icons.filled.Description
@@ -19,6 +20,7 @@ import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.OpenInNew
+import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.SaveAlt
@@ -50,9 +52,11 @@ fun bubbleIcon(key: String): ImageVector = when (key) {
     "excel" -> Icons.Filled.TableChart
     "scan" -> Icons.Filled.DocumentScanner
     "ocr" -> Icons.Filled.TextFields
+    "ocr-cloud" -> Icons.Filled.Cloud
     "call" -> Icons.Filled.Call
     "message" -> Icons.Filled.Sms
     "email" -> Icons.Filled.Email
+    "contact" -> Icons.Filled.PersonAdd
     "open-in" -> Icons.Filled.Apps
     else -> Icons.Filled.Bolt
 }
@@ -73,6 +77,7 @@ fun bubbleColor(key: String): Color = when (key) {
     "compress" -> Color(0xFF0EA5A5) // teal — image
     "scan" -> Color(0xFF6366F1)     // indigo — scan
     "ocr" -> Color(0xFF16A34A)      // green — recognise text
+    "ocr-cloud" -> Color(0xFF2F80ED) // blue — recognise in the cloud
     "office" -> Color(0xFF16A34A)   // green — documents/data
     "excel" -> Color(0xFF15803D)    // deeper green — spreadsheet
     "unzip" -> Color(0xFFF2994A)    // amber — archive
@@ -81,6 +86,7 @@ fun bubbleColor(key: String): Color = when (key) {
     "call" -> Color(0xFF16A34A)      // green — call
     "message" -> Color(0xFF2F80ED)   // blue — message
     "email" -> Color(0xFF2F80ED)     // blue — email
+    "contact" -> Color(0xFF16A34A)   // green — add contact
     "open-in" -> Color(0xFF2F80ED)   // blue — open externally
     else -> Color(0xFF9AA0A6)        // grey — everything else
 }

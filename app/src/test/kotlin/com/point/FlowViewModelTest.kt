@@ -462,21 +462,33 @@ class FlowViewModelTest {
 
     // --- Clipboard-on-open (#72): only actionable, new text is offered ---
 
-    @Test fun `offers actionable clipboard text, ignores plain and re-dismissed text`() {
+    @Test fun `offers any new clipboard text, ignores blank and re-dismissed text`() {
         val vm = vm()
 
-        vm.offerClipboard("позвони +380671234567") // has a phone → offered
-        assertEquals("позвони +380671234567", vm.clipboard.value)
+        vm.offerClipboard("любой скопированный текст")
+        assertEquals("любой скопированный текст", vm.clipboard.value)
 
-        vm.offerClipboard("просто заметка без ничего") // no entity → not offered
+        vm.offerClipboard("   ") // blank → not offered
         assertNull(vm.clipboard.value)
 
-        vm.offerClipboard("напиши на a@b.com") // has an email → offered
-        assertEquals("напиши на a@b.com", vm.clipboard.value)
+        vm.offerClipboard("ещё текст")
+        assertEquals("ещё текст", vm.clipboard.value)
         vm.dismissClipboard()
         assertNull(vm.clipboard.value)
-        vm.offerClipboard("напиши на a@b.com") // same as dismissed → not re-offered
+        vm.offerClipboard("ещё текст") // same as dismissed → not re-offered
         assertNull(vm.clipboard.value)
+    }
+
+    @Test fun `the app picker never lists an app twice — direct and bridged dedup`() = runTest(dispatcher) {
+        val files = AppTarget("Files", "com.files", "A")
+        appLauncher.apps = listOf(files)                            // Files handles it directly
+        appLauncher.mimeApps = mapOf("text/plain" to listOf(files)) // AND via the "a" transform
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.onBubble(bubble(id = "open-in")); advanceUntilIdle()
+
+        assertEquals(1, vm.ui.value.appPicker?.size) // deduped by package (a dup key crashed the list)
     }
 }
 

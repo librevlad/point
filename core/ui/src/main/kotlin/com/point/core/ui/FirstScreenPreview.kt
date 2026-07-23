@@ -147,6 +147,23 @@ private fun PreviewTextRead() = PointTheme {
     )
 }
 
+@Preview(name = "Text · markdown (AI-результат)", showBackground = true)
+@Composable
+private fun PreviewMarkdown() = PointTheme(darkTheme = true) {
+    val obj = sampleObject(ObjectKind.TEXT, "text/markdown", "ответ.md")
+    FirstScreen(
+        obj = obj,
+        bubbles = sampleBubbles(ObjectKind.TEXT),
+        onBubble = {},
+        intents = sampleIntents(ObjectKind.TEXT),
+        // Renders as heading + bold + bullets, not raw ###/**/*.
+        textPreview = "### Анализ запроса\n" +
+            "* **Тип запроса:** Составление технической карты (ТТК).\n" +
+            "* **Объект:** Блюдо «Фасоль с пасеровкой».\n" +
+            "* **Проблема:** есть только ингредиенты и веса, нет технологии приготовления.",
+    )
+}
+
 @Preview(name = "Image · dark", showBackground = true)
 @Composable
 private fun PreviewImageDark() = PointTheme(darkTheme = true) {

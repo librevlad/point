@@ -3,6 +3,8 @@ package com.point.data
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Matrix
+import android.media.ExifInterface
 import android.util.Log
 import com.googlecode.tesseract.android.TessBaseAPI
 import com.point.core.flow.TextRecognizer
@@ -56,7 +58,7 @@ class TesseractTextRecognizer @Inject constructor(
 
     /**
      * Bounded decode so OCR of a huge photo can't OOM (#18): subsample the long edge to
-     * under 2×[maxPx]. Tesseract does its own orientation detection, so no EXIF rotation here.
+     * under 2×[maxPx], then rotate upright by EXIF (see [uprightByExif]).
      */
     private fun decodeBounded(path: String, maxPx: Int): Bitmap? {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
@@ -68,7 +70,33 @@ class TesseractTextRecognizer @Inject constructor(
             edge /= 2
             sample *= 2
         }
-        return BitmapFactory.decodeFile(path, BitmapFactory.Options().apply { inSampleSize = sample })
+        val decoded = BitmapFactory.decodeFile(path, BitmapFactory.Options().apply { inSampleSize = sample })
+            ?: return null
+        return uprightByExif(decoded, path)
+    }
+
+    /**
+     * A phone photo stores its rotation in EXIF and keeps the pixels sideways; [BitmapFactory]
+     * ignores the tag and hands back those sideways pixels. Tesseract has no orientation model in
+     * this path, so sideways lines decode to **deterministic gibberish** (`©`, `=`, stray 1–2 char
+     * fragments) — *the* reason on-device OCR of a document photo returns junk rather than the text.
+     * Rotating to upright first is the real fix; the cloud fallback was only masking it.
+     */
+    private fun uprightByExif(bitmap: Bitmap, path: String): Bitmap {
+        val orientation = runCatching {
+            ExifInterface(path).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
+        }.getOrDefault(ExifInterface.ORIENTATION_NORMAL)
+        val degrees = when (orientation) {
+            ExifInterface.ORIENTATION_ROTATE_90 -> 90f
+            ExifInterface.ORIENTATION_ROTATE_180 -> 180f
+            ExifInterface.ORIENTATION_ROTATE_270 -> 270f
+            else -> return bitmap
+        }
+        val rotated = Bitmap.createBitmap(
+            bitmap, 0, 0, bitmap.width, bitmap.height, Matrix().apply { postRotate(degrees) }, true,
+        )
+        if (rotated != bitmap) bitmap.recycle()
+        return rotated
     }
 
     /** @return the dir that CONTAINS `tessdata/` (what TessBaseAPI.init expects). */

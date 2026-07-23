@@ -16,6 +16,9 @@ enum class Feature {
     HAS_PHONE,
     HAS_EMAIL,
 
+    /** The text is a vCard (.vcf contact) — offer "add to contacts", not raw-text actions. */
+    HAS_VCARD,
+
     /** Size above the async-enrichment threshold (e.g. a 200 MB zip). */
     LARGE,
 }

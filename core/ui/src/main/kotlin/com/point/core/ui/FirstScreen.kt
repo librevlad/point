@@ -49,6 +49,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -107,7 +108,7 @@ fun FirstScreen(
         }
 
         if (textPreview != null && inputPrompt == null) {
-            TextPreview(text = textPreview)
+            TextPreview(text = textPreview, markdown = obj.mime == "text/markdown")
             Spacer(Modifier.height(28.dp))
         }
 
@@ -282,7 +283,9 @@ private fun CollectionItems(items: List<PointObject>, onItem: (PointObject) -> U
 
 /** For a TEXT object: its content, readable in-app — scroll + native select/copy. */
 @Composable
-private fun TextPreview(text: String) {
+private fun TextPreview(text: String, markdown: Boolean = false) {
+    // AI answers arrive as Markdown — render headings/bold/bullets instead of raw `###`/`**`/`*`.
+    val rendered = remember(text, markdown) { if (markdown) markdownToAnnotated(text) else AnnotatedString(text) }
     Text(
         text = "Текст",
         style = MaterialTheme.typography.labelMedium,
@@ -298,7 +301,7 @@ private fun TextPreview(text: String) {
     ) {
         SelectionContainer {
             Text(
-                text = text,
+                text = rendered,
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(max = 320.dp)

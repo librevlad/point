@@ -83,11 +83,14 @@ class HomeActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        if (!viewModel.hasFlow()) {
-            viewModel.loadRecent()
-            // Foreground-only clipboard read (Android 10+): offer to act on copied text (#72).
-            viewModel.offerClipboard(readClipboardText())
-        }
+        if (!viewModel.hasFlow()) viewModel.loadRecent()
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        // The clipboard is readable only with window focus (Android 10+), which lands AFTER
+        // onResume — reading here is what makes the "act on copied text" offer appear (#72).
+        if (hasFocus && !viewModel.hasFlow()) viewModel.offerClipboard(readClipboardText())
     }
 
     /** The current clipboard text, or null. Only ever called while Point is in the foreground. */

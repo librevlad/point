@@ -133,9 +133,7 @@ class FlowViewModel @Inject constructor(
      */
     fun offerClipboard(text: String?) {
         val t = text?.trim().orEmpty()
-        _clipboard.value = t.takeIf {
-            it.isNotBlank() && it.length <= MAX_CLIP && it != lastClipboard && ACTIONABLE_CLIP.containsMatchIn(it)
-        }
+        _clipboard.value = t.takeIf { it.isNotBlank() && it.length <= MAX_CLIP && it != lastClipboard }
     }
 
     /** Dismiss the clipboard suggestion and remember it, so the same text is not re-offered. */
@@ -282,7 +280,9 @@ class FlowViewModel @Inject constructor(
         _ui.update { it.copy(busy = "Ищу приложения…", message = null, inputPrompt = null, selectedIntent = null, intentBubbles = emptyList()) }
         viewModelScope.launch {
             val direct = runCatching { appLauncher.handlers(obj) }.getOrDefault(emptyList())
-            val apps = direct + bridgedHandlers(obj)
+            // Dedup by package: an app that also appears as a bridged target must not double —
+            // the picker keys rows by package, and duplicates crash the list. Direct wins.
+            val apps = (direct + bridgedHandlers(obj)).distinctBy { it.packageName }
             _ui.update {
                 if (apps.isEmpty()) it.copy(busy = null, message = "Нет приложения для этого объекта")
                 else it.copy(busy = null, appPicker = apps)
@@ -505,8 +505,9 @@ class FlowViewModel @Inject constructor(
     private fun loadTextPreviewIfText(obj: PointObject) {
         if (obj.state.kind != ObjectKind.TEXT) return
         viewModelScope.launch {
-            val text = runCatching { store.readText(obj, limit = 100_000) }.getOrDefault("")
-            if (text.isBlank()) return@launch
+            val raw = runCatching { store.readText(obj, limit = 100_000) }.getOrDefault("")
+            if (raw.isBlank()) return@launch
+            val text = sanitizeTextPreview(raw) // strip base64 blobs (e.g. a vCard's inline photo)
 
             val topIndex = stack.lastIndex
             val top = stack.getOrNull(topIndex) ?: return@launch
@@ -581,6 +582,3 @@ class FlowViewModel @Inject constructor(
 }
 
 private const val MAX_CLIP = 2000
-
-/** Clipboard text worth offering an action for: a URL, an email, or a phone-ish number. */
-private val ACTIONABLE_CLIP = Regex("""(https?://\S+)|([\w.+-]+@[\w-]+\.[\w.-]+)|(\+?\d[\d\s()-]{6,}\d)""")

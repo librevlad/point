@@ -27,6 +27,8 @@ import com.point.executors.ImageCapability
 import com.point.executors.ImageRealizer
 import com.point.executors.MergePdfCapability
 import com.point.executors.MergePdfRealizer
+import com.point.executors.CloudOcrCapability
+import com.point.executors.CloudOcrDirectRealizer
 import com.point.executors.CloudOcrRealizer
 import com.point.executors.DeviceOcrRealizer
 import com.point.executors.OcrCapability
@@ -54,6 +56,8 @@ import com.point.executors.ShareCapability
 import com.point.executors.ShareRealizer
 import com.point.executors.TranslateCapability
 import com.point.executors.TranslateRealizer
+import com.point.executors.VCardCapability
+import com.point.executors.VCardRealizer
 import com.point.core.flow.ObjectStore
 import com.point.executors.OpenCvScanRealizer
 import dagger.Binds
@@ -90,6 +94,7 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun callCap(c: CallCapability): Capability
     @Binds @IntoSet abstract fun smsCap(c: SmsCapability): Capability
     @Binds @IntoSet abstract fun emailCap(c: EmailCapability): Capability
+    @Binds @IntoSet abstract fun vcardCap(c: VCardCapability): Capability
     @Binds @IntoSet abstract fun imageCap(c: ImageCapability): Capability
     @Binds @IntoSet abstract fun pdfCap(c: PdfCapability): Capability
     @Binds @IntoSet abstract fun pagesCap(c: PagesCapability): Capability
@@ -99,6 +104,7 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun excelCap(c: ExcelCapability): Capability
     @Binds @IntoSet abstract fun scanCap(c: ScanCapability): Capability
     @Binds @IntoSet abstract fun ocrCap(c: OcrCapability): Capability
+    @Binds @IntoSet abstract fun cloudOcrCap(c: CloudOcrCapability): Capability
     @Binds @IntoSet abstract fun aiCap(c: AiCapability): Capability
 
     // --- Realizers (behaviour) ---
@@ -114,6 +120,7 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun callR(r: CallRealizer): Realizer
     @Binds @IntoSet abstract fun smsR(r: SmsRealizer): Realizer
     @Binds @IntoSet abstract fun emailR(r: EmailRealizer): Realizer
+    @Binds @IntoSet abstract fun vcardR(r: VCardRealizer): Realizer
     @Binds @IntoSet abstract fun imageR(r: ImageRealizer): Realizer
     @Binds @IntoSet abstract fun pdfR(r: PdfRealizer): Realizer
     @Binds @IntoSet abstract fun pagesR(r: PagesRealizer): Realizer
@@ -126,6 +133,7 @@ abstract class CapabilityModule {
     // cloud and chains them (device recognises nothing -> cloud). Roadmap #1 in prod.
     @Binds @IntoSet abstract fun deviceOcrR(r: DeviceOcrRealizer): Realizer
     @Binds @IntoSet abstract fun cloudOcrR(r: CloudOcrRealizer): Realizer
+    @Binds @IntoSet abstract fun cloudOcrDirectR(r: CloudOcrDirectRealizer): Realizer
     @Binds @IntoSet abstract fun aiR(r: AiRealizer): Realizer
 
     companion object {
