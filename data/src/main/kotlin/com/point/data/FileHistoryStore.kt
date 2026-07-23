@@ -8,18 +8,24 @@ import com.point.core.model.PointObject
 import com.point.core.model.ScratchRef
 import com.point.data.di.HistoryDir
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
 import java.util.UUID
 import javax.inject.Inject
+import javax.inject.Singleton
 
 /**
  * File-based history: a persistent copy of each object plus an append-only
  * `index.jsonl` journal. No Room — a plain, unit-testable store. The base dir is
  * `filesDir/history`, which the scratch wipe never touches; it is injected so the
- * store is testable on the JVM.
+ * store is testable on the JVM. History is bounded to [MAX_ENTRIES] most-recent
+ * objects so it never silently fills the device (#8); writes are serialised by a
+ * mutex (app-scoped @Singleton) because pruning read-rewrites the journal.
  */
+@Singleton
 class FileHistoryStore @Inject constructor(
     @HistoryDir private val baseDir: File,
     private val classifier: ObjectClassifier,
@@ -27,6 +33,7 @@ class FileHistoryStore @Inject constructor(
 
     private val dir: File get() = baseDir.apply { mkdirs() }
     private val index: File get() = File(dir, "index.jsonl")
+    private val mutex = Mutex()
 
     override suspend fun record(obj: PointObject) = withContext(Dispatchers.IO) {
         val source = File(obj.uri.value)
@@ -34,16 +41,11 @@ class FileHistoryStore @Inject constructor(
         val name = obj.metadata["name"]
         val ext = extensionFor(name, obj.mime)
         val dest = File(dir, if (ext.isBlank()) obj.id else "${obj.id}.$ext")
-        source.inputStream().use { input -> dest.outputStream().use { input.copyTo(it) } }
-
-        val row = JSONObject()
-            .put("id", obj.id)
-            .put("mime", obj.mime)
-            .put("kind", obj.state.kind.name)
-            .put("name", name ?: JSONObject.NULL)
-            .put("t", System.currentTimeMillis())
-            .put("path", dest.absolutePath)
-        index.appendText(row.toString() + "\n")
+        mutex.withLock {
+            source.inputStream().use { input -> dest.outputStream().use { input.copyTo(it) } }
+            index.appendText(row(obj.id, obj.mime, obj.state.kind.name, name, System.currentTimeMillis(), dest.absolutePath) + "\n")
+            pruneToLimit() // keep history bounded so it never silently fills the disk (#8)
+        }
     }
 
     override suspend fun recent(limit: Int): List<HistoryEntry> = withContext(Dispatchers.IO) {
@@ -71,8 +73,31 @@ class FileHistoryStore @Inject constructor(
     }
 
     override suspend fun clearAll() {
-        withContext(Dispatchers.IO) { dir.deleteRecursively() }
+        withContext(Dispatchers.IO) { mutex.withLock { dir.deleteRecursively() } }
     }
+
+    /**
+     * Cap history at [MAX_ENTRIES] most-recent objects: delete the evicted copies and
+     * rewrite the journal to one compact line per survivor. Without this the store grows
+     * forever — every shared object left a file behind (#8). Called under [mutex].
+     */
+    private fun pruneToLimit() {
+        val entries = readEntries().values.toList() // oldest → newest
+        if (entries.size <= MAX_ENTRIES) return
+        entries.dropLast(MAX_ENTRIES).forEach { runCatching { File(it.ref.value).delete() } }
+        val survivors = entries.takeLast(MAX_ENTRIES)
+        index.writeText(survivors.joinToString("") { row(it.id, it.mime, it.kind.name, it.name, it.epochMillis, it.ref.value) + "\n" })
+    }
+
+    private fun row(id: String, mime: String, kind: String, name: String?, t: Long, path: String): String =
+        JSONObject()
+            .put("id", id)
+            .put("mime", mime)
+            .put("kind", kind)
+            .put("name", name ?: JSONObject.NULL)
+            .put("t", t)
+            .put("path", path)
+            .toString()
 
     /** id -> latest entry (last journal line for that id wins). */
     private fun readEntries(): Map<String, HistoryEntry> {
@@ -108,5 +133,10 @@ class FileHistoryStore @Inject constructor(
             mime == "application/zip" -> "zip"
             else -> ""
         }
+    }
+
+    private companion object {
+        /** Keep the last N objects — more than the 30 Home shows, so nothing recent is lost. */
+        const val MAX_ENTRIES = 50
     }
 }

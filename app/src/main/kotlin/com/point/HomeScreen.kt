@@ -19,6 +19,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -37,6 +38,7 @@ fun HomeScreen(
     recent: List<HistoryEntry>,
     onOpen: (HistoryEntry) -> Unit,
     onSettings: () -> Unit,
+    onClear: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Box(modifier.fillMaxSize()) {
@@ -66,6 +68,14 @@ fun HomeScreen(
                 }
                 items(recent, key = { it.id }) { entry ->
                     HistoryRow(entry = entry, onClick = { onOpen(entry) })
+                }
+                item {
+                    TextButton(
+                        onClick = onClear,
+                        modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+                    ) {
+                        Text("Очистить недавнее", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
             }
         }
