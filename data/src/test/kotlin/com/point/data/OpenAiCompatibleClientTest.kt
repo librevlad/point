@@ -8,6 +8,7 @@ import com.point.core.model.ResultObject
 import com.point.core.model.ScratchRef
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -84,5 +85,45 @@ class OpenAiCompatibleClientTest {
         client(http(200, okBody) { sent = it }).run(textObj, "переведи это")
         assertTrue(sent.contains("some-model"))
         assertTrue(sent.contains("переведи это"))
+    }
+
+    // --- Vision routing (#60) ---
+
+    private val image = PointObject("i", "image/png", ScratchRef("/x.png"), ObjectState(ObjectKind.IMAGE))
+
+    @Test
+    fun `a text-only model cannot handle an image but still handles text`() {
+        val textOnly = client(http(200, okBody)) // provider model "some-model" → not vision
+        assertFalse(textOnly.canHandle(image))
+        assertTrue(textOnly.canHandle(textObj))
+    }
+
+    @Test
+    fun `a vision model can handle an image`() {
+        val vision = OpenAiCompatibleClient(http(200, okBody), store, provider.copy(vision = true))
+        assertTrue(vision.canHandle(image))
+    }
+
+    @Test
+    fun `openAiModels infers vision from the model name`() {
+        val models = openAiModels("openrouter", "https://x/v1", "k", "google/gemma-4-31b-it:free, llama-3.1-8b-instant")
+        assertTrue(models.first { it.model.contains("gemma") }.vision)
+        assertFalse(models.first { it.model.contains("llama-3.1") }.vision)
+    }
+
+    @Test
+    fun `a NO_IMAGE marker reply is treated as failure so the chain continues`() = runTest {
+        val body = """{"choices":[{"message":{"content":"NO_IMAGE"}}]}"""
+        val vision = OpenAiCompatibleClient(http(200, body), store, provider.copy(vision = true))
+        val e = runCatching { vision.run(image, "опиши") }.exceptionOrNull()
+        assertTrue(e?.message?.contains("не увидела изображение") == true)
+    }
+
+    @Test
+    fun `an image request bakes the strict NO_IMAGE directive into the prompt`() = runTest {
+        var sent = ""
+        val vision = OpenAiCompatibleClient(http(200, okBody) { sent = it }, store, provider.copy(vision = true))
+        vision.run(image, "опиши")
+        assertTrue(sent.contains("NO_IMAGE")) // strict format is instructed, not guessed after
     }
 }

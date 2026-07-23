@@ -60,4 +60,25 @@ class FallbackLlmClientTest {
         val error = runCatching { FallbackLlmClient(emptyList()).run(obj, "hi") }.exceptionOrNull()
         assertTrue(error?.message?.contains("задайте свой ключ") == true)
     }
+
+    // --- Vision routing (#60) ---
+
+    private val image = PointObject("i", "image/png", ScratchRef("/x.png"), ObjectState(ObjectKind.IMAGE))
+
+    private fun textOnly() = object : LlmClient {
+        override suspend fun run(obj: PointObject, prompt: String): ResultObject = error("must not run for an image")
+        override fun canHandle(obj: PointObject) = !obj.mime.startsWith("image/")
+    }
+
+    @Test
+    fun `an image skips text-only providers and reaches a vision one`() = runTest {
+        val client = FallbackLlmClient(listOf(textOnly(), ok("vision")))
+        assertEquals("/out/vision", client.run(image, "опиши").uri.value)
+    }
+
+    @Test
+    fun `an image with only text-only providers gives a clear no-model error, not a false answer`() = runTest {
+        val error = runCatching { FallbackLlmClient(listOf(textOnly())).run(image, "опиши") }.exceptionOrNull()
+        assertTrue(error?.message?.contains("нет подходящей AI-модели") == true)
+    }
 }
