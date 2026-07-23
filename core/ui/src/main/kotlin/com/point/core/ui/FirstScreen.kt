@@ -48,12 +48,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.point.core.model.Bubble
 import com.point.core.model.FavoriteChain
+import com.point.core.model.Intent
 import com.point.core.model.PointObject
 
 /**
@@ -84,6 +86,9 @@ fun FirstScreen(
     items: List<PointObject> = emptyList(),
     onItem: (PointObject) -> Unit = {},
     textPreview: String? = null,
+    intents: List<Intent> = emptyList(),
+    selectedIntent: Intent? = null,
+    onIntent: (Intent) -> Unit = {},
 ) {
     Column(
         modifier = modifier
@@ -113,8 +118,9 @@ fun FirstScreen(
                 onCancel = onCancelInput,
             )
         } else {
+            val showingIntents = selectedIntent == null
             Text(
-                text = "Следующее действие",
+                text = selectedIntent?.let { intentTitle(it) } ?: "Что сделать?",
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -125,9 +131,23 @@ fun FirstScreen(
                 horizontalArrangement = Arrangement.spacedBy(20.dp, Alignment.CenterHorizontally),
                 verticalArrangement = Arrangement.spacedBy(20.dp),
             ) {
-                bubbles.forEachIndexed { index, bubble ->
-                    key(bubble.capabilityId.value) {
-                        BubbleItem(bubble = bubble, index = index, onClick = { onBubble(bubble) })
+                if (showingIntents) {
+                    intents.forEachIndexed { index, intent ->
+                        key("intent-${intent.name}") {
+                            ActionBubble(
+                                icon = intentIcon(intent),
+                                title = intentTitle(intent),
+                                color = intentColor(intent),
+                                index = index,
+                                onClick = { onIntent(intent) },
+                            )
+                        }
+                    }
+                } else {
+                    bubbles.forEachIndexed { index, bubble ->
+                        key(bubble.capabilityId.value) {
+                            BubbleItem(bubble = bubble, index = index, onClick = { onBubble(bubble) })
+                        }
                     }
                 }
             }
@@ -326,8 +346,22 @@ private fun ObjectHeader(obj: PointObject) {
 }
 
 @Composable
-private fun BubbleItem(
-    bubble: Bubble,
+private fun BubbleItem(bubble: Bubble, index: Int, onClick: () -> Unit) =
+    ActionBubble(
+        icon = bubbleIcon(bubble.icon),
+        title = bubble.title,
+        color = bubbleColor(bubble.icon),
+        index = index,
+        onClick = onClick,
+    )
+
+/** One circular action bubble — an intent or a capability. Fades/scales in with a
+ *  stagger so newly disclosed actions visibly appear. */
+@Composable
+private fun ActionBubble(
+    icon: ImageVector,
+    title: String,
+    color: Color,
     index: Int,
     onClick: () -> Unit,
 ) {
@@ -339,7 +373,6 @@ private fun BubbleItem(
         label = "bubble-in",
     )
 
-    val color = bubbleColor(bubble.icon)
     Column(
         modifier = Modifier
             .width(84.dp)
@@ -361,7 +394,7 @@ private fun BubbleItem(
             contentAlignment = Alignment.Center,
         ) {
             Icon(
-                imageVector = bubbleIcon(bubble.icon),
+                imageVector = icon,
                 contentDescription = null,
                 tint = Color.White,
                 modifier = Modifier.size(28.dp),
@@ -369,7 +402,7 @@ private fun BubbleItem(
         }
         Spacer(Modifier.height(9.dp))
         Text(
-            text = bubble.title,
+            text = title,
             style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onBackground,

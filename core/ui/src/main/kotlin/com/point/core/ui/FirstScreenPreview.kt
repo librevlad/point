@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.tooling.preview.Preview
 import com.point.core.model.Bubble
 import com.point.core.model.CapabilityId
+import com.point.core.model.Intent
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
@@ -62,25 +63,32 @@ private fun sampleBubbles(kind: ObjectKind): List<Bubble> =
     else -> emptyList()
 }
 
+/** Intents mirror what the registry derives for that kind (the intent-first surface). */
+private fun sampleIntents(kind: ObjectKind): List<Intent> = when (kind) {
+    ObjectKind.COLLECTION, ObjectKind.ZIP -> listOf(Intent.PREPARE, Intent.SEND)
+    ObjectKind.UNKNOWN -> listOf(Intent.UNDERSTAND, Intent.SEND)
+    else -> listOf(Intent.UNDERSTAND, Intent.PREPARE, Intent.SEND)
+}
+
 @Preview(name = "Image", showBackground = true)
 @Composable
 private fun PreviewImage() = PointTheme {
     val obj = sampleObject(ObjectKind.IMAGE, "image/jpeg", "photo.jpg")
-    FirstScreen(obj = obj, bubbles = sampleBubbles(ObjectKind.IMAGE), onBubble = {})
+    FirstScreen(obj = obj, bubbles = sampleBubbles(ObjectKind.IMAGE), onBubble = {}, intents = sampleIntents(ObjectKind.IMAGE))
 }
 
 @Preview(name = "PDF", showBackground = true)
 @Composable
 private fun PreviewPdf() = PointTheme {
     val obj = sampleObject(ObjectKind.PDF, "application/pdf", "report.pdf")
-    FirstScreen(obj = obj, bubbles = sampleBubbles(ObjectKind.PDF), onBubble = {})
+    FirstScreen(obj = obj, bubbles = sampleBubbles(ObjectKind.PDF), onBubble = {}, intents = sampleIntents(ObjectKind.PDF))
 }
 
 @Preview(name = "Zip", showBackground = true)
 @Composable
 private fun PreviewZip() = PointTheme {
     val obj = sampleObject(ObjectKind.ZIP, "application/zip", "album.zip")
-    FirstScreen(obj = obj, bubbles = sampleBubbles(ObjectKind.ZIP), onBubble = {})
+    FirstScreen(obj = obj, bubbles = sampleBubbles(ObjectKind.ZIP), onBubble = {}, intents = sampleIntents(ObjectKind.ZIP))
 }
 
 @Preview(name = "Collection · unpacked archive", showBackground = true)
@@ -97,6 +105,7 @@ private fun PreviewCollection() = PointTheme {
         obj = obj,
         bubbles = sampleBubbles(ObjectKind.COLLECTION),
         onBubble = {},
+        intents = sampleIntents(ObjectKind.COLLECTION),
         items = items,
         onItem = {},
     )
@@ -106,7 +115,7 @@ private fun PreviewCollection() = PointTheme {
 @Composable
 private fun PreviewUnknownOpen() = PointTheme {
     val obj = sampleObject(ObjectKind.UNKNOWN, "application/octet-stream", "data.bin")
-    FirstScreen(obj = obj, bubbles = sampleBubbles(ObjectKind.UNKNOWN), onBubble = {})
+    FirstScreen(obj = obj, bubbles = sampleBubbles(ObjectKind.UNKNOWN), onBubble = {}, intents = sampleIntents(ObjectKind.UNKNOWN))
 }
 
 @Preview(name = "Text + Failure message", showBackground = true)
@@ -117,6 +126,7 @@ private fun PreviewTextWithMessage() = PointTheme {
         obj = obj,
         bubbles = sampleBubbles(ObjectKind.TEXT),
         onBubble = {},
+        intents = sampleIntents(ObjectKind.TEXT),
         message = "Действие подключим в следующем срезе",
     )
 }
@@ -129,6 +139,7 @@ private fun PreviewTextRead() = PointTheme {
         obj = obj,
         bubbles = sampleBubbles(ObjectKind.TEXT),
         onBubble = {},
+        intents = sampleIntents(ObjectKind.TEXT),
         textPreview = "Заголовок заметки\n\nАбзац текста, который прокручивается, " +
             "выделяется и копируется прямо в Point — не выходя во внешнее приложение.\n\n" +
             "• пункт один\n• пункт два\n• пункт три\n\nЕщё строка для объёма.",
@@ -139,7 +150,7 @@ private fun PreviewTextRead() = PointTheme {
 @Composable
 private fun PreviewImageDark() = PointTheme(darkTheme = true) {
     val obj = sampleObject(ObjectKind.IMAGE, "image/png", "screenshot.png")
-    FirstScreen(obj = obj, bubbles = sampleBubbles(ObjectKind.IMAGE), onBubble = {})
+    FirstScreen(obj = obj, bubbles = sampleBubbles(ObjectKind.IMAGE), onBubble = {}, intents = sampleIntents(ObjectKind.IMAGE))
 }
 
 @Preview(name = "AI · needs input", showBackground = true)
@@ -151,5 +162,19 @@ private fun PreviewNeedsInput() = PointTheme {
         bubbles = sampleBubbles(ObjectKind.IMAGE),
         onBubble = {},
         inputPrompt = "Что сделать с объектом? (пусто = авто-анализ)",
+    )
+}
+
+@Preview(name = "Intent · Подготовить (раскрыто)", showBackground = true)
+@Composable
+private fun PreviewIntentDrill() = PointTheme {
+    val obj = sampleObject(ObjectKind.IMAGE, "image/jpeg", "photo.jpg")
+    // The user tapped «Подготовить»; that intent's capabilities are revealed.
+    FirstScreen(
+        obj = obj,
+        bubbles = sampleBubbles(ObjectKind.IMAGE).filter { it.icon in setOf("compress", "pdf", "excel") },
+        onBubble = {},
+        intents = sampleIntents(ObjectKind.IMAGE),
+        selectedIntent = Intent.PREPARE,
     )
 }

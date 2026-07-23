@@ -1,6 +1,8 @@
 package com.point.executors
 
+import com.point.core.model.CapabilityId
 import com.point.core.model.Feature
+import com.point.core.model.Intent
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import org.junit.Assert.assertEquals
@@ -103,5 +105,37 @@ class DefaultCapabilityRegistryTest {
     fun `byId round-trips`() {
         val bubble = registry.bubblesFor(ObjectState(ObjectKind.TEXT)).first()
         assertEquals(bubble.capabilityId, registry.byId(bubble.capabilityId).id)
+    }
+
+    // --- Intent layer (Object → Intent → … → Object) ---
+
+    @Test
+    fun `an image offers all three intents`() {
+        assertEquals(
+            listOf(Intent.UNDERSTAND, Intent.PREPARE, Intent.SEND),
+            registry.intentsFor(ObjectState(ObjectKind.IMAGE)),
+        )
+    }
+
+    @Test
+    fun `a collection has prepare and send but nothing to understand`() {
+        assertEquals(
+            listOf(Intent.PREPARE, Intent.SEND),
+            registry.intentsFor(ObjectState(ObjectKind.COLLECTION)),
+        )
+    }
+
+    @Test
+    fun `pdf capability understands a PDF but prepares from an image`() {
+        val pdf = registry.byId(CapabilityId("pdf"))
+        assertEquals(setOf(Intent.UNDERSTAND), pdf.intents(ObjectState(ObjectKind.PDF)))
+        assertEquals(setOf(Intent.PREPARE), pdf.intents(ObjectState(ObjectKind.IMAGE)))
+    }
+
+    @Test
+    fun `default intent derives from produces — ai understands, share sends`() {
+        // AI produces an unknown object -> UNDERSTAND; a terminal (produces == state) -> SEND.
+        assertEquals(setOf(Intent.UNDERSTAND), AiCapability().intents(ObjectState(ObjectKind.IMAGE)))
+        assertEquals(setOf(Intent.SEND), ShareCapability().intents(ObjectState(ObjectKind.IMAGE)))
     }
 }

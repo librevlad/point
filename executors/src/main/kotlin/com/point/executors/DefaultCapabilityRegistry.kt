@@ -5,6 +5,7 @@ import com.point.core.flow.Capability
 import com.point.core.flow.CapabilityRegistry
 import com.point.core.model.Bubble
 import com.point.core.model.CapabilityId
+import com.point.core.model.Intent
 import com.point.core.model.ObjectState
 import javax.inject.Inject
 
@@ -31,6 +32,11 @@ class DefaultCapabilityRegistry @Inject constructor(
                     expectedNextState = c.produces(state) ?: state,
                 )
             }
+
+    override fun intentsFor(state: ObjectState): List<Intent> {
+        val accepting = capabilities.filter { it.accepts(state) }
+        return Intent.entries.filter { intent -> accepting.any { intent in it.intents(state) } }
+    }
 
     override fun byId(id: CapabilityId): Capability =
         byIdMap[id] ?: error("No capability registered for id=${id.value}")

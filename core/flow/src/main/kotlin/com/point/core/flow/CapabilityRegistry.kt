@@ -2,6 +2,7 @@ package com.point.core.flow
 
 import com.point.core.model.Bubble
 import com.point.core.model.CapabilityId
+import com.point.core.model.Intent
 import com.point.core.model.ObjectState
 
 /**
@@ -12,5 +13,10 @@ import com.point.core.model.ObjectState
  */
 interface CapabilityRegistry {
     fun bubblesFor(state: ObjectState): List<Bubble>
+
+    /** Applicable user intents for [state] — the intents served by ≥1 accepting
+     *  capability, in [Intent] declaration order. The intent-first surface. */
+    fun intentsFor(state: ObjectState): List<Intent>
+
     fun byId(id: CapabilityId): Capability
 }
