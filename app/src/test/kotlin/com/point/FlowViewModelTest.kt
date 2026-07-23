@@ -429,6 +429,37 @@ class FlowViewModelTest {
         assertTrue(vm.ui.value.message?.contains("Нет приложения") == true)
     }
 
+    // --- Synthesized compatibility: bridged app targets via one transform (#79.1) ---
+
+    @Test fun `open-in also offers apps reachable via one transform`() = runTest(dispatcher) {
+        // No direct handler; the default capability "a" produces TEXT → text apps become reachable.
+        appLauncher.apps = emptyList()
+        appLauncher.mimeApps = mapOf("text/plain" to listOf(AppTarget("Notepad", "com.np", "A")))
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle() // an IMAGE object
+
+        vm.onBubble(bubble(id = "open-in")); advanceUntilIdle()
+
+        val picker = vm.ui.value.appPicker
+        assertEquals(1, picker?.size)
+        assertEquals("a", picker?.first()?.via)                       // bridged via transform "a"
+        assertTrue(picker?.first()?.label?.contains("текст") == true) // labelled with the produced kind
+    }
+
+    @Test fun `picking a bridged app converts first, then launches the produced object`() = runTest(dispatcher) {
+        resolver.result = ActionResult.Success(ResultObject(ObjectKind.TEXT, "text/plain", ScratchRef("/converted")))
+        appLauncher.mimeApps = mapOf("text/plain" to listOf(AppTarget("Notepad", "com.np", "A")))
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        vm.onBubble(bubble(id = "open-in")); advanceUntilIdle()
+        val bridged = vm.ui.value.appPicker!!.first()
+
+        vm.onPickApp(bridged); advanceUntilIdle()
+
+        assertEquals("com.np", appLauncher.launched?.packageName)
+        assertEquals(ObjectKind.TEXT, appLauncher.launchedObj?.state?.kind) // the converted object, not the image
+    }
+
     // --- Clipboard-on-open (#72): only actionable, new text is offered ---
 
     @Test fun `offers actionable clipboard text, ignores plain and re-dismissed text`() {
@@ -537,10 +568,15 @@ private class FakePrivacyConsent(var granted: Boolean = false) : PrivacyConsent 
     override suspend fun allowCloud() { granted = true }
 }
 
-private class FakeAppLauncher(var apps: List<AppTarget> = emptyList()) : AppLauncher {
+private class FakeAppLauncher(
+    var apps: List<AppTarget> = emptyList(),
+    var mimeApps: Map<String, List<AppTarget>> = emptyMap(),
+) : AppLauncher {
     var launched: AppTarget? = null
+    var launchedObj: PointObject? = null
     override suspend fun handlers(obj: PointObject) = apps
-    override suspend fun launch(target: AppTarget, obj: PointObject) { launched = target }
+    override suspend fun handlersForMime(mime: String) = mimeApps[mime].orEmpty()
+    override suspend fun launch(target: AppTarget, obj: PointObject) { launched = target; launchedObj = obj }
 }
 
 private class FakeUsageJournal(private var enabled: Boolean = true) : UsageJournal {

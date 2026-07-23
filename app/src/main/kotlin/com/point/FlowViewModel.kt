@@ -281,7 +281,8 @@ class FlowViewModel @Inject constructor(
     private fun showAppPicker(obj: PointObject) {
         _ui.update { it.copy(busy = "Ищу приложения…", message = null, inputPrompt = null, selectedIntent = null, intentBubbles = emptyList()) }
         viewModelScope.launch {
-            val apps = runCatching { appLauncher.handlers(obj) }.getOrDefault(emptyList())
+            val direct = runCatching { appLauncher.handlers(obj) }.getOrDefault(emptyList())
+            val apps = direct + bridgedHandlers(obj)
             _ui.update {
                 if (apps.isEmpty()) it.copy(busy = null, message = "Нет приложения для этого объекта")
                 else it.copy(busy = null, appPicker = apps)
@@ -289,14 +290,59 @@ class FlowViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Apps reachable via ONE transform (#79.1 synthesized compatibility): for every capability that
+     * turns this object into a different openable type, the apps for that type — tagged with the
+     * transform so a pick converts first, then launches. E.g. an image → PDF apps ("Acrobat · PDF").
+     */
+    private suspend fun bridgedHandlers(obj: PointObject): List<AppTarget> {
+        val state = stack.lastOrNull()?.obj?.state ?: return emptyList()
+        val transforms = registry.bubblesFor(state).mapNotNull { bubble ->
+            val produced = runCatching { registry.byId(bubble.capabilityId).produces(state) }.getOrNull()
+            val kind = produced?.kind?.takeIf { it != state.kind } ?: return@mapNotNull null
+            openableMime(kind)?.let { Triple(bubble.capabilityId, kind, it) }
+        }.distinctBy { it.third }
+        return transforms.flatMap { (capId, kind, mime) ->
+            runCatching { appLauncher.handlersForMime(mime) }.getOrDefault(emptyList())
+                .map { it.copy(label = "${it.label} · ${kindShort(kind)}", via = capId.value) }
+        }
+    }
+
     fun onPickApp(target: AppTarget) {
         val obj = stack.lastOrNull()?.obj ?: return
         _ui.update { it.copy(appPicker = null) }
+        val via = target.via
         viewModelScope.launch {
-            runCatching { appLauncher.launch(target, obj) }
-                .onSuccess { _ui.update { it.copy(message = "Открываю в ${target.label}") } }
-                .onFailure { e -> _ui.update { it.copy(message = e.message ?: "Не удалось открыть") } }
+            val toOpen = if (via != null) bridge(obj, via) else obj
+            if (toOpen == null) {
+                _ui.update { it.copy(busy = null, message = "Не удалось преобразовать") }
+                return@launch
+            }
+            runCatching { appLauncher.launch(target, toOpen) }
+                .onSuccess { _ui.update { it.copy(busy = null, message = "Открываю в ${target.label}") } }
+                .onFailure { e -> _ui.update { it.copy(busy = null, message = e.message ?: "Не удалось открыть") } }
         }
+    }
+
+    /** Run one transform to produce the object the bridged app can open (#79.1); null on failure. */
+    private suspend fun bridge(obj: PointObject, viaCapId: String): PointObject? {
+        _ui.update { it.copy(busy = "Преобразую…") }
+        val result = runCatching { resolver.realizerFor(CapabilityId(viaCapId)).perform(obj, null) }.getOrNull()
+        return (result as? ActionResult.Success)?.let { runCatching { store.put(it.result) }.getOrNull() }
+    }
+
+    private fun openableMime(kind: ObjectKind): String? = when (kind) {
+        ObjectKind.PDF -> "application/pdf"
+        ObjectKind.IMAGE -> "image/png"
+        ObjectKind.TEXT -> "text/plain"
+        else -> null
+    }
+
+    private fun kindShort(kind: ObjectKind): String = when (kind) {
+        ObjectKind.PDF -> "PDF"
+        ObjectKind.IMAGE -> "картинка"
+        ObjectKind.TEXT -> "текст"
+        else -> kind.name
     }
 
     fun dismissAppPicker() = _ui.update { it.copy(appPicker = null) }

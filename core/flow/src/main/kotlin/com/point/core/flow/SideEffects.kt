@@ -22,8 +22,17 @@ interface Viewer {
     suspend fun view(obj: PointObject)
 }
 
-/** One installed app that can act on an object. Strings only — Android-free. */
-data class AppTarget(val label: String, val packageName: String, val activity: String)
+/**
+ * One installed app that can act on an object. Strings only — Android-free. [via] is set for a
+ * *bridged* target (#79.1): the object can't be opened in this app directly, but it can be after one
+ * transform (whose capability id is [via]) — e.g. an image opened as a PDF. Null = direct handler.
+ */
+data class AppTarget(
+    val label: String,
+    val packageName: String,
+    val activity: String,
+    val via: String? = null,
+)
 
 /**
  * The device's *real* capabilities: the installed apps that can handle an object, enumerated from
@@ -33,6 +42,10 @@ data class AppTarget(val label: String, val packageName: String, val activity: S
 interface AppLauncher {
     /** Installed apps that can open [obj], most-relevant first; empty if none. */
     suspend fun handlers(obj: PointObject): List<AppTarget>
+
+    /** Installed apps that can open an object of [mime] — used to find apps reachable via a
+     *  transform (#79.1), before the object of that type actually exists. */
+    suspend fun handlersForMime(mime: String): List<AppTarget>
 
     /** Open [obj] in the chosen [target] app. */
     suspend fun launch(target: AppTarget, obj: PointObject)

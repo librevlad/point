@@ -38,6 +38,17 @@ class AndroidAppLauncher @Inject constructor(
             .toList()
     }
 
+    override suspend fun handlersForMime(mime: String): List<AppTarget> = withContext(Dispatchers.IO) {
+        val pm = context.packageManager
+        val query = Intent(Intent.ACTION_VIEW).setType(mime) // type only — the object doesn't exist yet
+        pm.queryIntentActivities(query, 0)
+            .asSequence()
+            .filter { it.activityInfo.packageName != context.packageName }
+            .map { AppTarget(it.loadLabel(pm).toString(), it.activityInfo.packageName, it.activityInfo.name) }
+            .distinctBy { it.packageName }
+            .toList()
+    }
+
     override suspend fun launch(target: AppTarget, obj: PointObject) {
         withContext(Dispatchers.IO) {
             val intent = viewIntent(obj).apply {
