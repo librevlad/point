@@ -20,6 +20,7 @@ class OpenInActionTest {
     private class FakeLauncher(private val apps: List<AppTarget>) : AppLauncher {
         var launched: AppTarget? = null
         override suspend fun handlers(obj: PointObject) = apps
+        override suspend fun handlersForMime(mime: String) = emptyList<AppTarget>()
         override suspend fun launch(target: AppTarget, obj: PointObject) { launched = target }
     }
 
