@@ -80,4 +80,19 @@ class FileHistoryStoreTest {
         store.clearAll()
         assertTrue(store.recent().isEmpty())
     }
+
+    @Test
+    fun `history is capped — the oldest objects and their files are purged`() = runTest {
+        // Cap is 50; recording 55 must evict the 5 oldest and delete their copies (#8).
+        repeat(55) { i -> store.record(textObject("id$i", "c$i", "$i.txt")) }
+
+        assertNull(store.open("id0"))                                   // evicted from the index…
+        assertNull(store.open("id4"))
+        assertEquals("c5", File(store.open("id5")!!.uri.value).readText()) // the 50 newest survive
+
+        // …and physically gone: only the survivors' copies remain on disk (+ the journal).
+        val objectFiles = dir.listFiles { f -> f.name != "index.jsonl" }?.size ?: 0
+        assertEquals(50, objectFiles)
+        assertEquals("id54", store.recent().first().id)                // newest-first window intact
+    }
 }

@@ -48,6 +48,7 @@ class HomeActivity : ComponentActivity() {
                             recent = recent,
                             onOpen = viewModel::openFromHistory,
                             onSettings = viewModel::openKeySettings,
+                            onClear = viewModel::clearHistory,
                         )
                     } else {
                         PointHost(

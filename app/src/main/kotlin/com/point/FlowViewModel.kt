@@ -109,6 +109,14 @@ class FlowViewModel @Inject constructor(
         }
     }
 
+    /** Wipe the recent list and its files — the user's "очистить недавнее" (#8). */
+    fun clearHistory() {
+        viewModelScope.launch {
+            runCatching { history.clearAll() }
+            _recent.value = emptyList()
+        }
+    }
+
     fun openFromHistory(entry: HistoryEntry) {
         _ui.update { it.copy(busy = "Открываю…", message = null, inputPrompt = null) }
         viewModelScope.launch {
