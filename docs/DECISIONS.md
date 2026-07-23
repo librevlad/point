@@ -695,3 +695,11 @@ on-demand pack / ограничить `abiFilters` (созвучно #23).
 `onShared(fileUri, "text/plain")`, что и Share (общий хелпер `cacheTextFile`). Ноль разрешений,
 API 23+. Это **invocation-триггер** (по вызову пользователя), не слежка — первый срез плана
 «правая кнопка для всего, без слежки».
+
+### Сущности on-device → действия (#64/#66, Slice 2a)
+**Решение:** TEXT-объект обогащается on-device детектом сущностей (ML Kit Entity Extraction за
+Android-free контрактом `EntityExtractor`; `@Provides` — обход KSP-затыка с нативным AAR, как с
+OpenCV). Найден телефон → пузырьки «Позвонить»/«Сообщение» (`tel:`/`smsto:`), email → «Написать
+письмо» (`mailto:`) через существующий `UrlOpener` (ACTION_VIEW на схеме). Ровно шаблон
+`TextUrlEnricher → Feature → OpenUrlCapability`. Работает и на OCR-скриншотах даром (OCR даёт
+TEXT). Адрес/дата/карта — следующий срез. Без облака, без слежки.

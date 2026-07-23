@@ -5,6 +5,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import com.point.core.flow.CapabilityUsage
 import com.point.core.flow.Enricher
 import com.point.core.flow.Enrichment
+import com.point.core.flow.EntityExtractor
 import com.point.core.flow.Entitlements
 import com.point.core.flow.Exporter
 import com.point.core.flow.FavoritesStore
@@ -31,6 +32,8 @@ import com.point.data.ClaudeLlmClient
 import com.point.data.CommonsArchiveExtractor
 import com.point.data.DefaultEnrichment
 import com.point.data.DefaultEntitlements
+import com.point.data.EntityEnricher
+import com.point.data.MlKitEntityExtractor
 import com.point.data.FallbackLlmClient
 import com.point.data.FileUsageJournal
 import com.point.data.FileCapabilityUsage
@@ -63,6 +66,7 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import dagger.multibindings.IntoSet
+import javax.inject.Singleton
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -140,6 +144,9 @@ abstract class DataModule {
     abstract fun textUrlEnricher(e: TextUrlEnricher): Enricher
 
     @Binds @IntoSet
+    abstract fun entityEnricher(e: EntityEnricher): Enricher
+
+    @Binds @IntoSet
     abstract fun zipImagesEnricher(e: ZipImagesEnricher): Enricher
 
     @Binds @IntoSet
@@ -149,6 +156,12 @@ abstract class DataModule {
         /** Pure classifier lives in :core:flow (no DI annotations there). */
         @Provides
         fun objectClassifier(): ObjectClassifier = ObjectClassifier()
+
+        /** On-device entity detection (ML Kit) behind the [EntityExtractor] seam. @Provides (not
+         *  @Binds) keeps the ML Kit AAR types out of Dagger's KSP aggregation (same fix as OpenCV). */
+        @Provides
+        @Singleton
+        fun entityExtractor(): EntityExtractor = MlKitEntityExtractor()
 
         /**
          * The AI fallback chain — "all free providers, max": every OpenAI-compatible

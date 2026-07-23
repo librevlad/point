@@ -24,6 +24,7 @@ tukaaniXz = "1.10"
 junrar = "7.5.5"
 tesseract4android = "4.8.0"
 opencv = "4.11.0"
+mlkitEntityExtraction = "16.0.0-beta5"
 junit = "4.13.2"
 
 [libraries]
@@ -60,6 +61,8 @@ tukaani-xz = { group = "org.tukaani", name = "xz", version.ref = "tukaaniXz" } #
 junrar = { group = "com.github.junrar", name = "junrar", version.ref = "junrar" } # rar
 tesseract4android = { group = "com.github.adaptech-cz.Tesseract4Android", name = "tesseract4android", version.ref = "tesseract4android" } # on-device OCR (Tesseract 5)
 opencv = { group = "org.opencv", name = "opencv", version.ref = "opencv" } # document scan pipeline (perspective + adaptive threshold)
+mlkit-entity-extraction = { group = "com.google.mlkit", name = "entity-extraction", version.ref = "mlkitEntityExtraction" } # on-device entity detection (phone/email/address/date/…)
+kotlinx-coroutines-play-services = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-play-services", version.ref = "coroutines" } # await() for ML Kit Tasks
 
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 json = { group = "org.json", name = "json", version = "20240303" } # real org.json for JVM unit tests
