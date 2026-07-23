@@ -56,7 +56,9 @@ class DeviceOcrRealizer @Inject constructor(
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
             val text = runCatching { recognizer.recognize(input) }.getOrDefault("")
-            if (text.isBlank()) {
+            if (text.isBlank() || looksLikeOcrGarbage(text)) {
+                // Blank OR gibberish (Tesseract on a photographed document) → hand off to the
+                // cloud vision OCR, which reads real-world photos far better.
                 return@withContext ActionResult.Failure("На устройстве текст не распознан", recoverable = true)
             }
             runCatching {
@@ -97,4 +99,19 @@ class CloudOcrRealizer @Inject constructor(
             "Извлеки весь текст с изображения дословно, сохраняя порядок строк. " +
                 "Таблицы оформи в Markdown. Верни только текст, без комментариев."
     }
+}
+
+/**
+ * Tesseract on a photographed document often returns *gibberish* (symbols and isolated 1-2 char
+ * fragments) rather than empty — so the blank-check alone never falls back. This flags that
+ * gibberish by two cheap signals: too few letters among the non-space characters, or almost no real
+ * (4+ letter) words. A false positive just means we use the cloud OCR — better anyway — so this errs
+ * toward flagging.
+ */
+internal fun looksLikeOcrGarbage(text: String): Boolean {
+    val nonSpace = text.count { !it.isWhitespace() }
+    if (nonSpace < 30) return false // too short to judge — let it through
+    val letters = text.count { it.isLetter() }
+    val words = Regex("""\p{L}{4,}""").findAll(text).count()
+    return letters.toDouble() / nonSpace < 0.6 || words < 3
 }
