@@ -65,9 +65,10 @@ private fun sampleBubbles(kind: ObjectKind): List<Bubble> =
 
 /** Intents mirror what the registry derives for that kind (the intent-first surface). */
 private fun sampleIntents(kind: ObjectKind): List<Intent> = when (kind) {
-    ObjectKind.COLLECTION, ObjectKind.ZIP -> listOf(Intent.PREPARE, Intent.SEND)
-    ObjectKind.UNKNOWN -> listOf(Intent.UNDERSTAND, Intent.SEND)
-    else -> listOf(Intent.UNDERSTAND, Intent.PREPARE, Intent.SEND)
+    ObjectKind.COLLECTION -> listOf(Intent.PREPARE, Intent.SEND)
+    ObjectKind.ZIP -> listOf(Intent.PREPARE, Intent.OPEN, Intent.SEND)
+    ObjectKind.UNKNOWN -> listOf(Intent.UNDERSTAND, Intent.OPEN, Intent.SEND)
+    else -> listOf(Intent.UNDERSTAND, Intent.PREPARE, Intent.OPEN, Intent.SEND)
 }
 
 @Preview(name = "Image", showBackground = true)

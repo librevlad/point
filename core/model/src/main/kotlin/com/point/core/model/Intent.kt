@@ -10,6 +10,8 @@ package com.point.core.model
  * change what the user sees here.
  *
  * Понять (understand what this object is / says) · Подготовить (prepare a new form
- * of it) · Отправить (send it onward). Declaration order is display order.
+ * of it) · Открыть (open/view it in another app) · Отправить (send it onward, i.e.
+ * share/save out). Open is deliberately its own goal — viewing here is not sending
+ * away. Declaration order is display order.
  */
-enum class Intent { UNDERSTAND, PREPARE, SEND }
+enum class Intent { UNDERSTAND, PREPARE, OPEN, SEND }
