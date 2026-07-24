@@ -34,6 +34,8 @@ import com.point.executors.MergePdfRealizer
 import com.point.executors.CloudOcrCapability
 import com.point.executors.CloudOcrDirectRealizer
 import com.point.executors.CloudOcrRealizer
+import com.point.executors.CutoutCapability
+import com.point.executors.CutoutRealizer
 import com.point.executors.DeviceOcrRealizer
 import com.point.executors.OcrCapability
 import com.point.executors.OfficeCapability
@@ -112,6 +114,7 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun excelCap(c: ExcelCapability): Capability
     @Binds @IntoSet abstract fun qrCap(c: QrCapability): Capability
     @Binds @IntoSet abstract fun scanCap(c: ScanCapability): Capability
+    @Binds @IntoSet abstract fun cutoutCap(c: CutoutCapability): Capability
     @Binds @IntoSet abstract fun ocrCap(c: OcrCapability): Capability
     @Binds @IntoSet abstract fun cloudOcrCap(c: CloudOcrCapability): Capability
     @Binds @IntoSet abstract fun aiCap(c: AiCapability): Capability
@@ -141,6 +144,7 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun excelR(r: ExcelRealizer): Realizer
     @Binds @IntoSet abstract fun qrR(r: QrRealizer): Realizer
     @Binds @IntoSet abstract fun scanR(r: ScanRealizer): Realizer
+    @Binds @IntoSet abstract fun cutoutR(r: CutoutRealizer): Realizer
     // OCR has two realizers behind one capability — the Resolver ranks device before
     // cloud and chains them (device recognises nothing -> cloud). Roadmap #1 in prod.
     @Binds @IntoSet abstract fun deviceOcrR(r: DeviceOcrRealizer): Realizer

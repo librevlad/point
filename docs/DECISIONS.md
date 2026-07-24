@@ -804,3 +804,15 @@ AI-генерируемые: мгновенно, без сети и без LLM �
 Первые честные near-miss: фото → «Перевести»/«Открыть ссылку» (нужно «сначала распознать текст» —
 OCR раскрывает текст/ссылку). Набор растёт вместе с семантическими фичами (#89) — тогда появятся
 «Создать контакт — нужен телефон» и подобные.
+
+### «Убрать фон» — фото → прозрачный PNG (шаг 1 замены фона)
+On-device вырезание объекта через ML Kit **Subject Segmentation** (`play-services-mlkit-subject-
+segmentation`, едет через Play Services; модель качается при первом использовании — сбой деградирует
+в recoverable Failure). Контракт `BackgroundRemover.cutout(path): ScratchRef` (:core:flow) →
+`MlKitBackgroundRemover` (:data, `@Provides` в companion — держим ML Kit AAR вне KSP-агрегации, как
+у entity/OpenCV). `CutoutCapability`/`CutoutRealizer` (:executors) `produces` IMAGE (PNG — **не JPEG**,
+иначе теряется альфа). Edge cases: большое фото — bounded decode; поворот — EXIF-upright
+(`decodeBoundedUpright`, общий с уроком OCR); нет объекта — почти-прозрачный foreground → понятная
+ошибка «Объект на фото не найден». **Замена** фона на произвольную сцену = AI-редактирование, чего
+бесплатные модели надёжно не умеют; честный путь — вырезать + подставить фон, который даёт
+пользователь (свой снимок / цвет / размытие) — отдельный срез.

@@ -87,6 +87,7 @@ dependencies {
     implementation(libs.junrar) // rar archives
     implementation(libs.tesseract4android) // on-device OCR (Tesseract 5, rus+eng)
     implementation(libs.mlkit.entity.extraction) // on-device entity detection (phone/email/…)
+    implementation(libs.mlkit.subject.segmentation) // on-device subject cutout → transparent PNG
     implementation(libs.kotlinx.coroutines.play.services) // await() for ML Kit Tasks
     implementation(libs.zxing.core) // QR encode (pure Java → BitMatrix → Bitmap)
     implementation(libs.hilt.android)
