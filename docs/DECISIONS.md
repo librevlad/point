@@ -857,3 +857,11 @@ NeedsInput. Генерация произвольной сцены (AI) — вн
 список (Телефоны/Почты/Ссылки/Адреса) новым TEXT-объектом → копировать/поделиться. `formatEntities`
 (pure, тестируемо) + `ExtractAll*` (:executors, `EntityExtractor` + `ObjectStore`). Зажигается на
 TEXT с ≥1 сущностью (HAS_PHONE/EMAIL/URL/ADDRESS).
+
+### «Считать QR» — декод QR с картинки (реверс генерации)
+Скрин/фото с QR → его текст (обычно ссылка) → «Открыть ссылку». Переиспользуем ZXing (уже есть для
+генерации): контракт `QrReader.decode(path): String?` → `ZxingQrReader` (:data, RGBLuminanceSource +
+HybridBinarizer + TRY_HARDER; bounded+EXIF-upright). Пузырёк показываем **только если QR есть** —
+async `QrEnricher` (:data) декодит и ставит `Feature.HAS_QR`, `ReadQrCapability.accepts(HAS_QR)`.
+Результат — TEXT → дальше URL-enricher зажигает «Открыть ссылку». Двойной декод (enricher+realizer)
+— осознанный размен на простоту.

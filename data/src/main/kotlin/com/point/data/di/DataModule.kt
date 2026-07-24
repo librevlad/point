@@ -25,6 +25,7 @@ import com.point.core.flow.PdfRasterizer
 import com.point.core.flow.PdfTextExtractor
 import com.point.core.flow.PrivacyConsent
 import com.point.core.flow.QrEncoder
+import com.point.core.flow.QrReader
 import com.point.core.flow.Sharer
 import com.point.core.flow.SpreadsheetWriter
 import com.point.core.flow.TextRecognizer
@@ -67,6 +68,7 @@ import com.point.data.PdfBoxTextExtractor
 import com.point.data.PdfImageEnricher
 import com.point.data.PrefsPrivacyConsent
 import com.point.data.PrefsUserKeyStore
+import com.point.data.QrEnricher
 import com.point.data.UserKeyLlmClient
 import com.point.data.PdfRendererRasterizer
 import com.point.data.ScratchObjectStore
@@ -74,6 +76,7 @@ import com.point.data.TesseractTextRecognizer
 import com.point.data.TextUrlEnricher
 import com.point.data.VCardEnricher
 import com.point.data.ZxingQrEncoder
+import com.point.data.ZxingQrReader
 import com.point.data.ZipImagesEnricher
 import dagger.Binds
 import dagger.Module
@@ -141,6 +144,9 @@ abstract class DataModule {
     abstract fun imageCompositor(impl: AndroidImageCompositor): ImageCompositor
 
     @Binds
+    abstract fun qrReader(impl: ZxingQrReader): QrReader
+
+    @Binds
     abstract fun officeTextExtractor(impl: OoxmlOfficeTextExtractor): OfficeTextExtractor
 
     @Binds
@@ -182,6 +188,9 @@ abstract class DataModule {
 
     @Binds @IntoSet
     abstract fun vcardEnricher(e: VCardEnricher): Enricher
+
+    @Binds @IntoSet
+    abstract fun qrEnricher(e: QrEnricher): Enricher
 
     @Binds @IntoSet
     abstract fun zipImagesEnricher(e: ZipImagesEnricher): Enricher

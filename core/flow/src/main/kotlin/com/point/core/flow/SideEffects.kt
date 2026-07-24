@@ -106,6 +106,11 @@ interface BackgroundRemover {
     suspend fun cutout(imagePath: String): ScratchRef
 }
 
+/** Decodes a QR code from an image (on-device). @return its text, or null if the image has no QR. */
+interface QrReader {
+    suspend fun decode(imagePath: String): String?
+}
+
 /** On-device image compositing — the pieces for replacing / blurring a background. */
 interface ImageCompositor {
     /** Draw [subjectPath] (a transparent-PNG cutout) over [backgroundPath] (centre-cropped to fill
