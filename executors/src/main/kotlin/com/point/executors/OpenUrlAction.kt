@@ -29,6 +29,9 @@ class OpenUrlCapability @Inject constructor() : Capability {
         state.kind == ObjectKind.URL || state.has(Feature.HAS_URL)
     override fun produces(state: ObjectState) = state // terminal
     override fun intents(state: ObjectState) = setOf(Intent.OPEN)
+    // A link inside a screenshot is one OCR away — surface it as "почти доступно" (#97).
+    override fun missing(state: ObjectState) =
+        if (state.kind == ObjectKind.IMAGE) "сначала распознайте текст" else null
 
     companion object { val ID = CapabilityId("open-url") }
 }

@@ -529,7 +529,10 @@ class FlowViewModel @Inject constructor(
     }
 
     private fun pushFrame(obj: PointObject, via: CapabilityId? = null, viaTitle: String? = null) {
-        val frame = FlowFrame(obj, registry.bubblesFor(obj.state), via, viaTitle)
+        val frame = FlowFrame(
+            obj, registry.bubblesFor(obj.state), via, viaTitle,
+            latent = registry.latentBubblesFor(obj.state),
+        )
         stack.addLast(frame)
         _ui.update {
             it.copy(
@@ -614,7 +617,11 @@ class FlowViewModel @Inject constructor(
             if (enrichedState == top.obj.state) return@launch
 
             val enrichedObj = top.obj.copy(state = enrichedState)
-            val refreshed = top.copy(obj = enrichedObj, bubbles = registry.bubblesFor(enrichedState))
+            val refreshed = top.copy(
+                obj = enrichedObj,
+                bubbles = registry.bubblesFor(enrichedState),
+                latent = registry.latentBubblesFor(enrichedState),
+            )
             stack[topIndex] = refreshed
             _ui.update {
                 if (it.frame === top) it.copy(frame = refreshed, intents = registry.intentsFor(enrichedState)) else it

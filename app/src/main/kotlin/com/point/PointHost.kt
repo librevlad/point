@@ -128,6 +128,7 @@ fun PointHost(
                     items = current.items,
                     onItem = onItem,
                     textPreview = current.textPreview,
+                    latent = current.latent,
                     intents = state.intents,
                     selectedIntent = state.selectedIntent,
                     onIntent = onIntent,

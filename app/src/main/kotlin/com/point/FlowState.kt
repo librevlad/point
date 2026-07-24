@@ -7,6 +7,7 @@ import com.point.core.model.Bubble
 import com.point.core.model.CapabilityId
 import com.point.core.model.FavoriteChain
 import com.point.core.model.Intent
+import com.point.core.model.LatentBubble
 import com.point.core.model.PointObject
 import com.point.core.model.Preview
 
@@ -24,6 +25,8 @@ data class FlowFrame(
     val items: List<PointObject> = emptyList(),
     /** For a TEXT object: a bounded preview of its content, loaded async. */
     val textPreview: String? = null,
+    /** Almost-applicable capabilities (#97): shown dimmed with what each still needs. */
+    val latent: List<LatentBubble> = emptyList(),
 )
 
 /** Immutable UI state rendered by the host. */

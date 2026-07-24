@@ -5,6 +5,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import com.point.core.model.Bubble
 import com.point.core.model.CapabilityId
 import com.point.core.model.Intent
+import com.point.core.model.LatentBubble
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
@@ -168,7 +169,17 @@ private fun PreviewMarkdown() = PointTheme(darkTheme = true) {
 @Composable
 private fun PreviewImageDark() = PointTheme(darkTheme = true) {
     val obj = sampleObject(ObjectKind.IMAGE, "image/png", "screenshot.png")
-    FirstScreen(obj = obj, bubbles = sampleBubbles(ObjectKind.IMAGE), onBubble = {}, intents = sampleIntents(ObjectKind.IMAGE))
+    FirstScreen(
+        obj = obj,
+        bubbles = sampleBubbles(ObjectKind.IMAGE),
+        onBubble = {},
+        intents = sampleIntents(ObjectKind.IMAGE),
+        // Negotiation (#97): translate/open-url are one OCR away.
+        latent = listOf(
+            LatentBubble("translate", "Перевести", "сначала распознайте текст"),
+            LatentBubble("link", "Открыть ссылку", "сначала распознайте текст"),
+        ),
+    )
 }
 
 @Preview(name = "AI · needs input", showBackground = true)

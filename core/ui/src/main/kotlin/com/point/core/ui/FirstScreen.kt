@@ -56,6 +56,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.point.core.model.Bubble
+import com.point.core.model.LatentBubble
 import com.point.core.model.FavoriteChain
 import com.point.core.model.Intent
 import com.point.core.model.PointObject
@@ -89,6 +90,7 @@ fun FirstScreen(
     items: List<PointObject> = emptyList(),
     onItem: (PointObject) -> Unit = {},
     textPreview: String? = null,
+    latent: List<LatentBubble> = emptyList(),
     intents: List<Intent> = emptyList(),
     selectedIntent: Intent? = null,
     onIntent: (Intent) -> Unit = {},
@@ -155,6 +157,10 @@ fun FirstScreen(
                     }
                 }
             }
+            if (showingIntents && latent.isNotEmpty()) {
+                Spacer(Modifier.height(22.dp))
+                LatentHints(latent)
+            }
         }
 
         if (inputPrompt == null && (favorites.isNotEmpty() || canSaveChain)) {
@@ -163,6 +169,42 @@ fun FirstScreen(
         }
 
         MessageBanner(message)
+    }
+}
+
+/**
+ * "Почти доступно" (#97 negotiation): capabilities one signal away, dimmed, each with what it still
+ * needs. Informational — it teaches the object's latent powers without crowding the real actions.
+ */
+@Composable
+private fun LatentHints(latent: List<LatentBubble>) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(
+            text = "Почти доступно",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f),
+        )
+        latent.forEach { hint ->
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Icon(
+                    imageVector = bubbleIcon(hint.icon),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                    modifier = Modifier.size(18.dp),
+                )
+                Text(
+                    text = "${hint.title} · ${hint.missing}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                )
+            }
+        }
     }
 }
 
