@@ -87,6 +87,12 @@ interface QrEncoder {
     suspend fun encode(text: String): ScratchRef
 }
 
+/** Cuts the main subject out of a photo (on-device segmentation), returning a transparent-background
+ *  PNG in the scratch store — the basis for "remove/replace background". Throws if no subject is found. */
+interface BackgroundRemover {
+    suspend fun cutout(imagePath: String): ScratchRef
+}
+
 /** Renders each page of a PDF to an image in a fresh scratch directory. */
 interface PdfRasterizer {
     /** @return the scratch directory holding the page images (page-001.jpg …),

@@ -3,6 +3,7 @@ package com.point.data.di
 import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
 import com.point.core.flow.AppLauncher
+import com.point.core.flow.BackgroundRemover
 import com.point.core.flow.CalendarInserter
 import com.point.core.flow.CapabilityUsage
 import com.point.core.flow.Enricher
@@ -48,6 +49,7 @@ import com.point.data.GeminiLlmClient
 import com.point.data.HttpJson
 import com.point.data.UrlConnectionHttpJson
 import com.point.data.MediaStoreExporter
+import com.point.data.MlKitBackgroundRemover
 import com.point.data.OoxmlOfficeTextExtractor
 import com.point.data.OoxmlSpreadsheetWriter
 import com.point.data.BuildConfig
@@ -182,6 +184,12 @@ abstract class DataModule {
         @Provides
         @Singleton
         fun entityExtractor(): EntityExtractor = MlKitEntityExtractor()
+
+        /** On-device subject cutout (ML Kit). @Provides (not @Binds) keeps the ML Kit AAR types out
+         *  of Dagger's KSP aggregation (same fix as OpenCV / the entity extractor). */
+        @Provides
+        @Singleton
+        fun backgroundRemover(store: ObjectStore): BackgroundRemover = MlKitBackgroundRemover(store)
 
         /**
          * The AI fallback chain — "all free providers, max": every OpenAI-compatible
