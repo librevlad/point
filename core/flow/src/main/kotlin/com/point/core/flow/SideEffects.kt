@@ -93,6 +93,16 @@ interface BackgroundRemover {
     suspend fun cutout(imagePath: String): ScratchRef
 }
 
+/** On-device image compositing — the pieces for replacing / blurring a background. */
+interface ImageCompositor {
+    /** Draw [subjectPath] (a transparent-PNG cutout) over [backgroundPath] (centre-cropped to fill
+     *  the subject's frame). @return the composited PNG in scratch. */
+    suspend fun composite(subjectPath: String, backgroundPath: String): ScratchRef
+
+    /** @return a heavily-blurred copy of [imagePath] in scratch — a background for the portrait effect. */
+    suspend fun blur(imagePath: String): ScratchRef
+}
+
 /** Renders each page of a PDF to an image in a fresh scratch directory. */
 interface PdfRasterizer {
     /** @return the scratch directory holding the page images (page-001.jpg …),

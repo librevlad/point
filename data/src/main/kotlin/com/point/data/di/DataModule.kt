@@ -13,6 +13,7 @@ import com.point.core.flow.Entitlements
 import com.point.core.flow.Exporter
 import com.point.core.flow.FavoritesStore
 import com.point.core.flow.HistoryStore
+import com.point.core.flow.ImageCompositor
 import com.point.core.flow.LlmClient
 import com.point.core.flow.ArchiveExtractor
 import com.point.core.flow.ObjectClassifier
@@ -31,6 +32,7 @@ import com.point.core.flow.UserKeyStore
 import com.point.core.flow.Viewer
 import com.point.data.AndroidAppLauncher
 import com.point.data.AndroidCalendarInserter
+import com.point.data.AndroidImageCompositor
 import com.point.data.AndroidSharer
 import com.point.data.AndroidUrlOpener
 import com.point.data.AndroidViewer
@@ -124,6 +126,9 @@ abstract class DataModule {
 
     @Binds
     abstract fun qrEncoder(impl: ZxingQrEncoder): QrEncoder
+
+    @Binds
+    abstract fun imageCompositor(impl: AndroidImageCompositor): ImageCompositor
 
     @Binds
     abstract fun officeTextExtractor(impl: OoxmlOfficeTextExtractor): OfficeTextExtractor

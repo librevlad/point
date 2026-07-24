@@ -21,6 +21,8 @@ import com.point.executors.SmsCapability
 import com.point.executors.SmsRealizer
 import com.point.executors.ArchiveCapability
 import com.point.executors.ArchiveRealizer
+import com.point.executors.BlurBgCapability
+import com.point.executors.BlurBgRealizer
 import com.point.executors.DefaultBubblePolicy
 import com.point.executors.DefaultCapabilityRegistry
 import com.point.executors.DefaultResolver
@@ -115,6 +117,7 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun qrCap(c: QrCapability): Capability
     @Binds @IntoSet abstract fun scanCap(c: ScanCapability): Capability
     @Binds @IntoSet abstract fun cutoutCap(c: CutoutCapability): Capability
+    @Binds @IntoSet abstract fun blurBgCap(c: BlurBgCapability): Capability
     @Binds @IntoSet abstract fun ocrCap(c: OcrCapability): Capability
     @Binds @IntoSet abstract fun cloudOcrCap(c: CloudOcrCapability): Capability
     @Binds @IntoSet abstract fun aiCap(c: AiCapability): Capability
@@ -145,6 +148,7 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun qrR(r: QrRealizer): Realizer
     @Binds @IntoSet abstract fun scanR(r: ScanRealizer): Realizer
     @Binds @IntoSet abstract fun cutoutR(r: CutoutRealizer): Realizer
+    @Binds @IntoSet abstract fun blurBgR(r: BlurBgRealizer): Realizer
     // OCR has two realizers behind one capability — the Resolver ranks device before
     // cloud and chains them (device recognises nothing -> cloud). Roadmap #1 in prod.
     @Binds @IntoSet abstract fun deviceOcrR(r: DeviceOcrRealizer): Realizer
