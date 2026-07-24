@@ -24,4 +24,11 @@ sealed interface ActionResult {
      * typing.
      */
     data class NeedsInput(val prompt: String, val suggestions: List<String> = emptyList()) : ActionResult
+
+    /**
+     * The executor needs the user to pick an **image** before it can proceed (e.g. a background to
+     * composite onto). The host opens the system photo picker; the chosen URI is fed back as the
+     * step's amendment.
+     */
+    data class NeedsImage(val prompt: String) : ActionResult
 }

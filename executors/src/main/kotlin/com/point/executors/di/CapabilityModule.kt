@@ -50,6 +50,8 @@ import com.point.executors.PagesCapability
 import com.point.executors.PagesRealizer
 import com.point.executors.PdfCapability
 import com.point.executors.PdfRealizer
+import com.point.executors.ReplaceBgCapability
+import com.point.executors.ReplaceBgRealizer
 import com.point.executors.QrCapability
 import com.point.executors.QrRealizer
 import com.point.executors.ScanCapability
@@ -118,6 +120,7 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun scanCap(c: ScanCapability): Capability
     @Binds @IntoSet abstract fun cutoutCap(c: CutoutCapability): Capability
     @Binds @IntoSet abstract fun blurBgCap(c: BlurBgCapability): Capability
+    @Binds @IntoSet abstract fun replaceBgCap(c: ReplaceBgCapability): Capability
     @Binds @IntoSet abstract fun ocrCap(c: OcrCapability): Capability
     @Binds @IntoSet abstract fun cloudOcrCap(c: CloudOcrCapability): Capability
     @Binds @IntoSet abstract fun aiCap(c: AiCapability): Capability
@@ -149,6 +152,7 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun scanR(r: ScanRealizer): Realizer
     @Binds @IntoSet abstract fun cutoutR(r: CutoutRealizer): Realizer
     @Binds @IntoSet abstract fun blurBgR(r: BlurBgRealizer): Realizer
+    @Binds @IntoSet abstract fun replaceBgR(r: ReplaceBgRealizer): Realizer
     // OCR has two realizers behind one capability — the Resolver ranks device before
     // cloud and chains them (device recognises nothing -> cloud). Roadmap #1 in prod.
     @Binds @IntoSet abstract fun deviceOcrR(r: DeviceOcrRealizer): Realizer

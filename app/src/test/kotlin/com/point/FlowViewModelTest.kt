@@ -195,6 +195,19 @@ class FlowViewModelTest {
         assertTrue(vm.ui.value.inputSuggestions.isEmpty())
     }
 
+    @Test fun `NeedsImage raises the picker flag, cleared when the picked image is submitted`() = runTest(dispatcher) {
+        resolver.result = ActionResult.NeedsImage("Выберите фон")
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        vm.onBubble(bubble()); advanceUntilIdle()
+        assertEquals("Выберите фон", vm.ui.value.needsImage)
+
+        resolver.result = ActionResult.Done("готово")
+        vm.submitAmendment("content://bg/1"); advanceUntilIdle()
+        assertNull(vm.ui.value.needsImage)
+        assertEquals("content://bg/1", resolver.lastAmendment) // picked URI fed back as the amendment
+    }
+
     @Test fun `the busy label is the action title while it runs`() = runTest(dispatcher) {
         val vm = vm()
         vm.onShared("uri", "image/png"); advanceUntilIdle()
