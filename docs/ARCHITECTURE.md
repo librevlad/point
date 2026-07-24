@@ -424,7 +424,27 @@ Robolectric. Это практический выхлоп принципа «max
   одним реализатором — напрямую, без обёртки. Интеграционный `OcrChainTest`. См.
   `DECISIONS.md`.
 
-**Отложено:** OpenCV-скан-пак (авто-геометрия), `IS_IMAGE_PDF`/`HAS_TEXT`-
-энричер для PDF, персист стека на process death; шрифты Manrope/Unbounded и
-отдельные дизайн-экраны (AI / «Ещё» / результат / поток); проверка OCR на
-устройстве.
+**Большая автономная сессия — «правая кнопка для всего» + трансформеры + фон (много срезов, все на CI-зелёном, проверены на эмуляторе):**
+- **Триггеры/вход**: `ACTION_PROCESS_TEXT` (выделил текст в любом приложении → Point),
+  чтение буфера при открытии (`onWindowFocusChanged`, Android 10+), device-app-picker
+  inline (`AppLauncher.queryIntentActivities`), синтез совместимости через одну
+  трансформу (`AppTarget.via`, #79.1).
+- **Сущности → действия** (`EntityExtractor` ML Kit, модель по скрипту RU/EN): Позвонить/
+  Сообщение/Написать письмо, Открыть на карте (`geo:`), Создать событие
+  (`CalendarInserter`), Скопировать карту; vCard → «Добавить в контакты» (`Viewer`),
+  «Собрать данные» (все сущности → список), «Скопировать» (`Clipboard`).
+- **Трансформеры (#85)**: text/url → **QR** (ZXing), image → **Считать QR** (обратно, через
+  `QrEnricher`/`HAS_QR`); фичи `HAS_ADDRESS/DATE/CARD/QR/VCARD`.
+- **Фон (ML Kit Subject Segmentation)**: «Убрать фон» (→ прозрачный PNG), «Размыть фон»
+  (портретный эффект), «Заменить фон» (пикер второй картинки через
+  `rememberLauncherForActivityResult` + `ActionResult.NeedsImage`); общий `ImageCompositor`.
+- **Документы**: PDF/текст → **Word** (`.docx`, hand-rolled OOXML, #61).
+- **UX-швы**: **Preview** перед действием (`Realizer.preview` → лист-подтверждение, #97),
+  **Negotiation** «почти доступно» (`Capability.missing` → latent-пузырьки, #97), **3 AI-
+  промпта** чипами (`NeedsInput.suggestions`, #86), markdown-рендер AI-ответов,
+  EXIF-разворот перед OCR (корень «мусора»), «Распознать в облаке», авто-язык перевода.
+- **Бренд**: шрифты Manrope (текст) + Unbounded (дисплей) через `FontVariation` (#13).
+
+**Отложено:** OpenCV-скан-пак (авто-геометрия), `IS_IMAGE_PDF`/`HAS_TEXT`-энричер для PDF,
+персист стека на process death; составной «набор» объектов (#96) и семантические фичи
+`IS_MEETING/…` (#89) — под дизайн; выравнивание нативных либ по 16 КБ для релиза (#68).
