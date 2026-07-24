@@ -22,6 +22,9 @@ enum class Feature {
     /** The text is a vCard (.vcf contact) — offer "add to contacts", not raw-text actions. */
     HAS_VCARD,
 
+    /** The image contains a QR code — offer to read it (found by async peek). */
+    HAS_QR,
+
     /** Size above the async-enrichment threshold (e.g. a 200 MB zip). */
     LARGE,
 }

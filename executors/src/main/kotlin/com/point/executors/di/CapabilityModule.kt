@@ -60,6 +60,8 @@ import com.point.executors.ReplaceBgCapability
 import com.point.executors.ReplaceBgRealizer
 import com.point.executors.QrCapability
 import com.point.executors.QrRealizer
+import com.point.executors.ReadQrCapability
+import com.point.executors.ReadQrRealizer
 import com.point.executors.ScanCapability
 import com.point.executors.ScanRealizer
 import com.point.executors.ScanPdfCapability
@@ -129,6 +131,7 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun excelCap(c: ExcelCapability): Capability
     @Binds @IntoSet abstract fun wordCap(c: WordCapability): Capability
     @Binds @IntoSet abstract fun qrCap(c: QrCapability): Capability
+    @Binds @IntoSet abstract fun readQrCap(c: ReadQrCapability): Capability
     @Binds @IntoSet abstract fun scanCap(c: ScanCapability): Capability
     @Binds @IntoSet abstract fun cutoutCap(c: CutoutCapability): Capability
     @Binds @IntoSet abstract fun blurBgCap(c: BlurBgCapability): Capability
@@ -165,6 +168,7 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun excelR(r: ExcelRealizer): Realizer
     @Binds @IntoSet abstract fun wordR(r: WordRealizer): Realizer
     @Binds @IntoSet abstract fun qrR(r: QrRealizer): Realizer
+    @Binds @IntoSet abstract fun readQrR(r: ReadQrRealizer): Realizer
     @Binds @IntoSet abstract fun scanR(r: ScanRealizer): Realizer
     @Binds @IntoSet abstract fun cutoutR(r: CutoutRealizer): Realizer
     @Binds @IntoSet abstract fun blurBgR(r: BlurBgRealizer): Realizer
