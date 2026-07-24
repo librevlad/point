@@ -80,6 +80,13 @@ interface SpreadsheetWriter {
     suspend fun write(rows: List<List<String>>): ScratchRef
 }
 
+/** Writes paragraphs to a minimal, editable .docx in the scratch store — a hand-rolled OOXML
+ *  wordprocessing package (no Apache POI), mirroring [SpreadsheetWriter]. */
+interface DocxWriter {
+    /** @return the scratch .docx holding [paragraphs], one `<w:p>` each. */
+    suspend fun write(paragraphs: List<String>): ScratchRef
+}
+
 /** Encodes text into a QR-code PNG in the scratch store — a pure on-device type transform
  *  (text/url → image) that opens the whole image action set (save / share / open). */
 interface QrEncoder {
