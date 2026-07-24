@@ -836,3 +836,11 @@ NeedsInput). `ReplaceBgRealizer`: `amendment==null` → NeedsImage; иначе `
 даёт read-grant) → `cutout` объекта → `composite` на фон. VM чистит `needsImage` в
 submit/cancel/pushFrame/back; replay цепочки не может авто-выбрать картинку → прерывается как
 NeedsInput. Генерация произвольной сцены (AI) — вне охвата, бесплатные модели не тянут.
+
+### #61 — PDF/текст → Word (.docx)
+Редактируемый `.docx` из PDF (или текста). Контракт `DocxWriter.write(paragraphs): ScratchRef`
+(:core:flow) → `OoxmlDocxWriter` (:data): руками собранный OOXML-ZIP из трёх частей
+(`[Content_Types].xml`, `_rels/.rels`, `word/document.xml`), один `<w:p>` на строку — без Apache POI,
+как у `OoxmlSpreadsheetWriter`. `Word*` (:executors): PDF → `PdfTextExtractor`, TEXT → файл; пусто
+(скан без текст-слоя) → recoverable Failure с подсказкой распознать. Результат — OFFICE-объект
+(docx-mime), дальше share/save/open/в-PDF. Валидность OOXML покрыта JVM-тестом (ZIP-части + экранизация).

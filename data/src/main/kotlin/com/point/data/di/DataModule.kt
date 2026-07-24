@@ -9,6 +9,7 @@ import com.point.core.flow.CapabilityUsage
 import com.point.core.flow.Enricher
 import com.point.core.flow.Enrichment
 import com.point.core.flow.EntityExtractor
+import com.point.core.flow.DocxWriter
 import com.point.core.flow.Entitlements
 import com.point.core.flow.Exporter
 import com.point.core.flow.FavoritesStore
@@ -52,6 +53,7 @@ import com.point.data.HttpJson
 import com.point.data.UrlConnectionHttpJson
 import com.point.data.MediaStoreExporter
 import com.point.data.MlKitBackgroundRemover
+import com.point.data.OoxmlDocxWriter
 import com.point.data.OoxmlOfficeTextExtractor
 import com.point.data.OoxmlSpreadsheetWriter
 import com.point.data.BuildConfig
@@ -123,6 +125,9 @@ abstract class DataModule {
 
     @Binds
     abstract fun spreadsheetWriter(impl: OoxmlSpreadsheetWriter): SpreadsheetWriter
+
+    @Binds
+    abstract fun docxWriter(impl: OoxmlDocxWriter): DocxWriter
 
     @Binds
     abstract fun qrEncoder(impl: ZxingQrEncoder): QrEncoder

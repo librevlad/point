@@ -68,6 +68,8 @@ import com.point.executors.ShareCapability
 import com.point.executors.ShareRealizer
 import com.point.executors.TranslateCapability
 import com.point.executors.TranslateRealizer
+import com.point.executors.WordCapability
+import com.point.executors.WordRealizer
 import com.point.executors.VCardCapability
 import com.point.executors.VCardRealizer
 import com.point.core.flow.ObjectStore
@@ -116,6 +118,7 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun archiveCap(c: ArchiveCapability): Capability
     @Binds @IntoSet abstract fun translateCap(c: TranslateCapability): Capability
     @Binds @IntoSet abstract fun excelCap(c: ExcelCapability): Capability
+    @Binds @IntoSet abstract fun wordCap(c: WordCapability): Capability
     @Binds @IntoSet abstract fun qrCap(c: QrCapability): Capability
     @Binds @IntoSet abstract fun scanCap(c: ScanCapability): Capability
     @Binds @IntoSet abstract fun cutoutCap(c: CutoutCapability): Capability
@@ -148,6 +151,7 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun archiveR(r: ArchiveRealizer): Realizer
     @Binds @IntoSet abstract fun translateR(r: TranslateRealizer): Realizer
     @Binds @IntoSet abstract fun excelR(r: ExcelRealizer): Realizer
+    @Binds @IntoSet abstract fun wordR(r: WordRealizer): Realizer
     @Binds @IntoSet abstract fun qrR(r: QrRealizer): Realizer
     @Binds @IntoSet abstract fun scanR(r: ScanRealizer): Realizer
     @Binds @IntoSet abstract fun cutoutR(r: CutoutRealizer): Realizer
