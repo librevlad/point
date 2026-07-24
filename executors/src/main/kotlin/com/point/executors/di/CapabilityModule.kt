@@ -36,6 +36,10 @@ import com.point.executors.MergePdfRealizer
 import com.point.executors.CloudOcrCapability
 import com.point.executors.CloudOcrDirectRealizer
 import com.point.executors.CloudOcrRealizer
+import com.point.executors.CopyCapability
+import com.point.executors.CopyCardCapability
+import com.point.executors.CopyCardRealizer
+import com.point.executors.CopyRealizer
 import com.point.executors.CutoutCapability
 import com.point.executors.CutoutRealizer
 import com.point.executors.DeviceOcrRealizer
@@ -110,7 +114,9 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun emailCap(c: EmailCapability): Capability
     @Binds @IntoSet abstract fun mapCap(c: MapCapability): Capability
     @Binds @IntoSet abstract fun eventCap(c: EventCapability): Capability
+    @Binds @IntoSet abstract fun copyCardCap(c: CopyCardCapability): Capability
     @Binds @IntoSet abstract fun vcardCap(c: VCardCapability): Capability
+    @Binds @IntoSet abstract fun copyCap(c: CopyCapability): Capability
     @Binds @IntoSet abstract fun imageCap(c: ImageCapability): Capability
     @Binds @IntoSet abstract fun pdfCap(c: PdfCapability): Capability
     @Binds @IntoSet abstract fun pagesCap(c: PagesCapability): Capability
@@ -143,7 +149,9 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun emailR(r: EmailRealizer): Realizer
     @Binds @IntoSet abstract fun mapR(r: MapRealizer): Realizer
     @Binds @IntoSet abstract fun eventR(r: EventRealizer): Realizer
+    @Binds @IntoSet abstract fun copyCardR(r: CopyCardRealizer): Realizer
     @Binds @IntoSet abstract fun vcardR(r: VCardRealizer): Realizer
+    @Binds @IntoSet abstract fun copyR(r: CopyRealizer): Realizer
     @Binds @IntoSet abstract fun imageR(r: ImageRealizer): Realizer
     @Binds @IntoSet abstract fun pdfR(r: PdfRealizer): Realizer
     @Binds @IntoSet abstract fun pagesR(r: PagesRealizer): Realizer

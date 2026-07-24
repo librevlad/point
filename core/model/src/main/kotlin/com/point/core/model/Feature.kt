@@ -17,6 +17,7 @@ enum class Feature {
     HAS_EMAIL,
     HAS_ADDRESS,
     HAS_DATE,
+    HAS_CARD,
 
     /** The text is a vCard (.vcf contact) — offer "add to contacts", not raw-text actions. */
     HAS_VCARD,
