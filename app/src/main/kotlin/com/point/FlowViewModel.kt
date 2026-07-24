@@ -256,14 +256,17 @@ class FlowViewModel @Inject constructor(
         val top = stack.lastOrNull()?.obj ?: return
         pendingBubble = null
         _ui.update {
-            it.copy(busy = bubble.title, busyNetwork = isCloud(bubble.capabilityId), inputPrompt = null, inputSuggestions = emptyList())
+            it.copy(
+                busy = bubble.title, busyNetwork = isCloud(bubble.capabilityId),
+                inputPrompt = null, inputSuggestions = emptyList(), needsImage = null,
+            )
         }
         dispatch(bubble) { resolver.realizerFor(bubble.capabilityId).perform(top, text) }
     }
 
     fun cancelInput() {
         pendingBubble = null
-        _ui.update { it.copy(inputPrompt = null, inputSuggestions = emptyList(), busy = null) }
+        _ui.update { it.copy(inputPrompt = null, inputSuggestions = emptyList(), needsImage = null, busy = null) }
     }
 
     // --- Bring-your-own AI key (#19). Summoned on demand or from the Home gear. ---
@@ -442,7 +445,7 @@ class FlowViewModel @Inject constructor(
                         _ui.update { it.copy(busy = null, message = "Цепочка прервана: ${result.reason}") }
                         return@launch
                     }
-                    is ActionResult.NeedsInput -> {
+                    is ActionResult.NeedsInput, is ActionResult.NeedsImage -> {
                         _ui.update { it.copy(busy = null, message = "Цепочка требует ввода — прервана") }
                         return@launch
                     }
@@ -477,6 +480,12 @@ class FlowViewModel @Inject constructor(
                 pendingBubble = bubble
                 _ui.update { it.copy(busy = null, inputPrompt = result.prompt, inputSuggestions = result.suggestions) }
             }
+            is ActionResult.NeedsImage -> {
+                // Same pending-bubble mechanism as NeedsInput; the picked image URI is fed back
+                // through submitAmendment (the host opens the photo picker on this flag).
+                pendingBubble = bubble
+                _ui.update { it.copy(busy = null, needsImage = result.prompt) }
+            }
         }
     }
 
@@ -497,7 +506,7 @@ class FlowViewModel @Inject constructor(
             closeKeySettings()
             return true
         }
-        if (_ui.value.inputPrompt != null) {
+        if (_ui.value.inputPrompt != null || _ui.value.needsImage != null) {
             cancelInput()
             return true
         }
@@ -537,7 +546,8 @@ class FlowViewModel @Inject constructor(
         _ui.update {
             it.copy(
                 busy = null, frame = frame, message = null, inputPrompt = null, inputSuggestions = emptyList(),
-                preview = null, intents = registry.intentsFor(obj.state), selectedIntent = null, intentBubbles = emptyList(),
+                needsImage = null, preview = null,
+                intents = registry.intentsFor(obj.state), selectedIntent = null, intentBubbles = emptyList(),
             )
         }
         refreshFavorites()

@@ -44,6 +44,8 @@ data class FlowUiState(
     val inputPrompt: String? = null,
     /** Ready-made answers for [inputPrompt] — the 3 likely AI prompts to tap instead of typing (#86). */
     val inputSuggestions: List<String> = emptyList(),
+    /** Non-null while a capability awaits a picked image (NeedsImage) — the host opens the photo picker. */
+    val needsImage: String? = null,
     /** Saved chains applicable to the current object (first step accepts it). */
     val favorites: List<FavoriteChain> = emptyList(),
     /** True when the current flow has ≥1 applied step that can be saved. */

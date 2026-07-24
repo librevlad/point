@@ -1,5 +1,8 @@
 package com.point
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -70,6 +73,16 @@ fun PointHost(
     onCancelPreview: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
+    // The system photo picker for "Заменить фон" (#97): registered here so no Activity needs to
+    // change; the picked image URI feeds back through the normal amendment channel.
+    val pickBackground = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) onSubmitInput(uri.toString()) else onCancelInput()
+    }
+    LaunchedEffect(state.needsImage) {
+        if (state.needsImage != null) {
+            pickBackground.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+        }
+    }
     Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         val frame = state.frame
         when {
@@ -91,6 +104,21 @@ fun PointHost(
                 onConfirm = onConfirmPreview,
                 onCancel = onCancelPreview,
             )
+
+            // Waiting on the photo picker (opened by the LaunchedEffect above).
+            state.needsImage != null -> Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.padding(24.dp),
+            ) {
+                Text(
+                    text = state.needsImage,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onBackground,
+                )
+                Spacer(Modifier.height(16.dp))
+                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary, strokeWidth = 4.dp)
+            }
 
             state.keyScreen != null -> KeyScreen(
                 config = state.keyScreen,
