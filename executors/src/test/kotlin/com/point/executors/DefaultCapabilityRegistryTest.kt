@@ -108,6 +108,21 @@ class DefaultCapabilityRegistryTest {
         assertEquals(bubble.capabilityId, registry.byId(bubble.capabilityId).id)
     }
 
+    // --- Negotiation: "почти доступно" (#97) ---
+
+    @Test
+    fun `an image surfaces translate and open-url as almost-available (needs OCR first)`() {
+        val latent = registry.latentBubblesFor(ObjectState(ObjectKind.IMAGE))
+        assertTrue("Перевести" in latent.map { it.title })
+        assertTrue(latent.all { it.missing.contains("распознайте текст") })
+        assertTrue("capped so it informs, not clutters", latent.size <= 2)
+    }
+
+    @Test
+    fun `text has no almost-available translate — it already accepts`() {
+        assertFalse("Перевести" in registry.latentBubblesFor(ObjectState(ObjectKind.TEXT)).map { it.title })
+    }
+
     // --- Intent layer (Object → Intent → … → Object) ---
 
     @Test

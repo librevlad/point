@@ -36,6 +36,9 @@ class TranslateCapability @Inject constructor() : Capability {
     override fun accepts(state: ObjectState) =
         state.kind in setOf(ObjectKind.TEXT, ObjectKind.PDF)
     override fun produces(state: ObjectState) = ObjectState(ObjectKind.TEXT)
+    // A photo's text is one OCR away — surface translate as "почти доступно" (#97).
+    override fun missing(state: ObjectState) =
+        if (state.kind == ObjectKind.IMAGE) "сначала распознайте текст" else null
 
     companion object { val ID = CapabilityId("translate") }
 }

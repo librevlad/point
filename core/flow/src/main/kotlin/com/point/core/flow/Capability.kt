@@ -60,4 +60,13 @@ interface Capability {
             else -> setOf(Intent.PREPARE)
         }
     }
+
+    /**
+     * Capability negotiation (#97). When this capability does **not** [accepts] [state] but is one
+     * concrete signal away, return a short phrase for **what's missing** (e.g. "нужен номер",
+     * "сначала распознайте текст"); the UI shows it as a dimmed "почти доступно" hint so the user
+     * learns the power exists and how to unlock it. Return null (default) to stay hidden — only
+     * declare a hint where it is genuinely close, never for every unrelated object (no clutter).
+     */
+    fun missing(state: ObjectState): String? = null
 }

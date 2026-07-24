@@ -582,6 +582,7 @@ private class FakeRegistry(
         caps.keys.map { Bubble("x", "Action ${it.value}", it, ObjectState(ObjectKind.TEXT)) }
     override fun intentsFor(state: ObjectState): List<Intent> =
         Intent.entries.filter { intent -> caps.values.any { intent in it } }
+    override fun latentBubblesFor(state: ObjectState) = emptyList<com.point.core.model.LatentBubble>()
     override fun byId(id: CapabilityId): Capability = FakeCapability(id, caps[id] ?: emptySet(), id in cloud)
 }
 

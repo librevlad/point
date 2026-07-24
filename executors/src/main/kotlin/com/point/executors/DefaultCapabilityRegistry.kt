@@ -6,6 +6,7 @@ import com.point.core.flow.CapabilityRegistry
 import com.point.core.model.Bubble
 import com.point.core.model.CapabilityId
 import com.point.core.model.Intent
+import com.point.core.model.LatentBubble
 import com.point.core.model.ObjectState
 import javax.inject.Inject
 
@@ -38,6 +39,19 @@ class DefaultCapabilityRegistry @Inject constructor(
         return Intent.entries.filter { intent -> accepting.any { intent in it.intents(state) } }
     }
 
+    // Near-miss capabilities (#97): not accepting now, but one signal away. Ranked by priority and
+    // capped so the hint informs rather than clutters the real action set.
+    override fun latentBubblesFor(state: ObjectState): List<LatentBubble> =
+        capabilities.filterNot { it.accepts(state) }
+            .sortedBy { it.meta.priority }
+            .mapNotNull { c -> c.missing(state)?.let { LatentBubble(c.icon, c.label(state), it) } }
+            .take(MAX_LATENT)
+
     override fun byId(id: CapabilityId): Capability =
         byIdMap[id] ?: error("No capability registered for id=${id.value}")
+
+    private companion object {
+        /** Show at most this many "почти доступно" hints — negotiation informs, it doesn't clutter. */
+        const val MAX_LATENT = 2
+    }
 }
