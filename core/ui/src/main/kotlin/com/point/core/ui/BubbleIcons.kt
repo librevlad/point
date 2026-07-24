@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.DocumentScanner
 import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.FormatListBulleted
 import androidx.compose.material.icons.filled.FolderZip
 import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.Image
@@ -66,6 +67,7 @@ fun bubbleIcon(key: String): ImageVector = when (key) {
     "qr" -> Icons.Filled.QrCode2
     "call" -> Icons.Filled.Call
     "copy" -> Icons.Filled.ContentCopy
+    "list" -> Icons.Filled.FormatListBulleted
     "message" -> Icons.Filled.Sms
     "email" -> Icons.Filled.Email
     "map" -> Icons.Filled.Place
@@ -103,6 +105,7 @@ fun bubbleColor(key: String): Color = when (key) {
     "translate" -> Color(0xFFEC4899) // pink — translate
     "call" -> Color(0xFF16A34A)      // green — call
     "copy" -> Color(0xFF64748B)      // slate — copy to clipboard
+    "list" -> Color(0xFF0EA5A5)      // teal — collect entities into a list
     "message" -> Color(0xFF2F80ED)   // blue — message
     "email" -> Color(0xFF2F80ED)     // blue — email
     "map" -> Color(0xFFEA4335)       // red — map pin
