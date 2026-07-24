@@ -28,6 +28,8 @@ import com.point.executors.DefaultCapabilityRegistry
 import com.point.executors.DefaultResolver
 import com.point.executors.ExcelCapability
 import com.point.executors.ExcelRealizer
+import com.point.executors.ExtractAllCapability
+import com.point.executors.ExtractAllRealizer
 import com.point.executors.LearningBubblePolicy
 import com.point.executors.ImageCapability
 import com.point.executors.ImageRealizer
@@ -117,6 +119,7 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun copyCardCap(c: CopyCardCapability): Capability
     @Binds @IntoSet abstract fun vcardCap(c: VCardCapability): Capability
     @Binds @IntoSet abstract fun copyCap(c: CopyCapability): Capability
+    @Binds @IntoSet abstract fun extractAllCap(c: ExtractAllCapability): Capability
     @Binds @IntoSet abstract fun imageCap(c: ImageCapability): Capability
     @Binds @IntoSet abstract fun pdfCap(c: PdfCapability): Capability
     @Binds @IntoSet abstract fun pagesCap(c: PagesCapability): Capability
@@ -152,6 +155,7 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun copyCardR(r: CopyCardRealizer): Realizer
     @Binds @IntoSet abstract fun vcardR(r: VCardRealizer): Realizer
     @Binds @IntoSet abstract fun copyR(r: CopyRealizer): Realizer
+    @Binds @IntoSet abstract fun extractAllR(r: ExtractAllRealizer): Realizer
     @Binds @IntoSet abstract fun imageR(r: ImageRealizer): Realizer
     @Binds @IntoSet abstract fun pdfR(r: PdfRealizer): Realizer
     @Binds @IntoSet abstract fun pagesR(r: PagesRealizer): Realizer

@@ -851,3 +851,9 @@ NeedsInput. Генерация произвольной сцены (AI) — вн
 мешает). `CopyCapability` (TEXT/URL → весь текст), `CopyCardCapability` (`HAS_CARD` → только цифры
 номера, через `EntityExtractor`). Добавлен `Feature.HAS_CARD` + маппинг `PAYMENT_CARD` в
 `EntityEnricher`. Обе — `Done`, produces===state → интент SEND. Юнит-тесты с fake-буфером.
+
+### «Собрать данные» — все сущности текста в чистый список (#97)
+Скрытая сила «собрать все телефоны/ссылки»: из текста с сущностями — сгруппированный, дедуп-нутый
+список (Телефоны/Почты/Ссылки/Адреса) новым TEXT-объектом → копировать/поделиться. `formatEntities`
+(pure, тестируемо) + `ExtractAll*` (:executors, `EntityExtractor` + `ObjectStore`). Зажигается на
+TEXT с ≥1 сущностью (HAS_PHONE/EMAIL/URL/ADDRESS).
