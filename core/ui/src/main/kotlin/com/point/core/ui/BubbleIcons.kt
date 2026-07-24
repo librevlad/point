@@ -11,6 +11,7 @@ import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Collections
 import androidx.compose.material.icons.filled.Compress
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.ContentCut
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Email
@@ -64,6 +65,7 @@ fun bubbleIcon(key: String): ImageVector = when (key) {
     "ocr-cloud" -> Icons.Filled.Cloud
     "qr" -> Icons.Filled.QrCode2
     "call" -> Icons.Filled.Call
+    "copy" -> Icons.Filled.ContentCopy
     "message" -> Icons.Filled.Sms
     "email" -> Icons.Filled.Email
     "map" -> Icons.Filled.Place
@@ -100,6 +102,7 @@ fun bubbleColor(key: String): Color = when (key) {
     "pages" -> Color(0xFF2F80ED)    // blue — PDF pages
     "translate" -> Color(0xFFEC4899) // pink — translate
     "call" -> Color(0xFF16A34A)      // green — call
+    "copy" -> Color(0xFF64748B)      // slate — copy to clipboard
     "message" -> Color(0xFF2F80ED)   // blue — message
     "email" -> Color(0xFF2F80ED)     // blue — email
     "map" -> Color(0xFFEA4335)       // red — map pin

@@ -844,3 +844,10 @@ NeedsInput. Генерация произвольной сцены (AI) — вн
 как у `OoxmlSpreadsheetWriter`. `Word*` (:executors): PDF → `PdfTextExtractor`, TEXT → файл; пусто
 (скан без текст-слоя) → recoverable Failure с подсказкой распознать. Результат — OFFICE-объект
 (docx-mime), дальше share/save/open/в-PDF. Валидность OOXML покрыта JVM-тестом (ZIP-части + экранизация).
+
+### «Скопировать» в буфер + «Скопировать карту»
+Терминальное копирование в системный буфер. Контракт `Clipboard.copy(text, label)` (:core:flow) →
+`AndroidClipboard` (:data, `ClipboardManager`, запись только на переднем плане — Android 10+ гейт не
+мешает). `CopyCapability` (TEXT/URL → весь текст), `CopyCardCapability` (`HAS_CARD` → только цифры
+номера, через `EntityExtractor`). Добавлен `Feature.HAS_CARD` + маппинг `PAYMENT_CARD` в
+`EntityEnricher`. Обе — `Done`, produces===state → интент SEND. Юнит-тесты с fake-буфером.

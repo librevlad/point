@@ -6,6 +6,7 @@ import com.point.core.flow.AppLauncher
 import com.point.core.flow.BackgroundRemover
 import com.point.core.flow.CalendarInserter
 import com.point.core.flow.CapabilityUsage
+import com.point.core.flow.Clipboard
 import com.point.core.flow.Enricher
 import com.point.core.flow.Enrichment
 import com.point.core.flow.EntityExtractor
@@ -33,6 +34,7 @@ import com.point.core.flow.UserKeyStore
 import com.point.core.flow.Viewer
 import com.point.data.AndroidAppLauncher
 import com.point.data.AndroidCalendarInserter
+import com.point.data.AndroidClipboard
 import com.point.data.AndroidImageCompositor
 import com.point.data.AndroidSharer
 import com.point.data.AndroidUrlOpener
@@ -103,6 +105,9 @@ abstract class DataModule {
 
     @Binds
     abstract fun calendarInserter(impl: AndroidCalendarInserter): CalendarInserter
+
+    @Binds
+    abstract fun clipboard(impl: AndroidClipboard): Clipboard
 
     @Binds
     abstract fun viewer(impl: AndroidViewer): Viewer

@@ -62,6 +62,12 @@ interface UrlOpener {
     suspend fun open(url: String)
 }
 
+/** Puts text on the system clipboard (a terminal "Скопировать"). Called only while Point is
+ *  foreground, so the Android 10+ background-clipboard limit doesn't apply. */
+interface Clipboard {
+    suspend fun copy(text: String, label: String)
+}
+
 /** Opens the system calendar's "new event" screen, pre-filled with [title] (the user sets the time).
  *  ACTION_INSERT isn't a URI scheme, so this can't ride [UrlOpener]. */
 interface CalendarInserter {

@@ -43,17 +43,19 @@ class EntityEnricherTest {
     }
 
     @Test
-    fun `maps address and date to features`() = runTest {
+    fun `maps address, date and card to features`() = runTest {
         val enricher = EntityEnricher(
             extractor(
                 Entity(EntityType.ADDRESS, "ул. Крещатик, 12"),
                 Entity(EntityType.DATE_TIME, "завтра 18:00"),
+                Entity(EntityType.PAYMENT_CARD, "4111 1111 1111 1111"),
             ),
         )
-        val features = enricher.enrich(obj("встреча завтра 18:00 ул. Крещатик, 12"))
+        val features = enricher.enrich(obj("встреча завтра 18:00 ул. Крещатик, 12 карта 4111111111111111"))
         assertTrue(Feature.HAS_ADDRESS in features)
         assertTrue(Feature.HAS_DATE in features)
-        assertEquals(2, features.size)
+        assertTrue(Feature.HAS_CARD in features)
+        assertEquals(3, features.size)
     }
 
     @Test

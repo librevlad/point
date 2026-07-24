@@ -36,7 +36,8 @@ class EntityEnricher @Inject constructor(
         EntityType.EMAIL -> Feature.HAS_EMAIL
         EntityType.ADDRESS -> Feature.HAS_ADDRESS
         EntityType.DATE_TIME -> Feature.HAS_DATE
-        else -> null // url handled by TextUrlEnricher; payment-card/money have no action yet
+        EntityType.PAYMENT_CARD -> Feature.HAS_CARD
+        else -> null // url handled by TextUrlEnricher; money has no action yet
     }
 
     private companion object {
