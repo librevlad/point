@@ -2,6 +2,8 @@ package com.point.executors
 
 import android.graphics.Bitmap
 import com.point.core.flow.Capability
+import com.point.core.flow.CapabilityMeta
+import com.point.core.flow.Latency
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.Realizer
 import com.point.core.flow.RealizerMeta
@@ -21,6 +23,7 @@ import javax.inject.Inject
 class ScanCapability @Inject constructor() : Capability {
     override val id = ID
     override val icon = "scan"
+    override val meta = CapabilityMeta(latency = Latency.FAST) // full-photo CV, not instant
     override fun label(state: ObjectState) = "Скан"
     override fun accepts(state: ObjectState) = state.kind == ObjectKind.IMAGE
     override fun produces(state: ObjectState) = ObjectState(ObjectKind.IMAGE)
