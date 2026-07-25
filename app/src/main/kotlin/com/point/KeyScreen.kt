@@ -44,6 +44,8 @@ fun KeyScreen(
     usageEnabled: Boolean,
     usageSummary: UsageSummary?,
     onToggleUsage: (Boolean) -> Unit,
+    soundEnabled: Boolean = true,
+    onToggleSound: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     var key by remember(config) { mutableStateOf(config.apiKey) }
@@ -112,6 +114,20 @@ fun KeyScreen(
                 )
             }
             Switch(checked = usageEnabled, onCheckedChange = onToggleUsage)
+        }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text("Звук действий", style = MaterialTheme.typography.titleSmall)
+                Text(
+                    "Тихий фирменный отклик на каждое действие. Вибрация управляется системной настройкой касаний.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(checked = soundEnabled, onCheckedChange = onToggleSound)
         }
         if (usageEnabled && usageSummary != null) {
             Text(

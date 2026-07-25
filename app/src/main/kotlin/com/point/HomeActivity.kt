@@ -70,6 +70,7 @@ class HomeActivity : ComponentActivity() {
                             onSaveAiConfig = viewModel::saveAiConfig,
                             onCloseKeySettings = viewModel::closeKeySettings,
                             onToggleUsage = viewModel::setUsageEnabled,
+                            onToggleSound = viewModel::setSoundEnabled,
                             onConfirmCloud = viewModel::confirmCloud,
                             onDeclineCloud = viewModel::declineCloud,
                             onPickApp = viewModel::onPickApp,
