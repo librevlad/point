@@ -15,6 +15,7 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -63,8 +64,10 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.isSpecified
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.text.AnnotatedString
@@ -115,6 +118,7 @@ fun FirstScreen(
     enriching: List<String> = emptyList(),
     discover: Bubble? = null,
     working: Boolean = false,
+    previewBitmap: ImageBitmap? = null,
 ) {
     Column(
         modifier = modifier
@@ -132,7 +136,12 @@ fun FirstScreen(
         Box(
             Modifier.onGloballyPositioned { objectCenter.value = it.boundsInRoot().center },
         ) {
-            ObjectHeader(obj, thinking = enriching.isNotEmpty() || working, understood = facts.isNotEmpty())
+            ObjectHeader(
+                obj,
+                thinking = enriching.isNotEmpty() || working,
+                understood = facts.isNotEmpty(),
+                preview = previewBitmap,
+            )
         }
 
         // «Point понял» (#114): the understanding card — facts land line by line as
@@ -399,31 +408,50 @@ private fun TextPreview(text: String, markdown: Boolean = false) {
 }
 
 @Composable
-private fun ObjectHeader(obj: PointObject, thinking: Boolean = false, understood: Boolean = false) {
+private fun ObjectHeader(
+    obj: PointObject,
+    thinking: Boolean = false,
+    understood: Boolean = false,
+    preview: ImageBitmap? = null,
+) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         // M1 (MOTION.md): the object breathes with its kind's physics; a light ring
         // pulses while enrichment thinks; the shadow warms into an aura once understood.
+        // The hero is the object itself (#114): a real thumbnail when we have one,
+        // the kind icon only as the first frame / non-visual fallback.
+        val headerSize = if (preview != null) 132.dp else 96.dp
         AliveSurface(
             kind = obj.state.kind,
             thinking = thinking,
             understood = understood,
             shape = RoundedCornerShape(26.dp),
-            size = 96.dp,
+            size = headerSize,
         ) {
-            Surface(
-                shape = RoundedCornerShape(26.dp),
-                color = MaterialTheme.colorScheme.secondary,
-                shadowElevation = 0.dp,
-                modifier = Modifier.size(96.dp),
-            ) {
-                Icon(
-                    imageVector = kindIcon(obj.state.kind),
-                    contentDescription = obj.state.kind.name,
-                    tint = MaterialTheme.colorScheme.onSecondary,
+            if (preview != null) {
+                Image(
+                    bitmap = preview,
+                    contentDescription = obj.metadata["name"] ?: obj.state.kind.name,
+                    contentScale = ContentScale.Crop,
                     modifier = Modifier
-                        .padding(26.dp)
-                        .fillMaxSize(),
+                        .size(headerSize)
+                        .clip(RoundedCornerShape(26.dp)),
                 )
+            } else {
+                Surface(
+                    shape = RoundedCornerShape(26.dp),
+                    color = MaterialTheme.colorScheme.secondary,
+                    shadowElevation = 0.dp,
+                    modifier = Modifier.size(headerSize),
+                ) {
+                    Icon(
+                        imageVector = kindIcon(obj.state.kind),
+                        contentDescription = obj.state.kind.name,
+                        tint = MaterialTheme.colorScheme.onSecondary,
+                        modifier = Modifier
+                            .padding(26.dp)
+                            .fillMaxSize(),
+                    )
+                }
             }
         }
         Spacer(Modifier.height(14.dp))
