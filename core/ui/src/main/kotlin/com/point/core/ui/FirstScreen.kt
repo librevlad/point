@@ -18,7 +18,9 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -78,6 +80,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.point.core.model.Bubble
 import com.point.core.model.BubbleTier
+import com.point.core.model.CapabilityId
 import com.point.core.model.LatentBubble
 import com.point.core.model.FavoriteChain
 import com.point.core.model.PointObject
@@ -119,6 +122,8 @@ fun FirstScreen(
     discover: Bubble? = null,
     working: Boolean = false,
     previewBitmap: ImageBitmap? = null,
+    pinned: CapabilityId? = null,
+    onBubbleLongPress: (Bubble) -> Unit = {},
 ) {
     Column(
         modifier = modifier
@@ -192,7 +197,9 @@ fun FirstScreen(
                         BubbleItem(
                             bubble = bubble, index = index, size = 68.dp,
                             objectCenter = objectCenter.value, enabled = !working,
+                            pinned = bubble.capabilityId == pinned,
                             onClick = { onBubble(bubble) },
+                            onLongClick = { onBubbleLongPress(bubble) },
                         )
                     }
                 }
@@ -203,7 +210,10 @@ fun FirstScreen(
             }
             if (rest.isNotEmpty()) {
                 Spacer(Modifier.height(10.dp))
-                AllActions(rest = rest, objectCenter = objectCenter.value, onBubble = onBubble)
+                AllActions(
+                    rest = rest, objectCenter = objectCenter.value,
+                    onBubble = onBubble, onBubbleLongPress = onBubbleLongPress,
+                )
             }
             if (latent.isNotEmpty()) {
                 Spacer(Modifier.height(22.dp))
@@ -501,7 +511,12 @@ private fun DiscoverHint(bubble: Bubble, onClick: () -> Unit) {
  *  grouped by [BubbleTier] — the levels themselves teach an action's nature. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun AllActions(rest: List<Bubble>, objectCenter: Offset, onBubble: (Bubble) -> Unit) {
+private fun AllActions(
+    rest: List<Bubble>,
+    objectCenter: Offset,
+    onBubble: (Bubble) -> Unit,
+    onBubbleLongPress: (Bubble) -> Unit = {},
+) {
     var expanded by remember { mutableStateOf(false) }
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         TextButton(onClick = { expanded = !expanded }) {
@@ -542,7 +557,9 @@ private fun AllActions(rest: List<Bubble>, objectCenter: Offset, onBubble: (Bubb
                             key(bubble.capabilityId.value) {
                                 BubbleItem(
                                     bubble = bubble, index = index, size = 52.dp,
-                                    objectCenter = objectCenter, onClick = { onBubble(bubble) },
+                                    objectCenter = objectCenter,
+                                    onClick = { onBubble(bubble) },
+                                    onLongClick = { onBubbleLongPress(bubble) },
                                 )
                             }
                         }
@@ -574,7 +591,9 @@ private fun BubbleItem(
     size: Dp = 62.dp,
     objectCenter: Offset = Offset.Unspecified,
     enabled: Boolean = true,
+    pinned: Boolean = false,
     onClick: () -> Unit,
+    onLongClick: () -> Unit = {},
 ) = ActionBubble(
     icon = bubbleIcon(bubble.icon),
     title = bubble.title,
@@ -584,7 +603,9 @@ private fun BubbleItem(
     ai = bubble.tier == BubbleTier.AI,
     objectCenter = objectCenter,
     enabled = enabled,
+    pinned = pinned,
     onClick = onClick,
+    onLongClick = onLongClick,
 )
 
 /**
@@ -595,6 +616,7 @@ private fun BubbleItem(
  * motion (or in previews, where the anchor is unknown) it appears in place and fires
  * instantly. An AI bubble wears a quiet tertiary ring — the action leaves the device.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ActionBubble(
     icon: ImageVector,
@@ -605,7 +627,9 @@ private fun ActionBubble(
     ai: Boolean = false,
     objectCenter: Offset = Offset.Unspecified,
     enabled: Boolean = true,
+    pinned: Boolean = false,
     onClick: () -> Unit,
+    onLongClick: () -> Unit = {},
 ) {
     val motion = rememberMotionEnabled()
     val presence = remember { Animatable(0f) }
@@ -654,19 +678,23 @@ private fun ActionBubble(
                 translationY = v.y * (1f - p) +
                     sin(driftPhase + drift.phaseRad) * drift.amplitudeDp.dp.toPx() * p
             }
-            .clickable(enabled = enabled) {
-                when {
-                    !motion || birthVector == null -> onClick()
-                    !departing -> {
-                        // Pulled back into the object, then the action fires (BUBBLE_DEPART_MS).
-                        departing = true
-                        scope.launch {
-                            presence.animateTo(0f, tween(BUBBLE_DEPART_MS, easing = FastOutLinearInEasing))
-                            onClick()
+            .combinedClickable(
+                enabled = enabled,
+                onLongClick = onLongClick, // #66: pin the action for this kind
+                onClick = {
+                    when {
+                        !motion || birthVector == null -> onClick()
+                        !departing -> {
+                            // Pulled back into the object, then the action fires (BUBBLE_DEPART_MS).
+                            departing = true
+                            scope.launch {
+                                presence.animateTo(0f, tween(BUBBLE_DEPART_MS, easing = FastOutLinearInEasing))
+                                onClick()
+                            }
                         }
                     }
-                }
-            },
+                },
+            ),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Box(
@@ -690,10 +718,10 @@ private fun ActionBubble(
         }
         Spacer(Modifier.height(9.dp))
         Text(
-            text = title,
+            text = if (pinned) "\u2605 " + title else title, // #66: the user's own rule is visible
             style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onBackground,
+            color = if (pinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground,
             textAlign = TextAlign.Center,
             maxLines = 2,
         )

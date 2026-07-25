@@ -37,6 +37,8 @@ data class FlowFrame(
     val enriching: List<String> = emptyList(),
     /** Discover (#114): one folded, never-tried action offered as a «💡 Попробуйте» hint. */
     val discover: Bubble? = null,
+    /** User rule (#66): the action pinned first for this object kind, if any. */
+    val pinned: CapabilityId? = null,
 )
 
 /** The file the header preview is decoded from (#114): an image shows itself, a PDF its

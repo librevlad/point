@@ -67,6 +67,7 @@ fun PointHost(
     onSaveChain: () -> Unit = {},
     onItem: (PointObject) -> Unit = {},
     onJumpTo: (Int) -> Unit = {},
+    onBubbleLongPress: (Bubble) -> Unit = {},
     onSaveAiConfig: (UserAiConfig) -> Unit = {},
     onCloseKeySettings: () -> Unit = {},
     onToggleUsage: (Boolean) -> Unit = {},
@@ -199,6 +200,8 @@ fun PointHost(
                     discover = current.discover,
                     working = state.busy != null && state.busyQuiet,
                     previewBitmap = current.preview,
+                    pinned = current.pinned,
+                    onBubbleLongPress = onBubbleLongPress,
                 )
                 }
             }
