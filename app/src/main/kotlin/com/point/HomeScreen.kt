@@ -39,6 +39,7 @@ import androidx.compose.ui.layout.ContentScale
 import com.point.core.model.HistoryEntry
 import com.point.core.model.ObjectKind
 import com.point.core.ui.kindIcon
+import com.point.core.ui.kindLabel
 import com.point.executors.Bitmaps
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -181,8 +182,11 @@ private fun HistoryRow(entry: HistoryEntry, onClick: () -> Unit) {
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+                // #114: a person remembers the object, not the clock — the kind leads,
+                // the relative time only seconds it.
                 Text(
-                    text = DateUtils.getRelativeTimeSpanString(entry.epochMillis).toString(),
+                    text = kindLabel(entry.kind) + " · " +
+                        DateUtils.getRelativeTimeSpanString(entry.epochMillis).toString(),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

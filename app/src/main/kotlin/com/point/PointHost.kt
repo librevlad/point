@@ -60,6 +60,7 @@ fun PointHost(
     onApplyFavorite: (FavoriteChain) -> Unit = {},
     onSaveChain: () -> Unit = {},
     onItem: (PointObject) -> Unit = {},
+    onJumpTo: (Int) -> Unit = {},
     onSaveAiConfig: (UserAiConfig) -> Unit = {},
     onCloseKeySettings: () -> Unit = {},
     onToggleUsage: (Boolean) -> Unit = {},
@@ -129,15 +130,19 @@ fun PointHost(
 
             state.busy != null -> BusyScreen(title = state.busy, network = state.busyNetwork)
 
-            frame != null -> AnimatedContent(
-                targetState = frame,
-                contentKey = { it.obj.id },
-                transitionSpec = {
-                    (fadeIn(tween(260)) + scaleIn(tween(260), initialScale = 0.94f)) togetherWith
-                        fadeOut(tween(140))
-                },
-                label = "frame",
-            ) { current ->
+            frame != null -> Column(Modifier.fillMaxSize()) {
+                // The journey so far (#114) — stays put while the object below animates.
+                TimelineStrip(path = state.path, onNode = onJumpTo)
+                AnimatedContent(
+                    targetState = frame,
+                    contentKey = { it.obj.id },
+                    transitionSpec = {
+                        (fadeIn(tween(260)) + scaleIn(tween(260), initialScale = 0.94f)) togetherWith
+                            fadeOut(tween(140))
+                    },
+                    label = "frame",
+                    modifier = Modifier.weight(1f),
+                ) { current ->
                 FirstScreen(
                     obj = current.obj,
                     bubbles = current.bubbles,
@@ -157,6 +162,7 @@ fun PointHost(
                     latent = current.latent,
                     enriching = current.enriching,
                 )
+                }
             }
 
             state.message != null -> Column(

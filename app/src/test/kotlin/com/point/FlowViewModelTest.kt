@@ -220,6 +220,46 @@ class FlowViewModelTest {
         assertNull(vm.ui.value.busy)
     }
 
+    // --- Object Timeline (#114): the journey is visible and tappable ---
+
+    @Test fun `the path mirrors the stack — kinds with the actions between them`() = runTest(dispatcher) {
+        resolver.result = ActionResult.Success(ResultObject(ObjectKind.TEXT, "text/plain", ScratchRef("/o")))
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        assertEquals(listOf(ObjectKind.IMAGE), vm.ui.value.path.map { it.kind })
+
+        vm.onBubble(bubble(title = "Распознать текст")); advanceUntilIdle()
+        assertEquals(listOf(ObjectKind.IMAGE, ObjectKind.TEXT), vm.ui.value.path.map { it.kind })
+        assertEquals("Распознать текст", vm.ui.value.path.last().via)
+
+        vm.onBack()
+        assertEquals(listOf(ObjectKind.IMAGE), vm.ui.value.path.map { it.kind })
+    }
+
+    @Test fun `tapping a timeline node jumps back to that object`() = runTest(dispatcher) {
+        resolver.result = ActionResult.Success(ResultObject(ObjectKind.TEXT, "text/plain", ScratchRef("/o")))
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        vm.onBubble(bubble()); advanceUntilIdle()
+        vm.onBubble(bubble()); advanceUntilIdle() // three frames deep
+        assertEquals(3, vm.ui.value.path.size)
+
+        vm.jumpTo(0)
+
+        assertEquals(ObjectKind.IMAGE, vm.ui.value.frame?.obj?.state?.kind)
+        assertEquals(1, vm.ui.value.path.size)
+    }
+
+    @Test fun `jumping to the current node changes nothing`() = runTest(dispatcher) {
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.jumpTo(0)
+
+        assertEquals(1, vm.ui.value.path.size)
+        assertEquals(ObjectKind.IMAGE, vm.ui.value.frame?.obj?.state?.kind)
+    }
+
     // --- Back ---
 
     @Test fun `back pops to the previous object`() = runTest(dispatcher) {

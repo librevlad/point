@@ -7,6 +7,7 @@ import com.point.core.model.Bubble
 import com.point.core.model.CapabilityId
 import com.point.core.model.FavoriteChain
 import com.point.core.model.LatentBubble
+import com.point.core.model.ObjectKind
 import com.point.core.model.PointObject
 import com.point.core.model.Preview
 
@@ -31,6 +32,11 @@ data class FlowFrame(
     val enriching: List<String> = emptyList(),
 )
 
+/** One node of the visible Object Timeline (#114): what the object was at that step,
+ *  and the action that made it (null for the root). The philosophy made visible —
+ *  the flow is a journey of transformations, not a stack of screens. */
+data class PathStep(val kind: ObjectKind, val via: String?)
+
 /** Immutable UI state rendered by the host. */
 data class FlowUiState(
     /** Non-null while an action runs: a short label of WHAT is happening (e.g. the
@@ -40,6 +46,8 @@ data class FlowUiState(
      *  cloud-flavoured, time-advancing stages instead of a frozen wheel (#62). */
     val busyNetwork: Boolean = false,
     val frame: FlowFrame? = null,
+    /** The Object Timeline (#114): the whole journey, root first — tap a node to jump back. */
+    val path: List<PathStep> = emptyList(),
     /** Transient text from the ActionResult channel (Failure / Done). */
     val message: String? = null,
     /** Non-null while a capability awaits free-text input (NeedsInput). */
