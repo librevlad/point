@@ -181,7 +181,7 @@ private fun HistoryRow(entry: HistoryEntry, onClick: () -> Unit) {
             HistoryAvatar(entry)
             Column(Modifier.fillMaxWidth()) {
                 Text(
-                    text = entry.name ?: entry.mime,
+                    text = entry.name ?: kindLabel(entry.kind), // #129: no raw MIME in a person's face
                     style = MaterialTheme.typography.titleMedium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
