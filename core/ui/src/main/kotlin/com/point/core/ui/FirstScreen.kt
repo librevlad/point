@@ -320,7 +320,6 @@ fun FirstScreen(
             obj = obj,
             bubbles = bubbles,
             previewBitmap = previewBitmap,
-            pinned = pinned,
             onBubble = { spaceOpen = false; onBubble(it) },
             onDismiss = { spaceOpen = false },
         )
@@ -677,7 +676,7 @@ private fun AllActions(
 const val LIKELY_COUNT = 3
 
 /** #115: how close (dp) the carried object must get to a bubble to form a connection. */
-const val MAGNET_RADIUS_DP = 64
+const val MAGNET_RADIUS_DP = 84
 
 /** The number of actions actually shown big for [total] candidates (see [LIKELY_COUNT]). */
 fun likelyCount(total: Int): Int = if (total <= LIKELY_COUNT + 2) total else LIKELY_COUNT
@@ -699,13 +698,15 @@ internal fun BubbleItem(
     magnet: Boolean = false,
     labelMaxLines: Int = 2,
     showLabel: Boolean = true,
+    labelAbove: Boolean = false,
+    tint: Color? = null,
     onCenter: (Offset) -> Unit = {},
     onClick: () -> Unit,
     onLongClick: () -> Unit = {},
 ) = ActionBubble(
     icon = bubbleIcon(bubble.icon),
     title = bubble.title,
-    color = bubbleColor(bubble.icon),
+    color = tint ?: bubbleColor(bubble.icon),
     index = index,
     size = size,
     ai = bubble.tier == BubbleTier.AI,
@@ -715,6 +716,7 @@ internal fun BubbleItem(
     magnet = magnet,
     labelMaxLines = labelMaxLines,
     showLabel = showLabel,
+    labelAbove = labelAbove,
     onCenter = onCenter,
     onClick = onClick,
     onLongClick = onLongClick,
@@ -743,6 +745,7 @@ internal fun ActionBubble(
     magnet: Boolean = false,
     labelMaxLines: Int = 2,
     showLabel: Boolean = true,
+    labelAbove: Boolean = false,
     onCenter: (Offset) -> Unit = {},
     onClick: () -> Unit,
     onLongClick: () -> Unit = {},
@@ -819,6 +822,24 @@ internal fun ActionBubble(
             ),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        // In the object's space only the near ring carries captions \u2014 everything else
+        // is an icon until the carried object approaches and the magnet names it. Near
+        // the object the caption goes ABOVE the head, keeping the object's zone clean.
+        val caption: @Composable () -> Unit = {
+            Text(
+                text = if (pinned) "\u2605 " + title else title, // #66: the user's own rule is visible
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = if (pinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground,
+                textAlign = TextAlign.Center,
+                maxLines = labelMaxLines,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        if ((showLabel || magnet) && labelAbove) {
+            caption()
+            Spacer(Modifier.height(9.dp))
+        }
         Box(
             modifier = Modifier
                 .size(size)
@@ -843,19 +864,9 @@ internal fun ActionBubble(
                 modifier = Modifier.size(size * 0.45f),
             )
         }
-        // In the object's space only the near ring carries captions \u2014 everything else
-        // is an icon until the carried object approaches and the magnet names it.
-        if (showLabel || magnet) {
+        if ((showLabel || magnet) && !labelAbove) {
             Spacer(Modifier.height(9.dp))
-            Text(
-                text = if (pinned) "\u2605 " + title else title, // #66: the user's own rule is visible
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Bold,
-                color = if (pinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground,
-                textAlign = TextAlign.Center,
-                maxLines = labelMaxLines,
-                overflow = TextOverflow.Ellipsis,
-            )
+            caption()
         }
     }
 }

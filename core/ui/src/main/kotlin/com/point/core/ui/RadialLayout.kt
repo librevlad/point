@@ -26,21 +26,21 @@ fun radialPlacement(bubbles: List<Bubble>, likelyCount: Int): List<PlacedBubble>
     val midRest = mid.filter { it.tier != BubbleTier.INSTANT }
 
     val placed = mutableListOf<PlacedBubble>()
-    // The likely few fan out ABOVE the object — the only place a narrow screen always
-    // has clear of both the object and the side columns.
+    // The likely few sit on the INNER orbit above the object — the only captioned ring.
     near.forEachIndexed { i, b ->
-        placed += PlacedBubble(b, sectorAngle(-PI / 2, near.size, i, PI / 4), SpaceRing.NEAR)
+        placed += PlacedBubble(b, sectorAngle(-PI / 2, near.size, i, PI * 0.194), SpaceRing.NEAR)
     }
+    // Everything else shares ONE outer orbit, in non-overlapping arcs so the eye reads
+    // a single ring with meaningful sides: instant sweeps the whole left arc, real work
+    // takes the upper right, AI sinks along the lower right — leaving your hand's reach.
     midInstant.forEachIndexed { i, b ->
-        placed += PlacedBubble(b, sectorAngle(PI, midInstant.size, i, PI / 3), SpaceRing.MID)
+        placed += PlacedBubble(b, sectorAngle(PI, midInstant.size, i, PI * 0.361), SpaceRing.MID)
     }
     midRest.forEachIndexed { i, b ->
-        placed += PlacedBubble(b, sectorAngle(0.0, midRest.size, i, PI / 3), SpaceRing.MID)
+        placed += PlacedBubble(b, sectorAngle(-PI * 0.194, midRest.size, i, PI * 0.194), SpaceRing.MID)
     }
-    // AI sinks to the lower-right arc — starting below the right column's tail,
-    // wide enough that several cloud actions string out instead of piling up.
     ai.forEachIndexed { i, b ->
-        placed += PlacedBubble(b, sectorAngle(PI * 0.34, ai.size, i, PI * 0.15), SpaceRing.FAR)
+        placed += PlacedBubble(b, sectorAngle(PI * 0.319, ai.size, i, PI * 0.125), SpaceRing.FAR)
     }
     return placed
 }

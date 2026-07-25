@@ -4,6 +4,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -26,8 +27,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.isSpecified
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -38,14 +43,10 @@ import androidx.compose.ui.unit.dp
 import com.point.core.model.Bubble
 import com.point.core.model.CapabilityId
 import com.point.core.model.PointObject
-import androidx.compose.ui.unit.Dp
 import kotlinx.coroutines.launch
-import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.sin
-
-/** sin of the MID sector's half-width — normalises the angle into a full column spread. */
-private val SECTOR_SIN = sin(PI / 3).toFloat()
 
 /**
  * #115 slice 2 — the object's SPACE, not a screen: the dimmed field holds the object in
@@ -62,7 +63,6 @@ fun ObjectSpace(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
     previewBitmap: ImageBitmap? = null,
-    pinned: CapabilityId? = null,
 ) {
     val surface = MaterialTheme.colorScheme.surface
     val dimmed = MaterialTheme.colorScheme.surfaceVariant
@@ -85,12 +85,17 @@ fun ObjectSpace(
             ),
     ) {
         val placed = remember(bubbles) { radialPlacement(bubbles, likelyCount(bubbles.size)) }
-        // The horizontal axis is the scarce one on a phone, the vertical one generous.
-        // NEAR/FAR project on their ellipse arcs; the MID sectors flatten into side
-        // COLUMNS (x pinned to the edge, herringbone-staggered, the angle only spreads
-        // them vertically) — the one projection that never collides on a narrow screen.
-        val rx = maxWidth / 2 - 78.dp
+        // Two visible ORBITS around the object (the art-review verdict: the eye must see
+        // the gravity, not infer it): a captioned inner orbit for the likely few, one
+        // shared outer orbit for everything else. Ellipses — the phone is tall, not round.
+        val rx = maxWidth / 2 - 62.dp
         val ry = maxHeight / 2 - 110.dp
+        // Inner orbit: a wide, shallow ellipse whose upper arc passes just over the
+        // object — the likely three sit exactly on it, captions above their heads.
+        val innerRx = rx * 0.84f
+        val innerRy = ry * 0.40f
+        val outerRx = rx
+        val outerRy = ry * 0.66f
 
         val objectCenter = remember { mutableStateOf(Offset.Unspecified) }
         val bubbleCenters = remember { mutableStateMapOf<CapabilityId, Offset>() }
@@ -104,38 +109,36 @@ fun ObjectSpace(
             bubbleCenters.keys.retainAll(placed.map { it.bubble.capabilityId }.toSet())
         }
 
-        var columnSlot = 0
+        // The orbits themselves — faint, so the structure reads at a glance.
+        val orbitColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.10f)
+        val threadColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
+        Canvas(Modifier.fillMaxSize()) {
+            val c = Offset(size.width / 2, size.height / 2)
+            for ((ellipseRx, ellipseRy) in listOf(innerRx to innerRy, outerRx to outerRy)) {
+                drawOval(
+                    color = orbitColor,
+                    topLeft = Offset(c.x - ellipseRx.toPx(), c.y - ellipseRy.toPx()),
+                    size = Size(ellipseRx.toPx() * 2, ellipseRy.toPx() * 2),
+                    style = Stroke(width = 1.5.dp.toPx()),
+                )
+            }
+        }
+
         placed.forEachIndexed { index, spot ->
             val cosA = cos(spot.angleRad).toFloat()
             val sinA = sin(spot.angleRad).toFloat()
-            val x: Dp
-            val y: Dp
-            when (spot.ring) {
-                SpaceRing.NEAR -> {
-                    // A level row above the object: same height for all three, so their
-                    // captions sit on one line; ×1.16 opens the fan wide enough that
-                    // three Russian captions never touch.
-                    x = rx * 1.16f * cosA
-                    y = -ry * 0.56f
-                }
-                SpaceRing.MID -> {
-                    val stagger = 1f - 0.15f * (columnSlot++ % 2)
-                    x = rx * (if (cosA >= 0f) stagger else -stagger)
-                    // Short columns beside the object — well below the near row.
-                    y = ry * 0.36f * (sinA / SECTOR_SIN)
-                }
-                SpaceRing.FAR -> {
-                    x = rx * cosA
-                    y = ry * sinA
-                }
-            }
-            // Depth is size and presence, not captions: the near ring is big, named and
-            // fully lit; the further out, the smaller and quieter — an icon is enough
-            // until the carried object approaches and the magnet names it.
+            val inner = spot.ring == SpaceRing.NEAR
+            val x = (if (inner) innerRx else outerRx) * cosA
+            // The near three ride the UPPER arc of the inner orbit — never its lower
+            // half, where the object lives.
+            val y = (if (inner) -innerRy * abs(sinA) else outerRy * sinA)
+            // Depth is size, presence and COLOUR: the inner orbit is big, named and fully
+            // lit; the outer one shrinks, fades and greys towards the theme — a bubble
+            // regains its own colour only when the carried object closes in (the magnet).
             val (bubbleSize, depthAlpha) = when (spot.ring) {
-                SpaceRing.NEAR -> 62.dp to 1f
-                SpaceRing.MID -> 46.dp to 0.78f
-                SpaceRing.FAR -> 40.dp to 0.62f
+                SpaceRing.NEAR -> 64.dp to 1f
+                SpaceRing.MID -> 46.dp to 0.82f
+                SpaceRing.FAR -> 38.dp to 0.60f
             }
             key(spot.bubble.capabilityId.value) {
                 Box(
@@ -144,19 +147,39 @@ fun ObjectSpace(
                         .offset(x = x, y = y)
                         .graphicsLayer { alpha = depthAlpha },
                 ) {
+                    val magnet = spot.bubble.capabilityId == dragTarget
                     BubbleItem(
                         bubble = spot.bubble,
                         index = index,
                         size = bubbleSize,
                         labelMaxLines = 1,
-                        showLabel = spot.ring == SpaceRing.NEAR,
+                        showLabel = inner,
+                        labelAbove = true,
+                        tint = if (inner || magnet) {
+                            null // own colour — the privilege of the close and the chosen
+                        } else {
+                            lerp(bubbleColor(spot.bubble.icon), dimmed, 0.55f)
+                        },
                         objectCenter = objectCenter.value,
-                        pinned = spot.bubble.capabilityId == pinned,
-                        magnet = spot.bubble.capabilityId == dragTarget,
+                        magnet = magnet,
                         onCenter = { bubbleCenters[spot.bubble.capabilityId] = it },
                         onClick = { onBubble(spot.bubble) },
                     )
                 }
+            }
+        }
+
+        // The thread of connection — OVER the bubbles (a line under them is invisible),
+        // drawn while the carried object is inside some bubble's magnet radius.
+        Canvas(Modifier.fillMaxSize()) {
+            val target = dragTarget?.let { bubbleCenters[it] }
+            if (target != null && objectCenter.value.isSpecified) {
+                drawLine(
+                    color = threadColor,
+                    start = objectCenter.value + dragOffset.value,
+                    end = target,
+                    strokeWidth = 3.dp.toPx(),
+                )
             }
         }
 
