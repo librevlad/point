@@ -9,6 +9,7 @@ import com.point.core.flow.CapabilityUsage
 import com.point.core.flow.Enrichment
 import com.point.core.flow.EnrichmentUpdate
 import com.point.core.flow.FavoritesStore
+import com.point.core.flow.FlowSnapshotStore
 import com.point.core.flow.HistoryStore
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.PdfRasterizer
@@ -25,6 +26,7 @@ import com.point.core.model.ActionResult
 import com.point.core.model.Bubble
 import com.point.core.model.CapabilityId
 import com.point.core.model.FavoriteChain
+import com.point.core.model.FlowSnapshotFrame
 import com.point.core.model.HistoryEntry
 import com.point.core.model.Intent
 import com.point.core.model.BubbleTier
@@ -68,6 +70,7 @@ class FlowViewModel @Inject constructor(
     private val pdfRasterizer: PdfRasterizer,
     private val sensory: SensoryFeedback,
     private val sensorySettings: SensorySettings,
+    private val flowSnapshot: FlowSnapshotStore,
 ) : ViewModel() {
 
     private val stack = ArrayDeque<FlowFrame>()
@@ -90,11 +93,40 @@ class FlowViewModel @Inject constructor(
     val clipboard: StateFlow<String?> = _clipboard.asStateFlow()
     private var lastClipboard: String? = null
 
+    /** Set synchronously by a fresh share BEFORE its coroutine runs — a stale snapshot
+     *  must never race over the user's new intent (#7). */
+    private var freshShareArrived = false
+
     init {
         viewModelScope.launch { loadFavorites() }
+        restoreJourney()
+    }
+
+    /** #7: re-materialise the flow after process death. Scratch files survive (clear()
+     *  runs only at flow end), so the journey resumes on the same object and step —
+     *  features re-derive instantly from the kept metadata via enrichment. */
+    private fun restoreJourney() {
+        viewModelScope.launch {
+            val frames = runCatching { flowSnapshot.load() }.getOrDefault(emptyList())
+            if (frames.isEmpty() || freshShareArrived || stack.isNotEmpty()) return@launch
+            val alive = frames.filter { runCatching { java.io.File(it.ref).isFile }.getOrDefault(false) }
+            if (alive.isEmpty()) {
+                runCatching { flowSnapshot.clear() }
+                return@launch
+            }
+            alive.forEach { f ->
+                pushFrame(
+                    PointObject(f.id, f.mime, com.point.core.model.ScratchRef(f.ref),
+                        com.point.core.model.ObjectState(f.kind), f.metadata),
+                    via = f.viaCapabilityId?.let { CapabilityId(it) },
+                    viaTitle = f.viaTitle,
+                )
+            }
+        }
     }
 
     fun onShared(sourceUri: String, mime: String) {
+        freshShareArrived = true
         _ui.update { it.copy(busy = "Открываю…", busyNetwork = false, busyQuiet = false, message = null, inputPrompt = null) }
         viewModelScope.launch {
             val obj = runCatching {
@@ -115,6 +147,7 @@ class FlowViewModel @Inject constructor(
     /** Several shared files → one COLLECTION (the inbound half of collections;
      *  e.g. several photos to merge into a PDF). */
     fun onSharedMultiple(sources: List<String>) {
+        freshShareArrived = true
         _ui.update { it.copy(busy = "Открываю…", busyNetwork = false, busyQuiet = false, message = null, inputPrompt = null) }
         viewModelScope.launch {
             val obj = runCatching {
@@ -163,6 +196,7 @@ class FlowViewModel @Inject constructor(
     }
 
     fun openFromHistory(entry: HistoryEntry) {
+        freshShareArrived = true
         _ui.update { it.copy(busy = "Открываю…", busyNetwork = false, busyQuiet = false, message = null, inputPrompt = null) }
         viewModelScope.launch {
             val obj = runCatching { history.open(entry.id) }.getOrNull()
@@ -544,6 +578,7 @@ class FlowViewModel @Inject constructor(
         val top = stack.last()
         _ui.update { it.copy(frame = top, message = null, path = currentPath()) }
         refreshFavorites()
+        persistJourney()
         return true
     }
 
@@ -554,6 +589,7 @@ class FlowViewModel @Inject constructor(
         val top = stack.last()
         _ui.update { it.copy(frame = top, message = null, path = currentPath()) }
         refreshFavorites()
+        persistJourney()
     }
 
     private fun currentPath(): List<PathStep> =
@@ -577,7 +613,10 @@ class FlowViewModel @Inject constructor(
         pendingBubble = null
         pendingPreviewBubble = null
         _ui.update { FlowUiState() }
-        viewModelScope.launch { runCatching { store.clear() } }
+        viewModelScope.launch {
+            runCatching { store.clear() }
+            runCatching { flowSnapshot.clear() } // the journey ended on purpose — forget it (#7)
+        }
     }
 
     private fun pushFrame(obj: PointObject, via: CapabilityId? = null, viaTitle: String? = null) {
@@ -595,10 +634,23 @@ class FlowViewModel @Inject constructor(
             )
         }
         refreshFavorites()
+        persistJourney()
         enrichInBackground(obj)
         loadChildrenIfCollection(obj)
         loadTextPreviewIfText(obj)
         loadObjectPreview(obj)
+    }
+
+    /** #7: journal the journey after every step — a crash loses nothing. */
+    private fun persistJourney() {
+        val frames = stack.map { f ->
+            FlowSnapshotFrame(
+                id = f.obj.id, kind = f.obj.state.kind, mime = f.obj.mime, ref = f.obj.uri.value,
+                metadata = f.obj.metadata,
+                viaCapabilityId = f.viaCapability?.value, viaTitle = f.viaTitle,
+            )
+        }
+        viewModelScope.launch { runCatching { flowSnapshot.save(frames) } }
     }
 
     /** For a visual frame (IMAGE / PDF), decode a real thumbnail off-main and attach it (only
@@ -715,7 +767,10 @@ class FlowViewModel @Inject constructor(
         )
         stack[index] = refreshed
         _ui.update { if (it.frame?.obj?.id == source.id) it.copy(frame = refreshed) else it }
-        if (objChanged) refreshFavorites()
+        if (objChanged) {
+            refreshFavorites()
+            persistJourney() // #7: understanding survives process death together with the step
+        }
     }
 
     private fun cancelEnrichment() {
