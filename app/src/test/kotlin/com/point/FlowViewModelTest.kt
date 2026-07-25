@@ -71,6 +71,7 @@ class FlowViewModelTest {
     private val appLauncher = FakeAppLauncher()
     private val sensory = FakeSensoryFeedback()
     private val sensorySettings = FakeSensorySettings()
+    private val snapshot = FakeFlowSnapshotStore()
 
     @Before fun setUp() = Dispatchers.setMain(dispatcher)
     @After fun tearDown() = Dispatchers.resetMain()
@@ -80,10 +81,80 @@ class FlowViewModelTest {
     private fun vm(
         caps: Map<CapabilityId, Set<Intent>> = mapOf(CapabilityId("a") to setOf(Intent.PREPARE)),
         cloud: Set<CapabilityId> = emptySet(),
-    ) = FlowViewModel(store, FakeRegistry(caps, cloud), resolver, enrichment, history, favorites, usage, userKeys, journal, consent, appLauncher, FakePdfRasterizer(), sensory, sensorySettings)
+    ) = FlowViewModel(store, FakeRegistry(caps, cloud), resolver, enrichment, history, favorites, usage, userKeys, journal, consent, appLauncher, FakePdfRasterizer(), sensory, sensorySettings, snapshot)
 
     private fun bubble(id: String = "a", title: String = "Действие") =
         Bubble("x", title, CapabilityId(id), ObjectState(ObjectKind.TEXT))
+
+    // --- Crash-proof flow (#7): the journey survives process death ---
+
+    private fun tempFile(content: String): String =
+        java.io.File.createTempFile("snap", ".bin").apply { writeText(content); deleteOnExit() }.absolutePath
+
+    @Test fun `restores the journey after process death`() = runTest(dispatcher) {
+        snapshot.frames = listOf(
+            com.point.core.model.FlowSnapshotFrame(
+                "root", ObjectKind.IMAGE, "image/png", tempFile("img"),
+                metadata = mapOf("entity.phone" to "+380671234567"),
+            ),
+            com.point.core.model.FlowSnapshotFrame(
+                "step", ObjectKind.TEXT, "text/plain", tempFile("txt"),
+                viaCapabilityId = "ocr", viaTitle = "Распознать текст",
+            ),
+        )
+        val vm = vm(); advanceUntilIdle()
+
+        assertEquals(ObjectKind.TEXT, vm.ui.value.frame?.obj?.state?.kind) // back on the same step
+        assertEquals(2, vm.ui.value.path.size)                             // the whole journey
+        assertEquals("Распознать текст", vm.ui.value.path.last().via)
+        assertEquals("+380671234567", vm.ui.value.path.let { snapshot.frames.first().metadata["entity.phone"] })
+    }
+
+    @Test fun `a frame whose file died is skipped on restore`() = runTest(dispatcher) {
+        snapshot.frames = listOf(
+            com.point.core.model.FlowSnapshotFrame("root", ObjectKind.IMAGE, "image/png", tempFile("img")),
+            com.point.core.model.FlowSnapshotFrame("gone", ObjectKind.TEXT, "text/plain", "/nowhere/gone.txt"),
+        )
+        val vm = vm(); advanceUntilIdle()
+
+        assertEquals(1, vm.ui.value.path.size)
+        assertEquals(ObjectKind.IMAGE, vm.ui.value.frame?.obj?.state?.kind)
+    }
+
+    @Test fun `a fresh share wins over a stale snapshot`() = runTest(dispatcher) {
+        snapshot.frames = listOf(
+            com.point.core.model.FlowSnapshotFrame("old", ObjectKind.TEXT, "text/plain", tempFile("old")),
+        )
+        val vm = vm()
+        vm.onShared("uri", "image/png") // arrives before the async restore lands
+        advanceUntilIdle()
+
+        assertEquals(ObjectKind.IMAGE, vm.ui.value.frame?.obj?.state?.kind)
+        assertEquals(1, vm.ui.value.path.size)
+    }
+
+    @Test fun `every step persists the journey, ending the flow clears it`() = runTest(dispatcher) {
+        resolver.result = ActionResult.Success(ResultObject(ObjectKind.TEXT, "text/plain", ScratchRef("/o")))
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        vm.onBubble(bubble(title = "Шаг")); advanceUntilIdle()
+
+        assertEquals(2, snapshot.saved.last().size)
+        assertEquals("Шаг", snapshot.saved.last().last().viaTitle)
+
+        vm.endFlow(); advanceUntilIdle()
+        assertTrue(snapshot.cleared)
+    }
+
+    @Test fun `enrichment findings are persisted into the journey too`() = runTest(dispatcher) {
+        enrichment.updates = listOf(
+            EnrichmentUpdate(setOf(Feature.HAS_PHONE), mapOf("entity.phone" to "+380671234567"), emptyList()),
+        )
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        assertEquals("+380671234567", snapshot.saved.last().last().metadata["entity.phone"])
+    }
 
     // --- Ingest ---
 
@@ -823,6 +894,15 @@ private class FakeSensoryFeedback : com.point.core.flow.SensoryFeedback {
     override fun tap() { events += "tap" }
     override fun success() { events += "success" }
     override fun failure() { events += "failure" }
+}
+
+private class FakeFlowSnapshotStore : com.point.core.flow.FlowSnapshotStore {
+    var frames: List<com.point.core.model.FlowSnapshotFrame> = emptyList()
+    val saved = mutableListOf<List<com.point.core.model.FlowSnapshotFrame>>()
+    var cleared = false
+    override suspend fun save(frames: List<com.point.core.model.FlowSnapshotFrame>) { saved += frames }
+    override suspend fun load() = frames
+    override suspend fun clear() { cleared = true; frames = emptyList() }
 }
 
 private class FakeSensorySettings : com.point.core.flow.SensorySettings {
