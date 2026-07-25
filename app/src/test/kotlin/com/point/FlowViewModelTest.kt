@@ -5,6 +5,7 @@ import com.point.core.flow.AppTarget
 import com.point.core.flow.Capability
 import com.point.core.flow.CapabilityMeta
 import com.point.core.flow.CapabilityRegistry
+import com.point.core.flow.Latency
 import com.point.core.flow.CapabilityUsage
 import com.point.core.flow.Enrichment
 import com.point.core.flow.EnrichmentUpdate
@@ -218,6 +219,26 @@ class FlowViewModelTest {
 
         advanceUntilIdle()
         assertNull(vm.ui.value.busy)
+    }
+
+    // --- M3 (MOTION.md №8/9): a fast local action works quietly — the object stays put ---
+
+    @Test fun `a fast local action is quiet busy — the screen must not switch away`() = runTest(dispatcher) {
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.onBubble(bubble()) // default fake capability: local, instant latency
+        assertTrue(vm.ui.value.busyQuiet)
+
+        advanceUntilIdle()
+        assertNull(vm.ui.value.busy)
+    }
+
+    @Test fun `only local non-slow work is quiet — cloud and slow keep the full busy screen`() {
+        assertTrue(quietWork(CapabilityMeta()))
+        assertTrue(quietWork(CapabilityMeta(latency = Latency.FAST)))
+        assertEquals(false, quietWork(CapabilityMeta(network = true)))
+        assertEquals(false, quietWork(CapabilityMeta(latency = Latency.SLOW)))
     }
 
     // --- Discover (#114): one never-tried possibility is surfaced as a hint ---

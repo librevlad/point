@@ -4,10 +4,13 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -128,7 +131,10 @@ fun PointHost(
                 onToggleUsage = onToggleUsage,
             )
 
-            state.busy != null -> BusyScreen(title = state.busy, network = state.busyNetwork)
+            // M3 (MOTION.md №8): quiet local work keeps the object on screen — it "works"
+            // in place; only cloud/slow actions get the full staged busy screen.
+            state.busy != null && !state.busyQuiet ->
+                BusyScreen(title = state.busy, network = state.busyNetwork)
 
             frame != null -> Column(Modifier.fillMaxSize()) {
                 // The journey so far (#114) — stays put while the object below animates.
@@ -137,8 +143,12 @@ fun PointHost(
                     targetState = frame,
                     contentKey = { it.obj.id },
                     transitionSpec = {
-                        (fadeIn(tween(260)) + scaleIn(tween(260), initialScale = 0.94f)) togetherWith
-                            fadeOut(tween(140))
+                        // M3 transformation morph (№9): the new state grows out of the old
+                        // one with a soft spring — 300–500 мс of visible becoming.
+                        (fadeIn(tween(340)) + scaleIn(
+                            animationSpec = spring(dampingRatio = 0.72f, stiffness = Spring.StiffnessMediumLow),
+                            initialScale = 0.80f,
+                        )) togetherWith (fadeOut(tween(150)) + scaleOut(tween(220), targetScale = 1.08f))
                     },
                     label = "frame",
                     modifier = Modifier.weight(1f),
@@ -162,6 +172,7 @@ fun PointHost(
                     latent = current.latent,
                     enriching = current.enriching,
                     discover = current.discover,
+                    working = state.busy != null && state.busyQuiet,
                 )
                 }
             }
