@@ -95,5 +95,7 @@ data class FlowUiState(
     val keyScreen: UserAiConfig? = null,
     /** On the key screen: whether the private usage journal is on, and its current tally. */
     val usageEnabled: Boolean = false,
+    /** On the key screen: whether branded action sounds are on (MOTION.md M4). */
+    val soundEnabled: Boolean = true,
     val usageSummary: UsageSummary? = null,
 )

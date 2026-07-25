@@ -15,6 +15,7 @@ import com.point.core.flow.PdfRasterizer
 import com.point.core.flow.PrivacyConsent
 import com.point.core.flow.Resolver
 import com.point.core.flow.SensoryFeedback
+import com.point.core.flow.SensorySettings
 import com.point.core.flow.UsageEvent
 import com.point.core.flow.UsageEventType
 import com.point.core.flow.UsageJournal
@@ -66,6 +67,7 @@ class FlowViewModel @Inject constructor(
     private val appLauncher: AppLauncher,
     private val pdfRasterizer: PdfRasterizer,
     private val sensory: SensoryFeedback,
+    private val sensorySettings: SensorySettings,
 ) : ViewModel() {
 
     private val stack = ArrayDeque<FlowFrame>()
@@ -285,7 +287,10 @@ class FlowViewModel @Inject constructor(
         // A tiny prefs read; the store is warmed when it's created (Activity start), so it
         // is in-memory by the time the gear or an AI-no-key failure summons the screen.
         _ui.update {
-            it.copy(keyScreen = userKeys.read() ?: UserAiConfig.DEFAULT, busy = null, message = null, inputPrompt = null)
+            it.copy(
+                keyScreen = userKeys.read() ?: UserAiConfig.DEFAULT, busy = null, message = null, inputPrompt = null,
+                soundEnabled = runCatching { sensorySettings.isSoundEnabled() }.getOrDefault(true),
+            )
         }
         refreshUsage()
     }
@@ -296,6 +301,13 @@ class FlowViewModel @Inject constructor(
             val enabled = journal.isEnabled()
             val summary = if (enabled) runCatching { journal.summary() }.getOrNull() else null
             _ui.update { it.copy(usageEnabled = enabled, usageSummary = summary) }
+        }
+    }
+
+    fun setSoundEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            runCatching { sensorySettings.setSoundEnabled(enabled) }
+            _ui.update { it.copy(soundEnabled = enabled) }
         }
     }
 
