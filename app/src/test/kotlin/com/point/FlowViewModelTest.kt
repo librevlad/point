@@ -380,6 +380,18 @@ class FlowViewModelTest {
         assertTrue(vm.ui.value.frame?.obj?.state?.has(Feature.HAS_PHONE) == true) // not lost
     }
 
+    @Test fun `finished enrichment lands its understanding in history`() = runTest(dispatcher) {
+        enrichment.updates = listOf(
+            EnrichmentUpdate(setOf(Feature.HAS_PHONE), mapOf("entity.phone" to "+380671234567"), emptyList()),
+        )
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        val updated = history.updated.single()
+        assertTrue(updated.state.has(Feature.HAS_PHONE))
+        assertEquals("+380671234567", updated.metadata["entity.phone"])
+    }
+
     @Test fun `ending the flow cancels running enrichment`() = runTest(dispatcher) {
         enrichment.updates = listOf(EnrichmentUpdate(setOf(Feature.HAS_PHONE), emptyMap(), emptyList()))
         enrichment.stepDelayMs = 10_000
@@ -682,7 +694,9 @@ private class FakeEnrichment(var features: Set<Feature> = emptySet()) : Enrichme
 
 private class FakeHistory : HistoryStore {
     val recorded = mutableListOf<PointObject>()
+    val updated = mutableListOf<PointObject>()
     override suspend fun record(obj: PointObject) { recorded += obj }
+    override suspend fun update(obj: PointObject) { updated += obj }
     override suspend fun recent(limit: Int): List<HistoryEntry> = emptyList()
     override suspend fun open(entryId: String): PointObject? = null
     override suspend fun clearAll() = Unit

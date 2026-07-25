@@ -619,6 +619,11 @@ class FlowViewModel @Inject constructor(
             enrichment.enrich(obj)
                 .catch { /* enrichment must never break the flow — it only ever adds */ }
                 .collect { update -> applyEnrichment(obj, update) }
+            // Understanding is final — fold it into History, so Home remembers the object
+            // by what it IS («телефон, дата»), not just when it arrived (#114).
+            stack.lastOrNull { it.obj.id == obj.id }?.let { frame ->
+                if (frame.obj.state.features.isNotEmpty()) runCatching { history.update(frame.obj) }
+            }
         }
     }
 

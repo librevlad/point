@@ -13,4 +13,8 @@ data class HistoryEntry(
     val name: String?,
     val epochMillis: Long,
     val ref: ObjectRef,
+    /** What Point understood about the object (#114) — appended once enrichment finished. */
+    val features: Set<Feature> = emptySet(),
+    /** First value per entity kind, without the `entity.` prefix (phone → «+380…»). */
+    val entities: Map<String, String> = emptyMap(),
 )
