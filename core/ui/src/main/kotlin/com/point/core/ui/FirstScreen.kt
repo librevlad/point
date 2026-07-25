@@ -97,6 +97,7 @@ fun FirstScreen(
     textPreview: String? = null,
     latent: List<LatentBubble> = emptyList(),
     enriching: List<String> = emptyList(),
+    discover: Bubble? = null,
 ) {
     Column(
         modifier = modifier
@@ -133,7 +134,7 @@ fun FirstScreen(
         } else {
             // #114: the likely few, big — everything else folded behind «Все действия».
             // Ranking is the learning BubblePolicy's job; the screen just respects it.
-            val likely = if (bubbles.size <= LIKELY_COUNT + 2) bubbles else bubbles.take(LIKELY_COUNT)
+            val likely = bubbles.take(likelyCount(bubbles.size))
             val rest = bubbles.drop(likely.size)
             Text(
                 text = if (rest.isEmpty()) "Что сделать?" else "Самые вероятные",
@@ -152,6 +153,10 @@ fun FirstScreen(
                         BubbleItem(bubble = bubble, index = index, size = 68.dp, onClick = { onBubble(bubble) })
                     }
                 }
+            }
+            if (discover != null) {
+                Spacer(Modifier.height(14.dp))
+                DiscoverHint(discover, onClick = { onBubble(discover) })
             }
             if (rest.isNotEmpty()) {
                 Spacer(Modifier.height(10.dp))
@@ -393,6 +398,32 @@ private fun ObjectHeader(obj: PointObject) {
     }
 }
 
+/** Discover (#114): ONE folded possibility the user never tried, surfaced as a hint —
+ *  «💡 Попробуйте: Создать событие». Tapping runs it like any bubble; once used, the
+ *  usage signal retires the hint by itself. How new capabilities get found. */
+@Composable
+private fun DiscoverHint(bubble: Bubble, onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.primaryContainer,
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp),
+        ) {
+            Text(text = "💡", style = MaterialTheme.typography.labelLarge)
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = "Попробуйте: ${bubble.title}",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+            )
+        }
+    }
+}
+
 /** The folded remainder of the graph (#114): a count that unfolds into the full set,
  *  grouped by [BubbleTier] — the levels themselves teach an action's nature. */
 @OptIn(ExperimentalLayoutApi::class)
@@ -446,7 +477,14 @@ private fun AllActions(rest: List<Bubble>, onBubble: (Bubble) -> Unit) {
     }
 }
 
-private const val LIKELY_COUNT = 3
+/** #114: how many top-ranked actions are shown big. With ≤2 more than that, folding
+ *  is sillier than showing — everything is "likely". Shared with the ViewModel so the
+ *  Discover hint knows exactly which actions the user does NOT see. */
+const val LIKELY_COUNT = 3
+
+/** The number of actions actually shown big for [total] candidates (see [LIKELY_COUNT]). */
+fun likelyCount(total: Int): Int = if (total <= LIKELY_COUNT + 2) total else LIKELY_COUNT
+
 private val TIER_GROUPS = listOf(
     BubbleTier.INSTANT to "Мгновенные",
     BubbleTier.SMART to "Умные",

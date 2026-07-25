@@ -30,6 +30,8 @@ data class FlowFrame(
     /** Labels of still-running background enrichment («Распознаю текст…») — the visible
      *  "Point думает" feedback; empty when understanding is complete (#64). */
     val enriching: List<String> = emptyList(),
+    /** Discover (#114): one folded, never-tried action offered as a «💡 Попробуйте» hint. */
+    val discover: Bubble? = null,
 )
 
 /** One node of the visible Object Timeline (#114): what the object was at that step,
