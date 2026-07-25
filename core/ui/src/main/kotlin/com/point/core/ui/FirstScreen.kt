@@ -102,6 +102,9 @@ fun FirstScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
+            // The unfolded «Все действия» can outgrow the screen (#114) — the whole
+            // screen scrolls; with little content the Center arrangement still centres.
+            .verticalScroll(rememberScrollState())
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
@@ -525,8 +528,10 @@ private fun ActionBubble(
     )
 
     Column(
+        // Never narrower than 100dp: the longest one-word Russian labels («Скопировать»)
+        // must fit in one line even under the small folded-group bubbles.
         modifier = Modifier
-            .width(size + 24.dp)
+            .width(maxOf(size + 24.dp, 100.dp))
             .graphicsLayer {
                 alpha = progress
                 val scale = 0.7f + 0.3f * progress
