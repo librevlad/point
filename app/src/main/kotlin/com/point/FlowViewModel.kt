@@ -85,7 +85,7 @@ class FlowViewModel @Inject constructor(
     }
 
     fun onShared(sourceUri: String, mime: String) {
-        _ui.update { it.copy(busy = "Открываю…", busyNetwork = false, message = null, inputPrompt = null) }
+        _ui.update { it.copy(busy = "Открываю…", busyNetwork = false, busyQuiet = false, message = null, inputPrompt = null) }
         viewModelScope.launch {
             val obj = runCatching {
                 store.clear()
@@ -105,7 +105,7 @@ class FlowViewModel @Inject constructor(
     /** Several shared files → one COLLECTION (the inbound half of collections;
      *  e.g. several photos to merge into a PDF). */
     fun onSharedMultiple(sources: List<String>) {
-        _ui.update { it.copy(busy = "Открываю…", busyNetwork = false, message = null, inputPrompt = null) }
+        _ui.update { it.copy(busy = "Открываю…", busyNetwork = false, busyQuiet = false, message = null, inputPrompt = null) }
         viewModelScope.launch {
             val obj = runCatching {
                 store.clear()
@@ -153,7 +153,7 @@ class FlowViewModel @Inject constructor(
     }
 
     fun openFromHistory(entry: HistoryEntry) {
-        _ui.update { it.copy(busy = "Открываю…", busyNetwork = false, message = null, inputPrompt = null) }
+        _ui.update { it.copy(busy = "Открываю…", busyNetwork = false, busyQuiet = false, message = null, inputPrompt = null) }
         viewModelScope.launch {
             val obj = runCatching { history.open(entry.id) }.getOrNull()
             if (obj == null) {
@@ -188,7 +188,8 @@ class FlowViewModel @Inject constructor(
     private fun maybePreview(bubble: Bubble, top: PointObject) {
         _ui.update {
             it.copy(
-                busy = bubble.title, busyNetwork = isCloud(bubble.capabilityId), message = null,
+                busy = bubble.title, busyNetwork = isCloud(bubble.capabilityId),
+                busyQuiet = isQuietAction(bubble.capabilityId), message = null,
                 inputPrompt = null,
             )
         }
@@ -217,12 +218,16 @@ class FlowViewModel @Inject constructor(
     }
 
     private fun runOnObject(bubble: Bubble, top: PointObject) {
-        _ui.update { it.copy(busy = bubble.title, busyNetwork = isCloud(bubble.capabilityId), message = null, inputPrompt = null) }
+        _ui.update { it.copy(busy = bubble.title, busyNetwork = isCloud(bubble.capabilityId), busyQuiet = isQuietAction(bubble.capabilityId), message = null, inputPrompt = null) }
         dispatch(bubble) { resolver.realizerFor(bubble.capabilityId).perform(top, null) }
     }
 
     private fun isCloud(id: CapabilityId) =
         runCatching { registry.byId(id).meta.network }.getOrDefault(false)
+
+    /** M3: fast local work runs quietly on the object itself — no full busy screen. */
+    private fun isQuietAction(id: CapabilityId) =
+        runCatching { quietWork(registry.byId(id).meta) }.getOrDefault(false)
 
     /**
      * Runs [onGranted] at once if cloud consent is already given; otherwise shows the consent
@@ -254,6 +259,7 @@ class FlowViewModel @Inject constructor(
         _ui.update {
             it.copy(
                 busy = bubble.title, busyNetwork = isCloud(bubble.capabilityId),
+                busyQuiet = isQuietAction(bubble.capabilityId),
                 inputPrompt = null, inputSuggestions = emptyList(), needsImage = null,
             )
         }
@@ -314,7 +320,7 @@ class FlowViewModel @Inject constructor(
     // --- Device actions (#66): the installed apps that can open the object, shown inline. ---
 
     private fun showAppPicker(obj: PointObject) {
-        _ui.update { it.copy(busy = "Ищу приложения…", message = null, inputPrompt = null) }
+        _ui.update { it.copy(busy = "Ищу приложения…", busyQuiet = false, message = null, inputPrompt = null) }
         viewModelScope.launch {
             val direct = runCatching { appLauncher.handlers(obj) }.getOrDefault(emptyList())
             // Dedup by package: an app that also appears as a bridged target must not double —
@@ -363,7 +369,7 @@ class FlowViewModel @Inject constructor(
 
     /** Run one transform to produce the object the bridged app can open (#79.1); null on failure. */
     private suspend fun bridge(obj: PointObject, viaCapId: String): PointObject? {
-        _ui.update { it.copy(busy = "Преобразую…") }
+        _ui.update { it.copy(busy = "Преобразую…", busyQuiet = false) }
         val result = runCatching { resolver.realizerFor(CapabilityId(viaCapId)).perform(obj, null) }.getOrNull()
         return (result as? ActionResult.Success)?.let { runCatching { store.put(it.result) }.getOrNull() }
     }
@@ -416,7 +422,7 @@ class FlowViewModel @Inject constructor(
     }
 
     private fun replayChain(chain: FavoriteChain, start: PointObject) {
-        _ui.update { it.copy(busy = "Выполняю цепочку…", busyNetwork = false, message = null, inputPrompt = null) }
+        _ui.update { it.copy(busy = "Выполняю цепочку…", busyNetwork = false, busyQuiet = false, message = null, inputPrompt = null) }
         viewModelScope.launch {
             var current = start
             for (capId in chain.steps) {

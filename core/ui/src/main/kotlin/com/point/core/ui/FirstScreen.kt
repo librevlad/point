@@ -6,6 +6,7 @@ import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
@@ -113,6 +114,7 @@ fun FirstScreen(
     latent: List<LatentBubble> = emptyList(),
     enriching: List<String> = emptyList(),
     discover: Bubble? = null,
+    working: Boolean = false,
 ) {
     Column(
         modifier = modifier
@@ -130,7 +132,7 @@ fun FirstScreen(
         Box(
             Modifier.onGloballyPositioned { objectCenter.value = it.boundsInRoot().center },
         ) {
-            ObjectHeader(obj, thinking = enriching.isNotEmpty(), understood = facts.isNotEmpty())
+            ObjectHeader(obj, thinking = enriching.isNotEmpty() || working, understood = facts.isNotEmpty())
         }
 
         // «Point понял» (#114): the understanding card — facts land line by line as
@@ -168,8 +170,11 @@ fun FirstScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(20.dp))
+            val fieldAlpha by animateFloatAsState(if (working) 0.45f else 1f, tween(200), label = "field-dim")
             FlowRow(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .graphicsLayer { alpha = fieldAlpha },
                 horizontalArrangement = Arrangement.spacedBy(20.dp, Alignment.CenterHorizontally),
                 verticalArrangement = Arrangement.spacedBy(20.dp),
             ) {
@@ -177,7 +182,8 @@ fun FirstScreen(
                     key(bubble.capabilityId.value) {
                         BubbleItem(
                             bubble = bubble, index = index, size = 68.dp,
-                            objectCenter = objectCenter.value, onClick = { onBubble(bubble) },
+                            objectCenter = objectCenter.value, enabled = !working,
+                            onClick = { onBubble(bubble) },
                         )
                     }
                 }
@@ -538,6 +544,7 @@ private fun BubbleItem(
     index: Int,
     size: Dp = 62.dp,
     objectCenter: Offset = Offset.Unspecified,
+    enabled: Boolean = true,
     onClick: () -> Unit,
 ) = ActionBubble(
     icon = bubbleIcon(bubble.icon),
@@ -547,6 +554,7 @@ private fun BubbleItem(
     size = size,
     ai = bubble.tier == BubbleTier.AI,
     objectCenter = objectCenter,
+    enabled = enabled,
     onClick = onClick,
 )
 
@@ -567,6 +575,7 @@ private fun ActionBubble(
     size: Dp = 62.dp,
     ai: Boolean = false,
     objectCenter: Offset = Offset.Unspecified,
+    enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
     val motion = rememberMotionEnabled()
@@ -616,7 +625,7 @@ private fun ActionBubble(
                 translationY = v.y * (1f - p) +
                     sin(driftPhase + drift.phaseRad) * drift.amplitudeDp.dp.toPx() * p
             }
-            .clickable {
+            .clickable(enabled = enabled) {
                 when {
                     !motion || birthVector == null -> onClick()
                     !departing -> {
