@@ -1,7 +1,14 @@
 package com.point.core.ui
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -46,14 +53,19 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.isSpecified
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -65,6 +77,9 @@ import com.point.core.model.BubbleTier
 import com.point.core.model.LatentBubble
 import com.point.core.model.FavoriteChain
 import com.point.core.model.PointObject
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlin.math.sin
 
 /**
  * The first (and every) screen: a preview of the current object and the bubbles
@@ -110,7 +125,13 @@ fun FirstScreen(
         verticalArrangement = Arrangement.Center,
     ) {
         val facts = understoodFacts(obj)
-        ObjectHeader(obj, thinking = enriching.isNotEmpty(), understood = facts.isNotEmpty())
+        // M2: the object's centre is the birth/return anchor of every bubble-particle.
+        val objectCenter = remember { mutableStateOf(Offset.Unspecified) }
+        Box(
+            Modifier.onGloballyPositioned { objectCenter.value = it.boundsInRoot().center },
+        ) {
+            ObjectHeader(obj, thinking = enriching.isNotEmpty(), understood = facts.isNotEmpty())
+        }
 
         // «Point понял» (#114): the understanding card — facts land line by line as
         // enrichment delivers them (#64), with still-running work inside the same card.
@@ -154,7 +175,10 @@ fun FirstScreen(
             ) {
                 likely.forEachIndexed { index, bubble ->
                     key(bubble.capabilityId.value) {
-                        BubbleItem(bubble = bubble, index = index, size = 68.dp, onClick = { onBubble(bubble) })
+                        BubbleItem(
+                            bubble = bubble, index = index, size = 68.dp,
+                            objectCenter = objectCenter.value, onClick = { onBubble(bubble) },
+                        )
                     }
                 }
             }
@@ -164,7 +188,7 @@ fun FirstScreen(
             }
             if (rest.isNotEmpty()) {
                 Spacer(Modifier.height(10.dp))
-                AllActions(rest = rest, onBubble = onBubble)
+                AllActions(rest = rest, objectCenter = objectCenter.value, onBubble = onBubble)
             }
             if (latent.isNotEmpty()) {
                 Spacer(Modifier.height(22.dp))
@@ -442,7 +466,7 @@ private fun DiscoverHint(bubble: Bubble, onClick: () -> Unit) {
  *  grouped by [BubbleTier] — the levels themselves teach an action's nature. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun AllActions(rest: List<Bubble>, onBubble: (Bubble) -> Unit) {
+private fun AllActions(rest: List<Bubble>, objectCenter: Offset, onBubble: (Bubble) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         TextButton(onClick = { expanded = !expanded }) {
@@ -481,7 +505,10 @@ private fun AllActions(rest: List<Bubble>, onBubble: (Bubble) -> Unit) {
                     ) {
                         group.forEachIndexed { index, bubble ->
                             key(bubble.capabilityId.value) {
-                                BubbleItem(bubble = bubble, index = index, size = 52.dp, onClick = { onBubble(bubble) })
+                                BubbleItem(
+                                    bubble = bubble, index = index, size = 52.dp,
+                                    objectCenter = objectCenter, onClick = { onBubble(bubble) },
+                                )
                             }
                         }
                     }
@@ -506,20 +533,31 @@ private val TIER_GROUPS = listOf(
 )
 
 @Composable
-private fun BubbleItem(bubble: Bubble, index: Int, size: Dp = 62.dp, onClick: () -> Unit) =
-    ActionBubble(
-        icon = bubbleIcon(bubble.icon),
-        title = bubble.title,
-        color = bubbleColor(bubble.icon),
-        index = index,
-        size = size,
-        ai = bubble.tier == BubbleTier.AI,
-        onClick = onClick,
-    )
+private fun BubbleItem(
+    bubble: Bubble,
+    index: Int,
+    size: Dp = 62.dp,
+    objectCenter: Offset = Offset.Unspecified,
+    onClick: () -> Unit,
+) = ActionBubble(
+    icon = bubbleIcon(bubble.icon),
+    title = bubble.title,
+    color = bubbleColor(bubble.icon),
+    index = index,
+    size = size,
+    ai = bubble.tier == BubbleTier.AI,
+    objectCenter = objectCenter,
+    onClick = onClick,
+)
 
-/** One circular action bubble. Fades/scales in with a stagger so newly disclosed
- *  actions visibly appear. An AI bubble wears a quiet tertiary ring — the action
- *  leaves the device, and the screen says so before the tap (#114). */
+/**
+ * A bubble is a particle, not a button (M2, MOTION.md №4): it is **born from the
+ * object** (springs out along the object→slot vector, staggered), **drifts** weightlessly
+ * in idle with its own period and phase, and on tap is **pulled back into the object**
+ * before the action dispatches — the possibility returns to transform it. With reduced
+ * motion (or in previews, where the anchor is unknown) it appears in place and fires
+ * instantly. An AI bubble wears a quiet tertiary ring — the action leaves the device.
+ */
 @Composable
 private fun ActionBubble(
     icon: ImageVector,
@@ -528,28 +566,69 @@ private fun ActionBubble(
     index: Int,
     size: Dp = 62.dp,
     ai: Boolean = false,
+    objectCenter: Offset = Offset.Unspecified,
     onClick: () -> Unit,
 ) {
-    var appeared by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { appeared = true }
-    val progress by animateFloatAsState(
-        targetValue = if (appeared) 1f else 0f,
-        animationSpec = tween(durationMillis = 260, delayMillis = index * 45),
-        label = "bubble-in",
-    )
+    val motion = rememberMotionEnabled()
+    val presence = remember { Animatable(0f) }
+    var birthVector by remember { mutableStateOf<Offset?>(null) }
+    var departing by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val drift = remember(index) { driftSpecFor(index) }
+    val driftPhase = if (motion) {
+        rememberInfiniteTransition(label = "drift").animateFloat(
+            initialValue = 0f,
+            targetValue = 2f * Math.PI.toFloat(),
+            animationSpec = infiniteRepeatable(tween(drift.periodMs, easing = LinearEasing)),
+            label = "drift-phase",
+        ).value
+    } else {
+        0f
+    }
+
+    LaunchedEffect(Unit) {
+        if (!motion) {
+            presence.snapTo(1f)
+            return@LaunchedEffect
+        }
+        delay(index * 45L)
+        presence.animateTo(1f, spring(dampingRatio = 0.62f, stiffness = Spring.StiffnessMediumLow))
+    }
 
     Column(
         // Never narrower than 100dp: the longest one-word Russian labels («Скопировать»)
         // must fit in one line even under the small folded-group bubbles.
         modifier = Modifier
             .width(maxOf(size + 24.dp, 100.dp))
+            .onGloballyPositioned { coords ->
+                if (birthVector == null && objectCenter.isSpecified) {
+                    birthVector = objectCenter - coords.boundsInRoot().center
+                }
+            }
             .graphicsLayer {
-                alpha = progress
-                val scale = 0.7f + 0.3f * progress
+                val p = presence.value
+                alpha = p
+                val scale = 0.55f + 0.45f * p
                 scaleX = scale
                 scaleY = scale
+                val v = birthVector ?: Offset.Zero
+                translationX = v.x * (1f - p)
+                translationY = v.y * (1f - p) +
+                    sin(driftPhase + drift.phaseRad) * drift.amplitudeDp.dp.toPx() * p
             }
-            .clickable(onClick = onClick),
+            .clickable {
+                when {
+                    !motion || birthVector == null -> onClick()
+                    !departing -> {
+                        // Pulled back into the object, then the action fires (BUBBLE_DEPART_MS).
+                        departing = true
+                        scope.launch {
+                            presence.animateTo(0f, tween(BUBBLE_DEPART_MS, easing = FastOutLinearInEasing))
+                            onClick()
+                        }
+                    }
+                }
+            },
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Box(

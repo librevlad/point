@@ -46,6 +46,24 @@ fun breathSpecFor(kind: ObjectKind): BreathSpec = when (kind) {
     ObjectKind.PDF, ObjectKind.OFFICE, ObjectKind.UNKNOWN -> BreathSpec(scale = 1.003f, periodMs = 6_000)
 }
 
+/*
+ * M2: bubbles are particles, not buttons (принцип №4). Each drifts weightlessly with
+ * its own period and phase — the field must never move as one rigid grid.
+ */
+
+/** Per-bubble weightless drift parameters. */
+data class DriftSpec(val amplitudeDp: Float, val periodMs: Int, val phaseRad: Float)
+
+fun driftSpecFor(index: Int): DriftSpec = DriftSpec(
+    amplitudeDp = 1.4f + (index % 3) * 0.4f,
+    periodMs = 2_900 + (index % 5) * 340,
+    phaseRad = (index * 0.9f) % (2f * Math.PI.toFloat()),
+)
+
+/** How long a tapped bubble takes to be pulled back into the object before the action
+ *  dispatches — the deliberate price of the «микрорадость» rule; reduced motion skips it. */
+const val BUBBLE_DEPART_MS = 180
+
 /** The system's reduced-motion wish (animator scale 0) — all M1 dynamics freeze to static. */
 @Composable
 fun rememberMotionEnabled(): Boolean {
