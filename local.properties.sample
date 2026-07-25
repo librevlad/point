@@ -54,3 +54,11 @@ CEREBRAS_MODELS=gpt-oss-120b,gemma-4-31b
 GITHUB_API_KEY=
 GITHUB_BASE_URL=https://models.github.ai/inference
 GITHUB_MODELS=openai/gpt-4o-mini,openai/gpt-4o
+
+# Release signing (#11): absolute path to the keystore + its passwords.
+# Generate once (keytool -genkeypair), store OUTSIDE the repo, BACK IT UP -
+# losing it means losing the Play identity of the app.
+RELEASE_STORE_FILE=
+RELEASE_STORE_PASSWORD=
+RELEASE_KEY_ALIAS=
+RELEASE_KEY_PASSWORD=

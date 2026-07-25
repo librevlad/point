@@ -27,6 +27,7 @@ import com.point.core.flow.PrivacyConsent
 import com.point.core.flow.SensoryFeedback
 import com.point.core.flow.SensorySettings
 import com.point.core.flow.FlowSnapshotStore
+import com.point.core.flow.CrashLog
 import com.point.core.flow.QrEncoder
 import com.point.core.flow.QrReader
 import com.point.core.flow.Sharer
@@ -74,6 +75,7 @@ import com.point.data.PdfImageEnricher
 import com.point.data.PrefsPrivacyConsent
 import com.point.data.PrefsSensorySettings
 import com.point.data.FileFlowSnapshotStore
+import com.point.data.FileCrashLog
 import com.point.data.VibratorSensoryFeedback
 import com.point.data.PrefsUserKeyStore
 import com.point.data.QrEnricher
@@ -199,6 +201,10 @@ abstract class DataModule {
     @Binds
     abstract fun flowSnapshotStore(impl: FileFlowSnapshotStore): FlowSnapshotStore
 
+    /** Local, consent-to-share crash visibility (#11). */
+    @Binds
+    abstract fun crashLog(impl: FileCrashLog): CrashLog
+
     @Binds @IntoSet
     abstract fun textUrlEnricher(e: TextUrlEnricher): Enricher
 
@@ -294,6 +300,16 @@ abstract class DataModule {
         @FlowSnapshotFile
         fun flowSnapshotFile(@ApplicationContext context: Context): java.io.File =
             java.io.File(context.filesDir, "flow-snapshot.json")
+
+        /** The one injectable IO dispatcher — swapped for the test dispatcher in JVM tests,
+         *  so no real thread ever outlives a test (#11 flake root-cause). */
+        @Provides
+        fun ioDispatcher(): kotlinx.coroutines.CoroutineDispatcher = kotlinx.coroutines.Dispatchers.IO
+
+        @Provides
+        @CrashLogFile
+        fun crashLogFile(@ApplicationContext context: Context): java.io.File =
+            java.io.File(context.filesDir, "last-crash.txt")
 
         @Provides
         @FavoritesDir

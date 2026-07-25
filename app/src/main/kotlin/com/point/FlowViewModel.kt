@@ -6,6 +6,7 @@ import com.point.core.flow.AppLauncher
 import com.point.core.flow.AppTarget
 import com.point.core.flow.CapabilityRegistry
 import com.point.core.flow.CapabilityUsage
+import com.point.core.flow.CrashLog
 import com.point.core.flow.Enrichment
 import com.point.core.flow.EnrichmentUpdate
 import com.point.core.flow.FavoritesStore
@@ -37,7 +38,7 @@ import com.point.executors.Bitmaps
 import com.point.executors.OpenInCapability
 import dagger.hilt.android.lifecycle.HiltViewModel
 import androidx.compose.ui.graphics.asImageBitmap
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -71,6 +72,8 @@ class FlowViewModel @Inject constructor(
     private val sensory: SensoryFeedback,
     private val sensorySettings: SensorySettings,
     private val flowSnapshot: FlowSnapshotStore,
+    private val crashLog: CrashLog,
+    private val ioDispatcher: CoroutineDispatcher,
 ) : ViewModel() {
 
     private val stack = ArrayDeque<FlowFrame>()
@@ -88,6 +91,10 @@ class FlowViewModel @Inject constructor(
     private val _recent = MutableStateFlow<List<HistoryEntry>>(emptyList())
     val recent: StateFlow<List<HistoryEntry>> = _recent.asStateFlow()
 
+    private val _crashReport = MutableStateFlow<String?>(null)
+    /** A previous crash report, offered once for an explicit share (#11). */
+    val crashReport: StateFlow<String?> = _crashReport.asStateFlow()
+
     private val _clipboard = MutableStateFlow<String?>(null)
     /** Actionable text sitting in the clipboard when Point opened — a dismissible Home suggestion (#72). */
     val clipboard: StateFlow<String?> = _clipboard.asStateFlow()
@@ -99,7 +106,14 @@ class FlowViewModel @Inject constructor(
 
     init {
         viewModelScope.launch { loadFavorites() }
+        viewModelScope.launch { _crashReport.value = runCatching { crashLog.pending() }.getOrNull() }
         restoreJourney()
+    }
+
+    /** The user saw (and maybe shared) the crash report - forget it either way. */
+    fun dismissCrashReport() {
+        _crashReport.value = null
+        viewModelScope.launch { runCatching { crashLog.clear() } }
     }
 
     /** #7: re-materialise the flow after process death. Scratch files survive (clear()
@@ -659,7 +673,7 @@ class FlowViewModel @Inject constructor(
     private fun loadObjectPreview(obj: PointObject) {
         if (obj.state.kind != ObjectKind.IMAGE && obj.state.kind != ObjectKind.PDF) return
         viewModelScope.launch {
-            val bitmap = withContext(Dispatchers.IO) {
+            val bitmap = withContext(ioDispatcher) {
                 val source = previewSource(obj, pdfRasterizer) ?: return@withContext null
                 runCatching { Bitmaps.decodeThumbnail(source, PREVIEW_MAX_PX)?.asImageBitmap() }.getOrNull()
             } ?: return@launch

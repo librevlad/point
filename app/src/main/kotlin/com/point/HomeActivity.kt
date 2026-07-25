@@ -48,6 +48,7 @@ class HomeActivity : ComponentActivity() {
                     if (state.frame == null && state.busy == null && state.message == null && state.keyScreen == null) {
                         val recent by viewModel.recent.collectAsStateWithLifecycle()
                         val clipboard by viewModel.clipboard.collectAsStateWithLifecycle()
+                        val crash by viewModel.crashReport.collectAsStateWithLifecycle()
                         HomeScreen(
                             recent = recent,
                             onOpen = viewModel::openFromHistory,
@@ -56,6 +57,9 @@ class HomeActivity : ComponentActivity() {
                             clipboard = clipboard,
                             onUseClipboard = ::useClipboard,
                             onDismissClipboard = viewModel::dismissClipboard,
+                            crashReport = crash,
+                            onSendCrash = ::shareCrashReport,
+                            onDismissCrash = viewModel::dismissCrashReport,
                         )
                     } else {
                         PointHost(
@@ -102,6 +106,16 @@ class HomeActivity : ComponentActivity() {
         val clip = cm.primaryClip ?: return null
         if (clip.itemCount == 0) return null
         return clip.getItemAt(0).coerceToText(this)?.toString()
+    }
+
+    /** #11: the report leaves the device only through the user's own share choice. */
+    private fun shareCrashReport(report: String) {
+        val send = android.content.Intent(android.content.Intent.ACTION_SEND)
+            .setType("text/plain")
+            .putExtra(android.content.Intent.EXTRA_SUBJECT, "Point - отчёт о падении")
+            .putExtra(android.content.Intent.EXTRA_TEXT, report)
+        startActivity(android.content.Intent.createChooser(send, "Отправить отчёт"))
+        viewModel.dismissCrashReport()
     }
 
     private fun useClipboard(text: String) {
