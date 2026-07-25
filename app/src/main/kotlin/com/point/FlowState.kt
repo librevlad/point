@@ -39,6 +39,16 @@ data class FlowFrame(
     val discover: Bubble? = null,
 )
 
+/** The file the header preview is decoded from (#114): an image shows itself, a PDF its
+ *  rendered first page; everything else keeps the kind icon (null). Failures are null too —
+ *  a preview is a gift, never an error. */
+suspend fun previewSource(obj: PointObject, rasterizer: com.point.core.flow.PdfRasterizer): String? =
+    when (obj.state.kind) {
+        ObjectKind.IMAGE -> obj.uri.value
+        ObjectKind.PDF -> runCatching { rasterizer.rasterizeFirstPage(obj)?.value }.getOrNull()
+        else -> null
+    }
+
 /** M3: work that may run quietly on the object itself — local and not declared slow.
  *  Cloud (network) and SLOW work keep the full busy screen with its staged reassurance. */
 fun quietWork(meta: CapabilityMeta): Boolean = !meta.network && meta.latency != Latency.SLOW

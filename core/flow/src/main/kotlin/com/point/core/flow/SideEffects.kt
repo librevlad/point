@@ -126,6 +126,10 @@ interface PdfRasterizer {
     /** @return the scratch directory holding the page images (page-001.jpg …),
      *  which may be empty if the PDF has no pages / cannot be rendered. */
     suspend fun rasterize(obj: PointObject): ScratchRef
+
+    /** Render ONLY the first page — cheap enough for the header preview (#114).
+     *  @return the page image, or null when the PDF has no pages / cannot be read. */
+    suspend fun rasterizeFirstPage(obj: PointObject): ScratchRef?
 }
 
 /** Extracts text from an OOXML office document (docx/xlsx/pptx). Empty if none
