@@ -507,10 +507,22 @@ class FlowViewModel @Inject constructor(
         if (stack.size <= 1) return false
         stack.removeLast()
         val top = stack.last()
-        _ui.update { it.copy(frame = top, message = null) }
+        _ui.update { it.copy(frame = top, message = null, path = currentPath()) }
         refreshFavorites()
         return true
     }
+
+    /** Timeline tap (#114): pop back to the [index]-th step of the journey in one move. */
+    fun jumpTo(index: Int) {
+        if (index < 0 || index >= stack.size - 1) return
+        while (stack.size - 1 > index) stack.removeLast()
+        val top = stack.last()
+        _ui.update { it.copy(frame = top, message = null, path = currentPath()) }
+        refreshFavorites()
+    }
+
+    private fun currentPath(): List<PathStep> =
+        stack.map { PathStep(it.obj.state.kind, it.viaTitle) }
 
     fun hasFlow(): Boolean = stack.isNotEmpty()
 
@@ -532,7 +544,7 @@ class FlowViewModel @Inject constructor(
         _ui.update {
             it.copy(
                 busy = null, frame = frame, message = null, inputPrompt = null, inputSuggestions = emptyList(),
-                needsImage = null, preview = null,
+                needsImage = null, preview = null, path = currentPath(),
             )
         }
         refreshFavorites()

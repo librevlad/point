@@ -67,6 +67,7 @@ class SandboxActivity : ComponentActivity() {
                             onSubmitInput = viewModel::submitAmendment,
                             onCancelInput = viewModel::cancelInput,
                             onItem = viewModel::onItem,
+                            onJumpTo = viewModel::jumpTo,
                             onSaveAiConfig = viewModel::saveAiConfig,
                             onCloseKeySettings = viewModel::closeKeySettings,
                             onToggleUsage = viewModel::setUsageEnabled,

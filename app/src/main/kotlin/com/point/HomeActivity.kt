@@ -66,6 +66,7 @@ class HomeActivity : ComponentActivity() {
                             onApplyFavorite = viewModel::applyFavorite,
                             onSaveChain = viewModel::saveCurrentChain,
                             onItem = viewModel::onItem,
+                            onJumpTo = viewModel::jumpTo,
                             onSaveAiConfig = viewModel::saveAiConfig,
                             onCloseKeySettings = viewModel::closeKeySettings,
                             onToggleUsage = viewModel::setUsageEnabled,
