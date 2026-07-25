@@ -97,7 +97,19 @@ class HomeActivity : ComponentActivity() {
         super.onWindowFocusChanged(hasFocus)
         // The clipboard is readable only with window focus (Android 10+), which lands AFTER
         // onResume — reading here is what makes the "act on copied text" offer appear (#72).
-        if (hasFocus && !viewModel.hasFlow()) viewModel.offerClipboard(readClipboardText())
+        if (hasFocus && !viewModel.hasFlow()) {
+            val text = readClipboardText()
+            viewModel.offerClipboard(text)
+            // #111: on some devices the clipboard is not yet served at the focus edge —
+            // one delayed retry closes that race without ever polling in background.
+            if (text.isNullOrBlank()) {
+                window.decorView.postDelayed({
+                    if (hasWindowFocus() && !viewModel.hasFlow()) {
+                        viewModel.offerClipboard(readClipboardText())
+                    }
+                }, CLIPBOARD_RETRY_MS)
+            }
+        }
     }
 
     /** The current clipboard text, or null. Only ever called while Point is in the foreground. */
@@ -123,3 +135,5 @@ class HomeActivity : ComponentActivity() {
         viewModel.onShared(Uri.fromFile(cacheTextFile(cacheDir, text)).toString(), "text/plain")
     }
 }
+
+private const val CLIPBOARD_RETRY_MS = 300L
