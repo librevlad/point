@@ -69,6 +69,7 @@ class FlowViewModelTest {
     private val journal = FakeUsageJournal()
     private val consent = FakePrivacyConsent()
     private val appLauncher = FakeAppLauncher()
+    private val sensory = FakeSensoryFeedback()
 
     @Before fun setUp() = Dispatchers.setMain(dispatcher)
     @After fun tearDown() = Dispatchers.resetMain()
@@ -78,7 +79,7 @@ class FlowViewModelTest {
     private fun vm(
         caps: Map<CapabilityId, Set<Intent>> = mapOf(CapabilityId("a") to setOf(Intent.PREPARE)),
         cloud: Set<CapabilityId> = emptySet(),
-    ) = FlowViewModel(store, FakeRegistry(caps, cloud), resolver, enrichment, history, favorites, usage, userKeys, journal, consent, appLauncher, FakePdfRasterizer())
+    ) = FlowViewModel(store, FakeRegistry(caps, cloud), resolver, enrichment, history, favorites, usage, userKeys, journal, consent, appLauncher, FakePdfRasterizer(), sensory)
 
     private fun bubble(id: String = "a", title: String = "Действие") =
         Bubble("x", title, CapabilityId(id), ObjectState(ObjectKind.TEXT))
@@ -219,6 +220,38 @@ class FlowViewModelTest {
 
         advanceUntilIdle()
         assertNull(vm.ui.value.busy)
+    }
+
+    // --- M4 (MOTION.md №7): every action answers in the hand — tap / success / failure ---
+
+    @Test fun `a bubble tap clicks, a Done answers with success in the hand`() = runTest(dispatcher) {
+        resolver.result = ActionResult.Done("Скопировано")
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.onBubble(bubble()); advanceUntilIdle()
+
+        assertEquals(listOf("tap", "success"), sensory.events)
+    }
+
+    @Test fun `a Failure answers with the failure buzz`() = runTest(dispatcher) {
+        resolver.result = ActionResult.Failure("не вышло", recoverable = true)
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.onBubble(bubble()); advanceUntilIdle()
+
+        assertEquals(listOf("tap", "failure"), sensory.events)
+    }
+
+    @Test fun `a Success transformation answers with success too`() = runTest(dispatcher) {
+        resolver.result = ActionResult.Success(ResultObject(ObjectKind.TEXT, "text/plain", ScratchRef("/o")))
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.onBubble(bubble()); advanceUntilIdle()
+
+        assertEquals(listOf("tap", "success"), sensory.events)
     }
 
     // --- M3 (MOTION.md №8/9): a fast local action works quietly — the object stays put ---
@@ -775,6 +808,13 @@ private class FakeUserKeys(var config: UserAiConfig? = null) : UserKeyStore {
 private class FakePrivacyConsent(var granted: Boolean = false) : PrivacyConsent {
     override suspend fun cloudAllowed() = granted
     override suspend fun allowCloud() { granted = true }
+}
+
+private class FakeSensoryFeedback : com.point.core.flow.SensoryFeedback {
+    val events = mutableListOf<String>()
+    override fun tap() { events += "tap" }
+    override fun success() { events += "success" }
+    override fun failure() { events += "failure" }
 }
 
 private class FakePdfRasterizer : com.point.core.flow.PdfRasterizer {
