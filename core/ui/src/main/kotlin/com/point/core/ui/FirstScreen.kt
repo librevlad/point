@@ -36,6 +36,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -131,8 +132,13 @@ fun FirstScreen(
     pinned: CapabilityId? = null,
     onBubbleLongPress: (Bubble) -> Unit = {},
 ) {
+    // #115 slice 2: tapping the object opens ITS SPACE — the radial mode where the
+    // possibilities place themselves around it. Rendered over the list layout so the
+    // proven first screen stays intact; dismiss returns to it.
+    var spaceOpen by remember { mutableStateOf(false) }
+    Box(modifier.fillMaxSize()) {
     Column(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxSize()
             // The unfolded «Все действия» can outgrow the screen (#114) — the whole
             // screen scrolls; with little content the Center arrangement still centres.
@@ -171,6 +177,12 @@ fun FirstScreen(
                     scaleX = heldScale
                     scaleY = heldScale
                 }
+                // #115 slice 2: a tap enters the object's space (long-press still drags).
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    enabled = !working && inputPrompt == null && bubbles.isNotEmpty(),
+                ) { spaceOpen = true }
                 .pointerInput(working, inputPrompt, likely.map { it.capabilityId }) {
                     if (working || inputPrompt != null) return@pointerInput
                     val radius = MAGNET_RADIUS_DP.dp.toPx()
@@ -302,6 +314,17 @@ fun FirstScreen(
         }
 
         MessageBanner(message)
+    }
+    if (spaceOpen) {
+        ObjectSpace(
+            obj = obj,
+            bubbles = bubbles,
+            previewBitmap = previewBitmap,
+            pinned = pinned,
+            onBubble = { spaceOpen = false; onBubble(it) },
+            onDismiss = { spaceOpen = false },
+        )
+    }
     }
 }
 
@@ -493,11 +516,12 @@ private fun TextPreview(text: String, markdown: Boolean = false) {
 }
 
 @Composable
-private fun ObjectHeader(
+internal fun ObjectHeader(
     obj: PointObject,
     thinking: Boolean = false,
     understood: Boolean = false,
     preview: ImageBitmap? = null,
+    titled: Boolean = true,
 ) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         // M1 (MOTION.md): the object breathes with its kind's physics; a light ring
@@ -539,20 +563,22 @@ private fun ObjectHeader(
                 }
             }
         }
-        Spacer(Modifier.height(14.dp))
-        Text(
-            text = obj.metadata["name"] ?: kindLabel(obj.state.kind),
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        // #129: never show a raw MIME to a person — the kind label speaks their language.
-        Text(
-            text = kindLabel(obj.state.kind),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        if (titled) {
+            Spacer(Modifier.height(14.dp))
+            Text(
+                text = obj.metadata["name"] ?: kindLabel(obj.state.kind),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            // #129: never show a raw MIME to a person — the kind label speaks their language.
+            Text(
+                text = kindLabel(obj.state.kind),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
 
@@ -663,7 +689,7 @@ private val TIER_GROUPS = listOf(
 )
 
 @Composable
-private fun BubbleItem(
+internal fun BubbleItem(
     bubble: Bubble,
     index: Int,
     size: Dp = 62.dp,
@@ -671,6 +697,8 @@ private fun BubbleItem(
     enabled: Boolean = true,
     pinned: Boolean = false,
     magnet: Boolean = false,
+    labelMaxLines: Int = 2,
+    showLabel: Boolean = true,
     onCenter: (Offset) -> Unit = {},
     onClick: () -> Unit,
     onLongClick: () -> Unit = {},
@@ -685,6 +713,8 @@ private fun BubbleItem(
     enabled = enabled,
     pinned = pinned,
     magnet = magnet,
+    labelMaxLines = labelMaxLines,
+    showLabel = showLabel,
     onCenter = onCenter,
     onClick = onClick,
     onLongClick = onLongClick,
@@ -700,7 +730,7 @@ private fun BubbleItem(
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ActionBubble(
+internal fun ActionBubble(
     icon: ImageVector,
     title: String,
     color: Color,
@@ -711,6 +741,8 @@ private fun ActionBubble(
     enabled: Boolean = true,
     pinned: Boolean = false,
     magnet: Boolean = false,
+    labelMaxLines: Int = 2,
+    showLabel: Boolean = true,
     onCenter: (Offset) -> Unit = {},
     onClick: () -> Unit,
     onLongClick: () -> Unit = {},
@@ -745,10 +777,11 @@ private fun ActionBubble(
     }
 
     Column(
-        // Never narrower than 100dp: the longest one-word Russian labels («Скопировать»)
-        // must fit in one line even under the small folded-group bubbles.
+        // Never narrower than 100dp when captioned: the longest one-word Russian labels
+        // («Скопировать») must fit in one line even under the small folded-group bubbles.
+        // Icon-only bubbles keep a tight hit-box so space layouts don't overlap invisibly.
         modifier = Modifier
-            .width(maxOf(size + 24.dp, 100.dp))
+            .width(if (showLabel) maxOf(size + 24.dp, 100.dp) else size + 24.dp)
             .onGloballyPositioned { coords ->
                 if (birthVector == null && objectCenter.isSpecified) {
                     birthVector = objectCenter - coords.boundsInRoot().center
@@ -810,15 +843,20 @@ private fun ActionBubble(
                 modifier = Modifier.size(size * 0.45f),
             )
         }
-        Spacer(Modifier.height(9.dp))
-        Text(
-            text = if (pinned) "\u2605 " + title else title, // #66: the user's own rule is visible
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.Bold,
-            color = if (pinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground,
-            textAlign = TextAlign.Center,
-            maxLines = 2,
-        )
+        // In the object's space only the near ring carries captions \u2014 everything else
+        // is an icon until the carried object approaches and the magnet names it.
+        if (showLabel || magnet) {
+            Spacer(Modifier.height(9.dp))
+            Text(
+                text = if (pinned) "\u2605 " + title else title, // #66: the user's own rule is visible
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = if (pinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground,
+                textAlign = TextAlign.Center,
+                maxLines = labelMaxLines,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
     }
 }
 
