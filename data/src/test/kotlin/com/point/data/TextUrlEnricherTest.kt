@@ -31,13 +31,13 @@ class TextUrlEnricherTest {
 
     @Test
     fun `flags HAS_URL when the text contains a link`() = runTest {
-        val features = enricher.enrich(textObject("смотри тут https://example.com дальше"))
+        val features = enricher.enrich(textObject("смотри тут https://example.com дальше")).features
         assertTrue(Feature.HAS_URL in features)
     }
 
     @Test
     fun `no flag when there is no link`() = runTest {
-        val features = enricher.enrich(textObject("просто текст без ссылок"))
+        val features = enricher.enrich(textObject("просто текст без ссылок")).features
         assertFalse(Feature.HAS_URL in features)
     }
 }

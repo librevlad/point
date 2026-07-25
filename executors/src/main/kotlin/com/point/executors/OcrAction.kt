@@ -5,7 +5,9 @@ import com.point.core.flow.CapabilityMeta
 import com.point.core.flow.Cost
 import com.point.core.flow.Latency
 import com.point.core.flow.LlmClient
+import com.point.core.flow.META_OCR_TEXT_REF
 import com.point.core.flow.ObjectStore
+import com.point.core.flow.looksLikeOcrGarbage
 import com.point.core.flow.Realizer
 import com.point.core.flow.RealizerKind
 import com.point.core.flow.RealizerMeta
@@ -16,6 +18,7 @@ import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
 import com.point.core.model.ResultObject
+import com.point.core.model.ScratchRef
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -61,6 +64,20 @@ class DeviceOcrRealizer @Inject constructor(
 
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
+            // The OCR enricher may have read this image already (#64) — reuse its sidecar
+            // instead of running the engine a second time on the same pixels.
+            val cached = input.metadata[META_OCR_TEXT_REF]
+                ?.let { path -> runCatching { File(path).takeIf(File::isFile)?.readText() }.getOrNull() }
+            if (!cached.isNullOrBlank()) {
+                return@withContext ActionResult.Success(
+                    ResultObject(
+                        ObjectKind.TEXT,
+                        "text/plain",
+                        ScratchRef(input.metadata.getValue(META_OCR_TEXT_REF)),
+                        mapOf("op" to "ocr", "engine" to "on-device"),
+                    ),
+                )
+            }
             val text = runCatching { recognizer.recognize(input) }.getOrDefault("")
             if (text.isBlank() || looksLikeOcrGarbage(text)) {
                 // Blank OR gibberish (Tesseract on a photographed document) → hand off to the
@@ -129,19 +146,4 @@ class CloudOcrDirectRealizer @Inject constructor(
             runCatching { ActionResult.Success(llm.run(input, OCR_CLOUD_PROMPT)) }
                 .getOrElse { ActionResult.Failure(it.message ?: "Ошибка распознавания в облаке", recoverable = true) }
         }
-}
-
-/**
- * Tesseract on a photographed document often returns *gibberish* (symbols and isolated 1-2 char
- * fragments) rather than empty — so the blank-check alone never falls back. This flags that
- * gibberish by two cheap signals: too few letters among the non-space characters, or almost no real
- * (4+ letter) words. A false positive just means we use the cloud OCR — better anyway — so this errs
- * toward flagging.
- */
-internal fun looksLikeOcrGarbage(text: String): Boolean {
-    val nonSpace = text.count { !it.isWhitespace() }
-    if (nonSpace < 30) return false // too short to judge — let it through
-    val letters = text.count { it.isLetter() }
-    val words = Regex("""\p{L}{4,}""").findAll(text).count()
-    return letters.toDouble() / nonSpace < 0.6 || words < 3
 }

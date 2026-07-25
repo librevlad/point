@@ -7,6 +7,7 @@ import com.point.core.flow.AppTarget
 import com.point.core.flow.CapabilityRegistry
 import com.point.core.flow.CapabilityUsage
 import com.point.core.flow.Enrichment
+import com.point.core.flow.EnrichmentUpdate
 import com.point.core.flow.FavoritesStore
 import com.point.core.flow.HistoryStore
 import com.point.core.flow.ObjectStore
@@ -27,9 +28,11 @@ import com.point.core.model.ObjectKind
 import com.point.core.model.PointObject
 import com.point.executors.OpenInCapability
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -56,6 +59,7 @@ class FlowViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val stack = ArrayDeque<FlowFrame>()
+    private val enrichJobs = mutableListOf<Job>()
     private var pendingBubble: Bubble? = null
     /** A cloud action deferred until the user grants consent (#10); run on confirm. */
     private var pendingCloud: (() -> Unit)? = null
@@ -90,6 +94,7 @@ class FlowViewModel @Inject constructor(
             }
             runCatching { history.record(obj) }
             runCatching { journal.record(UsageEvent(UsageEventType.SHARED, obj.state.kind.name)) }
+            cancelEnrichment()
             stack.clear()
             pushFrame(obj)
         }
@@ -109,6 +114,7 @@ class FlowViewModel @Inject constructor(
             }
             // A collection is a transient scratch directory — History copies a single file, so skip it.
             runCatching { journal.record(UsageEvent(UsageEventType.SHARED, obj.state.kind.name)) }
+            cancelEnrichment()
             stack.clear()
             pushFrame(obj)
         }
@@ -153,6 +159,7 @@ class FlowViewModel @Inject constructor(
                 return@launch
             }
             runCatching { store.clear() }
+            cancelEnrichment()
             stack.clear()
             pushFrame(obj)
         }
@@ -530,6 +537,7 @@ class FlowViewModel @Inject constructor(
     fun hasFlow(): Boolean = stack.isNotEmpty()
 
     fun endFlow() {
+        cancelEnrichment()
         stack.clear()
         pendingBubble = null
         pendingPreviewBubble = null
@@ -614,30 +622,45 @@ class FlowViewModel @Inject constructor(
         refreshFavorites()
     }
 
+    /** Collect the progressive enrichment stream: every finding lands on screen as it
+     *  arrives (bubbles grow one by one), and [FlowFrame.enriching] mirrors the labels of
+     *  still-running work — the visible "Point думает" feedback (#64). */
     private fun enrichInBackground(obj: PointObject) {
-        viewModelScope.launch {
-            val extra = runCatching { enrichment.enrich(obj) }.getOrDefault(emptySet())
-            if (extra.isEmpty()) return@launch
-
-            val topIndex = stack.lastIndex
-            val top = stack.getOrNull(topIndex) ?: return@launch
-            if (top.obj.id != obj.id) return@launch
-
-            val enrichedState = extra.fold(top.obj.state) { state, feature -> state.with(feature) }
-            if (enrichedState == top.obj.state) return@launch
-
-            val enrichedObj = top.obj.copy(state = enrichedState)
-            val refreshed = top.copy(
-                obj = enrichedObj,
-                bubbles = registry.bubblesFor(enrichedState),
-                latent = registry.latentBubblesFor(enrichedState),
-            )
-            stack[topIndex] = refreshed
-            _ui.update {
-                if (it.frame === top) it.copy(frame = refreshed, intents = registry.intentsFor(enrichedState)) else it
-            }
-            refreshFavorites()
+        enrichJobs += viewModelScope.launch {
+            enrichment.enrich(obj)
+                .catch { /* enrichment must never break the flow — it only ever adds */ }
+                .collect { update -> applyEnrichment(obj, update) }
         }
+    }
+
+    /** Apply one enrichment snapshot to its object's frame — found by id, not by top:
+     *  a slow OCR finishing after the user moved on still lands on the frame below,
+     *  so its findings are there when they come back. */
+    private fun applyEnrichment(source: PointObject, update: EnrichmentUpdate) {
+        val index = stack.indexOfLast { it.obj.id == source.id }
+        val frame = stack.getOrNull(index) ?: return
+        val newState = update.features.fold(frame.obj.state) { state, feature -> state.with(feature) }
+        val newMetadata = frame.obj.metadata + update.metadata
+        val objChanged = newState != frame.obj.state || newMetadata != frame.obj.metadata
+        if (!objChanged && update.running == frame.enriching) return
+
+        val refreshed = frame.copy(
+            obj = frame.obj.copy(state = newState, metadata = newMetadata),
+            bubbles = if (objChanged) registry.bubblesFor(newState) else frame.bubbles,
+            latent = if (objChanged) registry.latentBubblesFor(newState) else frame.latent,
+            enriching = update.running,
+        )
+        stack[index] = refreshed
+        _ui.update {
+            if (it.frame?.obj?.id == source.id) it.copy(frame = refreshed, intents = registry.intentsFor(newState))
+            else it
+        }
+        if (objChanged) refreshFavorites()
+    }
+
+    private fun cancelEnrichment() {
+        enrichJobs.forEach { it.cancel() }
+        enrichJobs.clear()
     }
 }
 

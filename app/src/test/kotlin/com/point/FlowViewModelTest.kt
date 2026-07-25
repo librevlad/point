@@ -7,6 +7,7 @@ import com.point.core.flow.CapabilityMeta
 import com.point.core.flow.CapabilityRegistry
 import com.point.core.flow.CapabilityUsage
 import com.point.core.flow.Enrichment
+import com.point.core.flow.EnrichmentUpdate
 import com.point.core.flow.FavoritesStore
 import com.point.core.flow.HistoryStore
 import com.point.core.flow.ObjectStore
@@ -325,6 +326,66 @@ class FlowViewModelTest {
         assertTrue(vm.ui.value.frame?.obj?.state?.has(Feature.HAS_URL) == true)
     }
 
+    @Test fun `enrichment updates land progressively — each finding refreshes the frame`() = runTest(dispatcher) {
+        enrichment.updates = listOf(
+            EnrichmentUpdate(setOf(Feature.HAS_URL), emptyMap(), listOf("Распознаю текст…")),
+            EnrichmentUpdate(setOf(Feature.HAS_URL, Feature.HAS_PHONE), emptyMap(), emptyList()),
+        )
+        enrichment.stepDelayMs = 100
+        val vm = vm()
+        vm.onShared("uri", "image/png")
+        dispatcher.scheduler.advanceTimeBy(150) // after the 1st update, before the 2nd
+
+        val mid = vm.ui.value.frame
+        assertTrue(mid?.obj?.state?.has(Feature.HAS_URL) == true)   // first finding already visible
+        assertEquals(false, mid?.obj?.state?.has(Feature.HAS_PHONE))
+        assertEquals(listOf("Распознаю текст…"), mid?.enriching)    // background work is announced
+
+        advanceUntilIdle()
+        val end = vm.ui.value.frame
+        assertTrue(end?.obj?.state?.has(Feature.HAS_PHONE) == true) // second finding arrived
+        assertTrue(end?.enriching?.isEmpty() == true)               // and the announcement cleared
+    }
+
+    @Test fun `enrichment merges discovered metadata into the frame object`() = runTest(dispatcher) {
+        enrichment.updates = listOf(
+            EnrichmentUpdate(setOf(Feature.HAS_PHONE), mapOf("ocr.text.ref" to "/scratch/ocr.txt"), emptyList()),
+        )
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        assertEquals("/scratch/ocr.txt", vm.ui.value.frame?.obj?.metadata?.get("ocr.text.ref"))
+    }
+
+    @Test fun `late enrichment still lands on its object below the top of the stack`() = runTest(dispatcher) {
+        enrichment.updates = listOf(EnrichmentUpdate(setOf(Feature.HAS_PHONE), emptyMap(), emptyList()))
+        enrichment.stepDelayMs = 500 // the root's OCR is still running when the user acts
+        resolver.result = ActionResult.Success(ResultObject(ObjectKind.TEXT, "text/plain", ScratchRef("/o")))
+        val vm = vm()
+        vm.onShared("uri", "image/png")
+        dispatcher.scheduler.advanceTimeBy(50)   // root frame pushed, its enrichment pending
+        vm.onBubble(bubble())
+        dispatcher.scheduler.advanceTimeBy(100)  // a TEXT frame is now on top
+        assertEquals(ObjectKind.TEXT, vm.ui.value.frame?.obj?.state?.kind)
+
+        advanceUntilIdle()                        // root enrichment finally lands
+
+        vm.onBack()
+        assertTrue(vm.ui.value.frame?.obj?.state?.has(Feature.HAS_PHONE) == true) // not lost
+    }
+
+    @Test fun `ending the flow cancels running enrichment`() = runTest(dispatcher) {
+        enrichment.updates = listOf(EnrichmentUpdate(setOf(Feature.HAS_PHONE), emptyMap(), emptyList()))
+        enrichment.stepDelayMs = 10_000
+        val vm = vm()
+        vm.onShared("uri", "image/png")
+        dispatcher.scheduler.advanceTimeBy(50)
+
+        vm.endFlow(); advanceUntilIdle() // must not hang or apply to a cleared stack
+
+        assertNull(vm.ui.value.frame)
+    }
+
     @Test fun `onItem drills into a collection item as a new frame`() = runTest(dispatcher) {
         val vm = vm()
         vm.onSharedMultiple(listOf("a", "b")); advanceUntilIdle()
@@ -600,7 +661,17 @@ private class FakeRegistry(
 }
 
 private class FakeEnrichment(var features: Set<Feature> = emptySet()) : Enrichment {
-    override suspend fun enrich(obj: PointObject): Set<Feature> = features
+    /** Progressive script: each update is emitted after [stepDelayMs] of virtual time. */
+    var updates: List<EnrichmentUpdate>? = null
+    var stepDelayMs: Long = 0
+    override fun enrich(obj: PointObject): kotlinx.coroutines.flow.Flow<EnrichmentUpdate> =
+        kotlinx.coroutines.flow.flow {
+            val script = updates ?: listOf(EnrichmentUpdate(features, emptyMap(), emptyList()))
+            for (u in script) {
+                if (stepDelayMs > 0) kotlinx.coroutines.delay(stepDelayMs)
+                emit(u)
+            }
+        }
 }
 
 private class FakeHistory : HistoryStore {

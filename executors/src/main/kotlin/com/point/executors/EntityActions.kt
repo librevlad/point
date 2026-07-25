@@ -5,6 +5,7 @@ import com.point.core.flow.Capability
 import com.point.core.flow.CapabilityMeta
 import com.point.core.flow.EntityExtractor
 import com.point.core.flow.EntityType
+import com.point.core.flow.META_OCR_TEXT_REF
 import com.point.core.flow.Realizer
 import com.point.core.flow.UrlOpener
 import java.net.URLEncoder
@@ -27,8 +28,16 @@ import javax.inject.Inject
  * [EntityExtractor] and opens the matching app through [UrlOpener] (ACTION_VIEW on a scheme URI —
  * `tel:` / `smsto:` / `mailto:`). Terminal (`produces == state`, returns `Done`).
  */
+/** The text entities live in: a TEXT object's own content, or — for an IMAGE the OCR enricher
+ *  already read (#64) — its recognised-text sidecar, so entity actions work on screenshots. */
+internal fun entitySourceText(input: PointObject): String {
+    val sidecar = input.metadata[META_OCR_TEXT_REF]
+        ?.let { path -> runCatching { File(path).takeIf(File::isFile)?.readText() }.getOrNull() }
+    return sidecar ?: File(input.uri.value).takeIf { it.isFile }?.readText().orEmpty()
+}
+
 internal suspend fun firstEntity(extractor: EntityExtractor, input: PointObject, type: EntityType): String? {
-    val text = File(input.uri.value).takeIf { it.isFile }?.readText().orEmpty()
+    val text = entitySourceText(input)
     if (text.isBlank()) return null
     return extractor.extract(text).firstOrNull { it.type == type }?.value
 }
@@ -184,8 +193,7 @@ class EventRealizer @Inject constructor(
 
     /** The first non-blank line is the most sensible event title; the calendar screen lets the user
      *  set the time (ML Kit gives us that a date exists, not yet a parsed timestamp). */
-    private fun eventTitle(input: PointObject): String {
-        val text = File(input.uri.value).takeIf { it.isFile }?.readText().orEmpty()
-        return text.lineSequence().map { it.trim() }.firstOrNull { it.isNotBlank() }?.take(100) ?: "Событие"
-    }
+    private fun eventTitle(input: PointObject): String =
+        entitySourceText(input).lineSequence().map { it.trim() }
+            .firstOrNull { it.isNotBlank() }?.take(100) ?: "Событие"
 }

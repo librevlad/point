@@ -19,13 +19,13 @@ class QrEnricherTest {
     @Test
     fun `flags HAS_QR when the image decodes to something`() = runTest {
         val enricher = QrEnricher(object : QrReader { override suspend fun decode(imagePath: String) = "hi" })
-        assertTrue(Feature.HAS_QR in enricher.enrich(imageObj()))
+        assertTrue(Feature.HAS_QR in enricher.enrich(imageObj()).features)
     }
 
     @Test
     fun `no flag when there is no QR`() = runTest {
         val enricher = QrEnricher(object : QrReader { override suspend fun decode(imagePath: String): String? = null })
-        assertTrue(enricher.enrich(imageObj()).isEmpty())
+        assertTrue(enricher.enrich(imageObj()).features.isEmpty())
     }
 
     @Test

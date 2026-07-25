@@ -56,6 +56,7 @@ import com.point.data.HttpJson
 import com.point.data.UrlConnectionHttpJson
 import com.point.data.MediaStoreExporter
 import com.point.data.MlKitBackgroundRemover
+import com.point.data.OcrEnricher
 import com.point.data.OoxmlDocxWriter
 import com.point.data.OoxmlOfficeTextExtractor
 import com.point.data.OoxmlSpreadsheetWriter
@@ -191,6 +192,9 @@ abstract class DataModule {
 
     @Binds @IntoSet
     abstract fun qrEnricher(e: QrEnricher): Enricher
+
+    @Binds @IntoSet
+    abstract fun ocrEnricher(e: OcrEnricher): Enricher
 
     @Binds @IntoSet
     abstract fun zipImagesEnricher(e: ZipImagesEnricher): Enricher

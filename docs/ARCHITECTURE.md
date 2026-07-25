@@ -448,3 +448,15 @@ Robolectric. Это практический выхлоп принципа «max
 **Отложено:** OpenCV-скан-пак (авто-геометрия), `IS_IMAGE_PDF`/`HAS_TEXT`-энричер для PDF,
 персист стека на process death; составной «набор» объектов (#96) и семантические фичи
 `IS_MEETING/…` (#89) — под дизайн; выравнивание нативных либ по 16 КБ для релиза (#68).
+
+**Срез «прогрессивное обогащение с ценами + скриншот оживает» (#64) — реализован (BUILD SUCCESSFUL):**
+- `EnricherMeta(cost INSTANT/FAST/SLOW, mayYield, label)`; `Enrichment` → `Flow<EnrichmentUpdate>`.
+  `DefaultEnrichment` = планировщик: волны по цене, параллельно внутри волны, emit на каждое
+  завершение; SLOW — только если `mayYield` открывает новые действия (гейт через
+  `CapabilityRegistry` на состоянии, обогащённом дешёвыми волнами).
+- `OcrEnricher` (SLOW, «Распознаю текст…»): скриншот → Tesseract → сущности → `HAS_*` прямо на
+  IMAGE; текст — sidecar в `metadata[META_OCR_TEXT_REF]`. Entity-реализаторы читают sidecar
+  (`entitySourceText`), `DeviceOcrRealizer` отдаёт его как кэш, `ExtractAll` отвязан от TEXT.
+- `FlowViewModel` применяет апдейты к фрейму **по id** (поздние находки доезжают в нижние фреймы),
+  `FlowFrame.enriching` → индикатор фоновой работы на экране. `looksLikeOcrGarbage` → :core:flow.
+- Проверено: ML Kit OCR **без кириллицы** — Tesseract остаётся базой (см. DECISIONS).

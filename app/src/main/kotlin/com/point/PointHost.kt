@@ -160,6 +160,7 @@ fun PointHost(
                     intents = state.intents,
                     selectedIntent = state.selectedIntent,
                     onIntent = onIntent,
+                    enriching = current.enriching,
                 )
             }
 

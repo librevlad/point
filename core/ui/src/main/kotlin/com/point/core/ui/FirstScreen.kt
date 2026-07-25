@@ -29,6 +29,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -94,6 +95,7 @@ fun FirstScreen(
     intents: List<Intent> = emptyList(),
     selectedIntent: Intent? = null,
     onIntent: (Intent) -> Unit = {},
+    enriching: List<String> = emptyList(),
 ) {
     Column(
         modifier = modifier
@@ -103,6 +105,31 @@ fun FirstScreen(
         verticalArrangement = Arrangement.Center,
     ) {
         ObjectHeader(obj)
+
+        // Background understanding in progress («Распознаю текст…») — the visible "Point
+        // думает" feedback (#64); new bubbles pop in as its findings land.
+        AnimatedVisibility(
+            visible = enriching.isNotEmpty(),
+            enter = fadeIn(tween(200)) + expandVertically(tween(200)),
+            exit = fadeOut(tween(300)) + shrinkVertically(tween(300)),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(top = 12.dp),
+            ) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(12.dp),
+                    strokeWidth = 1.5.dp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = enriching.joinToString(" · "),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
 
         Spacer(Modifier.height(40.dp))
 

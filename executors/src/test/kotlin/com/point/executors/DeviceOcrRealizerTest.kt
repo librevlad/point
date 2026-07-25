@@ -68,4 +68,17 @@ class DeviceOcrRealizerTest {
         assertTrue(result is ActionResult.Failure)
         assertTrue((result as ActionResult.Failure).recoverable)
     }
+
+    @Test
+    fun `reuses the OCR sidecar of an enriched image instead of re-running the engine`() = runTest {
+        val side = File.createTempFile("ocr", ".txt").apply { writeText("Уже распознано"); deleteOnExit() }
+        val enriched = image.copy(metadata = mapOf(com.point.core.flow.META_OCR_TEXT_REF to side.absolutePath))
+
+        val result = DeviceOcrRealizer(store, throwingRecognizer()).perform(enriched)
+
+        assertTrue(result is ActionResult.Success)
+        val out = (result as ActionResult.Success).result
+        assertEquals(ObjectKind.TEXT, out.type)
+        assertEquals("Уже распознано", File(out.uri.value).readText())
+    }
 }

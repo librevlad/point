@@ -27,13 +27,13 @@ class PdfImageEnricherTest {
 
     @Test
     fun `flags IS_IMAGE_PDF when the PDF has no text layer`() = runTest {
-        val features = PdfImageEnricher(extractorOf("   \n  \t ")).enrich(pdf)
+        val features = PdfImageEnricher(extractorOf("   \n  \t ")).enrich(pdf).features
         assertTrue(Feature.IS_IMAGE_PDF in features)
     }
 
     @Test
     fun `no flag when the PDF has extractable text`() = runTest {
-        val features = PdfImageEnricher(extractorOf("Договор №42 от 2026 года")).enrich(pdf)
+        val features = PdfImageEnricher(extractorOf("Договор №42 от 2026 года")).enrich(pdf).features
         assertFalse(Feature.IS_IMAGE_PDF in features)
     }
 
