@@ -71,6 +71,7 @@ class HomeActivity : ComponentActivity() {
                             onSaveChain = viewModel::saveCurrentChain,
                             onItem = viewModel::onItem,
                             onJumpTo = viewModel::jumpTo,
+                            onBubbleLongPress = viewModel::togglePin,
                             onSaveAiConfig = viewModel::saveAiConfig,
                             onCloseKeySettings = viewModel::closeKeySettings,
                             onToggleUsage = viewModel::setUsageEnabled,
