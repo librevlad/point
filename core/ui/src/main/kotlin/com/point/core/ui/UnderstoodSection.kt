@@ -1,8 +1,14 @@
 package com.point.core.ui
 
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -10,8 +16,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -24,6 +30,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -90,11 +97,8 @@ internal fun UnderstoodSection(facts: List<UnderstoodFact>, enriching: List<Stri
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.padding(vertical = 4.dp),
                     ) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(11.dp),
-                            strokeWidth = 1.5.dp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                        // Not a spinner (MOTION.md №3) — a thought-pulse in the brand colour.
+                        ThinkingDot()
                         Spacer(Modifier.width(9.dp))
                         Text(
                             text = label,
@@ -106,6 +110,29 @@ internal fun UnderstoodSection(facts: List<UnderstoodFact>, enriching: List<Stri
             }
         }
     }
+}
+
+/** The visible heartbeat of a running enricher — a softly pulsing brand dot. */
+@Composable
+private fun ThinkingDot() {
+    val motion = rememberMotionEnabled()
+    val alpha = if (motion) {
+        rememberInfiniteTransition(label = "think").animateFloat(
+            initialValue = 0.3f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(tween(700), RepeatMode.Reverse),
+            label = "dot",
+        ).value
+    } else {
+        1f
+    }
+    Box(
+        Modifier
+            .size(9.dp)
+            .graphicsLayer { this.alpha = alpha }
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.primary),
+    )
 }
 
 /** One understood line: an accent check, the claim, and the value it rests on. */
