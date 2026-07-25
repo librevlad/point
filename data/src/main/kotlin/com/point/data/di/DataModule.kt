@@ -24,6 +24,7 @@ import com.point.core.flow.OfficeTextExtractor
 import com.point.core.flow.PdfRasterizer
 import com.point.core.flow.PdfTextExtractor
 import com.point.core.flow.PrivacyConsent
+import com.point.core.flow.SensoryFeedback
 import com.point.core.flow.QrEncoder
 import com.point.core.flow.QrReader
 import com.point.core.flow.Sharer
@@ -68,6 +69,7 @@ import com.point.data.openAiModels
 import com.point.data.PdfBoxTextExtractor
 import com.point.data.PdfImageEnricher
 import com.point.data.PrefsPrivacyConsent
+import com.point.data.VibratorSensoryFeedback
 import com.point.data.PrefsUserKeyStore
 import com.point.data.QrEnricher
 import com.point.data.UserKeyLlmClient
@@ -180,6 +182,10 @@ abstract class DataModule {
     /** Consent to send objects to a cloud service (#10). */
     @Binds
     abstract fun privacyConsent(impl: PrefsPrivacyConsent): PrivacyConsent
+
+    /** Hand-feel of the flow (MOTION.md M4) — predefined haptics behind the seam. */
+    @Binds
+    abstract fun sensoryFeedback(impl: VibratorSensoryFeedback): SensoryFeedback
 
     @Binds @IntoSet
     abstract fun textUrlEnricher(e: TextUrlEnricher): Enricher
