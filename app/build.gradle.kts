@@ -1,5 +1,7 @@
 // :app — DI wiring, Share entry Activity, Compose host, navigation stack.
 // The only module that knows every other module.
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -26,13 +28,37 @@ android {
         }
     }
 
+    // Release signing (#11): keystore path/passwords come from git-ignored
+    // local.properties (see local.properties.sample). Without them the release build
+    // falls back to the debug key, so `assembleRelease` always works locally and on CI;
+    // a real store upload requires the real keystore.
+    val localProps = Properties().apply {
+        val f = rootProject.file("local.properties")
+        if (f.exists()) f.inputStream().use { load(it) }
+    }
+    val releaseStore = localProps.getProperty("RELEASE_STORE_FILE")?.let { rootProject.file(it) }
+
+    signingConfigs {
+        if (releaseStore != null && releaseStore.exists()) {
+            create("release") {
+                storeFile = releaseStore
+                storePassword = localProps.getProperty("RELEASE_STORE_PASSWORD")
+                keyAlias = localProps.getProperty("RELEASE_KEY_ALIAS")
+                keyPassword = localProps.getProperty("RELEASE_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // #11: a store build is shrunk and obfuscated; keep-rules live in proguard-rules.pro.
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
         }
     }
 
