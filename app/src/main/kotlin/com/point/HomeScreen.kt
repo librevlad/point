@@ -36,10 +36,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import com.point.core.flow.META_ENTITY_PREFIX
 import com.point.core.model.HistoryEntry
 import com.point.core.model.ObjectKind
+import com.point.core.model.ObjectState
+import com.point.core.model.PointObject
 import com.point.core.ui.kindIcon
 import com.point.core.ui.kindLabel
+import com.point.core.ui.understoodFacts
 import com.point.executors.Bitmaps
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -190,10 +194,34 @@ private fun HistoryRow(entry: HistoryEntry, onClick: () -> Unit) {
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                // What Point understood back then («+380 67… · завтра 18:00») — the entry
+                // is remembered by its content, not its filename (#114).
+                val facts = entryFacts(entry)
+                if (facts.isNotEmpty()) {
+                    Text(
+                        text = facts.take(2).joinToString(" · ") { it.value ?: it.label },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
         }
     }
 }
+
+/** The understood facts of a history entry — the same derivation the first screen uses,
+ *  rebuilt from the persisted features + entity values (#114). */
+private fun entryFacts(entry: HistoryEntry) = understoodFacts(
+    PointObject(
+        id = entry.id,
+        mime = entry.mime,
+        uri = entry.ref,
+        state = ObjectState(entry.kind, entry.features),
+        metadata = entry.entities.mapKeys { META_ENTITY_PREFIX + it.key },
+    ),
+)
 
 private const val THUMB_PX = 96
 

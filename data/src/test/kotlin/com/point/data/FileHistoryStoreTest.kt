@@ -1,6 +1,7 @@
 package com.point.data
 
 import com.point.core.flow.ObjectClassifier
+import com.point.core.model.Feature
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
@@ -79,6 +80,43 @@ class FileHistoryStoreTest {
         store.record(textObject("a", "x", "a.txt"))
         store.clearAll()
         assertTrue(store.recent().isEmpty())
+    }
+
+    // --- Understanding lands in history (#114): update appends, last journal line wins ---
+
+    @Test
+    fun `update appends the understanding — recent carries features and entity values`() = runTest {
+        store.record(textObject("a", "звони +380671234567", "a.txt"))
+        val enriched = textObject("a", "звони +380671234567", "a.txt").copy(
+            state = ObjectState(ObjectKind.TEXT, setOf(Feature.HAS_PHONE)),
+            metadata = mapOf("name" to "a.txt", "entity.phone" to "+380671234567"),
+        )
+
+        store.update(enriched)
+
+        val entry = store.recent().single()
+        assertTrue(Feature.HAS_PHONE in entry.features)
+        assertEquals("+380671234567", entry.entities["phone"])
+    }
+
+    @Test
+    fun `update for an id never recorded does nothing`() = runTest {
+        store.update(textObject("ghost", "x", "g.txt"))
+        assertTrue(store.recent().isEmpty())
+    }
+
+    @Test
+    fun `journal lines from before the understanding fields still parse`() = runTest {
+        val copy = File(dir, "old.txt").apply { writeText("x") }
+        val legacy = org.json.JSONObject()
+            .put("id", "old").put("mime", "text/plain").put("kind", "TEXT")
+            .put("name", "old.txt").put("t", 123L).put("path", copy.absolutePath)
+        File(dir, "index.jsonl").appendText(legacy.toString() + "\n")
+
+        val entry = store.recent().single()
+        assertEquals("old", entry.id)
+        assertTrue(entry.features.isEmpty())
+        assertTrue(entry.entities.isEmpty())
     }
 
     @Test
