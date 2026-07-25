@@ -2,6 +2,7 @@ package com.point.executors
 
 import com.point.core.flow.Capability
 import com.point.core.flow.CapabilityMeta
+import com.point.core.flow.Latency
 import com.point.core.flow.Entity
 import com.point.core.flow.EntityExtractor
 import com.point.core.flow.EntityType
@@ -49,7 +50,8 @@ private fun StringBuilder.appendSection(title: String, items: List<String>) {
 class ExtractAllCapability @Inject constructor() : Capability {
     override val id = ID
     override val icon = "list"
-    override val meta = CapabilityMeta(priority = 30)
+    // ML Kit does a real pass over the text — not an instant terminal (#114 tiers).
+    override val meta = CapabilityMeta(priority = 30, latency = Latency.FAST)
     override fun label(state: ObjectState) = "Собрать данные"
     override fun accepts(state: ObjectState) =
         state.has(Feature.HAS_PHONE) || state.has(Feature.HAS_EMAIL) ||
