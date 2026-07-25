@@ -27,3 +27,19 @@ fun EntityType.asFeature(): Feature? = when (this) {
     EntityType.PAYMENT_CARD -> Feature.HAS_CARD
     EntityType.URL, EntityType.MONEY -> null
 }
+
+/** Metadata key prefix for *understood facts* — the first value found per entity kind
+ *  (`entity.phone` → «+380…»). The «Point понял» checklist (#114) renders these, so the
+ *  screen can say "Нашёл телефон +380…", not just "PHONE". */
+const val META_ENTITY_PREFIX = "entity."
+
+/** The metadata key an entity's first value is kept under; null = not a shown fact. */
+fun EntityType.asMetaKey(): String? = when (this) {
+    EntityType.PHONE -> META_ENTITY_PREFIX + "phone"
+    EntityType.EMAIL -> META_ENTITY_PREFIX + "email"
+    EntityType.ADDRESS -> META_ENTITY_PREFIX + "address"
+    EntityType.DATE_TIME -> META_ENTITY_PREFIX + "date"
+    EntityType.PAYMENT_CARD -> META_ENTITY_PREFIX + "card"
+    EntityType.URL -> META_ENTITY_PREFIX + "url"
+    EntityType.MONEY -> null
+}

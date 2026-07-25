@@ -3,8 +3,8 @@ package com.point.core.ui
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.tooling.preview.Preview
 import com.point.core.model.Bubble
+import com.point.core.model.BubbleTier
 import com.point.core.model.CapabilityId
-import com.point.core.model.Intent
 import com.point.core.model.LatentBubble
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
@@ -16,81 +16,118 @@ import com.point.core.ui.theme.PointTheme
  * Preview harness — this is how you iterate the first screen WITHOUT building an
  * APK or touching a device. Open any function below in Android Studio's Split /
  * Design view; edits re-render live. Each mirrors what the registry produces for
- * that object kind.
+ * that object kind — including the #114 shape: понял-card, likely three, folded rest.
  */
 
-private fun sampleObject(kind: ObjectKind, mime: String, name: String) = PointObject(
+private fun sampleObject(
+    kind: ObjectKind,
+    mime: String,
+    name: String,
+    features: Set<com.point.core.model.Feature> = emptySet(),
+    metadata: Map<String, String> = emptyMap(),
+) = PointObject(
     id = "preview",
     mime = mime,
     uri = ScratchRef("/preview/$name"),
-    state = ObjectState(kind),
-    metadata = mapOf("name" to name),
+    state = ObjectState(kind, features),
+    metadata = metadata + mapOf("name" to name),
 )
 
+private fun bubble(icon: String, title: String, id: String, next: ObjectKind, tier: BubbleTier) =
+    Bubble(icon, title, CapabilityId(id), ObjectState(next), tier)
+
 private fun universalBubbles(kind: ObjectKind) = listOf(
-    Bubble("open", "Открыть", CapabilityId("open"), ObjectState(kind)),
-    Bubble("share", "Поделиться", CapabilityId("share"), ObjectState(kind)),
-    Bubble("save", "Сохранить", CapabilityId("save"), ObjectState(kind)),
-    Bubble("ai", "AI", CapabilityId("ai"), ObjectState(ObjectKind.TEXT)),
+    bubble("open", "Открыть", "open", kind, BubbleTier.INSTANT),
+    bubble("share", "Поделиться", "share", kind, BubbleTier.INSTANT),
+    bubble("save", "Сохранить", "save", kind, BubbleTier.INSTANT),
+    bubble("ai", "AI", "ai", ObjectKind.TEXT, BubbleTier.AI),
 )
 
 private fun sampleBubbles(kind: ObjectKind): List<Bubble> =
     if (kind == ObjectKind.COLLECTION)
         listOf(
-            Bubble("save-all", "Сохранить всё", CapabilityId("save-all"), ObjectState(ObjectKind.COLLECTION)),
-            Bubble("share", "Поделиться всем", CapabilityId("share-all"), ObjectState(ObjectKind.COLLECTION)),
-            Bubble("pdf", "Объединить в PDF", CapabilityId("merge-pdf"), ObjectState(ObjectKind.PDF)),
+            bubble("save-all", "Сохранить всё", "save-all", ObjectKind.COLLECTION, BubbleTier.INSTANT),
+            bubble("share", "Поделиться всем", "share-all", ObjectKind.COLLECTION, BubbleTier.INSTANT),
+            bubble("pdf", "Объединить в PDF", "merge-pdf", ObjectKind.PDF, BubbleTier.SMART),
         )
-    else universalBubbles(kind) + when (kind) {
-    ObjectKind.IMAGE -> listOf(
-        Bubble("compress", "Сжать", CapabilityId("image"), ObjectState(ObjectKind.IMAGE)),
-        Bubble("pdf", "В PDF", CapabilityId("pdf"), ObjectState(ObjectKind.PDF)),
-        Bubble("excel", "В Excel", CapabilityId("excel"), ObjectState(ObjectKind.OFFICE)),
+    else when (kind) {
+        ObjectKind.IMAGE -> listOf(
+            bubble("ocr", "Распознать текст", "ocr", ObjectKind.TEXT, BubbleTier.SMART),
+            bubble("compress", "Сжать", "image", ObjectKind.IMAGE, BubbleTier.SMART),
+            bubble("scan", "Скан", "scan", ObjectKind.IMAGE, BubbleTier.SMART),
+            bubble("pdf", "В PDF", "pdf", ObjectKind.PDF, BubbleTier.SMART),
+            bubble("excel", "В Excel", "excel", ObjectKind.OFFICE, BubbleTier.AI),
+            bubble("ocr-cloud", "Распознать в облаке", "ocr-cloud", ObjectKind.TEXT, BubbleTier.AI),
+        ) + universalBubbles(kind)
+        ObjectKind.PDF -> listOf(
+            bubble("pdf", "Извлечь текст", "pdf", ObjectKind.TEXT, BubbleTier.SMART),
+            bubble("pages", "Страницы", "pdf-pages", ObjectKind.COLLECTION, BubbleTier.SMART),
+            bubble("translate", "Перевести", "translate", ObjectKind.TEXT, BubbleTier.AI),
+            bubble("excel", "В Excel", "excel", ObjectKind.OFFICE, BubbleTier.AI),
+        ) + universalBubbles(kind)
+        ObjectKind.TEXT -> listOf(
+            bubble("call", "Позвонить", "call", ObjectKind.TEXT, BubbleTier.INSTANT),
+            bubble("event", "Создать событие", "event", ObjectKind.TEXT, BubbleTier.INSTANT),
+            bubble("list", "Собрать данные", "extract-all", ObjectKind.TEXT, BubbleTier.SMART),
+            bubble("pdf", "В PDF", "pdf", ObjectKind.PDF, BubbleTier.SMART),
+            bubble("translate", "Перевести", "translate", ObjectKind.TEXT, BubbleTier.AI),
+        ) + universalBubbles(kind)
+        ObjectKind.ZIP -> listOf(
+            bubble("unzip", "Распаковать", "zip", ObjectKind.UNKNOWN, BubbleTier.SMART),
+        ) + universalBubbles(kind)
+        else -> universalBubbles(kind)
+    }
+
+@Preview(name = "Скриншот · Point понял (#114)", showBackground = true)
+@Composable
+private fun PreviewUnderstoodScreenshot() = PointTheme {
+    // The #64 → #114 showcase: an OCR'd screenshot whose entities lit up on the image
+    // itself — the understanding card carries the values, actions follow from them.
+    val obj = sampleObject(
+        ObjectKind.IMAGE, "image/png", "screenshot.png",
+        features = setOf(
+            com.point.core.model.Feature.HAS_PHONE,
+            com.point.core.model.Feature.HAS_DATE,
+            com.point.core.model.Feature.HAS_URL,
+        ),
+        metadata = mapOf(
+            "entity.phone" to "+380 67 123 45 67",
+            "entity.date" to "завтра в 18:00",
+            "entity.url" to "https://point.app/demo",
+        ),
     )
-    ObjectKind.PDF -> listOf(
-        Bubble("pdf", "Извлечь текст", CapabilityId("pdf"), ObjectState(ObjectKind.TEXT)),
-        Bubble("pages", "Страницы", CapabilityId("pdf-pages"), ObjectState(ObjectKind.COLLECTION)),
-        Bubble("translate", "Перевести", CapabilityId("translate"), ObjectState(ObjectKind.TEXT)),
-        Bubble("excel", "В Excel", CapabilityId("excel"), ObjectState(ObjectKind.OFFICE)),
-    )
-    ObjectKind.TEXT -> listOf(
-        Bubble("pdf", "В PDF", CapabilityId("pdf"), ObjectState(ObjectKind.PDF)),
-        Bubble("translate", "Перевести", CapabilityId("translate"), ObjectState(ObjectKind.TEXT)),
-        Bubble("excel", "В Excel", CapabilityId("excel"), ObjectState(ObjectKind.OFFICE)),
-    )
-    ObjectKind.ZIP -> listOf(
-        Bubble("unzip", "Распаковать", CapabilityId("zip"), ObjectState(ObjectKind.UNKNOWN)),
-    )
-    else -> emptyList()
+    FirstScreen(obj = obj, bubbles = sampleBubbles(ObjectKind.IMAGE), onBubble = {})
 }
 
-/** Intents mirror what the registry derives for that kind (the intent-first surface). */
-private fun sampleIntents(kind: ObjectKind): List<Intent> = when (kind) {
-    ObjectKind.COLLECTION -> listOf(Intent.PREPARE, Intent.SEND)
-    ObjectKind.ZIP -> listOf(Intent.PREPARE, Intent.OPEN, Intent.SEND)
-    ObjectKind.UNKNOWN -> listOf(Intent.UNDERSTAND, Intent.OPEN, Intent.SEND)
-    else -> listOf(Intent.UNDERSTAND, Intent.PREPARE, Intent.OPEN, Intent.SEND)
+@Preview(name = "Скриншот · Point думает", showBackground = true)
+@Composable
+private fun PreviewThinking() = PointTheme {
+    // Mid-enrichment: one fact already landed, OCR still running — the card shows both.
+    val obj = sampleObject(
+        ObjectKind.IMAGE, "image/png", "screenshot.png",
+        features = setOf(com.point.core.model.Feature.HAS_QR),
+        metadata = mapOf("entity.qr" to "https://wifi.setup/qr"),
+    )
+    FirstScreen(
+        obj = obj,
+        bubbles = sampleBubbles(ObjectKind.IMAGE),
+        onBubble = {},
+        enriching = listOf("Распознаю текст…"),
+    )
 }
 
-@Preview(name = "Image", showBackground = true)
+@Preview(name = "Image · без фактов", showBackground = true)
 @Composable
 private fun PreviewImage() = PointTheme {
     val obj = sampleObject(ObjectKind.IMAGE, "image/jpeg", "photo.jpg")
-    FirstScreen(obj = obj, bubbles = sampleBubbles(ObjectKind.IMAGE), onBubble = {}, intents = sampleIntents(ObjectKind.IMAGE))
+    FirstScreen(obj = obj, bubbles = sampleBubbles(ObjectKind.IMAGE), onBubble = {})
 }
 
 @Preview(name = "PDF", showBackground = true)
 @Composable
 private fun PreviewPdf() = PointTheme {
     val obj = sampleObject(ObjectKind.PDF, "application/pdf", "report.pdf")
-    FirstScreen(obj = obj, bubbles = sampleBubbles(ObjectKind.PDF), onBubble = {}, intents = sampleIntents(ObjectKind.PDF))
-}
-
-@Preview(name = "Zip", showBackground = true)
-@Composable
-private fun PreviewZip() = PointTheme {
-    val obj = sampleObject(ObjectKind.ZIP, "application/zip", "album.zip")
-    FirstScreen(obj = obj, bubbles = sampleBubbles(ObjectKind.ZIP), onBubble = {}, intents = sampleIntents(ObjectKind.ZIP))
+    FirstScreen(obj = obj, bubbles = sampleBubbles(ObjectKind.PDF), onBubble = {})
 }
 
 @Preview(name = "Collection · unpacked archive", showBackground = true)
@@ -107,17 +144,9 @@ private fun PreviewCollection() = PointTheme {
         obj = obj,
         bubbles = sampleBubbles(ObjectKind.COLLECTION),
         onBubble = {},
-        intents = sampleIntents(ObjectKind.COLLECTION),
         items = items,
         onItem = {},
     )
-}
-
-@Preview(name = "Unknown file · Открыть", showBackground = true)
-@Composable
-private fun PreviewUnknownOpen() = PointTheme {
-    val obj = sampleObject(ObjectKind.UNKNOWN, "application/octet-stream", "data.bin")
-    FirstScreen(obj = obj, bubbles = sampleBubbles(ObjectKind.UNKNOWN), onBubble = {}, intents = sampleIntents(ObjectKind.UNKNOWN))
 }
 
 @Preview(name = "Text + Failure message", showBackground = true)
@@ -128,7 +157,6 @@ private fun PreviewTextWithMessage() = PointTheme {
         obj = obj,
         bubbles = sampleBubbles(ObjectKind.TEXT),
         onBubble = {},
-        intents = sampleIntents(ObjectKind.TEXT),
         message = "Действие подключим в следующем срезе",
     )
 }
@@ -136,15 +164,16 @@ private fun PreviewTextWithMessage() = PointTheme {
 @Preview(name = "Text · встроенный просмотр", showBackground = true)
 @Composable
 private fun PreviewTextRead() = PointTheme {
-    val obj = sampleObject(ObjectKind.TEXT, "text/plain", "notes.txt")
+    val obj = sampleObject(
+        ObjectKind.TEXT, "text/plain", "notes.txt",
+        features = setOf(com.point.core.model.Feature.HAS_PHONE, com.point.core.model.Feature.HAS_DATE),
+        metadata = mapOf("entity.phone" to "+380 67 123 45 67", "entity.date" to "завтра 18:00"),
+    )
     FirstScreen(
         obj = obj,
         bubbles = sampleBubbles(ObjectKind.TEXT),
         onBubble = {},
-        intents = sampleIntents(ObjectKind.TEXT),
-        textPreview = "Заголовок заметки\n\nАбзац текста, который прокручивается, " +
-            "выделяется и копируется прямо в Point — не выходя во внешнее приложение.\n\n" +
-            "• пункт один\n• пункт два\n• пункт три\n\nЕщё строка для объёма.",
+        textPreview = "Встретимся завтра в 18:00.\nЗвони +380 67 123 45 67 если что.",
     )
 }
 
@@ -156,7 +185,6 @@ private fun PreviewMarkdown() = PointTheme(darkTheme = true) {
         obj = obj,
         bubbles = sampleBubbles(ObjectKind.TEXT),
         onBubble = {},
-        intents = sampleIntents(ObjectKind.TEXT),
         // Renders as heading + bold + bullets, not raw ###/**/*.
         textPreview = "### Анализ запроса\n" +
             "* **Тип запроса:** Составление технической карты (ТТК).\n" +
@@ -165,7 +193,7 @@ private fun PreviewMarkdown() = PointTheme(darkTheme = true) {
     )
 }
 
-@Preview(name = "Image · dark", showBackground = true)
+@Preview(name = "Image · dark + negotiation", showBackground = true)
 @Composable
 private fun PreviewImageDark() = PointTheme(darkTheme = true) {
     val obj = sampleObject(ObjectKind.IMAGE, "image/png", "screenshot.png")
@@ -173,7 +201,6 @@ private fun PreviewImageDark() = PointTheme(darkTheme = true) {
         obj = obj,
         bubbles = sampleBubbles(ObjectKind.IMAGE),
         onBubble = {},
-        intents = sampleIntents(ObjectKind.IMAGE),
         // Negotiation (#97): translate/open-url are one OCR away.
         latent = listOf(
             LatentBubble("translate", "Перевести", "сначала распознайте текст"),
@@ -192,19 +219,5 @@ private fun PreviewNeedsInput() = PointTheme {
         onBubble = {},
         inputPrompt = "Что сделать с объектом? (пусто = авто-анализ)",
         inputSuggestions = listOf("Что на изображении?", "Извлеки весь текст", "Переведи текст с картинки"),
-    )
-}
-
-@Preview(name = "Intent · Подготовить (раскрыто)", showBackground = true)
-@Composable
-private fun PreviewIntentDrill() = PointTheme {
-    val obj = sampleObject(ObjectKind.IMAGE, "image/jpeg", "photo.jpg")
-    // The user tapped «Подготовить»; that intent's capabilities are revealed.
-    FirstScreen(
-        obj = obj,
-        bubbles = sampleBubbles(ObjectKind.IMAGE).filter { it.icon in setOf("compress", "pdf", "excel") },
-        onBubble = {},
-        intents = sampleIntents(ObjectKind.IMAGE),
-        selectedIntent = Intent.PREPARE,
     )
 }

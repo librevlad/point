@@ -4,6 +4,7 @@ import com.point.core.flow.EnrichCost
 import com.point.core.flow.Enricher
 import com.point.core.flow.EnricherMeta
 import com.point.core.flow.EnrichmentDelta
+import com.point.core.flow.META_ENTITY_PREFIX
 import com.point.core.model.Feature
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
@@ -22,7 +23,8 @@ class TextUrlEnricher @Inject constructor() : Enricher {
 
     override suspend fun enrich(obj: PointObject): EnrichmentDelta = withContext(Dispatchers.IO) {
         val head = runCatching { readHead(obj.uri.value) }.getOrDefault("")
-        if (URL_REGEX.containsMatchIn(head)) EnrichmentDelta(setOf(Feature.HAS_URL)) else EnrichmentDelta()
+        val url = URL_REGEX.find(head)?.value ?: return@withContext EnrichmentDelta()
+        EnrichmentDelta(setOf(Feature.HAS_URL), mapOf(META_ENTITY_PREFIX + "url" to url))
     }
 
     private fun readHead(path: String, limit: Int = 64 * 1024): String {

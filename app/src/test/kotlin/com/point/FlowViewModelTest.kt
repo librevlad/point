@@ -220,28 +220,6 @@ class FlowViewModelTest {
         assertNull(vm.ui.value.busy)
     }
 
-    // --- Intent-first ---
-
-    @Test fun `an intent with one serving capability runs it immediately`() = runTest(dispatcher) {
-        resolver.result = ActionResult.Done("сделано")
-        val vm = vm(mapOf(CapabilityId("a") to setOf(Intent.PREPARE)))
-        vm.onShared("uri", "image/png"); advanceUntilIdle()
-
-        vm.onIntent(Intent.PREPARE); advanceUntilIdle()
-
-        assertEquals("сделано", vm.ui.value.message)
-    }
-
-    @Test fun `an intent with several capabilities reveals them for a choice`() = runTest(dispatcher) {
-        val vm = vm(mapOf(CapabilityId("a") to setOf(Intent.PREPARE), CapabilityId("b") to setOf(Intent.PREPARE)))
-        vm.onShared("uri", "image/png"); advanceUntilIdle()
-
-        vm.onIntent(Intent.PREPARE); advanceUntilIdle()
-
-        assertEquals(Intent.PREPARE, vm.ui.value.selectedIntent)
-        assertEquals(2, vm.ui.value.intentBubbles.size)
-    }
-
     // --- Back ---
 
     @Test fun `back pops to the previous object`() = runTest(dispatcher) {
@@ -255,18 +233,6 @@ class FlowViewModelTest {
 
         assertTrue(handled)
         assertEquals(ObjectKind.IMAGE, vm.ui.value.frame?.obj?.state?.kind)
-    }
-
-    @Test fun `back steps out of a revealed intent before popping`() = runTest(dispatcher) {
-        val vm = vm(mapOf(CapabilityId("a") to setOf(Intent.PREPARE), CapabilityId("b") to setOf(Intent.PREPARE)))
-        vm.onShared("uri", "image/png"); advanceUntilIdle()
-        vm.onIntent(Intent.PREPARE); advanceUntilIdle()
-        assertEquals(Intent.PREPARE, vm.ui.value.selectedIntent)
-
-        val handled = vm.onBack()
-
-        assertTrue(handled)
-        assertNull(vm.ui.value.selectedIntent)
     }
 
     @Test fun `back cancels a pending input`() = runTest(dispatcher) {

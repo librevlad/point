@@ -2,8 +2,11 @@ package com.point.executors
 
 import com.point.core.flow.BubblePolicy
 import com.point.core.flow.Capability
+import com.point.core.flow.CapabilityMeta
 import com.point.core.flow.CapabilityRegistry
+import com.point.core.flow.Latency
 import com.point.core.model.Bubble
+import com.point.core.model.BubbleTier
 import com.point.core.model.CapabilityId
 import com.point.core.model.Intent
 import com.point.core.model.LatentBubble
@@ -31,8 +34,16 @@ class DefaultCapabilityRegistry @Inject constructor(
                     title = c.label(state),
                     capabilityId = c.id,
                     expectedNextState = c.produces(state) ?: state,
+                    tier = tierOf(c.meta),
                 )
             }
+
+    /** #114: the visual level is meta, not taste — network beats everything, then latency. */
+    private fun tierOf(meta: CapabilityMeta): BubbleTier = when {
+        meta.network -> BubbleTier.AI
+        meta.latency == Latency.INSTANT -> BubbleTier.INSTANT
+        else -> BubbleTier.SMART
+    }
 
     override fun intentsFor(state: ObjectState): List<Intent> {
         val accepting = capabilities.filter { it.accepts(state) }
