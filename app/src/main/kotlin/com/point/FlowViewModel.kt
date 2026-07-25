@@ -24,8 +24,10 @@ import com.point.core.model.CapabilityId
 import com.point.core.model.FavoriteChain
 import com.point.core.model.HistoryEntry
 import com.point.core.model.Intent
+import com.point.core.model.BubbleTier
 import com.point.core.model.ObjectKind
 import com.point.core.model.PointObject
+import com.point.core.ui.likelyCount
 import com.point.executors.OpenInCapability
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -524,6 +526,16 @@ class FlowViewModel @Inject constructor(
     private fun currentPath(): List<PathStep> =
         stack.map { PathStep(it.obj.state.kind, it.viaTitle) }
 
+    /** Discover (#114): the first FOLDED action (beyond the big likely ones) the user has
+     *  never tried — instant terminals are too obvious to be a discovery. Using it records
+     *  usage, which retires the hint on the next frame by itself. */
+    private fun discoverFor(bubbles: List<Bubble>): Bubble? {
+        val counts = runCatching { usage.counts() }.getOrDefault(emptyMap())
+        return bubbles.drop(likelyCount(bubbles.size)).firstOrNull {
+            it.tier != BubbleTier.INSTANT && (counts[it.capabilityId] ?: 0) == 0
+        }
+    }
+
     fun hasFlow(): Boolean = stack.isNotEmpty()
 
     fun endFlow() {
@@ -536,9 +548,11 @@ class FlowViewModel @Inject constructor(
     }
 
     private fun pushFrame(obj: PointObject, via: CapabilityId? = null, viaTitle: String? = null) {
+        val bubbles = registry.bubblesFor(obj.state)
         val frame = FlowFrame(
-            obj, registry.bubblesFor(obj.state), via, viaTitle,
+            obj, bubbles, via, viaTitle,
             latent = registry.latentBubblesFor(obj.state),
+            discover = discoverFor(bubbles),
         )
         stack.addLast(frame)
         _ui.update {
@@ -638,11 +652,13 @@ class FlowViewModel @Inject constructor(
         val objChanged = newState != frame.obj.state || newMetadata != frame.obj.metadata
         if (!objChanged && update.running == frame.enriching) return
 
+        val newBubbles = if (objChanged) registry.bubblesFor(newState) else frame.bubbles
         val refreshed = frame.copy(
             obj = frame.obj.copy(state = newState, metadata = newMetadata),
-            bubbles = if (objChanged) registry.bubblesFor(newState) else frame.bubbles,
+            bubbles = newBubbles,
             latent = if (objChanged) registry.latentBubblesFor(newState) else frame.latent,
             enriching = update.running,
+            discover = if (objChanged) discoverFor(newBubbles) else frame.discover,
         )
         stack[index] = refreshed
         _ui.update { if (it.frame?.obj?.id == source.id) it.copy(frame = refreshed) else it }

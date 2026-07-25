@@ -161,6 +161,7 @@ fun PointHost(
                     textPreview = current.textPreview,
                     latent = current.latent,
                     enriching = current.enriching,
+                    discover = current.discover,
                 )
                 }
             }
