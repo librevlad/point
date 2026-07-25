@@ -187,7 +187,7 @@ class FlowViewModel @Inject constructor(
         _ui.update {
             it.copy(
                 busy = bubble.title, busyNetwork = isCloud(bubble.capabilityId), message = null,
-                inputPrompt = null, selectedIntent = null, intentBubbles = emptyList(),
+                inputPrompt = null,
             )
         }
         viewModelScope.launch {
@@ -215,7 +215,7 @@ class FlowViewModel @Inject constructor(
     }
 
     private fun runOnObject(bubble: Bubble, top: PointObject) {
-        _ui.update { it.copy(busy = bubble.title, busyNetwork = isCloud(bubble.capabilityId), message = null, inputPrompt = null, selectedIntent = null, intentBubbles = emptyList()) }
+        _ui.update { it.copy(busy = bubble.title, busyNetwork = isCloud(bubble.capabilityId), message = null, inputPrompt = null) }
         dispatch(bubble) { resolver.realizerFor(bubble.capabilityId).perform(top, null) }
     }
 
@@ -233,21 +233,8 @@ class FlowViewModel @Inject constructor(
                 onGranted()
             } else {
                 pendingCloud = onGranted
-                _ui.update { it.copy(cloudConsent = true, selectedIntent = null, intentBubbles = emptyList()) }
+                _ui.update { it.copy(cloudConsent = true) }
             }
-        }
-    }
-
-    /** Intent-first: the user picks a goal (Понять / Подготовить / Отправить). If exactly
-     *  one capability serves it for this object, run it; otherwise reveal that intent's
-     *  capabilities as the next choice. */
-    fun onIntent(intent: Intent) {
-        val top = stack.lastOrNull() ?: return
-        val caps = top.bubbles.filter { intent in registry.byId(it.capabilityId).intents(top.obj.state) }
-        when (caps.size) {
-            0 -> return
-            1 -> onBubble(caps.first())
-            else -> _ui.update { it.copy(selectedIntent = intent, intentBubbles = caps) }
         }
     }
 
@@ -325,7 +312,7 @@ class FlowViewModel @Inject constructor(
     // --- Device actions (#66): the installed apps that can open the object, shown inline. ---
 
     private fun showAppPicker(obj: PointObject) {
-        _ui.update { it.copy(busy = "Ищу приложения…", message = null, inputPrompt = null, selectedIntent = null, intentBubbles = emptyList()) }
+        _ui.update { it.copy(busy = "Ищу приложения…", message = null, inputPrompt = null) }
         viewModelScope.launch {
             val direct = runCatching { appLauncher.handlers(obj) }.getOrDefault(emptyList())
             // Dedup by package: an app that also appears as a bridged target must not double —
@@ -517,19 +504,10 @@ class FlowViewModel @Inject constructor(
             cancelInput()
             return true
         }
-        if (_ui.value.selectedIntent != null) {
-            _ui.update { it.copy(selectedIntent = null, intentBubbles = emptyList()) }
-            return true
-        }
         if (stack.size <= 1) return false
         stack.removeLast()
         val top = stack.last()
-        _ui.update {
-            it.copy(
-                frame = top, message = null,
-                intents = registry.intentsFor(top.obj.state), selectedIntent = null, intentBubbles = emptyList(),
-            )
-        }
+        _ui.update { it.copy(frame = top, message = null) }
         refreshFavorites()
         return true
     }
@@ -555,7 +533,6 @@ class FlowViewModel @Inject constructor(
             it.copy(
                 busy = null, frame = frame, message = null, inputPrompt = null, inputSuggestions = emptyList(),
                 needsImage = null, preview = null,
-                intents = registry.intentsFor(obj.state), selectedIntent = null, intentBubbles = emptyList(),
             )
         }
         refreshFavorites()
@@ -651,10 +628,7 @@ class FlowViewModel @Inject constructor(
             enriching = update.running,
         )
         stack[index] = refreshed
-        _ui.update {
-            if (it.frame?.obj?.id == source.id) it.copy(frame = refreshed, intents = registry.intentsFor(newState))
-            else it
-        }
+        _ui.update { if (it.frame?.obj?.id == source.id) it.copy(frame = refreshed) else it }
         if (objChanged) refreshFavorites()
     }
 

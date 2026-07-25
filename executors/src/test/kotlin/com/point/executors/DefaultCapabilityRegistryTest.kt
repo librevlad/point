@@ -1,5 +1,6 @@
 package com.point.executors
 
+import com.point.core.model.BubbleTier
 import com.point.core.model.CapabilityId
 import com.point.core.model.Feature
 import com.point.core.model.Intent
@@ -100,6 +101,17 @@ class DefaultCapabilityRegistryTest {
         assertFalse("open-url" in idsFor(ObjectState(ObjectKind.TEXT)))
         assertTrue("open-url" in idsFor(ObjectState(ObjectKind.TEXT, setOf(Feature.HAS_URL))))
         assertTrue("open-url" in idsFor(ObjectState(ObjectKind.URL)))
+    }
+
+    // --- Bubble tiers (#114): the visual level derives from the capability's meta ---
+
+    @Test
+    fun `bubble tier derives from meta — cloud is AI, instant local is INSTANT, transforms are SMART`() {
+        val bubbles = registry.bubblesFor(ObjectState(ObjectKind.IMAGE))
+        fun tier(id: String) = bubbles.first { it.capabilityId.value == id }.tier
+        assertEquals(BubbleTier.AI, tier("ai"))          // network → AI, whatever else it says
+        assertEquals(BubbleTier.INSTANT, tier("share"))  // local + instant latency
+        assertEquals(BubbleTier.SMART, tier("ocr"))      // real on-device work (FAST/SLOW)
     }
 
     @Test

@@ -64,7 +64,6 @@ class SandboxActivity : ComponentActivity() {
                         PointHost(
                             state = state,
                             onBubble = viewModel::onBubble,
-                            onIntent = viewModel::onIntent,
                             onSubmitInput = viewModel::submitAmendment,
                             onCancelInput = viewModel::cancelInput,
                             onItem = viewModel::onItem,

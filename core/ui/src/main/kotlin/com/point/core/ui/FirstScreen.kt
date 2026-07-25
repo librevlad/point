@@ -8,6 +8,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -28,8 +29,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -55,11 +58,12 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.point.core.model.Bubble
+import com.point.core.model.BubbleTier
 import com.point.core.model.LatentBubble
 import com.point.core.model.FavoriteChain
-import com.point.core.model.Intent
 import com.point.core.model.PointObject
 
 /**
@@ -92,9 +96,6 @@ fun FirstScreen(
     onItem: (PointObject) -> Unit = {},
     textPreview: String? = null,
     latent: List<LatentBubble> = emptyList(),
-    intents: List<Intent> = emptyList(),
-    selectedIntent: Intent? = null,
-    onIntent: (Intent) -> Unit = {},
     enriching: List<String> = emptyList(),
 ) {
     Column(
@@ -106,32 +107,11 @@ fun FirstScreen(
     ) {
         ObjectHeader(obj)
 
-        // Background understanding in progress («Распознаю текст…») — the visible "Point
-        // думает" feedback (#64); new bubbles pop in as its findings land.
-        AnimatedVisibility(
-            visible = enriching.isNotEmpty(),
-            enter = fadeIn(tween(200)) + expandVertically(tween(200)),
-            exit = fadeOut(tween(300)) + shrinkVertically(tween(300)),
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(top = 12.dp),
-            ) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(12.dp),
-                    strokeWidth = 1.5.dp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    text = enriching.joinToString(" · "),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
+        // «Point понял» (#114): the understanding card — facts land line by line as
+        // enrichment delivers them (#64), with still-running work inside the same card.
+        UnderstoodSection(facts = understoodFacts(obj), enriching = enriching)
 
-        Spacer(Modifier.height(40.dp))
+        Spacer(Modifier.height(32.dp))
 
         if (items.isNotEmpty() && inputPrompt == null) {
             CollectionItems(items = items, onItem = onItem)
@@ -151,9 +131,12 @@ fun FirstScreen(
                 suggestions = inputSuggestions,
             )
         } else {
-            val showingIntents = selectedIntent == null
+            // #114: the likely few, big — everything else folded behind «Все действия».
+            // Ranking is the learning BubblePolicy's job; the screen just respects it.
+            val likely = if (bubbles.size <= LIKELY_COUNT + 2) bubbles else bubbles.take(LIKELY_COUNT)
+            val rest = bubbles.drop(likely.size)
             Text(
-                text = selectedIntent?.let { intentTitle(it) } ?: "Что сделать?",
+                text = if (rest.isEmpty()) "Что сделать?" else "Самые вероятные",
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -164,27 +147,17 @@ fun FirstScreen(
                 horizontalArrangement = Arrangement.spacedBy(20.dp, Alignment.CenterHorizontally),
                 verticalArrangement = Arrangement.spacedBy(20.dp),
             ) {
-                if (showingIntents) {
-                    intents.forEachIndexed { index, intent ->
-                        key("intent-${intent.name}") {
-                            ActionBubble(
-                                icon = intentIcon(intent),
-                                title = intentTitle(intent),
-                                color = intentColor(intent),
-                                index = index,
-                                onClick = { onIntent(intent) },
-                            )
-                        }
-                    }
-                } else {
-                    bubbles.forEachIndexed { index, bubble ->
-                        key(bubble.capabilityId.value) {
-                            BubbleItem(bubble = bubble, index = index, onClick = { onBubble(bubble) })
-                        }
+                likely.forEachIndexed { index, bubble ->
+                    key(bubble.capabilityId.value) {
+                        BubbleItem(bubble = bubble, index = index, size = 68.dp, onClick = { onBubble(bubble) })
                     }
                 }
             }
-            if (showingIntents && latent.isNotEmpty()) {
+            if (rest.isNotEmpty()) {
+                Spacer(Modifier.height(10.dp))
+                AllActions(rest = rest, onBubble = onBubble)
+            }
+            if (latent.isNotEmpty()) {
                 Spacer(Modifier.height(22.dp))
                 LatentHints(latent)
             }
@@ -420,24 +393,89 @@ private fun ObjectHeader(obj: PointObject) {
     }
 }
 
+/** The folded remainder of the graph (#114): a count that unfolds into the full set,
+ *  grouped by [BubbleTier] — the levels themselves teach an action's nature. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun BubbleItem(bubble: Bubble, index: Int, onClick: () -> Unit) =
+private fun AllActions(rest: List<Bubble>, onBubble: (Bubble) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        TextButton(onClick = { expanded = !expanded }) {
+            Text(
+                text = if (expanded) "Свернуть" else "Все действия (${rest.size})",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Icon(
+                imageVector = if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(18.dp),
+            )
+        }
+        AnimatedVisibility(
+            visible = expanded,
+            enter = fadeIn(tween(200)) + expandVertically(tween(200)),
+            exit = fadeOut(tween(160)) + shrinkVertically(tween(160)),
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                for ((tier, label) in TIER_GROUPS) {
+                    val group = rest.filter { it.tier == tier }
+                    if (group.isEmpty()) continue
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally),
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                    ) {
+                        group.forEachIndexed { index, bubble ->
+                            key(bubble.capabilityId.value) {
+                                BubbleItem(bubble = bubble, index = index, size = 52.dp, onClick = { onBubble(bubble) })
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private const val LIKELY_COUNT = 3
+private val TIER_GROUPS = listOf(
+    BubbleTier.INSTANT to "Мгновенные",
+    BubbleTier.SMART to "Умные",
+    BubbleTier.AI to "AI и облако",
+)
+
+@Composable
+private fun BubbleItem(bubble: Bubble, index: Int, size: Dp = 62.dp, onClick: () -> Unit) =
     ActionBubble(
         icon = bubbleIcon(bubble.icon),
         title = bubble.title,
         color = bubbleColor(bubble.icon),
         index = index,
+        size = size,
+        ai = bubble.tier == BubbleTier.AI,
         onClick = onClick,
     )
 
-/** One circular action bubble — an intent or a capability. Fades/scales in with a
- *  stagger so newly disclosed actions visibly appear. */
+/** One circular action bubble. Fades/scales in with a stagger so newly disclosed
+ *  actions visibly appear. An AI bubble wears a quiet tertiary ring — the action
+ *  leaves the device, and the screen says so before the tap (#114). */
 @Composable
 private fun ActionBubble(
     icon: ImageVector,
     title: String,
     color: Color,
     index: Int,
+    size: Dp = 62.dp,
+    ai: Boolean = false,
     onClick: () -> Unit,
 ) {
     var appeared by remember { mutableStateOf(false) }
@@ -450,7 +488,7 @@ private fun ActionBubble(
 
     Column(
         modifier = Modifier
-            .width(84.dp)
+            .width(size + 24.dp)
             .graphicsLayer {
                 alpha = progress
                 val scale = 0.7f + 0.3f * progress
@@ -462,8 +500,12 @@ private fun ActionBubble(
     ) {
         Box(
             modifier = Modifier
-                .size(62.dp)
+                .size(size)
                 .shadow(10.dp, CircleShape, clip = false, ambientColor = color, spotColor = color)
+                .then(
+                    if (ai) Modifier.border(1.5.dp, MaterialTheme.colorScheme.tertiary, CircleShape)
+                    else Modifier,
+                )
                 .clip(CircleShape)
                 .background(color),
             contentAlignment = Alignment.Center,
@@ -472,7 +514,7 @@ private fun ActionBubble(
                 imageVector = icon,
                 contentDescription = null,
                 tint = Color.White,
-                modifier = Modifier.size(28.dp),
+                modifier = Modifier.size(size * 0.45f),
             )
         }
         Spacer(Modifier.height(9.dp))

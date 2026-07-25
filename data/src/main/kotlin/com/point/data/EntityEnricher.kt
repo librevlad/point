@@ -6,6 +6,7 @@ import com.point.core.flow.EnricherMeta
 import com.point.core.flow.EnrichmentDelta
 import com.point.core.flow.EntityExtractor
 import com.point.core.flow.asFeature
+import com.point.core.flow.asMetaKey
 import com.point.core.model.Feature
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
@@ -38,10 +39,20 @@ class EntityEnricher @Inject constructor(
             .getOrDefault("")
             .take(MAX_CHARS)
         if (text.isBlank()) return@withContext EnrichmentDelta()
-        EnrichmentDelta(extractor.extract(text).mapNotNullTo(mutableSetOf()) { it.type.asFeature() })
+        entityDelta(extractor.extract(text))
     }
 
     private companion object {
         const val MAX_CHARS = 20_000
     }
+}
+
+/** Entities → one delta: features to flag + understood facts (the first value per kind,
+ *  `entity.*`) for the «Point понял» checklist. Shared by the text and OCR enrichers. */
+internal fun entityDelta(entities: List<com.point.core.flow.Entity>): EnrichmentDelta {
+    val features = entities.mapNotNullTo(mutableSetOf()) { it.type.asFeature() }
+    val facts = buildMap {
+        entities.forEach { e -> e.type.asMetaKey()?.let { key -> putIfAbsent(key, e.value) } }
+    }
+    return EnrichmentDelta(features, facts)
 }
