@@ -53,7 +53,13 @@ data class UnderstoodFact(val key: String, val label: String, val value: String?
 fun understoodFacts(obj: PointObject): List<UnderstoodFact> {
     val state = obj.state
     fun entity(key: String) = obj.metadata[META_ENTITY_PREFIX + key]
+    val summary = obj.metadata[com.point.core.flow.META_SEMANTIC_SUMMARY]
     return buildList {
+        // The semantic level (#89) leads: what the object IS, then what's inside it.
+        if (state.has(Feature.IS_MEETING)) add(UnderstoodFact("semantic", "Это встреча", summary))
+        if (state.has(Feature.IS_PURCHASE)) add(UnderstoodFact("semantic", "Это покупка", summary))
+        if (state.has(Feature.IS_RECIPE)) add(UnderstoodFact("semantic", "Это рецепт", summary))
+        if (state.has(Feature.IS_JOB)) add(UnderstoodFact("semantic", "Это вакансия", summary))
         if (state.has(Feature.HAS_PHONE)) add(UnderstoodFact("phone", "Нашёл телефон", entity("phone")))
         if (state.has(Feature.HAS_EMAIL)) add(UnderstoodFact("email", "Нашёл почту", entity("email")))
         if (state.has(Feature.HAS_URL)) add(UnderstoodFact("url", "Нашёл ссылку", entity("url")?.readableUrl()))

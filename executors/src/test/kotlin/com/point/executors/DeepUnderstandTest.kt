@@ -48,6 +48,26 @@ class DeepUnderstandTest {
     }
 
     @Test
+    fun `parses the semantic level - TYPE from the whitelist and SUMMARY (#89)`() {
+        val answer = """
+            TYPE=RECIPE
+            SUMMARY=Борщ на говяжьем бульоне
+            DATE=в субботу
+        """.trimIndent()
+        val facts = parseUnderstanding(answer)
+        assertEquals("recipe", facts[com.point.core.flow.META_SEMANTIC_TYPE])
+        assertEquals("Борщ на говяжьем бульоне", facts[com.point.core.flow.META_SEMANTIC_SUMMARY])
+        assertEquals("в субботу", facts[META_ENTITY_PREFIX + "date"])
+    }
+
+    @Test
+    fun `a TYPE outside the whitelist is ignored, not stored`() {
+        val facts = parseUnderstanding("TYPE=POEM\nSUMMARY=стихотворение")
+        assertNull(facts[com.point.core.flow.META_SEMANTIC_TYPE])
+        assertEquals("стихотворение", facts[com.point.core.flow.META_SEMANTIC_SUMMARY])
+    }
+
+    @Test
     fun `deep understand accepts text and OCR'd images, not raw photos`() {
         val cap = DeepUnderstandCapability()
         assertTrue(cap.accepts(ObjectState(ObjectKind.TEXT)))

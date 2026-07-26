@@ -32,6 +32,16 @@ enum class Feature {
      *  text-hungry actions (deep-understand) on a picture. Set by the OCR enricher. */
     HAS_TEXT,
 
+    /**
+     * The semantic level (#89): what the text IS, not what's in it. Lit from stored
+     * `semantic.type` metadata — today written by study («Понять глубже», #87), tomorrow
+     * possibly by on-device heuristics. Each unlocks type-specific actions.
+     */
+    IS_MEETING,
+    IS_PURCHASE,
+    IS_RECIPE,
+    IS_JOB,
+
     /** Size above the async-enrichment threshold (e.g. a 200 MB zip). */
     LARGE,
 }
