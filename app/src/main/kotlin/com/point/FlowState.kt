@@ -5,6 +5,8 @@ import com.point.core.flow.UsageSummary
 import com.point.core.flow.UserAiConfig
 import com.point.core.model.Bubble
 import com.point.core.model.CapabilityId
+import com.point.core.flow.CapabilityMeta
+import com.point.core.flow.Latency
 import com.point.core.model.FavoriteChain
 import com.point.core.model.LatentBubble
 import com.point.core.model.ObjectKind
@@ -34,6 +36,10 @@ data class FlowFrame(
     val discover: Bubble? = null,
 )
 
+/** M3: work that may run quietly on the object itself — local and not declared slow.
+ *  Cloud (network) and SLOW work keep the full busy screen with its staged reassurance. */
+fun quietWork(meta: CapabilityMeta): Boolean = !meta.network && meta.latency != Latency.SLOW
+
 /** One node of the visible Object Timeline (#114): what the object was at that step,
  *  and the action that made it (null for the root). The philosophy made visible —
  *  the flow is a journey of transformations, not a stack of screens. */
@@ -47,6 +53,9 @@ data class FlowUiState(
     /** True when the running action is a cloud/AI call — the busy screen then reassures with
      *  cloud-flavoured, time-advancing stages instead of a frozen wheel (#62). */
     val busyNetwork: Boolean = false,
+    /** M3 (MOTION.md №8): true while a fast local action runs — the object stays on screen
+     *  and "works" (thinking ring) instead of a full busy screen; states flow, never snap. */
+    val busyQuiet: Boolean = false,
     val frame: FlowFrame? = null,
     /** The Object Timeline (#114): the whole journey, root first — tap a node to jump back. */
     val path: List<PathStep> = emptyList(),
