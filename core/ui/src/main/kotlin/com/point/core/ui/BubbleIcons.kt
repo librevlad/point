@@ -44,7 +44,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import com.point.core.model.ObjectKind
 
 /** Resolves a [com.point.core.model.Bubble.icon] key to a vector. */
-fun bubbleIcon(key: String): ImageVector = when (key) {
+fun bubbleIcon(key: String): ImageVector = when (if (key.startsWith("app:")) "open-in" else key) {
     "share" -> Icons.Filled.Share
     "save" -> Icons.Filled.Save
     "save-all" -> Icons.Filled.SaveAlt
@@ -83,7 +83,7 @@ fun bubbleIcon(key: String): ImageVector = when (key) {
  * universal trio (share/save/ai) gets distinct anchors so it never collides with
  * the type-specific actions it always sits beside.
  */
-fun bubbleColor(key: String): Color = when (key) {
+fun bubbleColor(key: String): Color = when (if (key.startsWith("app:")) "open-in" else key) {
     "share" -> Color(0xFFF5610F)    // orange — brand "send"
     "save" -> Color(0xFF64748B)     // slate — neutral universal
     "save-all" -> Color(0xFF64748B) // slate — neutral universal (collection)

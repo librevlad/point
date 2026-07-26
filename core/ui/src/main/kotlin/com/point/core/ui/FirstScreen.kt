@@ -130,6 +130,7 @@ fun FirstScreen(
     previewBitmap: ImageBitmap? = null,
     pinned: CapabilityId? = null,
     onBubbleLongPress: (Bubble) -> Unit = {},
+    appIconFor: (String) -> ImageBitmap? = { null },
 ) {
     Column(
         modifier = modifier
@@ -272,6 +273,7 @@ fun FirstScreen(
                             objectCenter = objectCenter.value, enabled = !working,
                             pinned = bubble.capabilityId == pinned,
                             magnet = bubble.capabilityId == dragTarget,
+                            appIconFor = appIconFor,
                             onCenter = { bubbleCenters[bubble.capabilityId] = it },
                             onClick = { onBubble(bubble) },
                             onLongClick = { onBubbleLongPress(bubble) },
@@ -288,6 +290,7 @@ fun FirstScreen(
                 AllActions(
                     rest = rest, objectCenter = objectCenter.value,
                     onBubble = onBubble, onBubbleLongPress = onBubbleLongPress,
+                    appIconFor = appIconFor,
                 )
             }
             if (latent.isNotEmpty()) {
@@ -591,6 +594,7 @@ private fun AllActions(
     objectCenter: Offset,
     onBubble: (Bubble) -> Unit,
     onBubbleLongPress: (Bubble) -> Unit = {},
+    appIconFor: (String) -> ImageBitmap? = { null },
 ) {
     var expanded by remember { mutableStateOf(false) }
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -633,6 +637,7 @@ private fun AllActions(
                                 BubbleItem(
                                     bubble = bubble, index = index, size = 52.dp,
                                     objectCenter = objectCenter,
+                                    appIconFor = appIconFor,
                                     onClick = { onBubble(bubble) },
                                     onLongClick = { onBubbleLongPress(bubble) },
                                 )
@@ -671,13 +676,21 @@ private fun BubbleItem(
     enabled: Boolean = true,
     pinned: Boolean = false,
     magnet: Boolean = false,
+    appIconFor: (String) -> ImageBitmap? = { null },
     onCenter: (Offset) -> Unit = {},
     onClick: () -> Unit,
     onLongClick: () -> Unit = {},
 ) = ActionBubble(
     icon = bubbleIcon(bubble.icon),
     title = bubble.title,
-    color = bubbleColor(bubble.icon),
+    // A real device app keeps a neutral plate — its own icon carries the colour.
+    color = if (bubble.icon.startsWith("app:")) MaterialTheme.colorScheme.surfaceVariant
+    else bubbleColor(bubble.icon),
+    appIcon = if (bubble.icon.startsWith("app:")) {
+        remember(bubble.icon) { appIconFor(bubble.icon.removePrefix("app:")) }
+    } else {
+        null
+    },
     index = index,
     size = size,
     ai = bubble.tier == BubbleTier.AI,
@@ -711,6 +724,7 @@ private fun ActionBubble(
     enabled: Boolean = true,
     pinned: Boolean = false,
     magnet: Boolean = false,
+    appIcon: ImageBitmap? = null,
     onCenter: (Offset) -> Unit = {},
     onClick: () -> Unit,
     onLongClick: () -> Unit = {},
@@ -803,12 +817,21 @@ private fun ActionBubble(
                 .background(color),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = Color.White,
-                modifier = Modifier.size(size * 0.45f),
-            )
+            if (appIcon != null) {
+                // #66: a real device app shows its REAL icon — instant recognition.
+                Image(
+                    bitmap = appIcon,
+                    contentDescription = null,
+                    modifier = Modifier.size(size * 0.62f),
+                )
+            } else {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(size * 0.45f),
+                )
+            }
         }
         Spacer(Modifier.height(9.dp))
         Text(

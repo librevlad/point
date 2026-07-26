@@ -80,6 +80,7 @@ class FlowViewModel @Inject constructor(
     private val crashLog: CrashLog,
     private val ioDispatcher: CoroutineDispatcher,
     private val pins: PinnedActions,
+    private val appIcons: AppIconResolver,
 ) : ViewModel() {
 
     private val stack = ArrayDeque<FlowFrame>()
@@ -115,6 +116,10 @@ class FlowViewModel @Inject constructor(
         viewModelScope.launch { _crashReport.value = runCatching { crashLog.pending() }.getOrNull() }
         restoreJourney()
     }
+
+    /** Real launcher icon for an app-capability bubble; null → stock glyph (#66). */
+    fun appIcon(packageName: String): androidx.compose.ui.graphics.ImageBitmap? =
+        runCatching { appIcons.iconFor(packageName) }.getOrNull()
 
     /** The user saw (and maybe shared) the crash report - forget it either way. */
     fun dismissCrashReport() {

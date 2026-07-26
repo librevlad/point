@@ -23,7 +23,7 @@ import kotlinx.coroutines.withContext
  */
 class AppCapability(private val app: ChosenApp) : Capability {
     override val id = idFor(app)
-    override val icon = "open-in"
+    override val icon = "app:${app.packageName}" // the UI resolves the real app icon
     override val meta = CapabilityMeta(priority = 70, latency = Latency.INSTANT)
     override fun label(state: ObjectState) = app.label
     override fun accepts(state: ObjectState) = state.kind == app.kind
