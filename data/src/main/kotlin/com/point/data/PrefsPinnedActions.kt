@@ -1,0 +1,31 @@
+package com.point.data
+
+import android.content.Context
+import com.point.core.flow.PinnedActions
+import com.point.core.model.CapabilityId
+import com.point.core.model.ObjectKind
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import javax.inject.Inject
+import javax.inject.Singleton
+
+/** kind → pinned capability id in tiny prefs; reads are warm in-memory prefs like the key store. */
+@Singleton
+class PrefsPinnedActions @Inject constructor(
+    @ApplicationContext private val context: Context,
+) : PinnedActions {
+
+    private val prefs by lazy { context.getSharedPreferences("pinned-actions", Context.MODE_PRIVATE) }
+
+    override fun pinnedFor(kind: ObjectKind): CapabilityId? =
+        runCatching { prefs.getString(kind.name, null)?.let { CapabilityId(it) } }.getOrNull()
+
+    override suspend fun pin(kind: ObjectKind, id: CapabilityId): Unit = withContext(Dispatchers.IO) {
+        prefs.edit().putString(kind.name, id.value).apply()
+    }
+
+    override suspend fun unpin(kind: ObjectKind): Unit = withContext(Dispatchers.IO) {
+        prefs.edit().remove(kind.name).apply()
+    }
+}

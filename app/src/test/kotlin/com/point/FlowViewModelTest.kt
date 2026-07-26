@@ -73,6 +73,7 @@ class FlowViewModelTest {
     private val sensorySettings = FakeSensorySettings()
     private val snapshot = FakeFlowSnapshotStore()
     private val crashLog = FakeCrashLog()
+    private val pins = FakePinnedActions()
 
     @Before fun setUp() = Dispatchers.setMain(dispatcher)
     @After fun tearDown() = Dispatchers.resetMain()
@@ -82,10 +83,27 @@ class FlowViewModelTest {
     private fun vm(
         caps: Map<CapabilityId, Set<Intent>> = mapOf(CapabilityId("a") to setOf(Intent.PREPARE)),
         cloud: Set<CapabilityId> = emptySet(),
-    ) = FlowViewModel(store, FakeRegistry(caps, cloud), resolver, enrichment, history, favorites, usage, userKeys, journal, consent, appLauncher, FakePdfRasterizer(), sensory, sensorySettings, snapshot, crashLog, dispatcher)
+    ) = FlowViewModel(store, FakeRegistry(caps, cloud), resolver, enrichment, history, favorites, usage, userKeys, journal, consent, appLauncher, FakePdfRasterizer(), sensory, sensorySettings, snapshot, crashLog, dispatcher, pins)
 
     private fun bubble(id: String = "a", title: String = "Действие") =
         Bubble("x", title, CapabilityId(id), ObjectState(ObjectKind.TEXT))
+
+    // --- User rules (#66): a long-press pins the action for this object kind ---
+
+    @Test fun `long-press pins, second long-press unpins — with a spoken confirmation`() = runTest(dispatcher) {
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.togglePin(bubble(id = "a", title = "Действие")); advanceUntilIdle()
+        assertEquals("a", pins.pinned[ObjectKind.IMAGE]?.value)
+        assertTrue(vm.ui.value.message?.contains("Закреплено") == true)
+        assertEquals(CapabilityId("a"), vm.ui.value.frame?.pinned)
+
+        vm.togglePin(bubble(id = "a", title = "Действие")); advanceUntilIdle()
+        assertNull(pins.pinned[ObjectKind.IMAGE])
+        assertTrue(vm.ui.value.message?.contains("Откреплено") == true)
+        assertNull(vm.ui.value.frame?.pinned)
+    }
 
     // --- Crash visibility (#11): the last crash is offered once, shared only explicitly ---
 
@@ -908,6 +926,13 @@ private class FakeSensoryFeedback : com.point.core.flow.SensoryFeedback {
     override fun tap() { events += "tap" }
     override fun success() { events += "success" }
     override fun failure() { events += "failure" }
+}
+
+private class FakePinnedActions : com.point.core.flow.PinnedActions {
+    val pinned = mutableMapOf<ObjectKind, CapabilityId?>()
+    override fun pinnedFor(kind: ObjectKind) = pinned[kind]
+    override suspend fun pin(kind: ObjectKind, id: CapabilityId) { pinned[kind] = id }
+    override suspend fun unpin(kind: ObjectKind) { pinned[kind] = null }
 }
 
 private class FakeCrashLog : com.point.core.flow.CrashLog {

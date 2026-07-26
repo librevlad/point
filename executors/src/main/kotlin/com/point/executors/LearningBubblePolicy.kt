@@ -3,6 +3,7 @@ package com.point.executors
 import com.point.core.flow.BubblePolicy
 import com.point.core.flow.Capability
 import com.point.core.flow.CapabilityUsage
+import com.point.core.flow.PinnedActions
 import com.point.core.model.CapabilityId
 import com.point.core.model.ObjectState
 import javax.inject.Inject
@@ -17,13 +18,16 @@ import kotlin.math.min
  * in an ML/LLM policy later touches neither the registry nor the UI.
  */
 class LearningBubblePolicy @Inject constructor(
+    private val pins: PinnedActions,
     private val usage: CapabilityUsage,
 ) : BubblePolicy {
 
     override fun rank(state: ObjectState, candidates: List<Capability>): List<Capability> {
         val counts = usage.counts()
+        // #66 user rule: the pinned action wins over both priority and learned usage.
+        val pinned = runCatching { pins.pinnedFor(state.kind) }.getOrNull()
         return candidates.sortedWith(
-            compareBy({ effectivePriority(it, counts) }, { it.id.value }),
+            compareBy({ if (it.id == pinned) 0 else 1 }, { effectivePriority(it, counts) }, { it.id.value }),
         )
     }
 

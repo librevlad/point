@@ -14,6 +14,7 @@ import com.point.core.flow.FlowSnapshotStore
 import com.point.core.flow.HistoryStore
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.PdfRasterizer
+import com.point.core.flow.PinnedActions
 import com.point.core.flow.PrivacyConsent
 import com.point.core.flow.Resolver
 import com.point.core.flow.SensoryFeedback
@@ -74,6 +75,7 @@ class FlowViewModel @Inject constructor(
     private val flowSnapshot: FlowSnapshotStore,
     private val crashLog: CrashLog,
     private val ioDispatcher: CoroutineDispatcher,
+    private val pins: PinnedActions,
 ) : ViewModel() {
 
     private val stack = ArrayDeque<FlowFrame>()
@@ -596,6 +598,30 @@ class FlowViewModel @Inject constructor(
         return true
     }
 
+    /** User rule (#66): a long-press pins this action for objects of this kind — it will
+     *  always rank first; a second long-press unpins. The frame re-ranks at once. */
+    fun togglePin(bubble: Bubble) {
+        val top = stack.lastOrNull() ?: return
+        val kind = top.obj.state.kind
+        viewModelScope.launch {
+            val already = runCatching { pins.pinnedFor(kind) }.getOrNull() == bubble.capabilityId
+            runCatching { if (already) pins.unpin(kind) else pins.pin(kind, bubble.capabilityId) }
+            val index = stack.lastIndex
+            val frame = stack.getOrNull(index) ?: return@launch
+            val refreshed = frame.copy(
+                bubbles = registry.bubblesFor(frame.obj.state),
+                pinned = if (already) null else bubble.capabilityId,
+            )
+            stack[index] = refreshed
+            _ui.update {
+                it.copy(
+                    frame = refreshed,
+                    message = if (already) "Откреплено" else "Закреплено: ${bubble.title}",
+                )
+            }
+        }
+    }
+
     /** Timeline tap (#114): pop back to the [index]-th step of the journey in one move. */
     fun jumpTo(index: Int) {
         if (index < 0 || index >= stack.size - 1) return
@@ -639,6 +665,7 @@ class FlowViewModel @Inject constructor(
             obj, bubbles, via, viaTitle,
             latent = registry.latentBubblesFor(obj.state),
             discover = discoverFor(bubbles),
+            pinned = runCatching { pins.pinnedFor(obj.state.kind) }.getOrNull(),
         )
         stack.addLast(frame)
         _ui.update {
