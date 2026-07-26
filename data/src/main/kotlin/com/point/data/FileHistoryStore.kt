@@ -1,7 +1,9 @@
 package com.point.data
 
 import com.point.core.flow.HistoryStore
+import com.point.core.flow.META_ENTITY_PREFIX
 import com.point.core.flow.ObjectClassifier
+import com.point.core.model.Feature
 import com.point.core.model.HistoryEntry
 import com.point.core.model.ObjectKind
 import com.point.core.model.PointObject
@@ -11,6 +13,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.util.UUID
@@ -43,10 +46,34 @@ class FileHistoryStore @Inject constructor(
         val dest = File(dir, if (ext.isBlank()) obj.id else "${obj.id}.$ext")
         mutex.withLock {
             source.inputStream().use { input -> dest.outputStream().use { input.copyTo(it) } }
-            index.appendText(row(obj.id, obj.mime, obj.state.kind.name, name, System.currentTimeMillis(), dest.absolutePath) + "\n")
+            index.appendText(
+                row(
+                    obj.id, obj.mime, obj.state.kind.name, name, System.currentTimeMillis(),
+                    dest.absolutePath, obj.state.features, entityValues(obj.metadata),
+                ) + "\n",
+            )
             pruneToLimit() // keep history bounded so it never silently fills the disk (#8)
         }
     }
+
+    /** Append a fresh journal line for the id — last line wins, so the entry now carries
+     *  what enrichment understood (#114). The persisted copy and timestamp stay as-is. */
+    override suspend fun update(obj: PointObject): Unit = withContext(Dispatchers.IO) {
+        mutex.withLock {
+            val existing = readEntries()[obj.id] ?: return@withLock
+            index.appendText(
+                row(
+                    existing.id, existing.mime, existing.kind.name, existing.name, existing.epochMillis,
+                    existing.ref.value, obj.state.features, entityValues(obj.metadata),
+                ) + "\n",
+            )
+        }
+    }
+
+    /** The `entity.*` understood facts, keyed without the prefix (phone → «+380…»). */
+    private fun entityValues(metadata: Map<String, String>): Map<String, String> =
+        metadata.filterKeys { it.startsWith(META_ENTITY_PREFIX) }
+            .mapKeys { it.key.removePrefix(META_ENTITY_PREFIX) }
 
     override suspend fun recent(limit: Int): List<HistoryEntry> = withContext(Dispatchers.IO) {
         // Order by journal recency, not by the millisecond timestamp: several records
@@ -86,18 +113,32 @@ class FileHistoryStore @Inject constructor(
         if (entries.size <= MAX_ENTRIES) return
         entries.dropLast(MAX_ENTRIES).forEach { runCatching { File(it.ref.value).delete() } }
         val survivors = entries.takeLast(MAX_ENTRIES)
-        index.writeText(survivors.joinToString("") { row(it.id, it.mime, it.kind.name, it.name, it.epochMillis, it.ref.value) + "\n" })
+        index.writeText(
+            survivors.joinToString("") {
+                row(it.id, it.mime, it.kind.name, it.name, it.epochMillis, it.ref.value, it.features, it.entities) + "\n"
+            },
+        )
     }
 
-    private fun row(id: String, mime: String, kind: String, name: String?, t: Long, path: String): String =
-        JSONObject()
-            .put("id", id)
-            .put("mime", mime)
-            .put("kind", kind)
-            .put("name", name ?: JSONObject.NULL)
-            .put("t", t)
-            .put("path", path)
-            .toString()
+    private fun row(
+        id: String,
+        mime: String,
+        kind: String,
+        name: String?,
+        t: Long,
+        path: String,
+        features: Set<Feature>,
+        entities: Map<String, String>,
+    ): String = JSONObject()
+        .put("id", id)
+        .put("mime", mime)
+        .put("kind", kind)
+        .put("name", name ?: JSONObject.NULL)
+        .put("t", t)
+        .put("path", path)
+        .put("features", JSONArray(features.map { it.name }))
+        .put("entities", JSONObject(entities))
+        .toString()
 
     /** id -> latest entry (last journal line for that id wins). */
     private fun readEntries(): Map<String, HistoryEntry> {
@@ -116,6 +157,14 @@ class FileHistoryStore @Inject constructor(
                     name = json.optString("name").ifBlank { null },
                     epochMillis = json.getLong("t"),
                     ref = ScratchRef(json.getString("path")),
+                    features = json.optJSONArray("features")?.let { arr ->
+                        (0 until arr.length()).mapNotNullTo(mutableSetOf()) { i ->
+                            runCatching { Feature.valueOf(arr.getString(i)) }.getOrNull()
+                        }
+                    } ?: emptySet(),
+                    entities = json.optJSONObject("entities")?.let { obj ->
+                        obj.keys().asSequence().associateWith { key -> obj.getString(key) }
+                    } ?: emptyMap(),
                 )
             }
         }

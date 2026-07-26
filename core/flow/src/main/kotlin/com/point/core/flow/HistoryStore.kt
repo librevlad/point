@@ -12,6 +12,11 @@ interface HistoryStore {
     /** Persist an object as a history entry (a copy is kept). */
     suspend fun record(obj: PointObject)
 
+    /** Fold what enrichment understood (features / entity values) into the existing
+     *  entry for this object — so Home remembers objects by what they ARE (#114).
+     *  Unknown id (e.g. a mid-flow object never recorded) is a no-op. */
+    suspend fun update(obj: PointObject)
+
     /** Most-recent-first, de-duplicated, existing files only. */
     suspend fun recent(limit: Int = 30): List<HistoryEntry>
 
