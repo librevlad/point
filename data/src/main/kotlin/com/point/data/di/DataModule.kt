@@ -36,6 +36,8 @@ import com.point.core.flow.SpreadsheetWriter
 import com.point.core.flow.TextRecognizer
 import com.point.core.flow.UrlOpener
 import com.point.core.flow.ChosenApps
+import com.point.core.flow.PcPairings
+import com.point.core.flow.PcTransport
 import com.point.core.flow.UsageJournal
 import com.point.core.flow.UserKeyStore
 import com.point.core.flow.Viewer
@@ -54,6 +56,8 @@ import com.point.data.EntityEnricher
 import com.point.data.MlKitEntityExtractor
 import com.point.data.FallbackLlmClient
 import com.point.data.FileChosenApps
+import com.point.data.FilePcPairings
+import com.point.data.HttpUrlPcTransport
 import com.point.data.FileUsageJournal
 import com.point.data.FileCapabilityUsage
 import com.point.data.FileFavoritesStore
@@ -193,6 +197,13 @@ abstract class DataModule {
     /** Remembered app picks — the seed for per-app capabilities (#66 slice 4). */
     @Binds
     abstract fun chosenApps(impl: FileChosenApps): ChosenApps
+
+    /** The paired PC (#147) and the LAN transport to it. */
+    @Binds
+    abstract fun pcPairings(impl: FilePcPairings): PcPairings
+
+    @Binds
+    abstract fun pcTransport(impl: HttpUrlPcTransport): PcTransport
 
     /** Consent to send objects to a cloud service (#10). */
     @Binds

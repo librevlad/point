@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- #147: phone → PC runs over plain http INSIDE the user's LAN. Every cloud call in
+     the app is https, so permitting cleartext adds no downgrade surface. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

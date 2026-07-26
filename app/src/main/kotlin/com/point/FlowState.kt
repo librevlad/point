@@ -95,9 +95,18 @@ data class FlowUiState(
     val appPicker: List<AppTarget>? = null,
     /** Non-null while the bring-your-own AI-key screen is shown (its prefilled values). */
     val keyScreen: UserAiConfig? = null,
+    val pcScreen: PcScreenState? = null,
     /** On the key screen: whether the private usage journal is on, and its current tally. */
     val usageEnabled: Boolean = false,
     /** On the key screen: whether branded action sounds are on (MOTION.md M4). */
     val soundEnabled: Boolean = true,
     val usageSummary: UsageSummary? = null,
+)
+
+
+/** «Компьютер» (#147): the pairing screen's state — current pairing + a busy/error line. */
+data class PcScreenState(
+    val pairing: com.point.core.flow.PcPairing? = null,
+    val busy: Boolean = false,
+    val error: String? = null,
 )
