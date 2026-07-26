@@ -62,6 +62,9 @@ fun HomeScreen(
     clipboard: String? = null,
     onUseClipboard: (String) -> Unit = {},
     onDismissClipboard: () -> Unit = {},
+    crashReport: String? = null,
+    onSendCrash: (String) -> Unit = {},
+    onDismissCrash: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Column(modifier.fillMaxSize()) {
@@ -76,6 +79,11 @@ fun HomeScreen(
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+        }
+
+        if (crashReport != null) {
+            // #11: crash visibility - offered once, leaves the device only by explicit share.
+            CrashBanner(onSend = { onSendCrash(crashReport) }, onDismiss = onDismissCrash)
         }
 
         if (clipboard != null) {
@@ -158,6 +166,43 @@ private fun ClipboardBanner(text: String, onUse: () -> Unit, onDismiss: () -> Un
                     imageVector = Icons.Filled.Close,
                     contentDescription = "Скрыть",
                     tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                )
+            }
+        }
+    }
+}
+
+/** The last-crash offer: one dismissible line, no automation whatsoever (#11). */
+@Composable
+private fun CrashBanner(onSend: () -> Unit, onDismiss: () -> Unit) {
+    Surface(
+        onClick = onSend,
+        color = MaterialTheme.colorScheme.errorContainer,
+        shape = MaterialTheme.shapes.large,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+    ) {
+        Row(
+            modifier = Modifier.padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    "Point падал в прошлый раз",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                )
+                Text(
+                    "Нажмите, чтобы отправить отчёт разработчику - только по вашему решению.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                )
+            }
+            IconButton(onClick = onDismiss) {
+                Icon(
+                    imageVector = Icons.Filled.Close,
+                    contentDescription = "Скрыть",
+                    tint = MaterialTheme.colorScheme.onErrorContainer,
                 )
             }
         }

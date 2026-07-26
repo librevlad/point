@@ -72,6 +72,7 @@ class FlowViewModelTest {
     private val sensory = FakeSensoryFeedback()
     private val sensorySettings = FakeSensorySettings()
     private val snapshot = FakeFlowSnapshotStore()
+    private val crashLog = FakeCrashLog()
 
     @Before fun setUp() = Dispatchers.setMain(dispatcher)
     @After fun tearDown() = Dispatchers.resetMain()
@@ -81,10 +82,23 @@ class FlowViewModelTest {
     private fun vm(
         caps: Map<CapabilityId, Set<Intent>> = mapOf(CapabilityId("a") to setOf(Intent.PREPARE)),
         cloud: Set<CapabilityId> = emptySet(),
-    ) = FlowViewModel(store, FakeRegistry(caps, cloud), resolver, enrichment, history, favorites, usage, userKeys, journal, consent, appLauncher, FakePdfRasterizer(), sensory, sensorySettings, snapshot)
+    ) = FlowViewModel(store, FakeRegistry(caps, cloud), resolver, enrichment, history, favorites, usage, userKeys, journal, consent, appLauncher, FakePdfRasterizer(), sensory, sensorySettings, snapshot, crashLog, dispatcher)
 
     private fun bubble(id: String = "a", title: String = "Действие") =
         Bubble("x", title, CapabilityId(id), ObjectState(ObjectKind.TEXT))
+
+    // --- Crash visibility (#11): the last crash is offered once, shared only explicitly ---
+
+    @Test fun `a previous crash surfaces once and is forgotten on dismiss`() = runTest(dispatcher) {
+        crashLog.report = "Point 0.2.0 crashed"
+        val vm = vm(); advanceUntilIdle()
+
+        assertEquals("Point 0.2.0 crashed", vm.crashReport.value)
+
+        vm.dismissCrashReport(); advanceUntilIdle()
+        assertNull(vm.crashReport.value)
+        assertEquals(1, crashLog.clearedTimes)
+    }
 
     // --- Crash-proof flow (#7): the journey survives process death ---
 
@@ -894,6 +908,14 @@ private class FakeSensoryFeedback : com.point.core.flow.SensoryFeedback {
     override fun tap() { events += "tap" }
     override fun success() { events += "success" }
     override fun failure() { events += "failure" }
+}
+
+private class FakeCrashLog : com.point.core.flow.CrashLog {
+    var report: String? = null
+    var clearedTimes = 0
+    override fun record(report: String) { this.report = report }
+    override suspend fun pending() = report
+    override suspend fun clear() { clearedTimes++; report = null }
 }
 
 private class FakeFlowSnapshotStore : com.point.core.flow.FlowSnapshotStore {
