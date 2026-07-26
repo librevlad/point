@@ -8,6 +8,7 @@ import com.point.core.flow.CapabilityRegistry
 import com.point.core.flow.CapabilityUsage
 import com.point.core.flow.CrashLog
 import com.point.core.flow.Enrichment
+import com.point.core.flow.edgeDetail
 import com.point.core.flow.EnrichmentUpdate
 import com.point.core.flow.FavoritesStore
 import com.point.core.flow.FlowSnapshotStore
@@ -541,7 +542,17 @@ class FlowViewModel @Inject constructor(
         when (result) {
             is ActionResult.Success -> {
                 runCatching { sensory.success() } // M4: the transformation lands in the hand
+                // #117 graph metrics: the edge actually traversed — kinds and id only.
+                val fromKind = stack.lastOrNull()?.obj?.state?.kind?.name ?: "?"
                 pushFrame(store.put(result.result), bubble.capabilityId, bubble.title)
+                runCatching {
+                    journal.record(
+                        UsageEvent(
+                            UsageEventType.EDGE,
+                            edgeDetail(fromKind, bubble.capabilityId.value, result.result.type.name),
+                        ),
+                    )
+                }
             }
             is ActionResult.Done -> {
                 runCatching { sensory.success() }
@@ -551,6 +562,7 @@ class FlowViewModel @Inject constructor(
             }
             is ActionResult.Failure -> {
                 runCatching { sensory.failure() } // M4: a failure bumps, never buzzes long
+                runCatching { journal.record(UsageEvent(UsageEventType.FAILED, bubble.capabilityId.value)) }
                 // A "no AI key" failure summons the key screen on demand instead of just erroring.
                 if (result.reason.contains("задайте свой ключ")) openKeySettings()
                 else _ui.update { it.copy(busy = null, message = result.reason) }

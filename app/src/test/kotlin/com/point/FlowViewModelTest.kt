@@ -226,6 +226,26 @@ class FlowViewModelTest {
         assertTrue(usage.recorded.contains(CapabilityId("a")))
     }
 
+    @Test fun `a Success step journals the traversed graph edge`() = runTest(dispatcher) {
+        resolver.result = ActionResult.Success(ResultObject(ObjectKind.TEXT, "text/plain", ScratchRef("/o")))
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.onBubble(bubble()); advanceUntilIdle()
+
+        assertEquals(mapOf("IMAGE>a>TEXT" to 1), journal.graph())
+    }
+
+    @Test fun `a Failure step journals a FAILED event`() = runTest(dispatcher) {
+        resolver.result = ActionResult.Failure("Не удалось", recoverable = true)
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.onBubble(bubble()); advanceUntilIdle()
+
+        assertEquals(1, journal.events.count { it.type == UsageEventType.FAILED })
+    }
+
     @Test fun `a Done step shows its message and keeps the frame`() = runTest(dispatcher) {
         resolver.result = ActionResult.Done("Открываю…")
         val vm = vm()
@@ -979,6 +999,8 @@ private class FakeUsageJournal(private var enabled: Boolean = true) : UsageJourn
     override suspend fun isEnabled() = enabled
     override suspend fun setEnabled(enabled: Boolean) { this.enabled = enabled }
     override suspend fun record(event: UsageEvent) { if (enabled) events += event }
+    override suspend fun graph(): Map<String, Int> =
+        events.filter { it.type == UsageEventType.EDGE }.groupingBy { it.detail }.eachCount()
     override suspend fun summary() = UsageSummary(
         events.count { it.type == UsageEventType.SHARED },
         events.count { it.type == UsageEventType.ACTION },

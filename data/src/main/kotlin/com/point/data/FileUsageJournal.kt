@@ -61,6 +61,7 @@ class FileUsageJournal @Inject constructor(
             var objects = 0
             var actions = 0
             var completed = 0
+            var failed = 0
             runCatching {
                 journal.forEachLine { line ->
                     if (line.isBlank()) return@forEachLine
@@ -69,11 +70,32 @@ class FileUsageJournal @Inject constructor(
                             UsageEventType.SHARED.name -> objects++
                             UsageEventType.ACTION.name -> actions++
                             UsageEventType.COMPLETED.name -> completed++
+                            UsageEventType.FAILED.name -> failed++
                         }
                     }
                 }
             }
-            UsageSummary(objects, actions, completed)
+            UsageSummary(objects, actions, completed, failed)
+        }
+    }
+
+    override suspend fun graph(): Map<String, Int> = withContext(Dispatchers.IO) {
+        lock.withLock {
+            if (!journal.exists()) return@withLock emptyMap()
+            val edges = mutableMapOf<String, Int>()
+            runCatching {
+                journal.forEachLine { line ->
+                    if (line.isBlank()) return@forEachLine
+                    runCatching {
+                        val row = JSONObject(line)
+                        if (row.getString("t") == UsageEventType.EDGE.name) {
+                            val d = row.getString("d")
+                            edges[d] = (edges[d] ?: 0) + 1
+                        }
+                    }
+                }
+            }
+            edges
         }
     }
 
