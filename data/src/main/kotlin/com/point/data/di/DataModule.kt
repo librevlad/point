@@ -26,6 +26,7 @@ import com.point.core.flow.PdfTextExtractor
 import com.point.core.flow.PrivacyConsent
 import com.point.core.flow.SensoryFeedback
 import com.point.core.flow.SensorySettings
+import com.point.core.flow.FlowSnapshotStore
 import com.point.core.flow.QrEncoder
 import com.point.core.flow.QrReader
 import com.point.core.flow.Sharer
@@ -72,6 +73,7 @@ import com.point.data.PdfBoxTextExtractor
 import com.point.data.PdfImageEnricher
 import com.point.data.PrefsPrivacyConsent
 import com.point.data.PrefsSensorySettings
+import com.point.data.FileFlowSnapshotStore
 import com.point.data.VibratorSensoryFeedback
 import com.point.data.PrefsUserKeyStore
 import com.point.data.QrEnricher
@@ -193,6 +195,10 @@ abstract class DataModule {
     @Binds
     abstract fun sensorySettings(impl: PrefsSensorySettings): SensorySettings
 
+    /** Crash-proof journey journal (#7). */
+    @Binds
+    abstract fun flowSnapshotStore(impl: FileFlowSnapshotStore): FlowSnapshotStore
+
     @Binds @IntoSet
     abstract fun textUrlEnricher(e: TextUrlEnricher): Enricher
 
@@ -283,6 +289,11 @@ abstract class DataModule {
         @HistoryDir
         fun historyDir(@ApplicationContext context: Context): java.io.File =
             java.io.File(context.filesDir, "history")
+
+        @Provides
+        @FlowSnapshotFile
+        fun flowSnapshotFile(@ApplicationContext context: Context): java.io.File =
+            java.io.File(context.filesDir, "flow-snapshot.json")
 
         @Provides
         @FavoritesDir
