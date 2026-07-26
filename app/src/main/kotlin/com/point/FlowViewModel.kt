@@ -14,6 +14,7 @@ import com.point.core.flow.ObjectStore
 import com.point.core.flow.PdfRasterizer
 import com.point.core.flow.PrivacyConsent
 import com.point.core.flow.Resolver
+import com.point.core.flow.SensoryFeedback
 import com.point.core.flow.UsageEvent
 import com.point.core.flow.UsageEventType
 import com.point.core.flow.UsageJournal
@@ -64,6 +65,7 @@ class FlowViewModel @Inject constructor(
     private val consent: PrivacyConsent,
     private val appLauncher: AppLauncher,
     private val pdfRasterizer: PdfRasterizer,
+    private val sensory: SensoryFeedback,
 ) : ViewModel() {
 
     private val stack = ArrayDeque<FlowFrame>()
@@ -463,6 +465,7 @@ class FlowViewModel @Inject constructor(
     }
 
     private fun dispatch(bubble: Bubble, action: suspend () -> ActionResult) {
+        runCatching { sensory.tap() } // M4: the choice answers in the hand at once
         viewModelScope.launch {
             runCatching { usage.record(bubble.capabilityId) } // learning signal for BubblePolicy
             runCatching { journal.record(UsageEvent(UsageEventType.ACTION, bubble.capabilityId.value)) }
@@ -474,16 +477,22 @@ class FlowViewModel @Inject constructor(
 
     private suspend fun handleResult(result: ActionResult, bubble: Bubble) {
         when (result) {
-            is ActionResult.Success -> pushFrame(store.put(result.result), bubble.capabilityId, bubble.title)
+            is ActionResult.Success -> {
+                runCatching { sensory.success() } // M4: the transformation lands in the hand
+                pushFrame(store.put(result.result), bubble.capabilityId, bubble.title)
+            }
             is ActionResult.Done -> {
+                runCatching { sensory.success() }
                 // A flow carried to a terminal (Share/Save/Open) — a task handled in Point.
                 runCatching { journal.record(UsageEvent(UsageEventType.COMPLETED, bubble.capabilityId.value)) }
                 _ui.update { it.copy(busy = null, message = result.message) }
             }
-            is ActionResult.Failure ->
+            is ActionResult.Failure -> {
+                runCatching { sensory.failure() } // M4: a failure bumps, never buzzes long
                 // A "no AI key" failure summons the key screen on demand instead of just erroring.
                 if (result.reason.contains("задайте свой ключ")) openKeySettings()
                 else _ui.update { it.copy(busy = null, message = result.reason) }
+            }
             is ActionResult.NeedsInput -> {
                 pendingBubble = bubble
                 _ui.update { it.copy(busy = null, inputPrompt = result.prompt, inputSuggestions = result.suggestions) }
