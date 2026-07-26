@@ -75,6 +75,9 @@ fun PointHost(
     onConfirmCloud: () -> Unit = {},
     onDeclineCloud: () -> Unit = {},
     onPickApp: (AppTarget) -> Unit = {},
+    onPairPc: (String, Int) -> Unit = { _, _ -> },
+    onUnpairPc: () -> Unit = {},
+    onClosePcSettings: () -> Unit = {},
     onDismissAppPicker: () -> Unit = {},
     onConfirmPreview: () -> Unit = {},
     onCancelPreview: () -> Unit = {},
@@ -132,6 +135,13 @@ fun PointHost(
                 Spacer(Modifier.height(16.dp))
                 CircularProgressIndicator(color = MaterialTheme.colorScheme.primary, strokeWidth = 4.dp)
             }
+
+            state.pcScreen != null -> PairPcScreen(
+                state = state.pcScreen,
+                onPair = onPairPc,
+                onUnpair = onUnpairPc,
+                onClose = onClosePcSettings,
+            )
 
             state.keyScreen != null -> KeyScreen(
                 config = state.keyScreen,

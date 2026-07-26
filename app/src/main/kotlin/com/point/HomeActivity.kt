@@ -45,7 +45,7 @@ class HomeActivity : ComponentActivity() {
             PointTheme {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     val state by viewModel.ui.collectAsStateWithLifecycle()
-                    if (state.frame == null && state.busy == null && state.message == null && state.keyScreen == null) {
+                    if (state.frame == null && state.busy == null && state.message == null && state.keyScreen == null && state.pcScreen == null) {
                         val recent by viewModel.recent.collectAsStateWithLifecycle()
                         val clipboard by viewModel.clipboard.collectAsStateWithLifecycle()
                         val crash by viewModel.crashReport.collectAsStateWithLifecycle()
@@ -53,6 +53,7 @@ class HomeActivity : ComponentActivity() {
                             recent = recent,
                             onOpen = viewModel::openFromHistory,
                             onSettings = viewModel::openKeySettings,
+                            onPc = viewModel::openPcSettings,
                             onClear = viewModel::clearHistory,
                             clipboard = clipboard,
                             onUseClipboard = ::useClipboard,
@@ -66,6 +67,9 @@ class HomeActivity : ComponentActivity() {
                             state = state,
                             onBubble = viewModel::onBubble,
                         appIconFor = viewModel::appIcon,
+                        onPairPc = viewModel::pairPc,
+                        onUnpairPc = viewModel::unpairPc,
+                        onClosePcSettings = viewModel::closePcSettings,
                             onSubmitInput = viewModel::submitAmendment,
                             onCancelInput = viewModel::cancelInput,
                             onApplyFavorite = viewModel::applyFavorite,

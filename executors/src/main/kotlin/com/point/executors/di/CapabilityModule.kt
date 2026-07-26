@@ -8,6 +8,8 @@ import com.point.core.flow.CapabilityRegistry
 import com.point.core.flow.Realizer
 import com.point.core.flow.Resolver
 import com.point.executors.AppCapability
+import com.point.executors.PcCapability
+import com.point.executors.PcRealizer
 import com.point.executors.AppOpenRealizer
 import com.point.executors.AiCapability
 import com.point.executors.AiRealizer
@@ -108,6 +110,7 @@ abstract class CapabilityModule {
     @Binds abstract fun bubblePolicy(impl: LearningBubblePolicy): BubblePolicy
 
     // --- Capabilities (declarations) ---
+    @Binds @IntoSet abstract fun pcCap(c: PcCapability): Capability
     @Binds @IntoSet abstract fun shareCap(c: ShareCapability): Capability
     @Binds @IntoSet abstract fun saveCap(c: SaveCapability): Capability
     @Binds @IntoSet abstract fun saveAllCap(c: SaveAllCapability): Capability
@@ -184,6 +187,7 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun cloudOcrR(r: CloudOcrRealizer): Realizer
     @Binds @IntoSet abstract fun cloudOcrDirectR(r: CloudOcrDirectRealizer): Realizer
     @Binds @IntoSet abstract fun aiR(r: AiRealizer): Realizer
+    @Binds @IntoSet abstract fun pcR(r: PcRealizer): Realizer
 
     companion object {
         // @Provides (not @Binds) keeps the concrete OpenCV realizer out of the binding

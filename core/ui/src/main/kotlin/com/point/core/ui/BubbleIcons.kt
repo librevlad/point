@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.ContentCut
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Event
+import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.DocumentScanner
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.FormatListBulleted
@@ -58,6 +59,7 @@ fun bubbleIcon(key: String): ImageVector = when (if (key.startsWith("app:")) "op
     "link" -> Icons.Filled.Link
     "office" -> Icons.Filled.Article
     "excel" -> Icons.Filled.TableChart
+    "pc" -> Icons.Filled.Computer
     "scan" -> Icons.Filled.DocumentScanner
     "cutout" -> Icons.Filled.ContentCut
     "blur" -> Icons.Filled.BlurOn
@@ -92,6 +94,7 @@ fun bubbleColor(key: String): Color = when (if (key.startsWith("app:")) "open-in
     "pdf" -> Color(0xFF2F80ED)      // blue — documents
     "link" -> Color(0xFF2F80ED)     // blue — open link
     "compress" -> Color(0xFF0EA5A5) // teal — image
+    "pc" -> Color(0xFF0EA5E9)       // sky — continue on PC
     "scan" -> Color(0xFF6366F1)     // indigo — scan
     "cutout" -> Color(0xFF0EA5A5)   // teal — remove background
     "blur" -> Color(0xFF6366F1)     // indigo — blur background

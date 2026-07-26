@@ -84,7 +84,7 @@ class FlowViewModelTest {
     private fun vm(
         caps: Map<CapabilityId, Set<Intent>> = mapOf(CapabilityId("a") to setOf(Intent.PREPARE)),
         cloud: Set<CapabilityId> = emptySet(),
-    ) = FlowViewModel(store, FakeRegistry(caps, cloud), resolver, enrichment, history, favorites, usage, chosenApps, userKeys, journal, consent, appLauncher, FakePdfRasterizer(), sensory, sensorySettings, snapshot, crashLog, dispatcher, pins, AppIconResolver { null })
+    ) = FlowViewModel(store, FakeRegistry(caps, cloud), resolver, enrichment, history, favorites, usage, chosenApps, userKeys, journal, consent, appLauncher, FakePdfRasterizer(), sensory, sensorySettings, snapshot, crashLog, dispatcher, pins, AppIconResolver { null }, FakePcPairings(), FakePcTransport())
 
     private fun bubble(id: String = "a", title: String = "Действие") =
         Bubble("x", title, CapabilityId(id), ObjectState(ObjectKind.TEXT))
@@ -1015,6 +1015,23 @@ private class FakeAppLauncher(
     override suspend fun handlers(obj: PointObject) = apps
     override suspend fun handlersForMime(mime: String) = mimeApps[mime].orEmpty()
     override suspend fun launch(target: AppTarget, obj: PointObject) { launched = target; launchedObj = obj }
+}
+
+private class FakePcPairings : com.point.core.flow.PcPairings {
+    var pairing: com.point.core.flow.PcPairing? = null
+    override fun current() = pairing
+    override suspend fun save(pairing: com.point.core.flow.PcPairing) { this.pairing = pairing }
+    override suspend fun clear() { pairing = null }
+}
+
+private class FakePcTransport : com.point.core.flow.PcTransport {
+    override suspend fun pair(host: String, port: Int, deviceName: String): com.point.core.flow.PcPairing? = null
+    override suspend fun send(
+        pairing: com.point.core.flow.PcPairing,
+        obj: com.point.core.model.PointObject,
+        fileName: String,
+        meta: Map<String, String>,
+    ): com.point.core.flow.PcSendOutcome = com.point.core.flow.PcSendOutcome.Sent
 }
 
 private class FakeChosenApps : com.point.core.flow.ChosenApps {

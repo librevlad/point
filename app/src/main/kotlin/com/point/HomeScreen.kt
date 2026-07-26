@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -58,6 +59,7 @@ fun HomeScreen(
     recent: List<HistoryEntry>,
     onOpen: (HistoryEntry) -> Unit,
     onSettings: () -> Unit,
+    onPc: () -> Unit = {},
     onClear: () -> Unit = {},
     clipboard: String? = null,
     onUseClipboard: (String) -> Unit = {},
@@ -72,6 +74,13 @@ fun HomeScreen(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.End,
         ) {
+            IconButton(onClick = onPc) {
+                Icon(
+                    imageVector = Icons.Filled.Computer,
+                    contentDescription = "Компьютер",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             IconButton(onClick = onSettings) {
                 Icon(
                     imageVector = Icons.Filled.Settings,

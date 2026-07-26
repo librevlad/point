@@ -81,6 +81,8 @@ class FlowViewModel @Inject constructor(
     private val ioDispatcher: CoroutineDispatcher,
     private val pins: PinnedActions,
     private val appIcons: AppIconResolver,
+    private val pcPairings: com.point.core.flow.PcPairings,
+    private val pcTransport: com.point.core.flow.PcTransport,
 ) : ViewModel() {
 
     private val stack = ArrayDeque<FlowFrame>()
@@ -379,6 +381,42 @@ class FlowViewModel @Inject constructor(
 
     fun closeKeySettings() = _ui.update { it.copy(keyScreen = null) }
 
+    // --- «Компьютер» (#147): pair once, then the «На компьютер» bubble appears. ---
+
+    fun openPcSettings() = _ui.update {
+        it.copy(pcScreen = PcScreenState(pairing = pcPairings.current()), busy = null, message = null)
+    }
+
+    fun closePcSettings() = _ui.update { it.copy(pcScreen = null) }
+
+    fun pairPc(host: String, port: Int) {
+        _ui.update { it.copy(pcScreen = PcScreenState(pairing = pcPairings.current(), busy = true)) }
+        viewModelScope.launch {
+            val device = "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}"
+            val pairing = runCatching { pcTransport.pair(host, port, device) }.getOrNull()
+            if (pairing != null) {
+                runCatching { pcPairings.save(pairing) }
+                _ui.update { it.copy(pcScreen = PcScreenState(pairing = pairing)) }
+            } else {
+                _ui.update {
+                    it.copy(
+                        pcScreen = PcScreenState(
+                            pairing = pcPairings.current(),
+                            error = "Не удалось связаться — проверьте адрес и подтвердите на компьютере",
+                        ),
+                    )
+                }
+            }
+        }
+    }
+
+    fun unpairPc() {
+        viewModelScope.launch {
+            runCatching { pcPairings.clear() }
+            _ui.update { it.copy(pcScreen = PcScreenState(pairing = null)) }
+        }
+    }
+
     // --- Cloud consent (#10): nothing leaves the device before the user agrees once. ---
 
     fun confirmCloud() {
@@ -611,6 +649,10 @@ class FlowViewModel @Inject constructor(
         }
         if (_ui.value.keyScreen != null) {
             closeKeySettings()
+            return true
+        }
+        if (_ui.value.pcScreen != null) {
+            closePcSettings()
             return true
         }
         if (_ui.value.inputPrompt != null || _ui.value.needsImage != null) {
