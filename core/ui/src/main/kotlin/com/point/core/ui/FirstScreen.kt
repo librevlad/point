@@ -521,13 +521,14 @@ internal fun ObjectHeader(
     understood: Boolean = false,
     preview: ImageBitmap? = null,
     titled: Boolean = true,
+    sizeOverride: Dp? = null,
 ) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         // M1 (MOTION.md): the object breathes with its kind's physics; a light ring
         // pulses while enrichment thinks; the shadow warms into an aura once understood.
         // The hero is the object itself (#114): a real thumbnail when we have one,
         // the kind icon only as the first frame / non-visual fallback.
-        val headerSize = if (preview != null) 132.dp else 96.dp
+        val headerSize = sizeOverride ?: if (preview != null) 132.dp else 96.dp
         AliveSurface(
             kind = obj.state.kind,
             thinking = thinking,
@@ -838,7 +839,7 @@ internal fun ActionBubble(
         }
         if ((showLabel || magnet) && labelAbove) {
             caption()
-            Spacer(Modifier.height(9.dp))
+            Spacer(Modifier.height(6.dp))
         }
         Box(
             modifier = Modifier

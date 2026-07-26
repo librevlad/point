@@ -34,10 +34,10 @@ fun radialPlacement(bubbles: List<Bubble>, likelyCount: Int): List<PlacedBubble>
     // a single ring with meaningful sides: instant sweeps the whole left arc, real work
     // takes the upper right, AI sinks along the lower right — leaving your hand's reach.
     midInstant.forEachIndexed { i, b ->
-        placed += PlacedBubble(b, sectorAngle(PI, midInstant.size, i, PI * 0.361), SpaceRing.MID)
+        placed += PlacedBubble(b, sectorAngle(PI, midInstant.size, i, PI * 0.306), SpaceRing.MID)
     }
     midRest.forEachIndexed { i, b ->
-        placed += PlacedBubble(b, sectorAngle(-PI * 0.194, midRest.size, i, PI * 0.194), SpaceRing.MID)
+        placed += PlacedBubble(b, sectorAngle(-PI * 0.139, midRest.size, i, PI * 0.167), SpaceRing.MID)
     }
     ai.forEachIndexed { i, b ->
         placed += PlacedBubble(b, sectorAngle(PI * 0.319, ai.size, i, PI * 0.125), SpaceRing.FAR)

@@ -66,15 +66,18 @@ fun ObjectSpace(
 ) {
     val surface = MaterialTheme.colorScheme.surface
     val dimmed = MaterialTheme.colorScheme.surfaceVariant
+    val warmth = MaterialTheme.colorScheme.primaryContainer
+    val localFamily = MaterialTheme.colorScheme.secondaryContainer
+    val aiFamily = MaterialTheme.colorScheme.tertiaryContainer
     BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
-            // «Телефон слегка затемняется»: light stays with the object, the edges of
-            // the space sink into shade — depth without a single decoration.
+            // «Телефон слегка затемняется»: the object's warmth stays in the middle of
+            // the space, the edges sink into shade — depth without a single decoration.
             .background(
                 Brush.radialGradient(
-                    0.0f to surface,
-                    0.55f to surface,
+                    0.0f to lerp(surface, warmth, 0.90f),
+                    0.52f to lerp(surface, warmth, 0.22f),
                     1.0f to dimmed,
                 ),
             )
@@ -92,10 +95,10 @@ fun ObjectSpace(
         val ry = maxHeight / 2 - 110.dp
         // Inner orbit: a wide, shallow ellipse whose upper arc passes just over the
         // object — the likely three sit exactly on it, captions above their heads.
-        val innerRx = rx * 0.84f
-        val innerRy = ry * 0.40f
+        val innerRx = rx * 0.76f
+        val innerRy = ry * 0.44f
         val outerRx = rx
-        val outerRy = ry * 0.66f
+        val outerRy = ry * 0.60f
 
         val objectCenter = remember { mutableStateOf(Offset.Unspecified) }
         val bubbleCenters = remember { mutableStateMapOf<CapabilityId, Offset>() }
@@ -109,42 +112,56 @@ fun ObjectSpace(
             bubbleCenters.keys.retainAll(placed.map { it.bubble.capabilityId }.toSet())
         }
 
-        // The orbits themselves — faint, so the structure reads at a glance.
-        val orbitColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.10f)
+        // The orbits themselves — faint OPEN arcs, only where bubbles actually live: a
+        // closed oval reads as a dial menu, a broken one as traces of motion in space.
+        val orbitColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.16f)
         val threadColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
         Canvas(Modifier.fillMaxSize()) {
             val c = Offset(size.width / 2, size.height / 2)
-            for ((ellipseRx, ellipseRy) in listOf(innerRx to innerRy, outerRx to outerRy)) {
-                drawOval(
-                    color = orbitColor,
-                    topLeft = Offset(c.x - ellipseRx.toPx(), c.y - ellipseRy.toPx()),
-                    size = Size(ellipseRx.toPx() * 2, ellipseRy.toPx() * 2),
-                    style = Stroke(width = 1.5.dp.toPx()),
-                )
-            }
+            fun arc(rxA: Float, ryA: Float, startDeg: Float, sweepDeg: Float) = drawArc(
+                color = orbitColor,
+                startAngle = startDeg,
+                sweepAngle = sweepDeg,
+                useCenter = false,
+                topLeft = Offset(c.x - rxA, c.y - ryA),
+                size = Size(rxA * 2, ryA * 2),
+                style = Stroke(width = 2.dp.toPx()),
+            )
+            arc(innerRx.toPx(), innerRy.toPx(), 200f, 140f)      // inner: upper arc only
+            arc(outerRx.toPx(), outerRy.toPx(), 120f, 120f)      // outer: instant (left)
+            arc(outerRx.toPx(), outerRy.toPx(), -60f, 70f)       // outer: smart (right)
+            arc(outerRx.toPx() * 1.02f, outerRy.toPx() * 1.12f, 30f, 55f) // far: AI
         }
 
         placed.forEachIndexed { index, spot ->
             val cosA = cos(spot.angleRad).toFloat()
             val sinA = sin(spot.angleRad).toFloat()
             val inner = spot.ring == SpaceRing.NEAR
-            val x = (if (inner) innerRx else outerRx) * cosA
+            // AI rides its own, furthest arc — visibly past the outer orbit.
+            val far = spot.ring == SpaceRing.FAR
+            val ringX = if (inner) innerRx else if (far) outerRx * 1.02f else outerRx
+            val ringY = if (inner) innerRy else if (far) outerRy * 1.12f else outerRy
+            val x = ringX * cosA
             // The near three ride the UPPER arc of the inner orbit — never its lower
             // half, where the object lives.
-            val y = (if (inner) -innerRy * abs(sinA) else outerRy * sinA)
+            val y = if (inner) -ringY * abs(sinA) else ringY * sinA
             // Depth is size, presence and COLOUR: the inner orbit is big, named and fully
             // lit; the outer one shrinks, fades and greys towards the theme — a bubble
             // regains its own colour only when the carried object closes in (the magnet).
             val (bubbleSize, depthAlpha) = when (spot.ring) {
-                SpaceRing.NEAR -> 64.dp to 1f
-                SpaceRing.MID -> 46.dp to 0.82f
-                SpaceRing.FAR -> 38.dp to 0.60f
+                SpaceRing.NEAR -> 62.dp to 1f
+                SpaceRing.MID -> 44.dp to 0.74f
+                SpaceRing.FAR -> 36.dp to 0.52f
             }
+            // Bubbles hover NEAR their orbit, not pinned to it — a deterministic drift
+            // of a few dp per bubble keeps the space alive instead of dial-like.
+            val jx = if (inner) 0.dp else (((index * 37) % 13) - 6).dp
+            val jy = if (inner) 0.dp else (((index * 53) % 15) - 7).dp
             key(spot.bubble.capabilityId.value) {
                 Box(
                     Modifier
                         .align(Alignment.Center)
-                        .offset(x = x, y = y)
+                        .offset(x = x + jx, y = y + jy)
                         .graphicsLayer { alpha = depthAlpha },
                 ) {
                     val magnet = spot.bubble.capabilityId == dragTarget
@@ -157,8 +174,12 @@ fun ObjectSpace(
                         labelAbove = true,
                         tint = if (inner || magnet) {
                             null // own colour — the privilege of the close and the chosen
+                        } else if (far) {
+                            // AI family: violet, quiet but alive
+                            lerp(bubbleColor(spot.bubble.icon), aiFamily, 0.62f)
                         } else {
-                            lerp(bubbleColor(spot.bubble.icon), dimmed, 0.55f)
+                            // local family: cool, receded towards the theme
+                            lerp(bubbleColor(spot.bubble.icon), localFamily, 0.62f)
                         },
                         objectCenter = objectCenter.value,
                         magnet = magnet,
@@ -242,7 +263,7 @@ fun ObjectSpace(
                 },
         ) {
             // No caption in the space — the object is in the hand, names are list-speak.
-            ObjectHeader(obj, preview = previewBitmap, understood = true, titled = false)
+            ObjectHeader(obj, preview = previewBitmap, understood = true, titled = false, sizeOverride = 150.dp)
         }
 
         Text(
