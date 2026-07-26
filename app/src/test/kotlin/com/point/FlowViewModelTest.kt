@@ -847,6 +847,22 @@ class FlowViewModelTest {
         assertNull(vm.clipboard.value)
     }
 
+    @Test fun `refreshClipboard offers when idle but stays silent while a flow is active`() = runTest(dispatcher) {
+        val vm = vm()
+
+        vm.refreshClipboard { "скопировано до флоу" }
+        assertEquals("скопировано до флоу", vm.clipboard.value)
+        vm.dismissClipboard()
+
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        vm.refreshClipboard { "новый текст" }
+        assertNull(vm.clipboard.value) // a flow is on screen — the Home banner does not exist there
+
+        vm.endFlow()
+        vm.refreshClipboard { "новый текст" }
+        assertEquals("новый текст", vm.clipboard.value) // back on Home → the copied text is offered
+    }
+
     @Test fun `the app picker never lists an app twice — direct and bridged dedup`() = runTest(dispatcher) {
         val files = AppTarget("Files", "com.files", "A")
         appLauncher.apps = listOf(files)                            // Files handles it directly
