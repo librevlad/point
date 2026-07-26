@@ -462,8 +462,9 @@ private fun ObjectHeader(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
+        // #129: never show a raw MIME to a person — the kind label speaks their language.
         Text(
-            text = obj.mime,
+            text = kindLabel(obj.state.kind),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
