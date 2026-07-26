@@ -35,6 +35,7 @@ import com.point.core.flow.Sharer
 import com.point.core.flow.SpreadsheetWriter
 import com.point.core.flow.TextRecognizer
 import com.point.core.flow.UrlOpener
+import com.point.core.flow.ChosenApps
 import com.point.core.flow.UsageJournal
 import com.point.core.flow.UserKeyStore
 import com.point.core.flow.Viewer
@@ -52,6 +53,7 @@ import com.point.data.DefaultEntitlements
 import com.point.data.EntityEnricher
 import com.point.data.MlKitEntityExtractor
 import com.point.data.FallbackLlmClient
+import com.point.data.FileChosenApps
 import com.point.data.FileUsageJournal
 import com.point.data.FileCapabilityUsage
 import com.point.data.FileFavoritesStore
@@ -187,6 +189,10 @@ abstract class DataModule {
     /** Private, consent-gated usage journal (North Star measurement). */
     @Binds
     abstract fun usageJournal(impl: FileUsageJournal): UsageJournal
+
+    /** Remembered app picks — the seed for per-app capabilities (#66 slice 4). */
+    @Binds
+    abstract fun chosenApps(impl: FileChosenApps): ChosenApps
 
     /** Consent to send objects to a cloud service (#10). */
     @Binds

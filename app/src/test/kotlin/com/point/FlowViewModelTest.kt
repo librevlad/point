@@ -65,6 +65,7 @@ class FlowViewModelTest {
     private val history = FakeHistory()
     private val favorites = FakeFavorites()
     private val usage = FakeUsage()
+    private val chosenApps = FakeChosenApps()
     private val userKeys = FakeUserKeys()
     private val journal = FakeUsageJournal()
     private val consent = FakePrivacyConsent()
@@ -83,7 +84,7 @@ class FlowViewModelTest {
     private fun vm(
         caps: Map<CapabilityId, Set<Intent>> = mapOf(CapabilityId("a") to setOf(Intent.PREPARE)),
         cloud: Set<CapabilityId> = emptySet(),
-    ) = FlowViewModel(store, FakeRegistry(caps, cloud), resolver, enrichment, history, favorites, usage, userKeys, journal, consent, appLauncher, FakePdfRasterizer(), sensory, sensorySettings, snapshot, crashLog, dispatcher, pins)
+    ) = FlowViewModel(store, FakeRegistry(caps, cloud), resolver, enrichment, history, favorites, usage, chosenApps, userKeys, journal, consent, appLauncher, FakePdfRasterizer(), sensory, sensorySettings, snapshot, crashLog, dispatcher, pins)
 
     private fun bubble(id: String = "a", title: String = "Действие") =
         Bubble("x", title, CapabilityId(id), ObjectState(ObjectKind.TEXT))
@@ -103,6 +104,28 @@ class FlowViewModelTest {
         assertNull(pins.pinned[ObjectKind.IMAGE])
         assertTrue(vm.ui.value.message?.contains("Откреплено") == true)
         assertNull(vm.ui.value.frame?.pinned)
+    }
+
+    // --- #66 slice 4: a direct app pick joins the graph via ChosenApps + usage ---
+
+    @Test fun `a direct app pick is remembered and trains usage`() = runTest(dispatcher) {
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.onPickApp(com.point.core.flow.AppTarget("Telegram", "org.tg", "org.tg.Main")); advanceUntilIdle()
+
+        assertEquals(listOf("org.tg"), chosenApps.recorded.map { it.packageName })
+        assertEquals(ObjectKind.IMAGE, chosenApps.recorded.single().kind)
+        assertTrue(usage.recorded.contains(CapabilityId("app:org.tg#IMAGE")))
+    }
+
+    @Test fun `a bridged pick is not remembered as a capability seed`() = runTest(dispatcher) {
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.onPickApp(com.point.core.flow.AppTarget("Acrobat · PDF", "com.adobe", "com.adobe.Main", via = "pdf")); advanceUntilIdle()
+
+        assertTrue(chosenApps.recorded.isEmpty())
     }
 
     // --- Crash visibility (#11): the last crash is offered once, shared only explicitly ---
@@ -992,6 +1015,12 @@ private class FakeAppLauncher(
     override suspend fun handlers(obj: PointObject) = apps
     override suspend fun handlersForMime(mime: String) = mimeApps[mime].orEmpty()
     override suspend fun launch(target: AppTarget, obj: PointObject) { launched = target; launchedObj = obj }
+}
+
+private class FakeChosenApps : com.point.core.flow.ChosenApps {
+    val recorded = mutableListOf<com.point.core.flow.ChosenApp>()
+    override fun all() = recorded.toList()
+    override suspend fun record(app: com.point.core.flow.ChosenApp) { recorded += app }
 }
 
 private class FakeUsageJournal(private var enabled: Boolean = true) : UsageJournal {

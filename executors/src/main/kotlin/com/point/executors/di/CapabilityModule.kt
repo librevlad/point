@@ -1,10 +1,14 @@
 package com.point.executors.di
 
 import com.point.core.flow.BubblePolicy
+import com.point.core.flow.AppLauncher
 import com.point.core.flow.Capability
+import com.point.core.flow.ChosenApps
 import com.point.core.flow.CapabilityRegistry
 import com.point.core.flow.Realizer
 import com.point.core.flow.Resolver
+import com.point.executors.AppCapability
+import com.point.executors.AppOpenRealizer
 import com.point.executors.AiCapability
 import com.point.executors.AiRealizer
 import com.point.executors.CallCapability
@@ -87,6 +91,7 @@ import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
+import dagger.multibindings.ElementsIntoSet
 import dagger.multibindings.IntoSet
 
 /**
@@ -186,5 +191,16 @@ abstract class CapabilityModule {
         // types (which it can't, even though kotlinc can) — the pack still lands @IntoSet (#45).
         @Provides @IntoSet
         fun openCvScanR(store: ObjectStore): Realizer = OpenCvScanRealizer(store)
+
+        // #66 slice 4: remembered app picks join the SAME graph as built-in actions —
+        // a capability+realizer pair per pick, synthesised once at process start
+        // (a fresh pick appears on the next launch; ChosenApps.all() is warm and I/O-free).
+        @Provides @ElementsIntoSet
+        fun appCapabilities(chosen: ChosenApps): Set<Capability> =
+            chosen.all().map { AppCapability(it) }.toSet()
+
+        @Provides @ElementsIntoSet
+        fun appRealizers(chosen: ChosenApps, launcher: AppLauncher): Set<Realizer> =
+            chosen.all().map { AppOpenRealizer(it, launcher) }.toSet()
     }
 }
