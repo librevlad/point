@@ -1195,3 +1195,18 @@ convex hull → `minAreaRect` — спрятанный/рваный угол в�
 `PERSPECTIVE` ждёт коэффициенты output→input; при обратном порядке текст непараллелен краям и
 лист «обрезан» уже во входе) — прежде чем чинить алгоритм, проверь геометрию входа. Полигон
 (генератор фото + python-реплика пайплайна с визуализацией маски/quad) живёт в scratch, не в репо.
+
+### #147 — дистрибутив для Windows: msi + exe + portable, jpackage поверх Temurin
+`nativeDistributions` в `:desktop`: `targetFormats(Msi, Exe)` — **без явных targetFormats задача
+`package` молча не делает ничего** (UP-TO-DATE и пустой выход — грабли, не ошибка). Три артефакта:
+`Point-1.0.0.msi` / `Point-1.0.0.exe` (инсталлеры, ярлык+меню) и portable-папка
+`binaries/main/app/Point/` (запуск без установки). Критично: `modules("jdk.httpserver")` — jpackage
+режет модули, и без явного включения приёмник /receive умирает только в упакованной сборке (из
+`:run` работает — ловушка). Упаковка требует **Temurin из `~/.gradle/jdks`** (`JAVA_HOME=...
+eclipse_adoptium-17...`): в JBR Android Studio нет jpackage.exe. Msi собирает WiX через code page
+1252 → описание пакета — только ASCII (кириллица = LGHT0311, exit 311 у light.exe без внятного
+лога). Иконка — сгенерированный PIL многоразмерный `point.ico` (бренд-марка: пузырь + оранжевая
+точка). Верификация без установки в систему: `msiexec /a … TARGETDIR=…` (administrative extract),
+извлечённый exe поднял приёмник и ответил на /ping; portable-exe прошёл тот же смок раньше
+(включая /receive 200). Инсталлеры не подписаны — SmartScreen предупредит; подпись = отдельный
+срез, если владельцу вообще нужна раздача наружу.
