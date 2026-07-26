@@ -208,13 +208,23 @@ class FlowViewModel @Inject constructor(
     }
 
     /**
-     * Offer to act on clipboard text when Point opens — only if it looks actionable (a phone/email/
-     * URL) and is new. The Activity reads the clipboard **foreground-only** (Android 10+ rule); Point
+     * Offer to act on clipboard text when Point opens — any non-blank text that wasn't already
+     * dismissed. The Activity reads the clipboard **foreground-only** (Android 10+ rule); Point
      * never watches the clipboard in the background (#72). Reaches messengers: copy → open Point → act.
      */
     fun offerClipboard(text: String?) {
         val t = text?.trim().orEmpty()
         _clipboard.value = t.takeIf { it.isNotBlank() && it.length <= MAX_CLIP && it != lastClipboard }
+    }
+
+    /**
+     * Re-read the clipboard when the Home list (re)appears mid-session. After Back out of a
+     * restored flow the window-focus edge is long gone — without this, copied text is silently
+     * ignored exactly when the user came to act on it (#111).
+     */
+    fun refreshClipboard(reader: () -> String?) {
+        if (hasFlow()) return
+        offerClipboard(reader())
     }
 
     /** Dismiss the clipboard suggestion and remember it, so the same text is not re-offered. */
