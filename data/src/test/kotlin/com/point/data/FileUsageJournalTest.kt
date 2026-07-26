@@ -38,6 +38,28 @@ class FileUsageJournalTest {
     }
 
     @Test
+    fun `graph aggregates edge traversals`() = runTest {
+        journal.setEnabled(true)
+        journal.record(UsageEvent(UsageEventType.EDGE, "IMAGE>scan>IMAGE"))
+        journal.record(UsageEvent(UsageEventType.EDGE, "IMAGE>scan>IMAGE"))
+        journal.record(UsageEvent(UsageEventType.EDGE, "IMAGE>ocr>TEXT"))
+
+        assertEquals(
+            mapOf("IMAGE>scan>IMAGE" to 2, "IMAGE>ocr>TEXT" to 1),
+            journal.graph(),
+        )
+    }
+
+    @Test
+    fun `failed actions are counted in the summary`() = runTest {
+        journal.setEnabled(true)
+        journal.record(UsageEvent(UsageEventType.ACTION, "ai"))
+        journal.record(UsageEvent(UsageEventType.FAILED, "ai"))
+
+        assertEquals(1, journal.summary().failed)
+    }
+
+    @Test
     fun `opting out wipes the journal`() = runTest {
         journal.setEnabled(true)
         journal.record(UsageEvent(UsageEventType.SHARED))
