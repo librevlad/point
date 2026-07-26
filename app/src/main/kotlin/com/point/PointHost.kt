@@ -46,6 +46,7 @@ import com.point.core.model.FavoriteChain
 import com.point.core.model.PointObject
 import com.point.core.model.Preview
 import com.point.core.ui.FirstScreen
+import com.point.core.ui.livingBackground
 import kotlinx.coroutines.delay
 
 /**
@@ -85,7 +86,12 @@ fun PointHost(
             pickBackground.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
         }
     }
-    Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+    Box(
+        modifier
+            .fillMaxSize()
+            .livingBackground(), // M5: the canvas itself is alive (MOTION.md №5)
+        contentAlignment = Alignment.Center,
+    ) {
         val frame = state.frame
         when {
             // Cloud consent is a gate: it must be answered before anything else renders (#10).
