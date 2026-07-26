@@ -27,6 +27,9 @@ data class FlowFrame(
     val items: List<PointObject> = emptyList(),
     /** For a TEXT object: a bounded preview of its content, loaded async. */
     val textPreview: String? = null,
+    /** For an IMAGE object: its real thumbnail (EXIF-upright, downsampled), loaded async —
+     *  the hero of the screen is the object itself, not a kind icon (#114). */
+    val preview: androidx.compose.ui.graphics.ImageBitmap? = null,
     /** Almost-applicable capabilities (#97): shown dimmed with what each still needs. */
     val latent: List<LatentBubble> = emptyList(),
     /** Labels of still-running background enrichment («Распознаю текст…») — the visible

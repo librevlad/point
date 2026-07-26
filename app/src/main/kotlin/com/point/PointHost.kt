@@ -173,6 +173,7 @@ fun PointHost(
                     enriching = current.enriching,
                     discover = current.discover,
                     working = state.busy != null && state.busyQuiet,
+                    previewBitmap = current.preview,
                 )
                 }
             }

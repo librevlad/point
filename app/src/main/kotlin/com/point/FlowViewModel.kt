@@ -28,8 +28,11 @@ import com.point.core.model.BubbleTier
 import com.point.core.model.ObjectKind
 import com.point.core.model.PointObject
 import com.point.core.ui.likelyCount
+import com.point.executors.Bitmaps
 import com.point.executors.OpenInCapability
 import dagger.hilt.android.lifecycle.HiltViewModel
+import androidx.compose.ui.graphics.asImageBitmap
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -37,6 +40,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 /**
@@ -571,6 +575,24 @@ class FlowViewModel @Inject constructor(
         enrichInBackground(obj)
         loadChildrenIfCollection(obj)
         loadTextPreviewIfText(obj)
+        loadPreviewIfImage(obj)
+    }
+
+    /** For an IMAGE frame, decode a real thumbnail off-main and attach it (only while
+     *  that object is still on the stack). The hero is the object, not an icon (#114). */
+    private fun loadPreviewIfImage(obj: PointObject) {
+        if (obj.state.kind != ObjectKind.IMAGE) return
+        viewModelScope.launch {
+            val bitmap = withContext(Dispatchers.IO) {
+                runCatching { Bitmaps.decodeThumbnail(obj.uri.value, PREVIEW_MAX_PX)?.asImageBitmap() }.getOrNull()
+            } ?: return@launch
+
+            val index = stack.indexOfLast { it.obj.id == obj.id }
+            val top = stack.getOrNull(index) ?: return@launch
+            val refreshed = top.copy(preview = bitmap)
+            stack[index] = refreshed
+            _ui.update { if (it.frame?.obj?.id == obj.id) it.copy(frame = refreshed) else it }
+        }
     }
 
     /** For a TEXT frame, read a bounded preview of its content and attach it to the
@@ -678,3 +700,4 @@ class FlowViewModel @Inject constructor(
 }
 
 private const val MAX_CLIP = 2000
+private const val PREVIEW_MAX_PX = 640
