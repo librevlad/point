@@ -16,6 +16,8 @@ dependencies {
     implementation(libs.kotlinx.coroutines.core)
     // QR for pairing (pure-JVM zxing core — the phone scans the window).
     implementation("com.google.zxing:core:3.5.3")
+    // mDNS advertising so the phone finds this PC by itself (#147 slice C).
+    implementation("org.jmdns:jmdns:3.6.1")
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

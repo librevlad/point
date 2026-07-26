@@ -36,6 +36,7 @@ import com.point.core.flow.SpreadsheetWriter
 import com.point.core.flow.TextRecognizer
 import com.point.core.flow.UrlOpener
 import com.point.core.flow.ChosenApps
+import com.point.core.flow.PcDiscovery
 import com.point.core.flow.PcPairings
 import com.point.core.flow.PcTransport
 import com.point.core.flow.UsageJournal
@@ -56,6 +57,7 @@ import com.point.data.EntityEnricher
 import com.point.data.MlKitEntityExtractor
 import com.point.data.FallbackLlmClient
 import com.point.data.FileChosenApps
+import com.point.data.AndroidPcDiscovery
 import com.point.data.FilePcPairings
 import com.point.data.HttpUrlPcTransport
 import com.point.data.FileUsageJournal
@@ -91,6 +93,7 @@ import com.point.data.UserKeyLlmClient
 import com.point.data.PdfRendererRasterizer
 import com.point.data.ScratchObjectStore
 import com.point.data.TesseractTextRecognizer
+import com.point.data.PcPairingEnricher
 import com.point.data.TextUrlEnricher
 import com.point.data.VCardEnricher
 import com.point.data.ZxingQrEncoder
@@ -205,6 +208,10 @@ abstract class DataModule {
     @Binds
     abstract fun pcTransport(impl: HttpUrlPcTransport): PcTransport
 
+    /** LAN autodiscovery of Point-for-PC (#147 slice C) — sugar over manual entry. */
+    @Binds
+    abstract fun pcDiscovery(impl: AndroidPcDiscovery): PcDiscovery
+
     /** Consent to send objects to a cloud service (#10). */
     @Binds
     abstract fun privacyConsent(impl: PrefsPrivacyConsent): PrivacyConsent
@@ -230,6 +237,11 @@ abstract class DataModule {
 
     @Binds @IntoSet
     abstract fun textUrlEnricher(e: TextUrlEnricher): Enricher
+
+    /** `point-pc://` text → «Подключить компьютер» (#147, camera-free pairing). */
+    @Binds
+    @IntoSet
+    abstract fun pcPairingEnricher(e: PcPairingEnricher): Enricher
 
     @Binds @IntoSet
     abstract fun entityEnricher(e: EntityEnricher): Enricher

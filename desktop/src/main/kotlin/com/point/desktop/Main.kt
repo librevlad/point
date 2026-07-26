@@ -68,10 +68,13 @@ fun main() {
         onReceived = state::onReceived,
     )
     server.start(preferredPort = config.port)
+    // Slice C: let phones discover this PC by themselves (best-effort mDNS).
+    val advertiser = Advertiser(config.name, server.port).also { it.start() }
 
     application {
         Window(
             onCloseRequest = {
+                advertiser.stop()
                 server.stop()
                 exitApplication()
             },

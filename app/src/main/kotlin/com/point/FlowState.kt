@@ -107,6 +107,7 @@ data class FlowUiState(
 /** «Компьютер» (#147): the pairing screen's state — current pairing + a busy/error line. */
 data class PcScreenState(
     val pairing: com.point.core.flow.PcPairing? = null,
+    val discovered: List<com.point.core.flow.DiscoveredPc> = emptyList(),
     val busy: Boolean = false,
     val error: String? = null,
 )
