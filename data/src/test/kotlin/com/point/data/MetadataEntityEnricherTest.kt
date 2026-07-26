@@ -45,4 +45,21 @@ class MetadataEntityEnricherTest {
     fun `no stored facts - no features`() = runTest {
         assertTrue(MetadataEntityEnricher().enrich(obj(emptyMap())).features.isEmpty())
     }
+
+    @Test
+    fun `a stored semantic type lights its IS feature (#89)`() = runTest {
+        val features = MetadataEntityEnricher().enrich(
+            obj(mapOf(com.point.core.flow.META_SEMANTIC_TYPE to "recipe")),
+        ).features
+        assertEquals(setOf(Feature.IS_RECIPE), features)
+    }
+
+    @Test
+    fun `an unknown semantic type stays silent`() = runTest {
+        assertTrue(
+            MetadataEntityEnricher().enrich(
+                obj(mapOf(com.point.core.flow.META_SEMANTIC_TYPE to "poem")),
+            ).features.isEmpty(),
+        )
+    }
 }

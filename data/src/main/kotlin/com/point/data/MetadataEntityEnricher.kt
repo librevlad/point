@@ -19,7 +19,7 @@ class MetadataEntityEnricher @javax.inject.Inject constructor() : Enricher {
 
     override val meta = EnricherMeta(
         cost = EnrichCost.INSTANT,
-        mayYield = FEATURE_BY_SUFFIX.values.toSet(),
+        mayYield = FEATURE_BY_SUFFIX.values.toSet() + com.point.core.flow.SEMANTIC_TYPES.values,
     )
 
     override fun appliesTo(state: ObjectState) = true
@@ -27,7 +27,10 @@ class MetadataEntityEnricher @javax.inject.Inject constructor() : Enricher {
     override suspend fun enrich(obj: PointObject): EnrichmentDelta = EnrichmentDelta(
         features = FEATURE_BY_SUFFIX.mapNotNullTo(mutableSetOf()) { (suffix, feature) ->
             feature.takeIf { !obj.metadata[META_ENTITY_PREFIX + suffix].isNullOrBlank() }
-        },
+        } + setOfNotNull(
+            // The semantic level (#89): a stored recognised type IS a feature of the object.
+            com.point.core.flow.SEMANTIC_TYPES[obj.metadata[com.point.core.flow.META_SEMANTIC_TYPE]],
+        ),
     )
 
     private companion object {

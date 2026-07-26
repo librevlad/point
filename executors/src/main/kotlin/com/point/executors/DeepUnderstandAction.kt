@@ -7,6 +7,9 @@ import com.point.core.flow.Latency
 import com.point.core.flow.LlmClient
 import com.point.core.flow.META_ENTITY_PREFIX
 import com.point.core.flow.META_OCR_TEXT_REF
+import com.point.core.flow.META_SEMANTIC_SUMMARY
+import com.point.core.flow.META_SEMANTIC_TYPE
+import com.point.core.flow.SEMANTIC_TYPES
 import com.point.core.flow.Realizer
 import com.point.core.model.ActionResult
 import com.point.core.model.CapabilityId
@@ -40,17 +43,28 @@ private val CONTRACT_KEYS = mapOf(
 internal const val DEEP_UNDERSTAND_PROMPT =
     "Найди в тексте контактные данные и извлеки их ДОСЛОВНО. Отвечай ТОЛЬКО строками вида " +
         "KEY=значение, по одной на строку, без пояснений. Разрешённые KEY: PHONE, EMAIL, URL, " +
-        "ADDRESS, DATE, CARD. Если ничего нет — ответь ровно NONE.\n\nТекст:\n"
+        "ADDRESS, DATE, CARD. Дополнительно определи, ЧТО это за текст: если он целиком является " +
+        "встречей/приглашением — строка TYPE=MEETING, покупкой/чеком/заказом — TYPE=PURCHASE, " +
+        "кулинарным рецептом — TYPE=RECIPE, вакансией — TYPE=JOB; в остальных случаях строку TYPE " +
+        "не пиши. Добавь строку SUMMARY=<суть текста в 3-6 словах>. " +
+        "Если ничего нет — ответь ровно NONE.\n\nТекст:\n"
 
-/** Parse the strict contract: known keys only, first value per key wins, blanks dropped. */
+/** Parse the strict contract: known keys only, first value per key wins, blanks dropped.
+ *  The semantic level (#89) rides the same contract: TYPE (whitelisted) and SUMMARY. */
 internal fun parseUnderstanding(answer: String): Map<String, String> = buildMap {
     answer.lineSequence().forEach { raw ->
         val line = raw.trim()
         val eq = line.indexOf('=')
         if (eq <= 0) return@forEach
-        val suffix = CONTRACT_KEYS[line.substring(0, eq).trim().uppercase()] ?: return@forEach
+        val key = line.substring(0, eq).trim().uppercase()
         val value = line.substring(eq + 1).trim()
-        if (value.isNotEmpty()) putIfAbsent(META_ENTITY_PREFIX + suffix, value)
+        if (value.isEmpty()) return@forEach
+        when {
+            key == "TYPE" -> value.lowercase().takeIf { it in SEMANTIC_TYPES }
+                ?.let { putIfAbsent(META_SEMANTIC_TYPE, it) }
+            key == "SUMMARY" -> putIfAbsent(META_SEMANTIC_SUMMARY, value.take(120))
+            else -> CONTRACT_KEYS[key]?.let { putIfAbsent(META_ENTITY_PREFIX + it, value) }
+        }
     }
 }
 
