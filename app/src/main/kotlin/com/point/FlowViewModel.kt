@@ -83,6 +83,7 @@ class FlowViewModel @Inject constructor(
     private val appIcons: AppIconResolver,
     private val pcPairings: com.point.core.flow.PcPairings,
     private val pcTransport: com.point.core.flow.PcTransport,
+    private val pcDiscovery: com.point.core.flow.PcDiscovery,
 ) : ViewModel() {
 
     private val stack = ArrayDeque<FlowFrame>()
@@ -383,11 +384,29 @@ class FlowViewModel @Inject constructor(
 
     // --- «Компьютер» (#147): pair once, then the «На компьютер» bubble appears. ---
 
-    fun openPcSettings() = _ui.update {
-        it.copy(pcScreen = PcScreenState(pairing = pcPairings.current()), busy = null, message = null)
+    private var discoveryJob: Job? = null
+
+    fun openPcSettings() {
+        _ui.update {
+            it.copy(pcScreen = PcScreenState(pairing = pcPairings.current()), busy = null, message = null)
+        }
+        discoveryJob?.cancel()
+        discoveryJob = viewModelScope.launch {
+            runCatching {
+                pcDiscovery.discover().collect { found ->
+                    _ui.update { s ->
+                        s.pcScreen?.let { s.copy(pcScreen = it.copy(discovered = found)) } ?: s
+                    }
+                }
+            }
+        }
     }
 
-    fun closePcSettings() = _ui.update { it.copy(pcScreen = null) }
+    fun closePcSettings() {
+        discoveryJob?.cancel()
+        discoveryJob = null
+        _ui.update { it.copy(pcScreen = null) }
+    }
 
     fun pairPc(host: String, port: Int) {
         _ui.update { it.copy(pcScreen = PcScreenState(pairing = pcPairings.current(), busy = true)) }

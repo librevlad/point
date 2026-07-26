@@ -64,6 +64,29 @@ fun PairPcScreen(
         )
         Spacer(Modifier.height(20.dp))
 
+        if (state.discovered.isNotEmpty()) {
+            Text(
+                "Найдено в сети",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(8.dp))
+            state.discovered.forEach { pc ->
+                Button(
+                    onClick = { onPair(pc.host, pc.port) },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("${pc.name} · ${pc.host}:${pc.port}") }
+                Spacer(Modifier.height(6.dp))
+            }
+            Spacer(Modifier.height(10.dp))
+            Text(
+                "или вручную:",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(8.dp))
+        }
+
         Row(verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(
                 value = host,
