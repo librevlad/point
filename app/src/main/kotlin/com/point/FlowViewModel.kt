@@ -11,6 +11,7 @@ import com.point.core.flow.EnrichmentUpdate
 import com.point.core.flow.FavoritesStore
 import com.point.core.flow.HistoryStore
 import com.point.core.flow.ObjectStore
+import com.point.core.flow.PdfRasterizer
 import com.point.core.flow.PrivacyConsent
 import com.point.core.flow.Resolver
 import com.point.core.flow.UsageEvent
@@ -62,6 +63,7 @@ class FlowViewModel @Inject constructor(
     private val journal: UsageJournal,
     private val consent: PrivacyConsent,
     private val appLauncher: AppLauncher,
+    private val pdfRasterizer: PdfRasterizer,
 ) : ViewModel() {
 
     private val stack = ArrayDeque<FlowFrame>()
@@ -575,16 +577,18 @@ class FlowViewModel @Inject constructor(
         enrichInBackground(obj)
         loadChildrenIfCollection(obj)
         loadTextPreviewIfText(obj)
-        loadPreviewIfImage(obj)
+        loadObjectPreview(obj)
     }
 
-    /** For an IMAGE frame, decode a real thumbnail off-main and attach it (only while
-     *  that object is still on the stack). The hero is the object, not an icon (#114). */
-    private fun loadPreviewIfImage(obj: PointObject) {
-        if (obj.state.kind != ObjectKind.IMAGE) return
+    /** For a visual frame (IMAGE / PDF), decode a real thumbnail off-main and attach it (only
+     *  while that object is still on the stack). The hero is the object, not an icon (#114);
+     *  a PDF shows its rendered first page via [previewSource]. */
+    private fun loadObjectPreview(obj: PointObject) {
+        if (obj.state.kind != ObjectKind.IMAGE && obj.state.kind != ObjectKind.PDF) return
         viewModelScope.launch {
             val bitmap = withContext(Dispatchers.IO) {
-                runCatching { Bitmaps.decodeThumbnail(obj.uri.value, PREVIEW_MAX_PX)?.asImageBitmap() }.getOrNull()
+                val source = previewSource(obj, pdfRasterizer) ?: return@withContext null
+                runCatching { Bitmaps.decodeThumbnail(source, PREVIEW_MAX_PX)?.asImageBitmap() }.getOrNull()
             } ?: return@launch
 
             val index = stack.indexOfLast { it.obj.id == obj.id }

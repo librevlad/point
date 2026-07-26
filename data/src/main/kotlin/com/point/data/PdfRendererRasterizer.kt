@@ -60,6 +60,35 @@ class PdfRendererRasterizer @Inject constructor(
         ScratchRef(dir.absolutePath)
     }
 
+    override suspend fun rasterizeFirstPage(obj: PointObject): ScratchRef? = withContext(Dispatchers.IO) {
+        runCatching {
+            ParcelFileDescriptor.open(File(obj.uri.value), ParcelFileDescriptor.MODE_READ_ONLY).use { pfd ->
+                val renderer = PdfRenderer(pfd)
+                try {
+                    if (renderer.pageCount == 0) return@use null
+                    val page = renderer.openPage(0)
+                    try {
+                        val w = (page.width * SCALE).coerceIn(1, MAX_DIM)
+                        val h = (page.height * SCALE).coerceIn(1, MAX_DIM)
+                        val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+                        bmp.eraseColor(Color.WHITE)
+                        page.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                        val ref = store.newScratchFile("jpg")
+                        File(ref.value).outputStream().use { out ->
+                            bmp.compress(Bitmap.CompressFormat.JPEG, 85, out)
+                        }
+                        bmp.recycle()
+                        ref
+                    } finally {
+                        page.close()
+                    }
+                } finally {
+                    renderer.close()
+                }
+            }
+        }.getOrNull()
+    }
+
     private companion object {
         const val TAG = "PointPdf"
         const val SCALE = 2          // ~144 DPI — readable without ballooning memory

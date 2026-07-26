@@ -78,7 +78,7 @@ class FlowViewModelTest {
     private fun vm(
         caps: Map<CapabilityId, Set<Intent>> = mapOf(CapabilityId("a") to setOf(Intent.PREPARE)),
         cloud: Set<CapabilityId> = emptySet(),
-    ) = FlowViewModel(store, FakeRegistry(caps, cloud), resolver, enrichment, history, favorites, usage, userKeys, journal, consent, appLauncher)
+    ) = FlowViewModel(store, FakeRegistry(caps, cloud), resolver, enrichment, history, favorites, usage, userKeys, journal, consent, appLauncher, FakePdfRasterizer())
 
     private fun bubble(id: String = "a", title: String = "Действие") =
         Bubble("x", title, CapabilityId(id), ObjectState(ObjectKind.TEXT))
@@ -775,6 +775,11 @@ private class FakeUserKeys(var config: UserAiConfig? = null) : UserKeyStore {
 private class FakePrivacyConsent(var granted: Boolean = false) : PrivacyConsent {
     override suspend fun cloudAllowed() = granted
     override suspend fun allowCloud() { granted = true }
+}
+
+private class FakePdfRasterizer : com.point.core.flow.PdfRasterizer {
+    override suspend fun rasterize(obj: PointObject) = ScratchRef("/pages")
+    override suspend fun rasterizeFirstPage(obj: PointObject): ScratchRef? = null
 }
 
 private class FakeAppLauncher(
