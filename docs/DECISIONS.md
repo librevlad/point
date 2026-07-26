@@ -866,6 +866,19 @@ async `QrEnricher` (:data) декодит и ставит `Feature.HAS_QR`, `Rea
 Результат — TEXT → дальше URL-enricher зажигает «Открыть ссылку». Двойной декод (enricher+realizer)
 — осознанный размен на простоту.
 
+### #68 — 16 КБ страницы: выравнивание нативных библиотек (Play-блокер снят)
+Все восемь `.so` (tesseract/leptonica/pngx/jpeg, opencv_java4, libc++_shared,
+androidx.graphics.path, textclassifier3 из ML Kit) выровнены поднятием версий:
+**tesseract4android 4.9.0** (NDK r27c; наша 4.8.0 с JitPack была собрана старым NDK),
+**OpenCV 4.14.0** (официальный AAR с выровненными сегментами; 4.11 был «old NDK»),
+**ML Kit entity-extraction beta6**, **Compose BOM 2026.06.01** (graphics.path; заодно BOM
+перестал тянуть material-icons транзитивно — :app получил явную зависимость).
+Проверка — не вера в ченджлоги, а факт: свой Python-парсер ELF program headers по каждой
+`.so` внутри APK (все PT_LOAD p_align == 16384) + проверка zip-оффсетов несжатых библиотек
+(кратны 16 КБ). Прогон на эмуляторе: Tesseract 4.9 распознаёт (image → TEXT). Финальное
+подтверждение — открыть Point на Android 16 (SM-A346E): системный диалог совместимости
+больше не должен появляться.
+
 ### Захват экрана = только скриншот (решение владельца, #64)
 Путь «прочитать текущий экран» (MediaProjection, `AccessibilityService.takeScreenshot`, роль
 ассистента) закрыт навсегда: policy-риск Google Play и трение согласий не окупают выгоды.
