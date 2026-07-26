@@ -6,6 +6,8 @@ import com.point.core.flow.AppLauncher
 import com.point.core.flow.AppTarget
 import com.point.core.flow.CapabilityRegistry
 import com.point.core.flow.CapabilityUsage
+import com.point.core.flow.ChosenApp
+import com.point.core.flow.ChosenApps
 import com.point.core.flow.CrashLog
 import com.point.core.flow.Enrichment
 import com.point.core.flow.edgeDetail
@@ -66,6 +68,7 @@ class FlowViewModel @Inject constructor(
     private val history: HistoryStore,
     private val favorites: FavoritesStore,
     private val usage: CapabilityUsage,
+    private val chosenApps: ChosenApps,
     private val userKeys: UserKeyStore,
     private val journal: UsageJournal,
     private val consent: PrivacyConsent,
@@ -427,6 +430,14 @@ class FlowViewModel @Inject constructor(
         _ui.update { it.copy(appPicker = null) }
         val via = target.via
         viewModelScope.launch {
+            // #66 slice 4: a direct pick is remembered — on the next launch this app is a
+            // first-class bubble in the graph, learning through the same usage signal.
+            // Bridged picks are skipped: their capability would need the transform re-run.
+            if (via == null) {
+                val pick = ChosenApp(obj.state.kind, target.packageName, target.activity, target.label)
+                runCatching { chosenApps.record(pick) }
+                runCatching { usage.record(CapabilityId("app:${target.packageName}#${obj.state.kind.name}")) }
+            }
             val toOpen = if (via != null) bridge(obj, via) else obj
             if (toOpen == null) {
                 _ui.update { it.copy(busy = null, message = "Не удалось преобразовать") }
