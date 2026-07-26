@@ -35,6 +35,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -55,6 +56,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -63,12 +65,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.animation.core.VectorConverter
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.isSpecified
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -136,10 +142,81 @@ fun FirstScreen(
         verticalArrangement = Arrangement.Center,
     ) {
         val facts = understoodFacts(obj)
+        // #114: the likely few, big — everything else folded behind «Все действия».
+        // Ranking is the learning BubblePolicy's job; the screen just respects it.
+        val likely = bubbles.take(likelyCount(bubbles.size))
+        val rest = bubbles.drop(likely.size)
+
         // M2: the object's centre is the birth/return anchor of every bubble-particle.
         val objectCenter = remember { mutableStateOf(Offset.Unspecified) }
+        // #115 drag-to-connect: the object can be carried to a bubble; the nearest one
+        // inside the magnet radius lights up, and releasing there fires the action.
+        val bubbleCenters = remember { mutableStateMapOf<CapabilityId, Offset>() }
+        var dragTarget by remember { mutableStateOf<CapabilityId?>(null) }
+        var dragging by remember { mutableStateOf(false) }
+        val dragOffset = remember { Animatable(Offset.Zero, Offset.VectorConverter) }
+        val dragScope = rememberCoroutineScope()
+        val motion = rememberMotionEnabled()
+        val haptics = LocalHapticFeedback.current
+        LaunchedEffect(likely) {
+            bubbleCenters.keys.retainAll(likely.map { it.capabilityId }.toSet())
+        }
+        val heldScale by animateFloatAsState(if (dragging) 0.92f else 1f, label = "held")
         Box(
-            Modifier.onGloballyPositioned { objectCenter.value = it.boundsInRoot().center },
+            Modifier
+                .onGloballyPositioned { objectCenter.value = it.boundsInRoot().center }
+                .graphicsLayer {
+                    translationX = dragOffset.value.x
+                    translationY = dragOffset.value.y
+                    scaleX = heldScale
+                    scaleY = heldScale
+                }
+                .pointerInput(working, inputPrompt, likely.map { it.capabilityId }) {
+                    if (working || inputPrompt != null) return@pointerInput
+                    val radius = MAGNET_RADIUS_DP.dp.toPx()
+                    // After-long-press: a plain drag must stay the screen's scroll; holding
+                    // the object first is "picking it up" — the launcher-icon gesture.
+                    detectDragGesturesAfterLongPress(
+                        onDragStart = {
+                            dragging = true
+                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        },
+                        onDrag = { change, amount ->
+                            change.consume()
+                            dragScope.launch { dragOffset.snapTo(dragOffset.value + amount) }
+                            val carried = objectCenter.value + dragOffset.value
+                            val target = magnetTarget(carried, bubbleCenters, radius)
+                            if (target != dragTarget) {
+                                dragTarget = target
+                                // The click of a connection forming — feel it before seeing it.
+                                if (target != null) {
+                                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                }
+                            }
+                        },
+                        onDragEnd = {
+                            dragging = false
+                            val hit = likely.firstOrNull { it.capabilityId == dragTarget }
+                            dragTarget = null
+                            if (hit != null) onBubble(hit)
+                            dragScope.launch {
+                                if (motion && hit == null) {
+                                    dragOffset.animateTo(Offset.Zero, spring(dampingRatio = 0.62f))
+                                } else {
+                                    dragOffset.snapTo(Offset.Zero)
+                                }
+                            }
+                        },
+                        onDragCancel = {
+                            dragging = false
+                            dragTarget = null
+                            dragScope.launch {
+                                if (motion) dragOffset.animateTo(Offset.Zero, spring(dampingRatio = 0.62f))
+                                else dragOffset.snapTo(Offset.Zero)
+                            }
+                        },
+                    )
+                },
         ) {
             ObjectHeader(
                 obj,
@@ -173,10 +250,6 @@ fun FirstScreen(
                 suggestions = inputSuggestions,
             )
         } else {
-            // #114: the likely few, big — everything else folded behind «Все действия».
-            // Ranking is the learning BubblePolicy's job; the screen just respects it.
-            val likely = bubbles.take(likelyCount(bubbles.size))
-            val rest = bubbles.drop(likely.size)
             Text(
                 text = if (rest.isEmpty()) "Что сделать?" else "Самые вероятные",
                 style = MaterialTheme.typography.labelMedium,
@@ -198,6 +271,8 @@ fun FirstScreen(
                             bubble = bubble, index = index, size = 68.dp,
                             objectCenter = objectCenter.value, enabled = !working,
                             pinned = bubble.capabilityId == pinned,
+                            magnet = bubble.capabilityId == dragTarget,
+                            onCenter = { bubbleCenters[bubble.capabilityId] = it },
                             onClick = { onBubble(bubble) },
                             onLongClick = { onBubbleLongPress(bubble) },
                         )
@@ -575,6 +650,9 @@ private fun AllActions(
  *  Discover hint knows exactly which actions the user does NOT see. */
 const val LIKELY_COUNT = 3
 
+/** #115: how close (dp) the carried object must get to a bubble to form a connection. */
+const val MAGNET_RADIUS_DP = 64
+
 /** The number of actions actually shown big for [total] candidates (see [LIKELY_COUNT]). */
 fun likelyCount(total: Int): Int = if (total <= LIKELY_COUNT + 2) total else LIKELY_COUNT
 
@@ -592,6 +670,8 @@ private fun BubbleItem(
     objectCenter: Offset = Offset.Unspecified,
     enabled: Boolean = true,
     pinned: Boolean = false,
+    magnet: Boolean = false,
+    onCenter: (Offset) -> Unit = {},
     onClick: () -> Unit,
     onLongClick: () -> Unit = {},
 ) = ActionBubble(
@@ -604,6 +684,8 @@ private fun BubbleItem(
     objectCenter = objectCenter,
     enabled = enabled,
     pinned = pinned,
+    magnet = magnet,
+    onCenter = onCenter,
     onClick = onClick,
     onLongClick = onLongClick,
 )
@@ -628,6 +710,8 @@ private fun ActionBubble(
     objectCenter: Offset = Offset.Unspecified,
     enabled: Boolean = true,
     pinned: Boolean = false,
+    magnet: Boolean = false,
+    onCenter: (Offset) -> Unit = {},
     onClick: () -> Unit,
     onLongClick: () -> Unit = {},
 ) {
@@ -637,6 +721,9 @@ private fun ActionBubble(
     var departing by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val drift = remember(index) { driftSpecFor(index) }
+    val magnetScale by animateFloatAsState(
+        if (magnet) 1.16f else 1f, spring(dampingRatio = 0.55f), label = "magnet",
+    )
     val driftPhase = if (motion) {
         rememberInfiniteTransition(label = "drift").animateFloat(
             initialValue = 0f,
@@ -666,11 +753,13 @@ private fun ActionBubble(
                 if (birthVector == null && objectCenter.isSpecified) {
                     birthVector = objectCenter - coords.boundsInRoot().center
                 }
+                onCenter(coords.boundsInRoot().center)
             }
             .graphicsLayer {
                 val p = presence.value
                 alpha = p
-                val scale = 0.55f + 0.45f * p
+                // #115: the magnet candidate leans towards the carried object.
+                val scale = (0.55f + 0.45f * p) * magnetScale
                 scaleX = scale
                 scaleY = scale
                 val v = birthVector ?: Offset.Zero
@@ -702,8 +791,13 @@ private fun ActionBubble(
                 .size(size)
                 .shadow(10.dp, CircleShape, clip = false, ambientColor = color, spotColor = color)
                 .then(
-                    if (ai) Modifier.border(1.5.dp, MaterialTheme.colorScheme.tertiary, CircleShape)
-                    else Modifier,
+                    when {
+                        // #115: the connection candidate wears the brand ring while the
+                        // object hovers within its magnet radius.
+                        magnet -> Modifier.border(2.5.dp, MaterialTheme.colorScheme.primary, CircleShape)
+                        ai -> Modifier.border(1.5.dp, MaterialTheme.colorScheme.tertiary, CircleShape)
+                        else -> Modifier
+                    },
                 )
                 .clip(CircleShape)
                 .background(color),
