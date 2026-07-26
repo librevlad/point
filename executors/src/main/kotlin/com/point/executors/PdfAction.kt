@@ -3,6 +3,8 @@ package com.point.executors
 import android.graphics.Paint
 import android.graphics.pdf.PdfDocument
 import com.point.core.flow.Capability
+import com.point.core.flow.CapabilityMeta
+import com.point.core.flow.Latency
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.OfficeTextExtractor
 import com.point.core.flow.PdfTextExtractor
@@ -24,6 +26,8 @@ import javax.inject.Inject
 class PdfCapability @Inject constructor() : Capability {
     override val id = ID
     override val icon = "pdf"
+    // Real rendering/extraction work — honest latency keeps it out of the «Мгновенные» tier (#114).
+    override val meta = CapabilityMeta(latency = Latency.FAST)
     override fun label(state: ObjectState) =
         if (state.kind == ObjectKind.PDF) "Извлечь текст" else "В PDF"
     override fun accepts(state: ObjectState) =
