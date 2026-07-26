@@ -24,4 +24,23 @@ class BreathSpecTest {
             assertTrue("$kind period must be calm (>= 3s)", spec.periodMs >= 3_000)
         }
     }
+
+    // --- M2: weightless drift (принцип №4 — bubbles are particles, not buttons) ---
+
+    @Test
+    fun `neighbouring bubbles drift out of sync — never as one rigid grid`() {
+        val a = driftSpecFor(0)
+        val b = driftSpecFor(1)
+        assertTrue("periods must differ so the field never locks in step", a.periodMs != b.periodMs)
+        assertTrue("phases must differ", a.phaseRad != b.phaseRad)
+    }
+
+    @Test
+    fun `drift stays barely visible and calm for any index`() {
+        (0..24).forEach { index ->
+            val spec = driftSpecFor(index)
+            assertTrue("amplitude must stay subtle", spec.amplitudeDp in 1.0f..2.5f)
+            assertTrue("period must be slow (>= 2.5s)", spec.periodMs >= 2_500)
+        }
+    }
 }
