@@ -9,6 +9,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
@@ -42,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import com.point.core.flow.AppTarget
 import com.point.core.flow.UserAiConfig
 import com.point.core.model.Bubble
+import com.point.core.model.ObjectKind
 import com.point.core.model.FavoriteChain
 import com.point.core.model.PointObject
 import com.point.core.model.Preview
@@ -68,6 +70,7 @@ fun PointHost(
     onSaveAiConfig: (UserAiConfig) -> Unit = {},
     onCloseKeySettings: () -> Unit = {},
     onToggleUsage: (Boolean) -> Unit = {},
+    onToggleSound: (Boolean) -> Unit = {},
     onConfirmCloud: () -> Unit = {},
     onDeclineCloud: () -> Unit = {},
     onPickApp: (AppTarget) -> Unit = {},
@@ -135,6 +138,8 @@ fun PointHost(
                 usageEnabled = state.usageEnabled,
                 usageSummary = state.usageSummary,
                 onToggleUsage = onToggleUsage,
+                soundEnabled = state.soundEnabled,
+                onToggleSound = onToggleSound,
             )
 
             // M3 (MOTION.md №8): quiet local work keeps the object on screen — it "works"
@@ -149,12 +154,26 @@ fun PointHost(
                     targetState = frame,
                     contentKey = { it.obj.id },
                     transitionSpec = {
-                        // M3 transformation morph (№9): the new state grows out of the old
-                        // one with a soft spring — 300–500 мс of visible becoming.
-                        (fadeIn(tween(340)) + scaleIn(
-                            animationSpec = spring(dampingRatio = 0.72f, stiffness = Spring.StiffnessMediumLow),
-                            initialScale = 0.80f,
-                        )) togetherWith (fadeOut(tween(150)) + scaleOut(tween(220), targetScale = 1.08f))
+                        // M3/M3.5 (№9): the generic morph, specialised for the signature
+                        // transformations — the change itself tells what happened.
+                        val from = initialState.obj.state.kind
+                        val to = targetState.obj.state.kind
+                        when {
+                            // Something became a PDF: the old object folds flat into a sheet,
+                            // the page unfolds open.
+                            to == ObjectKind.PDF && from != ObjectKind.PDF ->
+                                (fadeIn(tween(260, delayMillis = 120)) + expandVertically(
+                                    tween(340, delayMillis = 120), expandFrom = Alignment.CenterVertically,
+                                )) togetherWith (fadeOut(tween(200)) + scaleOut(tween(240), targetScale = 0.06f))
+                            // Recognition: letters slowly come through — a long, calm reveal.
+                            from == ObjectKind.IMAGE && to == ObjectKind.TEXT ->
+                                fadeIn(tween(520)) togetherWith fadeOut(tween(260))
+                            else ->
+                                (fadeIn(tween(340)) + scaleIn(
+                                    animationSpec = spring(dampingRatio = 0.72f, stiffness = Spring.StiffnessMediumLow),
+                                    initialScale = 0.80f,
+                                )) togetherWith (fadeOut(tween(150)) + scaleOut(tween(220), targetScale = 1.08f))
+                        }
                     },
                     label = "frame",
                     modifier = Modifier.weight(1f),

@@ -70,6 +70,7 @@ class FlowViewModelTest {
     private val consent = FakePrivacyConsent()
     private val appLauncher = FakeAppLauncher()
     private val sensory = FakeSensoryFeedback()
+    private val sensorySettings = FakeSensorySettings()
 
     @Before fun setUp() = Dispatchers.setMain(dispatcher)
     @After fun tearDown() = Dispatchers.resetMain()
@@ -79,7 +80,7 @@ class FlowViewModelTest {
     private fun vm(
         caps: Map<CapabilityId, Set<Intent>> = mapOf(CapabilityId("a") to setOf(Intent.PREPARE)),
         cloud: Set<CapabilityId> = emptySet(),
-    ) = FlowViewModel(store, FakeRegistry(caps, cloud), resolver, enrichment, history, favorites, usage, userKeys, journal, consent, appLauncher, FakePdfRasterizer(), sensory)
+    ) = FlowViewModel(store, FakeRegistry(caps, cloud), resolver, enrichment, history, favorites, usage, userKeys, journal, consent, appLauncher, FakePdfRasterizer(), sensory, sensorySettings)
 
     private fun bubble(id: String = "a", title: String = "Действие") =
         Bubble("x", title, CapabilityId(id), ObjectState(ObjectKind.TEXT))
@@ -220,6 +221,13 @@ class FlowViewModelTest {
 
         advanceUntilIdle()
         assertNull(vm.ui.value.busy)
+    }
+
+    @Test fun `sound toggle persists and reflects in ui`() = runTest(dispatcher) {
+        val vm = vm()
+        vm.setSoundEnabled(false); advanceUntilIdle()
+        assertEquals(false, vm.ui.value.soundEnabled)
+        assertEquals(false, sensorySettings.enabled)
     }
 
     // --- M4 (MOTION.md №7): every action answers in the hand — tap / success / failure ---
@@ -815,6 +823,12 @@ private class FakeSensoryFeedback : com.point.core.flow.SensoryFeedback {
     override fun tap() { events += "tap" }
     override fun success() { events += "success" }
     override fun failure() { events += "failure" }
+}
+
+private class FakeSensorySettings : com.point.core.flow.SensorySettings {
+    var enabled = true
+    override fun isSoundEnabled() = enabled
+    override suspend fun setSoundEnabled(enabled: Boolean) { this.enabled = enabled }
 }
 
 private class FakePdfRasterizer : com.point.core.flow.PdfRasterizer {
