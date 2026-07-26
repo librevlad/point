@@ -1,0 +1,41 @@
+package com.point.core.flow
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Test
+
+/**
+ * #147 Continue on PC: the pairing QR and the metadata codec are a PROTOCOL shared by
+ * the phone (sender) and the desktop (receiver) — pure Kotlin, tested here once.
+ */
+class ContinueOnPcTest {
+
+    @Test
+    fun `pairing roundtrip via the QR payload`() {
+        val info = PcPairing(host = "192.168.1.42", port = 8391, token = "abc123XYZ")
+        assertEquals(info, parsePcPairing(info.qrPayload()))
+    }
+
+    @Test
+    fun `garbage and foreign QR payloads are rejected`() {
+        assertNull(parsePcPairing("https://example.com"))
+        assertNull(parsePcPairing("point-pc://noport/tok"))
+        assertNull(parsePcPairing(""))
+    }
+
+    @Test
+    fun `metadata codec roundtrips understanding`() {
+        val meta = mapOf(
+            "entity.phone" to "+380671234567",
+            "name" to "receipt.jpg",
+            "multi line" to "clean value",
+        )
+        assertEquals(meta, decodePcMeta(encodePcMeta(meta)))
+    }
+
+    @Test
+    fun `metadata codec drops line breaks inside values`() {
+        val decoded = decodePcMeta(encodePcMeta(mapOf("k" to "a\nb")))
+        assertEquals("a b", decoded["k"])
+    }
+}

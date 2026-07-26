@@ -1,0 +1,85 @@
+package com.point.desktop
+
+import com.point.core.flow.decodePcMeta
+import com.sun.net.httpserver.HttpExchange
+import com.sun.net.httpserver.HttpServer
+import java.net.InetSocketAddress
+import java.security.MessageDigest
+import java.util.Base64
+import java.util.concurrent.Executors
+
+/**
+ * The LAN receiver (#147) on the JDK's own HttpServer — zero dependencies.
+ *
+ * - `POST /pair`   — asks the user via [pairGate] (blocks up to its timeout); 200 = token.
+ * - `POST /receive`— constant-time token check, base64 headers (ASCII-safe Cyrillic),
+ *                    body streamed into the inbox; 401 on a bad token.
+ * - `GET  /ping`   — "point-pc <name>", the connectivity probe for manual pairing.
+ *
+ * A cached thread pool is essential: the default executor runs handlers on the accept
+ * thread, and a pending pair dialog would freeze every other request.
+ */
+class PcServer(
+    private val inbox: Inbox,
+    private val token: String,
+    private val pcName: String,
+    private val pairGate: (deviceName: String) -> Boolean,
+    private val onReceived: (InboxItem) -> Unit,
+) {
+    private var server: HttpServer? = null
+    val port: Int get() = server?.address?.port ?: -1
+
+    fun start(preferredPort: Int) {
+        val s = bind(preferredPort)
+        s.executor = Executors.newCachedThreadPool { r -> Thread(r, "point-pc-http").apply { isDaemon = true } }
+        s.createContext("/ping") { ex ->
+            respond(ex, 200, "point-pc $pcName")
+        }
+        s.createContext("/pair") { ex ->
+            val device = ex.requestHeaders.getFirst("X-Point-Name")?.let(::unb64) ?: "телефон"
+            ex.requestBody.readBytes() // drain
+            if (pairGate(device)) respond(ex, 200, token) else respond(ex, 403, "denied")
+        }
+        s.createContext("/receive") { ex ->
+            val given = ex.requestHeaders.getFirst("X-Point-Token").orEmpty()
+            if (!MessageDigest.isEqual(given.toByteArray(), token.toByteArray())) {
+                ex.requestBody.readBytes()
+                respond(ex, 401, "bad token")
+                return@createContext
+            }
+            val mime = ex.requestHeaders.getFirst("X-Point-Mime") ?: "application/octet-stream"
+            val name = ex.requestHeaders.getFirst("X-Point-Name")?.let(::unb64)
+                ?.takeIf { it.isNotBlank() } ?: "объект.${extFor(mime)}"
+            val meta = ex.requestHeaders.getFirst("X-Point-Meta")?.let { decodePcMeta(unb64(it)) }.orEmpty()
+            val item = inbox.receive(name, mime, meta, ex.requestBody)
+            onReceived(item)
+            respond(ex, 200, "ok")
+        }
+        s.start()
+        server = s
+    }
+
+    private fun bind(preferredPort: Int): HttpServer {
+        if (preferredPort > 0) {
+            for (candidate in preferredPort..preferredPort + 8) {
+                runCatching { return HttpServer.create(InetSocketAddress(candidate), 0) }
+            }
+        }
+        return HttpServer.create(InetSocketAddress(preferredPort.coerceAtLeast(0)), 0)
+    }
+
+    fun stop() {
+        server?.stop(0)
+        server = null
+    }
+
+    private fun respond(ex: HttpExchange, code: Int, body: String) {
+        val bytes = body.toByteArray()
+        ex.responseHeaders.add("Content-Type", "text/plain; charset=utf-8")
+        ex.sendResponseHeaders(code, bytes.size.toLong())
+        ex.responseBody.use { it.write(bytes) }
+    }
+
+    private fun unb64(s: String): String =
+        runCatching { String(Base64.getDecoder().decode(s)) }.getOrDefault("")
+}

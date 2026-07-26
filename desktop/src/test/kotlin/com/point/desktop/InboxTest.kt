@@ -1,0 +1,57 @@
+package com.point.desktop
+
+import com.point.core.model.ObjectKind
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Rule
+import org.junit.Test
+import org.junit.rules.TemporaryFolder
+
+/** The desktop inbox: safe names, bytes land intact, kinds come from the shared classifier. */
+class InboxTest {
+
+    @get:Rule val tmp = TemporaryFolder()
+
+    @Test
+    fun `uniqueChildName sanitises separators and traversal`() {
+        assertEquals("_.._evil.sh", uniqueChildName(emptySet(), "/../evil.sh"))
+        assertEquals("a_b_c.txt", uniqueChildName(emptySet(), "a\\b/c.txt"))
+        assertEquals("объект", uniqueChildName(emptySet(), "  "))
+    }
+
+    @Test
+    fun `uniqueChildName resolves collisions with a counter`() {
+        assertEquals("чек (2).jpg", uniqueChildName(setOf("чек.jpg"), "чек.jpg"))
+        assertEquals("чек (3).jpg", uniqueChildName(setOf("чек.jpg", "чек (2).jpg"), "чек.jpg"))
+    }
+
+    @Test
+    fun `receive lands bytes under a cyrillic name with the right kind`() {
+        val inbox = Inbox(tmp.root)
+        val item = inbox.receive(
+            name = "чек.jpg", mime = "image/jpeg",
+            meta = mapOf("entity.phone" to "+380671234567"),
+            source = byteArrayOf(7, 8, 9).inputStream(),
+        )
+        assertEquals("чек.jpg", item.obj.metadata["name"])
+        assertEquals(ObjectKind.IMAGE, item.obj.state.kind)
+        assertEquals("+380671234567", item.obj.metadata["entity.phone"])
+        assertEquals(3, java.io.File(item.obj.uri.value).length())
+    }
+
+    @Test
+    fun `addText creates a note file and classifies TEXT`() {
+        val inbox = Inbox(tmp.root)
+        val item = inbox.addText("привет с телефона")
+        assertEquals(ObjectKind.TEXT, item.obj.state.kind)
+        assertEquals("привет с телефона", java.io.File(item.obj.uri.value).readText())
+    }
+
+    @Test
+    fun `addFile wraps a local file in place without copying`() {
+        val f = tmp.newFile("local.pdf").apply { writeBytes(byteArrayOf(1)) }
+        val item = Inbox(tmp.root).addFile(f.absolutePath)
+        assertEquals(ObjectKind.PDF, item.obj.state.kind)
+        assertEquals(f.absolutePath, item.obj.uri.value)
+    }
+}
