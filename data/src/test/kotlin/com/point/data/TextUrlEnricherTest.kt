@@ -6,6 +6,7 @@ import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
 import com.point.core.model.ScratchRef
 import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -31,7 +32,9 @@ class TextUrlEnricherTest {
 
     @Test
     fun `flags HAS_URL when the text contains a link`() = runTest {
-        val features = enricher.enrich(textObject("смотри тут https://example.com дальше")).features
+        val delta = enricher.enrich(textObject("смотри тут https://example.com дальше"))
+        val features = delta.features
+        assertEquals("https://example.com", delta.metadata[com.point.core.flow.META_ENTITY_PREFIX + "url"])
         assertTrue(Feature.HAS_URL in features)
     }
 

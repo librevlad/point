@@ -40,7 +40,6 @@ import com.point.core.flow.AppTarget
 import com.point.core.flow.UserAiConfig
 import com.point.core.model.Bubble
 import com.point.core.model.FavoriteChain
-import com.point.core.model.Intent
 import com.point.core.model.PointObject
 import com.point.core.model.Preview
 import com.point.core.ui.FirstScreen
@@ -61,7 +60,6 @@ fun PointHost(
     onApplyFavorite: (FavoriteChain) -> Unit = {},
     onSaveChain: () -> Unit = {},
     onItem: (PointObject) -> Unit = {},
-    onIntent: (Intent) -> Unit = {},
     onSaveAiConfig: (UserAiConfig) -> Unit = {},
     onCloseKeySettings: () -> Unit = {},
     onToggleUsage: (Boolean) -> Unit = {},
@@ -142,7 +140,7 @@ fun PointHost(
             ) { current ->
                 FirstScreen(
                     obj = current.obj,
-                    bubbles = state.intentBubbles,
+                    bubbles = current.bubbles,
                     onBubble = onBubble,
                     message = state.message,
                     inputPrompt = state.inputPrompt,
@@ -157,9 +155,6 @@ fun PointHost(
                     onItem = onItem,
                     textPreview = current.textPreview,
                     latent = current.latent,
-                    intents = state.intents,
-                    selectedIntent = state.selectedIntent,
-                    onIntent = onIntent,
                     enriching = current.enriching,
                 )
             }

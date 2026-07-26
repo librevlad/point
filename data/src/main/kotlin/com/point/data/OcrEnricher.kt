@@ -5,10 +5,10 @@ import com.point.core.flow.Enricher
 import com.point.core.flow.EnricherMeta
 import com.point.core.flow.EnrichmentDelta
 import com.point.core.flow.EntityExtractor
+import com.point.core.flow.META_ENTITY_PREFIX
 import com.point.core.flow.META_OCR_TEXT_REF
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.TextRecognizer
-import com.point.core.flow.asFeature
 import com.point.core.flow.looksLikeOcrGarbage
 import com.point.core.model.Feature
 import com.point.core.model.ObjectKind
@@ -51,13 +51,18 @@ class OcrEnricher @Inject constructor(
         val text = runCatching { recognizer.recognize(obj) }.getOrDefault("")
         if (text.isBlank() || looksLikeOcrGarbage(text)) return@withContext EnrichmentDelta()
 
-        val features = buildSet {
-            extractor.extract(text.take(MAX_CHARS)).forEach { it.type.asFeature()?.let(::add) }
-            if (URL_REGEX.containsMatchIn(text)) add(Feature.HAS_URL)
-        }
+        val entities = entityDelta(extractor.extract(text.take(MAX_CHARS)))
+        val url = URL_REGEX.find(text)?.value
         val ref = store.newScratchFile("txt")
         File(ref.value).writeText(text)
-        EnrichmentDelta(features, mapOf(META_OCR_TEXT_REF to ref.value))
+        EnrichmentDelta(
+            features = entities.features + if (url != null) setOf(Feature.HAS_URL) else emptySet(),
+            metadata = buildMap {
+                putAll(entities.metadata)
+                if (url != null) putIfAbsent(META_ENTITY_PREFIX + "url", url)
+                put(META_OCR_TEXT_REF, ref.value)
+            },
+        )
     }
 
     private companion object {

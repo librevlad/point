@@ -30,6 +30,9 @@ kotlin {
 
 dependencies {
     api(project(":core:model"))
+    // Metadata-key constants (entity.* understood facts) — allowed by the module rule
+    // (:core:flow ← :core:ui); still zero business logic here.
+    implementation(project(":core:flow"))
 
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
@@ -39,4 +42,6 @@ dependencies {
     implementation(libs.androidx.compose.material.icons.extended)
     implementation(libs.androidx.compose.ui.tooling.preview)
     debugImplementation(libs.androidx.compose.ui.tooling)
+
+    testImplementation(libs.junit)
 }

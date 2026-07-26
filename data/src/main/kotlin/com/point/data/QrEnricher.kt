@@ -4,6 +4,7 @@ import com.point.core.flow.EnrichCost
 import com.point.core.flow.Enricher
 import com.point.core.flow.EnricherMeta
 import com.point.core.flow.EnrichmentDelta
+import com.point.core.flow.META_ENTITY_PREFIX
 import com.point.core.flow.QrReader
 import com.point.core.model.Feature
 import com.point.core.model.ObjectKind
@@ -25,7 +26,7 @@ class QrEnricher @Inject constructor(
     override fun appliesTo(state: ObjectState) = state.kind == ObjectKind.IMAGE
 
     override suspend fun enrich(obj: PointObject): EnrichmentDelta {
-        val found = runCatching { reader.decode(obj.uri.value) }.getOrNull()
-        return if (found != null) EnrichmentDelta(setOf(Feature.HAS_QR)) else EnrichmentDelta()
+        val found = runCatching { reader.decode(obj.uri.value) }.getOrNull() ?: return EnrichmentDelta()
+        return EnrichmentDelta(setOf(Feature.HAS_QR), mapOf(META_ENTITY_PREFIX + "qr" to found))
     }
 }

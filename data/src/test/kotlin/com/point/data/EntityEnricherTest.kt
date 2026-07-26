@@ -3,6 +3,7 @@ package com.point.data
 import com.point.core.flow.Entity
 import com.point.core.flow.EntityExtractor
 import com.point.core.flow.EntityType
+import com.point.core.flow.META_ENTITY_PREFIX
 import com.point.core.model.Feature
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
@@ -69,5 +70,19 @@ class EntityEnricherTest {
     fun `blank text yields no features and never calls the extractor`() = runTest {
         val enricher = EntityEnricher(extractor(Entity(EntityType.PHONE, "x")))
         assertTrue(enricher.enrich(obj("   ")).features.isEmpty())
+    }
+
+    @Test
+    fun `keeps the first value of each entity type as an understood fact`() = runTest {
+        val enricher = EntityEnricher(
+            extractor(
+                Entity(EntityType.PHONE, "+380671234567"),
+                Entity(EntityType.PHONE, "+380952222222"), // a second phone — the first one wins
+                Entity(EntityType.ADDRESS, "ул. Крещатик, 12"),
+            ),
+        )
+        val meta = enricher.enrich(obj("звони +380671234567 или +380952222222, адрес ул. Крещатик, 12")).metadata
+        assertEquals("+380671234567", meta[META_ENTITY_PREFIX + "phone"])
+        assertEquals("ул. Крещатик, 12", meta[META_ENTITY_PREFIX + "address"])
     }
 }

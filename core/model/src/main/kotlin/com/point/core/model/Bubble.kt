@@ -14,4 +14,13 @@ data class Bubble(
     val title: String,
     val capabilityId: CapabilityId,
     val expectedNextState: ObjectState,
+    val tier: BubbleTier = BubbleTier.SMART,
 )
+
+/**
+ * The action's visual weight class (#114) — derived from the capability's meta, never
+ * hand-assigned: INSTANT (local, immediate — copy/share/open), SMART (real on-device
+ * work — recognise/transform), AI (leaves the device — cloud models). The three levels
+ * look different on screen so the user can feel an action's nature before tapping.
+ */
+enum class BubbleTier { INSTANT, SMART, AI }

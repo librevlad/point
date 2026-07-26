@@ -41,7 +41,6 @@ import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.filled.Wallpaper
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import com.point.core.model.Intent
 import com.point.core.model.ObjectKind
 
 /** Resolves a [com.point.core.model.Bubble.icon] key to a vector. */
@@ -116,30 +115,6 @@ fun bubbleColor(key: String): Color = when (key) {
     "contact" -> Color(0xFF16A34A)   // green — add contact
     "open-in" -> Color(0xFF2F80ED)   // blue — open externally
     else -> Color(0xFF9AA0A6)        // grey — everything else
-}
-
-/** Icon for a user [Intent] — the intent-first surface (Понять / Подготовить / Отправить). */
-fun intentIcon(intent: Intent): ImageVector = when (intent) {
-    Intent.UNDERSTAND -> Icons.Filled.Lightbulb
-    Intent.PREPARE -> Icons.Filled.AutoFixHigh
-    Intent.OPEN -> Icons.Filled.OpenInNew
-    Intent.SEND -> Icons.Filled.Send
-}
-
-/** Russian label for a user [Intent]. */
-fun intentTitle(intent: Intent): String = when (intent) {
-    Intent.UNDERSTAND -> "Понять"
-    Intent.PREPARE -> "Подготовить"
-    Intent.OPEN -> "Открыть"
-    Intent.SEND -> "Отправить"
-}
-
-/** Circle colour for a user [Intent], from the Point palette. */
-fun intentColor(intent: Intent): Color = when (intent) {
-    Intent.UNDERSTAND -> Color(0xFF7C4DFF) // purple — understanding
-    Intent.PREPARE -> Color(0xFF0EA5A5)    // teal — prepare / transform
-    Intent.OPEN -> Color(0xFF2F80ED)       // blue — open externally
-    Intent.SEND -> Color(0xFFF5610F)       // orange — brand "send"
 }
 
 /** Icon representing the current object's kind, shown in the screen header. */

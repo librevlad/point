@@ -4,6 +4,7 @@ import com.point.core.flow.EnrichCost
 import com.point.core.flow.Entity
 import com.point.core.flow.EntityExtractor
 import com.point.core.flow.EntityType
+import com.point.core.flow.META_ENTITY_PREFIX
 import com.point.core.flow.META_OCR_TEXT_REF
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.TextRecognizer
@@ -84,6 +85,18 @@ class OcrEnricherTest {
     fun `flags a link found in the recognised text`() = runTest {
         val enricher = OcrEnricher(FakeStore(), recognizer(realText), extractor())
         assertTrue(Feature.HAS_URL in enricher.enrich(image).features)
+    }
+
+    @Test
+    fun `keeps entity values and the found link as understood facts`() = runTest {
+        val enricher = OcrEnricher(
+            FakeStore(),
+            recognizer(realText),
+            extractor(Entity(EntityType.PHONE, "+380671234567")),
+        )
+        val meta = enricher.enrich(image).metadata
+        assertEquals("+380671234567", meta[META_ENTITY_PREFIX + "phone"])
+        assertEquals("https://point.app/x", meta[META_ENTITY_PREFIX + "url"])
     }
 
     @Test
