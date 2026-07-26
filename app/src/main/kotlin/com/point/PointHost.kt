@@ -78,6 +78,7 @@ fun PointHost(
     onDismissAppPicker: () -> Unit = {},
     onConfirmPreview: () -> Unit = {},
     onCancelPreview: () -> Unit = {},
+    appIconFor: (String) -> androidx.compose.ui.graphics.ImageBitmap? = { null },
     modifier: Modifier = Modifier,
 ) {
     // The system photo picker for "Заменить фон" (#97): registered here so no Activity needs to
@@ -202,6 +203,7 @@ fun PointHost(
                     previewBitmap = current.preview,
                     pinned = current.pinned,
                     onBubbleLongPress = onBubbleLongPress,
+                    appIconFor = appIconFor,
                 )
                 }
             }

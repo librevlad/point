@@ -65,6 +65,7 @@ class HomeActivity : ComponentActivity() {
                         PointHost(
                             state = state,
                             onBubble = viewModel::onBubble,
+                        appIconFor = viewModel::appIcon,
                             onSubmitInput = viewModel::submitAmendment,
                             onCancelInput = viewModel::cancelInput,
                             onApplyFavorite = viewModel::applyFavorite,

@@ -34,6 +34,11 @@ class AppActionsTest {
     }
 
     @Test
+    fun `icon key carries the package so the UI can show the real app icon`() {
+        assertEquals("app:org.tg", AppCapability(telegram).icon)
+    }
+
+    @Test
     fun `id is stable per app and kind`() {
         assertEquals(AppCapability(telegram).id, AppCapability(telegram).id)
         val pdfPick = telegram.copy(kind = ObjectKind.PDF)
