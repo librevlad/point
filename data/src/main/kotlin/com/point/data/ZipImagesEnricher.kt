@@ -1,6 +1,9 @@
 package com.point.data
 
+import com.point.core.flow.EnrichCost
 import com.point.core.flow.Enricher
+import com.point.core.flow.EnricherMeta
+import com.point.core.flow.EnrichmentDelta
 import com.point.core.model.Feature
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
@@ -14,9 +17,11 @@ import javax.inject.Inject
 /** Scans a zip's entries (bounded) and flags [Feature.ZIP_OF_IMAGES] if they are all images. */
 class ZipImagesEnricher @Inject constructor() : Enricher {
 
+    override val meta = EnricherMeta(cost = EnrichCost.FAST, mayYield = setOf(Feature.ZIP_OF_IMAGES))
+
     override fun appliesTo(state: ObjectState) = state.kind == ObjectKind.ZIP
 
-    override suspend fun enrich(obj: PointObject): Set<Feature> = withContext(Dispatchers.IO) {
+    override suspend fun enrich(obj: PointObject): EnrichmentDelta = withContext(Dispatchers.IO) {
         var files = 0
         var images = 0
         runCatching {
@@ -32,7 +37,7 @@ class ZipImagesEnricher @Inject constructor() : Enricher {
                 }
             }
         }
-        if (files > 0 && images == files) setOf(Feature.ZIP_OF_IMAGES) else emptySet()
+        if (files > 0 && images == files) EnrichmentDelta(setOf(Feature.ZIP_OF_IMAGES)) else EnrichmentDelta()
     }
 
     private fun isImage(name: String): Boolean =

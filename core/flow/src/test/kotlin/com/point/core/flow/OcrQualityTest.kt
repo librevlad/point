@@ -1,11 +1,11 @@
-package com.point.executors
+package com.point.core.flow
 
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** The gibberish detector that makes bad on-device OCR fall back to the cloud. Pure — JVM. */
-class OcrGarbageTest {
+/** The gibberish detector shared by the OCR realizer chain and the OCR enricher. Pure — JVM. */
+class OcrQualityTest {
 
     @Test
     fun `flags Tesseract gibberish from a document photo`() {

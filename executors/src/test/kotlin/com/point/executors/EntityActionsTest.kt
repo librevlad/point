@@ -4,8 +4,10 @@ import com.point.core.flow.CalendarInserter
 import com.point.core.flow.Entity
 import com.point.core.flow.EntityExtractor
 import com.point.core.flow.EntityType
+import com.point.core.flow.META_OCR_TEXT_REF
 import com.point.core.flow.UrlOpener
 import com.point.core.model.ActionResult
+import com.point.core.model.Feature
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
@@ -26,6 +28,25 @@ class EntityActionsTest {
 
     private fun extractor(vararg entities: Entity) = object : EntityExtractor {
         override suspend fun extract(text: String) = entities.toList()
+    }
+
+    /** An IMAGE whose scratch file is binary, with the recognised text kept as an OCR sidecar (#64). */
+    private fun imageWithSidecar(ocrText: String): PointObject {
+        val img = File.createTempFile("shot", ".png").apply { writeBytes(byteArrayOf(1, 2, 3)); deleteOnExit() }
+        val side = File.createTempFile("ocr", ".txt").apply { writeText(ocrText); deleteOnExit() }
+        return PointObject(
+            "img", "image/png", ScratchRef(img.absolutePath),
+            ObjectState(ObjectKind.IMAGE, setOf(Feature.HAS_PHONE)),
+            metadata = mapOf(META_OCR_TEXT_REF to side.absolutePath),
+        )
+    }
+
+    private class RecordingExtractor(private vararg val entities: Entity) : EntityExtractor {
+        var seen: String? = null
+        override suspend fun extract(text: String): List<Entity> {
+            seen = text
+            return entities.toList()
+        }
     }
 
     private class FakeOpener : UrlOpener {
@@ -96,5 +117,23 @@ class EntityActionsTest {
         val result = CallRealizer(extractor(), FakeOpener()).perform(obj("no phone here"))
         assertTrue(result is ActionResult.Failure)
         assertTrue((result as ActionResult.Failure).recoverable)
+    }
+
+    @Test
+    fun `entity lookup on an image reads the OCR sidecar, not the binary`() = runTest {
+        val recording = RecordingExtractor(Entity(EntityType.PHONE, "+380671234567"))
+        val opener = FakeOpener()
+        val result = CallRealizer(recording, opener).perform(imageWithSidecar("звони +380671234567"))
+
+        assertTrue(result is ActionResult.Done)
+        assertEquals("звони +380671234567", recording.seen)
+        assertEquals("tel:+380671234567", opener.opened)
+    }
+
+    @Test
+    fun `event on an image titles itself from the OCR sidecar`() = runTest {
+        val cal = FakeCalendar()
+        EventRealizer(cal).perform(imageWithSidecar("Встреча с командой\nзавтра 18:00"))
+        assertEquals("Встреча с командой", cal.title)
     }
 }

@@ -32,19 +32,19 @@ class VCardEnricherTest {
     @Test
     fun `flags HAS_VCARD by BEGIN-VCARD head even under a generic mime`() = runTest {
         val vcard = "BEGIN:VCARD\nVERSION:3.0\nFN:Александр Лаврон\nEND:VCARD"
-        val features = enricher.enrich(textObject(vcard, mime = "application/octet-stream"))
+        val features = enricher.enrich(textObject(vcard, mime = "application/octet-stream")).features
         assertTrue(Feature.HAS_VCARD in features)
     }
 
     @Test
     fun `flags HAS_VCARD by mime`() = runTest {
-        val features = enricher.enrich(textObject("BEGIN:VCARD", mime = "text/x-vcard"))
+        val features = enricher.enrich(textObject("BEGIN:VCARD", mime = "text/x-vcard")).features
         assertTrue(Feature.HAS_VCARD in features)
     }
 
     @Test
     fun `no flag for ordinary text`() = runTest {
-        val features = enricher.enrich(textObject("просто заметка про контакты и телефоны"))
+        val features = enricher.enrich(textObject("просто заметка про контакты и телефоны")).features
         assertFalse(Feature.HAS_VCARD in features)
     }
 }

@@ -27,6 +27,9 @@ data class FlowFrame(
     val textPreview: String? = null,
     /** Almost-applicable capabilities (#97): shown dimmed with what each still needs. */
     val latent: List<LatentBubble> = emptyList(),
+    /** Labels of still-running background enrichment («Распознаю текст…») — the visible
+     *  "Point думает" feedback; empty when understanding is complete (#64). */
+    val enriching: List<String> = emptyList(),
 )
 
 /** Immutable UI state rendered by the host. */

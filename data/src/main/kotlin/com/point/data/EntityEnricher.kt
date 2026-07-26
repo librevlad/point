@@ -1,8 +1,11 @@
 package com.point.data
 
+import com.point.core.flow.EnrichCost
 import com.point.core.flow.Enricher
+import com.point.core.flow.EnricherMeta
+import com.point.core.flow.EnrichmentDelta
 import com.point.core.flow.EntityExtractor
-import com.point.core.flow.EntityType
+import com.point.core.flow.asFeature
 import com.point.core.model.Feature
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
@@ -21,23 +24,21 @@ class EntityEnricher @Inject constructor(
     private val extractor: EntityExtractor,
 ) : Enricher {
 
+    override val meta = EnricherMeta(
+        cost = EnrichCost.FAST,
+        mayYield = setOf(
+            Feature.HAS_PHONE, Feature.HAS_EMAIL, Feature.HAS_ADDRESS, Feature.HAS_DATE, Feature.HAS_CARD,
+        ),
+    )
+
     override fun appliesTo(state: ObjectState) = state.kind == ObjectKind.TEXT
 
-    override suspend fun enrich(obj: PointObject): Set<Feature> = withContext(Dispatchers.IO) {
+    override suspend fun enrich(obj: PointObject): EnrichmentDelta = withContext(Dispatchers.IO) {
         val text = runCatching { File(obj.uri.value).takeIf { it.isFile }?.readText().orEmpty() }
             .getOrDefault("")
             .take(MAX_CHARS)
-        if (text.isBlank()) return@withContext emptySet()
-        extractor.extract(text).mapNotNullTo(mutableSetOf()) { feature(it.type) }
-    }
-
-    private fun feature(type: EntityType): Feature? = when (type) {
-        EntityType.PHONE -> Feature.HAS_PHONE
-        EntityType.EMAIL -> Feature.HAS_EMAIL
-        EntityType.ADDRESS -> Feature.HAS_ADDRESS
-        EntityType.DATE_TIME -> Feature.HAS_DATE
-        EntityType.PAYMENT_CARD -> Feature.HAS_CARD
-        else -> null // url handled by TextUrlEnricher; money has no action yet
+        if (text.isBlank()) return@withContext EnrichmentDelta()
+        EnrichmentDelta(extractor.extract(text).mapNotNullTo(mutableSetOf()) { it.type.asFeature() })
     }
 
     private companion object {

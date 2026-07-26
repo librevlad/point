@@ -1,6 +1,9 @@
 package com.point.data
 
+import com.point.core.flow.EnrichCost
 import com.point.core.flow.Enricher
+import com.point.core.flow.EnricherMeta
+import com.point.core.flow.EnrichmentDelta
 import com.point.core.model.Feature
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
@@ -18,13 +21,15 @@ import javax.inject.Inject
  */
 class VCardEnricher @Inject constructor() : Enricher {
 
+    override val meta = EnricherMeta(cost = EnrichCost.INSTANT, mayYield = setOf(Feature.HAS_VCARD))
+
     override fun appliesTo(state: ObjectState) = state.kind == ObjectKind.TEXT
 
-    override suspend fun enrich(obj: PointObject): Set<Feature> = withContext(Dispatchers.IO) {
+    override suspend fun enrich(obj: PointObject): EnrichmentDelta = withContext(Dispatchers.IO) {
         val byMime = obj.mime.contains("vcard", ignoreCase = true)
         val byHead = runCatching { readHead(obj.uri.value) }
             .getOrDefault("").trimStart().startsWith("BEGIN:VCARD", ignoreCase = true)
-        if (byMime || byHead) setOf(Feature.HAS_VCARD) else emptySet()
+        if (byMime || byHead) EnrichmentDelta(setOf(Feature.HAS_VCARD)) else EnrichmentDelta()
     }
 
     private fun readHead(path: String, limit: Int = 256): String {

@@ -36,7 +36,7 @@ class EntityEnricherTest {
                 Entity(EntityType.MONEY, "$5"), // not yet actionable → ignored
             ),
         )
-        val features = enricher.enrich(obj("call +380671234567 a@b.com"))
+        val features = enricher.enrich(obj("call +380671234567 a@b.com")).features
         assertTrue(Feature.HAS_PHONE in features)
         assertTrue(Feature.HAS_EMAIL in features)
         assertEquals(2, features.size)
@@ -51,7 +51,7 @@ class EntityEnricherTest {
                 Entity(EntityType.PAYMENT_CARD, "4111 1111 1111 1111"),
             ),
         )
-        val features = enricher.enrich(obj("встреча завтра 18:00 ул. Крещатик, 12 карта 4111111111111111"))
+        val features = enricher.enrich(obj("встреча завтра 18:00 ул. Крещатик, 12 карта 4111111111111111")).features
         assertTrue(Feature.HAS_ADDRESS in features)
         assertTrue(Feature.HAS_DATE in features)
         assertTrue(Feature.HAS_CARD in features)
@@ -68,6 +68,6 @@ class EntityEnricherTest {
     @Test
     fun `blank text yields no features and never calls the extractor`() = runTest {
         val enricher = EntityEnricher(extractor(Entity(EntityType.PHONE, "x")))
-        assertTrue(enricher.enrich(obj("   ")).isEmpty())
+        assertTrue(enricher.enrich(obj("   ")).features.isEmpty())
     }
 }

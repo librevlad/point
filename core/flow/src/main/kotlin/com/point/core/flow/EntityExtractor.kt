@@ -1,5 +1,7 @@
 package com.point.core.flow
 
+import com.point.core.model.Feature
+
 /** An actionable entity found in text. [value] is the raw form to act on (a phone number, email, …). */
 data class Entity(val type: EntityType, val value: String)
 
@@ -13,4 +15,15 @@ enum class EntityType { PHONE, EMAIL, URL, ADDRESS, DATE_TIME, PAYMENT_CARD, MON
  */
 interface EntityExtractor {
     suspend fun extract(text: String): List<Entity>
+}
+
+/** The one entity→feature mapping, shared by every enricher that flags entities.
+ *  URL is deliberately absent (flagged by the head-peek/regex path); MONEY has no action yet. */
+fun EntityType.asFeature(): Feature? = when (this) {
+    EntityType.PHONE -> Feature.HAS_PHONE
+    EntityType.EMAIL -> Feature.HAS_EMAIL
+    EntityType.ADDRESS -> Feature.HAS_ADDRESS
+    EntityType.DATE_TIME -> Feature.HAS_DATE
+    EntityType.PAYMENT_CARD -> Feature.HAS_CARD
+    EntityType.URL, EntityType.MONEY -> null
 }

@@ -42,17 +42,18 @@ private fun StringBuilder.appendSection(title: String, items: List<String>) {
 }
 
 /**
- * text with entities → a clean list of all of them (all phones, emails, links, addresses), deduped
- * and grouped. Lit up once enrichment finds ≥1 entity; the result is a TEXT object → copy / share.
+ * An object with entities → a clean list of all of them (all phones, emails, links, addresses),
+ * deduped and grouped. Lit up once enrichment finds ≥1 entity — on a TEXT, or on a screenshot the
+ * OCR enricher read (#64). The result is a TEXT object → copy / share.
  */
 class ExtractAllCapability @Inject constructor() : Capability {
     override val id = ID
     override val icon = "list"
     override val meta = CapabilityMeta(priority = 30)
     override fun label(state: ObjectState) = "Собрать данные"
-    override fun accepts(state: ObjectState) = state.kind == ObjectKind.TEXT &&
-        (state.has(Feature.HAS_PHONE) || state.has(Feature.HAS_EMAIL) ||
-            state.has(Feature.HAS_URL) || state.has(Feature.HAS_ADDRESS))
+    override fun accepts(state: ObjectState) =
+        state.has(Feature.HAS_PHONE) || state.has(Feature.HAS_EMAIL) ||
+            state.has(Feature.HAS_URL) || state.has(Feature.HAS_ADDRESS)
     override fun produces(state: ObjectState) = ObjectState(ObjectKind.TEXT)
     override fun intents(state: ObjectState) = setOf(Intent.PREPARE)
 
@@ -68,7 +69,7 @@ class ExtractAllRealizer @Inject constructor(
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
             runCatching {
-                val text = File(input.uri.value).takeIf { it.isFile }?.readText().orEmpty()
+                val text = entitySourceText(input)
                 val list = formatEntities(extractor.extract(text))
                 if (list.isBlank()) {
                     ActionResult.Failure("Не удалось собрать данные", recoverable = true)

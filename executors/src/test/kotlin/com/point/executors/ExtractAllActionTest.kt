@@ -36,10 +36,11 @@ class ExtractAllActionTest {
     }
 
     @Test
-    fun `accepts a text that has entities, not a bare text or an image`() {
+    fun `accepts any object with entities — a text or an OCR-enriched image`() {
         val cap = ExtractAllCapability()
         assertTrue(cap.accepts(ObjectState(ObjectKind.TEXT, setOf(Feature.HAS_PHONE))))
         assertFalse(cap.accepts(ObjectState(ObjectKind.TEXT))) // no entities → not offered
-        assertFalse(cap.accepts(ObjectState(ObjectKind.IMAGE, setOf(Feature.HAS_PHONE))))
+        // A screenshot whose OCR enrichment flagged entities collects them too (#64).
+        assertTrue(cap.accepts(ObjectState(ObjectKind.IMAGE, setOf(Feature.HAS_PHONE))))
     }
 }
