@@ -109,11 +109,12 @@ fun FirstScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        ObjectHeader(obj)
+        val facts = understoodFacts(obj)
+        ObjectHeader(obj, thinking = enriching.isNotEmpty(), understood = facts.isNotEmpty())
 
         // «Point понял» (#114): the understanding card — facts land line by line as
         // enrichment delivers them (#64), with still-running work inside the same card.
-        UnderstoodSection(facts = understoodFacts(obj), enriching = enriching)
+        UnderstoodSection(facts = facts, enriching = enriching)
 
         Spacer(Modifier.height(32.dp))
 
@@ -368,22 +369,32 @@ private fun TextPreview(text: String, markdown: Boolean = false) {
 }
 
 @Composable
-private fun ObjectHeader(obj: PointObject) {
+private fun ObjectHeader(obj: PointObject, thinking: Boolean = false, understood: Boolean = false) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Surface(
+        // M1 (MOTION.md): the object breathes with its kind's physics; a light ring
+        // pulses while enrichment thinks; the shadow warms into an aura once understood.
+        AliveSurface(
+            kind = obj.state.kind,
+            thinking = thinking,
+            understood = understood,
             shape = RoundedCornerShape(26.dp),
-            color = MaterialTheme.colorScheme.secondary,
-            shadowElevation = 14.dp,
-            modifier = Modifier.size(96.dp),
+            size = 96.dp,
         ) {
-            Icon(
-                imageVector = kindIcon(obj.state.kind),
-                contentDescription = obj.state.kind.name,
-                tint = MaterialTheme.colorScheme.onSecondary,
-                modifier = Modifier
-                    .padding(26.dp)
-                    .fillMaxSize(),
-            )
+            Surface(
+                shape = RoundedCornerShape(26.dp),
+                color = MaterialTheme.colorScheme.secondary,
+                shadowElevation = 0.dp,
+                modifier = Modifier.size(96.dp),
+            ) {
+                Icon(
+                    imageVector = kindIcon(obj.state.kind),
+                    contentDescription = obj.state.kind.name,
+                    tint = MaterialTheme.colorScheme.onSecondary,
+                    modifier = Modifier
+                        .padding(26.dp)
+                        .fillMaxSize(),
+                )
+            }
         }
         Spacer(Modifier.height(14.dp))
         Text(
