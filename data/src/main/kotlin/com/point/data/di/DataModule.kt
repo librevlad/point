@@ -56,6 +56,7 @@ import com.point.data.GeminiLlmClient
 import com.point.data.HttpJson
 import com.point.data.UrlConnectionHttpJson
 import com.point.data.MediaStoreExporter
+import com.point.data.MetadataEntityEnricher
 import com.point.data.MlKitBackgroundRemover
 import com.point.data.OcrEnricher
 import com.point.data.OoxmlDocxWriter
@@ -201,6 +202,9 @@ abstract class DataModule {
 
     @Binds @IntoSet
     abstract fun ocrEnricher(e: OcrEnricher): Enricher
+
+    @Binds @IntoSet
+    abstract fun metadataEntityEnricher(e: MetadataEntityEnricher): Enricher
 
     @Binds @IntoSet
     abstract fun zipImagesEnricher(e: ZipImagesEnricher): Enricher

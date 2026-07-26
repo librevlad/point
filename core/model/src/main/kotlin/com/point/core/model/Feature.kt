@@ -25,6 +25,10 @@ enum class Feature {
     /** The image contains a QR code — offer to read it (found by async peek). */
     HAS_QR,
 
+    /** An OCR sidecar with real recognised text exists on this IMAGE (#64) — the gate for
+     *  text-hungry actions (deep-understand) on a picture. Set by the OCR enricher. */
+    HAS_TEXT,
+
     /** Size above the async-enrichment threshold (e.g. a 200 MB zip). */
     LARGE,
 }

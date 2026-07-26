@@ -39,7 +39,7 @@ class OcrEnricher @Inject constructor(
     override val meta = EnricherMeta(
         cost = EnrichCost.SLOW,
         mayYield = setOf(
-            Feature.HAS_PHONE, Feature.HAS_EMAIL, Feature.HAS_ADDRESS,
+            Feature.HAS_TEXT, Feature.HAS_PHONE, Feature.HAS_EMAIL, Feature.HAS_ADDRESS,
             Feature.HAS_DATE, Feature.HAS_CARD, Feature.HAS_URL,
         ),
         label = "Распознаю текст…",
@@ -56,7 +56,8 @@ class OcrEnricher @Inject constructor(
         val ref = store.newScratchFile("txt")
         File(ref.value).writeText(text)
         EnrichmentDelta(
-            features = entities.features + if (url != null) setOf(Feature.HAS_URL) else emptySet(),
+            features = entities.features + Feature.HAS_TEXT +
+                if (url != null) setOf(Feature.HAS_URL) else emptySet(),
             metadata = buildMap {
                 putAll(entities.metadata)
                 if (url != null) putIfAbsent(META_ENTITY_PREFIX + "url", url)
