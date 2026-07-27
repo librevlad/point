@@ -177,7 +177,7 @@ class FlowViewModelTest {
                 viaCapabilityId = "ocr", viaTitle = "Распознать текст",
             ),
         )
-        val vm = vm(); advanceUntilIdle()
+        val vm = vm(); vm.restoreJourney(); advanceUntilIdle()
 
         assertEquals(ObjectKind.TEXT, vm.ui.value.frame?.obj?.state?.kind) // back on the same step
         assertEquals(2, vm.ui.value.path.size)                             // the whole journey
@@ -185,12 +185,20 @@ class FlowViewModelTest {
         assertEquals("+380671234567", vm.ui.value.path.let { snapshot.frames.first().metadata["entity.phone"] })
     }
 
+    @Test fun `a snapshot does not auto-open without an explicit restore — launcher lands on Home`() = runTest(dispatcher) {
+        snapshot.frames = listOf(
+            com.point.core.model.FlowSnapshotFrame("root", ObjectKind.IMAGE, "image/png", tempFile("img")),
+        )
+        val vm = vm(); advanceUntilIdle() // HomeActivity path: never calls restoreJourney()
+        assertNull(vm.ui.value.frame)     // Home, not the restored object
+    }
+
     @Test fun `a frame whose file died is skipped on restore`() = runTest(dispatcher) {
         snapshot.frames = listOf(
             com.point.core.model.FlowSnapshotFrame("root", ObjectKind.IMAGE, "image/png", tempFile("img")),
             com.point.core.model.FlowSnapshotFrame("gone", ObjectKind.TEXT, "text/plain", "/nowhere/gone.txt"),
         )
-        val vm = vm(); advanceUntilIdle()
+        val vm = vm(); vm.restoreJourney(); advanceUntilIdle()
 
         assertEquals(1, vm.ui.value.path.size)
         assertEquals(ObjectKind.IMAGE, vm.ui.value.frame?.obj?.state?.kind)
@@ -201,7 +209,8 @@ class FlowViewModelTest {
             com.point.core.model.FlowSnapshotFrame("old", ObjectKind.TEXT, "text/plain", tempFile("old")),
         )
         val vm = vm()
-        vm.onShared("uri", "image/png") // arrives before the async restore lands
+        vm.onShared("uri", "image/png") // a fresh share sets the guard...
+        vm.restoreJourney()             // ...so the opt-in restore self-skips
         advanceUntilIdle()
 
         assertEquals(ObjectKind.IMAGE, vm.ui.value.frame?.obj?.state?.kind)

@@ -130,7 +130,6 @@ class FlowViewModel @Inject constructor(
     init {
         viewModelScope.launch { loadFavorites() }
         viewModelScope.launch { _crashReport.value = runCatching { crashLog.pending() }.getOrNull() }
-        restoreJourney()
     }
 
     /** Real launcher icon for an app-capability bubble; null → stock glyph (#66). */
@@ -145,8 +144,10 @@ class FlowViewModel @Inject constructor(
 
     /** #7: re-materialise the flow after process death. Scratch files survive (clear()
      *  runs only at flow end), so the journey resumes on the same object and step —
-     *  features re-derive instantly from the kept metadata via enrichment. */
-    private fun restoreJourney() {
+     *  features re-derive instantly from the kept metadata via enrichment. Opt-in: only
+     *  ShareActivity calls this (a killed mid-share resumes), so the launcher icon
+     *  (HomeActivity) always lands on Home — the last object stays in «Недавнее» to re-open. */
+    fun restoreJourney() {
         viewModelScope.launch {
             val frames = runCatching { flowSnapshot.load() }.getOrDefault(emptyList())
             if (frames.isEmpty() || freshShareArrived || stack.isNotEmpty()) return@launch
