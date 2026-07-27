@@ -167,7 +167,9 @@ class EventCapability @Inject constructor() : Capability {
     override val icon = "event"
     override val meta = CapabilityMeta(priority = 16)
     override fun label(state: ObjectState) = "Создать событие"
-    override fun accepts(state: ObjectState) = state.has(Feature.HAS_DATE)
+    // IS_MEETING (#89): a recognised meeting deserves the bubble even when the date
+    // parser found nothing — the calendar sheet lets the user pick the time.
+    override fun accepts(state: ObjectState) = state.has(Feature.HAS_DATE) || state.has(Feature.IS_MEETING)
     override fun produces(state: ObjectState) = state
     override fun intents(state: ObjectState) = setOf(Intent.OPEN)
 
