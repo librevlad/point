@@ -22,6 +22,8 @@ class PcServerTest {
 
     private fun b64(s: String) = Base64.getEncoder().encodeToString(s.toByteArray())
 
+    private val ranActions = mutableListOf<Pair<String, InboxItem>>()
+
     private fun server(accept: Boolean = true, onReceived: (InboxItem) -> Unit = {}): PcServer =
         PcServer(
             inbox = Inbox(tmp.root),
@@ -29,6 +31,11 @@ class PcServerTest {
             pcName = "TEST-PC",
             pairGate = { accept },
             onReceived = onReceived,
+            remoteActions = listOf(
+                com.point.core.flow.PcRemoteAction("pc-open", "Открыть на компьютере"),
+                com.point.core.flow.PcRemoteAction("pc-copy", "В буфер компьютера"),
+            ),
+            runAction = { id, item -> ranActions += id to item },
         ).also { it.start(preferredPort = 0) }
 
     private fun post(url: String, headers: Map<String, String>, body: ByteArray): Pair<Int, String> {
@@ -127,5 +134,57 @@ class PcServerTest {
         } finally {
             s.stop()
         }
+    }
+
+    // --- Remote capabilities (#80): the PC advertises and runs its actions ---
+
+    @Test
+    fun `caps are served to a valid token and refused otherwise`() {
+        val s = server()
+        try {
+            val ok = URL("http://127.0.0.1:${s.port}/caps").openConnection() as HttpURLConnection
+            ok.setRequestProperty("X-Point-Token", "secret-token")
+            assertEquals(200, ok.responseCode)
+            val caps = com.point.core.flow.decodePcCaps(ok.inputStream.bufferedReader().readText())
+            assertEquals(listOf("pc-open", "pc-copy"), caps.map { it.id })
+            ok.disconnect()
+
+            val bad = URL("http://127.0.0.1:${s.port}/caps").openConnection() as HttpURLConnection
+            bad.setRequestProperty("X-Point-Token", "wrong")
+            assertEquals(401, bad.responseCode)
+            bad.disconnect()
+        } finally { s.stop() }
+    }
+
+    @Test
+    fun `a requested action runs after the receive, an unknown one is ignored`() {
+        val s = server()
+        try {
+            val (code, _) = post(
+                "http://127.0.0.1:${s.port}/receive",
+                mapOf(
+                    "X-Point-Token" to "secret-token",
+                    "X-Point-Name" to b64("заметка.txt"),
+                    "X-Point-Mime" to "text/plain",
+                    "X-Point-Action" to b64("pc-copy"),
+                ),
+                "привет".toByteArray(),
+            )
+            assertEquals(200, code)
+            assertEquals(listOf("pc-copy"), ranActions.map { it.first })
+
+            val (code2, _) = post(
+                "http://127.0.0.1:${s.port}/receive",
+                mapOf(
+                    "X-Point-Token" to "secret-token",
+                    "X-Point-Name" to b64("ещё.txt"),
+                    "X-Point-Mime" to "text/plain",
+                    "X-Point-Action" to b64("no-such-action"),
+                ),
+                "тело".toByteArray(),
+            )
+            assertEquals(200, code2) // unknown action never fails the receive
+            assertEquals(1, ranActions.size)
+        } finally { s.stop() }
     }
 }

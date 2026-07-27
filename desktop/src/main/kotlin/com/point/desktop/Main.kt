@@ -66,6 +66,14 @@ fun main() {
         pcName = config.name,
         pairGate = state::askPair,
         onReceived = state::onReceived,
+        // #80: advertise the actions the phone may run here. Save-as stays local-only —
+        // it opens a target dialog, which nobody expects to pop from a remote tap.
+        remoteActions = listOf(
+            com.point.core.flow.PcRemoteAction("pc-open", "Открыть на компьютере"),
+            com.point.core.flow.PcRemoteAction("pc-copy", "В буфер компьютера"),
+            com.point.core.flow.PcRemoteAction("pc-reveal", "Показать в папке на ПК"),
+        ),
+        runAction = state::runRemoteAction,
     )
     server.start(preferredPort = config.port)
     // Slice C: let phones discover this PC by themselves (best-effort mDNS).

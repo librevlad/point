@@ -84,9 +84,18 @@ class FlowViewModelTest {
     private fun vm(
         caps: Map<CapabilityId, Set<Intent>> = mapOf(CapabilityId("a") to setOf(Intent.PREPARE)),
         cloud: Set<CapabilityId> = emptySet(),
-    ) = FlowViewModel(store, FakeRegistry(caps, cloud), resolver, enrichment, history, favorites, usage, chosenApps, userKeys, journal, consent, appLauncher, FakePdfRasterizer(), sensory, sensorySettings, snapshot, crashLog, dispatcher, pins, AppIconResolver { null }, FakePcPairings(), FakePcTransport(), com.point.core.flow.PcDiscovery { kotlinx.coroutines.flow.flowOf(emptyList()) }, basket)
+    ) = FlowViewModel(store, FakeRegistry(caps, cloud), resolver, enrichment, history, favorites, usage, chosenApps, userKeys, journal, consent, appLauncher, FakePdfRasterizer(), sensory, sensorySettings, snapshot, crashLog, dispatcher, pins, AppIconResolver { null }, FakePcPairings(), FakePcTransport(), com.point.core.flow.PcDiscovery { kotlinx.coroutines.flow.flowOf(emptyList()) }, basket, pcCaps)
 
     private val basket = FakeBasket()
+    private val pcCaps = FakePcCaps()
+
+    private class FakePcCaps : com.point.core.flow.PcCapsStore {
+        var saved: List<com.point.core.flow.PcRemoteAction>? = null
+        var cleared = false
+        override fun all(): List<com.point.core.flow.PcRemoteAction> = saved.orEmpty()
+        override suspend fun save(caps: List<com.point.core.flow.PcRemoteAction>) { saved = caps }
+        override suspend fun clear() { cleared = true; saved = null }
+    }
 
     private class FakeBasket : com.point.core.flow.Basket {
         val added = mutableListOf<String>()
@@ -650,6 +659,15 @@ class FlowViewModelTest {
         assertNull(vm.ui.value.frame)
     }
 
+    @Test fun `pairing caches the PC's advertised actions, unpair drops them (#80)`() = runTest(dispatcher) {
+        val vm = vm()
+        vm.pairPc("10.0.2.2", 8391); advanceUntilIdle()
+        assertEquals(listOf("pc-open"), pcCaps.saved?.map { it.id })
+
+        vm.unpairPc(); advanceUntilIdle()
+        assertTrue(pcCaps.cleared)
+    }
+
     @Test fun `the basket opens as one collection flow and its count reaches Home (#96)`() = runTest(dispatcher) {
         basket.added += listOf("/b/1-a.txt", "/b/2-b.jpg")
         val vm = vm()
@@ -1065,13 +1083,17 @@ private class FakePcPairings : com.point.core.flow.PcPairings {
 }
 
 private class FakePcTransport : com.point.core.flow.PcTransport {
-    override suspend fun pair(host: String, port: Int, deviceName: String): com.point.core.flow.PcPairing? = null
+    override suspend fun pair(host: String, port: Int, deviceName: String): com.point.core.flow.PcPairing? =
+        com.point.core.flow.PcPairing(host, port, "tok")
     override suspend fun send(
         pairing: com.point.core.flow.PcPairing,
         obj: com.point.core.model.PointObject,
         fileName: String,
         meta: Map<String, String>,
+        action: String?,
     ): com.point.core.flow.PcSendOutcome = com.point.core.flow.PcSendOutcome.Sent
+    override suspend fun fetchCaps(pairing: com.point.core.flow.PcPairing): List<com.point.core.flow.PcRemoteAction>? =
+        listOf(com.point.core.flow.PcRemoteAction("pc-open", "Открыть на компьютере"))
 }
 
 private class FakeChosenApps : com.point.core.flow.ChosenApps {

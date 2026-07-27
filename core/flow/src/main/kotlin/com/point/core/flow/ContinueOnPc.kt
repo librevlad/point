@@ -50,3 +50,19 @@ fun decodePcMeta(encoded: String): Map<String, String> =
             val i = line.indexOf('=')
             line.substring(0, i) to line.substring(i + 1)
         }
+
+/** One action the paired PC can run on a received object (#80). */
+data class PcRemoteAction(val id: String, val label: String)
+
+/** `id=label` per line — the same dumb-simple line codec as [encodePcMeta]. */
+fun encodePcCaps(caps: List<PcRemoteAction>): String =
+    caps.joinToString("\n") { "${it.id}=${it.label.replace('\n', ' ').replace('\r', ' ')}" }
+
+fun decodePcCaps(encoded: String): List<PcRemoteAction> =
+    encoded.lineSequence().mapNotNull { line ->
+        val eq = line.indexOf('=')
+        if (eq <= 0) return@mapNotNull null
+        val id = line.substring(0, eq).trim()
+        val label = line.substring(eq + 1).trim()
+        if (id.isEmpty() || label.isEmpty()) null else PcRemoteAction(id, label)
+    }.toList()
