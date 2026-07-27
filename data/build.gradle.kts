@@ -27,9 +27,11 @@ android {
             "\"${localProps.getProperty(key, default)}\""
 
         buildConfigField("String", "GEMINI_API_KEY", prop("GEMINI_API_KEY"))
-        // Gemini models tried in order (aliases track a serving free model; the pinned
-        // gemini-2.0-flash 429s with zero free quota, so it is NOT the default).
-        buildConfigField("String", "GEMINI_MODELS", prop("GEMINI_MODELS", "gemini-flash-latest,gemini-flash-lite-latest"))
+        // Gemini models tried in order. Lead with the STRONG model (gemini-pro-latest) so the
+        // default is best-quality when available — flash garbled dense/rotated tables on real
+        // photos; Pro reads them. The client falls through to flash/flash-lite on any failure
+        // (no Pro access, quota), so "strong by default IF available" costs nothing when it isn't.
+        buildConfigField("String", "GEMINI_MODELS", prop("GEMINI_MODELS", "gemini-pro-latest,gemini-flash-latest,gemini-flash-lite-latest"))
         // Claude (Anthropic) — fallback after Gemini. Native Messages API.
         buildConfigField("String", "ANTHROPIC_API_KEY", prop("ANTHROPIC_API_KEY"))
         buildConfigField("String", "ANTHROPIC_BASE_URL", prop("ANTHROPIC_BASE_URL", "https://api.anthropic.com"))

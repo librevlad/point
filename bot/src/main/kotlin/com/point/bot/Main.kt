@@ -19,7 +19,7 @@ fun main() = runBlocking {
         "TELEGRAM_BOT_TOKEN не задан в local.properties (создайте бота у @BotFather)"
     }
     val geminiKey = System.getProperty("GEMINI_API_KEY").orEmpty()
-    val models = System.getProperty("GEMINI_MODELS", "gemini-flash-latest,gemini-flash-lite-latest")
+    val models = System.getProperty("GEMINI_MODELS", "gemini-pro-latest,gemini-flash-latest,gemini-flash-lite-latest")
         .split(",").map { it.trim() }.filter { it.isNotEmpty() }
 
     val scratch = File(System.getProperty("java.io.tmpdir"), "point-bot").apply { mkdirs() }
