@@ -26,6 +26,15 @@ interface PcTransport {
 
     /** The PC's advertised remote actions (#80), or null when it is unreachable. */
     suspend fun fetchCaps(pairing: PcPairing): List<PcRemoteAction>?
+
+    /** The PC's outbox listing (#161), or null when it is unreachable. */
+    suspend fun fetchOutbox(pairing: PcPairing): List<PcOutboxEntry>?
+
+    /** Stream one outbox entry into [targetPath]; false on any failure. */
+    suspend fun downloadOutboxFile(pairing: PcPairing, id: Int, targetPath: String): Boolean
+
+    /** Confirm the entry landed — the PC drops it from the outbox. */
+    suspend fun ackOutbox(pairing: PcPairing, id: Int)
 }
 
 /** Cached remote actions of the paired PC — warm sync read for capability synthesis

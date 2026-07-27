@@ -68,4 +68,23 @@ class ContinueOnPcTest {
         val decoded = decodePcCaps("pc-open=Открыть\nмусор без разделителя\n=безид\npc-copy=Копировать")
         assertEquals(listOf(PcRemoteAction("pc-open", "Открыть"), PcRemoteAction("pc-copy", "Копировать")), decoded)
     }
+
+    // --- Liquid pull (#161): the PC's outbox listing travels as id<TAB>b64(meta) lines ---
+
+    @Test
+    fun `outbox codec roundtrips ids and metadata`() {
+        val entries = listOf(
+            PcOutboxEntry(1, mapOf("name" to "чек.jpg", "mime" to "image/jpeg", "entity.phone" to "+380671234567")),
+            PcOutboxEntry(3, mapOf("name" to "заметка.txt", "mime" to "text/plain")),
+        )
+        assertEquals(entries, decodePcOutbox(encodePcOutbox(entries)))
+    }
+
+    @Test
+    fun `outbox codec survives garbage and empty input`() {
+        assertEquals(emptyList<PcOutboxEntry>(), decodePcOutbox(""))
+        assertEquals(emptyList<PcOutboxEntry>(), decodePcOutbox("мусор\nещё мусор"))
+        val one = decodePcOutbox("не-число\tAAAA\n" + encodePcOutbox(listOf(PcOutboxEntry(7, mapOf("name" to "a")))))
+        assertEquals(listOf(7), one.map { it.id })
+    }
 }

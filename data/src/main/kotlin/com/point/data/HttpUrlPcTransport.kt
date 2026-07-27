@@ -1,7 +1,9 @@
 package com.point.data
 
+import com.point.core.flow.PcOutboxEntry
 import com.point.core.flow.PcPairing
 import com.point.core.flow.PcRemoteAction
+import com.point.core.flow.decodePcOutbox
 import com.point.core.flow.PcSendOutcome
 import com.point.core.flow.decodePcCaps
 import com.point.core.flow.PcTransport
@@ -88,6 +90,60 @@ class HttpUrlPcTransport @Inject constructor() : PcTransport {
                 c.disconnect()
                 caps
             }.getOrNull()
+        }
+
+    override suspend fun fetchOutbox(pairing: PcPairing): List<PcOutboxEntry>? =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val c = URL("http://${pairing.host}:${pairing.port}/outbox").openConnection() as HttpURLConnection
+                c.connectTimeout = 3_000
+                c.readTimeout = 5_000
+                c.setRequestProperty("X-Point-Token", pairing.token)
+                val entries = if (c.responseCode == 200) {
+                    decodePcOutbox(c.inputStream.bufferedReader().readText())
+                } else {
+                    null
+                }
+                c.disconnect()
+                entries
+            }.getOrNull()
+        }
+
+    override suspend fun downloadOutboxFile(pairing: PcPairing, id: Int, targetPath: String): Boolean =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val c = URL("http://${pairing.host}:${pairing.port}/outbox/file").openConnection() as HttpURLConnection
+                c.connectTimeout = 3_000
+                c.readTimeout = 60_000 // a big photo over slow Wi-Fi deserves patience
+                c.setRequestProperty("X-Point-Token", pairing.token)
+                c.setRequestProperty("X-Point-Id", id.toString())
+                if (c.responseCode != 200) {
+                    c.disconnect()
+                    return@runCatching false
+                }
+                val target = File(targetPath).apply { parentFile?.mkdirs() }
+                val part = File(target.absolutePath + ".part")
+                c.inputStream.use { input -> part.outputStream().use { input.copyTo(it) } }
+                c.disconnect()
+                target.delete()
+                part.renameTo(target)
+            }.getOrDefault(false)
+        }
+
+    override suspend fun ackOutbox(pairing: PcPairing, id: Int): Unit =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val c = URL("http://${pairing.host}:${pairing.port}/outbox/ack").openConnection() as HttpURLConnection
+                c.requestMethod = "POST"
+                c.connectTimeout = 3_000
+                c.readTimeout = 5_000
+                c.setRequestProperty("X-Point-Token", pairing.token)
+                c.setRequestProperty("X-Point-Id", id.toString())
+                c.doOutput = true
+                c.outputStream.use { it.write(ByteArray(0)) }
+                c.responseCode
+                c.disconnect()
+            }
         }
 
     private fun b64(s: String): String = Base64.getEncoder().encodeToString(s.toByteArray())

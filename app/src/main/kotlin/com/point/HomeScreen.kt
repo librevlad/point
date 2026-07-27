@@ -70,6 +70,9 @@ fun HomeScreen(
     basketCount: Int = 0,
     onOpenBasket: () -> Unit = {},
     onClearBasket: () -> Unit = {},
+    fromPcCount: Int = 0,
+    onPullFromPc: () -> Unit = {},
+    onHideFromPc: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Column(modifier.fillMaxSize()) {
@@ -100,6 +103,10 @@ fun HomeScreen(
 
         if (clipboard != null) {
             ClipboardBanner(clipboard, onUse = { onUseClipboard(clipboard) }, onDismiss = onDismissClipboard)
+        }
+
+        if (fromPcCount > 0) {
+            FromPcBanner(fromPcCount, onPull = onPullFromPc, onHide = onHideFromPc)
         }
 
         if (basketCount > 0) {
@@ -150,6 +157,44 @@ fun HomeScreen(
  * A dismissible suggestion when Point opens with actionable text in the clipboard (#72) — the
  * trigger that reaches messengers (copy in the app → open Point → act). Read foreground-only.
  */
+/** Liquid pull (#161): the paired PC queued objects for this phone — one tap brings
+ *  them here and opens the flow; the cross hides the offer without touching the queue. */
+@Composable
+private fun FromPcBanner(count: Int, onPull: () -> Unit, onHide: () -> Unit) {
+    Surface(
+        onClick = onPull,
+        color = MaterialTheme.colorScheme.primaryContainer,
+        shape = MaterialTheme.shapes.large,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+    ) {
+        Row(
+            modifier = Modifier.padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    "С компьютера: $count",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+                Text(
+                    "Забрать и открыть здесь",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+            }
+            IconButton(onClick = onHide) {
+                Icon(
+                    imageVector = Icons.Filled.Close,
+                    contentDescription = "Скрыть",
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+            }
+        }
+    }
+}
+
 /** The progressive object (#96): the pile keeps growing across flows; one tap opens
  *  it as a COLLECTION whose actions apply to everything together. */
 @Composable

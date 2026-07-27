@@ -140,3 +140,24 @@ class PcDownloadRealizer(private val downloader: VideoDownloader) : Realizer {
         }
     }
 }
+
+/** «На телефон» (#161): drop the object into the outbox — the phone pulls it from
+ *  its Home banner. The liquid половина ПК→телефон. */
+class PcToPhoneCapability : Capability {
+    override val id = CapabilityId("pc-to-phone")
+    override val icon = "pc"
+    override val meta = CapabilityMeta(priority = 15)
+    override fun label(state: ObjectState) = "На телефон"
+    override fun accepts(state: ObjectState) = true
+    override fun produces(state: ObjectState) = state
+}
+
+class PcToPhoneRealizer(private val outbox: Outbox) : Realizer {
+    override val capabilityId = CapabilityId("pc-to-phone")
+
+    override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
+        runCatching {
+            outbox.add(input)
+            ActionResult.Done("Заберите на телефоне — плашка на главном экране")
+        }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось положить в очередь", recoverable = true) }
+}
