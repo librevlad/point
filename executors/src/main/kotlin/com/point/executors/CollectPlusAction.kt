@@ -30,12 +30,19 @@ private val COLLECT_CATEGORIES = linkedMapOf(
     "DATE" to "Даты",
     "AMOUNT" to "Суммы",
     "PRODUCT" to "Товары",
+    "MODEL" to "Модели",
+    "SERIAL" to "Серийные номера",
+    "CODE" to "Коды",
+    "ID" to "Идентификаторы",
+    "ACCOUNT" to "Счета",
 )
 
 internal const val COLLECT_PLUS_PROMPT =
     "Собери из текста ВСЕ полезные данные и сгруппируй. Отвечай ТОЛЬКО строками вида КАТЕГОРИЯ=значение, " +
         "по одной на строку, без пояснений. Разрешённые категории: NAME (люди), ORG (организации), " +
-        "PHONE, EMAIL, URL, ADDRESS, DATE, AMOUNT (суммы/числа с единицами), PRODUCT (товары/услуги). " +
+        "PHONE, EMAIL, URL, ADDRESS, DATE, AMOUNT (суммы/числа с единицами), PRODUCT (товары/услуги), " +
+        "MODEL (модели устройств), SERIAL (серийные номера), CODE (артикулы/номера моделей/коды), " +
+        "ID (идентификаторы), ACCOUNT (номера счетов/карт). " +
         "Извлекай значения ДОСЛОВНО, ничего не выдумывай. Если ничего нет — ответь ровно NONE.\n\nТекст:\n"
 
 /** Parse the strict contract into ordered, deduped category → values. */

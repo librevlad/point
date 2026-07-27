@@ -34,9 +34,11 @@ class MlKitEntityExtractor : EntityExtractor {
             }
             client.downloadModelIfNeeded().await()
             val params = EntityExtractionParams.Builder(text).build()
-            client.annotate(params).await().flatMap { annotation: EntityAnnotation ->
+            val raw = client.annotate(params).await().flatMap { annotation: EntityAnnotation ->
                 annotation.entities.mapNotNull { map(it, annotation.annotatedText) }
             }
+            // Real-device feedback: drop implausible phones/addresses from noisy OCR text.
+            com.point.core.flow.plausibleEntities(raw)
         }.getOrDefault(emptyList())
     }
 

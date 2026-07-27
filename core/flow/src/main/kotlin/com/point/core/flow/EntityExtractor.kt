@@ -17,6 +17,23 @@ interface EntityExtractor {
     suspend fun extract(text: String): List<Entity>
 }
 
+/**
+ * Drop entities ML Kit over-eagerly flags on OCR'd documents (real-device feedback):
+ * a waybill/account digit-run masquerading as a PHONE, a bare «г.» as an ADDRESS. Other
+ * kinds pass through untouched. Applied at the extractor choke point so both the feature
+ * flags and the realizers (which re-extract) see only plausible hits.
+ */
+fun plausibleEntities(entities: List<Entity>): List<Entity> = entities.filter { it.isPlausible() }
+
+fun Entity.isPlausible(): Boolean = when (type) {
+    // A real phone is 10–13 significant digits — shorter is a fragment, 14+ is a
+    // waybill/account number, not something you dial.
+    EntityType.PHONE -> value.count(Char::isDigit) in 10..13
+    // A real address carries a name or number, not just an abbreviation like «г.»/«ул.».
+    EntityType.ADDRESS -> value.trim().length >= 5 && Regex("""\p{L}{3,}""").containsMatchIn(value)
+    else -> true
+}
+
 /** The one entity→feature mapping, shared by every enricher that flags entities.
  *  URL is deliberately absent (flagged by the head-peek/regex path); MONEY has no action yet. */
 fun EntityType.asFeature(): Feature? = when (this) {
