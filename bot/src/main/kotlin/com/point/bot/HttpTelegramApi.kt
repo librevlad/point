@@ -14,10 +14,14 @@ import org.json.JSONObject
  * the desktop's hand-rolled http. Long-polling ([getUpdates]) means no webhook/server:
  * the bot runs from anywhere, even behind NAT, on the owner's PC.
  */
-class HttpTelegramApi(private val token: String) : TelegramApi {
+class HttpTelegramApi(
+    private val token: String,
+    apiRoot: String = "https://api.telegram.org",
+) : TelegramApi {
 
-    private val base = "https://api.telegram.org/bot$token"
-    private val fileBase = "https://api.telegram.org/file/bot$token"
+    // Injectable root so the whole HTTP loop is provable headless against a local stub.
+    private val base = "$apiRoot/bot$token"
+    private val fileBase = "$apiRoot/file/bot$token"
 
     /** Long-poll for updates since [offset]; returns raw JSON for [parseUpdates]. */
     suspend fun getUpdates(offset: Long, timeoutSec: Int = 25): String = withContext(Dispatchers.IO) {
