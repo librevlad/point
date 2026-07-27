@@ -34,7 +34,14 @@ class MlKitBackgroundRemover(
         try {
             val result = segmenter.process(InputImage.fromBitmap(bitmap, 0)).await()
             val foreground = result.foregroundBitmap ?: error("Объект на фото не найден")
-            if (isMostlyTransparent(foreground)) error("Объект на фото не найден")
+            val opaque = opaqueRatio(foreground)
+            // No subject → nothing to keep. Subject fills the frame → no background to blur/remove:
+            // without this guard the opaque cutout repaints the whole photo and the effect is a
+            // silent no-op ("the same picture") — say so instead.
+            if (opaque < MIN_OPAQUE_RATIO) error("Объект на фото не найден")
+            if (opaque > MAX_OPAQUE_RATIO) {
+                error("На фото почти нет фона — объект занимает весь кадр")
+            }
             val ref = store.newScratchFile("png")
             File(ref.value).outputStream().use { foreground.compress(Bitmap.CompressFormat.PNG, 100, it) }
             foreground.recycle()
@@ -44,8 +51,8 @@ class MlKitBackgroundRemover(
         }
     }
 
-    /** Sample a coarse grid; almost no opaque pixels means nothing was segmented (empty cutout). */
-    private fun isMostlyTransparent(bmp: Bitmap): Boolean {
+    /** Fraction of a coarse grid whose pixels are opaque: ~0 → nothing segmented; ~1 → subject fills the frame. */
+    private fun opaqueRatio(bmp: Bitmap): Double {
         val step = maxOf(1, minOf(bmp.width, bmp.height) / GRID)
         var opaque = 0
         var total = 0
@@ -59,12 +66,13 @@ class MlKitBackgroundRemover(
             }
             y += step
         }
-        return total == 0 || opaque.toDouble() / total < MIN_OPAQUE_RATIO
+        return if (total == 0) 0.0 else opaque.toDouble() / total
     }
 
     private companion object {
         const val MAX_PX = 2048
         const val GRID = 40
         const val MIN_OPAQUE_RATIO = 0.01
+        const val MAX_OPAQUE_RATIO = 0.96
     }
 }
