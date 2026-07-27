@@ -30,6 +30,7 @@ fun main() = runBlocking {
         LlmBotCapability("understand", "Понять", setOf(ObjectKind.TEXT, ObjectKind.IMAGE, ObjectKind.PDF), 10),
         LlmBotCapability("translate", "Перевести", setOf(ObjectKind.TEXT, ObjectKind.IMAGE), 12),
         LlmBotCapability("collect", "Собрать данные", setOf(ObjectKind.TEXT, ObjectKind.IMAGE), 14),
+        ExcelBotCapability(),
         QrMakeCapability(),
         QrReadCapability(),
     )
@@ -37,6 +38,7 @@ fun main() = runBlocking {
         LlmBotRealizer("understand", "Кратко и ясно перескажи суть. Если это чек/таблица/документ — извлеки ключевое.", llm),
         LlmBotRealizer("translate", "Переведи на русский (а если текст уже русский — на английский). Верни только перевод.", llm),
         LlmBotRealizer("collect", "Собери все полезные данные и сгруппируй списком с заголовками: имена, организации, телефоны, почты, ссылки, адреса, даты, суммы. Дословно.", llm),
+        ExcelBotRealizer(llm, File(scratch, "xlsx")),
         QrMakeRealizer(File(scratch, "qr")),
         QrReadRealizer(File(scratch, "qr")),
     )
