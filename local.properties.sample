@@ -62,3 +62,7 @@ RELEASE_STORE_FILE=
 RELEASE_STORE_PASSWORD=
 RELEASE_KEY_ALIAS=
 RELEASE_KEY_PASSWORD=
+
+# Point как Telegram-бот (#92): токен от @BotFather. Без него :bot:run не стартует.
+# Бот переиспользует GEMINI_API_KEY выше для AI-действий (Понять/Перевести/Собрать).
+TELEGRAM_BOT_TOKEN=PUT_YOUR_BOTFATHER_TOKEN_HERE
