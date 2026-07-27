@@ -30,6 +30,11 @@ class HomeActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         viewModel.loadRecent()
 
+        // Scanned the PC's pairing QR with a camera → a point-pc:// VIEW intent lands here.
+        if (savedInstanceState == null && intent?.action == android.content.Intent.ACTION_VIEW) {
+            intent.data?.takeIf { it.scheme == "point-pc" }?.let { viewModel.pairFromPayload(it.toString()) }
+        }
+
         onBackPressedDispatcher.addCallback(this) {
             when {
                 viewModel.onBack() -> Unit

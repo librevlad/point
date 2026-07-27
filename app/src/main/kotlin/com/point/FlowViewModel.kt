@@ -518,6 +518,26 @@ class FlowViewModel @Inject constructor(
         _ui.update { it.copy(pcScreen = null) }
     }
 
+    /** Pair straight from a scanned QR / deep link (`point-pc://host:port/token`). The token
+     *  rides in the payload, so — unlike [pairPc] — no `/pair` round-trip to the PC is needed:
+     *  the QR being visible on the PC IS the consent, and pairing works even before the PC is
+     *  reachable (e.g. firewall). Opens the «Компьютер» screen showing the paired state. */
+    fun pairFromPayload(payload: String) {
+        val pairing = com.point.core.flow.parsePcPairing(payload)
+        if (pairing == null) {
+            _ui.update { it.copy(message = "Это не код подключения Point для ПК") }
+            return
+        }
+        _ui.update { it.copy(pcScreen = PcScreenState(pairing = pcPairings.current(), busy = true), message = null) }
+        viewModelScope.launch {
+            runCatching { pcPairings.save(pairing) }
+            runCatching { pcTransport.fetchCaps(pairing)?.let { caps -> pcCaps.save(caps) } }
+            runCatching { pcTransport.pushPhoneCaps(pairing, PHONE_ADVERTISED) }
+            refreshFromPc(force = true)
+            _ui.update { it.copy(pcScreen = PcScreenState(pairing = pairing)) }
+        }
+    }
+
     fun pairPc(host: String, port: Int) {
         _ui.update { it.copy(pcScreen = PcScreenState(pairing = pcPairings.current(), busy = true)) }
         viewModelScope.launch {

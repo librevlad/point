@@ -20,6 +20,14 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- Scan the PC's pairing QR with any camera → opens Point and pairs (the token
+                 rides in the point-pc:// URI, so no round-trip to the PC is needed). -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="point-pc" />
+            </intent-filter>
         </activity>
 
         <!--
