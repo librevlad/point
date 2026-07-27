@@ -85,6 +85,7 @@ class FlowViewModel @Inject constructor(
     private val pcTransport: com.point.core.flow.PcTransport,
     private val pcDiscovery: com.point.core.flow.PcDiscovery,
     private val basket: com.point.core.flow.Basket,
+    private val pcCaps: com.point.core.flow.PcCapsStore,
 ) : ViewModel() {
 
     private val stack = ArrayDeque<FlowFrame>()
@@ -448,6 +449,9 @@ class FlowViewModel @Inject constructor(
             val pairing = runCatching { pcTransport.pair(host, port, device) }.getOrNull()
             if (pairing != null) {
                 runCatching { pcPairings.save(pairing) }
+                // #80: remember what the PC can do — its actions become bubbles from
+                // the next launch (synthesis reads the warm cache at process start).
+                runCatching { pcTransport.fetchCaps(pairing)?.let { caps -> pcCaps.save(caps) } }
                 _ui.update { it.copy(pcScreen = PcScreenState(pairing = pairing)) }
             } else {
                 _ui.update {
@@ -465,6 +469,7 @@ class FlowViewModel @Inject constructor(
     fun unpairPc() {
         viewModelScope.launch {
             runCatching { pcPairings.clear() }
+            runCatching { pcCaps.clear() }
             _ui.update { it.copy(pcScreen = PcScreenState(pairing = null)) }
         }
     }

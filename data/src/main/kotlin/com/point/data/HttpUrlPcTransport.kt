@@ -1,7 +1,9 @@
 package com.point.data
 
 import com.point.core.flow.PcPairing
+import com.point.core.flow.PcRemoteAction
 import com.point.core.flow.PcSendOutcome
+import com.point.core.flow.decodePcCaps
 import com.point.core.flow.PcTransport
 import com.point.core.flow.encodePcMeta
 import com.point.core.model.PointObject
@@ -45,6 +47,7 @@ class HttpUrlPcTransport @Inject constructor() : PcTransport {
         obj: PointObject,
         fileName: String,
         meta: Map<String, String>,
+        action: String?,
     ): PcSendOutcome = withContext(Dispatchers.IO) {
         runCatching {
             val file = File(obj.uri.value)
@@ -56,6 +59,7 @@ class HttpUrlPcTransport @Inject constructor() : PcTransport {
             c.setRequestProperty("X-Point-Name", b64(fileName))
             c.setRequestProperty("X-Point-Mime", obj.mime)
             c.setRequestProperty("X-Point-Meta", b64(encodePcMeta(meta)))
+            action?.let { c.setRequestProperty("X-Point-Action", b64(it)) }
             c.doOutput = true
             c.setFixedLengthStreamingMode(file.length())
             file.inputStream().use { input -> c.outputStream.use { input.copyTo(it) } }
@@ -68,6 +72,23 @@ class HttpUrlPcTransport @Inject constructor() : PcTransport {
             }
         }.getOrElse { PcSendOutcome.Unreachable(it.message ?: "нет связи") }
     }
+
+    override suspend fun fetchCaps(pairing: PcPairing): List<PcRemoteAction>? =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val c = URL("http://${pairing.host}:${pairing.port}/caps").openConnection() as HttpURLConnection
+                c.connectTimeout = 3_000
+                c.readTimeout = 5_000
+                c.setRequestProperty("X-Point-Token", pairing.token)
+                val caps = if (c.responseCode == 200) {
+                    decodePcCaps(c.inputStream.bufferedReader().readText())
+                } else {
+                    null
+                }
+                c.disconnect()
+                caps
+            }.getOrNull()
+        }
 
     private fun b64(s: String): String = Base64.getEncoder().encodeToString(s.toByteArray())
 

@@ -38,6 +38,7 @@ import com.point.core.flow.UrlOpener
 import com.point.core.flow.ChosenApps
 import com.point.core.flow.PcDiscovery
 import com.point.core.flow.Basket
+import com.point.core.flow.PcCapsStore
 import com.point.core.flow.PcPairings
 import com.point.core.flow.PcTransport
 import com.point.core.flow.UsageJournal
@@ -60,6 +61,7 @@ import com.point.data.FallbackLlmClient
 import com.point.data.FileChosenApps
 import com.point.data.AndroidPcDiscovery
 import com.point.data.FileBasket
+import com.point.data.FilePcCaps
 import com.point.data.FilePcPairings
 import com.point.data.HttpUrlPcTransport
 import com.point.data.FileUsageJournal
@@ -209,6 +211,9 @@ abstract class DataModule {
 
     @Binds
     abstract fun basket(impl: FileBasket): Basket
+
+    @Binds
+    abstract fun pcCaps(impl: FilePcCaps): PcCapsStore
 
     @Binds
     abstract fun pcTransport(impl: HttpUrlPcTransport): PcTransport

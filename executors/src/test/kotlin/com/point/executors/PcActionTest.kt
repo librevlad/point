@@ -30,12 +30,13 @@ class PcActionTest {
         var sentName: String? = null
         override suspend fun pair(host: String, port: Int, deviceName: String): PcPairing? = null
         override suspend fun send(
-            pairing: PcPairing, obj: PointObject, fileName: String, meta: Map<String, String>,
+            pairing: PcPairing, obj: PointObject, fileName: String, meta: Map<String, String>, action: String?,
         ): PcSendOutcome {
             sentName = fileName
             sentMeta = meta
             return outcome
         }
+        override suspend fun fetchCaps(pairing: PcPairing): List<com.point.core.flow.PcRemoteAction>? = null
     }
 
     private fun obj(meta: Map<String, String> = emptyMap()) = PointObject(

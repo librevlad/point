@@ -1,6 +1,8 @@
 package com.point.desktop
 
+import com.point.core.flow.PcRemoteAction
 import com.point.core.flow.decodePcMeta
+import com.point.core.flow.encodePcCaps
 import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpServer
 import java.net.InetSocketAddress
@@ -15,6 +17,7 @@ import java.util.concurrent.Executors
  * - `POST /receive`— constant-time token check, base64 headers (ASCII-safe Cyrillic),
  *                    body streamed into the inbox; 401 on a bad token.
  * - `GET  /ping`   — "point-pc <name>", the connectivity probe for manual pairing.
+ * - `GET  /caps`   — the PC's remote actions (`id=label` lines) for the paired phone (#80).
  *
  * A cached thread pool is essential: the default executor runs handlers on the accept
  * thread, and a pending pair dialog would freeze every other request.
@@ -25,6 +28,8 @@ class PcServer(
     private val pcName: String,
     private val pairGate: (deviceName: String) -> Boolean,
     private val onReceived: (InboxItem) -> Unit,
+    private val remoteActions: List<PcRemoteAction> = emptyList(),
+    private val runAction: (id: String, item: InboxItem) -> Unit = { _, _ -> },
 ) {
     private var server: HttpServer? = null
     val port: Int get() = server?.address?.port ?: -1
@@ -40,6 +45,14 @@ class PcServer(
             ex.requestBody.readBytes() // drain
             if (pairGate(device)) respond(ex, 200, token) else respond(ex, 403, "denied")
         }
+        s.createContext("/caps") { ex ->
+            val given = ex.requestHeaders.getFirst("X-Point-Token").orEmpty()
+            if (!MessageDigest.isEqual(given.toByteArray(), token.toByteArray())) {
+                respond(ex, 401, "bad token")
+            } else {
+                respond(ex, 200, encodePcCaps(remoteActions))
+            }
+        }
         s.createContext("/receive") { ex ->
             val given = ex.requestHeaders.getFirst("X-Point-Token").orEmpty()
             if (!MessageDigest.isEqual(given.toByteArray(), token.toByteArray())) {
@@ -53,6 +66,13 @@ class PcServer(
             val meta = ex.requestHeaders.getFirst("X-Point-Meta")?.let { decodePcMeta(unb64(it)) }.orEmpty()
             val item = inbox.receive(name, mime, meta, ex.requestBody)
             onReceived(item)
+            // #80: the phone may name one of the advertised actions to run right away.
+            // Unknown or failing actions never fail the receive — the object landed.
+            ex.requestHeaders.getFirst("X-Point-Action")?.let(::unb64)?.let { actionId ->
+                if (remoteActions.any { it.id == actionId }) {
+                    runCatching { runAction(actionId, item) }
+                }
+            }
             respond(ex, 200, "ok")
         }
         s.start()

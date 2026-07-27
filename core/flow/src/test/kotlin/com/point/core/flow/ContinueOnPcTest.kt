@@ -38,4 +38,21 @@ class ContinueOnPcTest {
         val decoded = decodePcMeta(encodePcMeta(mapOf("k" to "a\nb")))
         assertEquals("a b", decoded["k"])
     }
+
+    // --- Remote PC capabilities (#80): the PC advertises its actions over the pairing ---
+
+    @Test
+    fun `caps codec roundtrips id and label in order`() {
+        val caps = listOf(
+            PcRemoteAction("pc-open", "Открыть на компьютере"),
+            PcRemoteAction("pc-copy", "В буфер компьютера"),
+        )
+        assertEquals(caps, decodePcCaps(encodePcCaps(caps)))
+    }
+
+    @Test
+    fun `caps codec skips garbage lines and blank ids`() {
+        val decoded = decodePcCaps("pc-open=Открыть\nмусор без разделителя\n=безид\npc-copy=Копировать")
+        assertEquals(listOf(PcRemoteAction("pc-open", "Открыть"), PcRemoteAction("pc-copy", "Копировать")), decoded)
+    }
 }

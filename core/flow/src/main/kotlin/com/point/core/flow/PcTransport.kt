@@ -21,7 +21,19 @@ interface PcTransport {
         obj: PointObject,
         fileName: String,
         meta: Map<String, String>,
+        action: String? = null,
     ): PcSendOutcome
+
+    /** The PC's advertised remote actions (#80), or null when it is unreachable. */
+    suspend fun fetchCaps(pairing: PcPairing): List<PcRemoteAction>?
+}
+
+/** Cached remote actions of the paired PC — warm sync read for capability synthesis
+ *  at process start (#80); refreshed on pairing, dropped on unpair. */
+interface PcCapsStore {
+    fun all(): List<PcRemoteAction>
+    suspend fun save(caps: List<PcRemoteAction>)
+    suspend fun clear()
 }
 
 /** The remembered PC, warm sync read like the other tiny stores. */

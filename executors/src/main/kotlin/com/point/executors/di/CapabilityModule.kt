@@ -15,6 +15,8 @@ import com.point.executors.PcRealizer
 import com.point.executors.AppOpenRealizer
 import com.point.executors.AiCapability
 import com.point.executors.BasketCapability
+import com.point.executors.RemotePcCapability
+import com.point.executors.RemotePcRealizer
 import com.point.executors.BasketRealizer
 import com.point.executors.DeepUnderstandCapability
 import com.point.executors.JobReplyCapability
@@ -226,5 +228,18 @@ abstract class CapabilityModule {
         @Provides @ElementsIntoSet
         fun appRealizers(chosen: ChosenApps, launcher: AppLauncher): Set<Realizer> =
             chosen.all().map { AppOpenRealizer(it, launcher) }.toSet()
+
+        // #80: the paired PC's advertised actions join the SAME graph — one pair per
+        // cached advertisement (refreshed on pairing; visible from the next launch).
+        @Provides @ElementsIntoSet
+        fun pcRemoteCapabilities(caps: com.point.core.flow.PcCapsStore, pairings: com.point.core.flow.PcPairings): Set<Capability> =
+            caps.all().map { RemotePcCapability(it, pairings) }.toSet()
+
+        @Provides @ElementsIntoSet
+        fun pcRemoteRealizers(
+            caps: com.point.core.flow.PcCapsStore,
+            pairings: com.point.core.flow.PcPairings,
+            transport: com.point.core.flow.PcTransport,
+        ): Set<Realizer> = caps.all().map { RemotePcRealizer(it, pairings, transport) }.toSet()
     }
 }

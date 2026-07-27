@@ -44,6 +44,19 @@ class DesktopState(
 
     fun bubblesFor(item: InboxItem): List<Bubble> = registry.bubblesFor(item.obj.state)
 
+    /** #80: the phone asked to run one of the advertised actions on the received object. */
+    fun runRemoteAction(id: String, item: InboxItem) {
+        scope.launch {
+            val result = runCatching {
+                resolver.realizerFor(com.point.core.model.CapabilityId(id)).perform(item.obj, null)
+            }.getOrNull()
+            _message.value = when (result) {
+                is com.point.core.model.ActionResult.Done -> result.message
+                else -> _message.value
+            }
+        }
+    }
+
     fun onReceived(item: InboxItem) {
         _items.update { listOf(item) + it }
         // Owner's decision: text from the phone lands straight in the clipboard —
