@@ -8,7 +8,7 @@ sdk.dir=C\:\\Users\\User\\AppData\\Local\\Android\\Sdk
 # the real local.properties. GEMINI_MODELS is a comma-separated fallback list; the
 # pinned gemini-2.0-flash has zero free quota (429), so serving aliases lead.
 GEMINI_API_KEY=PUT_YOUR_KEY_HERE
-GEMINI_MODELS=gemini-flash-latest,gemini-flash-lite-latest
+GEMINI_MODELS=gemini-pro-latest,gemini-flash-latest,gemini-flash-lite-latest
 
 # Fallback #1 — Claude (Anthropic), tried after Gemini. Native Messages API.
 # Leave ANTHROPIC_API_KEY blank to disable. Model defaults to claude-opus-4-8;
