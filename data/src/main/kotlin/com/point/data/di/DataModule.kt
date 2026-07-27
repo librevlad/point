@@ -37,6 +37,7 @@ import com.point.core.flow.TextRecognizer
 import com.point.core.flow.UrlOpener
 import com.point.core.flow.ChosenApps
 import com.point.core.flow.PcDiscovery
+import com.point.core.flow.Basket
 import com.point.core.flow.PcPairings
 import com.point.core.flow.PcTransport
 import com.point.core.flow.UsageJournal
@@ -58,6 +59,7 @@ import com.point.data.MlKitEntityExtractor
 import com.point.data.FallbackLlmClient
 import com.point.data.FileChosenApps
 import com.point.data.AndroidPcDiscovery
+import com.point.data.FileBasket
 import com.point.data.FilePcPairings
 import com.point.data.HttpUrlPcTransport
 import com.point.data.FileUsageJournal
@@ -204,6 +206,9 @@ abstract class DataModule {
     /** The paired PC (#147) and the LAN transport to it. */
     @Binds
     abstract fun pcPairings(impl: FilePcPairings): PcPairings
+
+    @Binds
+    abstract fun basket(impl: FileBasket): Basket
 
     @Binds
     abstract fun pcTransport(impl: HttpUrlPcTransport): PcTransport

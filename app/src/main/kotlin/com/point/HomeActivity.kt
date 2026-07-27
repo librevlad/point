@@ -49,6 +49,7 @@ class HomeActivity : ComponentActivity() {
                         val recent by viewModel.recent.collectAsStateWithLifecycle()
                         val clipboard by viewModel.clipboard.collectAsStateWithLifecycle()
                         val crash by viewModel.crashReport.collectAsStateWithLifecycle()
+                        val basketCount by viewModel.basketCount.collectAsStateWithLifecycle()
                         // Re-offer the clipboard each time Home comes back on screen: after Back
                         // out of a restored flow the focus edge has already passed (#111).
                         androidx.compose.runtime.LaunchedEffect(Unit) {
@@ -66,6 +67,9 @@ class HomeActivity : ComponentActivity() {
                             crashReport = crash,
                             onSendCrash = ::shareCrashReport,
                             onDismissCrash = viewModel::dismissCrashReport,
+                            basketCount = basketCount,
+                            onOpenBasket = viewModel::openBasket,
+                            onClearBasket = viewModel::clearBasket,
                         )
                     } else {
                         PointHost(

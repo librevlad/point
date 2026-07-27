@@ -67,6 +67,9 @@ fun HomeScreen(
     crashReport: String? = null,
     onSendCrash: (String) -> Unit = {},
     onDismissCrash: () -> Unit = {},
+    basketCount: Int = 0,
+    onOpenBasket: () -> Unit = {},
+    onClearBasket: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Column(modifier.fillMaxSize()) {
@@ -97,6 +100,10 @@ fun HomeScreen(
 
         if (clipboard != null) {
             ClipboardBanner(clipboard, onUse = { onUseClipboard(clipboard) }, onDismiss = onDismissClipboard)
+        }
+
+        if (basketCount > 0) {
+            BasketBanner(basketCount, onOpen = onOpenBasket, onClear = onClearBasket)
         }
 
         if (recent.isEmpty()) {
@@ -143,6 +150,44 @@ fun HomeScreen(
  * A dismissible suggestion when Point opens with actionable text in the clipboard (#72) — the
  * trigger that reaches messengers (copy in the app → open Point → act). Read foreground-only.
  */
+/** The progressive object (#96): the pile keeps growing across flows; one tap opens
+ *  it as a COLLECTION whose actions apply to everything together. */
+@Composable
+private fun BasketBanner(count: Int, onOpen: () -> Unit, onClear: () -> Unit) {
+    Surface(
+        onClick = onOpen,
+        color = MaterialTheme.colorScheme.tertiaryContainer,
+        shape = MaterialTheme.shapes.large,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+    ) {
+        Row(
+            modifier = Modifier.padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    "Корзина: $count",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                )
+                Text(
+                    "Открыть всё вместе как один объект",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                )
+            }
+            IconButton(onClick = onClear) {
+                Icon(
+                    imageVector = Icons.Filled.Close,
+                    contentDescription = "Очистить корзину",
+                    tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                )
+            }
+        }
+    }
+}
+
 @Composable
 private fun ClipboardBanner(text: String, onUse: () -> Unit, onDismiss: () -> Unit) {
     Surface(
