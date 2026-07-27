@@ -5,6 +5,7 @@ import com.point.core.flow.DocStyle
 import com.point.core.flow.DocxWriter
 import com.point.core.flow.LlmClient
 import com.point.core.flow.PdfTextExtractor
+import com.point.core.flow.TextRecognizer
 import com.point.core.model.ActionResult
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
@@ -54,7 +55,7 @@ class WordPlusTest {
         val cap = WordPlusCapability()
         assertTrue(cap.accepts(ObjectState(ObjectKind.TEXT)))
         assertTrue(cap.accepts(ObjectState(ObjectKind.PDF)))
-        assertEquals(false, cap.accepts(ObjectState(ObjectKind.IMAGE)))
+        assertTrue("картинку теперь тоже (OCR → Word+)", cap.accepts(ObjectState(ObjectKind.IMAGE)))
         assertTrue(cap.meta.network)
         assertEquals("В Word+", cap.label(ObjectState(ObjectKind.TEXT)))
     }
@@ -80,7 +81,8 @@ class WordPlusTest {
         }
         val obj = PointObject("id", "text/plain", ScratchRef(src.absolutePath), ObjectState(ObjectKind.TEXT))
 
-        val result = WordPlusRealizer(llm, object : PdfTextExtractor { override suspend fun extractText(obj: PointObject) = "" }, writer).perform(obj, null)
+        val ocr = object : TextRecognizer { override suspend fun recognize(obj: PointObject) = "" }
+        val result = WordPlusRealizer(llm, object : PdfTextExtractor { override suspend fun extractText(obj: PointObject) = "" }, writer, ocr).perform(obj, null)
 
         assertTrue(result is ActionResult.Success)
         assertEquals(DocStyle.TITLE, styled!![0].style)

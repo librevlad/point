@@ -10,6 +10,7 @@ import com.point.core.flow.Latency
 import com.point.core.flow.LlmClient
 import com.point.core.flow.PdfTextExtractor
 import com.point.core.flow.Realizer
+import com.point.core.flow.TextRecognizer
 import com.point.core.model.ActionResult
 import com.point.core.model.CapabilityId
 import com.point.core.model.ObjectKind
@@ -54,7 +55,8 @@ class WordPlusCapability @Inject constructor() : Capability {
     override val icon = "office"
     override val meta = CapabilityMeta(cost = Cost.PAID, latency = Latency.SLOW, network = true, auth = true)
     override fun label(state: ObjectState) = "В Word+"
-    override fun accepts(state: ObjectState) = state.kind == ObjectKind.PDF || state.kind == ObjectKind.TEXT
+    override fun accepts(state: ObjectState) =
+        state.kind == ObjectKind.PDF || state.kind == ObjectKind.TEXT || state.kind == ObjectKind.IMAGE
     override fun produces(state: ObjectState) = ObjectState(ObjectKind.OFFICE)
 
     companion object { val ID = CapabilityId("word-plus") }
@@ -64,6 +66,7 @@ class WordPlusRealizer @Inject constructor(
     private val llm: LlmClient,
     private val pdfText: PdfTextExtractor,
     private val docx: DocxWriter,
+    private val recognizer: TextRecognizer,
 ) : Realizer {
     override val capabilityId = WordPlusCapability.ID
 
@@ -72,6 +75,7 @@ class WordPlusRealizer @Inject constructor(
             runCatching {
                 val text = when (input.state.kind) {
                     ObjectKind.PDF -> pdfText.extractText(input)
+                    ObjectKind.IMAGE -> recognizer.recognize(input) // OCR the photo first (#128)
                     else -> File(input.uri.value).takeIf { it.isFile }?.readText().orEmpty()
                 }.take(MAX_TEXT)
                 if (text.isBlank()) {
