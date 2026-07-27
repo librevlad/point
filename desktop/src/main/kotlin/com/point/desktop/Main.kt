@@ -5,12 +5,7 @@ import androidx.compose.ui.window.application
 import com.point.desktop.ui.DesktopApp
 import java.awt.FileDialog
 import java.awt.Toolkit
-import java.awt.datatransfer.DataFlavor
 import java.awt.datatransfer.StringSelection
-import java.awt.dnd.DnDConstants
-import java.awt.dnd.DropTarget
-import java.awt.dnd.DropTargetAdapter
-import java.awt.dnd.DropTargetDropEvent
 import java.io.File
 
 /**
@@ -107,36 +102,15 @@ fun main() {
             },
             title = "Point для ПК",
         ) {
-            // Local input: OS drag&drop straight onto the window (AWT DropTarget is the
-            // dependable route on every platform; files and plain text both land).
-            window.dropTarget = DropTarget(
-                window,
-                object : DropTargetAdapter() {
-                    override fun drop(event: DropTargetDropEvent) {
-                        event.acceptDrop(DnDConstants.ACTION_COPY)
-                        val t = event.transferable
-                        runCatching {
-                            when {
-                                t.isDataFlavorSupported(DataFlavor.javaFileListFlavor) -> {
-                                    @Suppress("UNCHECKED_CAST")
-                                    (t.getTransferData(DataFlavor.javaFileListFlavor) as List<File>)
-                                        .forEach { state.onReceived(inbox.addFile(it.absolutePath)) }
-                                }
-                                t.isDataFlavorSupported(DataFlavor.stringFlavor) -> {
-                                    val text = t.getTransferData(DataFlavor.stringFlavor) as String
-                                    state.onReceived(inbox.addText(text))
-                                }
-                            }
-                        }
-                        event.dropComplete(true)
-                    }
-                },
-            )
+            // Local input: native Compose drag&drop (the AWT window.dropTarget never fired —
+            // the Compose surface intercepts drops; DesktopApp uses Modifier.dragAndDropTarget).
             DesktopApp(
                 state = state,
                 config = config,
                 addresses = siteLocalAddresses(),
                 port = server.port,
+                onFilesDropped = { files -> files.forEach { state.onReceived(inbox.addFile(it.absolutePath)) } },
+                onTextDropped = { text -> state.onReceived(inbox.addText(text)) },
             )
         }
     }

@@ -52,7 +52,11 @@ class PcRealizer @Inject constructor(
             is PcSendOutcome.Rejected ->
                 ActionResult.Failure("Компьютер отклонил — свяжите устройства заново", recoverable = true)
             is PcSendOutcome.Unreachable ->
-                ActionResult.Failure("Компьютер недоступен: ${outcome.detail}", recoverable = true)
+                ActionResult.Failure(
+                    "Компьютер недоступен. Проверьте, что «Point для ПК» запущен, а порт открыт " +
+                        "в брандмауэре Windows (или сделайте Wi-Fi сеть «Частной»).",
+                    recoverable = true,
+                )
         }
     }
 }
