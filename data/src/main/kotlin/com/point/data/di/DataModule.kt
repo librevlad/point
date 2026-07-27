@@ -32,6 +32,7 @@ import com.point.core.flow.PinnedActions
 import com.point.core.flow.QrEncoder
 import com.point.core.flow.QrReader
 import com.point.core.flow.Sharer
+import com.point.core.flow.SpreadsheetReader
 import com.point.core.flow.SpreadsheetWriter
 import com.point.core.flow.TextRecognizer
 import com.point.core.flow.UrlOpener
@@ -78,6 +79,7 @@ import com.point.data.MlKitQrReader
 import com.point.data.OcrEnricher
 import com.point.data.OoxmlDocxWriter
 import com.point.data.OoxmlOfficeTextExtractor
+import com.point.data.OoxmlSpreadsheetReader
 import com.point.data.OoxmlSpreadsheetWriter
 import com.point.data.BuildConfig
 import com.point.data.OpenAiCompatibleClient
@@ -159,6 +161,9 @@ abstract class DataModule {
 
     @Binds
     abstract fun spreadsheetWriter(impl: OoxmlSpreadsheetWriter): SpreadsheetWriter
+
+    @Binds
+    abstract fun spreadsheetReader(impl: OoxmlSpreadsheetReader): SpreadsheetReader
 
     @Binds
     abstract fun docxWriter(impl: OoxmlDocxWriter): DocxWriter

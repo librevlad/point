@@ -1,6 +1,7 @@
 package com.point.executors
 
 import android.graphics.Paint
+import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
 import com.point.core.flow.Capability
 import com.point.core.flow.CapabilityMeta
@@ -8,6 +9,7 @@ import com.point.core.flow.Latency
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.OfficeTextExtractor
 import com.point.core.flow.PdfTextExtractor
+import com.point.core.flow.SpreadsheetReader
 import com.point.core.flow.Realizer
 import com.point.core.model.ActionResult
 import com.point.core.model.CapabilityId
@@ -44,6 +46,7 @@ class PdfRealizer @Inject constructor(
     private val store: ObjectStore,
     private val pdfText: PdfTextExtractor,
     private val officeText: OfficeTextExtractor,
+    private val spreadsheet: SpreadsheetReader,
 ) : Realizer {
     override val capabilityId = PdfCapability.ID
 
@@ -72,6 +75,15 @@ class PdfRealizer @Inject constructor(
     }
 
     private suspend fun officeToPdf(input: PointObject): ActionResult {
+        // A spreadsheet is a grid, not prose: read its rows and render a monospace table. Our own
+        // «В Excel» writes inline strings (no sharedStrings.xml), which the text extractor can't
+        // read — so without this branch converting Point's own xlsx dead-ends on empty text.
+        if (isSpreadsheet(input)) {
+            val rows = spreadsheet.readRows(input)
+            if (rows.any { row -> row.any { it.isNotBlank() } }) {
+                return renderTextToPdf(formatSpreadsheet(rows), mono = true)
+            }
+        }
         val text = officeText.extractText(input)
         return if (text.isBlank()) {
             ActionResult.Failure("Не удалось извлечь текст из документа", recoverable = true)
@@ -80,8 +92,18 @@ class PdfRealizer @Inject constructor(
         }
     }
 
-    private suspend fun renderTextToPdf(text: String): ActionResult {
-        val paint = Paint().apply { textSize = 12f }
+    private fun isSpreadsheet(input: PointObject): Boolean {
+        val mime = input.mime.lowercase()
+        val path = input.uri.value.lowercase()
+        return "spreadsheet" in mime || mime == "application/vnd.ms-excel" ||
+            path.endsWith(".xlsx") || path.endsWith(".xls")
+    }
+
+    private suspend fun renderTextToPdf(text: String, mono: Boolean = false): ActionResult {
+        val paint = Paint().apply {
+            textSize = if (mono) 10f else 12f
+            if (mono) typeface = Typeface.MONOSPACE
+        }
         val lines = wrap(text, paint, PAGE_WIDTH - 2 * MARGIN)
 
         val document = PdfDocument()

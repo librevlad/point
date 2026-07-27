@@ -1428,3 +1428,14 @@ HomeActivity + `FlowViewModel.pairFromPayload` — парсит URI, сохра�
   трогает реальные портреты/фото-с-фоном (там субъект <90%), но ловит полнокадровые документы.
 - Смысл действия остаётся: «Размыть фон» размывает ОКРУЖЕНИЕ вокруг объекта; без видимого фона
   эффекту нечего делать — и теперь он это говорит, а не молчит.
+
+### xlsx → PDF: свой же xlsx не конвертился (self-dogfooding)
+- Живой фидбек: «xlsx не конвертится в pdf». `OoxmlSpreadsheetWriter` пишет ячейки inline-строками
+  (`t="inlineStr"`, без `xl/sharedStrings.xml`), а `OoxmlOfficeTextExtractor` для xlsx читал
+  ТОЛЬКО `sharedStrings.xml` → свой же xlsx (из «В Excel») давал пустой текст → `officeToPdf`
+  падал «Не удалось извлечь текст». Плюс таблица, сплющенная в поток текста, — плохой PDF.
+- Фикс: новый контракт `SpreadsheetReader` + `OoxmlSpreadsheetReader` (обратный к writer): читает
+  inline strings, shared-strings таблицу И числовые ячейки; колонка из `r="A1"`, гэпы паддятся.
+  `PdfRealizer.officeToPdf` для xlsx/xls рендерит monospace-таблицу (`formatSpreadsheet`
+  выравнивает колонки по ширине), для docx/pptx — прежний текстовый путь. TDD: round-trip
+  writer→reader, shared-strings, числа, гэпы; форматтер (выравнивание/обрезка) отдельно.

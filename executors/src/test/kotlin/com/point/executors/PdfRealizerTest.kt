@@ -3,6 +3,7 @@ package com.point.executors
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.OfficeTextExtractor
 import com.point.core.flow.PdfTextExtractor
+import com.point.core.flow.SpreadsheetReader
 import com.point.core.model.ActionResult
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
@@ -37,6 +38,10 @@ class PdfRealizerTest {
         override suspend fun extractText(obj: PointObject) = ""
     }
 
+    private val noSheets = object : SpreadsheetReader {
+        override suspend fun readRows(obj: PointObject) = emptyList<List<String>>()
+    }
+
     private fun pdfObject() = PointObject(
         id = "id",
         mime = "application/pdf",
@@ -46,7 +51,7 @@ class PdfRealizerTest {
 
     @Test
     fun `pdf with text extracts to a TEXT object`() = runTest {
-        val realizer = PdfRealizer(store, pdfExtractor("Привет из PDF"), noOffice)
+        val realizer = PdfRealizer(store, pdfExtractor("Привет из PDF"), noOffice, noSheets)
         val result = realizer.perform(pdfObject())
 
         assertTrue(result is ActionResult.Success)
@@ -57,7 +62,7 @@ class PdfRealizerTest {
 
     @Test
     fun `scanned pdf with no text is a recoverable failure`() = runTest {
-        val realizer = PdfRealizer(store, pdfExtractor("   "), noOffice)
+        val realizer = PdfRealizer(store, pdfExtractor("   "), noOffice, noSheets)
         val result = realizer.perform(pdfObject())
 
         assertTrue(result is ActionResult.Failure)
