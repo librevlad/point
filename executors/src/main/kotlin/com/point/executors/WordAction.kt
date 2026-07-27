@@ -6,6 +6,7 @@ import com.point.core.flow.DocxWriter
 import com.point.core.flow.Latency
 import com.point.core.flow.PdfTextExtractor
 import com.point.core.flow.Realizer
+import com.point.core.flow.TextRecognizer
 import com.point.core.model.ActionResult
 import com.point.core.model.CapabilityId
 import com.point.core.model.Intent
@@ -29,7 +30,8 @@ class WordCapability @Inject constructor() : Capability {
     override val icon = "office"
     override val meta = CapabilityMeta(latency = Latency.FAST)
     override fun label(state: ObjectState) = "В Word"
-    override fun accepts(state: ObjectState) = state.kind == ObjectKind.PDF || state.kind == ObjectKind.TEXT
+    override fun accepts(state: ObjectState) =
+        state.kind == ObjectKind.PDF || state.kind == ObjectKind.TEXT || state.kind == ObjectKind.IMAGE
     override fun produces(state: ObjectState) = ObjectState(ObjectKind.OFFICE)
     override fun intents(state: ObjectState) = setOf(Intent.PREPARE)
 
@@ -39,6 +41,7 @@ class WordCapability @Inject constructor() : Capability {
 class WordRealizer @Inject constructor(
     private val pdfText: PdfTextExtractor,
     private val docx: DocxWriter,
+    private val recognizer: TextRecognizer,
 ) : Realizer {
     override val capabilityId = WordCapability.ID
 
@@ -47,6 +50,7 @@ class WordRealizer @Inject constructor(
             runCatching {
                 val text = when (input.state.kind) {
                     ObjectKind.PDF -> pdfText.extractText(input)
+                    ObjectKind.IMAGE -> recognizer.recognize(input) // OCR the photo first (#61)
                     ObjectKind.TEXT -> File(input.uri.value).takeIf { it.isFile }?.readText().orEmpty()
                     else -> ""
                 }
