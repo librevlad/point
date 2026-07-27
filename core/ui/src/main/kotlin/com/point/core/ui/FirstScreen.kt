@@ -543,19 +543,27 @@ private fun ObjectHeader(
             }
         }
         Spacer(Modifier.height(14.dp))
+        // #114: the hero says WHAT it is — the verdict (semantic type once understood, else the
+        // kind), with the human summary / file name beneath, never a raw MIME (#129).
+        val verdict = objectVerdict(obj)
         Text(
-            text = obj.metadata["name"] ?: kindLabel(obj.state.kind),
+            text = verdict.headline,
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center,
         )
-        // #129: never show a raw MIME to a person — the kind label speaks their language.
-        Text(
-            text = kindLabel(obj.state.kind),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        verdict.subline?.let { sub ->
+            Text(
+                text = sub,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center,
+            )
+        }
     }
 }
 

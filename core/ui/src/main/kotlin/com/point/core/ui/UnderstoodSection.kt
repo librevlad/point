@@ -36,6 +36,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.point.core.flow.META_ENTITY_PREFIX
+import com.point.core.flow.META_SEMANTIC_SUMMARY
 import com.point.core.model.Feature
 import com.point.core.model.PointObject
 
@@ -73,6 +74,26 @@ fun understoodFacts(obj: PointObject): List<UnderstoodFact> {
     }
 }
 
+/** The object's hero line: WHAT it is — the semantic verdict once understood, otherwise its
+ *  kind — plus a human subline (the AI summary if present, else the file's own name). Grows
+ *  from «Изображение» to «Покупка · <сводка>» as understanding deepens (#114). */
+data class ObjectVerdict(val headline: String, val subline: String?)
+
+fun objectVerdict(obj: PointObject): ObjectVerdict {
+    val state = obj.state
+    val headline = when {
+        state.has(Feature.IS_PURCHASE) -> "Покупка"
+        state.has(Feature.IS_MEETING) -> "Встреча"
+        state.has(Feature.IS_RECIPE) -> "Рецепт"
+        state.has(Feature.IS_JOB) -> "Вакансия"
+        state.has(Feature.HAS_VCARD) -> "Визитка"
+        else -> kindLabel(state.kind)
+    }
+    val summary = obj.metadata[META_SEMANTIC_SUMMARY]?.takeIf { it.isNotBlank() }
+    val name = obj.metadata["name"]?.takeIf { it.isNotBlank() && it != headline }
+    return ObjectVerdict(headline, summary ?: name)
+}
+
 private fun String.readableUrl() =
     removePrefix("https://").removePrefix("http://").removePrefix("www.").trimEnd('/')
 
@@ -86,7 +107,10 @@ private fun String.maskedCard() = "•• " + filter(Char::isDigit).takeLast(4)
  */
 @Composable
 internal fun UnderstoodSection(facts: List<UnderstoodFact>, enriching: List<String>) {
-    if (facts.isEmpty() && enriching.isEmpty()) return
+    // The semantic verdict is now the object's headline (objectVerdict) — the card carries only
+    // the detail facts (entities, with values), so understanding isn't shown twice (#114).
+    val detail = facts.filter { it.key != "semantic" }
+    if (detail.isEmpty() && enriching.isEmpty()) return
     Surface(
         shape = RoundedCornerShape(18.dp),
         color = MaterialTheme.colorScheme.surface,
@@ -96,7 +120,7 @@ internal fun UnderstoodSection(facts: List<UnderstoodFact>, enriching: List<Stri
             .animateContentSize(tween(220)),
     ) {
         Column(modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp)) {
-            facts.forEach { fact -> key(fact.key) { FactRow(fact) } }
+            detail.forEach { fact -> key(fact.key) { FactRow(fact) } }
             enriching.forEach { label ->
                 key("running-$label") {
                     Row(
