@@ -116,6 +116,31 @@ private fun PreviewThinking() = PointTheme {
     )
 }
 
+@Preview(name = "Скриншот · Момент чтения (#114)", showBackground = true)
+@Composable
+private fun PreviewReadingBeat() = PointTheme {
+    // Reading-beat: обогащение ещё идёт (свип + ignite живы), но факты уже упали —
+    // аура высоко по своей рампе. Момент «он понял» в полёте.
+    val obj = sampleObject(
+        ObjectKind.IMAGE, "image/png", "чек.jpg",
+        features = setOf(
+            com.point.core.model.Feature.IS_PURCHASE,
+            com.point.core.model.Feature.HAS_PHONE,
+            com.point.core.model.Feature.HAS_ADDRESS,
+        ),
+        metadata = mapOf(
+            "entity.phone" to "+380 67 123 45 67",
+            "entity.address" to "вул. Хрещатик, 1",
+        ),
+    )
+    FirstScreen(
+        obj = obj,
+        bubbles = sampleBubbles(ObjectKind.IMAGE),
+        onBubble = {},
+        enriching = listOf("Распознаю текст…"),
+    )
+}
+
 @Preview(name = "Image · без фактов", showBackground = true)
 @Composable
 private fun PreviewImage() = PointTheme {
