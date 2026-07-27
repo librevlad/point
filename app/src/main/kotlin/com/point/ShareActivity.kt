@@ -76,6 +76,14 @@ class ShareActivity : ComponentActivity() {
         }
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        // singleTop: a second share landing on the live top activity must start a new
+        // flow — without this override the intent is delivered and silently dropped.
+        handleShare(intent)
+    }
+
     override fun onDestroy() {
         if (isFinishing) viewModel.endFlow() // mandatory scratch cleanup
         super.onDestroy()
