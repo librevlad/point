@@ -86,6 +86,7 @@ class FlowViewModel @Inject constructor(
     private val pcDiscovery: com.point.core.flow.PcDiscovery,
     private val basket: com.point.core.flow.Basket,
     private val pcCaps: com.point.core.flow.PcCapsStore,
+    private val pulledFiles: PulledFileFactory,
 ) : ViewModel() {
 
     private val stack = ArrayDeque<FlowFrame>()
@@ -106,6 +107,12 @@ class FlowViewModel @Inject constructor(
     private val _crashReport = MutableStateFlow<String?>(null)
     /** A previous crash report, offered once for an explicit share (#11). */
     val crashReport: StateFlow<String?> = _crashReport.asStateFlow()
+
+    private val _fromPcCount = MutableStateFlow(0)
+    /** Objects waiting in the paired PC's outbox (#161) — Home offers to pull them here. */
+    val fromPcCount: StateFlow<Int> = _fromPcCount.asStateFlow()
+    private var fromPcEntries: List<com.point.core.flow.PcOutboxEntry> = emptyList()
+    private var lastOutboxFetchMs = 0L
 
     private val _basketCount = MutableStateFlow(0)
     /** Items accumulated in the basket (#96) — Home offers to open the pile as one COLLECTION. */
@@ -204,6 +211,58 @@ class FlowViewModel @Inject constructor(
             _recent.value = runCatching { history.recent() }.getOrDefault(emptyList())
             _basketCount.value = runCatching { basket.items().size }.getOrDefault(0)
         }
+        refreshFromPc()
+    }
+
+    /** Quietly ask the paired PC for its outbox (#161) — throttled so app switches with the
+     *  PC away don't burn a connect timeout every time; failures just mean no banner. */
+    private fun refreshFromPc(force: Boolean = false) {
+        val pairing = pcPairings.current() ?: return
+        val now = System.currentTimeMillis()
+        if (!force && now - lastOutboxFetchMs < OUTBOX_THROTTLE_MS) return
+        lastOutboxFetchMs = now
+        viewModelScope.launch {
+            runCatching { pcTransport.fetchOutbox(pairing) }.getOrNull()?.let { entries ->
+                fromPcEntries = entries
+                _fromPcCount.value = entries.size
+            }
+        }
+    }
+
+    /** Pull everything the PC queued (#161): download → ingest → ack, in that order —
+     *  a failed ack re-offers (at-least-once); a failed download acks nothing. */
+    fun pullFromPc() {
+        val pairing = pcPairings.current() ?: return
+        val entries = fromPcEntries
+        if (entries.isEmpty()) { _fromPcCount.value = 0; return }
+        _ui.update { it.copy(busy = "Забираю с компьютера…", busyNetwork = false, busyQuiet = false, message = null) }
+        viewModelScope.launch {
+            val pulled = entries.map { entry ->
+                val name = entry.meta["name"] ?: "объект"
+                val path = pulledFiles.create("${entry.id}-$name")
+                val ok = runCatching { pcTransport.downloadOutboxFile(pairing, entry.id, path) }.getOrDefault(false)
+                Triple(entry, path, ok)
+            }
+            if (pulled.any { !it.third }) {
+                _ui.update { it.copy(busy = null, message = "Компьютер недоступен — попробуйте ещё раз") }
+                return@launch
+            }
+            when (pulled.size) {
+                1 -> onShared("file://${pulled[0].second}", pulled[0].first.meta["mime"] ?: "application/octet-stream")
+                else -> onSharedMultiple(pulled.map { "file://${it.second}" })
+            }
+            pulled.forEach { (entry, _, _) ->
+                runCatching { pcTransport.ackOutbox(pairing, entry.id) }
+                    .recoverCatching { pcTransport.ackOutbox(pairing, entry.id) }
+            }
+            fromPcEntries = emptyList()
+            _fromPcCount.value = 0
+        }
+    }
+
+    /** Hide the banner until the next fetch — the objects stay on the PC (no ack). */
+    fun hideFromPc() {
+        _fromPcCount.value = 0
     }
 
     /** Open the accumulated pile (#96) as one COLLECTION flow — the basket itself
@@ -430,6 +489,7 @@ class FlowViewModel @Inject constructor(
                 runCatching { pcTransport.fetchCaps(pairing)?.let { caps -> pcCaps.save(caps) } }
             }
         }
+        refreshFromPc(force = true)
         discoveryJob?.cancel()
         discoveryJob = viewModelScope.launch {
             runCatching {
@@ -443,6 +503,7 @@ class FlowViewModel @Inject constructor(
     }
 
     fun closePcSettings() {
+        refreshFromPc() // #161: Home is about to show — its banner must be current
         discoveryJob?.cancel()
         discoveryJob = null
         _ui.update { it.copy(pcScreen = null) }
@@ -458,6 +519,7 @@ class FlowViewModel @Inject constructor(
                 // #80: remember what the PC can do — its actions become bubbles from
                 // the next launch (synthesis reads the warm cache at process start).
                 runCatching { pcTransport.fetchCaps(pairing)?.let { caps -> pcCaps.save(caps) } }
+                refreshFromPc(force = true) // #161: the fresh pairing may already have a queue
                 _ui.update { it.copy(pcScreen = PcScreenState(pairing = pairing)) }
             } else {
                 _ui.update {
@@ -954,4 +1016,8 @@ class FlowViewModel @Inject constructor(
 }
 
 private const val MAX_CLIP = 2000
+
+/** How rarely Home re-asks the PC for its outbox (#161) — app switches with the PC away
+ *  must not burn a connect timeout every time. */
+private const val OUTBOX_THROTTLE_MS = 30_000L
 private const val PREVIEW_MAX_PX = 640

@@ -37,6 +37,9 @@ class PcActionTest {
             return outcome
         }
         override suspend fun fetchCaps(pairing: PcPairing): List<com.point.core.flow.PcRemoteAction>? = null
+        override suspend fun fetchOutbox(pairing: PcPairing): List<com.point.core.flow.PcOutboxEntry>? = null
+        override suspend fun downloadOutboxFile(pairing: PcPairing, id: Int, targetPath: String): Boolean = false
+        override suspend fun ackOutbox(pairing: PcPairing, id: Int) {}
     }
 
     private fun obj(meta: Map<String, String> = emptyMap()) = PointObject(

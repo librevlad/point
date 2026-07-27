@@ -75,3 +75,26 @@ fun decodePcCaps(encoded: String): List<PcRemoteAction> =
             .mapNotNull { it.trim().takeIf(String::isNotEmpty) }.toSet()
         if (id.isEmpty() || label.isEmpty()) null else PcRemoteAction(id, label, kinds)
     }.toList()
+
+/** One object waiting in the PC's outbox for the phone to pull (#161).
+ *  The display name and mime live inside [meta] («name», «mime»). */
+data class PcOutboxEntry(val id: Int, val meta: Map<String, String>)
+
+/** `id<TAB>base64(encodePcMeta(meta))` per line — base64 keeps tabs and newlines
+ *  inside metadata values from ever breaking the line format. */
+fun encodePcOutbox(entries: List<PcOutboxEntry>): String =
+    entries.joinToString("\n") { entry ->
+        val meta = java.util.Base64.getEncoder().encodeToString(encodePcMeta(entry.meta).toByteArray())
+        "${entry.id}\t$meta"
+    }
+
+fun decodePcOutbox(encoded: String): List<PcOutboxEntry> =
+    encoded.lineSequence().mapNotNull { line ->
+        val tab = line.indexOf('\t')
+        if (tab <= 0) return@mapNotNull null
+        val id = line.substring(0, tab).trim().toIntOrNull() ?: return@mapNotNull null
+        val meta = runCatching {
+            decodePcMeta(String(java.util.Base64.getDecoder().decode(line.substring(tab + 1).trim())))
+        }.getOrNull() ?: return@mapNotNull null
+        PcOutboxEntry(id, meta)
+    }.toList()

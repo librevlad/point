@@ -84,11 +84,12 @@ class FlowViewModelTest {
     private fun vm(
         caps: Map<CapabilityId, Set<Intent>> = mapOf(CapabilityId("a") to setOf(Intent.PREPARE)),
         cloud: Set<CapabilityId> = emptySet(),
-    ) = FlowViewModel(store, FakeRegistry(caps, cloud), resolver, enrichment, history, favorites, usage, chosenApps, userKeys, journal, consent, appLauncher, FakePdfRasterizer(), sensory, sensorySettings, snapshot, crashLog, dispatcher, pins, AppIconResolver { null }, pcPairings, FakePcTransport(), com.point.core.flow.PcDiscovery { kotlinx.coroutines.flow.flowOf(emptyList()) }, basket, pcCaps)
+    ) = FlowViewModel(store, FakeRegistry(caps, cloud), resolver, enrichment, history, favorites, usage, chosenApps, userKeys, journal, consent, appLauncher, FakePdfRasterizer(), sensory, sensorySettings, snapshot, crashLog, dispatcher, pins, AppIconResolver { null }, pcPairings, pcTransport, com.point.core.flow.PcDiscovery { kotlinx.coroutines.flow.flowOf(emptyList()) }, basket, pcCaps, PulledFileFactory { name -> java.io.File(java.io.File(System.getProperty("java.io.tmpdir")), "pulled-" + name).absolutePath })
 
     private val basket = FakeBasket()
     private val pcCaps = FakePcCaps()
     private val pcPairings = FakePcPairings()
+    private val pcTransport = FakePcTransport()
 
     private class FakePcCaps : com.point.core.flow.PcCapsStore {
         var saved: List<com.point.core.flow.PcRemoteAction>? = null
@@ -669,6 +670,46 @@ class FlowViewModelTest {
         assertTrue(pcCaps.cleared)
     }
 
+    @Test fun `a paired Home visit lights the from-PC banner, throttled, and pull opens the flow (#161)`() = runTest(dispatcher) {
+        pcPairings.pairing = com.point.core.flow.PcPairing("10.0.2.2", 8391, "tok")
+        pcTransport.outbox = listOf(com.point.core.flow.PcOutboxEntry(1, mapOf("name" to "чек.jpg", "mime" to "image/jpeg")))
+        val vm = vm()
+
+        vm.loadRecent(); advanceUntilIdle()
+        assertEquals(1, vm.fromPcCount.value)
+        vm.loadRecent(); advanceUntilIdle()
+        assertEquals(1, pcTransport.outboxFetches) // throttled: one wire call for two visits
+
+        vm.pullFromPc(); advanceUntilIdle()
+        assertEquals(ObjectKind.IMAGE, vm.ui.value.frame?.obj?.state?.kind) // ingested and opened
+        assertEquals(listOf(1), pcTransport.acked)
+        assertEquals(0, vm.fromPcCount.value)
+    }
+
+    @Test fun `closing the PC screen refreshes the from-PC banner for Home (#161)`() = runTest(dispatcher) {
+        pcPairings.pairing = com.point.core.flow.PcPairing("10.0.2.2", 8391, "tok")
+        pcTransport.outbox = listOf(com.point.core.flow.PcOutboxEntry(2, mapOf("name" to "a.txt", "mime" to "text/plain")))
+        val vm = vm()
+
+        vm.openPcSettings(); advanceUntilIdle()
+        vm.closePcSettings(); advanceUntilIdle()
+
+        assertEquals(1, vm.fromPcCount.value)
+    }
+
+    @Test fun `a failed download keeps the entries un-acked (#161)`() = runTest(dispatcher) {
+        pcPairings.pairing = com.point.core.flow.PcPairing("10.0.2.2", 8391, "tok")
+        pcTransport.outbox = listOf(com.point.core.flow.PcOutboxEntry(1, mapOf("name" to "a.txt", "mime" to "text/plain")))
+        pcTransport.downloadOk = false
+        val vm = vm()
+        vm.loadRecent(); advanceUntilIdle()
+
+        vm.pullFromPc(); advanceUntilIdle()
+
+        assertTrue(pcTransport.acked.isEmpty())
+        assertEquals(1, vm.fromPcCount.value)
+    }
+
     @Test fun `opening the PC screen refreshes the cached remote actions (#80 v2)`() = runTest(dispatcher) {
         val vm = vm()
         pcPairings.pairing = com.point.core.flow.PcPairing("10.0.2.2", 8391, "tok")
@@ -1093,6 +1134,10 @@ private class FakePcPairings : com.point.core.flow.PcPairings {
 }
 
 private class FakePcTransport : com.point.core.flow.PcTransport {
+    var outbox: List<com.point.core.flow.PcOutboxEntry> = emptyList()
+    var outboxFetches = 0
+    var downloadOk = true
+    val acked = mutableListOf<Int>()
     override suspend fun pair(host: String, port: Int, deviceName: String): com.point.core.flow.PcPairing? =
         com.point.core.flow.PcPairing(host, port, "tok")
     override suspend fun send(
@@ -1104,6 +1149,16 @@ private class FakePcTransport : com.point.core.flow.PcTransport {
     ): com.point.core.flow.PcSendOutcome = com.point.core.flow.PcSendOutcome.Sent
     override suspend fun fetchCaps(pairing: com.point.core.flow.PcPairing): List<com.point.core.flow.PcRemoteAction>? =
         listOf(com.point.core.flow.PcRemoteAction("pc-open", "Открыть на компьютере"))
+    override suspend fun fetchOutbox(pairing: com.point.core.flow.PcPairing): List<com.point.core.flow.PcOutboxEntry>? {
+        outboxFetches++
+        return outbox
+    }
+    override suspend fun downloadOutboxFile(pairing: com.point.core.flow.PcPairing, id: Int, targetPath: String): Boolean {
+        if (!downloadOk) return false
+        java.io.File(targetPath).apply { parentFile?.mkdirs(); writeText("pulled-$id") }
+        return true
+    }
+    override suspend fun ackOutbox(pairing: com.point.core.flow.PcPairing, id: Int) { acked += id }
 }
 
 private class FakeChosenApps : com.point.core.flow.ChosenApps {

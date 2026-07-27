@@ -48,8 +48,9 @@ fun main() {
     }
 
     val downloader = YtDlpDownloader(File(System.getProperty("user.home"), "Point/downloads"))
+    val outbox = Outbox(File(System.getProperty("user.home"), "Point/outbox"))
     val registry = DesktopRegistry(
-        setOf(PcOpenCapability(), PcCopyCapability(), PcRevealCapability(), PcSaveAsCapability(), PcDownloadCapability()),
+        setOf(PcOpenCapability(), PcCopyCapability(), PcRevealCapability(), PcSaveAsCapability(), PcDownloadCapability(), PcToPhoneCapability()),
     )
     val resolver = DesktopResolver(
         setOf(
@@ -58,6 +59,7 @@ fun main() {
             PcRevealRealizer(revealer),
             PcSaveAsRealizer(saveTarget),
             PcDownloadRealizer(downloader),
+            PcToPhoneRealizer(outbox),
         ),
     )
     state = DesktopState(registry, resolver, clipboard)
@@ -81,6 +83,7 @@ fun main() {
             }
         },
         runAction = state::runRemoteAction,
+        outbox = outbox,
     )
     server.start(preferredPort = config.port)
     // Slice C: let phones discover this PC by themselves (best-effort mDNS).
