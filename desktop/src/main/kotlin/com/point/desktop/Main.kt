@@ -62,7 +62,15 @@ fun main() {
             PcToPhoneRealizer(outbox),
         ),
     )
-    state = DesktopState(registry, resolver, clipboard)
+    val phoneCapsFile = File(File(System.getProperty("user.home"), ".point-pc"), "phone-caps")
+    state = DesktopState(
+        registry, resolver, clipboard, outbox,
+        persistPhoneCaps = { caps ->
+            runCatching { phoneCapsFile.apply { parentFile?.mkdirs() }.writeText(com.point.core.flow.encodePcCaps(caps)) }
+        },
+    )
+    runCatching { com.point.core.flow.decodePcCaps(phoneCapsFile.readText()) }
+        .getOrNull()?.let(state::setPhoneCaps)
 
     val server = PcServer(
         inbox = inbox,
@@ -84,6 +92,7 @@ fun main() {
         },
         runAction = state::runRemoteAction,
         outbox = outbox,
+        onPhoneCaps = state::setPhoneCaps,
     )
     server.start(preferredPort = config.port)
     // Slice C: let phones discover this PC by themselves (best-effort mDNS).

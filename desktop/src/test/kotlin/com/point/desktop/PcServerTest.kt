@@ -24,6 +24,8 @@ class PcServerTest {
 
     private val ranActions = mutableListOf<Pair<String, InboxItem>>()
 
+    private val phoneCaps = mutableListOf<com.point.core.flow.PcRemoteAction>()
+
     private fun server(accept: Boolean = true, outbox: Outbox? = null, onReceived: (InboxItem) -> Unit = {}): PcServer =
         PcServer(
             inbox = Inbox(tmp.root),
@@ -32,6 +34,7 @@ class PcServerTest {
             pairGate = { accept },
             onReceived = onReceived,
             outbox = outbox,
+            onPhoneCaps = { caps -> phoneCaps.clear(); phoneCaps.addAll(caps) },
             remoteActions = listOf(
                 com.point.core.flow.PcRemoteAction("pc-open", "Открыть на компьютере"),
                 com.point.core.flow.PcRemoteAction("pc-copy", "В буфер компьютера"),
@@ -261,6 +264,27 @@ class PcServerTest {
                 ByteArray(0),
             )
             assertEquals(200, again)
+        } finally { s.stop() }
+    }
+
+    @Test
+    fun `the phone advertises its actions and the PC stores them (#161 v2)`() {
+        val s = server()
+        try {
+            val body = com.point.core.flow.encodePcCaps(
+                listOf(com.point.core.flow.PcRemoteAction("call", "Позвонить", kinds = setOf("TEXT"))),
+            ).toByteArray()
+            val (code, _) = post(
+                "http://127.0.0.1:${s.port}/phone-caps",
+                mapOf("X-Point-Token" to "secret-token"),
+                body,
+            )
+            assertEquals(200, code)
+            assertEquals(listOf("call"), phoneCaps.map { it.id })
+            assertEquals(setOf("TEXT"), phoneCaps[0].kinds)
+
+            val (bad, _) = post("http://127.0.0.1:${s.port}/phone-caps", mapOf("X-Point-Token" to "wrong"), body)
+            assertEquals(401, bad)
         } finally { s.stop() }
     }
 }

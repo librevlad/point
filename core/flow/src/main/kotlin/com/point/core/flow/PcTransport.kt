@@ -35,6 +35,10 @@ interface PcTransport {
 
     /** Confirm the entry landed — the PC drops it from the outbox. */
     suspend fun ackOutbox(pairing: PcPairing, id: Int)
+
+    /** Advertise the phone's own actions to the PC (#161 v2) — its cards grow
+     *  «… · телефон» buttons. Quiet best-effort. */
+    suspend fun pushPhoneCaps(pairing: PcPairing, caps: List<PcRemoteAction>): Boolean
 }
 
 /** Cached remote actions of the paired PC — warm sync read for capability synthesis

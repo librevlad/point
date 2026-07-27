@@ -166,7 +166,7 @@ class FlowViewModel @Inject constructor(
         }
     }
 
-    fun onShared(sourceUri: String, mime: String) {
+    fun onShared(sourceUri: String, mime: String, autoAction: String? = null) {
         freshShareArrived = true
         _ui.update { it.copy(busy = "Открываю…", busyNetwork = false, busyQuiet = false, message = null, inputPrompt = null) }
         viewModelScope.launch {
@@ -182,6 +182,10 @@ class FlowViewModel @Inject constructor(
             cancelEnrichment()
             stack.clear()
             pushFrame(obj)
+            // #161 v2: the PC named an intent for this object — run it as if tapped.
+            autoAction?.let { id ->
+                onBubble(Bubble("pc", registry.byId(CapabilityId(id)).label(obj.state), CapabilityId(id), obj.state))
+            }
         }
     }
 
@@ -248,7 +252,11 @@ class FlowViewModel @Inject constructor(
                 return@launch
             }
             when (pulled.size) {
-                1 -> onShared("file://${pulled[0].second}", pulled[0].first.meta["mime"] ?: "application/octet-stream")
+                1 -> onShared(
+                    "file://${pulled[0].second}",
+                    pulled[0].first.meta["mime"] ?: "application/octet-stream",
+                    autoAction = pulled[0].first.meta["pc.action"]?.takeIf { it.isNotBlank() },
+                )
                 else -> onSharedMultiple(pulled.map { "file://${it.second}" })
             }
             pulled.forEach { (entry, _, _) ->
@@ -519,6 +527,7 @@ class FlowViewModel @Inject constructor(
                 // #80: remember what the PC can do — its actions become bubbles from
                 // the next launch (synthesis reads the warm cache at process start).
                 runCatching { pcTransport.fetchCaps(pairing)?.let { caps -> pcCaps.save(caps) } }
+                runCatching { pcTransport.pushPhoneCaps(pairing, PHONE_ADVERTISED) }
                 refreshFromPc(force = true) // #161: the fresh pairing may already have a queue
                 _ui.update { it.copy(pcScreen = PcScreenState(pairing = pairing)) }
             } else {
@@ -1020,4 +1029,11 @@ private const val MAX_CLIP = 2000
 /** How rarely Home re-asks the PC for its outbox (#161) — app switches with the PC away
  *  must not burn a connect timeout every time. */
 private const val OUTBOX_THROTTLE_MS = 30_000L
+
+/** The phone-side actions advertised to the paired PC (#161 v2) — deliberately few and
+ *  non-interactive: each opens a system screen the user finishes themselves. */
+private val PHONE_ADVERTISED = listOf(
+    com.point.core.flow.PcRemoteAction("call", "Позвонить", kinds = setOf("TEXT")),
+    com.point.core.flow.PcRemoteAction("event", "Создать событие", kinds = setOf("TEXT")),
+)
 private const val PREVIEW_MAX_PX = 640
