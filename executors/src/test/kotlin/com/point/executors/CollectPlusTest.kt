@@ -44,6 +44,17 @@ class CollectPlusTest {
     }
 
     @Test
+    fun `collects device and document identifiers - model, serial, code (real-device #128)`() {
+        val grouped = parseCollected("MODEL=Apple Watch Series 11\nSERIAL=PH7QMF2D\nCODE=MEV44ZP/A")
+        assertEquals(listOf("Apple Watch Series 11"), grouped["MODEL"])
+        assertEquals(listOf("PH7QMF2D"), grouped["SERIAL"])
+        assertEquals(listOf("MEV44ZP/A"), grouped["CODE"])
+        val text = formatCollected(grouped)
+        assertTrue(text.contains("Серийные номера:"))
+        assertTrue(text.contains("PH7QMF2D"))
+    }
+
+    @Test
     fun `formats grouped categories into titled russian sections`() {
         val text = formatCollected(
             linkedMapOf("NAME" to listOf("Иван Петров"), "AMOUNT" to listOf("50 000 ₽")),
