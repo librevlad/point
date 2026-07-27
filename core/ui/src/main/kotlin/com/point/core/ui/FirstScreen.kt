@@ -222,7 +222,7 @@ fun FirstScreen(
             ObjectHeader(
                 obj,
                 thinking = enriching.isNotEmpty() || working,
-                understood = facts.isNotEmpty(),
+                factCount = facts.size,
                 preview = previewBitmap,
             )
         }
@@ -499,7 +499,7 @@ private fun TextPreview(text: String, markdown: Boolean = false) {
 private fun ObjectHeader(
     obj: PointObject,
     thinking: Boolean = false,
-    understood: Boolean = false,
+    factCount: Int = 0,
     preview: ImageBitmap? = null,
 ) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -511,7 +511,7 @@ private fun ObjectHeader(
         AliveSurface(
             kind = obj.state.kind,
             thinking = thinking,
-            understood = understood,
+            understanding = auraLevel(factCount),
             shape = RoundedCornerShape(26.dp),
             size = headerSize,
         ) {
