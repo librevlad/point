@@ -41,6 +41,10 @@ class DesktopState(
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()
 
+    private val _clipboardText = MutableStateFlow<String?>(null)
+    /** The latest text that crossed into the PC clipboard — shown as a live «Буфер» card. */
+    val clipboardText: StateFlow<String?> = _clipboardText.asStateFlow()
+
     private val _phoneCaps = MutableStateFlow<List<com.point.core.flow.PcRemoteAction>>(emptyList())
     /** The paired phone's advertised actions (#161 v2) — cards grow «… · телефон» buttons. */
     val phoneCaps = _phoneCaps.asStateFlow()
@@ -90,8 +94,12 @@ class DesktopState(
         // Owner's decision: text from the phone lands straight in the clipboard —
         // arrived → Ctrl+V, the shortest possible path.
         if (item.obj.state.kind == ObjectKind.TEXT) {
-            runCatching { clipboard.copy(File(item.obj.uri.value).readText()) }
-                .onSuccess { _message.value = "Текст уже в буфере — Ctrl+V" }
+            val text = runCatching { File(item.obj.uri.value).readText() }.getOrNull()
+            if (text != null) {
+                runCatching { clipboard.copy(text) }
+                _clipboardText.value = text // a live «Буфер» card, not just a transient line
+                _message.value = null
+            }
         } else {
             _message.value = "Получено: ${item.obj.metadata["name"]}"
         }
@@ -119,6 +127,15 @@ class DesktopState(
         return runCatching {
             decision.get(60, java.util.concurrent.TimeUnit.SECONDS)
         }.getOrDefault(false).also { _pairRequest.value = null }
+    }
+
+    /** Re-copy the current clipboard text (after copying something else on the PC). */
+    fun copyClipboardAgain() {
+        _clipboardText.value?.let { runCatching { clipboard.copy(it) } }
+    }
+
+    fun clearClipboard() {
+        _clipboardText.value = null
     }
 
     fun dismissMessage() {

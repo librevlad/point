@@ -1,5 +1,6 @@
 package com.point.desktop.ui
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.draganddrop.dragAndDropTarget
@@ -40,6 +41,7 @@ import androidx.compose.ui.draganddrop.DragAndDropEvent
 import androidx.compose.ui.draganddrop.DragAndDropTarget
 import androidx.compose.ui.draganddrop.awtTransferable
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import java.awt.datatransfer.DataFlavor
 import java.io.File
@@ -65,6 +67,7 @@ fun DesktopApp(
     val items by state.items.collectAsState()
     val message by state.message.collectAsState()
     val pair by state.pairRequest.collectAsState()
+    val clipboardText by state.clipboardText.collectAsState()
 
     // Native Compose drag&drop (the AWT window.dropTarget never fired — the Compose
     // surface intercepts drops). Reads the OS transferable: files or plain text.
@@ -108,6 +111,17 @@ fun DesktopApp(
                     )
                 }
                 ConnectionChip(config, onShowQr = { showQr = true })
+            }
+            // The buffer «lands» visibly (fade + expand) instead of a silent one-off message.
+            AnimatedVisibility(visible = clipboardText != null) {
+                Column {
+                    Spacer(Modifier.height(12.dp))
+                    ClipboardCard(
+                        text = clipboardText ?: "",
+                        onCopyAgain = { state.copyClipboardAgain() },
+                        onClose = { state.clearClipboard() },
+                    )
+                }
             }
             Spacer(Modifier.height(16.dp))
             if (items.isEmpty()) {
@@ -185,6 +199,38 @@ private fun ItemCard(state: DesktopState, item: InboxItem) {
                     OutlinedButton(onClick = { state.onBubble(item, bubble) }) { Text(bubble.title) }
                 }
             }
+        }
+    }
+}
+
+/** The live «Буфер» card — the text that just crossed from the phone into the PC clipboard,
+ *  shown instead of a silent one-off message; re-copy or dismiss. */
+@Composable
+private fun ClipboardCard(text: String, onCopyAgain: () -> Unit, onClose: () -> Unit) {
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    "Буфер · Ctrl+V",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            TextButton(onClick = onCopyAgain) { Text("Копировать снова") }
+            TextButton(onClick = onClose) { Text("×") }
         }
     }
 }
