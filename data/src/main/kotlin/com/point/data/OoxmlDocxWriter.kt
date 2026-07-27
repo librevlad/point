@@ -29,6 +29,39 @@ class OoxmlDocxWriter @Inject constructor(
         ref
     }
 
+    override suspend fun writeStyled(blocks: List<com.point.core.flow.DocBlock>): ScratchRef =
+        withContext(Dispatchers.IO) {
+            val ref = store.newScratchFile("docx")
+            ZipOutputStream(File(ref.value).outputStream().buffered()).use { zip ->
+                zip.put("[Content_Types].xml", CONTENT_TYPES)
+                zip.put("_rels/.rels", ROOT_RELS)
+                zip.put("word/document.xml", styledDocument(blocks))
+            }
+            ref
+        }
+
+    /** Hand-rolled run/paragraph properties (#128): enough real formatting for an
+     *  editable structured document — no styles part needed. */
+    private fun styledDocument(blocks: List<com.point.core.flow.DocBlock>): String = buildString {
+        append("""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>""")
+        append("""<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>""")
+        (blocks.ifEmpty { listOf(com.point.core.flow.DocBlock("", com.point.core.flow.DocStyle.NORMAL)) }).forEach { block ->
+            val (pPr, rPr, text) = when (block.style) {
+                com.point.core.flow.DocStyle.TITLE ->
+                    Triple("""<w:pPr><w:spacing w:after="240"/></w:pPr>""", """<w:rPr><w:b/><w:sz w:val="48"/></w:rPr>""", block.text)
+                com.point.core.flow.DocStyle.HEADING ->
+                    Triple("""<w:pPr><w:spacing w:before="240" w:after="120"/></w:pPr>""", """<w:rPr><w:b/><w:sz w:val="32"/></w:rPr>""", block.text)
+                com.point.core.flow.DocStyle.BULLET ->
+                    Triple("""<w:pPr><w:ind w:left="720"/></w:pPr>""", "", "• " + block.text)
+                com.point.core.flow.DocStyle.NORMAL -> Triple("", "", block.text)
+            }
+            append("<w:p>").append(pPr)
+            append("<w:r>").append(rPr)
+            append("""<w:t xml:space="preserve">""").append(xml(text)).append("</w:t></w:r></w:p>")
+        }
+        append("""<w:sectPr/></w:body></w:document>""")
+    }
+
     private fun ZipOutputStream.put(name: String, content: String) {
         putNextEntry(ZipEntry(name))
         write(content.toByteArray(Charsets.UTF_8))

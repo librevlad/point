@@ -50,4 +50,22 @@ class OoxmlDocxWriterTest {
         val ref = OoxmlDocxWriter(store).write(emptyList())
         assertTrue(documentOf(ref).contains("<w:body>"))
     }
+
+    @Test
+    fun `styled blocks carry real formatting - bold sizes and bullet markers (#128)`() = runBlocking {
+        val ref = OoxmlDocxWriter(store).writeStyled(
+            listOf(
+                com.point.core.flow.DocBlock("Отчёт", com.point.core.flow.DocStyle.TITLE),
+                com.point.core.flow.DocBlock("Расходы", com.point.core.flow.DocStyle.HEADING),
+                com.point.core.flow.DocBlock("Такси — 540", com.point.core.flow.DocStyle.BULLET),
+                com.point.core.flow.DocBlock("Обычный абзац.", com.point.core.flow.DocStyle.NORMAL),
+            ),
+        )
+        val doc = documentOf(ref)
+        assertTrue(doc.contains("<w:b/><w:sz w:val=\"48\"/>")) // title: bold, 24pt
+        assertTrue(doc.contains("<w:b/><w:sz w:val=\"32\"/>")) // heading: bold, 16pt
+        assertTrue(doc.contains("<w:ind w:left=\"720\"/>"))     // bullet indent
+        assertTrue(doc.contains(">• Такси — 540<"))
+        assertTrue(doc.contains(">Обычный абзац.<"))
+    }
 }
