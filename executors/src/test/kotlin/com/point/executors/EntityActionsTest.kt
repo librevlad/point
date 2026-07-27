@@ -91,6 +91,14 @@ class EntityActionsTest {
     }
 
     @Test
+    fun `event is offered for a recognised meeting even without a parsed date (#89)`() {
+        val cap = EventCapability()
+        assertTrue(cap.accepts(ObjectState(ObjectKind.TEXT, setOf(Feature.IS_MEETING))))
+        assertTrue(cap.accepts(ObjectState(ObjectKind.TEXT, setOf(Feature.HAS_DATE))))
+        assertEquals(false, cap.accepts(ObjectState(ObjectKind.TEXT)))
+    }
+
+    @Test
     fun `event inserts a calendar entry titled from the first non-blank line`() = runTest {
         val cal = FakeCalendar()
         val result = EventRealizer(cal).perform(obj("\nВстреча с командой\nзавтра 18:00"))
