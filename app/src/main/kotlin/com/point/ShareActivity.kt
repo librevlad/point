@@ -31,6 +31,9 @@ class ShareActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         if (savedInstanceState == null) handleShare(intent)
+        // #7: resume a flow interrupted by process death — only here, so the launcher icon
+        // always opens Home. Self-skips when a fresh share just arrived (freshShareArrived).
+        viewModel.restoreJourney()
 
         onBackPressedDispatcher.addCallback(this) {
             if (!viewModel.onBack()) {
