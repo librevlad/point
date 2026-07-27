@@ -9,7 +9,6 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
@@ -18,7 +17,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
@@ -45,6 +48,22 @@ fun breathSpecFor(kind: ObjectKind): BreathSpec = when (kind) {
     ObjectKind.ZIP, ObjectKind.COLLECTION -> BreathSpec(scale = 1.004f, periodMs = 5_600)
     ObjectKind.PDF, ObjectKind.OFFICE, ObjectKind.UNKNOWN -> BreathSpec(scale = 1.003f, periodMs = 6_000)
 }
+
+/** Физика свипа-чтения по типу (принцип №3): как именно объект «читается». */
+data class ReadingSweepSpec(val vertical: Boolean, val periodMs: Int, val softness: Float)
+
+/** Документ читается строго сверху вниз (по строкам); фото — мягкий диагональный отблеск. */
+fun readingSweepSpecFor(kind: ObjectKind): ReadingSweepSpec = when (kind) {
+    ObjectKind.IMAGE -> ReadingSweepSpec(vertical = false, periodMs = 1_800, softness = 0.5f)
+    ObjectKind.PDF, ObjectKind.OFFICE, ObjectKind.TEXT, ObjectKind.URL ->
+        ReadingSweepSpec(vertical = true, periodMs = 1_300, softness = 0.3f)
+    else -> ReadingSweepSpec(vertical = true, periodMs = 1_500, softness = 0.35f)
+}
+
+/** Аура понимания (принцип №10): растёт с числом понятых фактов — 0 фактов темно,
+ *  первый факт уже тёплый, насыщается к максимуму. */
+fun auraLevel(factCount: Int): Float =
+    if (factCount <= 0) 0f else minOf(1f, 0.55f + 0.15f * (factCount - 1))
 
 /*
  * M2: bubbles are particles, not buttons (принцип №4). Each drifts weightlessly with
@@ -80,16 +99,16 @@ fun rememberMotionEnabled(): Boolean {
 /**
  * The living frame around the object's preview:
  * - it **breathes** with its kind's physics — the object is alive, not a thumbnail;
- * - while [thinking], a light ring pulses outward — the visible thought process
- *   (never a spinner);
- * - once [understood], the shadow warms into a soft brand-coloured **aura** —
- *   "Point понял" without a word of text.
+ * - while [thinking], a soft band of light is **read across** the object (принцип №3) —
+ *   clipped to its own shape, direction by kind ([readingSweepSpecFor]);
+ * - [understanding] (0..1, from [auraLevel]) warms the shadow into a brand **aura** that
+ *   grows fact by fact — "Point понял" without a word of text (принцип №10).
  */
 @Composable
 fun AliveSurface(
     kind: ObjectKind,
     thinking: Boolean,
-    understood: Boolean,
+    understanding: Float,
     shape: Shape,
     size: Dp,
     modifier: Modifier = Modifier,
@@ -97,10 +116,12 @@ fun AliveSurface(
 ) {
     val motion = rememberMotionEnabled()
     val spec = remember(kind) { breathSpecFor(kind) }
+    val sweepSpec = remember(kind) { readingSweepSpecFor(kind) }
     val accent = MaterialTheme.colorScheme.primary
+    val reading = motion && thinking
 
     val breath: Float
-    val pulse: Float
+    val sweep: Float
     if (motion) {
         val transition = rememberInfiniteTransition(label = "alive")
         breath = transition.animateFloat(
@@ -111,37 +132,23 @@ fun AliveSurface(
             ),
             label = "breath",
         ).value
-        pulse = transition.animateFloat(
+        sweep = transition.animateFloat(
             initialValue = 0f,
             targetValue = 1f,
-            animationSpec = infiniteRepeatable(tween(1_400, easing = LinearEasing)),
-            label = "pulse",
+            animationSpec = infiniteRepeatable(tween(sweepSpec.periodMs, easing = LinearEasing)),
+            label = "sweep",
         ).value
     } else {
         breath = 1f
-        pulse = 0f
+        sweep = 0f
     }
     val aura by animateFloatAsState(
-        targetValue = if (understood) 1f else 0f,
+        targetValue = understanding.coerceIn(0f, 1f),
         animationSpec = tween(900),
         label = "aura",
     )
 
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
-        if (motion && thinking) {
-            // An impulse ring, born at the object and dissolving outward (принцип №3).
-            Box(
-                Modifier
-                    .size(size)
-                    .graphicsLayer {
-                        val grow = 1f + 0.35f * pulse
-                        scaleX = grow
-                        scaleY = grow
-                        alpha = (1f - pulse) * 0.45f
-                    }
-                    .border(2.dp, accent, shape),
-            )
-        }
         Box(
             Modifier
                 .size(size)
@@ -155,7 +162,33 @@ fun AliveSurface(
                     clip = false,
                     ambientColor = lerp(Color.Black, accent, aura),
                     spotColor = lerp(Color.Black, accent, aura),
-                ),
+                )
+                .clip(shape)
+                .drawWithContent {
+                    drawContent()
+                    // Свип-чтение (принцип №3): мягкая световая полоса читается по объекту,
+                    // пока Point думает; клип по форме объекта делает предыдущий .clip(shape).
+                    if (reading) {
+                        val band = this.size.minDimension * (0.35f + sweepSpec.softness)
+                        val travel =
+                            if (sweepSpec.vertical) this.size.height
+                            else this.size.width + this.size.height
+                        val p = sweep * (travel + band * 2f) - band
+                        val start = if (sweepSpec.vertical) Offset(0f, p) else Offset(p, p)
+                        val end =
+                            if (sweepSpec.vertical) Offset(0f, p + band)
+                            else Offset(p + band, p + band)
+                        drawRect(
+                            brush = Brush.linearGradient(
+                                0f to Color.Transparent,
+                                0.5f to accent.copy(alpha = 0.20f),
+                                1f to Color.Transparent,
+                                start = start,
+                                end = end,
+                            ),
+                        )
+                    }
+                },
         ) {
             content()
         }

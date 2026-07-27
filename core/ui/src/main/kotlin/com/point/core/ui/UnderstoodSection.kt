@@ -141,7 +141,8 @@ private fun ThinkingDot() {
     )
 }
 
-/** One understood line: an accent check, the claim, and the value it rests on. */
+/** One understood line: ignites brand-bright as if just read out of the object (принципы
+ *  №1/№4), then settles — синхронно с аурой объекта, что делает шаг на каждый факт. */
 @Composable
 private fun FactRow(fact: UnderstoodFact) {
     var appeared by remember { mutableStateOf(false) }
@@ -151,20 +152,33 @@ private fun FactRow(fact: UnderstoodFact) {
         animationSpec = tween(240),
         label = "fact-in",
     )
+    val flash by animateFloatAsState(
+        targetValue = if (appeared) 0f else 1f,
+        animationSpec = tween(520),
+        label = "fact-ignite",
+    )
+    val accent = MaterialTheme.colorScheme.primary
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
-            .padding(vertical = 4.dp)
             .graphicsLayer {
                 alpha = progress
                 translationY = (1f - progress) * 8.dp.toPx()
-            },
+            }
+            .clip(RoundedCornerShape(8.dp))
+            .background(accent.copy(alpha = 0.16f * flash))
+            .padding(horizontal = 6.dp, vertical = 4.dp),
     ) {
         Text(
             text = "✓",
             style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.graphicsLayer {
+                val s = 1f + 0.35f * flash
+                scaleX = s
+                scaleY = s
+            },
         )
         Spacer(Modifier.width(9.dp))
         Text(
