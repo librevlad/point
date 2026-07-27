@@ -15,6 +15,8 @@ import com.point.executors.PcRealizer
 import com.point.executors.AppOpenRealizer
 import com.point.executors.AiCapability
 import com.point.executors.DeepUnderstandCapability
+import com.point.executors.JobReplyCapability
+import com.point.executors.JobReplyRealizer
 import com.point.executors.DeepUnderstandRealizer
 import com.point.executors.ShoppingListCapability
 import com.point.executors.ShoppingListRealizer
@@ -156,6 +158,7 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun aiCap(c: AiCapability): Capability
     @Binds @IntoSet abstract fun shoppingListCap(c: ShoppingListCapability): Capability
     @Binds @IntoSet abstract fun deepUnderstandCap(c: DeepUnderstandCapability): Capability
+    @Binds @IntoSet abstract fun jobReplyCap(c: JobReplyCapability): Capability
 
     // --- Realizers (behaviour) ---
     @Binds @IntoSet abstract fun shareR(r: ShareRealizer): Realizer
@@ -198,6 +201,7 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun aiR(r: AiRealizer): Realizer
     @Binds @IntoSet abstract fun shoppingListR(r: ShoppingListRealizer): Realizer
     @Binds @IntoSet abstract fun deepUnderstandR(r: DeepUnderstandRealizer): Realizer
+    @Binds @IntoSet abstract fun jobReplyR(r: JobReplyRealizer): Realizer
     @Binds @IntoSet abstract fun pcR(r: PcRealizer): Realizer
     @Binds @IntoSet abstract fun pairPcR(r: PairPcRealizer): Realizer
 
