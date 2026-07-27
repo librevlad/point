@@ -2,6 +2,7 @@ package com.point.desktop.ui
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.draganddrop.dragAndDropTarget
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,8 +33,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draganddrop.DragAndDropEvent
+import androidx.compose.ui.draganddrop.DragAndDropTarget
+import androidx.compose.ui.draganddrop.awtTransferable
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import java.awt.datatransfer.DataFlavor
+import java.io.File
 import com.point.core.model.ObjectKind
 import com.point.desktop.DesktopState
 import com.point.desktop.InboxItem
@@ -43,18 +49,47 @@ import com.point.desktop.PcConfig
  * One window: the inbox on the left, the selected object's bubbles inline, and the
  * "connect your phone" card with the QR — the whole pairing story on one screen.
  */
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun DesktopApp(
     state: DesktopState,
     config: PcConfig,
     addresses: List<String>,
     port: Int,
+    onFilesDropped: (List<File>) -> Unit = {},
+    onTextDropped: (String) -> Unit = {},
 ) {
     val items by state.items.collectAsState()
     val message by state.message.collectAsState()
     val pair by state.pairRequest.collectAsState()
 
-    Surface(color = MaterialTheme.colorScheme.surface, modifier = Modifier.fillMaxSize()) {
+    // Native Compose drag&drop (the AWT window.dropTarget never fired — the Compose
+    // surface intercepts drops). Reads the OS transferable: files or plain text.
+    val dropTarget = remember {
+        object : DragAndDropTarget {
+            override fun onDrop(event: DragAndDropEvent): Boolean = runCatching {
+                val t = event.awtTransferable
+                when {
+                    t.isDataFlavorSupported(DataFlavor.javaFileListFlavor) -> {
+                        @Suppress("UNCHECKED_CAST")
+                        onFilesDropped(t.getTransferData(DataFlavor.javaFileListFlavor) as List<File>)
+                        true
+                    }
+                    t.isDataFlavorSupported(DataFlavor.stringFlavor) -> {
+                        onTextDropped(t.getTransferData(DataFlavor.stringFlavor) as String)
+                        true
+                    }
+                    else -> false
+                }
+            }.getOrDefault(false)
+        }
+    }
+
+    Surface(
+        color = MaterialTheme.colorScheme.surface,
+        modifier = Modifier.fillMaxSize()
+            .dragAndDropTarget(shouldStartDragAndDrop = { true }, target = dropTarget),
+    ) {
         Row(Modifier.fillMaxSize().padding(20.dp)) {
             Column(Modifier.weight(1f).fillMaxHeight()) {
                 Text("Point для ПК", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
