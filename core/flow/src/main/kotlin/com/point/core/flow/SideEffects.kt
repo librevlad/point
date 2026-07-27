@@ -88,9 +88,18 @@ interface SpreadsheetWriter {
 
 /** Writes paragraphs to a minimal, editable .docx in the scratch store — a hand-rolled OOXML
  *  wordprocessing package (no Apache POI), mirroring [SpreadsheetWriter]. */
+/** A structured document block (#128) — what «В Word+» lays the raw text out into. */
+enum class DocStyle { TITLE, HEADING, BULLET, NORMAL }
+
+data class DocBlock(val text: String, val style: DocStyle)
+
 interface DocxWriter {
     /** @return the scratch .docx holding [paragraphs], one `<w:p>` each. */
     suspend fun write(paragraphs: List<String>): ScratchRef
+
+    /** Styled variant (#128): titles bold+large, headings bold, bullets indented with a
+     *  marker. Default keeps old implementations compiling by flattening to plain text. */
+    suspend fun writeStyled(blocks: List<DocBlock>): ScratchRef = write(blocks.map { it.text })
 }
 
 /** Encodes text into a QR-code PNG in the scratch store — a pure on-device type transform
