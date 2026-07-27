@@ -25,6 +25,7 @@ junrar = "7.5.5"
 tesseract4android = "4.9.0"
 opencv = "4.14.0"
 mlkitEntityExtraction = "16.0.0-beta6"
+mlkitBarcode = "17.3.0"
 mlkitSubjectSegmentation = "16.0.0-beta1"
 zxing = "3.5.3"
 junit = "4.13.2"
@@ -64,6 +65,7 @@ junrar = { group = "com.github.junrar", name = "junrar", version.ref = "junrar" 
 tesseract4android = { group = "com.github.adaptech-cz.Tesseract4Android", name = "tesseract4android", version.ref = "tesseract4android" } # on-device OCR (Tesseract 5)
 opencv = { group = "org.opencv", name = "opencv", version.ref = "opencv" } # document scan pipeline (perspective + adaptive threshold)
 mlkit-entity-extraction = { group = "com.google.mlkit", name = "entity-extraction", version.ref = "mlkitEntityExtraction" } # on-device entity detection (phone/email/address/date/…)
+mlkit-barcode = { group = "com.google.mlkit", name = "barcode-scanning", version.ref = "mlkitBarcode" } # on-device QR/barcode (bundled model, offline)
 mlkit-subject-segmentation = { group = "com.google.android.gms", name = "play-services-mlkit-subject-segmentation", version.ref = "mlkitSubjectSegmentation" } # on-device subject cutout (transparent PNG)
 kotlinx-coroutines-play-services = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-play-services", version.ref = "coroutines" } # await() for ML Kit Tasks
 zxing-core = { group = "com.google.zxing", name = "core", version.ref = "zxing" } # QR encode (pure Java → BitMatrix)

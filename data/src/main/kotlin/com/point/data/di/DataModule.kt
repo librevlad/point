@@ -74,6 +74,7 @@ import com.point.data.UrlConnectionHttpJson
 import com.point.data.MediaStoreExporter
 import com.point.data.MetadataEntityEnricher
 import com.point.data.MlKitBackgroundRemover
+import com.point.data.MlKitQrReader
 import com.point.data.OcrEnricher
 import com.point.data.OoxmlDocxWriter
 import com.point.data.OoxmlOfficeTextExtractor
@@ -167,9 +168,6 @@ abstract class DataModule {
 
     @Binds
     abstract fun imageCompositor(impl: AndroidImageCompositor): ImageCompositor
-
-    @Binds
-    abstract fun qrReader(impl: ZxingQrReader): QrReader
 
     @Binds
     abstract fun officeTextExtractor(impl: OoxmlOfficeTextExtractor): OfficeTextExtractor
@@ -290,6 +288,12 @@ abstract class DataModule {
         @Provides
         @Singleton
         fun backgroundRemover(store: ObjectStore): BackgroundRemover = MlKitBackgroundRemover(store)
+
+        /** QR read: ML Kit Barcode (robust on photos) with ZXing as fallback. @Provides keeps the
+         *  ML Kit AAR types out of KSP aggregation, same as the others. */
+        @Provides
+        @Singleton
+        fun qrReader(): QrReader = MlKitQrReader(ZxingQrReader())
 
         /**
          * The AI fallback chain — "all free providers, max": every OpenAI-compatible
