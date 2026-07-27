@@ -84,6 +84,7 @@ class FlowViewModel @Inject constructor(
     private val pcPairings: com.point.core.flow.PcPairings,
     private val pcTransport: com.point.core.flow.PcTransport,
     private val pcDiscovery: com.point.core.flow.PcDiscovery,
+    private val basket: com.point.core.flow.Basket,
 ) : ViewModel() {
 
     private val stack = ArrayDeque<FlowFrame>()
@@ -104,6 +105,10 @@ class FlowViewModel @Inject constructor(
     private val _crashReport = MutableStateFlow<String?>(null)
     /** A previous crash report, offered once for an explicit share (#11). */
     val crashReport: StateFlow<String?> = _crashReport.asStateFlow()
+
+    private val _basketCount = MutableStateFlow(0)
+    /** Items accumulated in the basket (#96) — Home offers to open the pile as one COLLECTION. */
+    val basketCount: StateFlow<Int> = _basketCount.asStateFlow()
 
     private val _clipboard = MutableStateFlow<String?>(null)
     /** Actionable text sitting in the clipboard when Point opened — a dismissible Home suggestion (#72). */
@@ -196,6 +201,24 @@ class FlowViewModel @Inject constructor(
     fun loadRecent() {
         viewModelScope.launch {
             _recent.value = runCatching { history.recent() }.getOrDefault(emptyList())
+            _basketCount.value = runCatching { basket.items().size }.getOrDefault(0)
+        }
+    }
+
+    /** Open the accumulated pile (#96) as one COLLECTION flow — the basket itself
+     *  keeps its copies; the flow works on fresh scratch ones (copy-in invariant). */
+    fun openBasket() {
+        viewModelScope.launch {
+            val paths = runCatching { basket.items() }.getOrDefault(emptyList())
+            if (paths.isEmpty()) { _basketCount.value = 0; return@launch }
+            onSharedMultiple(paths.map { "file://$it" })
+        }
+    }
+
+    fun clearBasket() {
+        viewModelScope.launch {
+            runCatching { basket.clear() }
+            _basketCount.value = 0
         }
     }
 

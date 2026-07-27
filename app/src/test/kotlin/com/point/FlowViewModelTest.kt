@@ -84,7 +84,16 @@ class FlowViewModelTest {
     private fun vm(
         caps: Map<CapabilityId, Set<Intent>> = mapOf(CapabilityId("a") to setOf(Intent.PREPARE)),
         cloud: Set<CapabilityId> = emptySet(),
-    ) = FlowViewModel(store, FakeRegistry(caps, cloud), resolver, enrichment, history, favorites, usage, chosenApps, userKeys, journal, consent, appLauncher, FakePdfRasterizer(), sensory, sensorySettings, snapshot, crashLog, dispatcher, pins, AppIconResolver { null }, FakePcPairings(), FakePcTransport(), com.point.core.flow.PcDiscovery { kotlinx.coroutines.flow.flowOf(emptyList()) })
+    ) = FlowViewModel(store, FakeRegistry(caps, cloud), resolver, enrichment, history, favorites, usage, chosenApps, userKeys, journal, consent, appLauncher, FakePdfRasterizer(), sensory, sensorySettings, snapshot, crashLog, dispatcher, pins, AppIconResolver { null }, FakePcPairings(), FakePcTransport(), com.point.core.flow.PcDiscovery { kotlinx.coroutines.flow.flowOf(emptyList()) }, basket)
+
+    private val basket = FakeBasket()
+
+    private class FakeBasket : com.point.core.flow.Basket {
+        val added = mutableListOf<String>()
+        override suspend fun add(obj: PointObject): Int { added += obj.uri.value; return added.size }
+        override suspend fun items(): List<String> = added.toList()
+        override suspend fun clear() = added.clear()
+    }
 
     private fun bubble(id: String = "a", title: String = "Действие") =
         Bubble("x", title, CapabilityId(id), ObjectState(ObjectKind.TEXT))
@@ -639,6 +648,21 @@ class FlowViewModelTest {
         vm.endFlow(); advanceUntilIdle() // must not hang or apply to a cleared stack
 
         assertNull(vm.ui.value.frame)
+    }
+
+    @Test fun `the basket opens as one collection flow and its count reaches Home (#96)`() = runTest(dispatcher) {
+        basket.added += listOf("/b/1-a.txt", "/b/2-b.jpg")
+        val vm = vm()
+
+        vm.loadRecent(); advanceUntilIdle()
+        assertEquals(2, vm.basketCount.value)
+
+        vm.openBasket(); advanceUntilIdle()
+        assertEquals(ObjectKind.COLLECTION, vm.ui.value.frame?.obj?.state?.kind)
+
+        vm.endFlow()
+        vm.clearBasket(); advanceUntilIdle()
+        assertEquals(0, vm.basketCount.value)
     }
 
     @Test fun `onItem drills into a collection item as a new frame`() = runTest(dispatcher) {
