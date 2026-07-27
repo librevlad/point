@@ -46,6 +46,22 @@ fun breathSpecFor(kind: ObjectKind): BreathSpec = when (kind) {
     ObjectKind.PDF, ObjectKind.OFFICE, ObjectKind.UNKNOWN -> BreathSpec(scale = 1.003f, periodMs = 6_000)
 }
 
+/** Физика свипа-чтения по типу (принцип №3): как именно объект «читается». */
+data class ReadingSweepSpec(val vertical: Boolean, val periodMs: Int, val softness: Float)
+
+/** Документ читается строго сверху вниз (по строкам); фото — мягкий диагональный отблеск. */
+fun readingSweepSpecFor(kind: ObjectKind): ReadingSweepSpec = when (kind) {
+    ObjectKind.IMAGE -> ReadingSweepSpec(vertical = false, periodMs = 1_800, softness = 0.5f)
+    ObjectKind.PDF, ObjectKind.OFFICE, ObjectKind.TEXT, ObjectKind.URL ->
+        ReadingSweepSpec(vertical = true, periodMs = 1_300, softness = 0.3f)
+    else -> ReadingSweepSpec(vertical = true, periodMs = 1_500, softness = 0.35f)
+}
+
+/** Аура понимания (принцип №10): растёт с числом понятых фактов — 0 фактов темно,
+ *  первый факт уже тёплый, насыщается к максимуму. */
+fun auraLevel(factCount: Int): Float =
+    if (factCount <= 0) 0f else minOf(1f, 0.55f + 0.15f * (factCount - 1))
+
 /*
  * M2: bubbles are particles, not buttons (принцип №4). Each drifts weightlessly with
  * its own period and phase — the field must never move as one rigid grid.
