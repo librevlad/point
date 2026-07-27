@@ -41,6 +41,7 @@ graph TD
     data[":data<br/>ObjectStore (scratch) · LlmClient (Gemini)"]
     flow[":core:flow<br/>контракты · вывод Flow Graph"]
     model[":core:model<br/>чистая модель (без Android)"]
+    desktop[":desktop<br/>Point для ПК · Compose Desktop (JVM)"]
 
     app --> ui
     app --> executors
@@ -52,7 +53,15 @@ graph TD
     executors --> flow
     data --> flow
     flow --> model
+    desktop --> flow
+    desktop --> model
 ```
+
+**`:desktop`** — вторая витрина того же ядра: Compose Desktop на JVM, переиспользует
+`:core:model` и `:core:flow` **без изменений** (ради чего они и держатся Android-free).
+Свой ручной DI (без Hilt), свои JVM-реализации `Capability`/`Realizer` (Открыть/
+Копировать/Показать в папке/Сохранить/Скачать видео) и LAN-приёмник на `com.sun.net.httpserver`.
+Зависит только вниз — на два чистых core-модуля, как и правило требует.
 
 **Правило зависимостей (строгое):** стрелки идут только вниз. `:core:model` не
 зависит ни от чего; `:core:flow` — только от `:core:model`. Ни один модуль не
@@ -67,6 +76,7 @@ graph TD
 | `:data` | android-lib | да | Scratch-store, copy-in, cleanup; Gemini-клиент. |
 | `:executors` | android-lib | да | Все Executor'ы; регистрируются через Hilt multibinding. |
 | `:app` | android-app | да | Share Activity, Compose host, стек-навигация, DI-wiring. |
+| `:desktop` | kotlin-jvm + compose-desktop | **нет Android** | Point для ПК: окно, LAN-приёмник, свои JVM-действия, ручной DI. Переиспользует `:core:model`+`:core:flow`. |
 
 ---
 
@@ -470,3 +480,47 @@ Robolectric. Это практический выхлоп принципа «max
   `CapabilityMeta` в реестре; AI-пузырь — tertiary-кольцо.
 - Intent-first UI снят (контракты `intents()`/`intentsFor` остаются); `:core:ui` →
   `:core:flow` (разрешено правилом модулей). Превью-харнесс обновлён под новую композицию.
+
+**Срез «семантический уровень понимания» (#87, #89) — реализован:**
+- Над синтаксическими `entity.*` — `semantic.type` (закрытый белый список
+  meeting/purchase/recipe/job → `Feature.IS_*`) и `semantic.summary`. Пишет «Понять
+  глубже» тем же строгим строчным контрактом (`Semantics.kt` в `:core:flow`);
+  `MetadataEntityEnricher` зажигает `IS_*` мгновенно из metadata (переживает history и
+  переезд на ПК). Карточка ведёт семантикой («Это рецепт · …»). Действия от типа:
+  «Список покупок» (IS_RECIPE), «Создать событие» += IS_MEETING, «Отклик» (IS_JOB).
+
+**Срез «Point для ПК» (#147) — реализован (E2E эмулятор↔Windows):**
+- Новый модуль `:desktop` (Compose Desktop, JVM) — окно, drag&drop, свои действия.
+- Протокол `ContinueOnPc` (`:core:flow`, pure): `PcPairing`/`qrPayload`/`parsePcPairing`,
+  `encodePcMeta`/`decodePcMeta` — понимание едет метадатой вместе с объектом.
+- LAN на `com.sun.net.httpserver` (ноль зависимостей): `/pair` (диалог-подтверждение на
+  ПК → долгоживущий токен), `/receive` (constant-time токен, base64-заголовки, стрим в
+  inbox), `/ping`. Телефон: пузырь «На компьютер» (`PcCapability`/`PcRealizer`,
+  `HttpUrlPcTransport`), экран пейринга, mDNS-автообнаружение (jmdns↔NsdManager).
+- Поставка: msi/exe/portable (jpackage поверх Temurin; `modules("jdk.httpserver")`).
+
+**Срез «действия ПК как пузыри телефона» (#80) — реализован (Distributed Capability Graph по LAN):**
+- ПК объявляет свои действия (`GET /caps`, `id=label[<TAB>KIND]` строки, токен-гейт);
+  телефон кэширует при пейринге (`FilePcCaps`) и синтезирует пары Capability/Realizer при
+  старте (как app-пузыри #66). Тап → `/receive` + `X-Point-Action` → ПК исполняет realizer.
+  «Скачать видео на ПК» (yt-dlp) объявляется только при живом yt-dlp; kind-гейт (URL).
+
+**Срез «Liquid Software: объект и намерение в обе стороны» (#161) — реализован (E2E):**
+- ПК→телефон pull: ПК держит `Outbox` (`<n>.bin`+`<n>.meta`), маршруты
+  `/outbox` | `/outbox/file` | `/outbox/ack`; телефон тихо забирает в `loadRecent`
+  (троттл 30с) → плашка «С компьютера: N» → download→ingest→ack (at-least-once).
+  `PulledFileFactory`-шов держит `FlowViewModel` JVM-тестируемым.
+- Намерение обратно: телефон объявляет свои действия (`POST /phone-caps`), ПК рисует
+  «Позвонить · телефон» / «Создать событие · телефон» (kind-гейт), тап кладёт объект с
+  `pc.action`; телефон при заборе исполняет действие сразу после ingest (`onShared(autoAction)`).
+
+**Срез «Progressive Object: корзина» (#96) — реализован (E2E):**
+- Пузырь «В корзину» (терминал) копит объекты в `basket/` (переживает флоу); Home-плашка
+  «Корзина: N» → существующий `ingestMultiple` → обычный COLLECTION-флоу («Набор (N)»).
+  Ноль новой механики коллекций.
+
+**Срез «плюс-вариант: AI-двойник» (#128) — реализован (E2E):**
+- Паттерн: `<id>-plus`, label «<Label>+», те же accepts, PAID/network — рядом с локальным
+  собратом в «AI и облако», только там где ИИ объективно добавляет. «В Word+» (LLM
+  размечает документ строгим контрактом T=/H=/B=/P= → styled OOXML `DocxWriter.writeStyled`);
+  «Собрать данные+» (LLM собирает NAME/ORG/AMOUNT/DATE — то, что ML Kit-регекс не видит).
