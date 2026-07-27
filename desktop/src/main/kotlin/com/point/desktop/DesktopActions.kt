@@ -91,3 +91,52 @@ class PcSaveAsRealizer(private val target: SaveTarget) : Realizer {
             ActionResult.Done("Сохранено: $saved")
         }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось сохранить", recoverable = true) }
 }
+
+/** yt-dlp behind a seam (#80 v2): availability decides whether «Скачать видео» is
+ *  advertised at all; start() fires the download in the background. */
+interface VideoDownloader {
+    fun available(): Boolean
+
+    /** Launch the download of [url]; true when the process started. */
+    fun start(url: String): Boolean
+}
+
+/** The real yt-dlp: `yt-dlp -P <downloads> <url>`, fire-and-forget. */
+class YtDlpDownloader(private val downloadsDir: File) : VideoDownloader {
+    override fun available(): Boolean = runCatching {
+        ProcessBuilder("yt-dlp", "--version").start().waitFor() == 0
+    }.getOrDefault(false)
+
+    override fun start(url: String): Boolean = runCatching {
+        downloadsDir.mkdirs()
+        ProcessBuilder("yt-dlp", "-P", downloadsDir.absolutePath, url)
+            .redirectErrorStream(true)
+            .redirectOutput(File(downloadsDir, "yt-dlp.log"))
+            .start()
+        true
+    }.getOrDefault(false)
+}
+
+class PcDownloadCapability : Capability {
+    override val id = CapabilityId("pc-download")
+    override val icon = "open"
+    override val meta = CapabilityMeta(priority = 40)
+    override fun label(state: ObjectState) = "Скачать видео"
+    override fun accepts(state: ObjectState) = state.kind == com.point.core.model.ObjectKind.URL
+    override fun produces(state: ObjectState) = state
+}
+
+class PcDownloadRealizer(private val downloader: VideoDownloader) : Realizer {
+    override val capabilityId = CapabilityId("pc-download")
+
+    override suspend fun perform(input: PointObject, amendment: String?): ActionResult {
+        val url = runCatching { File(input.uri.value).readText() }.getOrDefault("")
+            .lineSequence().map(String::trim).firstOrNull { it.startsWith("http://") || it.startsWith("https://") }
+            ?: return ActionResult.Failure("В объекте нет ссылки", recoverable = true)
+        return if (downloader.start(url)) {
+            ActionResult.Done("Скачиваю: $url")
+        } else {
+            ActionResult.Failure("Не удалось запустить yt-dlp", recoverable = true)
+        }
+    }
+}

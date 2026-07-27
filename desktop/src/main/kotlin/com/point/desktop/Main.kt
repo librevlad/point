@@ -47,8 +47,9 @@ fun main() {
         target.absolutePath
     }
 
+    val downloader = YtDlpDownloader(File(System.getProperty("user.home"), "Point/downloads"))
     val registry = DesktopRegistry(
-        setOf(PcOpenCapability(), PcCopyCapability(), PcRevealCapability(), PcSaveAsCapability()),
+        setOf(PcOpenCapability(), PcCopyCapability(), PcRevealCapability(), PcSaveAsCapability(), PcDownloadCapability()),
     )
     val resolver = DesktopResolver(
         setOf(
@@ -56,6 +57,7 @@ fun main() {
             PcCopyRealizer(clipboard),
             PcRevealRealizer(revealer),
             PcSaveAsRealizer(saveTarget),
+            PcDownloadRealizer(downloader),
         ),
     )
     state = DesktopState(registry, resolver, clipboard)
@@ -68,11 +70,16 @@ fun main() {
         onReceived = state::onReceived,
         // #80: advertise the actions the phone may run here. Save-as stays local-only —
         // it opens a target dialog, which nobody expects to pop from a remote tap.
-        remoteActions = listOf(
-            com.point.core.flow.PcRemoteAction("pc-open", "Открыть на компьютере"),
-            com.point.core.flow.PcRemoteAction("pc-copy", "В буфер компьютера"),
-            com.point.core.flow.PcRemoteAction("pc-reveal", "Показать в папке на ПК"),
-        ),
+        remoteActions = buildList {
+            add(com.point.core.flow.PcRemoteAction("pc-open", "Открыть на компьютере"))
+            add(com.point.core.flow.PcRemoteAction("pc-copy", "В буфер компьютера"))
+            add(com.point.core.flow.PcRemoteAction("pc-reveal", "Показать в папке на ПК"))
+            // Advertised only when yt-dlp actually exists on this PC — a bubble that
+            // cannot run must never appear on the phone.
+            if (downloader.available()) {
+                add(com.point.core.flow.PcRemoteAction("pc-download", "Скачать видео на ПК", kinds = setOf("URL")))
+            }
+        },
         runAction = state::runRemoteAction,
     )
     server.start(preferredPort = config.port)
