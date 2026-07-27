@@ -2,6 +2,7 @@ package com.point.core.flow
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -48,6 +49,18 @@ class ContinueOnPcTest {
             PcRemoteAction("pc-copy", "В буфер компьютера"),
         )
         assertEquals(caps, decodePcCaps(encodePcCaps(caps)))
+    }
+
+    @Test
+    fun `caps codec carries kind gates and keeps the bare format for gate-free actions`() {
+        val caps = listOf(
+            PcRemoteAction("pc-open", "Открыть на компьютере"),
+            PcRemoteAction("pc-download", "Скачать видео на ПК", kinds = setOf("URL")),
+        )
+        val decoded = decodePcCaps(encodePcCaps(caps))
+        assertEquals(caps, decoded)
+        assertEquals(setOf("URL"), decoded[1].kinds)
+        assertTrue(decoded[0].kinds.isEmpty()) // empty = any kind
     }
 
     @Test

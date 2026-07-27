@@ -51,18 +51,27 @@ fun decodePcMeta(encoded: String): Map<String, String> =
             line.substring(0, i) to line.substring(i + 1)
         }
 
-/** One action the paired PC can run on a received object (#80). */
-data class PcRemoteAction(val id: String, val label: String)
+/** One action the paired PC can run on a received object (#80).
+ *  [kinds] — ObjectKind names the action makes sense for; empty = any kind. */
+data class PcRemoteAction(val id: String, val label: String, val kinds: Set<String> = emptySet())
 
-/** `id=label` per line — the same dumb-simple line codec as [encodePcMeta]. */
+/** `id=label` per line, optionally `id=label<TAB>KIND1,KIND2` — the same dumb-simple
+ *  line codec as [encodePcMeta]; a tab never appears in a human label. */
 fun encodePcCaps(caps: List<PcRemoteAction>): String =
-    caps.joinToString("\n") { "${it.id}=${it.label.replace('\n', ' ').replace('\r', ' ')}" }
+    caps.joinToString("\n") { action ->
+        val label = action.label.replace('\n', ' ').replace('\r', ' ').replace('\t', ' ')
+        val gate = if (action.kinds.isEmpty()) "" else "\t" + action.kinds.joinToString(",")
+        "${action.id}=$label$gate"
+    }
 
 fun decodePcCaps(encoded: String): List<PcRemoteAction> =
     encoded.lineSequence().mapNotNull { line ->
         val eq = line.indexOf('=')
         if (eq <= 0) return@mapNotNull null
         val id = line.substring(0, eq).trim()
-        val label = line.substring(eq + 1).trim()
-        if (id.isEmpty() || label.isEmpty()) null else PcRemoteAction(id, label)
+        val rest = line.substring(eq + 1)
+        val label = rest.substringBefore('\t').trim()
+        val kinds = rest.substringAfter('\t', "").split(',')
+            .mapNotNull { it.trim().takeIf(String::isNotEmpty) }.toSet()
+        if (id.isEmpty() || label.isEmpty()) null else PcRemoteAction(id, label, kinds)
     }.toList()

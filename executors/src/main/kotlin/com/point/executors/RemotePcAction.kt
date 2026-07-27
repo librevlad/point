@@ -30,7 +30,9 @@ class RemotePcCapability(
     override val meta = CapabilityMeta(priority = 76, latency = Latency.FAST)
     override fun label(state: ObjectState) = action.label
     override fun accepts(state: ObjectState) =
-        state.kind != ObjectKind.COLLECTION && pairings.current() != null
+        state.kind != ObjectKind.COLLECTION &&
+            (action.kinds.isEmpty() || state.kind.name in action.kinds) &&
+            pairings.current() != null
 
     override fun produces(state: ObjectState) = state // terminal — the action happens on the PC
 

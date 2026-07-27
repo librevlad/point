@@ -58,6 +58,13 @@ class RemotePcActionTest {
     }
 
     @Test
+    fun `a kind-gated action appears only for its kinds (#80 v2)`() {
+        val urlOnly = RemotePcCapability(PcRemoteAction("pc-download", "Скачать видео на ПК", kinds = setOf("URL")), FakePairings())
+        assertTrue(urlOnly.accepts(ObjectState(ObjectKind.URL)))
+        assertFalse(urlOnly.accepts(ObjectState(ObjectKind.TEXT)))
+    }
+
+    @Test
     fun `sends the object with the action id and reports success`() = runTest {
         val transport = FakeTransport()
         val result = RemotePcRealizer(action, FakePairings(), transport).perform(obj(), null)

@@ -424,6 +424,12 @@ class FlowViewModel @Inject constructor(
         _ui.update {
             it.copy(pcScreen = PcScreenState(pairing = pcPairings.current()), busy = null, message = null)
         }
+        // #80 v2: the natural sync point — the PC may have gained abilities since pairing.
+        pcPairings.current()?.let { pairing ->
+            viewModelScope.launch {
+                runCatching { pcTransport.fetchCaps(pairing)?.let { caps -> pcCaps.save(caps) } }
+            }
+        }
         discoveryJob?.cancel()
         discoveryJob = viewModelScope.launch {
             runCatching {

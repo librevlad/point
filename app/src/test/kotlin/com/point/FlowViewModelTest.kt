@@ -84,10 +84,11 @@ class FlowViewModelTest {
     private fun vm(
         caps: Map<CapabilityId, Set<Intent>> = mapOf(CapabilityId("a") to setOf(Intent.PREPARE)),
         cloud: Set<CapabilityId> = emptySet(),
-    ) = FlowViewModel(store, FakeRegistry(caps, cloud), resolver, enrichment, history, favorites, usage, chosenApps, userKeys, journal, consent, appLauncher, FakePdfRasterizer(), sensory, sensorySettings, snapshot, crashLog, dispatcher, pins, AppIconResolver { null }, FakePcPairings(), FakePcTransport(), com.point.core.flow.PcDiscovery { kotlinx.coroutines.flow.flowOf(emptyList()) }, basket, pcCaps)
+    ) = FlowViewModel(store, FakeRegistry(caps, cloud), resolver, enrichment, history, favorites, usage, chosenApps, userKeys, journal, consent, appLauncher, FakePdfRasterizer(), sensory, sensorySettings, snapshot, crashLog, dispatcher, pins, AppIconResolver { null }, pcPairings, FakePcTransport(), com.point.core.flow.PcDiscovery { kotlinx.coroutines.flow.flowOf(emptyList()) }, basket, pcCaps)
 
     private val basket = FakeBasket()
     private val pcCaps = FakePcCaps()
+    private val pcPairings = FakePcPairings()
 
     private class FakePcCaps : com.point.core.flow.PcCapsStore {
         var saved: List<com.point.core.flow.PcRemoteAction>? = null
@@ -666,6 +667,15 @@ class FlowViewModelTest {
 
         vm.unpairPc(); advanceUntilIdle()
         assertTrue(pcCaps.cleared)
+    }
+
+    @Test fun `opening the PC screen refreshes the cached remote actions (#80 v2)`() = runTest(dispatcher) {
+        val vm = vm()
+        pcPairings.pairing = com.point.core.flow.PcPairing("10.0.2.2", 8391, "tok")
+
+        vm.openPcSettings(); advanceUntilIdle()
+
+        assertEquals(listOf("pc-open"), pcCaps.saved?.map { it.id })
     }
 
     @Test fun `the basket opens as one collection flow and its count reaches Home (#96)`() = runTest(dispatcher) {
