@@ -1,5 +1,6 @@
 package com.point.desktop.ui
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.draganddrop.dragAndDropTarget
@@ -17,8 +18,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -30,13 +32,16 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draganddrop.DragAndDropEvent
 import androidx.compose.ui.draganddrop.DragAndDropTarget
 import androidx.compose.ui.draganddrop.awtTransferable
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import java.awt.datatransfer.DataFlavor
 import java.io.File
@@ -62,6 +67,7 @@ fun DesktopApp(
     val items by state.items.collectAsState()
     val message by state.message.collectAsState()
     val pair by state.pairRequest.collectAsState()
+    val clipboardText by state.clipboardText.collectAsState()
 
     // Native Compose drag&drop (the AWT window.dropTarget never fired — the Compose
     // surface intercepts drops). Reads the OS transferable: files or plain text.
@@ -85,40 +91,62 @@ fun DesktopApp(
         }
     }
 
+    var showQr by remember { mutableStateOf(false) }
     Surface(
         color = MaterialTheme.colorScheme.surface,
         modifier = Modifier.fillMaxSize()
             .dragAndDropTarget(shouldStartDragAndDrop = { true }, target = dropTarget),
     ) {
-        Row(Modifier.fillMaxSize().padding(20.dp)) {
-            Column(Modifier.weight(1f).fillMaxHeight()) {
-                Text("Point для ПК", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    message ?: "Перетащите файл в окно или отправьте с телефона",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(Modifier.height(16.dp))
-                if (items.isEmpty()) {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text(
-                            "Пока пусто",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                } else {
-                    LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        items(items, key = { it.obj.id }) { item -> ItemCard(state, item) }
-                    }
+        Column(Modifier.fillMaxSize().padding(20.dp)) {
+            // Compact top bar: title + a connection chip. The big QR only owns the screen while
+            // the inbox is empty (onboarding); once objects arrive they take the whole canvas.
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Point для ПК", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        message ?: "Перетащите файл в окно или отправьте с телефона",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                ConnectionChip(config, onShowQr = { showQr = true })
+            }
+            // The buffer «lands» visibly (fade + expand) instead of a silent one-off message.
+            AnimatedVisibility(visible = clipboardText != null) {
+                Column {
+                    Spacer(Modifier.height(12.dp))
+                    ClipboardCard(
+                        text = clipboardText ?: "",
+                        onCopyAgain = { state.copyClipboardAgain() },
+                        onClose = { state.clearClipboard() },
+                    )
                 }
             }
-
-            Spacer(Modifier.width(20.dp))
-
-            ConnectionCard(config, addresses, port)
+            Spacer(Modifier.height(16.dp))
+            if (items.isEmpty()) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    ConnectionCard(config, addresses, port)
+                }
+            } else {
+                LazyVerticalGrid(
+                    columns = GridCells.Adaptive(minSize = 320.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    items(items, key = { it.obj.id }) { item -> ItemCard(state, item) }
+                }
+            }
         }
+    }
+
+    if (showQr) {
+        AlertDialog(
+            onDismissRequest = { showQr = false },
+            title = { Text("Подключить телефон") },
+            text = { ConnectionCard(config, addresses, port) },
+            confirmButton = { TextButton(onClick = { showQr = false }) { Text("Готово") } },
+        )
     }
 
     pair?.let { request ->
@@ -172,6 +200,48 @@ private fun ItemCard(state: DesktopState, item: InboxItem) {
                 }
             }
         }
+    }
+}
+
+/** The live «Буфер» card — the text that just crossed from the phone into the PC clipboard,
+ *  shown instead of a silent one-off message; re-copy or dismiss. */
+@Composable
+private fun ClipboardCard(text: String, onCopyAgain: () -> Unit, onClose: () -> Unit) {
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    "Буфер · Ctrl+V",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            TextButton(onClick = onCopyAgain) { Text("Копировать снова") }
+            TextButton(onClick = onClose) { Text("×") }
+        }
+    }
+}
+
+/** Compact connection status once the desktop is in use — tap to re-show the pairing QR. */
+@Composable
+private fun ConnectionChip(config: PcConfig, onShowQr: () -> Unit) {
+    OutlinedButton(onClick = onShowQr) {
+        Text("● ${config.name}", style = MaterialTheme.typography.labelLarge)
+        Spacer(Modifier.width(8.dp))
+        Text("QR", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
     }
 }
 
