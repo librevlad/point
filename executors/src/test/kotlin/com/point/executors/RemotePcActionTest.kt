@@ -45,6 +45,7 @@ class RemotePcActionTest {
         override suspend fun fetchOutbox(pairing: PcPairing): List<com.point.core.flow.PcOutboxEntry>? = null
         override suspend fun downloadOutboxFile(pairing: PcPairing, id: Int, targetPath: String): Boolean = false
         override suspend fun ackOutbox(pairing: PcPairing, id: Int) {}
+        override suspend fun pushPhoneCaps(pairing: PcPairing, caps: List<com.point.core.flow.PcRemoteAction>): Boolean = true
     }
 
     private fun obj() = PointObject("id", "text/plain", ScratchRef("/x"), ObjectState(ObjectKind.TEXT))

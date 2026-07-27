@@ -2,6 +2,7 @@ package com.point.desktop
 
 import com.point.core.flow.PcRemoteAction
 import com.point.core.flow.decodePcMeta
+import com.point.core.flow.decodePcCaps
 import com.point.core.flow.encodePcCaps
 import com.point.core.flow.encodePcOutbox
 import java.io.File
@@ -35,6 +36,7 @@ class PcServer(
     private val remoteActions: List<PcRemoteAction> = emptyList(),
     private val runAction: (id: String, item: InboxItem) -> Unit = { _, _ -> },
     private val outbox: Outbox? = null,
+    private val onPhoneCaps: (List<PcRemoteAction>) -> Unit = {},
 ) {
     private var server: HttpServer? = null
     val port: Int get() = server?.address?.port ?: -1
@@ -56,6 +58,13 @@ class PcServer(
                 respond(ex, 401, "bad token")
             } else {
                 respond(ex, 200, encodePcCaps(remoteActions))
+            }
+        }
+        s.createContext("/phone-caps") { ex ->
+            withToken(ex) {
+                val caps = decodePcCaps(String(ex.requestBody.readBytes()))
+                onPhoneCaps(caps)
+                respond(ex, 200, "ok")
             }
         }
         s.createContext("/outbox") { ex ->

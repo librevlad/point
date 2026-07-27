@@ -697,6 +697,28 @@ class FlowViewModelTest {
         assertEquals(1, vm.fromPcCount.value)
     }
 
+    @Test fun `a pulled entry carrying a PC intent runs that action after ingest (#161 v2)`() = runTest(dispatcher) {
+        pcPairings.pairing = com.point.core.flow.PcPairing("10.0.2.2", 8391, "tok")
+        pcTransport.outbox = listOf(
+            com.point.core.flow.PcOutboxEntry(1, mapOf("name" to "т.txt", "mime" to "text/plain", "pc.action" to "call")),
+        )
+        val vm = vm(caps = mapOf(CapabilityId("call") to setOf(Intent.OPEN)))
+        vm.loadRecent(); advanceUntilIdle()
+
+        resolver.lastAmendment = "__unset__"
+        vm.pullFromPc(); advanceUntilIdle()
+
+        assertEquals(null, resolver.lastAmendment) // the call realizer actually ran
+        assertEquals(listOf(1), pcTransport.acked)
+    }
+
+    @Test fun `pairing advertises the phone's own actions to the PC (#161 v2)`() = runTest(dispatcher) {
+        val vm = vm()
+        vm.pairPc("10.0.2.2", 8391); advanceUntilIdle()
+        assertTrue(pcTransport.pushedPhoneCaps.any { it.id == "call" })
+        assertTrue(pcTransport.pushedPhoneCaps.any { it.id == "event" })
+    }
+
     @Test fun `a failed download keeps the entries un-acked (#161)`() = runTest(dispatcher) {
         pcPairings.pairing = com.point.core.flow.PcPairing("10.0.2.2", 8391, "tok")
         pcTransport.outbox = listOf(com.point.core.flow.PcOutboxEntry(1, mapOf("name" to "a.txt", "mime" to "text/plain")))
@@ -1138,6 +1160,7 @@ private class FakePcTransport : com.point.core.flow.PcTransport {
     var outboxFetches = 0
     var downloadOk = true
     val acked = mutableListOf<Int>()
+    var pushedPhoneCaps: List<com.point.core.flow.PcRemoteAction> = emptyList()
     override suspend fun pair(host: String, port: Int, deviceName: String): com.point.core.flow.PcPairing? =
         com.point.core.flow.PcPairing(host, port, "tok")
     override suspend fun send(
@@ -1159,6 +1182,10 @@ private class FakePcTransport : com.point.core.flow.PcTransport {
         return true
     }
     override suspend fun ackOutbox(pairing: com.point.core.flow.PcPairing, id: Int) { acked += id }
+    override suspend fun pushPhoneCaps(pairing: com.point.core.flow.PcPairing, caps: List<com.point.core.flow.PcRemoteAction>): Boolean {
+        pushedPhoneCaps = caps
+        return true
+    }
 }
 
 private class FakeChosenApps : com.point.core.flow.ChosenApps {

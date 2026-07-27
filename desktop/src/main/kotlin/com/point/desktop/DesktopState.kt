@@ -30,6 +30,8 @@ class DesktopState(
     private val registry: CapabilityRegistry,
     private val resolver: Resolver,
     private val clipboard: TextClipboard,
+    private val outbox: Outbox? = null,
+    private val persistPhoneCaps: (List<com.point.core.flow.PcRemoteAction>) -> Unit = {},
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
@@ -38,6 +40,10 @@ class DesktopState(
 
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()
+
+    private val _phoneCaps = MutableStateFlow<List<com.point.core.flow.PcRemoteAction>>(emptyList())
+    /** The paired phone's advertised actions (#161 v2) — cards grow «… · телефон» buttons. */
+    val phoneCaps = _phoneCaps.asStateFlow()
 
     private val _pairRequest = MutableStateFlow<PairRequest?>(null)
     val pairRequest: StateFlow<PairRequest?> = _pairRequest.asStateFlow()
@@ -53,6 +59,28 @@ class DesktopState(
             _message.value = when (result) {
                 is com.point.core.model.ActionResult.Done -> result.message
                 else -> _message.value
+            }
+        }
+    }
+
+    fun setPhoneCaps(caps: List<com.point.core.flow.PcRemoteAction>) {
+        _phoneCaps.value = caps
+        runCatching { persistPhoneCaps(caps) }
+    }
+
+    /** Phone actions that make sense for this item — empty kinds means any kind. */
+    fun phoneActionsFor(item: InboxItem): List<com.point.core.flow.PcRemoteAction> =
+        _phoneCaps.value.filter { it.kinds.isEmpty() || item.obj.state.kind.name in it.kinds }
+
+    /** «<действие> · телефон» (#161 v2): queue the object with the intent riding its metadata. */
+    fun sendToPhone(item: InboxItem, action: com.point.core.flow.PcRemoteAction) {
+        scope.launch(Dispatchers.IO) {
+            runCatching {
+                outbox?.add(item.obj.copy(metadata = item.obj.metadata + ("pc.action" to action.id)))
+            }.onSuccess {
+                _message.value = "${action.label} — заберите на телефоне (плашка на главном экране)"
+            }.onFailure {
+                _message.value = "Не удалось положить в очередь"
             }
         }
     }

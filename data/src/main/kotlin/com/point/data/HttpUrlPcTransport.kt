@@ -4,6 +4,7 @@ import com.point.core.flow.PcOutboxEntry
 import com.point.core.flow.PcPairing
 import com.point.core.flow.PcRemoteAction
 import com.point.core.flow.decodePcOutbox
+import com.point.core.flow.encodePcCaps
 import com.point.core.flow.PcSendOutcome
 import com.point.core.flow.decodePcCaps
 import com.point.core.flow.PcTransport
@@ -144,6 +145,23 @@ class HttpUrlPcTransport @Inject constructor() : PcTransport {
                 c.responseCode
                 c.disconnect()
             }
+        }
+
+    override suspend fun pushPhoneCaps(pairing: PcPairing, caps: List<PcRemoteAction>): Boolean =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val body = encodePcCaps(caps).toByteArray()
+                val c = URL("http://${pairing.host}:${pairing.port}/phone-caps").openConnection() as HttpURLConnection
+                c.requestMethod = "POST"
+                c.connectTimeout = 3_000
+                c.readTimeout = 5_000
+                c.setRequestProperty("X-Point-Token", pairing.token)
+                c.doOutput = true
+                c.outputStream.use { it.write(body) }
+                val ok = c.responseCode == 200
+                c.disconnect()
+                ok
+            }.getOrDefault(false)
         }
 
     private fun b64(s: String): String = Base64.getEncoder().encodeToString(s.toByteArray())
