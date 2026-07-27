@@ -86,6 +86,14 @@ interface SpreadsheetWriter {
     suspend fun write(rows: List<List<String>>): ScratchRef
 }
 
+/** Reads an OOXML `.xlsx` back into rows of cell text — the inverse of [SpreadsheetWriter].
+ *  Handles the three ways a cell carries text: inline strings (what our writer emits), the
+ *  shared-strings table (what Excel/Sheets emit) and bare numeric values. Empty when the file
+ *  is not a readable OOXML spreadsheet. */
+interface SpreadsheetReader {
+    suspend fun readRows(obj: PointObject): List<List<String>>
+}
+
 /** Writes paragraphs to a minimal, editable .docx in the scratch store — a hand-rolled OOXML
  *  wordprocessing package (no Apache POI), mirroring [SpreadsheetWriter]. */
 /** A structured document block (#128) — what «В Word+» lays the raw text out into. */
