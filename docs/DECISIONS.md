@@ -1346,3 +1346,21 @@ PRODUCT (товары). Строгий контракт КАТЕГОРИЯ=зн�
 дедлайн пятница» → Имена: Иван Петров / Организации: ООО Ромашка / Телефоны / Даты / Суммы —
 именно те категории, что локальный собрат пропускает. Паттерн плюс-варианта (см. запись #128
 выше) теперь с двумя экземплярами: «В Word+» (структура) и «Собрать данные+» (богаче сущности).
+
+### #92 — Point как Telegram-бот: третье воплощение Android-free ядра
+Владелец выбрал видение #92 (Point ЕСТЬ бот), запуск локальный с токеном в local.properties.
+Новый модуль `:bot` (kotlin-jvm, application) переиспользует `:core:model`+`:core:flow` БЕЗ
+изменений — как `:desktop`, третье доказательство ставки на чистое ядро (Android / Desktop / Bot
+крутят один движок Capability/Realizer). Long-polling (`getUpdates`) вместо вебхука: бот работает
+откуда угодно, даже из-за NAT, без сервера. Killer-идея: **Flow Graph → inline-клавиатура** —
+пузыри становятся кнопками бота; тап (`callback_data=cap:<id>`) исполняет realizer, результат
+становится новым объектом сессии (стек флоу глубиной в одно сообщение, per-chat scratch).
+Действия: LLM-обобщённый `LlmBotCapability/Realizer` (Понять/Перевести/Собрать — отличаются
+только промптом) + чистые zxing QR-make/QR-read (мгновенные, без LLM). Свой JVM
+`BotLlm` (Gemini REST, java.util.Base64 вместо android.util) инлайнит фото/PDF — бот читает
+сфотканную таблицу. `TelegramApi`-шов держит `BotEngine` JVM-тестируемым (fake api), HTTP+Main —
+тонкий непокрытый шов (как desktop Main). Секреты — TELEGRAM_BOT_TOKEN/GEMINI_API_KEY из
+local.properties, инъекция в `:bot:run` через systemProperty (не компилируются в артефакт).
+Живой E2E owner-gated (нужен токен от @BotFather); движок доказан 13 JVM-тестами headless.
+Урок: QR с кириллицей требует `EncodeHintType.CHARACTER_SET=UTF-8` (ECI-маркер), иначе decode
+ломает round-trip.
