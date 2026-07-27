@@ -185,6 +185,22 @@ class FlowViewModelTest {
         assertEquals("+380671234567", vm.ui.value.path.let { snapshot.frames.first().metadata["entity.phone"] })
     }
 
+    @Test fun `pairFromPayload saves a scanned QR pairing without a round-trip and caches caps`() = runTest(dispatcher) {
+        val vm = vm()
+        vm.pairFromPayload("point-pc://10.0.2.2:8391/tok"); advanceUntilIdle()
+
+        assertEquals(com.point.core.flow.PcPairing("10.0.2.2", 8391, "tok"), pcPairings.pairing)
+        assertEquals(listOf("pc-open"), pcCaps.saved?.map { it.id }) // caps fetched on pair
+        assertEquals("10.0.2.2:8391", vm.ui.value.pcScreen?.pairing?.let { "${it.host}:${it.port}" })
+    }
+
+    @Test fun `pairFromPayload rejects a non point-pc uri`() = runTest(dispatcher) {
+        val vm = vm()
+        vm.pairFromPayload("https://example.com/x"); advanceUntilIdle()
+        assertNull(pcPairings.pairing)
+        assertTrue(vm.ui.value.message?.contains("Point для ПК") == true)
+    }
+
     @Test fun `a snapshot does not auto-open without an explicit restore — launcher lands on Home`() = runTest(dispatcher) {
         snapshot.frames = listOf(
             com.point.core.model.FlowSnapshotFrame("root", ObjectKind.IMAGE, "image/png", tempFile("img")),
