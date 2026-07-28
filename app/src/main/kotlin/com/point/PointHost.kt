@@ -84,6 +84,8 @@ fun PointHost(
     onDismissAppPicker: () -> Unit = {},
     onConfirmPreview: () -> Unit = {},
     onCancelPreview: () -> Unit = {},
+    onSendChat: (String) -> Unit = {},
+    onCloseChat: () -> Unit = {},
     appIconFor: (String) -> androidx.compose.ui.graphics.ImageBitmap? = { null },
     modifier: Modifier = Modifier,
 ) {
@@ -162,6 +164,14 @@ fun PointHost(
             // in place; only cloud/slow actions get the full staged busy screen.
             state.busy != null && !state.busyQuiet ->
                 BusyScreen(title = state.busy, network = state.busyNetwork)
+
+            // #4: the AI chat takes over the screen while open (over the object it discusses).
+            state.chat != null -> AiChatScreen(
+                chat = state.chat,
+                onSend = onSendChat,
+                onClose = onCloseChat,
+                modifier = Modifier.fillMaxSize(),
+            )
 
             frame != null -> Column(Modifier.fillMaxSize()) {
                 // The journey so far (#114) — stays put while the object below animates.

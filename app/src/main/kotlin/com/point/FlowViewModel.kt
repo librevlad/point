@@ -28,6 +28,8 @@ import com.point.core.flow.UsageJournal
 import com.point.core.flow.UserAiConfig
 import com.point.core.flow.UserKeyStore
 import com.point.core.model.ActionResult
+import com.point.core.model.ChatMessage
+import com.point.core.model.ChatRole
 import com.point.core.model.Bubble
 import com.point.core.model.CapabilityId
 import com.point.core.model.FavoriteChain
@@ -39,7 +41,10 @@ import com.point.core.model.ObjectKind
 import com.point.core.model.PointObject
 import com.point.core.ui.likelyCount
 import com.point.executors.Bitmaps
+import com.point.executors.AiCapability
 import com.point.executors.OpenInCapability
+import com.point.executors.aiSuggestions
+import com.point.executors.aiTransformTarget
 import dagger.hilt.android.lifecycle.HiltViewModel
 import androidx.compose.ui.graphics.asImageBitmap
 import kotlinx.coroutines.CoroutineDispatcher
@@ -64,6 +69,7 @@ class FlowViewModel @Inject constructor(
     private val store: ObjectStore,
     private val registry: CapabilityRegistry,
     private val resolver: Resolver,
+    private val aiChatResponder: com.point.core.flow.AiChatResponder,
     private val enrichment: Enrichment,
     private val history: HistoryStore,
     private val favorites: FavoritesStore,
@@ -348,6 +354,12 @@ class FlowViewModel @Inject constructor(
             showAppPicker(top)
             return
         }
+        if (bubble.capabilityId == AiCapability.ID) {
+            // #4: «Спросить AI» opens the multi-turn chat, not a one-shot field. Cloud consent (#10)
+            // gates the conversation, since talking to the object leaves the device.
+            requireCloudConsent { openChat(top) }
+            return
+        }
         if (isCloud(bubble.capabilityId)) {
             // Nothing leaves the device before the user agrees, even once (#10).
             requireCloudConsent { maybePreview(bubble, top) }
@@ -443,6 +455,57 @@ class FlowViewModel @Inject constructor(
     fun cancelInput() {
         pendingBubble = null
         _ui.update { it.copy(inputPrompt = null, inputSuggestions = emptyList(), needsImage = null, busy = null) }
+    }
+
+    // --- AI chat (#4): a multi-turn conversation grounded in the object ---
+
+    /** Open the chat over [obj] (from «Спросить AI»). Cloud consent is already granted by onBubble. */
+    private fun openChat(obj: PointObject) {
+        _ui.update {
+            it.copy(
+                chat = ChatState(obj = obj, suggestions = aiSuggestions(obj.state.kind)),
+                busy = null, inputPrompt = null, message = null,
+            )
+        }
+    }
+
+    fun closeChat() = _ui.update { it.copy(chat = null) }
+
+    /**
+     * Send a chat message. A «сделай word/excel/pdf» request produces a real object and lands on it
+     * (#190 inside the chat); anything else is answered as text with the whole thread as context.
+     */
+    fun sendChatMessage(text: String) {
+        val chat = _ui.value.chat ?: return
+        val message = text.trim()
+        if (message.isEmpty() || chat.pending) return
+        val history = chat.messages
+        val obj = chat.obj
+        _ui.update { it.copy(chat = chat.copy(messages = history + ChatMessage(ChatRole.USER, message), pending = true)) }
+        viewModelScope.launch {
+            val target = aiTransformTarget(message)
+            if (target != null) {
+                val result = runCatching { resolver.realizerFor(target).perform(obj, null) }.getOrNull()
+                if (result is ActionResult.Success) {
+                    runCatching { sensory.success() }
+                    _ui.update { it.copy(chat = null) } // leave the chat and continue on the new object
+                    pushFrame(store.put(result.result), target, null)
+                } else {
+                    appendChatAssistant((result as? ActionResult.Failure)?.reason ?: "Не удалось создать документ")
+                }
+            } else {
+                val reply = runCatching { aiChatResponder.reply(obj, history, message) }
+                    .getOrElse { "Не получилось ответить: ${it.message ?: "ошибка"}" }
+                appendChatAssistant(reply)
+            }
+        }
+    }
+
+    private fun appendChatAssistant(text: String) {
+        _ui.update { s ->
+            val c = s.chat ?: return@update s
+            s.copy(chat = c.copy(messages = c.messages + ChatMessage(ChatRole.ASSISTANT, text), pending = false))
+        }
     }
 
     // --- Bring-your-own AI key (#19). Summoned on demand or from the Home gear. ---
@@ -800,6 +863,10 @@ class FlowViewModel @Inject constructor(
         }
         if (_ui.value.cloudConsent) {
             declineCloud()
+            return true
+        }
+        if (_ui.value.chat != null) {
+            closeChat() // #4: back leaves the chat, returning to the object
             return true
         }
         if (_ui.value.keyScreen != null) {

@@ -94,6 +94,8 @@ class HomeActivity : ComponentActivity() {
                             onSaveChain = viewModel::saveCurrentChain,
                             onItem = viewModel::onItem,
                             onJumpTo = viewModel::jumpTo,
+                            onSendChat = viewModel::sendChatMessage,
+                            onCloseChat = viewModel::closeChat,
                             onBubbleLongPress = viewModel::togglePin,
                             onSaveAiConfig = viewModel::saveAiConfig,
                             onCloseKeySettings = viewModel::closeKeySettings,
