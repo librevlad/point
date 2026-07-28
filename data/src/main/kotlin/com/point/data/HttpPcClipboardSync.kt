@@ -1,44 +1,62 @@
 package com.point.data
 
+import com.point.core.flow.ClipboardPayload
 import com.point.core.flow.PcClipboardSync
 import com.point.core.flow.PcPairing
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.Base64
 import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
  * Shared-clipboard transport over the LAN hop (#161 «общий буфер»). `POST /clipboard` sets the PC's
- * clipboard from the phone's; `GET /clipboard` returns the PC's. Plain text, UTF-8 — Cyrillic safe.
- * Same token gate as the rest of the PC link.
+ * clipboard from the phone's; `GET /clipboard` returns the PC's. The payload's mime + name ride in
+ * `X-Clip-Mime` / `X-Clip-Name` (base64, Cyrillic-safe) and the raw bytes are the body — so text,
+ * screenshots and files all cross. Same token gate as the rest of the PC link.
  */
 class HttpPcClipboardSync @Inject constructor() : PcClipboardSync {
 
-    override suspend fun push(pairing: PcPairing, text: String): Boolean = withContext(Dispatchers.IO) {
+    override suspend fun push(pairing: PcPairing, payload: ClipboardPayload): Boolean = withContext(Dispatchers.IO) {
         runCatching {
-            val c = URL("http://${pairing.host}:${pairing.port}/clipboard").openConnection() as HttpURLConnection
+            val c = endpoint(pairing)
             c.requestMethod = "POST"
             c.connectTimeout = 3_000
-            c.readTimeout = 5_000
+            c.readTimeout = 20_000
             c.setRequestProperty("X-Point-Token", pairing.token)
+            c.setRequestProperty("X-Clip-Mime", payload.mime)
+            c.setRequestProperty("X-Clip-Name", b64(payload.name))
             c.doOutput = true
-            c.outputStream.use { it.write(text.toByteArray(Charsets.UTF_8)) }
+            c.setFixedLengthStreamingMode(payload.bytes.size)
+            c.outputStream.use { it.write(payload.bytes) }
             val ok = c.responseCode == 200
             c.disconnect()
             ok
         }.getOrDefault(false)
     }
 
-    override suspend fun pull(pairing: PcPairing): String? = withContext(Dispatchers.IO) {
+    override suspend fun pull(pairing: PcPairing): ClipboardPayload? = withContext(Dispatchers.IO) {
         runCatching {
-            val c = URL("http://${pairing.host}:${pairing.port}/clipboard").openConnection() as HttpURLConnection
+            val c = endpoint(pairing)
             c.connectTimeout = 3_000
-            c.readTimeout = 5_000
+            c.readTimeout = 20_000
             c.setRequestProperty("X-Point-Token", pairing.token)
-            val text = if (c.responseCode == 200) c.inputStream.bufferedReader(Charsets.UTF_8).readText() else null
+            if (c.responseCode != 200) {
+                c.disconnect()
+                return@runCatching null
+            }
+            val mime = c.getHeaderField("X-Clip-Mime")?.takeIf { it.isNotBlank() } ?: "text/plain"
+            val name = c.getHeaderField("X-Clip-Name")?.let { runCatching { unb64(it) }.getOrDefault("") }.orEmpty()
+            val bytes = c.inputStream.readBytes()
             c.disconnect()
-            text
+            if (bytes.isEmpty()) null else ClipboardPayload(mime, name, bytes)
         }.getOrNull()
     }
+
+    private fun endpoint(pairing: PcPairing) =
+        URL("http://${pairing.host}:${pairing.port}/clipboard").openConnection() as HttpURLConnection
+
+    private fun b64(s: String): String = Base64.getEncoder().encodeToString(s.toByteArray(Charsets.UTF_8))
+    private fun unb64(s: String): String = String(Base64.getDecoder().decode(s), Charsets.UTF_8)
 }

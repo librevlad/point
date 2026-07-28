@@ -20,16 +20,6 @@ fun main() {
     val clipboard = TextClipboard { text ->
         Toolkit.getDefaultToolkit().systemClipboard.setContents(StringSelection(text), null)
     }
-    // #161 «общий буфер»: read/write the PC's system clipboard for the shared-clipboard tile.
-    val readClipboard: () -> String = {
-        runCatching {
-            Toolkit.getDefaultToolkit().systemClipboard
-                .getData(java.awt.datatransfer.DataFlavor.stringFlavor) as? String
-        }.getOrNull().orEmpty()
-    }
-    val writeClipboard: (String) -> Unit = { text ->
-        runCatching { Toolkit.getDefaultToolkit().systemClipboard.setContents(StringSelection(text), null) }
-    }
     val opener = SystemOpener { file -> java.awt.Desktop.getDesktop().open(file) }
     val revealer = FileRevealer { file ->
         when {
@@ -99,8 +89,8 @@ fun main() {
         runAction = state::runRemoteAction,
         outbox = outbox,
         onPhoneCaps = state::setPhoneCaps,
-        clipboardGet = readClipboard,
-        clipboardSet = writeClipboard,
+        clipboardGet = ::readSystemClipboard,
+        clipboardSet = ::writeSystemClipboard,
     )
     server.start(preferredPort = config.port)
     // Slice C: let phones discover this PC by themselves (best-effort mDNS).
