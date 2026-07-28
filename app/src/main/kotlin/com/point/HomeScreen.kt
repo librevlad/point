@@ -4,6 +4,8 @@ import android.text.format.DateUtils
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -36,12 +38,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.layout.ContentScale
 import com.point.core.flow.META_ENTITY_PREFIX
 import com.point.core.model.HistoryEntry
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
+import com.point.core.ui.Portal
 import com.point.core.ui.kindIcon
 import com.point.core.ui.kindLabel
 import com.point.core.ui.understoodFacts
@@ -116,7 +120,14 @@ fun HomeScreen(
         if (recent.isEmpty()) {
             Box(Modifier.weight(1f).fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("Point", style = MaterialTheme.typography.headlineMedium)
+                    Portal(size = 168.dp) // the brand mark — the glowing point (redesign, экран 1)
+                    Spacer(Modifier.height(28.dp))
+                    Text(
+                        "Point",
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Spacer(Modifier.height(6.dp))
                     Text(
                         "Поделитесь объектом — он появится здесь",
                         style = MaterialTheme.typography.bodyMedium,
