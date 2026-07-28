@@ -6,7 +6,9 @@ import com.point.core.flow.Cost
 import com.point.core.flow.Latency
 import com.point.core.flow.LlmClient
 import com.point.core.flow.Realizer
+import com.point.core.flow.Resolver
 import com.point.core.model.ActionResult
+import dagger.Lazy
 import com.point.core.model.CapabilityId
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
@@ -28,11 +30,37 @@ internal fun aiSuggestions(kind: ObjectKind): List<String> = when (kind) {
     ObjectKind.UNKNOWN -> listOf("Что это?", "Что можно сделать?")
 }
 
+private val WORD_HINTS = listOf("word", "ворд", "docx")
+private val EXCEL_HINTS = listOf("excel", "эксель", "xlsx", "таблиц")
+private val PDF_HINTS = listOf("pdf", "пдф")
+private val QUESTION_STARTERS =
+    listOf("что ", "что-", "как ", "какой", "кака", "каки", "почему", "зачем", "кто ", "где ",
+        "когда", "сколько", "объясни", "расскажи", "опиши", "правда ли", "верно ли")
+
+/**
+ * Split the AI free prompt (#4): a "produce «format»" request routes to a real object producer so
+ * "сделай word" yields a .docx OBJECT, not text; a question (or a plain analysis prompt) returns null
+ * and stays a chat answer. Keyword-based and deliberately conservative — a question that merely
+ * mentions a format ("что такое word?") stays chat. Pure — JVM-tested in AiTransformTargetTest.
+ */
+internal fun aiTransformTarget(prompt: String): CapabilityId? {
+    val p = prompt.lowercase().trim()
+    if (p.endsWith("?")) return null
+    if (QUESTION_STARTERS.any { p.startsWith(it) }) return null
+    return when {
+        WORD_HINTS.any { it in p } -> WordPlusCapability.ID
+        EXCEL_HINTS.any { it in p } -> ExcelCapability.ID
+        PDF_HINTS.any { it in p } -> PdfCapability.ID
+        else -> null
+    }
+}
+
 /**
  * Emergency universal capability. Accepts any object; asks the user what to do
- * (NeedsInput), routes object + prompt to the LLM, materialises the answer
- * (markdown -> `.md`). `produces` is null — the AI output type is unknown until
- * the result is classified.
+ * (NeedsInput). A "produce «format»" request ([aiTransformTarget]) is delegated to the real object
+ * producer (word/excel/pdf) so it yields an OBJECT; any other request routes object + prompt to the
+ * LLM and materialises the answer as text (markdown -> `.md`). `produces` is null — the AI output
+ * type is unknown until the result is classified.
  */
 class AiCapability @Inject constructor() : Capability {
     override val id = ID
@@ -47,6 +75,9 @@ class AiCapability @Inject constructor() : Capability {
 
 class AiRealizer @Inject constructor(
     private val llm: LlmClient,
+    // Lazy breaks the DI cycle: the Resolver holds every Realizer, this one included. Delegating a
+    // format request through it also gives the producer the paywall / fallback chain for free.
+    private val resolver: Lazy<Resolver>,
 ) : Realizer {
     override val capabilityId = AiCapability.ID
 
@@ -57,6 +88,11 @@ class AiRealizer @Inject constructor(
                 suggestions = aiSuggestions(input.state.kind),
             )
         }
+        // «Сделай word/excel/pdf» → the real producer, so the result is an OBJECT, not text (#4).
+        aiTransformTarget(amendment)?.let { target ->
+            return resolver.get().realizerFor(target).perform(input, null)
+        }
+        // Otherwise it is a chat question — answer as text.
         return withContext(Dispatchers.IO) {
             runCatching {
                 ActionResult.Success(llm.run(input, buildPrompt(input, amendment)))
