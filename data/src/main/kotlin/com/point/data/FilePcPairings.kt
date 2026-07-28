@@ -45,6 +45,7 @@ class FilePcPairings @Inject constructor(
                         .put("host", pairing.host)
                         .put("port", pairing.port)
                         .put("token", pairing.token)
+                        .apply { pairing.relay?.let { put("relay", it) } } // #161 v2: keep the relay fallback
                         .toString(),
                 )
             }
@@ -62,6 +63,9 @@ class FilePcPairings @Inject constructor(
     private fun load(): PcPairing? = runCatching {
         if (!file.exists()) return@runCatching null
         val o = JSONObject(file.readText())
-        PcPairing(o.getString("host"), o.getInt("port"), o.getString("token"))
+        PcPairing(
+            o.getString("host"), o.getInt("port"), o.getString("token"),
+            o.optString("relay").takeIf { it.isNotBlank() },
+        )
     }.getOrNull()
 }

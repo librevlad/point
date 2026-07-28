@@ -65,6 +65,8 @@ import com.point.data.FileBasket
 import com.point.data.FilePcCaps
 import com.point.data.FilePcPairings
 import com.point.data.HttpUrlPcTransport
+import com.point.data.LanThenRelayTransport
+import com.point.data.RelayPcTransport
 import com.point.data.SelfHealingPcTransport
 import com.point.data.FileUsageJournal
 import com.point.data.FileCapabilityUsage
@@ -280,14 +282,18 @@ abstract class DataModule {
         @Provides
         fun objectClassifier(): ObjectClassifier = ObjectClassifier()
 
-        /** #161 v2 «железобетонно»: the LAN transport, wrapped so a stale saved PC IP self-heals via
-         *  mDNS on an Unreachable send (re-resolve + retry with the token, remember what worked). */
+        /** #161 v2 «железобетонно»: the LAN transport self-heals a stale PC IP via mDNS (re-resolve +
+         *  retry with the token), and when it still can't be reached — different network, LTE — the
+         *  object falls back to the always-works relay (outbound-only, E2E-encrypted). */
         @Provides
         fun pcTransport(
             http: HttpUrlPcTransport,
             discovery: PcDiscovery,
             pairings: PcPairings,
-        ): PcTransport = SelfHealingPcTransport(http, discovery, pairings)
+        ): PcTransport = LanThenRelayTransport(
+            lan = SelfHealingPcTransport(http, discovery, pairings),
+            relay = RelayPcTransport(BuildConfig.RELAY_APP_SECRET),
+        )
 
         /** On-device entity detection (ML Kit) behind the [EntityExtractor] seam. @Provides (not
          *  @Binds) keeps the ML Kit AAR types out of Dagger's KSP aggregation (same fix as OpenCV). */

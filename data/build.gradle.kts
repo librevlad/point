@@ -27,6 +27,11 @@ android {
             "\"${localProps.getProperty(key, default)}\""
 
         buildConfigField("String", "GEMINI_API_KEY", prop("GEMINI_API_KEY"))
+
+        // Relay (#161 v2): the app-wide shared secret for the blind relay (sent as X-Point-App). The
+        // relay URL itself travels in the pairing (QR ?r=), so only the secret is build-baked here.
+        buildConfigField("String", "RELAY_URL", prop("RELAY_URL"))
+        buildConfigField("String", "RELAY_APP_SECRET", prop("RELAY_APP_SECRET"))
         // Gemini models tried in order. Lead with the STRONG model (gemini-pro-latest) so the
         // default is best-quality when available — flash garbled dense/rotated tables on real
         // photos; Pro reads them. The client falls through to flash/flash-lite on any failure
