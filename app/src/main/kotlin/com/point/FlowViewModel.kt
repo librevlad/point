@@ -244,10 +244,18 @@ class FlowViewModel @Inject constructor(
      *  a failed ack re-offers (at-least-once); a failed download acks nothing. */
     fun pullFromPc() {
         val pairing = pcPairings.current() ?: return
-        val entries = fromPcEntries
-        if (entries.isEmpty()) { _fromPcCount.value = 0; return }
         _ui.update { it.copy(busy = "Забираю с компьютера…", busyNetwork = false, busyQuiet = false, message = null) }
         viewModelScope.launch {
+            // Pull what is on the PC RIGHT NOW — a fresh fetch, not the throttled banner snapshot. The
+            // cached list can be up to OUTBOX_THROTTLE_MS stale, so an object queued after the last
+            // fetch would be missed and a stale one pulled instead — the phone got «не то» (#161).
+            val entries = runCatching { pcTransport.fetchOutbox(pairing) }.getOrNull().orEmpty()
+            if (entries.isEmpty()) {
+                fromPcEntries = emptyList()
+                _fromPcCount.value = 0
+                _ui.update { it.copy(busy = null) }
+                return@launch
+            }
             val pulled = entries.map { entry ->
                 val name = entry.meta["name"] ?: "объект"
                 val path = pulledFiles.create("${entry.id}-$name")

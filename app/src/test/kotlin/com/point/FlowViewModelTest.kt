@@ -711,6 +711,23 @@ class FlowViewModelTest {
         assertEquals(0, vm.fromPcCount.value)
     }
 
+    @Test fun `pull uses the CURRENT PC outbox, not a stale throttled snapshot (#161)`() = runTest(dispatcher) {
+        pcPairings.pairing = com.point.core.flow.PcPairing("10.0.2.2", 8391, "tok")
+        pcTransport.outbox = listOf(com.point.core.flow.PcOutboxEntry(1, mapOf("name" to "old.txt", "mime" to "text/plain")))
+        val vm = vm()
+        vm.loadRecent(); advanceUntilIdle() // throttled fetch → snapshot [1]
+
+        // The PC queued a new object AFTER the last (throttled) fetch — the phone's cached list is stale.
+        pcTransport.outbox = listOf(
+            com.point.core.flow.PcOutboxEntry(1, mapOf("name" to "old.txt", "mime" to "text/plain")),
+            com.point.core.flow.PcOutboxEntry(2, mapOf("name" to "new.txt", "mime" to "text/plain")),
+        )
+        vm.pullFromPc(); advanceUntilIdle()
+
+        // Must pull what is ACTUALLY on the PC now — both entries — not the stale [1] that misses the new object.
+        assertEquals(listOf(1, 2), pcTransport.acked)
+    }
+
     @Test fun `closing the PC screen refreshes the from-PC banner for Home (#161)`() = runTest(dispatcher) {
         pcPairings.pairing = com.point.core.flow.PcPairing("10.0.2.2", 8391, "tok")
         pcTransport.outbox = listOf(com.point.core.flow.PcOutboxEntry(2, mapOf("name" to "a.txt", "mime" to "text/plain")))
