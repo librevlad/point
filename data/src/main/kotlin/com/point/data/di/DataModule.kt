@@ -65,6 +65,7 @@ import com.point.data.FileBasket
 import com.point.data.FilePcCaps
 import com.point.data.FilePcPairings
 import com.point.data.HttpUrlPcTransport
+import com.point.data.SelfHealingPcTransport
 import com.point.data.FileUsageJournal
 import com.point.data.FileCapabilityUsage
 import com.point.data.FileFavoritesStore
@@ -218,9 +219,6 @@ abstract class DataModule {
     @Binds
     abstract fun pcCaps(impl: FilePcCaps): PcCapsStore
 
-    @Binds
-    abstract fun pcTransport(impl: HttpUrlPcTransport): PcTransport
-
     /** LAN autodiscovery of Point-for-PC (#147 slice C) — sugar over manual entry. */
     @Binds
     abstract fun pcDiscovery(impl: AndroidPcDiscovery): PcDiscovery
@@ -281,6 +279,15 @@ abstract class DataModule {
         /** Pure classifier lives in :core:flow (no DI annotations there). */
         @Provides
         fun objectClassifier(): ObjectClassifier = ObjectClassifier()
+
+        /** #161 v2 «железобетонно»: the LAN transport, wrapped so a stale saved PC IP self-heals via
+         *  mDNS on an Unreachable send (re-resolve + retry with the token, remember what worked). */
+        @Provides
+        fun pcTransport(
+            http: HttpUrlPcTransport,
+            discovery: PcDiscovery,
+            pairings: PcPairings,
+        ): PcTransport = SelfHealingPcTransport(http, discovery, pairings)
 
         /** On-device entity detection (ML Kit) behind the [EntityExtractor] seam. @Provides (not
          *  @Binds) keeps the ML Kit AAR types out of Dagger's KSP aggregation (same fix as OpenCV). */
