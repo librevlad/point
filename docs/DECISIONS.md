@@ -1544,3 +1544,18 @@ HomeActivity + `FlowViewModel.pairFromPayload` — парсит URI, сохра�
 - Структурно чат и трансформация уже по разным секциям (intent-группировка #188): «Спросить AI» в
   «Извлечь», «В Word+/Excel+» в «Превратить». Этот срез закрыл дыру свободного промпта.
 - Следующий срез поверх: многоходовой AI-чат-экран (концепт, экран 8).
+
+### AI-чат с объектом — многоходовой диалог (#4, экран 8)
+- «Спросить AI» теперь открывает многоходовой чат вместо одноходового поля. В чате: вопрос →
+  history-aware текст-ответ; «сделай word/excel/pdf» → производитель → объект и `pushFrame` на него
+  (разделение из #190 живёт внутри чата).
+- Швы: `ChatMessage`/`ChatRole` (core:model); `AiChatResponder` (**fun interface**) + чистый
+  `buildChatPrompt(kind, content, history, message)` (core:flow, TDD) — промпт с историей;
+  `AiChatResponderImpl` поверх `LlmClient` (читает ответ обратно из материализованного .md).
+- `FlowUiState.chat` + `ChatState`; `onBubble` спец-кейсит `AiCapability.ID` → `openChat` под
+  cloud-consent (#10); `sendChatMessage` роутит/отвечает; `onBack` закрывает чат. `AiChatScreen` в app
+  (портал-хедер, баблы, чипы-подсказки, `imePadding`), подключён в PointHost + 4 активностях.
+- Hilt: `AiChatResponder` через `@Provides` в companion (конструируем из `LlmClient` вручную) —
+  тот же приём keep-out-of-graph, что у OpenCV-реалайзера.
+- Проверено живьём на эмуляторе: диалог с грундингом по объекту + «word» в чате → реальный
+  `документ.docx` и таймлайн Текст→Документ. `aiSuggestions`/`aiTransformTarget` стали public (VM зовёт).
