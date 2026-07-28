@@ -7,6 +7,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -359,37 +360,45 @@ private fun ObjectHeader(
         // The hero is the object itself (#114): a real thumbnail when we have one,
         // the kind icon only as the first frame / non-visual fallback.
         val headerSize = if (preview != null) 132.dp else 96.dp
-        AliveSurface(
-            kind = obj.state.kind,
-            thinking = thinking,
-            understanding = auraLevel(factCount),
-            shape = RoundedCornerShape(26.dp),
-            size = headerSize,
-        ) {
-            if (preview != null) {
-                Image(
-                    bitmap = preview,
-                    contentDescription = obj.metadata["name"] ?: obj.state.kind.name,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .size(headerSize)
-                        .clip(RoundedCornerShape(26.dp)),
-                )
-            } else {
-                Surface(
-                    shape = RoundedCornerShape(26.dp),
-                    color = MaterialTheme.colorScheme.secondary,
-                    shadowElevation = 0.dp,
-                    modifier = Modifier.size(headerSize),
-                ) {
-                    Icon(
-                        imageVector = kindIcon(obj.state.kind),
-                        contentDescription = obj.state.kind.name,
-                        tint = MaterialTheme.colorScheme.onSecondary,
+        // Concept borrow ("объект внутри портала"): the object sits inside the brand portal ring —
+        // the same neon motif as Home and the busy screen. The halo brightens as understanding grows
+        // ("Point понял" = the glow rises) and while enrichment is thinking. The AliveSurface below
+        // keeps the object's breath / reading-beat; the portal is the frame around it.
+        Box(contentAlignment = Alignment.Center) {
+            val glow = ((if (thinking) 0.9f else 0.62f) + 0.09f * factCount.coerceAtMost(4)).coerceAtMost(1f)
+            Portal(size = headerSize + 68.dp, intensity = glow)
+            AliveSurface(
+                kind = obj.state.kind,
+                thinking = thinking,
+                understanding = auraLevel(factCount),
+                shape = RoundedCornerShape(26.dp),
+                size = headerSize,
+            ) {
+                if (preview != null) {
+                    Image(
+                        bitmap = preview,
+                        contentDescription = obj.metadata["name"] ?: obj.state.kind.name,
+                        contentScale = ContentScale.Crop,
                         modifier = Modifier
-                            .padding(26.dp)
-                            .fillMaxSize(),
+                            .size(headerSize)
+                            .clip(RoundedCornerShape(26.dp)),
                     )
+                } else {
+                    Surface(
+                        shape = RoundedCornerShape(26.dp),
+                        color = MaterialTheme.colorScheme.secondary,
+                        shadowElevation = 0.dp,
+                        modifier = Modifier.size(headerSize),
+                    ) {
+                        Icon(
+                            imageVector = kindIcon(obj.state.kind),
+                            contentDescription = obj.state.kind.name,
+                            tint = MaterialTheme.colorScheme.onSecondary,
+                            modifier = Modifier
+                                .padding(26.dp)
+                                .fillMaxSize(),
+                        )
+                    }
                 }
             }
         }
