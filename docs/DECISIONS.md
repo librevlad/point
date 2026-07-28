@@ -1590,3 +1590,17 @@ HomeActivity + `FlowViewModel.pairFromPayload` — парсит URI, сохра�
   секрета→401, ack→200. Крипта/кадр — юнитами.
 - Осталось (Слайс B): десктоп QR с `?r=<relay>` (сейчас без relay → `pairing.relay` null → фолбэк не
   сработает в реальном флоу), десктоп-поллер mailbox `to-pc` (декрипт → объект), живой e2e.
+
+### Релей — десктоп-половина + e2e (Трек 2, Слайс B) — ЗАМКНУТО
+- `RelayTls` перенесён `data` → **`core:flow`** (общий: телефон и десктоп; `javax.net.ssl` работает в
+  pure-Kotlin). Десктоп QR теперь кладёт `RelayEnv.URL` в пейринг (`pairing.relay`) → фолбэк активен.
+- Десктоп-конфиг релея: у Compose Desktop нет BuildConfig → gradle-задача `generateRelayEnv` пишет
+  `RelayEnv{URL, APP_SECRET}` из local.properties (пусто в CI → компилится).
+- `RelayPoller` (desktop, P4): демон-поток long-poll `GET /mbx/<to-pc>?wait=25` (pinned TLS + секрет)
+  → `RelayCrypto.open` → `decodePcFrame` → `inbox.receive(name, mime, meta, bytes)` → `onReceived`
+  (+ action) — тот же поток, что LAN `/receive`. Стартует/стопается в `Main`.
+- **e2e проверено вживую** (`RelayPollerLiveTest`, guarded `assumeTrue` секретом → скип в CI): seal
+  кадра → POST в реальный релей → поллер принял, расшифровал, восстановил объект. Обе половины через
+  живой сервер.
+- Итог железобетонности: одна сеть — самолечение+ретрай (#192/#193); кросс-сеть — релей телефон↔ПК
+  (#194 + этот срез), выключается при LAN-успехе (LanThenRelay), включается при недостижимости.

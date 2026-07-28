@@ -1,3 +1,6 @@
+import java.io.File
+import java.util.Properties
+
 // Point for PC (#147): a pure-JVM Compose Desktop app. It reuses the Android-free core
 // (:core:model, :core:flow) untouched — the whole reason those modules stay pure.
 plugins {
@@ -22,6 +25,30 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
 }
+
+// Relay config (#161 v2): generate RelayEnv from local.properties — Compose Desktop has no
+// BuildConfig. The relay URL is public (it also travels in the QR); the secret is the shared
+// app secret. Empty when local.properties is absent (CI), so the build still compiles.
+val generateRelayEnv by tasks.registering {
+    val outDir = layout.buildDirectory.dir("generated/relay")
+    outputs.dir(outDir)
+    val props = Properties()
+    rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { props.load(it) }
+    val url = props.getProperty("RELAY_URL", "")
+    val secret = props.getProperty("RELAY_APP_SECRET", "")
+    doLast {
+        val pkg = outDir.get().dir("com/point/desktop").asFile.apply { mkdirs() }
+        File(pkg, "RelayEnv.kt").writeText(
+            "package com.point.desktop\n\n" +
+                "// Generated from local.properties — do not edit.\n" +
+                "object RelayEnv {\n" +
+                "    const val URL = \"$url\"\n" +
+                "    const val APP_SECRET = \"$secret\"\n" +
+                "}\n",
+        )
+    }
+}
+kotlin.sourceSets.named("main") { kotlin.srcDir(generateRelayEnv) }
 
 compose.desktop {
     application {
