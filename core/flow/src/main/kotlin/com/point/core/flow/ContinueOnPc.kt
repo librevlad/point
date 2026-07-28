@@ -1,5 +1,7 @@
 package com.point.core.flow
 
+import java.nio.ByteBuffer
+
 /**
  * Continue on PC (#147) — the protocol both sides share. Pure Kotlin: the phone builds
  * requests from it, the desktop parses them, and the pairing QR payload round-trips
@@ -10,9 +12,20 @@ data class PcPairing(
     val host: String,
     val port: Int,
     val token: String,
+    /** The always-works relay base URL (#161 v2), when the pairing offers the firewall-proof
+     *  fallback. The same [token] both authenticates the LAN hop and derives the relay E2E key. */
+    val relay: String? = null,
 ) {
-    /** The payload shown in the desktop QR / typed manually: `point-pc://host:port/token`. */
-    fun qrPayload(): String = "$SCHEME$host:$port/$token"
+    /** `point-pc://host:port/token` — plus `?r=<base64url(relay)>` when a relay is offered. */
+    fun qrPayload(): String {
+        val base = "$SCHEME$host:$port/$token"
+        return if (relay.isNullOrBlank()) {
+            base
+        } else {
+            base + "?r=" + java.util.Base64.getUrlEncoder().withoutPadding()
+                .encodeToString(relay.toByteArray(Charsets.UTF_8))
+        }
+    }
 }
 
 const val PC_SCHEME = "point-pc://"
@@ -25,13 +38,45 @@ fun parsePcPairing(payload: String): PcPairing? {
     val slash = rest.indexOf('/')
     if (slash <= 0 || slash == rest.length - 1) return null
     val hostPort = rest.substring(0, slash)
-    val token = rest.substring(slash + 1)
+    var token = rest.substring(slash + 1)
+    var relay: String? = null
+    val q = token.indexOf('?')
+    if (q >= 0) {
+        val query = token.substring(q + 1)
+        token = token.substring(0, q)
+        query.split('&').firstOrNull { it.startsWith("r=") }?.removePrefix("r=")
+            ?.takeIf { it.isNotBlank() }
+            ?.let { relay = runCatching { String(java.util.Base64.getUrlDecoder().decode(it), Charsets.UTF_8) }.getOrNull() }
+    }
     val colon = hostPort.lastIndexOf(':')
     if (colon <= 0) return null
     val host = hostPort.substring(0, colon)
     val port = hostPort.substring(colon + 1).toIntOrNull() ?: return null
     if (host.isBlank() || token.isBlank() || port !in 1..65535) return null
-    return PcPairing(host, port, token)
+    return PcPairing(host, port, token, relay)
+}
+
+/**
+ * The object as it crosses the relay: [meta] (name/mime/understanding) + raw [bytes], framed so the
+ * far side reconstructs it. The whole frame is sealed by RelayCrypto (#161 v2) — the relay server
+ * only ever holds the ciphertext.
+ */
+class PcFrame(val meta: Map<String, String>, val bytes: ByteArray)
+
+/** `[4-byte header length][encodePcMeta header][raw bytes]` — binary-safe, so any object survives. */
+fun encodePcFrame(meta: Map<String, String>, bytes: ByteArray): ByteArray {
+    val header = encodePcMeta(meta).toByteArray(Charsets.UTF_8)
+    return ByteBuffer.allocate(4 + header.size + bytes.size)
+        .putInt(header.size).put(header).put(bytes).array()
+}
+
+fun decodePcFrame(blob: ByteArray): PcFrame {
+    val buffer = ByteBuffer.wrap(blob)
+    val headerLen = buffer.int
+    require(headerLen in 0..buffer.remaining()) { "malformed frame" }
+    val header = ByteArray(headerLen).also(buffer::get)
+    val bytes = ByteArray(buffer.remaining()).also(buffer::get)
+    return PcFrame(decodePcMeta(String(header, Charsets.UTF_8)), bytes)
 }
 
 /**
