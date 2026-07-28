@@ -74,5 +74,25 @@
             </intent-filter>
         </activity>
 
+        <!-- «Общий буфер» (#161): a Quick Settings tile syncs the clipboard with the paired PC. The
+             invisible sync activity is the trick that gets clipboard access from the shade. -->
+        <activity
+            android:name=".ClipboardSyncActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:excludeFromRecents="true"
+            android:noHistory="true" />
+
+        <service
+            android:name=".ClipboardTileService"
+            android:exported="true"
+            android:icon="@android:drawable/ic_popup_sync"
+            android:label="Общий буфер"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
     </application>
 </manifest>

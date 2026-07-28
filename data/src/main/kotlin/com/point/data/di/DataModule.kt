@@ -64,6 +64,7 @@ import com.point.data.AndroidPcDiscovery
 import com.point.data.FileBasket
 import com.point.data.FilePcCaps
 import com.point.data.FilePcPairings
+import com.point.data.HttpPcClipboardSync
 import com.point.data.HttpUrlPcTransport
 import com.point.data.LanThenRelayTransport
 import com.point.data.RelayPcTransport
@@ -224,6 +225,10 @@ abstract class DataModule {
     /** LAN autodiscovery of Point-for-PC (#147 slice C) — sugar over manual entry. */
     @Binds
     abstract fun pcDiscovery(impl: AndroidPcDiscovery): PcDiscovery
+
+    /** Shared clipboard with the PC (#161 «общий буфер»). */
+    @Binds
+    abstract fun pcClipboardSync(impl: HttpPcClipboardSync): com.point.core.flow.PcClipboardSync
 
     /** Consent to send objects to a cloud service (#10). */
     @Binds
