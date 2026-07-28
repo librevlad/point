@@ -1577,3 +1577,16 @@ HomeActivity + `FlowViewModel.pairFromPayload` — парсит URI, сохра�
 - Трек 2 (релей, за фаерволом владельца): достроить клиентский слой — телефонный `RelayPcTransport`,
   десктоп-релей-клиент, DI/BuildConfig (`RELAY_URL`/`RELAY_APP_SECRET` есть в local.properties, но НЕ
   проброшены в BuildConfig), QR с relay, персист relay (`FilePcPairings.save` сейчас дропает relay).
+
+### Релей — телефонный клиент (Трек 2, Слайс A)
+- Владелец открыл фаервол → `8443` открыт, `/health=ok`. Релей разблокирован.
+- `RelayTls` (data): пиннинг self-signed серта релея (встроен строкой, серт публичный; SAN=IP →
+  hostname-верификация штатная). `RelayPcTransport` (data): отправка — `encodePcFrame` → `RelayCrypto.seal`
+  → `POST /mbx/<to-pc>` c `X-Point-App` (pinned TLS). Релей send-only (приём — десктоп-поллер, P4/Слайс B).
+- BuildConfig: `RELAY_URL`/`RELAY_APP_SECRET`. `FilePcPairings` теперь персистит `relay`. Проводка:
+  `PcTransport = LanThenRelay(SelfHealing(HttpUrl), Relay)` — LAN самолечится, при недостижимости уходит
+  в релей. `RELAY_APP_SECRET` пуст в CI (нет local.properties) — компилится; реальный секрет в локальной сборке.
+- Проверено вживую (curl к реальному серверу с pinned-сертом): POST→200, GET вернул тот же блоб, без
+  секрета→401, ack→200. Крипта/кадр — юнитами.
+- Осталось (Слайс B): десктоп QR с `?r=<relay>` (сейчас без relay → `pairing.relay` null → фолбэк не
+  сработает в реальном флоу), десктоп-поллер mailbox `to-pc` (декрипт → объект), живой e2e.
