@@ -9,6 +9,7 @@ import com.point.core.flow.PcRemoteAction
 import com.point.core.flow.PcSendOutcome
 import com.point.core.flow.PcTransport
 import com.point.core.model.PointObject
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -31,6 +32,7 @@ class SelfHealingPcTransport(
     private val discovery: PcDiscovery,
     private val pairings: PcPairings,
     private val scanTimeoutMs: Long = 4000,
+    private val retryDelayMs: Long = 400,
 ) : PcTransport {
 
     override suspend fun send(
@@ -42,6 +44,11 @@ class SelfHealingPcTransport(
     ): PcSendOutcome {
         val outcome = lan.send(pairing, obj, fileName, meta, action)
         if (outcome !is PcSendOutcome.Unreachable) return outcome
+        // A transient Wi-Fi hiccup on the current address? one quick retry before assuming it's stale.
+        delay(retryDelayMs)
+        val retry = lan.send(pairing, obj, fileName, meta, action)
+        if (retry !is PcSendOutcome.Unreachable) return retry
+        // Still unreachable — the saved address is likely stale; re-resolve via mDNS.
         for (pc in pcHealCandidates(pairing, snapshot())) {
             val healed = pairing.copy(host = pc.host, port = pc.port)
             if (lan.send(healed, obj, fileName, meta, action) is PcSendOutcome.Sent) {

@@ -64,6 +64,25 @@ class SelfHealingPcTransportTest {
     }
 
     @Test
+    fun `a transient hiccup on the current address is retried once, without re-resolving`() = runTest {
+        var calls = 0
+        var scanned = false
+        val lan = object : Fake() {
+            override suspend fun send(pairing: PcPairing, obj: PointObject, fileName: String, meta: Map<String, String>, action: String?) =
+                if (++calls == 1) PcSendOutcome.Unreachable("hiccup") else PcSendOutcome.Sent
+        }
+        val discovery = PcDiscovery { scanned = true; flowOf(emptyList()) }
+        val pairings = CapturingPairings(stale)
+
+        val outcome = SelfHealingPcTransport(lan, discovery, pairings).send(stale, obj(), "f", emptyMap(), null)
+
+        assertEquals(PcSendOutcome.Sent, outcome)
+        assertEquals(2, calls)                     // retried once on the same address
+        assertFalse("no re-resolve when the retry succeeds", scanned)
+        assertNull(pairings.saved)                 // same address — nothing new to remember
+    }
+
+    @Test
     fun `on unreachable, re-resolves via mDNS, retries with the token, and remembers the working address`() = runTest {
         val live = "10.0.0.9"
         val lan = object : Fake() {
