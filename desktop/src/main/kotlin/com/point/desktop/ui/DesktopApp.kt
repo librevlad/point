@@ -256,7 +256,9 @@ private fun ConnectionCard(config: PcConfig, addresses: List<String>, port: Int)
             Spacer(Modifier.height(8.dp))
             val payload = remember(addresses, port) {
                 val host = addresses.firstOrNull() ?: "127.0.0.1"
-                com.point.core.flow.PcPairing(host, port, config.token).qrPayload()
+                // #161 v2: advertise the relay too, so the phone can fall back to it off-LAN.
+                val relay = com.point.desktop.RelayEnv.URL.takeIf { it.isNotBlank() }
+                com.point.core.flow.PcPairing(host, port, config.token, relay).qrPayload()
             }
             Image(qrImage(payload), contentDescription = "QR для пейринга", modifier = Modifier.size(200.dp).background(androidx.compose.ui.graphics.Color.White))
             Spacer(Modifier.height(8.dp))

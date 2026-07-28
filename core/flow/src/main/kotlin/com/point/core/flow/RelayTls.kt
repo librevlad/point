@@ -1,4 +1,4 @@
-package com.point.data
+package com.point.core.flow
 
 import java.security.KeyStore
 import java.security.cert.CertificateFactory
@@ -9,9 +9,10 @@ import javax.net.ssl.TrustManagerFactory
 
 /**
  * TLS pinning for the relay (#161 v2). The relay serves a **self-signed** cert (IP SAN
- * `35.185.31.106`), so the phone trusts exactly that one certificate — nothing else. Pinning IS the
- * security here; the cert has the server IP as its SAN, so the platform's hostname check passes on
- * its own. The certificate is public (not a secret), so it is embedded rather than shipped as a file.
+ * `35.185.31.106`), so both the phone and the PC trust exactly that one certificate — nothing else.
+ * Pinning IS the security here; the cert carries the server IP as its SAN, so the platform's hostname
+ * check passes on its own. The certificate is public (not a secret), so it is embedded rather than
+ * shipped as a file. Pure JVM (`javax.net.ssl`) — the same object runs on Android and Compose Desktop.
  */
 object RelayTls {
 

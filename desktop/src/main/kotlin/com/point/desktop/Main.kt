@@ -93,10 +93,23 @@ fun main() {
     server.start(preferredPort = config.port)
     // Slice C: let phones discover this PC by themselves (best-effort mDNS).
     val advertiser = Advertiser(config.name, server.port).also { it.start() }
+    // #161 v2 (P4): also receive over the always-works relay — the PC polls the mailbox and an
+    // object the phone sent off-LAN lands in the SAME inbox flow as a LAN /receive.
+    val relayPoller = RelayPoller(
+        relayUrl = RelayEnv.URL,
+        appSecret = RelayEnv.APP_SECRET,
+        token = config.token,
+        onObject = { name, mime, meta, bytes, action ->
+            val item = inbox.receive(name, mime, meta, bytes.inputStream())
+            state.onReceived(item)
+            action?.let { runCatching { state.runRemoteAction(it, item) } }
+        },
+    ).also { it.start() }
 
     application {
         Window(
             onCloseRequest = {
+                relayPoller.stop()
                 advertiser.stop()
                 server.stop()
                 exitApplication()
