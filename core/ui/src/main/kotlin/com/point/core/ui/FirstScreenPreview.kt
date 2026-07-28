@@ -5,6 +5,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import com.point.core.model.Bubble
 import com.point.core.model.BubbleTier
 import com.point.core.model.CapabilityId
+import com.point.core.model.Intent
 import com.point.core.model.LatentBubble
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
@@ -33,8 +34,23 @@ private fun sampleObject(
     metadata = metadata + mapOf("name" to name),
 )
 
-private fun bubble(icon: String, title: String, id: String, next: ObjectKind, tier: BubbleTier) =
-    Bubble(icon, title, CapabilityId(id), ObjectState(next), tier)
+// Mirror the registry's intent derivation so previews render the object screen's grouped sections
+// (Извлечь / Превратить / Отправить), not one big pile under UNDERSTAND.
+private fun previewIntent(id: String, next: ObjectKind): Intent = when {
+    id.startsWith("open") -> Intent.OPEN
+    id in setOf("share", "share-all", "save", "save-all", "call") -> Intent.SEND
+    next == ObjectKind.TEXT -> Intent.UNDERSTAND
+    else -> Intent.PREPARE
+}
+
+private fun bubble(
+    icon: String,
+    title: String,
+    id: String,
+    next: ObjectKind,
+    tier: BubbleTier,
+    intent: Intent = previewIntent(id, next),
+) = Bubble(icon, title, CapabilityId(id), ObjectState(next), tier, intent = intent)
 
 private fun universalBubbles(kind: ObjectKind) = listOf(
     bubble("open", "Открыть", "open", kind, BubbleTier.INSTANT),
