@@ -84,7 +84,7 @@ class FlowViewModelTest {
     private fun vm(
         caps: Map<CapabilityId, Set<Intent>> = mapOf(CapabilityId("a") to setOf(Intent.PREPARE)),
         cloud: Set<CapabilityId> = emptySet(),
-    ) = FlowViewModel(store, FakeRegistry(caps, cloud), resolver, enrichment, history, favorites, usage, chosenApps, userKeys, journal, consent, appLauncher, FakePdfRasterizer(), sensory, sensorySettings, snapshot, crashLog, dispatcher, pins, AppIconResolver { null }, pcPairings, pcTransport, com.point.core.flow.PcDiscovery { kotlinx.coroutines.flow.flowOf(emptyList()) }, basket, pcCaps, PulledFileFactory { name -> java.io.File(java.io.File(System.getProperty("java.io.tmpdir")), "pulled-" + name).absolutePath })
+    ) = FlowViewModel(store, FakeRegistry(caps, cloud), resolver, com.point.core.flow.AiChatResponder { _, _, _ -> "ответ" }, enrichment, history, favorites, usage, chosenApps, userKeys, journal, consent, appLauncher, FakePdfRasterizer(), sensory, sensorySettings, snapshot, crashLog, dispatcher, pins, AppIconResolver { null }, pcPairings, pcTransport, com.point.core.flow.PcDiscovery { kotlinx.coroutines.flow.flowOf(emptyList()) }, basket, pcCaps, PulledFileFactory { name -> java.io.File(java.io.File(System.getProperty("java.io.tmpdir")), "pulled-" + name).absolutePath })
 
     private val basket = FakeBasket()
     private val pcCaps = FakePcCaps()
@@ -834,9 +834,14 @@ class FlowViewModelTest {
 
     // --- Cloud privacy consent (#10) ---
 
+    // "ai" is cloud but now opens the chat (#4), so the generic consent-then-run tests below drive a
+    // neutral cloud action ("cloudx"); "ai" stays cloud for the favorite-chain gating test.
     private fun cloudVm() = vm(
-        caps = mapOf(CapabilityId("ai") to setOf(Intent.UNDERSTAND)),
-        cloud = setOf(CapabilityId("ai")),
+        caps = mapOf(
+            CapabilityId("ai") to setOf(Intent.UNDERSTAND),
+            CapabilityId("cloudx") to setOf(Intent.UNDERSTAND),
+        ),
+        cloud = setOf(CapabilityId("ai"), CapabilityId("cloudx")),
     )
 
     @Test fun `a cloud action asks for consent before anything leaves the device`() = runTest(dispatcher) {
@@ -844,7 +849,7 @@ class FlowViewModelTest {
         val vm = cloudVm()
         vm.onShared("uri", "image/png"); advanceUntilIdle()
 
-        vm.onBubble(bubble(id = "ai")); advanceUntilIdle()
+        vm.onBubble(bubble(id = "cloudx")); advanceUntilIdle()
 
         assertTrue(vm.ui.value.cloudConsent)                  // asked
         assertNull(vm.ui.value.message)                       // nothing ran
@@ -855,7 +860,7 @@ class FlowViewModelTest {
         resolver.result = ActionResult.Done("готово")
         val vm = cloudVm()
         vm.onShared("uri", "image/png"); advanceUntilIdle()
-        vm.onBubble(bubble(id = "ai")); advanceUntilIdle()
+        vm.onBubble(bubble(id = "cloudx")); advanceUntilIdle()
 
         vm.confirmCloud(); advanceUntilIdle()
 
@@ -868,7 +873,7 @@ class FlowViewModelTest {
         resolver.result = ActionResult.Done("готово")
         val vm = cloudVm()
         vm.onShared("uri", "image/png"); advanceUntilIdle()
-        vm.onBubble(bubble(id = "ai")); advanceUntilIdle()
+        vm.onBubble(bubble(id = "cloudx")); advanceUntilIdle()
 
         vm.declineCloud()
 
@@ -884,10 +889,21 @@ class FlowViewModelTest {
         val vm = cloudVm()
         vm.onShared("uri", "image/png"); advanceUntilIdle() // init caches cloudAllowed = true
 
-        vm.onBubble(bubble(id = "ai")); advanceUntilIdle()
+        vm.onBubble(bubble(id = "cloudx")); advanceUntilIdle()
 
         assertEquals("готово", vm.ui.value.message)
         assertEquals(false, vm.ui.value.cloudConsent)         // no prompt
+    }
+
+    @Test fun `tapping AI opens the multi-turn chat, not a one-shot action (#4)`() = runTest(dispatcher) {
+        consent.granted = true
+        val vm = cloudVm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.onBubble(bubble(id = "ai")); advanceUntilIdle()
+
+        assertTrue(vm.ui.value.chat != null)                  // the chat opened
+        assertEquals("__unset__", resolver.lastAmendment)     // no one-shot realizer ran
     }
 
     @Test fun `a favorite chain hiding a cloud step is gated too — not a back door`() = runTest(dispatcher) {

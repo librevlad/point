@@ -10,7 +10,7 @@ import com.point.core.model.PointObject
  * the whole thread. Behind a contract so the LLM stays fakeable and off the first screen; the impl
  * builds the prompt with [buildChatPrompt] and calls the shared [LlmClient].
  */
-interface AiChatResponder {
+fun interface AiChatResponder {
     /** Answer [message] in the context of [obj] and the prior [history]. Returns plain/markdown text. */
     suspend fun reply(obj: PointObject, history: List<ChatMessage>, message: String): String
 }
