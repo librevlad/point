@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
@@ -99,7 +100,8 @@ fun PointHost(
     Box(
         modifier
             .fillMaxSize()
-            .livingBackground(), // M5: the canvas itself is alive (MOTION.md №5)
+            .livingBackground() // M5: the canvas itself is alive (MOTION.md №5) — fills edge-to-edge
+            .systemBarsPadding(), // targetSdk 35 is edge-to-edge; keep content clear of the system bars
         contentAlignment = Alignment.Center,
     ) {
         val frame = state.frame
