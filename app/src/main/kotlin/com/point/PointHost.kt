@@ -47,8 +47,10 @@ import com.point.core.model.ObjectKind
 import com.point.core.model.FavoriteChain
 import com.point.core.model.PointObject
 import com.point.core.model.Preview
+import com.point.core.ui.BusyPortal
 import com.point.core.ui.FirstScreen
 import com.point.core.ui.livingBackground
+import com.point.core.ui.portalStep
 import kotlinx.coroutines.delay
 
 /**
@@ -267,26 +269,14 @@ private fun BusyScreen(title: String, network: Boolean) {
         }
     }
     val stages = if (network) NETWORK_STAGES else LOCAL_STAGES
-    val stage = stages[minOf(elapsed / 4, stages.lastIndex)]
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        CircularProgressIndicator(
-            color = MaterialTheme.colorScheme.primary,
-            strokeWidth = 4.dp,
-        )
-        Spacer(Modifier.height(22.dp))
-        Text(
-            text = title, // WHAT is running — not a faceless wheel
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onBackground,
-        )
-        Spacer(Modifier.height(8.dp))
-        Text(
-            text = if (elapsed >= 3) "$stage · $elapsed с" else stage,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
+    // The portal (redesign slice 1): a glowing "reading" vortex + indicative step checklist on its
+    // own near-black stage — replaces the plain wheel (MOTION.md принцип №3, impulses not a spinner).
+    BusyPortal(
+        title = title,
+        subtitle = "Это займёт несколько секунд",
+        steps = stages,
+        activeStep = portalStep(elapsed, stages.size),
+    )
 }
 
 /**
