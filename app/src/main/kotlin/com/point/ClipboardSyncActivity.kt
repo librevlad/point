@@ -3,7 +3,6 @@ package com.point
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
-import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.lifecycle.lifecycleScope
@@ -26,12 +25,19 @@ class ClipboardSyncActivity : ComponentActivity() {
 
     @Inject lateinit var pcPairings: PcPairings
     @Inject lateinit var clipboardSync: PcClipboardSync
+    private var handled = false
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        lifecycleScope.launch {
-            runCatching { sync() }.onFailure { toast("Не удалось синхронизировать") }
-            finish()
+    // The clipboard may only be READ once this activity actually holds window focus (Android 10+) —
+    // which is NOT yet true in onCreate. Reading there returns empty, so a fresh phone copy looked
+    // like «nothing to push» and the tile always pulled instead. Sync on first real focus.
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus && !handled) {
+            handled = true
+            lifecycleScope.launch {
+                runCatching { sync() }.onFailure { toast("Не удалось синхронизировать") }
+                finish()
+            }
         }
     }
 
