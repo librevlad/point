@@ -45,8 +45,8 @@ import com.point.core.ui.theme.PointTheme
  * accent and of the system light/dark theme. Pure Compose, zero dependencies.
  */
 
-private val PortalPurple = Color(0xFF7C4DFF)
-private val PortalBlue = Color(0xFF3B82F6)
+private val PortalPurple = Color(0xFF7B5CFF) // АКЦЕНТ1 (design system)
+private val PortalBlue = Color(0xFF00E0FF)    // АКЦЕНТ2 — the portal's cyan ring (design system)
 private val PortalGlow = Color(0xFFB39DFF)
 private val PortalCore = Color(0xFFEAF0FF)
 private val PortalBackdrop = Color(0xFF07070C)

@@ -40,24 +40,26 @@ private val LightColors = lightColorScheme(
     onErrorContainer = Color(0xFF410002),
 )
 
-// The dark palette of the mock-ups: deep near-black + the icon's violet-blue neon accent (no orange).
+// The design system (docs/design-system.png), tokens copied exactly: ФОН #0B0D10, ПОВЕРХНОСТЬ
+// #14161C, ГРАНИЦЫ #242833, АКЦЕНТ1 (violet) #7B5CFF, АКЦЕНТ2 (cyan) #00E0FF, ТЕКСТ #FFFFFF,
+// ВТОРИЧНЫЙ #A1A6B3. A deep near-black field with the portal's violet→cyan neon accents.
 private val DarkColors = darkColorScheme(
-    primary = Purple, // the portal/icon accent — unifies buttons, aura, active states with the glow
+    primary = Color(0xFF7B5CFF), // АКЦЕНТ1 — the portal/icon violet; buttons, aura, active states
     onPrimary = Color(0xFFFFFFFF),
-    primaryContainer = Color(0xFF2A2350), // dark violet for banners / chips
+    primaryContainer = Color(0xFF211B3E), // dark violet for banners / chips
     onPrimaryContainer = Color(0xFFD6CCFF),
-    secondary = Color(0xFFC7CEDE),
+    secondary = Color(0xFFA1A6B3), // ВТОРИЧНЫЙ
     onSecondary = Ink,
-    secondaryContainer = Color(0xFF1D1D2A),
+    secondaryContainer = Color(0xFF1B1E27),
     onSecondaryContainer = Color(0xFFE6E9F0),
-    tertiary = Color(0xFF6EA8FF), // portal blue (AI ring / secondary neon)
-    background = Color(0xFF0A0A12), // deep near-black field
-    onBackground = Color(0xFFE9ECF4),
-    surface = Color(0xFF14141F), // dark card, faint violet tint
-    onSurface = Color(0xFFE9ECF4),
-    surfaceVariant = Color(0xFF1E1E2C),
-    onSurfaceVariant = Color(0xFF9AA3B7),
-    outline = Color(0xFF2E2E40),
+    tertiary = Color(0xFF00E0FF), // АКЦЕНТ2 — portal cyan (AI ring / secondary neon)
+    background = Color(0xFF0B0D10), // ФОН — deep near-black field
+    onBackground = Color(0xFFFFFFFF), // ТЕКСТ
+    surface = Color(0xFF14161C), // ПОВЕРХНОСТЬ — dark card
+    onSurface = Color(0xFFFFFFFF),
+    surfaceVariant = Color(0xFF1B1E27), // one step up from surface: icon plates, elevated rows
+    onSurfaceVariant = Color(0xFFA1A6B3), // ВТОРИЧНЫЙ — captions, sublines, secondary labels
+    outline = Color(0xFF242833), // ГРАНИЦЫ
     errorContainer = Color(0xFF93000A),
     onErrorContainer = Color(0xFFFFDAD6),
 )

@@ -15,6 +15,10 @@ data class Bubble(
     val capabilityId: CapabilityId,
     val expectedNextState: ObjectState,
     val tier: BubbleTier = BubbleTier.SMART,
+    /** The user [Intent] this action primarily serves (its first served intent in declaration
+     *  order). Set by the registry from the capability; the object screen groups actions by it —
+     *  Извлечь (UNDERSTAND) / Превратить (PREPARE) / Отправить (OPEN, SEND). */
+    val intent: Intent = Intent.UNDERSTAND,
 )
 
 /**

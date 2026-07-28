@@ -35,6 +35,7 @@ class DefaultCapabilityRegistry @Inject constructor(
                     capabilityId = c.id,
                     expectedNextState = c.produces(state) ?: state,
                     tier = tierOf(c.meta),
+                    intent = primaryIntentOf(c, state),
                 )
             }
 
@@ -43,6 +44,13 @@ class DefaultCapabilityRegistry @Inject constructor(
         meta.network -> BubbleTier.AI
         meta.latency == Latency.INSTANT -> BubbleTier.INSTANT
         else -> BubbleTier.SMART
+    }
+
+    /** The one intent a bubble is grouped under on the object screen: the first the capability serves
+     *  in [Intent] declaration order (same convention as [intentsFor]). */
+    private fun primaryIntentOf(c: Capability, state: ObjectState): Intent {
+        val served = c.intents(state)
+        return Intent.entries.firstOrNull { it in served } ?: Intent.UNDERSTAND
     }
 
     override fun intentsFor(state: ObjectState): List<Intent> {

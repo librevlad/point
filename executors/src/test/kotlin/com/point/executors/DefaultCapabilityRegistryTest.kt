@@ -115,6 +115,17 @@ class DefaultCapabilityRegistryTest {
     }
 
     @Test
+    fun `each bubble carries its capability's primary intent (for grouping on the object screen)`() {
+        val bubbles = registry.bubblesFor(ObjectState(ObjectKind.IMAGE))
+        fun intent(id: String) = bubbles.first { it.capabilityId.value == id }.intent
+        assertEquals(Intent.UNDERSTAND, intent("ocr"))  // recognise text → understand
+        assertEquals(Intent.PREPARE, intent("pdf"))     // image → PDF → prepare
+        assertEquals(Intent.OPEN, intent("open"))       // open in an app → open
+        assertEquals(Intent.SEND, intent("share"))      // share → send
+        assertEquals(Intent.UNDERSTAND, intent("ai"))   // ask AI → understand
+    }
+
+    @Test
     fun `byId round-trips`() {
         val bubble = registry.bubblesFor(ObjectState(ObjectKind.TEXT)).first()
         assertEquals(bubble.capabilityId, registry.byId(bubble.capabilityId).id)
