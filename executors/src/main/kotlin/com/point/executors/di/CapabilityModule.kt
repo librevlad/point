@@ -6,6 +6,7 @@ import com.point.core.flow.Capability
 import com.point.core.flow.ChosenApps
 import com.point.core.flow.CapabilityRegistry
 import com.point.core.flow.Realizer
+import com.point.core.flow.AiChatResponder
 import com.point.core.flow.Resolver
 import com.point.executors.AppCapability
 import com.point.executors.PairPcCapability
@@ -28,6 +29,7 @@ import com.point.executors.JobReplyRealizer
 import com.point.executors.DeepUnderstandRealizer
 import com.point.executors.ShoppingListCapability
 import com.point.executors.ShoppingListRealizer
+import com.point.executors.AiChatResponderImpl
 import com.point.executors.AiRealizer
 import com.point.executors.CallCapability
 import com.point.executors.CallRealizer
@@ -225,6 +227,11 @@ abstract class CapabilityModule {
         // types (which it can't, even though kotlinc can) — the pack still lands @IntoSet (#45).
         @Provides @IntoSet
         fun openCvScanR(store: ObjectStore): Realizer = OpenCvScanRealizer(store)
+
+        // #4: same trick for the AI chat — construct the impl manually from its LlmClient dep so
+        // the concrete class stays out of the binding graph KSP aggregates.
+        @Provides
+        fun aiChatResponder(llm: com.point.core.flow.LlmClient): AiChatResponder = AiChatResponderImpl(llm)
 
         // #66 slice 4: remembered app picks join the SAME graph as built-in actions —
         // a capability+realizer pair per pick, synthesised once at process start

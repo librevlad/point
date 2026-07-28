@@ -5,6 +5,7 @@ import com.point.core.flow.UsageSummary
 import com.point.core.flow.UserAiConfig
 import com.point.core.model.Bubble
 import com.point.core.model.CapabilityId
+import com.point.core.model.ChatMessage
 import com.point.core.flow.CapabilityMeta
 import com.point.core.flow.Latency
 import com.point.core.model.FavoriteChain
@@ -72,6 +73,8 @@ data class FlowUiState(
      *  and "works" (thinking ring) instead of a full busy screen; states flow, never snap. */
     val busyQuiet: Boolean = false,
     val frame: FlowFrame? = null,
+    /** Non-null while the AI chat (#4) is open over the current object — a multi-turn conversation. */
+    val chat: ChatState? = null,
     /** The Object Timeline (#114): the whole journey, root first — tap a node to jump back. */
     val path: List<PathStep> = emptyList(),
     /** Transient text from the ActionResult channel (Failure / Done). */
@@ -103,6 +106,15 @@ data class FlowUiState(
     val usageSummary: UsageSummary? = null,
 )
 
+
+/** The AI chat with the current object (#4). A multi-turn conversation grounded in [obj]; [pending]
+ *  is true while the model answers. [suggestions] are the opening prompts shown on an empty thread. */
+data class ChatState(
+    val obj: PointObject,
+    val messages: List<ChatMessage> = emptyList(),
+    val pending: Boolean = false,
+    val suggestions: List<String> = emptyList(),
+)
 
 /** «Компьютер» (#147): the pairing screen's state — current pairing + a busy/error line. */
 data class PcScreenState(

@@ -20,7 +20,7 @@ import javax.inject.Inject
 
 /** The 3 most-likely AI prompts for an object of [kind] (#86) — tappable so the user rarely has to
  *  type. Kept short and imperative; the LLM gets the object's content alongside. */
-internal fun aiSuggestions(kind: ObjectKind): List<String> = when (kind) {
+fun aiSuggestions(kind: ObjectKind): List<String> = when (kind) {
     ObjectKind.IMAGE -> listOf("Что на изображении?", "Извлеки весь текст", "Переведи текст с картинки")
     ObjectKind.TEXT -> listOf("Кратко перескажи", "Исправь ошибки и стиль", "Ответь на это")
     ObjectKind.PDF -> listOf("Краткое содержание", "Главные тезисы", "О чём документ?")
@@ -43,7 +43,7 @@ private val QUESTION_STARTERS =
  * and stays a chat answer. Keyword-based and deliberately conservative — a question that merely
  * mentions a format ("что такое word?") stays chat. Pure — JVM-tested in AiTransformTargetTest.
  */
-internal fun aiTransformTarget(prompt: String): CapabilityId? {
+fun aiTransformTarget(prompt: String): CapabilityId? {
     val p = prompt.lowercase().trim()
     if (p.endsWith("?")) return null
     if (QUESTION_STARTERS.any { p.startsWith(it) }) return null
