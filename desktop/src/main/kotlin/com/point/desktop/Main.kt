@@ -1,5 +1,6 @@
 package com.point.desktop
 
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import com.point.desktop.ui.DesktopApp
@@ -101,6 +102,7 @@ fun main() {
                 exitApplication()
             },
             title = "Point для ПК",
+            icon = painterResource("point-icon.png"),
         ) {
             // Local input: native Compose drag&drop (the AWT window.dropTarget never fired —
             // the Compose surface intercepts drops; DesktopApp uses Modifier.dragAndDropTarget).
