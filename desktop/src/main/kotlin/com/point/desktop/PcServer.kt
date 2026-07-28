@@ -37,6 +37,9 @@ class PcServer(
     private val runAction: (id: String, item: InboxItem) -> Unit = { _, _ -> },
     private val outbox: Outbox? = null,
     private val onPhoneCaps: (List<PcRemoteAction>) -> Unit = {},
+    // #161 «общий буфер»: read/write the PC's system clipboard for the shared-clipboard tile.
+    private val clipboardGet: () -> String = { "" },
+    private val clipboardSet: (String) -> Unit = {},
 ) {
     private var server: HttpServer? = null
     val port: Int get() = server?.address?.port ?: -1
@@ -83,6 +86,17 @@ class PcServer(
                 ex.requestBody.readBytes()
                 ex.requestHeaders.getFirst("X-Point-Id")?.trim()?.toIntOrNull()?.let { outbox?.remove(it) }
                 respond(ex, 200, "ok")
+            }
+        }
+        // #161 «общий буфер»: GET returns the PC's clipboard; POST sets it from the phone's.
+        s.createContext("/clipboard") { ex ->
+            withToken(ex) {
+                if (ex.requestMethod == "POST") {
+                    clipboardSet(ex.requestBody.readBytes().toString(Charsets.UTF_8))
+                    respond(ex, 200, "ok")
+                } else {
+                    respond(ex, 200, clipboardGet())
+                }
             }
         }
         s.createContext("/receive") { ex ->
