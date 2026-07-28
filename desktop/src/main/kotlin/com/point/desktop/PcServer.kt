@@ -38,8 +38,8 @@ class PcServer(
     private val outbox: Outbox? = null,
     private val onPhoneCaps: (List<PcRemoteAction>) -> Unit = {},
     // #161 «общий буфер»: read/write the PC's system clipboard for the shared-clipboard tile.
-    private val clipboardGet: () -> String = { "" },
-    private val clipboardSet: (String) -> Unit = {},
+    private val clipboardGet: () -> com.point.core.flow.ClipboardPayload? = { null },
+    private val clipboardSet: (com.point.core.flow.ClipboardPayload) -> Unit = {},
 ) {
     private var server: HttpServer? = null
     val port: Int get() = server?.address?.port ?: -1
@@ -88,14 +88,28 @@ class PcServer(
                 respond(ex, 200, "ok")
             }
         }
-        // #161 «общий буфер»: GET returns the PC's clipboard; POST sets it from the phone's.
+        // #161 «общий буфер»: GET returns the PC's clipboard (mime+name headers, bytes body); POST
+        // sets it from the phone's. Text/image/file all cross as raw bytes.
         s.createContext("/clipboard") { ex ->
             withToken(ex) {
                 if (ex.requestMethod == "POST") {
-                    clipboardSet(ex.requestBody.readBytes().toString(Charsets.UTF_8))
+                    val mime = ex.requestHeaders.getFirst("X-Clip-Mime") ?: "text/plain"
+                    val name = ex.requestHeaders.getFirst("X-Clip-Name")?.let(::unb64).orEmpty()
+                    clipboardSet(com.point.core.flow.ClipboardPayload(mime, name, ex.requestBody.readBytes()))
                     respond(ex, 200, "ok")
                 } else {
-                    respond(ex, 200, clipboardGet())
+                    val p = clipboardGet()
+                    if (p == null) {
+                        ex.sendResponseHeaders(200, 0); ex.responseBody.close()
+                    } else {
+                        ex.responseHeaders.add("X-Clip-Mime", p.mime)
+                        ex.responseHeaders.add(
+                            "X-Clip-Name",
+                            java.util.Base64.getEncoder().encodeToString(p.name.toByteArray(Charsets.UTF_8)),
+                        )
+                        ex.sendResponseHeaders(200, p.bytes.size.toLong())
+                        ex.responseBody.use { it.write(p.bytes) }
+                    }
                 }
             }
         }

@@ -3,12 +3,17 @@ package com.point
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.net.Uri
+import android.provider.OpenableColumns
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
+import com.point.core.flow.ClipboardPayload
 import com.point.core.flow.PcClipboardSync
 import com.point.core.flow.PcPairings
 import dagger.hilt.android.AndroidEntryPoint
+import java.io.File
 import javax.inject.Inject
 import kotlinx.coroutines.launch
 
@@ -18,7 +23,7 @@ import kotlinx.coroutines.launch
  * clipboard here (foreground = allowed), decides direction, syncs, and finishes — invisible.
  *
  * Direction without conflict-versioning: if the phone clipboard changed since the last sync, PUSH it
- * to the PC; otherwise PULL the PC's. So a copy on either device reaches the other on the next tap.
+ * to the PC; otherwise PULL the PC's. Text, images (screenshots) and files all cross.
  */
 @AndroidEntryPoint
 class ClipboardSyncActivity : ComponentActivity() {
@@ -43,34 +48,71 @@ class ClipboardSyncActivity : ComponentActivity() {
 
     private suspend fun sync() {
         val pairing = pcPairings.current() ?: return toast("Сначала подключите компьютер")
-        val cm = getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-            ?: return toast("Буфер недоступен")
-        val phoneClip = cm.primaryClip?.takeIf { it.itemCount > 0 }
-            ?.getItemAt(0)?.coerceToText(this)?.toString().orEmpty()
+        val phone = readPhoneClipboard()
         val prefs = getSharedPreferences(PREFS, MODE_PRIVATE)
-        val lastSynced = prefs.getString(KEY_LAST, "").orEmpty()
+        val lastSig = prefs.getString(KEY_LAST, "").orEmpty()
+        val phoneSig = phone?.signature().orEmpty()
 
-        if (phoneClip.isNotEmpty() && phoneClip != lastSynced) {
+        if (phone != null && phoneSig != lastSig) {
             // The phone copied something new — send it to the PC.
-            if (clipboardSync.push(pairing, phoneClip)) {
-                prefs.edit().putString(KEY_LAST, phoneClip).apply()
-                toast("Буфер → компьютер")
+            if (clipboardSync.push(pairing, phone)) {
+                prefs.edit().putString(KEY_LAST, phoneSig).apply()
+                toast(if (phone.isText) "Буфер → компьютер" else "Файл → компьютер")
             } else {
                 toast("Компьютер недоступен")
             }
         } else {
             // Nothing new on the phone — take what the PC has.
-            when (val pcClip = clipboardSync.pull(pairing)) {
-                null -> toast("Компьютер недоступен")
-                phoneClip, "" -> toast("Буфер уже синхронизирован")
+            val pc = clipboardSync.pull(pairing)
+            when {
+                pc == null -> toast("Компьютер недоступен")
+                pc.signature() == phoneSig -> toast("Буфер уже синхронизирован")
                 else -> {
-                    cm.setPrimaryClip(ClipData.newPlainText("Point", pcClip))
-                    prefs.edit().putString(KEY_LAST, pcClip).apply()
-                    toast("Буфер ← компьютер")
+                    setPhoneClipboard(pc)
+                    prefs.edit().putString(KEY_LAST, pc.signature()).apply()
+                    toast(if (pc.isText) "Буфер ← компьютер" else "Файл ← компьютер")
                 }
             }
         }
     }
+
+    /** The phone clipboard as a payload: a content-URI item (image / file) → its bytes + mime + name;
+     *  otherwise plain text. */
+    private fun readPhoneClipboard(): ClipboardPayload? {
+        val cm = getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager ?: return null
+        val item = cm.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0) ?: return null
+        val uri = item.uri
+        return if (uri != null) {
+            runCatching {
+                val mime = contentResolver.getType(uri) ?: "application/octet-stream"
+                val name = displayName(uri) ?: "clip"
+                val bytes = contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return null
+                ClipboardPayload(mime, name, bytes)
+            }.getOrNull()
+        } else {
+            item.coerceToText(this)?.toString()?.takeIf { it.isNotEmpty() }?.let(ClipboardPayload::ofText)
+        }
+    }
+
+    private fun setPhoneClipboard(payload: ClipboardPayload) {
+        val cm = getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager ?: return
+        if (payload.isText) {
+            cm.setPrimaryClip(ClipData.newPlainText("Point", payload.text()))
+        } else {
+            // Land it under the FileProvider-shared scratch dir so a paste target can read the URI.
+            val dir = File(filesDir, "scratch/clip").apply { mkdirs() }
+            val safe = payload.name.ifBlank { "clip" }.replace('/', '_').replace('\\', '_')
+            val file = File(dir, safe).apply { writeBytes(payload.bytes) }
+            val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
+            cm.setPrimaryClip(ClipData.newUri(contentResolver, "Point", uri))
+        }
+    }
+
+    private fun displayName(uri: Uri): String? = runCatching {
+        contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
+            if (c.moveToFirst() && c.columnCount > 0) c.getString(0) else null
+        }
+    }.getOrNull()
 
     private fun toast(message: String) = Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
 
