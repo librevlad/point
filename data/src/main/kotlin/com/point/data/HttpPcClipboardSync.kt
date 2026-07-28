@@ -1,5 +1,6 @@
 package com.point.data
 
+import com.point.core.flow.ClipPull
 import com.point.core.flow.ClipboardPayload
 import com.point.core.flow.PcClipboardSync
 import com.point.core.flow.PcPairing
@@ -36,7 +37,7 @@ class HttpPcClipboardSync @Inject constructor() : PcClipboardSync {
         }.getOrDefault(false)
     }
 
-    override suspend fun pull(pairing: PcPairing): ClipboardPayload? = withContext(Dispatchers.IO) {
+    override suspend fun pull(pairing: PcPairing): ClipPull = withContext(Dispatchers.IO) {
         runCatching {
             val c = endpoint(pairing)
             c.connectTimeout = 3_000
@@ -44,14 +45,14 @@ class HttpPcClipboardSync @Inject constructor() : PcClipboardSync {
             c.setRequestProperty("X-Point-Token", pairing.token)
             if (c.responseCode != 200) {
                 c.disconnect()
-                return@runCatching null
+                return@runCatching ClipPull.Unreachable
             }
             val mime = c.getHeaderField("X-Clip-Mime")?.takeIf { it.isNotBlank() } ?: "text/plain"
             val name = c.getHeaderField("X-Clip-Name")?.let { runCatching { unb64(it) }.getOrDefault("") }.orEmpty()
             val bytes = c.inputStream.readBytes()
             c.disconnect()
-            if (bytes.isEmpty()) null else ClipboardPayload(mime, name, bytes)
-        }.getOrNull()
+            if (bytes.isEmpty()) ClipPull.Empty else ClipPull.Got(ClipboardPayload(mime, name, bytes))
+        }.getOrDefault(ClipPull.Unreachable)
     }
 
     private fun endpoint(pairing: PcPairing) =
