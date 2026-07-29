@@ -11,6 +11,7 @@ import org.opencv.core.MatOfFloat
 import org.opencv.core.MatOfInt
 import org.opencv.core.MatOfPoint2f
 import org.opencv.core.Point
+import org.opencv.core.Scalar
 import org.opencv.core.Size
 import org.opencv.imgproc.Imgproc
 
@@ -257,6 +258,129 @@ object OpenCvScan {
         return rgba
     }
 
+    /** A detected table rule as a polyline: paired (along, across) coords in the working copy. */
+    private class Rule(val along: DoubleArray, val across: DoubleArray)
+
+    /**
+     * Long, straight table rules. axis 0 = horizontal (across=y as a function of along=x),
+     * axis 1 = vertical (across=x of along=y). Morphological OPEN with a long kernel isolates
+     * the ruled lines; per connected component we average the across-coord at each along-coord.
+     */
+    private fun detectRules(
+        gray: Mat,
+        axis: Int,
+        minSpanFrac: Double,
+        kernel: Mat,
+        scratch: MutableList<Mat>,
+    ): List<Rule> {
+        val w = gray.cols()
+        val h = gray.rows()
+        val bin = Mat().also { scratch += it }
+        Imgproc.adaptiveThreshold(
+            gray, bin, 255.0, Imgproc.ADAPTIVE_THRESH_MEAN_C, Imgproc.THRESH_BINARY_INV, 25, 15.0,
+        )
+        val op = Mat().also { scratch += it }
+        Imgproc.morphologyEx(bin, op, Imgproc.MORPH_OPEN, kernel)
+        val labels = Mat().also { scratch += it }
+        val stats = Mat().also { scratch += it }
+        val centroids = Mat().also { scratch += it }
+        val n = Imgproc.connectedComponentsWithStats(op, labels, stats, centroids)
+        val dim = if (axis == 0) w else h
+        val rules = mutableListOf<Rule>()
+        for (i in 1 until n) {
+            val span = stats.get(i, if (axis == 0) Imgproc.CC_STAT_WIDTH else Imgproc.CC_STAT_HEIGHT)[0]
+            if (span < minSpanFrac * dim) continue
+            val mask = Mat().also { scratch += it }
+            Core.compare(labels, Scalar(i.toDouble()), mask, Core.CMP_EQ)
+            val pts = MatOfPoint().also { scratch += it }
+            Core.findNonZero(mask, pts) // only this rule's pixels — cheap
+            val sum = HashMap<Int, DoubleArray>() // along -> [sumAcross, count]
+            for (p in pts.toArray()) {
+                val along = (if (axis == 0) p.x else p.y).toInt()
+                val across = if (axis == 0) p.y else p.x
+                val acc = sum.getOrPut(along) { DoubleArray(2) }
+                acc[0] += across
+                acc[1] += 1.0
+            }
+            if (sum.size < 8) continue
+            val keys = sum.keys.sorted()
+            rules += Rule(
+                DoubleArray(keys.size) { keys[it].toDouble() },
+                DoubleArray(keys.size) { sum[keys[it]]!!.let { a -> a[0] / a[1] } },
+            )
+        }
+        return rules
+    }
+
+    /**
+     * «Скан+» geometry (#200): straighten by the table rules. Each horizontal rule is pulled to
+     * its own mean height (field Dy), each vertical rule to its mean x (field Dx) via [DewarpField];
+     * the full-res frame is remapped. Returns null when there are too few horizontal rules — the
+     * caller then falls back to the corner-perspective [detectDocument].
+     */
+    private fun dewarpByRules(rgba: Mat, scratch: MutableList<Mat>): Mat? {
+        val longSide = maxOf(rgba.rows(), rgba.cols()).toDouble()
+        val s = if (longSide > RULE_DETECT_PX) RULE_DETECT_PX / longSide else 1.0
+        val small = Mat().also { scratch += it }
+        if (s < 1.0) Imgproc.resize(rgba, small, Size(rgba.cols() * s, rgba.rows() * s)) else rgba.copyTo(small)
+        val w = small.cols()
+        val h = small.rows()
+        val gray = Mat().also { scratch += it }
+        Imgproc.cvtColor(small, gray, Imgproc.COLOR_RGBA2GRAY)
+
+        val hk = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size((w / 12).toDouble(), 1.0)).also { scratch += it }
+        val vk = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(1.0, (h / 25).toDouble())).also { scratch += it }
+        val hRules = detectRules(gray, 0, 0.30, hk, scratch)
+        val vRules = detectRules(gray, 1, 0.12, vk, scratch)
+        if (hRules.size < MIN_H_RULES) return null
+
+        fun nx(x: Double) = x / w * 2 - 1
+        fun ny(y: Double) = y / h * 2 - 1
+        val ay = mutableListOf<DewarpField.Anchor>()
+        for (r in hRules) {
+            val t = r.across.average() // target height = the rule's mean
+            for (k in r.along.indices) ay += DewarpField.Anchor(nx(r.along[k]), ny(t), r.across[k] - t)
+        }
+        val ax = mutableListOf<DewarpField.Anchor>()
+        for (r in vRules) {
+            val srcx = r.across.average()
+            for (k in r.along.indices) ax += DewarpField.Anchor(nx(srcx), ny(r.along[k]), r.across[k] - srcx)
+        }
+        val cy = DewarpField.fit(ay)
+        val cx = DewarpField.fit(ax)
+
+        // Build the remap on a decimated grid (the degree-3 field is smooth) and resize up, so we
+        // don't evaluate the polynomial for every one of ~2M pixels on-device. Values stay in
+        // small-copy source coords; scaling by 1/s lifts them to full-res.
+        val wd = maxOf(w / REMAP_DECIMATE, 2)
+        val hd = maxOf(h / REMAP_DECIMATE, 2)
+        val mapXs = Mat(hd, wd, CvType.CV_32F).also { scratch += it }
+        val mapYs = Mat(hd, wd, CvType.CV_32F).also { scratch += it }
+        val rowX = FloatArray(wd)
+        val rowY = FloatArray(wd)
+        for (id in 0 until hd) {
+            val sy = id.toDouble() * (h - 1) / (hd - 1)
+            val yn = ny(sy)
+            for (jd in 0 until wd) {
+                val sx = jd.toDouble() * (w - 1) / (wd - 1)
+                val xn = nx(sx)
+                rowX[jd] = (sx + DewarpField.eval(cx, xn, yn)).toFloat()
+                rowY[jd] = (sy + DewarpField.eval(cy, xn, yn)).toFloat()
+            }
+            mapXs.put(id, 0, rowX)
+            mapYs.put(id, 0, rowY)
+        }
+        val mapX = Mat().also { scratch += it }
+        val mapY = Mat().also { scratch += it }
+        Imgproc.resize(mapXs, mapX, Size(rgba.cols().toDouble(), rgba.rows().toDouble()))
+        Imgproc.resize(mapYs, mapY, Size(rgba.cols().toDouble(), rgba.rows().toDouble()))
+        Core.multiply(mapX, Scalar(1.0 / s), mapX)
+        Core.multiply(mapY, Scalar(1.0 / s), mapY)
+        val out = Mat().also { scratch += it }
+        Imgproc.remap(rgba, out, mapX, mapY, Imgproc.INTER_CUBIC, Core.BORDER_REPLICATE)
+        return out
+    }
+
     /** Sort four corners into (top-left, top-right, bottom-right, bottom-left). Pure — testable. */
     internal fun orderCorners(pts: Array<Point>): Array<Point> {
         val bySum = pts.sortedBy { it.x + it.y }   // tl smallest, br largest
@@ -269,6 +393,12 @@ object OpenCvScan {
     private const val DETECT_MAX_PX = 720.0
     /** «Скан+» upscales a small scan toward this long-side resolution (cubic); a larger one is untouched. */
     private const val UPSCALE_TARGET = 2400
+    /** Rule detection + displacement field run on this long-side working copy (#200 dewarp). */
+    private const val RULE_DETECT_PX = 1600.0
+    /** Fewer horizontal rules than this → no rule-dewarp; fall back to corner-perspective. */
+    private const val MIN_H_RULES = 6
+    /** The smooth degree-3 field is sampled every this-many px, then the remap is resized up. */
+    private const val REMAP_DECIMATE = 8
     /** Illumination blur: wide enough (~1/8 frame) to smooth a lamp gradient, not page detail. */
     private const val ILLUMINATION_SIGMA = 90.0
     /** A page smaller than this fraction of the frame is clutter… */
