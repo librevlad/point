@@ -44,6 +44,54 @@ object OpenCvScan {
     }
 
     /**
+     * «Скан+» (#200): the detail-preserving premium scan. Find and straighten the page like [process],
+     * but instead of harsh black-and-white, lift faint ink with CLAHE **keeping colour** and upscale —
+     * for handwriting, pencil and coloured forms where binarisation throws away information the eye
+     * (and later OCR) needs. The caller owns [src].
+     */
+    fun enhance(src: Bitmap): Bitmap {
+        val rgba = Mat()
+        Utils.bitmapToMat(src, rgba)
+        val scratch = mutableListOf(rgba)
+        try {
+            val document = detectDocument(rgba, scratch) ?: rgba
+            val lifted = claheColour(document, scratch)
+            val scaled = upscale(lifted, scratch)
+            val out = Bitmap.createBitmap(scaled.cols(), scaled.rows(), Bitmap.Config.ARGB_8888)
+            Utils.matToBitmap(scaled, out)
+            return out
+        } finally {
+            scratch.forEach { it.release() }
+        }
+    }
+
+    /** CLAHE on the LAB luminance only — contrast lifts, colours stay true (no cast, no binarisation). */
+    private fun claheColour(mat: Mat, scratch: MutableList<Mat>): Mat {
+        val rgb = Mat().also { scratch += it }
+        Imgproc.cvtColor(mat, rgb, Imgproc.COLOR_RGBA2RGB)
+        val lab = Mat().also { scratch += it }
+        Imgproc.cvtColor(rgb, lab, Imgproc.COLOR_RGB2Lab)
+        val channels = ArrayList<Mat>().also { Core.split(lab, it); scratch += it }
+        Imgproc.createCLAHE(2.0, Size(8.0, 8.0)).apply(channels[0], channels[0])
+        Core.merge(channels, lab)
+        val outRgb = Mat().also { scratch += it }
+        Imgproc.cvtColor(lab, outRgb, Imgproc.COLOR_Lab2RGB)
+        val outRgba = Mat().also { scratch += it }
+        Imgproc.cvtColor(outRgb, outRgba, Imgproc.COLOR_RGB2RGBA)
+        return outRgba
+    }
+
+    /** Upscale a small scan toward [UPSCALE_TARGET] on its long side (cubic); a big one is left as-is. */
+    private fun upscale(mat: Mat, scratch: MutableList<Mat>): Mat {
+        val longSide = maxOf(mat.rows(), mat.cols())
+        if (longSide >= UPSCALE_TARGET) return mat
+        val s = UPSCALE_TARGET.toDouble() / longSide
+        val up = Mat().also { scratch += it }
+        Imgproc.resize(mat, up, Size(mat.cols() * s, mat.rows() * s), 0.0, 0.0, Imgproc.INTER_CUBIC)
+        return up
+    }
+
+    /**
      * Find the page and perspective-warp it upright; null when no page-like shape exists.
      *
      * #116 hardening (the owner's photos came back with skewed, cropped corners):
@@ -197,6 +245,9 @@ object OpenCvScan {
     private fun binarise(mat: Mat, scratch: MutableList<Mat>): Mat {
         val gray = Mat().also { scratch += it }
         Imgproc.cvtColor(mat, gray, Imgproc.COLOR_RGBA2GRAY)
+        // #200: lift faint ink (pencil, worn pen) with CLAHE before thresholding, so it survives the
+        // binarisation instead of dropping to white — the same enhancement that rescued faint scans in ocr++.
+        Imgproc.createCLAHE(2.0, Size(8.0, 8.0)).apply(gray, gray)
         val bw = Mat().also { scratch += it }
         Imgproc.adaptiveThreshold(
             gray, bw, 255.0, Imgproc.ADAPTIVE_THRESH_GAUSSIAN_C, Imgproc.THRESH_BINARY, 15, 10.0,
@@ -216,6 +267,8 @@ object OpenCvScan {
     internal fun distance(a: Point, b: Point): Double = Math.hypot(a.x - b.x, a.y - b.y)
 
     private const val DETECT_MAX_PX = 720.0
+    /** «Скан+» upscales a small scan toward this long-side resolution (cubic); a larger one is untouched. */
+    private const val UPSCALE_TARGET = 2400
     /** Illumination blur: wide enough (~1/8 frame) to smooth a lamp gradient, not page detail. */
     private const val ILLUMINATION_SIGMA = 90.0
     /** A page smaller than this fraction of the frame is clutter… */

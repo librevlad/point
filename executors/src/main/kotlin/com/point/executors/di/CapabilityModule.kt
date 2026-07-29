@@ -88,6 +88,8 @@ import com.point.executors.ReadQrCapability
 import com.point.executors.ReadQrRealizer
 import com.point.executors.ScanCapability
 import com.point.executors.ScanRealizer
+import com.point.executors.ScanPlusCapability
+import com.point.executors.ScanPlusRealizer
 import com.point.executors.ScanPdfCapability
 import com.point.executors.ScanPdfRealizer
 import com.point.executors.SaveAllCapability
@@ -160,6 +162,7 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun qrCap(c: QrCapability): Capability
     @Binds @IntoSet abstract fun readQrCap(c: ReadQrCapability): Capability
     @Binds @IntoSet abstract fun scanCap(c: ScanCapability): Capability
+    @Binds @IntoSet abstract fun scanPlusCap(c: ScanPlusCapability): Capability
     @Binds @IntoSet abstract fun cutoutCap(c: CutoutCapability): Capability
     @Binds @IntoSet abstract fun blurBgCap(c: BlurBgCapability): Capability
     @Binds @IntoSet abstract fun replaceBgCap(c: ReplaceBgCapability): Capability
