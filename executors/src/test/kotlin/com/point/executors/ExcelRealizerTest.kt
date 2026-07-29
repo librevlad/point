@@ -26,9 +26,14 @@ class ExcelRealizerTest {
     }
 
     private var lastRows: List<List<String>>? = null
+    private var lastCandidates: Map<Pair<Int, Int>, List<String>> = emptyMap()
     private val writer = object : SpreadsheetWriter {
-        override suspend fun write(rows: List<List<String>>): ScratchRef {
+        override suspend fun write(
+            rows: List<List<String>>,
+            candidates: Map<Pair<Int, Int>, List<String>>,
+        ): ScratchRef {
             lastRows = rows
+            lastCandidates = candidates
             return ScratchRef(File.createTempFile("point-xlsx", ".xlsx").apply { deleteOnExit() }.absolutePath)
         }
     }
@@ -81,6 +86,7 @@ class ExcelRealizerTest {
         ).perform(image)
         assertEquals("42⚠", lastRows!![1][1]) // disagreement → plurality value, flagged for review
         assertEquals(listOf("№", "Сума"), lastRows!![0]) // agreed header is clean
+        assertEquals(listOf("42", "43"), lastCandidates[1 to 1]) // both readings offered as candidates
     }
 
     @Test

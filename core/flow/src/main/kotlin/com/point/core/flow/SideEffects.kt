@@ -82,8 +82,13 @@ interface PdfTextExtractor {
 /** Writes rows of cells to a minimal .xlsx in the scratch store (no dependency —
  *  a hand-rolled OOXML package, mirroring the dependency-free OOXML reader). */
 interface SpreadsheetWriter {
-    /** @return the scratch .xlsx file holding [rows] on one sheet. */
-    suspend fun write(rows: List<List<String>>): ScratchRef
+    /** @return the scratch .xlsx file holding [rows] on one sheet. [candidates] maps a flagged
+     *  `(row, col)` to the models' distinct readings (#200) — emitted as an in-cell dropdown so the
+     *  user picks the right one instead of retyping. Empty = a plain sheet (back-compatible). */
+    suspend fun write(
+        rows: List<List<String>>,
+        candidates: Map<Pair<Int, Int>, List<String>> = emptyMap(),
+    ): ScratchRef
 }
 
 /** Reads an OOXML `.xlsx` back into rows of cell text — the inverse of [SpreadsheetWriter].
