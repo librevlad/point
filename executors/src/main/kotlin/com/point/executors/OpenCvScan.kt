@@ -46,9 +46,10 @@ object OpenCvScan {
     }
 
     /**
-     * «Скан+» (#200): the detail-preserving premium scan. Find and straighten the page like [process],
-     * but instead of harsh black-and-white, lift faint ink with CLAHE **keeping colour** and upscale —
-     * for handwriting, pencil and coloured forms where binarisation throws away information the eye
+     * «Скан+» (#200): a flat-bed-quality colour scan. Straighten the page by its table rules
+     * ([dewarpByRules]) — falling back to corner-perspective ([detectDocument]) when a document has
+     * too few rules — then finish to pure-white paper with live colour ([whitenFinish]) and upscale.
+     * For handwriting, coloured forms and stamps where binarisation throws away information the eye
      * (and later OCR) needs. The caller owns [src].
      */
     fun enhance(src: Bitmap): Bitmap {
@@ -56,31 +57,17 @@ object OpenCvScan {
         Utils.bitmapToMat(src, rgba)
         val scratch = mutableListOf(rgba)
         try {
-            val document = detectDocument(rgba, scratch) ?: rgba
-            val lifted = claheColour(document, scratch)
-            val scaled = upscale(lifted, scratch)
+            val straight = dewarpByRules(rgba, scratch) // straighten by table rules…
+                ?: detectDocument(rgba, scratch)        // …else correct perspective by page corners…
+                ?: rgba                                 // …else take the frame as-is
+            val finished = whitenFinish(straight, scratch)
+            val scaled = upscale(finished, scratch)
             val out = Bitmap.createBitmap(scaled.cols(), scaled.rows(), Bitmap.Config.ARGB_8888)
             Utils.matToBitmap(scaled, out)
             return out
         } finally {
             scratch.forEach { it.release() }
         }
-    }
-
-    /** CLAHE on the LAB luminance only — contrast lifts, colours stay true (no cast, no binarisation). */
-    private fun claheColour(mat: Mat, scratch: MutableList<Mat>): Mat {
-        val rgb = Mat().also { scratch += it }
-        Imgproc.cvtColor(mat, rgb, Imgproc.COLOR_RGBA2RGB)
-        val lab = Mat().also { scratch += it }
-        Imgproc.cvtColor(rgb, lab, Imgproc.COLOR_RGB2Lab)
-        val channels = ArrayList<Mat>().also { Core.split(lab, it); scratch += it }
-        Imgproc.createCLAHE(2.0, Size(8.0, 8.0)).apply(channels[0], channels[0])
-        Core.merge(channels, lab)
-        val outRgb = Mat().also { scratch += it }
-        Imgproc.cvtColor(lab, outRgb, Imgproc.COLOR_Lab2RGB)
-        val outRgba = Mat().also { scratch += it }
-        Imgproc.cvtColor(outRgb, outRgba, Imgproc.COLOR_RGB2RGBA)
-        return outRgba
     }
 
     /** Upscale a small scan toward [UPSCALE_TARGET] on its long side (cubic); a big one is left as-is. */

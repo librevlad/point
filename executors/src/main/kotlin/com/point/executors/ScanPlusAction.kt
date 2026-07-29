@@ -48,7 +48,7 @@ class ScanPlusRealizer(
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
             runCatching {
-                val src = Bitmaps.decodeUpright(input.uri.value)
+                val src = Bitmaps.decodeUpright(input.uri.value, Bitmaps.SCAN_PLUS_MAX_PX)
                     ?: error("Не удалось прочитать изображение")
                 val enhanced = OpenCvScan.enhance(src)
                 val ref = store.newScratchFile("jpg")
