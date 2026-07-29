@@ -8,6 +8,7 @@ import com.point.core.flow.LlmClient
 import com.point.core.flow.Realizer
 import com.point.core.flow.SpreadsheetWriter
 import com.point.core.flow.styleCell
+import com.point.core.flow.validateTable
 import com.point.core.model.ActionResult
 import com.point.core.model.CapabilityId
 import com.point.core.model.ObjectKind
@@ -54,10 +55,16 @@ class ExcelRealizer @Inject constructor(
                     ""
                 }
                 val answer = llm.run(input, PROMPT + extra)
-                val rows = parseTable(File(answer.uri.value).readText())
-                if (rows.isEmpty()) {
+                val parsed = parseTable(File(answer.uri.value).readText())
+                if (parsed.isEmpty()) {
                     ActionResult.Failure("Не удалось распознать таблицу", recoverable = true)
                 } else {
+                    // #200: model-free logic check marks cells it would otherwise silently guess
+                    // (a letter in a number, a broken id run) with ⚠ so the writer highlights them.
+                    val suspect = validateTable(parsed)
+                    val rows = parsed.mapIndexed { r, row ->
+                        row.mapIndexed { c, v -> if ((r to c) in suspect && !v.contains('⚠')) "$v⚠" else v }
+                    }
                     val ref = writer.write(rows)
                     // #200: how many cells the model wasn't sure about (⚠) — surfaced so the flow can
                     // tell the user «N клітин під питанням підсвічено» rather than hide a guess.
