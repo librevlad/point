@@ -14,12 +14,12 @@ import java.io.File
 import javax.inject.Inject
 
 /**
- * The preferred "Скан" realizer: OpenCV document detection + perspective correction + adaptive
- * threshold — CamScanner-grade (#45). Shares the `scan` capability with the pure-filter
- * [ScanRealizer]; a lower [RealizerMeta.priority] makes the Resolver prefer it. Gated by
- * [isAvailable] (OpenCV native load), and a recoverable failure at run time hands off to the
- * pure filter through the Resolver's fallback chain — so a missing pack or a hard photo never
- * dead-ends the scan.
+ * The preferred "Скан" realizer: the CamScanner-grade on-device pipeline (#200) — straighten the
+ * page by its table-line intersections (TPS), finish to pure-white paper with live colour, clean
+ * the edges, upscale. Shares the `scan` capability with the pure-filter [ScanRealizer]; a lower
+ * [RealizerMeta.priority] makes the Resolver prefer it. Gated by [isAvailable] (OpenCV native load);
+ * a recoverable failure hands off to the pure grayscale filter through the Resolver's fallback
+ * chain — so a missing pack or a hard photo never dead-ends the scan. («Скан+» goes to the cloud.)
  */
 class OpenCvScanRealizer @Inject constructor(
     private val store: ObjectStore,
@@ -35,17 +35,17 @@ class OpenCvScanRealizer @Inject constructor(
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
             runCatching {
-                val src = Bitmaps.decodeUpright(input.uri.value)
+                val src = Bitmaps.decodeUpright(input.uri.value, Bitmaps.SCAN_PLUS_MAX_PX)
                     ?: error("Не удалось прочитать изображение")
-                val scanned = OpenCvScan.process(src)
+                val scanned = OpenCvScan.enhance(src)
                 src.recycle()
 
-                val ref = store.newScratchFile("png")
-                File(ref.value).outputStream().use { scanned.compress(Bitmap.CompressFormat.PNG, 100, it) }
+                val ref = store.newScratchFile("jpg")
+                File(ref.value).outputStream().use { scanned.compress(Bitmap.CompressFormat.JPEG, 92, it) }
                 scanned.recycle()
 
                 ActionResult.Success(
-                    ResultObject(ObjectKind.IMAGE, "image/png", ref, mapOf("op" to "scan")),
+                    ResultObject(ObjectKind.IMAGE, "image/jpeg", ref, mapOf("op" to "scan")),
                 )
             }.getOrElse {
                 // Recoverable → the Resolver's FallbackRealizer hands off to the pure ScanRealizer.
