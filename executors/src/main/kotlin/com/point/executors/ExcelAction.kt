@@ -7,6 +7,7 @@ import com.point.core.flow.Latency
 import com.point.core.flow.LlmClient
 import com.point.core.flow.Realizer
 import com.point.core.flow.SpreadsheetWriter
+import com.point.core.flow.styleCell
 import com.point.core.model.ActionResult
 import com.point.core.model.CapabilityId
 import com.point.core.model.ObjectKind
@@ -58,12 +59,18 @@ class ExcelRealizer @Inject constructor(
                     ActionResult.Failure("Не удалось распознать таблицу", recoverable = true)
                 } else {
                     val ref = writer.write(rows)
+                    // #200: how many cells the model wasn't sure about (⚠) — surfaced so the flow can
+                    // tell the user «N клітин під питанням підсвічено» rather than hide a guess.
+                    val flagged = rows.sumOf { row -> row.count { styleCell(it).flagged } }
                     ActionResult.Success(
                         ResultObject(
                             ObjectKind.OFFICE,
                             XLSX_MIME,
                             ref,
-                            mapOf("op" to "excel", "name" to "таблица.xlsx", "rows" to rows.size.toString()),
+                            mapOf(
+                                "op" to "excel", "name" to "таблица.xlsx",
+                                "rows" to rows.size.toString(), "flagged" to flagged.toString(),
+                            ),
                         ),
                     )
                 }
@@ -77,11 +84,17 @@ class ExcelRealizer @Inject constructor(
             "Извлеки табличные данные из документа. Это может быть фото рукописной таблицы, " +
                 "возможно под углом или повёрнутое — читай внимательно в любой ориентации. " +
                 "Верни ТОЛЬКО JSON: массив строк, каждая строка — массив ячеек-строк, например " +
-                "[[\"Имя\",\"Сумма\"],[\"Приказ\",\"42\"]]. " +
+                "[[\"Дата\",\"Сумма\"],[\"16.07\",\"42\"]]. " +
+                "Первая строка — заголовки, если они есть. " +
                 "ВАЖНО: в каждой строке ровно столько столбцов, сколько их в источнике — не добавляй, " +
-                "не повторяй и не дублируй столбцы. Не выдумывай данные: если ячейку не разобрать — оставь " +
-                "её пустой (\"\"), НЕ ставь \"?\"; если не удаётся прочитать всю строку — пропусти её целиком. " +
-                "Первая строка — заголовки, если они есть. Без пояснений, без markdown, без ограждений ```."
+                "не повторяй и не дублируй столбцы. " +
+                "Зачёркнутое/исправленное помечай так: \"~~53~~ 40\" (было 53, стало 40) или \"~~52~~\" " +
+                "(просто зачёркнуто). " +
+                "Если ячейку видно, но ты НЕ уверен в прочтении — добавь символ ⚠ в конец её текста " +
+                "(например \"Гречка⚠\"): её подсветят для проверки. " +
+                "Не выдумывай данные: если ячейку не разобрать совсем — оставь её пустой (\"\"), НЕ ставь " +
+                "\"?\"; если не удаётся прочитать всю строку — пропусти её целиком. " +
+                "Без пояснений, без markdown, без ограждений ```."
     }
 }
 

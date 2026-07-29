@@ -5,6 +5,7 @@ import com.point.core.model.PointObject
 import com.point.core.model.ResultObject
 import com.point.core.model.ScratchRef
 import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -53,5 +54,26 @@ class OoxmlSpreadsheetWriterTest {
     fun `escapes xml-special characters`() = runBlocking {
         val ref = OoxmlSpreadsheetWriter(store).write(listOf(listOf("a & b < c")))
         assertTrue(sheetOf(ref).contains("a &amp; b &lt; c"))
+    }
+
+    @Test
+    fun `renders header, corrections and flags with styles (#200 ocr++)`() = runBlocking {
+        val ref = OoxmlSpreadsheetWriter(store).write(
+            listOf(
+                listOf("Дата", "Результат"),
+                listOf("16.07", "~~53~~ 40⚠"),
+                listOf("18.07", "Гречка⚠"),
+            ),
+        )
+        val entries = ZipFile(File(ref.value)).use { zip -> zip.entries().toList().map { it.name } }
+        assertTrue("styles.xml part is present", entries.contains("xl/styles.xml"))
+        val sheet = sheetOf(ref)
+        // A correction stores only the NEW value; every marker is stripped from the stored text.
+        assertTrue(sheet.contains("<t xml:space=\"preserve\">40</t>"))
+        assertTrue(sheet.contains("<t xml:space=\"preserve\">Гречка</t>"))
+        assertFalse("strike markers stripped", sheet.contains("~~"))
+        assertFalse("warning marker stripped", sheet.contains("⚠"))
+        // The header row carries the header style id.
+        assertTrue("header cell styled", sheet.contains("r=\"A1\" s=\"1\""))
     }
 }
