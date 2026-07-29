@@ -18,6 +18,10 @@ object Bitmaps {
      *  to under 2× this before decode, so a 48 MP photo can't OOM a weak device (#18). */
     const val PROCESS_MAX_PX = 1600
 
+    /** «Скан+» decodes larger for detail on dense handwritten tables (#200): the rule-dewarp +
+     *  finisher keep fine strokes that 1600 px blurs. Heavier — see the memory risk in the spec. */
+    const val SCAN_PLUS_MAX_PX = 2600
+
     /** Upright decode, subsampled to at most ~[maxPx] on the long edge (default: the
      *  processing cap) — for scans, PDF pages and compression. Bounds peak memory (#18). */
     fun decodeUpright(path: String, maxPx: Int = PROCESS_MAX_PX): Bitmap? = decodeBounded(path, maxPx)
