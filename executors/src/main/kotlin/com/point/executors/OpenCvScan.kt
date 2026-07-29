@@ -14,6 +14,7 @@ import org.opencv.core.Point
 import org.opencv.core.Scalar
 import org.opencv.core.Size
 import org.opencv.imgproc.Imgproc
+import org.opencv.photo.Photo
 
 /**
  * CamScanner-grade document scan via OpenCV: find the page, correct its perspective, then
@@ -379,6 +380,118 @@ object OpenCvScan {
         val out = Mat().also { scratch += it }
         Imgproc.remap(rgba, out, mapX, mapY, Imgproc.INTER_CUBIC, Core.BORDER_REPLICATE)
         return out
+    }
+
+    /**
+     * «Скан+» finisher (#200): a clean flat-bed look — pure-white paper, live colour.
+     * Inpaint bright glare → white-balance (median a/b → 128) → mark ink relative to the LOCAL mean
+     * (so uneven-lit paper still reads as background) and colour by saturation → blend the paper to
+     * pure white while keeping crisp dark text and a saturation-boosted stamp. All OpenCV.
+     */
+    private fun whitenFinish(rgba: Mat, scratch: MutableList<Mat>): Mat {
+        val bgr = Mat().also { scratch += it }
+        Imgproc.cvtColor(rgba, bgr, Imgproc.COLOR_RGBA2BGR)
+
+        // 1) inpaint bright specular glare (blown, low-saturation blobs)
+        val gray0 = Mat().also { scratch += it }
+        Imgproc.cvtColor(bgr, gray0, Imgproc.COLOR_BGR2GRAY)
+        val ch = ArrayList<Mat>().also { Core.split(bgr, it) }.onEach { scratch += it }
+        val minCh = Mat().also { scratch += it }
+        Core.min(ch[0], ch[1], minCh)
+        Core.min(minCh, ch[2], minCh)
+        val glare = Mat().also { scratch += it }
+        Core.inRange(minCh, Scalar(237.0), Scalar(255.0), glare)
+        val glareG = Mat().also { scratch += it }
+        Imgproc.threshold(gray0, glareG, 244.0, 255.0, Imgproc.THRESH_BINARY)
+        Core.bitwise_and(glare, glareG, glare)
+        val dk = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(5.0, 5.0)).also { scratch += it }
+        Imgproc.dilate(glare, glare, dk, Point(-1.0, -1.0), 2)
+        val clean = Mat().also { scratch += it }
+        if (Core.countNonZero(glare) > 0) Photo.inpaint(bgr, glare, clean, 5.0, Photo.INPAINT_TELEA) else bgr.copyTo(clean)
+
+        // 2) white balance: shift each of a/b so its (paper-dominated) median sits at 128
+        val lab = Mat().also { scratch += it }
+        Imgproc.cvtColor(clean, lab, Imgproc.COLOR_BGR2Lab)
+        val lc = ArrayList<Mat>().also { Core.split(lab, it) }.onEach { scratch += it }
+        Core.add(lc[1], Scalar(128.0 - medianOf(lc[1])), lc[1])
+        Core.add(lc[2], Scalar(128.0 - medianOf(lc[2])), lc[2])
+        Core.merge(lc, lab)
+        val wb = Mat().also { scratch += it }
+        Imgproc.cvtColor(lab, wb, Imgproc.COLOR_Lab2BGR)
+
+        // 3) content mask: ink = darker than LOCAL mean; colour = saturated. In [0,1].
+        val gray = Mat().also { scratch += it }
+        Imgproc.cvtColor(wb, gray, Imgproc.COLOR_BGR2GRAY)
+        val grayF = Mat().also { scratch += it }
+        gray.convertTo(grayF, CvType.CV_32F)
+        val local = Mat().also { scratch += it }
+        Imgproc.blur(grayF, local, Size(51.0, 51.0))
+        val ink = Mat().also { scratch += it }           // (local - 12 - gray) / 26
+        Core.subtract(local, grayF, ink)
+        Core.subtract(ink, Scalar(12.0), ink)
+        ink.convertTo(ink, -1, 1.0 / 26.0)
+        val hsv = Mat().also { scratch += it }
+        Imgproc.cvtColor(wb, hsv, Imgproc.COLOR_BGR2HSV)
+        val hc = ArrayList<Mat>().also { Core.split(hsv, it) }.onEach { scratch += it }
+        val col = Mat().also { scratch += it }           // (S - 30) / 30
+        hc[1].convertTo(col, CvType.CV_32F)
+        Core.subtract(col, Scalar(30.0), col)
+        col.convertTo(col, -1, 1.0 / 30.0)
+        val content = Mat().also { scratch += it }
+        Core.max(ink, col, content)
+        Imgproc.GaussianBlur(content, content, Size(0.0, 0.0), 1.0)
+        Imgproc.threshold(content, content, 1.0, 1.0, Imgproc.THRESH_TRUNC)   // clamp ≤ 1
+        Imgproc.threshold(content, content, 0.0, 0.0, Imgproc.THRESH_TOZERO)  // clamp ≥ 0
+
+        // 4) crisp ink source: ink contrast + unsharp
+        val srcv = Mat().also { scratch += it }
+        wb.convertTo(srcv, -1, 1.12, -25.0 * 1.12)       // (px - 25) * 1.12
+        val ublur = Mat().also { scratch += it }
+        Imgproc.GaussianBlur(srcv, ublur, Size(0.0, 0.0), 1.2)
+        Core.addWeighted(srcv, 1.30, ublur, -0.30, 0.0, srcv)
+
+        // 5) blend: paper → pure white, content → srcv (all float 3-ch)
+        val srcvF = Mat().also { scratch += it }
+        srcv.convertTo(srcvF, CvType.CV_32F)
+        val c3 = Mat().also { scratch += it }
+        Imgproc.cvtColor(content, c3, Imgproc.COLOR_GRAY2BGR)   // mask → 3-ch, values [0,1]
+        val paperTerm = Mat().also { scratch += it }
+        c3.convertTo(paperTerm, -1, 255.0)                     // 255 * content
+        val whiteFull = Mat(c3.size(), c3.type(), Scalar.all(255.0)).also { scratch += it }
+        Core.subtract(whiteFull, paperTerm, paperTerm)         // 255 * (1 - content)
+        Core.multiply(srcvF, c3, srcvF)                        // srcv * content
+        Core.add(srcvF, paperTerm, srcvF)
+        val bgrOut = Mat().also { scratch += it }
+        srcvF.convertTo(bgrOut, CvType.CV_8U)
+
+        // 6) boost colour saturation — paper S≈0 untouched, stamp/pen go vivid
+        val hsv2 = Mat().also { scratch += it }
+        Imgproc.cvtColor(bgrOut, hsv2, Imgproc.COLOR_BGR2HSV)
+        val hc2 = ArrayList<Mat>().also { Core.split(hsv2, it) }.onEach { scratch += it }
+        hc2[1].convertTo(hc2[1], -1, 1.7)
+        Core.merge(hc2, hsv2)
+        Imgproc.cvtColor(hsv2, bgrOut, Imgproc.COLOR_HSV2BGR)
+
+        val outRgba = Mat().also { scratch += it }
+        Imgproc.cvtColor(bgrOut, outRgba, Imgproc.COLOR_BGR2RGBA)
+        return outRgba
+    }
+
+    /** Median of a single-channel 8U [chan] via a 256-bin histogram (as [medianBrightness]). */
+    private fun medianOf(chan: Mat): Double {
+        val hist = Mat()
+        Imgproc.calcHist(listOf(chan), MatOfInt(0), Mat(), hist, MatOfInt(256), MatOfFloat(0f, 256f))
+        val half = chan.total() / 2
+        var seen = 0L
+        for (b in 0 until 256) {
+            seen += hist.get(b, 0)[0].toLong()
+            if (seen >= half) {
+                hist.release()
+                return b.toDouble()
+            }
+        }
+        hist.release()
+        return 128.0
     }
 
     /** Sort four corners into (top-left, top-right, bottom-right, bottom-left). Pure — testable. */
