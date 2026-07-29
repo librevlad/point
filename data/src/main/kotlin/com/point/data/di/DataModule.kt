@@ -66,7 +66,9 @@ import com.point.data.FilePcCaps
 import com.point.data.FilePcPairings
 import com.point.data.HttpPcClipboardSync
 import com.point.data.HttpUrlPcTransport
+import com.point.data.LanThenRelayClipboardSync
 import com.point.data.LanThenRelayTransport
+import com.point.data.RelayPcClipboardSync
 import com.point.data.RelayPcTransport
 import com.point.data.SelfHealingPcTransport
 import com.point.data.FileUsageJournal
@@ -226,10 +228,6 @@ abstract class DataModule {
     @Binds
     abstract fun pcDiscovery(impl: AndroidPcDiscovery): PcDiscovery
 
-    /** Shared clipboard with the PC (#161 «общий буфер»). */
-    @Binds
-    abstract fun pcClipboardSync(impl: HttpPcClipboardSync): com.point.core.flow.PcClipboardSync
-
     /** Consent to send objects to a cloud service (#10). */
     @Binds
     abstract fun privacyConsent(impl: PrefsPrivacyConsent): PrivacyConsent
@@ -299,6 +297,15 @@ abstract class DataModule {
             lan = SelfHealingPcTransport(http, discovery, pairings),
             relay = RelayPcTransport(BuildConfig.RELAY_APP_SECRET),
         )
+
+        /** Shared clipboard (#161 «общий буфер»): LAN hop first, relay fallback when off-network —
+         *  same «безотказно» shape as [pcTransport]. */
+        @Provides
+        fun pcClipboardSync(http: HttpPcClipboardSync): com.point.core.flow.PcClipboardSync =
+            LanThenRelayClipboardSync(
+                lan = http,
+                relay = RelayPcClipboardSync(BuildConfig.RELAY_APP_SECRET),
+            )
 
         /** On-device entity detection (ML Kit) behind the [EntityExtractor] seam. @Provides (not
          *  @Binds) keeps the ML Kit AAR types out of Dagger's KSP aggregation (same fix as OpenCV). */

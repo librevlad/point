@@ -9,6 +9,7 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
+import com.point.core.flow.ClipPull
 import com.point.core.flow.ClipboardPayload
 import com.point.core.flow.PcClipboardSync
 import com.point.core.flow.PcPairings
@@ -62,15 +63,19 @@ class ClipboardSyncActivity : ComponentActivity() {
                 toast("Компьютер недоступен")
             }
         } else {
-            // Nothing new on the phone — take what the PC has.
-            val pc = clipboardSync.pull(pairing)
-            when {
-                pc == null -> toast("Компьютер недоступен")
-                pc.signature() == phoneSig -> toast("Буфер уже синхронизирован")
-                else -> {
-                    setPhoneClipboard(pc)
-                    prefs.edit().putString(KEY_LAST, pc.signature()).apply()
-                    toast(if (pc.isText) "Буфер ← компьютер" else "Файл ← компьютер")
+            // Nothing new on the phone — take what the PC has (LAN, or the relay when off-network).
+            when (val pc = clipboardSync.pull(pairing)) {
+                is ClipPull.Unreachable -> toast("Компьютер недоступен")
+                is ClipPull.Empty -> toast("Буфер уже синхронизирован")
+                is ClipPull.Got -> {
+                    val payload = pc.payload
+                    if (payload.signature() == phoneSig) {
+                        toast("Буфер уже синхронизирован")
+                    } else {
+                        setPhoneClipboard(payload)
+                        prefs.edit().putString(KEY_LAST, payload.signature()).apply()
+                        toast(if (payload.isText) "Буфер ← компьютер" else "Файл ← компьютер")
+                    }
                 }
             }
         }

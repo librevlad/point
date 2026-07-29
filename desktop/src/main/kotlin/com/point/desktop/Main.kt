@@ -107,10 +107,20 @@ fun main() {
             action?.let { runCatching { state.runRemoteAction(it, item) } }
         },
     ).also { it.start() }
+    // #161 «общий буфер» через релей: the shared clipboard also works off-LAN — the PC applies a
+    // phone push and answers a phone pull over the same blind relay, on its own daemon.
+    val relayClipPoller = RelayClipPoller(
+        relayUrl = RelayEnv.URL,
+        appSecret = RelayEnv.APP_SECRET,
+        token = config.token,
+        clipboardGet = ::readSystemClipboard,
+        clipboardSet = ::writeSystemClipboard,
+    ).also { it.start() }
 
     application {
         Window(
             onCloseRequest = {
+                relayClipPoller.stop()
                 relayPoller.stop()
                 advertiser.stop()
                 server.stop()
