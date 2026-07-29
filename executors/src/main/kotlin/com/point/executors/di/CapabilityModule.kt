@@ -231,6 +231,11 @@ abstract class CapabilityModule {
         @Provides @IntoSet
         fun openCvScanR(store: ObjectStore): Realizer = OpenCvScanRealizer(store)
 
+        // «Скан+» (#200): same @Provides trick — the realizer touches native OpenCV, so keep it out of
+        // the @Binds signature KSP aggregates. Was missing → capability appeared but «no realizer».
+        @Provides @IntoSet
+        fun scanPlusR(store: ObjectStore): Realizer = ScanPlusRealizer(store)
+
         // #4: same trick for the AI chat — construct the impl manually from its LlmClient dep so
         // the concrete class stays out of the binding graph KSP aggregates.
         @Provides
