@@ -83,7 +83,8 @@ class ExcelRealizer @Inject constructor(
                     val rows = consensus.rows.mapIndexed { r, row ->
                         row.mapIndexed { c, v -> if ((r to c) in suspect && !v.contains('⚠')) "$v⚠" else v }
                     }
-                    val ref = writer.write(rows)
+                    // consensus disagreements carry the models' readings as an in-cell dropdown (#200).
+                    val ref = writer.write(rows, consensus.candidates)
                     val flagged = rows.sumOf { row -> row.count { styleCell(it).flagged } }
                     ActionResult.Success(
                         ResultObject(

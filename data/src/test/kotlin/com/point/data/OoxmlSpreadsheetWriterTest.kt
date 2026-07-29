@@ -76,4 +76,18 @@ class OoxmlSpreadsheetWriterTest {
         // The header row carries the header style id.
         assertTrue("header cell styled", sheet.contains("r=\"A1\" s=\"1\""))
     }
+
+    @Test
+    fun `candidates become an in-cell dropdown backed by a hidden sheet (#200 ocr++)`() = runBlocking {
+        val ref = OoxmlSpreadsheetWriter(store).write(
+            listOf(listOf("№", "Сума"), listOf("1", "0,72 0,883")),
+            mapOf((1 to 1) to listOf("0,72 0,883", "0,270")), // comma-decimals — must not break the list
+        )
+        val entries = ZipFile(File(ref.value)).use { zip -> zip.entries().toList().map { it.name } }
+        assertTrue("helper sheet present", entries.contains("xl/worksheets/sheet2.xml"))
+        val sheet = sheetOf(ref)
+        assertTrue("a list data-validation is emitted", sheet.contains("<dataValidation type=\"list\""))
+        assertTrue("dropdown targets the disagreed cell B2", sheet.contains("sqref=\"B2\""))
+        assertTrue("options come from the hidden sheet by range", sheet.contains("_варіанти"))
+    }
 }
