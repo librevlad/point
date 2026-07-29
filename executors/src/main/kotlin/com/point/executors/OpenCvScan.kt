@@ -57,7 +57,7 @@ object OpenCvScan {
         Utils.bitmapToMat(src, rgba)
         val scratch = mutableListOf(rgba)
         try {
-            val straight = dewarpByRules(rgba, scratch) // straighten by table rules…
+            val straight = dewarpByTps(rgba, scratch)   // straighten by table-line intersections (TPS)…
                 ?: detectDocument(rgba, scratch)        // …else correct perspective by page corners…
                 ?: rgba                                 // …else take the frame as-is
             val finished = whitenFinish(straight, scratch)
@@ -300,13 +300,31 @@ object OpenCvScan {
         return rules
     }
 
+    /** Value of a rule (polyline) at an along-coordinate, by linear interpolation (clamped to span). */
+    private fun evalRule(r: Rule, along: Double): Double {
+        val a = r.along
+        val last = a.size - 1
+        if (along <= a[0]) return r.across[0]
+        if (along >= a[last]) return r.across[last]
+        var lo = 0
+        var hi = last
+        while (hi - lo > 1) {
+            val mid = (lo + hi) / 2
+            if (a[mid] <= along) lo = mid else hi = mid
+        }
+        val t = (along - a[lo]) / (a[hi] - a[lo])
+        return r.across[lo] + t * (r.across[hi] - r.across[lo])
+    }
+
     /**
-     * «Скан+» geometry (#200): straighten by the table rules. Each horizontal rule is pulled to
-     * its own mean height (field Dy), each vertical rule to its mean x (field Dx) via [DewarpField];
-     * the full-res frame is remapped. Returns null when there are too few horizontal rules — the
-     * caller then falls back to the corner-perspective [detectDocument].
+     * «Скан» geometry (#200): straighten the page from the GRID OF TABLE-LINE INTERSECTIONS via a
+     * thin-plate spline ([TpsField]). Each horizontal×vertical rule crossing is a control point
+     * mapped to a regular grid (columns to their mean x, rows to their mean y), so BOTH row
+     * curvature and column/perspective are removed — where a per-rule global polynomial blew up
+     * (~30-44 %). The field fades to zero outside the rule band and is clamped, then the full frame
+     * is remapped. Returns null with too few rules — the caller falls back to corner-perspective.
      */
-    private fun dewarpByRules(rgba: Mat, scratch: MutableList<Mat>): Mat? {
+    private fun dewarpByTps(rgba: Mat, scratch: MutableList<Mat>): Mat? {
         val longSide = maxOf(rgba.rows(), rgba.cols()).toDouble()
         val s = if (longSide > RULE_DETECT_PX) RULE_DETECT_PX / longSide else 1.0
         val small = Mat().also { scratch += it }
@@ -317,29 +335,40 @@ object OpenCvScan {
         Imgproc.cvtColor(small, gray, Imgproc.COLOR_RGBA2GRAY)
 
         val hk = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size((w / 12).toDouble(), 1.0)).also { scratch += it }
-        val vk = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(1.0, (h / 25).toDouble())).also { scratch += it }
-        val hRules = detectRules(gray, 0, 0.30, hk, scratch)
-        val vRules = detectRules(gray, 1, 0.12, vk, scratch)
-        if (hRules.size < MIN_H_RULES) return null
-
-        fun nx(x: Double) = x / w * 2 - 1
-        fun ny(y: Double) = y / h * 2 - 1
-        val ay = mutableListOf<DewarpField.Anchor>()
-        for (r in hRules) {
-            val t = r.across.average() // target height = the rule's mean
-            for (k in r.along.indices) ay += DewarpField.Anchor(nx(r.along[k]), ny(t), r.across[k] - t)
+        val vk = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(1.0, (h / 28).toDouble())).also { scratch += it }
+        var hRules = detectRules(gray, 0, 0.30, hk, scratch)
+        val vRules = detectRules(gray, 1, 0.10, vk, scratch)
+        if (hRules.size < MIN_H_RULES || vRules.size < MIN_V_RULES) return null
+        if (hRules.size > MAX_TPS_H) {                        // cap control points = |H|·|V|
+            val step = hRules.size.toDouble() / MAX_TPS_H
+            hRules = (0 until MAX_TPS_H).map { hRules[(it * step).toInt()] }
         }
-        val ax = mutableListOf<DewarpField.Anchor>()
-        for (r in vRules) {
-            val srcx = r.across.average()
-            for (k in r.along.indices) ax += DewarpField.Anchor(nx(srcx), ny(r.along[k]), r.across[k] - srcx)
-        }
-        val cy = DewarpField.fit(ay)
-        val cx = DewarpField.fit(ax)
 
-        // Build the remap on a decimated grid (the degree-3 field is smooth) and resize up, so we
-        // don't evaluate the polynomial for every one of ~2M pixels on-device. Values stay in
-        // small-copy source coords; scaling by 1/s lifts them to full-res.
+        val ti = hRules.map { it.across.average() }           // target row heights
+        val sj = vRules.map { it.across.average() }           // target column x's
+        val d = maxOf(w, h).toDouble()                        // normalise coords for TPS stability
+        val n = ti.size * sj.size
+        val tpx = DoubleArray(n); val tpy = DoubleArray(n)
+        val obx = DoubleArray(n); val oby = DoubleArray(n)
+        var k = 0
+        for (i in hRules.indices) for (j in vRules.indices) {
+            tpx[k] = sj[j] / d; tpy[k] = ti[i] / d            // control point on the regular target grid
+            obx[k] = evalRule(vRules[j], ti[i]) / d           // observed x: vertical rule at that row height
+            oby[k] = evalRule(hRules[i], sj[j]) / d           // observed y: horizontal rule at that column x
+            k++
+        }
+        val fx = TpsField.fit(tpx, tpy, obx, TPS_SMOOTH)      // output(target) → source x
+        val fy = TpsField.fit(tpx, tpy, oby, TPS_SMOOTH)      // output(target) → source y
+
+        val yMin = ti.minOrNull() ?: 0.0
+        val yMax = ti.maxOrNull() ?: h.toDouble()
+        val fade = FADE_FRAC * h
+        val maxDx = MAX_DISP_FRAC * w
+        val maxDy = MAX_DISP_FRAC * h
+        val xMax = (w - 1).toDouble()
+        val yMaxPx = (h - 1).toDouble()
+
+        // Sample the smooth field on a decimated grid (then resize up) — not every one of ~2M pixels.
         val wd = maxOf(w / REMAP_DECIMATE, 2)
         val hd = maxOf(h / REMAP_DECIMATE, 2)
         val mapXs = Mat(hd, wd, CvType.CV_32F).also { scratch += it }
@@ -348,12 +377,18 @@ object OpenCvScan {
         val rowY = FloatArray(wd)
         for (id in 0 until hd) {
             val sy = id.toDouble() * (h - 1) / (hd - 1)
-            val yn = ny(sy)
+            val outside = when {
+                sy < yMin -> yMin - sy
+                sy > yMax -> sy - yMax
+                else -> 0.0
+            }
+            val wgt = (1.0 - outside / fade).coerceIn(0.0, 1.0) // 1 in the rule band, →0 in the margins
             for (jd in 0 until wd) {
                 val sx = jd.toDouble() * (w - 1) / (wd - 1)
-                val xn = nx(sx)
-                rowX[jd] = (sx + DewarpField.eval(cx, xn, yn)).toFloat()
-                rowY[jd] = (sy + DewarpField.eval(cy, xn, yn)).toFloat()
+                val dx = (fx.eval(sx / d, sy / d) * d - sx).coerceIn(-maxDx, maxDx) * wgt
+                val dy = (fy.eval(sx / d, sy / d) * d - sy).coerceIn(-maxDy, maxDy) * wgt
+                rowX[jd] = (sx + dx).coerceIn(0.0, xMax).toFloat()
+                rowY[jd] = (sy + dy).coerceIn(0.0, yMaxPx).toFloat()
             }
             mapXs.put(id, 0, rowX)
             mapYs.put(id, 0, rowY)
@@ -497,7 +532,17 @@ object OpenCvScan {
     private const val RULE_DETECT_PX = 1600.0
     /** Fewer horizontal rules than this → no rule-dewarp; fall back to corner-perspective. */
     private const val MIN_H_RULES = 6
-    /** The smooth degree-3 field is sampled every this-many px, then the remap is resized up. */
+    /** Need at least this many vertical rules too — the TPS grid needs both axes to straighten columns. */
+    private const val MIN_V_RULES = 5
+    /** Cap horizontal rules used for TPS control points (|H|·|V|) so the linear solve stays small. */
+    private const val MAX_TPS_H = 10
+    /** TPS regularization (smoothing) — tolerates noisy detected intersections. */
+    private const val TPS_SMOOTH = 2.0
+    /** Displacement fades to zero over this fraction of height beyond the rule band (no margin smear). */
+    private const val FADE_FRAC = 0.10
+    /** Hard cap on per-axis displacement (fraction of the dimension) — a safety net against blow-ups. */
+    private const val MAX_DISP_FRAC = 0.12
+    /** The smooth field is sampled every this-many px, then the remap is resized up. */
     private const val REMAP_DECIMATE = 8
     /** Illumination blur: wide enough (~1/8 frame) to smooth a lamp gradient, not page detail. */
     private const val ILLUMINATION_SIGMA = 90.0
