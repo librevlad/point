@@ -7,6 +7,7 @@ import com.point.core.flow.Latency
 import com.point.core.flow.LlmClient
 import com.point.core.flow.Realizer
 import com.point.core.flow.SpreadsheetWriter
+import com.point.core.flow.reconcile
 import com.point.core.flow.styleCell
 import com.point.core.flow.validateTable
 import com.point.core.model.ActionResult
@@ -40,7 +41,7 @@ class ExcelCapability @Inject constructor() : Capability {
 }
 
 class ExcelRealizer @Inject constructor(
-    private val llm: LlmClient,
+    private val providers: List<@JvmSuppressWildcards LlmClient>,
     private val writer: SpreadsheetWriter,
 ) : Realizer {
     override val capabilityId = ExcelCapability.ID
@@ -54,20 +55,35 @@ class ExcelRealizer @Inject constructor(
                 } else {
                     ""
                 }
-                val answer = llm.run(input, PROMPT + extra)
-                val parsed = parseTable(File(answer.uri.value).readText())
-                if (parsed.isEmpty()) {
-                    ActionResult.Failure("Не удалось распознать таблицу", recoverable = true)
+                // #200: read the table with up to CONSENSUS_N independent strong-vision models, then
+                // vote each cell (reconcile). A dense/handwritten table one model guesses, another catches
+                // — agreement = confidence, disagreement = ⚠ + the models' distinct readings as candidates.
+                val ordered = providers.sortedByDescending { it.strongVision }.filter { it.canHandle(input) }
+                val tables = mutableListOf<List<List<String>>>()
+                val errors = mutableListOf<String>()
+                for (provider in ordered) {
+                    if (tables.size >= CONSENSUS_N) break
+                    try {
+                        val answer = provider.run(input, PROMPT + extra)
+                        parseTable(File(answer.uri.value).readText()).takeIf { it.isNotEmpty() }?.let(tables::add)
+                    } catch (e: Exception) {
+                        errors += e.message ?: e.javaClass.simpleName
+                    }
+                }
+                if (tables.isEmpty()) {
+                    ActionResult.Failure(
+                        errors.firstOrNull()?.substringBefore('\n')?.take(120) ?: "Не удалось распознать таблицу",
+                        recoverable = true,
+                    )
                 } else {
-                    // #200: model-free logic check marks cells it would otherwise silently guess
-                    // (a letter in a number, a broken id run) with ⚠ so the writer highlights them.
-                    val suspect = validateTable(parsed)
-                    val rows = parsed.mapIndexed { r, row ->
+                    val consensus = reconcile(tables) // 1 read → passthrough; ≥2 → voted, disagreements ⚠
+                    // model-free logic check also marks cells one would silently guess (letter-in-number,
+                    // broken id run) with ⚠ so the writer highlights them.
+                    val suspect = validateTable(consensus.rows)
+                    val rows = consensus.rows.mapIndexed { r, row ->
                         row.mapIndexed { c, v -> if ((r to c) in suspect && !v.contains('⚠')) "$v⚠" else v }
                     }
                     val ref = writer.write(rows)
-                    // #200: how many cells the model wasn't sure about (⚠) — surfaced so the flow can
-                    // tell the user «N клітин під питанням підсвічено» rather than hide a guess.
                     val flagged = rows.sumOf { row -> row.count { styleCell(it).flagged } }
                     ActionResult.Success(
                         ResultObject(
@@ -77,6 +93,7 @@ class ExcelRealizer @Inject constructor(
                             mapOf(
                                 "op" to "excel", "name" to "таблица.xlsx",
                                 "rows" to rows.size.toString(), "flagged" to flagged.toString(),
+                                "models" to tables.size.toString(),
                             ),
                         ),
                     )
@@ -87,6 +104,10 @@ class ExcelRealizer @Inject constructor(
     private companion object {
         const val XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         const val MAX_TEXT = 20_000
+
+        /** Independent model reads to vote across (#200). 2 = confidence at 2× cost/latency, which a
+         *  PAID/SLOW action can bear; a single-model setup degrades gracefully to a passthrough. */
+        const val CONSENSUS_N = 2
         const val PROMPT =
             "Извлеки табличные данные из документа. Это может быть фото рукописной таблицы, " +
                 "возможно под углом или повёрнутое — читай внимательно в любой ориентации. " +

@@ -35,9 +35,12 @@ class ExcelRealizerTest {
 
     private val image = PointObject("id", "image/png", ScratchRef("/tmp/x.png"), ObjectState(ObjectKind.IMAGE))
 
+    /** A realizer over one or more canned model reads (consensus votes across them). */
+    private fun realizer(vararg answers: String) = ExcelRealizer(answers.map { llm(it) }, writer)
+
     @Test
     fun `parses TSV into rows and produces an OFFICE xlsx`() = runTest {
-        val result = ExcelRealizer(llm("Имя\tСумма\nПриказ\t42"), writer).perform(image)
+        val result = realizer("Имя\tСумма\nПриказ\t42").perform(image)
         assertTrue(result is ActionResult.Success)
         assertEquals(ObjectKind.OFFICE, (result as ActionResult.Success).result.type)
         assertEquals(listOf(listOf("Имя", "Сумма"), listOf("Приказ", "42")), lastRows)
@@ -45,29 +48,39 @@ class ExcelRealizerTest {
 
     @Test
     fun `tolerates a code fence the model may wrap around the TSV`() = runTest {
-        val result = ExcelRealizer(llm("```tsv\nA\tB\n1\t2\n```"), writer).perform(image)
+        val result = realizer("```tsv\nA\tB\n1\t2\n```").perform(image)
         assertTrue(result is ActionResult.Success)
         assertEquals(listOf(listOf("A", "B"), listOf("1", "2")), lastRows)
     }
 
     @Test
     fun `a blank answer surfaces a recoverable failure`() = runTest {
-        val result = ExcelRealizer(llm("   "), writer).perform(image)
+        val result = realizer("   ").perform(image)
         assertTrue(result is ActionResult.Failure)
         assertTrue((result as ActionResult.Failure).recoverable)
     }
 
     @Test
     fun `parses a structured JSON table (issue 22)`() = runTest {
-        val result = ExcelRealizer(llm("""[["Имя","Сумма"],["Приказ","42"]]"""), writer).perform(image)
+        val result = realizer("""[["Имя","Сумма"],["Приказ","42"]]""").perform(image)
         assertTrue(result is ActionResult.Success)
         assertEquals(listOf(listOf("Имя", "Сумма"), listOf("Приказ", "42")), lastRows)
     }
 
     @Test
     fun `tolerates a json code fence`() = runTest {
-        ExcelRealizer(llm("```json\n[[\"A\",\"B\"],[\"1\",\"2\"]]\n```"), writer).perform(image)
+        realizer("```json\n[[\"A\",\"B\"],[\"1\",\"2\"]]\n```").perform(image)
         assertEquals(listOf(listOf("A", "B"), listOf("1", "2")), lastRows)
+    }
+
+    @Test
+    fun `two models that disagree flag the cell (#200 consensus)`() = runTest {
+        realizer(
+            """[["№","Сума"],["1","42"]]""",
+            """[["№","Сума"],["1","43"]]""",
+        ).perform(image)
+        assertEquals("42⚠", lastRows!![1][1]) // disagreement → plurality value, flagged for review
+        assertEquals(listOf("№", "Сума"), lastRows!![0]) // agreed header is clean
     }
 
     @Test
