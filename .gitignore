@@ -20,3 +20,7 @@ Thumbs.db
 # Keystores
 *.jks
 *.keystore
+
+# JVM crash / replay logs — never committed
+hs_err_pid*.log
+replay_pid*.log
