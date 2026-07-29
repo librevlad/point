@@ -238,3 +238,19 @@ gh release  → пусто    versionName  → "0.2.0"
 - **M2 «мультистраничный скан → merge»** и **M1 «полировка error/empty-состояний»** не проверены по коду. Статус M1/M2 «закрыты» опирается на 8 из 10 пунктов.
 - **Числа `:desktop`.** В ревью названо «15 файлов» — это `.kt` в `main`; в git их 27.
 - **Секции Landscape и Vision** не несут решения: единственный пункт, которому нужен был аргумент про платформенный потенциал (E4), отложен. Обоснование E1 стоит в таблице Scope Decisions.
+
+## GSTACK REVIEW REPORT
+
+| Review | Trigger | Why | Runs | Status | Findings |
+|--------|---------|-----|------|--------|----------|
+| CEO Review | `/plan-ceo-review` | Scope & strategy | 1 | ISSUES_OPEN | 6 предложений, 3 приняты, 3 отложены; 12 блокеров релиза |
+| Codex Review | `/codex review` | Independent 2nd opinion | 0 | — | — |
+| Eng Review | `/plan-eng-review` | Architecture & tests (required) | 1 | ISSUES_OPEN | 12 находок, 3 критические щели, 19→15→14 задач |
+| Design Review | `/plan-design-review` | UI/UX gaps | 0 | — | — |
+| DX Review | `/plan-devex-review` | Developer experience gaps | 0 | — | — |
+
+**CROSS-MODEL:** внешний голос — консилиум залогиненных веб-ботов, два прогона. По плану: ChatGPT 7/10, Gemini Pro 4/10, оба ITERATE. По инженерным находкам: ChatGPT 8/10 (SHIP), Gemini Pro 5/10 (ITERATE); Grok недоступен, Copilot разлогинен. Пять расхождений с принятыми решениями вынесены владельцу и разрешены (D12, D13, D14, D21, D22). Консилиум поймал две вещи, которых не увидели ни ревью, ни adversarial-проверка: `jpackage` не собирает MSI на Linux-раннере, и «поток на соединение» в релее это не замечание по производительности, а тривиальный вектор DDoS.
+
+**VERDICT:** CEO + ENG пройдены, обе с открытыми находками. К реализации готово: 14 задач инженерного ревью плюс 12 блокеров релиза из CEO-ревью. Design review не запускался — рекомендуется до E3/E5, потому что язык плана про «пузырьки» разошёлся с редизайном #115 (UI это строки).
+
+NO UNRESOLVED DECISIONS
