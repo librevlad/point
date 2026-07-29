@@ -46,11 +46,11 @@ object OpenCvScan {
     }
 
     /**
-     * «Скан+» (#200): a flat-bed-quality colour scan. Straighten the page by its table rules
-     * ([dewarpByRules]) — falling back to corner-perspective ([detectDocument]) when a document has
-     * too few rules — then finish to pure-white paper with live colour ([whitenFinish]) and upscale.
-     * For handwriting, coloured forms and stamps where binarisation throws away information the eye
-     * (and later OCR) needs. The caller owns [src].
+     * «Скан» (#200): a flat-bed-quality colour scan. Straighten the page by its table-line
+     * intersections ([dewarpByTps]) — falling back to corner-perspective ([detectDocument]) when a
+     * document has too few rules — then finish to pure-white paper with live colour, clean edges
+     * ([whitenFinish]) and upscale. For handwriting, coloured forms and stamps where binarisation
+     * throws away information the eye (and later OCR) needs. The caller owns [src].
      */
     fun enhance(src: Bitmap): Bitmap {
         val rgba = Mat()
@@ -494,6 +494,49 @@ object OpenCvScan {
         Core.merge(hc2, hsv2)
         Imgproc.cvtColor(hsv2, bgrOut, Imgproc.COLOR_HSV2BGR)
 
+        // 7) убрать мусор по краям (плёночная бахрома/тёмные кромки): добел внешней margin-полосы там,
+        //    где нет длинных ГОРИЗОНТАЛЬНЫХ структур (текст-строк/линий) и нет цвета — контент защищён.
+        val bgray = Mat().also { scratch += it }
+        Imgproc.cvtColor(bgrOut, bgray, Imgproc.COLOR_BGR2GRAY)
+        val bsv = Mat().also { scratch += it }
+        Imgproc.cvtColor(bgrOut, bsv, Imgproc.COLOR_BGR2HSV)
+        val bsat = ArrayList<Mat>().also { Core.split(bsv, it) }.onEach { scratch += it }
+        val runs = Mat().also { scratch += it }
+        Imgproc.threshold(bgray, runs, 150.0, 255.0, Imgproc.THRESH_BINARY_INV)
+        Imgproc.morphologyEx(runs, runs, Imgproc.MORPH_CLOSE, Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(25.0, 1.0)).also { scratch += it })
+        Imgproc.morphologyEx(runs, runs, Imgproc.MORPH_OPEN, Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(22.0, 1.0)).also { scratch += it })
+        val colored = Mat().also { scratch += it }
+        Imgproc.threshold(bsat[1], colored, 45.0, 255.0, Imgproc.THRESH_BINARY)
+        val prot = Mat().also { scratch += it }
+        Core.max(runs, colored, prot)
+        Imgproc.dilate(prot, prot, Imgproc.getStructuringElement(Imgproc.MORPH_ELLIPSE, Size(27.0, 27.0)).also { scratch += it }, Point(-1.0, -1.0), 1)
+        val bh = bgrOut.rows()
+        val bw = bgrOut.cols()
+        val border = Mat.zeros(bh, bw, CvType.CV_8U).also { scratch += it }
+        val by = (BORDER_FRAC * bh).toInt().coerceAtLeast(1)
+        val bx = (BORDER_FRAC * bw).toInt().coerceAtLeast(1)
+        border.rowRange(0, by).setTo(Scalar(255.0))
+        border.rowRange(bh - by, bh).setTo(Scalar(255.0))
+        border.colRange(0, bx).setTo(Scalar(255.0))
+        border.colRange(bw - bx, bw).setTo(Scalar(255.0))
+        val garbage = Mat().also { scratch += it }
+        Core.bitwise_not(prot, garbage)
+        Core.bitwise_and(garbage, border, garbage)
+        Imgproc.GaussianBlur(garbage, garbage, Size(0.0, 0.0), 5.0)      // feather → soft alpha
+        val gf = Mat().also { scratch += it }
+        garbage.convertTo(gf, CvType.CV_32F, 1.0 / 255.0)
+        val gf3 = Mat().also { scratch += it }
+        Imgproc.cvtColor(gf, gf3, Imgproc.COLOR_GRAY2BGR)
+        val bf = Mat().also { scratch += it }
+        bgrOut.convertTo(bf, CvType.CV_32F)
+        val inv = Mat(gf3.size(), gf3.type(), Scalar.all(1.0)).also { scratch += it }
+        Core.subtract(inv, gf3, inv)                                     // 1 − alpha
+        Core.multiply(bf, inv, bf)                                       // bgr · (1 − alpha)
+        val wterm = Mat().also { scratch += it }
+        gf3.convertTo(wterm, -1, 255.0)                                  // 255 · alpha
+        Core.add(bf, wterm, bf)
+        bf.convertTo(bgrOut, CvType.CV_8U)
+
         val outRgba = Mat().also { scratch += it }
         Imgproc.cvtColor(bgrOut, outRgba, Imgproc.COLOR_BGR2RGBA)
         return outRgba
@@ -542,6 +585,8 @@ object OpenCvScan {
     private const val FADE_FRAC = 0.10
     /** Hard cap on per-axis displacement (fraction of the dimension) — a safety net against blow-ups. */
     private const val MAX_DISP_FRAC = 0.12
+    /** Outer margin band (fraction of each side) whitened where free of content — edge/corner garbage. */
+    private const val BORDER_FRAC = 0.09
     /** The smooth field is sampled every this-many px, then the remap is resized up. */
     private const val REMAP_DECIMATE = 8
     /** Illumination blur: wide enough (~1/8 frame) to smooth a lamp gradient, not page detail. */
