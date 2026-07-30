@@ -94,3 +94,8 @@ interface Enrichment {
 /** Metadata key: scratch ref of the text recognised inside an IMAGE object (OCR sidecar).
  *  Written by the OCR enricher; read by entity realizers and the OCR capability as a cache. */
 const val META_OCR_TEXT_REF = "ocr.text.ref"
+
+/** Metadata key: scratch ref of the full atom layer ([AtomCodec] format) read off an IMAGE (#257).
+ *  The layer is evidence, not a representation: it survives even when the garbage gate hides the
+ *  text from features, and it is what область-selection (#259) and re-reading will address. */
+const val META_OCR_ATOMS_REF = "ocr.atoms.ref"
