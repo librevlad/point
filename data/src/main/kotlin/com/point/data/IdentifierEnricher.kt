@@ -47,35 +47,49 @@ class IdentifierEnricher @Inject constructor() : Enricher {
             .take(MAX_CHARS)
         if (text.isBlank()) return@withContext EnrichmentDelta()
 
-        val objects = waybillNumbers(text).map { value ->
-            PointObject(
-                id = identifierId(obj.id, value),
-                mime = "text/plain",
-                // No file behind it: the value IS the content (#222).
-                uri = ValueRef(value),
-                state = ObjectState(KIND_IDENTIFIER),
-                // Structural match only — no published check-digit algorithm went into the rule.
-                confidence = WAYBILL_CONFIDENCE,
-                sourceObjects = listOf(obj.id),
-                creatorAction = CREATOR,
-            )
-        }
+        val (objects, relations) = identifierObjects(obj, text)
         if (objects.isEmpty()) return@withContext EnrichmentDelta()
-
-        EnrichmentDelta(
-            objects = objects,
-            // Provenance, not meaning: «this number was read off that page». What the number
-            // identifies and who issued it is for a classifier to say later, in code.
-            relations = objects.map { Relation(it.id, RelationType.FOUND_IN, obj.id) },
-        )
+        EnrichmentDelta(objects = objects, relations = relations)
     }
 
     private companion object {
         const val MAX_CHARS = 20_000
-        const val CREATOR = "identifier-enricher"
-
-        /** Deterministic: re-running enrichment on the same object must not double the graph. */
-        fun identifierId(sourceId: String, value: String) =
-            "$sourceId:identifier:${value.filter(Char::isDigit)}"
     }
 }
+
+/**
+ * Waybill numbers in already-read text → graph nodes.
+ *
+ * Shared with [OcrEnricher] on purpose. The rule first shipped as a TEXT-only enricher, and on a
+ * real device that meant it **never ran**: what the user shares is an IMAGE, its text lives as an
+ * OCR sidecar, and a TEXT object only appears if they tap «Распознать текст». The single most
+ * useful thing on a parcel screenshot fell through the same floor twice, for a different reason
+ * each time. Every path that produces text now goes through here.
+ */
+internal fun identifierObjects(
+    source: PointObject,
+    text: String,
+): Pair<List<PointObject>, List<Relation>> {
+    val objects = waybillNumbers(text).map { value ->
+        PointObject(
+            id = identifierId(source.id, value),
+            mime = "text/plain",
+            // No file behind it: the value IS the content (#222).
+            uri = ValueRef(value),
+            state = ObjectState(KIND_IDENTIFIER),
+            // Structural match only — no published check-digit algorithm went into the rule.
+            confidence = WAYBILL_CONFIDENCE,
+            sourceObjects = listOf(source.id),
+            creatorAction = IDENTIFIER_CREATOR,
+        )
+    }
+    // Provenance, not meaning: «this number was read off that page». What the number identifies
+    // and who issued it is for a classifier to say later, in code.
+    return objects to objects.map { Relation(it.id, RelationType.FOUND_IN, source.id) }
+}
+
+internal const val IDENTIFIER_CREATOR = "identifier-enricher"
+
+/** Deterministic: re-running enrichment on the same object must not double the graph. */
+private fun identifierId(sourceId: String, value: String) =
+    "$sourceId:identifier:${value.filter(Char::isDigit)}"

@@ -22,3 +22,7 @@ gradlew       text eol=lf
 *.webp        binary
 *.jks         binary
 *.keystore    binary
+
+# Дословный вывод OCR с устройства — фикстуры должны оставаться побайтово теми же
+# на Windows и на CI, иначе тест сверяется не с тем, что выдал телефон.
+core/flow/src/test/resources/ocr/*.txt -text eol=lf
