@@ -10,11 +10,6 @@ data class Consensus(
     val candidates: Map<Pair<Int, Int>, List<String>>,
 )
 
-/** Fold-away for agreement: case, spacing, dashes, and the ⚠/~~strike~~ markers don't count as a diff. */
-private fun normConsensus(s: String): String =
-    s.lowercase().replace("⚠", "").replace("~~", "")
-        .replace(Regex("""[\s\-–—.,]+"""), "")
-
 /**
  * Vote each cell across [tables] (independent reads of the same table). Aligns by row/column index —
  * strong vision models produce the same structure for a clean table; a shorter read simply has no
@@ -33,18 +28,17 @@ fun reconcile(tables: List<List<List<String>>>): Consensus {
         val ncol = ts.mapNotNull { it.getOrNull(r)?.size }.maxOrNull() ?: 0
         val row = ArrayList<String>(ncol)
         for (c in 0 until ncol) {
-            val present = ts.mapNotNull { it.getOrNull(r)?.getOrNull(c)?.trim() }.filter { it.isNotBlank() }
-            if (present.isEmpty()) {
+            // The vote itself is [agree] (#222, шаг 7) — same mechanics, no longer table-only.
+            // What stays here is the table's own dressing: the ⚠ marker and the candidate cap.
+            val verdict = agree(ts.mapNotNull { it.getOrNull(r)?.getOrNull(c) })
+            if (verdict == null) {
                 row.add(""); continue
             }
-            val byNorm = present.groupBy(::normConsensus)
-            val top = byNorm.maxByOrNull { it.value.size }!!
-            val pick = top.value.first() // a raw value of the plurality group
-            if (byNorm.size == 1) {
-                row.add(pick) // every present read agrees
+            if (verdict.agreed) {
+                row.add(verdict.value) // every present read agrees
             } else {
-                row.add(if (pick.contains('⚠')) pick else "$pick⚠")
-                candidates[r to c] = present.distinct().filter { it.length <= 80 }
+                row.add(if (verdict.value.contains('⚠')) verdict.value else "${verdict.value}⚠")
+                candidates[r to c] = verdict.candidates.filter { it.length <= 80 }
             }
         }
         outRows.add(row)

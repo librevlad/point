@@ -23,7 +23,9 @@ private fun chatSystemPrompt(kind: ObjectKind): String {
         ObjectKind.OFFICE -> "офисным документом"
         ObjectKind.URL -> "ссылкой"
         ObjectKind.ZIP, ObjectKind.COLLECTION -> "набором файлов"
-        ObjectKind.UNKNOWN -> "объектом"
+        // Extraction kinds are open (#222) — an Organization or an Identifier is still just
+        // «an object» to talk about, so UNKNOWN and everything new share one wording.
+        else -> "объектом"
     }
     return "Ты — помощник Point. Помогаешь пользователю разобраться с этим $subject. " +
         "Отвечай кратко, по делу и по-русски; не выдумывай фактов."

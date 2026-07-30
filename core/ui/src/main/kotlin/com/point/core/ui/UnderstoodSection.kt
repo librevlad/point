@@ -37,6 +37,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.point.core.flow.META_ENTITY_PREFIX
 import com.point.core.flow.META_SEMANTIC_SUMMARY
+import com.point.core.flow.META_SEMANTIC_TYPE
+import com.point.core.flow.documentLabel
 import com.point.core.model.Feature
 import com.point.core.model.PointObject
 
@@ -87,7 +89,9 @@ fun objectVerdict(obj: PointObject): ObjectVerdict {
         state.has(Feature.IS_RECIPE) -> "Рецепт"
         state.has(Feature.IS_JOB) -> "Вакансия"
         state.has(Feature.HAS_VCARD) -> "Визитка"
-        else -> kindLabel(state.kind)
+        // What kind of document it is (#222, шаг 5) — «Посылка» beats «Изображение». Below the
+        // features because those are backed by a capability that acts; this only renames.
+        else -> documentLabel(obj.metadata[META_SEMANTIC_TYPE]) ?: kindLabel(state.kind)
     }
     val summary = obj.metadata[META_SEMANTIC_SUMMARY]?.takeIf { it.isNotBlank() }
     val name = obj.metadata["name"]?.takeIf { it.isNotBlank() && it != headline }

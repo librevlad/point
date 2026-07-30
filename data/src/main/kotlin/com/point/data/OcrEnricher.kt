@@ -4,6 +4,13 @@ import com.point.core.flow.EnrichCost
 import com.point.core.flow.Enricher
 import com.point.core.flow.EnricherMeta
 import com.point.core.flow.EnrichmentDelta
+import com.point.core.flow.documentType
+import com.point.core.flow.META_SEMANTIC_TYPE
+import com.point.core.flow.KIND_ADDRESS
+import com.point.core.flow.KIND_DATE
+import com.point.core.flow.KIND_EMAIL
+import com.point.core.flow.KIND_PHONE
+import com.point.core.flow.KIND_URL
 import com.point.core.flow.EntityExtractor
 import com.point.core.flow.META_ENTITY_PREFIX
 import com.point.core.flow.META_OCR_TEXT_REF
@@ -42,6 +49,9 @@ class OcrEnricher @Inject constructor(
             Feature.HAS_TEXT, Feature.HAS_PHONE, Feature.HAS_EMAIL, Feature.HAS_ADDRESS,
             Feature.HAS_DATE, Feature.HAS_CARD, Feature.HAS_URL,
         ),
+        // The gate must know OCR can yield objects, not only actions: on a parcel screenshot
+        // the address and the deadline are the whole point, and neither opens a new button.
+        mayYieldKinds = setOf(KIND_PHONE, KIND_EMAIL, KIND_URL, KIND_ADDRESS, KIND_DATE),
         label = "Распознаю текст…",
     )
 
@@ -51,7 +61,7 @@ class OcrEnricher @Inject constructor(
         val text = runCatching { recognizer.recognize(obj) }.getOrDefault("")
         if (text.isBlank() || looksLikeOcrGarbage(text)) return@withContext EnrichmentDelta()
 
-        val entities = entityDelta(extractor.extract(text.take(MAX_CHARS)))
+        val entities = entityDelta(obj, extractor.extract(text.take(MAX_CHARS)))
         val url = URL_REGEX.find(text)?.value
         val ref = store.newScratchFile("txt")
         File(ref.value).writeText(text)
@@ -61,8 +71,15 @@ class OcrEnricher @Inject constructor(
             metadata = buildMap {
                 putAll(entities.metadata)
                 if (url != null) putIfAbsent(META_ENTITY_PREFIX + "url", url)
+                // «Посылка», а не «Изображение» (#222, шаг 5): скриншот приходит сюда, не в
+                // DocumentTypeEnricher — тот работает по TEXT, а у картинки текста ещё нет.
+                documentType(text)?.let { putIfAbsent(META_SEMANTIC_TYPE, it) }
                 put(META_OCR_TEXT_REF, ref.value)
             },
+            // The screenshot's own findings become graph objects (#222) — the branch address
+            // read off a parcel screenshot is a place, not a line in a checklist.
+            objects = entities.objects,
+            relations = entities.relations,
         )
     }
 

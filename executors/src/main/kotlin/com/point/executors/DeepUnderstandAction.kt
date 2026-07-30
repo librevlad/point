@@ -3,13 +3,14 @@ package com.point.executors
 import com.point.core.flow.Capability
 import com.point.core.flow.CapabilityMeta
 import com.point.core.flow.Cost
+import com.point.core.flow.mergeFacts
 import com.point.core.flow.Latency
 import com.point.core.flow.LlmClient
 import com.point.core.flow.META_ENTITY_PREFIX
 import com.point.core.flow.META_OCR_TEXT_REF
 import com.point.core.flow.META_SEMANTIC_SUMMARY
 import com.point.core.flow.META_SEMANTIC_TYPE
-import com.point.core.flow.SEMANTIC_TYPES
+import com.point.core.flow.KNOWN_SEMANTIC_TAGS
 import com.point.core.flow.Realizer
 import com.point.core.model.ActionResult
 import com.point.core.model.CapabilityId
@@ -60,7 +61,9 @@ internal fun parseUnderstanding(answer: String): Map<String, String> = buildMap 
         val value = line.substring(eq + 1).trim()
         if (value.isEmpty()) return@forEach
         when {
-            key == "TYPE" -> value.lowercase().takeIf { it in SEMANTIC_TYPES }
+            // Любой известный тег — из закрытой карты признаков или из карты документов;
+            // выдуманный моделью отбрасывается (#222: никакого свободного текста).
+            key == "TYPE" -> value.lowercase().takeIf { it in KNOWN_SEMANTIC_TAGS }
                 ?.let { putIfAbsent(META_SEMANTIC_TYPE, it) }
             key == "SUMMARY" -> putIfAbsent(META_SEMANTIC_SUMMARY, value.take(120))
             else -> CONTRACT_KEYS[key]?.let { putIfAbsent(META_ENTITY_PREFIX + it, value) }
@@ -103,10 +106,15 @@ class DeepUnderstandRealizer @Inject constructor(
                 } else {
                     // The same object, one understanding richer: same bytes, merged facts.
                     // The metadata enricher lights the features on the next frame.
+                    // #222, шаг 7: голосованием, а не поверх. Раньше прочтение модели молча
+                    // затирало то, что нашёл экстрактор на устройстве, и понять, совпали ли
+                    // они, было нельзя. Теперь расхождение записывается, а при равенстве
+                    // голосов побеждает уже известное — платная догадка не выигрывает тем,
+                    // что пришла второй.
                     ActionResult.Success(
                         ResultObject(
                             input.state.kind, input.mime, input.uri,
-                            metadata = input.metadata + found + ("op" to "deep-understand"),
+                            metadata = mergeFacts(input.metadata, found) + ("op" to "deep-understand"),
                         ),
                     )
                 }

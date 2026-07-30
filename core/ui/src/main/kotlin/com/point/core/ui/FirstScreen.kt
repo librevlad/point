@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -33,6 +34,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.key
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -47,12 +49,22 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.point.core.flow.META_ALT_SUFFIX
+import com.point.core.flow.alternativesOf
+import com.point.core.flow.KIND_ADDRESS
+import com.point.core.flow.KIND_DATE
+import com.point.core.flow.KIND_EMAIL
+import com.point.core.flow.KIND_PHONE
+import com.point.core.flow.KIND_URL
+import com.point.core.model.ObjectKind
 import com.point.core.model.Bubble
 import com.point.core.model.CapabilityId
 import com.point.core.model.Intent
 import com.point.core.model.LatentBubble
 import com.point.core.model.FavoriteChain
 import com.point.core.model.PointObject
+import com.point.core.model.RelationType
+import com.point.core.model.Relation
 
 /**
  * The first (and every) screen: a preview of the current object and the bubbles
@@ -82,6 +94,9 @@ fun FirstScreen(
     onSaveChain: () -> Unit = {},
     items: List<PointObject> = emptyList(),
     onItem: (PointObject) -> Unit = {},
+    found: List<PointObject> = emptyList(),
+    relations: List<Relation> = emptyList(),
+    onFound: (PointObject) -> Unit = {},
     textPreview: String? = null,
     latent: List<LatentBubble> = emptyList(),
     enriching: List<String> = emptyList(),
@@ -102,6 +117,10 @@ fun FirstScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         val facts = understoodFacts(obj)
+        // A fact that has become a thing (#222) is shown as that thing, not twice: «Нашёл
+        // адрес · Отделение №9» graduates out of the checklist into the object list below.
+        val promoted = found.mapNotNullTo(mutableSetOf()) { factKeyFor(it.state.kind) }
+        val plainFacts = facts.filter { it.key !in promoted }
 
         // The object is the hero (#114): its real preview breathes inside the portal aura.
         ObjectHeader(
@@ -113,7 +132,13 @@ fun FirstScreen(
 
         // «Point понял» (#114): the understanding card — facts land line by line as
         // enrichment delivers them (#64), with still-running work inside the same card.
-        UnderstoodSection(facts = facts, enriching = enriching)
+        UnderstoodSection(facts = plainFacts, enriching = enriching)
+
+        // What Point found INSIDE the object (#222) — things, not lines: the waybill number,
+        // the branch, the deadline. Each opens as an object of its own.
+        if (found.isNotEmpty() && inputPrompt == null) {
+            FoundObjects(found = found, relations = relations, onFound = onFound)
+        }
 
         Spacer(Modifier.height(28.dp))
 
@@ -266,6 +291,125 @@ private fun MessageBanner(message: String?) {
 
 /** For a COLLECTION: a scrollable list of its items. Tapping one drills in — the
  *  normal flow continues on that object (its own bubbles: Открыть/Сохранить/…). */
+/**
+ * «Point нашёл» (#222) — the things extraction lifted out of the object, each one tappable.
+ *
+ * The list is the visible half of the migration: an address here is not a line of text but an
+ * `Address` object, and tapping it opens a screen whose actions come from the same registry
+ * every other object uses. «Маршрут» appears there because the object carries `HAS_ADDRESS`,
+ * not because anyone wrote a case for it.
+ *
+ * A reading below certainty is shown as such — the graph carries confidence, so the screen
+ * must not present a structural guess as a fact.
+ */
+@Composable
+private fun FoundObjects(
+    found: List<PointObject>,
+    relations: List<Relation>,
+    onFound: (PointObject) -> Unit,
+) {
+    Spacer(Modifier.height(16.dp))
+    Column(
+        modifier = Modifier.widthIn(max = 340.dp).fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(
+            text = "Нашёл · ${found.size}",
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        found.forEach { obj ->
+            key(obj.id) {
+                Surface(
+                    onClick = { onFound(obj) },
+                    shape = RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Icon(
+                            imageVector = kindIcon(obj.state.kind),
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp),
+                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = obj.uri.value,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                text = listOfNotNull(
+                                    kindLabel(obj.state.kind),
+                                    roleOf(obj, relations),
+                                    // Honest about a reading nobody checked against the world.
+                                    "возможно".takeIf { obj.confidence < 1f },
+                                ).joinToString(" · "),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            // #222, шаг 7: sources read it differently — say so, do not pick
+                            // one silently. A value nobody agrees on is not a settled value.
+                            otherReading(obj)?.let { other ->
+                                Text(
+                                    text = "или: $other",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The role a found object plays in the document (#222, шаг 6) — the answer the classifier was
+ * actually asked for. Provenance («found_in») is not a role: it says where the thing was read,
+ * which the screen already makes obvious by showing it under this object.
+ */
+/** The reading this object's sources disagreed with, if any — its own value is the winner
+ *  of the vote, and the loser is worth one quiet line rather than silence. */
+private fun otherReading(obj: PointObject): String? =
+    obj.metadata.keys.firstOrNull { it.endsWith(META_ALT_SUFFIX) }
+        ?.let { alternativesOf(obj.metadata, it.removeSuffix(META_ALT_SUFFIX)) }
+        ?.firstOrNull { it.trim() != obj.uri.value.trim() }
+
+private fun roleOf(obj: PointObject, relations: List<Relation>): String? =
+    relations.asSequence().filter { it.fromId == obj.id }.mapNotNull { relationLabel(it.type) }.firstOrNull()
+
+internal fun relationLabel(type: RelationType): String? = when (type) {
+    RelationType.SENDER -> "отправитель"
+    RelationType.RECEIVER -> "получатель"
+    RelationType.CARRIER -> "перевозчик"
+    RelationType.ISSUED_BY -> "выдал документ"
+    RelationType.SIGNED_BY -> "подписал"
+    else -> null
+}
+
+/** Which «Point понял» line a found object replaces — null when nothing was showing it. */
+internal fun factKeyFor(kind: ObjectKind): String? = when (kind) {
+    KIND_PHONE -> "phone"
+    KIND_EMAIL -> "email"
+    KIND_URL -> "url"
+    KIND_ADDRESS -> "address"
+    KIND_DATE -> "date"
+    else -> null // an Identifier was never in the checklist — it had no type to be shown as
+}
+
 @Composable
 private fun CollectionItems(items: List<PointObject>, onItem: (PointObject) -> Unit) {
     Text(

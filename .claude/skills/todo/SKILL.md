@@ -1,6 +1,6 @@
 ---
 name: todo
-description: Быстрый захват задачи в трекер. Используй, когда владелец пишет "/todo <текст>", "запиши таску", "закинь в issues", "не забудь <X>" — особенно посреди другой работы. Создаёт GitHub-issue в librevlad/point, кладёт на доску Project #2 в Backlog, отдаёт ссылку одной строкой и сразу возвращает к прерванному делу.
+description: Быстрый захват задачи в трекер. Используй, когда владелец пишет "/todo <текст>", "запиши таску", "закинь в issues", "не забудь <X>" — особенно посреди другой работы. Создаёт GitHub-issue в librevlad/point, кладёт на доску Project #3 в Backlog, отдаёт ссылку одной строкой и сразу возвращает к прерванному делу.
 ---
 
 # /todo — мгновенный захват задачи в Issues
@@ -16,8 +16,9 @@ description: Быстрый захват задачи в трекер. Испо�
   задачи, не расширяй её, не задавай вопросов (единственное исключение — текст пуст).
 - **Статус по умолчанию — `Backlog`.** Приоритет («Up next») ставит только
   человек/ко-фаундер. Claude никогда не двигает задачу выше Backlog сам.
-- **Не полагайся на auto-add.** Встроенный воркфлоу борда сейчас НЕ подхватывает
-  новые issues автоматически — поэтому скилл сам явно добавляет issue на Project #2.
+- **Ставь статус явно.** Встроенный auto-add борда подхватывает новые issues, но
+  кладёт их без статуса — поэтому скилл всё равно добавляет issue сам (операция
+  идемпотентна: если auto-add успел, вернётся тот же item) и проставляет Backlog.
 - **Не глотай ошибку.** Если `gh` упал (auth/сеть) — честно скажи и покажи исходный
   текст задачи дословно, чтобы мысль не потерялась.
 
@@ -31,16 +32,16 @@ description: Быстрый захват задачи в трекер. Испо�
   «баг: …» → `--label bug`.
 
 ## Команды (Bash / gh; один заход)
-Подставь TITLE и BODY. Константы борда зашиты (Project #2 «Point»).
+Подставь TITLE и BODY. Константы борда зашиты (Project #3 «Point», привязан к репозиторию).
 
 ```bash
-PROJECT_ID=PVT_kwHOAvE9d84BeN3K
-STATUS_FIELD=PVTSSF_lAHOAvE9d84BeN3KzhYpurw
-BACKLOG=da9a91d0
+PROJECT_ID=PVT_kwHOAvE9d84Be3eP
+STATUS_FIELD=PVTSSF_lAHOAvE9d84Be3ePzhZOiSg
+BACKLOG=dbdb0935
 
 URL=$(gh issue create --repo librevlad/point --title "TITLE" --body "BODY") \
   || { echo "gh issue create FAILED — задача НЕ потеряна: TITLE"; exit 1; }
-ITEM=$(gh project item-add 2 --owner librevlad --url "$URL" --format json \
+ITEM=$(gh project item-add 3 --owner librevlad --url "$URL" --format json \
   | python -c "import sys,json;print(json.load(sys.stdin)['id'])")
 gh project item-edit --id "$ITEM" --project-id "$PROJECT_ID" \
   --field-id "$STATUS_FIELD" --single-select-option-id "$BACKLOG" >/dev/null
@@ -64,7 +65,10 @@ Body-шаблон:
 приступай.
 
 ## Справочник борда
-- Repo: `librevlad/point` · Project #2 «Point» (`PVT_kwHOAvE9d84BeN3K`)
-- Status-поле `PVTSSF_lAHOAvE9d84BeN3KzhYpurw`:
-  Backlog `da9a91d0` · Up next `cd64bbb0` · In progress `bb486dff`
-  · In review `ececb442` · Done `14e2d913`
+- Repo: `librevlad/point` · Project #3 «Point» (`PVT_kwHOAvE9d84Be3eP`), привязан к репозиторию
+- Status-поле `PVTSSF_lAHOAvE9d84Be3ePzhZOiSg`:
+  Backlog `dbdb0935` · Up next `212da4d0` · In progress `c2538f73`
+  · In review `72b0463f` · Done `5765df46`
+- Есть ещё поля Priority (P0/P1/P2), Size (XS…XL) и Iteration — их скилл НЕ трогает,
+  это домен ко-фаундера.
+- Project #2 — архив до переезда, закрыт. Не писать туда.

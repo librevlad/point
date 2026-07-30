@@ -34,6 +34,7 @@ import com.point.core.model.PointObject
 import com.point.core.model.Preview
 import com.point.core.model.ResultObject
 import com.point.core.model.ScratchRef
+import com.point.core.model.ValueRef
 import com.point.executors.OpenInCapability
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -807,6 +808,68 @@ class FlowViewModelTest {
         advanceUntilIdle()
 
         assertEquals(ObjectKind.IMAGE, vm.ui.value.frame?.obj?.state?.kind)
+    }
+
+    // --- Граф объектов (#222): найденное доезжает до кадра и открывается ---
+
+    @Test fun `objects found by enrichment land on the frame`() = runTest(dispatcher) {
+        val vm = vm()
+        val waybill = PointObject(
+            "o:id", "text/plain", ValueRef("20 4514 9154 9395"),
+            ObjectState(ObjectKind.of("Identifier")),
+        )
+        enrichment.updates = listOf(
+            EnrichmentUpdate(emptySet(), emptyMap(), emptyList(), listOf(waybill), emptyList()),
+        )
+
+        vm.onShared("/parcel.jpg", "image/jpeg"); advanceUntilIdle()
+
+        assertEquals(listOf("20 4514 9154 9395"), vm.ui.value.frame?.found?.map { it.uri.value })
+    }
+
+    @Test fun `the same object arriving twice stays one node`() = runTest(dispatcher) {
+        // The live extractor and stored metadata build the same id on purpose (#222).
+        val vm = vm()
+        val addr = PointObject(
+            "o:address", "text/plain", ValueRef("Київ"),
+            ObjectState(ObjectKind.of("Address"), setOf(Feature.HAS_ADDRESS)),
+        )
+        enrichment.updates = listOf(
+            EnrichmentUpdate(emptySet(), emptyMap(), emptyList(), listOf(addr), emptyList()),
+            EnrichmentUpdate(emptySet(), emptyMap(), emptyList(), listOf(addr, addr), emptyList()),
+        )
+
+        vm.onShared("/parcel.jpg", "image/jpeg"); advanceUntilIdle()
+
+        assertEquals(1, vm.ui.value.frame?.found?.size)
+    }
+
+    @Test fun `tapping a found object opens it as a frame of its own`() = runTest(dispatcher) {
+        val vm = vm()
+        val addr = PointObject(
+            "o:address", "text/plain", ValueRef("Відділення №9"),
+            ObjectState(ObjectKind.of("Address"), setOf(Feature.HAS_ADDRESS)),
+        )
+        enrichment.updates = listOf(
+            EnrichmentUpdate(emptySet(), emptyMap(), emptyList(), listOf(addr), emptyList()),
+        )
+        vm.onShared("/parcel.jpg", "image/jpeg"); advanceUntilIdle()
+
+        vm.onFound(addr); advanceUntilIdle()
+
+        assertEquals("Відділення №9", vm.ui.value.frame?.obj?.uri?.value)
+        assertEquals(ObjectKind.of("Address"), vm.ui.value.frame?.obj?.state?.kind)
+    }
+
+    @Test fun `an object the frame never found is not an open door`() = runTest(dispatcher) {
+        val vm = vm()
+        vm.onShared("/parcel.jpg", "image/jpeg"); advanceUntilIdle()
+        val before = vm.ui.value.frame?.obj?.id
+
+        vm.onFound(PointObject("stranger", "text/plain", ValueRef("x"), ObjectState(ObjectKind.of("Address"))))
+        advanceUntilIdle()
+
+        assertEquals(before, vm.ui.value.frame?.obj?.id)
     }
 
     // --- Bring-your-own AI key (#19) ---

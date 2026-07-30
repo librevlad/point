@@ -13,6 +13,7 @@ import com.point.core.model.LatentBubble
 import com.point.core.model.ObjectKind
 import com.point.core.model.PointObject
 import com.point.core.model.Preview
+import com.point.core.model.Relation
 
 /**
  * One entry on the navigation stack: an object, the bubbles it offers, and the
@@ -26,6 +27,13 @@ data class FlowFrame(
     val viaTitle: String? = null,
     /** For a COLLECTION: its items (files), loaded async after the frame is pushed. */
     val items: List<PointObject> = emptyList(),
+    /** Things extraction found *inside* this object (#222) — the waybill number, the branch
+     *  address, the deadline. Not the same as [items]: those are files the object contains,
+     *  these are things the world contains that the object mentions. Grows as waves land. */
+    val found: List<PointObject> = emptyList(),
+    /** How the [found] objects relate to this one and to each other — provenance for now
+     *  («read off that page»), roles once the classifier lands (#222, шаг 6). */
+    val relations: List<Relation> = emptyList(),
     /** For a TEXT object: a bounded preview of its content, loaded async. */
     val textPreview: String? = null,
     /** For an IMAGE object: its real thumbnail (EXIF-upright, downsampled), loaded async —

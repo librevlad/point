@@ -46,7 +46,8 @@ fun breathSpecFor(kind: ObjectKind): BreathSpec = when (kind) {
     ObjectKind.URL -> BreathSpec(scale = 1.006f, periodMs = 4_600)
     ObjectKind.TEXT -> BreathSpec(scale = 1.005f, periodMs = 5_000)
     ObjectKind.ZIP, ObjectKind.COLLECTION -> BreathSpec(scale = 1.004f, periodMs = 5_600)
-    ObjectKind.PDF, ObjectKind.OFFICE, ObjectKind.UNKNOWN -> BreathSpec(scale = 1.003f, periodMs = 6_000)
+    // Kinds are open (#222): the calmest breath is the safe default for anything new.
+    else -> BreathSpec(scale = 1.003f, periodMs = 6_000)
 }
 
 /** Физика свипа-чтения по типу (принцип №3): как именно объект «читается». */

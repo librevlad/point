@@ -71,6 +71,7 @@ class SandboxActivity : ComponentActivity() {
                             onSubmitInput = viewModel::submitAmendment,
                             onCancelInput = viewModel::cancelInput,
                             onItem = viewModel::onItem,
+                            onFound = viewModel::onFound,
                             onJumpTo = viewModel::jumpTo,
                             onSendChat = viewModel::sendChatMessage,
                             onCloseChat = viewModel::closeChat,

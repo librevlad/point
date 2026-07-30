@@ -1,8 +1,10 @@
 package com.point.core.flow
 
 import com.point.core.model.Feature
+import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
+import com.point.core.model.Relation
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -17,7 +19,11 @@ interface Enricher {
     /** Cheap gate: is this enricher relevant to [state] at all? */
     fun appliesTo(state: ObjectState): Boolean
 
-    /** Expensive peek; returns what it discovered (features to ADD — never removes). */
+    /**
+     * Expensive peek; returns what it discovered — features to ADD (never removes) and, since
+     * #222, the objects it extracted. An enricher that yields objects is an **extractor**: it
+     * answers «what is on this page», never «what should the user do about it».
+     */
     suspend fun enrich(obj: PointObject): EnrichmentDelta
 }
 
@@ -30,21 +36,37 @@ enum class EnrichCost { INSTANT, FAST, SLOW }
  *
  * @param mayYield every feature this enricher could possibly flag. A SLOW enricher is
  *   skipped when none of them would open a new action on the current state — the
- *   knowledge would cost real work and change nothing. Empty = unknown, always run.
+ *   knowledge would cost real work and change nothing.
+ * @param mayYieldKinds every [com.point.core.model.ObjectKind] this enricher could extract
+ *   (#222). The gate needs this because **an object is worth finding even when it opens no
+ *   new action**: a waybill number adds nothing to the action list, yet it is the single most
+ *   useful thing on a parcel screenshot. Judging by actions alone would skip exactly the
+ *   extractors that matter most.
  * @param label short user-facing progress text (e.g. «Распознаю текст…») shown while
  *   this enricher works; null = too quick to be worth announcing.
+ *
+ * Both yield declarations empty = unknown, always run.
  */
 data class EnricherMeta(
     val cost: EnrichCost = EnrichCost.FAST,
     val mayYield: Set<Feature> = emptySet(),
     val label: String? = null,
+    val mayYieldKinds: Set<ObjectKind> = emptySet(),
 )
 
-/** One enricher's findings: features to add, plus sidecar facts (e.g. a scratch ref
- *  to OCR'd text) merged into the object's metadata. */
+/**
+ * One enricher's findings: features to add, sidecar facts merged into the object's metadata
+ * (e.g. a scratch ref to OCR'd text), and — since #222 — the objects and edges it extracted.
+ *
+ * [relations] may reference ids from [objects] and the id of the object being enriched.
+ * Nothing here is authored by a model: an extractor answers with what it saw, and the
+ * pipeline turns that into graph nodes in code.
+ */
 data class EnrichmentDelta(
     val features: Set<Feature> = emptySet(),
     val metadata: Map<String, String> = emptyMap(),
+    val objects: List<PointObject> = emptyList(),
+    val relations: List<Relation> = emptyList(),
 )
 
 /**
@@ -56,6 +78,8 @@ data class EnrichmentUpdate(
     val features: Set<Feature>,
     val metadata: Map<String, String>,
     val running: List<String>,
+    val objects: List<PointObject> = emptyList(),
+    val relations: List<Relation> = emptyList(),
 )
 
 /**

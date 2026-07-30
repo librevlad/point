@@ -54,9 +54,12 @@ import com.point.data.AndroidUrlOpener
 import com.point.data.AndroidViewer
 import com.point.data.ClaudeLlmClient
 import com.point.data.CommonsArchiveExtractor
+import com.point.data.DocumentTypeEnricher
+import com.point.data.GraphMetadataEnricher
 import com.point.data.DefaultEnrichment
 import com.point.data.DefaultEntitlements
 import com.point.data.EntityEnricher
+import com.point.data.IdentifierEnricher
 import com.point.data.MlKitEntityExtractor
 import com.point.data.FallbackLlmClient
 import com.point.data.FileChosenApps
@@ -279,6 +282,21 @@ abstract class DataModule {
 
     @Binds @IntoSet
     abstract fun pdfImageEnricher(e: PdfImageEnricher): Enricher
+
+    /** First extractor of the object pipeline (#222): a waybill number becomes an object,
+     *  not a flag. On-device rule, no key and no signal needed. */
+    @Binds @IntoSet
+    abstract fun identifierEnricher(e: IdentifierEnricher): Enricher
+
+    /** Names the object after what it IS (#222, шаг 5): «Посылка», не «Изображение».
+     *  On-device rule — an object's own name must not depend on a quota. */
+    @Binds @IntoSet
+    abstract fun documentTypeEnricher(e: DocumentTypeEnricher): Enricher
+
+    /** Rebuilds classified roles into graph nodes (#222, шаг 6) — instant, from journaled
+     *  metadata, so the paid classification is paid for once. */
+    @Binds @IntoSet
+    abstract fun graphMetadataEnricher(e: GraphMetadataEnricher): Enricher
 
     companion object {
         /** Pure classifier lives in :core:flow (no DI annotations there). */
