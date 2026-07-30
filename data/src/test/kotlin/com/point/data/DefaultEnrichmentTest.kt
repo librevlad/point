@@ -13,6 +13,8 @@ import com.point.core.model.LatentBubble
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
+import com.point.core.model.Relation
+import com.point.core.model.RelationType
 import com.point.core.model.ScratchRef
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.toList
@@ -199,5 +201,105 @@ class DefaultEnrichmentTest {
 
         assertFalse(textOnly.started)
         assertTrue(updates.last().features.isEmpty())
+    }
+
+    // ── Extraction: objects and relations (#222) ────────────────────────────────────────
+
+    private val identifierKind = ObjectKind.of("Identifier")
+
+    private fun extracted(id: String, kind: ObjectKind) =
+        PointObject(id, "text/plain", ScratchRef("/tmp/$id"), ObjectState(kind), sourceObjects = listOf("id"))
+
+    @Test
+    fun `runs a slow extractor that yields a new kind even when no action opens`() = runTest {
+        // The case the old gate got wrong. A waybill number opens no new action at all —
+        // judging by actions alone would skip the extractor that finds the single most useful
+        // thing on a parcel screenshot.
+        val extractor = FakeEnricher(
+            EnricherMeta(cost = EnrichCost.SLOW, mayYieldKinds = setOf(identifierKind)),
+            delta = EnrichmentDelta(objects = listOf(extracted("ttn", identifierKind))),
+        )
+        val flat = registry { listOf(bubble("base")) } // the action list never changes
+
+        val updates = DefaultEnrichment(setOf(extractor), flat).enrich(obj).toList()
+
+        assertTrue("an object is worth finding even with no new action", extractor.started)
+        assertEquals(listOf(identifierKind), updates.last().objects.map { it.state.kind })
+    }
+
+    @Test
+    fun `skips a slow extractor whose kind the graph already has`() = runTest {
+        val fast = FakeEnricher(
+            EnricherMeta(cost = EnrichCost.FAST),
+            delta = EnrichmentDelta(objects = listOf(extracted("ttn", identifierKind))),
+        )
+        val slow = FakeEnricher(
+            EnricherMeta(cost = EnrichCost.SLOW, mayYieldKinds = setOf(identifierKind)),
+            delta = EnrichmentDelta(objects = listOf(extracted("ttn2", identifierKind))),
+        )
+        val flat = registry { listOf(bubble("base")) }
+
+        DefaultEnrichment(setOf(fast, slow), flat).enrich(obj).toList()
+
+        assertTrue(fast.started)
+        assertFalse("the cheap wave already produced this kind", slow.started)
+    }
+
+    @Test
+    fun `a slow extractor still runs when its features open an action, whatever it yields`() = runTest {
+        // Both halves of the gate are honoured: features OR kinds is enough.
+        val gated = FakeEnricher(
+            EnricherMeta(
+                cost = EnrichCost.SLOW,
+                mayYield = setOf(Feature.HAS_PHONE),
+                mayYieldKinds = setOf(identifierKind),
+            ),
+            delta = EnrichmentDelta(setOf(Feature.HAS_PHONE)),
+        )
+        val fast = FakeEnricher(
+            EnricherMeta(cost = EnrichCost.FAST),
+            delta = EnrichmentDelta(objects = listOf(extracted("ttn", identifierKind))),
+        )
+
+        DefaultEnrichment(setOf(fast, gated), openingRegistry).enrich(obj).toList()
+
+        assertTrue("the kind is taken, but the feature still opens an action", gated.started)
+    }
+
+    @Test
+    fun `objects and relations accumulate across waves and survive into the final update`() = runTest {
+        val org = extracted("org1", ObjectKind.of("Organization"))
+        val instant = FakeEnricher(
+            EnricherMeta(cost = EnrichCost.INSTANT),
+            delta = EnrichmentDelta(objects = listOf(extracted("ttn", identifierKind))),
+        )
+        val fast = FakeEnricher(
+            EnricherMeta(cost = EnrichCost.FAST),
+            delta = EnrichmentDelta(
+                objects = listOf(org),
+                relations = listOf(Relation("ttn", RelationType.ISSUED_BY, "org1")),
+            ),
+        )
+        val updates = DefaultEnrichment(setOf(instant, fast), openingRegistry).enrich(obj).toList()
+
+        assertEquals(listOf("ttn", "org1"), updates.last().objects.map { it.id })
+        assertEquals(
+            listOf(Relation("ttn", RelationType.ISSUED_BY, "org1")),
+            updates.last().relations,
+        )
+    }
+
+    @Test
+    fun `an extractor that declares nothing still runs, as before`() = runTest {
+        // Unknown yield must keep meaning «run rather than guess» — the old contract.
+        val undeclared = FakeEnricher(
+            EnricherMeta(cost = EnrichCost.SLOW),
+            delta = EnrichmentDelta(objects = listOf(extracted("x", identifierKind))),
+        )
+        val flat = registry { listOf(bubble("base")) }
+
+        DefaultEnrichment(setOf(undeclared), flat).enrich(obj).toList()
+
+        assertTrue(undeclared.started)
     }
 }
