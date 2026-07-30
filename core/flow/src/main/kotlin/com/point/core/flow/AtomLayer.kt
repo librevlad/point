@@ -7,6 +7,7 @@ package com.point.core.flow
 data class Box(val left: Float, val top: Float, val right: Float, val bottom: Float) {
     val centerX: Float get() = (left + right) / 2f
     val centerY: Float get() = (top + bottom) / 2f
+    val height: Float get() = bottom - top
 
     fun contains(x: Float, y: Float): Boolean = x in left..right && y in top..bottom
 }
@@ -47,7 +48,27 @@ class AtomLayer(val atoms: List<Atom>) {
      * восстанавливается по геометрии.
      */
     fun textIn(region: Box): String =
-        atomsIn(region)
-            .sortedWith(compareBy({ it.box.top }, { it.box.left }))
-            .joinToString(" ") { it.text }
+        readingOrder(atomsIn(region)).joinToString(" ") { it.text }
+
+    /**
+     * Атомы, разложенные по строкам, и внутри строки — слева направо.
+     *
+     * Строка определяется **полосой**, а не равенством `top`: на реальном фото лист не идеально
+     * ровный, а буквы разной высоты, поэтому верхние края слов одной строки расходятся на
+     * несколько пикселей. Сортировка по `top` на таком входе переставляет куски номера местами —
+     * ровно то, из-за чего 14-значный трек собирается неправильно и тихо отдаётся как валидный.
+     *
+     * Порог — половина высоты самого атома, а не константа в пикселях: страница может прийти в
+     * любом разрешении, и абсолютный допуск, подобранный под одно фото, соврёт на другом.
+     */
+    fun readingOrder(subset: List<Atom> = atoms): List<Atom> {
+        val lines = mutableListOf<MutableList<Atom>>()
+        subset.sortedBy { it.box.centerY }.forEach { atom ->
+            val line = lines.lastOrNull()
+            val sameLine = line != null &&
+                kotlin.math.abs(line.last().box.centerY - atom.box.centerY) <= atom.box.height / 2f
+            if (sameLine) line.add(atom) else lines.add(mutableListOf(atom))
+        }
+        return lines.flatMap { it.sortedBy { atom -> atom.box.left } }
+    }
 }
