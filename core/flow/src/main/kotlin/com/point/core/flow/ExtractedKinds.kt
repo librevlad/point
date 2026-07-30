@@ -41,8 +41,13 @@ val KIND_EMAIL: ObjectKind = ObjectKind.of("Email")
 /** A link you can follow. */
 val KIND_URL: ObjectKind = ObjectKind.of("Url")
 
+/** A company, a carrier, an agency — anyone that is not a person. Which *side* it is on
+ *  (sender, receiver, carrier) is a role and lives in its [com.point.core.model.Relation]s. */
+val KIND_ORGANIZATION: ObjectKind = ObjectKind.of("Organization")
+
 /** Everything extraction produces so far. A frame that already IS one of these does not get
  *  extracted from again — otherwise every tap into an address would find that same address
  *  inside itself, one level deeper, forever. */
-val EXTRACTED_KINDS: Set<ObjectKind> =
-    setOf(KIND_IDENTIFIER, KIND_ADDRESS, KIND_DATE, KIND_PHONE, KIND_EMAIL, KIND_URL)
+val EXTRACTED_KINDS: Set<ObjectKind> = setOf(
+    KIND_IDENTIFIER, KIND_ADDRESS, KIND_DATE, KIND_PHONE, KIND_EMAIL, KIND_URL, KIND_ORGANIZATION,
+)

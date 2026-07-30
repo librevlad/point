@@ -5,6 +5,7 @@ import com.point.core.flow.KIND_ADDRESS
 import com.point.core.flow.KIND_DATE
 import com.point.core.flow.KIND_EMAIL
 import com.point.core.flow.KIND_IDENTIFIER
+import com.point.core.flow.KIND_ORGANIZATION
 import com.point.core.flow.KIND_PHONE
 import com.point.core.flow.KIND_URL
 import androidx.compose.material.icons.filled.Apps
@@ -12,6 +13,7 @@ import androidx.compose.material.icons.filled.Article
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.AutoFixHigh
 import androidx.compose.material.icons.filled.BlurOn
+import androidx.compose.material.icons.filled.Business
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Cloud
@@ -151,6 +153,7 @@ fun kindIcon(kind: ObjectKind): ImageVector = when (kind) {
     KIND_PHONE -> Icons.Filled.Call
     KIND_EMAIL -> Icons.Filled.Email
     KIND_URL -> Icons.Filled.Link
+    KIND_ORGANIZATION -> Icons.Filled.Business
     // Kinds are open — an extraction kind with no icon of its own falls back here.
     else -> Icons.Filled.HelpOutline
 }
@@ -171,5 +174,6 @@ fun kindLabel(kind: ObjectKind): String = when (kind) {
     KIND_PHONE -> "Телефон"
     KIND_EMAIL -> "Почта"
     KIND_URL -> "Ссылка"
+    KIND_ORGANIZATION -> "Организация"
     else -> "Объект"
 }

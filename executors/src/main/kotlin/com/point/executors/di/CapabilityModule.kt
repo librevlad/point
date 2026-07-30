@@ -24,9 +24,11 @@ import com.point.executors.WordPlusRealizer
 import com.point.executors.RemotePcRealizer
 import com.point.executors.BasketRealizer
 import com.point.executors.DeepUnderstandCapability
+import com.point.executors.ClassifyCapability
 import com.point.executors.JobReplyCapability
 import com.point.executors.JobReplyRealizer
 import com.point.executors.DeepUnderstandRealizer
+import com.point.executors.ClassifyRealizer
 import com.point.executors.ShoppingListCapability
 import com.point.executors.ShoppingListRealizer
 import com.point.executors.AiChatResponderImpl
@@ -171,6 +173,8 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun aiCap(c: AiCapability): Capability
     @Binds @IntoSet abstract fun shoppingListCap(c: ShoppingListCapability): Capability
     @Binds @IntoSet abstract fun deepUnderstandCap(c: DeepUnderstandCapability): Capability
+    /** #222, шаг 6: модель как классификатор над раскладкой — «кто есть кто». */
+    @Binds @IntoSet abstract fun classifyCap(c: ClassifyCapability): Capability
     @Binds @IntoSet abstract fun basketCap(c: BasketCapability): Capability
     @Binds @IntoSet abstract fun wordPlusCap(c: WordPlusCapability): Capability
     @Binds @IntoSet abstract fun collectPlusCap(c: CollectPlusCapability): Capability
@@ -217,6 +221,7 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun aiR(r: AiRealizer): Realizer
     @Binds @IntoSet abstract fun shoppingListR(r: ShoppingListRealizer): Realizer
     @Binds @IntoSet abstract fun deepUnderstandR(r: DeepUnderstandRealizer): Realizer
+    @Binds @IntoSet abstract fun classifyR(r: ClassifyRealizer): Realizer
     @Binds @IntoSet abstract fun basketR(r: BasketRealizer): Realizer
     @Binds @IntoSet abstract fun wordPlusR(r: WordPlusRealizer): Realizer
     @Binds @IntoSet abstract fun collectPlusR(r: CollectPlusRealizer): Realizer

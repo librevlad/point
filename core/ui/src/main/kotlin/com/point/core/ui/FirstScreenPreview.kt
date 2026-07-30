@@ -5,6 +5,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import com.point.core.flow.KIND_ADDRESS
 import com.point.core.flow.KIND_DATE
 import com.point.core.flow.KIND_IDENTIFIER
+import com.point.core.flow.KIND_ORGANIZATION
 import com.point.core.model.Bubble
 import com.point.core.model.BubbleTier
 import com.point.core.model.CapabilityId
@@ -146,6 +147,13 @@ private fun PreviewFoundObjects() = PointTheme {
             foundObject("o:id", KIND_IDENTIFIER, "20 4514 9154 9395", confidence = 0.8f),
             foundObject("o:address", KIND_ADDRESS, "Відділення №9, вул. Хрещатик, 1"),
             foundObject("o:date", KIND_DATE, "29.07 до 18:00"),
+            // #222, шаг 6: прочтение классификатора — роль видна, уверенность честно ниже.
+            foundObject("o:org", KIND_ORGANIZATION, "Нова Пошта", confidence = 0.7f),
+        ),
+        relations = listOf(
+            com.point.core.model.Relation(
+                "o:org", com.point.core.model.RelationType.CARRIER, "preview",
+            ),
         ),
     )
 }

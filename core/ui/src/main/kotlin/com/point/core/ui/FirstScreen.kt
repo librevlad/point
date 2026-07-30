@@ -61,6 +61,8 @@ import com.point.core.model.Intent
 import com.point.core.model.LatentBubble
 import com.point.core.model.FavoriteChain
 import com.point.core.model.PointObject
+import com.point.core.model.RelationType
+import com.point.core.model.Relation
 
 /**
  * The first (and every) screen: a preview of the current object and the bubbles
@@ -91,6 +93,7 @@ fun FirstScreen(
     items: List<PointObject> = emptyList(),
     onItem: (PointObject) -> Unit = {},
     found: List<PointObject> = emptyList(),
+    relations: List<Relation> = emptyList(),
     onFound: (PointObject) -> Unit = {},
     textPreview: String? = null,
     latent: List<LatentBubble> = emptyList(),
@@ -132,7 +135,7 @@ fun FirstScreen(
         // What Point found INSIDE the object (#222) — things, not lines: the waybill number,
         // the branch, the deadline. Each opens as an object of its own.
         if (found.isNotEmpty() && inputPrompt == null) {
-            FoundObjects(found = found, onFound = onFound)
+            FoundObjects(found = found, relations = relations, onFound = onFound)
         }
 
         Spacer(Modifier.height(28.dp))
@@ -298,7 +301,11 @@ private fun MessageBanner(message: String?) {
  * must not present a structural guess as a fact.
  */
 @Composable
-private fun FoundObjects(found: List<PointObject>, onFound: (PointObject) -> Unit) {
+private fun FoundObjects(
+    found: List<PointObject>,
+    relations: List<Relation>,
+    onFound: (PointObject) -> Unit,
+) {
     Spacer(Modifier.height(16.dp))
     Column(
         modifier = Modifier.widthIn(max = 340.dp).fillMaxWidth(),
@@ -339,9 +346,12 @@ private fun FoundObjects(found: List<PointObject>, onFound: (PointObject) -> Uni
                                 overflow = TextOverflow.Ellipsis,
                             )
                             Text(
-                                text = kindLabel(obj.state.kind) +
-                                    // Honest about a reading the extractor is not sure of.
-                                    if (obj.confidence < 1f) " · возможно" else "",
+                                text = listOfNotNull(
+                                    kindLabel(obj.state.kind),
+                                    roleOf(obj, relations),
+                                    // Honest about a reading nobody checked against the world.
+                                    "возможно".takeIf { obj.confidence < 1f },
+                                ).joinToString(" · "),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -351,6 +361,23 @@ private fun FoundObjects(found: List<PointObject>, onFound: (PointObject) -> Uni
             }
         }
     }
+}
+
+/**
+ * The role a found object plays in the document (#222, шаг 6) — the answer the classifier was
+ * actually asked for. Provenance («found_in») is not a role: it says where the thing was read,
+ * which the screen already makes obvious by showing it under this object.
+ */
+private fun roleOf(obj: PointObject, relations: List<Relation>): String? =
+    relations.asSequence().filter { it.fromId == obj.id }.mapNotNull { relationLabel(it.type) }.firstOrNull()
+
+internal fun relationLabel(type: RelationType): String? = when (type) {
+    RelationType.SENDER -> "отправитель"
+    RelationType.RECEIVER -> "получатель"
+    RelationType.CARRIER -> "перевозчик"
+    RelationType.ISSUED_BY -> "выдал документ"
+    RelationType.SIGNED_BY -> "подписал"
+    else -> null
 }
 
 /** Which «Point понял» line a found object replaces — null when nothing was showing it. */

@@ -221,6 +221,7 @@ fun PointHost(
                     items = current.items,
                     onItem = onItem,
                     found = current.found,
+                    relations = current.relations,
                     onFound = onFound,
                     textPreview = current.textPreview,
                     latent = current.latent,
