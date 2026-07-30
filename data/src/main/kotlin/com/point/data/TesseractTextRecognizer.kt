@@ -8,6 +8,7 @@ import android.media.ExifInterface
 import android.util.Log
 import com.googlecode.tesseract.android.TessBaseAPI
 import com.point.core.flow.Atom
+import com.point.core.flow.AtomCodec
 import com.point.core.flow.AtomLayer
 import com.point.core.flow.AtomRecognizer
 import com.point.core.flow.Box
@@ -58,9 +59,11 @@ class TesseractTextRecognizer @Inject constructor(
             // Сперва текст движка, потом итератор: распознавание запускается первым обращением,
             // и порядок гарантирует, что итератор работает по уже готовому результату.
             val engineText = tess.getUTF8Text()?.trim().orEmpty()
-            val atoms = words(tess, toRawFrame)
+            val atoms = words(tess, toRawFrame, runCatching { tess.version ?: "" }.getOrDefault(""))
             Log.i(TAG, "OCR done: ${atoms.size} words, ${engineText.length} chars")
-            AtomLayer(atoms, readerText = engineText.ifEmpty { null })
+            val layer = AtomLayer(atoms, readerText = engineText.ifEmpty { null }, transform = toRawFrame)
+            dumpForAcceptance(layer)
+            layer
         } catch (e: Throwable) {
             Log.w(TAG, "OCR error", e)
             EMPTY
@@ -82,7 +85,7 @@ class TesseractTextRecognizer @Inject constructor(
      * копии, а перечитывать сомнительное значение мы пойдём в исходный файл (ADR-0001, два
      * адресных пространства).
      */
-    private fun words(tess: TessBaseAPI, toRawFrame: FrameTransform): List<Atom> {
+    private fun words(tess: TessBaseAPI, toRawFrame: FrameTransform, version: String): List<Atom> {
         val iterator = tess.resultIterator ?: return emptyList()
         val level = TessBaseAPI.PageIteratorLevel.RIL_WORD
         val atoms = mutableListOf<Atom>()
@@ -103,6 +106,9 @@ class TesseractTextRecognizer @Inject constructor(
                     box = toRawFrame.toRaw(upright),
                     // Движок отдаёт 0..100; ноль до единицы — чтобы шкала не зависела от ридера.
                     confidence = (iterator.confidence(level) / 100f).coerceIn(0f, 1f),
+                    reader = READER,
+                    readerVersion = version,
+                    page = 0,
                 )
             }
         } while (iterator.next(level))
@@ -167,6 +173,23 @@ class TesseractTextRecognizer @Inject constructor(
         return rotated
     }
 
+    /**
+     * Канал приёмки #257: слой целиком — в файл, который забирается без рута:
+     * `adb pull /sdcard/Android/data/com.point/files/atoms-last.tsv`.
+     *
+     * Только debug: приёмка issue требует «дословный вывод устройства, а не сочинённый текст», а
+     * дословные `слово+bbox+conf` до этого файла жили лишь в памяти процесса — фикстуру с
+     * геометрией снять было нечем. Перезаписывается каждым чтением: «last» и есть контракт.
+     */
+    private fun dumpForAcceptance(layer: AtomLayer) {
+        if (!BuildConfig.DEBUG || layer.atoms.isEmpty()) return
+        runCatching {
+            val dir = context.getExternalFilesDir(null) ?: return
+            File(dir, "atoms-last.tsv").writeText(AtomCodec.encode(layer))
+            Log.i(TAG, "atoms dumped: ${layer.atoms.size} -> $dir/atoms-last.tsv")
+        }.onFailure { Log.w(TAG, "atoms dump failed", it) }
+    }
+
     /** @return the dir that CONTAINS `tessdata/` (what TessBaseAPI.init expects). */
     private fun ensureTessData(): File {
         val base = File(context.filesDir, "tesseract")
@@ -188,5 +211,8 @@ class TesseractTextRecognizer @Inject constructor(
         const val OCR_MAX_PX = 2048 // enough for legible text; bounds memory on huge photos (#18)
         val MODELS = listOf("rus.traineddata", "eng.traineddata")
         val EMPTY = AtomLayer(emptyList())
+
+        /** Происхождение атома (#257): имя — константа контракта, версия — у живого движка. */
+        const val READER = "tesseract"
     }
 }
