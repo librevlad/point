@@ -23,7 +23,40 @@ interface EntityExtractor {
  * kinds pass through untouched. Applied at the extractor choke point so both the feature
  * flags and the realizers (which re-extract) see only plausible hits.
  */
-fun plausibleEntities(entities: List<Entity>): List<Entity> = entities.filter { it.isPlausible() }
+fun plausibleEntities(entities: List<Entity>, sourceText: String = ""): List<Entity> {
+    val numbers = numberRuns(sourceText)
+    return entities.filter { it.isPlausible() && !it.isFragmentOf(numbers) }
+}
+
+/**
+ * Числовые последовательности страницы: цифры одного числа, слитно, без пробелов и дефисов.
+ *
+ * Нужны, чтобы отличить телефон от **обрезка** более длинного числа. По форме их не различить:
+ * первые двенадцать цифр банковской карты — законная длина телефона, а первые десять цифр
+ * накладной тем более. Отличает только страница, на которой те же цифры продолжаются дальше.
+ */
+private fun numberRuns(text: String): List<String> =
+    NUMBER_TOKEN.findAll(text).map { it.value.filter(Char::isDigit) }.toList()
+
+/** Число как оно написано человеком: цифры, между ними могут стоять пробелы и дефисы. */
+private val NUMBER_TOKEN = Regex("""\d[\d \-]*\d|\d""")
+
+/**
+ * Телефон ли это, или кусок чего-то большего, что просто совпало по длине.
+ *
+ * Живой случай (#240): на скриншоте переписки первые двенадцать цифр номера карты уехали в
+ * «Телефон» с иконкой звонка — рядом с той же картой, правильно замаскированной до «•• 2632».
+ * Маскировка работала; номер утёк мимо неё обрезком.
+ *
+ * Проверка строгая: последовательность должна быть **длиннее**, иначе число всегда содержало бы
+ * само себя. Смотрим только телефоны — почта и ссылка обрезками не бывают.
+ */
+private fun Entity.isFragmentOf(numbers: List<String>): Boolean {
+    if (type != EntityType.PHONE) return false
+    val digits = value.filter(Char::isDigit)
+    if (digits.isEmpty()) return false
+    return numbers.any { it.length > digits.length && it.contains(digits) }
+}
 
 fun Entity.isPlausible(): Boolean = when (type) {
     // A real phone is 10–13 significant digits — shorter is a fragment, 14+ is a
