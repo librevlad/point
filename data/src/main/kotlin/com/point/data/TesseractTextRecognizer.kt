@@ -94,7 +94,13 @@ class TesseractTextRecognizer @Inject constructor(
                     rect.right.toFloat(),
                     rect.bottom.toFloat(),
                 )
-                atoms += Atom(id = "w${atoms.size}", text = text, box = toRawFrame.toRaw(upright))
+                atoms += Atom(
+                    id = "w${atoms.size}",
+                    text = text,
+                    box = toRawFrame.toRaw(upright),
+                    // Движок отдаёт 0..100; ноль до единицы — чтобы шкала не зависела от ридера.
+                    confidence = (iterator.confidence(level) / 100f).coerceIn(0f, 1f),
+                )
             }
         } while (iterator.next(level))
         return atoms

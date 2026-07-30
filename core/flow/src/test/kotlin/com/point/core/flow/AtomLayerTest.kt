@@ -12,8 +12,15 @@ import org.junit.Test
  */
 class AtomLayerTest {
 
-    private fun atom(id: String, text: String, left: Float, top: Float, right: Float, bottom: Float) =
-        Atom(id = id, text = text, box = Box(left, top, right, bottom))
+    private fun atom(
+        id: String,
+        text: String,
+        left: Float,
+        top: Float,
+        right: Float,
+        bottom: Float,
+        confidence: Float = 0.9f,
+    ) = Atom(id = id, text = text, box = Box(left, top, right, bottom), confidence = confidence)
 
     @Test
     fun `область возвращает атомы, чьи центроиды внутри неё`() {
@@ -83,5 +90,25 @@ class AtomLayerTest {
         )
 
         assertEquals("Одержувач Нор І.А\nВідправник", layer.text)
+    }
+
+    /**
+     * Сомнительное слово нельзя ни выбросить, ни выдать за прочитанное.
+     *
+     * Выбрасывание — то, из-за чего 14-значный трек умер в фильтре правдоподобия: улику удалили,
+     * чтобы «не мусорить в UI». Выдача за прочитанное — тихая ложь. Остаётся третье: слой обязан
+     * уметь показать, куда идти перечитывать — кропом, в увеличении, другим ридером.
+     */
+    @Test
+    fun `слой показывает, что стоит перечитать, а не выбрасывает это`() {
+        val layer = AtomLayer(
+            listOf(
+                atom("a1", "Одержувач", 10f, 100f, 120f, 120f, confidence = 0.94f),
+                atom("a2", "Нор", 125f, 100f, 160f, 120f, confidence = 0.41f),
+            )
+        )
+
+        assertEquals(listOf("a2"), layer.doubtful(below = 0.6f).map { it.id })
+        assertEquals(2, layer.atoms.size)
     }
 }
