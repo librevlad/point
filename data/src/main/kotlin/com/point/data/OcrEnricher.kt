@@ -66,7 +66,7 @@ class OcrEnricher @Inject constructor(
         // «дата 15:12». Dropped once, here, so no later reader can mistake furniture for content.
         val text = stripStatusBar(raw)
 
-        val entities = entityDelta(obj, extractor.extract(text.take(MAX_CHARS)))
+        val entities = entityDelta(obj, extractor.extract(text.take(MAX_CHARS)), text.take(MAX_CHARS))
         // The waybill number is the whole reason the user shared the screenshot. It reaches the
         // graph on this path — the TEXT-only enricher never runs on what was actually shared.
         val (identifiers, idRelations) = identifierObjects(obj, text.take(MAX_CHARS))

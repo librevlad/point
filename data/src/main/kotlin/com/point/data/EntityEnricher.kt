@@ -4,6 +4,7 @@ import com.point.core.flow.EnrichCost
 import com.point.core.flow.Enricher
 import com.point.core.flow.EnricherMeta
 import com.point.core.flow.EnrichmentDelta
+import com.point.core.flow.expandAddressToLine
 import com.point.core.flow.alternativesOf
 import com.point.core.flow.altValue
 import com.point.core.flow.META_ALT_SUFFIX
@@ -54,7 +55,7 @@ class EntityEnricher @Inject constructor(
             .getOrDefault("")
             .take(MAX_CHARS)
         if (text.isBlank()) return@withContext EnrichmentDelta()
-        entityDelta(obj, extractor.extract(text))
+        entityDelta(obj, extractor.extract(text), text)
     }
 
     private companion object {
@@ -65,10 +66,26 @@ class EntityEnricher @Inject constructor(
 /** Entities → one delta: features to flag, understood facts (the first value per kind,
  *  `entity.*`) for the «Point понял» checklist, and the same facts as graph objects (#222).
  *  Shared by the text and OCR enrichers. */
-internal fun entityDelta(source: PointObject, entities: List<com.point.core.flow.Entity>): EnrichmentDelta {
+internal fun entityDelta(
+    source: PointObject,
+    entities: List<com.point.core.flow.Entity>,
+    text: String = "",
+): EnrichmentDelta {
     val features = entities.mapNotNullTo(mutableSetOf()) { it.type.asFeature() }
     val facts = buildMap {
-        entities.forEach { e -> e.type.asMetaKey()?.let { key -> putIfAbsent(key, e.value) } }
+        entities.forEach { e ->
+            e.type.asMetaKey()?.let { key ->
+                // #236: an address loses its settlement in extraction («Олексйвка, вул. Сонячна, 15»
+                // comes back as «вул. Сонячна, 15») and the map then offers four towns. What was
+                // lost is on the same line — give it back here, on device, for nothing.
+                val value = if (e.type == com.point.core.flow.EntityType.ADDRESS && text.isNotEmpty()) {
+                    expandAddressToLine(e.value, text)
+                } else {
+                    e.value
+                }
+                putIfAbsent(key, value)
+            }
+        }
     }
     val (objects, relations) = entityObjects(source, facts, creator = ENTITY_CREATOR)
     return EnrichmentDelta(features, facts, objects, relations)
