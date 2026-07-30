@@ -150,4 +150,91 @@ class AgreementTest {
 
         assertEquals(listOf("A", "B", "C"), alternativesOf(stored, "k"))
     }
+
+    // --- Починка искажений распознавания (#236) ---
+
+    @Test
+    fun `restoring the letter OCR ate is a repair, not a disagreement`() {
+        // Ровно случай владельца: «Олексіївка» распозналась как «Олексйвка».
+        assertTrue(isRepairOf("Олексйвка, вул. Сонячна, 15", "Олексіївка, вул. Сонячна, 15"))
+    }
+
+    @Test
+    fun `a different street is not a repair`() {
+        assertFalse(isRepairOf("Олексйвка, вул. Сонячна, 15", "Київ, вул. Хрещатик, 1"))
+    }
+
+    @Test
+    fun `a changed digit is never a repair`() {
+        // Телефон, ошибшийся на цифру, — другой человек; накладная — другая посылка;
+        // «Хрещатик, 1» против «Хрещатик, 7» — другое здание в получасе езды.
+        assertFalse(isRepairOf("+380671234567", "+380671234568"))
+        assertFalse(isRepairOf("20451491549395", "20451491549396"))
+        assertFalse(isRepairOf("вул. Хрещатик, 1", "вул. Хрещатик, 7"))
+        assertFalse(isRepairOf("вул. Хрещатик, 15", "вул. Хрещатик, 155"))
+    }
+
+    @Test
+    fun `letters may be repaired while the digits stay exactly as they were`() {
+        assertTrue(isRepairOf("Олексйвка, вул. Сонячна, 15", "Олексіївка, вул. Сонячна, 15"))
+        assertTrue(isRepairOf("вул. Хрещатк, 15", "вул. Хрещатик, 15"))
+    }
+
+    @Test
+    fun `a short value is not repairable — the bound would mean nothing`() {
+        assertFalse(isRepairOf("Київ", "Кіїв"))
+    }
+
+    @Test
+    fun `the same value is not a repair of itself`() {
+        assertFalse(isRepairOf("вул. Сонячна, 15", "вул. Сонячна, 15"))
+        assertFalse(isRepairOf("вул. Сонячна, 15", "ВУЛ. СОНЯЧНА, 15"))
+    }
+
+    @Test
+    fun `a repair wins the value and leaves no dispute behind`() {
+        val merged = mergeFacts(
+            mapOf("entity.address" to "Олексйвка, вул. Сонячна, 15"),
+            mapOf("entity.address" to "Олексіївка, вул. Сонячна, 15"),
+        )
+
+        assertEquals("Олексіївка, вул. Сонячна, 15", merged["entity.address"])
+        assertTrue(alternativesOf(merged, "entity.address").isEmpty())
+    }
+
+    @Test
+    fun `a repair clears a dispute recorded earlier`() {
+        val disputed = mergeFacts(
+            mapOf("entity.address" to "Олексйвка, вул. Сонячна, 15"),
+            mapOf("entity.address" to "совсем другое место"),
+        )
+        assertTrue(alternativesOf(disputed, "entity.address").isNotEmpty())
+
+        val repaired = mergeFacts(disputed, mapOf("entity.address" to "Олексіївка, вул. Сонячна, 15"))
+
+        assertEquals("Олексіївка, вул. Сонячна, 15", repaired["entity.address"])
+        assertTrue(alternativesOf(repaired, "entity.address").isEmpty())
+    }
+
+    @Test
+    fun `something far away is still a disagreement, not a repair`() {
+        val merged = mergeFacts(
+            mapOf("entity.address" to "Олексйвка, вул. Сонячна, 15"),
+            mapOf("entity.address" to "Київ, проспект Перемоги, 100"),
+        )
+
+        assertEquals("Олексйвка, вул. Сонячна, 15", merged["entity.address"])
+        assertEquals(2, alternativesOf(merged, "entity.address").size)
+    }
+
+    @Test
+    fun `a phone the model rewrote is a disagreement the user gets to see`() {
+        val merged = mergeFacts(
+            mapOf("entity.phone" to "+380671234567"),
+            mapOf("entity.phone" to "+380671234568"),
+        )
+
+        assertEquals("+380671234567", merged["entity.phone"])
+        assertEquals(2, alternativesOf(merged, "entity.phone").size)
+    }
 }

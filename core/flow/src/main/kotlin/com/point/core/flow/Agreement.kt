@@ -63,6 +63,58 @@ fun alternativesOf(metadata: Map<String, String>, key: String): List<String> =
     metadata[key + META_ALT_SUFFIX]?.split(ALT_SEPARATOR)?.filter { it.isNotBlank() }.orEmpty()
 
 /**
+ * How far a repair may move a value: a fifth of it. Restoring the `і` OCR ate moves a couple of
+ * characters; swapping in a different street moves most of them.
+ */
+const val MAX_REPAIR_RATIO = 0.2
+
+/** Below this a value is too short for the distance bound to mean anything. */
+private const val MIN_REPAIRABLE = 8
+
+/**
+ * Is [fresh] the same value as [known], only cleaner (#236)?
+ *
+ * OCR damages letters — `Олексіївка` comes back as `Олексйвка` — and a model reading the same
+ * line can put them back. That is a **repair**, not a contradiction, and treating it as one would
+ * either hide the better reading or nag about a difference nobody needs to arbitrate.
+ *
+ * **Every digit must survive untouched.** OCR damages letters; digits carry identity. A phone one
+ * digit off is a different person, a waybill one digit off a different parcel, and `Хрещатик, 1`
+ * against `Хрещатик, 7` is a different building — one character apart and half a city away. There
+ * is no way to tell a fixed digit from a hallucinated one, so a changed digit is a disagreement
+ * and goes to the vote, where the user gets to see both readings.
+ */
+fun isRepairOf(known: String, fresh: String): Boolean {
+    val a = known.trim()
+    val b = fresh.trim()
+    if (a.length < MIN_REPAIRABLE || b.isEmpty() || a.equals(b, ignoreCase = true)) return false
+    if (a.filter(Char::isDigit) != b.filter(Char::isDigit)) return false
+    val budget = (maxOf(a.length, b.length) * MAX_REPAIR_RATIO).toInt()
+    if (budget < 1) return false
+    return editDistance(a.lowercase(), b.lowercase(), budget) <= budget
+}
+
+/** Levenshtein, abandoned as soon as it exceeds [budget] — the answer above the bound is
+ *  «too far», and computing how much too far would be wasted work. */
+private fun editDistance(a: String, b: String, budget: Int): Int {
+    if (kotlin.math.abs(a.length - b.length) > budget) return budget + 1
+    var prev = IntArray(b.length + 1) { it }
+    var cur = IntArray(b.length + 1)
+    for (i in 1..a.length) {
+        cur[0] = i
+        var best = cur[0]
+        for (j in 1..b.length) {
+            val cost = if (a[i - 1] == b[j - 1]) 0 else 1
+            cur[j] = minOf(cur[j - 1] + 1, prev[j] + 1, prev[j - 1] + cost)
+            best = minOf(best, cur[j])
+        }
+        if (best > budget) return budget + 1
+        val swap = prev; prev = cur; cur = swap
+    }
+    return prev[b.length]
+}
+
+/**
  * Merges freshly read facts into what the object already knew — **by vote, not by overwrite**.
  *
  * Before this, a later source simply won: the deep-understand model's address replaced the
@@ -77,6 +129,14 @@ fun mergeFacts(known: Map<String, String>, fresh: Map<String, String>): Map<Stri
         val was = known[key]
         if (was.isNullOrBlank()) {
             merged[key] = value
+            return@forEach
+        }
+        // A cleaner reading of the same thing is not a disagreement (#236). Recording it as one
+        // would either hide the better value or ask the user to arbitrate a difference that is
+        // simply OCR damage being undone.
+        if (isRepairOf(was, value)) {
+            merged[key] = value
+            merged.remove(key + META_ALT_SUFFIX)
             return@forEach
         }
         val verdict = agree(listOf(was, value)) ?: return@forEach
