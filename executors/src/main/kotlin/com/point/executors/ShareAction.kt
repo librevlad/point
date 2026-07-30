@@ -8,6 +8,7 @@ import com.point.core.model.ActionResult
 import com.point.core.model.CapabilityId
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
+import com.point.core.model.isFileBacked
 import com.point.core.model.PointObject
 import javax.inject.Inject
 
@@ -17,7 +18,7 @@ class ShareCapability @Inject constructor() : Capability {
     override val icon = "share"
     override val meta = CapabilityMeta(priority = 80)
     override fun label(state: ObjectState) = "Поделиться"
-    override fun accepts(state: ObjectState) = state.kind != ObjectKind.COLLECTION
+    override fun accepts(state: ObjectState) = state.kind.isFileBacked
     override fun produces(state: ObjectState) = state
 
     companion object { val ID = CapabilityId("share") }

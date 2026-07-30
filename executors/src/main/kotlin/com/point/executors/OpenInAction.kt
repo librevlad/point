@@ -9,6 +9,7 @@ import com.point.core.model.CapabilityId
 import com.point.core.model.Intent
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
+import com.point.core.model.isFileBacked
 import com.point.core.model.PointObject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -26,7 +27,7 @@ class OpenInCapability @Inject constructor() : Capability {
     override val meta = CapabilityMeta(priority = 60)
     override fun label(state: ObjectState) = "Открыть в…"
     override fun accepts(state: ObjectState) =
-        state.kind != ObjectKind.URL && state.kind != ObjectKind.COLLECTION
+        state.kind.isFileBacked && state.kind != ObjectKind.URL
     override fun produces(state: ObjectState) = state // terminal
     override fun intents(state: ObjectState) = setOf(Intent.OPEN)
 

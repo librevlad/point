@@ -11,6 +11,7 @@ import com.point.core.model.ActionResult
 import com.point.core.model.CapabilityId
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
+import com.point.core.model.isFileBacked
 import com.point.core.model.PointObject
 import javax.inject.Inject
 
@@ -28,7 +29,7 @@ class PcCapability @Inject constructor(
     override val meta = CapabilityMeta(priority = 75, latency = Latency.FAST)
     override fun label(state: ObjectState) = "На компьютер"
     override fun accepts(state: ObjectState) =
-        state.kind != ObjectKind.COLLECTION && pairings.current() != null
+        state.kind.isFileBacked && pairings.current() != null
 
     override fun produces(state: ObjectState) = state // terminal — the object leaves for the PC
     override fun missing(state: ObjectState) =

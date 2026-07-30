@@ -1,6 +1,12 @@
 package com.point.core.ui
 
 import androidx.compose.material.icons.Icons
+import com.point.core.flow.KIND_ADDRESS
+import com.point.core.flow.KIND_DATE
+import com.point.core.flow.KIND_EMAIL
+import com.point.core.flow.KIND_IDENTIFIER
+import com.point.core.flow.KIND_PHONE
+import com.point.core.flow.KIND_URL
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Article
 import androidx.compose.material.icons.filled.AutoAwesome
@@ -39,6 +45,7 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.Sms
 import androidx.compose.material.icons.filled.TableChart
+import androidx.compose.material.icons.filled.Tag
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.filled.Wallpaper
@@ -137,7 +144,14 @@ fun kindIcon(kind: ObjectKind): ImageVector = when (kind) {
     ObjectKind.OFFICE -> Icons.Filled.Article
     ObjectKind.URL -> Icons.Filled.Link
     ObjectKind.COLLECTION -> Icons.Filled.FolderOpen
-    // Kinds are open (#222) — an extraction kind with no icon of its own falls back here.
+    // Things extraction finds in the world (#222) — each looks like what it is.
+    KIND_IDENTIFIER -> Icons.Filled.Tag
+    KIND_ADDRESS -> Icons.Filled.Place
+    KIND_DATE -> Icons.Filled.Event
+    KIND_PHONE -> Icons.Filled.Call
+    KIND_EMAIL -> Icons.Filled.Email
+    KIND_URL -> Icons.Filled.Link
+    // Kinds are open — an extraction kind with no icon of its own falls back here.
     else -> Icons.Filled.HelpOutline
 }
 
@@ -151,5 +165,11 @@ fun kindLabel(kind: ObjectKind): String = when (kind) {
     ObjectKind.OFFICE -> "Документ"
     ObjectKind.URL -> "Ссылка"
     ObjectKind.COLLECTION -> "Коллекция"
+    KIND_IDENTIFIER -> "Номер"
+    KIND_ADDRESS -> "Адрес"
+    KIND_DATE -> "Дата"
+    KIND_PHONE -> "Телефон"
+    KIND_EMAIL -> "Почта"
+    KIND_URL -> "Ссылка"
     else -> "Объект"
 }

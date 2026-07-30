@@ -12,6 +12,7 @@ import dagger.Lazy
 import com.point.core.model.CapabilityId
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
+import com.point.core.model.isFileBacked
 import com.point.core.model.PointObject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -67,7 +68,7 @@ class AiCapability @Inject constructor() : Capability {
     override val icon = "ai"
     override val meta = CapabilityMeta(priority = 100, cost = Cost.PAID, latency = Latency.SLOW, network = true, auth = true)
     override fun label(state: ObjectState) = "AI"
-    override fun accepts(state: ObjectState) = state.kind != ObjectKind.COLLECTION
+    override fun accepts(state: ObjectState) = state.kind.isFileBacked
     override fun produces(state: ObjectState): ObjectState? = null // unknown until classified
 
     companion object { val ID = CapabilityId("ai") }

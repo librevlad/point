@@ -25,3 +25,24 @@ import com.point.core.model.ObjectKind
 
 /** Any number that identifies something: a waybill, an invoice number, a VIN, an article code. */
 val KIND_IDENTIFIER: ObjectKind = ObjectKind.of("Identifier")
+
+/** A place you can go to — a postal branch, a delivery address, a meeting point. */
+val KIND_ADDRESS: ObjectKind = ObjectKind.of("Address")
+
+/** A point in time: a deadline, an appointment, a storage-until date. */
+val KIND_DATE: ObjectKind = ObjectKind.of("Date")
+
+/** A number you can dial. */
+val KIND_PHONE: ObjectKind = ObjectKind.of("Phone")
+
+/** An address you can write to. */
+val KIND_EMAIL: ObjectKind = ObjectKind.of("Email")
+
+/** A link you can follow. */
+val KIND_URL: ObjectKind = ObjectKind.of("Url")
+
+/** Everything extraction produces so far. A frame that already IS one of these does not get
+ *  extracted from again — otherwise every tap into an address would find that same address
+ *  inside itself, one level deeper, forever. */
+val EXTRACTED_KINDS: Set<ObjectKind> =
+    setOf(KIND_IDENTIFIER, KIND_ADDRESS, KIND_DATE, KIND_PHONE, KIND_EMAIL, KIND_URL)

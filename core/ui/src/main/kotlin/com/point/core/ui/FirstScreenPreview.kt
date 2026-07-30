@@ -2,6 +2,9 @@ package com.point.core.ui
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.tooling.preview.Preview
+import com.point.core.flow.KIND_ADDRESS
+import com.point.core.flow.KIND_DATE
+import com.point.core.flow.KIND_IDENTIFIER
 import com.point.core.model.Bubble
 import com.point.core.model.BubbleTier
 import com.point.core.model.CapabilityId
@@ -114,6 +117,45 @@ private fun PreviewUnderstoodScreenshot() = PointTheme {
     )
     FirstScreen(obj = obj, bubbles = sampleBubbles(ObjectKind.IMAGE), onBubble = {})
 }
+
+@Preview(name = "Посылка · Point нашёл вещи (#222)", showBackground = true)
+@Composable
+private fun PreviewFoundObjects() = PointTheme {
+    // The owner's real case: a Nova Poshta parcel screenshot. What used to be «Изображение» +
+    // «✓ Нашёл дату 15:12» is now the three things that were actually on it. The address and
+    // the deadline moved OUT of the checklist and became objects — tapping either opens a
+    // screen whose «Маршрут» / «Создать событие» come from capabilities written long ago.
+    val obj = sampleObject(
+        ObjectKind.IMAGE, "image/png", "Screenshot_Nova Post.jpg",
+        features = setOf(
+            com.point.core.model.Feature.HAS_ADDRESS,
+            com.point.core.model.Feature.HAS_DATE,
+        ),
+        metadata = mapOf(
+            "entity.address" to "Відділення №9, вул. Хрещатик, 1",
+            "entity.date" to "29.07 до 18:00",
+        ),
+    )
+    FirstScreen(
+        obj = obj,
+        bubbles = sampleBubbles(ObjectKind.IMAGE),
+        onBubble = {},
+        found = listOf(
+            foundObject("o:id", KIND_IDENTIFIER, "20 4514 9154 9395", confidence = 0.8f),
+            foundObject("o:address", KIND_ADDRESS, "Відділення №9, вул. Хрещатик, 1"),
+            foundObject("o:date", KIND_DATE, "29.07 до 18:00"),
+        ),
+    )
+}
+
+private fun foundObject(id: String, kind: ObjectKind, value: String, confidence: Float = 1f) =
+    PointObject(
+        id = id,
+        mime = "text/plain",
+        uri = com.point.core.model.ValueRef(value),
+        state = ObjectState(kind),
+        confidence = confidence,
+    )
 
 @Preview(name = "Скриншот · Point думает", showBackground = true)
 @Composable

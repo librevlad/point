@@ -12,6 +12,7 @@ import com.point.core.model.ActionResult
 import com.point.core.model.CapabilityId
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
+import com.point.core.model.isFileBacked
 import com.point.core.model.PointObject
 
 /**
@@ -30,7 +31,7 @@ class RemotePcCapability(
     override val meta = CapabilityMeta(priority = 76, latency = Latency.FAST)
     override fun label(state: ObjectState) = action.label
     override fun accepts(state: ObjectState) =
-        state.kind != ObjectKind.COLLECTION &&
+        state.kind.isFileBacked &&
             (action.kinds.isEmpty() || state.kind.name in action.kinds) &&
             pairings.current() != null
 

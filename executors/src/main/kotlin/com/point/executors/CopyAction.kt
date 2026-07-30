@@ -11,6 +11,7 @@ import com.point.core.model.CapabilityId
 import com.point.core.model.Feature
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
+import com.point.core.model.isFileBacked
 import com.point.core.model.PointObject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -23,7 +24,11 @@ class CopyCapability @Inject constructor() : Capability {
     override val icon = "copy"
     override val meta = CapabilityMeta(priority = 55)
     override fun label(state: ObjectState) = "Скопировать"
-    override fun accepts(state: ObjectState) = state.kind == ObjectKind.TEXT || state.kind == ObjectKind.URL
+    override fun accepts(state: ObjectState) =
+        state.kind == ObjectKind.TEXT || state.kind == ObjectKind.URL ||
+            // An extracted object (#222) IS its value — the waybill number the user came for.
+            // Копировать is the one action that always makes sense on it.
+            !state.kind.isFileBacked
     override fun produces(state: ObjectState) = state // terminal → SEND
 
     companion object { val ID = CapabilityId("copy") }
@@ -36,7 +41,11 @@ class CopyRealizer @Inject constructor(
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
             runCatching {
-                val text = File(input.uri.value).takeIf { it.isFile }?.readText()?.trim().orEmpty()
+                val text = if (input.state.kind.isFileBacked) {
+                    File(input.uri.value).takeIf { it.isFile }?.readText()?.trim().orEmpty()
+                } else {
+                    input.uri.value.trim() // no file behind it: the value is the content (#222)
+                }
                 if (text.isBlank()) {
                     ActionResult.Failure("Нечего копировать", recoverable = true)
                 } else {

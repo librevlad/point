@@ -57,6 +57,7 @@ class ProcessTextActivity : ComponentActivity() {
                         onApplyFavorite = viewModel::applyFavorite,
                         onSaveChain = viewModel::saveCurrentChain,
                         onItem = viewModel::onItem,
+                            onFound = viewModel::onFound,
                         onJumpTo = viewModel::jumpTo,
                         onSendChat = viewModel::sendChatMessage,
                         onCloseChat = viewModel::closeChat,

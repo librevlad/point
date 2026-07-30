@@ -61,5 +61,23 @@ value class ObjectKind private constructor(val name: String) {
         /** Mint a kind an extractor produces. Grep-able on purpose: every call site is a
          *  place where the «a kind is a thing» rule above must be checked by a human. */
         fun of(name: String): ObjectKind = valueOf(name)
+
+        /** The kinds that are bytes in scratch — see [isFileBacked]. */
+        val fileBacked: Set<ObjectKind> = entries.toSet() - COLLECTION
     }
 }
+
+/**
+ * True when the object is bytes in scratch, so `File(obj.uri.value)` is valid — and false
+ * when it is not (#222).
+ *
+ * Extraction puts things into the graph that never had a file: a waybill number, an address,
+ * a date. Their ref is a [ValueRef] — the value IS the content, there is nothing on disk.
+ *
+ * **Why this exists as a named predicate.** Capabilities that read, send or save bytes used to
+ * ask `kind != COLLECTION`, which meant «any file» back when the eight constants were the only
+ * kinds there were. Opening [ObjectKind] silently changed that sentence's meaning: every
+ * extracted value would pass it and then die in `File(…)`. The compiler cannot catch a `!=`
+ * the way it catches a non-exhaustive `when`, so the intent is spelled out here instead.
+ */
+val ObjectKind.isFileBacked: Boolean get() = this in ObjectKind.fileBacked

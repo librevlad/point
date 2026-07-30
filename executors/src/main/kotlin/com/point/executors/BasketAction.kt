@@ -8,6 +8,7 @@ import com.point.core.model.ActionResult
 import com.point.core.model.CapabilityId
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
+import com.point.core.model.isFileBacked
 import com.point.core.model.PointObject
 import javax.inject.Inject
 
@@ -22,7 +23,7 @@ class BasketCapability @Inject constructor() : Capability {
     override val icon = "basket"
     override val meta = CapabilityMeta(priority = 27)
     override fun label(state: ObjectState) = "В корзину"
-    override fun accepts(state: ObjectState) = state.kind != ObjectKind.COLLECTION
+    override fun accepts(state: ObjectState) = state.kind.isFileBacked
     override fun produces(state: ObjectState) = state // terminal — the pile is the outcome
 
     companion object { val ID = CapabilityId("basket") }

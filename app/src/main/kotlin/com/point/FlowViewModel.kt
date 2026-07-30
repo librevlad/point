@@ -38,6 +38,10 @@ import com.point.core.model.HistoryEntry
 import com.point.core.model.Intent
 import com.point.core.model.BubbleTier
 import com.point.core.model.ObjectKind
+import com.point.core.model.isFileBacked
+import com.point.core.model.ValueRef
+import com.point.core.model.ScratchRef
+import com.point.core.model.ObjectRef
 import com.point.core.model.PointObject
 import com.point.core.ui.likelyCount
 import com.point.executors.Bitmaps
@@ -157,14 +161,21 @@ class FlowViewModel @Inject constructor(
         viewModelScope.launch {
             val frames = runCatching { flowSnapshot.load() }.getOrDefault(emptyList())
             if (frames.isEmpty() || freshShareArrived || stack.isNotEmpty()) return@launch
-            val alive = frames.filter { runCatching { java.io.File(it.ref).isFile }.getOrDefault(false) }
+            // An extracted object (#222) has no file to check for — its ref IS its value, so it
+            // survives on its own. Only file-backed frames die with their bytes.
+            val alive = frames.filter {
+                !it.kind.isFileBacked || runCatching { java.io.File(it.ref).isFile }.getOrDefault(false)
+            }
             if (alive.isEmpty()) {
                 runCatching { flowSnapshot.clear() }
                 return@launch
             }
+            // The found objects themselves are not journaled: their facts live in the source's
+            // `entity.*` metadata, which IS journaled, and MetadataEntityEnricher rebuilds them
+            // with the same ids on the way back (#222). Facts survive, bytes need not.
             alive.forEach { f ->
                 pushFrame(
-                    PointObject(f.id, f.mime, com.point.core.model.ScratchRef(f.ref),
+                    PointObject(f.id, f.mime, refFor(f.kind, f.ref),
                         com.point.core.model.ObjectState(f.kind), f.metadata),
                     via = f.viaCapabilityId?.let { CapabilityId(it) },
                     viaTitle = f.viaTitle,
@@ -444,6 +455,17 @@ class FlowViewModel @Inject constructor(
     fun onItem(item: PointObject) {
         if (stack.lastOrNull()?.obj?.state?.kind != ObjectKind.COLLECTION) return
         pushFrame(item)
+    }
+
+    /** Tap a thing extraction found inside the object (#222) — the branch address, the waybill
+     *  number — and continue the flow on *it*. Its actions come from the same registry: an
+     *  Address carries HAS_ADDRESS, so «Маршрут» is there without a line of new action code.
+     *
+     *  Only objects the current frame actually found are accepted — the graph is what the
+     *  screen shows, not an open door into arbitrary objects. */
+    fun onFound(found: PointObject) {
+        if (stack.lastOrNull()?.found?.none { it.id == found.id } != false) return
+        pushFrame(found)
     }
 
     fun submitAmendment(text: String) {
@@ -994,6 +1016,12 @@ class FlowViewModel @Inject constructor(
         viewModelScope.launch { runCatching { flowSnapshot.save(frames) } }
     }
 
+    /** A journaled ref back into an object ref. The journal stores one string; what it means
+     *  depends on the kind — scratch bytes for a file, the value itself for an extracted
+     *  object (#222). `File(ref)` is no longer universally valid, so the kind decides. */
+    private fun refFor(kind: ObjectKind, ref: String): ObjectRef =
+        if (kind.isFileBacked) ScratchRef(ref) else ValueRef(ref)
+
     /** For a visual frame (IMAGE / PDF), decode a real thumbnail off-main and attach it (only
      *  while that object is still on the stack). The hero is the object, not an icon (#114);
      *  a PDF shows its rendered first page via [previewSource]. */
@@ -1095,8 +1123,13 @@ class FlowViewModel @Inject constructor(
         val frame = stack.getOrNull(index) ?: return
         val newState = update.features.fold(frame.obj.state) { state, feature -> state.with(feature) }
         val newMetadata = frame.obj.metadata + update.metadata
+        // #222: the same fact can arrive from the live extractor and from stored metadata —
+        // the ids are built to match, so keeping the first wins and the graph stays one node.
+        val newFound = (frame.found + update.objects).distinctBy { it.id }
+        val newRelations = (frame.relations + update.relations).distinct()
         val objChanged = newState != frame.obj.state || newMetadata != frame.obj.metadata
-        if (!objChanged && update.running == frame.enriching) return
+        val graphChanged = newFound.size != frame.found.size || newRelations.size != frame.relations.size
+        if (!objChanged && !graphChanged && update.running == frame.enriching) return
 
         val newBubbles = if (objChanged) registry.bubblesFor(newState) else frame.bubbles
         val refreshed = frame.copy(
@@ -1105,6 +1138,8 @@ class FlowViewModel @Inject constructor(
             latent = if (objChanged) registry.latentBubblesFor(newState) else frame.latent,
             enriching = update.running,
             discover = if (objChanged) discoverFor(newBubbles) else frame.discover,
+            found = newFound,
+            relations = newRelations,
         )
         stack[index] = refreshed
         _ui.update { if (it.frame?.obj?.id == source.id) it.copy(frame = refreshed) else it }
