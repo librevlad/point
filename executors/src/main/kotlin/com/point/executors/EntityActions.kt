@@ -15,6 +15,8 @@ import com.point.core.model.Feature
 import com.point.core.model.Intent
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
+import com.point.core.model.isFileBacked
+import com.point.core.flow.asExtractedKind
 import com.point.core.model.Preview
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -33,10 +35,17 @@ import javax.inject.Inject
 internal fun entitySourceText(input: PointObject): String {
     val sidecar = input.metadata[META_OCR_TEXT_REF]
         ?.let { path -> runCatching { File(path).takeIf(File::isFile)?.readText() }.getOrNull() }
-    return sidecar ?: File(input.uri.value).takeIf { it.isFile }?.readText().orEmpty()
+    if (sidecar != null) return sidecar
+    // An extracted object (#222) has no file: its value IS its text. Without this every action
+    // on a found thing looked for `File("вул. Сонячна, 15")`, found nothing, and failed (#237).
+    if (!input.state.kind.isFileBacked) return input.uri.value
+    return File(input.uri.value).takeIf { it.isFile }?.readText().orEmpty()
 }
 
 internal suspend fun firstEntity(extractor: EntityExtractor, input: PointObject, type: EntityType): String? {
+    // The object may BE that entity. An `Address` knows its own value; re-running a model over
+    // fifteen characters to rediscover it is slower, less reliable, and can only disagree.
+    if (type.asExtractedKind() == input.state.kind) return input.uri.value.takeIf { it.isNotBlank() }
     val text = entitySourceText(input)
     if (text.isBlank()) return null
     return extractor.extract(text).firstOrNull { it.type == type }?.value

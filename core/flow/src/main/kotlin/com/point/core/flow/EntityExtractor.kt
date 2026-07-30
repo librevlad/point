@@ -45,6 +45,22 @@ fun EntityType.asFeature(): Feature? = when (this) {
     EntityType.URL, EntityType.MONEY -> null
 }
 
+/**
+ * The extracted kind this entity becomes as a graph object (#222), or null when it never does.
+ *
+ * The inverse of what the entity enricher builds, and the reason an action on a found object does
+ * not have to re-run a model: an `Address` object already IS the address. `PAYMENT_CARD` has no
+ * kind on purpose — a card number is masked on screen and never promoted to an object.
+ */
+fun EntityType.asExtractedKind(): com.point.core.model.ObjectKind? = when (this) {
+    EntityType.PHONE -> KIND_PHONE
+    EntityType.EMAIL -> KIND_EMAIL
+    EntityType.URL -> KIND_URL
+    EntityType.ADDRESS -> KIND_ADDRESS
+    EntityType.DATE_TIME -> KIND_DATE
+    EntityType.PAYMENT_CARD, EntityType.MONEY -> null
+}
+
 /** Metadata key prefix for *understood facts* — the first value found per entity kind
  *  (`entity.phone` → «+380…»). The «Point понял» checklist (#114) renders these, so the
  *  screen can say "Нашёл телефон +380…", not just "PHONE". */
