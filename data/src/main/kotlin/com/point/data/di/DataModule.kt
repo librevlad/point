@@ -57,6 +57,7 @@ import com.point.data.CommonsArchiveExtractor
 import com.point.data.DefaultEnrichment
 import com.point.data.DefaultEntitlements
 import com.point.data.EntityEnricher
+import com.point.data.IdentifierEnricher
 import com.point.data.MlKitEntityExtractor
 import com.point.data.FallbackLlmClient
 import com.point.data.FileChosenApps
@@ -279,6 +280,11 @@ abstract class DataModule {
 
     @Binds @IntoSet
     abstract fun pdfImageEnricher(e: PdfImageEnricher): Enricher
+
+    /** First extractor of the object pipeline (#222): a waybill number becomes an object,
+     *  not a flag. On-device rule, no key and no signal needed. */
+    @Binds @IntoSet
+    abstract fun identifierEnricher(e: IdentifierEnricher): Enricher
 
     companion object {
         /** Pure classifier lives in :core:flow (no DI annotations there). */
