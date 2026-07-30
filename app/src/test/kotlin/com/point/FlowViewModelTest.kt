@@ -872,6 +872,36 @@ class FlowViewModelTest {
         assertEquals(before, vm.ui.value.frame?.obj?.id)
     }
 
+    // --- Обогащение не затирает установленное действием (#243) ---
+
+    @Test fun `a fact the object already knows is not overwritten by a later reading`() = runTest(dispatcher) {
+        // Сценарий #243: «Понять глубже» чинит адрес, кадр выталкивается, фоновое обогащение
+        // распознаёт ту же картинку заново и возвращает повреждённую версию. Она не должна
+        // победить: перевывод факта из неизменившихся байтов не может дать ничего нового.
+        val vm = vm()
+        enrichment.updates = listOf(
+            EnrichmentUpdate(emptySet(), mapOf("entity.address" to "первое"), emptyList()),
+            EnrichmentUpdate(emptySet(), mapOf("entity.address" to "второе"), emptyList()),
+        )
+
+        vm.onShared("/x.jpg", "image/jpeg"); advanceUntilIdle()
+
+        assertEquals("первое", vm.ui.value.frame?.obj?.metadata?.get("entity.address"))
+    }
+
+    @Test fun `the pointer to recognised text still refreshes`() = runTest(dispatcher) {
+        // Иначе «Распознать текст» уедет в файл из прошлого прогона.
+        val vm = vm()
+        enrichment.updates = listOf(
+            EnrichmentUpdate(emptySet(), mapOf(com.point.core.flow.META_OCR_TEXT_REF to "/scratch/a.txt"), emptyList()),
+            EnrichmentUpdate(emptySet(), mapOf(com.point.core.flow.META_OCR_TEXT_REF to "/scratch/b.txt"), emptyList()),
+        )
+
+        vm.onShared("/x.jpg", "image/jpeg"); advanceUntilIdle()
+
+        assertEquals("/scratch/b.txt", vm.ui.value.frame?.obj?.metadata?.get(com.point.core.flow.META_OCR_TEXT_REF))
+    }
+
     // --- Bring-your-own AI key (#19) ---
 
     @Test fun `openKeySettings shows the key screen prefilled`() = runTest(dispatcher) {
