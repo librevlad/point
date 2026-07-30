@@ -4,6 +4,8 @@ import com.point.core.flow.EnrichCost
 import com.point.core.flow.Enricher
 import com.point.core.flow.EnricherMeta
 import com.point.core.flow.EnrichmentDelta
+import com.point.core.flow.documentType
+import com.point.core.flow.META_SEMANTIC_TYPE
 import com.point.core.flow.KIND_ADDRESS
 import com.point.core.flow.KIND_DATE
 import com.point.core.flow.KIND_EMAIL
@@ -69,6 +71,9 @@ class OcrEnricher @Inject constructor(
             metadata = buildMap {
                 putAll(entities.metadata)
                 if (url != null) putIfAbsent(META_ENTITY_PREFIX + "url", url)
+                // «Посылка», а не «Изображение» (#222, шаг 5): скриншот приходит сюда, не в
+                // DocumentTypeEnricher — тот работает по TEXT, а у картинки текста ещё нет.
+                documentType(text)?.let { putIfAbsent(META_SEMANTIC_TYPE, it) }
                 put(META_OCR_TEXT_REF, ref.value)
             },
             // The screenshot's own findings become graph objects (#222) — the branch address

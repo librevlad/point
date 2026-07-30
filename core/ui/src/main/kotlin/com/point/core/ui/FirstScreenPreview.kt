@@ -134,6 +134,8 @@ private fun PreviewFoundObjects() = PointTheme {
         metadata = mapOf(
             "entity.address" to "Відділення №9, вул. Хрещатик, 1",
             "entity.date" to "29.07 до 18:00",
+            // #222, шаг 5: заголовок берётся отсюда — «Посылка» вместо «Изображение».
+            com.point.core.flow.META_SEMANTIC_TYPE to com.point.core.flow.TYPE_PARCEL,
         ),
     )
     FirstScreen(

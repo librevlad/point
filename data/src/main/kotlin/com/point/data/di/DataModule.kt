@@ -54,6 +54,7 @@ import com.point.data.AndroidUrlOpener
 import com.point.data.AndroidViewer
 import com.point.data.ClaudeLlmClient
 import com.point.data.CommonsArchiveExtractor
+import com.point.data.DocumentTypeEnricher
 import com.point.data.DefaultEnrichment
 import com.point.data.DefaultEntitlements
 import com.point.data.EntityEnricher
@@ -285,6 +286,11 @@ abstract class DataModule {
      *  not a flag. On-device rule, no key and no signal needed. */
     @Binds @IntoSet
     abstract fun identifierEnricher(e: IdentifierEnricher): Enricher
+
+    /** Names the object after what it IS (#222, шаг 5): «Посылка», не «Изображение».
+     *  On-device rule — an object's own name must not depend on a quota. */
+    @Binds @IntoSet
+    abstract fun documentTypeEnricher(e: DocumentTypeEnricher): Enricher
 
     companion object {
         /** Pure classifier lives in :core:flow (no DI annotations there). */
