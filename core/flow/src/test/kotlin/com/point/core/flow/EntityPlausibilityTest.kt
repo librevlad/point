@@ -62,6 +62,35 @@ class EntityPlausibilityTest {
         assertEquals(listOf("+380 67 123 45 67"), kept)
     }
 
+    /**
+     * Живой баг (#244), подтверждённый тремя разными кадрами владельца: на экране посылки Новой
+     * Пошты датой показывалось `11:41` — время статуса «Прибула до пункту… Сьогодні, 11:41»;
+     * на скриншоте переписки — `18:24`, время «в сети» из шапки чата.
+     *
+     * Голое время суток — не дата документа. Экран переписки состоит из времён почти целиком
+     * (`10:00`, `10:03`, `10:23`, `18:51`, `18:54`…), и любое из них может занять единственное
+     * место «Дата», вытеснив настоящую дату, которая на том же кадре есть: `30.03`, `01.04`.
+     *
+     * Даты остаются нетронутыми: правило смотрит только на форму «часы двоеточие минуты» целиком,
+     * без календарной части.
+     */
+    @Test
+    fun `голое время суток — не дата документа`() {
+        val entities = listOf(
+            Entity(EntityType.DATE_TIME, "11:41"),
+            Entity(EntityType.DATE_TIME, "18:24"),
+            Entity(EntityType.DATE_TIME, "9:05"),
+            Entity(EntityType.DATE_TIME, "30.03"),
+            Entity(EntityType.DATE_TIME, "01.04.2026"),
+            Entity(EntityType.DATE_TIME, "вт, 21 июл."),
+            Entity(EntityType.DATE_TIME, "завтра о 09:00"),
+        )
+
+        val kept = plausibleEntities(entities, "").map { it.value }
+
+        assertEquals(listOf("30.03", "01.04.2026", "вт, 21 июл.", "завтра о 09:00"), kept)
+    }
+
     @Test
     fun `real phones pass, waybill fragments and over-long digit runs are rejected`() {
         assertTrue(phone("+380 67 123 45 67").isPlausible())   // 12 digits
