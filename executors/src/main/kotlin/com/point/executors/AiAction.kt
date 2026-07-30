@@ -27,7 +27,7 @@ fun aiSuggestions(kind: ObjectKind): List<String> = when (kind) {
     ObjectKind.OFFICE -> listOf("Краткое содержание", "Извлеки ключевые данные", "Главные тезисы")
     ObjectKind.URL -> listOf("О чём эта ссылка?", "Краткое содержание страницы", "Главные тезисы")
     ObjectKind.ZIP, ObjectKind.COLLECTION -> listOf("Что внутри?", "Что можно сделать?")
-    ObjectKind.UNKNOWN -> listOf("Что это?", "Что можно сделать?")
+    else -> listOf("Что это?", "Что можно сделать?")
 }
 
 private val WORD_HINTS = listOf("word", "ворд", "docx")
@@ -119,9 +119,10 @@ class AiRealizer @Inject constructor(
         ObjectKind.ZIP -> "Это архив. Подскажи, что с ним можно сделать."
         ObjectKind.OFFICE -> "Это офисный документ. Кратко изложи его содержимое."
         ObjectKind.URL -> "Это ссылка. Кратко скажи, о чём она."
-        // AI is not offered for collections (accepts excludes them), but the
-        // when stays exhaustive so a new kind forces a review here too.
+        // AI is not offered for collections (accepts excludes them), listed for clarity.
         ObjectKind.COLLECTION -> "Это набор файлов. Подскажи, что с ними можно сделать."
-        ObjectKind.UNKNOWN -> "Помоги разобраться с этим объектом."
+        // Kinds are open now (#222), so the compiler can no longer force a review here when
+        // a new one appears — this branch has to be a sane default on its own.
+        else -> "Помоги разобраться с этим объектом."
     }
 }

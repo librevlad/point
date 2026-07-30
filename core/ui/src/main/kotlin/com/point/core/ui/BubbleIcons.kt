@@ -137,7 +137,8 @@ fun kindIcon(kind: ObjectKind): ImageVector = when (kind) {
     ObjectKind.OFFICE -> Icons.Filled.Article
     ObjectKind.URL -> Icons.Filled.Link
     ObjectKind.COLLECTION -> Icons.Filled.FolderOpen
-    ObjectKind.UNKNOWN -> Icons.Filled.HelpOutline
+    // Kinds are open (#222) — an extraction kind with no icon of its own falls back here.
+    else -> Icons.Filled.HelpOutline
 }
 
 /** Friendly Russian title for an object kind — used when the object has no name, instead of the
@@ -150,5 +151,5 @@ fun kindLabel(kind: ObjectKind): String = when (kind) {
     ObjectKind.OFFICE -> "Документ"
     ObjectKind.URL -> "Ссылка"
     ObjectKind.COLLECTION -> "Коллекция"
-    ObjectKind.UNKNOWN -> "Объект"
+    else -> "Объект"
 }

@@ -38,5 +38,7 @@ internal fun kindLabel(kind: ObjectKind): String = when (kind) {
     ObjectKind.OFFICE -> "Документ"
     ObjectKind.URL -> "Ссылка"
     ObjectKind.COLLECTION -> "Коллекция"
-    ObjectKind.UNKNOWN -> "Объект"
+    // Kinds are open (#222): an extraction kind we have no wording for reads as «Объект»,
+    // exactly like UNKNOWN.
+    else -> "Объект"
 }
