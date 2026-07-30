@@ -44,4 +44,23 @@ class RelayClipProtocolTest {
         assertTrue(f.payload!!.isText)
         assertEquals("привет мир", f.payload!!.text())
     }
+
+    /** #272: протухший REPLY от таймаутнувшего прошлого pull неотличим от свежего без корреляции.
+     *  PULL несёт reqId, REPLY его эхоит, телефон принимает только эхо своего запроса. */
+    @Test
+    fun `pull request and reply carry the correlation id`() {
+        val request = decodeClipFrame(encodeClipFrame(ClipRelay.PULL, null, reqId = "r-42"))
+        assertEquals("r-42", request.reqId)
+        assertNull(request.payload)
+
+        val reply = decodeClipFrame(encodeClipFrame(ClipRelay.REPLY, ClipboardPayload.ofText("x"), reqId = request.reqId))
+        assertEquals("r-42", reply.reqId)
+    }
+
+    /** Кадр от сборки до reqId (или push, которому корреляция не нужна) декодируется с null. */
+    @Test
+    fun `frames without a correlation id decode to null reqId`() {
+        assertNull(decodeClipFrame(encodeClipFrame(ClipRelay.PUSH, ClipboardPayload.ofText("x"))).reqId)
+        assertNull(decodeClipFrame(encodeClipFrame(ClipRelay.REPLY, null)).reqId)
+    }
 }

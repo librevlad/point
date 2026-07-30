@@ -1,6 +1,7 @@
 package com.point.data
 
 import com.point.core.flow.ClipPull
+import com.point.core.flow.ClipPush
 import com.point.core.flow.ClipboardPayload
 import com.point.core.flow.PcClipboardSync
 import com.point.core.flow.PcPairing
@@ -19,7 +20,7 @@ import kotlinx.coroutines.withContext
  */
 class HttpPcClipboardSync @Inject constructor() : PcClipboardSync {
 
-    override suspend fun push(pairing: PcPairing, payload: ClipboardPayload): Boolean = withContext(Dispatchers.IO) {
+    override suspend fun push(pairing: PcPairing, payload: ClipboardPayload): ClipPush = withContext(Dispatchers.IO) {
         runCatching {
             val c = endpoint(pairing)
             c.requestMethod = "POST"
@@ -33,8 +34,9 @@ class HttpPcClipboardSync @Inject constructor() : PcClipboardSync {
             c.outputStream.use { it.write(payload.bytes) }
             val ok = c.responseCode == 200
             c.disconnect()
-            ok
-        }.getOrDefault(false)
+            // The PC's own server has no blob cap or app secret: anything but 200 is «didn't reach it».
+            if (ok) ClipPush.Sent else ClipPush.Unreachable
+        }.getOrDefault(ClipPush.Unreachable)
     }
 
     override suspend fun pull(pairing: PcPairing): ClipPull = withContext(Dispatchers.IO) {
