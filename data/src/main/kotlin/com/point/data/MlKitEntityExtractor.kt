@@ -38,7 +38,9 @@ class MlKitEntityExtractor : EntityExtractor {
                 annotation.entities.mapNotNull { map(it, annotation.annotatedText) }
             }
             // Real-device feedback: drop implausible phones/addresses from noisy OCR text.
-            com.point.core.flow.plausibleEntities(raw)
+            // Текст передаётся не для красоты: обрезок длинного числа от телефона отличается
+            // только тем, что на странице те же цифры продолжаются дальше (#240).
+            com.point.core.flow.plausibleEntities(raw, text)
         }.getOrDefault(emptyList())
     }
 
