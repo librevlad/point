@@ -15,7 +15,10 @@ import java.net.URL
 import java.util.UUID
 import javax.net.ssl.HttpsURLConnection
 import javax.net.ssl.SSLHandshakeException
+import kotlin.coroutines.coroutineContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 
 /**
@@ -40,18 +43,36 @@ class RelayPcClipboardSync(
     override suspend fun push(pairing: PcPairing, payload: ClipboardPayload): ClipPush = withContext(Dispatchers.IO) {
         val base = relayBase(pairing) ?: return@withContext ClipPush.Unreachable
         val blob = RelayCrypto.seal(pairing.token, encodeClipFrame(ClipRelay.PUSH, payload))
+        // Гейт по размеру ДО сети: relay.py отвечает 413 по одному Content-Length, не читая тело, —
+        // клиент в streaming-режиме умирает на write задолго до чтения кода ответа, и «слишком
+        // большой» превращался в ложный «недоступен». Лимит — константа протокола (relay.py MAX_BLOB).
+        if (blob.size > MAX_RELAY_BLOB) return@withContext ClipPush.Failed(ClipFail.TOO_BIG)
         when (post(base, RelayCrypto.mailboxId(pairing.token, ClipRelay.TO_PC), blob)) {
             200 -> ClipPush.Sent
             CODE_TLS -> ClipPush.Failed(ClipFail.TAMPERED)
             401, 403 -> ClipPush.Failed(ClipFail.AUTH)
-            413 -> ClipPush.Failed(ClipFail.TOO_BIG)
+            413 -> ClipPush.Failed(ClipFail.TOO_BIG) // на случай, если сервер ужесточит лимит
             else -> ClipPush.Unreachable // any other code / -1: network-class, a fallback may help
         }
     }
 
     override suspend fun pull(pairing: PcPairing): ClipPull = withContext(Dispatchers.IO) {
         val base = relayBase(pairing) ?: return@withContext ClipPull.Unreachable
-        val token = pairing.token
+        // Классификация — на весь путь: drain() первым делает сетевой I/O, и без внешнего catch
+        // недоступный релей (повседневный фолбэк-случай) вылетал исключением мимо sealed-контракта
+        // прямо в catch-all активити («Не удалось синхронизировать» вместо честного тоста).
+        try {
+            pullSealed(base, pairing.token)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: SSLHandshakeException) {
+            ClipPull.Failed(ClipFail.TAMPERED)
+        } catch (e: Throwable) {
+            ClipPull.Unreachable
+        }
+    }
+
+    private suspend fun pullSealed(base: String, token: String): ClipPull {
         val toPc = RelayCrypto.mailboxId(token, ClipRelay.TO_PC)
         val toPhone = RelayCrypto.mailboxId(token, ClipRelay.TO_PHONE)
 
@@ -60,10 +81,10 @@ class RelayPcClipboardSync(
         val request = RelayCrypto.seal(token, encodeClipFrame(ClipRelay.PULL, null, reqId))
         when (post(base, toPc, request)) {
             200 -> Unit
-            CODE_TLS -> return@withContext ClipPull.Failed(ClipFail.TAMPERED)
-            401, 403 -> return@withContext ClipPull.Failed(ClipFail.AUTH)
-            413 -> return@withContext ClipPull.Failed(ClipFail.TOO_BIG)
-            else -> return@withContext ClipPull.Unreachable
+            CODE_TLS -> return ClipPull.Failed(ClipFail.TAMPERED)
+            401, 403 -> return ClipPull.Failed(ClipFail.AUTH)
+            413 -> return ClipPull.Failed(ClipFail.TOO_BIG)
+            else -> return ClipPull.Unreachable
         }
 
         // Await OUR reply. A foreign blob (stale reply, garbage) is already acked by poll() — skip it
@@ -71,19 +92,24 @@ class RelayPcClipboardSync(
         // the bounded drain can miss a 9th stale blob; the reqId echo is the real guarantee).
         val deadline = System.nanoTime() + waitSeconds * 1_000_000_000L
         while (true) {
+            coroutineContext.ensureActive() // отменённый pull (повторный тап тайла) не должен
+            // дожёвывать 25 с и ack'ать ответы, адресованные живому pull'у
             val remaining = ((deadline - System.nanoTime()) / 1_000_000_000L).toInt()
-            if (remaining <= 0) return@withContext ClipPull.Unreachable
+            if (remaining <= 0) return ClipPull.Unreachable
             val polled = poll(base, toPhone, remaining)
-            if (polled.code == 401 || polled.code == 403) return@withContext ClipPull.Failed(ClipFail.AUTH)
-            if (polled.code == CODE_TLS) return@withContext ClipPull.Failed(ClipFail.TAMPERED)
-            val blob = polled.blob ?: return@withContext ClipPull.Unreachable
+            if (polled.code == 401 || polled.code == 403) return ClipPull.Failed(ClipFail.AUTH)
+            if (polled.code == CODE_TLS) return ClipPull.Failed(ClipFail.TAMPERED)
+            val blob = polled.blob ?: return ClipPull.Unreachable
             val frame = runCatching { decodeClipFrame(RelayCrypto.open(token, blob)) }.getOrNull()
                 ?: continue // undecodable garbage in a public mailbox — acked, gone, keep waiting
-            if (frame.kind != ClipRelay.REPLY || frame.reqId != reqId) continue // someone else's / stale
-            return@withContext frame.payload?.let { ClipPull.Got(it) } ?: ClipPull.Empty
+            if (frame.kind != ClipRelay.REPLY) continue
+            // Чужой reqId — протухший ответ другому pull'у: пропустить. Null — десктоп сборки до
+            // reqId: принять, иначе version skew навсегда брикает канал («новый телефон + старый
+            // jar»: свежий ответ ack'ается и отбрасывается до дедлайна). Со старым десктопом
+            // гарантия от протухших деградирует до дренажа — как было до reqId, не хуже.
+            if (frame.reqId != null && frame.reqId != reqId) continue
+            return frame.payload?.let { ClipPull.Got(it) } ?: ClipPull.Empty
         }
-        @Suppress("UNREACHABLE_CODE")
-        ClipPull.Unreachable // while(true) always returns; the compiler still wants an expression here
     }
 
     private fun relayBase(pairing: PcPairing): String? =
@@ -151,5 +177,8 @@ class RelayPcClipboardSync(
         const val MAX_DRAIN = 8
         /** A sentinel «status» for an [SSLHandshakeException]: the pinned handshake failed. */
         const val CODE_TLS = -2
+        /** Лимит блоба релея — константа протокола (relay.py MAX_BLOB = 50 МБ). Проверяется до
+         *  сети: сервер режет по Content-Length, и streaming-write умирает раньше кода ответа. */
+        const val MAX_RELAY_BLOB = 50 * 1024 * 1024
     }
 }

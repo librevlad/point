@@ -41,8 +41,21 @@ class RelayClipPoller(
         val base = relayUrl.trimEnd('/')
         val toPc = RelayCrypto.mailboxId(token, ClipRelay.TO_PC)
         val toPhone = RelayCrypto.mailboxId(token, ClipRelay.TO_PHONE)
+        var lastFailure: String? = null
         while (running) {
-            val handled = runCatching { pollOnce(base, toPc, toPhone) }.getOrDefault(false)
+            val handled = runCatching { pollOnce(base, toPc, toPhone) }
+                .onFailure { e ->
+                    // Виден только ПЕРЕХОД в отказ, не каждый 3-секундный повтор: бесконечный
+                    // молчаливый цикл противоречил цели #271, а лог каждой итерации — спам.
+                    val failure = "${e.javaClass.simpleName}: ${e.message}"
+                    if (failure != lastFailure) log("polling failed ($failure) — retrying every ${BACKOFF_MS / 1000}s")
+                    lastFailure = failure
+                }
+                .onSuccess {
+                    if (lastFailure != null) log("polling recovered")
+                    lastFailure = null
+                }
+                .getOrDefault(false)
             // An empty long-poll already cost ~WAIT_SECONDS; only back off after an error.
             if (!handled) runCatching { Thread.sleep(if (running) BACKOFF_MS else 0) }
         }

@@ -1172,8 +1172,13 @@ class FlowViewModel @Inject constructor(
 
     private companion object {
         /** Metadata that points at a file enrichment just wrote — a stale pointer would send
-         *  «Распознать текст» to a scratch file from a previous run. */
-        val REFRESHABLE_META = setOf(com.point.core.flow.META_OCR_TEXT_REF)
+         *  «Распознать текст» to a scratch file from a previous run. The atoms sidecar (#257)
+         *  is the same class of pointer: each OCR run writes a fresh atoms.tsv, and a stale ref
+         *  would tear the text/atoms pair apart on restoreJourney re-enrichment. */
+        val REFRESHABLE_META = setOf(
+            com.point.core.flow.META_OCR_TEXT_REF,
+            com.point.core.flow.META_OCR_ATOMS_REF,
+        )
     }
 
     private fun cancelEnrichment() {
