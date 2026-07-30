@@ -7,7 +7,10 @@ import android.graphics.Matrix
 import android.media.ExifInterface
 import android.util.Log
 import com.googlecode.tesseract.android.TessBaseAPI
-import com.point.core.flow.TextRecognizer
+import com.point.core.flow.Atom
+import com.point.core.flow.AtomLayer
+import com.point.core.flow.AtomRecognizer
+import com.point.core.flow.Box
 import com.point.core.model.PointObject
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -25,14 +28,14 @@ import javax.inject.Inject
  */
 class TesseractTextRecognizer @Inject constructor(
     @ApplicationContext private val context: Context,
-) : TextRecognizer {
+) : AtomRecognizer {
 
-    override suspend fun recognize(obj: PointObject): String = withContext(Dispatchers.IO) {
-        if (!obj.mime.startsWith("image/")) return@withContext ""
+    override suspend fun read(obj: PointObject): AtomLayer = withContext(Dispatchers.IO) {
+        if (!obj.mime.startsWith("image/")) return@withContext EMPTY
         val bitmap = decodeBounded(obj.uri.value, OCR_MAX_PX)
         if (bitmap == null) {
             Log.w(TAG, "bitmap decode failed: ${obj.mime} @ ${obj.uri.value}")
-            return@withContext ""
+            return@withContext EMPTY
         }
         val tess = TessBaseAPI()
         try {
@@ -41,19 +44,55 @@ class TesseractTextRecognizer @Inject constructor(
             val ok = tess.init(dataPath.absolutePath, LANG, 1)
             if (!ok) {
                 Log.w(TAG, "Tesseract init failed (dataPath=${dataPath.absolutePath}, lang=$LANG)")
-                return@withContext ""
+                return@withContext EMPTY
             }
             tess.setImage(bitmap)
-            val text = tess.getUTF8Text()?.trim().orEmpty()
-            Log.i(TAG, "OCR done: ${text.length} chars recognised")
-            text
+            val atoms = words(tess)
+            Log.i(TAG, "OCR done: ${atoms.size} words recognised")
+            AtomLayer(atoms)
         } catch (e: Throwable) {
             Log.w(TAG, "OCR error", e)
-            ""
+            EMPTY
         } finally {
             runCatching { tess.recycle() }
             bitmap.recycle()
         }
+    }
+
+    /**
+     * Слова с их местом на странице.
+     *
+     * Раньше здесь стоял `getUTF8Text()`, и геометрия выбрасывалась на первом же шаге — при том
+     * что движок её знает. Из-за этого 14-значный трек, разорванный движком на куски, собрать
+     * обратно было нечем: адреса не существовало (#257).
+     *
+     * **Координаты пока в системе распознанного битмапа**, а не исходного кадра: [decodeBounded]
+     * уменьшает длинную сторону и доворачивает по EXIF. Преобразование обратно в сырой кадр
+     * (требование ADR-0001 о двух адресных пространствах) ещё не сохраняется — это следующий
+     * цикл, и до него кроп по атому нельзя брать из оригинального файла.
+     */
+    private fun words(tess: TessBaseAPI): List<Atom> {
+        val iterator = tess.resultIterator ?: return emptyList()
+        val level = TessBaseAPI.PageIteratorLevel.RIL_WORD
+        val atoms = mutableListOf<Atom>()
+        iterator.begin()
+        do {
+            val text = iterator.getUTF8Text(level)?.trim().orEmpty()
+            val rect = iterator.getBoundingRect(level)
+            if (text.isNotEmpty() && rect != null) {
+                atoms += Atom(
+                    id = "w${atoms.size}",
+                    text = text,
+                    box = Box(
+                        rect.left.toFloat(),
+                        rect.top.toFloat(),
+                        rect.right.toFloat(),
+                        rect.bottom.toFloat(),
+                    ),
+                )
+            }
+        } while (iterator.next(level))
+        return atoms
     }
 
     /**
@@ -119,5 +158,6 @@ class TesseractTextRecognizer @Inject constructor(
         const val LANG = "rus+eng"
         const val OCR_MAX_PX = 2048 // enough for legible text; bounds memory on huge photos (#18)
         val MODELS = listOf("rus.traineddata", "eng.traineddata")
+        val EMPTY = AtomLayer(emptyList())
     }
 }
