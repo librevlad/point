@@ -22,6 +22,7 @@ class RelayPollerLiveTest {
     @Test
     fun `a sealed frame round-trips through the live relay into the poller`() {
         assumeTrue("no relay secret (CI / no local.properties)", RelayEnv.APP_SECRET.isNotBlank())
+        assumeTrue("relay unreachable (offline run)", relayUp)
         val token = "point-e2e-${System.nanoTime()}"
         val payload = "relay-e2e-payload".toByteArray()
 
@@ -57,5 +58,20 @@ class RelayPollerLiveTest {
         c.outputStream.use { it.write(blob) }
         check(c.responseCode == 200) { "relay POST failed: ${c.responseCode}" }
         c.disconnect()
+    }
+
+    private companion object {
+        /** One probe per JVM: is the live relay reachable at all? Offline runs skip, not fail. */
+        val relayUp: Boolean by lazy {
+            runCatching {
+                val c = (URL("${RelayEnv.URL.trimEnd('/')}/health").openConnection() as HttpsURLConnection)
+                c.sslSocketFactory = RelayTls.socketFactory
+                c.connectTimeout = 4_000
+                c.readTimeout = 4_000
+                val ok = c.responseCode == 200
+                c.disconnect()
+                ok
+            }.getOrDefault(false)
+        }
     }
 }

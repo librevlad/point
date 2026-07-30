@@ -9,7 +9,9 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
+import com.point.core.flow.ClipFail
 import com.point.core.flow.ClipPull
+import com.point.core.flow.ClipPush
 import com.point.core.flow.ClipboardPayload
 import com.point.core.flow.PcClipboardSync
 import com.point.core.flow.PcPairings
@@ -56,16 +58,19 @@ class ClipboardSyncActivity : ComponentActivity() {
 
         if (phone != null && phoneSig != lastSig) {
             // The phone copied something new — send it to the PC.
-            if (clipboardSync.push(pairing, phone)) {
-                prefs.edit().putString(KEY_LAST, phoneSig).apply()
-                toast(if (phone.isText) "Буфер → компьютер" else "Файл → компьютер")
-            } else {
-                toast("Компьютер недоступен")
+            when (val sent = clipboardSync.push(pairing, phone)) {
+                is ClipPush.Sent -> {
+                    prefs.edit().putString(KEY_LAST, phoneSig).apply()
+                    toast(if (phone.isText) "Буфер → компьютер" else "Файл → компьютер")
+                }
+                is ClipPush.Unreachable -> toast("Компьютер недоступен")
+                is ClipPush.Failed -> toast(failText(sent.why))
             }
         } else {
             // Nothing new on the phone — take what the PC has (LAN, or the relay when off-network).
             when (val pc = clipboardSync.pull(pairing)) {
                 is ClipPull.Unreachable -> toast("Компьютер недоступен")
+                is ClipPull.Failed -> toast(failText(pc.why))
                 is ClipPull.Empty -> toast("Буфер уже синхронизирован")
                 is ClipPull.Got -> {
                     val payload = pc.payload
@@ -120,6 +125,14 @@ class ClipboardSyncActivity : ComponentActivity() {
     }.getOrNull()
 
     private fun toast(message: String) = Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+
+    /** Terminal failures say what actually happened (#272) — «Компьютер недоступен» was a lie for
+     *  each of these: the PC is fine, the payload/key/channel is the problem. */
+    private fun failText(why: ClipFail): String = when (why) {
+        ClipFail.TOO_BIG -> "Слишком большой буфер для отправки через релей"
+        ClipFail.AUTH -> "Релей не принял ключ приложения — обновите сборку"
+        ClipFail.TAMPERED -> "Защищённое соединение не удалось — синхронизация отменена"
+    }
 
     private companion object {
         const val PREFS = "point-clipboard"

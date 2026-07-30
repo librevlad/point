@@ -59,29 +59,37 @@ class RelayClipPoller(
         c.disconnect()
         if (blob == null) return false
 
-        val frame = decodeClipFrame(RelayCrypto.open(token, blob)) // E2E: the relay only held ciphertext
+        // Ack FIRST, decode after — the mirror of the phone half (#271). The relay serves oldest-first
+        // and only ack removes: a blob that fails to decrypt would otherwise become the permanent head
+        // of the queue, re-served every backoff for its 24 h TTL, starving the whole clip channel.
+        blobId?.let { ack(base, toPc, it) }
+        val frame = runCatching { decodeClipFrame(RelayCrypto.open(token, blob)) } // E2E: relay held ciphertext
+            .getOrElse { e ->
+                log("dropped an undecodable clip blob (${e.javaClass.simpleName}: ${e.message})")
+                return true // it left the queue; the channel is healthy — no backoff
+            }
         when (frame.kind) {
             ClipRelay.PUSH -> frame.payload?.let(clipboardSet)
-            ClipRelay.PULL -> reply(base, toPhone)
+            ClipRelay.PULL -> reply(base, toPhone, frame.reqId)
         }
-        blobId?.let { ack(base, toPc, it) }
         return true
     }
 
     /** Answer a pull request: seal the PC's current clipboard (null → an empty-clipboard marker) into
-     *  the phone mailbox. */
-    private fun reply(base: String, toPhone: String) {
+     *  the phone mailbox, echoing the request's [reqId] so the phone accepts only its own answer. */
+    private fun reply(base: String, toPhone: String, reqId: String?) {
         val payload = runCatching { clipboardGet() }.getOrNull()
-        val blob = RelayCrypto.seal(token, encodeClipFrame(ClipRelay.REPLY, payload))
+        val blob = RelayCrypto.seal(token, encodeClipFrame(ClipRelay.REPLY, payload, reqId))
         runCatching {
             val c = open("$base/mbx/$toPhone", 15)
             c.requestMethod = "POST"
             c.doOutput = true
             c.setFixedLengthStreamingMode(blob.size)
             c.outputStream.use { it.write(blob) }
-            c.responseCode
+            val code = c.responseCode
             c.disconnect()
-        }
+            if (code != 200) log("relay refused the pull reply: HTTP $code")
+        }.onFailure { log("pull reply failed to send (${it.javaClass.simpleName}: ${it.message})") }
     }
 
     private fun ack(base: String, mailbox: String, blobId: String) {
@@ -93,8 +101,11 @@ class RelayClipPoller(
             c.outputStream.use { it.write(ByteArray(0)) }
             c.responseCode
             c.disconnect()
-        }
+        }.onFailure { log("ack failed for $blobId (${it.javaClass.simpleName}) — the blob will be re-served") }
     }
+
+    /** The desktop runs headless: stderr is its only честный канал (#271 — no more silent failures). */
+    private fun log(message: String) = System.err.println("[point relay-clip] $message")
 
     private fun open(url: String, readSeconds: Int): HttpsURLConnection =
         (URL(url).openConnection() as HttpsURLConnection).apply {
