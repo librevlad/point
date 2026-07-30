@@ -34,6 +34,7 @@ import com.point.core.flow.QrReader
 import com.point.core.flow.Sharer
 import com.point.core.flow.SpreadsheetReader
 import com.point.core.flow.SpreadsheetWriter
+import com.point.core.flow.AtomRecognizer
 import com.point.core.flow.TextRecognizer
 import com.point.core.flow.UrlOpener
 import com.point.core.flow.ChosenApps
@@ -200,6 +201,10 @@ abstract class DataModule {
 
     @Binds
     abstract fun textRecognizer(impl: TesseractTextRecognizer): TextRecognizer
+
+    /** Геометрия доходит до пайплайна (#257): OcrEnricher читает слой, а не плоскую строку. */
+    @Binds
+    abstract fun atomRecognizer(impl: TesseractTextRecognizer): AtomRecognizer
 
     /** The one real HTTP transport; LLM clients depend on the [HttpJson] interface. */
     @Binds

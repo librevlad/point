@@ -1,13 +1,18 @@
 package com.point.data
 
+import com.point.core.flow.Atom
+import com.point.core.flow.AtomCodec
+import com.point.core.flow.AtomLayer
+import com.point.core.flow.AtomRecognizer
+import com.point.core.flow.Box
 import com.point.core.flow.EnrichCost
 import com.point.core.flow.Entity
 import com.point.core.flow.EntityExtractor
 import com.point.core.flow.EntityType
 import com.point.core.flow.META_ENTITY_PREFIX
+import com.point.core.flow.META_OCR_ATOMS_REF
 import com.point.core.flow.META_OCR_TEXT_REF
 import com.point.core.flow.ObjectStore
-import com.point.core.flow.TextRecognizer
 import com.point.core.model.Feature
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
@@ -31,12 +36,13 @@ class OcrEnricherTest {
 
     private val image = PointObject("id", "image/png", ScratchRef("/tmp/shot.png"), ObjectState(ObjectKind.IMAGE))
 
-    private fun recognizer(text: String, fail: Boolean = false) = object : TextRecognizer {
-        override suspend fun recognize(obj: PointObject): String {
-            if (fail) error("engine crashed")
-            return text
+    private fun recognizer(text: String, fail: Boolean = false, atoms: List<Atom> = emptyList()) =
+        object : AtomRecognizer {
+            override suspend fun read(obj: PointObject): AtomLayer {
+                if (fail) error("engine crashed")
+                return AtomLayer(atoms, readerText = text.ifBlank { null })
+            }
         }
-    }
 
     private fun extractor(vararg entities: Entity) = object : EntityExtractor {
         override suspend fun extract(text: String) = entities.toList()
@@ -99,16 +105,38 @@ class OcrEnricherTest {
         assertEquals("https://point.app/x", meta[META_ENTITY_PREFIX + "url"])
     }
 
+    /** Мусорный текст не зажигает ни фич, ни сущностей — фото еды остаётся фото. Но слой атомов,
+     *  если он есть, персистится и здесь: `looksLikeOcrGarbage` ложно срабатывает на фото мониторов
+     *  с настоящим текстом (кадры 07/21 корпуса #262) — гейт судит представление, не улику (#257). */
     @Test
-    fun `discards gibberish and writes nothing`() = runTest {
+    fun `discards gibberish from features but keeps the atom evidence`() = runTest {
         val store = FakeStore()
         val garbage = "; i= © © - O = & E =. are © = E oS 2 (a9) ous © E pa ae Pl ans BS &§ я OE в > 3EE:"
-        val enricher = OcrEnricher(store, recognizer(garbage), extractor(Entity(EntityType.PHONE, "x")))
+        val atom = Atom("w0", "©", Box(0f, 0f, 5f, 5f), 0.2f)
+        val enricher = OcrEnricher(store, recognizer(garbage, atoms = listOf(atom)), extractor(Entity(EntityType.PHONE, "x")))
         val delta = enricher.enrich(image)
 
         assertTrue(delta.features.isEmpty())
-        assertTrue(delta.metadata.isEmpty())
-        assertTrue(store.created.isEmpty())
+        assertEquals(setOf(META_OCR_ATOMS_REF), delta.metadata.keys)
+        assertEquals(listOf(atom), AtomCodec.decode(File(delta.metadata[META_OCR_ATOMS_REF]!!).readText()).atoms)
+    }
+
+    /** Слой с геометрией — улика объекта: он уходит в scratch сайдкаром и переживает пайплайн,
+     *  а не уплощается в строку в момент рождения (#257: «геометрия не доходила до продакшена»). */
+    @Test
+    fun `persists the atom layer as a sidecar next to the text`() = runTest {
+        val store = FakeStore()
+        val atoms = listOf(
+            Atom("w0", "20", Box(10f, 10f, 30f, 24f), 0.9f, "tesseract", "5.3", 0),
+            Atom("w1", "4514", Box(34f, 10f, 80f, 24f), 0.8f, "tesseract", "5.3", 0),
+        )
+        val enricher = OcrEnricher(store, recognizer(realText, atoms = atoms), extractor())
+        val delta = enricher.enrich(image)
+
+        val ref = delta.metadata[META_OCR_ATOMS_REF]
+        assertNotNull("the atom layer must survive as evidence", ref)
+        assertEquals(atoms, AtomCodec.decode(File(ref!!).readText()).atoms)
+        assertEquals(realText, File(delta.metadata[META_OCR_TEXT_REF]!!).readText())
     }
 
     @Test

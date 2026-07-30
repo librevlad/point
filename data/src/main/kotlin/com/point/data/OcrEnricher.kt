@@ -13,11 +13,14 @@ import com.point.core.flow.KIND_DATE
 import com.point.core.flow.KIND_EMAIL
 import com.point.core.flow.KIND_PHONE
 import com.point.core.flow.KIND_URL
+import com.point.core.flow.AtomCodec
+import com.point.core.flow.AtomLayer
+import com.point.core.flow.AtomRecognizer
 import com.point.core.flow.EntityExtractor
 import com.point.core.flow.META_ENTITY_PREFIX
+import com.point.core.flow.META_OCR_ATOMS_REF
 import com.point.core.flow.META_OCR_TEXT_REF
 import com.point.core.flow.ObjectStore
-import com.point.core.flow.TextRecognizer
 import com.point.core.flow.looksLikeOcrGarbage
 import com.point.core.model.Feature
 import com.point.core.model.ObjectKind
@@ -41,7 +44,7 @@ import javax.inject.Inject
  */
 class OcrEnricher @Inject constructor(
     private val store: ObjectStore,
-    private val recognizer: TextRecognizer,
+    private val recognizer: AtomRecognizer,
     private val extractor: EntityExtractor,
 ) : Enricher {
 
@@ -60,8 +63,20 @@ class OcrEnricher @Inject constructor(
     override fun appliesTo(state: ObjectState) = state.kind == ObjectKind.IMAGE
 
     override suspend fun enrich(obj: PointObject): EnrichmentDelta = withContext(Dispatchers.IO) {
-        val raw = runCatching { recognizer.recognize(obj) }.getOrDefault("")
-        if (raw.isBlank() || looksLikeOcrGarbage(raw)) return@withContext EnrichmentDelta()
+        val layer = runCatching { recognizer.read(obj) }.getOrDefault(AtomLayer(emptyList()))
+        // Слой — улика, а не представление (#257): он персистится ДО любых гейтов. Гейт мусора
+        // ниже судит, что показывать человеку; уничтожать прочитанное он права не имеет —
+        // на фото монитора с настоящим текстом он ошибается (кадры 07/21 корпуса #262).
+        val atomsRef = if (layer.atoms.isNotEmpty()) {
+            store.newScratchFile("atoms.tsv").also { File(it.value).writeText(AtomCodec.encode(layer)) }
+        } else {
+            null
+        }
+        val evidenceOnly = EnrichmentDelta(
+            metadata = atomsRef?.let { mapOf(META_OCR_ATOMS_REF to it.value) } ?: emptyMap(),
+        )
+        val raw = layer.text
+        if (raw.isBlank() || looksLikeOcrGarbage(raw)) return@withContext evidenceOnly
         // #233: the phone's own clock sits at the top of every screenshot and used to become
         // «дата 15:12». Dropped once, here, so no later reader can mistake furniture for content.
         val text = stripStatusBar(raw)
@@ -83,6 +98,7 @@ class OcrEnricher @Inject constructor(
                 // DocumentTypeEnricher — тот работает по TEXT, а у картинки текста ещё нет.
                 documentType(text)?.let { putIfAbsent(META_SEMANTIC_TYPE, it) }
                 put(META_OCR_TEXT_REF, ref.value)
+                atomsRef?.let { put(META_OCR_ATOMS_REF, it.value) }
             },
             // The screenshot's own findings become graph objects (#222) — the branch address
             // read off a parcel screenshot is a place, not a line in a checklist.
