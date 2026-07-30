@@ -1115,6 +1115,27 @@ class FlowViewModel @Inject constructor(
         }
     }
 
+    /**
+     * What a fresh enrichment run is allowed to write onto an object that already knows things
+     * (#243).
+     *
+     * Enrichment **adds**; it does not overwrite. The bug this replaces was a flat `+`, so a
+     * re-run of OCR over the same bytes silently undid what an explicit — and paid — action had
+     * established: «Понять глубже» repaired `Олексйвка` to `Олексіївка`, the frame was pushed with
+     * the repair, background enrichment recognised the same picture again and put the damage back.
+     *
+     * Re-deriving a fact from bytes that have not changed cannot produce anything new, so the
+     * older value is not stale — it is simply the one somebody decided on.
+     *
+     * [REFRESHABLE_META] is the exception: those keys name a work product, not a fact, and each
+     * run writes a new file for them.
+     */
+    private fun enrichmentAdditions(
+        known: Map<String, String>,
+        fresh: Map<String, String>,
+    ): Map<String, String> =
+        fresh.filterKeys { it !in known || it in REFRESHABLE_META }
+
     /** Apply one enrichment snapshot to its object's frame — found by id, not by top:
      *  a slow OCR finishing after the user moved on still lands on the frame below,
      *  so its findings are there when they come back. */
@@ -1122,7 +1143,7 @@ class FlowViewModel @Inject constructor(
         val index = stack.indexOfLast { it.obj.id == source.id }
         val frame = stack.getOrNull(index) ?: return
         val newState = update.features.fold(frame.obj.state) { state, feature -> state.with(feature) }
-        val newMetadata = frame.obj.metadata + update.metadata
+        val newMetadata = frame.obj.metadata + enrichmentAdditions(frame.obj.metadata, update.metadata)
         // #222: the same fact can arrive from the live extractor and from stored metadata —
         // the ids are built to match, so keeping the first wins and the graph stays one node.
         val newFound = (frame.found + update.objects).distinctBy { it.id }
@@ -1147,6 +1168,12 @@ class FlowViewModel @Inject constructor(
             refreshFavorites()
             persistJourney() // #7: understanding survives process death together with the step
         }
+    }
+
+    private companion object {
+        /** Metadata that points at a file enrichment just wrote — a stale pointer would send
+         *  «Распознать текст» to a scratch file from a previous run. */
+        val REFRESHABLE_META = setOf(com.point.core.flow.META_OCR_TEXT_REF)
     }
 
     private fun cancelEnrichment() {
