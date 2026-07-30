@@ -124,4 +124,36 @@ class EntityObjectsTest {
         assertEquals(KIND_ADDRESS, delta.objects.single().state.kind)
         assertEquals("restored", delta.objects.single().sourceObjects.single())
     }
+
+    // --- Расхождение источников (#222, шаг 7) ---
+
+    @Test
+    fun `a disputed fact becomes an object that says it is disputed`() {
+        val disputed = com.point.core.flow.mergeFacts(
+            facts("address" to "вул. Хрещатик, 1"),
+            facts("address" to "вул. Хрещатик, 7"),
+        )
+
+        val obj = entityObjects(source(), disputed, "t").first.single()
+
+        assertEquals("вул. Хрещатик, 1", obj.uri.value)
+        assertTrue("спорное значение не должно выглядеть решённым", obj.confidence < 1f)
+        assertEquals(
+            listOf("вул. Хрещатик, 1", "вул. Хрещатик, 7"),
+            com.point.core.flow.alternativesOf(obj.metadata, "entity.address"),
+        )
+    }
+
+    @Test
+    fun `an agreed fact stays certain and carries no alternatives`() {
+        val agreed = com.point.core.flow.mergeFacts(
+            facts("address" to "вул. Хрещатик, 1"),
+            facts("address" to "вул.  Хрещатик 1"),
+        )
+
+        val obj = entityObjects(source(), agreed, "t").first.single()
+
+        assertEquals(1f, obj.confidence, 0f)
+        assertTrue(com.point.core.flow.alternativesOf(obj.metadata, "entity.address").isEmpty())
+    }
 }

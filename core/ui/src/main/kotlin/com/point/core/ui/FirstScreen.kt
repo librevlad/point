@@ -49,6 +49,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.point.core.flow.META_ALT_SUFFIX
+import com.point.core.flow.alternativesOf
 import com.point.core.flow.KIND_ADDRESS
 import com.point.core.flow.KIND_DATE
 import com.point.core.flow.KIND_EMAIL
@@ -355,6 +357,17 @@ private fun FoundObjects(
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
+                            // #222, шаг 7: sources read it differently — say so, do not pick
+                            // one silently. A value nobody agrees on is not a settled value.
+                            otherReading(obj)?.let { other ->
+                                Text(
+                                    text = "или: $other",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
                         }
                     }
                 }
@@ -368,6 +381,13 @@ private fun FoundObjects(
  * actually asked for. Provenance («found_in») is not a role: it says where the thing was read,
  * which the screen already makes obvious by showing it under this object.
  */
+/** The reading this object's sources disagreed with, if any — its own value is the winner
+ *  of the vote, and the loser is worth one quiet line rather than silence. */
+private fun otherReading(obj: PointObject): String? =
+    obj.metadata.keys.firstOrNull { it.endsWith(META_ALT_SUFFIX) }
+        ?.let { alternativesOf(obj.metadata, it.removeSuffix(META_ALT_SUFFIX)) }
+        ?.firstOrNull { it.trim() != obj.uri.value.trim() }
+
 private fun roleOf(obj: PointObject, relations: List<Relation>): String? =
     relations.asSequence().filter { it.fromId == obj.id }.mapNotNull { relationLabel(it.type) }.firstOrNull()
 

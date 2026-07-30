@@ -4,6 +4,10 @@ import com.point.core.flow.EnrichCost
 import com.point.core.flow.Enricher
 import com.point.core.flow.EnricherMeta
 import com.point.core.flow.EnrichmentDelta
+import com.point.core.flow.alternativesOf
+import com.point.core.flow.altValue
+import com.point.core.flow.META_ALT_SUFFIX
+import com.point.core.flow.DISPUTED_CONFIDENCE
 import com.point.core.flow.EXTRACTED_KINDS
 import com.point.core.flow.KIND_ADDRESS
 import com.point.core.flow.KIND_DATE
@@ -100,6 +104,9 @@ internal fun entityObjects(
         val key = META_ENTITY_PREFIX + suffix
         val value = facts[key]?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
         val (kind, feature) = kindAndFeature
+        // #222, шаг 7: when two sources read this fact differently, the object says so instead
+        // of presenting one of them as settled.
+        val alternatives = alternativesOf(facts, key)
         PointObject(
             id = "${source.id}:$suffix",
             mime = "text/plain",
@@ -107,7 +114,13 @@ internal fun entityObjects(
             state = ObjectState(kind, setOf(feature)),
             // Kept so the object's own screen shows its value, and so a re-open re-lights
             // the feature through MetadataEntityEnricher without re-running any engine.
-            metadata = mapOf(key to value),
+            metadata = buildMap {
+                put(key, value)
+                if (alternatives.isNotEmpty()) {
+                    put(key + META_ALT_SUFFIX, altValue(alternatives))
+                }
+            },
+            confidence = if (alternatives.isEmpty()) 1f else DISPUTED_CONFIDENCE,
             sourceObjects = listOf(source.id),
             creatorAction = creator,
         )

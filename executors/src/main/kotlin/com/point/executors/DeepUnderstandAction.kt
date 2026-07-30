@@ -3,6 +3,7 @@ package com.point.executors
 import com.point.core.flow.Capability
 import com.point.core.flow.CapabilityMeta
 import com.point.core.flow.Cost
+import com.point.core.flow.mergeFacts
 import com.point.core.flow.Latency
 import com.point.core.flow.LlmClient
 import com.point.core.flow.META_ENTITY_PREFIX
@@ -105,10 +106,15 @@ class DeepUnderstandRealizer @Inject constructor(
                 } else {
                     // The same object, one understanding richer: same bytes, merged facts.
                     // The metadata enricher lights the features on the next frame.
+                    // #222, шаг 7: голосованием, а не поверх. Раньше прочтение модели молча
+                    // затирало то, что нашёл экстрактор на устройстве, и понять, совпали ли
+                    // они, было нельзя. Теперь расхождение записывается, а при равенстве
+                    // голосов побеждает уже известное — платная догадка не выигрывает тем,
+                    // что пришла второй.
                     ActionResult.Success(
                         ResultObject(
                             input.state.kind, input.mime, input.uri,
-                            metadata = input.metadata + found + ("op" to "deep-understand"),
+                            metadata = mergeFacts(input.metadata, found) + ("op" to "deep-understand"),
                         ),
                     )
                 }
