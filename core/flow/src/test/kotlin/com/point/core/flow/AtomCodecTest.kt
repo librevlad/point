@@ -38,6 +38,16 @@ class AtomCodecTest {
         assertEquals(layer.atoms, decoded.atoms)
     }
 
+    /** Дамп дословен: слой без текста движка кодируется БЕЗ секции #readerText — иначе сборка по
+     *  полосам приписалась бы движку, и «дословный вывод устройства» стал бы сочинённым. */
+    @Test
+    fun `a geometry-only layer does not fabricate reader text`() {
+        val decoded = AtomCodec.decode(AtomCodec.encode(AtomLayer(layer.atoms)))
+        assertNull(decoded.readerText)
+        // Пересборка воспроизводима из атомов той же функцией — text совпадает без фиксации.
+        assertEquals(AtomLayer(layer.atoms).text, decoded.text)
+    }
+
     /** Повреждённая фикстура падает громко: тихий пропуск строки превратил бы битый дамп в
      *  зелёный тест — ровно та тихая ложь, от которой слой атомов лечит. */
     @Test

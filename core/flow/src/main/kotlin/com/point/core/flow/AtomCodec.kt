@@ -30,7 +30,10 @@ object AtomCodec {
         layer.transform?.let {
             appendLine("$TRANSFORM sample=${it.sample} rotation=${it.rotationDegrees} w=${it.uprightWidth} h=${it.uprightHeight}")
         }
-        layer.text.takeIf { it.isNotEmpty() }?.let { appendLine("$READER_TEXT ${b64(it)}") }
+        // Именно readerText, не layer.text: вычисленная сборка по полосам под ярлыком движка
+        // сделала бы «дословный дамп» сочинённым — decode обязан вернуть слой без readerText,
+        // если движок его не отдавал (пересборка воспроизводится из атомов той же функцией).
+        layer.readerText?.takeIf { it.isNotEmpty() }?.let { appendLine("$READER_TEXT ${b64(it)}") }
         layer.atoms.forEach { a ->
             appendLine(
                 listOf(
