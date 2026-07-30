@@ -39,7 +39,18 @@ data class Atom(
  * строк OCR — ложь про двухколоночный документ, а 14-значный трек с посылочного экрана приходит
  * тремя кусками, и «ответ = один идентификатор» такого не выдерживает (#257, #258).
  */
-class AtomLayer(val atoms: List<Atom>) {
+class AtomLayer(
+    val atoms: List<Atom>,
+    /**
+     * Текст, который отдал сам ридер, если он это умеет.
+     *
+     * Не второе чтение: координаты и текст приходят из одного прохода движка, поэтому они
+     * согласованы по построению. Смысл в другом — у движка есть собственный анализ раскладки, и
+     * на двухколоночном документе он различает колонки, а сборка по горизонтальным полосам
+     * склеивает левую строку с правой. Раз он знает больше — его текст и побеждает.
+     */
+    private val readerText: String? = null,
+) {
 
     /**
      * Атомы, чей центроид лежит внутри [region], в исходном порядке слоя.
@@ -92,7 +103,8 @@ class AtomLayer(val atoms: List<Atom>) {
      * одну строку страница развалит раскладку ещё до того, как её кто-то увидит.
      */
     val text: String
-        get() = lines(atoms).joinToString("\n") { line -> line.joinToString(" ") { it.text } }
+        get() = readerText
+            ?: lines(atoms).joinToString("\n") { line -> line.joinToString(" ") { it.text } }
 
     private fun lines(subset: List<Atom>): List<List<Atom>> {
         val lines = mutableListOf<MutableList<Atom>>()

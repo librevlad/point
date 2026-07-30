@@ -55,9 +55,12 @@ class TesseractTextRecognizer @Inject constructor(
                 uprightWidth = bitmap.width,
                 uprightHeight = bitmap.height,
             )
+            // Сперва текст движка, потом итератор: распознавание запускается первым обращением,
+            // и порядок гарантирует, что итератор работает по уже готовому результату.
+            val engineText = tess.getUTF8Text()?.trim().orEmpty()
             val atoms = words(tess, toRawFrame)
-            Log.i(TAG, "OCR done: ${atoms.size} words recognised")
-            AtomLayer(atoms)
+            Log.i(TAG, "OCR done: ${atoms.size} words, ${engineText.length} chars")
+            AtomLayer(atoms, readerText = engineText.ifEmpty { null })
         } catch (e: Throwable) {
             Log.w(TAG, "OCR error", e)
             EMPTY
