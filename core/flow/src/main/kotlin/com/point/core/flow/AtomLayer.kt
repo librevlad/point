@@ -61,7 +61,19 @@ class AtomLayer(val atoms: List<Atom>) {
      * Порог — половина высоты самого атома, а не константа в пикселях: страница может прийти в
      * любом разрешении, и абсолютный допуск, подобранный под одно фото, соврёт на другом.
      */
-    fun readingOrder(subset: List<Atom> = atoms): List<Atom> {
+    fun readingOrder(subset: List<Atom> = atoms): List<Atom> = lines(subset).flatten()
+
+    /**
+     * Весь слой как текст: слова строки через пробел, строки — через перевод строки.
+     *
+     * Перевод строки здесь несущий, а не косметика. Это значение уедет туда, где сегодня стоит
+     * `recognize(): String`, а его потребители режут результат по `\n` (`layoutOf`). Склеенная в
+     * одну строку страница развалит раскладку ещё до того, как её кто-то увидит.
+     */
+    val text: String
+        get() = lines(atoms).joinToString("\n") { line -> line.joinToString(" ") { it.text } }
+
+    private fun lines(subset: List<Atom>): List<List<Atom>> {
         val lines = mutableListOf<MutableList<Atom>>()
         subset.sortedBy { it.box.centerY }.forEach { atom ->
             val line = lines.lastOrNull()
@@ -69,6 +81,6 @@ class AtomLayer(val atoms: List<Atom>) {
                 kotlin.math.abs(line.last().box.centerY - atom.box.centerY) <= atom.box.height / 2f
             if (sameLine) line.add(atom) else lines.add(mutableListOf(atom))
         }
-        return lines.flatMap { it.sortedBy { atom -> atom.box.left } }
+        return lines.map { it.sortedBy { atom -> atom.box.left } }
     }
 }
