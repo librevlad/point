@@ -22,6 +22,7 @@ import com.point.core.model.ValueRef
 import com.point.core.flow.EntityExtractor
 import com.point.core.flow.asFeature
 import com.point.core.flow.asMetaKey
+import com.point.core.flow.isBareClock
 import com.point.core.model.Feature
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
@@ -73,7 +74,12 @@ internal fun entityDelta(
 ): EnrichmentDelta {
     val features = entities.mapNotNullTo(mutableSetOf()) { it.type.asFeature() }
     val facts = buildMap {
-        entities.forEach { e ->
+        // #244: место «Дата» одно, а экран переписки состоит из времён почти целиком — любое
+        // из них вытесняло настоящую дату, которая на том же кадре есть (`30.03`, `01.04`).
+        // Голое время не выбрасывается: оно остаётся уликой и признаком HAS_DATE (заметка
+        // «15:12 Встреча с Петром» — #233), но встаёт в очереди последним. Сортировка
+        // стабильная, поэтому порядок всех прочих сущностей сохраняется.
+        entities.sortedBy { it.isBareClock() }.forEach { e ->
             e.type.asMetaKey()?.let { key ->
                 // #236: an address loses its settlement in extraction («Олексйвка, вул. Сонячна, 15»
                 // comes back as «вул. Сонячна, 15») and the map then offers four towns. What was

@@ -59,6 +59,45 @@ class EntityEnricherTest {
         assertEquals(3, features.size)
     }
 
+    /**
+     * Живой баг (#244): на кадре посылки Новой Пошты единственное место «Дата» занимало время
+     * статуса — `11:41` из «Прибула до пункту… Сьогодні, 11:41», — вытесняя настоящую дату
+     * `30.03`, которая на том же кадре есть. Порядок сущностей от движка обратный нужному,
+     * а место одно (`putIfAbsent`), поэтому роль присуждается ранжированием.
+     */
+    @Test
+    fun `календарная дата побеждает отметку времени в роли даты документа`() = runTest {
+        val enricher = EntityEnricher(
+            extractor(
+                Entity(EntityType.DATE_TIME, "11:41"),
+                Entity(EntityType.DATE_TIME, "30.03"),
+            ),
+        )
+
+        val delta = enricher.enrich(obj("Прибула до пункту Сьогоднi, 11:41 Київ - 30.03"))
+
+        assertEquals("30.03", delta.metadata[META_ENTITY_PREFIX + "date"])
+        assertTrue(Feature.HAS_DATE in delta.features)
+    }
+
+    /**
+     * Регрессия, которую дала первая версия правки #244: голое время отсеивалось прямо в
+     * `isPlausible`, и вместе с ложной «Датой» пропадал признак `HAS_DATE`, а с ним пузырёк
+     * «Создать событие» на заметке, где время и есть содержание (случай #233).
+     *
+     * Когда календарной даты на кадре нет, отметка времени остаётся датой объекта: это не
+     * ложь, а единственное, что движок увидел.
+     */
+    @Test
+    fun `заметка со временем не теряет ни дату, ни признак`() = runTest {
+        val enricher = EntityEnricher(extractor(Entity(EntityType.DATE_TIME, "15:12")))
+
+        val delta = enricher.enrich(obj("15:12 Встреча с Петром\nвторой этаж"))
+
+        assertEquals("15:12", delta.metadata[META_ENTITY_PREFIX + "date"])
+        assertTrue(Feature.HAS_DATE in delta.features)
+    }
+
     @Test
     fun `applies only to text objects`() {
         val enricher = EntityEnricher(extractor())
