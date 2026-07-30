@@ -47,21 +47,41 @@ fun documentLabel(type: String?): String? = type?.let { DOCUMENT_TYPES[it] }
  * ignore than a boring one.
  */
 fun documentType(text: String): String? {
-    val hay = text.lowercase()
-    val hits = PARCEL_MARKERS.count { it in hay }
+    val hay = foldOcr(text)
+    val hits = FOLDED_PARCEL_MARKERS.count { it in hay }
     val parcel = hits >= 2 || (hits >= 1 && waybillNumbers(text).isNotEmpty())
     return if (parcel) TYPE_PARCEL else null
 }
 
-/** The vocabulary of delivery, as it appears on the carriers' own screens. Ukrainian and Russian
- *  side by side because both show up on one phone. Latin forms catch the app's English locale. */
+/**
+ * Folds away the letter OCR eats.
+ *
+ * Measured on the device (2026-07-30): Tesseract drops the Ukrainian `і` almost everywhere —
+ * `відділення` comes back as `вддлення`, `місце` as `мсце`, `зберігання` as `збергання`. A
+ * vocabulary written the way the words are spelled matched **nothing at all** on four real
+ * Nova Poshta screenshots. Deleting `і` from both sides costs nothing and fixes all of them,
+ * which is a better answer than keeping two spellings of every word.
+ */
+internal fun foldOcr(s: String): String =
+    s.lowercase().replace("і", "").replace("i", "").replace("ї", "")
+
+/**
+ * The vocabulary of delivery **as OCR actually returns it**, not as the words are spelled.
+ * Written here in normal spelling and folded once below, so the list stays readable.
+ *
+ * Every entry earned its place on a real screenshot: stems (`посилк`) rather than whole forms,
+ * because the carrier writes «посилка», «посилку» and «про посилку» on three different screens.
+ */
 private val PARCEL_MARKERS = listOf(
     "відділення", "отделение",
     "нова пошта", "новая почта", "nova poshta", "novaposhta",
     "укрпошта", "укрпочта", "ukrposhta",
-    "посилка", "посылка", "parcel",
+    "посилк", "посылк", "parcel",
     "накладна", "накладная",
-    "зберігання до", "хранение до",
-    "отримувач", "получатель",
-    "експрес-накладна", "экспресс-накладная",
+    "зберігання", "хранение",
+    "отримувач", "одержувач", "получатель",
+    "відправник", "відправлення", "отправитель",
+    "місце доставки", "переадресувати", "прибула",
 )
+
+private val FOLDED_PARCEL_MARKERS = PARCEL_MARKERS.map(::foldOcr)

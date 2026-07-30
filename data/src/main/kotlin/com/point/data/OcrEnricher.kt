@@ -4,6 +4,8 @@ import com.point.core.flow.EnrichCost
 import com.point.core.flow.Enricher
 import com.point.core.flow.EnricherMeta
 import com.point.core.flow.EnrichmentDelta
+import com.point.core.flow.stripStatusBar
+import com.point.core.flow.KIND_IDENTIFIER
 import com.point.core.flow.documentType
 import com.point.core.flow.META_SEMANTIC_TYPE
 import com.point.core.flow.KIND_ADDRESS
@@ -51,17 +53,23 @@ class OcrEnricher @Inject constructor(
         ),
         // The gate must know OCR can yield objects, not only actions: on a parcel screenshot
         // the address and the deadline are the whole point, and neither opens a new button.
-        mayYieldKinds = setOf(KIND_PHONE, KIND_EMAIL, KIND_URL, KIND_ADDRESS, KIND_DATE),
+        mayYieldKinds = setOf(KIND_PHONE, KIND_EMAIL, KIND_URL, KIND_ADDRESS, KIND_DATE, KIND_IDENTIFIER),
         label = "Распознаю текст…",
     )
 
     override fun appliesTo(state: ObjectState) = state.kind == ObjectKind.IMAGE
 
     override suspend fun enrich(obj: PointObject): EnrichmentDelta = withContext(Dispatchers.IO) {
-        val text = runCatching { recognizer.recognize(obj) }.getOrDefault("")
-        if (text.isBlank() || looksLikeOcrGarbage(text)) return@withContext EnrichmentDelta()
+        val raw = runCatching { recognizer.recognize(obj) }.getOrDefault("")
+        if (raw.isBlank() || looksLikeOcrGarbage(raw)) return@withContext EnrichmentDelta()
+        // #233: the phone's own clock sits at the top of every screenshot and used to become
+        // «дата 15:12». Dropped once, here, so no later reader can mistake furniture for content.
+        val text = stripStatusBar(raw)
 
         val entities = entityDelta(obj, extractor.extract(text.take(MAX_CHARS)))
+        // The waybill number is the whole reason the user shared the screenshot. It reaches the
+        // graph on this path — the TEXT-only enricher never runs on what was actually shared.
+        val (identifiers, idRelations) = identifierObjects(obj, text.take(MAX_CHARS))
         val url = URL_REGEX.find(text)?.value
         val ref = store.newScratchFile("txt")
         File(ref.value).writeText(text)
@@ -78,8 +86,8 @@ class OcrEnricher @Inject constructor(
             },
             // The screenshot's own findings become graph objects (#222) — the branch address
             // read off a parcel screenshot is a place, not a line in a checklist.
-            objects = entities.objects,
-            relations = entities.relations,
+            objects = entities.objects + identifiers,
+            relations = entities.relations + idRelations,
         )
     }
 
