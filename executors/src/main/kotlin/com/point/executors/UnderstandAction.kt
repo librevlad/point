@@ -15,6 +15,7 @@ import com.point.core.flow.LayoutElement
 import com.point.core.flow.LlmClient
 import com.point.core.flow.MAX_FIELD_CANDIDATES
 import com.point.core.flow.META_ALT_SUFFIX
+import com.point.core.flow.META_BLOCKED_SUFFIX
 import com.point.core.flow.META_ENTITY_PREFIX
 import com.point.core.flow.META_EVIDENCE_SUFFIX
 import com.point.core.flow.META_GRAPH_ROLE_PREFIX
@@ -41,6 +42,7 @@ import com.point.core.flow.resolve
 import com.point.core.flow.ruleEvidence
 import com.point.core.flow.s10CheckDigitValid
 import com.point.core.flow.semanticFits
+import com.point.core.flow.sourceRank
 import com.point.core.model.ActionResult
 import com.point.core.model.CapabilityId
 import com.point.core.model.Feature
@@ -246,6 +248,11 @@ class UnderstandRealizer @Inject constructor(
                     judgeFields(parseFieldCandidates(again).fields.filterKeys { it in keys }, layer)
                 }
                 val fields = judged.won + retried?.won.orEmpty()
+                // Отклонённое hard-block'ом не исчезает молча (ревью #261): чтения обеих попыток
+                // остаются в .blocked — «прочиталось, но контрольная цифра не сошлась» ≠ «не нашлось».
+                val blocked = (judged.blocked.keys + retried?.blocked?.keys.orEmpty()).associateWith { key ->
+                    (judged.blocked[key].orEmpty() + retried?.blocked?.get(key).orEmpty()).distinct()
+                }
                 // Роль — собственным текстом элемента, не формулировкой модели; выдуманный
                 // идентификатор отброшен парсером и не тратит свою роль (#222, шаг 6).
                 val roles = parseClassification(answer, elements)
@@ -260,7 +267,9 @@ class UnderstandRealizer @Inject constructor(
                     ActionResult.Success(
                         ResultObject(
                             input.state.kind, input.mime, input.uri,
-                            metadata = merged + annotations(merged, fields) + ("op" to "understand"),
+                            metadata = merged +
+                                annotations(merged, fields, judgedByLayer = layer != null, blocked = blocked) +
+                                ("op" to "understand"),
                         ),
                     )
                 }
@@ -271,20 +280,43 @@ class UnderstandRealizer @Inject constructor(
         File(llm.run(textOnly(input), prompt).uri.value).readText()
 
     /**
-     * Аннотации к слитым фактам: улики и происхождение — только тем ключам, где голосование
-     * оставило именно наше чтение (иначе аннотация приписала бы чужому значению наши улики);
-     * кандидаты — в `.alt` рядом с победителем, ничего не выброшено молча.
+     * Аннотации к слитым фактам (переписаны по ревью #261 — три подтверждённые находки):
+     *
+     * - **кандидаты не тонут никогда**: все чтения модели остаются в `.alt` рядом со слитым
+     *   значением — даже когда голосование оставило известное;
+     * - **улики — только когда их считали**: без живого слоя суд не состоялся, и `.ev` не
+     *   пишется («не судили — не врём»); слабый повторный суд не стирает более сильный;
+     * - **происхождение не понижается** ([sourceRank]): подтверждение моделью значения,
+     *   прочитанного правилом со страницы, не делает его «диктовкой» — согласие двух
+     *   независимых источников повышает доверие, а не снижает;
+     * - отклонённое hard-block'ом — в `.blocked`, не в никуда.
      */
-    private fun annotations(merged: Map<String, String>, fields: Map<String, JudgedField>): Map<String, String> =
-        buildMap {
-            fields.forEach { (key, field) ->
-                if (normConsensus(merged[key].orEmpty()) != normConsensus(field.text)) return@forEach
-                put(key + META_SOURCE_SUFFIX, if (field.grounded) SOURCE_OCR else SOURCE_MODEL)
-                put(key + META_EVIDENCE_SUFFIX, field.evidence.joinToString(",") { it.name.lowercase() })
-                val readings = (alternativesOf(merged, key) + field.candidates).distinct()
-                if (readings.size > 1) put(key + META_ALT_SUFFIX, altValue(readings))
+    private fun annotations(
+        merged: Map<String, String>,
+        fields: Map<String, JudgedField>,
+        judgedByLayer: Boolean,
+        blocked: Map<String, List<String>>,
+    ): Map<String, String> = buildMap {
+        fields.forEach { (key, field) ->
+            val readings = (listOfNotNull(merged[key]) + alternativesOf(merged, key) + field.candidates).distinct()
+            if (readings.size > 1) put(key + META_ALT_SUFFIX, altValue(readings))
+            // Аннотации силы — только своему значению: чужому они приписали бы наши улики.
+            if (normConsensus(merged[key].orEmpty()) != normConsensus(field.text)) return@forEach
+            if (judgedByLayer) {
+                val existing = merged[key + META_EVIDENCE_SUFFIX]?.split(',')?.count { it.isNotBlank() } ?: 0
+                if (field.evidence.size >= existing) {
+                    put(key + META_EVIDENCE_SUFFIX, field.evidence.joinToString(",") { it.name.lowercase() })
+                }
+            }
+            val source = if (field.grounded) SOURCE_OCR else SOURCE_MODEL
+            if (sourceRank(source) > sourceRank(merged[key + META_SOURCE_SUFFIX])) {
+                put(key + META_SOURCE_SUFFIX, source)
             }
         }
+        blocked.forEach { (key, texts) ->
+            if (texts.isNotEmpty()) put(key + META_BLOCKED_SUFFIX, altValue(texts))
+        }
+    }
 
     /** The LLM must judge the TEXT, not re-read the image — a text-shaped stand-in object. */
     private fun textOnly(input: PointObject) =
@@ -320,7 +352,12 @@ internal data class JudgedField(
     val candidates: List<String>,
 )
 
-internal data class JudgedFields(val won: Map<String, JudgedField>, val retry: Set<String>)
+internal data class JudgedFields(
+    val won: Map<String, JudgedField>,
+    val retry: Set<String>,
+    /** Чтения, отклонённые hard-block'ом, по ключам — след для `.blocked`, не тихая смерть. */
+    val blocked: Map<String, List<String>> = emptyMap(),
+)
 
 /**
  * Суд над кандидатами поля — кодом, не моделью (#261):
@@ -343,10 +380,12 @@ internal fun judgeFields(
     val ruleMarks = layer?.ruleEvidence().orEmpty()
     val won = LinkedHashMap<String, JudgedField>()
     val retry = mutableSetOf<String>()
+    val blockedByKey = LinkedHashMap<String, List<String>>()
     fields.forEach { (key, rawCandidates) ->
         val grounded = rawCandidates.flatMap { groundCandidate(key, it, layer) }
             .distinctBy { it.first.text to it.first.ids }
-        val alive = grounded.filterNot { (c, _) -> s10CheckDigitValid(c.text) == false }
+        val (blocked, alive) = grounded.partition { (c, _) -> s10CheckDigitValid(c.text) == false }
+        if (blocked.isNotEmpty()) blockedByKey[key] = blocked.map { it.first.text }
         if (alive.isEmpty()) {
             if (grounded.isNotEmpty()) retry += key
             return@forEach
@@ -364,7 +403,7 @@ internal fun judgeFields(
             candidates = scored.map { it.first.text }.distinct(),
         )
     }
-    return JudgedFields(won, retry)
+    return JudgedFields(won, retry, blockedByKey)
 }
 
 /**

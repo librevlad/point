@@ -103,9 +103,41 @@ class CandidatesTest {
     // --- Формы и checksum ---
 
     @Test
+    fun `маркер в дальнем пробеге той же строки — не подпись`() {
+        // «Накладна №» в шапке и номер замовлення через две колонки: смежности нет (ревью #261).
+        val far = AtomLayer(
+            listOf(
+                atom("m", "ТТН", 10f, 100f, 60f, 120f),
+                atom("x", "інше", 200f, 100f, 260f, 120f),
+                atom("v", "20451491549395", 500f, 100f, 700f, 120f),
+            ),
+        )
+
+        val ev = far.fieldEvidence(META_ENTITY_TRACK, FieldCandidate("20451491549395", listOf("v")))
+
+        assertFalse(EvidenceClass.GEOMETRIC in ev)
+    }
+
+    @Test
+    fun `заголовок через пустые полстраницы — не подпись над значением`() {
+        val distant = AtomLayer(
+            listOf(
+                atom("m", "Телефон", 100f, 60f, 220f, 80f),
+                atom("v", "+380671234567", 90f, 600f, 280f, 620f),
+            ),
+        )
+
+        val ev = distant.fieldEvidence(META_ENTITY_PREFIX + "phone", FieldCandidate("+380671234567", listOf("v")))
+
+        assertFalse(EvidenceClass.GEOMETRIC in ev)
+    }
+
+    @Test
     fun `формы полей — свидетели`() {
         assertTrue(semanticFits(META_ENTITY_TRACK, "20 4514 9154 9395") == true)
         assertTrue(semanticFits(META_ENTITY_TRACK, "RA123456789UA") == true)
+        // Пробелы — формат: заземлённый S10 собирается из атомов через пробел (ревью #261).
+        assertTrue(semanticFits(META_ENTITY_TRACK, "RA 123456785 UA") == true)
         assertTrue(semanticFits(META_ENTITY_PREFIX + "phone", "+380 67 123 45 67") == true)
         assertTrue(semanticFits(META_ENTITY_PREFIX + "phone", "1600") == false)
         assertTrue(semanticFits(META_ENTITY_PREFIX + "email", "olena@example.com") == true)

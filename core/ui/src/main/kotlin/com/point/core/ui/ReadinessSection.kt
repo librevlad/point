@@ -57,13 +57,13 @@ internal fun ReadinessSection(metadata: Map<String, String>) {
             .animateContentSize(tween(220)),
     ) {
         Column(modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp)) {
-            rows.forEach { row -> key(row.schema.id) { ReadinessRow(row, understood) } }
+            rows.forEach { row -> key(row.schema.id) { ReadinessRow(row, understood, metadata) } }
         }
     }
 }
 
 @Composable
-private fun ReadinessRow(row: ActionReadiness, understood: Boolean) {
+private fun ReadinessRow(row: ActionReadiness, understood: Boolean, metadata: Map<String, String>) {
     val ready = row.readiness is Readiness.Ready
     val present = when (val r = row.readiness) {
         is Readiness.Ready -> r.present
@@ -136,14 +136,19 @@ private fun ReadinessRow(row: ActionReadiness, understood: Boolean) {
         }
         if (expanded) {
             missing.forEach { spec ->
+                // Отклонённое проверкой — не «не нашлось» (ревью #261): чтение было, но
+                // контрольная цифра не сошлась, и человек обязан видеть, ЧТО прочиталось.
+                val blockedReadings = metadata[spec.key + com.point.core.flow.META_BLOCKED_SUFFIX]
+                    ?.split("\n")?.filter { it.isNotBlank() }.orEmpty()
                 Text(
                     // «Не нашлось» — не вердикт, а состояние поиска: до «Понять» искало только
                     // офлайн-правило, и оно слепо к чужим форматам (у идентификатора нет
                     // универсальной формы) — ложный тупик хуже честного «можно спросить модель».
-                    text = if (understood) {
-                        "${spec.label} — в прочитанном не нашлось"
-                    } else {
-                        "${spec.label} — офлайн не нашлось; «Понять» может найти"
+                    text = when {
+                        blockedReadings.isNotEmpty() ->
+                            "${spec.label} — прочиталось «${blockedReadings.first()}», но контрольная цифра не сошлась"
+                        understood -> "${spec.label} — в прочитанном не нашлось"
+                        else -> "${spec.label} — офлайн не нашлось; «Понять» может найти"
                     },
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,

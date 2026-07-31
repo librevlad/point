@@ -70,11 +70,32 @@ const val SOURCE_RULE = "rule"
 const val SOURCE_MODEL = "model"
 const val SOURCE_HUMAN = "human"
 
-/** Аннотация ли это, а не значение: `.alt`/`.more`/`.ev`/`.src` живут рядом с фактом и не
- *  участвуют в голосовании фактов ([mergeFacts] их не сливает — ими управляют их авторы). */
+/**
+ * Суффикс метаданных: чтения, отклонённые hard-block-валидатором (контрольная цифра не
+ * сошлась) — `entity.track.blocked`. Невозможное не становится значением, но и не исчезает
+ * молча (ревью #261): карточка говорит «прочиталось, но контрольная цифра не сошлась»
+ * вместо ложного «не нашлось».
+ */
+const val META_BLOCKED_SUFFIX = ".blocked"
+
+/**
+ * Сила происхождения — для правила «происхождение не понижается» (ревью #261): подтверждение
+ * моделью значения, прочитанного со страницы, не имеет права переписать `ocr` на `model`.
+ */
+fun sourceRank(source: String?): Int = when (source) {
+    SOURCE_HUMAN -> 3
+    SOURCE_OCR -> 2
+    SOURCE_RULE -> 1
+    SOURCE_MODEL -> 0
+    else -> -1
+}
+
+/** Аннотация ли это, а не значение: `.alt`/`.more`/`.ev`/`.src`/`.blocked` живут рядом с фактом
+ *  и не участвуют в голосовании фактов ([mergeFacts] их не сливает — ими управляют их авторы). */
 fun isAnnotationKey(key: String): Boolean =
     key.endsWith(META_ALT_SUFFIX) || key.endsWith(META_MORE_SUFFIX) ||
-        key.endsWith(META_EVIDENCE_SUFFIX) || key.endsWith(META_SOURCE_SUFFIX)
+        key.endsWith(META_EVIDENCE_SUFFIX) || key.endsWith(META_SOURCE_SUFFIX) ||
+        key.endsWith(META_BLOCKED_SUFFIX)
 
 /**
  * Формный валидатор «значение подходит под тип поля» — класс [EvidenceClass.SEMANTIC].
@@ -84,7 +105,9 @@ fun isAnnotationKey(key: String): Boolean =
 fun semanticFits(key: String, value: String): Boolean? {
     val digits = value.count(Char::isDigit)
     return when (key) {
-        META_ENTITY_TRACK -> digits in 13..14 || S10_SHAPED.matches(value.trim().uppercase())
+        // Пробелы — формат, не суть (как в [s10CheckDigitValid]): заземлённый кандидат
+        // собирается из атомов через пробел — «RA 123456785 UA» тот же S10 (ревью #261).
+        META_ENTITY_TRACK -> digits in 13..14 || S10_SHAPED.matches(value.trim().uppercase().replace(" ", ""))
         META_ENTITY_PREFIX + "phone" -> digits in 10..13
         META_ENTITY_PREFIX + "email" -> value.contains('@') && value.substringAfter('@').contains('.')
         META_ENTITY_PREFIX + "card" -> digits in 15..19
@@ -167,22 +190,35 @@ fun AtomLayer.fieldEvidence(
     fun isMarker(atom: Atom) = atom.text.trim().trimEnd(':', '.').lowercase() in markers
 
     // LEXICAL: маркер в том же пробеге, что значение («ТТН 20 4514…» одной ячейкой).
-    // GEOMETRIC: маркер в соседнем пробеге той же строки либо строкой выше над значением.
+    // GEOMETRIC: маркер в СОСЕДНЕМ пробеге той же строки либо строкой выше НАД значением,
+    // не дальше [LABEL_GAP_HEIGHTS] высот по вертикали. Смежность и потолок обязательны
+    // (ревью #261): «Накладна №» в дальней колонке той же полосы и заголовок через пустые
+    // полстраницы — не подпись, а инфляция класса, меняющая победителя.
     val valueBox = resolved.atoms.map { it.box }.reduce(Box::union)
     valueLines.forEach { li ->
-        cellRuns(pageLines[li]).forEach { run ->
-            val holdsValue = run.any { it.id in valueIds }
+        val runs = cellRuns(pageLines[li])
+        val valueRunIdx = runs.indices.filter { i -> runs[i].any { it.id in valueIds } }
+        runs.forEachIndexed { ri, run ->
+            val holdsValue = ri in valueRunIdx
             val marker = run.any { it.id !in valueIds && isMarker(it) }
             if (marker && holdsValue) classes += EvidenceClass.LEXICAL
-            if (marker && !holdsValue) classes += EvidenceClass.GEOMETRIC
+            if (marker && !holdsValue && valueRunIdx.any { kotlin.math.abs(it - ri) == 1 }) {
+                classes += EvidenceClass.GEOMETRIC
+            }
         }
-        val above = pageLines.getOrNull(li - 1).orEmpty()
-        if (above.any { isMarker(it) && it.box.left <= valueBox.right && valueBox.left <= it.box.right }) {
-            classes += EvidenceClass.GEOMETRIC
+        pageLines.getOrNull(li - 1).orEmpty().forEach { atom ->
+            val overlapsX = atom.box.left <= valueBox.right && valueBox.left <= atom.box.right
+            val closeAbove = valueBox.top - atom.box.bottom <=
+                maxOf(atom.box.height, valueBox.height) * LABEL_GAP_HEIGHTS
+            if (overlapsX && closeAbove && isMarker(atom)) classes += EvidenceClass.GEOMETRIC
         }
     }
     return classes
 }
+
+/** Подпись стоит над значением вплотную; заголовок через пустое поле — не подпись.
+ *  Порог в высотах, не в пикселях — страница приходит в любом разрешении. */
+private const val LABEL_GAP_HEIGHTS = 2f
 
 /**
  * Слова-маркеры полей — **свидетели, не решатели** (design v3 §4): маркер даёт класс улики

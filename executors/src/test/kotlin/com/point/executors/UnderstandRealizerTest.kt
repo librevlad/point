@@ -221,11 +221,55 @@ class UnderstandRealizerTest {
 
         val meta = result.result.metadata
         assertEquals("20 4514 9154 9395", meta[META_ENTITY_TRACK])
-        // Порядок кандидатов = порядок ответа модели; победа уликами его не переставляет.
+        // Слитое значение — первым (конвенция .alt «победитель включён»), дальше все чтения.
         assertEquals(
-            listOf("99 9999 9999 9995", "20 4514 9154 9395"),
+            listOf("20 4514 9154 9395", "99 9999 9999 9995"),
             alternativesOf(meta, META_ENTITY_TRACK),
         )
+    }
+
+    // -- находки ревью #261: аннотации не лгут, отклонённое не тонет --
+
+    /** Подтверждение моделью значения, прочитанного правилом, повышает доверие, а не снижает:
+     *  происхождение не деградирует ocr→model, «возможно» не появляется (ревью #261). */
+    @Test
+    fun `подтверждение моделью не понижает происхождение и не судит без слоя`() = runTest {
+        val known = textObject(
+            metadata = mapOf(
+                META_ENTITY_TRACK to "20 4514 9154 9395",
+                META_ENTITY_TRACK + com.point.core.flow.META_SOURCE_SUFFIX to com.point.core.flow.SOURCE_OCR,
+            ),
+        )
+
+        val result = realizer("TRACK=20 4514 9154 9395").perform(known) as ActionResult.Success
+
+        val meta = result.result.metadata
+        assertEquals(com.point.core.flow.SOURCE_OCR, meta["entity.track.src"])
+        assertNull("без слоя суд не состоялся — .ev не пишется", meta["entity.track.ev"])
+    }
+
+    @Test
+    fun `отклонённое контрольной цифрой не исчезает — blocked виден`() = runTest {
+        val result = realizer("TRACK=RA123456789UA\nSUMMARY=лист", "TRACK=RA123456780UA")
+            .perform(imageWithLayer()) as ActionResult.Success
+
+        val meta = result.result.metadata
+        assertNull(meta[META_ENTITY_TRACK])
+        val blocked = meta["entity.track" + com.point.core.flow.META_BLOCKED_SUFFIX]!!.split("\n")
+        assertTrue(blocked.contains("RA123456789UA"))
+        assertTrue("чтение повторного вызова тоже не тонет", blocked.contains("RA123456780UA"))
+    }
+
+    @Test
+    fun `при победе известного кандидаты модели не тонут`() = runTest {
+        val known = textObject(metadata = mapOf("entity.phone" to "+380671234567"))
+
+        val result = realizer("PHONE=+380679999999\nPHONE=+380671111111").perform(known) as ActionResult.Success
+
+        assertEquals("+380671234567", result.result.metadata["entity.phone"])
+        val alt = alternativesOf(result.result.metadata, "entity.phone")
+        assertTrue(alt.contains("+380679999999"))
+        assertTrue("второй кандидат не исчез", alt.contains("+380671111111"))
     }
 
     @Test
