@@ -101,6 +101,10 @@ fun AtomLayer.resolveCells(cells: List<List<CellAnswer>>): GroundedTable {
  * Слой как индекс слов для запроса модели: строки страницы, каждое слово с меткой —
  * `[w12]Дата [w13]Сумма`. Модель отвечает метками, текст собирает [resolveCells].
  *
+ * Улики офлайн-правил ([ruleEvidence]) едут атрибутом метки — `[w7 rule=track-shaped]9395`:
+ * подсказка о форме, видимая модели ровно там, где ей отвечать, и ничего не решающая
+ * (design v3 §4 — правила размечают вход, а не роль).
+ *
  * `null` — индекса не будет, честно и целиком:
  * - слой пуст или прочитанное — символьная каша: рукопись и фото мира дают бессмысленные
  *   атомы, и индекс из них только собьёт модель с собственных глаз;
@@ -111,8 +115,13 @@ fun AtomLayer.promptIndex(): String? {
     val named = atoms.filter { it.text.isNotBlank() }
     if (named.isEmpty() || named.size > MAX_PROMPT_ATOMS) return null
     if (symbolSoup(text)) return null
+    val evidence = ruleEvidence()
     return lines(named).joinToString("\n") { line ->
-        line.joinToString(" ") { "[${it.id}]${it.text}" }
+        line.joinToString(" ") { atom ->
+            val rules = evidence[atom.id]
+            val attr = if (rules.isNullOrEmpty()) "" else " rule=" + rules.joinToString(",")
+            "[${atom.id}$attr]${atom.text}"
+        }
     }
 }
 

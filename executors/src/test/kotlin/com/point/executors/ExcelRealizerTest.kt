@@ -132,7 +132,8 @@ class ExcelRealizerTest {
 
         assertTrue(result is ActionResult.Success)
         assertEquals(listOf(listOf("Трек-номер", "20 4514 9154 9395")), lastRows)
-        assertTrue(lastPrompt!!.contains("[a2]4514 9154")) // индекс слов приложен к запросу
+        // Индекс слов приложен к запросу, и куски трека несут улику правила (#258, design v3 §4).
+        assertTrue(lastPrompt!!.contains("[a2 rule=track-shaped]4514 9154"))
     }
 
     @Test
