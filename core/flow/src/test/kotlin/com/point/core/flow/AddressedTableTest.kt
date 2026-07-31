@@ -116,6 +116,37 @@ class AddressedTableTest {
         assertEquals("4514 9154", t.rows[0][0])
     }
 
+    /** Гейт диктовки не пробивается сплайсом (ревью #258): «1491» — хвост «4514» + голова «9154»,
+     *  на странице такого числа нет; в склейке страницы без пробелов оно «находилось». */
+    @Test
+    fun `цифра, склеенная из кусков соседних чисел, — диктовка, а не значение страницы`() {
+        assertEquals("1491⚠", layer.resolveCells(listOf(listOf(CellAnswer.Literal("1491")))).rows[0][0])
+        assertEquals("549395⚠", layer.resolveCells(listOf(listOf(CellAnswer.Literal("549395")))).rows[0][0])
+    }
+
+    @Test
+    fun `подчисло одного слова страницы — тоже диктовка`() {
+        val money = AtomLayer(listOf(atom("m1", "30.00", 10f, 10f, 60f, 30f)))
+
+        assertEquals("300⚠", money.resolveCells(listOf(listOf(CellAnswer.Literal("300")))).rows[0][0])
+    }
+
+    /** Цепочка целых соседних слов строки — законное значение: модель прочла два стоящих рядом
+     *  куска как одно поле, границы слов не порваны. */
+    @Test
+    fun `цепочка целых соседних слов строки проходит чистой`() {
+        val t = layer.resolveCells(listOf(listOf(CellAnswer.Literal("9154 9395"))))
+
+        assertEquals("9154 9395", t.rows[0][0])
+    }
+
+    @Test
+    fun `слэш и двоеточие — формат, а не другая цифра`() {
+        val time = AtomLayer(listOf(atom("t1", "16:00", 10f, 10f, 60f, 30f)))
+
+        assertEquals("1600", time.resolveCells(listOf(listOf(CellAnswer.Literal("1600")))).rows[0][0])
+    }
+
     /** Спор длиннее лимита дропдауна: вариантов не остаётся — пометка живёт, пустой список нет. */
     @Test
     fun `спор о длинном чтении не рождает пустой дропдаун`() {

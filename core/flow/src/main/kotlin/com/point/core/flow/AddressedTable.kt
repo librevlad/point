@@ -53,7 +53,7 @@ data class GroundedTable(
  * (ревью #281 — просьба в промпте «текст только когда слов нет в списке» кодом не подкреплялась).
  */
 fun AtomLayer.resolveCells(cells: List<List<CellAnswer>>): GroundedTable {
-    val page = normConsensus(text)
+    val page = pageValues(text)
     val rows = ArrayList<List<String>>(cells.size)
     val candidates = LinkedHashMap<Pair<Int, Int>, List<String>>()
     cells.forEachIndexed { r, row ->
@@ -61,7 +61,7 @@ fun AtomLayer.resolveCells(cells: List<List<CellAnswer>>): GroundedTable {
             var flagged = false
             val text = when (cell) {
                 is CellAnswer.Literal -> {
-                    val folded = normConsensus(cell.text)
+                    val folded = pageFold(cell.text)
                     flagged = cell.text.any { it.isDigit() } && folded.isNotEmpty() && folded !in page
                     cell.text
                 }
@@ -138,6 +138,41 @@ private fun symbolSoup(text: String): Boolean {
     val readable = text.count { it.isLetterOrDigit() }
     return readable.toDouble() / nonSpace < 0.6
 }
+
+/**
+ * Значения, которые страница может подтвердить: свёртки **цепочек целых подряд идущих слов**
+ * каждой строки. Именно целых слов, а не подстрока склейки всей страницы: в склейке без пробелов
+ * «1491» находится как хвост «4514» + голова «9154», хотя такого числа на странице нет, — число,
+ * собранное не из тех кусков и тихо отданное как валидное, это ровно болезнь design v3 §2,
+ * от которой гейт диктовки и защищает (ревью #258 — гейт пробивался сплайсом через стёртые
+ * границы слов и строк).
+ */
+private fun pageValues(text: String): Set<String> {
+    val values = HashSet<String>()
+    text.split('\n').forEach { line ->
+        val tokens = line.split(WHITESPACE).map(::pageFold).filter { it.isNotEmpty() }
+        tokens.indices.forEach { i ->
+            val chain = StringBuilder()
+            var j = i
+            while (j < tokens.size && chain.length + tokens[j].length <= MAX_VALUE_LEN) {
+                chain.append(tokens[j])
+                values.add(chain.toString())
+                j++
+            }
+        }
+    }
+    return values
+}
+
+/** Свёртка для сверки со страницей: формат-шум [normConsensus] плюс `/` и `:` — «16:00» на
+ *  странице подтверждает продиктованное «1600», иначе честная цифра ловит ⚠ за наш же формат. */
+private fun pageFold(s: String): String = normConsensus(s).replace("/", "").replace(":", "")
+
+private val WHITESPACE = Regex("""\s+""")
+
+/** Длиннее этого значения на странице не живут (IBAN — 29 знаков): потолок держит набор цепочек
+ *  малым даже на плотной странице в [MAX_PROMPT_ATOMS] слов. */
+private const val MAX_VALUE_LEN = 64
 
 /** Потолок индекса: плотная страница — сотни слов, разворот книги — уже нет. */
 const val MAX_PROMPT_ATOMS = 600

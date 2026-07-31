@@ -21,8 +21,10 @@ data class Agreement(
     val candidates: List<String>,
 )
 
-/** Fold-away for agreement: case, spacing, dashes, and the ⚠/~~strike~~ markers don't count as a diff. */
-internal fun normConsensus(s: String): String =
+/** Fold-away for agreement: case, spacing, dashes, and the ⚠/~~strike~~ markers don't count as a diff.
+ *  Public, потому что это общий язык сравнения чтений: якорение кандидатов в `:executors`
+ *  обязано сверять ячейки той же свёрткой, что и голосование, — иначе они разойдутся. */
+fun normConsensus(s: String): String =
     s.lowercase().replace("⚠", "").replace("~~", "")
         .replace(Regex("""[\s\-–—.,]+"""), "")
 
@@ -30,21 +32,33 @@ internal fun normConsensus(s: String): String =
  * Votes [readings] of one thing. Null when nothing was read at all — an absent value is not a
  * disagreement, and the caller decides what absence means.
  *
+ * Чтение из одних маркеров ⚠ — «не разобрано», а не чтение: содержания у него нет, поэтому оно
+ * не перевешивает настоящее значение и не попадает в кандидаты (ревью #258 — «⚠» одной модели
+ * побеждало слово, прочитанное со страницы другой, и само становилось вариантом в дропдауне).
+ * Если **все** чтения такие — маркер возвращается: «не разобрано» должно пережить голосование,
+ * тихая пустота на его месте — та же потеря сигнала.
+ *
  * On a tie the **first** reading wins, so the caller controls precedence by ordering: putting
  * what is already known first means a fresh source has to actually outvote it, not merely
  * arrive later.
+ *
+ * Внутри согласной группы чистое чтение бьёт помеченное независимо от порядка источников:
+ * ⚠ переживает голосование, только когда ни один источник не подтвердил значение чистым, —
+ * иначе судьба пометки зависела бы от того, кто из источников успел ответить первым (ревью #258).
  */
 fun agree(readings: List<String>): Agreement? {
     val present = readings.map { it.trim() }.filter { it.isNotBlank() }
     if (present.isEmpty()) return null
+    val content = present.filter { it.replace("⚠", "").isNotBlank() }
+    if (content.isEmpty()) return Agreement(present.first(), agreed = true, candidates = emptyList())
 
-    val byNorm = present.groupBy(::normConsensus)
+    val byNorm = content.groupBy(::normConsensus)
     val top = byNorm.maxByOrNull { it.value.size }!!
-    val pick = top.value.first() // a raw value of the plurality group
+    val pick = top.value.firstOrNull { !it.contains('⚠') } ?: top.value.first()
     return if (byNorm.size == 1) {
         Agreement(pick, agreed = true, candidates = emptyList())
     } else {
-        Agreement(pick, agreed = false, candidates = present.distinct())
+        Agreement(pick, agreed = false, candidates = content.distinct())
     }
 }
 

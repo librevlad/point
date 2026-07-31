@@ -11,6 +11,7 @@ import com.point.core.flow.LlmClient
 import com.point.core.flow.META_OCR_ATOMS_REF
 import com.point.core.flow.Realizer
 import com.point.core.flow.SpreadsheetWriter
+import com.point.core.flow.normConsensus
 import com.point.core.flow.promptIndex
 import com.point.core.flow.reconcile
 import com.point.core.flow.resolveCells
@@ -85,7 +86,14 @@ class ExcelRealizer @Inject constructor(
                         val answer = provider.run(input, prompt)
                         val raw = File(answer.uri.value).readText()
                         val grounded = if (layer != null && index != null) {
-                            parseAddressedCells(raw)?.let(layer::resolveCells)
+                            // Ответ мимо адресного контракта (TSV, прочий текст) — те же дословные
+                            // ячейки: честность проверки не зависит от формата, которым модель решила
+                            // ответить. Иначе диктовка целой таблицы, отвеченная TSV, миновала бы
+                            // проверку страницы, которую тот же ответ в JSON бы не прошёл (ревью #258).
+                            val cells = parseAddressedCells(raw)
+                                ?: parseTable(raw).map { row -> row.map { CellAnswer.Literal(it) } }
+                                    .takeIf { it.isNotEmpty() }
+                            cells?.let(layer::resolveCells)
                         } else {
                             null
                         }
@@ -122,9 +130,22 @@ class ExcelRealizer @Inject constructor(
                     // Кандидаты двух этажей под одним дропдауном: спор моделей между собой (reconcile)
                     // и спор модели с атомами страницы (#258). Согласие моделей второй спор не гасит:
                     // два пересказа, совпавшие друг с другом, — всё ещё не то, что напечатано.
-                    val candidates = (consensus.candidates.asSequence() + cellCandidates.asSequence().flatMap { it.asSequence() })
-                        .groupBy({ it.key }, { it.value })
-                        .mapValues { (_, lists) -> lists.flatten().distinct() }
+                    // Спор с атомами едет к своей ячейке по якорю-содержимому (anchorCandidates), а в
+                    // дропдауне каждое чтение живёт один раз — чистым, если хоть один этаж дал его чистым.
+                    val candidates = (
+                        consensus.candidates.asSequence().map { it.key to it.value } +
+                            cellCandidates.asSequence().flatMap { perModel ->
+                                perModel.asSequence().mapNotNull { (key, cand) ->
+                                    anchorCandidates(key, cand, consensus.rows)?.let { it to cand }
+                                }
+                            }
+                        )
+                        .groupBy({ it.first }, { it.second })
+                        .mapValues { (_, lists) ->
+                            lists.flatten().distinct()
+                                .groupBy(::normConsensus).values
+                                .map { g -> g.firstOrNull { !it.contains('⚠') } ?: g.first() }
+                        }
                     // model-free logic check also marks cells one would silently guess (letter-in-number,
                     // broken id run) with ⚠ so the writer highlights them.
                     val suspect = validateTable(consensus.rows)
@@ -230,12 +251,45 @@ internal fun parseAddressedCells(raw: String): List<List<CellAnswer>>? {
     if (!cleaned.startsWith("[")) return null
     return runCatching {
         val arr = JSONArray(cleaned)
-        (0 until arr.length()).mapNotNull { i ->
-            (arr.opt(i) as? JSONArray)?.let { row ->
-                (0 until row.length()).map { j -> cellAnswer(row.opt(j)) }
+        val elems = (0 until arr.length()).map { arr.opt(it) }
+        when {
+            elems.isEmpty() -> emptyList()
+            // Модель «сплющила» уровень: массив ячеек-объектов вместо массива строк — типовой
+            // сбой на таблице из одной строки. Ответ по контракту минус одна скобка — это одна
+            // строка, а не мусор: раньше он падал в TSV-фолбэк и уезжал в xlsx сырым JSON под
+            // видом успеха (ревью #258).
+            elems.none { it is JSONArray } -> listOf(elems.map(::cellAnswer))
+            // Ячейка, затесавшаяся между строками-массивами, — строка из одной ячейки: молча
+            // выбросить её значило бы потерять указание на реально прочитанные слова страницы.
+            else -> elems.map { e ->
+                if (e is JSONArray) (0 until e.length()).map { j -> cellAnswer(e.opt(j)) }
+                else listOf(cellAnswer(e))
             }
         }
     }.getOrNull()?.takeIf { it.isNotEmpty() }
+}
+
+/**
+ * Куда в консенсусной сетке приложить спор модели с её же атомами. Ключи [com.point.core.flow.GroundedTable.candidates]
+ * живут в координатах таблицы **одной** модели, а [reconcile] выравнивает таблицы по индексу
+ * строки: модель, пропустившая строку заголовка, сдвинута на строку, и её спор о цифре без
+ * якорения приклеился бы к чужой ячейке — где выбор из дропдауна в один тап вписывает трек-номер
+ * вместо заголовка, а настоящая спорная ячейка уходит в файл чистой (ревью #258).
+ *
+ * Якорь — атомное чтение спора (первый кандидат, по построению [resolveCells] это текст ячейки):
+ * совпало с ячейкой на своём месте — туда; иначе — в единственную ячейку того же столбца с тем же
+ * чтением. Неоднозначно — спор не прикладывается: сдвинутую путаницу в столбце reconcile уже
+ * пометил своим ⚠, а дропдаун на чужой ячейке хуже отсутствия дропдауна.
+ */
+internal fun anchorCandidates(
+    key: Pair<Int, Int>,
+    candidates: List<String>,
+    grid: List<List<String>>,
+): Pair<Int, Int>? {
+    val anchor = normConsensus(candidates.first())
+    fun matches(r: Int, c: Int) = grid.getOrNull(r)?.getOrNull(c)?.let { normConsensus(it) == anchor } == true
+    if (matches(key.first, key.second)) return key
+    return grid.indices.filter { matches(it, key.second) }.singleOrNull()?.let { it to key.second }
 }
 
 private fun cellAnswer(cell: Any?): CellAnswer = when {
