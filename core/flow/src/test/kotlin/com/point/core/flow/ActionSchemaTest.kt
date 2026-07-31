@@ -1,6 +1,7 @@
 package com.point.core.flow
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -55,6 +56,21 @@ class ActionSchemaTest {
         val r = track.readiness(facts) as Readiness.Ready
 
         assertEquals(listOf("20 4514 9154 9396"), r.present.single().alternatives)
+    }
+
+    @Test
+    fun `одно доказательство — предположение и оно видно, не судили — не врём`() {
+        val judged = track.readiness(
+            mapOf("entity.track" to "99 9999 9999 9995", "entity.track.ev" to "semantic"),
+        ) as Readiness.Ready
+        val confirmed = track.readiness(
+            mapOf("entity.track" to "20 4514 9154 9395", "entity.track.ev" to "semantic,geometric"),
+        ) as Readiness.Ready
+        val unjudged = track.readiness(mapOf("entity.track" to "20 4514 9154 9395")) as Readiness.Ready
+
+        assertTrue(judged.present.single().assumption)
+        assertFalse(confirmed.present.single().assumption)
+        assertFalse("улики не считались — маркера нет", unjudged.present.single().assumption)
     }
 
     @Test

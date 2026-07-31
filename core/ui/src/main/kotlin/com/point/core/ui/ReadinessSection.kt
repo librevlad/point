@@ -100,11 +100,12 @@ private fun ReadinessRow(row: ActionReadiness, understood: Boolean) {
                 color = MaterialTheme.colorScheme.onSurface,
             )
             // Готовое действие показывает своё ключевое значение — то, ради чего оно готово.
+            // «Возможно» — предположение (#261): улик меньше двух независимых классов.
             if (ready) {
                 present.firstOrNull { it.spec.critical }?.let { field ->
                     Spacer(Modifier.width(6.dp))
                     Text(
-                        text = field.value,
+                        text = field.value + if (field.assumption) " · возможно" else "",
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,

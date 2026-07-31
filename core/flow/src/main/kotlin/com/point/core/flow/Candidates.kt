@@ -1,0 +1,204 @@
+package com.point.core.flow
+
+/**
+ * Кандидаты на поле с уликами — в одном вызове заполнения (#261, design v3 §7).
+ *
+ * Вопрос модели «этого действительно нет или ты пропустил?» — самоподтверждение, а не проверка:
+ * те же пиксели, та же раскладка, та же модель, а наводящая формулировка смещает её к заполнению
+ * пустот. Поэтому перечисление кандидатов — **часть контракта ответа**, а не второй проход:
+ * модель возвращает до [MAX_FIELD_CANDIDATES] чтений на поле, каждое — с метками слов страницы,
+ * которыми она указала. Судит кандидатов код: улики считаются по слою атомов, невозможное
+ * блокируется валидатором, победитель выбирается числом **независимых классов** доказательств.
+ *
+ * Ни один кандидат не выбрасывается молча: проигравшие остаются рядом с победителем в `.alt`
+ * (спор о чтении — тот же канал, что у консенсуса), а «предположение» (меньше двух классов
+ * улик) видно как предположение.
+ */
+data class FieldCandidate(
+    /** Чтение модели, дословно. */
+    val text: String,
+    /** Метки слов страницы, которыми модель указала на значение; пусто — диктовка без указания. */
+    val ids: List<String> = emptyList(),
+)
+
+/** Больше кандидатов — не честность, а шум: три чтения покрывают реальную неоднозначность. */
+const val MAX_FIELD_CANDIDATES = 3
+
+/**
+ * Классы доказательств (design v3 §4). Поле **подтверждено**, когда совпали минимум
+ * [CONFIRMED_CLASSES] независимых класса; одно доказательство — предположение, и оно видно
+ * как предположение. Классы сделаны взаимоисключающими по источнику, чтобы одна физическая
+ * улика не подтверждала поле дважды:
+ *
+ * - [SEMANTIC] — значение подходит под тип поля: формный валидатор ([semanticFits]) либо
+ *   улика правила ([ruleEvidence]) на атомах значения;
+ * - [GEOMETRIC] — подпись-маркер поля стоит **рядом**: в соседнем пробеге той же строки или
+ *   строкой выше над значением;
+ * - [LEXICAL] — маркер поля стоит **в том же пробеге**, что значение («ТТН 20 4514…» одной
+ *   ячейкой). Один и тот же маркер не может быть и соседним, и внутренним — классы не
+ *   пересекаются по построению;
+ * - [STRUCTURAL] — значение связно на странице: все метки настоящие, атомы не разорваны
+ *   пространственно ([ResolvedValue]);
+ * - [ARITHMETIC] — сумма сходится; в этом срезе никто его не выдаёт (сумм у полей-сущностей
+ *   нет), класс объявлен ради словаря контракта.
+ */
+enum class EvidenceClass { SEMANTIC, GEOMETRIC, LEXICAL, STRUCTURAL, ARITHMETIC }
+
+/** Минимум независимых классов, при котором поле подтверждено, а не предположение. */
+const val CONFIRMED_CLASSES = 2
+
+/**
+ * Суффикс метаданных: классы улик победившего кандидата, через запятую —
+ * `entity.track.ev = "semantic,geometric"`. Пишется только путём, который улики считал
+ * («Понять» с живым слоем); отсутствие ключа значит «не судили», а не «улик нет».
+ */
+const val META_EVIDENCE_SUFFIX = ".ev"
+
+/**
+ * Суффикс метаданных: происхождение значения (design v3 §8) — `entity.track.src = "ocr"`.
+ *
+ * - [SOURCE_OCR] — ПРОЧИТАНО: дословно со страницы (правило нашло в распознанном тексте либо
+ *   модель указала метками, а текст собрали атомы);
+ * - [SOURCE_RULE] — ВЫВЕДЕНО: значение вычислено правилом, а не прочитано;
+ * - [SOURCE_MODEL] — ПРОЧИТАНО МОДЕЛЬЮ: диктовка без указания на страницу;
+ * - [SOURCE_HUMAN] — ПОДТВЕРЖДЕНО ЧЕЛОВЕКОМ: правка человека; не переписывается прилетевшим
+ *   позже ответом модели (#243 — инвариант уже держит порядок аргументов [mergeFacts]).
+ */
+const val META_SOURCE_SUFFIX = ".src"
+const val SOURCE_OCR = "ocr"
+const val SOURCE_RULE = "rule"
+const val SOURCE_MODEL = "model"
+const val SOURCE_HUMAN = "human"
+
+/** Аннотация ли это, а не значение: `.alt`/`.more`/`.ev`/`.src` живут рядом с фактом и не
+ *  участвуют в голосовании фактов ([mergeFacts] их не сливает — ими управляют их авторы). */
+fun isAnnotationKey(key: String): Boolean =
+    key.endsWith(META_ALT_SUFFIX) || key.endsWith(META_MORE_SUFFIX) ||
+        key.endsWith(META_EVIDENCE_SUFFIX) || key.endsWith(META_SOURCE_SUFFIX)
+
+/**
+ * Формный валидатор «значение подходит под тип поля» — класс [EvidenceClass.SEMANTIC].
+ * `null` — у поля нет формы (адрес), и класс просто недостижим, а не провален.
+ * Форма свидетельствует, но не решает: непрошедший кандидат живёт дальше, просто без класса.
+ */
+fun semanticFits(key: String, value: String): Boolean? {
+    val digits = value.count(Char::isDigit)
+    return when (key) {
+        META_ENTITY_TRACK -> digits in 13..14 || S10_SHAPED.matches(value.trim().uppercase())
+        META_ENTITY_PREFIX + "phone" -> digits in 10..13
+        META_ENTITY_PREFIX + "email" -> value.contains('@') && value.substringAfter('@').contains('.')
+        META_ENTITY_PREFIX + "card" -> digits in 15..19
+        META_ENTITY_PREFIX + "date" -> value.any(Char::isDigit) && value.any { it in ".:/-" }
+        else -> null
+    }
+}
+
+/**
+ * Контрольная цифра S10 (UPU): `RA123456789UA` — 8 цифр значения, девятая контрольная,
+ * веса 8 6 4 2 3 5 9 7, C = 11 − (Σ mod 11), 10 → 0, 11 → 5.
+ *
+ * `null` — формат не S10, и checksum **неприменима** (у 14-значного номера Нова Пошты
+ * опубликованного алгоритма нет — выдумать его значило бы отбрасывать настоящие номера).
+ * `false` — hard-block (design v3 §4): «checksum не прошла там, где формат её поддерживает» —
+ * математически невозможное значение, единственный законный повод валидатора отклонить.
+ */
+fun s10CheckDigitValid(value: String): Boolean? {
+    val v = value.trim().uppercase().replace(" ", "")
+    if (!S10_SHAPED.matches(v)) return null
+    val digits = v.substring(2, 11).map { it - '0' }
+    val sum = S10_WEIGHTS.indices.sumOf { digits[it] * S10_WEIGHTS[it] }
+    val check = when (val c = 11 - sum % 11) {
+        10 -> 0
+        11 -> 5
+        else -> c
+    }
+    return check == digits[8]
+}
+
+private val S10_SHAPED = Regex("""[A-Z]{2}\d{9}[A-Z]{2}""")
+private val S10_WEIGHTS = intArrayOf(8, 6, 4, 2, 3, 5, 9, 7)
+
+/**
+ * Метка индекса без промпт-атрибутов: скобка показывает `[a2 rule=track-shaped]`, и модель
+ * может процитировать её целиком — терять указание из-за нашей же подсказки нельзя (ревью #283).
+ * Срезается только собственный синтаксис индекса, чужие id не трогаются.
+ */
+fun bareIndexId(id: String): String = id.replace(INDEX_ATTRS, "")
+
+private val INDEX_ATTRS = Regex("""\s+rule=\S*$""")
+
+/**
+ * Улики кандидата по слою страницы. Считает только то, что можно проверить по атомам;
+ * кандидат без меток может заработать разве что [EvidenceClass.SEMANTIC].
+ *
+ * [ruleMarks] — готовая разметка [ruleEvidence] (считается один раз на вызов, не на кандидата).
+ */
+fun AtomLayer.fieldEvidence(
+    key: String,
+    candidate: FieldCandidate,
+    ruleMarks: Map<String, List<String>> = ruleEvidence(),
+): Set<EvidenceClass> {
+    val classes = mutableSetOf<EvidenceClass>()
+    val resolved = resolve(AtomAddress.ByIds(candidate.ids.map(::bareIndexId)))
+
+    // SEMANTIC: форма значения — валидатором либо уликой правила на атомах значения.
+    // Улика правила требует ПОЛНОГО окна: правило метило пробег с суммой цифр ровно
+    // [WAYBILL_DIGITS], и кусок этого пробега — не «похоже на трек», а кусок.
+    val formFits = semanticFits(key, candidate.text) == true
+    val ruleFits = key == META_ENTITY_TRACK && resolved.atoms.isNotEmpty() &&
+        resolved.atoms.all { "track-shaped" in ruleMarks[it.id].orEmpty() } &&
+        resolved.text.count(Char::isDigit) == WAYBILL_DIGITS
+    if (formFits || ruleFits) classes += EvidenceClass.SEMANTIC
+
+    if (resolved.atoms.isEmpty()) return classes
+    // STRUCTURAL: связь со страницей не порвана — метки настоящие, набор не разорван.
+    if (resolved.droppedIds.isEmpty() && !resolved.disjoint) classes += EvidenceClass.STRUCTURAL
+
+    val markers = FIELD_MARKERS[key].orEmpty()
+    if (markers.isEmpty()) return classes
+    val valueIds = resolved.atoms.mapTo(mutableSetOf()) { it.id }
+    val named = atoms.filter { it.text.isNotBlank() }
+    val pageLines = lines(named)
+    val lineOf = HashMap<String, Int>()
+    pageLines.forEachIndexed { i, line -> line.forEach { lineOf[it.id] = i } }
+    val valueLines = resolved.atoms.mapNotNull { lineOf[it.id] }.toSet()
+    if (valueLines.isEmpty()) return classes
+
+    fun isMarker(atom: Atom) = atom.text.trim().trimEnd(':', '.').lowercase() in markers
+
+    // LEXICAL: маркер в том же пробеге, что значение («ТТН 20 4514…» одной ячейкой).
+    // GEOMETRIC: маркер в соседнем пробеге той же строки либо строкой выше над значением.
+    val valueBox = resolved.atoms.map { it.box }.reduce(Box::union)
+    valueLines.forEach { li ->
+        cellRuns(pageLines[li]).forEach { run ->
+            val holdsValue = run.any { it.id in valueIds }
+            val marker = run.any { it.id !in valueIds && isMarker(it) }
+            if (marker && holdsValue) classes += EvidenceClass.LEXICAL
+            if (marker && !holdsValue) classes += EvidenceClass.GEOMETRIC
+        }
+        val above = pageLines.getOrNull(li - 1).orEmpty()
+        if (above.any { isMarker(it) && it.box.left <= valueBox.right && valueBox.left <= it.box.right }) {
+            classes += EvidenceClass.GEOMETRIC
+        }
+    }
+    return classes
+}
+
+/**
+ * Слова-маркеры полей — **свидетели, не решатели** (design v3 §4): маркер даёт класс улики
+ * рядом с кандидатом, которого уже назвала модель, и никогда не ищет значения сам. Ложный
+ * якорь («Кому» внутри цитаты) поэтому стоит одно очко из двух необходимых, а не роль.
+ */
+private val FIELD_MARKERS: Map<String, List<String>> = mapOf(
+    META_ENTITY_TRACK to listOf(
+        "ттн", "трек", "трек-номер", "накладна", "накладная", "відправлення", "отправление",
+        "waybill", "tracking",
+    ),
+    META_ENTITY_PREFIX + "phone" to listOf("тел", "телефон", "phone", "моб", "mobile"),
+    META_ENTITY_PREFIX + "email" to listOf("email", "e-mail", "почта", "пошта", "мейл"),
+    META_ENTITY_PREFIX + "date" to listOf("дата", "date", "від", "от"),
+    META_ENTITY_PREFIX + "address" to listOf(
+        "адреса", "адрес", "address", "відділення", "отделение",
+    ),
+    META_ENTITY_PREFIX + "card" to listOf("карта", "картка", "card", "iban", "рахунок", "счёт", "счет"),
+)

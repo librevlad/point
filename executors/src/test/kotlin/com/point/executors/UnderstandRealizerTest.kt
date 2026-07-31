@@ -28,13 +28,16 @@ import java.io.File
  */
 class UnderstandRealizerTest {
 
-    private var lastPrompt: String? = null
+    private val prompts = mutableListOf<String>()
+    private val lastPrompt: String? get() = prompts.lastOrNull()
     private var lastLlmObject: PointObject? = null
 
-    private fun llm(answer: String) = object : LlmClient {
+    /** Ответы по одному на вызов (повтор по hard-block — второй элемент); последний повторяется. */
+    private fun llm(vararg answers: String) = object : LlmClient {
         override suspend fun run(obj: PointObject, prompt: String): ResultObject {
-            lastPrompt = prompt
+            prompts += prompt
             lastLlmObject = obj
+            val answer = answers[minOf(prompts.size, answers.size) - 1]
             val f = File.createTempFile("point-ans", ".txt").apply { deleteOnExit(); writeText(answer) }
             return ResultObject(ObjectKind.TEXT, "text/plain", ScratchRef(f.absolutePath))
         }
@@ -52,7 +55,32 @@ class UnderstandRealizerTest {
         return PointObject("doc", "text/plain", ScratchRef(f.absolutePath), ObjectState(ObjectKind.TEXT), metadata)
     }
 
-    private fun realizer(answer: String) = UnderstandRealizer(llm(answer))
+    private fun realizer(vararg answers: String) = UnderstandRealizer(llm(*answers))
+
+    /** Посылочный экран со слоем слов: подпись «ТТН» рядом с треком тремя атомами. */
+    private fun imageWithLayer(): PointObject {
+        val pageText = "ТТН 20 4514 9154 9395"
+        val layer = com.point.core.flow.AtomLayer(
+            listOf(
+                com.point.core.flow.Atom("m1", "ТТН", com.point.core.flow.Box(10f, 100f, 60f, 120f)),
+                com.point.core.flow.Atom("w1", "20", com.point.core.flow.Box(200f, 100f, 230f, 120f)),
+                com.point.core.flow.Atom("w2", "4514 9154", com.point.core.flow.Box(235f, 100f, 330f, 120f)),
+                com.point.core.flow.Atom("w3", "9395", com.point.core.flow.Box(335f, 100f, 380f, 120f)),
+            ),
+        )
+        val dump = File.createTempFile("point-atoms", ".tsv").apply {
+            deleteOnExit(); writeText(com.point.core.flow.AtomCodec.encode(layer))
+        }
+        val sidecar = File.createTempFile("point-ocr", ".txt").apply { deleteOnExit(); writeText(pageText) }
+        return PointObject(
+            "img", "image/png", ScratchRef("/tmp/x.png"),
+            ObjectState(ObjectKind.IMAGE, setOf(Feature.HAS_TEXT)),
+            metadata = mapOf(
+                META_OCR_TEXT_REF to sidecar.absolutePath,
+                com.point.core.flow.META_OCR_ATOMS_REF to dump.absolutePath,
+            ),
+        )
+    }
 
     // --- Одно действие, обе стадии: значения и роли из одного ответа ---
 
@@ -81,9 +109,10 @@ class UnderstandRealizerTest {
 
     @Test
     fun `TRACK — законный ключ контракта, у идентификатора нет универсальной формы`() = runTest {
-        val result = realizer("TRACK=RA123456789UA").perform(textObject()) as ActionResult.Success
+        // Номер Укрпошты формата S10 с верной контрольной цифрой — правило 14 цифр его слепо.
+        val result = realizer("TRACK=RA123456785UA").perform(textObject()) as ActionResult.Success
 
-        assertEquals("RA123456789UA", result.result.metadata[META_ENTITY_TRACK])
+        assertEquals("RA123456785UA", result.result.metadata[META_ENTITY_TRACK])
     }
 
     @Test
@@ -135,10 +164,106 @@ class UnderstandRealizerTest {
     }
 
     @Test
-    fun `первый ответ на ключ побеждает, пустые значения отброшены`() {
-        val found = parseUnderstanding("PHONE=+380671234567\nPHONE=+380000000000\nEMAIL=")
+    fun `повторные строки ключа — кандидаты по порядку, пустые отброшены, потолок три`() {
+        val parsed = parseFieldCandidates(
+            "PHONE=+380671234567\nPHONE=+380000000000\nPHONE=+380111111111\nPHONE=+380222222222\nEMAIL=",
+        )
 
-        assertEquals(mapOf("entity.phone" to "+380671234567"), found)
+        assertEquals(
+            listOf("+380671234567", "+380000000000", "+380111111111"),
+            parsed.fields["entity.phone"]!!.map { it.text },
+        )
+        assertNull(parsed.fields["entity.email"])
+    }
+
+    @Test
+    fun `скобки с метками — указание, скобки с текстом — текст`() {
+        val parsed = parseFieldCandidates(
+            "TRACK=20 4514 9154 9395 [w1 w2, w3 rule=track-shaped]\nADDRESS=Відділення №9 [нове]",
+        )
+
+        assertEquals(
+            com.point.core.flow.FieldCandidate("20 4514 9154 9395", listOf("w1", "w2", "w3")),
+            parsed.fields["entity.track"]!!.single(),
+        )
+        assertEquals(
+            com.point.core.flow.FieldCandidate("Відділення №9 [нове]"),
+            parsed.fields["entity.address"]!!.single(),
+        )
+    }
+
+    // -- #261: кандидаты с уликами в одном вызове --
+
+    @Test
+    fun `кандидат с метками собирается со страницы — происхождение прочитано, улики есть`() = runTest {
+        val result = realizer("TRACK=20 4514 9154 9395 [w1 w2 w3]")
+            .perform(imageWithLayer()) as ActionResult.Success
+
+        val meta = result.result.metadata
+        assertEquals("20 4514 9154 9395", meta[META_ENTITY_TRACK])
+        assertEquals("ocr", meta["entity.track.src"])
+        assertTrue(meta["entity.track.ev"]!!.split(",").size >= 2) // подтверждено, не предположение
+    }
+
+    @Test
+    fun `диктовка без меток — происхождение модель и одно доказательство`() = runTest {
+        val result = realizer("TRACK=99 9999 9999 9995").perform(imageWithLayer()) as ActionResult.Success
+
+        val meta = result.result.metadata
+        assertEquals("model", meta["entity.track.src"])
+        assertEquals("semantic", meta["entity.track.ev"])
+    }
+
+    @Test
+    fun `из двух кандидатов побеждает богатый уликами, оба остаются в alt`() = runTest {
+        val result = realizer("TRACK=99 9999 9999 9995\nTRACK=20 4514 9154 9395 [w1 w2 w3]")
+            .perform(imageWithLayer()) as ActionResult.Success
+
+        val meta = result.result.metadata
+        assertEquals("20 4514 9154 9395", meta[META_ENTITY_TRACK])
+        // Порядок кандидатов = порядок ответа модели; победа уликами его не переставляет.
+        assertEquals(
+            listOf("99 9999 9999 9995", "20 4514 9154 9395"),
+            alternativesOf(meta, META_ENTITY_TRACK),
+        )
+    }
+
+    @Test
+    fun `тронутая цифра — не ремонт, а второй кандидат, страница побеждает`() = runTest {
+        val result = realizer("TRACK=20 4614 9154 9395 [w1 w2 w3]")
+            .perform(imageWithLayer()) as ActionResult.Success
+
+        val meta = result.result.metadata
+        assertEquals("20 4514 9154 9395", meta[META_ENTITY_TRACK])
+        assertTrue(alternativesOf(meta, META_ENTITY_TRACK).contains("20 4614 9154 9395"))
+    }
+
+    @Test
+    fun `checksum S10 отклоняет кандидатов и даёт один повторный вызов`() = runTest {
+        val result = realizer("TRACK=RA123456789UA\nSUMMARY=лист", "TRACK=RA123456785UA [w1]")
+            .perform(imageWithLayer()) as ActionResult.Success
+
+        assertEquals(2, prompts.size)
+        assertTrue(prompts[1].contains("контрольной цифры"))
+        assertEquals("RA123456785UA", result.result.metadata[META_ENTITY_TRACK])
+    }
+
+    @Test
+    fun `повторный вызов один — второй провал не рождает третьего`() = runTest {
+        val result = realizer("TRACK=RA123456789UA\nSUMMARY=лист", "TRACK=RA123456780UA")
+            .perform(imageWithLayer())
+
+        assertEquals(2, prompts.size)
+        assertTrue(result is ActionResult.Success) // SUMMARY выжил, действие не провалено
+        assertNull((result as ActionResult.Success).result.metadata[META_ENTITY_TRACK])
+    }
+
+    @Test
+    fun `индекс слов страницы приложен к запросу — правила размечают вход`() = runTest {
+        realizer("TRACK=20 4514 9154 9395 [w1 w2 w3]").perform(imageWithLayer())
+
+        assertTrue(lastPrompt!!.contains("[w2 rule=track-shaped]4514 9154"))
+        assertTrue(lastPrompt!!.contains("квадратных скобках"))
     }
 
     // --- Слияние голосованием (пин DeepUnderstand: платная догадка не выигрывает) ---

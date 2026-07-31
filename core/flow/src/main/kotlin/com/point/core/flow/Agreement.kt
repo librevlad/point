@@ -155,7 +155,9 @@ private fun editDistance(a: String, b: String, budget: Int): Int {
 fun mergeFacts(known: Map<String, String>, fresh: Map<String, String>): Map<String, String> {
     val merged = LinkedHashMap(known)
     fresh.forEach { (key, value) ->
-        if (key.endsWith(META_ALT_SUFFIX)) return@forEach
+        // Аннотации (`.alt`/`.more`/`.ev`/`.src`) — не факты: ими управляют их авторы,
+        // голосование значений их не сливает и не затирает (#261).
+        if (isAnnotationKey(key)) return@forEach
         val was = known[key]
         if (was.isNullOrBlank()) {
             merged[key] = value

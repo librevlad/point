@@ -11,6 +11,7 @@ import com.point.core.flow.LlmClient
 import com.point.core.flow.META_OCR_ATOMS_REF
 import com.point.core.flow.Realizer
 import com.point.core.flow.SpreadsheetWriter
+import com.point.core.flow.bareIndexId
 import com.point.core.flow.normConsensus
 import com.point.core.flow.promptIndex
 import com.point.core.flow.reconcile
@@ -320,12 +321,9 @@ private fun idList(ids: Any?): List<String> = when {
     else -> listOf(bareId(ids.toString()))
 }
 
-/** Метка без атрибутов индекса: скобка показывает `[a2 rule=track-shaped]`, и модель может
- *  процитировать её целиком — терять указание из-за нашей же подсказки нельзя (ревью #283).
- *  Срезается только собственный синтаксис индекса, чужие id не трогаются. */
-private fun bareId(id: String): String = id.replace(INDEX_ATTRS, "")
-
-private val INDEX_ATTRS = Regex("""\s+rule=\S*$""")
+/** Метка без атрибутов индекса — общий срез синтаксиса промпта живёт в ядре ([bareIndexId]):
+ *  кандидаты «Понять» (#261) цитируют те же метки с теми же атрибутами. */
+private fun bareId(id: String): String = bareIndexId(id)
 
 /** A JSON array-of-arrays → rows, or null if it is not that shape (→ TSV fallback). */
 private fun parseJsonTable(s: String): List<List<String>>? {
