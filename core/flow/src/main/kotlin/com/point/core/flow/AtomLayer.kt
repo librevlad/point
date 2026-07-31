@@ -10,6 +10,14 @@ data class Box(val left: Float, val top: Float, val right: Float, val bottom: Fl
     val height: Float get() = bottom - top
 
     fun contains(x: Float, y: Float): Boolean = x in left..right && y in top..bottom
+
+    /** Есть ли общая точка — касание краем считается (щедрость к неточному пальцу, #259). */
+    fun intersects(other: Box): Boolean =
+        left <= other.right && other.left <= right && top <= other.bottom && other.top <= bottom
+
+    /** Наименьший прямоугольник, накрывающий оба. */
+    fun union(other: Box): Box =
+        Box(minOf(left, other.left), minOf(top, other.top), maxOf(right, other.right), maxOf(bottom, other.bottom))
 }
 
 /**
