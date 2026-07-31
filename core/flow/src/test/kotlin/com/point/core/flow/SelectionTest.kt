@@ -84,4 +84,19 @@ class SelectionTest {
 
         assertEquals("20", s.text)
     }
+
+    /** Координаты страниц PDF лежат в одном пространстве — рамка на первой странице не смеет
+     *  молча захватить слова второй. */
+    @Test
+    fun `рамка захватывает только свою страницу`() {
+        val twoPages = AtomLayer(
+            listOf(
+                atom("p0", "первая", 10f, 100f, 100f, 120f),
+                Atom("p1", "вторая", Box(10f, 100f, 100f, 120f), page = 1),
+            ),
+        )
+
+        assertEquals("первая", twoPages.snapSelection(Box(0f, 90f, 120f, 130f)).text)
+        assertEquals("вторая", twoPages.snapSelection(Box(0f, 90f, 120f, 130f), page = 1).text)
+    }
 }

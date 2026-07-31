@@ -28,6 +28,12 @@ data class SnappedSelection(
  * Притягивает кривую рамку человека к атомам: захват — атомы, чей бокс **пересекает** рамку,
  * итоговая область — объединение их боксов.
  *
+ * Рамка живёт **на одной странице** ([page]): человек рисует по конкретному развороту, а
+ * координаты атомов разных страниц лежат в одном пространстве — без фильтра выделение на
+ * первой странице PDF молча захватило бы слова со всех остальных. ([AtomLayer.atomsIn] несёт
+ * то же плоское допущение — для области, которую рисует модель, страницу выберет вызов;
+ * выравнивать оба адреса по странице — работа PDF-среза.)
+ *
  * Пересечение, а не центроид — сознательное расхождение с резолвером значений
  * ([AtomLayer.atomsIn]). У них разные ошибки с разной ценой (#259, граница Copilot):
  *
@@ -40,8 +46,8 @@ data class SnappedSelection(
  * видно и убирается пальцем, а тихо потерянное не видно никому. Расширение идёт по целым
  * атомам — слово не режется пополам ни по ширине, ни по высоте строки.
  */
-fun AtomLayer.snapSelection(raw: Box): SnappedSelection {
-    val hit = readingOrder(atoms.filter { it.box.intersects(raw) })
+fun AtomLayer.snapSelection(raw: Box, page: Int = 0): SnappedSelection {
+    val hit = readingOrder(atoms.filter { it.page == page && it.box.intersects(raw) })
     if (hit.isEmpty()) return SnappedSelection(raw, emptyList(), "")
     return SnappedSelection(
         region = hit.map { it.box }.reduce(Box::union),
