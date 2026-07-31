@@ -99,4 +99,53 @@ class SelectionTest {
         assertEquals("первая", twoPages.snapSelection(Box(0f, 90f, 120f, 130f)).text)
         assertEquals("вторая", twoPages.snapSelection(Box(0f, 90f, 120f, 130f), page = 1).text)
     }
+
+    // -- находки ревью #284 --
+
+    /** Палец ведут из любого угла: перевёрнутая рамка жеста — тот же захват, а не молча пустой. */
+    @Test
+    fun `перевёрнутая рамка жеста захватывает то же, что выпрямленная`() {
+        val straight = layer.snapSelection(Box(30f, 110f, 150f, 125f))
+        val inverted = layer.snapSelection(Box(150f, 125f, 30f, 110f))
+
+        assertEquals(straight.text, inverted.text)
+        assertEquals(straight.region, inverted.region)
+        assertEquals("20 4514 9154 9395", inverted.text)
+    }
+
+    /** Внешняя рамка многострочного захвата накрывает и незахваченное — рисовать надо построчно:
+     *  построчные рамки не утверждают захват слова, которого в atoms нет. */
+    @Test
+    fun `построчные рамки не накрывают незахваченное слово между строк`() {
+        val page = AtomLayer(
+            listOf(
+                atom("a", "Отправитель:", 10f, 100f, 150f, 120f),
+                atom("e", "Индекс", 20f, 130f, 90f, 150f),
+                atom("b", "Иванов", 160f, 130f, 230f, 150f),
+            ),
+        )
+
+        val s = page.snapSelection(Box(140f, 118f, 170f, 132f)) // диагональ через перенос строки
+
+        assertEquals("Отправитель: Иванов", s.text)
+        assertFalse("e" in s.ids)
+        // Внешняя рамка накрывает «Индекс» — потому она для кропа, не для показа.
+        assertTrue(s.region.contains(50f, 140f))
+        // Построчные рамки — нет: ни одна не содержит центр незахваченного слова.
+        assertTrue(s.lineRegions.none { it.contains(55f, 140f) })
+        assertEquals(2, s.lineRegions.size)
+    }
+
+    /** Разнесённый захват резолвится с disjoint — и для выделения это не порок: полигон назвал
+     *  человек, его выбор — истина. Тест закрепляет семантику, чтобы потребитель не превратил
+     *  разнесённость в предупреждение. */
+    @Test
+    fun `двухстрочный захват разнесённых слов резолвится с disjoint — и это законно`() {
+        val s = layer.snapSelection(Box(0f, 0f, 500f, 1000f))
+        val v = layer.resolve(AtomAddress.ByIds(s.ids))
+
+        assertEquals(s.text, v.text)
+        assertTrue(v.droppedIds.isEmpty())
+        assertTrue(v.disjoint) // трек и слово из подвала страницы дальше порога связности
+    }
 }
