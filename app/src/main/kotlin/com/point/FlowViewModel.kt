@@ -25,8 +25,23 @@ import com.point.core.flow.SensorySettings
 import com.point.core.flow.UsageEvent
 import com.point.core.flow.UsageEventType
 import com.point.core.flow.UsageJournal
+import com.point.core.flow.AtomCodec
+import com.point.core.flow.AtomLayer
+import com.point.core.flow.Box
+import com.point.core.flow.FrameTransform
+import com.point.core.flow.META_OCR_ATOMS_REF
+import com.point.core.flow.META_SELECTION_IDS
+import com.point.core.flow.META_SELECTION_PAGE
+import com.point.core.flow.META_SELECTION_REGION
+import com.point.core.flow.META_SELECTION_SOURCE
+import com.point.core.flow.SnappedSelection
 import com.point.core.flow.UserAiConfig
 import com.point.core.flow.UserKeyStore
+import com.point.core.flow.snapSelection
+import com.point.core.model.Feature
+import com.point.core.model.ObjectState
+import com.point.data.decodeSelectionFrame
+import java.io.File
 import com.point.core.model.ActionResult
 import com.point.core.model.ChatMessage
 import com.point.core.model.ChatRole
@@ -106,6 +121,11 @@ class FlowViewModel @Inject constructor(
     private var pendingCloud: (() -> Unit)? = null
     /** A bubble whose preview is shown, deferred until the user confirms it (#97). */
     private var pendingPreviewBubble: Bubble? = null
+    /** Экран выделения (#259): слой, преобразование координат и последний захват — живут,
+     *  пока экран открыт; текст ячейки собирают атомы, модель здесь не участвует вовсе. */
+    private var selectionLayer: AtomLayer? = null
+    private var selectionTransform: FrameTransform? = null
+    private var selectionSnap: SnappedSelection? = null
     private var allFavorites: List<FavoriteChain> = emptyList()
 
     private val _ui = MutableStateFlow(FlowUiState())
@@ -420,6 +440,95 @@ class FlowViewModel @Inject constructor(
     fun cancelPreview() {
         pendingPreviewBubble = null
         _ui.update { it.copy(preview = null) }
+    }
+
+    /**
+     * Тап по герою-превью (#259): страница целиком, палец рисует рамку. Открывается только по
+     * явному тапу и только когда слой слов уже прочитан — выделение не смеет стать обязательным
+     * шагом, а без атомов прилипать не к чему (кроп «непрочитанного» — следующий срез).
+     */
+    fun openSelection() {
+        val top = stack.lastOrNull()?.obj ?: return
+        val atomsRef = top.metadata[META_OCR_ATOMS_REF] ?: return
+        viewModelScope.launch {
+            val loaded = withContext(ioDispatcher) {
+                runCatching {
+                    val layer = AtomCodec.decode(File(atomsRef).readText())
+                    decodeSelectionFrame(top.uri.value, SELECTION_MAX_PX)?.let { frame ->
+                        Triple(layer, frame.transform, frame.bitmap.asImageBitmap())
+                    }
+                }.getOrNull()
+            }
+            if (loaded == null) {
+                _ui.update { it.copy(message = "Не удалось открыть страницу для выделения") }
+                return@launch
+            }
+            selectionLayer = loaded.first
+            selectionTransform = loaded.second
+            selectionSnap = null
+            _ui.update { it.copy(selection = SelectionUi(image = loaded.third)) }
+        }
+    }
+
+    /** Рамка жеста в координатах показанной копии → притягивание к атомам в сыром кадре →
+     *  построчная подсветка обратно в координатах копии. Чистая математика, всё уже оттестировано
+     *  в ядре ([snapSelection], [FrameTransform]) — здесь только перевод туда-обратно. */
+    fun onSelectRegion(display: Box) {
+        val layer = selectionLayer ?: return
+        val transform = selectionTransform ?: return
+        val snap = layer.snapSelection(transform.toRaw(display))
+        selectionSnap = snap
+        _ui.update { state ->
+            val sel = state.selection ?: return@update state
+            state.copy(
+                selection = sel.copy(
+                    highlights = snap.lineRegions.map(transform::toUpright),
+                    text = snap.text,
+                ),
+            )
+        }
+    }
+
+    /** «Взять»: захват становится объектом графа — текст с происхождением до сырого кадра
+     *  (источник, метки атомов, рамка, страница), дальше обычный экран действий. */
+    fun takeSelection() {
+        val top = stack.lastOrNull()?.obj ?: return
+        val snap = selectionSnap ?: return
+        if (snap.text.isBlank()) return
+        viewModelScope.launch {
+            val derived = withContext(ioDispatcher) {
+                runCatching {
+                    val ref = store.newScratchFile("txt")
+                    File(ref.value).writeText(snap.text)
+                    PointObject(
+                        id = "sel-${top.id}-${snap.ids.hashCode()}",
+                        mime = "text/plain",
+                        uri = ref,
+                        state = ObjectState(ObjectKind.TEXT, features = setOf(Feature.HAS_TEXT)),
+                        metadata = mapOf(
+                            META_SELECTION_SOURCE to top.id,
+                            META_SELECTION_IDS to snap.ids.joinToString(" "),
+                            META_SELECTION_REGION to snap.region.let { "${it.left} ${it.top} ${it.right} ${it.bottom}" },
+                            META_SELECTION_PAGE to "0",
+                        ),
+                        sourceObjects = listOf(top.id),
+                    )
+                }.getOrNull()
+            }
+            if (derived == null) {
+                _ui.update { it.copy(message = "Не удалось сохранить выделение") }
+                return@launch
+            }
+            closeSelection()
+            pushFrame(derived, viaTitle = "Выделение")
+        }
+    }
+
+    fun closeSelection() {
+        selectionLayer = null
+        selectionTransform = null
+        selectionSnap = null
+        _ui.update { it.copy(selection = null) }
     }
 
     private fun runOnObject(bubble: Bubble, top: PointObject) {
@@ -883,6 +992,10 @@ class FlowViewModel @Inject constructor(
     }
 
     fun onBack(): Boolean {
+        if (_ui.value.selection != null) {
+            closeSelection() // #259: назад закрывает выделение, объект остаётся
+            return true
+        }
         if (_ui.value.preview != null) {
             cancelPreview()
             return true
@@ -1200,3 +1313,6 @@ private val PHONE_ADVERTISED = listOf(
     com.point.core.flow.PcRemoteAction("event", "Создать событие", kinds = setOf("TEXT")),
 )
 private const val PREVIEW_MAX_PX = 640
+
+/** Полный экран выделения читает страницу крупнее превью: слова должны быть различимы. */
+private const val SELECTION_MAX_PX = 2048

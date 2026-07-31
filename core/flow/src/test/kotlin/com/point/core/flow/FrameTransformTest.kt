@@ -56,4 +56,18 @@ class FrameTransformTest {
                 .toRaw(word),
         )
     }
+
+    /** Обратная дорога для экрана выделения (#259): подсветка атомов рисуется на выпрямленной
+     *  копии, и круговой путь обязан вернуть исходный бокс — иначе рамка мимо слов. */
+    @Test
+    fun `круговой путь raw-upright-raw тождественен для всех ориентаций и масштаба`() {
+        val word = Box(10f, 20f, 30f, 40f)
+
+        listOf(0, 90, 180, 270).forEach { deg ->
+            val t = FrameTransform(sample = 3, rotationDegrees = deg, uprightWidth = 100, uprightHeight = 200)
+
+            assertEquals("rotation=$deg", word, t.toUpright(t.toRaw(word)))
+            assertEquals("rotation=$deg", t.toRaw(word), t.toRaw(t.toUpright(t.toRaw(word))))
+        }
+    }
 }

@@ -34,6 +34,14 @@ data class FrameTransform(
     /** Место [box] в сыром кадре: сперва отменяем доворот, затем возвращаем масштаб. */
     fun toRaw(box: Box): Box = unrotate(box).scaled()
 
+    /**
+     * Обратная дорога: место сырого [box] в довёрнутой копии. Нужна экрану выделения (#259):
+     * атомы живут в сыром кадре, показывается человеку EXIF-выпрямленная копия — подсветка
+     * захвата без обратного преобразования рисовалась бы мимо слов. Держится зеркалом [toRaw]:
+     * `toUpright(toRaw(b)) == b`, и тест закрепляет именно круговой путь.
+     */
+    fun toUpright(box: Box): Box = rotate(box.unscaled())
+
     private fun unrotate(box: Box): Box {
         val w = uprightWidth.toFloat()
         val h = uprightHeight.toFloat()
@@ -45,8 +53,22 @@ data class FrameTransform(
         }
     }
 
+    private fun rotate(box: Box): Box {
+        val w = uprightWidth.toFloat()
+        val h = uprightHeight.toFloat()
+        return when (rotationDegrees) {
+            90 -> Box(w - box.bottom, box.left, w - box.top, box.right)
+            180 -> Box(w - box.right, h - box.bottom, w - box.left, h - box.top)
+            270 -> Box(box.top, h - box.right, box.bottom, h - box.left)
+            else -> box
+        }
+    }
+
     private fun Box.scaled(): Box =
         Box(left * sample, top * sample, right * sample, bottom * sample)
+
+    private fun Box.unscaled(): Box =
+        Box(left / sample, top / sample, right / sample, bottom / sample)
 
     private companion object {
         val ROTATIONS = setOf(0, 90, 180, 270)

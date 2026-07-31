@@ -112,6 +112,19 @@ data class FlowUiState(
     /** On the key screen: whether branded action sounds are on (MOTION.md M4). */
     val soundEnabled: Boolean = true,
     val usageSummary: UsageSummary? = null,
+    /** Экран выделения (#259): открыт, пока не взяли захват или не вышли назад. */
+    val selection: SelectionUi? = null,
+)
+
+/**
+ * Живое состояние экрана выделения (#259): страница (EXIF-выпрямленная копия), построчная
+ * подсветка захвата и его текст — подсветка и рамки в координатах [image]. [text] `null` —
+ * ещё не обводили; пустой — обвели место без слов (честное состояние, кнопка «Взять» гаснет).
+ */
+data class SelectionUi(
+    val image: androidx.compose.ui.graphics.ImageBitmap,
+    val highlights: List<com.point.core.flow.Box> = emptyList(),
+    val text: String? = null,
 )
 
 
