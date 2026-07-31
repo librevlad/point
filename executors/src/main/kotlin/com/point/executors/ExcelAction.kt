@@ -1,13 +1,19 @@
 package com.point.executors
 
+import com.point.core.flow.AtomCodec
+import com.point.core.flow.AtomLayer
 import com.point.core.flow.Capability
 import com.point.core.flow.CapabilityMeta
+import com.point.core.flow.CellAnswer
 import com.point.core.flow.Cost
 import com.point.core.flow.Latency
 import com.point.core.flow.LlmClient
+import com.point.core.flow.META_OCR_ATOMS_REF
 import com.point.core.flow.Realizer
 import com.point.core.flow.SpreadsheetWriter
+import com.point.core.flow.promptIndex
 import com.point.core.flow.reconcile
+import com.point.core.flow.resolveCells
 import com.point.core.flow.styleCell
 import com.point.core.flow.validateTable
 import com.point.core.model.ActionResult
@@ -19,6 +25,7 @@ import com.point.core.model.ResultObject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
+import org.json.JSONObject
 import java.io.File
 import javax.inject.Inject
 
@@ -55,17 +62,52 @@ class ExcelRealizer @Inject constructor(
                 } else {
                     ""
                 }
+                // #258: на печатном документе, который телефон уже прочитал сам, модель указывает
+                // на слова страницы вместо диктовки — текст ячейки собирается из атомов. Подменить
+                // цифру незаметно нельзя: через метки её перепишет атом, а продиктованная мимо
+                // страницы получит ⚠ (resolveCells). Слоя нет (рукопись, PDF, текст) — старый
+                // контракт, дословно.
+                val layer = atomLayer(input)
+                val index = layer?.promptIndex()
+                val prompt = if (index != null) PROMPT + ADDRESSED + index + extra else PROMPT + extra
                 // #200: read the table with up to CONSENSUS_N independent strong-vision models, then
                 // vote each cell (reconcile). A dense/handwritten table one model guesses, another catches
                 // — agreement = confidence, disagreement = ⚠ + the models' distinct readings as candidates.
                 val ordered = providers.sortedByDescending { it.strongVision }.filter { it.canHandle(input) }
                 val tables = mutableListOf<List<List<String>>>()
+                // Спор модели с её же атомами (цифра!) — кандидаты уровня одной модели; копятся
+                // отдельно и после голосования вливаются в общий дропдаун теми же ключами (row, col).
+                val cellCandidates = mutableListOf<Map<Pair<Int, Int>, List<String>>>()
                 val errors = mutableListOf<String>()
                 for (provider in ordered) {
                     if (tables.size >= CONSENSUS_N) break
                     try {
-                        val answer = provider.run(input, PROMPT + extra)
-                        parseTable(File(answer.uri.value).readText()).takeIf { it.isNotEmpty() }?.let(tables::add)
+                        val answer = provider.run(input, prompt)
+                        val raw = File(answer.uri.value).readText()
+                        val grounded = if (layer != null && index != null) {
+                            parseAddressedCells(raw)?.let(layer::resolveCells)
+                        } else {
+                            null
+                        }
+                        if (grounded != null) {
+                            // Таблица, где живого текста нет, а разорванные ячейки есть, — это не
+                            // «пустой документ», это модель, перенумеровавшая метки: связь ответа со
+                            // страницей порвана целиком. Отдать такой «успех» — вручить чистый бланк
+                            // вместо прочитанной страницы (ревью #281); честный исход — отказ чтения.
+                            val cells = grounded.rows.flatten()
+                            val torn = cells.all { it.isBlank() || it == "⚠" } && "⚠" in cells
+                            if (torn) {
+                                errors += "Модель не смогла указать на слова страницы"
+                            } else {
+                                grounded.rows.takeIf { it.isNotEmpty() }?.let {
+                                    tables += it
+                                    cellCandidates += grounded.candidates
+                                }
+                            }
+                        } else {
+                            // Модель ответила не по адресному контракту (или слоя нет) — прежний путь.
+                            parseTable(raw).takeIf { it.isNotEmpty() }?.let(tables::add)
+                        }
                     } catch (e: Exception) {
                         errors += e.message ?: e.javaClass.simpleName
                     }
@@ -77,14 +119,23 @@ class ExcelRealizer @Inject constructor(
                     )
                 } else {
                     val consensus = reconcile(tables) // 1 read → passthrough; ≥2 → voted, disagreements ⚠
+                    // Кандидаты двух этажей под одним дропдауном: спор моделей между собой (reconcile)
+                    // и спор модели с атомами страницы (#258). Согласие моделей второй спор не гасит:
+                    // два пересказа, совпавшие друг с другом, — всё ещё не то, что напечатано.
+                    val candidates = (consensus.candidates.asSequence() + cellCandidates.asSequence().flatMap { it.asSequence() })
+                        .groupBy({ it.key }, { it.value })
+                        .mapValues { (_, lists) -> lists.flatten().distinct() }
                     // model-free logic check also marks cells one would silently guess (letter-in-number,
                     // broken id run) with ⚠ so the writer highlights them.
                     val suspect = validateTable(consensus.rows)
                     val rows = consensus.rows.mapIndexed { r, row ->
-                        row.mapIndexed { c, v -> if ((r to c) in suspect && !v.contains('⚠')) "$v⚠" else v }
+                        row.mapIndexed { c, v ->
+                            val flagged = (r to c) in suspect || (r to c) in candidates
+                            if (flagged && !v.contains('⚠')) "$v⚠" else v
+                        }
                     }
-                    // consensus disagreements carry the models' readings as an in-cell dropdown (#200).
-                    val ref = writer.write(rows, consensus.candidates)
+                    // disagreements carry the distinct readings as an in-cell dropdown (#200).
+                    val ref = writer.write(rows, candidates)
                     val flagged = rows.sumOf { row -> row.count { styleCell(it).flagged } }
                     ActionResult.Success(
                         ResultObject(
@@ -100,6 +151,13 @@ class ExcelRealizer @Inject constructor(
                     )
                 }
             }.getOrElse { ActionResult.Failure(it.message ?: "Ошибка разбора в Excel", recoverable = true) }
+        }
+
+    /** Слой слов страницы, если распознавание его уже сложило; битый дамп не роняет действие —
+     *  просто возвращает нас к старому контракту (и это видно по отсутствию меток в промпте). */
+    private fun atomLayer(input: PointObject): AtomLayer? =
+        input.metadata[META_OCR_ATOMS_REF]?.let { ref ->
+            runCatching { AtomCodec.decode(File(ref).readText()) }.getOrNull()
         }
 
     private companion object {
@@ -124,6 +182,16 @@ class ExcelRealizer @Inject constructor(
                 "Не выдумывай данные: если ячейку не разобрать совсем — оставь её пустой (\"\"), НЕ ставь " +
                 "\"?\"; если не удаётся прочитать всю строку — пропусти её целиком. " +
                 "Без пояснений, без markdown, без ограждений ```."
+
+        /** Добавка к промпту при наличии индекса слов (#258): модель указывает, а не диктует. */
+        const val ADDRESSED =
+            "\n\nНиже — слова, уже прочитанные с этой страницы, построчно, каждое с меткой: [метка]слово. " +
+                "Если слова ячейки есть в списке — верни ячейку НЕ текстом, а объектом {\"ids\":[\"w1\",\"w2\"]} " +
+                "с метками её слов в точности как в списке. " +
+                "Если слово в списке прочитано с ошибкой (перепутана или потеряна буква) — добавь своё чтение: " +
+                "{\"ids\":[\"w1\"],\"text\":\"исправленное\"}. " +
+                "Ячейку-текст используй только когда её слов в списке нет совсем. " +
+                "Не выдумывай метки: несуществующие будут отброшены.\n\nСлова страницы:\n"
     }
 }
 
@@ -144,6 +212,55 @@ internal fun parseTable(raw: String): List<List<String>> {
         .filter { it.isNotBlank() }
         .map { line -> line.split('\t').map { it.trim() } }
         .toList()
+}
+
+/**
+ * Разбор адресного ответа (#258): JSON-таблица, где ячейка — строка либо объект
+ * `{"ids":[...], "text"?}`. Понимает и старый ответ сплошными строками (все ячейки дословные),
+ * поэтому модель, проигнорировавшая метки, не ломает путь. Не-JSON → null (→ TSV-фолбэк).
+ */
+internal fun parseAddressedCells(raw: String): List<List<CellAnswer>>? {
+    val cleaned = raw.trim()
+        .removePrefix("```json").removePrefix("```tsv").removePrefix("```")
+        .removeSuffix("```")
+        .trim()
+    if (!cleaned.startsWith("[")) return null
+    return runCatching {
+        val arr = JSONArray(cleaned)
+        (0 until arr.length()).mapNotNull { i ->
+            (arr.opt(i) as? JSONArray)?.let { row ->
+                (0 until row.length()).map { j -> cellAnswer(row.opt(j)) }
+            }
+        }
+    }.getOrNull()?.takeIf { it.isNotEmpty() }
+}
+
+private fun cellAnswer(cell: Any?): CellAnswer = when {
+    cell is JSONObject -> {
+        val ids = idList(cell.opt("ids"))
+        // isNull обязателен: платформенный org.json на устройстве превращает явный
+        // {"text": null} в строку "null" через optString — JVM-тесты на эталонной библиотеке
+        // этого не видят, а на телефоне рождался ложный спор с атомами (ревью #281).
+        val text = if (cell.isNull("text")) null else cell.optString("text").takeIf { it.isNotEmpty() }
+        // Объект без единой метки — это дословная ячейка, как бы модель её ни завернула.
+        if (ids.isEmpty()) CellAnswer.Literal(text ?: "") else CellAnswer.Ids(ids, text)
+    }
+    // Голый массив на месте ячейки — модель сэкономила на обёртке {"ids": …}; принять дешевле,
+    // чем уронить её указание в текст вида ["w1","w2"] посреди таблицы.
+    cell is JSONArray -> CellAnswer.Ids(idList(cell))
+    cell == null || cell == JSONObject.NULL -> CellAnswer.Literal("")
+    else -> CellAnswer.Literal(cell.toString())
+}
+
+/** Метки из чего угодно, чем модель их завернула: массив, одиночная строка или число.
+ *  Выбросить `{"ids":"a1"}` молча значило бы потерять указание на реально прочитанное
+ *  слово страницы (ревью #281); null-элементы внутри массива — не метки. */
+private fun idList(ids: Any?): List<String> = when {
+    ids is JSONArray -> (0 until ids.length()).mapNotNull { i ->
+        ids.opt(i)?.takeIf { it != JSONObject.NULL }?.toString()
+    }
+    ids == null || ids == JSONObject.NULL -> emptyList()
+    else -> listOf(ids.toString())
 }
 
 /** A JSON array-of-arrays → rows, or null if it is not that shape (→ TSV fallback). */
