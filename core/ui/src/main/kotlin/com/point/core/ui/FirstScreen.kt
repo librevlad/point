@@ -37,6 +37,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.key
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -106,6 +108,8 @@ fun FirstScreen(
     pinned: CapabilityId? = null,
     onBubbleLongPress: (Bubble) -> Unit = {},
     appIconFor: (String) -> ImageBitmap? = { null },
+    /** #259: тап по герою открывает выделение; null — у объекта нет слоя слов, тап не предлагается. */
+    onHeroTap: (() -> Unit)? = null,
 ) {
     Column(
         modifier = modifier
@@ -128,6 +132,7 @@ fun FirstScreen(
             thinking = enriching.isNotEmpty() || working,
             factCount = facts.size,
             preview = previewBitmap,
+            onTap = onHeroTap,
         )
 
         // «Point понял» (#114): the understanding card — facts land line by line as
@@ -497,6 +502,7 @@ private fun ObjectHeader(
     thinking: Boolean = false,
     factCount: Int = 0,
     preview: ImageBitmap? = null,
+    onTap: (() -> Unit)? = null,
 ) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         // M1 (MOTION.md): the object breathes with its kind's physics; a light ring
@@ -508,7 +514,15 @@ private fun ObjectHeader(
         // the same neon motif as Home and the busy screen. The halo brightens as understanding grows
         // ("Point понял" = the glow rises) and while enrichment is thinking. The AliveSurface below
         // keeps the object's breath / reading-beat; the portal is the frame around it.
-        Box(contentAlignment = Alignment.Center) {
+        Box(
+            contentAlignment = Alignment.Center,
+            // #259: сам объект и есть кнопка «рассмотреть ближе» — без ряби, портал не мигает.
+            modifier = Modifier.clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                enabled = onTap != null,
+            ) { onTap?.invoke() },
+        ) {
             val glow = ((if (thinking) 0.9f else 0.62f) + 0.09f * factCount.coerceAtMost(4)).coerceAtMost(1f)
             Portal(size = headerSize + 68.dp, intensity = glow)
             AliveSurface(

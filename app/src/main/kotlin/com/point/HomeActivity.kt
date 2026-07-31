@@ -107,6 +107,10 @@ class HomeActivity : ComponentActivity() {
                             onPickApp = viewModel::onPickApp,
                             onDismissAppPicker = viewModel::dismissAppPicker,
                             onConfirmPreview = viewModel::confirmPreview,
+                        onOpenSelection = viewModel::openSelection,
+                        onSelectRegion = viewModel::onSelectRegion,
+                        onTakeSelection = viewModel::takeSelection,
+                        onCloseSelection = viewModel::closeSelection,
                             onCancelPreview = viewModel::cancelPreview,
                         )
                     }

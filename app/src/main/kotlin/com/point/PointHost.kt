@@ -50,6 +50,7 @@ import com.point.core.model.PointObject
 import com.point.core.model.Preview
 import com.point.core.ui.BusyPortal
 import com.point.core.ui.FirstScreen
+import com.point.core.ui.SelectionScreen
 import com.point.core.ui.livingBackground
 import com.point.core.ui.portalStep
 import kotlinx.coroutines.delay
@@ -87,6 +88,10 @@ fun PointHost(
     onCancelPreview: () -> Unit = {},
     onSendChat: (String) -> Unit = {},
     onCloseChat: () -> Unit = {},
+    onOpenSelection: () -> Unit = {},
+    onSelectRegion: (com.point.core.flow.Box) -> Unit = {},
+    onTakeSelection: () -> Unit = {},
+    onCloseSelection: () -> Unit = {},
     appIconFor: (String) -> androidx.compose.ui.graphics.ImageBitmap? = { null },
     modifier: Modifier = Modifier,
 ) {
@@ -166,6 +171,17 @@ fun PointHost(
             state.busy != null && !state.busyQuiet ->
                 BusyScreen(title = state.busy, network = state.busyNetwork)
 
+            // #259: выделение поверх объекта — страница целиком, рамка пальцем, «Взять».
+            state.selection != null -> SelectionScreen(
+                image = state.selection.image,
+                highlights = state.selection.highlights,
+                capturedText = state.selection.text,
+                onSelect = onSelectRegion,
+                onTake = onTakeSelection,
+                onClose = onCloseSelection,
+                modifier = Modifier.fillMaxSize(),
+            )
+
             // #4: the AI chat takes over the screen while open (over the object it discusses).
             state.chat != null -> AiChatScreen(
                 chat = state.chat,
@@ -232,6 +248,13 @@ fun PointHost(
                     pinned = current.pinned,
                     onBubbleLongPress = onBubbleLongPress,
                     appIconFor = appIconFor,
+                    // #259: герой открывает выделение только когда слой слов уже прочитан —
+                    // без атомов рамке не к чему прилипать, и тап честно не предлагается.
+                    onHeroTap = if (current.obj.metadata.containsKey(com.point.core.flow.META_OCR_ATOMS_REF)) {
+                        onOpenSelection
+                    } else {
+                        null
+                    },
                 )
                 }
             }
