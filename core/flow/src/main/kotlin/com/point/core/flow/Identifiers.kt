@@ -37,5 +37,7 @@ fun waybillNumbers(text: String): List<String> =
         .distinct()
         .toList()
 
-private const val WAYBILL_DIGITS = 14
+/** `internal`: разметка улик ([ruleEvidence]) судит ту же форму окнами по атомам — счётчик
+ *  цифр обязан быть общим, иначе два «похоже на трек» разъедутся при первой правке. */
+internal const val WAYBILL_DIGITS = 14
 private val MULTI_SPACE = Regex(""" {2,}""")

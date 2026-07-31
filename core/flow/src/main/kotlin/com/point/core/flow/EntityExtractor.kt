@@ -62,7 +62,7 @@ private val NUMBER_TOKEN = Regex("""\d[\d \-]*\d|\d""")
  * пишут время через двоеточие, дату — через точку, и путать их дороже, чем упустить редкое
  * `9.05`.
  */
-private val BARE_CLOCK = Regex("""\d{1,2}:\d{2}(\s*[AaPp][Mm])?""")
+internal val BARE_CLOCK = Regex("""\d{1,2}:\d{2}(\s*[AaPp][Mm])?""")
 
 /** Отметка времени, а не дата документа: см. [BARE_CLOCK]. Для прочих типов всегда `false`. */
 fun Entity.isBareClock(): Boolean =

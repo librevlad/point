@@ -191,7 +191,10 @@ class ExcelRealizer @Inject constructor(
                 "Если слово в списке прочитано с ошибкой (перепутана или потеряна буква) — добавь своё чтение: " +
                 "{\"ids\":[\"w1\"],\"text\":\"исправленное\"}. " +
                 "Ячейку-текст используй только когда её слов в списке нет совсем. " +
-                "Не выдумывай метки: несуществующие будут отброшены.\n\nСлова страницы:\n"
+                "Не выдумывай метки: несуществующие будут отброшены. " +
+                "Атрибут rule= у метки — подсказка офлайн-правила о форме слова " +
+                "(например rule=track-shaped: похоже на номер отправления); подсказка может " +
+                "ошибаться и ничего не решает — решаешь ты по контексту страницы.\n\nСлова страницы:\n"
     }
 }
 
@@ -257,11 +260,18 @@ private fun cellAnswer(cell: Any?): CellAnswer = when {
  *  слово страницы (ревью #281); null-элементы внутри массива — не метки. */
 private fun idList(ids: Any?): List<String> = when {
     ids is JSONArray -> (0 until ids.length()).mapNotNull { i ->
-        ids.opt(i)?.takeIf { it != JSONObject.NULL }?.toString()
+        ids.opt(i)?.takeIf { it != JSONObject.NULL }?.toString()?.let(::bareId)
     }
     ids == null || ids == JSONObject.NULL -> emptyList()
-    else -> listOf(ids.toString())
+    else -> listOf(bareId(ids.toString()))
 }
+
+/** Метка без атрибутов индекса: скобка показывает `[a2 rule=track-shaped]`, и модель может
+ *  процитировать её целиком — терять указание из-за нашей же подсказки нельзя (ревью #283).
+ *  Срезается только собственный синтаксис индекса, чужие id не трогаются. */
+private fun bareId(id: String): String = id.replace(INDEX_ATTRS, "")
+
+private val INDEX_ATTRS = Regex("""\s+rule=\S*$""")
 
 /** A JSON array-of-arrays → rows, or null if it is not that shape (→ TSV fallback). */
 private fun parseJsonTable(s: String): List<List<String>>? {
