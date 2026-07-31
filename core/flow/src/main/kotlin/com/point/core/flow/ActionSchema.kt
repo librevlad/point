@@ -38,6 +38,14 @@ data class FieldSpec(
     val label: String,
     /** Критическое: без него действие не работает. Некритическое отсутствие готовности не рушит. */
     val critical: Boolean = false,
+    /**
+     * Якорное: наличие этого поля означает, что документ **про это действие**. Дата и адрес
+     * есть почти на каждом скриншоте (таймстемп переписки — тоже `entity.date`, #244), и
+     * гейт видимости по «хоть одному полю» звал «Отследить отправление» на любой чат
+     * (ревью #260). Про посылку говорят трек и перевозчик — универсальные поля читаются
+     * схемой, но карточку не зовут.
+     */
+    val anchor: Boolean = critical,
 )
 
 /**
@@ -66,7 +74,11 @@ data class FieldReading(
 fun ActionSchema.readiness(facts: Map<String, String>): Readiness {
     val present = fields.mapNotNull { spec ->
         facts[spec.key]?.takeIf { it.isNotBlank() }?.let { value ->
-            FieldReading(spec, value, alternativesOf(facts, spec.key).filter { it != value })
+            // Спор о чтении (.alt) и другие значения того же типа на странице (.more) для
+            // человека — один вопрос: «а не то ли это?» — и показываются одной строкой «или:».
+            val readings = (alternativesOf(facts, spec.key) + moreOf(facts, spec.key))
+                .distinct().filter { it != value }
+            FieldReading(spec, value, readings)
         }
     }
     val presentKeys = present.map { it.spec.key }.toSet()
@@ -83,19 +95,20 @@ data class ActionReadiness(val schema: ActionSchema, val readiness: Readiness)
 
 /**
  * Готовность известных действий по фактам объекта — только тех, к которым документ имеет
- * отношение: схема видна, когда хотя бы одно её поле прочитано. Пустой документ не получает
- * список «не хватает всего» — это был бы тот же опросник из девяти полей, только с минусами.
+ * отношение: схема видна, когда прочитано хотя бы одно её **якорное** поле ([FieldSpec.anchor]).
+ * Пустой документ не получает список «не хватает всего», а чат с таймстемпом «18:24» — карточку
+ * про посылку (ревью #260): универсальное поле схему не зовёт, оно только читается ею.
  */
 fun actionReadiness(
     facts: Map<String, String>,
     schemas: List<ActionSchema> = ACTION_SCHEMAS,
 ): List<ActionReadiness> = schemas.mapNotNull { schema ->
     val readiness = schema.readiness(facts)
-    val visible = when (readiness) {
-        is Readiness.Ready -> readiness.present.isNotEmpty()
-        is Readiness.Missing -> readiness.present.isNotEmpty()
+    val present = when (readiness) {
+        is Readiness.Ready -> readiness.present
+        is Readiness.Missing -> readiness.present
     }
-    if (visible) ActionReadiness(schema, readiness) else null
+    if (present.any { it.spec.anchor }) ActionReadiness(schema, readiness) else null
 }
 
 /**
@@ -109,7 +122,9 @@ val ACTION_SCHEMAS: List<ActionSchema> = listOf(
         label = "Отследить отправление",
         fields = listOf(
             FieldSpec(META_ENTITY_TRACK, "трек-номер", critical = true),
-            FieldSpec(META_GRAPH_ROLE_PREFIX + "carrier", "перевозчик"),
+            // Перевозчик — якорь: роль «carrier» на странице значит «это про отправление».
+            FieldSpec(META_GRAPH_ROLE_PREFIX + "carrier", "перевозчик", anchor = true),
+            // Дата — универсал (таймстемп чата — тоже дата, #244): читается, но не зовёт.
             FieldSpec(META_ENTITY_PREFIX + "date", "дата"),
         ),
     ),
@@ -118,7 +133,9 @@ val ACTION_SCHEMAS: List<ActionSchema> = listOf(
         label = "Сохранить контакт",
         fields = listOf(
             FieldSpec(META_ENTITY_PREFIX + "phone", "телефон", critical = true),
-            FieldSpec(META_ENTITY_PREFIX + "email", "почта"),
+            // Почта — якорь: адрес почты сам по себе контакт.
+            FieldSpec(META_ENTITY_PREFIX + "email", "почта", anchor = true),
+            // Адрес — универсал: адрес на счёте — место, а не «сохраните контакт».
             FieldSpec(META_ENTITY_PREFIX + "address", "адрес"),
         ),
     ),

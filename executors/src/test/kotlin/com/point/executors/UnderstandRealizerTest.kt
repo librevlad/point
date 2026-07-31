@@ -156,6 +156,27 @@ class UnderstandRealizerTest {
         )
     }
 
+    /** Ревью #260: подтверждение моделью первого номера не имеет права стирать запись о втором
+     *  настоящем номере страницы — второй живёт в .more, который mergeFacts не трогает. */
+    @Test
+    fun `подтверждение первого трека не стирает второй номер страницы`() = runTest {
+        val two = com.point.core.flow.altValue(listOf("20 4514 9154 9395", "20451491549396"))
+        val known = textObject(
+            metadata = mapOf(
+                META_ENTITY_TRACK to "20 4514 9154 9395",
+                META_ENTITY_TRACK + com.point.core.flow.META_MORE_SUFFIX to two,
+            ),
+        )
+
+        val result = realizer("TRACK=20 4514 9154 9395").perform(known) as ActionResult.Success
+
+        assertEquals("20 4514 9154 9395", result.result.metadata[META_ENTITY_TRACK])
+        assertEquals(
+            listOf("20 4514 9154 9395", "20451491549396"),
+            com.point.core.flow.moreOf(result.result.metadata, META_ENTITY_TRACK),
+        )
+    }
+
     // --- Только текст уходит с устройства (пины Classify/DeepUnderstand) ---
 
     @Test

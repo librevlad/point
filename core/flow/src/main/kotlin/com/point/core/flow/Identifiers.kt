@@ -28,13 +28,17 @@ const val WAYBILL_CONFIDENCE = 0.8f
 /**
  * Waybill-shaped numbers in [text], normalised to single spaces and de-duplicated in the order
  * they appear. Empty when there are none — the common case, and the reason this is cheap.
+ *
+ * Дедупликация — **по цифрам**, не по строке: «20 4514 9154 9395» в шапке и те же 14 цифр
+ * слитно под штрихкодом — один номер, а не «второй похожий» (ревью #260 — граф склеивал их в
+ * один узел по цифрам, а карточка готовности одновременно показывала ложный спор).
  */
 fun waybillNumbers(text: String): List<String> =
     WAYBILL_SHAPED.findAll(text)
         .map { it.value.trim() }
         .filter { it.count(Char::isDigit) == WAYBILL_DIGITS }
         .map { it.replace(MULTI_SPACE, " ") }
-        .distinct()
+        .distinctBy { it.filter(Char::isDigit) }
         .toList()
 
 /** `internal`: разметка улик ([ruleEvidence]) судит ту же форму окнами по атомам — счётчик
@@ -51,15 +55,17 @@ private val MULTI_SPACE = Regex(""" {2,}""")
 const val META_ENTITY_TRACK = META_ENTITY_PREFIX + "track"
 
 /**
- * Треки текста как факты: первый — значение, при нескольких все чтения уходят в
- * `entity.track.alt` (design v3 §8 — «трек найден, но есть второй похожий номер» вместо
- * ложной однозначности). Пусто — пустая карта, а не ключ с пустым значением.
+ * Треки текста как факты: первый — значение, при нескольких **разных** номерах все они уходят
+ * в `entity.track.more` (design v3 §8 — «трек найден, но есть второй похожий номер» вместо
+ * ложной однозначности). Именно `.more`, не `.alt`: это не спор о чтении одного номера, а
+ * второй настоящий номер на странице — и подтверждение первого моделью его не стирает
+ * ([mergeFacts] снимает только `.alt`). Пусто — пустая карта, а не ключ с пустым значением.
  */
 fun trackFacts(text: String): Map<String, String> {
     val tracks = waybillNumbers(text)
     if (tracks.isEmpty()) return emptyMap()
     return buildMap {
         put(META_ENTITY_TRACK, tracks.first())
-        if (tracks.size > 1) put(META_ENTITY_TRACK + META_ALT_SUFFIX, altValue(tracks))
+        if (tracks.size > 1) put(META_ENTITY_TRACK + META_MORE_SUFFIX, altValue(tracks))
     }
 }

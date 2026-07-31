@@ -83,15 +83,28 @@ class IdentifiersTest {
     }
 
     @Test
-    fun `второй похожий номер не прячется — все чтения в alt`() {
+    fun `второй настоящий номер не прячется — все номера в more`() {
         // design v3 §8: «трек найден, но есть второй похожий» вместо ложной однозначности.
+        // Именно .more, не .alt: это второй номер на странице, а не спор о чтении первого,
+        // и подтверждение первого моделью его не стирает (ревью #260).
         val facts = trackFacts("20 4514 9154 9395 та 20451491549396")
 
         assertEquals("20 4514 9154 9395", facts[META_ENTITY_TRACK])
         assertEquals(
             listOf("20 4514 9154 9395", "20451491549396"),
-            alternativesOf(facts, META_ENTITY_TRACK),
+            moreOf(facts, META_ENTITY_TRACK),
         )
+        assertTrue(alternativesOf(facts, META_ENTITY_TRACK).isEmpty())
+    }
+
+    @Test
+    fun `один номер в двух написаниях — один трек, а не «второй похожий»`() {
+        // Шапка накладной и цифры под штрихкодом: строка разная, цифры те же (ревью #260 —
+        // граф склеивал их в один узел, а карточка готовности показывала ложный спор).
+        val facts = trackFacts("20 4514 9154 9395\nпід штрихкодом: 20451491549395")
+
+        assertEquals(mapOf(META_ENTITY_TRACK to "20 4514 9154 9395"), facts)
+        assertEquals(listOf("20 4514 9154 9395"), waybillNumbers("20 4514 9154 9395 і 20451491549395"))
     }
 
     @Test

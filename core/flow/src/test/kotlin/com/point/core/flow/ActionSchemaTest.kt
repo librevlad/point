@@ -58,6 +58,19 @@ class ActionSchemaTest {
     }
 
     @Test
+    fun `второй номер страницы (more) виден на поле той же строкой «или»`() {
+        // Спор о чтении и второй настоящий номер — для человека один вопрос: «а не то ли это?»
+        val facts = mapOf(
+            "entity.track" to "20 4514 9154 9395",
+            "entity.track.more" to altValue(listOf("20 4514 9154 9395", "20451491549396")),
+        )
+
+        val r = track.readiness(facts) as Readiness.Ready
+
+        assertEquals(listOf("20451491549396"), r.present.single().alternatives)
+    }
+
+    @Test
     fun `дайджест показывает только действия, к которым документ имеет отношение`() {
         // На скрине посылки нет телефона — «Сохранить контакт» не показывается вовсе,
         // даже как «не готово»: пустой опросник с минусами тем же самым опросником и остался бы.
@@ -68,11 +81,30 @@ class ActionSchemaTest {
     }
 
     @Test
-    fun `неготовое действие видно, когда прочитано хоть одно его поле`() {
+    fun `неготовое действие видно, когда прочитано его якорное поле`() {
         val rows = actionReadiness(mapOf(META_GRAPH_ROLE_PREFIX + "carrier" to "Нова Пошта"))
 
         val parcel = rows.single { it.schema.id == "track-parcel" }
         assertTrue(parcel.readiness is Readiness.Missing)
+    }
+
+    @Test
+    fun `универсальное поле карточку не зовёт — чат с таймстемпом не про посылку`() {
+        // Ревью #260: entity.date пишется почти на каждом скриншоте («18:24» переписки — тоже
+        // дата, #244), и гейт «хоть одно поле» звал «Отследить отправление» на любой чат.
+        assertTrue(actionReadiness(mapOf(META_ENTITY_PREFIX + "date" to "18:24")).isEmpty())
+        assertTrue(
+            "адрес на счёте — место, а не «сохраните контакт»",
+            actionReadiness(mapOf(META_ENTITY_PREFIX + "address" to "вул. Хрещатик, 1")).isEmpty(),
+        )
+    }
+
+    @Test
+    fun `почта — якорь контакта, письмо без телефона зовёт «Сохранить контакт»`() {
+        val rows = actionReadiness(mapOf(META_ENTITY_PREFIX + "email" to "olena@example.com"))
+
+        val contact = rows.single { it.schema.id == "save-contact" }
+        assertTrue(contact.readiness is Readiness.Missing)
     }
 
     @Test

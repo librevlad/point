@@ -45,6 +45,9 @@ import com.point.core.flow.actionReadiness
 internal fun ReadinessSection(metadata: Map<String, String>) {
     val rows = remember(metadata) { actionReadiness(metadata) }
     if (rows.isEmpty()) return
+    // «Понять» уже спрашивали? От этого зависит честная формулировка отсутствия: до модели
+    // трек искало только офлайн-правило, и «не нашлось» обязано звучать как «офлайн не нашлось».
+    val understood = metadata["op"] == "understand"
     Surface(
         shape = RoundedCornerShape(18.dp),
         color = MaterialTheme.colorScheme.surface,
@@ -54,13 +57,13 @@ internal fun ReadinessSection(metadata: Map<String, String>) {
             .animateContentSize(tween(220)),
     ) {
         Column(modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp)) {
-            rows.forEach { row -> key(row.schema.id) { ReadinessRow(row) } }
+            rows.forEach { row -> key(row.schema.id) { ReadinessRow(row, understood) } }
         }
     }
 }
 
 @Composable
-private fun ReadinessRow(row: ActionReadiness) {
+private fun ReadinessRow(row: ActionReadiness, understood: Boolean) {
     val ready = row.readiness is Readiness.Ready
     val present = when (val r = row.readiness) {
         is Readiness.Ready -> r.present
@@ -68,7 +71,6 @@ private fun ReadinessRow(row: ActionReadiness) {
     }
     val missing = (row.readiness as? Readiness.Missing)?.missing.orEmpty()
     val disputed = present.filter { it.alternatives.isNotEmpty() }
-    val hasEvidence = missing.isNotEmpty() || disputed.isNotEmpty()
     // Что именно раскрыто — переживает пересборку списка (rememberSaveable), но не притворяется
     // состоянием объекта: это чисто взгляд человека.
     var expanded by rememberSaveable(row.schema.id) { mutableStateOf(false) }
@@ -76,7 +78,7 @@ private fun ReadinessRow(row: ActionReadiness) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .let { if (hasEvidence) it.clickable { expanded = !expanded } else it }
+            .let { if (missing.isNotEmpty()) it.clickable { expanded = !expanded } else it }
             .padding(vertical = 4.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -111,6 +113,18 @@ private fun ReadinessRow(row: ActionReadiness) {
                 }
             }
         }
+        // Спор виден без тапа (контракт FieldReading: готовность не прячет спор — человек
+        // обязан видеть, что значение спорное, ДО того как начнёт отслеживать не тот номер).
+        disputed.forEach { field ->
+            Text(
+                text = "${field.spec.label} — или: " + field.alternatives.joinToString(", "),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(start = 18.dp, top = 2.dp),
+            )
+        }
         if (!ready) {
             Text(
                 text = "не хватает только: " + missing.joinToString(", ") { it.label },
@@ -122,19 +136,16 @@ private fun ReadinessRow(row: ActionReadiness) {
         if (expanded) {
             missing.forEach { spec ->
                 Text(
-                    text = "${spec.label} — в прочитанном не нашлось",
+                    // «Не нашлось» — не вердикт, а состояние поиска: до «Понять» искало только
+                    // офлайн-правило, и оно слепо к чужим форматам (у идентификатора нет
+                    // универсальной формы) — ложный тупик хуже честного «можно спросить модель».
+                    text = if (understood) {
+                        "${spec.label} — в прочитанном не нашлось"
+                    } else {
+                        "${spec.label} — офлайн не нашлось; «Понять» может найти"
+                    },
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 18.dp, top = 2.dp),
-                )
-            }
-            disputed.forEach { field ->
-                Text(
-                    text = "${field.spec.label} — или: " + field.alternatives.joinToString(", "),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.padding(start = 18.dp, top = 2.dp),
                 )
             }
