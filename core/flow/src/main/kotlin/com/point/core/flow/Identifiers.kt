@@ -19,10 +19,8 @@ package com.point.core.flow
  * not verified, and consensus or a later validator can raise it.
  */
 
-/** A digit run of exactly 14 digits, optionally grouped by spaces, not glued to other digits.
- *  `internal`, не `private`: разметка улик ([ruleEvidence]) помечает ту же форму на атомах —
- *  два регекса «похоже на трек» разъехались бы при первой же правке. */
-internal val WAYBILL_SHAPED = Regex("""(?<!\d)\d[\d ]{11,20}\d(?!\d)""")
+/** A digit run of exactly 14 digits, optionally grouped by spaces, not glued to other digits. */
+private val WAYBILL_SHAPED = Regex("""(?<!\d)\d[\d ]{11,20}\d(?!\d)""")
 
 /** Structural match only — see the note on the checksum above. */
 const val WAYBILL_CONFIDENCE = 0.8f
@@ -39,5 +37,7 @@ fun waybillNumbers(text: String): List<String> =
         .distinct()
         .toList()
 
+/** `internal`: разметка улик ([ruleEvidence]) судит ту же форму окнами по атомам — счётчик
+ *  цифр обязан быть общим, иначе два «похоже на трек» разъедутся при первой правке. */
 internal const val WAYBILL_DIGITS = 14
 private val MULTI_SPACE = Regex(""" {2,}""")

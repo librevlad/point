@@ -223,6 +223,16 @@ class ExcelRealizerTest {
         assertEquals(listOf(listOf("Трек-номер", "20")), lastRows)
     }
 
+    /** Скобка индекса показывает `[a1 rule=track-shaped]`, и модель может процитировать её
+     *  целиком — собственный синтаксис срезается, указание не теряется (ревью #283). */
+    @Test
+    fun `метка, процитированная вместе с атрибутом rule, не теряется`() = runTest {
+        realizer("""[[{"ids":["a1 rule=track-shaped","a2 rule=track-shaped","a3 rule=track-shaped"]}]]""")
+            .perform(imageWithAtoms())
+
+        assertEquals(listOf(listOf("20 4514 9154 9395")), lastRows)
+    }
+
     /** Явный null в поле text не должен рождать спор: на устройстве платформенный optString
      *  вернул бы строку "null" — от этого защищает isNull-гвард (ревью #281). */
     @Test

@@ -75,4 +75,95 @@ class RuleEvidenceTest {
 
         assertTrue(layer.ruleEvidence().isEmpty())
     }
+
+    // -- находки ревью #283: форма судится геометрией, а не склейкой строки --
+
+    /** Четыре независимые ячейки числовой строки (в сумме ровно 14 цифр) — не трек: зазоры
+     *  колонок больше высоты строки режут пробег. Первая версия помечала все четыре. */
+    @Test
+    fun `независимые ячейки числовой строки не сливаются в ложный трек`() {
+        val layer = AtomLayer(
+            listOf(
+                atom("c1", "2500", 10f, 100f, 60f, 120f),
+                atom("c2", "4000", 100f, 100f, 150f, 120f),
+                atom("c3", "100", 190f, 100f, 230f, 120f),
+                atom("c4", "500", 270f, 100f, 310f, 120f),
+            ),
+        )
+
+        assertTrue(layer.ruleEvidence().isEmpty())
+    }
+
+    /** Цифровой сосед в той же ячейке не глотает улику: окно по границам атомов находит
+     *  14-значный пробег внутри. Первая версия жадным матчем теряла всё. */
+    @Test
+    fun `номер строки рядом не топит улику настоящего трека`() {
+        val layer = AtomLayer(
+            listOf(
+                atom("n", "1", 10f, 100f, 20f, 120f),
+                atom("a1", "20", 25f, 100f, 50f, 120f),
+                atom("a2", "4514 9154", 55f, 100f, 150f, 120f),
+                atom("a3", "9395", 155f, 100f, 200f, 120f),
+            ),
+        )
+
+        val e = layer.ruleEvidence()
+
+        assertEquals(null, e["n"])
+        assertEquals(listOf("track-shaped"), e["a1"])
+        assertEquals(listOf("track-shaped"), e["a2"])
+        assertEquals(listOf("track-shaped"), e["a3"])
+    }
+
+    /** Дата — не цифровой атом (точки), в пробег не въезжает и куском «трека» не объявляется. */
+    @Test
+    fun `дата с точками не въезжает в пробег трека`() {
+        val layer = AtomLayer(
+            listOf(
+                atom("d", "15.06.2025", 10f, 100f, 110f, 120f),
+                atom("x1", "1200", 115f, 100f, 160f, 120f),
+                atom("x2", "3400", 165f, 100f, 210f, 120f),
+                atom("x3", "56", 215f, 100f, 240f, 120f),
+            ),
+        )
+
+        assertTrue(layer.ruleEvidence().isEmpty())
+    }
+
+    @Test
+    fun `хвостовой сосед после трека не помечается — окно не пересекается`() {
+        val layer = AtomLayer(
+            listOf(
+                atom("a1", "20", 10f, 100f, 40f, 120f),
+                atom("a2", "4514 9154", 45f, 100f, 140f, 120f),
+                atom("a3", "9395", 145f, 100f, 190f, 120f),
+                atom("tail", "07", 195f, 100f, 220f, 120f),
+            ),
+        )
+
+        val e = layer.ruleEvidence()
+
+        assertEquals(listOf("track-shaped"), e["a3"])
+        assertEquals(null, e["tail"])
+    }
+
+    @Test
+    fun `два трека в одной ячейке — помечены оба`() {
+        val layer = AtomLayer(
+            listOf(
+                atom("a1", "20", 10f, 100f, 40f, 120f),
+                atom("a2", "4514 9154", 45f, 100f, 140f, 120f),
+                atom("a3", "9395", 145f, 100f, 190f, 120f),
+                atom("b1", "2045", 195f, 100f, 240f, 120f),
+                atom("b2", "149154", 245f, 100f, 310f, 120f),
+                atom("b3", "9395", 315f, 100f, 360f, 120f),
+            ),
+        )
+
+        val e = layer.ruleEvidence()
+
+        assertEquals(listOf("track-shaped"), e["a1"])
+        assertEquals(listOf("track-shaped"), e["b1"])
+        assertEquals(listOf("track-shaped"), e["b3"])
+    }
 }

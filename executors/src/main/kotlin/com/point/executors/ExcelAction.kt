@@ -260,11 +260,18 @@ private fun cellAnswer(cell: Any?): CellAnswer = when {
  *  слово страницы (ревью #281); null-элементы внутри массива — не метки. */
 private fun idList(ids: Any?): List<String> = when {
     ids is JSONArray -> (0 until ids.length()).mapNotNull { i ->
-        ids.opt(i)?.takeIf { it != JSONObject.NULL }?.toString()
+        ids.opt(i)?.takeIf { it != JSONObject.NULL }?.toString()?.let(::bareId)
     }
     ids == null || ids == JSONObject.NULL -> emptyList()
-    else -> listOf(ids.toString())
+    else -> listOf(bareId(ids.toString()))
 }
+
+/** Метка без атрибутов индекса: скобка показывает `[a2 rule=track-shaped]`, и модель может
+ *  процитировать её целиком — терять указание из-за нашей же подсказки нельзя (ревью #283).
+ *  Срезается только собственный синтаксис индекса, чужие id не трогаются. */
+private fun bareId(id: String): String = id.replace(INDEX_ATTRS, "")
+
+private val INDEX_ATTRS = Regex("""\s+rule=\S*$""")
 
 /** A JSON array-of-arrays → rows, or null if it is not that shape (→ TSV fallback). */
 private fun parseJsonTable(s: String): List<List<String>>? {
