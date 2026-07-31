@@ -68,6 +68,13 @@ data class FieldReading(
     val spec: FieldSpec,
     val value: String,
     val alternatives: List<String> = emptyList(),
+    /**
+     * Предположение (#261, design v3 §4): улики считались (`<key>.ev`) и независимых классов
+     * меньше [CONFIRMED_CLASSES] — «одно доказательство — предположение, и оно видно как
+     * предположение». Улики не считались вовсе (ключа нет) — поле не судили, и врать про него
+     * маркером нельзя ни в одну сторону.
+     */
+    val assumption: Boolean = false,
 )
 
 /** Готовность одной схемы по фактам объекта. Чистая функция — UI и тесты зовут её напрямую. */
@@ -78,7 +85,9 @@ fun ActionSchema.readiness(facts: Map<String, String>): Readiness {
             // человека — один вопрос: «а не то ли это?» — и показываются одной строкой «или:».
             val readings = (alternativesOf(facts, spec.key) + moreOf(facts, spec.key))
                 .distinct().filter { it != value }
-            FieldReading(spec, value, readings)
+            val judged = facts[spec.key + META_EVIDENCE_SUFFIX]
+                ?.split(',')?.filter { it.isNotBlank() }
+            FieldReading(spec, value, readings, assumption = judged != null && judged.size < CONFIRMED_CLASSES)
         }
     }
     val presentKeys = present.map { it.spec.key }.toSet()

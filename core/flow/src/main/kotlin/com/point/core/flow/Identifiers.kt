@@ -66,6 +66,9 @@ fun trackFacts(text: String): Map<String, String> {
     if (tracks.isEmpty()) return emptyMap()
     return buildMap {
         put(META_ENTITY_TRACK, tracks.first())
+        // Происхождение (#261, v3 §8): найдено правилом дословно в распознанном тексте —
+        // ПРОЧИТАНО со страницы, не выведено и не продиктовано.
+        put(META_ENTITY_TRACK + META_SOURCE_SUFFIX, SOURCE_OCR)
         if (tracks.size > 1) put(META_ENTITY_TRACK + META_MORE_SUFFIX, altValue(tracks))
     }
 }

@@ -75,9 +75,12 @@ class IdentifiersTest {
     // --- Трек как факт (#260): схема «Отследить отправление» читает entity.track ---
 
     @Test
-    fun `трек становится фактом объекта`() {
+    fun `трек становится фактом объекта с происхождением «прочитано»`() {
         assertEquals(
-            mapOf(META_ENTITY_TRACK to "20 4514 9154 9395"),
+            mapOf(
+                META_ENTITY_TRACK to "20 4514 9154 9395",
+                META_ENTITY_TRACK + META_SOURCE_SUFFIX to SOURCE_OCR,
+            ),
             trackFacts("ТТН 20 4514 9154 9395 прибула"),
         )
     }
@@ -103,7 +106,8 @@ class IdentifiersTest {
         // граф склеивал их в один узел, а карточка готовности показывала ложный спор).
         val facts = trackFacts("20 4514 9154 9395\nпід штрихкодом: 20451491549395")
 
-        assertEquals(mapOf(META_ENTITY_TRACK to "20 4514 9154 9395"), facts)
+        assertEquals("20 4514 9154 9395", facts[META_ENTITY_TRACK])
+        assertTrue(moreOf(facts, META_ENTITY_TRACK).isEmpty())
         assertEquals(listOf("20 4514 9154 9395"), waybillNumbers("20 4514 9154 9395 і 20451491549395"))
     }
 

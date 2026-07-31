@@ -61,7 +61,7 @@ fun AtomLayer.ruleEvidence(): Map<String, List<String>> {
  * Порог в высотах атома, не в пикселях — страница приходит в любом разрешении (тот же принцип,
  * что полоса строки и радиус связности).
  */
-private fun cellRuns(line: List<Atom>): List<List<Atom>> {
+internal fun cellRuns(line: List<Atom>): List<List<Atom>> {
     val runs = mutableListOf<MutableList<Atom>>()
     line.forEach { atom ->
         val prev = runs.lastOrNull()?.last()
