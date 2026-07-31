@@ -177,6 +177,7 @@ Point не становится **браузером**, **менеджером �
 `local.properties.sample`.
 
 Без ключей `AI`/`Перевод` вернут понятную ошибку. Провайдеры — `GeminiLlmClient`
-(`gemini-2.0-flash`) → `OpenAiLlmClient` (OpenAI-совместимый), связанные
-`FallbackLlmClient` (первый успех выигрывает, чинит 429). Ключи/URL/модель — в
-`local.properties` (см. `local.properties.sample`).
+(серверные алиасы `gemini-*-latest` из `GEMINI_MODELS` — переживают отключения
+моделей; НЕ пиновать конкретные версии) → `OpenAiLlmClient` (OpenAI-совместимый),
+связанные `FallbackLlmClient` (первый успех выигрывает, чинит 429). Ключи/URL/модель —
+в `local.properties` (см. `local.properties.sample`).
