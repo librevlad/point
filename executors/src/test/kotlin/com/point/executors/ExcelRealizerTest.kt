@@ -196,4 +196,65 @@ class ExcelRealizerTest {
             cells,
         )
     }
+
+    // -- находки ревью #281: щели адресного контракта --
+
+    /** Метка строкой вместо массива — небрежность модели, а не повод молча выбросить указание. */
+    @Test
+    fun `метки строкой и голым массивом не теряются`() {
+        val cells = parseAddressedCells("""[[{"ids":"h1"},["a1","a2"]]]""")!!
+
+        assertEquals(
+            listOf(
+                listOf(
+                    com.point.core.flow.CellAnswer.Ids(listOf("h1")),
+                    com.point.core.flow.CellAnswer.Ids(listOf("a1", "a2")),
+                ),
+            ),
+            cells,
+        )
+    }
+
+    @Test
+    fun `метка строкой доезжает до текста ячейки из атомов`() = runTest {
+        realizer("""[[{"ids":"h1"},{"ids":"a1"}]]""").perform(imageWithAtoms())
+
+        assertEquals(listOf(listOf("Трек-номер", "20")), lastRows)
+    }
+
+    /** Явный null в поле text не должен рождать спор: на устройстве платформенный optString
+     *  вернул бы строку "null" — от этого защищает isNull-гвард (ревью #281). */
+    @Test
+    fun `явный null в тексте ячейки — не чтение модели`() = runTest {
+        realizer("""[[{"ids":["a1"],"text":null}]]""").perform(imageWithAtoms())
+
+        assertEquals(listOf(listOf("20")), lastRows)
+        assertTrue(lastCandidates.isEmpty())
+    }
+
+    /** Таблица, где модель перенумеровала все метки: связь со страницей порвана целиком —
+     *  это отказ чтения, а не «успешно распознанный» чистый бланк (ревью #281). */
+    @Test
+    fun `полностью галлюцинированная таблица — отказ, а не пустой успех`() = runTest {
+        val result = realizer("""[[{"ids":[1]},{"ids":[2]}],[{"ids":[3]},{"ids":[4]}]]""")
+            .perform(imageWithAtoms())
+
+        assertTrue(result is ActionResult.Failure)
+        assertTrue((result as ActionResult.Failure).recoverable)
+    }
+
+    @Test
+    fun `одна галлюцинированная ячейка помечается, таблица живёт`() = runTest {
+        realizer("""[[{"ids":["w99"]},{"ids":["a1"]}]]""").perform(imageWithAtoms())
+
+        assertEquals(listOf(listOf("⚠", "20")), lastRows)
+    }
+
+    /** Продиктованная строкой цифра, которой нет на странице, — помечена как диктовка. */
+    @Test
+    fun `диктовка цифры мимо страницы видна в xlsx`() = runTest {
+        realizer("""[[{"ids":["h1"]},"1600"]]""").perform(imageWithAtoms())
+
+        assertEquals(listOf(listOf("Трек-номер", "1600⚠")), lastRows)
+    }
 }

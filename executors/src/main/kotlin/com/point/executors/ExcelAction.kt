@@ -63,9 +63,10 @@ class ExcelRealizer @Inject constructor(
                     ""
                 }
                 // #258: на печатном документе, который телефон уже прочитал сам, модель указывает
-                // на слова страницы вместо диктовки — текст ячейки собирается из атомов, и модель
-                // физически не может подменить цифру незаметно. Слоя нет (рукопись, PDF, текст) —
-                // старый контракт, дословно.
+                // на слова страницы вместо диктовки — текст ячейки собирается из атомов. Подменить
+                // цифру незаметно нельзя: через метки её перепишет атом, а продиктованная мимо
+                // страницы получит ⚠ (resolveCells). Слоя нет (рукопись, PDF, текст) — старый
+                // контракт, дословно.
                 val layer = atomLayer(input)
                 val index = layer?.promptIndex()
                 val prompt = if (index != null) PROMPT + ADDRESSED + index + extra else PROMPT + extra
@@ -89,9 +90,19 @@ class ExcelRealizer @Inject constructor(
                             null
                         }
                         if (grounded != null) {
-                            grounded.rows.takeIf { it.isNotEmpty() }?.let {
-                                tables += it
-                                cellCandidates += grounded.candidates
+                            // Таблица, где живого текста нет, а разорванные ячейки есть, — это не
+                            // «пустой документ», это модель, перенумеровавшая метки: связь ответа со
+                            // страницей порвана целиком. Отдать такой «успех» — вручить чистый бланк
+                            // вместо прочитанной страницы (ревью #281); честный исход — отказ чтения.
+                            val cells = grounded.rows.flatten()
+                            val torn = cells.all { it.isBlank() || it == "⚠" } && "⚠" in cells
+                            if (torn) {
+                                errors += "Модель не смогла указать на слова страницы"
+                            } else {
+                                grounded.rows.takeIf { it.isNotEmpty() }?.let {
+                                    tables += it
+                                    cellCandidates += grounded.candidates
+                                }
                             }
                         } else {
                             // Модель ответила не по адресному контракту (или слоя нет) — прежний путь.
@@ -226,15 +237,30 @@ internal fun parseAddressedCells(raw: String): List<List<CellAnswer>>? {
 
 private fun cellAnswer(cell: Any?): CellAnswer = when {
     cell is JSONObject -> {
-        val ids = cell.optJSONArray("ids")
-            ?.let { a -> (0 until a.length()).map { a.get(it).toString() } }
-            .orEmpty()
-        val text = cell.optString("text").takeIf { it.isNotEmpty() }
+        val ids = idList(cell.opt("ids"))
+        // isNull обязателен: платформенный org.json на устройстве превращает явный
+        // {"text": null} в строку "null" через optString — JVM-тесты на эталонной библиотеке
+        // этого не видят, а на телефоне рождался ложный спор с атомами (ревью #281).
+        val text = if (cell.isNull("text")) null else cell.optString("text").takeIf { it.isNotEmpty() }
         // Объект без единой метки — это дословная ячейка, как бы модель её ни завернула.
         if (ids.isEmpty()) CellAnswer.Literal(text ?: "") else CellAnswer.Ids(ids, text)
     }
+    // Голый массив на месте ячейки — модель сэкономила на обёртке {"ids": …}; принять дешевле,
+    // чем уронить её указание в текст вида ["w1","w2"] посреди таблицы.
+    cell is JSONArray -> CellAnswer.Ids(idList(cell))
     cell == null || cell == JSONObject.NULL -> CellAnswer.Literal("")
     else -> CellAnswer.Literal(cell.toString())
+}
+
+/** Метки из чего угодно, чем модель их завернула: массив, одиночная строка или число.
+ *  Выбросить `{"ids":"a1"}` молча значило бы потерять указание на реально прочитанное
+ *  слово страницы (ревью #281); null-элементы внутри массива — не метки. */
+private fun idList(ids: Any?): List<String> = when {
+    ids is JSONArray -> (0 until ids.length()).mapNotNull { i ->
+        ids.opt(i)?.takeIf { it != JSONObject.NULL }?.toString()
+    }
+    ids == null || ids == JSONObject.NULL -> emptyList()
+    else -> listOf(ids.toString())
 }
 
 /** A JSON array-of-arrays → rows, or null if it is not that shape (→ TSV fallback). */

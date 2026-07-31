@@ -81,21 +81,49 @@ class AddressedTableTest {
         assertEquals("Гречка⚠", t.rows[0][0])
     }
 
+    /** «Указала в никуда» и «честно не разобрано» — разные вещи (ревью #281): пустая ячейка
+     *  с отброшенными метками несёт ⚠, иначе разрыв связи модель↔страница неотличим от пустоты. */
     @Test
-    fun `все метки чужие и чтения нет — ячейка пустая, без ошибки`() {
+    fun `все метки чужие и чтения нет — ячейка помечена, а не тихо пустая`() {
         val t = layer.resolveCells(listOf(listOf(ids("x", "y"))))
 
-        assertEquals("", t.rows[0][0])
+        assertEquals("⚠", t.rows[0][0])
     }
 
     @Test
-    fun `дословная ячейка проходит как есть — рукопись и старый контракт живут`() {
+    fun `дословная ячейка без цифр проходит как есть — рукопись и старый контракт живут`() {
         val t = layer.resolveCells(
             listOf(listOf(CellAnswer.Literal("итого⚠"), ids("a1"))),
         )
 
         assertEquals("итого⚠", t.rows[0][0])
         assertEquals("20", t.rows[0][1])
+    }
+
+    /** Диктовка мимо страницы (ревью #281): слой жив, а продиктованной цифры в нём нет нигде —
+     *  ровно та подмена, которую промпт лишь просил не делать, а код теперь помечает. */
+    @Test
+    fun `дословная цифра, которой нет на странице, помечается как диктовка`() {
+        val t = layer.resolveCells(listOf(listOf(CellAnswer.Literal("1600"))))
+
+        assertEquals("1600⚠", t.rows[0][0])
+    }
+
+    @Test
+    fun `дословная цифра, совпавшая со страницей, проходит чистой`() {
+        val t = layer.resolveCells(listOf(listOf(CellAnswer.Literal("4514 9154"))))
+
+        assertEquals("4514 9154", t.rows[0][0])
+    }
+
+    /** Спор длиннее лимита дропдауна: вариантов не остаётся — пометка живёт, пустой список нет. */
+    @Test
+    fun `спор о длинном чтении не рождает пустой дропдаун`() {
+        val long = AtomLayer(listOf(atom("l1", "9".repeat(85), 10f, 10f, 900f, 30f)))
+        val t = long.resolveCells(listOf(listOf(CellAnswer.Ids(listOf("l1"), "8" + "9".repeat(84)))))
+
+        assertTrue(t.rows[0][0].endsWith("⚠"))
+        assertTrue(t.candidates.isEmpty())
     }
 
     @Test

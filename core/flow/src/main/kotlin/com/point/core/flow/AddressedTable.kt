@@ -35,7 +35,9 @@ data class GroundedTable(
  * [resolve] — единственный путь, которым модельный ответ становится текстом на печатном
  * документе. Порванная связь ответа с координатами не глотается:
  *
- * - галлюцинированные метки отброшены резолвером → ячейка помечена ⚠;
+ * - галлюцинированные метки отброшены резолвером → ячейка помечена ⚠ — даже пустая: «модель
+ *   указала в никуда» и «честно не разобрано» — разные вещи, и склеивать их значком нельзя
+ *   (ревью #281 — сигнал разрыва уничтожался гвардом на пустоту);
  * - пространственно несвязный набор → ⚠ (значение собрано, но это предположение);
  * - все метки чужие, но модель дала своё чтение → чтение остаётся с ⚠: связь со страницей
  *   не подтверждена, а молча выбросить прочитанное — тот же грех, что молча поверить.
@@ -43,22 +45,34 @@ data class GroundedTable(
  * Чтение модели против атомов судится готовыми правилами консенсуса: формальный шум складывает
  * [normConsensus], ремонт букв пропускает [isRepairOf] (цифры неприкосновенны), настоящий спор
  * виден как ⚠ + оба чтения в кандидатах.
+ *
+ * Дословная ячейка ([CellAnswer.Literal]) — законный путь для того, чего в слое нет. Но слой
+ * здесь **есть** (иначе эту функцию некому звать), и дословная **цифра**, которой нет нигде в
+ * прочитанном, — это диктовка мимо страницы: ровно та подмена, от которой контракт защищает.
+ * Она не выбрасывается (модель могла прочитать то, что движок пропустил), но помечается ⚠
+ * (ревью #281 — просьба в промпте «текст только когда слов нет в списке» кодом не подкреплялась).
  */
 fun AtomLayer.resolveCells(cells: List<List<CellAnswer>>): GroundedTable {
+    val page = normConsensus(text)
     val rows = ArrayList<List<String>>(cells.size)
     val candidates = LinkedHashMap<Pair<Int, Int>, List<String>>()
     cells.forEachIndexed { r, row ->
         rows += row.mapIndexed { c, cell ->
-            when (cell) {
-                is CellAnswer.Literal -> cell.text
+            var flagged = false
+            val text = when (cell) {
+                is CellAnswer.Literal -> {
+                    val folded = normConsensus(cell.text)
+                    flagged = cell.text.any { it.isDigit() } && folded.isNotEmpty() && folded !in page
+                    cell.text
+                }
                 is CellAnswer.Ids -> {
                     val v = resolve(AtomAddress.ByIds(cell.ids))
                     // Маркеры неуверенности и правок — не текст: в ids-ячейке модельное чтение
                     // сравнивается с атомами, и «Гречка⚠» против «Гречка» — не спор.
                     val model = cell.text?.replace("⚠", "")?.replace("~~", "")?.trim()
                         ?.takeIf { it.isNotEmpty() }
-                    var flagged = v.droppedIds.isNotEmpty() || v.disjoint
-                    val text = when {
+                    flagged = v.droppedIds.isNotEmpty() || v.disjoint
+                    when {
                         v.atoms.isEmpty() -> {
                             if (model != null) flagged = true
                             model ?: ""
@@ -67,13 +81,17 @@ fun AtomLayer.resolveCells(cells: List<List<CellAnswer>>): GroundedTable {
                         isRepairOf(v.text, model) -> model
                         else -> {
                             flagged = true
-                            candidates[r to c] = listOf(v.text, model).distinct().filter { it.length <= 80 }
+                            // Дропдаун из одного варианта — не выбор: длинные чтения срезаны
+                            // фильтром писателя, и пустой/одиночный список туда не идёт (⚠ остаётся).
+                            listOf(v.text, model).distinct().filter { it.length <= 80 }
+                                .takeIf { it.size >= 2 }
+                                ?.let { candidates[r to c] = it }
                             v.text
                         }
                     }
-                    if (flagged && text.isNotEmpty() && !text.contains('⚠')) "$text⚠" else text
                 }
             }
+            if (flagged && !text.contains('⚠')) "$text⚠" else text
         }
     }
     return GroundedTable(rows, candidates)
