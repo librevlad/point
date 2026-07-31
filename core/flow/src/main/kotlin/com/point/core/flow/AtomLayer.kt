@@ -131,7 +131,14 @@ class AtomLayer(
         get() = readerText
             ?: lines(atoms).joinToString("\n") { line -> line.joinToString(" ") { it.text } }
 
-    private fun lines(subset: List<Atom>): List<List<Atom>> {
+    /**
+     * Атомы, разложенные по строкам страницы (полосы по центроиду, см. [readingOrder]).
+     *
+     * Публичные, потому что строка — единица представления слоя наружу: индекс слов для
+     * модели (#258) и будущий предпросмотр выделения показывают страницу построчно, и
+     * каждый из них, собирая полосы заново, разошёлся бы с [text] на косой строке.
+     */
+    fun lines(subset: List<Atom> = atoms): List<List<Atom>> {
         val lines = mutableListOf<MutableList<Atom>>()
         subset.sortedBy { it.box.centerY }.forEach { atom ->
             val line = lines.lastOrNull()
