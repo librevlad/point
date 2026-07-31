@@ -148,7 +148,9 @@ fun SelectionScreen(
                 Text(
                     text = when {
                         capturedText == null -> "Обведите нужное на странице"
-                        capturedText.isBlank() -> "Здесь слов не найдено"
+                        // Путь «непрочитанного» (#259): слов нет, но рамка — честный фрагмент
+                        // исходных пикселей, с происхождением. Рукопись обводят именно так.
+                        capturedText.isBlank() -> "Слов здесь не прочитано — возьмётся фрагмент изображения"
                         else -> capturedText
                     },
                     style = MaterialTheme.typography.bodyMedium,
@@ -166,7 +168,9 @@ fun SelectionScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     TextButton(onClick = onClose) { Text("Отмена") }
-                    Button(onClick = onTake, enabled = !capturedText.isNullOrBlank()) { Text("Взять") }
+                    Button(onClick = onTake, enabled = capturedText != null) {
+                        Text(if (capturedText != null && capturedText.isBlank()) "Взять фрагмент" else "Взять")
+                    }
                 }
             }
         }

@@ -65,3 +65,28 @@ fun decodeSelectionFrame(path: String, maxPx: Int): SelectionFrame? {
         ),
     )
 }
+
+/**
+ * Фрагмент сырого файла по рамке (#259, путь «непрочитанного»): человек обвёл место, где движок
+ * ничего не прочитал (рукопись, штамп, фото в фото) — фрагмент несёт исходные пиксели без
+ * пересжатия всей страницы, а происхождение (рамка+источник) едет в metadata объекта. Рамка —
+ * в координатах сырого кадра; выход за края обрезается, вырожденная рамка — null, не мусор.
+ */
+fun cropRegion(path: String, left: Int, top: Int, right: Int, bottom: Int): Bitmap? {
+    @Suppress("DEPRECATION")
+    val decoder = android.graphics.BitmapRegionDecoder.newInstance(path, false) ?: return null
+    return try {
+        val r = android.graphics.Rect(
+            left.coerceAtLeast(0),
+            top.coerceAtLeast(0),
+            right.coerceAtMost(decoder.width),
+            bottom.coerceAtMost(decoder.height),
+        )
+        if (r.width() < MIN_CROP_PX || r.height() < MIN_CROP_PX) null else decoder.decodeRegion(r, null)
+    } finally {
+        decoder.recycle()
+    }
+}
+
+/** Мельче — не фрагмент, а промах пальца: честнее ничего, чем пиксельный огрызок. */
+private const val MIN_CROP_PX = 16
