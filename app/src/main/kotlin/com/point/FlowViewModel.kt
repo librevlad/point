@@ -482,37 +482,30 @@ class FlowViewModel @Inject constructor(
             val sel = state.selection ?: return@update state
             state.copy(
                 selection = sel.copy(
-                    highlights = snap.lineRegions.map(transform::toUpright),
+                    // Пустой захват показывает саму рамку: это то, что уйдёт фрагментом, и оно
+                    // обязано быть видно до «Взять» — как и построчная подсветка для слов.
+                    highlights = if (snap.atoms.isEmpty()) {
+                        listOf(transform.toUpright(snap.region))
+                    } else {
+                        snap.lineRegions.map(transform::toUpright)
+                    },
                     text = snap.text,
                 ),
             )
         }
     }
 
-    /** «Взять»: захват становится объектом графа — текст с происхождением до сырого кадра
-     *  (источник, метки атомов, рамка, страница), дальше обычный экран действий. */
+    /** «Взять»: захват становится объектом графа с происхождением до сырого кадра (источник,
+     *  метки атомов, рамка, страница). Слова → TEXT; пустой захват → фрагмент-изображение
+     *  исходными пикселями (#259, путь «непрочитанного» — рукопись обводят, чтобы проверить
+     *  глазами или отдать зрячей модели, и кроп не смеет потерять, откуда он взят). */
     fun takeSelection() {
         val top = stack.lastOrNull()?.obj ?: return
         val snap = selectionSnap ?: return
-        if (snap.text.isBlank()) return
         viewModelScope.launch {
             val derived = withContext(ioDispatcher) {
                 runCatching {
-                    val ref = store.newScratchFile("txt")
-                    File(ref.value).writeText(snap.text)
-                    PointObject(
-                        id = "sel-${top.id}-${snap.ids.hashCode()}",
-                        mime = "text/plain",
-                        uri = ref,
-                        state = ObjectState(ObjectKind.TEXT, features = setOf(Feature.HAS_TEXT)),
-                        metadata = mapOf(
-                            META_SELECTION_SOURCE to top.id,
-                            META_SELECTION_IDS to snap.ids.joinToString(" "),
-                            META_SELECTION_REGION to snap.region.let { "${it.left} ${it.top} ${it.right} ${it.bottom}" },
-                            META_SELECTION_PAGE to "0",
-                        ),
-                        sourceObjects = listOf(top.id),
-                    )
+                    if (snap.text.isNotBlank()) textCapture(top, snap) else fragmentCapture(top, snap)
                 }.getOrNull()
             }
             if (derived == null) {
@@ -522,6 +515,45 @@ class FlowViewModel @Inject constructor(
             closeSelection()
             pushFrame(derived, viaTitle = "Выделение")
         }
+    }
+
+    private fun provenance(top: PointObject, snap: SnappedSelection) = buildMap {
+        put(META_SELECTION_SOURCE, top.id)
+        if (snap.ids.isNotEmpty()) put(META_SELECTION_IDS, snap.ids.joinToString(" "))
+        put(META_SELECTION_REGION, snap.region.let { "${it.left} ${it.top} ${it.right} ${it.bottom}" })
+        put(META_SELECTION_PAGE, "0")
+    }
+
+    private suspend fun textCapture(top: PointObject, snap: SnappedSelection): PointObject {
+        val ref = store.newScratchFile("txt")
+        File(ref.value).writeText(snap.text)
+        return PointObject(
+            id = "sel-${top.id}-${snap.ids.hashCode()}",
+            mime = "text/plain",
+            uri = ref,
+            state = ObjectState(ObjectKind.TEXT, features = setOf(Feature.HAS_TEXT)),
+            metadata = provenance(top, snap),
+            sourceObjects = listOf(top.id),
+        )
+    }
+
+    private suspend fun fragmentCapture(top: PointObject, snap: SnappedSelection): PointObject? {
+        val r = snap.region
+        val bmp = com.point.data.cropRegion(
+            top.uri.value, r.left.toInt(), r.top.toInt(), r.right.toInt(), r.bottom.toInt(),
+        ) ?: return null
+        val ref = store.newScratchFile("jpg")
+        File(ref.value).outputStream().use {
+            bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, FRAGMENT_JPEG_QUALITY, it)
+        }
+        return PointObject(
+            id = "sel-${top.id}-${r.hashCode()}",
+            mime = "image/jpeg",
+            uri = ref,
+            state = ObjectState(ObjectKind.IMAGE),
+            metadata = provenance(top, snap),
+            sourceObjects = listOf(top.id),
+        )
     }
 
     fun closeSelection() {
@@ -1316,3 +1348,6 @@ private const val PREVIEW_MAX_PX = 640
 
 /** Полный экран выделения читает страницу крупнее превью: слова должны быть различимы. */
 private const val SELECTION_MAX_PX = 2048
+
+/** Фрагмент — рабочая улика, не сувенир: жмём щадяще, чтобы зрячей модели было что читать. */
+private const val FRAGMENT_JPEG_QUALITY = 92
