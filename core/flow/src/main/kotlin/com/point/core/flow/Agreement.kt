@@ -108,21 +108,45 @@ private const val MIN_REPAIRABLE = 8
  * line can put them back. That is a **repair**, not a contradiction, and treating it as one would
  * either hide the better reading or nag about a difference nobody needs to arbitrate.
  *
- * **Every digit must survive untouched.** OCR damages letters; digits carry identity. A phone one
- * digit off is a different person, a waybill one digit off a different parcel, and `Хрещатик, 1`
- * against `Хрещатик, 7` is a different building — one character apart and half a city away. There
- * is no way to tell a fixed digit from a hallucinated one, so a changed digit is a disagreement
- * and goes to the vote, where the user gets to see both readings.
+ * **Every digit in a number must survive untouched.** Digits carry identity: a phone one digit
+ * off is a different person, a waybill one digit off a different parcel, `Хрещатик, 1` против
+ * `Хрещатик, 7` — другое здание. Поэтому цифры **цифро-доминантных** токенов неприкосновенны.
+ *
+ * Но «1ваненко» — не число (#297): это буква «І», убитая OCR в цифру. Одинокая цифра-конфузабл
+ * внутри буквенного токена (1↔І, 0↔О, 3↔З — [confusableFold]) — жертва распознавания, и её
+ * замена на букву — буквенный ремонт, а не подмена цифры. Цифра буквенного токена, у которой
+ * конфузабла нет («Дом7») либо которую меняют на другую цифру («Дом1»→«Дом2»), — по-прежнему
+ * identity и по-прежнему спор.
  */
 fun isRepairOf(known: String, fresh: String): Boolean {
     val a = known.trim()
     val b = fresh.trim()
     if (a.length < MIN_REPAIRABLE || b.isEmpty() || a.equals(b, ignoreCase = true)) return false
-    if (a.filter(Char::isDigit) != b.filter(Char::isDigit)) return false
+    val fa = confusableFold(a.lowercase())
+    val fb = confusableFold(b.lowercase())
+    if (fa.filter(Char::isDigit) != fb.filter(Char::isDigit)) return false
     val budget = (maxOf(a.length, b.length) * MAX_REPAIR_RATIO).toInt()
     if (budget < 1) return false
-    return editDistance(a.lowercase(), b.lowercase(), budget) <= budget
+    return editDistance(fa, fb, budget) <= budget
 }
+
+/**
+ * Свёртка OCR-конфузаблов (#297): в **буквенно-доминантном** токене цифры-жертвы канонизируются
+ * в свои буквы, и защита цифр их больше не держит. Токены, где цифр не меньше, чем букв, — числа
+ * (включая «№9» и одинокую «1») — не трогаются никогда: там цифра несёт identity.
+ */
+private fun confusableFold(s: String): String = WORD_TOKEN.replace(s) { m ->
+    val token = m.value
+    val letters = token.count(Char::isLetter)
+    val digits = token.count(Char::isDigit)
+    if (letters > digits) token.map { CONFUSABLE_LETTER[it] ?: it }.joinToString("") else token
+}
+
+/** Цифра → буква, которую OCR в неё ломает. Список сознательно короткий: пары, живущие в
+ *  реальном корпусе кириллицы («1ваненко», «0лена»); расширять — только с дословной фикстурой. */
+private val CONFUSABLE_LETTER = mapOf('1' to 'і', '0' to 'о', '3' to 'з')
+
+private val WORD_TOKEN = Regex("""\S+""")
 
 /** Levenshtein, abandoned as soon as it exceeds [budget] — the answer above the bound is
  *  «too far», and computing how much too far would be wasted work. */

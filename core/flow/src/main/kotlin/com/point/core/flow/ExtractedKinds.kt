@@ -45,9 +45,14 @@ val KIND_URL: ObjectKind = ObjectKind.of("Url")
  *  (sender, receiver, carrier) is a role and lives in its [com.point.core.model.Relation]s. */
 val KIND_ORGANIZATION: ObjectKind = ObjectKind.of("Organization")
 
+/** Живой человек (#297): отправитель посылки — обычно не юрлицо, и звать его «Организацией»
+ *  значит врать в подписи чипа. Сторона (sender/receiver) — по-прежнему роль в Relation. */
+val KIND_PERSON: ObjectKind = ObjectKind.of("Person")
+
 /** Everything extraction produces so far. A frame that already IS one of these does not get
  *  extracted from again — otherwise every tap into an address would find that same address
  *  inside itself, one level deeper, forever. */
 val EXTRACTED_KINDS: Set<ObjectKind> = setOf(
     KIND_IDENTIFIER, KIND_ADDRESS, KIND_DATE, KIND_PHONE, KIND_EMAIL, KIND_URL, KIND_ORGANIZATION,
+    KIND_PERSON,
 )
