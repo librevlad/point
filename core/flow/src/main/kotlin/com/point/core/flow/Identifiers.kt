@@ -41,3 +41,25 @@ fun waybillNumbers(text: String): List<String> =
  *  цифр обязан быть общим, иначе два «похоже на трек» разъедутся при первой правке. */
 internal const val WAYBILL_DIGITS = 14
 private val MULTI_SPACE = Regex(""" {2,}""")
+
+/**
+ * Трек-номер как факт объекта: тот же ключ читают схемы действий (#260 — «Отследить
+ * отправление» готово ⇔ трек есть) и пишет «Понять» (модель находит форматы, которых правило
+ * не знает, — у идентификатора нет формы, есть только организация, которая её назначила).
+ * Два независимых источника встречаются в [mergeFacts]: цифры неприкосновенны, спор виден.
+ */
+const val META_ENTITY_TRACK = META_ENTITY_PREFIX + "track"
+
+/**
+ * Треки текста как факты: первый — значение, при нескольких все чтения уходят в
+ * `entity.track.alt` (design v3 §8 — «трек найден, но есть второй похожий номер» вместо
+ * ложной однозначности). Пусто — пустая карта, а не ключ с пустым значением.
+ */
+fun trackFacts(text: String): Map<String, String> {
+    val tracks = waybillNumbers(text)
+    if (tracks.isEmpty()) return emptyMap()
+    return buildMap {
+        put(META_ENTITY_TRACK, tracks.first())
+        if (tracks.size > 1) put(META_ENTITY_TRACK + META_ALT_SUFFIX, altValue(tracks))
+    }
+}

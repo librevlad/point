@@ -6,6 +6,7 @@ import com.point.core.flow.EnricherMeta
 import com.point.core.flow.EnrichmentDelta
 import com.point.core.flow.KIND_IDENTIFIER
 import com.point.core.flow.WAYBILL_CONFIDENCE
+import com.point.core.flow.trackFacts
 import com.point.core.flow.waybillNumbers
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
@@ -49,7 +50,9 @@ class IdentifierEnricher @Inject constructor() : Enricher {
 
         val (objects, relations) = identifierObjects(obj, text)
         if (objects.isEmpty()) return@withContext EnrichmentDelta()
-        EnrichmentDelta(objects = objects, relations = relations)
+        // Трек — и факт, а не только узел графа (#260): схема «Отследить отправление» читает
+        // `entity.track` из метаданных, второй похожий номер честно виден в `.alt` (v3 §8).
+        EnrichmentDelta(objects = objects, relations = relations, metadata = trackFacts(text))
     }
 
     private companion object {

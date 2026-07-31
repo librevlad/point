@@ -22,6 +22,7 @@ import com.point.core.flow.META_OCR_ATOMS_REF
 import com.point.core.flow.META_OCR_TEXT_REF
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.looksLikeOcrGarbage
+import com.point.core.flow.trackFacts
 import com.point.core.model.Feature
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
@@ -97,6 +98,9 @@ class OcrEnricher @Inject constructor(
                 // «Посылка», а не «Изображение» (#222, шаг 5): скриншот приходит сюда, не в
                 // DocumentTypeEnricher — тот работает по TEXT, а у картинки текста ещё нет.
                 documentType(text)?.let { putIfAbsent(META_SEMANTIC_TYPE, it) }
+                // Трек — и факт, а не только узел графа (#260): готовность «Отследить
+                // отправление» считается по метаданным, и правило — её бесплатный источник.
+                putAll(trackFacts(text.take(MAX_CHARS)))
                 put(META_OCR_TEXT_REF, ref.value)
                 atomsRef?.let { put(META_OCR_ATOMS_REF, it.value) }
             },

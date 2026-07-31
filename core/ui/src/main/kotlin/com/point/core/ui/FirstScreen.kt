@@ -139,6 +139,10 @@ fun FirstScreen(
         // enrichment delivers them (#64), with still-running work inside the same card.
         UnderstoodSection(facts = plainFacts, enriching = enriching)
 
+        // Готовность действий (#260): полнота считается по действию — «не хватает только X»,
+        // а не форма из девяти полей. Схемы читают те же факты, что пишут энричеры и «Понять».
+        ReadinessSection(metadata = obj.metadata)
+
         // What Point found INSIDE the object (#222) — things, not lines: the waybill number,
         // the branch, the deadline. Each opens as an object of its own.
         if (found.isNotEmpty() && inputPrompt == null) {

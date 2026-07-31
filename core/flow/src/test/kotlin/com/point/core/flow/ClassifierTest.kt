@@ -1,7 +1,6 @@
 package com.point.core.flow
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -46,29 +45,9 @@ class ClassifierTest {
         assertEquals(MAX_LAYOUT_ELEMENTS, layoutOf(many).size)
     }
 
-    // --- The prompt: what the model is and is not shown ---
-
-    @Test
-    fun `the prompt carries the elements and the roles`() {
-        val prompt = classifierPrompt(elements)
-
-        assertTrue(prompt.contains("P2: ТОВ «Агротрейд»"))
-        CLASSIFIER_ROLES.forEach { assertTrue("роль ${it.key}", prompt.contains(it.key)) }
-    }
-
-    @Test
-    fun `the prompt names no kind and no relation — the graph has no route in`() {
-        // The guarantee is structural: classifierPrompt takes elements and roles, and there is no
-        // parameter through which a PointObject could arrive. This asserts the vocabulary too.
-        val prompt = classifierPrompt(elements)
-
-        assertFalse(prompt.contains("Organization"))
-        assertFalse(prompt.contains(KIND_ORGANIZATION.name))
-        assertFalse(prompt.contains("PointObject"))
-        assertFalse(prompt.contains("issued_by"))
-    }
-
     // --- The answer: everything that is not a real reference is dropped ---
+    // (Тесты промпта живут рядом с ним: он строится у «Понять» в :executors — см.
+    // UnderstandRealizerTest, гарантия «граф не имеет пути в промпт» проверяется там.)
 
     @Test
     fun `a good answer becomes roles pointing at real elements`() {
@@ -102,7 +81,8 @@ class ClassifierTest {
 
     @Test
     fun `«ничего не нашёл» is an answer, not a parse failure`() {
-        assertTrue(parseClassification(CLASSIFIER_NOTHING, elements).isEmpty())
+        assertTrue(parseClassification("НЕТ", elements).isEmpty())
+        assertTrue(parseClassification("NONE", elements).isEmpty())
     }
 
     @Test

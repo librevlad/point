@@ -135,6 +135,9 @@ private fun PreviewFoundObjects() = PointTheme {
         metadata = mapOf(
             "entity.address" to "Відділення №9, вул. Хрещатик, 1",
             "entity.date" to "29.07 до 18:00",
+            // #260: трек — факт, и «Отследить отправление» в карточке готовности — готово.
+            com.point.core.flow.META_ENTITY_TRACK to "20 4514 9154 9395",
+            "graph.role.carrier" to "Нова Пошта",
             // #222, шаг 5: заголовок берётся отсюда — «Посылка» вместо «Изображение».
             com.point.core.flow.META_SEMANTIC_TYPE to com.point.core.flow.TYPE_PARCEL,
         ),
@@ -155,6 +158,25 @@ private fun PreviewFoundObjects() = PointTheme {
                 "o:org", com.point.core.model.RelationType.CARRIER, "preview",
             ),
         ),
+    )
+}
+
+@Preview(name = "Посылка · не хватает только трека (#260)", showBackground = true)
+@Composable
+private fun PreviewReadinessMissing() = PointTheme {
+    // Полнота — по действию: перевозчик прочитан, трека нет. Строка «не хватает только:
+    // трек-номер» вместо формы из девяти полей; тап раскрывает честное «в прочитанном
+    // не нашлось».
+    FirstScreen(
+        obj = sampleObject(
+            ObjectKind.IMAGE, "image/png", "photo_label.jpg",
+            metadata = mapOf(
+                "graph.role.carrier" to "Нова Пошта",
+                com.point.core.flow.META_SEMANTIC_TYPE to com.point.core.flow.TYPE_PARCEL,
+            ),
+        ),
+        bubbles = sampleBubbles(ObjectKind.IMAGE),
+        onBubble = {},
     )
 }
 

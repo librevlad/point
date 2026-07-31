@@ -71,4 +71,31 @@ class IdentifiersTest {
         // consensus or a later validator is what raises this.
         assertTrue("structural match must stay below certainty", WAYBILL_CONFIDENCE < 1f)
     }
+
+    // --- Трек как факт (#260): схема «Отследить отправление» читает entity.track ---
+
+    @Test
+    fun `трек становится фактом объекта`() {
+        assertEquals(
+            mapOf(META_ENTITY_TRACK to "20 4514 9154 9395"),
+            trackFacts("ТТН 20 4514 9154 9395 прибула"),
+        )
+    }
+
+    @Test
+    fun `второй похожий номер не прячется — все чтения в alt`() {
+        // design v3 §8: «трек найден, но есть второй похожий» вместо ложной однозначности.
+        val facts = trackFacts("20 4514 9154 9395 та 20451491549396")
+
+        assertEquals("20 4514 9154 9395", facts[META_ENTITY_TRACK])
+        assertEquals(
+            listOf("20 4514 9154 9395", "20451491549396"),
+            alternativesOf(facts, META_ENTITY_TRACK),
+        )
+    }
+
+    @Test
+    fun `нет трека — нет ключей, а не ключ с пустотой`() {
+        assertTrue(trackFacts("Позвони на +380671234567").isEmpty())
+    }
 }
