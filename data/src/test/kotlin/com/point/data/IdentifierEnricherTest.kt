@@ -109,6 +109,16 @@ class IdentifierEnricherTest {
         assertTrue(delta.objects.isEmpty())
         assertTrue(delta.relations.isEmpty())
         assertTrue("must not flag features either", delta.features.isEmpty())
+        assertTrue("and no metadata keys", delta.metadata.isEmpty())
+    }
+
+    @Test
+    fun `трек уходит и в метаданные — схема «Отследить» читает факт, не граф`() = runTest {
+        // #260: готовность действия считается по метаданным объекта; узел графа остаётся,
+        // но тот же трек обязан быть и фактом entity.track.
+        val delta = enricher.enrich(textObject("ТТН 20 4514 9154 9395"))
+
+        assertEquals("20 4514 9154 9395", delta.metadata[com.point.core.flow.META_ENTITY_TRACK])
     }
 
     @Test

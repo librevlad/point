@@ -65,6 +65,22 @@ fun agree(readings: List<String>): Agreement? {
 /** Metadata suffix holding the readings a fact was disputed between: `entity.address.alt`. */
 const val META_ALT_SUFFIX = ".alt"
 
+/**
+ * Metadata suffix для **других значений того же типа на странице**: `entity.track.more`.
+ *
+ * Не путать с [META_ALT_SUFFIX]: `.alt` — спор источников о чтении ОДНОГО значения, и
+ * согласие источников его закрывает ([mergeFacts] снимает ключ). `.more` — на странице
+ * реально несколько разных значений (накладная + обратная накладная, v3 §8 «трек найден,
+ * но есть второй похожий»), и подтверждение моделью первого номера не имеет права стирать
+ * запись о втором (ревью #260 — второй настоящий номер исчезал после «Понять» и мигал,
+ * возвращаясь с фоновым ре-OCR). [mergeFacts] этот ключ сознательно не трогает.
+ */
+const val META_MORE_SUFFIX = ".more"
+
+/** Другие значения того же типа, записанные для [key]; пусто, когда значение одно. */
+fun moreOf(metadata: Map<String, String>, key: String): List<String> =
+    metadata[key + META_MORE_SUFFIX]?.split("\n")?.filter { it.isNotBlank() }.orEmpty()
+
 /** The readings are separated by newlines — metadata is stored as JSON, which escapes them. */
 private const val ALT_SEPARATOR = "\n"
 

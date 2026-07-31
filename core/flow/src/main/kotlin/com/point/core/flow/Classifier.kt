@@ -14,8 +14,9 @@ import com.point.core.model.RelationType
  * or it does not; an invented id is dropped without a human ever seeing it. Today an LLM answer is
  * free prose, and there is no way at all to tell a good one from a confident wrong one.
  *
- * The Point graph is not in the prompt and cannot be: [classifierPrompt] takes elements and roles,
- * and there is no parameter through which an object, a kind or a relation could reach it.
+ * The Point graph is not in the prompt and cannot be: the prompt builder (у «Понять» в
+ * `:executors`) takes elements and roles, and there is no parameter through which an object,
+ * a kind or a relation could reach it.
  */
 data class ClassifierRole(
     /** The word the model answers with — short, lowercase, ASCII, never translated. */
@@ -34,9 +35,11 @@ data class ClassifierRole(
  * One line per role, and nothing else changes: no new kind, no new capability, no new parsing.
  * That is the promise of «экстрактор с крошечным ТЗ» made concrete.
  *
- * Only organisations for now — deliberately. Addresses, dates and identifiers already come off
- * the page by rule, for free and offline; asking a paid model to repeat that work would be worse
- * in every way. What a rule genuinely cannot do is say **who is who**, and that is what is here.
+ * Only organisations for now — deliberately: роли и есть то, чего правило не скажет никогда.
+ * (Прежний довод «адреса, даты и идентификаторы снимаются правилом, просить модель — хуже»
+ * отменён design v3 §5: у идентификатора нет универсальной формы, есть только организация,
+ * которая её назначила, — поэтому «Понять» спрашивает модель и о значениях тоже, а правило
+ * осталось вторым, бесплатным источником того же факта.)
  */
 val CLASSIFIER_ROLES: List<ClassifierRole> = listOf(
     ClassifierRole("sender", KIND_ORGANIZATION, RelationType.SENDER, "отправитель груза или письма"),
@@ -54,33 +57,8 @@ val CLASSIFIER_ROLES: List<ClassifierRole> = listOf(
  */
 const val META_GRAPH_ROLE_PREFIX = "graph.role."
 
-/** The model's way of saying «ничего из этого в документе нет» — an answer, not a failure. */
-const val CLASSIFIER_NOTHING = "НЕТ"
-
 /** One survived reading: this element plays this role. Built only from a validated id. */
 data class Classified(val role: ClassifierRole, val element: LayoutElement)
-
-/**
- * The prompt: the elements, the roles, and a format with no room for prose.
- *
- * Note what is absent. No object ids, no kinds, no relations, no earlier findings — the graph has
- * no route into this string.
- */
-fun classifierPrompt(
-    elements: List<LayoutElement>,
-    roles: List<ClassifierRole> = CLASSIFIER_ROLES,
-): String = buildString {
-    append("Ниже элементы документа, у каждого свой идентификатор.\n\n")
-    elements.forEach { append(it.id).append(": ").append(it.text).append('\n') }
-    append("\nОпредели, какой элемент играет каждую из ролей:\n")
-    roles.forEach { append("- ").append(it.key).append(" — ").append(it.question).append('\n') }
-    append(
-        "\nОтвечай ТОЛЬКО строками вида роль=идентификатор, по одной на строку, без пояснений.\n" +
-            "Идентификатор — РОВНО один из перечисленных выше, а не текст элемента.\n" +
-            "Роль, которой в документе нет, пропусти.\n" +
-            "Если не нашёл ни одной роли — ответь ровно $CLASSIFIER_NOTHING.\n",
-    )
-}
 
 /**
  * Parses the answer and throws away everything that is not a reference to a real element.

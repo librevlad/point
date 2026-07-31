@@ -17,18 +17,14 @@ import com.point.executors.AppOpenRealizer
 import com.point.executors.AiCapability
 import com.point.executors.BasketCapability
 import com.point.executors.RemotePcCapability
-import com.point.executors.CollectPlusCapability
-import com.point.executors.CollectPlusRealizer
 import com.point.executors.WordPlusCapability
 import com.point.executors.WordPlusRealizer
 import com.point.executors.RemotePcRealizer
 import com.point.executors.BasketRealizer
-import com.point.executors.DeepUnderstandCapability
-import com.point.executors.ClassifyCapability
 import com.point.executors.JobReplyCapability
 import com.point.executors.JobReplyRealizer
-import com.point.executors.DeepUnderstandRealizer
-import com.point.executors.ClassifyRealizer
+import com.point.executors.UnderstandCapability
+import com.point.executors.UnderstandRealizer
 import com.point.executors.ShoppingListCapability
 import com.point.executors.ShoppingListRealizer
 import com.point.executors.AiChatResponderImpl
@@ -172,12 +168,10 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun cloudOcrCap(c: CloudOcrCapability): Capability
     @Binds @IntoSet abstract fun aiCap(c: AiCapability): Capability
     @Binds @IntoSet abstract fun shoppingListCap(c: ShoppingListCapability): Capability
-    @Binds @IntoSet abstract fun deepUnderstandCap(c: DeepUnderstandCapability): Capability
-    /** #222, шаг 6: модель как классификатор над раскладкой — «кто есть кто». */
-    @Binds @IntoSet abstract fun classifyCap(c: ClassifyCapability): Capability
+    /** #260: «Понять глубже» + «Кто есть кто» + «Собрать данные+» свёрнуты в одно «Понять». */
+    @Binds @IntoSet abstract fun understandCap(c: UnderstandCapability): Capability
     @Binds @IntoSet abstract fun basketCap(c: BasketCapability): Capability
     @Binds @IntoSet abstract fun wordPlusCap(c: WordPlusCapability): Capability
-    @Binds @IntoSet abstract fun collectPlusCap(c: CollectPlusCapability): Capability
     @Binds @IntoSet abstract fun jobReplyCap(c: JobReplyCapability): Capability
 
     // --- Realizers (behaviour) ---
@@ -220,11 +214,9 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun cloudOcrDirectR(r: CloudOcrDirectRealizer): Realizer
     @Binds @IntoSet abstract fun aiR(r: AiRealizer): Realizer
     @Binds @IntoSet abstract fun shoppingListR(r: ShoppingListRealizer): Realizer
-    @Binds @IntoSet abstract fun deepUnderstandR(r: DeepUnderstandRealizer): Realizer
-    @Binds @IntoSet abstract fun classifyR(r: ClassifyRealizer): Realizer
+    @Binds @IntoSet abstract fun understandR(r: UnderstandRealizer): Realizer
     @Binds @IntoSet abstract fun basketR(r: BasketRealizer): Realizer
     @Binds @IntoSet abstract fun wordPlusR(r: WordPlusRealizer): Realizer
-    @Binds @IntoSet abstract fun collectPlusR(r: CollectPlusRealizer): Realizer
     @Binds @IntoSet abstract fun jobReplyR(r: JobReplyRealizer): Realizer
     @Binds @IntoSet abstract fun pcR(r: PcRealizer): Realizer
     @Binds @IntoSet abstract fun pairPcR(r: PairPcRealizer): Realizer
