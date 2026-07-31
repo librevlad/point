@@ -63,6 +63,31 @@ class AgreementTest {
         assertEquals("свежее", agree(listOf("свежее", "известное"))!!.value)
     }
 
+    // --- Маркер ⚠ против голосования (ревью #258) ---
+
+    @Test
+    fun `ячейка из одних маркеров — не разобрано, а не чтение — слово страницы побеждает`() {
+        val v = agree(listOf("⚠", "20"))!!
+
+        assertEquals("20", v.value)
+        assertTrue(v.agreed) // «не разобрано» — отсутствие, не разногласие
+        assertTrue(v.candidates.isEmpty()) // и в дропдаун «⚠» вариантом не лезет
+    }
+
+    @Test
+    fun `все источники не разобрали — маркер выживает, а не тихая пустота`() {
+        assertEquals("⚠", agree(listOf("⚠", "⚠"))!!.value)
+    }
+
+    @Test
+    fun `чистое чтение бьёт помеченное в согласной группе независимо от порядка`() {
+        // Пометка выживает, только если ни один источник не подтвердил значение чистым, —
+        // иначе судьбу ⚠ решал бы порядок, в котором источники успели ответить.
+        assertEquals("1600", agree(listOf("1600⚠", "1600"))!!.value)
+        assertEquals("1600", agree(listOf("1600", "1600⚠"))!!.value)
+        assertEquals("1600⚠", agree(listOf("1600⚠", "1600⚠"))!!.value)
+    }
+
     // --- Merging what is known with what just arrived ---
 
     @Test
