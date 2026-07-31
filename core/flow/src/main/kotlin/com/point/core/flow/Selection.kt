@@ -89,3 +89,19 @@ fun AtomLayer.snapSelection(raw: Box, page: Int = 0): SnappedSelection {
         lineRegions = lines(hit).map { line -> line.map { it.box }.reduce(Box::union) },
     )
 }
+
+/**
+ * Происхождение выделения на производном объекте: захваченный текст обязан уметь показать,
+ * **откуда он взят**, и перечитать себя — «обвёл → кроп → потерял происхождение» и есть ловушка,
+ * которую #259 запрещает. Все значения — в координатах сырого кадра исходного файла.
+ */
+const val META_SELECTION_SOURCE = "selection.source"
+
+/** Метки захваченных атомов через пробел — тот же адрес, что у ответа модели ([AtomAddress.ByIds]). */
+const val META_SELECTION_IDS = "selection.ids"
+
+/** Внешняя рамка захвата в сыром кадре: `left top right bottom` (для кропа и «показать откуда»). */
+const val META_SELECTION_REGION = "selection.region"
+
+/** Страница исходника, с нуля — контракт обязан пережить PDF. */
+const val META_SELECTION_PAGE = "selection.page"

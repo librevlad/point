@@ -1,0 +1,174 @@
+package com.point.core.ui
+
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Button
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.dp
+import com.point.core.flow.Box as PageBox
+
+/**
+ * Экран выделения (#259): страница целиком, палец рисует рамку, рамка прилипает к словам.
+ *
+ * Экран нем по части логики: получает битмап и подсветку в **координатах битмапа**, отдаёт
+ * рамку жеста в них же — притягивание, страницы и сырой кадр живут у вызывающего. Захваченный
+ * текст показывается **до** любых действий (граница #259: кривое выделение видно сразу), и
+ * подсветка строится построчно — внешняя рамка многострочного захвата утверждала бы захват
+ * слова, которого в адресе нет (ревью #284).
+ */
+@Composable
+fun SelectionScreen(
+    image: ImageBitmap,
+    highlights: List<PageBox>,
+    capturedText: String?,
+    onSelect: (PageBox) -> Unit,
+    onTake: () -> Unit,
+    onClose: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        var container by remember { mutableStateOf(IntSize.Zero) }
+        var dragStart by remember { mutableStateOf<Offset?>(null) }
+        var dragNow by remember { mutableStateOf<Offset?>(null) }
+
+        // Вписывание битмапа в контейнер: одна точка правды для рисования и для обратного
+        // пересчёта пальца в координаты битмапа.
+        val scale = if (container == IntSize.Zero) 1f else minOf(
+            container.width / image.width.toFloat(),
+            container.height / image.height.toFloat(),
+        )
+        val dx = if (container == IntSize.Zero) 0f else (container.width - image.width * scale) / 2f
+        val dy = if (container == IntSize.Zero) 0f else (container.height - image.height * scale) / 2f
+
+        val accent = MaterialTheme.colorScheme.primary
+
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .onSizeChanged { container = it }
+                .pointerInput(image) {
+                    detectDragGestures(
+                        onDragStart = { at -> dragStart = at; dragNow = at },
+                        onDragCancel = { dragStart = null; dragNow = null },
+                        onDrag = { change, _ -> dragNow = change.position },
+                        onDragEnd = {
+                            val a = dragStart
+                            val b = dragNow
+                            dragStart = null
+                            dragNow = null
+                            if (a != null && b != null) {
+                                onSelect(
+                                    PageBox(
+                                        (a.x - dx) / scale, (a.y - dy) / scale,
+                                        (b.x - dx) / scale, (b.y - dy) / scale,
+                                    ),
+                                )
+                            }
+                        },
+                    )
+                }
+                .drawWithContent {
+                    drawContent()
+                    // Построчная подсветка захвата — в координатах контейнера.
+                    highlights.forEach { h ->
+                        val r = Rect(
+                            Offset(h.left * scale + dx, h.top * scale + dy),
+                            Offset(h.right * scale + dx, h.bottom * scale + dy),
+                        )
+                        drawRoundRect(
+                            color = accent.copy(alpha = 0.24f),
+                            topLeft = r.topLeft, size = r.size,
+                            cornerRadius = CornerRadius(4.dp.toPx()),
+                        )
+                        drawRoundRect(
+                            color = accent.copy(alpha = 0.85f),
+                            topLeft = r.topLeft, size = r.size,
+                            cornerRadius = CornerRadius(4.dp.toPx()),
+                            style = Stroke(width = 1.5f.dp.toPx()),
+                        )
+                    }
+                    // Живая рамка жеста, пока палец на экране.
+                    val a = dragStart
+                    val b = dragNow
+                    if (a != null && b != null) {
+                        val r = Rect(
+                            Offset(minOf(a.x, b.x), minOf(a.y, b.y)),
+                            Offset(maxOf(a.x, b.x), maxOf(a.y, b.y)),
+                        )
+                        drawRect(color = accent.copy(alpha = 0.10f), topLeft = r.topLeft, size = r.size)
+                        drawRect(
+                            color = accent, topLeft = r.topLeft, size = r.size,
+                            style = Stroke(width = 2.dp.toPx()),
+                        )
+                    }
+                },
+            contentAlignment = Alignment.Center,
+        ) {
+            Image(
+                bitmap = image,
+                contentDescription = null,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+
+        Surface(tonalElevation = 3.dp) {
+            Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp)) {
+                Text(
+                    text = when {
+                        capturedText == null -> "Обведите нужное на странице"
+                        capturedText.isBlank() -> "Здесь слов не найдено"
+                        else -> capturedText
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (capturedText.isNullOrBlank()) {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    },
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TextButton(onClick = onClose) { Text("Отмена") }
+                    Button(onClick = onTake, enabled = !capturedText.isNullOrBlank()) { Text("Взять") }
+                }
+            }
+        }
+    }
+}
