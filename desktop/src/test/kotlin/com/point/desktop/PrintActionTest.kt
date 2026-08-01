@@ -47,12 +47,31 @@ class PrintActionTest {
     }
 
     @Test
-    fun `обещаем отправку, а не готовую бумагу`() = runTest {
-        // Бумага могла кончиться, и увидит это человек, а не мы: обещать «напечатано» нельзя.
+    fun `обещаем очередь, а не готовую бумагу`() = runTest {
+        // Включён ли принтер и есть ли бумага — с телефона не видно, и отчитываться за чужую
+        // машину нельзя (консилиум: «отчитались об успехе, не зная состояния»).
         val result = PcPrintRealizer(printer()).perform(document, null) as ActionResult.Done
 
-        assertTrue(result.message.startsWith("Отправлено"))
+        assertTrue(result.message.contains("очереди"))
+        assertTrue("человека надо отправить проверить", result.message.contains("проверьте"))
         assertTrue(!result.message.contains("Напечатано"))
+    }
+
+    @Test
+    fun `принтер сменился между тапом и печатью — отказ, а не печать в никуда`() = runTest {
+        // Кнопка появилась, когда принтер был; к моменту работы его убрали — проверяем в
+        // момент печати, потому что состояние чужой машины живёт своей жизнью.
+        var printed = false
+        val vanished = object : Printer {
+            override fun name(): String? = null
+            override fun print(file: File) { printed = true }
+        }
+
+        val result = PcPrintRealizer(vanished).perform(document, null)
+
+        assertTrue(result is ActionResult.Failure)
+        assertTrue("повторить можно — это не приговор", (result as ActionResult.Failure).recoverable)
+        assertTrue(!printed)
     }
 
     @Test
