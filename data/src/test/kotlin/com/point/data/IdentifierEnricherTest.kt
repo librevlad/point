@@ -151,6 +151,17 @@ class IdentifierEnricherTest {
     }
 
     @Test
+    fun `показание счётчика и координаты — факты того же дешёвого прохода`() = runTest {
+        // #262: узлами графа они пока не становятся (действия, которое по ним поедет, нет),
+        // но метрика и карточка готовности читают метаданные — значит, факты обязаны быть.
+        val delta = enricher.enrich(textObject("Вода 154 м³\nТочка 50.4501, 30.5234"))
+
+        assertEquals("154", delta.metadata["entity.meter"])
+        assertEquals("50.4501, 30.5234", delta.metadata["entity.geo"])
+        assertTrue("узлов графа у них ещё нет", delta.objects.isEmpty())
+    }
+
+    @Test
     fun `applies to text only — an image is handled after OCR turns it into text`() {
         assertTrue(enricher.appliesTo(ObjectState(ObjectKind.TEXT)))
         assertTrue(!enricher.appliesTo(ObjectState(ObjectKind.IMAGE)))

@@ -96,6 +96,12 @@ fun semanticFits(key: String, value: String): Boolean? {
         META_ENTITY_PREFIX + "email" -> value.contains('@') && value.substringAfter('@').contains('.')
         META_ENTITY_PREFIX + "card" -> digits in 15..19
         META_ENTITY_PREFIX + "date" -> value.any(Char::isDigit) && value.any { it in ".:/-" }
+        // Показание — та же ОДНА реализация границы, которой судит офлайновое правило
+        // ([meterDigitsFit]): два счётчика формы разъехались бы на первой правке (#262).
+        META_ENTITY_METER -> meterDigitsFit(value)
+        // Координаты — целиком форма правила: пара в границах глобуса. Одна реализация на
+        // обоих читателей, поэтому «модель назвала координатами не координаты» видно сразу.
+        META_ENTITY_GEO -> geoPoints(value).isNotEmpty()
         else -> null
     }
 }
@@ -221,4 +227,13 @@ private val FIELD_MARKERS: Map<String, List<String>> = mapOf(
         "адреса", "адрес", "address", "відділення", "отделение",
     ),
     META_ENTITY_PREFIX + "card" to listOf("карта", "картка", "card", "iban", "рахунок", "счёт", "счет"),
+    // Единица учёта — маркер показания наравне с подписью: «кВт·ч» рядом с числом стоит
+    // отдельным пробегом, и это ВТОРОЙ, независимый от формы класс улик (позиционный).
+    META_ENTITY_METER to listOf(
+        "показання", "показания", "показник", "лічильник", "личильник", "счётчик", "счетчик",
+        "meter", "reading", "квт·ч", "квт*ч", "квтч", "квт·год", "м³", "м3", "kwh", "гкал",
+    ),
+    META_ENTITY_GEO to listOf(
+        "координати", "координаты", "coordinates", "gps", "широта", "довгота", "долгота",
+    ),
 )
