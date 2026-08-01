@@ -70,7 +70,7 @@ internal fun alignRows(tables: List<List<List<String>>>): List<List<List<String>
         val next = mutableListOf<MutableList<List<String>?>>()
         // Ключ строки — если он есть — надёжнее похожести: рукописные пометки поверх бланка
         // меняют половину ячеек, но артикул остаётся артикулом.
-        val key = keyColumn(grid, rows)
+        val key = keyColumns(grid, rows)
         val pairs = if (key != null) matchByKey(grid, rows, key) else matchRows(grid, rows)
         for ((slotIdx, rowIdx) in pairs) {
             when {
@@ -98,20 +98,36 @@ internal fun alignRows(tables: List<List<List<String>>>): List<List<List<String>
  * внутри каждого чтения и хотя бы половина из них встречается в обоих. Не нашли такую — работаем
  * по прежнему пути (похожесть строк), а не выдумываем ключ.
  */
-private fun keyColumn(a: List<List<String>>, b: List<List<String>>): Int? {
-    val columns = minOf(a.maxOfOrNull { it.size } ?: 0, b.maxOfOrNull { it.size } ?: 0)
-    for (c in 0 until columns) {
-        val ka = a.mapNotNull { it.getOrNull(c)?.let(::normConsensus)?.takeIf { v -> v.isNotEmpty() } }
-        val kb = b.mapNotNull { it.getOrNull(c)?.let(::normConsensus)?.takeIf { v -> v.isNotEmpty() } }
-        if (ka.size < MIN_KEYED_ROWS || kb.size < MIN_KEYED_ROWS) continue
-        if (ka.toSet().size != ka.size || kb.toSet().size != kb.size) continue // не ключ — повторяется
-        // Почти все, а не половина: на «Итого» против «Всего» половина совпадений находится
-        // случайно, и подписи строк выдали бы себя за идентификаторы (поймано тестом #294).
-        val shared = ka.count { it in kb.toSet() }
-        if (shared * 5 >= minOf(ka.size, kb.size) * 4) return c
+private fun keyColumns(a: List<List<String>>, b: List<List<String>>): Pair<Int, Int>? {
+    fun keys(t: List<List<String>>, c: Int) =
+        t.mapNotNull { it.getOrNull(c)?.let(::normConsensus)?.takeIf { v -> v.isNotEmpty() } }
+    val wa = a.maxOfOrNull { it.size } ?: 0
+    val wb = b.maxOfOrNull { it.size } ?: 0
+    var best: Pair<Int, Int>? = null
+    var bestShared = 0
+    // Пары столбцов, а не один и тот же индекс: на живой ведомости одно чтение отдало артикул
+    // первой колонкой, другое — второй (первую заняла пустая колонка бланка), и ключ, искомый
+    // по совпадающему индексу, не находился вовсе.
+    for (ca in 0 until minOf(wa, MAX_KEY_SCAN)) {
+        val ka = keys(a, ca)
+        if (ka.size < MIN_KEYED_ROWS || ka.toSet().size != ka.size) continue
+        for (cb in 0 until minOf(wb, MAX_KEY_SCAN)) {
+            val kb = keys(b, cb)
+            if (kb.size < MIN_KEYED_ROWS || kb.toSet().size != kb.size) continue
+            // Почти все, а не половина: на «Итого» против «Всего» половина совпадений находится
+            // случайно, и подписи строк выдали бы себя за идентификаторы (поймано тестом #294).
+            val shared = ka.count { it in kb.toSet() }
+            if (shared * 5 >= minOf(ka.size, kb.size) * 4 && shared > bestShared) {
+                best = ca to cb
+                bestShared = shared
+            }
+        }
     }
-    return null
+    return best
 }
+
+/** Дальше третьей колонки идентификатор строки не прячется, а перебор пар дорожает квадратично. */
+private const val MAX_KEY_SCAN = 3
 
 /** Ниже этого числа опознанных строк «ключ» — совпадение, а не свойство таблицы. */
 private const val MIN_KEYED_ROWS = 5
@@ -124,10 +140,11 @@ private const val MIN_KEYED_ROWS = 5
 private fun matchByKey(
     grid: List<List<String>>,
     rows: List<List<String>>,
-    column: Int,
+    columns: Pair<Int, Int>,
 ): List<Pair<Int?, Int?>> {
-    fun key(row: List<String>) = row.getOrNull(column)?.let(::normConsensus)?.takeIf { it.isNotEmpty() }
-    val rowByKey = rows.indices.mapNotNull { i -> key(rows[i])?.let { it to i } }.toMap()
+    fun key(row: List<String>, c: Int) = row.getOrNull(c)?.let(::normConsensus)?.takeIf { it.isNotEmpty() }
+    fun key(row: List<String>) = key(row, columns.first)
+    val rowByKey = rows.indices.mapNotNull { i -> key(rows[i], columns.second)?.let { it to i } }.toMap()
     val used = mutableSetOf<Int>()
     val out = mutableListOf<Pair<Int?, Int?>>()
     grid.indices.forEach { g ->
