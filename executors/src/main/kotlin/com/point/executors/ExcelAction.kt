@@ -14,6 +14,7 @@ import com.point.core.flow.SpreadsheetWriter
 import com.point.core.flow.bareIndexId
 import com.point.core.flow.normConsensus
 import com.point.core.flow.promptIndex
+import com.point.core.flow.reportStage
 import com.point.core.flow.reconcile
 import com.point.core.flow.resolveCells
 import com.point.core.flow.styleCell
@@ -69,6 +70,7 @@ class ExcelRealizer @Inject constructor(
                 // цифру незаметно нельзя: через метки её перепишет атом, а продиктованная мимо
                 // страницы получит ⚠ (resolveCells). Слоя нет (рукопись, PDF, текст) — старый
                 // контракт, дословно.
+                reportStage(if (input.state.kind == ObjectKind.IMAGE) "Читаю страницу" else "Готовлю текст")
                 val layer = atomLayer(input)
                 val index = layer?.promptIndex()
                 val prompt = if (index != null) PROMPT + ADDRESSED + index + extra else PROMPT + extra
@@ -84,6 +86,7 @@ class ExcelRealizer @Inject constructor(
                 for (provider in ordered) {
                     if (tables.size >= CONSENSUS_N) break
                     try {
+                        reportStage("Модель ${tables.size + 1} из $CONSENSUS_N читает таблицу")
                         val answer = provider.run(input, prompt)
                         val raw = File(answer.uri.value).readText()
                         val grounded = if (layer != null && index != null) {
@@ -127,6 +130,7 @@ class ExcelRealizer @Inject constructor(
                         recoverable = true,
                     )
                 } else {
+                    reportStage(if (tables.size > 1) "Свожу расхождения чтений" else "Собираю таблицу")
                     val consensus = reconcile(tables) // 1 read → passthrough; ≥2 → voted, disagreements ⚠
                     // Кандидаты двух этажей под одним дропдауном: спор моделей между собой (reconcile)
                     // и спор модели с атомами страницы (#258). Согласие моделей второй спор не гасит:
@@ -157,6 +161,7 @@ class ExcelRealizer @Inject constructor(
                         }
                     }
                     // disagreements carry the distinct readings as an in-cell dropdown (#200).
+                    reportStage("Собираю файл")
                     val ref = writer.write(rows, candidates)
                     val flagged = rows.sumOf { row -> row.count { styleCell(it).flagged } }
                     ActionResult.Success(

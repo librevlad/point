@@ -171,7 +171,7 @@ fun PointHost(
             // M3 (MOTION.md №8): quiet local work keeps the object on screen — it "works"
             // in place; only cloud/slow actions get the full staged busy screen.
             state.busy != null && !state.busyQuiet ->
-                BusyScreen(title = state.busy, network = state.busyNetwork, onCancel = onCancelAction)
+                BusyScreen(title = state.busy, stage = state.busyStage, network = state.busyNetwork, onCancel = onCancelAction)
 
             // #259: выделение поверх объекта — страница целиком, рамка пальцем, «Взять».
             state.selection != null -> SelectionScreen(
@@ -292,8 +292,6 @@ fun PointHost(
     }
 }
 
-private val NETWORK_STAGES = listOf("Отправляю в облако…", "Модель обрабатывает запрос…", "Собираю ответ…")
-private val LOCAL_STAGES = listOf("Обрабатываю…")
 
 /**
  * The working screen — alive, not a frozen wheel (#62). A ticking elapsed counter proves it is
@@ -301,7 +299,7 @@ private val LOCAL_STAGES = listOf("Обрабатываю…")
  * wait reads as progress, not a hang. No fake percentages — only what we truly know.
  */
 @Composable
-private fun BusyScreen(title: String, network: Boolean, onCancel: () -> Unit) {
+private fun BusyScreen(title: String, stage: String?, network: Boolean, onCancel: () -> Unit) {
     var elapsed by remember(title) { mutableIntStateOf(0) }
     LaunchedEffect(title) {
         while (true) {
@@ -309,17 +307,19 @@ private fun BusyScreen(title: String, network: Boolean, onCancel: () -> Unit) {
             elapsed++
         }
     }
-    val stages = if (network) NETWORK_STAGES else LOCAL_STAGES
     // The portal (redesign slice 1): a glowing "reading" vortex + indicative step checklist on its
     // own near-black stage — replaces the plain wheel (MOTION.md принцип №3, impulses not a spinner).
     // Подпись говорит правду о времени, а не обещает «несколько секунд» (#288): две модели по
     // фото — это минута и больше, и обещание, которое нарушается на 12-й секунде, читается как
     // «зависло». Секунды идут, отмена доступна с самого начала — передумать не поздно никогда.
+    // Никакого выдуманного чек-листа (#288, консилиум: «замещение реального статуса
+    // имитацией»): показываем ТОЛЬКО то, что действие сказало о себе само. Молчит — человек
+    // видит идущее время и кнопку отмены, и это честнее застрявшей бутафории.
     BusyPortal(
         title = title,
         subtitle = waitingSubtitle(elapsed, network),
-        steps = stages,
-        activeStep = portalStep(elapsed, stages.size),
+        steps = listOfNotNull(stage),
+        activeStep = 0,
         onCancel = onCancel,
     )
 }

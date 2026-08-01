@@ -175,7 +175,8 @@ fun BusyPortal(
                 Spacer(Modifier.height(6.dp))
                 Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = PortalMuted)
             }
-            if (steps.size > 1) {
+            // Одна строка — тоже строка: реализатор сказал, что делает сейчас (#288).
+            if (steps.isNotEmpty()) {
                 Spacer(Modifier.height(28.dp))
                 StepChecklist(steps, activeStep)
             }

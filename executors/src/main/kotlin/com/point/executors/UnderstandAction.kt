@@ -37,6 +37,7 @@ import com.point.core.flow.mergeFacts
 import com.point.core.flow.normConsensus
 import com.point.core.flow.parseClassification
 import com.point.core.flow.promptIndex
+import com.point.core.flow.reportStage
 import com.point.core.flow.provenanceOf
 import com.point.core.flow.resolve
 import com.point.core.flow.ruleEvidence
@@ -252,13 +253,16 @@ class UnderstandRealizer @Inject constructor(
                 }
                 val layer = atomLayer(input)
                 val index = layer?.promptIndex()
+                reportStage("Отправляю страницу модели")
                 val answer = ask(input, understandPrompt(elements, index = index))
+                reportStage("Проверяю прочитанное по странице")
                 val parsed = parseFieldCandidates(answer)
                 val judged = judgeFields(parsed.fields, layer)
                 // Второй вызов — один и только по полям, где валидатор отклонил ВСЕХ кандидатов
                 // (design v3 §7): не «поищи ещё» всему документу — самоподтверждение, — а
                 // конкретный конфликт конкретного поля.
                 val retried = judged.retry.takeIf { it.isNotEmpty() }?.let { keys ->
+                    reportStage("Контрольная цифра не сошлась — перечитываю")
                     val again = ask(input, retryPrompt(keys, elements, index))
                     judgeFields(parseFieldCandidates(again).fields.filterKeys { it in keys }, layer)
                 }
