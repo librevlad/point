@@ -107,6 +107,24 @@ fun semanticFits(key: String, value: String): Boolean? {
 }
 
 /**
+ * Улики, которые видно **без страницы**: форма значения и сошедшаяся контрольная цифра (#262).
+ *
+ * Одна реализация на всех судей — офлайновое правило ([trackFacts]), суд кандидатов модели по
+ * слою ([fieldEvidence]) и тот же суд, когда слоя нет вовсе. Два счётчика улик разъехались бы на
+ * первой правке, и «правило считает номер подтверждённым, а модель — предположением» стало бы
+ * невидимым расхождением.
+ *
+ * Контрольная цифра — [EvidenceClass.ARITHMETIC], и это **второй, независимый от формы класс**:
+ * форма говорит «так пишут номера», арифметика — «эти девять цифр согласованы между собой».
+ * Поэтому S10 подтверждён без всякой страницы, а 14-значный номер Новой Почты — нет: у него
+ * такого доказательства не существует, и притворяться иначе значило бы врать сильнее.
+ */
+fun formEvidence(key: String, value: String): Set<EvidenceClass> = buildSet {
+    if (semanticFits(key, value) == true) add(EvidenceClass.SEMANTIC)
+    if (s10CheckDigitValid(value) == true) add(EvidenceClass.ARITHMETIC)
+}
+
+/**
  * Контрольная цифра S10 (UPU): `RA123456789UA` — 8 цифр значения, девятая контрольная,
  * веса 8 6 4 2 3 5 9 7, C = 11 − (Σ mod 11), 10 → 0, 11 → 5.
  *
@@ -157,11 +175,12 @@ fun AtomLayer.fieldEvidence(
     // SEMANTIC: форма значения — валидатором либо уликой правила на атомах значения.
     // Улика правила требует ПОЛНОГО окна: правило метило пробег с суммой цифр ровно
     // [WAYBILL_DIGITS], и кусок этого пробега — не «похоже на трек», а кусок.
-    val formFits = semanticFits(key, candidate.text) == true
+    // ARITHMETIC приходит оттуда же, где его берёт офлайновое правило ([formEvidence], #262).
+    classes += formEvidence(key, candidate.text)
     val ruleFits = key == META_ENTITY_TRACK && resolved.atoms.isNotEmpty() &&
         resolved.atoms.all { "track-shaped" in ruleMarks[it.id].orEmpty() } &&
         resolved.text.count(Char::isDigit) == WAYBILL_DIGITS
-    if (formFits || ruleFits) classes += EvidenceClass.SEMANTIC
+    if (ruleFits) classes += EvidenceClass.SEMANTIC
 
     if (resolved.atoms.isEmpty()) return classes
     // STRUCTURAL: связь со страницей не порвана — метки настоящие, набор не разорван.
@@ -214,8 +233,11 @@ private const val LABEL_GAP_HEIGHTS = 2f
  * Слова-маркеры полей — **свидетели, не решатели** (design v3 §4): маркер даёт класс улики
  * рядом с кандидатом, которого уже назвала модель, и никогда не ищет значения сам. Ложный
  * якорь («Кому» внутри цитаты) поэтому стоит одно очко из двух необходимых, а не роль.
+ *
+ * `internal` — ради инварианта, а не ради доступа: слова трека читает тест, который держит этот
+ * словарь и стемы плоского текста ([looksLikeTrackMarker], #262) от расхождения.
  */
-private val FIELD_MARKERS: Map<String, List<String>> = mapOf(
+internal val FIELD_MARKERS: Map<String, List<String>> = mapOf(
     META_ENTITY_TRACK to listOf(
         "ттн", "трек", "трек-номер", "накладна", "накладная", "відправлення", "отправление",
         "waybill", "tracking",

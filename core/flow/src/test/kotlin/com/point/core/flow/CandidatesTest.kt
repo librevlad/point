@@ -158,6 +158,27 @@ class CandidatesTest {
         assertNull(s10CheckDigitValid("случайный текст"))
     }
 
+    @Test
+    fun `улики без страницы — форма и контрольная цифра, одной функцией на обоих судей`() {
+        // #262: офлайновое правило и суд кандидатов модели обязаны считать улики одинаково,
+        // иначе «подтверждено» у одного и «возможно» у другого разойдутся невидимо.
+        assertEquals(
+            setOf(EvidenceClass.SEMANTIC, EvidenceClass.ARITHMETIC),
+            formEvidence(META_ENTITY_TRACK, "RA123456785UA"),
+        )
+        assertEquals(setOf(EvidenceClass.SEMANTIC), formEvidence(META_ENTITY_TRACK, "20 4514 9154 9395"))
+        assertTrue(formEvidence(META_ENTITY_TRACK, "не номер").isEmpty())
+    }
+
+    @Test
+    fun `сошедшаяся контрольная цифра — второй класс и на слое страницы`() {
+        val s10 = AtomLayer(listOf(atom("v", "RA123456785UA", 10f, 100f, 190f, 120f)))
+
+        val ev = s10.fieldEvidence(META_ENTITY_TRACK, FieldCandidate("RA123456785UA", listOf("v")))
+
+        assertTrue(EvidenceClass.ARITHMETIC in ev)
+    }
+
     // --- Аннотации не голосуются ---
 
     @Test
