@@ -104,7 +104,28 @@ interface SpreadsheetReader {
 /** A structured document block (#128) — what «В Word+» lays the raw text out into. */
 enum class DocStyle { TITLE, HEADING, BULLET, NORMAL }
 
-data class DocBlock(val text: String, val style: DocStyle)
+data class DocBlock(
+    val text: String,
+    val style: DocStyle,
+    /**
+     * Фрагмент, который человек обязан вычитать глазами (#267): чистый уверенно выглядящий
+     * .docx из рукописи — документ, который **тихо врёт**, потому что прочитанное в нём
+     * неотличимо от угаданного. Экспорт неуверенность не сглаживает, а переносит в документ:
+     * помеченное видно при вычитке и снимается одним действием, когда человек проверил.
+     */
+    val uncertain: Boolean = false,
+)
+
+/**
+ * Что в этом фрагменте нельзя отдавать как прочитанное (#267).
+ *
+ * На рукописи ([ReadingMode.HANDWRITTEN]) **цифры помечаются всегда**: правило «модель не
+ * трогает цифры» (#236) там структурно неисполнимо — символы предложила зрячая модель, и
+ * честная пометка остаётся единственной заменой гарантии. Маркер неуверенности самой модели
+ * (⚠) переносится в документ на любом режиме — он и означает «я не уверена».
+ */
+fun uncertainInExport(text: String, mode: ReadingMode): Boolean =
+    text.contains('⚠') || (mode == ReadingMode.HANDWRITTEN && text.any(Char::isDigit))
 
 interface DocxWriter {
     /** @return the scratch .docx holding [paragraphs], one `<w:p>` each. */
