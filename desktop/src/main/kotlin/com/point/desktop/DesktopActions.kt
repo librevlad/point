@@ -19,6 +19,9 @@ fun interface FileRevealer { fun reveal(file: File) }
 fun interface TextClipboard { fun copy(text: String) }
 fun interface SaveTarget { fun pickAndSave(file: File): String? }
 
+/** Печать на принтере компьютера (#291): телефон печатать не умеет, компьютер умеет. */
+fun interface Printer { fun print(file: File) }
+
 class PcOpenCapability : Capability {
     override val id = CapabilityId("pc-open")
     override val icon = "open"
@@ -160,4 +163,32 @@ class PcToPhoneRealizer(private val outbox: Outbox) : Realizer {
             outbox.add(input)
             ActionResult.Done("Заберите на телефоне — плашка на главном экране")
         }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось положить в очередь", recoverable = true) }
+}
+
+/**
+ * «Напечатать на ПК» (#291) — ровно то, за чем человек идёт к компьютеру с телефона в руках.
+ *
+ * Новой машинерии не нужно: телефон уже превращает каждое рекламируемое компьютером действие
+ * в пузырёк ([RemotePcCapability]), а объект уже доезжает до ПК по существующему транспорту.
+ * Здесь только пара «что» и «как» на стороне компьютера — и шов [Printer], за которым в
+ * `Main` живёт AWT.
+ */
+class PcPrintCapability : Capability {
+    override val id = CapabilityId("pc-print")
+    override val icon = "print"
+    override val meta = CapabilityMeta(priority = 25)
+    override fun label(state: ObjectState) = "Напечатать"
+    override fun accepts(state: ObjectState) = true
+    override fun produces(state: ObjectState) = state
+}
+
+class PcPrintRealizer(private val printer: Printer) : Realizer {
+    override val capabilityId = CapabilityId("pc-print")
+    override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
+        runCatching {
+            printer.print(File(input.uri.value))
+            // Печать уходит в очередь принтера — обещать «напечатано» мы не вправе: бумага
+            // могла кончиться, и увидит это человек, а не мы.
+            ActionResult.Done("Отправлено на принтер")
+        }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось напечатать", recoverable = true) }
 }
