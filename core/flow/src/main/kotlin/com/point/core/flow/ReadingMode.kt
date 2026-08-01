@@ -1,0 +1,68 @@
+package com.point.core.flow
+
+/**
+ * Режим чтения страницы — **отдельный контракт доверия для рукописи** (#263, design v3,
+ * единогласное решение консилиума 8 из 8).
+ *
+ * На печати цепочка такая: модель **указывает** метками на слова, OCR их **читает**,
+ * валидаторы проверяют — и модель никогда не видит пиксели значения, поэтому цифру она
+ * изменить не может по построению ([isRepairOf], #236). На рукописи зрячая модель **сама и
+ * есть читатель**: указывать не на что, атомов нет, и та же гарантия неисполнима — её
+ * некому исполнять.
+ *
+ * Это не разница в качестве, а другая эпистемическая ситуация. Обещать одну гарантию на оба
+ * случая нельзя: человек перенесёт доверие с печати на рукопись и ошибётся именно там, где
+ * цена ошибки выше.
+ */
+enum class ReadingMode {
+    /** Слова прочитаны движком со страницы: есть атомы, есть куда указывать. */
+    PRINTED,
+
+    /**
+     * Движок видел пиксели, но слов не собрал: рукопись, фото мира, снимок под бликом.
+     * Читать может только зрячая модель — своими глазами, без адресации.
+     */
+    HANDWRITTEN,
+
+    /** Откуда пришёл текст, неизвестно (объект-текст, чужой источник) — не врём ни в одну сторону. */
+    UNKNOWN,
+}
+
+/** Метаданные объекта: режим чтения страницы. Пишет тот, кто читал (`OcrEnricher`). */
+const val META_READING_MODE = "reading.mode"
+
+/**
+ * Режим по слою: слоя нет — [ReadingMode.UNKNOWN]; слой пуст или прочитанное — символьная
+ * каша ([looksLikeOcrGarbage] по тексту слоя) — [ReadingMode.HANDWRITTEN]; иначе печать.
+ *
+ * Гейт тот же, что решает судьбу индекса слов для модели ([promptIndex]): если цитировать
+ * нечего, то и указывать не на что — а значит, читать будет модель, и обещания печатного
+ * пути не действуют.
+ */
+fun readingModeOf(layer: AtomLayer?): ReadingMode = when {
+    layer == null -> ReadingMode.UNKNOWN
+    layer.atoms.none { it.text.isNotBlank() } -> ReadingMode.HANDWRITTEN
+    looksLikeOcrGarbage(layer.text) -> ReadingMode.HANDWRITTEN
+    else -> ReadingMode.PRINTED
+}
+
+/** Режим, записанный в метаданных объекта; неизвестное имя — [ReadingMode.UNKNOWN], а не падение. */
+fun readingModeOf(metadata: Map<String, String>): ReadingMode =
+    ReadingMode.entries.firstOrNull { it.name.equals(metadata[META_READING_MODE], ignoreCase = true) }
+        ?: ReadingMode.UNKNOWN
+
+/**
+ * Можно ли обещать печатные гарантии значению этого объекта.
+ *
+ * `false` на рукописи — и это не оценка качества, а честность о происхождении: значение
+ * прочитано зрячей моделью с пикселей, проверить его против атомов невозможно, и подтверждать
+ * его двумя классами улик тоже нечем ([fieldEvidence] без слоя выдаёт максимум форму).
+ */
+fun printedGuarantees(mode: ReadingMode): Boolean = mode == ReadingMode.PRINTED
+
+/** Как назвать режим человеку рядом со значением; `null` — молчим, потому что не знаем. */
+fun readingModeLabel(mode: ReadingMode): String? = when (mode) {
+    ReadingMode.HANDWRITTEN -> "с рукописи"
+    ReadingMode.PRINTED -> null
+    ReadingMode.UNKNOWN -> null
+}

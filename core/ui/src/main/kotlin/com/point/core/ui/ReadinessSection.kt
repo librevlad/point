@@ -29,6 +29,8 @@ import androidx.compose.ui.unit.dp
 import com.point.core.flow.ActionReadiness
 import com.point.core.flow.Readiness
 import com.point.core.flow.actionReadiness
+import com.point.core.flow.readingModeOf
+import com.point.core.flow.readingModeLabel
 
 /**
  * Готовность действий (#260, design v3 §6): полнота считается **по действию**, а не по числу
@@ -101,11 +103,15 @@ private fun ReadinessRow(row: ActionReadiness, understood: Boolean, metadata: Ma
             )
             // Готовое действие показывает своё ключевое значение — то, ради чего оно готово.
             // «Возможно» — предположение (#261): улик меньше двух независимых классов.
+            // «с рукописи» — другой контракт доверия (#263): значение прочитано зрячей
+            // моделью с пикселей, проверить его против слов страницы невозможно.
             if (ready) {
                 present.firstOrNull { it.spec.critical }?.let { field ->
                     Spacer(Modifier.width(6.dp))
+                    val origin = readingModeLabel(readingModeOf(metadata))?.let { " · $it" }.orEmpty()
+                    val doubt = if (field.assumption) " · возможно" else ""
                     Text(
-                        text = field.value + if (field.assumption) " · возможно" else "",
+                        text = field.value + doubt + origin,
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
