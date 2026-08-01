@@ -72,9 +72,13 @@ class DesktopState(
         runCatching { persistPhoneCaps(caps) }
     }
 
-    /** Phone actions that make sense for this item — empty kinds means any kind. */
+    /** Phone actions that make sense for this item — empty kinds means any kind.
+     *  #316: объявленное телефоном как недоступное кнопкой на ПК не становится — симметрия
+     *  того же признака, каким компьютер объясняет своё «не сейчас» телефону. */
     fun phoneActionsFor(item: InboxItem): List<com.point.core.flow.PcRemoteAction> =
-        _phoneCaps.value.filter { it.kinds.isEmpty() || item.obj.state.kind.name in it.kinds }
+        _phoneCaps.value.filter {
+            it.unavailable == null && (it.kinds.isEmpty() || item.obj.state.kind.name in it.kinds)
+        }
 
     /** «<действие> · телефон» (#161 v2): queue the object with the intent riding its metadata. */
     fun sendToPhone(item: InboxItem, action: com.point.core.flow.PcRemoteAction) {

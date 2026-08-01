@@ -69,6 +69,109 @@ class ContinueOnPcTest {
         assertEquals(listOf(PcRemoteAction("pc-open", "Открыть"), PcRemoteAction("pc-copy", "Копировать")), decoded)
     }
 
+    // --- Недоступное с причиной (#316): «нет принтера» вместо молчания, в обе стороны ---
+
+    /**
+     * Декодер образца #80/#291 — дословно тот, что живёт на уже установленных телефонах.
+     * Держим копию здесь, потому что совместимость проверяется не намерением, а поведением
+     * старого кода на новых байтах.
+     */
+    private fun legacyDecodePcCaps(encoded: String): List<PcRemoteAction> =
+        encoded.lineSequence().mapNotNull { line ->
+            val eq = line.indexOf('=')
+            if (eq <= 0) return@mapNotNull null
+            val id = line.substring(0, eq).trim()
+            val rest = line.substring(eq + 1)
+            val label = rest.substringBefore('\t').trim()
+            val kinds = rest.substringAfter('\t', "").split(',')
+                .mapNotNull { it.trim().takeIf(String::isNotEmpty) }.toSet()
+            if (id.isEmpty() || label.isEmpty()) null else PcRemoteAction(id, label, kinds)
+        }.toList()
+
+    @Test
+    fun `caps codec roundtrips the reason an action is unavailable`() {
+        val caps = listOf(
+            PcRemoteAction("pc-open", "Открыть на компьютере"),
+            PcRemoteAction("pc-print", "Напечатать на ПК", unavailable = "на компьютере нет принтера"),
+            PcRemoteAction("pc-download", "Скачать видео на ПК", kinds = setOf("URL"), unavailable = "нет yt-dlp"),
+        )
+        val decoded = decodePcCaps(encodePcCaps(caps))
+
+        assertEquals(caps, decoded)
+        assertNull("доступное остаётся доступным", decoded[0].unavailable)
+        assertEquals("на компьютере нет принтера", decoded[1].unavailable)
+        assertEquals(setOf("URL"), decoded[2].kinds) // гейт видов не теряется рядом с причиной
+    }
+
+    /** Старый телефон встречает незнакомую форму — молча её роняет и работает как раньше. */
+    @Test
+    fun `an old phone ignores unavailable actions instead of showing a dead button`() {
+        val encoded = encodePcCaps(
+            listOf(
+                PcRemoteAction("pc-open", "Открыть на компьютере"),
+                PcRemoteAction("pc-print", "Напечатать на ПК", unavailable = "на компьютере нет принтера"),
+                PcRemoteAction("pc-download", "Скачать видео на ПК", kinds = setOf("URL"), unavailable = "нет yt-dlp"),
+            ),
+        )
+
+        val old = legacyDecodePcCaps(encoded)
+
+        assertEquals(listOf("pc-open"), old.map { it.id })
+        assertEquals(listOf(PcRemoteAction("pc-open", "Открыть на компьютере")), old)
+    }
+
+    /** Старый ПК признака не шлёт — новый телефон обязан видеть ровно прежнюю картину. */
+    @Test
+    fun `an old PC advertisement stays fully available for a new phone`() {
+        val fromOldPc = "pc-open=Открыть на компьютере\npc-download=Скачать видео на ПК\tURL"
+
+        val decoded = decodePcCaps(fromOldPc)
+
+        assertEquals(
+            listOf(
+                PcRemoteAction("pc-open", "Открыть на компьютере"),
+                PcRemoteAction("pc-download", "Скачать видео на ПК", kinds = setOf("URL")),
+            ),
+            decoded,
+        )
+        assertTrue(decoded.all { it.unavailable == null })
+    }
+
+    /** Доступные строки кодируются байт-в-байт как раньше — старый ПК читает нас без сюрпризов. */
+    @Test
+    fun `available actions keep the byte-identical old wire format`() {
+        assertEquals(
+            "pc-open=Открыть на компьютере\npc-download=Скачать видео на ПК\tURL",
+            encodePcCaps(
+                listOf(
+                    PcRemoteAction("pc-open", "Открыть на компьютере"),
+                    PcRemoteAction("pc-download", "Скачать видео на ПК", kinds = setOf("URL")),
+                ),
+            ),
+        )
+    }
+
+    /** Причина не названа — действие всё равно остаётся недоступным. «Не смог объяснить» не
+     *  должно молча превращаться в «можно нажать» (тот же страх, что и в #316 целиком). */
+    @Test
+    fun `an unavailable action without a reason never becomes tappable`() {
+        val decoded = decodePcCaps(encodePcCaps(listOf(PcRemoteAction("pc-print", "Напечатать на ПК", unavailable = ""))))
+
+        assertEquals(1, decoded.size)
+        assertEquals("", decoded[0].unavailable)
+    }
+
+    /** Форма может дорасти полями — незнакомые мы игнорируем, а не роняем всю строку. */
+    @Test
+    fun `unknown extra fields of a future format are ignored`() {
+        val fromFuturePc = "pc-open=Открыть\tTEXT\tчто-то новое\tи ещё\n=pc-print=Напечатать\t\tнет принтера\tещё поле"
+
+        val decoded = decodePcCaps(fromFuturePc)
+
+        assertEquals(listOf(PcRemoteAction("pc-open", "Открыть", kinds = setOf("TEXT"))), decoded.take(1))
+        assertEquals(PcRemoteAction("pc-print", "Напечатать", unavailable = "нет принтера"), decoded[1])
+    }
+
     // --- Liquid pull (#161): the PC's outbox listing travels as id<TAB>b64(meta) lines ---
 
     @Test
