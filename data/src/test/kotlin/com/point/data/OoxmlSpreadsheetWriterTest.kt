@@ -5,6 +5,7 @@ import com.point.core.model.PointObject
 import com.point.core.model.ResultObject
 import com.point.core.model.ScratchRef
 import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -89,5 +90,42 @@ class OoxmlSpreadsheetWriterTest {
         assertTrue("a list data-validation is emitted", sheet.contains("<dataValidation type=\"list\""))
         assertTrue("dropdown targets the disagreed cell B2", sheet.contains("sqref=\"B2\""))
         assertTrue("options come from the hidden sheet by range", sheet.contains("_варіанти"))
+    }
+
+    /**
+     * Заливка неуверенности — контракт с харнессом корпуса (#262), а не деталь оформления.
+     *
+     * Знака «⚠» в тексте ячейки нет: писатель снимает маркер и оставляет только номер стиля. Счётчик
+     * таблиц (`tools/xlsx-to-tsv.awk`) переводит стиль обратно в маркер по ЦВЕТУ заливки — иначе
+     * каждое честное предупреждение он посчитал бы молчаливым расхождением, то есть соврал бы в
+     * главном своём числе и в худшую сторону. Цвет продублирован в `tools/table-score.sh`
+     * (`FLAG_FILL`), и этот тест держит копию за руку: уехала палитра — падает здесь, а не тихо в
+     * метрике через две недели.
+     */
+    @Test
+    fun `uncertain cell is filled with the colour the corpus harness looks for (#262)`() = runBlocking {
+        val ref = OoxmlSpreadsheetWriter(store).write(listOf(listOf("Артикул"), listOf("11004⚠")))
+        val sheet = sheetOf(ref)
+        val styles = ZipFile(File(ref.value)).use { zip ->
+            zip.getInputStream(zip.getEntry("xl/styles.xml")).readBytes().decodeToString()
+        }
+
+        // s="…" помеченной ячейки → её xf в cellXfs → fillId → цвет. Ровно тот путь, что идёт awk.
+        val styleId = Regex("""r="A2" s="(\d+)"""").find(sheet)!!.groupValues[1].toInt()
+        val xfs = Regex("""<cellXfs\b[^>]*>(.*?)</cellXfs>""", RegexOption.DOT_MATCHES_ALL)
+            .find(styles)!!.groupValues[1]
+        val fillId = Regex("""<xf\b[^>]*?>""").findAll(xfs).toList()[styleId]
+            .let { Regex("""fillId="(\d+)"""").find(it.value)!!.groupValues[1].toInt() }
+        val fills = Regex("""<fills\b[^>]*>(.*?)</fills>""", RegexOption.DOT_MATCHES_ALL)
+            .find(styles)!!.groupValues[1]
+        val rgb = Regex("""<fill>(.*?)</fill>""", RegexOption.DOT_MATCHES_ALL).findAll(fills).toList()[fillId]
+            .let { Regex("""rgb="([0-9A-Fa-f]+)"""").find(it.value)?.groupValues?.get(1) }
+
+        assertEquals(
+            "цвет неуверенности сменился — поправь FLAG_FILL в tools/table-score.sh, иначе счётчик " +
+                "таблиц (#262) назовёт молчаливыми все предупреждённые расхождения",
+            "FFFFD199",
+            rgb,
+        )
     }
 }
