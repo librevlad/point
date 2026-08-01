@@ -25,11 +25,19 @@ import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
 import com.point.core.model.ResultObject
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
 
 /**
@@ -83,45 +91,59 @@ class ExcelRealizer @Inject constructor(
                 // отдельно и после голосования вливаются в общий дропдаун теми же ключами (row, col).
                 val cellCandidates = mutableListOf<Map<Pair<Int, Int>, List<String>>>()
                 val errors = mutableListOf<String>()
-                for (provider in ordered) {
-                    if (tables.size >= CONSENSUS_N) break
-                    try {
-                        reportStage("Модель ${tables.size + 1} из $CONSENSUS_N читает таблицу")
-                        val answer = provider.run(input, prompt)
-                        val raw = File(answer.uri.value).readText()
-                        val grounded = if (layer != null && index != null) {
-                            // Ответ мимо адресного контракта (TSV, прочий текст) — те же дословные
-                            // ячейки: честность проверки не зависит от формата, которым модель решила
-                            // ответить. Иначе диктовка целой таблицы, отвеченная TSV, миновала бы
-                            // проверку страницы, которую тот же ответ в JSON бы не прошёл (ревью #258).
-                            val cells = parseAddressedCells(raw)
-                                ?: parseTable(raw).map { row -> row.map { CellAnswer.Literal(it) } }
-                                    .takeIf { it.isNotEmpty() }
-                            cells?.let(layer::resolveCells)
-                        } else {
-                            null
+                var next = 0
+                while (tables.size < CONSENSUS_N && next < ordered.size) {
+                    // Столько чтений, скольких не хватает до консенсуса, — и все ОДНОВРЕМЕННО.
+                    // Второй заход случается там, где первый недодал ТАБЛИЦ (ответ пришёл, но
+                    // читаемой таблицы в нём нет): цепочка «не вышло — берём следующего» жива,
+                    // просто больше не оплачивается ожиданием в общем случае.
+                    val reads = readTogether(ordered, next, CONSENSUS_N - tables.size, input, prompt, next == 0)
+                    next = reads.next
+                    // Порядок ответов — порядок провайдеров, а не порядок финиша: сетку консенсуса
+                    // задаёт первая таблица (reconcile), и она обязана быть таблицей самой зоркой
+                    // модели, кто бы ни ответил раньше.
+                    for (read in reads.answers) {
+                        val raw = read.getOrNull()
+                        if (raw == null) {
+                            val e = read.exceptionOrNull()!!
+                            errors += e.message ?: e.javaClass.simpleName
+                            continue
                         }
-                        if (grounded != null) {
-                            // Таблица, где живого текста нет, а разорванные ячейки есть, — это не
-                            // «пустой документ», это модель, перенумеровавшая метки: связь ответа со
-                            // страницей порвана целиком. Отдать такой «успех» — вручить чистый бланк
-                            // вместо прочитанной страницы (ревью #281); честный исход — отказ чтения.
-                            val cells = grounded.rows.flatten()
-                            val torn = cells.all { it.isBlank() || it == "⚠" } && "⚠" in cells
-                            if (torn) {
-                                errors += "Модель не смогла указать на слова страницы"
+                        try {
+                            val grounded = if (layer != null && index != null) {
+                                // Ответ мимо адресного контракта (TSV, прочий текст) — те же дословные
+                                // ячейки: честность проверки не зависит от формата, которым модель решила
+                                // ответить. Иначе диктовка целой таблицы, отвеченная TSV, миновала бы
+                                // проверку страницы, которую тот же ответ в JSON бы не прошёл (ревью #258).
+                                val cells = parseAddressedCells(raw)
+                                    ?: parseTable(raw).map { row -> row.map { CellAnswer.Literal(it) } }
+                                        .takeIf { it.isNotEmpty() }
+                                cells?.let(layer::resolveCells)
                             } else {
-                                grounded.rows.takeIf { it.isNotEmpty() }?.let {
-                                    tables += it
-                                    cellCandidates += grounded.candidates
-                                }
+                                null
                             }
-                        } else {
-                            // Модель ответила не по адресному контракту (или слоя нет) — прежний путь.
-                            parseTable(raw).takeIf { it.isNotEmpty() }?.let(tables::add)
+                            if (grounded != null) {
+                                // Таблица, где живого текста нет, а разорванные ячейки есть, — это не
+                                // «пустой документ», это модель, перенумеровавшая метки: связь ответа со
+                                // страницей порвана целиком. Отдать такой «успех» — вручить чистый бланк
+                                // вместо прочитанной страницы (ревью #281); честный исход — отказ чтения.
+                                val cells = grounded.rows.flatten()
+                                val torn = cells.all { it.isBlank() || it == "⚠" } && "⚠" in cells
+                                if (torn) {
+                                    errors += "Модель не смогла указать на слова страницы"
+                                } else {
+                                    grounded.rows.takeIf { it.isNotEmpty() }?.let {
+                                        tables += it
+                                        cellCandidates += grounded.candidates
+                                    }
+                                }
+                            } else {
+                                // Модель ответила не по адресному контракту (или слоя нет) — прежний путь.
+                                parseTable(raw).takeIf { it.isNotEmpty() }?.let(tables::add)
+                            }
+                        } catch (e: Exception) {
+                            errors += e.message ?: e.javaClass.simpleName
                         }
-                    } catch (e: Exception) {
-                        errors += e.message ?: e.javaClass.simpleName
                     }
                 }
                 if (tables.isEmpty()) {
@@ -180,6 +202,109 @@ class ExcelRealizer @Inject constructor(
             }.getOrElse { ActionResult.Failure(it.message ?: "Ошибка разбора в Excel", recoverable = true) }
         }
 
+    /** Исходы одного захода чтения — **в порядке провайдеров** — и индекс первого, кого ещё
+     *  не спрашивали. */
+    private class Reads(val answers: List<Result<String>>, val next: Int)
+
+    /**
+     * Чтения одной страницы, идущие **одновременно** (#200).
+     *
+     * Консенсус двух моделей стоил ровно вдвое дороже по времени: цикл `for` отправлял кадр
+     * второй модели только после ответа первой. На эталонной ведомости владельца (фото 4000×3000,
+     * 35 строк) это ~2.5 минуты ожидания, из которых половина — стояние в очереди, а не работа.
+     * Модели друг о друге ничего не знают, и на вход второй ответ первой не влияет — значит,
+     * последовательность здесь была не инвариантом, а случайностью реализации.
+     *
+     * **Не «волна», а слоты.** Читающих ровно столько, сколько таблиц не хватает до консенсуса, и
+     * освободившийся слот сразу берёт следующего кандидата, не дожидаясь соседа. Иначе первый же
+     * провайдер, отказывающий мгновенно, съедал бы слот целиком: в живой цепочке первым стоит
+     * «свой ключ» (`UserKeyLlmClient`), и без заданного ключа он падает за миллисекунду — фиксированная
+     * пара «свой ключ + Gemini» оставила бы Claude на второй заход, то есть снова последовательно.
+     *
+     * Отказ соседа чтение не роняет: исход каждой модели заворачивается в [Result] **внутри**
+     * корутины, поэтому исключение не отменяет `coroutineScope` и не уносит с собой того, кто
+     * уже читает. Отмена всего действия человеком — наоборот, обязана проходить насквозь, поэтому
+     * `CancellationException` пробрасывается, а не превращается в «ошибку модели».
+     *
+     * Ответы возвращаются в порядке провайдеров, а не в порядке финиша: сетку консенсуса задаёт
+     * первая таблица, и голосование при равенстве отдаёт голос первому чтению
+     * ([com.point.core.flow.agree]) — то есть от порядка зависит содержимое файла.
+     */
+    private suspend fun readTogether(
+        ordered: List<LlmClient>,
+        from: Int,
+        need: Int,
+        input: PointObject,
+        prompt: String,
+        firstRound: Boolean,
+    ): Reads = coroutineScope {
+        val slots = minOf(need, ordered.size - from)
+        reportStage(readingStage(slots, firstRound))
+        val cursor = AtomicInteger(from)
+        val collected = ConcurrentHashMap<Int, Result<String>>()
+        // Счётчик и рассказ о нём — под одним замком: две корутины, пришедшие одновременно,
+        // иначе назвали бы экрану одно и то же число (#288 — стадия обязана быть правдой).
+        val heard = Mutex()
+        var done = 0
+        (0 until slots).map {
+            async {
+                var retry = false
+                while (true) {
+                    val i = cursor.getAndIncrement()
+                    if (i >= ordered.size) break
+                    // Молчаливая замена отказавшей модели выглядит как зависшее чтение: слот
+                    // начинает всё сначала, а секунды на экране продолжают идти от старого.
+                    if (retry) heard.withLock { reportStage("Модель отказала — читаю следующей") }
+                    val read = try {
+                        Result.success(File(ordered[i].run(input, prompt).uri.value).readText())
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled // отмена человеком — не отказ модели
+                    } catch (e: Exception) {
+                        Result.failure(e)
+                    }
+                    collected[i] = read
+                    if (read.isFailure) {
+                        retry = true
+                        continue // слот свободен — следующий кандидат, не дожидаясь соседа
+                    }
+                    heard.withLock {
+                        done++
+                        if (done < slots) reportStage("Готово $done из $slots чтений — жду остальные")
+                    }
+                    break
+                }
+            }
+        }.awaitAll()
+        Reads(collected.toSortedMap().values.toList(), minOf(cursor.get(), ordered.size))
+    }
+
+    /**
+     * Чем стадия честна теперь (#288). «Модель 1 из 2 читает таблицу» описывала очередь: пока
+     * шло первое чтение, второго не существовало. Одновременным чтениям такая фраза врёт дважды —
+     * и про то, что модель одна, и про то, что вторая ещё не начата. Говорим то, что есть:
+     * сколько моделей смотрит на страницу прямо сейчас, а по мере ответов — сколько чтений готово.
+     * Второй заход — это не «продолжаем», а «прошлые не дали таблицы», и звучать должен иначе.
+     */
+    private fun readingStage(n: Int, firstRound: Boolean): String = when {
+        !firstRound && n > 1 -> "Перечитываю другими моделями"
+        !firstRound -> "Перечитываю другой моделью"
+        n > 1 -> "Таблицу читают $n ${modelsWord(n)} одновременно"
+        else -> "Читаю таблицу"
+    }
+
+    /** «2 модели», «5 моделей» — стадия, собранная из числа и слова, не должна выглядеть
+     *  машинным переводом. */
+    private fun modelsWord(n: Int): String {
+        val tens = n % 100
+        val ones = n % 10
+        return when {
+            tens in 11..14 -> "моделей"
+            ones == 1 -> "модель"
+            ones in 2..4 -> "модели"
+            else -> "моделей"
+        }
+    }
+
     /** Слой слов страницы, если распознавание его уже сложило; битый дамп не роняет действие —
      *  просто возвращает нас к старому контракту (и это видно по отсутствию меток в промпте). */
     private fun atomLayer(input: PointObject): AtomLayer? =
@@ -191,8 +316,9 @@ class ExcelRealizer @Inject constructor(
         const val XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         const val MAX_TEXT = 20_000
 
-        /** Independent model reads to vote across (#200). 2 = confidence at 2× cost/latency, which a
-         *  PAID/SLOW action can bear; a single-model setup degrades gracefully to a passthrough. */
+        /** Independent model reads to vote across (#200). 2 = уверенность за двойную ЦЕНУ, но уже
+         *  не за двойное ВРЕМЯ: чтения идут одновременно ([readTogether]), поэтому ожидание — это
+         *  самая медленная модель, а не сумма двух. Один провайдер вырождается в passthrough. */
         const val CONSENSUS_N = 2
         const val PROMPT =
             "Извлеки табличные данные из документа. Это может быть фото рукописной таблицы, " +
