@@ -74,6 +74,9 @@ data class FlowUiState(
     /** Non-null while an action runs: a short label of WHAT is happening (e.g. the
      *  action's title), so the busy screen shows progress instead of a blank spinner. */
     val busy: String? = null,
+    /** Что действие делает СЕЙЧАС — его собственные слова (#288). null — реализатор молчит,
+     *  и экран не выдумывает за него шаги: показывает время и отмену. */
+    val busyStage: String? = null,
     /** True when the running action is a cloud/AI call — the busy screen then reassures with
      *  cloud-flavoured, time-advancing stages instead of a frozen wheel (#62). */
     val busyNetwork: Boolean = false,
