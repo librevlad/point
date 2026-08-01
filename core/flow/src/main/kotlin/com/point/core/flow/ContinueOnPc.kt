@@ -139,7 +139,7 @@ fun encodePcCaps(caps: List<PcRemoteAction>): String =
 fun decodePcCaps(encoded: String): List<PcRemoteAction> =
     encoded.lineSequence().mapNotNull { raw ->
         val unavailableLine = raw.startsWith(PC_CAP_UNAVAILABLE)
-        val line = if (unavailableLine) raw.substring(1) else raw
+        val line = if (unavailableLine) raw.substring(PC_CAP_UNAVAILABLE.length) else raw
         val eq = line.indexOf('=')
         if (eq <= 0) return@mapNotNull null
         val id = line.substring(0, eq).trim()
