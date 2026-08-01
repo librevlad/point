@@ -165,7 +165,7 @@ class ActionSchemaTest {
         val r = route.readiness(mapOf(META_ENTITY_PREFIX + "date" to "29.07"))
 
         assertTrue(r is Readiness.Missing)
-        assertEquals(listOf("адрес или координаты"), (r as Readiness.Missing).missing.map { it.label })
+        assertEquals(listOf("адрес, координаты или место"), (r as Readiness.Missing).missing.map { it.label })
     }
 
     @Test
@@ -249,5 +249,36 @@ class ActionSchemaTest {
                 known.any { field.key.startsWith(it) },
             )
         }
+    }
+
+    // -- «куда» на карте: место, когда адреса нет (#262) --
+
+    @Test
+    fun `место назначения закрывает маршрут наравне с адресом и координатами`() {
+        // Скрин карты Новой Почты: улицы с домом нет, а «Відділення №21» — есть.
+        val rows = actionReadiness(mapOf(META_ENTITY_PLACE to "Відділення №21"))
+
+        val route = rows.single { it.schema.id == "route" }
+        assertTrue(route.readiness is Readiness.Ready)
+    }
+
+    @Test
+    fun `место — якорь, а адрес нет`() {
+        // Место называет только модель и только когда видит «куда» на экране: документ
+        // действительно про поездку. Адрес бывает на счёте и в подписи письма — он не зовёт.
+        val route = ACTION_SCHEMAS.single { it.id == "route" }
+
+        assertTrue(route.fields.single { it.key == META_ENTITY_PLACE }.anchor)
+        assertFalse(route.fields.single { it.key.endsWith("address") }.anchor)
+    }
+
+    @Test
+    fun `без всякого «куда» маршрут не готов, и строка называет все чтения`() {
+        val r = ACTION_SCHEMAS.single { it.id == "route" }
+            .readiness(mapOf(META_ENTITY_PREFIX + "date" to "29.07")) as Readiness.Missing
+
+        val labels = r.missing.joinToString(" ") { it.label }
+        assertTrue(labels.contains("адрес"))
+        assertTrue(labels.contains("координаты") || labels.contains("место"))
     }
 }

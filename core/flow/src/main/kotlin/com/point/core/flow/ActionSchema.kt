@@ -119,7 +119,14 @@ fun ActionSchema.readiness(facts: Map<String, String>): Readiness {
             // только: адрес или координаты». Подпись собирается из подписей полей, чтобы фраза
             // не жила вторым списком, разъезжающимся с первым на первой правке.
             specs.first().let { primary ->
-                if (specs.size == 1) primary else primary.copy(label = specs.joinToString(" или ") { it.label })
+                // «адрес, координаты или место» — перечисление через запятую и «или» перед
+                // последним: три чтения через два «или» читались бы как три отдельных нехватки.
+                if (specs.size == 1) {
+                    primary
+                } else {
+                    val labels = specs.map { it.label }
+                    primary.copy(label = labels.dropLast(1).joinToString(", ") + " или " + labels.last())
+                }
             }
         }
     return if (missingCritical.isEmpty()) {
@@ -213,6 +220,16 @@ val ACTION_SCHEMAS: List<ActionSchema> = listOf(
         fields = listOf(
             FieldSpec(META_ENTITY_PREFIX + "address", "адрес", critical = true, anchor = false),
             FieldSpec(META_ENTITY_GEO, "координаты", critical = true, insteadOf = META_ENTITY_PREFIX + "address"),
+            // Третье чтение «куда» (#262): на карте адреса может не быть вовсе, а место —
+            // есть («Відділення №21», «Новониколаевка»). Якорем не делаем: место называет
+            // только модель, и до тапа его на объекте не бывает.
+            // Якорь: место называет только модель и только когда видит на экране «куда», —
+            // значит документ действительно про поездку. У адреса такой уверенности нет: он
+            // бывает на счёте и в подписи письма, поэтому адрес карточку не зовёт.
+            FieldSpec(
+                META_ENTITY_PLACE, "место", critical = true,
+                insteadOf = META_ENTITY_PREFIX + "address", anchor = true,
+            ),
         ),
     ),
     /*
