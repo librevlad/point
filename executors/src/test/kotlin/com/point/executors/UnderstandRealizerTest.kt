@@ -540,4 +540,66 @@ class UnderstandRealizerTest {
         assertEquals("Понять", cap.label(state))
         assertEquals(state, cap.produces(state))
     }
+
+    // -- зрячее чтение: фото прибора, рукопись, снимок под бликом --
+
+    /** Замер корпуса: на фото счётчика движок собирает символьный шум, и «Понять» отвечало
+     *  «нет текста» — у человека НЕ было пути прочитать прибор вообще. */
+    @Test
+    fun `картинка без текста читается глазами, а не отвергается`() = runTest {
+        val photo = PointObject(
+            "img", "image/jpeg", ScratchRef("/tmp/meter.jpg"), ObjectState(ObjectKind.IMAGE),
+        )
+
+        val result = realizer("METER=20842\nSUMMARY=табло электросчётчика").perform(photo)
+
+        assertTrue(result is ActionResult.Success)
+        val meta = (result as ActionResult.Success).result.metadata
+        assertEquals("20842", meta["entity.meter"])
+        assertEquals("табло электросчётчика", meta["semantic.summary"])
+    }
+
+    @Test
+    fun `зрячее чтение помечает происхождение как модель и режим как рукопись`() = runTest {
+        val photo = PointObject(
+            "img", "image/jpeg", ScratchRef("/tmp/meter.jpg"), ObjectState(ObjectKind.IMAGE),
+        )
+
+        val meta = (realizer("METER=154").perform(photo) as ActionResult.Success).result.metadata
+
+        // Указывать не на что: печатных гарантий этот путь не даёт и не притворяется (#263).
+        assertEquals("model", meta["entity.meter.src"])
+        assertEquals("HANDWRITTEN", meta["reading.mode"])
+    }
+
+    @Test
+    fun `снимку отправляются пиксели, а не текстовая заглушка`() = runTest {
+        val photo = PointObject(
+            "img", "image/jpeg", ScratchRef("/tmp/meter.jpg"), ObjectState(ObjectKind.IMAGE),
+        )
+
+        realizer("METER=154").perform(photo)
+
+        assertEquals("image/jpeg", lastLlmObject!!.mime)
+        assertTrue(lastPrompt!!.contains("Прочитай, что написано на снимке"))
+    }
+
+    @Test
+    fun `на снимке нечего разобрать — честный отказ, а не пустой успех`() = runTest {
+        val photo = PointObject(
+            "img", "image/jpeg", ScratchRef("/tmp/dark.jpg"), ObjectState(ObjectKind.IMAGE),
+        )
+
+        val result = realizer("NONE").perform(photo)
+
+        assertTrue(result is ActionResult.Failure)
+        assertTrue((result as ActionResult.Failure).recoverable)
+    }
+
+    @Test
+    fun `текстовый объект без текста по-прежнему честно отказывает`() = runTest {
+        val result = realizer("METER=154").perform(textObject(content = "   "))
+
+        assertTrue(result is ActionResult.Failure)
+    }
 }
