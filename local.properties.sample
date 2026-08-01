@@ -8,7 +8,7 @@ sdk.dir=C\:\\Users\\User\\AppData\\Local\\Android\\Sdk
 # the real local.properties. GEMINI_MODELS is a comma-separated fallback list; the
 # pinned gemini-2.0-flash has zero free quota (429), so serving aliases lead.
 GEMINI_API_KEY=PUT_YOUR_KEY_HERE
-GEMINI_MODELS=gemini-pro-latest,gemini-flash-latest,gemini-flash-lite-latest
+GEMINI_MODELS=gemini-flash-latest,gemini-flash-lite-latest,gemini-pro-latest
 
 # Fallback #1 — Claude (Anthropic), tried after Gemini. Native Messages API.
 # Leave ANTHROPIC_API_KEY blank to disable. Model defaults to claude-opus-4-8;
@@ -42,18 +42,19 @@ GROQ_MODELS=llama-3.3-70b-versatile,openai/gpt-oss-120b,llama-3.1-8b-instant
 # Mistral — free tier, pixtral is multimodal.  https://console.mistral.ai
 MISTRAL_API_KEY=
 MISTRAL_BASE_URL=https://api.mistral.ai/v1
-MISTRAL_MODELS=mistral-small-latest,pixtral-12b-2409
+MISTRAL_MODELS=pixtral-12b-2409,mistral-medium-latest,mistral-small-latest
 
 # Cerebras — very fast. Free tier needs a plan enabled in the billing tab.  https://cloud.cerebras.ai
 CEREBRAS_API_KEY=
 CEREBRAS_BASE_URL=https://api.cerebras.ai/v1
-CEREBRAS_MODELS=gpt-oss-120b,gemma-4-31b
+CEREBRAS_MODELS=gpt-oss-120b
 
 # GitHub Models — free during preview, generous, vision (gpt-4o). Token with the
 # "models" permission: https://github.com/settings/tokens  (fine-grained or classic)
 GITHUB_API_KEY=
 GITHUB_BASE_URL=https://models.github.ai/inference
-GITHUB_MODELS=openai/gpt-4o-mini,openai/gpt-4o
+# GitHub Models закрыт (410 на 02.08.2026) — вернут, впишите модели сюда
+GITHUB_MODELS=
 
 # Release signing (#11): absolute path to the keystore + its passwords.
 # Generate once (keytool -genkeypair), store OUTSIDE the repo, BACK IT UP -

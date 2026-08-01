@@ -38,11 +38,12 @@ android {
         // relay URL itself travels in the pairing (QR ?r=), so only the secret is build-baked here.
         buildConfigField("String", "RELAY_URL", "\"\"")
         buildConfigField("String", "RELAY_APP_SECRET", "\"\"")
-        // Gemini models tried in order. Lead with the STRONG model (gemini-pro-latest) so the
-        // default is best-quality when available — flash garbled dense/rotated tables on real
-        // photos; Pro reads them. The client falls through to flash/flash-lite on any failure
-        // (no Pro access, quota), so "strong by default IF available" costs nothing when it isn't.
-        buildConfigField("String", "GEMINI_MODELS", prop("GEMINI_MODELS", "gemini-pro-latest,gemini-flash-latest,gemini-flash-lite-latest"))
+        // Gemini models tried in order. Pro стоял первым — «лучшее, если доступно», и это
+        // ничего не стоило, пока бесплатная квота Pro не кончилась насовсем: замер на живой
+        // ведомости (02.08.2026) даёт от него 429 за 14 с — плату берёт каждое действие, а
+        // читает всё равно flash. Поэтому первым идёт тот, кто отвечает; Pro остаётся в
+        // хвосте — вернётся квота или чужой ключ, и очередь снова начнётся с сильного.
+        buildConfigField("String", "GEMINI_MODELS", prop("GEMINI_MODELS", "gemini-flash-latest,gemini-flash-lite-latest,gemini-pro-latest"))
         // Claude (Anthropic) — fallback after Gemini. Native Messages API.
         buildConfigField("String", "ANTHROPIC_API_KEY", "\"\"")
         buildConfigField("String", "ANTHROPIC_BASE_URL", prop("ANTHROPIC_BASE_URL", "https://api.anthropic.com"))
@@ -64,14 +65,22 @@ android {
         buildConfigField("String", "GROQ_MODELS", prop("GROQ_MODELS", "llama-3.3-70b-versatile,openai/gpt-oss-120b,llama-3.1-8b-instant"))
         buildConfigField("String", "MISTRAL_API_KEY", "\"\"")
         buildConfigField("String", "MISTRAL_BASE_URL", prop("MISTRAL_BASE_URL", "https://api.mistral.ai/v1"))
-        buildConfigField("String", "MISTRAL_MODELS", prop("MISTRAL_MODELS", "mistral-small-latest,pixtral-12b-2409"))
+        // Mistral — из бесплатных единственный, кто на замере прочитал плотную ведомость
+        // целиком: pixtral за 33 с, medium за 27 с, оба нашли все 27 артикулов. medium
+        // добавлен по этому замеру, а не по названию.
+        buildConfigField("String", "MISTRAL_MODELS", prop("MISTRAL_MODELS", "pixtral-12b-2409,mistral-medium-latest,mistral-small-latest"))
         buildConfigField("String", "CEREBRAS_API_KEY", "\"\"")
         buildConfigField("String", "CEREBRAS_BASE_URL", prop("CEREBRAS_BASE_URL", "https://api.cerebras.ai/v1"))
-        buildConfigField("String", "CEREBRAS_MODELS", prop("CEREBRAS_MODELS", "gpt-oss-120b,gemma-4-31b"))
-        // GitHub Models — free during preview, generous; needs a GitHub PAT (models scope).
+        // gemma-4-31b здесь текстовая: у Cerebras картинок нет. Имя же выглядит зрячим —
+        // и фото уходило на эндпойнт, который его не принимает. Оставлен только текст.
+        buildConfigField("String", "CEREBRAS_MODELS", prop("CEREBRAS_MODELS", "gpt-oss-120b"))
+        // GitHub Models — превью закрыто: на 02.08.2026 любой запрос отвечает
+        // 410 github_models_retirement_brownout. Ключ можно оставить в local.properties, но
+        // по умолчанию моделей нет — иначе каждое действие платит два таймаута за мёртвый
+        // сервис. Вернут — вписать список обратно одной строкой в local.properties.
         buildConfigField("String", "GITHUB_API_KEY", "\"\"")
         buildConfigField("String", "GITHUB_BASE_URL", prop("GITHUB_BASE_URL", "https://models.github.ai/inference"))
-        buildConfigField("String", "GITHUB_MODELS", prop("GITHUB_MODELS", "openai/gpt-4o-mini,openai/gpt-4o"))
+        buildConfigField("String", "GITHUB_MODELS", prop("GITHUB_MODELS", ""))
     }
 
     buildTypes {

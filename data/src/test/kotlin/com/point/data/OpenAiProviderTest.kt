@@ -1,6 +1,7 @@
 package com.point.data
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -32,5 +33,24 @@ class OpenAiProviderTest {
     fun `configured is empty when no keys are set`() {
         val all = listOf(provider("openrouter", ""), provider("groq", ""))
         assertEquals(emptyList<OpenAiProvider>(), all.configured())
+    }
+
+    /**
+     * Замер на живой ведомости (02.08.2026): mistral-medium прочитал её целиком — 30 строк,
+     * все 27 артикулов, — а Point отправлял фото мимо него, потому что в названии нет ни
+     * «vision», ни «vl». Пропущенный зрячий стоит дороже лишнего: пока он молчит, очередь
+     * добирается до него минутами.
+     */
+    @Test
+    fun `mistral small and medium count as vision - measured, not guessed by name`() {
+        assertTrue(isVisionModel("mistral-medium-latest"))
+        assertTrue(isVisionModel("mistral-small-latest"))
+        assertTrue(isVisionModel("pixtral-12b-2409"))
+    }
+
+    @Test
+    fun `a text-only model still keeps photos out`() {
+        assertFalse(isVisionModel("gpt-oss-120b"))
+        assertFalse(isVisionModel("llama-3.3-70b-versatile"))
     }
 }
