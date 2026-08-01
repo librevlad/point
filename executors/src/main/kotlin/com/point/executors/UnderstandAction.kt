@@ -32,6 +32,7 @@ import com.point.core.flow.altValue
 import com.point.core.flow.alternativesOf
 import com.point.core.flow.bareIndexId
 import com.point.core.flow.fieldEvidence
+import com.point.core.flow.formEvidence
 import com.point.core.flow.isRepairOf
 import com.point.core.flow.isRoleLabel
 import com.point.core.flow.layoutOf
@@ -550,8 +551,9 @@ internal fun judgeFields(
             return@forEach
         }
         val scored = alive.map { (c, isGrounded) ->
-            val evidence = layer?.fieldEvidence(key, c, ruleMarks)
-                ?: setOfNotNull(EvidenceClass.SEMANTIC.takeIf { semanticFits(key, c.text) == true })
+            // Без слоя видно только то, что видно без страницы, — но ровно то же самое, что
+            // считает офлайновое правило ([formEvidence], #262): форма и контрольная цифра.
+            val evidence = layer?.fieldEvidence(key, c, ruleMarks) ?: formEvidence(key, c.text)
             Triple(c, isGrounded, evidence)
         }
         val winner = scored.maxByOrNull { it.third.size }!!

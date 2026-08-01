@@ -166,4 +166,30 @@ class RuleEvidenceTest {
         assertEquals(listOf("track-shaped"), e["b1"])
         assertEquals(listOf("track-shaped"), e["b3"])
     }
+
+    /**
+     * Формы, которые печатаются одним куском (#262), пробеговое правило не видит вовсе — цифровым
+     * пробегом «5900162/7808586» не является. Модели подсказка нужна ровно та же, поэтому их
+     * метит токенное правило, как и голое время.
+     */
+    @Test
+    fun `номер через косую и S10 помечены целым токеном`() {
+        val layer = AtomLayer(
+            listOf(
+                atom("s", "5900162/7808586", 10f, 100f, 200f, 120f),
+                atom("u", "RA123456785UA", 10f, 200f, 190f, 220f),
+                atom("bad", "RA123456789UA", 10f, 300f, 190f, 320f),
+                atom("price", "1234/5678", 10f, 400f, 120f, 420f),
+            ),
+        )
+
+        val e = layer.ruleEvidence()
+
+        assertEquals(listOf("track-shaped"), e["s"])
+        assertEquals(listOf("track-shaped"), e["u"])
+        // Контрольная цифра не сошлась — форма S10 подсказкой не становится.
+        assertEquals(null, e["bad"])
+        // Восемь цифр через косую — не номер накладной, а пара чисел.
+        assertEquals(null, e["price"])
+    }
 }

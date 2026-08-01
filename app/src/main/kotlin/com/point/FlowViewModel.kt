@@ -592,8 +592,11 @@ class FlowViewModel @Inject constructor(
         dispatch(bubble) { resolver.realizerFor(bubble.capabilityId).perform(top, null) }
     }
 
+    /** Сеть по факту, а не по объявлению (#325): согласие спрашивает тот, кто МОЖЕТ
+     *  отправить объект наружу, — хоть один не-локальный реализатор в цепочке. */
     private fun isCloud(id: CapabilityId) =
-        runCatching { registry.byId(id).meta.network }.getOrDefault(false)
+        runCatching { registry.byId(id).meta.network }.getOrDefault(false) ||
+            runCatching { resolver.leavesDevice(id) }.getOrDefault(false)
 
     /** M3: fast local work runs quietly on the object itself — no full busy screen. */
     private fun isQuietAction(id: CapabilityId) =

@@ -553,6 +553,10 @@ private fun ObjectHeader(
                             .size(headerSize)
                             .clip(RoundedCornerShape(26.dp)),
                     )
+                } else if (objectMark(obj) == ObjectMark.SPREADSHEET) {
+                    // #295: результат «В Excel» больше не выглядит как любой другой документ —
+                    // у таблицы свой знак, рождающийся в языке портала.
+                    SpreadsheetMark(size = headerSize)
                 } else {
                     Surface(
                         shape = RoundedCornerShape(26.dp),
