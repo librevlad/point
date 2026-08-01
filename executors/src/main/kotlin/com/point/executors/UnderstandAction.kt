@@ -21,6 +21,8 @@ import com.point.core.flow.META_EVIDENCE_SUFFIX
 import com.point.core.flow.META_GRAPH_ROLE_PREFIX
 import com.point.core.flow.META_OCR_ATOMS_REF
 import com.point.core.flow.META_OCR_TEXT_REF
+import com.point.core.flow.ReadingMode
+import com.point.core.flow.META_READING_MODE
 import com.point.core.flow.META_SEMANTIC_SUMMARY
 import com.point.core.flow.META_SEMANTIC_TYPE
 import com.point.core.flow.META_SOURCE_SUFFIX
@@ -259,8 +261,17 @@ class UnderstandRealizer @Inject constructor(
             runCatching {
                 val text = entitySourceText(input).take(MAX_CHARS)
                 val elements = layoutOf(text)
+                // Текста нет — но пиксели есть (#263, замер корпуса): фото счётчика, рукопись,
+                // табло под бликом. Движок на них собирает символьный шум, и до этой правки
+                // «Понять» отвечало «нет текста» — то есть у человека НЕ БЫЛО пути прочитать
+                // прибор вообще. На таком кадре зрячая модель сама и есть читатель: указывать
+                // ей не на что, поэтому и печатных гарантий тут никто не даёт (printedGuarantees).
                 if (elements.isEmpty()) {
-                    return@withContext ActionResult.Failure("Нет текста для понимания", recoverable = true)
+                    return@withContext if (input.state.kind == ObjectKind.IMAGE) {
+                        readWithEyes(input)
+                    } else {
+                        ActionResult.Failure("Нет текста для понимания", recoverable = true)
+                    }
                 }
                 val layer = atomLayer(input)
                 val index = layer?.promptIndex()
@@ -323,6 +334,37 @@ class UnderstandRealizer @Inject constructor(
             }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось понять документ", recoverable = true) }
         }
 
+
+    /**
+     * Чтение глазами: сама картинка уходит зрячей модели (#263). Путь для того, что движок не
+     * прочитал, — фото прибора, рукопись, снимок под бликом.
+     *
+     * Отличия от печатного пути названы явно, потому что это другой контракт доверия: индекса
+     * слов нет (указывать не на что), значения приходят диктовкой и получают происхождение
+     * «прочитано моделью», подтверждения двумя классами улик тут недостижимы by design.
+     */
+    private suspend fun readWithEyes(input: PointObject): ActionResult {
+        reportStage("Смотрю на снимок")
+        val answer = File(llm.run(input, VISUAL_PROMPT).uri.value).readText()
+        val parsed = parseFieldCandidates(answer)
+        val judged = judgeFields(parsed.fields, layer = null)
+        val fields = judged.won
+        if (fields.isEmpty() && parsed.single.isEmpty()) {
+            return ActionResult.Failure("На снимке ничего не разобрать", recoverable = true)
+        }
+        val values = fields.mapValues { it.value.text } + parsed.single
+        val merged = mergeFacts(input.metadata, values)
+        return ActionResult.Success(
+            ResultObject(
+                input.state.kind, input.mime, input.uri,
+                metadata = merged +
+                    annotations(merged, fields, judgedByLayer = false, blocked = judged.blocked) +
+                    (META_READING_MODE to ReadingMode.HANDWRITTEN.name) +
+                    ("op" to "understand"),
+            ),
+        )
+    }
+
     private suspend fun ask(input: PointObject, prompt: String): String =
         File(llm.run(textOnly(input), prompt).uri.value).readText()
 
@@ -376,6 +418,18 @@ class UnderstandRealizer @Inject constructor(
 
     private companion object {
         const val MAX_CHARS = 6_000
+
+        /** Зрячее чтение: просим значения, а не пересказ, и запрещаем догадки о нечитаемом. */
+        const val VISUAL_PROMPT =
+            "Прочитай, что написано на снимке. Это может быть табло счётчика, рукописная " +
+                "запись, фото документа под углом или бликом. " +
+                "Отвечай ТОЛЬКО строками вида KEY=значение, по одной на строку. Разрешённые KEY: " +
+                "METER (показание счётчика — ТОЛЬКО цифры показания, без единицы измерения), " +
+                "TRACK (номер отправления), PHONE, EMAIL, URL, ADDRESS, DATE, CARD, " +
+                "GEO (координаты). Добавь строку SUMMARY=<что на снимке, 3-6 слов>. " +
+                "Цифры читай ровно так, как видишь: не додумывай и не выравнивай под привычный " +
+                "формат. Если цифра не видна — не пиши строку вовсе. " +
+                "Если разобрать нечего — ответь ровно NONE."
 
         fun retryPrompt(keys: Set<String>, elements: List<LayoutElement>, index: String?): String {
             val names = keys.mapNotNull { key ->
