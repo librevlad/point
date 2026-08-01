@@ -1160,8 +1160,13 @@ private class FakeStore : ObjectStore {
 
 private class FakeResolver : Resolver {
     var result: ActionResult = ActionResult.Done("done")
+    /** Реализаторы фейка локальные, и он это знает: контракт по умолчанию отвечает
+     *  «может уйти наружу» намеренно — не знаем, значит спрашиваем согласие. */
+    var leavesDevice = false
     var lastAmendment: String? = "__unset__"
     var previews: Map<CapabilityId, Preview> = emptyMap()
+    override fun leavesDevice(capabilityId: CapabilityId): Boolean = leavesDevice
+
     override fun realizerFor(capabilityId: CapabilityId): Realizer = object : Realizer {
         override val capabilityId = capabilityId
         override suspend fun perform(input: PointObject, amendment: String?): ActionResult {
