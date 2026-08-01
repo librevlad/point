@@ -50,7 +50,10 @@ import com.point.core.ui.theme.PointTheme
 private val PortalPurple = Color(0xFF7B5CFF) // АКЦЕНТ1 (design system)
 private val PortalBlue = Color(0xFF00E0FF)    // АКЦЕНТ2 — the portal's cyan ring (design system)
 private val PortalGlow = Color(0xFFB39DFF)
-private val PortalCore = Color(0xFFEAF0FF)
+
+/** Белый сердечник портала. Не private: знак таблицы (#295) светится тем же ядром — иначе
+ *  «согласовано с порталом» держалось бы на второй копии константы, которая однажды разъедется. */
+internal val PortalCore = Color(0xFFEAF0FF)
 private val PortalBackdrop = Color(0xFF07070C)
 private val PortalText = Color(0xFFEAF0FF)
 private val PortalMuted = Color(0xFF9AA3B2)
