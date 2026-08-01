@@ -33,6 +33,7 @@ import com.point.core.flow.alternativesOf
 import com.point.core.flow.bareIndexId
 import com.point.core.flow.fieldEvidence
 import com.point.core.flow.isRepairOf
+import com.point.core.flow.isRoleLabel
 import com.point.core.flow.layoutOf
 import com.point.core.flow.mergeFacts
 import com.point.core.flow.normConsensus
@@ -142,7 +143,14 @@ internal fun understandPrompt(
         append(
             "Отвечай строками вида роль=имя [метки слов имени]. Метки — из списка слов страницы; " +
                 "слово-подпись (например «Відправник:», «Отримувач») в метки НЕ включай — " +
-                "только слова самого имени. Роль, которой в документе нет, пропусти.\n\n",
+                "только слова самого имени. " +
+                // Без этой просьбы модель цитирует индекс дословно и огрех OCR доезжает до
+                // экрана: «1ваненко ван» вместо «Іваненко Іван» (дым #297). Ремонт судится
+                // кодом (isRepairOf с конфузаблами) — далёкая «правка» станет спором.
+                "Само имя пиши ПРАВИЛЬНО, исправляя явные искажения распознавания " +
+                "(цифра вместо похожей буквы, потерянная буква): в списке слов может стоять " +
+                "«1ваненко ван», а имя — «Іваненко Іван». Не выдумывай другое имя. " +
+                "Роль, которой в документе нет, пропусти.\n\n",
         )
     } else {
         append(
@@ -392,7 +400,15 @@ internal fun roleReadings(
         if (metaKey in values) return@forEach
         val candidate = splitCandidate(line.substring(eq + 1).trim()) ?: return@forEach
         if (candidate.ids.isEmpty()) return@forEach
-        val resolved = layer.resolve(AtomAddress.ByIds(candidate.ids.map(::bareIndexId)))
+        // Подпись отрезает КОД, а не послушание модели (#297): на живом прогоне модель
+        // включила метку «Вйдправник» в указание, и значением стало «Вйдправник 1ваненко ван».
+        // Если подписью оказались все метки — не отрезаем: пустое указание хуже лишнего слова.
+        val idsByAtom = layer.atoms.associateBy { it.id }
+        val pointed = candidate.ids.map(::bareIndexId)
+        val withoutLabel = pointed.filterNot { id ->
+            idsByAtom[id]?.text?.let { role.isRoleLabel(it) } == true
+        }
+        val resolved = layer.resolve(AtomAddress.ByIds(withoutLabel.ifEmpty { pointed }))
         if (resolved.atoms.isEmpty()) return@forEach
         val page = resolved.text
         val model = candidate.text

@@ -275,6 +275,33 @@ class UnderstandRealizerTest {
         assertEquals("Іваненко Іван", result.result.metadata["graph.role.sender"])
     }
 
+    /** Дым #297: без явной просьбы модель цитирует индекс дословно, и огрех OCR доезжает
+     *  до экрана. Промпт ролей обязан просить писать имя правильно. */
+    @Test
+    fun `промпт ролей просит исправлять искажения распознавания в имени`() = runTest {
+        realizer("sender=Іваненко Іван [w6 w7]").perform(imageWithLayer())
+
+        assertTrue(lastPrompt!!.contains("исправляя явные искажения распознавания"))
+        assertTrue(lastPrompt!!.contains("метки слов имени"))
+    }
+
+    /** Дым #297: модель включила метку подписи в указание, и значением стало «Вйдправник
+     *  1ваненко ван». Подпись отрезает код — послушание модели механизмом не является. */
+    @Test
+    fun `метка подписи в указании отрезается кодом`() = runTest {
+        val result = realizer("sender=Іваненко Іван [m2 w6 w7]")
+            .perform(imageWithLayer()) as ActionResult.Success
+
+        assertEquals("Іваненко Іван", result.result.metadata["graph.role.sender"])
+    }
+
+    @Test
+    fun `указание из одной подписи не отрезается в пустоту`() = runTest {
+        val result = realizer("sender=Відправник [m2]").perform(imageWithLayer()) as ActionResult.Success
+
+        assertEquals("Відправник", result.result.metadata["graph.role.sender"])
+    }
+
     @Test
     fun `роль с галлюцинированными метками не пишется и не тратится`() = runTest {
         val result = realizer("sender=Хтось [z9]\nsender=Іваненко Іван [w6 w7]")
