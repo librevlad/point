@@ -73,6 +73,7 @@ private fun ReadinessRow(row: ActionReadiness, understood: Boolean, metadata: Ma
     }
     val missing = (row.readiness as? Readiness.Missing)?.missing.orEmpty()
     val disputed = present.filter { it.alternatives.isNotEmpty() }
+    val hinted = present.mapNotNull { field -> field.hint?.let { field to it } }
     // Что именно раскрыто — переживает пересборку списка (rememberSaveable), но не притворяется
     // состоянием объекта: это чисто взгляд человека.
     var expanded by rememberSaveable(row.schema.id) { mutableStateOf(false) }
@@ -119,6 +120,25 @@ private fun ReadinessRow(row: ActionReadiness, understood: Boolean, metadata: Ma
                     )
                 }
             }
+        }
+        // Ведущие нули барабана (#262): дословное значение остаётся на своём месте, а рядом —
+        // то, что человек, скорее всего, передаст. Строка называет ОБА числа и говорит, какое
+        // со страницы: карточка, показавшая одно «1154», молча решила бы за человека, сколько
+        // разрядов значащие, — а это знает поставщик услуги, не Point. Строка идёт за
+        // ПРОЧИТАННЫМ полем, а не за готовностью действия — прятать прочитанное до готовности
+        // незачем; сегодня разницы не видно (показание — единственное критическое поле своей
+        // схемы, и раз оно прочитано, действие уже готово), но правило именно такое.
+        // Названная граница: «обычно передают» — фраза единственного поля, у которого сегодня
+        // есть подсказка ([fieldHint]); второму придётся решить, годится ли она ему.
+        hinted.forEach { (field, hint) ->
+            Text(
+                text = "${field.spec.label} — со страницы «${field.value}», обычно передают «$hint»",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(start = 18.dp, top = 2.dp),
+            )
         }
         // Спор виден без тапа (контракт FieldReading: готовность не прячет спор — человек
         // обязан видеть, что значение спорное, ДО того как начнёт отслеживать не тот номер).
