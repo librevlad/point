@@ -67,6 +67,8 @@ fun PointHost(
     onBubble: (Bubble) -> Unit,
     onSubmitInput: (String) -> Unit,
     onCancelInput: () -> Unit,
+    /** Отмена идущего действия (#288): передумать можно всегда. */
+    onCancelAction: () -> Unit = {},
     onApplyFavorite: (FavoriteChain) -> Unit = {},
     onSaveChain: () -> Unit = {},
     onItem: (PointObject) -> Unit = {},
@@ -169,7 +171,7 @@ fun PointHost(
             // M3 (MOTION.md №8): quiet local work keeps the object on screen — it "works"
             // in place; only cloud/slow actions get the full staged busy screen.
             state.busy != null && !state.busyQuiet ->
-                BusyScreen(title = state.busy, network = state.busyNetwork)
+                BusyScreen(title = state.busy, network = state.busyNetwork, onCancel = onCancelAction)
 
             // #259: выделение поверх объекта — страница целиком, рамка пальцем, «Взять».
             state.selection != null -> SelectionScreen(
@@ -299,7 +301,7 @@ private val LOCAL_STAGES = listOf("Обрабатываю…")
  * wait reads as progress, not a hang. No fake percentages — only what we truly know.
  */
 @Composable
-private fun BusyScreen(title: String, network: Boolean) {
+private fun BusyScreen(title: String, network: Boolean, onCancel: () -> Unit) {
     var elapsed by remember(title) { mutableIntStateOf(0) }
     LaunchedEffect(title) {
         while (true) {
@@ -310,12 +312,24 @@ private fun BusyScreen(title: String, network: Boolean) {
     val stages = if (network) NETWORK_STAGES else LOCAL_STAGES
     // The portal (redesign slice 1): a glowing "reading" vortex + indicative step checklist on its
     // own near-black stage — replaces the plain wheel (MOTION.md принцип №3, impulses not a spinner).
+    // Подпись говорит правду о времени, а не обещает «несколько секунд» (#288): две модели по
+    // фото — это минута и больше, и обещание, которое нарушается на 12-й секунде, читается как
+    // «зависло». Секунды идут, отмена доступна с самого начала — передумать не поздно никогда.
     BusyPortal(
         title = title,
-        subtitle = "Это займёт несколько секунд",
+        subtitle = waitingSubtitle(elapsed, network),
         steps = stages,
         activeStep = portalStep(elapsed, stages.size),
+        onCancel = onCancel,
     )
+}
+
+/** Что честно сказать о времени: сколько уже идёт и почему это нормально. */
+internal fun waitingSubtitle(elapsed: Int, network: Boolean): String = when {
+    !network -> if (elapsed < 3) "Обрабатываю…" else "Идёт $elapsed с"
+    elapsed < 5 -> "Идёт $elapsed с"
+    elapsed < 30 -> "Идёт $elapsed с · модель читает документ"
+    else -> "Идёт $elapsed с · долгая страница, можно отменить"
 }
 
 /**

@@ -54,6 +54,7 @@ class ProcessTextActivity : ComponentActivity() {
                         onClosePcSettings = viewModel::closePcSettings,
                         onSubmitInput = viewModel::submitAmendment,
                         onCancelInput = viewModel::cancelInput,
+                        onCancelAction = viewModel::cancelAction,
                         onApplyFavorite = viewModel::applyFavorite,
                         onSaveChain = viewModel::saveCurrentChain,
                         onItem = viewModel::onItem,
