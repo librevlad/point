@@ -179,6 +179,25 @@ class CandidatesTest {
         assertTrue(EvidenceClass.ARITHMETIC in ev)
     }
 
+    @Test
+    fun `контрольная цифра отправления чужому полю класса не даёт`() {
+        // Ревью #262. S10 — стандарт почтового отправления, и «сошлась» доказывает отправление,
+        // а не дату и не телефон. Класс улик выбирает победителя среди кандидатов, поэтому
+        // чужое доказательство — не безобидная щедрость, а лишний голос из ниоткуда.
+        listOf("phone", "card", "date", "address").forEach { field ->
+            assertTrue(
+                "«$field» не должен получать ARITHMETIC от трековой контрольной цифры",
+                formEvidence(META_ENTITY_PREFIX + field, "RA123456785UA").isEmpty(),
+            )
+        }
+        val layer = AtomLayer(listOf(atom("v", "RA123456785UA", 10f, 100f, 190f, 120f)))
+        val ev = layer.fieldEvidence(
+            META_ENTITY_PREFIX + "date",
+            FieldCandidate("RA123456785UA", listOf("v")),
+        )
+        assertTrue(EvidenceClass.ARITHMETIC !in ev)
+    }
+
     // --- Аннотации не голосуются ---
 
     @Test
