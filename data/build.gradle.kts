@@ -81,6 +81,17 @@ android {
         buildConfigField("String", "GITHUB_API_KEY", "\"\"")
         buildConfigField("String", "GITHUB_BASE_URL", prop("GITHUB_BASE_URL", "https://models.github.ai/inference"))
         buildConfigField("String", "GITHUB_MODELS", prop("GITHUB_MODELS", ""))
+
+        // Второй читатель страницы (#280) — только БЕСПЛАТНОЕ и только без привязки карты.
+        // Unstructured: ~15 000 страниц/мес, ключ выдаётся без карты. LlamaParse: ~10 000
+        // кредитов/мес. Azure Document Intelligence сюда не приехал сознательно — он требует
+        // карту, а тезис проекта: на 402/429 идём к следующему провайдеру, а не в кассу.
+        // Ключи — пустые здесь и живые только в debug (buildTypes ниже); адреса не секрет.
+        buildConfigField("String", "UNSTRUCTURED_API_KEY", "\"\"")
+        buildConfigField("String", "UNSTRUCTURED_API_URL", prop("UNSTRUCTURED_API_URL", "https://api.unstructuredapp.io/general/v0/general"))
+        buildConfigField("String", "LLAMA_CLOUD_API_KEY", "\"\"")
+        buildConfigField("String", "LLAMA_CLOUD_BASE_URL", prop("LLAMA_CLOUD_BASE_URL", "https://api.cloud.llamaindex.ai"))
+        buildConfigField("String", "LLAMA_CLOUD_TIER", prop("LLAMA_CLOUD_TIER", "cost_effective"))
     }
 
     buildTypes {
@@ -97,6 +108,8 @@ android {
             buildConfigField("String", "MISTRAL_API_KEY", prop("MISTRAL_API_KEY"))
             buildConfigField("String", "CEREBRAS_API_KEY", prop("CEREBRAS_API_KEY"))
             buildConfigField("String", "GITHUB_API_KEY", prop("GITHUB_API_KEY"))
+            buildConfigField("String", "UNSTRUCTURED_API_KEY", prop("UNSTRUCTURED_API_KEY"))
+            buildConfigField("String", "LLAMA_CLOUD_API_KEY", prop("LLAMA_CLOUD_API_KEY"))
         }
     }
 
