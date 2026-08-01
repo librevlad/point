@@ -289,7 +289,11 @@ internal fun anchorCandidates(
 ): Pair<Int, Int>? {
     val anchor = normConsensus(candidates.first())
     fun matches(r: Int, c: Int) = grid.getOrNull(r)?.getOrNull(c)?.let { normConsensus(it) == anchor } == true
-    if (matches(key.first, key.second)) return key
+    // Позиции не доверяем вовсе (ревью #294): после выравнивания строк по содержимому номер
+    // строки в таблице модели больше не равен номеру в консенсусной сетке, и «своё место»
+    // может оказаться чужой строкой с тем же чтением. Привязываем только когда чтение в
+    // столбце единственно; иначе дропдауна не будет — это лучше, чем дропдаун не на своей
+    // ячейке, где выбор в один тап портит значение.
     return grid.indices.filter { matches(it, key.second) }.singleOrNull()?.let { it to key.second }
 }
 

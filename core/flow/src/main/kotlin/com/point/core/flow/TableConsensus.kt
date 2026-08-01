@@ -101,18 +101,46 @@ private fun matchRows(
             }
         }
     }
-    val out = mutableListOf<Pair<Int?, Int?>>()
+    val raw = mutableListOf<Pair<Int?, Int?>>()
     var i = 0
     var j = 0
     while (i < n && j < m) {
         when {
-            rowsSimilar(grid[i], rows[j]) -> { out += i to j; i++; j++ }
-            lcs[i + 1][j] >= lcs[i][j + 1] -> { out += i to null; i++ }
-            else -> { out += null to j; j++ }
+            rowsSimilar(grid[i], rows[j]) -> { raw += i to j; i++; j++ }
+            lcs[i + 1][j] >= lcs[i][j + 1] -> { raw += i to null; i++ }
+            else -> { raw += null to j; j++ }
         }
     }
-    while (i < n) out += i++ to null
-    while (j < m) out += null to j++
+    while (i < n) raw += i++ to null
+    while (j < m) raw += null to j++
+    return pairSubstitutions(raw)
+}
+
+/**
+ * Соседние «только сетка» и «только чтение» — это ЗАМЕНА одной строки, а не потеря и находка
+ * (ревью #294). Разорванная надвое, такая строка попадала в два слота и голосовалась в
+ * одиночку — то есть консенсус выключался ровно там, где модели разошлись сильнее всего:
+ * спор исчезал, ⚠ не ставился, а в файле появлялась лишняя строка.
+ *
+ * Классический diff называет это substitution; здесь она и восстанавливается, чтобы обе
+ * версии строки встретились в одном слоте и рассудились [agree].
+ */
+private fun pairSubstitutions(ops: List<Pair<Int?, Int?>>): List<Pair<Int?, Int?>> {
+    val out = mutableListOf<Pair<Int?, Int?>>()
+    var k = 0
+    while (k < ops.size) {
+        val cur = ops[k]
+        val next = ops.getOrNull(k + 1)
+        val curIsGridOnly = cur.first != null && cur.second == null
+        val curIsRowOnly = cur.first == null && cur.second != null
+        val nextIsGridOnly = next != null && next.first != null && next.second == null
+        val nextIsRowOnly = next != null && next.first == null && next.second != null
+        when {
+            curIsGridOnly && nextIsRowOnly -> { out += cur.first to next!!.second; k += 2 }
+            curIsRowOnly && nextIsGridOnly -> { out += next!!.first to cur.second; k += 2 }
+            else -> { out += cur; k++ }
+        }
+    }
     return out
 }
 
@@ -131,5 +159,9 @@ private fun rowsSimilar(a: List<String>, b: List<String>): Boolean {
         comparable++
         if (x == y) same++
     }
-    return comparable > 0 && same * 2 >= comparable
+    // Строгое большинство, а не половина (ревью #294): в узкой таблице с повторяющимся
+    // столбцом «1|5» и «2|5» совпадали ровно наполовину и склеивались в одну строку —
+    // разные строки документа теряли друг друга. Половину теперь разбирает pairSubstitutions:
+    // соседние односторонние слоты — это замена, и обе версии встречаются в одном слоте.
+    return comparable > 0 && same * 2 > comparable
 }

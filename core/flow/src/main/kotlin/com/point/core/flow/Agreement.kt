@@ -122,8 +122,11 @@ fun isRepairOf(known: String, fresh: String): Boolean {
     val a = known.trim()
     val b = fresh.trim()
     if (a.length < MIN_REPAIRABLE || b.isEmpty() || a.equals(b, ignoreCase = true)) return false
-    val fa = confusableFold(a.lowercase())
-    val fb = confusableFold(b.lowercase())
+    // Складывается только [known] — то, что прочитал движок: жертвой OCR бывает оно.
+    // Свежее чтение цифру не теряет никогда, иначе модель, ДОБАВИВШАЯ цифру («Дом» → «Дом1»),
+    // получала бы ремонт за диктовку (ревью #297).
+    val fa = confusableFold(a.lowercase(), b.lowercase())
+    val fb = b.lowercase()
     if (fa.filter(Char::isDigit) != fb.filter(Char::isDigit)) return false
     val budget = (maxOf(a.length, b.length) * MAX_REPAIR_RATIO).toInt()
     if (budget < 1) return false
@@ -134,12 +137,29 @@ fun isRepairOf(known: String, fresh: String): Boolean {
  * Свёртка OCR-конфузаблов (#297): в **буквенно-доминантном** токене цифры-жертвы канонизируются
  * в свои буквы, и защита цифр их больше не держит. Токены, где цифр не меньше, чем букв, — числа
  * (включая «№9» и одинокую «1») — не трогаются никогда: там цифра несёт identity.
+ *
+ * Складывается только сторона [known], и только там, где встречное чтение [other] НЕ ставит на
+ * место цифры другую цифру. Оба условия — из ревью #297: складывая обе стороны сразу, «Дом1» и
+ * «Дом3» теряли цифру одновременно, и identity дома решало расстояние Левенштейна.
  */
-private fun confusableFold(s: String): String = WORD_TOKEN.replace(s) { m ->
-    val token = m.value
-    val letters = token.count(Char::isLetter)
-    val digits = token.count(Char::isDigit)
-    if (letters > digits) token.map { CONFUSABLE_LETTER[it] ?: it }.joinToString("") else token
+private fun confusableFold(s: String, other: String): String {
+    val otherTokens = other.split(WORD_TOKEN_SPLIT)
+    var index = -1
+    return WORD_TOKEN.replace(s) { m ->
+        index++
+        val token = m.value
+        val letters = token.count(Char::isLetter)
+        val digits = token.count(Char::isDigit)
+        // Складываем цифру-жертву, только когда встречное чтение НЕ ставит на её место цифру:
+        // «1ваненко» против «Іваненко» — жертва OCR; «Дом1» против «Дом3» — спор двух цифр,
+        // и стереть обе значило бы отдать identity расстоянию Левенштейна (ревью #297).
+        val rival = otherTokens.getOrNull(index).orEmpty()
+        if (letters > digits && rival.none(Char::isDigit)) {
+            token.map { CONFUSABLE_LETTER[it] ?: it }.joinToString("")
+        } else {
+            token
+        }
+    }
 }
 
 /** Цифра → буква, которую OCR в неё ломает. Список сознательно короткий: пары, живущие в
@@ -147,6 +167,7 @@ private fun confusableFold(s: String): String = WORD_TOKEN.replace(s) { m ->
 private val CONFUSABLE_LETTER = mapOf('1' to 'і', '0' to 'о', '3' to 'з')
 
 private val WORD_TOKEN = Regex("""\S+""")
+private val WORD_TOKEN_SPLIT = Regex("""\s+""")
 
 /** Levenshtein, abandoned as soon as it exceeds [budget] — the answer above the bound is
  *  «too far», and computing how much too far would be wasted work. */

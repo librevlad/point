@@ -6,6 +6,7 @@ import com.point.core.flow.Cost
 import com.point.core.flow.Latency
 import com.point.core.flow.LlmClient
 import com.point.core.flow.META_OCR_TEXT_REF
+import com.point.core.flow.META_READING_MODE
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.looksLikeOcrGarbage
 import com.point.core.flow.Realizer
@@ -74,7 +75,7 @@ class DeviceOcrRealizer @Inject constructor(
                         ObjectKind.TEXT,
                         "text/plain",
                         ScratchRef(input.metadata.getValue(META_OCR_TEXT_REF)),
-                        mapOf("op" to "ocr", "engine" to "on-device"),
+                        ocrMeta(input),
                     ),
                 )
             }
@@ -92,7 +93,7 @@ class DeviceOcrRealizer @Inject constructor(
                         ObjectKind.TEXT,
                         "text/plain",
                         ref,
-                        mapOf("op" to "ocr", "engine" to "on-device"),
+                        ocrMeta(input),
                     ),
                 )
             }.getOrElse { ActionResult.Failure(it.message ?: "Ошибка записи результата", recoverable = true) }
@@ -146,4 +147,16 @@ class CloudOcrDirectRealizer @Inject constructor(
             runCatching { ActionResult.Success(llm.run(input, OCR_CLOUD_PROMPT)) }
                 .getOrElse { ActionResult.Failure(it.message ?: "Ошибка распознавания в облаке", recoverable = true) }
         }
+}
+
+/**
+ * Метаданные результата распознавания. Режим чтения (#263) **переносится на текстовый объект**:
+ * его наблюдал движок на картинке, а действует он дальше по цепочке — «В Word+» решает по нему,
+ * помечать ли цифры (#267). Без переноса пометка не срабатывала именно там, где нужна: на
+ * рукописи, распознанной отдельным шагом (ревью).
+ */
+private fun ocrMeta(input: PointObject): Map<String, String> = buildMap {
+    put("op", "ocr")
+    put("engine", "on-device")
+    input.metadata[META_READING_MODE]?.let { put(META_READING_MODE, it) }
 }

@@ -104,4 +104,32 @@ class TableConsensusTest {
         assertEquals("9", c.rows[2][1])            // only a has it → taken as-is, not flagged
         assertTrue(c.candidates.isEmpty())
     }
+
+    @Test
+    fun `сильно разошедшаяся строка остаётся одной строкой и голосуется (ревью #294)`() {
+        // Разорванная надвое, она голосовалась в одиночку: спор исчезал, ⚠ не ставился,
+        // а в файле появлялась лишняя строка — консенсус выключался там, где он нужнее всего.
+        val a = listOf(header, listOf("1", "5"), listOf("Итого", "42"))
+        val b = listOf(header, listOf("1", "5"), listOf("Всего", "48"))
+
+        val c = reconcile(listOf(a, b))
+
+        assertEquals("три строки, а не четыре", 3, c.rows.size)
+        assertTrue("спор виден", c.rows[2].any { it.contains("⚠") })
+        assertEquals(listOf("42", "48"), c.candidates[2 to 1])
+    }
+
+    @Test
+    fun `узкая таблица с повторяющимся столбцом не склеивает разные строки (ревью #294)`() {
+        // «1|5» и «2|5» совпадали ровно наполовину — половины мало, чтобы звать их одной строкой.
+        val a = listOf(header, listOf("1", "5"), listOf("2", "5"))
+        val b = listOf(header, listOf("1", "5"), listOf("2", "5"))
+
+        val c = reconcile(listOf(a, b))
+
+        assertEquals(3, c.rows.size)
+        assertEquals(listOf("1", "5"), c.rows[1])
+        assertEquals(listOf("2", "5"), c.rows[2])
+        assertTrue(c.candidates.isEmpty())
+    }
 }
