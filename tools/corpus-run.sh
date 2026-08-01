@@ -19,14 +19,40 @@ OUT="$1"; shift
 mkdir -p "$OUT"
 : > "$OUT/report.md"
 
+# Софтверный эмулятор регулярно вешает поверх приложения диалог «System UI isn't responding»
+# (заметка про эмулятор в #257): он перехватывает тапы, и замер молча меряет пустоту. Поэтому
+# перед тапом помеха убирается, и это записывается в отчёт, а не проглатывается.
+dismiss_anr() {
+  local dump b n x1 y1 x2 y2
+  dump=$("$A" exec-out cat /sdcard/ui.xml 2>/dev/null | tr -d '\r')
+  case "$dump" in
+    *"isn't responding"*|*"не отвечает"*) ;;
+    *) return 1 ;;
+  esac
+  b=$(printf '%s' "$dump" | tr '>' '\n' | grep -F 'text="Wait"' \
+    | grep -o 'bounds="\[[0-9]*,[0-9]*\]\[[0-9]*,[0-9]*\]"' | head -1)
+  [ -n "$b" ] || return 1
+  n=$(printf '%s' "$b" | grep -o '[0-9]\+')
+  x1=$(echo "$n" | sed -n 1p); y1=$(echo "$n" | sed -n 2p)
+  x2=$(echo "$n" | sed -n 3p); y2=$(echo "$n" | sed -n 4p)
+  "$A" shell input tap $(( (x1 + x2) / 2 )) $(( (y1 + y2) / 2 ))
+  sleep 2
+  return 0
+}
+
 # Тап по кнопке ПО ИМЕНИ, а не по координатам: список действий растёт по мере обогащения,
 # и зашитые координаты попадают в соседнюю кнопку — так уже случалось вживую.
 tap_by_text() {
   local label="$1"
   for _ in $(seq 1 6); do
     "$A" shell uiautomator dump /sdcard/ui.xml > /dev/null 2>&1
+    if dismiss_anr; then
+      echo "_помеха эмулятора убрана_" >> "$OUT/report.md"
+      "$A" shell uiautomator dump /sdcard/ui.xml > /dev/null 2>&1
+    fi
     local bounds
-    bounds=$("$A" shell cat /sdcard/ui.xml 2>/dev/null | tr -d '' | tr '>' '
+    bounds=$("$A" exec-out cat /sdcard/ui.xml 2>/dev/null | tr -d '
+' | tr '>' '
 '       | grep -F "text=\"$label\"" | grep -o 'bounds="\[[0-9]*,[0-9]*\]\[[0-9]*,[0-9]*\]"' | head -1)
     if [ -n "$bounds" ]; then
       local nums x1 y1 x2 y2
