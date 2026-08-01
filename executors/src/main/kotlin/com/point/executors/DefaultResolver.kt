@@ -4,6 +4,7 @@ import com.point.core.flow.CapabilityRegistry
 import com.point.core.flow.Cost
 import com.point.core.flow.Entitlements
 import com.point.core.flow.Realizer
+import com.point.core.flow.RealizerKind
 import com.point.core.flow.Resolver
 import com.point.core.model.ActionResult
 import com.point.core.model.CapabilityId
@@ -51,6 +52,14 @@ class DefaultResolver @Inject constructor(
             else -> FallbackRealizer(capabilityId, available)
         }
     }
+
+    /**
+     * Уходит ли объект с устройства при этом тапе: достаточно ОДНОГО не-локального
+     * реализатора в цепочке. Именно так открылась дыра «Распознать текст»: capability
+     * объявлена локальной, а её запасной путь — облачный, и согласие не спрашивалось.
+     */
+    override fun leavesDevice(capabilityId: CapabilityId): Boolean =
+        byCapability[capabilityId]?.any { it.meta.kind != RealizerKind.LOCAL } ?: false
 
     /** A PAID capability blocks only when the user is not entitled. An unknown id
      *  (no capability registered) is never gated — it resolves as before. */

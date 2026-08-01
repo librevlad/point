@@ -95,6 +95,10 @@ private fun sampleBubbles(kind: ObjectKind): List<Bubble> =
         ObjectKind.ZIP -> listOf(
             bubble("unzip", "Распаковать", "zip", ObjectKind.UNKNOWN, BubbleTier.SMART),
         ) + universalBubbles(kind)
+        ObjectKind.OFFICE -> listOf(
+            bubble("office", "Извлечь текст", "office", ObjectKind.TEXT, BubbleTier.SMART),
+            bubble("pdf", "В PDF", "pdf", ObjectKind.PDF, BubbleTier.SMART),
+        ) + universalBubbles(kind)
         else -> universalBubbles(kind)
     }
 
@@ -289,6 +293,31 @@ private fun PreviewImage() = PointTheme {
 private fun PreviewPdf() = PointTheme {
     val obj = sampleObject(ObjectKind.PDF, "application/pdf", "report.pdf")
     FirstScreen(obj = obj, bubbles = sampleBubbles(ObjectKind.PDF), onBubble = {})
+}
+
+@Preview(name = "Excel · результат «В Excel» (#295)", showBackground = true)
+@Composable
+private fun PreviewExcelResult() = PointTheme(darkTheme = true) {
+    // Экран, ради которого знак и заводили: минуту ждали сеть, получили таблицу — и герой
+    // говорит «это таблица», а не показывает ту же иконку документа, что docx и pptx.
+    val obj = sampleObject(
+        ObjectKind.OFFICE,
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "таблица.xlsx",
+    )
+    FirstScreen(obj = obj, bubbles = sampleBubbles(ObjectKind.OFFICE), onBubble = {})
+}
+
+@Preview(name = "Word · знака нет, иконка типа (#295)", showBackground = true)
+@Composable
+private fun PreviewWordResult() = PointTheme(darkTheme = true) {
+    // Контроль к предыдущему превью: docx остаётся общим документом — знак носит только таблица.
+    val obj = sampleObject(
+        ObjectKind.OFFICE,
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "документ.docx",
+    )
+    FirstScreen(obj = obj, bubbles = sampleBubbles(ObjectKind.OFFICE), onBubble = {})
 }
 
 @Preview(name = "Collection · unpacked archive", showBackground = true)
