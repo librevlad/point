@@ -20,6 +20,11 @@ import com.point.core.model.PointObject
  * the local actions, indistinguishable in the UI — the realizer ships the object over
  * the existing LAN channel with the action id, and the PC runs it. Synthesised one
  * pair per cached advertisement, exactly like remembered app picks (#66).
+ *
+ * #316: компьютер умеет объявить действие недоступным с причиной («нет принтера»). Такое
+ * действие не становится кнопкой — оно уходит в «Почти доступно» (#97) той же причиной,
+ * без обещаний: раньше принтера не было → действие не объявлялось вовсе → человек читал это
+ * как «Point не умеет печатать», хотя умеет — печатать некуда именно сейчас.
  */
 class RemotePcCapability(
     private val action: PcRemoteAction,
@@ -31,11 +36,21 @@ class RemotePcCapability(
     override val meta = CapabilityMeta(priority = 76, latency = Latency.FAST)
     override fun label(state: ObjectState) = action.label
     override fun accepts(state: ObjectState) =
+        action.unavailable == null && fitsThisObject(state)
+
+    override fun produces(state: ObjectState) = state // terminal — the action happens on the PC
+
+    /** Причина показывается только там, где кнопка и была бы: объект подходящего вида и
+     *  компьютер на связи. Иначе «нет принтера» всплывёт рядом с объектом, который на ПК
+     *  вообще не поедет, — шум вместо объяснения. Причины нет → и подсказки нет (молчание
+     *  честнее выдуманного текста). */
+    override fun missing(state: ObjectState): String? =
+        action.unavailable?.takeIf { it.isNotBlank() && fitsThisObject(state) }
+
+    private fun fitsThisObject(state: ObjectState) =
         state.kind.isFileBacked &&
             (action.kinds.isEmpty() || state.kind.name in action.kinds) &&
             pairings.current() != null
-
-    override fun produces(state: ObjectState) = state // terminal — the action happens on the PC
 
     companion object {
         fun idFor(action: PcRemoteAction) = CapabilityId("pc-do:${action.id}")
@@ -50,6 +65,13 @@ class RemotePcRealizer(
     override val capabilityId = RemotePcCapability.idFor(action)
 
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult {
+        // #316: недоступное не отправляется никогда — даже если до реализатора добрались в
+        // обход экрана (сохранённая цепочка, устаревший кэш действий ПК). Объект остаётся
+        // на телефоне, человек читает ту же причину, что и в «Почти доступно».
+        action.unavailable?.let { why ->
+            val reason = "Компьютер сейчас не может это сделать" + if (why.isBlank()) "" else " — $why"
+            return ActionResult.Failure(reason, recoverable = true)
+        }
         val pairing = pairings.current()
             ?: return ActionResult.Failure("Компьютер не подключён", recoverable = true)
         val name = input.metadata["name"] ?: "объект"

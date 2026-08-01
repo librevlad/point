@@ -97,29 +97,65 @@ fun decodePcMeta(encoded: String): Map<String, String> =
         }
 
 /** One action the paired PC can run on a received object (#80).
- *  [kinds] — ObjectKind names the action makes sense for; empty = any kind. */
-data class PcRemoteAction(val id: String, val label: String, val kinds: Set<String> = emptySet())
+ *  [kinds] — ObjectKind names the action makes sense for; empty = any kind.
+ *
+ *  [unavailable] (#316) — не `null`, если это компьютер **умеет**, но прямо сейчас сделать не
+ *  может, и строка объясняет почему («нет принтера»). Раньше такое действие просто не
+ *  объявлялось, и человек читал молчание как «Point не умеет печатать» — хотя умеет, печатать
+ *  некуда именно сейчас. Пустая строка = «недоступно, причина не названа»: тапнуть всё равно
+ *  нельзя (`null` и «не смог объяснить» — разные состояния, и второе не должно стать первым). */
+data class PcRemoteAction(
+    val id: String,
+    val label: String,
+    val kinds: Set<String> = emptySet(),
+    val unavailable: String? = null,
+)
 
-/** `id=label` per line, optionally `id=label<TAB>KIND1,KIND2` — the same dumb-simple
- *  line codec as [encodePcMeta]; a tab never appears in a human label. */
+/**
+ * `id=label` per line, optionally `id=label<TAB>KIND1,KIND2` — the same dumb-simple
+ * line codec as [encodePcMeta]; a tab never appears in a human label.
+ *
+ * Недоступное действие (#316) едет строкой `=id=label<TAB>KINDS<TAB>причина` — ведущий `=`
+ * выбран не за красоту: старый декодер отбрасывает строку ровно по правилу `indexOf('=') <= 0`
+ * (то же, что уже роняло мусорную строку `=безид` в тесте кодека). То есть старый телефон
+ * встречает незнакомую форму, молча её игнорирует и ведёт себя как раньше — кнопки, которую
+ * нельзя нажать, у него не появится. Доступные действия кодируются байт-в-байт как прежде,
+ * поэтому старый ПК, не знающий о признаке, для нового телефона не меняется.
+ */
 fun encodePcCaps(caps: List<PcRemoteAction>): String =
     caps.joinToString("\n") { action ->
-        val label = action.label.replace('\n', ' ').replace('\r', ' ').replace('\t', ' ')
-        val gate = if (action.kinds.isEmpty()) "" else "\t" + action.kinds.joinToString(",")
-        "${action.id}=$label$gate"
+        val label = oneLine(action.label)
+        val kinds = action.kinds.joinToString(",")
+        val why = action.unavailable
+        when {
+            why == null && kinds.isEmpty() -> "${action.id}=$label"
+            why == null -> "${action.id}=$label\t$kinds"
+            // Недоступное — всегда три поля: причина последняя, поэтому пустой гейт видов
+            // не делает строку двусмысленной.
+            else -> "$PC_CAP_UNAVAILABLE${action.id}=$label\t$kinds\t${oneLine(why)}"
+        }
     }
 
 fun decodePcCaps(encoded: String): List<PcRemoteAction> =
-    encoded.lineSequence().mapNotNull { line ->
+    encoded.lineSequence().mapNotNull { raw ->
+        val unavailableLine = raw.startsWith(PC_CAP_UNAVAILABLE)
+        val line = if (unavailableLine) raw.substring(PC_CAP_UNAVAILABLE.length) else raw
         val eq = line.indexOf('=')
         if (eq <= 0) return@mapNotNull null
         val id = line.substring(0, eq).trim()
-        val rest = line.substring(eq + 1)
-        val label = rest.substringBefore('\t').trim()
-        val kinds = rest.substringAfter('\t', "").split(',')
+        // Лишние поля будущих версий просто игнорируются — расширять формат можно, не ломая нас.
+        val fields = line.substring(eq + 1).split('\t')
+        val label = fields[0].trim()
+        val kinds = fields.getOrElse(1) { "" }.split(',')
             .mapNotNull { it.trim().takeIf(String::isNotEmpty) }.toSet()
-        if (id.isEmpty() || label.isEmpty()) null else PcRemoteAction(id, label, kinds)
+        val why = if (unavailableLine) fields.getOrElse(2) { "" }.trim() else null
+        if (id.isEmpty() || label.isEmpty()) null else PcRemoteAction(id, label, kinds, why)
     }.toList()
+
+/** Метка недоступного действия в начале строки (#316) — см. [encodePcCaps]. */
+const val PC_CAP_UNAVAILABLE = "="
+
+private fun oneLine(s: String) = s.replace('\n', ' ').replace('\r', ' ').replace('\t', ' ')
 
 /** One object waiting in the PC's outbox for the phone to pull (#161).
  *  The display name and mime live inside [meta] («name», «mime»). */
