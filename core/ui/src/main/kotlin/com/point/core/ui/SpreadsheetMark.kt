@@ -97,6 +97,9 @@ private fun isSpreadsheet(mime: String, name: String?): Boolean {
     return ext in SPREADSHEET_EXTS
 }
 
+/** Макро-таблица (`.xlsm`) стоит здесь **на вырост, а не работает**: `ObjectClassifier` её пока не
+ *  знает — ни в `OFFICE_MIMES`, ни в `OFFICE_EXTS`, — поэтому она приезжает `UNKNOWN` и до знака не
+ *  доходит вовсе. Сказано вслух, чтобы список не читался как поддержка, которой нет. */
 private val SPREADSHEET_MIMES = setOf(
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     "application/vnd.ms-excel",

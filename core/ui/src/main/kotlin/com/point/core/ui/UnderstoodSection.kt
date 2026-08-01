@@ -91,12 +91,23 @@ fun objectVerdict(obj: PointObject): ObjectVerdict {
         state.has(Feature.HAS_VCARD) -> "Визитка"
         // What kind of document it is (#222, шаг 5) — «Посылка» beats «Изображение». Below the
         // features because those are backed by a capability that acts; this only renames.
-        else -> documentLabel(obj.metadata[META_SEMANTIC_TYPE]) ?: kindLabel(state.kind)
+        else -> documentLabel(obj.metadata[META_SEMANTIC_TYPE]) ?: heroKindLabel(obj)
     }
     val summary = obj.metadata[META_SEMANTIC_SUMMARY]?.takeIf { it.isNotBlank() }
     val name = obj.metadata["name"]?.takeIf { it.isNotBlank() && it != headline }
     return ObjectVerdict(headline, summary ?: name)
 }
+
+/**
+ * Как герой называет вид объекта — то же, что [kindLabel], кроме одного случая (#295).
+ *
+ * Живой прецедент: человек нажал «В Excel», дождался сети, получил таблицу — и над знаком таблицы
+ * стояло слово «Документ», ровно то же, что над docx. Знак говорил одно, подпись другое, и «это
+ * теперь другой объект» экран сказал только наполовину. Слово берётся из того же [objectMark], что
+ * и знак, поэтому они не могут разъехаться: поменяется выбор знака — поменяется и подпись.
+ */
+private fun heroKindLabel(obj: PointObject): String =
+    if (objectMark(obj) == ObjectMark.SPREADSHEET) "Таблица" else kindLabel(obj.state.kind)
 
 private fun String.readableUrl() =
     removePrefix("https://").removePrefix("http://").removePrefix("www.").trimEnd('/')

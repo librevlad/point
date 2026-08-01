@@ -19,7 +19,8 @@ class ObjectVerdictTest {
         kind: ObjectKind = ObjectKind.IMAGE,
         features: Set<Feature> = emptySet(),
         metadata: Map<String, String> = emptyMap(),
-    ) = PointObject("id", "mime", ScratchRef("/x"), ObjectState(kind, features), metadata)
+        mime: String = "mime",
+    ) = PointObject("id", mime, ScratchRef("/x"), ObjectState(kind, features), metadata)
 
     @Test
     fun `falls back to the kind label when nothing is understood`() {
@@ -83,5 +84,43 @@ class ObjectVerdictTest {
         val o = obj(kind = ObjectKind.PDF, metadata = mapOf(META_SEMANTIC_TYPE to "cmr"))
 
         assertEquals(kindLabel(ObjectKind.PDF), objectVerdict(o).headline)
+    }
+
+    // --- Подпись героя не спорит со знаком (#295) ---
+
+    @Test
+    fun `над знаком таблицы стоит «Таблица», а не «Документ»`() {
+        // Результат «В Excel»: знак уже говорит «таблица», подпись обязана говорить то же.
+        val o = obj(
+            kind = ObjectKind.OFFICE,
+            metadata = mapOf("name" to "таблица.xlsx"),
+            mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+
+        assertEquals("Таблица", objectVerdict(o).headline)
+        assertEquals("таблица.xlsx", objectVerdict(o).subline)
+    }
+
+    @Test
+    fun `docx остаётся «Документом» — переименован только тот, у кого свой знак`() {
+        val o = obj(
+            kind = ObjectKind.OFFICE,
+            metadata = mapOf("name" to "документ.docx"),
+            mime = "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        )
+
+        assertEquals(kindLabel(ObjectKind.OFFICE), objectVerdict(o).headline)
+    }
+
+    @Test
+    fun `понятый тип документа сильнее переименования по знаку`() {
+        // Порядок тот же, что был до #295 — семантика, добытая работой, важнее вида файла.
+        val o = obj(
+            kind = ObjectKind.OFFICE,
+            metadata = mapOf(META_SEMANTIC_TYPE to TYPE_PARCEL, "name" to "таблица.xlsx"),
+            mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+
+        assertEquals("Посылка", objectVerdict(o).headline)
     }
 }
