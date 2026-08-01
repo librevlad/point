@@ -57,4 +57,22 @@ class ShoppingListTest {
         assertTrue(seenPrompt!!.contains("свёкла")) // the recipe itself travels in the prompt
         assertEquals("text/markdown", (result as ActionResult.Success).result.mime)
     }
+
+    @Test
+    fun `сетевое ожидание названо своими словами (#288)`() = runTest {
+        val recipe = File(tmp.root, "r2.txt").apply { writeText("Борщ") }
+        val out = File(tmp.root, "list2.md").apply { writeText("- свёкла") }
+        val llm = object : LlmClient {
+            override suspend fun run(obj: PointObject, prompt: String) =
+                ResultObject(ObjectKind.TEXT, "text/markdown", ScratchRef(out.absolutePath))
+        }
+        val obj = PointObject(
+            "id", "text/plain", ScratchRef(recipe.absolutePath),
+            ObjectState(ObjectKind.TEXT, setOf(Feature.IS_RECIPE)),
+        )
+
+        val heard = stagesHeard { ShoppingListRealizer(llm).perform(obj, null) }
+
+        assertEquals(listOf("Модель собирает список"), heard)
+    }
 }

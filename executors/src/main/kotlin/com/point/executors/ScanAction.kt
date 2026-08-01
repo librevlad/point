@@ -7,6 +7,7 @@ import com.point.core.flow.Latency
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.Realizer
 import com.point.core.flow.RealizerMeta
+import com.point.core.flow.reportStage
 import com.point.core.model.ActionResult
 import com.point.core.model.CapabilityId
 import com.point.core.model.ObjectKind
@@ -42,9 +43,19 @@ class ScanRealizer @Inject constructor(
     // it — falling back here automatically when the pack is absent or OpenCV fails.
     override val meta = RealizerMeta(priority = 90)
 
+    /**
+     * Стадии здесь не «за компанию», а против прямого вранья (#288). «Скан» — единственная, кроме
+     * распознавания, способность с ДВУМЯ реализациями: `OpenCvScanRealizer` идёт первым и с этого
+     * среза рассказывает о себе, а на восстановимом отказе (пакета OpenCV нет, кадр не дался)
+     * [FallbackRealizer] тихо переводит работу сюда. Если бы этот тир молчал, экран продолжал бы
+     * показывать «Выбеливаю бумагу» от чужого, уже сдавшегося движка, пока считает совсем другой, —
+     * ровно та подмена статуса, против которой весь срез. Слова про одинаковую работу взяты
+     * одинаковые («Читаю снимок», «Сохраняю») — как у [OCR_CLOUD_STAGE] в цепочке распознавания.
+     */
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
             runCatching {
+                reportStage("Читаю снимок")
                 val src = Bitmaps.decodeUpright(input.uri.value)
                     ?: error("Не удалось прочитать изображение")
                 val width = src.width
@@ -52,9 +63,11 @@ class ScanRealizer @Inject constructor(
                 val pixels = IntArray(width * height)
                 src.getPixels(pixels, 0, width, 0, 0, width, height)
 
+                reportStage("Свожу к чёрно-белому")
                 val scanned = ScanFilter.apply(pixels)
                 val output = Bitmap.createBitmap(scanned, width, height, Bitmap.Config.ARGB_8888)
 
+                reportStage("Сохраняю")
                 val ref = store.newScratchFile("png")
                 File(ref.value).outputStream().use { output.compress(Bitmap.CompressFormat.PNG, 100, it) }
                 src.recycle()

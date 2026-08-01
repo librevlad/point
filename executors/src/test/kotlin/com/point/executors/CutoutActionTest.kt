@@ -40,6 +40,19 @@ class CutoutActionTest {
         assertEquals("Объект на фото не найден", result.reason)
     }
 
+    /** #288: сегментация — модель ML Kit, которая на первом применении ещё и качается; голый
+     *  счётчик секунд был там дольше всего и не говорил ничего. */
+    @Test
+    fun `отделение объекта называет себя`() = runTest {
+        val remover = object : BackgroundRemover {
+            override suspend fun cutout(imagePath: String) = ScratchRef("/tmp/cut.png")
+        }
+
+        val heard = stagesHeard { CutoutRealizer(remover).perform(imageObj(), null) }
+
+        assertEquals(listOf("Отделяю объект от фона"), heard)
+    }
+
     @Test
     fun `capability accepts only images`() {
         val cap = CutoutCapability()

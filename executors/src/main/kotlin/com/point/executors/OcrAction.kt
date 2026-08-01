@@ -13,6 +13,7 @@ import com.point.core.flow.Realizer
 import com.point.core.flow.RealizerKind
 import com.point.core.flow.RealizerMeta
 import com.point.core.flow.TextRecognizer
+import com.point.core.flow.reportStage
 import com.point.core.model.ActionResult
 import com.point.core.model.CapabilityId
 import com.point.core.model.ObjectKind
@@ -30,6 +31,10 @@ import javax.inject.Inject
 internal const val OCR_CLOUD_PROMPT =
     "Извлеки весь текст с изображения дословно, сохраняя порядок строк. " +
         "Таблицы оформи в Markdown. Верни только текст, без комментариев."
+
+/** Одна работа — одни слова (#288): облачное чтение снимка выглядит одинаково и как запасное
+ *  звено цепочки, и как отдельная кнопка «Распознать в облаке». */
+internal const val OCR_CLOUD_STAGE = "Читаю снимок в облаке"
 
 /**
  * photo -> recognised text. Tries on-device OCR first (Tesseract, rus+eng — free,
@@ -79,6 +84,10 @@ class DeviceOcrRealizer @Inject constructor(
                     ),
                 )
             }
+            // Стадия — только когда движок действительно запускается (#288): у обогащённой
+            // картинки текст уже лежит в сайдкаре, и путь выше возвращается мгновенно; сказать
+            // там «Читаю текст на устройстве» значило бы назвать работу, которой не было.
+            reportStage("Читаю текст на устройстве")
             val text = runCatching { recognizer.recognize(input) }.getOrDefault("")
             if (text.isBlank() || looksLikeOcrGarbage(text)) {
                 // Blank OR gibberish (Tesseract on a photographed document) → hand off to the
@@ -114,6 +123,12 @@ class CloudOcrRealizer @Inject constructor(
 
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
+            // Стадия говорит про СЕЙЧАС, а не про прошлое (#288). Соблазн был написать «на
+            // устройстве не вышло — читаю в облаке»: сегодня это правда, потому что сюда попадают
+            // только после отказа локального звена. Но правда о чужом шаге держится на порядке
+            // цепочки в чужом файле — уедет он, и строка начнёт врать ровно тем способом, против
+            // которого весь срез. Переход и так виден: строка сменилась с «на устройстве».
+            reportStage(OCR_CLOUD_STAGE)
             runCatching { ActionResult.Success(llm.run(input, OCR_CLOUD_PROMPT)) }
                 .getOrElse { ActionResult.Failure(it.message ?: "Ошибка распознавания в облаке", recoverable = true) }
         }
@@ -144,6 +159,7 @@ class CloudOcrDirectRealizer @Inject constructor(
 
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
+            reportStage(OCR_CLOUD_STAGE)
             runCatching { ActionResult.Success(llm.run(input, OCR_CLOUD_PROMPT)) }
                 .getOrElse { ActionResult.Failure(it.message ?: "Ошибка распознавания в облаке", recoverable = true) }
         }

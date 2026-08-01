@@ -7,6 +7,7 @@ import com.point.core.flow.Latency
 import com.point.core.flow.PdfTextExtractor
 import com.point.core.flow.Realizer
 import com.point.core.flow.TextRecognizer
+import com.point.core.flow.reportStage
 import com.point.core.model.ActionResult
 import com.point.core.model.CapabilityId
 import com.point.core.model.Intent
@@ -45,18 +46,31 @@ class WordRealizer @Inject constructor(
 ) : Realizer {
     override val capabilityId = WordCapability.ID
 
+    /**
+     * Те же слова, что у «В Word+» (#288), потому что работа перед ними та же: у PDF — извлечение
+     * текста, у фото — Tesseract по всему кадру (десятки секунд, тот же движок, что в «Распознать»).
+     * Два соседних пузырька над одним объектом, где первый рассказывает о себе, а второй молчит,
+     * читаются как «второй завис»; молчит здесь только текстовый вход — там ждать нечего.
+     */
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
             runCatching {
                 val text = when (input.state.kind) {
-                    ObjectKind.PDF -> pdfText.extractText(input)
-                    ObjectKind.IMAGE -> recognizer.recognize(input) // OCR the photo first (#61)
+                    ObjectKind.PDF -> {
+                        reportStage("Читаю текст PDF")
+                        pdfText.extractText(input)
+                    }
+                    ObjectKind.IMAGE -> {
+                        reportStage("Распознаю текст на фото") // OCR the photo first (#61)
+                        recognizer.recognize(input)
+                    }
                     ObjectKind.TEXT -> File(input.uri.value).takeIf { it.isFile }?.readText().orEmpty()
                     else -> ""
                 }
                 if (text.isBlank()) {
                     ActionResult.Failure("Нет текста (возможно, это скан — сначала распознайте текст)", recoverable = true)
                 } else {
+                    reportStage("Собираю документ")
                     ActionResult.Success(
                         ResultObject(ObjectKind.OFFICE, DOCX_MIME, docx.write(toParagraphs(text)), mapOf("op" to "to-word")),
                     )

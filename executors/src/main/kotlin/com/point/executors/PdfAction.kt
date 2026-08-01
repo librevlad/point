@@ -11,6 +11,7 @@ import com.point.core.flow.OfficeTextExtractor
 import com.point.core.flow.PdfTextExtractor
 import com.point.core.flow.SpreadsheetReader
 import com.point.core.flow.Realizer
+import com.point.core.flow.reportStage
 import com.point.core.model.ActionResult
 import com.point.core.model.CapabilityId
 import com.point.core.model.Feature
@@ -64,6 +65,7 @@ class PdfRealizer @Inject constructor(
         }
 
     private suspend fun imageToPdf(input: PointObject): ActionResult {
+        reportStage("Читаю изображение")
         val bitmap = Bitmaps.decodeUpright(input.uri.value) ?: error("Не удалось прочитать изображение")
         val document = PdfDocument()
         val page = document.startPage(PdfDocument.PageInfo.Builder(bitmap.width, bitmap.height, 1).create())
@@ -75,6 +77,7 @@ class PdfRealizer @Inject constructor(
     }
 
     private suspend fun officeToPdf(input: PointObject): ActionResult {
+        reportStage("Читаю документ") // #288: разбор docx/xlsx — секунды до всякой отрисовки
         // A spreadsheet is a grid, not prose: read its rows and render a monospace table. Our own
         // «В Excel» writes inline strings (no sharedStrings.xml), which the text extractor can't
         // read — so without this branch converting Point's own xlsx dead-ends on empty text.
@@ -99,17 +102,26 @@ class PdfRealizer @Inject constructor(
             path.endsWith(".xlsx") || path.endsWith(".xls")
     }
 
+    /**
+     * Стадии многостраничного «В PDF» (#288): длинный текст сперва целиком меряется по словам
+     * ([wrap] — реальные секунды на книге), потом страницы рисуются одна за другой. Номер страницы
+     * называется без «из N»: сколько их получится, знает только сам этот цикл — он и решает, когда
+     * страница кончилась. Обещать общее число значило бы посчитать его вторым способом и однажды
+     * разойтись с первым.
+     */
     private suspend fun renderTextToPdf(text: String, mono: Boolean = false): ActionResult {
         val paint = Paint().apply {
             textSize = if (mono) 10f else 12f
             if (mono) typeface = Typeface.MONOSPACE
         }
+        reportStage("Раскладываю по страницам")
         val lines = wrap(text, paint, PAGE_WIDTH - 2 * MARGIN)
 
         val document = PdfDocument()
         var index = 0
         var pageNumber = 1
         do {
+            reportStage("Страница $pageNumber")
             val page = document.startPage(
                 PdfDocument.PageInfo.Builder(PAGE_WIDTH, PAGE_HEIGHT, pageNumber++).create(),
             )
@@ -127,6 +139,7 @@ class PdfRealizer @Inject constructor(
     }
 
     private suspend fun pdfToText(input: PointObject): ActionResult {
+        reportStage("Извлекаю текст из PDF")
         val text = pdfText.extractText(input)
         if (text.isBlank()) {
             return ActionResult.Failure(

@@ -68,4 +68,18 @@ class PdfRealizerTest {
         assertTrue(result is ActionResult.Failure)
         assertTrue((result as ActionResult.Failure).recoverable)
     }
+
+    /**
+     * #288: извлечение текста из большой книги идёт секундами, и до этого среза человек видел
+     * только счётчик. Рисование страниц (обратный путь, «В PDF») стадии тоже называет, но там
+     * `android.graphics.Paint` — заглушка на JVM, поэтому проверяется оно живьём, не тестом.
+     */
+    @Test
+    fun `извлечение текста из PDF называет себя`() = runTest {
+        val realizer = PdfRealizer(store, pdfExtractor("Привет из PDF"), noOffice, noSheets)
+
+        val heard = stagesHeard { realizer.perform(pdfObject()) }
+
+        assertEquals(listOf("Извлекаю текст из PDF"), heard)
+    }
 }

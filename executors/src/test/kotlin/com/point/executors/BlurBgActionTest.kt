@@ -40,6 +40,23 @@ class BlurBgActionTest {
         assertEquals("/tmp/blurred.png", bgSeen) // blurred original behind
     }
 
+    /** #288: шага правда три, и каждый — тяжёлая работа над целым кадром; слово стоит ровно перед
+     *  тем вызовом, который называет, а не «примерно посередине». */
+    @Test
+    fun `портретное размытие рассказывает про все три шага`() = runTest {
+        val remover = object : BackgroundRemover {
+            override suspend fun cutout(imagePath: String) = ScratchRef("/tmp/subject.png")
+        }
+        val compositor = object : ImageCompositor {
+            override suspend fun composite(subjectPath: String, backgroundPath: String) = ScratchRef("/tmp/out.png")
+            override suspend fun blur(imagePath: String) = ScratchRef("/tmp/blurred.png")
+        }
+
+        val heard = stagesHeard { BlurBgRealizer(remover, compositor).perform(imageObj(), null) }
+
+        assertEquals(listOf("Отделяю объект от фона", "Размываю фон", "Собираю снимок"), heard)
+    }
+
     @Test
     fun `a segmentation failure is recoverable`() = runTest {
         val remover = object : BackgroundRemover {

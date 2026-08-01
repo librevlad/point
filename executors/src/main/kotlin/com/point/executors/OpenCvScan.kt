@@ -1,6 +1,7 @@
 package com.point.executors
 
 import android.graphics.Bitmap
+import com.point.core.flow.reportStage
 import org.opencv.android.OpenCVLoader
 import org.opencv.android.Utils
 import org.opencv.core.Core
@@ -51,15 +52,22 @@ object OpenCvScan {
      * document has too few rules — then finish to pure-white paper with live colour, clean edges
      * ([whitenFinish]) and upscale. For handwriting, coloured forms and stamps where binarisation
      * throws away information the eye (and later OCR) needs. The caller owns [src].
+     *
+     * `suspend` не ради потока, а ради канала стадий (#288): на телефоне владельца этот рецепт идёт
+     * десятки секунд, и до этого среза человек всё это время видел один голый счётчик. Стадии здесь —
+     * настоящие ветки конвейера, а не отсчёт по часам: сказано ровно то, что делается сейчас
+     * («Увеличиваю» не произносится, когда снимок уже крупный, — см. [upscale]).
      */
-    fun enhance(src: Bitmap): Bitmap {
+    suspend fun enhance(src: Bitmap): Bitmap {
         val rgba = Mat()
         Utils.bitmapToMat(src, rgba)
         val scratch = mutableListOf(rgba)
         try {
+            reportStage("Ищу страницу на снимке")
             val straight = dewarpByTps(rgba, scratch)   // straighten by table-line intersections (TPS)…
                 ?: detectDocument(rgba, scratch)        // …else correct perspective by page corners…
                 ?: rgba                                 // …else take the frame as-is
+            reportStage("Выбеливаю бумагу")
             val finished = whitenFinish(straight, scratch)
             val scaled = upscale(finished, scratch)
             val out = Bitmap.createBitmap(scaled.cols(), scaled.rows(), Bitmap.Config.ARGB_8888)
@@ -70,10 +78,13 @@ object OpenCvScan {
         }
     }
 
-    /** Upscale a small scan toward [UPSCALE_TARGET] on its long side (cubic); a big one is left as-is. */
-    private fun upscale(mat: Mat, scratch: MutableList<Mat>): Mat {
+    /** Upscale a small scan toward [UPSCALE_TARGET] on its long side (cubic); a big one is left as-is.
+     *  Стадия объявляется ПОСЛЕ проверки размера (#288): на крупном снимке увеличения не происходит,
+     *  и сказать «Увеличиваю» значило бы описать шаг, которого нет. */
+    private suspend fun upscale(mat: Mat, scratch: MutableList<Mat>): Mat {
         val longSide = maxOf(mat.rows(), mat.cols())
         if (longSide >= UPSCALE_TARGET) return mat
+        reportStage("Увеличиваю")
         val s = UPSCALE_TARGET.toDouble() / longSide
         val up = Mat().also { scratch += it }
         Imgproc.resize(mat, up, Size(mat.cols() * s, mat.rows() * s), 0.0, 0.0, Imgproc.INTER_CUBIC)

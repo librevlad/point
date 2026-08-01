@@ -42,4 +42,31 @@ class CloudOcrRealizerTest {
         assertTrue(result is ActionResult.Failure)
         assertTrue((result as ActionResult.Failure).recoverable)
     }
+
+    // --- #288: чтение в облаке называет себя ---
+
+    @Test
+    fun `запасное звено говорит, что читает снимок в облаке`() = runTest {
+        val cloud = ResultObject(ObjectKind.TEXT, "text/markdown", ScratchRef("/out/cloud.md"))
+
+        val heard = stagesHeard { CloudOcrRealizer(llm(cloud)).perform(image) }
+
+        assertEquals(listOf("Читаю снимок в облаке"), heard)
+    }
+
+    @Test
+    fun `отдельная кнопка «Распознать в облаке» говорит теми же словами — работа одна и та же`() = runTest {
+        val cloud = ResultObject(ObjectKind.TEXT, "text/markdown", ScratchRef("/out/cloud.md"))
+
+        val heard = stagesHeard { CloudOcrDirectRealizer(llm(cloud)).perform(image) }
+
+        assertEquals(listOf("Читаю снимок в облаке"), heard)
+    }
+
+    @Test
+    fun `стадия доходит и тогда, когда провайдер упал — иначе экран молчал бы всю неудачную минуту`() = runTest {
+        val heard = stagesHeard { CloudOcrRealizer(llm(/* throws */)).perform(image) }
+
+        assertEquals(listOf("Читаю снимок в облаке"), heard)
+    }
 }

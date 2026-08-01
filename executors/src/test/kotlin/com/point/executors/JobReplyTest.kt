@@ -58,4 +58,24 @@ class JobReplyTest {
         assertTrue(seenPrompt!!.contains("5 лет Android"))      // and the user's line
         assertEquals("text/markdown", (result as ActionResult.Success).result.mime)
     }
+
+    /** #288: пока модель пишет, экран говорит об этом; вопрос о кандидате работой не является —
+     *  там ждут человека, а не сеть, и стадии там быть не должно. */
+    @Test
+    fun `стадия появляется на письме, а не на вопросе о кандидате`() = runTest {
+        val vacancy = File(tmp.root, "v2.txt").apply { writeText("Требуется Kotlin-разработчик") }
+        val out = File(tmp.root, "reply2.md").apply { writeText("Здравствуйте") }
+        val llm = object : LlmClient {
+            override suspend fun run(obj: PointObject, prompt: String) =
+                ResultObject(ObjectKind.TEXT, "text/markdown", ScratchRef(out.absolutePath))
+        }
+        val obj = PointObject(
+            "id", "text/plain", ScratchRef(vacancy.absolutePath),
+            ObjectState(ObjectKind.TEXT, setOf(Feature.IS_JOB)),
+        )
+        val realizer = JobReplyRealizer(llm)
+
+        assertTrue(stagesHeard { realizer.perform(obj, null) }.isEmpty())
+        assertEquals(listOf("Модель пишет отклик"), stagesHeard { realizer.perform(obj, "5 лет Android") })
+    }
 }

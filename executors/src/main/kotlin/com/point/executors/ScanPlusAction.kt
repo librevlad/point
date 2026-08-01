@@ -7,6 +7,7 @@ import com.point.core.flow.Latency
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.Realizer
 import com.point.core.flow.RealizerMeta
+import com.point.core.flow.reportStage
 import com.point.core.model.ActionResult
 import com.point.core.model.CapabilityId
 import com.point.core.model.ObjectKind
@@ -48,9 +49,14 @@ class ScanPlusRealizer(
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
             runCatching {
+                // Стадии (#288): «Скан+» на телефоне идёт десятки секунд — декод многомегапиксельного
+                // кадра, конвейер OpenCV ([OpenCvScan.enhance] рассказывает о себе сам), сжатие в JPEG.
+                // Каждая строка называет то, что происходит именно сейчас.
+                reportStage("Читаю снимок")
                 val src = Bitmaps.decodeUpright(input.uri.value, Bitmaps.SCAN_PLUS_MAX_PX)
                     ?: error("Не удалось прочитать изображение")
                 val enhanced = OpenCvScan.enhance(src)
+                reportStage("Сохраняю")
                 val ref = store.newScratchFile("jpg")
                 File(ref.value).outputStream().use { enhanced.compress(Bitmap.CompressFormat.JPEG, 92, it) }
                 src.recycle()
