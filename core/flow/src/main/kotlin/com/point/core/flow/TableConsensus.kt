@@ -68,7 +68,11 @@ internal fun alignRows(tables: List<List<List<String>>>): List<List<List<String>
         val rows = tables[t]
         val grid = slots.map { slot -> slot.firstOrNull { it != null }!! }
         val next = mutableListOf<MutableList<List<String>?>>()
-        for ((slotIdx, rowIdx) in matchRows(grid, rows)) {
+        // Ключ строки — если он есть — надёжнее похожести: рукописные пометки поверх бланка
+        // меняют половину ячеек, но артикул остаётся артикулом.
+        val key = keyColumn(grid, rows)
+        val pairs = if (key != null) matchByKey(grid, rows, key) else matchRows(grid, rows)
+        for ((slotIdx, rowIdx) in pairs) {
             when {
                 slotIdx != null && rowIdx != null -> next += slots[slotIdx].also { it += rows[rowIdx] }
                 slotIdx != null -> next += slots[slotIdx].also { it += null }
@@ -79,6 +83,64 @@ internal fun alignRows(tables: List<List<List<String>>>): List<List<List<String>
         slots = next
     }
     return slots
+}
+
+/**
+ * Ключевая колонка — столбец, по которому строки таблицы узнают друг друга (#294, эталонная
+ * ведомость владельца).
+ *
+ * На реальной ведомости первая колонка — артикул (`11004`, `11006`, `11012`…), и он опознаёт
+ * строку надёжнее, чем похожесть всей строки: рукописные пометки поверх бланка меняют половину
+ * ячеек, строки перестают быть «похожими» и разъезжаются по разным слотам — в файле появляется
+ * строка-фантом, а значения уезжают к соседям.
+ *
+ * Колонка считается ключевой, только если она **действительно ключ**: значения в ней уникальны
+ * внутри каждого чтения и хотя бы половина из них встречается в обоих. Не нашли такую — работаем
+ * по прежнему пути (похожесть строк), а не выдумываем ключ.
+ */
+private fun keyColumn(a: List<List<String>>, b: List<List<String>>): Int? {
+    val columns = minOf(a.maxOfOrNull { it.size } ?: 0, b.maxOfOrNull { it.size } ?: 0)
+    for (c in 0 until columns) {
+        val ka = a.mapNotNull { it.getOrNull(c)?.let(::normConsensus)?.takeIf { v -> v.isNotEmpty() } }
+        val kb = b.mapNotNull { it.getOrNull(c)?.let(::normConsensus)?.takeIf { v -> v.isNotEmpty() } }
+        if (ka.size < MIN_KEYED_ROWS || kb.size < MIN_KEYED_ROWS) continue
+        if (ka.toSet().size != ka.size || kb.toSet().size != kb.size) continue // не ключ — повторяется
+        // Почти все, а не половина: на «Итого» против «Всего» половина совпадений находится
+        // случайно, и подписи строк выдали бы себя за идентификаторы (поймано тестом #294).
+        val shared = ka.count { it in kb.toSet() }
+        if (shared * 5 >= minOf(ka.size, kb.size) * 4) return c
+    }
+    return null
+}
+
+/** Ниже этого числа опознанных строк «ключ» — совпадение, а не свойство таблицы. */
+private const val MIN_KEYED_ROWS = 5
+
+/**
+ * Пары «слот сетки ↔ строка чтения» по ключевой колонке: строки с одинаковым ключом — одна
+ * строка документа, чем бы ни отличались остальные ячейки. Строки без ключа и с ключом, которого
+ * нет у другой стороны, остаются на своих местах в порядке документа.
+ */
+private fun matchByKey(
+    grid: List<List<String>>,
+    rows: List<List<String>>,
+    column: Int,
+): List<Pair<Int?, Int?>> {
+    fun key(row: List<String>) = row.getOrNull(column)?.let(::normConsensus)?.takeIf { it.isNotEmpty() }
+    val rowByKey = rows.indices.mapNotNull { i -> key(rows[i])?.let { it to i } }.toMap()
+    val used = mutableSetOf<Int>()
+    val out = mutableListOf<Pair<Int?, Int?>>()
+    grid.indices.forEach { g ->
+        val match = key(grid[g])?.let(rowByKey::get)
+        if (match != null && used.add(match)) out += g to match else out += g to null
+    }
+    // Строки чтения, не нашедшие своего ключа в сетке, — его собственные находки: они встают
+    // после ближайшей уже сопоставленной строки, чтобы не всплыть в конце документа.
+    rows.indices.filter { it !in used }.forEach { r ->
+        val after = out.indexOfLast { it.second != null && it.second!! < r }
+        if (after >= 0) out.add(after + 1, null to r) else out.add(0, null to r)
+    }
+    return out
 }
 
 /**
