@@ -60,4 +60,39 @@ class OoxmlOfficeTextExtractorTest {
         val obj = PointObject("id", "application/msword", ScratchRef(file.absolutePath), ObjectState(ObjectKind.OFFICE))
         assertEquals("", extractor.extractText(obj))
     }
+
+    /** Жалоба владельца «word в pdf даёт кракозябры» (#289): Word пишет кириллицу числовыми
+     *  ссылками, когда документ прошёл через чужой редактор, — пять именованных сущностей их
+     *  не знали, и «&#1053;&#1077;…» доезжало до экрана и до PDF дословно. */
+    @Test
+    fun `numeric entities become real letters, not mojibake`() = runTest {
+        val obj = docx(
+            "<w:body>" +
+                "<w:t>&#1053;&#1072;&#1082;&#1083;&#1072;&#1076;&#1085;&#1072;&#1103;</w:t>" +
+                "<w:t>&#x41F;&#x43E;&#x447;&#x442;&#x430;</w:t>" +
+                "</w:body>",
+        )
+
+        val text = extractor.extractText(obj)
+
+        assertTrue(text.contains("Накладная"))
+        assertTrue(text.contains("Почта"))
+        assertTrue("сырых ссылок остаться не должно", !text.contains("&#"))
+    }
+
+    @Test
+    fun `an escaped ampersand does not turn into a letter`() = runTest {
+        // «&amp;#1053;» — это текст про сущность, а не сама сущность: порядок разворачивания
+        // обязан оставить его текстом, иначе мы подменим содержимое документа.
+        val obj = docx("<w:body><w:t>&amp;#1053;</w:t></w:body>")
+
+        assertEquals("&#1053;", extractor.extractText(obj))
+    }
+
+    @Test
+    fun `an impossible code point is left as written`() = runTest {
+        val obj = docx("<w:body><w:t>&#99999999;</w:t></w:body>")
+
+        assertEquals("&#99999999;", extractor.extractText(obj))
+    }
 }
