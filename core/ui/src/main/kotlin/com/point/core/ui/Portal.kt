@@ -11,6 +11,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -148,6 +150,9 @@ fun BusyPortal(
     steps: List<String>,
     activeStep: Int,
     modifier: Modifier = Modifier,
+    /** Отмена (#288): человек имеет право передумать, а сетевое действие идёт минуту и
+     *  больше. `null` — отменять нечего, кнопки нет. */
+    onCancel: (() -> Unit)? = null,
 ) {
     Box(
         modifier.fillMaxSize().background(PortalBackdrop),
@@ -173,6 +178,18 @@ fun BusyPortal(
             if (steps.size > 1) {
                 Spacer(Modifier.height(28.dp))
                 StepChecklist(steps, activeStep)
+            }
+            if (onCancel != null) {
+                Spacer(Modifier.height(32.dp))
+                Text(
+                    text = "Отменить",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = PortalMuted,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable(onClick = onCancel)
+                        .padding(horizontal = 20.dp, vertical = 10.dp),
+                )
             }
         }
     }

@@ -114,6 +114,9 @@ class FlowViewModel @Inject constructor(
     private val pulledFiles: PulledFileFactory,
 ) : ViewModel() {
 
+    /** Идущее действие — чтобы его можно было отменить (#288). */
+    private var actionJob: kotlinx.coroutines.Job? = null
+
     private val stack = ArrayDeque<FlowFrame>()
     private val enrichJobs = mutableListOf<Job>()
     private var pendingBubble: Bubble? = null
@@ -974,13 +977,32 @@ class FlowViewModel @Inject constructor(
 
     private fun dispatch(bubble: Bubble, action: suspend () -> ActionResult) {
         runCatching { sensory.tap() } // M4: the choice answers in the hand at once
-        viewModelScope.launch {
+        // Задача действия хранится, потому что человек имеет право передумать (#288): «В Excel»
+        // — это две последовательные модели по фото, минута и больше, и до сих пор прервать её
+        // было нечем; экран обещал «несколько секунд» и упирался в последний шаг.
+        actionJob?.cancel()
+        actionJob = viewModelScope.launch {
             runCatching { usage.record(bubble.capabilityId) } // learning signal for BubblePolicy
             runCatching { journal.record(UsageEvent(UsageEventType.ACTION, bubble.capabilityId.value)) }
             runCatching { action() }
                 .onSuccess { result -> handleResult(result, bubble) }
-                .onFailure { e -> _ui.update { it.copy(busy = null, message = e.message ?: "Ошибка") } }
+                .onFailure { e ->
+                    // Отмена — не ошибка: человек передумал, и сказать ему «Ошибка» было бы враньём.
+                    if (e is kotlinx.coroutines.CancellationException) throw e
+                    _ui.update { it.copy(busy = null, message = e.message ?: "Ошибка") }
+                }
         }
+    }
+
+    /**
+     * Отменить идущее действие (#288). Работа снимается, экран возвращается к объекту, и человек
+     * видит, что произошло: молчаливое исчезновение экрана неотличимо от сбоя.
+     */
+    fun cancelAction() {
+        val job = actionJob ?: return
+        actionJob = null
+        job.cancel()
+        _ui.update { it.copy(busy = null, message = "Отменено") }
     }
 
     private suspend fun handleResult(result: ActionResult, bubble: Bubble) {
