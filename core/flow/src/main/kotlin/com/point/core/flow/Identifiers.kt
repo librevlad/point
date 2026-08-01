@@ -3,50 +3,207 @@ package com.point.core.flow
 import com.point.core.model.Provenance
 
 /**
- * «Find waybill numbers» — one extractor, one line of spec (#222).
+ * «Найти номер отправления» — офлайновое правило формы: дешёвое, на устройстве, ошибающееся (#222).
  *
- * This is the shape every extractor in the pipeline takes: a tiny, single-purpose rule that can
- * be improved on its own without touching anything else. Pure and on-device — no model, no
- * network, so it runs in the cheap wave.
+ * **Зачем оно вообще.** ML Kit читает `20 4514 9154 9395` со скрина посылки и называет это
+ * телефоном; [isPlausible] справедливо выбрасывает — 14 цифр не набирают. Судит он верно, не
+ * хватало того, кто подберёт номер после него: самое полезное, что было на экране, проваливалось
+ * в пол.
  *
- * **Why this exists at all.** ML Kit reads `20 4514 9154 9395` off a parcel screenshot and calls
- * it a phone; [isPlausible] then correctly drops it, because 14 digits is not something you dial.
- * The judgement is right and stays — what was missing is anyone to pick the number up afterwards.
- * It was the single most useful thing on the screen and it fell through the floor.
+ * **Форма была уже реальности (#262).** Замер корпуса поймал это на кадре 13 (фото
+ * бумажной экспресс-накладной) номер напечатан как `5900162/7808586` — со структурным
+ * разделителем, — и правило, знавшее ровно 14 подряд идущих цифр, было слепо. У Укрпошты форм ещё
+ * две: 13 цифр и международная S10 (`RA123456785UA`). Расширять форму — всегда торговать ложными
+ * срабатываниями, поэтому каждая форма допускается только **своим** подтверждением:
  *
- * **On the checksum.** A structural rule only: 14 digits, optionally grouped by spaces. Nova
- * Poshta does publish waybills in this shape, but no verified check-digit algorithm went into
- * this code — inventing one would reject real numbers, which is worse than a rare false
- * positive.
+ * | форма | чем допущена |
+ * |---|---|
+ * | 14 цифр (Нова Пошта) | сама форма — столько цифр подряд не бывает ни у телефона (12), ни у карты (16), ни у IBAN (29) |
+ * | 13–14 цифр через `/` | структурный разделитель: разбиение напечатано вместе с номером, случайным оно не бывает |
+ * | 13 цифр подряд | слово-маркер вплотную ([TRACK_MARKER_STEMS]) — иначе штрихкод EAN-13 и номер счёта стали бы треком |
+ * | S10 | контрольная цифра ([s10CheckDigitValid]) — подтверждение внутри самого номера |
  *
- * «Форма совпала, контрольной цифры нет» жило числом `WAYBILL_CONFIDENCE = 0.8f`. Это не
- * уверенность, а **улика** — ровно один класс [EvidenceClass.SEMANTIC] (#264), и [trackFacts]
- * теперь так и пишет. Второй независимый класс приносит только тот, кто судил страницу.
+ * **Чего правило по-прежнему не делает.** Не выдумывает контрольную цифру там, где её нет: у
+ * 14-значного номера Новой Почты опубликованного алгоритма не существует, а выдуманный отбрасывал
+ * бы настоящие номера — это хуже редкого ложного срабатывания.
+ *
+ * **Названный остаточный класс ложных.** Две группы цифр через косую, дающие в сумме 13–14
+ * (`1000000/2500000` в прайсе), от напечатанного номера неотличимы ни формой, ни разделителем.
+ * Поэтому улика мягкая: правило **размечает, а не решает**, и человек видит «возможно» —
+ * ровно один класс [EvidenceClass.SEMANTIC] (#264). Второй класс приносит либо тот, кто судил
+ * страницу ([fieldEvidence]), либо сошедшаяся контрольная цифра.
  */
-
-/** A digit run of exactly 14 digits, optionally grouped by spaces, not glued to other digits. */
-private val WAYBILL_SHAPED = Regex("""(?<!\d)\d[\d ]{11,20}\d(?!\d)""")
 
 /**
- * Waybill-shaped numbers in [text], normalised to single spaces and de-duplicated in the order
- * they appear. Empty when there are none — the common case, and the reason this is cheap.
- *
- * Дедупликация — **по цифрам**, не по строке: «20 4514 9154 9395» в шапке и те же 14 цифр
- * слитно под штрихкодом — один номер, а не «второй похожий» (ревью #260 — граф склеивал их в
- * один узел по цифрам, а карточка готовности одновременно показывала ложный спор).
+ * Чем номер допущен к званию трека. Перечисление не для красоты кода: оно называет **цену
+ * допуска** — видно, какая форма держится на себе, а какая на соседнем слове.
  */
-fun waybillNumbers(text: String): List<String> =
-    WAYBILL_SHAPED.findAll(text)
-        .map { it.value.trim() }
-        .filter { it.count(Char::isDigit) == WAYBILL_DIGITS }
-        .map { it.replace(MULTI_SPACE, " ") }
-        .distinctBy { it.filter(Char::isDigit) }
-        .toList()
+internal enum class TrackForm {
+    /** 14 цифр подряд — форма Новой Почты, допускает сама себя. */
+    NOVA_POSHTA,
+
+    /** 13–14 цифр через косую — так номер напечатан на бумажной экспресс-накладной (кадр 13). */
+    SPLIT,
+
+    /** 13 цифр рядом со словом-маркером: форма слабая, допускает её соседнее слово. */
+    MARKED,
+
+    /** S10 (UPU) с сошедшейся контрольной цифрой — она сама себе подтверждение. */
+    S10,
+}
+
+/** Найденный номер вместе с тем, чем он допущен и где стоит (позиция нужна, чтобы формы,
+ *  которые судятся независимо, не сочли один кусок строки двумя разными номерами). */
+internal data class TrackHit(val value: String, val form: TrackForm, val at: IntRange)
+
+/**
+ * Все номера [text] в порядке появления — по одному на каждый настоящий номер.
+ *
+ * Формы судятся независимо и **потом** мирятся: перекрывшиеся куски строки — один номер,
+ * прочитанный дважды, а совпавшие ключи ([trackKey]) — один номер, написанный дважды («20 4514
+ * 9154 9395» в шапке и те же цифры слитно под штрихкодом, ревью #260).
+ */
+internal fun trackHits(text: String): List<TrackHit> {
+    val hits = mutableListOf<TrackHit>()
+    DIGIT_RUN.findAll(text).forEach { m ->
+        val digits = m.value.count(Char::isDigit)
+        val form = when {
+            digits == WAYBILL_DIGITS -> TrackForm.NOVA_POSHTA
+            digits == SHORT_TRACK_DIGITS && markerNear(text, m.range) -> TrackForm.MARKED
+            else -> return@forEach
+        }
+        hits += TrackHit(m.value.replace(MULTI_SPACE, " ").trim(), form, m.range)
+    }
+    SPLIT_SHAPED.findAll(text)
+        .filter { it.value.count(Char::isDigit) in SHORT_TRACK_DIGITS..WAYBILL_DIGITS }
+        .forEach { hits += TrackHit(it.value.trim(), TrackForm.SPLIT, it.range) }
+    S10_IN_TEXT.findAll(text)
+        .filter { s10CheckDigitValid(it.value) == true }
+        .forEach { hits += TrackHit(it.value.trim(), TrackForm.S10, it.range) }
+
+    val kept = mutableListOf<TrackHit>()
+    hits.sortedBy { it.at.first }.forEach { hit ->
+        val overlaps = kept.any { it.at.first <= hit.at.last && hit.at.first <= it.at.last }
+        if (!overlaps) kept += hit
+    }
+    return kept.distinctBy { trackKey(it.value) }
+}
+
+/**
+ * Номера отправлений в [text], дословно и в порядке появления. Пусто — обычный случай, и в нём
+ * же вся дешевизна правила.
+ *
+ * Значение не переписывается: правило складывает только двойные пробелы, но не меняет регистр и
+ * не выбрасывает разделитель. `src = ocr` значит «прочитано дословно», и оно обязано быть правдой;
+ * регистр и пробелы всё равно складывает [normConsensus], поэтому спора с моделью не возникнет.
+ */
+fun waybillNumbers(text: String): List<String> = trackHits(text).map { it.value }
 
 /** `internal`: разметка улик ([ruleEvidence]) судит ту же форму окнами по атомам — счётчик
  *  цифр обязан быть общим, иначе два «похоже на трек» разъедутся при первой правке. */
 internal const val WAYBILL_DIGITS = 14
+
+/** Столько цифр у Укрпошты — и ровно столько же у штрихкода EAN-13, поэтому одной формы мало. */
+internal const val SHORT_TRACK_DIGITS = 13
+
+/** Пробег цифр с разрядными пробелами — кандидат, которому [trackHits] ещё будет искать допуск.
+ *  Окно взято с запасом на пробелы, а сколько цифр законно, решает не регекс, а счётчик выше —
+ *  граница живёт в одном месте (тот же приём, что у [meterDigitsFit]). Границы числа держат
+ *  `(?<!\d)`/`(?!\d)`: «рахунок 202045149154939512» не обрезается до трека. */
+private val DIGIT_RUN = Regex("""(?<!\d)\d[\d ]{11,20}\d(?!\d)""")
+
+/**
+ * Две группы цифр через косую — форма бумажной накладной (`5900162/7808586`).
+ *
+ * Разделитель ровно один и ровно такой: **дефис взят не был** сознательно — «1000000-2500000» в
+ * прайсе имеет ту же форму, а цена ошибки тут не «лишний факт», а ложное «Отследить отправление»
+ * на чужом документе. Появится живой кадр с дефисом — появится и строка (тот же порядок, что у
+ * единиц учёта в [meterReadings]).
+ *
+ * Разделитель по краям запрещён, поэтому цепочка «1234/5678/9012» на пары не разбирается вовсе,
+ * а дата `01/08/2026` не проходит и по длине групп. Запрет считает **и пробел у косой** (ревью
+ * #262): сама форма пробел вокруг разделителя допускает, поэтому без этого «1234567 / 8901234 /
+ * 5678901» отдавало бы первую пару как трек — ровно то, от чего защищает запрет.
+ */
+private val SPLIT_SHAPED = Regex("""(?<![\d/])(?<!/ )(\d{4,10}) ?/ ?(\d{4,10})(?![\d/])(?! ?/)""")
+
+/** S10 в потоке текста: две буквы, девять цифр, две буквы — пробелы между блоками формат, а не
+ *  суть (так же считает [s10CheckDigitValid]). Границы держат буквы и цифры по краям, чтобы
+ *  форма не выкусывалась из середины слова. */
+private val S10_IN_TEXT = Regex("""(?<![\p{L}\d])[A-Za-z]{2} ?\d{9} ?[A-Za-z]{2}(?![\p{L}\d])""")
+
 private val MULTI_SPACE = Regex(""" {2,}""")
+
+/** Ключ тождества номера: буквы и цифры, регистр не в счёт. «20 4514 9154 9395» и те же цифры
+ *  слитно — один номер, а `RA123456785UA` и `CP123456785UA` — разные (цифры у них одни). */
+private fun trackKey(value: String): String = value.filter(Char::isLetterOrDigit).uppercase()
+
+/**
+ * Стоит ли рядом слово, которым накладную зовут на бумаге.
+ *
+ * «Рядом» — это **соседние токены той же строки**, а не «где-то в тексте»: в строке «Ваша
+ * накладна відправлена, а рахунок 1234567890123 сплачено» маркер есть, а номер — счёта.
+ * Окно смещено назад ([MARKER_TOKENS_BEFORE] против [MARKER_TOKENS_AFTER]), потому что подпись
+ * в документе стоит перед значением: «Експрес-накладна № 0501234567890».
+ *
+ * Класса улик маркер здесь **не даёт**, только допуск. У плоского текста нет геометрии, которой
+ * слой атомов отличает подпись в той же ячейке от слова в дальней колонке ([fieldEvidence],
+ * ревью #261), и раздавать по этому же слову второй класс значило бы объявлять «подтверждено»
+ * там, где страница судима строже.
+ */
+private fun markerNear(text: String, at: IntRange): Boolean {
+    val lineStart = text.lastIndexOf('\n', at.first).let { if (it < 0) 0 else it + 1 }
+    val lineEnd = text.indexOf('\n', at.last).let { if (it < 0) text.length else it }
+    val before = text.substring(lineStart, at.first).tokens().takeLast(MARKER_TOKENS_BEFORE)
+    val after = text.substring(minOf(at.last + 1, lineEnd), lineEnd).tokens().take(MARKER_TOKENS_AFTER)
+    return (before + after).any(::looksLikeTrackMarker)
+}
+
+/** Пунктуация окна не занимает: «0501234567890, ТТН» — тот же сосед, что и без запятой. */
+private fun String.tokens(): List<String> = split(WHITESPACE).filter { it.any(Char::isLetterOrDigit) }
+
+private val WHITESPACE = Regex("""\s+""")
+
+/** Подпись стоит перед значением — назад окно шире. */
+private const val MARKER_TOKENS_BEFORE = 2
+
+/** Вперёд — только вплотную: «0501234567890 ТТН» бывает, «…, а по накладній» уже нет. */
+private const val MARKER_TOKENS_AFTER = 1
+
+/**
+ * Слово ли это, которым зовут накладную. Сравнение **стемами и через [foldOcr]**: форм у слова
+ * много («накладна», «накладної», «експрес-накладна»), а OCR к тому же ест буквы — тот же урок,
+ * что у словаря типа документа, где написанные по правилам слова не совпали ни разу.
+ */
+internal fun looksLikeTrackMarker(word: String): Boolean {
+    val folded = foldOcr(word).trim { !it.isLetterOrDigit() }
+    return folded.isNotEmpty() && FOLDED_TRACK_MARKERS.any { it in folded }
+}
+
+/**
+ * Слова-маркеры трека для плоского текста. Список короткий сознательно: каждая новая строка —
+ * новый способ ошибиться. Инвариант держит тест — всё, чем маркирован трек на слое атомов
+ * ([FIELD_MARKERS]), обязано узнаваться и здесь, иначе два судьи одного маркера разъедутся.
+ */
+private val TRACK_MARKER_STEMS = listOf(
+    "ттн", "накладн", "відправлен", "отправлен", "трек", "waybill", "tracking",
+)
+
+private val FOLDED_TRACK_MARKERS = TRACK_MARKER_STEMS.map(::foldOcr)
+
+/**
+ * Целый токен, который сам по себе трек: напечатанный через косую номер накладной либо S10 с
+ * сошедшейся контрольной цифрой. Нужен разметке улик на слое ([ruleEvidence]): там нет ни строки,
+ * ни соседей — есть атом, и пробеговое правило «сумма цифр ровно 14» такой токен не видит вовсе
+ * (`5900162/7808586` — не цифровой пробег).
+ *
+ * 13 цифр подряд сюда не входят сознательно: их допускает контекст, которого у одинокого атома нет.
+ */
+internal fun looksLikeTrackToken(text: String): Boolean {
+    val token = text.trim()
+    return (SPLIT_SHAPED.matches(token) && token.count(Char::isDigit) in SHORT_TRACK_DIGITS..WAYBILL_DIGITS) ||
+        s10CheckDigitValid(token) == true
+}
 
 /**
  * Трек-номер как факт объекта: тот же ключ читают схемы действий (#260 — «Отследить
@@ -63,24 +220,61 @@ const val META_ENTITY_TRACK = META_ENTITY_PREFIX + "track"
  * второй настоящий номер на странице — и подтверждение первого моделью его не стирает
  * ([mergeFacts] снимает только `.alt`). Пусто — пустая карта, а не ключ с пустым значением.
  *
- * **Сознательная смена поведения (#264).** Правило пишет и улику: `entity.track.ev = "semantic"` —
- * одна и ровно одна. Раньше то же самое говорило число `WAYBILL_CONFIDENCE = 0.8f`, которое видел
- * только граф; теперь это видит карточка готовности, и она честно скажет «Отследить отправление
- * ✓ 20 4514 9154 9395 · возможно» **ещё до** «Понять». Так и должно быть: офлайновое правило
- * совпало формой и ничем больше — контрольной цифры у 14-значного номера нет, страницу никто не
- * судил. Второй класс улик приносит только тот, кто смотрел на слой ([fieldEvidence]).
+ * **Улики считает [formEvidence] — та же функция, что судит чтение модели** (#262). Форма даёт
+ * ровно один класс, и карточка готовности честно говорит «Отследить отправление ✓ 20 4514 9154
+ * 9395 · возможно» ещё до «Понять»: офлайновое правило совпало формой и ничем больше. У S10
+ * классов два — форма и сошедшаяся контрольная цифра, — и «возможно» справедливо исчезает: это
+ * не смягчение порога, а доказательство, которого у 14-значного номера не существует. Два
+ * счётчика улик (свой у правила, свой у модели) разъехались бы на первой же правке.
+ *
+ * **Отклонённое контрольной цифрой не исчезает молча** (`.blocked`, ревью #261): «прочиталось
+ * `RA123456789UA`, но контрольная цифра не сошлась» — это чтение, а не пустота, и карточка
+ * готовности показывает его вместо ложного «не нашлось». Чтением его делает слово рядом, а не
+ * форма ([blockedTracks]) — иначе канал говорил бы «прочиталось» про то, что треком никто не звал.
  */
 fun trackFacts(text: String): Map<String, String> {
-    val tracks = waybillNumbers(text)
-    if (tracks.isEmpty()) return emptyMap()
+    val hits = trackHits(text)
+    val blocked = blockedTracks(text)
+    if (hits.isEmpty() && blocked.isEmpty()) return emptyMap()
     return buildMap {
-        put(META_ENTITY_TRACK, tracks.first())
-        // Происхождение (#261, v3 §8): найдено правилом дословно в распознанном тексте —
-        // ПРОЧИТАНО со страницы, не выведено и не продиктовано.
-        put(META_ENTITY_TRACK + META_SOURCE_SUFFIX, Provenance.OCR.wire)
-        // Улика ровно одна: форма. Правило судило и говорит, чем именно, — «не судили» и
-        // «улик мало» обязаны выглядеть по-разному (#264).
-        put(META_ENTITY_TRACK + META_EVIDENCE_SUFFIX, EvidenceClass.SEMANTIC.name.lowercase())
-        if (tracks.size > 1) put(META_ENTITY_TRACK + META_MORE_SUFFIX, altValue(tracks))
+        hits.firstOrNull()?.let { first ->
+            put(META_ENTITY_TRACK, first.value)
+            // Происхождение (#261, v3 §8): найдено правилом дословно в распознанном тексте —
+            // ПРОЧИТАНО со страницы, не выведено и не продиктовано.
+            put(META_ENTITY_TRACK + META_SOURCE_SUFFIX, Provenance.OCR.wire)
+            put(
+                META_ENTITY_TRACK + META_EVIDENCE_SUFFIX,
+                formEvidence(META_ENTITY_TRACK, first.value)
+                    .joinToString(",") { it.name.lowercase() },
+            )
+            if (hits.size > 1) {
+                put(META_ENTITY_TRACK + META_MORE_SUFFIX, altValue(hits.map { it.value }))
+            }
+        }
+        if (blocked.isNotEmpty()) put(META_ENTITY_TRACK + META_BLOCKED_SUFFIX, altValue(blocked))
     }
 }
+
+/**
+ * S10-чтения, у которых контрольная цифра не сошлась, — единственное, что правило имеет право
+ * отклонить как математически невозможное (design v3 §4). Это тот же hard-block, которым судят
+ * чтения модели ([s10CheckDigitValid] `== false`), и след он оставляет в том же `.blocked`.
+ *
+ * **Но след требует чтения, а не формы** (ревью #262). У модели `.blocked` честен по построению —
+ * она НАЗВАЛА это значение треком, и «прочиталось, но цифра не сошлась» пересказывает её заявление.
+ * У правила заявления нет: без маркера строка «Артикул QQ111111111ZZ» уходила в тот же канал, и
+ * карточка готовности говорила «прочиталось «QQ111111111ZZ», но контрольная цифра не сошлась» —
+ * про артикул, который треком никто не звал. Это ровно та подмена статуса красивой видимостью,
+ * против которой канал и заведён, поэтому заявление приносит [markerNear] — тот же сосед, что
+ * допускает 13-значную форму.
+ *
+ * Асимметрия с допуском намеренна — **сошедшаяся** цифра сама себе заявление и соседа не просит,
+ * **несошедшаяся** доказывает только то, что перед нами не номер, и одна назвать отправление
+ * не может.
+ */
+private fun blockedTracks(text: String): List<String> =
+    S10_IN_TEXT.findAll(text)
+        .filter { s10CheckDigitValid(it.value) == false && markerNear(text, it.range) }
+        .map { it.value.trim() }
+        .distinct()
+        .toList()

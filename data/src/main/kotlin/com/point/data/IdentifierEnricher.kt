@@ -127,6 +127,12 @@ internal fun identifierObjects(
 
 internal const val IDENTIFIER_CREATOR = "identifier-enricher"
 
-/** Deterministic: re-running enrichment on the same object must not double the graph. */
+/**
+ * Deterministic: re-running enrichment on the same object must not double the graph.
+ *
+ * Тождество — по буквам И цифрам (#262): формы трека теперь не только цифровые, и у `RA123456785UA`
+ * с `CP123456785UA` цифры одни и те же — по одним цифрам два разных отправления слиплись бы в один
+ * узел. Для 14-значного номера ключ прежний посимвольно, поэтому старые узлы не переезжают.
+ */
 private fun identifierId(sourceId: String, value: String) =
-    "$sourceId:identifier:${value.filter(Char::isDigit)}"
+    "$sourceId:identifier:${value.filter(Char::isLetterOrDigit).uppercase()}"
