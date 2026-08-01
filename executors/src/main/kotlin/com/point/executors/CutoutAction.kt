@@ -4,6 +4,7 @@ import com.point.core.flow.BackgroundRemover
 import com.point.core.flow.Capability
 import com.point.core.flow.CapabilityMeta
 import com.point.core.flow.Realizer
+import com.point.core.flow.reportStage
 import com.point.core.model.ActionResult
 import com.point.core.model.CapabilityId
 import com.point.core.model.Intent
@@ -37,9 +38,15 @@ class CutoutRealizer @Inject constructor(
 ) : Realizer {
     override val capabilityId = CutoutCapability.ID
 
+    /**
+     * Стадия одна, но она нужна (#288): сегментация — не мгновенная арифметика, а модель ML Kit,
+     * которая на ПЕРВОМ применении ещё и докачивается. Именно первый раз человек и видел голый
+     * счётчик дольше всего, ничего не понимая про происходящее.
+     */
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
             runCatching {
+                reportStage("Отделяю объект от фона")
                 val ref = remover.cutout(input.uri.value)
                 ActionResult.Success(ResultObject(ObjectKind.IMAGE, "image/png", ref, mapOf("op" to "cutout")))
             }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось убрать фон", recoverable = true) }

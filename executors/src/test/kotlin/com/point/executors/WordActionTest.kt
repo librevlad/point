@@ -78,6 +78,46 @@ class WordActionTest {
         assertTrue((result as ActionResult.Failure).reason.contains("распознайте"))
     }
 
+    // --- #288: «В Word» рассказывает о себе теми же словами, что «В Word+» ---
+
+    private fun docxTo(path: String) = object : DocxWriter {
+        override suspend fun write(paragraphs: List<String>) = ScratchRef(path)
+    }
+
+    @Test
+    fun `на PDF слышно чтение текста и сборку документа`() = runTest {
+        val pdf = object : PdfTextExtractor {
+            override suspend fun extractText(obj: PointObject) = "Строка 1"
+        }
+
+        val heard = stagesHeard { WordRealizer(pdf, docxTo("/tmp/out.docx"), noOcr).perform(pdfObj(), null) }
+
+        assertEquals(listOf("Читаю текст PDF", "Собираю документ"), heard)
+    }
+
+    /** Фото распознаёт тот же Tesseract, что и «Распознать», — десятки секунд на кадр. Молчащий
+     *  соседний пузырёк над тем же объектом читается как «завис». */
+    @Test
+    fun `фото сперва распознаётся — и это сказано`() = runTest {
+        val pdf = object : PdfTextExtractor { override suspend fun extractText(obj: PointObject) = "" }
+        val ocr = object : TextRecognizer {
+            override suspend fun recognize(obj: PointObject) = "Чек"
+        }
+
+        val heard = stagesHeard { WordRealizer(pdf, docxTo("/tmp/out.docx"), ocr).perform(imageObj(), null) }
+
+        assertEquals(listOf("Распознаю текст на фото", "Собираю документ"), heard)
+    }
+
+    @Test
+    fun `у скана без текста сборки не было — и слова о ней нет`() = runTest {
+        val pdf = object : PdfTextExtractor { override suspend fun extractText(obj: PointObject) = "" }
+
+        val heard = stagesHeard { WordRealizer(pdf, docxTo("/x"), noOcr).perform(pdfObj(), null) }
+
+        assertEquals(listOf("Читаю текст PDF"), heard)
+    }
+
     @Test
     fun `toParagraphs splits on lines and normalises CRLF`() {
         assertEquals(listOf("a", "b", "", "c"), toParagraphs("a\r\nb\n\nc"))

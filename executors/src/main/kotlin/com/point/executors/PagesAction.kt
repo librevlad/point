@@ -3,6 +3,7 @@ package com.point.executors
 import com.point.core.flow.Capability
 import com.point.core.flow.PdfRasterizer
 import com.point.core.flow.Realizer
+import com.point.core.flow.reportStage
 import com.point.core.model.ActionResult
 import com.point.core.model.CapabilityId
 import com.point.core.model.ObjectKind
@@ -31,9 +32,16 @@ class PagesRealizer @Inject constructor(
 ) : Realizer {
     override val capabilityId = PagesCapability.ID
 
+    /**
+     * Один в один случай «Распаковать» (#288): книга рисуется постранично в картинки — десятки
+     * секунд, — а разбить ожидание честно нельзя, контракт [PdfRasterizer] отдаёт готовый каталог
+     * одним вызовом и о своём ходе молчит. Назвать работу, которая правда идёт, — уже правда;
+     * «Страница N из M» здесь пришлось бы выдумать, потому что счёт ведёт чужой код.
+     */
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
             runCatching {
+                reportStage("Разбираю PDF на страницы")
                 val dir = rasterizer.rasterize(input)
                 val count = File(dir.value).walkTopDown().count { it.isFile }
                 if (count == 0) {

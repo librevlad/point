@@ -6,6 +6,7 @@ import com.point.core.flow.CapabilityMeta
 import com.point.core.flow.ImageCompositor
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.Realizer
+import com.point.core.flow.reportStage
 import com.point.core.model.ActionResult
 import com.point.core.model.CapabilityId
 import com.point.core.model.Intent
@@ -43,11 +44,14 @@ class ReplaceBgRealizer @Inject constructor(
     override val capabilityId = ReplaceBgCapability.ID
 
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult {
+        // Первый тап ждёт человека у выбора фона, а не работу — стадии там быть не должно (#288).
         if (amendment == null) return ActionResult.NeedsImage("Выберите фон")
         return withContext(Dispatchers.IO) {
             runCatching {
                 val background = store.ingest(amendment, "image/jpeg") // the picked photo → scratch copy
+                reportStage("Отделяю объект от фона")
                 val subject = remover.cutout(input.uri.value) // subject, transparent elsewhere
+                reportStage("Ставлю новый фон")
                 val result = compositor.composite(subject.value, background.uri.value)
                 ActionResult.Success(ResultObject(ObjectKind.IMAGE, "image/png", result, mapOf("op" to "replace-bg")))
             }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось заменить фон", recoverable = true) }

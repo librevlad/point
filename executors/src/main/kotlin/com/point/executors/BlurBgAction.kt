@@ -5,6 +5,7 @@ import com.point.core.flow.Capability
 import com.point.core.flow.CapabilityMeta
 import com.point.core.flow.ImageCompositor
 import com.point.core.flow.Realizer
+import com.point.core.flow.reportStage
 import com.point.core.model.ActionResult
 import com.point.core.model.CapabilityId
 import com.point.core.model.Intent
@@ -39,11 +40,20 @@ class BlurBgRealizer @Inject constructor(
 ) : Realizer {
     override val capabilityId = BlurBgCapability.ID
 
+    /**
+     * Три стадии, потому что шага правда три (#288), и каждый — своя тяжёлая работа над целым
+     * кадром: модель ML Kit (на первом применении ещё и качается), размытие всей фотографии,
+     * сведение. Слово говорится ровно перед тем вызовом, который оно называет, — не «примерно
+     * посередине»: иначе это опять отсчёт по часам, а не рассказ о происходящем.
+     */
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
             runCatching {
+                reportStage("Отделяю объект от фона")
                 val subject = remover.cutout(input.uri.value) // sharp subject, transparent elsewhere
+                reportStage("Размываю фон")
                 val blurred = compositor.blur(input.uri.value) // blurred copy of the whole photo
+                reportStage("Собираю снимок")
                 val result = compositor.composite(subject.value, blurred.value)
                 ActionResult.Success(ResultObject(ObjectKind.IMAGE, "image/png", result, mapOf("op" to "blur-bg")))
             }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось размыть фон", recoverable = true) }

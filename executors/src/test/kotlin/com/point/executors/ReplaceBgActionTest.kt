@@ -65,4 +65,22 @@ class ReplaceBgActionTest {
         assertEquals("/tmp/subject.png", compositor.subject) // subject on top
         assertEquals("/tmp/bg.jpg", compositor.bg) // picked background behind
     }
+
+    // --- #288: стадия там, где работа, и молчание там, где ждут человека ---
+
+    @Test
+    fun `подстановка фона рассказывает про оба шага`() = runTest {
+        val heard = stagesHeard {
+            ReplaceBgRealizer(FakeStore(), remover, FakeCompositor()).perform(imageObj(), "content://pick/42")
+        }
+
+        assertEquals(listOf("Отделяю объект от фона", "Ставлю новый фон"), heard)
+    }
+
+    @Test
+    fun `первый тап ждёт человека у выбора фона — стадии нет`() = runTest {
+        val heard = stagesHeard { ReplaceBgRealizer(FakeStore(), remover, FakeCompositor()).perform(imageObj(), null) }
+
+        assertTrue(heard.isEmpty())
+    }
 }
