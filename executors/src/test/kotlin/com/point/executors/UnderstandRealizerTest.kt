@@ -57,15 +57,19 @@ class UnderstandRealizerTest {
 
     private fun realizer(vararg answers: String) = UnderstandRealizer(llm(*answers))
 
-    /** Посылочный экран со слоем слов: подпись «ТТН» рядом с треком тремя атомами. */
+    /** Посылочный экран со слоем слов: подпись «ТТН» рядом с треком тремя атомами; строкой
+     *  ниже — «Відправник 1ваненко ван» (живой OCR-огрех владельца, #297). */
     private fun imageWithLayer(): PointObject {
-        val pageText = "ТТН 20 4514 9154 9395"
+        val pageText = "ТТН 20 4514 9154 9395\nВідправник 1ваненко ван"
         val layer = com.point.core.flow.AtomLayer(
             listOf(
                 com.point.core.flow.Atom("m1", "ТТН", com.point.core.flow.Box(10f, 100f, 60f, 120f)),
                 com.point.core.flow.Atom("w1", "20", com.point.core.flow.Box(200f, 100f, 230f, 120f)),
                 com.point.core.flow.Atom("w2", "4514 9154", com.point.core.flow.Box(235f, 100f, 330f, 120f)),
                 com.point.core.flow.Atom("w3", "9395", com.point.core.flow.Box(335f, 100f, 380f, 120f)),
+                com.point.core.flow.Atom("m2", "Відправник", com.point.core.flow.Box(10f, 200f, 150f, 220f)),
+                com.point.core.flow.Atom("w6", "1ваненко", com.point.core.flow.Box(200f, 200f, 300f, 220f)),
+                com.point.core.flow.Atom("w7", "ван", com.point.core.flow.Box(305f, 200f, 350f, 220f)),
             ),
         )
         val dump = File.createTempFile("point-atoms", ".tsv").apply {
@@ -258,6 +262,62 @@ class UnderstandRealizerTest {
         val blocked = meta["entity.track" + com.point.core.flow.META_BLOCKED_SUFFIX]!!.split("\n")
         assertTrue(blocked.contains("RA123456789UA"))
         assertTrue("чтение повторного вызова тоже не тонет", blocked.contains("RA123456780UA"))
+    }
+
+    // -- #297: роли метками атомов — подпись вне указания, конфузаблы чинят имя --
+
+    /** Дословный случай владельца («имена кривые»): OCR прочёл «1ваненко ван», модель указала
+     *  метками на слова имени (подпись «Відправник» — вне указания) и починила буквы-жертвы. */
+    @Test
+    fun `роль метками атомов — имя без подписи, конфузаблы починены`() = runTest {
+        val result = realizer("sender=Іваненко Іван [w6 w7]").perform(imageWithLayer()) as ActionResult.Success
+
+        assertEquals("Іваненко Іван", result.result.metadata["graph.role.sender"])
+    }
+
+    /** Дым #297: без явной просьбы модель цитирует индекс дословно, и огрех OCR доезжает
+     *  до экрана. Промпт ролей обязан просить писать имя правильно. */
+    @Test
+    fun `промпт ролей просит исправлять искажения распознавания в имени`() = runTest {
+        realizer("sender=Іваненко Іван [w6 w7]").perform(imageWithLayer())
+
+        assertTrue(lastPrompt!!.contains("исправляя явные искажения распознавания"))
+        assertTrue(lastPrompt!!.contains("метки слов имени"))
+    }
+
+    /** Дым #297: модель включила метку подписи в указание, и значением стало «Вйдправник
+     *  1ваненко ван». Подпись отрезает код — послушание модели механизмом не является. */
+    @Test
+    fun `метка подписи в указании отрезается кодом`() = runTest {
+        val result = realizer("sender=Іваненко Іван [m2 w6 w7]")
+            .perform(imageWithLayer()) as ActionResult.Success
+
+        assertEquals("Іваненко Іван", result.result.metadata["graph.role.sender"])
+    }
+
+    @Test
+    fun `указание из одной подписи не отрезается в пустоту`() = runTest {
+        val result = realizer("sender=Відправник [m2]").perform(imageWithLayer()) as ActionResult.Success
+
+        assertEquals("Відправник", result.result.metadata["graph.role.sender"])
+    }
+
+    @Test
+    fun `роль с галлюцинированными метками не пишется и не тратится`() = runTest {
+        val result = realizer("sender=Хтось [z9]\nsender=Іваненко Іван [w6 w7]")
+            .perform(imageWithLayer()) as ActionResult.Success
+
+        assertEquals("Іваненко Іван", result.result.metadata["graph.role.sender"])
+    }
+
+    @Test
+    fun `переписанное целиком имя — страница побеждает, спор виден`() = runTest {
+        val result = realizer("sender=Зовсім Інша Людина [w6 w7]")
+            .perform(imageWithLayer()) as ActionResult.Success
+
+        val meta = result.result.metadata
+        assertEquals("1ваненко ван", meta["graph.role.sender"])
+        assertTrue(alternativesOf(meta, "graph.role.sender").contains("Зовсім Інша Людина"))
     }
 
     @Test

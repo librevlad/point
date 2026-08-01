@@ -33,6 +33,7 @@ import com.point.core.flow.alternativesOf
 import com.point.core.flow.bareIndexId
 import com.point.core.flow.fieldEvidence
 import com.point.core.flow.isRepairOf
+import com.point.core.flow.isRoleLabel
 import com.point.core.flow.layoutOf
 import com.point.core.flow.mergeFacts
 import com.point.core.flow.normConsensus
@@ -136,12 +137,27 @@ internal fun understandPrompt(
             "кулинарным рецептом — TYPE=RECIPE, вакансией — TYPE=JOB; в остальных случаях строку " +
             "TYPE не пиши. Добавь строку SUMMARY=<суть текста в 3-6 словах>.\n\n",
     )
-    append("2) Определи, какой элемент играет каждую из ролей:\n")
+    append("2) Определи, кто играет каждую из ролей:\n")
     roles.forEach { append("- ").append(it.key).append(" — ").append(it.question).append('\n') }
-    append(
-        "Отвечай строками вида роль=идентификатор. Идентификатор — РОВНО один из " +
-            "перечисленных выше, а не текст элемента. Роль, которой в документе нет, пропусти.\n\n",
-    )
+    if (index != null) {
+        append(
+            "Отвечай строками вида роль=имя [метки слов имени]. Метки — из списка слов страницы; " +
+                "слово-подпись (например «Відправник:», «Отримувач») в метки НЕ включай — " +
+                "только слова самого имени. " +
+                // Без этой просьбы модель цитирует индекс дословно и огрех OCR доезжает до
+                // экрана: «1ваненко ван» вместо «Іваненко Іван» (дым #297). Ремонт судится
+                // кодом (isRepairOf с конфузаблами) — далёкая «правка» станет спором.
+                "Само имя пиши ПРАВИЛЬНО, исправляя явные искажения распознавания " +
+                "(цифра вместо похожей буквы, потерянная буква): в списке слов может стоять " +
+                "«1ваненко ван», а имя — «Іваненко Іван». Не выдумывай другое имя. " +
+                "Роль, которой в документе нет, пропусти.\n\n",
+        )
+    } else {
+        append(
+            "Отвечай строками вида роль=идентификатор. Идентификатор — РОВНО один из " +
+                "перечисленных выше, а не текст элемента. Роль, которой в документе нет, пропусти.\n\n",
+        )
+    }
     append("Без пояснений. Если не нашлось вообще ничего — ответь ровно NONE.\n")
 }
 
@@ -253,10 +269,10 @@ class UnderstandRealizer @Inject constructor(
                 val blocked = (judged.blocked.keys + retried?.blocked?.keys.orEmpty()).associateWith { key ->
                     (judged.blocked[key].orEmpty() + retried?.blocked?.get(key).orEmpty()).distinct()
                 }
-                // Роль — собственным текстом элемента, не формулировкой модели; выдуманный
-                // идентификатор отброшен парсером и не тратит свою роль (#222, шаг 6).
-                val roles = parseClassification(answer, elements)
-                    .associate { META_GRAPH_ROLE_PREFIX + it.role.key to it.element.text }
+                // Роль — текстом страницы, не формулировкой модели: с живым слоем модель
+                // указывает метками на слова ИМЕНИ (подпись — вне указания, #297), без слоя —
+                // прежний контракт идентификаторов элементов (#222, шаг 6).
+                val (roles, roleDisputes) = roleReadings(answer, elements, layer)
                 if (fields.isEmpty() && parsed.single.isEmpty() && roles.isEmpty()) {
                     ActionResult.Failure("Ничего нового не найдено", recoverable = true)
                 } else {
@@ -264,11 +280,19 @@ class UnderstandRealizer @Inject constructor(
                     // виден в .alt, платная догадка не выигрывает тем, что пришла второй.
                     val values = fields.mapValues { it.value.text } + parsed.single + roles
                     val merged = mergeFacts(input.metadata, values)
+                    // Спор модели со страницей об имени роли — тем же каналом .alt, и только
+                    // когда голосование оставило наше чтение.
+                    val roleAlts = roleDisputes
+                        .filterKeys { key -> normConsensus(merged[key].orEmpty()) == normConsensus(roles[key].orEmpty()) }
+                        .map { (key, readings) ->
+                            key + META_ALT_SUFFIX to altValue((listOfNotNull(merged[key]) + readings).distinct())
+                        }
                     ActionResult.Success(
                         ResultObject(
                             input.state.kind, input.mime, input.uri,
                             metadata = merged +
                                 annotations(merged, fields, judgedByLayer = layer != null, blocked = blocked) +
+                                roleAlts +
                                 ("op" to "understand"),
                         ),
                     )
@@ -342,6 +366,64 @@ class UnderstandRealizer @Inject constructor(
                 "кандидатов каждое, с метками слов. Если настоящего значения нет — не пиши строку.\n"
         }
     }
+}
+
+/**
+ * Чтения ролей (#297): с живым слоем модель отвечает `роль=имя [метки слов имени]` — значение
+ * собирается из указанных атомов, и подпись («Відправник») остаётся за пределами указания.
+ * Чтение модели судится готовыми правилами: совпало — текст страницы; починило буквы-жертвы
+ * OCR ([isRepairOf] с конфузаблами — «1ваненко ван» → «Іваненко Іван») — чтение модели;
+ * переписало целиком — страница побеждает, спор виден (второй элемент пары).
+ *
+ * Галлюцинированные метки роль **не тратят** (как у классификатора #222): следующая валидная
+ * строка той же роли выигрывает. Модель, ответившая по-старому идентификатором элемента, не
+ * ломает путь — Pn-фолбэк добирает роли, не указанные метками. Без слоя — прежний контракт.
+ */
+internal fun roleReadings(
+    answer: String,
+    elements: List<LayoutElement>,
+    layer: AtomLayer?,
+): Pair<Map<String, String>, Map<String, List<String>>> {
+    val fromElements = parseClassification(answer, elements)
+        .associate { META_GRAPH_ROLE_PREFIX + it.role.key to it.element.text }
+    if (layer == null) return fromElements to emptyMap()
+
+    val byKey = CLASSIFIER_ROLES.associateBy { it.key }
+    val values = LinkedHashMap<String, String>()
+    val disputes = LinkedHashMap<String, List<String>>()
+    answer.lineSequence().forEach { raw ->
+        val line = raw.trim()
+        val eq = line.indexOf('=')
+        if (eq <= 0) return@forEach
+        val role = byKey[line.substring(0, eq).trim().lowercase()] ?: return@forEach
+        val metaKey = META_GRAPH_ROLE_PREFIX + role.key
+        if (metaKey in values) return@forEach
+        val candidate = splitCandidate(line.substring(eq + 1).trim()) ?: return@forEach
+        if (candidate.ids.isEmpty()) return@forEach
+        // Подпись отрезает КОД, а не послушание модели (#297): на живом прогоне модель
+        // включила метку «Вйдправник» в указание, и значением стало «Вйдправник 1ваненко ван».
+        // Если подписью оказались все метки — не отрезаем: пустое указание хуже лишнего слова.
+        val idsByAtom = layer.atoms.associateBy { it.id }
+        val pointed = candidate.ids.map(::bareIndexId)
+        val withoutLabel = pointed.filterNot { id ->
+            idsByAtom[id]?.text?.let { role.isRoleLabel(it) } == true
+        }
+        val resolved = layer.resolve(AtomAddress.ByIds(withoutLabel.ifEmpty { pointed }))
+        if (resolved.atoms.isEmpty()) return@forEach
+        val page = resolved.text
+        val model = candidate.text
+        values[metaKey] = when {
+            normConsensus(model) == normConsensus(page) -> page
+            isRepairOf(page, model) -> model
+            else -> {
+                disputes[metaKey] = listOf(page, model)
+                page
+            }
+        }
+    }
+    // Роли, не указанные метками, добирает старый контракт — ответ по-старому не теряется.
+    fromElements.forEach { (key, text) -> values.putIfAbsent(key, text) }
+    return values to disputes
 }
 
 /** Победивший кандидат поля после суда: текст, улики, происхождение и все выжившие чтения. */

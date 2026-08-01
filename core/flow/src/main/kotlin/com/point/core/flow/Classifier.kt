@@ -27,7 +27,43 @@ data class ClassifierRole(
     val relation: RelationType,
     /** How the role is put to the model, in the user's language. */
     val question: String,
+    /** Обычно человек (#297): отправитель/получатель посылки — люди, если значение не несёт
+     *  юридической формы. Решает код по значению ([kindFor]), не модель. */
+    val usuallyPerson: Boolean = false,
+    /**
+     * Слова-подписи этой роли на странице («Відправник», «Отримувач»).
+     *
+     * Нужны не для поиска значения — роль по-прежнему называет модель, — а чтобы **код**
+     * отрезал подпись из её указания ([isRoleLabel]). Просьба в промпте «подпись в метки не
+     * включай» не исполняется: на живом прогоне #297 модель включила метку «Вйдправник», и
+     * значением стало «Вйдправник 1ваненко ван». Послушание модели — не механизм.
+     */
+    val markers: Set<String> = emptySet(),
 )
+
+/** Слово-подпись роли (регистр и хвостовые двоеточия/точки — формат, не суть). */
+fun ClassifierRole.isRoleLabel(word: String): Boolean =
+    word.trim().trimEnd(':', '.', '—', '-').lowercase() in markers
+
+/**
+ * Вид узла для конкретного значения (#297): роль «отправитель» у «Іваненко Іван» — человек,
+ * у «ТОВ „Агротрейд“» — организация. Юридическая форма — структурный маркер значения, и решает
+ * код; перевозчик и выдавший документ — организации всегда.
+ */
+fun ClassifierRole.kindFor(value: String): ObjectKind =
+    if (usuallyPerson && value.split(WORD_SPLIT).none { it.trim('«', '»', '"', '\'', '(', ')').lowercase() in LEGAL_FORMS }) {
+        KIND_PERSON
+    } else {
+        kind
+    }
+
+/** Юридические формы, флипающие «обычно человека» в организацию. Маркер-свидетель значения. */
+private val LEGAL_FORMS = setOf(
+    "тов", "фоп", "пп", "ат", "пат", "прат", "кп", "ооо", "ип", "зао", "оао", "ано",
+    "llc", "ltd", "inc", "gmbh", "corp", "co",
+)
+
+private val WORD_SPLIT = Regex("""[\s.,]+""")
 
 /**
  * The roles worth asking about, and what each one means in the graph.
@@ -42,10 +78,24 @@ data class ClassifierRole(
  * осталось вторым, бесплатным источником того же факта.)
  */
 val CLASSIFIER_ROLES: List<ClassifierRole> = listOf(
-    ClassifierRole("sender", KIND_ORGANIZATION, RelationType.SENDER, "отправитель груза или письма"),
-    ClassifierRole("receiver", KIND_ORGANIZATION, RelationType.RECEIVER, "получатель груза или письма"),
-    ClassifierRole("carrier", KIND_ORGANIZATION, RelationType.CARRIER, "перевозчик"),
-    ClassifierRole("issuer", KIND_ORGANIZATION, RelationType.ISSUED_BY, "кто выдал документ"),
+    ClassifierRole(
+        "sender", KIND_ORGANIZATION, RelationType.SENDER, "отправитель груза или письма",
+        usuallyPerson = true,
+        markers = setOf("відправник", "вйдправник", "отправитель", "sender", "from", "від", "от"),
+    ),
+    ClassifierRole(
+        "receiver", KIND_ORGANIZATION, RelationType.RECEIVER, "получатель груза или письма",
+        usuallyPerson = true,
+        markers = setOf("отримувач", "одержувач", "получатель", "receiver", "recipient", "кому", "to"),
+    ),
+    ClassifierRole(
+        "carrier", KIND_ORGANIZATION, RelationType.CARRIER, "перевозчик",
+        markers = setOf("перевізник", "перевозчик", "carrier", "доставка"),
+    ),
+    ClassifierRole(
+        "issuer", KIND_ORGANIZATION, RelationType.ISSUED_BY, "кто выдал документ",
+        markers = setOf("видав", "видано", "выдал", "выдан", "issuer", "issued"),
+    ),
 )
 
 /**

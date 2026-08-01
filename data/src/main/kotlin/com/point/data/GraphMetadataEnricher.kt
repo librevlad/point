@@ -1,6 +1,8 @@
 package com.point.data
 
 import com.point.core.flow.CLASSIFIER_ROLES
+import com.point.core.flow.KIND_PERSON
+import com.point.core.flow.kindFor
 import com.point.core.flow.EXTRACTED_KINDS
 import com.point.core.flow.EnrichCost
 import com.point.core.flow.Enricher
@@ -32,7 +34,7 @@ class GraphMetadataEnricher @Inject constructor() : Enricher {
 
     override val meta = EnricherMeta(
         cost = EnrichCost.INSTANT,
-        mayYieldKinds = CLASSIFIER_ROLES.mapTo(mutableSetOf()) { it.kind },
+        mayYieldKinds = CLASSIFIER_ROLES.mapTo(mutableSetOf()) { it.kind } + KIND_PERSON,
     )
 
     override fun appliesTo(state: ObjectState) = true
@@ -43,16 +45,24 @@ class GraphMetadataEnricher @Inject constructor() : Enricher {
 
         val objects = LinkedHashMap<String, PointObject>()
         val relations = mutableListOf<Relation>()
-        CLASSIFIER_ROLES.forEach { role ->
-            val value = obj.metadata[META_GRAPH_ROLE_PREFIX + role.key]?.trim().orEmpty()
-            if (value.isEmpty()) return@forEach
-            val id = nodeId(obj.id, role.kind.name, value)
+        val claims = CLASSIFIER_ROLES.mapNotNull { role ->
+            obj.metadata[META_GRAPH_ROLE_PREFIX + role.key]?.trim()?.takeIf { it.isNotEmpty() }
+                ?.let { role to it }
+        }
+        // Вид унифицируется по значению (#297): «Нова Пошта» перевозчиком — организация, и тот
+        // же текст отправителем не становится вторым узлом-«человеком». Узел один — вид один.
+        val orgValues = claims
+            .filter { (role, value) -> role.kindFor(value) != KIND_PERSON }
+            .mapTo(mutableSetOf()) { normalized(it.second) }
+        claims.forEach { (role, value) ->
+            val kind = if (normalized(value) in orgValues) role.kind else role.kindFor(value)
+            val id = nodeId(obj.id, value)
             objects.getOrPut(id) {
                 PointObject(
                     id = id,
                     mime = "text/plain",
                     uri = ValueRef(value), // the value IS the content — no file behind it
-                    state = ObjectState(role.kind),
+                    state = ObjectState(kind),
                     // A model's reading, not a rule's: the graph carries that honestly.
                     confidence = CLASSIFIED_CONFIDENCE,
                     sourceObjects = listOf(obj.id),
@@ -73,8 +83,10 @@ class GraphMetadataEnricher @Inject constructor() : Enricher {
         const val CLASSIFIED_CONFIDENCE = 0.7f
 
         /** Deterministic and value-keyed: re-enrichment does not double the graph, and the
-         *  same organisation in two roles is one node. */
-        fun nodeId(sourceId: String, kind: String, value: String) =
-            "$sourceId:${kind.lowercase()}:${value.lowercase().replace(Regex("""\s+"""), " ").trim()}"
+         *  same party in two roles is one node — вид в id не входит (#297), иначе человек-и-
+         *  организация с одним именем раздваивались бы. */
+        fun nodeId(sourceId: String, value: String) = "$sourceId:party:${normalized(value)}"
+
+        fun normalized(value: String) = value.lowercase().replace(Regex("""\s+"""), " ").trim()
     }
 }

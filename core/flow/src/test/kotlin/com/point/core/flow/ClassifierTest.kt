@@ -135,4 +135,24 @@ class ClassifierTest {
     fun `role keys are unique`() {
         assertEquals(CLASSIFIER_ROLES.size, CLASSIFIER_ROLES.mapTo(mutableSetOf()) { it.key }.size)
     }
+
+    // --- Вид узла по значению (#297): человек или организация решает код ---
+
+    @Test
+    fun `отправитель без юрформы — человек, с юрформой — организация`() {
+        val sender = CLASSIFIER_ROLES.first { it.key == "sender" }
+
+        assertEquals(KIND_PERSON, sender.kindFor("Іваненко Іван"))
+        assertEquals(KIND_ORGANIZATION, sender.kindFor("ТОВ «Агротрейд»"))
+        assertEquals(KIND_ORGANIZATION, sender.kindFor("ФОП Петренко О.В."))
+    }
+
+    @Test
+    fun `перевозчик и выдавший документ — организации всегда`() {
+        val carrier = CLASSIFIER_ROLES.first { it.key == "carrier" }
+        val issuer = CLASSIFIER_ROLES.first { it.key == "issuer" }
+
+        assertEquals(KIND_ORGANIZATION, carrier.kindFor("Нова Пошта"))
+        assertEquals(KIND_ORGANIZATION, issuer.kindFor("Іваненко Іван"))
+    }
 }
