@@ -1,6 +1,11 @@
 package com.point.data
 
+import com.point.core.flow.DocBlock
+import com.point.core.flow.DocStyle
 import com.point.core.flow.DocxWriter
+import com.point.core.flow.EvidenceCropper
+import com.point.core.flow.EvidenceImage
+import com.point.core.flow.MAX_EVIDENCE_CROPS
 import com.point.core.flow.ObjectStore
 import com.point.core.model.ScratchRef
 import kotlinx.coroutines.Dispatchers
@@ -14,9 +19,14 @@ import javax.inject.Inject
  * Writes an editable `.docx` by hand — a ZIP of the three OOXML parts a wordprocessing document
  * needs, one `<w:p>` per paragraph. No Apache POI: mirrors [OoxmlSpreadsheetWriter]. Enough for
  * PDF/text → Word, where the value is an editable document, not fidelity.
+ *
+ * Улики (#267): к помеченному фрагменту сюда же кладётся кусок исходного кадра — части
+ * `word/media`, отношение в `word/_rels/document.xml.rels` и разметка `w:drawing`. Их нет —
+ * файл побайтово тот же, что и раньше.
  */
 class OoxmlDocxWriter @Inject constructor(
     private val store: ObjectStore,
+    private val cropper: EvidenceCropper,
 ) : DocxWriter {
 
     override suspend fun write(paragraphs: List<String>): ScratchRef = withContext(Dispatchers.IO) {
@@ -29,31 +39,66 @@ class OoxmlDocxWriter @Inject constructor(
         ref
     }
 
-    override suspend fun writeStyled(blocks: List<com.point.core.flow.DocBlock>): ScratchRef =
+    override suspend fun writeStyled(blocks: List<DocBlock>): ScratchRef =
         withContext(Dispatchers.IO) {
+            // Резать — до записи: разметка ссылается на отношение, которого без картинки нет,
+            // а неудавшийся кроп не должен оставлять в документе ссылку в никуда.
+            val crops = crops(blocks)
             val ref = store.newScratchFile("docx")
             ZipOutputStream(File(ref.value).outputStream().buffered()).use { zip ->
-                zip.put("[Content_Types].xml", CONTENT_TYPES)
+                zip.put("[Content_Types].xml", contentTypes(crops.values))
                 zip.put("_rels/.rels", ROOT_RELS)
-                zip.put("word/document.xml", styledDocument(blocks))
+                if (crops.isNotEmpty()) zip.put("word/_rels/document.xml.rels", documentRels(crops.values))
+                zip.put("word/document.xml", styledDocument(blocks, crops))
+                crops.values.forEach { zip.put("word/${it.part}", it.image.bytes) }
             }
             ref
         }
 
+    /**
+     * Улики по номерам блоков — те, что реально вырезались.
+     *
+     * Здесь же второй раз стоят оба правила отбора (#267). Политику держит ядро
+     * ([com.point.core.flow.withCropEvidence]), но цену за раздутый файл платит писатель, и он
+     * не обязан верить вызывающему: улика идёт только к помеченному фрагменту и только пока их
+     * меньше [MAX_EVIDENCE_CROPS].
+     */
+    private suspend fun crops(blocks: List<DocBlock>): Map<Int, Crop> =
+        blocks.withIndex()
+            .filter { (_, block) -> block.uncertain && block.evidence != null }
+            .take(MAX_EVIDENCE_CROPS)
+            .mapNotNull { (index, block) ->
+                val evidence = block.evidence ?: return@mapNotNull null
+                val image = cropper.crop(evidence) ?: return@mapNotNull null
+                if (image.widthPx <= 0 || image.heightPx <= 0) null else index to image
+            }
+            .mapIndexed { ordinal, (index, image) -> index to Crop(ordinal + 1, image) }
+            .toMap()
+
+    /** Одна улика в упаковке: свой номер, своя часть `word/media`, своё отношение. */
+    private class Crop(val id: Int, val image: EvidenceImage) {
+        val relId = "rId$id"
+        val part = "media/evidence-$id.${image.extension}"
+    }
+
     /** Hand-rolled run/paragraph properties (#128): enough real formatting for an
      *  editable structured document — no styles part needed. */
-    private fun styledDocument(blocks: List<com.point.core.flow.DocBlock>): String = buildString {
+    private fun styledDocument(blocks: List<DocBlock>, crops: Map<Int, Crop>): String = buildString {
         append("""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>""")
-        append("""<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>""")
-        (blocks.ifEmpty { listOf(com.point.core.flow.DocBlock("", com.point.core.flow.DocStyle.NORMAL)) }).forEach { block ->
+        append("""<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"""")
+        // Пространства имён картинки объявляются, только когда картинка есть: документ без улик
+        // обязан остаться прежним файлом.
+        if (crops.isNotEmpty()) append(DRAWING_NAMESPACES)
+        append("><w:body>")
+        (blocks.ifEmpty { listOf(DocBlock("", DocStyle.NORMAL)) }).forEachIndexed { index, block ->
             val (pPr, rPr, text) = when (block.style) {
-                com.point.core.flow.DocStyle.TITLE ->
+                DocStyle.TITLE ->
                     Triple("""<w:pPr><w:spacing w:after="240"/></w:pPr>""", """<w:rPr><w:b/><w:sz w:val="48"/></w:rPr>""", block.text)
-                com.point.core.flow.DocStyle.HEADING ->
+                DocStyle.HEADING ->
                     Triple("""<w:pPr><w:spacing w:before="240" w:after="120"/></w:pPr>""", """<w:rPr><w:b/><w:sz w:val="32"/></w:rPr>""", block.text)
-                com.point.core.flow.DocStyle.BULLET ->
-                    Triple("""<w:pPr><w:ind w:left="720"/></w:pPr>""", "", "• " + block.text)
-                com.point.core.flow.DocStyle.NORMAL -> Triple("", "", block.text)
+                DocStyle.BULLET ->
+                    Triple("""<w:pPr><w:ind w:left="720"/></w:pPr>""", "", "• " + block.text)
+                DocStyle.NORMAL -> Triple("", "", block.text)
             }
             // Неуверенное подсвечивается прямо в документе (#267): чистый .docx из рукописи
             // тихо врёт — прочитанное в нём неотличимо от угаданного. Подсветка снимается
@@ -69,13 +114,69 @@ class OoxmlDocxWriter @Inject constructor(
             append("<w:p>").append(pPr)
             append("<w:r>").append(props)
             append("""<w:t xml:space="preserve">""").append(xml(text)).append("</w:t></w:r></w:p>")
+            // Улика идёт СРАЗУ за своим фрагментом: рядом — это и есть весь смысл (#267).
+            crops[index]?.let { append(drawing(it, block.text)) }
         }
         append("""<w:sectPr/></w:body></w:document>""")
     }
 
-    private fun ZipOutputStream.put(name: String, content: String) {
+    /**
+     * Картинка отдельным абзацем сразу под фрагментом.
+     *
+     * `wp:extent` меряется в EMU (914400 на дюйм), поэтому пиксели переводятся из расчёта 96 dpi
+     * и ширина зажимается по колонке текста — полоса ведомости в 4000 px иначе уехала бы за поля,
+     * и Word показал бы обрезок. Пропорция сохраняется: улика, растянутая по вертикали, читается
+     * хуже исходника, а её работа — читаться.
+     */
+    private fun drawing(crop: Crop, alt: String): String = buildString {
+        val cx = minOf(crop.image.widthPx * EMU_PER_PX, MAX_WIDTH_EMU)
+        val cy = (cx * crop.image.heightPx / crop.image.widthPx).coerceAtLeast(1L)
+        append("<w:p><w:r><w:drawing>")
+        append("""<wp:inline distT="0" distB="0" distL="0" distR="0">""")
+        append("""<wp:extent cx="$cx" cy="$cy"/>""")
+        append("""<wp:docPr id="${crop.id}" name="Улика ${crop.id}" descr="${attr(alt)}"/>""")
+        append("""<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">""")
+        append("<pic:pic>")
+        append("""<pic:nvPicPr><pic:cNvPr id="${crop.id}" name="evidence-${crop.id}"/><pic:cNvPicPr/></pic:nvPicPr>""")
+        append("""<pic:blipFill><a:blip r:embed="${crop.relId}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>""")
+        append("""<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="$cx" cy="$cy"/></a:xfrm>""")
+        append("""<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr>""")
+        append("</pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>")
+    }
+
+    /** Отношения документа: у каждой картинки своё, иначе `r:embed` указывает в никуда. */
+    private fun documentRels(crops: Collection<Crop>): String = buildString {
+        append("""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>""")
+        append("""<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">""")
+        crops.forEach {
+            append("""<Relationship Id="${it.relId}" """)
+            append("""Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" """)
+            append("""Target="${it.part}"/>""")
+        }
+        append("</Relationships>")
+    }
+
+    /** Тот же список типов плюс `Default` на каждое расширение картинок — без него Word считает
+     *  пакет битым. Улик нет — строка ровно прежняя. */
+    private fun contentTypes(crops: Collection<Crop>): String {
+        if (crops.isEmpty()) return CONTENT_TYPES
+        val defaults = crops.map { it.image.extension }.distinct().joinToString("") {
+            """<Default Extension="$it" ContentType="${mediaType(it)}"/>"""
+        }
+        return CONTENT_TYPES.replace("<Override", defaults + "<Override")
+    }
+
+    private fun mediaType(extension: String): String = when (extension.lowercase()) {
+        "png" -> "image/png"
+        "webp" -> "image/webp"
+        else -> "image/jpeg"
+    }
+
+    private fun ZipOutputStream.put(name: String, content: String) = put(name, content.toByteArray(Charsets.UTF_8))
+
+    private fun ZipOutputStream.put(name: String, bytes: ByteArray) {
         putNextEntry(ZipEntry(name))
-        write(content.toByteArray(Charsets.UTF_8))
+        write(bytes)
         closeEntry()
     }
 
@@ -94,7 +195,22 @@ class OoxmlDocxWriter @Inject constructor(
     private fun xml(value: String): String = value
         .replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
+    /** То же экранирование плюс кавычка: значение едет в атрибут, а не в текст. */
+    private fun attr(value: String): String = xml(value).replace("\"", "&quot;")
+
     private companion object {
+        /** 96 dpi: столько EMU в пикселе (914400 EMU в дюйме). */
+        const val EMU_PER_PX = 9525L
+
+        /** Шесть дюймов — колонка текста A4 со стандартными полями Word. */
+        const val MAX_WIDTH_EMU = 5_486_400L
+
+        val DRAWING_NAMESPACES =
+            """ xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"""" +
+                """ xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"""" +
+                """ xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"""" +
+                """ xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture""""
+
         val CONTENT_TYPES = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>""" +
             """<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">""" +
             """<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>""" +
