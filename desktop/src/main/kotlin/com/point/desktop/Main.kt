@@ -21,9 +21,13 @@ fun main() {
         Toolkit.getDefaultToolkit().systemClipboard.setContents(StringSelection(text), null)
     }
     val opener = SystemOpener { file -> java.awt.Desktop.getDesktop().open(file) }
-    // Печать (#291): AWT живёт только здесь, за швом Printer. Системный диалог принтера
-    // открывает сама ОС — выбор принтера и копий остаётся за человеком.
-    val printer = Printer { file -> java.awt.Desktop.getDesktop().print(file) }
+    // Печать (#291): AWT живёт только здесь, за швом Printer. Уходит на принтер по умолчанию —
+    // диалог на компьютере тот, кто тапнул на телефоне, не увидит.
+    val printer = object : Printer {
+        override fun name(): String? =
+            runCatching { javax.print.PrintServiceLookup.lookupDefaultPrintService()?.name }.getOrNull()
+        override fun print(file: File) = java.awt.Desktop.getDesktop().print(file)
+    }
     val revealer = FileRevealer { file ->
         when {
             System.getProperty("os.name").lowercase().contains("win") ->
@@ -164,5 +168,6 @@ fun main() {
 private fun canPrint(): Boolean = runCatching {
     java.awt.Desktop.isDesktopSupported() &&
         java.awt.Desktop.getDesktop().isSupported(java.awt.Desktop.Action.PRINT) &&
-        javax.print.PrintServiceLookup.lookupPrintServices(null, null).isNotEmpty()
+        // Именно принтер ПО УМОЛЧАНИЮ: печать уходит на него, и если его нет, кнопка обманет.
+        javax.print.PrintServiceLookup.lookupDefaultPrintService() != null
 }.getOrDefault(false)

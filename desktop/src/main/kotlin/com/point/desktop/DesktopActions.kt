@@ -19,8 +19,19 @@ fun interface FileRevealer { fun reveal(file: File) }
 fun interface TextClipboard { fun copy(text: String) }
 fun interface SaveTarget { fun pickAndSave(file: File): String? }
 
-/** Печать на принтере компьютера (#291): телефон печатать не умеет, компьютер умеет. */
-fun interface Printer { fun print(file: File) }
+/**
+ * Печать на принтере компьютера (#291): телефон печатать не умеет, компьютер умеет.
+ *
+ * Печать уходит на принтер **по умолчанию**, без диалога: тап сделан на телефоне, и всплывший
+ * на компьютере модальный диалог человек, стоящий в другой комнате, просто не увидит — работа
+ * повиснет в тишине. Поэтому имя принтера [name] возвращается на телефон, чтобы человек видел,
+ * куда ушла бумага, а не гадал.
+ */
+interface Printer {
+    /** Имя принтера по умолчанию; `null` — принтера нет, и печатать некуда. */
+    fun name(): String?
+    fun print(file: File)
+}
 
 class PcOpenCapability : Capability {
     override val id = CapabilityId("pc-open")
@@ -186,9 +197,12 @@ class PcPrintRealizer(private val printer: Printer) : Realizer {
     override val capabilityId = CapabilityId("pc-print")
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         runCatching {
+            val target = printer.name()
+                ?: return ActionResult.Failure("На компьютере нет принтера", recoverable = false)
             printer.print(File(input.uri.value))
-            // Печать уходит в очередь принтера — обещать «напечатано» мы не вправе: бумага
-            // могла кончиться, и увидит это человек, а не мы.
-            ActionResult.Done("Отправлено на принтер")
+            // Куда именно ушла бумага — часть ответа, а не деталь: печать идёт на принтер по
+            // умолчанию, и человек имеет право это видеть, а не узнавать по факту.
+            // «Отправлено», а не «напечатано»: бумага могла кончиться, и увидит это он, не мы.
+            ActionResult.Done("Отправлено на «$target»")
         }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось напечатать", recoverable = true) }
 }
