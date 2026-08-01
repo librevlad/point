@@ -20,6 +20,8 @@ import com.point.core.flow.EntityExtractor
 import com.point.core.flow.META_ENTITY_PREFIX
 import com.point.core.flow.META_OCR_ATOMS_REF
 import com.point.core.flow.META_OCR_TEXT_REF
+import com.point.core.flow.META_READING_MODE
+import com.point.core.flow.readingModeOf
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.looksLikeOcrGarbage
 import com.point.core.flow.trackFacts
@@ -64,7 +66,10 @@ class OcrEnricher @Inject constructor(
     override fun appliesTo(state: ObjectState) = state.kind == ObjectKind.IMAGE
 
     override suspend fun enrich(obj: PointObject): EnrichmentDelta = withContext(Dispatchers.IO) {
-        val layer = runCatching { recognizer.read(obj) }.getOrDefault(AtomLayer(emptyList()))
+        // Сбой движка — не рукопись: режим чтения пишется только когда движок отработал,
+        // иначе мы приписали бы объекту происхождение, которого не наблюдали (#263).
+        val read = runCatching { recognizer.read(obj) }.getOrNull()
+        val layer = read ?: AtomLayer(emptyList())
         // Слой — улика, а не представление (#257): он персистится ДО любых гейтов. Гейт мусора
         // ниже судит, что показывать человеку; уничтожать прочитанное он права не имеет —
         // на фото монитора с настоящим текстом он ошибается (кадры 07/21 корпуса #262).
@@ -73,8 +78,14 @@ class OcrEnricher @Inject constructor(
         } else {
             null
         }
+        // Режим чтения — улика, а не показ (#263): он пишется ДО гейта мусора, потому что
+        // именно закрытый гейт и означает «слов не собрали, читать будет зрячая модель».
+        val mode = read?.let { readingModeOf(it) }
         val evidenceOnly = EnrichmentDelta(
-            metadata = atomsRef?.let { mapOf(META_OCR_ATOMS_REF to it.value) } ?: emptyMap(),
+            metadata = buildMap {
+                atomsRef?.let { put(META_OCR_ATOMS_REF, it.value) }
+                mode?.let { put(META_READING_MODE, it.name) }
+            },
         )
         val raw = layer.text
         if (raw.isBlank() || looksLikeOcrGarbage(raw)) return@withContext evidenceOnly
@@ -101,6 +112,7 @@ class OcrEnricher @Inject constructor(
                 // Трек — и факт, а не только узел графа (#260): готовность «Отследить
                 // отправление» считается по метаданным, и правило — её бесплатный источник.
                 putAll(trackFacts(text.take(MAX_CHARS)))
+                mode?.let { put(META_READING_MODE, it.name) }
                 put(META_OCR_TEXT_REF, ref.value)
                 atomsRef?.let { put(META_OCR_ATOMS_REF, it.value) }
             },

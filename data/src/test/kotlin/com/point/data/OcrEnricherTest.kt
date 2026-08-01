@@ -12,6 +12,8 @@ import com.point.core.flow.EntityType
 import com.point.core.flow.META_ENTITY_PREFIX
 import com.point.core.flow.META_OCR_ATOMS_REF
 import com.point.core.flow.META_OCR_TEXT_REF
+import com.point.core.flow.META_READING_MODE
+import com.point.core.flow.ReadingMode
 import com.point.core.flow.ObjectStore
 import com.point.core.model.Feature
 import com.point.core.model.ObjectKind
@@ -117,7 +119,9 @@ class OcrEnricherTest {
         val delta = enricher.enrich(image)
 
         assertTrue(delta.features.isEmpty())
-        assertEquals(setOf(META_OCR_ATOMS_REF), delta.metadata.keys)
+        // Каша — улика рукописи (#263): слой сохранён, режим чтения назван, текста нет.
+        assertEquals(setOf(META_OCR_ATOMS_REF, META_READING_MODE), delta.metadata.keys)
+        assertEquals(ReadingMode.HANDWRITTEN.name, delta.metadata[META_READING_MODE])
         assertEquals(listOf(atom), AtomCodec.decode(File(delta.metadata[META_OCR_ATOMS_REF]!!).readText()).atoms)
     }
 
@@ -140,14 +144,19 @@ class OcrEnricherTest {
     }
 
     @Test
-    fun `blank recognition yields nothing`() = runTest {
+    fun `blank recognition yields nothing but the honest reading mode`() = runTest {
+        // #263: движок отработал и слов не собрал — это улика «читать будет зрячая модель»,
+        // а не молчание. Признаков и текста по-прежнему нет: мусор в фичи не превращается.
         val enricher = OcrEnricher(FakeStore(), recognizer("   "), extractor())
         val delta = enricher.enrich(image)
-        assertTrue(delta.features.isEmpty() && delta.metadata.isEmpty())
+        assertTrue(delta.features.isEmpty())
+        assertEquals(ReadingMode.HANDWRITTEN.name, delta.metadata[META_READING_MODE])
+        assertEquals(setOf(META_READING_MODE), delta.metadata.keys)
     }
 
     @Test
-    fun `an engine failure yields nothing`() = runTest {
+    fun `an engine failure yields nothing — a crash is not handwriting`() = runTest {
+        // Режим чтения — наблюдение, а не догадка: движок упал, наблюдать нечего (#263).
         val enricher = OcrEnricher(FakeStore(), recognizer("", fail = true), extractor())
         val delta = enricher.enrich(image)
         assertTrue(delta.features.isEmpty() && delta.metadata.isEmpty())
