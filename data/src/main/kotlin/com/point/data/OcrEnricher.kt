@@ -23,7 +23,9 @@ import com.point.core.flow.META_OCR_TEXT_REF
 import com.point.core.flow.META_READING_MODE
 import com.point.core.flow.readingModeOf
 import com.point.core.flow.ObjectStore
+import com.point.core.flow.geoFacts
 import com.point.core.flow.looksLikeOcrGarbage
+import com.point.core.flow.meterFacts
 import com.point.core.flow.trackFacts
 import com.point.core.model.Feature
 import com.point.core.model.ObjectKind
@@ -115,6 +117,12 @@ class OcrEnricher @Inject constructor(
                 // Трек — и факт, а не только узел графа (#260): готовность «Отследить
                 // отправление» считается по метаданным, и правило — её бесплатный источник.
                 putAll(trackMeta)
+                // Показание счётчика и координаты (#262) — те же офлайновые правила формы.
+                // Именно этот путь и есть настоящий: человек делится ФОТО счётчика и скрином
+                // карты, а не текстовым файлом; TEXT-энричер на них не запускается никогда —
+                // ровно тот урок, на котором однажды уже потеряли трек (см. identifierObjects).
+                putAll(meterFacts(text.take(MAX_CHARS)))
+                putAll(geoFacts(text.take(MAX_CHARS)))
                 mode?.let { put(META_READING_MODE, it.name) }
                 put(META_OCR_TEXT_REF, ref.value)
                 atomsRef?.let { put(META_OCR_ATOMS_REF, it.value) }

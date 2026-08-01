@@ -2,6 +2,8 @@ package com.point.executors
 
 import com.point.core.flow.KIND_ORGANIZATION
 import com.point.core.flow.LlmClient
+import com.point.core.flow.META_ENTITY_GEO
+import com.point.core.flow.META_ENTITY_METER
 import com.point.core.flow.META_ENTITY_TRACK
 import com.point.core.flow.META_OCR_TEXT_REF
 import com.point.core.flow.alternativesOf
@@ -118,6 +120,26 @@ class UnderstandRealizerTest {
         val result = realizer("TRACK=RA123456785UA").perform(textObject()) as ActionResult.Success
 
         assertEquals("RA123456785UA", result.result.metadata[META_ENTITY_TRACK])
+    }
+
+    @Test
+    fun `METER и GEO — законные ключи контракта там, где правило формы слепо`() = runTest {
+        // #262: офлайновое правило видит показание только рядом с единицей учёта, а координаты —
+        // только в десятичных градусах. Табло водомера на фото и градусы-минуты остаются модели.
+        val result = realizer("METER=00154\nGEO=50°27'0\"N 30°31'24\"E")
+            .perform(textObject()) as ActionResult.Success
+
+        assertEquals("00154", result.result.metadata[META_ENTITY_METER])
+        assertEquals("50°27'0\"N 30°31'24\"E", result.result.metadata[META_ENTITY_GEO])
+    }
+
+    @Test
+    fun `промпт называет новые ключи и требует показание без единицы`() {
+        val prompt = understandPrompt(layoutOf(document))
+
+        assertTrue(prompt.contains("METER"))
+        assertTrue(prompt.contains("GEO"))
+        assertTrue(prompt.contains("без единицы измерения"))
     }
 
     @Test

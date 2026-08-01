@@ -109,10 +109,107 @@ class ActionSchemaTest {
         // Ревью #260: entity.date пишется почти на каждом скриншоте («18:24» переписки — тоже
         // дата, #244), и гейт «хоть одно поле» звал «Отследить отправление» на любой чат.
         assertTrue(actionReadiness(mapOf(META_ENTITY_PREFIX + "date" to "18:24")).isEmpty())
+    }
+
+    @Test
+    fun `адрес карточку не зовёт ни одному действию — ни контакту, ни маршруту`() {
+        // Инвариант #260 дословно, и #262 его НЕ отменяет. Соблазн был сделать адрес якорем
+        // маршрута («место и есть предмет маршрута») — щуп ревью показал цену: чек, письмо,
+        // счёт и карточка посылки получали «Построить маршрут» все четверо. Адрес упомянут
+        // почти везде, а якорь означает «документ ПРО это действие».
         assertTrue(
-            "адрес на счёте — место, а не «сохраните контакт»",
+            "адрес на счёте — место, а не «сохраните контакт» и не «поехали туда»",
             actionReadiness(mapOf(META_ENTITY_PREFIX + "address" to "вул. Хрещатик, 1")).isEmpty(),
         )
+    }
+
+    @Test
+    fun `адрес на посылке не превращает её в маршрут`() {
+        // Тот же щуп на гибридном входе: у карточки Новой Пошты есть и трек, и адрес отделения.
+        val rows = actionReadiness(
+            mapOf(
+                META_ENTITY_TRACK to "20 4514 9154 9395",
+                META_ENTITY_PREFIX + "address" to "Відділення №9, Олексіївка",
+            ),
+        )
+
+        assertEquals(listOf("track-parcel"), rows.map { it.schema.id })
+    }
+
+    // --- #262: маршрут и счётчик — действия, которые корпус ждал ---
+
+    @Test
+    fun `маршрут готов и по адресу, и по координатам — требование одно, чтений два`() {
+        // Готовность считается схемой напрямую: якорь решает, показывать ли строку, а не
+        // готово ли действие, — и метрика корпуса ходит именно этой дверью ([scoreCorpus]).
+        val route = ACTION_SCHEMAS.single { it.id == "route" }
+
+        val byAddress = route.readiness(mapOf(META_ENTITY_PREFIX + "address" to "Відділення №9, Олексіївка"))
+        val byPoint = route.readiness(mapOf(META_ENTITY_GEO to "50.4501, 30.5234"))
+
+        assertTrue(byAddress is Readiness.Ready)
+        assertTrue(byPoint is Readiness.Ready)
+        // Координаты карточку зовут: пара чисел ничем, кроме точки на карте, не бывает.
+        assertTrue(
+            actionReadiness(mapOf(META_ENTITY_GEO to "50.4501, 30.5234"))
+                .single { it.schema.id == "route" }.readiness is Readiness.Ready,
+        )
+    }
+
+    @Test
+    fun `маршрута без места нет, и «не хватает» называет оба чтения одной строкой`() {
+        // «не хватает только адрес, координаты» читалось бы как «нужны оба» — это ложь про
+        // требование, у которого два законных чтения.
+        val route = ACTION_SCHEMAS.single { it.id == "route" }
+
+        val r = route.readiness(mapOf(META_ENTITY_PREFIX + "date" to "29.07"))
+
+        assertTrue(r is Readiness.Missing)
+        assertEquals(listOf("адрес или координаты"), (r as Readiness.Missing).missing.map { it.label })
+    }
+
+    @Test
+    fun `показание счётчика готово по самому показанию — единица весит почти ноль`() {
+        val rows = actionReadiness(
+            mapOf(META_ENTITY_METER to "20842", META_ENTITY_METER_UNIT to "кВт·ч"),
+        )
+
+        val meter = rows.single { it.schema.id == "meter-reading" }
+        assertTrue(meter.readiness is Readiness.Ready)
+        assertEquals("20842", (meter.readiness as Readiness.Ready).present.single { it.spec.critical }.value)
+    }
+
+    @Test
+    fun `якорь счётчика не срабатывает на чужом документе`() {
+        // Единица без числа — подпись на трубе, а не показание; дата счётчика не касается.
+        assertTrue(actionReadiness(mapOf(META_ENTITY_METER_UNIT to "м³")).isEmpty())
+        assertTrue(
+            actionReadiness(mapOf(META_ENTITY_TRACK to "20 4514 9154 9395"))
+                .none { it.schema.id == "meter-reading" || it.schema.id == "route" },
+        )
+    }
+
+    @Test
+    fun `без показания действие не готово, и не хватает именно показания`() {
+        val meter = ACTION_SCHEMAS.single { it.id == "meter-reading" }
+
+        val r = meter.readiness(mapOf(META_ENTITY_METER_UNIT to "кВт·ч", META_ENTITY_PREFIX + "date" to "29.07"))
+
+        assertTrue(r is Readiness.Missing)
+        assertEquals(listOf("показание"), (r as Readiness.Missing).missing.map { it.label })
+    }
+
+    @Test
+    fun `замена объявлена только на критическое поле своей же схемы`() {
+        // Замена, указывающая в пустоту, тихо перестала бы закрывать требование, и действие
+        // навсегда осталось бы неготовым — молча.
+        ACTION_SCHEMAS.forEach { schema ->
+            schema.fields.mapNotNull { it.insteadOf }.forEach { key ->
+                val target = schema.fields.singleOrNull { it.key == key }
+                assertTrue("${schema.id}: замена ссылается на несуществующее поле $key", target != null)
+                assertTrue("${schema.id}: заменять можно только критическое поле", target!!.critical)
+            }
+        }
     }
 
     @Test
