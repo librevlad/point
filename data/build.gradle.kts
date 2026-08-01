@@ -9,6 +9,13 @@ plugins {
     alias(libs.plugins.hilt)
 }
 
+// Ключи читаются один раз на модуль и подставляются ТОЛЬКО в debug (см. buildTypes ниже).
+val localProps = Properties().apply {
+    val f = rootProject.file("local.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+fun prop(key: String, default: String = "") = "\"${localProps.getProperty(key, default)}\""
+
 android {
     namespace = "com.point.data"
     compileSdk = libs.versions.compileSdk.get().toInt()
@@ -16,33 +23,32 @@ android {
     defaultConfig {
         minSdk = libs.versions.minSdk.get().toInt()
 
-        // Gemini key: local.properties -> BuildConfig.GEMINI_API_KEY.
-        // Never hard-coded, never committed (local.properties is git-ignored).
-        val localProps = Properties()
-        val localFile = rootProject.file("local.properties")
-        if (localFile.exists()) {
-            localFile.inputStream().use { localProps.load(it) }
-        }
-        fun prop(key: String, default: String = "") =
-            "\"${localProps.getProperty(key, default)}\""
-
-        buildConfigField("String", "GEMINI_API_KEY", prop("GEMINI_API_KEY"))
+        // Ключи: local.properties -> BuildConfig, и ТОЛЬКО в debug.
+        //
+        // Инвариант «ни один секрет не попадает в раздаваемый артефакт» был записан в
+        // CLAUDE.md, но код ему не соответствовал: buildConfigField в defaultConfig
+        // применяется ко ВСЕМ вариантам, поэтому релизная сборка запекала те же живые
+        // ключи. Поймано разбором публично выложенного APK (v0.2.0): внутри лежали
+        // GitHub-токен и два ключа к моделям. Теперь defaultConfig объявляет поля
+        // ПУСТЫМИ, а настоящие значения подставляет только buildTypes.debug —
+        // release физически не видит local.properties.
+        buildConfigField("String", "GEMINI_API_KEY", "\"\"")
 
         // Relay (#161 v2): the app-wide shared secret for the blind relay (sent as X-Point-App). The
         // relay URL itself travels in the pairing (QR ?r=), so only the secret is build-baked here.
-        buildConfigField("String", "RELAY_URL", prop("RELAY_URL"))
-        buildConfigField("String", "RELAY_APP_SECRET", prop("RELAY_APP_SECRET"))
+        buildConfigField("String", "RELAY_URL", "\"\"")
+        buildConfigField("String", "RELAY_APP_SECRET", "\"\"")
         // Gemini models tried in order. Lead with the STRONG model (gemini-pro-latest) so the
         // default is best-quality when available — flash garbled dense/rotated tables on real
         // photos; Pro reads them. The client falls through to flash/flash-lite on any failure
         // (no Pro access, quota), so "strong by default IF available" costs nothing when it isn't.
         buildConfigField("String", "GEMINI_MODELS", prop("GEMINI_MODELS", "gemini-pro-latest,gemini-flash-latest,gemini-flash-lite-latest"))
         // Claude (Anthropic) — fallback after Gemini. Native Messages API.
-        buildConfigField("String", "ANTHROPIC_API_KEY", prop("ANTHROPIC_API_KEY"))
+        buildConfigField("String", "ANTHROPIC_API_KEY", "\"\"")
         buildConfigField("String", "ANTHROPIC_BASE_URL", prop("ANTHROPIC_BASE_URL", "https://api.anthropic.com"))
         buildConfigField("String", "CLAUDE_MODEL", prop("CLAUDE_MODEL", "claude-opus-4-8"))
         // Alternative provider (OpenAI-compatible: OpenAI, OpenRouter, local...).
-        buildConfigField("String", "OPENAI_API_KEY", prop("OPENAI_API_KEY"))
+        buildConfigField("String", "OPENAI_API_KEY", "\"\"")
         buildConfigField("String", "OPENAI_BASE_URL", prop("OPENAI_BASE_URL", "https://api.openai.com/v1"))
         buildConfigField("String", "OPENAI_MODELS", prop("OPENAI_MODELS", "gpt-4o-mini"))
 
@@ -50,22 +56,39 @@ android {
         // activates only when its key is present; *_MODELS is a comma-separated fallback
         // list, so a single key (esp. OpenRouter) yields several free models chained.
         // Vision-capable models lead so "Понять" works on a photo.
-        buildConfigField("String", "OPENROUTER_API_KEY", prop("OPENROUTER_API_KEY"))
+        buildConfigField("String", "OPENROUTER_API_KEY", "\"\"")
         buildConfigField("String", "OPENROUTER_BASE_URL", prop("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"))
         buildConfigField("String", "OPENROUTER_MODELS", prop("OPENROUTER_MODELS", "google/gemma-4-31b-it:free,google/gemma-4-26b-a4b-it:free,openai/gpt-oss-20b:free"))
-        buildConfigField("String", "GROQ_API_KEY", prop("GROQ_API_KEY"))
+        buildConfigField("String", "GROQ_API_KEY", "\"\"")
         buildConfigField("String", "GROQ_BASE_URL", prop("GROQ_BASE_URL", "https://api.groq.com/openai/v1"))
         buildConfigField("String", "GROQ_MODELS", prop("GROQ_MODELS", "llama-3.3-70b-versatile,openai/gpt-oss-120b,llama-3.1-8b-instant"))
-        buildConfigField("String", "MISTRAL_API_KEY", prop("MISTRAL_API_KEY"))
+        buildConfigField("String", "MISTRAL_API_KEY", "\"\"")
         buildConfigField("String", "MISTRAL_BASE_URL", prop("MISTRAL_BASE_URL", "https://api.mistral.ai/v1"))
         buildConfigField("String", "MISTRAL_MODELS", prop("MISTRAL_MODELS", "mistral-small-latest,pixtral-12b-2409"))
-        buildConfigField("String", "CEREBRAS_API_KEY", prop("CEREBRAS_API_KEY"))
+        buildConfigField("String", "CEREBRAS_API_KEY", "\"\"")
         buildConfigField("String", "CEREBRAS_BASE_URL", prop("CEREBRAS_BASE_URL", "https://api.cerebras.ai/v1"))
         buildConfigField("String", "CEREBRAS_MODELS", prop("CEREBRAS_MODELS", "gpt-oss-120b,gemma-4-31b"))
         // GitHub Models — free during preview, generous; needs a GitHub PAT (models scope).
-        buildConfigField("String", "GITHUB_API_KEY", prop("GITHUB_API_KEY"))
+        buildConfigField("String", "GITHUB_API_KEY", "\"\"")
         buildConfigField("String", "GITHUB_BASE_URL", prop("GITHUB_BASE_URL", "https://models.github.ai/inference"))
         buildConfigField("String", "GITHUB_MODELS", prop("GITHUB_MODELS", "openai/gpt-4o-mini,openai/gpt-4o"))
+    }
+
+    buildTypes {
+        debug {
+            // Только отладочная сборка читает local.properties — раздаётся она вручную и
+            // осознанно; всё, что уходит людям, собирается release-вариантом и ключей не несёт.
+            buildConfigField("String", "GEMINI_API_KEY", prop("GEMINI_API_KEY"))
+            buildConfigField("String", "RELAY_URL", prop("RELAY_URL"))
+            buildConfigField("String", "RELAY_APP_SECRET", prop("RELAY_APP_SECRET"))
+            buildConfigField("String", "ANTHROPIC_API_KEY", prop("ANTHROPIC_API_KEY"))
+            buildConfigField("String", "OPENAI_API_KEY", prop("OPENAI_API_KEY"))
+            buildConfigField("String", "OPENROUTER_API_KEY", prop("OPENROUTER_API_KEY"))
+            buildConfigField("String", "GROQ_API_KEY", prop("GROQ_API_KEY"))
+            buildConfigField("String", "MISTRAL_API_KEY", prop("MISTRAL_API_KEY"))
+            buildConfigField("String", "CEREBRAS_API_KEY", prop("CEREBRAS_API_KEY"))
+            buildConfigField("String", "GITHUB_API_KEY", prop("GITHUB_API_KEY"))
+        }
     }
 
     buildFeatures {
