@@ -25,8 +25,6 @@ import com.point.core.flow.META_SEMANTIC_SUMMARY
 import com.point.core.flow.META_SEMANTIC_TYPE
 import com.point.core.flow.META_SOURCE_SUFFIX
 import com.point.core.flow.Realizer
-import com.point.core.flow.SOURCE_MODEL
-import com.point.core.flow.SOURCE_OCR
 import com.point.core.flow.AtomAddress
 import com.point.core.flow.altValue
 import com.point.core.flow.alternativesOf
@@ -39,11 +37,11 @@ import com.point.core.flow.mergeFacts
 import com.point.core.flow.normConsensus
 import com.point.core.flow.parseClassification
 import com.point.core.flow.promptIndex
+import com.point.core.flow.provenanceOf
 import com.point.core.flow.resolve
 import com.point.core.flow.ruleEvidence
 import com.point.core.flow.s10CheckDigitValid
 import com.point.core.flow.semanticFits
-import com.point.core.flow.sourceRank
 import com.point.core.model.ActionResult
 import com.point.core.model.CapabilityId
 import com.point.core.model.Feature
@@ -51,6 +49,7 @@ import com.point.core.model.Intent
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
+import com.point.core.model.Provenance
 import com.point.core.model.ResultObject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -287,12 +286,21 @@ class UnderstandRealizer @Inject constructor(
                         .map { (key, readings) ->
                             key + META_ALT_SUFFIX to altValue((listOfNotNull(merged[key]) + readings).distinct())
                         }
+                    // Происхождение ролей (#264): до этого среза `graph.role.*` уходил в
+                    // метаданные вообще без `.src` — дыра, а не экономия. Роль присуждает
+                    // МОДЕЛЬ, даже когда буквы собраны из атомов страницы: происхождение
+                    // отвечает на «кто утверждает это значение», а не «кто набрал буквы».
+                    // Понизить чужое более сильное происхождение штамп не может (#243).
+                    val roleSources = roles.keys
+                        .filter { key -> !merged[key].isNullOrBlank() }
+                        .filter { key -> Provenance.MODEL > provenanceOf(merged, key) }
+                        .map { key -> key + META_SOURCE_SUFFIX to Provenance.MODEL.wire }
                     ActionResult.Success(
                         ResultObject(
                             input.state.kind, input.mime, input.uri,
                             metadata = merged +
                                 annotations(merged, fields, judgedByLayer = layer != null, blocked = blocked) +
-                                roleAlts +
+                                roleAlts + roleSources +
                                 ("op" to "understand"),
                         ),
                     )
@@ -310,9 +318,9 @@ class UnderstandRealizer @Inject constructor(
      *   значением — даже когда голосование оставило известное;
      * - **улики — только когда их считали**: без живого слоя суд не состоялся, и `.ev` не
      *   пишется («не судили — не врём»); слабый повторный суд не стирает более сильный;
-     * - **происхождение не понижается** ([sourceRank]): подтверждение моделью значения,
-     *   прочитанного правилом со страницы, не делает его «диктовкой» — согласие двух
-     *   независимых источников повышает доверие, а не снижает;
+     * - **происхождение не понижается** (порядок [Provenance] = сила, #264): подтверждение
+     *   моделью значения, прочитанного правилом со страницы, не делает его «диктовкой» —
+     *   согласие двух независимых источников повышает доверие, а не снижает;
      * - отклонённое hard-block'ом — в `.blocked`, не в никуда.
      */
     private fun annotations(
@@ -332,10 +340,8 @@ class UnderstandRealizer @Inject constructor(
                     put(key + META_EVIDENCE_SUFFIX, field.evidence.joinToString(",") { it.name.lowercase() })
                 }
             }
-            val source = if (field.grounded) SOURCE_OCR else SOURCE_MODEL
-            if (sourceRank(source) > sourceRank(merged[key + META_SOURCE_SUFFIX])) {
-                put(key + META_SOURCE_SUFFIX, source)
-            }
+            val source = if (field.grounded) Provenance.OCR else Provenance.MODEL
+            if (source > provenanceOf(merged, key)) put(key + META_SOURCE_SUFFIX, source.wire)
         }
         blocked.forEach { (key, texts) ->
             if (texts.isNotEmpty()) put(key + META_BLOCKED_SUFFIX, altValue(texts))

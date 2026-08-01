@@ -73,6 +73,9 @@ data class FieldReading(
      * меньше [CONFIRMED_CLASSES] — «одно доказательство — предположение, и оно видно как
      * предположение». Улики не считались вовсе (ключа нет) — поле не судили, и врать про него
      * маркером нельзя ни в одну сторону.
+     *
+     * Считается общим [isAssumption] (#264): то же самое слово «возможно» стоит под найденным
+     * объектом, и две реализации одного суда разъехались бы на первой правке.
      */
     val assumption: Boolean = false,
 )
@@ -85,9 +88,7 @@ fun ActionSchema.readiness(facts: Map<String, String>): Readiness {
             // человека — один вопрос: «а не то ли это?» — и показываются одной строкой «или:».
             val readings = (alternativesOf(facts, spec.key) + moreOf(facts, spec.key))
                 .distinct().filter { it != value }
-            val judged = facts[spec.key + META_EVIDENCE_SUFFIX]
-                ?.split(',')?.filter { it.isNotBlank() }
-            FieldReading(spec, value, readings, assumption = judged != null && judged.size < CONFIRMED_CLASSES)
+            FieldReading(spec, value, readings, assumption = isAssumption(facts, spec.key))
         }
     }
     val presentKeys = present.map { it.spec.key }.toSet()

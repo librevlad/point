@@ -5,7 +5,10 @@ import com.point.core.flow.Enricher
 import com.point.core.flow.EnricherMeta
 import com.point.core.flow.EnrichmentDelta
 import com.point.core.flow.KIND_IDENTIFIER
-import com.point.core.flow.WAYBILL_CONFIDENCE
+import com.point.core.flow.META_ENTITY_TRACK
+import com.point.core.flow.META_EVIDENCE_SUFFIX
+import com.point.core.flow.META_SOURCE_SUFFIX
+import com.point.core.flow.provenanceOf
 import com.point.core.flow.trackFacts
 import com.point.core.flow.waybillNumbers
 import com.point.core.model.ObjectKind
@@ -48,11 +51,14 @@ class IdentifierEnricher @Inject constructor() : Enricher {
             .take(MAX_CHARS)
         if (text.isBlank()) return@withContext EnrichmentDelta()
 
-        val (objects, relations) = identifierObjects(obj, text)
+        // Один суд правила на весь вызов: факты трека и узлы графа обязаны говорить одно и то
+        // же о происхождении и уликах — иначе узел разойдётся с фактом, из которого вырос (#264).
+        val facts = trackFacts(text)
+        val (objects, relations) = identifierObjects(obj, text, facts)
         if (objects.isEmpty()) return@withContext EnrichmentDelta()
         // Трек — и факт, а не только узел графа (#260): схема «Отследить отправление» читает
         // `entity.track` из метаданных, второй похожий номер честно виден в `.alt` (v3 §8).
-        EnrichmentDelta(objects = objects, relations = relations, metadata = trackFacts(text))
+        EnrichmentDelta(objects = objects, relations = relations, metadata = facts)
     }
 
     private companion object {
@@ -68,20 +74,36 @@ class IdentifierEnricher @Inject constructor() : Enricher {
  * OCR sidecar, and a TEXT object only appears if they tap «Распознать текст». The single most
  * useful thing on a parcel screenshot fell through the same floor twice, for a different reason
  * each time. Every path that produces text now goes through here.
+ *
+ * **Узел несёт срез фактов трека** ([facts], #264): собственное значение плюс происхождение и
+ * улики, которыми правило судило форму. Значение у каждого узла своё (на странице бывает второй
+ * настоящий номер), а происхождение и улики — общие: их выдал один и тот же прогон одного и того
+ * же правила. `provenance` читается из этого же среза, поэтому поле и `.src` разойтись не могут.
  */
 internal fun identifierObjects(
     source: PointObject,
     text: String,
+    facts: Map<String, String> = trackFacts(text),
 ): Pair<List<PointObject>, List<Relation>> {
     val objects = waybillNumbers(text).map { value ->
+        val slice = buildMap {
+            put(META_ENTITY_TRACK, value)
+            facts[META_ENTITY_TRACK + META_SOURCE_SUFFIX]
+                ?.let { put(META_ENTITY_TRACK + META_SOURCE_SUFFIX, it) }
+            facts[META_ENTITY_TRACK + META_EVIDENCE_SUFFIX]
+                ?.let { put(META_ENTITY_TRACK + META_EVIDENCE_SUFFIX, it) }
+        }
         PointObject(
             id = identifierId(source.id, value),
             mime = "text/plain",
             // No file behind it: the value IS the content (#222).
             uri = ValueRef(value),
             state = ObjectState(KIND_IDENTIFIER),
-            // Structural match only — no published check-digit algorithm went into the rule.
-            confidence = WAYBILL_CONFIDENCE,
+            metadata = slice,
+            // ПРОЧИТАНО, а не ВЫВЕДЕНО: правило нашло эти цифры дословно в распознанном тексте —
+            // то же самое, что оно объявило факту строкой выше (#264). Расхождение узла с
+            // родителем было бы ровно той болезнью, от которой лечит срез.
+            provenance = provenanceOf(slice, META_ENTITY_TRACK),
             sourceObjects = listOf(source.id),
             creatorAction = IDENTIFIER_CREATOR,
         )

@@ -11,6 +11,7 @@ import com.point.core.model.Feature
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
+import com.point.core.model.Provenance
 import com.point.core.model.ResultObject
 import com.point.core.model.ScratchRef
 import kotlinx.coroutines.test.runTest
@@ -241,15 +242,57 @@ class UnderstandRealizerTest {
         val known = textObject(
             metadata = mapOf(
                 META_ENTITY_TRACK to "20 4514 9154 9395",
-                META_ENTITY_TRACK + com.point.core.flow.META_SOURCE_SUFFIX to com.point.core.flow.SOURCE_OCR,
+                META_ENTITY_TRACK + com.point.core.flow.META_SOURCE_SUFFIX to Provenance.OCR.wire,
             ),
         )
 
         val result = realizer("TRACK=20 4514 9154 9395").perform(known) as ActionResult.Success
 
         val meta = result.result.metadata
-        assertEquals(com.point.core.flow.SOURCE_OCR, meta["entity.track.src"])
+        assertEquals(Provenance.OCR.wire, meta["entity.track.src"])
         assertNull("без слоя суд не состоялся — .ev не пишется", meta["entity.track.ev"])
+    }
+
+    /** #243 + #264: правка человека — сильнейшее происхождение, и прилетевший позже ответ
+     *  модели её не переписывает. Порядок enum'а держит это правило, а не таблица рангов. */
+    @Test
+    fun `правку человека модель не понижает — ни в значении, ни в происхождении`() = runTest {
+        val edited = textObject(
+            metadata = mapOf(
+                META_ENTITY_TRACK to "20 4514 9154 9395",
+                META_ENTITY_TRACK + com.point.core.flow.META_SOURCE_SUFFIX to Provenance.HUMAN.wire,
+            ),
+        )
+
+        val result = realizer("TRACK=20 4514 9154 9395").perform(edited) as ActionResult.Success
+
+        assertEquals(Provenance.HUMAN.wire, result.result.metadata["entity.track.src"])
+    }
+
+    /** #264: роль присуждает МОДЕЛЬ, даже когда буквы собраны из атомов страницы. До этого
+     *  среза `graph.role.*` уходил в метаданные вообще без происхождения — дыра, не экономия. */
+    @Test
+    fun `роль уходит в метаданные с происхождением, а не молча`() = runTest {
+        val result = realizer("sender=Іваненко Іван [w6 w7]")
+            .perform(imageWithLayer()) as ActionResult.Success
+
+        val meta = result.result.metadata
+        assertEquals("Іваненко Іван", meta["graph.role.sender"])
+        assertEquals(Provenance.MODEL.wire, meta["graph.role.sender.src"])
+    }
+
+    @Test
+    fun `подтверждённую человеком роль модель не переписывает происхождением`() = runTest {
+        val known = textObject(
+            metadata = mapOf(
+                "graph.role.sender" to "ТОВ «Агротрейд»",
+                "graph.role.sender" + com.point.core.flow.META_SOURCE_SUFFIX to Provenance.HUMAN.wire,
+            ),
+        )
+
+        val result = realizer("sender=P2").perform(known) as ActionResult.Success
+
+        assertEquals(Provenance.HUMAN.wire, result.result.metadata["graph.role.sender.src"])
     }
 
     @Test

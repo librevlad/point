@@ -8,9 +8,14 @@ import com.point.core.flow.EnrichCost
 import com.point.core.flow.Enricher
 import com.point.core.flow.EnricherMeta
 import com.point.core.flow.EnrichmentDelta
+import com.point.core.flow.META_ALT_SUFFIX
+import com.point.core.flow.META_EVIDENCE_SUFFIX
 import com.point.core.flow.META_GRAPH_ROLE_PREFIX
+import com.point.core.flow.META_SOURCE_SUFFIX
+import com.point.core.flow.provenanceOf
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
+import com.point.core.model.Provenance
 import com.point.core.model.Relation
 import com.point.core.model.ValueRef
 import javax.inject.Inject
@@ -57,14 +62,18 @@ class GraphMetadataEnricher @Inject constructor() : Enricher {
         claims.forEach { (role, value) ->
             val kind = if (normalized(value) in orgValues) role.kind else role.kindFor(value)
             val id = nodeId(obj.id, value)
+            val roleKey = META_GRAPH_ROLE_PREFIX + role.key
             objects.getOrPut(id) {
                 PointObject(
                     id = id,
                     mime = "text/plain",
                     uri = ValueRef(value), // the value IS the content — no file behind it
                     state = ObjectState(kind),
-                    // A model's reading, not a rule's: the graph carries that honestly.
-                    confidence = CLASSIFIED_CONFIDENCE,
+                    // Срез факта роли (#264): значение, спор о его чтении и происхождение —
+                    // ровно то, чем узел является. Одна сторона в двух ролях — один узел, и
+                    // ключом он несёт ту роль, которой был создан.
+                    metadata = roleSlice(obj.metadata, roleKey, value),
+                    provenance = roleProvenance(obj.metadata, roleKey),
                     sourceObjects = listOf(obj.id),
                     creatorAction = CREATOR,
                 )
@@ -78,9 +87,29 @@ class GraphMetadataEnricher @Inject constructor() : Enricher {
     private companion object {
         const val CREATOR = "classifier"
 
-        /** A model pointed at a line; nobody checked it against the world. Below a rule's
-         *  certainty on purpose, so the screen can say «возможно» and mean it. */
-        const val CLASSIFIED_CONFIDENCE = 0.7f
+        /**
+         * Происхождение роли (#264, было `CLASSIFIED_CONFIDENCE = 0.7f` — дословно «A model's
+         * reading, not a rule's»).
+         *
+         * Роль **присуждает модель**, даже когда буквы взяты со страницы: происхождение отвечает
+         * на «кто утверждает это значение», а не «кто набрал буквы». Поэтому [Provenance.MODEL] —
+         * фолбэк, а не константа: у ключа `graph.role.*` единственный писатель, и он с #264
+         * штампует `.src` сам; фолбэк нужен журналам, записанным до этого среза, и правке
+         * человека, которую модель понижать не имеет права (#243).
+         */
+        fun roleProvenance(metadata: Map<String, String>, roleKey: String): Provenance =
+            provenanceOf(metadata, roleKey).takeIf { it != Provenance.GIVEN } ?: Provenance.MODEL
+
+        /** Срез факта роли для узла: значение + спор + улики + происхождение, выведенное тем же
+         *  [roleProvenance] — поле узла и его `.src` не могут разойтись по построению (#264). */
+        fun roleSlice(metadata: Map<String, String>, roleKey: String, value: String) = buildMap {
+            put(roleKey, value)
+            put(roleKey + META_SOURCE_SUFFIX, roleProvenance(metadata, roleKey).wire)
+            metadata[roleKey + META_EVIDENCE_SUFFIX]?.let { put(roleKey + META_EVIDENCE_SUFFIX, it) }
+            // Спор модели со страницей об имени (#297) виден и на самом узле — строкой «или: …»,
+            // а не только на карточке документа: чтение, которое проиграло, не исчезает.
+            metadata[roleKey + META_ALT_SUFFIX]?.let { put(roleKey + META_ALT_SUFFIX, it) }
+        }
 
         /** Deterministic and value-keyed: re-enrichment does not double the graph, and the
          *  same party in two roles is one node — вид в id не входит (#297), иначе человек-и-

@@ -5,6 +5,7 @@ import com.point.core.flow.META_GRAPH_ROLE_PREFIX
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
+import com.point.core.model.Provenance
 import com.point.core.model.Relation
 import com.point.core.model.RelationType
 import com.point.core.model.ScratchRef
@@ -39,12 +40,52 @@ class GraphMetadataEnricherTest {
     }
 
     @Test
-    fun `a model's reading is marked less certain than a rule's`() = runTest {
+    fun `роль присуждает модель — узел говорит это словом, а не числом 0_7`() = runTest {
         val org = enricher.enrich(doc("carrier" to "Нова Пошта")).objects.single()
 
-        assertTrue("нужно честно сказать, что это прочтение модели", org.confidence < 1f)
+        // #264: было confidence = 0.7f («A model's reading, not a rule's») — то же самое,
+        // но названное своим именем и сравнимое между ридерами.
+        assertEquals(Provenance.MODEL, org.provenance)
+        assertEquals("прочитано моделью", com.point.core.flow.provenanceLabel(org.provenance))
         assertEquals("classifier", org.creatorAction)
         assertEquals(listOf("cmr"), org.sourceObjects)
+    }
+
+    @Test
+    fun `поле узла и его src не расходятся — один источник истины`() = runTest {
+        val org = enricher.enrich(doc("carrier" to "Нова Пошта")).objects.single()
+
+        assertEquals("Нова Пошта", org.metadata[META_GRAPH_ROLE_PREFIX + "carrier"])
+        assertEquals(
+            org.provenance,
+            com.point.core.flow.provenanceOf(org.metadata, META_GRAPH_ROLE_PREFIX + "carrier"),
+        )
+    }
+
+    @Test
+    fun `записанное происхождение сильнее фолбэка — правку человека модель не переписывает`() = runTest {
+        // #243: `.src` роли пишет «Понять» (model), а правка человека — human. Фолбэк MODEL
+        // существует только для журналов, записанных до #264, и понижать сильное не имеет права.
+        val srcKey = META_GRAPH_ROLE_PREFIX + "carrier" + com.point.core.flow.META_SOURCE_SUFFIX
+        val base = doc("carrier" to "Нова Пошта")
+        val edited = base.copy(metadata = base.metadata + (srcKey to Provenance.HUMAN.wire))
+
+        val org = enricher.enrich(edited).objects.single()
+
+        assertEquals(Provenance.HUMAN, org.provenance)
+        assertEquals("подтверждено вами", com.point.core.flow.provenanceLabel(org.provenance))
+    }
+
+    @Test
+    fun `спор об имени роли виден и на самом узле, а не только на документе`() = runTest {
+        val altKey = META_GRAPH_ROLE_PREFIX + "sender" + com.point.core.flow.META_ALT_SUFFIX
+        val readings = com.point.core.flow.altValue(listOf("1ваненко ван", "Зовсім Інша Людина"))
+        val base = doc("sender" to "1ваненко ван")
+        val disputed = base.copy(metadata = base.metadata + (altKey to readings))
+
+        val node = enricher.enrich(disputed).objects.single()
+
+        assertTrue(com.point.core.flow.isDoubtful(node.metadata))
     }
 
     @Test

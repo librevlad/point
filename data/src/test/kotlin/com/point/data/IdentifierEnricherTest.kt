@@ -4,6 +4,7 @@ import com.point.core.flow.KIND_IDENTIFIER
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
+import com.point.core.model.Provenance
 import com.point.core.model.RelationType
 import com.point.core.model.ScratchRef
 import com.point.core.model.ValueRef
@@ -19,7 +20,7 @@ import java.io.File
 /**
  * The first extractor that returns objects instead of flags (#222). What it proves is not the
  * regex — that is covered in `IdentifiersTest` — but the shape of the contract: a value becomes
- * a graph node with provenance, a confidence and a stable id.
+ * a graph node with a source edge, a **происхождением** ([Provenance], #264) and a stable id.
  */
 class IdentifierEnricherTest {
 
@@ -68,11 +69,39 @@ class IdentifierEnricherTest {
     }
 
     @Test
-    fun `the reading is marked structural, not certain`() = runTest {
-        // No published check-digit algorithm went into the rule, and the graph must carry that.
+    fun `узел говорит «прочитано» — правило нашло цифры дословно на странице`() = runTest {
+        // #264: узел обязан говорить о происхождении то же, что факт, из которого он вырос —
+        // OCR, а не RULE: правило нашло эти цифры В РАСПОЗНАННОМ ТЕКСТЕ, а не вычислило их.
         val found = enricher.enrich(textObject("20 4514 9154 9395")).objects.single()
 
-        assertTrue("structural match must stay below certainty", found.confidence < 1f)
+        assertEquals(Provenance.OCR, found.provenance)
+        assertEquals(
+            found.provenance,
+            com.point.core.flow.provenanceOf(found.metadata, com.point.core.flow.META_ENTITY_TRACK),
+        )
+    }
+
+    @Test
+    fun `улика одна — форма, и узел показывает это как «возможно»`() = runTest {
+        // Было confidence = WAYBILL_CONFIDENCE = 0.8f; стало — один класс улик, из которого
+        // «возможно» ВЫВОДИТСЯ. Контрольной цифры у 14-значного номера нет, и это видно.
+        val found = enricher.enrich(textObject("20 4514 9154 9395")).objects.single()
+
+        assertEquals("semantic", found.metadata["entity.track.ev"])
+        assertTrue("одна улика — предположение", com.point.core.flow.isDoubtful(found.metadata))
+    }
+
+    @Test
+    fun `второй настоящий номер — свой узел со своим значением, улики те же`() = runTest {
+        // Значение у каждого узла собственное, а происхождение и улики общие: их выдал один
+        // прогон одного правила (#264).
+        val found = enricher.enrich(textObject("20 4514 9154 9395 та 20451491549396")).objects
+
+        assertEquals(
+            listOf("20 4514 9154 9395", "20451491549396"),
+            found.map { it.metadata[com.point.core.flow.META_ENTITY_TRACK] },
+        )
+        assertTrue(found.all { it.provenance == Provenance.OCR })
     }
 
     @Test

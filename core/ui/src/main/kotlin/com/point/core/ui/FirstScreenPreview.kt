@@ -132,12 +132,23 @@ private fun PreviewFoundObjects() = PointTheme {
             com.point.core.model.Feature.HAS_ADDRESS,
             com.point.core.model.Feature.HAS_DATE,
         ),
+        // #264: документ несёт происхождение своих фактов (`.src`) — узлы наследуют его отсюда,
+        // и превью показывает состояние, которое реально собирают OcrEnricher + «Понять», а не
+        // документ без происхождения с узлами, у которых оно откуда-то взялось.
         metadata = mapOf(
             "entity.address" to "Відділення №9, вул. Хрещатик, 1",
+            "entity.address.src" to com.point.core.model.Provenance.OCR.wire,
             "entity.date" to "29.07 до 18:00",
+            "entity.date.src" to com.point.core.model.Provenance.OCR.wire,
             // #260: трек — факт, и «Отследить отправление» в карточке готовности — готово.
             com.point.core.flow.META_ENTITY_TRACK to "20 4514 9154 9395",
+            com.point.core.flow.META_ENTITY_TRACK + com.point.core.flow.META_SOURCE_SUFFIX to
+                com.point.core.model.Provenance.OCR.wire,
+            // Улика ровно одна — форма (#264): карточка готовности честно скажет «возможно»
+            // ещё до «Понять», и превью обязано это показывать.
+            com.point.core.flow.META_ENTITY_TRACK + com.point.core.flow.META_EVIDENCE_SUFFIX to "semantic",
             "graph.role.carrier" to "Нова Пошта",
+            "graph.role.carrier.src" to com.point.core.model.Provenance.MODEL.wire,
             // #222, шаг 5: заголовок берётся отсюда — «Посылка» вместо «Изображение».
             com.point.core.flow.META_SEMANTIC_TYPE to com.point.core.flow.TYPE_PARCEL,
         ),
@@ -147,11 +158,22 @@ private fun PreviewFoundObjects() = PointTheme {
         bubbles = sampleBubbles(ObjectKind.IMAGE),
         onBubble = {},
         found = listOf(
-            foundObject("o:id", KIND_IDENTIFIER, "20 4514 9154 9395", confidence = 0.8f),
-            foundObject("o:address", KIND_ADDRESS, "Відділення №9, вул. Хрещатик, 1"),
-            foundObject("o:date", KIND_DATE, "29.07 до 18:00"),
-            // #222, шаг 6: прочтение классификатора — роль видна, уверенность честно ниже.
-            foundObject("o:org", KIND_ORGANIZATION, "Нова Пошта", confidence = 0.7f),
+            // #264: «прочитано · возможно» — правило нашло номер дословно на странице, но улика
+            // ровно одна (форма), и это видно словами, а не числом 0.8.
+            foundObject(
+                "o:id", KIND_IDENTIFIER, "20 4514 9154 9395",
+                key = com.point.core.flow.META_ENTITY_TRACK,
+                evidence = "semantic",
+            ),
+            foundObject("o:address", KIND_ADDRESS, "Відділення №9, вул. Хрещатик, 1", key = "entity.address"),
+            foundObject("o:date", KIND_DATE, "29.07 до 18:00", key = "entity.date"),
+            // #222, шаг 6 + #264: прочтение классификатора — роль видна, происхождение названо
+            // своим именем («прочитано моделью»), а не спрятано за 0.7.
+            foundObject(
+                "o:org", KIND_ORGANIZATION, "Нова Пошта",
+                key = "graph.role.carrier",
+                provenance = com.point.core.model.Provenance.MODEL,
+            ),
         ),
         relations = listOf(
             com.point.core.model.Relation(
@@ -180,14 +202,38 @@ private fun PreviewReadinessMissing() = PointTheme {
     )
 }
 
-private fun foundObject(id: String, kind: ObjectKind, value: String, confidence: Float = 1f) =
-    PointObject(
+/**
+ * Найденный объект для превью — **срез метаданных своего факта**, ровно как его строят энричеры
+ * (#264): значение, `<key>.src`, опционально улики `<key>.ev`.
+ *
+ * `provenance` здесь **выводится** из среза тем же [com.point.core.flow.provenanceOf], а не
+ * задаётся отдельным параметром рядом с метаданными. Превью — главный инструмент дизайна
+ * (`docs/TESTING.md`), и оно обязано показывать состояние, которое продакшн умеет произвести:
+ * фикстура, где поле и `.src` разошлись, рисует владельцу подпись, которой на устройстве не
+ * будет, — ровно та болезнь двух источников истины, от которой лечит срез.
+ */
+private fun foundObject(
+    id: String,
+    kind: ObjectKind,
+    value: String,
+    key: String,
+    provenance: com.point.core.model.Provenance = com.point.core.model.Provenance.OCR,
+    evidence: String? = null,
+): PointObject {
+    val slice = buildMap {
+        put(key, value)
+        put(key + com.point.core.flow.META_SOURCE_SUFFIX, provenance.wire)
+        evidence?.let { put(key + com.point.core.flow.META_EVIDENCE_SUFFIX, it) }
+    }
+    return PointObject(
         id = id,
         mime = "text/plain",
         uri = com.point.core.model.ValueRef(value),
         state = ObjectState(kind),
-        confidence = confidence,
+        metadata = slice,
+        provenance = com.point.core.flow.provenanceOf(slice, key),
     )
+}
 
 @Preview(name = "Скриншот · Point думает", showBackground = true)
 @Composable

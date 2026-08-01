@@ -1,5 +1,6 @@
 package com.point.core.flow
 
+import com.point.core.model.Provenance
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -66,20 +67,33 @@ class IdentifiersTest {
     }
 
     @Test
-    fun `the reading is marked structural, not verified`() {
-        // No published check-digit algorithm went into the rule, and the pipeline must know:
-        // consensus or a later validator is what raises this.
-        assertTrue("structural match must stay below certainty", WAYBILL_CONFIDENCE < 1f)
+    fun `форма совпала, контрольной цифры нет — одна улика, а не уверенность 0_8`() {
+        // Было: WAYBILL_CONFIDENCE = 0.8f — число, которое видел только граф и которое экран
+        // всё равно переводил в «возможно» (#264). Стало: ровно один класс улик, и «возможно»
+        // выводится из него же — утверждение сильнее прежнего, а не слабее.
+        val facts = trackFacts("ТТН 20 4514 9154 9395 прибула")
+
+        assertEquals(
+            EvidenceClass.SEMANTIC.name.lowercase(),
+            facts[META_ENTITY_TRACK + META_EVIDENCE_SUFFIX],
+        )
+        val ready = ACTION_SCHEMAS.single { it.id == "track-parcel" }.readiness(facts)
+        assertTrue(ready is Readiness.Ready)
+        assertTrue(
+            "одна улика — предположение, и оно обязано быть видно как предположение",
+            (ready as Readiness.Ready).present.single { it.spec.critical }.assumption,
+        )
     }
 
     // --- Трек как факт (#260): схема «Отследить отправление» читает entity.track ---
 
     @Test
-    fun `трек становится фактом объекта с происхождением «прочитано»`() {
+    fun `трек становится фактом объекта с происхождением «прочитано» и одной уликой формы`() {
         assertEquals(
             mapOf(
                 META_ENTITY_TRACK to "20 4514 9154 9395",
-                META_ENTITY_TRACK + META_SOURCE_SUFFIX to SOURCE_OCR,
+                META_ENTITY_TRACK + META_SOURCE_SUFFIX to Provenance.OCR.wire,
+                META_ENTITY_TRACK + META_EVIDENCE_SUFFIX to "semantic",
             ),
             trackFacts("ТТН 20 4514 9154 9395 прибула"),
         )

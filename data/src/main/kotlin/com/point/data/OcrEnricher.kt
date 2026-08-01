@@ -96,7 +96,10 @@ class OcrEnricher @Inject constructor(
         val entities = entityDelta(obj, extractor.extract(text.take(MAX_CHARS)), text.take(MAX_CHARS))
         // The waybill number is the whole reason the user shared the screenshot. It reaches the
         // graph on this path — the TEXT-only enricher never runs on what was actually shared.
-        val (identifiers, idRelations) = identifierObjects(obj, text.take(MAX_CHARS))
+        // Один суд правила на весь вызов (#264): факты и узлы говорят одно и то же о
+        // происхождении и уликах, потому что берут их из одной карты, а не считают дважды.
+        val trackMeta = trackFacts(text.take(MAX_CHARS))
+        val (identifiers, idRelations) = identifierObjects(obj, text.take(MAX_CHARS), trackMeta)
         val url = URL_REGEX.find(text)?.value
         val ref = store.newScratchFile("txt")
         File(ref.value).writeText(text)
@@ -111,7 +114,7 @@ class OcrEnricher @Inject constructor(
                 documentType(text)?.let { putIfAbsent(META_SEMANTIC_TYPE, it) }
                 // Трек — и факт, а не только узел графа (#260): готовность «Отследить
                 // отправление» считается по метаданным, и правило — её бесплатный источник.
-                putAll(trackFacts(text.take(MAX_CHARS)))
+                putAll(trackMeta)
                 mode?.let { put(META_READING_MODE, it.name) }
                 put(META_OCR_TEXT_REF, ref.value)
                 atomsRef?.let { put(META_OCR_ATOMS_REF, it.value) }

@@ -8,6 +8,7 @@ import com.point.core.model.Feature
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
+import com.point.core.model.Provenance
 import com.point.core.model.Relation
 import com.point.core.model.RelationType
 import com.point.core.model.ScratchRef
@@ -137,7 +138,11 @@ class EntityObjectsTest {
         val obj = entityObjects(source(), disputed, "t").first.single()
 
         assertEquals("вул. Хрещатик, 1", obj.uri.value)
-        assertTrue("спорное значение не должно выглядеть решённым", obj.confidence < 1f)
+        // #264: «спорное» — канал, а не число 0.5f. Спор виден там же, где рисуется «или: …».
+        assertTrue(
+            "спорное значение не должно выглядеть решённым",
+            com.point.core.flow.isDoubtful(obj.metadata),
+        )
         assertEquals(
             listOf("вул. Хрещатик, 1", "вул. Хрещатик, 7"),
             com.point.core.flow.alternativesOf(obj.metadata, "entity.address"),
@@ -153,7 +158,60 @@ class EntityObjectsTest {
 
         val obj = entityObjects(source(), agreed, "t").first.single()
 
-        assertEquals(1f, obj.confidence, 0f)
+        assertTrue(!com.point.core.flow.isDoubtful(obj.metadata))
         assertTrue(com.point.core.flow.alternativesOf(obj.metadata, "entity.address").isEmpty())
+    }
+
+    // --- Происхождение узла (#264) ---
+
+    @Test
+    fun `узел наследует происхождение и улики своего факта, а не выдумывает их`() {
+        val judged = facts("address" to "вул. Хрещатик, 1") + mapOf(
+            "entity.address" + com.point.core.flow.META_SOURCE_SUFFIX to Provenance.OCR.wire,
+            "entity.address" + com.point.core.flow.META_EVIDENCE_SUFFIX to "semantic,geometric",
+        )
+
+        val obj = entityObjects(source(), judged, "t").first.single()
+
+        assertEquals(Provenance.OCR, obj.provenance)
+        assertEquals("semantic,geometric", obj.metadata["entity.address.ev"])
+        // Две независимые улики — подтверждено, «возможно» не появляется.
+        assertTrue(!com.point.core.flow.isDoubtful(obj.metadata))
+    }
+
+    @Test
+    fun `факт без происхождения не получает выдуманного — молчим, а не врём`() {
+        val obj = entityObjects(source(), facts("phone" to "+380671112233"), "t").first.single()
+
+        assertEquals(Provenance.GIVEN, obj.provenance)
+        assertNull(obj.metadata["entity.phone.src"])
+    }
+
+    @Test
+    fun `правку человека узел не понижает до чтения модели`() {
+        // #243: значение, подтверждённое человеком, остаётся подтверждённым человеком — узел
+        // читает происхождение из среза, а не приписывает своё по создателю.
+        val edited = facts("address" to "вул. Хрещатик, 1") +
+            mapOf("entity.address" + com.point.core.flow.META_SOURCE_SUFFIX to Provenance.HUMAN.wire)
+
+        val obj = entityObjects(source(), edited, "metadata-entity-enricher").first.single()
+
+        assertEquals(Provenance.HUMAN, obj.provenance)
+    }
+
+    @Test
+    fun `поле узла и его src не расходятся — один источник истины`() {
+        listOf(Provenance.OCR, Provenance.MODEL, Provenance.RULE, Provenance.HUMAN).forEach { p ->
+            val stamped = facts("address" to "Київ") +
+                mapOf("entity.address" + com.point.core.flow.META_SOURCE_SUFFIX to p.wire)
+
+            val obj = entityObjects(source(), stamped, "t").first.single()
+
+            assertEquals(p, obj.provenance)
+            assertEquals(
+                obj.provenance,
+                com.point.core.flow.provenanceOf(obj.metadata, "entity.address"),
+            )
+        }
     }
 }
