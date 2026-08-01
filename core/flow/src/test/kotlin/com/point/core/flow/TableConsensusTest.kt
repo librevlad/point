@@ -47,6 +47,55 @@ class TableConsensusTest {
         assertEquals(a, reconcile(listOf(a)).rows)
     }
 
+    // --- Выравнивание по содержимому (#294) ---
+
+    @Test
+    fun `модель, пропустившая заголовок, не сдвигает голосование`() {
+        // Ровно случай из дыма: одна модель вернула шапку, другая начала со строки данных.
+        val withHeader = listOf(header, listOf("1", "5"), listOf("2", "8"))
+        val without = listOf(listOf("1", "5"), listOf("2", "8"))
+
+        val c = reconcile(listOf(withHeader, without))
+
+        assertEquals(listOf(header, listOf("1", "5"), listOf("2", "8")), c.rows)
+        assertTrue("сдвиг больше не рождает ложный спор", c.candidates.isEmpty())
+    }
+
+    @Test
+    fun `строка, которую увидела только одна модель, встаёт на своё место`() {
+        val full = listOf(header, listOf("1", "5"), listOf("2", "8"), listOf("3", "9"))
+        val skipped = listOf(header, listOf("1", "5"), listOf("3", "9")) // пропущена середина
+
+        val c = reconcile(listOf(full, skipped))
+
+        assertEquals(listOf(header, listOf("1", "5"), listOf("2", "8"), listOf("3", "9")), c.rows)
+        assertTrue(c.candidates.isEmpty())
+    }
+
+    @Test
+    fun `настоящее расхождение внутри выровненной строки по-прежнему спор`() {
+        val a = listOf(header, listOf("1", "5"))
+        val b = listOf(listOf("1", "8")) // без шапки И с другим значением
+
+        val c = reconcile(listOf(a, b))
+
+        assertEquals(header, c.rows[0])
+        assertEquals("5⚠", c.rows[1][1])
+        assertEquals(listOf("5", "8"), c.candidates[1 to 1])
+    }
+
+    @Test
+    fun `находка только второй модели становится своей строкой, а не спором`() {
+        val a = listOf(header, listOf("1", "5"))
+        val b = listOf(header, listOf("1", "5"), listOf("2", "8"))
+
+        val c = reconcile(listOf(a, b))
+
+        assertEquals(3, c.rows.size)
+        assertEquals(listOf("2", "8"), c.rows[2])
+        assertTrue(c.candidates.isEmpty())
+    }
+
     @Test
     fun `ragged tables align by index and vote on present values`() {
         val a = listOf(header, listOf("1", "5"), listOf("2", "9"))
