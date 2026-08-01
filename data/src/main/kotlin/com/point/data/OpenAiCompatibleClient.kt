@@ -50,6 +50,10 @@ private val VISION_MODEL_HINTS = listOf(
     "gemma-3", "gemma-4", "gemma3", "gemma4", "pixtral", "llava", "-vl", "vl-",
     "gpt-4o", "gpt-4.1", "vision", "llama-3.2", "llama-4", "internvl", "minicpm-v",
     "qwen2-vl", "qwen2.5-vl", "molmo", "phi-3.5-vision", "phi-4-multimodal",
+    // Названия без всякого намёка на картинку: mistral-small/medium зрячие с 2025 года.
+    // Замер на ведомости (02.08.2026): medium прочитал 30 строк и все 27 артикулов, а
+    // Point его пропускал — угадывание по имени промахивается в обе стороны.
+    "mistral-small", "mistral-medium",
 )
 
 /**
