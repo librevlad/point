@@ -21,6 +21,9 @@ fun main() {
         Toolkit.getDefaultToolkit().systemClipboard.setContents(StringSelection(text), null)
     }
     val opener = SystemOpener { file -> java.awt.Desktop.getDesktop().open(file) }
+    // Печать (#291): AWT живёт только здесь, за швом Printer. Системный диалог принтера
+    // открывает сама ОС — выбор принтера и копий остаётся за человеком.
+    val printer = Printer { file -> java.awt.Desktop.getDesktop().print(file) }
     val revealer = FileRevealer { file ->
         when {
             System.getProperty("os.name").lowercase().contains("win") ->
@@ -46,7 +49,10 @@ fun main() {
     val downloader = YtDlpDownloader(File(System.getProperty("user.home"), "Point/downloads"))
     val outbox = Outbox(File(System.getProperty("user.home"), "Point/outbox"))
     val registry = DesktopRegistry(
-        setOf(PcOpenCapability(), PcCopyCapability(), PcRevealCapability(), PcSaveAsCapability(), PcDownloadCapability(), PcToPhoneCapability()),
+        setOf(
+            PcOpenCapability(), PcCopyCapability(), PcRevealCapability(), PcSaveAsCapability(),
+            PcDownloadCapability(), PcToPhoneCapability(), PcPrintCapability(),
+        ),
     )
     val resolver = DesktopResolver(
         setOf(
@@ -56,6 +62,7 @@ fun main() {
             PcSaveAsRealizer(saveTarget),
             PcDownloadRealizer(downloader),
             PcToPhoneRealizer(outbox),
+            PcPrintRealizer(printer),
         ),
     )
     val phoneCapsFile = File(File(System.getProperty("user.home"), ".point-pc"), "phone-caps")
@@ -84,6 +91,12 @@ fun main() {
             // cannot run must never appear on the phone.
             if (downloader.available()) {
                 add(com.point.core.flow.PcRemoteAction("pc-download", "Скачать видео на ПК", kinds = setOf("URL")))
+            }
+            // #291: рекламируем печать, только если этот компьютер её умеет и принтер есть —
+            // пузырёк, который не сможет отработать, на телефоне появляться не должен
+            // (та же дисциплина, что у гейта yt-dlp выше).
+            if (canPrint()) {
+                add(com.point.core.flow.PcRemoteAction("pc-print", "Напечатать на ПК"))
             }
         },
         runAction = state::runRemoteAction,
@@ -142,3 +155,14 @@ fun main() {
         }
     }
 }
+
+/**
+ * Умеет ли этот компьютер печатать: поддержка действия PRINT в системе плюс хотя бы один
+ * установленный принтер. Реклама действия, которое не отработает, — обещание, которого мы
+ * не сдержим (#291).
+ */
+private fun canPrint(): Boolean = runCatching {
+    java.awt.Desktop.isDesktopSupported() &&
+        java.awt.Desktop.getDesktop().isSupported(java.awt.Desktop.Action.PRINT) &&
+        javax.print.PrintServiceLookup.lookupPrintServices(null, null).isNotEmpty()
+}.getOrDefault(false)
