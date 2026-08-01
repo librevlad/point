@@ -197,12 +197,18 @@ class PcPrintRealizer(private val printer: Printer) : Realizer {
     override val capabilityId = CapabilityId("pc-print")
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         runCatching {
+            // Принтер проверяется В МОМЕНТ печати, а не когда рисовалась кнопка: между тапом
+            // на телефоне и работой на компьютере принтер могли отключить или сменить
+            // (консилиум, инженер по надёжности — состояние второй машины живёт своей жизнью).
             val target = printer.name()
-                ?: return ActionResult.Failure("На компьютере нет принтера", recoverable = false)
+                ?: return ActionResult.Failure(
+                    "На компьютере сейчас нет принтера по умолчанию",
+                    recoverable = true,
+                )
             printer.print(File(input.uri.value))
-            // Куда именно ушла бумага — часть ответа, а не деталь: печать идёт на принтер по
-            // умолчанию, и человек имеет право это видеть, а не узнавать по факту.
-            // «Отправлено», а не «напечатано»: бумага могла кончиться, и увидит это он, не мы.
-            ActionResult.Done("Отправлено на «$target»")
+            // Мы знаем ровно одно: задание ушло в очередь этого принтера. Включён ли он, есть
+            // ли бумага — нам отсюда не видно, и обещать «напечатано» значило бы отчитаться за
+            // чужую машину. Человек уйдёт в другую комнату — пусть уходит с правдой.
+            ActionResult.Done("В очереди «$target» · проверьте принтер")
         }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось напечатать", recoverable = true) }
 }
