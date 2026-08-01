@@ -21,28 +21,53 @@ class PrintActionTest {
         "id", "application/pdf", ScratchRef("/tmp/doc.pdf"), ObjectState(ObjectKind.PDF),
     )
 
+    private fun printer(name: String? = "HP LaserJet", onPrint: (File) -> Unit = {}) =
+        object : Printer {
+            override fun name() = name
+            override fun print(file: File) = onPrint(file)
+        }
+
     @Test
     fun `печатается именно тот файл, который дали`() = runTest {
         var printed: File? = null
 
-        val result = PcPrintRealizer { file -> printed = file }.perform(document, null)
+        val result = PcPrintRealizer(printer(onPrint = { printed = it })).perform(document, null)
 
         assertEquals(File("/tmp/doc.pdf"), printed)
         assertTrue(result is ActionResult.Done)
     }
 
+    /** Вопрос владельца «а на каком принтере печать?» — ответ обязан быть в самом сообщении:
+     *  печать уходит на принтер по умолчанию, и человек имеет право видеть, куда. */
     @Test
-    fun `обещаем отправку в очередь, а не готовую бумагу`() = runTest {
-        // Бумага могла кончиться, и увидит это человек, а не мы: обещать «напечатано» нельзя.
-        val result = PcPrintRealizer { }.perform(document, null) as ActionResult.Done
+    fun `сообщение называет принтер, на который ушла печать`() = runTest {
+        val result = PcPrintRealizer(printer(name = "HP LaserJet")).perform(document, null) as ActionResult.Done
 
-        assertTrue(result.message.contains("принтер"))
+        assertTrue(result.message.contains("HP LaserJet"))
+    }
+
+    @Test
+    fun `обещаем отправку, а не готовую бумагу`() = runTest {
+        // Бумага могла кончиться, и увидит это человек, а не мы: обещать «напечатано» нельзя.
+        val result = PcPrintRealizer(printer()).perform(document, null) as ActionResult.Done
+
+        assertTrue(result.message.startsWith("Отправлено"))
         assertTrue(!result.message.contains("Напечатано"))
     }
 
     @Test
+    fun `принтера нет — честный отказ, а не тихая отправка в никуда`() = runTest {
+        var printed = false
+
+        val result = PcPrintRealizer(printer(name = null) { printed = true }).perform(document, null)
+
+        assertTrue(result is ActionResult.Failure)
+        assertTrue("печатать было некуда", !printed)
+    }
+
+    @Test
     fun `сбой принтера — понятный отказ, а не падение`() = runTest {
-        val result = PcPrintRealizer { error("принтер недоступен") }.perform(document, null)
+        val result = PcPrintRealizer(printer { error("принтер недоступен") }).perform(document, null)
 
         assertTrue(result is ActionResult.Failure)
         assertTrue((result as ActionResult.Failure).recoverable)
