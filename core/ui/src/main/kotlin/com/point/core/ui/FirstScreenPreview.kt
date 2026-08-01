@@ -202,6 +202,29 @@ private fun PreviewReadinessMissing() = PointTheme {
     )
 }
 
+@Preview(name = "Счётчик · ведущие нули барабана (#262)", showBackground = true)
+@Composable
+private fun PreviewMeterDrumZeros() = PointTheme {
+    // Живой кадр устройства: водомер отдал «00001154», и это 154 м³. Значение остаётся
+    // дословным — сколько разрядов значащие, знает поставщик услуги, — а строкой ниже стоит
+    // то, что человек, скорее всего, передаст. Оба числа видно, и видно, какое со страницы.
+    FirstScreen(
+        obj = sampleObject(
+            ObjectKind.IMAGE, "image/jpeg", "meter.jpg",
+            metadata = mapOf(
+                com.point.core.flow.META_ENTITY_METER to "00001154",
+                com.point.core.flow.META_ENTITY_METER_UNIT to "м³",
+                com.point.core.flow.META_ENTITY_METER + com.point.core.flow.META_SOURCE_SUFFIX to
+                    com.point.core.model.Provenance.OCR.wire,
+                com.point.core.flow.META_ENTITY_METER + com.point.core.flow.META_EVIDENCE_SUFFIX to
+                    "semantic",
+            ),
+        ),
+        bubbles = sampleBubbles(ObjectKind.IMAGE),
+        onBubble = {},
+    )
+}
+
 /**
  * Найденный объект для превью — **срез метаданных своего факта**, ровно как его строят энричеры
  * (#264): значение, `<key>.src`, опционально улики `<key>.ev`.

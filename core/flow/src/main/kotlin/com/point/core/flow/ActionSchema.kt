@@ -96,6 +96,15 @@ data class FieldReading(
      * объектом, и две реализации одного суда разъехались бы на первой правке.
      */
     val assumption: Boolean = false,
+    /**
+     * То, что человек, скорее всего, передаст, — показание без ведущих нулей барабана
+     * (`00001154` → `1154`, #262). **Производная, а не факт:** [value] остаётся дословным
+     * и на экране, и в метаданных, подсказка его не подменяет нигде и ни на минуту.
+     *
+     * Выводится в момент чтения ([fieldHint]) и потому не может разъехаться со значением —
+     * почему не ключ метаданных, разобрано там же. `null` — подсказывать нечего.
+     */
+    val hint: String? = null,
 )
 
 /** Готовность одной схемы по фактам объекта. Чистая функция — UI и тесты зовут её напрямую. */
@@ -106,7 +115,11 @@ fun ActionSchema.readiness(facts: Map<String, String>): Readiness {
             // человека — один вопрос: «а не то ли это?» — и показываются одной строкой «или:».
             val readings = (alternativesOf(facts, spec.key) + moreOf(facts, spec.key))
                 .distinct().filter { it != value }
-            FieldReading(spec, value, readings, assumption = isAssumption(facts, spec.key))
+            FieldReading(
+                spec, value, readings,
+                assumption = isAssumption(facts, spec.key),
+                hint = fieldHint(spec.key, value),
+            )
         }
     }
     // Считаются закрытые ТРЕБОВАНИЯ, а не прочитанные ключи: координаты закрывают то же «куда»,
