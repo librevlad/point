@@ -13,6 +13,9 @@ import com.point.core.flow.AtomLayer
 import com.point.core.flow.AtomRecognizer
 import com.point.core.flow.Box
 import com.point.core.flow.FrameTransform
+import com.point.core.flow.ORIENTATION_ANGLES
+import com.point.core.flow.bestOrientation
+import com.point.core.flow.looksMisoriented
 import com.point.core.model.PointObject
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -49,19 +52,27 @@ class TesseractTextRecognizer @Inject constructor(
                 Log.w(TAG, "Tesseract init failed (dataPath=${dataPath.absolutePath}, lang=$LANG)")
                 return@withContext EMPTY
             }
-            tess.setImage(bitmap)
-            val toRawFrame = FrameTransform(
-                sample = frame.sample,
-                rotationDegrees = frame.rotation,
-                uprightWidth = bitmap.width,
-                uprightHeight = bitmap.height,
-            )
-            // Сперва текст движка, потом итератор: распознавание запускается первым обращением,
-            // и порядок гарантирует, что итератор работает по уже готовому результату.
-            val engineText = tess.getUTF8Text()?.trim().orEmpty()
-            val atoms = words(tess, toRawFrame, runCatching { tess.version ?: "" }.getOrDefault(""))
-            Log.i(TAG, "OCR done: ${atoms.size} words, ${engineText.length} chars")
-            val layer = AtomLayer(atoms, readerText = engineText.ifEmpty { null }, transform = toRawFrame)
+            val version = runCatching { tess.version ?: "" }.getOrDefault("")
+            val base = readAt(tess, bitmap, frame, extraRotation = 0, version = version)
+            // Ориентация — проба и измерение (#262): фото бумаги на столе EXIF не несёт, а
+            // боком движок читает мусор. Крутим только слабое чтение — четыре прохода стоят
+            // секунд, и живут они в медленной волне, а не на первом экране.
+            val layer = if (looksMisoriented(base)) {
+                val tried = ORIENTATION_ANGLES.associateWith { angle ->
+                    val turned = bitmap.rotated(angle)
+                    try {
+                        readAt(tess, turned, frame, extraRotation = angle, version = version)
+                    } finally {
+                        if (turned !== bitmap) turned.recycle()
+                    }
+                }
+                val best = bestOrientation(base, tried)
+                if (best != 0) Log.i(TAG, "OCR orientation: +$best°")
+                tried[best] ?: base
+            } else {
+                base
+            }
+            Log.i(TAG, "OCR done: ${layer.atoms.size} words, ${layer.text.length} chars")
             dumpForAcceptance(layer)
             layer
         } catch (e: Throwable) {
@@ -72,6 +83,40 @@ class TesseractTextRecognizer @Inject constructor(
             bitmap.recycle()
         }
     }
+
+    /**
+     * Одно чтение страницы в заданном довороте: движок читает [image], а координаты слов
+     * приводятся к сырому кадру через суммарный угол (EXIF + наш) — адрес атома обязан
+     * указывать в исходный файл, каким бы боком мы его ни читали.
+     */
+    private fun readAt(
+        tess: TessBaseAPI,
+        image: Bitmap,
+        frame: Decoded,
+        extraRotation: Int,
+        version: String,
+    ): AtomLayer {
+        tess.setImage(image)
+        val toRawFrame = FrameTransform(
+            sample = frame.sample,
+            rotationDegrees = (frame.rotation + extraRotation) % 360,
+            uprightWidth = image.width,
+            uprightHeight = image.height,
+        )
+        // Сперва текст движка, потом итератор: распознавание запускается первым обращением,
+        // и порядок гарантирует, что итератор работает по уже готовому результату.
+        val engineText = tess.getUTF8Text()?.trim().orEmpty()
+        val atoms = words(tess, toRawFrame, version)
+        return AtomLayer(atoms, readerText = engineText.ifEmpty { null }, transform = toRawFrame)
+    }
+
+    /** Копия, довёрнутая по часовой стрелке; 0° — тот же битмап, без лишней памяти. */
+    private fun Bitmap.rotated(degrees: Int): Bitmap =
+        if (degrees % 360 == 0) {
+            this
+        } else {
+            Bitmap.createBitmap(this, 0, 0, width, height, Matrix().apply { postRotate(degrees.toFloat()) }, true)
+        }
 
     /**
      * Слова с их местом на странице.
