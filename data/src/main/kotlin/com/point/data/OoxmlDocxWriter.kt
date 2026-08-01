@@ -55,8 +55,19 @@ class OoxmlDocxWriter @Inject constructor(
                     Triple("""<w:pPr><w:ind w:left="720"/></w:pPr>""", "", "• " + block.text)
                 com.point.core.flow.DocStyle.NORMAL -> Triple("", "", block.text)
             }
+            // Неуверенное подсвечивается прямо в документе (#267): чистый .docx из рукописи
+            // тихо врёт — прочитанное в нём неотличимо от угаданного. Подсветка снимается
+            // одним действием, когда человек вычитал, и Word остаётся нормальным Word.
+            val mark = if (block.uncertain) """<w:highlight w:val="yellow"/>""" else ""
+            val props = if (mark.isEmpty()) {
+                rPr
+            } else if (rPr.isEmpty()) {
+                "<w:rPr>" + mark + "</w:rPr>"
+            } else {
+                rPr.replace("</w:rPr>", mark + "</w:rPr>")
+            }
             append("<w:p>").append(pPr)
-            append("<w:r>").append(rPr)
+            append("<w:r>").append(props)
             append("""<w:t xml:space="preserve">""").append(xml(text)).append("</w:t></w:r></w:p>")
         }
         append("""<w:sectPr/></w:body></w:document>""")

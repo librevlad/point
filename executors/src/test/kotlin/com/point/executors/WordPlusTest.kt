@@ -15,6 +15,7 @@ import com.point.core.model.ScratchRef
 import java.io.File
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -87,5 +88,25 @@ class WordPlusTest {
         assertTrue(result is ActionResult.Success)
         assertEquals(DocStyle.TITLE, styled!![0].style)
         assertEquals("Отчёт", styled!![0].text)
+    }
+
+    // -- #267: экспорт помечает неуверенное --
+
+    @Test
+    fun `на рукописи цифры уходят в документ помеченными`() {
+        val blocks = parseDocBlocks(
+            "T=Конспект\nP=Итого 1450 грн",
+            com.point.core.flow.ReadingMode.HANDWRITTEN,
+        )
+
+        assertFalse("заголовок без цифр — чистый", blocks[0].uncertain)
+        assertTrue("цифра рукописи обязана быть видна при вычитке", blocks[1].uncertain)
+    }
+
+    @Test
+    fun `на печати те же цифры идут чистыми — их читал движок`() {
+        val blocks = parseDocBlocks("P=Итого 1450 грн", com.point.core.flow.ReadingMode.PRINTED)
+
+        assertFalse(blocks.single().uncertain)
     }
 }

@@ -4,6 +4,9 @@ import com.point.core.flow.Capability
 import com.point.core.flow.CapabilityMeta
 import com.point.core.flow.Cost
 import com.point.core.flow.DocBlock
+import com.point.core.flow.uncertainInExport
+import com.point.core.flow.readingModeOf
+import com.point.core.flow.ReadingMode
 import com.point.core.flow.DocStyle
 import com.point.core.flow.DocxWriter
 import com.point.core.flow.Latency
@@ -29,7 +32,10 @@ internal const val WORD_PLUS_PROMPT =
         "факты и числа дословно, ничего не выдумывай.\n\nТекст:\n"
 
 /** Parse the strict block contract: known prefixes only, garbage lines dropped. */
-internal fun parseDocBlocks(answer: String): List<DocBlock> =
+internal fun parseDocBlocks(
+    answer: String,
+    mode: ReadingMode = ReadingMode.UNKNOWN,
+): List<DocBlock> =
     answer.lineSequence().mapNotNull { raw ->
         val line = raw.trim()
         if (line.length < 3 || line[1] != '=') return@mapNotNull null
@@ -41,7 +47,8 @@ internal fun parseDocBlocks(answer: String): List<DocBlock> =
             else -> return@mapNotNull null
         }
         val text = line.substring(2).trim()
-        if (text.isEmpty()) null else DocBlock(text, style)
+        // Неуверенность не сглаживается, а переносится в документ (#267).
+        if (text.isEmpty()) null else DocBlock(text, style, uncertainInExport(text, mode))
     }.toList()
 
 /**
@@ -82,7 +89,7 @@ class WordPlusRealizer @Inject constructor(
                     return@withContext ActionResult.Failure("Нет текста (возможно, это скан — сначала распознайте текст)", recoverable = true)
                 }
                 val answer = llm.run(textStandIn(input), WORD_PLUS_PROMPT + text)
-                val blocks = parseDocBlocks(File(answer.uri.value).readText())
+                val blocks = parseDocBlocks(File(answer.uri.value).readText(), readingModeOf(input.metadata))
                 if (blocks.isEmpty()) {
                     ActionResult.Failure("Не удалось разметить документ", recoverable = true)
                 } else {
