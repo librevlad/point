@@ -18,10 +18,10 @@ class ActionProgressTest {
 
         withContext(ActionProgress { heard += it }) {
             reportStage("Читаю страницу")
-            reportStage("Модель 1 из 2 читает таблицу")
+            reportStage("Таблицу читают 2 модели одновременно")
         }
 
-        assertEquals(listOf("Читаю страницу", "Модель 1 из 2 читает таблицу"), heard)
+        assertEquals(listOf("Читаю страницу", "Таблицу читают 2 модели одновременно"), heard)
     }
 
     @Test

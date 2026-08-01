@@ -1,6 +1,5 @@
 package com.point.data
 
-import android.util.Base64
 import com.point.core.flow.LlmClient
 import com.point.core.flow.ObjectStore
 import com.point.core.model.ObjectKind
@@ -122,14 +121,14 @@ class OpenAiCompatibleClient(
             .toString()
     }
 
+    /** Кадр и его предел — за [inlineAttachment] (общее место на все клиенты); data-URL несёт
+     *  mime вложения, потому что ужатый кадр перекодирован. */
     private fun maybeImage(obj: PointObject): JSONObject? {
         if (!obj.mime.startsWith("image/")) return null
-        val file = File(obj.uri.value)
-        if (!file.exists() || file.length() !in 1..MAX_INLINE_BYTES) return null
-        val data = Base64.encodeToString(file.readBytes(), Base64.NO_WRAP)
+        val attachment = inlineAttachment(obj.uri.value, obj.mime) ?: return null
         return JSONObject()
             .put("type", "image_url")
-            .put("image_url", JSONObject().put("url", "data:${obj.mime};base64,$data"))
+            .put("image_url", JSONObject().put("url", "data:${attachment.mime};base64,${attachment.base64}"))
     }
 
     private fun parseAnswer(json: String): String {
@@ -152,7 +151,6 @@ class OpenAiCompatibleClient(
 
     private companion object {
         const val DEFAULT_BASE_URL = "https://api.openai.com/v1"
-        const val MAX_INLINE_BYTES = 15L * 1024 * 1024
         const val NO_IMAGE_MARKER = "NO_IMAGE"
         const val NO_IMAGE_DIRECTIVE =
             "Если изображение не приложено к запросу или ты его не видишь, ответь ровно одним словом без пояснений: NO_IMAGE"

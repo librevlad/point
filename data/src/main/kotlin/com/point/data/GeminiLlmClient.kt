@@ -1,6 +1,5 @@
 package com.point.data
 
-import android.util.Base64
 import com.point.core.flow.LlmClient
 import com.point.core.flow.ObjectStore
 import com.point.core.model.ObjectKind
@@ -15,8 +14,8 @@ import java.io.File
 /**
  * Minimal Gemini (Generative Language API) client over [HttpJson] — no SDK. The
  * model's text answer is materialised into a scratch `.md` file and returned as a
- * TEXT [ResultObject]. Small image/PDF objects are attached inline (base64); larger
- * ones are skipped (size guard).
+ * TEXT [ResultObject]. Image/PDF objects are attached inline (base64) by
+ * [inlineAttachment] — оно же держит предел размера кадра, общий для всех клиентов.
  *
  * Key and [models] are injected (from BuildConfig, in DataModule) rather than read
  * from BuildConfig here — so the multi-model fallback is unit-testable regardless of
@@ -72,12 +71,13 @@ class GeminiLlmClient(
     private fun maybeAttachFile(obj: PointObject): JSONObject? {
         val attachable = obj.mime.startsWith("image/") || obj.mime == "application/pdf"
         if (!attachable) return null
-        val file = File(obj.uri.value)
-        if (!file.exists() || file.length() !in 1..MAX_INLINE_BYTES) return null
-        val data = Base64.encodeToString(file.readBytes(), Base64.NO_WRAP)
+        // Размер отправляемого кадра решает [inlineAttachment] — один предел на всех клиентов;
+        // mime берётся у вложения, а не у объекта: ужатый кадр перекодирован, и запрос обязан
+        // называть то, что в нём лежит.
+        val attachment = inlineAttachment(obj.uri.value, obj.mime) ?: return null
         return JSONObject().put(
             "inlineData",
-            JSONObject().put("mimeType", obj.mime).put("data", data),
+            JSONObject().put("mimeType", attachment.mime).put("data", attachment.base64),
         )
     }
 
@@ -92,9 +92,5 @@ class GeminiLlmClient(
             for (i in 0 until parts.length()) append(parts.getJSONObject(i).optString("text"))
         }
         return out.ifBlank { error("Gemini вернул пустой текст") }
-    }
-
-    private companion object {
-        const val MAX_INLINE_BYTES = 15L * 1024 * 1024
     }
 }

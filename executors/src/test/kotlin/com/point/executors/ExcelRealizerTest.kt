@@ -13,12 +13,16 @@ import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
 import com.point.core.model.ResultObject
 import com.point.core.model.ScratchRef
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
+import java.util.concurrent.ConcurrentLinkedQueue
 
 /** The realizer parses the LLM's TSV into rows and hands them to the writer. */
 class ExcelRealizerTest {
@@ -29,9 +33,14 @@ class ExcelRealizerTest {
     private fun llm(answer: String) = object : LlmClient {
         override suspend fun run(obj: PointObject, prompt: String): ResultObject {
             lastPrompt = prompt
-            val f = File.createTempFile("point-ans", ".txt").apply { deleteOnExit(); writeText(answer) }
-            return ResultObject(ObjectKind.TEXT, "text/plain", ScratchRef(f.absolutePath))
+            return answerOf(answer)
         }
+    }
+
+    /** Ответ модели так, как его отдаёт настоящий клиент — файлом в scratch. */
+    private fun answerOf(answer: String): ResultObject {
+        val f = File.createTempFile("point-ans", ".txt").apply { deleteOnExit(); writeText(answer) }
+        return ResultObject(ObjectKind.TEXT, "text/plain", ScratchRef(f.absolutePath))
     }
 
     private var lastRows: List<List<String>>? = null
@@ -316,6 +325,182 @@ class ExcelRealizerTest {
         assertEquals(listOf(listOf("Итого", "1600⚠")), lastRows)
     }
 
+    // -- два чтения идут одновременно (консенсус #200 перестал стоить двойного ожидания) --
+
+    /**
+     * Каждое чтение отвечает только после того, как СОСЕД начал своё. Последовательный цикл на
+     * этом встаёт: первая модель ждёт того, кто ещё не запущен, отваливается по таймауту — и до
+     * консенсуса доживает одна таблица. Две таблицы в ответе = чтения шли параллельно.
+     */
+    @Test
+    fun `два чтения идут одновременно, а не одно за другим`() = runTest {
+        val started = List(2) { CompletableDeferred<Unit>() }
+        fun paired(i: Int, answer: String) = object : LlmClient {
+            override val strongVision = true
+            override suspend fun run(obj: PointObject, prompt: String): ResultObject {
+                started[i].complete(Unit)
+                withTimeout(STUCK_MS) { started[1 - i].await() }
+                return answerOf(answer)
+            }
+        }
+
+        val result = ExcelRealizer(
+            listOf(paired(0, """[["№","42"]]"""), paired(1, """[["№","42"]]""")),
+            writer,
+        ).perform(image)
+
+        assertTrue(result is ActionResult.Success)
+        assertEquals("2", (result as ActionResult.Success).result.metadata["models"])
+    }
+
+    /** Упавшая модель забирает с собой только себя — соседнее чтение доезжает до файла. */
+    @Test
+    fun `отказ одной модели не роняет чтение соседней`() = runTest {
+        val broken = object : LlmClient {
+            override val strongVision = true
+            override suspend fun run(obj: PointObject, prompt: String): ResultObject = error("HTTP 429 quota")
+        }
+
+        val result = ExcelRealizer(listOf(broken, llm("""[["A","B"]]""")), writer).perform(image)
+
+        assertTrue(result is ActionResult.Success)
+        assertEquals(listOf(listOf("A", "B")), lastRows)
+    }
+
+    /**
+     * Пришедший раньше не становится первым чтением. Голос при равенстве отдаётся первому
+     * (`agree`), а сетку строк задаёт первая таблица (`reconcile`) — то есть от порядка зависит
+     * содержимое файла, и порядок обязан остаться порядком моделей, а не порядком финиша.
+     */
+    @Test
+    fun `порядок чтений — порядок моделей, а не порядок финиша`() = runTest {
+        val fastAnswered = CompletableDeferred<Unit>()
+        val strongButSlow = object : LlmClient {
+            override val strongVision = true
+            override suspend fun run(obj: PointObject, prompt: String): ResultObject {
+                withTimeout(STUCK_MS) { fastAnswered.await() }
+                return answerOf("""[["№","42"]]""")
+            }
+        }
+        val quick = object : LlmClient {
+            override suspend fun run(obj: PointObject, prompt: String): ResultObject =
+                answerOf("""[["№","43"]]""").also { fastAnswered.complete(Unit) }
+        }
+
+        ExcelRealizer(listOf(strongButSlow, quick), writer).perform(image)
+
+        assertEquals("42⚠", lastRows!![0][1]) // победило чтение сильной модели, спор помечен
+        assertEquals(listOf("42", "43"), lastCandidates[0 to 1])
+    }
+
+    /**
+     * Мгновенный отказ не съедает слот до конца чтения: освободившийся слот сразу берёт следующего
+     * кандидата. Это и есть живой случай — первым в цепочке стоит «свой ключ», и без ключа он
+     * падает за миллисекунду; фиксированная пара оставила бы вторую сильную модель на потом.
+     */
+    @Test
+    fun `отказ модели не съедает слот — он берёт следующего кандидата`() = runTest {
+        val keyless = object : LlmClient {
+            override val strongVision = true
+            override suspend fun run(obj: PointObject, prompt: String): ResultObject = error("задайте свой ключ")
+        }
+        val bothRead = CompletableDeferred<Unit>()
+        val started = ConcurrentLinkedQueue<String>()
+        fun waiting(answer: String) = object : LlmClient {
+            override val strongVision = true
+            override suspend fun run(obj: PointObject, prompt: String): ResultObject {
+                started += answer
+                if (started.size == 2) bothRead.complete(Unit)
+                withTimeout(STUCK_MS) { bothRead.await() } // ответим, только когда читают обе
+                return answerOf(answer)
+            }
+        }
+        var result: ActionResult? = null
+
+        val heard = stagesHeard {
+            result = ExcelRealizer(
+                listOf(keyless, waiting("""[["№","42"]]"""), waiting("""[["№","42"]]""")),
+                writer,
+            ).perform(image)
+        }
+
+        assertTrue(result is ActionResult.Success)
+        assertEquals("2", (result as ActionResult.Success).result.metadata["models"])
+        assertTrue(heard.contains("Модель отказала — читаю следующей"))
+    }
+
+    /**
+     * Модели ответили, но читаемой таблицы не дали — цепочка «не вышло, берём следующего» жива:
+     * читают оставшиеся. И это событие называется своим именем, а не продолжением первого.
+     */
+    @Test
+    fun `когда чтения не дали таблиц, читают следующие модели`() = runTest {
+        var result: ActionResult? = null
+
+        val heard = stagesHeard {
+            result = ExcelRealizer(
+                listOf(llm("   "), llm("   "), llm("""[["A","B"]]""")),
+                writer,
+            ).perform(image)
+        }
+
+        assertTrue(result is ActionResult.Success)
+        assertEquals(listOf(listOf("A", "B")), lastRows)
+        assertTrue(heard.contains("Перечитываю другой моделью"))
+    }
+
+    /** «Модель 1 из 2 читает таблицу» описывала очередь, которой больше нет (#288). */
+    @Test
+    fun `стадии не выдают одновременное чтение за очередь`() = runTest {
+        val heard = stagesHeard {
+            realizer("""[["№","42"]]""", """[["№","42"]]""").perform(image)
+        }
+
+        assertTrue(heard.contains("Таблицу читают 2 модели одновременно"))
+        assertTrue(heard.contains("Готово 1 из 2 чтений — жду остальные"))
+        assertTrue(heard.none { it.startsWith("Модель ") })
+    }
+
+    /** Одна модель — одна фраза без чисел, а не «1 из 1». */
+    @Test
+    fun `с единственной моделью стадия не считает несуществующих соседей`() = runTest {
+        val heard = stagesHeard { realizer("""[["A","B"]]""").perform(image) }
+
+        assertTrue(heard.contains("Читаю таблицу"))
+        assertTrue(heard.none { it.contains("из 1") })
+    }
+
+    /**
+     * Замер на моках, ради которого правка и делалась. Два чтения по [READ_MS]: по очереди
+     * ожидание — их сумма, одновременно — самое медленное из них. Меряется именно фаза чтения
+     * (по отметкам внутри моков), а не весь `perform` — на разборе и записи файла время тратится
+     * одинаково в обоих мирах, и включать его в замер значило бы разбавлять то, что изменилось.
+     * Утверждается отношение, а не абсолютное число, — порог в миллисекундах падал бы от загрузки
+     * машины, а не от регрессии.
+     */
+    @Test
+    fun `ожидание двух чтений — это самое медленное чтение, а не их сумма`() = runTest {
+        val spans = ConcurrentLinkedQueue<Pair<Long, Long>>()
+        fun slow(answer: String) = object : LlmClient {
+            override val strongVision = true
+            override suspend fun run(obj: PointObject, prompt: String): ResultObject {
+                val from = System.currentTimeMillis()
+                delay(READ_MS)
+                spans += from to System.currentTimeMillis()
+                return answerOf(answer)
+            }
+        }
+        val realizer = ExcelRealizer(listOf(slow("""[["№","42"]]"""), slow("""[["№","42"]]""")), writer)
+
+        val result = realizer.perform(image)
+
+        assertTrue(result is ActionResult.Success)
+        val queued = spans.sumOf { it.second - it.first } // столько ждали бы по очереди
+        val together = spans.maxOf { it.second } - spans.minOf { it.first } // столько ждали на деле
+        println("два чтения по $READ_MS мс — по очереди $queued мс, одновременно $together мс")
+        assertTrue("ждали $together мс против $queued мс по очереди", together * 4 < queued * 3)
+    }
+
     /** Модель пропустила заголовок — её таблица сдвинута на строку: спор о цифре едет к своей
      *  ячейке по якорю-содержимому, а не к чужой по сырым координатам. */
     @Test
@@ -328,5 +513,13 @@ class ExcelRealizerTest {
         assertEquals("20 4514 9154 9395⚠", lastRows!![1][0])
         assertEquals(listOf("20 4514 9154 9395", "20 4614 9154 9395"), lastCandidates[1 to 0])
         assertTrue(lastCandidates[0 to 0].orEmpty().none { it.contains("4614") })
+    }
+
+    private companion object {
+        /** Столько «читает» модель в замере — заметно на часах и незаметно для прогона тестов. */
+        const val READ_MS = 300L
+
+        /** Столько ждёт чтение, встав в очередь вместо параллели: тест обязан упасть, а не висеть. */
+        const val STUCK_MS = 5_000L
     }
 }

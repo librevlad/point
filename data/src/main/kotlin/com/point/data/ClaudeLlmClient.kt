@@ -1,6 +1,5 @@
 package com.point.data
 
-import android.util.Base64
 import com.point.core.flow.LlmClient
 import com.point.core.flow.ObjectStore
 import com.point.core.model.ObjectKind
@@ -66,18 +65,18 @@ class ClaudeLlmClient @Inject constructor(
             .toString()
     }
 
-    /** Image mimes become an image block; application/pdf a document block; others skipped. */
+    /** Image mimes become an image block; application/pdf a document block; others skipped.
+     *  Байты и их предел — за [inlineAttachment]: ужатый кадр перекодирован, поэтому media_type
+     *  берётся у вложения, а вид блока (image/document) — у исходного объекта. */
     private fun maybeAttachment(obj: PointObject): JSONObject? {
         val isImage = obj.mime.startsWith("image/")
         val isPdf = obj.mime == "application/pdf"
         if (!isImage && !isPdf) return null
-        val file = File(obj.uri.value)
-        if (!file.exists() || file.length() !in 1..MAX_INLINE_BYTES) return null
-        val data = Base64.encodeToString(file.readBytes(), Base64.NO_WRAP)
+        val attachment = inlineAttachment(obj.uri.value, obj.mime) ?: return null
         val source = JSONObject()
             .put("type", "base64")
-            .put("media_type", obj.mime)
-            .put("data", data)
+            .put("media_type", attachment.mime)
+            .put("data", attachment.base64)
         return JSONObject()
             .put("type", if (isImage) "image" else "document")
             .put("source", source)
@@ -101,6 +100,5 @@ class ClaudeLlmClient @Inject constructor(
         const val DEFAULT_BASE_URL = "https://api.anthropic.com"
         const val ANTHROPIC_VERSION = "2023-06-01"
         const val MAX_TOKENS = 8192
-        const val MAX_INLINE_BYTES = 15L * 1024 * 1024
     }
 }
