@@ -6,6 +6,7 @@ import com.point.core.flow.LlmClient
 import com.point.core.flow.Latency
 import com.point.core.flow.PdfTextExtractor
 import com.point.core.flow.Realizer
+import com.point.core.flow.reportStage
 import com.point.core.model.ActionResult
 import com.point.core.model.CapabilityId
 import com.point.core.model.ObjectKind
@@ -54,7 +55,11 @@ class TranslateRealizer @Inject constructor(
             runCatching {
                 val text = when (input.state.kind) {
                     ObjectKind.TEXT -> File(input.uri.value).readText()
-                    ObjectKind.PDF -> pdfText.extractText(input)
+                    // Извлечение текста из большого PDF — секунды до всякой сети (#288).
+                    ObjectKind.PDF -> {
+                        reportStage("Читаю текст PDF")
+                        pdfText.extractText(input)
+                    }
                     else -> ""
                 }
                 if (text.isBlank()) {
@@ -62,6 +67,10 @@ class TranslateRealizer @Inject constructor(
                 } else {
                     val target = amendment?.takeIf { it.isNotBlank() } ?: translateDefaultTarget(text)
                     val prompt = "Переведи текст на $target. Верни только перевод, без пояснений.\n\n$text"
+                    // Язык в стадии — не украшение (#288): при одном тапе его выбрал код
+                    // ([translateDefaultTarget]), и человек узнаёт этот выбор ДО того, как получит
+                    // результат не на том языке, которого ждал.
+                    reportStage("Перевожу на $target")
                     ActionResult.Success(llm.run(input, prompt))
                 }
             }.getOrElse { ActionResult.Failure(it.message ?: "Ошибка перевода", recoverable = true) }

@@ -84,4 +84,38 @@ class AiRealizerTest {
         val result = ai(llm = chatLlm).perform(image, amendment = "что тут?")
         assertEquals(answer, (result as ActionResult.Success).result)
     }
+
+    // --- #288: стадия там, где ждём мы, и молчание там, где работает делегат ---
+
+    @Test
+    fun `вопрос к модели называет себя`() = runTest {
+        val chatLlm = object : LlmClient {
+            override suspend fun run(obj: PointObject, prompt: String) =
+                ResultObject(ObjectKind.TEXT, "text/markdown", ScratchRef("/tmp/a.md"))
+        }
+
+        val heard = stagesHeard { ai(llm = chatLlm).perform(image, amendment = "что тут?") }
+
+        assertEquals(listOf("Спрашиваю модель"), heard)
+    }
+
+    @Test
+    fun `запрос формата уходит производителю — и рассказывает о себе уже он, а не AI`() = runTest {
+        val docx = ResultObject(ObjectKind.OFFICE, "docx", ScratchRef("/tmp/out.docx"))
+        val resolver = object : Resolver {
+            override fun realizerFor(id: CapabilityId) = object : Realizer {
+                override val capabilityId = id
+                override suspend fun perform(input: PointObject, amendment: String?) = ActionResult.Success(docx)
+            }
+        }
+
+        val heard = stagesHeard { ai(resolver = lazyOf(resolver)).perform(text, amendment = "сделай ворд") }
+
+        assertTrue("AI своих слов о чужой работе не выдумывает", heard.isEmpty())
+    }
+
+    @Test
+    fun `первый тап только спрашивает человека — ждать нечего, стадии нет`() = runTest {
+        assertTrue(stagesHeard { ai().perform(text, amendment = null) }.isEmpty())
+    }
 }

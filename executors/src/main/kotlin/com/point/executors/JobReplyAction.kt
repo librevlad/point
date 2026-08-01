@@ -6,6 +6,7 @@ import com.point.core.flow.Cost
 import com.point.core.flow.Latency
 import com.point.core.flow.LlmClient
 import com.point.core.flow.Realizer
+import com.point.core.flow.reportStage
 import com.point.core.model.ActionResult
 import com.point.core.model.CapabilityId
 import com.point.core.model.Feature
@@ -54,6 +55,7 @@ class JobReplyRealizer @Inject constructor(
                 if (vacancy.isBlank()) return@withContext ActionResult.Failure("Нет текста вакансии", recoverable = true)
                 val about = amendment.takeIf { it.isNotBlank() }
                     ?.let { "\n\nО кандидате: $it" }.orEmpty()
+                reportStage("Модель пишет отклик") // #288: сетевое ожидание названо своими словами
                 ActionResult.Success(llm.run(input, JOB_REPLY_PROMPT + about + "\n\nВакансия:\n" + vacancy))
             }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось написать отклик", recoverable = true) }
         }

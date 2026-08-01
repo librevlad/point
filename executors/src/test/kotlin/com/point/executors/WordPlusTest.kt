@@ -90,6 +90,59 @@ class WordPlusTest {
         assertEquals("Отчёт", styled!![0].text)
     }
 
+    // -- #288: стадии доходят до экрана --
+
+    @Test
+    fun `на PDF слышно все три шага — чтение, модель, сборка документа`() = runTest {
+        val out = File(tmp.root, "doc.docx").apply { writeText("zip") }
+        val ans = File(tmp.root, "ans.txt").apply { writeText("T=Отчёт\nB=пункт") }
+        val writer = object : DocxWriter {
+            override suspend fun write(paragraphs: List<String>): ScratchRef = ScratchRef(out.absolutePath)
+            override suspend fun writeStyled(blocks: List<DocBlock>): ScratchRef = ScratchRef(out.absolutePath)
+        }
+        val llm = object : LlmClient {
+            override suspend fun run(obj: PointObject, prompt: String) =
+                ResultObject(ObjectKind.TEXT, "text/plain", ScratchRef(ans.absolutePath))
+        }
+        val pdf = PointObject("id", "application/pdf", ScratchRef("/tmp/x.pdf"), ObjectState(ObjectKind.PDF))
+        val realizer = WordPlusRealizer(
+            llm,
+            object : PdfTextExtractor { override suspend fun extractText(obj: PointObject) = "сырой текст" },
+            writer,
+            object : TextRecognizer { override suspend fun recognize(obj: PointObject) = "" },
+        )
+
+        val heard = stagesHeard { realizer.perform(pdf, null) }
+
+        assertEquals(listOf("Читаю текст PDF", "Модель размечает документ", "Собираю документ"), heard)
+    }
+
+    @Test
+    fun `у текста шага чтения нет — читать нечего, и стадия о нём не выдумывается`() = runTest {
+        val src = File(tmp.root, "raw.txt").apply { writeText("сырой текст отчёта") }
+        val ans = File(tmp.root, "ans2.txt").apply { writeText("T=Отчёт") }
+        val out = File(tmp.root, "doc2.docx").apply { writeText("zip") }
+        val writer = object : DocxWriter {
+            override suspend fun write(paragraphs: List<String>): ScratchRef = ScratchRef(out.absolutePath)
+            override suspend fun writeStyled(blocks: List<DocBlock>): ScratchRef = ScratchRef(out.absolutePath)
+        }
+        val llm = object : LlmClient {
+            override suspend fun run(obj: PointObject, prompt: String) =
+                ResultObject(ObjectKind.TEXT, "text/plain", ScratchRef(ans.absolutePath))
+        }
+        val obj = PointObject("id", "text/plain", ScratchRef(src.absolutePath), ObjectState(ObjectKind.TEXT))
+        val realizer = WordPlusRealizer(
+            llm,
+            object : PdfTextExtractor { override suspend fun extractText(obj: PointObject) = "" },
+            writer,
+            object : TextRecognizer { override suspend fun recognize(obj: PointObject) = "" },
+        )
+
+        val heard = stagesHeard { realizer.perform(obj, null) }
+
+        assertEquals(listOf("Модель размечает документ", "Собираю документ"), heard)
+    }
+
     // -- #267: экспорт помечает неуверенное --
 
     @Test

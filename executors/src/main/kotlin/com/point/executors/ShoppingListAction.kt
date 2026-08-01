@@ -6,6 +6,7 @@ import com.point.core.flow.Cost
 import com.point.core.flow.Latency
 import com.point.core.flow.LlmClient
 import com.point.core.flow.Realizer
+import com.point.core.flow.reportStage
 import com.point.core.model.ActionResult
 import com.point.core.model.CapabilityId
 import com.point.core.model.Feature
@@ -46,6 +47,7 @@ class ShoppingListRealizer @Inject constructor(
             runCatching {
                 val text = entitySourceText(input).take(MAX_CHARS)
                 if (text.isBlank()) return@withContext ActionResult.Failure("Нет текста рецепта", recoverable = true)
+                reportStage("Модель собирает список") // #288: сетевое ожидание названо своими словами
                 ActionResult.Success(llm.run(input, SHOPPING_LIST_PROMPT + text))
             }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось составить список", recoverable = true) }
         }

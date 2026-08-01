@@ -7,6 +7,7 @@ import com.point.core.flow.Latency
 import com.point.core.flow.LlmClient
 import com.point.core.flow.Realizer
 import com.point.core.flow.Resolver
+import com.point.core.flow.reportStage
 import com.point.core.model.ActionResult
 import dagger.Lazy
 import com.point.core.model.CapabilityId
@@ -96,6 +97,9 @@ class AiRealizer @Inject constructor(
         // Otherwise it is a chat question — answer as text.
         return withContext(Dispatchers.IO) {
             runCatching {
+                // Один сетевой вызов — одна стадия (#288). Ветка выше уходит к настоящему
+                // производителю (word/excel/pdf), и стадии там свои: делегат рассказывает о себе сам.
+                reportStage("Спрашиваю модель")
                 ActionResult.Success(llm.run(input, buildPrompt(input, amendment)))
             }.getOrElse { ActionResult.Failure(it.message ?: "Ошибка AI", recoverable = true) }
         }

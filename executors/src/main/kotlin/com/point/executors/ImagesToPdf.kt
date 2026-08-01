@@ -3,6 +3,7 @@ package com.point.executors
 import android.graphics.Bitmap
 import android.graphics.pdf.PdfDocument
 import com.point.core.flow.ObjectStore
+import com.point.core.flow.reportStage
 import com.point.core.model.ActionResult
 import com.point.core.model.ObjectKind
 import com.point.core.model.ResultObject
@@ -16,6 +17,11 @@ import java.io.File
  * Non-images are skipped; an empty result is a recoverable failure.
  *
  * Meant to run inside a Dispatchers.IO context (both realizers switch to it).
+ *
+ * Стадии (#288): это самое долгое действие Point — двадцать фото с камеры, каждое декодируется и
+ * (в «Сканировать в PDF») прогоняется через OpenCV, и вся эта минута шла молча. Счёт идёт по
+ * СОБРАННЫМ страницам, а не по файлам в папке: в коллекции бывает нефото, которое [imagesToPdf]
+ * пропускает, — «Страница 4 из 12» обещала бы двенадцать страниц там, где их выйдет девять.
  */
 internal suspend fun imagesToPdf(
     store: ObjectStore,
@@ -30,6 +36,7 @@ internal suspend fun imagesToPdf(
     var pages = 0
     for (file in files) {
         val src = Bitmaps.decodeUpright(file.absolutePath) ?: continue // skip non-images
+        reportStage("Страница ${pages + 1}")
         val bitmap = process(src)
         val page = document.startPage(
             PdfDocument.PageInfo.Builder(bitmap.width, bitmap.height, pages + 1).create(),
@@ -46,6 +53,7 @@ internal suspend fun imagesToPdf(
         return ActionResult.Failure("В коллекции нет изображений для PDF", recoverable = true)
     }
 
+    reportStage("Собираю PDF")
     val ref = store.newScratchFile("pdf")
     File(ref.value).outputStream().use { document.writeTo(it) }
     document.close()

@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.Realizer
 import com.point.core.flow.RealizerMeta
+import com.point.core.flow.reportStage
 import com.point.core.model.ActionResult
 import com.point.core.model.ObjectKind
 import com.point.core.model.PointObject
@@ -35,11 +36,15 @@ class OpenCvScanRealizer @Inject constructor(
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
             runCatching {
+                // Тот же конвейер, что у «Скан+», — и то же право человека знать, на чём он стоит
+                // (#288): декод кадра, [OpenCvScan.enhance] со своими стадиями, запись JPEG.
+                reportStage("Читаю снимок")
                 val src = Bitmaps.decodeUpright(input.uri.value, Bitmaps.SCAN_PLUS_MAX_PX)
                     ?: error("Не удалось прочитать изображение")
                 val scanned = OpenCvScan.enhance(src)
                 src.recycle()
 
+                reportStage("Сохраняю")
                 val ref = store.newScratchFile("jpg")
                 File(ref.value).outputStream().use { scanned.compress(Bitmap.CompressFormat.JPEG, 92, it) }
                 scanned.recycle()

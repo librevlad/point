@@ -81,4 +81,23 @@ class DeviceOcrRealizerTest {
         assertEquals(ObjectKind.TEXT, out.type)
         assertEquals("Уже распознано", File(out.uri.value).readText())
     }
+
+    // --- #288: стадия ровно там, где работа ---
+
+    @Test
+    fun `запуск движка на устройстве называет себя`() = runTest {
+        val heard = stagesHeard { DeviceOcrRealizer(store, recognizer("Привет из Tesseract")).perform(image) }
+
+        assertEquals(listOf("Читаю текст на устройстве"), heard)
+    }
+
+    @Test
+    fun `готовый сайдкар не рождает стадии — движок не запускался, врать не о чем`() = runTest {
+        val side = File.createTempFile("ocr", ".txt").apply { writeText("Уже распознано"); deleteOnExit() }
+        val enriched = image.copy(metadata = mapOf(com.point.core.flow.META_OCR_TEXT_REF to side.absolutePath))
+
+        val heard = stagesHeard { DeviceOcrRealizer(store, throwingRecognizer()).perform(enriched) }
+
+        assertTrue("работы не было — и слов о ней нет", heard.isEmpty())
+    }
 }

@@ -14,6 +14,7 @@ import com.point.core.flow.LlmClient
 import com.point.core.flow.PdfTextExtractor
 import com.point.core.flow.Realizer
 import com.point.core.flow.TextRecognizer
+import com.point.core.flow.reportStage
 import com.point.core.model.ActionResult
 import com.point.core.model.CapabilityId
 import com.point.core.model.ObjectKind
@@ -80,19 +81,30 @@ class WordPlusRealizer @Inject constructor(
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
             runCatching {
+                // Стадии (#288): у «В Word+» перед сетью стоит своя работа — распознать фото или
+                // вытащить текст PDF, — и она идёт секунды. Названо то, что происходит сейчас;
+                // у текстового входа этого шага нет вовсе, поэтому и стадии про него нет.
                 val text = when (input.state.kind) {
-                    ObjectKind.PDF -> pdfText.extractText(input)
-                    ObjectKind.IMAGE -> recognizer.recognize(input) // OCR the photo first (#128)
+                    ObjectKind.PDF -> {
+                        reportStage("Читаю текст PDF")
+                        pdfText.extractText(input)
+                    }
+                    ObjectKind.IMAGE -> {
+                        reportStage("Распознаю текст на фото") // OCR the photo first (#128)
+                        recognizer.recognize(input)
+                    }
                     else -> File(input.uri.value).takeIf { it.isFile }?.readText().orEmpty()
                 }.take(MAX_TEXT)
                 if (text.isBlank()) {
                     return@withContext ActionResult.Failure("Нет текста (возможно, это скан — сначала распознайте текст)", recoverable = true)
                 }
+                reportStage("Модель размечает документ")
                 val answer = llm.run(textStandIn(input), WORD_PLUS_PROMPT + text)
                 val blocks = parseDocBlocks(File(answer.uri.value).readText(), readingModeOf(input.metadata))
                 if (blocks.isEmpty()) {
                     ActionResult.Failure("Не удалось разметить документ", recoverable = true)
                 } else {
+                    reportStage("Собираю документ")
                     ActionResult.Success(
                         ResultObject(
                             ObjectKind.OFFICE, DOCX_MIME, docx.writeStyled(blocks),
