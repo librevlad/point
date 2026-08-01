@@ -69,6 +69,8 @@ fun PointHost(
     onCancelInput: () -> Unit,
     /** Отмена идущего действия (#288): передумать можно всегда. */
     onCancelAction: () -> Unit = {},
+    /** Тап по объекту без слоя слов — открыть его (#290). */
+    onOpenObject: () -> Unit = {},
     onApplyFavorite: (FavoriteChain) -> Unit = {},
     onSaveChain: () -> Unit = {},
     onItem: (PointObject) -> Unit = {},
@@ -250,12 +252,14 @@ fun PointHost(
                     pinned = current.pinned,
                     onBubbleLongPress = onBubbleLongPress,
                     appIconFor = appIconFor,
-                    // #259: герой открывает выделение только когда слой слов уже прочитан —
-                    // без атомов рамке не к чему прилипать, и тап честно не предлагается.
+                    // Тап по объекту всегда что-то делает (#290). Есть слой слов — открывается
+                    // выделение (#259: рамке есть к чему прилипать). Слоя нет — объект просто
+                    // открывается, как от кнопки «Открыть»: тишина в ответ на тап по самому
+                    // крупному элементу экрана — та же ложь, что заглушка вместо статуса.
                     onHeroTap = if (current.obj.metadata.containsKey(com.point.core.flow.META_OCR_ATOMS_REF)) {
                         onOpenSelection
                     } else {
-                        null
+                        onOpenObject
                     },
                 )
                 }

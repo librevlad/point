@@ -450,6 +450,25 @@ class FlowViewModel @Inject constructor(
      * явному тапу и только когда слой слов уже прочитан — выделение не смеет стать обязательным
      * шагом, а без атомов прилипать не к чему (кроп «непрочитанного» — следующий срез).
      */
+    /**
+     * Тап по объекту (#290): смотришь на превью — тапнул — открылось.
+     *
+     * До этого тап по герою жил только ради выделения (#259) и на объекте без слоя слов не
+     * делал НИЧЕГО: человек тапал по единственному крупному элементу экрана и получал тишину.
+     * Тишина в ответ на прямое действие — та же ложь, что и заглушка вместо статуса.
+     *
+     * Открывает тем же путём, что кнопка «Открыть», — без дублирования поведения: одно
+     * действие, один реализатор, одна запись в журнале.
+     */
+    fun openTopObject() {
+        val top = stack.lastOrNull()?.obj ?: return
+        val cap = com.point.core.model.CapabilityId("open")
+        val bubble = runCatching {
+            Bubble("open", registry.byId(cap).label(top.state), cap, top.state)
+        }.getOrNull() ?: return
+        onBubble(bubble)
+    }
+
     fun openSelection() {
         val top = stack.lastOrNull()?.obj ?: return
         val atomsRef = top.metadata[META_OCR_ATOMS_REF] ?: return

@@ -59,6 +59,7 @@ class ShareActivity : ComponentActivity() {
                         onSubmitInput = viewModel::submitAmendment,
                         onCancelInput = viewModel::cancelInput,
                         onCancelAction = viewModel::cancelAction,
+                        onOpenObject = viewModel::openTopObject,
                         onApplyFavorite = viewModel::applyFavorite,
                         onSaveChain = viewModel::saveCurrentChain,
                         onItem = viewModel::onItem,
