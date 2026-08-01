@@ -12,6 +12,7 @@ import com.point.core.flow.Enrichment
 import com.point.core.flow.EntityExtractor
 import com.point.core.flow.DocxWriter
 import com.point.core.flow.Entitlements
+import com.point.core.flow.EvidenceCropper
 import com.point.core.flow.Exporter
 import com.point.core.flow.FavoritesStore
 import com.point.core.flow.HistoryStore
@@ -53,6 +54,7 @@ import com.point.data.AndroidImageCompositor
 import com.point.data.AndroidSharer
 import com.point.data.AndroidUrlOpener
 import com.point.data.AndroidViewer
+import com.point.data.BitmapEvidenceCropper
 import com.point.data.ClaudeLlmClient
 import com.point.data.CommonsArchiveExtractor
 import com.point.data.DocumentTypeEnricher
@@ -177,6 +179,10 @@ abstract class DataModule {
 
     @Binds
     abstract fun docxWriter(impl: OoxmlDocxWriter): DocxWriter
+
+    /** Кроп-улика к спорному фрагменту (#267): режет Android-декодер, поэтому реализация в :data. */
+    @Binds
+    abstract fun evidenceCropper(impl: BitmapEvidenceCropper): EvidenceCropper
 
     @Binds
     abstract fun qrEncoder(impl: ZxingQrEncoder): QrEncoder

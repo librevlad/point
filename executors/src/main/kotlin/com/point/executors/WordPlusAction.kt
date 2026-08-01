@@ -1,10 +1,13 @@
 package com.point.executors
 
+import com.point.core.flow.AtomLayer
+import com.point.core.flow.AtomRecognizer
 import com.point.core.flow.Capability
 import com.point.core.flow.CapabilityMeta
 import com.point.core.flow.Cost
 import com.point.core.flow.DocBlock
 import com.point.core.flow.uncertainInExport
+import com.point.core.flow.withCropEvidence
 import com.point.core.flow.readingModeOf
 import com.point.core.flow.ReadingMode
 import com.point.core.flow.DocStyle
@@ -84,6 +87,11 @@ class WordPlusRealizer @Inject constructor(
                 // Стадии (#288): у «В Word+» перед сетью стоит своя работа — распознать фото или
                 // вытащить текст PDF, — и она идёт секунды. Названо то, что происходит сейчас;
                 // у текстового входа этого шага нет вовсе, поэтому и стадии про него нет.
+                //
+                // Слой атомов — единственный адрес, по которому к спорному фрагменту можно
+                // приложить кроп-улику (#267). Ридер без геометрии — законная конфигурация:
+                // тогда улик просто нет, и это не ошибка.
+                var layer: AtomLayer? = null
                 val text = when (input.state.kind) {
                     ObjectKind.PDF -> {
                         reportStage("Читаю текст PDF")
@@ -91,7 +99,10 @@ class WordPlusRealizer @Inject constructor(
                     }
                     ObjectKind.IMAGE -> {
                         reportStage("Распознаю текст на фото") // OCR the photo first (#128)
-                        recognizer.recognize(input)
+                        // read(), а не recognize(): у геометрического ридера плоский текст —
+                        // производное того же прохода, поэтому второго распознавания не будет.
+                        layer = (recognizer as? AtomRecognizer)?.read(input)
+                        layer?.text ?: recognizer.recognize(input)
                     }
                     else -> File(input.uri.value).takeIf { it.isFile }?.readText().orEmpty()
                 }.take(MAX_TEXT)
@@ -100,7 +111,14 @@ class WordPlusRealizer @Inject constructor(
                 }
                 reportStage("Модель размечает документ")
                 val answer = llm.run(textStandIn(input), WORD_PLUS_PROMPT + text)
-                val blocks = parseDocBlocks(File(answer.uri.value).readText(), readingModeOf(input.metadata))
+                // Режим из метаданных, но если энричер до объекта не дошёл — из слоя, который мы
+                // только что прочитали сами: иначе рукопись уедет в документ неотмеченной просто
+                // потому, что фоновая волна не успела (#263, #267).
+                val mode = readingModeOf(input.metadata).takeIf { it != ReadingMode.UNKNOWN }
+                    ?: readingModeOf(layer)
+                val blocks = parseDocBlocks(File(answer.uri.value).readText(), mode)
+                    // Улика к помеченному, если у фрагмента есть адрес на странице (#267).
+                    .withCropEvidence(layer, input.uri.value)
                 if (blocks.isEmpty()) {
                     ActionResult.Failure("Не удалось разметить документ", recoverable = true)
                 } else {
