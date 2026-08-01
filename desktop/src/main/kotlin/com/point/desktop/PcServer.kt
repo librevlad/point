@@ -128,8 +128,11 @@ class PcServer(
             onReceived(item)
             // #80: the phone may name one of the advertised actions to run right away.
             // Unknown or failing actions never fail the receive — the object landed.
+            // #316: недоступное действие не запускается, даже если его назвали, — старый
+            // телефон его не увидит, а телефон с протухшим кэшем не должен продавить печать
+            // на компьютере, где принтера уже нет. Объект при этом всё равно доехал.
             ex.requestHeaders.getFirst("X-Point-Action")?.let(::unb64)?.let { actionId ->
-                if (remoteActions.any { it.id == actionId }) {
+                if (remoteActions.any { it.id == actionId && it.unavailable == null }) {
                     runCatching { runAction(actionId, item) }
                 }
             }

@@ -26,7 +26,17 @@ class PcServerTest {
 
     private val phoneCaps = mutableListOf<com.point.core.flow.PcRemoteAction>()
 
-    private fun server(accept: Boolean = true, outbox: Outbox? = null, onReceived: (InboxItem) -> Unit = {}): PcServer =
+    private val defaultActions = listOf(
+        com.point.core.flow.PcRemoteAction("pc-open", "Открыть на компьютере"),
+        com.point.core.flow.PcRemoteAction("pc-copy", "В буфер компьютера"),
+    )
+
+    private fun server(
+        accept: Boolean = true,
+        outbox: Outbox? = null,
+        actions: List<com.point.core.flow.PcRemoteAction> = defaultActions,
+        onReceived: (InboxItem) -> Unit = {},
+    ): PcServer =
         PcServer(
             inbox = Inbox(tmp.root),
             token = "secret-token",
@@ -35,10 +45,7 @@ class PcServerTest {
             onReceived = onReceived,
             outbox = outbox,
             onPhoneCaps = { caps -> phoneCaps.clear(); phoneCaps.addAll(caps) },
-            remoteActions = listOf(
-                com.point.core.flow.PcRemoteAction("pc-open", "Открыть на компьютере"),
-                com.point.core.flow.PcRemoteAction("pc-copy", "В буфер компьютера"),
-            ),
+            remoteActions = actions,
             runAction = { id, item -> ranActions += id to item },
         ).also { it.start(preferredPort = 0) }
 
@@ -189,6 +196,42 @@ class PcServerTest {
             )
             assertEquals(200, code2) // unknown action never fails the receive
             assertEquals(1, ranActions.size)
+        } finally { s.stop() }
+    }
+
+    /**
+     * #316: компьютер объявляет то, что умеет, но сейчас не может, — с причиной. Причина
+     * доезжает до телефона, а запустить такое действие нельзя даже по прямому запросу
+     * (телефон с протухшим кэшем не должен продавить печать там, где принтера уже нет).
+     */
+    @Test
+    fun `an unavailable action carries its reason and still never runs`() {
+        var got: InboxItem? = null
+        val printerless = com.point.core.flow.PcRemoteAction(
+            "pc-print", "Напечатать на ПК", unavailable = "на компьютере нет принтера",
+        )
+        val s = server(actions = defaultActions + printerless) { got = it }
+        try {
+            val caps = URL("http://127.0.0.1:${s.port}/caps").openConnection() as HttpURLConnection
+            caps.setRequestProperty("X-Point-Token", "secret-token")
+            val advertised = com.point.core.flow.decodePcCaps(caps.inputStream.bufferedReader().readText())
+            caps.disconnect()
+            assertEquals(printerless, advertised.first { it.id == "pc-print" })
+
+            val (code, _) = post(
+                "http://127.0.0.1:${s.port}/receive",
+                mapOf(
+                    "X-Point-Token" to "secret-token",
+                    "X-Point-Name" to b64("документ.pdf"),
+                    "X-Point-Mime" to "application/pdf",
+                    "X-Point-Action" to b64("pc-print"),
+                ),
+                byteArrayOf(1, 2, 3),
+            )
+
+            assertEquals(200, code)
+            assertEquals("объект доехал, потерять его нельзя", "документ.pdf", got!!.obj.metadata["name"])
+            assertTrue("печать не запускалась", ranActions.isEmpty())
         } finally { s.stop() }
     }
 

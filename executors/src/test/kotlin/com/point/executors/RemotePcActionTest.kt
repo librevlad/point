@@ -14,6 +14,7 @@ import com.point.core.model.ScratchRef
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -30,6 +31,7 @@ class RemotePcActionTest {
 
     private class FakeTransport(var outcome: PcSendOutcome = PcSendOutcome.Sent) : PcTransport {
         var sentAction: String? = null
+        var sent = false
         override suspend fun pair(host: String, port: Int, deviceName: String): PcPairing? = null
         override suspend fun send(
             pairing: PcPairing,
@@ -39,6 +41,7 @@ class RemotePcActionTest {
             action: String?,
         ): PcSendOutcome {
             sentAction = action
+            sent = true
             return outcome
         }
         override suspend fun fetchCaps(pairing: PcPairing): List<PcRemoteAction>? = null
@@ -75,6 +78,55 @@ class RemotePcActionTest {
 
         assertTrue(result is ActionResult.Done)
         assertEquals("pc-open", transport.sentAction)
+    }
+
+    // --- #316: компьютер объявил действие недоступным с причиной ---
+
+    private val printerless = PcRemoteAction("pc-print", "Напечатать на ПК", unavailable = "на компьютере нет принтера")
+
+    @Test
+    fun `недоступное действие не становится кнопкой, но объясняет причину`() {
+        val cap = RemotePcCapability(printerless, FakePairings())
+
+        assertFalse("нажать недоступное нельзя", cap.accepts(ObjectState(ObjectKind.PDF)))
+        assertEquals("на компьютере нет принтера", cap.missing(ObjectState(ObjectKind.PDF)))
+    }
+
+    @Test
+    fun `причина молчит там, где кнопки и не было бы`() {
+        // Компьютер не подключён — про его принтер человеку сейчас знать незачем: экран
+        // и так скажет «подключите компьютер» (PcCapability.missing).
+        assertNull(RemotePcCapability(printerless, FakePairings(pairing = null)).missing(ObjectState(ObjectKind.PDF)))
+
+        // Действие про URL — на картинке оно не появилось бы и доступным.
+        val urlOnly = PcRemoteAction("pc-download", "Скачать видео на ПК", kinds = setOf("URL"), unavailable = "нет yt-dlp")
+        assertNull(RemotePcCapability(urlOnly, FakePairings()).missing(ObjectState(ObjectKind.IMAGE)))
+        assertEquals("нет yt-dlp", RemotePcCapability(urlOnly, FakePairings()).missing(ObjectState(ObjectKind.URL)))
+    }
+
+    @Test
+    fun `причины нет — нет и подсказки, но кнопки тоже нет`() {
+        // «Недоступно, причина не названа»: выдумывать за компьютер текст мы не будем,
+        // а тапнуть всё равно нельзя.
+        val mute = RemotePcCapability(PcRemoteAction("pc-print", "Напечатать на ПК", unavailable = ""), FakePairings())
+
+        assertNull(mute.missing(ObjectState(ObjectKind.PDF)))
+        assertFalse(mute.accepts(ObjectState(ObjectKind.PDF)))
+    }
+
+    @Test
+    fun `недоступное не уезжает на компьютер даже в обход экрана`() = runTest {
+        // Сохранённая цепочка или протухший кэш действий ПК могут дойти до реализатора
+        // мимо пузырьков — объект обязан остаться на телефоне, а человек получить причину.
+        val transport = FakeTransport()
+
+        val result = RemotePcRealizer(printerless, FakePairings(), transport).perform(obj(), null)
+
+        assertTrue(result is ActionResult.Failure)
+        assertTrue((result as ActionResult.Failure).recoverable)
+        assertTrue("причина обязана дойти", result.reason.contains("нет принтера"))
+        assertNull("ничего не отправлено", transport.sentAction)
+        assertFalse("объект не уехал", transport.sent)
     }
 
     @Test

@@ -87,21 +87,23 @@ fun main() {
         onReceived = state::onReceived,
         // #80: advertise the actions the phone may run here. Save-as stays local-only —
         // it opens a target dialog, which nobody expects to pop from a remote tap.
+        //
+        // #316: то, что этот компьютер умеет, но сейчас не может, объявляется с причиной
+        // (`unavailable`), а не молчанием. Кнопкой оно не станет — станет строкой «Почти
+        // доступно · нет принтера». Молчание человек читал как «Point не умеет печатать».
         remoteActions = buildList {
             add(com.point.core.flow.PcRemoteAction("pc-open", "Открыть на компьютере"))
             add(com.point.core.flow.PcRemoteAction("pc-copy", "В буфер компьютера"))
             add(com.point.core.flow.PcRemoteAction("pc-reveal", "Показать в папке на ПК"))
-            // Advertised only when yt-dlp actually exists on this PC — a bubble that
-            // cannot run must never appear on the phone.
-            if (downloader.available()) {
-                add(com.point.core.flow.PcRemoteAction("pc-download", "Скачать видео на ПК", kinds = setOf("URL")))
-            }
-            // #291: рекламируем печать, только если этот компьютер её умеет и принтер есть —
-            // пузырёк, который не сможет отработать, на телефоне появляться не должен
-            // (та же дисциплина, что у гейта yt-dlp выше).
-            if (canPrint()) {
-                add(com.point.core.flow.PcRemoteAction("pc-print", "Напечатать на ПК"))
-            }
+            add(
+                com.point.core.flow.PcRemoteAction(
+                    "pc-download", "Скачать видео на ПК", kinds = setOf("URL"),
+                    unavailable = if (downloader.available()) null else "на компьютере нет yt-dlp",
+                ),
+            )
+            // #291: печать отрабатывает, только если система её поддерживает и принтер по
+            // умолчанию есть; #316: если нет — говорим, чего именно не хватает.
+            add(com.point.core.flow.PcRemoteAction("pc-print", "Напечатать на ПК", unavailable = whyCannotPrint()))
         },
         runAction = state::runRemoteAction,
         outbox = outbox,
@@ -161,13 +163,18 @@ fun main() {
 }
 
 /**
- * Умеет ли этот компьютер печатать: поддержка действия PRINT в системе плюс хотя бы один
- * установленный принтер. Реклама действия, которое не отработает, — обещание, которого мы
- * не сдержим (#291).
+ * Почему этот компьютер сейчас не напечатает — или `null`, если напечатает. Реклама действия,
+ * которое не отработает, — обещание, которого мы не сдержим (#291); молчание вместо действия
+ * человек читает как «Point не умеет печатать» (#316). Поэтому не булево «можно/нельзя», а
+ * причина словами: её увидит тот, кто держит телефон в руках.
  */
-private fun canPrint(): Boolean = runCatching {
-    java.awt.Desktop.isDesktopSupported() &&
-        java.awt.Desktop.getDesktop().isSupported(java.awt.Desktop.Action.PRINT) &&
-        // Именно принтер ПО УМОЛЧАНИЮ: печать уходит на него, и если его нет, кнопка обманет.
-        javax.print.PrintServiceLookup.lookupDefaultPrintService() != null
-}.getOrDefault(false)
+private fun whyCannotPrint(): String? {
+    val systemPrints = runCatching {
+        java.awt.Desktop.isDesktopSupported() &&
+            java.awt.Desktop.getDesktop().isSupported(java.awt.Desktop.Action.PRINT)
+    }.getOrDefault(false)
+    if (!systemPrints) return "этот компьютер не умеет печатать"
+    // Именно принтер ПО УМОЛЧАНИЮ: печать уходит на него, и если его нет, кнопка обманет.
+    val printer = runCatching { javax.print.PrintServiceLookup.lookupDefaultPrintService() }.getOrNull()
+    return if (printer == null) "на компьютере нет принтера" else null
+}
