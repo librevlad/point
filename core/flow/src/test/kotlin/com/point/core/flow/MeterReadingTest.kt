@@ -2,6 +2,7 @@ package com.point.core.flow
 
 import com.point.core.model.Provenance
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -142,6 +143,118 @@ class MeterReadingTest {
         // судить теми же границами, что офлайновое правило.
         assertEquals(true, semanticFits(META_ENTITY_METER, "20842"))
         assertEquals(false, semanticFits(META_ENTITY_METER, "12"))
+    }
+
+    @Test
+    fun `ведущие нули барабана остаются в значении дословно`() {
+        // Живой кадр устройства — водомер отдал «00001154», и это 154 м³. Обрезать нули молча
+        // нельзя, сколько разрядов значащие — знает поставщик услуги, а не Point.
+        val facts = meterFacts("Показання 00001154 м³")
+
+        assertEquals("00001154", facts[META_ENTITY_METER])
+        assertEquals("м³", facts[META_ENTITY_METER_UNIT])
+    }
+
+    @Test
+    fun `подсказка не становится фактом — в метаданных живёт только дословное`() {
+        // Производная, которой никто не читал, в метаданных факта была бы значением без
+        // происхождения — и разъехалась бы со значением при первом же голосовании.
+        val facts = meterFacts("Показання 00001154 м³")
+
+        assertTrue("подсказки в метаданных быть не должно", facts.none { it.value == "1154" })
+        assertEquals(
+            setOf(
+                META_ENTITY_METER,
+                META_ENTITY_METER_UNIT,
+                META_ENTITY_METER + META_SOURCE_SUFFIX,
+                META_ENTITY_METER + META_EVIDENCE_SUFFIX,
+            ),
+            facts.keys,
+        )
+    }
+
+    @Test
+    fun `живые показания устройства теряют в подсказке ровно ведущие нули`() {
+        assertEquals("1154", meterWithoutDrumZeros("00001154"))
+        assertEquals("7145", meterWithoutDrumZeros("007145"))
+        assertEquals("208425", meterWithoutDrumZeros("0208425"))
+    }
+
+    @Test
+    fun `всё значащее — подсказывать нечего, и карточка молчит`() {
+        // Прецедент молчания — provenanceLabel(GIVEN) и readingModeLabel(PRINTED): норма не
+        // подписывается, иначе подпись превращается в шум.
+        assertNull(meterWithoutDrumZeros("20842"))
+        assertNull(meterWithoutDrumZeros("154"))
+        assertNull(meterWithoutDrumZeros("20 842"))
+        assertNull(meterWithoutDrumZeros("105,3"))
+    }
+
+    @Test
+    fun `единственный ноль уже без ведущих нулей — подсказка совпала бы со значением`() {
+        assertNull(meterWithoutDrumZeros("0"))
+        assertNull(meterWithoutDrumZeros("0,5"))
+    }
+
+    @Test
+    fun `барабан из одних нулей — это ноль, а не пустота`() {
+        // Пустая строка на месте подсказки была бы худшим исходом: «показание есть, а числа
+        // нет». Поэтому последний ноль остаётся.
+        assertEquals("0", meterWithoutDrumZeros("000"))
+        assertEquals("0", meterWithoutDrumZeros("00000000"))
+        assertEquals("0,5", meterWithoutDrumZeros("00,5"))
+    }
+
+    @Test
+    fun `дробная часть и разрядные пробелы подсказку не ломают`() {
+        assertEquals("154,3", meterWithoutDrumZeros("00154,3"))
+        assertEquals("154", meterWithoutDrumZeros("000 154"))
+    }
+
+    @Test
+    fun `не число — подсказки нет, Point не советует передать слово`() {
+        // Писателей у факта трое, и модель («Понять», ключ METER) формой не судится —
+        // semanticFits размечает, а не решает. Значит в entity.meter законно ложится
+        // «0 показань», и срезать у него «нули» значило бы посоветовать передать «показань».
+        assertNull(meterWithoutDrumZeros("0 показань"))
+        assertNull(meterWithoutDrumZeros("0 куб.м знято"))
+        // Единица живёт своим ключом — склеенное значение Point числом табло не признаёт.
+        assertNull(fieldHint(META_ENTITY_METER, "00154 м³"))
+    }
+
+    @Test
+    fun `пробелы по краям подсказку не выдумывают`() {
+        // Подсказка обязана отличаться от значения по сути, а не по пробелам, иначе карточка
+        // предложит «передать» ровно то, что уже показала.
+        assertNull(meterWithoutDrumZeros(" 0 "))
+        assertEquals("1154", meterWithoutDrumZeros(" 00001154 "))
+    }
+
+    @Test
+    fun `подсказка есть только у показания — чужой ведущий ноль часть номера`() {
+        // У трека и телефона ноль впереди — не оформление барабана, а сам номер, и срезать
+        // его значило бы отслеживать чужую посылку.
+        assertNull(fieldHint(META_ENTITY_TRACK, "0420459154939512"))
+        assertNull(fieldHint(META_ENTITY_PREFIX + "phone", "0671234567"))
+        assertEquals("1154", fieldHint(META_ENTITY_METER, "00001154"))
+    }
+
+    @Test
+    fun `карточка получает оба числа — дословное со страницы и подсказку рядом`() {
+        val facts = meterFacts("Показання 00001154 м³")
+        val ready = ACTION_SCHEMAS.single { it.id == "meter-reading" }.readiness(facts)
+        val field = (ready as Readiness.Ready).present.single { it.spec.critical }
+
+        assertEquals("00001154", field.value)
+        assertEquals("1154", field.hint)
+    }
+
+    @Test
+    fun `показание без нулей подсказки в карточке не заводит`() {
+        val ready = ACTION_SCHEMAS.single { it.id == "meter-reading" }
+            .readiness(meterFacts("Показання 20842 кВт·ч"))
+
+        assertNull((ready as Readiness.Ready).present.single { it.spec.critical }.hint)
     }
 
     @Test
