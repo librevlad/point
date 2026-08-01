@@ -139,7 +139,9 @@ fun bubbleColor(key: String): Color = when (if (key.startsWith("app:")) "open-in
     else -> Color(0xFF9AA0A6)        // grey — everything else
 }
 
-/** Icon representing the current object's kind, shown in the screen header. */
+/** Icon representing the current object's kind, shown in the screen header.
+ *  Один тип уже перерос иконку: у таблицы есть собственный рисованный знак — `objectMark` /
+ *  `SpreadsheetMark` (#295), и герой экрана спрашивает сначала его. */
 fun kindIcon(kind: ObjectKind): ImageVector = when (kind) {
     ObjectKind.IMAGE -> Icons.Filled.Image
     ObjectKind.TEXT -> Icons.Filled.Description
