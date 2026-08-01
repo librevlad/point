@@ -40,6 +40,31 @@ class AgreementTest {
         assertEquals("+380 67 123-45-67", v.value) // the first raw form, never a normalised one
     }
 
+    // --- Число складывается как число (#294) ---
+
+    @Test
+    fun `формат числа складывается — запятая, точка и разрядный пробел`() {
+        // Ведомость владельца написана как «6,003»; модель, ответившая «6.003», прочла то же
+        // самое, и объявлять это спором значило бы пометить всю таблицу за нашу же типографику.
+        assertTrue(agree(listOf("6,003", "6.003"))!!.agreed)
+        assertTrue(agree(listOf("20 842", "20842"))!!.agreed)
+        assertTrue(agree(listOf("1 234,56", "1.234,56"))!!.agreed)
+    }
+
+    @Test
+    fun `пропавшая запятая — другое число, а не другой формат`() {
+        // Стирая разделитель наравне с пробелом, свёртка равняла «1,0» и «10»: ошибка в десять
+        // раз проходила как согласие источников — без пометки и без вариантов на выбор.
+        assertFalse(agree(listOf("1,0", "10"))!!.agreed)
+        assertFalse(agree(listOf("0,72", "072"))!!.agreed)
+    }
+
+    @Test
+    fun `ведущий ноль по-прежнему различие — его несут барабан счётчика и номер телефона`() {
+        assertFalse(agree(listOf("00154", "154"))!!.agreed)
+        assertTrue(agree(listOf("+380 67 123-45-67", "+380671234567"))!!.agreed)
+    }
+
     @Test
     fun `two of three agreeing wins the vote, and the loser is kept`() {
         val v = agree(listOf("Хрещатик 1", "Хрещатик 7", "Хрещатик, 1"))!!

@@ -11,10 +11,15 @@ data class Consensus(
 )
 
 /**
- * Vote each cell across [tables] (independent reads of the same table). Aligns by row/column index —
- * strong vision models produce the same structure for a clean table; a shorter read simply has no
- * value to contribute for the missing cells. A cell is clean iff every present read agrees; otherwise
- * it takes the plurality raw value, is flagged ⚠, and its distinct readings become candidates.
+ * Vote each cell across [tables] (independent reads of the same table). A cell is clean iff every
+ * present read agrees; otherwise it takes the plurality raw value, is flagged ⚠, and its distinct
+ * readings become candidates.
+ *
+ * Что с чем сравнивать, решает **содержимое, а не индекс** — и по строкам ([alignRows]), и по
+ * ячейкам внутри строки ([columnsOf]). Индекс врёт ровно там, где чтения расходятся: модель,
+ * пропустившая шапку, сдвинута целиком, а модель, пропустившая узкий столбец бланка, — на
+ * столбец внутри каждой строки. Голосуя по индексу, обе превращали соседнее значение в «другое
+ * чтение» — и на эталонной ведомости владельца ⚠ стояло на 387 ячейках из ~430.
  */
 fun reconcile(tables: List<List<List<String>>>): Consensus {
     val ts = tables.filter { it.isNotEmpty() }
@@ -28,14 +33,16 @@ fun reconcile(tables: List<List<List<String>>>): Consensus {
     val candidates = LinkedHashMap<Pair<Int, Int>, List<String>>()
 
     slots.forEachIndexed { r, slot ->
-        val ncol = slot.mapNotNull { it?.size }.maxOrNull() ?: 0
-        val row = ArrayList<String>(ncol)
-        for (c in 0 until ncol) {
+        // Столбцы — тоже по содержимому (#294): чтение, пропустившее узкий столбец бланка,
+        // сдвинуто внутри строки, и голосование по индексу сравнивало бы соседние значения.
+        val columns = columnsOf(slot.filterNotNull())
+        val row = ArrayList<String>(columns.size)
+        columns.forEachIndexed { c, readings ->
             // The vote itself is [agree] (#222, шаг 7) — same mechanics, no longer table-only.
             // What stays here is the table's own dressing: the ⚠ marker and the candidate cap.
-            val verdict = agree(slot.mapNotNull { it?.getOrNull(c) })
+            val verdict = agree(readings)
             if (verdict == null) {
-                row.add(""); continue
+                row.add(""); return@forEachIndexed
             }
             if (verdict.agreed) {
                 row.add(verdict.value) // every present read agrees
@@ -47,6 +54,67 @@ fun reconcile(tables: List<List<List<String>>>): Consensus {
         outRows.add(row)
     }
     return Consensus(outRows, candidates)
+}
+
+/**
+ * Ячейки одной строки документа, разложенные по столбцам: `columns[c]` — что прочитал в этом
+ * столбце каждый источник, в порядке источников.
+ *
+ * Сетку столбцов задаёт первое чтение строки, остальные раскладываются по ней [alignCells].
+ * Ячейка, которой места в сетке не нашлось, встаёт **новым столбцом справа**: выбросить её
+ * значило бы потерять прочитанное молча, а вдвинуть в середину — сдвинуть эту строку
+ * относительно всех прочих строк файла.
+ */
+private fun columnsOf(readings: List<List<String>>): List<List<String>> {
+    val base = readings.firstOrNull().orEmpty()
+    val columns = base.mapTo(mutableListOf()) { mutableListOf(it) }
+    readings.drop(1).forEach { row ->
+        val places = alignCells(base, row)
+        row.forEachIndexed { j, value ->
+            val c = if (places == null) j else places[j]
+            if (c == null) {
+                if (value.isNotBlank()) columns += mutableListOf(value)
+            } else {
+                while (columns.size <= c) columns += mutableListOf<String>()
+                columns[c] += value
+            }
+        }
+    }
+    return columns
+}
+
+/**
+ * Куда ложится каждая ячейка чтения [row] в столбцах опорной строки [base]; `null` в позиции —
+ * места в сетке нет. `null` вместо всей раскладки — содержимое не даёт оснований двигать
+ * ячейки, и столбцы считаются по индексу, как раньше.
+ *
+ * Живой случай (#294, ведомость владельца): одна модель отдала строку `… 1,000 | 0,087 | 1,375 |
+ * 0,120 | 0,625 | 0,054`, другая пропустила узкий столбец бланка и дописала хвост —
+ * `… 1,000 | 1,375 | 0,125 | 0,625 | 0,875 | 0,875`. По индексу спорной становилась **каждая**
+ * ячейка после пропуска, и в дропдауне рядом с «0,087» стояло «1,375» — не другое чтение, а
+ * значение соседнего столбца. По содержимому совпавшие значения встречаются, пропуск читается
+ * как отсутствие, а спорят ровно те ячейки, где модели правда разошлись («0,120» против «0,125»).
+ *
+ * Раскладка принимается, только если она **строго** лучше индексной: сдвиг надо доказать
+ * совпадениями, иначе таблица, где модели разошлись во всех ячейках, «выравнивалась» бы в
+ * произвольную перестановку. Настоящий спор при этом уцелеет — на нём раскладка не выигрывает.
+ */
+private fun alignCells(base: List<String>, row: List<String>): List<Int?>? {
+    fun same(a: String?, b: String?): Boolean {
+        val x = a?.let(::normConsensus).orEmpty()
+        return x.isNotEmpty() && x == b?.let(::normConsensus)
+    }
+    val byIndex = row.indices.count { same(base.getOrNull(it), row[it]) }
+    // Соседние односторонние ячейки — замена (одно место документа, прочитанное по-разному),
+    // иначе спор о значении растворился бы в «пропуск + находка»; правдоподобие тут ни при чём —
+    // это ячейки одной и той же строки.
+    val matched = lcsOps(base.size, row.size) { i, j -> same(base[i], row[j]) }
+    val ops = pairSubstitutions(matched) { _, _ -> true }
+    val byContent = ops.count { (i, j) -> i != null && j != null && same(base[i], row[j]) }
+    if (byContent <= byIndex) return null
+    val places = arrayOfNulls<Int>(row.size)
+    ops.forEach { (i, j) -> if (j != null) places[j] = i }
+    return places.toList()
 }
 
 /**
@@ -167,17 +235,23 @@ private fun matchByKey(
 private fun matchRows(
     grid: List<List<String>>,
     rows: List<List<String>>,
-): List<Pair<Int?, Int?>> {
-    val n = grid.size
-    val m = rows.size
+): List<Pair<Int?, Int?>> =
+    pairSubstitutions(lcsOps(grid.size, rows.size) { i, j -> rowsSimilar(grid[i], rows[j]) }) { i, j ->
+        sameRowPossible(grid[i], rows[j])
+    }
+
+/**
+ * Классический LCS-обход двух последовательностей: пары «индекс слева ↔ индекс справа», `null`
+ * с одной стороны — пропуск. Длина совпадений максимизируется, порядок сохраняется.
+ *
+ * Общий для строк и для ячеек внутри строки: обе задачи — «те же элементы, кто-то что-то
+ * пропустил», и две копии одного обхода разошлись бы на первой правке.
+ */
+private fun lcsOps(n: Int, m: Int, similar: (Int, Int) -> Boolean): List<Pair<Int?, Int?>> {
     val lcs = Array(n + 1) { IntArray(m + 1) }
     for (i in n - 1 downTo 0) {
         for (j in m - 1 downTo 0) {
-            lcs[i][j] = if (rowsSimilar(grid[i], rows[j])) {
-                lcs[i + 1][j + 1] + 1
-            } else {
-                maxOf(lcs[i + 1][j], lcs[i][j + 1])
-            }
+            lcs[i][j] = if (similar(i, j)) lcs[i + 1][j + 1] + 1 else maxOf(lcs[i + 1][j], lcs[i][j + 1])
         }
     }
     val raw = mutableListOf<Pair<Int?, Int?>>()
@@ -185,15 +259,44 @@ private fun matchRows(
     var j = 0
     while (i < n && j < m) {
         when {
-            rowsSimilar(grid[i], rows[j]) -> { raw += i to j; i++; j++ }
+            similar(i, j) -> { raw += i to j; i++; j++ }
             lcs[i + 1][j] >= lcs[i][j + 1] -> { raw += i to null; i++ }
             else -> { raw += null to j; j++ }
         }
     }
     while (i < n) raw += i++ to null
     while (j < m) raw += null to j++
-    return pairSubstitutions(raw)
+    return raw
 }
+
+/**
+ * Могут ли это быть два чтения ОДНОЙ строки документа (#294, эталонная ведомость владельца).
+ *
+ * Идентификатор строки спором не бывает: `11401` и `11029` — две разные строки бланка, а не два
+ * чтения одной, как бы близко они ни оказались в ответах моделей. Без этой проверки замена
+ * ([pairSubstitutions]) склеивала в один слот что попало — на живом прогоне строку данных с
+ * **шапкой** второго чтения, и человек получал дропдаун, где «0,831» предлагалось заменить на
+ * «Рота зв'язку». Три такие склейки дали в файле почти все дропдауны, и ни один из них не был
+ * спором о значении.
+ *
+ * Идентификатор — целое из 3–6 цифр ([ID_SHAPED], та же форма, что у [validateTable]): «1,917»
+ * им не считается (свёртка числа оставляет точку), поэтому строки с расходящимися количествами
+ * по-прежнему считаются одной строкой и голосуются. Пустая ячейка ничего не опровергает —
+ * отсутствие не разногласие.
+ */
+private fun sameRowPossible(a: List<String>, b: List<String>): Boolean {
+    for (c in 0 until minOf(a.size, b.size)) {
+        val x = normConsensus(a[c])
+        val y = normConsensus(b[c])
+        if (x.isEmpty() || y.isEmpty()) continue
+        if (!ID_SHAPED.matches(x) && !ID_SHAPED.matches(y)) continue
+        if (x != y) return false
+    }
+    return true
+}
+
+/** Артикул/номер строки: целое из 3–6 цифр — та же форма, которой [validateTable] узнаёт ряд id. */
+private val ID_SHAPED = Regex("""\d{3,6}""")
 
 /**
  * Соседние «только сетка» и «только чтение» — это ЗАМЕНА одной строки, а не потеря и находка
@@ -203,8 +306,15 @@ private fun matchRows(
  *
  * Классический diff называет это substitution; здесь она и восстанавливается, чтобы обе
  * версии строки встретились в одном слоте и рассудились [agree].
+ *
+ * [plausible] — право вето: не всякая пара соседей одна и та же строка документа (см.
+ * [sameRowPossible]). Склеенные без разбора, они рождали спор из ничего — и именно такие
+ * дропдауны человек видел на эталонной ведомости.
  */
-private fun pairSubstitutions(ops: List<Pair<Int?, Int?>>): List<Pair<Int?, Int?>> {
+private fun pairSubstitutions(
+    ops: List<Pair<Int?, Int?>>,
+    plausible: (Int, Int) -> Boolean,
+): List<Pair<Int?, Int?>> {
     val out = mutableListOf<Pair<Int?, Int?>>()
     var k = 0
     while (k < ops.size) {
@@ -215,8 +325,10 @@ private fun pairSubstitutions(ops: List<Pair<Int?, Int?>>): List<Pair<Int?, Int?
         val nextIsGridOnly = next != null && next.first != null && next.second == null
         val nextIsRowOnly = next != null && next.first == null && next.second != null
         when {
-            curIsGridOnly && nextIsRowOnly -> { out += cur.first to next!!.second; k += 2 }
-            curIsRowOnly && nextIsGridOnly -> { out += next!!.first to cur.second; k += 2 }
+            curIsGridOnly && nextIsRowOnly && plausible(cur.first!!, next!!.second!!) ->
+                { out += cur.first to next.second; k += 2 }
+            curIsRowOnly && nextIsGridOnly && plausible(next!!.first!!, cur.second!!) ->
+                { out += next.first to cur.second; k += 2 }
             else -> { out += cur; k++ }
         }
     }
