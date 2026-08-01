@@ -53,6 +53,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.point.core.flow.META_ALT_SUFFIX
 import com.point.core.flow.alternativesOf
+import com.point.core.flow.isDoubtful
+import com.point.core.flow.provenanceLabel
 import com.point.core.flow.KIND_ADDRESS
 import com.point.core.flow.KIND_DATE
 import com.point.core.flow.KIND_EMAIL
@@ -308,8 +310,12 @@ private fun MessageBanner(message: String?) {
  * every other object uses. «Маршрут» appears there because the object carries `HAS_ADDRESS`,
  * not because anyone wrote a case for it.
  *
- * A reading below certainty is shown as such — the graph carries confidence, so the screen
- * must not present a structural guess as a fact.
+ * Под значением — **откуда оно взялось** (#264): «прочитано» / «выведено правилом» / «прочитано
+ * моделью» / «подтверждено вами». Раньше здесь стояло одно слово «возможно» на любое
+ * `confidence < 1f`, и трек, найденный правилом дословно на странице (0.8), выглядел ровно так
+ * же, как имя перевозчика, которое модель назвала сама (0.7). «Возможно» осталось, но теперь
+ * оно означает ровно две вещи и **вычисляется** ([isDoubtful]): улик меньше двух независимых
+ * классов либо источники спорят о чтении.
  */
 @Composable
 private fun FoundObjects(
@@ -360,8 +366,10 @@ private fun FoundObjects(
                                 text = listOfNotNull(
                                     kindLabel(obj.state.kind),
                                     roleOf(obj, relations),
-                                    // Honest about a reading nobody checked against the world.
-                                    "возможно".takeIf { obj.confidence < 1f },
+                                    // Происхождение — честная подпись вместо суррогатного числа.
+                                    provenanceLabel(obj.provenance),
+                                    // «Возможно» — только предположение или спор, не «не 1.0».
+                                    "возможно".takeIf { isDoubtful(obj.metadata) },
                                 ).joinToString(" · "),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,

@@ -517,7 +517,9 @@ class FlowViewModel @Inject constructor(
         }
     }
 
-    private fun provenance(top: PointObject, snap: SnappedSelection) = buildMap {
+    /** Откуда взялось ВЫДЕЛЕНИЕ: объект-источник, метки атомов, область, страница.
+     *  Не путать с `PointObject.provenance` (#264) — то про происхождение значения. */
+    private fun selectionOrigin(top: PointObject, snap: SnappedSelection) = buildMap {
         put(META_SELECTION_SOURCE, top.id)
         if (snap.ids.isNotEmpty()) put(META_SELECTION_IDS, snap.ids.joinToString(" "))
         put(META_SELECTION_REGION, snap.region.let { "${it.left} ${it.top} ${it.right} ${it.bottom}" })
@@ -532,7 +534,7 @@ class FlowViewModel @Inject constructor(
             mime = "text/plain",
             uri = ref,
             state = ObjectState(ObjectKind.TEXT, features = setOf(Feature.HAS_TEXT)),
-            metadata = provenance(top, snap),
+            metadata = selectionOrigin(top, snap),
             sourceObjects = listOf(top.id),
         )
     }
@@ -551,7 +553,7 @@ class FlowViewModel @Inject constructor(
             mime = "image/jpeg",
             uri = ref,
             state = ObjectState(ObjectKind.IMAGE),
-            metadata = provenance(top, snap),
+            metadata = selectionOrigin(top, snap),
             sourceObjects = listOf(top.id),
         )
     }

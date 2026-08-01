@@ -62,7 +62,13 @@ fun agree(readings: List<String>): Agreement? {
     }
 }
 
-/** Metadata suffix holding the readings a fact was disputed between: `entity.address.alt`. */
+/**
+ * Metadata suffix holding the readings a fact was disputed between: `entity.address.alt`.
+ *
+ * Спор — **канал**, а не число: `DISPUTED_CONFIDENCE = 0.5f` («источники противоречат друг
+ * другу») удалён в #264, потому что то же самое уже сказано здесь и уже нарисовано строкой
+ * «или: …». Судит спор [isDisputed], а не сравнение с 1f.
+ */
 const val META_ALT_SUFFIX = ".alt"
 
 /**
@@ -229,5 +235,3 @@ fun mergeFacts(known: Map<String, String>, fresh: Map<String, String>): Map<Stri
     return merged
 }
 
-/** What a fact is worth when its sources contradict each other: a coin flip, and shown as one. */
-const val DISPUTED_CONFIDENCE = 0.5f

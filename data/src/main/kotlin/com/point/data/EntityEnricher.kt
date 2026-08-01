@@ -8,7 +8,9 @@ import com.point.core.flow.expandAddressToLine
 import com.point.core.flow.alternativesOf
 import com.point.core.flow.altValue
 import com.point.core.flow.META_ALT_SUFFIX
-import com.point.core.flow.DISPUTED_CONFIDENCE
+import com.point.core.flow.META_EVIDENCE_SUFFIX
+import com.point.core.flow.META_SOURCE_SUFFIX
+import com.point.core.flow.provenanceOf
 import com.point.core.flow.EXTRACTED_KINDS
 import com.point.core.flow.KIND_ADDRESS
 import com.point.core.flow.KIND_DATE
@@ -113,6 +115,10 @@ internal const val ENTITY_CREATOR = "entity-enricher"
  *
  * **`entity.card` is deliberately absent.** A card number is the one fact the UI takes care to
  * mask («•• 5678»); promoting it to a first-class object would put it on screen in full.
+ *
+ * **Узел несёт срез метаданных своего факта** (#264): значение, спор (`.alt`), улики (`.ev`) и
+ * происхождение (`.src`) родителя — и `provenance` выводится из этого же среза, а не выставляется
+ * рядом. Это и есть защита от двух источников истины: поле узла и его `.src` разойтись не могут.
  */
 internal fun entityObjects(
     source: PointObject,
@@ -130,20 +136,26 @@ internal fun entityObjects(
         // #222, шаг 7: when two sources read this fact differently, the object says so instead
         // of presenting one of them as settled.
         val alternatives = alternativesOf(facts, key)
+        // Kept so the object's own screen shows its value, and so a re-open re-lights
+        // the feature through MetadataEntityEnricher without re-running any engine.
+        val slice = buildMap {
+            put(key, value)
+            if (alternatives.isNotEmpty()) {
+                put(key + META_ALT_SUFFIX, altValue(alternatives))
+            }
+            // Улики и происхождение — родительские: узел судится ровно тем же, чем судился
+            // факт, из которого он вырос (#264). Чего у родителя нет, того нет и здесь —
+            // «не судили» не становится «улик нет».
+            facts[key + META_EVIDENCE_SUFFIX]?.let { put(key + META_EVIDENCE_SUFFIX, it) }
+            facts[key + META_SOURCE_SUFFIX]?.let { put(key + META_SOURCE_SUFFIX, it) }
+        }
         PointObject(
             id = "${source.id}:$suffix",
             mime = "text/plain",
             uri = ValueRef(value), // no file behind it — the value IS the content
             state = ObjectState(kind, setOf(feature)),
-            // Kept so the object's own screen shows its value, and so a re-open re-lights
-            // the feature through MetadataEntityEnricher without re-running any engine.
-            metadata = buildMap {
-                put(key, value)
-                if (alternatives.isNotEmpty()) {
-                    put(key + META_ALT_SUFFIX, altValue(alternatives))
-                }
-            },
-            confidence = if (alternatives.isEmpty()) 1f else DISPUTED_CONFIDENCE,
+            metadata = slice,
+            provenance = provenanceOf(slice, key),
             sourceObjects = listOf(source.id),
             creatorAction = creator,
         )

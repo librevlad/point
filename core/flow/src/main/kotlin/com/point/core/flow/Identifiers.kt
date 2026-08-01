@@ -1,5 +1,7 @@
 package com.point.core.flow
 
+import com.point.core.model.Provenance
+
 /**
  * «Find waybill numbers» — one extractor, one line of spec (#222).
  *
@@ -15,15 +17,15 @@ package com.point.core.flow
  * **On the checksum.** A structural rule only: 14 digits, optionally grouped by spaces. Nova
  * Poshta does publish waybills in this shape, but no verified check-digit algorithm went into
  * this code — inventing one would reject real numbers, which is worse than a rare false
- * positive. Hence [WAYBILL_CONFIDENCE] below 1: the pipeline is told this reading is structural,
- * not verified, and consensus or a later validator can raise it.
+ * positive.
+ *
+ * «Форма совпала, контрольной цифры нет» жило числом `WAYBILL_CONFIDENCE = 0.8f`. Это не
+ * уверенность, а **улика** — ровно один класс [EvidenceClass.SEMANTIC] (#264), и [trackFacts]
+ * теперь так и пишет. Второй независимый класс приносит только тот, кто судил страницу.
  */
 
 /** A digit run of exactly 14 digits, optionally grouped by spaces, not glued to other digits. */
 private val WAYBILL_SHAPED = Regex("""(?<!\d)\d[\d ]{11,20}\d(?!\d)""")
-
-/** Structural match only — see the note on the checksum above. */
-const val WAYBILL_CONFIDENCE = 0.8f
 
 /**
  * Waybill-shaped numbers in [text], normalised to single spaces and de-duplicated in the order
@@ -60,6 +62,13 @@ const val META_ENTITY_TRACK = META_ENTITY_PREFIX + "track"
  * ложной однозначности). Именно `.more`, не `.alt`: это не спор о чтении одного номера, а
  * второй настоящий номер на странице — и подтверждение первого моделью его не стирает
  * ([mergeFacts] снимает только `.alt`). Пусто — пустая карта, а не ключ с пустым значением.
+ *
+ * **Сознательная смена поведения (#264).** Правило пишет и улику: `entity.track.ev = "semantic"` —
+ * одна и ровно одна. Раньше то же самое говорило число `WAYBILL_CONFIDENCE = 0.8f`, которое видел
+ * только граф; теперь это видит карточка готовности, и она честно скажет «Отследить отправление
+ * ✓ 20 4514 9154 9395 · возможно» **ещё до** «Понять». Так и должно быть: офлайновое правило
+ * совпало формой и ничем больше — контрольной цифры у 14-значного номера нет, страницу никто не
+ * судил. Второй класс улик приносит только тот, кто смотрел на слой ([fieldEvidence]).
  */
 fun trackFacts(text: String): Map<String, String> {
     val tracks = waybillNumbers(text)
@@ -68,7 +77,10 @@ fun trackFacts(text: String): Map<String, String> {
         put(META_ENTITY_TRACK, tracks.first())
         // Происхождение (#261, v3 §8): найдено правилом дословно в распознанном тексте —
         // ПРОЧИТАНО со страницы, не выведено и не продиктовано.
-        put(META_ENTITY_TRACK + META_SOURCE_SUFFIX, SOURCE_OCR)
+        put(META_ENTITY_TRACK + META_SOURCE_SUFFIX, Provenance.OCR.wire)
+        // Улика ровно одна: форма. Правило судило и говорит, чем именно, — «не судили» и
+        // «улик мало» обязаны выглядеть по-разному (#264).
+        put(META_ENTITY_TRACK + META_EVIDENCE_SUFFIX, EvidenceClass.SEMANTIC.name.lowercase())
         if (tracks.size > 1) put(META_ENTITY_TRACK + META_MORE_SUFFIX, altValue(tracks))
     }
 }

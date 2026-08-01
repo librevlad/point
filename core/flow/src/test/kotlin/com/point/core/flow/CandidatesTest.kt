@@ -163,11 +163,14 @@ class CandidatesTest {
     @Test
     fun `mergeFacts не сливает аннотации как факты`() {
         val merged = mergeFacts(
-            mapOf("entity.track" to "A", "entity.track.src" to SOURCE_OCR),
-            mapOf("entity.track.src" to SOURCE_MODEL, "entity.track.ev" to "semantic"),
+            mapOf("entity.track" to "A", "entity.track.src" to com.point.core.model.Provenance.OCR.wire),
+            mapOf(
+                "entity.track.src" to com.point.core.model.Provenance.MODEL.wire,
+                "entity.track.ev" to "semantic",
+            ),
         )
 
-        assertEquals(SOURCE_OCR, merged["entity.track.src"])
+        assertEquals(com.point.core.model.Provenance.OCR.wire, merged["entity.track.src"])
         assertNull(merged["entity.track.ev"])
     }
 
