@@ -45,7 +45,7 @@ class TesseractTextRecognizer @Inject constructor(
         val bitmap = frame.bitmap
         val tess = TessBaseAPI()
         try {
-            val dataPath = ensureTessData()
+            val dataPath = TessData.ensure(context)
             // OEM 1 = LSTM_ONLY — matches the tessdata_fast (LSTM) models.
             val ok = tess.init(dataPath.absolutePath, LANG, 1)
             if (!ok) {
@@ -235,26 +235,10 @@ class TesseractTextRecognizer @Inject constructor(
         }.onFailure { Log.w(TAG, "atoms dump failed", it) }
     }
 
-    /** @return the dir that CONTAINS `tessdata/` (what TessBaseAPI.init expects). */
-    private fun ensureTessData(): File {
-        val base = File(context.filesDir, "tesseract")
-        val tessdata = File(base, "tessdata").apply { mkdirs() }
-        for (name in MODELS) {
-            val out = File(tessdata, name)
-            if (out.exists() && out.length() > 0) continue
-            context.assets.open("tessdata/$name").use { input ->
-                out.outputStream().use { input.copyTo(it) }
-            }
-            Log.i(TAG, "copied model $name (${out.length()} bytes)")
-        }
-        return base
-    }
-
     private companion object {
         const val TAG = "PointOCR"
-        const val LANG = "rus+eng"
+        val LANG = TessData.LANG
         const val OCR_MAX_PX = 2048 // enough for legible text; bounds memory on huge photos (#18)
-        val MODELS = listOf("rus.traineddata", "eng.traineddata")
         val EMPTY = AtomLayer(emptyList())
 
         /** Происхождение атома (#257): имя — константа контракта, версия — у живого движка. */
