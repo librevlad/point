@@ -55,6 +55,7 @@ import com.point.executors.ExtractAllRealizer
 import com.point.executors.LearningBubblePolicy
 import com.point.executors.ImageCapability
 import com.point.executors.ImageRealizer
+import com.point.executors.MeterOcrCapability
 import com.point.executors.MeterOcrRealizer
 import com.point.executors.MergePdfCapability
 import com.point.executors.MergePdfRealizer
@@ -167,6 +168,8 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun replaceBgCap(c: ReplaceBgCapability): Capability
     @Binds @IntoSet abstract fun ocrCap(c: OcrCapability): Capability
     @Binds @IntoSet abstract fun cloudOcrCap(c: CloudOcrCapability): Capability
+    /** Табло прибора — собственный тап, а не звено «Распознать текст» (#262): решает человек. */
+    @Binds @IntoSet abstract fun meterOcrCap(c: MeterOcrCapability): Capability
     @Binds @IntoSet abstract fun aiCap(c: AiCapability): Capability
     @Binds @IntoSet abstract fun shoppingListCap(c: ShoppingListCapability): Capability
     /** #260: «Понять глубже» + «Кто есть кто» + «Собрать данные+» свёрнуты в одно «Понять». */
@@ -208,12 +211,14 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun cutoutR(r: CutoutRealizer): Realizer
     @Binds @IntoSet abstract fun blurBgR(r: BlurBgRealizer): Realizer
     @Binds @IntoSet abstract fun replaceBgR(r: ReplaceBgRealizer): Realizer
-    // OCR has three realizers behind one capability — the Resolver ranks them and chains:
-    // страница целиком (10) → табло прибора (50) → облако (90). Roadmap #1 in prod.
+    // OCR has two realizers behind one capability — the Resolver ranks device before
+    // cloud and chains them (device recognises nothing -> cloud). Roadmap #1 in prod.
+    // Чтение прибора в эту цепочку НЕ входит: поиск табло срабатывает на 22 кадрах корпуса из
+    // 23, и внутри цепочки он подменял бы облачное чтение документа выдуманным числом (#262).
     @Binds @IntoSet abstract fun deviceOcrR(r: DeviceOcrRealizer): Realizer
-    @Binds @IntoSet abstract fun meterOcrR(r: MeterOcrRealizer): Realizer
     @Binds @IntoSet abstract fun cloudOcrR(r: CloudOcrRealizer): Realizer
     @Binds @IntoSet abstract fun cloudOcrDirectR(r: CloudOcrDirectRealizer): Realizer
+    @Binds @IntoSet abstract fun meterOcrR(r: MeterOcrRealizer): Realizer
     @Binds @IntoSet abstract fun aiR(r: AiRealizer): Realizer
     @Binds @IntoSet abstract fun shoppingListR(r: ShoppingListRealizer): Realizer
     @Binds @IntoSet abstract fun understandR(r: UnderstandRealizer): Realizer

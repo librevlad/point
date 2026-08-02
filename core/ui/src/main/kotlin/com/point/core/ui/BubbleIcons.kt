@@ -47,6 +47,7 @@ import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.ShoppingBasket
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Sms
 import androidx.compose.material.icons.filled.TableChart
 import androidx.compose.material.icons.filled.Tag
@@ -82,6 +83,7 @@ fun bubbleIcon(key: String): ImageVector = when (if (key.startsWith("app:")) "op
     "replace-bg" -> Icons.Filled.Wallpaper
     "ocr" -> Icons.Filled.TextFields
     "ocr-cloud" -> Icons.Filled.Cloud
+    "meter" -> Icons.Filled.Speed
     "qr" -> Icons.Filled.QrCode2
     "qr-scan" -> Icons.Filled.QrCodeScanner
     "call" -> Icons.Filled.Call
@@ -120,6 +122,7 @@ fun bubbleColor(key: String): Color = when (if (key.startsWith("app:")) "open-in
     "replace-bg" -> Color(0xFF7C4DFF) // purple — replace background
     "ocr" -> Color(0xFF16A34A)      // green — recognise text
     "ocr-cloud" -> Color(0xFF2F80ED) // blue — recognise in the cloud
+    "meter" -> Color(0xFF15803D)     // deeper green — местное чтение табло прибора
     "qr" -> Color(0xFF0EA5A5)       // teal — produces an image
     "qr-scan" -> Color(0xFF2F80ED)  // blue — read a QR
     "office" -> Color(0xFF16A34A)   // green — documents/data
