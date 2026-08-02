@@ -49,3 +49,17 @@ tasks.register<JavaExec>("scoreCorpus") {
         listOf("run", "frames", "report").map { project.findProperty(it) as? String ?: "" }
     }
 }
+
+// Свод чтений для опытов над тем, ЧЕМ читать (ICG-бенчмарк): та же `reconcile`, что в продукте,
+// иначе опыт мерил бы качество скрипта, а не качество ансамбля.
+//
+//   ./gradlew :core:flow:reconcileTables -Pinputs=a.tsv,b.tsv -Pout=consensus.tsv
+tasks.register<JavaExec>("reconcileTables") {
+    group = "verification"
+    description = "Сводит несколько прочтений одной таблицы в одну (#346)"
+    mainClass.set("com.point.core.flow.ReconcileCliKt")
+    classpath = sourceSets["test"].runtimeClasspath
+    argumentProviders.add {
+        listOf("inputs", "out").map { project.findProperty(it) as? String ?: "" }
+    }
+}

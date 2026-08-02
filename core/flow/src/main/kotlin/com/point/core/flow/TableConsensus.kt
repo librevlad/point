@@ -8,6 +8,17 @@ package com.point.core.flow
 data class Consensus(
     val rows: List<List<String>>,
     val candidates: Map<Pair<Int, Int>, List<String>>,
+    /**
+     * Сколько чтений реально стоит за таблицей. `1` при нескольких прочтениях значит, что они
+     * говорили о разных таблицах и смешивать их было нельзя, — и человеку это надо сказать:
+     * иначе он получает одно ничем не подтверждённое чтение с видом проверенного.
+     *
+     * Замер (кадр 23, повторы 02.08.2026) показал, зачем: одно и то же чтение одной и той же
+     * моделью выходит то 48 из 49 верных ячеек, то 23 из 49 — разброс больше любой разницы
+     * между конфигурациями. Второе мнение защищает не от плохой модели, а от плохого раза;
+     * когда защиты не случилось, молчать об этом нельзя.
+     */
+    val sources: Int = 1,
 )
 
 /**
@@ -31,7 +42,7 @@ data class Consensus(
  */
 fun reconcile(tables: List<List<List<String>>>): Consensus {
     val ts = tables.filter { it.isNotEmpty() }
-    if (ts.size <= 1) return Consensus(ts.firstOrNull() ?: emptyList(), emptyMap())
+    if (ts.size <= 1) return Consensus(ts.firstOrNull() ?: emptyList(), emptyMap(), sources = ts.size)
 
     // Строки выравниваются ПО СОДЕРЖИМОМУ, а не по индексу (#294): модель, пропустившая
     // строку заголовка, сдвинута целиком, и голосование по индексу сравнивало её заголовок
@@ -43,7 +54,13 @@ fun reconcile(tables: List<List<List<String>>>): Consensus {
     // 57 строк вместо 35 и пометка на 75% ячеек — человек получил не таблицу, а задание
     // перепроверить её целиком. Честнее отдать одно чтение целиком: оно про одну страницу.
     if (slots.size >= MIN_SLOTS_TO_JUDGE_ALIGNMENT && agreedShare(slots, ts.size) < MIN_ALIGNED_SHARE) {
-        return Consensus(ts.first(), emptyMap())
+        // Кого оставить — решает согласие, а не очередь провайдеров. Замер повторов показал
+        // почему: у одной и той же модели чтение выходит то 48 верных ячеек из 49, то 23, —
+        // и «первое по списку» с равной вероятностью оказывается любым из двух. Чтение,
+        // которое ближе всех к остальным, — не обязательно лучшее, но это единственный
+        // довод, который у нас есть без эталона. При двух чтениях доводов нет вовсе, и
+        // порядок провайдеров (сильнейший первым) остаётся честным правилом по умолчанию.
+        return Consensus(medoid(ts), emptyMap(), sources = 1)
     }
 
     val outRows = ArrayList<List<String>>(slots.size)
@@ -75,7 +92,28 @@ fun reconcile(tables: List<List<List<String>>>): Consensus {
         }
         outRows.add(row)
     }
-    return Consensus(outRows, candidates)
+    return Consensus(outRows, candidates, sources = ts.size)
+}
+
+/**
+ * Чтение, ближе всех стоящее к остальным, — по совпадению значений, а не по числу строк.
+ *
+ * Считается свёрнутыми ячейками: у каждой пары чтений берётся доля общих значений, у каждого
+ * чтения — среднее по парам. Двух чтений для такого сравнения не хватает (доля симметрична и
+ * одинакова у обоих), поэтому там побеждает первое — то есть порядок провайдеров, где сильнейший
+ * стоит первым.
+ */
+private fun medoid(tables: List<List<List<String>>>): List<List<String>> {
+    if (tables.size < 3) return tables.first()
+    val values = tables.map { t -> t.flatten().map(::normConsensus).filter { it.isNotEmpty() }.toSet() }
+    fun share(a: Set<String>, b: Set<String>): Double {
+        val union = (a + b).size
+        return if (union == 0) 0.0 else a.intersect(b).size.toDouble() / union
+    }
+    val best = values.indices.maxByOrNull { i ->
+        values.indices.filter { it != i }.map { share(values[i], values[it]) }.average()
+    } ?: 0
+    return tables[best]
 }
 
 /**

@@ -195,6 +195,11 @@ class ExcelRealizer @Inject constructor(
                                 "op" to "excel", "name" to "таблица.xlsx",
                                 "rows" to rows.size.toString(), "flagged" to flagged.toString(),
                                 "models" to tables.size.toString(),
+                                // Сколько чтений реально стоит за таблицей. Меньше, чем читали, —
+                                // значит они говорили о разных таблицах и свод не состоялся:
+                                // человек держит в руках одно ничем не подтверждённое чтение, и
+                                // узнать об этом он должен от нас, а не по расхождению с бумагой.
+                                "confirmedBy" to consensus.sources.toString(),
                             ),
                         ),
                     )
