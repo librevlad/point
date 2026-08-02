@@ -335,6 +335,8 @@ class TableMetricTest {
         assertTrue("11004" in expectation.namedRows.map { it.key })
         // Значения сверены глазами, иначе метрика печатала бы «сдано» за отсутствие проверки
         // (#340): восемнадцать чистых значений первой числовой колонки.
-        assertEquals("сверенных значений", 18, expectation.namedRows.count { it.cells.isNotEmpty() })
+        // 26, а не 18: после решения владельца (#345 — брать оба) ячейки, где рука спорит с
+        // печатью, стали проверяемыми, и восемь из них тоже сверены.
+        assertEquals("сверенных значений", 26, expectation.namedRows.count { it.cells.isNotEmpty() })
     }
 }
