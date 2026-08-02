@@ -337,6 +337,127 @@ class TableMetricTest {
         // (#340): восемнадцать чистых значений первой числовой колонки.
         // 26, а не 18: после решения владельца (#345 — брать оба) ячейки, где рука спорит с
         // печатью, стали проверяемыми, и восемь из них тоже сверены.
-        assertEquals("сверенных значений", 26, expectation.namedRows.count { it.cells.isNotEmpty() })
+        assertEquals("строк со сверенными значениями", 26, expectation.namedRows.count { it.cells.isNotEmpty() })
+        // Знаменатель метрики считается в ЯЧЕЙКАХ, а не в строках: 26 чисел плюс 23 названия. Без
+        // этого числа потерянная при правке табуляция убирает одно значение из проверки, строка
+        // остаётся «со значениями», и замер молча становится меньше обещанного.
+        assertEquals("сверенных значений", 49, expectation.namedRows.sumOf { it.cells.size })
     }
+
+    /**
+     * Читаются ВСЕ эталоны каталога, а не только тот, что вспомнили. Эталон пишет человек глазами
+     * по фотографии; опечатка в нём — табуляция вместо пробела, «колонок» без числа, дважды
+     * названный ключ — иначе всплывает только на устройстве: после минут ожидания «В Excel» и
+     * потраченного кадра. Тест ходит по каталогу, а не по списку имён, чтобы новый эталон
+     * попадал под проверку самим фактом появления.
+     */
+    @Test
+    fun `все эталоны каталога разбираются и называют хотя бы одно сверенное значение`() {
+        val dir = File("../../tools/corpus")
+        val files = dir.listFiles { f: File -> f.name.endsWith(EXPECTED_SUFFIX) }.orEmpty().sortedBy { it.name }
+        assertTrue("нет эталонов в ${dir.absolutePath}", files.isNotEmpty())
+
+        files.forEach { file ->
+            val frame = file.name.removeSuffix(EXPECTED_SUFFIX)
+            val expectation = parseTableExpectation(frame, file.readText())
+
+            assertTrue("$frame — «строк» должно быть больше нуля", expectation.documentRows > 0)
+            assertTrue("$frame — «колонок» должно быть больше нуля", expectation.documentColumns > 0)
+            assertTrue("$frame — не названо ни одной строки", expectation.namedRows.isNotEmpty())
+            // «Нечем судить» (TableScore.unjudged) — законный исход метрики, но не законное
+            // состояние эталона в репозитории: файл без единого сверенного значения молча
+            // пропустит любую таблицу с правильными ключами.
+            assertTrue(
+                "$frame — ни одного сверенного значения: метрике нечем судить",
+                expectation.namedRows.any { it.cells.isNotEmpty() },
+            )
+
+            // Эталон не должен противоречить сам себе: таблица, прочитанная идеально, обязана его
+            // пройти. Ловушка тут не выдуманная — колонка-ключ ищется как та, где нашлось больше
+            // всего эталонных ключей, и слабый ключ («1»…«5» на технологической карте) мог бы
+            // найтись в другой колонке. Тогда метрика мерила бы съехавшую сетку и врала бы на
+            // любом файле, а причину искали бы в чтении.
+            val score = scoreTable(expectation, perfectTable(expectation))
+            assertTrue("$frame — эталон не проходит сам себя: ${score.failures}", score.passed)
+            assertEquals("$frame — сверенных ячеек", score.checkedCells, score.matchedCells)
+        }
+    }
+
+    /**
+     * Таблица, прочитанная идеально: строка шапки (если эталон её заявил), названные строки с теми
+     * значениями, что человек сверил, и столько же безымянных строк, сколько документ мог дать
+     * сверх названных. Несверенные ячейки пусты — метрика их не судит.
+     */
+    private fun perfectTable(e: TableExpectation): List<List<String>> = buildList {
+        if (e.header) add(List(e.documentColumns) { "шапка ${it + 1}" })
+        e.namedRows.forEach { named ->
+            add(
+                List(e.documentColumns) { column ->
+                    when (column) {
+                        e.keyColumn -> named.key
+                        else -> named.cells[column].orEmpty()
+                    }
+                },
+            )
+        }
+        repeat(e.documentRows - e.namedRows.size) { add(List(e.documentColumns) { "" }) }
+    }
+
+    /**
+     * Числа эталонов, снятые с кадров глазами 02.08.2026. Тест выше говорит «файл разбирается»,
+     * этот — «в файле ровно то, что человек увидел»: строка, потерянная при правке, иначе тихо
+     * уменьшит знаменатель метрики, и провал исчезнет вместе с ней.
+     *
+     * Считаются и строки, и **значения**. Знаменатель метрики ([TableScore.checkedCells]) —
+     * ячейки, а не строки: пропавшая при правке табуляция убирает одно сверенное значение, строка
+     * при этом остаётся «со значениями», и замер молча становится меньше того, что обещано в
+     * `docs/CORPUS.md`. Проверено щупом на кадре 06: без счёта ячеек эталон, потерявший «діє з»
+     * первой строки (24 значения → 23), проходил тест зелёным.
+     *
+     * Кадры 10 и 19 эталонов не имеют намеренно — причины названы в docs/CORPUS.md
+     * («Приватность эталона»): на 10 колонку с названиями строк срезал край кадра, на 19 таблица
+     * целиком состоит из персональных данных.
+     */
+    @Test
+    fun `эталоны кадров 01, 04, 06 и 18 держат числа, снятые с кадров`() {
+        // кадр → строк, колонок, колонка-ключ (0-based), шапка, названо строк, из них со
+        // значениями, сверенных значений (ячеек) — последнее число и есть то, что напечатано
+        // в docs/CORPUS.md как «сверено значений».
+        val expected = mapOf(
+            "01" to Shape(12, 7, 0, header = true, named = 5, checked = 5, cells = 25),
+            "04" to Shape(12, 7, 0, header = true, named = 5, checked = 5, cells = 25),
+            "06" to Shape(16, 7, 1, header = true, named = 16, checked = 8, cells = 24),
+            "18" to Shape(2, 7, 1, header = false, named = 2, checked = 2, cells = 10),
+        )
+
+        expected.forEach { (frame, shape) ->
+            val file = File("../../tools/corpus/$frame$EXPECTED_SUFFIX")
+            assertTrue("не найден ${file.absolutePath}", file.exists())
+            val e = parseTableExpectation(frame, file.readText())
+
+            assertEquals("$frame — строк", shape.rows, e.documentRows)
+            assertEquals("$frame — колонок", shape.columns, e.documentColumns)
+            assertEquals("$frame — колонка-ключ", shape.keyColumn, e.keyColumn)
+            assertEquals("$frame — шапка", shape.header, e.header)
+            assertEquals("$frame — названо строк", shape.named, e.namedRows.size)
+            assertEquals(
+                "$frame — строк со сверенными значениями",
+                shape.checked,
+                e.namedRows.count { it.cells.isNotEmpty() },
+            )
+            assertEquals("$frame — сверенных значений", shape.cells, e.namedRows.sumOf { it.cells.size })
+        }
+    }
+
+    private data class Shape(
+        val rows: Int,
+        val columns: Int,
+        val keyColumn: Int,
+        val header: Boolean,
+        val named: Int,
+        val checked: Int,
+        val cells: Int,
+    )
 }
+
+private const val EXPECTED_SUFFIX = ".expected.tsv"
