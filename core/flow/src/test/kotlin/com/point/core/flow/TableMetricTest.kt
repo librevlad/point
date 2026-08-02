@@ -295,6 +295,26 @@ class TableMetricTest {
         }
     }
 
+    /**
+     * Замер кадра 23: в бланке напечатано `Пластівці вівсяні “Екстра”` типографскими
+     * лапками, модель отвечает прямыми — и метрика винила чтение за оформление.
+     */
+    @Test
+    fun `стиль кавычки не расхождение, а слово внутри неё — расхождение`() {
+        val e = parseTableExpectation(
+            "к",
+            "строк 2\nколонок 2\nключ 1\n--\n11401\tПластівці вівсяні “Екстра”\n",
+        )
+
+        val same = scoreTable(e, listOf(listOf("11401", "Пластівці вівсяні \"Екстра\"")))
+        assertEquals(1, same.matchedCells)
+        assertEquals(0, same.silent.size)
+
+        val other = scoreTable(e, listOf(listOf("11401", "Пластівці вівсяні \"Преміум\"")))
+        assertEquals(0, other.matchedCells)
+        assertEquals(1, other.silent.size)
+    }
+
     @Test
     fun `заготовка эталона кадра 23 читается — её правит человек руками`() {
         // Путь от каталога модуля: рабочий каталог теста у Gradle — core/flow. Эталон дописывает
@@ -306,9 +326,15 @@ class TableMetricTest {
         val expectation = parseTableExpectation("23", file.readText())
 
         assertEquals(35, expectation.documentRows)
-        assertEquals(8, expectation.documentColumns)
+        // Девять, а не восемь: Арт.№ + Найменування + семь подразделений в шапке кадра.
+        // Заготовка называла восемь, и «ширина не совпала» держалась в отчёте как провал —
+        // пересчитано по самому кадру 02.08.2026.
+        assertEquals(9, expectation.documentColumns)
         assertEquals(0, expectation.keyColumn)
         assertEquals("артикулы кадра 23", 27, expectation.namedRows.size)
         assertTrue("11004" in expectation.namedRows.map { it.key })
+        // Значения сверены глазами, иначе метрика печатала бы «сдано» за отсутствие проверки
+        // (#340): восемнадцать чистых значений первой числовой колонки.
+        assertEquals("сверенных значений", 18, expectation.namedRows.count { it.cells.isNotEmpty() })
     }
 }
