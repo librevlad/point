@@ -8,9 +8,11 @@ import com.point.core.flow.KIND_IDENTIFIER
 import com.point.core.flow.META_ENTITY_TRACK
 import com.point.core.flow.META_EVIDENCE_SUFFIX
 import com.point.core.flow.META_SOURCE_SUFFIX
+import com.point.core.flow.amountFacts
 import com.point.core.flow.geoFacts
 import com.point.core.flow.meterFacts
 import com.point.core.flow.provenanceOf
+import com.point.core.flow.receiptFacts
 import com.point.core.flow.trackFacts
 import com.point.core.flow.waybillNumbers
 import com.point.core.model.ObjectKind
@@ -62,11 +64,12 @@ class IdentifierEnricher @Inject constructor() : Enricher {
         // же о происхождении и уликах — иначе узел разойдётся с фактом, из которого вырос (#264).
         val facts = trackFacts(text)
         val (objects, relations) = identifierObjects(obj, text, facts)
-        // Показание счётчика и координаты (#262) — те же офлайновые правила формы в том же
-        // дешёвом проходе. Узлами графа они пока не становятся (действия, которое по ним
-        // поедет, ещё нет), но фактами — обязаны: схемы «Передать показание» и «Построить
-        // маршрут» считаются по метаданным, а не по графу.
-        val ruleFacts = facts + meterFacts(text) + geoFacts(text)
+        // Показание счётчика, координаты, сумма и номер квитанции (#262) — те же офлайновые
+        // правила формы в том же дешёвом проходе. Узлами графа они пока не становятся
+        // (действия, которое по ним поедет, ещё нет), но фактами — обязаны: схемы «Передать
+        // показание», «Построить маршрут», «Перевести по реквизитам» и «Переслать квитанцию»
+        // считаются по метаданным, а не по графу.
+        val ruleFacts = facts + meterFacts(text) + geoFacts(text) + amountFacts(text) + receiptFacts(text)
         if (objects.isEmpty() && ruleFacts.isEmpty()) return@withContext EnrichmentDelta()
         // Трек — и факт, а не только узел графа (#260): схема «Отследить отправление» читает
         // `entity.track` из метаданных, второй похожий номер честно виден в `.alt` (v3 §8).

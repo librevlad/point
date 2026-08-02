@@ -39,6 +39,7 @@ import com.point.core.flow.META_ENTITY_PREFIX
 import com.point.core.flow.META_SEMANTIC_SUMMARY
 import com.point.core.flow.META_SEMANTIC_TYPE
 import com.point.core.flow.documentLabel
+import com.point.core.flow.maskedForScreen
 import com.point.core.model.Feature
 import com.point.core.model.PointObject
 
@@ -68,7 +69,9 @@ fun understoodFacts(obj: PointObject): List<UnderstoodFact> {
         if (state.has(Feature.HAS_URL)) add(UnderstoodFact("url", "Нашёл ссылку", entity("url")?.readableUrl()))
         if (state.has(Feature.HAS_ADDRESS)) add(UnderstoodFact("address", "Нашёл адрес", entity("address")))
         if (state.has(Feature.HAS_DATE)) add(UnderstoodFact("date", "Нашёл дату", entity("date")))
-        if (state.has(Feature.HAS_CARD)) add(UnderstoodFact("card", "Нашёл карту", entity("card")?.maskedCard()))
+        if (state.has(Feature.HAS_CARD)) {
+            add(UnderstoodFact("card", "Нашёл карту", entity("card")?.let { maskedForScreen(META_ENTITY_PREFIX + "card", it) }))
+        }
         if (state.has(Feature.HAS_QR)) add(UnderstoodFact("qr", "Есть QR-код", entity("qr")?.readableUrl()))
         if (state.has(Feature.HAS_VCARD)) add(UnderstoodFact("vcard", "Это визитка"))
         if (state.has(Feature.IS_IMAGE_PDF)) add(UnderstoodFact("scan", "Это скан — текст не выделяется"))
@@ -112,8 +115,11 @@ private fun heroKindLabel(obj: PointObject): String =
 private fun String.readableUrl() =
     removePrefix("https://").removePrefix("http://").removePrefix("www.").trimEnd('/')
 
-/** A card number is sensitive — the checklist shows only its tail («•• 5678»). */
-private fun String.maskedCard() = "•• " + filter(Char::isDigit).takeLast(4)
+/*
+ * Маскировка карты уехала в [maskedForScreen] (#262): её же печатает карточка готовности
+ * «Перевести по реквизитам», и две копии одного правила разъехались бы молча — ровно так, как
+ * однажды уже утёк номер карты мимо работавшей маски (#240).
+ */
 
 /**
  * The understanding card — Point thinking out loud. Facts appear line by line as
