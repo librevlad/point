@@ -57,7 +57,10 @@ class TableConsensusTest {
 
         val c = reconcile(listOf(withHeader, without))
 
-        assertEquals(listOf(header, listOf("1", "5"), listOf("2", "8")), c.rows)
+        // Шапку видело одно чтение из двух — она помечена (отсутствие не согласие), но
+        // строки данных, которые видели оба, остались чистыми: сдвиг спора не рождает.
+        assertEquals(listOf("1", "5"), c.rows[1])
+        assertEquals(listOf("2", "8"), c.rows[2])
         assertTrue("сдвиг больше не рождает ложный спор", c.candidates.isEmpty())
     }
 
@@ -68,7 +71,12 @@ class TableConsensusTest {
 
         val c = reconcile(listOf(full, skipped))
 
-        assertEquals(listOf(header, listOf("1", "5"), listOf("2", "8"), listOf("3", "9")), c.rows)
+        assertEquals(4, c.rows.size)
+        assertEquals(listOf("1", "5"), c.rows[1])
+        assertEquals(listOf("3", "9"), c.rows[3])
+        // Пропущенную середину видело одно чтение — она на месте, но помечена: подтвердить её
+        // некому. Выбирать не из чего, поэтому дропдауна нет.
+        assertTrue(c.rows[2].all { "⚠" in it })
         assertTrue(c.candidates.isEmpty())
     }
 
@@ -79,7 +87,8 @@ class TableConsensusTest {
 
         val c = reconcile(listOf(a, b))
 
-        assertEquals(header, c.rows[0])
+        // Шапку видело одно чтение — она помечена как неподтверждённая, но текст её цел.
+        assertEquals(header, c.rows[0].map { it.removeSuffix("⚠") })
         assertEquals("5⚠", c.rows[1][1])
         assertEquals(listOf("5", "8"), c.candidates[1 to 1])
     }
@@ -92,7 +101,9 @@ class TableConsensusTest {
         val c = reconcile(listOf(a, b))
 
         assertEquals(3, c.rows.size)
-        assertEquals(listOf("2", "8"), c.rows[2])
+        // Находка второй модели — своя строка, а НЕ спор: вариантов у неё нет. Но и не факт
+        // наравне с прочитанным обоими — на ведомости владельца так прошли выдуманные строки.
+        assertEquals(listOf("2⚠", "8⚠"), c.rows[2])
         assertTrue(c.candidates.isEmpty())
     }
 
@@ -101,7 +112,7 @@ class TableConsensusTest {
         val a = listOf(header, listOf("1", "5"), listOf("2", "9"))
         val b = listOf(header, listOf("1", "5")) // shorter — no row 2
         val c = reconcile(listOf(a, b))
-        assertEquals("9", c.rows[2][1])            // only a has it → taken as-is, not flagged
+        assertEquals("9⚠", c.rows[2][1])           // only a has it → kept, but unconfirmed
         assertTrue(c.candidates.isEmpty())
     }
 
@@ -181,7 +192,12 @@ class TableConsensusTest {
         val c = reconcile(listOf(short, full))
 
         assertEquals(7, c.rows.size)
-        assertTrue("находка второй модели на месте", c.rows.any { it.take(2) == listOf("11010", "Кабачки") })
+        // На месте — и помечена: подтвердить её некому, первое чтение этой строки не видело.
+        assertTrue(
+            "находка второй модели на месте",
+            c.rows.any { it.take(2).map { v -> v.removeSuffix("⚠") } == listOf("11010", "Кабачки") },
+        )
+        assertTrue(c.rows.first { "11010" in it.first() }.all { "⚠" in it })
     }
 
     @Test
@@ -266,7 +282,9 @@ class TableConsensusTest {
 
         assertEquals("строки остались своими", 3, c.rows.size)
         assertTrue("спора из ничего нет", c.candidates.isEmpty())
-        assertTrue(c.rows.none { row -> row.any { it.contains("⚠") } })
+        // Пометка тут есть — каждую строку видело одно чтение из двух, — но это НЕ спор:
+        // дропдауна нет, и «11401 Пластівці» не предлагается заменить на «11029 Огірки».
+        assertTrue(c.rows.all { row -> row.none { "Огірки" in it && "Пластівці" in it } })
     }
 
     @Test
@@ -321,5 +339,26 @@ class TableConsensusTest {
 
         assertTrue(c.rows[1][1].contains("⚠"))
         assertEquals(listOf("0,883", "0,72 0,883"), c.candidates[1 to 1])
+    }
+
+    /**
+     * Живой случай (ведомость владельца, 02.08.2026): в файл приехали тринадцать строк, которых на
+     * снимке нет вовсе — «Паштет м'ясний», «Йогурт», артикулы из четырёх цифр вместо пяти. Одна
+     * модель дописала правдоподобное продолжение таблицы, второе чтение этих строк не видело, и
+     * голосование объявило их единогласными: спорить не с кем. Так выдумка легла в файл наравне
+     * с прочитанным и не оставила следа — метрика насчитала ноль молчаливых расхождений.
+     */
+    @Test
+    fun `строка, которую видело одно чтение из двух, помечена — отсутствие не согласие`() {
+        val both = listOf(header, listOf("11004", "6,003"))
+        val invented = both + listOf(listOf("1162", "Паштет м'ясний"))
+
+        val c = reconcile(listOf(both, invented))
+
+        assertEquals(3, c.rows.size) // не выброшена: второе чтение могло её и правда пропустить
+        assertTrue("выдуманная строка помечена", c.rows[2].all { it.isBlank() || "⚠" in it })
+        assertTrue("строка обоих чтений чиста", c.rows[1].none { "⚠" in it })
+        // Выбирать не из чего — дропдаун предложил бы одно значение против пустоты.
+        assertTrue(c.candidates.keys.none { it.first == 2 })
     }
 }

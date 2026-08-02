@@ -20,6 +20,14 @@ data class Consensus(
  * пропустившая шапку, сдвинута целиком, а модель, пропустившая узкий столбец бланка, — на
  * столбец внутри каждой строки. Голосуя по индексу, обе превращали соседнее значение в «другое
  * чтение» — и на эталонной ведомости владельца ⚠ стояло на 387 ячейках из ~430.
+ *
+ * **Отсутствие — не согласие.** Строку, которой у второго чтения нет вовсе, голосование
+ * объявляло единогласной: спорить не с кем. На ведомости владельца так прошли молча
+ * тринадцать строк, которых на снимке нет вообще («Паштет м'ясний», «Йогурт», артикулы из
+ * четырёх цифр вместо пяти) — одна модель дописала правдоподобное продолжение, и оно легло
+ * в файл наравне с прочитанным. Теперь такая строка помечается: не выброшена (второе чтение
+ * могло её и правда пропустить — терять прочитанное молча нельзя), но и не выдана за
+ * подтверждённую. Вариантов у неё нет — выбирать не из чего, поэтому дропдаун не заводится.
  */
 fun reconcile(tables: List<List<List<String>>>): Consensus {
     val ts = tables.filter { it.isNotEmpty() }
@@ -33,6 +41,9 @@ fun reconcile(tables: List<List<List<String>>>): Consensus {
     val candidates = LinkedHashMap<Pair<Int, Int>, List<String>>()
 
     slots.forEachIndexed { r, slot ->
+        // Строку видело каждое чтение — или не каждое. Второе не то же самое, что согласие:
+        // спорить не с кем, и голосование по одному источнику всегда «единогласно».
+        val seenByEveryone = slot.count { it != null } == ts.size
         // Столбцы — тоже по содержимому (#294): чтение, пропустившее узкий столбец бланка,
         // сдвинуто внутри строки, и голосование по индексу сравнивало бы соседние значения.
         val columns = columnsOf(slot.filterNotNull())
@@ -44,11 +55,13 @@ fun reconcile(tables: List<List<List<String>>>): Consensus {
             if (verdict == null) {
                 row.add(""); return@forEachIndexed
             }
-            if (verdict.agreed) {
+            if (verdict.agreed && (seenByEveryone || verdict.value.isBlank())) {
                 row.add(verdict.value) // every present read agrees
             } else {
                 row.add(if (verdict.value.contains('⚠')) verdict.value else "${verdict.value}⚠")
-                candidates[r to c] = verdict.candidates.filter { it.length <= 80 }
+                // Вариантов нет — выбирать не из чего: дропдаун бы предложил одно значение
+                // против пустоты. Пометка здесь значит «это видело одно чтение», а не «выберите».
+                if (!verdict.agreed) candidates[r to c] = verdict.candidates.filter { it.length <= 80 }
             }
         }
         outRows.add(row)
