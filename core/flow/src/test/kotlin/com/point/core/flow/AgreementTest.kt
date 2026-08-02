@@ -2,6 +2,7 @@ package com.point.core.flow
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -331,5 +332,24 @@ class AgreementTest {
     fun `появление или пропажа похожей цифры — тоже спор`() {
         assertFalse(isRepairOf("будинок Дом корпус", "будинок Дом1 корпус"))
         assertFalse(isRepairOf("вул.Сонячна, буд.1", "вул.Сонячна, буд.10"))
+    }
+
+    /**
+     * Замер кадра 23: в бланке напечатано `Пластівці вівсяні “Екстра”` типографскими
+     * лапками, модель отвечает прямыми — и это уходило в «значение разошлось». Стиль кавычки —
+     * оформление, как разрядный пробел в числе.
+     */
+    @Test
+    fun `стиль кавычек — оформление, а не другое чтение`() {
+        assertEquals(
+            normConsensus("Пластівці вівсяні “Екстра”"),
+            normConsensus("Пластівці вівсяні \"Екстра\""),
+        )
+        assertEquals(normConsensus("«Масло»"), normConsensus("Масло"))
+    }
+
+    @Test
+    fun `разные слова в кавычках остаются разными`() {
+        assertNotEquals(normConsensus("вівсяні \"Екстра\""), normConsensus("вівсяні \"Преміум\""))
     }
 }
