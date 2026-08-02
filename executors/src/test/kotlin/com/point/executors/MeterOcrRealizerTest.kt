@@ -1,6 +1,7 @@
 package com.point.executors
 
 import com.point.core.flow.Box
+import com.point.core.flow.Cost
 import com.point.core.flow.Entitlements
 import com.point.core.flow.LlmClient
 import com.point.core.flow.MeterDisplayReading
@@ -22,10 +23,16 @@ import org.junit.Test
 import java.io.File
 
 /**
- * Табло прибора как среднее звено «Распознать текст» (#262).
+ * Табло прибора как **отдельное действие за тапом человека** (#262).
  *
  * Здесь проверяется поведение, а не распознавание: сам движок и подготовка кадра живут за
  * [MeterReader], а его чистая половина — под `MeterDisplayTest`.
+ *
+ * Главное, что здесь доказывается, — граница: цепочка «Распознать текст» осталась прежней
+ * (страница → облако), и чтение прибора её не перехватывает. Поиск табло срабатывает на 22 кадрах
+ * корпуса из 23 (логотип на квитанции, строка письма, ряд дат в ведомости, гравий), а движку в
+ * этом пути разрешены только цифры — значит внутри цепочки он вернул бы `Success` с выдуманным
+ * числом там, где человек просил прочитать документ.
  */
 class MeterOcrRealizerTest {
 
@@ -109,7 +116,7 @@ class MeterOcrRealizerTest {
         assertTrue(failure.reason, failure.reason.contains("движок упал"))
     }
 
-    // ── место в цепочке ─────────────────────────────────────────────────────────────────────
+    // ── граница с цепочкой «Распознать текст» ───────────────────────────────────────────────
 
     private class TrackingLlm : LlmClient {
         var called = false
@@ -120,63 +127,98 @@ class MeterOcrRealizerTest {
         }
     }
 
-    private fun chain(pageText: String, readout: MeterReadout, llm: LlmClient) = DefaultResolver(
+    /** Считает, спрашивали ли у него прибор: чтение табло не должно случаться само собой. */
+    private class TrackingMeterReader(private val readout: MeterReadout) : MeterReader {
+        var called = false
+            private set
+        override suspend fun read(obj: PointObject): MeterReadout {
+            called = true
+            return readout
+        }
+    }
+
+    /** Настоящий боевой набор: все три реализатора и оба capability, как их связывает Hilt. */
+    private fun resolver(pageText: String, meter: MeterReader, llm: LlmClient) = DefaultResolver(
         realizers = setOf(
             DeviceOcrRealizer(store, object : TextRecognizer {
                 override suspend fun recognize(obj: PointObject) = pageText
             }),
-            MeterOcrRealizer(store, reader(readout)),
+            MeterOcrRealizer(store, meter),
             CloudOcrRealizer(llm),
         ),
-        registry = DefaultCapabilityRegistry(setOf(OcrCapability()), DefaultBubblePolicy()),
+        registry = DefaultCapabilityRegistry(
+            setOf(OcrCapability(), MeterOcrCapability()),
+            DefaultBubblePolicy(),
+        ),
         entitlements = Entitlements { true },
-    ).realizerFor(OcrCapability.ID)
+    )
 
     @Test
-    fun `шум страницы уводит в табло, а не сразу в облако`() = runTest {
+    fun `движок вернул шум — читает облако, а не прибор`() = runTest {
+        // Ровно этот случай и опасен: до чтения прибора очередь доходила бы там, где страницу
+        // прочитать не удалось, то есть на сфотографированном документе. Поиск табло на таком
+        // кадре находит место почти всегда (22 кадра корпуса из 23), а движку разрешены только
+        // цифры — значит человек получил бы выдуманное число вместо своего документа.
         val llm = TrackingLlm()
-        val result = chain("", MeterReadout(listOf(reading("0208425")), 1), llm).perform(image)
+        val meter = TrackingMeterReader(MeterReadout(listOf(reading("0208425")), candidates = 3))
+        val result = resolver("", meter, llm).realizerFor(OcrCapability.ID).perform(image)
 
         assertTrue(result is ActionResult.Success)
-        assertEquals("0208425", File((result as ActionResult.Success).result.uri.value).readText())
-        assertFalse("объект ушёл в облако там, где справилось устройство", llm.called)
+        assertEquals("/cloud.md", (result as ActionResult.Success).result.uri.value)
+        assertTrue("облако не запустилось", llm.called)
+        assertFalse("чтение прибора влезло в «Распознать текст»", meter.called)
     }
 
     @Test
-    fun `страница прочиталась — до табло очередь не доходит`() = runTest {
+    fun `страница прочиталась — ни прибора, ни облака`() = runTest {
         val llm = TrackingLlm()
-        val touched = object : MeterReader {
-            var called = false
-            override suspend fun read(obj: PointObject): MeterReadout {
-                called = true
-                return MeterReadout.NOTHING
-            }
-        }
-        val result = DefaultResolver(
-            realizers = setOf(
-                DeviceOcrRealizer(store, object : TextRecognizer {
-                    override suspend fun recognize(obj: PointObject) =
-                        "Накладная Нова Пошта 20451491549395 получатель Владислав"
-                }),
-                MeterOcrRealizer(store, touched),
-                CloudOcrRealizer(llm),
-            ),
-            registry = DefaultCapabilityRegistry(setOf(OcrCapability()), DefaultBubblePolicy()),
-            entitlements = Entitlements { true },
+        val meter = TrackingMeterReader(MeterReadout.NOTHING)
+        val result = resolver(
+            "Накладная Нова Пошта 20451491549395 получатель Владислав",
+            meter,
+            llm,
         ).realizerFor(OcrCapability.ID).perform(image)
 
         assertTrue(result is ActionResult.Success)
-        assertFalse("обычное чтение подменено чтением прибора", touched.called)
+        assertFalse("обычное чтение подменено чтением прибора", meter.called)
         assertFalse(llm.called)
     }
 
     @Test
-    fun `табло не нашлось — цепочка идёт в облако, а не молчит`() = runTest {
+    fun `показание читает тот, кого попросили — за своим тапом и без облака`() = runTest {
         val llm = TrackingLlm()
-        val result = chain("", MeterReadout.NOTHING, llm).perform(image)
+        val meter = TrackingMeterReader(MeterReadout(listOf(reading("0208425")), candidates = 3))
+        val result = resolver("", meter, llm).realizerFor(MeterOcrCapability.ID).perform(image)
 
         assertTrue(result is ActionResult.Success)
-        assertEquals("/cloud.md", (result as ActionResult.Success).result.uri.value)
-        assertTrue(llm.called)
+        assertEquals("0208425", File((result as ActionResult.Success).result.uri.value).readText())
+        assertTrue(meter.called)
+        assertFalse("снимок прибора ушёл в облако без спроса", llm.called)
+    }
+
+    @Test
+    fun `у снимка есть отдельный пузырёк показания, и он местный и бесплатный`() {
+        val registry = DefaultCapabilityRegistry(
+            setOf(OcrCapability(), CloudOcrCapability(), MeterOcrCapability()),
+            DefaultBubblePolicy(),
+        )
+        val bubbles = registry.bubblesFor(ObjectState(ObjectKind.IMAGE))
+        assertTrue(bubbles.map { it.title }.contains("Прочитать показание"))
+        // Текстовому объекту показание не предлагается: читать нечего.
+        assertFalse(
+            registry.bubblesFor(ObjectState(ObjectKind.TEXT)).map { it.title }.contains("Прочитать показание"),
+        )
+
+        val meter = MeterOcrCapability()
+        assertFalse("чтение прибора не должно требовать сети", meter.meta.network)
+        assertEquals(Cost.FREE, meter.meta.cost)
+        // Снимок с устройства не уходит — согласия на это действие не спрашивают.
+        assertFalse(
+            DefaultResolver(
+                realizers = setOf(MeterOcrRealizer(store, reader(MeterReadout.NOTHING))),
+                registry = registry,
+                entitlements = Entitlements { true },
+            ).leavesDevice(MeterOcrCapability.ID),
+        )
     }
 }
