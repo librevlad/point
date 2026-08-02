@@ -5,12 +5,19 @@ import com.point.core.flow.AtomLayer
 import com.point.core.flow.Capability
 import com.point.core.flow.CapabilityMeta
 import com.point.core.flow.CellAnswer
+import com.point.core.flow.Consensus
 import com.point.core.flow.Cost
+import com.point.core.flow.CropEvidence
+import com.point.core.flow.EvidenceCropper
 import com.point.core.flow.Latency
 import com.point.core.flow.LlmClient
 import com.point.core.flow.META_OCR_ATOMS_REF
+import com.point.core.flow.ObjectStore
+import com.point.core.flow.RECROP_TIMEOUT_MS
 import com.point.core.flow.Realizer
+import com.point.core.flow.RecropQuestion
 import com.point.core.flow.SpreadsheetWriter
+import com.point.core.flow.recropDisputed
 import com.point.core.flow.bareIndexId
 import com.point.core.flow.normConsensus
 import com.point.core.flow.promptIndex
@@ -58,10 +65,23 @@ class ExcelCapability @Inject constructor() : Capability {
     companion object { val ID = CapabilityId("excel") }
 }
 
-class ExcelRealizer @Inject constructor(
+class ExcelRealizer(
     private val providers: List<@JvmSuppressWildcards LlmClient>,
     private val writer: SpreadsheetWriter,
+    private val cropper: EvidenceCropper,
+    private val store: ObjectStore,
+    private val recropTimeoutMs: Long,
 ) : Realizer {
+
+    /** Боевой срок перечита — общий [RECROP_TIMEOUT_MS]; свой параметр существует только для
+     *  тестов, которым нельзя ждать полминуты настенного времени. */
+    @Inject constructor(
+        providers: List<@JvmSuppressWildcards LlmClient>,
+        writer: SpreadsheetWriter,
+        cropper: EvidenceCropper,
+        store: ObjectStore,
+    ) : this(providers, writer, cropper, store, RECROP_TIMEOUT_MS)
+
     override val capabilityId = ExcelCapability.ID
 
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
@@ -173,18 +193,33 @@ class ExcelRealizer @Inject constructor(
                                 .groupBy(::normConsensus).values
                                 .map { g -> g.firstOrNull { !it.contains('⚠') } ?: g.first() }
                         }
+                    // #346 (идея владельца): спорной ячейке — кроп у сильного маршрута, а не весь
+                    // документ заново. Третий голос входит в голосование ячейки (agree), а не
+                    // заменяет его; не успевшие в общий срок остаются спором и дропдауном, как
+                    // раньше. Без кадра (PDF/текст), без слоя атомов или без сильной зрячей модели
+                    // перечитывать нечем — свод отдаётся как есть.
+                    val eyes = ordered.filter { it.strongVision }
+                    val settled = if (input.state.kind == ObjectKind.IMAGE && layer != null && eyes.isNotEmpty()) {
+                        recropDisputed(
+                            Consensus(consensus.rows, candidates, consensus.sources),
+                            layer,
+                            recropTimeoutMs,
+                        ) { question -> reread(input, layer, question, eyes) }
+                    } else {
+                        Consensus(consensus.rows, candidates, consensus.sources)
+                    }
                     // model-free logic check also marks cells one would silently guess (letter-in-number,
                     // broken id run) with ⚠ so the writer highlights them.
-                    val suspect = validateTable(consensus.rows)
-                    val rows = consensus.rows.mapIndexed { r, row ->
+                    val suspect = validateTable(settled.rows)
+                    val rows = settled.rows.mapIndexed { r, row ->
                         row.mapIndexed { c, v ->
-                            val flagged = (r to c) in suspect || (r to c) in candidates
+                            val flagged = (r to c) in suspect || (r to c) in settled.candidates
                             if (flagged && !v.contains('⚠')) "$v⚠" else v
                         }
                     }
                     // disagreements carry the distinct readings as an in-cell dropdown (#200).
                     reportStage("Собираю файл")
-                    val ref = writer.write(rows, candidates)
+                    val ref = writer.write(rows, settled.candidates)
                     val flagged = rows.sumOf { row -> row.count { styleCell(it).flagged } }
                     ActionResult.Success(
                         ResultObject(
@@ -317,6 +352,46 @@ class ExcelRealizer @Inject constructor(
             runCatching { AtomCodec.decode(File(ref).readText()) }.getOrNull()
         }
 
+    /**
+     * Один перечит (#346): строка спорной ячейки вырезается из исходного кадра **тем же
+     * резаком**, что кроп-улика в Word (#267), и сильная зрячая модель отвечает, что в ячейке
+     * написано. Кроп кладётся в scratch — живёт и чистится вместе с остальной копией документа.
+     *
+     * `null` — перечит не состоялся (кроп не вырезался, маршруты отказали): спор этой ячейки
+     * просто остаётся человеку. Отказ одного маршрута — следующий сильный, как всюду в цепочке.
+     */
+    private suspend fun reread(
+        input: PointObject,
+        layer: AtomLayer,
+        question: RecropQuestion,
+        eyes: List<LlmClient>,
+    ): String? {
+        val cut = cropper.crop(
+            CropEvidence(input.uri.value, question.region, layer.transform?.rotationDegrees ?: 0),
+        ) ?: return null
+        val ref = store.newScratchFile(cut.extension)
+        File(ref.value).writeBytes(cut.bytes)
+        val crop = PointObject(
+            id = "recrop-${question.cell.first}-${question.cell.second}",
+            mime = if (cut.extension == "jpg") "image/jpeg" else "image/${cut.extension}",
+            uri = ref,
+            state = ObjectState(ObjectKind.IMAGE),
+        )
+        val prompt = RECROP_PROMPT +
+            question.readings.joinToString(" / ") { "«${it.replace("⚠", "").trim()}»" }
+        for (eye in eyes) {
+            if (!eye.canHandle(crop)) continue
+            try {
+                return File(eye.run(crop, prompt).uri.value).readText()
+            } catch (cancelled: CancellationException) {
+                throw cancelled // отмена действия или общий срок перечита — не отказ маршрута
+            } catch (_: Exception) {
+                // отказ маршрута — пробуем следующего сильного; некому — спор остаётся
+            }
+        }
+        return null
+    }
+
     private companion object {
         const val XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         const val MAX_TEXT = 20_000
@@ -350,6 +425,21 @@ class ExcelRealizer @Inject constructor(
                 "Не выдумывай данные: если ячейку не разобрать совсем — оставь её пустой (\"\"), НЕ ставь " +
                 "\"?\"; если не удаётся прочитать всю строку — пропусти её целиком. " +
                 "Без пояснений, без markdown, без ограждений ```."
+
+        /**
+         * Вопрос перечита (#346): кроп строки + «что написано в этой ячейке?». Варианты — только
+         * контекст, не меню: модель просят прочитать пиксели, а не проголосовать вслепую, иначе
+         * третий голос был бы эхом первых двух. «⚠» на нечитаемом — честное «не разобрал», оно
+         * не голосует и не лезет в дропдаун.
+         */
+        const val RECROP_PROMPT =
+            "На снимке — одна строка таблицы, вырезанная из фото документа. " +
+                "В этой строке есть ячейка, которую прочитали по-разному; варианты чтения — в конце. " +
+                "Найди эту ячейку и прочитай её заново по снимку. " +
+                "Верни ТОЛЬКО содержимое ячейки, одной строкой, без пояснений, без markdown. " +
+                "Не выбирай вариант вслепую: верни то, что видишь на снимке. " +
+                "Если разобрать нельзя — верни ровно ⚠. " +
+                "Варианты чтения: "
 
         /** Добавка к промпту при наличии индекса слов (#258): модель указывает, а не диктует. */
         const val ADDRESSED =
