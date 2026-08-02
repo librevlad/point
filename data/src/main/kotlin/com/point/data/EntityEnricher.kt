@@ -4,6 +4,8 @@ import com.point.core.flow.EnrichCost
 import com.point.core.flow.Enricher
 import com.point.core.flow.EnricherMeta
 import com.point.core.flow.EnrichmentDelta
+import com.point.core.flow.META_ENTITY_ADDRESS
+import com.point.core.flow.addressFacts
 import com.point.core.flow.expandAddressToLine
 import com.point.core.flow.alternativesOf
 import com.point.core.flow.altValue
@@ -75,7 +77,7 @@ internal fun entityDelta(
     text: String = "",
 ): EnrichmentDelta {
     val features = entities.mapNotNullTo(mutableSetOf()) { it.type.asFeature() }
-    val facts = buildMap {
+    val extracted = buildMap {
         // #244: место «Дата» одно, а экран переписки состоит из времён почти целиком — любое
         // из них вытесняло настоящую дату, которая на том же кадре есть (`30.03`, `01.04`).
         // Голое время не выбрасывается: оно остаётся уликой и признаком HAS_DATE (заметка
@@ -95,6 +97,16 @@ internal fun entityDelta(
             }
         }
     }
+    // #262, кадры 12 и 14: адресом до сих пор считалось только то, что назвал извлекатель, а на
+    // скрине карты он молчит — «Бритвка, Центральна, 586» стоит в тексте целиком и адресом не
+    // признано. Офлайновое правило формы ([addressLines]) читает такую строку бесплатно, но
+    // **только там, где первый читатель промолчал**: два писателя одного ключа в одной волне
+    // обогащения гонялись бы за значение, и человек видел бы то один адрес, то другой.
+    val ruled = if (META_ENTITY_ADDRESS in extracted) emptyMap() else addressFacts(text)
+    val facts = extracted + ruled
+    // Признак зажигается вместе с фактом: без него «Открыть на карте» не появится, и прочитанный
+    // адрес снова провалился бы в пол — та же болезнь, что чинил #222 для номера накладной.
+    if (ruled.isNotEmpty()) features += Feature.HAS_ADDRESS
     val (objects, relations) = entityObjects(source, facts, creator = ENTITY_CREATOR)
     return EnrichmentDelta(features, facts, objects, relations)
 }

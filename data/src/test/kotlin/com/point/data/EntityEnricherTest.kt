@@ -3,6 +3,7 @@ package com.point.data
 import com.point.core.flow.Entity
 import com.point.core.flow.EntityExtractor
 import com.point.core.flow.EntityType
+import com.point.core.flow.META_ENTITY_ADDRESS
 import com.point.core.flow.META_ENTITY_PREFIX
 import com.point.core.model.Feature
 import com.point.core.model.ObjectKind
@@ -96,6 +97,33 @@ class EntityEnricherTest {
 
         assertEquals("15:12", delta.metadata[META_ENTITY_PREFIX + "date"])
         assertTrue(Feature.HAS_DATE in delta.features)
+    }
+
+    /**
+     * Кадр 12 корпуса (#262): на скриншоте карты Новой Пошты адрес отделения стоит в
+     * распознанном тексте целиком — «Бритвка, Центральна, 586», — а извлекатель сущностей молчит:
+     * улицу здесь называют без слова «вулиця», а дом ставят последним через запятую. Адрес
+     * проваливался в пол вместе с единственным действием кадра.
+     */
+    @Test
+    fun `адрес с кадра карты находится и тогда, когда извлекатель молчит`() = runTest {
+        val enricher = EntityEnricher(extractor())
+
+        val delta = enricher.enrich(obj("Вддлення 1\n© Бритвка, Центральна, 586\nРобочий час"))
+
+        assertEquals("Бритвка, Центральна, 586", delta.metadata[META_ENTITY_ADDRESS])
+        assertTrue("без признака пузырёк карты не появится", Feature.HAS_ADDRESS in delta.features)
+    }
+
+    @Test
+    fun `правило — второй читатель адреса, а не спорщик`() = runTest {
+        // Два писателя одного ключа в одной волне обогащения гонялись бы за значение, и человек
+        // видел бы то один адрес, то другой. Поэтому правило работает только по молчанию первого.
+        val enricher = EntityEnricher(extractor(Entity(EntityType.ADDRESS, "вул. Сонячна, 15")))
+
+        val delta = enricher.enrich(obj("Олексйвка, вул. Сонячна, 15\nБритвка, Центральна, 586"))
+
+        assertEquals("Олексйвка, вул. Сонячна, 15", delta.metadata[META_ENTITY_ADDRESS])
     }
 
     @Test
