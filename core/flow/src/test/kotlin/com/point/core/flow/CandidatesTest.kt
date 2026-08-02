@@ -141,7 +141,15 @@ class CandidatesTest {
         assertTrue(semanticFits(META_ENTITY_PREFIX + "phone", "+380 67 123 45 67") == true)
         assertTrue(semanticFits(META_ENTITY_PREFIX + "phone", "1600") == false)
         assertTrue(semanticFits(META_ENTITY_PREFIX + "email", "olena@example.com") == true)
-        assertNull("у адреса нет формы", semanticFits(META_ENTITY_PREFIX + "address", "вул. Хрещатик, 1"))
+        // У адреса форма появилась (#262, кадры 12 и 14) — но только та, которую правило умеет
+        // узнавать: пункт с улицей и домом либо пункт с административной единицей.
+        assertTrue(semanticFits(META_ENTITY_PREFIX + "address", "вул. Хрещатик, 1") == true)
+        // А «нет» форма адреса сказать не умеет: записей больше, чем правило знает, и провал
+        // отнимал бы голос у честного чтения модели. Класс недостижим, а не провален.
+        assertNull(
+            "неузнанная запись адреса — не провал формы",
+            semanticFits(META_ENTITY_PREFIX + "address", "м. Павлоград, вул. Кодацька, 39, Днiпропетровська обл."),
+        )
     }
 
     @Test

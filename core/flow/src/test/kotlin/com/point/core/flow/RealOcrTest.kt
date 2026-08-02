@@ -26,6 +26,9 @@ class RealOcrTest {
     private val parcels = listOf("parcel_1", "parcel_2", "parcel_3", "parcel_4")
     private val notParcels = listOf("neg_viber", "neg_whatsapp")
 
+    /** Номер, который в `neg_viber` стоит своей строкой, а подписан «ТТН» строкой ниже. */
+    private val numberInViber = "20451491549395"
+
     // --- Тип документа (#222, шаг 5) ---
 
     @Test
@@ -85,6 +88,28 @@ class RealOcrTest {
     fun `a card number in a chat is not mistaken for a waybill`() {
         // neg_viber also contains «5169 3351 0965 2632» — sixteen digits, a card.
         assertTrue(waybillNumbers(ocr("neg_viber")).none { it.filter(Char::isDigit).length != 14 })
+    }
+
+    /**
+     * Подпись трека стоит на СОСЕДНЕЙ строке — и это не выдумка, а вёрстка реального экрана
+     * (#262, кадр 13). В дословном выводе устройства номер занимает строку целиком, а «ТТН»
+     * подписывает его строкой ниже; на бумажной экспресс-накладной кадра 13 подпись стоит,
+     * наоборот, строкой выше. Окно соседства, считавшее только свою строку, было слепо к обоим.
+     */
+    @Test
+    fun `слово-маркер на соседней строке — сосед номера`() {
+        val text = ocr("neg_viber")
+        val at = text.indexOf(numberInViber).let { it until it + numberInViber.length }
+
+        assertTrue("«ТТН» стоит соседней строкой и обязано считаться соседом", markerNear(text, at))
+        // Почему прежнее правило этого не видело: на своей строке у номера соседей нет вовсе.
+        assertEquals(numberInViber, text.lineSequence().first { numberInViber in it }.trim())
+    }
+
+    @Test
+    fun `ведомость владельца номеров отправлений не рождает`() {
+        // Расширенное окно соседства не имеет права начать находить треки в символьной каше.
+        assertTrue(waybillNumbers(ocr("ledger_23")).isEmpty())
     }
 
     // --- Часы статус-бара (#233) ---
