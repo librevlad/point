@@ -223,8 +223,8 @@ class TableMetricTest {
             ),
         )
 
-        assertTrue(text, text.contains("нечем судить"))
-        assertFalse(text, text.contains("**сдано**"))
+        assertTrue(text, text.contains("проверить нечем"))
+        assertFalse(text, text.contains("**всё верно**"))
     }
 
     @Test
@@ -236,7 +236,7 @@ class TableMetricTest {
             ),
         )
 
-        assertTrue(text, text.contains("**сдано**"))
+        assertTrue(text, text.contains("**всё верно**"))
     }
 
     // --- формат эталона ---

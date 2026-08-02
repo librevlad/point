@@ -44,7 +44,7 @@ fun main(args: Array<String>) {
  * скрывает, на чём она посчитана.
  */
 fun renderTableScore(score: TableScore): String = buildString {
-    appendLine("#### таблица кадра ${score.frame}")
+    appendLine("#### таблица примера ${score.frame}")
     appendLine(
         "- строк в документе ${score.documentRows}, в файле ${score.tableRows}; " +
             "колонок ${score.documentColumns} против ${score.tableColumns}",
@@ -54,24 +54,24 @@ fun renderTableScore(score: TableScore): String = buildString {
             "потеряно ${score.lost.size}, лишних ${score.extra}",
     )
     if (score.lost.isNotEmpty()) appendLine("  - потеряны: ${score.lost.joinToString(", ")}")
-    appendLine("- сверено ячеек ${score.checkedCells}, совпало ${score.matchedCells}${percent(score.cellShare)}")
-    appendLine("- **расхождений молча ${score.silent.size}**, помечено ⚠ ${score.flagged.size}")
-    score.silent.forEach { appendLine("  - молча: ${diff(it)}") }
-    score.flagged.forEach { appendLine("  - ⚠: ${diff(it)}") }
-    appendLine("- помечено ⚠ ячеек ${score.markedCells} из ${score.totalCells}${percent(score.markedShare)}")
+    appendLine("- проверено ячеек ${score.checkedCells}, совпало ${score.matchedCells}${percent(score.cellShare)}")
+    appendLine("- **ошибок без предупреждения ${score.silent.size}**, предупреждений ${score.flagged.size}")
+    score.silent.forEach { appendLine("  - без предупреждения: ${diff(it)}") }
+    score.flagged.forEach { appendLine("  - предупреждение: ${diff(it)}") }
+    appendLine("- ячеек с предупреждением ${score.markedCells} из ${score.totalCells}${percent(score.markedShare)}")
     when {
         score.unjudged -> appendLine(
-            "- **нечем судить:** эталон не называет ни одного сверенного значения — " +
-                "сошлись только строки и ширина, содержимое ячеек никто не проверял",
+            "- **проверить нечем:** для этого примера не названо ни одного верного значения — " +
+                "сошлись только строки и ширина, а само содержимое ячеек никто не сверял",
         )
-        score.passed -> appendLine("- **сдано**")
-        else -> appendLine("- **ПРОВАЛ:** " + score.failures.joinToString("; ") { it.reason })
+        score.passed -> appendLine("- **всё верно**")
+        else -> appendLine("- **не годится:** " + score.failures.joinToString("; ") { it.reason })
     }
     appendLine()
 }
 
 private fun diff(d: CellDiff): String =
-    "строка ${d.key}, колонка ${d.column + 1} — ждали «${d.expected}», " +
+    "строка ${d.key}, колонка ${d.column + 1} — верно «${d.expected}», " +
         (d.actual?.let { "получили «$it»" } ?: "ячейки нет")
 
 private fun percent(share: Double?): String =

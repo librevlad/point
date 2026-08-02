@@ -33,3 +33,19 @@ tasks.register<JavaExec>("scoreTable") {
         listOf("table", "expected", "report").map { project.findProperty(it) as? String ?: "" }
     }
 }
+
+// Счётчик корпуса (#262): число «действие без правок» собиралось РУКАМИ по журналам флоу —
+// человек открывал двадцать три файла и сверял их с действием, которое помнил. Метрика, которую
+// считает человек, меряет прежде всего его терпение. Реализация одна и та же (`scoreCorpus`),
+// CLI — рядом с её тестами, поэтому в артефакт приложения не попадает.
+//
+//   ./gradlew :core:flow:scoreCorpus -Prun=out -Pframes=tools/corpus/frames.tsv -Preport=out/report.md
+tasks.register<JavaExec>("scoreCorpus") {
+    group = "verification"
+    description = "Считает долю кадров корпуса, где действие готово без правок (#262)"
+    mainClass.set("com.point.core.flow.CorpusScoreCliKt")
+    classpath = sourceSets["test"].runtimeClasspath
+    argumentProviders.add {
+        listOf("run", "frames", "report").map { project.findProperty(it) as? String ?: "" }
+    }
+}
