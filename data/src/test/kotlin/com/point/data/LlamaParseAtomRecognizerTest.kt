@@ -1,6 +1,7 @@
 package com.point.data
 
 import kotlinx.coroutines.test.runTest
+import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -121,6 +122,93 @@ class LlamaParseAtomRecognizerTest {
 
         assertTrue(error?.message?.contains("задача не выполнена") == true)
         assertTrue(error?.message?.contains("bad page") == true)
+    }
+
+    /**
+     * Ответ, списанный с примера в документации сервиса **дословно** — страница в пунктах
+     * (612×792), рамка массивом спанов, у заголовка рамки нет вовсе.
+     *
+     * Смысл отдельного теста: все остальные фикстуры здесь сочинил тот же человек, который писал
+     * разбор, и они сходятся друг с другом по построению. Урок #233 ровно про это — движок,
+     * проверенный на собственноручно набранном входе, разошёлся с живым кадром по трём пунктам
+     * из четырёх. Фикстура из чужого первоисточника этот круг размыкает.
+     */
+    @Test
+    fun `ответ в форме из документации разбирается как есть`() = runTest {
+        val documented = """
+            {"job":{"id":"pjb-1","status":"COMPLETED"},
+             "items":{"pages":[{"page_number":1,"page_width":612.0,"page_height":792.0,
+               "items":[
+                 {"type":"heading","level":1,"value":"Document Title","md":"# Document Title"},
+                 {"type":"text","value":"11004","bbox":[{"x":72.0,"y":100.0,"w":200.0,"h":12.0}]}
+               ],"success":true}]}}
+        """.trimIndent()
+        val http = FakeHttpFiles(onPost = { created }, onGet = { HttpResult(200, documented) })
+        val layer = reader(http).read(pageObject)
+
+        // Заголовок из примера рамки не несёт — адрес ему не выдумываем, но текст остаётся.
+        assertEquals(listOf("11004"), layer.atoms.map { it.text })
+        assertTrue(layer.text.contains("Document Title"))
+
+        // Страница объявлена в пунктах (612×792), послали копию 1000×800, сырой файл вдвое больше.
+        // Закрепляется здесь ПРАВИЛО — нормировка по объявленной системе. Останется ли система
+        // пропорциональной посланному кадру, правило не решает: уложи сервис снимок 4:3 в лист
+        // Letter полями, и понадобились бы ещё и отступы, которых он не сообщает. Это и есть та
+        // единственная вещь, которую закроет только живой ключ с наложением рамок на 23.jpg.
+        val box = layer.atoms.single().box
+        assertEquals(72f / 612f * 1000f * 2f, box.left, 0.05f)
+        assertEquals(100f / 792f * 800f * 2f, box.top, 0.05f)
+        assertEquals(272f / 612f * 1000f * 2f, box.right, 0.05f)
+    }
+
+    /**
+     * Язык страницы уезжает вместе с настройками — иначе на русской ведомости сервис читает
+     * латиницей и второе чтение оказывается такой же кашей, как первое.
+     *
+     * Коды здесь **свои** (`ru`), не тессерактовые (`rus`) соседнего ридера: у этого сервиса свой
+     * перечень языков, и одинаково выглядящая строка молча читала бы не тот язык.
+     */
+    @Test
+    fun `настройки несут язык страницы, и код языка — из перечня этого сервиса`() = runTest {
+        val http = FakeHttpFiles(
+            onPost = { created },
+            onGet = { completed("""{"type":"text","value":"11004","bbox":{"x":0,"y":0,"w":10,"h":10}}""") },
+        )
+        reader(http).read(pageObject)
+
+        val configuration = JSONObject(http.posts.single().field("configuration").orEmpty())
+        val languages = configuration
+            .getJSONObject("processing_options")
+            .getJSONObject("ocr_parameters")
+            .getJSONArray("languages")
+
+        assertEquals("cost_effective", configuration.getString("tier"))
+        assertEquals(2, languages.length())
+        assertEquals("ru", languages.getString(0)) // порядок значащий — основной язык первым
+        assertEquals("en", languages.getString(1))
+    }
+
+    /**
+     * Уверенность берётся у сервиса, а не ставится единицей «на всякий случай»: он её сообщает
+     * (поле `confidence` у рамки), а подменить её единицей — сгладить ровно ту неуверенность,
+     * по которой человек и решает, куда идти перечитывать.
+     */
+    @Test
+    fun `уверенность приезжает от сервиса, а несколько спанов схлопываются худшим`() = runTest {
+        val items = listOf(
+            """{"type":"text","value":"уверенно","bbox":[{"x":0,"y":0,"w":10,"h":10,"confidence":0.94}]}""",
+            """{"type":"text","value":"спорно","bbox":[{"x":0,"y":20,"w":10,"h":10,"confidence":0.9},
+                 {"x":20,"y":20,"w":10,"h":10,"confidence":0.31}]}""",
+            """{"type":"text","value":"молчит","bbox":[{"x":0,"y":40,"w":10,"h":10}]}""",
+        ).joinToString(",")
+        val http = FakeHttpFiles(onPost = { created }, onGet = { completed(items) })
+        val atoms = reader(http).read(pageObject).atoms
+
+        assertEquals(0.94f, atoms[0].confidence, 0.001f)
+        // Минимум, а не среднее: атом надёжен настолько, насколько надёжен его худший кусок.
+        assertEquals(0.31f, atoms[1].confidence, 0.001f)
+        // Не сообщил — единица, и она означает «не сообщил», а не «уверен».
+        assertEquals(1f, atoms[2].confidence, 0.001f)
     }
 
     @Test
