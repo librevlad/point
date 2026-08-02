@@ -59,10 +59,13 @@ fun renderTableScore(score: TableScore): String = buildString {
     score.silent.forEach { appendLine("  - молча: ${diff(it)}") }
     score.flagged.forEach { appendLine("  - ⚠: ${diff(it)}") }
     appendLine("- помечено ⚠ ячеек ${score.markedCells} из ${score.totalCells}${percent(score.markedShare)}")
-    if (score.passed) {
-        appendLine("- **сдано**")
-    } else {
-        appendLine("- **ПРОВАЛ:** " + score.failures.joinToString("; ") { it.reason })
+    when {
+        score.unjudged -> appendLine(
+            "- **нечем судить:** эталон не называет ни одного сверенного значения — " +
+                "сошлись только строки и ширина, содержимое ячеек никто не проверял",
+        )
+        score.passed -> appendLine("- **сдано**")
+        else -> appendLine("- **ПРОВАЛ:** " + score.failures.joinToString("; ") { it.reason })
     }
     appendLine()
 }
