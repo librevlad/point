@@ -1,0 +1,103 @@
+package com.point.core.flow
+
+import com.point.core.model.Provenance
+
+/**
+ * Номер квитанции — факт, которым считается «Переслать квитанцию» (#262).
+ *
+ * В корпусе владельца два таких кадра, и они устроены по-разному: на одном квитанция **сама**
+ * лежит перед человеком (лист банка с полями «відправник / одержувач / сума», печатью и подписью),
+ * на другом её на экране нет вовсе — есть экран банковского приложения «платіж надіслано» и
+ * **ссылка** на квитанцию. Переслать надо квитанцию, а не снимок приложения, поэтому у действия
+ * одно требование с двумя законными чтениями ([FieldSpec.insteadOf]): номер квитанции — когда
+ * документ на руках, ссылка ([META_ENTITY_PREFIX] + `url`) — когда он за ссылкой.
+ *
+ * **Форма — номер рядом со словом «квитанція».** Одной формы тут мало по построению: `AB12-CD34-
+ * EF56-GH78` неотличим от артикула, а `950333` — от любого шестизначного числа. Допуск даёт
+ * соседнее слово ([markerNear] — то же окно в токенах, что у 13-значного трека), и это ровно та
+ * же порода правила: дешёвая, офлайновая, ошибающаяся. Улика одна ([EvidenceClass.SEMANTIC]),
+ * человек видит «возможно», второй класс приносит тот, кто смотрел на слой страницы.
+ *
+ * **Чего правило не делает.** Оно не объявляет квитанцией документ: номер — это факт, а не
+ * вердикт о типе. И оно молчит там, где слова «квитанція» нет вовсе: фискальный чек магазина со
+ * словом «ЧЕК» правило сегодня не читает — строка в [RECEIPT_MARKER_STEMS] появится вместе с живым
+ * кадром, а не «на всякий случай» (тот же порядок, что у единиц учёта в [meterReadings]).
+ */
+
+/**
+ * Номер квитанции как факт объекта: тот же ключ читает схема «Переслать квитанцию»
+ * ([ACTION_SCHEMAS]) и пишет «Понять» (контрактный ключ `RECEIPT`). Два независимых источника
+ * встречаются в [mergeFacts]: цифры неприкосновенны, спор виден.
+ */
+const val META_ENTITY_RECEIPT = META_ENTITY_PREFIX + "receipt"
+
+/** Короче — это не номер, а обрывок: «№ 12» рядом со словом «квитанція» бывает у пункта списка. */
+private const val MIN_RECEIPT_CHARS = 6
+
+/**
+ * Номера квитанций в [text] в порядке появления, дословно и без повторов (тот же номер в шапке и
+ * в подписи — один номер). Пусто — обычный случай, и в нём вся дешевизна правила.
+ */
+fun receiptNumbers(text: String): List<String> =
+    RECEIPT_SHAPED.findAll(text)
+        .filter { receiptNumberShaped(it.value) }
+        .filter { markerNear(text, it.range, ::looksLikeReceiptMarker) }
+        .map { it.value.trim() }
+        .distinctBy { it.filter(Char::isLetterOrDigit).uppercase() }
+        .toList()
+
+/**
+ * Похоже ли значение на номер квитанции — **одна реализация формы на обоих судей**: правило выше
+ * и валидатор чтения модели ([semanticFits]). Два счётчика формы разъехались бы на первой правке
+ * (тот же урок, что у [meterDigitsFit] и [amountDigitsFit]).
+ *
+ * Цифра обязательна: «Квитанція ОРИГІНАЛ» — слово, а не номер.
+ */
+internal fun receiptNumberShaped(value: String): Boolean {
+    val token = value.trim()
+    return RECEIPT_SHAPED.matches(token) &&
+        token.count(Char::isLetterOrDigit) >= MIN_RECEIPT_CHARS &&
+        token.any(Char::isDigit)
+}
+
+/**
+ * Номер квитанции как факты объекта: значение, происхождение и улика формы. Второй номер на
+ * странице — в `entity.receipt.more` (конвенция `.more`, #260: подтверждение первого моделью не
+ * стирает запись о втором).
+ */
+fun receiptFacts(text: String): Map<String, String> {
+    val numbers = receiptNumbers(text)
+    val first = numbers.firstOrNull() ?: return emptyMap()
+    return buildMap {
+        put(META_ENTITY_RECEIPT, first)
+        // ПРОЧИТАНО: правило нашло эти знаки дословно в распознанном тексте, а не вывело их (#264).
+        put(META_ENTITY_RECEIPT + META_SOURCE_SUFFIX, Provenance.OCR.wire)
+        // Улика ровно одна — форма с соседним словом. «Не судили» и «улик мало» выглядят по-разному.
+        put(META_ENTITY_RECEIPT + META_EVIDENCE_SUFFIX, EvidenceClass.SEMANTIC.name.lowercase())
+        if (numbers.size > 1) put(META_ENTITY_RECEIPT + META_MORE_SUFFIX, altValue(numbers))
+    }
+}
+
+/**
+ * Слово ли это, которым зовут квитанцию. Сравнение стемами и через [foldOcr] — по той же причине,
+ * что у слов трека ([looksLikeTrackMarker]): форм у слова много («квитанція», «квитанції»,
+ * «квитанцію»), а OCR к тому же ест буквы.
+ */
+internal fun looksLikeReceiptMarker(word: String): Boolean {
+    val folded = foldOcr(word).trim { !it.isLetterOrDigit() }
+    return folded.isNotEmpty() && FOLDED_RECEIPT_MARKERS.any { it in folded }
+}
+
+/** Слова-маркеры квитанции. Список короткий сознательно: каждая новая строка — новый способ
+ *  ошибиться. Инвариант держит тест: всё, чем помечена квитанция на слое атомов ([FIELD_MARKERS]),
+ *  обязано узнаваться и здесь, иначе два судьи одного маркера разъедутся. */
+private val RECEIPT_MARKER_STEMS = listOf("квитанц", "receipt")
+
+private val FOLDED_RECEIPT_MARKERS = RECEIPT_MARKER_STEMS.map(::foldOcr)
+
+/**
+ * Форма номера: латиница и цифры блоками через дефис (`AB12-CD34-EF56-GH78`) либо один блок
+ * (`950333`). Кириллица сюда не входит намеренно — номера документов печатают латиницей и
+ * цифрами, а `[А-Я]` втянул бы в номер соседнее слово подписи целиком.
+ */
+private val RECEIPT_SHAPED = Regex("""(?<![\p{L}\d-])[A-Z0-9]{2,}(?:-[A-Z0-9]{2,}){0,5}(?![\p{L}\d-])""")

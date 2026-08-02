@@ -23,9 +23,11 @@ import com.point.core.flow.META_OCR_TEXT_REF
 import com.point.core.flow.META_READING_MODE
 import com.point.core.flow.readingModeOf
 import com.point.core.flow.ObjectStore
+import com.point.core.flow.amountFacts
 import com.point.core.flow.geoFacts
 import com.point.core.flow.weaklyRead
 import com.point.core.flow.meterFacts
+import com.point.core.flow.receiptFacts
 import com.point.core.flow.trackFacts
 import com.point.core.model.Feature
 import com.point.core.model.ObjectKind
@@ -126,6 +128,10 @@ class OcrEnricher @Inject constructor(
                 // ровно тот урок, на котором однажды уже потеряли трек (см. identifierObjects).
                 putAll(meterFacts(text.take(MAX_CHARS)))
                 putAll(geoFacts(text.take(MAX_CHARS)))
+                // Сумма и номер квитанции — те же правила формы и ровно тот же путь: человек
+                // делится СКРИНОМ переписки с реквизитами и ФОТО квитанции, а не текстовым файлом.
+                putAll(amountFacts(text.take(MAX_CHARS)))
+                putAll(receiptFacts(text.take(MAX_CHARS)))
                 mode?.let { put(META_READING_MODE, it.name) }
                 put(META_OCR_TEXT_REF, ref.value)
                 atomsRef?.let { put(META_OCR_ATOMS_REF, it.value) }

@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import com.point.core.flow.ActionReadiness
 import com.point.core.flow.Readiness
 import com.point.core.flow.actionReadiness
+import com.point.core.flow.maskedForScreen
 import com.point.core.flow.readingModeOf
 import com.point.core.flow.readingModeLabel
 
@@ -111,8 +112,11 @@ private fun ReadinessRow(row: ActionReadiness, understood: Boolean, metadata: Ma
                     Spacer(Modifier.width(6.dp))
                     val origin = readingModeLabel(readingModeOf(metadata))?.let { " · $it" }.orEmpty()
                     val doubt = if (field.assumption) " · возможно" else ""
+                    // Значение печатается ровно так, как его показывают человеку везде: номер
+                    // карты «Перевести по реквизитам» — хвостом (#240 — маска, мимо которой
+                    // однажды утёк номер, была на одном экране, а не у ключа факта).
                     Text(
-                        text = field.value + doubt + origin,
+                        text = maskedForScreen(field.spec.key, field.value) + doubt + origin,
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
@@ -144,7 +148,8 @@ private fun ReadinessRow(row: ActionReadiness, understood: Boolean, metadata: Ma
         // обязан видеть, что значение спорное, ДО того как начнёт отслеживать не тот номер).
         disputed.forEach { field ->
             Text(
-                text = "${field.spec.label} — или: " + field.alternatives.joinToString(", "),
+                text = "${field.spec.label} — или: " +
+                    field.alternatives.joinToString(", ") { maskedForScreen(field.spec.key, it) },
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 2,

@@ -272,6 +272,142 @@ class ActionSchemaTest {
         assertFalse(route.fields.single { it.key.endsWith("address") }.anchor)
     }
 
+    // -- #262: перевод, квитанция и ответ — кадры, которые не мерились ничем --
+
+    @Test
+    fun `перевод готов по карте и сумме — двух критических полей ровно два`() {
+        val rows = actionReadiness(
+            mapOf(
+                META_ENTITY_PREFIX + "card" to "4111 1111 1111 1111",
+                META_ENTITY_AMOUNT to "300",
+                META_ENTITY_AMOUNT_CURRENCY to "грн",
+            ),
+        )
+
+        val pay = rows.single { it.schema.id == "pay-by-requisites" }
+        assertTrue(pay.readiness is Readiness.Ready)
+    }
+
+    @Test
+    fun `карта без суммы — не перевод, и не хватает именно суммы`() {
+        // «Сохрани реквизиты» и «переведи 300 грн» — разные действия: без суммы человек
+        // допишет её сам, то есть действие выполнено НЕ без правок.
+        val pay = ACTION_SCHEMAS.single { it.id == "pay-by-requisites" }
+
+        val r = pay.readiness(mapOf(META_ENTITY_PREFIX + "card" to "4111 1111 1111 1111"))
+
+        assertTrue(r is Readiness.Missing)
+        assertEquals(listOf("сумма"), (r as Readiness.Missing).missing.map { it.label })
+    }
+
+    @Test
+    fun `сумма без карты — не перевод, и не хватает именно карты`() {
+        val pay = ACTION_SCHEMAS.single { it.id == "pay-by-requisites" }
+
+        val r = pay.readiness(mapOf(META_ENTITY_AMOUNT to "300", META_ENTITY_AMOUNT_CURRENCY to "грн"))
+
+        assertTrue(r is Readiness.Missing)
+        assertEquals(listOf("карта"), (r as Readiness.Missing).missing.map { it.label })
+    }
+
+    @Test
+    fun `сумма карточку не зовёт — цена на чеке не просьба перевести`() {
+        // Тот же щуп, что снял якорь с адреса (#262): сумма есть на каждом чеке, счёте и в
+        // прайсе, и якорь на ней звал бы «Перевести» на всём подряд.
+        assertTrue(
+            actionReadiness(mapOf(META_ENTITY_AMOUNT to "500", META_ENTITY_AMOUNT_CURRENCY to "грн"))
+                .isEmpty(),
+        )
+    }
+
+    @Test
+    fun `квитанция готова и по номеру, и по ссылке — требование одно, чтений два`() {
+        val receipt = ACTION_SCHEMAS.single { it.id == "forward-receipt" }
+
+        val byNumber = receipt.readiness(mapOf(META_ENTITY_RECEIPT to "AB12-CD34-EF56-GH78"))
+        val byLink = receipt.readiness(mapOf(META_ENTITY_PREFIX + "url" to "https://check.bank.example/p/NaXzz"))
+
+        assertTrue(byNumber is Readiness.Ready)
+        assertTrue(byLink is Readiness.Ready)
+    }
+
+    @Test
+    fun `без квитанции и ссылки действие не готово, и строка называет оба чтения`() {
+        val receipt = ACTION_SCHEMAS.single { it.id == "forward-receipt" }
+
+        val r = receipt.readiness(mapOf(META_ENTITY_AMOUNT to "500"))
+
+        assertTrue(r is Readiness.Missing)
+        assertEquals(
+            listOf("номер квитанции или ссылка на квитанцию"),
+            (r as Readiness.Missing).missing.map { it.label },
+        )
+    }
+
+    @Test
+    fun `ссылка карточку не зовёт — ссылка есть на каждом втором скриншоте`() {
+        assertTrue(
+            actionReadiness(mapOf(META_ENTITY_PREFIX + "url" to "https://anyimage.io/contact.php"))
+                .none { it.schema.id == "forward-receipt" },
+        )
+        // А номер квитанции — зовёт: он стоит рядом со словом «квитанція», то есть документ
+        // сам о себе это сказал.
+        assertTrue(
+            actionReadiness(mapOf(META_ENTITY_RECEIPT to "AB12-CD34-EF56-GH78"))
+                .single { it.schema.id == "forward-receipt" }.readiness is Readiness.Ready,
+        )
+    }
+
+    @Test
+    fun `ответить готово по адресу почты — черновик полем схемы не является`() {
+        val reply = ACTION_SCHEMAS.single { it.id == "reply" }
+
+        assertTrue(reply.readiness(mapOf(META_ENTITY_PREFIX + "email" to "liz@example.com")) is Readiness.Ready)
+    }
+
+    @Test
+    fun `без адреса отвечать некуда, и не хватает именно адреса`() {
+        val reply = ACTION_SCHEMAS.single { it.id == "reply" }
+
+        val r = reply.readiness(mapOf(META_ENTITY_SUBJECT to "Refund for service"))
+
+        assertTrue(r is Readiness.Missing)
+        assertEquals(listOf("адрес почты"), (r as Readiness.Missing).missing.map { it.label })
+    }
+
+    @Test
+    fun `карточку ответа зовёт тема, а не почта`() {
+        // Почта стоит в подписи счёта и на визитке — там «Ответить» не предлагают. Тема бывает
+        // только у письма; цена названа — письмо без темы карточку не покажет, а измеримость
+        // не меняется (готовность считается readiness, где якоря нет).
+        assertTrue(
+            actionReadiness(mapOf(META_ENTITY_PREFIX + "email" to "olena@example.com"))
+                .none { it.schema.id == "reply" },
+        )
+        val rows = actionReadiness(
+            mapOf(
+                META_ENTITY_SUBJECT to "Refund for service",
+                META_ENTITY_PREFIX + "email" to "liz@example.com",
+            ),
+        )
+        assertTrue(rows.single { it.schema.id == "reply" }.readiness is Readiness.Ready)
+    }
+
+    @Test
+    fun `номер карты на экране показывается хвостом, а значение остаётся дословным`() {
+        // #240: маска работала на одном экране, и номер утёк мимо неё другим полем. Теперь
+        // маскировка — свойство ключа факта, и её же печатает карточка готовности.
+        val pay = ACTION_SCHEMAS.single { it.id == "pay-by-requisites" }
+        val r = pay.readiness(
+            mapOf(META_ENTITY_PREFIX + "card" to "4111 1111 1111 1111", META_ENTITY_AMOUNT to "300"),
+        ) as Readiness.Ready
+
+        val card = r.present.single { it.spec.key.endsWith("card") }
+        assertEquals("4111 1111 1111 1111", card.value)
+        assertEquals("•• 1111", maskedForScreen(card.spec.key, card.value))
+        assertEquals("300", maskedForScreen(META_ENTITY_AMOUNT, "300"))
+    }
+
     @Test
     fun `без всякого «куда» маршрут не готов, и строка называет все чтения`() {
         val r = ACTION_SCHEMAS.single { it.id == "route" }

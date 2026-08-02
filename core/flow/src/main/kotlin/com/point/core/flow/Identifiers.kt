@@ -178,15 +178,23 @@ private fun trackKey(value: String): String = value.filter(Char::isLetterOrDigit
  * слой атомов отличает подпись в той же ячейке от слова в дальней колонке ([fieldEvidence],
  * ревью #261), и раздавать по этому же слову второй класс значило бы объявлять «подтверждено»
  * там, где страница судима строже.
+ *
+ * [isMarker] — чьё это слово: у трека свои стемы, у квитанции свои ([looksLikeReceiptMarker],
+ * #262). Окно у них общее сознательно: «рядом» — свойство вёрстки документа, а не поля, и две
+ * его реализации разъехались бы на первой же правке (тот же довод, что у общей формы значения).
  */
-internal fun markerNear(text: String, at: IntRange): Boolean {
+internal fun markerNear(
+    text: String,
+    at: IntRange,
+    isMarker: (String) -> Boolean = ::looksLikeTrackMarker,
+): Boolean {
     val lineStart = text.lastIndexOf('\n', at.first).let { if (it < 0) 0 else it + 1 }
     val lineEnd = text.indexOf('\n', at.last).let { if (it < 0) text.length else it }
     val sameLineBefore = text.substring(lineStart, at.first).tokens()
     val sameLineAfter = text.substring(minOf(at.last + 1, lineEnd), lineEnd).tokens()
     val before = sameLineBefore.ifEmpty { tailAbove(text, lineStart) }.takeLast(MARKER_TOKENS_BEFORE)
     val after = sameLineAfter.ifEmpty { headBelow(text, lineEnd) }.take(MARKER_TOKENS_AFTER)
-    return (before + after).any(::looksLikeTrackMarker)
+    return (before + after).any(isMarker)
 }
 
 /** Хвост ближайшей непустой строки выше: пустые строки — оформление, а не расстояние. */
