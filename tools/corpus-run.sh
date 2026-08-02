@@ -22,6 +22,9 @@ A="$ANDROID_HOME/platform-tools/adb.exe"
 
 TAP=""
 TABLE=""
+# Сколько ждать сам .xlsx после тапа «В Excel». Не «на глаз»: живой кадр 23 строился ~2.5 минуты,
+# и предел взят с запасом. Переопределяется переменной окружения, потому что кадры разной тяжести.
+TABLE_WAIT="${TABLE_WAIT:-300}"
 while :; do
   case "${1:-}" in
     --tap) TAP="$2"; shift 2 ;;
@@ -113,10 +116,27 @@ for img in "$@"; do
 
   sleep 12  # дать энричерам дописать метаданные и журнал
 
+  waited=""
   if [ -n "$TAP" ]; then
     if tap_by_text "$TAP"; then
       echo "_тап «$TAP»_" >> "$OUT/report.md"
-      sleep 45   # сетевое действие — десятки секунд
+      if [ -n "$TABLE" ]; then
+        # Таблицу строит зрячая модель: живое «В Excel» на кадре 23 заняло ~2.5 минуты. Слепой
+        # sleep короче работы объявил бы «файла нет» там, где действие ещё идёт, — то есть соврал
+        # бы ОТКАЗОМ, а это та же подмена факта, от которой лечит сама метрика. Поэтому ждём сам
+        # файл и пишем в отчёт, сколько ждали: «не успели» и «не сделал» — разные ответы.
+        waited=0
+        while [ "$waited" -lt "$TABLE_WAIT" ]; do
+          x=$("$A" shell "run-as com.point ls files/scratch 2>/dev/null" | tr -d '\r' | grep -m1 '[.]xlsx$')
+          [ -n "$x" ] && break
+          sleep 5
+          waited=$((waited + 5))
+        done
+        sleep 5   # файл заводится пустым и дописывается — даём писателю закрыть zip
+        echo "_ждали .xlsx ${waited} с (предел ${TABLE_WAIT} с)_" >> "$OUT/report.md"
+      else
+        sleep 45   # сетевое действие — десятки секунд
+      fi
     else
       echo "_кнопка «$TAP» не найдена на экране_" >> "$OUT/report.md"
     fi
@@ -157,7 +177,8 @@ for img in "$@"; do
         || echo "_счёт таблицы не получен_" >> "$OUT/report.md"
     else
       rm -f "$OUT/$name.xlsx"
-      echo "_файла .xlsx на устройстве нет — действие до файла не дошло_" >> "$OUT/report.md"
+      echo "_файла .xlsx на устройстве нет${waited:+ (ждали $waited с)} — действие до файла не дошло_" \
+        >> "$OUT/report.md"
     fi
   fi
 

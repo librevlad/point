@@ -1,6 +1,7 @@
 package com.point.core.flow
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
@@ -193,6 +194,49 @@ class TableMetricTest {
         assertEquals(1, score.silent.size)
         assertNull("помечать нечего — доли нет", score.markedShare)
         assertEquals(0.0, score.cellShare!!, 0.001)
+    }
+
+    @Test
+    fun `эталон без сверенных значений не даёт «сдано» — судить было нечем`() {
+        // Ровно тот случай, что лежит в репозитории: заготовка кадра 23 называет 27 артикулов и
+        // ни одного значения. Файл, где артикулы прочитаны и ширина сошлась, а содержимое пусто,
+        // не даёт ни потерь, ни молчаливых расхождений — и «сдано» здесь было бы статусом,
+        // выданным за отсутствие проверки.
+        val score = scoreTable(
+            ledger(2, named = listOf(row("11004"), row("11006"))),
+            listOf(head, listOf("11004", "", ""), listOf("11006", "", "")),
+        )
+
+        assertEquals(0, score.checkedCells)
+        assertTrue("причин провала действительно нет", score.failures.isEmpty())
+        assertFalse("сверять было нечего — значит не сдано", score.passed)
+        assertTrue(score.unjudged)
+    }
+
+    @Test
+    fun `отчёт не говорит «сдано» там, где сверять было нечего`() {
+        // Числа читает человек в отчёте, а не в полях: пин стоит на самом тексте.
+        val text = renderTableScore(
+            scoreTable(
+                ledger(2, named = listOf(row("11004"), row("11006"))),
+                listOf(head, listOf("11004", "", ""), listOf("11006", "", "")),
+            ),
+        )
+
+        assertTrue(text, text.contains("нечем судить"))
+        assertFalse(text, text.contains("**сдано**"))
+    }
+
+    @Test
+    fun `одно сверенное значение уже даёт право на «сдано»`() {
+        val text = renderTableScore(
+            scoreTable(
+                ledger(2, named = listOf(row("11004", 2 to "120"), row("11006"))),
+                listOf(head, listOf("11004", "Гречка", "120"), listOf("11006", "Рис", "40")),
+            ),
+        )
+
+        assertTrue(text, text.contains("**сдано**"))
     }
 
     // --- формат эталона ---
