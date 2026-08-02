@@ -99,3 +99,14 @@ const val META_OCR_TEXT_REF = "ocr.text.ref"
  *  The layer is evidence, not a representation: it survives even when the garbage gate hides the
  *  text from features, and it is what область-selection (#259) and re-reading will address. */
 const val META_OCR_ATOMS_REF = "ocr.atoms.ref"
+
+/**
+ * Metadata key: scratch ref слоя атомов **второго**, облачного чтения страницы (#280).
+ *
+ * Свой ключ, а не [META_OCR_ATOMS_REF]. Затри облако офлайновый слой — и сравнивать два чтения
+ * стало бы не с чем: расхождение ридеров и есть сигнал, где значение надёжно, а где идти
+ * перечитывать. Один ключ на все облачные слои: кто именно прочитал, знает сам атом
+ * ([Atom.reader]/[Atom.readerVersion]), и дублировать это отдельным ключом — заводить второй
+ * источник правды о происхождении.
+ */
+const val META_CLOUD_ATOMS_REF = "cloud.atoms.ref"

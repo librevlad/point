@@ -56,6 +56,24 @@ GITHUB_BASE_URL=https://models.github.ai/inference
 # GitHub Models закрыт (410 на 02.08.2026) — вернут, впишите модели сюда
 GITHUB_MODELS=
 
+# Второй читатель страницы (#280) — БЕСПЛАТНЫЕ сервисы, ключ без привязки карты.
+# Оба необязательны: пустой ключ = слоя нет, приложение работает офлайновым OCR как раньше.
+# Слой пишется в свой ключ метаданных (cloud.atoms.ref) и НЕ затирает офлайновое чтение —
+# смысл именно в двух независимых чтениях одного кадра.
+# Azure Document Intelligence сюда не приехал сознательно: он требует карту.
+
+# Unstructured — ~15 000 страниц/мес бесплатно, ключ выдаётся без карты.
+# https://unstructured.io/pricing → Sign up → API key
+UNSTRUCTURED_API_KEY=
+UNSTRUCTURED_API_URL=https://api.unstructuredapp.io/general/v0/general
+
+# LlamaParse (LlamaCloud) — ~10 000 кредитов/мес бесплатно, карта не нужна.
+# https://cloud.llamaindex.ai → API Keys.  LLAMA_CLOUD_TIER: cost_effective (дешевле всего
+# по кредитам) | agentic | agentic_plus — сильнее, но месячная квота уходит заметно быстрее.
+LLAMA_CLOUD_API_KEY=
+LLAMA_CLOUD_BASE_URL=https://api.cloud.llamaindex.ai
+LLAMA_CLOUD_TIER=cost_effective
+
 # Release signing (#11): absolute path to the keystore + its passwords.
 # Generate once (keytool -genkeypair), store OUTSIDE the repo, BACK IT UP -
 # losing it means losing the Play identity of the app.

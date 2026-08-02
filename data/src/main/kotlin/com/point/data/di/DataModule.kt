@@ -84,6 +84,13 @@ import com.point.data.FileHistoryStore
 import com.point.data.GeminiLlmClient
 import com.point.data.HttpJson
 import com.point.data.UrlConnectionHttpJson
+import com.point.data.HttpFiles
+import com.point.data.UrlConnectionHttpFiles
+import com.point.data.OutboundFrames
+import com.point.data.BitmapOutboundFrames
+import com.point.data.CloudAtomRecognizer
+import com.point.data.LlamaParseAtomRecognizer
+import com.point.data.UnstructuredAtomRecognizer
 import com.point.data.MediaStoreExporter
 import com.point.data.MetadataEntityEnricher
 import com.point.data.MlKitBackgroundRemover
@@ -208,13 +215,27 @@ abstract class DataModule {
     @Binds
     abstract fun textRecognizer(impl: TesseractTextRecognizer): TextRecognizer
 
-    /** Геометрия доходит до пайплайна (#257): OcrEnricher читает слой, а не плоскую строку. */
+    /**
+     * Геометрия доходит до пайплайна (#257): OcrEnricher читает слой, а не плоскую строку.
+     *
+     * По умолчанию ридер **офлайновый и остаётся таким**. Облачное второе чтение (#280) живёт
+     * своим типом ([com.point.data.FallbackAtomRecognizer]) и сюда не подставляется: фоновое
+     * обогащение обязано укладываться в первый экран и не имеет права ходить в сеть.
+     */
     @Binds
     abstract fun atomRecognizer(impl: TesseractTextRecognizer): AtomRecognizer
 
     /** The one real HTTP transport; LLM clients depend on the [HttpJson] interface. */
     @Binds
     abstract fun httpJson(impl: UrlConnectionHttpJson): HttpJson
+
+    /** Загрузка файла формой + опрос задачи (#280) — второй сетевой шов рядом с [HttpJson]. */
+    @Binds
+    abstract fun httpFiles(impl: UrlConnectionHttpFiles): HttpFiles
+
+    /** Подготовка кадра к отправке наружу: EXIF-выпрямленная копия + её преобразование в сырой кадр. */
+    @Binds
+    abstract fun outboundFrames(impl: BitmapOutboundFrames): OutboundFrames
 
     /** The user's own AI key (BYO), stored on-device. */
     @Binds
@@ -377,6 +398,33 @@ abstract class DataModule {
             // The user's own key leads the chain; when unset it steps aside to the built-ins.
             return listOf<LlmClient>(userKey) + free + native
         }
+
+        /**
+         * Бесплатные читатели страницы (#280), в порядке очереди: Unstructured (~15 000
+         * страниц/мес) → LlamaParse (~10 000 кредитов/мес). Каждый попадает в цепочку, только
+         * если его ключ задан, — поэтому в раздаваемой релизной сборке список **пуст**, и
+         * облачного чтения там просто нет.
+         *
+         * Список не биндится на `AtomRecognizer`: подменять им ридер по умолчанию нельзя, иначе
+         * фоновое обогащение ушло бы в сеть на первом же экране.
+         */
+        @Provides
+        fun cloudAtomRecognizers(
+            http: HttpFiles,
+            frames: OutboundFrames,
+        ): List<@JvmSuppressWildcards CloudAtomRecognizer> = listOf(
+            UnstructuredAtomRecognizer(
+                http, frames,
+                BuildConfig.UNSTRUCTURED_API_KEY,
+                BuildConfig.UNSTRUCTURED_API_URL,
+            ),
+            LlamaParseAtomRecognizer(
+                http, frames,
+                BuildConfig.LLAMA_CLOUD_API_KEY,
+                BuildConfig.LLAMA_CLOUD_BASE_URL,
+                BuildConfig.LLAMA_CLOUD_TIER,
+            ),
+        ).filter { it.configured }
 
         /** Gemini is built here (not @Inject) so its key + model list — from BuildConfig —
          *  are constructor-injected, keeping the client itself BuildConfig-free and testable. */
