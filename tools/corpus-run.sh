@@ -6,6 +6,13 @@
 #   2) что он понимает после ОДНОГО явного тапа по действию — режим `--tap "Название"`.
 # Смешивать их в одно число нельзя.
 #
+# Третий режим — `--table <эталон>`: кадр с таблицей меряется не готовностью полей, а РЕЗУЛЬТАТОМ.
+# После тапа по «В Excel» харнесс забирает готовый .xlsx с устройства и считает по нему числа
+# метрики (`tools/table-score.sh`): нашлось строк, потеряно, лишних, доля сверенных ячеек и —
+# главное — сколько расхождений прошло молча. Схемы готовности у таблиц нет и быть не может.
+#
+#   bash tools/corpus-run.sh --tap "В Excel" --table tools/corpus/23.expected.tsv out 23.jpg
+#
 # На кадр снимается дословно: текст из scratch, слой атомов (слово+bbox+уверенность),
 # журнал метаданных объекта (вход метрики) и снимок экрана. Ничего не выдумывает.
 set -u
@@ -14,8 +21,19 @@ export MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*'
 A="$ANDROID_HOME/platform-tools/adb.exe"
 
 TAP=""
-if [ "${1:-}" = "--tap" ]; then TAP="$2"; shift 2; fi
+TABLE=""
+while :; do
+  case "${1:-}" in
+    --tap) TAP="$2"; shift 2 ;;
+    --table) TABLE="$2"; shift 2 ;;
+    *) break ;;
+  esac
+done
 OUT="$1"; shift
+[ -z "$TABLE" ] || [ -s "$TABLE" ] || { echo "нет эталона таблицы: $TABLE" >&2; exit 2; }
+# Без тапа действие «В Excel» не выполняется вовсе, и мерить было бы нечего — а молчание на этом
+# месте выглядело бы как ноль результата вместо «замер не проводился».
+[ -z "$TABLE" ] || [ -n "$TAP" ] || { echo "--table без --tap: таблицу никто не построит" >&2; exit 2; }
 mkdir -p "$OUT"
 : > "$OUT/report.md"
 
@@ -76,6 +94,9 @@ for img in "$@"; do
   "$A" shell "run-as com.point cp /data/local/tmp/c.jpg files/c.jpg"
   "$A" shell am force-stop com.point > /dev/null 2>&1
   "$A" shell rm -f /sdcard/Android/data/com.point/files/atoms-last.tsv > /dev/null 2>&1
+  # Таблица прошлого кадра из scratch убирается ДО прогона: иначе «самый свежий .xlsx» окажется
+  # чужим, и метрика посчитает предыдущий кадр, ничем себя не выдав.
+  [ -z "$TABLE" ] || "$A" shell "run-as com.point sh -c 'rm -f files/scratch/*.xlsx'" > /dev/null 2>&1
   "$A" logcat -c
   "$A" shell am start -a android.intent.action.SEND -t image/jpeg \
     --eu android.intent.extra.STREAM "file:///data/user/0/com.point/files/c.jpg" \
@@ -120,6 +141,25 @@ for img in "$@"; do
   # Журнал флоу: метаданные объекта — вход метрики «действие без правок» (actionReadiness).
   "$A" exec-out run-as com.point cat files/flow-snapshot.json > "$OUT/$name.flow.json" 2>/dev/null
   [ -s "$OUT/$name.flow.json" ] || rm -f "$OUT/$name.flow.json"
+
+  # Результат «В Excel»: сам файл, а не рассказ о нём. Отсутствие файла — тоже результат, и он
+  # записывается словами: тихий ноль опаснее честного отказа.
+  if [ -n "$TABLE" ]; then
+    # Файл прошлого прогона ЭТОГО кадра — тоже чужой результат: не сотрёшь, и `-s` ниже
+    # посчитает вчерашнюю таблицу как сегодняшнюю.
+    rm -f "$OUT/$name.xlsx" "$OUT/$name.tsv"
+    x=$("$A" shell "run-as com.point ls -t files/scratch 2>/dev/null" | tr -d '\r' | grep -m1 '[.]xlsx$')
+    if [ -n "$x" ]; then
+      "$A" exec-out run-as com.point cat "files/scratch/$x" > "$OUT/$name.xlsx" 2>/dev/null
+    fi
+    if [ -s "$OUT/$name.xlsx" ]; then
+      bash "$(dirname "$0")/table-score.sh" "$OUT/$name.xlsx" "$TABLE" "$OUT/report.md" \
+        || echo "_счёт таблицы не получен_" >> "$OUT/report.md"
+    else
+      rm -f "$OUT/$name.xlsx"
+      echo "_файла .xlsx на устройстве нет — действие до файла не дошло_" >> "$OUT/report.md"
+    fi
+  fi
 
   "$A" exec-out screencap -p > "$OUT/$name.png" 2>/dev/null
   echo "" >> "$OUT/report.md"
