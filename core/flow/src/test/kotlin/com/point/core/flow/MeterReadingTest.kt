@@ -268,4 +268,17 @@ class MeterReadingTest {
             (ready as Readiness.Ready).present.single { it.spec.critical }.assumption,
         )
     }
+
+    @Test
+    fun `перенос строки разрядным пробелом не бывает — время сверху в показание не приклеивается`() {
+        // Тот же дефект, что найден у суммы (ревью #262): `\s` в Java включает `\n`, и разрядной
+        // группой оказывался кусок соседней строки. Показание кадра 03 приходит из переписки, где
+        // над снимком счётчика стоит таймстемп, — «02⏎154» человек передал бы поставщику услуги
+        // как прочитанное с табло дословно.
+        assertEquals(listOf("154"), meterReadings("18:02\n154 м³").map { it.value })
+        assertEquals("154", meterFacts("18:02\n154 м³")[META_ENTITY_METER])
+        assertTrue(meterReadings("18:02\n154 м³").none { '\n' in it.value })
+        // Разрядный пробел внутри строки при этом остаётся частью числа.
+        assertEquals(listOf("20 842"), meterReadings("Показання 20 842 кВт·ч").map { it.value })
+    }
 }
