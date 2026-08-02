@@ -144,6 +144,48 @@ class TableConsensusTest {
         assertTrue(c.candidates.isEmpty())
     }
 
+    /**
+     * Живой прогон ведомости: два чтения разошлись настолько, что в файл ушло 57 строк
+     * вместо 35, а помечено оказалось 75% ячеек. Смесь двух рассказов о разных таблицах
+     * не становится правдой оттого, что строки сложены в один файл.
+     */
+    @Test
+    fun `чтения, говорящие о разных таблицах, не смешиваются`() {
+        val first = listOf(
+            listOf("11004", "Буряк"), listOf("11006", "Горошок"), listOf("11008", "Ікра"),
+            listOf("11012", "Капуста"), listOf("11019", "Картопля"), listOf("11024", "Кукурудза"),
+            listOf("11025", "Маслини"), listOf("11026", "Морква"), listOf("11028", "Огірки"),
+        )
+        val other = listOf(
+            listOf("11004", "Буряк"), listOf("1162", "Паштет"), listOf("1165", "Йогурт"),
+            listOf("1167", "Масло"), listOf("1168", "Консерва"), listOf("1169", "Паштет м'ясний"),
+            listOf("1205", "Яйця"), listOf("1207", "Сир"), listOf("1209", "Молоко"),
+        )
+
+        val c = reconcile(listOf(first, other))
+
+        assertEquals("отдано одно чтение целиком", first, c.rows)
+        assertTrue("без пометок и без вариантов", c.candidates.isEmpty())
+        assertTrue(c.rows.none { row -> row.any { "⚠" in it } })
+    }
+
+    /** Костяк общий, дописанное по краям — смесь осмысленна, и дописанное помечено. */
+    @Test
+    fun `при общем костяке смесь остаётся, а дописанное помечено`() {
+        val base = listOf(
+            listOf("11004", "Буряк"), listOf("11006", "Горошок"), listOf("11008", "Ікра"),
+            listOf("11012", "Капуста"), listOf("11019", "Картопля"), listOf("11024", "Кукурудза"),
+            listOf("11025", "Маслини"), listOf("11026", "Морква"), listOf("11028", "Огірки"),
+        )
+        val withTail = base + listOf(listOf("1162", "Паштет"))
+
+        val c = reconcile(listOf(base, withTail))
+
+        assertEquals(10, c.rows.size)
+        assertTrue("костяк чист", c.rows.take(9).none { row -> row.any { "⚠" in it } })
+        assertTrue("дописанное помечено", c.rows[9].all { "⚠" in it })
+    }
+
     // -- ведомость владельца: строки узнают друг друга по артикулу (#294) --
 
     @Test
