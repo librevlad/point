@@ -42,7 +42,10 @@ const val META_READING_MODE = "reading.mode"
 fun readingModeOf(layer: AtomLayer?): ReadingMode = when {
     layer == null -> ReadingMode.UNKNOWN
     layer.atoms.none { it.text.isNotBlank() } -> ReadingMode.HANDWRITTEN
-    looksLikeOcrGarbage(layer.text) -> ReadingMode.HANDWRITTEN
+    // Судит [weaklyRead] — уверенность движка, а не доля букв. По доле букв снимок экрана с
+    // таблицей договоров (0,39) объявлялся рукописью, а настоящая каша ведомости (0,62) —
+    // печатью: признак стоял ровно наоборот на обоих живых примерах.
+    weaklyRead(layer) -> ReadingMode.HANDWRITTEN
     else -> ReadingMode.PRINTED
 }
 
