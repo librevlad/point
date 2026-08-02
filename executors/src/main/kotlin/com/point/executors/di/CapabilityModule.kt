@@ -55,6 +55,7 @@ import com.point.executors.ExtractAllRealizer
 import com.point.executors.LearningBubblePolicy
 import com.point.executors.ImageCapability
 import com.point.executors.ImageRealizer
+import com.point.executors.MeterOcrRealizer
 import com.point.executors.MergePdfCapability
 import com.point.executors.MergePdfRealizer
 import com.point.executors.CloudOcrCapability
@@ -207,9 +208,10 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun cutoutR(r: CutoutRealizer): Realizer
     @Binds @IntoSet abstract fun blurBgR(r: BlurBgRealizer): Realizer
     @Binds @IntoSet abstract fun replaceBgR(r: ReplaceBgRealizer): Realizer
-    // OCR has two realizers behind one capability — the Resolver ranks device before
-    // cloud and chains them (device recognises nothing -> cloud). Roadmap #1 in prod.
+    // OCR has three realizers behind one capability — the Resolver ranks them and chains:
+    // страница целиком (10) → табло прибора (50) → облако (90). Roadmap #1 in prod.
     @Binds @IntoSet abstract fun deviceOcrR(r: DeviceOcrRealizer): Realizer
+    @Binds @IntoSet abstract fun meterOcrR(r: MeterOcrRealizer): Realizer
     @Binds @IntoSet abstract fun cloudOcrR(r: CloudOcrRealizer): Realizer
     @Binds @IntoSet abstract fun cloudOcrDirectR(r: CloudOcrDirectRealizer): Realizer
     @Binds @IntoSet abstract fun aiR(r: AiRealizer): Realizer
