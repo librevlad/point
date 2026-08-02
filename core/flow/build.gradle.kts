@@ -17,6 +17,24 @@ dependencies {
     testImplementation(libs.kotlinx.coroutines.test)
 }
 
+// Эталоны корпуса — ВХОД тестов, и Gradle обязан об этом знать (#262).
+//
+// `TableMetricTest` и `CorpusScoreCliTest` читают `tools/corpus/*.tsv` напрямую файлом, мимо
+// classpath. Для Gradle такого входа не существует: правка эталона не меняет ни исходников, ни
+// зависимостей, поэтому задача `test` остаётся UP-TO-DATE, а при `org.gradle.caching=true` —
+// FROM-CACHE. Проверено щупом: заведомо сломанный эталон, положенный в `tools/corpus`,
+// прошёл `./gradlew :core:flow:test` с BUILD SUCCESSFUL, ни разу не запустив проверку.
+// Это ровно та тихая зелень, от которой сама метрика и лечит: сторож есть, а не сработал.
+//
+// Объявляем каталог входом — теперь новый или исправленный эталон перезапускает тесты самим
+// фактом изменения. Чувствительность к пути относительная, чтобы кэш переносился между
+// рабочими копиями и CI.
+tasks.test {
+    inputs.dir(rootProject.layout.projectDirectory.dir("tools/corpus"))
+        .withPropertyName("corpusExpectations")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+}
+
 // Счётчик таблиц корпуса (#262): у метрики одна реализация — `scoreTable`, и харнесс
 // `tools/table-score.sh` зовёт именно её, а не свою копию на awk. CLI живёт в тестовых исходниках,
 // поэтому в артефакт приложения не попадает.
