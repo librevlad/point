@@ -24,7 +24,7 @@ import com.point.core.flow.META_READING_MODE
 import com.point.core.flow.readingModeOf
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.geoFacts
-import com.point.core.flow.looksLikeOcrGarbage
+import com.point.core.flow.weaklyRead
 import com.point.core.flow.meterFacts
 import com.point.core.flow.trackFacts
 import com.point.core.model.Feature
@@ -90,7 +90,10 @@ class OcrEnricher @Inject constructor(
             },
         )
         val raw = layer.text
-        if (raw.isBlank() || looksLikeOcrGarbage(raw)) return@withContext evidenceOnly
+        // Судит слой, а не текст: движок сам говорит, читал он или угадывал. Прежний гейт мерил
+        // долю букв — и прятал от человека начисто прочитанную таблицу договоров только потому,
+        // что она состоит из номеров, дат и сумм (замер примеров 02.08.2026).
+        if (raw.isBlank() || weaklyRead(layer)) return@withContext evidenceOnly
         // #233: the phone's own clock sits at the top of every screenshot and used to become
         // «дата 15:12». Dropped once, here, so no later reader can mistake furniture for content.
         val text = stripStatusBar(raw)
