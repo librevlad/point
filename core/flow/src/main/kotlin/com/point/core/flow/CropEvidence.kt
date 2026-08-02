@@ -77,11 +77,34 @@ const val MAX_EVIDENCE_CROPS = 12
  *
  * Возвращается **вся строка** с полем в треть высоты, а не боксы совпавших слов: человек сверяет
  * строку целиком, а обрезанный по буквам кроп проверять нечем.
+ *
+ * Возвращённая рамка — в координатах **сырого** кадра, как и требует [CropEvidence].
  */
-fun AtomLayer.locate(fragment: String): Box? {
+fun AtomLayer.locate(fragment: String): Box? = locateIn(uprightLines(), fragment)
+
+/**
+ * Строки страницы, собранные в **выпрямленном** кадре.
+ *
+ * Атомы лежат в сыром кадре (ADR-0001), а сырой кадр бывает боком: телефон держит пиксели как
+ * снял и пишет поворот в EXIF, а на фото бумаги со стола EXIF нулевой и доворот подбирает сама
+ * проба ориентации (#262). В таком кадре строка страницы — вертикальная полоса, и разбиение по
+ * сырому `centerY` ([AtomLayer.lines]) собирает **колонку вместо строки**: три колонки ведомости
+ * дают ничью по одному совпавшему слову, адрес не находится, и улики к строке не будет никогда.
+ * Поэтому полосы ищутся там, где строка горизонтальна, — в выпрямленной копии.
+ *
+ * Считается один раз на документ: [lines] сортирует все атомы, а спорных фрагментов в ведомости
+ * сотни.
+ */
+private fun AtomLayer.uprightLines(): List<List<Atom>> {
+    val frame = transform ?: return lines()
+    return AtomLayer(atoms.map { it.copy(box = frame.toUpright(it.box)) }).lines()
+}
+
+/** [locate] по уже разложенным строкам: рамка считается в выпрямленном кадре и возвращается в сыром. */
+private fun AtomLayer.locateIn(lines: List<List<Atom>>, fragment: String): Box? {
     val wanted = evidenceTokens(fragment)
     if (wanted.isEmpty()) return null
-    val scored = lines()
+    val scored = lines
         .map { line -> line to wanted.count { token -> line.any { evidenceToken(it.text) == token } } }
     val best = scored.maxByOrNull { it.second } ?: return null
     if (best.second == 0) return null
@@ -92,7 +115,8 @@ fun AtomLayer.locate(fragment: String): Box? {
     }
     val box = best.first.map { it.box }.reduce(Box::union)
     val pad = box.height * PAD_SHARE
-    return Box(box.left - pad, box.top - pad, box.right + pad, box.bottom + pad)
+    val padded = Box(box.left - pad, box.top - pad, box.right + pad, box.bottom + pad)
+    return transform?.toRaw(padded) ?: padded
 }
 
 /**
@@ -104,9 +128,11 @@ fun AtomLayer.locate(fragment: String): Box? {
  * - **координат нет — улики нет, и это не ошибка**: текст мог прийти из PDF или из чужого файла,
  *   где за словом не стоит никаких пикселей. Возвращается тот же список.
  *
- * Остаток, обрезанный пределом, называется вслух отдельным абзацем: иначе отсутствие картинки
- * читается как «здесь сомнений нет», хотя означает «улики кончились» — ровно та подмена статуса
- * красивой видимостью, от которой пометка и лечит.
+ * **Помеченное без картинки называется вслух** отдельным абзацем — и когда упёрлись в предел, и
+ * когда адреса не нашлось. Причина у молчания разная, а читается оно одинаково: «здесь сомнений
+ * нет», хотя означает «улики не будет». Ровно та подмена статуса красивой видимостью, от которой
+ * пометка и лечит, — и на эталонной ведомости это не редкий край, а норма: помеченных ячеек 387,
+ * а печатный якорь есть далеко не в каждой строке.
  */
 fun List<DocBlock>.withCropEvidence(
     layer: AtomLayer?,
@@ -115,21 +141,24 @@ fun List<DocBlock>.withCropEvidence(
 ): List<DocBlock> {
     if (layer == null || layer.atoms.isEmpty() || imagePath.isNullOrBlank()) return this
     val degrees = layer.transform?.rotationDegrees ?: 0
+    // Строки страницы — один раз на документ, а не заново на каждый спорный фрагмент.
+    val lines = layer.uprightLines()
     var attached = 0
-    var skipped = 0
+    var bare = 0
     val blocks = map { block ->
         if (!block.uncertain || block.evidence != null) return@map block
-        val region = layer.locate(block.text) ?: return@map block
-        if (attached >= limit) {
-            skipped++
+        val region = layer.locateIn(lines, block.text)
+        if (region == null || attached >= limit) {
+            bare++
             return@map block
         }
         attached++
         block.copy(evidence = CropEvidence(imagePath, region, degrees))
     }
-    if (skipped == 0) return blocks
-    val note = "Улик приложено $attached из ${attached + skipped} — предел на документ. " +
-        "Остальные помеченные фрагменты сверяйте с исходником."
+    if (bare == 0) return blocks
+    val note = "Улик приложено $attached из ${attached + bare} помеченных фрагментов: " +
+        "у остальных не нашлось однозначного места на снимке или сработал предел на документ. " +
+        "Сверяйте их с исходником."
     return blocks + DocBlock(note, DocStyle.NORMAL)
 }
 
