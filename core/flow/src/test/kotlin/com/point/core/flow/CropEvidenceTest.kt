@@ -105,13 +105,51 @@ class CropEvidenceTest {
         assertEquals("/tmp/23.jpg", out[1].evidence!!.imagePath)
     }
 
+    // -- кадр боком: сырой Y это не «вниз по странице» --
+
+    /**
+     * Ведомость, снятая боком, — ровно тот случай, ради которого заведён [FrameTransform].
+     *
+     * Атомы лежат в **сыром** кадре, а сырой кадр повёрнут: строка страницы становится в нём
+     * вертикальной полосой. Полоса по сырому `centerY` в таком кадре собирает КОЛОНКУ, а не
+     * строку — и адрес либо не находится вовсе (ничья трёх колонок), либо накрывает чужие
+     * слова. Поворот сюда приходит не только из EXIF: пробу ориентации (#262) ставит сам
+     * движок на фото бумаги со стола, где EXIF нулевой.
+     */
+    private val sidewaysFrame =
+        FrameTransform(sample = 2, rotationDegrees = 90, uprightWidth = 400, uprightHeight = 600)
+
+    /** Слово, положенное в СЫРОЙ кадр тем же путём, каким его кладёт ридер: [FrameTransform.toRaw]. */
+    private fun rawAtom(text: String, x: Float, y: Float, width: Float = 60f) =
+        Atom(id = "$text-$x-$y", text = text, box = sidewaysFrame.toRaw(Box(x, y, x + width, y + 20f)))
+
+    /** Тот же лист, что и [sheet], но снятый боком: слова разложены по СТРАНИЦЕ, а в файл
+     *  попали через [FrameTransform.toRaw] — как их и кладёт настоящий ридер. */
+    private val sidewaysSheet = AtomLayer(
+        listOf(
+            rawAtom("11004", 0f, 100f), rawAtom("Гречка", 100f, 100f), rawAtom("50", 300f, 100f),
+            rawAtom("11006", 0f, 200f), rawAtom("Рис", 100f, 200f), rawAtom("40", 300f, 200f),
+        ),
+        transform = sidewaysFrame,
+    )
+
     @Test
     fun `улика режется из сырого кадра и знает, на сколько её довернуть`() {
-        val sideways = AtomLayer(sheet.atoms, transform = FrameTransform(sample = 2, rotationDegrees = 90, uprightWidth = 400, uprightHeight = 300))
-
-        val out = listOf(uncertain("11004 Гречка 50")).withCropEvidence(sideways, "/tmp/23.jpg")
+        val out = listOf(uncertain("11004 Гречка 50")).withCropEvidence(sidewaysSheet, "/tmp/23.jpg")
 
         assertEquals(90, out.single().evidence!!.uprightDegrees)
+    }
+
+    @Test
+    fun `кадр снят боком — адресуется строка страницы, а не колонка сырого кадра`() {
+        val region = sidewaysSheet.locate("11004 Гречка 50 кг")
+
+        assertNotNull("строка бокового кадра обязана адресоваться так же, как ровного", region)
+        val mine = sidewaysFrame.toRaw(Box(0f, 100f, 360f, 120f))
+        val neighbour = sidewaysFrame.toRaw(Box(0f, 200f, 360f, 220f))
+        assertTrue("улика накрывает свою строку целиком", region!!.holds(mine.centerX, mine.centerY))
+        assertTrue("вместе с крайним словом строки", region.holds(mine.left + 1f, mine.top + 1f))
+        assertTrue("и не залезает в соседнюю", !region.holds(neighbour.centerX, neighbour.centerY))
     }
 
     @Test
@@ -126,6 +164,18 @@ class CropEvidenceTest {
         assertEquals("абзац-приписка добавляется ровно один", blocks.size + 1, out.size)
         assertTrue(out.last().text.contains("$MAX_EVIDENCE_CROPS из 20"))
         assertTrue("приписка — наша, а не прочитанное", !out.last().uncertain)
+    }
+
+    @Test
+    fun `помеченное без адреса названо вслух так же, как обрезанное пределом`() {
+        val blocks = listOf(uncertain("11004 Гречка 50"), uncertain("Итого по ведомости 2400"))
+
+        val out = blocks.withCropEvidence(sheet, "/tmp/23.jpg")
+
+        assertNotNull("у строки с печатным артикулом место на снимке есть", out[0].evidence)
+        assertNull("у итога — нет, такой строки движок не собрал", out[1].evidence)
+        assertEquals("значит, про него сказано вслух", blocks.size + 1, out.size)
+        assertTrue("иначе картинка была бы у одного, а второй читался бы как бесспорный", out.last().text.contains("1 из 2"))
     }
 
     @Test
