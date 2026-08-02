@@ -19,6 +19,11 @@ import javax.inject.Inject
  *
  * Ненастроенный слой (нет ключа — например, в раздаваемой релизной сборке, где `BuildConfig`
  * пустой) выпадает **молча**: это не отказ чтения, это отсутствие провайдера.
+ *
+ * «Никто не читал» бывает двух разных сортов, и отказ обязан их различать: **ключа нет вовсе**
+ * (совет — задать бесплатный ключ) против **ключ есть, но входа такого сорта никто не берёт**
+ * (PDF там, где читатели умеют только снимок). Слить их в одну строку значило бы посоветовать
+ * задать ключ человеку, у которого ключ задан, — статус, подменённый красивой видимостью.
  */
 class FallbackAtomRecognizer @Inject constructor(
     private val readers: List<@JvmSuppressWildcards CloudAtomRecognizer>,
@@ -29,9 +34,11 @@ class FallbackAtomRecognizer @Inject constructor(
 
     override suspend fun read(obj: PointObject): AtomLayer {
         val errors = mutableListOf<String>()
+        var configured = 0
         var considered = 0
         for (reader in readers) {
             if (!reader.configured) continue // нет ключа — слоя просто нет, это не сбой
+            configured++
             if (!reader.canRead(obj)) continue // например, PDF там, где ридер умеет только кадр
             considered++
             try {
@@ -42,7 +49,10 @@ class FallbackAtomRecognizer @Inject constructor(
                 errors += e.message ?: e.javaClass.simpleName
             }
         }
-        if (considered == 0) error(NOT_CONFIGURED)
+        // Два разных «никто не читал», и путать их нельзя: человеку с настроенным ключом,
+        // приславшему PDF, совет «задайте ключ» — не статус, а красивая видимость статуса.
+        if (configured == 0) error(NOT_CONFIGURED)
+        if (considered == 0) error(NOT_FOR_THIS_OBJECT)
         error(summarise(errors))
     }
 
@@ -67,6 +77,10 @@ class FallbackAtomRecognizer @Inject constructor(
     private companion object {
         const val NOT_CONFIGURED =
             "Облачное чтение не настроено — задайте бесплатный ключ Unstructured или LlamaParse"
+
+        /** Ключ есть, а читателя для такого входа нет — сегодня облако берётся только за снимок. */
+        const val NOT_FOR_THIS_OBJECT =
+            "Облачное чтение не берётся за этот объект — бесплатные читатели принимают снимок страницы"
 
         val NETWORK_HINTS = listOf(
             "resolve host", "No address associated", "Unable to resolve",

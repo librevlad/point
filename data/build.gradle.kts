@@ -82,11 +82,13 @@ android {
         buildConfigField("String", "GITHUB_BASE_URL", prop("GITHUB_BASE_URL", "https://models.github.ai/inference"))
         buildConfigField("String", "GITHUB_MODELS", prop("GITHUB_MODELS", ""))
 
-        // Второй читатель страницы (#280) — только БЕСПЛАТНОЕ и только без привязки карты.
-        // Unstructured: ~15 000 страниц/мес, ключ выдаётся без карты. LlamaParse: ~10 000
-        // кредитов/мес. Azure Document Intelligence сюда не приехал сознательно — он требует
-        // карту, а тезис проекта: на 402/429 идём к следующему провайдеру, а не в кассу.
+        // Второй читатель страницы (#280) — только БЕСПЛАТНОЕ. Unstructured: 15 000 страниц/мес,
+        // на странице тарифов прямо «No card required». LlamaParse: 10 000 кредитов/мес, про
+        // карту первоисточник молчит — обещания за него нет, и пустой ключ означает «слоя нет».
+        // Azure Document Intelligence сюда не приехал сознательно — он требует карту, а тезис
+        // проекта: на 402/429 идём к следующему провайдеру, а не в кассу.
         // Ключи — пустые здесь и живые только в debug (buildTypes ниже); адреса не секрет.
+        // UNSTRUCTURED_API_URL вынесен параметром не для красоты — у аккаунта бывает свой адрес.
         buildConfigField("String", "UNSTRUCTURED_API_KEY", "\"\"")
         buildConfigField("String", "UNSTRUCTURED_API_URL", prop("UNSTRUCTURED_API_URL", "https://api.unstructuredapp.io/general/v0/general"))
         buildConfigField("String", "LLAMA_CLOUD_API_KEY", "\"\"")

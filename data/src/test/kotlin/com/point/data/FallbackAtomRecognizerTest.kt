@@ -93,10 +93,25 @@ class FallbackAtomRecognizerTest {
     }
 
     @Test
-    fun `слой, который не берётся за такой объект, не считается отказом`() = runTest {
+    fun `ключ есть, а входа такого сорта никто не берёт — это не «задайте ключ»`() = runTest {
         val chain = FallbackAtomRecognizer(listOf(cloudReader("только кадры", takesObject = false) { layerOf("x") }))
         val error = runCatching { chain.read(pageObject) }.exceptionOrNull()
 
+        // Ключ у человека задан. Совет «задайте бесплатный ключ» был бы не статусом, а
+        // красивой видимостью статуса — и увёл бы отладку ровно в ту сторону, где всё в порядке.
+        assertTrue(chain.available)
+        assertTrue(error?.message?.contains("не берётся за этот объект") == true)
+        assertFalse(error?.message?.contains("задайте") == true)
+    }
+
+    @Test
+    fun `ни одного ключа — вот тогда просьба задать ключ`() = runTest {
+        val chain = FallbackAtomRecognizer(
+            listOf(cloudReader("безключевой", hasKey = false, takesObject = false) { layerOf("x") }),
+        )
+        val error = runCatching { chain.read(pageObject) }.exceptionOrNull()
+
+        assertFalse(chain.available)
         assertTrue(error?.message?.contains("не настроено") == true)
     }
 

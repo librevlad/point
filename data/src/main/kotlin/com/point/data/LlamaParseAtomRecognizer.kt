@@ -9,22 +9,30 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * LlamaParse (LlamaCloud) — второй бесплатный читатель страницы (~10 000 кредитов/мес, ключ без
- * привязки карты). Отдаёт страницу разобранной на элементы с рамками, а не плоским текстом.
+ * LlamaParse (LlamaCloud) — второй бесплатный читатель страницы (бесплатный план: 10 000
+ * кредитов/мес). Отдаёт страницу разобранной на элементы с рамками, а не плоским текстом.
  *
- * Контракт запроса (проверено по документации на 2026-08), три шага, потому что API асинхронный:
+ * Про карту первоисточник тарифов молчит — в отличие от Unstructured, где написано «No card
+ * required». Поэтому здесь обещания «без карты» нет: ключ задаёт человек, а попросят карту —
+ * ключ остаётся пустым и слоя просто нет (см. `local.properties.sample`).
+ *
+ * Контракт запроса сверен с **машинной спекой самого сервиса** (`/api/openapi.json`, 02.08.2026),
+ * а не только с текстом документации; три шага, потому что API асинхронный:
  * 1. `POST {base}/api/v2/parse/upload` — `multipart/form-data` с полем `file` и полем
- *    `configuration` (JSON-строка), заголовок `Authorization: Bearer …`; в ответе `id` задачи;
- * 2. `GET {base}/api/v2/parse/{id}?expand=items` — пока `job.status` не станет `COMPLETED`;
+ *    `configuration` (JSON-строка), заголовок `Authorization: Bearer …`; в ответе `id` задачи.
+ *    Спека говорит это дословно: «Send the file as a `file` field and parsing configuration as a
+ *    `configuration` JSON string field»;
+ * 2. `GET {base}/api/v2/parse/{id}?expand=items` — пока `job.status` не станет `COMPLETED`
+ *    (весь набор статусов по спеке: `PENDING`, `RUNNING`, `COMPLETED`, `FAILED`, `CANCELLED`);
  * 3. в ответе `items.pages[]`: `page_number`, `page_width`, `page_height` и `items[]` с `bbox`
- *    (`{x,y,w,h}` в системе страницы) и текстом в `value`/`md`.
+ *    и текстом в `value`/`md`.
  *
  * Ожидание — это `delay` между опросами, а не блокировка потока, и живёт оно **после явного тапа**:
  * сетевой слой не имеет права оказаться на первом экране (`CapabilityMeta.network`).
  *
- * Разбор рамки нарочно терпим к трём написаниям (`bbox` объектом, `bbox` массивом спанов, старое
- * `bBox`): поле у сервиса за год переезжало, а фикстура, снятая под одно написание, дала бы
- * зелёный тест при мёртвой геометрии в бою. Терпимость здесь — к **форме поля**, не к отсутствию
+ * По спеке `bbox` — это **список** `BBox`, и других написаний в контракте нет. Разбор всё же
+ * терпит рамку объектом и старое `bBox`: это стоит трёх строк и спасает от молчаливой потери
+ * геометрии, если написание опять поедет. Но терпимость здесь — к **форме поля**, не к отсутствию
  * координат: элемент без рамки в атомы не попадает.
  */
 class LlamaParseAtomRecognizer(
@@ -57,9 +65,7 @@ class LlamaParseAtomRecognizer(
             headers = auth,
             parts = listOf(
                 FormPart.Binary("file", frame.fileName, frame.mime, frame.bytes),
-                // Самый дешёвый тариф по кредитам: тезис проекта — жить на бесплатном,
-                // а не тратить месячную квоту на один кадр.
-                FormPart.Field("configuration", JSONObject().put("tier", tier).toString()),
+                FormPart.Field("configuration", configuration()),
             ),
         )
         if (res.code !in 200..299) error(refusal(res.code, res.body))
@@ -67,6 +73,31 @@ class LlamaParseAtomRecognizer(
         val id = json.optString("id").ifBlank { json.optJSONObject("job")?.optString("id").orEmpty() }
         return id.ifBlank { error("$READER: задача не создана — ${res.body.take(200)}") }
     }
+
+    /**
+     * Настройки разбора одной строкой JSON.
+     *
+     * **Язык здесь обязателен, и это не украшение.** Эталонный кадр — русская ведомость; сервис,
+     * которому не сказали языка, читает её латиницей, и мы получили бы вторую кашу вместо второго
+     * чтения — ровно тот провал, ради которого весь этот слой и заводился. Соседний ридер язык
+     * получал с первого дня (`languages=rus,eng`), а здесь его молча не было.
+     *
+     * Коды **другие**, чем у соседа, и списывать их друг у друга нельзя: Unstructured берёт коды
+     * Tesseract (`rus`, `eng`), а LlamaParse — свой перечень `ParserLanguages`, где то же самое
+     * пишется `ru` и `en` (машинная спека сервиса, 02.08.2026). Порядок значащий: первым идёт
+     * основной язык страницы.
+     *
+     * Тариф — самый дешёвый из тех, что вообще видят страницу: тезис проекта — жить на бесплатном,
+     * а не тратить месячную квоту на один кадр. Ниже по кредитам только `fast`, но он
+     * правило-ориентированный и снимок не читает вовсе.
+     */
+    private fun configuration(): String = JSONObject()
+        .put("tier", tier)
+        .put(
+            "processing_options",
+            JSONObject().put("ocr_parameters", JSONObject().put("languages", JSONArray(LANGUAGES))),
+        )
+        .toString()
 
     /**
      * Опрос задачи до готовности.
@@ -110,8 +141,7 @@ class LlamaParseAtomRecognizer(
                     id = "$ID_SPACE${atoms.size}",
                     text = text,
                     box = box,
-                    // Сервис своей уверенности не сообщает — единица и означает «не сообщил».
-                    confidence = 1f,
+                    confidence = confidenceOf(item),
                     reader = READER,
                     readerVersion = API_VERSION,
                     page = index,
@@ -131,15 +161,38 @@ class LlamaParseAtomRecognizer(
 
     /** Рамка элемента в сыром кадре; несколько спанов схлопываются в накрывающий прямоугольник. */
     private fun boxOf(item: JSONObject, frame: OutboundFrame, pageWidth: Float, pageHeight: Float): Box? {
-        val raw = item.opt("bbox") ?: item.opt("bBox") ?: return null
-        val spans = when (raw) {
+        val box = spansOf(item).mapNotNull { rectOf(it) }.reduceOrNull { a, b -> a.union(b) } ?: return null
+        return frame.toRawFrame(box, layoutWidth = pageWidth, layoutHeight = pageHeight)
+    }
+
+    /**
+     * Уверенность элемента — **та, которую назвал сервис**, а не единица «на всякий случай».
+     *
+     * Первая редакция ставила здесь 1f с комментарием «сервис своей уверенности не сообщает».
+     * Сообщает: по машинной спеке у `BBox` есть поле `confidence`, и стандартное скорингование
+     * включено по умолчанию. Единица вместо реального 0.4 — это не осторожность, это сглаженная
+     * неуверенность: подсказка «сюда идти перечитывать» гасится ровно там, где она нужнее всего,
+     * и слой улик начинает врать тем же способом, от которого он лечит (#257).
+     *
+     * Несколько спанов схлопываются **минимумом**, а не средним: атом надёжен ровно настолько,
+     * насколько надёжен его худший кусок, а среднее — это и есть сглаживание. Не сказал сервис
+     * ничего — остаётся 1f, и единица тут означает «не сообщил», как и у соседнего ридера.
+     */
+    private fun confidenceOf(item: JSONObject): Float =
+        spansOf(item)
+            .filter { it.has("confidence") && !it.isNull("confidence") }
+            .map { it.optDouble("confidence", 1.0).toFloat() }
+            .minOrNull()
+            ?.coerceIn(0f, 1f)
+            ?: 1f
+
+    /** Спаны рамки: по спеке — список, но объект и старое `bBox` тоже понимаются. */
+    private fun spansOf(item: JSONObject): List<JSONObject> =
+        when (val raw = item.opt("bbox") ?: item.opt("bBox")) {
             is JSONArray -> (0 until raw.length()).mapNotNull { raw.optJSONObject(it) }
             is JSONObject -> listOf(raw)
             else -> emptyList()
         }
-        val box = spans.mapNotNull { rectOf(it) }.reduceOrNull { a, b -> a.union(b) } ?: return null
-        return frame.toRawFrame(box, layoutWidth = pageWidth, layoutHeight = pageHeight)
-    }
 
     private fun rectOf(span: JSONObject): Box? {
         if (!span.has("x") || !span.has("y")) return null
@@ -166,8 +219,14 @@ class LlamaParseAtomRecognizer(
         const val API_VERSION = "parse/v2"
         const val DEFAULT_BASE_URL = "https://api.cloud.llamaindex.ai"
 
-        /** Самый дешёвый по кредитам тариф; сильнее — только за деньги. */
+        /** Самый дешёвый по кредитам тариф из читающих снимок; сильнее — только за деньги. */
         const val DEFAULT_TIER = "cost_effective"
+
+        /**
+         * Коды перечня `ParserLanguages` этого сервиса, а НЕ коды Tesseract у соседнего ридера.
+         * Русский первым: порядок в контракте значащий, первым идёт основной язык страницы.
+         */
+        val LANGUAGES = listOf("ru", "en")
         const val MAX_POLLS = 40
         const val POLL_MS = 1_500L
     }

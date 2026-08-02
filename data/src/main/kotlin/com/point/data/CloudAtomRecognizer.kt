@@ -5,7 +5,7 @@ import com.point.core.flow.Box
 import com.point.core.model.PointObject
 
 /**
- * Второй читатель страницы — из **бесплатных** сервисов, без привязки карты (#280).
+ * Второй читатель страницы — из **бесплатных** сервисов (#280).
  *
  * Зачем вообще второй. На эталонном кадре владельца (продовольственная ведомость: печатный бланк
  * воинской части, ~35 строк × 8 колонок, поверх печати — синяя ручка) офлайновый движок выдаёт
@@ -14,9 +14,11 @@ import com.point.core.model.PointObject
  * (свой ключ метаданных), потому что два независимых чтения одного кадра — это и есть сигнал, где
  * доверять, а где идти перечитывать. Затри мы первое — сравнивать стало бы не с чем.
  *
- * Деньги. Опора на бесплатное: Unstructured (~15 000 страниц/мес, ключ без карты) и LlamaParse
- * (~10 000 кредитов/мес). Azure Document Intelligence на этом шаге отпадает — он требует карту.
- * На 402 (нужна карта) и 429 (кончился лимит) цепочка идёт к следующему слою, а не покупает.
+ * Деньги. Опора на бесплатное: Unstructured (15 000 страниц/мес, на странице тарифов прямо
+ * сказано «No card required») и LlamaParse (10 000 кредитов/мес; про карту первоисточник молчит,
+ * и обещать за него мы не будем). Azure Document Intelligence на этом шаге отпадает — он требует
+ * карту. На 402 (нужна карта) и 429 (кончился лимит) цепочка идёт к следующему слою, а не
+ * покупает.
  *
  * Отличие от [AtomRecognizer] — две вещи, которых офлайновому движку знать не нужно: есть ли у
  * слоя ключ и берётся ли он вообще за этот объект. Без них «нет ключа» стало бы падением, а
@@ -55,12 +57,20 @@ interface CloudAtomRecognizer : AtomRecognizer {
  * Нулевая или отсутствующая размерность — не повод делить на ноль: считаем, что сервис ответил в
  * той же системе, в какой получил. Соврать здесь дешевле нельзя — молчаливый ноль отправил бы все
  * атомы в левый верхний угол.
+ *
+ * Система отчёта объявляется **целиком или никак**. Пересчитать одну ось по объявленной ширине,
+ * а вторую оставить как есть — значит выдать за адрес то, чего не бывает: растянутый по одной оси
+ * кадр. Такая рамка не падает и не выглядит битой, она просто указывает мимо — ровно тот тихий
+ * сбой, ради которого ADR-0001 держит два адресных пространства сразу. Поэтому объявленной
+ * системой считается только пара положительных размерностей, а половина отчёта не считается
+ * отчётом вовсе.
  */
 internal fun OutboundFrame.toRawFrame(box: Box, layoutWidth: Float, layoutHeight: Float): Box {
     val sentWidth = transform.uprightWidth.toFloat()
     val sentHeight = transform.uprightHeight.toFloat()
-    val scaleX = if (layoutWidth > 0f && sentWidth > 0f) sentWidth / layoutWidth else 1f
-    val scaleY = if (layoutHeight > 0f && sentHeight > 0f) sentHeight / layoutHeight else 1f
+    val declared = layoutWidth > 0f && layoutHeight > 0f && sentWidth > 0f && sentHeight > 0f
+    val scaleX = if (declared) sentWidth / layoutWidth else 1f
+    val scaleY = if (declared) sentHeight / layoutHeight else 1f
     val onSentCopy = Box(box.left * scaleX, box.top * scaleY, box.right * scaleX, box.bottom * scaleY)
     return transform.toRaw(onSentCopy)
 }

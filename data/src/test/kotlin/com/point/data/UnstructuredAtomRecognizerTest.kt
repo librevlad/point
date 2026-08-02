@@ -76,6 +76,28 @@ class UnstructuredAtomRecognizerTest {
     }
 
     @Test
+    fun `объявлена половина системы отчёта — не растягиваем кадр по одной оси`() = runTest {
+        // Сервис назвал ширину и умолчал про высоту. Пересчитать X и оставить Y — выдать за адрес
+        // растянутый кадр: рамка не упадёт и не будет выглядеть битой, она просто укажет мимо.
+        val halfDeclared = """
+            {"type":"Table","text":"11004",
+             "metadata":{"page_number":1,
+               "coordinates":{"system":"PixelSpace","layout_width":500,
+                 "points":[[100,100],[100,150],[200,150],[200,100]]}}}
+        """.trimIndent()
+        val http = FakeHttpFiles(onPost = { answer(halfDeclared) })
+        val box = reader(http).read(pageObject).atoms.single().box
+
+        // Отчёт не объявлен целиком → считаем его в системе посланной копии, и остаётся только
+        // масштаб кадра (sample = 2). Косой рамки (×2 по X и ×1 по Y) не возникает.
+        assertEquals(200f, box.left, 0.01f)
+        assertEquals(200f, box.top, 0.01f)
+        assertEquals(400f, box.right, 0.01f)
+        assertEquals(300f, box.bottom, 0.01f)
+        assertEquals(box.right - box.left, (box.bottom - box.top) * 2f, 0.01f) // пропорция цела
+    }
+
+    @Test
     fun `id атомов живут в своём пространстве и помнят своего ридера`() = runTest {
         val http = FakeHttpFiles(
             onPost = { answer(element("11004", 0, 0, 10, 10), element("11006", 0, 20, 10, 30)) },
