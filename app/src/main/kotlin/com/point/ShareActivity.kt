@@ -104,25 +104,25 @@ class ShareActivity : ComponentActivity() {
     }
 
     private fun handleShare(intent: Intent) {
-        val mime = intent.type ?: "application/octet-stream"
-        when (intent.action) {
-            Intent.ACTION_SEND -> {
-                val stream = IntentCompat.getParcelableExtra(intent, Intent.EXTRA_STREAM, Uri::class.java)
-                when {
-                    stream != null -> viewModel.onShared(stream.toString(), mime)
-
-                    intent.hasExtra(Intent.EXTRA_TEXT) -> {
-                        val text = intent.getStringExtra(Intent.EXTRA_TEXT).orEmpty()
-                        val uri = Uri.fromFile(cacheTextFile(cacheDir, text))
-                        viewModel.onShared(uri.toString(), "text/plain")
-                    }
-                }
+        val stream = IntentCompat.getParcelableExtra(intent, Intent.EXTRA_STREAM, Uri::class.java)
+        val streams = IntentCompat.getParcelableArrayListExtra(intent, Intent.EXTRA_STREAM, Uri::class.java)
+        when (
+            val incoming = incomingOf(
+                action = intent.action,
+                type = intent.type,
+                data = intent.data?.toString(),
+                stream = stream?.toString(),
+                text = intent.getStringExtra(Intent.EXTRA_TEXT),
+                streams = streams?.map { it.toString() }.orEmpty(),
+            )
+        ) {
+            is Incoming.Single -> viewModel.onShared(incoming.uri, incoming.mime)
+            is Incoming.Many -> viewModel.onSharedMultiple(incoming.uris)
+            is Incoming.Body -> {
+                val uri = Uri.fromFile(cacheTextFile(cacheDir, incoming.text))
+                viewModel.onShared(uri.toString(), "text/plain")
             }
-
-            Intent.ACTION_SEND_MULTIPLE -> {
-                val streams = IntentCompat.getParcelableArrayListExtra(intent, Intent.EXTRA_STREAM, Uri::class.java)
-                if (!streams.isNullOrEmpty()) viewModel.onSharedMultiple(streams.map { it.toString() })
-            }
+            null -> Unit
         }
     }
 }
