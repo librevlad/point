@@ -70,6 +70,18 @@
                 <data android:mimeType="text/uri-list" />
                 <data android:mimeType="application/pdf" />
                 <data android:mimeType="application/zip" />
+                <!--
+                  Офисные документы (#403). Разбирать их Point умел давно — классификатор знает
+                  docx/xlsx/pptx, текст читается из слайдов и листов, «В PDF» для них есть, — но в
+                  списке «Поделиться» этих типов не было, и человек упирался в то, что Point
+                  просто не предлагается. Дверь была закрыта снаружи, а не сломана внутри.
+                -->
+                <data android:mimeType="application/vnd.openxmlformats-officedocument.presentationml.presentation" />
+                <data android:mimeType="application/vnd.openxmlformats-officedocument.wordprocessingml.document" />
+                <data android:mimeType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
+                <data android:mimeType="application/vnd.ms-powerpoint" />
+                <data android:mimeType="application/msword" />
+                <data android:mimeType="application/vnd.ms-excel" />
             </intent-filter>
             <!-- Several files at once (e.g. multi-photo) -> a COLLECTION in Point. -->
             <intent-filter>
