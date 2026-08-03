@@ -70,12 +70,15 @@ fun DesktopApp(
     port: Int,
     onFilesDropped: (List<File>) -> Unit = {},
     onTextDropped: (String) -> Unit = {},
+    /** Взятое из буфера — отдельный вход: журнал (#407) должен отличать его от перетаскивания. */
+    onClipboardTaken: (String) -> Unit = onTextDropped,
 ) {
     val items by state.items.collectAsState()
     val message by state.message.collectAsState()
     val pair by state.pairRequest.collectAsState()
     val clipboardText by state.clipboardText.collectAsState()
     val lastContact by state.lastContact.collectAsState()
+    val journal by state.journal.collectAsState()
 
     // Native Compose drag&drop (the AWT window.dropTarget never fired — the Compose
     // surface intercepts drops). Reads the OS transferable: files or plain text.
@@ -109,7 +112,7 @@ fun DesktopApp(
             java.awt.Toolkit.getDefaultToolkit().systemClipboard
                 .getData(java.awt.datatransfer.DataFlavor.stringFlavor) as? String
         }.getOrNull()
-        if (text.isNullOrBlank()) state.say("В буфере пусто") else onTextDropped(text)
+        if (text.isNullOrBlank()) state.say("В буфере пусто") else onClipboardTaken(text)
     }
     Surface(
         color = MaterialTheme.colorScheme.surface,
@@ -164,7 +167,13 @@ fun DesktopApp(
                 }
             }
             Spacer(Modifier.height(16.dp))
-            if (items.isEmpty()) {
+            // Док показывается и тогда, когда в эту сессию ещё ничего не прилетело, но компьютер
+            // помнит прежнее (#407): иначе после перезапуска вся память была бы не видна вовсе —
+            // ровно та беда, ради которой срез и делался.
+            val remembered = remember(journal, items) {
+                com.point.desktop.recentBesides(journal, items.map { it.obj.uri.value }.toSet())
+            }
+            if (items.isEmpty() && remembered.isEmpty()) {
                 // Экран без объекта занят тем, чем работу начать (#285): портал, три способа
                 // дать объект и подключение телефона — а не одним лишь QR.
                 EmptyScreen(config, addresses, port, onTakeClipboard = takeClipboard)
@@ -173,16 +182,24 @@ fun DesktopApp(
                 // справа. Сетка карточек ушла: она показывала много объектов сразу и ни одного
                 // как следует, а работа в Point всегда идёт с одним.
                 var selectedId by remember { mutableStateOf<String?>(null) }
-                val selected = items.firstOrNull { it.obj.id == selectedId } ?: items.first()
+                val selected = items.firstOrNull { it.obj.id == selectedId } ?: items.firstOrNull()
                 Row(Modifier.fillMaxSize()) {
                     Dock(
                         items = items,
                         selected = selected,
                         onSelect = { selectedId = it.obj.id },
+                        recent = remembered,
+                        onOpenAgain = { entry -> state.openAgain(entry) },
                     )
                     Spacer(Modifier.width(1.dp).fillMaxHeight().background(PointColors.border))
                     Box(Modifier.weight(1f).fillMaxHeight().padding(24.dp)) {
-                        Conveyor(state, selected)
+                        if (selected == null) {
+                            // Память есть, объекта на экране нет: место занято тем, чем начать
+                            // работу, а не пустотой рядом со списком.
+                            EmptyScreen(config, addresses, port, onTakeClipboard = takeClipboard)
+                        } else {
+                            Conveyor(state, selected)
+                        }
                     }
                 }
             }

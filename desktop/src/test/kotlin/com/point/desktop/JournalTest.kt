@@ -211,6 +211,16 @@ class JournalTest {
         assertEquals("с телефона", sourceShort(ObjectSource.PHONE_RELAY))
     }
 
+    /** Русский счёт: строку читает человек, и «2 действий» выдаёт, что её никто не писал. */
+    @Test
+    fun `станции считаются по-русски`() {
+        assertEquals("1 действие", stepsWord(1))
+        assertEquals("2 действия", stepsWord(2))
+        assertEquals("5 действий", stepsWord(5))
+        assertEquals("11 действий", stepsWord(11))
+        assertEquals("21 действие", stepsWord(21))
+    }
+
     @Test
     fun `время сегодня, вчера и раньше называется по-человечески`() {
         val now = at(4, 12, 0)

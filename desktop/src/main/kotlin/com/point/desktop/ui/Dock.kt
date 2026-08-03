@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -29,12 +30,21 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.point.desktop.InboxItem
+import com.point.desktop.JournalEntry
+import com.point.desktop.sourceShort
+import com.point.desktop.stepsWord
+import com.point.desktop.whenLabel
+import java.time.ZoneId
 
 /**
  * Док «Прилетело» (#285): всё, что пришло на ПК, вдоль левого края.
  *
  * Здесь видна **передача с телефона**: объект прилетел — он тут же появляется в доке, и человек
  * выбирает, с каким работать. Выбранный уходит в конвейер справа.
+ *
+ * Ниже — «было раньше» (#407): то, что приезжало прежде и пережило закрытие окна. Строка
+ * открывается **по тапу человека** и только открывается: ни одно прежнее действие само не
+ * повторяется.
  */
 @Composable
 fun Dock(
@@ -42,14 +52,22 @@ fun Dock(
     selected: InboxItem?,
     onSelect: (InboxItem) -> Unit,
     modifier: Modifier = Modifier,
+    recent: List<JournalEntry> = emptyList(),
+    onOpenAgain: (JournalEntry) -> Unit = {},
 ) {
+    val now = rememberNow()
+    val zone = remember { ZoneId.systemDefault() }
     Column(
         modifier = modifier.width(244.dp).fillMaxHeight()
             .background(PointColors.window.copy(alpha = 0.5f))
             .padding(horizontal = 14.dp, vertical = 18.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Text("ПРИЛЕТЕЛО", style = PointType.label, modifier = Modifier.padding(horizontal = 4.dp))
+        // Заголовок без содержимого — обещание пустоты: пока в эту сессию ничего не прилетело,
+        // «ПРИЛЕТЕЛО» не пишется, и первым идёт то, что компьютер помнит.
+        if (items.isNotEmpty()) {
+            Text("ПРИЛЕТЕЛО", style = PointType.label, modifier = Modifier.padding(horizontal = 4.dp))
+        }
 
         Column(
             modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()),
@@ -57,6 +75,14 @@ fun Dock(
         ) {
             items.forEach { item ->
                 DockItem(item, selected = item === selected, onClick = { onSelect(item) })
+            }
+
+            if (recent.isNotEmpty()) {
+                if (items.isNotEmpty()) Spacer(Modifier.height(6.dp))
+                Text("БЫЛО РАНЬШЕ", style = PointType.label, modifier = Modifier.padding(horizontal = 4.dp))
+                recent.forEach { entry ->
+                    RecentItem(entry, now, zone, onClick = { onOpenAgain(entry) })
+                }
             }
         }
 
@@ -96,6 +122,41 @@ private fun DockItem(item: InboxItem, selected: Boolean, onClick: () -> Unit) {
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
+    }
+}
+
+/**
+ * Строка памяти (#407): что это было, откуда приехало, когда — и сколько станций уже пройдено.
+ *
+ * Приглушена относительно живых: это не то, с чем работают сейчас, а то, к чему можно вернуться.
+ */
+@Composable
+private fun RecentItem(entry: JournalEntry, now: Long, zone: ZoneId, onClick: () -> Unit) {
+    Column(
+        modifier = Modifier.fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .border(1.dp, PointColors.border.copy(alpha = 0.55f), RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 9.dp),
+        verticalArrangement = Arrangement.spacedBy(3.dp),
+    ) {
+        Text(
+            entry.name.ifBlank { "Объект" },
+            style = PointType.body.copy(fontSize = PointType.small.fontSize, color = PointColors.muted),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        // Откуда и когда — одной строкой; сколько станций — следующей. В одну строку они не влезают
+        // в узкий док и обрезались многоточием: обрезанная память бесполезнее короткой.
+        Text(
+            "${sourceShort(entry.source)} · ${whenLabel(entry.at, now, zone)}",
+            style = PointType.mono,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        if (entry.steps.isNotEmpty()) {
+            Text(stepsWord(entry.steps.size), style = PointType.mono.copy(color = PointColors.cyan))
+        }
     }
 }
 

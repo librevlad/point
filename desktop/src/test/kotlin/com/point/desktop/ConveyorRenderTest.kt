@@ -14,6 +14,7 @@ import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
 import com.point.core.model.ScratchRef
 import com.point.desktop.ui.Conveyor
+import com.point.desktop.ui.Dock
 import com.point.desktop.ui.PointColors
 import com.point.desktop.ui.PointDesktopTheme
 import java.io.File
@@ -38,11 +39,29 @@ class ConveyorRenderTest {
         PcRemoteAction("share", "Поделиться", kinds = emptySet()),
     )
 
-    private fun state() = DesktopState(
+    private fun state(journal: List<JournalEntry> = emptyList()) = DesktopState(
         registry = DesktopRegistry(emptySet()),
         resolver = DesktopResolver(emptySet()),
         clipboard = { },
+        journalStore = object : JournalStore {
+            override fun load() = journal
+            override fun save(entries: List<JournalEntry>) = Unit
+        },
     ).apply { setPhoneCaps(phoneActions) }
+
+    /** Путь того же объекта: приезд с телефона и две станции — сделанная и не сделанная. */
+    private fun pathOfItem() = JournalEntry(
+        path = "/tmp/накладная.txt",
+        name = "накладная.txt",
+        kind = ObjectKind.TEXT.name,
+        mime = "text/plain",
+        source = ObjectSource.PHONE_RELAY,
+        at = System.currentTimeMillis() - 3 * 60 * 60 * 1000,
+        steps = listOf(
+            JournalStep("pc-copy", "Копировать", System.currentTimeMillis() - 2 * 60 * 60 * 1000, true, "Скопировано в буфер"),
+            JournalStep("pc-print", "Напечатать · с телефона", System.currentTimeMillis() - 60 * 60 * 1000, false, "на компьютере нет принтера"),
+        ),
+    )
 
     private fun item() = InboxItem(
         PointObject(
@@ -76,6 +95,71 @@ class ConveyorRenderTest {
 
         // Снимок — для глаз; в репозиторий не попадает, только в build/.
         val out = File("build/render/conveyor.png").apply { parentFile.mkdirs() }
+        out.writeBytes(
+            image.encodeToData(org.jetbrains.skia.EncodedImageFormat.PNG)?.bytes
+                ?: error("не удалось закодировать снимок"),
+        )
+        assertTrue("снимок не записан", out.length() > 0)
+    }
+
+    /**
+     * Полоса пути с настоящими станциями (#407) — то, что раньше было заглушкой.
+     *
+     * Тест судит то же, что и первый: композиция с провалившейся станцией и приездом через релей
+     * собирается и рисуется. Снимок рядом — чтобы владелец мог посмотреть глазами, как выглядит
+     * путь объекта, не устанавливая сборку.
+     */
+    @Test
+    fun `конвейер рисует пройденный путь объекта`() {
+        val scene = ImageComposeScene(width = 1100, height = 720, density = Density(1f)) {
+            PointDesktopTheme {
+                Box(Modifier.fillMaxSize().background(PointColors.window).padding(24.dp)) {
+                    Conveyor(state(listOf(pathOfItem())), item())
+                }
+            }
+        }
+
+        val image = scene.render()
+        scene.close()
+
+        val out = File("build/render/conveyor-path.png").apply { parentFile.mkdirs() }
+        out.writeBytes(
+            image.encodeToData(org.jetbrains.skia.EncodedImageFormat.PNG)?.bytes
+                ?: error("не удалось закодировать снимок"),
+        )
+        assertTrue("снимок не записан", out.length() > 0)
+    }
+
+    /**
+     * Док с памятью о прежнем (#407): «прилетело» сверху, «было раньше» под ним.
+     *
+     * Тап по строке памяти отдаётся наружу — здесь проверяется, что композиция собирается, а не
+     * что она что-то запускает: запускать ей и нечего, открытие остаётся выбором человека.
+     */
+    @Test
+    fun `док рисует и живое, и то, что компьютер помнит`() {
+        val remembered = listOf(
+            pathOfItem().copy(path = "/tmp/счёт.pdf", name = "счёт.pdf", source = ObjectSource.PHONE_LAN),
+            pathOfItem().copy(path = "/tmp/фото.jpg", name = "фото.jpg", source = ObjectSource.DROPPED, steps = emptyList()),
+        )
+        val scene = ImageComposeScene(width = 300, height = 720, density = Density(1f)) {
+            PointDesktopTheme {
+                Box(Modifier.fillMaxSize().background(PointColors.window)) {
+                    Dock(
+                        items = listOf(item()),
+                        selected = item(),
+                        onSelect = { },
+                        recent = remembered,
+                        onOpenAgain = { },
+                    )
+                }
+            }
+        }
+
+        val image = scene.render()
+        scene.close()
+
+        val out = File("build/render/dock-recent.png").apply { parentFile.mkdirs() }
         out.writeBytes(
             image.encodeToData(org.jetbrains.skia.EncodedImageFormat.PNG)?.bytes
                 ?: error("не удалось закодировать снимок"),

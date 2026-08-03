@@ -21,6 +21,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -32,21 +35,25 @@ import com.point.core.model.Bubble
 import com.point.core.model.ObjectKind
 import com.point.desktop.DesktopState
 import com.point.desktop.InboxItem
+import com.point.desktop.JournalEntry
+import com.point.desktop.sourceLabel
+import com.point.desktop.whenLabel
+import java.time.ZoneId
 
 /**
  * Конвейер (#285, мокап 2a): объект и то, что с ним можно сделать, — на одном экране.
  *
- * Показывается ровно то, что у ПК действительно есть: сам объект, что в нём понято, и живой конец
- * с действиями. Полоса пройденного пути в мокапе есть, а данных под ней нет — ПК не помнит, какие
- * действия к объекту уже применяли (#407), — поэтому она выведена приглушённой заглушкой и прямо
- * говорит, что появится позже. Рисовать выдуманные станции значило бы обещать историю, которой не
- * существует.
+ * Показывается ровно то, что у ПК действительно есть: сам объект, что в нём понято, пройденный
+ * путь и живой конец с действиями. Полоса пути перестала быть заглушкой в #407 — компьютер
+ * наконец помнит, откуда объект приехал и что с ним делали.
  *
  * Главное на экране — **передача**: секция «Отправить» показывает, что объект умеет уехать на
  * телефон, и каким действием он там встретится.
  */
 @Composable
 fun Conveyor(state: DesktopState, item: InboxItem) {
+    val journal by state.journal.collectAsState()
+    val now = rememberNow()
     Row(
         modifier = Modifier.fillMaxSize(),
         horizontalArrangement = Arrangement.spacedBy(28.dp),
@@ -56,7 +63,7 @@ fun Conveyor(state: DesktopState, item: InboxItem) {
             verticalArrangement = Arrangement.spacedBy(18.dp),
         ) {
             Source(item)
-            Path()
+            Path(journal.firstOrNull { it.path == item.obj.uri.value }, now)
         }
 
         LiveEnd(state, item, modifier = Modifier.width(380.dp).fillMaxHeight())
@@ -111,22 +118,56 @@ private fun Source(item: InboxItem) {
 }
 
 /**
- * Пройденный путь — заглушка до #407.
+ * Пройденный путь объекта (#407): откуда приехал и что с ним делали.
  *
- * Приглушена намеренно и подписана словами: экран не делает вид, что помнит больше, чем помнит.
+ * Об объекте, которого компьютер не помнит, полоса молчит целиком — пустая рамка с заголовком
+ * обещала бы историю, которой нет. Неудачные станции остаются на месте и приглушены: провал,
+ * стёртый из пути, — это не аккуратность, а враньё.
  */
 @Composable
-private fun Path() {
-    Row(
+private fun Path(entry: JournalEntry?, now: Long) {
+    if (entry == null) return
+    val zone = remember { ZoneId.systemDefault() }
+    Column(
         modifier = Modifier.fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .border(1.dp, PointColors.border.copy(alpha = 0.5f), RoundedCornerShape(16.dp))
+            .border(1.dp, PointColors.border, RoundedCornerShape(16.dp))
             .padding(horizontal = 16.dp, vertical = 14.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalArrangement = Arrangement.spacedBy(11.dp),
     ) {
-        Box(Modifier.size(7.dp).background(PointColors.border, CircleShape))
-        Text("Путь объекта появится здесь — ПК пока не помнит, что с ним уже делали", style = PointType.small)
+        Text("ПУТЬ", style = PointType.label)
+        PathStop(
+            dot = PointColors.violet,
+            title = "Приехал · ${sourceLabel(entry.source)}",
+            note = null,
+            time = whenLabel(entry.at, now, zone),
+        )
+        entry.steps.forEach { step ->
+            PathStop(
+                // Голубой — сделанное, приглушённый — то, что не вышло. Красного в палитре ПК нет,
+                // и заводить его ради одной строки значило бы разойтись с дизайн-системой.
+                dot = if (step.ok) PointColors.cyan else PointColors.muted,
+                title = step.title,
+                note = step.note.takeIf { it.isNotBlank() },
+                time = whenLabel(step.at, now, zone),
+            )
+        }
+        if (entry.steps.isEmpty()) {
+            Text("Пока ничего не делали — действия справа", style = PointType.small)
+        }
+    }
+}
+
+/** Одна станция пути: точка, что сделали, чем кончилось и когда. */
+@Composable
+private fun PathStop(dot: Color, title: String, note: String?, time: String) {
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Top) {
+        Box(Modifier.padding(top = 6.dp).size(7.dp).background(dot, CircleShape))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(title, style = PointType.body.copy(fontSize = PointType.small.fontSize))
+            note?.let { Text(it, style = PointType.small, maxLines = 2, overflow = TextOverflow.Ellipsis) }
+        }
+        Text(time, style = PointType.small)
     }
 }
 
