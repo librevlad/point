@@ -110,6 +110,44 @@ class PeriodRenewalTest {
     }
 
     @Test
+    fun `чужой срок в примечании периодом таблицы не становится`() {
+        // Тот же график из #224, но в первой строке приписано, по какому договору он ведётся.
+        // Срок договора накрывает две недели целиком — и по одному накрытию документ уезжал на
+        // ГОД вперёд: 16.07.2026 становилось 16.07.2027, а человеку это сообщалось как готовый
+        // «Бланк на 01.01.2027 – 31.12.2027». Накрыть мало: период — тот, по которому таблица
+        // ведётся, то есть тот, который её календарь заполняет.
+        val rows = schedule().mapIndexed { i, row ->
+            if (i == 1) listOf("Договір діє з 01.01.2026 по 31.12.2026") + row.drop(1) else row
+        }
+        val reading = checkNotNull(readPeriod(rows))
+        assertFalse("годовой срок договора — не период графика", reading.stated)
+        assertEquals(LocalDate.of(2026, 7, 16), reading.period.from)
+        assertEquals(LocalDate.of(2026, 7, 29), reading.period.to)
+
+        val renewed = checkNotNull(renewPeriod(rows))
+        assertEquals(LocalDate.of(2026, 7, 30), renewed.period.from)
+        assertEquals("сдвиг на две недели, а не на год", "30.07.2026", renewed.rows[1][1])
+    }
+
+    @Test
+    fun `названный период принимается, пока календарь его заполняет`() {
+        // Край правила с обеих сторон: декада, где записи есть в пяти днях из десяти, — всё ещё
+        // период этой таблицы; одиннадцать дней при тех же пяти — уже чужой срок.
+        fun ledger(stated: String) = listOf(listOf(stated, "", "")) +
+            listOf(listOf("Дата", "Видано", "Приймальник")) +
+            (1..5).map { day -> listOf("0$day.09.2026", "$day кг", "Приймальник") }
+
+        assertTrue(
+            "пять дней заполняют десять — большинство",
+            checkNotNull(readPeriod(ledger("Відомість за 01.09.2026 - 10.09.2026"))).stated,
+        )
+        assertFalse(
+            "те же пять дней в одиннадцати — уже не про эту таблицу",
+            checkNotNull(readPeriod(ledger("Відомість за 01.09.2026 - 11.09.2026"))).stated,
+        )
+    }
+
+    @Test
     fun `время не дата — столбец времени календарём не становится`() {
         assertNull(tableDate("8-00"))
         assertNull(tableDate("17-30"))
