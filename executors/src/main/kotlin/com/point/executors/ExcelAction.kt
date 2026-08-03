@@ -8,6 +8,7 @@ import com.point.core.flow.CellAnswer
 import com.point.core.flow.Consensus
 import com.point.core.flow.Cost
 import com.point.core.flow.CropEvidence
+import com.point.core.flow.CropPurpose
 import com.point.core.flow.EvidenceCropper
 import com.point.core.flow.Latency
 import com.point.core.flow.LlmClient
@@ -357,6 +358,13 @@ class ExcelRealizer(
      * резаком**, что кроп-улика в Word (#267), и сильная зрячая модель отвечает, что в ячейке
      * написано. Кроп кладётся в scratch — живёт и чистится вместе с остальной копией документа.
      *
+     * Резак тот же, а **размер — свой** ([CropPurpose.READING], #273): улику в документе смотрит
+     * человек, и её ужимают до ширины колонки; здесь кусок читает модель, и ужатие тут — прямая
+     * потеря знаков. Раньше назначения не было вовсе, и полоса строки — а она почти во всю ширину
+     * кадра, у эталонной ведомости это 4000 px — уезжала зрячей модели ужатой до 1400. То есть
+     * третий голос, заведённый ради взгляда на пиксели, смотрел на них через то самое ужатие,
+     * цену которого замер уже назвал (#360).
+     *
      * `null` — перечит не состоялся (кроп не вырезался, маршруты отказали): спор этой ячейки
      * просто остаётся человеку. Отказ одного маршрута — следующий сильный, как всюду в цепочке.
      */
@@ -367,7 +375,12 @@ class ExcelRealizer(
         eyes: List<LlmClient>,
     ): String? {
         val cut = cropper.crop(
-            CropEvidence(input.uri.value, question.region, layer.transform?.rotationDegrees ?: 0),
+            CropEvidence(
+                imagePath = input.uri.value,
+                region = question.region,
+                uprightDegrees = layer.transform?.rotationDegrees ?: 0,
+                purpose = CropPurpose.READING,
+            ),
         ) ?: return null
         val ref = store.newScratchFile(cut.extension)
         File(ref.value).writeBytes(cut.bytes)
