@@ -158,6 +158,8 @@ data class FlowUiState(
     val usageSummary: UsageSummary? = null,
     /** Экран выделения (#259): открыт, пока не взяли захват или не вышли назад. */
     val selection: SelectionUi? = null,
+    /** Экран поиска по документу (#279): открыт, пока не вышли назад. */
+    val find: FindUi? = null,
 )
 
 /**
@@ -169,6 +171,20 @@ data class SelectionUi(
     val image: androidx.compose.ui.graphics.ImageBitmap,
     val highlights: List<com.point.core.flow.Box> = emptyList(),
     val text: String? = null,
+)
+
+/**
+ * Живое состояние экрана поиска (#279): та же страница, что у выделения, и рамки найденных мест
+ * в координатах [image].
+ *
+ * [status] — что сказано про находки; `null` значит «ещё не искали». Различие несущее: пустое
+ * поле — не неудачный поиск, и «Ничего не нашлось» под нетронутым полем было бы ответом на
+ * вопрос, которого человек не задавал.
+ */
+data class FindUi(
+    val image: androidx.compose.ui.graphics.ImageBitmap,
+    val highlights: List<com.point.core.flow.Box> = emptyList(),
+    val status: String? = null,
 )
 
 

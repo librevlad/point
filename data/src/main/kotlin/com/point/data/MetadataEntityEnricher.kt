@@ -15,16 +15,22 @@ import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
 
 /**
- * Lights entity features straight from stored `entity.*` metadata — instant, no I/O.
+ * Lights features straight from stored metadata — instant, no I/O.
  * This is how facts that arrived OUTSIDE a scan reach the graph: the LLM fallback's
  * findings (#64) and history re-opens keep their «Позвонить»/«Создать событие» without
  * re-running any engine.
+ *
+ * Тем же путём переживает перезапуск и **слой слов** (#279): признаки не персистятся, а
+ * прочитанная страница — да, ссылкой в метаданных. Без этого «Найти в документе» пропадало бы
+ * ровно на объекте, который уже прочитан, и вернуть его мог бы только повторный прогон движка —
+ * работа, уже сделанная однажды.
  */
 class MetadataEntityEnricher @javax.inject.Inject constructor() : Enricher {
 
     override val meta = EnricherMeta(
         cost = EnrichCost.INSTANT,
-        mayYield = FEATURE_BY_SUFFIX.values.toSet() + com.point.core.flow.SEMANTIC_TYPES.values,
+        mayYield = FEATURE_BY_SUFFIX.values.toSet() + com.point.core.flow.SEMANTIC_TYPES.values +
+            Feature.HAS_WORD_LAYER,
         mayYieldKinds = setOf(KIND_PHONE, KIND_EMAIL, KIND_URL, KIND_ADDRESS, KIND_DATE),
     )
 
@@ -40,6 +46,13 @@ class MetadataEntityEnricher @javax.inject.Inject constructor() : Enricher {
             } + setOfNotNull(
                 // The semantic level (#89): a stored recognised type IS a feature of the object.
                 com.point.core.flow.SEMANTIC_TYPES[obj.metadata[com.point.core.flow.META_SEMANTIC_TYPE]],
+                // Прочитанная страница (#279). Любой слой годится: офлайновый и облачный (#280)
+                // лежат в разных ключах именно для того, чтобы не затирать друг друга, а
+                // подсветить находку можно по любому из них.
+                Feature.HAS_WORD_LAYER.takeIf {
+                    !obj.metadata[com.point.core.flow.META_OCR_ATOMS_REF].isNullOrBlank() ||
+                        !obj.metadata[com.point.core.flow.META_CLOUD_ATOMS_REF].isNullOrBlank()
+                },
             ),
             objects = objects,
             relations = relations,

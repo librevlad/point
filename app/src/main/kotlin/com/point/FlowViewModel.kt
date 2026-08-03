@@ -29,6 +29,7 @@ import com.point.core.flow.AtomCodec
 import com.point.core.flow.AtomLayer
 import com.point.core.flow.Box
 import com.point.core.flow.FrameTransform
+import com.point.core.flow.META_CLOUD_ATOMS_REF
 import com.point.core.flow.META_OCR_ATOMS_REF
 import com.point.core.flow.META_SELECTION_IDS
 import com.point.core.flow.META_SELECTION_PAGE
@@ -37,6 +38,8 @@ import com.point.core.flow.META_SELECTION_SOURCE
 import com.point.core.flow.SnappedSelection
 import com.point.core.flow.UserAiConfig
 import com.point.core.flow.UserKeyStore
+import com.point.core.flow.findOnPage
+import com.point.core.flow.foundOnPageLabel
 import com.point.core.flow.snapSelection
 import com.point.core.model.Feature
 import com.point.core.model.ObjectState
@@ -61,6 +64,7 @@ import com.point.core.model.PointObject
 import com.point.core.ui.likelyCount
 import com.point.executors.Bitmaps
 import com.point.executors.AiCapability
+import com.point.executors.FindCapability
 import com.point.executors.OpenInCapability
 import com.point.executors.aiSuggestions
 import com.point.executors.aiTransformTarget
@@ -145,6 +149,11 @@ class FlowViewModel @Inject constructor(
     private var selectionLayer: AtomLayer? = null
     private var selectionTransform: FrameTransform? = null
     private var selectionSnap: SnappedSelection? = null
+    /** Экран поиска (#279): та же пара «слой + преобразование координат», что у выделения, —
+     *  живёт, пока экран открыт. Своя пара, а не общая с выделением: два экрана открываются
+     *  независимо, и закрытие одного не имеет права обнулять страницу другого. */
+    private var findLayer: AtomLayer? = null
+    private var findTransform: FrameTransform? = null
     private var allFavorites: List<FavoriteChain> = emptyList()
 
     private val _ui = MutableStateFlow(FlowUiState())
@@ -422,6 +431,13 @@ class FlowViewModel @Inject constructor(
             requireCloudConsent { openChat(top) }
             return
         }
+        if (bubble.capabilityId == FindCapability.ID) {
+            // #279: «Найти в документе» показывает места НА СТРАНИЦЕ, а не отвечает числом в
+            // баннере, — поэтому тап открывает экран поиска (тот же перехват, что у чата и
+            // «Открыть в…»). Реализатор отвечает на тот же вопрос там, где экрана нет.
+            openFind()
+            return
+        }
         if (isCloud(bubble.capabilityId)) {
             // Nothing leaves the device before the user agrees, even once (#10).
             requireCloudConsent { maybePreview(bubble, top) }
@@ -606,6 +622,70 @@ class FlowViewModel @Inject constructor(
         selectionTransform = null
         selectionSnap = null
         _ui.update { it.copy(selection = null) }
+    }
+
+    /**
+     * «Найти в документе» (#279): та же страница, что у выделения, — только рамку рисует запрос.
+     *
+     * Открывается по явному тапу и только на объекте со слоем слов ([FindCapability.accepts]
+     * держит пузырь вне остальных): искать без прочитанных слов не в чем, и действие, которое
+     * «ищет и не находит», обещало бы поиск и врало бы про результат.
+     */
+    fun openFind() {
+        val top = stack.lastOrNull()?.obj ?: return
+        // Молча не отвечаем никогда: пузырь показан — значит, человек нажал, и тишина в ответ
+        // неотличима от сбоя (#290). Слой мог уехать вместе с очищенным scratch.
+        val atomsRef = top.metadata[META_OCR_ATOMS_REF] ?: top.metadata[META_CLOUD_ATOMS_REF]
+        if (atomsRef == null) {
+            _ui.update { it.copy(message = "Страница ещё не прочитана — искать не в чем", messageIsFailure = true) }
+            return
+        }
+        viewModelScope.launch {
+            val loaded = withContext(ioDispatcher) {
+                runCatching {
+                    val layer = AtomCodec.decode(File(atomsRef).readText())
+                    decodeSelectionFrame(top.uri.value, SELECTION_MAX_PX)?.let { frame ->
+                        Triple(layer, frame.transform, frame.bitmap.asImageBitmap())
+                    }
+                }.getOrNull()
+            }
+            if (loaded == null) {
+                _ui.update { it.copy(message = "Не удалось открыть страницу для поиска", messageIsFailure = true) }
+                return@launch
+            }
+            findLayer = loaded.first
+            findTransform = loaded.second
+            _ui.update { it.copy(find = FindUi(image = loaded.third)) }
+        }
+    }
+
+    /**
+     * Запрос человека → места на странице. Правила сравнения живут в ядре ([findOnPage]) — те же,
+     * что у свода чтений; здесь только перевод рамок в координаты показанной копии.
+     *
+     * Пустой запрос гасит подсветку и **молчит**: сказать «ничего не нашлось» человеку, который
+     * стёр строку, значило бы ответить на не заданный вопрос.
+     */
+    fun onFindQuery(query: String) {
+        val layer = findLayer ?: return
+        val transform = findTransform ?: return
+        val found = layer.findOnPage(query)
+        val asked = com.point.core.flow.isSearchable(query)
+        _ui.update { state ->
+            val find = state.find ?: return@update state
+            state.copy(
+                find = find.copy(
+                    highlights = found.map { transform.toUpright(it.region) },
+                    status = if (asked) foundOnPageLabel(found.size) else null,
+                ),
+            )
+        }
+    }
+
+    fun closeFind() {
+        findLayer = null
+        findTransform = null
+        _ui.update { it.copy(find = null) }
     }
 
     private fun runOnObject(bubble: Bubble, top: PointObject) {
@@ -1110,6 +1190,10 @@ class FlowViewModel @Inject constructor(
     fun onBack(): Boolean {
         if (_ui.value.selection != null) {
             closeSelection() // #259: назад закрывает выделение, объект остаётся
+            return true
+        }
+        if (_ui.value.find != null) {
+            closeFind() // #279: назад закрывает поиск, объект остаётся
             return true
         }
         if (_ui.value.preview != null) {

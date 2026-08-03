@@ -140,7 +140,10 @@ class OcrEnricherTest {
         val enricher = OcrEnricher(store, recognizer(garbage, atoms = listOf(atom)), extractor(Entity(EntityType.PHONE, "x")))
         val delta = enricher.enrich(image)
 
-        assertTrue(delta.features.isEmpty())
+        // Ни текста, ни сущностей — но слой слов есть, и сказать об этом обязано (#279): по такой
+        // странице можно искать, и «Найти в документе» появляется ровно там, где есть чему
+        // прилипнуть. Гейт судит представление, а признак слоя говорит про улику.
+        assertEquals(setOf(Feature.HAS_WORD_LAYER), delta.features)
         // Каша — улика рукописи (#263): слой сохранён, режим чтения назван, текста нет.
         assertEquals(setOf(META_OCR_ATOMS_REF, META_READING_MODE), delta.metadata.keys)
         assertEquals(ReadingMode.HANDWRITTEN.name, delta.metadata[META_READING_MODE])
@@ -163,6 +166,8 @@ class OcrEnricherTest {
         assertNotNull("the atom layer must survive as evidence", ref)
         assertEquals(atoms, AtomCodec.decode(File(ref!!).readText()).atoms)
         assertEquals(realText, File(delta.metadata[META_OCR_TEXT_REF]!!).readText())
+        // Слой есть — значит, по странице можно искать (#279).
+        assertTrue(Feature.HAS_WORD_LAYER in delta.features)
     }
 
     @Test

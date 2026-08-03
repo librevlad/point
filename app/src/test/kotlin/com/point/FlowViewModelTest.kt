@@ -1347,6 +1347,25 @@ class FlowViewModelTest {
 
         assertEquals(1, vm.ui.value.appPicker?.size) // deduped by package (a dup key crashed the list)
     }
+
+    // --- #279: «Найти в документе» показывает места на странице, а не выполняет реализатор ---
+
+    /**
+     * Тап по поиску открывает экран, а не запускает действие: находки живут подсветкой на
+     * странице, и провести их через `perform` нечем. Здесь у объекта слоя слов нет вовсе —
+     * значит, человек обязан услышать причину, а не получить тишину в ответ на нажатие (#290).
+     */
+    @Test fun `тап по поиску не выполняет реализатор и называет причину, если искать не в чем`() = runTest(dispatcher) {
+        val vm = vm(caps = mapOf(CapabilityId("find") to setOf(Intent.UNDERSTAND)))
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.onBubble(bubble(id = "find", title = "Найти в документе")); advanceUntilIdle()
+
+        assertEquals("__unset__", resolver.lastAmendment) // реализатор не звали вовсе
+        assertNull(vm.ui.value.find)
+        assertEquals("Страница ещё не прочитана — искать не в чем", vm.ui.value.message)
+        assertTrue(vm.ui.value.messageIsFailure)
+    }
 }
 
 // --- Fakes ---

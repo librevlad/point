@@ -49,6 +49,7 @@ import com.point.core.model.FavoriteChain
 import com.point.core.model.PointObject
 import com.point.core.model.Preview
 import com.point.core.ui.BusyPortal
+import com.point.core.ui.FindScreen
 import com.point.core.ui.FirstScreen
 import com.point.core.ui.SelectionScreen
 import com.point.core.ui.livingBackground
@@ -96,6 +97,8 @@ fun PointHost(
     onSelectRegion: (com.point.core.flow.Box) -> Unit = {},
     onTakeSelection: () -> Unit = {},
     onCloseSelection: () -> Unit = {},
+    onFindQuery: (String) -> Unit = {},
+    onCloseFind: () -> Unit = {},
     appIconFor: (String) -> androidx.compose.ui.graphics.ImageBitmap? = { null },
     modifier: Modifier = Modifier,
 ) {
@@ -185,6 +188,16 @@ fun PointHost(
                 onSelect = onSelectRegion,
                 onTake = onTakeSelection,
                 onClose = onCloseSelection,
+                modifier = Modifier.fillMaxSize(),
+            )
+
+            // #279: поиск по документу — та же страница, только рамку рисует запрос человека.
+            state.find != null -> FindScreen(
+                image = state.find.image,
+                highlights = state.find.highlights,
+                status = state.find.status,
+                onQuery = onFindQuery,
+                onClose = onCloseFind,
                 modifier = Modifier.fillMaxSize(),
             )
 
