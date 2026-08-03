@@ -229,8 +229,9 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun replaceBgR(r: ReplaceBgRealizer): Realizer
     // OCR has two realizers behind one capability — the Resolver ranks device before
     // cloud and chains them (device recognises nothing -> cloud). Roadmap #1 in prod.
-    // Показание прибора приходит этой же цепочкой: собственного чтения табло у Point больше
-    // нет (#396), зрячая модель читает приборы обычным распознаванием.
+    // Собственного чтения табло у Point больше нет (#396, кнопка убрана владельцем), а эта
+    // цепочка приборы не читает: внешний глаз на трёх настоящих кадрах даёт ноль из трёх.
+    // Путь от фотографии прибора к показанию заведён отдельно — #426 (вырезанный барабан).
     @Binds @IntoSet abstract fun deviceOcrR(r: DeviceOcrRealizer): Realizer
     @Binds @IntoSet abstract fun cloudOcrR(r: CloudOcrRealizer): Realizer
     @Binds @IntoSet abstract fun cloudOcrDirectR(r: CloudOcrDirectRealizer): Realizer
