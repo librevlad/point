@@ -117,6 +117,22 @@ class FlowViewModel @Inject constructor(
     /** Идущее действие — чтобы его можно было отменить (#288). */
     private var actionJob: kotlinx.coroutines.Job? = null
 
+    /**
+     * Чей голос сейчас на экране (#288): номер занятости, которой принадлежит `busyStage`.
+     *
+     * Отмена и смена действия снимают задачу, но не саму работу: нативный проход Tesseract и
+     * отрисовка страниц о прерывании не знают и договаривают начатое. Их `reportStage` попадал
+     * в живое состояние уже над ДРУГОЙ занятостью — и объект подписывался словами работы,
+     * которой больше нет. Это та же подмена статуса, ради которой затевался срез, только
+     * чужими словами вместо выдуманных, и обнулением стадии в начале новой работы она не
+     * лечится: снятая работа заговаривает уже ПОСЛЕ обнуления.
+     */
+    @Volatile private var workVoice = 0L
+
+    /** Новая занятость забирает голос у прошлой: та замолкает, даже если ещё дышит. Вызывается
+     *  везде, где ставится `busy`, — «Открываю…» и цепочка чужих слов носить тоже не должны. */
+    private fun claimVoice(): Long = ++workVoice
+
     private val stack = ArrayDeque<FlowFrame>()
     private val enrichJobs = mutableListOf<Job>()
     private var pendingBubble: Bubble? = null
@@ -209,6 +225,7 @@ class FlowViewModel @Inject constructor(
 
     fun onShared(sourceUri: String, mime: String, autoAction: String? = null) {
         freshShareArrived = true
+        claimVoice()
         _ui.update { it.copy(busy = "Открываю…", busyStage = null, busyNetwork = false, busyQuiet = false, message = null, messageIsFailure = false, inputPrompt = null) }
         viewModelScope.launch {
             val obj = runCatching {
@@ -234,6 +251,7 @@ class FlowViewModel @Inject constructor(
      *  e.g. several photos to merge into a PDF). */
     fun onSharedMultiple(sources: List<String>) {
         freshShareArrived = true
+        claimVoice()
         _ui.update { it.copy(busy = "Открываю…", busyStage = null, busyNetwork = false, busyQuiet = false, message = null, messageIsFailure = false, inputPrompt = null) }
         viewModelScope.launch {
             val obj = runCatching {
@@ -278,6 +296,7 @@ class FlowViewModel @Inject constructor(
      *  a failed ack re-offers (at-least-once); a failed download acks nothing. */
     fun pullFromPc() {
         val pairing = pcPairings.current() ?: return
+        claimVoice()
         _ui.update { it.copy(busy = "Забираю с компьютера…", busyStage = null, busyNetwork = false, busyQuiet = false, message = null, messageIsFailure = false) }
         viewModelScope.launch {
             // Pull what is on the PC RIGHT NOW — a fresh fetch, not the throttled banner snapshot. The
@@ -375,6 +394,7 @@ class FlowViewModel @Inject constructor(
 
     fun openFromHistory(entry: HistoryEntry) {
         freshShareArrived = true
+        claimVoice()
         _ui.update { it.copy(busy = "Открываю…", busyStage = null, busyNetwork = false, busyQuiet = false, message = null, messageIsFailure = false, inputPrompt = null) }
         viewModelScope.launch {
             val obj = runCatching { history.open(entry.id) }.getOrNull()
@@ -414,6 +434,7 @@ class FlowViewModel @Inject constructor(
      *  straight away. Busy is shown immediately (so feedback is instant and the preview computation —
      *  e.g. ML Kit for an address — is covered); the coroutine then reveals the preview or runs. */
     private fun maybePreview(bubble: Bubble, top: PointObject) {
+        claimVoice()
         _ui.update {
             it.copy(
                 busy = bubble.title, busyStage = null, busyNetwork = isCloud(bubble.capabilityId),
@@ -588,6 +609,7 @@ class FlowViewModel @Inject constructor(
     }
 
     private fun runOnObject(bubble: Bubble, top: PointObject) {
+        claimVoice()
         _ui.update { it.copy(busy = bubble.title, busyStage = null, busyNetwork = isCloud(bubble.capabilityId), busyQuiet = isQuietAction(bubble.capabilityId), message = null, messageIsFailure = false, inputPrompt = null) }
         dispatch(bubble) { resolver.realizerFor(bubble.capabilityId).perform(top, null) }
     }
@@ -640,6 +662,7 @@ class FlowViewModel @Inject constructor(
         val bubble = pendingBubble ?: return
         val top = stack.lastOrNull()?.obj ?: return
         pendingBubble = null
+        claimVoice()
         _ui.update {
             it.copy(
                 busy = bubble.title, busyStage = null, busyNetwork = isCloud(bubble.capabilityId),
@@ -853,6 +876,7 @@ class FlowViewModel @Inject constructor(
     // --- Device actions (#66): the installed apps that can open the object, shown inline. ---
 
     private fun showAppPicker(obj: PointObject) {
+        claimVoice()
         _ui.update { it.copy(busy = "Ищу приложения…", busyStage = null, busyQuiet = false, message = null, messageIsFailure = false, inputPrompt = null) }
         viewModelScope.launch {
             val direct = runCatching { appLauncher.handlers(obj) }.getOrDefault(emptyList())
@@ -910,6 +934,7 @@ class FlowViewModel @Inject constructor(
 
     /** Run one transform to produce the object the bridged app can open (#79.1); null on failure. */
     private suspend fun bridge(obj: PointObject, viaCapId: String): PointObject? {
+        claimVoice()
         _ui.update { it.copy(busy = "Преобразую…", busyStage = null, busyQuiet = false) }
         val result = runCatching { resolver.realizerFor(CapabilityId(viaCapId)).perform(obj, null) }.getOrNull()
         return (result as? ActionResult.Success)?.let { runCatching { store.put(it.result) }.getOrNull() }
@@ -963,6 +988,7 @@ class FlowViewModel @Inject constructor(
     }
 
     private fun replayChain(chain: FavoriteChain, start: PointObject) {
+        claimVoice()
         _ui.update { it.copy(busy = "Выполняю цепочку…", busyStage = null, busyNetwork = false, busyQuiet = false, message = null, messageIsFailure = false, inputPrompt = null) }
         viewModelScope.launch {
             var current = start
@@ -1003,14 +1029,19 @@ class FlowViewModel @Inject constructor(
         // — это две последовательные модели по фото, минута и больше, и до сих пор прервать её
         // было нечем; экран обещал «несколько секунд» и упирался в последний шаг.
         actionJob?.cancel()
+        val voice = claimVoice()
         actionJob = viewModelScope.launch {
             runCatching { usage.record(bubble.capabilityId) } // learning signal for BubblePolicy
             runCatching { journal.record(UsageEvent(UsageEventType.ACTION, bubble.capabilityId.value)) }
             runCatching {
                 // Стадии действия текут на экран его собственными словами (#288): выдуманный
                 // чек-лист «по часам» застывал на последнем шаге и читался как «зависло».
+                // Говорит только та работа, чей голос на экране: снятая договаривает своё в
+                // пустоту, а не поверх следующей (см. [workVoice]).
                 kotlinx.coroutines.withContext(
-                    com.point.core.flow.ActionProgress { stage -> _ui.update { it.copy(busyStage = stage) } },
+                    com.point.core.flow.ActionProgress { stage ->
+                        if (voice == workVoice) _ui.update { it.copy(busyStage = stage) }
+                    },
                 ) { action() }
             }
                 .onSuccess { result -> handleResult(result, bubble) }
@@ -1030,6 +1061,7 @@ class FlowViewModel @Inject constructor(
         val job = actionJob ?: return
         actionJob = null
         job.cancel()
+        claimVoice() // остановленная работа замолкает сразу — её хвост ещё идёт
         _ui.update { it.copy(busy = null, busyStage = null, message = "Отменено") }
     }
 

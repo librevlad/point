@@ -602,6 +602,48 @@ class FlowViewModelTest {
         assertNull(quietStage(vm.ui.value))
     }
 
+    @Test fun `смененная работа замолкает — новое действие не носит её слов`() = runTest(dispatcher) {
+        // Обнулить стадию в начале новой работы мало: снятое действие продолжает идти. Нативный
+        // проход движка и отрисовка страниц об отмене не знают, договаривают своё — и фраза
+        // прошлой работы приземлялась НА живой экран уже над другой. Начать второе действие,
+        // пока первое идёт, человек может: тап по самому объекту (#290) списком не гасится.
+        resolver.stage = "Читаю текст на устройстве"
+        resolver.lateStage = "Пробую повернуть страницу — 2 из 3"
+        resolver.holdMs = 1_000
+        val vm = vm(caps = mapOf(CapabilityId("a") to setOf(Intent.PREPARE), CapabilityId("b") to setOf(Intent.PREPARE)))
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.onBubble(bubble(id = "a"))
+        dispatcher.scheduler.advanceTimeBy(10)
+
+        resolver.stage = null
+        resolver.lateStage = null
+        vm.onBubble(bubble(id = "b")) // второе действие о себе молчит
+        dispatcher.scheduler.advanceTimeBy(500) // снятая работа договаривает своё
+
+        assertTrue("объект работает — строке есть где появиться", objectWorking(vm.ui.value))
+        assertNull("но слова принадлежали бы снятой работе", quietStage(vm.ui.value))
+    }
+
+    @Test fun `остановленная работа не оставляет слов в состоянии`() = runTest(dispatcher) {
+        // Человек нажал «Отменить» на экране ожидания. Работа снята, но её хвост ещё идёт: то,
+        // что он скажет, не должно осесть в состоянии и всплыть над следующей занятостью.
+        resolver.stage = "Читаю текст на устройстве"
+        resolver.lateStage = "Пробую повернуть страницу — 2 из 3"
+        resolver.holdMs = 1_000
+        val vm = vm(slow = setOf(CapabilityId("a")))
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.onBubble(bubble(id = "a"))
+        dispatcher.scheduler.advanceTimeBy(10)
+        assertTrue(showsBusyScreen(vm.ui.value))
+
+        vm.cancelAction()
+        dispatcher.scheduler.advanceTimeBy(500)
+
+        assertNull(vm.ui.value.busyStage)
+    }
+
     // --- Discover (#114): one never-tried possibility is surfaced as a hint ---
 
     @Test fun `discover offers the first hidden action the user never tried`() = runTest(dispatcher) {
@@ -1340,6 +1382,15 @@ private class FakeResolver : Resolver {
     var stage: String? = null
     /** Сколько работа идёт после сказанного — чтобы тест успел посмотреть на экран, пока она жива. */
     var holdMs: Long = 0
+    /**
+     * Слово, которое работа договаривает, когда её уже сняли (#288).
+     *
+     * Так ведёт себя настоящее долгое действие: нативный проход Tesseract и отрисовка страниц
+     * об отмене не знают и доходят до конца сами. `NonCancellable` — и есть модель этой
+     * непрерываемости, а не трюк ради теста.
+     */
+    var lateStage: String? = null
+    var lateAfterMs: Long = 100
     override fun leavesDevice(capabilityId: CapabilityId): Boolean = leavesDevice
 
     override fun realizerFor(capabilityId: CapabilityId): Realizer {
@@ -1350,6 +1401,12 @@ private class FakeResolver : Resolver {
                 lastAmendment = amendment
                 throwsOnPerform?.let { throw it }
                 stage?.let { com.point.core.flow.reportStage(it) }
+                lateStage?.let { late ->
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+                        kotlinx.coroutines.delay(lateAfterMs)
+                        com.point.core.flow.reportStage(late)
+                    }
+                }
                 if (holdMs > 0) kotlinx.coroutines.delay(holdMs)
                 return result
             }
