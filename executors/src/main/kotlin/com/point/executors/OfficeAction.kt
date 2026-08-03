@@ -4,6 +4,7 @@ import com.point.core.flow.Capability
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.OfficeTextExtractor
 import com.point.core.flow.Realizer
+import com.point.core.flow.reportStage
 import com.point.core.model.ActionResult
 import com.point.core.model.CapabilityId
 import com.point.core.model.ObjectKind
@@ -26,6 +27,14 @@ class OfficeCapability @Inject constructor() : Capability {
     companion object { val ID = CapabilityId("office") }
 }
 
+/**
+ * Одна работа — одни слова (#288). Разбор docx/xlsx/pptx идёт секунды на большом файле, и делают
+ * его два соседних пузырька над одним и тем же документом: «Извлечь текст» — здесь, «В PDF» — в
+ * [PdfRealizer]. Пока говорил только второй, первый читался не как «этот проще», а как «этот
+ * завис»; общая константа держит их от расхождения впредь.
+ */
+internal const val OFFICE_READ_STAGE = "Читаю документ"
+
 class OfficeRealizer @Inject constructor(
     private val store: ObjectStore,
     private val officeText: OfficeTextExtractor,
@@ -35,6 +44,7 @@ class OfficeRealizer @Inject constructor(
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
             runCatching {
+                reportStage(OFFICE_READ_STAGE)
                 val text = officeText.extractText(input)
                 if (text.isBlank()) {
                     ActionResult.Failure(

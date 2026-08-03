@@ -81,8 +81,18 @@ class PlannedReading(val layer: AtomLayer, val angleDegrees: Int)
  *    дочитывание отрезали — итогом становится слой пробы;
  * 5. всё, что вышло короче задуманного, несёт причину [INCOMPLETE_TIMEOUT] — частичный ответ
  *    без пометки был бы тихой ложью, как и пустота без ответа.
+ *
+ * **Почему функция стала `suspend` (#288).** Здесь живёт самое длинное молчание Point: у чтения
+ * бюджет в три минуты, и всё это время действие «Распознать текст» говорило ровно одну фразу —
+ * «Читаю текст на устройстве», сказанную до входа сюда. Между ней и ответом помещаются до четырёх
+ * полных проходов движка, и снаружи они неотличимы от зависания. Слова берутся из настоящих
+ * ветвей ниже, а не из таймера: пробы произносятся, только когда базовое чтение вышло слабым и
+ * повороты действительно перебираются, дочитывание — только когда доворот победил и время на него
+ * осталось. Хорошо прочитанная страница не говорит ничего сверх первой фразы, потому что и работы
+ * сверх неё не было. Тот же приём, что у `OpenCvScan.enhance`: `suspend` не ради потока, а ради
+ * канала [reportStage].
  */
-fun readWithBudget(
+suspend fun readWithBudget(
     budget: ReadingBudget,
     readFull: (angleDegrees: Int, capMs: Long) -> CappedRead,
     readProbe: (angleDegrees: Int, capMs: Long) -> CappedRead,
@@ -93,12 +103,15 @@ fun readWithBudget(
 
     val tried = LinkedHashMap<Int, AtomLayer>()
     var probesUnfinished = false
-    for (angle in ORIENTATION_ANGLES) {
+    for ((index, angle) in ORIENTATION_ANGLES.withIndex()) {
         val left = budget.leftMs()
         if (left <= 0) {
             probesUnfinished = true
             break
         }
+        // Счёт идёт по попыткам, а не по градусам: «повернул на 180°» человеку ничего не говорит
+        // про ожидание, а «2 из 3» говорит — видно, что работа движется и сколько её осталось.
+        reportStage(orientationProbeStage(index, ORIENTATION_ANGLES.size))
         val probe = readProbe(angle, left)
         if (probe.cut) probesUnfinished = true
         tried[angle] = probe.layer
@@ -113,6 +126,9 @@ fun readWithBudget(
 
     val probeLayer = tried.getValue(best)
     if (budget.leftMs() <= 0) return PlannedReading(probeLayer.cutShort(), best)
+    // Стадия стоит ПОСЛЕ проверки остатка: без времени дочитывания не будет, и обещать его —
+    // ровно та имитация статуса, против которой весь #288.
+    reportStage(REREAD_STAGE)
     val full = readFull(best, budget.leftMs())
     return when {
         !full.cut -> PlannedReading(full.layer, best)
@@ -122,6 +138,20 @@ fun readWithBudget(
         else -> PlannedReading(probeLayer.cutShort(), best)
     }
 }
+
+/**
+ * Что сказать человеку, пока перебираются повороты страницы (#288).
+ *
+ * Слова отдельно от цикла, потому что проверить их без движка можно только так: сам перебор живёт
+ * рядом с Tesseract, а фраза — то единственное, что видит человек, и она обязана быть под тестом.
+ * Номер приходит с нуля (индекс попытки), а человеку показывается с единицы: «0 из 3» — счёт для
+ * машины, не для того, кто ждёт.
+ */
+fun orientationProbeStage(index: Int, total: Int): String =
+    "Пробую повернуть страницу — ${index + 1} из $total"
+
+/** Доворот выбран, и страница читается заново целиком — это отдельное ожидание, не продолжение проб. */
+const val REREAD_STAGE = "Нашёл, как лежит страница — перечитываю"
 
 /** Тот же слой с причиной «упёрлись в предел времени». */
 private fun AtomLayer.cutShort(): AtomLayer =

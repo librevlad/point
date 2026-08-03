@@ -8,6 +8,7 @@ import com.point.core.flow.PcRemoteAction
 import com.point.core.flow.PcSendOutcome
 import com.point.core.flow.PcTransport
 import com.point.core.flow.Realizer
+import com.point.core.flow.reportStage
 import com.point.core.model.ActionResult
 import com.point.core.model.CapabilityId
 import com.point.core.model.ObjectKind
@@ -75,6 +76,8 @@ class RemotePcRealizer(
         val pairing = pairings.current()
             ?: return ActionResult.Failure("Компьютер не подключён", recoverable = true)
         val name = input.metadata["name"] ?: "объект"
+        // Те же слова, что у «На компьютер» (#288): работа буквально одна — [PC_SEND_STAGE].
+        reportStage(PC_SEND_STAGE)
         return when (val outcome = transport.send(pairing, input, name, input.metadata, action.id)) {
             PcSendOutcome.Sent -> ActionResult.Done("${action.label} — готово")
             PcSendOutcome.Rejected ->

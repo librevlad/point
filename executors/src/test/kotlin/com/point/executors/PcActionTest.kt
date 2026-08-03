@@ -76,6 +76,23 @@ class PcActionTest {
     }
 
     @Test
+    fun `отправка на компьютер называет себя, пока идёт`() = runTest {
+        val heard = stagesHeard {
+            PcRealizer(FakePairings(PcPairing("h", 1, "t")), FakeTransport()).perform(obj(), null)
+        }
+
+        assertEquals(listOf("Отправляю на компьютер"), heard)
+    }
+
+    @Test
+    fun `без связанного компьютера ждать нечего — и слов о работе нет`() = runTest {
+        // Отказ приходит мгновенно, работы не было: стадия здесь назвала бы несуществующий шаг.
+        val heard = stagesHeard { PcRealizer(FakePairings(null), FakeTransport()).perform(obj(), null) }
+
+        assertTrue(heard.isEmpty())
+    }
+
+    @Test
     fun `rejection asks to re-pair, unreachable stays recoverable`() = runTest {
         val pairings = FakePairings(PcPairing("h", 1, "t"))
         val transport = FakeTransport(PcSendOutcome.Rejected)

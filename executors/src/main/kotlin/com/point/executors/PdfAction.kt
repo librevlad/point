@@ -77,7 +77,9 @@ class PdfRealizer @Inject constructor(
     }
 
     private suspend fun officeToPdf(input: PointObject): ActionResult {
-        reportStage("Читаю документ") // #288: разбор docx/xlsx — секунды до всякой отрисовки
+        // #288: разбор docx/xlsx — секунды до всякой отрисовки. Слова общие с «Извлечь текст»
+        // ([OFFICE_READ_STAGE]): работа буквально одна, и разъехаться им нельзя.
+        reportStage(OFFICE_READ_STAGE)
         // A spreadsheet is a grid, not prose: read its rows and render a monospace table. Our own
         // «В Excel» writes inline strings (no sharedStrings.xml), which the text extractor can't
         // read — so without this branch converting Point's own xlsx dead-ends on empty text.

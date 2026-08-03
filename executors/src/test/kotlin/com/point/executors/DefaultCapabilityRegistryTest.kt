@@ -3,6 +3,7 @@ package com.point.executors
 import com.point.core.flow.PcPairing
 import com.point.core.flow.PcPairings
 import com.point.core.flow.PcRemoteAction
+import com.point.core.flow.Latency
 import com.point.core.model.BubbleTier
 import com.point.core.model.CapabilityId
 import com.point.core.model.Feature
@@ -117,6 +118,23 @@ class DefaultCapabilityRegistryTest {
         assertEquals(BubbleTier.AI, tier("ai"))          // network → AI, whatever else it says
         assertEquals(BubbleTier.INSTANT, tier("share"))  // local + instant latency
         assertEquals(BubbleTier.SMART, tier("ocr"))      // real on-device work (FAST/SLOW)
+    }
+
+    @Test
+    fun `распознавание на устройстве объявлено долгим, а место пузырька не сдвинулось`() {
+        // #288: у чтения страницы бюджет в три минуты, и FAST было прямой неправдой — из-за неё
+        // работа шла на объекте, без единого слова о себе и без кнопки отмены. Второе утверждение
+        // важнее первого: место пузырька считается по INSTANT против «всего остального», поэтому
+        // правка обязана оставить первый экран прежним.
+        assertEquals(Latency.SLOW, OcrCapability().meta.latency)
+        assertEquals(
+            BubbleTier.SMART,
+            registry.bubblesFor(ObjectState(ObjectKind.IMAGE)).first { it.capabilityId.value == "ocr" }.tier,
+        )
+        assertEquals(
+            listOf("image", "ocr", "pdf", "scan", "open", "save", "share", "ai"),
+            registry.bubblesFor(ObjectState(ObjectKind.IMAGE)).map { it.capabilityId.value },
+        )
     }
 
     @Test

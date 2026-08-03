@@ -7,6 +7,7 @@ import com.point.core.flow.PcPairings
 import com.point.core.flow.PcSendOutcome
 import com.point.core.flow.PcTransport
 import com.point.core.flow.Realizer
+import com.point.core.flow.reportStage
 import com.point.core.model.ActionResult
 import com.point.core.model.CapabilityId
 import com.point.core.model.ObjectKind
@@ -38,6 +39,14 @@ class PcCapability @Inject constructor(
     companion object { val ID = CapabilityId("pc") }
 }
 
+/**
+ * Одна работа — одни слова (#288): объект уходит на компьютер и из «На компьютер», и из любого
+ * действия, объявленного самим компьютером («Открыть на компьютере», «Напечатать»). Ждём мы в
+ * обоих случаях одного и того же — байтов по домашней сети, — и разная разговорчивость двух
+ * соседних пузырьков читалась бы не как «этот проще», а как «этот завис».
+ */
+internal const val PC_SEND_STAGE = "Отправляю на компьютер"
+
 class PcRealizer @Inject constructor(
     private val pairings: PcPairings,
     private val transport: PcTransport,
@@ -48,6 +57,10 @@ class PcRealizer @Inject constructor(
         val pairing = pairings.current()
             ?: return ActionResult.Failure("Компьютер не подключён", recoverable = true)
         val name = input.metadata["name"] ?: "point-${input.id.take(8)}"
+        // Стадия ПОСЛЕ проверки связи (#288): без пары ждать нечего, отказ приходит мгновенно, и
+        // «Отправляю» там было бы словом о работе, которой не было. Дальше начинается настоящее
+        // ожидание — байты по сети, а при спящем компьютере ещё и поиск его нового адреса.
+        reportStage(PC_SEND_STAGE)
         return when (val outcome = transport.send(pairing, input, name, input.metadata)) {
             is PcSendOutcome.Sent -> ActionResult.Done("Отправлено на компьютер")
             is PcSendOutcome.Rejected ->

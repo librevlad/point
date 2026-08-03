@@ -130,6 +130,22 @@ class RemotePcActionTest {
     }
 
     @Test
+    fun `действие компьютера ждёт теми же словами, что и «На компьютер»`() = runTest {
+        // Одна работа — одни слова (#288): байты едут по той же сети, и разная разговорчивость
+        // двух соседних пузырьков читалась бы как «этот завис».
+        val heard = stagesHeard { RemotePcRealizer(action, FakePairings(), FakeTransport()).perform(obj(), null) }
+
+        assertEquals(listOf("Отправляю на компьютер"), heard)
+    }
+
+    @Test
+    fun `недоступное действие молчит — работы не было`() = runTest {
+        val heard = stagesHeard { RemotePcRealizer(printerless, FakePairings(), FakeTransport()).perform(obj(), null) }
+
+        assertTrue(heard.isEmpty())
+    }
+
+    @Test
     fun `a rejected token asks to re-pair, unreachable is recoverable`() = runTest {
         val rejected = RemotePcRealizer(action, FakePairings(), FakeTransport(PcSendOutcome.Rejected))
             .perform(obj(), null)
