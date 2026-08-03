@@ -8,10 +8,9 @@ package com.point.core.flow
  * открыл документ: у кадра есть **ожидаемое действие**, и оно либо готово по своим критическим
  * полям ([ActionSchema.readiness]), либо нет. Бинарно, по кадру.
  *
- * Кадры, чьё ожидаемое действие ещё не имеет схемы (извлечь таблицу, переслать квитанцию,
- * ответить на письмо), в знаменатель **не идут** — но и не исчезают: [CorpusScore.unscored]
- * называет их поимённо. Молчаливое сужение корпуса до удобных кадров — тот же грех, что
- * красивая ложь про «6 из 9».
+ * Кадры, чьё ожидаемое действие не имеет схемы, в знаменатель **не идут** — но и не исчезают:
+ * [CorpusScore.unscored] называет их поимённо **и с причиной** ([OutOfCount]). Молчаливое сужение
+ * корпуса до удобных кадров — тот же грех, что красивая ложь про «6 из 9».
  *
  * «Нет схемы» при этом больше не значит «не измерено». У таблиц схемы готовности не будет никогда
  * (честного факта «в документе есть таблица» не существует), поэтому их меряет [scoreTable] — по
@@ -31,29 +30,76 @@ data class CorpusCase(
     val expectedAction: String,
     /** Факты объекта после прогона на устройстве — вход [ActionSchema.readiness]. */
     val facts: Map<String, String>,
+    /**
+     * Почему кадр стоит вне знаменателя — для кадров без схемы. `null` — причины нет, и отчёт
+     * скажет об этом словами: кадр без схемы и без причины **выпал молча**, а это ошибка карты
+     * кадров, а не свойство кадра.
+     *
+     * На кадре со схемой ничего не меняет — такой кадр считается, — и потому ловится не числом, а
+     * тестом карты: там устаревшая причина видна до прогона, а не после.
+     */
+    val outOfCount: OutOfCount? = null,
 )
+
+/**
+ * Почему кадр стоит вне знаменателя (#262). Причин ровно три, и они **разные новости**:
+ *
+ * - [TABLE] — кадр меряется, но не здесь: у таблицы схемы готовности не будет никогда, её судит
+ *   [scoreTable] по результату действия. «Не в этом числе» ≠ «не измерено»;
+ * - [REFUSED] — схемы не будет, и отказ записан решением (кадры 16 и 21, разбор — в
+ *   `docs/DECISIONS.md` и рядом со схемами в [ACTION_SCHEMAS]);
+ * - [AWAITING] — схемы ещё нет, это законное «пока».
+ *
+ * До этого все трое печатались одной строкой со словом «пока» — то есть отчёт обещал человеку
+ * работу там, где её решили не делать, и молчал о том, что семь кадров уже измерены другим числом.
+ *
+ * [word] — слово из карты кадров (`tools/corpus/frames.tsv`), третье поле строки. Слово живёт
+ * здесь, рядом с причиной, а не в разборщике: вторая копия списка разъехалась бы с первой.
+ */
+enum class OutOfCount(val word: String, val note: String) {
+    TABLE("таблица", "меряются не здесь, а по самой таблице, которую получил человек"),
+    REFUSED("отказ", "проверять не будем — решение и причина записаны в docs/CORPUS.md"),
+    AWAITING("ждёт схемы", "ждут описания успеха"),
+    ;
+
+    companion object {
+        /** Слово карты → причина; неизвестное слово — громкая ошибка, а не тихий `null`. */
+        fun byWord(word: String): OutOfCount = entries.firstOrNull { it.word == word }
+            ?: error("«$word» — не причина; годятся: ${entries.joinToString { it.word }}")
+    }
+}
+
+/** Кадр вне знаменателя и причина, по которой он там стоит. `null` — причина не названа. */
+data class UnscoredFrame(val frame: String, val reason: OutOfCount?)
 
 /** Итог прогона корпуса: числитель, знаменатель и поимённо всё, что осталось за скобками. */
 data class CorpusScore(
     val ready: List<String>,
     val notReady: List<String>,
-    /** Кадры, чьё действие ещё не имеет схемы: считать их нечем, скрывать — нельзя. */
-    val unscored: List<String>,
+    /** Кадры, чьё действие не имеет схемы: считать их нечем, скрывать — нельзя. */
+    val unscored: List<UnscoredFrame>,
 ) {
     val scored: Int get() = ready.size + notReady.size
     /** Доля готовых среди измеримых; `null` — измерять пока нечего, и это честный ответ. */
     val share: Double? get() = if (scored == 0) null else ready.size.toDouble() / scored
+
+    /** Кадры вне счёта по названной причине — в том порядке, в каком причины перечислены. */
+    fun outOfCount(reason: OutOfCount): List<String> =
+        unscored.filter { it.reason == reason }.map { it.frame }
+
+    /** Вне счёта без названной причины: карта кадров потеряла их молча, и так быть не должно. */
+    val unnamed: List<String> get() = unscored.filter { it.reason == null }.map { it.frame }
 }
 
 /** Считает [CorpusScore] по кадрам: действие готово ⇔ его схема готова по фактам кадра. */
 fun scoreCorpus(cases: List<CorpusCase>, schemas: List<ActionSchema> = ACTION_SCHEMAS): CorpusScore {
     val ready = mutableListOf<String>()
     val notReady = mutableListOf<String>()
-    val unscored = mutableListOf<String>()
+    val unscored = mutableListOf<UnscoredFrame>()
     cases.forEach { case ->
         val schema = schemas.firstOrNull { it.id == case.expectedAction }
         when {
-            schema == null -> unscored += case.frame
+            schema == null -> unscored += UnscoredFrame(case.frame, case.outOfCount)
             schema.readiness(case.facts) is Readiness.Ready -> ready += case.frame
             else -> notReady += case.frame
         }

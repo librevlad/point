@@ -14,6 +14,8 @@ class CorpusMetricTest {
     private fun case(frame: String, action: String, vararg facts: Pair<String, String>) =
         CorpusCase(frame, action, facts.toMap())
 
+    private fun frames(score: CorpusScore) = score.unscored.map { it.frame }
+
     @Test
     fun `готово — когда критическое поле действия прочитано`() {
         val score = scoreCorpus(
@@ -39,8 +41,51 @@ class CorpusMetricTest {
         )
 
         assertEquals(1, score.scored)
-        assertEquals(listOf("06", "18"), score.unscored)
+        assertEquals(listOf("06", "18"), frames(score))
         assertEquals(1.0, score.share!!, 0.001)
+    }
+
+    // --- #262: вне счёта стоят по РАЗНЫМ причинам, и число обязано их различать ---
+
+    /**
+     * Одинаковое «пока» на всех кадрах вне счёта врало дважды: таблицы измерены другим числом, а
+     * двум кадрам схемы не будет по записанному решению. Причина едет с кадром, а не с прозой.
+     */
+    @Test
+    fun `причина, по которой кадр вне счёта, едет вместе с кадром`() {
+        val score = scoreCorpus(
+            listOf(
+                CorpusCase("23", "извлечь таблицу", emptyMap(), OutOfCount.TABLE),
+                CorpusCase("16", "собрать список в текст", emptyMap(), OutOfCount.REFUSED),
+                CorpusCase("21", "найти и забрать нужный отчёт", emptyMap(), OutOfCount.REFUSED),
+            ),
+        )
+
+        assertEquals(listOf("23"), score.outOfCount(OutOfCount.TABLE))
+        assertEquals(listOf("16", "21"), score.outOfCount(OutOfCount.REFUSED))
+        assertTrue("названные причиной не могут числиться потерянными", score.unnamed.isEmpty())
+    }
+
+    /**
+     * Кадр без схемы и без причины — потеря, а не свойство кадра: считать его нечем и сказать о
+     * нём нечего, кроме того, что он выпал. Молчание здесь — то самое сужение корпуса до удобных
+     * кадров, от которого метрику и лечили.
+     */
+    @Test
+    fun `кадр вне счёта без причины назван потерянным, а не приравнен к таблице`() {
+        val score = scoreCorpus(listOf(case("24", "неизвестное действие")))
+
+        assertEquals(listOf("24"), score.unnamed)
+        assertTrue(score.outOfCount(OutOfCount.AWAITING).isEmpty())
+    }
+
+    /** Опечатка в причине не имеет права притвориться законным «ждёт схемы». */
+    @Test
+    fun `неизвестное слово причины — ошибка вслух`() {
+        val boom = runCatching { OutOfCount.byWord("таблицы") }.exceptionOrNull()
+
+        assertTrue("ждали громкую ошибку, получили $boom", boom is IllegalStateException)
+        assertTrue(boom!!.message!!.contains("таблица"))
     }
 
     // --- #262: шесть кадров вышли из unscored, потому что у их действий появились схемы ---

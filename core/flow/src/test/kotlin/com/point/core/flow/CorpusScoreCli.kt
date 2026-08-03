@@ -30,11 +30,15 @@ fun main(args: Array<String>) {
 
     val text = runCatching {
         val map = parseFrameMap(File(frames).readText())
-        val cases = map.mapNotNull { (frame, action) ->
+        val cases = map.mapNotNull { (frame, expectation) ->
             val journal = File(run, "$frame.flow.json")
             // Кадра без журнала в счёте нет — но и молчать о нём нельзя: прогон мог до него не
             // дойти, и «не мерили» обязано отличаться от «не готово».
-            if (journal.isFile) CorpusCase(frame, action, factsOf(journal.readText())) else null
+            if (journal.isFile) {
+                CorpusCase(frame, expectation.action, factsOf(journal.readText()), expectation.outOfCount)
+            } else {
+                null
+            }
         }
         val missing = map.keys.filter { !File(run, "$it.flow.json").isFile }
         renderCorpusScore(scoreCorpus(cases), missing)
@@ -43,22 +47,32 @@ fun main(args: Array<String>) {
     if (report.isEmpty()) print(text) else File(report).appendText(text)
 }
 
+/** Строка карты кадров: что человек пришёл сделать и, если схемы нет, почему кадр вне счёта. */
+internal data class FrameExpectation(val action: String, val outOfCount: OutOfCount?)
+
 /**
- * Карта «кадр → ожидаемое действие»: по строке на кадр, `NN<TAB>действие`, `#` — комментарий.
+ * Карта «кадр → ожидаемое действие»: по строке на кадр, `NN<TAB>действие[<TAB>причина]`,
+ * `#` — комментарий.
  *
  * Действие — это [ActionSchema.id] там, где схема есть (`track-parcel`, `route`,
- * `meter-reading`, `save-contact`), и человеческое имя там, где её ещё нет (`извлечь таблицу`).
+ * `meter-reading`, `save-contact`), и человеческое имя там, где её нет (`извлечь таблицу`).
  * Второе не ошибка формата, а сам смысл счёта: такие кадры уходят в `unscored` и называются
  * поимённо, вместо того чтобы тихо выпасть из знаменателя.
+ *
+ * Третье поле — **причина**, по которой кадр стоит вне счёта ([OutOfCount]): «таблица» —
+ * меряется другим числом, «отказ» — схемы не будет по записанному решению, «ждёт схемы» — её
+ * ещё не написали. Без причины кадр вне счёта тоже пройдёт (разбор не падает — прогон дороже
+ * строки карты), но отчёт назовёт его выпавшим молча. Неизвестное слово — ошибка вслух:
+ * опечатка в причине иначе притворилась бы законным «ждёт схемы».
  */
-internal fun parseFrameMap(text: String): Map<String, String> =
+internal fun parseFrameMap(text: String): Map<String, FrameExpectation> =
     text.lineSequence()
         .map { it.substringBefore('#').trim() }
         .filter { it.isNotEmpty() }
         .map { line ->
             val parts = line.split('\t').map(String::trim).filter(String::isNotEmpty)
             require(parts.size >= 2) { "строка «$line» — нужно «кадр<TAB>действие»" }
-            parts[0] to parts[1]
+            parts[0] to FrameExpectation(parts[1], parts.getOrNull(2)?.let(OutOfCount::byWord))
         }
         .toMap()
 
@@ -101,6 +115,11 @@ private fun unescape(s: String): String =
  * Отчёт человеку. Числитель и знаменатель раздельно, неизмеримые — поимённо, а кадры без журнала
  * названы отдельной строкой: «не мерили» и «не готово» — разные факты, и складывать их значит
  * подменять один другим.
+ *
+ * Кадры вне счёта печатаются **по причинам** ([OutOfCount]), каждая своей строкой. Одна общая
+ * строка со словом «пока» врала дважды: таблицы измерены другим числом (`scoreTable`), а двум
+ * кадрам схемы не будет по записанному решению — обещать по ним работу значит обещать то, чего
+ * не будет.
  */
 internal fun renderCorpusScore(score: CorpusScore, missing: List<String>): String = buildString {
     appendLine()
@@ -112,8 +131,16 @@ internal fun renderCorpusScore(score: CorpusScore, missing: List<String>): Strin
     )
     if (score.ready.isNotEmpty()) appendLine("- справился: ${score.ready.joinToString(", ")}")
     if (score.notReady.isNotEmpty()) appendLine("- не справился: ${score.notReady.joinToString(", ")}")
-    if (score.unscored.isNotEmpty()) {
-        appendLine("- пока не проверяем, не описано что считать успехом: ${score.unscored.joinToString(", ")}")
+    OutOfCount.entries.forEach { reason ->
+        val frames = score.outOfCount(reason)
+        if (frames.isNotEmpty()) appendLine("- ${reason.note}: ${frames.joinToString(", ")}")
+    }
+    // Кадр вне счёта и без причины — потеря, а не свойство кадра: говорим об этом громче всего.
+    if (score.unnamed.isNotEmpty()) {
+        appendLine(
+            "- **выпали из счёта, причина не названа** — это дыра в карте примеров: " +
+                score.unnamed.joinToString(", "),
+        )
     }
     if (missing.isNotEmpty()) {
         appendLine("- не проверялись, прогон до них не дошёл: ${missing.joinToString(", ")}")
