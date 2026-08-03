@@ -9,4 +9,6 @@
       путём — при приёме объекта, как любой входящий файл.
     -->
     <cache-path name="capture" path="capture/" />
+    <!-- Куда падает задание печати (#251): тот же принцип, что у съёмки, — кэш, а не scratch. -->
+    <cache-path name="print" path="print/" />
 </paths>

@@ -136,6 +136,21 @@
             android:excludeFromRecents="true"
             android:launchMode="singleTop" />
 
+        <!-- Point как принтер (#251): печатать умеет почти любое приложение, поэтому это самый
+             широкий вход. Службу человек включает руками в системных настройках печати. -->
+        <service
+            android:name=".print.PointPrintService"
+            android:exported="true"
+            android:label="Point"
+            android:permission="android.permission.BIND_PRINT_SERVICE">
+            <intent-filter>
+                <action android:name="android.printservice.PrintService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.printservice"
+                android:resource="@xml/point_printservice" />
+        </service>
+
         <service
             android:name=".source.PointTileService"
             android:exported="true"
