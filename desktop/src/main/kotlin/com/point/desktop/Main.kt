@@ -92,19 +92,9 @@ fun main(args: Array<String>) {
     runCatching { com.point.core.flow.decodePcCaps(phoneCapsFile.readText()) }
         .getOrNull()?.let(state::setPhoneCaps)
 
-    val server = PcServer(
-        inbox = inbox,
-        token = config.token,
-        pcName = config.name,
-        pairGate = state::askPair,
-        onReceived = state::onReceived,
-        // #80: advertise the actions the phone may run here. Save-as stays local-only —
-        // it opens a target dialog, which nobody expects to pop from a remote tap.
-        //
-        // #316: то, что этот компьютер умеет, но сейчас не может, объявляется с причиной
-        // (`unavailable`), а не молчанием. Кнопкой оно не станет — станет строкой «Почти
-        // доступно · нет принтера». Молчание человек читал как «Point не умеет печатать».
-        remoteActions = buildList {
+    // Что этот компьютер умеет — один список на оба канала: и для локальной сети, и для
+    // релея (#161). Второй правды о возможностях ПК в проекте не заводится.
+    val pcRemoteActions = buildList {
             add(com.point.core.flow.PcRemoteAction("pc-open", "Открыть на компьютере"))
             add(com.point.core.flow.PcRemoteAction("pc-copy", "В буфер компьютера"))
             add(com.point.core.flow.PcRemoteAction("pc-reveal", "Показать в папке на ПК"))
@@ -127,7 +117,21 @@ fun main(args: Array<String>) {
                     unavailable = officeToPdf.whyUnavailable(),
                 ),
             )
-        },
+        }
+
+    val server = PcServer(
+        inbox = inbox,
+        token = config.token,
+        pcName = config.name,
+        pairGate = state::askPair,
+        onReceived = state::onReceived,
+        // #80: advertise the actions the phone may run here. Save-as stays local-only —
+        // it opens a target dialog, which nobody expects to pop from a remote tap.
+        //
+        // #316: то, что этот компьютер умеет, но сейчас не может, объявляется с причиной
+        // (`unavailable`), а не молчанием. Кнопкой оно не станет — станет строкой «Почти
+        // доступно · нет принтера». Молчание человек читал как «Point не умеет печатать».
+        remoteActions = pcRemoteActions,
         runAction = state::runRemoteAction,
         outbox = outbox,
         onPhoneCaps = state::setPhoneCaps,
@@ -161,6 +165,20 @@ fun main(args: Array<String>) {
         clipboardSet = ::writeSystemClipboard,
     ).also { it.start() }
 
+    // #161: компьютер отвечает телефону через релей — что умеет, что приготовил, отдай сделанное.
+    // Без этого через релей ходило одно направление, и вне общей сети телефон не мог ни узнать про
+    // принтер и сборку PDF, ни забрать результат.
+    val relayRequestPoller = RelayRequestPoller(
+        relayUrl = RelayEnv.URL,
+        appSecret = RelayEnv.APP_SECRET,
+        token = config.token,
+        remoteActions = { pcRemoteActions },
+        outbox = outbox,
+        onPhoneCaps = state::setPhoneCaps,
+        runAction = state::runRemoteAction,
+        log = { line -> println("[relay-rpc] " + line) },
+    ).also { it.start() }
+
     application {
         // Окно мокапа — 1440x900 (#285). Берём чуть меньше, чтобы влезало и на ноутбучный экран,
         // но так, чтобы конвейер помещался целиком: на 800x600 по умолчанию он не помещался.
@@ -171,6 +189,7 @@ fun main(args: Array<String>) {
             state = windowState,
             onCloseRequest = {
                 relayClipPoller.stop()
+                relayRequestPoller.stop()
                 relayPoller.stop()
                 advertiser.stop()
                 server.stop()

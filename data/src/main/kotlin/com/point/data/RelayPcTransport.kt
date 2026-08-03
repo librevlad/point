@@ -6,6 +6,10 @@ import com.point.core.flow.PcRemoteAction
 import com.point.core.flow.PcSendOutcome
 import com.point.core.flow.PcTransport
 import com.point.core.flow.RelayCrypto
+import com.point.core.flow.decodePcOutbox
+import com.point.core.flow.encodePcCaps
+import com.point.core.flow.decodePcCaps
+import com.point.core.flow.RelayRpc
 import com.point.core.flow.RelayTls
 import com.point.core.flow.encodePcFrame
 import com.point.core.model.PointObject
@@ -69,14 +73,47 @@ class RelayPcTransport(
         }.getOrElse { PcSendOutcome.Unreachable(it.message ?: "релей недоступен") }
     }
 
-    // Relay is the send fallback only (LanThenRelay routes just send here); receive is the LAN path
-    // until the desktop poller (P4) lands.
+    /**
+     * Пейринг через релей невозможен по построению: ящик адресуется производной от токена, а
+     * токен телефон узнаёт как раз из QR. Значит связывание — это чтение QR, а не сетевой вызов;
+     * сюда попадает только попытка спариться по адресу, и честный ответ на неё — «не умею».
+     */
     override suspend fun pair(host: String, port: Int, deviceName: String): PcPairing? = null
-    override suspend fun fetchCaps(pairing: PcPairing): List<PcRemoteAction>? = null
-    override suspend fun fetchOutbox(pairing: PcPairing): List<PcOutboxEntry>? = null
-    override suspend fun downloadOutboxFile(pairing: PcPairing, id: Int, targetPath: String): Boolean = false
-    override suspend fun ackOutbox(pairing: PcPairing, id: Int) = Unit
-    override suspend fun pushPhoneCaps(pairing: PcPairing, caps: List<PcRemoteAction>): Boolean = false
+
+    /** Что умеет компьютер — включая печать и сборку PDF, ради которых человек к нему и идёт. */
+    override suspend fun fetchCaps(pairing: PcPairing): List<PcRemoteAction>? =
+        rpc.ask(pairing, RelayRpc.CAPS)?.let { reply ->
+            runCatching { decodePcCaps(String(reply.body, Charsets.UTF_8)) }.getOrNull()
+        }
+
+    override suspend fun fetchOutbox(pairing: PcPairing): List<PcOutboxEntry>? =
+        rpc.ask(pairing, RelayRpc.OUTBOX)?.let { reply ->
+            runCatching { decodePcOutbox(String(reply.body, Charsets.UTF_8)) }.getOrNull()
+        }
+
+    override suspend fun downloadOutboxFile(pairing: PcPairing, id: Int, targetPath: String): Boolean {
+        val reply = rpc.ask(pairing, RelayRpc.FETCH, mapOf("id" to id.toString())) ?: return false
+        // Пустое тело с причиной — это отказ компьютера, а не файл нулевой длины: записать его
+        // значило бы отдать человеку пустышку под видом результата.
+        if (reply.meta.containsKey("error") || reply.body.isEmpty()) return false
+        return runCatching {
+            File(targetPath).apply { parentFile?.mkdirs() }.writeBytes(reply.body)
+            true
+        }.getOrDefault(false)
+    }
+
+    override suspend fun ackOutbox(pairing: PcPairing, id: Int) {
+        rpc.ask(pairing, RelayRpc.ACK, mapOf("id" to id.toString()))
+    }
+
+    override suspend fun pushPhoneCaps(pairing: PcPairing, caps: List<PcRemoteAction>): Boolean =
+        rpc.ask(
+            pairing,
+            RelayRpc.PHONE_CAPS,
+            body = encodePcCaps(caps).toByteArray(Charsets.UTF_8),
+        ) != null
+
+    private val rpc = RelayRpcClient(appSecret)
 
     private companion object {
         const val TO_PC = "to-pc"
