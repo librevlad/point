@@ -32,6 +32,38 @@ class OoxmlOfficeTextExtractorTest {
         )
     }
 
+    /** Презентация — тот же OOXML-zip, только текст живёт в слайдах (#403). */
+    private fun pptx(vararg slideXml: String): PointObject {
+        val file = File.createTempFile("point-", ".pptx").apply { deleteOnExit() }
+        ZipOutputStream(file.outputStream()).use { zos ->
+            slideXml.forEachIndexed { index, xml ->
+                zos.putNextEntry(ZipEntry("ppt/slides/slide${index + 1}.xml"))
+                zos.write(xml.toByteArray(Charsets.UTF_8))
+                zos.closeEntry()
+            }
+        }
+        return PointObject(
+            id = "id",
+            mime = "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            uri = ScratchRef(file.absolutePath),
+            state = ObjectState(ObjectKind.OFFICE),
+        )
+    }
+
+    @Test
+    fun `текст презентации читается со слайдов, а не теряется`() = runTest {
+        val obj = pptx(
+            "<p:sld><p:cSld><p:spTree><a:t>Квартальный отчёт</a:t></p:spTree></p:cSld></p:sld>",
+            "<p:sld><p:cSld><p:spTree><a:t>Выручка выросла</a:t><a:t>на 20%</a:t></p:spTree></p:cSld></p:sld>",
+        )
+
+        val text = extractor.extractText(obj)
+
+        assertTrue(text, text.contains("Квартальный отчёт"))
+        assertTrue(text, text.contains("Выручка выросла"))
+        assertTrue(text, text.contains("на 20%"))
+    }
+
     @Test
     fun `extracts text from a single run`() = runTest {
         val obj = docx("<w:document><w:body><w:p><w:r><w:t>Привет из документа</w:t></w:r></w:p></w:body></w:document>")
