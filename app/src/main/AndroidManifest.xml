@@ -1,6 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!--
+      Кого Point спрашивает у системы (#246). С Android 11 приложение не видит чужих приложений
+      без этого списка, и `resolveActivity` молча отвечает «никого нет»: источники «Камера» и
+      «Голос» просто не появлялись бы на экране выбора — не потому, что снимать нечем, а потому,
+      что мы не имели права спросить.
+    -->
+    <queries>
+        <intent>
+            <action android:name="android.media.action.IMAGE_CAPTURE" />
+        </intent>
+        <intent>
+            <action android:name="android.provider.MediaStore.RECORD_SOUND" />
+        </intent>
+    </queries>
+
     <application
         android:networkSecurityConfig="@xml/network_security_config"
         android:name=".PointApplication"
@@ -106,6 +121,26 @@
             android:exported="true"
             android:icon="@android:drawable/ic_popup_sync"
             android:label="Общий буфер"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
+        <!-- Шторка рождает объект (#246): плитка открывает выбор источника, экран живёт поверх
+             чужого приложения и исчезает, как только объект родился. -->
+        <activity
+            android:name=".source.SourcePickerActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTop" />
+
+        <service
+            android:name=".source.PointTileService"
+            android:exported="true"
+            android:icon="@android:drawable/ic_menu_add"
+            android:label="Point"
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
             <intent-filter>
                 <action android:name="android.service.quicksettings.action.QS_TILE" />

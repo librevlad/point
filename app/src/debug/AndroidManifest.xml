@@ -3,9 +3,20 @@
   DEBUG-ONLY overlay. Adds a launcher icon (SandboxActivity) so you can drive the
   real flow from sample objects without sharing a file. Not present in release.
 -->
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <application>
+        <!--
+          Экран выбора источника открывается плиткой из шторки, а плитку человек добавляет руками —
+          поэтому проверить поток с машины иначе нечем: неэкспортированную активити adb запускать
+          не даёт. В debug она экспортируется, в release остаётся закрытой (#246).
+        -->
+        <activity
+            android:name=".source.SourcePickerActivity"
+            android:exported="true"
+            tools:replace="android:exported" />
+
         <activity
             android:name=".SandboxActivity"
             android:exported="true"

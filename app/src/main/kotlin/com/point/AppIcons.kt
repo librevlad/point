@@ -4,11 +4,14 @@ import android.content.Context
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.core.graphics.drawable.toBitmap
+import com.point.source.ObjectSource
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import dagger.multibindings.IntoSet
+import dagger.multibindings.Multibinds
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -49,4 +52,24 @@ abstract class AppIconsModule {
 
     @Binds
     abstract fun selectionFrames(impl: AndroidSelectionFrames): SelectionFrames
+
+    /**
+     * Набор источников объекта для шторки (#246). Объявлен явно, потому что пустой набор — тоже
+     * законное состояние: пока ни один источник не зарегистрирован, экран выбора обязан собраться
+     * и честно показать, что выбирать нечего, а не уронить сборку.
+     */
+    @Multibinds
+    abstract fun objectSources(): Set<ObjectSource>
+
+    @Binds
+    @IntoSet
+    abstract fun clipboardSource(impl: com.point.source.ClipboardSource): ObjectSource
+
+    @Binds
+    @IntoSet
+    abstract fun cameraSource(impl: com.point.source.CameraSource): ObjectSource
+
+    @Binds
+    @IntoSet
+    abstract fun voiceSource(impl: com.point.source.VoiceSource): ObjectSource
 }
