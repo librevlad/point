@@ -27,7 +27,17 @@ sealed interface CellAnswer {
  */
 data class GroundedTable(
     val rows: List<List<String>>,
-    val candidates: Map<Pair<Int, Int>, List<String>>,
+    val candidates: Map<Pair<Int, Int>, List<String>> = emptyMap(),
+    /**
+     * Ячейки, чьи метки разрешились **чисто**: атомы нашлись все, набор связен — то есть у
+     * значения есть настоящий адрес на странице ([EvidenceClass.STRUCTURAL]).
+     *
+     * Это не «значение верное» и не «спора нет»: спор чтений живёт отдельно, в [candidates].
+     * Это ровно одно утверждение — «мы знаем, откуда на странице взялись эти символы», — и
+     * без него улику происхождения пришлось бы восстанавливать догадкой «первый кандидат
+     * атомный», а такое допущение здесь уже ломалось.
+     */
+    val structural: Set<Pair<Int, Int>> = emptySet(),
 )
 
 /**
@@ -58,6 +68,7 @@ fun AtomLayer.resolveCells(cells: List<List<CellAnswer>>): GroundedTable {
     val witness = pageWitnesses(cells, page)
     val rows = ArrayList<List<String>>(cells.size)
     val candidates = LinkedHashMap<Pair<Int, Int>, List<String>>()
+    val structural = LinkedHashSet<Pair<Int, Int>>()
     cells.forEachIndexed { r, row ->
         rows += row.mapIndexed { c, cell ->
             var flagged = false
@@ -75,6 +86,9 @@ fun AtomLayer.resolveCells(cells: List<List<CellAnswer>>): GroundedTable {
                     val model = cell.text?.replace("⚠", "")?.replace("~~", "")?.trim()
                         ?.takeIf { it.isNotEmpty() }
                     flagged = v.droppedIds.isNotEmpty() || v.disjoint
+                    // Адрес разрешился чисто — у значения есть происхождение на странице. Спор
+                    // чтений этого не отменяет: «откуда символы» и «какие они» — разные вопросы.
+                    if (!flagged && v.atoms.isNotEmpty()) structural += r to c
                     when {
                         v.atoms.isEmpty() -> {
                             if (model != null) flagged = true
@@ -97,7 +111,7 @@ fun AtomLayer.resolveCells(cells: List<List<CellAnswer>>): GroundedTable {
             if (flagged && !text.contains('⚠')) "$text⚠" else text
         }
     }
-    return GroundedTable(rows, candidates)
+    return GroundedTable(rows, candidates, structural)
 }
 
 /**

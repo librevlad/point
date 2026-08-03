@@ -89,6 +89,16 @@ interface SpreadsheetWriter {
         rows: List<List<String>>,
         candidates: Map<Pair<Int, Int>, List<String>> = emptyMap(),
     ): ScratchRef
+
+    /**
+     * Тот же лист, но с фактами стиля от документа (#266): где на самом деле шапка, а не «первая
+     * строка всегда заголовок».
+     *
+     * Реализация по умолчанию отбрасывает факты и пишет строки как раньше — писатель, который о
+     * плане не знает, обязан вести себя ровно так, как вёл; ни один сегодняшний вызов от этого не
+     * становится хуже.
+     */
+    suspend fun write(plan: SheetPlan): ScratchRef = write(plan.rows, plan.candidates)
 }
 
 /** Reads an OOXML `.xlsx` back into rows of cell text — the inverse of [SpreadsheetWriter].

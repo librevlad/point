@@ -1,6 +1,7 @@
 package com.point.data
 
 import com.point.core.flow.ObjectStore
+import com.point.core.flow.SheetPlan
 import com.point.core.model.PointObject
 import com.point.core.model.ResultObject
 import com.point.core.model.ScratchRef
@@ -106,6 +107,25 @@ class OoxmlSpreadsheetWriterTest {
         val sheet = sheetOf(ref)
         assertTrue("помеченная ячейка залита неуверенностью", sheet.contains("""r="A1" s="4""""))
         assertTrue("непомеченная осталась шапкой", sheet.contains("""r="B1" s="1""""))
+    }
+
+    /**
+     * Шапка — по факту документа, а не по позиции строки (#266).
+     *
+     * У счёта, где сетка начинается сразу под подписью, заголовков нет вовсе, и первая товарная
+     * строка приезжала жирной — оформление утверждало то, чего в документе нет. Теперь писателю
+     * говорят, какие строки заголовочные, и «ни одной» — законный ответ.
+     */
+    @Test
+    fun `шапку назначает план документа, а не номер строки (#266)`() = runBlocking {
+        val rows = listOf(listOf("Гречка", "2"), listOf("Рис", "5"))
+
+        val noHeader = sheetOf(OoxmlSpreadsheetWriter(store).write(SheetPlan(rows, headerRows = emptySet())))
+        val secondRow = sheetOf(OoxmlSpreadsheetWriter(store).write(SheetPlan(rows, headerRows = setOf(1))))
+
+        assertTrue("шапки нет — первая строка обычная", noHeader.contains("""r="A1" s="0""""))
+        assertTrue("шапка на второй строке — она и жирная", secondRow.contains("""r="A2" s="1""""))
+        assertTrue("а первая осталась данными", secondRow.contains("""r="A1" s="0""""))
     }
 
     /**
