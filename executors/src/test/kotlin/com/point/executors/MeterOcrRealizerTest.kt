@@ -10,6 +10,7 @@ import com.point.core.flow.MeterReader
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.TextRecognizer
 import com.point.core.model.ActionResult
+import com.point.core.model.Feature
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
@@ -202,8 +203,9 @@ class MeterOcrRealizerTest {
             setOf(OcrCapability(), CloudOcrCapability(), MeterOcrCapability()),
             DefaultBubblePolicy(),
         )
-        val bubbles = registry.bubblesFor(ObjectState(ObjectKind.IMAGE))
-        assertTrue(bubbles.map { it.title }.contains("Прочитать показание"))
+        // Страницу читали, связного текста не собралось — снимок мира: прибор, блик, рукопись.
+        val unread = ObjectState(ObjectKind.IMAGE, setOf(Feature.HAS_WORD_LAYER))
+        assertTrue(registry.bubblesFor(unread).map { it.title }.contains("Прочитать показание"))
         // Текстовому объекту показание не предлагается: читать нечего.
         assertFalse(
             registry.bubblesFor(ObjectState(ObjectKind.TEXT)).map { it.title }.contains("Прочитать показание"),
@@ -220,5 +222,28 @@ class MeterOcrRealizerTest {
                 entitlements = Entitlements { true },
             ).leavesDevice(MeterOcrCapability.ID),
         )
+    }
+
+    /**
+     * Замечание владельца на живой приёмке 03.08.2026 — «не нужно показание на всём подряд» (#396).
+     *
+     * Разрез взят не на вкус, а из четвёртого замера корпуса: у всех восьми кадров, где страница
+     * прочиталась печатным текстом, приборов нет ни одного (переписки, письма, квитанции,
+     * посылки), а все три счётчика лежат среди тех, где связного текста не собралось. Поэтому
+     * гейт — [Feature.HAS_TEXT], тот самый, что загорается только после гейта мусора.
+     *
+     * Геометрию сюда возвращать нельзя: поиск табло срабатывает на 22 кадрах корпуса из 23
+     * (разбор — в `MeterOcrCapability`), то есть «похоже на табло» не отделяет прибор ни от чего.
+     */
+    @Test
+    fun `прочитанной странице показание не предлагается, непрочитанному снимку — да`() {
+        val meter = MeterOcrCapability()
+        val read = ObjectState(ObjectKind.IMAGE, setOf(Feature.HAS_WORD_LAYER, Feature.HAS_TEXT))
+        val unread = ObjectState(ObjectKind.IMAGE, setOf(Feature.HAS_WORD_LAYER))
+
+        assertFalse("на прочитанном письме показание — шум", meter.accepts(read))
+        assertTrue("на снимке прибора показание нужно", meter.accepts(unread))
+        // До чтения страницы предлагать нечего: обогащение ещё не сказало, что это за снимок.
+        assertFalse("пузырёк не висит на снимке, которого ещё не читали", meter.accepts(ObjectState(ObjectKind.IMAGE)))
     }
 }
