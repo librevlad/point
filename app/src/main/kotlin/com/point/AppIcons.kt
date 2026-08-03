@@ -10,6 +10,7 @@ import dagger.Module
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import dagger.multibindings.IntoSet
 import dagger.multibindings.Multibinds
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -59,4 +60,16 @@ abstract class AppIconsModule {
      */
     @Multibinds
     abstract fun objectSources(): Set<ObjectSource>
+
+    @Binds
+    @IntoSet
+    abstract fun clipboardSource(impl: com.point.source.ClipboardSource): ObjectSource
+
+    @Binds
+    @IntoSet
+    abstract fun cameraSource(impl: com.point.source.CameraSource): ObjectSource
+
+    @Binds
+    @IntoSet
+    abstract fun voiceSource(impl: com.point.source.VoiceSource): ObjectSource
 }
