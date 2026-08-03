@@ -60,17 +60,31 @@ class DefaultCapabilityRegistry @Inject constructor(
 
     // Near-miss capabilities (#97): not accepting now, but one signal away. Ranked by priority and
     // capped so the hint informs rather than clutters the real action set.
-    override fun latentBubblesFor(state: ObjectState): List<LatentBubble> =
-        capabilities.filterNot { it.accepts(state) }
+    //
+    // #316: бюджет тратится на РАЗНЫЕ причины, а не на повтор одной. Замер: фото + связанный
+    // компьютер без принтера — оба места занимали «Открыть ссылку · сначала распознайте текст» и
+    // «Перевести · сначала распознайте текст», то есть одна новость, сказанная дважды, вытесняла
+    // другую, и «Напечатать на ПК · на компьютере нет принтера» пропадало ровно тем молчанием,
+    // от которого лечит #316 (на PDF и тексте причина видна — потому и не заметили). Поэтому
+    // сначала берётся по одной подсказке на каждую причину, и только потом вторые.
+    override fun latentBubblesFor(state: ObjectState): List<LatentBubble> {
+        val hints = capabilities.filterNot { it.accepts(state) }
             .sortedBy { it.meta.priority }
             .mapNotNull { c -> c.missing(state)?.let { LatentBubble(c.icon, c.label(state), it) } }
+        // Одна причина — одна новость: группы идут в порядке приоритета первой подсказки в каждой.
+        val byReason = hints.groupBy(LatentBubble::missing).values.toList()
+        val rounds = byReason.maxOfOrNull { it.size } ?: 0
+        return (0 until rounds)
+            .flatMap { round -> byReason.mapNotNull { it.getOrNull(round) } }
             .take(MAX_LATENT)
+    }
 
     override fun byId(id: CapabilityId): Capability =
         byIdMap[id] ?: error("No capability registered for id=${id.value}")
 
     private companion object {
-        /** Show at most this many "почти доступно" hints — negotiation informs, it doesn't clutter. */
+        /** Show at most this many "почти доступно" hints — negotiation informs, it doesn't clutter.
+         *  Число строк, а не причин: список остаётся ровно таким же коротким, как был. */
         const val MAX_LATENT = 2
     }
 }

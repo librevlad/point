@@ -1,5 +1,8 @@
 package com.point.executors
 
+import com.point.core.flow.PcPairing
+import com.point.core.flow.PcPairings
+import com.point.core.flow.PcRemoteAction
 import com.point.core.model.BubbleTier
 import com.point.core.model.CapabilityId
 import com.point.core.model.Feature
@@ -41,7 +44,9 @@ class DefaultCapabilityRegistryTest {
         policy = DefaultBubblePolicy(),
     )
 
-    private fun idsFor(state: ObjectState) =
+    private fun idsFor(state: ObjectState) = idsFor(registry, state)
+
+    private fun idsFor(registry: DefaultCapabilityRegistry, state: ObjectState) =
         registry.bubblesFor(state).map { it.capabilityId.value }.toSet()
 
     @Test
@@ -144,6 +149,64 @@ class DefaultCapabilityRegistryTest {
     @Test
     fun `text has no almost-available translate — it already accepts`() {
         assertFalse("Перевести" in registry.latentBubblesFor(ObjectState(ObjectKind.TEXT)).map { it.title })
+    }
+
+    // --- #316: у компьютера есть действие, но сейчас оно недоступно ---
+
+    private class FixedPairing(private val pairing: PcPairing?) : PcPairings {
+        override fun current() = pairing
+        override suspend fun save(pairing: PcPairing) = Unit
+        override suspend fun clear() = Unit
+    }
+
+    private val printerless =
+        PcRemoteAction("pc-print", "Напечатать на ПК", unavailable = "на компьютере нет принтера")
+
+    /** Реестр из тех же деклараций плюс одно действие связанного компьютера. */
+    private fun registryWithPc(action: PcRemoteAction, pairing: PcPairing?) = DefaultCapabilityRegistry(
+        capabilities = setOf(
+            ShareCapability(), SaveCapability(), OpenCapability(), PdfCapability(),
+            ImageCapability(), TranslateCapability(), AiCapability(), OpenUrlCapability(),
+            ScanCapability(), OcrCapability(),
+            RemotePcCapability(action, FixedPairing(pairing)),
+        ),
+        policy = DefaultBubblePolicy(),
+    )
+
+    @Test
+    fun `причина «нет принтера» не вытесняется повтором чужой подсказки`() {
+        // Фото: «Открыть ссылку» и «Перевести» просят одного и того же — распознать текст. Это
+        // одна новость; занимая оба места, она молча съедала объяснение компьютера, и человек
+        // снова читал пустоту как «Point не умеет печатать».
+        val latent = registryWithPc(printerless, PcPairing("h", 1, "tok"))
+            .latentBubblesFor(ObjectState(ObjectKind.IMAGE))
+
+        assertTrue("объяснение компьютера обязано дойти", "Напечатать на ПК" in latent.map { it.title })
+        assertEquals("на компьютере нет принтера", latent.first { it.title == "Напечатать на ПК" }.missing)
+        assertEquals("два места — два разных объяснения", latent.size, latent.map { it.missing }.toSet().size)
+        assertTrue("список не вырос", latent.size <= 2)
+    }
+
+    @Test
+    fun `есть принтер — обычная кнопка, а не строка с причиной`() {
+        val available = PcRemoteAction("pc-print", "Напечатать на ПК")
+        val registry = registryWithPc(available, PcPairing("h", 1, "tok"))
+
+        assertTrue("pc-do:pc-print" in idsFor(registry, ObjectState(ObjectKind.IMAGE)))
+        assertFalse(
+            "Напечатать на ПК" in registry.latentBubblesFor(ObjectState(ObjectKind.IMAGE)).map { it.title },
+        )
+    }
+
+    @Test
+    fun `без связи с компьютером не появляется ни кнопки, ни причины`() {
+        // Иначе список замусорился бы действиями несуществующего компьютера: «нет принтера» у
+        // того, кого нет. Про сам компьютер скажет «На компьютер · подключите компьютер».
+        val registry = registryWithPc(printerless, pairing = null)
+        val state = ObjectState(ObjectKind.IMAGE)
+
+        assertFalse("pc-do:pc-print" in idsFor(registry, state))
+        assertFalse("Напечатать на ПК" in registry.latentBubblesFor(state).map { it.title })
     }
 
     // --- Intent layer (Object → Intent → … → Object) ---
