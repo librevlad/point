@@ -3,6 +3,7 @@ package com.point.desktop.ui
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.draganddrop.dragAndDropTarget
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -97,21 +98,30 @@ fun DesktopApp(
         modifier = Modifier.fillMaxSize()
             .dragAndDropTarget(shouldStartDragAndDrop = { true }, target = dropTarget),
     ) {
-        Column(Modifier.fillMaxSize().padding(20.dp)) {
-            // Compact top bar: title + a connection chip. The big QR only owns the screen while
-            // the inbox is empty (onboarding); once objects arrive they take the whole canvas.
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("Point для ПК", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.height(2.dp))
-                    Text(
-                        message ?: "Перетащите файл в окно или отправьте с телефона",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+        Column(Modifier.fillMaxSize()) {
+            // Полоса окна из мокапа (#285): точка-портал, имя и связь — одной строкой в 44 dp.
+            // Крупный заголовок «Point для ПК» ушёл: место на экране принадлежит объекту, а не
+            // названию программы, которое человек и так видит в заголовке окна.
+            Row(
+                modifier = Modifier.fillMaxWidth()
+                    .background(PointColors.window)
+                    .height(44.dp)
+                    .padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(
+                    Modifier.size(14.dp)
+                        .border(2.dp, PointColors.violet, androidx.compose.foundation.shape.CircleShape),
+                )
+                Spacer(Modifier.width(10.dp))
+                Text("Point для ПК", style = PointType.small.copy(color = PointColors.muted))
+                Spacer(Modifier.width(16.dp))
+                message?.let { Text(it, style = PointType.small) }
+                Spacer(Modifier.weight(1f))
                 ConnectionChip(config, onShowQr = { showQr = true })
             }
+            Spacer(Modifier.height(1.dp).fillMaxWidth().background(PointColors.border))
+            Column(Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 12.dp)) {
             // The buffer «lands» visibly (fade + expand) instead of a silent one-off message.
             AnimatedVisibility(visible = clipboardText != null) {
                 Column {
@@ -125,9 +135,9 @@ fun DesktopApp(
             }
             Spacer(Modifier.height(16.dp))
             if (items.isEmpty()) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    ConnectionCard(config, addresses, port)
-                }
+                // Экран без объекта занят тем, чем работу начать (#285): портал, три способа
+                // дать объект и подключение телефона — а не одним лишь QR.
+                EmptyScreen(config, addresses, port)
             } else {
                 LazyVerticalGrid(
                     columns = GridCells.Adaptive(minSize = 320.dp),
@@ -136,6 +146,7 @@ fun DesktopApp(
                 ) {
                     items(items, key = { it.obj.id }) { item -> ItemCard(state, item) }
                 }
+            }
             }
         }
     }
