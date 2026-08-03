@@ -2,6 +2,9 @@ package com.point.executors
 
 import com.point.core.flow.AtomCodec
 import com.point.core.flow.AtomLayer
+import com.point.core.flow.BlockAnswer
+import com.point.core.flow.BlockContent
+import com.point.core.flow.BlockRole
 import com.point.core.flow.Capability
 import com.point.core.flow.CapabilityMeta
 import com.point.core.flow.CellAnswer
@@ -9,24 +12,46 @@ import com.point.core.flow.Consensus
 import com.point.core.flow.Cost
 import com.point.core.flow.CropEvidence
 import com.point.core.flow.CropPurpose
+import com.point.core.flow.DocScope
+import com.point.core.flow.DocumentLayout
 import com.point.core.flow.EvidenceCropper
+import com.point.core.flow.GroundedTable
 import com.point.core.flow.Latency
+import com.point.core.flow.LayoutAnswer
 import com.point.core.flow.LlmClient
 import com.point.core.flow.META_OCR_ATOMS_REF
+import com.point.core.flow.META_READING_MODE
+import com.point.core.flow.META_TABLE_COVERED
+import com.point.core.flow.META_TABLE_FLAGGED
+import com.point.core.flow.META_TABLE_GRID
+import com.point.core.flow.META_TABLE_HEADER
+import com.point.core.flow.META_TABLE_SCOPE
+import com.point.core.flow.META_TABLE_UNREAD
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.RECROP_TIMEOUT_MS
+import com.point.core.flow.ReadingMode
 import com.point.core.flow.Realizer
 import com.point.core.flow.RecropQuestion
 import com.point.core.flow.SpreadsheetWriter
+import com.point.core.flow.coveredClaim
 import com.point.core.flow.recropDisputed
 import com.point.core.flow.bareIndexId
+import com.point.core.flow.grid
+import com.point.core.flow.gridHeaderRows
+import com.point.core.flow.headerLabel
+import com.point.core.flow.layoutSheet
+import com.point.core.flow.literalLayout
 import com.point.core.flow.normConsensus
 import com.point.core.flow.promptIndex
+import com.point.core.flow.readingModeOf
 import com.point.core.flow.reportStage
 import com.point.core.flow.reconcile
-import com.point.core.flow.resolveCells
+import com.point.core.flow.resolveLayout
+import com.point.core.flow.scopeLabel
 import com.point.core.flow.styleCell
+import com.point.core.flow.unreadWords
 import com.point.core.flow.validateTable
+import com.point.core.flow.withGrid
 import com.point.core.model.ActionResult
 import com.point.core.model.CapabilityId
 import com.point.core.model.ObjectKind
@@ -107,18 +132,22 @@ class ExcelRealizer(
                 // vote each cell (reconcile). A dense/handwritten table one model guesses, another catches
                 // — agreement = confidence, disagreement = ⚠ + the models' distinct readings as candidates.
                 val ordered = providers.sortedByDescending { it.strongVision }.filter { it.canHandle(input) }
+                // #266: чтение — это ДОКУМЕНТ, а не только сетка. Голосуется по-прежнему сетка
+                // (голосовать структуру нечем, и выдумывать голосование мы не будем), а шапка,
+                // реквизиты, примечание и подписи живут в разобранной раскладке рядом.
+                val layouts = mutableListOf<DocumentLayout>()
                 val tables = mutableListOf<List<List<String>>>()
                 // Спор модели с её же атомами (цифра!) — кандидаты уровня одной модели; копятся
                 // отдельно и после голосования вливаются в общий дропдаун теми же ключами (row, col).
                 val cellCandidates = mutableListOf<Map<Pair<Int, Int>, List<String>>>()
                 val errors = mutableListOf<String>()
                 var next = 0
-                while (tables.size < CONSENSUS_N && next < ordered.size) {
+                while (layouts.size < CONSENSUS_N && next < ordered.size) {
                     // Столько чтений, скольких не хватает до консенсуса, — и все ОДНОВРЕМЕННО.
                     // Второй заход случается там, где первый недодал ТАБЛИЦ (ответ пришёл, но
                     // читаемой таблицы в нём нет): цепочка «не вышло — берём следующего» жива,
                     // просто больше не оплачивается ожиданием в общем случае.
-                    val reads = readTogether(ordered, next, CONSENSUS_N - tables.size, input, prompt, next == 0)
+                    val reads = readTogether(ordered, next, CONSENSUS_N - layouts.size, input, prompt, next == 0)
                     next = reads.next
                     // Порядок ответов — порядок провайдеров, а не порядок финиша: сетку консенсуса
                     // задаёт первая таблица (reconcile), и она обязана быть таблицей самой зоркой
@@ -131,43 +160,36 @@ class ExcelRealizer(
                             continue
                         }
                         try {
-                            val grounded = if (layer != null && index != null) {
-                                // Ответ мимо адресного контракта (TSV, прочий текст) — те же дословные
-                                // ячейки: честность проверки не зависит от формата, которым модель решила
-                                // ответить. Иначе диктовка целой таблицы, отвеченная TSV, миновала бы
-                                // проверку страницы, которую тот же ответ в JSON бы не прошёл (ревью #258).
-                                val cells = parseAddressedCells(raw)
-                                    ?: parseTable(raw).map { row -> row.map { CellAnswer.Literal(it) } }
-                                        .takeIf { it.isNotEmpty() }
-                                cells?.let(layer::resolveCells)
-                            } else {
-                                null
+                            // Ответ мимо адресного контракта (массив, TSV, прочий текст) — те же
+                            // дословные ячейки в одном блоке-сетке: честность проверки не зависит от
+                            // формата, которым модель решила ответить. Иначе диктовка целой таблицы,
+                            // отвеченная TSV, миновала бы проверку страницы, которую тот же ответ в
+                            // JSON бы не прошёл (ревью #258).
+                            val answer = parseLayout(raw) ?: continue
+                            val addressable = layer != null && index != null
+                            val layout =
+                                if (addressable) layer.resolveLayout(answer) else literalLayout(answer)
+                            val gridRows = layout.grid?.rows.orEmpty()
+                            // Таблица, где живого текста нет, а разорванные ячейки есть, — это не
+                            // «пустой документ», это модель, перенумеровавшая метки: связь ответа со
+                            // страницей порвана целиком. Отдать такой «успех» — вручить чистый бланк
+                            // вместо прочитанной страницы (ревью #281); честный исход — отказ чтения.
+                            val cells = gridRows.flatten()
+                            if (addressable && cells.all { it.isBlank() || it == "⚠" } && "⚠" in cells) {
+                                errors += "Модель не смогла указать на слова страницы"
+                                continue
                             }
-                            if (grounded != null) {
-                                // Таблица, где живого текста нет, а разорванные ячейки есть, — это не
-                                // «пустой документ», это модель, перенумеровавшая метки: связь ответа со
-                                // страницей порвана целиком. Отдать такой «успех» — вручить чистый бланк
-                                // вместо прочитанной страницы (ревью #281); честный исход — отказ чтения.
-                                val cells = grounded.rows.flatten()
-                                val torn = cells.all { it.isBlank() || it == "⚠" } && "⚠" in cells
-                                if (torn) {
-                                    errors += "Модель не смогла указать на слова страницы"
-                                } else {
-                                    grounded.rows.takeIf { it.isNotEmpty() }?.let {
-                                        tables += it
-                                        cellCandidates += grounded.candidates
-                                    }
-                                }
-                            } else {
-                                // Модель ответила не по адресному контракту (или слоя нет) — прежний путь.
-                                parseTable(raw).takeIf { it.isNotEmpty() }?.let(tables::add)
+                            layouts += layout
+                            if (gridRows.isNotEmpty()) {
+                                tables += gridRows
+                                cellCandidates += layout.grid?.candidates.orEmpty()
                             }
                         } catch (e: Exception) {
                             errors += e.message ?: e.javaClass.simpleName
                         }
                     }
                 }
-                if (tables.isEmpty()) {
+                if (layouts.isEmpty()) {
                     ActionResult.Failure(
                         errors.firstOrNull()?.substringBefore('\n')?.take(120) ?: "Не удалось распознать таблицу",
                         recoverable = true,
@@ -218,25 +240,67 @@ class ExcelRealizer(
                             if (flagged && !v.contains('⚠')) "$v⚠" else v
                         }
                     }
+                    // Документ берёт **ведущее чтение** — самой зоркой модели, ответившей первой по
+                    // порядку провайдеров. Голосовать структуру нечем: у блока нет ни ключа, ни
+                    // порядка, по которым две раскладки узнали бы друг друга, и «свод раскладок»
+                    // был бы выдуманным голосованием. Сетка при этом сведена честно и возвращается
+                    // на своё место в документе.
+                    val read = layouts.first()
+                    // Происхождение ячейки принадлежит СВОЕЙ сетке: свод переставляет строки
+                    // (alignRows), и перенос адресов на чужие координаты приписал бы значению
+                    // происхождение, которого у него нет. Одно чтение — координаты те же.
+                    val structural = if (tables.size == 1) read.grid?.structural.orEmpty() else emptySet()
+                    val document = read.withGrid(GroundedTable(rows, settled.candidates, structural))
+                    // Что в этом файле нельзя отдавать как прочитанное, решает режим чтения (#267):
+                    // на рукописи цифры помечаются всегда. Режим приходит со входа — от энричера,
+                    // который страницу и читал; не дошёл — судим по слою, который у нас на руках.
+                    // Иначе рукопись уедет в файл неотмеченной просто потому, что фоновая волна не
+                    // успела, — та же дыра, что #263 закрывал в «В Word+».
+                    val mode = readingModeOf(input.metadata).takeIf { it != ReadingMode.UNKNOWN }
+                        ?: readingModeOf(layer)
+                    val plan = layoutSheet(document, mode)
                     // disagreements carry the distinct readings as an in-cell dropdown (#200).
                     reportStage("Собираю файл")
-                    val ref = writer.write(rows, settled.candidates)
-                    val flagged = rows.sumOf { row -> row.count { styleCell(it).flagged } }
+                    val ref = writer.write(plan)
+                    val flagged = plan.rows.sumOf { row -> row.count { styleCell(it).flagged } }
+                    val grid = document.grid?.takeIf { it.rows.isNotEmpty() }
                     ActionResult.Success(
                         ResultObject(
                             ObjectKind.OFFICE,
                             XLSX_MIME,
                             ref,
-                            mapOf(
-                                "op" to "excel", "name" to "таблица.xlsx",
-                                "rows" to rows.size.toString(), "flagged" to flagged.toString(),
-                                "models" to tables.size.toString(),
+                            buildMap {
+                                put("op", "excel")
+                                put("name", "таблица.xlsx")
+                                // Факты о результате пишет само действие: до тапа их не бывает и
+                                // быть не должно — LLM никогда не на первом экране.
+                                grid?.let {
+                                    put(META_TABLE_GRID, "${it.rows.size}×${it.rows.maxOf { r -> r.size }}")
+                                    put(
+                                        META_TABLE_HEADER,
+                                        headerLabel(minOf(document.gridHeaderRows, it.rows.size)),
+                                    )
+                                }
+                                document.scope?.let { put(META_TABLE_SCOPE, scopeLabel(it)) }
+                                // Отмычку «ссыпать половину документа в непрочитанное» ловит не
+                                // порог, а публикация: число едет и в метаданные, и в файл строкой.
+                                document.unreadWords.takeIf { it > 0 }
+                                    ?.let { put(META_TABLE_UNREAD, it.toString()) }
+                                // «Да» — и только когда правда; иначе ключа нет вовсе, а объясняет
+                                // его отсутствие соседний ключ «непрочитанного».
+                                if (coveredClaim(document, plan, mode) == true) put(META_TABLE_COVERED, "да")
+                                put(META_TABLE_FLAGGED, flagged.toString())
+                                // Режим чтения со входа не наследуется результатом сам (в scratch
+                                // едут только метаданные результата), а без него рукописный путь
+                                // не смог бы сказать, чем именно его гарантия слабее.
+                                if (mode != ReadingMode.UNKNOWN) put(META_READING_MODE, mode.name)
+                                put("models", layouts.size.toString())
                                 // Сколько чтений реально стоит за таблицей. Меньше, чем читали, —
                                 // значит они говорили о разных таблицах и свод не состоялся:
                                 // человек держит в руках одно ничем не подтверждённое чтение, и
                                 // узнать об этом он должен от нас, а не по расхождению с бумагой.
-                                "confirmedBy" to consensus.sources.toString(),
-                            ),
+                                put("confirmedBy", consensus.sources.toString())
+                            },
                         ),
                     )
                 }
@@ -413,14 +477,44 @@ class ExcelRealizer(
          *  не за двойное ВРЕМЯ: чтения идут одновременно ([readTogether]), поэтому ожидание — это
          *  самая медленная модель, а не сумма двух. Один провайдер вырождается в passthrough. */
         const val CONSENSUS_N = 2
+        /**
+         * Контракт структуры (#266) — единственное место, где чинится главный дефект: раньше
+         * допустимая форма ответа была одна («массив строк из строк-ячеек»), слов «шапка», «итог»,
+         * «примечание», «подпись» в запросе не было вовсе, и остальному документу **некуда было
+         * лечь**. Терялось оно поэтому не при разборе, а при постановке вопроса.
+         *
+         * Словарь структуры в проекте уже был — строгие префиксы `T=/H=/B=/P=` у «В Word+»; сюда
+         * он просто не был заведён.
+         */
+        const val STRUCTURE =
+            "Верни ТОЛЬКО JSON-объект: {\"scope\":…,\"blocks\":[…]}, без пояснений. " +
+                "blocks — части документа сверху вниз, у каждой есть \"role\": " +
+                "\"title\" — заголовок документа; " +
+                "\"field\" — реквизит (у него ещё \"label\" с названием: \"Клиент\", \"Дата\"); " +
+                "\"table\" — сетка; \"totals\" — итоги; \"note\" — примечание или сноска; " +
+                "\"sign\" — подписи; " +
+                "\"chrome\" — то, что видно, но документом НЕ является: строка состояния телефона, " +
+                "панель приложения, полосы прокрутки, соседнее окно, чужая карточка; " +
+                "\"unread\" — слова видно, а отнести их не к чему. " +
+                "Часть-сетка несёт \"rows\": [[ячейка,…],…] и \"header\" — сколько СТРОК сетки заняты " +
+                "заголовками: 0 (заголовков нет вовсе), 1 (одна строка) или 2 (двухуровневая шапка). " +
+                "Остальные части несут \"text\" со своим текстом. " +
+                "\"scope\": \"full\" — документ попал в кадр целиком, \"viewport\" — виден только экран, " +
+                "за краем есть ещё, \"cropped\" — часть документа обрезана краем кадра. " +
+                "Пример: {\"scope\":\"full\",\"blocks\":[" +
+                "{\"role\":\"title\",\"text\":\"Рахунок №7\"}," +
+                "{\"role\":\"field\",\"label\":\"Клієнт\",\"text\":\"Термінал\"}," +
+                "{\"role\":\"table\",\"header\":1,\"rows\":[[\"Товар\",\"Кіль-ть\"],[\"Гречка\",\"2\"]]}," +
+                "{\"role\":\"note\",\"text\":\"Відпуск без довіреності заборонено\"}]}. "
+
         const val PROMPT =
-            "Извлеки табличные данные из документа. Это может быть фото рукописной таблицы, " +
-                "возможно под углом или повёрнутое — читай внимательно в любой ориентации. " +
-                "Верни ТОЛЬКО JSON: массив строк, каждая строка — массив ячеек-строк, например " +
-                "[[\"Дата\",\"Сумма\"],[\"16.07\",\"42\"]]. " +
-                "Первая строка — заголовки, если они есть. " +
-                "ВАЖНО: в каждой строке ровно столько столбцов, сколько их в источнике — не добавляй, " +
-                "не повторяй и не дублируй столбцы. " +
+            "Прочитай документ ЦЕЛИКОМ и верни всё, что на нём видно, — не только табличную сетку, " +
+                "но и заголовок, реквизиты, итоги, примечания и подписи. Это может быть фото " +
+                "рукописной таблицы, возможно под углом или повёрнутое — читай внимательно в любой " +
+                "ориентации. " +
+                STRUCTURE +
+                "ВАЖНО: в каждой строке сетки ровно столько столбцов, сколько их в источнике — не " +
+                "добавляй, не повторяй и не дублируй столбцы. " +
                 // Решение владельца по #345: в ячейке, где рука спорит с печатью, берём ОБА. Правило
                 // стоит РАНЬШЕ прочих и сказано числом примеров: на ведомости модель в большинстве
                 // ячеек отдавала оба числа, а в восьми молча оставила только рукописное — печатное
@@ -436,7 +530,12 @@ class ExcelRealizer(
                 "Если ячейку видно, но ты НЕ уверен в прочтении — добавь символ ⚠ в конец её текста " +
                 "(например \"Гречка⚠\"): её подсветят для проверки. " +
                 "Не выдумывай данные: если ячейку не разобрать совсем — оставь её пустой (\"\"), НЕ ставь " +
-                "\"?\"; если не удаётся прочитать всю строку — пропусти её целиком. " +
+                "\"?\". " +
+                // Раньше здесь стояло «не удаётся прочитать всю строку — пропусти её целиком», и
+                // выбрасывались первыми строка-итог и строка-примечание: они читаются хуже
+                // табличных. Пропущенное молча — худший из исходов; теперь ему есть куда лечь.
+                "Ничего не выбрасывай: строку или надпись, которую разобрать не удалось, положи в " +
+                "часть \"unread\", а не пропускай. " +
                 "Без пояснений, без markdown, без ограждений ```."
 
         /**
@@ -459,6 +558,10 @@ class ExcelRealizer(
             "\n\nНиже — слова, уже прочитанные с этой страницы, построчно, каждое с меткой: [метка]слово. " +
                 "Если слова ячейки есть в списке — верни ячейку НЕ текстом, а объектом {\"ids\":[\"w1\",\"w2\"]} " +
                 "с метками её слов в точности как в списке. " +
+                "Так же отвечают и части документа вне сетки: {\"role\":\"title\",\"ids\":[\"w3\",\"w4\"]}, " +
+                "{\"role\":\"field\",\"label\":{\"ids\":[\"w10\"]},\"ids\":[\"w11\"]}. " +
+                "Каждое слово списка должно попасть хоть куда-нибудь — в ячейку, в часть документа, " +
+                "в \"chrome\" или в \"unread\". " +
                 "Если слово в списке прочитано с ошибкой (перепутана или потеряна буква) — добавь своё чтение: " +
                 "{\"ids\":[\"w1\"],\"text\":\"исправленное\"}. " +
                 "Ячейку-текст используй только когда её слов в списке нет совсем. " +
@@ -475,10 +578,7 @@ class ExcelRealizer(
  * delimited format keeps working. Tolerant of a stray code fence around either.
  */
 internal fun parseTable(raw: String): List<List<String>> {
-    val cleaned = raw.trim()
-        .removePrefix("```json").removePrefix("```tsv").removePrefix("```")
-        .removeSuffix("```")
-        .trim()
+    val cleaned = stripFence(raw)
 
     parseJsonTable(cleaned)?.let { return it }
 
@@ -496,15 +596,117 @@ internal fun parseTable(raw: String): List<List<String>> {
 }
 
 /**
+ * Разбор ответа про **весь документ** (#266) — с совместимостью в обе стороны.
+ *
+ * Три формы входа и одна форма выхода:
+ * - объект `{"scope":…,"blocks":[…]}` — контракт структуры целиком;
+ * - массив верхнего уровня — сегодняшний ответ: одна сетка и ничего вокруг;
+ * - TSV — он же.
+ *
+ * Это чинит дефект, из-за которого **любой более богатый ответ был хуже плоского**: объект
+ * отвергали оба разборщика (`startsWith("[")`), он уезжал в текстовый фолбэк, и фигурные скобки
+ * ложились в ячейки как данные — под видом успеха. Ни один сегодняшний ответ при этом не
+ * становится хуже: массив и TSV разбираются ровно как раньше, просто их результат теперь
+ * называется блоком-сеткой.
+ */
+internal fun parseLayout(raw: String): LayoutAnswer? {
+    val cleaned = stripFence(raw)
+    if (cleaned.startsWith("{")) parseLayoutObject(cleaned)?.let { return it }
+    parseAddressedCells(cleaned)?.let { return tableOnly(it) }
+    return parseTable(cleaned).takeIf { it.isNotEmpty() }
+        ?.let { rows -> tableOnly(rows.map { row -> row.map { CellAnswer.Literal(it) } }) }
+}
+
+/**
+ * Ответ без структуры — одна сетка и ничего вокруг.
+ *
+ * Заголовков у неё **одна строка**: таков сегодняшний контракт («первая строка — заголовки, если
+ * они есть»), и менять его молчанием нельзя. Сказать «их нет» умеет только новая форма — там это
+ * `"header": 0`, названное явно.
+ */
+private fun tableOnly(cells: List<List<CellAnswer>>) = LayoutAnswer(
+    listOf(BlockAnswer(BlockRole.TABLE, null, BlockContent.Grid(cells, DEFAULT_HEADER_ROWS))),
+)
+
+private fun parseLayoutObject(s: String): LayoutAnswer? = runCatching {
+    val root = JSONObject(s)
+    val scope = docScope(root.optString("scope"))
+    val blocks = root.optJSONArray("blocks")
+    if (blocks != null) {
+        val parsed = (0 until blocks.length()).mapNotNull { blockAnswer(blocks.opt(it)) }
+        return@runCatching parsed.takeIf { it.isNotEmpty() }?.let { LayoutAnswer(it, scope) }
+    }
+    // Объект без списка частей, но с сеткой — тот же ответ, просто без обёртки: модель сэкономила
+    // уровень. Уронить его в текстовый фолбэк значило бы положить JSON в ячейки как данные.
+    blockAnswer(root)?.let { LayoutAnswer(listOf(it), scope) }
+}.getOrNull()
+
+/**
+ * Одна часть документа. Роль неизвестна — часть становится примечанием: **содержимое важнее
+ * места**, и потерять прочитанное из-за незнакомого слова было бы единственной настоящей ошибкой
+ * (роль всё равно ничего не решает — она свидетельство, а не переключатель).
+ */
+private fun blockAnswer(raw: Any?): BlockAnswer? {
+    val obj = raw as? JSONObject ?: return null
+    val role = blockRole(obj.optString("role"))
+    val label = obj.opt("label")?.takeIf { it != JSONObject.NULL }?.let(::cellAnswer)
+    val rows = obj.optJSONArray("rows")
+    if (rows != null) {
+        val cells = (0 until rows.length()).map { i ->
+            when (val row = rows.opt(i)) {
+                is JSONArray -> (0 until row.length()).map { j -> cellAnswer(row.opt(j)) }
+                else -> listOf(cellAnswer(row))
+            }
+        }
+        return BlockAnswer(role, label, BlockContent.Grid(cells, headerRowsOf(obj.opt("header"))))
+    }
+    // Ячейку части собирает тот же разборщик, что ячейку сетки: у части нет собственного пути
+    // чтения — ни своего «ids», ни своего «text».
+    val cell = cellAnswer(obj)
+    if (label == null && cell is CellAnswer.Literal && cell.text.isEmpty()) return null
+    return BlockAnswer(role, label, BlockContent.Text(cell))
+}
+
+/** «сколько строк заняты заголовками»: число, «нет»/false — ноль, молчание — сегодняшняя единица. */
+private fun headerRowsOf(raw: Any?): Int = when (raw) {
+    null, JSONObject.NULL -> DEFAULT_HEADER_ROWS
+    is Boolean -> if (raw) 1 else 0
+    is Number -> raw.toInt().coerceAtLeast(0)
+    else -> raw.toString().trim().toIntOrNull()?.coerceAtLeast(0) ?: DEFAULT_HEADER_ROWS
+}
+
+private fun blockRole(raw: String?): BlockRole = when (raw?.trim()?.lowercase()) {
+    "title", "heading" -> BlockRole.TITLE
+    "field", "fields", "requisite" -> BlockRole.FIELD
+    "table", "grid" -> BlockRole.TABLE
+    "totals", "total", "summary" -> BlockRole.TOTALS
+    "sign", "signature", "signatures" -> BlockRole.SIGN
+    "chrome", "ui" -> BlockRole.CHROME
+    "unread", "unknown", "unreadable" -> BlockRole.UNREAD
+    else -> BlockRole.NOTE
+}
+
+private fun docScope(raw: String?): DocScope? = when (raw?.trim()?.lowercase()) {
+    "full", "whole" -> DocScope.FULL
+    "viewport", "screen" -> DocScope.VIEWPORT
+    "cropped", "crop", "partial" -> DocScope.CROPPED
+    else -> null
+}
+
+private const val DEFAULT_HEADER_ROWS = 1
+
+private fun stripFence(raw: String): String = raw.trim()
+    .removePrefix("```json").removePrefix("```tsv").removePrefix("```")
+    .removeSuffix("```")
+    .trim()
+
+/**
  * Разбор адресного ответа (#258): JSON-таблица, где ячейка — строка либо объект
  * `{"ids":[...], "text"?}`. Понимает и старый ответ сплошными строками (все ячейки дословные),
  * поэтому модель, проигнорировавшая метки, не ломает путь. Не-JSON → null (→ TSV-фолбэк).
  */
 internal fun parseAddressedCells(raw: String): List<List<CellAnswer>>? {
-    val cleaned = raw.trim()
-        .removePrefix("```json").removePrefix("```tsv").removePrefix("```")
-        .removeSuffix("```")
-        .trim()
+    val cleaned = stripFence(raw)
     if (!cleaned.startsWith("[")) return null
     return runCatching {
         val arr = JSONArray(cleaned)

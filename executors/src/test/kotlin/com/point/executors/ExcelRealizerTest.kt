@@ -11,7 +11,9 @@ import com.point.core.flow.EvidenceImage
 import com.point.core.flow.LlmClient
 import com.point.core.flow.META_OCR_ATOMS_REF
 import com.point.core.flow.ObjectStore
+import com.point.core.flow.SheetPlan
 import com.point.core.flow.SpreadsheetWriter
+import com.point.core.flow.UNREAD_CAPTION
 import com.point.core.model.ActionResult
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
@@ -52,6 +54,7 @@ class ExcelRealizerTest {
 
     private var lastRows: List<List<String>>? = null
     private var lastCandidates: Map<Pair<Int, Int>, List<String>> = emptyMap()
+    private var lastPlan: SheetPlan? = null
     private val writer = object : SpreadsheetWriter {
         override suspend fun write(
             rows: List<List<String>>,
@@ -61,7 +64,22 @@ class ExcelRealizerTest {
             lastCandidates = candidates
             return ScratchRef(File.createTempFile("point-xlsx", ".xlsx").apply { deleteOnExit() }.absolutePath)
         }
+
+        override suspend fun write(plan: SheetPlan): ScratchRef {
+            lastPlan = plan
+            return write(plan.rows, plan.candidates)
+        }
     }
+
+    /**
+     * Строки сетки — без хвоста «непрочитанного» (#266).
+     *
+     * Слова страницы, на которые ответ не указал ни одной меткой, теперь едут в файл отдельной
+     * частью под своей подписью, и стоит она после таблицы. Проверки про сетку смотрят на сетку;
+     * что до непокрытого доезжает, проверяет [ExcelLayoutTest].
+     */
+    private fun gridRows(): List<List<String>> =
+        lastRows!!.takeWhile { it.firstOrNull() != UNREAD_CAPTION }
 
     private val image = PointObject("id", "image/png", ScratchRef("/tmp/x.png"), ObjectState(ObjectKind.IMAGE))
 
@@ -255,7 +273,7 @@ class ExcelRealizerTest {
     fun `метка строкой доезжает до текста ячейки из атомов`() = runTest {
         realizer("""[[{"ids":"h1"},{"ids":"a1"}]]""").perform(imageWithAtoms())
 
-        assertEquals(listOf(listOf("Трек-номер", "20")), lastRows)
+        assertEquals(listOf(listOf("Трек-номер", "20")), gridRows())
     }
 
     /** Скобка индекса показывает `[a1 rule=track-shaped]`, и модель может процитировать её
@@ -265,7 +283,7 @@ class ExcelRealizerTest {
         realizer("""[[{"ids":["a1 rule=track-shaped","a2 rule=track-shaped","a3 rule=track-shaped"]}]]""")
             .perform(imageWithAtoms())
 
-        assertEquals(listOf(listOf("20 4514 9154 9395")), lastRows)
+        assertEquals(listOf(listOf("20 4514 9154 9395")), gridRows())
     }
 
     /** Явный null в поле text не должен рождать спор: на устройстве платформенный optString
@@ -274,7 +292,7 @@ class ExcelRealizerTest {
     fun `явный null в тексте ячейки — не чтение модели`() = runTest {
         realizer("""[[{"ids":["a1"],"text":null}]]""").perform(imageWithAtoms())
 
-        assertEquals(listOf(listOf("20")), lastRows)
+        assertEquals(listOf(listOf("20")), gridRows())
         assertTrue(lastCandidates.isEmpty())
     }
 
@@ -293,7 +311,7 @@ class ExcelRealizerTest {
     fun `одна галлюцинированная ячейка помечается, таблица живёт`() = runTest {
         realizer("""[[{"ids":["w99"]},{"ids":["a1"]}]]""").perform(imageWithAtoms())
 
-        assertEquals(listOf(listOf("⚠", "20")), lastRows)
+        assertEquals(listOf(listOf("⚠", "20")), gridRows())
     }
 
     /** Продиктованная строкой цифра, которой нет на странице, — помечена как диктовка. */
@@ -301,7 +319,7 @@ class ExcelRealizerTest {
     fun `диктовка цифры мимо страницы видна в xlsx`() = runTest {
         realizer("""[[{"ids":["h1"]},"1600"]]""").perform(imageWithAtoms())
 
-        assertEquals(listOf(listOf("Трек-номер", "1600⚠")), lastRows)
+        assertEquals(listOf(listOf("Трек-номер", "1600⚠")), gridRows())
     }
 
     // -- находки ревью #258, второй заход: дыры честности между этажами --
@@ -329,7 +347,7 @@ class ExcelRealizerTest {
         realizer("""[[{"ids":["zz"]},{"ids":["h1"]}]]""", """[[{"ids":["a1"]},{"ids":["h1"]}]]""")
             .perform(imageWithAtoms())
 
-        assertEquals(listOf(listOf("20", "Трек-номер")), lastRows)
+        assertEquals(listOf(listOf("20", "Трек-номер")), gridRows())
         assertTrue(lastCandidates.isEmpty())
     }
 

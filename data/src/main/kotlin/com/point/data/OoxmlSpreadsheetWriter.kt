@@ -1,7 +1,9 @@
 package com.point.data
 
 import com.point.core.flow.ObjectStore
+import com.point.core.flow.SheetPlan
 import com.point.core.flow.SpreadsheetWriter
+import com.point.core.flow.sheetPlanOf
 import com.point.core.flow.styleCell
 import com.point.core.model.ScratchRef
 import kotlinx.coroutines.Dispatchers
@@ -29,7 +31,11 @@ class OoxmlSpreadsheetWriter @Inject constructor(
     override suspend fun write(
         rows: List<List<String>>,
         candidates: Map<Pair<Int, Int>, List<String>>,
-    ): ScratchRef = withContext(Dispatchers.IO) {
+    ): ScratchRef = write(sheetPlanOf(rows, candidates))
+
+    override suspend fun write(plan: SheetPlan): ScratchRef = withContext(Dispatchers.IO) {
+        val rows = plan.rows
+        val candidates = plan.candidates
         val ref = store.newScratchFile("xlsx")
         // lay each multi-option cell's candidates down column A of the helper sheet
         var hrow = 1
@@ -47,7 +53,7 @@ class OoxmlSpreadsheetWriter @Inject constructor(
             zip.put("xl/workbook.xml", workbook(hasCand))
             zip.put("xl/_rels/workbook.xml.rels", workbookRels(hasCand))
             zip.put("xl/styles.xml", STYLES)
-            zip.put("xl/worksheets/sheet1.xml", sheet(rows, blocks))
+            zip.put("xl/worksheets/sheet1.xml", sheet(rows, blocks, plan.headerRows))
             if (hasCand) zip.put("xl/worksheets/sheet2.xml", helperSheet(blocks))
         }
         ref
@@ -59,14 +65,14 @@ class OoxmlSpreadsheetWriter @Inject constructor(
         closeEntry()
     }
 
-    private fun sheet(rows: List<List<String>>, blocks: List<Block>): String = buildString {
+    private fun sheet(rows: List<List<String>>, blocks: List<Block>, headerRows: Set<Int>): String = buildString {
         append("""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>""")
         append("""<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>""")
         rows.forEachIndexed { r, cells ->
             append("""<row r="${r + 1}">""")
             cells.forEachIndexed { c, value ->
                 val cell = styleCell(value)
-                append("""<c r="${col(c)}${r + 1}" s="${styleId(r, cell)}" t="inlineStr"><is><t xml:space="preserve">""")
+                append("""<c r="${col(c)}${r + 1}" s="${styleId(r in headerRows, cell)}" t="inlineStr"><is><t xml:space="preserve">""")
                 append(xml(cell.value))
                 append("""</t></is></c>""")
             }
@@ -113,12 +119,17 @@ class OoxmlSpreadsheetWriter @Inject constructor(
      * стёрло оформление.
      *
      * Неуверенность — факт, шапка — оформление; факт оформлению не уступает.
+     *
+     * Какая строка шапка, писателю теперь **говорят** ([SheetPlan.headerRows]), а не считают по
+     * позиции (#266): у счёта, где сетка начинается сразу под подписью, заголовков нет вовсе, и
+     * первая товарная строка приезжала жирной. Плана нет — старое правило «строка 0» живёт
+     * дословно ([sheetPlanOf]).
      */
-    private fun styleId(row: Int, cell: com.point.core.flow.StyledCell): Int = when {
+    private fun styleId(header: Boolean, cell: com.point.core.flow.StyledCell): Int = when {
         cell.flagged -> STYLE_FLAG
         cell.corrected -> STYLE_CORRECTED
         cell.strike -> STYLE_STRIKE
-        row == 0 -> STYLE_HEADER
+        header -> STYLE_HEADER
         else -> STYLE_DEFAULT
     }
 

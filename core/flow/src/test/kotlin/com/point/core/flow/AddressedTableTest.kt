@@ -199,6 +199,33 @@ class AddressedTableTest {
         assertTrue(t.candidates.isEmpty())
     }
 
+    // -- происхождение ячейки: откуда на странице взялись её символы (#266) --
+
+    /**
+     * Заземлённость — это про **происхождение символов**, а не про их верность. Спор чтений её не
+     * отменяет: «откуда символы» и «какие они» — разные утверждения, и склеивать их значило бы
+     * снимать чужую пометку.
+     */
+    @Test
+    fun `чисто разрешённый адрес отмечен, даже когда чтения спорят`() {
+        val t = layer.resolveCells(
+            listOf(listOf(ids("a1", "a2", "a3"), ids("v1", text = "Олексіївка"))),
+        )
+
+        assertEquals(setOf(0 to 0, 0 to 1), t.structural)
+    }
+
+    @Test
+    fun `порванный адрес заземлённым не считается`() {
+        val hallucinated = layer.resolveCells(listOf(listOf(ids("a1", "ghost"))))
+        val scattered = layer.resolveCells(listOf(listOf(ids("a1", "far"))))
+        val dictated = layer.resolveCells(listOf(listOf(CellAnswer.Literal("Гречка"))))
+
+        assertTrue(hallucinated.structural.isEmpty())
+        assertTrue(scattered.structural.isEmpty())
+        assertTrue("дословная ячейка адреса не занимает", dictated.structural.isEmpty())
+    }
+
     // -- индекс слов для запроса модели --
 
     /** Куски трека несут улику правила прямо в метке — модель видит подсказку там, где отвечает. */
