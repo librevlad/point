@@ -22,6 +22,7 @@ private fun chatSystemPrompt(kind: ObjectKind): String {
         ObjectKind.TEXT -> "текстом"
         ObjectKind.OFFICE -> "офисным документом"
         ObjectKind.URL -> "ссылкой"
+        ObjectKind.AUDIO -> "аудиозаписью"
         ObjectKind.ZIP, ObjectKind.COLLECTION -> "набором файлов"
         // Extraction kinds are open (#222) — an Organization or an Identifier is still just
         // «an object» to talk about, so UNKNOWN and everything new share one wording.

@@ -41,6 +41,7 @@ class DefaultCapabilityRegistryTest {
             OfficeCapability(),
             ScanCapability(),
             OcrCapability(),
+            TranscribeCapability(),
         ),
         policy = DefaultBubblePolicy(),
     )
@@ -83,6 +84,28 @@ class DefaultCapabilityRegistryTest {
         val ids = idsFor(ObjectState(ObjectKind.OFFICE))
         assertTrue(ids.containsAll(setOf("office", "pdf", "share", "save", "ai")))
         assertTrue(setOf("translate", "image", "archive").none { it in ids })
+    }
+
+    @Test
+    fun `голосовое — объект с действиями, а не файл, про который нечего сказать`() {
+        // #223: до среза `audio/*` был UNKNOWN, то есть «поделиться и сохранить». Теперь у
+        // записи есть своё действие, а универсальные приходят даром — через `isFileBacked`.
+        val ids = idsFor(ObjectState(ObjectKind.AUDIO))
+
+        assertTrue(ids.containsAll(setOf("transcribe", "share", "save", "open", "ai")))
+        // Чужих действий на записи нет: у неё нечего сканировать, распознавать глазами и
+        // распаковывать. Граф это выводит сам — таблицы переходов нет.
+        assertTrue(setOf("ocr", "scan", "image", "archive", "office", "pdf").none { it in ids })
+    }
+
+    @Test
+    fun `расшифровка — понимание, и на первый экран она не тащит сеть`() {
+        val bubble = registry.bubblesFor(ObjectState(ObjectKind.AUDIO))
+            .first { it.capabilityId.value == "transcribe" }
+
+        assertEquals(Intent.UNDERSTAND, bubble.intent)
+        assertEquals("сетевое — значит уровень AI, каким бы полезным оно ни было", BubbleTier.AI, bubble.tier)
+        assertEquals(ObjectState(ObjectKind.TEXT), bubble.expectedNextState)
     }
 
     @Test

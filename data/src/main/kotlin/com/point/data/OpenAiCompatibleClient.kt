@@ -73,6 +73,10 @@ class OpenAiCompatibleClient(
     override fun canHandle(obj: PointObject): Boolean = when {
         isImage(obj) -> provider.vision            // never send a photo to a text-only model
         obj.mime == "application/pdf" -> false     // OpenAI-compat has no PDF input → Gemini/Claude
+        // Запись голоса (#223): в Chat Completions вложения звука нет. До правки этот клиент
+        // отвечал «да» и получал ОДИН промпт без файла — модель уверенно рассказывала про
+        // запись, которой не слышала. Это худший вид отказа: неотличимый от успеха.
+        isAudio(obj) -> false
         else -> true
     }
 

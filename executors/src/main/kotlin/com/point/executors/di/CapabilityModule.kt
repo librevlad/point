@@ -102,6 +102,8 @@ import com.point.executors.ShareAllCapability
 import com.point.executors.ShareAllRealizer
 import com.point.executors.ShareCapability
 import com.point.executors.ShareRealizer
+import com.point.executors.TranscribeCapability
+import com.point.executors.TranscribeRealizer
 import com.point.executors.TranslateCapability
 import com.point.executors.TranslateRealizer
 import com.point.executors.WordCapability
@@ -164,6 +166,9 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun officeCap(c: OfficeCapability): Capability
     @Binds @IntoSet abstract fun archiveCap(c: ArchiveCapability): Capability
     @Binds @IntoSet abstract fun translateCap(c: TranslateCapability): Capability
+    /** #223: голосовое — объект, и «Расшифровать» — его действие. Дальше текст живёт по общим
+     *  правилам графа: перевести, в PDF, сохранить — всё это уже есть у TEXT. */
+    @Binds @IntoSet abstract fun transcribeCap(c: TranscribeCapability): Capability
     @Binds @IntoSet abstract fun excelCap(c: ExcelCapability): Capability
     /** #224: та же таблица на следующий период. Появляется только на таблице, где прочитан
      *  календарь дат (`Feature.HAS_PERIOD`), — иначе продлевать было бы нечего. */
@@ -212,6 +217,7 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun officeR(r: OfficeRealizer): Realizer
     @Binds @IntoSet abstract fun archiveR(r: ArchiveRealizer): Realizer
     @Binds @IntoSet abstract fun translateR(r: TranslateRealizer): Realizer
+    @Binds @IntoSet abstract fun transcribeR(r: TranscribeRealizer): Realizer
     @Binds @IntoSet abstract fun excelR(r: ExcelRealizer): Realizer
     @Binds @IntoSet abstract fun renewPeriodR(r: RenewPeriodRealizer): Realizer
     @Binds @IntoSet abstract fun wordR(r: WordRealizer): Realizer

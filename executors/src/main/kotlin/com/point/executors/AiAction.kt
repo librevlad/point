@@ -28,6 +28,7 @@ fun aiSuggestions(kind: ObjectKind): List<String> = when (kind) {
     ObjectKind.PDF -> listOf("Краткое содержание", "Главные тезисы", "О чём документ?")
     ObjectKind.OFFICE -> listOf("Краткое содержание", "Извлеки ключевые данные", "Главные тезисы")
     ObjectKind.URL -> listOf("О чём эта ссылка?", "Краткое содержание страницы", "Главные тезисы")
+    ObjectKind.AUDIO -> listOf("О чём эта запись?", "Кто что сказал?", "Что от меня хотят?")
     ObjectKind.ZIP, ObjectKind.COLLECTION -> listOf("Что внутри?", "Что можно сделать?")
     else -> listOf("Что это?", "Что можно сделать?")
 }
@@ -124,6 +125,8 @@ class AiRealizer @Inject constructor(
         ObjectKind.ZIP -> "Это архив. Подскажи, что с ним можно сделать."
         ObjectKind.OFFICE -> "Это офисный документ. Кратко изложи его содержимое."
         ObjectKind.URL -> "Это ссылка. Кратко скажи, о чём она."
+        // Дословную расшифровку даёт «Расшифровать» (#223); здесь свободный вопрос о записи.
+        ObjectKind.AUDIO -> "Это аудиозапись. Послушай её и ответь по существу."
         // AI is not offered for collections (accepts excludes them), listed for clarity.
         ObjectKind.COLLECTION -> "Это набор файлов. Подскажи, что с ними можно сделать."
         // Kinds are open now (#222), so the compiler can no longer force a review here when

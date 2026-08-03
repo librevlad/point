@@ -32,6 +32,10 @@ class ObjectClassifier {
             // are often shared as application/zip or octet-stream — the extension wins.
             m in OFFICE_MIMES || ext in OFFICE_EXTS -> ObjectKind.OFFICE
             m.startsWith("image/") -> ObjectKind.IMAGE
+            // Запись звука (#223). Проверяется до архивов: голосовое из мессенджера часто
+            // приезжает как `application/ogg`, а `.ogg`/`.oga` в списке архивов нет — но
+            // родовое имя контейнера сбивало бы с толку следом за любым новым mime.
+            m.startsWith("audio/") || m == "application/ogg" || ext in AUDIO_EXTS -> ObjectKind.AUDIO
             m == "application/pdf" -> ObjectKind.PDF
             m in ARCHIVE_MIMES || ext in ARCHIVE_EXTS -> ObjectKind.ZIP
             m == "text/uri-list" -> ObjectKind.URL
@@ -60,6 +64,12 @@ class ObjectClassifier {
             "application/vnd.ms-powerpoint",
         )
         val OFFICE_EXTS = setOf("docx", "xlsx", "pptx", "doc", "xls", "ppt")
+
+        /** Расширения записей звука (#223). Мессенджеры отдают голосовое как `ogg`/`opus`
+         *  (WhatsApp, Telegram) или `m4a`/`aac` (iOS), диктофон Android — `m4a`, `amr`, `3gp`. */
+        val AUDIO_EXTS = setOf(
+            "ogg", "oga", "opus", "m4a", "mp3", "wav", "amr", "aac", "flac", "aiff", "aif", "3gp", "wma",
+        )
 
         val ARCHIVE_MIMES = setOf(
             "application/zip",

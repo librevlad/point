@@ -18,7 +18,7 @@ class FileBackedTest {
     fun `the built-in kinds are bytes in scratch`() {
         listOf(
             ObjectKind.IMAGE, ObjectKind.TEXT, ObjectKind.PDF, ObjectKind.ZIP,
-            ObjectKind.OFFICE, ObjectKind.URL, ObjectKind.UNKNOWN,
+            ObjectKind.OFFICE, ObjectKind.URL, ObjectKind.AUDIO, ObjectKind.UNKNOWN,
         ).forEach { assertTrue("$it must be file-backed", it.isFileBacked) }
     }
 

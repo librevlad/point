@@ -36,6 +36,7 @@ import com.point.core.flow.Sharer
 import com.point.core.flow.SpreadsheetReader
 import com.point.core.flow.SpreadsheetWriter
 import com.point.core.flow.AtomRecognizer
+import com.point.core.flow.SpeechToText
 import com.point.core.flow.TextRecognizer
 import com.point.core.flow.UrlOpener
 import com.point.core.flow.ChosenApps
@@ -119,6 +120,7 @@ import com.point.data.QrEnricher
 import com.point.data.UserKeyLlmClient
 import com.point.data.PdfRendererRasterizer
 import com.point.data.ScratchObjectStore
+import com.point.data.LlmSpeechToText
 import com.point.data.TesseractTextRecognizer
 import com.point.data.PcPairingEnricher
 import com.point.data.TextUrlEnricher
@@ -215,6 +217,14 @@ abstract class DataModule {
 
     @Binds
     abstract fun textRecognizer(impl: TesseractTextRecognizer): TextRecognizer
+
+    /**
+     * Расшифровка голосового (#223). Реализация облачная, и это не временная заглушка, а
+     * измеренный факт: системного распознавания **из файла** в Android нет — `SpeechRecognizer`
+     * слушает микрофон. Шов настоящий: офлайновый движок встанет сюда одной строкой.
+     */
+    @Binds
+    abstract fun speechToText(impl: LlmSpeechToText): SpeechToText
 
     /**
      * Геометрия доходит до пайплайна (#257): OcrEnricher читает слой, а не плоскую строку.

@@ -2,6 +2,7 @@ package com.point.data
 
 import com.point.core.flow.LlmClient
 import com.point.core.flow.ObjectStore
+import com.point.core.flow.modelReadableAudio
 import com.point.core.model.ObjectKind
 import com.point.core.model.PointObject
 import com.point.core.model.ResultObject
@@ -10,6 +11,24 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+
+/**
+ * Чем объект уезжает вложением к Gemini — или null, если прикладывать нечего.
+ *
+ * Чистая функция и одно место на два вопроса (#223): её же спрашивает `canHandle`, решая, брать
+ * ли объект вообще. Разъехаться «беру» и «прикладываю» не могут — а именно на этом расхождении
+ * держался бы худший из отказов: модель уверенно рассказывает про запись, которой не слышала.
+ *
+ * Для записи голоса возвращается **канонический** тип: одно и то же голосовое приезжает то
+ * `audio/opus`, то `application/ogg`, а модель понимает одно имя.
+ */
+internal fun geminiAttachmentMime(obj: PointObject): String? = when {
+    obj.mime.startsWith("image/") || obj.mime == "application/pdf" -> obj.mime
+    else -> modelReadableAudio(obj.mime, obj.metadata["name"])
+}
+
+internal fun isAudio(obj: PointObject): Boolean =
+    obj.mime.startsWith("audio/") || obj.mime == "application/ogg"
 
 /**
  * Minimal Gemini (Generative Language API) client over [HttpJson] — no SDK. The
@@ -30,6 +49,15 @@ class GeminiLlmClient(
 ) : LlmClient {
 
     override val strongVision = true // Gemini reads dense/handwritten tables far better than free models
+
+    /**
+     * Запись голоса Gemini принимает вложением нативно (#223) — но только тех форматов, что
+     * знает [modelReadableAudio]. Ответ берётся у [geminiAttachmentMime], то есть у той же
+     * функции, что решает, **чем** приложить файл: «что мы берём» и «что мы отправляем» не
+     * могут разъехаться, потому что это одна функция, а не два похожих условия.
+     */
+    override fun canHandle(obj: PointObject): Boolean =
+        if (isAudio(obj)) geminiAttachmentMime(obj) != null else true
 
     override suspend fun run(obj: PointObject, prompt: String): ResultObject =
         withContext(Dispatchers.IO) {
@@ -69,12 +97,11 @@ class GeminiLlmClient(
     }
 
     private fun maybeAttachFile(obj: PointObject): JSONObject? {
-        val attachable = obj.mime.startsWith("image/") || obj.mime == "application/pdf"
-        if (!attachable) return null
+        val declared = geminiAttachmentMime(obj) ?: return null
         // Размер отправляемого кадра решает [inlineAttachment] — один предел на всех клиентов;
         // mime берётся у вложения, а не у объекта: ужатый кадр перекодирован, и запрос обязан
         // называть то, что в нём лежит.
-        val attachment = inlineAttachment(obj.uri.value, obj.mime) ?: return null
+        val attachment = inlineAttachment(obj.uri.value, declared) ?: return null
         return JSONObject().put(
             "inlineData",
             JSONObject().put("mimeType", attachment.mime).put("data", attachment.base64),

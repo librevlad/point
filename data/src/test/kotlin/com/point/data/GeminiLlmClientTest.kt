@@ -8,6 +8,8 @@ import com.point.core.model.ResultObject
 import com.point.core.model.ScratchRef
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -57,6 +59,42 @@ class GeminiLlmClientTest {
         }.exceptionOrNull()
         assertTrue(e?.message?.contains("Gemini недоступен") == true)
         assertTrue(e?.message?.contains("m1") == true && e?.message?.contains("m2") == true)
+    }
+
+    // --- Голосовое (#223): запись едет вложением, и под тем именем, что модель понимает ---
+
+    private fun audio(mime: String, name: String? = null) = PointObject(
+        "v", mime, ScratchRef("/x.bin"), ObjectState(ObjectKind.AUDIO),
+        metadata = name?.let { mapOf("name" to it) } ?: emptyMap(),
+    )
+
+    @Test
+    fun `запись едет вложением под каноническим типом`() {
+        // Голосовуха приезжает как `audio/opus`, а модель знает `audio/ogg`. Отправлять байты
+        // под именем, которого получатель не знает, — тот же тихий провал, что и без вложения.
+        assertEquals("audio/ogg", geminiAttachmentMime(audio("audio/opus")))
+        assertEquals("audio/ogg", geminiAttachmentMime(audio("application/ogg")))
+        assertEquals("audio/mp4", geminiAttachmentMime(audio("application/octet-stream", "voice.m4a")))
+        // Снимок и PDF — как были, своим типом.
+        assertEquals("image/png", geminiAttachmentMime(PointObject("i", "image/png", ScratchRef("/x.png"), ObjectState(ObjectKind.IMAGE))))
+    }
+
+    @Test
+    fun `«беру» и «прикладываю» — одна функция, поэтому глухой шаг отходит, а не молчит`() {
+        // Расхождение этих двух ответов и есть худший отказ: модель уверенно рассказывает про
+        // запись, которой не слышала. Здесь оно невозможно по построению — и это проверяется.
+        val client = GeminiLlmClient(
+            object : HttpJson {
+                override suspend fun post(url: String, headers: Map<String, String>, body: String) =
+                    HttpResult(200, okBody)
+            },
+            store, "key", listOf("m1"),
+        )
+
+        assertTrue(client.canHandle(audio("audio/ogg")))
+        assertFalse("amr не читает никто — значит и не берём", client.canHandle(audio("audio/amr")))
+        assertNull(geminiAttachmentMime(audio("audio/amr")))
+        assertTrue("всё незвуковое как было", client.canHandle(textObj))
     }
 
     @Test
