@@ -40,6 +40,30 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 
 /**
+ * Чем кончилось то, что человек запустил, — три разные новости, а не две.
+ *
+ * Пока исход был «отказ / не отказ», «не отказ» означало на экране **успех**: галочку и слово
+ * «Готово» голосом экрана. Тогда всё, чему флаг забыли поставить, отчитывалось об успехе — и
+ * первым в эту дыру провалилась отмена: человек сам остановил работу, а карточка ставила ему
+ * «✓ Готово». Значение по умолчанию не имеет права быть утверждением, поэтому их три, а
+ * умолчание — [NONE].
+ */
+enum class Outcome {
+    /** Сделано: действие дошло до конца. Знак — «✓» светом самого портала. */
+    DONE,
+
+    /** Не получилось: Point не смог и говорит об этом словами. Знак — «✕» тёплым концом градиента. */
+    FAILED,
+
+    /**
+     * Ни то ни другое: человек остановил работу сам, или сказать об исходе пока нечего. Знака нет
+     * — «✓» отменённому такое же враньё, как «✕» тому, что не отказывало. Текст остаётся: молча
+     * исчезнувший экран неотличим от сбоя (#288).
+     */
+    NONE,
+}
+
+/**
  * Исход только что сделанного — карточка под объектом, в языке портала (`docs/design-system.png`).
  *
  * Пока исход стоял последним элементом прокрутки, его никто не видел (#358), и то, каким он
@@ -52,27 +76,21 @@ import androidx.compose.ui.unit.dp
  * **знак и его свет**, а не громкость: «✓» в фиолетовом АКЦЕНТ1 (свет самого портала) против «✕»
  * в тёплом конце фирменного градиента. Цвет здесь — второе сообщение после текста: удача не имеет
  * права выглядеть сбоем, а отказ обязан отличаться — но не обязан орать.
- */
-
-/**
- * Тёплый конец градиента дизайн-системы (`docs/design-system.png`, полоса «ГРАДИЕНТЫ»: фиолетовый
- * → синий → коралл; замер по картинке — `#F85938`).
  *
- * Отказ светится им, а не красным Material `errorContainer` `#93000A`: тревога остаётся в палитре
- * портала, где у неё уже есть законное место, вместо цвета из чужой системы.
+ * Карточку показывают оба экрана, на которых Point отвечает: объект ([FirstScreen]) и тот, где
+ * объекта ещё нет (шаринг не открылся). Иначе «языком портала» говорил бы только один из них, а
+ * человек с разбитым шарингом — единственный, кто отказ и увидит, — читал бы его красным Material.
  */
-private val OutcomeWarm = Color(0xFFF85938)
-
 @Composable
-internal fun OutcomeBanner(message: String?, failure: Boolean) {
+fun OutcomeBanner(message: String?, outcome: Outcome) {
     // Последнее сказанное держится, пока карточка уезжает, — и держится ВМЕСТЕ со своим исходом:
     // иначе отказ на выезде перекрашивался бы в удачу, потому что флаг ушёл раньше текста.
     var shown by remember { mutableStateOf("") }
-    var shownFailure by remember { mutableStateOf(false) }
-    LaunchedEffect(message, failure) {
+    var shownOutcome by remember { mutableStateOf(Outcome.NONE) }
+    LaunchedEffect(message, outcome) {
         if (message != null) {
             shown = message
-            shownFailure = failure
+            shownOutcome = outcome
         }
     }
 
@@ -81,7 +99,13 @@ internal fun OutcomeBanner(message: String?, failure: Boolean) {
         enter = fadeIn() + expandVertically(),
         exit = fadeOut() + shrinkVertically(),
     ) {
-        val accent = if (shownFailure) OutcomeWarm else MaterialTheme.colorScheme.primary
+        // Свет есть у того, чему есть что заявить. Остановленному человеком карточка достаётся
+        // без света и без знака — она просто говорит словами, что работы больше нет.
+        val accent = when (shownOutcome) {
+            Outcome.DONE -> MaterialTheme.colorScheme.primary
+            Outcome.FAILED -> OutcomeWarm
+            Outcome.NONE -> null
+        }
         val shape = RoundedCornerShape(18.dp)
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -96,13 +120,19 @@ internal fun OutcomeBanner(message: String?, failure: Boolean) {
                 .background(Brush.verticalGradient(listOf(RowTop, RowBottom)))
                 // Свет исхода ложится с той стороны, где стоит знак, и гаснет к тексту: карточка
                 // окрашена, но читается как поверхность портала, а не как цветной блок.
-                .background(Brush.horizontalGradient(listOf(accent.copy(alpha = 0.16f), Color.Transparent)))
+                .background(
+                    Brush.horizontalGradient(
+                        listOf((accent ?: Color.Transparent).copy(alpha = 0.16f), Color.Transparent),
+                    ),
+                )
                 .border(1.dp, Brush.verticalGradient(listOf(TopHighlight, Color.Transparent)), shape)
                 .padding(horizontal = 14.dp, vertical = 12.dp),
         ) {
             // Знак зажигается заново на каждый новый исход, а не один раз за жизнь карточки:
             // второе подряд действие иначе досталось бы уже погасшему знаку.
-            key(shown) { OutcomeMark(accent = accent, failure = shownFailure) }
+            if (accent != null) {
+                key(shown) { OutcomeMark(accent = accent, failed = shownOutcome == Outcome.FAILED) }
+            }
             Text(
                 text = shown,
                 style = MaterialTheme.typography.bodyMedium,
@@ -115,6 +145,15 @@ internal fun OutcomeBanner(message: String?, failure: Boolean) {
 }
 
 /**
+ * Тёплый конец градиента дизайн-системы (`docs/design-system.png`, полоса «ГРАДИЕНТЫ»: фиолетовый
+ * → синий → коралл; замер по картинке — `#F85938`).
+ *
+ * Отказ светится им, а не красным Material `errorContainer` `#93000A`: тревога остаётся в палитре
+ * портала, где у неё уже есть законное место, вместо цвета из чужой системы.
+ */
+private val OutcomeWarm = Color(0xFFF85938)
+
+/**
  * Знак исхода — кружок в языке иконных плиток списка действий: плита, радиальное свечение своего
  * цвета, тонкое кольцо. Загорается при появлении и оседает (MOTION.md: импульс, а не крутилка);
  * при выключенной анимации просто стоит на месте.
@@ -123,7 +162,7 @@ internal fun OutcomeBanner(message: String?, failure: Boolean) {
  * цвете — ни для человека, который цвета не различает, ни для того, кто слушает экран.
  */
 @Composable
-private fun OutcomeMark(accent: Color, failure: Boolean) {
+private fun OutcomeMark(accent: Color, failed: Boolean) {
     val motion = rememberMotionEnabled()
     var appeared by remember { mutableStateOf(!motion) }
     LaunchedEffect(Unit) { appeared = true }
@@ -151,8 +190,8 @@ private fun OutcomeMark(accent: Color, failure: Boolean) {
             .border(1.dp, accent.copy(alpha = 0.45f), CircleShape),
     ) {
         Icon(
-            imageVector = if (failure) Icons.Filled.Close else Icons.Filled.Check,
-            contentDescription = if (failure) "Не получилось" else "Готово",
+            imageVector = if (failed) Icons.Filled.Close else Icons.Filled.Check,
+            contentDescription = if (failed) "Не получилось" else "Готово",
             tint = accent,
             modifier = Modifier.size(18.dp),
         )
