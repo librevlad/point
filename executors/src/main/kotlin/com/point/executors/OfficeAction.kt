@@ -1,6 +1,8 @@
 package com.point.executors
 
 import com.point.core.flow.Capability
+import com.point.core.flow.CapabilityMeta
+import com.point.core.flow.Latency
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.OfficeTextExtractor
 import com.point.core.flow.Realizer
@@ -20,6 +22,10 @@ import javax.inject.Inject
 class OfficeCapability @Inject constructor() : Capability {
     override val id = ID
     override val icon = "office"
+
+    /** Не [Latency.INSTANT] (#288): разбор docx/xlsx/pptx идёт секунды на большом файле — ровно
+     *  та же работа и те же слова, что у «В PDF» над документом, а тот объявлен [Latency.FAST]. */
+    override val meta = CapabilityMeta(latency = Latency.FAST)
     override fun label(state: ObjectState) = "Извлечь текст"
     override fun accepts(state: ObjectState) = state.kind == ObjectKind.OFFICE
     override fun produces(state: ObjectState) = ObjectState(ObjectKind.TEXT)

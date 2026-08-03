@@ -1,6 +1,8 @@
 package com.point.executors
 
 import com.point.core.flow.Capability
+import com.point.core.flow.CapabilityMeta
+import com.point.core.flow.Latency
 import com.point.core.flow.PdfRasterizer
 import com.point.core.flow.Realizer
 import com.point.core.flow.reportStage
@@ -20,6 +22,12 @@ import javax.inject.Inject
 class PagesCapability @Inject constructor() : Capability {
     override val id = ID
     override val icon = "pages"
+
+    /** Не [Latency.INSTANT] (#288): книга растеризуется в картинки десятки секунд. Мгновенным
+     *  объявляется то, чего человек не успевает заметить, — и стадия у такого действия была бы
+     *  миганием. Долгим тоже не объявлено: работа растёт со страницами, и над PDF из двух
+     *  страниц полноэкранное ожидание мигнуло бы вместо того, чтобы что-то сказать. */
+    override val meta = CapabilityMeta(latency = Latency.FAST)
     override fun label(state: ObjectState) = "Страницы"
     override fun accepts(state: ObjectState) = state.kind == ObjectKind.PDF
     override fun produces(state: ObjectState) = ObjectState(ObjectKind.COLLECTION)

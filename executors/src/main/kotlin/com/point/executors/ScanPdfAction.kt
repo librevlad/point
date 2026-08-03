@@ -1,6 +1,8 @@
 package com.point.executors
 
 import com.point.core.flow.Capability
+import com.point.core.flow.CapabilityMeta
+import com.point.core.flow.Latency
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.Realizer
 import com.point.core.model.ActionResult
@@ -23,6 +25,11 @@ import javax.inject.Inject
 class ScanPdfCapability @Inject constructor() : Capability {
     override val id = ID
     override val icon = "scan"
+
+    /** Не [Latency.INSTANT] (#288): самое долгое действие Point — каждая страница ещё и прогоняется
+     *  через [scanPage]. Но работа растёт с пачкой, а не длится всегда, — поэтому она говорит
+     *  на объекте («Страница N» за страницей), а не забирает экран ради двух снимков. */
+    override val meta = CapabilityMeta(latency = Latency.FAST)
     override fun label(state: ObjectState) = "Сканировать в PDF"
     override fun accepts(state: ObjectState) = state.kind == ObjectKind.COLLECTION
     override fun produces(state: ObjectState) = ObjectState(ObjectKind.PDF)

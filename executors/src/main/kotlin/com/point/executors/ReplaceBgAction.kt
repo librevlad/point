@@ -4,6 +4,7 @@ import com.point.core.flow.BackgroundRemover
 import com.point.core.flow.Capability
 import com.point.core.flow.CapabilityMeta
 import com.point.core.flow.ImageCompositor
+import com.point.core.flow.Latency
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.Realizer
 import com.point.core.flow.reportStage
@@ -27,7 +28,10 @@ import javax.inject.Inject
 class ReplaceBgCapability @Inject constructor() : Capability {
     override val id = ID
     override val icon = "replace-bg"
-    override val meta = CapabilityMeta(priority = 42)
+
+    /** Не [Latency.INSTANT] (#288) — как и «Убрать фон»: та же сегментация ML Kit,
+     *  докачиваемая при первом применении, плюс сведение с новым фоном. */
+    override val meta = CapabilityMeta(priority = 42, latency = Latency.FAST)
     override fun label(state: ObjectState) = "Заменить фон"
     override fun accepts(state: ObjectState) = state.kind == ObjectKind.IMAGE
     override fun produces(state: ObjectState) = ObjectState(ObjectKind.IMAGE)

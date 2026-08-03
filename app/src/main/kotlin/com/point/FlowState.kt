@@ -64,6 +64,33 @@ suspend fun previewSource(obj: PointObject, rasterizer: com.point.core.flow.PdfR
  *  Cloud (network) and SLOW work keep the full busy screen with its staged reassurance. */
 fun quietWork(meta: CapabilityMeta): Boolean = !meta.network && meta.latency != Latency.SLOW
 
+/**
+ * Экран ожидания поднимается только над нетихой работой (M3) — облачной или объявленной долгой.
+ *
+ * Условие вынуто из `PointHost` в чистую функцию не ради красоты: «тихая работа не поднимает
+ * экран» — обещание, которое надо проверять тестом, а не глазами на устройстве.
+ */
+fun showsBusyScreen(ui: FlowUiState): Boolean = ui.busy != null && !ui.busyQuiet
+
+/** Работает сам объект: тихая работа идёт, экран остался на нём, кольцо-раздумье живёт.
+ *  Не путать с [quietWork] — та про способность («такой работе экран не нужен»), эта про
+ *  происходящее прямо сейчас. */
+fun objectWorking(ui: FlowUiState): Boolean = ui.busy != null && ui.busyQuiet
+
+/**
+ * Что действие говорит о себе, когда экрана ожидания нет (#288).
+ *
+ * Быстрые действия идут БЕЗ экрана ожидания — и до сих пор их стадии умирали в состоянии: канал
+ * [com.point.core.flow.ActionProgress] доносил слова до `FlowViewModel`, а рисовать их было
+ * негде. «Скан», «В Word», «В PDF», «Страницы», «Распаковать» на большом файле работают секунды
+ * и молчали ровно так же, как раньше молчало всё: снаружи тишина неотличима от «зависло».
+ *
+ * Говорит **тот же** `busyStage`, что показывает экран ожидания, — второго механизма нет, и
+ * разъехаться словам негде. Пусто, пока действие молчит: выдумывать за него шаги — та самая
+ * подмена статуса имитацией, против которой весь срез.
+ */
+fun quietStage(ui: FlowUiState): String? = ui.busyStage?.takeIf { objectWorking(ui) }
+
 /** One node of the visible Object Timeline (#114): what the object was at that step,
  *  and the action that made it (null for the root). The philosophy made visible —
  *  the flow is a journey of transformations, not a stack of screens. */
@@ -75,7 +102,12 @@ data class FlowUiState(
      *  action's title), so the busy screen shows progress instead of a blank spinner. */
     val busy: String? = null,
     /** Что действие делает СЕЙЧАС — его собственные слова (#288). null — реализатор молчит,
-     *  и экран не выдумывает за него шаги: показывает время и отмену. */
+     *  и экран не выдумывает за него шаги: показывает время и отмену.
+     *
+     *  Читают двое, и оба берут ОДНУ строку: экран ожидания у нетихой работы ([showsBusyScreen])
+     *  и сам объект у тихой ([quietStage]). Стадия живёт ровно столько, сколько занятость, её
+     *  породившая: каждое новое [busy] обнуляет её, иначе над новой работой висели бы слова
+     *  предыдущей — подмена статуса, только чужими словами вместо выдуманных. */
     val busyStage: String? = null,
     /** True when the running action is a cloud/AI call — the busy screen then reassures with
      *  cloud-flavoured, time-advancing stages instead of a frozen wheel (#62). */

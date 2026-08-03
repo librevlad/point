@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -108,6 +109,9 @@ fun FirstScreen(
     enriching: List<String> = emptyList(),
     discover: Bubble? = null,
     working: Boolean = false,
+    /** Что идущее действие говорит о себе (#288) — та же строка, что показал бы экран ожидания.
+     *  null — действие молчит, и экран за него не сочиняет. */
+    workingStage: String? = null,
     previewBitmap: ImageBitmap? = null,
     pinned: CapabilityId? = null,
     onBubbleLongPress: (Bubble) -> Unit = {},
@@ -141,6 +145,12 @@ fun FirstScreen(
             preview = previewBitmap,
             onTap = onHeroTap,
         )
+
+        // Что действие делает СЕЙЧАС — там же, где объект «работает» (#288). Быстрые действия
+        // идут без экрана ожидания (M3: он мигал бы на каждом мелком тапе), и до сих пор их
+        // слова было негде показать: «Скан», «В Word», «Страницы», «Распаковать» на большом
+        // файле работали секунды притушенным списком и без единой строки.
+        WorkingStage(workingStage)
 
         // Исход только что сделанного — СРАЗУ под объектом, а не в конце списка.
         //
@@ -285,6 +295,45 @@ private fun ChainSection(
         }
         if (canSave) {
             TextButton(onClick = onSave) { Text("★ Сохранить цепочку") }
+        }
+    }
+}
+
+/**
+ * Голос тихой работы (#288): одна строка под объектом — что действие делает прямо сейчас.
+ *
+ * Тем же языком, что «Point думает» об обогащении ([ThinkingDot] + подпись): человеку всё равно,
+ * кто внутри Point занят — объект работает, и работа названа. Пульс здесь не украшение, а
+ * доказательство хода: строка «Распаковываю архив» без него замирает так же немо, как замирал
+ * притушенный список.
+ *
+ * Появляется строго по факту первой стадии. Молчащее действие ничего не рисует: короткие
+ * («Копировать», «Поделиться», QR) стадий не сообщают вовсе — мигание на каждом мелком тапе
+ * было бы шумом, а не информацией.
+ */
+@Composable
+private fun WorkingStage(stage: String?) {
+    // Последнее сказанное держится, пока строка уезжает, — иначе она гасла бы пустой.
+    var shown by remember { mutableStateOf("") }
+    LaunchedEffect(stage) { if (stage != null) shown = stage }
+
+    AnimatedVisibility(
+        visible = stage != null,
+        enter = fadeIn() + expandVertically(),
+        exit = fadeOut() + shrinkVertically(),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(top = 14.dp),
+        ) {
+            ThinkingDot()
+            Spacer(Modifier.width(9.dp))
+            Text(
+                text = shown,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
         }
     }
 }
