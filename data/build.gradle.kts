@@ -113,6 +113,21 @@ android {
             buildConfigField("String", "UNSTRUCTURED_API_KEY", prop("UNSTRUCTURED_API_KEY"))
             buildConfigField("String", "LLAMA_CLOUD_API_KEY", prop("LLAMA_CLOUD_API_KEY"))
         }
+
+        // «Свой» вариант (#403/#161): сборка, которую владелец ставит себе с сайта.
+        //
+        // Ключей моделей здесь НЕТ — они личные и платные, и раздаваемому артефакту не место их
+        // нести (инвариант «ни один секрет не попадает в раздаваемый артефакт», пойманный на
+        // v0.2.0). Свой ключ человек вводит в приложении.
+        //
+        // А вот релей едет: без его адреса и общего секрета связь телефона с компьютером не
+        // работает вовсе, а именно она — смысл этой сборки. Секрет релея не даёт доступа к
+        // содержимому: релей слепой, он умеет только «положить» и «забрать» запечатанное письмо.
+        create("dogfood") {
+            initWith(getByName("release"))
+            buildConfigField("String", "RELAY_URL", prop("RELAY_URL"))
+            buildConfigField("String", "RELAY_APP_SECRET", prop("RELAY_APP_SECRET"))
+        }
     }
 
     buildFeatures {

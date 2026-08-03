@@ -41,13 +41,18 @@
     return null;
   }
 
-  fetch('https://api.github.com/repos/' + REPO + '/releases/latest', {
+  // Берём СПИСОК, а не /releases/latest: тот молча пропускает предварительные сборки, а «своя
+  // сборка» владельца — как раз предварительная. Показываем самое свежее, что есть.
+  fetch('https://api.github.com/repos/' + REPO + '/releases?per_page=10', {
     headers: { Accept: 'application/vnd.github+json' }
   })
     .then(function (r) {
-      if (r.status === 404) return null;      // релизов ещё нет — это не ошибка
       if (!r.ok) throw new Error('HTTP ' + r.status);
       return r.json();
+    })
+    .then(function (list) {
+      if (!Array.isArray(list) || list.length === 0) return null;
+      return list.filter(function (rel) { return !rel.draft; })[0] || null;
     })
     .then(function (rel) {
       if (!rel) {
@@ -70,6 +75,9 @@
       });
 
       var parts = ['<strong style="color:#A1A6B3;font-weight:600">' + (rel.tag_name || 'latest') + '</strong>'];
+      // Предварительная сборка называется своим именем: человек должен знать, что берёт
+      // свежее и непроверенное, а не выпущенную версию.
+      if (rel.prerelease) parts.push('своя сборка');
       if (rel.published_at) parts.push('published ' + human(rel.published_at));
       if (apk) parts.push('APK ' + mb(apk.size));
       if (!apk) parts.push('no APK in this release');

@@ -894,8 +894,6 @@ class FlowViewModel @Inject constructor(
         _ui.update {
             it.copy(pcScreen = PcScreenState(pairing = pcPairings.current()), busy = null, message = null, messageOutcome = Outcome.NONE)
         }
-        // Экран открыт — состояние связи должно жить, а не застыть на момент открытия: «молчит
-        // 3 минуты» меняется само, и замерший текст соврал бы ровно тогда, когда на него смотрят.
         // Состояние связи следует за контактами, а не за таймером.
         //
         // Сначала здесь стоял цикл «раз в секунду пересчитать» — и он вешал тесты намертво:
