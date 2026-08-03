@@ -74,6 +74,10 @@ android {
             isShrinkResources = false
             signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
             matchingFallbacks += listOf("release")
+            // Своя сборка едет на свой телефон — и часто по мобильной сети. Половина её веса это
+            // машинный код распознавания под четыре процессора, из которых нужен ровно один.
+            // Публичному релизу так делать нельзя, здесь — можно: адресат известен.
+            ndk { abiFilters += "arm64-v8a" }
         }
     }
 
