@@ -182,10 +182,13 @@ fun whenLabel(at: Long, now: Long, zone: ZoneId): String {
     val day = Instant.ofEpochMilli(at).atZone(zone)
     val today = Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
     val clock = "%02d:%02d".format(day.hour, day.minute)
-    return when (day.toLocalDate()) {
+    val date = day.toLocalDate()
+    // Год пишется только у чужого года: «1 августа» о прошлогоднем объекте выглядело бы свежим.
+    val year = if (date.year == today.year) "" else " ${date.year}"
+    return when (date) {
         today -> "сегодня $clock"
         today.minusDays(1) -> "вчера $clock"
-        else -> "${day.dayOfMonth} ${monthOf(day.toLocalDate())} · $clock"
+        else -> "${date.dayOfMonth} ${monthOf(date)}$year · $clock"
     }
 }
 

@@ -229,4 +229,12 @@ class JournalTest {
         assertEquals("вчера 23:40", whenLabel(at(3, 23, 40), now, zone))
         assertEquals("1 августа · 08:00", whenLabel(at(1, 8, 0), now, zone))
     }
+
+    /** Прошлогоднее не должно выглядеть свежим: у чужого года пишется год. */
+    @Test
+    fun `у прошлогодней записи назван год`() {
+        val lastYear = ZonedDateTime.of(2025, 12, 31, 18, 30, 0, 0, zone).toInstant().toEpochMilli()
+
+        assertEquals("31 декабря 2025 · 18:30", whenLabel(lastYear, at(4, 12, 0), zone))
+    }
 }
