@@ -46,4 +46,7 @@ class AppIcons @Inject constructor(
 abstract class AppIconsModule {
     @Binds
     abstract fun appIconResolver(impl: AppIcons): AppIconResolver
+
+    @Binds
+    abstract fun selectionFrames(impl: AndroidSelectionFrames): SelectionFrames
 }
