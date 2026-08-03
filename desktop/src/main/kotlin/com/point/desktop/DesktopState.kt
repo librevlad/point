@@ -54,6 +54,9 @@ class DesktopState(
 
     fun bubblesFor(item: InboxItem): List<Bubble> = registry.bubblesFor(item.obj.state)
 
+    /** Сказать человеку словами. Пустой буфер и прочие «ничего не вышло» обязаны звучать. */
+    fun say(text: String) { _message.value = text }
+
     /** #80: the phone asked to run one of the advertised actions on the received object. */
     fun runRemoteAction(id: String, item: InboxItem) {
         scope.launch {
