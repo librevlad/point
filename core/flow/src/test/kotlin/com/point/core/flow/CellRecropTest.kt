@@ -127,6 +127,54 @@ class CellRecropTest {
     }
 
     @Test
+    fun `спорное значение само себе не адрес — чужая строка с тем же числом не перечитывается`() = runTest {
+        // Строку спора движок не прочитал вовсе, а «0,120» на листе есть — в ЧУЖОЙ строке.
+        // Если искать строку по спорному значению, именно ошибочный свод находит чужое место
+        // «однозначно»: своей строки с этим числом на кадре нет. Модель тогда честно читает
+        // не ту ячейку, голосом 2 из 3 подтверждает ошибку и снимает пометку с дропдауном.
+        val elsewhere = AtomLayer(
+            listOf(
+                atom("11006", 0f, 200f), atom("Рис", 100f, 200f), atom("0,500", 300f, 200f),
+                atom("Крупа", 100f, 300f), atom("0,120", 300f, 300f),
+            ),
+        )
+        val blind = Consensus(
+            rows = listOf(listOf("Гречка", "0,120⚠"), listOf("11006", "Рис", "0,500")),
+            candidates = mapOf((0 to 1) to listOf("0,120", "0,125")),
+            sources = 2,
+        )
+        var asked = 0
+
+        val out = recropDisputed(blind, elsewhere, timeoutMs = 5_000) { asked++; "0,120" }
+
+        assertEquals("адрес, собранный из спорного значения, — не адрес", 0, asked)
+        assertEquals("0,120⚠", out.rows[0][1])
+        assertEquals(listOf("0,120", "0,125"), out.candidates[0 to 1])
+    }
+
+    @Test
+    fun `соседняя спорная ячейка — тоже не адрес, строку узнают бесспорные ячейки`() = runTest {
+        // В строке спорят две ячейки; значение второй («1,375») нашлось бы в чужой строке листа.
+        val elsewhere = AtomLayer(
+            listOf(atom("11006", 0f, 200f), atom("Рис", 100f, 200f), atom("1,375", 300f, 200f)),
+        )
+        val pair = Consensus(
+            rows = listOf(listOf("Гречка", "0,120⚠", "1,375⚠")),
+            candidates = mapOf(
+                (0 to 1) to listOf("0,120", "0,125"),
+                (0 to 2) to listOf("1,375", "1,875"),
+            ),
+            sources = 2,
+        )
+        var asked = 0
+
+        val out = recropDisputed(pair, elsewhere, timeoutMs = 5_000) { asked++; "0,120" }
+
+        assertEquals(0, asked)
+        assertEquals(pair.candidates, out.candidates)
+    }
+
+    @Test
     fun `спорных ячеек больше дюжины — перечит не начинается вовсе`() = runTest {
         val wall = Consensus(
             rows = (0 until 13).map { listOf("строка$it⚠") },

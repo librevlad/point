@@ -91,6 +91,13 @@ suspend fun recropDisputed(
  * содержимому, и двусмысленность для него — отказ, а не «берём первую». Здесь это важнее, чем
  * там: кроп соседней строки человек хотя бы увидит глазами, а модель честно прочитает не ту
  * ячейку — и её голос будет уверенно неверным. Ячейка без адреса не перечитывается.
+ *
+ * Адрес при этом собирается из **бесспорных** ячеек строки. Спорное значение самому себе не
+ * адрес: ровно когда свод ошибся, его строки с этим числом на кадре нет — зато то же число
+ * почти всегда есть в чужой строке (количества в ведомости повторяются), и «однозначное» место
+ * оказывается чужим. Модель тогда честно читает не ту ячейку, голосом 2 из 3 подтверждает
+ * ошибку и снимает пометку — перечит, построенный ловить спор, прячет его от человека.
+ * Соседняя спорная ячейка — адрес не лучше: её значение под тем же вопросом.
  */
 internal fun recropQuestions(voted: Consensus, layer: AtomLayer): List<RecropQuestion> {
     if (voted.candidates.isEmpty() || voted.candidates.size > MAX_RECROP_CELLS) return emptyList()
@@ -98,7 +105,8 @@ internal fun recropQuestions(voted: Consensus, layer: AtomLayer): List<RecropQue
     return voted.candidates.mapNotNull { (cell, readings) ->
         if (readings.isEmpty()) return@mapNotNull null
         val row = voted.rows.getOrNull(cell.first) ?: return@mapNotNull null
-        val region = layer.locate(row.joinToString(" ")) ?: return@mapNotNull null
+        val address = row.filterIndexed { c, _ -> (cell.first to c) !in voted.candidates }
+        val region = layer.locate(address.joinToString(" ")) ?: return@mapNotNull null
         RecropQuestion(cell, region, readings)
     }
 }
