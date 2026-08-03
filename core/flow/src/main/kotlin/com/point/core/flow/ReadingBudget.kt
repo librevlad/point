@@ -56,7 +56,19 @@ class ReadingBudget(private val totalMs: Long, private val clock: OcrClock) {
      * по-прежнему исключена: её держит общий бюджет, а не эта половина. Не осталось времени на
      * пробы — слой честно скажет, что они не доехали ([cutShort]).
      */
-    fun baseCapMs(): Long = leftMs()
+    fun baseCapMs(): Long = (leftMs() - fallbackReserveMs()).coerceAtLeast(0)
+
+    /**
+     * Запас на страховочное чтение уменьшенной копии.
+     *
+     * Остановленный движок отдаёт ПУСТО (это его собственное поведение, не наше решение), и
+     * страница, не уложившаяся в бюджет, приходила человеку никак: ни текста, ни фактов, ни
+     * действий. Прогон примеров 03.08.2026: кадру 04 не хватало и полного бюджета — 0 слов на
+     * 181-й секунде. Поэтому кусочек времени резервируется заранее: не успело полное чтение —
+     * успеет быстрое по уменьшенной копии, и человек получит хоть что-то, честно помеченное
+     * неполным. Пустота вместо страницы — худший из возможных ответов.
+     */
+    fun fallbackReserveMs(): Long = totalMs / 6
 }
 
 /**
@@ -108,7 +120,15 @@ suspend fun readWithBudget(
     readProbe: (angleDegrees: Int, capMs: Long) -> CappedRead,
 ): PlannedReading {
     val base = readFull(0, budget.baseCapMs())
-    if (base.cut) return PlannedReading(base.layer.cutShort(), 0)
+    if (base.cut) {
+        // Полное чтение не уложилось — остаётся припасённое время на уменьшенную копию. Она
+        // читается вдвое-вчетверо быстрее и обычно успевает; пусто вышло и там — отдаём пустоту
+        // с причиной, но сперва пробуем, а не сдаёмся молча.
+        reportStage(FALLBACK_STAGE)
+        val small = readProbe(0, budget.leftMs())
+        val best = if (readingScore(small.layer) > readingScore(base.layer)) small.layer else base.layer
+        return PlannedReading(best.cutShort(), 0)
+    }
     if (!looksMisoriented(base.layer)) return PlannedReading(base.layer, 0)
 
     val tried = LinkedHashMap<Int, AtomLayer>()
@@ -161,6 +181,10 @@ fun orientationProbeStage(index: Int, total: Int): String =
     "Пробую повернуть страницу — ${index + 1} из $total"
 
 /** Доворот выбран, и страница читается заново целиком — это отдельное ожидание, не продолжение проб. */
+/** Страница не уложилась в отведённое время — читаем уменьшенную копию, чтобы человек получил
+ *  хоть что-то вместо пустоты. Говорится вслух: молчаливое ухудшение хуже честного. */
+const val FALLBACK_STAGE = "Страница большая — читаю упрощённо"
+
 const val REREAD_STAGE = "Нашёл, как лежит страница — перечитываю"
 
 /** Тот же слой с причиной «упёрлись в предел времени». */

@@ -76,22 +76,27 @@ class ReadingBudgetTest {
     }
 
     @Test
-    fun `вечное базовое чтение отрезается бюджетом — пустой слой с причиной`() = runTest {
+    fun `вечное базовое чтение отрезается бюджетом — спасает упрощённое`() = runTest {
         val clock = FakeClock()
         val full = SlowEngine(clock, 400_000) { goodPage() } // «вечность»
         val probe = SlowEngine(clock, 1_000) { goodPage() }
 
         val out = readWithBudget(ReadingBudget(180_000, clock), full, probe)
 
-        assertTrue(out.layer.atoms.isEmpty())
+        // Полное чтение не уложилось — но припасённое время спасло страницу: читается
+        // уменьшенная копия, и человек получает текст вместо пустоты (прогон примеров
+        // 03.08.2026: кадру 04 не хватало и полного бюджета — 0 слов на 181-й секунде).
+        assertTrue(out.layer.atoms.isNotEmpty())
         assertEquals(INCOMPLETE_TIMEOUT, out.layer.incomplete)
         assertEquals(0, out.angleDegrees)
-        // Пустое базовое чтение — сравнивать повороты не с чем: мусор «выиграл» бы у пустоты.
-        assertTrue(probe.calls.isEmpty())
+        // Повороты при этом не перебираются: сравнивать их не с чем.
+        assertEquals(listOf(0), probe.calls)
         // Съеден весь бюджет и ни минутой больше: вечность держит он, а не половинный колпак.
         // Половина стоила живых чтений — страница, которой нужно 120 с из 180, возвращала ноль
         // слов вместо текста (прогон примеров 03.08.2026).
-        assertEquals(180_000L, clock.now)
+        // 150 с полного чтения (бюджет минус припасённое) плюс 1 с упрощённого: вечность
+        // держит бюджет, а запас тратится только когда полное чтение не уложилось.
+        assertEquals(151_000L, clock.now)
     }
 
     @Test
@@ -213,12 +218,16 @@ class ReadingBudgetTest {
     }
 
     @Test
-    fun `отрезанное базовое чтение молчит — пробы не открывались`() = runTest {
+    fun `отрезанное базовое чтение зовёт упрощённое, а повороты не перебирает`() = runTest {
         val clock = FakeClock()
         val full = SlowEngine(clock, 400_000) { goodPage() }
         val probe = SlowEngine(clock, 1_000) { goodPage() }
 
-        assertTrue(stagesHeard { readWithBudget(ReadingBudget(180_000, clock), full, probe) }.isEmpty())
+        val heard = stagesHeard { readWithBudget(ReadingBudget(180_000, clock), full, probe) }
+
+        // Единственная сказанная фраза — про упрощённое чтение: повороты перебирать не на чем,
+        // а молчать, ухудшив чтение, нельзя.
+        assertEquals(listOf(FALLBACK_STAGE), heard)
     }
 
     @Test
@@ -269,12 +278,13 @@ class ReadingBudgetTest {
         // Базовому чтению — весь остаток: страница, которой нужно больше половины бюджета,
         // на половине возвращала НОЛЬ слов (прогон примеров 03.08.2026: было 385 и 329, стало
         // пусто). Пробы поворотов — уточнение угла, базовое чтение — сам продукт.
-        assertEquals(10_000L, budget.baseCapMs())
+        // Из бюджета вычтен запас на страховочное чтение уменьшенной копии.
+        assertEquals(10_000L - 10_000L / 6, budget.baseCapMs())
 
         clock.now = 4_000
         assertEquals(3_000L, budget.spentMs())
         assertEquals(7_000L, budget.leftMs())
-        assertEquals(7_000L, budget.baseCapMs())
+        assertEquals(7_000L - 10_000L / 6, budget.baseCapMs())
 
         clock.now = 100_000
         assertEquals(0L, budget.leftMs())
