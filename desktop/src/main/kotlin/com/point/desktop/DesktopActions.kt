@@ -2,6 +2,7 @@ package com.point.desktop
 
 import com.point.core.flow.Capability
 import com.point.core.flow.CapabilityMeta
+import com.point.core.flow.Latency
 import com.point.core.flow.Realizer
 import com.point.core.model.ActionResult
 import com.point.core.model.CapabilityId
@@ -174,6 +175,57 @@ class PcToPhoneRealizer(private val outbox: Outbox) : Realizer {
             outbox.add(input)
             ActionResult.Done("Заберите на телефоне — плашка на главном экране")
         }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось положить в очередь", recoverable = true) }
+}
+
+
+/**
+ * «Сделать PDF на компьютере» (#403) — ПК как мощность для телефона.
+ *
+ * Телефон офисный документ разбирает только текстом: нарисовать слайды со шрифтами и вёрсткой
+ * ему нечем. У компьютера для этого уже стоит LibreOffice или PowerPoint — и Point спрашивает
+ * того, кто умеет, вместо того чтобы учиться сам.
+ *
+ * Файл при этом никуда не уезжает: конвертация идёт на машине человека, а не в чужом облаке.
+ * Готовый PDF кладётся в очередь на телефон — тем же путём, что и всё остальное.
+ */
+class PcOfficePdfCapability : Capability {
+    override val id = CapabilityId("pc-office-pdf")
+    override val icon = "pdf"
+    override val meta = CapabilityMeta(priority = 30, latency = Latency.SLOW)
+    override fun label(state: ObjectState) = "Сделать PDF"
+    override fun accepts(state: ObjectState) = state.kind == ObjectKind.OFFICE
+    override fun produces(state: ObjectState) = ObjectState(ObjectKind.PDF)
+}
+
+class PcOfficePdfRealizer(
+    private val converter: OfficeToPdf,
+    private val outbox: Outbox,
+) : Realizer {
+    override val capabilityId = CapabilityId("pc-office-pdf")
+
+    override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
+        runCatching {
+            // Конвертер проверяется В МОМЕНТ работы, а не когда рисовалась кнопка: между тапом на
+            // телефоне и работой на компьютере Office могли снести (тот же урок, что у принтера).
+            converter.whyUnavailable()?.let {
+                return ActionResult.Failure(it, recoverable = true)
+            }
+            val pdf = converter.convert(File(input.uri.value))
+                ?: return ActionResult.Failure(
+                    "Компьютер не смог собрать PDF из этого документа",
+                    recoverable = true,
+                )
+            outbox.add(
+                input.copy(
+                    id = input.id + "-pdf",
+                    mime = "application/pdf",
+                    uri = com.point.core.model.ScratchRef(pdf.absolutePath),
+                    state = ObjectState(ObjectKind.PDF),
+                    metadata = input.metadata + ("name" to pdf.name),
+                ),
+            )
+            ActionResult.Done("PDF собран на компьютере — заберите на телефоне")
+        }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось собрать PDF", recoverable = true) }
 }
 
 /**

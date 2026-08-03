@@ -53,10 +53,14 @@ fun main() {
 
     val downloader = YtDlpDownloader(File(System.getProperty("user.home"), "Point/downloads"))
     val outbox = Outbox(File(System.getProperty("user.home"), "Point/outbox"))
+    // Чем компьютер умеет рисовать слайды (#403). Ищется один раз при старте: между запусками
+    // Office не появляется, а дёргать файловую систему на каждый тап незачем.
+    val officeToPdf = LocalOfficeToPdf()
     val registry = DesktopRegistry(
         setOf(
             PcOpenCapability(), PcCopyCapability(), PcRevealCapability(), PcSaveAsCapability(),
             PcDownloadCapability(), PcToPhoneCapability(), PcPrintCapability(),
+            PcOfficePdfCapability(),
         ),
     )
     val resolver = DesktopResolver(
@@ -68,6 +72,7 @@ fun main() {
             PcDownloadRealizer(downloader),
             PcToPhoneRealizer(outbox),
             PcPrintRealizer(printer),
+            PcOfficePdfRealizer(officeToPdf, outbox),
         ),
     )
     val phoneCapsFile = File(File(System.getProperty("user.home"), ".point-pc"), "phone-caps")
@@ -105,6 +110,16 @@ fun main() {
             // #291: печать отрабатывает, только если система её поддерживает и принтер по
             // умолчанию есть; #316: если нет — говорим, чего именно не хватает.
             add(com.point.core.flow.PcRemoteAction("pc-print", "Напечатать на ПК", unavailable = whyCannotPrint()))
+            // Телефон рисовать слайды не умеет, компьютер умеет — и говорит об этом прямо. Нет
+            // конвертера — действие приезжает недоступным, кнопки на телефоне не будет (#316).
+            add(
+                com.point.core.flow.PcRemoteAction(
+                    "pc-office-pdf",
+                    "Сделать PDF на ПК",
+                    kinds = setOf("OFFICE"),
+                    unavailable = officeToPdf.whyUnavailable(),
+                ),
+            )
         },
         runAction = state::runRemoteAction,
         outbox = outbox,
