@@ -156,6 +156,17 @@ PAGE_EMPTY = page(
     "<h1>Файл не выбран</h1><p>Вернитесь назад и выберите файл.</p>",
 )
 
+PAGE_FULL = page(
+    "Пока хватит",
+    "<h1>Пока хватит</h1>"
+    "<p>По этой ссылке уже отправлено много файлов. Подождите, пока их заберут, "
+    "или попросите новую ссылку.</p>",
+)
+
+# Сколько файлов ящик держит непринятыми. Не про вежливость: адрес мог утечь дальше, чем человек
+# рассчитывал, и открытый ящик не должен становиться чужим бесплатным диском.
+INBOX_MAX_FILES = 20
+
 
 class Handler(http.server.BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
@@ -344,7 +355,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
         d = self.inbox_ready(box)
         if not d:
             return self.html(404, PAGE_GONE)
-        n = int(self.headers.get("Content-Length", 0))
+        # Ящик не бездонный: адрес мог утечь дальше, чем человек рассчитывал, и один открытый
+        # ящик не должен превращаться в бесплатный диск. Забранное телефоном место освобождает.
+        if len([x for x in os.listdir(d) if x.endswith(".bin")]) >= INBOX_MAX_FILES:
+            return self.html(429, PAGE_FULL)
+        try:
+            n = int(self.headers.get("Content-Length", 0))
+        except ValueError:
+            n = 0
         if n <= 0 or n > MAX_BLOB:
             # Соединение закрываем: клиент ещё шлёт тело, и без этого он читал бы ответ в разрыв.
             self.close_connection = True
