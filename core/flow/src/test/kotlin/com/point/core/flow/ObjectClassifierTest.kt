@@ -51,6 +51,37 @@ class ObjectClassifierTest {
         assertEquals(ObjectKind.ZIP, classifier.classify("application/octet-stream", fileName = "logs.tar.gz").kind)
     }
 
+    // --- #223: голосовое приходит объектом, а не «неизвестным файлом» ---
+
+    @Test
+    fun `голосовое из мессенджера — запись, каким бы типом его ни назвали`() {
+        // Ровно те типы, которыми приезжает голосовуха: WhatsApp/Telegram шлют ogg/opus,
+        // iOS — m4a, диктофон Android — m4a или amr. До #223 всё это было UNKNOWN.
+        assertEquals(ObjectKind.AUDIO, classifier.classify("audio/ogg").kind)
+        assertEquals(ObjectKind.AUDIO, classifier.classify("audio/opus").kind)
+        assertEquals(ObjectKind.AUDIO, classifier.classify("audio/mpeg").kind)
+        assertEquals(ObjectKind.AUDIO, classifier.classify("audio/mp4").kind)
+        assertEquals(ObjectKind.AUDIO, classifier.classify("audio/amr").kind)
+        assertEquals(ObjectKind.AUDIO, classifier.classify("audio/wav").kind)
+        // Родовое имя контейнера: ogg-голосовое часто приезжает так.
+        assertEquals(ObjectKind.AUDIO, classifier.classify("application/ogg").kind)
+    }
+
+    @Test
+    fun `запись без типа узнаётся по расширению`() {
+        // «Открыть с помощью» и файловые менеджеры сплошь и рядом дают octet-stream.
+        assertEquals(ObjectKind.AUDIO, classifier.classify("application/octet-stream", fileName = "AUD-0001.OGG").kind)
+        assertEquals(ObjectKind.AUDIO, classifier.classify("application/octet-stream", fileName = "voice.m4a").kind)
+        assertEquals(ObjectKind.AUDIO, classifier.classify("application/octet-stream", fileName = "заметка.amr").kind)
+    }
+
+    @Test
+    fun `музыка и голосовое — один вид, разбираться дальше не классификатору`() {
+        // Первый экран работает на нулевых сигналах: «голос это или песня» из mime не видно,
+        // и выдумывать различие здесь значило бы гадать до всякого чтения.
+        assertEquals(ObjectKind.AUDIO, classifier.classify("audio/flac", fileName = "album.flac").kind)
+    }
+
     @Test
     fun `classifies an unpacked directory as a COLLECTION`() {
         // ArchiveRealizer materialises the unpacked dir with this synthetic mime;

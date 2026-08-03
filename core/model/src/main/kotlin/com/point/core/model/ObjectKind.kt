@@ -38,6 +38,16 @@ value class ObjectKind private constructor(val name: String) {
         val OFFICE = ObjectKind("OFFICE")
         val URL = ObjectKind("URL")
 
+        /**
+         * Запись звука (#223) — голосовое из мессенджера, диктофон, музыка.
+         *
+         * Вид, а не признак. Соблазн был описать голосовуху как UNKNOWN с признаком «это звук»,
+         * но признак уточняет уже понятый вид, а здесь от звука зависит **весь** набор действий,
+         * а не их оттенок. По правилу выше запись голоса — вещь мира ровно в той же мере, что
+         * снимок и документ.
+         */
+        val AUDIO = ObjectKind("AUDIO")
+
         /** A set of objects — e.g. an unpacked archive. Its [PointObject.uri] is a
          *  scratch directory; collection-level actions (save all…) operate on it. */
         val COLLECTION = ObjectKind("COLLECTION")
@@ -46,7 +56,7 @@ value class ObjectKind private constructor(val name: String) {
         /** The file-level kinds derived from MIME on zero-cost signals (no I/O). Extraction
          *  kinds are deliberately absent: they are open and created with [of]. */
         val entries: List<ObjectKind> =
-            listOf(IMAGE, TEXT, PDF, ZIP, OFFICE, URL, COLLECTION, UNKNOWN)
+            listOf(IMAGE, TEXT, PDF, ZIP, OFFICE, URL, AUDIO, COLLECTION, UNKNOWN)
 
         /**
          * A kind by name. Unlike the enum this replaces, an unknown name is NOT an error —
