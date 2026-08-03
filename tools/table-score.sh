@@ -27,7 +27,7 @@ FLAG_FILL=FFFFD199
 XLSX="${1:-}"
 EXPECTED="${2:-}"
 REPORT="${3:-}"
-ROOT=$(cd "$(dirname "$0")/.." && pwd)
+ROOT=$(cd "$(dirname "$0")/.." && { pwd -W 2>/dev/null || pwd; })
 
 if [ -z "$XLSX" ] || [ -z "$EXPECTED" ]; then
   echo "нужно: bash tools/table-score.sh <файл.xlsx> <эталон.tsv> [отчёт.md]" >&2

@@ -10,7 +10,7 @@
 # По умолчанию карта — tools/corpus/frames.tsv, отчёт дописывается в <каталог>/report.md.
 set -u
 RUN="${1:?нужен каталог прогона}"
-ROOT=$(cd "$(dirname "$0")/.." && pwd)
+ROOT=$(cd "$(dirname "$0")/.." && { pwd -W 2>/dev/null || pwd; })
 FRAMES="${2:-$ROOT/tools/corpus/frames.tsv}"
 REPORT="${3:-$RUN/report.md}"
 [ -d "$RUN" ] || { echo "нет каталога прогона: $RUN" >&2; exit 2; }
