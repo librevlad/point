@@ -383,15 +383,16 @@ private fun PreviewCollection() = PointTheme {
 @Preview(name = "Исход · отказ (#358)", showBackground = true, backgroundColor = 0xFF0B0D10)
 @Composable
 private fun PreviewOutcomeFailure() = PointTheme(darkTheme = true) {
-    // Живой случай, ради которого исход подняли под объект: «Прочитать показание» честно
-    // отказалось, а человек не видел ничего. Слова — дословно те, что вернуло устройство
-    // (MeterOcrAction.UNREADABLE); вид — карточка портала со знаком «✕» в тёплом конце
-    // фирменного градиента, а не красный блок Material.
+    // Живой случай, ради которого исход подняли под объект (03.08.2026): действие честно
+    // отказалось, а человек не видел ничего — баннер стоял в самом низу прокрутки. Тогда это
+    // было «Прочитать показание» (действие убрано в #396); слова здесь — дословный отказ
+    // чтения на устройстве, который в продукте живёт. Вид — карточка портала со знаком «✕» в
+    // тёплом конце фирменного градиента, а не красный блок Material.
     FirstScreen(
         obj = sampleObject(ObjectKind.IMAGE, "image/jpeg", "meter.jpg"),
         bubbles = sampleBubbles(ObjectKind.IMAGE),
         onBubble = {},
-        message = "Табло нашлось, но цифры не читаются — снимите ближе и без блика",
+        message = "На устройстве текст не распознан",
         messageOutcome = Outcome.FAILED,
     )
 }
