@@ -76,7 +76,7 @@ class ReadingBudgetTest {
     }
 
     @Test
-    fun `вечное базовое чтение отрезается на половине бюджета — пустой слой с причиной`() = runTest {
+    fun `вечное базовое чтение отрезается бюджетом — пустой слой с причиной`() = runTest {
         val clock = FakeClock()
         val full = SlowEngine(clock, 400_000) { goodPage() } // «вечность»
         val probe = SlowEngine(clock, 1_000) { goodPage() }
@@ -88,8 +88,10 @@ class ReadingBudgetTest {
         assertEquals(0, out.angleDegrees)
         // Пустое базовое чтение — сравнивать повороты не с чем: мусор «выиграл» бы у пустоты.
         assertTrue(probe.calls.isEmpty())
-        // Съедена ровно половина бюджета, не весь: колпак сработал.
-        assertEquals(90_000L, clock.now)
+        // Съеден весь бюджет и ни минутой больше: вечность держит он, а не половинный колпак.
+        // Половина стоила живых чтений — страница, которой нужно 120 с из 180, возвращала ноль
+        // слов вместо текста (прогон примеров 03.08.2026).
+        assertEquals(180_000L, clock.now)
     }
 
     @Test
@@ -264,12 +266,15 @@ class ReadingBudgetTest {
 
         assertEquals(0L, budget.spentMs())
         assertEquals(10_000L, budget.leftMs())
-        assertEquals(5_000L, budget.baseCapMs())
+        // Базовому чтению — весь остаток: страница, которой нужно больше половины бюджета,
+        // на половине возвращала НОЛЬ слов (прогон примеров 03.08.2026: было 385 и 329, стало
+        // пусто). Пробы поворотов — уточнение угла, базовое чтение — сам продукт.
+        assertEquals(10_000L, budget.baseCapMs())
 
         clock.now = 4_000
         assertEquals(3_000L, budget.spentMs())
         assertEquals(7_000L, budget.leftMs())
-        assertEquals(5_000L, budget.baseCapMs())
+        assertEquals(7_000L, budget.baseCapMs())
 
         clock.now = 100_000
         assertEquals(0L, budget.leftMs())
