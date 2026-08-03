@@ -1,6 +1,8 @@
 package com.point.data
 
 import com.point.core.flow.PcOutboxEntry
+import com.point.core.flow.LinkMonitor
+import com.point.core.flow.LinkPath
 import com.point.core.flow.PcPairing
 import com.point.core.flow.PcRemoteAction
 import com.point.core.flow.PcSendOutcome
@@ -16,7 +18,17 @@ import com.point.core.model.PointObject
 class LanThenRelayTransport(
     private val lan: PcTransport,
     private val relay: PcTransport,
+    /**
+     * Кому рассказать, что компьютер ответил и каким путём (#412).
+     *
+     * Транспорт — единственный, кто знает правду о связи: экран сам её узнать не может. Молчание
+     * здесь и было причиной, по которой человек не отличал «связи нет» от «ничего не произошло».
+     */
+    private val monitor: LinkMonitor? = null,
 ) : PcTransport {
+
+    private fun <T> T.heardVia(path: LinkPath, alive: (T) -> Boolean): T =
+        also { if (alive(it)) monitor?.heard(path) }
 
     override suspend fun send(
         pairing: PcPairing,
@@ -26,8 +38,10 @@ class LanThenRelayTransport(
         action: String?,
     ): PcSendOutcome {
         val viaLan = lan.send(pairing, obj, fileName, meta, action)
+            .heardVia(LinkPath.LAN) { it !is PcSendOutcome.Unreachable }
         return if (viaLan is PcSendOutcome.Unreachable && pairing.relay != null) {
             relay.send(pairing, obj, fileName, meta, action)
+                .heardVia(LinkPath.RELAY) { it !is PcSendOutcome.Unreachable }
         } else {
             viaLan
         }
@@ -42,14 +56,18 @@ class LanThenRelayTransport(
     // Теперь каждая пробует локальную сеть и, если её нет, идёт через релей.
 
     override suspend fun fetchCaps(pairing: PcPairing): List<PcRemoteAction>? =
-        lan.fetchCaps(pairing) ?: pairing.viaRelay { relay.fetchCaps(pairing) }
+        lan.fetchCaps(pairing).heardVia(LinkPath.LAN) { it != null }
+            ?: pairing.viaRelay { relay.fetchCaps(pairing).heardVia(LinkPath.RELAY) { it != null } }
 
     override suspend fun fetchOutbox(pairing: PcPairing): List<PcOutboxEntry>? =
-        lan.fetchOutbox(pairing) ?: pairing.viaRelay { relay.fetchOutbox(pairing) }
+        lan.fetchOutbox(pairing).heardVia(LinkPath.LAN) { it != null }
+            ?: pairing.viaRelay { relay.fetchOutbox(pairing).heardVia(LinkPath.RELAY) { it != null } }
 
     override suspend fun downloadOutboxFile(pairing: PcPairing, id: Int, targetPath: String): Boolean =
-        lan.downloadOutboxFile(pairing, id, targetPath) ||
-            (pairing.viaRelay { relay.downloadOutboxFile(pairing, id, targetPath) } ?: false)
+        lan.downloadOutboxFile(pairing, id, targetPath).heardVia(LinkPath.LAN) { it } ||
+            (pairing.viaRelay {
+                relay.downloadOutboxFile(pairing, id, targetPath).heardVia(LinkPath.RELAY) { it }
+            } ?: false)
 
     override suspend fun ackOutbox(pairing: PcPairing, id: Int) {
         lan.ackOutbox(pairing, id)

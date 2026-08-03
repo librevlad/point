@@ -115,6 +115,8 @@ class FlowViewModel @Inject constructor(
     private val pcDiscovery: com.point.core.flow.PcDiscovery,
     private val basket: com.point.core.flow.Basket,
     private val pcCaps: com.point.core.flow.PcCapsStore,
+    /** Кто помнит, когда компьютер отвечал в последний раз и каким путём (#412). */
+    private val linkMonitor: com.point.core.flow.LinkMonitor,
     private val pulledFiles: PulledFileFactory,
     private val frames: SelectionFrames,
 ) : ViewModel() {
@@ -892,6 +894,19 @@ class FlowViewModel @Inject constructor(
         _ui.update {
             it.copy(pcScreen = PcScreenState(pairing = pcPairings.current()), busy = null, message = null, messageOutcome = Outcome.NONE)
         }
+        // Экран открыт — состояние связи должно жить, а не застыть на момент открытия: «молчит
+        // 3 минуты» меняется само, и замерший текст соврал бы ровно тогда, когда на него смотрят.
+        linkJob?.cancel()
+        linkJob = viewModelScope.launch {
+            while (true) {
+                val contact = linkMonitor.last.value
+                val link = com.point.core.flow.linkStateOf(
+                    contact?.at, contact?.path, System.currentTimeMillis(),
+                )
+                _ui.update { s -> s.pcScreen?.let { s.copy(pcScreen = it.copy(link = link)) } ?: s }
+                kotlinx.coroutines.delay(1_000)
+            }
+        }
         // #80 v2: the natural sync point — the PC may have gained abilities since pairing.
         pcPairings.current()?.let { pairing ->
             viewModelScope.launch {
@@ -911,7 +926,10 @@ class FlowViewModel @Inject constructor(
         }
     }
 
+    private var linkJob: kotlinx.coroutines.Job? = null
+
     fun closePcSettings() {
+        linkJob?.cancel()
         refreshFromPc() // #161: Home is about to show — its banner must be current
         discoveryJob?.cancel()
         discoveryJob = null

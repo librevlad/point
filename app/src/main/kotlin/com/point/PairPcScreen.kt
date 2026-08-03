@@ -55,13 +55,26 @@ fun PairPcScreen(
         Spacer(Modifier.height(6.dp))
         Text(
             if (state.pairing != null) {
-                "Подключён: ${state.pairing.host}:${state.pairing.port}"
+                // «Подключён» раньше означало только «мы когда-то познакомились» — адрес из
+                // пейринга. Теперь рядом живое состояние: отвечает компьютер или молчит (#412).
+                "${state.pairing.host}:${state.pairing.port}"
             } else {
                 "Запустите «Point для ПК» и введите адрес из его окна"
             },
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        if (state.pairing != null) {
+            Spacer(Modifier.height(4.dp))
+            Text(
+                com.point.core.flow.linkLabel(state.link),
+                style = MaterialTheme.typography.bodyMedium,
+                color = when (state.link) {
+                    is com.point.core.flow.LinkState.Live -> MaterialTheme.colorScheme.primary
+                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                },
+            )
+        }
         Spacer(Modifier.height(20.dp))
 
         if (state.discovered.isNotEmpty()) {
