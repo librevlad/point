@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Описание службы печати Point (#251). Своего экрана настроек у принтера нет: настраивать
+     нечего — задание просто становится объектом. -->
+<print-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:vendor="Point" />

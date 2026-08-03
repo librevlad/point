@@ -17,6 +17,13 @@
             android:exported="true"
             tools:replace="android:exported" />
 
+        <!-- Проба принтера (#251): в образе эмулятора печатать нечем, а без живого задания
+             «Point как принтер» пришлось бы сдавать непроверенным. -->
+        <activity
+            android:name=".PrintProbeActivity"
+            android:exported="true"
+            android:excludeFromRecents="true" />
+
         <activity
             android:name=".SandboxActivity"
             android:exported="true"
