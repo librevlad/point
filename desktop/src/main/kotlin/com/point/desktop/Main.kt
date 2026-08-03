@@ -125,6 +125,7 @@ fun main(args: Array<String>) {
         pcName = config.name,
         pairGate = state::askPair,
         onReceived = state::onReceived,
+        onContact = { state.heard(com.point.core.flow.LinkPath.LAN) },
         // #80: advertise the actions the phone may run here. Save-as stays local-only —
         // it opens a target dialog, which nobody expects to pop from a remote tap.
         //
@@ -175,6 +176,7 @@ fun main(args: Array<String>) {
         remoteActions = { pcRemoteActions },
         outbox = outbox,
         onPhoneCaps = state::setPhoneCaps,
+        onContact = { state.heard(com.point.core.flow.LinkPath.RELAY) },
         runAction = state::runRemoteAction,
         log = { line -> println("[relay-rpc] " + line) },
     ).also { it.start() }

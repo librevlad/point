@@ -31,6 +31,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -74,6 +75,7 @@ fun DesktopApp(
     val message by state.message.collectAsState()
     val pair by state.pairRequest.collectAsState()
     val clipboardText by state.clipboardText.collectAsState()
+    val lastContact by state.lastContact.collectAsState()
 
     // Native Compose drag&drop (the AWT window.dropTarget never fired — the Compose
     // surface intercepts drops). Reads the OS transferable: files or plain text.
@@ -138,6 +140,11 @@ fun DesktopApp(
                 )
                 Spacer(Modifier.width(10.dp))
                 Text("Point для ПК", style = PointType.small.copy(color = PointColors.muted))
+                Spacer(Modifier.width(16.dp))
+                // Связь названа вслух (#412): человек тапал «Напечатать на ПК» и не понимал,
+                // сломалось оно или телефон просто не на связи. Строка живая — пересчитывается,
+                // пока экран открыт, иначе «на связи» застыло бы на весь вечер.
+                LinkChip(lastContact)
                 Spacer(Modifier.width(16.dp))
                 message?.let { Text(it, style = PointType.small) }
                 Spacer(Modifier.weight(1f))
@@ -279,6 +286,34 @@ private fun ClipboardCard(text: String, onCopyAgain: () -> Unit, onClose: () -> 
 }
 
 /** Compact connection status once the desktop is in use — tap to re-show the pairing QR. */
+/**
+ * Состояние связи с телефоном: точка-светофор и человеческие слова (#412).
+ *
+ * Пересчитывается раз в секунду, потому что «молчит 3 минуты» — величина, которая меняется сама:
+ * замерший текст врал бы ровно в тот момент, когда человек на него смотрит.
+ */
+@Composable
+private fun LinkChip(lastContact: Pair<Long, com.point.core.flow.LinkPath>?) {
+    var now by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            kotlinx.coroutines.delay(1_000)
+            now = System.currentTimeMillis()
+        }
+    }
+    val link = com.point.core.flow.linkStateOf(lastContact?.first, lastContact?.second, now)
+    val dot = when (link) {
+        is com.point.core.flow.LinkState.Live -> PointColors.cyan
+        is com.point.core.flow.LinkState.Silent -> PointColors.violet
+        com.point.core.flow.LinkState.Never -> PointColors.border
+    }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(7.dp).background(dot, androidx.compose.foundation.shape.CircleShape))
+        Spacer(Modifier.width(8.dp))
+        Text("Телефон · " + com.point.core.flow.linkLabel(link), style = PointType.small)
+    }
+}
+
 @Composable
 private fun ConnectionChip(config: PcConfig, onShowQr: () -> Unit) {
     OutlinedButton(onClick = onShowQr) {

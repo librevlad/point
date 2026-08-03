@@ -370,10 +370,18 @@ abstract class DataModule {
             http: HttpUrlPcTransport,
             discovery: PcDiscovery,
             pairings: PcPairings,
+            monitor: com.point.core.flow.LinkMonitor,
         ): PcTransport = LanThenRelayTransport(
             lan = SelfHealingPcTransport(http, discovery, pairings),
             relay = RelayPcTransport(BuildConfig.RELAY_APP_SECRET),
+            monitor = monitor,
         )
+
+        /** Кто помнит последний контакт с компьютером (#412) — один на приложение: экран и
+         *  транспорт обязаны говорить об одном и том же. */
+        @Provides
+        @Singleton
+        fun linkMonitor(): com.point.core.flow.LinkMonitor = com.point.core.flow.InMemoryLinkMonitor()
 
         /** Shared clipboard (#161 «общий буфер»): LAN hop first, relay fallback when off-network —
          *  same «безотказно» shape as [pcTransport]. */

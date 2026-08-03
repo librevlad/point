@@ -33,6 +33,8 @@ class PcServer(
     private val pcName: String,
     private val pairGate: (deviceName: String) -> Boolean,
     private val onReceived: (InboxItem) -> Unit,
+    /** Телефон дал о себе знать по локальной сети (#412): экран должен это показать. */
+    private val onContact: () -> Unit = {},
     private val remoteActions: List<PcRemoteAction> = emptyList(),
     private val runAction: (id: String, item: InboxItem) -> Unit = { _, _ -> },
     private val outbox: Outbox? = null,
@@ -170,6 +172,9 @@ class PcServer(
             runCatching { ex.requestBody.readBytes() }
             respond(ex, 401, "bad token")
         } else {
+            // Верный токен — это и есть «телефон на связи»: чужой сюда не дойдёт. Отмечается до
+            // работы, чтобы даже упавший запрос считался контактом — связь-то была.
+            onContact()
             body()
         }
     }

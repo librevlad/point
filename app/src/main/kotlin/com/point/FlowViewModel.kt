@@ -115,6 +115,8 @@ class FlowViewModel @Inject constructor(
     private val pcDiscovery: com.point.core.flow.PcDiscovery,
     private val basket: com.point.core.flow.Basket,
     private val pcCaps: com.point.core.flow.PcCapsStore,
+    /** Кто помнит, когда компьютер отвечал в последний раз и каким путём (#412). */
+    private val linkMonitor: com.point.core.flow.LinkMonitor,
     private val pulledFiles: PulledFileFactory,
     private val frames: SelectionFrames,
 ) : ViewModel() {
@@ -897,6 +899,21 @@ class FlowViewModel @Inject constructor(
         _ui.update {
             it.copy(pcScreen = PcScreenState(pairing = pcPairings.current()), busy = null, message = null, messageOutcome = Outcome.NONE)
         }
+        // Состояние связи следует за контактами, а не за таймером.
+        //
+        // Сначала здесь стоял цикл «раз в секунду пересчитать» — и он вешал тесты намертво:
+        // бесконечная корутина в viewModelScope не даёт `runTest` завершиться, и прогон CI висел
+        // час сорок вместо трёх минут. Бесконечный цикл ради секундной точности — плохая цена;
+        // экран и так перерисуется, когда компьютер отзовётся.
+        linkJob?.cancel()
+        linkJob = viewModelScope.launch {
+            linkMonitor.last.collect { contact ->
+                val link = com.point.core.flow.linkStateOf(
+                    contact?.at, contact?.path, System.currentTimeMillis(),
+                )
+                _ui.update { s -> s.pcScreen?.let { s.copy(pcScreen = it.copy(link = link)) } ?: s }
+            }
+        }
         // #80 v2: the natural sync point — the PC may have gained abilities since pairing.
         pcPairings.current()?.let { pairing ->
             viewModelScope.launch {
@@ -916,7 +933,10 @@ class FlowViewModel @Inject constructor(
         }
     }
 
+    private var linkJob: kotlinx.coroutines.Job? = null
+
     fun closePcSettings() {
+        linkJob?.cancel()
         refreshFromPc() // #161: Home is about to show — its banner must be current
         discoveryJob?.cancel()
         discoveryJob = null
