@@ -230,6 +230,7 @@ fun PointHost(
                     bubbles = current.bubbles,
                     onBubble = onBubble,
                     message = state.message,
+                    messageIsFailure = state.messageIsFailure,
                     inputPrompt = state.inputPrompt,
                     inputSuggestions = state.inputSuggestions,
                     onSubmitInput = onSubmitInput,
