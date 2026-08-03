@@ -12,6 +12,7 @@ import com.point.core.flow.RealizerMeta
 import com.point.core.flow.reportStage
 import com.point.core.model.ActionResult
 import com.point.core.model.CapabilityId
+import com.point.core.model.Feature
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
@@ -47,6 +48,19 @@ import javax.inject.Inject
  * бесплатен, офлайновый и объект с устройства не уводит; «Распознать текст» при этом работает
  * ровно как раньше (страница → облако), то есть соседние кадры правка не трогает. Порода та же,
  * что у `CloudOcrCapability`: где машина решить не может, спрашивают не эвристику, а человека.
+ *
+ * **Где показывать — уточнено живой приёмкой (#396).** «Решает человек» стоило пузырька на каждом
+ * снимке: на письме, на квитанции, на скриншоте переписки — владелец сказал прямо, что это шум.
+ * Разрез взят не из геометрии (она и не отделяет: табло «находится» на 22 кадрах из 23), а из
+ * того, чем кончилось чтение страницы: в четвёртом замере корпуса у всех восьми кадров с прочи-
+ * танным печатным текстом приборов нет ни одного, а все три счётчика — среди тех, где связного
+ * текста не собралось. Отсюда гейт: страницу **читали** ([Feature.HAS_WORD_LAYER] — слой слов
+ * сохраняется всегда, он улика), а связного текста на ней **не вышло** ([Feature.HAS_TEXT] гаснет
+ * на гейте мусора).
+ *
+ * Что это меняет для человека: до конца чтения пузырька нет вовсе — он приходит вместе с
+ * обогащением, как остальные признаковые действия. Остаточный шум назван: снимок экрана с письмом
+ * и два кадра маршрута тоже не читаются, и показание им предложится (кадры 07, 12, 13 корпуса).
  */
 class MeterOcrCapability @Inject constructor() : Capability {
     override val id = ID
@@ -55,7 +69,8 @@ class MeterOcrCapability @Inject constructor() : Capability {
     /** Местное и бесплатное, но не мгновенное: перебор наклонов и до трёх проходов движка. */
     override val meta = CapabilityMeta(priority = 60, cost = Cost.FREE, latency = Latency.SLOW)
     override fun label(state: ObjectState) = "Прочитать показание"
-    override fun accepts(state: ObjectState) = state.kind == ObjectKind.IMAGE
+    override fun accepts(state: ObjectState) = state.kind == ObjectKind.IMAGE &&
+        state.has(Feature.HAS_WORD_LAYER) && !state.has(Feature.HAS_TEXT)
     override fun produces(state: ObjectState) = ObjectState(ObjectKind.TEXT)
 
     companion object { val ID = CapabilityId("meter-ocr") }
