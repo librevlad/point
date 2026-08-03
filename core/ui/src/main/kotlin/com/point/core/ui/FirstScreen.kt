@@ -89,7 +89,7 @@ fun FirstScreen(
     onBubble: (Bubble) -> Unit,
     modifier: Modifier = Modifier,
     message: String? = null,
-    /** Отказ ли это: цвет исхода — второе сообщение после текста, и врать им нельзя. */
+    /** Отказ ли это: знак и свет исхода — второе сообщение после текста, и врать им нельзя. */
     messageIsFailure: Boolean = false,
     inputPrompt: String? = null,
     inputSuggestions: List<String> = emptyList(),
@@ -159,7 +159,9 @@ fun FirstScreen(
         // прокручиваемого экрана, ниже всех действий, подсказок и цепочек. Ответ существовал
         // ровно там, куда никто не смотрит; снаружи это неотличимо от «действие ничего не
         // сделало» — и это же ощущение владелец описал в #288 словом «зависло».
-        MessageBanner(message, messageIsFailure)
+        //
+        // Как он выглядит — OutcomeBanner: карточка портала, где исход различают знак и его свет.
+        OutcomeBanner(message, messageIsFailure)
 
         // «Point понял» (#114): the understanding card — facts land line by line as
         // enrichment delivers them (#64), with still-running work inside the same card.
@@ -334,40 +336,6 @@ private fun WorkingStage(stage: String?) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
             )
-        }
-    }
-}
-
-@Composable
-private fun MessageBanner(message: String?, failure: Boolean) {
-    // Hold the last message so it stays visible while the banner animates out.
-    var shown by remember { mutableStateOf("") }
-    LaunchedEffect(message) { if (message != null) shown = message }
-
-    AnimatedVisibility(
-        visible = message != null,
-        enter = fadeIn() + expandVertically(),
-        exit = fadeOut() + shrinkVertically(),
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Spacer(Modifier.height(32.dp))
-            Surface(
-                shape = RoundedCornerShape(12.dp),
-                // Тревожный цвет — только отказу. Удачный исход («Открываю в Excel»,
-                // «Отправлено на принтер») в красном читается как сбой, а цвет здесь — второе
-                // сообщение после текста.
-                color = if (failure) MaterialTheme.colorScheme.errorContainer
-                else MaterialTheme.colorScheme.surfaceVariant,
-            ) {
-                Text(
-                    text = shown,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-                    color = if (failure) MaterialTheme.colorScheme.onErrorContainer
-                    else MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodyMedium,
-                    textAlign = TextAlign.Center,
-                )
-            }
         }
     }
 }

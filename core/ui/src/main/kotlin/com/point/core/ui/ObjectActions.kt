@@ -47,12 +47,15 @@ import kotlinx.coroutines.delay
 
 // Premium dark-neon tokens for the action list (design system, docs/design-system.png). The list must
 // not read "cheap": a top-lit surface with real depth, colour-lit icon plates, and one bold focal row.
-private val RowTop = Color(0xFF1A1D25)      // top of the row's subtle top-lit gradient
-private val RowBottom = Color(0xFF121419)   // bottom — a hair below surface, gives the row body depth
-private val PlateBase = Color(0xFF1F222B)   // icon plate base under its colour glow
+//
+// Не private: карточка исхода (OutcomeBanner) сделана из тех же токенов — «в языке портала» не может
+// держаться на второй копии тех же констант, она разъедется молча при первой же правке одной из них.
+internal val RowTop = Color(0xFF1A1D25)      // top of the row's subtle top-lit gradient
+internal val RowBottom = Color(0xFF121419)   // bottom — a hair below surface, gives the row body depth
+internal val PlateBase = Color(0xFF1F222B)   // icon plate base under its colour glow
 private val PrimaryStart = Color(0xFF7B5CFF) // АКЦЕНТ1 — the hero gradient start (violet)
 private val PrimaryEnd = Color(0xFF4E7BFF)   // toward blue (cyan is reserved for the AI ring)
-private val TopHighlight = Color(0x12FFFFFF) // 7% white top-edge highlight — the "crafted glass" tell
+internal val TopHighlight = Color(0x12FFFFFF) // 7% white top-edge highlight — the "crafted glass" tell
 
 /**
  * The object's actions as design-system rows (docs/design-system.png), grouped by intent into the

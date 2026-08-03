@@ -378,15 +378,35 @@ private fun PreviewCollection() = PointTheme {
     )
 }
 
-@Preview(name = "Text + Failure message", showBackground = true)
+// Фон превью — ФОН дизайн-системы (#0B0D10): карточку исхода судят на поле портала, а не на белом
+// листе, иначе «в языке продукта» проверить нечем.
+@Preview(name = "Исход · отказ (#358)", showBackground = true, backgroundColor = 0xFF0B0D10)
 @Composable
-private fun PreviewTextWithMessage() = PointTheme {
-    val obj = sampleObject(ObjectKind.TEXT, "text/plain", "notes.txt")
+private fun PreviewOutcomeFailure() = PointTheme(darkTheme = true) {
+    // Живой случай, ради которого исход подняли под объект: «Прочитать показание» честно
+    // отказалось, а человек не видел ничего. Слова — дословно те, что вернуло устройство
+    // (MeterOcrAction.UNREADABLE); вид — карточка портала со знаком «✕» в тёплом конце
+    // фирменного градиента, а не красный блок Material.
     FirstScreen(
-        obj = obj,
-        bubbles = sampleBubbles(ObjectKind.TEXT),
+        obj = sampleObject(ObjectKind.IMAGE, "image/jpeg", "meter.jpg"),
+        bubbles = sampleBubbles(ObjectKind.IMAGE),
         onBubble = {},
-        message = "Действие подключим в следующем срезе",
+        message = "Табло нашлось, но цифры не читаются — снимите ближе и без блика",
+        messageIsFailure = true,
+    )
+}
+
+@Preview(name = "Исход · удача (#358)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@Composable
+private fun PreviewOutcomeDone() = PointTheme(darkTheme = true) {
+    // Контроль к предыдущему: тот же экран, тот же объект, удачный исход — знак «✓» светится
+    // фиолетовым АКЦЕНТ1, светом самого портала. Раньше обе эти карточки были одинаково красными,
+    // и «Сохранено» кричало сбоем наравне с настоящим отказом.
+    FirstScreen(
+        obj = sampleObject(ObjectKind.IMAGE, "image/jpeg", "meter.jpg"),
+        bubbles = sampleBubbles(ObjectKind.IMAGE),
+        onBubble = {},
+        message = "Сохранено: meter.jpg",
     )
 }
 

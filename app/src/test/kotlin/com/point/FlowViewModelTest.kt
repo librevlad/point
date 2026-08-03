@@ -45,6 +45,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -318,6 +319,27 @@ class FlowViewModelTest {
         assertNull(s.frame)
         assertNull(s.busy)
         assertTrue(s.message?.contains("Не удалось открыть") == true)
+        // Отказ обязан выглядеть отказом: карточка исхода рисует знак по этому флагу, и без него
+        // «Не удалось открыть» встало бы под галочкой «Готово».
+        assertTrue(s.messageIsFailure)
+    }
+
+    /**
+     * Исход не наследуется. `copy` сохраняет прошлое значение флага, поэтому удача, пришедшая
+     * после отказа, легко получала бы чужой знак «✕» — пока баннер красился в один цвет всегда,
+     * этого не было видно, а карточка исхода (#358) показывает такую ложь сразу.
+     */
+    @Test fun `удача после отказа не наследует знак отказа`() = runTest(dispatcher) {
+        resolver.throwsOnPerform = IllegalStateException("scratch-файл исчез")
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        vm.onBubble(bubble()); advanceUntilIdle()
+        assertTrue(vm.ui.value.messageIsFailure)
+
+        vm.togglePin(bubble(id = "a", title = "Действие")); advanceUntilIdle()
+
+        assertTrue(vm.ui.value.message?.contains("Закреплено") == true)
+        assertFalse(vm.ui.value.messageIsFailure)
     }
 
     // --- Action selection (the four ActionResult channels) ---

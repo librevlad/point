@@ -241,7 +241,9 @@ class FlowViewModel @Inject constructor(
                 store.clear()
                 store.ingest(sourceUri, mime)
             }.getOrElse { e ->
-                _ui.update { it.copy(busy = null, busyStage = null, message = "Не удалось открыть: ${e.message}") }
+                // Хвост исключения человеку ничего не говорит («…FileNotFoundException: /storage/…»),
+                // а теперь этот текст стоит под объектом первой строкой. Отказ называется словами.
+                _ui.update { it.copy(busy = null, busyStage = null, message = "Не удалось открыть объект", messageIsFailure = true) }
                 return@launch
             }
             runCatching { history.record(obj) }
@@ -267,7 +269,9 @@ class FlowViewModel @Inject constructor(
                 store.clear()
                 store.ingestMultiple(sources)
             }.getOrElse { e ->
-                _ui.update { it.copy(busy = null, busyStage = null, message = "Не удалось открыть: ${e.message}") }
+                // Хвост исключения человеку ничего не говорит («…FileNotFoundException: /storage/…»),
+                // а теперь этот текст стоит под объектом первой строкой. Отказ называется словами.
+                _ui.update { it.copy(busy = null, busyStage = null, message = "Не удалось открыть объект", messageIsFailure = true) }
                 return@launch
             }
             // A collection is a transient scratch directory — History copies a single file, so skip it.
@@ -325,7 +329,7 @@ class FlowViewModel @Inject constructor(
                 Triple(entry, path, ok)
             }
             if (pulled.any { !it.third }) {
-                _ui.update { it.copy(busy = null, busyStage = null, message = "Компьютер недоступен — попробуйте ещё раз") }
+                _ui.update { it.copy(busy = null, busyStage = null, message = "Компьютер недоступен — попробуйте ещё раз", messageIsFailure = true) }
                 return@launch
             }
             when (pulled.size) {
@@ -408,7 +412,7 @@ class FlowViewModel @Inject constructor(
         viewModelScope.launch {
             val obj = runCatching { history.open(entry.id) }.getOrNull()
             if (obj == null) {
-                _ui.update { it.copy(busy = null, busyStage = null, message = "Объект недоступен") }
+                _ui.update { it.copy(busy = null, busyStage = null, message = "Объект недоступен", messageIsFailure = true) }
                 return@launch
             }
             runCatching { store.clear() }
@@ -519,7 +523,7 @@ class FlowViewModel @Inject constructor(
                 }.getOrNull()
             }
             if (loaded == null) {
-                _ui.update { it.copy(message = "Не удалось открыть страницу для выделения") }
+                _ui.update { it.copy(message = "Не удалось открыть страницу для выделения", messageIsFailure = true) }
                 return@launch
             }
             selectionLayer = loaded.first
@@ -568,7 +572,7 @@ class FlowViewModel @Inject constructor(
                 }.getOrNull()
             }
             if (derived == null) {
-                _ui.update { it.copy(message = "Не удалось сохранить выделение") }
+                _ui.update { it.copy(message = "Не удалось сохранить выделение", messageIsFailure = true) }
                 return@launch
             }
             closeSelection()
@@ -889,7 +893,7 @@ class FlowViewModel @Inject constructor(
     fun pairFromPayload(payload: String) {
         val pairing = com.point.core.flow.parsePcPairing(payload)
         if (pairing == null) {
-            _ui.update { it.copy(message = "Это не код подключения Point для ПК") }
+            _ui.update { it.copy(message = "Это не код подключения Point для ПК", messageIsFailure = true) }
             return
         }
         _ui.update { it.copy(pcScreen = PcScreenState(pairing = pcPairings.current(), busy = true), message = null, messageIsFailure = false) }
@@ -964,7 +968,7 @@ class FlowViewModel @Inject constructor(
             // the picker keys rows by package, and duplicates crash the list. Direct wins.
             val apps = (direct + bridgedHandlers(obj)).distinctBy { it.packageName }
             _ui.update {
-                if (apps.isEmpty()) it.copy(busy = null, busyStage = null, message = "Нет приложения для этого объекта")
+                if (apps.isEmpty()) it.copy(busy = null, busyStage = null, message = "Нет приложения для этого объекта", messageIsFailure = true)
                 else it.copy(busy = null, busyStage = null, appPicker = apps)
             }
         }
@@ -1003,7 +1007,12 @@ class FlowViewModel @Inject constructor(
             }
             val toOpen = if (via != null) bridge(obj, via) else obj
             if (toOpen == null) {
-                _ui.update { it.copy(busy = null, busyStage = null, message = "Не удалось преобразовать") }
+                _ui.update {
+                    it.copy(
+                        busy = null, busyStage = null, messageIsFailure = true,
+                        message = "Не удалось подготовить объект для этого приложения",
+                    )
+                }
                 return@launch
             }
             runCatching { appLauncher.launch(target, toOpen) }
@@ -1039,7 +1048,7 @@ class FlowViewModel @Inject constructor(
     fun saveAiConfig(config: UserAiConfig) {
         viewModelScope.launch {
             runCatching { userKeys.save(config) }
-            _ui.update { it.copy(keyScreen = null, message = "Ключ AI сохранён") }
+            _ui.update { it.copy(keyScreen = null, message = "Ключ AI сохранён", messageIsFailure = false) }
         }
     }
 
@@ -1051,7 +1060,7 @@ class FlowViewModel @Inject constructor(
         viewModelScope.launch {
             runCatching { favorites.save(name, steps) }
             loadFavorites()
-            _ui.update { it.copy(message = "Цепочка сохранена: $name") }
+            _ui.update { it.copy(message = "Цепочка сохранена: $name", messageIsFailure = false) }
         }
     }
 
@@ -1075,12 +1084,12 @@ class FlowViewModel @Inject constructor(
             for (capId in chain.steps) {
                 val realizer = runCatching { resolver.realizerFor(capId) }.getOrNull()
                 if (realizer == null) {
-                    _ui.update { it.copy(busy = null, busyStage = null, message = "Шаг цепочки недоступен") }
+                    _ui.update { it.copy(busy = null, busyStage = null, message = "Шаг цепочки недоступен", messageIsFailure = true) }
                     return@launch
                 }
                 val label = runCatching { registry.byId(capId).label(current.state) }.getOrDefault("")
                 val result = runCatching { realizer.perform(current, null) }
-                    .getOrElse { ActionResult.Failure(it.message ?: "Ошибка", recoverable = true) }
+                    .getOrElse { ActionResult.Failure(it.message ?: "Не получилось", recoverable = true) }
                 when (result) {
                     is ActionResult.Success -> {
                         current = store.put(result.result)
@@ -1095,7 +1104,9 @@ class FlowViewModel @Inject constructor(
                         return@launch
                     }
                     is ActionResult.NeedsInput, is ActionResult.NeedsImage -> {
-                        _ui.update { it.copy(busy = null, busyStage = null, message = "Цепочка требует ввода — прервана", messageIsFailure = true) }
+                        // «Требует ввода» — слово контракта, а не человека: на экране это значит,
+                        // что шаг хочет спросить, а цепочку человек запускал одним тапом.
+                        _ui.update { it.copy(busy = null, busyStage = null, message = "Цепочка остановлена: шагу нужен ваш ответ", messageIsFailure = true) }
                         return@launch
                     }
                 }
@@ -1128,7 +1139,8 @@ class FlowViewModel @Inject constructor(
                 .onFailure { e ->
                     // Отмена — не ошибка: человек передумал, и сказать ему «Ошибка» было бы враньём.
                     if (e is kotlinx.coroutines.CancellationException) throw e
-                    _ui.update { it.copy(busy = null, busyStage = null, message = e.message ?: "Ошибка", messageIsFailure = true) }
+                    // «Ошибка» — слово системы; человеку под объектом нужен исход, а не термин.
+                    _ui.update { it.copy(busy = null, busyStage = null, message = e.message ?: "Не получилось", messageIsFailure = true) }
                 }
         }
     }
@@ -1143,6 +1155,8 @@ class FlowViewModel @Inject constructor(
         job.cancel()
         claimVoice() // остановленная работа замолкает сразу — её хвост ещё идёт
         _ui.update { it.copy(busy = null, busyStage = null, message = "Отменено") }
+        // Отмена — не отказ: человек сам передумал, и знак исхода не имеет права ставить ему «✕».
+        _ui.update { it.copy(busy = null, busyStage = null, message = "Отменено", messageIsFailure = false) }
     }
 
     private suspend fun handleResult(result: ActionResult, bubble: Bubble) {
@@ -1252,6 +1266,7 @@ class FlowViewModel @Inject constructor(
                 it.copy(
                     frame = refreshed,
                     message = if (already) "Откреплено" else "Закреплено: ${bubble.title}",
+                    messageIsFailure = false,
                 )
             }
         }
