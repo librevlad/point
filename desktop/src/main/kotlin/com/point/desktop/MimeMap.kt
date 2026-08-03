@@ -17,6 +17,12 @@ fun mimeFor(fileName: String): String =
         "rar" -> "application/vnd.rar"
         "docx" -> "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         "xlsx" -> "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        // Презентации и старый бинарный Office (#403): без них pptx приезжал на ПК как
+        // «неизвестно что» и терял действия, которые для офисных документов уже есть.
+        "pptx" -> "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        "ppt" -> "application/vnd.ms-powerpoint"
+        "doc" -> "application/msword"
+        "xls" -> "application/vnd.ms-excel"
         else -> "application/octet-stream"
     }
 

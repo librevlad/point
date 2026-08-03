@@ -14,7 +14,14 @@ import java.io.File
  * Composition root — hand-wired DI (no Hilt on the JVM). AWT implementations of the
  * desktop seams live here and only here; everything below them is pure and tested.
  */
-fun main() {
+fun main(args: Array<String>) {
+    // «Отправить в Point» из проводника (#252). Point на компьютере обычно уже открыт, поэтому
+    // файл сначала предлагается живому экземпляру — второе окно на каждый пункт меню человеку не
+    // нужно, да и порт у сервера уже занят. Никто не ответил — открываемся сами с этим файлом.
+    val handed = runCatching {
+        SendToRunning.handOff(filesFromArgs(args), FilePcConfig(File(System.getProperty("user.home"), ".point-pc")).load())
+    }.getOrDefault(false)
+    if (handed) return
     val config = FilePcConfig(File(System.getProperty("user.home"), ".point-pc")).load()
     val inbox = Inbox(File(System.getProperty("user.home"), "Point"))
 
@@ -127,6 +134,8 @@ fun main() {
         clipboardGet = ::readSystemClipboard,
         clipboardSet = ::writeSystemClipboard,
     )
+    // Открылись сами: файл из меню становится объектом сразу, без лишнего действия человека.
+    filesFromArgs(args).forEach { file -> state.onReceived(inbox.addFile(file.absolutePath)) }
     server.start(preferredPort = config.port)
     // Slice C: let phones discover this PC by themselves (best-effort mDNS).
     val advertiser = Advertiser(config.name, server.port).also { it.start() }
