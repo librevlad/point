@@ -257,6 +257,42 @@ class FlowViewModelTest {
         assertEquals("+380671234567", snapshot.saved.last().last().metadata["entity.phone"])
     }
 
+    // --- Рабочая копия объекта: чужие байты не остаются на устройстве ---
+
+    /**
+     * Инвариант проекта, который до ревизии #239 не проверял никто: по окончании флоу
+     * `ObjectStore.clear()` обязателен. Цена пропуска — не абстрактная: в корпусе владельца
+     * это фото карты, платёжка и военная ведомость, и они остались бы лежать копией в scratch
+     * после того, как человек закрыл Point. Журнал пути (`snapshot`) чистился и проверялся,
+     * а сами байты — нет.
+     */
+    @Test fun `конец флоу стирает рабочую копию объекта, а не только запись о пути`() = runTest(dispatcher) {
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        val beforeEnd = store.clearedTimes
+
+        vm.endFlow(); advanceUntilIdle()
+
+        assertTrue("копия объекта обязана быть стёрта", store.clearedTimes > beforeEnd)
+    }
+
+    /** Открыли объект из «Недавнего» — предыдущая копия уходит ДО того, как появится новая:
+     *  иначе scratch копит объекты всех прошлых флоу, а обещано «работаем с одной копией». */
+    @Test fun `открытие из истории стирает копию прошлого объекта`() = runTest(dispatcher) {
+        history.opened = PointObject("old", "image/png", ScratchRef("/old"), ObjectState(ObjectKind.IMAGE))
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        val beforeOpen = store.clearedTimes
+
+        vm.openFromHistory(entry("h")); advanceUntilIdle()
+
+        assertTrue("копия прошлого объекта обязана быть стёрта", store.clearedTimes > beforeOpen)
+        assertEquals("old", vm.ui.value.frame?.obj?.id)
+    }
+
+    private fun entry(id: String) =
+        HistoryEntry(id, "image/png", ObjectKind.IMAGE, "Фото", 0L, ScratchRef("/hist/$id"))
+
     // --- Ingest ---
 
     @Test fun `onShared ingests, pushes a frame and records history`() = runTest(dispatcher) {
@@ -335,6 +371,37 @@ class FlowViewModelTest {
         vm.onBubble(bubble()); advanceUntilIdle()
 
         assertEquals("Не удалось распознать", vm.ui.value.message)
+        assertNull(vm.ui.value.busy)
+    }
+
+    /**
+     * Пятый канал, которого нет в `ActionResult`: реализатор не вернул ничего, а взорвался
+     * (NPE в чужой библиотеке, оборванный поток, отсутствующий файл). До ревизии #239 весь
+     * набор проверял только четыре объявленных исхода, и ветка «неучтённый сбой» — та самая,
+     * что превращает «ничего не теряется молча» в обещание — не выполнялась ни разу.
+     */
+    @Test fun `взорвавшийся реализатор доходит до человека сообщением, а не тишиной`() = runTest(dispatcher) {
+        resolver.throwsOnPerform = IllegalStateException("scratch-файл исчез")
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.onBubble(bubble()); advanceUntilIdle()
+
+        assertEquals("scratch-файл исчез", vm.ui.value.message)
+        assertTrue(vm.ui.value.messageIsFailure)
+        assertNull("экран ожидания обязан уйти, иначе это «зависло»", vm.ui.value.busy)
+    }
+
+    /** Пузырёк нарисован, а реализатора для него нет (потеряли `@IntoSet` при добавлении
+     *  действия): тап обязан сказать об этом, а не уронить приложение и не сделать вид. */
+    @Test fun `пузырёк без реализатора отвечает отказом, а не падением`() = runTest(dispatcher) {
+        resolver.noRealizer = true
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.onBubble(bubble()); advanceUntilIdle()
+
+        assertTrue(vm.ui.value.messageIsFailure)
         assertNull(vm.ui.value.busy)
     }
 
@@ -1005,6 +1072,43 @@ class FlowViewModelTest {
         assertEquals(false, vm.ui.value.cloudConsent)         // no prompt
     }
 
+    /**
+     * #325, дыра, которую до ревизии #239 держал только тест `DefaultResolver` в `:executors`:
+     * «Распознать текст» объявлена местной и бесплатной, а за ней цепочка, где на неудаче
+     * движка объект уходит в облако. На корпусе владельца движок не справляется на шести
+     * кадрах из двадцати двух — путь обычный, не редкий.
+     *
+     * Экран судит по факту (`Resolver.leavesDevice`), а не по объявлению способности. Ручка
+     * у фейка была, и её никто не поворачивал: убери из `isCloud` вторую половину — весь
+     * набор оставался зелёным, а объект уезжал бы в чужой сервис без спроса.
+     */
+    @Test fun `местная способность с облачным запасным всё равно спрашивает согласие`() = runTest(dispatcher) {
+        resolver.result = ActionResult.Done("готово")
+        resolver.leavesDevice = true                          // цепочка «устройство → облако»
+        val vm = vm(caps = mapOf(CapabilityId("ocr") to setOf(Intent.UNDERSTAND)))  // объявлена местной
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.onBubble(bubble(id = "ocr")); advanceUntilIdle()
+
+        assertTrue("согласие обязано спрашиваться по факту, а не по объявлению", vm.ui.value.cloudConsent)
+        assertNull(vm.ui.value.message)
+        assertEquals("__unset__", resolver.lastAmendment)     // до реализатора дело не дошло
+    }
+
+    /** Обратная половина той же развилки: цепочка целиком местная — спрашивать не о чем,
+     *  иначе «Point всё время просит разрешение» и согласие обесценивается. */
+    @Test fun `полностью местная цепочка не спрашивает ничего`() = runTest(dispatcher) {
+        resolver.result = ActionResult.Done("готово")
+        resolver.leavesDevice = false
+        val vm = vm(caps = mapOf(CapabilityId("ocr") to setOf(Intent.UNDERSTAND)))
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.onBubble(bubble(id = "ocr")); advanceUntilIdle()
+
+        assertEquals(false, vm.ui.value.cloudConsent)
+        assertEquals("готово", vm.ui.value.message)
+    }
+
     @Test fun `tapping AI opens the multi-turn chat, not a one-shot action (#4)`() = runTest(dispatcher) {
         consent.granted = true
         val vm = cloudVm()
@@ -1146,6 +1250,8 @@ class FlowViewModelTest {
 
 private class FakeStore : ObjectStore {
     var failIngest = false
+    /** Сколько раз стёрли рабочую копию: инвариант «чужие байты не остаются» проверяем счётом. */
+    var clearedTimes = 0
     override suspend fun ingest(sourceUri: String, mime: String): PointObject =
         if (failIngest) error("boom") else PointObject("in", mime, ScratchRef("/in"), ObjectState(ObjectKind.IMAGE))
     override suspend fun ingestMultiple(sources: List<String>): PointObject =
@@ -1155,7 +1261,7 @@ private class FakeStore : ObjectStore {
     override suspend fun children(collection: PointObject): List<PointObject> = emptyList()
     override suspend fun readText(obj: PointObject, limit: Int): String = ""
     override suspend fun newScratchFile(extension: String): ScratchRef = ScratchRef("/scratch.$extension")
-    override suspend fun clear() = Unit
+    override suspend fun clear() { clearedTimes++ }
 }
 
 private class FakeResolver : Resolver {
@@ -1165,15 +1271,23 @@ private class FakeResolver : Resolver {
     var leavesDevice = false
     var lastAmendment: String? = "__unset__"
     var previews: Map<CapabilityId, Preview> = emptyMap()
+    /** Реализатор взорвался вместо того, чтобы вернуть `Failure`, — неучтённый сбой. */
+    var throwsOnPerform: Throwable? = null
+    /** Для способности нет ни одного реализатора: пузырёк нарисован, а исполнять нечем. */
+    var noRealizer = false
     override fun leavesDevice(capabilityId: CapabilityId): Boolean = leavesDevice
 
-    override fun realizerFor(capabilityId: CapabilityId): Realizer = object : Realizer {
-        override val capabilityId = capabilityId
-        override suspend fun perform(input: PointObject, amendment: String?): ActionResult {
-            lastAmendment = amendment
-            return result
+    override fun realizerFor(capabilityId: CapabilityId): Realizer {
+        if (noRealizer) error("No realizer for capability=${capabilityId.value}")
+        return object : Realizer {
+            override val capabilityId = capabilityId
+            override suspend fun perform(input: PointObject, amendment: String?): ActionResult {
+                lastAmendment = amendment
+                throwsOnPerform?.let { throw it }
+                return result
+            }
+            override suspend fun preview(input: PointObject): Preview? = previews[capabilityId]
         }
-        override suspend fun preview(input: PointObject): Preview? = previews[capabilityId]
     }
 }
 
@@ -1219,10 +1333,12 @@ private class FakeEnrichment(var features: Set<Feature> = emptySet()) : Enrichme
 private class FakeHistory : HistoryStore {
     val recorded = mutableListOf<PointObject>()
     val updated = mutableListOf<PointObject>()
+    /** Что отдаст «Недавнее» по тапу; null — запись не открылась. */
+    var opened: PointObject? = null
     override suspend fun record(obj: PointObject) { recorded += obj }
     override suspend fun update(obj: PointObject) { updated += obj }
     override suspend fun recent(limit: Int): List<HistoryEntry> = emptyList()
-    override suspend fun open(entryId: String): PointObject? = null
+    override suspend fun open(entryId: String): PointObject? = opened
     override suspend fun clearAll() = Unit
 }
 

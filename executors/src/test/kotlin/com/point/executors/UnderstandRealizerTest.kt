@@ -168,6 +168,8 @@ class UnderstandRealizerTest {
         assertTrue(result is ActionResult.Failure)
     }
 
+    /** Текстовый объект без текста — отказ, и заготовленный ответ роли не играет: до модели
+     *  такой объект не доходит вовсе, поэтому спрашивать нечего и платить не за что. */
     @Test
     fun `пустой документ не доходит до модели`() = runTest {
         val result = realizer("PHONE=+380671234567").perform(textObject(content = "   "))
@@ -293,8 +295,14 @@ class UnderstandRealizerTest {
         assertEquals(Provenance.HUMAN.wire, result.result.metadata["entity.track.src"])
     }
 
-    /** #264: роль присуждает МОДЕЛЬ, даже когда буквы собраны из атомов страницы. До этого
-     *  среза `graph.role.*` уходил в метаданные вообще без происхождения — дыра, не экономия. */
+    /**
+     * #264: роль присуждает МОДЕЛЬ, даже когда буквы собраны из атомов страницы. До этого
+     * среза `graph.role.*` уходил в метаданные вообще без происхождения — дыра, не экономия.
+     *
+     * Здесь же дословный случай владельца («имена кривые», #297): OCR прочёл «1ваненко ван»,
+     * модель указала метками на слова имени — подпись «Відправник» в указание не вошла — и
+     * буквы-жертвы починены. Значение и его происхождение проверяются одним вызовом.
+     */
     @Test
     fun `роль уходит в метаданные с происхождением, а не молча`() = runTest {
         val result = realizer("sender=Іваненко Іван [w6 w7]")
@@ -332,15 +340,6 @@ class UnderstandRealizerTest {
     }
 
     // -- #297: роли метками атомов — подпись вне указания, конфузаблы чинят имя --
-
-    /** Дословный случай владельца («имена кривые»): OCR прочёл «1ваненко ван», модель указала
-     *  метками на слова имени (подпись «Відправник» — вне указания) и починила буквы-жертвы. */
-    @Test
-    fun `роль метками атомов — имя без подписи, конфузаблы починены`() = runTest {
-        val result = realizer("sender=Іваненко Іван [w6 w7]").perform(imageWithLayer()) as ActionResult.Success
-
-        assertEquals("Іваненко Іван", result.result.metadata["graph.role.sender"])
-    }
 
     /** Дым #297: без явной просьбы модель цитирует индекс дословно, и огрех OCR доезжает
      *  до экрана. Промпт ролей обязан просить писать имя правильно. */
@@ -596,12 +595,5 @@ class UnderstandRealizerTest {
 
         assertTrue(result is ActionResult.Failure)
         assertTrue((result as ActionResult.Failure).recoverable)
-    }
-
-    @Test
-    fun `текстовый объект без текста по-прежнему честно отказывает`() = runTest {
-        val result = realizer("METER=154").perform(textObject(content = "   "))
-
-        assertTrue(result is ActionResult.Failure)
     }
 }
