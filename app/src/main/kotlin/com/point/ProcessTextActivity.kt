@@ -77,6 +77,8 @@ class ProcessTextActivity : ComponentActivity() {
                         onSelectRegion = viewModel::onSelectRegion,
                         onTakeSelection = viewModel::takeSelection,
                         onCloseSelection = viewModel::closeSelection,
+                        onFindQuery = viewModel::onFindQuery,
+                        onCloseFind = viewModel::closeFind,
                         onCancelPreview = viewModel::cancelPreview,
                     )
                 }

@@ -59,7 +59,7 @@ class OcrEnricher @Inject constructor(
         cost = EnrichCost.SLOW,
         mayYield = setOf(
             Feature.HAS_TEXT, Feature.HAS_PHONE, Feature.HAS_EMAIL, Feature.HAS_ADDRESS,
-            Feature.HAS_DATE, Feature.HAS_CARD, Feature.HAS_URL,
+            Feature.HAS_DATE, Feature.HAS_CARD, Feature.HAS_URL, Feature.HAS_WORD_LAYER,
         ),
         // The gate must know OCR can yield objects, not only actions: on a parcel screenshot
         // the address and the deadline are the whole point, and neither opens a new button.
@@ -88,6 +88,11 @@ class OcrEnricher @Inject constructor(
         // наблюдал до конца, и «рукопись» из него — происхождение, которого не было.
         val mode = read?.takeIf { it.incomplete == null }?.let { readingModeOf(it) }
         val evidenceOnly = EnrichmentDelta(
+            // Слой есть — значит, у страницы есть адресуемые слова, даже когда гейт мусора ниже
+            // не пустил их в текст (#279): искать по такой странице можно, и «Найти в документе»
+            // обязано быть предложено. Признак ставится там же, где пишется сам слой, — иначе
+            // он рассказывал бы про метаданные, а не про улику.
+            features = if (atomsRef != null) setOf(Feature.HAS_WORD_LAYER) else emptySet(),
             metadata = buildMap {
                 atomsRef?.let { put(META_OCR_ATOMS_REF, it.value) }
                 mode?.let { put(META_READING_MODE, it.name) }
@@ -114,6 +119,7 @@ class OcrEnricher @Inject constructor(
         File(ref.value).writeText(text)
         EnrichmentDelta(
             features = entities.features + Feature.HAS_TEXT +
+                (if (atomsRef != null) setOf(Feature.HAS_WORD_LAYER) else emptySet()) +
                 if (url != null) setOf(Feature.HAS_URL) else emptySet(),
             metadata = buildMap {
                 putAll(entities.metadata)

@@ -25,8 +25,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
@@ -62,13 +60,8 @@ fun SelectionScreen(
         var dragNow by remember { mutableStateOf<Offset?>(null) }
 
         // Вписывание битмапа в контейнер: одна точка правды для рисования и для обратного
-        // пересчёта пальца в координаты битмапа.
-        val scale = if (container == IntSize.Zero) 1f else minOf(
-            container.width / image.width.toFloat(),
-            container.height / image.height.toFloat(),
-        )
-        val dx = if (container == IntSize.Zero) 0f else (container.width - image.width * scale) / 2f
-        val dy = if (container == IntSize.Zero) 0f else (container.height - image.height * scale) / 2f
+        // пересчёта пальца в координаты битмапа — общая с экраном поиска (#279).
+        val fit = pageFit(container, image.width, image.height)
 
         val accent = MaterialTheme.colorScheme.primary
 
@@ -88,12 +81,9 @@ fun SelectionScreen(
                             dragStart = null
                             dragNow = null
                             if (a != null && b != null) {
-                                onSelect(
-                                    PageBox(
-                                        (a.x - dx) / scale, (a.y - dy) / scale,
-                                        (b.x - dx) / scale, (b.y - dy) / scale,
-                                    ),
-                                )
+                                val from = fit.toPage(a.x, a.y)
+                                val to = fit.toPage(b.x, b.y)
+                                onSelect(PageBox(from.x, from.y, to.x, to.y))
                             }
                         },
                     )
@@ -101,23 +91,13 @@ fun SelectionScreen(
                 .drawWithContent {
                     drawContent()
                     // Построчная подсветка захвата — в координатах контейнера.
-                    highlights.forEach { h ->
-                        val r = Rect(
-                            Offset(h.left * scale + dx, h.top * scale + dy),
-                            Offset(h.right * scale + dx, h.bottom * scale + dy),
-                        )
-                        drawRoundRect(
-                            color = accent.copy(alpha = 0.24f),
-                            topLeft = r.topLeft, size = r.size,
-                            cornerRadius = CornerRadius(4.dp.toPx()),
-                        )
-                        drawRoundRect(
-                            color = accent.copy(alpha = 0.85f),
-                            topLeft = r.topLeft, size = r.size,
-                            cornerRadius = CornerRadius(4.dp.toPx()),
-                            style = Stroke(width = 1.5f.dp.toPx()),
-                        )
-                    }
+                    drawPageHighlights(
+                        fit = fit,
+                        boxes = highlights,
+                        color = accent,
+                        cornerPx = 4.dp.toPx(),
+                        strokePx = 1.5f.dp.toPx(),
+                    )
                     // Живая рамка жеста, пока палец на экране.
                     val a = dragStart
                     val b = dragNow

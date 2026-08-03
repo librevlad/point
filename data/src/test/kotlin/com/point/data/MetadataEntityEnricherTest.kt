@@ -54,6 +54,22 @@ class MetadataEntityEnricherTest {
         assertEquals(setOf(Feature.IS_RECIPE), features)
     }
 
+    /** Признаки не персистятся, а прочитанная страница — да, ссылкой в метаданных (#279).
+     *  Иначе «Найти в документе» пропадало бы ровно на том объекте, который уже прочитан, и
+     *  вернуть его мог бы только повторный прогон движка. */
+    @Test
+    fun `сохранённый слой слов зажигает признак поиска после перезапуска`() = runTest {
+        val offline = MetadataEntityEnricher()
+            .enrich(obj(mapOf(com.point.core.flow.META_OCR_ATOMS_REF to "/scratch/atoms.tsv")))
+        assertEquals(setOf(Feature.HAS_WORD_LAYER), offline.features)
+
+        // Облачный слой лежит в своём ключе, чтобы не затирать офлайновый (#280), — и одинаково
+        // годится, чтобы показать место на странице.
+        val cloud = MetadataEntityEnricher()
+            .enrich(obj(mapOf(com.point.core.flow.META_CLOUD_ATOMS_REF to "/scratch/cloud.tsv")))
+        assertEquals(setOf(Feature.HAS_WORD_LAYER), cloud.features)
+    }
+
     @Test
     fun `an unknown semantic type stays silent`() = runTest {
         assertTrue(
