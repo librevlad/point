@@ -76,4 +76,9 @@ abstract class AppIconsModule {
     @Binds
     @IntoSet
     abstract fun locationSource(impl: com.point.source.LocationSource): ObjectSource
+
+    /** #388: объект приезжает из чужих рук — по ссылке, которую человек показал или отправил. */
+    @Binds
+    @IntoSet
+    abstract fun receiveFileSource(impl: com.point.source.ReceiveFileSource): ObjectSource
 }

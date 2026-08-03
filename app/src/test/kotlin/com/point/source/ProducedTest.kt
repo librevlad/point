@@ -54,4 +54,36 @@ class ProducedTest {
         // Камера создаёт файл заранее; отмена оставляет его нулевым, и это НЕ объект.
         assertNull(captureToProduced("/scratch/shot.jpg", sizeBytes = 0))
     }
+
+    // --- «Принять файл» (#388): файл из чужих рук ------------------------------------------
+
+    @Test
+    fun `принятый файл становится объектом своего типа`() {
+        val produced = receivedToProduced(
+            path = "/cache/pulled/отчёт.pdf", mime = "application/pdf",
+            exists = { true }, toUri = { "file://$it" },
+        )
+        assertEquals(Produced("file:///cache/pulled/отчёт.pdf", "application/pdf"), produced)
+    }
+
+    @Test
+    fun `у принятого файла без типа — общий тип, а не выдуманный`() {
+        val produced = receivedToProduced(
+            path = "/cache/pulled/f", mime = "  ",
+            exists = { true }, toUri = { "file://$it" },
+        )
+        assertEquals(Produced("file:///cache/pulled/f", "application/octet-stream"), produced)
+    }
+
+    @Test
+    fun `отменённое ожидание — ничего, а не пустой объект`() {
+        assertNull(receivedToProduced(null, null, exists = { true }, toUri = { it }))
+        assertNull(receivedToProduced("   ", "text/plain", exists = { true }, toUri = { it }))
+    }
+
+    @Test
+    fun `пустой файл объектом не становится`() {
+        // Тот же разрез, что у камеры: пустая карточка вместо файла хуже честной тишины.
+        assertNull(receivedToProduced("/cache/pulled/f", "application/pdf", exists = { false }, toUri = { it }))
+    }
 }

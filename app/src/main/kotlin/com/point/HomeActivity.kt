@@ -26,6 +26,25 @@ class HomeActivity : ComponentActivity() {
 
     private val viewModel: FlowViewModel by viewModels()
 
+    /**
+     * «Принять файл» (#388): экран ожидания отдаёт приехавший файл, и он входит в Point ровно той
+     * же дверью, что расшаренный, — обычным объектом. Отмена (RESULT_CANCELED) молчит: человек сам
+     * только что закрыл ожидание.
+     */
+    private val receiveLauncher = registerForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult(),
+    ) { result ->
+        val path = result.data?.getStringExtra(com.point.source.ReceiveActivity.EXTRA_PATH)
+        val mime = result.data?.getStringExtra(com.point.source.ReceiveActivity.EXTRA_MIME)
+        if (result.resultCode == RESULT_OK && !path.isNullOrBlank()) {
+            viewModel.onShared(Uri.fromFile(java.io.File(path)).toString(), mime ?: "application/octet-stream")
+        }
+    }
+
+    private fun receiveFile() {
+        receiveLauncher.launch(android.content.Intent(this, com.point.source.ReceiveActivity::class.java))
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         viewModel.loadRecent()
@@ -66,6 +85,7 @@ class HomeActivity : ComponentActivity() {
                             onOpen = viewModel::openFromHistory,
                             onSettings = viewModel::openKeySettings,
                             onPc = viewModel::openPcSettings,
+                            onReceive = ::receiveFile,
                             onClear = viewModel::clearHistory,
                             clipboard = clipboard,
                             onUseClipboard = ::useClipboard,

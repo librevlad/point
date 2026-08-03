@@ -52,5 +52,32 @@ cannot read the objects that cross it.
 | POST | `/mbx/<id>` | body = ciphertext → 200 + `X-Blob-Id` (≤ 50 MB) |
 | GET | `/mbx/<id>?wait=N` | oldest blob (+ `X-Blob-Id`) or 204 after N s long-poll |
 | POST | `/mbx/<id>/ack` | `X-Blob-Id` header → 200 (delete; repeat ack still 200) |
+| POST | `/d` | body = file (+ `X-Drop-Name` base64, `X-Drop-Mime`) → 200 + drop id |
+| GET | `/d/<id>` | **no auth** — the file itself, for any browser (#388) |
+| POST | `/u/<box>/open` | open a receiving box for 24 h (the phone does this) |
+| GET | `/u/<box>` | **no auth** — a plain Russian upload page (#388) |
+| POST | `/u/<box>` | **no auth** — `multipart/form-data` from that page → mailbox `<box>` |
+| PUT | `/u/<box>?name=&mime=` | **no auth** — same, raw body (curl / scripts) |
 
-All but `/health` require `X-Point-App: <secret>`.
+All but `/health`, `/d/<id>` and `/u/<box>` require `X-Point-App: <secret>`.
+
+### Drop: одной ссылкой в обе стороны (#388)
+
+`/d` отдаёт файл человеку без Point; `/u` принимает файл ОТ него. Обе стороны платят одним и тем
+же: у чужого браузера ключа пары устройств нет, поэтому **эти байты релей видит** — в отличие от
+всего, что возят спаренные устройства. Пропуск — сам адрес (160 бит), срок — сутки.
+
+Ящик приёма заводит телефон (`/u/<box>/open` с секретом): иначе запись без секрета позволяла бы
+набивать диск ящиками, которых никто не ждёт. Файл ложится в тот же `mbx/<box>`, который телефон
+уже слушает, кадром `[4 байта длины шапки][name=…\nmime=…][байты]` — тот же формат, что у пары
+устройств, только без шифрования.
+
+Проверить руками (`-k` — сертификат самоподписанный, он же пинится в приложении):
+
+```bash
+R=https://35.185.31.106:8443; S=<RELAY_APP_SECRET>; BOX=$(head -c 20 /dev/urandom | base64 | tr '+/' '-_' | tr -d '=')
+curl -sk -X POST -H "X-Point-App: $S" "$R/u/$BOX/open"      # завести ящик → ok
+curl -sk "$R/u/$BOX" | head -5                               # страница приёма (HTML, по-русски)
+curl -sk -F "f=@отчёт.pdf" "$R/u/$BOX" | grep -o Отправлено  # положить файл, как из браузера
+curl -sk -H "X-Point-App: $S" "$R/mbx/$BOX?wait=5" -o frame.bin -D-   # телефон забирает кадр
+```
