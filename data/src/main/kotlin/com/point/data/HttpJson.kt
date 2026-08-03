@@ -10,6 +10,20 @@ import javax.inject.Inject
 data class HttpResult(val code: Int, val body: String)
 
 /**
+ * Кем Point называется чужому серверу — и это не вежливость, а рабочий заголовок.
+ *
+ * Замер 04.08.2026: Groq отвечает **403 на запрос без `User-Agent`**, с заголовком — работает. Из-за
+ * этого провайдер числился мёртвым, а `docs/VISION-MODELS.md` прямо предупреждает: «стоит проверить,
+ * уходит ли он из Point, прежде чем считать провайдера мёртвым». Не уходил: `HttpURLConnection`
+ * своего значения не ставит, и наши запросы шли безымянными.
+ *
+ * Ставится **до** заголовков вызывающего, поэтому клиент со своими требованиями может назваться
+ * иначе. Число — поколение приложения, а не отпечаток сборки: серверу важно, что заголовок есть и
+ * называет нас, а точная версия ему не нужна и в лог чужого сервиса не просится.
+ */
+internal const val POINT_USER_AGENT = "Point/0.2 (Android)"
+
+/**
  * A minimal JSON-over-HTTP POST behind an interface, so the LLM clients' request
  * building and response parsing become unit-testable with a fake transport — no
  * real network, no Robolectric. The single real implementation
@@ -35,6 +49,7 @@ class UrlConnectionHttpJson @Inject constructor() : HttpJson {
                 connectTimeout = 30_000
                 readTimeout = 60_000
                 setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                setRequestProperty("User-Agent", POINT_USER_AGENT)
                 headers.forEach { (k, v) -> setRequestProperty(k, v) }
             }
             conn.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
