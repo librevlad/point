@@ -33,18 +33,35 @@ class LanThenRelayTransport(
         }
     }
 
+    /** Пейринг — только по локальной сети: телефон узнаёт токен из QR, а не спрашивает его. */
     override suspend fun pair(host: String, port: Int, deviceName: String): PcPairing? =
         lan.pair(host, port, deviceName)
 
-    override suspend fun fetchCaps(pairing: PcPairing): List<PcRemoteAction>? = lan.fetchCaps(pairing)
+    // Ниже — операции, которые до #161 были LAN-only. Именно из-за этого связь «работала через
+    // раз»: вне общей сети телефон не мог ни узнать, что умеет компьютер, ни забрать сделанное им.
+    // Теперь каждая пробует локальную сеть и, если её нет, идёт через релей.
 
-    override suspend fun fetchOutbox(pairing: PcPairing): List<PcOutboxEntry>? = lan.fetchOutbox(pairing)
+    override suspend fun fetchCaps(pairing: PcPairing): List<PcRemoteAction>? =
+        lan.fetchCaps(pairing) ?: pairing.viaRelay { relay.fetchCaps(pairing) }
+
+    override suspend fun fetchOutbox(pairing: PcPairing): List<PcOutboxEntry>? =
+        lan.fetchOutbox(pairing) ?: pairing.viaRelay { relay.fetchOutbox(pairing) }
 
     override suspend fun downloadOutboxFile(pairing: PcPairing, id: Int, targetPath: String): Boolean =
-        lan.downloadOutboxFile(pairing, id, targetPath)
+        lan.downloadOutboxFile(pairing, id, targetPath) ||
+            (pairing.viaRelay { relay.downloadOutboxFile(pairing, id, targetPath) } ?: false)
 
-    override suspend fun ackOutbox(pairing: PcPairing, id: Int) = lan.ackOutbox(pairing, id)
+    override suspend fun ackOutbox(pairing: PcPairing, id: Int) {
+        lan.ackOutbox(pairing, id)
+        // Подтверждение дублируется намеренно: по локальной сети оно молчаливое (Unit), и понять,
+        // дошло ли, нельзя. Повторный ack безвреден — компьютер удаляет уже удалённое молча.
+        pairing.viaRelay { relay.ackOutbox(pairing, id) }
+    }
 
     override suspend fun pushPhoneCaps(pairing: PcPairing, caps: List<PcRemoteAction>): Boolean =
-        lan.pushPhoneCaps(pairing, caps)
+        lan.pushPhoneCaps(pairing, caps) || (pairing.viaRelay { relay.pushPhoneCaps(pairing, caps) } ?: false)
+
+    /** Релей пробуется, только если он объявлен в этом пейринге, — иначе спрашивать некого. */
+    private suspend fun <T> PcPairing.viaRelay(block: suspend () -> T): T? =
+        if (relay.isNullOrBlank()) null else block()
 }
