@@ -264,7 +264,7 @@ class FlowViewModel @Inject constructor(
                 val title = runCatching { registry.byId(cap).label(obj.state) }.getOrNull()
                 if (title == null) {
                     _ui.update {
-                        it.copy(message = "Компьютер попросил действие, которого в Point нет", messageIsFailure = true)
+                        it.copy(message = "Компьютер попросил действие, которого в Point нет", messageOutcome = Outcome.FAILED)
                     }
                     return@let
                 }
@@ -485,7 +485,7 @@ class FlowViewModel @Inject constructor(
             // экран уезжал текст исключения, написанный для разработчика.
             val realizer = runCatching { resolver.realizerFor(bubble.capabilityId) }.getOrNull()
             if (realizer == null) {
-                _ui.update { it.copy(busy = null, busyStage = null, message = "Действие недоступно", messageIsFailure = true) }
+                _ui.update { it.copy(busy = null, busyStage = null, message = "Действие недоступно", messageOutcome = Outcome.FAILED) }
                 return@launch
             }
             val preview = runCatching { realizer.preview(top) }.getOrNull()

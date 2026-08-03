@@ -473,7 +473,7 @@ class FlowViewModelTest {
 
         vm.onBubble(bubble()); advanceUntilIdle()
 
-        assertTrue(vm.ui.value.messageIsFailure)
+        assertEquals(Outcome.FAILED, vm.ui.value.messageOutcome)
         assertEquals("Действие недоступно", vm.ui.value.message)
         assertEquals(Outcome.FAILED, vm.ui.value.messageOutcome)
         assertNull(vm.ui.value.busy)
@@ -1019,7 +1019,7 @@ class FlowViewModelTest {
         vm.pullFromPc(); advanceUntilIdle()
 
         assertTrue("объект обязан остаться открытым", vm.ui.value.frame != null)
-        assertTrue(vm.ui.value.messageIsFailure)
+        assertEquals(Outcome.FAILED, vm.ui.value.messageOutcome)
         assertEquals("Компьютер попросил действие, которого в Point нет", vm.ui.value.message)
     }
 
