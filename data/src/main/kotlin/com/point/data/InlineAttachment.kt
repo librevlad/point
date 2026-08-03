@@ -3,6 +3,7 @@ package com.point.data
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.Base64
+import com.point.core.flow.readingUpscale
 import java.io.ByteArrayOutputStream
 import java.io.File
 import kotlin.math.roundToInt
@@ -34,6 +35,11 @@ internal class InlineAttachment(val base64: String, val mime: String)
  * боковом фото) и едет уже пикселями, а не меткой поворота, которую получатель волен
  * проигнорировать. Кадр, уехавший как есть, ведёт себя ровно как раньше.
  *
+ * **Вторая половина той же мысли — увеличение** (#273, [enlargedFrame]): «не ужимать» чинит кадр,
+ * который родился большим, и ничего не делает с кадром, который родился мелким. Замер 04.08.2026
+ * показал, что мелкий кадр — единственный, на котором чтение вообще провалилось, и что обычное
+ * увеличение вчетверо его чинит целиком.
+ *
  * Возвращает null, когда прикладывать нечего: файла нет, он пуст или не влезает в жёсткий потолок
  * [MAX_INLINE_BYTES]. Заодно закрыт тихий провал (#334): снимок тяжелее потолка раньше просто не
  * прикладывался — модель получала один текст промпта и отвечала про несуществующую страницу.
@@ -45,9 +51,49 @@ internal fun inlineAttachment(path: String, mime: String): InlineAttachment? {
     val size = if (file.exists()) file.length() else 0L
     if (size < 1L) return null
     shrunkFrame(file, mime)?.let { return InlineAttachment(base64(it.bytes), it.mime) }
+    enlargedFrame(file, mime)?.let { return InlineAttachment(base64(it.bytes), it.mime) }
     // Кадр в пределах бюджета (и PDF, где ужимать нечего) уезжает как есть.
     if (size > MAX_INLINE_BYTES) return null
     return InlineAttachment(base64(file.readBytes()), mime)
+}
+
+/**
+ * Мелкий кадр, увеличенный перед отправкой модели (#273), либо null — увеличивать не нужно, нечем
+ * или незачем.
+ *
+ * **Это ровно та дорога, на которой замер получен.** Из шести порч эталонной ведомости
+ * (`docs/VISION-MODELS.md`, 04.08.2026) провалилась одна — кадр в четверть разрешения: 20 строк из
+ * 24 и итог мимо на 8300. Тот же кадр, увеличенный вчетверо и отданный той же модели, прочитался
+ * дословно: 24 из 24, четыре секунды. Увеличение локальное — наружу по-прежнему уходит один кадр
+ * по одному тапу, ни одного лишнего посредника.
+ *
+ * Порядок с [shrunkFrame] не спорит: тот включается **по весу** (кадр тяжелее бюджета), этот — по
+ * размеру мелкого кадра, и мелкий кадр тяжёлым не бывает. Пробуется он вторым, чтобы у ужатия
+ * осталось последнее слово в невероятном случае, когда сработали бы оба.
+ *
+ * Прозрачность и здесь переживает только PNG — вырезанный объект (#97), перекодированный в JPEG,
+ * приехал бы к модели на чёрном фоне.
+ */
+private fun enlargedFrame(file: File, mime: String): Frame? {
+    if (!mime.startsWith("image/")) return null
+    return runCatching {
+        val upright = decodeBoundedUpright(file.path, MODEL_MAX_EDGE_PX) ?: return null
+        val scale = readingUpscale(upright.width, upright.height)
+        if (scale <= 1) {
+            upright.recycle()
+            return null
+        }
+        val scaled = Bitmap.createScaledBitmap(upright, upright.width * scale, upright.height * scale, true)
+        if (scaled !== upright) upright.recycle()
+        val png = scaled.hasAlpha()
+        val out = ByteArrayOutputStream()
+        scaled.compress(if (png) Bitmap.CompressFormat.PNG else Bitmap.CompressFormat.JPEG, JPEG_QUALITY, out)
+        scaled.recycle()
+        val bytes = out.toByteArray()
+        // Увеличенный кадр весит больше исходного — это плата за читаемость, а не оплошность. Но
+        // выше жёсткого потолка вложения его никто не примет, и тогда честнее отправить оригинал.
+        if (bytes.size > MAX_INLINE_BYTES) null else Frame(bytes, if (png) "image/png" else "image/jpeg")
+    }.getOrNull()
 }
 
 /** Ужатая копия кадра, либо null — если ужимать не нужно, нечем или бессмысленно. */

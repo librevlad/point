@@ -39,6 +39,11 @@ import javax.inject.Inject
  * чтения, которые не кончаются, — 12-мегапиксельный кадр, четыре полных прохода движка и ни
  * одного колпака. Теперь базовое чтение и каждая проба поворота идут под колпаком, пробы — на
  * уменьшенной копии, а строка `OCR done` печатается всегда, чем бы чтение ни кончилось.
+ *
+ * Мелкий кадр перед чтением **увеличивается** (#273, `readingUpscale`): декодер умеет только
+ * прореживать большой кадр, и снимок, родившийся мелким, приезжал движку ниже всего, на чём
+ * конвейер настраивали. Решение — чистое правило, ресайз — за швом (`preparedBitmap`), множитель
+ * уезжает в `FrameTransform.upscale`, иначе адреса прочитанного поехали бы во столько же раз.
  */
 class TesseractTextRecognizer @Inject constructor(
     @ApplicationContext private val context: Context,
@@ -51,12 +56,18 @@ class TesseractTextRecognizer @Inject constructor(
         if (!obj.mime.startsWith("image/")) {
             return@withContext done(AtomLayer(emptyList(), incomplete = "not an image"), budget)
         }
-        val frame = decodeBounded(obj.uri.value, OCR_MAX_PX)
-        if (frame == null) {
+        val decoded = decodeBounded(obj.uri.value, OCR_MAX_PX)
+        if (decoded == null) {
             Log.w(TAG, "bitmap decode failed: ${obj.mime} @ ${obj.uri.value}")
             return@withContext done(AtomLayer(emptyList(), incomplete = "decode failed"), budget)
         }
-        val bitmap = frame.bitmap
+        // Мелкий кадр увеличивается ПЕРЕД чтением (#273) — единственный приём, который на замере
+        // вылечил провал, ничего не отправив наружу. Решает чистое правило; крупный кадр оно не
+        // трогает, и тогда `ready.frame` — тот же битмап, без второй копии в памяти.
+        val ready = preparedBitmap(decoded.bitmap, knownTextHeightPx(obj))
+        val bitmap = ready.frame
+        val frame = Decoded(bitmap, decoded.sample, decoded.rotation, ready.scale)
+        if (ready.upscaled) Log.i(TAG, "frame upscaled x${ready.scale} -> ${bitmap.width}x${bitmap.height}")
         // Копия для проб поворотов создаётся лениво: хорошо прочитанную страницу не крутят,
         // и платить половиной кадра памяти за каждый скриншот незачем.
         var probe: Bitmap? = null
@@ -92,6 +103,9 @@ class TesseractTextRecognizer @Inject constructor(
             runCatching { tess.recycle() }
             probe?.takeIf { it !== bitmap }?.recycle()
             bitmap.recycle()
+            // Увеличенная копия и исходная — два разных битмапа, и на 12 Мп это 48 МБ; кадр не
+            // увеличивали — это тот же объект, и второй recycle() был бы по освобождённому.
+            decoded.bitmap.takeIf { it !== bitmap }?.recycle()
         }
     }
 
@@ -163,6 +177,9 @@ class TesseractTextRecognizer @Inject constructor(
                 rotationDegrees = (frame.rotation + extraRotation) % 360,
                 uprightWidth = image.width,
                 uprightHeight = image.height,
+                // Пробы половинят уже увеличенный кадр, поэтому множители складываются, а не
+                // спорят: sample растёт от пробы, upscale остаётся тем, чем растянули кадр.
+                upscale = frame.upscale,
             )
             // Распознавание уже сделано вызовом выше — здесь только сборка текста и слов по
             // готовому результату, в прежнем порядке: сперва текст движка, потом итератор.
@@ -268,10 +285,17 @@ class TesseractTextRecognizer @Inject constructor(
      * Прочитанный снимок вместе с тем, что с ним по дороге сделали.
      *
      * Уменьшение и доворот раньше были невидимы снаружи, и это было терпимо, пока наружу уходил
-     * только текст. Теперь наружу уходят координаты, и без этих двух чисел их не вернуть в
-     * систему исходного файла.
+     * только текст. Теперь наружу уходят координаты, и без этих чисел их не вернуть в систему
+     * исходного файла. Третье из них — увеличение мелкого кадра (#273): оно тянет координаты в
+     * другую сторону, чем прореживание, и молчаливая потеря множителя увела бы каждый адрес во
+     * столько же раз.
      */
-    private class Decoded(val bitmap: Bitmap, val sample: Int, val rotation: Int)
+    private class Decoded(
+        val bitmap: Bitmap,
+        val sample: Int,
+        val rotation: Int,
+        val upscale: Int = 1,
+    )
 
     private fun exifDegrees(path: String): Int {
         val orientation = runCatching {
