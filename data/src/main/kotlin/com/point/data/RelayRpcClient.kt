@@ -54,8 +54,8 @@ class RelayRpcClient(
         val base = pairing.relay?.trimEnd('/')?.takeIf { it.isNotBlank() && appSecret.isNotBlank() }
             ?: return@withContext null
 
-        val toPc = RelayCrypto.mailboxId(pairing.token, TO_PC)
-        val toPhone = RelayCrypto.mailboxId(pairing.token, TO_PHONE)
+        val toPc = RelayCrypto.mailboxId(pairing.token, RelayRpc.TO_PC)
+        val toPhone = RelayCrypto.mailboxId(pairing.token, RelayRpc.TO_PHONE)
         val requestId = UUID.randomUUID().toString()
 
         drain(base, toPhone) // чужие ответы прошлых попыток — чтобы ждать только свой
@@ -140,8 +140,6 @@ class RelayRpcClient(
         }
 
     companion object {
-        const val TO_PC = "to-pc"
-        const val TO_PHONE = "to-phone"
         private const val MAX_DRAIN = 8
         private const val MAX_RELAY_BLOB = 50 * 1024 * 1024
     }
