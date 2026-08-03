@@ -49,6 +49,29 @@ fun readingModeOf(layer: AtomLayer?): ReadingMode = when {
     else -> ReadingMode.PRINTED
 }
 
+/**
+ * Режим по тому, что движок отдал **с кадра**: слой, если ридер собрал геометрию, иначе — плоский
+ * текст того же прохода.
+ *
+ * Смысл — в ридере без геометрии ([TextRecognizer], который не [AtomRecognizer]). Слоя у него нет,
+ * и [readingModeOf] отвечал про него [ReadingMode.UNKNOWN] — «мы не смотрели», хотя смотрели и
+ * получили пустоту или кашу. Молчание стоило дорого: цифры метит только [ReadingMode.HANDWRITTEN],
+ * и рукопись, прочитанная таким ридером, уезжала в документ чистой.
+ *
+ * Асимметрия здесь намеренная. Пустоту и кашу текст показывает сам, и это [ReadingMode.HANDWRITTEN]:
+ * читать будет модель. А вот **объявить печать по одному тексту нельзя** — состав символов на
+ * эталонной ведомости владельца стоит ровно наоборот: букв и цифр в символьной каше 0,7 от знаков,
+ * то есть текстовый гейт [looksLikeOcrGarbage] её пропускает, а движок при этом сам показывает
+ * 0,35 уверенности (см. [weaklyRead]). Печать, назначенная по такому признаку, — это обещание
+ * печатных гарантий там, где движок угадывал. Поэтому читаемый текст без геометрии остаётся
+ * [ReadingMode.UNKNOWN]: не знаем — значит не знаем.
+ */
+fun readingModeOfFrame(layer: AtomLayer?, engineText: String): ReadingMode = when {
+    layer != null -> readingModeOf(layer)
+    engineText.isBlank() || looksLikeOcrGarbage(engineText) -> ReadingMode.HANDWRITTEN
+    else -> ReadingMode.UNKNOWN
+}
+
 /** Режим, записанный в метаданных объекта; неизвестное имя — [ReadingMode.UNKNOWN], а не падение. */
 fun readingModeOf(metadata: Map<String, String>): ReadingMode =
     ReadingMode.entries.firstOrNull { it.name.equals(metadata[META_READING_MODE], ignoreCase = true) }
