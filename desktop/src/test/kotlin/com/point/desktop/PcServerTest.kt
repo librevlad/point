@@ -35,7 +35,7 @@ class PcServerTest {
         accept: Boolean = true,
         outbox: Outbox? = null,
         actions: List<com.point.core.flow.PcRemoteAction> = defaultActions,
-        onReceived: (InboxItem) -> Unit = {},
+        onReceived: (InboxItem, ObjectSource) -> Unit = { _, _ -> },
     ): PcServer =
         PcServer(
             inbox = Inbox(tmp.root),
@@ -66,7 +66,7 @@ class PcServerTest {
     @Test
     fun `receive lands the file, decodes base64 headers and fires the callback`() {
         var got: InboxItem? = null
-        val s = server { got = it }
+        val s = server { item, _ -> got = item }
         try {
             val (code, _) = post(
                 "http://127.0.0.1:${s.port}/receive",
@@ -91,7 +91,7 @@ class PcServerTest {
     @Test
     fun `a wrong token is 401 and nothing lands`() {
         var called = false
-        val s = server { called = true }
+        val s = server { _, _ -> called = true }
         try {
             val (code, _) = post(
                 "http://127.0.0.1:${s.port}/receive",
@@ -210,7 +210,7 @@ class PcServerTest {
         val printerless = com.point.core.flow.PcRemoteAction(
             "pc-print", "Напечатать на ПК", unavailable = "на компьютере нет принтера",
         )
-        val s = server(actions = defaultActions + printerless) { got = it }
+        val s = server(actions = defaultActions + printerless) { item, _ -> got = item }
         try {
             val caps = URL("http://127.0.0.1:${s.port}/caps").openConnection() as HttpURLConnection
             caps.setRequestProperty("X-Point-Token", "secret-token")
