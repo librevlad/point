@@ -145,7 +145,7 @@ class MeterOcrRealizerTest {
                 override suspend fun recognize(obj: PointObject) = pageText
             }),
             MeterOcrRealizer(store, meter),
-            CloudOcrRealizer(llm),
+            CloudOcrRealizer(llm, privacyAt()),
         ),
         registry = DefaultCapabilityRegistry(
             setOf(OcrCapability(), MeterOcrCapability()),
