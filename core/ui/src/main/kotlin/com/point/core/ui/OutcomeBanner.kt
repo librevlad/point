@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
@@ -33,7 +32,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -106,7 +104,6 @@ fun OutcomeBanner(message: String?, outcome: Outcome) {
             Outcome.FAILED -> OutcomeWarm
             Outcome.NONE -> null
         }
-        val shape = RoundedCornerShape(18.dp)
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -114,18 +111,10 @@ fun OutcomeBanner(message: String?, outcome: Outcome) {
                 .padding(top = 16.dp)
                 // Той же ширины, что карточка понятого и карточка готовности, — исход стоит с ними
                 // одной колонкой, а не выпадает из неё отдельной плашкой.
-                .widthIn(max = 340.dp)
-                .shadow(6.dp, shape, ambientColor = Color.Black, spotColor = Color.Black)
-                .clip(shape)
-                .background(Brush.verticalGradient(listOf(RowTop, RowBottom)))
+                .widthIn(max = PortalColumnWidth)
                 // Свет исхода ложится с той стороны, где стоит знак, и гаснет к тексту: карточка
                 // окрашена, но читается как поверхность портала, а не как цветной блок.
-                .background(
-                    Brush.horizontalGradient(
-                        listOf((accent ?: Color.Transparent).copy(alpha = 0.16f), Color.Transparent),
-                    ),
-                )
-                .border(1.dp, Brush.verticalGradient(listOf(TopHighlight, Color.Transparent)), shape)
+                .portalCard(accent = accent)
                 .padding(horizontal = 14.dp, vertical = 12.dp),
         ) {
             // Знак зажигается заново на каждый новый исход, а не один раз за жизнь карточки:
