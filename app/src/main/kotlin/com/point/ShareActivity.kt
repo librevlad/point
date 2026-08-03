@@ -109,7 +109,9 @@ class ShareActivity : ComponentActivity() {
         when (
             val incoming = incomingOf(
                 action = intent.action,
-                type = intent.type,
+                // При «Открыть с помощью» intent часто без типа: спрашиваем систему, иначе
+                // объект приедет как «неизвестно что» и потеряет половину действий.
+                type = intent.type ?: intent.data?.let { contentResolver.getType(it) },
                 data = intent.data?.toString(),
                 stream = stream?.toString(),
                 text = intent.getStringExtra(Intent.EXTRA_TEXT),

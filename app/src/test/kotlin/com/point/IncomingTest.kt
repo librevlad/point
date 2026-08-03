@@ -90,6 +90,20 @@ class IncomingTest {
     }
 
     @Test
+    fun `открыть с помощью — тип от системы важнее пустого типа intent`() {
+        // Дверь спрашивает тип у ContentResolver, когда intent молчит, и передаёт его сюда.
+        val incoming = incomingOf(
+            action = "android.intent.action.VIEW",
+            type = "application/zip",
+            data = "content://downloads/9",
+            stream = null,
+            text = null,
+            streams = emptyList(),
+        )
+        assertEquals(Incoming.Single("content://downloads/9", "application/zip"), incoming)
+    }
+
+    @Test
     fun `чужое действие — ничего`() {
         val incoming = incomingOf(
             action = "android.intent.action.MAIN",

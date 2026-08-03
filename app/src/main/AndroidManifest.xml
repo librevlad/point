@@ -56,6 +56,24 @@
                 <data android:mimeType="image/*" />
                 <data android:mimeType="application/pdf" />
             </intent-filter>
+            <!--
+              «Открыть с помощью Point» (#249): дверь не для «Поделиться», а для «Открыть».
+              Тип `*/*` — решение владельца: Point виден для любого файла. На незнакомом типе
+              экран не пустой — поделиться, сохранить и «открыть в другом приложении» принимают
+              что угодно.
+            -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="file" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
         </activity>
 
         <!--
