@@ -21,6 +21,7 @@ import com.point.core.flow.LayoutAnswer
 import com.point.core.flow.LlmClient
 import com.point.core.flow.META_OCR_ATOMS_REF
 import com.point.core.flow.META_READING_MODE
+import com.point.core.flow.META_TABLE_CHROME
 import com.point.core.flow.META_TABLE_COVERED
 import com.point.core.flow.META_TABLE_FLAGGED
 import com.point.core.flow.META_TABLE_GRID
@@ -49,6 +50,7 @@ import com.point.core.flow.reconcile
 import com.point.core.flow.resolveLayout
 import com.point.core.flow.scopeLabel
 import com.point.core.flow.styleCell
+import com.point.core.flow.chromeWords
 import com.point.core.flow.unreadWords
 import com.point.core.flow.validateTable
 import com.point.core.flow.withGrid
@@ -259,6 +261,18 @@ class ExcelRealizer(
                     val mode = readingModeOf(input.metadata).takeIf { it != ReadingMode.UNKNOWN }
                         ?: readingModeOf(layer)
                     val plan = layoutSheet(document, mode)
+                    // Файл без единой строки — не результат, а пустой бланк (ревью #266). Раньше
+                    // это было невозможно: пустая сетка = отказ. С блоками появились два входа в
+                    // пустоту — сетка, объявленная пустой, и страница, целиком названная «не
+                    // документом», — и оба отдавали ПУСТОЙ .xlsx как успех, да ещё со словами
+                    // «ничего не потеряно». Проверяем то, что реально доехало до файла, а не
+                    // форму ответа: так закрыты обе двери сразу и любая третья.
+                    if (plan.rows.isEmpty()) {
+                        return@runCatching ActionResult.Failure(
+                            "На странице не нашлось ничего, что можно положить в таблицу",
+                            recoverable = true,
+                        )
+                    }
                     // disagreements carry the distinct readings as an in-cell dropdown (#200).
                     reportStage("Собираю файл")
                     val ref = writer.write(plan)
@@ -286,6 +300,12 @@ class ExcelRealizer(
                                 // порог, а публикация: число едет и в метаданные, и в файл строкой.
                                 document.unreadWords.takeIf { it > 0 }
                                     ?.let { put(META_TABLE_UNREAD, it.toString()) }
+                                // Вторая отмычка того же замка (ревью #266): слова, названные «не
+                                // документом», в файл НЕ едут вовсе, поэтому строкой их не видно —
+                                // значит число обязано публиковаться тем более. Без него «ничего не
+                                // потеряно: да» стояло рядом с молча выброшенной половиной страницы.
+                                document.chromeWords.takeIf { it > 0 }
+                                    ?.let { put(META_TABLE_CHROME, it.toString()) }
                                 // «Да» — и только когда правда; иначе ключа нет вовсе, а объясняет
                                 // его отсутствие соседний ключ «непрочитанного».
                                 if (coveredClaim(document, plan, mode) == true) put(META_TABLE_COVERED, "да")
@@ -598,9 +618,10 @@ internal fun parseTable(raw: String): List<List<String>> {
 /**
  * Разбор ответа про **весь документ** (#266) — с совместимостью в обе стороны.
  *
- * Три формы входа и одна форма выхода:
+ * Четыре формы входа и одна форма выхода:
  * - объект `{"scope":…,"blocks":[…]}` — контракт структуры целиком;
- * - массив верхнего уровня — сегодняшний ответ: одна сетка и ничего вокруг;
+ * - **массив частей без обёртки** — тот же ответ, у которого модель уронила уровень;
+ * - массив строк-ячеек — сегодняшний ответ: одна сетка и ничего вокруг;
  * - TSV — он же.
  *
  * Это чинит дефект, из-за которого **любой более богатый ответ был хуже плоского**: объект
@@ -612,9 +633,36 @@ internal fun parseTable(raw: String): List<List<String>> {
 internal fun parseLayout(raw: String): LayoutAnswer? {
     val cleaned = stripFence(raw)
     if (cleaned.startsWith("{")) parseLayoutObject(cleaned)?.let { return it }
+    parseLayoutArray(cleaned)?.let { return it }
     parseAddressedCells(cleaned)?.let { return tableOnly(it) }
     return parseTable(cleaned).takeIf { it.isNotEmpty() }
         ?.let { rows -> tableOnly(rows.map { row -> row.map { CellAnswer.Literal(it) } }) }
+}
+
+/**
+ * Список частей документа **без обёртки** `{"blocks": …}` — та же уронённая ступенька, что уже
+ * описана у [parseAddressedCells] («массив ячеек-объектов вместо массива строк»), только этажом
+ * выше. Запрос просит объект, но словарь ролей модель усваивает раньше формы, а прошлый контракт
+ * годами просил именно массив.
+ *
+ * Ловится это здесь, а не «как-нибудь»: без разбора такой ответ шёл в [parseAddressedCells], где
+ * части документа становились ЯЧЕЙКАМИ ОДНОЙ СТРОКИ, часть-сетка — пустой ячейкой (у неё нет
+ * `text`), и таблица исчезала целиком, а действие отчитывалось успехом. Ревью #266: ровно та
+ * тихая потеря, ради которой срез и делался.
+ *
+ * Признак части — **названная роль или сетка**, а не «объект». Ячейка адресного ответа отвечает
+ * `ids`/`text`, и принять её за часть значило бы сломать сегодняшний контракт #258.
+ */
+private fun parseLayoutArray(s: String): LayoutAnswer? {
+    if (!s.startsWith("[")) return null
+    return runCatching {
+        val arr = JSONArray(s)
+        val elems = (0 until arr.length()).map { arr.opt(it) }
+        val blocks = elems.filterIsInstance<JSONObject>()
+        if (elems.isEmpty() || blocks.size != elems.size) return@runCatching null
+        if (blocks.none { it.has("role") || it.has("rows") }) return@runCatching null
+        elems.mapNotNull(::blockAnswer).takeIf { it.isNotEmpty() }?.let { LayoutAnswer(it) }
+    }.getOrNull()
 }
 
 /**

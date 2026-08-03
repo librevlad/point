@@ -173,8 +173,23 @@ private val BlockRole.isContent: Boolean
  * Смягчение — не порог (порог = выдуманное число), а публикация: это число едет в метаданные и
  * в файл видимой строкой, и первый же прогон покажет, если им злоупотребили.
  */
-val DocumentLayout.unreadWords: Int
-    get() = blocks.filter { it.role == BlockRole.UNREAD }.sumOf { block ->
+val DocumentLayout.unreadWords: Int get() = wordsIn(BlockRole.UNREAD)
+
+/**
+ * Сколько слов страницы объявлено «не документом» — и потому в файл не поехало вовсе.
+ *
+ * Отмычек у покрытия две, и вторая опаснее (ревью #266). «Непрочитанное» человек хотя бы видит
+ * строками в файле; [BlockRole.CHROME] не оставляет следа нигде — и при этом закрывает покрытие
+ * ровно так же, потому что присвоенное потерянным не считается. Страница, целиком названная
+ * панелью приложения, давала пустой файл со словами «ничего не потеряно».
+ *
+ * Защита та же, что у «непрочитанного», и по той же причине: не порог, а публикация. Разница
+ * одна — здесь публикация единственная, поэтому она обязательна.
+ */
+val DocumentLayout.chromeWords: Int get() = wordsIn(BlockRole.CHROME)
+
+private fun DocumentLayout.wordsIn(role: BlockRole): Int =
+    blocks.filter { it.role == role }.sumOf { block ->
         block.ids.size.takeIf { it > 0 }
             ?: block.grid?.rows?.sumOf { row -> row.sumOf { it.wordCount() } }
             ?: block.text.wordCount()
@@ -369,6 +384,9 @@ const val META_TABLE_SCOPE = "table.scope"
 
 /** Сколько слов уехало «непрочитанным» ([DocumentLayout.unreadWords]). */
 const val META_TABLE_UNREAD = "table.unread"
+
+/** Сколько слов признано «не документом» и в файл не поехало ([DocumentLayout.chromeWords]). */
+const val META_TABLE_CHROME = "table.chrome"
 
 /** Сколько ячеек в файле помечено на проверку. */
 const val META_TABLE_FLAGGED = "table.flagged"
