@@ -148,6 +148,9 @@ fun main() {
             title = "Point для ПК",
             icon = painterResource("point-icon.png"),
         ) {
+            // Language of the portal (#285): the desktop speaks the same palette and type as
+            // the phone, so the two stop looking like different products.
+            com.point.desktop.ui.PointDesktopTheme {
             // Local input: native Compose drag&drop (the AWT window.dropTarget never fired —
             // the Compose surface intercepts drops; DesktopApp uses Modifier.dragAndDropTarget).
             DesktopApp(
@@ -158,6 +161,7 @@ fun main() {
                 onFilesDropped = { files -> files.forEach { state.onReceived(inbox.addFile(it.absolutePath)) } },
                 onTextDropped = { text -> state.onReceived(inbox.addText(text)) },
             )
+            }
         }
     }
 }

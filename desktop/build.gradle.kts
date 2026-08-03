@@ -11,6 +11,13 @@ plugins {
 
 kotlin { jvmToolchain(17) }
 
+// Шрифты живут в :core:ui (Android-ресурсы) и здесь ПЕРЕИСПОЛЬЗУЮТСЯ, а не копируются:
+// один файл начертания на проект — иначе телефон и ПК однажды разойдутся, и никто не заметит,
+// какой из них прав (#285).
+sourceSets.main {
+    resources.srcDir(rootProject.file("core/ui/src/main/res/font"))
+}
+
 dependencies {
     implementation(project(":core:model"))
     implementation(project(":core:flow"))
