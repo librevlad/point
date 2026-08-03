@@ -1155,6 +1155,7 @@ class FlowViewModel @Inject constructor(
         job.cancel()
         claimVoice() // остановленная работа замолкает сразу — её хвост ещё идёт
         _ui.update { it.copy(busy = null, busyStage = null, message = "Отменено") }
+
         // Отмена — не отказ: человек сам передумал, и знак исхода не имеет права ставить ему «✕».
         _ui.update { it.copy(busy = null, busyStage = null, message = "Отменено", messageIsFailure = false) }
     }
