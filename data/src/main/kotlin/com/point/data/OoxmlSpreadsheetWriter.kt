@@ -101,12 +101,24 @@ class OoxmlSpreadsheetWriter @Inject constructor(
         append("</sheetData></worksheet>")
     }
 
-    /** Cell style index into [STYLES] cellXfs: header row wins, then flag > correction > strike. */
+    /**
+     * Cell style index into [STYLES] cellXfs: **сначала пометки, потом оформление шапки**.
+     *
+     * Порядок был обратным, и это стоило предупреждений. Знака «⚠» в тексте ячейки нет —
+     * [styleCell] снимает его, и единственный носитель неуверенности в файле — заливка. Стиль
+     * шапки стоял на первой строке безусловно, поэтому у документа **без строки заголовков**
+     * (кадр 18 корпуса: сетка начинается сразу под подписью) первая строка данных красилась
+     * серым «заголовком», и все её пометки исчезали бесследно. Живой прогон: приложение
+     * насчитало 24 помеченные ячейки, в файле их осталось 13 — одиннадцать предупреждений
+     * стёрло оформление.
+     *
+     * Неуверенность — факт, шапка — оформление; факт оформлению не уступает.
+     */
     private fun styleId(row: Int, cell: com.point.core.flow.StyledCell): Int = when {
-        row == 0 -> STYLE_HEADER
         cell.flagged -> STYLE_FLAG
         cell.corrected -> STYLE_CORRECTED
         cell.strike -> STYLE_STRIKE
+        row == 0 -> STYLE_HEADER
         else -> STYLE_DEFAULT
     }
 

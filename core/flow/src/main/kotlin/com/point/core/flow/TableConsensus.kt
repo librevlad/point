@@ -313,14 +313,59 @@ private fun matchByKey(
 /**
  * Пары «слот сетки ↔ строка чтения» в порядке документа: `null` с одной стороны — пропуск.
  * Классический LCS: длина совпадений максимизируется, порядок сохраняется.
+ *
+ * Похожесть строк ([rowsSimilar]) считается по позициям — и этого мало, когда чтения разбили
+ * строку на **разное число ячеек**. Тогда работает второй путь, [rowsWithSameId]: строку
+ * опознаёт её идентификатор, где бы в строке он ни стоял.
  */
 private fun matchRows(
     grid: List<List<String>>,
     rows: List<List<String>>,
-): List<Pair<Int?, Int?>> =
-    pairSubstitutions(lcsOps(grid.size, rows.size) { i, j -> rowsSimilar(grid[i], rows[j]) }) { i, j ->
-        sameRowPossible(grid[i], rows[j])
+): List<Pair<Int?, Int?>> {
+    val byId = rowsWithSameId(grid, rows)
+    return pairSubstitutions(
+        lcsOps(grid.size, rows.size) { i, j -> byId[i] == j || rowsSimilar(grid[i], rows[j]) },
+    ) { i, j -> sameRowPossible(grid[i], rows[j]) }
+}
+
+/**
+ * Строки сетки и чтения, узнавшие друг друга **по идентификатору**, где бы он в строке ни стоял:
+ * номер строки сетки → номер строки чтения (#262, кадр 18 корпуса).
+ *
+ * Ключевая колонка ([keyColumns]) уже умеет узнавать строки по артикулу, но требует, чтобы он
+ * стоял в **колонке** и чтобы строк было не меньше [MIN_KEYED_ROWS]. На кадре 18 закрылись оба
+ * условия сразу: в документе две строки, а чтения разложили их по-разному — одно указало на
+ * каждое слово отдельной ячейкой, другое собрало слова в ячейки, и артикул оказался в разных
+ * позициях. Позиционная похожесть не нашла ни одной общей ячейки, и обе версии обеих строк
+ * уехали в файл: **четыре строки на двухстрочном документе**, каждая напечатана дважды в своей
+ * разбивке. Человек получил документ, которого не существует, — и ни одной пометки об этом.
+ *
+ * Опознаёт только значение, встречающееся в чтении **ровно один раз** и составляющее ячейку
+ * целиком ([ID_SHAPED] — та же форма, которой [sameRowPossible] запрещает склейку). Иначе
+ * «120» из колонки количества или год из колонки договора объявили бы одной строкой любую пару
+ * строк, а это ровно та склейка, от которой лечит [sameRowPossible]. Пара, где идентификатор
+ * зовёт сразу нескольких, отбрасывается целиком: неоднозначное опознание хуже отсутствующего.
+ */
+private fun rowsWithSameId(grid: List<List<String>>, rows: List<List<String>>): Map<Int, Int> {
+    val ofGrid = uniqueRowIds(grid)
+    val ofRows = uniqueRowIds(rows)
+    val pairs = ofGrid.mapNotNull { (id, g) -> ofRows[id]?.let { r -> g to r } }.distinct()
+    val gridSeen = pairs.groupingBy { it.first }.eachCount()
+    val rowSeen = pairs.groupingBy { it.second }.eachCount()
+    return pairs.filter { gridSeen[it.first] == 1 && rowSeen[it.second] == 1 }.toMap()
+}
+
+/** Идентификаторы чтения, встреченные в нём ровно один раз: значение → номер его строки. */
+private fun uniqueRowIds(table: List<List<String>>): Map<String, Int> {
+    val rowsOf = LinkedHashMap<String, MutableSet<Int>>()
+    table.forEachIndexed { r, row ->
+        row.forEach { cell ->
+            val value = normConsensus(cell)
+            if (ID_SHAPED.matches(value)) rowsOf.getOrPut(value) { mutableSetOf() }.add(r)
+        }
     }
+    return rowsOf.filterValues { it.size == 1 }.mapValues { it.value.first() }
+}
 
 /**
  * Классический LCS-обход двух последовательностей: пары «индекс слева ↔ индекс справа», `null`
