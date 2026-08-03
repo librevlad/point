@@ -93,6 +93,16 @@ abstract class FlowHostActivity : ComponentActivity() {
                         onFindQuery = viewModel::onFindQuery,
                         onCloseFind = viewModel::closeFind,
                         onCancelPreview = viewModel::cancelPreview,
+                        // Страница, где выдают ключ, открывается браузером телефона: Point не
+                        // показывает чужие сайты внутри себя — он не браузер (продуктовый фильтр).
+                        onOpenUrl = { url ->
+                            runCatching {
+                                startActivity(
+                                    Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url))
+                                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                                )
+                            }
+                        },
                     )
                 }
             }

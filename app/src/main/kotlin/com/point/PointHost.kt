@@ -84,6 +84,8 @@ fun PointHost(
     onCloseKeySettings: () -> Unit = {},
     onToggleUsage: (Boolean) -> Unit = {},
     onToggleSound: (Boolean) -> Unit = {},
+    /** Открыть страницу, где выдают ключ (#403). */
+    onOpenUrl: (String) -> Unit = {},
     onConfirmCloud: () -> Unit = {},
     onDeclineCloud: () -> Unit = {},
     onPickApp: (AppTarget) -> Unit = {},
@@ -175,6 +177,7 @@ fun PointHost(
                 onToggleUsage = onToggleUsage,
                 soundEnabled = state.soundEnabled,
                 onToggleSound = onToggleSound,
+                onOpenUrl = onOpenUrl,
             )
 
             // M3 (MOTION.md №8): quiet local work keeps the object on screen — it "works"
