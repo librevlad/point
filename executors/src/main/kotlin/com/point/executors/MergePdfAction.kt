@@ -1,6 +1,8 @@
 package com.point.executors
 
 import com.point.core.flow.Capability
+import com.point.core.flow.CapabilityMeta
+import com.point.core.flow.Latency
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.Realizer
 import com.point.core.model.ActionResult
@@ -22,6 +24,10 @@ import javax.inject.Inject
 class MergePdfCapability @Inject constructor() : Capability {
     override val id = ID
     override val icon = "pdf"
+
+    /** Не [Latency.INSTANT] (#288): двадцать фото с камеры декодируются и рисуются в страницы десятки
+     *  секунд — и всё это время [imagesToPdf] честно считает собранные страницы вслух. */
+    override val meta = CapabilityMeta(latency = Latency.FAST)
     override fun label(state: ObjectState) = "Объединить в PDF"
     override fun accepts(state: ObjectState) = state.kind == ObjectKind.COLLECTION
     override fun produces(state: ObjectState) = ObjectState(ObjectKind.PDF)

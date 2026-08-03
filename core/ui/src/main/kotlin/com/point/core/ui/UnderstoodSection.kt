@@ -163,9 +163,10 @@ internal fun UnderstoodSection(facts: List<UnderstoodFact>, enriching: List<Stri
     }
 }
 
-/** The visible heartbeat of a running enricher — a softly pulsing brand dot. */
+/** The visible heartbeat of running work — a softly pulsing brand dot. Shared with the action's
+ *  own «сейчас» line (#288): «Point думает» и «действие работает» — одно ощущение, один знак. */
 @Composable
-private fun ThinkingDot() {
+internal fun ThinkingDot() {
     val motion = rememberMotionEnabled()
     val alpha = if (motion) {
         rememberInfiniteTransition(label = "think").animateFloat(

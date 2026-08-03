@@ -209,7 +209,7 @@ class FlowViewModel @Inject constructor(
 
     fun onShared(sourceUri: String, mime: String, autoAction: String? = null) {
         freshShareArrived = true
-        _ui.update { it.copy(busy = "Открываю…", busyNetwork = false, busyQuiet = false, message = null, messageIsFailure = false, inputPrompt = null) }
+        _ui.update { it.copy(busy = "Открываю…", busyStage = null, busyNetwork = false, busyQuiet = false, message = null, messageIsFailure = false, inputPrompt = null) }
         viewModelScope.launch {
             val obj = runCatching {
                 store.clear()
@@ -234,7 +234,7 @@ class FlowViewModel @Inject constructor(
      *  e.g. several photos to merge into a PDF). */
     fun onSharedMultiple(sources: List<String>) {
         freshShareArrived = true
-        _ui.update { it.copy(busy = "Открываю…", busyNetwork = false, busyQuiet = false, message = null, messageIsFailure = false, inputPrompt = null) }
+        _ui.update { it.copy(busy = "Открываю…", busyStage = null, busyNetwork = false, busyQuiet = false, message = null, messageIsFailure = false, inputPrompt = null) }
         viewModelScope.launch {
             val obj = runCatching {
                 store.clear()
@@ -278,7 +278,7 @@ class FlowViewModel @Inject constructor(
      *  a failed ack re-offers (at-least-once); a failed download acks nothing. */
     fun pullFromPc() {
         val pairing = pcPairings.current() ?: return
-        _ui.update { it.copy(busy = "Забираю с компьютера…", busyNetwork = false, busyQuiet = false, message = null, messageIsFailure = false) }
+        _ui.update { it.copy(busy = "Забираю с компьютера…", busyStage = null, busyNetwork = false, busyQuiet = false, message = null, messageIsFailure = false) }
         viewModelScope.launch {
             // Pull what is on the PC RIGHT NOW — a fresh fetch, not the throttled banner snapshot. The
             // cached list can be up to OUTBOX_THROTTLE_MS stale, so an object queued after the last
@@ -375,7 +375,7 @@ class FlowViewModel @Inject constructor(
 
     fun openFromHistory(entry: HistoryEntry) {
         freshShareArrived = true
-        _ui.update { it.copy(busy = "Открываю…", busyNetwork = false, busyQuiet = false, message = null, messageIsFailure = false, inputPrompt = null) }
+        _ui.update { it.copy(busy = "Открываю…", busyStage = null, busyNetwork = false, busyQuiet = false, message = null, messageIsFailure = false, inputPrompt = null) }
         viewModelScope.launch {
             val obj = runCatching { history.open(entry.id) }.getOrNull()
             if (obj == null) {
@@ -416,7 +416,7 @@ class FlowViewModel @Inject constructor(
     private fun maybePreview(bubble: Bubble, top: PointObject) {
         _ui.update {
             it.copy(
-                busy = bubble.title, busyNetwork = isCloud(bubble.capabilityId),
+                busy = bubble.title, busyStage = null, busyNetwork = isCloud(bubble.capabilityId),
                 busyQuiet = isQuietAction(bubble.capabilityId), message = null, messageIsFailure = false,
                 inputPrompt = null,
             )
@@ -642,7 +642,7 @@ class FlowViewModel @Inject constructor(
         pendingBubble = null
         _ui.update {
             it.copy(
-                busy = bubble.title, busyNetwork = isCloud(bubble.capabilityId),
+                busy = bubble.title, busyStage = null, busyNetwork = isCloud(bubble.capabilityId),
                 busyQuiet = isQuietAction(bubble.capabilityId),
                 inputPrompt = null, inputSuggestions = emptyList(), needsImage = null,
             )
@@ -853,7 +853,7 @@ class FlowViewModel @Inject constructor(
     // --- Device actions (#66): the installed apps that can open the object, shown inline. ---
 
     private fun showAppPicker(obj: PointObject) {
-        _ui.update { it.copy(busy = "Ищу приложения…", busyQuiet = false, message = null, messageIsFailure = false, inputPrompt = null) }
+        _ui.update { it.copy(busy = "Ищу приложения…", busyStage = null, busyQuiet = false, message = null, messageIsFailure = false, inputPrompt = null) }
         viewModelScope.launch {
             val direct = runCatching { appLauncher.handlers(obj) }.getOrDefault(emptyList())
             // Dedup by package: an app that also appears as a bridged target must not double —
@@ -910,7 +910,7 @@ class FlowViewModel @Inject constructor(
 
     /** Run one transform to produce the object the bridged app can open (#79.1); null on failure. */
     private suspend fun bridge(obj: PointObject, viaCapId: String): PointObject? {
-        _ui.update { it.copy(busy = "Преобразую…", busyQuiet = false) }
+        _ui.update { it.copy(busy = "Преобразую…", busyStage = null, busyQuiet = false) }
         val result = runCatching { resolver.realizerFor(CapabilityId(viaCapId)).perform(obj, null) }.getOrNull()
         return (result as? ActionResult.Success)?.let { runCatching { store.put(it.result) }.getOrNull() }
     }
@@ -963,7 +963,7 @@ class FlowViewModel @Inject constructor(
     }
 
     private fun replayChain(chain: FavoriteChain, start: PointObject) {
-        _ui.update { it.copy(busy = "Выполняю цепочку…", busyNetwork = false, busyQuiet = false, message = null, messageIsFailure = false, inputPrompt = null) }
+        _ui.update { it.copy(busy = "Выполняю цепочку…", busyStage = null, busyNetwork = false, busyQuiet = false, message = null, messageIsFailure = false, inputPrompt = null) }
         viewModelScope.launch {
             var current = start
             for (capId in chain.steps) {
@@ -1189,7 +1189,7 @@ class FlowViewModel @Inject constructor(
         stack.addLast(frame)
         _ui.update {
             it.copy(
-                busy = null, frame = frame, message = null, messageIsFailure = false, inputPrompt = null, inputSuggestions = emptyList(),
+                busy = null, busyStage = null, frame = frame, message = null, messageIsFailure = false, inputPrompt = null, inputSuggestions = emptyList(),
                 needsImage = null, preview = null, path = currentPath(),
             )
         }

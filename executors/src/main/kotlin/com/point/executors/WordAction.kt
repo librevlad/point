@@ -29,7 +29,18 @@ internal fun toParagraphs(text: String): List<String> =
 class WordCapability @Inject constructor() : Capability {
     override val id = ID
     override val icon = "office"
-    override val meta = CapabilityMeta(latency = Latency.FAST)
+
+    /**
+     * [Latency.SLOW], а не FAST (#288): над фото «В Word» запускает `TextRecognizer` — тот самый
+     * движок и тот самый трёхминутный бюджет, из-за которого «Распознать текст» уже объявлено
+     * долгим. Одна работа не может быть объявлена двумя способами: пузырьки стоят рядом над одним
+     * снимком, и «этот быстрый» читалось бы как обещание, которого никто не давал.
+     *
+     * Цена признана и названа: у текстового входа работы почти нет, и экран ожидания там мелькнёт.
+     * Это меньшее зло, чем оставить самый долгий вход без экрана — а значит **без кнопки отмены**:
+     * передумать через минуту ожидания человек должен уметь всегда, а мигание длится мгновение.
+     */
+    override val meta = CapabilityMeta(latency = Latency.SLOW)
     override fun label(state: ObjectState) = "В Word"
     override fun accepts(state: ObjectState) =
         state.kind == ObjectKind.PDF || state.kind == ObjectKind.TEXT || state.kind == ObjectKind.IMAGE

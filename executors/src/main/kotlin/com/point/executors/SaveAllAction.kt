@@ -1,7 +1,9 @@
 package com.point.executors
 
 import com.point.core.flow.Capability
+import com.point.core.flow.CapabilityMeta
 import com.point.core.flow.Exporter
+import com.point.core.flow.Latency
 import com.point.core.flow.Realizer
 import com.point.core.flow.reportStage
 import com.point.core.model.ActionResult
@@ -28,6 +30,10 @@ import javax.inject.Inject
 class SaveAllCapability @Inject constructor() : Capability {
     override val id = ID
     override val icon = "save-all"
+
+    /** Не [Latency.INSTANT] (#288): шагов столько, сколько файлов, и каждый копирует настоящие
+     *  мегабайты. Действие, которое считает вслух «Сохраняю 3 из 12», мгновенным не бывает. */
+    override val meta = CapabilityMeta(latency = Latency.FAST)
     override fun label(state: ObjectState) = "Сохранить всё"
     override fun accepts(state: ObjectState) = state.kind == ObjectKind.COLLECTION
     override fun produces(state: ObjectState) = state // terminal

@@ -3,6 +3,7 @@ package com.point.executors
 import com.point.core.flow.BackgroundRemover
 import com.point.core.flow.Capability
 import com.point.core.flow.CapabilityMeta
+import com.point.core.flow.Latency
 import com.point.core.flow.Realizer
 import com.point.core.flow.reportStage
 import com.point.core.model.ActionResult
@@ -24,7 +25,11 @@ import javax.inject.Inject
 class CutoutCapability @Inject constructor() : Capability {
     override val id = ID
     override val icon = "cutout"
-    override val meta = CapabilityMeta(priority = 40)
+
+    /** Не [Latency.INSTANT] (#288): сегментация — модель ML Kit, а на ПЕРВОМ применении она
+     *  ещё и докачивается. Мгновенным было объявлено действие, которое успевает сказать
+     *  о себе целую фразу, — и из-за этого объявления фразы было негде показать. */
+    override val meta = CapabilityMeta(priority = 40, latency = Latency.FAST)
     override fun label(state: ObjectState) = "Убрать фон"
     override fun accepts(state: ObjectState) = state.kind == ObjectKind.IMAGE
     override fun produces(state: ObjectState) = ObjectState(ObjectKind.IMAGE)
