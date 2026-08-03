@@ -76,4 +76,14 @@ class PeriodEnricherTest {
         assertFalse(enricher.appliesTo(ObjectState(ObjectKind.IMAGE)))
         assertFalse(enricher.appliesTo(ObjectState(ObjectKind.TEXT)))
     }
+
+    @Test
+    fun `ярлык не обещает таблицу — виден он над любым документом`() {
+        // `appliesTo` судит по виду объекта, а вид у .docx и .xlsx один. Значит строка «Point
+        // думает» встанет и над письмом в Word — а до этого среза над документами не работал ни
+        // один энричер, и карточки там не было вовсе. Обещать таблицу там, где её нет, — тихое
+        // враньё на пустом месте.
+        val label = checkNotNull(enricherOver(emptyList()).meta.label)
+        assertFalse("над .docx это будет неправдой", label.contains("таблиц", ignoreCase = true))
+    }
 }

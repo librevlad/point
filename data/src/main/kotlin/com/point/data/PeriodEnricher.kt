@@ -27,11 +27,17 @@ class PeriodEnricher @Inject constructor(
 ) : Enricher {
 
     /** Разбор xlsx — это распаковка zip и разбор XML: для волны обогащения это [EnrichCost.SLOW],
-     *  и планировщик вправе не звать нас, если признак ничего нового не откроет. */
+     *  и планировщик вправе не звать нас, если признак ничего нового не откроет.
+     *
+     *  Ярлык говорит «документ», а не «таблица», потому что виден он не только над таблицей:
+     *  [appliesTo] судит по виду объекта, а вид у .docx и .xlsx один — `OFFICE`. Обещать
+     *  человеку, что мы смотрим таблицу, над письмом в Word значит соврать на ровном месте:
+     *  до этого среза над документами не работал ни один энричер, и карточка «Point думает»
+     *  над ними появляется впервые. */
     override val meta = EnricherMeta(
         cost = EnrichCost.SLOW,
         mayYield = setOf(Feature.HAS_PERIOD),
-        label = "Смотрю таблицу…",
+        label = "Смотрю документ…",
     )
 
     override fun appliesTo(state: ObjectState) = state.kind == ObjectKind.OFFICE

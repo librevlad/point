@@ -35,6 +35,8 @@ class SpokenWorkLatencyTest {
         OcrCapability(),
         OfficeCapability(),
         SaveAllCapability(),
+        // #224: «Читаю документ» и «Собираю бланк» — те же слова на экране, тот же счёт здесь.
+        RenewPeriodCapability(),
     )
 
     @Test
