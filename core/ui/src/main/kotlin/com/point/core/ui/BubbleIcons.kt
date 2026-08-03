@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.ContentCut
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Event
+import androidx.compose.material.icons.filled.EventRepeat
 import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.DocumentScanner
 import androidx.compose.material.icons.filled.FolderOpen
@@ -76,6 +77,7 @@ fun bubbleIcon(key: String): ImageVector = when (if (key.startsWith("app:")) "op
     "link" -> Icons.Filled.Link
     "office" -> Icons.Filled.Article
     "excel" -> Icons.Filled.TableChart
+    "renew" -> Icons.Filled.EventRepeat
     "pc" -> Icons.Filled.Computer
     "scan" -> Icons.Filled.DocumentScanner
     "cutout" -> Icons.Filled.ContentCut
@@ -127,6 +129,7 @@ fun bubbleColor(key: String): Color = when (if (key.startsWith("app:")) "open-in
     "qr-scan" -> Color(0xFF2F80ED)  // blue — read a QR
     "office" -> Color(0xFF16A34A)   // green — documents/data
     "excel" -> Color(0xFF15803D)    // deeper green — spreadsheet
+    "renew" -> Color(0xFF0F766E)    // deep teal — тот же документ на новый период
     "unzip" -> Color(0xFFF2994A)    // amber — archive
     "pages" -> Color(0xFF2F80ED)    // blue — PDF pages
     "translate" -> Color(0xFFEC4899) // pink — translate

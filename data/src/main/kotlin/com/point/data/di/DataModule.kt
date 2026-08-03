@@ -108,6 +108,7 @@ import com.point.data.configured
 import com.point.data.openAiModels
 import com.point.data.PdfBoxTextExtractor
 import com.point.data.PdfImageEnricher
+import com.point.data.PeriodEnricher
 import com.point.data.PrefsPrivacyConsent
 import com.point.data.PrefsSensorySettings
 import com.point.data.FileFlowSnapshotStore
@@ -340,6 +341,11 @@ abstract class DataModule {
      *  metadata, so the paid classification is paid for once. */
     @Binds @IntoSet
     abstract fun graphMetadataEnricher(e: GraphMetadataEnricher): Enricher
+
+    /** Якорь «На новый период» (#224): в таблице прочитан календарь дат. Правило на устройстве,
+     *  после первого экрана — заглянуть внутрь файла иначе нечем. */
+    @Binds @IntoSet
+    abstract fun periodEnricher(e: PeriodEnricher): Enricher
 
     companion object {
         /** Pure classifier lives in :core:flow (no DI annotations there). */

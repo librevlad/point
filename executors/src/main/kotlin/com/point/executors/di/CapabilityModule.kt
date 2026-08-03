@@ -86,6 +86,8 @@ import com.point.executors.QrCapability
 import com.point.executors.QrRealizer
 import com.point.executors.ReadQrCapability
 import com.point.executors.ReadQrRealizer
+import com.point.executors.RenewPeriodCapability
+import com.point.executors.RenewPeriodRealizer
 import com.point.executors.ScanCapability
 import com.point.executors.ScanRealizer
 import com.point.executors.ScanPlusCapability
@@ -158,6 +160,9 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun archiveCap(c: ArchiveCapability): Capability
     @Binds @IntoSet abstract fun translateCap(c: TranslateCapability): Capability
     @Binds @IntoSet abstract fun excelCap(c: ExcelCapability): Capability
+    /** #224: та же таблица на следующий период. Появляется только на таблице, где прочитан
+     *  календарь дат (`Feature.HAS_PERIOD`), — иначе продлевать было бы нечего. */
+    @Binds @IntoSet abstract fun renewPeriodCap(c: RenewPeriodCapability): Capability
     @Binds @IntoSet abstract fun wordCap(c: WordCapability): Capability
     @Binds @IntoSet abstract fun qrCap(c: QrCapability): Capability
     @Binds @IntoSet abstract fun readQrCap(c: ReadQrCapability): Capability
@@ -204,6 +209,7 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun archiveR(r: ArchiveRealizer): Realizer
     @Binds @IntoSet abstract fun translateR(r: TranslateRealizer): Realizer
     @Binds @IntoSet abstract fun excelR(r: ExcelRealizer): Realizer
+    @Binds @IntoSet abstract fun renewPeriodR(r: RenewPeriodRealizer): Realizer
     @Binds @IntoSet abstract fun wordR(r: WordRealizer): Realizer
     @Binds @IntoSet abstract fun qrR(r: QrRealizer): Realizer
     @Binds @IntoSet abstract fun readQrR(r: ReadQrRealizer): Realizer
