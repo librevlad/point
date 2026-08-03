@@ -362,6 +362,14 @@ abstract class DataModule {
         fun dropLink(): com.point.core.flow.DropLink =
             com.point.data.RelayDropLink(BuildConfig.RELAY_URL, BuildConfig.RELAY_APP_SECRET)
 
+        /**
+         * «Принять файл» (#388) — та же ссылка в обратную сторону: чужой человек кладёт файл в
+         * ящик на релее, телефон забирает его обычным путём. Плата та же: этот файл релей видит.
+         */
+        @Provides
+        fun dropInbox(): com.point.core.flow.DropInbox =
+            com.point.data.RelayDropInbox(BuildConfig.RELAY_URL, BuildConfig.RELAY_APP_SECRET)
+
         /** #161 v2 «железобетонно»: the LAN transport self-heals a stale PC IP via mDNS (re-resolve +
          *  retry with the token), and when it still can't be reached — different network, LTE — the
          *  object falls back to the always-works relay (outbound-only, E2E-encrypted). */
