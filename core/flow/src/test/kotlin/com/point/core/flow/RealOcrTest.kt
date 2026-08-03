@@ -16,6 +16,12 @@ import org.junit.Test
  * The fixtures in `src/test/resources/ocr` are verbatim OCR output pulled off a Samsung A34 on
  * 2026-07-30 — four Nova Poshta screens and two chats. Nothing in them is cleaned up; the
  * mangling (`Мсця`, `Вдчинено`, `Micue`) is the point.
+ *
+ * **`chat_calc` и `receipt_paper` — обезличены** (#262, кадры 03 и 20, прогон 03.08.2026). Это
+ * платёж и переписка владельца, а правило корпуса на образцы распространяется целиком: имя,
+ * номер карты, IBAN, номер квитанции и код авторизации заменены на подставные **той же формы**.
+ * Порча движка не тронута ни в одном знаке — она и есть предмет проверки: «Квитанція» пришла как
+ * `Квитанщя`, время сообщения — как `4...` сразу за итогом расчёта.
  */
 class RealOcrTest {
 
@@ -136,6 +142,55 @@ class RealOcrTest {
         (parcels + "ledger_23").forEach { name ->
             assertTrue("«$name» не про деньги", amountFacts(ocr(name)).isEmpty())
         }
+    }
+
+    /**
+     * Кадр 03 корпуса: два прибора учёта, расчёт вслух и пересланная карта. Знака гривны на
+     * странице нет ни одного, а сумма к переводу напечатана — итогом второго расчёта. Прогон
+     * 03.08.2026 объявил кадр несправившимся именно здесь: карта прочитана, сумма — нет.
+     */
+    @Test
+    fun `сумма перевода читается там, где валюты на странице нет вовсе`() {
+        val facts = amountFacts(ocr("chat_calc"))
+
+        assertEquals("1048,64", facts[META_ENTITY_AMOUNT])
+        assertEquals("arithmetic", facts[META_ENTITY_AMOUNT + META_EVIDENCE_SUFFIX])
+        // Промежуточный итог не потерян и не назначен ответом.
+        assertEquals(altValue(listOf("1048,64", "548,64")), facts[META_ENTITY_AMOUNT + META_MORE_SUFFIX])
+    }
+
+    @Test
+    fun `порченые часы переписки суммами не становятся`() {
+        // Движок отдал таймстемпы как «49.45», «59.55», «15.55», «30.0,» — четыре числа с
+        // дробной частью на той же странице, что и настоящий расчёт. Ни одно из них суммой не
+        // стало: сумму назначает сошедшийся расчёт, а не форма числа.
+        val text = ocr("chat_calc")
+
+        assertEquals(listOf("1048,64", "548,64"), arithmeticTotals(text))
+        // И валютного чтения на этой странице нет вовсе — знака гривны движок не отдал ни одного.
+        assertTrue(moneyAmounts(text).isEmpty())
+    }
+
+    @Test
+    fun `на странице квитанции читается ровно один номер`() {
+        // Кадр 20: числа на листе повсюду — IBAN, карта, код банка, код авторизации, — и все
+        // они рядом со своими подписями. Номером квитанции становится только тот, у кого рядом
+        // стоит слово о квитанции, каким бы движок его ни отдал.
+        val text = ocr("receipt_paper")
+
+        assertEquals(listOf("AB12-CD34-EF56-GH78"), receiptNumbers(text))
+        assertEquals("500.00", amountFacts(text)[META_ENTITY_AMOUNT])
+        assertEquals("грн", amountFacts(text)[META_ENTITY_AMOUNT_CURRENCY])
+    }
+
+    @Test
+    fun `квитанция посылкой не становится`() {
+        // На листе стоит «Одержувач» — слово словаря доставки. Одного слова мало, и номера
+        // отправления на квитанции нет: ни IBAN, ни номер карты треком не притворяются.
+        val text = ocr("receipt_paper")
+
+        assertNull(documentType(text))
+        assertTrue(waybillNumbers(text).isEmpty())
     }
 
     @Test
