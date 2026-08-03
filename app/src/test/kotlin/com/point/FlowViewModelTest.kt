@@ -417,8 +417,14 @@ class FlowViewModelTest {
     }
 
     /** Пузырёк нарисован, а реализатора для него нет (потеряли `@IntoSet` при добавлении
-     *  действия): тап обязан сказать об этом, а не уронить приложение и не сделать вид. */
-    @Test fun `пузырёк без реализатора отвечает отказом, а не падением`() = runTest(dispatcher) {
+     *  действия): тап обязан сказать об этом, а не уронить приложение и не сделать вид.
+     *
+     *  Что именно сказано — тоже проверка, а не мелочь: текст исключения написан для
+     *  разработчика («No realizer for capability=excel» — так падает настоящий
+     *  `DefaultResolver`), и попасть на экран человека он не должен. На пути избранной
+     *  цепочки та же беда давно говорит по-человечески («Шаг цепочки недоступен») —
+     *  одиночный тап обязан звучать так же. */
+    @Test fun `пузырёк без реализатора отвечает отказом на языке человека, а не падением`() = runTest(dispatcher) {
         resolver.noRealizer = true
         val vm = vm()
         vm.onShared("uri", "image/png"); advanceUntilIdle()
@@ -426,6 +432,7 @@ class FlowViewModelTest {
         vm.onBubble(bubble()); advanceUntilIdle()
 
         assertTrue(vm.ui.value.messageIsFailure)
+        assertEquals("Действие недоступно", vm.ui.value.message)
         assertNull(vm.ui.value.busy)
     }
 
@@ -945,6 +952,32 @@ class FlowViewModelTest {
 
         assertEquals(null, resolver.lastAmendment) // the call realizer actually ran
         assertEquals(listOf(1), pcTransport.acked)
+    }
+
+    /**
+     * Обратная половина того же пути (#161 v2): компьютер называет действие по имени, а имена
+     * у двух половинок расходятся — на ПК действие есть, на телефоне ещё (или уже) нет.
+     *
+     * Объект к этому моменту уже скачан и открыт, и потерять его из-за незнакомого названия
+     * нельзя: человек обязан увидеть объект и фразу о том, что действия здесь нет. До этой
+     * правки `registry.byId` в `onShared` был единственным вызовом реестра без страховки: на
+     * телефоне исключению из `viewModelScope` деваться некуда — процесс умирает; на JVM оно
+     * теряется тихо, и видно только последствие, которое здесь и проверяется, — ни действия,
+     * ни слова человеку. Фейковый реестр отдавал заглушку на любое имя и прятал это вовсе.
+     */
+    @Test fun `названного компьютером действия на телефоне нет — объект открыт, человек предупреждён`() = runTest(dispatcher) {
+        pcPairings.pairing = com.point.core.flow.PcPairing("10.0.2.2", 8391, "tok")
+        pcTransport.outbox = listOf(
+            com.point.core.flow.PcOutboxEntry(1, mapOf("name" to "т.txt", "mime" to "text/plain", "pc.action" to "видеомонтаж")),
+        )
+        val vm = vm() // такого действия на телефоне нет
+        vm.loadRecent(); advanceUntilIdle()
+
+        vm.pullFromPc(); advanceUntilIdle()
+
+        assertTrue("объект обязан остаться открытым", vm.ui.value.frame != null)
+        assertTrue(vm.ui.value.messageIsFailure)
+        assertEquals("Компьютер попросил действие, которого в Point нет", vm.ui.value.message)
     }
 
     @Test fun `pairing advertises the phone's own actions to the PC (#161 v2)`() = runTest(dispatcher) {
@@ -1483,8 +1516,13 @@ private class FakeRegistry(
     override fun intentsFor(state: ObjectState): List<Intent> =
         Intent.entries.filter { intent -> caps.values.any { intent in it } }
     override fun latentBubblesFor(state: ObjectState) = emptyList<com.point.core.model.LatentBubble>()
+
+    /** Незнакомый id — ошибка, как и у настоящего `DefaultCapabilityRegistry`. Пока фейк
+     *  отдавал заглушку на любое имя, он был добрее реальности, и незащищённый вызов
+     *  `byId` не мог упасть ни в одном тесте — дыра держалась именно на доброте фейка. */
     override fun byId(id: CapabilityId): Capability =
-        FakeCapability(id, caps[id] ?: emptySet(), id in cloud, id in slow)
+        caps[id]?.let { FakeCapability(id, it, id in cloud, id in slow) }
+            ?: error("No capability registered for id=${id.value}")
 }
 
 private class FakeEnrichment(var features: Set<Feature> = emptySet()) : Enrichment {

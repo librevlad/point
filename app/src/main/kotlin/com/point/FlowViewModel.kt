@@ -251,9 +251,20 @@ class FlowViewModel @Inject constructor(
             cancelEnrichment()
             stack.clear()
             pushFrame(obj)
-            // #161 v2: the PC named an intent for this object — run it as if tapped.
+            // #161 v2: the PC named an intent for this object — run it as if tapped. Имена
+            // действий у двух половинок свои, и версии расходятся: незнакомое имя — это фраза
+            // на уже открытом объекте, а не смерть процесса. Единственный вызов реестра, что
+            // оставался без страховки; объект к этому моменту скачан, и терять его нельзя.
             autoAction?.let { id ->
-                onBubble(Bubble("pc", registry.byId(CapabilityId(id)).label(obj.state), CapabilityId(id), obj.state))
+                val cap = CapabilityId(id)
+                val title = runCatching { registry.byId(cap).label(obj.state) }.getOrNull()
+                if (title == null) {
+                    _ui.update {
+                        it.copy(message = "Компьютер попросил действие, которого в Point нет", messageIsFailure = true)
+                    }
+                    return@let
+                }
+                onBubble(Bubble("pc", title, cap, obj.state))
             }
         }
     }
@@ -463,9 +474,17 @@ class FlowViewModel @Inject constructor(
             )
         }
         viewModelScope.launch {
-            val preview = runCatching { resolver.realizerFor(bubble.capabilityId).preview(top) }.getOrNull()
+            // Пузырёк нарисован, а исполнять его нечем (потерян `@IntoSet`): человеку — фраза
+            // на его языке, как давно говорит путь избранной цепочки. Без этой развилки на
+            // экран уезжал текст исключения, написанный для разработчика.
+            val realizer = runCatching { resolver.realizerFor(bubble.capabilityId) }.getOrNull()
+            if (realizer == null) {
+                _ui.update { it.copy(busy = null, busyStage = null, message = "Действие недоступно", messageIsFailure = true) }
+                return@launch
+            }
+            val preview = runCatching { realizer.preview(top) }.getOrNull()
             if (preview == null) {
-                dispatch(bubble) { resolver.realizerFor(bubble.capabilityId).perform(top, null) }
+                dispatch(bubble) { realizer.perform(top, null) }
             } else {
                 pendingPreviewBubble = bubble
                 _ui.update { it.copy(busy = null, busyStage = null, preview = preview) }
