@@ -35,6 +35,7 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -162,6 +163,9 @@ fun PortalPlate(
  *
  * [subtitle] — вторая строка под названием (адрес компьютера, чем хорош провайдер). На экране
  * объекта её нет: у действия есть только имя, и придумывать ему подпись было бы шумом.
+ *
+ * [trailing] — то, что стоит справа вместо шеврона, когда у строки есть второе, отдельное желание
+ * («сходить за ключом» — не то же, что «выбрать этого»).
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -179,6 +183,7 @@ fun PortalRow(
     chevron: Boolean = true,
     appearIndex: Int = 0,
     onLongClick: (() -> Unit)? = null,
+    trailing: (@Composable () -> Unit)? = null,
 ) {
     val motion = rememberMotionEnabled()
     val presence = remember { Animatable(if (motion) 0f else 1f) }
@@ -240,8 +245,9 @@ fun PortalRow(
                     )
                 }
             }
-            if (chevron) {
-                Icon(
+            when {
+                trailing != null -> trailing()
+                chevron -> Icon(
                     imageVector = Icons.Filled.KeyboardArrowRight,
                     contentDescription = null,
                     tint = chevronColor,
@@ -280,18 +286,25 @@ fun ScreenHeader(
     title: String,
     modifier: Modifier = Modifier,
     subtitle: String? = null,
+    horizontalAlignment: Alignment.Horizontal = Alignment.Start,
 ) {
-    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalAlignment = horizontalAlignment,
+    ) {
         Text(
             text = title,
             style = MaterialTheme.typography.headlineSmall,
             color = MaterialTheme.colorScheme.onBackground,
+            textAlign = if (horizontalAlignment == Alignment.CenterHorizontally) TextAlign.Center else null,
         )
         if (subtitle != null) {
             Text(
                 text = subtitle,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = if (horizontalAlignment == Alignment.CenterHorizontally) TextAlign.Center else null,
             )
         }
     }
