@@ -1,5 +1,7 @@
 package com.point.core.flow
 
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -58,7 +60,7 @@ class ReadingBudgetTest {
     private fun garbage() = layerOf("|" to 0.2f, "l~" to 0.15f, "//" to 0.1f, "т" to 0.3f)
 
     @Test
-    fun `хорошее чтение уложилось — пробы не запускаются, пометки нет`() {
+    fun `хорошее чтение уложилось — пробы не запускаются, пометки нет`() = runTest {
         val clock = FakeClock()
         val page = goodPage()
         val full = SlowEngine(clock, 5_000) { page }
@@ -74,7 +76,7 @@ class ReadingBudgetTest {
     }
 
     @Test
-    fun `вечное базовое чтение отрезается на половине бюджета — пустой слой с причиной`() {
+    fun `вечное базовое чтение отрезается на половине бюджета — пустой слой с причиной`() = runTest {
         val clock = FakeClock()
         val full = SlowEngine(clock, 400_000) { goodPage() } // «вечность»
         val probe = SlowEngine(clock, 1_000) { goodPage() }
@@ -91,7 +93,7 @@ class ReadingBudgetTest {
     }
 
     @Test
-    fun `перевёрнутая страница — проба выигрывает и дочитывается полным кадром`() {
+    fun `перевёрнутая страница — проба выигрывает и дочитывается полным кадром`() = runTest {
         val clock = FakeClock()
         val fullGood = goodPage()
         val probeGood = goodPage()
@@ -108,7 +110,7 @@ class ReadingBudgetTest {
     }
 
     @Test
-    fun `пробы не уложились в предел — итог базовый, причина названа`() {
+    fun `пробы не уложились в предел — итог базовый, причина названа`() = runTest {
         val clock = FakeClock()
         val base = garbage()
         val full = SlowEngine(clock, 80_000) { base }
@@ -125,7 +127,7 @@ class ReadingBudgetTest {
     }
 
     @Test
-    fun `победителю не хватило времени на дочитку — итогом становится слой пробы`() {
+    fun `победителю не хватило времени на дочитку — итогом становится слой пробы`() = runTest {
         val clock = FakeClock()
         val probeGood = goodPage()
         val full = SlowEngine(clock, 90_000) { garbage() }
@@ -142,7 +144,7 @@ class ReadingBudgetTest {
     }
 
     @Test
-    fun `дочитывание отрезано — фолбэк на слой пробы, а не пустота`() {
+    fun `дочитывание отрезано — фолбэк на слой пробы, а не пустота`() = runTest {
         val clock = FakeClock()
         val probeGood = goodPage()
         val full = object : (Int, Long) -> CappedRead {
@@ -167,6 +169,79 @@ class ReadingBudgetTest {
         assertEquals(INCOMPLETE_TIMEOUT, out.layer.incomplete)
         assertEquals(180, out.angleDegrees)
         assertEquals(listOf(0, 180), full.calls)
+    }
+
+    /** Что действие рассказало о себе, пока шло чтение (#288). */
+    private suspend fun stagesHeard(action: suspend () -> Unit): List<String> {
+        val heard = mutableListOf<String>()
+        withContext(ActionProgress { heard += it }) { action() }
+        return heard
+    }
+
+    @Test
+    fun `перебор поворотов рассказывает о себе — по попытке за раз и в порядке`() = runTest {
+        val clock = FakeClock()
+        val fullGood = goodPage()
+        val full = SlowEngine(clock, 10_000) { angle -> if (angle == 180) fullGood else garbage() }
+        val probe = SlowEngine(clock, 2_000) { angle -> if (angle == 180) goodPage() else garbage() }
+
+        val heard = stagesHeard { readWithBudget(ReadingBudget(180_000, clock), full, probe) }
+
+        assertEquals(
+            listOf(
+                "Пробую повернуть страницу — 1 из 3",
+                "Пробую повернуть страницу — 2 из 3",
+                "Пробую повернуть страницу — 3 из 3",
+                "Нашёл, как лежит страница — перечитываю",
+            ),
+            heard,
+        )
+    }
+
+    @Test
+    fun `страница прочиталась с первого раза — сказать нечего`() = runTest {
+        val clock = FakeClock()
+        val page = goodPage()
+        val full = SlowEngine(clock, 5_000) { page }
+        val probe = SlowEngine(clock, 1_000) { page }
+
+        // Работы сверх базового чтения не было — и слов о ней нет: стадия у ненаступившего шага
+        // и есть та имитация статуса, против которой сделан весь #288.
+        assertTrue(stagesHeard { readWithBudget(ReadingBudget(180_000, clock), full, probe) }.isEmpty())
+    }
+
+    @Test
+    fun `отрезанное базовое чтение молчит — пробы не открывались`() = runTest {
+        val clock = FakeClock()
+        val full = SlowEngine(clock, 400_000) { goodPage() }
+        val probe = SlowEngine(clock, 1_000) { goodPage() }
+
+        assertTrue(stagesHeard { readWithBudget(ReadingBudget(180_000, clock), full, probe) }.isEmpty())
+    }
+
+    @Test
+    fun `на дочитывание не осталось времени — обещания перечитать нет`() = runTest {
+        val clock = FakeClock()
+        val full = SlowEngine(clock, 90_000) { garbage() }
+        val probe = SlowEngine(clock, 30_000) { angle -> if (angle == 180) goodPage() else garbage() }
+
+        val heard = stagesHeard { readWithBudget(ReadingBudget(180_000, clock), full, probe) }
+
+        // Пробы съели остаток: дочитки не будет, и слова о ней быть не должно.
+        assertEquals(
+            listOf(
+                "Пробую повернуть страницу — 1 из 3",
+                "Пробую повернуть страницу — 2 из 3",
+                "Пробую повернуть страницу — 3 из 3",
+            ),
+            heard,
+        )
+    }
+
+    @Test
+    fun `счёт попыток человеку — с единицы, а не с индекса`() {
+        assertEquals("Пробую повернуть страницу — 1 из 3", orientationProbeStage(0, 3))
+        assertEquals("Пробую повернуть страницу — 3 из 3", orientationProbeStage(2, 3))
     }
 
     @Test

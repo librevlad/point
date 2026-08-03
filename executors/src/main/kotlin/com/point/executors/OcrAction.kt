@@ -45,8 +45,25 @@ internal const val OCR_CLOUD_STAGE = "Читаю снимок в облаке"
 class OcrCapability @Inject constructor() : Capability {
     override val id = ID
     override val icon = "ocr"
-    // No network/auth required by default — on-device handles the common case.
-    override val meta = CapabilityMeta(cost = Cost.FREE, latency = Latency.FAST)
+    /**
+     * Ключей и сети не нужно — с обычным случаем справляется устройство. Но **не быстро**, и
+     * [Latency.FAST] здесь было прямой неправдой (#288): у чтения страницы бюджет в три минуты
+     * (`OCR_READ_BUDGET_MS`), внутри которого помещается до четырёх полных проходов движка.
+     *
+     * Цена этой неправды была не косметическая. Работа, объявленная нескорой, идёт на экране
+     * ожидания — там видно, что действие делает сейчас, и там же живёт кнопка отмены; работа,
+     * объявленная быстрой, остаётся на объекте притушенным списком, без единого слова и **без
+     * возможности передумать**. То есть самое долгое действие Point было единственным, которое
+     * нельзя было ни понять, ни остановить, — ровно то, на что пожаловался владелец.
+     *
+     * Соседний пузырёк «Распознать в облаке» делает ту же работу и объявлен [Latency.SLOW] с
+     * самого начала; отсюда и курьёз, который правка закрывает: одна и та же фраза
+     * [OCR_CLOUD_STAGE] была слышна из одного пузырька и нема из другого.
+     *
+     * Первый экран правка не трогает: место пузырька считается по [Latency.INSTANT] против
+     * «всего остального» ([DefaultCapabilityRegistry]), и FAST с SLOW стоят по одну сторону.
+     */
+    override val meta = CapabilityMeta(cost = Cost.FREE, latency = Latency.SLOW)
     override fun label(state: ObjectState) = "Распознать текст"
     override fun accepts(state: ObjectState) = state.kind == ObjectKind.IMAGE
     override fun produces(state: ObjectState) = ObjectState(ObjectKind.TEXT)

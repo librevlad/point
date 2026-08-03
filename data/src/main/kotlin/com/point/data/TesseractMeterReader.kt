@@ -17,7 +17,9 @@ import com.point.core.flow.cropRegionIn
 import com.point.core.flow.findMeterDisplays
 import com.point.core.flow.meterDigitsRead
 import com.point.core.flow.meterInk
+import com.point.core.flow.meterPlaceStage
 import com.point.core.flow.meterUpscale
+import com.point.core.flow.reportStage
 import com.point.core.model.PointObject
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -48,6 +50,12 @@ import kotlin.math.roundToInt
  * **Ничего не теряется молча.** Не нашли ни одного места — [MeterReadout.nothingFound]; нашли, но
  * цифр не собралось — [MeterReadout.foundButUnread]. Это две разные новости для человека, и
  * сливать их в одну пустоту нельзя.
+ *
+ * **Стадии (#288) и чего про них не проверить.** Поиск места называет своё имя в реализаторе
+ * («Ищу табло прибора»), а чтение каждого места — здесь, [meterPlaceStage]. Сама фраза под тестом
+ * в `:core:flow`; порядок, в котором она звучит, на JVM не проверяется — цикл живёт вплотную к
+ * `Bitmap` и нативному Tesseract. Сказано вслух, а не спрятано: это тот же случай, что рисование
+ * страниц PDF и конвейер OpenCV — проверяется живьём на телефоне.
  */
 class TesseractMeterReader @Inject constructor(
     @ApplicationContext private val context: Context,
@@ -75,8 +83,15 @@ class TesseractMeterReader @Inject constructor(
         }
     }
 
-    /** Один запуск движка на все кандидаты: инициализация Tesseract дороже самого чтения полоски. */
-    private fun readDigits(upright: Bitmap, candidates: List<MeterDisplayCandidate>): List<MeterDisplayReading> {
+    /**
+     * Один запуск движка на все кандидаты: инициализация Tesseract дороже самого чтения полоски.
+     *
+     * `suspend` — ради канала стадий (#288), не ради потока: каждое место это отдельный проход
+     * движка по отдельно довёрнутому и увеличенному куску кадра, и все они шли молча после
+     * единственной фразы «Ищу табло прибора». Слова берутся из настоящего цикла — сколько мест
+     * нашлось, столько и произносится.
+     */
+    private suspend fun readDigits(upright: Bitmap, candidates: List<MeterDisplayCandidate>): List<MeterDisplayReading> {
         val tess = TessBaseAPI()
         return try {
             // OEM 1 = LSTM_ONLY — как и у чтения страницы: модели в assets только LSTM.
@@ -89,11 +104,15 @@ class TesseractMeterReader @Inject constructor(
             // где их нет.
             tess.setVariable(TessBaseAPI.VAR_CHAR_WHITELIST, DIGITS)
             tess.pageSegMode = TessBaseAPI.PageSegMode.PSM_SINGLE_LINE
-            candidates.mapNotNull { candidate ->
-                val prepared = prepare(upright, candidate) ?: return@mapNotNull null
+            candidates.mapIndexedNotNull { index, candidate ->
+                // Стадия — до подготовки куска: это место уже взято в работу, даже если рамка
+                // выродится и читать окажется нечего. Сказать о нём после было бы враньём про
+                // то, чем занята прошедшая секунда.
+                reportStage(meterPlaceStage(index, candidates.size))
+                val prepared = prepare(upright, candidate) ?: return@mapIndexedNotNull null
                 try {
                     tess.setImage(prepared)
-                    val digits = meterDigitsRead(tess.utF8Text.orEmpty()) ?: return@mapNotNull null
+                    val digits = meterDigitsRead(tess.utF8Text.orEmpty()) ?: return@mapIndexedNotNull null
                     MeterDisplayReading(digits, candidate.cropRegion(upright), candidate.angleDegrees)
                 } finally {
                     prepared.recycle()
