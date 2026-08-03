@@ -36,6 +36,8 @@ import com.point.core.flow.Sharer
 import com.point.core.flow.SpreadsheetReader
 import com.point.core.flow.SpreadsheetWriter
 import com.point.core.flow.AtomRecognizer
+import com.point.core.flow.CloudPrivacySettings
+import com.point.core.flow.ExternalEye
 import com.point.core.flow.MeterReader
 import com.point.core.flow.SpeechToText
 import com.point.core.flow.TextRecognizer
@@ -93,6 +95,11 @@ import com.point.data.BitmapOutboundFrames
 import com.point.data.CloudAtomRecognizer
 import com.point.data.LlamaParseAtomRecognizer
 import com.point.data.UnstructuredAtomRecognizer
+import com.point.data.CloudTextReader
+import com.point.data.DefaultExternalEye
+import com.point.data.MistralOcrReader
+import com.point.data.OvhVisionReader
+import com.point.data.PrefsCloudPrivacySettings
 import com.point.data.MediaStoreExporter
 import com.point.data.MetadataEntityEnricher
 import com.point.data.MlKitBackgroundRemover
@@ -258,6 +265,19 @@ abstract class DataModule {
     /** Подготовка кадра к отправке наружу: EXIF-выпрямленная копия + её преобразование в сырой кадр. */
     @Binds
     abstract fun outboundFrames(impl: BitmapOutboundFrames): OutboundFrames
+
+    /**
+     * Внешний глаз (#280) — цепочка чужих сервисов, читающих страницу целиком.
+     *
+     * Отдельно от [LlmClient] сознательно: специальная OCR-ручка промпта не принимает, и попади
+     * она в общую цепочку моделей, «Понять» на снимке молча вернуло бы расшифровку вместо ответа.
+     */
+    @Binds
+    abstract fun externalEye(impl: DefaultExternalEye): ExternalEye
+
+    /** «Куда можно отправлять» — выбор человека, с умолчанием «максимум бесплатного». */
+    @Binds
+    abstract fun cloudPrivacy(impl: PrefsCloudPrivacySettings): CloudPrivacySettings
 
     /** The user's own AI key (BYO), stored on-device. */
     @Binds
@@ -478,6 +498,33 @@ abstract class DataModule {
                 BuildConfig.LLAMA_CLOUD_TIER,
             ),
         ).filter { it.configured }
+
+        /**
+         * Внешний глаз (#280) — цепочка в порядке **измеренной эффективности бесплатного**, а не
+         * по приватности: 1) Mistral OCR (24/24 дословно на всех порчах кадра, 1,3–5 с),
+         * 2) OVH Qwen2.5-VL (15/15 на кириллице, отдаётся без ключа и регистрации).
+         *
+         * Приватность отсюда никого больше не выбрасывает — она столбец, который человек видит, и
+         * настройка, которой он управляет ([CloudPrivacySettings]). Решение владельца 04.08.2026,
+         * разбор — в `DECISIONS.md`.
+         *
+         * Ненастроенные отсеиваются в самой цепочке, а не здесь: список должен уметь ответить
+         * «ключей нет вовсе» отдельно от «на этом уровне никого не пускают», а отфильтрованный
+         * заранее список эти два случая уже не различает.
+         */
+        @Provides
+        fun cloudTextReaders(
+            http: HttpJson,
+            frames: OutboundFrames,
+        ): List<@JvmSuppressWildcards CloudTextReader> = listOf(
+            MistralOcrReader(http, frames, BuildConfig.MISTRAL_API_KEY, BuildConfig.MISTRAL_BASE_URL),
+            OvhVisionReader(
+                http, frames,
+                BuildConfig.OVH_API_KEY,
+                BuildConfig.OVH_BASE_URL,
+                BuildConfig.OVH_MODEL,
+            ),
+        )
 
         /** Gemini is built here (not @Inject) so its key + model list — from BuildConfig —
          *  are constructor-injected, keeping the client itself BuildConfig-free and testable. */
