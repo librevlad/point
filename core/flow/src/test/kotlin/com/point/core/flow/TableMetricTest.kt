@@ -187,6 +187,54 @@ class TableMetricTest {
         assertEquals(listOf(TableFailure.WARNING_WALL), score.failures)
     }
 
+    // -- лист документа — не таблица (#266, ревью) --
+
+    /**
+     * Замер по живому файлу кадра 18 (03.08.2026): 13 пометок на 36 ячеек таблицы — стена стоит;
+     * те же 13 пометок на 55 ячеек **листа** (реквизиты сверху, примечание снизу, хвост
+     * «непрочитанного» под подписью) — стены нет. Для человека не изменилось ничего, а провал из
+     * отчёта исчез: чем больше документа вокруг сетки, тем зеленее число. «Непрочитанное» при этом
+     * поощрялось прямо — оно и есть самый длинный хвост.
+     *
+     * Поэтому метрика судит строки ТАБЛИЦЫ, а лист сужает до них по фактам самого файла.
+     */
+    @Test
+    fun `документ вокруг сетки не разбавляет долю пометок и не выдумывает лишних строк`() {
+        val expectation = ledger(2, named = listOf(row("11004", 2 to "120"), row("11006", 2 to "40")))
+        val grid = listOf(head, listOf("11004⚠", "Гречка⚠", "120⚠"), listOf("11006⚠", "Рис⚠", "40⚠"))
+
+        val bare = scoreTable(expectation, grid)
+        val document = scoreTable(
+            expectation,
+            listOf(listOf("Накладная №7")) +
+                listOf(listOf("Клиент", "Терминал Пр. 117")) +
+                grid +
+                listOf(listOf("Кладовщик не имеет права отпускать товар")) +
+                listOf(listOf(UNREAD_CAPTION)) +
+                listOf(listOf("‚ Be:"), listOf("MPs"), listOf("си")),
+        )
+
+        assertEquals("строк таблицы столько же", bare.tableRows, document.tableRows)
+        assertEquals("выдуманных строк не прибавилось", bare.extra, document.extra)
+        assertEquals("доля пометок не разбавлена", bare.markedShare!!, document.markedShare!!, 0.001)
+        assertEquals("и стена по-прежнему стоит", bare.failures, document.failures)
+        assertEquals(listOf(TableFailure.WARNING_WALL), document.failures)
+    }
+
+    /** Часть «непрочитанное» файл называет вслух — и всё, что ниже, таблицей не считается. */
+    @Test
+    fun `хвост непрочитанного в счёт таблицы не идёт`() {
+        val score = scoreTable(
+            ledger(2, named = listOf(row("11004", 2 to "120"), row("11006", 2 to "40"))),
+            listOf(head, listOf("11004", "Гречка", "120"), listOf("11006", "Рис", "40")) +
+                listOf(listOf(UNREAD_CAPTION), listOf("Кладовщик", "не", "имеет")),
+        )
+
+        assertEquals(2, score.tableRows)
+        assertEquals(0, score.extra)
+        assertTrue("таблица сдана — хвост её не топит", score.passed)
+    }
+
     @Test
     fun `артикул под меткой ⚠ всё равно узнаёт свою строку`() {
         // На живой ведомости помечено почти всё, ключи в том числе. Если бы метка мешала опознанию,

@@ -169,16 +169,16 @@ data class TableScore(
  * для человека это одно и то же — значения нет, и ничто не сказало, что его нет. Строка при этом
  * ещё раз названа в [TableScore.lost]; единицы разные (строки и ячейки), двойного счёта нет.
  */
-fun scoreTable(expectation: TableExpectation, table: List<List<String>>): TableScore {
+fun scoreTable(expectation: TableExpectation, sheet: List<List<String>>): TableScore {
     val expectedByKey = expectation.namedRows.associateBy { foldValue(it.key) }
-    val width = table.maxOfOrNull { it.size } ?: 0
+    val width = sheet.maxOfOrNull { it.size } ?: 0
 
     // Колонка-ключ файла: где нашлось больше всего эталонных ключей. Ничего не нашлось — берём
     // колонку эталона: тогда всё честно потеряется, вместо того чтобы совпасть случайной колонкой.
     var keyColumn = expectation.keyColumn
     var bestHits = 0
     for (c in 0 until width) {
-        val hits = table.mapNotNull { row -> row.getOrNull(c)?.let(::foldValue) }
+        val hits = sheet.mapNotNull { row -> row.getOrNull(c)?.let(::foldValue) }
             .filter { it.isNotEmpty() && it in expectedByKey }
             .distinct().size
         if (hits > bestHits) {
@@ -189,6 +189,8 @@ fun scoreTable(expectation: TableExpectation, table: List<List<String>>): TableS
 
     fun keyOf(row: List<String>): String? =
         row.getOrNull(keyColumn)?.let(::foldValue)?.takeIf { it.isNotEmpty() }
+
+    val table = tableRowsOf(sheet, expectedByKey.keys, ::keyOf)
 
     // Шапку эталон объявляет, но метрика не отдаёт ей первую строку вслепую: модель, потерявшая
     // шапку, отдаёт данными первую же строку, и слепое отбрасывание съело бы настоящую строку
@@ -243,6 +245,40 @@ fun scoreTable(expectation: TableExpectation, table: List<List<String>>): TableS
         markedCells = data.sumOf { row -> row.count { styleCell(it).flagged } },
         totalCells = data.sumOf { it.size },
     )
+}
+
+/**
+ * Строки **таблицы** на листе документа (#266, ревью).
+ *
+ * С блоками лист перестал быть таблицей: сверху на нём заголовок и реквизиты, снизу примечание и
+ * подписи, в самом низу — часть «непрочитанное». Метрика же судит таблицу, и, приняв весь лист за
+ * неё, начинала врать в обе стороны сразу:
+ *
+ * - **вверх:** реквизиты и примечание становились «строками, которых в документе нет»
+ *   ([TableFailure.EXTRA_ROWS]) — при том, что это ровно тот документ, ради которого #266 и делался;
+ * - **вниз, и это хуже:** их ячейки попадали в знаменатель доли пометок, и та падала. Замер по
+ *   живому файлу кадра 18: 13 пометок на 36 ячеек таблицы — стена ([TableFailure.WARNING_WALL])
+ *   стоит; те же 13 пометок на 55 ячеек листа — стены нет. Ничего для человека не изменилось, а
+ *   провал из отчёта исчез. Хуже того, чем БОЛЬШЕ модель ссыплет в «непрочитанное», тем зеленее
+ *   число — то есть отмычка не только не ловилась, она поощрялась.
+ *
+ * Границы берутся из фактов самого файла, а не из порога:
+ * - часть «непрочитанное» файл называет вслух ([UNREAD_CAPTION]) — всё от этой строки и ниже
+ *   таблицей не является по собственному признанию файла;
+ * - строка **уже самой узкой опознанной строки таблицы** строкой таблицы быть не может: у частей
+ *   документа одна-две ячейки, у строк сетки — её ширина. Опознанных строк нет вовсе (потеряны
+ *   все) — сужать нечем, и тогда лист остаётся как есть: провал назовут [TableFailure.LOST_ROWS].
+ */
+private fun tableRowsOf(
+    sheet: List<List<String>>,
+    keys: Set<String>,
+    keyOf: (List<String>) -> String?,
+): List<List<String>> {
+    val cut = sheet.takeWhile { row ->
+        row.firstOrNull()?.trimStart()?.startsWith(UNREAD_CAPTION) != true
+    }
+    val narrowest = cut.filter { keyOf(it) in keys }.minOfOrNull { it.size } ?: return cut
+    return cut.filter { it.size >= narrowest }
 }
 
 /**

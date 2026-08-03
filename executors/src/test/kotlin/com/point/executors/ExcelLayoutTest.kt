@@ -11,6 +11,7 @@ import com.point.core.flow.EvidenceImage
 import com.point.core.flow.LlmClient
 import com.point.core.flow.META_OCR_ATOMS_REF
 import com.point.core.flow.META_READING_MODE
+import com.point.core.flow.META_TABLE_CHROME
 import com.point.core.flow.META_TABLE_COVERED
 import com.point.core.flow.META_TABLE_FLAGGED
 import com.point.core.flow.META_TABLE_GRID
@@ -253,6 +254,84 @@ class ExcelLayoutTest {
         assertEquals(BlockRole.TABLE, parseLayout("A\tB")!!.blocks.single().role)
         assertNull("пустой ответ таблицей не притворяется", parseLayout("[]"))
         assertNull(parseLayout("   "))
+    }
+
+    /**
+     * Ревью #266: список частей БЕЗ обёртки `{"blocks": …}` — та же уронённая ступенька, что уже
+     * описана у разбора ячеек, только этажом выше. Запрос просит объект, но словарь ролей модель
+     * усваивает раньше формы, а прошлый контракт годами просил именно массив.
+     *
+     * Без разбора такой ответ уходил в разбор ячеек: части документа становились ЯЧЕЙКАМИ ОДНОЙ
+     * СТРОКИ, часть-сетка — пустой ячейкой (у неё нет "text"), и таблица исчезала целиком — под
+     * видом успеха и без единой пометки. Ровно та тихая потеря, ради которой срез и делался.
+     */
+    @Test
+    fun `список частей без обёртки — тот же документ, а не одна строка`() = runTest {
+        val answer =
+            """[{"role":"title","ids":["t1","t2"]},
+                {"role":"field","label":{"ids":["f1"]},"ids":["f2"]},
+                {"role":"table","header":1,
+                 "rows":[[{"ids":["c1"]},{"ids":["c2"]}],[{"ids":["c3"]},{"ids":["c4"]}]]},
+                {"role":"note","ids":["n1","n2"]}]"""
+
+        val result = realizer(answer).perform(invoice())
+
+        assertEquals(
+            listOf(
+                listOf("Рахунок №7"),
+                listOf("Клієнт", "Термінал"),
+                listOf("Товар", "Кіль-ть"),
+                listOf("Гречка", "2"),
+                listOf("Відпуск заборонено"),
+            ),
+            plan!!.rows,
+        )
+        assertEquals("2×2", (result as ActionResult.Success).result.metadata[META_TABLE_GRID])
+    }
+
+    // -- пустой файл успехом не бывает (ревью #266) --
+
+    /**
+     * Страница, целиком названная «не документом», давала ПУСТОЙ .xlsx — и он объявлялся успехом,
+     * да ещё со словами «ничего не потеряно». До блоков это было невозможно: пустая сетка = отказ.
+     * Судим по тому, что доехало до файла, а не по форме ответа.
+     */
+    @Test
+    fun `страница, признанная не документом, — отказ, а не пустой файл`() = runTest {
+        val answer = """{"scope":"full","blocks":[{"role":"chrome",
+            "ids":["t1","t2","f1","f2","c1","c2","c3","c4","n1","n2"]}]}"""
+
+        val result = realizer(answer).perform(invoice())
+
+        assertTrue("пустой файл результатом не бывает", result is ActionResult.Failure)
+        assertTrue((result as ActionResult.Failure).recoverable)
+    }
+
+    /** Второй вход в ту же пустоту: сетка, объявленная пустой. Закрыт тем же местом. */
+    @Test
+    fun `сетка, объявленная пустой, — отказ, а не пустой файл`() = runTest {
+        val result = realizer("""{"blocks":[{"role":"table","header":1,"rows":[]}]}""").perform(invoice())
+
+        assertTrue(result is ActionResult.Failure)
+    }
+
+    /**
+     * Слова, признанные «не документом», в файл не едут вовсе — значит строкой их не видно, и
+     * число обязано публиковаться тем более. Отмычек у покрытия две, и защита у них одна:
+     * не порог, а публикация.
+     */
+    @Test
+    fun `слова, признанные не документом, названы числом`() = runTest {
+        val answer =
+            """{"blocks":[{"role":"chrome","ids":["t1","t2","f1","f2","n1","n2"]},
+                 {"role":"table","header":1,
+                  "rows":[[{"ids":["c1"]},{"ids":["c2"]}],[{"ids":["c3"]},{"ids":["c4"]}]]}]}"""
+
+        val result = realizer(answer).perform(invoice())
+
+        val meta = (result as ActionResult.Success).result.metadata
+        assertEquals("6", meta[META_TABLE_CHROME])
+        assertEquals("да", meta[META_TABLE_COVERED])
     }
 
     /** Роль — свидетельство, а не переключатель: незнакомое слово не повод потерять прочитанное. */
