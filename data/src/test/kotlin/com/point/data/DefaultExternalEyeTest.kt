@@ -156,6 +156,40 @@ class DefaultExternalEyeTest {
     }
 
     @Test
+    fun `сильнейший читатель выпал без ключа — об этом сказано вместе с отказом`() = runTest {
+        val chain = chain(
+            eye("сильный", hasKey = false) { error("сюда не доходим") },
+            eye("безключевой") { error("ovh HTTP 500") },
+        )
+        val error = runCatching { chain.read(pageObject) }.exceptionOrNull()
+
+        // Читатель без ключа работает всегда, поэтому «задайте ключ» отдельной веткой не всплывёт
+        // никогда — а человек так и останется с худшим чтением, не узнав, что есть лучшее.
+        assertTrue(error?.message!!, error.message!!.contains("бесплатный ключ Mistral"))
+    }
+
+    @Test
+    fun `все ключи на месте — лишнего совета нет`() = runTest {
+        val chain = chain(eye("a") { error("ovh HTTP 500") })
+        val error = runCatching { chain.read(pageObject) }.exceptionOrNull()
+
+        assertFalse(error?.message!!, error.message!!.contains("ключ"))
+    }
+
+    @Test
+    fun `совет про ключ не даётся там, где ключ всё равно не поможет`() = runTest {
+        val chain = chain(
+            eye("заморский без ключа", overseas, hasKey = false) { "x" },
+            eye("европейский") { error("mistral HTTP 500") },
+            at = PrivacyLevel.EUROPE_ONLY,
+        )
+        val error = runCatching { chain.read(pageObject) }.exceptionOrNull()
+
+        // На уровне «только Европа» заморский читатель не включится ни с каким ключом.
+        assertFalse(error?.message!!, error.message!!.contains("ключ"))
+    }
+
+    @Test
     fun `все отказали — честный отказ, а не пустой текст`() = runTest {
         val chain = chain(eye("a") { "" }, eye("b") { error("ovh HTTP 500") })
         val error = runCatching { chain.read(pageObject) }.exceptionOrNull()

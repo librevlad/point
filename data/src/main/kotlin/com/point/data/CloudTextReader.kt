@@ -5,6 +5,7 @@ import com.point.core.flow.ExternalEye
 import com.point.core.flow.ExternalReading
 import com.point.core.flow.PrivacyLevel
 import com.point.core.flow.ReaderPrivacy
+import com.point.core.flow.allowedAt
 import com.point.core.flow.allowedBy
 import com.point.core.model.PointObject
 import javax.inject.Inject
@@ -78,7 +79,21 @@ class DefaultExternalEye @Inject constructor(
             }
         }
         if (considered == 0) error(NOT_FOR_THIS_OBJECT)
-        error(summariseCloudErrors(errors))
+        error(summariseCloudErrors(errors) + keyHint())
+    }
+
+    /**
+     * Совет про ключ — **только когда он и правда поможет**.
+     *
+     * Один из читателей работает без ключа вовсе, поэтому цепочка почти никогда не бывает пустой, и
+     * ветка «задайте ключ» до человека не доходила бы. Но сильнейший по замеру читатель ключа
+     * требует, и молчать об этом — значит оставить человека с худшим чтением, не сказав, что есть
+     * лучшее. Совет добавляется, если на текущем уровне есть **разрешённый** читатель, выпавший
+     * ровно из-за отсутствия ключа: иначе это была бы подсказка мимо.
+     */
+    private fun keyHint(): String {
+        val skipped = readers.any { !it.configured && allowedAt(privacy.level(), it.privacy) }
+        return if (skipped) KEY_HINT else ""
     }
 
     /**
@@ -106,5 +121,9 @@ class DefaultExternalEye @Inject constructor(
 
         const val NOT_FOR_THIS_OBJECT =
             "Чтение снаружи не берётся за этот объект — читают снимок страницы"
+
+        /** Не «настройте приложение», а «есть читатель посильнее» — это разные новости. */
+        const val KEY_HINT =
+            ". Есть читатель посильнее — он включится, если задать бесплатный ключ Mistral (см. настройки)"
     }
 }
