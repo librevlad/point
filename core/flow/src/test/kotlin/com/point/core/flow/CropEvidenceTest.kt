@@ -184,4 +184,47 @@ class CropEvidenceTest {
 
         assertEquals(1, out.size)
     }
+
+    // ── размер куска по назначению (#273) ──────────────────────────────────────────────────
+
+    @Test
+    fun `кусок для глаз и кусок для чтения — разные назначения одного адреса`() {
+        val glance = CropEvidence("/tmp/23.jpg", Box(0f, 0f, 10f, 10f))
+        // Умолчание — картинка в документе: старые вызовы (#267) ведут себя ровно как раньше.
+        assertEquals(CropPurpose.GLANCE, glance.purpose)
+        assertEquals(CropPurpose.READING, glance.copy(purpose = CropPurpose.READING).purpose)
+    }
+
+    @Test
+    fun `полосу строки с фотографии бумаги увеличивать не надо`() {
+        // Ведомость владельца: фото 4000×3000, ~35 строк — полоса строки выходит около 150 px.
+        assertEquals(1, readingCropUpscale(3500, 150))
+        assertEquals(1, readingCropUpscale(3500, READING_BAND_PX))
+    }
+
+    @Test
+    fun `строка снимка экрана поднимается до читаемой высоты`() {
+        // Кадр 06 корпуса — окно учётной программы: строка таблицы высотой в пару десятков px.
+        assertEquals(4, readingCropUpscale(900, 25))
+        assertEquals(3, readingCropUpscale(900, 41))
+        assertEquals(2, readingCropUpscale(900, 61))
+    }
+
+    @Test
+    fun `увеличение целое и только вверх — интерполяция не рисует того, чего нет`() {
+        // Потолок тот же, что у табло прибора: ниже 30 px увеличивать больше вчетверо бессмысленно.
+        assertEquals(4, readingCropUpscale(900, 1))
+        // Вырожденный кусок не делится и не растягивается — молча, потому что резать уже нечего.
+        assertEquals(1, readingCropUpscale(0, 0))
+        assertEquals(1, readingCropUpscale(900, 0))
+    }
+
+    @Test
+    fun `бюджет памяти отступает последним, но отступить обязан`() {
+        // Широкая и низкая полоса: по высоте просилось бы ×4, по памяти столько не выходит.
+        assertEquals(4, readingCropUpscale(widthPx = 4000, heightPx = 30))
+        assertEquals(2, readingCropUpscale(widthPx = 4000, heightPx = 30, budgetPx = 1_000_000L))
+        // Бюджет меньше самого куска увеличения не даёт вовсе — но и не режет: ужимать здесь нечем.
+        assertEquals(1, readingCropUpscale(widthPx = 4000, heightPx = 60, budgetPx = 1L))
+    }
 }

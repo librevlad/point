@@ -5,6 +5,7 @@ import com.point.core.flow.AtomCodec
 import com.point.core.flow.AtomLayer
 import com.point.core.flow.Box
 import com.point.core.flow.CropEvidence
+import com.point.core.flow.CropPurpose
 import com.point.core.flow.EvidenceCropper
 import com.point.core.flow.EvidenceImage
 import com.point.core.flow.LlmClient
@@ -620,6 +621,9 @@ class ExcelRealizerTest {
         assertEquals("0,120", lastRows!![0][2]) // большинство 2 из 3 — спор ушёл вместе с пометкой
         assertTrue(lastCandidates.isEmpty())
         assertEquals("кроп режется из исходного кадра", "/tmp/sheet.png", cropper.seen!!.imagePath)
+        // Кусок здесь читает модель, а не разглядывает человек: ужимать его до ширины колонки
+        // документа значит отдать третьему голосу те же пиксели, но мельче (#273).
+        assertEquals(CropPurpose.READING, cropper.seen!!.purpose)
         assertTrue(heard.contains("Переспрашиваю 1 спорную ячейку"))
     }
 
