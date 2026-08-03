@@ -1,6 +1,7 @@
 package com.point
 
 import com.point.core.flow.AppTarget
+import com.point.core.ui.Outcome
 import com.point.core.flow.UsageSummary
 import com.point.core.flow.UserAiConfig
 import com.point.core.model.Bubble
@@ -123,18 +124,20 @@ data class FlowUiState(
     /** Transient text from the ActionResult channel (Failure / Done). */
     val message: String? = null,
     /**
-     * Исход [message] — отказ или нет.
+     * Чем кончилось то, о чём говорит [message].
      *
      * Раньше поля не было и сообщение красилось тревожным всегда: пока баннер стоял внизу
      * прокрутки, этого никто не видел (#358). Как только исход подняли под объект, «Открываю
      * в Excel» стало кричать красным наравне с настоящим отказом — а цвет здесь и есть
      * сообщение, второе после текста.
      *
-     * Карточка исхода рисует по этому флагу **знак**: «✓» светом портала против «✕» тёплым
-     * концом фирменного градиента. Поэтому его нельзя ронять «по умолчанию»: `copy` без него
-     * тащит прошлое значение, и удача после отказа получила бы чужой знак.
+     * Карточка исхода рисует по нему **знак**: «✓» светом портала против «✕» тёплым концом
+     * фирменного градиента. Поэтому его нельзя ронять «по умолчанию»: `copy` без него тащит
+     * прошлое значение, и удача после отказа получила бы чужой знак. И поэтому исходов три, а
+     * не два: пока поле было `Boolean`, умолчанием (и судьбой всякого забытого сообщения) был
+     * **успех** — забытый исход обязан молчать, а не отчитываться о сделанном.
      */
-    val messageIsFailure: Boolean = false,
+    val messageOutcome: Outcome = Outcome.NONE,
     /** Non-null while a capability awaits free-text input (NeedsInput). */
     val inputPrompt: String? = null,
     /** Ready-made answers for [inputPrompt] — the 3 likely AI prompts to tap instead of typing (#86). */

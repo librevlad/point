@@ -51,6 +51,8 @@ import com.point.core.model.Preview
 import com.point.core.ui.BusyPortal
 import com.point.core.ui.FindScreen
 import com.point.core.ui.FirstScreen
+import com.point.core.ui.Outcome
+import com.point.core.ui.OutcomeBanner
 import com.point.core.ui.SelectionScreen
 import com.point.core.ui.livingBackground
 import com.point.core.ui.portalStep
@@ -245,7 +247,7 @@ fun PointHost(
                     bubbles = current.bubbles,
                     onBubble = onBubble,
                     message = state.message,
-                    messageIsFailure = state.messageIsFailure,
+                    messageOutcome = state.messageOutcome,
                     inputPrompt = state.inputPrompt,
                     inputSuggestions = state.inputSuggestions,
                     onSubmitInput = onSubmitInput,
@@ -292,18 +294,23 @@ fun PointHost(
                 // An ingest/open error before any object exists: show it plainly instead
                 // of the empty hint that used to mask it — so it never reads as a silent
                 // dead-end (#12).
-                Text(
-                    text = state.message,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.error,
-                )
-                Spacer(Modifier.height(10.dp))
-                Text(
-                    text = "Попробуйте поделиться объектом в Point ещё раз",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                //
+                // Той же карточкой, что на экране объекта (#358). Здесь этот экран и живёт: когда
+                // приём сорвался, объекта нет — значит именно сюда попадает «Не удалось открыть
+                // объект», и «языком портала» отказ обязан говорить в первую очередь тут. Красный
+                // Material `colorScheme.error` красил всё подряд, включая «Ключ AI сохранён»:
+                // удача выглядела сбоем ровно так же, как раньше на экране объекта.
+                OutcomeBanner(state.message, state.messageOutcome)
+                // Совет есть только у отказа: сказать «поделитесь ещё раз» тому, у кого ничего не
+                // ломалось, — выдумать ему проблему.
+                shareAgainHint(state.messageOutcome)?.let { hint ->
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        text = hint,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
 
             else -> Text(
@@ -347,6 +354,15 @@ private fun BusyScreen(title: String, stage: String?, network: Boolean, onCancel
         onCancel = onCancel,
     )
 }
+
+/**
+ * Что добавить под исходом на экране без объекта: совет повторить шаринг — и только отказу.
+ *
+ * Экран этот показывают не одному лишь сорванному приёму: сюда же попадает «Ключ AI сохранён»
+ * с домашнего экрана. Совет «попробуйте ещё раз» под удачей — выдуманная человеку проблема.
+ */
+internal fun shareAgainHint(outcome: Outcome): String? =
+    if (outcome == Outcome.FAILED) "Попробуйте поделиться объектом в Point ещё раз" else null
 
 /** Что честно сказать о времени: сколько уже идёт и почему это нормально. */
 internal fun waitingSubtitle(elapsed: Int, network: Boolean): String = when {

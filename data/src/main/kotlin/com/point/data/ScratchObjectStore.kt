@@ -3,6 +3,7 @@ package com.point.data
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
+import android.util.Log
 import android.webkit.MimeTypeMap
 import com.point.core.flow.ObjectClassifier
 import com.point.core.flow.ObjectStore
@@ -10,6 +11,7 @@ import com.point.core.model.PointObject
 import com.point.core.model.ResultObject
 import com.point.core.model.ScratchRef
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -33,42 +35,49 @@ class ScratchObjectStore @Inject constructor(
 
     override suspend fun ingest(sourceUri: String, mime: String): PointObject =
         withContext(Dispatchers.IO) {
-            val uri = Uri.parse(sourceUri)
-            val id = UUID.randomUUID().toString()
-            val dest = File(scratchDir, id)
+            // Экран отказа говорит человеку словами — «Не удалось открыть объект» (#358), без
+            // хвоста исключения. Значит техническая причина обязана остаться здесь: она известна
+            // только приёмнику, и без этой строки разбитый шаринг не оставляет вообще ни следа.
+            logFailure("ingest failed (mime=$mime)") {
+                val uri = Uri.parse(sourceUri)
+                val id = UUID.randomUUID().toString()
+                val dest = File(scratchDir, id)
 
-            val size = context.contentResolver.openInputStream(uri)?.use { input ->
-                dest.outputStream().use { output -> input.copyTo(output) }
-            } ?: error("Не удалось открыть источник: $sourceUri")
+                val size = context.contentResolver.openInputStream(uri)?.use { input ->
+                    dest.outputStream().use { output -> input.copyTo(output) }
+                } ?: error("Не удалось открыть источник: $sourceUri")
 
-            val name = displayName(uri)
-            PointObject(
-                id = id,
-                mime = mime,
-                uri = ScratchRef(dest.absolutePath),
-                state = classifier.classify(mime, size, name),
-                metadata = buildMap { name?.let { put("name", it) } },
-            )
+                val name = displayName(uri)
+                PointObject(
+                    id = id,
+                    mime = mime,
+                    uri = ScratchRef(dest.absolutePath),
+                    state = classifier.classify(mime, size, name),
+                    metadata = buildMap { name?.let { put("name", it) } },
+                )
+            }
         }
 
     override suspend fun ingestMultiple(sources: List<String>): PointObject =
         withContext(Dispatchers.IO) {
-            val id = UUID.randomUUID().toString()
-            val dir = File(scratchDir, id).apply { mkdirs() }
-            sources.forEachIndexed { index, source ->
-                val uri = Uri.parse(source)
-                val name = displayName(uri) ?: "file-${index + 1}"
-                context.contentResolver.openInputStream(uri)?.use { input ->
-                    uniqueFile(dir, name).outputStream().use { output -> input.copyTo(output) }
+            logFailure("ingest failed (files=${sources.size})") {
+                val id = UUID.randomUUID().toString()
+                val dir = File(scratchDir, id).apply { mkdirs() }
+                sources.forEachIndexed { index, source ->
+                    val uri = Uri.parse(source)
+                    val name = displayName(uri) ?: "file-${index + 1}"
+                    context.contentResolver.openInputStream(uri)?.use { input ->
+                        uniqueFile(dir, name).outputStream().use { output -> input.copyTo(output) }
+                    }
                 }
+                PointObject(
+                    id = id,
+                    mime = "inode/directory",
+                    uri = ScratchRef(dir.absolutePath),
+                    state = classifier.classify("inode/directory", 0),
+                    metadata = mapOf("name" to "Набор (${sources.size})"),
+                )
             }
-            PointObject(
-                id = id,
-                mime = "inode/directory",
-                uri = ScratchRef(dir.absolutePath),
-                state = classifier.classify("inode/directory", 0),
-                metadata = mapOf("name" to "Набор (${sources.size})"),
-            )
         }
 
     override suspend fun put(result: ResultObject): PointObject =
@@ -151,10 +160,25 @@ class ScratchObjectStore @Inject constructor(
         withContext(Dispatchers.IO) { scratchDir.deleteRecursively() }
     }
 
+    /**
+     * Причина сбоя приёма — в лог, а сам сбой — дальше наверх: что сказать человеку, решает экран.
+     *
+     * Отмена сбоем не считается: человек передумал делиться, и «ingest failed» в логе увело бы
+     * того, кто чинит, в несуществующую поломку.
+     */
+    private inline fun <T> logFailure(what: String, block: () -> T): T =
+        runCatching(block)
+            .onFailure { if (it !is CancellationException) Log.w(TAG, what, it) }
+            .getOrThrow()
+
     private fun displayName(uri: Uri): String? = runCatching {
         if (uri.scheme == "file") return uri.lastPathSegment
         context.contentResolver
             .query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
             ?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
     }.getOrNull()
+
+    private companion object {
+        const val TAG = "PointScratch"
+    }
 }

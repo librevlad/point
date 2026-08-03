@@ -35,6 +35,7 @@ import com.point.core.model.Preview
 import com.point.core.model.ResultObject
 import com.point.core.model.ScratchRef
 import com.point.core.model.ValueRef
+import com.point.core.ui.Outcome
 import com.point.executors.OpenInCapability
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -45,7 +46,6 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -319,27 +319,69 @@ class FlowViewModelTest {
         assertNull(s.frame)
         assertNull(s.busy)
         assertTrue(s.message?.contains("Не удалось открыть") == true)
-        // Отказ обязан выглядеть отказом: карточка исхода рисует знак по этому флагу, и без него
+        // Отказ обязан выглядеть отказом: карточка исхода рисует знак по этому полю, и без него
         // «Не удалось открыть» встало бы под галочкой «Готово».
-        assertTrue(s.messageIsFailure)
+        assertEquals(Outcome.FAILED, s.messageOutcome)
+        // Этот отказ человек видит НЕ на экране объекта: объекта нет (frame == null). Значит
+        // исход рисует экран «объекта ещё нет» — и совет повторить шаринг уместен там ровно
+        // потому, что сорвался именно приём.
+        assertEquals("Попробуйте поделиться объектом в Point ещё раз", shareAgainHint(s.messageOutcome))
     }
 
     /**
-     * Исход не наследуется. `copy` сохраняет прошлое значение флага, поэтому удача, пришедшая
-     * после отказа, легко получала бы чужой знак «✕» — пока баннер красился в один цвет всегда,
-     * этого не было видно, а карточка исхода (#358) показывает такую ложь сразу.
+     * Исход не наследуется. `copy` сохраняет прошлое значение, поэтому удача, пришедшая после
+     * отказа, легко получала бы чужой знак «✕» — пока баннер красился в один цвет всегда, этого
+     * не было видно, а карточка исхода (#358) показывает такую ложь сразу.
      */
     @Test fun `удача после отказа не наследует знак отказа`() = runTest(dispatcher) {
         resolver.throwsOnPerform = IllegalStateException("scratch-файл исчез")
         val vm = vm()
         vm.onShared("uri", "image/png"); advanceUntilIdle()
         vm.onBubble(bubble()); advanceUntilIdle()
-        assertTrue(vm.ui.value.messageIsFailure)
+        assertEquals(Outcome.FAILED, vm.ui.value.messageOutcome)
 
         vm.togglePin(bubble(id = "a", title = "Действие")); advanceUntilIdle()
 
         assertTrue(vm.ui.value.message?.contains("Закреплено") == true)
-        assertFalse(vm.ui.value.messageIsFailure)
+        assertEquals(Outcome.DONE, vm.ui.value.messageOutcome)
+    }
+
+    /**
+     * Отмена — третий исход, которого не было в паре «удача/отказ» (#288, #358).
+     *
+     * Человек сам остановил долгую работу. «✕» ему ставить нельзя — ничего не отказывало; но и
+     * «✓ Готово» нельзя тем более: работа не дошла до конца, а голос экрана прочитал бы вслух
+     * «Готово. Отменено». Пока поле было `Boolean`, третьего ответа просто не существовало, и
+     * отмена доставалась успеху — вместе со всяким сообщением, которому флаг забыли поставить.
+     */
+    @Test fun `отменённое человеком не выдаёт себя за сделанное`() = runTest(dispatcher) {
+        resolver.holdMs = 10_000 // работа ещё идёт, когда человек жмёт «Отмена»
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.onBubble(bubble())
+        dispatcher.scheduler.advanceTimeBy(50)
+        vm.cancelAction()
+        advanceUntilIdle()
+
+        assertEquals("Отменено", vm.ui.value.message)
+        assertEquals(Outcome.NONE, vm.ui.value.messageOutcome)
+        // И совета «поделитесь ещё раз» тут тоже нет: ничего не ломалось.
+        assertNull(shareAgainHint(vm.ui.value.messageOutcome))
+    }
+
+    /** Удача с домашнего экрана попадает на тот же экран «объекта ещё нет» — и не смеет
+     *  выглядеть сбоем: ни знака «✕», ни совета чинить несломанное. */
+    @Test fun `сохранённый ключ AI — это удача, а не сорванный шаринг`() = runTest(dispatcher) {
+        val vm = vm()
+
+        vm.saveAiConfig(UserAiConfig.DEFAULT); advanceUntilIdle()
+
+        val s = vm.ui.value
+        assertNull(s.frame) // объекта нет — рисует экран без объекта
+        assertEquals("Ключ AI сохранён", s.message)
+        assertEquals(Outcome.DONE, s.messageOutcome)
+        assertNull(shareAgainHint(s.messageOutcome))
     }
 
     // --- Action selection (the four ActionResult channels) ---
@@ -412,7 +454,7 @@ class FlowViewModelTest {
         vm.onBubble(bubble()); advanceUntilIdle()
 
         assertEquals("scratch-файл исчез", vm.ui.value.message)
-        assertTrue(vm.ui.value.messageIsFailure)
+        assertEquals(Outcome.FAILED, vm.ui.value.messageOutcome)
         assertNull("экран ожидания обязан уйти, иначе это «зависло»", vm.ui.value.busy)
     }
 
@@ -425,7 +467,7 @@ class FlowViewModelTest {
 
         vm.onBubble(bubble()); advanceUntilIdle()
 
-        assertTrue(vm.ui.value.messageIsFailure)
+        assertEquals(Outcome.FAILED, vm.ui.value.messageOutcome)
         assertNull(vm.ui.value.busy)
     }
 
