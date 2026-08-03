@@ -1,0 +1,87 @@
+package com.point.executors
+
+import com.point.core.flow.Capability
+import com.point.core.flow.CapabilityMeta
+import com.point.core.flow.Cost
+import com.point.core.flow.DropLink
+import com.point.core.flow.Latency
+import com.point.core.flow.ObjectStore
+import com.point.core.flow.Realizer
+import com.point.core.model.ActionResult
+import com.point.core.model.CapabilityId
+import com.point.core.model.ObjectKind
+import com.point.core.model.isFileBacked
+import com.point.core.model.ObjectState
+import com.point.core.model.PointObject
+import com.point.core.model.ResultObject
+import java.io.File
+import javax.inject.Inject
+
+/**
+ * «Дать ссылку» (#388) — отдать файл человеку, у которого Point не стоит.
+ *
+ * Самая маленькая форма Drop: ни аккаунтов, ни страниц, ни отдельного сервера. Получатель
+ * открывает ссылку браузером и получает файл; ссылка живёт сутки и умирает сама.
+ *
+ * Действие сетевое и **не бесплатное по приватности**: в отличие от всего остального, что возит
+ * релей, файл по ссылке лежит на сервере открытым — ключа у чужого человека нет. Поэтому оно
+ * стоит за явным тапом и названо прямо.
+ */
+class DropLinkCapability @Inject constructor() : Capability {
+    override val id = ID
+    override val icon = "link"
+    override val meta = CapabilityMeta(
+        priority = 35,
+        cost = Cost.FREE,
+        latency = Latency.SLOW,
+        network = true,
+    )
+
+    override fun label(state: ObjectState) = "Дать ссылку"
+    override fun accepts(state: ObjectState) = state.kind.isFileBacked
+    override fun produces(state: ObjectState) = ObjectState(ObjectKind.URL)
+
+    companion object { val ID = CapabilityId("drop-link") }
+}
+
+/**
+ * Результат — **новый объект-ссылка**, а не сообщение.
+ *
+ * Так ссылка попадает в обычную работу Point: её можно скопировать, отправить в мессенджер или
+ * показать QR-кодом человеку рядом — теми действиями, которые у URL уже есть. Показать её тостом
+ * значило бы заставить человека переписывать ссылку руками.
+ */
+class DropLinkRealizer @Inject constructor(
+    private val store: ObjectStore,
+    private val drop: DropLink,
+) : Realizer {
+    override val capabilityId = DropLinkCapability.ID
+
+    override suspend fun perform(input: PointObject, amendment: String?): ActionResult {
+        val file = File(input.uri.value)
+        val name = input.metadata["name"]?.takeIf { it.isNotBlank() } ?: file.name
+
+        val link = drop.give(file.absolutePath, name, input.mime)
+            ?: return ActionResult.Failure(
+                "Ссылку выдать не удалось — нет связи с сервером или файл слишком большой",
+                recoverable = true,
+            )
+
+        val ref = store.newScratchFile("txt")
+        File(ref.value).writeText(link)
+        return ActionResult.Success(
+            ResultObject(
+                type = ObjectKind.URL,
+                mime = "text/uri-list",
+                uri = ref,
+                metadata = mapOf(
+                    "name" to "ссылка на $name",
+                    "entity.url" to link,
+                    // Срок сказан рядом со ссылкой: человек должен знать, что она не вечная,
+                    // до того как отправит её кому-то.
+                    "drop.expires" to "сутки",
+                ),
+            ),
+        )
+    }
+}
