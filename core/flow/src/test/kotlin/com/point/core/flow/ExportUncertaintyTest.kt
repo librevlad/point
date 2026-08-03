@@ -1,5 +1,6 @@
 package com.point.core.flow
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -43,5 +44,46 @@ class ExportUncertaintyTest {
     @Test
     fun `блок по умолчанию уверен — пометка это решение, а не фон`() {
         assertFalse(DocBlock("текст", DocStyle.NORMAL).uncertain)
+    }
+
+    // -- #247: правка ручкой и происхождение всего документа --
+
+    @Test
+    fun `исправление ручкой помечается на любом режиме — какая версия верна, решает человек`() {
+        assertTrue(uncertainInExport("Крупа гречневая ~~53~~ 40", ReadingMode.PRINTED))
+        assertTrue(uncertainInExport("~~отменено~~", ReadingMode.UNKNOWN))
+        assertFalse("обычный текст с тире правкой не считается", uncertainInExport("53 — 40", ReadingMode.PRINTED))
+    }
+
+    @Test
+    fun `документ с рукописи говорит о своём происхождении первой строкой`() {
+        val read = listOf(
+            DocBlock("Недельный цикл", DocStyle.TITLE),
+            DocBlock("Крупа 1450", DocStyle.NORMAL, uncertain = true),
+        )
+
+        val out = read.withReadingNote(ReadingMode.HANDWRITTEN)
+
+        assertEquals("строка стоит раньше заголовка", 3, out.size)
+        assertTrue(out.first().text.startsWith(HANDWRITTEN_NOTE))
+        assertTrue("пометки в документе есть — о них и сказано", out.first().text.contains(HANDWRITTEN_MARKS))
+        assertFalse("сама строка — наши слова, а не прочитанное", out.first().uncertain)
+        assertEquals(read, out.drop(1))
+    }
+
+    @Test
+    fun `пометок в документе нет — про жёлтое молчим, иначе строка врёт`() {
+        val out = listOf(DocBlock("Конспект лекции", DocStyle.NORMAL)).withReadingNote(ReadingMode.HANDWRITTEN)
+
+        assertEquals(HANDWRITTEN_NOTE, out.first().text)
+    }
+
+    @Test
+    fun `печать и неизвестность документ не подписывают — подпись не про качество, а про рукопись`() {
+        val read = listOf(DocBlock("Итого 1450", DocStyle.NORMAL))
+
+        assertEquals(read, read.withReadingNote(ReadingMode.PRINTED))
+        assertEquals(read, read.withReadingNote(ReadingMode.UNKNOWN))
+        assertEquals(emptyList<DocBlock>(), emptyList<DocBlock>().withReadingNote(ReadingMode.HANDWRITTEN))
     }
 }

@@ -8,6 +8,7 @@ import com.point.core.flow.DocBlock
 import com.point.core.flow.DocStyle
 import com.point.core.flow.DocxWriter
 import com.point.core.flow.FrameTransform
+import com.point.core.flow.HANDWRITTEN_NOTE
 import com.point.core.flow.LlmClient
 import com.point.core.flow.META_READING_MODE
 import com.point.core.flow.PdfTextExtractor
@@ -192,40 +193,51 @@ class WordPlusTest {
         }
     }
 
-    private fun answering(answer: File) = object : LlmClient {
-        override suspend fun run(obj: PointObject, prompt: String) =
-            ResultObject(ObjectKind.TEXT, "text/plain", ScratchRef(answer.absolutePath))
+    /** Что реально уехало модели: объект (снимок или подменыш-текст) и промпт. */
+    private class Asked(val obj: PointObject, val prompt: String)
+
+    private fun answering(answer: File, seen: (Asked) -> Unit = {}) = object : LlmClient {
+        override suspend fun run(obj: PointObject, prompt: String): ResultObject {
+            seen(Asked(obj, prompt))
+            return ResultObject(ObjectKind.TEXT, "text/plain", ScratchRef(answer.absolutePath))
+        }
     }
 
     private val noPdf = object : PdfTextExtractor { override suspend fun extractText(obj: PointObject) = "" }
 
-    private fun photo(name: String) = PointObject(
+    private fun photo(name: String, mode: ReadingMode? = ReadingMode.HANDWRITTEN) = PointObject(
         "id", "image/jpeg", ScratchRef(File(tmp.root, name).apply { writeText("пиксели") }.absolutePath),
         ObjectState(ObjectKind.IMAGE),
-        metadata = mapOf(META_READING_MODE to ReadingMode.HANDWRITTEN.name),
+        metadata = mode?.let { mapOf(META_READING_MODE to it.name) }.orEmpty(),
     )
+
+    private fun reading(layer: AtomLayer) =
+        object : AtomRecognizer { override suspend fun read(obj: PointObject) = layer }
+
+    private fun answer(name: String, text: String) = File(tmp.root, name).apply { writeText(text) }
 
     @Test
     fun `спорная строка фото уезжает в документ с адресом улики в сыром кадре`() = runTest {
-        val ans = File(tmp.root, "ans-ev.txt").apply { writeText("T=Ведомость\nP=11004 Гречка 50") }
+        val ans = answer("ans-ev.txt", "T=Ведомость\nP=11004 Гречка 50")
         var styled: List<DocBlock>? = null
         val obj = photo("23.jpg")
-        val reader = object : AtomRecognizer { override suspend fun read(obj: PointObject) = sheetLayer }
 
         val result = WordPlusRealizer(
-            answering(ans), noPdf, docxSpy(File(tmp.root, "ev.docx")) { styled = it }, reader,
+            answering(ans), noPdf, docxSpy(File(tmp.root, "ev.docx")) { styled = it }, reading(sheetLayer),
         ).perform(obj, null)
 
         assertTrue(result is ActionResult.Success)
-        assertNull("заголовок без цифр — сверять нечего", styled!![0].evidence)
-        assertNotNull("а помеченная строка знает своё место на бумаге", styled!![1].evidence)
-        assertEquals(obj.uri.value, styled!![1].evidence!!.imagePath)
-        assertEquals("кроп надо будет довернуть — файл лежит боком", 90, styled!![1].evidence!!.uprightDegrees)
+        val title = styled!!.first { it.text == "Ведомость" }
+        val row = styled!!.first { it.text.startsWith("11004") }
+        assertNull("заголовок без цифр — сверять нечего", title.evidence)
+        assertNotNull("а помеченная строка знает своё место на бумаге", row.evidence)
+        assertEquals(obj.uri.value, row.evidence!!.imagePath)
+        assertEquals("кроп надо будет довернуть — файл лежит боком", 90, row.evidence!!.uprightDegrees)
     }
 
     @Test
     fun `ридер без геометрии — улик нет, и это не ошибка`() = runTest {
-        val ans = File(tmp.root, "ans-flat.txt").apply { writeText("P=11004 Гречка 50") }
+        val ans = answer("ans-flat.txt", "P=11004 Гречка 50")
         var styled: List<DocBlock>? = null
         val flat = object : TextRecognizer {
             override suspend fun recognize(obj: PointObject) = "11004 Гречка 50"
@@ -236,7 +248,115 @@ class WordPlusTest {
         ).perform(photo("24.jpg"), null)
 
         assertTrue(result is ActionResult.Success)
-        assertTrue("пометка остаётся — она про доверие, а не про картинку", styled!!.single().uncertain)
-        assertNull(styled!!.single().evidence)
+        val row = styled!!.first { it.text.startsWith("11004") }
+        assertTrue("пометка остаётся — она про доверие, а не про картинку", row.uncertain)
+        assertNull(row.evidence)
+    }
+
+    // -- #247: рукопись читает модель, и читает она страницу --
+
+    /** Ведомость глазами телефона: движок обошёл страницу и сам показал, что угадывал (0,35). */
+    private val soupLayer = AtomLayer(
+        (0 until 8).map { Atom("g$it", "3}3/9I=I", Box(0f, it * 20f, 200f, it * 20f + 18f), confidence = 0.35f) },
+    )
+
+    /** Печатная страница, прочитанная движком начисто: слова на месте, уверенность высокая. */
+    private val printedLayer = AtomLayer(
+        listOf(
+            Atom("p0", "Ведомость", Box(0f, 0f, 120f, 20f), confidence = 0.9f),
+            Atom("p1", "остатков", Box(130f, 0f, 240f, 20f), confidence = 0.9f),
+            Atom("p2", "продовольствия", Box(0f, 30f, 200f, 50f), confidence = 0.88f),
+            Atom("p3", "склада", Box(210f, 30f, 300f, 50f), confidence = 0.9f),
+        ),
+    )
+
+    @Test
+    fun `рукопись уходит модели снимком, а каша движка в запрос не попадает`() = runTest {
+        val ans = answer("ans-hand.txt", "T=Недельный цикл\nB=Крупа 1450")
+        var asked: Asked? = null
+        val obj = photo("10.jpg", mode = null) // энричер не дошёл — судим по своему проходу
+
+        val result = WordPlusRealizer(
+            answering(ans) { asked = it }, noPdf,
+            docxSpy(File(tmp.root, "hand.docx")) {}, reading(soupLayer),
+        ).perform(obj, null)
+
+        assertTrue(result is ActionResult.Success)
+        assertEquals("модели уехал снимок, а не подменыш-текст", "image/jpeg", asked!!.obj.mime)
+        assertEquals(obj.uri.value, asked!!.obj.uri.value)
+        assertEquals(WORD_PLUS_HANDWRITING_PROMPT, asked!!.prompt)
+        assertFalse("пересказывать шум не о чем", asked!!.prompt.contains("3}3/9I=I"))
+    }
+
+    @Test
+    fun `печатную страницу читает движок — модель её только размечает`() = runTest {
+        val ans = answer("ans-print.txt", "T=Ведомость\nP=Итого 1450")
+        var asked: Asked? = null
+        var styled: List<DocBlock>? = null
+
+        val result = WordPlusRealizer(
+            answering(ans) { asked = it }, noPdf,
+            docxSpy(File(tmp.root, "print.docx")) { styled = it }, reading(printedLayer),
+        ).perform(photo("06.jpg", mode = null), null)
+
+        assertTrue(result is ActionResult.Success)
+        assertEquals("картинку модели не отдаём — цифры она видеть не должна", "text/plain", asked!!.obj.mime)
+        assertTrue("прочитанное движком едет текстом", asked!!.prompt.contains("Ведомость остатков"))
+        assertFalse("и документ ничем не подписан — это норма", styled!!.any { it.text.startsWith(HANDWRITTEN_NOTE) })
+        assertFalse("печатные цифры чисты", styled!!.first { it.text.startsWith("Итого") }.uncertain)
+    }
+
+    @Test
+    fun `движок не собрал ни слова — это не отказ, страницу читает модель`() = runTest {
+        val ans = answer("ans-blank.txt", "T=Конспект\nP=Крупа 1450")
+        var asked: Asked? = null
+        var styled: List<DocBlock>? = null
+
+        val result = WordPlusRealizer(
+            answering(ans) { asked = it }, noPdf,
+            docxSpy(File(tmp.root, "blank.docx")) { styled = it }, reading(AtomLayer(emptyList())),
+        ).perform(photo("19.jpg", mode = null), null)
+
+        assertTrue("«нет текста» здесь было бы отказом читать", result is ActionResult.Success)
+        assertEquals("image/jpeg", asked!!.obj.mime)
+        assertTrue("документ назван прочитанным по снимку", styled!!.first().text.startsWith(HANDWRITTEN_NOTE))
+        assertTrue("и цифры в нём помечены", styled!!.first { it.text.startsWith("Крупа") }.uncertain)
+    }
+
+    @Test
+    fun `на рукописи слышно, что модель читает страницу, а не размечает текст`() = runTest {
+        val ans = answer("ans-stage.txt", "T=Конспект")
+        val realizer = WordPlusRealizer(
+            answering(ans), noPdf, docxSpy(File(tmp.root, "stage.docx")) {}, reading(soupLayer),
+        )
+
+        val heard = stagesHeard { realizer.perform(photo("10b.jpg", mode = null), null) }
+
+        assertEquals(listOf("Распознаю текст на фото", "Модель читает страницу", "Собираю документ"), heard)
+    }
+
+    @Test
+    fun `модель не разобрала страницу — отказ говорит про чтение, а не про разметку`() = runTest {
+        val ans = answer("ans-junk.txt", "не смогла разобрать эту страницу")
+
+        val result = WordPlusRealizer(
+            answering(ans), noPdf, docxSpy(File(tmp.root, "junk.docx")) {}, reading(soupLayer),
+        ).perform(photo("19b.jpg", mode = null), null)
+
+        assertEquals("Не удалось прочитать страницу", (result as ActionResult.Failure).reason)
+    }
+
+    @Test
+    fun `правка ручкой поверх печати едет в документ обеими версиями и помеченной`() = runTest {
+        val ans = answer("ans-strike.txt", "P=Крупа гречневая ~~53~~ 40")
+        var styled: List<DocBlock>? = null
+
+        WordPlusRealizer(
+            answering(ans), noPdf, docxSpy(File(tmp.root, "strike.docx")) { styled = it }, reading(printedLayer),
+        ).perform(photo("23b.jpg", mode = null), null)
+
+        val row = styled!!.first()
+        assertEquals("обе версии дословно — выбирает человек", "Крупа гречневая ~~53~~ 40", row.text)
+        assertTrue("и правка помечена, хотя страница печатная", row.uncertain)
     }
 }

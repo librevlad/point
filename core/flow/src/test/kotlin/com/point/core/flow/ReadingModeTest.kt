@@ -50,6 +50,48 @@ class ReadingModeTest {
         assertNull(readingModeLabel(ReadingMode.UNKNOWN))
     }
 
+    // -- Режим по кадру, который движок только что прошёл сам (#247) --
+
+    private fun ocr(name: String): String =
+        checkNotNull(javaClass.getResourceAsStream("/ocr/$name.txt")) { "нет образца $name" }
+            .bufferedReader().readText()
+
+    /**
+     * Дословный вывод движка на эталонной ведомости владельца (кадр 23) — символьная каша
+     * `3}3/9|=|=|=|=|-(8}-|8)`. Судить её можно только тем, что движок говорит о себе: букв и цифр
+     * в ней 0,7 от знаков (600 из 860), и текстовый признак «похоже на мусор» её **пропускает**.
+     *
+     * Уверенность 0,35 — не выдумка теста, а замер этого самого кадра (02.08.2026, см. [weaklyRead]:
+     * каша 0,35 против 0,81 у начисто прочитанного снимка экрана).
+     */
+    @Test
+    fun `дословная каша ведомости — рукопись по уверенности движка, а не по доле букв`() {
+        val soup = ocr("ledger_23")
+        val words = soup.split(Regex("""\s+""")).filter { it.isNotBlank() }
+        val page = AtomLayer(
+            words.mapIndexed { i, w -> Atom("w$i", w, Box(10f, i * 20f, 200f, i * 20f + 18f), confidence = 0.35f) },
+        )
+
+        assertFalse("состав символов кашу пропускает — на этом признаке всё и ломалось", looksLikeOcrGarbage(soup))
+        assertEquals("а движок про себя говорит правду", ReadingMode.HANDWRITTEN, readingModeOfFrame(page, soup))
+        assertFalse(printedGuarantees(readingModeOfFrame(page, soup)))
+    }
+
+    /**
+     * Той же странице без геометрии сказать нечего. Объявить её печатью значило бы пообещать
+     * печатные гарантии по признаку, который на этом кадре стоит наоборот.
+     */
+    @Test
+    fun `читаемый текст без геометрии — по-прежнему не знаем`() {
+        assertEquals(ReadingMode.UNKNOWN, readingModeOfFrame(null, ocr("ledger_23")))
+    }
+
+    @Test
+    fun `пустой и мусорный вывод ридера без геометрии — рукопись, читать будет модель`() {
+        assertEquals(ReadingMode.HANDWRITTEN, readingModeOfFrame(null, "   "))
+        assertEquals(ReadingMode.HANDWRITTEN, readingModeOfFrame(null, "|//~ ]{} ".repeat(6)))
+    }
+
     @Test
     fun `режим переживает журнал метаданными`() {
         val saved = mapOf(META_READING_MODE to ReadingMode.HANDWRITTEN.name)

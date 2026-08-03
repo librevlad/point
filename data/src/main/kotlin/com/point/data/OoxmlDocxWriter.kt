@@ -91,33 +91,76 @@ class OoxmlDocxWriter @Inject constructor(
         if (crops.isNotEmpty()) append(DRAWING_NAMESPACES)
         append("><w:body>")
         (blocks.ifEmpty { listOf(DocBlock("", DocStyle.NORMAL)) }).forEachIndexed { index, block ->
-            val (pPr, rPr, text) = when (block.style) {
+            val (pPr, style, text) = when (block.style) {
                 DocStyle.TITLE ->
-                    Triple("""<w:pPr><w:spacing w:after="240"/></w:pPr>""", """<w:rPr><w:b/><w:sz w:val="48"/></w:rPr>""", block.text)
+                    Triple("""<w:pPr><w:spacing w:after="240"/></w:pPr>""", RunStyle(bold = true, size = 48), block.text)
                 DocStyle.HEADING ->
-                    Triple("""<w:pPr><w:spacing w:before="240" w:after="120"/></w:pPr>""", """<w:rPr><w:b/><w:sz w:val="32"/></w:rPr>""", block.text)
+                    Triple("""<w:pPr><w:spacing w:before="240" w:after="120"/></w:pPr>""", RunStyle(bold = true, size = 32), block.text)
                 DocStyle.BULLET ->
-                    Triple("""<w:pPr><w:ind w:left="720"/></w:pPr>""", "", "• " + block.text)
-                DocStyle.NORMAL -> Triple("", "", block.text)
-            }
-            // Неуверенное подсвечивается прямо в документе (#267): чистый .docx из рукописи
-            // тихо врёт — прочитанное в нём неотличимо от угаданного. Подсветка снимается
-            // одним действием, когда человек вычитал, и Word остаётся нормальным Word.
-            val mark = if (block.uncertain) """<w:highlight w:val="yellow"/>""" else ""
-            val props = if (mark.isEmpty()) {
-                rPr
-            } else if (rPr.isEmpty()) {
-                "<w:rPr>" + mark + "</w:rPr>"
-            } else {
-                rPr.replace("</w:rPr>", mark + "</w:rPr>")
+                    Triple("""<w:pPr><w:ind w:left="720"/></w:pPr>""", RunStyle(), "• " + block.text)
+                DocStyle.NORMAL -> Triple("", RunStyle(), block.text)
             }
             append("<w:p>").append(pPr)
-            append("<w:r>").append(props)
-            append("""<w:t xml:space="preserve">""").append(xml(text)).append("</w:t></w:r></w:p>")
+            // Зачёркнутое — отдельным прогоном (#247). Модель возвращает правку разметкой
+            // «~~было~~ стало», и вывести её в документ дословно значило бы показать человеку
+            // тильды вместо того, что на бумаге. Зачёркивание — обычное свойство текста Word:
+            // видно, что было и что стало, и снимается одним действием, как и подсветка.
+            runsOf(text).forEach { run ->
+                append("<w:r>").append(runProps(style, block.uncertain, run.struck))
+                append("""<w:t xml:space="preserve">""").append(xml(run.text)).append("</w:t></w:r>")
+            }
+            append("</w:p>")
             // Улика идёт СРАЗУ за своим фрагментом: рядом — это и есть весь смысл (#267).
             crops[index]?.let { append(drawing(it, block.text)) }
         }
         append("""<w:sectPr/></w:body></w:document>""")
+    }
+
+    /** Оформление прогона от стиля блока — то, что одинаково у всех его кусков. */
+    private class RunStyle(val bold: Boolean = false, val size: Int? = null)
+
+    /** Кусок абзаца: свой текст и признак «зачёркнут на бумаге». */
+    private class Run(val text: String, val struck: Boolean)
+
+    /**
+     * Абзац, разложенный на прогоны по забору `~~…~~` (та же разметка правок, что у ячейки
+     * таблицы, — `com.point.core.flow.styleCell`).
+     *
+     * Забора нет — ровно один прогон с прежним текстом, то есть прежний файл побайтово. Незакрытый
+     * забор тоже не режется: половина разметки — не правка, а совпадение символов, и делать из неё
+     * зачёркивание значило бы угадывать.
+     */
+    private fun runsOf(text: String): List<Run> {
+        val out = mutableListOf<Run>()
+        var at = 0
+        for (m in STRIKE.findAll(text)) {
+            if (m.range.first > at) out += Run(text.substring(at, m.range.first), struck = false)
+            out += Run(m.groupValues[1], struck = true)
+            at = m.range.last + 1
+        }
+        if (out.isEmpty()) return listOf(Run(text, struck = false))
+        if (at < text.length) out += Run(text.substring(at), struck = false)
+        return out
+    }
+
+    /**
+     * Свойства прогона в порядке схемы OOXML (`CT_RPr`): жирность, зачёркивание, размер, подсветка.
+     * Порядок не косметика — Word считает пакет с переставленными свойствами битым.
+     *
+     * Неуверенное подсвечивается прямо в документе (#267): чистый .docx из рукописи тихо врёт —
+     * прочитанное в нём неотличимо от угаданного. Подсветка снимается одним действием, когда
+     * человек вычитал, и Word остаётся нормальным Word.
+     */
+    private fun runProps(style: RunStyle, uncertain: Boolean, struck: Boolean): String {
+        if (!style.bold && style.size == null && !uncertain && !struck) return ""
+        return buildString {
+            append("<w:rPr>")
+            if (style.bold) append("<w:b/>")
+            if (struck) append("<w:strike/>")
+            style.size?.let { append("""<w:sz w:val="$it"/>""") }
+            if (uncertain) append("""<w:highlight w:val="yellow"/>""")
+            append("</w:rPr>")
+        }
     }
 
     /**
@@ -199,6 +242,10 @@ class OoxmlDocxWriter @Inject constructor(
     private fun attr(value: String): String = xml(value).replace("\"", "&quot;")
 
     private companion object {
+        /** Забор зачёркнутого в ответе модели: «~~было~~ стало». Нежадный — правок в абзаце бывает
+         *  несколько, и жадный забор съел бы всё между первой и последней. */
+        val STRIKE = Regex("""~~(.+?)~~""", RegexOption.DOT_MATCHES_ALL)
+
         /** 96 dpi: столько EMU в пикселе (914400 EMU в дюйме). */
         const val EMU_PER_PX = 9525L
 

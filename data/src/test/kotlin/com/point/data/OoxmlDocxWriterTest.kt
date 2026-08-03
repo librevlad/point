@@ -111,6 +111,46 @@ class OoxmlDocxWriterTest {
         assertTrue(doc.contains(">Обычный абзац.<"))
     }
 
+    // -- #247: правка ручкой видна как правка, а не как тильды --
+
+    @Test
+    fun `зачёркнутое приезжает зачёркнутым, а не разметкой в тексте`() = runBlocking {
+        val ref = writer().writeStyled(
+            listOf(DocBlock("Крупа гречневая ~~53~~ 40", DocStyle.NORMAL, uncertain = true)),
+        )
+
+        val doc = documentOf(ref)
+        assertWellFormed(doc)
+        assertFalse("тильды в документе человеку не нужны", doc.contains("~~"))
+        assertTrue("зачёркнутое — своим прогоном", doc.contains("<w:strike/>"))
+        assertTrue(doc.contains(">Крупа гречневая <"))
+        assertTrue(doc.contains(">53<"))
+        assertTrue("новая версия остаётся рядом", doc.contains("> 40<"))
+        assertEquals("правка живёт внутри одного абзаца", 1, Regex("<w:p>").findAll(doc).count())
+        assertEquals("подсветка на всех кусках правки", 3, Regex("w:highlight").findAll(doc).count())
+    }
+
+    @Test
+    fun `зачёркнутое в заголовке не теряет ни жирности, ни размера`() = runBlocking {
+        val ref = writer().writeStyled(listOf(DocBlock("~~Приложение 1~~ Приложение 13", DocStyle.TITLE)))
+
+        val doc = documentOf(ref)
+        assertWellFormed(doc)
+        // Порядок свойств — по схеме OOXML: жирность, зачёркивание, размер. Переставленные
+        // свойства Word считает битым пакетом.
+        assertTrue(doc.contains("""<w:rPr><w:b/><w:strike/><w:sz w:val="48"/></w:rPr>"""))
+        assertTrue(doc.contains("""<w:rPr><w:b/><w:sz w:val="48"/></w:rPr>"""))
+    }
+
+    @Test
+    fun `текст без правок пишется одним прогоном — прежний файл`() = runBlocking {
+        val ref = writer().writeStyled(listOf(DocBlock("Обычный абзац с ~ тильдой", DocStyle.NORMAL)))
+
+        val doc = documentOf(ref)
+        assertEquals(1, Regex("<w:r>").findAll(doc).count())
+        assertFalse(doc.contains("<w:strike/>"))
+    }
+
     // -- #267: улика приезжает картинкой прямо в документ --
 
     @Test
