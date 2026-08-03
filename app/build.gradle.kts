@@ -60,6 +60,21 @@ android {
             )
             signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
         }
+
+        // «Свой» вариант: то, что владелец обновляет себе с сайта.
+        //
+        // Подпись — релизная: обновление ставится ПОВЕРХ и сохраняет всё, что человек накопил.
+        // Разные подписи означали бы удаление приложения на каждое обновление.
+        //
+        // Минификации нет намеренно: она стоит минуты на каждой сборке, а смысл этой сборки —
+        // быстро отдавать свежее. Ужимать код ради размера будет релиз, который идёт людям.
+        create("dogfood") {
+            initWith(getByName("release"))
+            isMinifyEnabled = false
+            isShrinkResources = false
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("release")
+        }
     }
 
     buildFeatures {
