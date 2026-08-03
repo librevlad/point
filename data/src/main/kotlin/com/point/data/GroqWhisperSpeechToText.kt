@@ -60,7 +60,7 @@ class GroqWhisperSpeechToText(
         }
 
         val res = http.postMultipart(
-            url = baseUrl.trimEnd('/') + PATH,
+            url = baseUrl.ifBlank { DEFAULT_BASE_URL }.trimEnd('/') + PATH,
             headers = mapOf(
                 "Authorization" to "Bearer $apiKey",
                 // Заголовок назван здесь, а не оставлен транспорту по умолчанию, потому что для
@@ -111,6 +111,9 @@ class GroqWhisperSpeechToText(
 
     private companion object {
         const val PATH = "/audio/transcriptions"
+
+        /** Запасной адрес: пустая строка в `local.properties` не должна превращать ключ в мусор. */
+        const val DEFAULT_BASE_URL = "https://api.groq.com/openai/v1"
 
         /** Предел бесплатного плана Groq на файл. Свой, а не общий с вложением модели (15 МБ). */
         const val MAX_WHISPER_BYTES = 25L * 1024 * 1024
