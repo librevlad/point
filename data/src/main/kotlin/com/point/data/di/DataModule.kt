@@ -352,6 +352,16 @@ abstract class DataModule {
         @Provides
         fun objectClassifier(): ObjectClassifier = ObjectClassifier()
 
+        /**
+         * «Дать ссылку» (#388): файл кладётся на релей под неугадываемым адресом и живёт сутки.
+         *
+         * Единственное, что релей возит НЕ запечатанным: у чужого человека, который откроет
+         * ссылку, ключа нет. Цена названа в самом действии, чтобы человек знал, что отдаёт.
+         */
+        @Provides
+        fun dropLink(): com.point.core.flow.DropLink =
+            com.point.data.RelayDropLink(BuildConfig.RELAY_URL, BuildConfig.RELAY_APP_SECRET)
+
         /** #161 v2 «железобетонно»: the LAN transport self-heals a stale PC IP via mDNS (re-resolve +
          *  retry with the token), and when it still can't be reached — different network, LTE — the
          *  object falls back to the always-works relay (outbound-only, E2E-encrypted). */

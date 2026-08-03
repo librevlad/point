@@ -129,6 +129,7 @@ fun PointHost(
             state.cloudConsent -> ConsentScreen(
                 onAllow = onConfirmCloud,
                 onDecline = onDeclineCloud,
+                destination = state.cloudDestination,
             )
 
             state.appPicker != null -> AppPickerScreen(

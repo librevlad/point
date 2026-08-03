@@ -461,7 +461,7 @@ class FlowViewModel @Inject constructor(
         }
         if (isCloud(bubble.capabilityId)) {
             // Nothing leaves the device before the user agrees, even once (#10).
-            requireCloudConsent { maybePreview(bubble, top) }
+            requireCloudConsent(bubble.capabilityId) { maybePreview(bubble, top) }
             return
         }
         maybePreview(bubble, top)
@@ -745,13 +745,18 @@ class FlowViewModel @Inject constructor(
      * gate and defers it (#10). Reads the on-device flag directly (no cached copy) — so there
      * is no init race, and a saved-chain replay or a single action is held the same way.
      */
-    private fun requireCloudConsent(onGranted: () -> Unit) {
+    private fun requireCloudConsent(
+        capabilityId: com.point.core.model.CapabilityId? = null,
+        onGranted: () -> Unit,
+    ) {
         viewModelScope.launch {
             if (runCatching { consent.cloudAllowed() }.getOrDefault(false)) {
                 onGranted()
             } else {
                 pendingCloud = onGranted
-                _ui.update { it.copy(cloudConsent = true) }
+                val where = capabilityId?.let { com.point.core.flow.cloudDestination(it) }
+                    ?: com.point.core.flow.cloudDestination(com.point.core.model.CapabilityId("ai"))
+                _ui.update { it.copy(cloudConsent = true, cloudDestination = where) }
             }
         }
     }

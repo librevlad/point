@@ -134,6 +134,9 @@ abstract class CapabilityModule {
     @Binds abstract fun bubblePolicy(impl: LearningBubblePolicy): BubblePolicy
 
     // --- Capabilities (declarations) ---
+    @Binds @IntoSet abstract fun dropLinkCap(c: com.point.executors.DropLinkCapability): Capability
+    @Binds @IntoSet abstract fun dropLinkReal(r: com.point.executors.DropLinkRealizer): Realizer
+
     @Binds @IntoSet abstract fun pcCap(c: PcCapability): Capability
     @Binds @IntoSet abstract fun pairPcCap(c: PairPcCapability): Capability
     @Binds @IntoSet abstract fun shareCap(c: ShareCapability): Capability

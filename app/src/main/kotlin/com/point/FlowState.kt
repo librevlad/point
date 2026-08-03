@@ -150,6 +150,13 @@ data class FlowUiState(
     val canSaveChain: Boolean = false,
     /** True while a cloud action waits for one-time privacy consent (#10). */
     val cloudConsent: Boolean = false,
+    /**
+     * Куда именно уйдёт объект, если человек разрешит (#388).
+     *
+     * Диалог говорил про «сервер AI-провайдера» для всего сетевого. Для «Дать ссылку» это была
+     * прямая неправда — файл уезжает на релей Point и лежит по ссылке сутки.
+     */
+    val cloudDestination: String = "",
     /** Non-null while a capability's pre-execution preview awaits confirm (#97). */
     val preview: Preview? = null,
     /** Non-null while the inline "Открыть в…" app-picker is shown — the installed apps that can

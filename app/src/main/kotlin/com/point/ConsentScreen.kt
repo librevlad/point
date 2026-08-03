@@ -29,6 +29,8 @@ import androidx.compose.ui.unit.dp
 fun ConsentScreen(
     onAllow: () -> Unit,
     onDecline: () -> Unit,
+    /** Куда именно уедет объект — текст зависит от действия (#388). */
+    destination: String = "",
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -45,8 +47,10 @@ fun ConsentScreen(
         )
         Spacer(Modifier.height(16.dp))
         Text(
-            text = "Это действие обрабатывает объект в облаке: файл уйдёт на сервер " +
-                "AI-провайдера и вернётся результатом. Без вашего согласия ничего не отправляется.",
+            text = destination.ifBlank {
+                "Объект уйдёт на сервер AI-провайдера и вернётся результатом. Ничего не " +
+                    "отправляется без вашего согласия."
+            },
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
