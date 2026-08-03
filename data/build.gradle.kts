@@ -63,6 +63,11 @@ android {
         buildConfigField("String", "GROQ_API_KEY", "\"\"")
         buildConfigField("String", "GROQ_BASE_URL", prop("GROQ_BASE_URL", "https://api.groq.com/openai/v1"))
         buildConfigField("String", "GROQ_MODELS", prop("GROQ_MODELS", "llama-3.3-70b-versatile,openai/gpt-oss-120b,llama-3.1-8b-instant"))
+        // Расшифровка голосового (#223) — у Groq для неё ОТДЕЛЬНАЯ ручка (/audio/transcriptions) и
+        // отдельная модель, поэтому она не в GROQ_MODELS: тем списком ходят в чат, а этой моделью
+        // слушают. turbo выбран замером 04.08.2026: украинскую речь читает дословно и даром, тогда
+        // как бесплатная квота модели общего назначения — 20 запросов в СУТКИ.
+        buildConfigField("String", "GROQ_WHISPER_MODEL", prop("GROQ_WHISPER_MODEL", "whisper-large-v3-turbo"))
         buildConfigField("String", "MISTRAL_API_KEY", "\"\"")
         buildConfigField("String", "MISTRAL_BASE_URL", prop("MISTRAL_BASE_URL", "https://api.mistral.ai/v1"))
         // Mistral — из бесплатных единственный, кто на замере прочитал плотную ведомость
