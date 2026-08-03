@@ -119,6 +119,22 @@ class FlowViewModelTest {
     private fun bubble(id: String = "a", title: String = "Действие") =
         Bubble("x", title, CapabilityId(id), ObjectState(ObjectKind.TEXT))
 
+    // --- Выделение области (#259): обвести можно, не распознавая ---
+
+    @Test fun `выделение открывается и без слоя слов — отказ приходит от картинки, а не от чтения`() =
+        runTest(dispatcher) {
+            // Объект-картинка без META_OCR_ATOMS_REF: раньше openSelection выходил молча, потому
+            // что требовал слой. Теперь он доходит до самой картинки; фейк кадра возвращает null,
+            // и человек слышит причину — вместо тишины в ответ на тап.
+            val vm = vm()
+            vm.onShared("uri", "image/jpeg"); advanceUntilIdle()
+
+            vm.openSelection(); advanceUntilIdle()
+
+            assertEquals("Не удалось открыть страницу для выделения", vm.ui.value.message)
+            assertEquals(Outcome.FAILED, vm.ui.value.messageOutcome)
+        }
+
     // --- User rules (#66): a long-press pins the action for this object kind ---
 
     @Test fun `long-press pins, second long-press unpins — with a spoken confirmation`() = runTest(dispatcher) {

@@ -537,11 +537,17 @@ class FlowViewModel @Inject constructor(
 
     fun openSelection() {
         val top = stack.lastOrNull()?.obj ?: return
-        val atomsRef = top.metadata[META_OCR_ATOMS_REF] ?: return
+        // Слой слов необязателен (#259). Есть — рамка липнет к словам, и выделение даёт текст;
+        // нет — берётся пустой слой, рамка остаётся свободной, а «Взять» уходит в фрагмент
+        // (`fragmentCapture`). Требовать чтение до обводки значило заставлять человека
+        // распознавать то, что он всего лишь хочет обвести.
+        val atomsRef = top.metadata[META_OCR_ATOMS_REF]
         viewModelScope.launch {
             val loaded = withContext(ioDispatcher) {
                 runCatching {
-                    val layer = AtomCodec.decode(File(atomsRef).readText())
+                    val layer = atomsRef
+                        ?.let { AtomCodec.decode(File(it).readText()) }
+                        ?: AtomLayer(emptyList())
                     frames.frame(top.uri.value, SELECTION_MAX_PX)?.let { frame ->
                         Triple(layer, frame.transform, frame.bitmap.asImageBitmap())
                     }
