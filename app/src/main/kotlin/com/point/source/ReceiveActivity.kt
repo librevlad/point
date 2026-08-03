@@ -11,10 +11,11 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -25,12 +26,21 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
 import com.point.PulledFileFactory
 import com.point.core.flow.DropInbox
 import com.point.core.ui.LinkCard
+import com.point.core.ui.Outcome
+import com.point.core.ui.OutcomeBanner
+import com.point.core.ui.Portal
+import com.point.core.ui.PortalColumnWidth
+import com.point.core.ui.PortalRow
+import com.point.core.ui.ScreenHeader
+import com.point.core.ui.ThinkingDot
+import com.point.core.ui.bubbleColor
+import com.point.core.ui.bubbleIcon
 import com.point.core.ui.theme.PointTheme
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
@@ -130,6 +140,18 @@ class ReceiveActivity : ComponentActivity() {
     }
 }
 
+/**
+ * Экран ожидания — в языке портала (#114), и целиком рисуется в `@Preview`: он ничего не знает про
+ * Activity, ящик и сеть, ему дают ссылку либо отказ.
+ *
+ * Что было не так. Ждали двумя крутилками Material — а Point ждёт порталом и пульсом
+ * (MOTION.md принцип №3: импульс, а не крутилка), и человек, видевший портал на каждом долгом
+ * действии, здесь встречал чужой знак. Отказ был обычной строкой текста вместо карточки исхода,
+ * которой Point отвечает везде. Действия со ссылкой были двумя голыми текстовыми кнопками, хотя
+ * «скопировать» и «отправить» — такие же действия, как на экране объекта, и выглядеть должны так
+ * же. И экран не называл себя вовсе: пока ссылка готовилась, на нём не было ни слова о том, куда
+ * человек попал.
+ */
 @Composable
 private fun ReceiveScreen(
     link: String?,
@@ -139,29 +161,33 @@ private fun ReceiveScreen(
     onCancel: () -> Unit,
 ) {
     Column(
-        modifier = Modifier.fillMaxSize().padding(20.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp, vertical = 20.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterVertically),
     ) {
         when {
-            failure != null -> Text(
-                text = failure,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.widthIn(max = 340.dp),
-            )
+            // Отказ — той же карточкой исхода, что на экране объекта: знак «✕» тёплым концом
+            // фирменного градиента на поверхности портала.
+            failure != null -> OutcomeBanner(failure, Outcome.FAILED)
 
             link == null -> {
-                CircularProgressIndicator(modifier = Modifier.size(28.dp))
-                Text(
-                    text = "Готовим ссылку…",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                Portal(size = 148.dp)
+                ScreenHeader(
+                    title = "Принять файл",
+                    subtitle = "Готовим ссылку…",
+                    horizontalAlignment = Alignment.CenterHorizontally,
                 )
             }
 
             else -> {
+                ScreenHeader(
+                    title = "Принять файл",
+                    subtitle = "Покажите код рядом или отправьте ссылку тому, кто далеко",
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                )
                 LinkCard(
                     url = link,
                     title = "Пусть отправят файл сюда",
@@ -170,20 +196,69 @@ private fun ReceiveScreen(
                     warning = "Откроет любой, у кого есть ссылка. Живёт сутки. Файл полежит " +
                         "на сервере Point, пока телефон его не заберёт.",
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TextButton(onClick = onCopy) { Text("Скопировать") }
-                    TextButton(onClick = onSend) { Text("Отправить ссылку") }
+                Column(
+                    modifier = Modifier.widthIn(max = PortalColumnWidth).fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(11.dp),
+                ) {
+                    PortalRow(
+                        title = "Скопировать ссылку",
+                        onClick = onCopy,
+                        icon = bubbleIcon("copy"),
+                        accent = bubbleColor("copy"),
+                        appearIndex = 0,
+                    )
+                    PortalRow(
+                        title = "Отправить ссылку",
+                        onClick = onSend,
+                        icon = bubbleIcon("share"),
+                        accent = bubbleColor("share"),
+                        appearIndex = 1,
+                    )
                 }
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    CircularProgressIndicator(modifier = Modifier.size(16.dp))
+                // Тем же пульсом, каким Point думает над объектом: ждём — значит работаем.
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                    ThinkingDot()
                     Text(
                         text = "Ждём файл…",
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
         }
-        TextButton(onClick = onCancel) { Text("Отмена") }
+        TextButton(onClick = onCancel) {
+            Text("Отмена", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
     }
+}
+
+@Preview(name = "Принять файл · ссылка готова (#114)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@Composable
+private fun PreviewReceiveWaiting() = PointTheme(darkTheme = true) {
+    ReceiveScreen(
+        link = "https://35.185.31.106:8443/u/2f8c1b0a4e6d9c3f5a7b1e2d4c6f8a0b1c3d5e7f",
+        failure = null,
+        onCopy = {},
+        onSend = {},
+        onCancel = {},
+    )
+}
+
+@Preview(name = "Принять файл · готовим ссылку (#114)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@Composable
+private fun PreviewReceivePreparing() = PointTheme(darkTheme = true) {
+    // Ждём порталом, а не крутилкой, — и экран наконец называет себя.
+    ReceiveScreen(link = null, failure = null, onCopy = {}, onSend = {}, onCancel = {})
+}
+
+@Preview(name = "Принять файл · не получилось (#114)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@Composable
+private fun PreviewReceiveFailed() = PointTheme(darkTheme = true) {
+    ReceiveScreen(
+        link = null,
+        failure = "Ссылку выдать не удалось — нет связи с сервером Point",
+        onCopy = {},
+        onSend = {},
+        onCancel = {},
+    )
 }
