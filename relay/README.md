@@ -10,13 +10,24 @@ only ciphertext addressed by an opaque, token-derived mailbox id (`RelayCrypto` 
 - `relay.py` runs as an **unprivileged user process** (no root / no systemd) on **:8443**, TLS with
   a self-signed cert (IP SAN `35.185.31.106`), gated by a build-baked `X-Point-App` secret.
 - Files under `~/point-relay/`: `relay.py`, `cert.pem` / `key.pem`, `secret`, `mbx/` (blobs), `start.sh`.
-- Autostart: `crontab @reboot ~/point-relay/start.sh` (relaunches only if not already running).
+- Autostart: `start.sh` (in this dir) from cron — `*/2 * * * *` plus `@reboot`. It decides
+  «already running?» **by the listening port**, not by process name.
+
+  Why that matters (fixed 03.08.2026): the old check was
+  `pgrep -f 'python3 .*point-relay/relay.py'`, and the cron line itself carried that very pattern
+  in its arguments — so `pgrep` matched **the watchdog's own shell** and concluded the relay was
+  alive. A relay that died stayed dead until the next reboot; the watchdog ran every two minutes
+  and did nothing. Ловушка тихая: логи крона выглядят исправными.
 - Verified locally: `health` / push → pull → ack / empty-after-ack / auth-reject all pass.
 
-## The one thing that must be done in the cloud
+## The one thing that must be done in the cloud (done)
 
-The instance's gcloud lacks firewall scopes, so the relay port must be opened in the **GCP firewall
-of project `leerio`** (Console → VPC → Firewall → Create rule, or from a machine authed to leerio):
+Правило фаервола создано владельцем 30.07.2026 — порт `8443` открыт, и «нет связи» с тех пор
+означает **лежащий процесс**, а не закрытый порт. Отличить одно от другого можно ответом хоста:
+закрытый фаервол молчит (таймаут), мёртвый процесс отвечает `connection refused`.
+
+Историческая справка: the instance's gcloud lacks firewall scopes, so the relay port had to be
+opened in the **GCP firewall of project `leerio`** (Console → VPC → Firewall → Create rule, or from a machine authed to leerio):
 
 ```
 gcloud compute firewall-rules create point-relay \
