@@ -76,7 +76,14 @@ def parse_multipart(content_type, body):
         if not payload:
             continue
         # Имя файла браузер шлёт байтами UTF-8: «отчёт.pdf» обязан остаться отчётом.
-        text = head.decode("utf-8", "replace")
+        try:
+            text = head.decode("utf-8")
+            lossy = False
+        except UnicodeDecodeError:
+            # Не браузер (curl под Windows, самодельный клиент) — имя пришло в чужой кодировке.
+            # Прочитать его нечем: заголовок не говорит, в какой именно.
+            text = head.decode("latin-1")
+            lossy = True
         if "filename=" not in text:
             continue
         name = re.search(r'filename="([^"]*)"', text)
@@ -84,6 +91,11 @@ def parse_multipart(content_type, body):
         data = payload[:-2] if payload.endswith(b"\r\n") else payload
         name = name.group(1) if name else ""
         name = name.replace("\\", "/").rsplit("/", 1)[-1] or "file"  # старые браузеры шлют путь
+        if lossy:
+            # Нечитаемое имя не передаём дальше: «îò÷¸ò.pdf» или строка из «�» — это не имя, а
+            # мусор на экране человека. Расширение сохраняем — по нему объект узнают.
+            ext = name.rsplit(".", 1)
+            name = "файл" + ("." + ext[1] if len(ext) > 1 and ext[1].isalnum() else "")
         return name, (mime.group(1).strip() if mime else "application/octet-stream"), data
     return "file", "application/octet-stream", b""
 
