@@ -45,6 +45,9 @@ merge, тег).
 - **Трекер:** GitHub Issues + Projects-доска; бэклог = issues (`roadmap #N == issue #N`).
   `ROADMAP.md` держит нарратив (Северная звезда / фазы / швы), не статус.
 - **CI:** `./gradlew test assembleDebug` на каждый push/PR (`.github/workflows/ci.yml`).
+- **Релиз:** тег `v*` → `.github/workflows/release.yml` — только release-варианты, ворота
+  против debug-артефактов и скан секретов (`tools/release-scan.sh`) ДО публикации, результат —
+  черновик с чек-листом; публикует человек (#306).
 
 ## Сборка и тесты
 

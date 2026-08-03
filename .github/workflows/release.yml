@@ -1,0 +1,228 @@
+# Релизный поезд (#306): тег v* → сборка ТОЛЬКО release-вариантов → ворота → ЧЕРНОВИК релиза.
+# Черновик публикует человек — после чек-листа в теле релиза. Workflow сам не делает
+# публичным ничего.
+#
+# Зачем это: в v0.2.0 в публичный релиз руками попал debug-APK с живыми ключами.
+# Причина в сборке починена (#305: release физически не видит local.properties);
+# здесь — защита процессом, три независимых рубежа:
+#   1) сборка идёт на чистом раннере, где local.properties нет вовсе — ключам неоткуда
+#      взяться (это строже локальной сборки владельца);
+#   2) debug-варианты здесь не собираются, а всё, что попадает в набор публикации,
+#      проверяется воротами (имя, происхождение, debuggable-флаг) ДО создания черновика;
+#   3) содержимое каждого публикуемого файла сканируется на известные формы секретов
+#      (tools/release-scan.sh) — это ПОСЛЕДНИЙ РУБЕЖ, а не основная защита: он ловит
+#      день, когда первые два рубежа кто-то обошёл руками.
+#
+# Ручной запуск (workflow_dispatch) — репетиция ворот: всё собирается и проверяется,
+# черновик не создаётся (нет тега).
+name: Release
+
+on:
+  push:
+    tags: [ 'v*' ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false # наполовину созданный релиз хуже двух прогонов подряд
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Тег и versionName не должны расходиться
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          vn=$(grep -o 'versionName = "[^"]*"' app/build.gradle.kts | head -1 | cut -d'"' -f2)
+          if [ "$tag" != "$vn" ]; then
+            echo "::error::Тег v$tag ≠ versionName=$vn (app/build.gradle.kts): не тот коммит или забыт бамп версии."
+            exit 1
+          fi
+
+      - name: Set up JDK 17 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK (accepts licenses, sets ANDROID_HOME)
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Gradle (with cache)
+        uses: gradle/actions/setup-gradle@v4
+
+      # ТОЛЬКО release-вариант. assembleDebug в этом workflow не существует; юнит-тесты
+      # компилируют debug-классы, но APK из них не рождается — ворота ниже это сторожат.
+      - name: Тесты + сборка release
+        run: ./gradlew test :app:assembleRelease --no-daemon --stacktrace
+
+      - name: Ворота происхождения — единственный APK собран release-вариантом
+        run: |
+          # Появится в выходах сборки хоть один debug-APK/AAB (кто-то дописал задачу
+          # выше) — падаем до любой публикации.
+          bad=$(find . -type f \( -name '*.apk' -o -name '*.aab' \) | grep -i debug || true)
+          if [ -n "$bad" ]; then
+            echo "::error::В сборке появились debug-артефакты — релизный workflow их не собирает:"
+            echo "$bad"
+            exit 1
+          fi
+          apk=app/build/outputs/apk/release/app-release.apk
+          [ -f "$apk" ] || { echo "::error::Нет $apk — release-сборка не дала APK."; exit 1; }
+          # Debug-вариант выдаёт себя флагом debuggable в манифесте — проверяем им,
+          # а не именем файла. Нет инструмента — падаем: «не проверили» ≠ «чисто».
+          tool=$(ls "$ANDROID_HOME"/build-tools/*/aapt2 "$ANDROID_HOME"/build-tools/*/aapt 2>/dev/null | sort | tail -1)
+          [ -n "$tool" ] || { echo "::error::aapt2/aapt не найден — проверить debuggable нечем."; exit 1; }
+          badging=$("$tool" dump badging "$apk")
+          [ -n "$badging" ] || { echo "::error::aapt не смог прочитать APK."; exit 1; }
+          if echo "$badging" | grep -q application-debuggable; then
+            echo "::error::$apk собран debuggable — это debug-вариант, публиковать нельзя."
+            exit 1
+          fi
+          echo "OK: единственный APK — release, не debuggable."
+
+      # Содержимое CI-APK проверяется тем же сканом, что и публикуемые файлы
+      # (--content-only: файл НЕ публикуется, поэтому правило подписи к нему не
+      # применяется — на чистом раннере keystore нет, и release-APK по построению
+      # подписан fallback-ключом debug, см. app/build.gradle.kts).
+      - name: Скан секретов в release-APK (последний рубеж, не основная защита)
+        run: bash tools/release-scan.sh --content-only app/build/outputs/apk/release/app-release.apk
+
+      # НЕ ассет релиза: подпись у него отладочная (см. выше), публиковать такое нельзя —
+      # подписанный APK владелец собирает локально по чек-листу черновика. «debug-signed»
+      # в имени стоит намеренно: попадёт этот артефакт в набор публикации — ворота имени
+      # уронят джоб.
+      - name: Сохранить APK артефактом прогона
+        uses: actions/upload-artifact@v4
+        with:
+          name: Point-apk-release-ci-debug-signed-DO-NOT-PUBLISH
+          path: app/build/outputs/apk/release/app-release.apk
+          retention-days: 14
+
+  desktop:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      # Полный JDK (Temurin), не JBR: MSI пакует jpackage из состава JDK.
+      # WiX ставить не нужно — Compose-плагин скачивает его сам (задача downloadWix).
+      - name: Set up JDK 17 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # AGP конфигурирует android-модули даже при сборке одного :desktop —
+      # без Android SDK падает конфигурация всего проекта.
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Gradle (with cache)
+        uses: gradle/actions/setup-gradle@v4
+
+      # На чистом раннере local.properties нет → RelayEnv генерируется пустым:
+      # MSI из CI не несёт даже relay-секрета (строже локальной сборки владельца).
+      - name: Сборка MSI
+        run: ./gradlew :desktop:packageMsi --no-daemon --stacktrace
+
+      - name: Сохранить MSI артефактом прогона
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-msi
+          path: desktop/build/compose/binaries/main/msi/*.msi
+          retention-days: 14
+
+  # Единственный джоб с правом писать в релизы. Публикует ТОЛЬКО dist/publish —
+  # набор, целиком прошедший ворота, — и только черновиком.
+  release:
+    needs: [ android, desktop ]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4 # ради tools/release-scan.sh и release-эталона
+
+      - name: Забрать MSI
+        uses: actions/download-artifact@v4
+        with:
+          name: desktop-msi
+          path: dist/in
+
+      - name: Собрать набор публикации
+        run: |
+          mkdir -p dist/publish
+          msi=$(find dist/in -type f -iname '*.msi' | head -1)
+          [ -n "$msi" ] || { echo "::error::MSI не найден среди артефактов сборки."; exit 1; }
+          cp "$msi" "dist/publish/Point-desktop-${GITHUB_REF_NAME}.msi"
+          echo "Набор публикации:"
+          ls -la dist/publish
+
+      - name: Ворота имени — ничего отладочного в наборе публикации
+        run: |
+          # Ловит и файл с «debug» в имени, и артефакт из debug-именованного каталога.
+          bad=$(cd dist && find publish -type f | grep -i debug || true)
+          if [ -n "$bad" ]; then
+            echo "::error::В наборе публикации отладочное — публиковать нельзя:"
+            echo "$bad"
+            exit 1
+          fi
+          echo "OK: отладочного в наборе нет."
+
+      - name: Скан содержимого набора (последний рубеж, не основная защита)
+        run: |
+          # MSI разворачивается только 7-Zip'ом; без него скан честно откажет,
+          # поэтому доставим заранее, если раннер вдруг без него.
+          command -v 7z >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq p7zip-full; }
+          bash tools/release-scan.sh dist/publish/*
+
+      - name: Черновик релиза с чек-листом
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="$GITHUB_REF_NAME"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "::error::Релиз (или черновик) для $tag уже существует — второй не создаю, чтобы не затереть правки. Удали старый или добавь ассеты руками."
+            exit 1
+          fi
+          notes="$RUNNER_TEMP/notes.md"
+          cat > "$notes" <<'EOF'
+          Черновик создан workflow'ом Release — публикация только руками владельца, после чек-листа.
+
+          **Машина уже проверила в этом прогоне:**
+          - собраны только release-варианты (debug-сборки в workflow не существует), APK не debuggable;
+          - в наборе публикации нет файлов с «debug» в имени;
+          - содержимое APK и MSI чисто по скану секретных форм (`tools/release-scan.sh` —
+            последний рубеж; основная защита — сборка на чистом раннере без ключей).
+
+          **Чек-лист владельца перед публикацией:**
+          - [ ] APK: собрать и подписать локально релизным ключом (в CI keystore сознательно нет):
+                `./gradlew :app:assembleRelease`, затем
+                `bash tools/release-scan.sh app/build/outputs/apk/release/app-release.apk`
+                (скан откажет и отладочной подписи, и секретам), затем
+                `apksigner verify --print-certs` — сертификат релизный, не отладочный;
+                переименовать в `Point-<тег>.apk` и приложить ассетом.
+          - [ ] Каждый ассет, добавленный руками, прогнан тем же `tools/release-scan.sh` —
+                ассет мимо скана и был аварией v0.2.0.
+          - [ ] MSI из CI собран без RELAY_* (чистый раннер): релей в нём выключен, LAN работает.
+                Если релиз должен нести релей — собери MSI локально и прогони скан, либо заведи
+                RELAY_* в секреты репозитория (решение владельца).
+          - [ ] Смоук release-сборки на устройстве — ворота поезда A (docs/RELEASE-PLAN.md).
+          - [ ] Заметки релиза написаны (что нового, что изменилось).
+          EOF
+          gh release create "$tag" --draft --verify-tag \
+            --title "Point $tag" \
+            --notes-file "$notes" \
+            dist/publish/*
+          echo "Черновик создан. Публикует человек."
