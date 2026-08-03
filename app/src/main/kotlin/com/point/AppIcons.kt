@@ -72,4 +72,8 @@ abstract class AppIconsModule {
     @Binds
     @IntoSet
     abstract fun voiceSource(impl: com.point.source.VoiceSource): ObjectSource
+
+    @Binds
+    @IntoSet
+    abstract fun locationSource(impl: com.point.source.LocationSource): ObjectSource
 }
