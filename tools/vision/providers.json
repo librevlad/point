@@ -1,0 +1,58 @@
+{
+  "_": [
+    "Кого дёргаем и как. Ключи здесь НЕ живут — только имя переменной окружения.",
+    "Список пополняется разведкой бесплатных провайдеров; здесь лежит способ вызова.",
+    "vision=true — умеет картинки; layout=true — годится в разметчики.",
+    "Пока провайдер не проверен живым запросом, у него стоит \"checked\": false — и отчёт",
+    "об этом скажет, вместо того чтобы выдать непроверенное за измеренное."
+  ],
+  "providers": {
+    "gemini": {
+      "kind": "google",
+      "url": "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+      "key_env": "GEMINI_API_KEY",
+      "models": [
+        "gemini-flash-latest",
+        "gemini-pro-latest"
+      ],
+      "vision": true,
+      "layout": true,
+      "checked": false,
+      "where": "Google, США — личные документы только по явному решению человека"
+    },
+    "openrouter": {
+      "kind": "openai",
+      "url": "https://openrouter.ai/api/v1/chat/completions",
+      "key_env": "OPENROUTER_API_KEY",
+      "models": [],
+      "vision": true,
+      "layout": false,
+      "checked": false,
+      "where": "OpenRouter, США — маршрутизирует к разным поставщикам"
+    },
+    "mistral-ocr": {
+      "kind": "mistral-ocr",
+      "url": "https://api.mistral.ai/v1/ocr",
+      "key_env": "MISTRAL_API_KEY",
+      "models": [
+        "mistral-ocr-latest"
+      ],
+      "vision": true,
+      "layout": false,
+      "checked": true,
+      "where": "Mistral, Франция (ЕС) — по замеру 03.08.2026 лучший бесплатный глаз: 15/15 и на чистом, и на мятом фото"
+    },
+    "ovh-qwen-vl": {
+      "kind": "openai",
+      "url": "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1/chat/completions",
+      "key_env": "OVH_API_KEY",
+      "models": [
+        "Qwen2.5-VL-72B-Instruct"
+      ],
+      "vision": true,
+      "layout": true,
+      "checked": true,
+      "where": "OVH, Франция (ЕС) — отдаёт зрячую модель анонимно, ключ не нужен (~2 запроса в минуту)"
+    }
+  }
+}
