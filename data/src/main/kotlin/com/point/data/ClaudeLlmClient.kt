@@ -31,6 +31,10 @@ class ClaudeLlmClient @Inject constructor(
 
     override val strongVision = true // Claude is a strong vision model — lead with it on images
 
+    /** Звук Claude на вход не принимает (#223). Молчаливое «да» отправило бы один промпт без
+     *  файла — и модель рассказала бы про запись, которой не слышала. */
+    override fun canHandle(obj: PointObject): Boolean = !isAudio(obj)
+
     override suspend fun run(obj: PointObject, prompt: String): ResultObject =
         withContext(Dispatchers.IO) {
             val key = BuildConfig.ANTHROPIC_API_KEY

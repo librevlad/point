@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.DocumentScanner
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.FormatListBulleted
+import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.FolderZip
 import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.Image
@@ -41,6 +42,7 @@ import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.QrCode2
+import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.SaveAlt
@@ -85,6 +87,7 @@ fun bubbleIcon(key: String): ImageVector = when (if (key.startsWith("app:")) "op
     "blur" -> Icons.Filled.BlurOn
     "replace-bg" -> Icons.Filled.Wallpaper
     "ocr" -> Icons.Filled.TextFields
+    "transcribe" -> Icons.Filled.RecordVoiceOver
     "find" -> Icons.Filled.Search
     "ocr-cloud" -> Icons.Filled.Cloud
     "meter" -> Icons.Filled.Speed
@@ -125,6 +128,7 @@ fun bubbleColor(key: String): Color = when (if (key.startsWith("app:")) "open-in
     "blur" -> Color(0xFF6366F1)     // indigo — blur background
     "replace-bg" -> Color(0xFF7C4DFF) // purple — replace background
     "ocr" -> Color(0xFF16A34A)      // green — recognise text
+    "transcribe" -> Color(0xFF16A34A) // green — тоже «прочитать сказанное», только ушами
     "find" -> Color(0xFF16A34A)     // green — читать прочитанное: поиск живёт рядом с распознаванием
     "ocr-cloud" -> Color(0xFF2F80ED) // blue — recognise in the cloud
     "meter" -> Color(0xFF15803D)     // deeper green — местное чтение табло прибора
@@ -158,6 +162,7 @@ fun kindIcon(kind: ObjectKind): ImageVector = when (kind) {
     ObjectKind.ZIP -> Icons.Filled.FolderZip
     ObjectKind.OFFICE -> Icons.Filled.Article
     ObjectKind.URL -> Icons.Filled.Link
+    ObjectKind.AUDIO -> Icons.Filled.GraphicEq
     ObjectKind.COLLECTION -> Icons.Filled.FolderOpen
     // Things extraction finds in the world (#222) — each looks like what it is.
     KIND_IDENTIFIER -> Icons.Filled.Tag
@@ -181,6 +186,7 @@ fun kindLabel(kind: ObjectKind): String = when (kind) {
     ObjectKind.ZIP -> "Архив"
     ObjectKind.OFFICE -> "Документ"
     ObjectKind.URL -> "Ссылка"
+    ObjectKind.AUDIO -> "Запись"
     ObjectKind.COLLECTION -> "Коллекция"
     KIND_IDENTIFIER -> "Номер"
     KIND_ADDRESS -> "Адрес"

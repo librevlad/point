@@ -94,4 +94,31 @@ class FallbackLlmClientTest {
         assertEquals("/out/strong", client.run(image, "опиши").uri.value) // image → strong wins
         assertEquals("/out/weak", client.run(obj, "hi").uri.value)        // text → original order
     }
+
+    // --- Голосовое (#223): подсказка называет то, чего не хватило именно этому объекту ---
+
+    private val voice = PointObject("v", "audio/ogg", ScratchRef("/x.ogg"), ObjectState(ObjectKind.AUDIO))
+
+    private fun deaf() = object : LlmClient {
+        override suspend fun run(obj: PointObject, prompt: String): ResultObject =
+            error("must not run for audio")
+        override fun canHandle(obj: PointObject) = !obj.mime.startsWith("audio/")
+    }
+
+    @Test
+    fun `запись минует глухих провайдеров и доходит до слышащего`() = runTest {
+        // До #223 глухой провайдер отвечал «беру» и получал ОДИН промпт без файла: модель
+        // рассказывала про запись, которой не слышала, — отказ, неотличимый от успеха.
+        val client = FallbackLlmClient(listOf(deaf(), ok("audio")))
+
+        assertEquals("/out/audio", client.run(voice, "расшифруй").uri.value)
+    }
+
+    @Test
+    fun `на записи подсказка просит ключ с поддержкой аудио, а не изображений`() = runTest {
+        val error = runCatching { FallbackLlmClient(listOf(deaf())).run(voice, "расшифруй") }.exceptionOrNull()
+
+        assertTrue(error?.message?.contains("с поддержкой аудио") == true)
+        assertFalse("картинка тут ни при чём", error?.message?.contains("изображени") == true)
+    }
 }

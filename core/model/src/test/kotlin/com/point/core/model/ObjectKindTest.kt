@@ -23,6 +23,7 @@ class ObjectKindTest {
         assertEquals("ZIP", ObjectKind.ZIP.name)
         assertEquals("OFFICE", ObjectKind.OFFICE.name)
         assertEquals("URL", ObjectKind.URL.name)
+        assertEquals("AUDIO", ObjectKind.AUDIO.name)
         assertEquals("COLLECTION", ObjectKind.COLLECTION.name)
         assertEquals("UNKNOWN", ObjectKind.UNKNOWN.name)
     }
@@ -55,7 +56,7 @@ class ObjectKindTest {
     fun `entries lists only the file-level kinds`() {
         // Extraction kinds are open and deliberately absent: anything iterating entries is
         // reasoning about files the runtime classifies from MIME, not about the whole world.
-        assertEquals(8, ObjectKind.entries.size)
+        assertEquals(9, ObjectKind.entries.size)
         assertTrue(ObjectKind.of("Organization") !in ObjectKind.entries)
     }
 
