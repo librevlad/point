@@ -32,7 +32,8 @@ class PcServer(
     private val token: String,
     private val pcName: String,
     private val pairGate: (deviceName: String) -> Boolean,
-    private val onReceived: (InboxItem) -> Unit,
+    /** Объект принят; вторым аргументом — откуда он пришёл, для журнала пути (#407). */
+    private val onReceived: (InboxItem, ObjectSource) -> Unit,
     /** Телефон дал о себе знать по локальной сети (#412): экран должен это показать. */
     private val onContact: () -> Unit = {},
     private val remoteActions: List<PcRemoteAction> = emptyList(),
@@ -127,7 +128,11 @@ class PcServer(
                 ?.takeIf { it.isNotBlank() } ?: "объект.${extFor(mime)}"
             val meta = ex.requestHeaders.getFirst("X-Point-Meta")?.let { decodePcMeta(unb64(it)) }.orEmpty()
             val item = inbox.receive(name, mime, meta, ex.requestBody)
-            onReceived(item)
+            // Откуда объект пришёл, видно по адресу (#407): через этот же `/receive` стучится
+            // «Отправить в Point» из проводника уже работающего компьютера (#252). Записать такой
+            // файл как приехавший с телефона значило бы врать человеку в его же истории.
+            val local = runCatching { ex.remoteAddress.address.isLoopbackAddress }.getOrDefault(false)
+            onReceived(item, if (local) ObjectSource.LOCAL else ObjectSource.PHONE_LAN)
             // #80: the phone may name one of the advertised actions to run right away.
             // Unknown or failing actions never fail the receive — the object landed.
             // #316: недоступное действие не запускается, даже если его назвали, — старый
