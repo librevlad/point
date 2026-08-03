@@ -12,15 +12,19 @@ import com.point.core.flow.AtomCodec
 import com.point.core.flow.AtomLayer
 import com.point.core.flow.AtomRecognizer
 import com.point.core.flow.Box
+import com.point.core.flow.CappedRead
 import com.point.core.flow.FrameTransform
-import com.point.core.flow.ORIENTATION_ANGLES
-import com.point.core.flow.bestOrientation
-import com.point.core.flow.looksMisoriented
+import com.point.core.flow.OCR_READ_BUDGET_MS
+import com.point.core.flow.OcrClock
+import com.point.core.flow.ReadingBudget
+import com.point.core.flow.ocrDoneLine
+import com.point.core.flow.readWithBudget
 import com.point.core.model.PointObject
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 
 /**
@@ -30,19 +34,32 @@ import javax.inject.Inject
  * engine is forced to OEM_LSTM_ONLY. Thin native glue — the OCR decision logic
  * lives in the tested OcrRealizer; a failure here returns blank so the realizer
  * can fall back to the cloud LLM. Diagnostics go to logcat under "PointOCR".
+ *
+ * Чтение живёт под пределом времени (#262, `readWithBudget`): живой прогон корпуса показал
+ * чтения, которые не кончаются, — 12-мегапиксельный кадр, четыре полных прохода движка и ни
+ * одного колпака. Теперь базовое чтение и каждая проба поворота идут под колпаком, пробы — на
+ * уменьшенной копии, а строка `OCR done` печатается всегда, чем бы чтение ни кончилось.
  */
 class TesseractTextRecognizer @Inject constructor(
     @ApplicationContext private val context: Context,
 ) : AtomRecognizer {
 
+    private val clock = OcrClock { System.currentTimeMillis() }
+
     override suspend fun read(obj: PointObject): AtomLayer = withContext(Dispatchers.IO) {
-        if (!obj.mime.startsWith("image/")) return@withContext EMPTY
+        val budget = ReadingBudget(OCR_READ_BUDGET_MS, clock)
+        if (!obj.mime.startsWith("image/")) {
+            return@withContext done(AtomLayer(emptyList(), incomplete = "not an image"), budget)
+        }
         val frame = decodeBounded(obj.uri.value, OCR_MAX_PX)
         if (frame == null) {
             Log.w(TAG, "bitmap decode failed: ${obj.mime} @ ${obj.uri.value}")
-            return@withContext EMPTY
+            return@withContext done(AtomLayer(emptyList(), incomplete = "decode failed"), budget)
         }
         val bitmap = frame.bitmap
+        // Копия для проб поворотов создаётся лениво: хорошо прочитанную страницу не крутят,
+        // и платить половиной кадра памяти за каждый скриншот незачем.
+        var probe: Bitmap? = null
         val tess = TessBaseAPI()
         try {
             val dataPath = TessData.ensure(context)
@@ -50,65 +67,132 @@ class TesseractTextRecognizer @Inject constructor(
             val ok = tess.init(dataPath.absolutePath, LANG, 1)
             if (!ok) {
                 Log.w(TAG, "Tesseract init failed (dataPath=${dataPath.absolutePath}, lang=$LANG)")
-                return@withContext EMPTY
+                return@withContext done(AtomLayer(emptyList(), incomplete = "engine init failed"), budget)
             }
             val version = runCatching { tess.version ?: "" }.getOrDefault("")
-            val base = readAt(tess, bitmap, frame, extraRotation = 0, version = version)
             // Ориентация — проба и измерение (#262): фото бумаги на столе EXIF не несёт, а
-            // боком движок читает мусор. Крутим только слабое чтение — четыре прохода стоят
-            // секунд, и живут они в медленной волне, а не на первом экране.
-            val layer = if (looksMisoriented(base)) {
-                val tried = ORIENTATION_ANGLES.associateWith { angle ->
-                    val turned = bitmap.rotated(angle)
-                    try {
-                        readAt(tess, turned, frame, extraRotation = angle, version = version)
-                    } finally {
-                        if (turned !== bitmap) turned.recycle()
-                    }
-                }
-                val best = bestOrientation(base, tried)
-                if (best != 0) Log.i(TAG, "OCR orientation: +$best°")
-                tried[best] ?: base
-            } else {
-                base
-            }
-            Log.i(TAG, "OCR done: ${layer.atoms.size} words, ${layer.text.length} chars")
-            dumpForAcceptance(layer)
-            layer
+            // боком движок читает мусор. Крутится только слабое чтение; бюджет, колпаки и
+            // выбор поворота — в readWithBudget (:core:flow), под тестами.
+            val planned = readWithBudget(
+                budget,
+                readFull = { angle, capMs -> cappedReadAt(tess, bitmap, frame, angle, 1, version, capMs) },
+                readProbe = { angle, capMs ->
+                    val source = probe ?: probeSource(bitmap).also { probe = it }
+                    val factor = if (source === bitmap) 1 else 2
+                    cappedReadAt(tess, source, frame, angle, factor, version, capMs)
+                },
+            )
+            if (planned.angleDegrees != 0) Log.i(TAG, "OCR orientation: +${planned.angleDegrees}°")
+            dumpForAcceptance(planned.layer)
+            done(planned.layer, budget)
         } catch (e: Throwable) {
             Log.w(TAG, "OCR error", e)
-            EMPTY
+            done(AtomLayer(emptyList(), incomplete = "error: ${e.javaClass.simpleName}"), budget)
         } finally {
             runCatching { tess.recycle() }
+            probe?.takeIf { it !== bitmap }?.recycle()
             bitmap.recycle()
         }
     }
 
     /**
-     * Одно чтение страницы в заданном довороте: движок читает [image], а координаты слов
-     * приводятся к сырому кадру через суммарный угол (EXIF + наш) — адрес атома обязан
-     * указывать в исходный файл, каким бы боком мы его ни читали.
+     * Каждый выход из чтения проходит здесь: строка `OCR done` печатается **всегда** — успех,
+     * таймаут, нечитаемый кадр. Чтение без этой строки снаружи неотличимо от «ещё думает»,
+     * и именно так три кадра корпуса молча съели живой прогон (#262).
      */
-    private fun readAt(
+    private fun done(layer: AtomLayer, budget: ReadingBudget): AtomLayer {
+        Log.i(TAG, ocrDoneLine(layer, budget.spentMs()))
+        return layer
+    }
+
+    /**
+     * Одно чтение движка в заданном довороте под колпаком времени.
+     *
+     * Распознавание запускает `getHOCRText(0)` — **единственный** вход движка, куда его обвязка
+     * передаёт монитор с отменой, то есть единственный, который умеет останавливаться по
+     * `stop()` с другого потока (сам hOCR-текст не нужен и выбрасывается). Прежний порядок
+     * «`getUTF8Text` запускает распознавание» останавливаться не умел — потому чтение и было
+     * вечным. Текст и итератор после этого читают уже готовый результат, ничего не запуская.
+     *
+     * Остановленное чтение отдаёт пустой слой, а не огрызок: после отмены в странице остаются
+     * слова без результата, и официальный путь Tesseract их не читает (CLI после дедлайна
+     * страницу не рендерит). Правду о причине пустоты несёт пометка слоя, её ставит план.
+     *
+     * Сторож живёт ровно столько, сколько сам вызов движка, и **дожидается** в finally
+     * (`interrupt` + `join`): `stop()` после возврата безвреден (обвязка сбрасывает флаг отмены
+     * на входе каждого распознавания), а вот пережить `recycle()` сторож не имеет права —
+     * незавершённый `stop()` рядом с освобождением нативных данных был бы use-after-free.
+     */
+    private fun cappedReadAt(
         tess: TessBaseAPI,
-        image: Bitmap,
+        source: Bitmap,
         frame: Decoded,
         extraRotation: Int,
+        sampleFactor: Int,
         version: String,
-    ): AtomLayer {
-        tess.setImage(image)
-        val toRawFrame = FrameTransform(
-            sample = frame.sample,
-            rotationDegrees = (frame.rotation + extraRotation) % 360,
-            uprightWidth = image.width,
-            uprightHeight = image.height,
-        )
-        // Сперва текст движка, потом итератор: распознавание запускается первым обращением,
-        // и порядок гарантирует, что итератор работает по уже готовому результату.
-        val engineText = tess.getUTF8Text()?.trim().orEmpty()
-        val atoms = words(tess, toRawFrame, version)
-        return AtomLayer(atoms, readerText = engineText.ifEmpty { null }, transform = toRawFrame)
+        capMs: Long,
+    ): CappedRead {
+        val image = source.rotated(extraRotation)
+        try {
+            tess.setImage(image)
+            val fired = AtomicBoolean(false)
+            val watchdog = Thread {
+                try {
+                    Thread.sleep(capMs.coerceAtLeast(1))
+                    fired.set(true)
+                    runCatching { tess.stop() }
+                } catch (_: InterruptedException) {
+                    // Чтение уложилось в колпак — сторожу нечего останавливать.
+                }
+            }.apply {
+                name = "PointOcrDeadline"
+                isDaemon = true
+                start()
+            }
+            val hocr = try {
+                tess.getHOCRText(0)
+            } finally {
+                watchdog.interrupt()
+                watchdog.join()
+            }
+            // Отменённое распознавание возвращает null; строка при сработавшем стороже значит,
+            // что отмена опоздала к уже готовому результату — тогда он полный и читается.
+            if (fired.get() && hocr == null) return CappedRead(EMPTY, cut = true)
+            val toRawFrame = FrameTransform(
+                sample = frame.sample * sampleFactor,
+                rotationDegrees = (frame.rotation + extraRotation) % 360,
+                uprightWidth = image.width,
+                uprightHeight = image.height,
+            )
+            // Распознавание уже сделано вызовом выше — здесь только сборка текста и слов по
+            // готовому результату, в прежнем порядке: сперва текст движка, потом итератор.
+            val engineText = tess.getUTF8Text()?.trim().orEmpty()
+            val atoms = words(tess, toRawFrame, version)
+            return CappedRead(
+                AtomLayer(atoms, readerText = engineText.ifEmpty { null }, transform = toRawFrame),
+                cut = false,
+            )
+        } finally {
+            if (image !== source) image.recycle()
+        }
     }
+
+    /**
+     * Копия кадра для проб поворотов: вдвое меньше по стороне — вчетверо дешевле проход движка.
+     * Пробе не нужны точные буквы, ей нужен счёт прочитанного; мелкий кадр не половинится —
+     * дешёвому и так, а текст на нём от уменьшения стал бы нечитаемым.
+     */
+    private fun probeSource(bitmap: Bitmap): Bitmap =
+        if (maxOf(bitmap.width, bitmap.height) < PROBE_HALF_MIN_EDGE) {
+            bitmap
+        } else {
+            Bitmap.createScaledBitmap(
+                bitmap,
+                (bitmap.width / 2).coerceAtLeast(1),
+                (bitmap.height / 2).coerceAtLeast(1),
+                true,
+            )
+        }
 
     /** Копия, довёрнутая по часовой стрелке; 0° — тот же битмап, без лишней памяти. */
     private fun Bitmap.rotated(degrees: Int): Bitmap =
@@ -239,6 +323,14 @@ class TesseractTextRecognizer @Inject constructor(
         const val TAG = "PointOCR"
         val LANG = TessData.LANG
         const val OCR_MAX_PX = 2048 // enough for legible text; bounds memory on huge photos (#18)
+
+        /**
+         * От этой стороны и выше кадр для проб половинится. Ниже — уже не 12-мегапиксельное фото,
+         * а скриншот или превью: проба и так дешёвая, а уменьшение сделало бы мелкий текст
+         * нечитаемым и подорвало бы сам счёт, ради которого проба существует.
+         */
+        const val PROBE_HALF_MIN_EDGE = 1600
+
         val EMPTY = AtomLayer(emptyList())
 
         /** Происхождение атома (#257): имя — константа контракта, версия — у живого движка. */

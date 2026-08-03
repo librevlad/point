@@ -48,6 +48,15 @@ class AtomCodecTest {
         assertEquals(AtomLayer(layer.atoms).text, decoded.text)
     }
 
+    /** Причина неполноты — часть дословного дампа (#262): фикстура отрезанного по времени чтения
+     *  без пометки выдала бы огрызок за всё, что движок увидел на кадре. */
+    @Test
+    fun `причина неполноты переживает encode-decode, а её отсутствие не выдумывается`() {
+        val cut = AtomLayer(layer.atoms, incomplete = INCOMPLETE_TIMEOUT)
+        assertEquals(INCOMPLETE_TIMEOUT, AtomCodec.decode(AtomCodec.encode(cut)).incomplete)
+        assertNull(AtomCodec.decode(AtomCodec.encode(layer)).incomplete)
+    }
+
     /** Повреждённая фикстура падает громко: тихий пропуск строки превратил бы битый дамп в
      *  зелёный тест — ровно та тихая ложь, от которой слой атомов лечит. */
     @Test

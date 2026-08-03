@@ -84,7 +84,9 @@ class OcrEnricher @Inject constructor(
         }
         // Режим чтения — улика, а не показ (#263): он пишется ДО гейта мусора, потому что
         // именно закрытый гейт и означает «слов не собрали, читать будет зрячая модель».
-        val mode = read?.let { readingModeOf(it) }
+        // Но только если движок дочитал (#262): слой, отрезанный пределом времени, ничего не
+        // наблюдал до конца, и «рукопись» из него — происхождение, которого не было.
+        val mode = read?.takeIf { it.incomplete == null }?.let { readingModeOf(it) }
         val evidenceOnly = EnrichmentDelta(
             metadata = buildMap {
                 atomsRef?.let { put(META_OCR_ATOMS_REF, it.value) }
