@@ -9,6 +9,7 @@ import com.point.core.flow.EnrichCost
 import com.point.core.flow.Entity
 import com.point.core.flow.EntityExtractor
 import com.point.core.flow.EntityType
+import com.point.core.flow.INCOMPLETE_TIMEOUT
 import com.point.core.flow.META_ENTITY_PREFIX
 import com.point.core.flow.META_OCR_ATOMS_REF
 import com.point.core.flow.META_OCR_TEXT_REF
@@ -181,6 +182,35 @@ class OcrEnricherTest {
         val enricher = OcrEnricher(FakeStore(), recognizer("", fail = true), extractor())
         val delta = enricher.enrich(image)
         assertTrue(delta.features.isEmpty() && delta.metadata.isEmpty())
+    }
+
+    /** Предел времени — не рукопись (#262): пустота отрезанного чтения означает «не успели»,
+     *  а не «движок дочитал и слов нет». Режим чтения из такого слоя был бы происхождением,
+     *  которого никто не наблюдал, — та же ловушка, что и упавший движок (#263). */
+    @Test
+    fun `чтение, отрезанное по времени, не выдаёт режим чтения`() = runTest {
+        val timedOut = object : AtomRecognizer {
+            override suspend fun read(obj: PointObject) =
+                AtomLayer(emptyList(), incomplete = INCOMPLETE_TIMEOUT)
+        }
+        val delta = OcrEnricher(FakeStore(), timedOut, extractor()).enrich(image)
+        assertTrue(delta.features.isEmpty() && delta.metadata.isEmpty())
+    }
+
+    /** Частичный слой таймаута (например, проба поворота вместо дочитанного полного кадра) —
+     *  всё же улика: атомы и текст персистятся, только режим чтения не приписывается. */
+    @Test
+    fun `частичный слой таймаута сохраняет улики, но не режим чтения`() = runTest {
+        val atoms = listOf(Atom("w0", "20", Box(10f, 10f, 30f, 24f), 0.9f, "tesseract", "5.3", 0))
+        val partial = object : AtomRecognizer {
+            override suspend fun read(obj: PointObject) =
+                AtomLayer(atoms, readerText = realText, incomplete = INCOMPLETE_TIMEOUT)
+        }
+        val delta = OcrEnricher(FakeStore(), partial, extractor()).enrich(image)
+
+        assertEquals(atoms, AtomCodec.decode(File(delta.metadata[META_OCR_ATOMS_REF]!!).readText()).atoms)
+        assertEquals(realText, File(delta.metadata[META_OCR_TEXT_REF]!!).readText())
+        assertFalse(META_READING_MODE in delta.metadata)
     }
 
     @Test

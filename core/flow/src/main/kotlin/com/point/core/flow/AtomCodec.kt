@@ -24,12 +24,16 @@ object AtomCodec {
     private const val HEADER = "#point-atoms v1"
     private const val TRANSFORM = "#transform"
     private const val READER_TEXT = "#readerText"
+    private const val INCOMPLETE = "#incomplete"
 
     fun encode(layer: AtomLayer): String = buildString {
         appendLine(HEADER)
         layer.transform?.let {
             appendLine("$TRANSFORM sample=${it.sample} rotation=${it.rotationDegrees} w=${it.uprightWidth} h=${it.uprightHeight}")
         }
+        // Причина неполноты — часть дословного дампа (#262): фикстура отрезанного по времени
+        // чтения без пометки выдала бы огрызок за всё, что движок увидел на кадре.
+        layer.incomplete?.takeIf { it.isNotEmpty() }?.let { appendLine("$INCOMPLETE ${b64(it)}") }
         // Именно readerText, не layer.text: вычисленная сборка по полосам под ярлыком движка
         // сделала бы «дословный дамп» сочинённым — decode обязан вернуть слой без readerText,
         // если движок его не отдавал (пересборка воспроизводится из атомов той же функцией).
@@ -50,6 +54,7 @@ object AtomCodec {
         require(lines.firstOrNull() == HEADER) { "not an atom dump: first line is '${lines.firstOrNull()}'" }
         var transform: FrameTransform? = null
         var readerText: String? = null
+        var incomplete: String? = null
         val atoms = mutableListOf<Atom>()
         lines.drop(1).forEach { line ->
             when {
@@ -64,6 +69,7 @@ object AtomCodec {
                     )
                 }
                 line.startsWith(READER_TEXT) -> readerText = unb64(line.removePrefix(READER_TEXT).trim())
+                line.startsWith(INCOMPLETE) -> incomplete = unb64(line.removePrefix(INCOMPLETE).trim())
                 else -> {
                     val f = line.split("\t")
                     require(f.size == 10) { "atom line must have 10 fields, got ${f.size}: '$line'" }
@@ -76,7 +82,7 @@ object AtomCodec {
                 }
             }
         }
-        return AtomLayer(atoms, readerText = readerText, transform = transform)
+        return AtomLayer(atoms, readerText = readerText, transform = transform, incomplete = incomplete)
     }
 
     private fun b64(s: String): String = Base64.getEncoder().encodeToString(s.toByteArray(Charsets.UTF_8))
