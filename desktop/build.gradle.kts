@@ -18,6 +18,12 @@ sourceSets.main {
     resources.srcDir(rootProject.file("core/ui/src/main/res/font"))
 }
 
+// Живая проверка конвертации офисных файлов (#403) идёт по настоящему файлу, путь к нему
+// передаётся снаружи: на CI ни файла, ни Office нет, и тест там сам себя пропускает.
+tasks.test {
+    System.getProperty("point.test.office")?.let { systemProperty("point.test.office", it) }
+}
+
 dependencies {
     implementation(project(":core:model"))
     implementation(project(":core:flow"))
