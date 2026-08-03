@@ -2,6 +2,8 @@ package com.point.executors
 
 import com.point.core.flow.ArchiveExtractor
 import com.point.core.flow.Capability
+import com.point.core.flow.CapabilityMeta
+import com.point.core.flow.Latency
 import com.point.core.flow.Realizer
 import com.point.core.flow.reportStage
 import com.point.core.model.ActionResult
@@ -19,6 +21,11 @@ import javax.inject.Inject
 class ArchiveCapability @Inject constructor() : Capability {
     override val id = ID
     override val icon = "unzip"
+
+    /** Не [Latency.INSTANT] (#288): большой архив распаковывается секунды и десятки секунд — та же
+     *  правка и по той же причине, что у «Страницы». Работа растёт с содержимым архива, поэтому
+     *  и не [Latency.SLOW]: она рассказывает о себе на объекте, а не забирает экран. */
+    override val meta = CapabilityMeta(latency = Latency.FAST)
     override fun label(state: ObjectState) = "Распаковать"
     override fun accepts(state: ObjectState) = state.kind == ObjectKind.ZIP
     override fun produces(state: ObjectState) = ObjectState(ObjectKind.COLLECTION)

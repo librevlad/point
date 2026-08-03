@@ -4,6 +4,7 @@ import com.point.core.flow.BackgroundRemover
 import com.point.core.flow.Capability
 import com.point.core.flow.CapabilityMeta
 import com.point.core.flow.ImageCompositor
+import com.point.core.flow.Latency
 import com.point.core.flow.Realizer
 import com.point.core.flow.reportStage
 import com.point.core.model.ActionResult
@@ -25,7 +26,10 @@ import javax.inject.Inject
 class BlurBgCapability @Inject constructor() : Capability {
     override val id = ID
     override val icon = "blur"
-    override val meta = CapabilityMeta(priority = 41)
+
+    /** Не [Latency.INSTANT] (#288) — как и «Убрать фон»: та же сегментация ML Kit, и шага здесь
+     *  правда три (отделить → размыть → свести). Каждый из них реализатор называет вслух. */
+    override val meta = CapabilityMeta(priority = 41, latency = Latency.FAST)
     override fun label(state: ObjectState) = "Размыть фон"
     override fun accepts(state: ObjectState) = state.kind == ObjectKind.IMAGE
     override fun produces(state: ObjectState) = ObjectState(ObjectKind.IMAGE)

@@ -80,12 +80,14 @@ class FlowViewModelTest {
     @Before fun setUp() = Dispatchers.setMain(dispatcher)
     @After fun tearDown() = Dispatchers.resetMain()
 
-    /** A view model over the fakes, whose registry offers [caps] (id → the intents it serves)
-     *  and treats the ids in [cloud] as network capabilities (gated by consent). */
+    /** A view model over the fakes, whose registry offers [caps] (id → the intents it serves),
+     *  treats the ids in [cloud] as network capabilities (gated by consent) and the ids in
+     *  [slow] as declared-slow ones (which keep the full busy screen instead of working quietly). */
     private fun vm(
         caps: Map<CapabilityId, Set<Intent>> = mapOf(CapabilityId("a") to setOf(Intent.PREPARE)),
         cloud: Set<CapabilityId> = emptySet(),
-    ) = FlowViewModel(store, FakeRegistry(caps, cloud), resolver, com.point.core.flow.AiChatResponder { _, _, _ -> "ответ" }, enrichment, history, favorites, usage, chosenApps, userKeys, journal, consent, appLauncher, FakePdfRasterizer(), sensory, sensorySettings, snapshot, crashLog, dispatcher, pins, AppIconResolver { null }, pcPairings, pcTransport, com.point.core.flow.PcDiscovery { kotlinx.coroutines.flow.flowOf(emptyList()) }, basket, pcCaps, PulledFileFactory { name -> java.io.File(java.io.File(System.getProperty("java.io.tmpdir")), "pulled-" + name).absolutePath })
+        slow: Set<CapabilityId> = emptySet(),
+    ) = FlowViewModel(store, FakeRegistry(caps, cloud, slow), resolver, com.point.core.flow.AiChatResponder { _, _, _ -> "ответ" }, enrichment, history, favorites, usage, chosenApps, userKeys, journal, consent, appLauncher, FakePdfRasterizer(), sensory, sensorySettings, snapshot, crashLog, dispatcher, pins, AppIconResolver { null }, pcPairings, pcTransport, com.point.core.flow.PcDiscovery { kotlinx.coroutines.flow.flowOf(emptyList()) }, basket, pcCaps, PulledFileFactory { name -> java.io.File(java.io.File(System.getProperty("java.io.tmpdir")), "pulled-" + name).absolutePath })
 
     private val basket = FakeBasket()
     private val pcCaps = FakePcCaps()
@@ -539,6 +541,65 @@ class FlowViewModelTest {
         assertTrue(quietWork(CapabilityMeta(latency = Latency.FAST)))
         assertEquals(false, quietWork(CapabilityMeta(network = true)))
         assertEquals(false, quietWork(CapabilityMeta(latency = Latency.SLOW)))
+    }
+
+    // --- #288: тихая работа тоже говорит — стадия живёт на объекте, а не пропадает ---
+
+    @Test fun `a quiet action speaks on the object — its stage reaches the state`() = runTest(dispatcher) {
+        resolver.stage = "Распаковываю архив"
+        resolver.holdMs = 1_000 // действие ещё идёт, когда мы смотрим на экран
+        val vm = vm()
+        vm.onShared("uri", "application/zip"); advanceUntilIdle()
+
+        vm.onBubble(bubble())
+        dispatcher.scheduler.advanceTimeBy(50) // стадия сказана, работа не кончилась
+
+        assertEquals("Распаковываю архив", quietStage(vm.ui.value))
+    }
+
+    @Test fun `a quiet action does not raise the busy screen — the object stays on screen`() = runTest(dispatcher) {
+        resolver.stage = "Распаковываю архив"
+        resolver.holdMs = 1_000
+        val vm = vm()
+        vm.onShared("uri", "application/zip"); advanceUntilIdle()
+
+        vm.onBubble(bubble())
+        dispatcher.scheduler.advanceTimeBy(50)
+
+        assertEquals(false, showsBusyScreen(vm.ui.value))
+        assertTrue(objectWorking(vm.ui.value))
+    }
+
+    @Test fun `slow work keeps the full busy screen — and the object says nothing over it`() = runTest(dispatcher) {
+        resolver.stage = "Читаю текст на устройстве"
+        resolver.holdMs = 1_000
+        val vm = vm(slow = setOf(CapabilityId("a")))
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.onBubble(bubble())
+        dispatcher.scheduler.advanceTimeBy(50)
+
+        assertTrue(showsBusyScreen(vm.ui.value))
+        assertEquals("Читаю текст на устройстве", vm.ui.value.busyStage)
+        assertNull(quietStage(vm.ui.value)) // одна строка, один хозяин — экран ИЛИ объект
+    }
+
+    @Test fun `a new action never wears the words of the previous one`() = runTest(dispatcher) {
+        resolver.stage = "Распаковываю архив"
+        resolver.holdMs = 1_000
+        val vm = vm(caps = mapOf(CapabilityId("a") to setOf(Intent.PREPARE), CapabilityId("b") to setOf(Intent.PREPARE)))
+        vm.onShared("uri", "application/zip"); advanceUntilIdle()
+
+        vm.onBubble(bubble(id = "a"))
+        dispatcher.scheduler.advanceTimeBy(50)
+        assertEquals("Распаковываю архив", quietStage(vm.ui.value))
+
+        // Второе действие молчит: над ним не должно висеть сказанное первым.
+        resolver.stage = null
+        vm.onBubble(bubble(id = "b"))
+        dispatcher.scheduler.advanceTimeBy(50)
+
+        assertNull(quietStage(vm.ui.value))
     }
 
     // --- Discover (#114): one never-tried possibility is surfaced as a hint ---
@@ -1275,6 +1336,10 @@ private class FakeResolver : Resolver {
     var throwsOnPerform: Throwable? = null
     /** Для способности нет ни одного реализатора: пузырёк нарисован, а исполнять нечем. */
     var noRealizer = false
+    /** Что реализатор говорит о себе (#288); null — молчит, как молчат короткие действия. */
+    var stage: String? = null
+    /** Сколько работа идёт после сказанного — чтобы тест успел посмотреть на экран, пока она жива. */
+    var holdMs: Long = 0
     override fun leavesDevice(capabilityId: CapabilityId): Boolean = leavesDevice
 
     override fun realizerFor(capabilityId: CapabilityId): Realizer {
@@ -1284,6 +1349,8 @@ private class FakeResolver : Resolver {
             override suspend fun perform(input: PointObject, amendment: String?): ActionResult {
                 lastAmendment = amendment
                 throwsOnPerform?.let { throw it }
+                stage?.let { com.point.core.flow.reportStage(it) }
+                if (holdMs > 0) kotlinx.coroutines.delay(holdMs)
                 return result
             }
             override suspend fun preview(input: PointObject): Preview? = previews[capabilityId]
@@ -1295,9 +1362,13 @@ private class FakeCapability(
     override val id: CapabilityId,
     private val served: Set<Intent>,
     network: Boolean = false,
+    slow: Boolean = false,
 ) : Capability {
     override val icon = "x"
-    override val meta = CapabilityMeta(network = network)
+    override val meta = CapabilityMeta(
+        latency = if (slow) Latency.SLOW else Latency.INSTANT,
+        network = network,
+    )
     override fun label(state: ObjectState) = "Action ${id.value}"
     override fun accepts(state: ObjectState) = true
     override fun produces(state: ObjectState) = ObjectState(ObjectKind.TEXT)
@@ -1307,13 +1378,15 @@ private class FakeCapability(
 private class FakeRegistry(
     private val caps: Map<CapabilityId, Set<Intent>>,
     private val cloud: Set<CapabilityId> = emptySet(),
+    private val slow: Set<CapabilityId> = emptySet(),
 ) : CapabilityRegistry {
     override fun bubblesFor(state: ObjectState): List<Bubble> =
         caps.keys.map { Bubble("x", "Action ${it.value}", it, ObjectState(ObjectKind.TEXT)) }
     override fun intentsFor(state: ObjectState): List<Intent> =
         Intent.entries.filter { intent -> caps.values.any { intent in it } }
     override fun latentBubblesFor(state: ObjectState) = emptyList<com.point.core.model.LatentBubble>()
-    override fun byId(id: CapabilityId): Capability = FakeCapability(id, caps[id] ?: emptySet(), id in cloud)
+    override fun byId(id: CapabilityId): Capability =
+        FakeCapability(id, caps[id] ?: emptySet(), id in cloud, id in slow)
 }
 
 private class FakeEnrichment(var features: Set<Feature> = emptySet()) : Enrichment {

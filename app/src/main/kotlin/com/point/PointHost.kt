@@ -117,6 +117,8 @@ fun PointHost(
         contentAlignment = Alignment.Center,
     ) {
         val frame = state.frame
+        // Заголовок экрана ожидания — он же условие его подъёма (M3: тихая работа его не поднимает).
+        val busyTitle = state.busy?.takeIf { showsBusyScreen(state) }
         when {
             // Cloud consent is a gate: it must be answered before anything else renders (#10).
             state.cloudConsent -> ConsentScreen(
@@ -172,8 +174,8 @@ fun PointHost(
 
             // M3 (MOTION.md №8): quiet local work keeps the object on screen — it "works"
             // in place; only cloud/slow actions get the full staged busy screen.
-            state.busy != null && !state.busyQuiet ->
-                BusyScreen(title = state.busy, stage = state.busyStage, network = state.busyNetwork, onCancel = onCancelAction)
+            busyTitle != null ->
+                BusyScreen(title = busyTitle, stage = state.busyStage, network = state.busyNetwork, onCancel = onCancelAction)
 
             // #259: выделение поверх объекта — страница целиком, рамка пальцем, «Взять».
             state.selection != null -> SelectionScreen(
@@ -248,7 +250,11 @@ fun PointHost(
                     latent = current.latent,
                     enriching = current.enriching,
                     discover = current.discover,
-                    working = state.busy != null && state.busyQuiet,
+                    working = objectWorking(state),
+                    // Тихая работа говорит на самом объекте (#288): экран ожидания для неё не
+                    // поднимают намеренно (мигал бы на каждом мелком тапе), но и молчать ей
+                    // больше нельзя — строка та же, что показал бы экран.
+                    workingStage = quietStage(state),
                     previewBitmap = current.preview,
                     pinned = current.pinned,
                     onBubbleLongPress = onBubbleLongPress,

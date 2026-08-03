@@ -279,6 +279,22 @@ private fun PreviewThinking() = PointTheme {
     )
 }
 
+@Preview(name = "Тихая работа говорит (#288)", showBackground = true)
+@Composable
+private fun PreviewQuietWorking() = PointTheme(darkTheme = true) {
+    // Быстрое действие идёт без экрана ожидания (M3) — и до этого среза молчало: список
+    // притушен, объект «работает», а что именно происходит, человек не знал. Теперь под
+    // объектом стоит та же строка, что показал бы экран ожидания.
+    val obj = sampleObject(ObjectKind.PDF, "application/pdf", "книга.pdf")
+    FirstScreen(
+        obj = obj,
+        bubbles = sampleBubbles(ObjectKind.PDF),
+        onBubble = {},
+        working = true,
+        workingStage = "Разбираю PDF на страницы",
+    )
+}
+
 @Preview(name = "Скриншот · Момент чтения (#114)", showBackground = true)
 @Composable
 private fun PreviewReadingBeat() = PointTheme {
