@@ -112,5 +112,25 @@
             </intent-filter>
         </service>
 
+        <!-- Шторка рождает объект (#246): плитка открывает выбор источника, экран живёт поверх
+             чужого приложения и исчезает, как только объект родился. -->
+        <activity
+            android:name=".source.SourcePickerActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTop" />
+
+        <service
+            android:name=".source.PointTileService"
+            android:exported="true"
+            android:icon="@android:drawable/ic_menu_add"
+            android:label="Point"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
     </application>
 </manifest>
