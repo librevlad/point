@@ -4,8 +4,12 @@ import com.point.core.flow.Atom
 import com.point.core.flow.AtomCodec
 import com.point.core.flow.AtomLayer
 import com.point.core.flow.Box
+import com.point.core.flow.CropEvidence
+import com.point.core.flow.EvidenceCropper
+import com.point.core.flow.EvidenceImage
 import com.point.core.flow.LlmClient
 import com.point.core.flow.META_OCR_ATOMS_REF
+import com.point.core.flow.ObjectStore
 import com.point.core.flow.SpreadsheetWriter
 import com.point.core.model.ActionResult
 import com.point.core.model.ObjectKind
@@ -14,11 +18,13 @@ import com.point.core.model.PointObject
 import com.point.core.model.ResultObject
 import com.point.core.model.ScratchRef
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -58,8 +64,27 @@ class ExcelRealizerTest {
 
     private val image = PointObject("id", "image/png", ScratchRef("/tmp/x.png"), ObjectState(ObjectKind.IMAGE))
 
+    /** Резак, который ничего не вырезал: перечит спорных ячеек (#346) тихо не состоится. */
+    private val noCrops = object : EvidenceCropper {
+        override suspend fun crop(evidence: CropEvidence): EvidenceImage? = null
+    }
+
+    /** Scratch для кропа перечита — настоящий временный файл, потому что его читает LLM-фейк. */
+    private val scratch = object : ObjectStore {
+        override suspend fun ingest(sourceUri: String, mime: String): PointObject = error("unused")
+        override suspend fun ingestMultiple(sources: List<String>): PointObject = error("unused")
+        override suspend fun put(result: ResultObject): PointObject = error("unused")
+        override suspend fun children(collection: PointObject): List<PointObject> = emptyList()
+        override suspend fun readText(obj: PointObject, limit: Int): String = ""
+        override suspend fun newScratchFile(extension: String) = ScratchRef(
+            File.createTempFile("point-crop", ".$extension").apply { deleteOnExit() }.absolutePath,
+        )
+        override suspend fun clear() = Unit
+    }
+
     /** A realizer over one or more canned model reads (consensus votes across them). */
-    private fun realizer(vararg answers: String) = ExcelRealizer(answers.map { llm(it) }, writer)
+    private fun realizer(vararg answers: String) =
+        ExcelRealizer(answers.map { llm(it) }, writer, noCrops, scratch)
 
     @Test
     fun `parses TSV into rows and produces an OFFICE xlsx`() = runTest {
@@ -346,7 +371,7 @@ class ExcelRealizerTest {
 
         val result = ExcelRealizer(
             listOf(paired(0, """[["№","42"]]"""), paired(1, """[["№","42"]]""")),
-            writer,
+            writer, noCrops, scratch,
         ).perform(image)
 
         assertTrue(result is ActionResult.Success)
@@ -361,7 +386,8 @@ class ExcelRealizerTest {
             override suspend fun run(obj: PointObject, prompt: String): ResultObject = error("HTTP 429 quota")
         }
 
-        val result = ExcelRealizer(listOf(broken, llm("""[["A","B"]]""")), writer).perform(image)
+        val result = ExcelRealizer(listOf(broken, llm("""[["A","B"]]""")), writer, noCrops, scratch)
+            .perform(image)
 
         assertTrue(result is ActionResult.Success)
         assertEquals(listOf(listOf("A", "B")), lastRows)
@@ -387,7 +413,7 @@ class ExcelRealizerTest {
                 answerOf("""[["№","43"]]""").also { fastAnswered.complete(Unit) }
         }
 
-        ExcelRealizer(listOf(strongButSlow, quick), writer).perform(image)
+        ExcelRealizer(listOf(strongButSlow, quick), writer, noCrops, scratch).perform(image)
 
         assertEquals("42⚠", lastRows!![0][1]) // победило чтение сильной модели, спор помечен
         assertEquals(listOf("42", "43"), lastCandidates[0 to 1])
@@ -420,7 +446,7 @@ class ExcelRealizerTest {
         val heard = stagesHeard {
             result = ExcelRealizer(
                 listOf(keyless, waiting("""[["№","42"]]"""), waiting("""[["№","42"]]""")),
-                writer,
+                writer, noCrops, scratch,
             ).perform(image)
         }
 
@@ -440,7 +466,7 @@ class ExcelRealizerTest {
         val heard = stagesHeard {
             result = ExcelRealizer(
                 listOf(llm("   "), llm("   "), llm("""[["A","B"]]""")),
-                writer,
+                writer, noCrops, scratch,
             ).perform(image)
         }
 
@@ -490,7 +516,8 @@ class ExcelRealizerTest {
                 return answerOf(answer)
             }
         }
-        val realizer = ExcelRealizer(listOf(slow("""[["№","42"]]"""), slow("""[["№","42"]]""")), writer)
+        val realizer =
+            ExcelRealizer(listOf(slow("""[["№","42"]]"""), slow("""[["№","42"]]""")), writer, noCrops, scratch)
 
         val result = realizer.perform(image)
 
@@ -533,6 +560,114 @@ class ExcelRealizerTest {
         assertTrue("замена запрещена прямо", prompt.contains("заменяет напечатанное"))
         // Оба числа доезжают до файла целиком — ничто по дороге не выбрасывает одно из них.
         assertEquals("1,0 0,230", lastRows!![1][1])
+    }
+
+    // -- #346: спорная ячейка перечитывается кропом у сильного маршрута --
+
+    /** Кадр ведомости со слоем атомов: два ряда «артикул название количество». */
+    private fun sheetImage(): PointObject {
+        val layer = AtomLayer(
+            listOf(
+                Atom("s1", "11004", Box(0f, 100f, 80f, 120f)),
+                Atom("s2", "Гречка", Box(100f, 100f, 200f, 120f)),
+                Atom("s3", "0,120", Box(300f, 100f, 380f, 120f)),
+                Atom("s4", "11006", Box(0f, 200f, 80f, 220f)),
+                Atom("s5", "Рис", Box(100f, 200f, 160f, 220f)),
+                Atom("s6", "0,500", Box(300f, 200f, 380f, 220f)),
+            ),
+        )
+        val dump = File.createTempFile("point-atoms", ".tsv").apply {
+            deleteOnExit(); writeText(AtomCodec.encode(layer))
+        }
+        return PointObject(
+            "id", "image/png", ScratchRef("/tmp/sheet.png"), ObjectState(ObjectKind.IMAGE),
+            metadata = mapOf(META_OCR_ATOMS_REF to dump.absolutePath),
+        )
+    }
+
+    /** Резак, запоминающий адрес: тест сверяет, что кроп режется из исходного кадра. */
+    private class RecordingCropper : EvidenceCropper {
+        var seen: CropEvidence? = null
+        override suspend fun crop(evidence: CropEvidence): EvidenceImage? {
+            seen = evidence
+            return EvidenceImage(byteArrayOf(7), 8, 8)
+        }
+    }
+
+    /** Сильная зрячая модель: страницу читает таблицей, перечит кропа — содержимым ячейки. */
+    private fun eyes(table: String, cell: String) = object : LlmClient {
+        override val strongVision = true
+        override suspend fun run(obj: PointObject, prompt: String): ResultObject =
+            answerOf(if ("Варианты чтения" in prompt) cell else table)
+    }
+
+    /** Чтения расходятся в количестве гречки: «0,120» против «0,125». */
+    private val tableA = """[["11004","Гречка","0,120"],["11006","Рис","0,500"]]"""
+    private val tableB = """[["11004","Гречка","0,125"],["11006","Рис","0,500"]]"""
+
+    @Test
+    fun `согласный перечит кропом снимает спор — ячейка чистая, дропдауна нет (#346)`() = runTest {
+        val cropper = RecordingCropper()
+        var result: ActionResult? = null
+
+        val heard = stagesHeard {
+            result = ExcelRealizer(
+                listOf(eyes(tableA, "0,120"), eyes(tableB, "0,120")), writer, cropper, scratch,
+            ).perform(sheetImage())
+        }
+
+        assertTrue(result is ActionResult.Success)
+        assertEquals("0,120", lastRows!![0][2]) // большинство 2 из 3 — спор ушёл вместе с пометкой
+        assertTrue(lastCandidates.isEmpty())
+        assertEquals("кроп режется из исходного кадра", "/tmp/sheet.png", cropper.seen!!.imagePath)
+        assertTrue(heard.contains("Переспрашиваю 1 спорную ячейку"))
+    }
+
+    @Test
+    fun `несогласный перечит спор не гасит — третье чтение встаёт в дропдаун (#346)`() = runTest {
+        val result = ExcelRealizer(
+            listOf(eyes(tableA, "0,999"), eyes(tableB, "0,999")), writer, RecordingCropper(), scratch,
+        ).perform(sheetImage())
+
+        assertTrue(result is ActionResult.Success)
+        assertEquals("0,120⚠", lastRows!![0][2])
+        assertEquals(listOf("0,120", "0,125⚠", "0,999"), lastCandidates[0 to 2])
+    }
+
+    @Test
+    fun `перечит не успел в общий срок — действие не падает, спор остаётся (#346)`() = runTest {
+        fun sleepy(table: String) = object : LlmClient {
+            override val strongVision = true
+            override suspend fun run(obj: PointObject, prompt: String): ResultObject {
+                if ("Варианты чтения" in prompt) awaitCancellation() // перечит молчит до отмены
+                return answerOf(table)
+            }
+        }
+
+        val result = ExcelRealizer(
+            listOf(sleepy(tableA), sleepy(tableB)), writer, RecordingCropper(), scratch,
+            recropTimeoutMs = 200,
+        ).perform(sheetImage())
+
+        assertTrue(result is ActionResult.Success)
+        assertEquals("0,120⚠", lastRows!![0][2])
+        assertEquals(listOf("0,120", "0,125⚠"), lastCandidates[0 to 2])
+    }
+
+    @Test
+    fun `спорной ячейке без места на кадре кроп не режется — спор остаётся человеку (#346)`() = runTest {
+        // Итоговой строки нет в слое атомов (движок её не собрал) — адреса на кадре у спора нет.
+        val cropper = RecordingCropper()
+        val a = """[["11004","Гречка","0,120"],["11006","Рис","0,500"],["Разом","до видачі","2400"]]"""
+        val b = """[["11004","Гречка","0,120"],["11006","Рис","0,500"],["Разом","до видачі","2100"]]"""
+
+        val result = ExcelRealizer(
+            listOf(eyes(a, "2400"), eyes(b, "2400")), writer, cropper, scratch,
+        ).perform(sheetImage())
+
+        assertTrue(result is ActionResult.Success)
+        assertNull("приложить соседнюю строку хуже, чем ничего", cropper.seen)
+        assertEquals(listOf("2400⚠", "2100⚠"), lastCandidates[2 to 2])
     }
 
     private companion object {
