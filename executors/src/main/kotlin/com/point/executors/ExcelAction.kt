@@ -469,6 +469,13 @@ internal fun parseTable(raw: String): List<List<String>> {
 
     parseJsonTable(cleaned)?.let { return it }
 
+    // Ответ начинается с «[», но строк в нём не нашлось — это JSON-ответ «таблицы нет» (модель
+    // на примере 01 честно вернула `[]`), либо обломанный JSON. Ни то ни другое не TSV: пропущенный
+    // в текстовый разбор, «[]» уезжал в Excel единственной ячейкой — мусор под видом успеха,
+    // та же болезнь, что и одна скобка в ревью #258. Пустая таблица здесь — честный отказ:
+    // действие скажет «не удалось распознать таблицу», а не отдаст файл со скобками.
+    if (cleaned.startsWith("[")) return emptyList()
+
     return cleaned.lineSequence()
         .filter { it.isNotBlank() }
         .map { line -> line.split('\t').map { it.trim() } }

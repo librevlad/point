@@ -670,6 +670,22 @@ class ExcelRealizerTest {
         assertEquals(listOf("2400⚠", "2100⚠"), lastCandidates[2 to 2])
     }
 
+    /**
+     * Живой прогон примера 01 (03.08.2026): модель честно ответила «таблицы нет» пустым
+     * массивом `[]` — а в Excel уехала таблица из одной ячейки с текстом «[]»: пустой JSON
+     * проваливался в текстовый разбор. Мусор под видом успеха хуже честного отказа.
+     */
+    @Test
+    fun `пустой JSON-ответ — честный отказ, а не ячейка со скобками`() = runTest {
+        assertTrue(parseTable("[]").isEmpty())
+        assertTrue(parseTable("[ ]").isEmpty())
+        assertTrue("обломанный JSON — тоже не TSV", parseTable("[[\"А\",").isEmpty())
+
+        val result = realizer("[]").perform(image)
+
+        assertTrue("пустой ответ — отказ действия", result is ActionResult.Failure)
+    }
+
     private companion object {
         /** Столько «читает» модель в замере — заметно на часах и незаметно для прогона тестов. */
         const val READ_MS = 300L
