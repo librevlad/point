@@ -486,3 +486,24 @@ private fun PreviewNeedsInput() = PointTheme {
         inputSuggestions = listOf("Что на изображении?", "Извлеки весь текст", "Переведи текст с картинки"),
     )
 }
+
+@Preview(name = "Ссылка · код рядом со ссылкой (#388)", showBackground = true)
+@Composable
+private fun PreviewIssuedLink() = PointTheme {
+    // Что человек видит сразу после «Дать ссылку»: объект-ссылка, а под ним код, сама ссылка и
+    // цена вслух. Код рисуется чистой матрицей из :core:flow — превью показывает его без устройства.
+    val obj = sampleObject(
+        ObjectKind.URL, "text/uri-list", "ссылка на отчёт.pdf",
+        metadata = mapOf(
+            "entity.url" to "https://35.185.31.106:8443/d/2f8c1b0a4e6d9c3f5a7b1e2d4c6f8a0b1c3d5e7f",
+            "drop.expires" to "сутки",
+        ),
+    )
+    FirstScreen(
+        obj = obj,
+        bubbles = sampleBubbles(ObjectKind.URL),
+        onBubble = {},
+        message = "Ссылка готова",
+        messageOutcome = Outcome.DONE,
+    )
+}
