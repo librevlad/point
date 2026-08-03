@@ -90,6 +90,15 @@ data class FlowUiState(
     val path: List<PathStep> = emptyList(),
     /** Transient text from the ActionResult channel (Failure / Done). */
     val message: String? = null,
+    /**
+     * Исход [message] — отказ или нет.
+     *
+     * Раньше поля не было и сообщение красилось тревожным всегда: пока баннер стоял внизу
+     * прокрутки, этого никто не видел (#358). Как только исход подняли под объект, «Открываю
+     * в Excel» стало кричать красным наравне с настоящим отказом — а цвет здесь и есть
+     * сообщение, второе после текста.
+     */
+    val messageIsFailure: Boolean = false,
     /** Non-null while a capability awaits free-text input (NeedsInput). */
     val inputPrompt: String? = null,
     /** Ready-made answers for [inputPrompt] — the 3 likely AI prompts to tap instead of typing (#86). */
