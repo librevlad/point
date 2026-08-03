@@ -1,6 +1,7 @@
 package com.point.core.flow
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertThrows
 import org.junit.Test
 
 /**
@@ -69,5 +70,47 @@ class FrameTransformTest {
             assertEquals("rotation=$deg", word, t.toUpright(t.toRaw(word)))
             assertEquals("rotation=$deg", t.toRaw(word), t.toRaw(t.toUpright(t.toRaw(word))))
         }
+    }
+
+    /**
+     * Мелкий кадр перед чтением растягивают (#273), и движок отдаёт координаты в системе растянутой
+     * копии. Не отменив растяжение, мы отправили бы человека перечитывать слово втрое дальше от
+     * места, где оно лежит, — и заметить это было бы нечем: текст правильный, место чужое.
+     */
+    @Test
+    fun `увеличение кадра перед чтением отменяется так же, как прореживание`() {
+        val enlarged = FrameTransform(sample = 1, uprightWidth = 3000, uprightHeight = 2250, upscale = 3)
+
+        assertEquals(Box(10f, 20f, 30f, 40f), enlarged.toRaw(Box(30f, 60f, 90f, 120f)))
+    }
+
+    /** Прореживание и увеличение считаются одним множителем: копия вдвое прорежена и вчетверо
+     *  растянута — значит она вдвое КРУПНЕЕ сырого кадра, и обратный путь обязан ужимать. */
+    @Test
+    fun `прореживание и увеличение складываются в один множитель`() {
+        val both = FrameTransform(sample = 2, uprightWidth = 4000, uprightHeight = 3000, upscale = 4)
+
+        assertEquals(Box(5f, 10f, 15f, 20f), both.toRaw(Box(10f, 20f, 30f, 40f)))
+    }
+
+    @Test
+    fun `круговой путь цел и для увеличенного кадра`() {
+        val word = Box(12f, 24f, 36f, 48f)
+
+        listOf(0, 90, 180, 270).forEach { deg ->
+            val t = FrameTransform(
+                sample = 2, rotationDegrees = deg, uprightWidth = 100, uprightHeight = 200, upscale = 4,
+            )
+
+            assertEquals("rotation=$deg", word, t.toUpright(t.toRaw(word)))
+        }
+    }
+
+    /** Ноль и минус — не «не увеличивали», а сломанный вызов: молчаливое деление на ноль увело бы
+     *  все адреса в бесконечность, и слой выглядел бы прочитанным. */
+    @Test
+    fun `нулевое увеличение отвергается на входе`() {
+        assertThrows(IllegalArgumentException::class.java) { FrameTransform(sample = 1, upscale = 0) }
+        assertThrows(IllegalArgumentException::class.java) { FrameTransform(sample = 1, upscale = -2) }
     }
 }
