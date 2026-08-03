@@ -1,6 +1,7 @@
 package com.point.desktop
 
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import com.point.desktop.ui.DesktopApp
@@ -137,7 +138,13 @@ fun main() {
     ).also { it.start() }
 
     application {
+        // Окно мокапа — 1440x900 (#285). Берём чуть меньше, чтобы влезало и на ноутбучный экран,
+        // но так, чтобы конвейер помещался целиком: на 800x600 по умолчанию он не помещался.
+        val windowState = androidx.compose.ui.window.rememberWindowState(
+            width = 1320.dp, height = 900.dp,
+        )
         Window(
+            state = windowState,
             onCloseRequest = {
                 relayClipPoller.stop()
                 relayPoller.stop()
