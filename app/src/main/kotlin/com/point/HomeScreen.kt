@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Computer
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -65,6 +66,8 @@ fun HomeScreen(
     onOpen: (HistoryEntry) -> Unit,
     onSettings: () -> Unit,
     onPc: () -> Unit = {},
+    /** «Принять файл» (#388): объект приезжает из чужих рук — по ссылке, которую человек показал. */
+    onReceive: () -> Unit = {},
     onClear: () -> Unit = {},
     clipboard: String? = null,
     onUseClipboard: (String) -> Unit = {},
@@ -85,6 +88,14 @@ fun HomeScreen(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.End,
         ) {
+            // Дверь для того, у кого объекта ещё нет: ссылку показывают, файл приезжает (#388).
+            IconButton(onClick = onReceive) {
+                Icon(
+                    imageVector = Icons.Filled.Download,
+                    contentDescription = "Принять файл",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             IconButton(onClick = onPc) {
                 Icon(
                     imageVector = Icons.Filled.Computer,

@@ -15,6 +15,9 @@ dependencies {
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
+    // ТОЛЬКО в тестах (#388): чужой декодер QR как экзаменатор нашего кодировщика. Чистая Java,
+    // в артефакт не попадает — модуль остаётся без зависимостей.
+    testImplementation(libs.zxing.core)
 }
 
 // Эталоны корпуса — ВХОД тестов, и Gradle обязан об этом знать (#262).

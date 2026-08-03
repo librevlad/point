@@ -164,6 +164,13 @@ fun FirstScreen(
         // Как он выглядит — OutcomeBanner: карточка портала, где исход различают знак и его свет.
         OutcomeBanner(message, messageOutcome)
 
+        // Ссылка, которую Point только что выдал, — сразу и кодом (#388). Человек рядом наводит
+        // камеру и забирает файл, ничего никому не пересылая; тут же сказано, чем за это платят.
+        issuedLinkOf(obj.metadata)?.let { link ->
+            Spacer(Modifier.height(16.dp))
+            LinkCard(url = link, title = "Ссылка на файл", warning = issuedLinkWarning(obj.metadata))
+        }
+
         // «Point понял» (#114): the understanding card — facts land line by line as
         // enrichment delivers them (#64), with still-running work inside the same card.
         UnderstoodSection(facts = plainFacts, enriching = enriching)
