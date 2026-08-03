@@ -28,6 +28,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.font.FontWeight
@@ -50,6 +51,9 @@ fun KeyScreen(
     onToggleUsage: (Boolean) -> Unit,
     soundEnabled: Boolean = true,
     onToggleSound: (Boolean) -> Unit = {},
+    /** Кому вообще можно предлагать объект (#280) — умолчание «максимум бесплатного». */
+    privacyLevel: com.point.core.flow.PrivacyLevel = com.point.core.flow.PrivacyLevel.DEFAULT,
+    onPickPrivacyLevel: (com.point.core.flow.PrivacyLevel) -> Unit = {},
     /** Открыть страницу провайдера, где выдают ключ (#403). */
     onOpenUrl: (String) -> Unit = {},
     modifier: Modifier = Modifier,
@@ -129,6 +133,37 @@ fun KeyScreen(
 
         Spacer(Modifier.height(16.dp))
         HorizontalDivider()
+
+        // «Куда можно отправлять» (#280) — тем же строем, что соседние настройки: заголовок,
+        // объяснение, управление. Три уровня не влезают в переключатель, поэтому — одна строка
+        // выбора; она же показывает цену выбранного, а не только его название.
+        Column {
+            Text(com.point.core.flow.PRIVACY_SETTING_TITLE, style = MaterialTheme.typography.titleSmall)
+            Text(
+                com.point.core.flow.PRIVACY_SETTING_HINT,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                com.point.core.flow.PrivacyLevel.entries.forEach { level ->
+                    LevelChip(
+                        title = level.title,
+                        selected = level == privacyLevel,
+                        onClick = { onPickPrivacyLevel(level) },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+            Spacer(Modifier.height(6.dp))
+            // Цена выбранного — рядом, а не в справке: выбор без цены это не выбор.
+            Text(
+                privacyLevel.what,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -164,6 +199,33 @@ fun KeyScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+    }
+}
+
+/** Один уровень «куда можно отправлять» — той же формы, что карточка провайдера рядом. */
+@Composable
+private fun LevelChip(
+    title: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = if (selected) {
+            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+        } else {
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+        },
+        modifier = modifier.clickable(onClick = onClick),
+    ) {
+        Text(
+            title,
+            style = MaterialTheme.typography.bodySmall,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 10.dp),
+        )
     }
 }
 

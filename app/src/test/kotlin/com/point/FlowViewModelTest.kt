@@ -74,6 +74,14 @@ class FlowViewModelTest {
     private val appLauncher = FakeAppLauncher()
     private val sensory = FakeSensoryFeedback()
     private val sensorySettings = FakeSensorySettings()
+
+    /** «Куда можно отправлять» (#280): умолчание — максимум бесплатного, как у человека,
+     *  не открывавшего настройки. */
+    private val cloudPrivacy = object : com.point.core.flow.CloudPrivacySettings {
+        var level = com.point.core.flow.PrivacyLevel.DEFAULT
+        override fun level() = level
+        override suspend fun setLevel(level: com.point.core.flow.PrivacyLevel) { this.level = level }
+    }
     private val snapshot = FakeFlowSnapshotStore()
     private val crashLog = FakeCrashLog()
     private val pins = FakePinnedActions()
@@ -94,7 +102,7 @@ class FlowViewModelTest {
         caps: Map<CapabilityId, Set<Intent>> = mapOf(CapabilityId("a") to setOf(Intent.PREPARE)),
         cloud: Set<CapabilityId> = emptySet(),
         slow: Set<CapabilityId> = emptySet(),
-    ) = FlowViewModel(store, FakeRegistry(caps, cloud, slow), resolver, com.point.core.flow.AiChatResponder { _, _, _ -> "ответ" }, enrichment, history, favorites, usage, chosenApps, userKeys, journal, consent, appLauncher, FakePdfRasterizer(), sensory, sensorySettings, snapshot, crashLog, dispatcher, pins, AppIconResolver { null }, pcPairings, pcTransport, com.point.core.flow.PcDiscovery { kotlinx.coroutines.flow.flowOf(emptyList()) }, basket, pcCaps, com.point.core.flow.InMemoryLinkMonitor(), PulledFileFactory { name -> java.io.File(java.io.File(System.getProperty("java.io.tmpdir")), "pulled-" + name).absolutePath }, noFrames)
+    ) = FlowViewModel(store, FakeRegistry(caps, cloud, slow), resolver, com.point.core.flow.AiChatResponder { _, _, _ -> "ответ" }, enrichment, history, favorites, usage, chosenApps, userKeys, journal, consent, appLauncher, FakePdfRasterizer(), sensory, sensorySettings, cloudPrivacy, snapshot, crashLog, dispatcher, pins, AppIconResolver { null }, pcPairings, pcTransport, com.point.core.flow.PcDiscovery { kotlinx.coroutines.flow.flowOf(emptyList()) }, basket, pcCaps, com.point.core.flow.InMemoryLinkMonitor(), PulledFileFactory { name -> java.io.File(java.io.File(System.getProperty("java.io.tmpdir")), "pulled-" + name).absolutePath }, noFrames)
 
     private val basket = FakeBasket()
     private val pcCaps = FakePcCaps()

@@ -29,7 +29,7 @@ class CloudOcrRealizerTest {
     @Test
     fun `the LLM result is returned as a success`() = runTest {
         val cloud = ResultObject(ObjectKind.TEXT, "text/markdown", ScratchRef("/out/cloud.md"))
-        val result = CloudOcrRealizer(llm(cloud)).perform(image)
+        val result = CloudOcrRealizer(llm(cloud), privacyAt()).perform(image)
 
         assertTrue(result is ActionResult.Success)
         assertEquals("/out/cloud.md", (result as ActionResult.Success).result.uri.value)
@@ -37,7 +37,7 @@ class CloudOcrRealizerTest {
 
     @Test
     fun `a provider failure surfaces as a recoverable failure`() = runTest {
-        val result = CloudOcrRealizer(llm(/* throws */)).perform(image)
+        val result = CloudOcrRealizer(llm(/* throws */), privacyAt()).perform(image)
 
         assertTrue(result is ActionResult.Failure)
         assertTrue((result as ActionResult.Failure).recoverable)
@@ -49,7 +49,7 @@ class CloudOcrRealizerTest {
     fun `запасное звено говорит, что читает снимок в облаке`() = runTest {
         val cloud = ResultObject(ObjectKind.TEXT, "text/markdown", ScratchRef("/out/cloud.md"))
 
-        val heard = stagesHeard { CloudOcrRealizer(llm(cloud)).perform(image) }
+        val heard = stagesHeard { CloudOcrRealizer(llm(cloud), privacyAt()).perform(image) }
 
         assertEquals(listOf("Читаю снимок в облаке"), heard)
     }
@@ -58,14 +58,14 @@ class CloudOcrRealizerTest {
     fun `отдельная кнопка «Распознать в облаке» говорит теми же словами — работа одна и та же`() = runTest {
         val cloud = ResultObject(ObjectKind.TEXT, "text/markdown", ScratchRef("/out/cloud.md"))
 
-        val heard = stagesHeard { CloudOcrDirectRealizer(llm(cloud)).perform(image) }
+        val heard = stagesHeard { CloudOcrDirectRealizer(llm(cloud), privacyAt()).perform(image) }
 
         assertEquals(listOf("Читаю снимок в облаке"), heard)
     }
 
     @Test
     fun `стадия доходит и тогда, когда провайдер упал — иначе экран молчал бы всю неудачную минуту`() = runTest {
-        val heard = stagesHeard { CloudOcrRealizer(llm(/* throws */)).perform(image) }
+        val heard = stagesHeard { CloudOcrRealizer(llm(/* throws */), privacyAt()).perform(image) }
 
         assertEquals(listOf("Читаю снимок в облаке"), heard)
     }
