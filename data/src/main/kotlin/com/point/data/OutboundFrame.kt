@@ -64,6 +64,9 @@ class BitmapOutboundFrames @Inject constructor() : OutboundFrames {
         // размер кадра, а не про чтение. Замер 04.08.2026 делался ровно так — увеличенный кадр
         // уехал зрячей модели и прочитался целиком.
         val ready = preparedBitmap(frame.bitmap, knownTextHeightPx(obj))
+        // Исходная копия нужна была ровно до этой строки — держать её рядом с увеличенной всё
+        // сжатие незачем.
+        if (ready.frame !== frame.bitmap) frame.bitmap.recycle()
         try {
             val out = ByteArrayOutputStream()
             ready.frame.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, out)
@@ -78,8 +81,7 @@ class BitmapOutboundFrames @Inject constructor() : OutboundFrames {
                 ),
             )
         } finally {
-            ready.frame.takeIf { it !== frame.bitmap }?.recycle()
-            frame.bitmap.recycle()
+            ready.frame.recycle()
         }
     }
 

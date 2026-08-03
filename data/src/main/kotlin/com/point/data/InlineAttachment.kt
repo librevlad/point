@@ -77,12 +77,16 @@ internal fun inlineAttachment(path: String, mime: String): InlineAttachment? {
 private fun enlargedFrame(file: File, mime: String): Frame? {
     if (!mime.startsWith("image/")) return null
     return runCatching {
+        // Решение принимается ПО ЗАГОЛОВКУ файла, до единого декодированного пикселя: сюда
+        // приходит каждый запрос к модели с картинкой, и поднимать эталонную ведомость в память
+        // (48 МБ) ради ответа «увеличивать не надо» значило бы платить за приём на всех кадрах,
+        // где он не работает. Поворот EXIF ответа не меняет — правило смотрит на длинную сторону
+        // и на площадь, а они от разворота не зависят.
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(file.path, bounds)
+        val scale = readingUpscale(bounds.outWidth, bounds.outHeight)
+        if (scale <= 1) return null
         val upright = decodeBoundedUpright(file.path, MODEL_MAX_EDGE_PX) ?: return null
-        val scale = readingUpscale(upright.width, upright.height)
-        if (scale <= 1) {
-            upright.recycle()
-            return null
-        }
         val scaled = Bitmap.createScaledBitmap(upright, upright.width * scale, upright.height * scale, true)
         if (scaled !== upright) upright.recycle()
         val png = scaled.hasAlpha()

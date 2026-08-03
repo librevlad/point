@@ -66,6 +66,9 @@ class TesseractTextRecognizer @Inject constructor(
         // трогает, и тогда `ready.frame` — тот же битмап, без второй копии в памяти.
         val ready = preparedBitmap(decoded.bitmap, knownTextHeightPx(obj))
         val bitmap = ready.frame
+        // Исходная копия освобождается сразу, а не в finally: держать рядом с увеличенной ещё и
+        // её значило бы платить лишние 16 МБ всё чтение, а нужна она была ровно до этой строки.
+        if (bitmap !== decoded.bitmap) decoded.bitmap.recycle()
         val frame = Decoded(bitmap, decoded.sample, decoded.rotation, ready.scale)
         if (ready.upscaled) Log.i(TAG, "frame upscaled x${ready.scale} -> ${bitmap.width}x${bitmap.height}")
         // Копия для проб поворотов создаётся лениво: хорошо прочитанную страницу не крутят,
@@ -103,9 +106,6 @@ class TesseractTextRecognizer @Inject constructor(
             runCatching { tess.recycle() }
             probe?.takeIf { it !== bitmap }?.recycle()
             bitmap.recycle()
-            // Увеличенная копия и исходная — два разных битмапа, и на 12 Мп это 48 МБ; кадр не
-            // увеличивали — это тот же объект, и второй recycle() был бы по освобождённому.
-            decoded.bitmap.takeIf { it !== bitmap }?.recycle()
         }
     }
 

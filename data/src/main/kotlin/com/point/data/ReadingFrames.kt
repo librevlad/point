@@ -1,14 +1,15 @@
 package com.point.data
 
 import android.graphics.Bitmap
+import android.util.Log
 import com.point.core.flow.AtomCodec
 import com.point.core.flow.FrameUpscaler
 import com.point.core.flow.META_CLOUD_ATOMS_REF
 import com.point.core.flow.META_OCR_ATOMS_REF
 import com.point.core.flow.ReadyFrame
-import com.point.core.model.PointObject
 import com.point.core.flow.preparedForReading
 import com.point.core.flow.typicalTextHeightPx
+import com.point.core.model.PointObject
 import java.io.File
 
 /**
@@ -37,7 +38,19 @@ internal val bitmapUpscaler = FrameUpscaler<Bitmap> { bitmap, scale ->
  * — тот же приём, что у резака улик.
  */
 internal fun preparedBitmap(bitmap: Bitmap, textHeightPx: Int?): ReadyFrame<Bitmap> =
-    preparedForReading(bitmap, bitmap.width, bitmap.height, textHeightPx, bitmapUpscaler)
+    try {
+        preparedForReading(bitmap, bitmap.width, bitmap.height, textHeightPx, bitmapUpscaler)
+    } catch (e: OutOfMemoryError) {
+        // Увеличение — улучшение чтения, а не его условие: не хватило памяти — читаем кадр как
+        // есть. Бюджет правила (12 Мп) делает этот случай редким, но телефон бывает занят чем-то
+        // ещё, и падать всем чтением из-за необязательного шага нечем оправдать.
+        //
+        // Молчать при этом нельзя: страница прочтётся хуже, чем могла, и причина обязана быть
+        // названа. Пометки в метаданных не будет по построению — множитель там ровно тот, каким
+        // кадр читали, и «увеличивали» про неувеличенный кадр было бы неправдой.
+        Log.w("PointOCR", "frame upscale skipped: out of memory", e)
+        ReadyFrame(bitmap, 1)
+    }
 
 /**
  * Высота типичного слова, измеренная тем, кто уже читал этот кадр, — «плотность текста» правила.
