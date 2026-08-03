@@ -2,97 +2,20 @@ package com.point
 
 import android.content.Intent
 import android.net.Uri
-import android.os.Bundle
-import androidx.activity.ComponentActivity
-import androidx.activity.addCallback
-import androidx.activity.compose.setContent
-import androidx.activity.viewModels
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.runtime.getValue
-import androidx.compose.ui.Modifier
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.point.core.ui.theme.PointTheme
 import dagger.hilt.android.AndroidEntryPoint
 
 /**
- * The "right-click for text" entry point: Point registers for ACTION_PROCESS_TEXT, so selecting text
- * in ANY app shows "Point" in the selection toolbar. The selected text enters the flow through the
- * same `onShared(fileUri, "text/plain")` path as a shared object — no permissions, API 23+.
+ * «Правый клик по тексту»: Point зарегистрирован на ACTION_PROCESS_TEXT, поэтому появляется в
+ * панели выделения любого приложения. Выделенное входит во флоу тем же путём, что объект из
+ * «Поделиться» — через `onShared(fileUri, "text/plain")`; ни разрешений, ни API выше 23 не нужно.
+ *
+ * Экран и уборка — общие, в [FlowHostActivity]; здесь только разбор своего intent.
  */
 @AndroidEntryPoint
-class ProcessTextActivity : ComponentActivity() {
+class ProcessTextActivity : FlowHostActivity() {
 
-    private val viewModel: FlowViewModel by viewModels()
-
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-
-        if (savedInstanceState == null) handleProcessText(intent)
-
-        onBackPressedDispatcher.addCallback(this) {
-            if (!viewModel.onBack()) {
-                isEnabled = false
-                this@ProcessTextActivity.onBackPressedDispatcher.onBackPressed()
-            }
-        }
-
-        setContent {
-            PointTheme {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background,
-                ) {
-                    val state by viewModel.ui.collectAsStateWithLifecycle()
-                    PointHost(
-                        state = state,
-                        onBubble = viewModel::onBubble,
-                        appIconFor = viewModel::appIcon,
-                        onPairPc = viewModel::pairPc,
-                        onUnpairPc = viewModel::unpairPc,
-                        onClosePcSettings = viewModel::closePcSettings,
-                        onSubmitInput = viewModel::submitAmendment,
-                        onCancelInput = viewModel::cancelInput,
-                        onCancelAction = viewModel::cancelAction,
-                        onOpenObject = viewModel::openTopObject,
-                        onApplyFavorite = viewModel::applyFavorite,
-                        onSaveChain = viewModel::saveCurrentChain,
-                        onItem = viewModel::onItem,
-                            onFound = viewModel::onFound,
-                        onJumpTo = viewModel::jumpTo,
-                        onSendChat = viewModel::sendChatMessage,
-                        onCloseChat = viewModel::closeChat,
-                            onBubbleLongPress = viewModel::togglePin,
-                        onSaveAiConfig = viewModel::saveAiConfig,
-                        onCloseKeySettings = viewModel::closeKeySettings,
-                        onToggleUsage = viewModel::setUsageEnabled,
-                            onToggleSound = viewModel::setSoundEnabled,
-                        onConfirmCloud = viewModel::confirmCloud,
-                        onDeclineCloud = viewModel::declineCloud,
-                        onPickApp = viewModel::onPickApp,
-                        onDismissAppPicker = viewModel::dismissAppPicker,
-                        onConfirmPreview = viewModel::confirmPreview,
-                        onOpenSelection = viewModel::openSelection,
-                        onSelectRegion = viewModel::onSelectRegion,
-                        onTakeSelection = viewModel::takeSelection,
-                        onCloseSelection = viewModel::closeSelection,
-                        onFindQuery = viewModel::onFindQuery,
-                        onCloseFind = viewModel::closeFind,
-                        onCancelPreview = viewModel::cancelPreview,
-                    )
-                }
-            }
-        }
-    }
-
-    override fun onDestroy() {
-        if (isFinishing) viewModel.endFlow() // mandatory scratch cleanup
-        super.onDestroy()
-    }
-
-    private fun handleProcessText(intent: Intent) {
-        // EXTRA_PROCESS_TEXT is the editable selection; the READONLY variant is the fallback.
+    override fun accept(intent: Intent) {
+        // EXTRA_PROCESS_TEXT — редактируемое выделение; READONLY-вариант остаётся запасным.
         val text = (
             intent.getCharSequenceExtra(Intent.EXTRA_PROCESS_TEXT)
                 ?: intent.getCharSequenceExtra(Intent.EXTRA_PROCESS_TEXT_READONLY)
