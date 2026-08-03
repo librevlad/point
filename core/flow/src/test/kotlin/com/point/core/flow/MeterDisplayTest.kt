@@ -5,7 +5,6 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.math.abs
-import kotlin.math.roundToInt
 import kotlin.math.tan
 
 /**
@@ -22,20 +21,16 @@ import kotlin.math.tan
 class MeterDisplayTest {
 
     // ── рабочая копия кадров корпуса ────────────────────────────────────────────────────────
+    //
+    // Размеры уменьшенных кадров: длинная сторона к [METER_WORK_PX] = 800. Само уменьшение
+    // делает `grayFrame` в `TesseractMeterReader` (`:data`, Bitmap) — на JVM его не вызвать,
+    // поэтому здесь только числа, на которых ищет [findMeterDisplays].
 
     /** 3000×4000 (кадры 09 и 15 корпуса после EXIF) при [METER_WORK_PX]. */
     private val waterMeterWork = 600 to 800
 
     /** 2160×3840 (кадр 17 корпуса после EXIF) при [METER_WORK_PX]. */
     private val powerMeterWork = 450 to 800
-
-    @Test
-    fun `рабочая копия кадра корпуса — та же, что посчитает телефон`() {
-        assertEquals(waterMeterWork, workSize(3000, 4000))
-        assertEquals(powerMeterWork, workSize(2160, 3840))
-        // Кадр меньше рабочего размера не растягивается: увеличивать нечего.
-        assertEquals(400 to 300, workSize(400, 300))
-    }
 
     // ── поиск ───────────────────────────────────────────────────────────────────────────────
 
@@ -240,14 +235,6 @@ class MeterDisplayTest {
     }
 
     // ── помощники ───────────────────────────────────────────────────────────────────────────
-
-    /** Размер рабочей копии: длинная сторона к [METER_WORK_PX], мелкое не растягивается. */
-    private fun workSize(width: Int, height: Int): Pair<Int, Int> {
-        val long = maxOf(width, height)
-        if (long <= METER_WORK_PX) return width to height
-        val k = METER_WORK_PX.toFloat() / long
-        return (width * k).roundToInt() to (height * k).roundToInt()
-    }
 
     private class Band(
         val left: Int,
