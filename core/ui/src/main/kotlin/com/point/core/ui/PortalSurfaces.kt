@@ -181,6 +181,9 @@ fun PortalRow(
     enabled: Boolean = true,
     ring: Color? = null,
     chevron: Boolean = true,
+    /** Сколько строк отдано подписи. Больше двух — когда подпись это **цена выбора**, и обрезать
+     *  её значит скрыть половину того, за что человек платит. */
+    subtitleMaxLines: Int = 2,
     appearIndex: Int = 0,
     onLongClick: (() -> Unit)? = null,
     trailing: (@Composable () -> Unit)? = null,
@@ -240,7 +243,7 @@ fun PortalRow(
                         text = subtitle,
                         style = MaterialTheme.typography.bodySmall,
                         color = subColor,
-                        maxLines = 2,
+                        maxLines = subtitleMaxLines,
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
