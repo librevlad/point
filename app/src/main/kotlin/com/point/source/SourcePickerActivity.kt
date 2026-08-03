@@ -1,6 +1,7 @@
 package com.point.source
 
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -15,6 +16,7 @@ import androidx.compose.material3.Text
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import android.widget.Toast
 import androidx.lifecycle.lifecycleScope
 import com.point.ShareActivity
 import com.point.core.ui.theme.PointTheme
@@ -35,6 +37,22 @@ class SourcePickerActivity : ComponentActivity() {
     @Inject lateinit var sources: Set<@JvmSuppressWildcards ObjectSource>
 
     private var pending: ObjectSource? = null
+
+    private val permissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
+            val source = pending
+            pending = null
+            when {
+                source == null -> finish()
+                result.values.any { !it } -> {
+                    // Отказ назван словами: молча закрыться — значит оставить человека гадать,
+                    // сломалось оно или он сам только что запретил.
+                    Toast.makeText(this, "Без этого доступа не получится", Toast.LENGTH_SHORT).show()
+                    finish()
+                }
+                else -> launchSource(source)
+            }
+        }
 
     private val launcher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val source = pending
@@ -65,7 +83,24 @@ class SourcePickerActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * Разрешение спрашивается по тапу и только то, которого нет: просить уже выданное — то самое
+     * назойливое трение, от которого Point уходит.
+     */
     private fun start(source: ObjectSource) {
+        val granted = source.permissions.filter {
+            checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED
+        }.toSet()
+        val missing = missingPermissions(source.permissions, granted)
+        if (missing.isNotEmpty()) {
+            pending = source
+            permissionLauncher.launch(missing.toTypedArray())
+            return
+        }
+        launchSource(source)
+    }
+
+    private fun launchSource(source: ObjectSource) {
         lifecycleScope.launch {
             val request = source.request(this@SourcePickerActivity)
             if (request == null) {
