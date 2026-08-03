@@ -49,6 +49,16 @@ class DesktopState(
     /** The paired phone's advertised actions (#161 v2) — cards grow «… · телефон» buttons. */
     val phoneCaps = _phoneCaps.asStateFlow()
 
+    // Когда и каким путём телефон приходил в последний раз (#412). Без этого экран молчал, и
+    // человек не мог отличить «связи нет» от «ничего не произошло».
+    private val _lastContact = MutableStateFlow<Pair<Long, com.point.core.flow.LinkPath>?>(null)
+    val lastContact: StateFlow<Pair<Long, com.point.core.flow.LinkPath>?> = _lastContact.asStateFlow()
+
+    /** Телефон дал о себе знать. Путь запоминается: он объясняет человеку скорость. */
+    fun heard(path: com.point.core.flow.LinkPath) {
+        _lastContact.value = System.currentTimeMillis() to path
+    }
+
     private val _pairRequest = MutableStateFlow<PairRequest?>(null)
     val pairRequest: StateFlow<PairRequest?> = _pairRequest.asStateFlow()
 

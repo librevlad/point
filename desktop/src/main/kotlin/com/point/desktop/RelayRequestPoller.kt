@@ -34,6 +34,8 @@ class RelayRequestPoller(
     private val remoteActions: () -> List<PcRemoteAction>,
     private val outbox: Outbox,
     private val onPhoneCaps: (List<PcRemoteAction>) -> Unit,
+    /** Телефон дал о себе знать через релей (#412). */
+    private val onContact: () -> Unit = {},
     private val runAction: (String, InboxItem) -> Unit = { _, _ -> },
     private val log: (String) -> Unit = {},
 ) {
@@ -88,6 +90,8 @@ class RelayRequestPoller(
         blobId?.let { ack(base, toPc, it) }
 
         val frame = runCatching { decodePcFrame(RelayCrypto.open(token, blob)) }.getOrNull() ?: return true
+        // Письмо расшифровалось нашим токеном — значит писал наш телефон, и связь есть (#412).
+        onContact()
         val kind = frame.meta[RelayRpc.KIND] ?: return true
         val id = frame.meta[RelayRpc.ID].orEmpty()
 

@@ -210,4 +210,12 @@ data class PcScreenState(
     val discovered: List<com.point.core.flow.DiscoveredPc> = emptyList(),
     val busy: Boolean = false,
     val error: String? = null,
+    /**
+     * Есть ли связь с компьютером и каким путём (#412).
+     *
+     * Раньше экран показывал только адрес пейринга — то есть «мы когда-то познакомились», а не
+     * «он сейчас на связи». Человек тапал «Напечатать на ПК» и не понимал, сломалось оно или
+     * компьютер выключен.
+     */
+    val link: com.point.core.flow.LinkState = com.point.core.flow.LinkState.Never,
 )
