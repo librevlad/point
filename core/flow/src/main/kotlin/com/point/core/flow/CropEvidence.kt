@@ -80,27 +80,17 @@ const val MAX_EVIDENCE_CROPS = 12
  *
  * Возвращённая рамка — в координатах **сырого** кадра, как и требует [CropEvidence].
  */
-fun AtomLayer.locate(fragment: String): Box? = locateIn(uprightLines(), fragment)
+fun AtomLayer.locate(fragment: String): Box? = locateIn(lines(), fragment)
 
 /**
- * Строки страницы, собранные в **выпрямленном** кадре.
+ * [locate] по уже разложенным строкам ([AtomLayer.lines] сортирует все атомы, а спорных
+ * фрагментов в ведомости сотни — строки считаются один раз на документ).
  *
- * Атомы лежат в сыром кадре (ADR-0001), а сырой кадр бывает боком: телефон держит пиксели как
- * снял и пишет поворот в EXIF, а на фото бумаги со стола EXIF нулевой и доворот подбирает сама
- * проба ориентации (#262). В таком кадре строка страницы — вертикальная полоса, и разбиение по
- * сырому `centerY` ([AtomLayer.lines]) собирает **колонку вместо строки**: три колонки ведомости
- * дают ничью по одному совпавшему слову, адрес не находится, и улики к строке не будет никогда.
- * Поэтому полосы ищутся там, где строка горизонтальна, — в выпрямленной копии.
- *
- * Считается один раз на документ: [lines] сортирует все атомы, а спорных фрагментов в ведомости
- * сотни.
+ * Рамка считается в **выпрямленном** кадре и возвращается в сыром: строки уже собраны в
+ * выпрямленном порядке, но боксы атомы несут сырые (ADR-0001), а на кадре боком (#262) рамка
+ * строки в сыром кадре вертикальна — поле «в треть высоты», отмеренное от сырой «высоты»,
+ * было бы полем от длины строки.
  */
-private fun AtomLayer.uprightLines(): List<List<Atom>> {
-    val frame = transform ?: return lines()
-    return AtomLayer(atoms.map { it.copy(box = frame.toUpright(it.box)) }).lines()
-}
-
-/** [locate] по уже разложенным строкам: рамка считается в выпрямленном кадре и возвращается в сыром. */
 private fun AtomLayer.locateIn(lines: List<List<Atom>>, fragment: String): Box? {
     val wanted = evidenceTokens(fragment)
     if (wanted.isEmpty()) return null
@@ -113,7 +103,7 @@ private fun AtomLayer.locateIn(lines: List<List<Atom>>, fragment: String): Box? 
         val matched = wanted.firstOrNull { token -> best.first.any { evidenceToken(it.text) == token } }
         if (matched == null || matched.length < DISTINCT_TOKEN) return null
     }
-    val box = best.first.map { it.box }.reduce(Box::union)
+    val box = best.first.map { transform?.toUpright(it.box) ?: it.box }.reduce(Box::union)
     val pad = box.height * PAD_SHARE
     val padded = Box(box.left - pad, box.top - pad, box.right + pad, box.bottom + pad)
     return transform?.toRaw(padded) ?: padded
@@ -142,7 +132,7 @@ fun List<DocBlock>.withCropEvidence(
     if (layer == null || layer.atoms.isEmpty() || imagePath.isNullOrBlank()) return this
     val degrees = layer.transform?.rotationDegrees ?: 0
     // Строки страницы — один раз на документ, а не заново на каждый спорный фрагмент.
-    val lines = layer.uprightLines()
+    val lines = layer.lines()
     var attached = 0
     var bare = 0
     val blocks = map { block ->

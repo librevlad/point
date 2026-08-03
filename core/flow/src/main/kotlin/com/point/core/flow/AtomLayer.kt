@@ -156,15 +156,27 @@ class AtomLayer(
      * Публичные, потому что строка — единица представления слоя наружу: индекс слов для
      * модели (#258) и будущий предпросмотр выделения показывают страницу построчно, и
      * каждый из них, собирая полосы заново, разошёлся бы с [text] на косой строке.
+     *
+     * Полосы и порядок считаются в **выпрямленном** кадре ([FrameTransform.toUpright]), хотя
+     * атомы лежат в сыром (ADR-0001) и возвращаются как есть — выпрямление здесь только
+     * упорядочивает. Сырой кадр бывает боком: EXIF на фото бумаги со стола нулевой, доворот
+     * подбирает проба ориентации (#262), и строка страницы в таком кадре — вертикальная полоса.
+     * Полоса по сырому `centerY` собирала на нём колонку вместо строки, «высотой» слова
+     * становилась его длина, а сортировка по сырому `left` читала строку задом наперёд. Живой
+     * след — кадр 04 корпуса (лист снят боком, rotation=90): движок прочитал ячейку как
+     * «Karycra бтоголова свйжа», а индекс модели и вслед за ним Excel получили
+     * «свйжа бтоголова Karycra» — перевёрнутое значение без единой пометки.
      */
     fun lines(subset: List<Atom> = atoms): List<List<Atom>> {
-        val lines = mutableListOf<MutableList<Atom>>()
-        subset.sortedBy { it.box.centerY }.forEach { atom ->
+        val placed = subset.map { it to (transform?.toUpright(it.box) ?: it.box) }
+        val lines = mutableListOf<MutableList<Pair<Atom, Box>>>()
+        placed.sortedBy { (_, box) -> box.centerY }.forEach { entry ->
+            val (_, box) = entry
             val line = lines.lastOrNull()
             val sameLine = line != null &&
-                kotlin.math.abs(line.last().box.centerY - atom.box.centerY) <= atom.box.height / 2f
-            if (sameLine) line.add(atom) else lines.add(mutableListOf(atom))
+                kotlin.math.abs(line.last().second.centerY - box.centerY) <= box.height / 2f
+            if (sameLine) line.add(entry) else lines.add(mutableListOf(entry))
         }
-        return lines.map { it.sortedBy { atom -> atom.box.left } }
+        return lines.map { line -> line.sortedBy { (_, box) -> box.left }.map { (atom, _) -> atom } }
     }
 }
