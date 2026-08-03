@@ -44,7 +44,6 @@ import com.point.core.ui.Outcome
 import com.point.core.flow.snapSelection
 import com.point.core.model.Feature
 import com.point.core.model.ObjectState
-import com.point.data.decodeSelectionFrame
 import java.io.File
 import com.point.core.model.ActionResult
 import com.point.core.model.ChatMessage
@@ -117,6 +116,7 @@ class FlowViewModel @Inject constructor(
     private val basket: com.point.core.flow.Basket,
     private val pcCaps: com.point.core.flow.PcCapsStore,
     private val pulledFiles: PulledFileFactory,
+    private val frames: SelectionFrames,
 ) : ViewModel() {
 
     /** Идущее действие — чтобы его можно было отменить (#288). */
@@ -537,12 +537,18 @@ class FlowViewModel @Inject constructor(
 
     fun openSelection() {
         val top = stack.lastOrNull()?.obj ?: return
-        val atomsRef = top.metadata[META_OCR_ATOMS_REF] ?: return
+        // Слой слов необязателен (#259). Есть — рамка липнет к словам, и выделение даёт текст;
+        // нет — берётся пустой слой, рамка остаётся свободной, а «Взять» уходит в фрагмент
+        // (`fragmentCapture`). Требовать чтение до обводки значило заставлять человека
+        // распознавать то, что он всего лишь хочет обвести.
+        val atomsRef = top.metadata[META_OCR_ATOMS_REF]
         viewModelScope.launch {
             val loaded = withContext(ioDispatcher) {
                 runCatching {
-                    val layer = AtomCodec.decode(File(atomsRef).readText())
-                    decodeSelectionFrame(top.uri.value, SELECTION_MAX_PX)?.let { frame ->
+                    val layer = atomsRef
+                        ?.let { AtomCodec.decode(File(it).readText()) }
+                        ?: AtomLayer(emptyList())
+                    frames.frame(top.uri.value, SELECTION_MAX_PX)?.let { frame ->
                         Triple(layer, frame.transform, frame.bitmap.asImageBitmap())
                     }
                 }.getOrNull()
@@ -629,7 +635,7 @@ class FlowViewModel @Inject constructor(
 
     private suspend fun fragmentCapture(top: PointObject, snap: SnappedSelection): PointObject? {
         val r = snap.region
-        val bmp = com.point.data.cropRegion(
+        val bmp = frames.crop(
             top.uri.value, r.left.toInt(), r.top.toInt(), r.right.toInt(), r.bottom.toInt(),
         ) ?: return null
         val ref = store.newScratchFile("jpg")
@@ -673,7 +679,7 @@ class FlowViewModel @Inject constructor(
             val loaded = withContext(ioDispatcher) {
                 runCatching {
                     val layer = AtomCodec.decode(File(atomsRef).readText())
-                    decodeSelectionFrame(top.uri.value, SELECTION_MAX_PX)?.let { frame ->
+                    frames.frame(top.uri.value, SELECTION_MAX_PX)?.let { frame ->
                         Triple(layer, frame.transform, frame.bitmap.asImageBitmap())
                     }
                 }.getOrNull()

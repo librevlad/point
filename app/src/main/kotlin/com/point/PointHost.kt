@@ -274,14 +274,19 @@ fun PointHost(
                     pinned = current.pinned,
                     onBubbleLongPress = onBubbleLongPress,
                     appIconFor = appIconFor,
-                    // Тап по объекту всегда что-то делает (#290). Есть слой слов — открывается
-                    // выделение (#259: рамке есть к чему прилипать). Слоя нет — объект просто
-                    // открывается, как от кнопки «Открыть»: тишина в ответ на тап по самому
-                    // крупному элементу экрана — та же ложь, что заглушка вместо статуса.
-                    onHeroTap = if (current.obj.metadata.containsKey(com.point.core.flow.META_OCR_ATOMS_REF)) {
-                        onOpenSelection
-                    } else {
-                        onOpenObject
+                    // Тап по объекту всегда что-то делает (#290). Картинку — обводим, читали её
+                    // или нет (#259): выделение и есть способ указать область, а распознавание —
+                    // одно из продолжений, а не пропуск на вход. Всё остальное открывается, как
+                    // от кнопки «Открыть»: тишина в ответ на тап по самому крупному элементу
+                    // экрана — та же ложь, что заглушка вместо статуса.
+                    onHeroTap = when (
+                        heroTapOf(
+                            current.obj.state.kind,
+                            hasWordLayer = current.obj.metadata.containsKey(com.point.core.flow.META_OCR_ATOMS_REF),
+                        )
+                    ) {
+                        HeroTap.SELECT -> onOpenSelection
+                        HeroTap.OPEN -> onOpenObject
                     },
                 )
                 }
