@@ -392,7 +392,7 @@ private fun PreviewOutcomeFailure() = PointTheme(darkTheme = true) {
         bubbles = sampleBubbles(ObjectKind.IMAGE),
         onBubble = {},
         message = "Табло нашлось, но цифры не читаются — снимите ближе и без блика",
-        messageIsFailure = true,
+        messageOutcome = Outcome.FAILED,
     )
 }
 
@@ -407,6 +407,22 @@ private fun PreviewOutcomeDone() = PointTheme(darkTheme = true) {
         bubbles = sampleBubbles(ObjectKind.IMAGE),
         onBubble = {},
         message = "Сохранено: meter.jpg",
+        messageOutcome = Outcome.DONE,
+    )
+}
+
+@Preview(name = "Исход · человек остановил (#358)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@Composable
+private fun PreviewOutcomeStopped() = PointTheme(darkTheme = true) {
+    // Третий исход, которого не было в паре «удача/отказ»: человек нажал «Отмена» на долгой
+    // работе (#288). Заявлять тут нечего — ни «Готово», ни «Не получилось», — поэтому карточка
+    // без знака и без света: одни слова о том, что работы больше нет.
+    FirstScreen(
+        obj = sampleObject(ObjectKind.IMAGE, "image/jpeg", "meter.jpg"),
+        bubbles = sampleBubbles(ObjectKind.IMAGE),
+        onBubble = {},
+        message = "Отменено",
+        messageOutcome = Outcome.NONE,
     )
 }
 

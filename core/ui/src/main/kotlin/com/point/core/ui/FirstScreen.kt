@@ -89,8 +89,9 @@ fun FirstScreen(
     onBubble: (Bubble) -> Unit,
     modifier: Modifier = Modifier,
     message: String? = null,
-    /** Отказ ли это: знак и свет исхода — второе сообщение после текста, и врать им нельзя. */
-    messageIsFailure: Boolean = false,
+    /** Чем это кончилось: знак и свет исхода — второе сообщение после текста, и врать им нельзя.
+     *  Умолчание — [Outcome.NONE]: забытый исход молчит, а не отчитывается об успехе. */
+    messageOutcome: Outcome = Outcome.NONE,
     inputPrompt: String? = null,
     inputSuggestions: List<String> = emptyList(),
     onSubmitInput: (String) -> Unit = {},
@@ -161,7 +162,7 @@ fun FirstScreen(
         // сделало» — и это же ощущение владелец описал в #288 словом «зависло».
         //
         // Как он выглядит — OutcomeBanner: карточка портала, где исход различают знак и его свет.
-        OutcomeBanner(message, messageIsFailure)
+        OutcomeBanner(message, messageOutcome)
 
         // «Point понял» (#114): the understanding card — facts land line by line as
         // enrichment delivers them (#64), with still-running work inside the same card.
