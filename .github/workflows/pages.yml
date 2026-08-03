@@ -1,0 +1,67 @@
+# Лендинг проекта на GitHub Pages (#282): статика из `site/` едет на Pages при каждом пуше в main.
+#
+# Здесь публикуется ТОЛЬКО сайт. Сборок приложения в артефакте Pages нет и быть не должно:
+# подписанный APK публикует человек релизным поездом (#306), а APK из CI подписан отладочным
+# ключом. Лендинг показывает последнюю опубликованную сборку, спрашивая GitHub на клиенте
+# (`site/releases.js`), — поэтому новая сборка появляется на сайте сама, без пересборки страницы.
+name: Pages
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'site/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Свежий деплой отменяет предыдущий: наполовину выложенный сайт хуже одного лишнего прогона.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Сайт раздаётся всему интернету, поэтому та же проверка, что и у релиза: ни один
+      # известный вид ключа не должен уехать в статику. Ловится содержимым, а не именем файла.
+      - name: Ворота — в статике нет ключей
+        run: |
+          hits=$(grep -rIEn 'AIza[0-9A-Za-z_-]{35}|sk-[A-Za-z0-9]{20,}|ghp_[A-Za-z0-9]{36}|-----BEGIN [A-Z ]*PRIVATE KEY-----' site/ || true)
+          if [ -n "$hits" ]; then
+            echo "::error::В site/ найдено похожее на секрет — публикация остановлена:"
+            echo "$hits"
+            exit 1
+          fi
+          echo "OK: ключей в статике нет."
+
+      # Сборки приложения в статике не место: она уедет без ворот релизного поезда.
+      - name: Ворота — в статике нет сборок приложения
+        run: |
+          bad=$(find site -type f \( -name '*.apk' -o -name '*.aab' -o -name '*.msi' -o -name '*.exe' \) || true)
+          if [ -n "$bad" ]; then
+            echo "::error::В site/ попали сборки — их публикует релизный поезд (#306), не Pages:"
+            echo "$bad"
+            exit 1
+          fi
+          echo "OK: сборок в статике нет."
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
