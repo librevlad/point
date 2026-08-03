@@ -106,7 +106,11 @@ class RelayRequestPoller(
                 if (file == null) {
                     reply(base, toPhone, id, ByteArray(0), mapOf("error" to "нет такого объекта"))
                 } else {
-                    reply(base, toPhone, id, file.readBytes(), mapOf("name" to file.name))
+                    // Имя — человеческое, из описи очереди, а не «1.bin» с диска. Телефон берёт его
+                    // из описи и потому не страдает, но ответ, называющий файл служебным номером,
+                    // это заряженная ловушка: первый, кто поверит мете, отдаст человеку «1.bin».
+                    val named = outbox.entries().firstOrNull { it.id == entryId }?.meta?.get("name")
+                    reply(base, toPhone, id, file.readBytes(), mapOf("name" to (named ?: file.name)))
                 }
             }
 

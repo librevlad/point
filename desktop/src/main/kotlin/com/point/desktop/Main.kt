@@ -83,11 +83,17 @@ fun main(args: Array<String>) {
         ),
     )
     val phoneCapsFile = File(File(System.getProperty("user.home"), ".point-pc"), "phone-caps")
+    // Память о пути объектов (#407) — рядом с остальным состоянием ПК, тем же способом хранения.
+    val journalStore = FileJournalStore(File(File(System.getProperty("user.home"), ".point-pc"), "journal"))
     state = DesktopState(
         registry, resolver, clipboard, outbox,
         persistPhoneCaps = { caps ->
             runCatching { phoneCapsFile.apply { parentFile?.mkdirs() }.writeText(com.point.core.flow.encodePcCaps(caps)) }
         },
+        journalStore = journalStore,
+        // «Открыть заново» из журнала: файл оборачивается на месте, копии не делается. Нет файла —
+        // нет объекта, и экран об этом скажет вместо того, чтобы открыть пустоту.
+        reopenPath = { path -> File(path).takeIf(File::isFile)?.let { inbox.addFile(it.absolutePath) } },
     )
     runCatching { com.point.core.flow.decodePcCaps(phoneCapsFile.readText()) }
         .getOrNull()?.let(state::setPhoneCaps)
@@ -140,7 +146,9 @@ fun main(args: Array<String>) {
         clipboardSet = ::writeSystemClipboard,
     )
     // Открылись сами: файл из меню становится объектом сразу, без лишнего действия человека.
-    filesFromArgs(args).forEach { file -> state.onReceived(inbox.addFile(file.absolutePath)) }
+    filesFromArgs(args).forEach { file ->
+        state.onReceived(inbox.addFile(file.absolutePath), ObjectSource.LOCAL)
+    }
     server.start(preferredPort = config.port)
     // Slice C: let phones discover this PC by themselves (best-effort mDNS).
     val advertiser = Advertiser(config.name, server.port).also { it.start() }
@@ -152,7 +160,7 @@ fun main(args: Array<String>) {
         token = config.token,
         onObject = { name, mime, meta, bytes, action ->
             val item = inbox.receive(name, mime, meta, bytes.inputStream())
-            state.onReceived(item)
+            state.onReceived(item, ObjectSource.PHONE_RELAY)
             action?.let { runCatching { state.runRemoteAction(it, item) } }
         },
     ).also { it.start() }
@@ -210,8 +218,13 @@ fun main(args: Array<String>) {
                 config = config,
                 addresses = siteLocalAddresses(),
                 port = server.port,
-                onFilesDropped = { files -> files.forEach { state.onReceived(inbox.addFile(it.absolutePath)) } },
-                onTextDropped = { text -> state.onReceived(inbox.addText(text)) },
+                // Происхождение объекта разделено (#407): перетащенный мышью и взятый из буфера —
+                // разные ответы на вопрос «откуда это здесь взялось», и журнал обязан их различать.
+                onFilesDropped = { files ->
+                    files.forEach { state.onReceived(inbox.addFile(it.absolutePath), ObjectSource.DROPPED) }
+                },
+                onTextDropped = { text -> state.onReceived(inbox.addText(text), ObjectSource.DROPPED) },
+                onClipboardTaken = { text -> state.onReceived(inbox.addText(text), ObjectSource.CLIPBOARD) },
             )
             }
         }

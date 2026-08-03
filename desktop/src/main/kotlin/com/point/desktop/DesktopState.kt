@@ -25,6 +25,9 @@ class PairRequest(val deviceName: String, private val decide: (Boolean) -> Unit)
 /**
  * The desktop's state holder (the VM analogue, hand-wired): received objects, a
  * transient message, the connection card, and the pending pair dialog.
+ *
+ * Ещё он ведёт журнал (#407): что приезжало, откуда и что с этим делали. Память живёт за швом
+ * [JournalStore] — экран читает её тем же способом, каким читает всё остальное состояние.
  */
 class DesktopState(
     private val registry: CapabilityRegistry,
@@ -32,11 +35,24 @@ class DesktopState(
     private val clipboard: TextClipboard,
     private val outbox: Outbox? = null,
     private val persistPhoneCaps: (List<com.point.core.flow.PcRemoteAction>) -> Unit = {},
+    /** Память компьютера о пути объектов (#407). `null` — journal-less state (тесты экрана). */
+    private val journalStore: JournalStore? = null,
+    /** Часы за швом: время станции в тесте обязано быть предсказуемым. */
+    private val clock: Clock = Clock { System.currentTimeMillis() },
+    /**
+     * Открыть заново файл, о котором помнит журнал. Возвращает `null`, если файла больше нет —
+     * тогда человеку об этом говорят, а не открывают пустоту. В `Main` это `Inbox::addFile`.
+     */
+    private val reopenPath: (String) -> InboxItem? = { null },
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     private val _items = MutableStateFlow<List<InboxItem>>(emptyList())
     val items: StateFlow<List<InboxItem>> = _items.asStateFlow()
+
+    private val _journal = MutableStateFlow(runCatching { journalStore?.load() }.getOrNull().orEmpty())
+    /** Путь объектов, переживший перезапуск (#407): самое свежее первым. */
+    val journal: StateFlow<List<JournalEntry>> = _journal.asStateFlow()
 
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()
@@ -77,6 +93,9 @@ class DesktopState(
                 is com.point.core.model.ActionResult.Done -> result.message
                 else -> _message.value
             }
+            // Тап был на телефоне, а работа шла здесь — иначе, вернувшись к компьютеру, человек
+            // не поймёт, откуда взялся результат. Поэтому в пути станция названа с автором (#407).
+            result?.let { note(item, id, "${titleOf(id, item)} · с телефона", it) }
         }
     }
 
@@ -100,14 +119,20 @@ class DesktopState(
                 outbox?.add(item.obj.copy(metadata = item.obj.metadata + ("pc.action" to action.id)))
             }.onSuccess {
                 _message.value = "${action.label} — заберите на телефоне (плашка на главном экране)"
+                note(item, action.id, "${action.label} · на телефон", ActionResult.Done("отправлено на телефон"))
             }.onFailure {
                 _message.value = "Не удалось положить в очередь"
+                note(
+                    item, action.id, "${action.label} · на телефон",
+                    ActionResult.Failure(it.message ?: "не удалось положить в очередь", recoverable = true),
+                )
             }
         }
     }
 
-    fun onReceived(item: InboxItem) {
+    fun onReceived(item: InboxItem, source: ObjectSource = ObjectSource.LOCAL) {
         _items.update { listOf(item) + it }
+        rememberArrival(item, source)
         // Owner's decision: text from the phone lands straight in the clipboard —
         // arrived → Ctrl+V, the shortest possible path.
         if (item.obj.state.kind == ObjectKind.TEXT) {
@@ -131,7 +156,69 @@ class DesktopState(
                 is ActionResult.Failure -> result.reason
                 else -> null
             }
+            note(item, bubble.capabilityId.value, bubble.title, result)
         }
+    }
+
+    /**
+     * Открыть заново то, что помнит журнал (#407) — по явному тапу человека.
+     *
+     * Только достаёт объект обратно на конвейер: ни одно действие не повторяется само. Point не
+     * строит автоматических цепочек, и «открыть заново» не становится исключением.
+     */
+    fun openAgain(entry: JournalEntry) {
+        val live = _items.value.firstOrNull { it.obj.uri.value == entry.path }
+        if (live != null) return
+        val item = runCatching { reopenPath(entry.path) }.getOrNull()
+        if (item == null) {
+            // Файла может не быть: его унесли, переименовали, вычистили. Честный отказ вместо
+            // пустого экрана — то же правило, что и везде.
+            _message.value = "Файла больше нет: ${entry.name}"
+            return
+        }
+        // Приезд заново не записывается: объект тот же, и переписанное время приезда солгало бы
+        // о том, когда он на самом деле появился на компьютере.
+        _items.update { listOf(item) + it }
+    }
+
+    /** Путь этого объекта, если компьютер его помнит. Ключ — файл: id объекта переживает не всё. */
+    fun pathOf(item: InboxItem): JournalEntry? =
+        _journal.value.firstOrNull { it.path == item.obj.uri.value }
+
+    private fun rememberArrival(item: InboxItem, source: ObjectSource) {
+        val file = java.io.File(item.obj.uri.value)
+        updateJournal {
+            recordArrival(
+                it,
+                JournalEntry(
+                    path = item.obj.uri.value,
+                    name = item.obj.metadata["name"] ?: file.name,
+                    kind = item.obj.state.kind.name,
+                    mime = item.obj.mime,
+                    source = source,
+                    at = item.receivedAt,
+                ),
+            )
+        }
+    }
+
+    /** Станция пути: что применили и чем кончилось. */
+    private fun note(item: InboxItem, capabilityId: String, title: String, result: ActionResult) {
+        updateJournal {
+            recordStep(it, item.obj.uri.value, stepOf(capabilityId, title, clock.now(), result))
+        }
+    }
+
+    /** Имя возможности из реестра; незнакомый id остаётся собой — выдумывать название нечем. */
+    private fun titleOf(id: String, item: InboxItem): String =
+        runCatching { registry.byId(com.point.core.model.CapabilityId(id)).label(item.obj.state) }
+            .getOrDefault(id)
+
+    @Synchronized
+    private fun updateJournal(transform: (List<JournalEntry>) -> List<JournalEntry>) {
+        val next = transform(_journal.value)
+        _journal.value = next
+        runCatching { journalStore?.save(next) }
     }
 
     /** Called from the HTTP thread; suspends it until the window answers or 60s pass. */
