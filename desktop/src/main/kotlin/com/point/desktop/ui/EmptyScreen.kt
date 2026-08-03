@@ -3,6 +3,7 @@ package com.point.desktop.ui
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,7 +38,12 @@ import com.point.desktop.PcConfig
  * есть отвечал на вопрос «как связать устройства» вместо «что здесь делать».
  */
 @Composable
-fun EmptyScreen(config: PcConfig, addresses: List<String>, port: Int) {
+fun EmptyScreen(
+    config: PcConfig,
+    addresses: List<String>,
+    port: Int,
+    onTakeClipboard: () -> Unit = {},
+) {
     Row(
         modifier = Modifier.fillMaxSize().padding(horizontal = 56.dp),
         horizontalArrangement = Arrangement.spacedBy(72.dp, Alignment.CenterHorizontally),
@@ -69,7 +75,12 @@ fun EmptyScreen(config: PcConfig, addresses: List<String>, port: Int) {
                 modifier = Modifier.width(360.dp),
             ) {
                 WayIn("Перетащить файл в окно", PointColors.violet)
-                WayIn("Взять то, что в буфере", PointColors.cyan, hotkey = "Ctrl+Shift+V")
+                WayIn(
+                    "Взять то, что в буфере",
+                    PointColors.cyan,
+                    hotkey = "Ctrl+Shift+V",
+                    onClick = onTakeClipboard,
+                )
                 WayIn("Поделиться с телефона в Point", PointColors.muted)
             }
         }
@@ -102,10 +113,11 @@ private fun Portal() {
 
 /** Способ дать объект: точка-акцент, название и — если есть — горячая клавиша. */
 @Composable
-private fun WayIn(title: String, dot: Color, hotkey: String? = null) {
+private fun WayIn(title: String, dot: Color, hotkey: String? = null, onClick: (() -> Unit)? = null) {
     Row(
         modifier = Modifier.fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
+            .let { if (onClick != null) it.clickable(onClick = onClick) else it }
             .background(Brush.verticalGradient(listOf(PointColors.surface, PointColors.surfaceDeep)))
             .border(1.dp, Color.White.copy(alpha = 0.06f), RoundedCornerShape(14.dp))
             .padding(horizontal = 15.dp, vertical = 11.dp),

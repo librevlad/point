@@ -39,6 +39,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draganddrop.DragAndDropEvent
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.draganddrop.DragAndDropTarget
 import androidx.compose.ui.draganddrop.awtTransferable
 import androidx.compose.ui.text.font.FontWeight
@@ -93,10 +98,28 @@ fun DesktopApp(
     }
 
     var showQr by remember { mutableStateOf(false) }
+
+    // «Взять то, что в буфере» (#285): подпись на экране обещает Ctrl+Shift+V, значит обещание
+    // обязано работать. Хоткей действует, пока окно Point в фокусе; общесистемный — отдельная
+    // работа (см. issue про глобальный хоткей).
+    val takeClipboard = {
+        val text = runCatching {
+            java.awt.Toolkit.getDefaultToolkit().systemClipboard
+                .getData(java.awt.datatransfer.DataFlavor.stringFlavor) as? String
+        }.getOrNull()
+        if (text.isNullOrBlank()) state.say("В буфере пусто") else onTextDropped(text)
+    }
     Surface(
         color = MaterialTheme.colorScheme.surface,
         modifier = Modifier.fillMaxSize()
-            .dragAndDropTarget(shouldStartDragAndDrop = { true }, target = dropTarget),
+            .dragAndDropTarget(shouldStartDragAndDrop = { true }, target = dropTarget)
+            .onPreviewKeyEvent { event ->
+                val hit = event.type == androidx.compose.ui.input.key.KeyEventType.KeyDown &&
+                    event.isCtrlPressed && event.isShiftPressed &&
+                    event.key == androidx.compose.ui.input.key.Key.V
+                if (hit) takeClipboard()
+                hit
+            },
     ) {
         Column(Modifier.fillMaxSize()) {
             // Полоса окна из мокапа (#285): точка-портал, имя и связь — одной строкой в 44 dp.
@@ -137,14 +160,23 @@ fun DesktopApp(
             if (items.isEmpty()) {
                 // Экран без объекта занят тем, чем работу начать (#285): портал, три способа
                 // дать объект и подключение телефона — а не одним лишь QR.
-                EmptyScreen(config, addresses, port)
+                EmptyScreen(config, addresses, port, onTakeClipboard = takeClipboard)
             } else {
-                LazyVerticalGrid(
-                    columns = GridCells.Adaptive(minSize = 320.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    items(items, key = { it.obj.id }) { item -> ItemCard(state, item) }
+                // Конвейер (#285, подход 2a): док прилетевшего слева, объект и его действия —
+                // справа. Сетка карточек ушла: она показывала много объектов сразу и ни одного
+                // как следует, а работа в Point всегда идёт с одним.
+                var selectedId by remember { mutableStateOf<String?>(null) }
+                val selected = items.firstOrNull { it.obj.id == selectedId } ?: items.first()
+                Row(Modifier.fillMaxSize()) {
+                    Dock(
+                        items = items,
+                        selected = selected,
+                        onSelect = { selectedId = it.obj.id },
+                    )
+                    Spacer(Modifier.width(1.dp).fillMaxHeight().background(PointColors.border))
+                    Box(Modifier.weight(1f).fillMaxHeight().padding(24.dp)) {
+                        Conveyor(state, selected)
+                    }
                 }
             }
             }
