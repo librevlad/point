@@ -31,7 +31,9 @@ import com.point.core.flow.DiscoveredPc
 import com.point.core.flow.LinkPath
 import com.point.core.flow.LinkState
 import com.point.core.flow.PcPairing
+import com.point.core.flow.PcSearch
 import com.point.core.flow.linkLabel
+import com.point.core.flow.pcSearchLine
 import com.point.core.ui.Outcome
 import com.point.core.ui.OutcomeBanner
 import com.point.core.ui.Portal
@@ -115,6 +117,13 @@ fun PairPcScreen(
             modifier = Modifier.widthIn(max = PortalColumnWidth).fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(11.dp),
         ) {
+            // Поиск виден, пока идёт (#458). До этого блок «Найдено в сети» появлялся, только
+            // когда что-то УЖЕ нашлось, и секунды сканирования выглядели как «ничего нет, вводите
+            // руками». Кончается поиск тоже словом: «никого не видно» — ответ, а не тишина.
+            pcSearchLine(state.search, state.discovered.size)?.let { line ->
+                PulseLine(line, pulsing = state.search == PcSearch.RUNNING)
+            }
+
             if (state.discovered.isNotEmpty()) {
                 SectionLabel("Найдено в сети")
                 state.discovered.forEachIndexed { index, pc ->
@@ -151,18 +160,7 @@ fun PairPcScreen(
 
             if (state.busy) {
                 // Рукопожатие ждут тем же пульсом, каким Point думает над объектом, — не крутилкой.
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(vertical = 6.dp),
-                ) {
-                    ThinkingDot()
-                    Spacer(Modifier.width(9.dp))
-                    Text(
-                        "Подтвердите на компьютере…",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+                PulseLine("Подтвердите на компьютере…")
             } else {
                 // «Основное действие» экрана — та же светящаяся строка, что главное действие
                 // объекта. Пока связывать нечем, она притушена: строка светится, когда может.
@@ -195,13 +193,42 @@ fun PairPcScreen(
     }
 }
 
+/**
+ * Одна строка ожидания на весь экран: пульс и слово рядом.
+ *
+ * Точка бьётся, пока Point правда ждёт; когда ждать перестал, остаётся слово без пульса — иначе
+ * законченный поиск выглядел бы как незаканчивающийся.
+ */
+@Composable
+private fun PulseLine(text: String, pulsing: Boolean = true) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.padding(vertical = 6.dp),
+    ) {
+        if (pulsing) {
+            ThinkingDot()
+            Spacer(Modifier.width(9.dp))
+        }
+        Text(
+            text,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
 /** Иконка компьютера из общего словаря — та же, что у действия «На компьютер». */
 private const val PC_ICON = "pc"
 
-/** Насколько ярко горит кольцо: живая связь — в полную силу, рукопожатие — тоже, молчание — вполсилы. */
+/**
+ * Насколько ярко горит кольцо: живая связь — в полную силу, рукопожатие — тоже, молчание —
+ * вполсилы. Проверка (#451) — между ними: ответа ещё нет, и обещать связь кольцом рано, но и
+ * гаснуть до молчания, пока запрос в пути, значило бы отвечать за компьютер раньше него.
+ */
 private fun portalIntensity(state: PcScreenState): Float = when {
     state.busy -> 1f
     state.link is LinkState.Live -> 1f
+    state.link is LinkState.Checking -> 0.7f
     else -> 0.4f
 }
 
@@ -231,6 +258,48 @@ private fun PreviewPcDiscovered() = PointTheme(darkTheme = true) {
                 DiscoveredPc(name = "Домашний ПК", host = "192.168.1.77", port = 8391),
             ),
         ),
+        onPair = { _, _ -> },
+        onUnpair = {},
+        onClose = {},
+    )
+}
+
+@Preview(name = "Компьютер · проверяю связь (#451)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@Composable
+private fun PreviewPcChecking() = PointTheme(darkTheme = true) {
+    // Первые секунды после открытия у давно связанного компьютера. Раньше здесь стояло «ещё не
+    // связывались» — утверждение о прошлом, которого не было: память о вчерашнем контакте жила
+    // только в процессе и умирала вместе с ним.
+    PairPcScreen(
+        state = PcScreenState(
+            pairing = PcPairing(host = "192.168.1.42", port = 8391, token = "t"),
+            link = LinkState.Checking,
+            search = PcSearch.RUNNING,
+        ),
+        onPair = { _, _ -> },
+        onUnpair = {},
+        onClose = {},
+    )
+}
+
+@Preview(name = "Компьютер · ищу в сети (#458)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@Composable
+private fun PreviewPcSearching() = PointTheme(darkTheme = true) {
+    // Поиск виден, пока идёт. До этого те же секунды выглядели как «ничего нет, вводите руками».
+    PairPcScreen(
+        state = PcScreenState(search = PcSearch.RUNNING),
+        onPair = { _, _ -> },
+        onUnpair = {},
+        onClose = {},
+    )
+}
+
+@Preview(name = "Компьютер · в сети никого (#458)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@Composable
+private fun PreviewPcSearchedNothing() = PointTheme(darkTheme = true) {
+    // Поиск кончился словом, а не тишиной: пульса нет, ответ есть, ручной ввод — рядом.
+    PairPcScreen(
+        state = PcScreenState(search = PcSearch.DONE),
         onPair = { _, _ -> },
         onUnpair = {},
         onClose = {},

@@ -7,6 +7,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -273,6 +274,41 @@ fun PortalRow(
                 )
             }
         }
+    }
+}
+
+/**
+ * Дверь портала: иконная плита с подписью под ней.
+ *
+ * Тот же язык, что у строки действия, но для служебной двери — той, которой место в углу экрана, а
+ * не в колонке. Отличие от строки одно, и оно принципиальное: **подпись обязательна**. Голая иконка
+ * это загадка (#462) — по стрелке вниз нельзя догадаться, что за ней «Принять файл», а по
+ * шестерёнке, что за ней ключ AI. Поэтому [label] здесь не необязательный параметр, а первый.
+ */
+@Composable
+fun PortalDoor(
+    label: String,
+    onClick: () -> Unit,
+    icon: ImageVector,
+    modifier: Modifier = Modifier,
+    accent: Color = MaterialTheme.colorScheme.primary,
+) {
+    Column(
+        modifier = modifier
+            .clip(PortalPlateShape)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 6.dp, vertical = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(5.dp),
+    ) {
+        PortalPlate(accent = accent, icon = icon, size = 40.dp)
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 

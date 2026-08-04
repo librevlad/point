@@ -9,6 +9,7 @@ import com.point.core.flow.CapabilityRegistry
 import com.point.core.flow.CapabilityUsage
 import com.point.core.flow.ChosenApp
 import com.point.core.flow.ChosenApps
+import com.point.core.flow.CollectionContent
 import com.point.core.flow.CrashLog
 import com.point.core.flow.Enrichment
 import com.point.core.flow.edgeDetail
@@ -878,17 +879,31 @@ class FlowViewModel @Inject constructor(
 
     // --- AI chat (#4): a multi-turn conversation grounded in the object ---
 
-    /** Open the chat over [obj] (from «Спросить AI»). Cloud consent is already granted by onBubble. */
+    /** Идущий вопрос к модели (#453): его можно остановить, и его ответ имеет право прийти
+     *  в закрытый экран — разговор ждёт человека там, где он его оставил. */
+    private var chatJob: Job? = null
+
+    /**
+     * Открыть разговор об [obj] (тап «Спросить AI»). Согласие на облако уже взято в `onBubble`.
+     *
+     * Разговор об ЭТОМ объекте не начинается заново (#453): если он уже был, экран возвращается к
+     * нему целиком — вместе с идущим вопросом, если тот ещё в пути. Новый пустой заводится только
+     * под новый объект: разговор принадлежит своему объекту, и переносить сказанное на чужой было
+     * бы хуже, чем начать с чистого листа.
+     */
     private fun openChat(obj: PointObject) {
         _ui.update {
+            val kept = it.chat?.takeIf { c -> c.obj.id == obj.id }
             it.copy(
-                chat = ChatState(obj = obj, suggestions = aiSuggestions(obj.state.kind)),
+                chat = kept ?: ChatState(obj = obj, suggestions = aiSuggestions(obj.state.kind)),
+                chatOpen = true,
                 busy = null, inputPrompt = null, message = null, messageOutcome = Outcome.NONE,
             )
         }
     }
 
-    fun closeChat() = _ui.update { it.copy(chat = null) }
+    /** «Назад» из разговора: закрывается экран, а не разговор (#453). */
+    fun closeChat() = _ui.update { it.copy(chatOpen = false) }
 
     /**
      * Send a chat message. A «сделай word/excel/pdf» request produces a real object and lands on it
@@ -900,30 +915,71 @@ class FlowViewModel @Inject constructor(
         if (message.isEmpty() || chat.pending) return
         val history = chat.messages
         val obj = chat.obj
-        _ui.update { it.copy(chat = chat.copy(messages = history + ChatMessage(ChatRole.USER, message), pending = true)) }
-        viewModelScope.launch {
+        _ui.update {
+            it.copy(
+                chat = chat.copy(
+                    messages = history + ChatMessage(ChatRole.USER, message),
+                    pending = true,
+                    notice = null, // новый вопрос отменяет прошлую остановку — она про прошлый
+                ),
+            )
+        }
+        chatJob?.cancel()
+        chatJob = viewModelScope.launch {
             val target = aiTransformTarget(message)
             if (target != null) {
-                val result = runCatching { resolver.realizerFor(target).perform(obj, null) }.getOrNull()
+                val result = runCatching { resolver.realizerFor(target).perform(obj, null) }
+                    // Остановленное человеком не договаривает: без этого отмена доезжала бы до
+                    // реплики «Не удалось создать документ» — отказ, которого не было.
+                    .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
+                    .getOrNull()
                 if (result is ActionResult.Success) {
                     runCatching { sensory.success() }
-                    _ui.update { it.copy(chat = null) } // leave the chat and continue on the new object
+                    // Экран уходит на новый объект, разговор остаётся при своём (#453).
+                    _ui.update { s -> s.copy(chat = s.chat?.copy(pending = false), chatOpen = false) }
                     pushFrame(store.put(result.result), target, null)
                 } else {
                     appendChatAssistant((result as? ActionResult.Failure)?.reason ?: "Не удалось создать документ")
                 }
             } else {
                 val reply = runCatching { aiChatResponder.reply(obj, history, message) }
-                    .getOrElse { "Не получилось ответить: ${it.message ?: "ошибка"}" }
+                    .getOrElse {
+                        if (it is kotlinx.coroutines.CancellationException) throw it
+                        "Не получилось ответить: ${it.message ?: "ошибка"}"
+                    }
                 appendChatAssistant(reply)
             }
         }
     }
 
+    /**
+     * Остановить идущий вопрос (#453). Кнопки отмены у разговора не было вовсе: пока модель
+     * думает, поле ввода погашено, и человеку оставалось только ждать или уйти — а ушедшему
+     * ответ выбрасывался молча вместе с потраченной квотой.
+     *
+     * Остановка говорит словами и не притворяется репликой собеседника: заданный вопрос остаётся
+     * в разговоре, ответа под ним нет, и сказано, почему.
+     */
+    fun cancelChatMessage() {
+        val job = chatJob ?: return
+        chatJob = null
+        job.cancel()
+        _ui.update { s -> s.chat?.let { c -> s.copy(chat = c.copy(pending = false, notice = "Ответ остановлен")) } ?: s }
+    }
+
+    /** Ответ ложится в разговор, а не на экран: закрытый экран больше не выбрасывает пришедшее
+     *  молча (#453) — человек вернётся и увидит ответ, за который уже заплачена квота. */
     private fun appendChatAssistant(text: String) {
+        chatJob = null
         _ui.update { s ->
             val c = s.chat ?: return@update s
-            s.copy(chat = c.copy(messages = c.messages + ChatMessage(ChatRole.ASSISTANT, text), pending = false))
+            s.copy(
+                chat = c.copy(
+                    messages = c.messages + ChatMessage(ChatRole.ASSISTANT, text),
+                    pending = false,
+                    notice = null,
+                ),
+            )
         }
     }
 
@@ -933,8 +989,21 @@ class FlowViewModel @Inject constructor(
         // A tiny prefs read; the store is warmed when it's created (Activity start), so it
         // is in-memory by the time the gear or an AI-no-key failure summons the screen.
         _ui.update {
+            // Отказ, ради которого сюда и пришли, экран ключей не стирает (#452): человек,
+            // нажавший «Отмена», возвращается к объекту, где причина по-прежнему сказана словами.
+            // Всё остальное сказанное — стирается, как раньше: «Ключ AI сохранён» из прошлого
+            // захода не имеет отношения к этому.
+            val refusal = keyOfferLabel(it.message) != null
             it.copy(
-                keyScreen = userKeys.read() ?: UserAiConfig.DEFAULT, busy = null, message = null, messageOutcome = Outcome.NONE, inputPrompt = null,
+                keyScreen = userKeys.read() ?: UserAiConfig.DEFAULT, busy = null,
+                // …и он же стоит НА экране ключей (#467). Сюда пришли по предложению под отказом —
+                // то есть с вопросом «какой из семи ключей задать»; ответ на него живёт в тексте
+                // отказа, а не в памяти человека, и терять его по дороге незачем. Заполняется
+                // только от отказа: пришедшему шестерёнкой объяснять нечего.
+                keyScreenNote = it.message.takeIf { _ -> refusal },
+                message = it.message.takeIf { _ -> refusal },
+                messageOutcome = if (refusal) it.messageOutcome else Outcome.NONE,
+                inputPrompt = null,
                 soundEnabled = runCatching { sensorySettings.isSoundEnabled() }.getOrDefault(true),
                 privacyLevel = runCatching { cloudPrivacy.level() }
                     .getOrDefault(com.point.core.flow.PrivacyLevel.DEFAULT),
@@ -978,15 +1047,24 @@ class FlowViewModel @Inject constructor(
         }
     }
 
-    fun closeKeySettings() = _ui.update { it.copy(keyScreen = null) }
+    fun closeKeySettings() = _ui.update { it.copy(keyScreen = null, keyScreenNote = null) }
 
     // --- «Компьютер» (#147): pair once, then the «На компьютер» bubble appears. ---
 
     private var discoveryJob: Job? = null
 
+    /** Правка только живого экрана связи: закрыли — правке некуда ложиться, и она не воскрешает его. */
+    private fun updatePc(block: (PcScreenState) -> PcScreenState) {
+        _ui.update { s -> s.pcScreen?.let { s.copy(pcScreen = block(it)) } ?: s }
+    }
+
+    /** Идёт ли прямо сейчас запрос к компьютеру (#451) — пока идёт, экран говорит «проверяю связь…». */
+    private val pcProbing = kotlinx.coroutines.flow.MutableStateFlow(false)
+
     fun openPcSettings() {
+        val pairing = pcPairings.current()
         _ui.update {
-            it.copy(pcScreen = PcScreenState(pairing = pcPairings.current()), busy = null, message = null, messageOutcome = Outcome.NONE)
+            it.copy(pcScreen = PcScreenState(pairing = pairing), busy = null, message = null, messageOutcome = Outcome.NONE)
         }
         // Состояние связи следует за контактами, а не за таймером.
         //
@@ -994,31 +1072,43 @@ class FlowViewModel @Inject constructor(
         // бесконечная корутина в viewModelScope не даёт `runTest` завершиться, и прогон CI висел
         // час сорок вместо трёх минут. Бесконечный цикл ради секундной точности — плохая цена;
         // экран и так перерисуется, когда компьютер отзовётся.
+        //
+        // Вторая половина ответа — сам запрос (#451): пока он в пути, о связи ещё нечего утверждать,
+        // и экран говорит «проверяю связь…» вместо приговора о прошлом.
+        pcProbing.value = pairing != null
         linkJob?.cancel()
         linkJob = viewModelScope.launch {
-            linkMonitor.last.collect { contact ->
-                val link = com.point.core.flow.linkStateOf(
-                    contact?.at, contact?.path, System.currentTimeMillis(),
+            kotlinx.coroutines.flow.combine(linkMonitor.last, pcProbing) { contact, probing ->
+                com.point.core.flow.linkStateOf(
+                    contact?.at, contact?.path, System.currentTimeMillis(), probing,
                 )
-                _ui.update { s -> s.pcScreen?.let { s.copy(pcScreen = it.copy(link = link)) } ?: s }
-            }
+            }.collect { link -> updatePc { it.copy(link = link) } }
         }
         // #80 v2: the natural sync point — the PC may have gained abilities since pairing.
-        pcPairings.current()?.let { pairing ->
+        // Он же и есть тот самый запрос, по которому видно, жив ли компьютер: удачный ход
+        // рассказывает монитору о контакте, неудачный оставляет прежний ответ в силе.
+        pairing?.let {
             viewModelScope.launch {
-                runCatching { pcTransport.fetchCaps(pairing)?.let { caps -> pcCaps.save(caps) } }
+                runCatching { pcTransport.fetchCaps(it)?.let { caps -> pcCaps.save(caps) } }
+                pcProbing.value = false
             }
         }
         refreshFromPc(force = true)
         discoveryJob?.cancel()
         discoveryJob = viewModelScope.launch {
-            runCatching {
-                pcDiscovery.discover().collect { found ->
-                    _ui.update { s ->
-                        s.pcScreen?.let { s.copy(pcScreen = it.copy(discovered = found)) } ?: s
-                    }
-                }
+            updatePc { it.copy(search = com.point.core.flow.PcSearch.RUNNING) }
+            // Окно поиска (#458): mDNS в сети с изоляцией клиентов не ответит никогда, и пульс без
+            // конца был бы вторым враньём поверх первого. Сам сканер при этом продолжает работать —
+            // компьютер, включённый позже, всё равно появится в списке.
+            val window = launch {
+                kotlinx.coroutines.delay(com.point.core.flow.PC_SEARCH_WINDOW_MS)
+                updatePc { it.copy(search = com.point.core.flow.PcSearch.DONE) }
             }
+            runCatching {
+                pcDiscovery.discover().collect { found -> updatePc { it.copy(discovered = found) } }
+            }
+            window.cancel()
+            updatePc { it.copy(search = com.point.core.flow.PcSearch.DONE) }
         }
     }
 
@@ -1026,6 +1116,7 @@ class FlowViewModel @Inject constructor(
 
     fun closePcSettings() {
         linkJob?.cancel()
+        pcProbing.value = false
         refreshFromPc() // #161: Home is about to show — its banner must be current
         discoveryJob?.cancel()
         discoveryJob = null
@@ -1042,18 +1133,28 @@ class FlowViewModel @Inject constructor(
             _ui.update { it.copy(message = "Это не код подключения Point для ПК", messageOutcome = Outcome.FAILED) }
             return
         }
-        _ui.update { it.copy(pcScreen = PcScreenState(pairing = pcPairings.current(), busy = true), message = null, messageOutcome = Outcome.NONE) }
+        _ui.update {
+            it.copy(
+                pcScreen = (it.pcScreen ?: PcScreenState()).copy(pairing = pcPairings.current(), busy = true, error = null),
+                message = null,
+                messageOutcome = Outcome.NONE,
+            )
+        }
         viewModelScope.launch {
             runCatching { pcPairings.save(pairing) }
             runCatching { pcTransport.fetchCaps(pairing)?.let { caps -> pcCaps.save(caps) } }
             runCatching { pcTransport.pushPhoneCaps(pairing, PHONE_ADVERTISED) }
             refreshFromPc(force = true)
-            _ui.update { it.copy(pcScreen = PcScreenState(pairing = pairing)) }
+            _ui.update {
+                it.copy(pcScreen = (it.pcScreen ?: PcScreenState()).copy(pairing = pairing, busy = false, error = null))
+            }
         }
     }
 
     fun pairPc(host: String, port: Int) {
-        _ui.update { it.copy(pcScreen = PcScreenState(pairing = pcPairings.current(), busy = true)) }
+        // Найденное в сети и ход поиска переживают рукопожатие: человек тапнул по строке из списка,
+        // и список, исчезающий на время попытки, лишает его возможности попробовать соседнюю.
+        _ui.update { it.copy(pcScreen = (it.pcScreen ?: PcScreenState()).copy(pairing = pcPairings.current(), busy = true, error = null)) }
         viewModelScope.launch {
             val device = "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}"
             val pairing = runCatching { pcTransport.pair(host, port, device) }.getOrNull()
@@ -1064,14 +1165,13 @@ class FlowViewModel @Inject constructor(
                 runCatching { pcTransport.fetchCaps(pairing)?.let { caps -> pcCaps.save(caps) } }
                 runCatching { pcTransport.pushPhoneCaps(pairing, PHONE_ADVERTISED) }
                 refreshFromPc(force = true) // #161: the fresh pairing may already have a queue
-                _ui.update { it.copy(pcScreen = PcScreenState(pairing = pairing)) }
+                updatePc { it.copy(pairing = pairing, busy = false, error = null) }
             } else {
-                _ui.update {
+                updatePc {
                     it.copy(
-                        pcScreen = PcScreenState(
-                            pairing = pcPairings.current(),
-                            error = "Не удалось связаться — проверьте адрес и подтвердите на компьютере",
-                        ),
+                        pairing = pcPairings.current(),
+                        busy = false,
+                        error = "Не удалось связаться — проверьте адрес и подтвердите на компьютере",
                     )
                 }
             }
@@ -1082,7 +1182,13 @@ class FlowViewModel @Inject constructor(
         viewModelScope.launch {
             runCatching { pcPairings.clear() }
             runCatching { pcCaps.clear() }
-            _ui.update { it.copy(pcScreen = PcScreenState(pairing = null)) }
+            // Связи больше нет ни с кем — и утверждать о ней нечего: память о контакте уходит
+            // вместе с пейрингом, иначе вчерашний компьютер рассказывал бы о следующем чужую
+            // правду (#451). Найденное в сети остаётся: отвязываются, чтобы связаться с другим.
+            runCatching { linkMonitor.forget() }
+            updatePc {
+                it.copy(pairing = null, busy = false, error = null, link = com.point.core.flow.LinkState.Never)
+            }
         }
     }
 
@@ -1224,7 +1330,12 @@ class FlowViewModel @Inject constructor(
     fun saveAiConfig(config: UserAiConfig) {
         viewModelScope.launch {
             runCatching { userKeys.save(config) }
-            _ui.update { it.copy(keyScreen = null, message = "Ключ AI сохранён", messageOutcome = Outcome.DONE) }
+            _ui.update {
+                it.copy(
+                    keyScreen = null, keyScreenNote = null,
+                    message = "Ключ AI сохранён", messageOutcome = Outcome.DONE,
+                )
+            }
         }
     }
 
@@ -1387,9 +1498,13 @@ class FlowViewModel @Inject constructor(
             is ActionResult.Failure -> {
                 runCatching { sensory.failure() } // M4: a failure bumps, never buzzes long
                 runCatching { journal.record(UsageEvent(UsageEventType.FAILED, bubble.capabilityId.value)) }
-                // A "no AI key" failure summons the key screen on demand instead of just erroring.
-                if (result.reason.contains("задайте свой ключ")) openKeySettings()
-                else _ui.update { it.copy(busy = null, busyStage = null, message = result.reason, messageOutcome = Outcome.FAILED) }
+                // Отказ говорит сам за себя — любой, включая «нет ключа» (#452). Раньше этот один
+                // подменялся экраном настроек, а причина при этом стиралась: человек тапал
+                // «Понять», ждал и получал экран про ключи без единого слова о том, почему тот
+                // открылся. «Отмена» возвращала его к объекту, где не осталось ничего, — снаружи
+                // неотличимо от «действие ничего не сделало». Экран ключей теперь стоит рядом с
+                // причиной предложением ([keyOfferLabel]), по которому человек идёт сам.
+                _ui.update { it.copy(busy = null, busyStage = null, message = result.reason, messageOutcome = Outcome.FAILED) }
             }
             is ActionResult.NeedsInput -> {
                 pendingBubble = bubble
@@ -1441,8 +1556,8 @@ class FlowViewModel @Inject constructor(
             declineCloud()
             return true
         }
-        if (_ui.value.chat != null) {
-            closeChat() // #4: back leaves the chat, returning to the object
+        if (openChatOf(_ui.value) != null) {
+            closeChat() // #4: back leaves the chat, returning to the object (#453: разговор остаётся)
             return true
         }
         if (_ui.value.keyScreen != null) {
@@ -1518,6 +1633,10 @@ class FlowViewModel @Inject constructor(
 
     fun endFlow() {
         cancelEnrichment()
+        // Флоу кончился — кончился и разговор о его объекте (#453): держать вопрос в пути некому,
+        // и ответ, пришедший в пустоту, ляжет в разговор, которого больше нет.
+        chatJob?.cancel()
+        chatJob = null
         stack.clear()
         pendingBubble = null
         pendingPreviewBubble = null
@@ -1612,14 +1731,19 @@ class FlowViewModel @Inject constructor(
     private fun loadChildrenIfCollection(obj: PointObject) {
         if (obj.state.kind != ObjectKind.COLLECTION) return
         viewModelScope.launch {
-            val items = runCatching { store.children(obj) }.getOrDefault(emptyList())
-            if (items.isEmpty()) return@launch
+            val content = runCatching { store.children(obj) }
+                .getOrDefault(CollectionContent.empty())
+            if (content.shown.isEmpty()) return@launch
 
             val topIndex = stack.lastIndex
             val top = stack.getOrNull(topIndex) ?: return@launch
             if (top.obj.id != obj.id) return@launch
 
-            val refreshed = top.copy(items = items)
+            val refreshed = top.copy(
+                items = content.shown,
+                itemsTotal = content.total,
+                itemsTotalAtLeast = content.atLeast,
+            )
             stack[topIndex] = refreshed
             _ui.update { if (it.frame?.obj?.id == obj.id) it.copy(frame = refreshed) else it }
         }

@@ -1,5 +1,8 @@
 package com.point.data
 
+import com.point.core.flow.GROQ_PROVIDER_ID
+import com.point.core.flow.KEY_SETTINGS_CALL
+import com.point.core.flow.SpeechKeyNeed
 import com.point.core.flow.Transcription
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
@@ -32,9 +35,8 @@ class GroqWhisperSpeechToTextTest {
         )
     }
 
-    private fun whisper(http: FakeHttpFiles, key: String = "gsk-free") = GroqWhisperSpeechToText(
-        http, key, "https://api.groq.com/openai/v1", "whisper-large-v3-turbo",
-    )
+    private fun whisper(http: FakeHttpFiles, key: () -> String = { "gsk-free" }) =
+        GroqWhisperSpeechToText(http, key, "https://api.groq.com/openai/v1", "whisper-large-v3-turbo")
 
     private fun heard(text: String) = HttpResult(200, """{"text":"$text"}""")
 
@@ -104,10 +106,43 @@ class GroqWhisperSpeechToTextTest {
     fun `нет ключа — честный отказ, а не запрос без ключа`() = runTest {
         val http = FakeHttpFiles(onPost = { heard("неважно") })
 
-        val e = runCatching { whisper(http, key = "").transcribe(recording("audio/ogg")) }.exceptionOrNull()
+        val e = runCatching { whisper(http, key = { "" }).transcribe(recording("audio/ogg")) }.exceptionOrNull()
 
-        assertTrue(e!!.message!!.contains("Whisper не настроен"))
+        val said = e!!.message!!
+        assertTrue(said.contains("Whisper не настроен"))
+        assertTrue("названо, ЧЕЙ ключ нужен: $said", said.contains("ключ Groq"))
+        assertTrue("сказано, куда идти: $said", said.contains(KEY_SETTINGS_CALL))
         assertTrue(http.posts.isEmpty())
+    }
+
+    // --- Ключ человека, а не ключ сборки (#467) ---
+
+    @Test
+    fun `ключ спрашивается на каждый запрос — введённый минуту назад работает сразу`() = runTest {
+        // Корень #467: ключ захватывался при сборке графа, поэтому введённый человеком не включал
+        // ничего до перезапуска — а в раздаваемой сборке не включал никогда.
+        var key = ""
+        val whisper = whisper(FakeHttpFiles(onPost = { heard("текст") }), key = { key })
+
+        assertEquals(SpeechKeyNeed("Whisper слушает по ключу Groq", GROQ_PROVIDER_ID), whisper.missingKey())
+
+        key = "gsk-от-человека" // человек ввёл ключ на экране ключей
+
+        assertNull("движок включился без пересборки графа", whisper.missingKey())
+    }
+
+    @Test
+    fun `в запрос уходит тот ключ, что задан сейчас, а не тот, что был при сборке`() = runTest {
+        var key = "gsk-старый"
+        val http = FakeHttpFiles(onPost = { heard("текст") })
+        val whisper = whisper(http, key = { key })
+
+        whisper.transcribe(recording("audio/ogg"))
+        key = "gsk-новый"
+        whisper.transcribe(recording("audio/ogg"))
+
+        assertEquals("Bearer gsk-старый", http.posts.first().headers["Authorization"])
+        assertEquals("Bearer gsk-новый", http.posts.last().headers["Authorization"])
     }
 
     @Test

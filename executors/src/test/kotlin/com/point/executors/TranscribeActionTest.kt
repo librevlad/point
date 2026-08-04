@@ -1,9 +1,14 @@
 package com.point.executors
 
+import com.point.core.flow.GROQ_PROVIDER_ID
+import com.point.core.flow.KEY_SETTINGS_CALL
 import com.point.core.flow.LISTENING
 import com.point.core.flow.META_SEMANTIC_SUMMARY
 import com.point.core.flow.ObjectStore
+import com.point.core.flow.SpeechKeyNeed
+import com.point.core.flow.SpeechReadiness
 import com.point.core.flow.SpeechToText
+import com.point.core.flow.refusalNeedsKey
 import com.point.core.flow.Transcription
 import com.point.core.model.ActionResult
 import com.point.core.model.Feature
@@ -32,7 +37,7 @@ class TranscribeActionTest {
         override suspend fun ingest(sourceUri: String, mime: String) = error("unused")
         override suspend fun ingestMultiple(sources: List<String>) = error("unused")
         override suspend fun put(result: ResultObject) = error("unused")
-        override suspend fun children(collection: PointObject) = error("unused")
+        override suspend fun children(collection: PointObject, limit: Int) = error("unused")
         override suspend fun readText(obj: PointObject, limit: Int) = error("unused")
         override suspend fun newScratchFile(extension: String) =
             ScratchRef(File.createTempFile("point-", ".$extension").apply { deleteOnExit() }.absolutePath)
@@ -56,11 +61,28 @@ class TranscribeActionTest {
         override suspend fun transcribe(obj: PointObject): Transcription = error(reason)
     }
 
+    /** Ключи заданы — слушать есть кому. */
+    private val ready = SpeechReadiness { emptyList() }
+
+    /** Ключей нет ни у кого: ровно то состояние, в котором владелец получил непонятную ошибку. */
+    private val keyless = SpeechReadiness {
+        listOf(
+            SpeechKeyNeed("Whisper слушает по ключу Groq", GROQ_PROVIDER_ID),
+            SpeechKeyNeed("модель общего назначения — по любому ключу AI"),
+        )
+    }
+
+    /** Движок, спрашивать который без ключа было бы ошибкой, — и она будет видна. */
+    private val forbidden = object : SpeechToText {
+        override suspend fun transcribe(obj: PointObject): Transcription =
+            error("движок спросили, хотя ключей нет")
+    }
+
     // --- Пузырёк: что можно сделать с записью ---
 
     @Test
     fun `«Расшифровать» появляется на записи и только на ней`() {
-        val cap = TranscribeCapability()
+        val cap = TranscribeCapability(ready)
 
         assertTrue(cap.accepts(ObjectState(ObjectKind.AUDIO)))
         assertFalse(cap.accepts(ObjectState(ObjectKind.IMAGE)))
@@ -72,7 +94,7 @@ class TranscribeActionTest {
     fun `распознавания до тапа не бывает — действие объявлено сетевым и долгим`() {
         // Инвариант первого экрана: сеть держится вне ≤300 мс объявлением, а не дисциплиной.
         // Сломается объявление — сломается и обещание, поэтому оно проверяется здесь.
-        val meta = TranscribeCapability().meta
+        val meta = TranscribeCapability(ready).meta
 
         assertTrue("сеть — только после выбора человека", meta.network)
         assertEquals(com.point.core.flow.Latency.SLOW, meta.latency)
@@ -82,8 +104,41 @@ class TranscribeActionTest {
     fun `расшифровка обещает текст — дальше он живёт по общим правилам графа`() {
         assertEquals(
             ObjectState(ObjectKind.TEXT),
-            TranscribeCapability().produces(ObjectState(ObjectKind.AUDIO)),
+            TranscribeCapability(ready).produces(ObjectState(ObjectKind.AUDIO)),
         )
+    }
+
+    // --- Без ключей это видно ДО тапа (#467) ---
+
+    @Test
+    fun `без единого ключа название действия само говорит, что нужен ключ`() {
+        assertEquals("Расшифровать", TranscribeCapability(ready).label(ObjectState(ObjectKind.AUDIO)))
+        assertEquals(
+            "Расшифровать · нужен ключ",
+            TranscribeCapability(keyless).label(ObjectState(ObjectKind.AUDIO)),
+        )
+    }
+
+    @Test
+    fun `без ключей действие остаётся на месте — прятать его значило бы прятать саму способность`() {
+        assertTrue(TranscribeCapability(keyless).accepts(ObjectState(ObjectKind.AUDIO)))
+    }
+
+    @Test
+    fun `без ключей отказ приходит до ожидания и называет провайдеров`() = runTest {
+        val stages = stagesHeard {
+            val result = TranscribeRealizer(store, forbidden, keyless).perform(recording(540 * 1024))
+
+            assertTrue(result is ActionResult.Failure)
+            result as ActionResult.Failure
+            assertTrue("назван Groq: ${result.reason}", result.reason.contains("ключу Groq"))
+            assertTrue("назван любой AI: ${result.reason}", result.reason.contains("любому ключу AI"))
+            assertTrue("сказано, куда идти", result.reason.contains(KEY_SETTINGS_CALL))
+            assertTrue("экран откроет ключи сам", refusalNeedsKey(result.reason))
+            assertTrue("это чинится ключом", result.recoverable)
+        }
+
+        assertEquals("«Слушаю запись…» над работой, которой не будет, — обещание впустую", emptyList<String>(), stages)
     }
 
     // --- Работа ---
@@ -93,7 +148,7 @@ class TranscribeActionTest {
         // Суть НЕ вторым действием: цепочка — это когда Point сам запускает следующее действие.
         // Здесь один тап, один запрос к движку, один объект.
         val heard = Transcription.Heard("Перезвони мне до шести", "Просят перезвонить до шести")
-        val result = TranscribeRealizer(store, engine(heard)).perform(recording(1024))
+        val result = TranscribeRealizer(store, engine(heard), ready).perform(recording(1024))
 
         assertTrue(result is ActionResult.Success)
         val out = (result as ActionResult.Success).result
@@ -110,7 +165,7 @@ class TranscribeActionTest {
         // расшифровка пользуется им же, а не заводит свой экран.
         runTest {
             val heard = Transcription.Heard("Длинный текст", "Просят перезвонить")
-            val out = (TranscribeRealizer(store, engine(heard)).perform(recording(1024)) as ActionResult.Success).result
+            val out = (TranscribeRealizer(store, engine(heard), ready).perform(recording(1024)) as ActionResult.Success).result
 
             assertEquals("Просят перезвонить", out.metadata[META_SEMANTIC_SUMMARY])
         }
@@ -118,7 +173,7 @@ class TranscribeActionTest {
 
     @Test
     fun `без сути объект не получает пустого обещания`() = runTest {
-        val out = (TranscribeRealizer(store, engine(Transcription.Heard("Только слова")))
+        val out = (TranscribeRealizer(store, engine(Transcription.Heard("Только слова")), ready)
             .perform(recording(1024)) as ActionResult.Success).result
 
         assertFalse(META_SEMANTIC_SUMMARY in out.metadata)
@@ -128,7 +183,7 @@ class TranscribeActionTest {
 
     @Test
     fun `тишина говорит про запись, и повторять её незачем`() = runTest {
-        val result = TranscribeRealizer(store, engine(Transcription.Silence)).perform(recording(1024))
+        val result = TranscribeRealizer(store, engine(Transcription.Silence), ready).perform(recording(1024))
 
         assertTrue(result is ActionResult.Failure)
         result as ActionResult.Failure
@@ -138,7 +193,7 @@ class TranscribeActionTest {
 
     @Test
     fun `сбой движка доходит до человека его же словами, а не пустым текстом`() = runTest {
-        val result = TranscribeRealizer(store, brokenEngine("Этот формат записи модель не читает"))
+        val result = TranscribeRealizer(store, brokenEngine("Этот формат записи модель не читает"), ready)
             .perform(recording(1024, mime = "audio/amr"))
 
         assertTrue(result is ActionResult.Failure)
@@ -154,7 +209,7 @@ class TranscribeActionTest {
         // 3 минуты opus ≈ 540 КБ. Молчание здесь читается как «зависло».
         val heard = Transcription.Heard("текст")
         val stages = stagesHeard {
-            TranscribeRealizer(store, engine(heard)).perform(recording(540 * 1024))
+            TranscribeRealizer(store, engine(heard), ready).perform(recording(540 * 1024))
         }
 
         assertEquals(1, stages.size)
@@ -166,7 +221,7 @@ class TranscribeActionTest {
     @Test
     fun `над короткой записью лишних обещаний нет`() = runTest {
         val stages = stagesHeard {
-            TranscribeRealizer(store, engine(Transcription.Heard("текст"))).perform(recording(60 * 1024))
+            TranscribeRealizer(store, engine(Transcription.Heard("текст")), ready).perform(recording(60 * 1024))
         }
 
         assertEquals(listOf(LISTENING), stages)

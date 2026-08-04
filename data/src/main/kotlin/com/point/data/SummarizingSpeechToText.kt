@@ -2,6 +2,7 @@ package com.point.data
 
 import com.point.core.flow.LlmClient
 import com.point.core.flow.SUMMARIZE_PROMPT
+import com.point.core.flow.SpeechKeyNeed
 import com.point.core.flow.SpeechToText
 import com.point.core.flow.Transcription
 import com.point.core.flow.parseSummary
@@ -39,6 +40,9 @@ class SummarizingSpeechToText(
     private val engine: SpeechToText,
     private val llm: LlmClient,
 ) : SpeechToText {
+
+    /** Готовность — про слух, а не про суть: отвечает тот, кто слушает; обёртка её только передаёт. */
+    override fun missingKey(): SpeechKeyNeed? = engine.missingKey()
 
     override suspend fun transcribe(obj: PointObject): Transcription = withContext(Dispatchers.IO) {
         val heard = engine.transcribe(obj)

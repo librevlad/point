@@ -20,6 +20,7 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -39,6 +40,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -83,6 +85,9 @@ fun AiChatScreen(
     chat: ChatState,
     onSend: (String) -> Unit,
     onClose: () -> Unit,
+    /** Остановить идущий ответ (#453). Пока модель думает, отправлять нечего — и ровно там, где
+     *  стояла погашенная «Отправить», стоит живая «Остановить». */
+    onCancel: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxSize().imePadding()) {
@@ -139,7 +144,19 @@ fun AiChatScreen(
             }
         }
 
-        ChatInput(enabled = !chat.pending, onSend = onSend)
+        // Остановленный ответ говорит словами (#453): вопрос остался в разговоре, ответа под ним
+        // нет — и без этой строки исчезнувшие точки читались бы как «оно сломалось».
+        chat.notice?.let { notice ->
+            Text(
+                text = notice,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                textAlign = TextAlign.Center,
+            )
+        }
+
+        ChatInput(pending = chat.pending, onSend = onSend, onCancel = onCancel)
     }
 }
 
@@ -230,8 +247,13 @@ private fun TypingBubble() {
     }
 }
 
+/**
+ * Строка ввода. Пока идёт ответ ([pending]), отправлять нечего — и кнопка не гаснет, а меняет
+ * желание: «Остановить» (#453). До этого выход из ожидания был только один — уйти с экрана,
+ * бросив идущий запрос вместе с потраченной квотой.
+ */
 @Composable
-private fun ChatInput(enabled: Boolean, onSend: (String) -> Unit) {
+private fun ChatInput(pending: Boolean, onSend: (String) -> Unit, onCancel: () -> Unit) {
     // `rememberSaveable` (#114): недописанный вопрос переживает поворот телефона — иначе он
     // пропадал молча, и человек набирал его заново.
     var text by rememberSaveable { mutableStateOf("") }
@@ -247,21 +269,24 @@ private fun ChatInput(enabled: Boolean, onSend: (String) -> Unit) {
             placeholder = { Text("Задайте вопрос…") },
             maxLines = 4,
         )
-        val canSend = enabled && text.isNotBlank()
+        val canSend = !pending && text.isNotBlank()
+        val active = pending || canSend
         // Отправка — иконная плита дизайн-системы, и она гаснет до 45%, когда отправлять нечего:
         // то же правило, что у «Сохранить» и «Связать» («светится, когда может»), а не серый
-        // Material-тинт.
+        // Material-тинт. Пока идёт ответ, плита не гаснет, а меняет желание на «Остановить» (#453).
         Box(
             modifier = Modifier
                 .clip(PortalPlateShape)
-                .clickable(enabled = canSend) { onSend(text); text = "" }
-                .semantics { contentDescription = "Отправить" },
+                .clickable(enabled = active) {
+                    if (pending) onCancel() else { onSend(text); text = "" }
+                }
+                .semantics { contentDescription = if (pending) "Остановить" else "Отправить" },
         ) {
             PortalPlate(
                 accent = MaterialTheme.colorScheme.primary,
-                icon = Icons.AutoMirrored.Filled.Send,
+                icon = if (pending) Icons.Filled.Close else Icons.AutoMirrored.Filled.Send,
                 onGlass = false,
-                modifier = Modifier.graphicsLayer { alpha = if (canSend) 1f else 0.45f },
+                modifier = Modifier.graphicsLayer { alpha = if (active) 1f else 0.45f },
             )
         }
     }

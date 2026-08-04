@@ -26,8 +26,15 @@ data class FlowFrame(
     val bubbles: List<Bubble>,
     val viaCapability: CapabilityId? = null,
     val viaTitle: String? = null,
-    /** For a COLLECTION: its items (files), loaded async after the frame is pushed. */
+    /** For a COLLECTION: its items (files), loaded async after the frame is pushed.
+     *  Не длиннее предела обхода (`COLLECTION_ITEMS_LIMIT`) — сколько их всего, говорит
+     *  [itemsTotal]. */
     val items: List<PointObject> = emptyList(),
+    /** Сколько файлов в наборе всего (0 — ещё не считали). Отличается от `items.size`, когда
+     *  набор больше предела: список обрезан, и экран обязан назвать настоящее число (#460). */
+    val itemsTotal: Int = 0,
+    /** Обход упёрся в свой потолок: [itemsTotal] — «не меньше чем», а не точное число. */
+    val itemsTotalAtLeast: Boolean = false,
     /** Things extraction found *inside* this object (#222) — the waybill number, the branch
      *  address, the deadline. Not the same as [items]: those are files the object contains,
      *  these are things the world contains that the object mentions. Grows as waves land. */
@@ -101,6 +108,30 @@ fun objectWorking(ui: FlowUiState): Boolean = ui.busy != null && ui.busyQuiet
  */
 fun quietStage(ui: FlowUiState): String? = ui.busyStage?.takeIf { objectWorking(ui) }
 
+/**
+ * Разговор, который сейчас на экране (#453), — или null, если экрана разговора нет.
+ *
+ * Одно место, где «есть разговор» превращается в «показать разговор»: сам разговор переживает
+ * закрытие, и без такой развилки каждый читающий его экран решал бы это по-своему.
+ */
+fun openChatOf(ui: FlowUiState): ChatState? = ui.chat?.takeIf { ui.chatOpen }
+
+/**
+ * Что предложено сделать с отказом (#452), или null — предлагать нечего.
+ *
+ * Отказ «работать нечем, нужен твой ключ» раньше подменялся экраном настроек: человек тапал
+ * «Понять», ждал и получал экран про ключи без единого слова о том, почему тот открылся, — а сам
+ * отказ при этом стирался. Теперь причина остаётся сказанной, а экран ключей стоит рядом с ней
+ * **предложением**: строка под карточкой исхода, по которой человек идёт сам. Ровно так же, как
+ * любое другое действие в Point, — его явный выбор, а не переход, сделанный за него.
+ *
+ * Узнаёт отказ общий `refusalNeedsKey`, а не одна фраза (#467): отказ расшифровки зовёт задать
+ * ключ своими словами, и по единственной марке предложение под ним не появлялось бы вовсе — то
+ * есть человек с голосовым и без ключей остался бы ровно там, откуда всё началось.
+ */
+fun keyOfferLabel(message: String?): String? =
+    if (message != null && com.point.core.flow.refusalNeedsKey(message)) "Задать свой ключ AI" else null
+
 /** One node of the visible Object Timeline (#114): what the object was at that step,
  *  and the action that made it (null for the root). The philosophy made visible —
  *  the flow is a journey of transformations, not a stack of screens. */
@@ -135,8 +166,18 @@ data class FlowUiState(
      */
     val busyCancelable: Boolean = false,
     val frame: FlowFrame? = null,
-    /** Non-null while the AI chat (#4) is open over the current object — a multi-turn conversation. */
+    /**
+     * Разговор об объекте (#4) — сам разговор, а не «открыт ли он».
+     *
+     * Живёт дольше своего экрана (#453): «назад» из чата закрывает экран, а сказанное остаётся
+     * здесь, и повторное «Спросить AI» о том же объекте возвращает человека в разговор. Раньше
+     * поле означало и то и другое сразу — и потому закрытие экрана было стиранием разговора,
+     * молча и без спроса.
+     */
     val chat: ChatState? = null,
+    /** Открыт ли экран разговора. Разговор и его экран — разные вещи; что именно рисовать,
+     *  отвечает [openChatOf], чтобы «открыт» не разъехался с «есть» на глазах у экрана. */
+    val chatOpen: Boolean = false,
     /** The Object Timeline (#114): the whole journey, root first — tap a node to jump back. */
     val path: List<PathStep> = emptyList(),
     /** Transient text from the ActionResult channel (Failure / Done). */
@@ -189,6 +230,9 @@ data class FlowUiState(
     val appPicker: List<AppTarget>? = null,
     /** Non-null while the bring-your-own AI-key screen is shown (its prefilled values). */
     val keyScreen: UserAiConfig? = null,
+    /** Отказ, который привёл человека на экран ключей, — чтобы он знал, зачем он тут (#467).
+     *  null — пришёл сам, через шестерёнку, и объяснять ему нечего. */
+    val keyScreenNote: String? = null,
     val pcScreen: PcScreenState? = null,
     /** On the key screen: whether the private usage journal is on, and its current tally. */
     val usageEnabled: Boolean = false,
@@ -236,6 +280,14 @@ data class ChatState(
     val messages: List<ChatMessage> = emptyList(),
     val pending: Boolean = false,
     val suggestions: List<String> = emptyList(),
+    /**
+     * Что случилось с разговором помимо реплик (#453): «Ответ остановлен».
+     *
+     * Отдельно от [messages] намеренно: остановку сказал не собеседник, и записывать её его
+     * репликой значило бы приписать модели слова, которых она не говорила. Молчать тоже нельзя —
+     * исчезнувшая точками строка неотличима от «оно сломалось».
+     */
+    val notice: String? = null,
 )
 
 /** «Компьютер» (#147): the pairing screen's state — current pairing + a busy/error line. */
@@ -252,4 +304,11 @@ data class PcScreenState(
      * компьютер выключен.
      */
     val link: com.point.core.flow.LinkState = com.point.core.flow.LinkState.Never,
+    /**
+     * Идёт ли сейчас поиск компьютеров в сети (#458).
+     *
+     * Блок «Найдено в сети» появлялся, только когда что-то уже нашлось, — и первые секунды экран
+     * выглядел как «ничего нет, вводите руками», хотя именно в этот момент он и искал.
+     */
+    val search: com.point.core.flow.PcSearch = com.point.core.flow.PcSearch.IDLE,
 )

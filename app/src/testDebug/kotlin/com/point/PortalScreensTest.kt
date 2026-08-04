@@ -114,12 +114,15 @@ class PortalScreensTest {
     }
 
     @Test fun `чат — вопрос-подсказка уходит дословно`() {
+        // `chatOpen` обязателен: с #453 разговор переживает закрытие и принадлежит объекту, а
+        // «показать разговор» решает одна `openChatOf`. Разговор без открытого экрана — не экран.
         val calls = host(
             FlowUiState(
                 chat = ChatState(
                     obj = chatObject(),
                     suggestions = listOf("О чём этот документ?", "Какие сроки в нём названы?"),
                 ),
+                chatOpen = true,
             ),
         )
 
@@ -136,6 +139,7 @@ class PortalScreensTest {
                     messages = listOf(com.point.core.model.ChatMessage(com.point.core.model.ChatRole.USER, "Привет")),
                     pending = true,
                 ),
+                chatOpen = true,
             ),
         )
 

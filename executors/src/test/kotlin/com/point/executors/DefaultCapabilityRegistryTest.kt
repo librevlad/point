@@ -41,7 +41,7 @@ class DefaultCapabilityRegistryTest {
             OfficeCapability(),
             ScanCapability(),
             OcrCapability(),
-            TranscribeCapability(),
+            TranscribeCapability { emptyList() },
         ),
         policy = DefaultBubblePolicy(),
     )
@@ -130,6 +130,35 @@ class DefaultCapabilityRegistryTest {
         assertFalse("open-url" in idsFor(ObjectState(ObjectKind.TEXT)))
         assertTrue("open-url" in idsFor(ObjectState(ObjectKind.TEXT, setOf(Feature.HAS_URL))))
         assertTrue("open-url" in idsFor(ObjectState(ObjectKind.URL)))
+    }
+
+    // --- #457: действие не предлагается там, где его результат бессмыслен ---
+
+    @Test
+    fun `«Дать ссылку» есть у файла, но не у самой ссылки`() {
+        // Объект-URL — это сорок байт текста со ссылкой внутри. «Дать ссылку» загрузило бы на
+        // сервер их и выдало ссылку на ссылку, а получателю — текстовый файлик вместо страницы.
+        val dropRegistry = DefaultCapabilityRegistry(
+            capabilities = setOf(DropLinkCapability(), OpenUrlCapability()),
+            policy = DefaultBubblePolicy(),
+        )
+
+        assertTrue("drop-link" in idsFor(dropRegistry, ObjectState(ObjectKind.PDF)))
+        assertTrue("drop-link" in idsFor(dropRegistry, ObjectState(ObjectKind.AUDIO)))
+        assertFalse("drop-link" in idsFor(dropRegistry, ObjectState(ObjectKind.URL)))
+        // У ссылки остаются её собственные действия — молчания вместо кнопок не образовалось.
+        assertTrue("open-url" in idsFor(dropRegistry, ObjectState(ObjectKind.URL)))
+    }
+
+    @Test
+    fun `результат «Дать ссылку» не годится ей же на вход`() {
+        // Сторож против самой болезни, а не против одного её вида: у действия, которое делает
+        // новый объект, собственный результат не должен снова попадать в его же accepts.
+        val drop = DropLinkCapability()
+        val output = drop.produces(ObjectState(ObjectKind.PDF))
+
+        assertEquals(ObjectState(ObjectKind.URL), output)
+        assertFalse("иначе — ссылка на ссылку", drop.accepts(output))
     }
 
     // --- Bubble tiers (#114): the visual level derives from the capability's meta ---

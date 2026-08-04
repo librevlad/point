@@ -9,8 +9,28 @@ import android.service.quicksettings.TileService
  * Плитка «Point» в шторке (#246): один тап открывает экран выбора источника.
  *
  * Отдельная от плитки «Общий буфер» (#161): та синхронизирует буфер с ПК и объекта не рождает.
+ *
+ * Плитка ещё и **сама рассказывает о себе** (#456). Спросить систему «а стоит ли моя плитка»
+ * нельзя — такого API нет, — но плитка узнаёт об этом первой: её добавили, шторка её слушает, её
+ * убрали. Без этого экран выбора предлагал бы поставить плитку тому, у кого она уже стоит.
  */
 class PointTileService : TileService() {
+
+    override fun onTileAdded() {
+        super.onTileAdded()
+        rememberShadeTile(this, added = true)
+    }
+
+    /** Шторка открылась и плитка в ней есть — самый надёжный признак, что она на месте. */
+    override fun onStartListening() {
+        super.onStartListening()
+        rememberShadeTile(this, added = true)
+    }
+
+    override fun onTileRemoved() {
+        super.onTileRemoved()
+        rememberShadeTile(this, added = false)
+    }
 
     override fun onClick() {
         super.onClick()

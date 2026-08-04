@@ -1,5 +1,6 @@
 package com.point.data
 
+import com.point.core.flow.META_SIZE
 import com.point.core.flow.ObjectClassifier
 import com.point.core.model.Feature
 import com.point.core.model.ObjectKind
@@ -59,6 +60,15 @@ class FileHistoryStoreTest {
         // Fresh object id, but the bytes come from the persistent history copy.
         assertEquals("hello", File(reopened.uri.value).readText())
         assertEquals(ObjectKind.TEXT, reopened.state.kind)
+    }
+
+    @Test
+    fun `переоткрытый объект знает свой вес — иначе экран нечем мерить`() = runTest {
+        // #459: длительность записи на первом экране считается из веса, а вес обязан приехать
+        // вместе с объектом: читать файл на первом экране нельзя.
+        store.record(textObject("a", "hello", "a.txt"))
+
+        assertEquals("5", store.open("a")!!.metadata[META_SIZE])
     }
 
     @Test
