@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
@@ -81,6 +82,8 @@ fun PointHost(
     onJumpTo: (Int) -> Unit = {},
     onBubbleLongPress: (Bubble) -> Unit = {},
     onSaveAiConfig: (UserAiConfig) -> Unit = {},
+    /** Пойти за ключом с отказа, который им и чинится (#452) — предложение, а не подмена ответа. */
+    onOpenKeySettings: () -> Unit = {},
     onCloseKeySettings: () -> Unit = {},
     onToggleUsage: (Boolean) -> Unit = {},
     onToggleSound: (Boolean) -> Unit = {},
@@ -100,6 +103,8 @@ fun PointHost(
     onCancelPreview: () -> Unit = {},
     onSendChat: (String) -> Unit = {},
     onCloseChat: () -> Unit = {},
+    /** Остановить идущий вопрос к AI (#453). */
+    onCancelChat: () -> Unit = {},
     onOpenSelection: () -> Unit = {},
     onSelectRegion: (com.point.core.flow.Box) -> Unit = {},
     onTakeSelection: () -> Unit = {},
@@ -131,6 +136,10 @@ fun PointHost(
         val frame = state.frame
         // Заголовок экрана ожидания — он же условие его подъёма (M3: тихая работа его не поднимает).
         val busyTitle = state.busy?.takeIf { showsBusyScreen(state) }
+        // Разговор рисуется, пока открыт его экран; сам он живёт дольше (#453).
+        val chat = openChatOf(state)
+        // Что предложено сделать с отказом (#452): null — предлагать нечего.
+        val offer = keyOfferLabel(state.message)
         when {
             // Cloud consent is a gate: it must be answered before anything else renders (#10).
             state.cloudConsent -> ConsentScreen(
@@ -226,10 +235,11 @@ fun PointHost(
             )
 
             // #4: the AI chat takes over the screen while open (over the object it discusses).
-            state.chat != null -> AiChatScreen(
-                chat = state.chat,
+            chat != null -> AiChatScreen(
+                chat = chat,
                 onSend = onSendChat,
                 onClose = onCloseChat,
+                onCancel = onCancelChat,
                 modifier = Modifier.fillMaxSize(),
             )
 
@@ -270,6 +280,8 @@ fun PointHost(
                     onBubble = onBubble,
                     message = state.message,
                     messageOutcome = state.messageOutcome,
+                    messageOffer = offer,
+                    onMessageOffer = onOpenKeySettings,
                     inputPrompt = state.inputPrompt,
                     inputSuggestions = state.inputSuggestions,
                     onSubmitInput = onSubmitInput,
@@ -330,6 +342,16 @@ fun PointHost(
                 // Material `colorScheme.error` красил всё подряд, включая «Ключ AI сохранён»:
                 // удача выглядела сбоем ровно так же, как раньше на экране объекта.
                 OutcomeBanner(state.message, state.messageOutcome)
+                // Предложение стоит и здесь (#452): отказ «нет ключа» может застать человека и без
+                // объекта на экране, и тогда единственный выход отсюда — уйти ни с чем.
+                if (offer != null) {
+                    Spacer(Modifier.height(10.dp))
+                    com.point.core.ui.PortalRow(
+                        title = offer,
+                        onClick = onOpenKeySettings,
+                        modifier = Modifier.widthIn(max = com.point.core.ui.PortalColumnWidth),
+                    )
+                }
                 // Совет есть только у отказа: сказать «поделитесь ещё раз» тому, у кого ничего не
                 // ломалось, — выдумать ему проблему.
                 shareAgainHint(state.messageOutcome)?.let { hint ->

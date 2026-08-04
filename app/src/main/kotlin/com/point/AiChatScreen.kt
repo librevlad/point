@@ -24,6 +24,7 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -40,6 +41,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.point.core.model.ChatMessage
@@ -57,6 +59,9 @@ fun AiChatScreen(
     chat: ChatState,
     onSend: (String) -> Unit,
     onClose: () -> Unit,
+    /** Остановить идущий ответ (#453). Пока модель думает, отправлять нечего — и ровно там, где
+     *  стояла погашенная «Отправить», стоит живая «Остановить». */
+    onCancel: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxSize().imePadding()) {
@@ -109,7 +114,19 @@ fun AiChatScreen(
             }
         }
 
-        ChatInput(enabled = !chat.pending, onSend = onSend)
+        // Остановленный ответ говорит словами (#453): вопрос остался в разговоре, ответа под ним
+        // нет — и без этой строки исчезнувшие точки читались бы как «оно сломалось».
+        chat.notice?.let { notice ->
+            Text(
+                text = notice,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                textAlign = TextAlign.Center,
+            )
+        }
+
+        ChatInput(pending = chat.pending, onSend = onSend, onCancel = onCancel)
     }
 }
 
@@ -185,8 +202,13 @@ private fun TypingBubble() {
     }
 }
 
+/**
+ * Строка ввода. Пока идёт ответ ([pending]), отправлять нечего — и кнопка не гаснет, а меняет
+ * желание: «Остановить» (#453). До этого выход из ожидания был только один — уйти с экрана,
+ * бросив идущий запрос вместе с потраченной квотой.
+ */
 @Composable
-private fun ChatInput(enabled: Boolean, onSend: (String) -> Unit) {
+private fun ChatInput(pending: Boolean, onSend: (String) -> Unit, onCancel: () -> Unit) {
     // `rememberSaveable` (#114): недописанный вопрос переживает поворот телефона — иначе он
     // пропадал молча, и человек набирал его заново.
     var text by rememberSaveable { mutableStateOf("") }
@@ -202,15 +224,21 @@ private fun ChatInput(enabled: Boolean, onSend: (String) -> Unit) {
             placeholder = { Text("Задайте вопрос…") },
             maxLines = 4,
         )
-        val canSend = enabled && text.isNotBlank()
+        val canSend = !pending && text.isNotBlank()
         IconButton(
-            onClick = { if (canSend) { onSend(text); text = "" } },
-            enabled = canSend,
+            onClick = {
+                if (pending) onCancel() else if (canSend) { onSend(text); text = "" }
+            },
+            enabled = pending || canSend,
         ) {
             Icon(
-                Icons.AutoMirrored.Filled.Send,
-                contentDescription = "Отправить",
-                tint = if (canSend) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                imageVector = if (pending) Icons.Filled.Close else Icons.AutoMirrored.Filled.Send,
+                contentDescription = if (pending) "Остановить" else "Отправить",
+                tint = if (pending || canSend) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
             )
         }
     }
