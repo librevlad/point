@@ -582,6 +582,14 @@ Robolectric. Это практический выхлоп принципа «max
 - Маршрутизация звука честная: `geminiAttachmentMime` — одна функция и для «беру ли»
   (`canHandle`), и для «чем прикладываю»; текстовые провайдеры (`OpenAiCompatibleClient`,
   `ClaudeLlmClient`) на аудио отвечают `canHandle=false` вместо промпта без файла.
+- **Движков стало два, и первый — Whisper** (замер 04.08.2026, разбор в `DECISIONS.md`):
+  `FirstHeardSpeechToText` (`:core:flow`, чистый) — очередь «первый, кто услышал, выигрывает», где
+  **тишина останавливает очередь**, а к следующему идут только от исключения; порядок
+  `GroqWhisperSpeechToText` (`:data`, ручка `POST /audio/transcriptions`, язык не форсируется) →
+  `LlmSpeechToText`. Whisper в очереди, только если у него есть ключ. Сути он не даёт — её добирает
+  `SummarizingSpeechToText` (`:data`) одним **текстовым** запросом к `LlmClient` (`SUMMARIZE_PROMPT`
+  + чистая `parseSummary`); не вышло — суть пустая, и это не ошибка. Имя запроса общее со всеми —
+  `pointHeaders`, своего `User-Agent` расшифровка не заводит.
 
 **Срез «внешний глаз» (#280) — реализован (UI не тронут):**
 - Новый шов `ExternalEye` (`:core:flow`) + `CloudTextReader` (`:data`): чужой сервис, читающий

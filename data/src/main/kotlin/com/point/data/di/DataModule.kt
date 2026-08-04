@@ -15,6 +15,7 @@ import com.point.core.flow.Entitlements
 import com.point.core.flow.EvidenceCropper
 import com.point.core.flow.Exporter
 import com.point.core.flow.FavoritesStore
+import com.point.core.flow.FirstHeardSpeechToText
 import com.point.core.flow.HistoryStore
 import com.point.core.flow.ImageCompositor
 import com.point.core.flow.LlmClient
@@ -85,6 +86,8 @@ import com.point.data.FileCapabilityUsage
 import com.point.data.FileFavoritesStore
 import com.point.data.FileHistoryStore
 import com.point.data.GeminiLlmClient
+import com.point.data.GroqWhisperSpeechToText
+import com.point.data.SummarizingSpeechToText
 import com.point.data.HttpJson
 import com.point.data.UrlConnectionHttpJson
 import com.point.data.HttpFiles
@@ -224,14 +227,6 @@ abstract class DataModule {
 
     @Binds
     abstract fun textRecognizer(impl: TesseractTextRecognizer): TextRecognizer
-
-    /**
-     * Расшифровка голосового (#223). Реализация облачная, и это не временная заглушка, а
-     * измеренный факт: системного распознавания **из файла** в Android нет — `SpeechRecognizer`
-     * слушает микрофон. Шов настоящий: офлайновый движок встанет сюда одной строкой.
-     */
-    @Binds
-    abstract fun speechToText(impl: LlmSpeechToText): SpeechToText
 
     /**
      * Геометрия доходит до пайплайна (#257): OcrEnricher читает слой, а не плоскую строку.
@@ -459,6 +454,45 @@ abstract class DataModule {
             }
             // The user's own key leads the chain; when unset it steps aside to the built-ins.
             return listOf<LlmClient>(userKey) + free + native
+        }
+
+        /**
+         * Расшифровка голосового (#223) — очередь движков, и порядок в ней измерен, а не выбран.
+         *
+         * **Whisper первый.** Замер 04.08.2026: бесплатная квота модели общего назначения — 20
+         * запросов в СУТКИ (`HTTP 429, generate_content_free_tier_requests, limit: 20`), то есть
+         * расшифровка на ней кончается за вечер. Whisper на тех же трёх записях владельца прочитал
+         * украинскую речь дословно и даром (ошибка слов 9,5 %, и вся она косметическая — «той
+         * ходім» / «то й ходім», место апострофа).
+         *
+         * **Модель общего назначения — вторая, а не выброшена.** Она читает форматы, которых
+         * Whisper не обещает, и приносит суть одним ответом; на её квоту приходят, только когда
+         * первый не дошёл.
+         *
+         * Whisper попадает в очередь, только если у него есть ключ, — поэтому в раздаваемой
+         * релизной сборке очередь состоит из одного движка, ровно как было до этой правки.
+         *
+         * Сверху — добор сути ([SummarizingSpeechToText]): Whisper отдаёт только дословный текст, а
+         * человеку обещана суть. Одно действие, один дополнительный ТЕКСТОВЫЙ запрос, и его провал
+         * ничего не отменяет.
+         */
+        @Provides
+        fun speechToText(
+            http: HttpFiles,
+            llm: LlmClient,
+            byModel: LlmSpeechToText,
+        ): SpeechToText {
+            val whisper = GroqWhisperSpeechToText(
+                http,
+                BuildConfig.GROQ_API_KEY,
+                BuildConfig.GROQ_BASE_URL,
+                BuildConfig.GROQ_WHISPER_MODEL,
+            )
+            val engines = buildList {
+                if (whisper.configured) add(whisper)
+                add(byModel)
+            }
+            return SummarizingSpeechToText(FirstHeardSpeechToText(engines), llm)
         }
 
         /**
