@@ -55,6 +55,7 @@ import com.point.core.flow.unreadWords
 import com.point.core.flow.validateTable
 import com.point.core.flow.withGrid
 import com.point.core.model.ActionResult
+import com.point.core.model.ActionYield
 import com.point.core.model.CapabilityId
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
@@ -89,6 +90,9 @@ class ExcelCapability @Inject constructor() : Capability {
     override fun accepts(state: ObjectState) =
         state.kind in setOf(ObjectKind.IMAGE, ObjectKind.PDF, ObjectKind.TEXT)
     override fun produces(state: ObjectState) = ObjectState(ObjectKind.OFFICE)
+
+    /** #491: `OFFICE` — это и документ, и таблица. Человеку сказано, что именно вернётся. */
+    override fun yields(state: ObjectState) = ActionYield.New(ObjectKind.OFFICE, "таблицу")
 
     companion object { val ID = CapabilityId("excel") }
 }

@@ -44,6 +44,7 @@ import com.point.core.flow.findOnPage
 import com.point.core.flow.foundOnPageLabel
 import com.point.core.ui.Outcome
 import com.point.core.flow.snapSelection
+import com.point.core.flow.yieldSurprise
 import com.point.core.model.Feature
 import com.point.core.model.ObjectState
 import java.io.File
@@ -972,6 +973,62 @@ class FlowViewModel @Inject constructor(
         _ui.update { s -> s.chat?.let { c -> s.copy(chat = c.copy(pending = false, notice = "Ответ остановлен")) } ?: s }
     }
 
+    /**
+     * Забрать сказанное — разговор кончается объектом (#491).
+     *
+     * Формула продукта: `Object → Intent → Capability → Realizer → Object`. Разговор её нарушал —
+     * он кончался текстом в переписке, и всё, что модель сказала, оставалось внутри чата: ни
+     * сохранить, ни перевести, ни сделать документом. Выход был ровно один — «назад», то есть
+     * выбросить ответ, за который уже заплачена квота.
+     *
+     * Способностей чату это не добавляет ни одной (он остаётся известным исключением из
+     * продуктового фильтра, CLAUDE.md) — оно даёт ему **выход**. Ответ становится обычным текстовым
+     * объектом, и дальше живёт по общим правилам графа: «В Word», «В Excel», «В PDF», «Перевести»,
+     * «Сохранить» приходят к нему сами, потому что принимают TEXT. Поэтому «превратить в документ»
+     * больше не требует угаданной формулировки внутри разговора: оно стоит строкой на экране
+     * объекта — с подписью, что вернёт.
+     *
+     * Цепочек Point не строит: забирает человек, тапом.
+     */
+    fun takeChatAnswer() {
+        val chat = _ui.value.chat ?: return
+        if (chat.pending) return
+        val answer = chat.messages.lastOrNull { it.role == ChatRole.ASSISTANT }
+            ?.text?.takeIf { it.isNotBlank() } ?: return
+        val source = chat.obj
+        viewModelScope.launch {
+            val obj = runCatching { chatAnswerObject(source, answer, chat.messages.size) }.getOrNull()
+            if (obj == null) {
+                _ui.update { it.copy(message = "Не удалось забрать ответ", messageOutcome = Outcome.FAILED) }
+                return@launch
+            }
+            runCatching { sensory.success() }
+            // Экран разговора закрывается, сам разговор остаётся при своём объекте (#453):
+            // человек вернётся к нему тем же «Спросить AI», если захочет спросить ещё.
+            _ui.update { it.copy(chatOpen = false) }
+            pushFrame(obj, viaTitle = "Ответ AI")
+        }
+    }
+
+    /** Ответ модели как текстовый объект в scratch. Markdown — потому что markdown и приходит:
+     *  тем же расширением материализует ответ одноразовое «AI» (`LlmClient.run`). */
+    private suspend fun chatAnswerObject(source: PointObject, answer: String, turn: Int): PointObject {
+        val ref = store.newScratchFile("md")
+        File(ref.value).writeText(answer)
+        return PointObject(
+            id = "chat-${source.id}-$turn",
+            mime = "text/markdown",
+            uri = ref,
+            state = ObjectState(ObjectKind.TEXT, features = setOf(Feature.HAS_TEXT)),
+            metadata = mapOf("name" to "Ответ AI"),
+            // Сказанное моделью помечено как сказанное моделью (#264) — забранное из разговора
+            // не становится «принесённым человеком» оттого, что стало файлом.
+            provenance = com.point.core.model.Provenance.MODEL,
+            sourceObjects = listOf(source.id),
+            creatorAction = AiCapability.ID.value,
+        )
+    }
+
     /** Ответ ложится в разговор, а не на экран: закрытый экран больше не выбрасывает пришедшее
      *  молча (#453) — человек вернётся и увидит ответ, за который уже заплачена квота. */
     private fun appendChatAssistant(text: String) {
@@ -1521,7 +1578,16 @@ class FlowViewModel @Inject constructor(
                 runCatching { sensory.success() } // M4: the transformation lands in the hand
                 // #117 graph metrics: the edge actually traversed — kinds and id only.
                 val fromKind = stack.lastOrNull()?.obj?.state?.kind?.name ?: "?"
-                pushFrame(store.put(result.result), bubble.capabilityId, bubble.title)
+                val produced = store.put(result.result)
+                pushFrame(produced, bubble.capabilityId, bubble.title)
+                // #491: строка под действием обещала ожидание, а не гарантию — `produces` объявлен
+                // подсказкой, и настоящий вид переклассифицируется из выхода. Когда вышло другое,
+                // Point говорит об этом сам: молчать тут хуже, чем ошибиться — ошибка объясняет
+                // экран, а молчание оставляет человека с догадкой «оно сделало что-то не то».
+                // Знака исхода нет (`NONE`): это не отказ и не победа, это уточнение.
+                yieldSurprise(bubble.yields, produced.state.kind)?.let { note ->
+                    _ui.update { it.copy(message = note, messageOutcome = Outcome.NONE) }
+                }
                 runCatching {
                     journal.record(
                         UsageEvent(

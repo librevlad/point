@@ -50,6 +50,47 @@ class AiChatScreenTest {
         assertTrue("кнопка нарисована, но ничего не останавливает", stopped)
     }
 
+    /**
+     * #491: у разговора появился выход, и это узел, по которому человек нажимает. Молча потерянный
+     * колбэк выглядел бы как «строка есть, а ответ забрать нельзя» — то есть ровно как тупик, от
+     * которого срез и лечит.
+     */
+    @Test fun `«Забрать ответ» и правда забирает`() {
+        var taken = false
+        compose.setContent {
+            AiChatScreen(
+                chat = ChatState(
+                    obj = obj,
+                    messages = listOf(
+                        ChatMessage(ChatRole.USER, "о чём это?"),
+                        ChatMessage(ChatRole.ASSISTANT, "Это договор аренды на 11 месяцев."),
+                    ),
+                ),
+                onSend = {},
+                onClose = {},
+                onTakeAnswer = { taken = true },
+            )
+        }
+
+        // Строка говорит, что вернётся, — тем же языком, что и строки на экране объекта.
+        compose.onNodeWithText("вернёт текст").assertExists()
+        compose.onNodeWithText("Забрать ответ").performClick()
+
+        assertTrue("строка нарисована, но ничего не забирает", taken)
+    }
+
+    @Test fun `пока забирать нечего, выхода и не предлагают`() {
+        compose.setContent {
+            AiChatScreen(
+                chat = ChatState(obj = obj, messages = listOf(ChatMessage(ChatRole.USER, "о чём это?"))),
+                onSend = {},
+                onClose = {},
+            )
+        }
+
+        compose.onNodeWithText("Забрать ответ").assertDoesNotExist()
+    }
+
     @Test fun `остановленный ответ сказан словами, а не исчезнувшими точками`() {
         compose.setContent {
             AiChatScreen(

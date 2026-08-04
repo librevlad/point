@@ -114,6 +114,8 @@ fun PointHost(
     onCloseChat: () -> Unit = {},
     /** Остановить идущий вопрос к AI (#453). */
     onCancelChat: () -> Unit = {},
+    /** Забрать ответ разговора объектом (#491). */
+    onTakeChatAnswer: () -> Unit = {},
     onOpenSelection: () -> Unit = {},
     onSelectRegion: (com.point.core.flow.Box) -> Unit = {},
     onTakeSelection: () -> Unit = {},
@@ -243,6 +245,7 @@ fun PointHost(
                 onSend = onSendChat,
                 onClose = onCloseChat,
                 onCancel = onCancelChat,
+                onTakeAnswer = onTakeChatAnswer,
                 modifier = Modifier.fillMaxSize(),
             )
 

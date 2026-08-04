@@ -1867,6 +1867,90 @@ class FlowViewModelTest {
         assertEquals("ответ издалека", vm.ui.value.chat?.messages?.last()?.text)
     }
 
+    // --- Разговор кончается объектом (#491) ---
+
+    @Test fun `забрать ответ — и разговор кончился объектом`() = runTest(dispatcher) {
+        // Формула продукта требует объекта на выходе. До этого среза разговор кончался текстом
+        // внутри переписки, и единственным выходом было «назад» — то есть выбросить ответ.
+        val vm = chattingVm()
+
+        vm.takeChatAnswer(); advanceUntilIdle()
+
+        assertNull("экран разговора закрылся", openChatOf(vm.ui.value))
+        val frame = vm.ui.value.frame!!
+        assertEquals(ObjectKind.TEXT, frame.obj.state.kind)
+        assertEquals("ответ", java.io.File(frame.obj.uri.value).readText())
+        // Провенанс не теряется: сказанное моделью остаётся сказанным моделью, став файлом.
+        assertEquals(com.point.core.model.Provenance.MODEL, frame.obj.provenance)
+        assertEquals("Ответ AI", frame.viaTitle)
+    }
+
+    @Test fun `сам разговор забиранием не стирается`() = runTest(dispatcher) {
+        val vm = chattingVm()
+
+        vm.takeChatAnswer(); advanceUntilIdle()
+
+        assertEquals("сказанное осталось при своём объекте", 2, vm.ui.value.chat?.messages?.size)
+    }
+
+    @Test fun `забирать нечего, пока модель не ответила`() = runTest(dispatcher) {
+        consent.granted = true
+        chatResponder.inFlight = kotlinx.coroutines.CompletableDeferred()
+        val vm = cloudVm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        vm.onBubble(bubble(id = "ai")); advanceUntilIdle()
+        vm.sendChatMessage("что тут написано?"); advanceUntilIdle()
+
+        vm.takeChatAnswer(); advanceUntilIdle()
+
+        // Ни объекта, ни ухода с экрана: забирать вопрос человека обратно ему же — бессмыслица.
+        assertNotNull("экран разговора на месте", openChatOf(vm.ui.value))
+        assertEquals(ObjectKind.IMAGE, vm.ui.value.frame?.obj?.state?.kind)
+    }
+
+    @Test fun `строка «Забрать ответ» появляется ровно тогда, когда есть что забирать`() {
+        val obj = PointObject("o", "image/png", ScratchRef("/o"), ObjectState(ObjectKind.IMAGE))
+        val asked = ChatState(obj, listOf(com.point.core.model.ChatMessage(com.point.core.model.ChatRole.USER, "?")))
+        val answered = asked.copy(
+            messages = asked.messages + com.point.core.model.ChatMessage(com.point.core.model.ChatRole.ASSISTANT, "вот"),
+        )
+
+        assertNull("пустой разговор забирать нечем", takeableAnswer(ChatState(obj)))
+        assertNull("свой же вопрос объектом не становится", takeableAnswer(asked))
+        assertEquals("вот", takeableAnswer(answered))
+        assertNull("пока идёт ответ, предыдущий устарел", takeableAnswer(answered.copy(pending = true)))
+    }
+
+    // --- Ожидание, а не обещание (#491) ---
+
+    @Test fun `вышло не то, что обещала строка, — и Point говорит об этом`() = runTest(dispatcher) {
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        resolver.result = ActionResult.Success(ResultObject(ObjectKind.OFFICE, "application/vnd", ScratchRef("/o")))
+
+        // Пузырь обещал текст, действие вернуло документ.
+        vm.onBubble(
+            bubble(id = "a").copy(yields = com.point.core.model.ActionYield.New(ObjectKind.TEXT)),
+        )
+        advanceUntilIdle()
+
+        assertEquals("Ожидался текст — вышел документ", vm.ui.value.message)
+        assertEquals(Outcome.NONE, vm.ui.value.messageOutcome)
+    }
+
+    @Test fun `вышло обещанное — лишних слов нет`() = runTest(dispatcher) {
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        resolver.result = ActionResult.Success(ResultObject(ObjectKind.TEXT, "text/plain", ScratchRef("/o")))
+
+        vm.onBubble(
+            bubble(id = "a").copy(yields = com.point.core.model.ActionYield.New(ObjectKind.TEXT)),
+        )
+        advanceUntilIdle()
+
+        assertNull(vm.ui.value.message)
+    }
+
     @Test fun `a favorite chain hiding a cloud step is gated too — not a back door`() = runTest(dispatcher) {
         val vm = cloudVm()
         vm.onShared("uri", "image/png"); advanceUntilIdle()
@@ -2127,7 +2211,10 @@ private class FakeStore : ObjectStore {
     var content: CollectionContent<PointObject> = CollectionContent.empty()
     override suspend fun children(collection: PointObject, limit: Int) = content
     override suspend fun readText(obj: PointObject, limit: Int): String = ""
-    override suspend fun newScratchFile(extension: String): ScratchRef = ScratchRef("/scratch.$extension")
+    /** Настоящий временный файл, а не «/scratch.md»: в него ПИШУТ (забранный из разговора ответ,
+     *  #491, захват выделения), и корень диска для этого не годится ни на одной системе. */
+    override suspend fun newScratchFile(extension: String): ScratchRef =
+        ScratchRef(java.io.File.createTempFile("point-test-", ".$extension").absolutePath)
     override suspend fun clear() { clearedTimes++ }
 }
 
