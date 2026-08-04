@@ -5,6 +5,7 @@ import android.net.Uri
 import android.provider.OpenableColumns
 import android.util.Log
 import android.webkit.MimeTypeMap
+import com.point.core.flow.META_SIZE
 import com.point.core.flow.ObjectClassifier
 import com.point.core.flow.ObjectStore
 import com.point.core.model.PointObject
@@ -53,7 +54,12 @@ class ScratchObjectStore @Inject constructor(
                     mime = mime,
                     uri = ScratchRef(dest.absolutePath),
                     state = classifier.classify(mime, size, name),
-                    metadata = buildMap { name?.let { put("name", it) } },
+                    // Вес едет вместе с объектом (#459): он уже посчитан этим самым копированием,
+                    // и только так первый экран может сказать «примерно 3 мин», не трогая диск.
+                    metadata = buildMap {
+                        name?.let { put("name", it) }
+                        put(META_SIZE, size.toString())
+                    },
                 )
             }
         }
@@ -89,7 +95,9 @@ class ScratchObjectStore @Inject constructor(
                 mime = result.mime,
                 uri = result.uri,
                 state = classifier.classify(result.mime, size),
-                metadata = result.metadata,
+                // Вес знает файл, а не действие: результат «Расшифровать»/«Вырезать» приходит без
+                // него, и следующий экран остался бы без меры объекта (#459).
+                metadata = result.metadata + (META_SIZE to size.toString()),
             )
         }
 
@@ -101,12 +109,13 @@ class ScratchObjectStore @Inject constructor(
                 .filter { it.isFile }
                 .map { file ->
                     val mime = mimeOf(file.name)
+                    val size = file.length()
                     PointObject(
                         id = UUID.randomUUID().toString(),
                         mime = mime,
                         uri = ScratchRef(file.absolutePath),
-                        state = classifier.classify(mime, file.length(), file.name),
-                        metadata = mapOf("name" to file.name),
+                        state = classifier.classify(mime, size, file.name),
+                        metadata = mapOf("name" to file.name, META_SIZE to size.toString()),
                     )
                 }
                 .sortedBy { it.metadata["name"]?.lowercase() }
