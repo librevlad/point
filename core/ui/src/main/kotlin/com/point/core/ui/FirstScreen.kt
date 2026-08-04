@@ -41,6 +41,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -694,7 +695,8 @@ private fun AmendmentInput(
     onCancel: () -> Unit,
     suggestions: List<String> = emptyList(),
 ) {
-    var text by remember { mutableStateOf("") }
+    // `rememberSaveable` (#114): дописанный запрос переживает поворот телефона.
+    var text by rememberSaveable { mutableStateOf("") }
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally,

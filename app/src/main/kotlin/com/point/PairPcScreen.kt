@@ -20,6 +20,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -65,8 +66,10 @@ fun PairPcScreen(
     onUnpair: () -> Unit,
     onClose: () -> Unit,
 ) {
-    var host by remember { mutableStateOf(state.pairing?.host ?: "") }
-    var port by remember { mutableStateOf((state.pairing?.port ?: 8391).toString()) }
+    // `rememberSaveable` (#114): поворот телефона пересоздаёт экран — набранные адрес и порт
+    // обязаны его пережить, иначе человек набирает их заново, не понимая, за что.
+    var host by rememberSaveable { mutableStateOf(state.pairing?.host ?: "") }
+    var port by rememberSaveable { mutableStateOf((state.pairing?.port ?: 8391).toString()) }
     val canPair = host.isNotBlank() && port.toIntOrNull() != null
 
     Column(

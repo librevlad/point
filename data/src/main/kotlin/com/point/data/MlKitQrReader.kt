@@ -20,9 +20,19 @@ class MlKitQrReader(
     private val fallback: QrReader,
 ) : QrReader {
 
-    private val scanner = BarcodeScanning.getClient(
-        BarcodeScannerOptions.Builder().setBarcodeFormats(Barcode.FORMAT_QR_CODE).build(),
-    )
+    /**
+     * Клиент ML Kit заводится при первом чтении, а не при сборке графа (#114).
+     *
+     * Сборка графа — это старт приложения, и до сих пор он тянул за собой инициализацию ML Kit ради
+     * способности, которой человек может ни разу не воспользоваться: чужая работа на пути к первому
+     * экрану, который обязан уложиться в 300 мс. Побочно это же делало невозможным поднять экран в
+     * тесте: вне устройства `MlKitContext` не инициализирован, и весь граф падал на конструкторе.
+     */
+    private val scanner by lazy {
+        BarcodeScanning.getClient(
+            BarcodeScannerOptions.Builder().setBarcodeFormats(Barcode.FORMAT_QR_CODE).build(),
+        )
+    }
 
     override suspend fun decode(imagePath: String): String? = withContext(Dispatchers.IO) {
         val bitmap = decodeBoundedUpright(imagePath, MAX_PX)

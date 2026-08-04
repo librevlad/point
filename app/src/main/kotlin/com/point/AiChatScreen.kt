@@ -34,6 +34,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -186,7 +187,9 @@ private fun TypingBubble() {
 
 @Composable
 private fun ChatInput(enabled: Boolean, onSend: (String) -> Unit) {
-    var text by remember { mutableStateOf("") }
+    // `rememberSaveable` (#114): недописанный вопрос переживает поворот телефона — иначе он
+    // пропадал молча, и человек набирал его заново.
+    var text by rememberSaveable { mutableStateOf("") }
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,

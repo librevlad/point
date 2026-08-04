@@ -57,6 +57,10 @@ class HomeActivity : ComponentActivity() {
         onBackPressedDispatcher.addCallback(this) {
             when {
                 viewModel.onBack() -> Unit
+                // Сообщение без объекта («Ключ AI сохранён», «Объект недоступен», чужой QR) —
+                // не тупик: «назад» с него возвращает на «Недавнее». Раньше оно уходило системе,
+                // и Point закрывался прямо после удачного сохранения ключа (#114).
+                viewModel.dismissMessage() -> viewModel.loadRecent()
                 viewModel.hasFlow() -> { viewModel.endFlow(); viewModel.loadRecent() }
                 else -> {
                     isEnabled = false
@@ -101,42 +105,12 @@ class HomeActivity : ComponentActivity() {
                             onHideFromPc = viewModel::hideFromPc,
                         )
                     } else {
-                        PointHost(
+                        PointFlow(
                             state = state,
-                            onBubble = viewModel::onBubble,
-                        appIconFor = viewModel::appIcon,
-                        onPairPc = viewModel::pairPc,
-                        onUnpairPc = viewModel::unpairPc,
-                        onClosePcSettings = viewModel::closePcSettings,
-                            onSubmitInput = viewModel::submitAmendment,
-                            onCancelInput = viewModel::cancelInput,
-                            onCancelAction = viewModel::cancelAction,
-                            onOpenObject = viewModel::openTopObject,
-                            onApplyFavorite = viewModel::applyFavorite,
-                            onSaveChain = viewModel::saveCurrentChain,
-                            onItem = viewModel::onItem,
-                            onFound = viewModel::onFound,
-                            onJumpTo = viewModel::jumpTo,
-                            onSendChat = viewModel::sendChatMessage,
-                            onCloseChat = viewModel::closeChat,
-                            onBubbleLongPress = viewModel::togglePin,
-                            onSaveAiConfig = viewModel::saveAiConfig,
-                            onCloseKeySettings = viewModel::closeKeySettings,
-                            onToggleUsage = viewModel::setUsageEnabled,
-                            onToggleSound = viewModel::setSoundEnabled,
-                        onPickPrivacyLevel = viewModel::setPrivacyLevel,
-                            onConfirmCloud = viewModel::confirmCloud,
-                            onDeclineCloud = viewModel::declineCloud,
-                            onPickApp = viewModel::onPickApp,
-                            onDismissAppPicker = viewModel::dismissAppPicker,
-                            onConfirmPreview = viewModel::confirmPreview,
-                        onOpenSelection = viewModel::openSelection,
-                        onSelectRegion = viewModel::onSelectRegion,
-                        onTakeSelection = viewModel::takeSelection,
-                        onCloseSelection = viewModel::closeSelection,
-                        onFindQuery = viewModel::onFindQuery,
-                        onCloseFind = viewModel::closeFind,
-                            onCancelPreview = viewModel::cancelPreview,
+                            viewModel = viewModel,
+                            // Домашняя дверь: «откуда пришли» — «Недавнее». Выход с
+                            // экрана-сообщения ведёт туда, а не из Point (#114).
+                            onLeave = { onBackPressedDispatcher.onBackPressed() },
                         )
                     }
                 }

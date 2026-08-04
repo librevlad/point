@@ -93,6 +93,14 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+
+    // Экраны под тестом (#114): Robolectric поднимает настоящий Android в JVM, поэтому ему нужны
+    // ресурсы приложения — без этого тема и строки не находятся, и экран не рисуется.
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+        }
+    }
 }
 
 kotlin {
@@ -125,4 +133,16 @@ dependencies {
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
+
+    // #114: до сих пор ни один тест не создавал экран — поворот, «назад» и потерянный колбэк были
+    // невидимы для CI по построению. Robolectric даёт Android в JVM (эмулятор не нужен),
+    // compose-ui-test — нажатие на узлы и пересоздание экрана.
+    //
+    // Только debug: активити-хост для экрана приносит `ui-test-manifest`, а он есть лишь в
+    // debug-манифесте — в релизном ему делать нечего. Поэтому и сами экранные тесты живут в
+    // `src/testDebug` (остальные тесты как гонялись на всех вариантах, так и гоняются).
+    testDebugImplementation(libs.robolectric)
+    testDebugImplementation(platform(libs.androidx.compose.bom))
+    testDebugImplementation(libs.androidx.compose.ui.test.junit4)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
 }

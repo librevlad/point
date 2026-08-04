@@ -32,5 +32,14 @@ jobs:
       - name: Set up Gradle (with cache)
         uses: gradle/actions/setup-gradle@v4
 
+      # Тесты экрана (#114) поднимают Android в JVM, и Robolectric тянет его образ (~100 МБ) в
+      # ~/.m2 при первом прогоне. Кэш Gradle туда не достаёт — без этого шага образ приезжал бы
+      # на каждый push.
+      - name: Cache Robolectric android-all
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository/org/robolectric
+          key: robolectric-${{ runner.os }}-4.16.1
+
       - name: Build + unit tests (canonical gate)
         run: ./gradlew test assembleDebug --no-daemon --stacktrace
