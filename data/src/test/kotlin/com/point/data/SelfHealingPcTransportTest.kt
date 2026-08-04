@@ -53,12 +53,12 @@ class SelfHealingPcTransportTest {
     fun `lan success is returned as-is, no discovery`() = runTest {
         var scanned = false
         val lan = object : Fake() {
-            override suspend fun send(pairing: PcPairing, obj: PointObject, fileName: String, meta: Map<String, String>, action: String?) = PcSendOutcome.Sent
+            override suspend fun send(pairing: PcPairing, obj: PointObject, fileName: String, meta: Map<String, String>, action: String?) = PcSendOutcome.Sent()
         }
         val discovery = PcDiscovery { scanned = true; flowOf(emptyList()) }
         val pairings = CapturingPairings(stale)
         val outcome = SelfHealingPcTransport(lan, discovery, pairings).send(stale, obj(), "f", emptyMap(), null)
-        assertEquals(PcSendOutcome.Sent, outcome)
+        assertEquals(PcSendOutcome.Sent(), outcome)
         assertFalse("no re-resolve when LAN works", scanned)
         assertNull(pairings.saved)
     }
@@ -69,14 +69,14 @@ class SelfHealingPcTransportTest {
         var scanned = false
         val lan = object : Fake() {
             override suspend fun send(pairing: PcPairing, obj: PointObject, fileName: String, meta: Map<String, String>, action: String?) =
-                if (++calls == 1) PcSendOutcome.Unreachable("hiccup") else PcSendOutcome.Sent
+                if (++calls == 1) PcSendOutcome.Unreachable("hiccup") else PcSendOutcome.Sent()
         }
         val discovery = PcDiscovery { scanned = true; flowOf(emptyList()) }
         val pairings = CapturingPairings(stale)
 
         val outcome = SelfHealingPcTransport(lan, discovery, pairings).send(stale, obj(), "f", emptyMap(), null)
 
-        assertEquals(PcSendOutcome.Sent, outcome)
+        assertEquals(PcSendOutcome.Sent(), outcome)
         assertEquals(2, calls)                     // retried once on the same address
         assertFalse("no re-resolve when the retry succeeds", scanned)
         assertNull(pairings.saved)                 // same address — nothing new to remember
@@ -87,14 +87,14 @@ class SelfHealingPcTransportTest {
         val live = "10.0.0.9"
         val lan = object : Fake() {
             override suspend fun send(pairing: PcPairing, obj: PointObject, fileName: String, meta: Map<String, String>, action: String?) =
-                if (pairing.host == live) PcSendOutcome.Sent else PcSendOutcome.Unreachable("stale")
+                if (pairing.host == live) PcSendOutcome.Sent() else PcSendOutcome.Unreachable("stale")
         }
         val discovery = PcDiscovery { flowOf(listOf(DiscoveredPc("pc", live, 8391))) }
         val pairings = CapturingPairings(stale)
 
         val outcome = SelfHealingPcTransport(lan, discovery, pairings).send(stale, obj(), "f", emptyMap(), null)
 
-        assertEquals(PcSendOutcome.Sent, outcome)
+        assertEquals(PcSendOutcome.Sent(), outcome)
         assertEquals(live, pairings.saved?.host)      // healed address remembered
         assertEquals("tok", pairings.saved?.token)    // same token — same PC
     }

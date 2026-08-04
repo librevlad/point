@@ -3,6 +3,7 @@ package com.point.executors
 import com.point.core.flow.Capability
 import com.point.core.flow.CapabilityMeta
 import com.point.core.flow.Latency
+import com.point.core.flow.PcActionOutcome
 import com.point.core.flow.PcPairings
 import com.point.core.flow.PcRemoteAction
 import com.point.core.flow.PcSendOutcome
@@ -79,7 +80,21 @@ class RemotePcRealizer(
         // Те же слова, что у «На компьютер» (#288): работа буквально одна — [PC_SEND_STAGE].
         reportStage(PC_SEND_STAGE)
         return when (val outcome = transport.send(pairing, input, name, input.metadata, action.id)) {
-            PcSendOutcome.Sent -> ActionResult.Done("${action.label} — готово")
+            // #114: «готово» имеет право сказать только тот, кто это сделал. Доставка файла —
+            // не выполнение действия: пока компьютер не назвал исход, телефон говорит ровно то,
+            // что знает сам, — теми же словами, что и соседнее «На компьютер».
+            is PcSendOutcome.Sent -> when (val done = outcome.action) {
+                null -> ActionResult.Done("Отправлено на компьютер")
+                is PcActionOutcome.Done ->
+                    // Слова компьютера сильнее наших: «В очереди «HP» · проверьте принтер» честнее
+                    // общего «готово», потому что сказано тем, кто печатал.
+                    ActionResult.Done(done.detail?.takeIf { it.isNotBlank() } ?: "${action.label} — готово")
+                is PcActionOutcome.Failed -> ActionResult.Failure(
+                    done.reason.takeIf { it.isNotBlank() }
+                        ?: "Компьютер не смог выполнить «${action.label}»",
+                    recoverable = true,
+                )
+            }
             PcSendOutcome.Rejected ->
                 ActionResult.Failure("Компьютер не узнал это устройство — свяжите устройства заново", recoverable = true)
             is PcSendOutcome.Unreachable ->

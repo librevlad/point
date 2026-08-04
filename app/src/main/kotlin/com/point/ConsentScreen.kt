@@ -20,10 +20,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 
 /**
- * One-time cloud-privacy consent (#10). Cloud actions (AI, Перевести, В Excel) upload the
+ * Cloud-privacy consent (#10). Cloud actions (AI, Перевести, В Excel) upload the
  * user's object to an AI provider — nothing leaves the device until the user agrees here.
  * True to Point's no-menu style: a single contextual decision, shown the moment it matters
  * (the first cloud action), not buried in settings.
+ *
+ * #114: вопрос называет своё обещание сам — [title] и [confirm] приходят от действия. «Выложить
+ * файл по ссылке?» и «Отправить в облако?» — разные решения, и человек соглашается с тем, что
+ * написано на кнопке, а не с «облаком вообще».
  */
 @Composable
 fun ConsentScreen(
@@ -31,6 +35,8 @@ fun ConsentScreen(
     onDecline: () -> Unit,
     /** Куда именно уедет объект — текст зависит от действия (#388). */
     destination: String = "",
+    title: String = "",
+    confirm: String = "",
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -39,7 +45,7 @@ fun ConsentScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
-            text = "Отправить в облако?",
+            text = title.ifBlank { "Отправить в облако?" },
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onBackground,
@@ -61,7 +67,7 @@ fun ConsentScreen(
             shape = RoundedCornerShape(16.dp),
             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
         ) {
-            Text("Разрешить", fontWeight = FontWeight.Bold)
+            Text(confirm.ifBlank { "Разрешить" }, fontWeight = FontWeight.Bold)
         }
         Spacer(Modifier.height(8.dp))
         TextButton(onClick = onDecline) {

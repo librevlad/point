@@ -66,7 +66,10 @@ class RelayPcTransport(
             val code = c.responseCode
             c.disconnect()
             when (code) {
-                200 -> PcSendOutcome.Sent
+                // Исход действия через релей узнать неоткуда: файл лёг в почтовый ящик, компьютер
+                // заберёт его когда-нибудь сам. Поэтому «доставлено, про исход неизвестно» —
+                // и телефон скажет «Отправлено на компьютер», а не «готово» (#114).
+                200 -> PcSendOutcome.Sent()
                 401, 403 -> PcSendOutcome.Rejected // wrong app secret — a build/config issue, not stale
                 else -> PcSendOutcome.Unreachable("relay HTTP $code")
             }

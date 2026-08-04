@@ -190,4 +190,61 @@ class ContinueOnPcTest {
         val one = decodePcOutbox("не-число\tAAAA\n" + encodePcOutbox(listOf(PcOutboxEntry(7, mapOf("name" to "a")))))
         assertEquals(listOf(7), one.map { it.id })
     }
+
+    // --- Исход действия едет обратно (#114): «доехало» ≠ «сделано» ---
+
+    @Test
+    fun `исход действия переживает дорогу в обе стороны`() {
+        val done = PcActionOutcome.Done("В очереди «HP LaserJet» · проверьте принтер")
+        assertEquals(done, decodePcReceiveReply(encodePcReceiveReply(done)))
+
+        val failed = PcActionOutcome.Failed("На компьютере сейчас нет принтера по умолчанию")
+        assertEquals(failed, decodePcReceiveReply(encodePcReceiveReply(failed)))
+
+        assertEquals(PcActionOutcome.Done(null), decodePcReceiveReply(encodePcReceiveReply(PcActionOutcome.Done())))
+    }
+
+    /**
+     * Старая сборка ПК отвечает одним «ok» — и это НЕ «готово».
+     *
+     * Совместимость здесь и есть честность: новый телефон обязан прочитать молчание как молчание,
+     * иначе он снова начнёт объявлять напечатанным то, о чём ему никто не говорил.
+     */
+    @Test
+    fun `старый компьютер отвечает «ok» — исход неизвестен, а не «сделано»`() {
+        assertNull(decodePcReceiveReply("ok"))
+        assertNull(decodePcReceiveReply(""))
+        assertNull(decodePcReceiveReply("ok\nчто-то из будущей версии"))
+        assertNull(encodePcReceiveReply(null).lineSequence().firstOrNull { it.startsWith(PC_ACTION_LINE) })
+        assertEquals("ok", encodePcReceiveReply(null))
+    }
+
+    @Test
+    fun `перенос строки в причине не ломает ответ`() {
+        val decoded = decodePcReceiveReply(encodePcReceiveReply(PcActionOutcome.Failed("нет бумаги\nи тонера")))
+
+        assertEquals(PcActionOutcome.Failed("нет бумаги и тонера"), decoded)
+    }
+
+    @Test
+    fun `отказ без слов всё равно называется отказом`() {
+        assertEquals(
+            PcActionOutcome.Failed("причина не названа"),
+            decodePcReceiveReply(encodePcReceiveReply(PcActionOutcome.Failed(""))),
+        )
+    }
+
+    /** Результат реализатора компьютера превращается в исход теми же словами, что он сказал. */
+    @Test
+    fun `результат работы на компьютере становится исходом без сглаживания`() {
+        assertEquals(
+            PcActionOutcome.Done("В очереди «HP» · проверьте принтер"),
+            pcActionOutcomeOf(com.point.core.model.ActionResult.Done("В очереди «HP» · проверьте принтер")),
+        )
+        assertEquals(
+            PcActionOutcome.Failed("нет принтера"),
+            pcActionOutcomeOf(com.point.core.model.ActionResult.Failure("нет принтера", recoverable = true)),
+        )
+        assertNull("не дождались — значит неизвестно, а не «готово»", pcActionOutcomeOf(null))
+    }
 }

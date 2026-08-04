@@ -67,9 +67,12 @@ class HttpUrlPcTransport @Inject constructor() : PcTransport {
             c.setFixedLengthStreamingMode(file.length())
             file.inputStream().use { input -> c.outputStream.use { input.copyTo(it) } }
             val code = c.responseCode
+            // Ответ читается целиком: во второй его строке едет исход заказанного действия (#114).
+            // Старый компьютер отвечает одним «ok» — декодер честно возвращает «неизвестно».
+            val reply = runCatching { c.inputStream.bufferedReader().readText() }.getOrDefault("")
             c.disconnect()
             when (code) {
-                200 -> PcSendOutcome.Sent
+                200 -> PcSendOutcome.Sent(com.point.core.flow.decodePcReceiveReply(reply))
                 401, 403 -> PcSendOutcome.Rejected
                 else -> PcSendOutcome.Unreachable("HTTP $code")
             }
