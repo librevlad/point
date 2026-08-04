@@ -109,6 +109,29 @@ fun Modifier.portalCard(
     .border(1.dp, Brush.verticalGradient(listOf(TopHighlight, Color.Transparent)), shape)
 
 /**
+ * Поверхность «основного действия»: фирменный градиент АКЦЕНТ1→синий со своим свечением.
+ *
+ * Ею светится главная строка ([PortalRow] с `primary`), ею же говорит человек в чате: его реплика —
+ * это его же выбор, и выглядеть она обязана тем, чем выглядит выбор. Вынута из [PortalRow] по той
+ * же причине, по которой из экрана объекта вынуто всё остальное (#430): пока градиент жил внутри
+ * строки приватным, чат красил свою реплику плоским `colorScheme.primary` — цвет тот же, язык
+ * другой.
+ */
+fun Modifier.portalPrimary(
+    shape: Shape = PortalCardShape,
+    elevation: Dp = 20.dp,
+): Modifier = this
+    .then(
+        if (elevation > 0.dp) {
+            Modifier.shadow(elevation, shape, ambientColor = PrimaryStart, spotColor = PrimaryStart)
+        } else {
+            Modifier
+        },
+    )
+    .clip(shape)
+    .background(Brush.horizontalGradient(listOf(PrimaryStart, PrimaryEnd)))
+
+/**
  * Иконная плита строки: плитка со свечением своего цвета и иконкой в нём же.
  *
  * На светящейся строке-герое ([onGlass]) плита белая-стеклянная. [ring] — кольцо АКЦЕНТ2 у
@@ -204,15 +227,7 @@ fun PortalRow(
             alpha = presence.value
             translationY = (1f - presence.value) * 10.dp.toPx()
         }
-    val surface =
-        if (primary) {
-            base
-                .shadow(20.dp, shape, ambientColor = PrimaryStart, spotColor = PrimaryStart)
-                .clip(shape)
-                .background(Brush.horizontalGradient(listOf(PrimaryStart, PrimaryEnd)))
-        } else {
-            base.portalCard(shape)
-        }
+    val surface = if (primary) base.portalPrimary(shape) else base.portalCard(shape)
 
     val labelColor = if (primary) Color.White else MaterialTheme.colorScheme.onSurface
     val subColor = if (primary) Color.White.copy(alpha = 0.80f) else MaterialTheme.colorScheme.onSurfaceVariant
