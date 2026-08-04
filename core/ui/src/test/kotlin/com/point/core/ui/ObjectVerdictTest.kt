@@ -2,6 +2,7 @@ package com.point.core.ui
 
 import com.point.core.flow.META_SEMANTIC_SUMMARY
 import com.point.core.flow.META_SEMANTIC_TYPE
+import com.point.core.flow.META_SIZE
 import com.point.core.flow.TYPE_PARCEL
 import com.point.core.model.Feature
 import com.point.core.model.ObjectKind
@@ -110,6 +111,59 @@ class ObjectVerdictTest {
         )
 
         assertEquals(kindLabel(ObjectKind.OFFICE), objectVerdict(o).headline)
+    }
+
+    // --- Цена тапа названа до тапа (#459) ---
+
+    @Test
+    fun `над записью стоит её длина — до всякого тапа`() {
+        // 3 минуты opus (24 кбит/с = 3000 байт/с). Раньше эту строку человек читал только
+        // после тапа, когда сеть уже пошла и квота уже тратилась.
+        val o = obj(
+            kind = ObjectKind.AUDIO,
+            mime = "audio/ogg",
+            metadata = mapOf("name" to "AUD-0001.ogg", META_SIZE to (180 * 3000).toString()),
+        )
+
+        assertEquals("примерно 3 мин", objectVerdict(o).measure)
+    }
+
+    @Test
+    fun `сорок секунд и сорок минут различимы глазом, а не только тапом`() {
+        fun measureOf(seconds: Int) = objectMeasure(
+            obj(
+                kind = ObjectKind.AUDIO,
+                mime = "audio/ogg",
+                metadata = mapOf(META_SIZE to (seconds * 3000).toString()),
+            ),
+        )
+
+        assertEquals("примерно 40 сек", measureOf(40))
+        assertEquals("примерно 40 мин", measureOf(40 * 60))
+    }
+
+    @Test
+    fun `битрейт неизвестен — тогда честный вес, а не выдуманные минуты`() {
+        val o = obj(
+            kind = ObjectKind.AUDIO,
+            mime = "audio/amr",
+            metadata = mapOf("name" to "REC001.amr", META_SIZE to (5L * 1024 * 1024).toString()),
+        )
+
+        assertEquals("5 МБ", objectVerdict(o).measure)
+    }
+
+    @Test
+    fun `веса не приехало — экран молчит, а не показывает «0 мин»`() {
+        assertNull(objectMeasure(obj(kind = ObjectKind.AUDIO, mime = "audio/ogg")))
+    }
+
+    @Test
+    fun `у снимка и документа меры нет — число под каждым объектом было бы шумом`() {
+        val size = mapOf(META_SIZE to (5L * 1024 * 1024).toString())
+
+        assertNull(objectMeasure(obj(kind = ObjectKind.IMAGE, metadata = size)))
+        assertNull(objectMeasure(obj(kind = ObjectKind.PDF, metadata = size)))
     }
 
     @Test

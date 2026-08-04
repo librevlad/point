@@ -22,6 +22,29 @@ fun recordingMinutes(mime: String, sizeBytes: Long, fileName: String? = null): D
 }
 
 /**
+ * Длина записи словами — «примерно 40 сек», «примерно 3 мин» — или null, когда честного числа
+ * нет (неизвестный битрейт, нулевой вес).
+ *
+ * **Одно место, где минуты становятся словами** (#459). Раньше эту фразу умел собрать только
+ * [listeningStage], то есть звучала она **после** тапа: сеть уже пошла, квота уже тратится, а
+ * человек только сейчас узнавал, что записи сорок минут. Теперь ту же строку показывает экран
+ * объекта до тапа, и с фразой ожидания она совпадает не случайно, а потому что фраза одна.
+ *
+ * Секунды округляются до пятёрки, минуты — до целой: точность здесь всё равно оценочная (см.
+ * [recordingMinutes]), и «примерно 47 сек» обещало бы измерение, которого не было.
+ */
+fun recordingLength(mime: String, sizeBytes: Long, fileName: String? = null): String? {
+    val minutes = recordingMinutes(mime, sizeBytes, fileName) ?: return null
+    val seconds = (minutes * 60.0 / 5.0).roundToInt() * 5
+    // Короче пяти секунд оценка по битрейту врёт больше, чем сообщает: молчим.
+    if (seconds < 5) return null
+    // Округлившаяся до минуты запись названа минутой: «примерно 60 сек» — то же число, но
+    // языком, которым о минуте не говорят.
+    if (seconds < 60) return "примерно $seconds сек"
+    return "примерно ${minutes.roundToInt()} мин"
+}
+
+/**
  * Что говорит реализатор перед тем, как уйти в сеть, — или null, когда сказать нечего сверх
  * самого действия.
  *
@@ -32,7 +55,8 @@ fun recordingMinutes(mime: String, sizeBytes: Long, fileName: String? = null): D
 fun listeningStage(mime: String, sizeBytes: Long, fileName: String? = null): String {
     val minutes = recordingMinutes(mime, sizeBytes, fileName)
     if (minutes == null || minutes < LONG_MINUTES) return LISTENING
-    return "$LISTENING — примерно ${minutes.roundToInt()} мин, это займёт время"
+    val length = recordingLength(mime, sizeBytes, fileName) ?: return LISTENING
+    return "$LISTENING — $length, это займёт время"
 }
 
 /** Слова о работе, которая идёт сейчас: слушаю запись. */

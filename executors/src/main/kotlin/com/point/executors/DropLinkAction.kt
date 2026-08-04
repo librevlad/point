@@ -38,7 +38,21 @@ class DropLinkCapability @Inject constructor() : Capability {
     )
 
     override fun label(state: ObjectState) = "Дать ссылку"
-    override fun accepts(state: ObjectState) = state.kind.isFileBacked
+
+    /**
+     * Ссылке ссылку не дают (#457).
+     *
+     * Объект-URL — это сорок байт текста со ссылкой внутри, и «Дать ссылку» загрузило бы на
+     * сервер **их**: человек получил бы ссылку на ссылку, а тот, кому он её отправит, — текстовый
+     * файлик вместо страницы. Это единственное действие, чей собственный результат (`produces`
+     * = URL) снова попадал в его же `accepts`: петля, у которой второй виток бессмыслен.
+     *
+     * Исключение то же самое, что уже стоит у «Открыть» и «Открыть в…»: у ссылки свои действия
+     * («Открыть ссылку», «Скопировать», «Код»), и подменять их загрузкой на сервер незачем.
+     */
+    override fun accepts(state: ObjectState) =
+        state.kind.isFileBacked && state.kind != ObjectKind.URL
+
     override fun produces(state: ObjectState) = ObjectState(ObjectKind.URL)
 
     companion object { val ID = CapabilityId("drop-link") }
