@@ -188,8 +188,19 @@ val DocumentLayout.unreadWords: Int get() = wordsIn(BlockRole.UNREAD)
  */
 val DocumentLayout.chromeWords: Int get() = wordsIn(BlockRole.CHROME)
 
-private fun DocumentLayout.wordsIn(role: BlockRole): Int =
-    blocks.filter { it.role == role }.sumOf { block ->
+/**
+ * Сколько слов документа реально прочитано — то есть попало в содержательную часть: ячейку сетки,
+ * заголовок, реквизит, итог, примечание или подпись.
+ *
+ * Знаменатель порога годности ([unfitTable]): «непрочитанного много» — утверждение относительное,
+ * и без прочитанного рядом оно не значит ничего.
+ */
+val DocumentLayout.readWords: Int get() = wordsWhere { it.isContent }
+
+private fun DocumentLayout.wordsIn(role: BlockRole): Int = wordsWhere { it == role }
+
+private fun DocumentLayout.wordsWhere(role: (BlockRole) -> Boolean): Int =
+    blocks.filter { role(it.role) }.sumOf { block ->
         block.ids.size.takeIf { it > 0 }
             ?: block.grid?.rows?.sumOf { row -> row.sumOf { it.wordCount() } }
             ?: block.text.wordCount()

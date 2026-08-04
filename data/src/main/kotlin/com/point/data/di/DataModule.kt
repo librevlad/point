@@ -42,6 +42,7 @@ import com.point.core.flow.AtomRecognizer
 import com.point.core.flow.CloudPrivacySettings
 import com.point.core.flow.ExternalEye
 import com.point.core.flow.GROQ_PROVIDER_ID
+import com.point.core.flow.MISTRAL_PROVIDER_ID
 import com.point.core.flow.SpeechReadiness
 import com.point.core.flow.SpeechToText
 import com.point.core.flow.TextRecognizer
@@ -108,6 +109,7 @@ import com.point.data.UnstructuredAtomRecognizer
 import com.point.data.CloudTextReader
 import com.point.data.DefaultExternalEye
 import com.point.data.MistralOcrReader
+import com.point.data.OcrSpaceReader
 import com.point.data.OvhVisionReader
 import com.point.data.PrefsCloudPrivacySettings
 import com.point.data.MediaStoreExporter
@@ -568,11 +570,22 @@ abstract class DataModule {
         ).filter { it.configured }
 
         /**
-         * Внешний глаз (#280) — цепочка в порядке **измеренной эффективности бесплатного**, а не
-         * по приватности: 1) Mistral OCR (24/24 дословно на всех порчах кадра, 1,3–5 с),
-         * 2) OVH Qwen2.5-VL (15/15 на кириллице, отдаётся без ключа и регистрации).
+         * Внешний глаз (#280/#490/#493) — цепочка в порядке **измеренной эффективности
+         * бесплатного**, а не по приватности и не по алфавиту. Числа — перемер 04.08.2026
+         * (`docs/VISION-MODELS.md`, три повтора на каждую пару «кандидат + картинка»):
          *
-         * Приватность отсюда никого больше не выбрасывает — она столбец, который человек видит, и
+         * 1. **Mistral OCR** — 15/15 и на чистом скане, и на мятом фото под углом, шесть ответов из
+         *    шести, медиана 0,3–0,4 с. Специальная ручка разбора страницы, а не чат: у того же
+         *    поставщика чат берёт 13/15. Отсюда правило очереди — специальные ручки раньше общих
+         *    чатов, а не «кто первый подключён».
+         * 2. **OCR.space** — 15/15 шесть из шести, 2 с, 25 000 страниц в месяц. Работает
+         *    **демо-ключом из их же примеров**, то есть живой у человека, который ничего не
+         *    настраивал.
+         * 3. **OVH Qwen2.5-VL** — 15/15 шесть из шести, 6–8 с, без ключа и регистрации вовсе; два
+         *    запроса в минуту. Медленнее первых двух, зато единственный, кто остаётся на строгом
+         *    уровне приватности («Не учатся на моём»).
+         *
+         * Приватность отсюда никого не выбрасывает — она столбец, который человек видит, и
          * настройка, которой он управляет ([CloudPrivacySettings]). Решение владельца 04.08.2026,
          * разбор — в `DECISIONS.md`.
          *
@@ -584,8 +597,21 @@ abstract class DataModule {
         fun cloudTextReaders(
             http: HttpJson,
             frames: OutboundFrames,
+            userKeys: UserKeyStore,
         ): List<@JvmSuppressWildcards CloudTextReader> = listOf(
-            MistralOcrReader(http, frames, BuildConfig.MISTRAL_API_KEY, BuildConfig.MISTRAL_BASE_URL),
+            MistralOcrReader(
+                http, frames,
+                // Ключ человека первым, ключ сборки вторым, и спрашивается он на каждом чтении
+                // (#467). Прежде сюда приходил только ключ сборки — а его нет ни в одной
+                // раздаваемой сборке: сильнейший читатель был мёртв у всех, кроме нас самих.
+                { userKeys.read().keyFor(MISTRAL_PROVIDER_ID).ifBlank { BuildConfig.MISTRAL_API_KEY } },
+                BuildConfig.MISTRAL_BASE_URL,
+            ),
+            OcrSpaceReader(
+                http, frames,
+                { BuildConfig.OCRSPACE_API_KEY },
+                BuildConfig.OCRSPACE_URL,
+            ),
             OvhVisionReader(
                 http, frames,
                 BuildConfig.OVH_API_KEY,
@@ -605,14 +631,40 @@ abstract class DataModule {
                 BuildConfig.GEMINI_MODELS.split(',').map(String::trim).filter(String::isNotBlank),
             )
 
-        /** Known OpenAI-compatible endpoints, each expanded into one entry per model in
-         *  its comma-separated *_MODELS list; [configured] drops the ones without a key. */
+        /**
+         * Known OpenAI-compatible endpoints, each expanded into one entry per model in its
+         * comma-separated `*_MODELS` list; [configured] drops the ones without a key.
+         *
+         * **Порядок — по замеру, и правило одно: сколько раз ответил → насколько дословно → за
+         * сколько** (перемер 04.08.2026, `docs/VISION-MODELS.md`, шесть попыток на кандидата).
+         * Надёжность стоит первой не из любви к порядку: одиночный удачный прогон прячет лимит
+         * провайдера, и ровно на этом Groq однажды выглядел вторым номером, а на повторах дал два
+         * ответа из шести. Прежняя очередь была наследством («кого подключили раньше»), а не
+         * ранжированием.
+         *
+         * - **openrouter** — 15/15, шесть ответов из шести;
+         * - **sambanova** — 14–15/15, шесть из шести (ключ лежал в `local.properties` мёртвым: поля
+         *   сборки под него не было вовсе);
+         * - **mistral** — чат 12–13/15, шесть из шести; его же OCR-ручка стоит отдельно и выше,
+         *   в цепочке читателей страницы;
+         * - **cerebras** — 14/15, пять из шести, но **0,7 с**: самый быстрый в таблице;
+         * - **groq** — 15/15 и два ответа из шести (8000 токенов в минуту, картинка ≈4400, то есть
+         *   вторая в ту же минуту не проходит). По качеству хорош, рабочей лошадью быть не может;
+         * - **zhipu** — 12–13/15 и два из шести («перегружено»); последний из живых;
+         * - **github** — закрыт (410), список моделей пуст; **openai** — платный, потому в хвосте.
+         *
+         * Замер делался на снимках. Для текста отдельного замера нет, и выдумывать ему свой порядок
+         * не из чего: 429 переводит очередь дальше сам, а лишний порядок был бы догадкой с видом
+         * решения.
+         */
         private fun openAiProviders(): List<OpenAiProvider> =
             openAiModels("openrouter", BuildConfig.OPENROUTER_BASE_URL, BuildConfig.OPENROUTER_API_KEY, BuildConfig.OPENROUTER_MODELS) +
-                openAiModels("github", BuildConfig.GITHUB_BASE_URL, BuildConfig.GITHUB_API_KEY, BuildConfig.GITHUB_MODELS) +
-                openAiModels("groq", BuildConfig.GROQ_BASE_URL, BuildConfig.GROQ_API_KEY, BuildConfig.GROQ_MODELS) +
+                openAiModels("sambanova", BuildConfig.SAMBANOVA_BASE_URL, BuildConfig.SAMBANOVA_API_KEY, BuildConfig.SAMBANOVA_MODELS) +
                 openAiModels("mistral", BuildConfig.MISTRAL_BASE_URL, BuildConfig.MISTRAL_API_KEY, BuildConfig.MISTRAL_MODELS) +
                 openAiModels("cerebras", BuildConfig.CEREBRAS_BASE_URL, BuildConfig.CEREBRAS_API_KEY, BuildConfig.CEREBRAS_MODELS) +
+                openAiModels("groq", BuildConfig.GROQ_BASE_URL, BuildConfig.GROQ_API_KEY, BuildConfig.GROQ_MODELS) +
+                openAiModels("zhipu", BuildConfig.ZHIPU_BASE_URL, BuildConfig.ZHIPU_API_KEY, BuildConfig.ZHIPU_MODELS) +
+                openAiModels("github", BuildConfig.GITHUB_BASE_URL, BuildConfig.GITHUB_API_KEY, BuildConfig.GITHUB_MODELS) +
                 openAiModels("openai", BuildConfig.OPENAI_BASE_URL, BuildConfig.OPENAI_API_KEY, BuildConfig.OPENAI_MODELS)
 
         @Provides

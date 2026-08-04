@@ -1,6 +1,7 @@
 package com.point.data
 
 import com.point.core.flow.ReaderPrivacy
+import com.point.core.flow.ReaderPromise
 import com.point.core.model.PointObject
 import org.json.JSONObject
 import java.util.Base64
@@ -29,31 +30,46 @@ import java.util.Base64
  * **Модель — серверный алиас** `mistral-ocr-latest`, а не пин версии: то же правило, что у Gemini
  * (`GEMINI_MODELS`) — пин переживает ровно до следующего отключения модели.
  *
- * Ключ и адрес инжектируются (из `BuildConfig`, в `DataModule`), а не читаются здесь: сборка
- * запроса и разбор ответа обязаны проверяться подделками независимо от того, что лежит в
- * `local.properties`.
+ * Адрес инжектируется (из `BuildConfig`, в `DataModule`), а не читается здесь: сборка запроса и
+ * разбор ответа обязаны проверяться подделками независимо от того, что лежит в `local.properties`.
+ *
+ * **Ключ спрашивается на каждом чтении, а не запоминается при старте** — и сначала ключ человека
+ * (#467). В раздаваемой сборке ключей нет вовсе, то есть сильнейший читатель включался бы там
+ * НИКОГДА, даже когда человек завёл себе бесплатный ключ Mistral на экране настроек. Ключ сборки
+ * остаётся вторым: квота человека — его собственная, и тратить чужую вместо неё было бы решением
+ * за него.
  */
 class MistralOcrReader(
     private val http: HttpJson,
     private val frames: OutboundFrames,
-    private val apiKey: String,
+    private val apiKey: () -> String,
     private val baseUrl: String,
 ) : CloudTextReader {
 
     override val reader = READER
 
     /**
-     * Франция, ЕС. Ключ бесплатного тарифа, запрос не идёт на обучение — поэтому [ReaderPrivacy.europe]
-     * поднят, и на уровне «только Европа» этот глаз остаётся единственным работающим.
+     * Франция, ЕС — **и при этом учится на присланном**.
+     *
+     * Прежняя запись здесь гласила «запрос не идёт на обучение», и это было неправдой: на
+     * бесплатном тарифе Mistral учится на входе и выходе по умолчанию (отказ — тумблером в
+     * кабинете) и держит присланное «thirty (30) rolling days». Перемер #490 вытащил это из их же
+     * условий. Ошибка была не косметической: на прежнем уровне «Только Европа» именно этот читатель
+     * оставался единственным работающим — то есть человек, закрывшийся ради приватности, получал
+     * ровно того, кто учится на его документах.
      */
-    override val privacy = ReaderPrivacy(where = "Mistral, Франция (ЕС)", europe = true, logsRequests = false)
+    override val privacy = ReaderPrivacy(
+        where = "Mistral, Франция (ЕС)",
+        promise = ReaderPromise.TRAINS,
+    )
 
-    override val configured: Boolean get() = apiKey.isNotBlank()
+    override val configured: Boolean get() = apiKey().isNotBlank()
 
     private val root: String get() = baseUrl.ifBlank { DEFAULT_BASE_URL }.trimEnd('/')
 
     override suspend fun read(obj: PointObject): String {
-        require(configured) { "$READER: ключ не задан" }
+        val key = apiKey()
+        require(key.isNotBlank()) { "$READER: ключ не задан" }
         val frame = frames.of(obj) ?: error("$READER: кадр не подготовлен — нечего отправлять")
         val body = JSONObject()
             .put("model", MODEL)
@@ -66,7 +82,7 @@ class MistralOcrReader(
             // Картинки страницы обратно не нужны — нам нужен её текст, а не её вес.
             .put("include_image_base64", false)
             .toString()
-        val res = http.post("$root/ocr", mapOf("Authorization" to "Bearer $apiKey"), body)
+        val res = http.post("$root/ocr", mapOf("Authorization" to "Bearer $key"), body)
         if (res.code !in 200..299) error(refusal(res.code, res.body))
         return textOf(res.body)
     }
