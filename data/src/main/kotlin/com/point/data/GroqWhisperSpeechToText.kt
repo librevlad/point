@@ -1,5 +1,9 @@
 package com.point.data
 
+import com.point.core.flow.FirstHeardSpeechToText
+import com.point.core.flow.GROQ_PROVIDER_ID
+import com.point.core.flow.KEY_SETTINGS_CALL
+import com.point.core.flow.SpeechKeyNeed
 import com.point.core.flow.SpeechToText
 import com.point.core.flow.Transcription
 import com.point.core.flow.modelReadableAudio
@@ -30,22 +34,34 @@ import java.io.File
  * **Сути Whisper не даёт**, и выдумывать её здесь нечем: [Transcription.Heard.summary] остаётся
  * пустой, а суть добирает [SummarizingSpeechToText] отдельным дешёвым текстовым запросом.
  *
- * Ключ и адрес приходят конструктором (из `BuildConfig`, в `DataModule`), а не читаются здесь, — как
- * у [GeminiLlmClient] и [UnstructuredAtomRecognizer]: сборка запроса и разбор ответа обязаны
+ * Адрес и модель приходят конструктором (из `BuildConfig`, в `DataModule`), а не читаются здесь, —
+ * как у [GeminiLlmClient] и [UnstructuredAtomRecognizer]: сборка запроса и разбор ответа обязаны
  * проверяться подделкой независимо от того, что лежит в `local.properties`.
+ *
+ * **Ключ — функция, а не строка, и это не мелочь (#467).** Раньше он захватывался при сборке графа
+ * из `BuildConfig.GROQ_API_KEY`, то есть из ключа СБОРКИ. В раздаваемой сборке такого ключа нет
+ * вовсе, поэтому Whisper там не включался никогда; а человек, прочитавший «нет ключа Groq», шёл на
+ * экран ключей, вводил ключ Groq — и не менялось ничего, потому что тот ключ уезжал только в
+ * цепочку моделей. Теперь ключ спрашивается на каждый вызов, и введённый минуту назад работает
+ * сразу — без пересборки графа и без перезапуска приложения.
  */
 class GroqWhisperSpeechToText(
     private val http: HttpFiles,
-    private val apiKey: String,
+    private val apiKey: () -> String,
     private val baseUrl: String,
     private val model: String,
 ) : SpeechToText {
 
-    /** Есть ли ключ. Без него движок в очередь не ставится — см. `DataModule`. */
-    val configured: Boolean get() = apiKey.isNotBlank()
+    /** Есть ли ключ прямо сейчас. Без него движок выпадает из очереди — см. [FirstHeardSpeechToText]. */
+    val configured: Boolean get() = apiKey().isNotBlank()
+
+    /** Ключ Groq — единственный, который включает Whisper; так это человеку и говорится. */
+    override fun missingKey(): SpeechKeyNeed? =
+        if (configured) null else SpeechKeyNeed("Whisper слушает по ключу Groq", GROQ_PROVIDER_ID)
 
     override suspend fun transcribe(obj: PointObject): Transcription = withContext(Dispatchers.IO) {
-        if (!configured) error("Whisper не настроен — нет ключа Groq")
+        val key = apiKey()
+        if (key.isBlank()) error("Whisper не настроен — нужен ключ Groq. $KEY_SETTINGS_CALL")
 
         // Отказ до сети: формат, которого движок не читает, честнее назвать словами здесь, чем
         // получить HTTP 400 и показать человеку кусок чужого JSON. Список общий с моделью общего
@@ -64,7 +80,7 @@ class GroqWhisperSpeechToText(
             // `User-Agent` здесь не называется: его ставит транспорт всем исходящим запросам
             // ([pointHeaders]). Именно этот сервис однажды числился мёртвым из-за безымянных
             // запросов, и второй правды об одном заголовке заводить нельзя — она разъедется.
-            headers = mapOf("Authorization" to "Bearer $apiKey"),
+            headers = mapOf("Authorization" to "Bearer $key"),
             parts = listOf(
                 // Имя файла синтетическое: сервис смотрит на расширение, а настоящее имя записи —
                 // это имя из чужого мессенджера, и чужому сервису оно не нужно.

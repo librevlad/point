@@ -1517,6 +1517,49 @@ class FlowViewModelTest {
         assertEquals(Outcome.NONE, vm.ui.value.messageOutcome)
     }
 
+    /**
+     * #467: отказ расшифровки зовёт задать ключ СВОИМИ словами, не говоря «задайте свой ключ». По
+     * одной марке предложение под ним не появлялось бы вовсе — человек с голосовым и без ключей
+     * остался бы ровно там, откуда всё началось.
+     */
+    @Test fun `отказ расшифровки тоже получает предложение задать ключ`() = runTest(dispatcher) {
+        val why = "Расшифровать некому: Whisper слушает по ключу Groq. " +
+            com.point.core.flow.KEY_SETTINGS_CALL
+        resolver.result = ActionResult.Failure(why, recoverable = true)
+        val vm = vm()
+        vm.onShared("voice.ogg", "audio/ogg"); advanceUntilIdle()
+
+        vm.onBubble(bubble()); advanceUntilIdle()
+
+        assertEquals(why, vm.ui.value.message)
+        assertNull("экран ключей открывает человек, а не отказ за него", vm.ui.value.keyScreen)
+        assertEquals("Задать свой ключ AI", keyOfferLabel(vm.ui.value.message))
+    }
+
+    /** Пришедший ПО ПРЕДЛОЖЕНИЮ приходит с вопросом «какой из семи ключей задать» — и ответ на него
+     *  стоит на экране ключей, а не остаётся позади (#467). */
+    @Test fun `причина доезжает до экрана ключей вместе с человеком`() = runTest(dispatcher) {
+        val why = "Расшифровать некому: Whisper слушает по ключу Groq. " +
+            com.point.core.flow.KEY_SETTINGS_CALL
+        resolver.result = ActionResult.Failure(why, recoverable = true)
+        val vm = vm()
+        vm.onShared("voice.ogg", "audio/ogg"); advanceUntilIdle()
+        vm.onBubble(bubble()); advanceUntilIdle()
+
+        vm.openKeySettings(); advanceUntilIdle() // тап по предложению
+
+        assertEquals(why, vm.ui.value.keyScreenNote)
+    }
+
+    /** Пришедшему шестерёнкой объяснять нечего — и чужая причина за ним не тянется. */
+    @Test fun `пришедший сам не видит на экране ключей чужой причины`() = runTest(dispatcher) {
+        val vm = vm()
+
+        vm.openKeySettings(); advanceUntilIdle()
+
+        assertNull(vm.ui.value.keyScreenNote)
+    }
+
     @Test fun `saveAiConfig stores the key and closes the screen`() = runTest(dispatcher) {
         val vm = vm()
         vm.openKeySettings(); advanceUntilIdle()

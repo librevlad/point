@@ -996,6 +996,11 @@ class FlowViewModel @Inject constructor(
             val refusal = keyOfferLabel(it.message) != null
             it.copy(
                 keyScreen = userKeys.read() ?: UserAiConfig.DEFAULT, busy = null,
+                // …и он же стоит НА экране ключей (#467). Сюда пришли по предложению под отказом —
+                // то есть с вопросом «какой из семи ключей задать»; ответ на него живёт в тексте
+                // отказа, а не в памяти человека, и терять его по дороге незачем. Заполняется
+                // только от отказа: пришедшему шестерёнкой объяснять нечего.
+                keyScreenNote = it.message.takeIf { _ -> refusal },
                 message = it.message.takeIf { _ -> refusal },
                 messageOutcome = if (refusal) it.messageOutcome else Outcome.NONE,
                 inputPrompt = null,
@@ -1042,7 +1047,7 @@ class FlowViewModel @Inject constructor(
         }
     }
 
-    fun closeKeySettings() = _ui.update { it.copy(keyScreen = null) }
+    fun closeKeySettings() = _ui.update { it.copy(keyScreen = null, keyScreenNote = null) }
 
     // --- «Компьютер» (#147): pair once, then the «На компьютер» bubble appears. ---
 
@@ -1325,7 +1330,12 @@ class FlowViewModel @Inject constructor(
     fun saveAiConfig(config: UserAiConfig) {
         viewModelScope.launch {
             runCatching { userKeys.save(config) }
-            _ui.update { it.copy(keyScreen = null, message = "Ключ AI сохранён", messageOutcome = Outcome.DONE) }
+            _ui.update {
+                it.copy(
+                    keyScreen = null, keyScreenNote = null,
+                    message = "Ключ AI сохранён", messageOutcome = Outcome.DONE,
+                )
+            }
         }
     }
 
