@@ -8,6 +8,7 @@ import com.point.core.flow.BlockRole
 import com.point.core.flow.Capability
 import com.point.core.flow.CapabilityMeta
 import com.point.core.flow.CellAnswer
+import com.point.core.flow.KEY_SETTINGS_CALL
 import com.point.core.flow.Consensus
 import com.point.core.flow.Cost
 import com.point.core.flow.CropEvidence
@@ -29,6 +30,7 @@ import com.point.core.flow.META_TABLE_HEADER
 import com.point.core.flow.META_TABLE_SCOPE
 import com.point.core.flow.META_TABLE_UNREAD
 import com.point.core.flow.ObjectStore
+import com.point.core.flow.refusalNeedsKey
 import com.point.core.flow.RECROP_TIMEOUT_MS
 import com.point.core.flow.ReadingMode
 import com.point.core.flow.Realizer
@@ -140,7 +142,15 @@ class ExcelRealizer(
                 // #200: read the table with up to CONSENSUS_N independent strong-vision models, then
                 // vote each cell (reconcile). A dense/handwritten table one model guesses, another catches
                 // — agreement = confidence, disagreement = ⚠ + the models' distinct readings as candidates.
-                val ordered = providers.sortedByDescending { it.strongVision }.filter { it.canHandle(input) }
+                // Ненастроенный клиент в очередь не встаёт вовсе (#493). Ключ человека объявлен
+                // сильной зрячей моделью и потому стоит первым — а пустой он у всех, кто ключа не
+                // заводил. Он падал с «задайте свой ключ», эта ошибка ложилась в список первой, и
+                // человек читал её как итог, хотя дальше по очереди работали живые модели сборки.
+                // Владелец так и увидел: «собрать excel из pdf не получилось — нет ключа говорит».
+                // Правило то же, что у слоёв распознавания: нет ключа — слоя просто нет, это не сбой.
+                val ordered = providers
+                    .filter { it.configured && it.canHandle(input) }
+                    .sortedByDescending { it.strongVision }
                 // #266: чтение — это ДОКУМЕНТ, а не только сетка. Голосуется по-прежнему сетка
                 // (голосовать структуру нечем, и выдумывать голосование мы не будем), а шапка,
                 // реквизиты, примечание и подписи живут в разобранной раскладке рядом.
@@ -199,10 +209,7 @@ class ExcelRealizer(
                     }
                 }
                 if (layouts.isEmpty()) {
-                    ActionResult.Failure(
-                        errors.firstOrNull()?.substringBefore('\n')?.take(120) ?: "Не удалось распознать таблицу",
-                        recoverable = true,
-                    )
+                    ActionResult.Failure(refusalOf(errors, ordered.isEmpty()), recoverable = true)
                 } else {
                     reportStage(if (tables.size > 1) "Свожу расхождения чтений" else "Собираю таблицу")
                     val consensus = reconcile(tables) // 1 read → passthrough; ≥2 → voted, disagreements ⚠
@@ -642,6 +649,22 @@ class ExcelRealizer(
                 "(например rule=track-shaped: похоже на номер отправления); подсказка может " +
                 "ошибаться и ничего не решает — решаешь ты по контексту страницы.\n\nСлова страницы:\n"
     }
+}
+
+/**
+ * Что сказать человеку, когда таблицы не вышло (#493).
+ *
+ * Отказов бывает много, а прочитает он один — и этот один обязан называть причину, которую можно
+ * устранить. Раньше брался просто первый по порядку очереди, а первым стоял ненастроенный ключ
+ * человека: «задайте свой ключ» показывалось даже там, где ключ ни при чём. Теперь ключ называется
+ * причиной только когда читать было **некем** ([noReaders]) или когда все отказы про него; в
+ * остальных случаях побеждает отказ по существу — квота, сеть, формат.
+ */
+internal fun refusalOf(errors: List<String>, noReaders: Boolean): String {
+    if (noReaders) return "Читать таблицу некем — $KEY_SETTINGS_CALL"
+    val substantive = errors.firstOrNull { !refusalNeedsKey(it) }
+    val chosen = substantive ?: errors.firstOrNull() ?: return "Не удалось распознать таблицу"
+    return chosen.substringBefore('\n').take(120)
 }
 
 /**
