@@ -58,4 +58,42 @@ class MessageScreenTest {
         assertEquals("Готово", messageExitLabel(Outcome.NONE))
         assertEquals("Понятно", messageExitLabel(Outcome.FAILED))
     }
+
+    /**
+     * #452: экран ключей — предложение, а не подмена ответа. Причина остаётся на экране, а рядом
+     * с ней стоит строка, по которой человек идёт за ключом сам.
+     */
+    @Test fun `под отказом про ключ стоит предложение, и оно ведёт к экрану ключей`() {
+        var opened = false
+        compose.setContent {
+            PointHost(
+                state = FlowUiState(
+                    message = "AI недоступен — задайте свой ключ",
+                    messageOutcome = Outcome.FAILED,
+                ),
+                onBubble = {},
+                onSubmitInput = {},
+                onCancelInput = {},
+                onOpenKeySettings = { opened = true },
+            )
+        }
+        compose.onNodeWithText("AI недоступен — задайте свой ключ").assertExists()
+
+        compose.onNodeWithText("Задать свой ключ AI").performClick()
+
+        assertTrue("предложение нарисовано, но никуда не ведёт", opened)
+    }
+
+    /** Предложить ключ там, где он ни при чём, — выдумать человеку причину. */
+    @Test fun `у постороннего отказа предложения про ключ нет`() {
+        compose.setContent {
+            PointHost(
+                state = FlowUiState(message = "Объект недоступен", messageOutcome = Outcome.FAILED),
+                onBubble = {},
+                onSubmitInput = {},
+                onCancelInput = {},
+            )
+        }
+        compose.onNodeWithText("Задать свой ключ AI").assertDoesNotExist()
+    }
 }
