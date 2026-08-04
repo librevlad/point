@@ -5,6 +5,7 @@ import com.point.core.flow.AtomCodec
 import com.point.core.flow.AtomLayer
 import com.point.core.flow.AtomRecognizer
 import com.point.core.flow.Box
+import com.point.core.flow.CollectionContent
 import com.point.core.flow.EnrichCost
 import com.point.core.flow.Entity
 import com.point.core.flow.EntityExtractor
@@ -63,7 +64,7 @@ class OcrEnricherTest {
         override suspend fun ingest(sourceUri: String, mime: String) = throw UnsupportedOperationException()
         override suspend fun ingestMultiple(sources: List<String>) = throw UnsupportedOperationException()
         override suspend fun put(result: ResultObject) = throw UnsupportedOperationException()
-        override suspend fun children(collection: PointObject) = emptyList<PointObject>()
+        override suspend fun children(collection: PointObject, limit: Int) = CollectionContent.empty<PointObject>()
         override suspend fun readText(obj: PointObject, limit: Int) = ""
         override suspend fun clear() {}
     }

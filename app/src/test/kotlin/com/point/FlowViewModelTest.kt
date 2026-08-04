@@ -5,6 +5,7 @@ import com.point.core.flow.AppTarget
 import com.point.core.flow.Capability
 import com.point.core.flow.CapabilityMeta
 import com.point.core.flow.CapabilityRegistry
+import com.point.core.flow.CollectionContent
 import com.point.core.flow.Latency
 import com.point.core.flow.CapabilityUsage
 import com.point.core.flow.Enrichment
@@ -1345,6 +1346,21 @@ class FlowViewModelTest {
         assertEquals(0, vm.basketCount.value)
     }
 
+    @Test fun `обрезанный набор доносит до экрана настоящее число файлов`() = runTest(dispatcher) {
+        // Набор больше предела обхода (#460): показать всё нельзя, но промолчать об этом — соврать.
+        store.content = CollectionContent(
+            shown = (1..2).map { PointObject("f$it", "text/plain", ScratchRef("/f$it"), ObjectState(ObjectKind.TEXT)) },
+            total = 1340,
+        )
+        val vm = vm()
+
+        vm.onSharedMultiple(listOf("a", "b")); advanceUntilIdle()
+
+        assertEquals(2, vm.ui.value.frame?.items?.size)
+        assertEquals(1340, vm.ui.value.frame?.itemsTotal)
+        assertEquals(false, vm.ui.value.frame?.itemsTotalAtLeast)
+    }
+
     @Test fun `onItem drills into a collection item as a new frame`() = runTest(dispatcher) {
         val vm = vm()
         vm.onSharedMultiple(listOf("a", "b")); advanceUntilIdle()
@@ -2107,7 +2123,9 @@ private class FakeStore : ObjectStore {
         PointObject("coll", "inode/directory", ScratchRef("/coll"), ObjectState(ObjectKind.COLLECTION))
     override suspend fun put(result: ResultObject): PointObject =
         PointObject("out", result.mime, result.uri, ObjectState(result.type), result.metadata)
-    override suspend fun children(collection: PointObject): List<PointObject> = emptyList()
+    /** Что store отдаёт как содержимое набора — вместе со счётом, который может быть больше списка. */
+    var content: CollectionContent<PointObject> = CollectionContent.empty()
+    override suspend fun children(collection: PointObject, limit: Int) = content
     override suspend fun readText(obj: PointObject, limit: Int): String = ""
     override suspend fun newScratchFile(extension: String): ScratchRef = ScratchRef("/scratch.$extension")
     override suspend fun clear() { clearedTimes++ }

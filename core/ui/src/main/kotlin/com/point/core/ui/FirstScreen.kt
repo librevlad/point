@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -112,6 +111,11 @@ fun FirstScreen(
     canSaveChain: Boolean = false,
     onSaveChain: () -> Unit = {},
     items: List<PointObject> = emptyList(),
+    /** Сколько файлов в наборе всего — [items] может быть обрезан пределом обхода (#460).
+     *  0 — счёта нет, и экран не выдумывает его из длины списка. */
+    itemsTotal: Int = 0,
+    /** [itemsTotal] — «не меньше чем»: обход упёрся в свой потолок и перестал считать. */
+    itemsTotalAtLeast: Boolean = false,
     onItem: (PointObject) -> Unit = {},
     found: List<PointObject> = emptyList(),
     relations: List<Relation> = emptyList(),
@@ -211,7 +215,12 @@ fun FirstScreen(
         Spacer(Modifier.height(28.dp))
 
         if (items.isNotEmpty() && inputPrompt == null) {
-            CollectionItems(items = items, onItem = onItem)
+            CollectionItems(
+                items = items,
+                total = itemsTotal,
+                atLeast = itemsTotalAtLeast,
+                onItem = onItem,
+            )
             Spacer(Modifier.height(28.dp))
         }
 
@@ -498,23 +507,51 @@ internal fun factKeyFor(kind: ObjectKind): String? = when (kind) {
     else -> null // an Identifier was never in the checklist — it had no type to be shown as
 }
 
+/** Сколько строк набора рисуется за раз; остальное — по тапу «Показать ещё» (#460). */
+const val COLLECTION_PAGE = 25
+
+/**
+ * Заголовок содержимого: сколько показано и сколько там на самом деле (#460).
+ *
+ * Обрезанный список обязан называть себя обрезанным: снаружи «Содержимое · 500» неотличимо от
+ * набора ровно из пятисот файлов, и человек уверен, что видел всё. [atLeast] — обход упёрся в
+ * потолок и перестал считать, то есть и само число «не меньше чем».
+ */
+fun collectionLabel(shown: Int, total: Int, atLeast: Boolean): String = when {
+    total <= shown && !atLeast -> "Содержимое · ${grouped(shown)}"
+    total <= shown -> "Содержимое · ${grouped(shown)}, и это не всё"
+    atLeast -> "Содержимое · ${grouped(shown)} из более чем ${grouped(total)}"
+    else -> "Содержимое · ${grouped(shown)} из ${grouped(total)}"
+}
+
+/** Число человеку: разряды отбиты неразрывным пробелом («1 340», а не «1340»). */
+internal fun grouped(n: Int): String =
+    n.toString().reversed().chunked(3).joinToString(" ").reversed()
+
 @Composable
-private fun CollectionItems(items: List<PointObject>, onItem: (PointObject) -> Unit) {
+private fun CollectionItems(
+    items: List<PointObject>,
+    total: Int,
+    atLeast: Boolean,
+    onItem: (PointObject) -> Unit,
+) {
+    // Строки рисуются страницами, и своей прокрутки у списка больше нет (#460). Прокручиваемая
+    // область внутри прокручиваемого экрана забирала жест себе: палец на списке двигал список, а
+    // страницу человек прокрутить не мог вовсе. Страница же держит и второе обещание — действия
+    // объекта остаются в досягаемости, а не уезжают на тысячу строк вниз.
+    var page by rememberSaveable(items.size) { mutableStateOf(COLLECTION_PAGE) }
     Text(
-        text = "Содержимое · ${items.size}",
+        text = collectionLabel(items.size, total, atLeast),
         style = MaterialTheme.typography.labelMedium,
         fontWeight = FontWeight.SemiBold,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
     Spacer(Modifier.height(12.dp))
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(max = 260.dp)
-            .verticalScroll(rememberScrollState()),
+        modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        items.forEach { item ->
+        items.take(page).forEach { item ->
             Surface(
                 onClick = { onItem(item) },
                 shape = RoundedCornerShape(12.dp),
@@ -543,14 +580,41 @@ private fun CollectionItems(items: List<PointObject>, onItem: (PointObject) -> U
                 }
             }
         }
+        if (page < items.size) {
+            TextButton(onClick = { page += COLLECTION_PAGE }) {
+                Text("Показать ещё · ${grouped(items.size - page)}")
+            }
+        }
     }
 }
 
-/** For a TEXT object: its content, readable in-app — scroll + native select/copy. */
+/** Сколько знаков текста видно сразу; остальное — по тапу «Показать целиком» (#460). */
+const val TEXT_PREVIEW_HEAD = 2_000
+
+/**
+ * Начало длинного текста — по границе строки, чтобы разметка не рвалась посередине слова.
+ *
+ * Обрыв ищется во второй половине куска: у текста без переносов (одна строка на сто тысяч знаков)
+ * границы нет вовсе, и резать по началу было бы хуже, чем резать ровно по пределу.
+ */
+fun textPreviewHead(text: String, limit: Int = TEXT_PREVIEW_HEAD): String {
+    if (text.length <= limit) return text
+    val head = text.take(limit)
+    val cut = head.lastIndexOf('\n')
+    return if (cut > limit / 2) head.substring(0, cut) else head
+}
+
+/** For a TEXT object: its content, readable in-app — native select/copy. */
 @Composable
 private fun TextPreview(text: String, markdown: Boolean = false) {
+    // Своей прокрутки у панели больше нет (#460): прокручиваемый текст внутри прокручиваемого
+    // экрана забирал жест себе. Видно начало, целиком — по явному тапу: сто тысяч знаков,
+    // развёрнутые молча, увели бы действия объекта на десятки экранов вниз.
+    var expanded by rememberSaveable(text.length) { mutableStateOf(false) }
+    val head = remember(text) { textPreviewHead(text) }
+    val shown = if (expanded) text else head
     // AI answers arrive as Markdown — render headings/bold/bullets instead of raw `###`/`**`/`*`.
-    val rendered = remember(text, markdown) { if (markdown) markdownToAnnotated(text) else AnnotatedString(text) }
+    val rendered = remember(shown, markdown) { if (markdown) markdownToAnnotated(shown) else AnnotatedString(shown) }
     Text(
         text = "Текст",
         style = MaterialTheme.typography.labelMedium,
@@ -569,11 +633,17 @@ private fun TextPreview(text: String, markdown: Boolean = false) {
                 text = rendered,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = 320.dp)
-                    .verticalScroll(rememberScrollState())
                     .padding(16.dp),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface,
+            )
+        }
+    }
+    if (head.length < text.length) {
+        TextButton(onClick = { expanded = !expanded }) {
+            Text(
+                if (expanded) "Свернуть"
+                else "Показать целиком · ещё ${grouped(text.length - head.length)} символов",
             )
         }
     }

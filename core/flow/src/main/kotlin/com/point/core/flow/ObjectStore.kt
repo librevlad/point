@@ -29,8 +29,15 @@ interface ObjectStore {
 
     /** The items of a COLLECTION — the files under its scratch directory, wrapped
      *  as objects ready to continue the flow (they are already in scratch, so no
-     *  copy). Empty for a non-collection or an empty directory. */
-    suspend fun children(collection: PointObject): List<PointObject>
+     *  copy). Empty for a non-collection or an empty directory.
+     *
+     *  Отдаёт **не больше [limit]** объектов и всегда говорит, сколько их там всего
+     *  ([CollectionContent]): обход дерева и создание объектов ограничены, а обрезка —
+     *  названа, а не проглочена. */
+    suspend fun children(
+        collection: PointObject,
+        limit: Int = COLLECTION_ITEMS_LIMIT,
+    ): CollectionContent<PointObject>
 
     /** Read up to [limit] characters of a text object's scratch content (UTF-8),
      *  for an in-app preview. Empty if it is not a readable file. */

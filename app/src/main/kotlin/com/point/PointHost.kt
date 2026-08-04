@@ -300,6 +300,8 @@ fun PointHost(
                     canSaveChain = state.canSaveChain,
                     onSaveChain = onSaveChain,
                     items = current.items,
+                    itemsTotal = current.itemsTotal,
+                    itemsTotalAtLeast = current.itemsTotalAtLeast,
                     onItem = onItem,
                     found = current.found,
                     relations = current.relations,
