@@ -39,6 +39,8 @@ import com.point.core.flow.PrivacyLevel
 import com.point.core.flow.UsageSummary
 import com.point.core.flow.UserAiConfig
 import com.point.core.flow.providerForBaseUrl
+import com.point.core.ui.Outcome
+import com.point.core.ui.OutcomeBanner
 import com.point.core.ui.PortalColumnWidth
 import com.point.core.ui.PortalRow
 import com.point.core.ui.ScreenHeader
@@ -69,6 +71,9 @@ import com.point.core.ui.theme.PointTheme
 @Composable
 fun KeyScreen(
     config: UserAiConfig,
+    /** Отказ, который сюда привёл (#467): человек, выброшенный на семь провайдеров молча, получает
+     *  ту самую «общую непонятную ошибку». null — пришёл сам, шестерёнкой, и объяснять нечего. */
+    note: String? = null,
     onSave: (UserAiConfig) -> Unit,
     onCancel: () -> Unit,
     usageEnabled: Boolean,
@@ -107,8 +112,14 @@ fun KeyScreen(
             ScreenHeader(
                 title = "Ваш AI-ключ",
                 subtitle = "Point работает на вашем ключе и вашей квоте — чужие ключи он не хранит и не просит.",
-                modifier = Modifier.padding(bottom = 9.dp),
+                modifier = Modifier.padding(bottom = if (note == null) 9.dp else 0.dp),
             )
+
+            // Зачем человека сюда принесло (#467). Стоит НАД списком провайдеров: это ответ на
+            // вопрос, с которым он пришёл, — какой из семи ключей задать. Карточка та же, что под
+            // объектом, и голос тот же: это одна и та же новость, просто досказанная там, где её
+            // можно устранить.
+            if (note != null) OutcomeBanner(message = note, outcome = Outcome.FAILED)
 
             // Выбор провайдера вместо трёх полей наизусть: адрес и модель подставляются сами, а
             // рядом лежит ссылка на страницу, где ключ выдают. Раньше человек должен был знать

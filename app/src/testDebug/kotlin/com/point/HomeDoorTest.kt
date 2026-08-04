@@ -7,7 +7,6 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
-import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -34,9 +33,9 @@ class HomeDoorTest {
 
     @get:Rule val compose = createAndroidComposeRule<HomeActivity>()
 
-    /** Шестерёнка на «Недавнем» — тот самый основной путь за ключом. */
+    /** Дверь «AI-ключ» на «Недавнем» — тот самый основной путь за ключом. */
     private fun openKeySettings() {
-        compose.onNodeWithContentDescription("Ваш AI-ключ").performClick()
+        compose.onNodeWithText("AI-ключ").performClick()
         compose.waitUntilAtLeastOneExists(hasText("Ваш AI-ключ"), TIMEOUT_MS)
     }
 
@@ -69,8 +68,8 @@ class HomeDoorTest {
         compose.waitForIdle()
 
         assertFalse("Point закрылся вместо возврата на «Недавнее»", compose.activity.isFinishing)
-        // Шестерёнка есть только на «Недавнем» — значит вернулись именно туда.
-        compose.onNodeWithContentDescription("Ваш AI-ключ").assertExists()
+        // Дверь «AI-ключ» есть только на «Недавнем» — значит вернулись именно туда.
+        compose.onNodeWithText("AI-ключ").assertExists()
         compose.onNodeWithText("Ключ AI сохранён").assertDoesNotExist()
     }
 
@@ -83,7 +82,7 @@ class HomeDoorTest {
 
         assertFalse(compose.activity.isFinishing)
         compose.onNodeWithText("Ключ AI сохранён").assertDoesNotExist()
-        compose.onNodeWithContentDescription("Ваш AI-ключ").assertExists()
+        compose.onNodeWithText("AI-ключ").assertExists()
     }
 }
 

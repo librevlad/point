@@ -322,6 +322,9 @@ private fun LinkChip(lastContact: Pair<Long, com.point.core.flow.LinkPath>?) {
     val dot = when (link) {
         is com.point.core.flow.LinkState.Live -> PointColors.cyan
         is com.point.core.flow.LinkState.Silent -> PointColors.violet
+        // Компьютер сам никого не спрашивает — он ждёт, когда придут к нему, поэтому «проверяю»
+        // здесь не возникает по построению. Цвет у него тот же, что у молчания: ответа нет.
+        com.point.core.flow.LinkState.Checking -> PointColors.violet
         com.point.core.flow.LinkState.Never -> PointColors.border
     }
     Row(verticalAlignment = Alignment.CenterVertically) {

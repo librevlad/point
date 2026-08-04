@@ -31,6 +31,12 @@ data class AiProvider(
 )
 
 /**
+ * Groq назван отдельно, потому что его ключ включает не только чат: у него есть ручка расшифровки
+ * (Whisper), и её надо уметь спросить по имени, а не по строке, набранной в двух местах (#467).
+ */
+const val GROQ_PROVIDER_ID = "groq"
+
+/**
  * Порядок не алфавитный: сверху то, с чего человеку проще начать. OpenRouter первым, потому что
  * один его ключ открывает сразу несколько бесплатных моделей.
  */
@@ -45,9 +51,9 @@ val AI_PROVIDERS: List<AiProvider> = listOf(
         freeNote = "бесплатные модели есть (проверено 08.2026)",
     ),
     AiProvider(
-        id = "groq",
+        id = GROQ_PROVIDER_ID,
         name = "Groq",
-        what = "самый быстрый ответ из бесплатных",
+        what = "самый быстрый ответ из бесплатных; им же Point расшифровывает голосовые",
         keyUrl = "https://console.groq.com/keys",
         baseUrl = "https://api.groq.com/openai/v1",
         models = "llama-3.3-70b-versatile,llama-3.1-8b-instant",

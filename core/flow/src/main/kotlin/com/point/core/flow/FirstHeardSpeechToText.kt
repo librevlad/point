@@ -25,17 +25,32 @@ import kotlin.coroutines.cancellation.CancellationException
  * запись в следующий сервис. Иначе тап по «Отмена» посреди долгой записи запускал бы ещё одну
  * отправку — ровно то, чего человек только что попросил не делать.
  *
+ * **Ненастроенный движок — не отказ, а отсутствие.** У кого нет ключа, того в очереди сегодня
+ * просто нет: спрашивать его значило бы положить «нет ключа» в сводку рядом с настоящими причинами
+ * и утопить их в шуме. Зато когда ключа нет НИ У КОГО, отказ приходит один — и называет, чей ключ
+ * какой движок включает, вместо прежнего «задайте свой ключ» (#467).
+ *
  * Чистый Kotlin и никаких синглтонов: список движков приходит снаружи (в приложении — из DI),
  * поэтому порядок очереди виден в одном месте и судится юнит-тестом.
  */
 class FirstHeardSpeechToText(
     private val engines: List<SpeechToText>,
-) : SpeechToText {
+) : SpeechToText, SpeechReadiness {
+
+    override fun missingKeys(): List<SpeechKeyNeed> = speechKeyNeeds(engines)
+
+    /** Очередь не готова, только когда не готов ни один: пока слышит хоть кто-то, ключ не нужен. */
+    override fun missingKey(): SpeechKeyNeed? = missingKeys().firstOrNull()
 
     override suspend fun transcribe(obj: PointObject): Transcription {
-        if (engines.isEmpty()) error(NO_ENGINES)
+        if (engines.isEmpty()) error(NO_SPEECH_ENGINES)
+        // Ключа нет ни у кого — сказать это надо ОДИН раз и по делу, до сети и до ожидания.
+        val needs = missingKeys()
+        if (needs.isNotEmpty()) error(speechKeyRefusal(needs))
+
         val refusals = mutableListOf<String>()
         for (engine in engines) {
+            if (engine.missingKey() != null) continue // без ключа движка сегодня нет — это не сбой
             try {
                 // И Heard, и Silence — ответ движка. Дальше по очереди идём только от исключения.
                 return engine.transcribe(obj)
@@ -58,13 +73,9 @@ class FirstHeardSpeechToText(
     private fun refusalOf(refusals: List<String>): String {
         val distinct = refusals.distinct()
         return when {
-            distinct.isEmpty() -> NO_ENGINES
+            distinct.isEmpty() -> NO_SPEECH_ENGINES
             distinct.size == 1 -> distinct.first()
             else -> "Расшифровать не удалось — " + distinct.take(2).joinToString("; ")
         }
-    }
-
-    private companion object {
-        const val NO_ENGINES = "Расшифровать некому — ни один движок распознавания речи не настроен"
     }
 }
