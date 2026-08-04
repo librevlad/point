@@ -13,7 +13,9 @@ import com.point.core.flow.META_READING_MODE
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.PrivacyLevel
 import com.point.core.flow.allowedAt
+import com.point.core.flow.META_READING_DOUBT
 import com.point.core.flow.degeneratedReading
+import com.point.core.flow.readingDoubts
 import com.point.core.flow.looksLikeOcrGarbage
 import com.point.core.flow.Realizer
 import com.point.core.flow.RealizerKind
@@ -275,6 +277,13 @@ private suspend fun readWithExternalEye(
                     put("engine", reading.reader)
                     put("where", reading.where)
                     input.metadata[META_READING_MODE]?.let { put(META_READING_MODE, it) }
+                    // Сомнение едет вместе с текстом, а не тонет в нём (#425). Отказом оно не
+                    // становится: выбросить накладную из-за одной подозрительной ячейки хуже, чем
+                    // показать её с пометкой. Но и промолчать нельзя — на замере уверенная ошибка
+                    // модели ловилась только несошедшимся итогом.
+                    readingDoubts(reading.text).takeIf { it.isNotEmpty() }?.let { doubts ->
+                        put(META_READING_DOUBT, doubts.joinToString("; ") { it.what })
+                    }
                 },
             ),
         )
