@@ -110,6 +110,8 @@ import com.point.executors.TranslateCapability
 import com.point.executors.TranslateRealizer
 import com.point.executors.WordCapability
 import com.point.executors.WordRealizer
+import com.point.executors.SaveContactCapability
+import com.point.executors.SaveContactRealizer
 import com.point.executors.VCardCapability
 import com.point.executors.VCardRealizer
 import com.point.core.flow.ObjectStore
@@ -158,6 +160,8 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun eventCap(c: EventCapability): Capability
     @Binds @IntoSet abstract fun copyCardCap(c: CopyCardCapability): Capability
     @Binds @IntoSet abstract fun vcardCap(c: VCardCapability): Capability
+    /** #464: строка карточки готовности «Сохранить контакт» запускает вот эту возможность. */
+    @Binds @IntoSet abstract fun saveContactCap(c: SaveContactCapability): Capability
     @Binds @IntoSet abstract fun copyCap(c: CopyCapability): Capability
     @Binds @IntoSet abstract fun extractAllCap(c: ExtractAllCapability): Capability
     /** #279: искать есть где только там, где страница уже разложена по словам. */
@@ -210,6 +214,7 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun eventR(r: EventRealizer): Realizer
     @Binds @IntoSet abstract fun copyCardR(r: CopyCardRealizer): Realizer
     @Binds @IntoSet abstract fun vcardR(r: VCardRealizer): Realizer
+    @Binds @IntoSet abstract fun saveContactR(r: SaveContactRealizer): Realizer
     @Binds @IntoSet abstract fun copyR(r: CopyRealizer): Realizer
     @Binds @IntoSet abstract fun extractAllR(r: ExtractAllRealizer): Realizer
     @Binds @IntoSet abstract fun findR(r: FindRealizer): Realizer

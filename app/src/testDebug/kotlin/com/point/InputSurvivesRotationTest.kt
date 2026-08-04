@@ -49,19 +49,17 @@ class InputSurvivesRotationTest {
                 onToggleSound = {},
             )
         }
-        // Поле ключа — первое и, пока блоки свёрнуты, единственное. Модель и адрес сложены за
-        // строкой «Модель и адрес» (#447), поэтому её сначала раскрываем — ровно как палец. Экран
-        // длиннее окна и прокручивается, поэтому до каждого узла ещё и доезжаем.
+        // Поля идут сверху вниз: ключ, модель, адрес сервиса. Экран длиннее окна и прокручивается,
+        // поэтому до каждого узла сначала доезжаем — как это делает палец.
         compose.onAllNodes(hasSetTextAction())[0].performScrollTo()
             .performTextInput("sk-очень-длинный-ключ-из-буфера")
-        compose.onNodeWithText("Модель и адрес").performScrollTo().performClick()
         compose.onAllNodes(hasSetTextAction())[1].performScrollTo().performTextReplacement("моя-модель")
 
         rotation.emulateSavedInstanceStateRestore()
 
-        // Судим по тому, что уйдёт в хранилище: «Сохранить» вообще погашено, пока ключ пуст, —
-        // потерянный ключ провалит этот тест и кнопкой, и значением.
-        compose.onNodeWithText("Сохранить").performScrollTo().assertIsEnabled().performClick()
+        // Судим по тому, что уйдёт в хранилище: тихая дорога в обход проверки (#465) вообще не
+        // рисуется, пока ключ пуст, — потерянный ключ провалит этот тест и кнопкой, и значением.
+        compose.onNodeWithText("Сохранить без проверки").performScrollTo().assertIsEnabled().performClick()
         assertEquals("sk-очень-длинный-ключ-из-буфера", saved?.apiKey)
         assertEquals("моя-модель", saved?.model)
     }

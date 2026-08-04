@@ -5,6 +5,7 @@ import com.point.core.flow.AppTarget
 import com.point.core.flow.Capability
 import com.point.core.flow.CapabilityMeta
 import com.point.core.flow.CapabilityRegistry
+import com.point.core.flow.CollectionContent
 import com.point.core.flow.Latency
 import com.point.core.flow.CapabilityUsage
 import com.point.core.flow.Enrichment
@@ -47,6 +48,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -103,25 +105,26 @@ class FlowViewModelTest {
         caps: Map<CapabilityId, Set<Intent>> = mapOf(CapabilityId("a") to setOf(Intent.PREPARE)),
         cloud: Set<CapabilityId> = emptySet(),
         slow: Set<CapabilityId> = emptySet(),
-    ) = FlowViewModel(store, FakeRegistry(caps, cloud, slow), resolver, com.point.core.flow.AiChatResponder { _, _, _ -> "ответ" }, enrichment, history, favorites, usage, chosenApps, userKeys, journal, consent, appLauncher, FakePdfRasterizer(), sensory, sensorySettings, cloudPrivacy, snapshot, crashLog, dispatcher, pins, AppIconResolver { null }, pcPairings, pcTransport, com.point.core.flow.PcDiscovery { kotlinx.coroutines.flow.flowOf(emptyList()) }, basket, pcCaps, com.point.core.flow.InMemoryLinkMonitor(), PulledFileFactory { name -> java.io.File(java.io.File(System.getProperty("java.io.tmpdir")), "pulled-" + name).absolutePath }, noFrames, keyProbe)
+        discovery: com.point.core.flow.PcDiscovery = com.point.core.flow.PcDiscovery { kotlinx.coroutines.flow.flowOf(emptyList()) },
+        linkMonitor: com.point.core.flow.LinkMonitor = com.point.core.flow.RememberingLinkMonitor(),
+    ) = FlowViewModel(store, FakeRegistry(caps, cloud, slow), resolver, chatResponder, enrichment, history, favorites, usage, chosenApps, userKeys, journal, consent, appLauncher, FakePdfRasterizer(), sensory, sensorySettings, cloudPrivacy, snapshot, crashLog, dispatcher, pins, AppIconResolver { null }, pcPairings, pcTransport, discovery, basket, pcCaps, linkMonitor, PulledFileFactory { name -> java.io.File(java.io.File(System.getProperty("java.io.tmpdir")), "pulled-" + name).absolutePath }, noFrames, keyCheck)
 
-    /** Провайдер, которого «спрашивают» про ключ (#447): отвечает тем, что положили в [keyAnswer]. */
-    private var keyAnswer: com.point.core.flow.KeyCheck =
-        com.point.core.flow.KeyCheck.Works("модель", 700, 0)
-    private val askedKeys = mutableListOf<com.point.core.flow.UserAiConfig>()
-    private val keyProbe = com.point.core.flow.AiKeyProbe { config ->
-        askedKeys += config
-        keyAnswer.let { answer ->
-            when (answer) {
-                is com.point.core.flow.KeyCheck.Works ->
-                    answer.copy(checked = com.point.core.flow.keyFingerprint(config))
-                is com.point.core.flow.KeyCheck.Rejected ->
-                    answer.copy(checked = com.point.core.flow.keyFingerprint(config))
-                else -> answer
-            }
+    /** Проверка ключа (#465): что «ответил сервис», решает тест, а не сеть. */
+    private val keyCheck = FakeAiKeyCheck()
+
+    private class FakeAiKeyCheck : com.point.core.flow.AiKeyCheck {
+        var probe = com.point.core.flow.KeyProbe(status = 200, reply = "Готово")
+        var asked: UserAiConfig? = null
+        /** Проверка сама может упасть — и это тоже обязано кончиться словами, а не тишиной. */
+        var explode = false
+        override suspend fun check(config: UserAiConfig): com.point.core.flow.KeyProbe {
+            asked = config
+            if (explode) error("что-то сломалось внутри проверки")
+            return probe
         }
     }
 
+    private val chatResponder = FakeChatResponder()
     private val basket = FakeBasket()
     private val pcCaps = FakePcCaps()
     private val pcPairings = FakePcPairings()
@@ -416,6 +419,100 @@ class FlowViewModelTest {
         assertEquals(Outcome.NONE, vm.ui.value.messageOutcome)
         // И совета «поделитесь ещё раз» тут тоже нет: ничего не ломалось.
         assertNull(shareAgainHint(vm.ui.value.messageOutcome))
+    }
+
+    // --- «Отменить» либо отменяет, либо её нет (#114) ---
+
+    /**
+     * Кнопка стоит только над той работой, которую отмена действительно снимает.
+     *
+     * Было: `onCancel` передавался экрану ожидания всегда, а задачу держало одно действие по
+     * пузырю. Над «Открываю…» кнопка была нарисована и не отменяла ничего.
+     */
+    @Test fun `кнопка отмены есть только там, где есть что отменять`() = runTest(dispatcher) {
+        val vm = vm(slow = setOf(CapabilityId("a")))
+
+        vm.onShared("uri", "image/png") // приём расшаренного идёт, объекта ещё нет
+        assertTrue("экран ожидания поднят", showsBusyScreen(vm.ui.value))
+        assertFalse("а отменять нечем — кнопки нет", showsCancel(vm.ui.value))
+        advanceUntilIdle()
+
+        resolver.holdMs = 1_000 // работа ещё идёт, когда человек смотрит на экран
+        vm.onBubble(bubble(id = "a")) // действие над объектом — вот его отменить можно
+        dispatcher.scheduler.advanceTimeBy(10)
+        assertTrue(showsCancel(vm.ui.value))
+    }
+
+    /**
+     * Отмена снимает ту работу, что идёт сейчас, — а не ту, что давно закончилась.
+     *
+     * Ровно этот путь и врал человеку: задача хранилась от действия по пузырю и не обнулялась по
+     * завершении. Тап «Отменить» во время «Открываю…» снимал уже сделанное, печатал «Отменено» —
+     * и объект открывался секундой позже, потому что открытие никто не останавливал.
+     */
+    @Test fun `отмена снимает идущую работу, а не законченную`() = runTest(dispatcher) {
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        vm.onBubble(bubble(id = "a")); advanceUntilIdle() // задача действия появилась и закончилась
+        vm.endFlow(); advanceUntilIdle() // человек вернулся на «Недавнее»
+        history.opened = PointObject("hist", "image/png", ScratchRef("/hist"), ObjectState(ObjectKind.IMAGE))
+
+        vm.openFromHistory(entry("h")) // идёт «Открываю…»
+        assertTrue("отсюда возвращаться есть куда — кнопка на месте", showsCancel(vm.ui.value))
+        vm.cancelAction()
+        advanceUntilIdle()
+
+        assertNull("объект не открылся вопреки отмене", vm.ui.value.frame)
+        assertNull("и «Отменено» не осталось висеть без объекта", vm.ui.value.message)
+    }
+
+    /** Цепочка — самая долгая работа в Point (несколько сетевых шагов). Отмена обязана
+     *  остановить её, а не позволить следующему шагу приземлиться поверх «Отменено». */
+    @Test fun `отменённая цепочка не делает следующий шаг`() = runTest(dispatcher) {
+        favorites.chains = listOf(FavoriteChain("c", "Цепочка", listOf(CapabilityId("a"), CapabilityId("a"))))
+        resolver.result = ActionResult.Success(
+            ResultObject(ObjectKind.TEXT, "text/plain", ScratchRef("/out")),
+        )
+        resolver.holdMs = 1_000
+        resolver.uninterruptible = true
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.applyFavorite(favorites.chains.first())
+        dispatcher.scheduler.advanceTimeBy(10)
+        assertTrue("над цепочкой кнопка есть", showsCancel(vm.ui.value))
+        vm.cancelAction()
+        advanceUntilIdle()
+
+        assertEquals("ни один шаг не приземлился", 1, vm.ui.value.path.size)
+        assertEquals("Отменено", vm.ui.value.message)
+    }
+
+    /** «Ищу приложения…» — тоже занятость с кнопкой; отменённый поиск не смеет открыть список. */
+    @Test fun `отменённый поиск приложений не открывает выбор`() = runTest(dispatcher) {
+        appLauncher.apps = listOf(AppTarget("Telegram", "org.tg", "org.tg.Main"))
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.onBubble(bubble(id = "open-in"))
+        assertTrue(showsCancel(vm.ui.value))
+        vm.cancelAction()
+        advanceUntilIdle()
+
+        assertNull("выбор приложений не всплыл", vm.ui.value.appPicker)
+        assertEquals("Отменено", vm.ui.value.message)
+    }
+
+    /** Законченная работа не отменяется задним числом: раньше задача не обнулялась, и тап
+     *  «Отменить» над следующей занятостью объявлял отменённым уже сделанное. */
+    @Test fun `нечего отменять — нечего и объявлять отменённым`() = runTest(dispatcher) {
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        vm.onBubble(bubble(id = "a")); advanceUntilIdle() // действие уже завершилось
+
+        vm.cancelAction()
+
+        assertEquals("done", vm.ui.value.message) // исход законченной работы уцелел
     }
 
     /** Удача с домашнего экрана попадает на тот же экран «объекта ещё нет» — и не смеет
@@ -1143,6 +1240,97 @@ class FlowViewModelTest {
         assertEquals(listOf("pc-open"), pcCaps.saved?.map { it.id })
     }
 
+    // --- «Компьютер»: что экран говорит про связь и про поиск (#451, #458) ---
+
+    @Test fun `пока запрос к компьютеру в пути, экран проверяет связь, а не отрицает её (#451)`() = runTest(dispatcher) {
+        // Перезапустили Point: память о вчерашнем контакте пуста. Раньше экран печатал «ещё не
+        // связывались» рядом с адресом давно связанного ПК — утверждение о прошлом, которого не было.
+        pcPairings.pairing = com.point.core.flow.PcPairing("10.0.2.2", 8391, "tok")
+        pcTransport.capsDelayMs = 10_000
+        val vm = vm()
+
+        vm.openPcSettings()
+        dispatcher.scheduler.advanceTimeBy(50) // запрос ушёл, ответа ещё нет
+
+        assertEquals(com.point.core.flow.LinkState.Checking, vm.ui.value.pcScreen?.link)
+
+        advanceUntilIdle()
+        vm.closePcSettings()
+    }
+
+    @Test fun `без пейринга проверять нечего — «ещё не связывались» остаётся честным (#451)`() = runTest(dispatcher) {
+        val vm = vm()
+
+        vm.openPcSettings(); advanceUntilIdle()
+
+        assertEquals(com.point.core.flow.LinkState.Never, vm.ui.value.pcScreen?.link)
+        vm.closePcSettings()
+    }
+
+    @Test fun `вчерашний контакт пережил перезапуск и назван молчанием, а не «ни разу» (#451)`() = runTest(dispatcher) {
+        pcPairings.pairing = com.point.core.flow.PcPairing("10.0.2.2", 8391, "tok")
+        // Прошлый запуск слышал компьютер двадцать минут назад и записал это в журнал.
+        val log = com.point.core.flow.ForgetfulLinkLog().apply {
+            write(com.point.core.flow.LinkMonitor.Contact(System.currentTimeMillis() - 20 * 60_000L, com.point.core.flow.LinkPath.LAN))
+        }
+        val vm = vm(linkMonitor = com.point.core.flow.RememberingLinkMonitor(log))
+
+        vm.openPcSettings(); advanceUntilIdle()
+
+        assertTrue(
+            "забытое — не «ни разу»: было ${vm.ui.value.pcScreen?.link}",
+            vm.ui.value.pcScreen?.link is com.point.core.flow.LinkState.Silent,
+        )
+        vm.closePcSettings()
+    }
+
+    @Test fun `отвязали компьютер — память о связи с ним ушла вместе с ним (#451)`() = runTest(dispatcher) {
+        val monitor = com.point.core.flow.RememberingLinkMonitor(com.point.core.flow.ForgetfulLinkLog())
+        monitor.heard(com.point.core.flow.LinkPath.LAN)
+        val vm = vm(linkMonitor = monitor)
+
+        vm.unpairPc(); advanceUntilIdle()
+
+        assertNull("контакт со вчерашним ПК рассказал бы о следующем чужую правду", monitor.last.value)
+    }
+
+    @Test fun `экран показывает, что ищет компьютеры, и заканчивает поиск словом (#458)`() = runTest(dispatcher) {
+        // Сканер сети живёт, пока экран открыт, и ничего не находит — как в сети с изоляцией клиентов.
+        val silentScan = com.point.core.flow.PcDiscovery {
+            kotlinx.coroutines.flow.flow {
+                emit(emptyList<com.point.core.flow.DiscoveredPc>())
+                kotlinx.coroutines.awaitCancellation()
+            }
+        }
+        val vm = vm(discovery = silentScan)
+
+        vm.openPcSettings()
+        dispatcher.scheduler.advanceTimeBy(50)
+        assertEquals(com.point.core.flow.PcSearch.RUNNING, vm.ui.value.pcScreen?.search)
+
+        dispatcher.scheduler.advanceTimeBy(com.point.core.flow.PC_SEARCH_WINDOW_MS + 1)
+        assertEquals(com.point.core.flow.PcSearch.DONE, vm.ui.value.pcScreen?.search)
+
+        vm.closePcSettings()
+    }
+
+    @Test fun `найденное в сети переживает неудачное рукопожатие (#458)`() = runTest(dispatcher) {
+        // Человек тапнул по строке из списка; список, исчезающий на время попытки, лишает его
+        // возможности попробовать соседнюю.
+        val found = com.point.core.flow.DiscoveredPc("Рабочий ноутбук", "192.168.1.42", 8391)
+        val vm = vm(discovery = com.point.core.flow.PcDiscovery { kotlinx.coroutines.flow.flowOf(listOf(found)) })
+        vm.openPcSettings(); advanceUntilIdle()
+        assertEquals(listOf(found), vm.ui.value.pcScreen?.discovered)
+
+        pcTransport.pairOk = false
+        vm.pairPc("192.168.1.42", 8391); advanceUntilIdle()
+
+        assertEquals(listOf(found), vm.ui.value.pcScreen?.discovered)
+        assertEquals(false, vm.ui.value.pcScreen?.busy)
+        assertTrue(vm.ui.value.pcScreen?.error != null)
+        vm.closePcSettings()
+    }
+
     @Test fun `the basket opens as one collection flow and its count reaches Home (#96)`() = runTest(dispatcher) {
         basket.added += listOf("/b/1-a.txt", "/b/2-b.jpg")
         val vm = vm()
@@ -1156,6 +1344,21 @@ class FlowViewModelTest {
         vm.endFlow()
         vm.clearBasket(); advanceUntilIdle()
         assertEquals(0, vm.basketCount.value)
+    }
+
+    @Test fun `обрезанный набор доносит до экрана настоящее число файлов`() = runTest(dispatcher) {
+        // Набор больше предела обхода (#460): показать всё нельзя, но промолчать об этом — соврать.
+        store.content = CollectionContent(
+            shown = (1..2).map { PointObject("f$it", "text/plain", ScratchRef("/f$it"), ObjectState(ObjectKind.TEXT)) },
+            total = 1340,
+        )
+        val vm = vm()
+
+        vm.onSharedMultiple(listOf("a", "b")); advanceUntilIdle()
+
+        assertEquals(2, vm.ui.value.frame?.items?.size)
+        assertEquals(1340, vm.ui.value.frame?.itemsTotal)
+        assertEquals(false, vm.ui.value.frame?.itemsTotalAtLeast)
     }
 
     @Test fun `onItem drills into a collection item as a new frame`() = runTest(dispatcher) {
@@ -1269,13 +1472,108 @@ class FlowViewModelTest {
         assertEquals(UserAiConfig.DEFAULT, vm.ui.value.keyScreen)
     }
 
-    @Test fun `an AI no-key failure opens the key screen on demand`() = runTest(dispatcher) {
+    /**
+     * #452: отказ «нет ключа» подменялся экраном настроек, и причина при этом стиралась. Человек
+     * тапал «Понять», ждал и видел экран про ключи без единого слова о том, почему тот открылся.
+     */
+    @Test fun `отказ «нет ключа» остаётся сказанным, а не подменяется экраном настроек`() = runTest(dispatcher) {
+        resolver.result = ActionResult.Failure("AI недоступен — задайте свой ключ", recoverable = true)
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.onBubble(bubble()); advanceUntilIdle()
+
+        assertEquals("AI недоступен — задайте свой ключ", vm.ui.value.message)
+        assertEquals(Outcome.FAILED, vm.ui.value.messageOutcome)
+        assertNull("экран ключей больше не открывается сам за человека", vm.ui.value.keyScreen)
+        assertEquals("Задать свой ключ AI", keyOfferLabel(vm.ui.value.message))
+    }
+
+    /** Предложение есть только у того отказа, который ключом и чинится: предложить ключ там, где
+     *  он ни при чём, — выдумать человеку причину. */
+    @Test fun `обычный отказ ключа не предлагает`() = runTest(dispatcher) {
+        resolver.result = ActionResult.Failure("Не удалось прочитать страницу", recoverable = true)
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.onBubble(bubble()); advanceUntilIdle()
+
+        assertNull(keyOfferLabel(vm.ui.value.message))
+    }
+
+    /** «Отмена» на экране ключей возвращает к объекту, где причина по-прежнему сказана словами:
+     *  иначе человек остаётся ни с чем, а это неотличимо от «действие ничего не сделало» (#452). */
+    @Test fun `отказ переживает поход за ключом и «Отмену»`() = runTest(dispatcher) {
         resolver.result = ActionResult.Failure("AI недоступен — задайте свой ключ", recoverable = true)
         val vm = vm()
         vm.onShared("uri", "image/png"); advanceUntilIdle()
         vm.onBubble(bubble()); advanceUntilIdle()
 
-        assertTrue(vm.ui.value.keyScreen != null) // summoned on demand, not just an error
+        vm.openKeySettings(); advanceUntilIdle()
+        assertEquals("AI недоступен — задайте свой ключ", vm.ui.value.message)
+
+        vm.closeKeySettings()
+
+        assertEquals("AI недоступен — задайте свой ключ", vm.ui.value.message)
+        assertEquals(Outcome.FAILED, vm.ui.value.messageOutcome)
+    }
+
+    /** Обратная половина: всё прочее сказанное экран ключей стирает, как и раньше, — «Ключ AI
+     *  сохранён» из прошлого захода к этому отношения не имеет. */
+    @Test fun `постороннее сообщение экран ключей всё так же стирает`() = runTest(dispatcher) {
+        resolver.result = ActionResult.Done("Готово")
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        vm.onBubble(bubble()); advanceUntilIdle()
+        assertEquals("Готово", vm.ui.value.message)
+
+        vm.openKeySettings(); advanceUntilIdle()
+
+        assertNull(vm.ui.value.message)
+        assertEquals(Outcome.NONE, vm.ui.value.messageOutcome)
+    }
+
+    /**
+     * #467: отказ расшифровки зовёт задать ключ СВОИМИ словами, не говоря «задайте свой ключ». По
+     * одной марке предложение под ним не появлялось бы вовсе — человек с голосовым и без ключей
+     * остался бы ровно там, откуда всё началось.
+     */
+    @Test fun `отказ расшифровки тоже получает предложение задать ключ`() = runTest(dispatcher) {
+        val why = "Расшифровать некому: Whisper слушает по ключу Groq. " +
+            com.point.core.flow.KEY_SETTINGS_CALL
+        resolver.result = ActionResult.Failure(why, recoverable = true)
+        val vm = vm()
+        vm.onShared("voice.ogg", "audio/ogg"); advanceUntilIdle()
+
+        vm.onBubble(bubble()); advanceUntilIdle()
+
+        assertEquals(why, vm.ui.value.message)
+        assertNull("экран ключей открывает человек, а не отказ за него", vm.ui.value.keyScreen)
+        assertEquals("Задать свой ключ AI", keyOfferLabel(vm.ui.value.message))
+    }
+
+    /** Пришедший ПО ПРЕДЛОЖЕНИЮ приходит с вопросом «какой из семи ключей задать» — и ответ на него
+     *  стоит на экране ключей, а не остаётся позади (#467). */
+    @Test fun `причина доезжает до экрана ключей вместе с человеком`() = runTest(dispatcher) {
+        val why = "Расшифровать некому: Whisper слушает по ключу Groq. " +
+            com.point.core.flow.KEY_SETTINGS_CALL
+        resolver.result = ActionResult.Failure(why, recoverable = true)
+        val vm = vm()
+        vm.onShared("voice.ogg", "audio/ogg"); advanceUntilIdle()
+        vm.onBubble(bubble()); advanceUntilIdle()
+
+        vm.openKeySettings(); advanceUntilIdle() // тап по предложению
+
+        assertEquals(why, vm.ui.value.keyScreenNote)
+    }
+
+    /** Пришедшему шестерёнкой объяснять нечего — и чужая причина за ним не тянется. */
+    @Test fun `пришедший сам не видит на экране ключей чужой причины`() = runTest(dispatcher) {
+        val vm = vm()
+
+        vm.openKeySettings(); advanceUntilIdle()
+
+        assertNull(vm.ui.value.keyScreenNote)
     }
 
     @Test fun `saveAiConfig stores the key and closes the screen`() = runTest(dispatcher) {
@@ -1289,51 +1587,80 @@ class FlowViewModelTest {
         assertNull(vm.ui.value.keyScreen)
     }
 
-    // --- «Проверить ключ» (#447): ответ провайдера, а не догадка по виду ключа ---
+    // --- Доведение до работающего ключа (#465) ---
 
-    @Test fun `проверка ключа спрашивает провайдера и приносит его ответ`() = runTest(dispatcher) {
+    @Test fun `удачная проверка сохраняет ключ и показывает слова сервиса`() = runTest(dispatcher) {
         val vm = vm()
         vm.openKeySettings(); advanceUntilIdle()
-        val config = UserAiConfig("sk-живой", "https://h/v1", "m")
+        val config = UserAiConfig("sk-1", "https://h/v1", "m")
+        keyCheck.probe = com.point.core.flow.KeyProbe(status = 200, reply = "Готово")
 
         vm.checkAiKey(config); advanceUntilIdle()
 
-        assertEquals(listOf(config), askedKeys)
-        val works = vm.ui.value.keyCheck as com.point.core.flow.KeyCheck.Works
-        assertEquals(com.point.core.flow.keyFingerprint(config), works.checked)
+        assertEquals("проверять надо ровно то, что человек набрал", config, keyCheck.asked)
+        assertEquals(com.point.core.flow.KeyVerdict.Works("Готово"), vm.ui.value.keyVerdict)
+        assertEquals("доказанный ключ обязан сохраниться сам", config, userKeys.saved)
+        // Экран остаётся: человек должен УВИДЕТЬ «работает», а не догадаться по его исчезновению.
+        assertNotNull(vm.ui.value.keyScreen)
+        assertTrue(vm.ui.value.aiKeySet)
     }
 
-    @Test fun `отказ провайдера доходит до экрана, а не глохнет`() = runTest(dispatcher) {
-        keyAnswer = com.point.core.flow.KeyCheck.Rejected("Groq не принял ключ (401)", 0)
+    @Test fun `непрошедший проверку ключ не сохраняется`() = runTest(dispatcher) {
         val vm = vm()
         vm.openKeySettings(); advanceUntilIdle()
+        keyCheck.probe = com.point.core.flow.KeyProbe(status = 401, error = "unauthorized")
 
-        vm.checkAiKey(UserAiConfig("sk-мёртвый", "https://h/v1", "m")); advanceUntilIdle()
+        vm.checkAiKey(UserAiConfig("не-тот", "https://h/v1", "m")); advanceUntilIdle()
 
-        val rejected = vm.ui.value.keyCheck as com.point.core.flow.KeyCheck.Rejected
-        assertTrue(rejected.reason.contains("401"))
+        // Записать ключ, про который уже известно, что он не подошёл, значит подготовить человеку
+        // следующий необъяснимый отказ.
+        assertNull("отказавший ключ не имеет права осесть на диске", userKeys.saved)
+        val verdict = vm.ui.value.keyVerdict as com.point.core.flow.KeyVerdict.Refused
+        assertTrue(verdict.what.contains("не подошёл"))
+        assertNotNull("с отказом человек остаётся на экране, где стоит его ключ", vm.ui.value.keyScreen)
     }
 
-    @Test fun `пустой ключ провайдера не тревожит`() = runTest(dispatcher) {
+    @Test fun `упавшая проверка — это отказ, а не тишина`() = runTest(dispatcher) {
         val vm = vm()
         vm.openKeySettings(); advanceUntilIdle()
+        keyCheck.explode = true
 
-        vm.checkAiKey(UserAiConfig("  ", "https://h/v1", "m")); advanceUntilIdle()
+        vm.checkAiKey(UserAiConfig("sk-1", "https://h/v1", "m")); advanceUntilIdle()
 
-        assertTrue(askedKeys.isEmpty())
-        assertEquals(com.point.core.flow.KeyCheck.Untested, vm.ui.value.keyCheck)
+        assertFalse("кнопка осталась бы в «Проверяю…» навсегда", vm.ui.value.keyChecking)
+        assertTrue(vm.ui.value.keyVerdict is com.point.core.flow.KeyVerdict.Refused)
     }
 
-    @Test fun `прошлый ответ не переезжает в новое открытие настроек`() = runTest(dispatcher) {
+    @Test fun `приговор не переживает закрытие экрана`() = runTest(dispatcher) {
         val vm = vm()
         vm.openKeySettings(); advanceUntilIdle()
-        vm.checkAiKey(UserAiConfig("sk-живой", "https://h/v1", "m")); advanceUntilIdle()
+        vm.checkAiKey(UserAiConfig("sk-1", "https://h/v1", "m")); advanceUntilIdle()
+        assertNotNull(vm.ui.value.keyVerdict)
+
         vm.closeKeySettings()
-
         vm.openKeySettings(); advanceUntilIdle()
 
-        // «Ключ работает» из прошлого раза — обещание, которого никто сейчас не давал.
-        assertEquals(com.point.core.flow.KeyCheck.Untested, vm.ui.value.keyCheck)
+        // «Работает», висящее над другим ключом, — ровно та ложь, против которой вся проверка.
+        assertNull(vm.ui.value.keyVerdict)
+        assertFalse(vm.ui.value.keyChecking)
+    }
+
+    @Test fun `пустой ключ не гоняет сеть`() = runTest(dispatcher) {
+        val vm = vm()
+        vm.checkAiKey(UserAiConfig("   ", "https://h/v1", "m")); advanceUntilIdle()
+
+        assertNull("сеть не имеет права уйти без ключа", keyCheck.asked)
+        assertNull(vm.ui.value.keyVerdict)
+    }
+
+    @Test fun `«Недавнее» знает, задан ли ключ`() = runTest(dispatcher) {
+        val vm = vm()
+        vm.loadRecent(); advanceUntilIdle()
+        assertFalse("приглашение подключить AI должно быть видно", vm.ui.value.aiKeySet)
+
+        userKeys.config = UserAiConfig("sk-1", "https://h/v1", "m")
+        vm.loadRecent(); advanceUntilIdle()
+        assertTrue("ключ есть — звать больше некуда", vm.ui.value.aiKeySet)
     }
 
     @Test fun `records usage events for the North Star (shared, action, completed)`() = runTest(dispatcher) {
@@ -1456,7 +1783,88 @@ class FlowViewModelTest {
         vm.onBubble(bubble(id = "ai")); advanceUntilIdle()
 
         assertTrue(vm.ui.value.chat != null)                  // the chat opened
+        assertTrue(vm.ui.value.chatOpen)
         assertEquals("__unset__", resolver.lastAmendment)     // no one-shot realizer ran
+    }
+
+    // --- Разговор переживает «назад», а идущий вопрос отменяем (#453) ---
+
+    /** Открыть разговор, спросить и получить ответ — исходное состояние для тестов ниже. */
+    private fun kotlinx.coroutines.test.TestScope.chattingVm(): FlowViewModel {
+        consent.granted = true
+        val vm = cloudVm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        vm.onBubble(bubble(id = "ai")); advanceUntilIdle()
+        vm.sendChatMessage("что тут написано?"); advanceUntilIdle()
+        return vm
+    }
+
+    @Test fun `«назад» из разговора закрывает экран, а не стирает разговор`() = runTest(dispatcher) {
+        val vm = chattingVm()
+        assertEquals(2, vm.ui.value.chat?.messages?.size)      // вопрос и ответ
+
+        assertTrue(vm.onBack())                               // «назад» — к объекту
+
+        assertNull("экрана разговора нет", openChatOf(vm.ui.value))
+        assertEquals("сказанное осталось", 2, vm.ui.value.chat?.messages?.size)
+    }
+
+    @Test fun `повторное «Спросить AI» возвращает в тот же разговор`() = runTest(dispatcher) {
+        val vm = chattingVm()
+        vm.onBack()
+
+        vm.onBubble(bubble(id = "ai")); advanceUntilIdle()
+
+        assertEquals(2, openChatOf(vm.ui.value)?.messages?.size)
+    }
+
+    /** Разговор принадлежит своему объекту: перенести сказанное на другой было бы хуже, чем
+     *  начать с чистого листа. */
+    @Test fun `новый объект начинает разговор заново`() = runTest(dispatcher) {
+        val vm = chattingVm()
+        vm.onBack()
+        resolver.result = ActionResult.Success(ResultObject(ObjectKind.TEXT, "text/plain", ScratchRef("/o")))
+        vm.onBubble(bubble(id = "cloudx")); advanceUntilIdle()  // получился новый объект
+
+        vm.onBubble(bubble(id = "ai")); advanceUntilIdle()
+
+        assertEquals(0, openChatOf(vm.ui.value)?.messages?.size)
+    }
+
+    @Test fun `идущий вопрос можно остановить, и остановка сказана словами`() = runTest(dispatcher) {
+        consent.granted = true
+        chatResponder.inFlight = kotlinx.coroutines.CompletableDeferred()
+        val vm = cloudVm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        vm.onBubble(bubble(id = "ai")); advanceUntilIdle()
+        vm.sendChatMessage("что тут написано?"); advanceUntilIdle()
+        assertTrue("вопрос в пути", vm.ui.value.chat?.pending == true)
+
+        vm.cancelChatMessage(); advanceUntilIdle()
+
+        assertEquals(false, vm.ui.value.chat?.pending)
+        assertEquals("Ответ остановлен", vm.ui.value.chat?.notice)
+        // Один только вопрос: остановленное не договаривает за собеседника — ни ответом, ни отказом.
+        assertEquals(1, vm.ui.value.chat?.messages?.size)
+    }
+
+    /** Квота уже потрачена: пришедший ответ ложится в разговор, даже если экран закрыт (#453).
+     *  Раньше он выбрасывался молча — `s.chat ?: return@update s`. */
+    @Test fun `ответ, пришедший после выхода, не пропадает`() = runTest(dispatcher) {
+        consent.granted = true
+        val late = kotlinx.coroutines.CompletableDeferred<String>()
+        chatResponder.inFlight = late
+        val vm = cloudVm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        vm.onBubble(bubble(id = "ai")); advanceUntilIdle()
+        vm.sendChatMessage("что тут написано?"); advanceUntilIdle()
+        vm.onBack()                                           // ушёл, не дождавшись
+
+        late.complete("ответ издалека"); advanceUntilIdle()
+
+        assertNull(openChatOf(vm.ui.value))                   // экран не всплыл сам
+        assertEquals(2, vm.ui.value.chat?.messages?.size)
+        assertEquals("ответ издалека", vm.ui.value.chat?.messages?.last()?.text)
     }
 
     @Test fun `a favorite chain hiding a cloud step is gated too — not a back door`() = runTest(dispatcher) {
@@ -1468,6 +1876,105 @@ class FlowViewModelTest {
 
         assertTrue(vm.ui.value.cloudConsent)                  // asked before replaying
         assertEquals("__unset__", resolver.lastAmendment)     // no step reached the cloud
+    }
+
+    // --- «Показать модели» ≠ «выложить в открытый доступ» (#114) ---
+
+    /** Способности с разной ценой: «Понять» показывает объект модели, «Дать ссылку» кладёт файл
+     *  на сервер открытым. Обе сетевые — и до сих пор их разрешал один флаг. */
+    private fun linkVm() = vm(
+        caps = mapOf(
+            CapabilityId("ai") to setOf(Intent.UNDERSTAND),
+            CapabilityId("drop-link") to setOf(Intent.SEND),
+        ),
+        cloud = setOf(CapabilityId("ai"), CapabilityId("drop-link")),
+    )
+
+    /**
+     * Разрешение, данное ради моделей, не выкладывает файл в открытый доступ.
+     *
+     * Было: человек однажды разрешил облако для «Понять» — и «Дать ссылку» молча уводило файл на
+     * сервер, откуда его заберёт любой, кому переслали ссылку. Про цену он узнавал ПОСЛЕ загрузки,
+     * с уже выданной карточки.
+     */
+    @Test fun `разрешение для моделей не выкладывает файл по открытой ссылке`() = runTest(dispatcher) {
+        consent.granted = true // облако для AI разрешено давно
+        val vm = linkVm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.onBubble(bubble(id = "drop-link", title = "Дать ссылку")); advanceUntilIdle()
+
+        assertTrue("про открытую ссылку спрашивают отдельно", vm.ui.value.cloudConsent)
+        assertEquals("файл никуда не уехал", "__unset__", resolver.lastAmendment)
+    }
+
+    /** Цена называется ДО отправки: текст вопроса — про открытость файла и срок жизни ссылки. */
+    @Test fun `цена открытой ссылки названа до отправки, а не после`() = runTest(dispatcher) {
+        consent.granted = true
+        val vm = linkVm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.onBubble(bubble(id = "drop-link", title = "Дать ссылку")); advanceUntilIdle()
+
+        val ask = vm.ui.value
+        assertTrue("не сказано, что заберёт любой: ${ask.cloudDestination}", ask.cloudDestination.contains("любому"))
+        assertTrue("не сказано, сколько живёт: ${ask.cloudDestination}", ask.cloudDestination.contains("суток"))
+        assertTrue("вопрос звучит про ссылку: ${ask.cloudTitle}", ask.cloudTitle.contains("ссылке"))
+        assertEquals("Выложить", ask.cloudConfirm)
+    }
+
+    /** Согласие на открытую ссылку не запоминается: следующий файл — следующее решение. */
+    @Test fun `второе «Дать ссылку» спрашивает заново`() = runTest(dispatcher) {
+        val vm = linkVm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        vm.onBubble(bubble(id = "drop-link", title = "Дать ссылку")); advanceUntilIdle()
+        vm.confirmCloud(); advanceUntilIdle()
+        assertEquals("первый файл выложен", "done", vm.ui.value.message)
+
+        vm.onBubble(bubble(id = "drop-link", title = "Дать ссылку")); advanceUntilIdle()
+
+        assertTrue("следующий файл — следующее решение", vm.ui.value.cloudConsent)
+    }
+
+    /** А обычное облако допросом не становится: разрешили один раз — работает. */
+    @Test fun `согласие на модели остаётся однократным`() = runTest(dispatcher) {
+        val vm = linkVm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        vm.onBubble(bubble(id = "ai")); advanceUntilIdle()
+        vm.confirmCloud(); advanceUntilIdle()
+
+        vm.onBubble(bubble(id = "ai")); advanceUntilIdle()
+
+        assertEquals("второй раз не спрашиваем", false, vm.ui.value.cloudConsent)
+    }
+
+    /** Согласие, которое нельзя отозвать, — не согласие. Тумблер в настройках возвращает вопрос. */
+    @Test fun `отозванное согласие возвращает вопрос`() = runTest(dispatcher) {
+        consent.granted = true
+        val vm = linkVm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.setCloudAllowed(false); advanceUntilIdle()
+        assertEquals(false, vm.ui.value.cloudEnabled)
+
+        vm.onBubble(bubble(id = "ai")); advanceUntilIdle()
+        assertTrue("отозвали — значит спрашиваем снова", vm.ui.value.cloudConsent)
+    }
+
+    /** Шаг «Дать ссылку», спрятанный в избранной цепочке, не проезжает под текстом про AI. */
+    @Test fun `цепочка со ссылкой спрашивает про ссылку, а не про AI`() = runTest(dispatcher) {
+        consent.granted = true
+        val vm = linkVm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.applyFavorite(FavoriteChain("c", "Цепочка", listOf(CapabilityId("ai"), CapabilityId("drop-link"))))
+        advanceUntilIdle()
+
+        assertTrue(vm.ui.value.cloudConsent)
+        assertTrue(
+            "спросили не про то: ${vm.ui.value.cloudDestination}",
+            vm.ui.value.cloudDestination.contains("любому"),
+        )
     }
 
     // --- Device actions: inline app picker (#66) ---
@@ -1616,10 +2123,27 @@ private class FakeStore : ObjectStore {
         PointObject("coll", "inode/directory", ScratchRef("/coll"), ObjectState(ObjectKind.COLLECTION))
     override suspend fun put(result: ResultObject): PointObject =
         PointObject("out", result.mime, result.uri, ObjectState(result.type), result.metadata)
-    override suspend fun children(collection: PointObject): List<PointObject> = emptyList()
+    /** Что store отдаёт как содержимое набора — вместе со счётом, который может быть больше списка. */
+    var content: CollectionContent<PointObject> = CollectionContent.empty()
+    override suspend fun children(collection: PointObject, limit: Int) = content
     override suspend fun readText(obj: PointObject, limit: Int): String = ""
     override suspend fun newScratchFile(extension: String): ScratchRef = ScratchRef("/scratch.$extension")
     override suspend fun clear() { clearedTimes++ }
+}
+
+/**
+ * Отвечающий на вопросы к объекту. По умолчанию отвечает сразу; [inFlight] — ответ, который ещё в
+ * пути: незавершённое обещание `advanceUntilIdle` не проматывает (в отличие от `delay`), и это
+ * единственный способ посмотреть на экран, пока вопрос действительно идёт.
+ */
+private class FakeChatResponder : com.point.core.flow.AiChatResponder {
+    var text = "ответ"
+    var inFlight: kotlinx.coroutines.CompletableDeferred<String>? = null
+    var calls = 0
+    override suspend fun reply(obj: PointObject, history: List<com.point.core.model.ChatMessage>, message: String): String {
+        calls++
+        return inFlight?.await() ?: text
+    }
 }
 
 private class FakeResolver : Resolver {
@@ -1637,6 +2161,14 @@ private class FakeResolver : Resolver {
     var stage: String? = null
     /** Сколько работа идёт после сказанного — чтобы тест успел посмотреть на экран, пока она жива. */
     var holdMs: Long = 0
+    /**
+     * Работа, которая об отмене не знает (#114).
+     *
+     * Так ведёт себя настоящая: нативный проход движка и сетевой запрос доходят до конца сами и
+     * возвращают результат уже ПОСЛЕ того, как человек нажал «Отменить». `NonCancellable` — модель
+     * этой непрерываемости, а не трюк ради теста: именно на ней ломалось обещание отмены.
+     */
+    var uninterruptible = false
     /**
      * Слово, которое работа договаривает, когда её уже сняли (#288).
      *
@@ -1662,7 +2194,15 @@ private class FakeResolver : Resolver {
                         com.point.core.flow.reportStage(late)
                     }
                 }
-                if (holdMs > 0) kotlinx.coroutines.delay(holdMs)
+                if (holdMs > 0) {
+                    if (uninterruptible) {
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+                            kotlinx.coroutines.delay(holdMs)
+                        }
+                    } else {
+                        kotlinx.coroutines.delay(holdMs)
+                    }
+                }
                 return result
             }
             override suspend fun preview(input: PointObject): Preview? = previews[capabilityId]
@@ -1752,9 +2292,19 @@ private class FakeUserKeys(var config: UserAiConfig? = null) : UserKeyStore {
     override suspend fun clear() { config = null }
 }
 
+/** Согласие по обещаниям (#114): «показать модели» помнится, «выложить по ссылке» — никогда. */
 private class FakePrivacyConsent(var granted: Boolean = false) : PrivacyConsent {
-    override suspend fun cloudAllowed() = granted
-    override suspend fun allowCloud() { granted = true }
+    val asked = mutableListOf<com.point.core.flow.CloudScope>()
+    override suspend fun allowed(scope: com.point.core.flow.CloudScope): Boolean {
+        asked += scope
+        return com.point.core.flow.remembersConsent(scope) && granted
+    }
+    override suspend fun allow(scope: com.point.core.flow.CloudScope) {
+        if (com.point.core.flow.remembersConsent(scope)) granted = true
+    }
+    override suspend fun revoke(scope: com.point.core.flow.CloudScope) {
+        if (com.point.core.flow.remembersConsent(scope)) granted = false
+    }
 }
 
 private class FakeSensoryFeedback : com.point.core.flow.SensoryFeedback {
@@ -1821,19 +2371,24 @@ private class FakePcTransport : com.point.core.flow.PcTransport {
     var outbox: List<com.point.core.flow.PcOutboxEntry> = emptyList()
     var outboxFetches = 0
     var downloadOk = true
+    var pairOk = true
+    /** Сколько компьютер думает над «что ты умеешь» — тот самый запрос, пока он в пути (#451). */
+    var capsDelayMs = 0L
     val acked = mutableListOf<Int>()
     var pushedPhoneCaps: List<com.point.core.flow.PcRemoteAction> = emptyList()
     override suspend fun pair(host: String, port: Int, deviceName: String): com.point.core.flow.PcPairing? =
-        com.point.core.flow.PcPairing(host, port, "tok")
+        if (pairOk) com.point.core.flow.PcPairing(host, port, "tok") else null
     override suspend fun send(
         pairing: com.point.core.flow.PcPairing,
         obj: com.point.core.model.PointObject,
         fileName: String,
         meta: Map<String, String>,
         action: String?,
-    ): com.point.core.flow.PcSendOutcome = com.point.core.flow.PcSendOutcome.Sent
-    override suspend fun fetchCaps(pairing: com.point.core.flow.PcPairing): List<com.point.core.flow.PcRemoteAction>? =
-        listOf(com.point.core.flow.PcRemoteAction("pc-open", "Открыть на компьютере"))
+    ): com.point.core.flow.PcSendOutcome = com.point.core.flow.PcSendOutcome.Sent()
+    override suspend fun fetchCaps(pairing: com.point.core.flow.PcPairing): List<com.point.core.flow.PcRemoteAction>? {
+        if (capsDelayMs > 0) kotlinx.coroutines.delay(capsDelayMs)
+        return listOf(com.point.core.flow.PcRemoteAction("pc-open", "Открыть на компьютере"))
+    }
     override suspend fun fetchOutbox(pairing: com.point.core.flow.PcPairing): List<com.point.core.flow.PcOutboxEntry>? {
         outboxFetches++
         return outbox

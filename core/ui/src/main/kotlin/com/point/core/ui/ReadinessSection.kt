@@ -8,9 +8,13 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -32,6 +36,8 @@ import com.point.core.flow.actionReadiness
 import com.point.core.flow.maskedForScreen
 import com.point.core.flow.readingModeOf
 import com.point.core.flow.readingModeLabel
+import com.point.core.flow.runner
+import com.point.core.model.Bubble
 
 /**
  * Готовность действий (#260, design v3 §6): полнота считается **по действию**, а не по числу
@@ -43,9 +49,26 @@ import com.point.core.flow.readingModeLabel
  * Секция видна только когда документ имеет отношение к действию (хоть одно поле прочитано):
  * пустой снимок не получает список «не хватает всего» — это был бы тот же опросник, только
  * с минусами.
+ *
+ * **Строка = действие (#464).** Готовая строка запускается тапом — решение владельца, увидевшего
+ * карточку живьём: «эти вещи некликабельны, по крайней мере были — надо пересмотреть подход». До
+ * него кликабельным было только НЕготовое, то есть тап существовал ровно там, где делать нечего, а
+ * галочка с глаголом и найденным значением обещала запуск и не давала его. Теперь карточка — список
+ * действий над найденным, и запускает она те же пузыри, что список ниже: [bubbles] приходят из
+ * реестра, [onBubble] — та же дорога исполнения, второй нет. Бизнес-логики тут по-прежнему ноль:
+ * чем строка запускается (и запускается ли), решает чистая [runner] в `:core:flow`.
+ *
+ * [enabled] — принимает ли экран тапы вообще (не идёт действие, не ждут ввода). Выключенная
+ * карточка шеврона не показывает: обещать запуск, которого сейчас не будет, — то же враньё,
+ * только с другой стороны.
  */
 @Composable
-internal fun ReadinessSection(metadata: Map<String, String>) {
+internal fun ReadinessSection(
+    metadata: Map<String, String>,
+    bubbles: List<Bubble> = emptyList(),
+    enabled: Boolean = true,
+    onBubble: (Bubble) -> Unit = {},
+) {
     val rows = remember(metadata) { actionReadiness(metadata) }
     if (rows.isEmpty()) return
     // «Понять» уже спрашивали? От этого зависит честная формулировка отсутствия: до модели
@@ -60,13 +83,29 @@ internal fun ReadinessSection(metadata: Map<String, String>) {
             .animateContentSize(tween(220)),
     ) {
         Column(modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp)) {
-            rows.forEach { row -> key(row.schema.id) { ReadinessRow(row, understood, metadata) } }
+            rows.forEach { row ->
+                key(row.schema.id) {
+                    ReadinessRow(
+                        row = row,
+                        understood = understood,
+                        metadata = metadata,
+                        runner = if (enabled) row.runner(bubbles) else null,
+                        onRun = onBubble,
+                    )
+                }
+            }
         }
     }
 }
 
 @Composable
-private fun ReadinessRow(row: ActionReadiness, understood: Boolean, metadata: Map<String, String>) {
+private fun ReadinessRow(
+    row: ActionReadiness,
+    understood: Boolean,
+    metadata: Map<String, String>,
+    runner: Bubble?,
+    onRun: (Bubble) -> Unit,
+) {
     val ready = row.readiness is Readiness.Ready
     val present = when (val r = row.readiness) {
         is Readiness.Ready -> r.present
@@ -82,10 +121,21 @@ private fun ReadinessRow(row: ActionReadiness, understood: Boolean, metadata: Ma
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .let { if (missing.isNotEmpty()) it.clickable { expanded = !expanded } else it }
+            // Две разные строки — два разных тапа, и ни один не делает вид, что он другой (#464):
+            // готовое ДЕЛАЕТ то, что на нём написано; неготовое раскрывает, чего не хватает.
+            // Готовое без реализации (сегодня — «Отследить отправление», «Передать показание»,
+            // «Перевести по реквизитам», «Переслать квитанцию») остаётся справкой и шеврона не
+            // носит: обещание кнопки без кнопки и было находкой владельца.
+            .let {
+                when {
+                    runner != null -> it.clickable { onRun(runner) }
+                    missing.isNotEmpty() -> it.clickable { expanded = !expanded }
+                    else -> it
+                }
+            }
             .padding(vertical = 4.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             Text(
                 text = if (ready) "✓" else "•",
                 style = MaterialTheme.typography.labelLarge,
@@ -107,22 +157,36 @@ private fun ReadinessRow(row: ActionReadiness, understood: Boolean, metadata: Ma
             // «Возможно» — предположение (#261): улик меньше двух независимых классов.
             // «с рукописи» — другой контракт доверия (#263): значение прочитано зрячей
             // моделью с пикселей, проверить его против слов страницы невозможно.
-            if (ready) {
-                present.firstOrNull { it.spec.critical }?.let { field ->
-                    Spacer(Modifier.width(6.dp))
-                    val origin = readingModeLabel(readingModeOf(metadata))?.let { " · $it" }.orEmpty()
-                    val doubt = if (field.assumption) " · возможно" else ""
-                    // Значение печатается ровно так, как его показывают человеку везде: номер
-                    // карты «Перевести по реквизитам» — хвостом (#240 — маска, мимо которой
-                    // однажды утёк номер, была на одном экране, а не у ключа факта).
-                    Text(
-                        text = maskedForScreen(field.spec.key, field.value) + doubt + origin,
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
+            val keyField = if (ready) present.firstOrNull { it.spec.critical } else null
+            if (keyField != null) {
+                Spacer(Modifier.width(6.dp))
+                val origin = readingModeLabel(readingModeOf(metadata))?.let { " · $it" }.orEmpty()
+                val doubt = if (keyField.assumption) " · возможно" else ""
+                // Значение печатается ровно так, как его показывают человеку везде: номер
+                // карты «Перевести по реквизитам» — хвостом (#240 — маска, мимо которой
+                // однажды утёк номер, была на одном экране, а не у ключа факта).
+                Text(
+                    text = maskedForScreen(keyField.spec.key, keyField.value) + doubt + origin,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+            } else if (runner != null) {
+                Spacer(Modifier.weight(1f))
+            }
+            // Шеврон — единственный знак, которым строка говорит «я делаю это» (#464). Он тот же,
+            // что у строк действий ниже (дизайн-система, [PortalRow]), но подсвечен цветом
+            // действия: в одной карточке стоят живые строки и справочные, и различать их обязано
+            // что-то, кроме надежды человека.
+            if (runner != null) {
+                Icon(
+                    imageVector = Icons.Filled.KeyboardArrowRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp),
+                )
             }
         }
         // Ведущие нули барабана (#262): дословное значение остаётся на своём месте, а рядом —

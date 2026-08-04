@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Знак плитки Point в шторке (#456).
+
+  Раньше плитка носила системный «плюс» (`@android:drawable/ic_menu_add`) — то есть в редакторе
+  шторки, среди сотни чужих плиток, Point выглядел как безымянная кнопка «добавить». Теперь у него
+  тот же знак, что и на первом экране: светящаяся точка в кольце — портал. Одноцветный нарочно:
+  шторка красит плитку сама, и цвет здесь ей не принадлежит.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M12,2C6.477,2 2,6.477 2,12s4.477,10 10,10 10,-4.477 10,-10S17.523,2 12,2zM12,20c-4.418,0 -8,-3.582 -8,-8s3.582,-8 8,-8 8,3.582 8,8 -3.582,8 -8,8z" />
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M12,7.5c-2.485,0 -4.5,2.015 -4.5,4.5s2.015,4.5 4.5,4.5 4.5,-2.015 4.5,-4.5 -2.015,-4.5 -4.5,-4.5z" />
+</vector>

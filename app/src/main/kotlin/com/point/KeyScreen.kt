@@ -1,10 +1,5 @@
 package com.point
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -13,18 +8,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
@@ -33,94 +20,94 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.point.core.flow.AI_KEY_WHY
 import com.point.core.flow.AI_PROVIDERS
 import com.point.core.flow.AiProvider
-import com.point.core.flow.KeyCheck
-import com.point.core.flow.KeyStatusLine
-import com.point.core.flow.KeyTone
+import com.point.core.flow.KeyVerdict
 import com.point.core.flow.PRIVACY_SETTING_HINT
 import com.point.core.flow.PRIVACY_SETTING_TITLE
 import com.point.core.flow.PrivacyLevel
 import com.point.core.flow.UsageSummary
 import com.point.core.flow.UserAiConfig
-import com.point.core.flow.checkFor
-import com.point.core.flow.keyFingerprint
-import com.point.core.flow.keyStatusLine
+import com.point.core.flow.looksLikeApiKey
 import com.point.core.flow.providerForBaseUrl
+import com.point.core.ui.Outcome
+import com.point.core.ui.OutcomeBanner
+import com.point.core.ui.OutcomeCard
 import com.point.core.ui.PortalColumnWidth
-import com.point.core.ui.PortalPlate
 import com.point.core.ui.PortalRow
-import com.point.core.ui.PortalWarm
 import com.point.core.ui.ScreenHeader
 import com.point.core.ui.SectionLabel
-import com.point.core.ui.ThinkingDot
 import com.point.core.ui.bubbleColor
 import com.point.core.ui.bubbleIcon
 import com.point.core.ui.portalCard
 import com.point.core.ui.theme.PointTheme
 
 /**
- * Настройки Point — служебное место, вызываемое шестерёнкой, а не второй дом (#447).
+ * Bring-your-own AI key. Point runs on the user's key and quota, so a released
+ * build is safe to hand out. Summoned on demand (AI with no key) or from the Home
+ * gear — not a persistent settings menu.
  *
- * **Что здесь было не так.** Владелец, увидев экран живьём: «в настройках неинтуитивные кнопки, что
- * делает кнопка Взять ключ — непонятно, задан он или нет — непонятно. до полей ввода надо
- * скроллить». Три жалобы — три разные ошибки, и все три от того, что экран не проектировался
- * целиком: он рос приращениями, и каждое приращение вставало сверху.
+ * Приведён к языку портала (#114). Провайдер выглядит строкой действия, и выбранный — той самой
+ * светящейся строкой, которой на экране объекта отмечено основное действие: «вот этот». Раньше
+ * выбор показывался двумя выдуманными тут же полупрозрачностями (`primaryContainer` 45% против
+ * `surfaceVariant` 35%) — цветами, которых нет больше нигде в приложении.
  *
- * 1. **Наверху стоял список из семи провайдеров** — то, что человек выбирает один раз. Поле ключа,
- *    ради которого экран и открывают, уезжало за нижний край. Теперь порядок — по тому, зачем сюда
- *    приходят: состояние ключа, поле ключа, проверка, сохранение. Провайдер и адрес свёрнуты в одну
- *    строку каждый и раскрываются тапом, когда нужны.
- * 2. **«Взять ключ» стояло внутри строки провайдера** и читалось как «взять этот ключ» — то есть
- *    как выбор, а не как уход в браузер. Теперь это отдельная строка **под** полем, названная тем,
- *    что произойдёт: «Открыть сайт OpenRouter», и подписью — что там делать. Ушла и двусмысленность
- *    самой позиции: сходить за ключом можно только к тому провайдеру, который выбран.
- * 3. **Задан ключ или нет — не было видно.** Поле под точками: пустое и заполненное отличались
- *    числом точек. Теперь сверху карточка состояния ([KeyStatusCard]): хвост ключа, чей он, сохранён
- *    ли — и, если человек нажал «Проверить», что ответил провайдер на самом деле (`keyStatusLine`
- *    живёт в `:core:flow` и потому под тестом).
+ * «Сохранить» — та же светящаяся строка; тихое — текстом. Разделительной линии Material больше нет:
+ * тумблеры стоят карточками портала, и группу видно без черты. Счётчик уехал внутрь своей карточки
+ * — он и есть итог того тумблера, а не отдельная строка внизу экрана.
  *
- * **Проверка — живой запрос, а не проверка формы.** Правильная длина и правильный префикс не значат
- * ничего: ключ бывает отозван, исчерпан или от другого сервиса. Отказ показывается словами
- * провайдера и не сглаживается: 401 («опечатка») и 429 («лимит, а не ключ») требуют от человека
- * разного.
+ * «Куда можно отправлять» (#280) собрано тем же строем, что выбор провайдера, — и по той же
+ * причине: это тот же вопрос «выбери одно из нескольких». Полоска узких чипов показывала цену
+ * только выбранного варианта; список строк держит цену при **каждом**.
  *
- * Экран остаётся одним экраном: Point не становится приложением с меню (продуктовый фильтр). Внутри
- * — четыре группы и ни одного перехода: ключ, куда можно отправлять, приложение, выход.
- *
- * Имя `KeyScreen` осталось прежним намеренно: в соседней ветке правится логика ключей, и
- * переименование файла ради заголовка стоило бы разбора слияния на ровном месте.
+ * **Путь до работающего ключа доведён до конца (#465).** Экран говорит, ЗАЧЕМ ключ, — до того, как
+ * человек упёрся в отказ; шаги пронумерованы (взять → вставить → проверить); буфер обмена
+ * принимается одним тапом; и главное — [onCheck] стучится в сервис по-настоящему и показывает
+ * ответ. «Сохранить» молча записывал ключ на диск, и узнать, подошёл ли он, можно было только
+ * следующим действием — то есть тогда, когда оно уже провалилось. Мастера на пять экранов при этом
+ * не появилось: экран остался одним, просто перестал молчать.
  */
 @Composable
 fun KeyScreen(
     config: UserAiConfig,
+    /** Отказ, который сюда привёл (#467): человек, выброшенный на семь провайдеров молча, получает
+     *  ту самую «общую непонятную ошибку». null — пришёл сам, шестерёнкой, и объяснять нечего. */
+    note: String? = null,
     onSave: (UserAiConfig) -> Unit,
     onCancel: () -> Unit,
     usageEnabled: Boolean,
     usageSummary: UsageSummary?,
     onToggleUsage: (Boolean) -> Unit,
+    /** Идёт ли живая проверка ключа прямо сейчас (#465). */
+    checking: Boolean = false,
+    /** Чем кончилась проверка — `null`, пока её не запускали (#465). */
+    verdict: KeyVerdict? = null,
+    /** Проверить ключ живым запросом; удачная проверка его же и сохраняет (#465). */
+    onCheck: (UserAiConfig) -> Unit = {},
+    /** Что лежит в буфере обмена — читается ТОЛЬКО по тапу «Вставить из буфера» (#465). */
+    onPasteKey: () -> String? = { null },
     soundEnabled: Boolean = true,
     onToggleSound: (Boolean) -> Unit = {},
     /** Кому вообще можно предлагать объект (#280) — умолчание «максимум бесплатного». */
     privacyLevel: com.point.core.flow.PrivacyLevel = com.point.core.flow.PrivacyLevel.DEFAULT,
     onPickPrivacyLevel: (com.point.core.flow.PrivacyLevel) -> Unit = {},
+    /** Разрешена ли отправка объектов моделям — и здесь же её можно забрать обратно (#114). */
+    cloudEnabled: Boolean = false,
+    onToggleCloud: (Boolean) -> Unit = {},
     /** Открыть страницу провайдера, где выдают ключ (#403). */
     onOpenUrl: (String) -> Unit = {},
-    /** Что ответил провайдер на «Проверить ключ» (#447) — или что мы ещё не спрашивали. */
-    keyCheck: KeyCheck = KeyCheck.Untested,
-    onCheckKey: (UserAiConfig) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     // `rememberSaveable`, а не `remember` (#114): поворот телефона пересоздаёт экран, и набранное
@@ -129,18 +116,8 @@ fun KeyScreen(
     var key by rememberSaveable(config) { mutableStateOf(config.apiKey) }
     var model by rememberSaveable(config) { mutableStateOf(config.model) }
     var baseUrl by rememberSaveable(config) { mutableStateOf(config.baseUrl) }
-    var keyVisible by rememberSaveable { mutableStateOf(false) }
-    var providersOpen by rememberSaveable { mutableStateOf(false) }
-    var advancedOpen by rememberSaveable { mutableStateOf(false) }
-
-    // Выбранный провайдер не хранится отдельным состоянием, а читается из адреса: два состояния об
-    // одном и том же расходятся при первом же восстановлении экрана (#114).
-    val chosen = providerForBaseUrl(baseUrl)
-    val edited = UserAiConfig(key.trim(), baseUrl.trim(), model.trim())
-    // Ответ, полученный на других настройках, — уже не ответ: правка поля гасит отметку.
-    val check = checkFor(keyCheck, keyFingerprint(edited))
-    val saved = edited == UserAiConfig(config.apiKey.trim(), config.baseUrl.trim(), config.model.trim())
-    val status = keyStatusLine(key, chosen?.name, saved, check)
+    // Что ответила вставка, когда в буфере оказался не ключ. Пусто — про буфер сказать нечего.
+    var pasteNote by rememberSaveable(config) { mutableStateOf("") }
 
     Column(
         modifier = modifier
@@ -154,137 +131,181 @@ fun KeyScreen(
             verticalArrangement = Arrangement.spacedBy(11.dp),
         ) {
             ScreenHeader(
-                title = "Настройки",
-                subtitle = "Ключ AI, куда можно отправлять объекты и звук. Point спрашивает об этом здесь и больше нигде.",
-                modifier = Modifier.padding(bottom = 9.dp),
+                title = "Ваш AI-ключ",
+                // Зачем ключ — первым, а не мелким шрифтом после отказа (#465). Слова общие с
+                // приглашением на «Недавнем» (`AI_KEY_WHY`): два текста об одном разъезжаются.
+                subtitle = "$AI_KEY_WHY Point работает на вашем ключе и вашей квоте — " +
+                    "чужие ключи он не хранит и не просит.",
+                modifier = Modifier.padding(bottom = if (note == null) 9.dp else 0.dp),
             )
 
-            // --- Ключ AI: сначала «что сейчас», потом само поле, потом что с ним делать ---
+            // Зачем человека сюда принесло (#467). Стоит НАД списком провайдеров: это ответ на
+            // вопрос, с которым он пришёл, — какой из семи ключей задать. Карточка та же, что под
+            // объектом, и голос тот же: это одна и та же новость, просто досказанная там, где её
+            // можно устранить.
+            if (note != null) OutcomeBanner(message = note, outcome = Outcome.FAILED)
 
-            SectionLabel("Ключ AI")
-            KeyStatusCard(status, running = check is KeyCheck.Running)
+            // Выбор провайдера вместо трёх полей наизусть: адрес и модель подставляются сами, а
+            // рядом лежит ссылка на страницу, где ключ выдают. Раньше человек должен был знать
+            // «endpoint (base URL)» — это знание разработчика, а не пользователя.
+            // Выбранный провайдер не хранится отдельным состоянием, а читается из адреса: два
+            // состояния об одном и том же расходятся при первом же восстановлении экрана (#114).
+            val chosen = providerForBaseUrl(baseUrl)
+            // Шаги пронумерованы прямо в лейблах секций (#465): человеку впервые видно, что путь
+            // конечен и его три. Отдельных экранов под шаги нет намеренно — мастер на пять
+            // экранов Point не становится, а порядок называется словом.
+            SectionLabel("Шаг 1 · Откуда взять ключ")
+            AI_PROVIDERS.forEachIndexed { index, provider ->
+                ProviderRow(
+                    provider = provider,
+                    selected = chosen?.id == provider.id,
+                    index = index,
+                    onChoose = {
+                        baseUrl = provider.baseUrl
+                        model = provider.models.substringBefore(',')
+                    },
+                    onOpenUrl = onOpenUrl,
+                )
+            }
 
+            Spacer(Modifier.height(6.dp))
+            SectionLabel("Шаг 2 · Вставьте ключ")
             OutlinedTextField(
                 value = key,
-                onValueChange = { key = it },
+                onValueChange = {
+                    key = it
+                    pasteNote = ""
+                },
                 label = { Text("API-ключ") },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                // Глаз рядом с полем — вторая половина ответа «задан или нет»: карточка показывает
-                // хвост, глаз даёт убедиться, что вставилось целиком, а не половина из буфера.
-                visualTransformation = if (keyVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                trailingIcon = {
-                    IconButton(onClick = { keyVisible = !keyVisible }) {
-                        Icon(
-                            imageVector = if (keyVisible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
-                            contentDescription = if (keyVisible) "Скрыть ключ" else "Показать ключ",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                },
+                visualTransformation = PasswordVisualTransformation(),
+                modifier = Modifier.fillMaxWidth(),
+            )
+            // Ключ приезжает из буфера — человек только что скопировал его на чужой странице.
+            // Буфер читается ТОЛЬКО по этому тапу: заглядывать в него, чтобы решить, показывать ли
+            // строку, значило бы читать чужое без спроса ради украшения экрана.
+            if (key.isBlank()) {
+                PortalRow(
+                    title = "Вставить из буфера",
+                    subtitle = "Скопировали ключ на странице сервиса — он встанет сюда одним тапом.",
+                    onClick = {
+                        val pasted = onPasteKey()
+                        if (looksLikeApiKey(pasted)) {
+                            key = pasted!!.trim()
+                            pasteNote = ""
+                        } else {
+                            // Честно про пустой результат: молчание тут неотличимо от «не нажалось».
+                            pasteNote = "В буфере нет ключа — скопируйте его на странице сервиса и вернитесь."
+                        }
+                    },
+                    icon = bubbleIcon("copy"),
+                    chevron = false,
+                )
+            }
+            if (pasteNote.isNotEmpty()) {
+                Text(
+                    pasteNote,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            OutlinedTextField(
+                value = model,
+                onValueChange = { model = it },
+                label = { Text("Модель") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            // Адрес остаётся видимым и правимым: у кого-то свой прокси, и отнимать эту возможность
+            // ради красоты нельзя. Но набирать его с нуля больше не нужно.
+            OutlinedTextField(
+                value = baseUrl,
+                onValueChange = { baseUrl = it },
+                label = { Text("Адрес сервиса") },
+                singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
 
-            // Проверка стоит ПЕРЕД сохранением, потому что так это и делают: вставил — спросил —
-            // сохранил. Пока проверять нечего, строка притушена: строка светится, когда может.
-            val canCheck = key.isNotBlank() && check !is KeyCheck.Running
+            Spacer(Modifier.height(6.dp))
+            SectionLabel("Шаг 3 · Проверьте, что работает")
+            Text(
+                // Что именно уедет при проверке — прежде, чем человек нажмёт. Объект тут ни при чём.
+                "Point спросит сервис одним коротким словом и покажет ответ. Ваш объект при этом " +
+                    "никуда не отправляется.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            // «Основное действие» экрана — та же светящаяся строка, что главное действие объекта.
+            // Пока ключа нет, она притушена: строка светится, когда может.
+            val entered = UserAiConfig(key.trim(), baseUrl.trim(), model.trim())
+            val canCheck = key.isNotBlank() && !checking
             PortalRow(
-                title = if (check is KeyCheck.Running) "Спрашиваем провайдера…" else "Проверить ключ",
-                subtitle = "Один короткий запрос к провайдеру — тот же, каким пойдёт настоящее действие.",
-                onClick = { onCheckKey(edited) },
+                // Слово меняется вместе с состоянием: «Проверяю…» над идущим запросом — это тот же
+                // честный статус, что и на экране ожидания, а не застывшая кнопка.
+                title = if (checking) "Проверяю…" else "Проверить и включить",
+                onClick = { onCheck(entered) },
                 icon = bubbleIcon(AI_ICON),
-                accent = bubbleColor(AI_ICON),
+                primary = true,
                 chevron = false,
                 enabled = canCheck,
                 modifier = Modifier.graphicsLayer { alpha = if (canCheck) 1f else 0.45f },
             )
-
-            // «Основное действие» экрана — та же светящаяся строка, что главное действие объекта.
-            val canSave = key.isNotBlank()
-            PortalRow(
-                title = "Сохранить",
-                onClick = { onSave(edited) },
-                icon = bubbleIcon("save"),
-                primary = true,
-                chevron = false,
-                enabled = canSave,
-                modifier = Modifier.graphicsLayer { alpha = if (canSave) 1f else 0.45f },
-            )
-
-            // «Взять ключ» больше не стоит внутри строки провайдера и не называется «взять».
-            // Название говорит, что произойдёт (откроется сайт), подпись — зачем туда идти.
-            PortalRow(
-                title = if (chosen != null) "Открыть сайт ${chosen.name}" else "Сначала выберите провайдера",
-                subtitle = if (chosen != null) {
-                    "Там выдают ключ: зарегистрируйтесь, скопируйте ключ и вставьте в поле выше. Откроется браузер."
-                } else {
-                    "Ключ выдаёт провайдер — выберите его строкой ниже, и сюда встанет ссылка на его сайт."
-                },
-                onClick = { if (chosen != null) onOpenUrl(chosen.keyUrl) else providersOpen = true },
-                icon = bubbleIcon("open"),
-                accent = bubbleColor("open"),
-                chevron = false,
-                subtitleMaxLines = 3,
-            )
-
-            // Провайдера выбирают один раз — значит, он свёрнут в одну строку, а не занимает экран.
-            DisclosureRow(
-                title = "Провайдер",
-                subtitle = chosen?.let { "${it.name} · ${it.what}" } ?: "не выбран",
-                open = providersOpen,
-                onToggle = { providersOpen = !providersOpen },
-            )
-            Reveal(providersOpen) {
-                Column(verticalArrangement = Arrangement.spacedBy(11.dp)) {
-                    AI_PROVIDERS.forEachIndexed { index, provider ->
-                        ProviderRow(
-                            provider = provider,
-                            selected = chosen?.id == provider.id,
-                            index = index,
-                            onChoose = {
-                                baseUrl = provider.baseUrl
-                                model = provider.models.substringBefore(',')
-                                providersOpen = false // выбрал — список свернулся, экран не растёт
-                            },
-                        )
-                    }
-                }
+            // Приговор стоит прямо под кнопкой, которая его вызвала: «работает» человек должен
+            // УВИДЕТЬ, а не додумать, а отказ обязан сказать, что именно не так и что с этим делать.
+            when (verdict) {
+                is KeyVerdict.Works -> OutcomeCard(
+                    title = "Работает — сервис ответил: «${verdict.reply}». Ключ сохранён.",
+                    detail = "Теперь «Понять», «Перевести», «Спросить AI» и расшифровка записи работают.",
+                    outcome = Outcome.DONE,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                is KeyVerdict.Refused -> OutcomeCard(
+                    title = verdict.what,
+                    detail = verdict.fix,
+                    outcome = Outcome.FAILED,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                null -> Unit
             }
 
-            // Адрес и модель остаются правимыми (у кого-то свой прокси), но не стоят на виду: это
-            // знание разработчика, а спрашивали его здесь у всех. Подпись показывает их значения —
-            // не раскрывая блок, видно, куда и чем Point ходит.
-            DisclosureRow(
-                title = "Модель и адрес",
-                subtitle = listOf(model, baseUrl).filter { it.isNotBlank() }.joinToString(" · ")
-                    .ifBlank { "подставятся вместе с провайдером" },
-                open = advancedOpen,
-                onToggle = { advancedOpen = !advancedOpen },
+            Spacer(Modifier.height(14.dp))
+            // Отозвать разрешение было негде: человек, разрешивший облако одним тапом когда-то, не
+            // мог передумать ничем, кроме переустановки (#114). Тумблер стоит первым в этом ряду —
+            // это самое дорогое из здешних решений: им объект уезжает с устройства. Соседняя
+            // настройка «Куда можно отправлять» (#280) отвечает на другой вопрос — кому МОЖНО
+            // предлагать; этот тумблер отвечает, разрешено ли вообще отпускать объект.
+            SwitchCard(
+                title = "Отправка в облако",
+                description = "Разрешает показывать объект моделям — по вашему тапу и с названием того, " +
+                    "куда он уедет. Выключите, и Point спросит заново. Выложить файл по открытой " +
+                    "ссылке этим тумблером нельзя: про такое спрашивают каждый раз.",
+                checked = cloudEnabled,
+                onCheckedChange = onToggleCloud,
             )
-            Reveal(advancedOpen) {
-                Column(verticalArrangement = Arrangement.spacedBy(11.dp)) {
-                    OutlinedTextField(
-                        value = model,
-                        onValueChange = { model = it },
-                        label = { Text("Модель") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    OutlinedTextField(
-                        value = baseUrl,
-                        onValueChange = { baseUrl = it },
-                        label = { Text("Адрес сервиса") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-            }
+            SwitchCard(
+                title = "Приватная статистика",
+                description = "Обезличенно, только на устройстве — мерит, экономит ли Point переключения между приложениями.",
+                checked = usageEnabled,
+                onCheckedChange = onToggleUsage,
+                // Итог живёт внутри своей карточки: он и есть то, что этот тумблер насчитал.
+                tally = usageSummary
+                    ?.takeIf { usageEnabled }
+                    ?.let { "Объектов: ${it.objects} · действий: ${it.actions} · завершено в Point: ${it.completed}" },
+            )
+            SwitchCard(
+                title = "Звук действий",
+                description = "Тихий фирменный отклик на каждое действие. Вибрация управляется системной настройкой касаний.",
+                checked = soundEnabled,
+                onCheckedChange = onToggleSound,
+            )
 
-            // --- Куда можно отправлять (#280) ---
-            //
-            // Тем же строем, что выбор провайдера: список строк, где выбранная светится. Первым
-            // решением была полоска узких чипов с ценой выбранного отдельной строкой ниже; у списка
-            // есть свойство, которого у чипов нет: цена стоит при **каждом** варианте.
+            // «Куда можно отправлять» (#280) — тем же строем, что выбор провайдера выше: список
+            // строк, где выбранная светится. Три уровня не влезали в один переключатель, и первым
+            // решением была полоска узких чипов с ценой выбранного отдельной строкой ниже. Здесь у
+            // экрана уже есть готовый ответ на ровно этот вопрос — «выбери одно из нескольких», — и
+            // у него есть свойство, которого у чипов нет: цена стоит при **каждом** варианте, а не
+            // только при том, который человек уже выбрал.
             Spacer(Modifier.height(14.dp))
             SectionLabel(PRIVACY_SETTING_TITLE)
             Text(
@@ -306,34 +327,21 @@ fun KeyScreen(
                     appearIndex = index,
                 )
             }
-
-            // --- Само приложение: две вещи, которые включают и забывают ---
-            Spacer(Modifier.height(14.dp))
-            SectionLabel("Приложение")
-            SwitchCard(
-                title = "Звук действий",
-                description = "Тихий фирменный отклик на каждое действие. Вибрация управляется системной настройкой касаний.",
-                checked = soundEnabled,
-                onCheckedChange = onToggleSound,
-            )
-            SwitchCard(
-                title = "Приватная статистика",
-                description = "Обезличенно, только на устройстве — мерит, экономит ли Point переключения между приложениями.",
-                checked = usageEnabled,
-                onCheckedChange = onToggleUsage,
-                // Итог живёт внутри своей карточки: он и есть то, что этот тумблер насчитал.
-                tally = usageSummary
-                    ?.takeIf { usageEnabled }
-                    ?.let { "Объектов: ${it.objects} · действий: ${it.actions} · завершено в Point: ${it.completed}" },
-            )
         }
 
         Spacer(Modifier.height(18.dp))
-        // Выход называет цену выхода: несохранённая правка ключа теряется молча, и раньше об этом
-        // не говорило ничего — кнопка называлась «Отмена» независимо от того, есть что терять.
+        // Дорога в обход проверки остаётся: связи может не быть вовсе, а ключ вписывают заранее;
+        // у кого-то свой прокси, который на пробный запрос не отвечает. Отнимать возможность
+        // сохранить ради красоты пути нельзя — но и главной она больше не является.
+        if (key.isNotBlank() && verdict !is KeyVerdict.Works) {
+            TextButton(onClick = { onSave(UserAiConfig(key.trim(), baseUrl.trim(), model.trim())) }) {
+                Text("Сохранить без проверки", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
         TextButton(onClick = onCancel) {
+            // После удачной проверки уходить уже не «отменой»: ключ сохранён, дело сделано.
             Text(
-                if (saved) "Закрыть" else "Закрыть без сохранения",
+                if (verdict is KeyVerdict.Works) "Готово" else "Отмена",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
@@ -341,96 +349,11 @@ fun KeyScreen(
 }
 
 /**
- * Что сейчас с ключом — первое, что человек видит на экране.
+ * Провайдер в списке: имя, чем он хорош, что известно про бесплатность — и ссылка на страницу,
+ * где ключ выдают.
  *
- * Карточка портала, как карточка исхода на экране объекта: свет говорит второе сообщение после
- * текста. «Работает» — свет самого портала, «не принят» — тёплый конец фирменного градиента,
- * «не проверен» — без света вовсе: неизвестность не имеет права выглядеть ни удачей, ни отказом.
- */
-@Composable
-private fun KeyStatusCard(status: KeyStatusLine, running: Boolean) {
-    val accent = when (status.tone) {
-        KeyTone.GOOD -> MaterialTheme.colorScheme.primary
-        KeyTone.BAD -> PortalWarm
-        KeyTone.NEUTRAL -> null
-    }
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .portalCard(accent = accent)
-            .padding(horizontal = 14.dp, vertical = 13.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        if (running) {
-            // Ждут тем же пульсом, каким Point думает над объектом (MOTION.md принцип №3).
-            Row(
-                modifier = Modifier.size(46.dp),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically,
-            ) { ThinkingDot() }
-        } else {
-            PortalPlate(accent = accent ?: bubbleColor("save"), icon = bubbleIcon(AI_ICON))
-        }
-        Column(Modifier.weight(1f)) {
-            Text(
-                status.title,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium,
-                color = accent ?: MaterialTheme.colorScheme.onSurface,
-            )
-            Text(
-                status.detail,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}
-
-/**
- * Строка, за которой сложено то, что нужно не всем: провайдер, модель и адрес.
- *
- * Не переход на другой экран, а раскрытие на месте: настройки Point — одно место, и уходить из него
- * вглубь некуда (продуктовый фильтр). Подпись показывает текущее значение, поэтому свёрнутый блок
- * ничего не прячет — он прячет только правку.
- */
-@Composable
-private fun DisclosureRow(title: String, subtitle: String, open: Boolean, onToggle: () -> Unit) {
-    PortalRow(
-        title = title,
-        subtitle = subtitle,
-        onClick = onToggle,
-        chevron = false,
-        trailing = {
-            Icon(
-                imageVector = Icons.Filled.KeyboardArrowRight,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier
-                    .size(20.dp)
-                    .graphicsLayer { rotationZ = if (open) 90f else 0f },
-            )
-        },
-    )
-}
-
-/** Раскрытие блока — тем же движением, каким появляется карточка исхода. */
-@Composable
-private fun Reveal(open: Boolean, content: @Composable () -> Unit) {
-    AnimatedVisibility(
-        visible = open,
-        enter = fadeIn() + expandVertically(),
-        exit = fadeOut() + shrinkVertically(),
-    ) { content() }
-}
-
-/**
- * Провайдер в списке: имя, чем он хорош и что известно про бесплатность.
- *
- * Кнопки «Взять ключ» здесь больше нет (#447): «сходить за ключом» и «выбрать этого» — разные
- * желания, и, стоя внутри строки выбора, вторая кнопка читалась как первая. Теперь у строки одно
- * значение — «вот этот», — а ссылка на сайт живёт отдельной строкой и относится к выбранному.
+ * Ссылка отдельной кнопкой, а не текстом: «сходить за ключом» и «выбрать этого» — разные желания,
+ * и склеивать их в один тап значит промахиваться в половине случаев.
  */
 @Composable
 private fun ProviderRow(
@@ -438,6 +361,7 @@ private fun ProviderRow(
     selected: Boolean,
     index: Int,
     onChoose: () -> Unit,
+    onOpenUrl: (String) -> Unit,
 ) {
     PortalRow(
         title = provider.name,
@@ -446,12 +370,14 @@ private fun ProviderRow(
         icon = bubbleIcon(AI_ICON),
         accent = bubbleColor(AI_ICON),
         primary = selected,
-        chevron = false,
         appearIndex = index,
-        trailing = if (selected) {
-            { Text("выбран", style = MaterialTheme.typography.labelMedium, color = Color.White) }
-        } else {
-            null
+        trailing = {
+            TextButton(onClick = { onOpenUrl(provider.keyUrl) }) {
+                Text(
+                    text = "Взять ключ",
+                    color = if (selected) Color.White else MaterialTheme.colorScheme.primary,
+                )
+            }
         },
     )
 }
@@ -488,33 +414,15 @@ private fun SwitchCard(
                 Text(tally, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
             }
         }
-        Spacer(Modifier.width(2.dp))
         Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
 
-@Preview(name = "Настройки · ключа ещё нет (#447)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@Preview(name = "Ключ AI · провайдер выбран (#114)", showBackground = true, backgroundColor = 0xFF0B0D10)
 @Composable
-private fun PreviewSettingsNoKey() = PointTheme(darkTheme = true) {
-    // То, что человек видит в первый раз. Карточка состояния прямо говорит, что ключа нет, поле
-    // ключа стоит вторым — до него не нужно скроллить, — а «Сохранить» не светится: нечего.
+private fun PreviewKeyScreen() = PointTheme(darkTheme = true) {
     KeyScreen(
-        config = UserAiConfig.DEFAULT,
-        onSave = {},
-        onCancel = {},
-        usageEnabled = false,
-        usageSummary = null,
-        onToggleUsage = {},
-    )
-}
-
-@Preview(name = "Настройки · ключ сохранён, не проверен (#447)", showBackground = true, backgroundColor = 0xFF0B0D10)
-@Composable
-private fun PreviewSettingsKeySaved() = PointTheme(darkTheme = true) {
-    // Ключ есть: карточка называет его хвост и чей он. «Ещё не проверен» — честно: мы правда не
-    // спрашивали, и выдавать это за рабочий ключ было бы обещанием, которого никто не давал.
-    KeyScreen(
-        config = UserAiConfig("sk-or-v1-9c2f4d7ab31e", AI_PROVIDERS.first().baseUrl, "google/gemma-4-31b-it:free"),
+        config = UserAiConfig(apiKey = "", baseUrl = AI_PROVIDERS.first().baseUrl, model = ""),
         onSave = {},
         onCancel = {},
         usageEnabled = true,
@@ -523,65 +431,77 @@ private fun PreviewSettingsKeySaved() = PointTheme(darkTheme = true) {
     )
 }
 
-@Preview(name = "Настройки · спрашиваем провайдера (#447)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@Preview(name = "Ключ AI · ключа ещё нет (#114)", showBackground = true, backgroundColor = 0xFF0B0D10)
 @Composable
-private fun PreviewSettingsChecking() = PointTheme(darkTheme = true) {
-    // Пока провайдер думает, карточка пульсирует тем же знаком, которым Point думает над объектом,
-    // а строка проверки называет саму себя — второй тап смысла не имеет и погашен.
+private fun PreviewKeyScreenEmpty() = PointTheme(darkTheme = true) {
+    // Пустой ключ: «Сохранить» стоит на месте, но не светится — строка светится, когда может.
     KeyScreen(
-        config = UserAiConfig("sk-or-v1-9c2f4d7ab31e", AI_PROVIDERS.first().baseUrl, "google/gemma-4-31b-it:free"),
+        config = UserAiConfig(apiKey = "", baseUrl = "", model = ""),
         onSave = {},
         onCancel = {},
         usageEnabled = false,
         usageSummary = null,
         onToggleUsage = {},
-        keyCheck = KeyCheck.Running,
     )
 }
 
-@Preview(name = "Настройки · ключ работает (#447)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@Preview(name = "Ключ AI · проверка сказала «работает» (#465)", showBackground = true, backgroundColor = 0xFF0B0D10)
 @Composable
-private fun PreviewSettingsKeyWorks() = PointTheme(darkTheme = true) {
-    // Ответ провайдера, а не наша догадка: кто ответил, какой моделью и за сколько.
-    val config = UserAiConfig("sk-or-v1-9c2f4d7ab31e", AI_PROVIDERS.first().baseUrl, "google/gemma-4-31b-it:free")
+private fun PreviewKeyScreenWorks() = PointTheme(darkTheme = true) {
+    // То, ради чего весь срез: человек ВИДИТ, что настроил правильно, — словами самого сервиса.
     KeyScreen(
-        config = config,
+        config = UserAiConfig(apiKey = "sk-demo-ключ", baseUrl = AI_PROVIDERS.first().baseUrl, model = "gemma"),
         onSave = {},
         onCancel = {},
         usageEnabled = false,
         usageSummary = null,
         onToggleUsage = {},
-        keyCheck = KeyCheck.Works("google/gemma-4-31b-it:free", tookMs = 1_240, checked = keyFingerprint(config)),
+        verdict = KeyVerdict.Works("Готово"),
     )
 }
 
-@Preview(name = "Настройки · ключ не принят (#447)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@Preview(name = "Ключ AI · отказ говорит, что чинить (#465)", showBackground = true, backgroundColor = 0xFF0B0D10)
 @Composable
-private fun PreviewSettingsKeyRejected() = PointTheme(darkTheme = true) {
-    // Отказ не сглажен: код провайдера, его слова и то, что человеку с этим делать.
-    val config = UserAiConfig("sk-or-v1-9c2f4d7ab31e", AI_PROVIDERS[1].baseUrl, "llama-3.3-70b-versatile")
+private fun PreviewKeyScreenRefused() = PointTheme(darkTheme = true) {
+    // Отказ с продолжением: что именно не так и что с этим делать. «Ошибка» без совета оставляет
+    // человека ровно там, откуда он пришёл.
     KeyScreen(
-        config = config,
+        config = UserAiConfig(apiKey = "не-тот-ключ", baseUrl = AI_PROVIDERS[1].baseUrl, model = "llama"),
         onSave = {},
         onCancel = {},
         usageEnabled = false,
         usageSummary = null,
         onToggleUsage = {},
-        keyCheck = KeyCheck.Rejected(
-            "Groq не принял ключ (401). Чаще всего это опечатка или скопирована половина. " +
-                "Ответ: {\"error\":{\"message\":\"Invalid API Key\"}}",
-            checked = keyFingerprint(config),
+        note = "AI недоступен — задайте свой ключ",
+        verdict = KeyVerdict.Refused(
+            what = "Ключ не подошёл",
+            fix = "Скопируйте ключ целиком, без пробелов по краям, и проверьте, что он от того " +
+                "сервиса, который выбран выше.",
         ),
     )
 }
 
-@Preview(name = "Настройки · куда можно отправлять (#280)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@Preview(name = "Ключ AI · проверка идёт (#465)", showBackground = true, backgroundColor = 0xFF0B0D10)
 @Composable
-private fun PreviewSettingsPrivacy() = PointTheme(darkTheme = true) {
+private fun PreviewKeyScreenChecking() = PointTheme(darkTheme = true) {
+    KeyScreen(
+        config = UserAiConfig(apiKey = "sk-demo-ключ", baseUrl = AI_PROVIDERS.first().baseUrl, model = "gemma"),
+        onSave = {},
+        onCancel = {},
+        usageEnabled = false,
+        usageSummary = null,
+        onToggleUsage = {},
+        checking = true,
+    )
+}
+
+@Preview(name = "Ключ AI · куда можно отправлять (#280 в системе)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@Composable
+private fun PreviewKeyScreenPrivacy() = PointTheme(darkTheme = true) {
     // Нижняя часть экрана: выбран «Только Европа». Цена стоит при каждом варианте — видно, что
     // человек теряет и что получает, не выбирая их по очереди.
     KeyScreen(
-        config = UserAiConfig("sk-demo-key-1234", AI_PROVIDERS[1].baseUrl, "llama-3.3-70b-versatile"),
+        config = UserAiConfig(apiKey = "sk-demo", baseUrl = AI_PROVIDERS[1].baseUrl, model = ""),
         onSave = {},
         onCancel = {},
         usageEnabled = false,

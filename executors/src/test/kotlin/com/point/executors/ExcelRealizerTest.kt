@@ -4,6 +4,7 @@ import com.point.core.flow.Atom
 import com.point.core.flow.AtomCodec
 import com.point.core.flow.AtomLayer
 import com.point.core.flow.Box
+import com.point.core.flow.CollectionContent
 import com.point.core.flow.CropEvidence
 import com.point.core.flow.CropPurpose
 import com.point.core.flow.EvidenceCropper
@@ -93,7 +94,7 @@ class ExcelRealizerTest {
         override suspend fun ingest(sourceUri: String, mime: String): PointObject = error("unused")
         override suspend fun ingestMultiple(sources: List<String>): PointObject = error("unused")
         override suspend fun put(result: ResultObject): PointObject = error("unused")
-        override suspend fun children(collection: PointObject): List<PointObject> = emptyList()
+        override suspend fun children(collection: PointObject, limit: Int) = CollectionContent.empty<PointObject>()
         override suspend fun readText(obj: PointObject, limit: Int): String = ""
         override suspend fun newScratchFile(extension: String) = ScratchRef(
             File.createTempFile("point-crop", ".$extension").apply { deleteOnExit() }.absolutePath,

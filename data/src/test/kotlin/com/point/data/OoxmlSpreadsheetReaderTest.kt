@@ -22,7 +22,7 @@ class OoxmlSpreadsheetReaderTest {
         override suspend fun ingest(sourceUri: String, mime: String) = error("unused")
         override suspend fun ingestMultiple(sources: List<String>) = error("unused")
         override suspend fun put(result: ResultObject) = error("unused")
-        override suspend fun children(collection: PointObject) = error("unused")
+        override suspend fun children(collection: PointObject, limit: Int) = error("unused")
         override suspend fun readText(obj: PointObject, limit: Int) = error("unused")
         override suspend fun newScratchFile(extension: String) =
             ScratchRef(File.createTempFile("point-", ".$extension").apply { deleteOnExit() }.absolutePath)

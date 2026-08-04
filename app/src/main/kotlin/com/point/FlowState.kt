@@ -26,8 +26,15 @@ data class FlowFrame(
     val bubbles: List<Bubble>,
     val viaCapability: CapabilityId? = null,
     val viaTitle: String? = null,
-    /** For a COLLECTION: its items (files), loaded async after the frame is pushed. */
+    /** For a COLLECTION: its items (files), loaded async after the frame is pushed.
+     *  Не длиннее предела обхода (`COLLECTION_ITEMS_LIMIT`) — сколько их всего, говорит
+     *  [itemsTotal]. */
     val items: List<PointObject> = emptyList(),
+    /** Сколько файлов в наборе всего (0 — ещё не считали). Отличается от `items.size`, когда
+     *  набор больше предела: список обрезан, и экран обязан назвать настоящее число (#460). */
+    val itemsTotal: Int = 0,
+    /** Обход упёрся в свой потолок: [itemsTotal] — «не меньше чем», а не точное число. */
+    val itemsTotalAtLeast: Boolean = false,
     /** Things extraction found *inside* this object (#222) — the waybill number, the branch
      *  address, the deadline. Not the same as [items]: those are files the object contains,
      *  these are things the world contains that the object mentions. Grows as waves land. */
@@ -73,6 +80,15 @@ fun quietWork(meta: CapabilityMeta): Boolean = !meta.network && meta.latency != 
  */
 fun showsBusyScreen(ui: FlowUiState): Boolean = ui.busy != null && !ui.busyQuiet
 
+/**
+ * Рисовать ли «Отменить» (#114): только над работой, которую отмена действительно снимает.
+ *
+ * Третьего не дано — либо кнопка останавливает то, что идёт, либо её нет вовсе. Раньше она
+ * стояла над всякой занятостью, а отменять умела одну: над «Открываю…» и «Выполняю цепочку…»
+ * тап печатал «Отменено», и работа спокойно доходила до конца поверх этих слов.
+ */
+fun showsCancel(ui: FlowUiState): Boolean = showsBusyScreen(ui) && ui.busyCancelable
+
 /** Работает сам объект: тихая работа идёт, экран остался на нём, кольцо-раздумье живёт.
  *  Не путать с [quietWork] — та про способность («такой работе экран не нужен»), эта про
  *  происходящее прямо сейчас. */
@@ -91,6 +107,30 @@ fun objectWorking(ui: FlowUiState): Boolean = ui.busy != null && ui.busyQuiet
  * подмена статуса имитацией, против которой весь срез.
  */
 fun quietStage(ui: FlowUiState): String? = ui.busyStage?.takeIf { objectWorking(ui) }
+
+/**
+ * Разговор, который сейчас на экране (#453), — или null, если экрана разговора нет.
+ *
+ * Одно место, где «есть разговор» превращается в «показать разговор»: сам разговор переживает
+ * закрытие, и без такой развилки каждый читающий его экран решал бы это по-своему.
+ */
+fun openChatOf(ui: FlowUiState): ChatState? = ui.chat?.takeIf { ui.chatOpen }
+
+/**
+ * Что предложено сделать с отказом (#452), или null — предлагать нечего.
+ *
+ * Отказ «работать нечем, нужен твой ключ» раньше подменялся экраном настроек: человек тапал
+ * «Понять», ждал и получал экран про ключи без единого слова о том, почему тот открылся, — а сам
+ * отказ при этом стирался. Теперь причина остаётся сказанной, а экран ключей стоит рядом с ней
+ * **предложением**: строка под карточкой исхода, по которой человек идёт сам. Ровно так же, как
+ * любое другое действие в Point, — его явный выбор, а не переход, сделанный за него.
+ *
+ * Узнаёт отказ общий `refusalNeedsKey`, а не одна фраза (#467): отказ расшифровки зовёт задать
+ * ключ своими словами, и по единственной марке предложение под ним не появлялось бы вовсе — то
+ * есть человек с голосовым и без ключей остался бы ровно там, откуда всё началось.
+ */
+fun keyOfferLabel(message: String?): String? =
+    if (message != null && com.point.core.flow.refusalNeedsKey(message)) "Задать свой ключ AI" else null
 
 /** One node of the visible Object Timeline (#114): what the object was at that step,
  *  and the action that made it (null for the root). The philosophy made visible —
@@ -116,9 +156,28 @@ data class FlowUiState(
     /** M3 (MOTION.md №8): true while a fast local action runs — the object stays on screen
      *  and "works" (thinking ring) instead of a full busy screen; states flow, never snap. */
     val busyQuiet: Boolean = false,
+    /**
+     * Можно ли отменить ту работу, что идёт сейчас (#114).
+     *
+     * Ставится ТАМ ЖЕ, где поднимается занятость, и только теми, кто держит её задачу: отмена
+     * снимает работу и выбрасывает её результат. Экран рисует «Отменить» ровно по этому полю —
+     * кнопка, печатающая «Отменено» поверх работы, которая доводится до конца, врёт человеку
+     * дважды: и про остановку, и про исход.
+     */
+    val busyCancelable: Boolean = false,
     val frame: FlowFrame? = null,
-    /** Non-null while the AI chat (#4) is open over the current object — a multi-turn conversation. */
+    /**
+     * Разговор об объекте (#4) — сам разговор, а не «открыт ли он».
+     *
+     * Живёт дольше своего экрана (#453): «назад» из чата закрывает экран, а сказанное остаётся
+     * здесь, и повторное «Спросить AI» о том же объекте возвращает человека в разговор. Раньше
+     * поле означало и то и другое сразу — и потому закрытие экрана было стиранием разговора,
+     * молча и без спроса.
+     */
     val chat: ChatState? = null,
+    /** Открыт ли экран разговора. Разговор и его экран — разные вещи; что именно рисовать,
+     *  отвечает [openChatOf], чтобы «открыт» не разъехался с «есть» на глазах у экрана. */
+    val chatOpen: Boolean = false,
     /** The Object Timeline (#114): the whole journey, root first — tap a node to jump back. */
     val path: List<PathStep> = emptyList(),
     /** Transient text from the ActionResult channel (Failure / Done). */
@@ -157,6 +216,13 @@ data class FlowUiState(
      * прямая неправда — файл уезжает на релей Point и лежит по ссылке сутки.
      */
     val cloudDestination: String = "",
+    /** Заголовок вопроса про облако (#114): «Отправить в облако?» против «Выложить файл по
+     *  ссылке?» — обещания разные, и вопрос обязан звучать по-разному. */
+    val cloudTitle: String = "",
+    /** Слово на кнопке согласия — человек соглашается с ним, а не с облаком вообще. */
+    val cloudConfirm: String = "",
+    /** На экране настроек: разрешена ли отправка моделям сейчас — и её можно выключить (#114). */
+    val cloudEnabled: Boolean = false,
     /** Non-null while a capability's pre-execution preview awaits confirm (#97). */
     val preview: Preview? = null,
     /** Non-null while the inline "Открыть в…" app-picker is shown — the installed apps that can
@@ -164,6 +230,15 @@ data class FlowUiState(
     val appPicker: List<AppTarget>? = null,
     /** Non-null while the bring-your-own AI-key screen is shown (its prefilled values). */
     val keyScreen: UserAiConfig? = null,
+    /** Отказ, который привёл человека на экран ключей, — чтобы он знал, зачем он тут (#467).
+     *  null — пришёл сам, дверью «AI-ключ», и объяснять ему нечего. */
+    val keyScreenNote: String? = null,
+    /** Идёт ли живая проверка ключа прямо сейчас (#465) — поднимается только явным тапом. */
+    val keyChecking: Boolean = false,
+    /** Чем кончилась проверка: «работает» словами сервиса или отказ с продолжением (#465). */
+    val keyVerdict: com.point.core.flow.KeyVerdict? = null,
+    /** Задан ли ключ вообще — пока нет, «Недавнее» зовёт его подключить и говорит зачем (#465). */
+    val aiKeySet: Boolean = false,
     val pcScreen: PcScreenState? = null,
     /** On the key screen: whether the private usage journal is on, and its current tally. */
     val usageEnabled: Boolean = false,
@@ -172,9 +247,6 @@ data class FlowUiState(
     /** На экране настроек: кому вообще можно предлагать прочитать объект (#280). */
     val privacyLevel: com.point.core.flow.PrivacyLevel = com.point.core.flow.PrivacyLevel.DEFAULT,
     val usageSummary: UsageSummary? = null,
-    /** На экране настроек: что ответил провайдер на «Проверить ключ» (#447). Отпечаток внутри
-     *  ответа гасит его, если человек правил поля после проверки. */
-    val keyCheck: com.point.core.flow.KeyCheck = com.point.core.flow.KeyCheck.Untested,
     /** Экран выделения (#259): открыт, пока не взяли захват или не вышли назад. */
     val selection: SelectionUi? = null,
     /** Экран поиска по документу (#279): открыт, пока не вышли назад. */
@@ -214,6 +286,14 @@ data class ChatState(
     val messages: List<ChatMessage> = emptyList(),
     val pending: Boolean = false,
     val suggestions: List<String> = emptyList(),
+    /**
+     * Что случилось с разговором помимо реплик (#453): «Ответ остановлен».
+     *
+     * Отдельно от [messages] намеренно: остановку сказал не собеседник, и записывать её его
+     * репликой значило бы приписать модели слова, которых она не говорила. Молчать тоже нельзя —
+     * исчезнувшая точками строка неотличима от «оно сломалось».
+     */
+    val notice: String? = null,
 )
 
 /** «Компьютер» (#147): the pairing screen's state — current pairing + a busy/error line. */
@@ -230,4 +310,11 @@ data class PcScreenState(
      * компьютер выключен.
      */
     val link: com.point.core.flow.LinkState = com.point.core.flow.LinkState.Never,
+    /**
+     * Идёт ли сейчас поиск компьютеров в сети (#458).
+     *
+     * Блок «Найдено в сети» появлялся, только когда что-то уже нашлось, — и первые секунды экран
+     * выглядел как «ничего нет, вводите руками», хотя именно в этот момент он и искал.
+     */
+    val search: com.point.core.flow.PcSearch = com.point.core.flow.PcSearch.IDLE,
 )

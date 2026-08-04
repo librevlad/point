@@ -5,8 +5,11 @@ import android.net.Uri
 import android.provider.OpenableColumns
 import android.util.Log
 import android.webkit.MimeTypeMap
+import com.point.core.flow.CollectionContent
+import com.point.core.flow.META_SIZE
 import com.point.core.flow.ObjectClassifier
 import com.point.core.flow.ObjectStore
+import com.point.core.flow.collectionContent
 import com.point.core.model.PointObject
 import com.point.core.model.ResultObject
 import com.point.core.model.ScratchRef
@@ -53,7 +56,12 @@ class ScratchObjectStore @Inject constructor(
                     mime = mime,
                     uri = ScratchRef(dest.absolutePath),
                     state = classifier.classify(mime, size, name),
-                    metadata = buildMap { name?.let { put("name", it) } },
+                    // Вес едет вместе с объектом (#459): он уже посчитан этим самым копированием,
+                    // и только так первый экран может сказать «примерно 3 мин», не трогая диск.
+                    metadata = buildMap {
+                        name?.let { put("name", it) }
+                        put(META_SIZE, size.toString())
+                    },
                 )
             }
         }
@@ -89,28 +97,41 @@ class ScratchObjectStore @Inject constructor(
                 mime = result.mime,
                 uri = result.uri,
                 state = classifier.classify(result.mime, size),
-                metadata = result.metadata,
+                // Вес знает файл, а не действие: результат «Расшифровать»/«Вырезать» приходит без
+                // него, и следующий экран остался бы без меры объекта (#459).
+                metadata = result.metadata + (META_SIZE to size.toString()),
             )
         }
 
-    override suspend fun children(collection: PointObject): List<PointObject> =
+    /**
+     * Содержимое набора — с двумя пределами (#460).
+     *
+     * Обход считает файлы, но объекты строит только для показанной части: `classify` + `length()`
+     * на каждый файл тысячефайлового архива — работа ради списка, из которого откроют один.
+     * Сколько файлов на самом деле, знает [CollectionContent.total] — экран говорит это словами.
+     */
+    override suspend fun children(collection: PointObject, limit: Int): CollectionContent<PointObject> =
         withContext(Dispatchers.IO) {
             val root = File(collection.uri.value)
-            if (!root.isDirectory) return@withContext emptyList()
-            root.walkTopDown()
-                .filter { it.isFile }
-                .map { file ->
-                    val mime = mimeOf(file.name)
-                    PointObject(
-                        id = UUID.randomUUID().toString(),
-                        mime = mime,
-                        uri = ScratchRef(file.absolutePath),
-                        state = classifier.classify(mime, file.length(), file.name),
-                        metadata = mapOf("name" to file.name),
-                    )
-                }
-                .sortedBy { it.metadata["name"]?.lowercase() }
-                .toList()
+            if (!root.isDirectory) return@withContext CollectionContent.empty()
+            collectionContent(
+                entries = root.walkTopDown(),
+                limit = limit,
+                isFile = { it.isFile },
+                name = { it.name },
+            ).map { file ->
+                val mime = mimeOf(file.name)
+                // Вес кладёт хранилище, а не спрашивает экран (#459): для записи из него растёт
+                // «примерно N мин» под объектом, и первый экран остаётся без собственного I/O.
+                val size = file.length()
+                PointObject(
+                    id = UUID.randomUUID().toString(),
+                    mime = mime,
+                    uri = ScratchRef(file.absolutePath),
+                    state = classifier.classify(mime, size, file.name),
+                    metadata = mapOf("name" to file.name, META_SIZE to size.toString()),
+                )
+            }
         }
 
     private fun mimeOf(name: String): String {

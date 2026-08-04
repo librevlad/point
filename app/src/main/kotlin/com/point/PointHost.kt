@@ -23,12 +23,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -39,7 +37,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview as ComposePreview
 import androidx.compose.ui.unit.dp
 import com.point.core.flow.AppTarget
 import com.point.core.flow.UserAiConfig
@@ -53,9 +51,17 @@ import com.point.core.ui.FindScreen
 import com.point.core.ui.FirstScreen
 import com.point.core.ui.Outcome
 import com.point.core.ui.OutcomeBanner
+import com.point.core.ui.Portal
+import com.point.core.ui.PortalColumnWidth
+import com.point.core.ui.PortalRow
+import com.point.core.ui.ScreenHeader
 import com.point.core.ui.SelectionScreen
+import com.point.core.ui.ThinkingDot
+import com.point.core.ui.bubbleIcon
 import com.point.core.ui.livingBackground
+import com.point.core.ui.portalCard
 import com.point.core.ui.portalStep
+import com.point.core.ui.theme.PointTheme
 import kotlinx.coroutines.delay
 
 /**
@@ -81,14 +87,20 @@ fun PointHost(
     onJumpTo: (Int) -> Unit = {},
     onBubbleLongPress: (Bubble) -> Unit = {},
     onSaveAiConfig: (UserAiConfig) -> Unit = {},
+    /** Пойти за ключом с отказа, который им и чинится (#452) — предложение, а не подмена ответа. */
+    onOpenKeySettings: () -> Unit = {},
+    /** Проверить ключ живым запросом — только по явному тапу человека (#465). */
+    onCheckAiKey: (UserAiConfig) -> Unit = {},
+    /** Что лежит в буфере обмена; читается только тапом «Вставить из буфера» (#465). */
+    onPasteKey: () -> String? = { null },
     onCloseKeySettings: () -> Unit = {},
     onToggleUsage: (Boolean) -> Unit = {},
     onToggleSound: (Boolean) -> Unit = {},
     onPickPrivacyLevel: (com.point.core.flow.PrivacyLevel) -> Unit = {},
+    /** Разрешить/отозвать отправку объектов моделям (#114). */
+    onToggleCloud: (Boolean) -> Unit = {},
     /** Открыть страницу, где выдают ключ (#403). */
     onOpenUrl: (String) -> Unit = {},
-    /** Спросить провайдера, работает ли ключ (#447). */
-    onCheckAiKey: (UserAiConfig) -> Unit = {},
     onConfirmCloud: () -> Unit = {},
     onDeclineCloud: () -> Unit = {},
     onPickApp: (AppTarget) -> Unit = {},
@@ -100,6 +112,8 @@ fun PointHost(
     onCancelPreview: () -> Unit = {},
     onSendChat: (String) -> Unit = {},
     onCloseChat: () -> Unit = {},
+    /** Остановить идущий вопрос к AI (#453). */
+    onCancelChat: () -> Unit = {},
     onOpenSelection: () -> Unit = {},
     onSelectRegion: (com.point.core.flow.Box) -> Unit = {},
     onTakeSelection: () -> Unit = {},
@@ -131,18 +145,25 @@ fun PointHost(
         val frame = state.frame
         // Заголовок экрана ожидания — он же условие его подъёма (M3: тихая работа его не поднимает).
         val busyTitle = state.busy?.takeIf { showsBusyScreen(state) }
+        // Разговор рисуется, пока открыт его экран; сам он живёт дольше (#453).
+        val chat = openChatOf(state)
+        // Что предложено сделать с отказом (#452): null — предлагать нечего.
+        val offer = keyOfferLabel(state.message)
         when {
             // Cloud consent is a gate: it must be answered before anything else renders (#10).
             state.cloudConsent -> ConsentScreen(
                 onAllow = onConfirmCloud,
                 onDecline = onDeclineCloud,
                 destination = state.cloudDestination,
+                title = state.cloudTitle,
+                confirm = state.cloudConfirm,
             )
 
             state.appPicker != null -> AppPickerScreen(
                 apps = state.appPicker,
                 onPick = onPickApp,
                 onDismiss = onDismissAppPicker,
+                appIconFor = appIconFor,
             )
 
             // A pre-execution preview is a gate too: confirm what will happen before it runs (#97).
@@ -153,19 +174,7 @@ fun PointHost(
             )
 
             // Waiting on the photo picker (opened by the LaunchedEffect above).
-            state.needsImage != null -> Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.padding(24.dp),
-            ) {
-                Text(
-                    text = state.needsImage,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onBackground,
-                )
-                Spacer(Modifier.height(16.dp))
-                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary, strokeWidth = 4.dp)
-            }
+            state.needsImage != null -> PickingImageScreen(title = state.needsImage)
 
             state.pcScreen != null -> PairPcScreen(
                 state = state.pcScreen,
@@ -176,8 +185,13 @@ fun PointHost(
 
             state.keyScreen != null -> KeyScreen(
                 config = state.keyScreen,
+                note = state.keyScreenNote,
                 onSave = onSaveAiConfig,
                 onCancel = onCloseKeySettings,
+                checking = state.keyChecking,
+                verdict = state.keyVerdict,
+                onCheck = onCheckAiKey,
+                onPasteKey = onPasteKey,
                 usageEnabled = state.usageEnabled,
                 usageSummary = state.usageSummary,
                 onToggleUsage = onToggleUsage,
@@ -185,15 +199,22 @@ fun PointHost(
                 onToggleSound = onToggleSound,
                 privacyLevel = state.privacyLevel,
                 onPickPrivacyLevel = onPickPrivacyLevel,
+                cloudEnabled = state.cloudEnabled,
+                onToggleCloud = onToggleCloud,
                 onOpenUrl = onOpenUrl,
-                keyCheck = state.keyCheck,
-                onCheckKey = onCheckAiKey,
             )
 
             // M3 (MOTION.md №8): quiet local work keeps the object on screen — it "works"
             // in place; only cloud/slow actions get the full staged busy screen.
             busyTitle != null ->
-                BusyScreen(title = busyTitle, stage = state.busyStage, network = state.busyNetwork, onCancel = onCancelAction)
+                BusyScreen(
+                    title = busyTitle,
+                    stage = state.busyStage,
+                    network = state.busyNetwork,
+                    // Кнопки нет там, где отменять нечем (#114): она рисуется по одному признаку
+                    // с тем, кто держит задачу работы, — см. [showsCancel].
+                    onCancel = onCancelAction.takeIf { showsCancel(state) },
+                )
 
             // #259: выделение поверх объекта — страница целиком, рамка пальцем, «Взять».
             state.selection != null -> SelectionScreen(
@@ -217,10 +238,11 @@ fun PointHost(
             )
 
             // #4: the AI chat takes over the screen while open (over the object it discusses).
-            state.chat != null -> AiChatScreen(
-                chat = state.chat,
+            chat != null -> AiChatScreen(
+                chat = chat,
                 onSend = onSendChat,
                 onClose = onCloseChat,
+                onCancel = onCancelChat,
                 modifier = Modifier.fillMaxSize(),
             )
 
@@ -261,6 +283,8 @@ fun PointHost(
                     onBubble = onBubble,
                     message = state.message,
                     messageOutcome = state.messageOutcome,
+                    messageOffer = offer,
+                    onMessageOffer = onOpenKeySettings,
                     inputPrompt = state.inputPrompt,
                     inputSuggestions = state.inputSuggestions,
                     onSubmitInput = onSubmitInput,
@@ -270,6 +294,8 @@ fun PointHost(
                     canSaveChain = state.canSaveChain,
                     onSaveChain = onSaveChain,
                     items = current.items,
+                    itemsTotal = current.itemsTotal,
+                    itemsTotalAtLeast = current.itemsTotalAtLeast,
                     onItem = onItem,
                     found = current.found,
                     relations = current.relations,
@@ -319,6 +345,16 @@ fun PointHost(
                 // Material `colorScheme.error` красил всё подряд, включая «Ключ AI сохранён»:
                 // удача выглядела сбоем ровно так же, как раньше на экране объекта.
                 OutcomeBanner(state.message, state.messageOutcome)
+                // Предложение стоит и здесь (#452): отказ «нет ключа» может застать человека и без
+                // объекта на экране, и тогда единственный выход отсюда — уйти ни с чем.
+                if (offer != null) {
+                    Spacer(Modifier.height(10.dp))
+                    com.point.core.ui.PortalRow(
+                        title = offer,
+                        onClick = onOpenKeySettings,
+                        modifier = Modifier.widthIn(max = com.point.core.ui.PortalColumnWidth),
+                    )
+                }
                 // Совет есть только у отказа: сказать «поделитесь ещё раз» тому, у кого ничего не
                 // ломалось, — выдумать ему проблему.
                 shareAgainHint(state.messageOutcome)?.let { hint ->
@@ -356,7 +392,7 @@ fun PointHost(
  * wait reads as progress, not a hang. No fake percentages — only what we truly know.
  */
 @Composable
-private fun BusyScreen(title: String, stage: String?, network: Boolean, onCancel: () -> Unit) {
+private fun BusyScreen(title: String, stage: String?, network: Boolean, onCancel: (() -> Unit)?) {
     var elapsed by remember(title) { mutableIntStateOf(0) }
     LaunchedEffect(title) {
         while (true) {
@@ -368,13 +404,13 @@ private fun BusyScreen(title: String, stage: String?, network: Boolean, onCancel
     // own near-black stage — replaces the plain wheel (MOTION.md принцип №3, impulses not a spinner).
     // Подпись говорит правду о времени, а не обещает «несколько секунд» (#288): две модели по
     // фото — это минута и больше, и обещание, которое нарушается на 12-й секунде, читается как
-    // «зависло». Секунды идут, отмена доступна с самого начала — передумать не поздно никогда.
+    // «зависло». Про отмену подпись напоминает только там, где кнопка есть (#114).
     // Никакого выдуманного чек-листа (#288, консилиум: «замещение реального статуса
     // имитацией»): показываем ТОЛЬКО то, что действие сказало о себе само. Молчит — человек
-    // видит идущее время и кнопку отмены, и это честнее застрявшей бутафории.
+    // видит идущее время, и это честнее застрявшей бутафории.
     BusyPortal(
         title = title,
-        subtitle = waitingSubtitle(elapsed, network),
+        subtitle = waitingSubtitle(elapsed, network, cancelable = onCancel != null),
         steps = listOfNotNull(stage),
         activeStep = 0,
         onCancel = onCancel,
@@ -399,84 +435,144 @@ internal fun shareAgainHint(outcome: Outcome): String? =
 internal fun messageExitLabel(outcome: Outcome): String =
     if (outcome == Outcome.FAILED) "Понятно" else "Готово"
 
-/** Что честно сказать о времени: сколько уже идёт и почему это нормально. */
-internal fun waitingSubtitle(elapsed: Int, network: Boolean): String = when {
+/**
+ * Что честно сказать о времени: сколько уже идёт и почему это нормально.
+ *
+ * Про отмену подпись напоминает только при [cancelable] — над работой без кнопки строка
+ * «можно отменить» отправляла бы человека искать то, чего на экране нет (#114).
+ */
+internal fun waitingSubtitle(elapsed: Int, network: Boolean, cancelable: Boolean = true): String = when {
     !network -> if (elapsed < 3) "Обрабатываю…" else "Идёт $elapsed с"
     elapsed < 5 -> "Идёт $elapsed с"
     elapsed < 30 -> "Идёт $elapsed с · модель читает документ"
-    else -> "Идёт $elapsed с · долгая страница, можно отменить"
+    cancelable -> "Идёт $elapsed с · долгая страница, можно отменить"
+    else -> "Идёт $elapsed с · долгая страница"
+}
+
+/**
+ * Ждём, пока человек выберет фото системным пикером (#97, «Заменить фон»).
+ *
+ * Ждём порталом и пульсом, а не крутилкой Material (#461, MOTION.md принцип №3): это была последняя
+ * `CircularProgressIndicator` в приложении — все остальные ожидания уже говорят так. Вынуто из
+ * `when` отдельной функцией, чтобы у экрана было превью: внутри `PointHost` его не показать —
+ * там же сидит `LaunchedEffect`, открывающий настоящий пикер.
+ */
+@Composable
+private fun PickingImageScreen(title: String) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.padding(24.dp),
+    ) {
+        Portal(size = 148.dp)
+        Spacer(Modifier.height(16.dp))
+        ScreenHeader(
+            title = title,
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.widthIn(max = PortalColumnWidth),
+        )
+        Spacer(Modifier.height(14.dp))
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(9.dp),
+        ) {
+            ThinkingDot()
+            Text(
+                text = "Выберите изображение",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@ComposePreview(name = "Ожидание фото · портал вместо крутилки (#461)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@Composable
+private fun PreviewPickingImage() = PointTheme(darkTheme = true) {
+    PickingImageScreen(title = "Выберите фон для замены")
 }
 
 /**
  * The inline app-picker (#66): the device's real installed handlers for the object, chosen in Point
  * itself rather than bounced to a system dialog.
+ *
+ * В языке портала (#461). Чужое приложение здесь — такое же действие над объектом, как «Открыть» на
+ * экране объекта, и выглядит оно теперь так же: строка с настоящей иконкой приложения в плите.
+ * Раньше это был столбик серых Material-плашек с одним лишь названием — то самое «другое
+ * приложение» на экране, и вдобавок иконки, которые Point уже умеет показывать, здесь пропадали.
  */
 @Composable
-private fun AppPickerScreen(apps: List<AppTarget>, onPick: (AppTarget) -> Unit, onDismiss: () -> Unit) {
+private fun AppPickerScreen(
+    apps: List<AppTarget>,
+    onPick: (AppTarget) -> Unit,
+    onDismiss: () -> Unit,
+    appIconFor: (String) -> androidx.compose.ui.graphics.ImageBitmap? = { null },
+) {
     Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
+        modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 24.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(
-            text = "Открыть в",
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onBackground,
+        ScreenHeader(
+            title = "Открыть в",
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(bottom = 15.dp),
         )
-        Spacer(Modifier.height(16.dp))
         LazyColumn(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.widthIn(max = PortalColumnWidth).fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(11.dp),
         ) {
-            items(apps, key = { it.packageName }) { app ->
-                Surface(
+            itemsIndexed(apps, key = { _, app -> app.packageName }) { index, app ->
+                PortalRow(
+                    title = app.label,
                     onClick = { onPick(app) },
-                    shape = MaterialTheme.shapes.large,
-                    color = MaterialTheme.colorScheme.surfaceVariant,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(
-                        text = app.label,
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(16.dp),
-                    )
-                }
+                    icon = bubbleIcon(APP_ICON),
+                    image = remember(app.packageName) { appIconFor(app.packageName) },
+                    accent = MaterialTheme.colorScheme.primary,
+                    appearIndex = index,
+                )
             }
         }
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(16.dp))
         TextButton(onClick = onDismiss) {
             Text("Отмена", color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
 
+/** Знак «чужое приложение» из общего словаря — тот же, которым помечены app-строки объекта. */
+private const val APP_ICON = "open-in"
+
 /**
  * A pre-execution preview (#97): what the action will do — the parsed contact, event or address —
  * so a terminal step is predictable. Confirm runs it; cancel returns to the bubbles.
+ *
+ * В языке портала (#461): разобранное лежит на карточке портала, а не на сером `surfaceVariant`, и
+ * подтверждение — светящаяся строка основного действия. Здесь это особенно к месту: экран
+ * показывают перед необратимым шагом, и «что именно сейчас произойдёт» обязано читаться как ответ
+ * Point, а не как системный диалог.
  */
 @Composable
 private fun PreviewScreen(preview: Preview, onConfirm: () -> Unit, onCancel: () -> Unit) {
     Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
+        modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 24.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(
-            text = preview.title,
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onBackground,
+        ScreenHeader(
+            title = preview.title,
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.widthIn(max = PortalColumnWidth),
         )
         Spacer(Modifier.height(16.dp))
-        Surface(
-            shape = MaterialTheme.shapes.large,
-            color = MaterialTheme.colorScheme.surfaceVariant,
-            modifier = Modifier.fillMaxWidth(),
+        Column(
+            modifier = Modifier.widthIn(max = PortalColumnWidth).fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             Column(
-                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .portalCard()
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 preview.lines.forEach { line ->
@@ -487,13 +583,49 @@ private fun PreviewScreen(preview: Preview, onConfirm: () -> Unit, onCancel: () 
                     )
                 }
             }
+            PortalRow(
+                title = preview.confirmLabel,
+                onClick = onConfirm,
+                icon = bubbleIcon("open"),
+                primary = true,
+                chevron = false,
+            )
         }
-        Spacer(Modifier.height(20.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            TextButton(onClick = onCancel) {
-                Text("Отмена", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Button(onClick = onConfirm) { Text(preview.confirmLabel) }
+        Spacer(Modifier.height(10.dp))
+        TextButton(onClick = onCancel) {
+            Text("Отмена", color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
+}
+
+@ComposePreview(name = "Открыть в · выбор приложения (#461)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@Composable
+private fun PreviewAppPicker() = PointTheme(darkTheme = true) {
+    // Установленные приложения — строками дизайн-системы. Иконок в превью нет (их даёт устройство),
+    // и видно, что строка не разваливается без них: знак «чужое приложение» стоит в плите.
+    AppPickerScreen(
+        apps = listOf(
+            AppTarget(label = "Google Диск", packageName = "com.google.android.apps.docs", activity = "a"),
+            AppTarget(label = "Telegram", packageName = "org.telegram.messenger", activity = "a"),
+            AppTarget(label = "Adobe Acrobat", packageName = "com.adobe.reader", activity = "a"),
+        ),
+        onPick = {},
+        onDismiss = {},
+    )
+}
+
+@ComposePreview(name = "Предпросмотр · что сейчас произойдёт (#461)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@Composable
+private fun PreviewActionPreview() = PointTheme(darkTheme = true) {
+    // Необратимый шаг показан до того, как случился: разобранный контакт на карточке портала,
+    // подтверждение — светящаяся строка.
+    PreviewScreen(
+        preview = Preview(
+            title = "Добавить контакт",
+            lines = listOf("Олена Ковальчук", "+380 67 123 45 67", "olena@example.com"),
+            confirmLabel = "Добавить",
+        ),
+        onConfirm = {},
+        onCancel = {},
+    )
 }

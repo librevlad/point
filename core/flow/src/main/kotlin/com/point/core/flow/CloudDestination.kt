@@ -33,3 +33,26 @@ fun cloudDestination(capabilityId: CapabilityId): String = when (capabilityId.va
         "Объект уйдёт на сервер AI-провайдера и вернётся результатом. Ничего не отправляется " +
             "без вашего согласия."
 }
+
+/**
+ * Какое обещание даёт это действие (#114): показать модели — или выложить в открытый доступ.
+ *
+ * Признак — сама способность, а не флаг «сетевое»: «Дать ссылку» кладёт файл на сервер открытым,
+ * и разрешение, данное когда-то ради «Понять», за это отвечать не может.
+ */
+fun cloudScopeOf(capabilityId: CapabilityId): CloudScope = when (capabilityId.value) {
+    "drop-link" -> CloudScope.PUBLIC_LINK
+    else -> CloudScope.MODELS
+}
+
+/** Заголовок вопроса: у публичной ссылки другое обещание — и звучать он обязан иначе. */
+fun cloudAskTitle(scope: CloudScope): String = when (scope) {
+    CloudScope.PUBLIC_LINK -> "Выложить файл по ссылке?"
+    CloudScope.MODELS -> "Отправить в облако?"
+}
+
+/** Слово на кнопке согласия: человек соглашается с тем, что написано на ней, а не вообще. */
+fun cloudAskConfirm(scope: CloudScope): String = when (scope) {
+    CloudScope.PUBLIC_LINK -> "Выложить"
+    CloudScope.MODELS -> "Разрешить"
+}

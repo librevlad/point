@@ -13,14 +13,15 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AddCircleOutline
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Computer
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -48,17 +49,33 @@ import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
 import com.point.core.ui.Portal
+import com.point.core.ui.PortalColumnWidth
+import com.point.core.ui.PortalDoor
+import com.point.core.ui.PortalRow
+import com.point.core.ui.bubbleColor
+import com.point.core.ui.bubbleIcon
 import com.point.core.ui.kindIcon
 import com.point.core.ui.kindLabel
+import com.point.core.ui.theme.PointTheme
 import com.point.core.ui.understoodFacts
 import com.point.executors.Bitmaps
+import androidx.compose.ui.tooling.preview.Preview
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
  * Point's home: the recent objects you brought in. Tap one to keep working with it —
- * no going back to the source app to share again (the metric: fewer switches). A
- * single key affordance opens the bring-your-own AI-key screen; there is no menu.
+ * no going back to the source app to share again (the metric: fewer switches).
+ *
+ * Дверей на этом экране ровно три, и у каждой есть имя (#462). Раньше в углу стояли три безымянные
+ * иконки — стрелка вниз, монитор, шестерёнка, — и угадать по стрелке вниз «Принять файл» было
+ * нельзя никак. Теперь это плиты дизайн-системы с подписями.
+ *
+ * Дверь «Новый объект» (#456) — та, которой не было вовсе: пять источников (камера, голос, буфер,
+ * место, файл из чужих рук) жили за плиткой шторки, а плитку надо было самому найти в редакторе.
+ * При этом один источник из пяти — «Принять файл» — успел получить собственную иконку здесь;
+ * теперь он стоит среди своих, а не отдельно. Меню это не заводит: экран по-прежнему отвечает на
+ * один вопрос, просто первый ответ на него — «объекта ещё нет, вот откуда его взять».
  */
 @Composable
 fun HomeScreen(
@@ -66,8 +83,10 @@ fun HomeScreen(
     onOpen: (HistoryEntry) -> Unit,
     onSettings: () -> Unit,
     onPc: () -> Unit = {},
-    /** «Принять файл» (#388): объект приезжает из чужих рук — по ссылке, которую человек показал. */
-    onReceive: () -> Unit = {},
+    /** Дверь к выбору источника (#456): камера, голос, буфер, место, файл из чужих рук. */
+    onNewObject: () -> Unit = {},
+    /** Имена источников — подпись двери. Приходят от самих источников, здесь не переписаны. */
+    sourceLabels: List<String> = emptyList(),
     onClear: () -> Unit = {},
     clipboard: String? = null,
     onUseClipboard: (String) -> Unit = {},
@@ -81,36 +100,39 @@ fun HomeScreen(
     fromPcCount: Int = 0,
     onPullFromPc: () -> Unit = {},
     onHideFromPc: () -> Unit = {},
+    /** Задан ли AI-ключ (#465). Пока нет — «Недавнее» зовёт его подключить и говорит зачем. */
+    aiKeySet: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier.fillMaxSize().systemBarsPadding()) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.End,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End),
         ) {
-            // Дверь для того, у кого объекта ещё нет: ссылку показывают, файл приезжает (#388).
-            IconButton(onClick = onReceive) {
-                Icon(
-                    imageVector = Icons.Filled.Download,
-                    contentDescription = "Принять файл",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            IconButton(onClick = onPc) {
-                Icon(
-                    imageVector = Icons.Filled.Computer,
-                    contentDescription = "Компьютер",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            IconButton(onClick = onSettings) {
-                Icon(
-                    imageVector = Icons.Filled.Settings,
-                    // Шестерёнка ведёт не только к ключу (#447): за ней ключ, приватность и звук —
-                    // и голос кнопки обязан совпадать с заголовком экрана, к которому она ведёт.
-                    contentDescription = "Настройки",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+            PortalDoor(
+                label = "Компьютер",
+                onClick = onPc,
+                icon = bubbleIcon("pc"),
+                accent = bubbleColor("pc"),
+            )
+            PortalDoor(
+                label = "AI-ключ",
+                onClick = onSettings,
+                icon = bubbleIcon("ai"),
+                accent = bubbleColor("ai"),
+            )
+        }
+
+        // Зачем ключ — сказанное ДО того, как человек упёрся в отказ (#465). Свежепоставленный
+        // Point молчал об этом вовсе: «Понять», «Перевести», «Спросить AI» и расшифровка отвечали
+        // отказом, и узнавал человек о ключе в худший момент — когда действие уже провалилось.
+        // Приглашение стоит здесь, а не на экране объекта: тот держит бюджет ≤300 мс без I/O.
+        if (!aiKeySet) {
+            Box(
+                Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                ConnectAiRow(onConnect = onSettings)
             }
         }
 
@@ -132,7 +154,12 @@ fun HomeScreen(
         }
 
         if (recent.isEmpty()) {
-            Box(Modifier.weight(1f).fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
+            // Прокрутка — не украшение: у пустого дома теперь есть дверь под текстом, и на низком
+            // экране (или с открытой плашкой буфера) она обязана оставаться достижимой.
+            Box(
+                Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(24.dp),
+                contentAlignment = Alignment.Center,
+            ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Portal(size = 168.dp) // the brand mark — the glowing point (redesign, экран 1)
                     Spacer(Modifier.height(28.dp))
@@ -143,10 +170,14 @@ fun HomeScreen(
                     )
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        "Поделитесь объектом — он появится здесь",
+                        // Раньше здесь был один путь внутрь — «поделитесь». Для того, у кого
+                        // объекта ещё нет, это был тупик: сделать прямо тут было нечего (#456).
+                        "Поделитесь объектом из любого приложения — или создайте его здесь",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                    Spacer(Modifier.height(22.dp))
+                    NewObjectDoor(sourceLabels = sourceLabels, onClick = onNewObject)
                 }
             }
         } else {
@@ -155,6 +186,13 @@ fun HomeScreen(
                 contentPadding = PaddingValues(20.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
+                item {
+                    NewObjectDoor(
+                        sourceLabels = sourceLabels,
+                        onClick = onNewObject,
+                        modifier = Modifier.padding(bottom = 8.dp),
+                    )
+                }
                 item {
                     Text(
                         "Недавнее",
@@ -176,6 +214,64 @@ fun HomeScreen(
             }
         }
     }
+}
+
+/**
+ * Дверь «Новый объект» (#456) — единственная светящаяся строка домашнего экрана.
+ *
+ * Ярко потому, что для человека без объекта это ЕДИНСТВЕННОЕ, что здесь можно сделать: «Недавнее»
+ * пусто, делиться нечем. Подпись перечисляет источники поимённо — иначе четыре из пяти так и
+ * остались бы догадкой, только на один тап ближе.
+ */
+@Composable
+private fun NewObjectDoor(
+    sourceLabels: List<String>,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    PortalRow(
+        title = "Новый объект",
+        subtitle = sourcesSubtitle(sourceLabels),
+        onClick = onClick,
+        icon = Icons.Filled.AddCircleOutline,
+        primary = true,
+        modifier = modifier.widthIn(max = PortalColumnWidth),
+    )
+}
+
+/**
+ * Из чего сегодня можно родить объект — подпись двери «Новый объект».
+ *
+ * Имена приходят от самих источников (`ObjectSource.label`), а не переписаны здесь руками: иначе
+ * обещание «добавить источник = добавить класс» перестало бы работать ровно на том экране, где
+ * человек о источниках впервые узнаёт. Пустой набор — законное состояние (`@Multibinds` в
+ * `AppIconsModule`), и тогда подписи нет вовсе: врать про несуществующее нечем.
+ */
+internal fun sourcesSubtitle(labels: List<String>): String? =
+    labels.filter { it.isNotBlank() }.takeIf { it.isNotEmpty() }?.joinToString(" · ")
+
+/**
+ * Приглашение подключить AI, пока ключа нет (#465).
+ *
+ * Не баннер и не «подсказка дня»: строка портала — тем же языком, каким Point предлагает действия
+ * над объектом. Скрыть её нечем намеренно — это не новость, которую можно прочитать и забыть, а
+ * состояние: половина Point молчит, пока ключа нет. Исчезнет она сама, когда ключ появится.
+ *
+ * Не светится, в отличие от «Нового объекта»: главное на этом экране — родить объект, а ключ это
+ * то, без чего половина действий над ним промолчит. Две светящиеся строки рядом спорили бы за
+ * внимание, и человек читал бы их обе как одинаково срочные.
+ */
+@Composable
+private fun ConnectAiRow(onConnect: () -> Unit, modifier: Modifier = Modifier) {
+    PortalRow(
+        title = "Подключите AI — пара минут",
+        subtitle = com.point.core.flow.AI_KEY_WHY_SHORT,
+        onClick = onConnect,
+        icon = com.point.core.ui.bubbleIcon("ai"),
+        accent = com.point.core.ui.bubbleColor("ai"),
+        subtitleMaxLines = 3,
+        modifier = modifier.widthIn(max = PortalColumnWidth),
+    )
 }
 
 /**
@@ -427,4 +523,40 @@ private fun HistoryAvatar(entry: HistoryEntry) {
             )
         }
     }
+}
+
+/** Источники так, как их видит домашний экран: только имена. */
+private val PREVIEW_SOURCES =
+    listOf("Буфер обмена", "Голос", "Камера", "Место", "Принять файл")
+
+private fun previewEntry(id: String, name: String, kind: ObjectKind, ago: Long) = HistoryEntry(
+    id = id,
+    name = name,
+    mime = "text/plain",
+    ref = com.point.core.model.ScratchRef("scratch/$id"),
+    kind = kind,
+    epochMillis = System.currentTimeMillis() - ago,
+)
+
+// Пустой дом — то состояние, в котором человек оказывается первым: объекта ещё нет. Именно здесь
+// «четыре источника из пяти спрятаны» (#456) видно глазами: без двери экран не предлагал ничего.
+@Preview(name = "Дом · объекта ещё нет (#456)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@Composable
+private fun PreviewHomeEmpty() = PointTheme {
+    HomeScreen(recent = emptyList(), onOpen = {}, onSettings = {}, sourceLabels = PREVIEW_SOURCES)
+}
+
+// Дом с работой: подписанные двери в углу (#462) и та же дверь «Новый объект» над «Недавним».
+@Preview(name = "Дом · недавнее (#462)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@Composable
+private fun PreviewHomeRecent() = PointTheme {
+    HomeScreen(
+        recent = listOf(
+            previewEntry("1", "Счёт за свет.pdf", ObjectKind.PDF, 3 * 60 * 1000L),
+            previewEntry("2", "Расписка", ObjectKind.TEXT, 40 * 60 * 1000L),
+        ),
+        onOpen = {},
+        onSettings = {},
+        sourceLabels = PREVIEW_SOURCES,
+    )
 }

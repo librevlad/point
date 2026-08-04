@@ -1,6 +1,7 @@
 package com.point.executors
 
 import com.point.core.flow.BackgroundRemover
+import com.point.core.flow.CollectionContent
 import com.point.core.flow.ImageCompositor
 import com.point.core.flow.ObjectStore
 import com.point.core.model.ActionResult
@@ -27,7 +28,7 @@ class ReplaceBgActionTest {
         }
         override suspend fun ingestMultiple(sources: List<String>): PointObject = error("unused")
         override suspend fun put(result: ResultObject): PointObject = error("unused")
-        override suspend fun children(collection: PointObject): List<PointObject> = emptyList()
+        override suspend fun children(collection: PointObject, limit: Int) = CollectionContent.empty<PointObject>()
         override suspend fun readText(obj: PointObject, limit: Int): String = ""
         override suspend fun newScratchFile(extension: String) = ScratchRef("/tmp/s.$extension")
         override suspend fun clear() = Unit

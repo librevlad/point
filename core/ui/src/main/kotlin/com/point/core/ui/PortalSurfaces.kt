@@ -7,6 +7,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -65,16 +66,6 @@ internal val TopHighlight = Color(0x12FFFFFF) // 7% белого по верхн
 private val PrimaryStart = Color(0xFF7B5CFF)  // АКЦЕНТ1 — начало градиента героя (фиолетовый)
 private val PrimaryEnd = Color(0xFF4E7BFF)    // к синему (циан занят кольцом AI)
 
-/**
- * Тёплый конец фирменного градиента — свет того, что не получилось.
- *
- * Жил приватно внутри карточки исхода, и второй экран, которому понадобилось сказать «не вышло»
- * (состояние ключа в настройках, #447), дотянуться до него не мог — взял бы красный
- * `colorScheme.error`, которым Point не говорит нигде. Тот же урок, ради которого затевался #114:
- * пока язык живёт приватно, каждый новый экран обязан заговорить на чужом.
- */
-val PortalWarm = Color(0xFFF85938)
-
 /** Скругление карточки и строки действия. */
 val PortalCardShape = RoundedCornerShape(18.dp)
 
@@ -117,6 +108,29 @@ fun Modifier.portalCard(
         },
     )
     .border(1.dp, Brush.verticalGradient(listOf(TopHighlight, Color.Transparent)), shape)
+
+/**
+ * Поверхность «основного действия»: фирменный градиент АКЦЕНТ1→синий со своим свечением.
+ *
+ * Ею светится главная строка ([PortalRow] с `primary`), ею же говорит человек в чате: его реплика —
+ * это его же выбор, и выглядеть она обязана тем, чем выглядит выбор. Вынута из [PortalRow] по той
+ * же причине, по которой из экрана объекта вынуто всё остальное (#430): пока градиент жил внутри
+ * строки приватным, чат красил свою реплику плоским `colorScheme.primary` — цвет тот же, язык
+ * другой.
+ */
+fun Modifier.portalPrimary(
+    shape: Shape = PortalCardShape,
+    elevation: Dp = 20.dp,
+): Modifier = this
+    .then(
+        if (elevation > 0.dp) {
+            Modifier.shadow(elevation, shape, ambientColor = PrimaryStart, spotColor = PrimaryStart)
+        } else {
+            Modifier
+        },
+    )
+    .clip(shape)
+    .background(Brush.horizontalGradient(listOf(PrimaryStart, PrimaryEnd)))
 
 /**
  * Иконная плита строки: плитка со свечением своего цвета и иконкой в нём же.
@@ -214,15 +228,7 @@ fun PortalRow(
             alpha = presence.value
             translationY = (1f - presence.value) * 10.dp.toPx()
         }
-    val surface =
-        if (primary) {
-            base
-                .shadow(20.dp, shape, ambientColor = PrimaryStart, spotColor = PrimaryStart)
-                .clip(shape)
-                .background(Brush.horizontalGradient(listOf(PrimaryStart, PrimaryEnd)))
-        } else {
-            base.portalCard(shape)
-        }
+    val surface = if (primary) base.portalPrimary(shape) else base.portalCard(shape)
 
     val labelColor = if (primary) Color.White else MaterialTheme.colorScheme.onSurface
     val subColor = if (primary) Color.White.copy(alpha = 0.80f) else MaterialTheme.colorScheme.onSurfaceVariant
@@ -268,6 +274,41 @@ fun PortalRow(
                 )
             }
         }
+    }
+}
+
+/**
+ * Дверь портала: иконная плита с подписью под ней.
+ *
+ * Тот же язык, что у строки действия, но для служебной двери — той, которой место в углу экрана, а
+ * не в колонке. Отличие от строки одно, и оно принципиальное: **подпись обязательна**. Голая иконка
+ * это загадка (#462) — по стрелке вниз нельзя догадаться, что за ней «Принять файл», а по
+ * шестерёнке, что за ней ключ AI. Поэтому [label] здесь не необязательный параметр, а первый.
+ */
+@Composable
+fun PortalDoor(
+    label: String,
+    onClick: () -> Unit,
+    icon: ImageVector,
+    modifier: Modifier = Modifier,
+    accent: Color = MaterialTheme.colorScheme.primary,
+) {
+    Column(
+        modifier = modifier
+            .clip(PortalPlateShape)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 6.dp, vertical = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(5.dp),
+    ) {
+        PortalPlate(accent = accent, icon = icon, size = 40.dp)
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 

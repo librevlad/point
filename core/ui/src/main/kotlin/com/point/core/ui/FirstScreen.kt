@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -93,6 +92,16 @@ fun FirstScreen(
     /** Чем это кончилось: знак и свет исхода — второе сообщение после текста, и врать им нельзя.
      *  Умолчание — [Outcome.NONE]: забытый исход молчит, а не отчитывается об успехе. */
     messageOutcome: Outcome = Outcome.NONE,
+    /**
+     * Что предложено сделать с этим исходом (#452) — например «Задать свой ключ AI» под отказом,
+     * который чинится ключом. null — предлагать нечего.
+     *
+     * Предложение, а не подмена: экран сам никуда не уходит, а ставит рядом с причиной строку, по
+     * которой человек идёт, если захочет. Раньше отказ «нет ключа» подменялся экраном настроек, и
+     * причина при этом стиралась — человек видел экран про ключи и ни слова о том, почему.
+     */
+    messageOffer: String? = null,
+    onMessageOffer: () -> Unit = {},
     inputPrompt: String? = null,
     inputSuggestions: List<String> = emptyList(),
     onSubmitInput: (String) -> Unit = {},
@@ -102,6 +111,11 @@ fun FirstScreen(
     canSaveChain: Boolean = false,
     onSaveChain: () -> Unit = {},
     items: List<PointObject> = emptyList(),
+    /** Сколько файлов в наборе всего — [items] может быть обрезан пределом обхода (#460).
+     *  0 — счёта нет, и экран не выдумывает его из длины списка. */
+    itemsTotal: Int = 0,
+    /** [itemsTotal] — «не меньше чем»: обход упёрся в свой потолок и перестал считать. */
+    itemsTotalAtLeast: Boolean = false,
     onItem: (PointObject) -> Unit = {},
     found: List<PointObject> = emptyList(),
     relations: List<Relation> = emptyList(),
@@ -165,6 +179,18 @@ fun FirstScreen(
         // Как он выглядит — OutcomeBanner: карточка портала, где исход различают знак и его свет.
         OutcomeBanner(message, messageOutcome)
 
+        // Что с этим исходом можно сделать (#452) — строкой действия, тем же языком, что и всё
+        // остальное на экране. Стоит вплотную под причиной: предложение имеет смысл только рядом
+        // с ней, иначе это снова экран, открывшийся сам по себе.
+        if (message != null && messageOffer != null) {
+            Spacer(Modifier.height(10.dp))
+            PortalRow(
+                title = messageOffer,
+                onClick = onMessageOffer,
+                modifier = Modifier.widthIn(max = PortalColumnWidth),
+            )
+        }
+
         // Ссылка, которую Point только что выдал, — сразу и кодом (#388). Человек рядом наводит
         // камеру и забирает файл, ничего никому не пересылая; тут же сказано, чем за это платят.
         issuedLinkOf(obj.metadata)?.let { link ->
@@ -178,7 +204,16 @@ fun FirstScreen(
 
         // Готовность действий (#260): полнота считается по действию — «не хватает только X»,
         // а не форма из девяти полей. Схемы читают те же факты, что пишут энричеры и «Понять».
-        ReadinessSection(metadata = obj.metadata)
+        //
+        // #464: готовая строка запускается тапом — тем же пузырём и тем же колбэком, что строка
+        // действия ниже. Пока действие идёт или ждут ввода, карточка тапов не принимает: список
+        // действий в это время притушен, и живая строка над ним обещала бы запуск, которого нет.
+        ReadinessSection(
+            metadata = obj.metadata,
+            bubbles = bubbles,
+            enabled = !working && inputPrompt == null,
+            onBubble = onBubble,
+        )
 
         // What Point found INSIDE the object (#222) — things, not lines: the waybill number,
         // the branch, the deadline. Each opens as an object of its own.
@@ -189,7 +224,12 @@ fun FirstScreen(
         Spacer(Modifier.height(28.dp))
 
         if (items.isNotEmpty() && inputPrompt == null) {
-            CollectionItems(items = items, onItem = onItem)
+            CollectionItems(
+                items = items,
+                total = itemsTotal,
+                atLeast = itemsTotalAtLeast,
+                onItem = onItem,
+            )
             Spacer(Modifier.height(28.dp))
         }
 
@@ -476,23 +516,51 @@ internal fun factKeyFor(kind: ObjectKind): String? = when (kind) {
     else -> null // an Identifier was never in the checklist — it had no type to be shown as
 }
 
+/** Сколько строк набора рисуется за раз; остальное — по тапу «Показать ещё» (#460). */
+const val COLLECTION_PAGE = 25
+
+/**
+ * Заголовок содержимого: сколько показано и сколько там на самом деле (#460).
+ *
+ * Обрезанный список обязан называть себя обрезанным: снаружи «Содержимое · 500» неотличимо от
+ * набора ровно из пятисот файлов, и человек уверен, что видел всё. [atLeast] — обход упёрся в
+ * потолок и перестал считать, то есть и само число «не меньше чем».
+ */
+fun collectionLabel(shown: Int, total: Int, atLeast: Boolean): String = when {
+    total <= shown && !atLeast -> "Содержимое · ${grouped(shown)}"
+    total <= shown -> "Содержимое · ${grouped(shown)}, и это не всё"
+    atLeast -> "Содержимое · ${grouped(shown)} из более чем ${grouped(total)}"
+    else -> "Содержимое · ${grouped(shown)} из ${grouped(total)}"
+}
+
+/** Число человеку: разряды отбиты неразрывным пробелом («1 340», а не «1340»). */
+internal fun grouped(n: Int): String =
+    n.toString().reversed().chunked(3).joinToString(" ").reversed()
+
 @Composable
-private fun CollectionItems(items: List<PointObject>, onItem: (PointObject) -> Unit) {
+private fun CollectionItems(
+    items: List<PointObject>,
+    total: Int,
+    atLeast: Boolean,
+    onItem: (PointObject) -> Unit,
+) {
+    // Строки рисуются страницами, и своей прокрутки у списка больше нет (#460). Прокручиваемая
+    // область внутри прокручиваемого экрана забирала жест себе: палец на списке двигал список, а
+    // страницу человек прокрутить не мог вовсе. Страница же держит и второе обещание — действия
+    // объекта остаются в досягаемости, а не уезжают на тысячу строк вниз.
+    var page by rememberSaveable(items.size) { mutableStateOf(COLLECTION_PAGE) }
     Text(
-        text = "Содержимое · ${items.size}",
+        text = collectionLabel(items.size, total, atLeast),
         style = MaterialTheme.typography.labelMedium,
         fontWeight = FontWeight.SemiBold,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
     Spacer(Modifier.height(12.dp))
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(max = 260.dp)
-            .verticalScroll(rememberScrollState()),
+        modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        items.forEach { item ->
+        items.take(page).forEach { item ->
             Surface(
                 onClick = { onItem(item) },
                 shape = RoundedCornerShape(12.dp),
@@ -521,14 +589,41 @@ private fun CollectionItems(items: List<PointObject>, onItem: (PointObject) -> U
                 }
             }
         }
+        if (page < items.size) {
+            TextButton(onClick = { page += COLLECTION_PAGE }) {
+                Text("Показать ещё · ${grouped(items.size - page)}")
+            }
+        }
     }
 }
 
-/** For a TEXT object: its content, readable in-app — scroll + native select/copy. */
+/** Сколько знаков текста видно сразу; остальное — по тапу «Показать целиком» (#460). */
+const val TEXT_PREVIEW_HEAD = 2_000
+
+/**
+ * Начало длинного текста — по границе строки, чтобы разметка не рвалась посередине слова.
+ *
+ * Обрыв ищется во второй половине куска: у текста без переносов (одна строка на сто тысяч знаков)
+ * границы нет вовсе, и резать по началу было бы хуже, чем резать ровно по пределу.
+ */
+fun textPreviewHead(text: String, limit: Int = TEXT_PREVIEW_HEAD): String {
+    if (text.length <= limit) return text
+    val head = text.take(limit)
+    val cut = head.lastIndexOf('\n')
+    return if (cut > limit / 2) head.substring(0, cut) else head
+}
+
+/** For a TEXT object: its content, readable in-app — native select/copy. */
 @Composable
 private fun TextPreview(text: String, markdown: Boolean = false) {
+    // Своей прокрутки у панели больше нет (#460): прокручиваемый текст внутри прокручиваемого
+    // экрана забирал жест себе. Видно начало, целиком — по явному тапу: сто тысяч знаков,
+    // развёрнутые молча, увели бы действия объекта на десятки экранов вниз.
+    var expanded by rememberSaveable(text.length) { mutableStateOf(false) }
+    val head = remember(text) { textPreviewHead(text) }
+    val shown = if (expanded) text else head
     // AI answers arrive as Markdown — render headings/bold/bullets instead of raw `###`/`**`/`*`.
-    val rendered = remember(text, markdown) { if (markdown) markdownToAnnotated(text) else AnnotatedString(text) }
+    val rendered = remember(shown, markdown) { if (markdown) markdownToAnnotated(shown) else AnnotatedString(shown) }
     Text(
         text = "Текст",
         style = MaterialTheme.typography.labelMedium,
@@ -547,11 +642,17 @@ private fun TextPreview(text: String, markdown: Boolean = false) {
                 text = rendered,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = 320.dp)
-                    .verticalScroll(rememberScrollState())
                     .padding(16.dp),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface,
+            )
+        }
+    }
+    if (head.length < text.length) {
+        TextButton(onClick = { expanded = !expanded }) {
+            Text(
+                if (expanded) "Свернуть"
+                else "Показать целиком · ещё ${grouped(text.length - head.length)} символов",
             )
         }
     }
@@ -643,6 +744,19 @@ private fun ObjectHeader(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center,
+            )
+        }
+        // #459: цена тапа — до тапа. Над записью здесь стоит «примерно 3 мин» — та же строка,
+        // которую раньше человек читал, только когда сеть уже пошла. Отдельной строкой, тише
+        // имени файла: это не название объекта, а его мера.
+        verdict.measure?.let { measure ->
+            Text(
+                text = measure,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center,
             )

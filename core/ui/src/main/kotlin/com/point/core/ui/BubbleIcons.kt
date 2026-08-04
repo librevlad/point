@@ -91,6 +91,10 @@ fun bubbleIcon(key: String): ImageVector = when (if (key.startsWith("app:")) "op
     "transcribe" -> Icons.Filled.RecordVoiceOver
     "find" -> Icons.Filled.Search
     "ocr-cloud" -> Icons.Filled.Cloud
+    // Просто «облако» — знак того, что объект уходит с устройства. Им подписан экран согласия:
+    // отдельный ключ, а не заимствованное «распознать в облаке», потому что спрашивают не про
+    // распознавание, а про саму отправку.
+    "cloud" -> Icons.Filled.Cloud
     "qr" -> Icons.Filled.QrCode2
     "qr-scan" -> Icons.Filled.QrCodeScanner
     "call" -> Icons.Filled.Call
@@ -132,6 +136,7 @@ fun bubbleColor(key: String): Color = when (if (key.startsWith("app:")) "open-in
     "transcribe" -> Color(0xFF16A34A) // green — тоже «прочитать сказанное», только ушами
     "find" -> Color(0xFF16A34A)     // green — читать прочитанное: поиск живёт рядом с распознаванием
     "ocr-cloud" -> Color(0xFF2F80ED) // blue — recognise in the cloud
+    "cloud" -> Color(0xFF00E0FF)    // АКЦЕНТ2 — то, что уходит с устройства, светится циан
     "qr" -> Color(0xFF0EA5A5)       // teal — produces an image
     "qr-scan" -> Color(0xFF2F80ED)  // blue — read a QR
     "office" -> Color(0xFF16A34A)   // green — documents/data

@@ -7,7 +7,6 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
-import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -34,33 +33,32 @@ class HomeDoorTest {
 
     @get:Rule val compose = createAndroidComposeRule<HomeActivity>()
 
-    /** Шестерёнка на «Недавнем» — тот самый основной путь за ключом. */
+    /** Дверь «AI-ключ» на «Недавнем» — тот самый основной путь за ключом. */
     private fun openKeySettings() {
-        // Шестерёнка и заголовок экрана называются одним словом (#447): за ней не только ключ.
-        compose.onNodeWithContentDescription(GEAR).performClick()
-        compose.waitUntilAtLeastOneExists(hasText(GEAR), TIMEOUT_MS)
+        compose.onNodeWithText("AI-ключ").performClick()
+        compose.waitUntilAtLeastOneExists(hasText("Ваш AI-ключ"), TIMEOUT_MS)
     }
 
     /** Сохранить ключ так, как это делает человек: доехать, набрать, нажать. */
     private fun saveKey(key: String) {
-        // Первое поле экрана — сам ключ; «Сохранить» до него погашено. Экран длиннее окна, поэтому
+        // Первое поле экрана — сам ключ; кнопки до него погашены. Экран длиннее окна, поэтому
         // до узлов доезжаем прокруткой — как пальцем.
         compose.onAllNodes(hasSetTextAction()).onFirst().performScrollTo().performTextInput(key)
-        compose.onNodeWithText("Сохранить").performScrollTo().performClick()
+        // Тихая дорога в обход живой проверки (#465) — она и есть прежнее «Сохранить». Тест про
+        // дверь, а не про сеть, поэтому идёт именно ею.
+        compose.onNodeWithText("Сохранить без проверки").performScrollTo().performClick()
         // Ключ уходит на диск в фоновом потоке — ждём словами экрана, а не «должно было успеть».
         compose.waitUntilAtLeastOneExists(hasText("Ключ AI сохранён"), TIMEOUT_MS)
     }
 
-    @Test fun `ссылка на сайт провайдера с домашнего экрана открывает браузер`() {
+    @Test fun `«Взять ключ» с домашнего экрана открывает страницу провайдера`() {
         openKeySettings()
-        // Раньше эта строка называлась «Взять ключ» и стояла внутри строки выбора провайдера —
-        // владелец прочитал её как «взять этот ключ» (#447). Теперь она называет, что произойдёт.
-        compose.onAllNodesWithText("Открыть сайт", substring = true).onFirst().performScrollTo().performClick()
+        compose.onAllNodesWithText("Взять ключ").onFirst().performClick()
         compose.waitForIdle()
 
         val opened = shadowOf(compose.activity).nextStartedActivity
             ?: shadowOf(RuntimeEnvironment.getApplication()).nextStartedActivity
-        assertNotNull("тап по ссылке на сайт не открыл ничего — колбэк потерян на этой двери", opened)
+        assertNotNull("тап по «Взять ключ» не открыл ничего — колбэк потерян на этой двери", opened)
         assertEquals(Intent.ACTION_VIEW, opened!!.action)
     }
 
@@ -72,8 +70,8 @@ class HomeDoorTest {
         compose.waitForIdle()
 
         assertFalse("Point закрылся вместо возврата на «Недавнее»", compose.activity.isFinishing)
-        // Шестерёнка есть только на «Недавнем» — значит вернулись именно туда.
-        compose.onNodeWithContentDescription(GEAR).assertExists()
+        // Дверь «AI-ключ» есть только на «Недавнем» — значит вернулись именно туда.
+        compose.onNodeWithText("AI-ключ").assertExists()
         compose.onNodeWithText("Ключ AI сохранён").assertDoesNotExist()
     }
 
@@ -86,12 +84,9 @@ class HomeDoorTest {
 
         assertFalse(compose.activity.isFinishing)
         compose.onNodeWithText("Ключ AI сохранён").assertDoesNotExist()
-        compose.onNodeWithContentDescription(GEAR).assertExists()
+        compose.onNodeWithText("AI-ключ").assertExists()
     }
 }
-
-/** Шестерёнка на «Недавнем» и заголовок экрана, к которому она ведёт, — одно слово (#447). */
-private const val GEAR = "Настройки"
 
 /** Экран рисуется в фоне и по-настоящему, поэтому ждём словами, а не «должно было успеть». */
 private const val TIMEOUT_MS = 10_000L

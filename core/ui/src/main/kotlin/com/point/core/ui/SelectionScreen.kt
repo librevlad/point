@@ -6,13 +6,11 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -27,6 +25,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
@@ -123,36 +122,58 @@ fun SelectionScreen(
             )
         }
 
-        Surface(tonalElevation = 3.dp) {
-            Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp)) {
-                Text(
-                    text = when {
-                        capturedText == null -> "Обведите нужное на странице"
-                        // Путь «непрочитанного» (#259): слов нет, но рамка — честный фрагмент
-                        // исходных пикселей, с происхождением. Рукопись обводят именно так.
-                        capturedText.isBlank() -> "Слов здесь не прочитано — возьмётся фрагмент изображения"
-                        else -> capturedText
-                    },
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = if (capturedText.isNullOrBlank()) {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    } else {
-                        MaterialTheme.colorScheme.onSurface
-                    },
-                    maxLines = 3,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    TextButton(onClick = onClose) { Text("Отмена") }
-                    Button(onClick = onTake, enabled = capturedText != null) {
-                        Text(if (capturedText != null && capturedText.isBlank()) "Взять фрагмент" else "Взять")
-                    }
-                }
+        // Панель под страницей — поверхность портала, а не `Surface(tonalElevation)` (#461): у
+        // Point одна поверхность, и лист бумаги под страницей был вторым языком на том же экране.
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .portalCard(shape = SheetShape, elevation = 16.dp)
+                .padding(horizontal = 20.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            SectionLabel("Захвачено")
+            Text(
+                text = when {
+                    capturedText == null -> "Обведите нужное на странице"
+                    // Путь «непрочитанного» (#259): слов нет, но рамка — честный фрагмент
+                    // исходных пикселей, с происхождением. Рукопись обводят именно так.
+                    capturedText.isBlank() -> "Слов здесь не прочитано — возьмётся фрагмент изображения"
+                    else -> capturedText
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (capturedText.isNullOrBlank()) {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                },
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis,
+            )
+            // «Основное действие» экрана — та же светящаяся строка, что главное действие объекта.
+            // Пока пальцем ничего не обведено, брать нечего, и строка притушена, а не перекрашена
+            // в серый Material: строка светится, когда может.
+            val canTake = capturedText != null
+            PortalRow(
+                title = if (capturedText != null && capturedText.isBlank()) "Взять фрагмент" else "Взять",
+                onClick = onTake,
+                icon = bubbleIcon(SELECT_ICON),
+                primary = true,
+                chevron = false,
+                enabled = canTake,
+                modifier = Modifier.graphicsLayer { alpha = if (canTake) 1f else 0.45f },
+            )
+            TextButton(
+                onClick = onClose,
+                modifier = Modifier.align(Alignment.CenterHorizontally),
+            ) {
+                Text("Отмена", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
 }
+
+/** Знак «вырезать нужное» из общего словаря — им же подписано «Вырезать» на экране объекта. */
+private const val SELECT_ICON = "cutout"
+
+/** Панель приклеена к низу экрана: скругления только сверху. */
+private val SheetShape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp)

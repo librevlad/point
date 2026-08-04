@@ -2,12 +2,14 @@ package com.point
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.ensureActive
 import com.point.core.flow.AppLauncher
 import com.point.core.flow.AppTarget
 import com.point.core.flow.CapabilityRegistry
 import com.point.core.flow.CapabilityUsage
 import com.point.core.flow.ChosenApp
 import com.point.core.flow.ChosenApps
+import com.point.core.flow.CollectionContent
 import com.point.core.flow.CrashLog
 import com.point.core.flow.Enrichment
 import com.point.core.flow.edgeDetail
@@ -120,12 +122,58 @@ class FlowViewModel @Inject constructor(
     private val linkMonitor: com.point.core.flow.LinkMonitor,
     private val pulledFiles: PulledFileFactory,
     private val frames: SelectionFrames,
-    /** «Проверить ключ» (#447) — живой запрос к провайдеру за швом, а не догадка по виду ключа. */
-    private val keyProbe: com.point.core.flow.AiKeyProbe,
+    /** Кто стучится в сервис ключом человека, когда тот просит проверить (#465). */
+    private val aiKeyCheck: com.point.core.flow.AiKeyCheck,
 ) : ViewModel() {
 
-    /** Идущее действие — чтобы его можно было отменить (#288). */
-    private var actionJob: kotlinx.coroutines.Job? = null
+    /**
+     * Задача той работы, что подняла экран ожидания, — чтобы её можно было отменить (#288, #114).
+     *
+     * Держат её ВСЕ занятости, а не одно действие по пузырю: «Ищу приложения…», «Выполняю
+     * цепочку…», «Забираю с компьютера…» тоже рисуют «Отменить», и кнопка обязана снимать ту
+     * работу, над которой стоит. Задача обнуляется по завершении: снимать законченное значило
+     * бы объявлять отменённым уже сделанное.
+     */
+    private var busyJob: kotlinx.coroutines.Job? = null
+
+    /** Эта задача теперь и есть идущая занятость. По завершении поле гаснет само. */
+    private fun trackWork(job: kotlinx.coroutines.Job) {
+        busyJob = job
+        job.invokeOnCompletion { if (busyJob === job) busyJob = null }
+    }
+
+    /**
+     * Поднять экран ожидания одним движением — и сразу сказать, можно ли эту работу отменить.
+     *
+     * [cancelable] стоит `true` только там, где [cancelAction] действительно снимает задачу И
+     * человеку есть куда вернуться (объект под экраном или «Недавнее»). Приём расшаренного
+     * файла — не такой случай: за экраном ожидания нет ничего, и «Отменено» осталось бы
+     * единственным, что человек видит.
+     */
+    private fun raiseBusy(
+        title: String,
+        network: Boolean = false,
+        quiet: Boolean = false,
+        cancelable: Boolean = false,
+    ) {
+        _ui.update {
+            it.copy(
+                busy = title, busyStage = null, busyNetwork = network, busyQuiet = quiet,
+                busyCancelable = cancelable,
+                message = null, messageOutcome = Outcome.NONE, inputPrompt = null,
+            )
+        }
+    }
+
+    /**
+     * Эта работа всё ещё та, что на экране?
+     *
+     * Отмена и любая новая занятость забирают голос ([claimVoice]). Снятая работа обязана не
+     * только замолчать, но и **не применить свой результат**: нативный проход движка о прерывании
+     * не знает и доходит до конца сам — без этой проверки объект открывался секундой позже поверх
+     * слова «Отменено».
+     */
+    private fun owns(voice: Long) = voice == workVoice
 
     /**
      * Чей голос сейчас на экране (#288): номер занятости, которой принадлежит `busyStage`.
@@ -148,6 +196,8 @@ class FlowViewModel @Inject constructor(
     private var pendingBubble: Bubble? = null
     /** A cloud action deferred until the user grants consent (#10); run on confirm. */
     private var pendingCloud: (() -> Unit)? = null
+    /** На что именно спрашиваем сейчас (#114) — от этого зависит, запоминать ли ответ. */
+    private var pendingCloudScope: com.point.core.flow.CloudScope = com.point.core.flow.CloudScope.MODELS
     /** A bubble whose preview is shown, deferred until the user confirms it (#97). */
     private var pendingPreviewBubble: Bubble? = null
     /** Экран выделения (#259): слой, преобразование координат и последний захват — живут,
@@ -240,14 +290,17 @@ class FlowViewModel @Inject constructor(
 
     fun onShared(sourceUri: String, mime: String, autoAction: String? = null) {
         freshShareArrived = true
-        claimVoice()
-        _ui.update { it.copy(busy = "Открываю…", busyStage = null, busyNetwork = false, busyQuiet = false, message = null, messageOutcome = Outcome.NONE, inputPrompt = null) }
-        _ui.update { it.copy(busy = "Открываю…", busyStage = null, busyNetwork = false, busyQuiet = false, message = null, messageOutcome = Outcome.NONE, inputPrompt = null) }
-        viewModelScope.launch {
+        val voice = claimVoice()
+        // Отменить нечем: за приёмом расшаренного файла экрана Point ещё нет, и кнопка увела бы
+        // человека в пустоту с одним словом «Отменено» (#114).
+        raiseBusy("Открываю…", cancelable = false)
+        trackWork(viewModelScope.launch {
             val obj = runCatching {
                 store.clear()
                 store.ingest(sourceUri, mime)
-            }.getOrElse {
+            }.getOrNull()
+            if (!owns(voice)) return@launch
+            if (obj == null) {
                 // Хвост исключения человеку ничего не говорит («…FileNotFoundException: /storage/…»),
                 // а теперь этот текст стоит под объектом первой строкой. Отказ называется словами;
                 // техническая причина при этом не пропадает — её пишет сам приёмник (ObjectStore),
@@ -275,21 +328,22 @@ class FlowViewModel @Inject constructor(
                 }
                 onBubble(Bubble("pc", title, cap, obj.state))
             }
-        }
+        })
     }
 
     /** Several shared files → one COLLECTION (the inbound half of collections;
      *  e.g. several photos to merge into a PDF). */
     fun onSharedMultiple(sources: List<String>) {
         freshShareArrived = true
-        claimVoice()
-        _ui.update { it.copy(busy = "Открываю…", busyStage = null, busyNetwork = false, busyQuiet = false, message = null, messageOutcome = Outcome.NONE, inputPrompt = null) }
-        _ui.update { it.copy(busy = "Открываю…", busyStage = null, busyNetwork = false, busyQuiet = false, message = null, messageOutcome = Outcome.NONE, inputPrompt = null) }
-        viewModelScope.launch {
+        val voice = claimVoice()
+        raiseBusy("Открываю…", cancelable = false) // как и в onShared: возвращаться некуда
+        trackWork(viewModelScope.launch {
             val obj = runCatching {
                 store.clear()
                 store.ingestMultiple(sources)
-            }.getOrElse {
+            }.getOrNull()
+            if (!owns(voice)) return@launch
+            if (obj == null) {
                 // То же, что в onShared: человеку — словами, причина — в логе приёмника.
                 _ui.update { it.copy(busy = null, busyStage = null, message = "Не удалось открыть объект", messageOutcome = Outcome.FAILED) }
                 return@launch
@@ -299,10 +353,13 @@ class FlowViewModel @Inject constructor(
             cancelEnrichment()
             stack.clear()
             pushFrame(obj)
-        }
+        })
     }
 
     fun loadRecent() {
+        // Есть ли ключ — «Недавнее» спрашивает об этом здесь, а не на экране объекта: приглашение
+        // подключить AI живёт на домашнем экране, и бюджет первого экрана (≤300 мс) не трогается.
+        _ui.update { it.copy(aiKeySet = runCatching { userKeys.read() != null }.getOrDefault(false)) }
         viewModelScope.launch {
             _recent.value = runCatching { history.recent() }.getOrDefault(emptyList())
             _basketCount.value = runCatching { basket.items().size }.getOrDefault(0)
@@ -329,14 +386,15 @@ class FlowViewModel @Inject constructor(
      *  a failed ack re-offers (at-least-once); a failed download acks nothing. */
     fun pullFromPc() {
         val pairing = pcPairings.current() ?: return
-        claimVoice()
-        _ui.update { it.copy(busy = "Забираю с компьютера…", busyStage = null, busyNetwork = false, busyQuiet = false, message = null, messageOutcome = Outcome.NONE) }
-        _ui.update { it.copy(busy = "Забираю с компьютера…", busyStage = null, busyNetwork = false, busyQuiet = false, message = null, messageOutcome = Outcome.NONE) }
-        viewModelScope.launch {
+        val voice = claimVoice()
+        // Отмена настоящая: качать по сети можно долго, а вернуться есть куда — в «Недавнее».
+        raiseBusy("Забираю с компьютера…", cancelable = true)
+        trackWork(viewModelScope.launch {
             // Pull what is on the PC RIGHT NOW — a fresh fetch, not the throttled banner snapshot. The
             // cached list can be up to OUTBOX_THROTTLE_MS stale, so an object queued after the last
             // fetch would be missed and a stale one pulled instead — the phone got «не то» (#161).
             val entries = runCatching { pcTransport.fetchOutbox(pairing) }.getOrNull().orEmpty()
+            if (!owns(voice)) return@launch
             if (entries.isEmpty()) {
                 fromPcEntries = emptyList()
                 _fromPcCount.value = 0
@@ -349,6 +407,7 @@ class FlowViewModel @Inject constructor(
                 val ok = runCatching { pcTransport.downloadOutboxFile(pairing, entry.id, path) }.getOrDefault(false)
                 Triple(entry, path, ok)
             }
+            if (!owns(voice)) return@launch // передумали на полпути — скачанное не открываем
             if (pulled.any { !it.third }) {
                 _ui.update { it.copy(busy = null, busyStage = null, message = "Компьютер недоступен — попробуйте ещё раз", messageOutcome = Outcome.FAILED) }
                 return@launch
@@ -367,7 +426,7 @@ class FlowViewModel @Inject constructor(
             }
             fromPcEntries = emptyList()
             _fromPcCount.value = 0
-        }
+        })
     }
 
     /** Hide the banner until the next fetch — the objects stay on the PC (no ack). */
@@ -428,11 +487,12 @@ class FlowViewModel @Inject constructor(
 
     fun openFromHistory(entry: HistoryEntry) {
         freshShareArrived = true
-        claimVoice()
-        _ui.update { it.copy(busy = "Открываю…", busyStage = null, busyNetwork = false, busyQuiet = false, message = null, messageOutcome = Outcome.NONE, inputPrompt = null) }
-        _ui.update { it.copy(busy = "Открываю…", busyStage = null, busyNetwork = false, busyQuiet = false, message = null, messageOutcome = Outcome.NONE, inputPrompt = null) }
-        viewModelScope.launch {
+        val voice = claimVoice()
+        // Пришли с «Недавнего» — туда же и возвращаемся, если человек передумал.
+        raiseBusy("Открываю…", cancelable = true)
+        trackWork(viewModelScope.launch {
             val obj = runCatching { history.open(entry.id) }.getOrNull()
+            if (!owns(voice)) return@launch
             if (obj == null) {
                 _ui.update { it.copy(busy = null, busyStage = null, message = "Объект недоступен", messageOutcome = Outcome.FAILED) }
                 return@launch
@@ -441,7 +501,7 @@ class FlowViewModel @Inject constructor(
             cancelEnrichment()
             stack.clear()
             pushFrame(obj)
-        }
+        })
     }
 
     fun onBubble(bubble: Bubble) {
@@ -476,31 +536,35 @@ class FlowViewModel @Inject constructor(
      *  straight away. Busy is shown immediately (so feedback is instant and the preview computation —
      *  e.g. ML Kit for an address — is covered); the coroutine then reveals the preview or runs. */
     private fun maybePreview(bubble: Bubble, top: PointObject) {
-        claimVoice()
-        _ui.update {
-            it.copy(
-                busy = bubble.title, busyStage = null, busyNetwork = isCloud(bubble.capabilityId),
-                busyQuiet = isQuietAction(bubble.capabilityId), message = null, messageOutcome = Outcome.NONE,
-                inputPrompt = null,
-            )
-        }
-        viewModelScope.launch {
+        val voice = claimVoice()
+        raiseBusy(
+            bubble.title,
+            network = isCloud(bubble.capabilityId),
+            quiet = isQuietAction(bubble.capabilityId),
+            cancelable = true,
+        )
+        trackWork(viewModelScope.launch {
             // Пузырёк нарисован, а исполнять его нечем (потерян `@IntoSet`): человеку — фраза
             // на его языке, как давно говорит путь избранной цепочки. Без этой развилки на
             // экран уезжал текст исключения, написанный для разработчика.
             val realizer = runCatching { resolver.realizerFor(bubble.capabilityId) }.getOrNull()
+            if (!owns(voice)) return@launch
             if (realizer == null) {
                 _ui.update { it.copy(busy = null, busyStage = null, message = "Действие недоступно", messageOutcome = Outcome.FAILED) }
                 return@launch
             }
             val preview = runCatching { realizer.preview(top) }.getOrNull()
+            if (!owns(voice)) return@launch
             if (preview == null) {
+                // Задача поиска превью своё отработала — экраном дальше владеет действие. Снимаем
+                // её с учёта до [dispatch]: иначе он снял бы предшественника, то есть нас самих.
+                busyJob = null
                 dispatch(bubble) { realizer.perform(top, null) }
             } else {
                 pendingPreviewBubble = bubble
                 _ui.update { it.copy(busy = null, busyStage = null, preview = preview) }
             }
-        }
+        })
     }
 
     fun confirmPreview() {
@@ -729,9 +793,12 @@ class FlowViewModel @Inject constructor(
     }
 
     private fun runOnObject(bubble: Bubble, top: PointObject) {
-        claimVoice()
-        _ui.update { it.copy(busy = bubble.title, busyStage = null, busyNetwork = isCloud(bubble.capabilityId), busyQuiet = isQuietAction(bubble.capabilityId), message = null, messageOutcome = Outcome.NONE, inputPrompt = null) }
-        _ui.update { it.copy(busy = bubble.title, busyStage = null, busyNetwork = isCloud(bubble.capabilityId), busyQuiet = isQuietAction(bubble.capabilityId), message = null, messageOutcome = Outcome.NONE, inputPrompt = null) }
+        raiseBusy(
+            bubble.title,
+            network = isCloud(bubble.capabilityId),
+            quiet = isQuietAction(bubble.capabilityId),
+            cancelable = true,
+        )
         dispatch(bubble) { resolver.realizerFor(bubble.capabilityId).perform(top, null) }
     }
 
@@ -749,19 +816,31 @@ class FlowViewModel @Inject constructor(
      * Runs [onGranted] at once if cloud consent is already given; otherwise shows the consent
      * gate and defers it (#10). Reads the on-device flag directly (no cached copy) — so there
      * is no init race, and a saved-chain replay or a single action is held the same way.
+     *
+     * #114: спрашивают не «про облако вообще», а про то обещание, которое даёт это действие
+     * ([cloudScopeOf]). «Показать модели» помнится; «выложить по ссылке, которую откроет любой»
+     * не помнится никогда — цена называется перед каждым файлом, до отправки, а не после.
      */
     private fun requireCloudConsent(
         capabilityId: com.point.core.model.CapabilityId? = null,
         onGranted: () -> Unit,
     ) {
+        val id = capabilityId ?: com.point.core.model.CapabilityId("ai")
+        val scope = com.point.core.flow.cloudScopeOf(id)
         viewModelScope.launch {
-            if (runCatching { consent.cloudAllowed() }.getOrDefault(false)) {
+            if (runCatching { consent.allowed(scope) }.getOrDefault(false)) {
                 onGranted()
             } else {
                 pendingCloud = onGranted
-                val where = capabilityId?.let { com.point.core.flow.cloudDestination(it) }
-                    ?: com.point.core.flow.cloudDestination(com.point.core.model.CapabilityId("ai"))
-                _ui.update { it.copy(cloudConsent = true, cloudDestination = where) }
+                pendingCloudScope = scope
+                _ui.update {
+                    it.copy(
+                        cloudConsent = true,
+                        cloudDestination = com.point.core.flow.cloudDestination(id),
+                        cloudTitle = com.point.core.flow.cloudAskTitle(scope),
+                        cloudConfirm = com.point.core.flow.cloudAskConfirm(scope),
+                    )
+                }
             }
         }
     }
@@ -788,14 +867,13 @@ class FlowViewModel @Inject constructor(
         val bubble = pendingBubble ?: return
         val top = stack.lastOrNull()?.obj ?: return
         pendingBubble = null
-        claimVoice()
-        _ui.update {
-            it.copy(
-                busy = bubble.title, busyStage = null, busyNetwork = isCloud(bubble.capabilityId),
-                busyQuiet = isQuietAction(bubble.capabilityId),
-                inputPrompt = null, inputSuggestions = emptyList(), needsImage = null,
-            )
-        }
+        raiseBusy(
+            bubble.title,
+            network = isCloud(bubble.capabilityId),
+            quiet = isQuietAction(bubble.capabilityId),
+            cancelable = true,
+        )
+        _ui.update { it.copy(inputSuggestions = emptyList(), needsImage = null) }
         dispatch(bubble) { resolver.realizerFor(bubble.capabilityId).perform(top, text) }
     }
 
@@ -806,17 +884,31 @@ class FlowViewModel @Inject constructor(
 
     // --- AI chat (#4): a multi-turn conversation grounded in the object ---
 
-    /** Open the chat over [obj] (from «Спросить AI»). Cloud consent is already granted by onBubble. */
+    /** Идущий вопрос к модели (#453): его можно остановить, и его ответ имеет право прийти
+     *  в закрытый экран — разговор ждёт человека там, где он его оставил. */
+    private var chatJob: Job? = null
+
+    /**
+     * Открыть разговор об [obj] (тап «Спросить AI»). Согласие на облако уже взято в `onBubble`.
+     *
+     * Разговор об ЭТОМ объекте не начинается заново (#453): если он уже был, экран возвращается к
+     * нему целиком — вместе с идущим вопросом, если тот ещё в пути. Новый пустой заводится только
+     * под новый объект: разговор принадлежит своему объекту, и переносить сказанное на чужой было
+     * бы хуже, чем начать с чистого листа.
+     */
     private fun openChat(obj: PointObject) {
         _ui.update {
+            val kept = it.chat?.takeIf { c -> c.obj.id == obj.id }
             it.copy(
-                chat = ChatState(obj = obj, suggestions = aiSuggestions(obj.state.kind)),
+                chat = kept ?: ChatState(obj = obj, suggestions = aiSuggestions(obj.state.kind)),
+                chatOpen = true,
                 busy = null, inputPrompt = null, message = null, messageOutcome = Outcome.NONE,
             )
         }
     }
 
-    fun closeChat() = _ui.update { it.copy(chat = null) }
+    /** «Назад» из разговора: закрывается экран, а не разговор (#453). */
+    fun closeChat() = _ui.update { it.copy(chatOpen = false) }
 
     /**
      * Send a chat message. A «сделай word/excel/pdf» request produces a real object and lands on it
@@ -828,30 +920,71 @@ class FlowViewModel @Inject constructor(
         if (message.isEmpty() || chat.pending) return
         val history = chat.messages
         val obj = chat.obj
-        _ui.update { it.copy(chat = chat.copy(messages = history + ChatMessage(ChatRole.USER, message), pending = true)) }
-        viewModelScope.launch {
+        _ui.update {
+            it.copy(
+                chat = chat.copy(
+                    messages = history + ChatMessage(ChatRole.USER, message),
+                    pending = true,
+                    notice = null, // новый вопрос отменяет прошлую остановку — она про прошлый
+                ),
+            )
+        }
+        chatJob?.cancel()
+        chatJob = viewModelScope.launch {
             val target = aiTransformTarget(message)
             if (target != null) {
-                val result = runCatching { resolver.realizerFor(target).perform(obj, null) }.getOrNull()
+                val result = runCatching { resolver.realizerFor(target).perform(obj, null) }
+                    // Остановленное человеком не договаривает: без этого отмена доезжала бы до
+                    // реплики «Не удалось создать документ» — отказ, которого не было.
+                    .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
+                    .getOrNull()
                 if (result is ActionResult.Success) {
                     runCatching { sensory.success() }
-                    _ui.update { it.copy(chat = null) } // leave the chat and continue on the new object
+                    // Экран уходит на новый объект, разговор остаётся при своём (#453).
+                    _ui.update { s -> s.copy(chat = s.chat?.copy(pending = false), chatOpen = false) }
                     pushFrame(store.put(result.result), target, null)
                 } else {
                     appendChatAssistant((result as? ActionResult.Failure)?.reason ?: "Не удалось создать документ")
                 }
             } else {
                 val reply = runCatching { aiChatResponder.reply(obj, history, message) }
-                    .getOrElse { "Не получилось ответить: ${it.message ?: "ошибка"}" }
+                    .getOrElse {
+                        if (it is kotlinx.coroutines.CancellationException) throw it
+                        "Не получилось ответить: ${it.message ?: "ошибка"}"
+                    }
                 appendChatAssistant(reply)
             }
         }
     }
 
+    /**
+     * Остановить идущий вопрос (#453). Кнопки отмены у разговора не было вовсе: пока модель
+     * думает, поле ввода погашено, и человеку оставалось только ждать или уйти — а ушедшему
+     * ответ выбрасывался молча вместе с потраченной квотой.
+     *
+     * Остановка говорит словами и не притворяется репликой собеседника: заданный вопрос остаётся
+     * в разговоре, ответа под ним нет, и сказано, почему.
+     */
+    fun cancelChatMessage() {
+        val job = chatJob ?: return
+        chatJob = null
+        job.cancel()
+        _ui.update { s -> s.chat?.let { c -> s.copy(chat = c.copy(pending = false, notice = "Ответ остановлен")) } ?: s }
+    }
+
+    /** Ответ ложится в разговор, а не на экран: закрытый экран больше не выбрасывает пришедшее
+     *  молча (#453) — человек вернётся и увидит ответ, за который уже заплачена квота. */
     private fun appendChatAssistant(text: String) {
+        chatJob = null
         _ui.update { s ->
             val c = s.chat ?: return@update s
-            s.copy(chat = c.copy(messages = c.messages + ChatMessage(ChatRole.ASSISTANT, text), pending = false))
+            s.copy(
+                chat = c.copy(
+                    messages = c.messages + ChatMessage(ChatRole.ASSISTANT, text),
+                    pending = false,
+                    notice = null,
+                ),
+            )
         }
     }
 
@@ -860,17 +993,63 @@ class FlowViewModel @Inject constructor(
     fun openKeySettings() {
         // A tiny prefs read; the store is warmed when it's created (Activity start), so it
         // is in-memory by the time the gear or an AI-no-key failure summons the screen.
+        val saved = userKeys.read()
         _ui.update {
+            // Отказ, ради которого сюда и пришли, экран ключей не стирает (#452): человек,
+            // нажавший «Отмена», возвращается к объекту, где причина по-прежнему сказана словами.
+            // Всё остальное сказанное — стирается, как раньше: «Ключ AI сохранён» из прошлого
+            // захода не имеет отношения к этому.
+            val refusal = keyOfferLabel(it.message) != null
             it.copy(
-                keyScreen = userKeys.read() ?: UserAiConfig.DEFAULT, busy = null, message = null, messageOutcome = Outcome.NONE, inputPrompt = null,
-                // Прошлый ответ провайдера сюда не переезжает (#447): он был про тот раз.
-                keyCheck = com.point.core.flow.KeyCheck.Untested,
+                keyScreen = saved ?: UserAiConfig.DEFAULT, busy = null,
+                // …и он же стоит НА экране ключей (#467). Сюда пришли по предложению под отказом —
+                // то есть с вопросом «какой из семи ключей задать»; ответ на него живёт в тексте
+                // отказа, а не в памяти человека, и терять его по дороге незачем. Заполняется
+                // только от отказа: пришедшему дверью «AI-ключ» объяснять нечего.
+                keyScreenNote = it.message.takeIf { _ -> refusal },
+                message = it.message.takeIf { _ -> refusal },
+                messageOutcome = if (refusal) it.messageOutcome else Outcome.NONE,
+                inputPrompt = null,
+                // Приговор прошлой проверки не имеет права пережить закрытие экрана: «работает»,
+                // висящее над другим ключом, — ровно та ложь, против которой вся проверка (#465).
+                keyChecking = false,
+                keyVerdict = null,
+                aiKeySet = saved != null,
                 soundEnabled = runCatching { sensorySettings.isSoundEnabled() }.getOrDefault(true),
                 privacyLevel = runCatching { cloudPrivacy.level() }
                     .getOrDefault(com.point.core.flow.PrivacyLevel.DEFAULT),
             )
         }
         refreshUsage()
+        viewModelScope.launch { refreshCloudConsent() } // тумблер показывает, что разрешено сейчас
+    }
+
+    /**
+     * Проверить ключ живым запросом и, если он работает, тут же его сохранить (#465).
+     *
+     * Порядок именно такой: сохраняет то, что доказано. Записать сначала и проверить потом значило
+     * бы оставить в приложении ключ, про который уже известно, что он не подошёл, — и следующее
+     * действие человека провалилось бы снова, теперь уже «необъяснимо».
+     *
+     * Отказ ничего не сохраняет и ничего не закрывает: человек остаётся на экране, где стоит и
+     * набранный ключ, и совет, что с ним сделать.
+     */
+    fun checkAiKey(config: UserAiConfig) {
+        if (config.apiKey.isBlank() || _ui.value.keyChecking) return
+        _ui.update { it.copy(keyChecking = true, keyVerdict = null) }
+        viewModelScope.launch {
+            val probe = runCatching { aiKeyCheck.check(config) }
+                .getOrElse { com.point.core.flow.KeyProbe(error = com.point.core.flow.withoutKey(it.message.orEmpty(), config.apiKey)) }
+            val verdict = com.point.core.flow.keyVerdict(probe)
+            if (verdict is com.point.core.flow.KeyVerdict.Works) runCatching { userKeys.save(config) }
+            _ui.update {
+                it.copy(
+                    keyChecking = false,
+                    keyVerdict = verdict,
+                    aiKeySet = it.aiKeySet || verdict is com.point.core.flow.KeyVerdict.Works,
+                )
+            }
+        }
     }
 
     /** Load the usage journal's on/off state and tally for the key screen. */
@@ -907,39 +1086,25 @@ class FlowViewModel @Inject constructor(
         }
     }
 
-    /**
-     * «Проверить ключ» (#447): спросить провайдера по-настоящему и сказать, что он ответил.
-     *
-     * Сетевое действие — только после явного тапа человека, как и всё сетевое в Point. Ответ несёт
-     * отпечаток настроек, на которых получен: правка поля после проверки гасит отметку на экране
-     * (`checkFor`), потому что зелёное «работает» над другим ключом — это ложь, а не задержка.
-     */
-    fun checkAiKey(config: UserAiConfig) {
-        if (config.apiKey.isBlank()) return
-        _ui.update { it.copy(keyCheck = com.point.core.flow.KeyCheck.Running) }
-        viewModelScope.launch {
-            val answer = runCatching { keyProbe.check(config) }.getOrElse { failure ->
-                // Проба и так ловит транспортный отказ; это — сеть, оборвавшаяся мимо неё. Тишина
-                // здесь означала бы вечное «спрашиваем провайдера…».
-                com.point.core.flow.KeyCheck.Rejected(
-                    com.point.core.flow.keyProbeFailure("провайдера", failure.message.orEmpty()),
-                    com.point.core.flow.keyFingerprint(config),
-                )
-            }
-            // Экран мог закрыться, пока провайдер думал: ответ про ключ ему уже не нужен.
-            _ui.update { if (it.keyScreen != null) it.copy(keyCheck = answer) else it }
-        }
-    }
-
-    fun closeKeySettings() = _ui.update { it.copy(keyScreen = null, keyCheck = com.point.core.flow.KeyCheck.Untested) }
+    fun closeKeySettings() =
+        _ui.update { it.copy(keyScreen = null, keyScreenNote = null, keyVerdict = null, keyChecking = false) }
 
     // --- «Компьютер» (#147): pair once, then the «На компьютер» bubble appears. ---
 
     private var discoveryJob: Job? = null
 
+    /** Правка только живого экрана связи: закрыли — правке некуда ложиться, и она не воскрешает его. */
+    private fun updatePc(block: (PcScreenState) -> PcScreenState) {
+        _ui.update { s -> s.pcScreen?.let { s.copy(pcScreen = block(it)) } ?: s }
+    }
+
+    /** Идёт ли прямо сейчас запрос к компьютеру (#451) — пока идёт, экран говорит «проверяю связь…». */
+    private val pcProbing = kotlinx.coroutines.flow.MutableStateFlow(false)
+
     fun openPcSettings() {
+        val pairing = pcPairings.current()
         _ui.update {
-            it.copy(pcScreen = PcScreenState(pairing = pcPairings.current()), busy = null, message = null, messageOutcome = Outcome.NONE)
+            it.copy(pcScreen = PcScreenState(pairing = pairing), busy = null, message = null, messageOutcome = Outcome.NONE)
         }
         // Состояние связи следует за контактами, а не за таймером.
         //
@@ -947,31 +1112,43 @@ class FlowViewModel @Inject constructor(
         // бесконечная корутина в viewModelScope не даёт `runTest` завершиться, и прогон CI висел
         // час сорок вместо трёх минут. Бесконечный цикл ради секундной точности — плохая цена;
         // экран и так перерисуется, когда компьютер отзовётся.
+        //
+        // Вторая половина ответа — сам запрос (#451): пока он в пути, о связи ещё нечего утверждать,
+        // и экран говорит «проверяю связь…» вместо приговора о прошлом.
+        pcProbing.value = pairing != null
         linkJob?.cancel()
         linkJob = viewModelScope.launch {
-            linkMonitor.last.collect { contact ->
-                val link = com.point.core.flow.linkStateOf(
-                    contact?.at, contact?.path, System.currentTimeMillis(),
+            kotlinx.coroutines.flow.combine(linkMonitor.last, pcProbing) { contact, probing ->
+                com.point.core.flow.linkStateOf(
+                    contact?.at, contact?.path, System.currentTimeMillis(), probing,
                 )
-                _ui.update { s -> s.pcScreen?.let { s.copy(pcScreen = it.copy(link = link)) } ?: s }
-            }
+            }.collect { link -> updatePc { it.copy(link = link) } }
         }
         // #80 v2: the natural sync point — the PC may have gained abilities since pairing.
-        pcPairings.current()?.let { pairing ->
+        // Он же и есть тот самый запрос, по которому видно, жив ли компьютер: удачный ход
+        // рассказывает монитору о контакте, неудачный оставляет прежний ответ в силе.
+        pairing?.let {
             viewModelScope.launch {
-                runCatching { pcTransport.fetchCaps(pairing)?.let { caps -> pcCaps.save(caps) } }
+                runCatching { pcTransport.fetchCaps(it)?.let { caps -> pcCaps.save(caps) } }
+                pcProbing.value = false
             }
         }
         refreshFromPc(force = true)
         discoveryJob?.cancel()
         discoveryJob = viewModelScope.launch {
-            runCatching {
-                pcDiscovery.discover().collect { found ->
-                    _ui.update { s ->
-                        s.pcScreen?.let { s.copy(pcScreen = it.copy(discovered = found)) } ?: s
-                    }
-                }
+            updatePc { it.copy(search = com.point.core.flow.PcSearch.RUNNING) }
+            // Окно поиска (#458): mDNS в сети с изоляцией клиентов не ответит никогда, и пульс без
+            // конца был бы вторым враньём поверх первого. Сам сканер при этом продолжает работать —
+            // компьютер, включённый позже, всё равно появится в списке.
+            val window = launch {
+                kotlinx.coroutines.delay(com.point.core.flow.PC_SEARCH_WINDOW_MS)
+                updatePc { it.copy(search = com.point.core.flow.PcSearch.DONE) }
             }
+            runCatching {
+                pcDiscovery.discover().collect { found -> updatePc { it.copy(discovered = found) } }
+            }
+            window.cancel()
+            updatePc { it.copy(search = com.point.core.flow.PcSearch.DONE) }
         }
     }
 
@@ -979,6 +1156,7 @@ class FlowViewModel @Inject constructor(
 
     fun closePcSettings() {
         linkJob?.cancel()
+        pcProbing.value = false
         refreshFromPc() // #161: Home is about to show — its banner must be current
         discoveryJob?.cancel()
         discoveryJob = null
@@ -995,18 +1173,28 @@ class FlowViewModel @Inject constructor(
             _ui.update { it.copy(message = "Это не код подключения Point для ПК", messageOutcome = Outcome.FAILED) }
             return
         }
-        _ui.update { it.copy(pcScreen = PcScreenState(pairing = pcPairings.current(), busy = true), message = null, messageOutcome = Outcome.NONE) }
+        _ui.update {
+            it.copy(
+                pcScreen = (it.pcScreen ?: PcScreenState()).copy(pairing = pcPairings.current(), busy = true, error = null),
+                message = null,
+                messageOutcome = Outcome.NONE,
+            )
+        }
         viewModelScope.launch {
             runCatching { pcPairings.save(pairing) }
             runCatching { pcTransport.fetchCaps(pairing)?.let { caps -> pcCaps.save(caps) } }
             runCatching { pcTransport.pushPhoneCaps(pairing, PHONE_ADVERTISED) }
             refreshFromPc(force = true)
-            _ui.update { it.copy(pcScreen = PcScreenState(pairing = pairing)) }
+            _ui.update {
+                it.copy(pcScreen = (it.pcScreen ?: PcScreenState()).copy(pairing = pairing, busy = false, error = null))
+            }
         }
     }
 
     fun pairPc(host: String, port: Int) {
-        _ui.update { it.copy(pcScreen = PcScreenState(pairing = pcPairings.current(), busy = true)) }
+        // Найденное в сети и ход поиска переживают рукопожатие: человек тапнул по строке из списка,
+        // и список, исчезающий на время попытки, лишает его возможности попробовать соседнюю.
+        _ui.update { it.copy(pcScreen = (it.pcScreen ?: PcScreenState()).copy(pairing = pcPairings.current(), busy = true, error = null)) }
         viewModelScope.launch {
             val device = "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}"
             val pairing = runCatching { pcTransport.pair(host, port, device) }.getOrNull()
@@ -1017,14 +1205,13 @@ class FlowViewModel @Inject constructor(
                 runCatching { pcTransport.fetchCaps(pairing)?.let { caps -> pcCaps.save(caps) } }
                 runCatching { pcTransport.pushPhoneCaps(pairing, PHONE_ADVERTISED) }
                 refreshFromPc(force = true) // #161: the fresh pairing may already have a queue
-                _ui.update { it.copy(pcScreen = PcScreenState(pairing = pairing)) }
+                updatePc { it.copy(pairing = pairing, busy = false, error = null) }
             } else {
-                _ui.update {
+                updatePc {
                     it.copy(
-                        pcScreen = PcScreenState(
-                            pairing = pcPairings.current(),
-                            error = "Не удалось связаться — проверьте адрес и подтвердите на компьютере",
-                        ),
+                        pairing = pcPairings.current(),
+                        busy = false,
+                        error = "Не удалось связаться — проверьте адрес и подтвердите на компьютере",
                     )
                 }
             }
@@ -1035,7 +1222,13 @@ class FlowViewModel @Inject constructor(
         viewModelScope.launch {
             runCatching { pcPairings.clear() }
             runCatching { pcCaps.clear() }
-            _ui.update { it.copy(pcScreen = PcScreenState(pairing = null)) }
+            // Связи больше нет ни с кем — и утверждать о ней нечего: память о контакте уходит
+            // вместе с пейрингом, иначе вчерашний компьютер рассказывал бы о следующем чужую
+            // правду (#451). Найденное в сети остаётся: отвязываются, чтобы связаться с другим.
+            runCatching { linkMonitor.forget() }
+            updatePc {
+                it.copy(pairing = null, busy = false, error = null, link = com.point.core.flow.LinkState.Never)
+            }
         }
     }
 
@@ -1043,10 +1236,13 @@ class FlowViewModel @Inject constructor(
 
     fun confirmCloud() {
         val run = pendingCloud ?: return
+        val scope = pendingCloudScope
         pendingCloud = null
         _ui.update { it.copy(cloudConsent = false) }
         viewModelScope.launch {
-            runCatching { consent.allowCloud() } // remember, so we ask only once
+            // Помнится только то, что имеет право помниться: «выложить по ссылке» — разрешение
+            // на ЭТОТ файл и на этот раз (#114).
+            runCatching { consent.allow(scope) }
             run()
         }
     }
@@ -1056,22 +1252,43 @@ class FlowViewModel @Inject constructor(
         _ui.update { it.copy(cloudConsent = false) }
     }
 
+    /**
+     * Разрешение на облако — тумблер в настройках, а не решение, принятое однажды навсегда (#114).
+     *
+     * Отозвать было негде: человек, разрешивший облако одним тапом полгода назад, не мог передумать
+     * ничем, кроме переустановки. Публичной ссылки это не касается — она спрашивает каждый раз.
+     */
+    fun setCloudAllowed(allowed: Boolean) {
+        viewModelScope.launch {
+            runCatching {
+                if (allowed) consent.allow(com.point.core.flow.CloudScope.MODELS)
+                else consent.revoke(com.point.core.flow.CloudScope.MODELS)
+            }
+            refreshCloudConsent()
+        }
+    }
+
+    private suspend fun refreshCloudConsent() {
+        val allowed = runCatching { consent.allowed(com.point.core.flow.CloudScope.MODELS) }.getOrDefault(false)
+        _ui.update { it.copy(cloudEnabled = allowed) }
+    }
+
     // --- Device actions (#66): the installed apps that can open the object, shown inline. ---
 
     private fun showAppPicker(obj: PointObject) {
-        claimVoice()
-        _ui.update { it.copy(busy = "Ищу приложения…", busyStage = null, busyQuiet = false, message = null, messageOutcome = Outcome.NONE, inputPrompt = null) }
-        _ui.update { it.copy(busy = "Ищу приложения…", busyStage = null, busyQuiet = false, message = null, messageOutcome = Outcome.NONE, inputPrompt = null) }
-        viewModelScope.launch {
+        val voice = claimVoice()
+        raiseBusy("Ищу приложения…", cancelable = true)
+        trackWork(viewModelScope.launch {
             val direct = runCatching { appLauncher.handlers(obj) }.getOrDefault(emptyList())
             // Dedup by package: an app that also appears as a bridged target must not double —
             // the picker keys rows by package, and duplicates crash the list. Direct wins.
             val apps = (direct + bridgedHandlers(obj)).distinctBy { it.packageName }
+            if (!owns(voice)) return@launch // отменённый поиск не открывает список приложений
             _ui.update {
                 if (apps.isEmpty()) it.copy(busy = null, busyStage = null, message = "Нет приложения для этого объекта", messageOutcome = Outcome.FAILED)
                 else it.copy(busy = null, busyStage = null, appPicker = apps)
             }
-        }
+        })
     }
 
     /**
@@ -1096,7 +1313,9 @@ class FlowViewModel @Inject constructor(
         val obj = stack.lastOrNull()?.obj ?: return
         _ui.update { it.copy(appPicker = null) }
         val via = target.via
-        viewModelScope.launch {
+        // Задача держится здесь, а не в [bridge]: «Преобразую…» поднимает она, и снимать надо
+        // именно её — иначе кнопка отменяла бы работу, которой не владеет.
+        trackWork(viewModelScope.launch {
             // #66 slice 4: a direct pick is remembered — on the next launch this app is a
             // first-class bubble in the graph, learning through the same usage signal.
             // Bridged picks are skipped: their capability would need the transform re-run.
@@ -1106,6 +1325,9 @@ class FlowViewModel @Inject constructor(
                 runCatching { usage.record(CapabilityId("app:${target.packageName}#${obj.state.kind.name}")) }
             }
             val toOpen = if (via != null) bridge(obj, via) else obj
+            // Отменённое преобразование — не «не удалось»: человек передумал сам, и отчитываться
+            // ему отказом было бы враньём. `runCatching` внутри [bridge] проглатывает и отмену.
+            ensureActive()
             if (toOpen == null) {
                 _ui.update {
                     it.copy(
@@ -1118,13 +1340,13 @@ class FlowViewModel @Inject constructor(
             runCatching { appLauncher.launch(target, toOpen) }
                 .onSuccess { _ui.update { it.copy(busy = null, busyStage = null, message = "Открываю в ${target.label}", messageOutcome = Outcome.DONE) } }
                 .onFailure { e -> _ui.update { it.copy(busy = null, busyStage = null, message = e.message ?: "Не удалось открыть", messageOutcome = Outcome.FAILED) } }
-        }
+        })
     }
 
     /** Run one transform to produce the object the bridged app can open (#79.1); null on failure. */
     private suspend fun bridge(obj: PointObject, viaCapId: String): PointObject? {
         claimVoice()
-        _ui.update { it.copy(busy = "Преобразую…", busyStage = null, busyQuiet = false) }
+        raiseBusy("Преобразую…", cancelable = true)
         val result = runCatching { resolver.realizerFor(CapabilityId(viaCapId)).perform(obj, null) }.getOrNull()
         return (result as? ActionResult.Success)?.let { runCatching { store.put(it.result) }.getOrNull() }
     }
@@ -1148,7 +1370,14 @@ class FlowViewModel @Inject constructor(
     fun saveAiConfig(config: UserAiConfig) {
         viewModelScope.launch {
             runCatching { userKeys.save(config) }
-            _ui.update { it.copy(keyScreen = null, message = "Ключ AI сохранён", messageOutcome = Outcome.DONE) }
+            _ui.update {
+                it.copy(
+                    keyScreen = null, keyScreenNote = null,
+                    keyVerdict = null,
+                    aiKeySet = config.apiKey.isNotBlank(),
+                    message = "Ключ AI сохранён", messageOutcome = Outcome.DONE,
+                )
+            }
         }
     }
 
@@ -1169,20 +1398,28 @@ class FlowViewModel @Inject constructor(
         val start = stack.lastOrNull()?.obj ?: return
         // A saved chain can hide a cloud step — gate the whole replay on consent (#10),
         // so a favorite is not a back door around the privacy prompt.
-        if (chain.steps.any { isCloud(it) }) {
-            requireCloudConsent { replayChain(chain, start) }
+        val cloudSteps = chain.steps.filter { isCloud(it) }
+        if (cloudSteps.isNotEmpty()) {
+            // Спрашиваем про самое дорогое обещание в цепочке (#114): шаг «Дать ссылку» внутри
+            // избранного не имеет права проехать под текстом про AI-провайдера.
+            val asks = cloudSteps.firstOrNull {
+                com.point.core.flow.cloudScopeOf(it) == com.point.core.flow.CloudScope.PUBLIC_LINK
+            } ?: cloudSteps.first()
+            requireCloudConsent(asks) { replayChain(chain, start) }
             return
         }
         replayChain(chain, start)
     }
 
     private fun replayChain(chain: FavoriteChain, start: PointObject) {
-        claimVoice()
-        _ui.update { it.copy(busy = "Выполняю цепочку…", busyStage = null, busyNetwork = false, busyQuiet = false, message = null, messageOutcome = Outcome.NONE, inputPrompt = null) }
-        _ui.update { it.copy(busy = "Выполняю цепочку…", busyStage = null, busyNetwork = false, busyQuiet = false, message = null, messageOutcome = Outcome.NONE, inputPrompt = null) }
-        viewModelScope.launch {
+        val voice = claimVoice()
+        // Цепочка идёт минутами и несколькими сетевыми шагами — отмена здесь нужнее всего, и
+        // теперь она настоящая: следующий шаг не начинается, а сделанное не приземляется.
+        raiseBusy("Выполняю цепочку…", cancelable = true)
+        trackWork(viewModelScope.launch {
             var current = start
             for (capId in chain.steps) {
+                if (!owns(voice)) return@launch
                 val realizer = runCatching { resolver.realizerFor(capId) }.getOrNull()
                 if (realizer == null) {
                     _ui.update { it.copy(busy = null, busyStage = null, message = "Шаг цепочки недоступен", messageOutcome = Outcome.FAILED) }
@@ -1191,6 +1428,9 @@ class FlowViewModel @Inject constructor(
                 val label = runCatching { registry.byId(capId).label(current.state) }.getOrDefault("")
                 val result = runCatching { realizer.perform(current, null) }
                     .getOrElse { ActionResult.Failure(it.message ?: "Не получилось", recoverable = true) }
+                // Шаг, доработавший после отмены, не приземляется: цепочка остановлена — значит
+                // остановлена, а не «ещё один объект напоследок».
+                if (!owns(voice)) return@launch
                 when (result) {
                     is ActionResult.Success -> {
                         current = store.put(result.result)
@@ -1212,7 +1452,7 @@ class FlowViewModel @Inject constructor(
                     }
                 }
             }
-        }
+        })
     }
 
     private fun dispatch(bubble: Bubble, action: suspend () -> ActionResult) {
@@ -1220,9 +1460,9 @@ class FlowViewModel @Inject constructor(
         // Задача действия хранится, потому что человек имеет право передумать (#288): «В Excel»
         // — это две последовательные модели по фото, минута и больше, и до сих пор прервать её
         // было нечем; экран обещал «несколько секунд» и упирался в последний шаг.
-        actionJob?.cancel()
+        busyJob?.cancel()
         val voice = claimVoice()
-        actionJob = viewModelScope.launch {
+        trackWork(viewModelScope.launch {
             runCatching { usage.record(bubble.capabilityId) } // learning signal for BubblePolicy
             runCatching { journal.record(UsageEvent(UsageEventType.ACTION, bubble.capabilityId.value)) }
             runCatching {
@@ -1236,31 +1476,43 @@ class FlowViewModel @Inject constructor(
                     },
                 ) { action() }
             }
-                .onSuccess { result -> handleResult(result, bubble) }
+                // Снятая работа не приземляется: нативный проход движка об отмене не знает и
+                // доходит до конца сам — без этой проверки объект открывался поверх «Отменено».
+                .onSuccess { result -> if (owns(voice)) handleResult(result, bubble) }
                 .onFailure { e ->
                     // Отмена — не ошибка: человек передумал, и сказать ему «Ошибка» было бы враньём.
                     if (e is kotlinx.coroutines.CancellationException) throw e
+                    if (!owns(voice)) return@onFailure
                     // «Ошибка» — слово системы; человеку под объектом нужен исход, а не термин.
                     _ui.update { it.copy(busy = null, busyStage = null, message = e.message ?: "Не получилось", messageOutcome = Outcome.FAILED) }
                 }
-        }
+        })
     }
 
     /**
-     * Отменить идущее действие (#288). Работа снимается, экран возвращается к объекту, и человек
-     * видит, что произошло: молчаливое исчезновение экрана неотличимо от сбоя.
+     * Отменить идущую работу (#288, #114) — ту самую, над которой человек видит кнопку.
+     *
+     * Отмена настоящая: задача снимается, а её результат на экран не попадает (см. [owns]).
+     * Кнопка рисуется только там, где обе половины верны, — иначе её нет вовсе ([showsCancel]).
+     * Возвращаемся туда, откуда пришли: над объектом — со словом «Отменено» (молчаливое
+     * исчезновение экрана неотличимо от сбоя), а с «Недавнего» — на само «Недавнее»: там
+     * ответом человеку служит вернувшийся экран, а карточка «Отменено» без объекта стала бы
+     * тупиком.
      */
     fun cancelAction() {
-        val job = actionJob ?: return
-        actionJob = null
+        val job = busyJob ?: return
+        busyJob = null
         job.cancel()
         claimVoice() // остановленная работа замолкает сразу — её хвост ещё идёт
-        _ui.update { it.copy(busy = null, busyStage = null, message = "Отменено") }
-        // Отмена — не отказ: человек сам передумал, и знак исхода не имеет права ставить ему «✕».
-        _ui.update { it.copy(busy = null, busyStage = null, message = "Отменено", messageOutcome = Outcome.NONE) }
         // Отмена — не отказ и не удача: человек сам передумал. Знак исхода не имеет права ставить
         // ему ни «✕», ни «✓ Готово» — работа не дошла до конца, и заявлять о ней нечего.
-        _ui.update { it.copy(busy = null, busyStage = null, message = "Отменено", messageOutcome = Outcome.NONE) }
+        val hasObject = _ui.value.frame != null
+        _ui.update {
+            it.copy(
+                busy = null, busyStage = null, busyCancelable = false,
+                message = if (hasObject) "Отменено" else null, messageOutcome = Outcome.NONE,
+            )
+        }
     }
 
     private suspend fun handleResult(result: ActionResult, bubble: Bubble) {
@@ -1288,9 +1540,14 @@ class FlowViewModel @Inject constructor(
             is ActionResult.Failure -> {
                 runCatching { sensory.failure() } // M4: a failure bumps, never buzzes long
                 runCatching { journal.record(UsageEvent(UsageEventType.FAILED, bubble.capabilityId.value)) }
-                // A "no AI key" failure summons the key screen on demand instead of just erroring.
-                if (result.reason.contains("задайте свой ключ")) openKeySettings()
-                else _ui.update { it.copy(busy = null, busyStage = null, message = result.reason, messageOutcome = Outcome.FAILED) }
+                // Отказ говорит сам за себя — любой, включая «нет ключа» (#452). Раньше этот один
+                // подменялся экраном настроек, а причина при этом стиралась: человек тапал
+                // «Понять», ждал и получал экран про ключи без единого слова о том, почему тот
+                // открылся. «Отмена» возвращала его к объекту, где не осталось ничего, — снаружи
+                // неотличимо от «действие ничего не сделало». Экран ключей теперь стоит рядом с
+                // причиной предложением ([keyOfferLabel]), по которому человек идёт сам, — и,
+                // открывшись, повторяет эту причину карточкой (#465).
+                _ui.update { it.copy(busy = null, busyStage = null, message = result.reason, messageOutcome = Outcome.FAILED) }
             }
             is ActionResult.NeedsInput -> {
                 pendingBubble = bubble
@@ -1342,8 +1599,8 @@ class FlowViewModel @Inject constructor(
             declineCloud()
             return true
         }
-        if (_ui.value.chat != null) {
-            closeChat() // #4: back leaves the chat, returning to the object
+        if (openChatOf(_ui.value) != null) {
+            closeChat() // #4: back leaves the chat, returning to the object (#453: разговор остаётся)
             return true
         }
         if (_ui.value.keyScreen != null) {
@@ -1419,6 +1676,10 @@ class FlowViewModel @Inject constructor(
 
     fun endFlow() {
         cancelEnrichment()
+        // Флоу кончился — кончился и разговор о его объекте (#453): держать вопрос в пути некому,
+        // и ответ, пришедший в пустоту, ляжет в разговор, которого больше нет.
+        chatJob?.cancel()
+        chatJob = null
         stack.clear()
         pendingBubble = null
         pendingPreviewBubble = null
@@ -1513,14 +1774,19 @@ class FlowViewModel @Inject constructor(
     private fun loadChildrenIfCollection(obj: PointObject) {
         if (obj.state.kind != ObjectKind.COLLECTION) return
         viewModelScope.launch {
-            val items = runCatching { store.children(obj) }.getOrDefault(emptyList())
-            if (items.isEmpty()) return@launch
+            val content = runCatching { store.children(obj) }
+                .getOrDefault(CollectionContent.empty())
+            if (content.shown.isEmpty()) return@launch
 
             val topIndex = stack.lastIndex
             val top = stack.getOrNull(topIndex) ?: return@launch
             if (top.obj.id != obj.id) return@launch
 
-            val refreshed = top.copy(items = items)
+            val refreshed = top.copy(
+                items = content.shown,
+                itemsTotal = content.total,
+                itemsTotalAtLeast = content.atLeast,
+            )
             stack[topIndex] = refreshed
             _ui.update { if (it.frame?.obj?.id == obj.id) it.copy(frame = refreshed) else it }
         }

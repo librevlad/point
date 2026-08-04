@@ -83,20 +83,42 @@ class DesktopState(
     /** Сказать человеку словами. Пустой буфер и прочие «ничего не вышло» обязаны звучать. */
     fun say(text: String) { _message.value = text }
 
-    /** #80: the phone asked to run one of the advertised actions on the received object. */
+    /** #80: the phone asked to run one of the advertised actions on the received object.
+     *  Путь через релей: ответить туда нечем, поэтому работа уходит в фон без исхода. */
     fun runRemoteAction(id: String, item: InboxItem) {
-        scope.launch {
-            val result = runCatching {
-                resolver.realizerFor(com.point.core.model.CapabilityId(id)).perform(item.obj, null)
-            }.getOrNull()
-            _message.value = when (result) {
-                is com.point.core.model.ActionResult.Done -> result.message
-                else -> _message.value
-            }
-            // Тап был на телефоне, а работа шла здесь — иначе, вернувшись к компьютеру, человек
-            // не поймёт, откуда взялся результат. Поэтому в пути станция названа с автором (#407).
-            result?.let { note(item, id, "${titleOf(id, item)} · с телефона", it) }
+        scope.launch { perform(id, item) }
+    }
+
+    /**
+     * То же действие, но телефон **ждёт исход** (#114).
+     *
+     * Телефон говорил «Напечатать на ПК — готово», получив 200 на доставку файла. Теперь ответ
+     * несёт то, чем действие кончилось здесь, — и «готово» произносит тот, кто это сделал.
+     *
+     * Ждём ограниченно ([timeoutMs] < чтения телефона): сборка PDF может идти минутами, и висеть
+     * на сокете ради неё нельзя. Не дождались — `null`, то есть «доставлено, исход неизвестен»:
+     * человек прочтёт «Отправлено на компьютер», что правда, а не «готово», что домысел.
+     */
+    fun runRemoteActionNow(id: String, item: InboxItem, timeoutMs: Long = 10_000): com.point.core.flow.PcActionOutcome? =
+        kotlinx.coroutines.runBlocking {
+            val result = kotlinx.coroutines.withTimeoutOrNull(timeoutMs) { perform(id, item) }
+            com.point.core.flow.pcActionOutcomeOf(result)
         }
+
+    /** Одна работа на оба пути: экран компьютера и его журнал обновляются одинаково. */
+    private suspend fun perform(id: String, item: InboxItem): ActionResult? {
+        val result = runCatching {
+            resolver.realizerFor(com.point.core.model.CapabilityId(id)).perform(item.obj, null)
+        }.getOrElse { ActionResult.Failure(it.message ?: "не получилось", recoverable = true) }
+        _message.value = when (result) {
+            is ActionResult.Done -> result.message
+            is ActionResult.Failure -> result.reason
+            else -> _message.value
+        }
+        // Тап был на телефоне, а работа шла здесь — иначе, вернувшись к компьютеру, человек
+        // не поймёт, откуда взялся результат. Поэтому в пути станция названа с автором (#407).
+        note(item, id, "${titleOf(id, item)} · с телефона", result)
+        return result
     }
 
     fun setPhoneCaps(caps: List<com.point.core.flow.PcRemoteAction>) {

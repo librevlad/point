@@ -2,11 +2,13 @@ package com.point.data.di
 
 import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
+import com.point.core.flow.AiKeyCheck
 import com.point.core.flow.AppLauncher
 import com.point.core.flow.BackgroundRemover
 import com.point.core.flow.CalendarInserter
 import com.point.core.flow.CapabilityUsage
 import com.point.core.flow.Clipboard
+import com.point.core.flow.ContactInserter
 import com.point.core.flow.Enricher
 import com.point.core.flow.Enrichment
 import com.point.core.flow.EntityExtractor
@@ -39,8 +41,12 @@ import com.point.core.flow.SpreadsheetWriter
 import com.point.core.flow.AtomRecognizer
 import com.point.core.flow.CloudPrivacySettings
 import com.point.core.flow.ExternalEye
+import com.point.core.flow.GROQ_PROVIDER_ID
+import com.point.core.flow.SpeechReadiness
 import com.point.core.flow.SpeechToText
 import com.point.core.flow.TextRecognizer
+import com.point.core.flow.keyFor
+import com.point.core.flow.speechKeyNeeds
 import com.point.core.flow.UrlOpener
 import com.point.core.flow.ChosenApps
 import com.point.core.flow.PcDiscovery
@@ -54,6 +60,7 @@ import com.point.core.flow.Viewer
 import com.point.data.AndroidAppLauncher
 import com.point.data.AndroidCalendarInserter
 import com.point.data.AndroidClipboard
+import com.point.data.AndroidContactInserter
 import com.point.data.AndroidImageCompositor
 import com.point.data.AndroidSharer
 import com.point.data.AndroidUrlOpener
@@ -74,6 +81,7 @@ import com.point.data.AndroidPcDiscovery
 import com.point.data.FileBasket
 import com.point.data.FilePcCaps
 import com.point.data.FilePcPairings
+import com.point.data.HttpAiKeyCheck
 import com.point.data.HttpPcClipboardSync
 import com.point.data.HttpUrlPcTransport
 import com.point.data.LanThenRelayClipboardSync
@@ -88,7 +96,6 @@ import com.point.data.FileHistoryStore
 import com.point.data.GeminiLlmClient
 import com.point.data.GroqWhisperSpeechToText
 import com.point.data.SummarizingSpeechToText
-import com.point.data.HttpAiKeyProbe
 import com.point.data.HttpJson
 import com.point.data.UrlConnectionHttpJson
 import com.point.data.HttpFiles
@@ -169,6 +176,10 @@ abstract class DataModule {
 
     @Binds
     abstract fun calendarInserter(impl: AndroidCalendarInserter): CalendarInserter
+
+    /** #464: «Сохранить контакт» открывает системный экран нового контакта. */
+    @Binds
+    abstract fun contactInserter(impl: AndroidContactInserter): ContactInserter
 
     @Binds
     abstract fun clipboard(impl: AndroidClipboard): Clipboard
@@ -268,6 +279,10 @@ abstract class DataModule {
     @Binds
     abstract fun userKeyStore(impl: PrefsUserKeyStore): UserKeyStore
 
+    /** Живая проверка этого ключа — тем же путём, каким пойдут действия, и только по тапу (#465). */
+    @Binds
+    abstract fun aiKeyCheck(impl: HttpAiKeyCheck): AiKeyCheck
+
     /** Private, consent-gated usage journal (North Star measurement). */
     @Binds
     abstract fun usageJournal(impl: FileUsageJournal): UsageJournal
@@ -289,6 +304,10 @@ abstract class DataModule {
     /** LAN autodiscovery of Point-for-PC (#147 slice C) — sugar over manual entry. */
     @Binds
     abstract fun pcDiscovery(impl: AndroidPcDiscovery): PcDiscovery
+
+    /** Где последний контакт с компьютером переживает перезапуск (#451). */
+    @Binds
+    abstract fun linkLog(impl: com.point.data.PrefsLinkLog): com.point.core.flow.LinkLog
 
     /** Consent to send objects to a cloud service (#10). */
     @Binds
@@ -368,15 +387,6 @@ abstract class DataModule {
         fun objectClassifier(): ObjectClassifier = ObjectClassifier()
 
         /**
-         * «Проверить ключ» (#447) — живой запрос той же дорогой, что и настоящее действие с AI.
-         *
-         * `@Provides`, а не `@Binds`: у пробы свои часы отдельным параметром (тест меряет время, а
-         * не засекает его), а умолчаний конструктора Dagger не видит.
-         */
-        @Provides
-        fun aiKeyProbe(http: HttpJson): com.point.core.flow.AiKeyProbe = HttpAiKeyProbe(http)
-
-        /**
          * «Дать ссылку» (#388): файл кладётся на релей под неугадываемым адресом и живёт сутки.
          *
          * Единственное, что релей возит НЕ запечатанным: у чужого человека, который откроет
@@ -410,10 +420,12 @@ abstract class DataModule {
         )
 
         /** Кто помнит последний контакт с компьютером (#412) — один на приложение: экран и
-         *  транспорт обязаны говорить об одном и том же. */
+         *  транспорт обязаны говорить об одном и том же. Помнит и после перезапуска (#451):
+         *  забытый вчерашний контакт превращался на экране в «ещё не связывались». */
         @Provides
         @Singleton
-        fun linkMonitor(): com.point.core.flow.LinkMonitor = com.point.core.flow.InMemoryLinkMonitor()
+        fun linkMonitor(log: com.point.core.flow.LinkLog): com.point.core.flow.LinkMonitor =
+            com.point.core.flow.RememberingLinkMonitor(log)
 
         /** Shared clipboard (#161 «общий буфер»): LAN hop first, relay fallback when off-network —
          *  same «безотказно» shape as [pcTransport]. */
@@ -479,31 +491,54 @@ abstract class DataModule {
          * Whisper не обещает, и приносит суть одним ответом; на её квоту приходят, только когда
          * первый не дошёл.
          *
-         * Whisper попадает в очередь, только если у него есть ключ, — поэтому в раздаваемой
-         * релизной сборке очередь состоит из одного движка, ровно как было до этой правки.
+         * **Ключ Whisper — от человека, а не от сборки (#467).** Раньше движок заводился от
+         * `BuildConfig.GROQ_API_KEY`, и очередь собиралась один раз при старте. В раздаваемой
+         * сборке этого ключа нет вовсе — то есть Whisper там не включался НИКОГДА, а тот, кто читал
+         * «нет ключа Groq», шёл на экран ключей, вводил ключ Groq — и не менялось ничего. Теперь
+         * ключ спрашивается на каждый вызов: сначала ключ человека (если на экране выбран именно
+         * Groq), и только потом ключ сборки — он живой лишь в отладочной. Ключ сборки остаётся
+         * вторым, а не первым, потому что квота человека — его собственная, и тратить чужую вместо
+         * неё было бы решением за него.
+         *
+         * Оба движка стоят в очереди всегда: ненастроенный из неё выпадает сам, спросив себя о
+         * ключе прямо в момент работы. Собирать список по ключам ЗДЕСЬ значило бы снова запомнить
+         * ответ на старте — ровно та ошибка, которую чиним.
          *
          * Сверху — добор сути ([SummarizingSpeechToText]): Whisper отдаёт только дословный текст, а
          * человеку обещана суть. Одно действие, один дополнительный ТЕКСТОВЫЙ запрос, и его провал
          * ничего не отменяет.
          */
         @Provides
-        fun speechToText(
+        fun speechEngines(
             http: HttpFiles,
-            llm: LlmClient,
             byModel: LlmSpeechToText,
-        ): SpeechToText {
-            val whisper = GroqWhisperSpeechToText(
+            userKeys: UserKeyStore,
+        ): List<@JvmSuppressWildcards SpeechToText> = listOf(
+            GroqWhisperSpeechToText(
                 http,
-                BuildConfig.GROQ_API_KEY,
+                { userKeys.read().keyFor(GROQ_PROVIDER_ID).ifBlank { BuildConfig.GROQ_API_KEY } },
                 BuildConfig.GROQ_BASE_URL,
                 BuildConfig.GROQ_WHISPER_MODEL,
-            )
-            val engines = buildList {
-                if (whisper.configured) add(whisper)
-                add(byModel)
-            }
-            return SummarizingSpeechToText(FirstHeardSpeechToText(engines), llm)
-        }
+            ),
+            byModel,
+        )
+
+        @Provides
+        fun speechToText(
+            engines: List<@JvmSuppressWildcards SpeechToText>,
+            llm: LlmClient,
+        ): SpeechToText = SummarizingSpeechToText(FirstHeardSpeechToText(engines), llm)
+
+        /**
+         * Тот же вопрос, что и у очереди, но заданный ДО тапа: «есть ли кому слушать». Отдельный
+         * контракт, потому что спрашивает его [com.point.core.flow.Capability] — то, что видит UI, —
+         * а движок остаётся за реализатором. Список движков общий, поэтому подсказка на экране и
+         * отказ после тапа не могут разойтись.
+         */
+        @Provides
+        fun speechReadiness(
+            engines: List<@JvmSuppressWildcards SpeechToText>,
+        ): SpeechReadiness = SpeechReadiness { speechKeyNeeds(engines) }
 
         /**
          * Бесплатные читатели страницы (#280), в порядке очереди: Unstructured (15 000

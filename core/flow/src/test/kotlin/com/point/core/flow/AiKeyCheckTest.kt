@@ -2,150 +2,101 @@ package com.point.core.flow
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Что человек читает про свой ключ (#447).
+ * Приговор проверки ключа (#465) — то место, где «ошибка» превращается в понятную человеку причину.
  *
- * Жалоба владельца была не про цвета: «задан он или нет — непонятно». Ответ на этот вопрос — текст,
- * и он живёт здесь, чистой функцией, а не разметкой внутри экрана. Значит, его можно проверить.
+ * Судится здесь, а не глазами на телефоне: воспроизвести 402 или кончившуюся квоту руками нельзя,
+ * а разница между «ключ не тот» и «квота кончилась» — это разница между «перевставь» и «подожди».
  */
 class AiKeyCheckTest {
 
-    private val config = UserAiConfig("sk-or-v1-abcdef123456", "https://openrouter.ai/api/v1", "gemma")
+    private fun refusal(probe: KeyProbe): KeyVerdict.Refused =
+        keyVerdict(probe) as KeyVerdict.Refused
 
-    @Test fun `пустое поле называется словами, а не пустотой`() {
-        val status = keyStatusLine("", "OpenRouter", saved = true, check = KeyCheck.Untested)
-
-        assertEquals("Ключа нет", status.title)
-        assertTrue("человек должен узнать, чего он лишается", status.detail.contains("не работают"))
-        assertEquals(KeyTone.NEUTRAL, status.tone)
+    @Test
+    fun `ответ модели и есть доказательство — его показывают человеку`() {
+        val verdict = keyVerdict(KeyProbe(status = 200, reply = "  Готово  "))
+        assertEquals(KeyVerdict.Works("Готово"), verdict)
     }
 
-    @Test fun `сохранённый ключ виден хвостом и именем провайдера — но не обещает, что работает`() {
-        val status = keyStatusLine(config.apiKey, "OpenRouter", saved = true, check = KeyCheck.Untested)
-
-        assertEquals("Ключ сохранён", status.title)
-        assertTrue(status.detail.contains("3456"))
-        assertTrue(status.detail.contains("OpenRouter"))
-        assertTrue("непроверенный ключ не имеет права выглядеть проверенным", status.detail.contains("не проверен"))
-        assertFalse("середина ключа не показывается", status.detail.contains("abcdef"))
+    @Test
+    fun `неверный ключ назван неверным ключом, а не ошибкой`() {
+        listOf(401, 403).forEach { code ->
+            val verdict = refusal(KeyProbe(status = code, error = "unauthorized"))
+            assertTrue("код $code: ${verdict.what}", verdict.what.contains("не подошёл"))
+            assertTrue("коду $code нечего посоветовать", verdict.fix.isNotBlank())
+        }
     }
 
-    @Test fun `введённый, но не сохранённый ключ так и называется`() {
-        val status = keyStatusLine(config.apiKey, "OpenRouter", saved = false, check = KeyCheck.Untested)
-
-        assertEquals("Ключ введён, но не сохранён", status.title)
+    @Test
+    fun `кончившаяся квота — это не сломанный ключ, и человек должен видеть разницу`() {
+        val quota = refusal(KeyProbe(status = 429))
+        val wrong = refusal(KeyProbe(status = 401))
+        assertTrue(quota.what.contains("квота"))
+        assertTrue("квота не должна читаться как неверный ключ", quota.what.contains("верный"))
+        assertFalse("два разных отказа говорят одно и то же", quota.what == wrong.what)
     }
 
-    @Test fun `рабочий ключ говорит, кто ответил, чем и за сколько`() {
-        val status = keyStatusLine(
-            config.apiKey, "Groq", saved = true,
-            check = KeyCheck.Works("llama-3.3-70b", tookMs = 1_240, checked = 0),
-        )
-
-        assertEquals("Ключ работает", status.title)
-        assertEquals(KeyTone.GOOD, status.tone)
-        assertTrue(status.detail.contains("Groq"))
-        assertTrue(status.detail.contains("llama-3.3-70b"))
-        assertTrue("время ответа — человеческим числом", status.detail.contains("1,2 с"))
+    @Test
+    fun `просьба об оплате отправляет к бесплатному соседу, а не в кассу`() {
+        val verdict = refusal(KeyProbe(status = 402))
+        assertTrue(verdict.what.contains("оплат"))
+        // Опора на бесплатные квоты — решение проекта: на 402 предлагаем другого, а не покупку.
+        assertTrue("на 402 надо звать к другому сервису", verdict.fix.contains("другого сервиса"))
     }
 
-    @Test fun `проверенный, но не сохранённый ключ не выдаётся за сохранённый`() {
-        val status = keyStatusLine(
-            config.apiKey, "Groq", saved = false,
-            check = KeyCheck.Works("llama", tookMs = 900, checked = 0),
-        )
-
-        assertTrue(status.detail.contains("не сохранён"))
+    @Test
+    fun `нет связи и отказ сервиса — разные новости`() {
+        val offline = refusal(KeyProbe())
+        val refused = refusal(KeyProbe(status = 500))
+        assertTrue(offline.what.contains("дозвонились"))
+        assertTrue(refused.what.contains("не отвечает"))
+        assertTrue("отказ сервиса нельзя вешать на ключ человека", refused.fix.contains("не про ваш ключ"))
     }
 
-    @Test fun `отказ показывается словами провайдера, а не «что-то пошло не так»`() {
-        val reason = keyRejectionReason("Groq", 401, """{"error":{"message":"Invalid API Key"}}""")
-        val status = keyStatusLine(config.apiKey, "Groq", saved = true, check = KeyCheck.Rejected(reason, 0))
-
-        assertEquals("Ключ не принят", status.title)
-        assertEquals(KeyTone.BAD, status.tone)
-        assertEquals(reason, status.detail)
-        assertTrue("текст провайдера прикладывается как есть", status.detail.contains("Invalid API Key"))
+    @Test
+    fun `незнакомая модель и непонятый запрос ведут к выбору сервиса из списка`() {
+        assertTrue(refusal(KeyProbe(status = 404)).fix.contains("списке выше"))
+        assertTrue(refusal(KeyProbe(status = 400)).fix.contains("списке выше"))
     }
 
-    @Test fun `лимит и опечатка — разные новости`() {
-        val typo = keyRejectionReason("Groq", 401, "")
-        val limit = keyRejectionReason("Groq", 429, "")
-
-        assertTrue(typo.contains("не принял ключ (401)"))
-        assertTrue("429 — не повод чинить ключ", limit.contains("Ключ дошёл"))
-        assertTrue(limit.contains("лимит, а не ключ"))
-        assertNotEquals(typo, limit)
+    @Test
+    fun `принятый ключ без ответа не выдаётся за работающий`() {
+        // 200 с пустым текстом — не успех: следующее действие человека всё равно не сработает.
+        val verdict = refusal(KeyProbe(status = 200, reply = "   "))
+        assertTrue(verdict.what.contains("ответа не прислали"))
     }
 
-    @Test fun `оплата, ненайденная модель и упавший сервис названы каждый своим`() {
-        assertTrue(keyRejectionReason("OpenAI", 402, "").contains("оплату"))
-        assertTrue(keyRejectionReason("OpenAI", 404, "").contains("Модель и адрес"))
-        assertTrue(keyRejectionReason("OpenAI", 503, "").contains("на его стороне"))
+    @Test
+    fun `незнакомый код пересказывает сервис, но коротко`() {
+        val verdict = refusal(KeyProbe(status = 418, error = "я".repeat(500)))
+        assertTrue(verdict.what.contains("418"))
+        assertTrue("дамп ответа вместо довода", verdict.fix.length < 220)
     }
 
-    @Test fun `хвост ответа провайдера не растёт до бесконечности`() {
-        val reason = keyRejectionReason("Groq", 401, "ошибка ".repeat(200))
-
-        assertTrue("длинное тело ответа не имеет права занять экран", reason.length < 400)
+    @Test
+    fun `ключ вычёркивается из всего, что пришло от сервиса`() {
+        val key = "sk-очень-секретный-ключ"
+        val said = withoutKey("bad request for key $key at /v1", key)
+        assertFalse("секрет уехал бы на экран", said.contains(key))
+        assertTrue(said.contains("bad request"))
     }
 
-    @Test fun `нет сети — это отказ сети, а не приговор ключу`() {
-        val reason = keyProbeFailure("Groq", "timeout")
-
-        assertTrue(reason.contains("Не удалось достучаться"))
-        assertTrue(reason.contains("timeout"))
+    @Test
+    fun `короткое за секрет не принимается — иначе вычеркнули бы половину текста`() {
+        assertEquals("ключ ok", withoutKey("ключ ok", "ok"))
     }
 
-    // --- Отпечаток: ответ принадлежит тем настройкам, на которых получен ---
-
-    @Test fun `правка ключа гасит отметку «работает»`() {
-        val works = KeyCheck.Works("gemma", 800, keyFingerprint(config))
-
-        assertEquals(works, checkFor(works, keyFingerprint(config)))
-        assertEquals(
-            "зелёная отметка над изменённым ключом — ложь",
-            KeyCheck.Untested,
-            checkFor(works, keyFingerprint(config.copy(apiKey = config.apiKey + "7"))),
-        )
-    }
-
-    @Test fun `смена модели тоже гасит отметку — проверяли другую`() {
-        val works = KeyCheck.Works("gemma", 800, keyFingerprint(config))
-
-        assertEquals(KeyCheck.Untested, checkFor(works, keyFingerprint(config.copy(model = "другая"))))
-    }
-
-    @Test fun `устаревший отказ тоже снимается — человек мог уже исправить опечатку`() {
-        val rejected = KeyCheck.Rejected("не принял", keyFingerprint(config))
-
-        assertEquals(KeyCheck.Untested, checkFor(rejected, keyFingerprint(config.copy(apiKey = "sk-другой-ключ"))))
-    }
-
-    @Test fun `ожидание и неизвестность отпечатком не гасятся`() {
-        assertEquals(KeyCheck.Running, checkFor(KeyCheck.Running, 42))
-        assertEquals(KeyCheck.Untested, checkFor(KeyCheck.Untested, 42))
-    }
-
-    @Test fun `пробелы по краям не делают ключ другим`() {
-        assertEquals(keyFingerprint(config), keyFingerprint(config.copy(apiKey = " ${config.apiKey} ")))
-    }
-
-    // --- Маска: узнать свой ключ можно, украсть — нет ---
-
-    @Test fun `маска показывает начало и хвост, а середину закрывает`() {
-        assertEquals("sk-o…3456", maskedKey("sk-or-v1-abcdef123456"))
-        assertEquals("", maskedKey(""))
-        assertFalse("короткий ключ показывать нечем", maskedKey("sk-123").contains("sk"))
-    }
-
-    @Test fun `неизвестный адрес не выдаётся за провайдера`() {
-        val status = keyStatusLine("sk-свой-прокси-12345", provider = null, saved = true, check = KeyCheck.Untested)
-
-        assertTrue(status.detail.contains("свой адрес"))
+    @Test
+    fun `вставка из буфера отличает ключ от скопированного абзаца`() {
+        assertTrue(looksLikeApiKey("sk-or-v1-0123456789abcdef0123"))
+        assertTrue("пробелы по краям — обычное дело для буфера", looksLikeApiKey("  gsk_0123456789abcdef  "))
+        assertFalse(looksLikeApiKey("короткий"))
+        assertFalse(looksLikeApiKey("это скопированное предложение, а не ключ"))
+        assertFalse(looksLikeApiKey(null))
+        assertFalse(looksLikeApiKey(""))
     }
 }
