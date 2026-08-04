@@ -717,6 +717,19 @@ private fun ObjectHeader(
                 textAlign = TextAlign.Center,
             )
         }
+        // #459: цена тапа — до тапа. Над записью здесь стоит «примерно 3 мин» — та же строка,
+        // которую раньше человек читал, только когда сеть уже пошла. Отдельной строкой, тише
+        // имени файла: это не название объекта, а его мера.
+        verdict.measure?.let { measure ->
+            Text(
+                text = measure,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center,
+            )
+        }
     }
 }
 
