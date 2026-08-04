@@ -374,6 +374,24 @@ private fun PreviewCollection() = PointTheme {
         bubbles = sampleBubbles(ObjectKind.COLLECTION),
         onBubble = {},
         items = items,
+        itemsTotal = items.size,
+        onItem = {},
+    )
+}
+
+/** Архив на тысячу файлов (#460): список обрезан пределом обхода — и говорит об этом вслух.
+ *  Строк рисуется страница, своей прокрутки у списка нет: жест принадлежит экрану. */
+@Preview(name = "Collection · huge archive (#460)", showBackground = true)
+@Composable
+private fun PreviewHugeCollection() = PointTheme {
+    val obj = sampleObject(ObjectKind.COLLECTION, "inode/directory", "backup (распаковано)")
+    val items = (1..500).map { sampleObject(ObjectKind.IMAGE, "image/jpeg", "IMG_%04d.jpg".format(it)) }
+    FirstScreen(
+        obj = obj,
+        bubbles = sampleBubbles(ObjectKind.COLLECTION),
+        onBubble = {},
+        items = items,
+        itemsTotal = 1340,
         onItem = {},
     )
 }

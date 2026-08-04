@@ -9,6 +9,7 @@ import com.point.core.flow.CapabilityRegistry
 import com.point.core.flow.CapabilityUsage
 import com.point.core.flow.ChosenApp
 import com.point.core.flow.ChosenApps
+import com.point.core.flow.CollectionContent
 import com.point.core.flow.CrashLog
 import com.point.core.flow.Enrichment
 import com.point.core.flow.edgeDetail
@@ -1730,14 +1731,19 @@ class FlowViewModel @Inject constructor(
     private fun loadChildrenIfCollection(obj: PointObject) {
         if (obj.state.kind != ObjectKind.COLLECTION) return
         viewModelScope.launch {
-            val items = runCatching { store.children(obj) }.getOrDefault(emptyList())
-            if (items.isEmpty()) return@launch
+            val content = runCatching { store.children(obj) }
+                .getOrDefault(CollectionContent.empty())
+            if (content.shown.isEmpty()) return@launch
 
             val topIndex = stack.lastIndex
             val top = stack.getOrNull(topIndex) ?: return@launch
             if (top.obj.id != obj.id) return@launch
 
-            val refreshed = top.copy(items = items)
+            val refreshed = top.copy(
+                items = content.shown,
+                itemsTotal = content.total,
+                itemsTotalAtLeast = content.atLeast,
+            )
             stack[topIndex] = refreshed
             _ui.update { if (it.frame?.obj?.id == obj.id) it.copy(frame = refreshed) else it }
         }

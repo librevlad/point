@@ -1,5 +1,6 @@
 package com.point.executors
 
+import com.point.core.flow.CollectionContent
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.QrReader
 import com.point.core.model.ActionResult
@@ -27,7 +28,7 @@ class ReadQrActionTest {
         override suspend fun ingest(sourceUri: String, mime: String): PointObject = error("unused")
         override suspend fun ingestMultiple(sources: List<String>): PointObject = error("unused")
         override suspend fun put(result: ResultObject): PointObject = error("unused")
-        override suspend fun children(collection: PointObject): List<PointObject> = emptyList()
+        override suspend fun children(collection: PointObject, limit: Int) = CollectionContent.empty<PointObject>()
         override suspend fun readText(obj: PointObject, limit: Int): String = ""
         override suspend fun newScratchFile(extension: String) =
             ScratchRef(File.createTempFile("qrtest-", ".$extension").apply { deleteOnExit() }.absolutePath)
