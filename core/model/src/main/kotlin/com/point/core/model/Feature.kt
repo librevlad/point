@@ -35,9 +35,6 @@ enum class Feature {
      */
     HAS_PERIOD,
 
-    /** The text is a `point-pc://` pairing payload (#147) — offer to connect the PC. */
-    HAS_PC_PAIRING,
-
     /** An OCR sidecar with real recognised text exists on this IMAGE (#64) — the gate for
      *  text-hungry actions (deep-understand) on a picture. Set by the OCR enricher. */
     HAS_TEXT,

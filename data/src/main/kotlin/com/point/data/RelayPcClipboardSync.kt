@@ -35,7 +35,8 @@ import kotlinx.coroutines.withContext
  * where trying another transport can help.
  */
 class RelayPcClipboardSync(
-    private val appSecret: String,
+    /** Пропуск устройства в аккаунте (#473): общего пароля приложения больше нет, у каждого свой. */
+    private val pass: () -> String?,
     private val waitSeconds: Int = 25,
     private val connectTimeoutMs: Int = 5_000,
 ) : PcClipboardSync {
@@ -113,7 +114,7 @@ class RelayPcClipboardSync(
     }
 
     private fun relayBase(pairing: PcPairing): String? =
-        pairing.relay?.trimEnd('/')?.takeIf { it.isNotBlank() && appSecret.isNotBlank() }
+        pairing.relay?.trimEnd('/')?.takeIf { it.isNotBlank() && !pass().isNullOrBlank() }
 
     /** POST a sealed blob; the HTTP status, [CODE_TLS] on a pinning miss, or -1 on network failure. */
     private fun post(base: String, mailbox: String, blob: ByteArray): Int = runCatching {
@@ -170,7 +171,7 @@ class RelayPcClipboardSync(
             sslSocketFactory = RelayTls.socketFactory
             connectTimeout = connectTimeoutMs
             readTimeout = readSeconds * 1000
-            setRequestProperty("X-Point-App", appSecret)
+            pass()?.let { setRequestProperty("Authorization", "Bearer $it") }
         }
 
     private companion object {

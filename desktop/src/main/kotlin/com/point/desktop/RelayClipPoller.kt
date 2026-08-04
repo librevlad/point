@@ -18,7 +18,8 @@ import javax.net.ssl.HttpsURLConnection
  */
 class RelayClipPoller(
     private val relayUrl: String,
-    private val appSecret: String,
+    /** Пропуск устройства в аккаунте (#473): общего пароля приложения больше нет, у каждого свой. */
+    private val pass: () -> String?,
     private val token: String,
     private val clipboardGet: () -> ClipboardPayload?,
     private val clipboardSet: (ClipboardPayload) -> Unit,
@@ -27,7 +28,7 @@ class RelayClipPoller(
     private var thread: Thread? = null
 
     fun start() {
-        if (relayUrl.isBlank() || appSecret.isBlank() || running) return
+        if (relayUrl.isBlank() || pass().isNullOrBlank() || running) return
         running = true
         thread = Thread({ loop() }, "point-relay-clip").apply { isDaemon = true }.also { it.start() }
     }
@@ -125,7 +126,7 @@ class RelayClipPoller(
             sslSocketFactory = RelayTls.socketFactory
             connectTimeout = CONNECT_MS
             readTimeout = readSeconds * 1000
-            setRequestProperty("X-Point-App", appSecret)
+            pass()?.let { setRequestProperty("Authorization", "Bearer $it") }
         }
 
     private companion object {

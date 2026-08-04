@@ -109,8 +109,10 @@ fun HomeScreen(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End),
         ) {
+            // За дверью теперь круг устройств, а не один компьютер (#472), и подпись обязана
+            // называть то, что там правда лежит: голая или врущая подпись — та же загадка, что в #462.
             PortalDoor(
-                label = "Компьютер",
+                label = "Устройства",
                 onClick = onPc,
                 icon = bubbleIcon("pc"),
                 accent = bubbleColor("pc"),

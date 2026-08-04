@@ -130,8 +130,9 @@ jobs:
       - name: Set up Gradle (with cache)
         uses: gradle/actions/setup-gradle@v4
 
-      # На чистом раннере local.properties нет → RelayEnv генерируется пустым:
-      # MSI из CI не несёт даже relay-секрета (строже локальной сборки владельца).
+      # Секрета в MSI больше нет ни в какой сборке (#419/#473): задача `generateRelayEnv` удалена
+      # вместе с `RelayEnv.APP_SECRET`, пропуск у каждого устройства свой и рождается при входе.
+      # Локальная сборка владельца больше ничем не отличается от сборки CI — и выкладывать её можно.
       - name: Сборка MSI
         run: ./gradlew :desktop:packageMsi --no-daemon --stacktrace
 

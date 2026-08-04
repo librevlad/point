@@ -239,7 +239,15 @@ data class FlowUiState(
     val keyVerdict: com.point.core.flow.KeyVerdict? = null,
     /** Задан ли ключ вообще — пока нет, «Недавнее» зовёт его подключить и говорит зачем (#465). */
     val aiKeySet: Boolean = false,
-    val pcScreen: PcScreenState? = null,
+    /**
+     * Экран «Мои устройства» (#472) — тот же экран, что был экраном компьютера.
+     */
+    val devicesScreen: DevicesScreenState? = null,
+    /**
+     * Вход (#472). Не `null` — экран входа стоит поверх всего: пока Point не знает, чьё это
+     * устройство, круга нет, и объекту место за этой дверью, а не перед ней.
+     */
+    val signIn: com.point.core.flow.SignIn? = null,
     /** On the key screen: whether the private usage journal is on, and its current tally. */
     val usageEnabled: Boolean = false,
     /** On the key screen: whether branded action sounds are on (MOTION.md M4). */
@@ -296,25 +304,19 @@ data class ChatState(
     val notice: String? = null,
 )
 
-/** «Компьютер» (#147): the pairing screen's state — current pairing + a busy/error line. */
-data class PcScreenState(
-    val pairing: com.point.core.flow.PcPairing? = null,
-    val discovered: List<com.point.core.flow.DiscoveredPc> = emptyList(),
+/**
+ * Живое состояние экрана «Мои устройства» (#472).
+ *
+ * Заменило состояние пейринга: адреса, найденного в сети, и хода рукопожатия здесь нет — есть круг
+ * устройств аккаунта. [loading] отделено от пустого списка намеренно: «спрашиваю сервер» и «у вас
+ * одно устройство» — разные новости, и молчание вместо первой человек читает как вторую.
+ */
+data class DevicesScreenState(
+    val email: String = "",
+    val devices: List<com.point.core.flow.CircleDevice> = emptyList(),
+    /** Идёт ли сейчас отзыв или выход — пока идёт, тапать по тем же местам нечем. */
     val busy: Boolean = false,
     val error: String? = null,
-    /**
-     * Есть ли связь с компьютером и каким путём (#412).
-     *
-     * Раньше экран показывал только адрес пейринга — то есть «мы когда-то познакомились», а не
-     * «он сейчас на связи». Человек тапал «Напечатать на ПК» и не понимал, сломалось оно или
-     * компьютер выключен.
-     */
-    val link: com.point.core.flow.LinkState = com.point.core.flow.LinkState.Never,
-    /**
-     * Идёт ли сейчас поиск компьютеров в сети (#458).
-     *
-     * Блок «Найдено в сети» появлялся, только когда что-то уже нашлось, — и первые секунды экран
-     * выглядел как «ничего нет, вводите руками», хотя именно в этот момент он и искал.
-     */
-    val search: com.point.core.flow.PcSearch = com.point.core.flow.PcSearch.IDLE,
+    /** Круг ещё едет с сервера. */
+    val loading: Boolean = true,
 )

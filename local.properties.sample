@@ -97,6 +97,16 @@ LLAMA_CLOUD_API_KEY=
 LLAMA_CLOUD_BASE_URL=https://api.cloud.llamaindex.ai
 LLAMA_CLOUD_TIER=cost_effective
 
+# Адрес сервера Point (#472/#473) — необязательное переопределение для своих опытов.
+# Пусто — берётся `PointServer.DEFAULT_URL`. Секретом не является: вход идёт по аккаунту
+# Google, и пропуск у каждого устройства свой. Общего `RELAY_APP_SECRET` больше не существует (#419).
+# Компьютер читает свой адрес из `~/.point-pc/config` (ключ `server`), а не отсюда.
+RELAY_URL=
+
+# Живой прогон сетевых тестов `:desktop` (#473) — СВОЙСТВАМИ ЗАПУСКА, не отсюда:
+#   ./gradlew :desktop:test -Dpoint.test.server=https://point.leerio.app -Dpoint.test.pass=<пропуск>
+# Нет свойств — тесты сами себя пропускают, как на CI.
+
 # Release signing (#11): absolute path to the keystore + its passwords.
 # Generate once (keytool -genkeypair), store OUTSIDE the repo, BACK IT UP -
 # losing it means losing the Play identity of the app.

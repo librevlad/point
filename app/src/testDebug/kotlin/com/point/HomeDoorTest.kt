@@ -33,6 +33,7 @@ class HomeDoorTest {
 
     @get:Rule val compose = createAndroidComposeRule<HomeActivity>()
 
+
     /** Дверь «AI-ключ» на «Недавнем» — тот самый основной путь за ключом. */
     private fun openKeySettings() {
         compose.onNodeWithText("AI-ключ").performClick()

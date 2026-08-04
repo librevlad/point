@@ -15,7 +15,8 @@ import javax.net.ssl.HttpsURLConnection
  */
 class RelayPoller(
     private val relayUrl: String,
-    private val appSecret: String,
+    /** Пропуск устройства в аккаунте (#473): общего пароля приложения больше нет, у каждого свой. */
+    private val pass: () -> String?,
     private val token: String,
     /** name, mime, understanding-metadata, raw bytes, optional action id. */
     private val onObject: (String, String, Map<String, String>, ByteArray, String?) -> Unit,
@@ -24,7 +25,7 @@ class RelayPoller(
     private var thread: Thread? = null
 
     fun start() {
-        if (relayUrl.isBlank() || appSecret.isBlank() || running) return
+        if (relayUrl.isBlank() || pass().isNullOrBlank() || running) return
         running = true
         thread = Thread({ loop() }, "point-relay-poll").apply { isDaemon = true }.also { it.start() }
     }
@@ -51,7 +52,7 @@ class RelayPoller(
         c.sslSocketFactory = RelayTls.socketFactory
         c.connectTimeout = CONNECT_MS
         c.readTimeout = (WAIT_SECONDS + 10) * 1000
-        c.setRequestProperty("X-Point-App", appSecret)
+        pass()?.let { c.setRequestProperty("Authorization", "Bearer $it") }
         val (blob, blobId) = if (c.responseCode == 200) {
             c.inputStream.readBytes() to c.getHeaderField("X-Blob-Id")
         } else {
@@ -77,7 +78,7 @@ class RelayPoller(
             c.requestMethod = "POST"
             c.connectTimeout = CONNECT_MS
             c.readTimeout = CONNECT_MS
-            c.setRequestProperty("X-Point-App", appSecret)
+            pass()?.let { c.setRequestProperty("Authorization", "Bearer $it") }
             c.setRequestProperty("X-Blob-Id", blobId)
             c.doOutput = true
             c.outputStream.use { it.write(ByteArray(0)) }

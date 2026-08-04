@@ -52,11 +52,6 @@ class HomeActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         viewModel.loadRecent()
 
-        // Scanned the PC's pairing QR with a camera → a point-pc:// VIEW intent lands here.
-        if (savedInstanceState == null && intent?.action == android.content.Intent.ACTION_VIEW) {
-            intent.data?.takeIf { it.scheme == "point-pc" }?.let { viewModel.pairFromPayload(it.toString()) }
-        }
-
         onBackPressedDispatcher.addCallback(this) {
             when {
                 viewModel.onBack() -> Unit
@@ -76,7 +71,9 @@ class HomeActivity : ComponentActivity() {
             PointTheme {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     val state by viewModel.ui.collectAsStateWithLifecycle()
-                    if (state.frame == null && state.busy == null && state.message == null && state.keyScreen == null && state.pcScreen == null) {
+                    if (state.frame == null && state.busy == null && state.message == null &&
+                        state.keyScreen == null && state.devicesScreen == null && state.signIn == null
+                    ) {
                         val recent by viewModel.recent.collectAsStateWithLifecycle()
                         val clipboard by viewModel.clipboard.collectAsStateWithLifecycle()
                         val crash by viewModel.crashReport.collectAsStateWithLifecycle()
@@ -91,7 +88,7 @@ class HomeActivity : ComponentActivity() {
                             recent = recent,
                             onOpen = viewModel::openFromHistory,
                             onSettings = viewModel::openKeySettings,
-                            onPc = viewModel::openPcSettings,
+                            onPc = viewModel::openDevices,
                             onNewObject = ::newObject,
                             sourceLabels = sourceLabels,
                             onClear = viewModel::clearHistory,

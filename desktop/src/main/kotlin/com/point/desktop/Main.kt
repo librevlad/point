@@ -82,6 +82,26 @@ fun main(args: Array<String>) {
             PcOfficePdfRealizer(officeToPdf, outbox),
         ),
     )
+    // Аккаунт этого компьютера (#473). Раньше ПК знал о себе только токен, имя и порт — владельца
+    // у него не было вовсе. Вход, круг устройств и пропуск — тем же кодом, что на телефоне.
+    val pointDir = File(System.getProperty("user.home"), ".point-pc")
+    val serverUrl = com.point.core.flow.PointServer.base(config.server)
+    val accountStore = FileAccountStore(pointDir)
+    val accountScope = kotlinx.coroutines.CoroutineScope(
+        kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default,
+    )
+    val account = DesktopAccount(
+        scope = accountScope,
+        store = accountStore,
+        client = com.point.core.flow.HttpAccountClient(serverUrl),
+        // Своего окна для чужих страниц у Point нет и не будет — вход открывает системный браузер.
+        browser = { url -> runCatching { java.awt.Desktop.getDesktop().browse(java.net.URI(url)) } },
+        deviceName = config.name,
+    )
+    // Пропуск для всех клиентов релея: функция, а не значение, — он появляется после входа
+    // и исчезает после «Выйти», а демоны живут дольше и того и другого.
+    val devicePass = account.pass()
+
     val phoneCapsFile = File(File(System.getProperty("user.home"), ".point-pc"), "phone-caps")
     // Память о пути объектов (#407) — рядом с остальным состоянием ПК, тем же способом хранения.
     val journalStore = FileJournalStore(File(File(System.getProperty("user.home"), ".point-pc"), "journal"))
@@ -156,8 +176,8 @@ fun main(args: Array<String>) {
     // #161 v2 (P4): also receive over the always-works relay — the PC polls the mailbox and an
     // object the phone sent off-LAN lands in the SAME inbox flow as a LAN /receive.
     val relayPoller = RelayPoller(
-        relayUrl = RelayEnv.URL,
-        appSecret = RelayEnv.APP_SECRET,
+        relayUrl = serverUrl,
+        pass = devicePass,
         token = config.token,
         onObject = { name, mime, meta, bytes, action ->
             val item = inbox.receive(name, mime, meta, bytes.inputStream())
@@ -168,8 +188,8 @@ fun main(args: Array<String>) {
     // #161 «общий буфер» через релей: the shared clipboard also works off-LAN — the PC applies a
     // phone push and answers a phone pull over the same blind relay, on its own daemon.
     val relayClipPoller = RelayClipPoller(
-        relayUrl = RelayEnv.URL,
-        appSecret = RelayEnv.APP_SECRET,
+        relayUrl = serverUrl,
+        pass = devicePass,
         token = config.token,
         clipboardGet = ::readSystemClipboard,
         clipboardSet = ::writeSystemClipboard,
@@ -179,8 +199,8 @@ fun main(args: Array<String>) {
     // Без этого через релей ходило одно направление, и вне общей сети телефон не мог ни узнать про
     // принтер и сборку PDF, ни забрать результат.
     val relayRequestPoller = RelayRequestPoller(
-        relayUrl = RelayEnv.URL,
-        appSecret = RelayEnv.APP_SECRET,
+        relayUrl = serverUrl,
+        pass = devicePass,
         token = config.token,
         remoteActions = { pcRemoteActions },
         outbox = outbox,
@@ -217,6 +237,7 @@ fun main(args: Array<String>) {
             DesktopApp(
                 state = state,
                 config = config,
+                account = account,
                 addresses = siteLocalAddresses(),
                 port = server.port,
                 // Происхождение объекта разделено (#407): перетащенный мышью и взятый из буфера —

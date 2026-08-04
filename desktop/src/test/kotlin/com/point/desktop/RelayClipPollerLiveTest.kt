@@ -37,7 +37,7 @@ class RelayClipPollerLiveTest {
         val latch = CountDownLatch(1)
         var applied: ClipboardPayload? = null
         val poller = RelayClipPoller(
-            RelayEnv.URL, RelayEnv.APP_SECRET, token,
+            LiveServer.url, { LiveServer.pass }, token,
             clipboardGet = { null },
             clipboardSet = { applied = it; latch.countDown() },
         )
@@ -58,7 +58,7 @@ class RelayClipPollerLiveTest {
         val pcClip = ClipboardPayload.ofText("pc-clipboard-e2e-привет")
 
         val poller = RelayClipPoller(
-            RelayEnv.URL, RelayEnv.APP_SECRET, token,
+            LiveServer.url, { LiveServer.pass }, token,
             clipboardGet = { pcClip },
             clipboardSet = {},
         )
@@ -98,7 +98,7 @@ class RelayClipPollerLiveTest {
         val latch = CountDownLatch(1)
         var applied: ClipboardPayload? = null
         val poller = RelayClipPoller(
-            RelayEnv.URL, RelayEnv.APP_SECRET, token,
+            LiveServer.url, { LiveServer.pass }, token,
             clipboardGet = { null },
             clipboardSet = { applied = it; latch.countDown() },
         )
@@ -111,12 +111,12 @@ class RelayClipPollerLiveTest {
     }
 
     private fun assumeRelay() {
-        assumeTrue("no relay secret (CI / no local.properties)", RelayEnv.APP_SECRET.isNotBlank())
+        assumeTrue("no relay secret (CI / no local.properties)", LiveServer.configured)
         assumeTrue("relay unreachable (offline run)", relayUp)
     }
 
     private fun postBlob(mailbox: String, blob: ByteArray) {
-        val c = conn("${RelayEnv.URL.trimEnd('/')}/mbx/$mailbox")
+        val c = conn("${LiveServer.url.trimEnd('/')}/mbx/$mailbox")
         c.requestMethod = "POST"
         c.doOutput = true
         c.setFixedLengthStreamingMode(blob.size)
@@ -128,13 +128,13 @@ class RelayClipPollerLiveTest {
     /** GET the mailbox with a long-poll; the raw blob (acked — leave the prod relay clean), or null
      *  after the wait (204). */
     private fun pollBlob(mailbox: String, waitSeconds: Int): ByteArray? {
-        val c = conn("${RelayEnv.URL.trimEnd('/')}/mbx/$mailbox?wait=$waitSeconds")
+        val c = conn("${LiveServer.url.trimEnd('/')}/mbx/$mailbox?wait=$waitSeconds")
         c.readTimeout = (waitSeconds + 10) * 1000
         val blob = if (c.responseCode == 200) c.inputStream.readBytes() else null
         val blobId = c.getHeaderField("X-Blob-Id")
         c.disconnect()
         if (blob != null && blobId != null) {
-            val ackC = conn("${RelayEnv.URL.trimEnd('/')}/mbx/$mailbox/ack")
+            val ackC = conn("${LiveServer.url.trimEnd('/')}/mbx/$mailbox/ack")
             ackC.requestMethod = "POST"
             ackC.setRequestProperty("X-Blob-Id", blobId)
             ackC.doOutput = true
@@ -150,14 +150,14 @@ class RelayClipPollerLiveTest {
             sslSocketFactory = RelayTls.socketFactory
             connectTimeout = 5_000
             readTimeout = 10_000
-            setRequestProperty("X-Point-App", RelayEnv.APP_SECRET)
+            setRequestProperty("Authorization", "Bearer " + LiveServer.pass)
         }
 
     private companion object {
         /** One probe per JVM: is the live relay reachable at all? Offline runs skip, not fail. */
         val relayUp: Boolean by lazy {
             runCatching {
-                val c = (URL("${RelayEnv.URL.trimEnd('/')}/health").openConnection() as HttpsURLConnection)
+                val c = (URL("${LiveServer.url.trimEnd('/')}/health").openConnection() as HttpsURLConnection)
                 c.sslSocketFactory = RelayTls.socketFactory
                 c.connectTimeout = 4_000
                 c.readTimeout = 4_000

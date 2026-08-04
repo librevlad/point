@@ -140,7 +140,6 @@ import com.point.data.PdfRendererRasterizer
 import com.point.data.ScratchObjectStore
 import com.point.data.LlmSpeechToText
 import com.point.data.TesseractTextRecognizer
-import com.point.data.PcPairingEnricher
 import com.point.data.TextUrlEnricher
 import com.point.data.VCardEnricher
 import com.point.data.ZxingQrEncoder
@@ -332,13 +331,17 @@ abstract class DataModule {
     @Binds
     abstract fun pinnedActions(impl: PrefsPinnedActions): PinnedActions
 
+    /** Пропуск аккаунта (#472) — шифрованный, один на приложение. */
+    @Binds
+    @Singleton
+    abstract fun accountStore(impl: com.point.data.EncryptedAccountStore): com.point.core.flow.AccountStore
+
+    /** Страница входа открывается системным браузером (#472). */
+    @Binds
+    abstract fun browserOpener(impl: com.point.data.AndroidBrowserOpener): com.point.core.flow.BrowserOpener
+
     @Binds @IntoSet
     abstract fun textUrlEnricher(e: TextUrlEnricher): Enricher
-
-    /** `point-pc://` text → «Подключить компьютер» (#147, camera-free pairing). */
-    @Binds
-    @IntoSet
-    abstract fun pcPairingEnricher(e: PcPairingEnricher): Enricher
 
     @Binds @IntoSet
     abstract fun entityEnricher(e: EntityEnricher): Enricher
@@ -393,16 +396,16 @@ abstract class DataModule {
          * ссылку, ключа нет. Цена названа в самом действии, чтобы человек знал, что отдаёт.
          */
         @Provides
-        fun dropLink(): com.point.core.flow.DropLink =
-            com.point.data.RelayDropLink(BuildConfig.RELAY_URL, BuildConfig.RELAY_APP_SECRET)
+        fun dropLink(account: com.point.core.flow.AccountStore): com.point.core.flow.DropLink =
+            com.point.data.RelayDropLink(serverUrl(), devicePass(account))
 
         /**
          * «Принять файл» (#388) — та же ссылка в обратную сторону: чужой человек кладёт файл в
          * ящик на релее, телефон забирает его обычным путём. Плата та же: этот файл релей видит.
          */
         @Provides
-        fun dropInbox(): com.point.core.flow.DropInbox =
-            com.point.data.RelayDropInbox(BuildConfig.RELAY_URL, BuildConfig.RELAY_APP_SECRET)
+        fun dropInbox(account: com.point.core.flow.AccountStore): com.point.core.flow.DropInbox =
+            com.point.data.RelayDropInbox(serverUrl(), devicePass(account))
 
         /** #161 v2 «железобетонно»: the LAN transport self-heals a stale PC IP via mDNS (re-resolve +
          *  retry with the token), and when it still can't be reached — different network, LTE — the
@@ -413,9 +416,10 @@ abstract class DataModule {
             discovery: PcDiscovery,
             pairings: PcPairings,
             monitor: com.point.core.flow.LinkMonitor,
+            account: com.point.core.flow.AccountStore,
         ): PcTransport = LanThenRelayTransport(
             lan = SelfHealingPcTransport(http, discovery, pairings),
-            relay = RelayPcTransport(BuildConfig.RELAY_APP_SECRET),
+            relay = RelayPcTransport(devicePass(account)),
             monitor = monitor,
         )
 
@@ -430,11 +434,40 @@ abstract class DataModule {
         /** Shared clipboard (#161 «общий буфер»): LAN hop first, relay fallback when off-network —
          *  same «безотказно» shape as [pcTransport]. */
         @Provides
-        fun pcClipboardSync(http: HttpPcClipboardSync): com.point.core.flow.PcClipboardSync =
+        fun pcClipboardSync(
+            http: HttpPcClipboardSync,
+            account: com.point.core.flow.AccountStore,
+        ): com.point.core.flow.PcClipboardSync =
             LanThenRelayClipboardSync(
                 lan = http,
-                relay = RelayPcClipboardSync(BuildConfig.RELAY_APP_SECRET),
+                relay = RelayPcClipboardSync(devicePass(account)),
             )
+
+        /**
+         * Разговор с сервером Point (#472): вход, круг устройств, отзыв.
+         *
+         * Реализация одна на телефон и на ПК и живёт в `:core:flow` — вход одинаков там и там.
+         */
+        @Provides
+        @Singleton
+        fun accountClient(): com.point.core.flow.AccountClient =
+            com.point.core.flow.HttpAccountClient(serverUrl())
+
+        /**
+         * Адрес сервера — сборка без секрета (#419).
+         *
+         * `RELAY_URL` остался переопределением для своих опытов и секретом никогда не был; пусто — берётся
+         * адрес по умолчанию. Общего пароля приложения рядом больше нет ни в одной сборке.
+         */
+        private fun serverUrl(): String = com.point.core.flow.PointServer.base(BuildConfig.RELAY_URL)
+
+        /**
+         * Чем это устройство предъявляется серверу — своим пропуском, а не общим паролем (#473).
+         *
+         * Функция, а не значение: пропуск появляется после входа и исчезает после «Выйти», а клиенты релея живут дольше и того и другого.
+         */
+        private fun devicePass(account: com.point.core.flow.AccountStore): () -> String? =
+            { account.current()?.deviceToken }
 
         /** On-device entity detection (ML Kit) behind the [EntityExtractor] seam. @Provides (not
          *  @Binds) keeps the ML Kit AAR types out of Dagger's KSP aggregation (same fix as OpenCV). */

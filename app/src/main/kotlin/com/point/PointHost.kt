@@ -104,9 +104,14 @@ fun PointHost(
     onConfirmCloud: () -> Unit = {},
     onDeclineCloud: () -> Unit = {},
     onPickApp: (AppTarget) -> Unit = {},
-    onPairPc: (String, Int) -> Unit = { _, _ -> },
-    onUnpairPc: () -> Unit = {},
-    onClosePcSettings: () -> Unit = {},
+    /** Войти в аккаунт (#472) — единственное действие экрана входа. */
+    onSignIn: () -> Unit = {},
+    onCancelSignIn: () -> Unit = {},
+    onContinueAfterSignIn: () -> Unit = {},
+    /** Отключить устройство круга — своё или чужое (#472). */
+    onRevokeDevice: (String) -> Unit = {},
+    onSignOut: () -> Unit = {},
+    onCloseDevices: () -> Unit = {},
     onDismissAppPicker: () -> Unit = {},
     onConfirmPreview: () -> Unit = {},
     onCancelPreview: () -> Unit = {},
@@ -150,6 +155,16 @@ fun PointHost(
         // Что предложено сделать с отказом (#452): null — предлагать нечего.
         val offer = keyOfferLabel(state.message)
         when {
+            // Вход — дверь перед всем остальным (#472): пока Point не знает, чьё это устройство,
+            // круга нет. Объект при этом не теряется — он ждёт под экраном и открывается сразу после входа.
+            state.signIn != null -> SignInScreen(
+                state = state.signIn,
+                onSignIn = onSignIn,
+                onCancel = onCancelSignIn,
+                onOpenAgain = onOpenUrl,
+                onContinue = onContinueAfterSignIn,
+            )
+
             // Cloud consent is a gate: it must be answered before anything else renders (#10).
             state.cloudConsent -> ConsentScreen(
                 onAllow = onConfirmCloud,
@@ -176,11 +191,11 @@ fun PointHost(
             // Waiting on the photo picker (opened by the LaunchedEffect above).
             state.needsImage != null -> PickingImageScreen(title = state.needsImage)
 
-            state.pcScreen != null -> PairPcScreen(
-                state = state.pcScreen,
-                onPair = onPairPc,
-                onUnpair = onUnpairPc,
-                onClose = onClosePcSettings,
+            state.devicesScreen != null -> MyDevicesScreen(
+                state = state.devicesScreen,
+                onRevoke = onRevokeDevice,
+                onSignOut = onSignOut,
+                onClose = onCloseDevices,
             )
 
             state.keyScreen != null -> KeyScreen(

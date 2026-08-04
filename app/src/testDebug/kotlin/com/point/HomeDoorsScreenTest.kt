@@ -25,10 +25,11 @@ class HomeDoorsScreenTest {
 
     @get:Rule val compose = createAndroidComposeRule<HomeActivity>()
 
+
     @Test fun `у каждой двери домашнего экрана есть подпись`() {
         // #462: в углу стояли стрелка вниз, монитор и шестерёнка — три загадки без единого слова.
         compose.onNodeWithText("Новый объект").assertExists()
-        compose.onNodeWithText("Компьютер").assertExists()
+        compose.onNodeWithText("Устройства").assertExists()
         compose.onNodeWithText("AI-ключ").assertExists()
     }
 

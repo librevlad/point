@@ -18,12 +18,13 @@ import kotlinx.coroutines.withContext
  */
 class RelayDropLink(
     private val relayUrl: String,
-    private val appSecret: String,
+    /** Пропуск устройства в аккаунте (#473): общего пароля приложения больше нет, у каждого свой. */
+    private val pass: () -> String?,
 ) : DropLink {
 
     override suspend fun give(path: String, fileName: String, mime: String): String? =
         withContext(Dispatchers.IO) {
-            val base = relayUrl.trimEnd('/').takeIf { it.isNotBlank() && appSecret.isNotBlank() }
+            val base = relayUrl.trimEnd('/').takeIf { it.isNotBlank() && !pass().isNullOrBlank() }
                 ?: return@withContext null
             val file = File(path).takeIf { it.isFile } ?: return@withContext null
             if (file.length() > MAX_DROP_BYTES) return@withContext null
@@ -35,7 +36,7 @@ class RelayDropLink(
                     doOutput = true
                     connectTimeout = 10_000
                     readTimeout = 60_000
-                    setRequestProperty("X-Point-App", appSecret)
+                    pass()?.let { setRequestProperty("Authorization", "Bearer $it") }
                     // Имя едет в base64: в HTTP-заголовке кириллица превращается в мусор, а
                     // «отчёт.pdf» обязан остаться отчётом и у получателя.
                     setRequestProperty("X-Drop-Name", Base64.encodeToString(fileName.toByteArray(), Base64.NO_WRAP))

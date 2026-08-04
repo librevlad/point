@@ -1,7 +1,6 @@
 package com.point.desktop.ui
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.draganddrop.dragAndDropTarget
@@ -66,6 +65,8 @@ import com.point.desktop.PcConfig
 fun DesktopApp(
     state: DesktopState,
     config: PcConfig,
+    /** Аккаунт этого компьютера (#473): вход и круг устройств вместо пейринга. */
+    account: com.point.desktop.DesktopAccount,
     addresses: List<String>,
     port: Int,
     onFilesDropped: (List<File>) -> Unit = {},
@@ -102,7 +103,14 @@ fun DesktopApp(
         }
     }
 
-    var showQr by remember { mutableStateOf(false) }
+    var showDevices by remember { mutableStateOf(false) }
+    val signIn by account.signIn.collectAsState()
+    val circle by account.circle.collectAsState()
+    val accountBusy by account.busy.collectAsState()
+    val accountError by account.error.collectAsState()
+    // Круг обновляется при открытии экрана и после входа — тем же правилом «не в каждом шаге»,
+    // что действует для `/caps` (#80).
+    LaunchedEffect(signIn) { if (signIn == null) account.refreshCircle() }
 
     // «Взять то, что в буфере» (#285): подпись на экране обещает Ctrl+Shift+V, значит обещание
     // обязано работать. Хоткей действует, пока окно Point в фокусе; общесистемный — отдельная
@@ -126,6 +134,18 @@ fun DesktopApp(
                 hit
             },
     ) {
+        // Вход стоит перед работой (#473): компьютер без круга и раньше ничего не делал — он
+        // стартовал карточкой «подключите телефон». Вход занял её место.
+        signIn?.let { gate ->
+            SignInPane(
+                state = gate,
+                onSignIn = account::signIn,
+                onCancel = account::cancel,
+                onOpenAgain = { url -> runCatching { java.awt.Desktop.getDesktop().browse(java.net.URI(url)) } },
+                onContinue = account::dismissGate,
+            )
+            return@Surface
+        }
         Column(Modifier.fillMaxSize()) {
             // Полоса окна из мокапа (#285): точка-портал, имя и связь — одной строкой в 44 dp.
             // Крупный заголовок «Point для ПК» ушёл: место на экране принадлежит объекту, а не
@@ -151,7 +171,7 @@ fun DesktopApp(
                 Spacer(Modifier.width(16.dp))
                 message?.let { Text(it, style = PointType.small) }
                 Spacer(Modifier.weight(1f))
-                ConnectionChip(config, onShowQr = { showQr = true })
+                ConnectionChip(config, onShowDevices = { showDevices = true })
             }
             Spacer(Modifier.height(1.dp).fillMaxWidth().background(PointColors.border))
             Column(Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 12.dp)) {
@@ -176,7 +196,16 @@ fun DesktopApp(
             if (items.isEmpty() && remembered.isEmpty()) {
                 // Экран без объекта занят тем, чем работу начать (#285): портал, три способа
                 // дать объект и подключение телефона — а не одним лишь QR.
-                EmptyScreen(config, addresses, port, onTakeClipboard = takeClipboard)
+                EmptyScreen(config, addresses, port, onTakeClipboard = takeClipboard) {
+                    MyDevicesPane(
+                        email = account.current()?.email.orEmpty(),
+                        devices = circle,
+                        busy = accountBusy,
+                        error = accountError,
+                        onRevoke = account::revoke,
+                        onSignOut = account::signOut,
+                    )
+                }
             } else {
                 // Конвейер (#285, подход 2a): док прилетевшего слева, объект и его действия —
                 // справа. Сетка карточек ушла: она показывала много объектов сразу и ни одного
@@ -196,7 +225,16 @@ fun DesktopApp(
                         if (selected == null) {
                             // Память есть, объекта на экране нет: место занято тем, чем начать
                             // работу, а не пустотой рядом со списком.
-                            EmptyScreen(config, addresses, port, onTakeClipboard = takeClipboard)
+                            EmptyScreen(config, addresses, port, onTakeClipboard = takeClipboard) {
+                                MyDevicesPane(
+                                    email = account.current()?.email.orEmpty(),
+                                    devices = circle,
+                                    busy = accountBusy,
+                                    error = accountError,
+                                    onRevoke = account::revoke,
+                                    onSignOut = account::signOut,
+                                )
+                            }
                         } else {
                             Conveyor(state, selected)
                         }
@@ -207,12 +245,21 @@ fun DesktopApp(
         }
     }
 
-    if (showQr) {
+    if (showDevices) {
         AlertDialog(
-            onDismissRequest = { showQr = false },
-            title = { Text("Подключить телефон") },
-            text = { ConnectionCard(config, addresses, port) },
-            confirmButton = { TextButton(onClick = { showQr = false }) { Text("Готово") } },
+            onDismissRequest = { showDevices = false },
+            title = { Text(com.point.core.flow.MY_DEVICES_TITLE) },
+            text = {
+                MyDevicesPane(
+                    email = account.current()?.email.orEmpty(),
+                    devices = circle,
+                    busy = accountBusy,
+                    error = accountError,
+                    onRevoke = account::revoke,
+                    onSignOut = account::signOut,
+                )
+            },
+            confirmButton = { TextButton(onClick = { showDevices = false }) { Text("Готово") } },
         )
     }
 
@@ -335,42 +382,15 @@ private fun LinkChip(lastContact: Pair<Long, com.point.core.flow.LinkPath>?) {
 }
 
 @Composable
-private fun ConnectionChip(config: PcConfig, onShowQr: () -> Unit) {
-    OutlinedButton(onClick = onShowQr) {
+private fun ConnectionChip(config: PcConfig, onShowDevices: () -> Unit) {
+    OutlinedButton(onClick = onShowDevices) {
         Text("● ${config.name}", style = MaterialTheme.typography.labelLarge)
         Spacer(Modifier.width(8.dp))
-        Text("QR", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-    }
-}
-
-@Composable
-private fun ConnectionCard(config: PcConfig, addresses: List<String>, port: Int) {
-    Surface(
-        shape = RoundedCornerShape(14.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-    ) {
-        Column(Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("Подключение телефона", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.height(8.dp))
-            val payload = remember(addresses, port) {
-                val host = addresses.firstOrNull() ?: "127.0.0.1"
-                // #161 v2: advertise the relay too, so the phone can fall back to it off-LAN.
-                val relay = com.point.desktop.RelayEnv.URL.takeIf { it.isNotBlank() }
-                com.point.core.flow.PcPairing(host, port, config.token, relay).qrPayload()
-            }
-            Image(qrImage(payload), contentDescription = "QR для пейринга", modifier = Modifier.size(200.dp).background(androidx.compose.ui.graphics.Color.White))
-            Spacer(Modifier.height(8.dp))
-            Text("Point на телефоне → Компьютер →", style = MaterialTheme.typography.bodySmall)
-            addresses.forEach {
-                Text("$it : $port", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-            }
-            Spacer(Modifier.height(4.dp))
-            Text(
-                "Имя: ${config.name}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
+        Text(
+            "Устройства",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+        )
     }
 }
 

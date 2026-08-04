@@ -30,7 +30,8 @@ import kotlinx.coroutines.withContext
  * клиентов.
  */
 class RelayRpcClient(
-    private val appSecret: String,
+    /** Пропуск устройства в аккаунте (#473): общего пароля приложения больше нет, у каждого свой. */
+    private val pass: () -> String?,
     private val waitSeconds: Int = 25,
     private val connectTimeoutMs: Int = 5_000,
 ) {
@@ -51,7 +52,7 @@ class RelayRpcClient(
         meta: Map<String, String> = emptyMap(),
         body: ByteArray = ByteArray(0),
     ): Reply? = withContext(Dispatchers.IO) {
-        val base = pairing.relay?.trimEnd('/')?.takeIf { it.isNotBlank() && appSecret.isNotBlank() }
+        val base = pairing.relay?.trimEnd('/')?.takeIf { it.isNotBlank() && !pass().isNullOrBlank() }
             ?: return@withContext null
 
         val toPc = RelayCrypto.mailboxId(pairing.token, RelayRpc.TO_PC)
@@ -136,7 +137,7 @@ class RelayRpcClient(
             sslSocketFactory = RelayTls.socketFactory
             connectTimeout = connectTimeoutMs
             readTimeout = readSeconds * 1000
-            setRequestProperty("X-Point-App", appSecret)
+            pass()?.let { setRequestProperty("Authorization", "Bearer $it") }
         }
 
     companion object {

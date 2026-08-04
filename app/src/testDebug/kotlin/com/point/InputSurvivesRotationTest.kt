@@ -64,25 +64,6 @@ class InputSurvivesRotationTest {
         assertEquals("моя-модель", saved?.model)
     }
 
-    @Test fun `набранный адрес компьютера переживает поворот`() {
-        var paired: Pair<String, Int>? = null
-        val rotation = StateRestorationTester(compose)
-        rotation.setContent {
-            PairPcScreen(
-                state = PcScreenState(),
-                onPair = { host, port -> paired = host to port },
-                onUnpair = {},
-                onClose = {},
-            )
-        }
-        compose.onAllNodes(hasSetTextAction())[0].performTextInput("192.168.1.50")
-
-        rotation.emulateSavedInstanceStateRestore()
-
-        compose.onNodeWithText("Связать").performClick()
-        assertEquals("192.168.1.50" to 8391, paired)
-    }
-
     @Test fun `недописанный вопрос к AI переживает поворот`() {
         val rotation = StateRestorationTester(compose)
         rotation.setContent {
