@@ -984,9 +984,18 @@ class FlowViewModel @Inject constructor(
 
     private var discoveryJob: Job? = null
 
+    /** Правка только живого экрана связи: закрыли — правке некуда ложиться, и она не воскрешает его. */
+    private fun updatePc(block: (PcScreenState) -> PcScreenState) {
+        _ui.update { s -> s.pcScreen?.let { s.copy(pcScreen = block(it)) } ?: s }
+    }
+
+    /** Идёт ли прямо сейчас запрос к компьютеру (#451) — пока идёт, экран говорит «проверяю связь…». */
+    private val pcProbing = kotlinx.coroutines.flow.MutableStateFlow(false)
+
     fun openPcSettings() {
+        val pairing = pcPairings.current()
         _ui.update {
-            it.copy(pcScreen = PcScreenState(pairing = pcPairings.current()), busy = null, message = null, messageOutcome = Outcome.NONE)
+            it.copy(pcScreen = PcScreenState(pairing = pairing), busy = null, message = null, messageOutcome = Outcome.NONE)
         }
         // Состояние связи следует за контактами, а не за таймером.
         //
@@ -994,31 +1003,43 @@ class FlowViewModel @Inject constructor(
         // бесконечная корутина в viewModelScope не даёт `runTest` завершиться, и прогон CI висел
         // час сорок вместо трёх минут. Бесконечный цикл ради секундной точности — плохая цена;
         // экран и так перерисуется, когда компьютер отзовётся.
+        //
+        // Вторая половина ответа — сам запрос (#451): пока он в пути, о связи ещё нечего утверждать,
+        // и экран говорит «проверяю связь…» вместо приговора о прошлом.
+        pcProbing.value = pairing != null
         linkJob?.cancel()
         linkJob = viewModelScope.launch {
-            linkMonitor.last.collect { contact ->
-                val link = com.point.core.flow.linkStateOf(
-                    contact?.at, contact?.path, System.currentTimeMillis(),
+            kotlinx.coroutines.flow.combine(linkMonitor.last, pcProbing) { contact, probing ->
+                com.point.core.flow.linkStateOf(
+                    contact?.at, contact?.path, System.currentTimeMillis(), probing,
                 )
-                _ui.update { s -> s.pcScreen?.let { s.copy(pcScreen = it.copy(link = link)) } ?: s }
-            }
+            }.collect { link -> updatePc { it.copy(link = link) } }
         }
         // #80 v2: the natural sync point — the PC may have gained abilities since pairing.
-        pcPairings.current()?.let { pairing ->
+        // Он же и есть тот самый запрос, по которому видно, жив ли компьютер: удачный ход
+        // рассказывает монитору о контакте, неудачный оставляет прежний ответ в силе.
+        pairing?.let {
             viewModelScope.launch {
-                runCatching { pcTransport.fetchCaps(pairing)?.let { caps -> pcCaps.save(caps) } }
+                runCatching { pcTransport.fetchCaps(it)?.let { caps -> pcCaps.save(caps) } }
+                pcProbing.value = false
             }
         }
         refreshFromPc(force = true)
         discoveryJob?.cancel()
         discoveryJob = viewModelScope.launch {
-            runCatching {
-                pcDiscovery.discover().collect { found ->
-                    _ui.update { s ->
-                        s.pcScreen?.let { s.copy(pcScreen = it.copy(discovered = found)) } ?: s
-                    }
-                }
+            updatePc { it.copy(search = com.point.core.flow.PcSearch.RUNNING) }
+            // Окно поиска (#458): mDNS в сети с изоляцией клиентов не ответит никогда, и пульс без
+            // конца был бы вторым враньём поверх первого. Сам сканер при этом продолжает работать —
+            // компьютер, включённый позже, всё равно появится в списке.
+            val window = launch {
+                kotlinx.coroutines.delay(com.point.core.flow.PC_SEARCH_WINDOW_MS)
+                updatePc { it.copy(search = com.point.core.flow.PcSearch.DONE) }
             }
+            runCatching {
+                pcDiscovery.discover().collect { found -> updatePc { it.copy(discovered = found) } }
+            }
+            window.cancel()
+            updatePc { it.copy(search = com.point.core.flow.PcSearch.DONE) }
         }
     }
 
@@ -1026,6 +1047,7 @@ class FlowViewModel @Inject constructor(
 
     fun closePcSettings() {
         linkJob?.cancel()
+        pcProbing.value = false
         refreshFromPc() // #161: Home is about to show — its banner must be current
         discoveryJob?.cancel()
         discoveryJob = null
@@ -1042,18 +1064,28 @@ class FlowViewModel @Inject constructor(
             _ui.update { it.copy(message = "Это не код подключения Point для ПК", messageOutcome = Outcome.FAILED) }
             return
         }
-        _ui.update { it.copy(pcScreen = PcScreenState(pairing = pcPairings.current(), busy = true), message = null, messageOutcome = Outcome.NONE) }
+        _ui.update {
+            it.copy(
+                pcScreen = (it.pcScreen ?: PcScreenState()).copy(pairing = pcPairings.current(), busy = true, error = null),
+                message = null,
+                messageOutcome = Outcome.NONE,
+            )
+        }
         viewModelScope.launch {
             runCatching { pcPairings.save(pairing) }
             runCatching { pcTransport.fetchCaps(pairing)?.let { caps -> pcCaps.save(caps) } }
             runCatching { pcTransport.pushPhoneCaps(pairing, PHONE_ADVERTISED) }
             refreshFromPc(force = true)
-            _ui.update { it.copy(pcScreen = PcScreenState(pairing = pairing)) }
+            _ui.update {
+                it.copy(pcScreen = (it.pcScreen ?: PcScreenState()).copy(pairing = pairing, busy = false, error = null))
+            }
         }
     }
 
     fun pairPc(host: String, port: Int) {
-        _ui.update { it.copy(pcScreen = PcScreenState(pairing = pcPairings.current(), busy = true)) }
+        // Найденное в сети и ход поиска переживают рукопожатие: человек тапнул по строке из списка,
+        // и список, исчезающий на время попытки, лишает его возможности попробовать соседнюю.
+        _ui.update { it.copy(pcScreen = (it.pcScreen ?: PcScreenState()).copy(pairing = pcPairings.current(), busy = true, error = null)) }
         viewModelScope.launch {
             val device = "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}"
             val pairing = runCatching { pcTransport.pair(host, port, device) }.getOrNull()
@@ -1064,14 +1096,13 @@ class FlowViewModel @Inject constructor(
                 runCatching { pcTransport.fetchCaps(pairing)?.let { caps -> pcCaps.save(caps) } }
                 runCatching { pcTransport.pushPhoneCaps(pairing, PHONE_ADVERTISED) }
                 refreshFromPc(force = true) // #161: the fresh pairing may already have a queue
-                _ui.update { it.copy(pcScreen = PcScreenState(pairing = pairing)) }
+                updatePc { it.copy(pairing = pairing, busy = false, error = null) }
             } else {
-                _ui.update {
+                updatePc {
                     it.copy(
-                        pcScreen = PcScreenState(
-                            pairing = pcPairings.current(),
-                            error = "Не удалось связаться — проверьте адрес и подтвердите на компьютере",
-                        ),
+                        pairing = pcPairings.current(),
+                        busy = false,
+                        error = "Не удалось связаться — проверьте адрес и подтвердите на компьютере",
                     )
                 }
             }
@@ -1082,7 +1113,13 @@ class FlowViewModel @Inject constructor(
         viewModelScope.launch {
             runCatching { pcPairings.clear() }
             runCatching { pcCaps.clear() }
-            _ui.update { it.copy(pcScreen = PcScreenState(pairing = null)) }
+            // Связи больше нет ни с кем — и утверждать о ней нечего: память о контакте уходит
+            // вместе с пейрингом, иначе вчерашний компьютер рассказывал бы о следующем чужую
+            // правду (#451). Найденное в сети остаётся: отвязываются, чтобы связаться с другим.
+            runCatching { linkMonitor.forget() }
+            updatePc {
+                it.copy(pairing = null, busy = false, error = null, link = com.point.core.flow.LinkState.Never)
+            }
         }
     }
 
