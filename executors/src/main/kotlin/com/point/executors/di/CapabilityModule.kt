@@ -61,6 +61,8 @@ import com.point.executors.MergePdfCapability
 import com.point.executors.MergePdfRealizer
 import com.point.executors.CloudOcrCapability
 import com.point.executors.CloudOcrDirectRealizer
+import com.point.executors.ExternalEyeCloudOcrRealizer
+import com.point.executors.ExternalEyeOcrRealizer
 import com.point.executors.CloudOcrRealizer
 import com.point.executors.CopyCapability
 import com.point.executors.CopyCardCapability
@@ -234,6 +236,11 @@ abstract class CapabilityModule {
     // Путь от фотографии прибора к показанию заведён отдельно — #426 (вырезанный барабан).
     @Binds @IntoSet abstract fun deviceOcrR(r: DeviceOcrRealizer): Realizer
     @Binds @IntoSet abstract fun cloudOcrR(r: CloudOcrRealizer): Realizer
+
+    /** Внешний глаз (#280): в «Распознать текст» — между устройством и общей цепочкой моделей,
+     *  в «Распознать в облаке» — первым. Порядок задан `RealizerMeta.priority`, UI не меняется. */
+    @Binds @IntoSet abstract fun externalEyeOcrR(r: ExternalEyeOcrRealizer): Realizer
+    @Binds @IntoSet abstract fun externalEyeCloudOcrR(r: ExternalEyeCloudOcrRealizer): Realizer
     @Binds @IntoSet abstract fun cloudOcrDirectR(r: CloudOcrDirectRealizer): Realizer
     @Binds @IntoSet abstract fun aiR(r: AiRealizer): Realizer
     @Binds @IntoSet abstract fun shoppingListR(r: ShoppingListRealizer): Realizer

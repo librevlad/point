@@ -34,8 +34,8 @@ class UrlConnectionHttpJson @Inject constructor() : HttpJson {
                 doOutput = true
                 connectTimeout = 30_000
                 readTimeout = 60_000
-                setRequestProperty("Content-Type", "application/json; charset=utf-8")
-                headers.forEach { (k, v) -> setRequestProperty(k, v) }
+                pointHeaders(mapOf("Content-Type" to "application/json; charset=utf-8"), headers)
+                    .forEach { (k, v) -> setRequestProperty(k, v) }
             }
             conn.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
             val code = conn.responseCode

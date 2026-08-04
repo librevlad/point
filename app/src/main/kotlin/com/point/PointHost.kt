@@ -84,6 +84,7 @@ fun PointHost(
     onCloseKeySettings: () -> Unit = {},
     onToggleUsage: (Boolean) -> Unit = {},
     onToggleSound: (Boolean) -> Unit = {},
+    onPickPrivacyLevel: (com.point.core.flow.PrivacyLevel) -> Unit = {},
     /** Открыть страницу, где выдают ключ (#403). */
     onOpenUrl: (String) -> Unit = {},
     onConfirmCloud: () -> Unit = {},
@@ -178,6 +179,8 @@ fun PointHost(
                 onToggleUsage = onToggleUsage,
                 soundEnabled = state.soundEnabled,
                 onToggleSound = onToggleSound,
+                privacyLevel = state.privacyLevel,
+                onPickPrivacyLevel = onPickPrivacyLevel,
                 onOpenUrl = onOpenUrl,
             )
 
