@@ -16,6 +16,13 @@ class FallbackLlmClient @Inject constructor(
     private val providers: List<@JvmSuppressWildcards LlmClient>,
 ) : LlmClient {
 
+    /**
+     * Цепочка настроена, пока настроен хоть один в ней. В раздаваемой сборке встроенных ключей нет,
+     * и список сводится к ключу человека — то есть ответ здесь и есть ответ на вопрос «есть ли у
+     * Point вообще AI прямо сейчас» (#467).
+     */
+    override val configured: Boolean get() = providers.any { it.configured }
+
     override suspend fun run(obj: PointObject, prompt: String): ResultObject {
         if (providers.isEmpty()) error("AI не настроен — задайте свой ключ")
         // For an image, lead with strong vision models — the free ones garble dense/handwritten

@@ -164,6 +164,9 @@ data class FlowUiState(
     val appPicker: List<AppTarget>? = null,
     /** Non-null while the bring-your-own AI-key screen is shown (its prefilled values). */
     val keyScreen: UserAiConfig? = null,
+    /** Отказ, который привёл человека на экран ключей, — чтобы он знал, зачем он тут (#467).
+     *  null — пришёл сам, через шестерёнку, и объяснять ему нечего. */
+    val keyScreenNote: String? = null,
     val pcScreen: PcScreenState? = null,
     /** On the key screen: whether the private usage journal is on, and its current tally. */
     val usageEnabled: Boolean = false,

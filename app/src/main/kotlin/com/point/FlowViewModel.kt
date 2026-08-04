@@ -38,6 +38,7 @@ import com.point.core.flow.META_SELECTION_SOURCE
 import com.point.core.flow.SnappedSelection
 import com.point.core.flow.UserAiConfig
 import com.point.core.flow.UserKeyStore
+import com.point.core.flow.refusalNeedsKey
 import com.point.core.flow.findOnPage
 import com.point.core.flow.foundOnPageLabel
 import com.point.core.ui.Outcome
@@ -855,12 +856,21 @@ class FlowViewModel @Inject constructor(
 
     // --- Bring-your-own AI key (#19). Summoned on demand or from the Home gear. ---
 
-    fun openKeySettings() {
+    /**
+     * @param note почему человек здесь оказался, если его привёл отказ.
+     *
+     * Экран ключей гасит сообщение (`message = null`) — иначе оно всплыло бы позже над чужим
+     * объектом. Но отказ, который сюда привёл, гасить нельзя: человек, молча выброшенный на экран
+     * с семью провайдерами, ровно и получает ту «общую непонятную ошибку», с которой начался #467.
+     * Поэтому причина едет с ним и стоит над полем ключа.
+     */
+    fun openKeySettings(note: String? = null) {
         // A tiny prefs read; the store is warmed when it's created (Activity start), so it
         // is in-memory by the time the gear or an AI-no-key failure summons the screen.
         _ui.update {
             it.copy(
-                keyScreen = userKeys.read() ?: UserAiConfig.DEFAULT, busy = null, message = null, messageOutcome = Outcome.NONE, inputPrompt = null,
+                keyScreen = userKeys.read() ?: UserAiConfig.DEFAULT, keyScreenNote = note,
+                busy = null, message = null, messageOutcome = Outcome.NONE, inputPrompt = null,
                 soundEnabled = runCatching { sensorySettings.isSoundEnabled() }.getOrDefault(true),
                 privacyLevel = runCatching { cloudPrivacy.level() }
                     .getOrDefault(com.point.core.flow.PrivacyLevel.DEFAULT),
@@ -903,7 +913,7 @@ class FlowViewModel @Inject constructor(
         }
     }
 
-    fun closeKeySettings() = _ui.update { it.copy(keyScreen = null) }
+    fun closeKeySettings() = _ui.update { it.copy(keyScreen = null, keyScreenNote = null) }
 
     // --- «Компьютер» (#147): pair once, then the «На компьютер» bubble appears. ---
 
@@ -1120,7 +1130,12 @@ class FlowViewModel @Inject constructor(
     fun saveAiConfig(config: UserAiConfig) {
         viewModelScope.launch {
             runCatching { userKeys.save(config) }
-            _ui.update { it.copy(keyScreen = null, message = "Ключ AI сохранён", messageOutcome = Outcome.DONE) }
+            _ui.update {
+                it.copy(
+                    keyScreen = null, keyScreenNote = null,
+                    message = "Ключ AI сохранён", messageOutcome = Outcome.DONE,
+                )
+            }
         }
     }
 
@@ -1260,8 +1275,11 @@ class FlowViewModel @Inject constructor(
             is ActionResult.Failure -> {
                 runCatching { sensory.failure() } // M4: a failure bumps, never buzzes long
                 runCatching { journal.record(UsageEvent(UsageEventType.FAILED, bubble.capabilityId.value)) }
-                // A "no AI key" failure summons the key screen on demand instead of just erroring.
-                if (result.reason.contains("задайте свой ключ")) openKeySettings()
+                // Отказ, который чинится ключом, сам открывает экран ключей — и приезжает туда
+                // вместе с человеком, чтобы тот знал, ЗАЧЕМ он там (#467). Признак — общий
+                // `refusalNeedsKey`, а не сравнение с единственной фразой: слова отказов разные, и
+                // сказанный по-новому раньше терялся молча.
+                if (refusalNeedsKey(result.reason)) openKeySettings(result.reason)
                 else _ui.update { it.copy(busy = null, busyStage = null, message = result.reason, messageOutcome = Outcome.FAILED) }
             }
             is ActionResult.NeedsInput -> {

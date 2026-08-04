@@ -21,6 +21,9 @@ class UserKeyLlmClient @Inject constructor(
 
     override val strongVision = true // the user's own model is their choice — trust it for vision too
 
+    /** Ключ спрашивается заново каждый раз: человек мог ввести его минуту назад (#467). */
+    override val configured: Boolean get() = userKeys.read()?.apiKey?.isNotBlank() == true
+
     override suspend fun run(obj: PointObject, prompt: String): ResultObject {
         val config = userKeys.read() ?: error("задайте свой ключ (шестерёнка на домашнем экране)")
         return OpenAiCompatibleClient(

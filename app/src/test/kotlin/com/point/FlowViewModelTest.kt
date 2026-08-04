@@ -1261,6 +1261,31 @@ class FlowViewModelTest {
         assertTrue(vm.ui.value.keyScreen != null) // summoned on demand, not just an error
     }
 
+    @Test fun `человек приезжает на экран ключей вместе с причиной`() = runTest(dispatcher) {
+        // #467: экран ключей гасит сообщение, и молча выброшенный туда человек получал ровно ту
+        // «общую непонятную ошибку», с которой всё началось: семь провайдеров и ни слова о том,
+        // какой из них задать.
+        val why = "Расшифровать некому: Whisper слушает по ключу Groq. " +
+            com.point.core.flow.KEY_SETTINGS_CALL
+        resolver.result = ActionResult.Failure(why, recoverable = true)
+        val vm = vm()
+        vm.onShared("voice.ogg", "audio/ogg"); advanceUntilIdle()
+        vm.onBubble(bubble()); advanceUntilIdle()
+
+        assertTrue("отказ, сказанный по-новому, тоже открывает ключи", vm.ui.value.keyScreen != null)
+        assertEquals(why, vm.ui.value.keyScreenNote)
+    }
+
+    @Test fun `закрытый экран ключей не оставляет за собой чужой причины`() = runTest(dispatcher) {
+        val vm = vm()
+        vm.openKeySettings("нужен ключ Groq"); advanceUntilIdle()
+
+        vm.closeKeySettings(); advanceUntilIdle()
+        vm.openKeySettings(); advanceUntilIdle()
+
+        assertEquals(null, vm.ui.value.keyScreenNote)
+    }
+
     @Test fun `saveAiConfig stores the key and closes the screen`() = runTest(dispatcher) {
         val vm = vm()
         vm.openKeySettings(); advanceUntilIdle()

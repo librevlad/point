@@ -41,7 +41,7 @@ class DefaultCapabilityRegistryTest {
             OfficeCapability(),
             ScanCapability(),
             OcrCapability(),
-            TranscribeCapability(),
+            TranscribeCapability { emptyList() },
         ),
         policy = DefaultBubblePolicy(),
     )
