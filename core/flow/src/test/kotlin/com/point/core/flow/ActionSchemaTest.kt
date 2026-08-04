@@ -1,7 +1,12 @@
 package com.point.core.flow
 
+import com.point.core.model.Bubble
+import com.point.core.model.CapabilityId
+import com.point.core.model.ObjectKind
+import com.point.core.model.ObjectState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -416,5 +421,69 @@ class ActionSchemaTest {
         val labels = r.missing.joinToString(" ") { it.label }
         assertTrue(labels.contains("адрес"))
         assertTrue(labels.contains("координаты") || labels.contains("место"))
+    }
+
+    // --- #464: строка = действие, и оно запускается тапом ---
+
+    private fun bubbleOf(id: String) = Bubble(
+        icon = id,
+        title = id,
+        capabilityId = CapabilityId(id),
+        expectedNextState = ObjectState(ObjectKind.IMAGE),
+    )
+
+    @Test
+    fun `готовая строка запускается тем же пузырём, что стоит в списке действий`() {
+        // Решение владельца 04.08.2026: тап по готовой строке делает то, что на ней написано.
+        val row = actionReadiness(mapOf(META_ENTITY_PREFIX + "phone" to "+380504327707"))
+            .single { it.schema.id == "save-contact" }
+
+        val runner = row.runner(listOf(bubbleOf("map"), bubbleOf("save-contact")))
+
+        assertEquals(CapabilityId("save-contact"), runner?.capabilityId)
+    }
+
+    @Test
+    fun `действия объекту не предложили — строка кнопкой не притворяется`() {
+        // Источник правды один — реестр возможностей. «Построить маршрут» готов по координатам,
+        // но карту Point на паре чисел не откроет: пузыря нет, и строка честно молчит вместо
+        // «Адрес не найден» после тапа.
+        val row = actionReadiness(mapOf(META_ENTITY_GEO to "50.4501, 30.5234"))
+            .single { it.schema.id == "route" }
+
+        assertTrue(row.readiness is Readiness.Ready)
+        assertNull(row.runner(emptyList()))
+        assertEquals(CapabilityId("map"), row.runner(listOf(bubbleOf("map")))?.capabilityId)
+    }
+
+    @Test
+    fun `неготовая строка остаётся раскрытием «чего не хватает», а не запуском`() {
+        val row = actionReadiness(mapOf(META_ENTITY_PREFIX + "email" to "olena@example.com"))
+            .single { it.schema.id == "save-contact" }
+
+        assertTrue(row.readiness is Readiness.Missing)
+        assertNull(row.runner(listOf(bubbleOf("save-contact"))))
+    }
+
+    @Test
+    fun `действие без реализации кнопкой не становится — глагол без действия и был находкой`() {
+        // Отслеживание, показание счётчика, перевод и пересылка квитанции сегодня запускать
+        // нечем (причины — при схемах). Строка остаётся справкой; выдать её за кнопку значило бы
+        // воспроизвести #464 на новом месте.
+        val tails = setOf("track-parcel", "meter-reading", "pay-by-requisites", "forward-receipt")
+        val all = ACTION_SCHEMAS.map { it.id to it.runs }.toMap()
+
+        assertEquals(tails, all.filterValues { it == null }.keys)
+        val parcel = actionReadiness(mapOf(META_ENTITY_TRACK to "20 4514 9154 9395")).single()
+        assertTrue(parcel.readiness is Readiness.Ready)
+        assertNull(parcel.runner(listOf(bubbleOf("share"), bubbleOf("copy"))))
+    }
+
+    @Test
+    fun `объявленное действие названо идентификатором возможности, а не именем схемы`() {
+        // Схема и возможность — разные вещи (`Capability` ≠ `ActionSchema`), и совпадение имён
+        // у «Сохранить контакт» — совпадение, а не правило: «Ответить» запускает «email».
+        assertEquals(CapabilityId("email"), ACTION_SCHEMAS.single { it.id == "reply" }.runs)
+        assertEquals(CapabilityId("map"), ACTION_SCHEMAS.single { it.id == "route" }.runs)
     }
 }

@@ -74,6 +74,20 @@ interface CalendarInserter {
     suspend fun insertEvent(title: String)
 }
 
+/**
+ * Открывает системный экран «новый контакт», заполненный тем, что нашлось на странице (#464).
+ *
+ * Ровно тот же приём, что у [CalendarInserter], и по той же причине: ACTION_INSERT — не схема URI,
+ * через [UrlOpener] он не едет. Имя человек допишет сам: системный экран контактов и есть
+ * подтверждение, второго спрашивать незачем.
+ *
+ * Оба значения необязательны — но не оба сразу пустые: звать с пустыми руками нечего, и вызывающий
+ * обязан это проверить до вызова (наверху это честный `Failure`, а не тихое «ничего не произошло»).
+ */
+interface ContactInserter {
+    suspend fun insertContact(phone: String?, email: String?)
+}
+
 /** Extracts plain text from a PDF object (empty if it has none, e.g. a scan). */
 interface PdfTextExtractor {
     suspend fun extractText(obj: PointObject): String
