@@ -7,6 +7,9 @@
       доступа к месту нет и не будет — Point узнаёт место, когда человек сам попросил.
     -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <!-- Звукозапись (#246): Point пишет сам, потому что на телефоне может не быть ни одного
+         диктофона. Просьба приходит по тапу человека, а не на старте. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
     <!--
       Кого Point спрашивает у системы (#246). С Android 11 приложение не видит чужих приложений
@@ -166,6 +169,13 @@
             android:name=".source.ReceiveActivity"
             android:exported="false"
             android:label="Принять файл" />
+
+        <!-- Звукозапись (#246): свой экран записи вместо чужого диктофона — его на устройстве
+             может не быть вовсе. Живёт только пока открыт: в фоне Point не пишет. -->
+        <activity
+            android:name=".source.RecordAudioActivity"
+            android:exported="false"
+            android:label="Звукозапись" />
 
         <!-- Point как принтер (#251): печатать умеет почти любое приложение, поэтому это самый
              широкий вход. Службу человек включает руками в системных настройках печати. -->
