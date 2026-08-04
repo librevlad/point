@@ -68,7 +68,7 @@ class UrlConnectionHttpFiles @Inject constructor() : HttpFiles {
             readTimeout = 120_000 // чтение страницы облаком — это не чат, ответ приходит небыстро
             setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
             setRequestProperty("Accept", "application/json")
-            // Без него Groq отвечает 403 — см. [POINT_USER_AGENT].
+            // Безымянными наши запросы уходить не должны — см. [POINT_USER_AGENT].
             setRequestProperty("User-Agent", POINT_USER_AGENT)
             headers.forEach { (k, v) -> setRequestProperty(k, v) }
         }

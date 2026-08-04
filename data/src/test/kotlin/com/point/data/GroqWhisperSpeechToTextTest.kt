@@ -16,9 +16,9 @@ import java.io.RandomAccessFile
 /**
  * Whisper на Groq (#223) поверх поддельной сети — ни ключа, ни байта наружу.
  *
- * Судится то, что человек почувствует: запрос уходит на ручку расшифровки и несёт имя (без него
- * сервис отвечает 403 — замер 04.08.2026); язык **не форсируется**, потому что записи бывают и на
- * украинском, и на русском; пустой ответ становится тишиной, а не пустой расшифровкой; отказ
+ * Судится то, что человек почувствует: запрос уходит на ручку расшифровки и несёт имя (безымянным
+ * этот провайдер однажды уже числился мёртвым); язык **не форсируется**, потому что записи бывают и
+ * на украинском, и на русском; пустой ответ становится тишиной, а не пустой расшифровкой; отказ
  * приходит словами.
  */
 class GroqWhisperSpeechToTextTest {
@@ -48,7 +48,7 @@ class GroqWhisperSpeechToTextTest {
         val sent = http.posts.single()
         assertEquals("https://api.groq.com/openai/v1/audio/transcriptions", sent.url)
         assertEquals("Bearer gsk-free", sent.headers["Authorization"])
-        // Без User-Agent Groq отвечает 403 — из-за этого провайдер числился мёртвым.
+        // Безымянные запросы — то, из-за чего этот провайдер однажды числился мёртвым.
         assertTrue(sent.headers["User-Agent"].orEmpty().startsWith("Point/"))
         assertEquals("whisper-large-v3-turbo", sent.field("model"))
         assertEquals("json", sent.field("response_format"))
@@ -120,12 +120,15 @@ class GroqWhisperSpeechToTextTest {
     }
 
     @Test
-    fun `отказ ключа называет и вторую причину — запрос без имени`() = runTest {
-        // 403 у Groq означает не только «ключ не тот»: так же отвечает запрос без User-Agent.
+    fun `403 не выдаёт себя за «ключ не принят» — причина названа осторожно`() = runTest {
+        // Так же выглядит отказ самого сервиса пустить запрос. Назвать одну причину значило бы
+        // отправить человека чинить исправный ключ.
         val http = FakeHttpFiles(onPost = { HttpResult(403, "forbidden") })
 
         val e = runCatching { whisper(http).transcribe(recording("audio/ogg")) }.exceptionOrNull()
 
-        assertTrue(e!!.message!!.contains("без имени"))
+        val said = e!!.message!!
+        assertTrue(said.contains("403"))
+        assertTrue(said.contains("отказал сам сервис"))
     }
 }
