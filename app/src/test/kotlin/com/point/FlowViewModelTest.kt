@@ -1834,7 +1834,7 @@ private class FakePcTransport : com.point.core.flow.PcTransport {
         fileName: String,
         meta: Map<String, String>,
         action: String?,
-    ): com.point.core.flow.PcSendOutcome = com.point.core.flow.PcSendOutcome.Sent
+    ): com.point.core.flow.PcSendOutcome = com.point.core.flow.PcSendOutcome.Sent()
     override suspend fun fetchCaps(pairing: com.point.core.flow.PcPairing): List<com.point.core.flow.PcRemoteAction>? =
         listOf(com.point.core.flow.PcRemoteAction("pc-open", "Открыть на компьютере"))
     override suspend fun fetchOutbox(pairing: com.point.core.flow.PcPairing): List<com.point.core.flow.PcOutboxEntry>? {
