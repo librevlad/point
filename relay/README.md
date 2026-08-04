@@ -1,4 +1,106 @@
-# Point relay (#161 v2)
+# Серверная сторона Point
+
+Здесь живут **две** вещи, и пока они рядом, а не одна вместо другой:
+
+| что | файлы | состояние |
+|---|---|---|
+| **Сервер аккаунтов** — вход по Google, круг устройств, изоляция (#471) | `point_server/`, `tests/` | новое, клиентов ещё нет |
+| **Слепой почтовый ящик** — сегодняшняя связь телефон↔ПК (#161) | `relay.py`, `start.sh`, `cert.pem` | работает, переезжает под аккаунты срезом #476 |
+
+Проект целиком — `docs/superpowers/specs/2026-08-04-point-server.md`; порядок срезов — там же,
+раздел 10.
+
+---
+
+# Сервер аккаунтов (#471)
+
+**Аккаунт даёт право положить и забрать, но не право прочитать.** Этот срез не возит ни байта
+содержимого вовсе: он знает, чьи устройства, — и всё. Ящики приезжают под аккаунты отдельно (#476),
+и слепота при этом не теряется, потому что ключи рождаются у устройств (#474).
+
+## Вход «как у телевизора»
+
+Устройство в OAuth **не участвует**: `client_id`/`client_secret` Google живут только на сервере,
+в файле службы. В APK и MSI их нет и быть не может — это и есть лечение общего секрета приложения
+(#419), а не замена одного секрета другим.
+
+```
+устройство                     сервер                          Google
+    │ POST /auth/start ──────────►│
+    │ ◄── login_id + claim_token + код «K7-42Q» + адрес страницы входа
+    │ открыть браузер ───────────►│ GET /login?d=<login_id>   (код сверяется глазами)
+    │                             │ ── Authorization Code + PKCE ──►│
+    │                             │ ◄──────── id_token (sub, email) │
+    │ GET /auth/session/<login_id>│   (Authorization: Bearer <claim_token>)
+    │ ◄── device_id + device_token — один раз, потом 404
+```
+
+`claim_token` отдельно от `login_id` нарочно: `login_id` лежит в адресе страницы, которую человек
+открывает в браузере, и одного его для забора пропуска аккаунта быть не должно.
+
+## Ручки
+
+| Метод | Путь | Пропуск | Что делает |
+|---|---|---|---|
+| GET | `/health` | — | `ok` |
+| POST | `/auth/start` | — | начать вход: `{kind: PHONE\|PC, name?, key_agree?, key_sign?}` |
+| GET | `/login?d=<login_id>` | — | страница входа для человека (код + кнопка) |
+| POST | `/login` | — | форма со страницы → редирект в Google (здесь рождаются `state` и PKCE) |
+| GET | `/auth/callback` | — | Google возвращает человека сюда; страница «Готово» |
+| GET | `/auth/session/<login_id>` | `Bearer <claim_token>` | 202 «ждём» / 200 пропуск / 404 «нет такого» |
+| POST | `/enroll` | `Bearer <device_token>` | объявить кругу имя и **открытые** ключи устройства |
+| GET | `/circle` | `Bearer` | устройства аккаунта: имя, вид, ключи, код сверки, «на связи» |
+| GET | `/me` | `Bearer` | аккаунт и это устройство |
+| POST | `/devices/<id>/revoke` | `Bearer` | отключить любое устройство круга (себя — это «Выйти») |
+| DELETE | `/account` | `Bearer` | удалить всё моё немедленно |
+
+Пропуск — непрозрачные 256 бит, в базе только SHA-256 от него. Не JWT: JWT нельзя отозвать, а
+отзыв («потерял телефон») — то самое свойство, ради которого всё делается.
+
+## Проверить руками
+
+```bash
+S=http://127.0.0.1:8080
+START=$(curl -s -XPOST $S/auth/start -H 'Content-Type: application/json' -d '{"kind":"PHONE","name":"Пиксель"}')
+echo "$START"                                    # login_id, claim_token, user_code, login_url
+# открыть login_url в браузере, сверить код, войти через Google
+curl -s "$S/auth/session/<login_id>" -H "Authorization: Bearer <claim_token>"   # 202 → 200
+curl -s "$S/circle" -H "Authorization: Bearer <device_token>"
+curl -s -XPOST "$S/devices/<id>/revoke" -H "Authorization: Bearer <device_token>"
+```
+
+## Запуск
+
+```bash
+python3 -m venv ~/point-server/venv && ~/point-server/venv/bin/pip install -r requirements.txt
+set -a; . ./point-server.env; set +a        # образец — point-server.env.sample
+~/point-server/venv/bin/python -m point_server        # 127.0.0.1:8080, access-log выключен
+```
+
+Снаружи сервер не виден: TLS терминирует Caddy с сертификатом Let's Encrypt — это срез #470, и до
+него сервер щупается с самой машины. Логи: правило релея перенесено дословно — ни путей, ни имён,
+ни адресов, `access_log=False`.
+
+**Площадка та же, что у релея, — `35.185.31.106`** (решение владельца 04.08.2026). A-запись
+`point.leerio.app` переставляется на неё владельцем; порт `80` нужен не под сайт, а под выдачу
+сертификата (проверка ACME), `443` — под сам сервер, `8443` после переезда закрывается. Фаервол
+GCP эти порты не блокирует — нужно, чтобы там слушала служба.
+
+## Тесты
+
+Без сети и без боевого сервера: вход по Google подменяется фейком того же шва, время — управляемыми
+часами, база — файлом во временном каталоге.
+
+```bash
+python -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
+cd relay && ../.venv/bin/python -m pytest tests -q
+```
+
+Гоняется в CI отдельной задачей `server` (`.github/workflows/ci.yml`).
+
+---
+
+# Point relay (#161 v2) — слепой почтовый ящик
 
 A **blind store-and-forward mailbox** that makes the phone↔PC link reliable across firewalls,
 changing IPs and different networks (LTE ↔ home Wi-Fi). Both devices connect **outbound** to it,

@@ -49,10 +49,12 @@ class InputSurvivesRotationTest {
                 onToggleSound = {},
             )
         }
-        // Поля идут сверху вниз: ключ, модель, адрес сервиса. Экран длиннее окна и прокручивается,
-        // поэтому до каждого узла сначала доезжаем — как это делает палец.
+        // Поле ключа — первое и, пока блоки свёрнуты, единственное. Модель и адрес сложены за
+        // строкой «Модель и адрес» (#447), поэтому её сначала раскрываем — ровно как палец. Экран
+        // длиннее окна и прокручивается, поэтому до каждого узла ещё и доезжаем.
         compose.onAllNodes(hasSetTextAction())[0].performScrollTo()
             .performTextInput("sk-очень-длинный-ключ-из-буфера")
+        compose.onNodeWithText("Модель и адрес").performScrollTo().performClick()
         compose.onAllNodes(hasSetTextAction())[1].performScrollTo().performTextReplacement("моя-модель")
 
         rotation.emulateSavedInstanceStateRestore()
