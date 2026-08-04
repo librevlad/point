@@ -1457,6 +1457,105 @@ class FlowViewModelTest {
         assertEquals("__unset__", resolver.lastAmendment)     // no step reached the cloud
     }
 
+    // --- «Показать модели» ≠ «выложить в открытый доступ» (#114) ---
+
+    /** Способности с разной ценой: «Понять» показывает объект модели, «Дать ссылку» кладёт файл
+     *  на сервер открытым. Обе сетевые — и до сих пор их разрешал один флаг. */
+    private fun linkVm() = vm(
+        caps = mapOf(
+            CapabilityId("ai") to setOf(Intent.UNDERSTAND),
+            CapabilityId("drop-link") to setOf(Intent.SEND),
+        ),
+        cloud = setOf(CapabilityId("ai"), CapabilityId("drop-link")),
+    )
+
+    /**
+     * Разрешение, данное ради моделей, не выкладывает файл в открытый доступ.
+     *
+     * Было: человек однажды разрешил облако для «Понять» — и «Дать ссылку» молча уводило файл на
+     * сервер, откуда его заберёт любой, кому переслали ссылку. Про цену он узнавал ПОСЛЕ загрузки,
+     * с уже выданной карточки.
+     */
+    @Test fun `разрешение для моделей не выкладывает файл по открытой ссылке`() = runTest(dispatcher) {
+        consent.granted = true // облако для AI разрешено давно
+        val vm = linkVm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.onBubble(bubble(id = "drop-link", title = "Дать ссылку")); advanceUntilIdle()
+
+        assertTrue("про открытую ссылку спрашивают отдельно", vm.ui.value.cloudConsent)
+        assertEquals("файл никуда не уехал", "__unset__", resolver.lastAmendment)
+    }
+
+    /** Цена называется ДО отправки: текст вопроса — про открытость файла и срок жизни ссылки. */
+    @Test fun `цена открытой ссылки названа до отправки, а не после`() = runTest(dispatcher) {
+        consent.granted = true
+        val vm = linkVm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.onBubble(bubble(id = "drop-link", title = "Дать ссылку")); advanceUntilIdle()
+
+        val ask = vm.ui.value
+        assertTrue("не сказано, что заберёт любой: ${ask.cloudDestination}", ask.cloudDestination.contains("любому"))
+        assertTrue("не сказано, сколько живёт: ${ask.cloudDestination}", ask.cloudDestination.contains("суток"))
+        assertTrue("вопрос звучит про ссылку: ${ask.cloudTitle}", ask.cloudTitle.contains("ссылке"))
+        assertEquals("Выложить", ask.cloudConfirm)
+    }
+
+    /** Согласие на открытую ссылку не запоминается: следующий файл — следующее решение. */
+    @Test fun `второе «Дать ссылку» спрашивает заново`() = runTest(dispatcher) {
+        val vm = linkVm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        vm.onBubble(bubble(id = "drop-link", title = "Дать ссылку")); advanceUntilIdle()
+        vm.confirmCloud(); advanceUntilIdle()
+        assertEquals("первый файл выложен", "done", vm.ui.value.message)
+
+        vm.onBubble(bubble(id = "drop-link", title = "Дать ссылку")); advanceUntilIdle()
+
+        assertTrue("следующий файл — следующее решение", vm.ui.value.cloudConsent)
+    }
+
+    /** А обычное облако допросом не становится: разрешили один раз — работает. */
+    @Test fun `согласие на модели остаётся однократным`() = runTest(dispatcher) {
+        val vm = linkVm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        vm.onBubble(bubble(id = "ai")); advanceUntilIdle()
+        vm.confirmCloud(); advanceUntilIdle()
+
+        vm.onBubble(bubble(id = "ai")); advanceUntilIdle()
+
+        assertEquals("второй раз не спрашиваем", false, vm.ui.value.cloudConsent)
+    }
+
+    /** Согласие, которое нельзя отозвать, — не согласие. Тумблер в настройках возвращает вопрос. */
+    @Test fun `отозванное согласие возвращает вопрос`() = runTest(dispatcher) {
+        consent.granted = true
+        val vm = linkVm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.setCloudAllowed(false); advanceUntilIdle()
+        assertEquals(false, vm.ui.value.cloudEnabled)
+
+        vm.onBubble(bubble(id = "ai")); advanceUntilIdle()
+        assertTrue("отозвали — значит спрашиваем снова", vm.ui.value.cloudConsent)
+    }
+
+    /** Шаг «Дать ссылку», спрятанный в избранной цепочке, не проезжает под текстом про AI. */
+    @Test fun `цепочка со ссылкой спрашивает про ссылку, а не про AI`() = runTest(dispatcher) {
+        consent.granted = true
+        val vm = linkVm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.applyFavorite(FavoriteChain("c", "Цепочка", listOf(CapabilityId("ai"), CapabilityId("drop-link"))))
+        advanceUntilIdle()
+
+        assertTrue(vm.ui.value.cloudConsent)
+        assertTrue(
+            "спросили не про то: ${vm.ui.value.cloudDestination}",
+            vm.ui.value.cloudDestination.contains("любому"),
+        )
+    }
+
     // --- Device actions: inline app picker (#66) ---
 
     @Test fun `open-in shows the device's installed apps`() = runTest(dispatcher) {
@@ -1755,9 +1854,19 @@ private class FakeUserKeys(var config: UserAiConfig? = null) : UserKeyStore {
     override suspend fun clear() { config = null }
 }
 
+/** Согласие по обещаниям (#114): «показать модели» помнится, «выложить по ссылке» — никогда. */
 private class FakePrivacyConsent(var granted: Boolean = false) : PrivacyConsent {
-    override suspend fun cloudAllowed() = granted
-    override suspend fun allowCloud() { granted = true }
+    val asked = mutableListOf<com.point.core.flow.CloudScope>()
+    override suspend fun allowed(scope: com.point.core.flow.CloudScope): Boolean {
+        asked += scope
+        return com.point.core.flow.remembersConsent(scope) && granted
+    }
+    override suspend fun allow(scope: com.point.core.flow.CloudScope) {
+        if (com.point.core.flow.remembersConsent(scope)) granted = true
+    }
+    override suspend fun revoke(scope: com.point.core.flow.CloudScope) {
+        if (com.point.core.flow.remembersConsent(scope)) granted = false
+    }
 }
 
 private class FakeSensoryFeedback : com.point.core.flow.SensoryFeedback {

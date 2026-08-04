@@ -85,6 +85,8 @@ fun PointHost(
     onToggleUsage: (Boolean) -> Unit = {},
     onToggleSound: (Boolean) -> Unit = {},
     onPickPrivacyLevel: (com.point.core.flow.PrivacyLevel) -> Unit = {},
+    /** Разрешить/отозвать отправку объектов моделям (#114). */
+    onToggleCloud: (Boolean) -> Unit = {},
     /** Открыть страницу, где выдают ключ (#403). */
     onOpenUrl: (String) -> Unit = {},
     onConfirmCloud: () -> Unit = {},
@@ -133,6 +135,8 @@ fun PointHost(
                 onAllow = onConfirmCloud,
                 onDecline = onDeclineCloud,
                 destination = state.cloudDestination,
+                title = state.cloudTitle,
+                confirm = state.cloudConfirm,
             )
 
             state.appPicker != null -> AppPickerScreen(
@@ -181,6 +185,8 @@ fun PointHost(
                 onToggleSound = onToggleSound,
                 privacyLevel = state.privacyLevel,
                 onPickPrivacyLevel = onPickPrivacyLevel,
+                cloudEnabled = state.cloudEnabled,
+                onToggleCloud = onToggleCloud,
                 onOpenUrl = onOpenUrl,
             )
 

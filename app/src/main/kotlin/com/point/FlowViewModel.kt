@@ -193,6 +193,8 @@ class FlowViewModel @Inject constructor(
     private var pendingBubble: Bubble? = null
     /** A cloud action deferred until the user grants consent (#10); run on confirm. */
     private var pendingCloud: (() -> Unit)? = null
+    /** На что именно спрашиваем сейчас (#114) — от этого зависит, запоминать ли ответ. */
+    private var pendingCloudScope: com.point.core.flow.CloudScope = com.point.core.flow.CloudScope.MODELS
     /** A bubble whose preview is shown, deferred until the user confirms it (#97). */
     private var pendingPreviewBubble: Bubble? = null
     /** Экран выделения (#259): слой, преобразование координат и последний захват — живут,
@@ -808,19 +810,31 @@ class FlowViewModel @Inject constructor(
      * Runs [onGranted] at once if cloud consent is already given; otherwise shows the consent
      * gate and defers it (#10). Reads the on-device flag directly (no cached copy) — so there
      * is no init race, and a saved-chain replay or a single action is held the same way.
+     *
+     * #114: спрашивают не «про облако вообще», а про то обещание, которое даёт это действие
+     * ([cloudScopeOf]). «Показать модели» помнится; «выложить по ссылке, которую откроет любой»
+     * не помнится никогда — цена называется перед каждым файлом, до отправки, а не после.
      */
     private fun requireCloudConsent(
         capabilityId: com.point.core.model.CapabilityId? = null,
         onGranted: () -> Unit,
     ) {
+        val id = capabilityId ?: com.point.core.model.CapabilityId("ai")
+        val scope = com.point.core.flow.cloudScopeOf(id)
         viewModelScope.launch {
-            if (runCatching { consent.cloudAllowed() }.getOrDefault(false)) {
+            if (runCatching { consent.allowed(scope) }.getOrDefault(false)) {
                 onGranted()
             } else {
                 pendingCloud = onGranted
-                val where = capabilityId?.let { com.point.core.flow.cloudDestination(it) }
-                    ?: com.point.core.flow.cloudDestination(com.point.core.model.CapabilityId("ai"))
-                _ui.update { it.copy(cloudConsent = true, cloudDestination = where) }
+                pendingCloudScope = scope
+                _ui.update {
+                    it.copy(
+                        cloudConsent = true,
+                        cloudDestination = com.point.core.flow.cloudDestination(id),
+                        cloudTitle = com.point.core.flow.cloudAskTitle(scope),
+                        cloudConfirm = com.point.core.flow.cloudAskConfirm(scope),
+                    )
+                }
             }
         }
     }
@@ -927,6 +941,7 @@ class FlowViewModel @Inject constructor(
             )
         }
         refreshUsage()
+        viewModelScope.launch { refreshCloudConsent() } // тумблер показывает, что разрешено сейчас
     }
 
     /** Load the usage journal's on/off state and tally for the key screen. */
@@ -1075,10 +1090,13 @@ class FlowViewModel @Inject constructor(
 
     fun confirmCloud() {
         val run = pendingCloud ?: return
+        val scope = pendingCloudScope
         pendingCloud = null
         _ui.update { it.copy(cloudConsent = false) }
         viewModelScope.launch {
-            runCatching { consent.allowCloud() } // remember, so we ask only once
+            // Помнится только то, что имеет право помниться: «выложить по ссылке» — разрешение
+            // на ЭТОТ файл и на этот раз (#114).
+            runCatching { consent.allow(scope) }
             run()
         }
     }
@@ -1086,6 +1104,27 @@ class FlowViewModel @Inject constructor(
     fun declineCloud() {
         pendingCloud = null
         _ui.update { it.copy(cloudConsent = false) }
+    }
+
+    /**
+     * Разрешение на облако — тумблер в настройках, а не решение, принятое однажды навсегда (#114).
+     *
+     * Отозвать было негде: человек, разрешивший облако одним тапом полгода назад, не мог передумать
+     * ничем, кроме переустановки. Публичной ссылки это не касается — она спрашивает каждый раз.
+     */
+    fun setCloudAllowed(allowed: Boolean) {
+        viewModelScope.launch {
+            runCatching {
+                if (allowed) consent.allow(com.point.core.flow.CloudScope.MODELS)
+                else consent.revoke(com.point.core.flow.CloudScope.MODELS)
+            }
+            refreshCloudConsent()
+        }
+    }
+
+    private suspend fun refreshCloudConsent() {
+        val allowed = runCatching { consent.allowed(com.point.core.flow.CloudScope.MODELS) }.getOrDefault(false)
+        _ui.update { it.copy(cloudEnabled = allowed) }
     }
 
     // --- Device actions (#66): the installed apps that can open the object, shown inline. ---
@@ -1206,8 +1245,14 @@ class FlowViewModel @Inject constructor(
         val start = stack.lastOrNull()?.obj ?: return
         // A saved chain can hide a cloud step — gate the whole replay on consent (#10),
         // so a favorite is not a back door around the privacy prompt.
-        if (chain.steps.any { isCloud(it) }) {
-            requireCloudConsent { replayChain(chain, start) }
+        val cloudSteps = chain.steps.filter { isCloud(it) }
+        if (cloudSteps.isNotEmpty()) {
+            // Спрашиваем про самое дорогое обещание в цепочке (#114): шаг «Дать ссылку» внутри
+            // избранного не имеет права проехать под текстом про AI-провайдера.
+            val asks = cloudSteps.firstOrNull {
+                com.point.core.flow.cloudScopeOf(it) == com.point.core.flow.CloudScope.PUBLIC_LINK
+            } ?: cloudSteps.first()
+            requireCloudConsent(asks) { replayChain(chain, start) }
             return
         }
         replayChain(chain, start)

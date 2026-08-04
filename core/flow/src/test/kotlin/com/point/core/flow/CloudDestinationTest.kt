@@ -1,6 +1,7 @@
 package com.point.core.flow
 
 import com.point.core.model.CapabilityId
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -54,5 +55,37 @@ class CloudDestinationTest {
                 text.contains("согласия") || text.contains("ссылке"),
             )
         }
+    }
+
+    // --- Разные обещания — разные «да» (#114) ---
+
+    /**
+     * «Показать модели» и «выложить в открытый доступ» — не одно согласие.
+     *
+     * Один флаг на всё означал: человек, разрешивший «Понять», тем же тапом навсегда разрешил
+     * класть свои файлы на сервер открытыми. Разница между обещаниями живёт здесь, в чистой
+     * функции, а не в памяти того, кто писал экран.
+     */
+    @Test
+    fun `выкладывание по ссылке — отдельное обещание, и оно не запоминается`() {
+        assertEquals(CloudScope.PUBLIC_LINK, cloudScopeOf(CapabilityId("drop-link")))
+        assertEquals(CloudScope.MODELS, cloudScopeOf(CapabilityId("ai")))
+        assertEquals(CloudScope.MODELS, cloudScopeOf(CapabilityId("cloud-ocr")))
+
+        assertTrue("про модели спрашивают один раз", remembersConsent(CloudScope.MODELS))
+        assertTrue(
+            "разрешение выложить один файл не отвечает за следующий",
+            !remembersConsent(CloudScope.PUBLIC_LINK),
+        )
+    }
+
+    @Test
+    fun `вопрос про открытую ссылку звучит не как вопрос про облако`() {
+        val open = cloudAskTitle(CloudScope.PUBLIC_LINK)
+        assertTrue(open, open.contains("ссылке"))
+        assertTrue("а кнопка обещает ровно то, что произойдёт", cloudAskConfirm(CloudScope.PUBLIC_LINK) == "Выложить")
+
+        assertTrue(cloudAskTitle(CloudScope.MODELS).contains("облако"))
+        assertEquals("Разрешить", cloudAskConfirm(CloudScope.MODELS))
     }
 }

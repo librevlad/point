@@ -175,6 +175,13 @@ data class FlowUiState(
      * прямая неправда — файл уезжает на релей Point и лежит по ссылке сутки.
      */
     val cloudDestination: String = "",
+    /** Заголовок вопроса про облако (#114): «Отправить в облако?» против «Выложить файл по
+     *  ссылке?» — обещания разные, и вопрос обязан звучать по-разному. */
+    val cloudTitle: String = "",
+    /** Слово на кнопке согласия — человек соглашается с ним, а не с облаком вообще. */
+    val cloudConfirm: String = "",
+    /** На экране настроек: разрешена ли отправка моделям сейчас — и её можно выключить (#114). */
+    val cloudEnabled: Boolean = false,
     /** Non-null while a capability's pre-execution preview awaits confirm (#97). */
     val preview: Preview? = null,
     /** Non-null while the inline "Открыть в…" app-picker is shown — the installed apps that can
