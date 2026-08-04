@@ -1,13 +1,21 @@
 package com.point.executors
 
+import com.point.core.flow.AI_CHAIN_PRIVACY
 import com.point.core.flow.Capability
 import com.point.core.flow.CapabilityMeta
+import com.point.core.flow.CloudPrivacySettings
 import com.point.core.flow.Cost
+import com.point.core.flow.ExternalEye
 import com.point.core.flow.Latency
 import com.point.core.flow.LlmClient
 import com.point.core.flow.META_OCR_TEXT_REF
 import com.point.core.flow.META_READING_MODE
 import com.point.core.flow.ObjectStore
+import com.point.core.flow.PrivacyLevel
+import com.point.core.flow.allowedAt
+import com.point.core.flow.META_READING_DOUBT
+import com.point.core.flow.degeneratedReading
+import com.point.core.flow.readingDoubts
 import com.point.core.flow.looksLikeOcrGarbage
 import com.point.core.flow.Realizer
 import com.point.core.flow.RealizerKind
@@ -127,6 +135,32 @@ class DeviceOcrRealizer @Inject constructor(
 }
 
 /**
+ * Внешний глаз в цепочке «Распознать текст» — между устройством и общей цепочкой моделей (#280).
+ *
+ * **Почему именно сюда.** Замер 04.08.2026 (`docs/VISION-MODELS.md`): на настоящих кадрах владельца,
+ * где телефонный движок не дал текста вовсе (водомер, две накладные), специальная ручка чтения
+ * прочитала всё; на эталонной ведомости — 24 строки из 24 дословно, включая кадр под углом, в тени
+ * и при плохом свете. Ставить её после общей цепочки моделей значило бы держать лучший измеренный
+ * способ чтения в запасе у худшего.
+ *
+ * Порядок цепочки: устройство (10, бесплатно и офлайн) → внешний глаз (50) → общая цепочка
+ * моделей (90). Первое звено — всегда местное: наружу уходит только то, что телефон не взял.
+ */
+class ExternalEyeOcrRealizer @Inject constructor(
+    private val eye: ExternalEye,
+    private val store: ObjectStore,
+) : Realizer {
+    override val capabilityId = OcrCapability.ID
+    override val meta = RealizerMeta(priority = 50, kind = RealizerKind.CLOUD)
+
+    /** Здесь узнать дёшево — в отличие от [LlmClient], который прячет своих за цепочкой. */
+    override fun isAvailable(): Boolean = eye.available()
+
+    override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
+        withContext(Dispatchers.IO) { readWithExternalEye(eye, store, input) }
+}
+
+/**
  * Cloud OCR — the chain's **fallback** realizer (network vision via [LlmClient],
  * priority 90). Reached only after on-device recognised nothing. A missing key /
  * provider failure surfaces as a recoverable Failure — as the last link in the chain,
@@ -134,19 +168,24 @@ class DeviceOcrRealizer @Inject constructor(
  */
 class CloudOcrRealizer @Inject constructor(
     private val llm: LlmClient,
+    private val privacy: CloudPrivacySettings,
 ) : Realizer {
     override val capabilityId = OcrCapability.ID
     override val meta = RealizerMeta(priority = 90, kind = RealizerKind.CLOUD)
 
+    /** Уровень «только Европа» и «только на телефоне» выключают общую цепочку: см. [AI_CHAIN_PRIVACY]. */
+    override fun isAvailable(): Boolean = allowedAt(privacy.level(), AI_CHAIN_PRIVACY)
+
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
+            if (!isAvailable()) return@withContext ActionResult.Failure(chainClosed(privacy.level()), recoverable = true)
             // Стадия говорит про СЕЙЧАС, а не про прошлое (#288). Соблазн был написать «на
             // устройстве не вышло — читаю в облаке»: сегодня это правда, потому что сюда попадают
             // только после отказа локального звена. Но правда о чужом шаге держится на порядке
             // цепочки в чужом файле — уедет он, и строка начнёт врать ровно тем способом, против
             // которого весь срез. Переход и так виден: строка сменилась с «на устройстве».
             reportStage(OCR_CLOUD_STAGE)
-            runCatching { ActionResult.Success(llm.run(input, OCR_CLOUD_PROMPT)) }
+            runCatching { guarded(llm.run(input, OCR_CLOUD_PROMPT), "модель") }
                 .getOrElse { ActionResult.Failure(it.message ?: "Ошибка распознавания в облаке", recoverable = true) }
         }
 }
@@ -168,18 +207,116 @@ class CloudOcrCapability @Inject constructor() : Capability {
     companion object { val ID = CapabilityId("ocr-cloud") }
 }
 
+/**
+ * «Распознать в облаке» — **первым читает внешний глаз** (priority 5), и только если он не дошёл,
+ * ход переходит общей цепочке моделей (priority 10).
+ *
+ * Пузырёк тот же, подпись та же, UI не тронут: новое звено встало за существующий шов
+ * «несколько Realizer на одну Capability», который `Resolver` и так умеет выстраивать в цепочку.
+ */
+class ExternalEyeCloudOcrRealizer @Inject constructor(
+    private val eye: ExternalEye,
+    private val store: ObjectStore,
+) : Realizer {
+    override val capabilityId = CloudOcrCapability.ID
+    override val meta = RealizerMeta(priority = 5, kind = RealizerKind.CLOUD)
+
+    override fun isAvailable(): Boolean = eye.available()
+
+    override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
+        withContext(Dispatchers.IO) { readWithExternalEye(eye, store, input) }
+}
+
 class CloudOcrDirectRealizer @Inject constructor(
     private val llm: LlmClient,
+    private val privacy: CloudPrivacySettings,
 ) : Realizer {
     override val capabilityId = CloudOcrCapability.ID
     override val meta = RealizerMeta(priority = 10, kind = RealizerKind.CLOUD)
 
+    override fun isAvailable(): Boolean = allowedAt(privacy.level(), AI_CHAIN_PRIVACY)
+
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
+            if (!isAvailable()) return@withContext ActionResult.Failure(chainClosed(privacy.level()), recoverable = true)
             reportStage(OCR_CLOUD_STAGE)
-            runCatching { ActionResult.Success(llm.run(input, OCR_CLOUD_PROMPT)) }
+            runCatching { guarded(llm.run(input, OCR_CLOUD_PROMPT), "модель") }
                 .getOrElse { ActionResult.Failure(it.message ?: "Ошибка распознавания в облаке", recoverable = true) }
         }
+}
+
+/**
+ * Чтение внешним глазом целиком: спросить, проверить сторожем, положить рядом происхождение.
+ *
+ * Общее для обоих реализаторов, потому что работа одна: разница между ними только в том, из какого
+ * пузырька в неё попадают.
+ */
+private suspend fun readWithExternalEye(
+    eye: ExternalEye,
+    store: ObjectStore,
+    input: PointObject,
+): ActionResult {
+    reportStage(OCR_CLOUD_STAGE)
+    val reading = runCatching { eye.read(input) }.getOrElse {
+        return ActionResult.Failure(it.message ?: "Прочитать снаружи не удалось", recoverable = true)
+    }
+    degeneratedReading(reading.text)?.let { why ->
+        return ActionResult.Failure(unreadable(reading.reader, why), recoverable = true)
+    }
+    return runCatching {
+        val ref = store.newScratchFile("txt")
+        File(ref.value).writeText(reading.text)
+        ActionResult.Success(
+            ResultObject(
+                ObjectKind.TEXT,
+                "text/plain",
+                ref,
+                buildMap {
+                    put("op", "ocr")
+                    // Происхождение значения видно человеку: не «облако», а кто именно и откуда.
+                    put("engine", reading.reader)
+                    put("where", reading.where)
+                    input.metadata[META_READING_MODE]?.let { put(META_READING_MODE, it) }
+                    // Сомнение едет вместе с текстом, а не тонет в нём (#425). Отказом оно не
+                    // становится: выбросить накладную из-за одной подозрительной ячейки хуже, чем
+                    // показать её с пометкой. Но и промолчать нельзя — на замере уверенная ошибка
+                    // модели ловилась только несошедшимся итогом.
+                    readingDoubts(reading.text).takeIf { it.isNotEmpty() }?.let { doubts ->
+                        put(META_READING_DOUBT, doubts.joinToString("; ") { it.what })
+                    }
+                },
+            ),
+        )
+    }.getOrElse { ActionResult.Failure(it.message ?: "Ошибка записи результата", recoverable = true) }
+}
+
+/**
+ * Сторож между моделью и человеком на пути общей цепочки (#280).
+ *
+ * Ответ модели уже лежит файлом, поэтому проверять приходится его содержимое. Файл не прочитался —
+ * пропускаем: выдумывать сбой там, где его не видно, так же нечестно, как прятать настоящий.
+ */
+private fun guarded(result: ResultObject, who: String): ActionResult {
+    val text = runCatching { File(result.uri.value).readText() }.getOrNull() ?: return ActionResult.Success(result)
+    val why = degeneratedReading(text) ?: return ActionResult.Success(result)
+    return ActionResult.Failure(unreadable(who, why), recoverable = true)
+}
+
+/**
+ * Отказ, который человек поймёт: **«не смог прочитать»**, а не сочинённый текст.
+ *
+ * Причина названа, потому что она подсказывает, что делать: зацикливание и пустой ответ лечатся
+ * пересъёмкой, а не повтором того же кадра. Замер поймал худший случай: одна выдуманная строка 71
+ * раз подряд, с обычной уверенностью и без единого слова о том, что модель не читает.
+ */
+private fun unreadable(who: String, why: String): String =
+    "Не смог прочитать этот снимок: $who отдала бессмыслицу ($why). " +
+        "Лучше переснять при ровном свете и поближе."
+
+/** Почему облако молчит, когда его выключил сам человек, — статус, а не поломка. */
+private fun chainClosed(level: PrivacyLevel): String = when (level) {
+    PrivacyLevel.DEVICE_ONLY -> "Наружу ничего не отправляется — в настройках выбрано «Только на телефоне»"
+    else -> "Читают только европейские сервисы — так выбрано в настройке «Куда можно отправлять»"
 }
 
 /**

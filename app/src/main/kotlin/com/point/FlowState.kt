@@ -169,6 +169,8 @@ data class FlowUiState(
     val usageEnabled: Boolean = false,
     /** On the key screen: whether branded action sounds are on (MOTION.md M4). */
     val soundEnabled: Boolean = true,
+    /** На экране настроек: кому вообще можно предлагать прочитать объект (#280). */
+    val privacyLevel: com.point.core.flow.PrivacyLevel = com.point.core.flow.PrivacyLevel.DEFAULT,
     val usageSummary: UsageSummary? = null,
     /** Экран выделения (#259): открыт, пока не взяли захват или не вышли назад. */
     val selection: SelectionUi? = null,

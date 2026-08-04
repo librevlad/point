@@ -99,6 +99,15 @@ android {
         buildConfigField("String", "LLAMA_CLOUD_API_KEY", "\"\"")
         buildConfigField("String", "LLAMA_CLOUD_BASE_URL", prop("LLAMA_CLOUD_BASE_URL", "https://api.cloud.llamaindex.ai"))
         buildConfigField("String", "LLAMA_CLOUD_TIER", prop("LLAMA_CLOUD_TIER", "cost_effective"))
+
+        // Внешний глаз (#280) — второй в очереди после Mistral OCR. OVH отдаёт зрячую модель
+        // БЕЗ ключа и регистрации (замер 04.08.2026: 15/15 на кириллице), поэтому ключ здесь
+        // необязателен и живёт наравне с остальными: задан — поднимает лимиты, пуст — читатель
+        // всё равно работает. Единственный такой в списке, и потому он единственный, кто
+        // остаётся живым в раздаваемой сборке без единого ключа.
+        buildConfigField("String", "OVH_API_KEY", "\"\"")
+        buildConfigField("String", "OVH_BASE_URL", prop("OVH_BASE_URL", "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1"))
+        buildConfigField("String", "OVH_MODEL", prop("OVH_MODEL", "Qwen2.5-VL-72B-Instruct"))
     }
 
     buildTypes {
@@ -117,6 +126,7 @@ android {
             buildConfigField("String", "GITHUB_API_KEY", prop("GITHUB_API_KEY"))
             buildConfigField("String", "UNSTRUCTURED_API_KEY", prop("UNSTRUCTURED_API_KEY"))
             buildConfigField("String", "LLAMA_CLOUD_API_KEY", prop("LLAMA_CLOUD_API_KEY"))
+            buildConfigField("String", "OVH_API_KEY", prop("OVH_API_KEY"))
         }
 
         // «Свой» вариант (#403/#161): сборка, которую владелец ставит себе с сайта.

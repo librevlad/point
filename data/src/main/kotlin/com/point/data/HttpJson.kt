@@ -10,24 +10,6 @@ import javax.inject.Inject
 data class HttpResult(val code: Int, val body: String)
 
 /**
- * Кем Point называется чужому серверу — и это не вежливость, а рабочий заголовок.
- *
- * `docs/VISION-MODELS.md` предупреждал: Groq и Cerebras отвечали отказом без браузерного
- * `User-Agent`, и «стоит проверить, уходит ли он из Point, прежде чем считать провайдера мёртвым».
- * Проверено (#223): **не уходил** — `HttpURLConnection` своего значения не ставит, и наши запросы
- * шли безымянными.
- *
- * Перепроверка самого отказа его не повторила (без заголовка — 200), поэтому здесь он стоит как
- * дешёвая страховка, а не как разгадка: если провайдер снова начнёт отказывать, списывать на
- * заголовок нельзя, разбор — в `docs/DECISIONS.md` (#223).
- *
- * Ставится **до** заголовков вызывающего, поэтому клиент со своими требованиями может назваться
- * иначе. Число — поколение приложения, а не отпечаток сборки: серверу важно, что заголовок есть и
- * называет нас, а точная версия ему не нужна и в лог чужого сервиса не просится.
- */
-internal const val POINT_USER_AGENT = "Point/0.2 (Android)"
-
-/**
  * A minimal JSON-over-HTTP POST behind an interface, so the LLM clients' request
  * building and response parsing become unit-testable with a fake transport — no
  * real network, no Robolectric. The single real implementation
@@ -52,9 +34,8 @@ class UrlConnectionHttpJson @Inject constructor() : HttpJson {
                 doOutput = true
                 connectTimeout = 30_000
                 readTimeout = 60_000
-                setRequestProperty("Content-Type", "application/json; charset=utf-8")
-                setRequestProperty("User-Agent", POINT_USER_AGENT)
-                headers.forEach { (k, v) -> setRequestProperty(k, v) }
+                pointHeaders(mapOf("Content-Type" to "application/json; charset=utf-8"), headers)
+                    .forEach { (k, v) -> setRequestProperty(k, v) }
             }
             conn.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
             val code = conn.responseCode

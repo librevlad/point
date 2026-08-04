@@ -16,10 +16,9 @@ import java.io.RandomAccessFile
 /**
  * Whisper на Groq (#223) поверх поддельной сети — ни ключа, ни байта наружу.
  *
- * Судится то, что человек почувствует: запрос уходит на ручку расшифровки и несёт имя (безымянным
- * этот провайдер однажды уже числился мёртвым); язык **не форсируется**, потому что записи бывают и
- * на украинском, и на русском; пустой ответ становится тишиной, а не пустой расшифровкой; отказ
- * приходит словами.
+ * Судится то, что человек почувствует: запрос уходит на ручку расшифровки и несёт ключ; язык **не
+ * форсируется**, потому что записи бывают и на украинском, и на русском; пустой ответ становится
+ * тишиной, а не пустой расшифровкой; отказ приходит словами.
  */
 class GroqWhisperSpeechToTextTest {
 
@@ -40,7 +39,7 @@ class GroqWhisperSpeechToTextTest {
     private fun heard(text: String) = HttpResult(200, """{"text":"$text"}""")
 
     @Test
-    fun `запрос уходит на ручку расшифровки — с ключом, с именем и без форсированного языка`() = runTest {
+    fun `запрос уходит на ручку расшифровки — с ключом и без форсированного языка`() = runTest {
         val http = FakeHttpFiles(onPost = { heard("А може до якого ґазди?") })
 
         whisper(http).transcribe(recording("audio/ogg", name = "PTT-20260804.opus"))
@@ -48,8 +47,9 @@ class GroqWhisperSpeechToTextTest {
         val sent = http.posts.single()
         assertEquals("https://api.groq.com/openai/v1/audio/transcriptions", sent.url)
         assertEquals("Bearer gsk-free", sent.headers["Authorization"])
-        // Безымянные запросы — то, из-за чего этот провайдер однажды числился мёртвым.
-        assertTrue(sent.headers["User-Agent"].orEmpty().startsWith("Point/"))
+        // `User-Agent` здесь не проверяется намеренно: его ставит транспорт всем запросам сразу
+        // (`pointHeaders`, судится `PointUserAgentTest`), и второе место с тем же обещанием
+        // разъехалось бы с первым.
         assertEquals("whisper-large-v3-turbo", sent.field("model"))
         assertEquals("json", sent.field("response_format"))
         // Форсированный язык превратил бы украинскую речь в русскую транслитерацию — то есть в

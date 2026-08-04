@@ -59,20 +59,10 @@ class FallbackAtomRecognizer @Inject constructor(
     /**
      * Одна человеческая строка вместо стены ошибок от каждого слоя — та же дисциплина, что в
      * [FallbackLlmClient]: общая причина (нет сети, кончилось бесплатное) схлопывается в причину,
-     * а не в перечисление.
+     * а не в перечисление. Свод общий с цепочкой внешнего глаза ([summariseCloudErrors]): причина у
+     * отказа одна, и объяснять её двумя разными наборами слов было бы второй правдой.
      */
-    private fun summarise(errors: List<String>): String = when {
-        errors.isNotEmpty() && errors.all { it.isNetworkError() } ->
-            "Облачное чтение недоступно — нет подключения к интернету"
-        errors.isNotEmpty() && errors.all { it.isQuotaError() } ->
-            "Бесплатные лимиты чтения исчерпаны — вернитесь позже, платить не идём"
-        else -> "Облачное чтение не удалось — " +
-            errors.map { it.substringBefore('\n').take(120) }.distinct().take(2).joinToString("; ")
-    }
-
-    private fun String.isNetworkError(): Boolean = NETWORK_HINTS.any { contains(it, ignoreCase = true) }
-
-    private fun String.isQuotaError(): Boolean = QUOTA_HINTS.any { contains(it, ignoreCase = true) }
+    private fun summarise(errors: List<String>): String = summariseCloudErrors(errors)
 
     private companion object {
         const val NOT_CONFIGURED =
@@ -81,13 +71,5 @@ class FallbackAtomRecognizer @Inject constructor(
         /** Ключ есть, а читателя для такого входа нет — сегодня облако берётся только за снимок. */
         const val NOT_FOR_THIS_OBJECT =
             "Облачное чтение не берётся за этот объект — бесплатные читатели принимают снимок страницы"
-
-        val NETWORK_HINTS = listOf(
-            "resolve host", "No address associated", "Unable to resolve",
-            "connection abort", "Network is unreachable", "Failed to connect",
-            "timed out", "timeout",
-        )
-
-        val QUOTA_HINTS = listOf("(402)", "(429)", "HTTP 402", "HTTP 429")
     }
 }

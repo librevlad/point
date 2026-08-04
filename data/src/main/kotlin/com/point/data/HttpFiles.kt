@@ -66,11 +66,13 @@ class UrlConnectionHttpFiles @Inject constructor() : HttpFiles {
             doOutput = true
             connectTimeout = 30_000
             readTimeout = 120_000 // чтение страницы облаком — это не чат, ответ приходит небыстро
-            setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
-            setRequestProperty("Accept", "application/json")
-            // Безымянными наши запросы уходить не должны — см. [POINT_USER_AGENT].
-            setRequestProperty("User-Agent", POINT_USER_AGENT)
-            headers.forEach { (k, v) -> setRequestProperty(k, v) }
+            pointHeaders(
+                mapOf(
+                    "Content-Type" to "multipart/form-data; boundary=$boundary",
+                    "Accept" to "application/json",
+                ),
+                headers,
+            ).forEach { (k, v) -> setRequestProperty(k, v) }
         }
         conn.outputStream.use { it.write(body) }
         conn.read()
@@ -82,9 +84,8 @@ class UrlConnectionHttpFiles @Inject constructor() : HttpFiles {
                 requestMethod = "GET"
                 connectTimeout = 30_000
                 readTimeout = 60_000
-                setRequestProperty("Accept", "application/json")
-                setRequestProperty("User-Agent", POINT_USER_AGENT)
-                headers.forEach { (k, v) -> setRequestProperty(k, v) }
+                pointHeaders(mapOf("Accept" to "application/json"), headers)
+                    .forEach { (k, v) -> setRequestProperty(k, v) }
             }
             conn.read()
         }
