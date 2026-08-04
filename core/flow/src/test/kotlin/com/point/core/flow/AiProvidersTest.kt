@@ -32,6 +32,21 @@ class AiProvidersTest {
     }
 
     @Test
+    fun `адрес ведёт в OpenAI-совместимую дверь, а не в корень домена`() {
+        // Ключ человека ходит через `OpenAiCompatibleClient`, который дописывает `/chat/completions`.
+        // Голый домен давал адрес, которого нет, — и Gemini с Anthropic отказывали человеку,
+        // сделавшему всё правильно (#465). Ловится это только здесь: снаружи такое выглядит как
+        // «сервис не знает такой модели».
+        AI_PROVIDERS.forEach { provider ->
+            val path = provider.baseUrl.removePrefix("https://").substringAfter('/', "")
+            assertTrue(
+                "${provider.name}: адрес «${provider.baseUrl}» — корень домена, а нужна дверь API",
+                path.isNotBlank(),
+            )
+        }
+    }
+
+    @Test
     fun `имена не повторяются — иначе выбор не выбор`() {
         assertEquals(AI_PROVIDERS.size, AI_PROVIDERS.map { it.id }.toSet().size)
         assertEquals(AI_PROVIDERS.size, AI_PROVIDERS.map { it.baseUrl }.toSet().size)

@@ -189,6 +189,20 @@ data class FlowUiState(
     val appPicker: List<AppTarget>? = null,
     /** Non-null while the bring-your-own AI-key screen is shown (its prefilled values). */
     val keyScreen: UserAiConfig? = null,
+    /**
+     * Почему экран ключа открылся сам (#465): «Чтобы «Понять» работало, нужен ключ AI».
+     *
+     * `null` — человек пришёл сюда сам, шестерёнкой, и объяснять ему нечего. Раньше разницы не
+     * было: экран выпрыгивал после отказа молча, и это читалось как сбой, а не как ответ на
+     * вопрос «почему не сработало».
+     */
+    val keyReason: String? = null,
+    /** Идёт ли живая проверка ключа прямо сейчас (#465) — поднимается только явным тапом. */
+    val keyChecking: Boolean = false,
+    /** Чем кончилась проверка: «работает» словами сервиса или отказ с продолжением (#465). */
+    val keyVerdict: com.point.core.flow.KeyVerdict? = null,
+    /** Задан ли ключ вообще — пока нет, «Недавнее» зовёт его подключить и говорит зачем (#465). */
+    val aiKeySet: Boolean = false,
     val pcScreen: PcScreenState? = null,
     /** On the key screen: whether the private usage journal is on, and its current tally. */
     val usageEnabled: Boolean = false,

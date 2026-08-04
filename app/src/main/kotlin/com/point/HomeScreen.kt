@@ -81,6 +81,8 @@ fun HomeScreen(
     fromPcCount: Int = 0,
     onPullFromPc: () -> Unit = {},
     onHideFromPc: () -> Unit = {},
+    /** Задан ли AI-ключ (#465). Пока нет — «Недавнее» зовёт его подключить и говорит зачем. */
+    aiKeySet: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier.fillMaxSize().systemBarsPadding()) {
@@ -110,6 +112,14 @@ fun HomeScreen(
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+        }
+
+        // Зачем ключ — сказанное ДО того, как человек упёрся в отказ (#465). Свежепоставленный
+        // Point молчал об этом вовсе: «Понять», «Перевести», «Спросить AI» и расшифровка отвечали
+        // отказом, и узнавал человек о ключе в худший момент — когда действие уже провалилось.
+        // Приглашение стоит здесь, а не на экране объекта: тот держит бюджет ≤300 мс без I/O.
+        if (!aiKeySet) {
+            ConnectAiRow(onConnect = onSettings)
         }
 
         if (crashReport != null) {
@@ -174,6 +184,28 @@ fun HomeScreen(
             }
         }
     }
+}
+
+/**
+ * Приглашение подключить AI, пока ключа нет (#465).
+ *
+ * Не баннер и не «подсказка дня»: строка портала — тем же языком, каким Point предлагает действия
+ * над объектом. Скрыть её нечем намеренно — это не новость, которую можно прочитать и забыть, а
+ * состояние: половина Point молчит, пока ключа нет. Исчезнет она сама, когда ключ появится.
+ */
+@Composable
+private fun ConnectAiRow(onConnect: () -> Unit) {
+    com.point.core.ui.PortalRow(
+        title = "Подключите AI — пара минут",
+        subtitle = com.point.core.flow.AI_KEY_WHY_SHORT,
+        onClick = onConnect,
+        icon = com.point.core.ui.bubbleIcon("ai"),
+        accent = com.point.core.ui.bubbleColor("ai"),
+        primary = true,
+        chevron = false,
+        subtitleMaxLines = 3,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+    )
 }
 
 /**

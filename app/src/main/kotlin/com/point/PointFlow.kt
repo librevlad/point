@@ -48,6 +48,8 @@ fun PointFlow(
         onCloseChat = viewModel::closeChat,
         onBubbleLongPress = viewModel::togglePin,
         onSaveAiConfig = viewModel::saveAiConfig,
+        onCheckAiKey = viewModel::checkAiKey,
+        onPasteKey = { clipboardText(context) },
         onCloseKeySettings = viewModel::closeKeySettings,
         onToggleUsage = viewModel::setUsageEnabled,
         onToggleSound = viewModel::setSoundEnabled,
@@ -84,3 +86,16 @@ internal fun openInBrowser(context: Context, url: String) {
         )
     }
 }
+
+/**
+ * Что лежит в буфере обмена — для «Вставить из буфера» на экране ключа (#465).
+ *
+ * Зовётся ТОЛЬКО из обработчика тапа: Point не заглядывает в чужой буфер, чтобы решить, показывать
+ * ли строку. Точка входа одна и живёт рядом с открытием браузера — обе двери про неё не знают и
+ * потерять её не могут (тот же довод, которым в своё время родился [PointFlow]).
+ */
+internal fun clipboardText(context: Context): String? = runCatching {
+    val manager = context.getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+    val clip = manager?.primaryClip ?: return@runCatching null
+    if (clip.itemCount == 0) null else clip.getItemAt(0).coerceToText(context)?.toString()
+}.getOrNull()

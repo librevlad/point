@@ -121,6 +121,8 @@ class FlowViewModel @Inject constructor(
     private val linkMonitor: com.point.core.flow.LinkMonitor,
     private val pulledFiles: PulledFileFactory,
     private val frames: SelectionFrames,
+    /** Кто стучится в сервис ключом человека, когда тот просит проверить (#465). */
+    private val aiKeyCheck: com.point.core.flow.AiKeyCheck,
 ) : ViewModel() {
 
     /**
@@ -354,6 +356,9 @@ class FlowViewModel @Inject constructor(
     }
 
     fun loadRecent() {
+        // Есть ли ключ — «Недавнее» спрашивает об этом здесь, а не на экране объекта: приглашение
+        // подключить AI живёт на домашнем экране, и бюджет первого экрана (≤300 мс) не трогается.
+        _ui.update { it.copy(aiKeySet = runCatching { userKeys.read() != null }.getOrDefault(false)) }
         viewModelScope.launch {
             _recent.value = runCatching { history.recent() }.getOrDefault(emptyList())
             _basketCount.value = runCatching { basket.items().size }.getOrDefault(0)
@@ -929,12 +934,23 @@ class FlowViewModel @Inject constructor(
 
     // --- Bring-your-own AI key (#19). Summoned on demand or from the Home gear. ---
 
-    fun openKeySettings() {
+    /**
+     * Открыть экран ключа. [reason] говорит, почему он открылся сам, — его называет тот, кто
+     * упёрся в отсутствие ключа (#465); шестерёнка не называет ничего, ей объяснять нечего.
+     */
+    fun openKeySettings(reason: String? = null) {
         // A tiny prefs read; the store is warmed when it's created (Activity start), so it
         // is in-memory by the time the gear or an AI-no-key failure summons the screen.
+        val saved = userKeys.read()
         _ui.update {
             it.copy(
-                keyScreen = userKeys.read() ?: UserAiConfig.DEFAULT, busy = null, message = null, messageOutcome = Outcome.NONE, inputPrompt = null,
+                keyScreen = saved ?: UserAiConfig.DEFAULT, busy = null, message = null, messageOutcome = Outcome.NONE, inputPrompt = null,
+                keyReason = reason,
+                // Приговор прошлой проверки не имеет права пережить закрытие экрана: «работает»,
+                // висящее над другим ключом, — ровно та ложь, против которой вся проверка (#465).
+                keyChecking = false,
+                keyVerdict = null,
+                aiKeySet = saved != null,
                 soundEnabled = runCatching { sensorySettings.isSoundEnabled() }.getOrDefault(true),
                 privacyLevel = runCatching { cloudPrivacy.level() }
                     .getOrDefault(com.point.core.flow.PrivacyLevel.DEFAULT),
@@ -942,6 +958,34 @@ class FlowViewModel @Inject constructor(
         }
         refreshUsage()
         viewModelScope.launch { refreshCloudConsent() } // тумблер показывает, что разрешено сейчас
+    }
+
+    /**
+     * Проверить ключ живым запросом и, если он работает, тут же его сохранить (#465).
+     *
+     * Порядок именно такой: сохраняет то, что доказано. Записать сначала и проверить потом значило
+     * бы оставить в приложении ключ, про который уже известно, что он не подошёл, — и следующее
+     * действие человека провалилось бы снова, теперь уже «необъяснимо».
+     *
+     * Отказ ничего не сохраняет и ничего не закрывает: человек остаётся на экране, где стоит и
+     * набранный ключ, и совет, что с ним сделать.
+     */
+    fun checkAiKey(config: UserAiConfig) {
+        if (config.apiKey.isBlank() || _ui.value.keyChecking) return
+        _ui.update { it.copy(keyChecking = true, keyVerdict = null) }
+        viewModelScope.launch {
+            val probe = runCatching { aiKeyCheck.check(config) }
+                .getOrElse { com.point.core.flow.KeyProbe(error = com.point.core.flow.withoutKey(it.message.orEmpty(), config.apiKey)) }
+            val verdict = com.point.core.flow.keyVerdict(probe)
+            if (verdict is com.point.core.flow.KeyVerdict.Works) runCatching { userKeys.save(config) }
+            _ui.update {
+                it.copy(
+                    keyChecking = false,
+                    keyVerdict = verdict,
+                    aiKeySet = it.aiKeySet || verdict is com.point.core.flow.KeyVerdict.Works,
+                )
+            }
+        }
     }
 
     /** Load the usage journal's on/off state and tally for the key screen. */
@@ -978,7 +1022,8 @@ class FlowViewModel @Inject constructor(
         }
     }
 
-    fun closeKeySettings() = _ui.update { it.copy(keyScreen = null) }
+    fun closeKeySettings() =
+        _ui.update { it.copy(keyScreen = null, keyReason = null, keyVerdict = null, keyChecking = false) }
 
     // --- «Компьютер» (#147): pair once, then the «На компьютер» bubble appears. ---
 
@@ -1224,7 +1269,16 @@ class FlowViewModel @Inject constructor(
     fun saveAiConfig(config: UserAiConfig) {
         viewModelScope.launch {
             runCatching { userKeys.save(config) }
-            _ui.update { it.copy(keyScreen = null, message = "Ключ AI сохранён", messageOutcome = Outcome.DONE) }
+            _ui.update {
+                it.copy(
+                    keyScreen = null,
+                    keyReason = null,
+                    keyVerdict = null,
+                    aiKeySet = config.apiKey.isNotBlank(),
+                    message = "Ключ AI сохранён",
+                    messageOutcome = Outcome.DONE,
+                )
+            }
         }
     }
 
@@ -1388,7 +1442,11 @@ class FlowViewModel @Inject constructor(
                 runCatching { sensory.failure() } // M4: a failure bumps, never buzzes long
                 runCatching { journal.record(UsageEvent(UsageEventType.FAILED, bubble.capabilityId.value)) }
                 // A "no AI key" failure summons the key screen on demand instead of just erroring.
-                if (result.reason.contains("задайте свой ключ")) openKeySettings()
+                // И называет себя (#465): экран, выпрыгнувший молча, читается как сбой, а не как
+                // ответ на вопрос «почему «Понять» ничего не сделало».
+                if (result.reason.contains("задайте свой ключ")) {
+                    openKeySettings(reason = "«${bubble.title}» делает модель — для неё и нужен ключ.")
+                }
                 else _ui.update { it.copy(busy = null, busyStage = null, message = result.reason, messageOutcome = Outcome.FAILED) }
             }
             is ActionResult.NeedsInput -> {
