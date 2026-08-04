@@ -9,9 +9,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -61,30 +61,41 @@ fun FindScreen(
         var query by rememberSaveable { mutableStateOf("") }
         // Поле сверху, страница под ним: экранная клавиатура закрывает низ экрана, и поле,
         // спрятанное под ней, — это поиск, в который нельзя посмотреть.
-        Surface(tonalElevation = 3.dp) {
-            Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    OutlinedTextField(
-                        value = query,
-                        onValueChange = { query = it; onQuery(it) },
-                        modifier = Modifier.weight(1f),
-                        singleLine = true,
-                        label = { Text("Что найти") },
-                    )
-                    TextButton(onClick = onClose) { Text("Закрыть") }
+        //
+        // Панель — поверхность портала, а не `Surface(tonalElevation)` (#461): у Point одна
+        // поверхность, и лист «приподнятой бумаги» над страницей был вторым языком на том же
+        // экране. И экран наконец называет себя: раньше на нём не было ни слова о том, куда человек
+        // попал, — только поле «Что найти» над чужой бумагой.
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .portalCard(shape = PanelShape, elevation = 16.dp)
+                .padding(horizontal = 20.dp, vertical = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            SectionLabel("Найти в документе")
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it; onQuery(it) },
+                    modifier = Modifier.weight(1f),
+                    singleLine = true,
+                    label = { Text("Что найти") },
+                )
+                TextButton(onClick = onClose) {
+                    Text("Закрыть", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                if (status != null) {
-                    Text(
-                        text = status,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 8.dp),
-                    )
-                }
+            }
+            if (status != null) {
+                Text(
+                    text = status,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
 
@@ -118,3 +129,6 @@ fun FindScreen(
         }
     }
 }
+
+/** Панель приклеена к верху экрана: скругления только снизу. */
+private val PanelShape = RoundedCornerShape(bottomStart = 22.dp, bottomEnd = 22.dp)
