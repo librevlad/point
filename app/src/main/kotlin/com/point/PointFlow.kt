@@ -54,6 +54,7 @@ fun PointFlow(
         onToggleUsage = viewModel::setUsageEnabled,
         onToggleSound = viewModel::setSoundEnabled,
         onPickPrivacyLevel = viewModel::setPrivacyLevel,
+        onToggleCloud = viewModel::setCloudAllowed,
         onConfirmCloud = viewModel::confirmCloud,
         onDeclineCloud = viewModel::declineCloud,
         onPickApp = viewModel::onPickApp,

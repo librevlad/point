@@ -402,6 +402,100 @@ class FlowViewModelTest {
         assertNull(shareAgainHint(vm.ui.value.messageOutcome))
     }
 
+    // --- «Отменить» либо отменяет, либо её нет (#114) ---
+
+    /**
+     * Кнопка стоит только над той работой, которую отмена действительно снимает.
+     *
+     * Было: `onCancel` передавался экрану ожидания всегда, а задачу держало одно действие по
+     * пузырю. Над «Открываю…» кнопка была нарисована и не отменяла ничего.
+     */
+    @Test fun `кнопка отмены есть только там, где есть что отменять`() = runTest(dispatcher) {
+        val vm = vm(slow = setOf(CapabilityId("a")))
+
+        vm.onShared("uri", "image/png") // приём расшаренного идёт, объекта ещё нет
+        assertTrue("экран ожидания поднят", showsBusyScreen(vm.ui.value))
+        assertFalse("а отменять нечем — кнопки нет", showsCancel(vm.ui.value))
+        advanceUntilIdle()
+
+        resolver.holdMs = 1_000 // работа ещё идёт, когда человек смотрит на экран
+        vm.onBubble(bubble(id = "a")) // действие над объектом — вот его отменить можно
+        dispatcher.scheduler.advanceTimeBy(10)
+        assertTrue(showsCancel(vm.ui.value))
+    }
+
+    /**
+     * Отмена снимает ту работу, что идёт сейчас, — а не ту, что давно закончилась.
+     *
+     * Ровно этот путь и врал человеку: задача хранилась от действия по пузырю и не обнулялась по
+     * завершении. Тап «Отменить» во время «Открываю…» снимал уже сделанное, печатал «Отменено» —
+     * и объект открывался секундой позже, потому что открытие никто не останавливал.
+     */
+    @Test fun `отмена снимает идущую работу, а не законченную`() = runTest(dispatcher) {
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        vm.onBubble(bubble(id = "a")); advanceUntilIdle() // задача действия появилась и закончилась
+        vm.endFlow(); advanceUntilIdle() // человек вернулся на «Недавнее»
+        history.opened = PointObject("hist", "image/png", ScratchRef("/hist"), ObjectState(ObjectKind.IMAGE))
+
+        vm.openFromHistory(entry("h")) // идёт «Открываю…»
+        assertTrue("отсюда возвращаться есть куда — кнопка на месте", showsCancel(vm.ui.value))
+        vm.cancelAction()
+        advanceUntilIdle()
+
+        assertNull("объект не открылся вопреки отмене", vm.ui.value.frame)
+        assertNull("и «Отменено» не осталось висеть без объекта", vm.ui.value.message)
+    }
+
+    /** Цепочка — самая долгая работа в Point (несколько сетевых шагов). Отмена обязана
+     *  остановить её, а не позволить следующему шагу приземлиться поверх «Отменено». */
+    @Test fun `отменённая цепочка не делает следующий шаг`() = runTest(dispatcher) {
+        favorites.chains = listOf(FavoriteChain("c", "Цепочка", listOf(CapabilityId("a"), CapabilityId("a"))))
+        resolver.result = ActionResult.Success(
+            ResultObject(ObjectKind.TEXT, "text/plain", ScratchRef("/out")),
+        )
+        resolver.holdMs = 1_000
+        resolver.uninterruptible = true
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.applyFavorite(favorites.chains.first())
+        dispatcher.scheduler.advanceTimeBy(10)
+        assertTrue("над цепочкой кнопка есть", showsCancel(vm.ui.value))
+        vm.cancelAction()
+        advanceUntilIdle()
+
+        assertEquals("ни один шаг не приземлился", 1, vm.ui.value.path.size)
+        assertEquals("Отменено", vm.ui.value.message)
+    }
+
+    /** «Ищу приложения…» — тоже занятость с кнопкой; отменённый поиск не смеет открыть список. */
+    @Test fun `отменённый поиск приложений не открывает выбор`() = runTest(dispatcher) {
+        appLauncher.apps = listOf(AppTarget("Telegram", "org.tg", "org.tg.Main"))
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.onBubble(bubble(id = "open-in"))
+        assertTrue(showsCancel(vm.ui.value))
+        vm.cancelAction()
+        advanceUntilIdle()
+
+        assertNull("выбор приложений не всплыл", vm.ui.value.appPicker)
+        assertEquals("Отменено", vm.ui.value.message)
+    }
+
+    /** Законченная работа не отменяется задним числом: раньше задача не обнулялась, и тап
+     *  «Отменить» над следующей занятостью объявлял отменённым уже сделанное. */
+    @Test fun `нечего отменять — нечего и объявлять отменённым`() = runTest(dispatcher) {
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        vm.onBubble(bubble(id = "a")); advanceUntilIdle() // действие уже завершилось
+
+        vm.cancelAction()
+
+        assertEquals("done", vm.ui.value.message) // исход законченной работы уцелел
+    }
+
     /** Удача с домашнего экрана попадает на тот же экран «объекта ещё нет» — и не смеет
      *  выглядеть сбоем: ни знака «✕», ни совета чинить несломанное. */
     @Test fun `сохранённый ключ AI — это удача, а не сорванный шаринг`() = runTest(dispatcher) {
@@ -1540,6 +1634,105 @@ class FlowViewModelTest {
         assertEquals("__unset__", resolver.lastAmendment)     // no step reached the cloud
     }
 
+    // --- «Показать модели» ≠ «выложить в открытый доступ» (#114) ---
+
+    /** Способности с разной ценой: «Понять» показывает объект модели, «Дать ссылку» кладёт файл
+     *  на сервер открытым. Обе сетевые — и до сих пор их разрешал один флаг. */
+    private fun linkVm() = vm(
+        caps = mapOf(
+            CapabilityId("ai") to setOf(Intent.UNDERSTAND),
+            CapabilityId("drop-link") to setOf(Intent.SEND),
+        ),
+        cloud = setOf(CapabilityId("ai"), CapabilityId("drop-link")),
+    )
+
+    /**
+     * Разрешение, данное ради моделей, не выкладывает файл в открытый доступ.
+     *
+     * Было: человек однажды разрешил облако для «Понять» — и «Дать ссылку» молча уводило файл на
+     * сервер, откуда его заберёт любой, кому переслали ссылку. Про цену он узнавал ПОСЛЕ загрузки,
+     * с уже выданной карточки.
+     */
+    @Test fun `разрешение для моделей не выкладывает файл по открытой ссылке`() = runTest(dispatcher) {
+        consent.granted = true // облако для AI разрешено давно
+        val vm = linkVm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.onBubble(bubble(id = "drop-link", title = "Дать ссылку")); advanceUntilIdle()
+
+        assertTrue("про открытую ссылку спрашивают отдельно", vm.ui.value.cloudConsent)
+        assertEquals("файл никуда не уехал", "__unset__", resolver.lastAmendment)
+    }
+
+    /** Цена называется ДО отправки: текст вопроса — про открытость файла и срок жизни ссылки. */
+    @Test fun `цена открытой ссылки названа до отправки, а не после`() = runTest(dispatcher) {
+        consent.granted = true
+        val vm = linkVm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.onBubble(bubble(id = "drop-link", title = "Дать ссылку")); advanceUntilIdle()
+
+        val ask = vm.ui.value
+        assertTrue("не сказано, что заберёт любой: ${ask.cloudDestination}", ask.cloudDestination.contains("любому"))
+        assertTrue("не сказано, сколько живёт: ${ask.cloudDestination}", ask.cloudDestination.contains("суток"))
+        assertTrue("вопрос звучит про ссылку: ${ask.cloudTitle}", ask.cloudTitle.contains("ссылке"))
+        assertEquals("Выложить", ask.cloudConfirm)
+    }
+
+    /** Согласие на открытую ссылку не запоминается: следующий файл — следующее решение. */
+    @Test fun `второе «Дать ссылку» спрашивает заново`() = runTest(dispatcher) {
+        val vm = linkVm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        vm.onBubble(bubble(id = "drop-link", title = "Дать ссылку")); advanceUntilIdle()
+        vm.confirmCloud(); advanceUntilIdle()
+        assertEquals("первый файл выложен", "done", vm.ui.value.message)
+
+        vm.onBubble(bubble(id = "drop-link", title = "Дать ссылку")); advanceUntilIdle()
+
+        assertTrue("следующий файл — следующее решение", vm.ui.value.cloudConsent)
+    }
+
+    /** А обычное облако допросом не становится: разрешили один раз — работает. */
+    @Test fun `согласие на модели остаётся однократным`() = runTest(dispatcher) {
+        val vm = linkVm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        vm.onBubble(bubble(id = "ai")); advanceUntilIdle()
+        vm.confirmCloud(); advanceUntilIdle()
+
+        vm.onBubble(bubble(id = "ai")); advanceUntilIdle()
+
+        assertEquals("второй раз не спрашиваем", false, vm.ui.value.cloudConsent)
+    }
+
+    /** Согласие, которое нельзя отозвать, — не согласие. Тумблер в настройках возвращает вопрос. */
+    @Test fun `отозванное согласие возвращает вопрос`() = runTest(dispatcher) {
+        consent.granted = true
+        val vm = linkVm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.setCloudAllowed(false); advanceUntilIdle()
+        assertEquals(false, vm.ui.value.cloudEnabled)
+
+        vm.onBubble(bubble(id = "ai")); advanceUntilIdle()
+        assertTrue("отозвали — значит спрашиваем снова", vm.ui.value.cloudConsent)
+    }
+
+    /** Шаг «Дать ссылку», спрятанный в избранной цепочке, не проезжает под текстом про AI. */
+    @Test fun `цепочка со ссылкой спрашивает про ссылку, а не про AI`() = runTest(dispatcher) {
+        consent.granted = true
+        val vm = linkVm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.applyFavorite(FavoriteChain("c", "Цепочка", listOf(CapabilityId("ai"), CapabilityId("drop-link"))))
+        advanceUntilIdle()
+
+        assertTrue(vm.ui.value.cloudConsent)
+        assertTrue(
+            "спросили не про то: ${vm.ui.value.cloudDestination}",
+            vm.ui.value.cloudDestination.contains("любому"),
+        )
+    }
+
     // --- Device actions: inline app picker (#66) ---
 
     @Test fun `open-in shows the device's installed apps`() = runTest(dispatcher) {
@@ -1723,6 +1916,14 @@ private class FakeResolver : Resolver {
     /** Сколько работа идёт после сказанного — чтобы тест успел посмотреть на экран, пока она жива. */
     var holdMs: Long = 0
     /**
+     * Работа, которая об отмене не знает (#114).
+     *
+     * Так ведёт себя настоящая: нативный проход движка и сетевой запрос доходят до конца сами и
+     * возвращают результат уже ПОСЛЕ того, как человек нажал «Отменить». `NonCancellable` — модель
+     * этой непрерываемости, а не трюк ради теста: именно на ней ломалось обещание отмены.
+     */
+    var uninterruptible = false
+    /**
      * Слово, которое работа договаривает, когда её уже сняли (#288).
      *
      * Так ведёт себя настоящее долгое действие: нативный проход Tesseract и отрисовка страниц
@@ -1747,7 +1948,15 @@ private class FakeResolver : Resolver {
                         com.point.core.flow.reportStage(late)
                     }
                 }
-                if (holdMs > 0) kotlinx.coroutines.delay(holdMs)
+                if (holdMs > 0) {
+                    if (uninterruptible) {
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+                            kotlinx.coroutines.delay(holdMs)
+                        }
+                    } else {
+                        kotlinx.coroutines.delay(holdMs)
+                    }
+                }
                 return result
             }
             override suspend fun preview(input: PointObject): Preview? = previews[capabilityId]
@@ -1837,9 +2046,19 @@ private class FakeUserKeys(var config: UserAiConfig? = null) : UserKeyStore {
     override suspend fun clear() { config = null }
 }
 
+/** Согласие по обещаниям (#114): «показать модели» помнится, «выложить по ссылке» — никогда. */
 private class FakePrivacyConsent(var granted: Boolean = false) : PrivacyConsent {
-    override suspend fun cloudAllowed() = granted
-    override suspend fun allowCloud() { granted = true }
+    val asked = mutableListOf<com.point.core.flow.CloudScope>()
+    override suspend fun allowed(scope: com.point.core.flow.CloudScope): Boolean {
+        asked += scope
+        return com.point.core.flow.remembersConsent(scope) && granted
+    }
+    override suspend fun allow(scope: com.point.core.flow.CloudScope) {
+        if (com.point.core.flow.remembersConsent(scope)) granted = true
+    }
+    override suspend fun revoke(scope: com.point.core.flow.CloudScope) {
+        if (com.point.core.flow.remembersConsent(scope)) granted = false
+    }
 }
 
 private class FakeSensoryFeedback : com.point.core.flow.SensoryFeedback {
@@ -1916,7 +2135,7 @@ private class FakePcTransport : com.point.core.flow.PcTransport {
         fileName: String,
         meta: Map<String, String>,
         action: String?,
-    ): com.point.core.flow.PcSendOutcome = com.point.core.flow.PcSendOutcome.Sent
+    ): com.point.core.flow.PcSendOutcome = com.point.core.flow.PcSendOutcome.Sent()
     override suspend fun fetchCaps(pairing: com.point.core.flow.PcPairing): List<com.point.core.flow.PcRemoteAction>? =
         listOf(com.point.core.flow.PcRemoteAction("pc-open", "Открыть на компьютере"))
     override suspend fun fetchOutbox(pairing: com.point.core.flow.PcPairing): List<com.point.core.flow.PcOutboxEntry>? {
