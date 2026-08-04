@@ -139,7 +139,8 @@ fun main(args: Array<String>) {
         // (`unavailable`), а не молчанием. Кнопкой оно не станет — станет строкой «Почти
         // доступно · нет принтера». Молчание человек читал как «Point не умеет печатать».
         remoteActions = pcRemoteActions,
-        runAction = state::runRemoteAction,
+        // #114: телефон ждёт исход, а не факт доставки — по домашней сети ответить ему есть чем.
+        runAction = state::runRemoteActionNow,
         outbox = outbox,
         onPhoneCaps = state::setPhoneCaps,
         clipboardGet = ::readSystemClipboard,

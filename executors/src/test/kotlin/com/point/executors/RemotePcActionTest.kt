@@ -1,5 +1,6 @@
 package com.point.executors
 
+import com.point.core.flow.PcActionOutcome
 import com.point.core.flow.PcCapsStore
 import com.point.core.flow.PcPairing
 import com.point.core.flow.PcPairings
@@ -23,13 +24,15 @@ class RemotePcActionTest {
 
     private val action = PcRemoteAction("pc-open", "Открыть на компьютере")
 
+    private val printerAction = PcRemoteAction("pc-print", "Напечатать на ПК")
+
     private class FakePairings(var pairing: PcPairing? = PcPairing("192.168.1.2", 8391, "tok")) : PcPairings {
         override fun current() = pairing
         override suspend fun save(pairing: PcPairing) { this.pairing = pairing }
         override suspend fun clear() { pairing = null }
     }
 
-    private class FakeTransport(var outcome: PcSendOutcome = PcSendOutcome.Sent) : PcTransport {
+    private class FakeTransport(var outcome: PcSendOutcome = PcSendOutcome.Sent()) : PcTransport {
         var sentAction: String? = null
         var sent = false
         override suspend fun pair(host: String, port: Int, deviceName: String): PcPairing? = null
@@ -71,13 +74,50 @@ class RemotePcActionTest {
         assertFalse(urlOnly.accepts(ObjectState(ObjectKind.TEXT)))
     }
 
+    /**
+     * Доставка — это доставка, а не выполнение (#114).
+     *
+     * Прежний тест на этом месте утверждал `Done` сразу после 200 на доставку файла и назывался
+     * «reports success» — он закреплял ошибку: телефон объявлял «готово» про работу, исхода
+     * которой не знал. Судить надо обещание, данное человеку, а не форму ответа транспорта.
+     */
     @Test
-    fun `sends the object with the action id and reports success`() = runTest {
-        val transport = FakeTransport()
+    fun `объект уезжает с именем действия, но «готово» без исхода не говорится`() = runTest {
+        val transport = FakeTransport(PcSendOutcome.Sent()) // компьютер об исходе смолчал
         val result = RemotePcRealizer(action, FakePairings(), transport).perform(obj(), null)
 
-        assertTrue(result is ActionResult.Done)
         assertEquals("pc-open", transport.sentAction)
+        assertEquals("Отправлено на компьютер", (result as ActionResult.Done).message)
+        assertFalse("«готово» — слово того, кто это сделал", result.message.contains("готово"))
+    }
+
+    @Test
+    fun `компьютер сказал, чем кончилось, — человек читает его слова`() = runTest {
+        val printed = PcSendOutcome.Sent(PcActionOutcome.Done("В очереди «HP LaserJet» · проверьте принтер"))
+        val result = RemotePcRealizer(printerAction, FakePairings(), FakeTransport(printed)).perform(obj(), null)
+
+        assertEquals("В очереди «HP LaserJet» · проверьте принтер", (result as ActionResult.Done).message)
+    }
+
+    @Test
+    fun `на компьютере не напечаталось — это отказ, а не «готово»`() = runTest {
+        val failed = PcSendOutcome.Sent(PcActionOutcome.Failed("На компьютере сейчас нет принтера по умолчанию"))
+
+        val result = RemotePcRealizer(printerAction, FakePairings(), FakeTransport(failed)).perform(obj(), null)
+
+        assertTrue("исход действия — исход, а не доставка", result is ActionResult.Failure)
+        assertEquals("На компьютере сейчас нет принтера по умолчанию", (result as ActionResult.Failure).reason)
+        assertTrue("человек может повторить", result.recoverable)
+    }
+
+    /** Компьютер сказал «сделано», но словами не отчитался — тогда говорим мы, и только тогда. */
+    @Test
+    fun `сделано без слов компьютера — «готово» от имени действия`() = runTest {
+        val done = PcSendOutcome.Sent(PcActionOutcome.Done(null))
+
+        val result = RemotePcRealizer(action, FakePairings(), FakeTransport(done)).perform(obj(), null)
+
+        assertEquals("Открыть на компьютере — готово", (result as ActionResult.Done).message)
     }
 
     // --- #316: компьютер объявил действие недоступным с причиной ---
