@@ -187,6 +187,7 @@ fun PointHost(
 
             state.keyScreen != null -> KeyScreen(
                 config = state.keyScreen,
+                note = state.keyScreenNote,
                 onSave = onSaveAiConfig,
                 onCancel = onCloseKeySettings,
                 usageEnabled = state.usageEnabled,
