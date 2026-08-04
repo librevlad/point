@@ -3,7 +3,6 @@ package com.point.data
 import com.point.core.flow.PcPairing
 import com.point.core.flow.RelayCrypto
 import com.point.core.flow.RelayRpc
-import com.point.core.flow.RelayTls
 import com.point.core.flow.decodePcFrame
 import com.point.core.flow.encodePcFrame
 import com.point.core.flow.isOurReply
@@ -134,7 +133,6 @@ class RelayRpcClient(
 
     private fun open(url: String, readSeconds: Int): HttpsURLConnection =
         (URL(url).openConnection() as HttpsURLConnection).apply {
-            sslSocketFactory = RelayTls.socketFactory
             connectTimeout = connectTimeoutMs
             readTimeout = readSeconds * 1000
             pass()?.let { setRequestProperty("Authorization", "Bearer $it") }

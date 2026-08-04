@@ -562,7 +562,7 @@ private fun PreviewIssuedLink() = PointTheme {
     val obj = sampleObject(
         ObjectKind.URL, "text/uri-list", "ссылка на отчёт.pdf",
         metadata = mapOf(
-            "entity.url" to "https://35.185.31.106:8443/d/2f8c1b0a4e6d9c3f5a7b1e2d4c6f8a0b1c3d5e7f",
+            "entity.url" to "https://point.leerio.app/d/2f8c1b0a4e6d9c3f5a7b1e2d4c6f8a0b1c3d5e7f",
             "drop.expires" to "сутки",
         ),
     )

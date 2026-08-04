@@ -11,10 +11,10 @@ class RelayProtocolTest {
 
     @Test
     fun `pairing QR round-trips the relay url`() {
-        val p = PcPairing("192.168.1.242", 8391, "tok123", relay = "https://35.185.31.106:8443")
+        val p = PcPairing("192.168.1.242", 8391, "tok123", relay = "https://point.leerio.app")
         val back = parsePcPairing(p.qrPayload())
         assertEquals(p, back)
-        assertEquals("https://35.185.31.106:8443", back!!.relay)
+        assertEquals("https://point.leerio.app", back!!.relay)
     }
 
     @Test

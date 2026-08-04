@@ -4,7 +4,6 @@ import com.point.core.flow.DropArrival
 import com.point.core.flow.DropInbox
 import com.point.core.flow.DropInboxBox
 import com.point.core.flow.DropWait
-import com.point.core.flow.RelayTls
 import com.point.core.flow.decodePcFrame
 import com.point.core.flow.dropFileName
 import com.point.core.flow.dropInboxId
@@ -39,7 +38,7 @@ class RelayDropInbox(
         val id = dropInboxId(ByteArray(20).also { SecureRandom().nextBytes(it) })
         val link = dropInboxLink(base, id) ?: return@withContext null
         runCatching {
-            val c = connect("$base/u/$id/open", "POST").apply {
+            val c = connect("$base/u/open", "POST").apply {
                 doOutput = true
                 setFixedLengthStreamingMode(0)
             }
@@ -109,7 +108,6 @@ class RelayDropInbox(
 
     private fun connect(url: String, method: String): HttpsURLConnection =
         (URL(url).openConnection() as HttpsURLConnection).apply {
-            sslSocketFactory = RelayTls.socketFactory
             requestMethod = method
             connectTimeout = 10_000
             readTimeout = 20_000

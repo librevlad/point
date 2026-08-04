@@ -1,7 +1,6 @@
 package com.point.desktop
 
 import com.point.core.flow.RelayCrypto
-import com.point.core.flow.RelayTls
 import com.point.core.flow.decodePcFrame
 import java.net.URL
 import javax.net.ssl.HttpsURLConnection
@@ -11,7 +10,7 @@ import javax.net.ssl.HttpsURLConnection
  * relay and long-polls the phone→PC mailbox; when the phone couldn't reach the LAN and fell back to
  * the relay, the object arrives here, sealed end-to-end. It is decrypted ([RelayCrypto.open]),
  * un-framed, and handed to [onObject] exactly like a LAN `/receive`. No inbound port, NAT, or shared
- * network needed — the same reason the phone side works. TLS is pinned ([RelayTls]).
+ * network needed — the same reason the phone side works. TLS is pinned (настоящий сертификат сервера).
  */
 class RelayPoller(
     private val relayUrl: String,
@@ -49,7 +48,6 @@ class RelayPoller(
     /** One long-poll: returns true if a blob was received (so we loop immediately for the next). */
     private fun pollOnce(base: String, mailbox: String): Boolean {
         val c = URL("$base/mbx/$mailbox?wait=$WAIT_SECONDS").openConnection() as HttpsURLConnection
-        c.sslSocketFactory = RelayTls.socketFactory
         c.connectTimeout = CONNECT_MS
         c.readTimeout = (WAIT_SECONDS + 10) * 1000
         pass()?.let { c.setRequestProperty("Authorization", "Bearer $it") }
@@ -74,7 +72,6 @@ class RelayPoller(
     private fun ack(base: String, mailbox: String, blobId: String) {
         runCatching {
             val c = URL("$base/mbx/$mailbox/ack").openConnection() as HttpsURLConnection
-            c.sslSocketFactory = RelayTls.socketFactory
             c.requestMethod = "POST"
             c.connectTimeout = CONNECT_MS
             c.readTimeout = CONNECT_MS

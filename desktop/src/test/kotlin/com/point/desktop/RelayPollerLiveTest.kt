@@ -1,7 +1,6 @@
 package com.point.desktop
 
 import com.point.core.flow.RelayCrypto
-import com.point.core.flow.RelayTls
 import com.point.core.flow.encodePcFrame
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -48,7 +47,6 @@ class RelayPollerLiveTest {
 
     private fun postBlob(mailbox: String, blob: ByteArray) {
         val c = URL("${LiveServer.url.trimEnd('/')}/mbx/$mailbox").openConnection() as HttpsURLConnection
-        c.sslSocketFactory = RelayTls.socketFactory
         c.requestMethod = "POST"
         c.connectTimeout = 5_000
         c.readTimeout = 10_000
@@ -65,7 +63,6 @@ class RelayPollerLiveTest {
         val relayUp: Boolean by lazy {
             runCatching {
                 val c = (URL("${LiveServer.url.trimEnd('/')}/health").openConnection() as HttpsURLConnection)
-                c.sslSocketFactory = RelayTls.socketFactory
                 c.connectTimeout = 4_000
                 c.readTimeout = 4_000
                 val ok = c.responseCode == 200

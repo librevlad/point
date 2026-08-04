@@ -2,7 +2,6 @@ package com.point.data
 
 import android.util.Base64
 import com.point.core.flow.DropLink
-import com.point.core.flow.RelayTls
 import java.io.File
 import java.net.URL
 import javax.net.ssl.HttpsURLConnection
@@ -31,7 +30,6 @@ class RelayDropLink(
 
             runCatching {
                 val c = (URL("$base/d").openConnection() as HttpsURLConnection).apply {
-                    sslSocketFactory = RelayTls.socketFactory
                     requestMethod = "POST"
                     doOutput = true
                     connectTimeout = 10_000

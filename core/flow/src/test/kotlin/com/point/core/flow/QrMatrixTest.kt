@@ -30,13 +30,13 @@ class QrMatrixTest {
 
     @Test
     fun `a drop link reads back exactly`() {
-        val link = "https://35.185.31.106:8443/d/2f8c1b0a4e6d9c3f5a7b1e2d4c6f8a0b1c3d5e7f"
+        val link = "https://point.leerio.app/d/2f8c1b0a4e6d9c3f5a7b1e2d4c6f8a0b1c3d5e7f"
         assertEquals(link, roundTrip(link))
     }
 
     @Test
     fun `a receiving link reads back exactly`() {
-        val link = "https://35.185.31.106:8443/u/nQ8vXk2mR7pLdT4wZs1aYbCe9Gh"
+        val link = "https://point.leerio.app/u/nQ8vXk2mR7pLdT4wZs1aYbCe9Gh"
         assertEquals(link, roundTrip(link))
     }
 

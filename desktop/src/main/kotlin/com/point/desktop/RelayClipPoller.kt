@@ -3,7 +3,6 @@ package com.point.desktop
 import com.point.core.flow.ClipRelay
 import com.point.core.flow.ClipboardPayload
 import com.point.core.flow.RelayCrypto
-import com.point.core.flow.RelayTls
 import com.point.core.flow.decodeClipFrame
 import com.point.core.flow.encodeClipFrame
 import java.net.URL
@@ -13,7 +12,7 @@ import javax.net.ssl.HttpsURLConnection
  * The shared-clipboard relay half on the desktop (#161 «общий буфер» через релей). The PC long-polls
  * the phone→PC clipboard mailbox: a PUSH sets the PC's system clipboard; a PULL request is answered by
  * sealing the PC's current clipboard into the PC→phone mailbox, which the phone is polling. Same blind
- * relay, pinned TLS ([RelayTls]) and E2E crypto ([RelayCrypto]) as the object [RelayPoller] — but its
+ * relay, pinned TLS (настоящий сертификат сервера) and E2E crypto ([RelayCrypto]) as the object [RelayPoller] — but its
  * own daemon, so clipboard traffic and object receive never block each other.
  */
 class RelayClipPoller(
@@ -123,7 +122,6 @@ class RelayClipPoller(
 
     private fun open(url: String, readSeconds: Int): HttpsURLConnection =
         (URL(url).openConnection() as HttpsURLConnection).apply {
-            sslSocketFactory = RelayTls.socketFactory
             connectTimeout = CONNECT_MS
             readTimeout = readSeconds * 1000
             pass()?.let { setRequestProperty("Authorization", "Bearer $it") }
