@@ -55,6 +55,47 @@ class RecordingTest {
         assertTrue(recordingMinutes("application/octet-stream", 3 * MINUTE_OF_OPUS, "AUD-1.ogg")!! > LONG_MINUTES)
     }
 
+    // --- Длина сказана до тапа (#459) ---
+
+    @Test
+    fun `длина записи — та же строка, что человек раньше видел только после тапа`() {
+        val length = recordingLength("audio/ogg", 3 * MINUTE_OF_OPUS)
+
+        assertEquals("примерно 3 мин", length)
+        // Ровно эта строка стоит внутри фразы ожидания: слова о длине одни, мест у них два.
+        assertEquals(
+            "$LISTENING — $length, это займёт время",
+            listeningStage("audio/ogg", 3 * MINUTE_OF_OPUS),
+        )
+    }
+
+    @Test
+    fun `сорок секунд и сорок минут — разные слова, и оба видны до тапа`() {
+        // Ради этой пары всё и делалось — «сорок секунд там или сорок минут» человек обязан
+        // видеть до того, как потратит квоту.
+        assertEquals("примерно 40 сек", recordingLength("audio/ogg", opusSeconds(40)))
+        assertEquals("примерно 40 мин", recordingLength("audio/ogg", opusSeconds(40 * 60)))
+    }
+
+    @Test
+    fun `неизвестный битрейт не получает выдуманной длины и до тапа тоже`() {
+        assertNull(recordingLength("audio/amr", 5L * 1024 * 1024))
+        assertNull(recordingLength("audio/ogg", 0L))
+    }
+
+    @Test
+    fun `огрызок в секунду молчит, а не обещает «примерно 1 сек»`() {
+        assertNull(recordingLength("audio/ogg", 1024L))
+    }
+
+    @Test
+    fun `почти минута названа минутой, а не «60 сек»`() {
+        assertEquals("примерно 1 мин", recordingLength("audio/ogg", opusSeconds(59)))
+    }
+
+    /** Вес opus-записи ровно на [seconds] секунд: 24 кбит/с = 3000 байт/с. */
+    private fun opusSeconds(seconds: Int) = seconds * 3000L
+
     private companion object {
         /** Голосовое на минуту в opus 24 кбит/с ≈ 180 КБ. */
         const val MINUTE_OF_OPUS = 180L * 1024
