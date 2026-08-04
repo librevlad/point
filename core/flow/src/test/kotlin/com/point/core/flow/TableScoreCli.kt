@@ -32,7 +32,9 @@ fun main(args: Array<String>) {
         val rows = File(table).readText().lines()
             .dropLastWhile { it.isEmpty() }
             .map { it.split('\t') }
-        renderTableScore(scoreTable(expectation, rows))
+        // Два блока подряд, а не одна оценка: «не соврал ли файл» и «можно ли им пользоваться» —
+        // разные обещания человеку, и среднее между ними не значит ничего (#493).
+        renderTableScore(scoreTable(expectation, rows)) + renderUsability(scoreUsable(frame, rows))
     }.getOrElse { "**эталон или таблица не прочитаны:** ${it.message}\n" }
 
     if (report.isEmpty()) print(text) else File(report).appendText(text)
@@ -66,6 +68,30 @@ fun renderTableScore(score: TableScore): String = buildString {
         )
         score.passed -> appendLine("- **всё верно**")
         else -> appendLine("- **не годится:** " + score.failures.joinToString("; ") { it.reason })
+    }
+    appendLine()
+}
+
+/**
+ * Отчёт о годности (#493): сколько из полученного человек может взять как есть. Значений ячеек
+ * здесь нет и быть не может — это документы владельца; печатаются только числа.
+ */
+fun renderUsability(score: UsabilityScore): String = buildString {
+    appendLine("#### годность файла ${score.frame}")
+    appendLine(
+        "- строк на листе ${score.sheetRows}, из них в непрочитанном ${score.dumpRows}; " +
+            "непустых ячеек ${score.cells}",
+    )
+    appendLine("- в непрочитанном ячеек ${score.dumpCells}${percent(score.dumpShare)}")
+    appendLine(
+        "- ячеек с символьным шумом ${score.noisyCells} из ${score.documentCells}${percent(score.noiseShare)}, " +
+            "с предупреждением ${score.flaggedCells}${percent(score.flaggedShare)}",
+    )
+    appendLine("- **можно взять как есть ${score.usableCells} из ${score.cells}${percent(score.usableShare)}**")
+    if (score.unfit.isEmpty()) {
+        appendLine("- названных причин негодности нет")
+    } else {
+        appendLine("- **негоден:** " + score.unfit.joinToString("; ") { it.reason })
     }
     appendLine()
 }
