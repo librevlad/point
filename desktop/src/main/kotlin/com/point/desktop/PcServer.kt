@@ -1,10 +1,12 @@
 package com.point.desktop
 
+import com.point.core.flow.PcActionOutcome
 import com.point.core.flow.PcRemoteAction
 import com.point.core.flow.decodePcMeta
 import com.point.core.flow.decodePcCaps
 import com.point.core.flow.encodePcCaps
 import com.point.core.flow.encodePcOutbox
+import com.point.core.flow.encodePcReceiveReply
 import java.io.File
 import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpServer
@@ -37,7 +39,13 @@ class PcServer(
     /** Телефон дал о себе знать по локальной сети (#412): экран должен это показать. */
     private val onContact: () -> Unit = {},
     private val remoteActions: List<PcRemoteAction> = emptyList(),
-    private val runAction: (id: String, item: InboxItem) -> Unit = { _, _ -> },
+    /**
+     * Выполнить заказанное телефоном действие и **вернуть его исход** (#114).
+     *
+     * `null` — «неизвестно»: действия не заказывали или мы не дождались. Раньше здесь стоял
+     * `-> Unit`, исход выбрасывался, и телефон переводил «файл доехал» в «готово».
+     */
+    private val runAction: (id: String, item: InboxItem) -> PcActionOutcome? = { _, _ -> null },
     private val outbox: Outbox? = null,
     private val onPhoneCaps: (List<PcRemoteAction>) -> Unit = {},
     // #161 «общий буфер»: read/write the PC's system clipboard for the shared-clipboard tile.
@@ -138,12 +146,22 @@ class PcServer(
             // #316: недоступное действие не запускается, даже если его назвали, — старый
             // телефон его не увидит, а телефон с протухшим кэшем не должен продавить печать
             // на компьютере, где принтера уже нет. Объект при этом всё равно доехал.
-            ex.requestHeaders.getFirst("X-Point-Action")?.let(::unb64)?.let { actionId ->
-                if (remoteActions.any { it.id == actionId && it.unavailable == null }) {
-                    runCatching { runAction(actionId, item) }
+            //
+            // #114: приём по-прежнему не падает из-за действия — но его исход больше не
+            // выбрасывается. Он едет в ответе, и телефон говорит человеку то, что было на самом
+            // деле. Недоступное действие — это отказ с причиной, а не тишина под словом «готово».
+            val outcome = ex.requestHeaders.getFirst("X-Point-Action")?.let(::unb64)?.let { actionId ->
+                val declared = remoteActions.firstOrNull { it.id == actionId }
+                when {
+                    declared == null -> PcActionOutcome.Failed("компьютер не знает такого действия")
+                    declared.unavailable != null -> PcActionOutcome.Failed(
+                        declared.unavailable!!.ifBlank { "компьютер сейчас не может это сделать" },
+                    )
+                    else -> runCatching { runAction(actionId, item) }
+                        .getOrElse { PcActionOutcome.Failed(it.message ?: "не получилось") }
                 }
             }
-            respond(ex, 200, "ok")
+            respond(ex, 200, encodePcReceiveReply(outcome))
         }
         s.start()
         server = s

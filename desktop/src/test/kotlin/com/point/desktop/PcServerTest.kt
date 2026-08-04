@@ -6,6 +6,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Base64
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -23,6 +24,10 @@ class PcServerTest {
     private fun b64(s: String) = Base64.getEncoder().encodeToString(s.toByteArray())
 
     private val ranActions = mutableListOf<Pair<String, InboxItem>>()
+
+    /** Чем действие кончилось на этом «компьютере» — исход подменяется тестом (#114). */
+    private var actionOutcome: com.point.core.flow.PcActionOutcome? =
+        com.point.core.flow.PcActionOutcome.Done(null)
 
     private val phoneCaps = mutableListOf<com.point.core.flow.PcRemoteAction>()
 
@@ -46,7 +51,7 @@ class PcServerTest {
             outbox = outbox,
             onPhoneCaps = { caps -> phoneCaps.clear(); phoneCaps.addAll(caps) },
             remoteActions = actions,
-            runAction = { id, item -> ranActions += id to item },
+            runAction = { id, item -> ranActions += id to item; actionOutcome },
         ).also { it.start(preferredPort = 0) }
 
     private fun post(url: String, headers: Map<String, String>, body: ByteArray): Pair<Int, String> {
@@ -200,6 +205,59 @@ class PcServerTest {
     }
 
     /**
+     * Исход действия едет в ответе (#114).
+     *
+     * Раньше компьютер отвечал «ok» на всё, что угодно: печать не удалась — телефон говорил
+     * «Напечатать на ПК — готово». Теперь ответ несёт то, чем работа кончилась ЗДЕСЬ, и телефон
+     * читает это тем же декодером, каким компьютер писал.
+     */
+    @Test
+    fun `ответ несёт исход действия, а не одно «ok»`() {
+        actionOutcome = com.point.core.flow.PcActionOutcome.Failed("На компьютере сейчас нет принтера")
+        val s = server()
+        try {
+            val (code, body) = post(
+                "http://127.0.0.1:${s.port}/receive",
+                mapOf(
+                    "X-Point-Token" to "secret-token",
+                    "X-Point-Name" to b64("заметка.txt"),
+                    "X-Point-Mime" to "text/plain",
+                    "X-Point-Action" to b64("pc-copy"),
+                ),
+                "привет".toByteArray(),
+            )
+
+            assertEquals("приём не падает из-за действия", 200, code)
+            assertEquals(
+                com.point.core.flow.PcActionOutcome.Failed("На компьютере сейчас нет принтера"),
+                com.point.core.flow.decodePcReceiveReply(body),
+            )
+        } finally { s.stop() }
+    }
+
+    /** Действия не заказывали — и говорить об исходе нечего: ответ прежний, старый телефон
+     *  читает его как читал. */
+    @Test
+    fun `без заказанного действия ответ остаётся прежним`() {
+        val s = server()
+        try {
+            val (code, body) = post(
+                "http://127.0.0.1:${s.port}/receive",
+                mapOf(
+                    "X-Point-Token" to "secret-token",
+                    "X-Point-Name" to b64("заметка.txt"),
+                    "X-Point-Mime" to "text/plain",
+                ),
+                "привет".toByteArray(),
+            )
+
+            assertEquals(200, code)
+            assertEquals("ok", body.trim())
+            assertNull(com.point.core.flow.decodePcReceiveReply(body))
+        } finally { s.stop() }
+    }
+
+    /**
      * #316: компьютер объявляет то, что умеет, но сейчас не может, — с причиной. Причина
      * доезжает до телефона, а запустить такое действие нельзя даже по прямому запросу
      * (телефон с протухшим кэшем не должен продавить печать там, где принтера уже нет).
@@ -218,7 +276,7 @@ class PcServerTest {
             caps.disconnect()
             assertEquals(printerless, advertised.first { it.id == "pc-print" })
 
-            val (code, _) = post(
+            val (code, body) = post(
                 "http://127.0.0.1:${s.port}/receive",
                 mapOf(
                     "X-Point-Token" to "secret-token",
@@ -232,6 +290,12 @@ class PcServerTest {
             assertEquals(200, code)
             assertEquals("объект доехал, потерять его нельзя", "документ.pdf", got!!.obj.metadata["name"])
             assertTrue("печать не запускалась", ranActions.isEmpty())
+            // #114: и молчанием это больше не заканчивается — телефон получает ту же причину,
+            // а не «готово» поверх непроизошедшей печати.
+            assertEquals(
+                com.point.core.flow.PcActionOutcome.Failed("на компьютере нет принтера"),
+                com.point.core.flow.decodePcReceiveReply(body),
+            )
         } finally { s.stop() }
     }
 

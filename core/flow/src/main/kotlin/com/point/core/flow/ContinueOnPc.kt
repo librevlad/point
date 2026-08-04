@@ -155,6 +155,69 @@ fun decodePcCaps(encoded: String): List<PcRemoteAction> =
 /** Метка недоступного действия в начале строки (#316) — см. [encodePcCaps]. */
 const val PC_CAP_UNAVAILABLE = "="
 
+/**
+ * Ответ компьютера на `/receive`: доставка **и** исход заказанного действия (#114).
+ *
+ * Формат нарочно дописан к прежнему «ok» второй строкой, а не заменён: старая сборка ПК отвечает
+ * одним «ok», и новый телефон обязан прочитать это как «доехало, про исход неизвестно» — то есть
+ * сказать «Отправлено на компьютер», а не «готово». Старый телефон вторую строку не читает вовсе,
+ * и для него ничего не меняется.
+ *
+ * ```
+ * ok
+ * action: done В очереди «HP LaserJet» · проверьте принтер
+ * ```
+ */
+fun encodePcReceiveReply(outcome: PcActionOutcome?): String = when (outcome) {
+    null -> PC_RECEIVE_OK
+    is PcActionOutcome.Done ->
+        PC_RECEIVE_OK + "\n" + PC_ACTION_LINE + "done" + (outcome.detail?.let { " " + oneLine(it) } ?: "")
+    is PcActionOutcome.Failed ->
+        PC_RECEIVE_OK + "\n" + PC_ACTION_LINE + "failed " + oneLine(outcome.reason).ifBlank { "причина не названа" }
+}
+
+/**
+ * Обратно: `null` — компьютер об исходе ничего не сказал.
+ *
+ * Незнакомая форма — тоже `null`: молчание честнее выдуманного «готово». Именно это и защищает
+ * человека от старой сборки ПК, которая отвечает просто «ok».
+ */
+fun decodePcReceiveReply(body: String): PcActionOutcome? {
+    val line = body.lineSequence()
+        .map { it.trim() }
+        .firstOrNull { it.startsWith(PC_ACTION_LINE) }
+        ?.removePrefix(PC_ACTION_LINE)
+        ?.trim()
+        ?: return null
+    val verdict = line.substringBefore(' ')
+    val detail = line.substringAfter(' ', "").trim()
+    return when (verdict) {
+        "done" -> PcActionOutcome.Done(detail.takeIf { it.isNotBlank() })
+        "failed" -> PcActionOutcome.Failed(detail.ifBlank { "причина не названа" })
+        else -> null
+    }
+}
+
+/**
+ * Исход действия словами контракта — из результата, каким его вернул реализатор компьютера.
+ *
+ * `null` значит «неизвестно» и попадает на телефон как «отправлено»: `NeedsInput` на компьютере
+ * спросить некого, а `null` результата — это работа, за которой мы не дождались.
+ */
+fun pcActionOutcomeOf(result: com.point.core.model.ActionResult?): PcActionOutcome? = when (result) {
+    null -> null
+    is com.point.core.model.ActionResult.Done -> PcActionOutcome.Done(result.message)
+    is com.point.core.model.ActionResult.Success -> PcActionOutcome.Done(null)
+    is com.point.core.model.ActionResult.Failure -> PcActionOutcome.Failed(result.reason)
+    is com.point.core.model.ActionResult.NeedsInput, is com.point.core.model.ActionResult.NeedsImage ->
+        PcActionOutcome.Failed("действие спрашивает на компьютере — ответить отсюда нечем")
+}
+
+private const val PC_RECEIVE_OK = "ok"
+
+/** Вторая строка ответа `/receive`: «action: done …» или «action: failed …». */
+const val PC_ACTION_LINE = "action: "
+
 private fun oneLine(s: String) = s.replace('\n', ' ').replace('\r', ' ').replace('\t', ' ')
 
 /** One object waiting in the PC's outbox for the phone to pull (#161).

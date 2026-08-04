@@ -48,7 +48,7 @@ class LanThenRelayFallbackTest {
         private val entries: List<PcOutboxEntry>,
     ) : PcTransport {
         override suspend fun send(p: PcPairing, o: PointObject, f: String, m: Map<String, String>, a: String?) =
-            PcSendOutcome.Sent
+            PcSendOutcome.Sent()
         override suspend fun pair(host: String, port: Int, deviceName: String): PcPairing? = null
         override suspend fun fetchCaps(pairing: PcPairing) = caps
         override suspend fun fetchOutbox(pairing: PcPairing) = entries
@@ -64,7 +64,7 @@ class LanThenRelayFallbackTest {
     ) : PcTransport {
         val asked = mutableListOf<String>()
         override suspend fun send(p: PcPairing, o: PointObject, f: String, m: Map<String, String>, a: String?): PcSendOutcome {
-            asked += "send"; return PcSendOutcome.Sent
+            asked += "send"; return PcSendOutcome.Sent()
         }
         override suspend fun pair(host: String, port: Int, deviceName: String): PcPairing? {
             asked += "pair"; return null
