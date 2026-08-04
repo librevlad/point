@@ -33,10 +33,15 @@ class HomeDoorTest {
 
     @get:Rule val compose = createAndroidComposeRule<HomeActivity>()
 
-    /** Дверь «AI-ключ» на «Недавнем» — тот самый основной путь за ключом. */
+    /**
+     * Дверь «AI-ключ» на «Недавнем» — тот самый основной путь за ключом.
+     *
+     * Дверь называет то, ЗА ЧЕМ идут, экран — то, ГДЕ оказались (#447): кроме ключа за этой дверью
+     * живут разрешение на облако, «куда можно отправлять» и звук.
+     */
     private fun openKeySettings() {
         compose.onNodeWithText("AI-ключ").performClick()
-        compose.waitUntilAtLeastOneExists(hasText("Ваш AI-ключ"), TIMEOUT_MS)
+        compose.waitUntilAtLeastOneExists(hasText("Настройки"), TIMEOUT_MS)
     }
 
     /** Сохранить ключ так, как это делает человек: доехать, набрать, нажать. */
@@ -51,14 +56,17 @@ class HomeDoorTest {
         compose.waitUntilAtLeastOneExists(hasText("Ключ AI сохранён"), TIMEOUT_MS)
     }
 
-    @Test fun `«Взять ключ» с домашнего экрана открывает страницу провайдера`() {
+    @Test fun `ссылка на страницу сервиса с домашнего экрана открывает браузер`() {
         openKeySettings()
-        compose.onAllNodesWithText("Взять ключ").onFirst().performClick()
+        // Строка называлась «Взять ключ» и стояла внутри строки выбора сервиса — владелец прочитал
+        // её как «взять этот ключ» (#447). Теперь она называет, что произойдёт.
+        compose.onAllNodesWithText("Открыть сайт", substring = true).onFirst()
+            .performScrollTo().performClick()
         compose.waitForIdle()
 
         val opened = shadowOf(compose.activity).nextStartedActivity
             ?: shadowOf(RuntimeEnvironment.getApplication()).nextStartedActivity
-        assertNotNull("тап по «Взять ключ» не открыл ничего — колбэк потерян на этой двери", opened)
+        assertNotNull("тап по ссылке на сайт не открыл ничего — колбэк потерян на этой двери", opened)
         assertEquals(Intent.ACTION_VIEW, opened!!.action)
     }
 
