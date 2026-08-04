@@ -204,7 +204,16 @@ fun FirstScreen(
 
         // Готовность действий (#260): полнота считается по действию — «не хватает только X»,
         // а не форма из девяти полей. Схемы читают те же факты, что пишут энричеры и «Понять».
-        ReadinessSection(metadata = obj.metadata)
+        //
+        // #464: готовая строка запускается тапом — тем же пузырём и тем же колбэком, что строка
+        // действия ниже. Пока действие идёт или ждут ввода, карточка тапов не принимает: список
+        // действий в это время притушен, и живая строка над ним обещала бы запуск, которого нет.
+        ReadinessSection(
+            metadata = obj.metadata,
+            bubbles = bubbles,
+            enabled = !working && inputPrompt == null,
+            onBubble = onBubble,
+        )
 
         // What Point found INSIDE the object (#222) — things, not lines: the waybill number,
         // the branch, the deadline. Each opens as an object of its own.
