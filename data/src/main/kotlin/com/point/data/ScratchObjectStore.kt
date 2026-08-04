@@ -5,8 +5,10 @@ import android.net.Uri
 import android.provider.OpenableColumns
 import android.util.Log
 import android.webkit.MimeTypeMap
+import com.point.core.flow.CollectionContent
 import com.point.core.flow.ObjectClassifier
 import com.point.core.flow.ObjectStore
+import com.point.core.flow.collectionContent
 import com.point.core.model.PointObject
 import com.point.core.model.ResultObject
 import com.point.core.model.ScratchRef
@@ -93,24 +95,32 @@ class ScratchObjectStore @Inject constructor(
             )
         }
 
-    override suspend fun children(collection: PointObject): List<PointObject> =
+    /**
+     * Содержимое набора — с двумя пределами (#460).
+     *
+     * Обход считает файлы, но объекты строит только для показанной части: `classify` + `length()`
+     * на каждый файл тысячефайлового архива — работа ради списка, из которого откроют один.
+     * Сколько файлов на самом деле, знает [CollectionContent.total] — экран говорит это словами.
+     */
+    override suspend fun children(collection: PointObject, limit: Int): CollectionContent<PointObject> =
         withContext(Dispatchers.IO) {
             val root = File(collection.uri.value)
-            if (!root.isDirectory) return@withContext emptyList()
-            root.walkTopDown()
-                .filter { it.isFile }
-                .map { file ->
-                    val mime = mimeOf(file.name)
-                    PointObject(
-                        id = UUID.randomUUID().toString(),
-                        mime = mime,
-                        uri = ScratchRef(file.absolutePath),
-                        state = classifier.classify(mime, file.length(), file.name),
-                        metadata = mapOf("name" to file.name),
-                    )
-                }
-                .sortedBy { it.metadata["name"]?.lowercase() }
-                .toList()
+            if (!root.isDirectory) return@withContext CollectionContent.empty()
+            collectionContent(
+                entries = root.walkTopDown(),
+                limit = limit,
+                isFile = { it.isFile },
+                name = { it.name },
+            ).map { file ->
+                val mime = mimeOf(file.name)
+                PointObject(
+                    id = UUID.randomUUID().toString(),
+                    mime = mime,
+                    uri = ScratchRef(file.absolutePath),
+                    state = classifier.classify(mime, file.length(), file.name),
+                    metadata = mapOf("name" to file.name),
+                )
+            }
         }
 
     private fun mimeOf(name: String): String {

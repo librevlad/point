@@ -26,8 +26,15 @@ data class FlowFrame(
     val bubbles: List<Bubble>,
     val viaCapability: CapabilityId? = null,
     val viaTitle: String? = null,
-    /** For a COLLECTION: its items (files), loaded async after the frame is pushed. */
+    /** For a COLLECTION: its items (files), loaded async after the frame is pushed.
+     *  Не длиннее предела обхода (`COLLECTION_ITEMS_LIMIT`) — сколько их всего, говорит
+     *  [itemsTotal]. */
     val items: List<PointObject> = emptyList(),
+    /** Сколько файлов в наборе всего (0 — ещё не считали). Отличается от `items.size`, когда
+     *  набор больше предела: список обрезан, и экран обязан назвать настоящее число (#460). */
+    val itemsTotal: Int = 0,
+    /** Обход упёрся в свой потолок: [itemsTotal] — «не меньше чем», а не точное число. */
+    val itemsTotalAtLeast: Boolean = false,
     /** Things extraction found *inside* this object (#222) — the waybill number, the branch
      *  address, the deadline. Not the same as [items]: those are files the object contains,
      *  these are things the world contains that the object mentions. Grows as waves land. */

@@ -8,6 +8,7 @@ import com.point.core.flow.CapabilityRegistry
 import com.point.core.flow.CapabilityUsage
 import com.point.core.flow.ChosenApp
 import com.point.core.flow.ChosenApps
+import com.point.core.flow.CollectionContent
 import com.point.core.flow.CrashLog
 import com.point.core.flow.Enrichment
 import com.point.core.flow.edgeDetail
@@ -240,7 +241,6 @@ class FlowViewModel @Inject constructor(
         freshShareArrived = true
         claimVoice()
         _ui.update { it.copy(busy = "Открываю…", busyStage = null, busyNetwork = false, busyQuiet = false, message = null, messageOutcome = Outcome.NONE, inputPrompt = null) }
-        _ui.update { it.copy(busy = "Открываю…", busyStage = null, busyNetwork = false, busyQuiet = false, message = null, messageOutcome = Outcome.NONE, inputPrompt = null) }
         viewModelScope.launch {
             val obj = runCatching {
                 store.clear()
@@ -281,7 +281,6 @@ class FlowViewModel @Inject constructor(
     fun onSharedMultiple(sources: List<String>) {
         freshShareArrived = true
         claimVoice()
-        _ui.update { it.copy(busy = "Открываю…", busyStage = null, busyNetwork = false, busyQuiet = false, message = null, messageOutcome = Outcome.NONE, inputPrompt = null) }
         _ui.update { it.copy(busy = "Открываю…", busyStage = null, busyNetwork = false, busyQuiet = false, message = null, messageOutcome = Outcome.NONE, inputPrompt = null) }
         viewModelScope.launch {
             val obj = runCatching {
@@ -328,7 +327,6 @@ class FlowViewModel @Inject constructor(
     fun pullFromPc() {
         val pairing = pcPairings.current() ?: return
         claimVoice()
-        _ui.update { it.copy(busy = "Забираю с компьютера…", busyStage = null, busyNetwork = false, busyQuiet = false, message = null, messageOutcome = Outcome.NONE) }
         _ui.update { it.copy(busy = "Забираю с компьютера…", busyStage = null, busyNetwork = false, busyQuiet = false, message = null, messageOutcome = Outcome.NONE) }
         viewModelScope.launch {
             // Pull what is on the PC RIGHT NOW — a fresh fetch, not the throttled banner snapshot. The
@@ -427,7 +425,6 @@ class FlowViewModel @Inject constructor(
     fun openFromHistory(entry: HistoryEntry) {
         freshShareArrived = true
         claimVoice()
-        _ui.update { it.copy(busy = "Открываю…", busyStage = null, busyNetwork = false, busyQuiet = false, message = null, messageOutcome = Outcome.NONE, inputPrompt = null) }
         _ui.update { it.copy(busy = "Открываю…", busyStage = null, busyNetwork = false, busyQuiet = false, message = null, messageOutcome = Outcome.NONE, inputPrompt = null) }
         viewModelScope.launch {
             val obj = runCatching { history.open(entry.id) }.getOrNull()
@@ -728,7 +725,6 @@ class FlowViewModel @Inject constructor(
 
     private fun runOnObject(bubble: Bubble, top: PointObject) {
         claimVoice()
-        _ui.update { it.copy(busy = bubble.title, busyStage = null, busyNetwork = isCloud(bubble.capabilityId), busyQuiet = isQuietAction(bubble.capabilityId), message = null, messageOutcome = Outcome.NONE, inputPrompt = null) }
         _ui.update { it.copy(busy = bubble.title, busyStage = null, busyNetwork = isCloud(bubble.capabilityId), busyQuiet = isQuietAction(bubble.capabilityId), message = null, messageOutcome = Outcome.NONE, inputPrompt = null) }
         dispatch(bubble) { resolver.realizerFor(bubble.capabilityId).perform(top, null) }
     }
@@ -1033,7 +1029,6 @@ class FlowViewModel @Inject constructor(
     private fun showAppPicker(obj: PointObject) {
         claimVoice()
         _ui.update { it.copy(busy = "Ищу приложения…", busyStage = null, busyQuiet = false, message = null, messageOutcome = Outcome.NONE, inputPrompt = null) }
-        _ui.update { it.copy(busy = "Ищу приложения…", busyStage = null, busyQuiet = false, message = null, messageOutcome = Outcome.NONE, inputPrompt = null) }
         viewModelScope.launch {
             val direct = runCatching { appLauncher.handlers(obj) }.getOrDefault(emptyList())
             // Dedup by package: an app that also appears as a bridged target must not double —
@@ -1151,7 +1146,6 @@ class FlowViewModel @Inject constructor(
     private fun replayChain(chain: FavoriteChain, start: PointObject) {
         claimVoice()
         _ui.update { it.copy(busy = "Выполняю цепочку…", busyStage = null, busyNetwork = false, busyQuiet = false, message = null, messageOutcome = Outcome.NONE, inputPrompt = null) }
-        _ui.update { it.copy(busy = "Выполняю цепочку…", busyStage = null, busyNetwork = false, busyQuiet = false, message = null, messageOutcome = Outcome.NONE, inputPrompt = null) }
         viewModelScope.launch {
             var current = start
             for (capId in chain.steps) {
@@ -1227,9 +1221,6 @@ class FlowViewModel @Inject constructor(
         actionJob = null
         job.cancel()
         claimVoice() // остановленная работа замолкает сразу — её хвост ещё идёт
-        _ui.update { it.copy(busy = null, busyStage = null, message = "Отменено") }
-        // Отмена — не отказ: человек сам передумал, и знак исхода не имеет права ставить ему «✕».
-        _ui.update { it.copy(busy = null, busyStage = null, message = "Отменено", messageOutcome = Outcome.NONE) }
         // Отмена — не отказ и не удача: человек сам передумал. Знак исхода не имеет права ставить
         // ему ни «✕», ни «✓ Готово» — работа не дошла до конца, и заявлять о ней нечего.
         _ui.update { it.copy(busy = null, busyStage = null, message = "Отменено", messageOutcome = Outcome.NONE) }
@@ -1485,14 +1476,19 @@ class FlowViewModel @Inject constructor(
     private fun loadChildrenIfCollection(obj: PointObject) {
         if (obj.state.kind != ObjectKind.COLLECTION) return
         viewModelScope.launch {
-            val items = runCatching { store.children(obj) }.getOrDefault(emptyList())
-            if (items.isEmpty()) return@launch
+            val content = runCatching { store.children(obj) }
+                .getOrDefault(CollectionContent.empty())
+            if (content.shown.isEmpty()) return@launch
 
             val topIndex = stack.lastIndex
             val top = stack.getOrNull(topIndex) ?: return@launch
             if (top.obj.id != obj.id) return@launch
 
-            val refreshed = top.copy(items = items)
+            val refreshed = top.copy(
+                items = content.shown,
+                itemsTotal = content.total,
+                itemsTotalAtLeast = content.atLeast,
+            )
             stack[topIndex] = refreshed
             _ui.update { if (it.frame?.obj?.id == obj.id) it.copy(frame = refreshed) else it }
         }
