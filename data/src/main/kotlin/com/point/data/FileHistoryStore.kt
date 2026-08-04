@@ -2,6 +2,7 @@ package com.point.data
 
 import com.point.core.flow.HistoryStore
 import com.point.core.flow.META_ENTITY_PREFIX
+import com.point.core.flow.META_SIZE
 import com.point.core.flow.ObjectClassifier
 import com.point.core.model.Feature
 import com.point.core.model.HistoryEntry
@@ -90,12 +91,18 @@ class FileHistoryStore @Inject constructor(
         val entry = readEntries()[entryId] ?: return@withContext null
         val file = File(entry.ref.value)
         if (!file.exists()) return@withContext null
+        val size = file.length()
         PointObject(
             id = UUID.randomUUID().toString(),
             mime = entry.mime,
             uri = ScratchRef(file.absolutePath),
-            state = classifier.classify(entry.mime, file.length(), entry.name),
-            metadata = buildMap { entry.name?.let { put("name", it) } },
+            state = classifier.classify(entry.mime, size, entry.name),
+            // Переоткрытый из «Недавнего» объект меряется так же, как только что расшаренный
+            // (#459): вес уже взят здесь, на фоне, до всякого экрана.
+            metadata = buildMap {
+                entry.name?.let { put("name", it) }
+                put(META_SIZE, size.toString())
+            },
         )
     }
 
