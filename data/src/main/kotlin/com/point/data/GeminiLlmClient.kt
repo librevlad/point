@@ -1,6 +1,7 @@
 package com.point.data
 
 import com.point.core.flow.LlmClient
+import com.point.core.flow.withoutPreamble
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.modelReadableAudio
 import com.point.core.model.ObjectKind
@@ -69,7 +70,8 @@ class GeminiLlmClient(
                 try {
                     val answer = fetch(model, obj, prompt)
                     val ref = store.newScratchFile("md")
-                    File(ref.value).writeText(answer)
+                    // Обращение к человеку («Вот вариант рецепта…») — не содержимое документа (#501).
+            File(ref.value).writeText(withoutPreamble(answer))
                     return@withContext ResultObject(
                         type = ObjectKind.TEXT,
                         mime = "text/markdown",
