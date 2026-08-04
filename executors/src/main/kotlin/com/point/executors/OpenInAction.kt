@@ -25,7 +25,10 @@ class OpenInCapability @Inject constructor() : Capability {
     override val id = ID
     override val icon = "open-in"
     override val meta = CapabilityMeta(priority = 60)
-    override fun label(state: ObjectState) = "Открыть в…"
+    // «Открыть в…» многоточием обещало продолжение, которого в строке нет: на экране объекта это
+    // читалось как обрезанный текст. Дизайн-ревью 04.08.2026 — название действия обязано говорить,
+    // что произойдёт, целиком. Выбор приложения по-прежнему спрашивается после тапа.
+    override fun label(state: ObjectState) = "Открыть другим приложением"
     override fun accepts(state: ObjectState) =
         state.kind.isFileBacked && state.kind != ObjectKind.URL
     override fun produces(state: ObjectState) = state // terminal

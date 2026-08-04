@@ -1,6 +1,5 @@
 package com.point
 
-import android.text.format.DateUtils
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -44,6 +43,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.layout.ContentScale
 import com.point.core.flow.META_ENTITY_PREFIX
+import com.point.core.flow.agoLabel
 import com.point.core.model.HistoryEntry
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
@@ -456,8 +456,11 @@ private fun HistoryRow(entry: HistoryEntry, onClick: () -> Unit) {
                 // #114: a person remembers the object, not the clock — the kind leads,
                 // the relative time only seconds it.
                 Text(
+                    // Время говорит по-русски всегда (дизайн-ревью 04.08.2026): системный
+                    // DateUtils берёт язык телефона, и на английской системе строка выходила
+                    // наполовину чужой — «Изображение · 3 hours ago».
                     text = kindLabel(entry.kind) + " · " +
-                        DateUtils.getRelativeTimeSpanString(entry.epochMillis).toString(),
+                        agoLabel(System.currentTimeMillis() - entry.epochMillis),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

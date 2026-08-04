@@ -7,6 +7,7 @@ import com.point.core.model.Intent
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -87,10 +88,19 @@ class CapabilityInventoryTest {
 
     @Test
     fun `терминальное договаривает, что оно вместо объекта сделает`() {
-        // «Ничего не вернёт» в одиночку читается как поломка. Продолжений три, и они разные.
-        assertEquals("ничего не вернёт — отправит", yieldLabel(ActionYield.None, Intent.SEND))
-        assertEquals("ничего не вернёт — откроет", yieldLabel(ActionYield.None, Intent.OPEN))
-        assertEquals("ничего не вернёт — покажет", yieldLabel(ActionYield.None, Intent.UNDERSTAND))
+        // Терминальное говорит, ЧТО сделает, а не чего не сделает: дизайн-ревью 04.08.2026 на живом
+        // экране показало, что два «ничего не вернёт» подряд читаются как поломка — глаз ловит
+        // отрицание раньше глагола. Продолжений по-прежнему три, и они разные.
+        assertEquals("отправит и вернётся сюда", yieldLabel(ActionYield.None, Intent.SEND))
+        assertEquals("откроет в другом приложении", yieldLabel(ActionYield.None, Intent.OPEN))
+        assertEquals("покажет здесь же", yieldLabel(ActionYield.None, Intent.UNDERSTAND))
+        // Ни одна подпись не начинается с отрицания — это и было находкой.
+        Intent.entries.forEach { intent ->
+            assertFalse(
+                "подпись начинается с отрицания: " + yieldLabel(ActionYield.None, intent),
+                yieldLabel(ActionYield.None, intent).startsWith("ничего"),
+            )
+        }
     }
 
     @Test
