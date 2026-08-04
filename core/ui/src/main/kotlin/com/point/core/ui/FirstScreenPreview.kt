@@ -206,6 +206,39 @@ private fun PreviewReadinessMissing() = PointTheme {
     )
 }
 
+@Preview(name = "Карточка готовности · строка = действие (#464)", showBackground = true)
+@Composable
+private fun PreviewReadinessActionable() = PointTheme {
+    // Решение владельца 04.08.2026: тап по готовой строке делает то, что на ней написано.
+    // Превью нарочно показывает обе половины правды разом:
+    //   «✓ Сохранить контакт  +380 50 432 77 07  ›» — живая строка, шеврон и есть обещание;
+    //   «✓ Отследить отправление  20 4514 9154 9395» — справка без шеврона: открыть страницу
+    //   перевозчика Point ещё не умеет, и притворяться кнопкой не должен (хвост #464).
+    FirstScreen(
+        obj = sampleObject(
+            ObjectKind.IMAGE, "image/png", "parcel_with_phone.jpg",
+            features = setOf(com.point.core.model.Feature.HAS_PHONE),
+            metadata = mapOf(
+                com.point.core.flow.META_ENTITY_TRACK to "20 4514 9154 9395",
+                com.point.core.flow.META_ENTITY_TRACK + com.point.core.flow.META_EVIDENCE_SUFFIX to
+                    "semantic,arithmetic",
+                "graph.role.carrier" to "Нова Пошта",
+                "entity.phone" to "+380 50 432 77 07",
+                com.point.core.flow.META_SEMANTIC_TYPE to com.point.core.flow.TYPE_PARCEL,
+            ),
+        ),
+        // Тот же пузырь, что стоит строкой в списке действий ниже: у карточки нет своей дороги
+        // исполнения, она запускает ровно то, что реестр объекту и так предложил.
+        bubbles = listOf(
+            bubble(
+                "contact", "Сохранить контакт", "save-contact",
+                ObjectKind.IMAGE, BubbleTier.INSTANT, Intent.OPEN,
+            ),
+        ) + sampleBubbles(ObjectKind.IMAGE),
+        onBubble = {},
+    )
+}
+
 @Preview(name = "Счётчик · ведущие нули барабана (#262)", showBackground = true)
 @Composable
 private fun PreviewMeterDrumZeros() = PointTheme {
