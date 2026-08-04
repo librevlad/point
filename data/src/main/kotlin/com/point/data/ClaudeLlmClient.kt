@@ -1,6 +1,7 @@
 package com.point.data
 
 import com.point.core.flow.LlmClient
+import com.point.core.flow.withoutPreamble
 import com.point.core.flow.ObjectStore
 import com.point.core.model.ObjectKind
 import com.point.core.model.PointObject
@@ -47,7 +48,8 @@ class ClaudeLlmClient @Inject constructor(
             if (res.code !in 200..299) error("Claude HTTP ${res.code}: ${res.body.take(300)}")
             val answer = parseAnswer(res.body)
             val ref = store.newScratchFile("md")
-            File(ref.value).writeText(answer)
+            // Обращение к человеку («Вот вариант рецепта…») — не содержимое документа (#501).
+            File(ref.value).writeText(withoutPreamble(answer))
             ResultObject(
                 type = ObjectKind.TEXT,
                 mime = "text/markdown",
