@@ -1,5 +1,6 @@
 package com.point.data
 
+import com.point.core.flow.AI_KEY_HINT
 import com.point.core.flow.LlmClient
 import com.point.core.model.PointObject
 import com.point.core.model.ResultObject
@@ -24,7 +25,7 @@ class FallbackLlmClient @Inject constructor(
     override val configured: Boolean get() = providers.any { it.configured }
 
     override suspend fun run(obj: PointObject, prompt: String): ResultObject {
-        if (providers.isEmpty()) error("AI не настроен — задайте свой ключ")
+        if (providers.isEmpty()) error("AI не настроен — $AI_KEY_HINT")
         // For an image, lead with strong vision models — the free ones garble dense/handwritten
         // /rotated tables (#22). Stable sort, so within each group the original order holds.
         val ordered = if (obj.mime.startsWith("image/")) {
@@ -51,7 +52,7 @@ class FallbackLlmClient @Inject constructor(
             } else {
                 "с поддержкой изображений"
             }
-            error("Для этого объекта нет подходящей AI-модели — задайте свой ключ $needed")
+            error("Для этого объекта нет подходящей AI-модели — $AI_KEY_HINT $needed")
         }
         error(summarise(errors))
     }

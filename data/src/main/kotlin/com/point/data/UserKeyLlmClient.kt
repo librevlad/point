@@ -1,5 +1,6 @@
 package com.point.data
 
+import com.point.core.flow.AI_KEY_HINT
 import com.point.core.flow.LlmClient
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.UserKeyStore
@@ -25,7 +26,7 @@ class UserKeyLlmClient @Inject constructor(
     override val configured: Boolean get() = userKeys.read()?.apiKey?.isNotBlank() == true
 
     override suspend fun run(obj: PointObject, prompt: String): ResultObject {
-        val config = userKeys.read() ?: error("задайте свой ключ (шестерёнка на домашнем экране)")
+        val config = userKeys.read() ?: error("$AI_KEY_HINT (шестерёнка на домашнем экране)")
         return OpenAiCompatibleClient(
             http,
             store,

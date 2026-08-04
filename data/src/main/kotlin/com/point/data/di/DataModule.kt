@@ -293,6 +293,10 @@ abstract class DataModule {
     @Binds
     abstract fun pcDiscovery(impl: AndroidPcDiscovery): PcDiscovery
 
+    /** Где последний контакт с компьютером переживает перезапуск (#451). */
+    @Binds
+    abstract fun linkLog(impl: com.point.data.PrefsLinkLog): com.point.core.flow.LinkLog
+
     /** Consent to send objects to a cloud service (#10). */
     @Binds
     abstract fun privacyConsent(impl: PrefsPrivacyConsent): PrivacyConsent
@@ -404,10 +408,12 @@ abstract class DataModule {
         )
 
         /** Кто помнит последний контакт с компьютером (#412) — один на приложение: экран и
-         *  транспорт обязаны говорить об одном и том же. */
+         *  транспорт обязаны говорить об одном и том же. Помнит и после перезапуска (#451):
+         *  забытый вчерашний контакт превращался на экране в «ещё не связывались». */
         @Provides
         @Singleton
-        fun linkMonitor(): com.point.core.flow.LinkMonitor = com.point.core.flow.InMemoryLinkMonitor()
+        fun linkMonitor(log: com.point.core.flow.LinkLog): com.point.core.flow.LinkMonitor =
+            com.point.core.flow.RememberingLinkMonitor(log)
 
         /** Shared clipboard (#161 «общий буфер»): LAN hop first, relay fallback when off-network —
          *  same «безотказно» shape as [pcTransport]. */
