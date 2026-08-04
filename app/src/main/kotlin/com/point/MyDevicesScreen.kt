@@ -111,7 +111,11 @@ fun MyDevicesScreen(
                         deviceKindLabel(device.kind),
                         lastSeenLabel(device.lastSeenMillis, now),
                     ).joinToString(" · "),
+                    // Строка круга — не кнопка, а запись: тапать по ней нечем, и делать вид, что
+                    // есть, нельзя (#464 — «тап по готовой строке делает то, что на ней написано»).
+                    // Действие у неё одно, и оно названо словом справа.
                     onClick = { },
+                    enabled = false,
                     icon = bubbleIcon(icon),
                     accent = bubbleColor(icon),
                     chevron = false,

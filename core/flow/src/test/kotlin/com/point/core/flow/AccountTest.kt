@@ -137,7 +137,7 @@ internal class FakeAccountClient(
         }
     }
 
-    override suspend fun circle(account: PointAccount): List<CircleDevice> = circle
+    override suspend fun circle(account: PointAccount): CircleAnswer = CircleAnswer.Circle(circle)
 
     override suspend fun revoke(account: PointAccount, deviceId: String): Boolean {
         revoked = deviceId

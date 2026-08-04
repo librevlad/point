@@ -3,6 +3,7 @@ package com.point.desktop
 import com.point.core.flow.AccountClient
 import com.point.core.flow.AccountStore
 import com.point.core.flow.BrowserOpener
+import com.point.core.flow.CircleAnswer
 import com.point.core.flow.CircleDevice
 import com.point.core.flow.DeviceKind
 import com.point.core.flow.PointAccount
@@ -79,12 +80,16 @@ class DesktopAccount(
     fun refreshCircle() {
         val account = store.current() ?: return
         scope.launch {
-            val circle = runCatching { client.circle(account) }.getOrNull()
-            if (circle == null) {
-                _error.value = "Не удалось спросить сервер о ваших устройствах"
-            } else {
-                _error.value = null
-                _circle.value = circle
+            val answer = runCatching { client.circle(account) }.getOrDefault(CircleAnswer.Unreachable)
+            when (answer) {
+                is CircleAnswer.Circle -> {
+                    _error.value = null
+                    _circle.value = answer.devices
+                }
+                CircleAnswer.Unreachable -> _error.value = "Не удалось спросить сервер о ваших устройствах"
+                // Отключили этот компьютер — он стирает своё состояние и показывает вход. Молчаливый
+                // выход человек прочитал бы как поломку.
+                CircleAnswer.Revoked -> forget()
             }
         }
     }

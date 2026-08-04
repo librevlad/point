@@ -1222,19 +1222,27 @@ class FlowViewModel @Inject constructor(
         _ui.update { it.copy(devicesScreen = null) }
     }
 
-    /** Спросить сервер, какие устройства у человека есть. */
+    /**
+     * Спросить сервер, какие устройства у человека есть.
+     *
+     * Три ответа разводятся, потому что чинятся разным: круг приехал, до сервера не дозвонились
+     * (прошлое знание в силе) и «это устройство отключили» — последнее поднимает дверь входа тут же,
+     * а не оставляет человека с молчаливо сломанным Point.
+     */
     private suspend fun loadCircle(account: com.point.core.flow.PointAccount) {
-        val circle = runCatching { accountClient.circle(account) }.getOrNull()
-        if (circle == null) {
-            updateDevices {
+        val answer = runCatching { accountClient.circle(account) }
+            .getOrDefault(com.point.core.flow.CircleAnswer.Unreachable)
+        when (answer) {
+            is com.point.core.flow.CircleAnswer.Circle ->
+                updateDevices { it.copy(devices = answer.devices, loading = false, error = null) }
+            com.point.core.flow.CircleAnswer.Unreachable -> updateDevices {
                 it.copy(
                     loading = false,
                     error = "Не удалось спросить сервер о ваших устройствах — проверьте интернет",
                 )
             }
-            return
+            com.point.core.flow.CircleAnswer.Revoked -> forgetAccount(com.point.core.flow.ACCOUNT_REVOKED)
         }
-        updateDevices { it.copy(devices = circle, loading = false, error = null) }
     }
 
     /**

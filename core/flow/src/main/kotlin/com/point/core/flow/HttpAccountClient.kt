@@ -100,20 +100,25 @@ class HttpAccountClient(
         }
     }
 
-    override suspend fun circle(account: PointAccount): List<CircleDevice>? = io {
+    override suspend fun circle(account: PointAccount): CircleAnswer = io {
         val reply = request(path = "/circle", method = "GET", token = account.deviceToken)
-        if (reply.status != 200) return@io null
-        val json = parseJson(reply.body ?: "") ?: return@io null
-        json.array("devices").mapNotNull { item ->
-            val id = item.str("id") ?: return@mapNotNull null
-            CircleDevice(
-                id = id,
-                kind = kindOf(item.str("kind")),
-                name = item.str("name")?.takeIf { it.isNotBlank() } ?: "Устройство",
-                lastSeenMillis = item.long("last_seen")?.takeIf { it > 0 }?.times(1_000L),
-                self = item.bool("self") ?: (id == account.deviceId),
-            )
-        }
+        // 401 — отозванное устройство попадает сюда же, и это ровно то, чего мы хотели: «Отключить»
+        // действует на следующем же запросе, без списка отозванных.
+        if (reply.status == 401 || reply.status == 403) return@io CircleAnswer.Revoked
+        if (reply.status != 200) return@io CircleAnswer.Unreachable
+        val json = parseJson(reply.body ?: "") ?: return@io CircleAnswer.Unreachable
+        CircleAnswer.Circle(
+            json.array("devices").mapNotNull { item ->
+                val id = item.str("id") ?: return@mapNotNull null
+                CircleDevice(
+                    id = id,
+                    kind = kindOf(item.str("kind")),
+                    name = item.str("name")?.takeIf { it.isNotBlank() } ?: "Устройство",
+                    lastSeenMillis = item.long("last_seen")?.takeIf { it > 0 }?.times(1_000L),
+                    self = item.bool("self") ?: (id == account.deviceId),
+                )
+            },
+        )
     }
 
     override suspend fun revoke(account: PointAccount, deviceId: String): Boolean = io {

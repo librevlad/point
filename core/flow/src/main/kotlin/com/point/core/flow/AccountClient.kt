@@ -20,8 +20,8 @@ interface AccountClient {
     /** Один опрос: подтвердил ли человек вход в браузере. [claimToken] — из [LoginStart]. */
     suspend fun poll(loginId: String, claimToken: String): LoginPoll
 
-    /** Круг устройств аккаунта; `null` — не дозвонились. Пустой список — законный ответ. */
-    suspend fun circle(account: PointAccount): List<CircleDevice>?
+    /** Круг устройств аккаунта. Пустой список — законный ответ; см. [CircleAnswer]. */
+    suspend fun circle(account: PointAccount): CircleAnswer
 
     /**
      * Отключить устройство круга — своё или чужое. Любое устройство круга может отключить любое:

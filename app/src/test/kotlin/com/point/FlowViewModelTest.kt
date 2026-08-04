@@ -1154,6 +1154,21 @@ class FlowViewModelTest {
         vm.closeDevices()
     }
 
+    @Test fun `отозванное устройство узнаёт об этом от сервера и показывает вход (#472)`() = runTest(dispatcher) {
+        // Отключили этот телефон с другого устройства. Молчаливо сломанный Point человек прочитал
+        // бы как поломку — а сервер уже сказал «вас тут нет».
+        val store = FakeAccountStore(TEST_ACCOUNT)
+        val vm = vm(account = store, accountClient = FakeCircleClient(gone = true))
+
+        vm.openDevices(); advanceUntilIdle()
+
+        assertNull(store.current())
+        assertEquals(
+            com.point.core.flow.ACCOUNT_REVOKED,
+            vm.ui.value.signIn,
+        )
+    }
+
     @Test fun `отключили само это устройство — дверь входа поднимается тут же (#472)`() = runTest(dispatcher) {
         // Молчаливый выход человек прочитал бы как поломку.
         val store = FakeAccountStore(TEST_ACCOUNT)
@@ -2369,6 +2384,8 @@ internal class FakeAccountStore(private var account: com.point.core.flow.PointAc
 /** Сервер, которого нет: `circle = null` — не дозвонились. */
 internal class FakeCircleClient(
     private var circle: List<com.point.core.flow.CircleDevice>? = emptyList(),
+    /** Отключили ли это устройство с другого — тогда сервер отвечает «вас тут нет». */
+    private val gone: Boolean = false,
 ) : com.point.core.flow.AccountClient {
     var revoked: String? = null
     var signedOut = false
@@ -2376,7 +2393,12 @@ internal class FakeCircleClient(
         com.point.core.flow.LoginStart("l1", "claim-1", "K7-42Q", "https://point.example/login?d=l1")
     override suspend fun poll(loginId: String, claimToken: String): com.point.core.flow.LoginPoll =
         com.point.core.flow.LoginPoll.Ready(TEST_ACCOUNT)
-    override suspend fun circle(account: com.point.core.flow.PointAccount) = circle
+    override suspend fun circle(account: com.point.core.flow.PointAccount): com.point.core.flow.CircleAnswer =
+        when {
+            gone -> com.point.core.flow.CircleAnswer.Revoked
+            circle == null -> com.point.core.flow.CircleAnswer.Unreachable
+            else -> com.point.core.flow.CircleAnswer.Circle(circle!!)
+        }
     override suspend fun revoke(account: com.point.core.flow.PointAccount, deviceId: String): Boolean {
         revoked = deviceId
         circle = circle?.filterNot { it.id == deviceId }
