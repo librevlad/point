@@ -24,7 +24,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -54,9 +54,12 @@ fun KeyScreen(
     onOpenUrl: (String) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
-    var key by remember(config) { mutableStateOf(config.apiKey) }
-    var model by remember(config) { mutableStateOf(config.model) }
-    var baseUrl by remember(config) { mutableStateOf(config.baseUrl) }
+    // `rememberSaveable`, а не `remember` (#114): поворот телефона пересоздаёт экран, и набранное
+    // на `remember` пропадает молча. Здесь это особенно дорого — API-ключ длинный и обычно
+    // вставлен из буфера: человек, повернувший телефон, шёл бы за ним второй раз.
+    var key by rememberSaveable(config) { mutableStateOf(config.apiKey) }
+    var model by rememberSaveable(config) { mutableStateOf(config.model) }
+    var baseUrl by rememberSaveable(config) { mutableStateOf(config.baseUrl) }
 
     Column(
         modifier = modifier
@@ -75,16 +78,15 @@ fun KeyScreen(
         // Выбор провайдера вместо трёх полей наизусть: адрес и модель подставляются сами, а
         // рядом лежит ссылка на страницу, где ключ выдают. Раньше человек должен был знать
         // «endpoint (base URL)» — это знание разработчика, а не пользователя.
-        var chosen by remember(config) {
-            mutableStateOf(com.point.core.flow.providerForBaseUrl(config.baseUrl))
-        }
+        // Выбранный провайдер не хранится отдельным состоянием, а читается из адреса: два
+        // состояния об одном и том же расходятся при первом же восстановлении экрана.
+        val chosen = com.point.core.flow.providerForBaseUrl(baseUrl)
         Text("Откуда взять ключ", style = MaterialTheme.typography.titleSmall)
         com.point.core.flow.AI_PROVIDERS.forEach { provider ->
             ProviderRow(
                 provider = provider,
                 selected = chosen?.id == provider.id,
                 onChoose = {
-                    chosen = provider
                     baseUrl = provider.baseUrl
                     model = provider.models.substringBefore(',')
                 },
