@@ -19,6 +19,8 @@ data class OpenAiProvider(
     val model: String,
     /** Does this model accept image input? Keeps photos out of text-only models (#60). */
     val vision: Boolean = false,
+    /** Замерена ли модель как читающая страницу дословно — см. [isMeasuredStrongVision]. */
+    val strongVision: Boolean = false,
 )
 
 /** The active providers, order preserved — a blank key means "not signed up", so skip it. */
@@ -32,7 +34,13 @@ fun List<OpenAiProvider>.configured(): List<OpenAiProvider> = filter { it.apiKey
  */
 fun openAiModels(label: String, baseUrl: String, apiKey: String, models: String): List<OpenAiProvider> =
     models.split(',').map(String::trim).filter(String::isNotBlank)
-        .map { OpenAiProvider(label, baseUrl, apiKey, it, vision = isVisionModel(it)) }
+        .map {
+            OpenAiProvider(
+                label, baseUrl, apiKey, it,
+                vision = isVisionModel(it),
+                strongVision = isMeasuredStrongVision(it),
+            )
+        }
 
 /**
  * Best-effort: does a model name denote a vision (image-in) model? Deliberately conservative —
@@ -52,7 +60,43 @@ private val VISION_MODEL_HINTS = listOf(
     // Названия без всякого намёка на картинку: mistral-small/medium зрячие с 2025 года.
     // Замер на ведомости (02.08.2026): medium прочитал 30 строк и все 27 артикулов, а
     // Point его пропускал — угадывание по имени промахивается в обе стороны.
-    "mistral-small", "mistral-medium",
+    "mistral-small", "mistral-medium", "ministral",
+    // Ещё одно имя без намёка на картинку. `qwen3.6-27b` берёт 15/15 на мятом фото под углом
+    // (перемер #490) — и без этой строки уехал бы в цепочку объявленным сильным читателем, к
+    // которому снимок не попадает НИКОГДА: `canHandle` не пустил бы. Поймано тестом «сильное
+    // зрение не заменяет зрения», а не глазами.
+    "qwen3.6",
+)
+
+/**
+ * Читает ли эта модель страницу **дословно** — по замеру, а не по названию (#490/#493).
+ *
+ * `strongVision` был объявлен ровно у трёх клиентов — Gemini, Claude и ключ человека, — то есть у
+ * тех, кого когда-то признали сильными на глаз. Из-за этого бесплатная цепочка на снимке шла в
+ * произвольном порядке, а лучшие читатели, найденные перемером, в неё не попадали вовсе: файл,
+ * собранный из плохого чтения, и был жалобой владельца в #493.
+ *
+ * Список — из таблицы `docs/VISION-MODELS.md` (04.08.2026, 132 замера, три повтора на пару
+ * «кандидат + картинка», счёт по 15 контрольным кускам на чистом скане и на мятом фото):
+ * - `gemma-4-*` — 14–15/15 у трёх разных поставщиков (OpenRouter 6/6, SambaNova 6/6, Cerebras 5/6);
+ * - `qwen3.6-*` — 15/15 на обеих картинках (Groq, OVH);
+ * - `qwen2.5-vl` / `qwen2-vl` — 15/15 шесть попыток из шести (OVH).
+ *
+ * **Чего здесь намеренно нет.** Чаты Mistral (12–13/15) — их же собственная OCR-ручка берёт 15/15,
+ * и объявить чат сильным значило бы поставить его вровень с тем, кто читает лучше. `glm-4.6v-flash`
+ * (13/15, два ответа из шести) и `nemotron-*` (пустой ответ на плохом фото) — тем более.
+ *
+ * **Надёжность здесь не судится.** Groq берёт 15/15 и отвечает 2 раза из 6 (8000 токенов в минуту,
+ * картинка ≈4400) — это про порядок в цепочке, а не про качество чтения: 429 переводит очередь
+ * дальше сам. Смешать одно с другим значило бы понизить того, кто читает лучше всех, когда доходит.
+ */
+fun isMeasuredStrongVision(model: String): Boolean {
+    val m = model.lowercase()
+    return STRONG_VISION_MEASURED.any { it in m }
+}
+
+private val STRONG_VISION_MEASURED = listOf(
+    "gemma-4", "gemma4", "qwen3.6", "qwen2.5-vl", "qwen2-vl",
 )
 
 /**
@@ -69,6 +113,14 @@ class OpenAiCompatibleClient(
 ) : LlmClient {
 
     private val baseUrl: String = provider.baseUrl.ifBlank { DEFAULT_BASE_URL }.trimEnd('/')
+
+    /**
+     * Сильное зрение — свойство модели, а не поставщика, и берётся оно из замера ([isMeasuredStrongVision]).
+     *
+     * Отсюда цепочка на снимке ведёт с тех, кто прочитал ведомость дословно, а не с того, кто
+     * оказался первым в списке ключей.
+     */
+    override val strongVision: Boolean = provider.strongVision
 
     override fun canHandle(obj: PointObject): Boolean = when {
         isImage(obj) -> provider.vision            // never send a photo to a text-only model

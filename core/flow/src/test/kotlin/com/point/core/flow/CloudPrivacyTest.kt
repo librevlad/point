@@ -11,11 +11,20 @@ import org.junit.Test
  * Прежде сервис, который логирует присланное, в цепочку не попадал вовсе — и это решало за
  * человека, отнимая у него ровно то, ради чего он поставил Point. Теперь выбирает он, а умолчание
  * даёт максимум бесплатного.
+ *
+ * Перемер #490 добавил вторую половину: **строгий уровень строится по обещанию сервиса, а не по
+ * флагу страны.** Здесь это под тестом, потому что снаружи ошибка не видна вовсе — человек считает,
+ * что закрылся, и шлёт документ туда, куда не отправил бы.
  */
 class CloudPrivacyTest {
 
-    private val europe = ReaderPrivacy("Mistral, Франция (ЕС)", europe = true, logsRequests = false)
-    private val overseas = ReaderPrivacy("сервис в США", europe = false, logsRequests = true)
+    /** Франция, ЕС — и при этом на бесплатном тарифе учится на присланном. Ровно тот случай. */
+    private val europeanButLearns = ReaderPrivacy("Mistral, Франция (ЕС)", ReaderPromise.TRAINS)
+
+    /** США — и при этом письменно обещал не учиться и не хранить. Тоже ровно тот случай. */
+    private val overseasButPromises = ReaderPrivacy("Groq, США", ReaderPromise.NO_TRAINING)
+
+    private val silent = ReaderPrivacy("OCR.space, Германия (ЕС)", ReaderPromise.UNKNOWN)
 
     @Test
     fun `умолчание — максимум бесплатного`() {
@@ -25,36 +34,75 @@ class CloudPrivacyTest {
     }
 
     @Test
-    fun `по умолчанию читают все, включая тех, кто хранит присланное у себя`() {
-        assertTrue(allowedAt(PrivacyLevel.FREE_FIRST, overseas))
-        assertTrue(allowedAt(PrivacyLevel.FREE_FIRST, europe))
+    fun `по умолчанию читают все, включая тех, кто учится на присланном`() {
+        assertTrue(allowedAt(PrivacyLevel.FREE_FIRST, europeanButLearns))
+        assertTrue(allowedAt(PrivacyLevel.FREE_FIRST, overseasButPromises))
+        assertTrue(allowedAt(PrivacyLevel.FREE_FIRST, silent))
     }
 
     @Test
-    fun `только Европа — остаются те, про кого адрес известен поимённо`() {
-        assertTrue(allowedAt(PrivacyLevel.EUROPE_ONLY, europe))
-        assertFalse(allowedAt(PrivacyLevel.EUROPE_ONLY, overseas))
-        // Общая цепочка моделей маршрутизирует куда угодно — обещать про неё Европу нельзя.
-        assertFalse(allowedAt(PrivacyLevel.EUROPE_ONLY, AI_CHAIN_PRIVACY))
+    fun `строгий уровень судит по обещанию, а не по стране`() {
+        // Прежний «Только Европа» делал ровно наоборот — и человек, выбравший его ради защиты,
+        // получал сервис, который учится на его документах, вместо того, кто обещал не учиться.
+        assertTrue(allowedAt(PrivacyLevel.NO_TRAINING, overseasButPromises))
+        assertFalse(allowedAt(PrivacyLevel.NO_TRAINING, europeanButLearns))
+    }
+
+    @Test
+    fun `молчание — не обещание`() {
+        // «Документы удаляются после обработки» и «мы не учимся на присланном» — разные фразы, и
+        // достраивать вторую из первой значит обещать за чужой сервис.
+        assertFalse(allowedAt(PrivacyLevel.NO_TRAINING, silent))
+    }
+
+    @Test
+    fun `общая цепочка моделей на строгом уровне молчит — за неё обещать некому`() {
+        assertFalse(allowedAt(PrivacyLevel.NO_TRAINING, AI_CHAIN_PRIVACY))
+        assertTrue(allowedAt(PrivacyLevel.FREE_FIRST, AI_CHAIN_PRIVACY))
+    }
+
+    @Test
+    fun `лестница настоящая — строгий уровень нигде не пропускает больше свободного`() {
+        // Главное свойство настройки: закрываясь сильнее, человек не может случайно открыться шире.
+        val all = ReaderPromise.entries.map { ReaderPrivacy("кто-то", it) } + AI_CHAIN_PRIVACY
+        all.forEach { privacy ->
+            if (allowedAt(PrivacyLevel.DEVICE_ONLY, privacy)) {
+                assertTrue("$privacy — строгий пропустил там, где средний нет", allowedAt(PrivacyLevel.NO_TRAINING, privacy))
+            }
+            if (allowedAt(PrivacyLevel.NO_TRAINING, privacy)) {
+                assertTrue("$privacy — средний пропустил там, где свободный нет", allowedAt(PrivacyLevel.FREE_FIRST, privacy))
+            }
+        }
+    }
+
+    @Test
+    fun `прежний выбор «Только Европа» не снимается молча`() {
+        // Настройка приватности, съехавшая на умолчание при обновлении, — сбой, которого человек не
+        // увидит: он по-прежнему считает, что закрыт.
+        assertEquals(PrivacyLevel.NO_TRAINING, PrivacyLevel.of("EUROPE_ONLY"))
     }
 
     @Test
     fun `только на телефоне — наружу не выпускается никто`() {
-        assertFalse(allowedAt(PrivacyLevel.DEVICE_ONLY, europe))
-        assertFalse(allowedAt(PrivacyLevel.DEVICE_ONLY, overseas))
+        assertFalse(allowedAt(PrivacyLevel.DEVICE_ONLY, europeanButLearns))
+        assertFalse(allowedAt(PrivacyLevel.DEVICE_ONLY, overseasButPromises))
         assertFalse(allowedAt(PrivacyLevel.DEVICE_ONLY, AI_CHAIN_PRIVACY))
     }
 
     @Test
     fun `отбор не пересобирает очередь — порядок это ранжирование по замеру`() {
-        val chain = listOf("mistral" to europe, "штаты" to overseas, "ovh" to europe)
+        val chain = listOf(
+            "mistral-ocr" to europeanButLearns,
+            "ocr-space" to silent,
+            "ovh" to overseasButPromises,
+        )
         assertEquals(
-            listOf("mistral", "штаты", "ovh"),
+            listOf("mistral-ocr", "ocr-space", "ovh"),
             allowedBy(PrivacyLevel.FREE_FIRST, chain) { it.second }.map { it.first },
         )
         assertEquals(
-            listOf("mistral", "ovh"),
-            allowedBy(PrivacyLevel.EUROPE_ONLY, chain) { it.second }.map { it.first },
+            listOf("ovh"),
+            allowedBy(PrivacyLevel.NO_TRAINING, chain) { it.second }.map { it.first },
         )
         assertTrue(allowedBy(PrivacyLevel.DEVICE_ONLY, chain) { it.second }.isEmpty())
     }
@@ -68,6 +116,15 @@ class CloudPrivacyTest {
             assertFalse("$level говорит на языке кода: ${level.what}", level.what.contains("провайдер"))
             assertFalse("$level говорит на языке кода: ${level.title}", level.title.contains("провайдер"))
         }
+    }
+
+    @Test
+    fun `каждое обещание сказано словами человека`() {
+        ReaderPromise.entries.forEach { promise ->
+            assertTrue("$promise без слов для человека", promise.what.length > 20)
+        }
+        // «Не сказал ничего» обязано отличаться от «обещал» словами, а не только именем в коде.
+        assertFalse(ReaderPromise.UNKNOWN.what.contains("обещал не"))
     }
 
     @Test

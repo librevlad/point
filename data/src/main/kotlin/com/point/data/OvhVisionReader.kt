@@ -1,6 +1,7 @@
 package com.point.data
 
 import com.point.core.flow.ReaderPrivacy
+import com.point.core.flow.ReaderPromise
 import com.point.core.model.PointObject
 import org.json.JSONArray
 import org.json.JSONObject
@@ -9,9 +10,11 @@ import java.util.Base64
 /**
  * OVH — зрячая модель, которую отдают **бесплатно и без регистрации** (#280).
  *
- * Замер разведки (04.08.2026, `docs/VISION-MODELS.md`): 15 строк из 15 на кириллице, Qwen2.5-VL-72B,
- * сервер во Франции, порядка двух запросов в минуту. Второй по счёту после Mistral OCR — и
- * единственный запасной на уровне «только Европа», где общая цепочка моделей молчит.
+ * Замер (04.08.2026, `docs/VISION-MODELS.md`, перемер #490): 15 строк из 15 на кириллице **шесть
+ * попыток из шести** — и на чистом скане, и на мятом фото под углом; Qwen2.5-VL-72B, сервер во
+ * Франции, два запроса в минуту. Третий по счёту (после Mistral OCR и OCR.space) — медленнее их
+ * обоих, но единственный, кто работает у любого человека сразу, и единственный, кто остаётся на
+ * строгом уровне «Не учатся на моём».
  *
  * **Ключ необязателен, и это его смысл.** Endpoint отдаёт модель анонимно; ключ, если человек его
  * завёл, поднимает лимиты. Поэтому [configured] здесь `true` всегда: читатель без ключа — не
@@ -32,7 +35,15 @@ class OvhVisionReader(
 
     override val reader = READER
 
-    override val privacy = ReaderPrivacy(where = "OVH, Франция (ЕС)", europe = true, logsRequests = false)
+    /**
+     * Единственный в цепочке, кто обещает обе вещи разом: «Your data will never be used to train or
+     * improve our AI models» и нулевое хранение. Поэтому на строгом уровне («Не учатся на моём») он
+     * остаётся работающим — и работает там без всякого ключа.
+     */
+    override val privacy = ReaderPrivacy(
+        where = "OVH, Франция (ЕС)",
+        promise = ReaderPromise.NO_TRAINING,
+    )
 
     /** Анонимный доступ — читатель есть всегда; ключ лишь поднимает лимиты. */
     override val configured = true

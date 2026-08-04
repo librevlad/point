@@ -47,6 +47,7 @@ import com.point.core.flow.ruleEvidence
 import com.point.core.flow.s10CheckDigitValid
 import com.point.core.flow.semanticFits
 import com.point.core.model.ActionResult
+import com.point.core.model.ActionYield
 import com.point.core.model.CapabilityId
 import com.point.core.model.Feature
 import com.point.core.model.Intent
@@ -263,6 +264,15 @@ class UnderstandCapability @Inject constructor() : Capability {
     override fun accepts(state: ObjectState) =
         state.kind == ObjectKind.TEXT || state.has(Feature.HAS_TEXT)
     override fun produces(state: ObjectState) = state
+
+    /**
+     * #491: единственное место, где `produces` не мог сказать правду.
+     *
+     * «Понять» отдаёт свой же объект — по `produces` это неотличимо от «Поделиться», то есть от
+     * «ничего не вернёт». А возвращает оно объект, и в нём главное: дописанные факты, их
+     * происхождение и споры. Умолчание тут врало бы человеку ровно про то, ради чего он тапает.
+     */
+    override fun yields(state: ObjectState) = ActionYield.Same
     override fun intents(state: ObjectState) = setOf(Intent.UNDERSTAND)
 
     companion object { val ID = CapabilityId("understand") }

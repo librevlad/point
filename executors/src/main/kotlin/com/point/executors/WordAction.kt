@@ -9,6 +9,7 @@ import com.point.core.flow.Realizer
 import com.point.core.flow.TextRecognizer
 import com.point.core.flow.reportStage
 import com.point.core.model.ActionResult
+import com.point.core.model.ActionYield
 import com.point.core.model.CapabilityId
 import com.point.core.model.Intent
 import com.point.core.model.ObjectKind
@@ -45,6 +46,9 @@ class WordCapability @Inject constructor() : Capability {
     override fun accepts(state: ObjectState) =
         state.kind == ObjectKind.PDF || state.kind == ObjectKind.TEXT || state.kind == ObjectKind.IMAGE
     override fun produces(state: ObjectState) = ObjectState(ObjectKind.OFFICE)
+
+    /** #491: `OFFICE` покрывает и таблицу — здесь это именно документ Word. */
+    override fun yields(state: ObjectState) = ActionYield.New(ObjectKind.OFFICE, "документ Word")
     override fun intents(state: ObjectState) = setOf(Intent.PREPARE)
 
     companion object { val ID = CapabilityId("word") }

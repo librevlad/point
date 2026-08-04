@@ -19,6 +19,14 @@ data class Bubble(
      *  order). Set by the registry from the capability; the object screen groups actions by it —
      *  Извлечь (UNDERSTAND) / Превратить (PREPARE) / Отправить (OPEN, SEND). */
     val intent: Intent = Intent.UNDERSTAND,
+    /**
+     * Что вернётся, если нажать (#491) — объявление самой способности, а не догадка экрана.
+     *
+     * Не выводится из [expectedNextState]: тот собран как `produces(state) ?: state`, и в одном
+     * значении слиты три разных ответа — «ничего не вернёт», «вернёт этот же объект понятым» и
+     * «неизвестно, пока не спросишь». Человеку они не одно и то же.
+     */
+    val yields: ActionYield = ActionYield.Unknown,
 )
 
 /**

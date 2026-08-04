@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
+import com.point.core.flow.yieldLabel
 import com.point.core.model.Bubble
 import com.point.core.model.BubbleTier
 import com.point.core.model.CapabilityId
@@ -72,6 +73,11 @@ internal fun ObjectActions(
  * One action as a full-width [PortalRow]. An AI action wears a cyan (АКЦЕНТ2/tertiary) ring — it
  * leaves the device; a device app shows its real icon. Long-press pins the action for this object
  * kind (#66).
+ *
+ * Под названием — **что вернётся** (#491): «вернёт текст», «вернёт таблицу», «ничего не вернёт —
+ * отправит». Формула продукта кончается объектом, и до этого среза последнее её звено человеку
+ * никто не называл: он узнавал, что получится, только выполнив действие. Слова приходят от самой
+ * способности (`Bubble.yields`), экран их не сочиняет.
  */
 @Composable
 private fun ActionRow(
@@ -89,6 +95,8 @@ private fun ActionRow(
     val ai = bubble.tier == BubbleTier.AI
     PortalRow(
         title = if (pinned) "★ ${bubble.title}" else bubble.title, // #66: the user's rule is visible
+        subtitle = yieldLabel(bubble.yields, bubble.intent),
+        subtitleMaxLines = 1,
         onClick = onClick,
         onLongClick = onLongClick,
         icon = bubbleIcon(bubble.icon),
