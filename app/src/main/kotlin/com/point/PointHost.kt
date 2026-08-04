@@ -89,6 +89,10 @@ fun PointHost(
     onSaveAiConfig: (UserAiConfig) -> Unit = {},
     /** Пойти за ключом с отказа, который им и чинится (#452) — предложение, а не подмена ответа. */
     onOpenKeySettings: () -> Unit = {},
+    /** Проверить ключ живым запросом — только по явному тапу человека (#465). */
+    onCheckAiKey: (UserAiConfig) -> Unit = {},
+    /** Что лежит в буфере обмена; читается только тапом «Вставить из буфера» (#465). */
+    onPasteKey: () -> String? = { null },
     onCloseKeySettings: () -> Unit = {},
     onToggleUsage: (Boolean) -> Unit = {},
     onToggleSound: (Boolean) -> Unit = {},
@@ -184,6 +188,10 @@ fun PointHost(
                 note = state.keyScreenNote,
                 onSave = onSaveAiConfig,
                 onCancel = onCloseKeySettings,
+                checking = state.keyChecking,
+                verdict = state.keyVerdict,
+                onCheck = onCheckAiKey,
+                onPasteKey = onPasteKey,
                 usageEnabled = state.usageEnabled,
                 usageSummary = state.usageSummary,
                 onToggleUsage = onToggleUsage,

@@ -57,9 +57,9 @@ class InputSurvivesRotationTest {
 
         rotation.emulateSavedInstanceStateRestore()
 
-        // Судим по тому, что уйдёт в хранилище: «Сохранить» вообще погашено, пока ключ пуст, —
-        // потерянный ключ провалит этот тест и кнопкой, и значением.
-        compose.onNodeWithText("Сохранить").performScrollTo().assertIsEnabled().performClick()
+        // Судим по тому, что уйдёт в хранилище: тихая дорога в обход проверки (#465) вообще не
+        // рисуется, пока ключ пуст, — потерянный ключ провалит этот тест и кнопкой, и значением.
+        compose.onNodeWithText("Сохранить без проверки").performScrollTo().assertIsEnabled().performClick()
         assertEquals("sk-очень-длинный-ключ-из-буфера", saved?.apiKey)
         assertEquals("моя-модель", saved?.model)
     }

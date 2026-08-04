@@ -2,6 +2,7 @@ package com.point.data.di
 
 import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
+import com.point.core.flow.AiKeyCheck
 import com.point.core.flow.AppLauncher
 import com.point.core.flow.BackgroundRemover
 import com.point.core.flow.CalendarInserter
@@ -80,6 +81,7 @@ import com.point.data.AndroidPcDiscovery
 import com.point.data.FileBasket
 import com.point.data.FilePcCaps
 import com.point.data.FilePcPairings
+import com.point.data.HttpAiKeyCheck
 import com.point.data.HttpPcClipboardSync
 import com.point.data.HttpUrlPcTransport
 import com.point.data.LanThenRelayClipboardSync
@@ -276,6 +278,10 @@ abstract class DataModule {
     /** The user's own AI key (BYO), stored on-device. */
     @Binds
     abstract fun userKeyStore(impl: PrefsUserKeyStore): UserKeyStore
+
+    /** Живая проверка этого ключа — тем же путём, каким пойдут действия, и только по тапу (#465). */
+    @Binds
+    abstract fun aiKeyCheck(impl: HttpAiKeyCheck): AiKeyCheck
 
     /** Private, consent-gated usage journal (North Star measurement). */
     @Binds

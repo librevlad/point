@@ -107,6 +107,8 @@ class HomeActivity : ComponentActivity() {
                             fromPcCount = fromPcCount,
                             onPullFromPc = viewModel::pullFromPc,
                             onHideFromPc = viewModel::hideFromPc,
+                            // Пока ключа нет — «Недавнее» само зовёт его подключить (#465).
+                            aiKeySet = state.aiKeySet,
                         )
                     } else {
                         PointFlow(
