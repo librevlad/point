@@ -16,6 +16,7 @@ class VoiceSource @Inject constructor() : ObjectSource {
 
     override val id = "voice"
     override val label = "Голос"
+    override val icon = "transcribe"
 
     override fun isAvailable(context: Context): Boolean =
         Intent(MediaStore.Audio.Media.RECORD_SOUND_ACTION)

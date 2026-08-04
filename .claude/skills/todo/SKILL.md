@@ -14,11 +14,14 @@ description: Быстрый захват задачи в трекер. Испо�
 - **Не перебивай текущую работу.** Один заход: создал issue → добавил на доску →
   одна строка отчёта → продолжил прерванное. Не переключайся на выполнение новой
   задачи, не расширяй её, не задавай вопросов (единственное исключение — текст пуст).
-- **Статус по умолчанию — `Backlog`.** Приоритет («Up next») ставит только
+- **Статус по умолчанию — `Inbox`.** Мысль на ходу — это сырьё, а не работа: `/todo` ловит её,
+  чтобы не потерять, а не чтобы поставить в очередь. В `Backlog` задача попадает только после
+  разбора (брейншторм с владельцем), где выясняется, зачем она человеку и как судить результат.
+  Приоритет («Up next») ставит только человек. Приоритет («Up next») ставит только
   человек/ко-фаундер. Claude никогда не двигает задачу выше Backlog сам.
 - **Ставь статус явно.** Встроенный auto-add борда подхватывает новые issues, но
   кладёт их без статуса — поэтому скилл всё равно добавляет issue сам (операция
-  идемпотентна: если auto-add успел, вернётся тот же item) и проставляет Backlog.
+  идемпотентна: если auto-add успел, вернётся тот же item) и проставляет Inbox.
 - **Не глотай ошибку.** Если `gh` упал (auth/сеть) — честно скажи и покажи исходный
   текст задачи дословно, чтобы мысль не потерялась.
 
@@ -37,14 +40,14 @@ description: Быстрый захват задачи в трекер. Испо�
 ```bash
 PROJECT_ID=PVT_kwHOAvE9d84Be3eP
 STATUS_FIELD=PVTSSF_lAHOAvE9d84Be3ePzhZOiSg
-BACKLOG=dbdb0935
+INBOX=a526aafe
 
 URL=$(gh issue create --repo librevlad/point --title "TITLE" --body "BODY") \
   || { echo "gh issue create FAILED — задача НЕ потеряна: TITLE"; exit 1; }
 ITEM=$(gh project item-add 3 --owner librevlad --url "$URL" --format json \
   | python -c "import sys,json;print(json.load(sys.stdin)['id'])")
 gh project item-edit --id "$ITEM" --project-id "$PROJECT_ID" \
-  --field-id "$STATUS_FIELD" --single-select-option-id "$BACKLOG" >/dev/null
+  --field-id "$STATUS_FIELD" --single-select-option-id "$INBOX" >/dev/null
 echo "$URL"
 ```
 
@@ -59,7 +62,7 @@ Body-шаблон:
 ## Отчёт (ровно одна строка) и возврат
 После успеха — одна строка, затем сразу продолжай прерванное дело:
 
-`📌 #<N> <title> → <url> (Backlog)`
+`📌 #<N> <title> → <url> (Inbox)`
 
 Несколько задач → по строке на каждую. Больше ничего не пиши, к новой задаче не
 приступай.
@@ -67,8 +70,11 @@ Body-шаблон:
 ## Справочник борда
 - Repo: `librevlad/point` · Project #3 «Point» (`PVT_kwHOAvE9d84Be3eP`), привязан к репозиторию
 - Status-поле `PVTSSF_lAHOAvE9d84Be3ePzhZOiSg`:
-  Backlog `dbdb0935` · Up next `212da4d0` · In progress `c2538f73`
-  · In review `72b0463f` · Done `5765df46`
+  Inbox `a526aafe` · Backlog `16036a29` · Up next `66c9f395` · In progress `d853cf89`
+  · In review `2fae74d0` · Done `2baf26cc`
+- **Идентификаторы меняются при любой правке набора колонок** (04.08.2026 добавили Inbox — сменились
+  ВСЕ шесть). Скилл упадёт молча, положив задачу без статуса. Если `item-edit` ругается на
+  option-id — перечитай их запросом, а не подставляй по памяти.
 - Есть ещё поля Priority (P0/P1/P2), Size (XS…XL) и Iteration — их скилл НЕ трогает,
   это домен ко-фаундера.
 - Project #2 — архив до переезда, закрыт. Не писать туда.

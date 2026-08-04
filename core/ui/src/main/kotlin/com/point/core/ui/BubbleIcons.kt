@@ -39,6 +39,7 @@ import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.QrCode2
@@ -82,6 +83,7 @@ fun bubbleIcon(key: String): ImageVector = when (if (key.startsWith("app:")) "op
     "renew" -> Icons.Filled.EventRepeat
     "pc" -> Icons.Filled.Computer
     "scan" -> Icons.Filled.DocumentScanner
+    "camera" -> Icons.Filled.PhotoCamera
     "cutout" -> Icons.Filled.ContentCut
     "blur" -> Icons.Filled.BlurOn
     "replace-bg" -> Icons.Filled.Wallpaper
@@ -122,6 +124,7 @@ fun bubbleColor(key: String): Color = when (if (key.startsWith("app:")) "open-in
     "compress" -> Color(0xFF0EA5A5) // teal — image
     "pc" -> Color(0xFF0EA5E9)       // sky — continue on PC
     "scan" -> Color(0xFF6366F1)     // indigo — scan
+    "camera" -> Color(0xFF6366F1)   // indigo — снять кадр: та же семья, что скан
     "cutout" -> Color(0xFF0EA5A5)   // teal — remove background
     "blur" -> Color(0xFF6366F1)     // indigo — blur background
     "replace-bg" -> Color(0xFF7C4DFF) // purple — replace background
