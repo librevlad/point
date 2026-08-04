@@ -36,8 +36,9 @@ class HomeDoorTest {
 
     /** Шестерёнка на «Недавнем» — тот самый основной путь за ключом. */
     private fun openKeySettings() {
-        compose.onNodeWithContentDescription("Ваш AI-ключ").performClick()
-        compose.waitUntilAtLeastOneExists(hasText("Ваш AI-ключ"), TIMEOUT_MS)
+        // Шестерёнка и заголовок экрана называются одним словом (#447): за ней не только ключ.
+        compose.onNodeWithContentDescription(GEAR).performClick()
+        compose.waitUntilAtLeastOneExists(hasText(GEAR), TIMEOUT_MS)
     }
 
     /** Сохранить ключ так, как это делает человек: доехать, набрать, нажать. */
@@ -50,14 +51,16 @@ class HomeDoorTest {
         compose.waitUntilAtLeastOneExists(hasText("Ключ AI сохранён"), TIMEOUT_MS)
     }
 
-    @Test fun `«Взять ключ» с домашнего экрана открывает страницу провайдера`() {
+    @Test fun `ссылка на сайт провайдера с домашнего экрана открывает браузер`() {
         openKeySettings()
-        compose.onAllNodesWithText("Взять ключ").onFirst().performClick()
+        // Раньше эта строка называлась «Взять ключ» и стояла внутри строки выбора провайдера —
+        // владелец прочитал её как «взять этот ключ» (#447). Теперь она называет, что произойдёт.
+        compose.onAllNodesWithText("Открыть сайт", substring = true).onFirst().performScrollTo().performClick()
         compose.waitForIdle()
 
         val opened = shadowOf(compose.activity).nextStartedActivity
             ?: shadowOf(RuntimeEnvironment.getApplication()).nextStartedActivity
-        assertNotNull("тап по «Взять ключ» не открыл ничего — колбэк потерян на этой двери", opened)
+        assertNotNull("тап по ссылке на сайт не открыл ничего — колбэк потерян на этой двери", opened)
         assertEquals(Intent.ACTION_VIEW, opened!!.action)
     }
 
@@ -70,7 +73,7 @@ class HomeDoorTest {
 
         assertFalse("Point закрылся вместо возврата на «Недавнее»", compose.activity.isFinishing)
         // Шестерёнка есть только на «Недавнем» — значит вернулись именно туда.
-        compose.onNodeWithContentDescription("Ваш AI-ключ").assertExists()
+        compose.onNodeWithContentDescription(GEAR).assertExists()
         compose.onNodeWithText("Ключ AI сохранён").assertDoesNotExist()
     }
 
@@ -83,9 +86,12 @@ class HomeDoorTest {
 
         assertFalse(compose.activity.isFinishing)
         compose.onNodeWithText("Ключ AI сохранён").assertDoesNotExist()
-        compose.onNodeWithContentDescription("Ваш AI-ключ").assertExists()
+        compose.onNodeWithContentDescription(GEAR).assertExists()
     }
 }
+
+/** Шестерёнка на «Недавнем» и заголовок экрана, к которому она ведёт, — одно слово (#447). */
+private const val GEAR = "Настройки"
 
 /** Экран рисуется в фоне и по-настоящему, поэтому ждём словами, а не «должно было успеть». */
 private const val TIMEOUT_MS = 10_000L

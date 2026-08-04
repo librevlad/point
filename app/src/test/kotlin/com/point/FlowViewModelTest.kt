@@ -103,7 +103,24 @@ class FlowViewModelTest {
         caps: Map<CapabilityId, Set<Intent>> = mapOf(CapabilityId("a") to setOf(Intent.PREPARE)),
         cloud: Set<CapabilityId> = emptySet(),
         slow: Set<CapabilityId> = emptySet(),
-    ) = FlowViewModel(store, FakeRegistry(caps, cloud, slow), resolver, com.point.core.flow.AiChatResponder { _, _, _ -> "ответ" }, enrichment, history, favorites, usage, chosenApps, userKeys, journal, consent, appLauncher, FakePdfRasterizer(), sensory, sensorySettings, cloudPrivacy, snapshot, crashLog, dispatcher, pins, AppIconResolver { null }, pcPairings, pcTransport, com.point.core.flow.PcDiscovery { kotlinx.coroutines.flow.flowOf(emptyList()) }, basket, pcCaps, com.point.core.flow.InMemoryLinkMonitor(), PulledFileFactory { name -> java.io.File(java.io.File(System.getProperty("java.io.tmpdir")), "pulled-" + name).absolutePath }, noFrames)
+    ) = FlowViewModel(store, FakeRegistry(caps, cloud, slow), resolver, com.point.core.flow.AiChatResponder { _, _, _ -> "ответ" }, enrichment, history, favorites, usage, chosenApps, userKeys, journal, consent, appLauncher, FakePdfRasterizer(), sensory, sensorySettings, cloudPrivacy, snapshot, crashLog, dispatcher, pins, AppIconResolver { null }, pcPairings, pcTransport, com.point.core.flow.PcDiscovery { kotlinx.coroutines.flow.flowOf(emptyList()) }, basket, pcCaps, com.point.core.flow.InMemoryLinkMonitor(), PulledFileFactory { name -> java.io.File(java.io.File(System.getProperty("java.io.tmpdir")), "pulled-" + name).absolutePath }, noFrames, keyProbe)
+
+    /** Провайдер, которого «спрашивают» про ключ (#447): отвечает тем, что положили в [keyAnswer]. */
+    private var keyAnswer: com.point.core.flow.KeyCheck =
+        com.point.core.flow.KeyCheck.Works("модель", 700, 0)
+    private val askedKeys = mutableListOf<com.point.core.flow.UserAiConfig>()
+    private val keyProbe = com.point.core.flow.AiKeyProbe { config ->
+        askedKeys += config
+        keyAnswer.let { answer ->
+            when (answer) {
+                is com.point.core.flow.KeyCheck.Works ->
+                    answer.copy(checked = com.point.core.flow.keyFingerprint(config))
+                is com.point.core.flow.KeyCheck.Rejected ->
+                    answer.copy(checked = com.point.core.flow.keyFingerprint(config))
+                else -> answer
+            }
+        }
+    }
 
     private val basket = FakeBasket()
     private val pcCaps = FakePcCaps()
@@ -1270,6 +1287,53 @@ class FlowViewModelTest {
 
         assertEquals(config, userKeys.saved)
         assertNull(vm.ui.value.keyScreen)
+    }
+
+    // --- «Проверить ключ» (#447): ответ провайдера, а не догадка по виду ключа ---
+
+    @Test fun `проверка ключа спрашивает провайдера и приносит его ответ`() = runTest(dispatcher) {
+        val vm = vm()
+        vm.openKeySettings(); advanceUntilIdle()
+        val config = UserAiConfig("sk-живой", "https://h/v1", "m")
+
+        vm.checkAiKey(config); advanceUntilIdle()
+
+        assertEquals(listOf(config), askedKeys)
+        val works = vm.ui.value.keyCheck as com.point.core.flow.KeyCheck.Works
+        assertEquals(com.point.core.flow.keyFingerprint(config), works.checked)
+    }
+
+    @Test fun `отказ провайдера доходит до экрана, а не глохнет`() = runTest(dispatcher) {
+        keyAnswer = com.point.core.flow.KeyCheck.Rejected("Groq не принял ключ (401)", 0)
+        val vm = vm()
+        vm.openKeySettings(); advanceUntilIdle()
+
+        vm.checkAiKey(UserAiConfig("sk-мёртвый", "https://h/v1", "m")); advanceUntilIdle()
+
+        val rejected = vm.ui.value.keyCheck as com.point.core.flow.KeyCheck.Rejected
+        assertTrue(rejected.reason.contains("401"))
+    }
+
+    @Test fun `пустой ключ провайдера не тревожит`() = runTest(dispatcher) {
+        val vm = vm()
+        vm.openKeySettings(); advanceUntilIdle()
+
+        vm.checkAiKey(UserAiConfig("  ", "https://h/v1", "m")); advanceUntilIdle()
+
+        assertTrue(askedKeys.isEmpty())
+        assertEquals(com.point.core.flow.KeyCheck.Untested, vm.ui.value.keyCheck)
+    }
+
+    @Test fun `прошлый ответ не переезжает в новое открытие настроек`() = runTest(dispatcher) {
+        val vm = vm()
+        vm.openKeySettings(); advanceUntilIdle()
+        vm.checkAiKey(UserAiConfig("sk-живой", "https://h/v1", "m")); advanceUntilIdle()
+        vm.closeKeySettings()
+
+        vm.openKeySettings(); advanceUntilIdle()
+
+        // «Ключ работает» из прошлого раза — обещание, которого никто сейчас не давал.
+        assertEquals(com.point.core.flow.KeyCheck.Untested, vm.ui.value.keyCheck)
     }
 
     @Test fun `records usage events for the North Star (shared, action, completed)`() = runTest(dispatcher) {

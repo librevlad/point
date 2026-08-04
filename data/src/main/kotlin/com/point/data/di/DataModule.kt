@@ -88,6 +88,7 @@ import com.point.data.FileHistoryStore
 import com.point.data.GeminiLlmClient
 import com.point.data.GroqWhisperSpeechToText
 import com.point.data.SummarizingSpeechToText
+import com.point.data.HttpAiKeyProbe
 import com.point.data.HttpJson
 import com.point.data.UrlConnectionHttpJson
 import com.point.data.HttpFiles
@@ -365,6 +366,15 @@ abstract class DataModule {
         /** Pure classifier lives in :core:flow (no DI annotations there). */
         @Provides
         fun objectClassifier(): ObjectClassifier = ObjectClassifier()
+
+        /**
+         * «Проверить ключ» (#447) — живой запрос той же дорогой, что и настоящее действие с AI.
+         *
+         * `@Provides`, а не `@Binds`: у пробы свои часы отдельным параметром (тест меряет время, а
+         * не засекает его), а умолчаний конструктора Dagger не видит.
+         */
+        @Provides
+        fun aiKeyProbe(http: HttpJson): com.point.core.flow.AiKeyProbe = HttpAiKeyProbe(http)
 
         /**
          * «Дать ссылку» (#388): файл кладётся на релей под неугадываемым адресом и живёт сутки.

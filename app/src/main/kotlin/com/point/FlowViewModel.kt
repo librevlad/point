@@ -120,6 +120,8 @@ class FlowViewModel @Inject constructor(
     private val linkMonitor: com.point.core.flow.LinkMonitor,
     private val pulledFiles: PulledFileFactory,
     private val frames: SelectionFrames,
+    /** «Проверить ключ» (#447) — живой запрос к провайдеру за швом, а не догадка по виду ключа. */
+    private val keyProbe: com.point.core.flow.AiKeyProbe,
 ) : ViewModel() {
 
     /** Идущее действие — чтобы его можно было отменить (#288). */
@@ -861,6 +863,8 @@ class FlowViewModel @Inject constructor(
         _ui.update {
             it.copy(
                 keyScreen = userKeys.read() ?: UserAiConfig.DEFAULT, busy = null, message = null, messageOutcome = Outcome.NONE, inputPrompt = null,
+                // Прошлый ответ провайдера сюда не переезжает (#447): он был про тот раз.
+                keyCheck = com.point.core.flow.KeyCheck.Untested,
                 soundEnabled = runCatching { sensorySettings.isSoundEnabled() }.getOrDefault(true),
                 privacyLevel = runCatching { cloudPrivacy.level() }
                     .getOrDefault(com.point.core.flow.PrivacyLevel.DEFAULT),
@@ -903,7 +907,31 @@ class FlowViewModel @Inject constructor(
         }
     }
 
-    fun closeKeySettings() = _ui.update { it.copy(keyScreen = null) }
+    /**
+     * «Проверить ключ» (#447): спросить провайдера по-настоящему и сказать, что он ответил.
+     *
+     * Сетевое действие — только после явного тапа человека, как и всё сетевое в Point. Ответ несёт
+     * отпечаток настроек, на которых получен: правка поля после проверки гасит отметку на экране
+     * (`checkFor`), потому что зелёное «работает» над другим ключом — это ложь, а не задержка.
+     */
+    fun checkAiKey(config: UserAiConfig) {
+        if (config.apiKey.isBlank()) return
+        _ui.update { it.copy(keyCheck = com.point.core.flow.KeyCheck.Running) }
+        viewModelScope.launch {
+            val answer = runCatching { keyProbe.check(config) }.getOrElse { failure ->
+                // Проба и так ловит транспортный отказ; это — сеть, оборвавшаяся мимо неё. Тишина
+                // здесь означала бы вечное «спрашиваем провайдера…».
+                com.point.core.flow.KeyCheck.Rejected(
+                    com.point.core.flow.keyProbeFailure("провайдера", failure.message.orEmpty()),
+                    com.point.core.flow.keyFingerprint(config),
+                )
+            }
+            // Экран мог закрыться, пока провайдер думал: ответ про ключ ему уже не нужен.
+            _ui.update { if (it.keyScreen != null) it.copy(keyCheck = answer) else it }
+        }
+    }
+
+    fun closeKeySettings() = _ui.update { it.copy(keyScreen = null, keyCheck = com.point.core.flow.KeyCheck.Untested) }
 
     // --- «Компьютер» (#147): pair once, then the «На компьютер» bubble appears. ---
 

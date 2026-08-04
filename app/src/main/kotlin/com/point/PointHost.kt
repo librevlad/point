@@ -87,6 +87,8 @@ fun PointHost(
     onPickPrivacyLevel: (com.point.core.flow.PrivacyLevel) -> Unit = {},
     /** Открыть страницу, где выдают ключ (#403). */
     onOpenUrl: (String) -> Unit = {},
+    /** Спросить провайдера, работает ли ключ (#447). */
+    onCheckAiKey: (UserAiConfig) -> Unit = {},
     onConfirmCloud: () -> Unit = {},
     onDeclineCloud: () -> Unit = {},
     onPickApp: (AppTarget) -> Unit = {},
@@ -184,6 +186,8 @@ fun PointHost(
                 privacyLevel = state.privacyLevel,
                 onPickPrivacyLevel = onPickPrivacyLevel,
                 onOpenUrl = onOpenUrl,
+                keyCheck = state.keyCheck,
+                onCheckKey = onCheckAiKey,
             )
 
             // M3 (MOTION.md №8): quiet local work keeps the object on screen — it "works"

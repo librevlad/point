@@ -106,7 +106,9 @@ fun HomeScreen(
             IconButton(onClick = onSettings) {
                 Icon(
                     imageVector = Icons.Filled.Settings,
-                    contentDescription = "Ваш AI-ключ",
+                    // Шестерёнка ведёт не только к ключу (#447): за ней ключ, приватность и звук —
+                    // и голос кнопки обязан совпадать с заголовком экрана, к которому она ведёт.
+                    contentDescription = "Настройки",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }

@@ -48,6 +48,7 @@ fun PointFlow(
         onCloseChat = viewModel::closeChat,
         onBubbleLongPress = viewModel::togglePin,
         onSaveAiConfig = viewModel::saveAiConfig,
+        onCheckAiKey = viewModel::checkAiKey,
         onCloseKeySettings = viewModel::closeKeySettings,
         onToggleUsage = viewModel::setUsageEnabled,
         onToggleSound = viewModel::setSoundEnabled,

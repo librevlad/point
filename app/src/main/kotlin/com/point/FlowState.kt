@@ -172,6 +172,9 @@ data class FlowUiState(
     /** На экране настроек: кому вообще можно предлагать прочитать объект (#280). */
     val privacyLevel: com.point.core.flow.PrivacyLevel = com.point.core.flow.PrivacyLevel.DEFAULT,
     val usageSummary: UsageSummary? = null,
+    /** На экране настроек: что ответил провайдер на «Проверить ключ» (#447). Отпечаток внутри
+     *  ответа гасит его, если человек правил поля после проверки. */
+    val keyCheck: com.point.core.flow.KeyCheck = com.point.core.flow.KeyCheck.Untested,
     /** Экран выделения (#259): открыт, пока не взяли захват или не вышли назад. */
     val selection: SelectionUi? = null,
     /** Экран поиска по документу (#279): открыт, пока не вышли назад. */
