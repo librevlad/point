@@ -1,5 +1,10 @@
 package com.point.core.ui
 
+import kotlinx.coroutines.delay
+import com.point.core.flow.copyableValue
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
@@ -118,18 +123,34 @@ private fun ReadinessRow(
     // состоянием объекта: это чисто взгляд человека.
     var expanded by rememberSaveable(row.schema.id) { mutableStateOf(false) }
 
+    // Что отдать по тапу, если запускать нечем (#481): найденное значение. Решение владельца —
+    // «на что нет обработчиков, по тапу в буфер»: тап обязан что-то делать, а нести номер посылки
+    // в чужое приложение человек всё равно понесёт руками.
+    val copyable = remember(row) { copyableValue(row.readiness) }
+    val clipboard = LocalClipboardManager.current
+    var copied by remember(row.schema.id) { mutableStateOf(false) }
+    LaunchedEffect(copied) {
+        if (copied) {
+            delay(COPIED_SHOWN_MS)
+            copied = false
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            // Две разные строки — два разных тапа, и ни один не делает вид, что он другой (#464):
-            // готовое ДЕЛАЕТ то, что на нём написано; неготовое раскрывает, чего не хватает.
-            // Готовое без реализации (сегодня — «Отследить отправление», «Передать показание»,
-            // «Перевести по реквизитам», «Переслать квитанцию») остаётся справкой и шеврона не
-            // носит: обещание кнопки без кнопки и было находкой владельца.
+            // Три разные строки — три разных тапа, и ни один не делает вид, что он другой (#464):
+            // готовое ДЕЛАЕТ то, что на нём написано; неготовое раскрывает, чего не хватает;
+            // готовое без реализации отдаёт найденное значение в буфер (#481). Шеврон при этом
+            // носит только первое: обещание кнопки без кнопки и было находкой владельца.
             .let {
                 when {
                     runner != null -> it.clickable { onRun(runner) }
                     missing.isNotEmpty() -> it.clickable { expanded = !expanded }
+                    copyable != null -> it.clickable {
+                        clipboard.setText(AnnotatedString(copyable))
+                        copied = true
+                    }
                     else -> it
                 }
             }
@@ -166,9 +187,19 @@ private fun ReadinessRow(
                 // карты «Перевести по реквизитам» — хвостом (#240 — маска, мимо которой
                 // однажды утёк номер, была на одном экране, а не у ключа факта).
                 Text(
-                    text = maskedForScreen(keyField.spec.key, keyField.value) + doubt + origin,
+                    // Тап без действия отдал значение в буфер — и сказал об этом (#481). Молчание
+                    // в ответ на тап неотличимо от мёртвой строки, ради которой всё и затевалось.
+                    text = if (copied) {
+                        "Скопировано"
+                    } else {
+                        maskedForScreen(keyField.spec.key, keyField.value) + doubt + origin
+                    },
                     style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = if (copied) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
@@ -253,3 +284,6 @@ private fun ReadinessRow(
         }
     }
 }
+
+/** Сколько держится слово «Скопировано» — успеть прочитать, но не мешать (#481). */
+private const val COPIED_SHOWN_MS = 1_600L
