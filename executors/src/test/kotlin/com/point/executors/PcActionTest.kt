@@ -25,7 +25,7 @@ class PcActionTest {
         override suspend fun clear() { pairing = null }
     }
 
-    private class FakeTransport(var outcome: PcSendOutcome = PcSendOutcome.Sent) : PcTransport {
+    private class FakeTransport(var outcome: PcSendOutcome = PcSendOutcome.Sent()) : PcTransport {
         var sentMeta: Map<String, String>? = null
         var sentName: String? = null
         override suspend fun pair(host: String, port: Int, deviceName: String): PcPairing? = null

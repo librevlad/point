@@ -37,23 +37,23 @@ class LanThenRelayTransportTest {
     fun `lan success never touches the relay`() = runTest {
         var relayCalled = false
         val lan = object : Fake("lan") {
-            override suspend fun send(pairing: PcPairing, obj: PointObject, fileName: String, meta: Map<String, String>, action: String?) = PcSendOutcome.Sent
+            override suspend fun send(pairing: PcPairing, obj: PointObject, fileName: String, meta: Map<String, String>, action: String?) = PcSendOutcome.Sent()
         }
         val relay = object : Fake("relay") {
             override suspend fun send(pairing: PcPairing, obj: PointObject, fileName: String, meta: Map<String, String>, action: String?): PcSendOutcome {
-                relayCalled = true; return PcSendOutcome.Sent
+                relayCalled = true; return PcSendOutcome.Sent()
             }
         }
-        assertEquals(PcSendOutcome.Sent, LanThenRelayTransport(lan, relay).send(withRelay, obj(), "f", emptyMap(), null))
+        assertEquals(PcSendOutcome.Sent(), LanThenRelayTransport(lan, relay).send(withRelay, obj(), "f", emptyMap(), null))
         assertFalse("relay must not be used when LAN works", relayCalled)
     }
 
     @Test
     fun `lan unreachable with a relay falls back to the relay`() = runTest {
         val relay = object : Fake("relay") {
-            override suspend fun send(pairing: PcPairing, obj: PointObject, fileName: String, meta: Map<String, String>, action: String?) = PcSendOutcome.Sent
+            override suspend fun send(pairing: PcPairing, obj: PointObject, fileName: String, meta: Map<String, String>, action: String?) = PcSendOutcome.Sent()
         }
-        assertEquals(PcSendOutcome.Sent, LanThenRelayTransport(Fake("lan"), relay).send(withRelay, obj(), "f", emptyMap(), null))
+        assertEquals(PcSendOutcome.Sent(), LanThenRelayTransport(Fake("lan"), relay).send(withRelay, obj(), "f", emptyMap(), null))
     }
 
     @Test
@@ -70,7 +70,7 @@ class LanThenRelayTransportTest {
         }
         val relay = object : Fake("relay") {
             override suspend fun send(pairing: PcPairing, obj: PointObject, fileName: String, meta: Map<String, String>, action: String?): PcSendOutcome {
-                relayCalled = true; return PcSendOutcome.Sent
+                relayCalled = true; return PcSendOutcome.Sent()
             }
         }
         assertEquals(PcSendOutcome.Rejected, LanThenRelayTransport(lan, relay).send(withRelay, obj(), "f", emptyMap(), null))
