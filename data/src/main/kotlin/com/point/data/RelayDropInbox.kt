@@ -3,6 +3,7 @@ package com.point.data
 import com.point.core.flow.DropArrival
 import com.point.core.flow.DropInbox
 import com.point.core.flow.DropInboxBox
+import com.point.core.flow.DropWait
 import com.point.core.flow.RelayTls
 import com.point.core.flow.decodePcFrame
 import com.point.core.flow.dropFileName
@@ -48,16 +49,28 @@ class RelayDropInbox(
         }.getOrNull()
     }
 
-    override suspend fun await(box: DropInboxBox, target: (name: String) -> String): DropArrival? =
+    /**
+     * Круг ожидания. Три исхода названы раздельно (#114): релей отвечает `204`, когда за отведённое
+     * время никто ничего не положил, — это норма; всё прочее (нет сети, чужой ответ, сломанный
+     * кадр) — отказ, и он доезжает до человека словами, а не вечным «Ждём файл…».
+     */
+    override suspend fun await(box: DropInboxBox, target: (name: String) -> String): DropWait =
         withContext(Dispatchers.IO) {
-            val base = base() ?: return@withContext null
+            val base = base() ?: return@withContext DropWait.Failed("Сервер Point не настроен")
             runCatching {
                 val c = connect("$base/mbx/${box.id}?wait=$waitSeconds", "GET").apply {
                     readTimeout = (waitSeconds + 20) * 1_000
                 }
-                if (c.responseCode != 200) {
+                val code = c.responseCode
+                if (code != 200) {
                     c.disconnect()
-                    return@runCatching null
+                    // 204 — «за это ожидание никто ничего не положил», ровно то, ради чего круг и
+                    // делается. Любой другой код — сервер отказал, и это другая новость.
+                    return@runCatching if (code == 204) {
+                        DropWait.Empty
+                    } else {
+                        DropWait.Failed("Сервер Point ответил $code")
+                    }
                 }
                 val blob = c.inputStream.readBytes()
                 val blobId = c.getHeaderField("X-Blob-Id")
@@ -72,8 +85,8 @@ class RelayDropInbox(
                 // Забрали — освобождаем ящик: иначе тот же файл приехал бы ещё раз на следующем
                 // круге ожидания, и человек получил бы его дважды.
                 ack(base, box.id, blobId)
-                DropArrival(path, name, mime)
-            }.getOrNull()
+                DropWait.Arrived(DropArrival(path, name, mime))
+            }.getOrElse { e -> DropWait.Failed(e.message ?: "Нет связи с сервером Point") }
         }
 
     private fun ack(base: String, box: String, blobId: String?) {

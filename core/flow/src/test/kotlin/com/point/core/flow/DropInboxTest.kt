@@ -62,6 +62,29 @@ class DropInboxTest {
         assertTrue(dropFileName("a".repeat(300)).length <= 120)
     }
 
+    /**
+     * Ожидание, которое не может кончиться, — не ожидание, а обман (#114).
+     *
+     * Человек с выключенным Wi-Fi смотрел на «Ждём файл…» столько, сколько выдержит: круг ожидания
+     * возвращал одно и то же и на «никто ничего не положил», и на «сети нет».
+     */
+    @Test
+    fun `сеть, которая упала, названа словами — а не молчанием`() {
+        assertEquals("Ждём файл…", receiveWaitStatus(0))
+        // Один сорвавшийся круг — ещё не новость: сеть моргает.
+        assertTrue(receiveWaitStatus(1).contains("Связь пропала"))
+        assertTrue(receiveWaitStatus(2).contains("Связь пропала"))
+        // Три подряд — уже состояние, и молчать о нём нельзя.
+        assertTrue(receiveWaitStatus(3).contains("Нет связи"))
+        assertTrue(receiveWaitStatus(30).contains("Нет связи"))
+    }
+
+    /** И вторая правда рядом с первой: ящик живёт сутки, значит ссылка не умерла вместе с сетью. */
+    @Test
+    fun `потеря сети не выдаётся за смерть ссылки`() {
+        assertTrue(receiveWaitStatus(5), receiveWaitStatus(5).contains("Ссылка не потерялась"))
+    }
+
     /** Без релея ссылки нет — и лучше её отсутствие, чем ссылка в никуда. */
     @Test
     fun `no relay means no link`() {
