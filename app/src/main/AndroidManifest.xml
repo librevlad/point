@@ -154,8 +154,13 @@
             </intent-filter>
         </service>
 
-        <!-- Шторка рождает объект (#246): плитка открывает выбор источника, экран живёт поверх
-             чужого приложения и исчезает, как только объект родился. -->
+        <!--
+          Шторка рождает объект (#246): плитка открывает выбор источника, экран живёт поверх того,
+          откуда пришли, и исчезает, как только объект родился.
+
+          `exported="false"` намеренно: экран открывают только сам Point — плитка шторки и дверь
+          «Новый объект» с домашнего экрана (#456). Наружу отдавать его незачем.
+        -->
         <activity
             android:name=".source.SourcePickerActivity"
             android:exported="false"
@@ -185,10 +190,12 @@
                 android:resource="@xml/point_printservice" />
         </service>
 
+        <!-- Плитка «Point» (#246) со своим знаком (#456): в редакторе шторки её надо УЗНАТЬ среди
+             сотни чужих, а системный «плюс» этого не позволял. -->
         <service
             android:name=".source.PointTileService"
             android:exported="true"
-            android:icon="@android:drawable/ic_menu_add"
+            android:icon="@drawable/ic_tile_point"
             android:label="Point"
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
             <intent-filter>
