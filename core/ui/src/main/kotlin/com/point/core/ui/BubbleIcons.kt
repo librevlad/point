@@ -88,6 +88,9 @@ fun bubbleIcon(key: String): ImageVector = when (if (key.startsWith("app:")) "op
     "blur" -> Icons.Filled.BlurOn
     "replace-bg" -> Icons.Filled.Wallpaper
     "ocr" -> Icons.Filled.TextFields
+    // #491: выход разговора — «Забрать ответ». Знак тот же, что у всякого текста в Point, а
+    // ключ отдельный: забирают не распознавание, а сказанное моделью.
+    "text" -> Icons.Filled.TextFields
     "transcribe" -> Icons.Filled.RecordVoiceOver
     "find" -> Icons.Filled.Search
     "ocr-cloud" -> Icons.Filled.Cloud
@@ -133,6 +136,7 @@ fun bubbleColor(key: String): Color = when (if (key.startsWith("app:")) "open-in
     "blur" -> Color(0xFF6366F1)     // indigo — blur background
     "replace-bg" -> Color(0xFF7C4DFF) // purple — replace background
     "ocr" -> Color(0xFF16A34A)      // green — recognise text
+    "text" -> Color(0xFF16A34A)     // green — текст, откуда бы он ни пришёл
     "transcribe" -> Color(0xFF16A34A) // green — тоже «прочитать сказанное», только ушами
     "find" -> Color(0xFF16A34A)     // green — читать прочитанное: поиск живёт рядом с распознаванием
     "ocr-cloud" -> Color(0xFF2F80ED) // blue — recognise in the cloud

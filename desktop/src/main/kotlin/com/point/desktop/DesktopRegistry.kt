@@ -20,7 +20,9 @@ class DesktopRegistry(private val capabilities: Set<Capability>) : CapabilityReg
         capabilities
             .filter { it.accepts(state) }
             .sortedWith(compareBy({ it.meta.priority }, { it.id.value }))
-            .map { Bubble(it.icon, it.label(state), it.id, it.produces(state) ?: state) }
+            // #491: «что вернётся» проставляют оба реестра одинаково — иначе одно и то же
+            // действие рассказывало бы о себе на телефоне и на ПК по-разному.
+            .map { Bubble(it.icon, it.label(state), it.id, it.produces(state) ?: state, yields = it.yields(state)) }
 
     override fun intentsFor(state: ObjectState): List<Intent> = emptyList()
 

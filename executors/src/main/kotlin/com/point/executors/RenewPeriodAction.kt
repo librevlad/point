@@ -12,6 +12,7 @@ import com.point.core.flow.SpreadsheetWriter
 import com.point.core.flow.renewPeriod
 import com.point.core.flow.reportStage
 import com.point.core.model.ActionResult
+import com.point.core.model.ActionYield
 import com.point.core.model.CapabilityId
 import com.point.core.model.Feature
 import com.point.core.model.ObjectKind
@@ -47,6 +48,9 @@ class RenewPeriodCapability @Inject constructor() : Capability {
         state.kind == ObjectKind.OFFICE && state.has(Feature.HAS_PERIOD)
 
     override fun produces(state: ObjectState) = ObjectState(ObjectKind.OFFICE)
+
+    /** #491: вид `OFFICE` тут — таблица, а не «документ» вообще. */
+    override fun yields(state: ObjectState) = ActionYield.New(ObjectKind.OFFICE, "таблицу")
 
     companion object { val ID = CapabilityId("renew-period") }
 }

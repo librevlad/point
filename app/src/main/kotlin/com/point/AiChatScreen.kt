@@ -44,8 +44,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.point.core.flow.yieldLabel
+import com.point.core.model.ActionYield
 import com.point.core.model.ChatMessage
 import com.point.core.model.ChatRole
+import com.point.core.model.Intent
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
@@ -88,6 +91,8 @@ fun AiChatScreen(
     /** Остановить идущий ответ (#453). Пока модель думает, отправлять нечего — и ровно там, где
      *  стояла погашенная «Отправить», стоит живая «Остановить». */
     onCancel: () -> Unit = {},
+    /** Забрать сказанное объектом (#491) — выход из разговора, которого у него не было. */
+    onTakeAnswer: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxSize().imePadding()) {
@@ -156,8 +161,41 @@ fun AiChatScreen(
             )
         }
 
+        // Разговор умеет кончиться объектом (#491). Строка появляется ровно тогда, когда забирать
+        // есть что: сказанное моделью, и не пока она говорит.
+        if (takeableAnswer(chat) != null) {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Column(Modifier.widthIn(max = PortalColumnWidth).fillMaxWidth()) {
+                    PortalRow(
+                        title = "Забрать ответ",
+                        // Тот же язык, что у строк на экране объекта: сказано, что вернётся.
+                        subtitle = yieldLabel(ActionYield.New(ObjectKind.TEXT), Intent.PREPARE),
+                        subtitleMaxLines = 1,
+                        onClick = onTakeAnswer,
+                        icon = bubbleIcon("text"),
+                        accent = bubbleColor("text"),
+                    )
+                }
+            }
+        }
+
         ChatInput(pending = chat.pending, onSend = onSend, onCancel = onCancel)
     }
+}
+
+/**
+ * Что можно забрать из разговора прямо сейчас (#491), или null — забирать нечего.
+ *
+ * Последнее сказанное **моделью**: реплика человека — это его же вопрос, объектом ей становиться
+ * незачем. Пока идёт ответ — тоже null: забирать предыдущий, когда на подходе новый, значит
+ * предлагать человеку устаревшее. Чистая — под JVM-тестом.
+ */
+fun takeableAnswer(chat: ChatState): String? {
+    if (chat.pending) return null
+    return chat.messages.lastOrNull { it.role == ChatRole.ASSISTANT }?.text?.takeIf { it.isNotBlank() }
 }
 
 /**
@@ -312,6 +350,28 @@ private fun PreviewChatEmpty() = PointTheme(darkTheme = true) {
                 "О чём этот документ?",
                 "Какие сроки и суммы в нём названы?",
                 "Что здесь стоит проверить внимательно?",
+            ),
+        ),
+        onSend = {},
+        onClose = {},
+    )
+}
+
+@Preview(name = "Чат · разговор кончается объектом (#491)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@Composable
+private fun PreviewChatTakeAnswer() = PointTheme(darkTheme = true) {
+    // Модель ответила — и под ответом стоит выход: «Забрать ответ · вернёт текст». Дальше это
+    // обычный текстовый объект, и «В Word»/«В Excel»/«Сохранить» приходят к нему сами.
+    AiChatScreen(
+        chat = ChatState(
+            obj = previewObject(),
+            messages = listOf(
+                ChatMessage(ChatRole.USER, "Собери из договора сроки и суммы списком"),
+                ChatMessage(
+                    ChatRole.ASSISTANT,
+                    "Срок аренды — 11 месяцев с 01.09.\nПлатёж — 42 000 ₽ до 5-го числа.\n" +
+                        "Залог — 42 000 ₽, возвращается в течение 10 дней после выезда.",
+                ),
             ),
         ),
         onSend = {},

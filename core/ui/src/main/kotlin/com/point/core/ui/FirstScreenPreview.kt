@@ -6,6 +6,7 @@ import com.point.core.flow.KIND_ADDRESS
 import com.point.core.flow.KIND_DATE
 import com.point.core.flow.KIND_IDENTIFIER
 import com.point.core.flow.KIND_ORGANIZATION
+import com.point.core.model.ActionYield
 import com.point.core.model.Bubble
 import com.point.core.model.BubbleTier
 import com.point.core.model.CapabilityId
@@ -47,6 +48,16 @@ private fun previewIntent(id: String, next: ObjectKind): Intent = when {
     else -> Intent.PREPARE
 }
 
+// То же зеркало и для «что вернётся» (#491): превью показывает подписи строк, значит обязано
+// выводить их тем же правилом, что и реестр, — иначе владелец смотрел бы на экран, которого нет.
+private fun previewYield(id: String, next: ObjectKind, intent: Intent): ActionYield = when (id) {
+    "ai" -> ActionYield.Unknown
+    "understand" -> ActionYield.Same
+    "excel" -> ActionYield.New(ObjectKind.OFFICE, "таблицу")
+    "word", "word-plus" -> ActionYield.New(ObjectKind.OFFICE, "документ Word")
+    else -> if (intent == Intent.OPEN || intent == Intent.SEND) ActionYield.None else ActionYield.New(next)
+}
+
 private fun bubble(
     icon: String,
     title: String,
@@ -54,7 +65,11 @@ private fun bubble(
     next: ObjectKind,
     tier: BubbleTier,
     intent: Intent = previewIntent(id, next),
-) = Bubble(icon, title, CapabilityId(id), ObjectState(next), tier, intent = intent)
+) = Bubble(
+    icon, title, CapabilityId(id), ObjectState(next), tier,
+    intent = intent,
+    yields = previewYield(id, next, intent),
+)
 
 private fun universalBubbles(kind: ObjectKind) = listOf(
     bubble("open", "Открыть", "open", kind, BubbleTier.INSTANT),

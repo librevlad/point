@@ -36,6 +36,10 @@ class DefaultCapabilityRegistry @Inject constructor(
                     expectedNextState = c.produces(state) ?: state,
                     tier = tierOf(c.meta),
                     intent = primaryIntentOf(c, state),
+                    // #491: «что вернётся» едет к экрану ОТ способности, а не досочиняется там.
+                    // Из `expectedNextState` это уже не вывести — он слил терминальное с
+                    // неизвестным, приравняв оба к текущему состоянию.
+                    yields = c.yields(state),
                 )
             }
 
