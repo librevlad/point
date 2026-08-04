@@ -2,6 +2,7 @@ package com.point
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.ensureActive
 import com.point.core.flow.AppLauncher
 import com.point.core.flow.AppTarget
 import com.point.core.flow.CapabilityRegistry
@@ -123,8 +124,54 @@ class FlowViewModel @Inject constructor(
     private val frames: SelectionFrames,
 ) : ViewModel() {
 
-    /** Идущее действие — чтобы его можно было отменить (#288). */
-    private var actionJob: kotlinx.coroutines.Job? = null
+    /**
+     * Задача той работы, что подняла экран ожидания, — чтобы её можно было отменить (#288, #114).
+     *
+     * Держат её ВСЕ занятости, а не одно действие по пузырю: «Ищу приложения…», «Выполняю
+     * цепочку…», «Забираю с компьютера…» тоже рисуют «Отменить», и кнопка обязана снимать ту
+     * работу, над которой стоит. Задача обнуляется по завершении: снимать законченное значило
+     * бы объявлять отменённым уже сделанное.
+     */
+    private var busyJob: kotlinx.coroutines.Job? = null
+
+    /** Эта задача теперь и есть идущая занятость. По завершении поле гаснет само. */
+    private fun trackWork(job: kotlinx.coroutines.Job) {
+        busyJob = job
+        job.invokeOnCompletion { if (busyJob === job) busyJob = null }
+    }
+
+    /**
+     * Поднять экран ожидания одним движением — и сразу сказать, можно ли эту работу отменить.
+     *
+     * [cancelable] стоит `true` только там, где [cancelAction] действительно снимает задачу И
+     * человеку есть куда вернуться (объект под экраном или «Недавнее»). Приём расшаренного
+     * файла — не такой случай: за экраном ожидания нет ничего, и «Отменено» осталось бы
+     * единственным, что человек видит.
+     */
+    private fun raiseBusy(
+        title: String,
+        network: Boolean = false,
+        quiet: Boolean = false,
+        cancelable: Boolean = false,
+    ) {
+        _ui.update {
+            it.copy(
+                busy = title, busyStage = null, busyNetwork = network, busyQuiet = quiet,
+                busyCancelable = cancelable,
+                message = null, messageOutcome = Outcome.NONE, inputPrompt = null,
+            )
+        }
+    }
+
+    /**
+     * Эта работа всё ещё та, что на экране?
+     *
+     * Отмена и любая новая занятость забирают голос ([claimVoice]). Снятая работа обязана не
+     * только замолчать, но и **не применить свой результат**: нативный проход движка о прерывании
+     * не знает и доходит до конца сам — без этой проверки объект открывался секундой позже поверх
+     * слова «Отменено».
+     */
+    private fun owns(voice: Long) = voice == workVoice
 
     /**
      * Чей голос сейчас на экране (#288): номер занятости, которой принадлежит `busyStage`.
@@ -147,6 +194,8 @@ class FlowViewModel @Inject constructor(
     private var pendingBubble: Bubble? = null
     /** A cloud action deferred until the user grants consent (#10); run on confirm. */
     private var pendingCloud: (() -> Unit)? = null
+    /** На что именно спрашиваем сейчас (#114) — от этого зависит, запоминать ли ответ. */
+    private var pendingCloudScope: com.point.core.flow.CloudScope = com.point.core.flow.CloudScope.MODELS
     /** A bubble whose preview is shown, deferred until the user confirms it (#97). */
     private var pendingPreviewBubble: Bubble? = null
     /** Экран выделения (#259): слой, преобразование координат и последний захват — живут,
@@ -239,14 +288,17 @@ class FlowViewModel @Inject constructor(
 
     fun onShared(sourceUri: String, mime: String, autoAction: String? = null) {
         freshShareArrived = true
-        claimVoice()
-        _ui.update { it.copy(busy = "Открываю…", busyStage = null, busyNetwork = false, busyQuiet = false, message = null, messageOutcome = Outcome.NONE, inputPrompt = null) }
-        _ui.update { it.copy(busy = "Открываю…", busyStage = null, busyNetwork = false, busyQuiet = false, message = null, messageOutcome = Outcome.NONE, inputPrompt = null) }
-        viewModelScope.launch {
+        val voice = claimVoice()
+        // Отменить нечем: за приёмом расшаренного файла экрана Point ещё нет, и кнопка увела бы
+        // человека в пустоту с одним словом «Отменено» (#114).
+        raiseBusy("Открываю…", cancelable = false)
+        trackWork(viewModelScope.launch {
             val obj = runCatching {
                 store.clear()
                 store.ingest(sourceUri, mime)
-            }.getOrElse {
+            }.getOrNull()
+            if (!owns(voice)) return@launch
+            if (obj == null) {
                 // Хвост исключения человеку ничего не говорит («…FileNotFoundException: /storage/…»),
                 // а теперь этот текст стоит под объектом первой строкой. Отказ называется словами;
                 // техническая причина при этом не пропадает — её пишет сам приёмник (ObjectStore),
@@ -274,21 +326,22 @@ class FlowViewModel @Inject constructor(
                 }
                 onBubble(Bubble("pc", title, cap, obj.state))
             }
-        }
+        })
     }
 
     /** Several shared files → one COLLECTION (the inbound half of collections;
      *  e.g. several photos to merge into a PDF). */
     fun onSharedMultiple(sources: List<String>) {
         freshShareArrived = true
-        claimVoice()
-        _ui.update { it.copy(busy = "Открываю…", busyStage = null, busyNetwork = false, busyQuiet = false, message = null, messageOutcome = Outcome.NONE, inputPrompt = null) }
-        _ui.update { it.copy(busy = "Открываю…", busyStage = null, busyNetwork = false, busyQuiet = false, message = null, messageOutcome = Outcome.NONE, inputPrompt = null) }
-        viewModelScope.launch {
+        val voice = claimVoice()
+        raiseBusy("Открываю…", cancelable = false) // как и в onShared: возвращаться некуда
+        trackWork(viewModelScope.launch {
             val obj = runCatching {
                 store.clear()
                 store.ingestMultiple(sources)
-            }.getOrElse {
+            }.getOrNull()
+            if (!owns(voice)) return@launch
+            if (obj == null) {
                 // То же, что в onShared: человеку — словами, причина — в логе приёмника.
                 _ui.update { it.copy(busy = null, busyStage = null, message = "Не удалось открыть объект", messageOutcome = Outcome.FAILED) }
                 return@launch
@@ -298,7 +351,7 @@ class FlowViewModel @Inject constructor(
             cancelEnrichment()
             stack.clear()
             pushFrame(obj)
-        }
+        })
     }
 
     fun loadRecent() {
@@ -328,14 +381,15 @@ class FlowViewModel @Inject constructor(
      *  a failed ack re-offers (at-least-once); a failed download acks nothing. */
     fun pullFromPc() {
         val pairing = pcPairings.current() ?: return
-        claimVoice()
-        _ui.update { it.copy(busy = "Забираю с компьютера…", busyStage = null, busyNetwork = false, busyQuiet = false, message = null, messageOutcome = Outcome.NONE) }
-        _ui.update { it.copy(busy = "Забираю с компьютера…", busyStage = null, busyNetwork = false, busyQuiet = false, message = null, messageOutcome = Outcome.NONE) }
-        viewModelScope.launch {
+        val voice = claimVoice()
+        // Отмена настоящая: качать по сети можно долго, а вернуться есть куда — в «Недавнее».
+        raiseBusy("Забираю с компьютера…", cancelable = true)
+        trackWork(viewModelScope.launch {
             // Pull what is on the PC RIGHT NOW — a fresh fetch, not the throttled banner snapshot. The
             // cached list can be up to OUTBOX_THROTTLE_MS stale, so an object queued after the last
             // fetch would be missed and a stale one pulled instead — the phone got «не то» (#161).
             val entries = runCatching { pcTransport.fetchOutbox(pairing) }.getOrNull().orEmpty()
+            if (!owns(voice)) return@launch
             if (entries.isEmpty()) {
                 fromPcEntries = emptyList()
                 _fromPcCount.value = 0
@@ -348,6 +402,7 @@ class FlowViewModel @Inject constructor(
                 val ok = runCatching { pcTransport.downloadOutboxFile(pairing, entry.id, path) }.getOrDefault(false)
                 Triple(entry, path, ok)
             }
+            if (!owns(voice)) return@launch // передумали на полпути — скачанное не открываем
             if (pulled.any { !it.third }) {
                 _ui.update { it.copy(busy = null, busyStage = null, message = "Компьютер недоступен — попробуйте ещё раз", messageOutcome = Outcome.FAILED) }
                 return@launch
@@ -366,7 +421,7 @@ class FlowViewModel @Inject constructor(
             }
             fromPcEntries = emptyList()
             _fromPcCount.value = 0
-        }
+        })
     }
 
     /** Hide the banner until the next fetch — the objects stay on the PC (no ack). */
@@ -427,11 +482,12 @@ class FlowViewModel @Inject constructor(
 
     fun openFromHistory(entry: HistoryEntry) {
         freshShareArrived = true
-        claimVoice()
-        _ui.update { it.copy(busy = "Открываю…", busyStage = null, busyNetwork = false, busyQuiet = false, message = null, messageOutcome = Outcome.NONE, inputPrompt = null) }
-        _ui.update { it.copy(busy = "Открываю…", busyStage = null, busyNetwork = false, busyQuiet = false, message = null, messageOutcome = Outcome.NONE, inputPrompt = null) }
-        viewModelScope.launch {
+        val voice = claimVoice()
+        // Пришли с «Недавнего» — туда же и возвращаемся, если человек передумал.
+        raiseBusy("Открываю…", cancelable = true)
+        trackWork(viewModelScope.launch {
             val obj = runCatching { history.open(entry.id) }.getOrNull()
+            if (!owns(voice)) return@launch
             if (obj == null) {
                 _ui.update { it.copy(busy = null, busyStage = null, message = "Объект недоступен", messageOutcome = Outcome.FAILED) }
                 return@launch
@@ -440,7 +496,7 @@ class FlowViewModel @Inject constructor(
             cancelEnrichment()
             stack.clear()
             pushFrame(obj)
-        }
+        })
     }
 
     fun onBubble(bubble: Bubble) {
@@ -475,31 +531,35 @@ class FlowViewModel @Inject constructor(
      *  straight away. Busy is shown immediately (so feedback is instant and the preview computation —
      *  e.g. ML Kit for an address — is covered); the coroutine then reveals the preview or runs. */
     private fun maybePreview(bubble: Bubble, top: PointObject) {
-        claimVoice()
-        _ui.update {
-            it.copy(
-                busy = bubble.title, busyStage = null, busyNetwork = isCloud(bubble.capabilityId),
-                busyQuiet = isQuietAction(bubble.capabilityId), message = null, messageOutcome = Outcome.NONE,
-                inputPrompt = null,
-            )
-        }
-        viewModelScope.launch {
+        val voice = claimVoice()
+        raiseBusy(
+            bubble.title,
+            network = isCloud(bubble.capabilityId),
+            quiet = isQuietAction(bubble.capabilityId),
+            cancelable = true,
+        )
+        trackWork(viewModelScope.launch {
             // Пузырёк нарисован, а исполнять его нечем (потерян `@IntoSet`): человеку — фраза
             // на его языке, как давно говорит путь избранной цепочки. Без этой развилки на
             // экран уезжал текст исключения, написанный для разработчика.
             val realizer = runCatching { resolver.realizerFor(bubble.capabilityId) }.getOrNull()
+            if (!owns(voice)) return@launch
             if (realizer == null) {
                 _ui.update { it.copy(busy = null, busyStage = null, message = "Действие недоступно", messageOutcome = Outcome.FAILED) }
                 return@launch
             }
             val preview = runCatching { realizer.preview(top) }.getOrNull()
+            if (!owns(voice)) return@launch
             if (preview == null) {
+                // Задача поиска превью своё отработала — экраном дальше владеет действие. Снимаем
+                // её с учёта до [dispatch]: иначе он снял бы предшественника, то есть нас самих.
+                busyJob = null
                 dispatch(bubble) { realizer.perform(top, null) }
             } else {
                 pendingPreviewBubble = bubble
                 _ui.update { it.copy(busy = null, busyStage = null, preview = preview) }
             }
-        }
+        })
     }
 
     fun confirmPreview() {
@@ -728,9 +788,12 @@ class FlowViewModel @Inject constructor(
     }
 
     private fun runOnObject(bubble: Bubble, top: PointObject) {
-        claimVoice()
-        _ui.update { it.copy(busy = bubble.title, busyStage = null, busyNetwork = isCloud(bubble.capabilityId), busyQuiet = isQuietAction(bubble.capabilityId), message = null, messageOutcome = Outcome.NONE, inputPrompt = null) }
-        _ui.update { it.copy(busy = bubble.title, busyStage = null, busyNetwork = isCloud(bubble.capabilityId), busyQuiet = isQuietAction(bubble.capabilityId), message = null, messageOutcome = Outcome.NONE, inputPrompt = null) }
+        raiseBusy(
+            bubble.title,
+            network = isCloud(bubble.capabilityId),
+            quiet = isQuietAction(bubble.capabilityId),
+            cancelable = true,
+        )
         dispatch(bubble) { resolver.realizerFor(bubble.capabilityId).perform(top, null) }
     }
 
@@ -748,19 +811,31 @@ class FlowViewModel @Inject constructor(
      * Runs [onGranted] at once if cloud consent is already given; otherwise shows the consent
      * gate and defers it (#10). Reads the on-device flag directly (no cached copy) — so there
      * is no init race, and a saved-chain replay or a single action is held the same way.
+     *
+     * #114: спрашивают не «про облако вообще», а про то обещание, которое даёт это действие
+     * ([cloudScopeOf]). «Показать модели» помнится; «выложить по ссылке, которую откроет любой»
+     * не помнится никогда — цена называется перед каждым файлом, до отправки, а не после.
      */
     private fun requireCloudConsent(
         capabilityId: com.point.core.model.CapabilityId? = null,
         onGranted: () -> Unit,
     ) {
+        val id = capabilityId ?: com.point.core.model.CapabilityId("ai")
+        val scope = com.point.core.flow.cloudScopeOf(id)
         viewModelScope.launch {
-            if (runCatching { consent.cloudAllowed() }.getOrDefault(false)) {
+            if (runCatching { consent.allowed(scope) }.getOrDefault(false)) {
                 onGranted()
             } else {
                 pendingCloud = onGranted
-                val where = capabilityId?.let { com.point.core.flow.cloudDestination(it) }
-                    ?: com.point.core.flow.cloudDestination(com.point.core.model.CapabilityId("ai"))
-                _ui.update { it.copy(cloudConsent = true, cloudDestination = where) }
+                pendingCloudScope = scope
+                _ui.update {
+                    it.copy(
+                        cloudConsent = true,
+                        cloudDestination = com.point.core.flow.cloudDestination(id),
+                        cloudTitle = com.point.core.flow.cloudAskTitle(scope),
+                        cloudConfirm = com.point.core.flow.cloudAskConfirm(scope),
+                    )
+                }
             }
         }
     }
@@ -787,14 +862,13 @@ class FlowViewModel @Inject constructor(
         val bubble = pendingBubble ?: return
         val top = stack.lastOrNull()?.obj ?: return
         pendingBubble = null
-        claimVoice()
-        _ui.update {
-            it.copy(
-                busy = bubble.title, busyStage = null, busyNetwork = isCloud(bubble.capabilityId),
-                busyQuiet = isQuietAction(bubble.capabilityId),
-                inputPrompt = null, inputSuggestions = emptyList(), needsImage = null,
-            )
-        }
+        raiseBusy(
+            bubble.title,
+            network = isCloud(bubble.capabilityId),
+            quiet = isQuietAction(bubble.capabilityId),
+            cancelable = true,
+        )
+        _ui.update { it.copy(inputSuggestions = emptyList(), needsImage = null) }
         dispatch(bubble) { resolver.realizerFor(bubble.capabilityId).perform(top, text) }
     }
 
@@ -877,6 +951,7 @@ class FlowViewModel @Inject constructor(
             )
         }
         refreshUsage()
+        viewModelScope.launch { refreshCloudConsent() } // тумблер показывает, что разрешено сейчас
     }
 
     /** Load the usage journal's on/off state and tally for the key screen. */
@@ -1025,10 +1100,13 @@ class FlowViewModel @Inject constructor(
 
     fun confirmCloud() {
         val run = pendingCloud ?: return
+        val scope = pendingCloudScope
         pendingCloud = null
         _ui.update { it.copy(cloudConsent = false) }
         viewModelScope.launch {
-            runCatching { consent.allowCloud() } // remember, so we ask only once
+            // Помнится только то, что имеет право помниться: «выложить по ссылке» — разрешение
+            // на ЭТОТ файл и на этот раз (#114).
+            runCatching { consent.allow(scope) }
             run()
         }
     }
@@ -1038,22 +1116,43 @@ class FlowViewModel @Inject constructor(
         _ui.update { it.copy(cloudConsent = false) }
     }
 
+    /**
+     * Разрешение на облако — тумблер в настройках, а не решение, принятое однажды навсегда (#114).
+     *
+     * Отозвать было негде: человек, разрешивший облако одним тапом полгода назад, не мог передумать
+     * ничем, кроме переустановки. Публичной ссылки это не касается — она спрашивает каждый раз.
+     */
+    fun setCloudAllowed(allowed: Boolean) {
+        viewModelScope.launch {
+            runCatching {
+                if (allowed) consent.allow(com.point.core.flow.CloudScope.MODELS)
+                else consent.revoke(com.point.core.flow.CloudScope.MODELS)
+            }
+            refreshCloudConsent()
+        }
+    }
+
+    private suspend fun refreshCloudConsent() {
+        val allowed = runCatching { consent.allowed(com.point.core.flow.CloudScope.MODELS) }.getOrDefault(false)
+        _ui.update { it.copy(cloudEnabled = allowed) }
+    }
+
     // --- Device actions (#66): the installed apps that can open the object, shown inline. ---
 
     private fun showAppPicker(obj: PointObject) {
-        claimVoice()
-        _ui.update { it.copy(busy = "Ищу приложения…", busyStage = null, busyQuiet = false, message = null, messageOutcome = Outcome.NONE, inputPrompt = null) }
-        _ui.update { it.copy(busy = "Ищу приложения…", busyStage = null, busyQuiet = false, message = null, messageOutcome = Outcome.NONE, inputPrompt = null) }
-        viewModelScope.launch {
+        val voice = claimVoice()
+        raiseBusy("Ищу приложения…", cancelable = true)
+        trackWork(viewModelScope.launch {
             val direct = runCatching { appLauncher.handlers(obj) }.getOrDefault(emptyList())
             // Dedup by package: an app that also appears as a bridged target must not double —
             // the picker keys rows by package, and duplicates crash the list. Direct wins.
             val apps = (direct + bridgedHandlers(obj)).distinctBy { it.packageName }
+            if (!owns(voice)) return@launch // отменённый поиск не открывает список приложений
             _ui.update {
                 if (apps.isEmpty()) it.copy(busy = null, busyStage = null, message = "Нет приложения для этого объекта", messageOutcome = Outcome.FAILED)
                 else it.copy(busy = null, busyStage = null, appPicker = apps)
             }
-        }
+        })
     }
 
     /**
@@ -1078,7 +1177,9 @@ class FlowViewModel @Inject constructor(
         val obj = stack.lastOrNull()?.obj ?: return
         _ui.update { it.copy(appPicker = null) }
         val via = target.via
-        viewModelScope.launch {
+        // Задача держится здесь, а не в [bridge]: «Преобразую…» поднимает она, и снимать надо
+        // именно её — иначе кнопка отменяла бы работу, которой не владеет.
+        trackWork(viewModelScope.launch {
             // #66 slice 4: a direct pick is remembered — on the next launch this app is a
             // first-class bubble in the graph, learning through the same usage signal.
             // Bridged picks are skipped: their capability would need the transform re-run.
@@ -1088,6 +1189,9 @@ class FlowViewModel @Inject constructor(
                 runCatching { usage.record(CapabilityId("app:${target.packageName}#${obj.state.kind.name}")) }
             }
             val toOpen = if (via != null) bridge(obj, via) else obj
+            // Отменённое преобразование — не «не удалось»: человек передумал сам, и отчитываться
+            // ему отказом было бы враньём. `runCatching` внутри [bridge] проглатывает и отмену.
+            ensureActive()
             if (toOpen == null) {
                 _ui.update {
                     it.copy(
@@ -1100,13 +1204,13 @@ class FlowViewModel @Inject constructor(
             runCatching { appLauncher.launch(target, toOpen) }
                 .onSuccess { _ui.update { it.copy(busy = null, busyStage = null, message = "Открываю в ${target.label}", messageOutcome = Outcome.DONE) } }
                 .onFailure { e -> _ui.update { it.copy(busy = null, busyStage = null, message = e.message ?: "Не удалось открыть", messageOutcome = Outcome.FAILED) } }
-        }
+        })
     }
 
     /** Run one transform to produce the object the bridged app can open (#79.1); null on failure. */
     private suspend fun bridge(obj: PointObject, viaCapId: String): PointObject? {
         claimVoice()
-        _ui.update { it.copy(busy = "Преобразую…", busyStage = null, busyQuiet = false) }
+        raiseBusy("Преобразую…", cancelable = true)
         val result = runCatching { resolver.realizerFor(CapabilityId(viaCapId)).perform(obj, null) }.getOrNull()
         return (result as? ActionResult.Success)?.let { runCatching { store.put(it.result) }.getOrNull() }
     }
@@ -1156,20 +1260,28 @@ class FlowViewModel @Inject constructor(
         val start = stack.lastOrNull()?.obj ?: return
         // A saved chain can hide a cloud step — gate the whole replay on consent (#10),
         // so a favorite is not a back door around the privacy prompt.
-        if (chain.steps.any { isCloud(it) }) {
-            requireCloudConsent { replayChain(chain, start) }
+        val cloudSteps = chain.steps.filter { isCloud(it) }
+        if (cloudSteps.isNotEmpty()) {
+            // Спрашиваем про самое дорогое обещание в цепочке (#114): шаг «Дать ссылку» внутри
+            // избранного не имеет права проехать под текстом про AI-провайдера.
+            val asks = cloudSteps.firstOrNull {
+                com.point.core.flow.cloudScopeOf(it) == com.point.core.flow.CloudScope.PUBLIC_LINK
+            } ?: cloudSteps.first()
+            requireCloudConsent(asks) { replayChain(chain, start) }
             return
         }
         replayChain(chain, start)
     }
 
     private fun replayChain(chain: FavoriteChain, start: PointObject) {
-        claimVoice()
-        _ui.update { it.copy(busy = "Выполняю цепочку…", busyStage = null, busyNetwork = false, busyQuiet = false, message = null, messageOutcome = Outcome.NONE, inputPrompt = null) }
-        _ui.update { it.copy(busy = "Выполняю цепочку…", busyStage = null, busyNetwork = false, busyQuiet = false, message = null, messageOutcome = Outcome.NONE, inputPrompt = null) }
-        viewModelScope.launch {
+        val voice = claimVoice()
+        // Цепочка идёт минутами и несколькими сетевыми шагами — отмена здесь нужнее всего, и
+        // теперь она настоящая: следующий шаг не начинается, а сделанное не приземляется.
+        raiseBusy("Выполняю цепочку…", cancelable = true)
+        trackWork(viewModelScope.launch {
             var current = start
             for (capId in chain.steps) {
+                if (!owns(voice)) return@launch
                 val realizer = runCatching { resolver.realizerFor(capId) }.getOrNull()
                 if (realizer == null) {
                     _ui.update { it.copy(busy = null, busyStage = null, message = "Шаг цепочки недоступен", messageOutcome = Outcome.FAILED) }
@@ -1178,6 +1290,9 @@ class FlowViewModel @Inject constructor(
                 val label = runCatching { registry.byId(capId).label(current.state) }.getOrDefault("")
                 val result = runCatching { realizer.perform(current, null) }
                     .getOrElse { ActionResult.Failure(it.message ?: "Не получилось", recoverable = true) }
+                // Шаг, доработавший после отмены, не приземляется: цепочка остановлена — значит
+                // остановлена, а не «ещё один объект напоследок».
+                if (!owns(voice)) return@launch
                 when (result) {
                     is ActionResult.Success -> {
                         current = store.put(result.result)
@@ -1199,7 +1314,7 @@ class FlowViewModel @Inject constructor(
                     }
                 }
             }
-        }
+        })
     }
 
     private fun dispatch(bubble: Bubble, action: suspend () -> ActionResult) {
@@ -1207,9 +1322,9 @@ class FlowViewModel @Inject constructor(
         // Задача действия хранится, потому что человек имеет право передумать (#288): «В Excel»
         // — это две последовательные модели по фото, минута и больше, и до сих пор прервать её
         // было нечем; экран обещал «несколько секунд» и упирался в последний шаг.
-        actionJob?.cancel()
+        busyJob?.cancel()
         val voice = claimVoice()
-        actionJob = viewModelScope.launch {
+        trackWork(viewModelScope.launch {
             runCatching { usage.record(bubble.capabilityId) } // learning signal for BubblePolicy
             runCatching { journal.record(UsageEvent(UsageEventType.ACTION, bubble.capabilityId.value)) }
             runCatching {
@@ -1223,31 +1338,43 @@ class FlowViewModel @Inject constructor(
                     },
                 ) { action() }
             }
-                .onSuccess { result -> handleResult(result, bubble) }
+                // Снятая работа не приземляется: нативный проход движка об отмене не знает и
+                // доходит до конца сам — без этой проверки объект открывался поверх «Отменено».
+                .onSuccess { result -> if (owns(voice)) handleResult(result, bubble) }
                 .onFailure { e ->
                     // Отмена — не ошибка: человек передумал, и сказать ему «Ошибка» было бы враньём.
                     if (e is kotlinx.coroutines.CancellationException) throw e
+                    if (!owns(voice)) return@onFailure
                     // «Ошибка» — слово системы; человеку под объектом нужен исход, а не термин.
                     _ui.update { it.copy(busy = null, busyStage = null, message = e.message ?: "Не получилось", messageOutcome = Outcome.FAILED) }
                 }
-        }
+        })
     }
 
     /**
-     * Отменить идущее действие (#288). Работа снимается, экран возвращается к объекту, и человек
-     * видит, что произошло: молчаливое исчезновение экрана неотличимо от сбоя.
+     * Отменить идущую работу (#288, #114) — ту самую, над которой человек видит кнопку.
+     *
+     * Отмена настоящая: задача снимается, а её результат на экран не попадает (см. [owns]).
+     * Кнопка рисуется только там, где обе половины верны, — иначе её нет вовсе ([showsCancel]).
+     * Возвращаемся туда, откуда пришли: над объектом — со словом «Отменено» (молчаливое
+     * исчезновение экрана неотличимо от сбоя), а с «Недавнего» — на само «Недавнее»: там
+     * ответом человеку служит вернувшийся экран, а карточка «Отменено» без объекта стала бы
+     * тупиком.
      */
     fun cancelAction() {
-        val job = actionJob ?: return
-        actionJob = null
+        val job = busyJob ?: return
+        busyJob = null
         job.cancel()
         claimVoice() // остановленная работа замолкает сразу — её хвост ещё идёт
-        _ui.update { it.copy(busy = null, busyStage = null, message = "Отменено") }
-        // Отмена — не отказ: человек сам передумал, и знак исхода не имеет права ставить ему «✕».
-        _ui.update { it.copy(busy = null, busyStage = null, message = "Отменено", messageOutcome = Outcome.NONE) }
         // Отмена — не отказ и не удача: человек сам передумал. Знак исхода не имеет права ставить
         // ему ни «✕», ни «✓ Готово» — работа не дошла до конца, и заявлять о ней нечего.
-        _ui.update { it.copy(busy = null, busyStage = null, message = "Отменено", messageOutcome = Outcome.NONE) }
+        val hasObject = _ui.value.frame != null
+        _ui.update {
+            it.copy(
+                busy = null, busyStage = null, busyCancelable = false,
+                message = if (hasObject) "Отменено" else null, messageOutcome = Outcome.NONE,
+            )
+        }
     }
 
     private suspend fun handleResult(result: ActionResult, bubble: Bubble) {

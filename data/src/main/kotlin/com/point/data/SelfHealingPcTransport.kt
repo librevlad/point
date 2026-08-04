@@ -51,9 +51,12 @@ class SelfHealingPcTransport(
         // Still unreachable — the saved address is likely stale; re-resolve via mDNS.
         for (pc in pcHealCandidates(pairing, snapshot())) {
             val healed = pairing.copy(host = pc.host, port = pc.port)
-            if (lan.send(healed, obj, fileName, meta, action) is PcSendOutcome.Sent) {
+            val sent = lan.send(healed, obj, fileName, meta, action)
+            if (sent is PcSendOutcome.Sent) {
                 runCatching { pairings.save(healed) } // remember the address that actually worked
-                return PcSendOutcome.Sent
+                // Возвращаем ИМЕННО тот ответ, что дал компьютер: исход действия ехал в нём, и
+                // пересобранный «Sent» стирал бы его — телефон снова говорил бы «готово» вслепую.
+                return sent
             }
         }
         return outcome
