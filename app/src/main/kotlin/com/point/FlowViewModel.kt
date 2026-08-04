@@ -989,12 +989,7 @@ class FlowViewModel @Inject constructor(
 
     // --- Bring-your-own AI key (#19). Summoned on demand or from the Home gear. ---
 
-    /**
-     * Открыть экран ключа. [reason] — что сказать человеку о том, зачем он здесь (#465); пустой
-     * означает «выведи причину сам»: пришедший с отказа увидит его словами, пришедший дверью —
-     * ничего, ему объяснять нечего.
-     */
-    fun openKeySettings(reason: String? = null) {
+    fun openKeySettings() {
         // A tiny prefs read; the store is warmed when it's created (Activity start), so it
         // is in-memory by the time the gear or an AI-no-key failure summons the screen.
         val saved = userKeys.read()
@@ -1006,13 +1001,14 @@ class FlowViewModel @Inject constructor(
             val refusal = keyOfferLabel(it.message) != null
             it.copy(
                 keyScreen = saved ?: UserAiConfig.DEFAULT, busy = null,
+                // …и он же стоит НА экране ключей (#467). Сюда пришли по предложению под отказом —
+                // то есть с вопросом «какой из семи ключей задать»; ответ на него живёт в тексте
+                // отказа, а не в памяти человека, и терять его по дороге незачем. Заполняется
+                // только от отказа: пришедшему дверью «AI-ключ» объяснять нечего.
+                keyScreenNote = it.message.takeIf { _ -> refusal },
                 message = it.message.takeIf { _ -> refusal },
                 messageOutcome = if (refusal) it.messageOutcome else Outcome.NONE,
                 inputPrompt = null,
-                // Зачем человек здесь (#465). Пришёл с отказа — экран повторяет его словами того
-                // самого отказа: «AI недоступен — задайте свой ключ» и есть ответ на «а почему».
-                // Пришёл дверью «AI-ключ» — объяснять нечего, и карточки нет.
-                keyReason = reason ?: it.message.takeIf { _ -> refusal },
                 // Приговор прошлой проверки не имеет права пережить закрытие экрана: «работает»,
                 // висящее над другим ключом, — ровно та ложь, против которой вся проверка (#465).
                 keyChecking = false,
@@ -1090,7 +1086,7 @@ class FlowViewModel @Inject constructor(
     }
 
     fun closeKeySettings() =
-        _ui.update { it.copy(keyScreen = null, keyReason = null, keyVerdict = null, keyChecking = false) }
+        _ui.update { it.copy(keyScreen = null, keyScreenNote = null, keyVerdict = null, keyChecking = false) }
 
     // --- «Компьютер» (#147): pair once, then the «На компьютер» bubble appears. ---
 
@@ -1375,12 +1371,10 @@ class FlowViewModel @Inject constructor(
             runCatching { userKeys.save(config) }
             _ui.update {
                 it.copy(
-                    keyScreen = null,
-                    keyReason = null,
+                    keyScreen = null, keyScreenNote = null,
                     keyVerdict = null,
                     aiKeySet = config.apiKey.isNotBlank(),
-                    message = "Ключ AI сохранён",
-                    messageOutcome = Outcome.DONE,
+                    message = "Ключ AI сохранён", messageOutcome = Outcome.DONE,
                 )
             }
         }

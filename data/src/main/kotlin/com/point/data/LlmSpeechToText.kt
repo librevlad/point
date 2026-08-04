@@ -1,6 +1,7 @@
 package com.point.data
 
 import com.point.core.flow.LlmClient
+import com.point.core.flow.SpeechKeyNeed
 import com.point.core.flow.SpeechToText
 import com.point.core.flow.TRANSCRIBE_PROMPT
 import com.point.core.flow.Transcription
@@ -27,6 +28,14 @@ import javax.inject.Inject
 class LlmSpeechToText @Inject constructor(
     private val llm: LlmClient,
 ) : SpeechToText {
+
+    /**
+     * Этому движку годится ЛЮБОЙ ключ AI — тем он и отличается от Whisper, которому нужен именно
+     * Groq. Сказать это словами обязательно: на экране ключей семь провайдеров, и человек,
+     * прочитавший «задайте свой ключ», не знал, какой из них включит расшифровку (#467).
+     */
+    override fun missingKey(): SpeechKeyNeed? =
+        if (llm.configured) null else SpeechKeyNeed("модель общего назначения — по любому ключу AI")
 
     override suspend fun transcribe(obj: PointObject): Transcription = withContext(Dispatchers.IO) {
         // Отказ до сети и до траты квоты: формат, которого не читает никто, честнее назвать

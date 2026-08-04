@@ -1517,6 +1517,49 @@ class FlowViewModelTest {
         assertEquals(Outcome.NONE, vm.ui.value.messageOutcome)
     }
 
+    /**
+     * #467: отказ расшифровки зовёт задать ключ СВОИМИ словами, не говоря «задайте свой ключ». По
+     * одной марке предложение под ним не появлялось бы вовсе — человек с голосовым и без ключей
+     * остался бы ровно там, откуда всё началось.
+     */
+    @Test fun `отказ расшифровки тоже получает предложение задать ключ`() = runTest(dispatcher) {
+        val why = "Расшифровать некому: Whisper слушает по ключу Groq. " +
+            com.point.core.flow.KEY_SETTINGS_CALL
+        resolver.result = ActionResult.Failure(why, recoverable = true)
+        val vm = vm()
+        vm.onShared("voice.ogg", "audio/ogg"); advanceUntilIdle()
+
+        vm.onBubble(bubble()); advanceUntilIdle()
+
+        assertEquals(why, vm.ui.value.message)
+        assertNull("экран ключей открывает человек, а не отказ за него", vm.ui.value.keyScreen)
+        assertEquals("Задать свой ключ AI", keyOfferLabel(vm.ui.value.message))
+    }
+
+    /** Пришедший ПО ПРЕДЛОЖЕНИЮ приходит с вопросом «какой из семи ключей задать» — и ответ на него
+     *  стоит на экране ключей, а не остаётся позади (#467). */
+    @Test fun `причина доезжает до экрана ключей вместе с человеком`() = runTest(dispatcher) {
+        val why = "Расшифровать некому: Whisper слушает по ключу Groq. " +
+            com.point.core.flow.KEY_SETTINGS_CALL
+        resolver.result = ActionResult.Failure(why, recoverable = true)
+        val vm = vm()
+        vm.onShared("voice.ogg", "audio/ogg"); advanceUntilIdle()
+        vm.onBubble(bubble()); advanceUntilIdle()
+
+        vm.openKeySettings(); advanceUntilIdle() // тап по предложению
+
+        assertEquals(why, vm.ui.value.keyScreenNote)
+    }
+
+    /** Пришедшему шестерёнкой объяснять нечего — и чужая причина за ним не тянется. */
+    @Test fun `пришедший сам не видит на экране ключей чужой причины`() = runTest(dispatcher) {
+        val vm = vm()
+
+        vm.openKeySettings(); advanceUntilIdle()
+
+        assertNull(vm.ui.value.keyScreenNote)
+    }
+
     @Test fun `saveAiConfig stores the key and closes the screen`() = runTest(dispatcher) {
         val vm = vm()
         vm.openKeySettings(); advanceUntilIdle()
@@ -1529,31 +1572,6 @@ class FlowViewModelTest {
     }
 
     // --- Доведение до работающего ключа (#465) ---
-
-    @Test fun `экран ключа, открытый с отказа, повторяет его причину`() = runTest(dispatcher) {
-        resolver.result = ActionResult.Failure(
-            "AI недоступен — ${com.point.core.flow.AI_KEY_HINT}",
-            recoverable = true,
-        )
-        val vm = vm()
-        vm.onShared("uri", "image/png"); advanceUntilIdle()
-        vm.onBubble(bubble()); advanceUntilIdle()
-
-        // За ключом человек идёт сам, предложением с отказа (#452), — а экран, открывшись,
-        // говорит, зачем он здесь, теми же словами (#465).
-        vm.openKeySettings(); advanceUntilIdle()
-
-        assertEquals("AI недоступен — ${com.point.core.flow.AI_KEY_HINT}", vm.ui.value.keyReason)
-    }
-
-    @Test fun `дверь «AI-ключ» ничего не объясняет — объяснять нечего`() = runTest(dispatcher) {
-        val vm = vm()
-        vm.openKeySettings(); advanceUntilIdle()
-
-        // Придуманная причина под человеком, который просто открыл настройки, — выдуманная ему
-        // проблема, ровно как совет «попробуйте ещё раз» над удачей.
-        assertNull(vm.ui.value.keyReason)
-    }
 
     @Test fun `удачная проверка сохраняет ключ и показывает слова сервиса`() = runTest(dispatcher) {
         val vm = vm()
@@ -1608,7 +1626,7 @@ class FlowViewModelTest {
 
         // «Работает», висящее над другим ключом, — ровно та ложь, против которой вся проверка.
         assertNull(vm.ui.value.keyVerdict)
-        assertNull(vm.ui.value.keyReason)
+        assertFalse(vm.ui.value.keyChecking)
     }
 
     @Test fun `пустой ключ не гоняет сеть`() = runTest(dispatcher) {

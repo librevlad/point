@@ -117,9 +117,13 @@ fun openChatOf(ui: FlowUiState): ChatState? = ui.chat?.takeIf { ui.chatOpen }
  * отказ при этом стирался. Теперь причина остаётся сказанной, а экран ключей стоит рядом с ней
  * **предложением**: строка под карточкой исхода, по которой человек идёт сам. Ровно так же, как
  * любое другое действие в Point, — его явный выбор, а не переход, сделанный за него.
+ *
+ * Узнаёт отказ общий `refusalNeedsKey`, а не одна фраза (#467): отказ расшифровки зовёт задать
+ * ключ своими словами, и по единственной марке предложение под ним не появлялось бы вовсе — то
+ * есть человек с голосовым и без ключей остался бы ровно там, откуда всё началось.
  */
 fun keyOfferLabel(message: String?): String? =
-    if (message?.contains(com.point.core.flow.AI_KEY_HINT) == true) "Задать свой ключ AI" else null
+    if (message != null && com.point.core.flow.refusalNeedsKey(message)) "Задать свой ключ AI" else null
 
 /** One node of the visible Object Timeline (#114): what the object was at that step,
  *  and the action that made it (null for the root). The philosophy made visible —
@@ -219,14 +223,9 @@ data class FlowUiState(
     val appPicker: List<AppTarget>? = null,
     /** Non-null while the bring-your-own AI-key screen is shown (its prefilled values). */
     val keyScreen: UserAiConfig? = null,
-    /**
-     * Почему экран ключа открылся сам (#465): «Чтобы «Понять» работало, нужен ключ AI».
-     *
-     * `null` — человек пришёл сюда сам, шестерёнкой, и объяснять ему нечего. Раньше разницы не
-     * было: экран выпрыгивал после отказа молча, и это читалось как сбой, а не как ответ на
-     * вопрос «почему не сработало».
-     */
-    val keyReason: String? = null,
+    /** Отказ, который привёл человека на экран ключей, — чтобы он знал, зачем он тут (#467).
+     *  null — пришёл сам, дверью «AI-ключ», и объяснять ему нечего. */
+    val keyScreenNote: String? = null,
     /** Идёт ли живая проверка ключа прямо сейчас (#465) — поднимается только явным тапом. */
     val keyChecking: Boolean = false,
     /** Чем кончилась проверка: «работает» словами сервиса или отказ с продолжением (#465). */

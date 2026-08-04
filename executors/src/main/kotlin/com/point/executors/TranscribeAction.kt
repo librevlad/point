@@ -9,10 +9,12 @@ import com.point.core.flow.ObjectStore
 import com.point.core.flow.Realizer
 import com.point.core.flow.RealizerKind
 import com.point.core.flow.RealizerMeta
+import com.point.core.flow.SpeechReadiness
 import com.point.core.flow.SpeechToText
 import com.point.core.flow.Transcription
 import com.point.core.flow.listeningStage
 import com.point.core.flow.reportStage
+import com.point.core.flow.speechKeyRefusal
 import com.point.core.flow.transcriptMarkdown
 import com.point.core.model.ActionResult
 import com.point.core.model.CapabilityId
@@ -39,8 +41,17 @@ import javax.inject.Inject
  *
  * Сеть — только после тапа: [CapabilityMeta.network] держит расшифровку вне первого экрана,
  * и до выбора человека ни одного байта записи никуда не уезжает.
+ *
+ * **«Нужен ключ» видно ДО тапа (#467).** Владелец живьём: без подключённых моделей расшифровка
+ * отвечала общей непонятной ошибкой — и отвечала её после ожидания. Способность спрашивает
+ * [SpeechReadiness] (это чтение настроек, не сеть и не работа) и договаривает ответ прямо в
+ * названии действия. Реализация сюда при этом не приезжает: контракт отвечает «есть ли кому», а не
+ * «как», — тем же приёмом, которым `PcCapability` спрашивает `PcPairings`, оставляя `PcTransport`
+ * реализатору.
  */
-class TranscribeCapability @Inject constructor() : Capability {
+class TranscribeCapability @Inject constructor(
+    private val readiness: SpeechReadiness,
+) : Capability {
     override val id = ID
     override val icon = "transcribe"
 
@@ -58,7 +69,15 @@ class TranscribeCapability @Inject constructor() : Capability {
         auth = true,
     )
 
-    override fun label(state: ObjectState) = "Расшифровать"
+    /**
+     * Действие не прячется без ключа и не блёкнет: оно есть, оно про этот объект, и человек имеет
+     * право по нему тапнуть — тап откроет экран ключей. Название лишь перестаёт умалчивать цену.
+     * Какой именно ключ — говорит отказ: коротко на строке про это не сказать, а полуправда
+     * («нужен ключ Groq») отправила бы человека чинить то, что чинится и иначе.
+     */
+    override fun label(state: ObjectState) =
+        if (readiness.missingKeys().isEmpty()) "Расшифровать" else "Расшифровать · нужен ключ"
+
     override fun accepts(state: ObjectState) = state.kind == ObjectKind.AUDIO
     override fun produces(state: ObjectState) = ObjectState(ObjectKind.TEXT)
 
@@ -80,12 +99,21 @@ class TranscribeCapability @Inject constructor() : Capability {
 class TranscribeRealizer @Inject constructor(
     private val store: ObjectStore,
     private val speech: SpeechToText,
+    private val readiness: SpeechReadiness,
 ) : Realizer {
     override val capabilityId = TranscribeCapability.ID
     override val meta = RealizerMeta(priority = 10, kind = RealizerKind.CLOUD)
 
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
+            // Отказ ДО стадии (#467): слушать некому — ждать нечего, и «Слушаю запись…» было бы
+            // словом о работе, которой не будет. Тот же порядок, что у отправки на компьютер: без
+            // пары сначала отказ, и только потом слова об ожидании.
+            val needs = readiness.missingKeys()
+            if (needs.isNotEmpty()) {
+                return@withContext ActionResult.Failure(speechKeyRefusal(needs), recoverable = true)
+            }
+
             // Длинная запись не заставляет гадать, зависло ли: стадия говорит, сколько примерно
             // длится запись и что это займёт время. Оценка честно приблизительная (#223).
             reportStage(listeningStage(input.mime, sizeOf(input), input.metadata["name"]))

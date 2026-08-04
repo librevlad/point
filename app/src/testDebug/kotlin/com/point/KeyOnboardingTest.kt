@@ -35,7 +35,7 @@ class KeyOnboardingTest {
 
     private fun keyScreen(
         config: UserAiConfig = UserAiConfig.DEFAULT,
-        reason: String? = null,
+        note: String? = null,
         checking: Boolean = false,
         verdict: KeyVerdict? = null,
         onCheck: (UserAiConfig) -> Unit = {},
@@ -49,7 +49,7 @@ class KeyOnboardingTest {
             usageEnabled = false,
             usageSummary = null,
             onToggleUsage = {},
-            reason = reason,
+            note = note,
             checking = checking,
             verdict = verdict,
             onCheck = onCheck,
@@ -173,9 +173,11 @@ class KeyOnboardingTest {
         compose.onNodeWithText("Скопируйте ключ целиком", substring = true).performScrollTo().assertIsDisplayed()
     }
 
-    @Test fun `экран, открытый отказом действия, говорит, почему он здесь`() {
-        keyScreen(reason = "«Понять» делает модель — для неё и нужен ключ.")
+    @Test fun `экран, открытый с отказа, повторяет его причину`() {
+        // Отказ приводит сюда предложением (#452), а экран досказывает его там, где его можно
+        // устранить (#467): человек не должен помнить, ради чего он сюда шёл.
+        keyScreen(note = "AI недоступен — задайте свой ключ")
 
-        compose.onNodeWithText("«Понять» делает модель", substring = true).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("AI недоступен", substring = true).performScrollTo().assertIsDisplayed()
     }
 }

@@ -43,6 +43,7 @@ import com.point.core.flow.UserAiConfig
 import com.point.core.flow.looksLikeApiKey
 import com.point.core.flow.providerForBaseUrl
 import com.point.core.ui.Outcome
+import com.point.core.ui.OutcomeBanner
 import com.point.core.ui.OutcomeCard
 import com.point.core.ui.PortalColumnWidth
 import com.point.core.ui.PortalRow
@@ -81,13 +82,14 @@ import com.point.core.ui.theme.PointTheme
 @Composable
 fun KeyScreen(
     config: UserAiConfig,
+    /** Отказ, который сюда привёл (#467): человек, выброшенный на семь провайдеров молча, получает
+     *  ту самую «общую непонятную ошибку». null — пришёл сам, шестерёнкой, и объяснять нечего. */
+    note: String? = null,
     onSave: (UserAiConfig) -> Unit,
     onCancel: () -> Unit,
     usageEnabled: Boolean,
     usageSummary: UsageSummary?,
     onToggleUsage: (Boolean) -> Unit,
-    /** Почему экран открылся сам: «Понять» делает модель, для неё и нужен ключ (#465). */
-    reason: String? = null,
     /** Идёт ли живая проверка ключа прямо сейчас (#465). */
     checking: Boolean = false,
     /** Чем кончилась проверка — `null`, пока её не запускали (#465). */
@@ -134,13 +136,14 @@ fun KeyScreen(
                 // приглашением на «Недавнем» (`AI_KEY_WHY`): два текста об одном разъезжаются.
                 subtitle = "$AI_KEY_WHY Point работает на вашем ключе и вашей квоте — " +
                     "чужие ключи он не хранит и не просит.",
-                modifier = Modifier.padding(bottom = 9.dp),
+                modifier = Modifier.padding(bottom = if (note == null) 9.dp else 0.dp),
             )
 
-            // Экран, выпрыгнувший после отказа, обязан сказать, почему он здесь (#465).
-            if (reason != null) {
-                OutcomeCard(title = reason, outcome = Outcome.NONE, modifier = Modifier.fillMaxWidth())
-            }
+            // Зачем человека сюда принесло (#467). Стоит НАД списком провайдеров: это ответ на
+            // вопрос, с которым он пришёл, — какой из семи ключей задать. Карточка та же, что под
+            // объектом, и голос тот же: это одна и та же новость, просто досказанная там, где её
+            // можно устранить.
+            if (note != null) OutcomeBanner(message = note, outcome = Outcome.FAILED)
 
             // Выбор провайдера вместо трёх полей наизусть: адрес и модель подставляются сами, а
             // рядом лежит ссылка на страницу, где ключ выдают. Раньше человек должен был знать
@@ -469,7 +472,7 @@ private fun PreviewKeyScreenRefused() = PointTheme(darkTheme = true) {
         usageEnabled = false,
         usageSummary = null,
         onToggleUsage = {},
-        reason = "«Понять» делает модель — для неё и нужен ключ.",
+        note = "AI недоступен — задайте свой ключ",
         verdict = KeyVerdict.Refused(
             what = "Ключ не подошёл",
             fix = "Скопируйте ключ целиком, без пробелов по краям, и проверьте, что он от того " +

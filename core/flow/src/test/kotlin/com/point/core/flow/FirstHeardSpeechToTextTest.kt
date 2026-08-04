@@ -25,8 +25,14 @@ class FirstHeardSpeechToTextTest {
     )
 
     /** Движок с заранее известным исходом; считает, сколько раз его спросили. */
-    private class FakeEngine(private val outcome: Result<Transcription>) : SpeechToText {
+    private class FakeEngine(
+        private val outcome: Result<Transcription>,
+        private val need: SpeechKeyNeed? = null,
+    ) : SpeechToText {
         var calls = 0
+
+        override fun missingKey(): SpeechKeyNeed? = need
+
         override suspend fun transcribe(obj: PointObject): Transcription {
             calls++
             return outcome.getOrThrow()
@@ -38,6 +44,12 @@ class FirstHeardSpeechToTextTest {
             fun silent() = FakeEngine(Result.success(Transcription.Silence))
 
             fun refuses(why: String) = FakeEngine(Result.failure(IllegalStateException(why)))
+
+            /** Ключа нет — движка сегодня нет. Спросят его только по ошибке, и это будет видно. */
+            fun keyless(phrase: String, providerId: String? = null) = FakeEngine(
+                Result.failure(IllegalStateException("этот движок спрашивать было нельзя")),
+                SpeechKeyNeed(phrase, providerId),
+            )
         }
     }
 
@@ -107,6 +119,66 @@ class FirstHeardSpeechToTextTest {
         val e = runCatching { FirstHeardSpeechToText(emptyList()).transcribe(recording) }.exceptionOrNull()
 
         assertTrue(e!!.message!!.contains("Расшифровать некому"))
+    }
+
+    // --- Ключей нет вовсе (#467): владелец живьём получал «общую непонятную ошибку» ---
+
+    @Test
+    fun `ключа нет ни у кого — отказ называет провайдеров и зовёт в настройки`() = runTest {
+        val chain = FirstHeardSpeechToText(
+            listOf(
+                FakeEngine.keyless("Whisper слушает по ключу Groq", GROQ_PROVIDER_ID),
+                FakeEngine.keyless("модель общего назначения — по любому ключу AI"),
+            ),
+        )
+
+        val said = runCatching { chain.transcribe(recording) }.exceptionOrNull()!!.message!!
+
+        assertTrue("назван конкретный провайдер: $said", said.contains("ключу Groq"))
+        assertTrue("сказано, что годится и любой другой: $said", said.contains("любому ключу AI"))
+        assertTrue("сказано, куда идти: $said", said.contains(KEY_SETTINGS_CALL))
+        assertTrue("экран узнаёт такой отказ и откроет ключи", refusalNeedsKey(said))
+    }
+
+    @Test
+    fun `ненастроенный движок не спрашивается вовсе`() = runTest {
+        // Спросить его значило бы положить «нет ключа» в сводку рядом с настоящей причиной второго
+        // — и утопить её. Ключа нет — движка сегодня нет.
+        val keyless = FakeEngine.keyless("Whisper слушает по ключу Groq", GROQ_PROVIDER_ID)
+        val working = FakeEngine.hears("А може до якого ґазди?")
+
+        val heard = FirstHeardSpeechToText(listOf(keyless, working)).transcribe(recording)
+
+        assertEquals("А може до якого ґазди?", (heard as Transcription.Heard).text)
+        assertEquals("ненастроенного не тревожили", 0, keyless.calls)
+    }
+
+    @Test
+    fun `пока слышит хоть кто-то, ключ не нужен`() = runTest {
+        // Подсказка «нужен ключ» до тапа обязана молчать, пока расшифровка работает: полуправда на
+        // экране дороже молчания.
+        val chain = FirstHeardSpeechToText(
+            listOf(FakeEngine.keyless("Whisper слушает по ключу Groq"), FakeEngine.hears("текст")),
+        )
+
+        assertTrue(chain.missingKeys().isEmpty())
+        assertEquals(null, chain.missingKey())
+    }
+
+    @Test
+    fun `нужен ключ виден ДО работы, а не после ожидания`() = runTest {
+        val chain = FirstHeardSpeechToText(
+            listOf(
+                FakeEngine.keyless("Whisper слушает по ключу Groq", GROQ_PROVIDER_ID),
+                FakeEngine.keyless("модель общего назначения — по любому ключу AI"),
+            ),
+        )
+
+        val needs = chain.missingKeys()
+
+        assertEquals(2, needs.size)
+        assertEquals(GROQ_PROVIDER_ID, needs.first().providerId)
+        assertEquals("подсказка и отказ — одни и те же слова", speechKeyRefusal(needs), speechKeyRefusal(chain.missingKeys()))
     }
 
     @Test
