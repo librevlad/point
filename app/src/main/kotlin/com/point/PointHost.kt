@@ -265,6 +265,17 @@ fun PointHost(
             )
 
             frame != null -> Column(Modifier.fillMaxSize()) {
+                // Видимый выход с объекта — единственная дверь, которой не было вовсе.
+                //
+                // Владелец 04.08.2026: «некак вернуться на главный экран». И это была правда: на
+                // экране объекта не стояло ни одной кнопки выхода, а полоса пути показывается
+                // только со второго шага — то есть у свежеоткрытого объекта наверху пусто. Выйти
+                // можно было лишь системным «назад», про который на экране не сказано ни слова.
+                //
+                // Дверь зовёт тот же [onLeave], что и жест: куда она ведёт, решает сама дверь —
+                // с «Недавнего» на «Недавнее», из «Поделиться» наружу. Обещание и поведение
+                // сходятся, второй правды о выходе не заводится.
+                ExitRow(onLeave = onDismissMessage)
                 // The journey so far (#114) — stays put while the object below animates.
                 TimelineStrip(path = state.path, onNode = onJumpTo)
                 AnimatedContent(
@@ -646,4 +657,23 @@ private fun PreviewActionPreview() = PointTheme(darkTheme = true) {
         onConfirm = {},
         onCancel = {},
     )
+}
+
+/**
+ * Дверь наружу с экрана объекта (#114, найдено прогоном 04.08.2026).
+ *
+ * Стоит над путём объекта и всегда: путь появляется только со второго шага, а выйти человек может
+ * захотеть с первого. Слово вместо стрелки — стрелка на этом экране уже занята полосой пути, и
+ * второй знак того же смысла читался бы как «шаг назад по цепочке», а не «уйти к списку».
+ */
+@Composable
+private fun ExitRow(onLeave: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(start = 12.dp, top = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        TextButton(onClick = onLeave) {
+            Text("← Недавнее", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
 }
