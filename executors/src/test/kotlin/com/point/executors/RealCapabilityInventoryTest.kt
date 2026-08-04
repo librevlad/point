@@ -39,7 +39,7 @@ class RealCapabilityInventoryTest {
         ExcelCapability(), ExtractAllCapability(), FindCapability(), ImageCapability(),
         JobReplyCapability(), MapCapability(), MergePdfCapability(), OcrCapability(),
         OfficeCapability(), OpenCapability(), OpenInCapability(), OpenUrlCapability(),
-        PagesCapability(), PairPcCapability(), PcCapability(pairedPc), PdfCapability(),
+        PagesCapability(), PcCapability(pairedPc), PdfCapability(),
         QrCapability(), ReadQrCapability(), RenewPeriodCapability(), ReplaceBgCapability(),
         SaveAllCapability(), SaveCapability(), SaveContactCapability(), ScanCapability(),
         ScanPdfCapability(), ScanPlusCapability(), ShareAllCapability(), ShareCapability(),
