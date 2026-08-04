@@ -290,4 +290,11 @@ data class PcScreenState(
      * компьютер выключен.
      */
     val link: com.point.core.flow.LinkState = com.point.core.flow.LinkState.Never,
+    /**
+     * Идёт ли сейчас поиск компьютеров в сети (#458).
+     *
+     * Блок «Найдено в сети» появлялся, только когда что-то уже нашлось, — и первые секунды экран
+     * выглядел как «ничего нет, вводите руками», хотя именно в этот момент он и искал.
+     */
+    val search: com.point.core.flow.PcSearch = com.point.core.flow.PcSearch.IDLE,
 )

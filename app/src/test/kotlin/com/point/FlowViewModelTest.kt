@@ -103,7 +103,13 @@ class FlowViewModelTest {
         caps: Map<CapabilityId, Set<Intent>> = mapOf(CapabilityId("a") to setOf(Intent.PREPARE)),
         cloud: Set<CapabilityId> = emptySet(),
         slow: Set<CapabilityId> = emptySet(),
+<<<<<<< HEAD
     ) = FlowViewModel(store, FakeRegistry(caps, cloud, slow), resolver, chatResponder, enrichment, history, favorites, usage, chosenApps, userKeys, journal, consent, appLauncher, FakePdfRasterizer(), sensory, sensorySettings, cloudPrivacy, snapshot, crashLog, dispatcher, pins, AppIconResolver { null }, pcPairings, pcTransport, com.point.core.flow.PcDiscovery { kotlinx.coroutines.flow.flowOf(emptyList()) }, basket, pcCaps, com.point.core.flow.InMemoryLinkMonitor(), PulledFileFactory { name -> java.io.File(java.io.File(System.getProperty("java.io.tmpdir")), "pulled-" + name).absolutePath }, noFrames)
+=======
+        discovery: com.point.core.flow.PcDiscovery = com.point.core.flow.PcDiscovery { kotlinx.coroutines.flow.flowOf(emptyList()) },
+        linkMonitor: com.point.core.flow.LinkMonitor = com.point.core.flow.RememberingLinkMonitor(),
+    ) = FlowViewModel(store, FakeRegistry(caps, cloud, slow), resolver, com.point.core.flow.AiChatResponder { _, _, _ -> "ответ" }, enrichment, history, favorites, usage, chosenApps, userKeys, journal, consent, appLauncher, FakePdfRasterizer(), sensory, sensorySettings, cloudPrivacy, snapshot, crashLog, dispatcher, pins, AppIconResolver { null }, pcPairings, pcTransport, discovery, basket, pcCaps, linkMonitor, PulledFileFactory { name -> java.io.File(java.io.File(System.getProperty("java.io.tmpdir")), "pulled-" + name).absolutePath }, noFrames)
+>>>>>>> origin/main
 
     private val chatResponder = FakeChatResponder()
     private val basket = FakeBasket()
@@ -1221,6 +1227,97 @@ class FlowViewModelTest {
         assertEquals(listOf("pc-open"), pcCaps.saved?.map { it.id })
     }
 
+    // --- «Компьютер»: что экран говорит про связь и про поиск (#451, #458) ---
+
+    @Test fun `пока запрос к компьютеру в пути, экран проверяет связь, а не отрицает её (#451)`() = runTest(dispatcher) {
+        // Перезапустили Point: память о вчерашнем контакте пуста. Раньше экран печатал «ещё не
+        // связывались» рядом с адресом давно связанного ПК — утверждение о прошлом, которого не было.
+        pcPairings.pairing = com.point.core.flow.PcPairing("10.0.2.2", 8391, "tok")
+        pcTransport.capsDelayMs = 10_000
+        val vm = vm()
+
+        vm.openPcSettings()
+        dispatcher.scheduler.advanceTimeBy(50) // запрос ушёл, ответа ещё нет
+
+        assertEquals(com.point.core.flow.LinkState.Checking, vm.ui.value.pcScreen?.link)
+
+        advanceUntilIdle()
+        vm.closePcSettings()
+    }
+
+    @Test fun `без пейринга проверять нечего — «ещё не связывались» остаётся честным (#451)`() = runTest(dispatcher) {
+        val vm = vm()
+
+        vm.openPcSettings(); advanceUntilIdle()
+
+        assertEquals(com.point.core.flow.LinkState.Never, vm.ui.value.pcScreen?.link)
+        vm.closePcSettings()
+    }
+
+    @Test fun `вчерашний контакт пережил перезапуск и назван молчанием, а не «ни разу» (#451)`() = runTest(dispatcher) {
+        pcPairings.pairing = com.point.core.flow.PcPairing("10.0.2.2", 8391, "tok")
+        // Прошлый запуск слышал компьютер двадцать минут назад и записал это в журнал.
+        val log = com.point.core.flow.ForgetfulLinkLog().apply {
+            write(com.point.core.flow.LinkMonitor.Contact(System.currentTimeMillis() - 20 * 60_000L, com.point.core.flow.LinkPath.LAN))
+        }
+        val vm = vm(linkMonitor = com.point.core.flow.RememberingLinkMonitor(log))
+
+        vm.openPcSettings(); advanceUntilIdle()
+
+        assertTrue(
+            "забытое — не «ни разу»: было ${vm.ui.value.pcScreen?.link}",
+            vm.ui.value.pcScreen?.link is com.point.core.flow.LinkState.Silent,
+        )
+        vm.closePcSettings()
+    }
+
+    @Test fun `отвязали компьютер — память о связи с ним ушла вместе с ним (#451)`() = runTest(dispatcher) {
+        val monitor = com.point.core.flow.RememberingLinkMonitor(com.point.core.flow.ForgetfulLinkLog())
+        monitor.heard(com.point.core.flow.LinkPath.LAN)
+        val vm = vm(linkMonitor = monitor)
+
+        vm.unpairPc(); advanceUntilIdle()
+
+        assertNull("контакт со вчерашним ПК рассказал бы о следующем чужую правду", monitor.last.value)
+    }
+
+    @Test fun `экран показывает, что ищет компьютеры, и заканчивает поиск словом (#458)`() = runTest(dispatcher) {
+        // Сканер сети живёт, пока экран открыт, и ничего не находит — как в сети с изоляцией клиентов.
+        val silentScan = com.point.core.flow.PcDiscovery {
+            kotlinx.coroutines.flow.flow {
+                emit(emptyList<com.point.core.flow.DiscoveredPc>())
+                kotlinx.coroutines.awaitCancellation()
+            }
+        }
+        val vm = vm(discovery = silentScan)
+
+        vm.openPcSettings()
+        dispatcher.scheduler.advanceTimeBy(50)
+        assertEquals(com.point.core.flow.PcSearch.RUNNING, vm.ui.value.pcScreen?.search)
+
+        dispatcher.scheduler.advanceTimeBy(com.point.core.flow.PC_SEARCH_WINDOW_MS + 1)
+        assertEquals(com.point.core.flow.PcSearch.DONE, vm.ui.value.pcScreen?.search)
+
+        vm.closePcSettings()
+    }
+
+    @Test fun `найденное в сети переживает неудачное рукопожатие (#458)`() = runTest(dispatcher) {
+        // Человек тапнул по строке из списка; список, исчезающий на время попытки, лишает его
+        // возможности попробовать соседнюю.
+        val found = com.point.core.flow.DiscoveredPc("Рабочий ноутбук", "192.168.1.42", 8391)
+        val vm = vm(discovery = com.point.core.flow.PcDiscovery { kotlinx.coroutines.flow.flowOf(listOf(found)) })
+        vm.openPcSettings(); advanceUntilIdle()
+        assertEquals(listOf(found), vm.ui.value.pcScreen?.discovered)
+
+        pcTransport.pairOk = false
+        vm.pairPc("192.168.1.42", 8391); advanceUntilIdle()
+
+        assertEquals(listOf(found), vm.ui.value.pcScreen?.discovered)
+        assertEquals(false, vm.ui.value.pcScreen?.busy)
+        assertTrue(vm.ui.value.pcScreen?.error != null)
+        vm.closePcSettings()
+    }
+
     @Test fun `the basket opens as one collection flow and its count reaches Home (#96)`() = runTest(dispatcher) {
         basket.added += listOf("/b/1-a.txt", "/b/2-b.jpg")
         val vm = vm()
@@ -2125,10 +2222,13 @@ private class FakePcTransport : com.point.core.flow.PcTransport {
     var outbox: List<com.point.core.flow.PcOutboxEntry> = emptyList()
     var outboxFetches = 0
     var downloadOk = true
+    var pairOk = true
+    /** Сколько компьютер думает над «что ты умеешь» — тот самый запрос, пока он в пути (#451). */
+    var capsDelayMs = 0L
     val acked = mutableListOf<Int>()
     var pushedPhoneCaps: List<com.point.core.flow.PcRemoteAction> = emptyList()
     override suspend fun pair(host: String, port: Int, deviceName: String): com.point.core.flow.PcPairing? =
-        com.point.core.flow.PcPairing(host, port, "tok")
+        if (pairOk) com.point.core.flow.PcPairing(host, port, "tok") else null
     override suspend fun send(
         pairing: com.point.core.flow.PcPairing,
         obj: com.point.core.model.PointObject,
@@ -2136,8 +2236,10 @@ private class FakePcTransport : com.point.core.flow.PcTransport {
         meta: Map<String, String>,
         action: String?,
     ): com.point.core.flow.PcSendOutcome = com.point.core.flow.PcSendOutcome.Sent()
-    override suspend fun fetchCaps(pairing: com.point.core.flow.PcPairing): List<com.point.core.flow.PcRemoteAction>? =
-        listOf(com.point.core.flow.PcRemoteAction("pc-open", "Открыть на компьютере"))
+    override suspend fun fetchCaps(pairing: com.point.core.flow.PcPairing): List<com.point.core.flow.PcRemoteAction>? {
+        if (capsDelayMs > 0) kotlinx.coroutines.delay(capsDelayMs)
+        return listOf(com.point.core.flow.PcRemoteAction("pc-open", "Открыть на компьютере"))
+    }
     override suspend fun fetchOutbox(pairing: com.point.core.flow.PcPairing): List<com.point.core.flow.PcOutboxEntry>? {
         outboxFetches++
         return outbox
