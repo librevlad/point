@@ -9,6 +9,7 @@ import com.point.core.flow.ExternalEye
 import com.point.core.flow.Latency
 import com.point.core.flow.LlmClient
 import com.point.core.flow.META_OCR_TEXT_REF
+import com.point.core.flow.META_READ_UPSCALE
 import com.point.core.flow.META_READING_MODE
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.PrivacyLevel
@@ -284,6 +285,15 @@ private suspend fun readWithExternalEye(
                     readingDoubts(reading.text).takeIf { it.isNotEmpty() }?.let { doubts ->
                         put(META_READING_DOUBT, doubts.joinToString("; ") { it.what })
                     }
+                    // Кадр внешнему глазу готовит тот же шов, что и офлайновому движку
+                    // (`OutboundFrames`), а значит мелкий кадр уехал увеличенным (#273) — то же
+                    // происхождение результата, что и режим чтения, и переносится оно так же.
+                    //
+                    // Переносится **наблюдённое**, а не пересчитанное: множитель тут тот, который
+                    // назвало чтение на устройстве. Сам внешний глаз своего множителя пока не
+                    // возвращает (у чтения без геометрии нет слоя, где ему ехать), поэтому
+                    // отсутствие ключа означает «мы этого не наблюдали», а не «кадр не увеличивали».
+                    input.metadata[META_READ_UPSCALE]?.let { put(META_READ_UPSCALE, it) }
                 },
             ),
         )
@@ -324,9 +334,15 @@ private fun chainClosed(level: PrivacyLevel): String = when (level) {
  * его наблюдал движок на картинке, а действует он дальше по цепочке — «В Word+» решает по нему,
  * помечать ли цифры (#267). Без переноса пометка не срабатывала именно там, где нужна: на
  * рукописи, распознанной отдельным шагом (ревью).
+ *
+ * Тем же переносом едет и увеличение кадра (#273): текст получен не с того кадра, что лежит в
+ * файле, а с увеличенной копии, и это происхождение результата — ровно такое же, как «читала
+ * рукопись». Оставь мы его на картинке, дальше по цепочке ответ выглядел бы прочитанным с
+ * исходника.
  */
 private fun ocrMeta(input: PointObject): Map<String, String> = buildMap {
     put("op", "ocr")
     put("engine", "on-device")
     input.metadata[META_READING_MODE]?.let { put(META_READING_MODE, it) }
+    input.metadata[META_READ_UPSCALE]?.let { put(META_READ_UPSCALE, it) }
 }

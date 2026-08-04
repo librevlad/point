@@ -49,23 +49,39 @@ interface OutboundFrames {
  * экономии: стоит поставить сюда более жёсткий предел, чем у офлайнового движка, — и два ридера
  * посмотрят на разные пиксели, а расхождение станет рассказывать про кадр, а не про чтение.
  * Трафик здесь дешевле сравнимости.
+ *
+ * По той же причине **мелкий кадр увеличивается** (#273) — и тем же правилом с тем же входом, что
+ * у офлайнового движка. Это ещё и путь, которым замер получен: провалившийся кадр вылечился именно
+ * тем, что зрячей модели уехала увеличенная копия.
  */
 class BitmapOutboundFrames @Inject constructor() : OutboundFrames {
 
     override suspend fun of(obj: PointObject): OutboundFrame? = withContext(Dispatchers.IO) {
         if (!obj.mime.startsWith("image/")) return@withContext null
         val frame = decodeSelectionFrame(obj.uri.value, PAGE_MAX_PX) ?: return@withContext null
+        // Мелкий кадр увеличивается перед отправкой (#273) — тем же правилом и с тем же входом,
+        // что у офлайнового движка: разъедься они, и расхождение двух чтений рассказывало бы про
+        // размер кадра, а не про чтение. Замер 04.08.2026 делался ровно так — увеличенный кадр
+        // уехал зрячей модели и прочитался целиком.
+        val ready = preparedBitmap(frame.bitmap, knownTextHeightPx(obj))
+        // Исходная копия нужна была ровно до этой строки — держать её рядом с увеличенной всё
+        // сжатие незачем.
+        if (ready.frame !== frame.bitmap) frame.bitmap.recycle()
         try {
             val out = ByteArrayOutputStream()
-            frame.bitmap.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, out)
+            ready.frame.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, out)
             OutboundFrame(
                 bytes = out.toByteArray(),
                 mime = "image/jpeg",
                 fileName = "page.jpg",
-                transform = frame.transform,
+                transform = frame.transform.copy(
+                    upscale = ready.scale,
+                    uprightWidth = ready.frame.width,
+                    uprightHeight = ready.frame.height,
+                ),
             )
         } finally {
-            frame.bitmap.recycle()
+            ready.frame.recycle()
         }
     }
 

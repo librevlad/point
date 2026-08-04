@@ -20,6 +20,7 @@ import com.point.core.flow.EntityExtractor
 import com.point.core.flow.META_ENTITY_PREFIX
 import com.point.core.flow.META_OCR_ATOMS_REF
 import com.point.core.flow.META_OCR_TEXT_REF
+import com.point.core.flow.META_READ_UPSCALE
 import com.point.core.flow.META_READING_MODE
 import com.point.core.flow.readingModeOf
 import com.point.core.flow.ObjectStore
@@ -87,6 +88,11 @@ class OcrEnricher @Inject constructor(
         // Но только если движок дочитал (#262): слой, отрезанный пределом времени, ничего не
         // наблюдал до конца, и «рукопись» из него — происхождение, которого не было.
         val mode = read?.takeIf { it.incomplete == null }?.let { readingModeOf(it) }
+        // Кадр увеличивали перед чтением (#273) — это происхождение результата, и оно видно так же,
+        // как режим чтения: пишется до гейтов, переживает историю и переезд на ПК. Ключа нет —
+        // читали кадр как есть. Множитель приходит из самого слоя, а не из отдельного канала:
+        // соврать про него нельзя, им же считаются адреса всех слов.
+        val zoom = layer.transform?.upscale?.takeIf { it > 1 }?.toString()
         val evidenceOnly = EnrichmentDelta(
             // Слой есть — значит, у страницы есть адресуемые слова, даже когда гейт мусора ниже
             // не пустил их в текст (#279): искать по такой странице можно, и «Найти в документе»
@@ -96,6 +102,7 @@ class OcrEnricher @Inject constructor(
             metadata = buildMap {
                 atomsRef?.let { put(META_OCR_ATOMS_REF, it.value) }
                 mode?.let { put(META_READING_MODE, it.name) }
+                zoom?.let { put(META_READ_UPSCALE, it) }
             },
         )
         val raw = layer.text
@@ -141,6 +148,7 @@ class OcrEnricher @Inject constructor(
                 putAll(amountFacts(text.take(MAX_CHARS)))
                 putAll(receiptFacts(text.take(MAX_CHARS)))
                 mode?.let { put(META_READING_MODE, it.name) }
+                zoom?.let { put(META_READ_UPSCALE, it) }
                 put(META_OCR_TEXT_REF, ref.value)
                 atomsRef?.let { put(META_OCR_ATOMS_REF, it.value) }
             },

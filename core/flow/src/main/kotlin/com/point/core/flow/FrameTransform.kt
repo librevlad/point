@@ -12,26 +12,40 @@ package com.point.core.flow
  * OCR снимок доворачивают, иначе движок читает боковые строки как мусор. После этого координаты
  * живут в повёрнутой копии, а исходный файл остался боком.
  *
+ * Третья — увеличение (#273). Мелкий кадр перед чтением растягивают целым
+ * множителем ([readingUpscale]), и движок отдаёт координаты в системе растянутой копии. Без
+ * [upscale] здесь адрес слова уехал бы ровно во столько же раз — та самая тихая ложь, которую на
+ * глаз не видно: текст правильный, место чужое.
+ *
  * ADR-0001 требует держать оба пространства сразу: сырое как основное, преобразование рядом.
  *
  * @param sample во сколько раз уменьшили длинную сторону (`inSampleSize`); 1 — не уменьшали.
  * @param rotationDegrees на сколько довернули по часовой стрелке: 0, 90, 180 или 270.
  * @param uprightWidth ширина довёрнутой копии — та, в системе которой пришли координаты.
  * @param uprightHeight высота довёрнутой копии.
+ * @param upscale во сколько раз увеличили копию перед чтением; 1 — не увеличивали.
  */
 data class FrameTransform(
     val sample: Int,
     val rotationDegrees: Int = 0,
     val uprightWidth: Int = 0,
     val uprightHeight: Int = 0,
+    val upscale: Int = 1,
 ) {
 
     init {
         require(sample >= 1) { "sample must be >= 1, was $sample" }
+        require(upscale >= 1) { "upscale must be >= 1, was $upscale" }
         require(rotationDegrees in ROTATIONS) { "rotation must be one of $ROTATIONS, was $rotationDegrees" }
     }
 
-    /** Место [box] в сыром кадре: сперва отменяем доворот, затем возвращаем масштаб. */
+    /**
+     * Место [box] в сыром кадре: сперва отменяем доворот, затем возвращаем масштаб.
+     *
+     * Порядок именно такой: доворот отменяется по размерам **читанной копии** ([uprightWidth] /
+     * [uprightHeight] — они уже с учётом увеличения), а масштаб возвращает и прореживание, и
+     * растяжение одним движением.
+     */
     fun toRaw(box: Box): Box = unrotate(box).scaled()
 
     /**
@@ -64,11 +78,12 @@ data class FrameTransform(
         }
     }
 
-    private fun Box.scaled(): Box =
-        Box(left * sample, top * sample, right * sample, bottom * sample)
+    /** Прореживание и увеличение — один множитель: копия во столько раз мельче сырого кадра. */
+    private val k: Float get() = sample.toFloat() / upscale
 
-    private fun Box.unscaled(): Box =
-        Box(left / sample, top / sample, right / sample, bottom / sample)
+    private fun Box.scaled(): Box = Box(left * k, top * k, right * k, bottom * k)
+
+    private fun Box.unscaled(): Box = Box(left / k, top / k, right / k, bottom / k)
 
     private companion object {
         val ROTATIONS = setOf(0, 90, 180, 270)

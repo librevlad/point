@@ -29,7 +29,10 @@ object AtomCodec {
     fun encode(layer: AtomLayer): String = buildString {
         appendLine(HEADER)
         layer.transform?.let {
-            appendLine("$TRANSFORM sample=${it.sample} rotation=${it.rotationDegrees} w=${it.uprightWidth} h=${it.uprightHeight}")
+            appendLine(
+                "$TRANSFORM sample=${it.sample} rotation=${it.rotationDegrees} " +
+                    "w=${it.uprightWidth} h=${it.uprightHeight} upscale=${it.upscale}",
+            )
         }
         // Причина неполноты — часть дословного дампа (#262): фикстура отрезанного по времени
         // чтения без пометки выдала бы огрызок за всё, что движок увидел на кадре.
@@ -66,6 +69,11 @@ object AtomCodec {
                         rotationDegrees = kv.getValue("rotation"),
                         uprightWidth = kv.getValue("w"),
                         uprightHeight = kv.getValue("h"),
+                        // Единственное поле с умолчанием, и это не послабление строгости: дампы,
+                        // снятые до #273, увеличения не знали, и «увеличивали в 1 раз» — правда
+                        // про них, а не догадка. Уронить на них тест значило бы выбросить
+                        // фикстуры устройства — то есть то, чем мы меряем.
+                        upscale = kv["upscale"] ?: 1,
                     )
                 }
                 line.startsWith(READER_TEXT) -> readerText = unb64(line.removePrefix(READER_TEXT).trim())
