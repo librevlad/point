@@ -27,22 +27,25 @@ class HomeActivity : ComponentActivity() {
     private val viewModel: FlowViewModel by viewModels()
 
     /**
-     * «Принять файл» (#388): экран ожидания отдаёт приехавший файл, и он входит в Point ровно той
-     * же дверью, что расшаренный, — обычным объектом. Отмена (RESULT_CANCELED) молчит: человек сам
-     * только что закрыл ожидание.
+     * Источники объекта (#456) — нужны экрану только именами: подпись двери «Новый объект»
+     * перечисляет их поимённо, чтобы камера, голос, буфер и место перестали быть догадкой.
+     *
+     * Фильтр `isAvailable` — тот же, что на экране выбора: назвать источник, которого на этом
+     * телефоне нет, значит соврать. Он спрашивает `PackageManager`, поэтому считается один раз.
      */
-    private val receiveLauncher = registerForActivityResult(
-        androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult(),
-    ) { result ->
-        val path = result.data?.getStringExtra(com.point.source.ReceiveActivity.EXTRA_PATH)
-        val mime = result.data?.getStringExtra(com.point.source.ReceiveActivity.EXTRA_MIME)
-        if (result.resultCode == RESULT_OK && !path.isNullOrBlank()) {
-            viewModel.onShared(Uri.fromFile(java.io.File(path)).toString(), mime ?: "application/octet-stream")
-        }
+    @javax.inject.Inject lateinit var sources: Set<@JvmSuppressWildcards com.point.source.ObjectSource>
+
+    private val sourceLabels: List<String> by lazy {
+        sources.filter { it.isAvailable(this) }.map { it.label }.sorted()
     }
 
-    private fun receiveFile() {
-        receiveLauncher.launch(android.content.Intent(this, com.point.source.ReceiveActivity::class.java))
+    /**
+     * Дверь «Новый объект» (#456): пять источников за одним тапом. Раньше вход был один — плитка
+     * шторки, которую надо было самому найти в редакторе плиток, — и «Принять файл» единственный
+     * из пяти имел здесь свою иконку. Теперь он стоит среди своих, и отдельный путь ему не нужен.
+     */
+    private fun newObject() {
+        startActivity(android.content.Intent(this, com.point.source.SourcePickerActivity::class.java))
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -89,7 +92,8 @@ class HomeActivity : ComponentActivity() {
                             onOpen = viewModel::openFromHistory,
                             onSettings = viewModel::openKeySettings,
                             onPc = viewModel::openPcSettings,
-                            onReceive = ::receiveFile,
+                            onNewObject = ::newObject,
+                            sourceLabels = sourceLabels,
                             onClear = viewModel::clearHistory,
                             clipboard = clipboard,
                             onUseClipboard = ::useClipboard,

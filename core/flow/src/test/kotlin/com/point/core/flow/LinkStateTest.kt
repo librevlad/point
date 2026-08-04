@@ -71,4 +71,34 @@ class LinkStateTest {
         val state = linkStateOf(now + 10_000, LinkPath.LAN, now)
         assertEquals(LinkState.Live(LinkPath.LAN, 0), state)
     }
+
+    // --- Пока запрос в пути (#451) ---
+
+    @Test
+    fun `запрос в пути, а прошлого нет — «проверяю», а не «ещё не связывались»`() {
+        // Тот самый экран из #451: связывались вчера, память о контакте не пережила перезапуск.
+        // «Ещё не связывались» — утверждение о прошлом, которого не было.
+        val state = linkStateOf(lastContactAt = null, path = null, now = now, probing = true)
+        assertEquals(LinkState.Checking, state)
+        assertEquals("проверяю связь…", linkLabel(state))
+    }
+
+    @Test
+    fun `запрос в пути поверх старого молчания — тоже «проверяю»`() {
+        // Приговор «молчит два часа» вынесен ДО того, как компьютер успел ответить.
+        assertEquals(LinkState.Checking, linkStateOf(now - 120 * minute, LinkPath.LAN, now, probing = true))
+    }
+
+    @Test
+    fun `свежий контакт запрос не гасит — мигать вместо ответа незачем`() {
+        // Ответ у человека уже есть, и он верный: гасить «на связи» на секунду проверки значит
+        // мигать вместо того, чтобы сообщать.
+        assertEquals(LinkState.Live(LinkPath.LAN, 5_000), linkStateOf(now - 5_000, LinkPath.LAN, now, probing = true))
+    }
+
+    @Test
+    fun `запроса нет — «ещё не связывались» остаётся честным ответом`() {
+        // Состояние никуда не делось: оно правдиво ровно тогда, когда правда никого не спрашивали.
+        assertEquals(LinkState.Never, linkStateOf(lastContactAt = null, path = null, now = now, probing = false))
+    }
 }
