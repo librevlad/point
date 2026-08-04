@@ -21,7 +21,7 @@ class RelayPollerLiveTest {
 
     @Test
     fun `a sealed frame round-trips through the live relay into the poller`() {
-        assumeTrue("no relay secret (CI / no local.properties)", RelayEnv.APP_SECRET.isNotBlank())
+        assumeTrue("no relay secret (CI / no local.properties)", LiveServer.configured)
         assumeTrue("relay unreachable (offline run)", relayUp)
         val token = "point-e2e-${System.nanoTime()}"
         val payload = "relay-e2e-payload".toByteArray()
@@ -34,7 +34,7 @@ class RelayPollerLiveTest {
         val latch = CountDownLatch(1)
         var name: String? = null
         var bytes: ByteArray? = null
-        val poller = RelayPoller(RelayEnv.URL, RelayEnv.APP_SECRET, token) { n, _, _, b, _ ->
+        val poller = RelayPoller(LiveServer.url, { LiveServer.pass }, token) { n, _, _, b, _ ->
             name = n; bytes = b; latch.countDown()
         }
         poller.start()
@@ -47,12 +47,12 @@ class RelayPollerLiveTest {
     }
 
     private fun postBlob(mailbox: String, blob: ByteArray) {
-        val c = URL("${RelayEnv.URL.trimEnd('/')}/mbx/$mailbox").openConnection() as HttpsURLConnection
+        val c = URL("${LiveServer.url.trimEnd('/')}/mbx/$mailbox").openConnection() as HttpsURLConnection
         c.sslSocketFactory = RelayTls.socketFactory
         c.requestMethod = "POST"
         c.connectTimeout = 5_000
         c.readTimeout = 10_000
-        c.setRequestProperty("X-Point-App", RelayEnv.APP_SECRET)
+        c.setRequestProperty("Authorization", "Bearer " + LiveServer.pass)
         c.doOutput = true
         c.setFixedLengthStreamingMode(blob.size)
         c.outputStream.use { it.write(blob) }
@@ -64,7 +64,7 @@ class RelayPollerLiveTest {
         /** One probe per JVM: is the live relay reachable at all? Offline runs skip, not fail. */
         val relayUp: Boolean by lazy {
             runCatching {
-                val c = (URL("${RelayEnv.URL.trimEnd('/')}/health").openConnection() as HttpsURLConnection)
+                val c = (URL("${LiveServer.url.trimEnd('/')}/health").openConnection() as HttpsURLConnection)
                 c.sslSocketFactory = RelayTls.socketFactory
                 c.connectTimeout = 4_000
                 c.readTimeout = 4_000

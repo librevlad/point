@@ -28,6 +28,7 @@ mlkitEntityExtraction = "16.0.0-beta6"
 mlkitBarcode = "17.3.0"
 mlkitSubjectSegmentation = "16.0.0-beta1"
 zxing = "3.5.3"
+securityCrypto = "1.1.0-alpha06"
 junit = "4.13.2"
 robolectric = "4.16.1"
 
@@ -70,6 +71,9 @@ mlkit-barcode = { group = "com.google.mlkit", name = "barcode-scanning", version
 mlkit-subject-segmentation = { group = "com.google.android.gms", name = "play-services-mlkit-subject-segmentation", version.ref = "mlkitSubjectSegmentation" } # on-device subject cutout (transparent PNG)
 kotlinx-coroutines-play-services = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-play-services", version.ref = "coroutines" } # await() for ML Kit Tasks
 zxing-core = { group = "com.google.zxing", name = "core", version.ref = "zxing" } # QR encode (pure Java → BitMatrix)
+
+# Пропуск аккаунта лежит шифрованным (#472): долгоживущий ключ к своим объектам — не то же, что обычные app-private prefs.
+androidx-security-crypto = { group = "androidx.security", name = "security-crypto", version.ref = "securityCrypto" }
 
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 json = { group = "org.json", name = "json", version = "20240303" } # real org.json for JVM unit tests

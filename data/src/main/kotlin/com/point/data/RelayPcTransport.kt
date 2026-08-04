@@ -27,7 +27,8 @@ import kotlinx.coroutines.withContext
  * relay only ever holds ciphertext. Relay is **send-only** here — everything else stays on LAN.
  */
 class RelayPcTransport(
-    private val appSecret: String,
+    /** Пропуск устройства в аккаунте (#473): общего пароля приложения больше нет, у каждого свой. */
+    private val pass: () -> String?,
     private val connectTimeoutMs: Int = 5_000,
     private val readTimeoutMs: Int = 20_000,
 ) : PcTransport {
@@ -59,7 +60,7 @@ class RelayPcTransport(
             c.requestMethod = "POST"
             c.connectTimeout = connectTimeoutMs
             c.readTimeout = readTimeoutMs
-            c.setRequestProperty("X-Point-App", appSecret)
+            pass()?.let { c.setRequestProperty("Authorization", "Bearer $it") }
             c.doOutput = true
             c.setFixedLengthStreamingMode(blob.size)
             c.outputStream.use { it.write(blob) }
@@ -116,7 +117,7 @@ class RelayPcTransport(
             body = encodePcCaps(caps).toByteArray(Charsets.UTF_8),
         ) != null
 
-    private val rpc = RelayRpcClient(appSecret)
+    private val rpc = RelayRpcClient(pass)
 
     private companion object {
         const val TO_PC = "to-pc"

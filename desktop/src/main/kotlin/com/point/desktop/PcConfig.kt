@@ -6,8 +6,19 @@ import java.io.File
 import java.net.InetAddress
 import java.security.SecureRandom
 
-/** The PC's identity: one long-lived token (reset revokes every phone at once). */
-data class PcConfig(val token: String, val name: String, val port: Int)
+/**
+ * Что компьютер знает о себе.
+ *
+ * [token] — пропуск быстрого пути по локальной сети. Он уже не общий и не ездит ни в каком QR
+ * — это внутреннее служебное значение одного хопа, и срез 6 (#475) снимает его совсем, заменяя
+ * подписанным кадром. Кто владеет этим компьютером, живёт отдельно — в `~/.point-pc/account`
+ * ([FileAccountStore]): пропуск аккаунта и адрес машины в сети — разные вещи с разной судьбой.
+ *
+ * [server] — адрес сервера Point; пусто значит `PointServer.DEFAULT_URL`. Раньше адрес запекался
+ * в сборку задачей `generateRelayEnv` вместе с общим паролем приложения; пароля больше нет (#419),
+ * а адрес — обычная настройка рядом с именем и портом.
+ */
+data class PcConfig(val token: String, val name: String, val port: Int, val server: String = "")
 
 /**
  * Stored in `~/.point-pc/config` using the protocol's own k=v codec — dogfooding
@@ -23,6 +34,7 @@ class FilePcConfig(private val baseDir: File) {
             token = stored["token"] ?: newToken(),
             name = stored["name"] ?: hostName(),
             port = stored["port"]?.toIntOrNull() ?: DEFAULT_PORT,
+            server = stored["server"].orEmpty(),
         )
         if (stored.isEmpty()) save(config)
         return config
@@ -33,7 +45,12 @@ class FilePcConfig(private val baseDir: File) {
     private fun save(config: PcConfig) {
         file.writeText(
             encodePcMeta(
-                mapOf("token" to config.token, "name" to config.name, "port" to config.port.toString()),
+                mapOf(
+                    "token" to config.token,
+                    "name" to config.name,
+                    "port" to config.port.toString(),
+                    "server" to config.server,
+                ),
             ),
         )
     }

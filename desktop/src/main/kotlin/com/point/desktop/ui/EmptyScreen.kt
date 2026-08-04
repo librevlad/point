@@ -1,6 +1,5 @@
 package com.point.desktop.ui
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -8,7 +7,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -20,7 +18,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -43,6 +40,8 @@ fun EmptyScreen(
     addresses: List<String>,
     port: Int,
     onTakeClipboard: () -> Unit = {},
+    /** Круг устройств аккаунта (#473) — на месте, где стояла карточка с QR. */
+    devices: (@Composable () -> Unit)? = null,
 ) {
     Row(
         modifier = Modifier.fillMaxSize().padding(horizontal = 56.dp),
@@ -85,7 +84,9 @@ fun EmptyScreen(
             }
         }
 
-        ConnectCard(config, addresses, port)
+        // Связывать больше нечего: телефон, вошедший в тот же аккаунт, уже в круге. На месте QR
+        // стоит то, что человеку теперь правда нужно видеть — что у него есть и на связи ли оно (#472).
+        devices?.invoke()
     }
 }
 
@@ -135,46 +136,5 @@ private fun WayIn(title: String, dot: Color, hotkey: String? = null, onClick: ((
                     .padding(horizontal = 6.dp, vertical = 2.dp),
             )
         }
-    }
-}
-
-/** «Подключить телефон»: QR, адрес и имя ПК — вся история связи на одной карточке. */
-@Composable
-private fun ConnectCard(config: PcConfig, addresses: List<String>, port: Int) {
-    Column(
-        modifier = Modifier.width(340.dp)
-            .clip(RoundedCornerShape(20.dp))
-            .background(PointColors.surface.copy(alpha = 0.85f))
-            .border(1.dp, PointColors.border, RoundedCornerShape(20.dp))
-            .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        Text("ПОДКЛЮЧИТЬ ТЕЛЕФОН", style = PointType.label)
-        val payload = remember(addresses, port) {
-            val host = addresses.firstOrNull() ?: "127.0.0.1"
-            // #161 v2: релей едет в QR тоже, чтобы телефон нашёл ПК и вне общей сети.
-            val relay = com.point.desktop.RelayEnv.URL.takeIf { it.isNotBlank() }
-            com.point.core.flow.PcPairing(host, port, config.token, relay).qrPayload()
-        }
-        Box(
-            Modifier.size(212.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .background(Color.White)
-                .padding(12.dp),
-        ) {
-            Image(qrImage(payload), contentDescription = "QR для пейринга", modifier = Modifier.fillMaxSize())
-        }
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            Text("Point на телефоне → Компьютер", style = PointType.small)
-            addresses.forEach { address ->
-                Text("$address : $port", style = PointType.title.copy(fontSize = PointType.body.fontSize))
-            }
-            Text("Имя: ${config.name} · релей как запас", style = PointType.small)
-        }
-        Spacer(Modifier.height(1.dp).fillMaxWidth().background(PointColors.border))
     }
 }

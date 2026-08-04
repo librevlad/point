@@ -41,7 +41,7 @@ class RelayLiveLinkTest {
 
     /** Свой токен на прогон: чужие письма в общем ящике нас не касаются, наши — никого. */
     private val token = "live-link-${System.nanoTime()}"
-    private val base = RelayEnv.URL.trimEnd('/')
+    private val base = LiveServer.url.trimEnd('/')
 
     private var poller: RelayRequestPoller? = null
 
@@ -52,7 +52,7 @@ class RelayLiveLinkTest {
 
     @Test
     fun `компьютер отвечает телефону через релей`() {
-        assumeTrue("релей не настроен — пропускаем", RelayEnv.URL.isNotBlank() && RelayEnv.APP_SECRET.isNotBlank())
+        assumeTrue("релей не настроен — пропускаем", LiveServer.configured)
         assumeTrue("релей не отвечает — пропускаем", relayAlive())
 
         val caps = listOf(
@@ -61,8 +61,8 @@ class RelayLiveLinkTest {
         )
         val contacts = mutableListOf<Long>()
         poller = RelayRequestPoller(
-            relayUrl = RelayEnv.URL,
-            appSecret = RelayEnv.APP_SECRET,
+            relayUrl = LiveServer.url,
+            pass = { LiveServer.pass },
             token = token,
             remoteActions = { caps },
             outbox = Outbox(File(System.getProperty("java.io.tmpdir"), "point-live-link-$token")),
@@ -81,12 +81,12 @@ class RelayLiveLinkTest {
 
     @Test
     fun `связать устройства можно без локальной сети`() {
-        assumeTrue("релей не настроен — пропускаем", RelayEnv.URL.isNotBlank() && RelayEnv.APP_SECRET.isNotBlank())
+        assumeTrue("релей не настроен — пропускаем", LiveServer.configured)
         assumeTrue("релей не отвечает — пропускаем", relayAlive())
 
         poller = RelayRequestPoller(
-            relayUrl = RelayEnv.URL,
-            appSecret = RelayEnv.APP_SECRET,
+            relayUrl = LiveServer.url,
+            pass = { LiveServer.pass },
             token = token,
             remoteActions = { emptyList() },
             outbox = Outbox(File(System.getProperty("java.io.tmpdir"), "point-live-pair-$token")),
@@ -101,7 +101,7 @@ class RelayLiveLinkTest {
 
     @Test
     fun `очередь на телефон проходит через релей целиком`() {
-        assumeTrue("релей не настроен — пропускаем", RelayEnv.URL.isNotBlank() && RelayEnv.APP_SECRET.isNotBlank())
+        assumeTrue("релей не настроен — пропускаем", LiveServer.configured)
         assumeTrue("релей не отвечает — пропускаем", relayAlive())
 
         val dir = File(System.getProperty("java.io.tmpdir"), "point-live-outbox-$token")
@@ -118,8 +118,8 @@ class RelayLiveLinkTest {
         )
 
         poller = RelayRequestPoller(
-            relayUrl = RelayEnv.URL,
-            appSecret = RelayEnv.APP_SECRET,
+            relayUrl = LiveServer.url,
+            pass = { LiveServer.pass },
             token = token,
             remoteActions = { emptyList() },
             outbox = outbox,
@@ -209,7 +209,7 @@ class RelayLiveLinkTest {
             sslSocketFactory = RelayTls.socketFactory
             connectTimeout = 5_000
             readTimeout = readSeconds * 1000
-            setRequestProperty("X-Point-App", RelayEnv.APP_SECRET)
+            setRequestProperty("Authorization", "Bearer " + LiveServer.pass)
         }
 
     private companion object {

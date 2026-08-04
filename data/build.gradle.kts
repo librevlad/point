@@ -34,10 +34,11 @@ android {
         // release физически не видит local.properties.
         buildConfigField("String", "GEMINI_API_KEY", "\"\"")
 
-        // Relay (#161 v2): the app-wide shared secret for the blind relay (sent as X-Point-App). The
-        // relay URL itself travels in the pairing (QR ?r=), so only the secret is build-baked here.
+        // Адрес сервера Point. Секретом он не является и никогда не являлся; пусто — берётся
+        // `PointServer.DEFAULT_URL`. Общий пароль приложения (`RELAY_APP_SECRET`, ездил в заголовке
+        // `X-Point-App`) удалён вместе с самой вещью (#419): в мире с аккаунтами пропуск у каждого
+        // свой и отзывается поимённо, а раздаваемый артефакт не несёт ни одного секрета.
         buildConfigField("String", "RELAY_URL", "\"\"")
-        buildConfigField("String", "RELAY_APP_SECRET", "\"\"")
         // Gemini models tried in order. Pro стоял первым — «лучшее, если доступно», и это
         // ничего не стоило, пока бесплатная квота Pro не кончилась насовсем: замер на живой
         // ведомости (02.08.2026) даёт от него 429 за 14 с — плату берёт каждое действие, а
@@ -142,7 +143,6 @@ android {
             // осознанно; всё, что уходит людям, собирается release-вариантом и ключей не несёт.
             buildConfigField("String", "GEMINI_API_KEY", prop("GEMINI_API_KEY"))
             buildConfigField("String", "RELAY_URL", prop("RELAY_URL"))
-            buildConfigField("String", "RELAY_APP_SECRET", prop("RELAY_APP_SECRET"))
             buildConfigField("String", "ANTHROPIC_API_KEY", prop("ANTHROPIC_API_KEY"))
             buildConfigField("String", "OPENAI_API_KEY", prop("OPENAI_API_KEY"))
             buildConfigField("String", "OPENROUTER_API_KEY", prop("OPENROUTER_API_KEY"))
@@ -164,13 +164,12 @@ android {
         // нести (инвариант «ни один секрет не попадает в раздаваемый артефакт», пойманный на
         // v0.2.0). Свой ключ человек вводит в приложении.
         //
-        // А вот релей едет: без его адреса и общего секрета связь телефона с компьютером не
-        // работает вовсе, а именно она — смысл этой сборки. Секрет релея не даёт доступа к
-        // содержимому: релей слепой, он умеет только «положить» и «забрать» запечатанное письмо.
+        // А вот адрес сервера едет — но только адрес. Общего пароля приложения больше не
+        // существует ни в одной сборке (#419): связь телефона с компьютером опирается на пропуск
+        // аккаунта, а он рождается при входе и лежит шифрованным на самом устройстве.
         create("dogfood") {
             initWith(getByName("release"))
             buildConfigField("String", "RELAY_URL", prop("RELAY_URL"))
-            buildConfigField("String", "RELAY_APP_SECRET", prop("RELAY_APP_SECRET"))
         }
     }
 
@@ -204,6 +203,7 @@ dependencies {
     implementation(libs.mlkit.subject.segmentation) // on-device subject cutout → transparent PNG
     implementation(libs.kotlinx.coroutines.play.services) // await() for ML Kit Tasks
     implementation(libs.zxing.core) // QR encode (pure Java → BitMatrix → Bitmap)
+    implementation(libs.androidx.security.crypto) // пропуск аккаунта в EncryptedSharedPreferences (#472)
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
 

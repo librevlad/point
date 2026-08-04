@@ -125,6 +125,12 @@ class FlowViewModel @Inject constructor(
     private val frames: SelectionFrames,
     /** Кто стучится в сервис ключом человека, когда тот просит проверить (#465). */
     private val aiKeyCheck: com.point.core.flow.AiKeyCheck,
+    /** Пропуск аккаунта на этом устройстве (#472). */
+    private val accountStore: com.point.core.flow.AccountStore,
+    /** Разговор с сервером Point: вход, круг устройств, отзыв (#472). */
+    private val accountClient: com.point.core.flow.AccountClient,
+    /** Открыть системный браузер — единственное, что вход просит у платформы (#472). */
+    private val browser: com.point.core.flow.BrowserOpener,
 ) : ViewModel() {
 
     /**
@@ -291,6 +297,7 @@ class FlowViewModel @Inject constructor(
 
     fun onShared(sourceUri: String, mime: String, autoAction: String? = null) {
         freshShareArrived = true
+        gateSignIn()
         val voice = claimVoice()
         // Отменить нечем: за приёмом расшаренного файла экрана Point ещё нет, и кнопка увела бы
         // человека в пустоту с одним словом «Отменено» (#114).
@@ -336,6 +343,7 @@ class FlowViewModel @Inject constructor(
      *  e.g. several photos to merge into a PDF). */
     fun onSharedMultiple(sources: List<String>) {
         freshShareArrived = true
+        gateSignIn()
         val voice = claimVoice()
         raiseBusy("Открываю…", cancelable = false) // как и в onShared: возвращаться некуда
         trackWork(viewModelScope.launch {
@@ -488,6 +496,7 @@ class FlowViewModel @Inject constructor(
 
     fun openFromHistory(entry: HistoryEntry) {
         freshShareArrived = true
+        gateSignIn()
         val voice = claimVoice()
         // Пришли с «Недавнего» — туда же и возвращаемся, если человек передумал.
         raiseBusy("Открываю…", cancelable = true)
@@ -1146,148 +1155,214 @@ class FlowViewModel @Inject constructor(
     fun closeKeySettings() =
         _ui.update { it.copy(keyScreen = null, keyScreenNote = null, keyVerdict = null, keyChecking = false) }
 
-    // --- «Компьютер» (#147): pair once, then the «На компьютер» bubble appears. ---
+    // --- Аккаунт и круг устройств (#472). Пейринга как действия больше нет. ---
 
     private var discoveryJob: Job? = null
 
-    /** Правка только живого экрана связи: закрыли — правке некуда ложиться, и она не воскрешает его. */
-    private fun updatePc(block: (PcScreenState) -> PcScreenState) {
-        _ui.update { s -> s.pcScreen?.let { s.copy(pcScreen = block(it)) } ?: s }
+    /** Правка только живого экрана устройств: закрыли — правке некуда ложиться. */
+    private fun updateDevices(block: (DevicesScreenState) -> DevicesScreenState) {
+        _ui.update { s -> s.devicesScreen?.let { s.copy(devicesScreen = block(it)) } ?: s }
     }
 
-    /** Идёт ли прямо сейчас запрос к компьютеру (#451) — пока идёт, экран говорит «проверяю связь…». */
-    private val pcProbing = kotlinx.coroutines.flow.MutableStateFlow(false)
+    /** Ход входа — один и тот же на телефоне и на ПК, поэтому живёт в `:core:flow`. */
+    private val signInDriver by lazy {
+        com.point.core.flow.SignInDriver(accountClient, accountStore, browser)
+    }
 
-    fun openPcSettings() {
-        val pairing = pcPairings.current()
-        _ui.update {
-            it.copy(pcScreen = PcScreenState(pairing = pairing), busy = null, message = null, messageOutcome = Outcome.NONE)
-        }
-        // Состояние связи следует за контактами, а не за таймером.
-        //
-        // Сначала здесь стоял цикл «раз в секунду пересчитать» — и он вешал тесты намертво:
-        // бесконечная корутина в viewModelScope не даёт `runTest` завершиться, и прогон CI висел
-        // час сорок вместо трёх минут. Бесконечный цикл ради секундной точности — плохая цена;
-        // экран и так перерисуется, когда компьютер отзовётся.
-        //
-        // Вторая половина ответа — сам запрос (#451): пока он в пути, о связи ещё нечего утверждать,
-        // и экран говорит «проверяю связь…» вместо приговора о прошлом.
-        pcProbing.value = pairing != null
-        linkJob?.cancel()
-        linkJob = viewModelScope.launch {
-            kotlinx.coroutines.flow.combine(linkMonitor.last, pcProbing) { contact, probing ->
-                com.point.core.flow.linkStateOf(
-                    contact?.at, contact?.path, System.currentTimeMillis(), probing,
-                )
-            }.collect { link -> updatePc { it.copy(link = link) } }
-        }
-        // #80 v2: the natural sync point — the PC may have gained abilities since pairing.
-        // Он же и есть тот самый запрос, по которому видно, жив ли компьютер: удачный ход
-        // рассказывает монитору о контакте, неудачный оставляет прежний ответ в силе.
-        pairing?.let {
-            viewModelScope.launch {
-                runCatching { pcTransport.fetchCaps(it)?.let { caps -> pcCaps.save(caps) } }
-                pcProbing.value = false
-            }
-        }
-        refreshFromPc(force = true)
-        discoveryJob?.cancel()
-        discoveryJob = viewModelScope.launch {
-            updatePc { it.copy(search = com.point.core.flow.PcSearch.RUNNING) }
-            // Окно поиска (#458): mDNS в сети с изоляцией клиентов не ответит никогда, и пульс без
-            // конца был бы вторым враньём поверх первого. Сам сканер при этом продолжает работать —
-            // компьютер, включённый позже, всё равно появится в списке.
-            val window = launch {
-                kotlinx.coroutines.delay(com.point.core.flow.PC_SEARCH_WINDOW_MS)
-                updatePc { it.copy(search = com.point.core.flow.PcSearch.DONE) }
-            }
-            runCatching {
-                pcDiscovery.discover().collect { found -> updatePc { it.copy(discovered = found) } }
-            }
-            window.cancel()
-            updatePc { it.copy(search = com.point.core.flow.PcSearch.DONE) }
+    private var signInJob: Job? = null
+
+    /**
+     * Поднять дверь входа, если её ещё не проходили (#472).
+     *
+     * **Вход — первый экран до объекта.** Дверь встаёт ровно там, где начинается работа с объектом
+     * (шаринг, «Недавнее», набор) и там, где спрашивают про круг устройств. Пока Point не знает,
+     * чьё это устройство, круга нет — и объекту место за этой дверью, а не перед ней. Сам объект
+     * при этом не теряется: он ждёт под экраном и открывается сразу после входа.
+     *
+     * Оболочка приложения — «Недавнее» с его дверями — гейтом не накрывается намеренно. Она не
+     * объект, а прихожая; человек, поставивший Point минуту назад, должен доходить до ключа AI и до
+     * экрана устройств своим ходом, а не упираться в стену раньше, чем что-нибудь увидел (#465).
+     */
+    private fun gateSignIn() {
+        if (accountStore.current() == null) {
+            _ui.update { it.copy(signIn = com.point.core.flow.SignIn.SignedOut) }
         }
     }
 
-    private var linkJob: kotlinx.coroutines.Job? = null
-
-    fun closePcSettings() {
-        linkJob?.cancel()
-        pcProbing.value = false
-        refreshFromPc() // #161: Home is about to show — its banner must be current
-        discoveryJob?.cancel()
-        discoveryJob = null
-        _ui.update { it.copy(pcScreen = null) }
+    /** Начать вход: сервер заводит вход, браузер спрашивает человека, экран показывает код. */
+    fun signIn() {
+        signInJob?.cancel()
+        signInJob = viewModelScope.launch {
+            signInDriver.signIn(deviceName(), com.point.core.flow.DeviceKind.PHONE) { state ->
+                _ui.update { it.copy(signIn = state) }
+            }
+        }
     }
 
-    /** Pair straight from a scanned QR / deep link (`point-pc://host:port/token`). The token
-     *  rides in the payload, so — unlike [pairPc] — no `/pair` round-trip to the PC is needed:
-     *  the QR being visible on the PC IS the consent, and pairing works even before the PC is
-     *  reachable (e.g. firewall). Opens the «Компьютер» screen showing the paired state. */
-    fun pairFromPayload(payload: String) {
-        val pairing = com.point.core.flow.parsePcPairing(payload)
-        if (pairing == null) {
-            _ui.update { it.copy(message = "Это не код подключения Point для ПК", messageOutcome = Outcome.FAILED) }
+    /** Передумал: опрос гаснет, экран возвращается к одной кнопке. Тупика на входе нет (#114). */
+    fun cancelSignIn() {
+        signInJob?.cancel()
+        signInJob = null
+        _ui.update { it.copy(signIn = com.point.core.flow.SignIn.SignedOut) }
+    }
+
+    /** Вошли — дверь уходит, и под ней оказывается то, ради чего Point открывали. */
+    fun dismissSignIn() {
+        _ui.update { it.copy(signIn = null) }
+    }
+
+    /** Открыть страницу входа ещё раз: браузер закрывают, не дойдя до конца. */
+    fun openSignInPage(url: String) = browser.open(url)
+
+    /** Есть ли на экране дверь входа — Activity решает по этому, что рисовать. */
+    fun hasSignInGate(): Boolean = _ui.value.signIn != null
+
+    /**
+     * «Мои устройства» — тот же экран, что был экраном компьютера.
+     *
+     * Круг приезжает с сервера при открытии экрана и после входа — тем же правилом «не в каждом
+     * шаринге», что действует для `/caps` (#80). Пока он едет, на экране уже стоит то устройство,
+     * которое Point знает про себя: пустой список был бы враньём о своём же круге.
+     */
+    fun openDevices() {
+        val account = accountStore.current()
+        if (account == null) {
+            gateSignIn()
             return
         }
+        val self = com.point.core.flow.CircleDevice(
+            id = account.deviceId,
+            kind = com.point.core.flow.DeviceKind.PHONE,
+            name = account.deviceName.ifBlank { deviceName() },
+            lastSeenMillis = System.currentTimeMillis(),
+            self = true,
+        )
         _ui.update {
             it.copy(
-                pcScreen = (it.pcScreen ?: PcScreenState()).copy(pairing = pcPairings.current(), busy = true, error = null),
-                message = null,
-                messageOutcome = Outcome.NONE,
+                devicesScreen = DevicesScreenState(email = account.email, devices = listOf(self), loading = true),
+                busy = null, message = null, messageOutcome = Outcome.NONE,
             )
         }
-        viewModelScope.launch {
-            runCatching { pcPairings.save(pairing) }
-            runCatching { pcTransport.fetchCaps(pairing)?.let { caps -> pcCaps.save(caps) } }
-            runCatching { pcTransport.pushPhoneCaps(pairing, PHONE_ADVERTISED) }
-            refreshFromPc(force = true)
-            _ui.update {
-                it.copy(pcScreen = (it.pcScreen ?: PcScreenState()).copy(pairing = pairing, busy = false, error = null))
+        viewModelScope.launch { loadCircle(account) }
+        // #80 v2: тот же естественный момент синхронизации, что и раньше. Компьютер мог обзавестись
+        // умениями с прошлого раза, а экран устройств — как раз тот, ради которого о них спрашивают.
+        pcPairings.current()?.let { pairing ->
+            viewModelScope.launch {
+                runCatching { pcTransport.fetchCaps(pairing)?.let { caps -> pcCaps.save(caps) } }
             }
         }
-    }
-
-    fun pairPc(host: String, port: Int) {
-        // Найденное в сети и ход поиска переживают рукопожатие: человек тапнул по строке из списка,
-        // и список, исчезающий на время попытки, лишает его возможности попробовать соседнюю.
-        _ui.update { it.copy(pcScreen = (it.pcScreen ?: PcScreenState()).copy(pairing = pcPairings.current(), busy = true, error = null)) }
-        viewModelScope.launch {
-            val device = "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}"
-            val pairing = runCatching { pcTransport.pair(host, port, device) }.getOrNull()
-            if (pairing != null) {
-                runCatching { pcPairings.save(pairing) }
-                // #80: remember what the PC can do — its actions become bubbles from
-                // the next launch (synthesis reads the warm cache at process start).
-                runCatching { pcTransport.fetchCaps(pairing)?.let { caps -> pcCaps.save(caps) } }
-                runCatching { pcTransport.pushPhoneCaps(pairing, PHONE_ADVERTISED) }
-                refreshFromPc(force = true) // #161: the fresh pairing may already have a queue
-                updatePc { it.copy(pairing = pairing, busy = false, error = null) }
-            } else {
-                updatePc {
-                    it.copy(
-                        pairing = pcPairings.current(),
-                        busy = false,
-                        error = "Не удалось связаться — проверьте адрес и подтвердите на компьютере",
-                    )
+        // Локальная сеть остаётся быстрым путём, и находит она себя сама: если компьютера в памяти
+        // ещё нет, а в сети он есть — телефон здоровается с ним молча, без QR и без ввода адреса.
+        // Это перевалочный шов: срез 6 (#475) заменит рукопожатие подписанным кадром и снимет его
+        // совсем. Пейрингом как ДЕЙСТВИЕМ человека это уже не является — экрана у него нет.
+        discoveryJob?.cancel()
+        discoveryJob = viewModelScope.launch {
+            if (pcPairings.current() != null) return@launch
+            val window = launch {
+                kotlinx.coroutines.delay(com.point.core.flow.PC_SEARCH_WINDOW_MS)
+                discoveryJob?.cancel()
+            }
+            runCatching {
+                pcDiscovery.discover().collect { found ->
+                    val pc = found.firstOrNull() ?: return@collect
+                    if (pcPairings.current() == null) linkToPcOnLan(pc.host, pc.port)
                 }
             }
+            window.cancel()
         }
     }
 
-    fun unpairPc() {
-        viewModelScope.launch {
-            runCatching { pcPairings.clear() }
-            runCatching { pcCaps.clear() }
-            // Связи больше нет ни с кем — и утверждать о ней нечего: память о контакте уходит
-            // вместе с пейрингом, иначе вчерашний компьютер рассказывал бы о следующем чужую
-            // правду (#451). Найденное в сети остаётся: отвязываются, чтобы связаться с другим.
-            runCatching { linkMonitor.forget() }
-            updatePc {
-                it.copy(pairing = null, busy = false, error = null, link = com.point.core.flow.LinkState.Never)
+    fun closeDevices() {
+        discoveryJob?.cancel()
+        discoveryJob = null
+        refreshFromPc() // #161: Home is about to show — its banner must be current
+        _ui.update { it.copy(devicesScreen = null) }
+    }
+
+    /**
+     * Спросить сервер, какие устройства у человека есть.
+     *
+     * Три ответа разводятся, потому что чинятся разным: круг приехал, до сервера не дозвонились
+     * (прошлое знание в силе) и «это устройство отключили» — последнее поднимает дверь входа тут же,
+     * а не оставляет человека с молчаливо сломанным Point.
+     */
+    private suspend fun loadCircle(account: com.point.core.flow.PointAccount) {
+        val answer = runCatching { accountClient.circle(account) }
+            .getOrDefault(com.point.core.flow.CircleAnswer.Unreachable)
+        when (answer) {
+            is com.point.core.flow.CircleAnswer.Circle ->
+                updateDevices { it.copy(devices = answer.devices, loading = false, error = null) }
+            com.point.core.flow.CircleAnswer.Unreachable -> updateDevices {
+                it.copy(
+                    loading = false,
+                    error = "Не удалось спросить сервер о ваших устройствах — проверьте интернет",
+                )
             }
+            com.point.core.flow.CircleAnswer.Revoked -> forgetAccount(com.point.core.flow.ACCOUNT_REVOKED)
         }
     }
+
+    /**
+     * Отключить устройство круга — своё или чужое.
+     *
+     * Отключённое получает `401` на следующем же запросе, стирает своё состояние и показывает вход.
+     * Отключили это устройство — дверь входа поднимается прямо здесь: молчаливый выход человек
+     * прочитал бы как поломку.
+     */
+    fun revokeDevice(deviceId: String) {
+        val account = accountStore.current() ?: return
+        updateDevices { it.copy(busy = true, error = null) }
+        viewModelScope.launch {
+            val ok = runCatching { accountClient.revoke(account, deviceId) }.getOrDefault(false)
+            if (!ok) {
+                updateDevices { it.copy(busy = false, error = "Сервер не отключил устройство — попробуйте ещё раз") }
+                return@launch
+            }
+            if (deviceId == account.deviceId) {
+                forgetAccount(com.point.core.flow.SignIn.SignedOut)
+                return@launch
+            }
+            updateDevices { it.copy(busy = false) }
+            loadCircle(account)
+        }
+    }
+
+    /** «Выйти»: устройство и его ящики уходят с сервера, экран возвращается ко входу. */
+    fun signOut() {
+        val account = accountStore.current() ?: return
+        updateDevices { it.copy(busy = true, error = null) }
+        viewModelScope.launch {
+            runCatching { accountClient.signOut(account) }
+            forgetAccount(com.point.core.flow.SignIn.SignedOut)
+        }
+    }
+
+    /** Стереть всё, что это устройство знало про аккаунт и про свой компьютер. */
+    private suspend fun forgetAccount(next: com.point.core.flow.SignIn) {
+        runCatching { accountStore.clear() }
+        runCatching { pcPairings.clear() }
+        runCatching { pcCaps.clear() }
+        runCatching { linkMonitor.forget() }
+        _ui.update { it.copy(devicesScreen = null, signIn = next) }
+    }
+
+    /**
+     * Поздороваться с компьютером по локальной сети (перевалочный шов до среза 6, #475).
+     *
+     * Экрана и тапа у этого нет: адрес приносит mDNS, согласие даёт сам компьютер своим окном.
+     * Молчит — молчим и мы: круг устройств от этого не меняется, а шуметь отказом рукопожатия,
+     * которого человек не заказывал, значило бы врать, будто он что-то сделал не так.
+     */
+    private suspend fun linkToPcOnLan(host: String, port: Int) {
+        val pairing = runCatching { pcTransport.pair(host, port, deviceName()) }.getOrNull() ?: return
+        runCatching { pcPairings.save(pairing) }
+        runCatching { pcTransport.fetchCaps(pairing)?.let { caps -> pcCaps.save(caps) } }
+        runCatching { pcTransport.pushPhoneCaps(pairing, PHONE_ADVERTISED) }
+        refreshFromPc(force = true)
+    }
+
+    /** Как это устройство представляется в круге. */
+    private fun deviceName(): String = "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}".trim()
 
     // --- Cloud consent (#10): nothing leaves the device before the user agrees once. ---
 
@@ -1673,8 +1748,8 @@ class FlowViewModel @Inject constructor(
             closeKeySettings()
             return true
         }
-        if (_ui.value.pcScreen != null) {
-            closePcSettings()
+        if (_ui.value.devicesScreen != null) {
+            closeDevices()
             return true
         }
         if (_ui.value.inputPrompt != null || _ui.value.needsImage != null) {

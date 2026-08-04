@@ -23,7 +23,7 @@ class RelayPcClipboardSyncTest {
     fun `an over-cap payload fails as TOO_BIG before touching the network`() = runTest {
         val big = ClipboardPayload("image/png", "huge.png", ByteArray(51 * 1024 * 1024))
 
-        val result = RelayPcClipboardSync("secret").push(pairing, big)
+        val result = RelayPcClipboardSync(pass = { "пропуск" }).push(pairing, big)
 
         assertEquals(ClipPush.Failed(ClipFail.TOO_BIG), result)
     }

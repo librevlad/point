@@ -10,6 +10,7 @@ import com.point.core.flow.KIND_PERSON
 import com.point.core.flow.KIND_PHONE
 import com.point.core.flow.KIND_URL
 import androidx.compose.material.icons.filled.Apps
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Article
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.AutoFixHigh
@@ -52,6 +53,7 @@ import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.ShoppingBasket
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material.icons.filled.Smartphone
 import androidx.compose.material.icons.filled.Sms
 import androidx.compose.material.icons.filled.TableChart
 import androidx.compose.material.icons.filled.Tag
@@ -82,6 +84,9 @@ fun bubbleIcon(key: String): ImageVector = when (if (key.startsWith("app:")) "op
     "excel" -> Icons.Filled.TableChart
     "renew" -> Icons.Filled.EventRepeat
     "pc" -> Icons.Filled.Computer
+    // Круг устройств (#472): телефон рядом с компьютером, и аккаунт, которым они связаны.
+    "phone" -> Icons.Filled.Smartphone
+    "account" -> Icons.Filled.AccountCircle
     "scan" -> Icons.Filled.DocumentScanner
     "camera" -> Icons.Filled.PhotoCamera
     "cutout" -> Icons.Filled.ContentCut
@@ -130,6 +135,8 @@ fun bubbleColor(key: String): Color = when (if (key.startsWith("app:")) "open-in
     "link" -> Color(0xFF2F80ED)     // blue — open link
     "compress" -> Color(0xFF0EA5A5) // teal — image
     "pc" -> Color(0xFF0EA5E9)       // sky — continue on PC
+    "phone" -> Color(0xFF0EA5E9)    // sky — тот же цвет семьи устройств: телефон и ПК — одно и то же сословие
+    "account" -> Color(0xFF7B5CFF) // АКЦЕНТ1 — аккаунт и есть главное действие своего экрана
     "scan" -> Color(0xFF6366F1)     // indigo — scan
     "camera" -> Color(0xFF6366F1)   // indigo — снять кадр: та же семья, что скан
     "cutout" -> Color(0xFF0EA5A5)   // teal — remove background

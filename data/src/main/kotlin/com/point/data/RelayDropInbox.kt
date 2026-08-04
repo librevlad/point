@@ -28,7 +28,8 @@ import kotlinx.coroutines.withContext
  */
 class RelayDropInbox(
     private val relayUrl: String,
-    private val appSecret: String,
+    /** Пропуск устройства в аккаунте (#473): общего пароля приложения больше нет, у каждого свой. */
+    private val pass: () -> String?,
     /** Сколько релей держит запрос, пока никто ничего не положил (его потолок — 30 с). */
     private val waitSeconds: Int = 25,
 ) : DropInbox {
@@ -104,7 +105,7 @@ class RelayDropInbox(
     }
 
     private fun base(): String? =
-        relayUrl.trimEnd('/').takeIf { it.isNotBlank() && appSecret.isNotBlank() }
+        relayUrl.trimEnd('/').takeIf { it.isNotBlank() && !pass().isNullOrBlank() }
 
     private fun connect(url: String, method: String): HttpsURLConnection =
         (URL(url).openConnection() as HttpsURLConnection).apply {
@@ -112,6 +113,6 @@ class RelayDropInbox(
             requestMethod = method
             connectTimeout = 10_000
             readTimeout = 20_000
-            setRequestProperty("X-Point-App", appSecret)
+            pass()?.let { setRequestProperty("Authorization", "Bearer $it") }
         }
 }

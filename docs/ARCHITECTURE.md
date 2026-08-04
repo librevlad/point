@@ -649,3 +649,27 @@ Robolectric. Это практический выхлоп принципа «max
   проваленной; у долей есть пол (40 слов, 24 ячейки), чтобы короткий документ не браковался за длину.
 - **Шапка** после свода чтений красится по содержимому (`survivedHeaderRows`): строка, поднятая
   выше заголовка выравниванием, больше не выдаётся за шапку.
+
+**Срез «вход по аккаунту вместо пейринга» (#472, #473) — клиентская половина:**
+- **Модель одна на две витрины** и живёт в `:core:flow`: `PointAccount`/`CircleDevice`/`SignIn`,
+  швы `AccountClient`/`AccountStore`/`BrowserOpener`, ход входа `SignInDriver` и единственная
+  реализация `HttpAccountClient`. Телефон и ПК зовут один и тот же код и говорят одними словами
+  (тексты — тоже константы `:core:flow`). Свой читатель JSON (`Json.kt`) — чтобы модуль остался
+  без единой зависимости (`org.json` есть только на Android).
+- **Устройство не держит учётных данных Google вовсе**: `/auth/start` → браузер → опрос
+  `/auth/session/<id>` (с `claim_token` в заголовке) → `device_id` + `device_token`. `client_secret`
+  живёт только на сервере. Ручки — те, что построил срез 2 (#471); «Выйти» = отзыв себя, отдельной
+  ручки у него нет.
+- **Хранение пропуска**: телефон — `EncryptedAccountStore` (`EncryptedSharedPreferences`, ключ в Android
+  Keystore); ПК — `FileAccountStore` (`~/.point-pc/account`, права только владельцу).
+- **Экраны**: `SignInScreen` + `MyDevicesScreen` (телефон, язык `PortalSurfaces`), `SignInPane` +
+  `MyDevicesPane` (ПК). `PairPcScreen`, `PairPcAction`, `PcPairingEnricher`, `Feature.HAS_PC_PAIRING`,
+  `point-pc://`-intent-filter и QR в окне ПК — удалены.
+- **Секрет из артефактов вынут (#419)**: `generateRelayEnv` и `RelayEnv.APP_SECRET` удалены,
+  `BuildConfig.RELAY_APP_SECRET` удалён; все клиенты релея шлют `Authorization: Bearer <device_token>`
+  вместо `X-Point-App`. Адрес сервера — `PointServer.DEFAULT_URL` с переопределением
+  (`BuildConfig.RELAY_URL` на телефоне, `~/.point-pc/config` на ПК).
+- **Что осталось срезам 5–7**: `PcPairing` ещё жив как внутренний адрес быстрого пути по
+  локальной сети — но шагом человека быть перестал: адрес приносит mDNS, согласие даёт сам
+  компьютер своим окном. Ключи устройств (#474), локальная сеть без токена (#475) и ящики
+  под аккаунтом (#476) — следующие срезы.
