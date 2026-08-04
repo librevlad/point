@@ -878,17 +878,31 @@ class FlowViewModel @Inject constructor(
 
     // --- AI chat (#4): a multi-turn conversation grounded in the object ---
 
-    /** Open the chat over [obj] (from «Спросить AI»). Cloud consent is already granted by onBubble. */
+    /** Идущий вопрос к модели (#453): его можно остановить, и его ответ имеет право прийти
+     *  в закрытый экран — разговор ждёт человека там, где он его оставил. */
+    private var chatJob: Job? = null
+
+    /**
+     * Открыть разговор об [obj] (тап «Спросить AI»). Согласие на облако уже взято в `onBubble`.
+     *
+     * Разговор об ЭТОМ объекте не начинается заново (#453): если он уже был, экран возвращается к
+     * нему целиком — вместе с идущим вопросом, если тот ещё в пути. Новый пустой заводится только
+     * под новый объект: разговор принадлежит своему объекту, и переносить сказанное на чужой было
+     * бы хуже, чем начать с чистого листа.
+     */
     private fun openChat(obj: PointObject) {
         _ui.update {
+            val kept = it.chat?.takeIf { c -> c.obj.id == obj.id }
             it.copy(
-                chat = ChatState(obj = obj, suggestions = aiSuggestions(obj.state.kind)),
+                chat = kept ?: ChatState(obj = obj, suggestions = aiSuggestions(obj.state.kind)),
+                chatOpen = true,
                 busy = null, inputPrompt = null, message = null, messageOutcome = Outcome.NONE,
             )
         }
     }
 
-    fun closeChat() = _ui.update { it.copy(chat = null) }
+    /** «Назад» из разговора: закрывается экран, а не разговор (#453). */
+    fun closeChat() = _ui.update { it.copy(chatOpen = false) }
 
     /**
      * Send a chat message. A «сделай word/excel/pdf» request produces a real object and lands on it
@@ -900,30 +914,71 @@ class FlowViewModel @Inject constructor(
         if (message.isEmpty() || chat.pending) return
         val history = chat.messages
         val obj = chat.obj
-        _ui.update { it.copy(chat = chat.copy(messages = history + ChatMessage(ChatRole.USER, message), pending = true)) }
-        viewModelScope.launch {
+        _ui.update {
+            it.copy(
+                chat = chat.copy(
+                    messages = history + ChatMessage(ChatRole.USER, message),
+                    pending = true,
+                    notice = null, // новый вопрос отменяет прошлую остановку — она про прошлый
+                ),
+            )
+        }
+        chatJob?.cancel()
+        chatJob = viewModelScope.launch {
             val target = aiTransformTarget(message)
             if (target != null) {
-                val result = runCatching { resolver.realizerFor(target).perform(obj, null) }.getOrNull()
+                val result = runCatching { resolver.realizerFor(target).perform(obj, null) }
+                    // Остановленное человеком не договаривает: без этого отмена доезжала бы до
+                    // реплики «Не удалось создать документ» — отказ, которого не было.
+                    .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
+                    .getOrNull()
                 if (result is ActionResult.Success) {
                     runCatching { sensory.success() }
-                    _ui.update { it.copy(chat = null) } // leave the chat and continue on the new object
+                    // Экран уходит на новый объект, разговор остаётся при своём (#453).
+                    _ui.update { s -> s.copy(chat = s.chat?.copy(pending = false), chatOpen = false) }
                     pushFrame(store.put(result.result), target, null)
                 } else {
                     appendChatAssistant((result as? ActionResult.Failure)?.reason ?: "Не удалось создать документ")
                 }
             } else {
                 val reply = runCatching { aiChatResponder.reply(obj, history, message) }
-                    .getOrElse { "Не получилось ответить: ${it.message ?: "ошибка"}" }
+                    .getOrElse {
+                        if (it is kotlinx.coroutines.CancellationException) throw it
+                        "Не получилось ответить: ${it.message ?: "ошибка"}"
+                    }
                 appendChatAssistant(reply)
             }
         }
     }
 
+    /**
+     * Остановить идущий вопрос (#453). Кнопки отмены у разговора не было вовсе: пока модель
+     * думает, поле ввода погашено, и человеку оставалось только ждать или уйти — а ушедшему
+     * ответ выбрасывался молча вместе с потраченной квотой.
+     *
+     * Остановка говорит словами и не притворяется репликой собеседника: заданный вопрос остаётся
+     * в разговоре, ответа под ним нет, и сказано, почему.
+     */
+    fun cancelChatMessage() {
+        val job = chatJob ?: return
+        chatJob = null
+        job.cancel()
+        _ui.update { s -> s.chat?.let { c -> s.copy(chat = c.copy(pending = false, notice = "Ответ остановлен")) } ?: s }
+    }
+
+    /** Ответ ложится в разговор, а не на экран: закрытый экран больше не выбрасывает пришедшее
+     *  молча (#453) — человек вернётся и увидит ответ, за который уже заплачена квота. */
     private fun appendChatAssistant(text: String) {
+        chatJob = null
         _ui.update { s ->
             val c = s.chat ?: return@update s
-            s.copy(chat = c.copy(messages = c.messages + ChatMessage(ChatRole.ASSISTANT, text), pending = false))
+            s.copy(
+                chat = c.copy(
+                    messages = c.messages + ChatMessage(ChatRole.ASSISTANT, text),
+                    pending = false,
+                    notice = null,
+                ),
+            )
         }
     }
 
@@ -933,8 +988,16 @@ class FlowViewModel @Inject constructor(
         // A tiny prefs read; the store is warmed when it's created (Activity start), so it
         // is in-memory by the time the gear or an AI-no-key failure summons the screen.
         _ui.update {
+            // Отказ, ради которого сюда и пришли, экран ключей не стирает (#452): человек,
+            // нажавший «Отмена», возвращается к объекту, где причина по-прежнему сказана словами.
+            // Всё остальное сказанное — стирается, как раньше: «Ключ AI сохранён» из прошлого
+            // захода не имеет отношения к этому.
+            val refusal = keyOfferLabel(it.message) != null
             it.copy(
-                keyScreen = userKeys.read() ?: UserAiConfig.DEFAULT, busy = null, message = null, messageOutcome = Outcome.NONE, inputPrompt = null,
+                keyScreen = userKeys.read() ?: UserAiConfig.DEFAULT, busy = null,
+                message = it.message.takeIf { _ -> refusal },
+                messageOutcome = if (refusal) it.messageOutcome else Outcome.NONE,
+                inputPrompt = null,
                 soundEnabled = runCatching { sensorySettings.isSoundEnabled() }.getOrDefault(true),
                 privacyLevel = runCatching { cloudPrivacy.level() }
                     .getOrDefault(com.point.core.flow.PrivacyLevel.DEFAULT),
@@ -1424,9 +1487,13 @@ class FlowViewModel @Inject constructor(
             is ActionResult.Failure -> {
                 runCatching { sensory.failure() } // M4: a failure bumps, never buzzes long
                 runCatching { journal.record(UsageEvent(UsageEventType.FAILED, bubble.capabilityId.value)) }
-                // A "no AI key" failure summons the key screen on demand instead of just erroring.
-                if (result.reason.contains("задайте свой ключ")) openKeySettings()
-                else _ui.update { it.copy(busy = null, busyStage = null, message = result.reason, messageOutcome = Outcome.FAILED) }
+                // Отказ говорит сам за себя — любой, включая «нет ключа» (#452). Раньше этот один
+                // подменялся экраном настроек, а причина при этом стиралась: человек тапал
+                // «Понять», ждал и получал экран про ключи без единого слова о том, почему тот
+                // открылся. «Отмена» возвращала его к объекту, где не осталось ничего, — снаружи
+                // неотличимо от «действие ничего не сделало». Экран ключей теперь стоит рядом с
+                // причиной предложением ([keyOfferLabel]), по которому человек идёт сам.
+                _ui.update { it.copy(busy = null, busyStage = null, message = result.reason, messageOutcome = Outcome.FAILED) }
             }
             is ActionResult.NeedsInput -> {
                 pendingBubble = bubble
@@ -1478,8 +1545,8 @@ class FlowViewModel @Inject constructor(
             declineCloud()
             return true
         }
-        if (_ui.value.chat != null) {
-            closeChat() // #4: back leaves the chat, returning to the object
+        if (openChatOf(_ui.value) != null) {
+            closeChat() // #4: back leaves the chat, returning to the object (#453: разговор остаётся)
             return true
         }
         if (_ui.value.keyScreen != null) {
@@ -1555,6 +1622,10 @@ class FlowViewModel @Inject constructor(
 
     fun endFlow() {
         cancelEnrichment()
+        // Флоу кончился — кончился и разговор о его объекте (#453): держать вопрос в пути некому,
+        // и ответ, пришедший в пустоту, ляжет в разговор, которого больше нет.
+        chatJob?.cancel()
+        chatJob = null
         stack.clear()
         pendingBubble = null
         pendingPreviewBubble = null

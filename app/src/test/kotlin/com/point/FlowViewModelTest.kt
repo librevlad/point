@@ -105,8 +105,9 @@ class FlowViewModelTest {
         slow: Set<CapabilityId> = emptySet(),
         discovery: com.point.core.flow.PcDiscovery = com.point.core.flow.PcDiscovery { kotlinx.coroutines.flow.flowOf(emptyList()) },
         linkMonitor: com.point.core.flow.LinkMonitor = com.point.core.flow.RememberingLinkMonitor(),
-    ) = FlowViewModel(store, FakeRegistry(caps, cloud, slow), resolver, com.point.core.flow.AiChatResponder { _, _, _ -> "ответ" }, enrichment, history, favorites, usage, chosenApps, userKeys, journal, consent, appLauncher, FakePdfRasterizer(), sensory, sensorySettings, cloudPrivacy, snapshot, crashLog, dispatcher, pins, AppIconResolver { null }, pcPairings, pcTransport, discovery, basket, pcCaps, linkMonitor, PulledFileFactory { name -> java.io.File(java.io.File(System.getProperty("java.io.tmpdir")), "pulled-" + name).absolutePath }, noFrames)
+    ) = FlowViewModel(store, FakeRegistry(caps, cloud, slow), resolver, chatResponder, enrichment, history, favorites, usage, chosenApps, userKeys, journal, consent, appLauncher, FakePdfRasterizer(), sensory, sensorySettings, cloudPrivacy, snapshot, crashLog, dispatcher, pins, AppIconResolver { null }, pcPairings, pcTransport, discovery, basket, pcCaps, linkMonitor, PulledFileFactory { name -> java.io.File(java.io.File(System.getProperty("java.io.tmpdir")), "pulled-" + name).absolutePath }, noFrames)
 
+    private val chatResponder = FakeChatResponder()
     private val basket = FakeBasket()
     private val pcCaps = FakePcCaps()
     private val pcPairings = FakePcPairings()
@@ -1439,13 +1440,65 @@ class FlowViewModelTest {
         assertEquals(UserAiConfig.DEFAULT, vm.ui.value.keyScreen)
     }
 
-    @Test fun `an AI no-key failure opens the key screen on demand`() = runTest(dispatcher) {
+    /**
+     * #452: отказ «нет ключа» подменялся экраном настроек, и причина при этом стиралась. Человек
+     * тапал «Понять», ждал и видел экран про ключи без единого слова о том, почему тот открылся.
+     */
+    @Test fun `отказ «нет ключа» остаётся сказанным, а не подменяется экраном настроек`() = runTest(dispatcher) {
+        resolver.result = ActionResult.Failure("AI недоступен — задайте свой ключ", recoverable = true)
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.onBubble(bubble()); advanceUntilIdle()
+
+        assertEquals("AI недоступен — задайте свой ключ", vm.ui.value.message)
+        assertEquals(Outcome.FAILED, vm.ui.value.messageOutcome)
+        assertNull("экран ключей больше не открывается сам за человека", vm.ui.value.keyScreen)
+        assertEquals("Задать свой ключ AI", keyOfferLabel(vm.ui.value.message))
+    }
+
+    /** Предложение есть только у того отказа, который ключом и чинится: предложить ключ там, где
+     *  он ни при чём, — выдумать человеку причину. */
+    @Test fun `обычный отказ ключа не предлагает`() = runTest(dispatcher) {
+        resolver.result = ActionResult.Failure("Не удалось прочитать страницу", recoverable = true)
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.onBubble(bubble()); advanceUntilIdle()
+
+        assertNull(keyOfferLabel(vm.ui.value.message))
+    }
+
+    /** «Отмена» на экране ключей возвращает к объекту, где причина по-прежнему сказана словами:
+     *  иначе человек остаётся ни с чем, а это неотличимо от «действие ничего не сделало» (#452). */
+    @Test fun `отказ переживает поход за ключом и «Отмену»`() = runTest(dispatcher) {
         resolver.result = ActionResult.Failure("AI недоступен — задайте свой ключ", recoverable = true)
         val vm = vm()
         vm.onShared("uri", "image/png"); advanceUntilIdle()
         vm.onBubble(bubble()); advanceUntilIdle()
 
-        assertTrue(vm.ui.value.keyScreen != null) // summoned on demand, not just an error
+        vm.openKeySettings(); advanceUntilIdle()
+        assertEquals("AI недоступен — задайте свой ключ", vm.ui.value.message)
+
+        vm.closeKeySettings()
+
+        assertEquals("AI недоступен — задайте свой ключ", vm.ui.value.message)
+        assertEquals(Outcome.FAILED, vm.ui.value.messageOutcome)
+    }
+
+    /** Обратная половина: всё прочее сказанное экран ключей стирает, как и раньше, — «Ключ AI
+     *  сохранён» из прошлого захода к этому отношения не имеет. */
+    @Test fun `постороннее сообщение экран ключей всё так же стирает`() = runTest(dispatcher) {
+        resolver.result = ActionResult.Done("Готово")
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        vm.onBubble(bubble()); advanceUntilIdle()
+        assertEquals("Готово", vm.ui.value.message)
+
+        vm.openKeySettings(); advanceUntilIdle()
+
+        assertNull(vm.ui.value.message)
+        assertEquals(Outcome.NONE, vm.ui.value.messageOutcome)
     }
 
     @Test fun `saveAiConfig stores the key and closes the screen`() = runTest(dispatcher) {
@@ -1579,7 +1632,88 @@ class FlowViewModelTest {
         vm.onBubble(bubble(id = "ai")); advanceUntilIdle()
 
         assertTrue(vm.ui.value.chat != null)                  // the chat opened
+        assertTrue(vm.ui.value.chatOpen)
         assertEquals("__unset__", resolver.lastAmendment)     // no one-shot realizer ran
+    }
+
+    // --- Разговор переживает «назад», а идущий вопрос отменяем (#453) ---
+
+    /** Открыть разговор, спросить и получить ответ — исходное состояние для тестов ниже. */
+    private fun kotlinx.coroutines.test.TestScope.chattingVm(): FlowViewModel {
+        consent.granted = true
+        val vm = cloudVm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        vm.onBubble(bubble(id = "ai")); advanceUntilIdle()
+        vm.sendChatMessage("что тут написано?"); advanceUntilIdle()
+        return vm
+    }
+
+    @Test fun `«назад» из разговора закрывает экран, а не стирает разговор`() = runTest(dispatcher) {
+        val vm = chattingVm()
+        assertEquals(2, vm.ui.value.chat?.messages?.size)      // вопрос и ответ
+
+        assertTrue(vm.onBack())                               // «назад» — к объекту
+
+        assertNull("экрана разговора нет", openChatOf(vm.ui.value))
+        assertEquals("сказанное осталось", 2, vm.ui.value.chat?.messages?.size)
+    }
+
+    @Test fun `повторное «Спросить AI» возвращает в тот же разговор`() = runTest(dispatcher) {
+        val vm = chattingVm()
+        vm.onBack()
+
+        vm.onBubble(bubble(id = "ai")); advanceUntilIdle()
+
+        assertEquals(2, openChatOf(vm.ui.value)?.messages?.size)
+    }
+
+    /** Разговор принадлежит своему объекту: перенести сказанное на другой было бы хуже, чем
+     *  начать с чистого листа. */
+    @Test fun `новый объект начинает разговор заново`() = runTest(dispatcher) {
+        val vm = chattingVm()
+        vm.onBack()
+        resolver.result = ActionResult.Success(ResultObject(ObjectKind.TEXT, "text/plain", ScratchRef("/o")))
+        vm.onBubble(bubble(id = "cloudx")); advanceUntilIdle()  // получился новый объект
+
+        vm.onBubble(bubble(id = "ai")); advanceUntilIdle()
+
+        assertEquals(0, openChatOf(vm.ui.value)?.messages?.size)
+    }
+
+    @Test fun `идущий вопрос можно остановить, и остановка сказана словами`() = runTest(dispatcher) {
+        consent.granted = true
+        chatResponder.inFlight = kotlinx.coroutines.CompletableDeferred()
+        val vm = cloudVm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        vm.onBubble(bubble(id = "ai")); advanceUntilIdle()
+        vm.sendChatMessage("что тут написано?"); advanceUntilIdle()
+        assertTrue("вопрос в пути", vm.ui.value.chat?.pending == true)
+
+        vm.cancelChatMessage(); advanceUntilIdle()
+
+        assertEquals(false, vm.ui.value.chat?.pending)
+        assertEquals("Ответ остановлен", vm.ui.value.chat?.notice)
+        // Один только вопрос: остановленное не договаривает за собеседника — ни ответом, ни отказом.
+        assertEquals(1, vm.ui.value.chat?.messages?.size)
+    }
+
+    /** Квота уже потрачена: пришедший ответ ложится в разговор, даже если экран закрыт (#453).
+     *  Раньше он выбрасывался молча — `s.chat ?: return@update s`. */
+    @Test fun `ответ, пришедший после выхода, не пропадает`() = runTest(dispatcher) {
+        consent.granted = true
+        val late = kotlinx.coroutines.CompletableDeferred<String>()
+        chatResponder.inFlight = late
+        val vm = cloudVm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        vm.onBubble(bubble(id = "ai")); advanceUntilIdle()
+        vm.sendChatMessage("что тут написано?"); advanceUntilIdle()
+        vm.onBack()                                           // ушёл, не дождавшись
+
+        late.complete("ответ издалека"); advanceUntilIdle()
+
+        assertNull(openChatOf(vm.ui.value))                   // экран не всплыл сам
+        assertEquals(2, vm.ui.value.chat?.messages?.size)
+        assertEquals("ответ издалека", vm.ui.value.chat?.messages?.last()?.text)
     }
 
     @Test fun `a favorite chain hiding a cloud step is gated too — not a back door`() = runTest(dispatcher) {
@@ -1842,6 +1976,21 @@ private class FakeStore : ObjectStore {
     override suspend fun readText(obj: PointObject, limit: Int): String = ""
     override suspend fun newScratchFile(extension: String): ScratchRef = ScratchRef("/scratch.$extension")
     override suspend fun clear() { clearedTimes++ }
+}
+
+/**
+ * Отвечающий на вопросы к объекту. По умолчанию отвечает сразу; [inFlight] — ответ, который ещё в
+ * пути: незавершённое обещание `advanceUntilIdle` не проматывает (в отличие от `delay`), и это
+ * единственный способ посмотреть на экран, пока вопрос действительно идёт.
+ */
+private class FakeChatResponder : com.point.core.flow.AiChatResponder {
+    var text = "ответ"
+    var inFlight: kotlinx.coroutines.CompletableDeferred<String>? = null
+    var calls = 0
+    override suspend fun reply(obj: PointObject, history: List<com.point.core.model.ChatMessage>, message: String): String {
+        calls++
+        return inFlight?.await() ?: text
+    }
 }
 
 private class FakeResolver : Resolver {
