@@ -24,6 +24,7 @@ import com.point.core.flow.RealizerMeta
 import com.point.core.flow.TextRecognizer
 import com.point.core.flow.reportStage
 import com.point.core.model.ActionResult
+import com.point.core.model.ActionYield
 import com.point.core.model.CapabilityId
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
@@ -201,9 +202,18 @@ class CloudOcrCapability @Inject constructor() : Capability {
     override val id = ID
     override val icon = "ocr-cloud"
     override val meta = CapabilityMeta(cost = Cost.PAID, latency = Latency.SLOW, network = true, auth = true)
-    override fun label(state: ObjectState) = "Распознать в облаке"
+    // «В облаке» — слово наше, не человека, и рядом с обычным «Распознать текст» оно ничего не
+    // объясняло: оба действия обещали «вернёт текст», и выбрать между ними было нечем. Прогон по
+    // экранам 04.08.2026. Название теперь говорит, ЧЕМ оно отличается — тем, что читает сильнее,
+    // а цена (объект уходит наружу) названа подписью через [yields].
+    override fun label(state: ObjectState) = "Прочитать сильнее"
     override fun accepts(state: ObjectState) = state.kind == ObjectKind.IMAGE
     override fun produces(state: ObjectState) = ObjectState(ObjectKind.TEXT)
+
+    // Цена сказана рядом с обещанием: соседнее «Распознать текст» отдаёт тот же текст, но не
+    // выпускает снимок с телефона. Без этой приписки два действия обещали одно и то же слово,
+    // и выбор между ними человек делал вслепую.
+    override fun yields(state: ObjectState) = ActionYield.New(ObjectKind.TEXT, "текст · снимок уйдёт в сервис")
 
     companion object { val ID = CapabilityId("ocr-cloud") }
 }
