@@ -4,6 +4,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -17,7 +18,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
@@ -41,27 +47,47 @@ import kotlinx.coroutines.launch
  * Живёт поверх чужого приложения и исчезает, как только объект родился. Здесь же решается вопрос,
  * из-за которого этот экран вообще обязан быть активити, а не сервисом: буфер обмена Android
  * отдаёт только приложению на переднем плане (тот же приём, что у `ClipboardSyncActivity`).
+ *
+ * Экран прозрачный и лёгкий, а ждёт он за камерой — самым тяжёлым приложением телефона. Значит,
+ * при нехватке памяти выгружают первым его, и всё, что он держал обычным полем, к возвращению
+ * мертво. Поэтому «кого запускали» и «что тот источник о себе помнил» переживают пересоздание
+ * через `onSaveInstanceState` (#454) — тем же приёмом, каким ящик приёма переживает поворот (#114).
  */
 @AndroidEntryPoint
 class SourcePickerActivity : ComponentActivity() {
 
     @Inject lateinit var sources: Set<@JvmSuppressWildcards ObjectSource>
 
+    /** Кого запускали и ждём обратно. Переживает выгрузку экрана — иначе снятый кадр пропадёт. */
     private var pending: ObjectSource? = null
+
+    /**
+     * Источник, которому доступ закрыт насовсем (#455), — его именем названы слова на экране.
+     * `null` — обычный выбор источника.
+     */
+    private var blocked by mutableStateOf<String?>(null)
 
     private val permissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
             val source = pending
             pending = null
-            when {
-                source == null -> finish()
-                result.values.any { !it } -> {
-                    // Отказ назван словами: молча закрыться — значит оставить человека гадать,
-                    // сломалось оно или он сам только что запретил.
+            if (source == null) {
+                lostToMemory()
+                return@registerForActivityResult
+            }
+            when (permissionOutcome(result, ::shouldShowRequestPermissionRationale)) {
+                PermissionOutcome.GRANTED -> launchSource(source)
+                // Отказ назван словами: молча закрыться — значит оставить человека гадать,
+                // сломалось оно или он сам только что запретил. Спросят снова — значит путь
+                // прежний, и экран уходит с дороги.
+                PermissionOutcome.DENIED -> {
                     Toast.makeText(this, "Без этого доступа не получится", Toast.LENGTH_SHORT).show()
                     finish()
                 }
-                else -> launchSource(source)
+                // А здесь тапать заново бессмысленно: система откажет мгновенно и молча, окна
+                // человек больше не увидит. Единственная настоящая дорога — настройки, и экран
+                // показывает её вместо того же тоста по кругу.
+                PermissionOutcome.BLOCKED -> blocked = source.label
             }
         }
 
@@ -69,7 +95,10 @@ class SourcePickerActivity : ComponentActivity() {
         val source = pending
         pending = null
         if (source == null) {
-            finish()
+            // Результат пришёл — значит что-то запускали; ждать его некому — значит экран
+            // выгрузили. Раньше здесь стоял голый `finish()`: кадр снят, файл записан, объект не
+            // родился, человек ничего не узнал (#454).
+            lostToMemory()
         } else {
             lifecycleScope.launch { deliver(source.read(this@SourcePickerActivity, result.data)) }
         }
@@ -77,12 +106,32 @@ class SourcePickerActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Кого ждали до выгрузки — и что он о себе помнил. Без второй строки восстановленная
+        // камера не знает, куда писался кадр, и снимок теряется ровно так же, как без первой.
+        pending = restoredSource(sources, savedInstanceState?.getString(STATE_SOURCE))
+        pending?.restoreState(savedInstanceState?.getString(STATE_SOURCE_STATE))
+        blocked = savedInstanceState?.getString(STATE_BLOCKED)
         val visible = sources.filter { it.isAvailable(this) }.sortedBy { it.label }
         setContent {
             PointTheme {
-                SourcePickerScreen(sources = visible, onPick = ::start)
+                SourcePickerScreen(
+                    sources = visible,
+                    onPick = ::start,
+                    blocked = blocked,
+                    onOpenSettings = ::openAppSettings,
+                    onDismissBlocked = ::finish,
+                )
             }
         }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        pending?.let {
+            outState.putString(STATE_SOURCE, it.id)
+            outState.putString(STATE_SOURCE_STATE, it.saveState())
+        }
+        blocked?.let { outState.putString(STATE_BLOCKED, it) }
     }
 
     /**
@@ -114,6 +163,40 @@ class SourcePickerActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * Единственная дорога дальше, когда доступ закрыт насовсем (#455): системные настройки Point.
+     *
+     * Экран не закрывается сам — человек возвращается «назад» с уже включённым доступом и делает
+     * ровно один тап. Если настройки не открылись, это тоже сказано словами: молчание здесь —
+     * та же ловушка, из которой мы только что вышли.
+     */
+    private fun openAppSettings() {
+        val opened = runCatching {
+            startActivity(
+                Intent(
+                    Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                    Uri.fromParts("package", packageName, null),
+                ),
+            )
+        }.isSuccess
+        if (opened) {
+            blocked = null
+        } else {
+            Toast.makeText(this, SETTINGS_CLOSED, Toast.LENGTH_LONG).show()
+        }
+    }
+
+    /**
+     * Сделанное в чужом приложении не дошло, потому что Point выгрузили из памяти (#454).
+     *
+     * Экран остаётся открытым: повторить — один тап, и это честнее, чем закрыться на ровном месте.
+     * Слова обязаны прозвучать даже теперь, когда восстановление сделано: сюда попадают ровно те
+     * случаи, где сохраниться не дали, — а такое молчание неотличимо от поломки.
+     */
+    private fun lostToMemory() {
+        Toast.makeText(this, LOST_TO_MEMORY, Toast.LENGTH_LONG).show()
+    }
+
     /** Объект уходит в обычную дверь: шторка его не обрабатывает (#246). */
     private fun deliver(produced: Produced?) {
         if (produced == null) {
@@ -129,7 +212,32 @@ class SourcePickerActivity : ComponentActivity() {
         )
         finish()
     }
+
+    companion object {
+        private const val STATE_SOURCE = "com.point.source.PENDING_ID"
+        private const val STATE_SOURCE_STATE = "com.point.source.PENDING_STATE"
+        private const val STATE_BLOCKED = "com.point.source.BLOCKED_LABEL"
+
+        /** Потерянное названо словами, а не молчанием (#454). */
+        internal const val LOST_TO_MEMORY =
+            "Point выгрузили из памяти, пока работало другое приложение, — сделанное там не дошло. " +
+                "Попробуйте ещё раз."
+
+        /** Даже отказ настроек открыться назван вслух (#455): иначе это второй тупик подряд. */
+        internal const val SETTINGS_CLOSED =
+            "Настройки не открылись — включите доступ вручную: Приложения → Point → Разрешения"
+    }
 }
+
+/**
+ * Источник, переживший пересоздание экрана (#454), — или `null`, если ждать было некого.
+ *
+ * Отдельной функцией, а не строкой внутри `onCreate`: решение «кого мы ждём обратно» и есть то
+ * место, где снятый кадр терялся молча. Источник ищется по устойчивому `id`, а не по месту в
+ * наборе: набор собирает Hilt, и порядок в нём не обещан никем.
+ */
+internal fun restoredSource(sources: Collection<ObjectSource>, id: String?): ObjectSource? =
+    if (id.isNullOrBlank()) null else sources.firstOrNull { it.id == id }
 
 /**
  * Сам экран — чистый и без Android-обвязки, поэтому целиком рисуется в `@Preview` (#114).
@@ -143,12 +251,18 @@ class SourcePickerActivity : ComponentActivity() {
  * приложения из шторки), а фона не было вовсе: белый текст ложился на чужой светлый экран и
  * пропадал. Теперь под карточкой лежит ФОН дизайн-системы, приглушённый до просвечивания: видно,
  * откуда пришли, и читается то, что написано.
+ *
+ * [blocked] — имя источника, которому доступ закрыт насовсем (#455). Выбирать тогда не из чего:
+ * экран называет, что произошло, и даёт единственную настоящую дорогу — в настройки Point.
  */
 @Composable
 internal fun SourcePickerScreen(
     sources: List<ObjectSource>,
     onPick: (ObjectSource) -> Unit,
     modifier: Modifier = Modifier,
+    blocked: String? = null,
+    onOpenSettings: () -> Unit = {},
+    onDismissBlocked: () -> Unit = {},
 ) {
     Box(
         modifier = modifier
@@ -162,15 +276,37 @@ internal fun SourcePickerScreen(
             modifier = Modifier.widthIn(max = PortalColumnWidth).fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(11.dp),
         ) {
-            ScreenHeader(title = "Что превратить в объект?", modifier = Modifier.padding(bottom = 9.dp))
-            sources.forEachIndexed { index, source ->
-                PortalRow(
-                    title = source.label,
-                    onClick = { onPick(source) },
-                    icon = bubbleIcon(source.icon),
-                    accent = bubbleColor(source.icon),
-                    appearIndex = index,
+            if (blocked == null) {
+                ScreenHeader(title = "Что превратить в объект?", modifier = Modifier.padding(bottom = 9.dp))
+                sources.forEachIndexed { index, source ->
+                    PortalRow(
+                        title = source.label,
+                        onClick = { onPick(source) },
+                        icon = bubbleIcon(source.icon),
+                        accent = bubbleColor(source.icon),
+                        appearIndex = index,
+                    )
+                }
+            } else {
+                // Настройки — не подсказка мелким шрифтом внизу тоста, а такая же строка действия,
+                // как всё остальное в Point: дорога дальше выглядит дорогой.
+                ScreenHeader(
+                    title = "Доступ выключен насовсем",
+                    subtitle = "«$blocked» без него не начнёт. Система больше не спросит — " +
+                        "включить можно только в настройках Point.",
+                    modifier = Modifier.padding(bottom = 9.dp),
                 )
+                PortalRow(
+                    title = "Открыть настройки Point",
+                    onClick = onOpenSettings,
+                    icon = bubbleIcon("open"),
+                    accent = bubbleColor("open"),
+                    appearIndex = 0,
+                )
+                // Из любого состояния есть выход (#114) — из этого тоже.
+                TextButton(onClick = onDismissBlocked, modifier = Modifier.align(Alignment.CenterHorizontally)) {
+                    Text("Не сейчас", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
         }
     }
@@ -201,4 +337,11 @@ private fun PreviewSourcePicker() = PointTheme {
         ),
         onPick = {},
     )
+}
+
+// Тупик #455 в лицо: раньше на этом месте был тост «Без этого доступа не получится» — и всё.
+@Preview(name = "Источник объекта · доступ закрыт насовсем (#455)", showBackground = true, backgroundColor = 0xFFFFFFFF)
+@Composable
+private fun PreviewSourceBlocked() = PointTheme {
+    SourcePickerScreen(sources = emptyList(), onPick = {}, blocked = "Место")
 }
