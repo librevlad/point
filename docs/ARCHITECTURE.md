@@ -651,7 +651,9 @@ Robolectric. Это практический выхлоп принципа «max
   (тексты — тоже константы `:core:flow`). Свой читатель JSON (`Json.kt`) — чтобы модуль остался
   без единой зависимости (`org.json` есть только на Android).
 - **Устройство не держит учётных данных Google вовсе**: `/auth/start` → браузер → опрос
-  `/auth/session/<id>` → `device_id` + `device_token`. `client_secret` живёт только на сервере.
+  `/auth/session/<id>` (с `claim_token` в заголовке) → `device_id` + `device_token`. `client_secret`
+  живёт только на сервере. Ручки — те, что построил срез 2 (#471); «Выйти» = отзыв себя, отдельной
+  ручки у него нет.
 - **Хранение пропуска**: телефон — `EncryptedAccountStore` (`EncryptedSharedPreferences`, ключ в Android
   Keystore); ПК — `FileAccountStore` (`~/.point-pc/account`, права только владельцу).
 - **Экраны**: `SignInScreen` + `MyDevicesScreen` (телефон, язык `PortalSurfaces`), `SignInPane` +
