@@ -3,6 +3,7 @@ package com.point.data
 import com.point.core.flow.CloudPrivacySettings
 import com.point.core.flow.PrivacyLevel
 import com.point.core.flow.ReaderPrivacy
+import com.point.core.flow.ReaderPromise
 import com.point.core.model.PointObject
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -19,8 +20,11 @@ import org.junit.Test
  */
 class DefaultExternalEyeTest {
 
-    private val europe = ReaderPrivacy("Европа", europe = true, logsRequests = false)
-    private val overseas = ReaderPrivacy("США", europe = false, logsRequests = true)
+    /** Обещал не учиться на присланном — и потому проходит на строгий уровень. */
+    private val promises = ReaderPrivacy("OVH, Франция (ЕС)", ReaderPromise.NO_TRAINING)
+
+    /** Учится на присланном — на строгом уровне молчит, каким бы хорошим ни был. */
+    private val learns = ReaderPrivacy("Mistral, Франция (ЕС)", ReaderPromise.TRAINS)
 
     private fun level(level: PrivacyLevel) = object : CloudPrivacySettings {
         override fun level() = level
@@ -29,7 +33,7 @@ class DefaultExternalEyeTest {
 
     private fun eye(
         name: String,
-        privacy: ReaderPrivacy = europe,
+        privacy: ReaderPrivacy = promises,
         hasKey: Boolean = true,
         takesObject: Boolean = true,
         answer: () -> String,
@@ -57,8 +61,11 @@ class DefaultExternalEyeTest {
 
     @Test
     fun `прочитавший назван — происхождение значения видно человеку`() = runTest {
-        val reading = chain(eye("mistral-ocr", europe) { "текст" }).read(pageObject)
-        assertEquals("Европа", reading.where)
+        val reading = chain(eye("mistral-ocr", learns) { "текст" }).read(pageObject)
+        assertEquals("Mistral, Франция (ЕС)", reading.where)
+        // «Куда» без «что там с ним делают» — половина правды, и именно эта половина однажды дала
+        // уровню «Только Европа» вид защиты при её отсутствии.
+        assertEquals(ReaderPromise.TRAINS.what, reading.promise)
     }
 
     @Test
@@ -81,30 +88,32 @@ class DefaultExternalEyeTest {
     }
 
     @Test
-    fun `тот, кто хранит присланное, больше не выбрасывается — он просто стоит в очереди`() = runTest {
+    fun `тот, кто учится на присланном, больше не выбрасывается — он просто стоит в очереди`() = runTest {
         val reading = chain(
-            eye("европейский", europe) { error("недоступен") },
-            eye("заморский", overseas) { "прочитано" },
+            eye("обещавший", promises) { error("недоступен") },
+            eye("учащийся", learns) { "прочитано" },
         ).read(pageObject)
 
         // Решение владельца: приватность — столбец и настройка, а не причина исключения.
-        assertEquals("заморский", reading.reader)
+        assertEquals("учащийся", reading.reader)
     }
 
     @Test
-    fun `только Европа — заморский не спрашивается вовсе`() = runTest {
+    fun `строгий уровень — учащийся на присланном не спрашивается вовсе`() = runTest {
         val chain = chain(
-            eye("европейский", europe) { "прочитано в Европе" },
-            eye("заморский", overseas) { error("сюда не доходим") },
-            at = PrivacyLevel.EUROPE_ONLY,
+            eye("обещавший", promises) { "прочитано тем, кто обещал" },
+            eye("учащийся", learns) { error("сюда не доходим") },
+            at = PrivacyLevel.NO_TRAINING,
         )
-        assertEquals("европейский", chain.read(pageObject).reader)
+        // Прежний уровень «Только Европа» на этих двоих выбирал бы ровно наоборот: оба во Франции,
+        // и вперёд шёл бы тот, кто учится. Настройка судит по обещанию, а не по стране.
+        assertEquals("обещавший", chain.read(pageObject).reader)
     }
 
     @Test
     fun `только на телефоне — наружу не идёт никто, и человеку сказано почему`() = runTest {
         val chain = chain(
-            eye("европейский", europe) { error("сюда не доходим") },
+            eye("обещавший", promises) { error("сюда не доходим") },
             at = PrivacyLevel.DEVICE_ONLY,
         )
         assertFalse(chain.available())
@@ -116,8 +125,8 @@ class DefaultExternalEyeTest {
     }
 
     @Test
-    fun `только Европа и европейских нет — совет про настройку, а не про поломку`() = runTest {
-        val chain = chain(eye("заморский", overseas) { "x" }, at = PrivacyLevel.EUROPE_ONLY)
+    fun `строгий уровень и обещавших нет — совет про настройку, а не про поломку`() = runTest {
+        val chain = chain(eye("учащийся", learns) { "x" }, at = PrivacyLevel.NO_TRAINING)
         val error = runCatching { chain.read(pageObject) }.exceptionOrNull()
 
         assertTrue(error?.message!!, error.message!!.contains("Куда можно отправлять"))
@@ -179,13 +188,13 @@ class DefaultExternalEyeTest {
     @Test
     fun `совет про ключ не даётся там, где ключ всё равно не поможет`() = runTest {
         val chain = chain(
-            eye("заморский без ключа", overseas, hasKey = false) { "x" },
-            eye("европейский") { error("mistral HTTP 500") },
-            at = PrivacyLevel.EUROPE_ONLY,
+            eye("учащийся без ключа", learns, hasKey = false) { "x" },
+            eye("обещавший") { error("ovh HTTP 500") },
+            at = PrivacyLevel.NO_TRAINING,
         )
         val error = runCatching { chain.read(pageObject) }.exceptionOrNull()
 
-        // На уровне «только Европа» заморский читатель не включится ни с каким ключом.
+        // На строгом уровне учащийся на присланном не включится ни с каким ключом.
         assertFalse(error?.message!!, error.message!!.contains("ключ"))
     }
 
@@ -206,7 +215,7 @@ class DefaultExternalEyeTest {
             override fun level() = current
             override suspend fun setLevel(level: PrivacyLevel) { current = level }
         }
-        val chain = DefaultExternalEye(listOf(eye("заморский", overseas) { "прочитано" }), settings)
+        val chain = DefaultExternalEye(listOf(eye("учащийся", learns) { "прочитано" }), settings)
 
         assertTrue(chain.available())
         current = PrivacyLevel.DEVICE_ONLY

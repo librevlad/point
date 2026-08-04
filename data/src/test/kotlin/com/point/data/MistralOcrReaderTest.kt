@@ -16,7 +16,7 @@ import org.junit.Test
 class MistralOcrReaderTest {
 
     private fun reader(http: HttpJson, key: String = "free-key") =
-        MistralOcrReader(http, FakeOutboundFrames(sentFrame()), key, "https://api.mistral.ai/v1")
+        MistralOcrReader(http, FakeOutboundFrames(sentFrame()), { key }, "https://api.mistral.ai/v1")
 
     private fun pages(vararg markdown: String) = HttpResult(
         200,
@@ -96,11 +96,31 @@ class MistralOcrReaderTest {
     }
 
     @Test
-    fun `адресат назван честно — Франция, ЕС`() {
+    fun `ключ спрашивается на каждом чтении — человек мог задать его минуту назад`() = runTest {
+        var key = ""
+        val eye = MistralOcrReader(
+            FakeHttpJson { pages("текст") },
+            FakeOutboundFrames(sentFrame()),
+            { key },
+            "https://api.mistral.ai/v1",
+        )
+
+        // Запомнив ответ на старте, сильнейший читатель не включился бы НИКОГДА в раздаваемой
+        // сборке: там ключей нет, а человек заводит свой уже после установки (#467).
+        assertFalse(eye.configured)
+        key = "ключ-человека"
+        assertTrue(eye.configured)
+        assertEquals("текст", eye.read(pageObject))
+    }
+
+    @Test
+    fun `адресат назван честно — Франция, и он учится на присланном`() {
         val eye = reader(FakeHttpJson())
         assertTrue(eye.privacy.where.contains("Франция"))
-        assertTrue(eye.privacy.europe)
-        assertFalse(eye.privacy.logsRequests)
+        // Здесь стояло «не учится», и это было неправдой из их же условий: на бесплатном тарифе
+        // Mistral учится по умолчанию и держит присланное 30 суток (перемер #490). Ошибка была не
+        // косметической — на прежнем уровне «Только Европа» он оставался единственным работающим.
+        assertEquals(com.point.core.flow.ReaderPromise.TRAINS, eye.privacy.promise)
     }
 
     @Test

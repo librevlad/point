@@ -663,6 +663,6 @@ private fun PreviewKeyScreenPrivacy() = PointTheme(darkTheme = true) {
         usageEnabled = false,
         usageSummary = null,
         onToggleUsage = {},
-        privacyLevel = PrivacyLevel.EUROPE_ONLY,
+        privacyLevel = PrivacyLevel.NO_TRAINING,
     )
 }

@@ -37,6 +37,14 @@ data class AiProvider(
 const val GROQ_PROVIDER_ID = "groq"
 
 /**
+ * Mistral назван отдельно по той же причине: у него есть **специальная ручка чтения страницы**
+ * (`/ocr`), и она по замеру бьёт его же зрячий чат — 15/15 против 13/15 (#490). Ключ человека
+ * обязан доходить до неё, а не только до чата: в раздаваемой сборке встроенных ключей нет вовсе, и
+ * без этого сильнейший читатель не включался бы там никогда (#493).
+ */
+const val MISTRAL_PROVIDER_ID = "mistral"
+
+/**
  * Порядок не алфавитный: сверху то, с чего человеку проще начать. OpenRouter первым, потому что
  * один его ключ открывает сразу несколько бесплатных моделей.
  */
@@ -60,13 +68,24 @@ val AI_PROVIDERS: List<AiProvider> = listOf(
         freeNote = "бесплатный уровень с лимитом в минуту (проверено 08.2026)",
     ),
     AiProvider(
-        id = "mistral",
+        id = MISTRAL_PROVIDER_ID,
         name = "Mistral",
-        what = "лучше прочих бесплатных читает плотные документы",
+        // Не «читает документы», а именно то, ради чего его стоит завести: его отдельной ручкой
+        // чтения Point разбирает снимок страницы, и она замерена лучшей из бесплатных (#490).
+        what = "лучше всех бесплатных читает фото документа — им Point разбирает страницу",
         keyUrl = "https://console.mistral.ai/api-keys",
         baseUrl = "https://api.mistral.ai/v1",
         models = "pixtral-12b-2409,mistral-medium-latest",
         freeNote = "бесплатный уровень после подтверждения телефона (проверено 08.2026)",
+    ),
+    AiProvider(
+        id = "sambanova",
+        name = "SambaNova",
+        what = "понимает фотографии, отвечает стабильно",
+        keyUrl = "https://cloud.sambanova.ai/apis",
+        baseUrl = "https://api.sambanova.ai/v1",
+        models = "gemma-4-31B-it",
+        freeNote = "бесплатный уровень (проверено 08.2026)",
     ),
     AiProvider(
         id = "gemini",
@@ -89,6 +108,16 @@ val AI_PROVIDERS: List<AiProvider> = listOf(
         baseUrl = "https://api.cerebras.ai/v1",
         models = "gpt-oss-120b",
         freeNote = "бесплатный уровень (проверено 08.2026)",
+    ),
+    AiProvider(
+        id = "zhipu",
+        name = "Z.ai (Zhipu)",
+        // Цена названа при варианте, а не в сноске: замер дал два ответа из шести — «перегружено».
+        what = "видит картинки, но часто отвечает «занят»",
+        keyUrl = "https://z.ai/manage-apikey/apikey-list",
+        baseUrl = "https://api.z.ai/api/paas/v4",
+        models = "glm-4.6v-flash",
+        freeNote = "бесплатная модель, лимит не назван (проверено 08.2026)",
     ),
     AiProvider(
         id = "openai",
