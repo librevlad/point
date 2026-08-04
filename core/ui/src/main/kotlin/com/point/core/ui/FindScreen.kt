@@ -18,6 +18,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -55,7 +56,9 @@ fun FindScreen(
     Column(modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         // Набранное живёт в поле, как у остальных полей ввода приложения: буквы не ездят
         // кругом через состояние экрана и не отстают от пальца.
-        var query by remember { mutableStateOf("") }
+        // `rememberSaveable` (#114): поворот пересоздаёт экран, а подсветка и «Найдено: N» живут в
+        // состоянии флоу и остаются. Пустое поле рядом с находками — экран, спорящий сам с собой.
+        var query by rememberSaveable { mutableStateOf("") }
         // Поле сверху, страница под ним: экранная клавиатура закрывает низ экрана, и поле,
         // спрятанное под ней, — это поиск, в который нельзя посмотреть.
         Surface(tonalElevation = 3.dp) {

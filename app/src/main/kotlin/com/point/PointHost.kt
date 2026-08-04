@@ -106,6 +106,8 @@ fun PointHost(
     onCloseSelection: () -> Unit = {},
     onFindQuery: (String) -> Unit = {},
     onCloseFind: () -> Unit = {},
+    /** Уйти с экрана-сообщения, за которым нет объекта (#114): то же, что «назад» у этой двери. */
+    onDismissMessage: () -> Unit = {},
     appIconFor: (String) -> androidx.compose.ui.graphics.ImageBitmap? = { null },
     modifier: Modifier = Modifier,
 ) {
@@ -336,6 +338,14 @@ fun PointHost(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+                // Выход (#114). Раньше здесь не было ни одной кнопки, а «назад» закрывал Point:
+                // человек, сохранивший ключ, вылетал из приложения вместо возврата к «Недавнему».
+                // Кнопка делает ровно то же, что «назад» у этой двери, — обещание и поведение
+                // сходятся, и из состояния-сообщения есть выход обоими путями.
+                Spacer(Modifier.height(18.dp))
+                TextButton(onClick = onDismissMessage) {
+                    Text(messageExitLabel(state.messageOutcome))
+                }
             }
 
             else -> Text(
@@ -388,6 +398,15 @@ private fun BusyScreen(title: String, stage: String?, network: Boolean, onCancel
  */
 internal fun shareAgainHint(outcome: Outcome): String? =
     if (outcome == Outcome.FAILED) "Попробуйте поделиться объектом в Point ещё раз" else null
+
+/**
+ * Что написано на выходе с экрана-сообщения (#114).
+ *
+ * Слово разное, дверь одна: у сделанного — «Готово», у сорвавшегося — «Понятно». Сказать «Готово»
+ * над отказом значит поздравить человека с неудачей.
+ */
+internal fun messageExitLabel(outcome: Outcome): String =
+    if (outcome == Outcome.FAILED) "Понятно" else "Готово"
 
 /**
  * Что честно сказать о времени: сколько уже идёт и почему это нормально.

@@ -29,6 +29,7 @@ mlkitBarcode = "17.3.0"
 mlkitSubjectSegmentation = "16.0.0-beta1"
 zxing = "3.5.3"
 junit = "4.13.2"
+robolectric = "4.16.1"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -72,6 +73,12 @@ zxing-core = { group = "com.google.zxing", name = "core", version.ref = "zxing" 
 
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 json = { group = "org.json", name = "json", version = "20240303" } # real org.json for JVM unit tests
+
+# Экран под тестом без эмулятора (#114): Robolectric поднимает Android в JVM, compose-ui-test
+# нажимает на узлы и пересоздаёт экран (поворот). Обе — только в тестах, в APK не попадают.
+robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
+androidx-compose-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" }
+androidx-compose-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

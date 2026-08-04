@@ -1404,6 +1404,22 @@ class FlowViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Убрать сообщение, за которым нет объекта (#114): «Ключ AI сохранён», «Объект недоступен»,
+     * «Это не код подключения Point для ПК». Возвращает `true`, если было что убирать.
+     *
+     * Такое состояние — экран из одной карточки, и раньше выйти из него было нечем: «назад»
+     * доходил до системы и закрывал Point. Дверь решает, куда именно это ведёт: домашняя — обратно
+     * на «Недавнее», «Поделиться» — наружу, в приложение, из которого пришли. Общее одно: выход
+     * есть всегда.
+     */
+    fun dismissMessage(): Boolean {
+        val state = _ui.value
+        if (state.frame != null || state.message == null) return false
+        _ui.update { it.copy(message = null, messageOutcome = Outcome.NONE) }
+        return true
+    }
+
     fun onBack(): Boolean {
         if (_ui.value.selection != null) {
             closeSelection() // #259: назад закрывает выделение, объект остаётся

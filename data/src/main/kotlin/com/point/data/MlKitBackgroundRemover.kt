@@ -25,9 +25,12 @@ class MlKitBackgroundRemover(
     private val store: ObjectStore,
 ) : BackgroundRemover {
 
-    private val segmenter = SubjectSegmentation.getClient(
-        SubjectSegmenterOptions.Builder().enableForegroundBitmap().build(),
-    )
+    /** Как и у чтения QR (#114): клиент заводится при первом вырезании, а не при старте приложения. */
+    private val segmenter by lazy {
+        SubjectSegmentation.getClient(
+            SubjectSegmenterOptions.Builder().enableForegroundBitmap().build(),
+        )
+    }
 
     override suspend fun cutout(imagePath: String): ScratchRef = withContext(Dispatchers.IO) {
         val bitmap = decodeBoundedUpright(imagePath, MAX_PX) ?: error("Не удалось прочитать изображение")
