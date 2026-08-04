@@ -72,7 +72,9 @@ class DefaultExternalEye @Inject constructor(
             considered++
             try {
                 val text = eye.read(obj)
-                if (text.isNotBlank()) return ExternalReading(text, eye.reader, eye.privacy.where)
+                if (text.isNotBlank()) {
+                    return ExternalReading(text, eye.reader, eye.privacy.where, eye.privacy.promise.what)
+                }
                 errors += "${eye.reader}: страница прочитана пустой"
             } catch (e: Exception) {
                 errors += e.message ?: e.javaClass.simpleName
@@ -104,8 +106,8 @@ class DefaultExternalEye @Inject constructor(
      */
     private fun nobodyAllowed(): String = when (privacy.level()) {
         PrivacyLevel.DEVICE_ONLY -> DEVICE_ONLY
-        PrivacyLevel.EUROPE_ONLY ->
-            if (readers.any { it.configured }) EUROPE_ONLY_EMPTY else NOT_CONFIGURED
+        PrivacyLevel.NO_TRAINING ->
+            if (readers.any { it.configured }) STRICT_LEVEL_EMPTY else NOT_CONFIGURED
         PrivacyLevel.FREE_FIRST -> NOT_CONFIGURED
     }
 
@@ -116,8 +118,8 @@ class DefaultExternalEye @Inject constructor(
         const val DEVICE_ONLY =
             "Наружу ничего не отправляется — в настройках выбрано «Только на телефоне»"
 
-        const val EUROPE_ONLY_EMPTY =
-            "Европейских читателей нет — задайте бесплатный ключ Mistral или смягчите настройку «Куда можно отправлять»"
+        const val STRICT_LEVEL_EMPTY =
+            "Читателей, обещавших не учиться на присланном, сейчас нет — смягчите настройку «Куда можно отправлять»"
 
         const val NOT_FOR_THIS_OBJECT =
             "Чтение снаружи не берётся за этот объект — читают снимок страницы"

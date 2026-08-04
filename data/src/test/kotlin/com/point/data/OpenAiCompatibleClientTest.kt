@@ -111,6 +111,48 @@ class OpenAiCompatibleClientTest {
         assertFalse(models.first { it.model.contains("llama-3.1") }.vision)
     }
 
+    // --- Сильное зрение объявляется по замеру, а не по названию (#490/#493) ---
+
+    @Test
+    fun `замеренные читатели страницы объявлены сильными — цепочка на снимке ведёт ими`() {
+        // До правки `strongVision` стоял ровно у трёх клиентов, признанных сильными на глаз, и
+        // бесплатная цепочка на снимке шла в произвольном порядке. Файл, собранный из плохого
+        // чтения, и был жалобой владельца (#493).
+        listOf(
+            "google/gemma-4-26b-a4b-it:free", // 15/15, шесть ответов из шести
+            "gemma-4-31B-it", // 14–15/15, шесть из шести
+            "qwen/qwen3.6-27b", // 15/15 на мятом фото
+            "Qwen2.5-VL-72B-Instruct", // 15/15 шесть из шести
+        ).forEach { assertTrue(it, isMeasuredStrongVision(it)) }
+    }
+
+    @Test
+    fun `тот, кто читает хуже специальной ручки, сильным не объявлен`() {
+        // Чат Mistral берёт 12–13/15 там, где его же OCR-ручка берёт 15/15. Объявить чат сильным
+        // значило бы поставить его вровень с тем, кто читает лучше.
+        listOf("mistral-medium-latest", "mistral-small-latest", "glm-4.6v-flash", "llama-3.3-70b-versatile")
+            .forEach { assertFalse(it, isMeasuredStrongVision(it)) }
+    }
+
+    @Test
+    fun `объявление доходит до клиента — иначе цепочка о нём не узнает`() {
+        val strong = openAiModels("cerebras", "https://x/v1", "k", "gemma-4-31b").single()
+        assertTrue(strong.strongVision)
+        assertTrue(OpenAiCompatibleClient(http(200, okBody), store, strong).strongVision)
+
+        val plain = openAiModels("groq", "https://x/v1", "k", "llama-3.1-8b-instant").single()
+        assertFalse(plain.strongVision)
+        assertFalse(OpenAiCompatibleClient(http(200, okBody), store, plain).strongVision)
+    }
+
+    @Test
+    fun `сильное зрение не заменяет зрения — оно про качество, а не про приём картинки`() {
+        // Замеренный сильный обязан быть и зрячим, иначе `canHandle` не пустит его к снимку и
+        // объявление окажется украшением.
+        openAiModels("x", "https://x/v1", "k", "gemma-4-31b,qwen/qwen3.6-27b,Qwen2.5-VL-72B-Instruct")
+            .forEach { assertTrue(it.model, !it.strongVision || it.vision) }
+    }
+
     @Test
     fun `a NO_IMAGE marker reply is treated as failure so the chain continues`() = runTest {
         val body = """{"choices":[{"message":{"content":"NO_IMAGE"}}]}"""

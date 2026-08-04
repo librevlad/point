@@ -167,11 +167,12 @@ class ExternalEyeOcrTest {
     }
 
     @Test
-    fun `только Европа — общая цепочка молчит, потому что про неё Европу обещать нельзя`() = runTest {
-        val realizer = CloudOcrDirectRealizer(failingLlm(), privacyAt(PrivacyLevel.EUROPE_ONLY))
+    fun `строгий уровень — общая цепочка молчит, потому что обещать за неё некому`() = runTest {
+        val realizer = CloudOcrDirectRealizer(failingLlm(), privacyAt(PrivacyLevel.NO_TRAINING))
 
+        // Внутри цепочки маршрутизаторы и тарифы разных стран, и кто ответит — решается в рантайме.
         assertFalse(realizer.isAvailable())
-        assertTrue((realizer.perform(image) as ActionResult.Failure).reason.contains("европейские"))
+        assertTrue((realizer.perform(image) as ActionResult.Failure).reason.contains("не учиться на присланном"))
     }
 
     @Test

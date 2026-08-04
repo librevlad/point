@@ -62,7 +62,11 @@ android {
         buildConfigField("String", "OPENROUTER_MODELS", prop("OPENROUTER_MODELS", "google/gemma-4-31b-it:free,google/gemma-4-26b-a4b-it:free,openai/gpt-oss-20b:free"))
         buildConfigField("String", "GROQ_API_KEY", "\"\"")
         buildConfigField("String", "GROQ_BASE_URL", prop("GROQ_BASE_URL", "https://api.groq.com/openai/v1"))
-        buildConfigField("String", "GROQ_MODELS", prop("GROQ_MODELS", "llama-3.3-70b-versatile,openai/gpt-oss-120b,llama-3.1-8b-instant"))
+        // Зрячая модель в хвосте списка не случайность: `qwen/qwen3.6-27b` берёт 15/15 на мятом фото
+        // (перемер #490), но у Groq потолок 8000 токенов в минуту, а одна картинка стоит ≈4400 —
+        // вторая в ту же минуту не проходит. То есть читатель отличный, а рабочая лошадь никакая.
+        // Текстовые идут первыми, зрячая включается только на снимке (`canHandle`).
+        buildConfigField("String", "GROQ_MODELS", prop("GROQ_MODELS", "llama-3.3-70b-versatile,openai/gpt-oss-120b,llama-3.1-8b-instant,qwen/qwen3.6-27b"))
         // Расшифровка голосового (#223) — у Groq для неё ОТДЕЛЬНАЯ ручка (/audio/transcriptions) и
         // отдельная модель, поэтому она не в GROQ_MODELS: тем списком ходят в чат, а этой моделью
         // слушают. turbo выбран замером 04.08.2026: украинскую речь читает дословно и даром, тогда
@@ -76,9 +80,26 @@ android {
         buildConfigField("String", "MISTRAL_MODELS", prop("MISTRAL_MODELS", "pixtral-12b-2409,mistral-medium-latest,mistral-small-latest"))
         buildConfigField("String", "CEREBRAS_API_KEY", "\"\"")
         buildConfigField("String", "CEREBRAS_BASE_URL", prop("CEREBRAS_BASE_URL", "https://api.cerebras.ai/v1"))
-        // gemma-4-31b здесь текстовая: у Cerebras картинок нет. Имя же выглядит зрячим —
-        // и фото уходило на эндпойнт, который его не принимает. Оставлен только текст.
-        buildConfigField("String", "CEREBRAS_MODELS", prop("CEREBRAS_MODELS", "gpt-oss-120b"))
+        // Здесь стояло «у Cerebras картинок нет» — и это перестало быть правдой. Перемер #490
+        // отправил снимок на тот же эндпойнт и получил 14/15 за 0,7 с (пять ответов из шести):
+        // самый быстрый читатель во всей таблице. Порядок такой: сначала текстовая рабочая
+        // лошадь, следом зрячая — она включается только на снимке (`canHandle`).
+        buildConfigField("String", "CEREBRAS_MODELS", prop("CEREBRAS_MODELS", "gpt-oss-120b,gemma-4-31b"))
+
+        // Ключи лежали в local.properties мёртвым грузом: полей сборки под них не было ни одного,
+        // то есть в приложение они не попадали вовсе (#490). Модели и адреса — из перемера
+        // 04.08.2026, не из головы.
+        //
+        // SambaNova: gemma-4-31B-it, 14–15/15, шесть ответов из шести. Про обучение на запросах
+        // их политика молчит — это видно человеку в уровне приватности, а не решается за него.
+        buildConfigField("String", "SAMBANOVA_API_KEY", "\"\"")
+        buildConfigField("String", "SAMBANOVA_BASE_URL", prop("SAMBANOVA_BASE_URL", "https://api.sambanova.ai/v1"))
+        buildConfigField("String", "SAMBANOVA_MODELS", prop("SAMBANOVA_MODELS", "gemma-4-31B-it"))
+        // Zhipu: glm-4.6v-flash, 12–13/15 и ДВА ответа из шести («перегружено»). Поэтому она
+        // последняя из живых, а не выброшена: когда доходит — читает.
+        buildConfigField("String", "ZHIPU_API_KEY", "\"\"")
+        buildConfigField("String", "ZHIPU_BASE_URL", prop("ZHIPU_BASE_URL", "https://api.z.ai/api/paas/v4"))
+        buildConfigField("String", "ZHIPU_MODELS", prop("ZHIPU_MODELS", "glm-4.6v-flash"))
         // GitHub Models — превью закрыто: на 02.08.2026 любой запрос отвечает
         // 410 github_models_retirement_brownout. Ключ можно оставить в local.properties, но
         // по умолчанию моделей нет — иначе каждое действие платит два таймаута за мёртвый
@@ -100,14 +121,19 @@ android {
         buildConfigField("String", "LLAMA_CLOUD_BASE_URL", prop("LLAMA_CLOUD_BASE_URL", "https://api.cloud.llamaindex.ai"))
         buildConfigField("String", "LLAMA_CLOUD_TIER", prop("LLAMA_CLOUD_TIER", "cost_effective"))
 
-        // Внешний глаз (#280) — второй в очереди после Mistral OCR. OVH отдаёт зрячую модель
-        // БЕЗ ключа и регистрации (замер 04.08.2026: 15/15 на кириллице), поэтому ключ здесь
-        // необязателен и живёт наравне с остальными: задан — поднимает лимиты, пуст — читатель
-        // всё равно работает. Единственный такой в списке, и потому он единственный, кто
-        // остаётся живым в раздаваемой сборке без единого ключа.
+        // Внешний глаз (#280) — третий в очереди, после Mistral OCR и OCR.space. OVH отдаёт зрячую
+        // модель БЕЗ ключа и регистрации (перемер #490: 15/15 шесть попыток из шести), поэтому ключ
+        // здесь необязателен: задан — поднимает лимиты, пуст — читатель всё равно работает.
         buildConfigField("String", "OVH_API_KEY", "\"\"")
         buildConfigField("String", "OVH_BASE_URL", prop("OVH_BASE_URL", "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1"))
         buildConfigField("String", "OVH_MODEL", prop("OVH_MODEL", "Qwen2.5-VL-72B-Instruct"))
+
+        // OCR.space (#490/#493) — второй читатель страницы и второй, кто работает без регистрации:
+        // в их собственных примерах напечатан демо-ключ, и замер сделан именно им (15/15 шесть
+        // попыток из шести, 2 с). Ключ здесь пустой не потому, что читателя нет, — подстановка
+        // демо-ключа живёт в самом читателе; своё поле поднимает потолок до 25 000 страниц в месяц.
+        buildConfigField("String", "OCRSPACE_API_KEY", "\"\"")
+        buildConfigField("String", "OCRSPACE_URL", prop("OCRSPACE_URL", "https://api.ocr.space/parse/image"))
     }
 
     buildTypes {
@@ -123,6 +149,9 @@ android {
             buildConfigField("String", "GROQ_API_KEY", prop("GROQ_API_KEY"))
             buildConfigField("String", "MISTRAL_API_KEY", prop("MISTRAL_API_KEY"))
             buildConfigField("String", "CEREBRAS_API_KEY", prop("CEREBRAS_API_KEY"))
+            buildConfigField("String", "SAMBANOVA_API_KEY", prop("SAMBANOVA_API_KEY"))
+            buildConfigField("String", "ZHIPU_API_KEY", prop("ZHIPU_API_KEY"))
+            buildConfigField("String", "OCRSPACE_API_KEY", prop("OCRSPACE_API_KEY"))
             buildConfigField("String", "GITHUB_API_KEY", prop("GITHUB_API_KEY"))
             buildConfigField("String", "UNSTRUCTURED_API_KEY", prop("UNSTRUCTURED_API_KEY"))
             buildConfigField("String", "LLAMA_CLOUD_API_KEY", prop("LLAMA_CLOUD_API_KEY"))

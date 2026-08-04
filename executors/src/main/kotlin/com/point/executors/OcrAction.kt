@@ -277,6 +277,8 @@ private suspend fun readWithExternalEye(
                     // Происхождение значения видно человеку: не «облако», а кто именно и откуда.
                     put("engine", reading.reader)
                     put("where", reading.where)
+                    // «Куда» без «что там с ним делают» — половина правды (#493).
+                    reading.promise.takeIf { it.isNotBlank() }?.let { put("promise", it) }
                     input.metadata[META_READING_MODE]?.let { put(META_READING_MODE, it) }
                     // Сомнение едет вместе с текстом, а не тонет в нём (#425). Отказом оно не
                     // становится: выбросить накладную из-за одной подозрительной ячейки хуже, чем
@@ -326,7 +328,8 @@ private fun unreadable(who: String, why: String): String =
 /** Почему облако молчит, когда его выключил сам человек, — статус, а не поломка. */
 private fun chainClosed(level: PrivacyLevel): String = when (level) {
     PrivacyLevel.DEVICE_ONLY -> "Наружу ничего не отправляется — в настройках выбрано «Только на телефоне»"
-    else -> "Читают только европейские сервисы — так выбрано в настройке «Куда можно отправлять»"
+    else -> "Читают только те, кто обещал не учиться на присланном, — так выбрано в настройке " +
+        "«Куда можно отправлять»"
 }
 
 /**
