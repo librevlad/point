@@ -22,6 +22,7 @@ class LocationSource @Inject constructor() : ObjectSource {
 
     override val id = "location"
     override val label = "Место"
+    override val icon = "map"
 
     override val permissions = listOf(Manifest.permission.ACCESS_FINE_LOCATION)
 
