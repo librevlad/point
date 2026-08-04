@@ -73,6 +73,15 @@ fun quietWork(meta: CapabilityMeta): Boolean = !meta.network && meta.latency != 
  */
 fun showsBusyScreen(ui: FlowUiState): Boolean = ui.busy != null && !ui.busyQuiet
 
+/**
+ * Рисовать ли «Отменить» (#114): только над работой, которую отмена действительно снимает.
+ *
+ * Третьего не дано — либо кнопка останавливает то, что идёт, либо её нет вовсе. Раньше она
+ * стояла над всякой занятостью, а отменять умела одну: над «Открываю…» и «Выполняю цепочку…»
+ * тап печатал «Отменено», и работа спокойно доходила до конца поверх этих слов.
+ */
+fun showsCancel(ui: FlowUiState): Boolean = showsBusyScreen(ui) && ui.busyCancelable
+
 /** Работает сам объект: тихая работа идёт, экран остался на нём, кольцо-раздумье живёт.
  *  Не путать с [quietWork] — та про способность («такой работе экран не нужен»), эта про
  *  происходящее прямо сейчас. */
@@ -116,6 +125,15 @@ data class FlowUiState(
     /** M3 (MOTION.md №8): true while a fast local action runs — the object stays on screen
      *  and "works" (thinking ring) instead of a full busy screen; states flow, never snap. */
     val busyQuiet: Boolean = false,
+    /**
+     * Можно ли отменить ту работу, что идёт сейчас (#114).
+     *
+     * Ставится ТАМ ЖЕ, где поднимается занятость, и только теми, кто держит её задачу: отмена
+     * снимает работу и выбрасывает её результат. Экран рисует «Отменить» ровно по этому полю —
+     * кнопка, печатающая «Отменено» поверх работы, которая доводится до конца, врёт человеку
+     * дважды: и про остановку, и про исход.
+     */
+    val busyCancelable: Boolean = false,
     val frame: FlowFrame? = null,
     /** Non-null while the AI chat (#4) is open over the current object — a multi-turn conversation. */
     val chat: ChatState? = null,

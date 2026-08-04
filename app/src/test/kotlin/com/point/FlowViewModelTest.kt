@@ -46,6 +46,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -398,6 +399,100 @@ class FlowViewModelTest {
         assertEquals(Outcome.NONE, vm.ui.value.messageOutcome)
         // И совета «поделитесь ещё раз» тут тоже нет: ничего не ломалось.
         assertNull(shareAgainHint(vm.ui.value.messageOutcome))
+    }
+
+    // --- «Отменить» либо отменяет, либо её нет (#114) ---
+
+    /**
+     * Кнопка стоит только над той работой, которую отмена действительно снимает.
+     *
+     * Было: `onCancel` передавался экрану ожидания всегда, а задачу держало одно действие по
+     * пузырю. Над «Открываю…» кнопка была нарисована и не отменяла ничего.
+     */
+    @Test fun `кнопка отмены есть только там, где есть что отменять`() = runTest(dispatcher) {
+        val vm = vm(slow = setOf(CapabilityId("a")))
+
+        vm.onShared("uri", "image/png") // приём расшаренного идёт, объекта ещё нет
+        assertTrue("экран ожидания поднят", showsBusyScreen(vm.ui.value))
+        assertFalse("а отменять нечем — кнопки нет", showsCancel(vm.ui.value))
+        advanceUntilIdle()
+
+        resolver.holdMs = 1_000 // работа ещё идёт, когда человек смотрит на экран
+        vm.onBubble(bubble(id = "a")) // действие над объектом — вот его отменить можно
+        dispatcher.scheduler.advanceTimeBy(10)
+        assertTrue(showsCancel(vm.ui.value))
+    }
+
+    /**
+     * Отмена снимает ту работу, что идёт сейчас, — а не ту, что давно закончилась.
+     *
+     * Ровно этот путь и врал человеку: задача хранилась от действия по пузырю и не обнулялась по
+     * завершении. Тап «Отменить» во время «Открываю…» снимал уже сделанное, печатал «Отменено» —
+     * и объект открывался секундой позже, потому что открытие никто не останавливал.
+     */
+    @Test fun `отмена снимает идущую работу, а не законченную`() = runTest(dispatcher) {
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        vm.onBubble(bubble(id = "a")); advanceUntilIdle() // задача действия появилась и закончилась
+        vm.endFlow(); advanceUntilIdle() // человек вернулся на «Недавнее»
+        history.opened = PointObject("hist", "image/png", ScratchRef("/hist"), ObjectState(ObjectKind.IMAGE))
+
+        vm.openFromHistory(entry("h")) // идёт «Открываю…»
+        assertTrue("отсюда возвращаться есть куда — кнопка на месте", showsCancel(vm.ui.value))
+        vm.cancelAction()
+        advanceUntilIdle()
+
+        assertNull("объект не открылся вопреки отмене", vm.ui.value.frame)
+        assertNull("и «Отменено» не осталось висеть без объекта", vm.ui.value.message)
+    }
+
+    /** Цепочка — самая долгая работа в Point (несколько сетевых шагов). Отмена обязана
+     *  остановить её, а не позволить следующему шагу приземлиться поверх «Отменено». */
+    @Test fun `отменённая цепочка не делает следующий шаг`() = runTest(dispatcher) {
+        favorites.chains = listOf(FavoriteChain("c", "Цепочка", listOf(CapabilityId("a"), CapabilityId("a"))))
+        resolver.result = ActionResult.Success(
+            ResultObject(ObjectKind.TEXT, "text/plain", ScratchRef("/out")),
+        )
+        resolver.holdMs = 1_000
+        resolver.uninterruptible = true
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.applyFavorite(favorites.chains.first())
+        dispatcher.scheduler.advanceTimeBy(10)
+        assertTrue("над цепочкой кнопка есть", showsCancel(vm.ui.value))
+        vm.cancelAction()
+        advanceUntilIdle()
+
+        assertEquals("ни один шаг не приземлился", 1, vm.ui.value.path.size)
+        assertEquals("Отменено", vm.ui.value.message)
+    }
+
+    /** «Ищу приложения…» — тоже занятость с кнопкой; отменённый поиск не смеет открыть список. */
+    @Test fun `отменённый поиск приложений не открывает выбор`() = runTest(dispatcher) {
+        appLauncher.apps = listOf(AppTarget("Telegram", "org.tg", "org.tg.Main"))
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.onBubble(bubble(id = "open-in"))
+        assertTrue(showsCancel(vm.ui.value))
+        vm.cancelAction()
+        advanceUntilIdle()
+
+        assertNull("выбор приложений не всплыл", vm.ui.value.appPicker)
+        assertEquals("Отменено", vm.ui.value.message)
+    }
+
+    /** Законченная работа не отменяется задним числом: раньше задача не обнулялась, и тап
+     *  «Отменить» над следующей занятостью объявлял отменённым уже сделанное. */
+    @Test fun `нечего отменять — нечего и объявлять отменённым`() = runTest(dispatcher) {
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        vm.onBubble(bubble(id = "a")); advanceUntilIdle() // действие уже завершилось
+
+        vm.cancelAction()
+
+        assertEquals("done", vm.ui.value.message) // исход законченной работы уцелел
     }
 
     /** Удача с домашнего экрана попадает на тот же экран «объекта ещё нет» — и не смеет
@@ -1530,6 +1625,14 @@ private class FakeResolver : Resolver {
     /** Сколько работа идёт после сказанного — чтобы тест успел посмотреть на экран, пока она жива. */
     var holdMs: Long = 0
     /**
+     * Работа, которая об отмене не знает (#114).
+     *
+     * Так ведёт себя настоящая: нативный проход движка и сетевой запрос доходят до конца сами и
+     * возвращают результат уже ПОСЛЕ того, как человек нажал «Отменить». `NonCancellable` — модель
+     * этой непрерываемости, а не трюк ради теста: именно на ней ломалось обещание отмены.
+     */
+    var uninterruptible = false
+    /**
      * Слово, которое работа договаривает, когда её уже сняли (#288).
      *
      * Так ведёт себя настоящее долгое действие: нативный проход Tesseract и отрисовка страниц
@@ -1554,7 +1657,15 @@ private class FakeResolver : Resolver {
                         com.point.core.flow.reportStage(late)
                     }
                 }
-                if (holdMs > 0) kotlinx.coroutines.delay(holdMs)
+                if (holdMs > 0) {
+                    if (uninterruptible) {
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+                            kotlinx.coroutines.delay(holdMs)
+                        }
+                    } else {
+                        kotlinx.coroutines.delay(holdMs)
+                    }
+                }
                 return result
             }
             override suspend fun preview(input: PointObject): Preview? = previews[capabilityId]

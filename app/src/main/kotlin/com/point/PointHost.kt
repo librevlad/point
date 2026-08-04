@@ -187,7 +187,14 @@ fun PointHost(
             // M3 (MOTION.md №8): quiet local work keeps the object on screen — it "works"
             // in place; only cloud/slow actions get the full staged busy screen.
             busyTitle != null ->
-                BusyScreen(title = busyTitle, stage = state.busyStage, network = state.busyNetwork, onCancel = onCancelAction)
+                BusyScreen(
+                    title = busyTitle,
+                    stage = state.busyStage,
+                    network = state.busyNetwork,
+                    // Кнопки нет там, где отменять нечем (#114): она рисуется по одному признаку
+                    // с тем, кто держит задачу работы, — см. [showsCancel].
+                    onCancel = onCancelAction.takeIf { showsCancel(state) },
+                )
 
             // #259: выделение поверх объекта — страница целиком, рамка пальцем, «Взять».
             state.selection != null -> SelectionScreen(
@@ -342,7 +349,7 @@ fun PointHost(
  * wait reads as progress, not a hang. No fake percentages — only what we truly know.
  */
 @Composable
-private fun BusyScreen(title: String, stage: String?, network: Boolean, onCancel: () -> Unit) {
+private fun BusyScreen(title: String, stage: String?, network: Boolean, onCancel: (() -> Unit)?) {
     var elapsed by remember(title) { mutableIntStateOf(0) }
     LaunchedEffect(title) {
         while (true) {
@@ -354,13 +361,13 @@ private fun BusyScreen(title: String, stage: String?, network: Boolean, onCancel
     // own near-black stage — replaces the plain wheel (MOTION.md принцип №3, impulses not a spinner).
     // Подпись говорит правду о времени, а не обещает «несколько секунд» (#288): две модели по
     // фото — это минута и больше, и обещание, которое нарушается на 12-й секунде, читается как
-    // «зависло». Секунды идут, отмена доступна с самого начала — передумать не поздно никогда.
+    // «зависло». Про отмену подпись напоминает только там, где кнопка есть (#114).
     // Никакого выдуманного чек-листа (#288, консилиум: «замещение реального статуса
     // имитацией»): показываем ТОЛЬКО то, что действие сказало о себе само. Молчит — человек
-    // видит идущее время и кнопку отмены, и это честнее застрявшей бутафории.
+    // видит идущее время, и это честнее застрявшей бутафории.
     BusyPortal(
         title = title,
-        subtitle = waitingSubtitle(elapsed, network),
+        subtitle = waitingSubtitle(elapsed, network, cancelable = onCancel != null),
         steps = listOfNotNull(stage),
         activeStep = 0,
         onCancel = onCancel,
@@ -376,12 +383,18 @@ private fun BusyScreen(title: String, stage: String?, network: Boolean, onCancel
 internal fun shareAgainHint(outcome: Outcome): String? =
     if (outcome == Outcome.FAILED) "Попробуйте поделиться объектом в Point ещё раз" else null
 
-/** Что честно сказать о времени: сколько уже идёт и почему это нормально. */
-internal fun waitingSubtitle(elapsed: Int, network: Boolean): String = when {
+/**
+ * Что честно сказать о времени: сколько уже идёт и почему это нормально.
+ *
+ * Про отмену подпись напоминает только при [cancelable] — над работой без кнопки строка
+ * «можно отменить» отправляла бы человека искать то, чего на экране нет (#114).
+ */
+internal fun waitingSubtitle(elapsed: Int, network: Boolean, cancelable: Boolean = true): String = when {
     !network -> if (elapsed < 3) "Обрабатываю…" else "Идёт $elapsed с"
     elapsed < 5 -> "Идёт $elapsed с"
     elapsed < 30 -> "Идёт $elapsed с · модель читает документ"
-    else -> "Идёт $elapsed с · долгая страница, можно отменить"
+    cancelable -> "Идёт $elapsed с · долгая страница, можно отменить"
+    else -> "Идёт $elapsed с · долгая страница"
 }
 
 /**
