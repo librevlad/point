@@ -1,8 +1,12 @@
 package com.point.source
 
+import android.app.StatusBarManager
+import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.drawable.Icon
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -16,14 +20,22 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.AddToHomeScreen
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import android.widget.Toast
 import androidx.lifecycle.lifecycleScope
+import com.point.R
 import com.point.ShareActivity
 import com.point.core.ui.PortalColumnWidth
 import com.point.core.ui.PortalRow
@@ -36,11 +48,13 @@ import javax.inject.Inject
 import kotlinx.coroutines.launch
 
 /**
- * «Что превратить в объект?» — экран выбора источника из шторки (#246).
+ * «Что превратить в объект?» — экран выбора источника (#246).
  *
- * Живёт поверх чужого приложения и исчезает, как только объект родился. Здесь же решается вопрос,
- * из-за которого этот экран вообще обязан быть активити, а не сервисом: буфер обмена Android
- * отдаёт только приложению на переднем плане (тот же приём, что у `ClipboardSyncActivity`).
+ * Открывается из плитки шторки и с домашнего экрана (#456): пока дверь была одна и та пряталась в
+ * редакторе плиток, четыре источника из пяти не видел никто. Живёт поверх того, откуда пришли, и
+ * исчезает, как только объект родился. Здесь же решается вопрос, из-за которого этот экран вообще
+ * обязан быть активити, а не сервисом: буфер обмена Android отдаёт только приложению на переднем
+ * плане (тот же приём, что у `ClipboardSyncActivity`).
  */
 @AndroidEntryPoint
 class SourcePickerActivity : ComponentActivity() {
@@ -48,6 +62,9 @@ class SourcePickerActivity : ComponentActivity() {
     @Inject lateinit var sources: Set<@JvmSuppressWildcards ObjectSource>
 
     private var pending: ObjectSource? = null
+
+    /** Показывать ли строку «Поставить плитку в шторку» — правило живёт в `ShadeTile.kt`. */
+    private var tileOffer by mutableStateOf(false)
 
     private val permissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
@@ -78,11 +95,44 @@ class SourcePickerActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val visible = sources.filter { it.isAvailable(this) }.sortedBy { it.label }
+        tileOffer = tileOfferVisible(Build.VERSION.SDK_INT, shadeTileKnown(this))
         setContent {
             PointTheme {
-                SourcePickerScreen(sources = visible, onPick = ::start)
+                SourcePickerScreen(
+                    sources = visible,
+                    onPick = ::start,
+                    tileOffer = tileOffer,
+                    onAddTile = ::addTile,
+                )
             }
         }
+    }
+
+    /**
+     * Попросить систему предложить плитку (#456). Дальше решает человек в системном диалоге —
+     * поставить плитку молча Point не может и не должен.
+     */
+    private fun addTile() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+        val bar = getSystemService(StatusBarManager::class.java)
+        if (bar == null) {
+            onTileAnswer(TileAddOutcome.FAILED)
+            return
+        }
+        bar.requestAddTileService(
+            ComponentName(this, PointTileService::class.java),
+            getString(R.string.app_name),
+            Icon.createWithResource(this, R.drawable.ic_tile_point),
+            mainExecutor,
+        ) { result -> onTileAnswer(tileAddOutcome(result)) }
+    }
+
+    private fun onTileAnswer(outcome: TileAddOutcome) {
+        if (outcome.tilePresent) {
+            rememberShadeTile(this, added = true)
+            tileOffer = false
+        }
+        tileAddMessage(outcome)?.let { Toast.makeText(this, it, Toast.LENGTH_SHORT).show() }
     }
 
     /**
@@ -143,18 +193,27 @@ class SourcePickerActivity : ComponentActivity() {
  * приложения из шторки), а фона не было вовсе: белый текст ложился на чужой светлый экран и
  * пропадал. Теперь под карточкой лежит ФОН дизайн-системы, приглушённый до просвечивания: видно,
  * откуда пришли, и читается то, что написано.
+ *
+ * [tileOffer] — последняя, тихая строка: «поставить плитку в шторку» (#456). Стоит она именно
+ * здесь, потому что здесь человек только что сказал, чего хочет, — а плитка это тот же экран, но
+ * без открывания Point. Ярче источников она не бывает: это ускорение, а не действие.
  */
 @Composable
 internal fun SourcePickerScreen(
     sources: List<ObjectSource>,
     onPick: (ObjectSource) -> Unit,
     modifier: Modifier = Modifier,
+    tileOffer: Boolean = false,
+    onAddTile: () -> Unit = {},
 ) {
     Box(
         modifier = modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background.copy(alpha = 0.88f))
             .systemBarsPadding()
+            // Источников пятеро, и к ним прибавилась строка про плитку (#456): на невысоком экране
+            // последний источник уходил за кромку молча — то есть снова становился невидимым.
+            .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp, vertical = 20.dp),
         contentAlignment = Alignment.Center,
     ) {
@@ -170,6 +229,16 @@ internal fun SourcePickerScreen(
                     icon = bubbleIcon(source.icon),
                     accent = bubbleColor(source.icon),
                     appearIndex = index,
+                )
+            }
+            if (tileOffer) {
+                PortalRow(
+                    title = "Поставить плитку в шторку",
+                    subtitle = "Тот же выбор, но не открывая Point",
+                    onClick = onAddTile,
+                    icon = Icons.AutoMirrored.Filled.AddToHomeScreen,
+                    accent = MaterialTheme.colorScheme.onSurfaceVariant,
+                    appearIndex = sources.size,
                 )
             }
         }
@@ -200,5 +269,7 @@ private fun PreviewSourcePicker() = PointTheme {
             previewSource("receive", "Принять файл", "link"),
         ),
         onPick = {},
+        tileOffer = true,
+        onAddTile = {},
     )
 }
