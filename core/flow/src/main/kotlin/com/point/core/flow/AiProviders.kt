@@ -73,7 +73,11 @@ val AI_PROVIDERS: List<AiProvider> = listOf(
         name = "Google Gemini",
         what = "хорошо понимает фотографии",
         keyUrl = "https://aistudio.google.com/apikey",
-        baseUrl = "https://generativelanguage.googleapis.com",
+        // Именно OpenAI-совместимая дверь Google, а не корень домена: ключ человека ходит через
+        // `OpenAiCompatibleClient`, который дописывает `/chat/completions`. С голым доменом
+        // получался адрес, которого нет, — и выбравший Gemini упирался в отказ, не сделав ничего
+        // неправильно. Нашла это живая проверка ключа (#465): молчаливое «Сохранить» такое не ловит.
+        baseUrl = "https://generativelanguage.googleapis.com/v1beta/openai",
         models = "gemini-flash-latest,gemini-pro-latest",
         freeNote = "бесплатная квота в сутки (проверено 08.2026)",
     ),
@@ -99,7 +103,8 @@ val AI_PROVIDERS: List<AiProvider> = listOf(
         name = "Anthropic Claude",
         what = "платно, сильна в длинных документах",
         keyUrl = "https://console.anthropic.com/settings/keys",
-        baseUrl = "https://api.anthropic.com",
+        // По той же причине, что у Gemini: OpenAI-совместимая дверь живёт на `/v1`, а не в корне.
+        baseUrl = "https://api.anthropic.com/v1",
         models = "claude-opus-4-8",
     ),
 )
@@ -107,3 +112,19 @@ val AI_PROVIDERS: List<AiProvider> = listOf(
 /** Какой провайдер соответствует уже сохранённому адресу — чтобы экран открылся на нужном. */
 fun providerForBaseUrl(baseUrl: String): AiProvider? =
     AI_PROVIDERS.firstOrNull { it.baseUrl.equals(baseUrl.trim().trimEnd('/'), ignoreCase = true) }
+
+/**
+ * Зачем вообще ключ — сказанное ДО отказа, а не после (#465).
+ *
+ * Свежепоставленный Point почти ничего не умеет из того, ради чего его ставят, и узнавал об этом
+ * человек в худший момент: когда действие уже провалилось. Слова живут здесь, в одном месте, чтобы
+ * «Недавнее» и экран ключа говорили одно и то же: два текста об одном разъезжаются на первой же
+ * правке, и человек читает разные обещания на соседних экранах.
+ */
+const val AI_KEY_WHY: String =
+    "«Понять», «Перевести», «Спросить AI» и расшифровку записи делает модель — она работает на " +
+        "вашем ключе и вашей квоте. У большинства сервисов ключ бесплатный."
+
+/** Короткий довод для «Недавнего»: что именно молчит, пока ключа нет. */
+const val AI_KEY_WHY_SHORT: String =
+    "Без ключа не работают «Понять», «Перевести», «Спросить AI» и расшифровка записи."

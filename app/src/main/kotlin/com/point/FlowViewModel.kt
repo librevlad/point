@@ -122,6 +122,8 @@ class FlowViewModel @Inject constructor(
     private val linkMonitor: com.point.core.flow.LinkMonitor,
     private val pulledFiles: PulledFileFactory,
     private val frames: SelectionFrames,
+    /** Кто стучится в сервис ключом человека, когда тот просит проверить (#465). */
+    private val aiKeyCheck: com.point.core.flow.AiKeyCheck,
 ) : ViewModel() {
 
     /**
@@ -355,6 +357,9 @@ class FlowViewModel @Inject constructor(
     }
 
     fun loadRecent() {
+        // Есть ли ключ — «Недавнее» спрашивает об этом здесь, а не на экране объекта: приглашение
+        // подключить AI живёт на домашнем экране, и бюджет первого экрана (≤300 мс) не трогается.
+        _ui.update { it.copy(aiKeySet = runCatching { userKeys.read() != null }.getOrDefault(false)) }
         viewModelScope.launch {
             _recent.value = runCatching { history.recent() }.getOrDefault(emptyList())
             _basketCount.value = runCatching { basket.items().size }.getOrDefault(0)
@@ -988,6 +993,7 @@ class FlowViewModel @Inject constructor(
     fun openKeySettings() {
         // A tiny prefs read; the store is warmed when it's created (Activity start), so it
         // is in-memory by the time the gear or an AI-no-key failure summons the screen.
+        val saved = userKeys.read()
         _ui.update {
             // Отказ, ради которого сюда и пришли, экран ключей не стирает (#452): человек,
             // нажавший «Отмена», возвращается к объекту, где причина по-прежнему сказана словами.
@@ -995,15 +1001,20 @@ class FlowViewModel @Inject constructor(
             // захода не имеет отношения к этому.
             val refusal = keyOfferLabel(it.message) != null
             it.copy(
-                keyScreen = userKeys.read() ?: UserAiConfig.DEFAULT, busy = null,
+                keyScreen = saved ?: UserAiConfig.DEFAULT, busy = null,
                 // …и он же стоит НА экране ключей (#467). Сюда пришли по предложению под отказом —
                 // то есть с вопросом «какой из семи ключей задать»; ответ на него живёт в тексте
                 // отказа, а не в памяти человека, и терять его по дороге незачем. Заполняется
-                // только от отказа: пришедшему шестерёнкой объяснять нечего.
+                // только от отказа: пришедшему дверью «AI-ключ» объяснять нечего.
                 keyScreenNote = it.message.takeIf { _ -> refusal },
                 message = it.message.takeIf { _ -> refusal },
                 messageOutcome = if (refusal) it.messageOutcome else Outcome.NONE,
                 inputPrompt = null,
+                // Приговор прошлой проверки не имеет права пережить закрытие экрана: «работает»,
+                // висящее над другим ключом, — ровно та ложь, против которой вся проверка (#465).
+                keyChecking = false,
+                keyVerdict = null,
+                aiKeySet = saved != null,
                 soundEnabled = runCatching { sensorySettings.isSoundEnabled() }.getOrDefault(true),
                 privacyLevel = runCatching { cloudPrivacy.level() }
                     .getOrDefault(com.point.core.flow.PrivacyLevel.DEFAULT),
@@ -1011,6 +1022,34 @@ class FlowViewModel @Inject constructor(
         }
         refreshUsage()
         viewModelScope.launch { refreshCloudConsent() } // тумблер показывает, что разрешено сейчас
+    }
+
+    /**
+     * Проверить ключ живым запросом и, если он работает, тут же его сохранить (#465).
+     *
+     * Порядок именно такой: сохраняет то, что доказано. Записать сначала и проверить потом значило
+     * бы оставить в приложении ключ, про который уже известно, что он не подошёл, — и следующее
+     * действие человека провалилось бы снова, теперь уже «необъяснимо».
+     *
+     * Отказ ничего не сохраняет и ничего не закрывает: человек остаётся на экране, где стоит и
+     * набранный ключ, и совет, что с ним сделать.
+     */
+    fun checkAiKey(config: UserAiConfig) {
+        if (config.apiKey.isBlank() || _ui.value.keyChecking) return
+        _ui.update { it.copy(keyChecking = true, keyVerdict = null) }
+        viewModelScope.launch {
+            val probe = runCatching { aiKeyCheck.check(config) }
+                .getOrElse { com.point.core.flow.KeyProbe(error = com.point.core.flow.withoutKey(it.message.orEmpty(), config.apiKey)) }
+            val verdict = com.point.core.flow.keyVerdict(probe)
+            if (verdict is com.point.core.flow.KeyVerdict.Works) runCatching { userKeys.save(config) }
+            _ui.update {
+                it.copy(
+                    keyChecking = false,
+                    keyVerdict = verdict,
+                    aiKeySet = it.aiKeySet || verdict is com.point.core.flow.KeyVerdict.Works,
+                )
+            }
+        }
     }
 
     /** Load the usage journal's on/off state and tally for the key screen. */
@@ -1047,7 +1086,8 @@ class FlowViewModel @Inject constructor(
         }
     }
 
-    fun closeKeySettings() = _ui.update { it.copy(keyScreen = null, keyScreenNote = null) }
+    fun closeKeySettings() =
+        _ui.update { it.copy(keyScreen = null, keyScreenNote = null, keyVerdict = null, keyChecking = false) }
 
     // --- «Компьютер» (#147): pair once, then the «На компьютер» bubble appears. ---
 
@@ -1333,6 +1373,8 @@ class FlowViewModel @Inject constructor(
             _ui.update {
                 it.copy(
                     keyScreen = null, keyScreenNote = null,
+                    keyVerdict = null,
+                    aiKeySet = config.apiKey.isNotBlank(),
                     message = "Ключ AI сохранён", messageOutcome = Outcome.DONE,
                 )
             }
@@ -1503,7 +1545,8 @@ class FlowViewModel @Inject constructor(
                 // «Понять», ждал и получал экран про ключи без единого слова о том, почему тот
                 // открылся. «Отмена» возвращала его к объекту, где не осталось ничего, — снаружи
                 // неотличимо от «действие ничего не сделало». Экран ключей теперь стоит рядом с
-                // причиной предложением ([keyOfferLabel]), по которому человек идёт сам.
+                // причиной предложением ([keyOfferLabel]), по которому человек идёт сам, — и,
+                // открывшись, повторяет эту причину карточкой (#465).
                 _ui.update { it.copy(busy = null, busyStage = null, message = result.reason, messageOutcome = Outcome.FAILED) }
             }
             is ActionResult.NeedsInput -> {

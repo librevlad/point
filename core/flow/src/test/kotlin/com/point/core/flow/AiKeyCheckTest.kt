@@ -1,0 +1,102 @@
+package com.point.core.flow
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+/**
+ * Приговор проверки ключа (#465) — то место, где «ошибка» превращается в понятную человеку причину.
+ *
+ * Судится здесь, а не глазами на телефоне: воспроизвести 402 или кончившуюся квоту руками нельзя,
+ * а разница между «ключ не тот» и «квота кончилась» — это разница между «перевставь» и «подожди».
+ */
+class AiKeyCheckTest {
+
+    private fun refusal(probe: KeyProbe): KeyVerdict.Refused =
+        keyVerdict(probe) as KeyVerdict.Refused
+
+    @Test
+    fun `ответ модели и есть доказательство — его показывают человеку`() {
+        val verdict = keyVerdict(KeyProbe(status = 200, reply = "  Готово  "))
+        assertEquals(KeyVerdict.Works("Готово"), verdict)
+    }
+
+    @Test
+    fun `неверный ключ назван неверным ключом, а не ошибкой`() {
+        listOf(401, 403).forEach { code ->
+            val verdict = refusal(KeyProbe(status = code, error = "unauthorized"))
+            assertTrue("код $code: ${verdict.what}", verdict.what.contains("не подошёл"))
+            assertTrue("коду $code нечего посоветовать", verdict.fix.isNotBlank())
+        }
+    }
+
+    @Test
+    fun `кончившаяся квота — это не сломанный ключ, и человек должен видеть разницу`() {
+        val quota = refusal(KeyProbe(status = 429))
+        val wrong = refusal(KeyProbe(status = 401))
+        assertTrue(quota.what.contains("квота"))
+        assertTrue("квота не должна читаться как неверный ключ", quota.what.contains("верный"))
+        assertFalse("два разных отказа говорят одно и то же", quota.what == wrong.what)
+    }
+
+    @Test
+    fun `просьба об оплате отправляет к бесплатному соседу, а не в кассу`() {
+        val verdict = refusal(KeyProbe(status = 402))
+        assertTrue(verdict.what.contains("оплат"))
+        // Опора на бесплатные квоты — решение проекта: на 402 предлагаем другого, а не покупку.
+        assertTrue("на 402 надо звать к другому сервису", verdict.fix.contains("другого сервиса"))
+    }
+
+    @Test
+    fun `нет связи и отказ сервиса — разные новости`() {
+        val offline = refusal(KeyProbe())
+        val refused = refusal(KeyProbe(status = 500))
+        assertTrue(offline.what.contains("дозвонились"))
+        assertTrue(refused.what.contains("не отвечает"))
+        assertTrue("отказ сервиса нельзя вешать на ключ человека", refused.fix.contains("не про ваш ключ"))
+    }
+
+    @Test
+    fun `незнакомая модель и непонятый запрос ведут к выбору сервиса из списка`() {
+        assertTrue(refusal(KeyProbe(status = 404)).fix.contains("списке выше"))
+        assertTrue(refusal(KeyProbe(status = 400)).fix.contains("списке выше"))
+    }
+
+    @Test
+    fun `принятый ключ без ответа не выдаётся за работающий`() {
+        // 200 с пустым текстом — не успех: следующее действие человека всё равно не сработает.
+        val verdict = refusal(KeyProbe(status = 200, reply = "   "))
+        assertTrue(verdict.what.contains("ответа не прислали"))
+    }
+
+    @Test
+    fun `незнакомый код пересказывает сервис, но коротко`() {
+        val verdict = refusal(KeyProbe(status = 418, error = "я".repeat(500)))
+        assertTrue(verdict.what.contains("418"))
+        assertTrue("дамп ответа вместо довода", verdict.fix.length < 220)
+    }
+
+    @Test
+    fun `ключ вычёркивается из всего, что пришло от сервиса`() {
+        val key = "sk-очень-секретный-ключ"
+        val said = withoutKey("bad request for key $key at /v1", key)
+        assertFalse("секрет уехал бы на экран", said.contains(key))
+        assertTrue(said.contains("bad request"))
+    }
+
+    @Test
+    fun `короткое за секрет не принимается — иначе вычеркнули бы половину текста`() {
+        assertEquals("ключ ok", withoutKey("ключ ok", "ok"))
+    }
+
+    @Test
+    fun `вставка из буфера отличает ключ от скопированного абзаца`() {
+        assertTrue(looksLikeApiKey("sk-or-v1-0123456789abcdef0123"))
+        assertTrue("пробелы по краям — обычное дело для буфера", looksLikeApiKey("  gsk_0123456789abcdef  "))
+        assertFalse(looksLikeApiKey("короткий"))
+        assertFalse(looksLikeApiKey("это скопированное предложение, а не ключ"))
+        assertFalse(looksLikeApiKey(null))
+        assertFalse(looksLikeApiKey(""))
+    }
+}

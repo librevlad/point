@@ -41,10 +41,12 @@ class HomeDoorTest {
 
     /** Сохранить ключ так, как это делает человек: доехать, набрать, нажать. */
     private fun saveKey(key: String) {
-        // Первое поле экрана — сам ключ; «Сохранить» до него погашено. Экран длиннее окна, поэтому
+        // Первое поле экрана — сам ключ; кнопки до него погашены. Экран длиннее окна, поэтому
         // до узлов доезжаем прокруткой — как пальцем.
         compose.onAllNodes(hasSetTextAction()).onFirst().performScrollTo().performTextInput(key)
-        compose.onNodeWithText("Сохранить").performScrollTo().performClick()
+        // Тихая дорога в обход живой проверки (#465) — она и есть прежнее «Сохранить». Тест про
+        // дверь, а не про сеть, поэтому идёт именно ею.
+        compose.onNodeWithText("Сохранить без проверки").performScrollTo().performClick()
         // Ключ уходит на диск в фоновом потоке — ждём словами экрана, а не «должно было успеть».
         compose.waitUntilAtLeastOneExists(hasText("Ключ AI сохранён"), TIMEOUT_MS)
     }

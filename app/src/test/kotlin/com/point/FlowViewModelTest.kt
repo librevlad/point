@@ -48,6 +48,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -106,7 +107,22 @@ class FlowViewModelTest {
         slow: Set<CapabilityId> = emptySet(),
         discovery: com.point.core.flow.PcDiscovery = com.point.core.flow.PcDiscovery { kotlinx.coroutines.flow.flowOf(emptyList()) },
         linkMonitor: com.point.core.flow.LinkMonitor = com.point.core.flow.RememberingLinkMonitor(),
-    ) = FlowViewModel(store, FakeRegistry(caps, cloud, slow), resolver, chatResponder, enrichment, history, favorites, usage, chosenApps, userKeys, journal, consent, appLauncher, FakePdfRasterizer(), sensory, sensorySettings, cloudPrivacy, snapshot, crashLog, dispatcher, pins, AppIconResolver { null }, pcPairings, pcTransport, discovery, basket, pcCaps, linkMonitor, PulledFileFactory { name -> java.io.File(java.io.File(System.getProperty("java.io.tmpdir")), "pulled-" + name).absolutePath }, noFrames)
+    ) = FlowViewModel(store, FakeRegistry(caps, cloud, slow), resolver, chatResponder, enrichment, history, favorites, usage, chosenApps, userKeys, journal, consent, appLauncher, FakePdfRasterizer(), sensory, sensorySettings, cloudPrivacy, snapshot, crashLog, dispatcher, pins, AppIconResolver { null }, pcPairings, pcTransport, discovery, basket, pcCaps, linkMonitor, PulledFileFactory { name -> java.io.File(java.io.File(System.getProperty("java.io.tmpdir")), "pulled-" + name).absolutePath }, noFrames, keyCheck)
+
+    /** Проверка ключа (#465): что «ответил сервис», решает тест, а не сеть. */
+    private val keyCheck = FakeAiKeyCheck()
+
+    private class FakeAiKeyCheck : com.point.core.flow.AiKeyCheck {
+        var probe = com.point.core.flow.KeyProbe(status = 200, reply = "Готово")
+        var asked: UserAiConfig? = null
+        /** Проверка сама может упасть — и это тоже обязано кончиться словами, а не тишиной. */
+        var explode = false
+        override suspend fun check(config: UserAiConfig): com.point.core.flow.KeyProbe {
+            asked = config
+            if (explode) error("что-то сломалось внутри проверки")
+            return probe
+        }
+    }
 
     private val chatResponder = FakeChatResponder()
     private val basket = FakeBasket()
@@ -1569,6 +1585,82 @@ class FlowViewModelTest {
 
         assertEquals(config, userKeys.saved)
         assertNull(vm.ui.value.keyScreen)
+    }
+
+    // --- Доведение до работающего ключа (#465) ---
+
+    @Test fun `удачная проверка сохраняет ключ и показывает слова сервиса`() = runTest(dispatcher) {
+        val vm = vm()
+        vm.openKeySettings(); advanceUntilIdle()
+        val config = UserAiConfig("sk-1", "https://h/v1", "m")
+        keyCheck.probe = com.point.core.flow.KeyProbe(status = 200, reply = "Готово")
+
+        vm.checkAiKey(config); advanceUntilIdle()
+
+        assertEquals("проверять надо ровно то, что человек набрал", config, keyCheck.asked)
+        assertEquals(com.point.core.flow.KeyVerdict.Works("Готово"), vm.ui.value.keyVerdict)
+        assertEquals("доказанный ключ обязан сохраниться сам", config, userKeys.saved)
+        // Экран остаётся: человек должен УВИДЕТЬ «работает», а не догадаться по его исчезновению.
+        assertNotNull(vm.ui.value.keyScreen)
+        assertTrue(vm.ui.value.aiKeySet)
+    }
+
+    @Test fun `непрошедший проверку ключ не сохраняется`() = runTest(dispatcher) {
+        val vm = vm()
+        vm.openKeySettings(); advanceUntilIdle()
+        keyCheck.probe = com.point.core.flow.KeyProbe(status = 401, error = "unauthorized")
+
+        vm.checkAiKey(UserAiConfig("не-тот", "https://h/v1", "m")); advanceUntilIdle()
+
+        // Записать ключ, про который уже известно, что он не подошёл, значит подготовить человеку
+        // следующий необъяснимый отказ.
+        assertNull("отказавший ключ не имеет права осесть на диске", userKeys.saved)
+        val verdict = vm.ui.value.keyVerdict as com.point.core.flow.KeyVerdict.Refused
+        assertTrue(verdict.what.contains("не подошёл"))
+        assertNotNull("с отказом человек остаётся на экране, где стоит его ключ", vm.ui.value.keyScreen)
+    }
+
+    @Test fun `упавшая проверка — это отказ, а не тишина`() = runTest(dispatcher) {
+        val vm = vm()
+        vm.openKeySettings(); advanceUntilIdle()
+        keyCheck.explode = true
+
+        vm.checkAiKey(UserAiConfig("sk-1", "https://h/v1", "m")); advanceUntilIdle()
+
+        assertFalse("кнопка осталась бы в «Проверяю…» навсегда", vm.ui.value.keyChecking)
+        assertTrue(vm.ui.value.keyVerdict is com.point.core.flow.KeyVerdict.Refused)
+    }
+
+    @Test fun `приговор не переживает закрытие экрана`() = runTest(dispatcher) {
+        val vm = vm()
+        vm.openKeySettings(); advanceUntilIdle()
+        vm.checkAiKey(UserAiConfig("sk-1", "https://h/v1", "m")); advanceUntilIdle()
+        assertNotNull(vm.ui.value.keyVerdict)
+
+        vm.closeKeySettings()
+        vm.openKeySettings(); advanceUntilIdle()
+
+        // «Работает», висящее над другим ключом, — ровно та ложь, против которой вся проверка.
+        assertNull(vm.ui.value.keyVerdict)
+        assertFalse(vm.ui.value.keyChecking)
+    }
+
+    @Test fun `пустой ключ не гоняет сеть`() = runTest(dispatcher) {
+        val vm = vm()
+        vm.checkAiKey(UserAiConfig("   ", "https://h/v1", "m")); advanceUntilIdle()
+
+        assertNull("сеть не имеет права уйти без ключа", keyCheck.asked)
+        assertNull(vm.ui.value.keyVerdict)
+    }
+
+    @Test fun `«Недавнее» знает, задан ли ключ`() = runTest(dispatcher) {
+        val vm = vm()
+        vm.loadRecent(); advanceUntilIdle()
+        assertFalse("приглашение подключить AI должно быть видно", vm.ui.value.aiKeySet)
+
+        userKeys.config = UserAiConfig("sk-1", "https://h/v1", "m")
+        vm.loadRecent(); advanceUntilIdle()
+        assertTrue("ключ есть — звать больше некуда", vm.ui.value.aiKeySet)
     }
 
     @Test fun `records usage events for the North Star (shared, action, completed)`() = runTest(dispatcher) {

@@ -11,6 +11,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -133,6 +134,56 @@ fun OutcomeBanner(message: String?, outcome: Outcome) {
                 // приглушённый: приглушённым он выглядел подписью к чему-то важнее себя.
                 color = MaterialTheme.colorScheme.onSurface,
             )
+        }
+    }
+}
+
+/**
+ * Исход, у которого есть продолжение: что случилось — и что с этим делать (#465).
+ *
+ * Та же карточка, что [OutcomeBanner], тот же знак и тот же свет; отличие одно — под ответом стоит
+ * вторая строка. Она нужна там, где исход не конец пути, а развилка: «Ключ не подошёл» без «что
+ * теперь» оставляет человека ровно там, откуда он пришёл.
+ *
+ * Стоит на месте, без выезда и без памяти о прошлом: карточка проверки — ответ на нажатую кнопку,
+ * а не всплывшая сама собой новость.
+ */
+@Composable
+fun OutcomeCard(
+    title: String,
+    outcome: Outcome,
+    modifier: Modifier = Modifier,
+    detail: String? = null,
+) {
+    val accent = when (outcome) {
+        Outcome.DONE -> MaterialTheme.colorScheme.primary
+        Outcome.FAILED -> OutcomeWarm
+        Outcome.NONE -> null
+    }
+    Row(
+        verticalAlignment = Alignment.Top,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = modifier
+            .widthIn(max = PortalColumnWidth)
+            .portalCard(accent = accent)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+    ) {
+        if (accent != null) {
+            key(title) { OutcomeMark(accent = accent, failed = outcome == Outcome.FAILED) }
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            if (detail != null) {
+                Text(
+                    text = detail,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }

@@ -31,16 +31,20 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.point.core.flow.AI_KEY_WHY
 import com.point.core.flow.AI_PROVIDERS
 import com.point.core.flow.AiProvider
+import com.point.core.flow.KeyVerdict
 import com.point.core.flow.PRIVACY_SETTING_HINT
 import com.point.core.flow.PRIVACY_SETTING_TITLE
 import com.point.core.flow.PrivacyLevel
 import com.point.core.flow.UsageSummary
 import com.point.core.flow.UserAiConfig
+import com.point.core.flow.looksLikeApiKey
 import com.point.core.flow.providerForBaseUrl
 import com.point.core.ui.Outcome
 import com.point.core.ui.OutcomeBanner
+import com.point.core.ui.OutcomeCard
 import com.point.core.ui.PortalColumnWidth
 import com.point.core.ui.PortalRow
 import com.point.core.ui.ScreenHeader
@@ -67,6 +71,13 @@ import com.point.core.ui.theme.PointTheme
  * «Куда можно отправлять» (#280) собрано тем же строем, что выбор провайдера, — и по той же
  * причине: это тот же вопрос «выбери одно из нескольких». Полоска узких чипов показывала цену
  * только выбранного варианта; список строк держит цену при **каждом**.
+ *
+ * **Путь до работающего ключа доведён до конца (#465).** Экран говорит, ЗАЧЕМ ключ, — до того, как
+ * человек упёрся в отказ; шаги пронумерованы (взять → вставить → проверить); буфер обмена
+ * принимается одним тапом; и главное — [onCheck] стучится в сервис по-настоящему и показывает
+ * ответ. «Сохранить» молча записывал ключ на диск, и узнать, подошёл ли он, можно было только
+ * следующим действием — то есть тогда, когда оно уже провалилось. Мастера на пять экранов при этом
+ * не появилось: экран остался одним, просто перестал молчать.
  */
 @Composable
 fun KeyScreen(
@@ -79,6 +90,14 @@ fun KeyScreen(
     usageEnabled: Boolean,
     usageSummary: UsageSummary?,
     onToggleUsage: (Boolean) -> Unit,
+    /** Идёт ли живая проверка ключа прямо сейчас (#465). */
+    checking: Boolean = false,
+    /** Чем кончилась проверка — `null`, пока её не запускали (#465). */
+    verdict: KeyVerdict? = null,
+    /** Проверить ключ живым запросом; удачная проверка его же и сохраняет (#465). */
+    onCheck: (UserAiConfig) -> Unit = {},
+    /** Что лежит в буфере обмена — читается ТОЛЬКО по тапу «Вставить из буфера» (#465). */
+    onPasteKey: () -> String? = { null },
     soundEnabled: Boolean = true,
     onToggleSound: (Boolean) -> Unit = {},
     /** Кому вообще можно предлагать объект (#280) — умолчание «максимум бесплатного». */
@@ -97,6 +116,8 @@ fun KeyScreen(
     var key by rememberSaveable(config) { mutableStateOf(config.apiKey) }
     var model by rememberSaveable(config) { mutableStateOf(config.model) }
     var baseUrl by rememberSaveable(config) { mutableStateOf(config.baseUrl) }
+    // Что ответила вставка, когда в буфере оказался не ключ. Пусто — про буфер сказать нечего.
+    var pasteNote by rememberSaveable(config) { mutableStateOf("") }
 
     Column(
         modifier = modifier
@@ -111,7 +132,10 @@ fun KeyScreen(
         ) {
             ScreenHeader(
                 title = "Ваш AI-ключ",
-                subtitle = "Point работает на вашем ключе и вашей квоте — чужие ключи он не хранит и не просит.",
+                // Зачем ключ — первым, а не мелким шрифтом после отказа (#465). Слова общие с
+                // приглашением на «Недавнем» (`AI_KEY_WHY`): два текста об одном разъезжаются.
+                subtitle = "$AI_KEY_WHY Point работает на вашем ключе и вашей квоте — " +
+                    "чужие ключи он не хранит и не просит.",
                 modifier = Modifier.padding(bottom = if (note == null) 9.dp else 0.dp),
             )
 
@@ -127,7 +151,10 @@ fun KeyScreen(
             // Выбранный провайдер не хранится отдельным состоянием, а читается из адреса: два
             // состояния об одном и том же расходятся при первом же восстановлении экрана (#114).
             val chosen = providerForBaseUrl(baseUrl)
-            SectionLabel("Откуда взять ключ")
+            // Шаги пронумерованы прямо в лейблах секций (#465): человеку впервые видно, что путь
+            // конечен и его три. Отдельных экранов под шаги нет намеренно — мастер на пять
+            // экранов Point не становится, а порядок называется словом.
+            SectionLabel("Шаг 1 · Откуда взять ключ")
             AI_PROVIDERS.forEachIndexed { index, provider ->
                 ProviderRow(
                     provider = provider,
@@ -142,15 +169,47 @@ fun KeyScreen(
             }
 
             Spacer(Modifier.height(6.dp))
+            SectionLabel("Шаг 2 · Вставьте ключ")
             OutlinedTextField(
                 value = key,
-                onValueChange = { key = it },
+                onValueChange = {
+                    key = it
+                    pasteNote = ""
+                },
                 label = { Text("API-ключ") },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                 visualTransformation = PasswordVisualTransformation(),
                 modifier = Modifier.fillMaxWidth(),
             )
+            // Ключ приезжает из буфера — человек только что скопировал его на чужой странице.
+            // Буфер читается ТОЛЬКО по этому тапу: заглядывать в него, чтобы решить, показывать ли
+            // строку, значило бы читать чужое без спроса ради украшения экрана.
+            if (key.isBlank()) {
+                PortalRow(
+                    title = "Вставить из буфера",
+                    subtitle = "Скопировали ключ на странице сервиса — он встанет сюда одним тапом.",
+                    onClick = {
+                        val pasted = onPasteKey()
+                        if (looksLikeApiKey(pasted)) {
+                            key = pasted!!.trim()
+                            pasteNote = ""
+                        } else {
+                            // Честно про пустой результат: молчание тут неотличимо от «не нажалось».
+                            pasteNote = "В буфере нет ключа — скопируйте его на странице сервиса и вернитесь."
+                        }
+                    },
+                    icon = bubbleIcon("copy"),
+                    chevron = false,
+                )
+            }
+            if (pasteNote.isNotEmpty()) {
+                Text(
+                    pasteNote,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             OutlinedTextField(
                 value = model,
                 onValueChange = { model = it },
@@ -169,18 +228,46 @@ fun KeyScreen(
             )
 
             Spacer(Modifier.height(6.dp))
+            SectionLabel("Шаг 3 · Проверьте, что работает")
+            Text(
+                // Что именно уедет при проверке — прежде, чем человек нажмёт. Объект тут ни при чём.
+                "Point спросит сервис одним коротким словом и покажет ответ. Ваш объект при этом " +
+                    "никуда не отправляется.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
             // «Основное действие» экрана — та же светящаяся строка, что главное действие объекта.
             // Пока ключа нет, она притушена: строка светится, когда может.
-            val canSave = key.isNotBlank()
+            val entered = UserAiConfig(key.trim(), baseUrl.trim(), model.trim())
+            val canCheck = key.isNotBlank() && !checking
             PortalRow(
-                title = "Сохранить",
-                onClick = { onSave(UserAiConfig(key.trim(), baseUrl.trim(), model.trim())) },
-                icon = bubbleIcon("save"),
+                // Слово меняется вместе с состоянием: «Проверяю…» над идущим запросом — это тот же
+                // честный статус, что и на экране ожидания, а не застывшая кнопка.
+                title = if (checking) "Проверяю…" else "Проверить и включить",
+                onClick = { onCheck(entered) },
+                icon = bubbleIcon(AI_ICON),
                 primary = true,
                 chevron = false,
-                enabled = canSave,
-                modifier = Modifier.graphicsLayer { alpha = if (canSave) 1f else 0.45f },
+                enabled = canCheck,
+                modifier = Modifier.graphicsLayer { alpha = if (canCheck) 1f else 0.45f },
             )
+            // Приговор стоит прямо под кнопкой, которая его вызвала: «работает» человек должен
+            // УВИДЕТЬ, а не додумать, а отказ обязан сказать, что именно не так и что с этим делать.
+            when (verdict) {
+                is KeyVerdict.Works -> OutcomeCard(
+                    title = "Работает — сервис ответил: «${verdict.reply}». Ключ сохранён.",
+                    detail = "Теперь «Понять», «Перевести», «Спросить AI» и расшифровка записи работают.",
+                    outcome = Outcome.DONE,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                is KeyVerdict.Refused -> OutcomeCard(
+                    title = verdict.what,
+                    detail = verdict.fix,
+                    outcome = Outcome.FAILED,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                null -> Unit
+            }
 
             Spacer(Modifier.height(14.dp))
             // Отозвать разрешение было негде: человек, разрешивший облако одним тапом когда-то, не
@@ -243,8 +330,20 @@ fun KeyScreen(
         }
 
         Spacer(Modifier.height(18.dp))
+        // Дорога в обход проверки остаётся: связи может не быть вовсе, а ключ вписывают заранее;
+        // у кого-то свой прокси, который на пробный запрос не отвечает. Отнимать возможность
+        // сохранить ради красоты пути нельзя — но и главной она больше не является.
+        if (key.isNotBlank() && verdict !is KeyVerdict.Works) {
+            TextButton(onClick = { onSave(UserAiConfig(key.trim(), baseUrl.trim(), model.trim())) }) {
+                Text("Сохранить без проверки", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
         TextButton(onClick = onCancel) {
-            Text("Отмена", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            // После удачной проверки уходить уже не «отменой»: ключ сохранён, дело сделано.
+            Text(
+                if (verdict is KeyVerdict.Works) "Готово" else "Отмена",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
@@ -343,6 +442,56 @@ private fun PreviewKeyScreenEmpty() = PointTheme(darkTheme = true) {
         usageEnabled = false,
         usageSummary = null,
         onToggleUsage = {},
+    )
+}
+
+@Preview(name = "Ключ AI · проверка сказала «работает» (#465)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@Composable
+private fun PreviewKeyScreenWorks() = PointTheme(darkTheme = true) {
+    // То, ради чего весь срез: человек ВИДИТ, что настроил правильно, — словами самого сервиса.
+    KeyScreen(
+        config = UserAiConfig(apiKey = "sk-demo-ключ", baseUrl = AI_PROVIDERS.first().baseUrl, model = "gemma"),
+        onSave = {},
+        onCancel = {},
+        usageEnabled = false,
+        usageSummary = null,
+        onToggleUsage = {},
+        verdict = KeyVerdict.Works("Готово"),
+    )
+}
+
+@Preview(name = "Ключ AI · отказ говорит, что чинить (#465)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@Composable
+private fun PreviewKeyScreenRefused() = PointTheme(darkTheme = true) {
+    // Отказ с продолжением: что именно не так и что с этим делать. «Ошибка» без совета оставляет
+    // человека ровно там, откуда он пришёл.
+    KeyScreen(
+        config = UserAiConfig(apiKey = "не-тот-ключ", baseUrl = AI_PROVIDERS[1].baseUrl, model = "llama"),
+        onSave = {},
+        onCancel = {},
+        usageEnabled = false,
+        usageSummary = null,
+        onToggleUsage = {},
+        note = "AI недоступен — задайте свой ключ",
+        verdict = KeyVerdict.Refused(
+            what = "Ключ не подошёл",
+            fix = "Скопируйте ключ целиком, без пробелов по краям, и проверьте, что он от того " +
+                "сервиса, который выбран выше.",
+        ),
+    )
+}
+
+@Preview(name = "Ключ AI · проверка идёт (#465)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@Composable
+private fun PreviewKeyScreenChecking() = PointTheme(darkTheme = true) {
+    KeyScreen(
+        config = UserAiConfig(apiKey = "sk-demo-ключ", baseUrl = AI_PROVIDERS.first().baseUrl, model = "gemma"),
+        onSave = {},
+        onCancel = {},
+        usageEnabled = false,
+        usageSummary = null,
+        onToggleUsage = {},
+        checking = true,
     )
 }
 
