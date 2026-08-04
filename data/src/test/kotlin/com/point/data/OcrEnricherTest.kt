@@ -9,10 +9,12 @@ import com.point.core.flow.EnrichCost
 import com.point.core.flow.Entity
 import com.point.core.flow.EntityExtractor
 import com.point.core.flow.EntityType
+import com.point.core.flow.FrameTransform
 import com.point.core.flow.INCOMPLETE_TIMEOUT
 import com.point.core.flow.META_ENTITY_PREFIX
 import com.point.core.flow.META_OCR_ATOMS_REF
 import com.point.core.flow.META_OCR_TEXT_REF
+import com.point.core.flow.META_READ_UPSCALE
 import com.point.core.flow.META_READING_MODE
 import com.point.core.flow.ReadingMode
 import com.point.core.flow.ObjectStore
@@ -168,6 +170,34 @@ class OcrEnricherTest {
         assertEquals(realText, File(delta.metadata[META_OCR_TEXT_REF]!!).readText())
         // Слой есть — значит, по странице можно искать (#279).
         assertTrue(Feature.HAS_WORD_LAYER in delta.features)
+    }
+
+    /**
+     * Кадр увеличивали перед чтением (#273) — это происхождение результата, и человек с метрикой
+     * обязаны его видеть, как видят режим чтения. Соврать про множитель нельзя: он приходит из
+     * самого слоя, им же посчитаны адреса всех слов.
+     */
+    @Test
+    fun `увеличение кадра перед чтением видно в метаданных объекта`() = runTest {
+        val enlarged = object : AtomRecognizer {
+            override suspend fun read(obj: PointObject) = AtomLayer(
+                listOf(Atom("w0", "11004", Box(30f, 30f, 90f, 60f), 0.9f)),
+                readerText = realText,
+                transform = FrameTransform(sample = 1, uprightWidth = 3000, uprightHeight = 2250, upscale = 3),
+            )
+        }
+        val delta = OcrEnricher(FakeStore(), enlarged, extractor()).enrich(image)
+
+        assertEquals("3", delta.metadata[META_READ_UPSCALE])
+    }
+
+    /** Кадр читали как есть — ключа нет вовсе: «увеличивали в 1 раз» человеку сказать не о чем,
+     *  а метрике пустая пометка мешала бы отличить прогон с увеличением от прогона без. */
+    @Test
+    fun `неувеличенный кадр не оставляет пометки об увеличении`() = runTest {
+        val delta = OcrEnricher(FakeStore(), recognizer(realText), extractor()).enrich(image)
+
+        assertFalse(META_READ_UPSCALE in delta.metadata)
     }
 
     @Test

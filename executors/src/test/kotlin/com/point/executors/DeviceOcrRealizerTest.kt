@@ -82,6 +82,39 @@ class DeviceOcrRealizerTest {
         assertEquals("Уже распознано", File(out.uri.value).readText())
     }
 
+    /**
+     * Увеличение кадра (#273) переезжает на текстовый объект вместе с режимом чтения.
+     *
+     * Текст получен не с того кадра, что лежит в файле, а с увеличенной копии, и это происхождение
+     * результата. Останься пометка на картинке — дальше по цепочке («В Word+», Excel, история)
+     * ответ выглядел бы прочитанным с исходника, а откуда он на самом деле, знать было бы неоткуда.
+     */
+    @Test
+    fun `увеличение кадра переезжает на распознанный текст`() = runTest {
+        val enlarged = image.copy(
+            metadata = mapOf(
+                com.point.core.flow.META_READ_UPSCALE to "3",
+                com.point.core.flow.META_READING_MODE to "PRINTED",
+            ),
+        )
+
+        val result = DeviceOcrRealizer(store, recognizer("Ведомость")).perform(enlarged)
+
+        val out = (result as ActionResult.Success).result
+        assertEquals("3", out.metadata[com.point.core.flow.META_READ_UPSCALE])
+        assertEquals("PRINTED", out.metadata[com.point.core.flow.META_READING_MODE])
+    }
+
+    /** Кадр читали как есть — на результате пометки нет: пустое «увеличено в 1 раз» отличать
+     *  прогон с увеличением от прогона без только мешало бы. */
+    @Test
+    fun `неувеличенный кадр не оставляет пометки на результате`() = runTest {
+        val result = DeviceOcrRealizer(store, recognizer("Ведомость")).perform(image)
+
+        val out = (result as ActionResult.Success).result
+        assertTrue(com.point.core.flow.META_READ_UPSCALE !in out.metadata)
+    }
+
     // --- #288: стадия ровно там, где работа ---
 
     @Test

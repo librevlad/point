@@ -105,6 +105,7 @@ class FlowViewModel @Inject constructor(
     private val pdfRasterizer: PdfRasterizer,
     private val sensory: SensoryFeedback,
     private val sensorySettings: SensorySettings,
+    private val cloudPrivacy: com.point.core.flow.CloudPrivacySettings,
     private val flowSnapshot: FlowSnapshotStore,
     private val crashLog: CrashLog,
     private val ioDispatcher: CoroutineDispatcher,
@@ -861,6 +862,8 @@ class FlowViewModel @Inject constructor(
             it.copy(
                 keyScreen = userKeys.read() ?: UserAiConfig.DEFAULT, busy = null, message = null, messageOutcome = Outcome.NONE, inputPrompt = null,
                 soundEnabled = runCatching { sensorySettings.isSoundEnabled() }.getOrDefault(true),
+                privacyLevel = runCatching { cloudPrivacy.level() }
+                    .getOrDefault(com.point.core.flow.PrivacyLevel.DEFAULT),
             )
         }
         refreshUsage()
@@ -879,6 +882,17 @@ class FlowViewModel @Inject constructor(
         viewModelScope.launch {
             runCatching { sensorySettings.setSoundEnabled(enabled) }
             _ui.update { it.copy(soundEnabled = enabled) }
+        }
+    }
+
+    /**
+     * «Куда можно отправлять» (#280). Настройка управляет тем, кому МОЖНО предлагать объект, а не
+     * тем, чтобы отправлять его молча: согласие и текст «куда именно» остаются на месте.
+     */
+    fun setPrivacyLevel(level: com.point.core.flow.PrivacyLevel) {
+        viewModelScope.launch {
+            runCatching { cloudPrivacy.setLevel(level) }
+            _ui.update { it.copy(privacyLevel = level) }
         }
     }
 

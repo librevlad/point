@@ -57,7 +57,7 @@ class OcrChainTest {
     )
 
     private fun resolver(recognized: String, llm: TrackingLlm) = DefaultResolver(
-        realizers = setOf(DeviceOcrRealizer(store, recognizer(recognized)), CloudOcrRealizer(llm)),
+        realizers = setOf(DeviceOcrRealizer(store, recognizer(recognized)), CloudOcrRealizer(llm, privacyAt())),
         registry = registry,
         entitlements = Entitlements { true },
     )

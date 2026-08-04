@@ -63,6 +63,11 @@ android {
         buildConfigField("String", "GROQ_API_KEY", "\"\"")
         buildConfigField("String", "GROQ_BASE_URL", prop("GROQ_BASE_URL", "https://api.groq.com/openai/v1"))
         buildConfigField("String", "GROQ_MODELS", prop("GROQ_MODELS", "llama-3.3-70b-versatile,openai/gpt-oss-120b,llama-3.1-8b-instant"))
+        // Расшифровка голосового (#223) — у Groq для неё ОТДЕЛЬНАЯ ручка (/audio/transcriptions) и
+        // отдельная модель, поэтому она не в GROQ_MODELS: тем списком ходят в чат, а этой моделью
+        // слушают. turbo выбран замером 04.08.2026: украинскую речь читает дословно и даром, тогда
+        // как бесплатная квота модели общего назначения — 20 запросов в СУТКИ.
+        buildConfigField("String", "GROQ_WHISPER_MODEL", prop("GROQ_WHISPER_MODEL", "whisper-large-v3-turbo"))
         buildConfigField("String", "MISTRAL_API_KEY", "\"\"")
         buildConfigField("String", "MISTRAL_BASE_URL", prop("MISTRAL_BASE_URL", "https://api.mistral.ai/v1"))
         // Mistral — из бесплатных единственный, кто на замере прочитал плотную ведомость
@@ -94,6 +99,15 @@ android {
         buildConfigField("String", "LLAMA_CLOUD_API_KEY", "\"\"")
         buildConfigField("String", "LLAMA_CLOUD_BASE_URL", prop("LLAMA_CLOUD_BASE_URL", "https://api.cloud.llamaindex.ai"))
         buildConfigField("String", "LLAMA_CLOUD_TIER", prop("LLAMA_CLOUD_TIER", "cost_effective"))
+
+        // Внешний глаз (#280) — второй в очереди после Mistral OCR. OVH отдаёт зрячую модель
+        // БЕЗ ключа и регистрации (замер 04.08.2026: 15/15 на кириллице), поэтому ключ здесь
+        // необязателен и живёт наравне с остальными: задан — поднимает лимиты, пуст — читатель
+        // всё равно работает. Единственный такой в списке, и потому он единственный, кто
+        // остаётся живым в раздаваемой сборке без единого ключа.
+        buildConfigField("String", "OVH_API_KEY", "\"\"")
+        buildConfigField("String", "OVH_BASE_URL", prop("OVH_BASE_URL", "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1"))
+        buildConfigField("String", "OVH_MODEL", prop("OVH_MODEL", "Qwen2.5-VL-72B-Instruct"))
     }
 
     buildTypes {
@@ -112,6 +126,7 @@ android {
             buildConfigField("String", "GITHUB_API_KEY", prop("GITHUB_API_KEY"))
             buildConfigField("String", "UNSTRUCTURED_API_KEY", prop("UNSTRUCTURED_API_KEY"))
             buildConfigField("String", "LLAMA_CLOUD_API_KEY", prop("LLAMA_CLOUD_API_KEY"))
+            buildConfigField("String", "OVH_API_KEY", prop("OVH_API_KEY"))
         }
 
         // «Свой» вариант (#403/#161): сборка, которую владелец ставит себе с сайта.

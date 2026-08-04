@@ -57,6 +57,30 @@ class AtomCodecTest {
         assertNull(AtomCodec.decode(AtomCodec.encode(layer)).incomplete)
     }
 
+    /**
+     * Увеличение кадра перед чтением (#273) обязано пережить дамп: слой персистится в scratch и
+     * оттуда его читают «Найти в документе», «В Excel» и резак улик. Потеряйся множитель — все
+     * адреса поехали бы во столько же раз, и заметить это было бы нечем.
+     */
+    @Test
+    fun `увеличение кадра переживает encode-decode`() {
+        val enlarged = AtomLayer(
+            layer.atoms,
+            transform = FrameTransform(sample = 1, uprightWidth = 3000, uprightHeight = 2250, upscale = 3),
+        )
+
+        assertEquals(3, AtomCodec.decode(AtomCodec.encode(enlarged)).transform?.upscale)
+    }
+
+    /** Дампы, снятые с устройства до #273, увеличения не знали — и «увеличивали в 1 раз» правда
+     *  про них, а не догадка. Уронить их значило бы выбросить фикстуры, которыми мы меряем. */
+    @Test
+    fun `дамп без поля увеличения читается как неувеличенный`() {
+        val old = "#point-atoms v1\n#transform sample=2 rotation=90 w=1024 h=768\n"
+
+        assertEquals(1, AtomCodec.decode(old).transform?.upscale)
+    }
+
     /** Повреждённая фикстура падает громко: тихий пропуск строки превратил бы битый дамп в
      *  зелёный тест — ровно та тихая ложь, от которой слой атомов лечит. */
     @Test

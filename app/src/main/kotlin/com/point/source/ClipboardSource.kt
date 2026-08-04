@@ -16,6 +16,7 @@ class ClipboardSource @Inject constructor() : ObjectSource {
 
     override val id = "clipboard"
     override val label = "Буфер обмена"
+    override val icon = "copy"
 
     override fun isAvailable(context: Context) =
         context.getSystemService(Context.CLIPBOARD_SERVICE) is ClipboardManager

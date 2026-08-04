@@ -47,6 +47,21 @@ class FakeHttpFiles(
     }
 }
 
+/** Записанный POST JSON-ом — по нему тест судит, о чём мы попросили внешний глаз. */
+class SentJson(val url: String, val headers: Map<String, String>, val body: String)
+
+/** Сеть, которой нет, для JSON-читателей: ответы задаёт тест, отправленное остаётся для проверки. */
+class FakeHttpJson(private val onPost: (SentJson) -> HttpResult = { HttpResult(200, "{}") }) : HttpJson {
+
+    val posts = mutableListOf<SentJson>()
+
+    override suspend fun post(url: String, headers: Map<String, String>, body: String): HttpResult =
+        SentJson(url, headers, body).let {
+            posts += it
+            onPost(it)
+        }
+}
+
 /** Кадр, приготовленный «к отправке», с заранее известным преобразованием в сырой файл. */
 class FakeOutboundFrames(private val frame: OutboundFrame?) : OutboundFrames {
     override suspend fun of(obj: PointObject): OutboundFrame? = frame

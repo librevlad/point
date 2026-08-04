@@ -200,5 +200,9 @@ private fun AtomLayer.cutShort(): AtomLayer =
  */
 fun ocrDoneLine(layer: AtomLayer, spentMs: Long): String {
     val note = layer.incomplete?.let { " ($it)" } ?: ""
-    return "OCR done: ${layer.atoms.size} words, ${layer.text.length} chars, $spentMs ms$note"
+    // Увеличение кадра (#273) названо здесь, а не только в метаданных: строку читает харнесс
+    // корпуса и человек в logcat, и «прочиталось за 40 с вместо 12» без «кадр увеличен втрое»
+    // выглядит как замедление движка, а не как объяснимая цена приёма.
+    val zoom = layer.transform?.upscale?.takeIf { it > 1 }?.let { ", upscale x$it" } ?: ""
+    return "OCR done: ${layer.atoms.size} words, ${layer.text.length} chars, $spentMs ms$zoom$note"
 }

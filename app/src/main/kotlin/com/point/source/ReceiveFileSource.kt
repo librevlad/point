@@ -19,6 +19,7 @@ class ReceiveFileSource @Inject constructor() : ObjectSource {
 
     override val id = "receive"
     override val label = "Принять файл"
+    override val icon = "link"
 
     /** Нужна только сеть, и её проверяет сам приём: отказ он называет словами на своём экране. */
     override fun isAvailable(context: Context) = true

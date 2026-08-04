@@ -15,6 +15,7 @@ import com.point.core.flow.Entitlements
 import com.point.core.flow.EvidenceCropper
 import com.point.core.flow.Exporter
 import com.point.core.flow.FavoritesStore
+import com.point.core.flow.FirstHeardSpeechToText
 import com.point.core.flow.HistoryStore
 import com.point.core.flow.ImageCompositor
 import com.point.core.flow.LlmClient
@@ -36,7 +37,8 @@ import com.point.core.flow.Sharer
 import com.point.core.flow.SpreadsheetReader
 import com.point.core.flow.SpreadsheetWriter
 import com.point.core.flow.AtomRecognizer
-import com.point.core.flow.MeterReader
+import com.point.core.flow.CloudPrivacySettings
+import com.point.core.flow.ExternalEye
 import com.point.core.flow.SpeechToText
 import com.point.core.flow.TextRecognizer
 import com.point.core.flow.UrlOpener
@@ -84,6 +86,8 @@ import com.point.data.FileCapabilityUsage
 import com.point.data.FileFavoritesStore
 import com.point.data.FileHistoryStore
 import com.point.data.GeminiLlmClient
+import com.point.data.GroqWhisperSpeechToText
+import com.point.data.SummarizingSpeechToText
 import com.point.data.HttpJson
 import com.point.data.UrlConnectionHttpJson
 import com.point.data.HttpFiles
@@ -93,6 +97,11 @@ import com.point.data.BitmapOutboundFrames
 import com.point.data.CloudAtomRecognizer
 import com.point.data.LlamaParseAtomRecognizer
 import com.point.data.UnstructuredAtomRecognizer
+import com.point.data.CloudTextReader
+import com.point.data.DefaultExternalEye
+import com.point.data.MistralOcrReader
+import com.point.data.OvhVisionReader
+import com.point.data.PrefsCloudPrivacySettings
 import com.point.data.MediaStoreExporter
 import com.point.data.MetadataEntityEnricher
 import com.point.data.MlKitBackgroundRemover
@@ -121,7 +130,6 @@ import com.point.data.QrEnricher
 import com.point.data.UserKeyLlmClient
 import com.point.data.PdfRendererRasterizer
 import com.point.data.ScratchObjectStore
-import com.point.data.TesseractMeterReader
 import com.point.data.LlmSpeechToText
 import com.point.data.TesseractTextRecognizer
 import com.point.data.PcPairingEnricher
@@ -221,14 +229,6 @@ abstract class DataModule {
     abstract fun textRecognizer(impl: TesseractTextRecognizer): TextRecognizer
 
     /**
-     * Расшифровка голосового (#223). Реализация облачная, и это не временная заглушка, а
-     * измеренный факт: системного распознавания **из файла** в Android нет — `SpeechRecognizer`
-     * слушает микрофон. Шов настоящий: офлайновый движок встанет сюда одной строкой.
-     */
-    @Binds
-    abstract fun speechToText(impl: LlmSpeechToText): SpeechToText
-
-    /**
      * Геометрия доходит до пайплайна (#257): OcrEnricher читает слой, а не плоскую строку.
      *
      * По умолчанию ридер **офлайновый и остаётся таким**. Облачное второе чтение (#280) живёт
@@ -237,15 +237,6 @@ abstract class DataModule {
      */
     @Binds
     abstract fun atomRecognizer(impl: TesseractTextRecognizer): AtomRecognizer
-
-    /**
-     * Чтение табло прибора (#262) — **отдельный контракт, а не режим ридера страницы**: у него
-     * другой вход (кусок кадра), другой алфавит (только цифры) и другой режим движка (одна
-     * строка). Сложить их в один тип значило бы завести флаг «читай по-другому» там, где
-     * различается всё.
-     */
-    @Binds
-    abstract fun meterReader(impl: TesseractMeterReader): MeterReader
 
     /** The one real HTTP transport; LLM clients depend on the [HttpJson] interface. */
     @Binds
@@ -258,6 +249,19 @@ abstract class DataModule {
     /** Подготовка кадра к отправке наружу: EXIF-выпрямленная копия + её преобразование в сырой кадр. */
     @Binds
     abstract fun outboundFrames(impl: BitmapOutboundFrames): OutboundFrames
+
+    /**
+     * Внешний глаз (#280) — цепочка чужих сервисов, читающих страницу целиком.
+     *
+     * Отдельно от [LlmClient] сознательно: специальная OCR-ручка промпта не принимает, и попади
+     * она в общую цепочку моделей, «Понять» на снимке молча вернуло бы расшифровку вместо ответа.
+     */
+    @Binds
+    abstract fun externalEye(impl: DefaultExternalEye): ExternalEye
+
+    /** «Куда можно отправлять» — выбор человека, с умолчанием «максимум бесплатного». */
+    @Binds
+    abstract fun cloudPrivacy(impl: PrefsCloudPrivacySettings): CloudPrivacySettings
 
     /** The user's own AI key (BYO), stored on-device. */
     @Binds
@@ -453,6 +457,45 @@ abstract class DataModule {
         }
 
         /**
+         * Расшифровка голосового (#223) — очередь движков, и порядок в ней измерен, а не выбран.
+         *
+         * **Whisper первый.** Замер 04.08.2026: бесплатная квота модели общего назначения — 20
+         * запросов в СУТКИ (`HTTP 429, generate_content_free_tier_requests, limit: 20`), то есть
+         * расшифровка на ней кончается за вечер. Whisper на тех же трёх записях владельца прочитал
+         * украинскую речь дословно и даром (ошибка слов 9,5 %, и вся она косметическая — «той
+         * ходім» / «то й ходім», место апострофа).
+         *
+         * **Модель общего назначения — вторая, а не выброшена.** Она читает форматы, которых
+         * Whisper не обещает, и приносит суть одним ответом; на её квоту приходят, только когда
+         * первый не дошёл.
+         *
+         * Whisper попадает в очередь, только если у него есть ключ, — поэтому в раздаваемой
+         * релизной сборке очередь состоит из одного движка, ровно как было до этой правки.
+         *
+         * Сверху — добор сути ([SummarizingSpeechToText]): Whisper отдаёт только дословный текст, а
+         * человеку обещана суть. Одно действие, один дополнительный ТЕКСТОВЫЙ запрос, и его провал
+         * ничего не отменяет.
+         */
+        @Provides
+        fun speechToText(
+            http: HttpFiles,
+            llm: LlmClient,
+            byModel: LlmSpeechToText,
+        ): SpeechToText {
+            val whisper = GroqWhisperSpeechToText(
+                http,
+                BuildConfig.GROQ_API_KEY,
+                BuildConfig.GROQ_BASE_URL,
+                BuildConfig.GROQ_WHISPER_MODEL,
+            )
+            val engines = buildList {
+                if (whisper.configured) add(whisper)
+                add(byModel)
+            }
+            return SummarizingSpeechToText(FirstHeardSpeechToText(engines), llm)
+        }
+
+        /**
          * Бесплатные читатели страницы (#280), в порядке очереди: Unstructured (15 000
          * страниц/мес) → LlamaParse (10 000 кредитов/мес). Каждый попадает в цепочку, только
          * если его ключ задан, — поэтому в раздаваемой релизной сборке список **пуст**, и
@@ -478,6 +521,33 @@ abstract class DataModule {
                 BuildConfig.LLAMA_CLOUD_TIER,
             ),
         ).filter { it.configured }
+
+        /**
+         * Внешний глаз (#280) — цепочка в порядке **измеренной эффективности бесплатного**, а не
+         * по приватности: 1) Mistral OCR (24/24 дословно на всех порчах кадра, 1,3–5 с),
+         * 2) OVH Qwen2.5-VL (15/15 на кириллице, отдаётся без ключа и регистрации).
+         *
+         * Приватность отсюда никого больше не выбрасывает — она столбец, который человек видит, и
+         * настройка, которой он управляет ([CloudPrivacySettings]). Решение владельца 04.08.2026,
+         * разбор — в `DECISIONS.md`.
+         *
+         * Ненастроенные отсеиваются в самой цепочке, а не здесь: список должен уметь ответить
+         * «ключей нет вовсе» отдельно от «на этом уровне никого не пускают», а отфильтрованный
+         * заранее список эти два случая уже не различает.
+         */
+        @Provides
+        fun cloudTextReaders(
+            http: HttpJson,
+            frames: OutboundFrames,
+        ): List<@JvmSuppressWildcards CloudTextReader> = listOf(
+            MistralOcrReader(http, frames, BuildConfig.MISTRAL_API_KEY, BuildConfig.MISTRAL_BASE_URL),
+            OvhVisionReader(
+                http, frames,
+                BuildConfig.OVH_API_KEY,
+                BuildConfig.OVH_BASE_URL,
+                BuildConfig.OVH_MODEL,
+            ),
+        )
 
         /** Gemini is built here (not @Inject) so its key + model list — from BuildConfig —
          *  are constructor-injected, keeping the client itself BuildConfig-free and testable. */

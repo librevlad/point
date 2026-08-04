@@ -66,8 +66,13 @@ NOTES="Своя сборка Point от $(git log -1 --format=%cd --date=format:
 Ключей моделей внутри нет — свой ключ вводится в приложении."
 
 if gh release view "$TAG" > /dev/null 2>&1; then
-  # Ассеты перезаписываются: у метки всегда одна свежая сборка, а не свалка старых.
   gh release upload "$TAG" "$OUT" --clobber
+  # Старые сборки удаляются, а не копятся. `--clobber` перезаписывает только одноимённое, а имя
+  # несёт коммит — поэтому без уборки на странице скапливается свалка, и человек скачивает
+  # позавчерашнее, думая, что берёт свежее. У метки всегда ровно одна сборка.
+  gh release view "$TAG" --json assets -q '.assets[].name' 2>/dev/null | grep -v "^$NAME$" | while read -r old; do
+    [ -n "$old" ] && gh release delete-asset "$TAG" "$old" --yes > /dev/null 2>&1 && echo "  убрано старое: $old"
+  done
   gh release edit "$TAG" --notes "$NOTES" --prerelease > /dev/null
 else
   gh release create "$TAG" "$OUT" --title "Своя сборка Point" --notes "$NOTES" --prerelease

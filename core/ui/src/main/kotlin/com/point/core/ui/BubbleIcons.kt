@@ -39,6 +39,7 @@ import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.QrCode2
@@ -51,7 +52,6 @@ import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.ShoppingBasket
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.ShoppingCart
-import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Sms
 import androidx.compose.material.icons.filled.TableChart
 import androidx.compose.material.icons.filled.Tag
@@ -83,6 +83,7 @@ fun bubbleIcon(key: String): ImageVector = when (if (key.startsWith("app:")) "op
     "renew" -> Icons.Filled.EventRepeat
     "pc" -> Icons.Filled.Computer
     "scan" -> Icons.Filled.DocumentScanner
+    "camera" -> Icons.Filled.PhotoCamera
     "cutout" -> Icons.Filled.ContentCut
     "blur" -> Icons.Filled.BlurOn
     "replace-bg" -> Icons.Filled.Wallpaper
@@ -90,7 +91,6 @@ fun bubbleIcon(key: String): ImageVector = when (if (key.startsWith("app:")) "op
     "transcribe" -> Icons.Filled.RecordVoiceOver
     "find" -> Icons.Filled.Search
     "ocr-cloud" -> Icons.Filled.Cloud
-    "meter" -> Icons.Filled.Speed
     "qr" -> Icons.Filled.QrCode2
     "qr-scan" -> Icons.Filled.QrCodeScanner
     "call" -> Icons.Filled.Call
@@ -124,6 +124,7 @@ fun bubbleColor(key: String): Color = when (if (key.startsWith("app:")) "open-in
     "compress" -> Color(0xFF0EA5A5) // teal — image
     "pc" -> Color(0xFF0EA5E9)       // sky — continue on PC
     "scan" -> Color(0xFF6366F1)     // indigo — scan
+    "camera" -> Color(0xFF6366F1)   // indigo — снять кадр: та же семья, что скан
     "cutout" -> Color(0xFF0EA5A5)   // teal — remove background
     "blur" -> Color(0xFF6366F1)     // indigo — blur background
     "replace-bg" -> Color(0xFF7C4DFF) // purple — replace background
@@ -131,7 +132,6 @@ fun bubbleColor(key: String): Color = when (if (key.startsWith("app:")) "open-in
     "transcribe" -> Color(0xFF16A34A) // green — тоже «прочитать сказанное», только ушами
     "find" -> Color(0xFF16A34A)     // green — читать прочитанное: поиск живёт рядом с распознаванием
     "ocr-cloud" -> Color(0xFF2F80ED) // blue — recognise in the cloud
-    "meter" -> Color(0xFF15803D)     // deeper green — местное чтение табло прибора
     "qr" -> Color(0xFF0EA5A5)       // teal — produces an image
     "qr-scan" -> Color(0xFF2F80ED)  // blue — read a QR
     "office" -> Color(0xFF16A34A)   // green — documents/data

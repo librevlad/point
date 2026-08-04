@@ -21,10 +21,22 @@ class CloudDestinationTest {
         assertTrue("назван чужой адресат: $text", !text.contains("AI-провайдера"))
     }
 
+    /**
+     * Имена здесь — **настоящие идентификаторы возможностей** (`OcrCapability.ID`,
+     * `CloudOcrCapability.ID`), а не удобные для теста. Прежняя редакция передавала «cloud-ocr»,
+     * которого в приложении нет, и потому зелёный тест сосуществовал с мёртвой веткой: человеку
+     * показывали умолчание про «сервер AI-провайдера». Сцепку имён стережёт
+     * `CloudDestinationNamesRealCapabilitiesTest` в `:executors`, где эти константы видны.
+     */
     @Test
     fun `облачное распознавание говорит про распознавание, а не про AI вообще`() {
-        val text = cloudDestination(CapabilityId("cloud-ocr"))
-        assertTrue(text, text.contains("распознавания"))
+        listOf("ocr", "ocr-cloud").forEach { id ->
+            val text = cloudDestination(CapabilityId(id))
+            assertTrue("«$id»: $text", text.contains("распознавания"))
+            assertTrue("«$id»: не назван первый адресат — $text", text.contains("Mistral"))
+            assertTrue("«$id»: не сказано, что это Европа — $text", text.contains("ЕС"))
+            assertTrue("«$id»: показано умолчание вместо своего текста — $text", !text.contains("AI-провайдера"))
+        }
     }
 
     @Test
@@ -35,7 +47,7 @@ class CloudDestinationTest {
 
     @Test
     fun `в каждом случае сказано, что без согласия ничего не уходит`() {
-        listOf("drop-link", "cloud-ocr", "ai", "translate").forEach { id ->
+        listOf("drop-link", "ocr", "ocr-cloud", "ai", "translate").forEach { id ->
             val text = cloudDestination(CapabilityId(id))
             assertTrue(
                 "«$id»: человеку не сказали, что решение за ним — $text",
