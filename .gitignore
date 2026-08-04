@@ -25,3 +25,6 @@ Thumbs.db
 hs_err_pid*.log
 replay_pid*.log
 __pycache__/
+
+# Питоновский кэш харнесса замеров — не артефакт, а след запуска.
+tools/**/__pycache__/
