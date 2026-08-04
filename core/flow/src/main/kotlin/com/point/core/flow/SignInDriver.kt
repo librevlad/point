@@ -50,7 +50,7 @@ class SignInDriver(
         while (waited < timeoutMs) {
             delay(pollIntervalMs)
             waited += pollIntervalMs
-            when (val poll = client.poll(start.loginId)) {
+            when (val poll = client.poll(start.loginId, start.claimToken)) {
                 LoginPoll.Pending -> Unit
                 is LoginPoll.Ready -> {
                     // Имя устройства сервер мог не вернуть — тогда остаётся то, которым представились.

@@ -2373,8 +2373,8 @@ internal class FakeCircleClient(
     var revoked: String? = null
     var signedOut = false
     override suspend fun start(deviceName: String, kind: com.point.core.flow.DeviceKind) =
-        com.point.core.flow.LoginStart("l1", "K7-42Q", "https://point.example/login?d=l1")
-    override suspend fun poll(loginId: String): com.point.core.flow.LoginPoll =
+        com.point.core.flow.LoginStart("l1", "claim-1", "K7-42Q", "https://point.example/login?d=l1")
+    override suspend fun poll(loginId: String, claimToken: String): com.point.core.flow.LoginPoll =
         com.point.core.flow.LoginPoll.Ready(TEST_ACCOUNT)
     override suspend fun circle(account: com.point.core.flow.PointAccount) = circle
     override suspend fun revoke(account: com.point.core.flow.PointAccount, deviceId: String): Boolean {
@@ -2384,7 +2384,7 @@ internal class FakeCircleClient(
     }
     override suspend fun signOut(account: com.point.core.flow.PointAccount): Boolean {
         signedOut = true
-        return true
+        return revoke(account, account.deviceId)
     }
 }
 

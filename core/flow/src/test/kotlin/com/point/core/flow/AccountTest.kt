@@ -125,9 +125,9 @@ internal class FakeAccountClient(
     private var polls = 0
 
     override suspend fun start(deviceName: String, kind: DeviceKind): LoginStart? =
-        if (startFails) null else LoginStart("login-1", "K7-42Q", "https://point.example/login?d=login-1")
+        if (startFails) null else LoginStart("login-1", "claim-1", "K7-42Q", "https://point.example/login?d=login-1")
 
-    override suspend fun poll(loginId: String): LoginPoll {
+    override suspend fun poll(loginId: String, claimToken: String): LoginPoll {
         refuseWith?.let { return it }
         polls++
         return if (polls >= readyAfter) {
@@ -147,7 +147,7 @@ internal class FakeAccountClient(
 
     override suspend fun signOut(account: PointAccount): Boolean {
         signedOut = true
-        return true
+        return revoke(account, account.deviceId)
     }
 }
 

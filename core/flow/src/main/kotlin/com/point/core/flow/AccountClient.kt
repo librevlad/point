@@ -17,8 +17,8 @@ interface AccountClient {
      */
     suspend fun start(deviceName: String, kind: DeviceKind): LoginStart?
 
-    /** Один опрос: подтвердил ли человек вход в браузере. */
-    suspend fun poll(loginId: String): LoginPoll
+    /** Один опрос: подтвердил ли человек вход в браузере. [claimToken] — из [LoginStart]. */
+    suspend fun poll(loginId: String, claimToken: String): LoginPoll
 
     /** Круг устройств аккаунта; `null` — не дозвонились. Пустой список — законный ответ. */
     suspend fun circle(account: PointAccount): List<CircleDevice>?
@@ -29,8 +29,13 @@ interface AccountClient {
      */
     suspend fun revoke(account: PointAccount, deviceId: String): Boolean
 
-    /** «Выйти»: отозвать ЭТО устройство и стереть его ящики на сервере. */
-    suspend fun signOut(account: PointAccount): Boolean
+    /**
+     * «Выйти» — это отзыв ЭТОГО устройства, а не отдельная дверь.
+     *
+     * Своей ручки у выхода нет намеренно (решение сервера, #471): «выйти» и «отключить это
+     * устройство» — одно и то же событие, и две ручки об одном однажды разошлись бы.
+     */
+    suspend fun signOut(account: PointAccount): Boolean = revoke(account, account.deviceId)
 }
 
 /** Где хранится пропуск. Телефон шифрует, компьютер кладёт файлом только для владельца. */

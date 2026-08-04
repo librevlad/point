@@ -12,20 +12,27 @@ import javax.net.ssl.HttpsURLConnection
  * Раньше такой код жил дважды: свой у `:data` и свой у `:desktop`, и расходились они молча. Здесь
  * он один, потому что в `:core:flow` можно: голая JVM, `HttpURLConnection`, ноль зависимостей.
  *
- * Ручки, которых ждёт клиент (контракт с сервером — срез 2, #471):
+ * Ручки — те, что построил срез 2 (#471, `relay/point_server/app.py`):
  *
  * ```
- * POST /auth/start            {"name","kind"}            → {"login_id","code","url"}
- * GET  /auth/session/<id>                                → {"status":"pending"}
- *                                                        | {"status":"ready","device_id","device_token","email"}
- *                                                        | {"status":"refused","what","fix"}
- * GET  /circle                Bearer <device_token>      → {"devices":[{"id","kind","name","last_seen","self"}]}
- * POST /devices/<id>/revoke   Bearer <device_token>      → 200
- * POST /signout               Bearer <device_token>      → 200
+ * POST /auth/start           {"kind","name","key_agree","key_sign"}
+ *                            → {"login_id","claim_token","user_code","login_url","expires_in","interval"}
+ * GET  /auth/session/<id>    Bearer <claim_token>
+ *                            → 202 {"status":"pending", …}
+ *                            | 200 {"status":"ready","device_id","device_token","kind","name",
+ *                                   "account":{"email","name"}}
+ *                            | 404 {"error","message"}
+ * GET  /circle               Bearer <device_token>
+ *                            → {"account":{"email","name"},
+ *                               "devices":[{"id","kind","name","last_seen","online","self",…}]}
+ * POST /devices/<id>/revoke  Bearer <device_token> → {"revoked","self"}
  * ```
  *
  * `Authorization: Bearer` вместо прежнего `X-Point-App`: общего пароля приложения больше нет, у
  * каждого устройства свой пропуск, и отзывается он поимённо.
+ *
+ * **Время сервера — в секундах** (`int(time.time())`), у нас — в миллисекундах: перевод делается
+ * здесь, на границе, чтобы дальше по коду жила одна единица.
  */
 class HttpAccountClient(
     /** База сервера; пусто — берётся [PointServer.DEFAULT_URL]. */
@@ -40,19 +47,25 @@ class HttpAccountClient(
         val reply = request(
             path = "/auth/start",
             method = "POST",
-            body = jsonObject("name" to deviceName, "kind" to kind.name),
+            // Открытые ключи устройства поедут здесь же, когда родятся (#474). Пустые поля — не
+            // забывчивость: ключей сегодня нет ни у кого, и сервер это знает.
+            body = jsonObject("kind" to kind.name, "name" to deviceName),
         )
         if (reply.status != 200) return@io null
         val json = parseJson(reply.body ?: "")
         val loginId = json.str("login_id") ?: return@io null
-        val code = json.str("code") ?: return@io null
-        val url = json.str("url") ?: return@io null
-        LoginStart(loginId, code, url)
+        val claim = json.str("claim_token") ?: return@io null
+        val code = json.str("user_code") ?: return@io null
+        val url = json.str("login_url") ?: return@io null
+        LoginStart(loginId = loginId, claimToken = claim, code = code, url = url)
     }
 
-    override suspend fun poll(loginId: String): LoginPoll = io {
-        val reply = request(path = "/auth/session/" + encode(loginId), method = "GET")
-        if (reply.status != 200) return@io accountRefusal(reply.status).toPoll()
+    override suspend fun poll(loginId: String, claimToken: String): LoginPoll = io {
+        val reply = request(path = "/auth/session/" + encode(loginId), method = "GET", token = claimToken)
+        // 202 — «человек ещё в браузере». Это не ошибка и не готовность, и отдельный код тут
+        // ценнее тела: ждать дальше можно, ничего не разбирая.
+        if (reply.status == 202) return@io LoginPoll.Pending
+        if (reply.status != 200) return@io refusal(reply)
         val json = parseJson(reply.body ?: "")
         when (json.str("status")) {
             "pending" -> LoginPoll.Pending
@@ -67,21 +80,18 @@ class HttpAccountClient(
                         fix = "Попробуйте войти ещё раз.",
                     )
                 } else {
+                    val account = (json as? JsonValue.Obj)?.fields?.get("account")
                     LoginPoll.Ready(
                         PointAccount(
                             deviceId = id,
                             deviceToken = token,
-                            email = json.str("email").orEmpty(),
+                            email = account.str("email").orEmpty(),
                             deviceName = json.str("name").orEmpty(),
                             kind = kindOf(json.str("kind")),
                         ),
                     )
                 }
             }
-            "refused" -> LoginPoll.Refused(
-                what = json.str("what") ?: "Вход не состоялся",
-                fix = json.str("fix") ?: "Попробуйте войти ещё раз.",
-            )
             // Незнакомая форма — не «готово» и не «ждём»: отвечать за сервер мы не будем.
             else -> LoginPoll.Refused(
                 what = "Сервер Point ответил непонятно",
@@ -100,7 +110,7 @@ class HttpAccountClient(
                 id = id,
                 kind = kindOf(item.str("kind")),
                 name = item.str("name")?.takeIf { it.isNotBlank() } ?: "Устройство",
-                lastSeenMillis = item.long("last_seen"),
+                lastSeenMillis = item.long("last_seen")?.takeIf { it > 0 }?.times(1_000L),
                 self = item.bool("self") ?: (id == account.deviceId),
             )
         }
@@ -115,13 +125,22 @@ class HttpAccountClient(
         ).status == 200
     }
 
-    override suspend fun signOut(account: PointAccount): Boolean = io {
-        request(path = "/signout", method = "POST", token = account.deviceToken, body = "").status == 200
-    }
-
     // --- HTTP, и ничего больше ---
 
     private class Reply(val status: Int?, val body: String?)
+
+    /**
+     * Отказ словами сервера, если он их сказал, и своими — если нет.
+     *
+     * Сервер отвечает `{"error","message"}`, и его `message` написан для человека («Вход не найден
+     * или уже завершён. Начните заново.»). Заменять его своим общим текстом значило бы выбросить
+     * то, что нам сказали прямо; совет («что делать») остаётся наш — сервер его не даёт.
+     */
+    private fun refusal(reply: Reply): LoginPoll.Refused {
+        val ours = accountRefusal(reply.status)
+        val said = parseJson(reply.body ?: "").str("message")?.takeIf { it.isNotBlank() }
+        return LoginPoll.Refused(what = said ?: ours.what, fix = ours.fix)
+    }
 
     private fun request(path: String, method: String, token: String? = null, body: String? = null): Reply =
         runCatching {
@@ -157,9 +176,6 @@ class HttpAccountClient(
         const val PINNED_HOST = "35.185.31.106"
     }
 }
-
-/** «Сервер отказал» одинаково выглядит и на старте, и на опросе — форма ответа разная. */
-private fun SignIn.Refused.toPoll(): LoginPoll = LoginPoll.Refused(what, fix)
 
 /** Вид устройства из строки сервера; незнакомое — телефон (их большинство, и это не ложь о правах). */
 internal fun kindOf(raw: String?): DeviceKind =

@@ -25,6 +25,11 @@ Thumbs.db
 hs_err_pid*.log
 replay_pid*.log
 __pycache__/
+.pytest_cache/
 
 # Питоновский кэш харнесса замеров — не артефакт, а след запуска.
 tools/**/__pycache__/
+
+# Окружение службы сервера аккаунтов: там лежат client_id/client_secret Google.
+# Учётные данные Google живут ТОЛЬКО на сервере — образец рядом (point-server.env.sample).
+relay/point-server.env

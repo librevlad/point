@@ -73,8 +73,20 @@ sealed interface SignIn {
     data class Refused(val what: String, val fix: String) : SignIn
 }
 
-/** Начало входа: что сервер ответил на «я хочу войти». */
-data class LoginStart(val loginId: String, val code: String, val url: String)
+/**
+ * Начало входа: что сервер ответил на «я хочу войти».
+ *
+ * [claimToken] — второй пропуск, и он существует не для красоты. `loginId` лежит в адресе страницы,
+ * которую человек открывает **в браузере**: он есть в истории, в расширениях, в чужих глазах через
+ * плечо. Забирать по нему пропуск ко всем объектам аккаунта было бы дырой, поэтому забор идёт с
+ * токеном, который знает только устройство (решение сервера, #471).
+ */
+data class LoginStart(
+    val loginId: String,
+    val claimToken: String,
+    val code: String,
+    val url: String,
+)
 
 /** Чем кончился один опрос сервера, пока человек в браузере. */
 sealed interface LoginPoll {
