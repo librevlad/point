@@ -26,7 +26,19 @@ class CameraSource @Inject constructor() : ObjectSource {
     override val label = "Камера"
     override val icon = "camera"
 
+    /**
+     * Куда пишется кадр. Обычным полем этому не жить: пока снимает камера, экран выбора стоит
+     * позади неё и первым идёт под нож при нехватке памяти — поэтому путь уезжает в `Bundle`
+     * ([saveState]) и возвращается оттуда ([restoreState]). До #454 он просто исчезал, и снятая
+     * фотография не становилась объектом молча.
+     */
     private var target: File? = null
+
+    override fun saveState(): String? = target?.absolutePath
+
+    override fun restoreState(state: String?) {
+        target = state?.takeIf { it.isNotBlank() }?.let(::File)
+    }
 
     override fun isAvailable(context: Context): Boolean =
         Intent(MediaStore.ACTION_IMAGE_CAPTURE).resolveActivity(context.packageManager) != null
