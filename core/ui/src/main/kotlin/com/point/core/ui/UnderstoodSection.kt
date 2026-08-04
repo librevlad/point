@@ -38,9 +38,13 @@ import androidx.compose.ui.unit.dp
 import com.point.core.flow.META_ENTITY_PREFIX
 import com.point.core.flow.META_SEMANTIC_SUMMARY
 import com.point.core.flow.META_SEMANTIC_TYPE
+import com.point.core.flow.META_SIZE
 import com.point.core.flow.documentLabel
+import com.point.core.flow.humanWeight
 import com.point.core.flow.maskedForScreen
+import com.point.core.flow.recordingLength
 import com.point.core.model.Feature
+import com.point.core.model.ObjectKind
 import com.point.core.model.PointObject
 
 /**
@@ -80,9 +84,29 @@ fun understoodFacts(obj: PointObject): List<UnderstoodFact> {
 }
 
 /** The object's hero line: WHAT it is — the semantic verdict once understood, otherwise its
- *  kind — plus a human subline (the AI summary if present, else the file's own name). Grows
- *  from «Изображение» to «Покупка · <сводка>» as understanding deepens (#114). */
-data class ObjectVerdict(val headline: String, val subline: String?)
+ *  kind — plus a human subline (the AI summary if present, else the file's own name) and, when
+ *  the object carries a cost the user should know before tapping, its [measure] (#114, #459).
+ *  Grows from «Изображение» to «Покупка · <сводка>» as understanding deepens. */
+data class ObjectVerdict(val headline: String, val subline: String?, val measure: String? = null)
+
+/**
+ * Мера объекта — то, что стоит знать ДО тапа, а не после (#459).
+ *
+ * Повод конкретный: «Расшифровать» уходило в сеть и только оттуда сообщало «примерно 40 мин, это
+ * займёт время». Квота уже тратилась, отменять было поздно, а до тапа экран не говорил ни
+ * длительности, ни веса — сорок секунд там или сорок минут, человек не знал. Теперь ту же строку
+ * (буквально ту же функцию — [recordingLength]) он читает под объектом.
+ *
+ * Меряется только запись. У снимка и документа цена тапа не в весе — она в самом действии, и
+ * число под каждым объектом было бы шумом, а не предупреждением. Битрейт неизвестен (`amr`,
+ * `wma`) — тогда честный вес: «5,2 МБ» ничего не выдумывает и всё равно отличает голосовое от
+ * получасовой лекции.
+ */
+fun objectMeasure(obj: PointObject): String? {
+    if (obj.state.kind != ObjectKind.AUDIO) return null
+    val size = obj.metadata[META_SIZE]?.toLongOrNull() ?: return null
+    return recordingLength(obj.mime, size, obj.metadata["name"]) ?: humanWeight(size)
+}
 
 fun objectVerdict(obj: PointObject): ObjectVerdict {
     val state = obj.state
@@ -98,7 +122,7 @@ fun objectVerdict(obj: PointObject): ObjectVerdict {
     }
     val summary = obj.metadata[META_SEMANTIC_SUMMARY]?.takeIf { it.isNotBlank() }
     val name = obj.metadata["name"]?.takeIf { it.isNotBlank() && it != headline }
-    return ObjectVerdict(headline, summary ?: name)
+    return ObjectVerdict(headline, summary ?: name, objectMeasure(obj))
 }
 
 /**
