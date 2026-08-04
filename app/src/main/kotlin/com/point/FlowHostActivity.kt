@@ -58,51 +58,12 @@ abstract class FlowHostActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background,
                 ) {
                     val state by viewModel.ui.collectAsStateWithLifecycle()
-                    PointHost(
+                    PointFlow(
                         state = state,
-                        onBubble = viewModel::onBubble,
-                        appIconFor = viewModel::appIcon,
-                        onPairPc = viewModel::pairPc,
-                        onUnpairPc = viewModel::unpairPc,
-                        onClosePcSettings = viewModel::closePcSettings,
-                        onSubmitInput = viewModel::submitAmendment,
-                        onCancelInput = viewModel::cancelInput,
-                        onCancelAction = viewModel::cancelAction,
-                        onOpenObject = viewModel::openTopObject,
-                        onApplyFavorite = viewModel::applyFavorite,
-                        onSaveChain = viewModel::saveCurrentChain,
-                        onItem = viewModel::onItem,
-                        onFound = viewModel::onFound,
-                        onJumpTo = viewModel::jumpTo,
-                        onSendChat = viewModel::sendChatMessage,
-                        onCloseChat = viewModel::closeChat,
-                        onBubbleLongPress = viewModel::togglePin,
-                        onSaveAiConfig = viewModel::saveAiConfig,
-                        onCloseKeySettings = viewModel::closeKeySettings,
-                        onToggleUsage = viewModel::setUsageEnabled,
-                        onToggleSound = viewModel::setSoundEnabled,
-                        onConfirmCloud = viewModel::confirmCloud,
-                        onDeclineCloud = viewModel::declineCloud,
-                        onPickApp = viewModel::onPickApp,
-                        onDismissAppPicker = viewModel::dismissAppPicker,
-                        onConfirmPreview = viewModel::confirmPreview,
-                        onOpenSelection = viewModel::openSelection,
-                        onSelectRegion = viewModel::onSelectRegion,
-                        onTakeSelection = viewModel::takeSelection,
-                        onCloseSelection = viewModel::closeSelection,
-                        onFindQuery = viewModel::onFindQuery,
-                        onCloseFind = viewModel::closeFind,
-                        onCancelPreview = viewModel::cancelPreview,
-                        // Страница, где выдают ключ, открывается браузером телефона: Point не
-                        // показывает чужие сайты внутри себя — он не браузер (продуктовый фильтр).
-                        onOpenUrl = { url ->
-                            runCatching {
-                                startActivity(
-                                    Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url))
-                                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                                )
-                            }
-                        },
+                        viewModel = viewModel,
+                        // Дверь «Поделиться»: «откуда пришли» — чужое приложение, значит выход с
+                        // экрана-сообщения ведёт наружу, ровно как системный «назад» (#114).
+                        onLeave = { onBackPressedDispatcher.onBackPressed() },
                     )
                 }
             }

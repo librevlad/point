@@ -46,6 +46,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -404,6 +405,49 @@ class FlowViewModelTest {
         assertEquals("Ключ AI сохранён", s.message)
         assertEquals(Outcome.DONE, s.messageOutcome)
         assertNull(shareAgainHint(s.messageOutcome))
+    }
+
+    /**
+     * Из состояния «сообщение без объекта» есть выход (#114).
+     *
+     * Прежний тест доводил до этого состояния и на нём останавливался — а выхода из него не было
+     * вовсе: `onBack()` возвращал false, дверь отдавала «назад» системе, и Point закрывался сразу
+     * после удачного сохранения ключа.
+     */
+    @Test fun `сообщение без объекта убирается, а не запирает человека`() = runTest(dispatcher) {
+        val vm = vm()
+
+        vm.saveAiConfig(UserAiConfig.DEFAULT); advanceUntilIdle()
+        assertEquals("Ключ AI сохранён", vm.ui.value.message)
+
+        assertTrue("из состояния-сообщения нет выхода", vm.dismissMessage())
+        assertNull(vm.ui.value.message)
+        assertEquals(Outcome.NONE, vm.ui.value.messageOutcome)
+        // Убирать больше нечего — дальше «назад» честно уходит двери.
+        assertFalse(vm.dismissMessage())
+    }
+
+    /** Тот же тупик приезжает историей: объект из «Недавнего» пропал с диска. */
+    @Test fun `недоступный объект из истории тоже отпускает человека`() = runTest(dispatcher) {
+        history.opened = null // запись есть, а файла за ней уже нет
+        val vm = vm()
+
+        vm.openFromHistory(
+            HistoryEntry("id", "text/plain", ObjectKind.TEXT, "имя", 0L, ScratchRef("/gone")),
+        )
+        advanceUntilIdle()
+
+        assertEquals("Объект недоступен", vm.ui.value.message)
+        assertTrue(vm.dismissMessage())
+        assertNull(vm.ui.value.message)
+    }
+
+    /** Сообщение поверх объекта — не тупик: там есть и пузырьки, и «назад» по стеку. */
+    @Test fun `сообщение над объектом не считается тупиком`() = runTest(dispatcher) {
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        assertFalse(vm.dismissMessage())
     }
 
     // --- Action selection (the four ActionResult channels) ---
