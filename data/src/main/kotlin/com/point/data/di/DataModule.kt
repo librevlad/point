@@ -38,7 +38,6 @@ import com.point.core.flow.SpreadsheetWriter
 import com.point.core.flow.AtomRecognizer
 import com.point.core.flow.CloudPrivacySettings
 import com.point.core.flow.ExternalEye
-import com.point.core.flow.MeterReader
 import com.point.core.flow.SpeechToText
 import com.point.core.flow.TextRecognizer
 import com.point.core.flow.UrlOpener
@@ -128,7 +127,6 @@ import com.point.data.QrEnricher
 import com.point.data.UserKeyLlmClient
 import com.point.data.PdfRendererRasterizer
 import com.point.data.ScratchObjectStore
-import com.point.data.TesseractMeterReader
 import com.point.data.LlmSpeechToText
 import com.point.data.TesseractTextRecognizer
 import com.point.data.PcPairingEnricher
@@ -244,15 +242,6 @@ abstract class DataModule {
      */
     @Binds
     abstract fun atomRecognizer(impl: TesseractTextRecognizer): AtomRecognizer
-
-    /**
-     * Чтение табло прибора (#262) — **отдельный контракт, а не режим ридера страницы**: у него
-     * другой вход (кусок кадра), другой алфавит (только цифры) и другой режим движка (одна
-     * строка). Сложить их в один тип значило бы завести флаг «читай по-другому» там, где
-     * различается всё.
-     */
-    @Binds
-    abstract fun meterReader(impl: TesseractMeterReader): MeterReader
 
     /** The one real HTTP transport; LLM clients depend on the [HttpJson] interface. */
     @Binds

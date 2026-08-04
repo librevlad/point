@@ -57,8 +57,6 @@ import com.point.executors.FindRealizer
 import com.point.executors.LearningBubblePolicy
 import com.point.executors.ImageCapability
 import com.point.executors.ImageRealizer
-import com.point.executors.MeterOcrCapability
-import com.point.executors.MeterOcrRealizer
 import com.point.executors.MergePdfCapability
 import com.point.executors.MergePdfRealizer
 import com.point.executors.CloudOcrCapability
@@ -187,8 +185,6 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun replaceBgCap(c: ReplaceBgCapability): Capability
     @Binds @IntoSet abstract fun ocrCap(c: OcrCapability): Capability
     @Binds @IntoSet abstract fun cloudOcrCap(c: CloudOcrCapability): Capability
-    /** Табло прибора — собственный тап, а не звено «Распознать текст» (#262): решает человек. */
-    @Binds @IntoSet abstract fun meterOcrCap(c: MeterOcrCapability): Capability
     @Binds @IntoSet abstract fun aiCap(c: AiCapability): Capability
     @Binds @IntoSet abstract fun shoppingListCap(c: ShoppingListCapability): Capability
     /** #260: «Понять глубже» + «Кто есть кто» + «Собрать данные+» свёрнуты в одно «Понять». */
@@ -235,8 +231,9 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun replaceBgR(r: ReplaceBgRealizer): Realizer
     // OCR has two realizers behind one capability — the Resolver ranks device before
     // cloud and chains them (device recognises nothing -> cloud). Roadmap #1 in prod.
-    // Чтение прибора в эту цепочку НЕ входит: поиск табло срабатывает на 22 кадрах корпуса из
-    // 23, и внутри цепочки он подменял бы облачное чтение документа выдуманным числом (#262).
+    // Собственного чтения табло у Point больше нет (#396, кнопка убрана владельцем), а эта
+    // цепочка приборы не читает: внешний глаз на трёх настоящих кадрах даёт ноль из трёх.
+    // Путь от фотографии прибора к показанию заведён отдельно — #426 (вырезанный барабан).
     @Binds @IntoSet abstract fun deviceOcrR(r: DeviceOcrRealizer): Realizer
     @Binds @IntoSet abstract fun cloudOcrR(r: CloudOcrRealizer): Realizer
 
@@ -245,7 +242,6 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun externalEyeOcrR(r: ExternalEyeOcrRealizer): Realizer
     @Binds @IntoSet abstract fun externalEyeCloudOcrR(r: ExternalEyeCloudOcrRealizer): Realizer
     @Binds @IntoSet abstract fun cloudOcrDirectR(r: CloudOcrDirectRealizer): Realizer
-    @Binds @IntoSet abstract fun meterOcrR(r: MeterOcrRealizer): Realizer
     @Binds @IntoSet abstract fun aiR(r: AiRealizer): Realizer
     @Binds @IntoSet abstract fun shoppingListR(r: ShoppingListRealizer): Realizer
     @Binds @IntoSet abstract fun understandR(r: UnderstandRealizer): Realizer
