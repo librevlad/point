@@ -7,18 +7,29 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
-import androidx.compose.material3.Text
+import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import android.widget.Toast
 import androidx.lifecycle.lifecycleScope
 import com.point.ShareActivity
+import com.point.core.ui.PortalColumnWidth
+import com.point.core.ui.PortalRow
+import com.point.core.ui.ScreenHeader
+import com.point.core.ui.bubbleColor
+import com.point.core.ui.bubbleIcon
 import com.point.core.ui.theme.PointTheme
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
@@ -69,16 +80,7 @@ class SourcePickerActivity : ComponentActivity() {
         val visible = sources.filter { it.isAvailable(this) }.sortedBy { it.label }
         setContent {
             PointTheme {
-                Column(
-                    modifier = Modifier.fillMaxSize().padding(24.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Text("Что превратить в объект?")
-                    visible.forEach { source ->
-                        Button(onClick = { start(source) }) { Text(source.label) }
-                    }
-                }
+                SourcePickerScreen(sources = visible, onPick = ::start)
             }
         }
     }
@@ -127,4 +129,76 @@ class SourcePickerActivity : ComponentActivity() {
         )
         finish()
     }
+}
+
+/**
+ * Сам экран — чистый и без Android-обвязки, поэтому целиком рисуется в `@Preview` (#114).
+ *
+ * Источник здесь выглядит **строкой действия с экрана объекта**: плита со свечением своего цвета,
+ * название, шеврон. Так и должно быть — «снять камерой» и «распознать текст» это одно и то же
+ * движение, только по разные стороны рождения объекта. Раньше здесь стоял ряд стандартных
+ * Material-кнопок: фиолетовые таблетки по центру, без иконок, набранные не тем шрифтом.
+ *
+ * Затемнение — тоже часть починки. Окно у экрана прозрачное (он открывается поверх чужого
+ * приложения из шторки), а фона не было вовсе: белый текст ложился на чужой светлый экран и
+ * пропадал. Теперь под карточкой лежит ФОН дизайн-системы, приглушённый до просвечивания: видно,
+ * откуда пришли, и читается то, что написано.
+ */
+@Composable
+internal fun SourcePickerScreen(
+    sources: List<ObjectSource>,
+    onPick: (ObjectSource) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background.copy(alpha = 0.88f))
+            .systemBarsPadding()
+            .padding(horizontal = 20.dp, vertical = 20.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            modifier = Modifier.widthIn(max = PortalColumnWidth).fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(11.dp),
+        ) {
+            ScreenHeader(title = "Что превратить в объект?", modifier = Modifier.padding(bottom = 9.dp))
+            sources.forEachIndexed { index, source ->
+                PortalRow(
+                    title = source.label,
+                    onClick = { onPick(source) },
+                    icon = bubbleIcon(source.icon),
+                    accent = bubbleColor(source.icon),
+                    appearIndex = index,
+                )
+            }
+        }
+    }
+}
+
+/** Источник для превью: экрану от него нужны только имя и иконка. */
+private fun previewSource(sourceId: String, sourceLabel: String, iconKey: String) = object : ObjectSource {
+    override val id = sourceId
+    override val label = sourceLabel
+    override val icon = iconKey
+    override fun isAvailable(context: android.content.Context) = true
+    override suspend fun request(context: android.content.Context): Intent? = null
+    override suspend fun read(context: android.content.Context, data: Intent?): Produced? = null
+}
+
+// Фон превью — белый нарочно: так видно, что затемнение делает свою работу поверх чужого светлого
+// приложения. Именно на нём прежний экран и терялся.
+@Preview(name = "Источник объекта · шторка (#114)", showBackground = true, backgroundColor = 0xFFFFFFFF)
+@Composable
+private fun PreviewSourcePicker() = PointTheme {
+    SourcePickerScreen(
+        sources = listOf(
+            previewSource("clipboard", "Буфер обмена", "copy"),
+            previewSource("camera", "Камера", "camera"),
+            previewSource("voice", "Голос", "transcribe"),
+            previewSource("location", "Место", "map"),
+            previewSource("receive", "Принять файл", "link"),
+        ),
+        onPick = {},
+    )
 }

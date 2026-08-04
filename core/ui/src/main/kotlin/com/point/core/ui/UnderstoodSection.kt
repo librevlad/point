@@ -133,11 +133,11 @@ internal fun UnderstoodSection(facts: List<UnderstoodFact>, enriching: List<Stri
     val detail = facts.filter { it.key != "semantic" }
     if (detail.isEmpty() && enriching.isEmpty()) return
     Surface(
-        shape = RoundedCornerShape(18.dp),
+        shape = PortalCardShape,
         color = MaterialTheme.colorScheme.surface,
         modifier = Modifier
             .padding(top = 16.dp)
-            .widthIn(max = 340.dp)
+            .widthIn(max = PortalColumnWidth)
             .animateContentSize(tween(220)),
     ) {
         Column(modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp)) {
@@ -163,10 +163,16 @@ internal fun UnderstoodSection(facts: List<UnderstoodFact>, enriching: List<Stri
     }
 }
 
-/** The visible heartbeat of running work — a softly pulsing brand dot. Shared with the action's
- *  own «сейчас» line (#288): «Point думает» и «действие работает» — одно ощущение, один знак. */
+/**
+ * The visible heartbeat of running work — a softly pulsing brand dot. Shared with the action's
+ * own «сейчас» line (#288): «Point думает» и «действие работает» — одно ощущение, один знак.
+ *
+ * Публичный, потому что ждут не только на экране объекта: связь с компьютером и приём файла ждут
+ * тем же знаком. Крутилка Material на их месте была бы вторым языком для того же ощущения
+ * (MOTION.md принцип №3 — импульс, а не крутилка).
+ */
 @Composable
-internal fun ThinkingDot() {
+fun ThinkingDot() {
     val motion = rememberMotionEnabled()
     val alpha = if (motion) {
         rememberInfiniteTransition(label = "think").animateFloat(

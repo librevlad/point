@@ -2,13 +2,11 @@ package com.point.core.ui
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -16,7 +14,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -45,7 +42,7 @@ fun LinkQr(
     size: Dp = 200.dp,
 ) {
     val matrix = remember(text) { qrMatrix(text) } ?: return
-    val plate = RoundedCornerShape(14.dp)
+    val plate = PortalPlateShape // то же скругление, что у иконных плит списка действий
     Canvas(
         modifier = modifier
             .size(size)
@@ -115,15 +112,12 @@ fun LinkCard(
     warning: String,
     modifier: Modifier = Modifier,
 ) {
-    val shape = RoundedCornerShape(18.dp)
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(10.dp),
         modifier = modifier
-            .widthIn(max = 340.dp)
-            .clip(shape)
-            .background(Brush.verticalGradient(listOf(RowTop, RowBottom)))
-            .border(1.dp, Brush.verticalGradient(listOf(TopHighlight, Color.Transparent)), shape)
+            .widthIn(max = PortalColumnWidth)
+            .portalCard(elevation = 0.dp)
             .padding(horizontal = 16.dp, vertical = 14.dp),
     ) {
         Text(

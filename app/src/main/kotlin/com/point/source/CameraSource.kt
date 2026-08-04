@@ -24,6 +24,7 @@ class CameraSource @Inject constructor() : ObjectSource {
 
     override val id = "camera"
     override val label = "Камера"
+    override val icon = "camera"
 
     private var target: File? = null
 
