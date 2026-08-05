@@ -1501,6 +1501,148 @@ class FlowViewModelTest {
         assertEquals("/scratch/b.txt", vm.ui.value.frame?.obj?.metadata?.get(com.point.core.flow.META_OCR_TEXT_REF))
     }
 
+    // --- Понятое живёт при объекте и только накапливается (#526) ---
+
+    /** Скан визитки, на котором локально нашёлся QR, — объект из живого случая владельца. */
+    private fun cardWithQr(
+        objects: List<PointObject> = emptyList(),
+        relations: List<com.point.core.model.Relation> = emptyList(),
+    ) = EnrichmentUpdate(
+        setOf(Feature.HAS_QR),
+        mapOf("entity.qr" to "https://example.org/vcard/17"),
+        emptyList(),
+        objects,
+        relations,
+    )
+
+    /** Что «Понять» возвращает по тапу: тот же объект теми же байтами (`/in` — ссылка, которую
+     *  выдаёт приёмник), только с дописанными фактами. Единственное действие, которое отдаёт
+     *  `input.uri`, — и по определению, потому что ничего, кроме понимания, не производит. */
+    private fun understood(vararg facts: Pair<String, String>) = ActionResult.Success(
+        ResultObject(
+            ObjectKind.IMAGE, "image/jpeg", ScratchRef("/in"),
+            mapOf(*facts) + ("op" to "understand"),
+        ),
+    )
+
+    @Test fun `локально найденный QR остаётся при объекте после облачного «Понять»`() = runTest(dispatcher) {
+        // Дословный случай владельца: QR нашёлся на устройстве, облако вернуло поля визитки и про
+        // QR не сказало ничего. Обогащение понимает объект один раз — иначе тест доказывал бы
+        // повторное чтение, а не наследование.
+        enrichment.updates = listOf(cardWithQr())
+        enrichment.understandsOnce = true
+        resolver.result = understood("entity.phone" to "+380671234567")
+        val vm = vm()
+        vm.onShared("/card.jpg", "image/jpeg"); advanceUntilIdle()
+        assertTrue(vm.ui.value.frame?.obj?.state?.has(Feature.HAS_QR) == true)
+
+        vm.onBubble(bubble(title = "Понять")); advanceUntilIdle()
+
+        val obj = vm.ui.value.frame?.obj
+        assertTrue("QR обязан пережить шаг", obj?.state?.has(Feature.HAS_QR) == true)
+        assertEquals("https://example.org/vcard/17", obj?.metadata?.get("entity.qr"))
+        // …и прочитанное облаком, разумеется, тоже на месте: шаг ДОБАВИЛ, а не заменил.
+        assertEquals("+380671234567", obj?.metadata?.get("entity.phone"))
+    }
+
+    @Test fun `найденное внутри объекта переживает шаг вместе со связями`() = runTest(dispatcher) {
+        val waybill = PointObject(
+            "o:id", "text/plain", ValueRef("20 4514 9154 9395"),
+            ObjectState(ObjectKind.of("Identifier")),
+        )
+        val foundIn = com.point.core.model.Relation(
+            "o:id", com.point.core.model.RelationType.FOUND_IN, "in",
+        )
+        enrichment.updates = listOf(cardWithQr(listOf(waybill), listOf(foundIn)))
+        enrichment.understandsOnce = true
+        resolver.result = understood("entity.phone" to "+380671234567")
+        val vm = vm()
+        vm.onShared("/parcel.jpg", "image/jpeg"); advanceUntilIdle()
+
+        vm.onBubble(bubble(title = "Понять")); advanceUntilIdle()
+
+        assertEquals(listOf("20 4514 9154 9395"), vm.ui.value.frame?.found?.map { it.uri.value })
+        assertEquals(listOf(foundIn), vm.ui.value.frame?.relations)
+        // Найденное не просто нарисовано — по нему по-прежнему можно уйти дальше.
+        vm.onFound(waybill); advanceUntilIdle()
+        assertEquals("20 4514 9154 9395", vm.ui.value.frame?.obj?.uri?.value)
+    }
+
+    @Test fun `понятое шагом доезжает до «Недавнего» — объект остаётся собой`() = runTest(dispatcher) {
+        enrichment.updates = listOf(cardWithQr())
+        enrichment.understandsOnce = true
+        resolver.result = understood("entity.phone" to "+380671234567")
+        val vm = vm()
+        vm.onShared("/card.jpg", "image/jpeg"); advanceUntilIdle()
+
+        vm.onBubble(bubble(title = "Понять")); advanceUntilIdle()
+
+        // «Недавнее» находит свою запись только по id. Со свежим id всё, что понял шаг, не
+        // доезжало до дома вовсе: переоткрытый объект знал ровно то, что знал до тапа.
+        assertEquals(history.recorded.single().id, history.updated.last().id)
+        assertEquals("+380671234567", history.updated.last().metadata["entity.phone"])
+        assertTrue(history.updated.last().state.has(Feature.HAS_QR))
+    }
+
+    @Test fun `спор двух чтений виден и после шага`() = runTest(dispatcher) {
+        // Спор записан прошлым чтением: два источника прочитали адрес по-разному, голосование
+        // оставило известное и показало расхождение в `.alt`. Следующий шаг про адрес не сказал
+        // ничего — и это тот случай, где рассказ о споре исчезал тише всего: не разрешённым, а
+        // просто не доехавшим до нового кадра.
+        enrichment.updates = listOf(
+            EnrichmentUpdate(
+                emptySet(),
+                mapOf(
+                    "entity.address" to "вул. Сонячна, 15",
+                    "entity.address" + com.point.core.flow.META_ALT_SUFFIX to
+                        com.point.core.flow.altValue(listOf("вул. Сонячна, 15", "вул. Сонячна, 51")),
+                ),
+                emptyList(),
+            ),
+        )
+        enrichment.understandsOnce = true
+        resolver.result = understood("entity.phone" to "+380671234567")
+        val vm = vm()
+        vm.onShared("/card.jpg", "image/jpeg"); advanceUntilIdle()
+
+        vm.onBubble(bubble(title = "Понять")); advanceUntilIdle()
+
+        assertEquals("вул. Сонячна, 15", vm.ui.value.frame?.obj?.metadata?.get("entity.address"))
+        assertEquals(
+            listOf("вул. Сонячна, 15", "вул. Сонячна, 51"),
+            com.point.core.flow.alternativesOf(vm.ui.value.frame?.obj?.metadata.orEmpty(), "entity.address"),
+        )
+    }
+
+    @Test fun `новый объект чужого понятого не наследует`() = runTest(dispatcher) {
+        // Наследует продолжение того же объекта, а не всякий шаг: у распознанного текста свои
+        // байты, и приписывать ему QR исходного снимка значило бы врать про другой объект.
+        enrichment.updates = listOf(cardWithQr())
+        enrichment.understandsOnce = true
+        resolver.result = ActionResult.Success(ResultObject(ObjectKind.TEXT, "text/plain", ScratchRef("/out.txt")))
+        val vm = vm()
+        vm.onShared("/card.jpg", "image/jpeg"); advanceUntilIdle()
+
+        vm.onBubble(bubble(title = "Распознать текст")); advanceUntilIdle()
+
+        assertFalse(vm.ui.value.frame?.obj?.state?.has(Feature.HAS_QR) == true)
+        assertNull(vm.ui.value.frame?.obj?.metadata?.get("entity.qr"))
+    }
+
+    @Test fun `«нового нет» — не отказ, и объект остаётся со всем, что о нём знали`() = runTest(dispatcher) {
+        enrichment.updates = listOf(cardWithQr())
+        enrichment.understandsOnce = true
+        resolver.result = ActionResult.Done("Point уже прочитал всё, что здесь есть")
+        val vm = vm()
+        vm.onShared("/card.jpg", "image/jpeg"); advanceUntilIdle()
+
+        vm.onBubble(bubble(title = "Понять")); advanceUntilIdle()
+
+        assertEquals("Point уже прочитал всё, что здесь есть", vm.ui.value.message)
+        assertEquals(Outcome.DONE, vm.ui.value.messageOutcome)
+        assertTrue(vm.ui.value.frame?.obj?.state?.has(Feature.HAS_QR) == true)
+    }
+
     // --- Bring-your-own AI key (#19) ---
 
     @Test fun `openKeySettings shows the key screen prefilled`() = runTest(dispatcher) {
@@ -2444,9 +2586,22 @@ private class FakeEnrichment(var features: Set<Feature> = emptySet()) : Enrichme
     /** Progressive script: each update is emitted after [stepDelayMs] of virtual time. */
     var updates: List<EnrichmentUpdate>? = null
     var stepDelayMs: Long = 0
+    /**
+     * Понимает объект только в первый раз (#526): следующие проходы отдают пустоту.
+     *
+     * Так видно, что понятое донёс ШАГ, а не повторное обогащение. Это не поблажка тесту:
+     * повторный проход по тем же байтам действительно может не принести ничего — а на устройстве
+     * он ещё и стоит десятки секунд, ровно те, которых наследование и избавляет.
+     */
+    var understandsOnce = false
+    private var runs = 0
     override fun enrich(obj: PointObject): kotlinx.coroutines.flow.Flow<EnrichmentUpdate> =
         kotlinx.coroutines.flow.flow {
-            val script = updates ?: listOf(EnrichmentUpdate(features, emptyMap(), emptyList()))
+            runs++
+            val script = when {
+                understandsOnce && runs > 1 -> listOf(EnrichmentUpdate(emptySet(), emptyMap(), emptyList()))
+                else -> updates ?: listOf(EnrichmentUpdate(features, emptyMap(), emptyList()))
+            }
             for (u in script) {
                 if (stepDelayMs > 0) kotlinx.coroutines.delay(stepDelayMs)
                 emit(u)

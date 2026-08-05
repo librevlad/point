@@ -40,6 +40,8 @@ import com.point.core.flow.META_SELECTION_SOURCE
 import com.point.core.flow.SnappedSelection
 import com.point.core.flow.UserAiConfig
 import com.point.core.flow.UserKeyStore
+import com.point.core.flow.carryKnowledge
+import com.point.core.flow.continuesObject
 import com.point.core.flow.findOnPage
 import com.point.core.flow.foundOnPageLabel
 import com.point.core.ui.Outcome
@@ -1921,12 +1923,30 @@ class FlowViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Новый кадр — и, если шаг вернул тот же объект, всё, что о нём уже знали (#526).
+     *
+     * Кадр — это место на экране. Знание о том, что на визитке есть QR, местом на экране не
+     * является: оно принадлежит объекту. Пока `found`/`relations` рождались пустыми, а состояние
+     * бралось только у результата, каждый шаг начинал понимать заново — и «Понять» стирало
+     * найденное локально ровно в тот момент, когда человек попросил понять ЛУЧШЕ.
+     *
+     * Наследование не выборочное и не по списку действий: правило одно на все шаги — «тот же
+     * объект продолжает знать то, что знал» ([continuesObject]). Иначе гарантия «ни один шаг не
+     * уменьшает известного» держалась бы на памяти автора следующего реализатора.
+     */
     private fun pushFrame(obj: PointObject, via: CapabilityId? = null, viaTitle: String? = null) {
-        val bubbles = registry.bubblesFor(obj.state)
+        val carried = stack.lastOrNull()?.takeIf { continuesObject(it.obj, obj) }
+        val known = carried?.let { carryKnowledge(it.obj, obj) } ?: obj
+        val bubbles = registry.bubblesFor(known.state)
         val frame = FlowFrame(
-            obj, bubbles, via, viaTitle,
-            latent = registry.latentBubblesFor(obj.state),
-            pinned = runCatching { pins.pinnedFor(obj.state.kind) }.getOrNull(),
+            known, bubbles, via, viaTitle,
+            // Найденное внутри объекта (#222) — тоже понятое о нём, а не свойство кадра: трек,
+            // адрес отделения и срок никуда не делись оттого, что страницу прочитали ещё раз.
+            found = carried?.found.orEmpty(),
+            relations = carried?.relations.orEmpty(),
+            latent = registry.latentBubblesFor(known.state),
+            pinned = runCatching { pins.pinnedFor(known.state.kind) }.getOrNull(),
         )
         stack.addLast(frame)
         _ui.update {
@@ -1937,10 +1957,10 @@ class FlowViewModel @Inject constructor(
         }
         refreshFavorites()
         persistJourney()
-        enrichInBackground(obj)
-        loadChildrenIfCollection(obj)
-        loadTextPreviewIfText(obj)
-        loadObjectPreview(obj)
+        enrichInBackground(known)
+        loadChildrenIfCollection(known)
+        loadTextPreviewIfText(known)
+        loadObjectPreview(known)
     }
 
     /** #7: journal the journey after every step — a crash loses nothing. */

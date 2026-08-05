@@ -153,19 +153,28 @@ class UnderstandRealizerTest {
         assertNull(meta["graph.role.sender"])
     }
 
+    /**
+     * «Нового не нашлось» — нормальный исход, а не поломка (#526).
+     *
+     * Отказом это красило карточку тревожным знаком, и человек читал «сломалось» там, где Point
+     * честно прочитал всё, что было, и ничего не потерял: объект остаётся на экране со всем, что о
+     * нём уже известно. Цена прежней формулировки — не косметическая: она учила не доверять
+     * действию, которое отработало правильно.
+     */
     @Test
-    fun `NONE — честное «ничего», recoverable отказ`() = runTest {
+    fun `нового не нашлось — это исход, а не отказ`() = runTest {
         val result = realizer("NONE").perform(textObject())
 
-        assertTrue(result is ActionResult.Failure)
-        assertTrue((result as ActionResult.Failure).recoverable)
+        assertTrue(result is ActionResult.Done)
+        assertEquals("Point уже прочитал всё, что здесь есть", (result as ActionResult.Done).message)
     }
 
     @Test
     fun `проза вместо контракта не рождает ни фактов, ни ролей`() = runTest {
         val result = realizer("Конечно! Отправителем является ТОВ «Агротрейд».").perform(textObject())
 
-        assertTrue(result is ActionResult.Failure)
+        assertFalse("проза не имеет права стать фактом", result is ActionResult.Success)
+        assertTrue(result is ActionResult.Done)
     }
 
     /** Текстовый объект без текста — отказ, и заготовленный ответ роли не играет: до модели
