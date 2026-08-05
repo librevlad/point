@@ -9,13 +9,17 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
+import com.point.core.flow.AI_PROVIDERS
+import com.point.core.flow.KeyProbe
 import com.point.core.flow.KeyVerdict
 import com.point.core.flow.UserAiConfig
+import com.point.core.flow.keyVerdict
 import com.point.core.model.HistoryEntry
 import com.point.core.model.ObjectKind
 import com.point.core.model.ScratchRef
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -41,6 +45,7 @@ class KeyOnboardingTest {
         onCheck: (UserAiConfig) -> Unit = {},
         onSave: (UserAiConfig) -> Unit = {},
         onPasteKey: () -> String? = { null },
+        onForgetKey: () -> Unit = {},
     ) = compose.setContent {
         KeyScreen(
             config = config,
@@ -54,6 +59,7 @@ class KeyOnboardingTest {
             verdict = verdict,
             onCheck = onCheck,
             onPasteKey = onPasteKey,
+            onForgetKey = onForgetKey,
         )
     }
 
@@ -179,5 +185,79 @@ class KeyOnboardingTest {
         keyScreen(note = "AI недоступен — задайте свой ключ")
 
         compose.onNodeWithText("AI недоступен", substring = true).performScrollTo().assertIsDisplayed()
+    }
+
+    // --- Экран закрытого релиза: обещания, путь назад и чужой ключ в поле ---
+
+    private val openRouter = AI_PROVIDERS.first()
+    private val savedKey = UserAiConfig("sk-or-v1-abcdef123456", openRouter.baseUrl, "gemma")
+
+    /**
+     * Кончившаяся квота не обещает с экрана того, чего Point не делает (#535).
+     *
+     * Приговор берётся настоящий — тот самый [keyVerdict], что показывают человеку, — а не
+     * сочинённый для теста: иначе проверялось бы, что экран умеет рисовать любые слова, а не что
+     * человек читает правду.
+     */
+    @Test fun `совет про исчерпанную квоту не обещает переключения на второй ключ`() {
+        keyScreen(config = savedKey, verdict = keyVerdict(KeyProbe(status = 429)))
+
+        compose.onNodeWithText("квота", substring = true).performScrollTo().assertIsDisplayed()
+        // Слота под второй ключ на этом экране ровно один — поле выше. Обещать очередь провайдеров
+        // значит отправить человека заводить второй аккаунт впустую.
+        compose.onNodeWithText("переключится", substring = true).assertDoesNotExist()
+        compose.onNodeWithText("второй ключ", substring = true).assertDoesNotExist()
+    }
+
+    /**
+     * «Забыть ключ» (#536): путь обратно, которого не было вовсе.
+     *
+     * `UserKeyStore.clear()` был написан и не звался ни с одного экрана — отключить AI человек мог
+     * только переустановкой приложения.
+     */
+    @Test fun `заданный ключ можно забыть, и поле пустеет сразу`() {
+        var forgotten = false
+        keyScreen(config = savedKey, onForgetKey = { forgotten = true })
+
+        compose.onNodeWithText("Забыть ключ").performScrollTo().performClick()
+
+        assertTrue("ключ не ушёл с устройства", forgotten)
+        // Стёртое человек ВИДИТ: строка состояния под полем говорит то же, что при пустом ключе.
+        compose.onNodeWithText("Ключа пока нет", substring = true).performScrollTo().assertIsDisplayed()
+    }
+
+    @Test fun `забывать нечего, пока ключ не задан`() {
+        keyScreen(config = UserAiConfig("", openRouter.baseUrl, "gemma"))
+
+        // Набранное, но не сохранённое стирается самим полем; строка «Забыть» обещала бы человеку
+        // действие над тем, чего на устройстве нет.
+        compose.onNodeWithText("Забыть ключ").assertDoesNotExist()
+    }
+
+    /**
+     * Смена сервиса уносит чужой ключ (#537).
+     *
+     * Прежде в поле оставался ключ прежнего сервиса, «Проверить» честно отвечало «Ключ не подошёл»
+     * — и человек читал это как поломку продукта, не сделав ничего неправильного.
+     */
+    @Test fun `выбор другого сервиса очищает поле ключа`() {
+        keyScreen(config = savedKey)
+        compose.onNodeWithText("Ключ на устройстве", substring = true).performScrollTo().assertIsDisplayed()
+
+        compose.onNodeWithText("Сервис").performScrollTo().performClick()
+        compose.onNodeWithText("Groq").performScrollTo().performClick()
+
+        compose.onNodeWithText("Ключа пока нет", substring = true).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("sk-o…3456", substring = true).assertDoesNotExist()
+    }
+
+    @Test fun `повторный выбор того же сервиса ключ не трогает`() {
+        keyScreen(config = savedKey)
+
+        compose.onNodeWithText("Сервис").performScrollTo().performClick()
+        compose.onNodeWithText(openRouter.name).performScrollTo().performClick()
+
+        // Человек не менял сервис — он подтвердил выбранный. Стирать ему ключ за это не за что.
+        compose.onNodeWithText("Ключ на устройстве", substring = true).performScrollTo().assertIsDisplayed()
     }
 }

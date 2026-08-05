@@ -876,7 +876,7 @@ class FlowViewModel @Inject constructor(
                 _ui.update {
                     it.copy(
                         cloudConsent = true,
-                        cloudDestination = com.point.core.flow.cloudDestination(id),
+                        cloudDestination = com.point.core.flow.cloudDestination(id, chosenAiService()),
                         cloudTitle = com.point.core.flow.cloudAskTitle(scope),
                         cloudConfirm = com.point.core.flow.cloudAskConfirm(scope),
                     )
@@ -884,6 +884,21 @@ class FlowViewModel @Inject constructor(
             }
         }
     }
+
+    /**
+     * Имя сервиса, которому уедет объект по AI-ветке (#538) — или `null`, если назвать его нечем.
+     *
+     * Согласие говорило «на сервер AI-провайдера» человеку, который сам выбрал сервис и сам вписал
+     * его ключ: Point знал адресата и не называл. Имя выводится из сохранённого адреса по каталогу
+     * — второго источника правды не заводится. Чтение дешёвое (prefs get, тот же, что перед каждым
+     * вызовом модели), и делается оно ровно в момент вопроса: ключ мог смениться минуту назад.
+     *
+     * `null` остаётся честным исходом: у своего прокси имени в каталоге нет, и выдумывать его
+     * нельзя — тогда на экране стоит прежнее умолчание.
+     */
+    private fun chosenAiService(): String? = runCatching {
+        com.point.core.flow.providerForBaseUrl(userKeys.read()?.baseUrl.orEmpty())?.name
+    }.getOrNull()
 
     /** Drill into a collection item — continue the normal flow on that object.
      *  The item is already materialised in scratch, so there is no re-ingest. */
@@ -1143,6 +1158,33 @@ class FlowViewModel @Inject constructor(
                     keyChecking = false,
                     keyVerdict = verdict,
                     aiKeySet = it.aiKeySet || verdict is com.point.core.flow.KeyVerdict.Works,
+                )
+            }
+        }
+    }
+
+    /**
+     * «Забыть ключ» (#536) — путь обратно, которого не было вовсе.
+     *
+     * `UserKeyStore.clear()` был написан и не звался ни с одного экрана: человек, задавший ключ, мог
+     * только переписать его другим. Отдать телефон, уйти с рабочего ключа, перестать платить своей
+     * квотой — всё это чинилось переустановкой приложения.
+     *
+     * Экран НЕ закрывается: стёртое надо увидеть, а не вывести из его исчезновения. Адрес и модель
+     * остаются — человек забыл ключ, а не выбор сервиса, и подсовывать ему вместо этого умолчание
+     * значило бы молча отменить ещё одно его решение. Приговор прошлой проверки снимается: «Работает
+     * — ключ сохранён», висящее над стёртым ключом, — ровно та ложь, против которой вся проверка.
+     */
+    fun forgetAiKey() {
+        viewModelScope.launch {
+            runCatching { userKeys.clear() }
+            _ui.update {
+                it.copy(
+                    keyScreen = it.keyScreen?.copy(apiKey = ""),
+                    keyVerdict = null,
+                    keyChecking = false,
+                    aiKeySet = false,
+                    message = "Ключ AI забыт", messageOutcome = Outcome.DONE,
                 )
             }
         }

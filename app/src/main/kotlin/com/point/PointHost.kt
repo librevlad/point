@@ -93,6 +93,8 @@ fun PointHost(
     onCheckAiKey: (UserAiConfig) -> Unit = {},
     /** Что лежит в буфере обмена; читается только тапом «Вставить из буфера» (#465). */
     onPasteKey: () -> String? = { null },
+    /** Стереть ключ с устройства (#536) — путь обратно, которого у человека не было. */
+    onForgetAiKey: () -> Unit = {},
     onCloseKeySettings: () -> Unit = {},
     onToggleUsage: (Boolean) -> Unit = {},
     onToggleSound: (Boolean) -> Unit = {},
@@ -209,6 +211,7 @@ fun PointHost(
                 verdict = state.keyVerdict,
                 onCheck = onCheckAiKey,
                 onPasteKey = onPasteKey,
+                onForgetKey = onForgetAiKey,
                 usageEnabled = state.usageEnabled,
                 usageSummary = state.usageSummary,
                 onToggleUsage = onToggleUsage,

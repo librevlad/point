@@ -1,5 +1,6 @@
 package com.point
 
+import com.point.core.flow.AI_PROVIDERS
 import com.point.core.flow.AppLauncher
 import com.point.core.flow.AppTarget
 import com.point.core.flow.Capability
@@ -1649,6 +1650,45 @@ class FlowViewModelTest {
         assertNull(vm.ui.value.keyScreen)
     }
 
+    // --- Путь обратно: «Забыть ключ» (#536) ---
+
+    /**
+     * `UserKeyStore.clear()` был объявлен и не звался ни с одного экрана: отключить AI обратно
+     * человек мог только переустановкой. Поводы настоящие — отдать телефон, уйти с рабочего ключа.
+     */
+    @Test fun `«Забыть ключ» стирает его с устройства и возвращает приглашение подключить AI`() = runTest(dispatcher) {
+        userKeys.config = UserAiConfig("sk-1", AI_PROVIDERS.first().baseUrl, "gemma")
+        val vm = vm()
+        vm.openKeySettings(); advanceUntilIdle()
+        assertTrue("ключ был задан — иначе забывать нечего", vm.ui.value.aiKeySet)
+
+        vm.forgetAiKey(); advanceUntilIdle()
+
+        assertNull("ключ остался на устройстве", userKeys.config)
+        assertFalse("«Недавнее» обязано снова звать подключить AI", vm.ui.value.aiKeySet)
+    }
+
+    /** Стёртое надо УВИДЕТЬ: экран остаётся, и на нём не висит приговор про прежний ключ. */
+    @Test fun `забытый ключ не уносит с собой экран и выбранный сервис`() = runTest(dispatcher) {
+        val openRouter = AI_PROVIDERS.first()
+        userKeys.config = UserAiConfig("sk-1", openRouter.baseUrl, "gemma")
+        val vm = vm()
+        vm.openKeySettings(); advanceUntilIdle()
+        vm.checkAiKey(UserAiConfig("sk-1", openRouter.baseUrl, "gemma")); advanceUntilIdle()
+        assertNotNull("проверка сказала «работает»", vm.ui.value.keyVerdict)
+
+        vm.forgetAiKey(); advanceUntilIdle()
+
+        val screen = vm.ui.value.keyScreen
+        assertNotNull("человек остался бы гадать, случилось ли что-нибудь", screen)
+        assertEquals("ключа на экране больше нет", "", screen?.apiKey)
+        // Человек забыл ключ, а не выбор сервиса: подставить сюда умолчание значило бы молча
+        // отменить ещё одно его решение.
+        assertEquals(openRouter.baseUrl, screen?.baseUrl)
+        // «Работает — ключ сохранён» над стёртым ключом — ровно та ложь, против которой проверка.
+        assertNull(vm.ui.value.keyVerdict)
+    }
+
     // --- Доведение до работающего ключа (#465) ---
 
     @Test fun `удачная проверка сохраняет ключ и показывает слова сервиса`() = runTest(dispatcher) {
@@ -2121,6 +2161,37 @@ class FlowViewModelTest {
             "спросили не про то: ${vm.ui.value.cloudDestination}",
             vm.ui.value.cloudDestination.contains("любому"),
         )
+    }
+
+    // --- Согласие называет адресата поимённо (#538) ---
+
+    /**
+     * Point знает, куда отправляет: человек сам выбрал сервис и сам вписал его ключ. Говорить ему в
+     * этот момент «на сервер AI-провайдера» — значит прятать имя, которое лежит на соседней полке.
+     * «Видно, КУДА уходит объект» — граница приватности проекта, а не украшение вопроса.
+     */
+    @Test fun `вопрос про облако называет тот сервис, ключ которого задан`() = runTest(dispatcher) {
+        val openRouter = AI_PROVIDERS.first()
+        userKeys.config = UserAiConfig("sk-1", openRouter.baseUrl, "gemma")
+        val vm = linkVm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.onBubble(bubble(id = "ai")); advanceUntilIdle()
+
+        val said = vm.ui.value.cloudDestination
+        assertTrue("адресат не назван: $said", said.contains(openRouter.name))
+        assertFalse("класс адресатов вместо адресата: $said", said.contains("AI-провайдера"))
+    }
+
+    /** Свой прокси в каталоге не значится — имени у него нет, и выдумывать его нечем. */
+    @Test fun `незнакомому адресу имя не выдумывается`() = runTest(dispatcher) {
+        userKeys.config = UserAiConfig("sk-1", "https://мой.прокси/v1", "м")
+        val vm = linkVm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.onBubble(bubble(id = "ai")); advanceUntilIdle()
+
+        assertTrue(vm.ui.value.cloudDestination.contains("AI-провайдера"))
     }
 
     // --- Device actions: inline app picker (#66) ---
