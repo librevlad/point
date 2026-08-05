@@ -2,6 +2,7 @@ package com.point.source
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -10,13 +11,30 @@ import org.junit.Test
  */
 class ProducedTest {
 
+    /** Момент съёмки. Ожидаемое время берётся у той же [stampLabel] — иначе тест проверял бы не
+     *  имя кадра, а часовой пояс машины, на которой его запустили (сам формат пришит `AgoLabelTest`). */
+    private val takenAt = 1_754_325_912_345L
+    private val stamp: String get() = com.point.core.flow.stampLabel(takenAt)
+
     @Test
     fun `текст из буфера ложится в файл и становится текстовым объектом`() {
         val produced = clipToProduced(
             text = "накладная 204514", uri = null, mime = null,
             textFile = { "file:///scratch/clip.txt" },
         )
-        assertEquals(Produced("file:///scratch/clip.txt", "text/plain"), produced)
+        // Имя — первые слова самого текста (#533): файл в кэше остаётся `clip-…​.txt`, но в
+        // «Недавнем» человек читает то, что скопировал.
+        assertEquals(Produced("file:///scratch/clip.txt", "text/plain", "накладная 204514"), produced)
+    }
+
+    /** Файл пришёл со своим именем — выдумывать поверх него нечего и незачем. */
+    @Test
+    fun `файлу из буфера имя не переписывают`() {
+        val produced = clipToProduced(
+            text = null, uri = "content://media/42", mime = "image/png",
+            textFile = { error("файл не пишем") },
+        )
+        assertNull(produced?.name)
     }
 
     @Test
@@ -45,8 +63,17 @@ class ProducedTest {
 
     @Test
     fun `снятый кадр становится объектом-картинкой`() {
-        val produced = captureToProduced("/scratch/shot.jpg", sizeBytes = 240_000)
-        assertEquals(Produced("/scratch/shot.jpg", "image/jpeg"), produced)
+        val produced = captureToProduced("/scratch/shot.jpg", sizeBytes = 240_000, epochMillis = takenAt)
+        assertEquals(Produced("/scratch/shot.jpg", "image/jpeg", "Снимок, $stamp"), produced)
+    }
+
+    /** #533: до правки кадр звался `shot-1754325912345.jpg`, и два снимка подряд в «Недавнем»
+     *  различались только временем ПОД строкой — то есть не различались вовсе. */
+    @Test
+    fun `имя кадра называет, что это и когда снято`() {
+        val name = captureToProduced("/scratch/shot.jpg", sizeBytes = 1, epochMillis = takenAt)?.name
+        assertEquals("Снимок, $stamp", name)
+        assertTrue("имя снова машинное: $name", name!!.startsWith("Снимок") && !name.contains("shot"))
     }
 
     @Test

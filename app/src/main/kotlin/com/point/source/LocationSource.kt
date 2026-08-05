@@ -54,9 +54,16 @@ class LocationSource @Inject constructor() : ObjectSource {
                 ?.getAddressLine(0)
         }.getOrNull()
 
+        val body = placeText(location.latitude, location.longitude, address)
         val file = java.io.File.createTempFile("place-", ".txt", context.cacheDir)
-        file.writeText(placeText(location.latitude, location.longitude, address))
-        return Produced(android.net.Uri.fromFile(file).toString(), "text/plain")
+        file.writeText(body)
+        // Имя месту даёт оно само — адрес или координаты (#533). `place-1754325912345.txt` в
+        // «Недавнем» не отличалось от соседнего такого же ничем, кроме времени под строкой.
+        return Produced(
+            android.net.Uri.fromFile(file).toString(),
+            "text/plain",
+            com.point.core.flow.textObjectName(body),
+        )
     }
 }
 

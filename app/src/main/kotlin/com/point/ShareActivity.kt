@@ -3,6 +3,7 @@ package com.point
 import android.content.Intent
 import android.net.Uri
 import androidx.core.content.IntentCompat
+import com.point.source.EXTRA_OBJECT_NAME
 import dagger.hilt.android.AndroidEntryPoint
 
 /**
@@ -30,13 +31,17 @@ class ShareActivity : FlowHostActivity() {
                 streams = streams?.map { it.toString() }.orEmpty(),
             )
         ) {
-            is Incoming.Single -> viewModel.onShared(incoming.uri, incoming.mime)
+            // Имя от своего источника (#533), если он его назвал: снимок и запись приходят сюда
+            // файлом с машинным именем, а как объект называется — знает только тот, кто его родил.
+            // Чужой Share этого ключа не ставит, и тогда имя по-прежнему берётся у файла.
+            is Incoming.Single ->
+                viewModel.onShared(incoming.uri, incoming.mime, name = intent.getStringExtra(EXTRA_OBJECT_NAME))
             is Incoming.Many -> viewModel.onSharedMultiple(incoming.uris)
-            is Incoming.Body -> {
-                val uri = Uri.fromFile(cacheTextFile(cacheDir, incoming.text))
-                viewModel.onShared(uri.toString(), "text/plain")
-            }
-            null -> Unit
+            is Incoming.Body -> viewModel.onSharedText(incoming.text)
+            // Разобрать не вышло — и раньше здесь не происходило ровно ничего: человек видел
+            // пустой чёрный экран без единого слова и без выхода. Молчание в ответ на действие —
+            // худший из отказов: непонятно даже, дошло ли оно.
+            null -> viewModel.refuseIncoming()
         }
     }
 }

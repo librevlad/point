@@ -252,6 +252,10 @@ class SourcePickerActivity : ComponentActivity() {
                 .setAction(Intent.ACTION_SEND)
                 .setType(produced.mime)
                 .putExtra(Intent.EXTRA_STREAM, Uri.parse(produced.uri))
+                // Имя объекта едет вместе с ним (#533): файл в кэше называется машинно
+                // (`shot-…`, `record-…`), а человек увидит «Снимок, 4 авг 19:25». Знает имя
+                // только источник — по дороге его взять уже неоткуда.
+                .apply { produced.name?.let { putExtra(EXTRA_OBJECT_NAME, it) } }
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION),
         )
         finish()

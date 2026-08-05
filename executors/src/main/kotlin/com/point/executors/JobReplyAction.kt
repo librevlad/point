@@ -1,5 +1,6 @@
 package com.point.executors
 
+import com.point.core.flow.AiReadiness
 import com.point.core.flow.Capability
 import com.point.core.flow.CapabilityMeta
 import com.point.core.flow.Cost
@@ -7,6 +8,7 @@ import com.point.core.flow.Latency
 import com.point.core.flow.LlmClient
 import com.point.core.flow.Realizer
 import com.point.core.flow.reportStage
+import com.point.core.flow.labelNeedingKey
 import com.point.core.model.ActionResult
 import com.point.core.model.CapabilityId
 import com.point.core.model.Feature
@@ -26,11 +28,13 @@ internal const val JOB_REPLY_PROMPT =
  * optional input — a line about the candidate — then the vacancy and that line travel
  * to the LLM together. Type-gated like «Список покупок»: IS_JOB, nothing else.
  */
-class JobReplyCapability @Inject constructor() : Capability {
+class JobReplyCapability @Inject constructor(
+    private val keys: AiReadiness,
+) : Capability {
     override val id = ID
     override val icon = "reply"
     override val meta = CapabilityMeta(priority = 30, cost = Cost.PAID, latency = Latency.SLOW, network = true, auth = true)
-    override fun label(state: ObjectState) = "Отклик"
+    override fun label(state: ObjectState) = labelNeedingKey("Отклик", keys.keySet())
     override fun accepts(state: ObjectState) = state.has(Feature.IS_JOB)
     override fun produces(state: ObjectState) = ObjectState(ObjectKind.TEXT)
 

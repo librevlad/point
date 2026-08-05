@@ -20,14 +20,26 @@ import kotlin.math.min
 class LearningBubblePolicy @Inject constructor(
     private val pins: PinnedActions,
     private val usage: CapabilityUsage,
+    private val llm: com.point.core.flow.LlmClient,
 ) : BubblePolicy {
 
     override fun rank(state: ObjectState, candidates: List<Capability>): List<Capability> {
         val counts = usage.counts()
         // #66 user rule: the pinned action wins over both priority and learned usage.
         val pinned = runCatching { pins.pinnedFor(state.kind) }.getOrNull()
+        val keyless = !runCatching { llm.configured }.getOrDefault(true)
         return candidates.sortedWith(
-            compareBy({ if (it.id == pinned) 0 else 1 }, { effectivePriority(it, counts) }, { it.id.value }),
+            compareBy(
+                { if (it.id == pinned) 0 else 1 },
+                // Пока ключа нет, «Понять», «Перевести» и прочее, что без него молчит, не встаёт
+                // главным действием. Раньше вставало: после того как Point сам прочитал
+                // фотографию, наверх поднималось платное сетевое действие, а работавшее
+                // «Распознать текст» уезжало вниз — и человек шёл за подсветкой в отказ.
+                // Способность не прячется: она остаётся в списке, просто ниже работающего.
+                { if (keyless && it.meta.auth) 1 else 0 },
+                { effectivePriority(it, counts) },
+                { it.id.value },
+            ),
         )
     }
 

@@ -132,6 +132,9 @@ def point(tmp_path, google: FakeGoogle, clock: Clock) -> Harness:
         public_url="https://point.test",
         google_client_id="",
         google_client_secret="",
+        # Обход просроченного — на каждом обращении: в жизни он раз в четверть часа, но тест
+        # не должен ждать четверть часа, чтобы увидеть, что обещание «сутки» выполняется.
+        sweep_every=0,
     )
     application = app_mod.create_app(settings=settings, google=google, now=clock)
     with TestClient(application) as client:

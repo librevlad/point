@@ -123,7 +123,6 @@ fun FirstScreen(
     textPreview: String? = null,
     latent: List<LatentBubble> = emptyList(),
     enriching: List<String> = emptyList(),
-    discover: Bubble? = null,
     working: Boolean = false,
     /** Что идущее действие говорит о себе (#288) — та же строка, что показал бы экран ожидания.
      *  null — действие молчит, и экран за него не сочиняет. */
@@ -764,12 +763,19 @@ private fun ObjectHeader(
     }
 }
 
-/** #114: how many top-ranked actions are shown big. With ≤2 more than that, folding
- *  is sillier than showing — everything is "likely". Shared with the ViewModel so the
- *  Discover hint knows exactly which actions the user does NOT see. */
+/**
+ * #114: сколько верхних действий раздела видно сразу. С ≤2 сверх этого сворачивать глупее, чем
+ * показать: свёртка ради одной спрятанной строки — это лишний тап и лишняя строка «Ещё 1» вместо
+ * неё же.
+ *
+ * С #530 счёт наконец применяется: до этого среза он существовал вместе с мёртвой подсказкой
+ * «Попробуйте», которую считали на каждом кадре, передавали через три слоя и не рисовали нигде.
+ * Подсказка убрана, счёт остался работать — теперь по нему сворачивается хвост каждой группы
+ * ([ObjectActions]), и человек видит, сколько именно действий за «Ещё N».
+ */
 const val LIKELY_COUNT = 3
 
-/** The number of actions actually shown big for [total] candidates (see [LIKELY_COUNT]). */
+/** Сколько строк раздела показать сразу при [total] действиях в нём (см. [LIKELY_COUNT]). */
 fun likelyCount(total: Int): Int = if (total <= LIKELY_COUNT + 2) total else LIKELY_COUNT
 
 /**

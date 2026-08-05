@@ -3,7 +3,6 @@ package com.point.desktop
 import com.point.core.flow.PcRemoteAction
 import com.point.core.flow.RelayCrypto
 import com.point.core.flow.RelayRpc
-import com.point.core.flow.RelayTls
 import com.point.core.flow.decodePcCaps
 import com.point.core.flow.decodePcFrame
 import com.point.core.flow.decodePcOutbox
@@ -206,7 +205,6 @@ class RelayLiveLinkTest {
 
     private fun open(url: String, readSeconds: Int): HttpsURLConnection =
         (URL(url).openConnection() as HttpsURLConnection).apply {
-            sslSocketFactory = RelayTls.socketFactory
             connectTimeout = 5_000
             readTimeout = readSeconds * 1000
             setRequestProperty("Authorization", "Bearer " + LiveServer.pass)

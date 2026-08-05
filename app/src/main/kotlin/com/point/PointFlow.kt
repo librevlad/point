@@ -25,6 +25,9 @@ fun PointFlow(
     viewModel: FlowViewModel,
     /** Уйти с экрана-сообщения, за которым нет объекта: у каждой двери своё «откуда пришли». */
     onLeave: () -> Unit,
+    /** Как этот выход называется у ЭТОЙ двери (#531): «← Недавнее» ведёт на «Недавнее» только из
+     *  лаунчера, а из «Поделиться» тот же жест возвращает в чужое приложение. */
+    leaveLabel: String = LEAVE_TO_HOME,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -56,6 +59,7 @@ fun PointFlow(
         onOpenKeySettings = { viewModel.openKeySettings() },
         onCheckAiKey = viewModel::checkAiKey,
         onPasteKey = { clipboardText(context) },
+        onForgetAiKey = viewModel::forgetAiKey,
         onCloseKeySettings = viewModel::closeKeySettings,
         onToggleUsage = viewModel::setUsageEnabled,
         onToggleSound = viewModel::setSoundEnabled,
@@ -75,6 +79,7 @@ fun PointFlow(
         onCloseFind = viewModel::closeFind,
         onOpenUrl = { url -> openInBrowser(context, url) },
         onDismissMessage = onLeave,
+        leaveLabel = leaveLabel,
         modifier = modifier,
     )
 }

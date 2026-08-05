@@ -2,7 +2,6 @@ package com.point
 
 import android.content.ClipboardManager
 import android.content.Context
-import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.addCallback
@@ -77,7 +76,6 @@ class HomeActivity : ComponentActivity() {
                         val recent by viewModel.recent.collectAsStateWithLifecycle()
                         val clipboard by viewModel.clipboard.collectAsStateWithLifecycle()
                         val crash by viewModel.crashReport.collectAsStateWithLifecycle()
-                        val basketCount by viewModel.basketCount.collectAsStateWithLifecycle()
                         val fromPcCount by viewModel.fromPcCount.collectAsStateWithLifecycle()
                         // Re-offer the clipboard each time Home comes back on screen: after Back
                         // out of a restored flow the focus edge has already passed (#111).
@@ -98,9 +96,6 @@ class HomeActivity : ComponentActivity() {
                             crashReport = crash,
                             onSendCrash = ::shareCrashReport,
                             onDismissCrash = viewModel::dismissCrashReport,
-                            basketCount = basketCount,
-                            onOpenBasket = viewModel::openBasket,
-                            onClearBasket = viewModel::clearBasket,
                             fromPcCount = fromPcCount,
                             onPullFromPc = viewModel::pullFromPc,
                             onHideFromPc = viewModel::hideFromPc,
@@ -112,8 +107,10 @@ class HomeActivity : ComponentActivity() {
                             state = state,
                             viewModel = viewModel,
                             // Домашняя дверь: «откуда пришли» — «Недавнее». Выход с
-                            // экрана-сообщения ведёт туда, а не из Point (#114).
+                            // экрана-сообщения ведёт туда, а не из Point (#114), — и только здесь
+                            // надпись «← Недавнее» говорит правду (#531).
                             onLeave = { onBackPressedDispatcher.onBackPressed() },
+                            leaveLabel = LEAVE_TO_HOME,
                         )
                     }
                 }
@@ -165,7 +162,9 @@ class HomeActivity : ComponentActivity() {
 
     private fun useClipboard(text: String) {
         viewModel.dismissClipboard()
-        viewModel.onShared(Uri.fromFile(cacheTextFile(cacheDir, text)).toString(), "text/plain")
+        // Скопированное называется своими первыми словами (#533), как любой другой текст,
+        // и убирается вместе с ним в конце флоу.
+        viewModel.onSharedText(text)
     }
 }
 

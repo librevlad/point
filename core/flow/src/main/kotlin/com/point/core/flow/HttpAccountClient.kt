@@ -4,7 +4,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
 import java.net.URL
-import javax.net.ssl.HttpsURLConnection
 
 /**
  * Разговор с сервером Point по HTTP — **один на телефон и на компьютер** (#472, #473).
@@ -150,10 +149,9 @@ class HttpAccountClient(
     private fun request(path: String, method: String, token: String? = null, body: String? = null): Reply =
         runCatching {
             val c = URL(base + path).openConnection() as HttpURLConnection
-            // Пиннинг остаётся ровно там, где сервер ещё стоит на самоподписанном сертификате
-            // (сегодняшний адрес по IP). У домена с настоящим сертификатом пинить нечего — и не
-            // нужно: срез 1 (#470) уносит пиннинг совсем.
-            if (c is HttpsURLConnection && base.contains(PINNED_HOST)) c.sslSocketFactory = RelayTls.socketFactory
+            // Пиннинга нет: у сервера настоящий сертификат Let'''s Encrypt на point.leerio.app
+            // (#470 выкачен 04.08.2026), и доверяем мы обычной цепочке. Самоподписанный жил ровно
+            // до этого дня — держать его дальше значило бы возить с собой мёртвую защиту.
             c.requestMethod = method
             c.connectTimeout = connectTimeoutMs
             c.readTimeout = readTimeoutMs
@@ -177,8 +175,6 @@ class HttpAccountClient(
     private fun encode(s: String): String = java.net.URLEncoder.encode(s, "UTF-8")
 
     private companion object {
-        /** Адрес сегодняшнего сервера с самоподписанным сертификатом (см. [RelayTls]). */
-        const val PINNED_HOST = "35.185.31.106"
     }
 }
 

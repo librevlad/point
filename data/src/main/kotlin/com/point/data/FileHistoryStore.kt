@@ -87,21 +87,41 @@ class FileHistoryStore @Inject constructor(
             .take(limit)
     }
 
+    /**
+     * Переоткрыть объект из «Недавнего» — вместе с тем, что о нём УЖЕ поняли (#532).
+     *
+     * Раньше отсюда уезжали только имя и вес, а признаки и найденные сущности выбрасывались —
+     * хотя лежали в том же журнале, строкой выше. Цена этому — живой замер: переоткрытие того же
+     * чека снова показывало «Распознаю текст…» двадцать-тридцать секунд, и все эти секунды объект
+     * стоял голым, без «Позвонить» и «Создать событие», которые Point про него уже знал.
+     * `MetadataEntityEnricher` зажигает такие сущности мгновенно и без единого чтения диска, так
+     * что первый экран остаётся в своём бюджете (I/O здесь — тот же, что и был: длина файла).
+     *
+     * **Что НЕ возвращается — и почему.** [Feature.HAS_TEXT] и [Feature.HAS_WORD_LAYER] говорят не
+     * о самом объекте, а о том, что рядом лежит написанный распознаванием файл (`META_OCR_TEXT_REF`,
+     * `META_OCR_ATOMS_REF`). Файлы эти живут в scratch и стираются по окончании работы, а в журнал
+     * не попадают вовсе (см. [entityValues] — журналятся только `entity.*`). Вернуть признак без
+     * улики значило бы предложить «Найти в документе» странице, на которой искать не по чему, —
+     * ровно та ложь, от которой `REFRESHABLE_META` бережёт живой флоу.
+     */
     override suspend fun open(entryId: String): PointObject? = withContext(Dispatchers.IO) {
         val entry = readEntries()[entryId] ?: return@withContext null
         val file = File(entry.ref.value)
         if (!file.exists()) return@withContext null
         val size = file.length()
+        val fresh = classifier.classify(entry.mime, size, file.name)
         PointObject(
             id = UUID.randomUUID().toString(),
             mime = entry.mime,
             uri = ScratchRef(file.absolutePath),
-            state = classifier.classify(entry.mime, size, entry.name),
+            state = entry.features.filter { it !in EVIDENCE_BACKED }
+                .fold(fresh) { state, feature -> state.with(feature) },
             // Переоткрытый из «Недавнего» объект меряется так же, как только что расшаренный
             // (#459): вес уже взят здесь, на фоне, до всякого экрана.
             metadata = buildMap {
                 entry.name?.let { put("name", it) }
                 put(META_SIZE, size.toString())
+                entry.entities.forEach { (key, value) -> put(META_ENTITY_PREFIX + key, value) }
             },
         )
     }
@@ -178,9 +198,20 @@ class FileHistoryStore @Inject constructor(
         return result
     }
 
+    /**
+     * Расширение копии в истории.
+     *
+     * Имя объекта с #533 — это фраза из его содержимого («Пришлите договор до пятницы», «Запись,
+     * 4 авг 19:25»), а не имя файла. Хвост после последней точки в такой фразе расширением не
+     * является: «1.5 кг сахара» дало бы копию `<id>.5 кг сахара`, а «и/или» — путь в несуществующую
+     * папку и потерянную запись истории. Поэтому из имени берётся только то, что расширением
+     * выглядит; всё остальное решает тип.
+     */
     private fun extensionFor(name: String?, mime: String): String {
         val fromName = name?.substringAfterLast('.', "")?.lowercase().orEmpty()
-        if (fromName.isNotBlank()) return fromName
+        if (fromName.isNotBlank() && fromName.length <= MAX_EXT && fromName.all { it.isLetterOrDigit() }) {
+            return fromName
+        }
         return when {
             mime.startsWith("image/") -> mime.substringAfter('/').substringBefore('+')
             mime == "application/pdf" -> "pdf"
@@ -194,5 +225,12 @@ class FileHistoryStore @Inject constructor(
     private companion object {
         /** Keep the last N objects — more than the 30 Home shows, so nothing recent is lost. */
         const val MAX_ENTRIES = 50
+
+        /** Длиннее расширений не бывает у того, что Point принимает: `jpeg`, `xlsx`, `webp`. */
+        const val MAX_EXT = 5
+
+        /** Признаки, за которыми стоит написанный файл, а не свойство объекта (#532). Живут они в
+         *  scratch, стираются вместе с работой — и вернуться из журнала не могут по определению. */
+        val EVIDENCE_BACKED = setOf(Feature.HAS_TEXT, Feature.HAS_WORD_LAYER)
     }
 }

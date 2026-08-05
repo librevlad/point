@@ -64,6 +64,20 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
+ * Что такое Point — одной строкой, на пустом доме, до всякой настройки.
+ *
+ * Продукт нигде не говорил, что он такое: слово «объект» — внутреннее, а первым сообщением стоял
+ * призыв подключить чужой AI-сервис. Новый человек начинал знакомство с рассказа о том, чего
+ * Point без ключа не умеет, — при том что лучшее, что он умеет, работает бесплатно и без сети.
+ *
+ * Строка называет продукт глаголом и примером, а не определением: «дайте — прочитает — подскажет».
+ * Тур, экскурсия и обучающие экраны для этого не нужны и заведены не будут.
+ */
+internal const val WHAT_POINT_IS: String =
+    "Дайте фото, скриншот, документ или текст — Point прочитает его и покажет, что с ним можно " +
+        "сделать"
+
+/**
  * Point's home: the recent objects you brought in. Tap one to keep working with it —
  * no going back to the source app to share again (the metric: fewer switches).
  *
@@ -94,9 +108,6 @@ fun HomeScreen(
     crashReport: String? = null,
     onSendCrash: (String) -> Unit = {},
     onDismissCrash: () -> Unit = {},
-    basketCount: Int = 0,
-    onOpenBasket: () -> Unit = {},
-    onClearBasket: () -> Unit = {},
     fromPcCount: Int = 0,
     onPullFromPc: () -> Unit = {},
     onHideFromPc: () -> Unit = {},
@@ -125,19 +136,6 @@ fun HomeScreen(
             )
         }
 
-        // Зачем ключ — сказанное ДО того, как человек упёрся в отказ (#465). Свежепоставленный
-        // Point молчал об этом вовсе: «Понять», «Перевести», «Спросить AI» и расшифровка отвечали
-        // отказом, и узнавал человек о ключе в худший момент — когда действие уже провалилось.
-        // Приглашение стоит здесь, а не на экране объекта: тот держит бюджет ≤300 мс без I/O.
-        if (!aiKeySet) {
-            Box(
-                Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                ConnectAiRow(onConnect = onSettings)
-            }
-        }
-
         if (crashReport != null) {
             // #11: crash visibility - offered once, leaves the device only by explicit share.
             CrashBanner(onSend = { onSendCrash(crashReport) }, onDismiss = onDismissCrash)
@@ -149,10 +147,6 @@ fun HomeScreen(
 
         if (fromPcCount > 0) {
             FromPcBanner(fromPcCount, onPull = onPullFromPc, onHide = onHideFromPc)
-        }
-
-        if (basketCount > 0) {
-            BasketBanner(basketCount, onOpen = onOpenBasket, onClear = onClearBasket)
         }
 
         if (recent.isEmpty()) {
@@ -172,14 +166,20 @@ fun HomeScreen(
                     )
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        // Раньше здесь был один путь внутрь — «поделитесь». Для того, у кого
-                        // объекта ещё нет, это был тупик: сделать прямо тут было нечего (#456).
-                        "Поделитесь объектом из любого приложения — или создайте его здесь",
+                        // Первое, что человек читает, обязано отвечать на «что это такое».
+                        // Прежняя строка звала поделиться объектом — а слова «объект» он ещё не
+                        // знает; и рассказывать про AI-ключ раньше, чем про сам продукт, значило
+                        // начинать знакомство с того, чего Point без чужого сервиса не умеет.
+                        WHAT_POINT_IS,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Spacer(Modifier.height(22.dp))
                     NewObjectDoor(sourceLabels = sourceLabels, onClick = onNewObject)
+                    if (!aiKeySet) {
+                        Spacer(Modifier.height(14.dp))
+                        ConnectAiRow(onConnect = onSettings)
+                    }
                 }
             }
         } else {
@@ -194,6 +194,10 @@ fun HomeScreen(
                         onClick = onNewObject,
                         modifier = Modifier.padding(bottom = 8.dp),
                     )
+                }
+                if (!aiKeySet) {
+                    // Ниже главной двери, а не над ней: сначала то, ради чего Point открыли.
+                    item { ConnectAiRow(onConnect = onSettings, modifier = Modifier.padding(bottom = 8.dp)) }
                 }
                 item {
                     Text(
@@ -266,7 +270,10 @@ internal fun sourcesSubtitle(labels: List<String>): String? =
 @Composable
 private fun ConnectAiRow(onConnect: () -> Unit, modifier: Modifier = Modifier) {
     PortalRow(
-        title = "Подключите AI — пара минут",
+        // Без «пара минут»: выпуск ключа у чужого сервиса за пару минут не делается, а обещание,
+        // которое человек проверит первым же действием, дороже сэкономленной строки. Короткий
+        // заголовок ещё и перестал ломаться на две строки поверх подписи.
+        title = "Подключить AI",
         subtitle = com.point.core.flow.AI_KEY_WHY_SHORT,
         onClick = onConnect,
         icon = com.point.core.ui.bubbleIcon("ai"),
@@ -312,44 +319,6 @@ private fun FromPcBanner(count: Int, onPull: () -> Unit, onHide: () -> Unit) {
                     imageVector = Icons.Filled.Close,
                     contentDescription = "Скрыть",
                     tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                )
-            }
-        }
-    }
-}
-
-/** The progressive object (#96): the pile keeps growing across flows; one tap opens
- *  it as a COLLECTION whose actions apply to everything together. */
-@Composable
-private fun BasketBanner(count: Int, onOpen: () -> Unit, onClear: () -> Unit) {
-    Surface(
-        onClick = onOpen,
-        color = MaterialTheme.colorScheme.tertiaryContainer,
-        shape = MaterialTheme.shapes.large,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-    ) {
-        Row(
-            modifier = Modifier.padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text(
-                    "Корзина: $count",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onTertiaryContainer,
-                )
-                Text(
-                    "Открыть всё вместе как один объект",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onTertiaryContainer,
-                )
-            }
-            IconButton(onClick = onClear) {
-                Icon(
-                    imageVector = Icons.Filled.Close,
-                    contentDescription = "Очистить корзину",
-                    tint = MaterialTheme.colorScheme.onTertiaryContainer,
                 )
             }
         }
@@ -456,11 +425,14 @@ private fun HistoryRow(entry: HistoryEntry, onClick: () -> Unit) {
                 // #114: a person remembers the object, not the clock — the kind leads,
                 // the relative time only seconds it.
                 Text(
-                    // Время говорит по-русски всегда (дизайн-ревью 04.08.2026): системный
-                    // DateUtils берёт язык телефона, и на английской системе строка выходила
-                    // наполовину чужой — «Изображение · 3 hours ago».
-                    text = kindLabel(entry.kind) + " · " +
-                        agoLabel(System.currentTimeMillis() - entry.epochMillis),
+                    text = historySubtitle(
+                        name = entry.name,
+                        kind = kindLabel(entry.kind),
+                        // Время говорит по-русски всегда (дизайн-ревью 04.08.2026): системный
+                        // DateUtils берёт язык телефона, и на английской системе строка выходила
+                        // наполовину чужой — «Изображение · 3 hours ago».
+                        ago = agoLabel(System.currentTimeMillis() - entry.epochMillis),
+                    ),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -480,6 +452,16 @@ private fun HistoryRow(entry: HistoryEntry, onClick: () -> Unit) {
         }
     }
 }
+
+/**
+ * Вторая строка «Недавнего»: чем объект является и когда он появился.
+ *
+ * Вид не называется дважды (#533). С тех пор как запись и снимок называют себя сами («Запись,
+ * 4 авг 19:25»), прежняя строка давала «Запись · 3 часа назад» прямо под словом «Запись» — вид
+ * повторялся, а сказать ему было уже нечего. Тогда остаётся только время: имя вид уже назвало.
+ */
+internal fun historySubtitle(name: String?, kind: String, ago: String): String =
+    if (name != null && name.startsWith(kind, ignoreCase = true)) ago else "$kind · $ago"
 
 /** The understood facts of a history entry — the same derivation the first screen uses,
  *  rebuilt from the persisted features + entity values (#114). */

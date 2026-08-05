@@ -56,6 +56,24 @@ class FallbackLlmClientTest {
     }
 
     @Test
+    fun `исчерпанная квота — одна фраза про бесплатное, а не склейка провайдерских строк`() = runTest {
+        // Кончившийся лимит — не поломка, и сказать про него надо тем же, чем говорит облачное
+        // чтение. Иначе человек читает «AI недоступен» как сломанное и идёт чинить исправное.
+        val client = FallbackLlmClient(
+            listOf(
+                failing("openrouter: бесплатный лимит исчерпан — вернитесь позже, платить не идём"),
+                failing("Gemini HTTP 429"),
+            ),
+        )
+
+        val error = runCatching { client.run(obj, "hi") }.exceptionOrNull()
+
+        assertTrue(error?.message, error?.message?.contains("вернитесь позже") == true)
+        assertTrue(error?.message, error?.message?.contains("платить не идём") == true)
+        assertFalse(error?.message, error?.message?.contains("HTTP") == true)
+    }
+
+    @Test
     fun `no providers asks the user to set a key`() = runTest {
         val error = runCatching { FallbackLlmClient(emptyList()).run(obj, "hi") }.exceptionOrNull()
         assertTrue(error?.message?.contains("задайте свой ключ") == true)

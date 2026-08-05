@@ -1,6 +1,7 @@
 package com.point.data
 
 import com.point.core.flow.ObjectStore
+import com.point.core.flow.refusalNeedsKey
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
@@ -14,6 +15,10 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 import java.net.SocketTimeoutException
+
+/** Настоящее тело отказа при исчерпанном лимите — то самое, что уезжало человеку на экран. */
+private const val RATE_LIMIT_JSON =
+    """{"error":{"message":"Rate limit reached for model gemma-4-31b-it:free","type":"rate_limit"}}"""
 
 /** The OpenAI-compatible provider over a fake [HttpJson] — response parsing, errors,
  *  timeouts. Pure JVM: a TEXT object avoids android.util.Base64. */
@@ -51,10 +56,82 @@ class OpenAiCompatibleClientTest {
         assertEquals("привет", File(res.uri.value).readText())
     }
 
+    // --- Отказ говорит словами, а не сырым JSON (блокер релиза) ---
+
+    /** Что человек прочитает под объектом при этом коде ответа. */
+    private suspend fun refusalFor(code: Int, body: String = RATE_LIMIT_JSON): String =
+        runCatching { client(http(code, body)).run(textObj, "hi") }.exceptionOrNull()?.message.orEmpty()
+
     @Test
-    fun `maps a non-2xx to an error carrying the code and provider`() = runTest {
-        val e = runCatching { client(http(429, "rate limit")).run(textObj, "hi") }.exceptionOrNull()
-        assertTrue(e?.message?.contains("openrouter HTTP 429") == true)
+    fun `отказ сервиса написан словами — без кода, без слова HTTP и без чужого ответа`() = runTest {
+        // Дословно то, что видел человек в раздаваемой сборке, где весь AI — это его собственный
+        // ключ: «AI недоступен — свой ключ HTTP 429: {"error":{"message":"Rate limit reached…».
+        listOf(401, 402, 429, 500).forEach { code ->
+            val said = refusalFor(code)
+            assertFalse(said, said.contains("{"))
+            assertFalse(said, said.contains("}"))
+            assertFalse(said, said.contains("HTTP", ignoreCase = true))
+            assertFalse(said, said.contains(code.toString()))
+            assertFalse(said, said.contains("Rate limit reached"))
+            // Кто именно отказал, человек знать должен: в цепочке провайдеров не один.
+            assertTrue(said, said.contains("openrouter"))
+        }
+    }
+
+    @Test
+    fun `неверный ключ ведёт в настройки, а не в тупик`() = runTest {
+        // Марка «чинится ключом» появлялась, только когда ключа не было вовсе. Заданный, но
+        // неверный ключ оставлял человека с JSON на экране и без единого выхода.
+        assertTrue(refusalNeedsKey(refusalFor(401)))
+        assertTrue(refusalNeedsKey(refusalFor(403)))
+    }
+
+    @Test
+    fun `исчерпанный лимит ключом не чинится — в настройки не зовут`() = runTest {
+        // Ключ здесь верный. Позвать чинить исправное — послать человека не туда.
+        assertFalse(refusalNeedsKey(refusalFor(429)))
+    }
+
+    @Test
+    fun `отказ по лимиту узнаётся сводкой цепочки как исчерпанная квота`() = runTest {
+        // Шов между клиентом и сводкой — общая константа, а не проза: переписать фразу здесь и
+        // молча выключить ветку «вернитесь позже» в цепочке больше нельзя.
+        assertTrue(refusalFor(429).isQuotaError())
+    }
+
+    @Test
+    fun `ключ человека не попадает в текст отказа`() = runTest {
+        // Часть сервисов возвращает присланный запрос внутри тела ошибки. Тело не доходит до
+        // строки отказа вовсе — этим тест и сторожит: вернут его на экран, и секрет ляжет
+        // под объектом, а с отчётом о падении уедет дальше.
+        val echoed = """{"error":{"message":"invalid api key sk-key"}}"""
+        assertFalse(refusalFor(401, echoed).contains("sk-key"))
+    }
+
+    @Test
+    fun `в раздаваемой сборке под объектом стоит фраза, а не кусок чужого JSON`() = runTest {
+        // Сквозь всю цепочку — ровно то, что доедет до экрана. Метка «свой ключ» здесь не для
+        // красоты: в раздаваемой сборке весь AI и есть ключ человека, и этот клиент обслуживает
+        // ВСЕ AI-действия. Дословность нарочная — это продуктовая поверхность, а не деталь.
+        val mine = OpenAiProvider("свой ключ", "https://x/v1", "sk-key", "some-model")
+        suspend fun said(code: Int): String? {
+            val chain = FallbackLlmClient(listOf(OpenAiCompatibleClient(http(code, RATE_LIMIT_JSON), store, mine)))
+            return runCatching { chain.run(textObj, "hi") }.exceptionOrNull()?.message
+        }
+
+        assertEquals("AI недоступен — свой ключ: ключ не принят — задайте свой ключ в настройках", said(401))
+        assertEquals("Бесплатные лимиты AI исчерпаны — вернитесь позже, платить не идём", said(429))
+        assertEquals(
+            "AI недоступен — свой ключ: сервис просит оплату — у этого ключа нет бесплатного доступа",
+            said(402),
+        )
+        assertEquals("AI недоступен — свой ключ: сервис сейчас не отвечает", said(500))
+    }
+
+    @Test
+    fun `сервис, который не отвечает, назван поломкой сервиса, а не ключа`() = runTest {
+        assertTrue(refusalFor(503).contains("не отвечает"))
+        assertFalse(refusalNeedsKey(refusalFor(503)))
     }
 
     @Test

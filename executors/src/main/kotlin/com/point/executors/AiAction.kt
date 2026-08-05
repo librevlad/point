@@ -1,5 +1,6 @@
 package com.point.executors
 
+import com.point.core.flow.AiReadiness
 import com.point.core.flow.Capability
 import com.point.core.flow.CapabilityMeta
 import com.point.core.flow.Cost
@@ -8,6 +9,7 @@ import com.point.core.flow.LlmClient
 import com.point.core.flow.Realizer
 import com.point.core.flow.Resolver
 import com.point.core.flow.reportStage
+import com.point.core.flow.labelNeedingKey
 import com.point.core.model.ActionResult
 import dagger.Lazy
 import com.point.core.model.CapabilityId
@@ -65,11 +67,16 @@ fun aiTransformTarget(prompt: String): CapabilityId? {
  * LLM and materialises the answer as text (markdown -> `.md`). `produces` is null — the AI output
  * type is unknown until the result is classified.
  */
-class AiCapability @Inject constructor() : Capability {
+class AiCapability @Inject constructor(
+    private val keys: AiReadiness,
+) : Capability {
     override val id = ID
     override val icon = "ai"
     override val meta = CapabilityMeta(priority = 100, cost = Cost.PAID, latency = Latency.SLOW, network = true, auth = true)
-    override fun label(state: ObjectState) = "AI"
+
+    /** #529: без ключа разговор с моделью не состоится, и сказано это в имени, а не в отказе
+     *  после минуты ожидания. Действие остаётся действием: тап ведёт на экран ключей. */
+    override fun label(state: ObjectState) = labelNeedingKey("AI", keys.keySet())
     override fun accepts(state: ObjectState) = state.kind.isFileBacked
     override fun produces(state: ObjectState): ObjectState? = null // unknown until classified
 

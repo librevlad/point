@@ -25,6 +25,7 @@ class PointApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        warmUpScanPack()
         val system = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, error ->
             runCatching {
@@ -35,5 +36,23 @@ class PointApplication : Application() {
             }
             system?.uncaughtException(thread, error)
         }
+    }
+
+    /**
+     * Разбудить пак обработки снимков заранее — в фоне и до первого объекта (#528).
+     *
+     * С этого среза первый экран спрашивает у реализаторов «есть ли чем это выполнить», и у
+     * «Скана с цветом» ответ упирается в загрузку нативной библиотеки — десятки миллисекунд. На
+     * бюджете в 300 мс без единого чтения с диска это была бы плата за честность, взятая с
+     * человека: экран стал бы правдивее и заметно медленнее.
+     *
+     * Поэтому загрузка происходит здесь, пока Point ещё принимает объект. Ответ кэширован
+     * (`by lazy`), гонка безопасна: успели — первый экран берёт готовое, не успели — платит
+     * ровно столько, сколько платил бы и без этой строки.
+     */
+    private fun warmUpScanPack() {
+        Thread { runCatching { com.point.executors.OpenCvScan.available } }
+            .apply { isDaemon = true }
+            .start()
     }
 }

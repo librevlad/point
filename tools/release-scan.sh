@@ -38,7 +38,11 @@
 #   «не смогли проверить» не равно «чисто».
 set -euo pipefail
 
-SECRET_RX='AIza[0-9A-Za-z_-]{20,}|gh[pousr]_[0-9A-Za-z]{20,}|sk-[A-Za-z0-9_-]{20,}'
+# Формы, по которым секрет узнаётся «в лицо». Список рос по факту: в v0.2.0 утёк ключ Gemini
+# вида AIza…, но Google с тех пор выдаёт ключи вида AQ.… — прежняя регулярка ту же аварию
+# сегодня НЕ заметила бы. Ловятся: Google (оба поколения), GitHub, OpenAI-стиль (включая
+# sk-or-… OpenRouter), Groq (gsk_), Cerebras (csk-), xAI, HuggingFace, Replicate.
+SECRET_RX='AIza[0-9A-Za-z_-]{20,}|AQ\.[0-9A-Za-z_-]{20,}|gh[pousr]_[0-9A-Za-z]{20,}|sk-[A-Za-z0-9_-]{20,}|gsk_[0-9A-Za-z]{20,}|csk-[0-9A-Za-z_-]{20,}|xai-[0-9A-Za-z]{20,}|hf_[0-9A-Za-z]{20,}|r8_[0-9A-Za-z]{20,}'
 MAX_DEPTH=4 # msi → cab → jar → содержимое; глубже наши артефакты не вложены
 
 here="$(cd "$(dirname "$0")" && pwd)"
@@ -171,6 +175,35 @@ if [ -n "$matches" ]; then
             fail "секретная форма $(redact "$m") — в $p; нет в release-эталоне (tools/release-scan-allowlist.txt) → публиковать нельзя. Живой ключ отзывается, безобидную строку можно внести в эталон."
         fi
     done <<< "$matches"
+fi
+
+# 4) Сверка с ФАКТИЧЕСКИМИ значениями секретов (последний рубеж последнего рубежа).
+#
+# Регулярка знает только те формы, которые мы успели в неё вписать, и молчит про всё остальное:
+# `RELAY_APP_SECRET` — 48 символов base64 без опознавательного префикса — прошёл мимо неё и
+# уехал в публичную сборку. Здесь же сравнение идёт с самими значениями, поэтому формат не важен
+# вовсе: что лежит в local.properties, того в артефакте быть не должно.
+#
+# В CI файла нет по построению — там это не «проверено и чисто», а «не проверялось», и так и
+# говорится: тишина вместо пропущенной проверки и есть то, как утекают ключи.
+lp="$here/../local.properties"
+if [ -f "$lp" ]; then
+    checked=0
+    while IFS= read -r line; do
+        case "$line" in \#* | "") continue ;; esac
+        k="${line%%=*}"; v="${line#*=}"
+        [ "$k" != "$line" ] || continue
+        case "${k^^}" in *KEY* | *SECRET* | *PASSWORD* | *TOKEN*) ;; *) continue ;; esac
+        v="$(printf '%s' "$v" | tr -d '\r' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+        [ "${#v}" -ge 16 ] || continue
+        checked=$((checked + 1))
+        if hit=$(cd "$work" && grep -arlF -- "$v" . 2>/dev/null | head -1); then
+            fail "значение $k лежит в артефакте — в ${hit#./}; отзови его и пересобери (публиковать нельзя)"
+        fi
+    done < "$lp"
+    echo "release-scan: сверено с фактическими значениями из local.properties: $checked"
+else
+    echo "release-scan: local.properties нет — сверка по фактическим значениям НЕ проводилась (только формы)"
 fi
 
 echo

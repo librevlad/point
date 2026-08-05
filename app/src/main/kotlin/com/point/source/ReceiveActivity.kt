@@ -286,7 +286,7 @@ private fun ReceiveScreen(
 @Composable
 private fun PreviewReceiveWaiting() = PointTheme(darkTheme = true) {
     ReceiveScreen(
-        link = "https://35.185.31.106:8443/u/2f8c1b0a4e6d9c3f5a7b1e2d4c6f8a0b1c3d5e7f",
+        link = "https://point.leerio.app/u/2f8c1b0a4e6d9c3f5a7b1e2d4c6f8a0b1c3d5e7f",
         failure = null,
         status = receiveWaitStatus(0),
         onCopy = {},

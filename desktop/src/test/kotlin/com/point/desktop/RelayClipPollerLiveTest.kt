@@ -3,7 +3,6 @@ package com.point.desktop
 import com.point.core.flow.ClipRelay
 import com.point.core.flow.ClipboardPayload
 import com.point.core.flow.RelayCrypto
-import com.point.core.flow.RelayTls
 import com.point.core.flow.decodeClipFrame
 import com.point.core.flow.encodeClipFrame
 import org.junit.Assert.assertArrayEquals
@@ -147,7 +146,6 @@ class RelayClipPollerLiveTest {
 
     private fun conn(url: String): HttpsURLConnection =
         (URL(url).openConnection() as HttpsURLConnection).apply {
-            sslSocketFactory = RelayTls.socketFactory
             connectTimeout = 5_000
             readTimeout = 10_000
             setRequestProperty("Authorization", "Bearer " + LiveServer.pass)
@@ -158,7 +156,6 @@ class RelayClipPollerLiveTest {
         val relayUp: Boolean by lazy {
             runCatching {
                 val c = (URL("${LiveServer.url.trimEnd('/')}/health").openConnection() as HttpsURLConnection)
-                c.sslSocketFactory = RelayTls.socketFactory
                 c.connectTimeout = 4_000
                 c.readTimeout = 4_000
                 val ok = c.responseCode == 200

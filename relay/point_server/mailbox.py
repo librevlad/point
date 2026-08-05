@@ -199,6 +199,25 @@ def inbox_accept(box: str, data: bytes, name: str, mime: str) -> None:
     os.replace(tmp, os.path.join(box, fid + ".bin"))
 
 
+def inbox_ack(root: str, user_id: str, box_id: str, file_id: str) -> bool:
+    """Забранное подтверждается отдельно — тем же приёмом, что и почта устройства.
+
+    Без подтверждения тот же файл приезжал бы на каждом круге ожидания; удалять его прямо в
+    выдаче тоже нельзя — на разрыве связи он пропал бы молча, а прислал его чужой человек и
+    прислать заново не сможет.
+    """
+    safe_box = "".join(c for c in box_id if c.isalnum())[:80]
+    safe_file = "".join(c for c in file_id if c.isalnum() or c in "-_")[:64]
+    box = os.path.join(inboxes_dir(root, user_id), safe_box)
+    removed = False
+    for suffix in (".bin", ".meta"):
+        path = os.path.join(box, safe_file + suffix)
+        if os.path.isfile(path):
+            os.remove(path)
+            removed = True
+    return removed
+
+
 def inbox_take(root: str, user_id: str, box_id: str) -> tuple[str, bytes, str, str] | None:
     """Забрать присланное — уже под пропуском: ящик свой, значит и владелец подставляется."""
     safe = "".join(c for c in box_id if c.isalnum())[:80]

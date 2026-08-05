@@ -1,5 +1,6 @@
 package com.point
 
+import com.point.core.flow.AI_PROVIDERS
 import com.point.core.flow.AppLauncher
 import com.point.core.flow.AppTarget
 import com.point.core.flow.Capability
@@ -112,7 +113,8 @@ class FlowViewModelTest {
         account: com.point.core.flow.AccountStore = FakeAccountStore(TEST_ACCOUNT),
         accountClient: com.point.core.flow.AccountClient = FakeCircleClient(),
         browser: com.point.core.flow.BrowserOpener = com.point.core.flow.BrowserOpener { },
-    ) = FlowViewModel(store, FakeRegistry(caps, cloud, slow), resolver, chatResponder, enrichment, history, favorites, usage, chosenApps, userKeys, journal, consent, appLauncher, FakePdfRasterizer(), sensory, sensorySettings, cloudPrivacy, snapshot, crashLog, dispatcher, pins, AppIconResolver { null }, pcPairings, pcTransport, discovery, basket, pcCaps, linkMonitor, PulledFileFactory { name -> java.io.File(java.io.File(System.getProperty("java.io.tmpdir")), "pulled-" + name).absolutePath }, noFrames, keyCheck, account, accountClient, browser)
+        sharedTexts: com.point.core.flow.SharedTexts = FakeSharedTexts(),
+    ) = FlowViewModel(store, FakeRegistry(caps, cloud, slow), resolver, chatResponder, enrichment, history, favorites, usage, chosenApps, userKeys, journal, consent, appLauncher, FakePdfRasterizer(), sensory, sensorySettings, cloudPrivacy, snapshot, crashLog, dispatcher, pins, AppIconResolver { null }, pcPairings, pcTransport, discovery, pcCaps, linkMonitor, PulledFileFactory { name -> java.io.File(java.io.File(System.getProperty("java.io.tmpdir")), "pulled-" + name).absolutePath }, noFrames, keyCheck, account, accountClient, browser, sharedTexts)
 
     /** Проверка ключа (#465): что «ответил сервис», решает тест, а не сеть. */
     private val keyCheck = FakeAiKeyCheck()
@@ -130,7 +132,6 @@ class FlowViewModelTest {
     }
 
     private val chatResponder = FakeChatResponder()
-    private val basket = FakeBasket()
     private val pcCaps = FakePcCaps()
     private val pcPairings = FakePcPairings()
     private val pcTransport = FakePcTransport()
@@ -141,13 +142,6 @@ class FlowViewModelTest {
         override fun all(): List<com.point.core.flow.PcRemoteAction> = saved.orEmpty()
         override suspend fun save(caps: List<com.point.core.flow.PcRemoteAction>) { saved = caps }
         override suspend fun clear() { cleared = true; saved = null }
-    }
-
-    private class FakeBasket : com.point.core.flow.Basket {
-        val added = mutableListOf<String>()
-        override suspend fun add(obj: PointObject): Int { added += obj.uri.value; return added.size }
-        override suspend fun items(): List<String> = added.toList()
-        override suspend fun clear() = added.clear()
     }
 
     private fun bubble(id: String = "a", title: String = "Действие") =
@@ -319,6 +313,61 @@ class FlowViewModelTest {
         assertTrue("копия объекта обязана быть стёрта", store.clearedTimes > beforeEnd)
     }
 
+    /**
+     * Расшаренный текст тоже уходит с диска (RC).
+     *
+     * Инвариант «по окончании флоу — обязательный clear()» держался только для рабочей копии, а
+     * текст из «Поделиться», из выделения и из буфера лежал в кэше приложения и переживал всё. На
+     * эмуляторе после нескольких сеансов там нашлось полтора десятка таких файлов — а через эту
+     * дверь идут пароли, переписка и реквизиты. Смотрим на диск, а не на счётчик вызовов.
+     */
+    @Test fun `конец флоу уносит и расшаренный текст, а не только рабочую копию`() = runTest(dispatcher) {
+        val texts = FakeSharedTexts()
+        val vm = vm(sharedTexts = texts)
+        vm.onSharedText("пароль от почты"); advanceUntilIdle()
+        assertTrue("текст обязан лечь файлом — иначе флоу его не примет", texts.files().isNotEmpty())
+
+        vm.endFlow(); advanceUntilIdle()
+
+        assertTrue("на диске не должно остаться расшаренного текста", texts.files().isEmpty())
+    }
+
+    /**
+     * Уход из флоу — это отмена (RC).
+     *
+     * Раньше `endFlow` снимал обогащение и разговор, но не саму работу: человек уходил на
+     * «Недавнее», а через минуту поверх него приезжал результат того, от чего он ушёл.
+     */
+    @Test fun `уход из флоу снимает начатую работу`() = runTest(dispatcher) {
+        val vm = vm(slow = setOf(CapabilityId("a")))
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        vm.onBubble(bubble("a")) // работа пошла и держит экран ожидания
+        assertNotNull("работа обязана идти — иначе снимать нечего", vm.ui.value.busy)
+
+        vm.endFlow(); advanceUntilIdle()
+
+        assertNull("после ухода работа не продолжается", vm.ui.value.busy)
+        assertNull("и её результат не приезжает поверх «Недавнего»", vm.ui.value.frame)
+    }
+
+    /**
+     * Из входа есть выход (RC).
+     *
+     * Проверено живьём до правки: «Устройства» → назад → Point закрывался целиком, вместе с
+     * объектом, ради которого его открыли. Кнопка «Отменить» на экране входа рисуется только в
+     * состоянии ожидания, так что из остальных состояний выхода не было вовсе.
+     */
+    @Test fun `назад с экрана входа возвращает в Point, а не закрывает его`() = runTest(dispatcher) {
+        val vm = vm()
+        vm.signIn(); advanceUntilIdle()
+        assertNotNull("дверь входа обязана быть на экране", vm.ui.value.signIn)
+
+        val handled = vm.onBack()
+
+        assertTrue("«назад» обязан быть обработан, а не уйти системе", handled)
+        assertNull("экран входа закрылся", vm.ui.value.signIn)
+    }
+
     /** Открыли объект из «Недавнего» — предыдущая копия уходит ДО того, как появится новая:
      *  иначе scratch копит объекты всех прошлых флоу, а обещано «работаем с одной копией». */
     @Test fun `открытие из истории стирает копию прошлого объекта`() = runTest(dispatcher) {
@@ -347,6 +396,32 @@ class FlowViewModelTest {
         assertEquals(ObjectKind.IMAGE, s.frame?.obj?.state?.kind)
         assertNull(s.busy)
         assertEquals(1, history.recorded.size)
+    }
+
+    /**
+     * #533: имя, которое знает дверь, побеждает имя файла.
+     *
+     * Приёмник называет объект по имени файла — а у того, что Point родил сам, оно машинное:
+     * `shared-5631909340713910696.txt`, `record-1754325912345.m4a`. Человеческое имя знает только
+     * источник, и ставится оно ровно здесь — одним местом на все двери, иначе «Недавнее» и экран
+     * объекта звали бы один объект по-разному.
+     */
+    @Test fun `имя от двери доезжает и до экрана, и до «Недавнего»`() = runTest(dispatcher) {
+        val vm = vm()
+        vm.onShared("uri", "text/plain", name = "Пришлите договор до пятницы")
+        advanceUntilIdle()
+
+        assertEquals("Пришлите договор до пятницы", vm.ui.value.frame?.obj?.metadata?.get("name"))
+        assertEquals("Пришлите договор до пятницы", history.recorded.single().metadata["name"])
+    }
+
+    /** Дверь молчит — имя остаётся тем, что дал приёмник: у файла из чужих рук оно настоящее. */
+    @Test fun `без имени от двери объект остаётся с именем файла`() = runTest(dispatcher) {
+        val vm = vm()
+        vm.onShared("uri", "image/png")
+        advanceUntilIdle()
+
+        assertNull(vm.ui.value.frame?.obj?.metadata?.get("name"))
     }
 
     @Test fun `onShared surfaces an ingest failure and pushes no frame`() = runTest(dispatcher) {
@@ -893,35 +968,6 @@ class FlowViewModelTest {
         assertNull(vm.ui.value.busyStage)
     }
 
-    // --- Discover (#114): one never-tried possibility is surfaced as a hint ---
-
-    @Test fun `discover offers the first hidden action the user never tried`() = runTest(dispatcher) {
-        // Six caps → top-3 shown big, three folded; "d" is the first hidden untried one.
-        val vm = vm(
-            caps = listOf("a", "b", "c", "d", "e", "f").associate { CapabilityId(it) to setOf(Intent.PREPARE) },
-        )
-        vm.onShared("uri", "image/png"); advanceUntilIdle()
-
-        assertEquals(CapabilityId("d"), vm.ui.value.frame?.discover?.capabilityId)
-    }
-
-    @Test fun `discover skips actions the user already tried`() = runTest(dispatcher) {
-        usage.counts = mapOf(CapabilityId("d") to 2)
-        val vm = vm(
-            caps = listOf("a", "b", "c", "d", "e", "f").associate { CapabilityId(it) to setOf(Intent.PREPARE) },
-        )
-        vm.onShared("uri", "image/png"); advanceUntilIdle()
-
-        assertEquals(CapabilityId("e"), vm.ui.value.frame?.discover?.capabilityId)
-    }
-
-    @Test fun `no discover when every action is visible anyway`() = runTest(dispatcher) {
-        val vm = vm() // single capability — nothing is folded
-        vm.onShared("uri", "image/png"); advanceUntilIdle()
-
-        assertNull(vm.ui.value.frame?.discover)
-    }
-
     // --- Object Timeline (#114): the journey is visible and tappable ---
 
     @Test fun `the path mirrors the stack — kinds with the actions between them`() = runTest(dispatcher) {
@@ -1337,21 +1383,6 @@ class FlowViewModelTest {
         vm.closeDevices()
     }
 
-    @Test fun `the basket opens as one collection flow and its count reaches Home (#96)`() = runTest(dispatcher) {
-        basket.added += listOf("/b/1-a.txt", "/b/2-b.jpg")
-        val vm = vm()
-
-        vm.loadRecent(); advanceUntilIdle()
-        assertEquals(2, vm.basketCount.value)
-
-        vm.openBasket(); advanceUntilIdle()
-        assertEquals(ObjectKind.COLLECTION, vm.ui.value.frame?.obj?.state?.kind)
-
-        vm.endFlow()
-        vm.clearBasket(); advanceUntilIdle()
-        assertEquals(0, vm.basketCount.value)
-    }
-
     @Test fun `обрезанный набор доносит до экрана настоящее число файлов`() = runTest(dispatcher) {
         // Набор больше предела обхода (#460): показать всё нельзя, но промолчать об этом — соврать.
         store.content = CollectionContent(
@@ -1591,6 +1622,45 @@ class FlowViewModelTest {
 
         assertEquals(config, userKeys.saved)
         assertNull(vm.ui.value.keyScreen)
+    }
+
+    // --- Путь обратно: «Забыть ключ» (#536) ---
+
+    /**
+     * `UserKeyStore.clear()` был объявлен и не звался ни с одного экрана: отключить AI обратно
+     * человек мог только переустановкой. Поводы настоящие — отдать телефон, уйти с рабочего ключа.
+     */
+    @Test fun `«Забыть ключ» стирает его с устройства и возвращает приглашение подключить AI`() = runTest(dispatcher) {
+        userKeys.config = UserAiConfig("sk-1", AI_PROVIDERS.first().baseUrl, "gemma")
+        val vm = vm()
+        vm.openKeySettings(); advanceUntilIdle()
+        assertTrue("ключ был задан — иначе забывать нечего", vm.ui.value.aiKeySet)
+
+        vm.forgetAiKey(); advanceUntilIdle()
+
+        assertNull("ключ остался на устройстве", userKeys.config)
+        assertFalse("«Недавнее» обязано снова звать подключить AI", vm.ui.value.aiKeySet)
+    }
+
+    /** Стёртое надо УВИДЕТЬ: экран остаётся, и на нём не висит приговор про прежний ключ. */
+    @Test fun `забытый ключ не уносит с собой экран и выбранный сервис`() = runTest(dispatcher) {
+        val openRouter = AI_PROVIDERS.first()
+        userKeys.config = UserAiConfig("sk-1", openRouter.baseUrl, "gemma")
+        val vm = vm()
+        vm.openKeySettings(); advanceUntilIdle()
+        vm.checkAiKey(UserAiConfig("sk-1", openRouter.baseUrl, "gemma")); advanceUntilIdle()
+        assertNotNull("проверка сказала «работает»", vm.ui.value.keyVerdict)
+
+        vm.forgetAiKey(); advanceUntilIdle()
+
+        val screen = vm.ui.value.keyScreen
+        assertNotNull("человек остался бы гадать, случилось ли что-нибудь", screen)
+        assertEquals("ключа на экране больше нет", "", screen?.apiKey)
+        // Человек забыл ключ, а не выбор сервиса: подставить сюда умолчание значило бы молча
+        // отменить ещё одно его решение.
+        assertEquals(openRouter.baseUrl, screen?.baseUrl)
+        // «Работает — ключ сохранён» над стёртым ключом — ровно та ложь, против которой проверка.
+        assertNull(vm.ui.value.keyVerdict)
     }
 
     // --- Доведение до работающего ключа (#465) ---
@@ -2065,6 +2135,37 @@ class FlowViewModelTest {
             "спросили не про то: ${vm.ui.value.cloudDestination}",
             vm.ui.value.cloudDestination.contains("любому"),
         )
+    }
+
+    // --- Согласие называет адресата поимённо (#538) ---
+
+    /**
+     * Point знает, куда отправляет: человек сам выбрал сервис и сам вписал его ключ. Говорить ему в
+     * этот момент «на сервер AI-провайдера» — значит прятать имя, которое лежит на соседней полке.
+     * «Видно, КУДА уходит объект» — граница приватности проекта, а не украшение вопроса.
+     */
+    @Test fun `вопрос про облако называет тот сервис, ключ которого задан`() = runTest(dispatcher) {
+        val openRouter = AI_PROVIDERS.first()
+        userKeys.config = UserAiConfig("sk-1", openRouter.baseUrl, "gemma")
+        val vm = linkVm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.onBubble(bubble(id = "ai")); advanceUntilIdle()
+
+        val said = vm.ui.value.cloudDestination
+        assertTrue("адресат не назван: $said", said.contains(openRouter.name))
+        assertFalse("класс адресатов вместо адресата: $said", said.contains("AI-провайдера"))
+    }
+
+    /** Свой прокси в каталоге не значится — имени у него нет, и выдумывать его нечем. */
+    @Test fun `незнакомому адресу имя не выдумывается`() = runTest(dispatcher) {
+        userKeys.config = UserAiConfig("sk-1", "https://мой.прокси/v1", "м")
+        val vm = linkVm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.onBubble(bubble(id = "ai")); advanceUntilIdle()
+
+        assertTrue(vm.ui.value.cloudDestination.contains("AI-провайдера"))
     }
 
     // --- Device actions: inline app picker (#66) ---

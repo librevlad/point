@@ -57,14 +57,12 @@ import com.point.core.model.FavoriteChain
 import com.point.core.model.FlowSnapshotFrame
 import com.point.core.model.HistoryEntry
 import com.point.core.model.Intent
-import com.point.core.model.BubbleTier
 import com.point.core.model.ObjectKind
 import com.point.core.model.isFileBacked
 import com.point.core.model.ValueRef
 import com.point.core.model.ScratchRef
 import com.point.core.model.ObjectRef
 import com.point.core.model.PointObject
-import com.point.core.ui.likelyCount
 import com.point.executors.Bitmaps
 import com.point.executors.AiCapability
 import com.point.executors.FindCapability
@@ -117,7 +115,6 @@ class FlowViewModel @Inject constructor(
     private val pcPairings: com.point.core.flow.PcPairings,
     private val pcTransport: com.point.core.flow.PcTransport,
     private val pcDiscovery: com.point.core.flow.PcDiscovery,
-    private val basket: com.point.core.flow.Basket,
     private val pcCaps: com.point.core.flow.PcCapsStore,
     /** Кто помнит, когда компьютер отвечал в последний раз и каким путём (#412). */
     private val linkMonitor: com.point.core.flow.LinkMonitor,
@@ -131,6 +128,8 @@ class FlowViewModel @Inject constructor(
     private val accountClient: com.point.core.flow.AccountClient,
     /** Открыть системный браузер — единственное, что вход просит у платформы (#472). */
     private val browser: com.point.core.flow.BrowserOpener,
+    /** Временные копии расшаренного текста: их заводит `:app`, их же и убирает в конце флоу. */
+    private val sharedTexts: com.point.core.flow.SharedTexts,
 ) : ViewModel() {
 
     /**
@@ -235,10 +234,6 @@ class FlowViewModel @Inject constructor(
     private var fromPcEntries: List<com.point.core.flow.PcOutboxEntry> = emptyList()
     private var lastOutboxFetchMs = 0L
 
-    private val _basketCount = MutableStateFlow(0)
-    /** Items accumulated in the basket (#96) — Home offers to open the pile as one COLLECTION. */
-    val basketCount: StateFlow<Int> = _basketCount.asStateFlow()
-
     private val _clipboard = MutableStateFlow<String?>(null)
     /** Actionable text sitting in the clipboard when Point opened — a dismissible Home suggestion (#72). */
     val clipboard: StateFlow<String?> = _clipboard.asStateFlow()
@@ -295,7 +290,52 @@ class FlowViewModel @Inject constructor(
         }
     }
 
-    fun onShared(sourceUri: String, mime: String, autoAction: String? = null) {
+    /**
+     * Расшаренный текст входит во флоу файлом — тем же путём, что и всё остальное.
+     *
+     * Файл заводит [SharedTexts], а не сама Activity: тогда его есть кому убрать в конце флоу.
+     * Имя объекту даёт содержимое, а не временный файл: `shared-5631909340713910696.txt` — самое
+     * частое, что человек шлёт в Point, и первое, что он потом читает в «Недавнем».
+     */
+    fun onSharedText(text: String) {
+        val path = runCatching { sharedTexts.create(text) }.getOrNull()
+        if (path == null) {
+            _ui.update { it.copy(message = "Не удалось принять текст", messageOutcome = Outcome.FAILED) }
+            return
+        }
+        onShared(
+            java.io.File(path).toURI().toString(),
+            "text/plain",
+            name = com.point.core.flow.textObjectName(text),
+        )
+    }
+
+    /**
+     * Пришло то, чего Point разобрать не смог.
+     *
+     * Раньше в этом месте не происходило ничего: экран оставался пустым и чёрным, без слова и без
+     * выхода. Отказ обязан быть виден — иначе человек не знает даже, дошёл ли его файл.
+     */
+    fun refuseIncoming() {
+        _ui.update {
+            it.copy(
+                busy = null,
+                busyStage = null,
+                message = "Point не понял, что ему прислали — попробуйте поделиться файлом",
+                messageOutcome = Outcome.FAILED,
+            )
+        }
+    }
+
+    /**
+     * [name] — имя объекта, если дверь знает его лучше файловой системы (#533).
+     *
+     * Приёмник (`ObjectStore`) называет объект по имени файла — единственному, что у него есть.
+     * Для того, что Point родил сам, это имя машинное (`shared-563190….txt`, `record-1754….m4a`),
+     * и человеческое знает только источник. Поэтому имя ставится здесь, ОДНИМ местом на все двери:
+     * иначе «Недавнее» и экран объекта разъехались бы в том, как объект называется.
+     */
+    fun onShared(sourceUri: String, mime: String, autoAction: String? = null, name: String? = null) {
         freshShareArrived = true
         val voice = claimVoice()
         // Отменить нечем: за приёмом расшаренного файла экрана Point ещё нет, и кнопка увела бы
@@ -305,7 +345,10 @@ class FlowViewModel @Inject constructor(
             val obj = runCatching {
                 store.clear()
                 store.ingest(sourceUri, mime)
-            }.getOrNull()
+            }.getOrNull()?.let { ingested ->
+                if (name.isNullOrBlank()) ingested
+                else ingested.copy(metadata = ingested.metadata + ("name" to name))
+            }
             if (!owns(voice)) return@launch
             if (obj == null) {
                 // Хвост исключения человеку ничего не говорит («…FileNotFoundException: /storage/…»),
@@ -369,7 +412,6 @@ class FlowViewModel @Inject constructor(
         _ui.update { it.copy(aiKeySet = runCatching { userKeys.read() != null }.getOrDefault(false)) }
         viewModelScope.launch {
             _recent.value = runCatching { history.recent() }.getOrDefault(emptyList())
-            _basketCount.value = runCatching { basket.items().size }.getOrDefault(0)
         }
         refreshFromPc()
     }
@@ -439,23 +481,6 @@ class FlowViewModel @Inject constructor(
     /** Hide the banner until the next fetch — the objects stay on the PC (no ack). */
     fun hideFromPc() {
         _fromPcCount.value = 0
-    }
-
-    /** Open the accumulated pile (#96) as one COLLECTION flow — the basket itself
-     *  keeps its copies; the flow works on fresh scratch ones (copy-in invariant). */
-    fun openBasket() {
-        viewModelScope.launch {
-            val paths = runCatching { basket.items() }.getOrDefault(emptyList())
-            if (paths.isEmpty()) { _basketCount.value = 0; return@launch }
-            onSharedMultiple(paths.map { "file://$it" })
-        }
-    }
-
-    fun clearBasket() {
-        viewModelScope.launch {
-            runCatching { basket.clear() }
-            _basketCount.value = 0
-        }
     }
 
     /** Wipe the recent list and its files — the user's "очистить недавнее" (#8). */
@@ -843,7 +868,7 @@ class FlowViewModel @Inject constructor(
                 _ui.update {
                     it.copy(
                         cloudConsent = true,
-                        cloudDestination = com.point.core.flow.cloudDestination(id),
+                        cloudDestination = com.point.core.flow.cloudDestination(id, chosenAiService()),
                         cloudTitle = com.point.core.flow.cloudAskTitle(scope),
                         cloudConfirm = com.point.core.flow.cloudAskConfirm(scope),
                     )
@@ -851,6 +876,21 @@ class FlowViewModel @Inject constructor(
             }
         }
     }
+
+    /**
+     * Имя сервиса, которому уедет объект по AI-ветке (#538) — или `null`, если назвать его нечем.
+     *
+     * Согласие говорило «на сервер AI-провайдера» человеку, который сам выбрал сервис и сам вписал
+     * его ключ: Point знал адресата и не называл. Имя выводится из сохранённого адреса по каталогу
+     * — второго источника правды не заводится. Чтение дешёвое (prefs get, тот же, что перед каждым
+     * вызовом модели), и делается оно ровно в момент вопроса: ключ мог смениться минуту назад.
+     *
+     * `null` остаётся честным исходом: у своего прокси имени в каталоге нет, и выдумывать его
+     * нельзя — тогда на экране стоит прежнее умолчание.
+     */
+    private fun chosenAiService(): String? = runCatching {
+        com.point.core.flow.providerForBaseUrl(userKeys.read()?.baseUrl.orEmpty())?.name
+    }.getOrNull()
 
     /** Drill into a collection item — continue the normal flow on that object.
      *  The item is already materialised in scratch, so there is no re-ingest. */
@@ -1110,6 +1150,33 @@ class FlowViewModel @Inject constructor(
                     keyChecking = false,
                     keyVerdict = verdict,
                     aiKeySet = it.aiKeySet || verdict is com.point.core.flow.KeyVerdict.Works,
+                )
+            }
+        }
+    }
+
+    /**
+     * «Забыть ключ» (#536) — путь обратно, которого не было вовсе.
+     *
+     * `UserKeyStore.clear()` был написан и не звался ни с одного экрана: человек, задавший ключ, мог
+     * только переписать его другим. Отдать телефон, уйти с рабочего ключа, перестать платить своей
+     * квотой — всё это чинилось переустановкой приложения.
+     *
+     * Экран НЕ закрывается: стёртое надо увидеть, а не вывести из его исчезновения. Адрес и модель
+     * остаются — человек забыл ключ, а не выбор сервиса, и подсовывать ему вместо этого умолчание
+     * значило бы молча отменить ещё одно его решение. Приговор прошлой проверки снимается: «Работает
+     * — ключ сохранён», висящее над стёртым ключом, — ровно та ложь, против которой вся проверка.
+     */
+    fun forgetAiKey() {
+        viewModelScope.launch {
+            runCatching { userKeys.clear() }
+            _ui.update {
+                it.copy(
+                    keyScreen = it.keyScreen?.copy(apiKey = ""),
+                    keyVerdict = null,
+                    keyChecking = false,
+                    aiKeySet = false,
+                    message = "Ключ AI забыт", messageOutcome = Outcome.DONE,
                 )
             }
         }
@@ -1754,6 +1821,15 @@ class FlowViewModel @Inject constructor(
             closeDevices()
             return true
         }
+        // Экран входа был единственным местом без выхода: «назад» проваливался мимо всех веток,
+        // Activity закрывалась, и Point исчезал целиком — вместе с объектом, ради которого его
+        // открыли. Кнопка «Отменить» на экране рисуется только в состоянии ожидания, так что
+        // из остальных состояний выхода не было вовсе.
+        if (_ui.value.signIn != null) {
+            cancelSignIn()
+            dismissSignIn()
+            return true
+        }
         if (_ui.value.inputPrompt != null || _ui.value.needsImage != null) {
             cancelInput()
             return true
@@ -1805,20 +1881,17 @@ class FlowViewModel @Inject constructor(
     private fun currentPath(): List<PathStep> =
         stack.map { PathStep(it.obj.state.kind, it.viaTitle) }
 
-    /** Discover (#114): the first FOLDED action (beyond the big likely ones) the user has
-     *  never tried — instant terminals are too obvious to be a discovery. Using it records
-     *  usage, which retires the hint on the next frame by itself. */
-    private fun discoverFor(bubbles: List<Bubble>): Bubble? {
-        val counts = runCatching { usage.counts() }.getOrDefault(emptyMap())
-        return bubbles.drop(likelyCount(bubbles.size)).firstOrNull {
-            it.tier != BubbleTier.INSTANT && (counts[it.capabilityId] ?: 0) == 0
-        }
-    }
-
     fun hasFlow(): Boolean = stack.isNotEmpty()
 
     fun endFlow() {
         cancelEnrichment()
+        // Флоу кончился — кончилась и работа над его объектом. Раньше отменялись только обогащение
+        // и разговор, а начатое действие продолжало идти: человек уходил на «Недавнее», и через
+        // минуту поверх него приезжал результат того, от чего он ушёл. Уход — это тоже отмена.
+        busyJob?.cancel()
+        busyJob = null
+        signInJob?.cancel()
+        signInJob = null
         // Флоу кончился — кончился и разговор о его объекте (#453): держать вопрос в пути некому,
         // и ответ, пришедший в пустоту, ляжет в разговор, которого больше нет.
         chatJob?.cancel()
@@ -1829,6 +1902,10 @@ class FlowViewModel @Inject constructor(
         _ui.update { FlowUiState() }
         viewModelScope.launch {
             runCatching { store.clear() }
+            // Расшаренный текст лежал в кэше и переживал всё: инвариант «по окончании флоу —
+            // обязательный clear()» держался только для рабочей копии, а через эту дверь идут
+            // пароли, переписка и реквизиты.
+            runCatching { sharedTexts.clear() }
             runCatching { flowSnapshot.clear() } // the journey ended on purpose — forget it (#7)
         }
     }
@@ -1838,7 +1915,6 @@ class FlowViewModel @Inject constructor(
         val frame = FlowFrame(
             obj, bubbles, via, viaTitle,
             latent = registry.latentBubblesFor(obj.state),
-            discover = discoverFor(bubbles),
             pinned = runCatching { pins.pinnedFor(obj.state.kind) }.getOrNull(),
         )
         stack.addLast(frame)
@@ -2009,13 +2085,17 @@ class FlowViewModel @Inject constructor(
         val graphChanged = newFound.size != frame.found.size || newRelations.size != frame.relations.size
         if (!objChanged && !graphChanged && update.running == frame.enriching) return
 
-        val newBubbles = if (objChanged) registry.bubblesFor(newState) else frame.bubbles
+        // Порядок уже показанного не трогаем — иначе строка уезжает из-под пальца (см. keepShownOrder).
+        val newBubbles = if (objChanged) {
+            com.point.core.model.keepShownOrder(frame.bubbles, registry.bubblesFor(newState))
+        } else {
+            frame.bubbles
+        }
         val refreshed = frame.copy(
             obj = frame.obj.copy(state = newState, metadata = newMetadata),
             bubbles = newBubbles,
             latent = if (objChanged) registry.latentBubblesFor(newState) else frame.latent,
             enriching = update.running,
-            discover = if (objChanged) discoverFor(newBubbles) else frame.discover,
             found = newFound,
             relations = newRelations,
         )

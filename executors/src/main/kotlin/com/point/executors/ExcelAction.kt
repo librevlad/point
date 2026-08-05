@@ -5,6 +5,7 @@ import com.point.core.flow.AtomLayer
 import com.point.core.flow.BlockAnswer
 import com.point.core.flow.BlockContent
 import com.point.core.flow.BlockRole
+import com.point.core.flow.AiReadiness
 import com.point.core.flow.Capability
 import com.point.core.flow.CapabilityMeta
 import com.point.core.flow.CellAnswer
@@ -58,6 +59,7 @@ import com.point.core.flow.unfitTable
 import com.point.core.flow.unreadWords
 import com.point.core.flow.validateTable
 import com.point.core.flow.withGrid
+import com.point.core.flow.labelNeedingKey
 import com.point.core.model.ActionResult
 import com.point.core.model.ActionYield
 import com.point.core.model.CapabilityId
@@ -86,11 +88,13 @@ import javax.inject.Inject
  * reliable than parsing delimited text — and materialise a real .xlsx. Paid/network,
  * so it is a Pro action off the first screen (gated by the paywall seam).
  */
-class ExcelCapability @Inject constructor() : Capability {
+class ExcelCapability @Inject constructor(
+    private val keys: AiReadiness,
+) : Capability {
     override val id = ID
     override val icon = "excel"
     override val meta = CapabilityMeta(cost = Cost.PAID, latency = Latency.SLOW, network = true, auth = true)
-    override fun label(state: ObjectState) = "В Excel"
+    override fun label(state: ObjectState) = labelNeedingKey("В Excel", keys.keySet())
     override fun accepts(state: ObjectState) =
         state.kind in setOf(ObjectKind.IMAGE, ObjectKind.PDF, ObjectKind.TEXT)
     override fun produces(state: ObjectState) = ObjectState(ObjectKind.OFFICE)

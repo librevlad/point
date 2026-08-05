@@ -10,7 +10,6 @@ import com.point.core.flow.decodePcOutbox
 import com.point.core.flow.encodePcCaps
 import com.point.core.flow.decodePcCaps
 import com.point.core.flow.RelayRpc
-import com.point.core.flow.RelayTls
 import com.point.core.flow.encodePcFrame
 import com.point.core.model.PointObject
 import java.io.File
@@ -23,7 +22,7 @@ import kotlinx.coroutines.withContext
  * The always-works relay client (#161 v2, phone half — P2b). When the LAN hop can't reach the PC,
  * the object is sealed end-to-end ([RelayCrypto]) and POSTed to the phone→PC mailbox on the blind
  * relay; the PC polls it out (desktop half, P4). Both devices connect OUTBOUND, so no inbound port,
- * NAT, or shared network is needed — LTE, guest Wi-Fi, anywhere. TLS is pinned ([RelayTls]); the
+ * NAT, or shared network is needed — LTE, guest Wi-Fi, anywhere. TLS — обычная цепочка доверия: у сервера Point настоящий сертификат Let's Encrypt (#470), и пиннинг самоподписанного больше не нужен. The
  * relay only ever holds ciphertext. Relay is **send-only** here — everything else stays on LAN.
  */
 class RelayPcTransport(
@@ -56,7 +55,6 @@ class RelayPcTransport(
             val mailbox = RelayCrypto.mailboxId(pairing.token, TO_PC)
 
             val c = URL("$relayUrl/mbx/$mailbox").openConnection() as HttpsURLConnection
-            c.sslSocketFactory = RelayTls.socketFactory
             c.requestMethod = "POST"
             c.connectTimeout = connectTimeoutMs
             c.readTimeout = readTimeoutMs

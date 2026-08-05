@@ -9,6 +9,7 @@ import com.point.core.flow.Realizer
 import com.point.core.flow.RealizerMeta
 import com.point.core.flow.reportStage
 import com.point.core.model.ActionResult
+import com.point.core.model.ActionYield
 import com.point.core.model.CapabilityId
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
@@ -28,6 +29,15 @@ class ScanCapability @Inject constructor() : Capability {
     override fun label(state: ObjectState) = "Скан"
     override fun accepts(state: ObjectState) = state.kind == ObjectKind.IMAGE
     override fun produces(state: ObjectState) = ObjectState(ObjectKind.IMAGE)
+
+    /**
+     * «Картинку» было верно и бесполезно (#527): соседний «Скан с цветом» обещал ровно то же
+     * слово, и вся разница между двумя действиями — а она про то, выживет ли карандаш и печать
+     * на бумаге, — до тапа не существовала. Здесь сказано, ЧТО за картинка: бумага сведена в
+     * чёрно-белое, цвета в ней не останется.
+     */
+    override fun yields(state: ObjectState) =
+        ActionYield.New(ObjectKind.IMAGE, "чёрно-белую страницу")
 
     companion object { val ID = CapabilityId("scan") }
 }

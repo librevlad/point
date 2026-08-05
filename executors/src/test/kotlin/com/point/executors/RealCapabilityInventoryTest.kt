@@ -33,19 +33,19 @@ class RealCapabilityInventoryTest {
      *  (приложения устройства #66, действия ПК #80) сюда не входят — их набор зависит от того,
      *  что человек выбирал и к какому компьютеру подключался. */
     private val builtIn: List<Capability> = listOf(
-        AiCapability(), ArchiveCapability(), BasketCapability(), BlurBgCapability(),
+        AiCapability(aiKeysReady), ArchiveCapability(), BlurBgCapability(),
         CallCapability(), CloudOcrCapability(), CopyCapability(), CopyCardCapability(),
         CutoutCapability(), DropLinkCapability(), EmailCapability(), EventCapability(),
-        ExcelCapability(), ExtractAllCapability(), FindCapability(), ImageCapability(),
-        JobReplyCapability(), MapCapability(), MergePdfCapability(), OcrCapability(),
+        ExcelCapability(aiKeysReady), ExtractAllCapability(), FindCapability(), ImageCapability(),
+        JobReplyCapability(aiKeysReady), MapCapability(), MergePdfCapability(), OcrCapability(),
         OfficeCapability(), OpenCapability(), OpenInCapability(), OpenUrlCapability(),
         PagesCapability(), PcCapability(pairedPc), PdfCapability(),
         QrCapability(), ReadQrCapability(), RenewPeriodCapability(), ReplaceBgCapability(),
         SaveAllCapability(), SaveCapability(), SaveContactCapability(), ScanCapability(),
         ScanPdfCapability(), ScanPlusCapability(), ShareAllCapability(), ShareCapability(),
-        ShoppingListCapability(), SmsCapability(), TranscribeCapability(keysReady),
-        TranslateCapability(), UnderstandCapability(), VCardCapability(), WordCapability(),
-        WordPlusCapability(),
+        ShoppingListCapability(aiKeysReady), SmsCapability(), TranscribeCapability(keysReady),
+        TranslateCapability(aiKeysReady), UnderstandCapability(aiKeysReady), VCardCapability(), WordCapability(),
+        WordPlusCapability(aiKeysReady),
     )
 
     private val inventory = capabilityInventory(builtIn)

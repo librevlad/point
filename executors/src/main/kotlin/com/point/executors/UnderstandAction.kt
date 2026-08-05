@@ -3,6 +3,7 @@ package com.point.executors
 import com.point.core.flow.AtomCodec
 import com.point.core.flow.AtomLayer
 import com.point.core.flow.CLASSIFIER_ROLES
+import com.point.core.flow.AiReadiness
 import com.point.core.flow.Capability
 import com.point.core.flow.CapabilityMeta
 import com.point.core.flow.ClassifierRole
@@ -46,6 +47,7 @@ import com.point.core.flow.resolve
 import com.point.core.flow.ruleEvidence
 import com.point.core.flow.s10CheckDigitValid
 import com.point.core.flow.semanticFits
+import com.point.core.flow.labelNeedingKey
 import com.point.core.model.ActionResult
 import com.point.core.model.ActionYield
 import com.point.core.model.CapabilityId
@@ -256,11 +258,13 @@ private val WHITESPACE = Regex("""\s+""")
  * already exists (never a raw photo — only text ever leaves the device, and only after the
  * user taps and consents).
  */
-class UnderstandCapability @Inject constructor() : Capability {
+class UnderstandCapability @Inject constructor(
+    private val keys: AiReadiness,
+) : Capability {
     override val id = ID
     override val icon = "ai"
     override val meta = CapabilityMeta(priority = 31, cost = Cost.PAID, latency = Latency.SLOW, network = true, auth = true)
-    override fun label(state: ObjectState) = "Понять"
+    override fun label(state: ObjectState) = labelNeedingKey("Понять", keys.keySet())
     override fun accepts(state: ObjectState) =
         state.kind == ObjectKind.TEXT || state.has(Feature.HAS_TEXT)
     override fun produces(state: ObjectState) = state

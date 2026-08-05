@@ -3,6 +3,7 @@ package com.point.data.di
 import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
 import com.point.core.flow.AiKeyCheck
+import com.point.core.flow.AiReadiness
 import com.point.core.flow.AppLauncher
 import com.point.core.flow.BackgroundRemover
 import com.point.core.flow.CalendarInserter
@@ -51,7 +52,6 @@ import com.point.core.flow.speechKeyNeeds
 import com.point.core.flow.UrlOpener
 import com.point.core.flow.ChosenApps
 import com.point.core.flow.PcDiscovery
-import com.point.core.flow.Basket
 import com.point.core.flow.PcCapsStore
 import com.point.core.flow.PcPairings
 import com.point.core.flow.PcTransport
@@ -79,7 +79,6 @@ import com.point.data.MlKitEntityExtractor
 import com.point.data.FallbackLlmClient
 import com.point.data.FileChosenApps
 import com.point.data.AndroidPcDiscovery
-import com.point.data.FileBasket
 import com.point.data.FilePcCaps
 import com.point.data.FilePcPairings
 import com.point.data.HttpAiKeyCheck
@@ -295,9 +294,6 @@ abstract class DataModule {
     /** The paired PC (#147) and the LAN transport to it. */
     @Binds
     abstract fun pcPairings(impl: FilePcPairings): PcPairings
-
-    @Binds
-    abstract fun basket(impl: FileBasket): Basket
 
     @Binds
     abstract fun pcCaps(impl: FilePcCaps): PcCapsStore
@@ -574,6 +570,17 @@ abstract class DataModule {
         fun speechReadiness(
             engines: List<@JvmSuppressWildcards SpeechToText>,
         ): SpeechReadiness = SpeechReadiness { speechKeyNeeds(engines) }
+
+        /**
+         * Тот же вопрос про модель, и по той же причине отдельным контрактом (#529): его задаёт
+         * [com.point.core.flow.Capability], а способности нельзя давать клиента, которым можно
+         * сходить в сеть, — иначе «что можно» и «как» перестают быть разными вещами.
+         *
+         * Клиент один и тот же, поэтому имя действия («AI · нужен ключ») и отказ после тапа не
+         * могут разойтись: оба судят по `configured` той же цепочки провайдеров.
+         */
+        @Provides
+        fun aiReadiness(llm: LlmClient): AiReadiness = AiReadiness { llm.configured }
 
         /**
          * Бесплатные читатели страницы (#280), в порядке очереди: Unstructured (15 000

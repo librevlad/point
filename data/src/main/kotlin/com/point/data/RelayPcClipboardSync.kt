@@ -8,7 +8,6 @@ import com.point.core.flow.ClipboardPayload
 import com.point.core.flow.PcClipboardSync
 import com.point.core.flow.PcPairing
 import com.point.core.flow.RelayCrypto
-import com.point.core.flow.RelayTls
 import com.point.core.flow.decodeClipFrame
 import com.point.core.flow.encodeClipFrame
 import java.net.URL
@@ -27,7 +26,7 @@ import kotlinx.coroutines.withContext
  * mailbox; the desktop clip-poller applies it. A [pull] is request/response over the one-way blind
  * relay: the phone deposits a pull-request into [ClipRelay.TO_PC], then long-polls [ClipRelay.TO_PHONE]
  * for the desktop's reply. Both devices connect OUTBOUND — LTE, guest Wi-Fi, anywhere; TLS is pinned
- * ([RelayTls]) and the relay only ever holds ciphertext. Mirrors [RelayPcTransport].
+ * (обычная цепочка доверия — сертификат сервера настоящий) and the server only ever holds ciphertext. Mirrors [RelayPcTransport].
  *
  * Failure classes are kept distinct (#272): a 413 (blob over the relay cap), a 401 (rotated app
  * secret) and a pinning miss each surface as their own [ClipFail] instead of a catch-all
@@ -168,7 +167,6 @@ class RelayPcClipboardSync(
 
     private fun open(url: String, readSeconds: Int): HttpsURLConnection =
         (URL(url).openConnection() as HttpsURLConnection).apply {
-            sslSocketFactory = RelayTls.socketFactory
             connectTimeout = connectTimeoutMs
             readTimeout = readSeconds * 1000
             pass()?.let { setRequestProperty("Authorization", "Bearer $it") }

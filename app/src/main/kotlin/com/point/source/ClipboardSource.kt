@@ -12,7 +12,10 @@ import javax.inject.Inject
  * Чужой активити не нужно: буфер читается прямо здесь, потому что экран выбора уже на переднем
  * плане, — единственное состояние, в котором Android отдаёт содержимое буфера.
  */
-class ClipboardSource @Inject constructor() : ObjectSource {
+class ClipboardSource @Inject constructor(
+    /** Тот же шов, что у расшаренного текста: файл заводится там, где его потом уберут. */
+    private val sharedTexts: com.point.core.flow.SharedTexts,
+) : ObjectSource {
 
     override val id = "clipboard"
     override val label = "Буфер обмена"
@@ -31,14 +34,9 @@ class ClipboardSource @Inject constructor() : ObjectSource {
             text = item?.text?.toString(),
             uri = uri?.toString(),
             mime = uri?.let { context.contentResolver.getType(it) },
-            // `cacheTextFile` — internal в пакете `com.point`, отсюда не виден; текст кладётся тем
-            // же способом, но своей строкой: дублировать один вызов дешевле, чем расширять
-            // видимость ради него.
-            textFile = { text ->
-                val file = java.io.File.createTempFile("clip-", ".txt", context.cacheDir)
-                file.writeText(text)
-                android.net.Uri.fromFile(file).toString()
-            },
+            // Файл кладётся туда, откуда его уберут в конце флоу: раньше он оставался в кэше
+            // навсегда, а из буфера в Point попадает ровно то, что человек только что копировал.
+            textFile = { text -> java.io.File(sharedTexts.create(text)).toURI().toString() },
         )
         // Пустота названа словами: молчание в ответ на тап — та же ложь, что заглушка вместо
         // статуса (#358).

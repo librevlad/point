@@ -12,6 +12,7 @@ import com.point.core.flow.RealizerMeta
 import com.point.core.flow.SpeechReadiness
 import com.point.core.flow.SpeechToText
 import com.point.core.flow.Transcription
+import com.point.core.flow.labelNeedingKey
 import com.point.core.flow.listeningStage
 import com.point.core.flow.reportStage
 import com.point.core.flow.speechKeyRefusal
@@ -74,9 +75,14 @@ class TranscribeCapability @Inject constructor(
      * право по нему тапнуть — тап откроет экран ключей. Название лишь перестаёт умалчивать цену.
      * Какой именно ключ — говорит отказ: коротко на строке про это не сказать, а полуправда
      * («нужен ключ Groq») отправила бы человека чинить то, что чинится и иначе.
+     *
+     * Слова приписки теперь общие ([labelNeedingKey]) — с #529 так же говорят ещё шесть действий,
+     * и раньше эта фраза была написана здесь единственный раз в проекте. Спрашивает расшифровка
+     * по-прежнему СВОЮ готовность: ключи у неё свои, и общий ответ «ключ AI не задан» был бы
+     * неправдой ровно там, где Whisper слушает по ключу Groq.
      */
     override fun label(state: ObjectState) =
-        if (readiness.missingKeys().isEmpty()) "Расшифровать" else "Расшифровать · нужен ключ"
+        labelNeedingKey("Расшифровать", readiness.missingKeys().isEmpty())
 
     override fun accepts(state: ObjectState) = state.kind == ObjectKind.AUDIO
     override fun produces(state: ObjectState) = ObjectState(ObjectKind.TEXT)

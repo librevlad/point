@@ -23,7 +23,7 @@ class DefaultResolverTest {
 
     // Registry with the real capabilities, so the paywall gate can read their cost.
     private val registry = DefaultCapabilityRegistry(
-        capabilities = setOf(AiCapability(), SaveCapability()),
+        capabilities = setOf(AiCapability(aiKeysReady), SaveCapability()),
         policy = DefaultBubblePolicy(),
     )
 
