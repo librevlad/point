@@ -44,10 +44,12 @@ class KeyOnboardingTest {
     private fun keyScreen(
         config: UserAiConfig = UserAiConfig.DEFAULT,
         note: String? = null,
+        errand: KeyErrand? = null,
         checking: Boolean = false,
         verdict: KeyVerdict? = null,
         onCheck: (UserAiConfig) -> Unit = {},
         onSave: (UserAiConfig) -> Unit = {},
+        onCancel: () -> Unit = {},
         onPasteKey: () -> String? = { null },
         onForgetKey: () -> Unit = {},
     ) {
@@ -55,11 +57,12 @@ class KeyOnboardingTest {
             KeyScreen(
                 config = config,
                 onSave = onSave,
-                onCancel = {},
+                onCancel = onCancel,
                 usageEnabled = false,
                 usageSummary = null,
                 onToggleUsage = {},
                 note = note,
+                errand = errand,
                 checking = checking,
                 verdict = verdict,
                 onCheck = onCheck,
@@ -67,7 +70,10 @@ class KeyOnboardingTest {
                 onForgetKey = onForgetKey,
             )
         }
-        if (note == null && verdict == null && !checking) {
+        // Поручение (#465) поднимает раздел ключа само — ровно как отказ и как идущая проверка.
+        // Стучаться в него вторым тапом значило бы проверять не тот путь, которым идёт человек:
+        // он тапнул по действию на своём объекте и обязан оказаться внутри мастера сразу.
+        if (note == null && errand == null && verdict == null && !checking) {
             compose.onNodeWithText("Ключ AI").performClick()
         }
     }
@@ -268,5 +274,82 @@ class KeyOnboardingTest {
 
         // Человек не менял сервис — он подтвердил выбранный. Стирать ему ключ за это не за что.
         compose.onNodeWithText("Ключ на устройстве", substring = true).performScrollTo().assertIsDisplayed()
+    }
+
+    // --- Путь не теряет объект: пришли с действия — уйдём к объекту (#465) ---
+
+    /** Человек тапнул «Понять · нужен ключ» на своей фотографии — с этим он сюда и пришёл. */
+    private val errand = KeyErrand(action = "Понять", objectName = "чек.jpg")
+
+    /**
+     * «Из тапа по действию человек попадает на путь ключа, а не в общий экран настроек» — первое
+     * условие #465 дословно. С #563 настройки читаются списком разделов, и без этого правила
+     * пришедший за ключом высаживался бы на список и искал вход в то, ради чего его сюда привели.
+     *
+     * Тапа по «Ключ AI» здесь нет намеренно ([keyScreen] его не делает при поручении): проверяем
+     * ровно то, что раздел поднялся сам.
+     */
+    @Test fun `пришедший с действия сразу оказывается в разделе ключа`() {
+        keyScreen(errand = errand)
+
+        compose.onNodeWithText("ШАГ 1 · ОТКУДА ВЗЯТЬ КЛЮЧ").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test fun `экран, открытый действием, называет это действие по имени`() {
+        keyScreen(errand = errand)
+
+        // Не «AI не настроен» вообще, а ««Понять» ждёт ключа» — про то, по чему он тапнул.
+        // Общий довод про ключ на этом экране тоже перечисляет «Понять» среди прочих; проверяем
+        // именно ту строку, которой без поручения здесь не было бы.
+        compose.onNodeWithText("«Понять» ждёт ключа", substring = true).performScrollTo().assertIsDisplayed()
+    }
+
+    @Test fun `экран, открытый действием, обещает возврат к объекту`() {
+        keyScreen(errand = errand)
+
+        // Обещание даётся ДО первого шага: человек должен знать, что путь конечен и кончается он
+        // не в настройках.
+        compose.onNodeWithText("вернётесь к своему объекту", substring = true).performScrollTo().assertIsDisplayed()
+    }
+
+    @Test fun `после «работает» дверь обратно названа именем объекта`() {
+        keyScreen(config = savedKey, errand = errand, verdict = KeyVerdict.Works("Готово"))
+
+        compose.onNodeWithText("Вернуться к «чек.jpg»").performScrollTo().assertIsDisplayed()
+    }
+
+    /**
+     * Прерванное действие Point за человека не выполняет — и говорит об этом там же, где зовёт
+     * обратно. Обещание «сейчас доделаю за тебя» было бы прямо против инварианта «Point никогда
+     * не строит автоматические цепочки».
+     */
+    @Test fun `дверь обратно не обещает выполнить действие сама`() {
+        keyScreen(config = savedKey, errand = errand, verdict = KeyVerdict.Works("Готово"))
+
+        compose.onNodeWithText("Тапнуть по нему Point за вас не станет", substring = true)
+            .performScrollTo().assertIsDisplayed()
+    }
+
+    @Test fun `дверь обратно ведёт тем же выходом, что и «Готово»`() {
+        var left = 0
+        keyScreen(config = savedKey, errand = errand, verdict = KeyVerdict.Works("Готово"), onCancel = { left++ })
+
+        compose.onNodeWithText("Вернуться к «чек.jpg»").performScrollTo().performClick()
+
+        assertEquals("строка есть, а выхода за ней нет", 1, left)
+    }
+
+    /** Пока ключ не проверен, звать обратно рано: возвращаться к тому же молчащему действию. */
+    @Test fun `до проверки двери обратно нет`() {
+        keyScreen(errand = errand)
+
+        compose.onNodeWithText("Вернуться к", substring = true).assertDoesNotExist()
+    }
+
+    /** Пришедшему дверью «AI-ключ» возвращать некуда — объекта на экране нет. */
+    @Test fun `без поручения экран не зовёт ни к какому объекту`() {
+        keyScreen(config = savedKey, verdict = KeyVerdict.Works("Готово"))
+
+        compose.onNodeWithText("Вернуться к", substring = true).assertDoesNotExist()
     }
 }

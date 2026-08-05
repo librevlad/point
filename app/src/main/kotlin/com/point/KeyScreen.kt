@@ -112,8 +112,27 @@ import com.point.core.ui.theme.PointTheme
  *    отправлять человека за ним внутрь значило бы чинить чтение ценой действия. Тап по самой строке
  *    открывает раздел «Приложение», где стоит полное объяснение, которое в одну строку не влезло.
  *
- * Раздел ключа открывается сразу, если человека сюда привёл отказ ([note]) или он только что
- * проверял ключ ([checking]/[verdict]): экран, открытый по поводу ключа, обязан показать ключ.
+ * Раздел ключа открывается сразу, если человека сюда привёл отказ ([note]), поручение от действия
+ * ([errand]) или он только что проверял ключ ([checking]/[verdict]): экран, открытый по поводу
+ * ключа, обязан показать ключ.
+ *
+ * ---
+ *
+ * **Путь больше не теряет объект (#465, вторая половина).** Всё перечисленное чинило сам экран, и
+ * оставалось последнее: экран не знал, ОТКУДА человек пришёл. Он тапал «Понять · нужен ключ» на
+ * своей фотографии, ждал минуту, получал отказ, шёл по предложению сюда — и оказывался в
+ * настройках, где о его объекте не сказано ни слова. Уйдя отсюда, он попадал на «Недавнее», а не к
+ * своей фотографии, и заново вспоминал, ради чего всё затевалось.
+ *
+ * Теперь тап по такому действию ведёт сюда сразу (минуту ожидания ради заведомого отказа Point не
+ * тратит), а с человеком приезжает [errand]: имя действия и имя объекта. Ими раздел ключа говорит,
+ * зачем ключ ИМЕННО здесь, и ими же называет дверь обратно — «Вернуться к «чек.jpg»», сразу под
+ * «Работает». Обе стоят внутри [KeySection], а не на общем списке: список разделов — не место для
+ * разговора про чью-то фотографию, и человек с поручением его вообще не видит.
+ *
+ * Что дверь НЕ делает — так это не выполняет прерванное действие: человек вернётся к объекту, где
+ * оно стоит доступным и ждёт его тапа («Point никогда не строит автоматические цепочки», и «он же
+ * сам его только что нажал» — не исключение).
  */
 @Composable
 fun KeyScreen(
@@ -122,6 +141,9 @@ fun KeyScreen(
      *  ту самую «общую непонятную ошибку». null — пришёл сам, дверью «Настройки», и объяснять
      *  нечего. */
     note: String? = null,
+    /** Поручение, с которым сюда пришли (#465): чьё имя назвать и куда вернуть. null — пришли
+     *  сами, дверью «Настройки»: возвращать некуда, и экран об этом молчит. */
+    errand: KeyErrand? = null,
     onSave: (UserAiConfig) -> Unit,
     onCancel: () -> Unit,
     usageEnabled: Boolean,
@@ -157,8 +179,13 @@ fun KeyScreen(
     val draft = rememberSaveable(config, saver = KeyDraft.Saver) { KeyDraft(config) }
     // Какой раздел открыт; `null` — общий список (#563). Переживает поворот по той же причине, что
     // и набранное: человек, крутивший телефон в мастере ключа, не должен возвращаться в список.
-    var section by rememberSaveable(note, checking, verdict) {
-        mutableStateOf(if (note != null || checking || verdict != null) SettingsSection.KEY else null)
+    // Поручение (#465) поднимает раздел ключа на тех же правах, что отказ: человек тапнул
+    // «Понять · нужен ключ» и пришёл сюда за ключом — высадить его в общий список настроек
+    // значило бы заставить искать вход в то, ради чего его сюда и привели.
+    var section by rememberSaveable(note, errand, checking, verdict) {
+        mutableStateOf(
+            if (note != null || errand != null || checking || verdict != null) SettingsSection.KEY else null,
+        )
     }
 
     Column(
@@ -189,6 +216,7 @@ fun KeyScreen(
                     config = config,
                     draft = draft,
                     note = note,
+                    errand = errand,
                     checking = checking,
                     verdict = verdict,
                     onCheck = onCheck,
@@ -196,6 +224,10 @@ fun KeyScreen(
                     onForgetKey = onForgetKey,
                     onOpenUrl = onOpenUrl,
                     onBack = { section = null },
+                    // Дверь к объекту — тот же выход, что «Готово» внизу экрана: закрыть настройки
+                    // целиком. Второй правды о выходе не заводится, а пересборку действий объекта
+                    // делает `FlowViewModel.closeKeySettings()` — она достаётся всем выходам сразу.
+                    onLeave = onCancel,
                 )
 
                 SettingsSection.PRIVACY -> PrivacySection(
@@ -357,12 +389,16 @@ private fun BackToList(onBack: () -> Unit) {
  *
  * Три шага никуда не делись и по-прежнему живут на одном экране — просто на этот экран человек
  * попадает, когда идёт за ключом, а не всякий раз, когда открыл настройки.
+ *
+ * Сюда же въезжает поручение (#465): [errand] — то, ради чего человек за ключом и пошёл. Раздел
+ * называет его действие по имени в начале пути и называет его объект в конце — строкой [onLeave].
  */
 @Composable
 private fun KeySection(
     config: UserAiConfig,
     draft: KeyDraft,
     note: String?,
+    errand: KeyErrand?,
     checking: Boolean,
     verdict: KeyVerdict?,
     onCheck: (UserAiConfig) -> Unit,
@@ -370,6 +406,7 @@ private fun KeySection(
     onForgetKey: () -> Unit,
     onOpenUrl: (String) -> Unit,
     onBack: () -> Unit,
+    onLeave: () -> Unit,
 ) {
     BackToList(onBack)
     ScreenHeader(title = KEY_SECTION_TITLE, modifier = Modifier.padding(bottom = if (note == null) 9.dp else 0.dp))
@@ -378,6 +415,20 @@ private fun KeySection(
     // пришёл. Карточка та же, что под объектом, и голос тот же: это одна и та же новость, просто
     // досказанная там, где её можно устранить.
     if (note != null) OutcomeBanner(message = note, outcome = Outcome.FAILED)
+
+    // Зачем ключ ИМЕННО тому действию, по которому человек тапнул (#465).
+    //
+    // Стоит над Шагом 1 и **не красным**: здесь ничего не сломалось. Человек нажал
+    // «Понять · нужен ключ» — Point не стал тратить его минуту на заведомый отказ, а назвал цену и
+    // повёл коротким путём. Знака исхода у карточки поэтому нет: `FAILED` сообщал бы о неудаче,
+    // `DONE` — о сделанном, а произошло ни то ни другое.
+    if (errand != null) {
+        OutcomeCard(
+            title = com.point.core.flow.keyErrandWhy(errand.action),
+            outcome = Outcome.NONE,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
 
     // Выбор провайдера вместо трёх полей наизусть: адрес и модель подставляются сами, а рядом
     // лежит ссылка на страницу, где ключ выдают. Выбранный провайдер не хранится отдельным
@@ -557,7 +608,10 @@ private fun KeySection(
         title = if (checking) "Проверяю…" else "Проверить и включить",
         onClick = { onCheck(draft.entered()) },
         icon = bubbleIcon(AI_ICON),
-        primary = true,
+        // Пока проверка не сказала «работает», главное здесь — она. Сказала — главным становится
+        // возврат к объекту, и светится он: двух светящихся строк подряд в Point не бывает, иначе
+        // они спорят за один тап.
+        primary = verdict !is KeyVerdict.Works,
         chevron = false,
         enabled = canCheck,
         modifier = Modifier.graphicsLayer { alpha = if (canCheck) 1f else 0.45f },
@@ -578,6 +632,31 @@ private fun KeySection(
             modifier = Modifier.fillMaxWidth(),
         )
         null -> Unit
+    }
+
+    // Дверь обратно к объекту — названная (#465).
+    //
+    // Технически она была всегда: «Готово» внизу экрана закрывает настройки, и под ними стоит тот
+    // самый объект. Но человек этого не знал: слово «Готово» говорит о ключе, а не о фотографии, и
+    // стоит оно за краем длинной прокрутки, ниже ещё и «Сохранить без проверки». Строка называет
+    // то место, куда ведёт, и стоит там, где кончился путь, — сразу под «Работает».
+    //
+    // Подпись говорит вторую половину правды, без которой возврат стал бы ловушкой: прерванное
+    // действие Point за человека НЕ выполнит. Тапнуть по нему — его выбор, ровно как в первый раз
+    // («Point никогда не строит автоматические цепочки»).
+    if (errand != null && verdict is KeyVerdict.Works) {
+        PortalRow(
+            title = "Вернуться к «${errand.objectName}»",
+            subtitle = "«${errand.action}» ждёт там — уже без приписки про ключ. Тапнуть по нему " +
+                "Point за вас не станет.",
+            onClick = onLeave,
+            // Без иконной плиты: у «вашего объекта» нет одного знака — сегодня это фото, завтра
+            // PDF, послезавтра запись. Любой выбранный врал бы в двух случаях из трёх, а стрелка
+            // «назад» в этом разделе уже занята выходом в список настроек.
+            primary = true,
+            chevron = false,
+            subtitleMaxLines = 3,
+        )
     }
 }
 
@@ -909,5 +988,38 @@ private fun PreviewKeyScreenChecking() = PointTheme(darkTheme = true) {
         usageSummary = null,
         onToggleUsage = {},
         checking = true,
+    )
+}
+
+@Preview(name = "Ключ AI · пришли с действия (#465)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@Composable
+private fun PreviewKeyScreenErrand() = PointTheme(darkTheme = true) {
+    // Человек тапнул «Понять · нужен ключ» на своей фотографии. Он сразу в разделе ключа, и первое,
+    // что читает, — про «Понять» и про свой объект, а не список настроек.
+    KeyScreen(
+        config = UserAiConfig(apiKey = "", baseUrl = AI_PROVIDERS.first().baseUrl, model = "gemma"),
+        onSave = {},
+        onCancel = {},
+        usageEnabled = false,
+        usageSummary = null,
+        onToggleUsage = {},
+        errand = KeyErrand(action = "Понять", objectName = "чек.jpg"),
+    )
+}
+
+@Preview(name = "Ключ AI · путь кончился, объект ждёт (#465)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@Composable
+private fun PreviewKeyScreenErrandDone() = PointTheme(darkTheme = true) {
+    // То, ради чего весь срез: ключ работает, и светится теперь дверь ОБРАТНО — с именем объекта и
+    // честной оговоркой, что тапать по «Понять» Point за человека не станет.
+    KeyScreen(
+        config = UserAiConfig(apiKey = "sk-demo-ключ", baseUrl = AI_PROVIDERS.first().baseUrl, model = "gemma"),
+        onSave = {},
+        onCancel = {},
+        usageEnabled = false,
+        usageSummary = null,
+        onToggleUsage = {},
+        errand = KeyErrand(action = "Понять", objectName = "чек.jpg"),
+        verdict = KeyVerdict.Works("Готово"),
     )
 }

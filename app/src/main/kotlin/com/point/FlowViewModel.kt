@@ -310,6 +310,22 @@ class FlowViewModel @Inject constructor(
     }
 
     /**
+     * Пример из ресурсов Point (#210) — и дальше это обычный объект.
+     *
+     * Всё, чем он отличается от принесённого человеком, кончается на этой строке: дальше та же
+     * дверь [onShared], та же копия в рабочую папку, те же действия, та же запись в «Недавнее» и
+     * та же обязательная уборка в конце флоу. Своего режима, своих экранов и своих действий у
+     * примера нет намеренно — «песочница» тем и является, что песка в ней нет: показывать продукт
+     * его подделкой значит показать не тот продукт.
+     *
+     * Заводить ради этого источник (`ObjectSource`) было бы неправдой в другую сторону: источники
+     * перечислены подписью двери «Новый объект», а пример — не то место, откуда человек берёт
+     * СВОИ объекты.
+     */
+    fun openExample(example: ExampleObject) =
+        onShared(example.uri, example.mime, name = example.name)
+
+    /**
      * Пришло то, чего Point разобрать не смог.
      *
      * Раньше в этом месте не происходило ничего: экран оставался пустым и чёрным, без слова и без
@@ -537,6 +553,22 @@ class FlowViewModel @Inject constructor(
 
     fun onBubble(bubble: Bubble) {
         val top = stack.lastOrNull()?.obj ?: return
+        // Действие само сказало в своём имени, что без ключа не сможет (#465). Тап по нему — это
+        // не запуск, а согласие сходить за ключом: гнать в реализатор то, чему нечем работать,
+        // значит отнять у человека минуту ожидания ради отказа, известного ДО тапа.
+        //
+        // Прерванное действие при этом НИКУДА не запоминается — ни здесь, ни на экране ключей.
+        // Человек вернётся к объекту, где оно стоит доступным и ждёт его тапа: «Point никогда не
+        // строит автоматические цепочки», и «он же сам его только что нажал» — не исключение.
+        if (com.point.core.flow.labelNeedsKey(bubble.title)) {
+            openKeyScreen(
+                KeyErrand(
+                    action = com.point.core.flow.labelWithoutKeyNote(bubble.title),
+                    objectName = top.metadata["name"] ?: com.point.core.ui.kindLabel(top.state.kind),
+                ),
+            )
+            return
+        }
         if (bubble.capabilityId == OpenInCapability.ID) {
             // "Открыть в…" opens an inline picker of the device's real handlers (#66).
             showAppPicker(top)
@@ -1092,7 +1124,10 @@ class FlowViewModel @Inject constructor(
 
     // --- Bring-your-own AI key (#19). Summoned on demand or from the Home gear. ---
 
-    fun openKeySettings() {
+    /** Дверь «AI-ключ» и предложение под отказом: пришли сами, возвращать некуда (#465). */
+    fun openKeySettings() = openKeyScreen(errand = null)
+
+    private fun openKeyScreen(errand: KeyErrand?) {
         // A tiny prefs read; the store is warmed when it's created (Activity start), so it
         // is in-memory by the time the gear or an AI-no-key failure summons the screen.
         val saved = userKeys.read()
@@ -1109,6 +1144,9 @@ class FlowViewModel @Inject constructor(
                 // отказа, а не в памяти человека, и терять его по дороге незачем. Заполняется
                 // только от отказа: пришедшему дверью «Настройки» объяснять нечего.
                 keyScreenNote = it.message.takeIf { _ -> refusal },
+                // Поручение (#465) — второе «зачем», и оно приходит не от отказа, а от тапа:
+                // человек ещё ничего не ждал и ничего не потерял, ему просто назвали цену.
+                keyErrand = errand,
                 message = it.message.takeIf { _ -> refusal },
                 messageOutcome = if (refusal) it.messageOutcome else Outcome.NONE,
                 inputPrompt = null,
@@ -1215,8 +1253,43 @@ class FlowViewModel @Inject constructor(
         }
     }
 
-    fun closeKeySettings() =
-        _ui.update { it.copy(keyScreen = null, keyScreenNote = null, keyVerdict = null, keyChecking = false) }
+    /**
+     * Уйти с экрана ключей — и увидеть объект таким, каким он стал (#465).
+     *
+     * Дверь отсюда одна на всех: «Отмена», «Готово», системное «назад» и названная строка
+     * «Вернуться к объекту» делают ровно это. Второй правды о выходе поэтому нет — и пересборка
+     * действий достаётся каждому из четырёх, а не тому, кто пошёл красивой дорогой.
+     */
+    fun closeKeySettings() {
+        _ui.update {
+            it.copy(
+                keyScreen = null, keyScreenNote = null, keyErrand = null,
+                keyVerdict = null, keyChecking = false,
+            )
+        }
+        refreshTopBubbles()
+    }
+
+    /**
+     * Пересобрать действия верхнего объекта (#465).
+     *
+     * Имена действий спрашивают готовность своей цепочки в момент сборки кадра: «Понять · нужен
+     * ключ» — правда о той секунде, когда кадр строился. Ключ появляется на другом экране, и без
+     * пересборки человек возвращался бы к прежней надписи — то есть к неправде ровно о том, что
+     * он только что починил.
+     *
+     * Пусто на стеке — делать нечего: на экран ключей ходят и с «Недавнего», где объекта нет.
+     */
+    private fun refreshTopBubbles() {
+        val index = stack.lastIndex
+        val frame = stack.getOrNull(index) ?: return
+        val refreshed = frame.copy(
+            bubbles = registry.bubblesFor(frame.obj.state),
+            latent = registry.latentBubblesFor(frame.obj.state),
+        )
+        stack[index] = refreshed
+        _ui.update { it.copy(frame = refreshed) }
+    }
 
     // --- Аккаунт и круг устройств (#472). Пейринга как действия больше нет. ---
 
@@ -1599,12 +1672,15 @@ class FlowViewModel @Inject constructor(
             runCatching { userKeys.save(config) }
             _ui.update {
                 it.copy(
-                    keyScreen = null, keyScreenNote = null,
+                    keyScreen = null, keyScreenNote = null, keyErrand = null,
                     keyVerdict = null,
                     aiKeySet = config.apiKey.isNotBlank(),
                     message = "Ключ AI сохранён", messageOutcome = Outcome.DONE,
                 )
             }
+            // «Сохранить без проверки» — тоже уход с экрана ключей (#465): объект под ним обязан
+            // перестать говорить «нужен ключ», иначе имя действия врало бы о только что сделанном.
+            refreshTopBubbles()
         }
     }
 
