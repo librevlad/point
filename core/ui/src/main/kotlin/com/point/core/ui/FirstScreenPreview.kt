@@ -145,6 +145,11 @@ private fun PreviewFoundObjects() = PointTheme {
     // «✓ Нашёл дату 15:12» is now the three things that were actually on it. The address and
     // the deadline moved OUT of the checklist and became objects — tapping either opens a
     // screen whose «Маршрут» / «Создать событие» come from capabilities written long ago.
+    //
+    // #564: трек-номер узлом ниже НЕ появится, хотя он тут в фикстуре, — его уже назвала строка
+    // «✓ Отследить отправление  20 4514 9154 9395». Один факт — одно место, и счёт «Нашёл»
+    // считает показанное. Фикстура нарочно оставлена полной: превью показывает, как правило
+    // работает, а не как его обошли.
     val obj = sampleObject(
         ObjectKind.IMAGE, "image/png", "Screenshot_Nova Post.jpg",
         features = setOf(

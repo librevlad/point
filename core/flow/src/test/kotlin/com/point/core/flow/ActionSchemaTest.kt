@@ -486,4 +486,57 @@ class ActionSchemaTest {
         assertEquals(CapabilityId("email"), ACTION_SCHEMAS.single { it.id == "reply" }.runs)
         assertEquals(CapabilityId("map"), ACTION_SCHEMAS.single { it.id == "route" }.runs)
     }
+
+    // -- #564: один факт — одно место --
+
+    @Test
+    fun `карточка готовности называет ключевое значение — по нему и узнаётся дубль`() {
+        // Визитка владельца: телефон — критическое поле «Сохранить контакт», и печатает
+        // карточка именно его. Ниже этот же номер повторяться не должен.
+        val shown = readinessShownFacts(
+            mapOf(
+                META_ENTITY_PREFIX + "phone" to "+380 67 123 45 67",
+                META_ENTITY_PREFIX + "email" to "olena@tihiy-dvor.example",
+                META_ENTITY_PREFIX + "address" to "Київ, вулиця Ярославська, 14",
+            ),
+        )
+
+        assertEquals(mapOf(META_ENTITY_PREFIX + "phone" to "+380 67 123 45 67"), shown)
+    }
+
+    @Test
+    fun `неготовое действие ничего не называет — прятать ниже нечего`() {
+        // Перевозчик прочитан, трека нет: на месте значения стоит «не хватает только трек-номер»,
+        // и номер, найденный где-то ещё, из списка исчезнуть не может.
+        assertTrue(readinessShownFacts(mapOf(META_GRAPH_ROLE_PREFIX + "carrier" to "Нова Пошта")).isEmpty())
+        assertTrue(readinessShownFacts(emptyMap()).isEmpty())
+    }
+
+    @Test
+    fun `названо ровно одно значение на готовое действие — побочные поля не прячутся`() {
+        // У перевода критических полей два, но печатается первое (карта): сумма остаётся
+        // видимой везде, где её показывают, — правило прячет только то, что уже показано.
+        val shown = readinessShownFacts(
+            mapOf(
+                META_ENTITY_PREFIX + "card" to "4111 1111 1111 1111",
+                META_ENTITY_AMOUNT to "300",
+            ),
+        )
+
+        assertEquals(mapOf(META_ENTITY_PREFIX + "card" to "4111 1111 1111 1111"), shown)
+    }
+
+    @Test
+    fun `названное значение — то же самое, что печатает строка карточки`() {
+        // Два места решают одно: что строка печатает и что первый экран прячет ниже. Если они
+        // разойдутся, факт снова покажется дважды — молча.
+        val facts = mapOf(META_ENTITY_TRACK to "20 4514 9154 9395", META_GRAPH_ROLE_PREFIX + "carrier" to "Нова Пошта")
+        val row = actionReadiness(facts).single { it.schema.id == "track-parcel" }
+
+        assertEquals(row.shownField()?.value, readinessShownFacts(facts)[META_ENTITY_TRACK])
+        assertNull(
+            "у неготовой строки печатать нечего",
+            actionReadiness(mapOf(META_GRAPH_ROLE_PREFIX + "carrier" to "Нова Пошта")).single().shownField(),
+        )
+    }
 }

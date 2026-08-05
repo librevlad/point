@@ -42,6 +42,7 @@ import com.point.core.flow.maskedForScreen
 import com.point.core.flow.readingModeOf
 import com.point.core.flow.readingModeLabel
 import com.point.core.flow.runner
+import com.point.core.flow.shownField
 import com.point.core.model.Bubble
 
 /**
@@ -178,7 +179,11 @@ private fun ReadinessRow(
             // «Возможно» — предположение (#261): улик меньше двух независимых классов.
             // «с рукописи» — другой контракт доверия (#263): значение прочитано зрячей
             // моделью с пикселей, проверить его против слов страницы невозможно.
-            val keyField = if (ready) present.firstOrNull { it.spec.critical } else null
+            //
+            // Какое именно поле печатается, решает [shownField] в `:core:flow`: по тому же
+            // правилу первый экран убирает этот факт из «Point понял» и из «Нашёл» (#564), и
+            // второй копии правила тут быть не должно — она разъехалась бы молча.
+            val keyField = row.shownField()
             if (keyField != null) {
                 Spacer(Modifier.width(6.dp))
                 val origin = readingModeLabel(readingModeOf(metadata))?.let { " · $it" }.orEmpty()
