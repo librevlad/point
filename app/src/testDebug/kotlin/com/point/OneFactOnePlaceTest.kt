@@ -1,0 +1,169 @@
+package com.point
+
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithText
+import com.point.core.flow.KIND_ADDRESS
+import com.point.core.flow.KIND_EMAIL
+import com.point.core.flow.KIND_IDENTIFIER
+import com.point.core.flow.KIND_PHONE
+import com.point.core.flow.META_ENTITY_PREFIX
+import com.point.core.flow.META_ENTITY_TRACK
+import com.point.core.flow.META_GRAPH_ROLE_PREFIX
+import com.point.core.model.Bubble
+import com.point.core.model.CapabilityId
+import com.point.core.model.Feature
+import com.point.core.model.ObjectKind
+import com.point.core.model.ObjectState
+import com.point.core.model.PointObject
+import com.point.core.model.ScratchRef
+import com.point.core.model.ValueRef
+import com.point.core.ui.FirstScreen
+import com.point.core.ui.theme.PointTheme
+import org.junit.Assert.assertEquals
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+
+/**
+ * Один факт — одно место на экране объекта (#564).
+ *
+ * Живой снимок визитки владельца 05.08.2026 показывал один и тот же номер дважды: «✓ Сохранить
+ * контакт · +380 67 …» в карточке готовности и «+380 67 … · Телефон» в списке найденного. Слова
+ * владельца: «Сохранить контакт и Телефон дублируют друг друга по смыслу». Чтобы выбрать между
+ * ними, человеку надо понимать разницу между фактом, найденным объектом и способностью, — то есть
+ * нашу внутреннюю механику.
+ *
+ * Проверяется глазами человека, а не сигнатурами: сколько раз номер написан на экране и совпадает
+ * ли счёт «Нашёл · N» с числом строк под ним.
+ */
+@RunWith(RobolectricTestRunner::class)
+class OneFactOnePlaceTest {
+
+    @get:Rule val compose = createComposeRule()
+
+    private val phone = "+380 67 123 45 67"
+    private val email = "olena@tihiy-dvor.example"
+    private val address = "Київ, вулиця Ярославська, 14"
+
+    /** Визитка владельца: телефон, почта, адрес — и все три стали объектами. */
+    private val card = PointObject(
+        id = "card",
+        mime = "image/jpeg",
+        uri = ScratchRef("/scratch/card.jpg"),
+        state = ObjectState(
+            ObjectKind.IMAGE,
+            setOf(Feature.HAS_PHONE, Feature.HAS_EMAIL, Feature.HAS_ADDRESS),
+        ),
+        metadata = mapOf(
+            "name" to "vizitka.jpg",
+            META_ENTITY_PREFIX + "phone" to phone,
+            META_ENTITY_PREFIX + "email" to email,
+            META_ENTITY_PREFIX + "address" to address,
+        ),
+    )
+
+    private fun found(id: String, kind: ObjectKind, value: String, feature: Feature? = null) = PointObject(
+        id = id,
+        mime = "text/plain",
+        uri = ValueRef(value), // у найденного узла значение и есть содержимое
+        state = ObjectState(kind, setOfNotNull(feature)),
+    )
+
+    private val cardFound = listOf(
+        found("card:phone", KIND_PHONE, phone, Feature.HAS_PHONE),
+        found("card:email", KIND_EMAIL, email, Feature.HAS_EMAIL),
+        found("card:address", KIND_ADDRESS, address, Feature.HAS_ADDRESS),
+    )
+
+    private val saveContact = Bubble(
+        icon = "contact",
+        title = "Сохранить контакт",
+        capabilityId = CapabilityId("save-contact"),
+        expectedNextState = ObjectState(ObjectKind.TEXT),
+    )
+
+    private fun screen(obj: PointObject, found: List<PointObject> = emptyList()) {
+        compose.setContent {
+            PointTheme(darkTheme = true) {
+                FirstScreen(obj = obj, bubbles = listOf(saveContact), onBubble = {}, found = found)
+            }
+        }
+    }
+
+    private fun timesOnScreen(text: String) =
+        compose.onAllNodesWithText(text).fetchSemanticsNodes().size
+
+    @Test fun `на визитке телефон виден ровно один раз`() {
+        screen(card, cardFound)
+
+        assertEquals("номер написан на экране дважды — ровно то, что увидел владелец", 1, timesOnScreen(phone))
+        // И виден он там, где с ним одним тапом делают то, что написано, — в строке готовности.
+        compose.onNode(hasText(phone) and hasText("Сохранить контакт")).assertExists()
+    }
+
+    @Test fun `счёт «Нашёл» считает то, что показано`() {
+        screen(card, cardFound)
+
+        compose.onNodeWithText("Нашёл · 2").assertExists()
+        compose.onNodeWithText("Нашёл · 3").assertDoesNotExist()
+    }
+
+    @Test fun `факты без готового действия остаются на месте — почта и адрес никуда не делись`() {
+        screen(card, cardFound)
+
+        compose.onNodeWithText(email).assertExists()
+        compose.onNodeWithText(address).assertExists()
+        compose.onNodeWithText("Почта", substring = true).assertExists()
+        compose.onNodeWithText("Адрес", substring = true).assertExists()
+    }
+
+    @Test fun `неготовое действие ничего не прячет — найденное показано целиком`() {
+        // Перевозчик прочитан, трека нет: карточка говорит «не хватает только трек-номер» и
+        // ни одного значения не печатает, значит и прятать ниже нечего.
+        val parcel = PointObject(
+            id = "parcel",
+            mime = "image/png",
+            uri = ScratchRef("/scratch/parcel.png"),
+            state = ObjectState(ObjectKind.IMAGE),
+            metadata = mapOf(META_GRAPH_ROLE_PREFIX + "carrier" to "Нова Пошта"),
+        )
+
+        screen(parcel, listOf(found("p:num", KIND_IDENTIFIER, "20 4514 9154 9395")))
+
+        compose.onNodeWithText("Нашёл · 1").assertExists()
+        compose.onNodeWithText("20 4514 9154 9395").assertExists()
+    }
+
+    @Test fun `правило общее — трек-номер посылки тоже показан один раз`() {
+        // Не про телефон: тот же приём убирает дубль любого факта, который карточка уже назвала.
+        val parcel = PointObject(
+            id = "parcel",
+            mime = "image/png",
+            uri = ScratchRef("/scratch/parcel.png"),
+            state = ObjectState(ObjectKind.IMAGE),
+            metadata = mapOf(
+                META_ENTITY_TRACK to "20 4514 9154 9395",
+                META_GRAPH_ROLE_PREFIX + "carrier" to "Нова Пошта",
+            ),
+        )
+
+        screen(parcel, listOf(found("p:num", KIND_IDENTIFIER, "20 4514 9154 9395")))
+
+        assertEquals(1, timesOnScreen("20 4514 9154 9395"))
+        compose.onNodeWithText("Отследить отправление", substring = true).assertExists()
+    }
+
+    @Test fun `«Point понял» не повторяет того, что уже названо карточкой готовности`() {
+        // Тот же дубль без списка найденного: до извлечения объектов номер стоял бы строкой
+        // «✓ Нашёл телефон · +380 67 …» и строкой «✓ Сохранить контакт · +380 67 …».
+        screen(card)
+
+        assertEquals(1, timesOnScreen(phone))
+        compose.onNodeWithText("Нашёл телефон").assertDoesNotExist()
+        // Факты, которых карточка не называла, «Point понял» показывает как раньше.
+        compose.onNodeWithText("Нашёл почту").assertExists()
+    }
+}

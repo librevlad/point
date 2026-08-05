@@ -53,9 +53,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.point.core.flow.META_ALT_SUFFIX
+import com.point.core.flow.META_ENTITY_PREFIX
 import com.point.core.flow.alternativesOf
 import com.point.core.flow.isDoubtful
 import com.point.core.flow.provenanceLabel
+import com.point.core.flow.readinessShownFacts
 import com.point.core.flow.KIND_ADDRESS
 import com.point.core.flow.KIND_DATE
 import com.point.core.flow.KIND_EMAIL
@@ -142,10 +144,29 @@ fun FirstScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         val facts = understoodFacts(obj)
+        // Один факт — одно место (#564). Живой снимок визитки показывал один номер дважды:
+        // «✓ Сохранить контакт · +380 67 …» в карточке готовности и «+380 67 … · Телефон» в
+        // списке найденного. Выбрать между ними человек мог, только зная разницу между фактом,
+        // найденным объектом и способностью, — то есть нашу внутреннюю механику.
+        //
+        // Побеждает карточка готовности ([readinessShownFacts] говорит, что именно она назвала):
+        // она и показывает значение, и делает с ним написанное одним тапом, тогда как строка в
+        // «Нашёл» — только дверь. Двери человек не лишается: признак остаётся на самом документе,
+        // поэтому «Позвонить» / «Открыть на карте» стоят в списке действий на этом же экране.
+        val shownAbove = remember(obj.metadata) { readinessShownFacts(obj.metadata) }
         // A fact that has become a thing (#222) is shown as that thing, not twice: «Нашёл
         // адрес · Отделение №9» graduates out of the checklist into the object list below.
+        // Той же дорогой (#564) из списка уходит факт, который карточка готовности уже назвала:
+        // приём один — множество ключей, которые ниже не повторяются.
         val promoted = found.mapNotNullTo(mutableSetOf()) { factKeyFor(it.state.kind) }
+        shownAbove.keys.mapNotNullTo(promoted) {
+            it.substringAfter(META_ENTITY_PREFIX, "").takeIf(String::isNotEmpty)
+        }
         val plainFacts = facts.filter { it.key !in promoted }
+        // Тот же приём для списка найденного, только узнаётся факт по значению: узел и есть своё
+        // значение, а второй телефон на странице — другой факт, и прятать его не за что.
+        val shownValues = remember(shownAbove) { shownAbove.values.mapTo(mutableSetOf()) { it.trim() } }
+        val visibleFound = found.filter { it.uri.value.trim() !in shownValues }
 
         // The object is the hero (#114): its real preview breathes inside the portal aura.
         ObjectHeader(
@@ -211,8 +232,12 @@ fun FirstScreen(
 
         // What Point found INSIDE the object (#222) — things, not lines: the waybill number,
         // the branch, the deadline. Each opens as an object of its own.
-        if (found.isNotEmpty() && inputPrompt == null) {
-            FoundObjects(found = found, relations = relations, onFound = onFound)
+        //
+        // Список — [visibleFound], а не [found]: счёт «Нашёл · N» считает то, что человек видит
+        // (#564). Заголовок над двумя строками, говорящий «три», — та же порода вранья, ради
+        // которой дубль и убирали.
+        if (visibleFound.isNotEmpty() && inputPrompt == null) {
+            FoundObjects(found = visibleFound, relations = relations, onFound = onFound)
         }
 
         Spacer(Modifier.height(28.dp))
