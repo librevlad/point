@@ -73,6 +73,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import androidx.compose.ui.graphics.asImageBitmap
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -1900,7 +1901,17 @@ class FlowViewModel @Inject constructor(
         pendingBubble = null
         pendingPreviewBubble = null
         _ui.update { FlowUiState() }
-        viewModelScope.launch {
+        // [NonCancellable] здесь — не осторожность, а условие того, что уборка вообще случается.
+        //
+        // Самый частый конец флоу — человек закрыл Point, и `FlowHostActivity.onDestroy` зовёт
+        // `endFlow`. К этой секунде система уже погасила viewModelScope: `ON_DESTROY` приходит
+        // наблюдателям ДО `Activity.onDestroy` (`performDestroy` шлёт событие первым), и на нём
+        // `ComponentActivity` чистит `ViewModelStore`. Работа, запущенная в мёртвой области, не
+        // начинается вовсе — и байты объекта оставались лежать на диске после ухода человека.
+        //
+        // Найдено тестом, который смотрит в папку, а не считает вызовы (#239): «модель позвала
+        // clear()» было правдой всё это время, а «на диске ничего не осталось» — нет.
+        viewModelScope.launch(NonCancellable) {
             runCatching { store.clear() }
             // Расшаренный текст лежал в кэше и переживал всё: инвариант «по окончании флоу —
             // обязательный clear()» держался только для рабочей копии, а через эту дверь идут
