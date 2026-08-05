@@ -259,7 +259,7 @@ private fun PreviewBusyPortalNetwork() = PointTheme(darkTheme = true) {
     )
 }
 
-@Preview(name = "Портал · локальное (один шаг)", showBackground = true, backgroundColor = 0xFF07070C)
+@Preview(name = "Портал · один шаг", showBackground = true, backgroundColor = 0xFF07070C)
 @Composable
 private fun PreviewBusyPortalLocal() = PointTheme(darkTheme = true) {
     BusyPortal(title = "Обрабатываю…", subtitle = "Это займёт несколько секунд", steps = listOf("Обрабатываю…"), activeStep = 0)

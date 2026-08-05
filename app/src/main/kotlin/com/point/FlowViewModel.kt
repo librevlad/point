@@ -113,11 +113,10 @@ class FlowViewModel @Inject constructor(
     private val ioDispatcher: CoroutineDispatcher,
     private val pins: PinnedActions,
     private val appIcons: AppIconResolver,
-    private val pcPairings: com.point.core.flow.PcPairings,
+    private val pcLinks: com.point.core.flow.PcLinks,
     private val pcTransport: com.point.core.flow.PcTransport,
-    private val pcDiscovery: com.point.core.flow.PcDiscovery,
     private val pcCaps: com.point.core.flow.PcCapsStore,
-    /** Кто помнит, когда компьютер отвечал в последний раз и каким путём (#412). */
+    /** Кто помнит, когда компьютер отвечал в последний раз (#412). */
     private val linkMonitor: com.point.core.flow.LinkMonitor,
     private val pulledFiles: PulledFileFactory,
     private val frames: SelectionFrames,
@@ -129,6 +128,8 @@ class FlowViewModel @Inject constructor(
     private val accountClient: com.point.core.flow.AccountClient,
     /** Начатый, но не законченный вход (#561): он переживает экран, потому что человек уходит в браузер. */
     private val pendingLogins: com.point.core.flow.PendingLoginStore,
+    /** Ключи этого телефона (#475): открытая половина едет в круг, закрытая остаётся здесь. */
+    private val deviceKeys: com.point.core.flow.DeviceKeyStore,
     /** Открыть системный браузер — единственное, что вход просит у платформы (#472). */
     private val browser: com.point.core.flow.BrowserOpener,
     /** Временные копии расшаренного текста: их заводит `:app`, их же и убирает в конце флоу. */
@@ -235,6 +236,7 @@ class FlowViewModel @Inject constructor(
     val fromPcCount: StateFlow<Int> = _fromPcCount.asStateFlow()
     private var fromPcEntries: List<com.point.core.flow.PcOutboxEntry> = emptyList()
     private var lastOutboxFetchMs = 0L
+    private var lastCircleSyncMs = 0L
 
     private val _clipboard = MutableStateFlow<String?>(null)
     /** Actionable text sitting in the clipboard when Point opened — a dismissible Home suggestion (#72). */
@@ -354,6 +356,11 @@ class FlowViewModel @Inject constructor(
      */
     fun onShared(sourceUri: String, mime: String, autoAction: String? = null, name: String? = null) {
         freshShareArrived = true
+        // Круг спрашивается фоном на каждом входе в Point (#475): иначе пузырёк
+        // «На компьютер» появлялся бы только после того, как человек сам откроет «Мои
+        // устройства», — то есть ровно та молчаливая задержка, из-за которой связь и
+        // казалась случайной. Сети на первом экране это не добавляет: запрос уходит в фон.
+        syncCircle()
         val voice = claimVoice()
         // Отменить нечем: за приёмом расшаренного файла экрана Point ещё нет, и кнопка увела бы
         // человека в пустоту с одним словом «Отменено» (#114).
@@ -431,17 +438,18 @@ class FlowViewModel @Inject constructor(
             _recent.value = runCatching { history.recent() }.getOrDefault(emptyList())
         }
         refreshFromPc()
+        syncCircle()
     }
 
     /** Quietly ask the paired PC for its outbox (#161) — throttled so app switches with the
      *  PC away don't burn a connect timeout every time; failures just mean no banner. */
     private fun refreshFromPc(force: Boolean = false) {
-        val pairing = pcPairings.current() ?: return
+        val pc = pcLinks.current() ?: return
         val now = System.currentTimeMillis()
         if (!force && now - lastOutboxFetchMs < OUTBOX_THROTTLE_MS) return
         lastOutboxFetchMs = now
         viewModelScope.launch {
-            runCatching { pcTransport.fetchOutbox(pairing) }.getOrNull()?.let { entries ->
+            runCatching { pcTransport.fetchOutbox(pc) }.getOrNull()?.let { entries ->
                 fromPcEntries = entries
                 _fromPcCount.value = entries.size
             }
@@ -451,7 +459,7 @@ class FlowViewModel @Inject constructor(
     /** Pull everything the PC queued (#161): download → ingest → ack, in that order —
      *  a failed ack re-offers (at-least-once); a failed download acks nothing. */
     fun pullFromPc() {
-        val pairing = pcPairings.current() ?: return
+        val pc = pcLinks.current() ?: return
         val voice = claimVoice()
         // Отмена настоящая: качать по сети можно долго, а вернуться есть куда — в «Недавнее».
         raiseBusy("Забираю с компьютера…", cancelable = true)
@@ -459,7 +467,7 @@ class FlowViewModel @Inject constructor(
             // Pull what is on the PC RIGHT NOW — a fresh fetch, not the throttled banner snapshot. The
             // cached list can be up to OUTBOX_THROTTLE_MS stale, so an object queued after the last
             // fetch would be missed and a stale one pulled instead — the phone got «не то» (#161).
-            val entries = runCatching { pcTransport.fetchOutbox(pairing) }.getOrNull().orEmpty()
+            val entries = runCatching { pcTransport.fetchOutbox(pc) }.getOrNull().orEmpty()
             if (!owns(voice)) return@launch
             if (entries.isEmpty()) {
                 fromPcEntries = emptyList()
@@ -470,12 +478,12 @@ class FlowViewModel @Inject constructor(
             val pulled = entries.map { entry ->
                 val name = entry.meta["name"] ?: "объект"
                 val path = pulledFiles.create("${entry.id}-$name")
-                val ok = runCatching { pcTransport.downloadOutboxFile(pairing, entry.id, path) }.getOrDefault(false)
+                val ok = runCatching { pcTransport.downloadOutboxFile(pc, entry.id, path) }.getOrDefault(false)
                 Triple(entry, path, ok)
             }
             if (!owns(voice)) return@launch // передумали на полпути — скачанное не открываем
             if (pulled.any { !it.third }) {
-                _ui.update { it.copy(busy = null, busyStage = null, message = "Компьютер недоступен — попробуйте ещё раз", messageOutcome = Outcome.FAILED) }
+                _ui.update { it.copy(busy = null, busyStage = null, message = com.point.core.flow.pcUnreachableText(com.point.core.flow.PcUnreachable.PC_ASLEEP), messageOutcome = Outcome.FAILED) }
                 return@launch
             }
             when (pulled.size) {
@@ -487,8 +495,8 @@ class FlowViewModel @Inject constructor(
                 else -> onSharedMultiple(pulled.map { "file://${it.second}" })
             }
             pulled.forEach { (entry, _, _) ->
-                runCatching { pcTransport.ackOutbox(pairing, entry.id) }
-                    .recoverCatching { pcTransport.ackOutbox(pairing, entry.id) }
+                runCatching { pcTransport.ackOutbox(pc, entry.id) }
+                    .recoverCatching { pcTransport.ackOutbox(pc, entry.id) }
             }
             fromPcEntries = emptyList()
             _fromPcCount.value = 0
@@ -1293,9 +1301,7 @@ class FlowViewModel @Inject constructor(
         _ui.update { it.copy(frame = refreshed) }
     }
 
-    // --- Аккаунт и круг устройств (#472). Пейринга как действия больше нет. ---
-
-    private var discoveryJob: Job? = null
+    // --- Аккаунт и круг устройств (#472). Пейринга нет ни как действия, ни как механики (#475). ---
 
     /** Правка только живого экрана устройств: закрыли — правке некуда ложиться. */
     private fun updateDevices(block: (DevicesScreenState) -> DevicesScreenState) {
@@ -1392,6 +1398,9 @@ class FlowViewModel @Inject constructor(
         if (state is com.point.core.flow.SignIn.SignedIn) {
             val gateWasUp = _ui.value.signIn != null
             _ui.update { it.copy(signIn = null) }
+            // Ключ объявляется сразу после входа, а не перед первой отправкой: компьютер, который
+            // уже в круге, должен уметь написать этому телефону, ничего от него не дожидаясь.
+            announceKey(state.account)
             if (gateWasUp) openDevices()
             return
         }
@@ -1452,29 +1461,10 @@ class FlowViewModel @Inject constructor(
         viewModelScope.launch { loadCircle(account) }
         // #80 v2: тот же естественный момент синхронизации, что и раньше. Компьютер мог обзавестись
         // умениями с прошлого раза, а экран устройств — как раз тот, ради которого о них спрашивают.
-        pcPairings.current()?.let { pairing ->
+        pcLinks.current()?.let { pc ->
             viewModelScope.launch {
-                runCatching { pcTransport.fetchCaps(pairing)?.let { caps -> pcCaps.save(caps) } }
+                runCatching { pcTransport.fetchCaps(pc)?.let { caps -> pcCaps.save(caps) } }
             }
-        }
-        // Локальная сеть остаётся быстрым путём, и находит она себя сама: если компьютера в памяти
-        // ещё нет, а в сети он есть — телефон здоровается с ним молча, без QR и без ввода адреса.
-        // Это перевалочный шов: срез 6 (#475) заменит рукопожатие подписанным кадром и снимет его
-        // совсем. Пейрингом как ДЕЙСТВИЕМ человека это уже не является — экрана у него нет.
-        discoveryJob?.cancel()
-        discoveryJob = viewModelScope.launch {
-            if (pcPairings.current() != null) return@launch
-            val window = launch {
-                kotlinx.coroutines.delay(com.point.core.flow.PC_SEARCH_WINDOW_MS)
-                discoveryJob?.cancel()
-            }
-            runCatching {
-                pcDiscovery.discover().collect { found ->
-                    val pc = found.firstOrNull() ?: return@collect
-                    if (pcPairings.current() == null) linkToPcOnLan(pc.host, pc.port)
-                }
-            }
-            window.cancel()
         }
     }
 
@@ -1486,8 +1476,6 @@ class FlowViewModel @Inject constructor(
      * не должен, состояние само устроено слоями.
      */
     fun closeDevices() {
-        discoveryJob?.cancel()
-        discoveryJob = null
         refreshFromPc() // #161: под кругом может показаться «Недавнее» — его плашка должна быть свежей
         _ui.update { it.copy(devicesScreen = null) }
     }
@@ -1503,8 +1491,10 @@ class FlowViewModel @Inject constructor(
         val answer = runCatching { accountClient.circle(account) }
             .getOrDefault(com.point.core.flow.CircleAnswer.Unreachable)
         when (answer) {
-            is com.point.core.flow.CircleAnswer.Circle ->
+            is com.point.core.flow.CircleAnswer.Circle -> {
+                rememberPc(answer.devices)
                 updateDevices { it.copy(devices = answer.devices, loading = false, error = null) }
+            }
             com.point.core.flow.CircleAnswer.Unreachable -> updateDevices {
                 it.copy(
                     loading = false,
@@ -1553,25 +1543,79 @@ class FlowViewModel @Inject constructor(
     /** Стереть всё, что это устройство знало про аккаунт и про свой компьютер. */
     private suspend fun forgetAccount(next: com.point.core.flow.SignIn) {
         runCatching { accountStore.clear() }
-        runCatching { pcPairings.clear() }
+        runCatching { pcLinks.clear() }
         runCatching { pcCaps.clear() }
         runCatching { linkMonitor.forget() }
         _ui.update { it.copy(devicesScreen = null, signIn = next) }
     }
 
     /**
-     * Поздороваться с компьютером по локальной сети (перевалочный шов до среза 6, #475).
+     * Компьютер из круга — и больше ничего между устройствами не происходит (#475).
      *
-     * Экрана и тапа у этого нет: адрес приносит mDNS, согласие даёт сам компьютер своим окном.
-     * Молчит — молчим и мы: круг устройств от этого не меняется, а шуметь отказом рукопожатия,
-     * которого человек не заказывал, значило бы врать, будто он что-то сделал не так.
+     * Связывание кончилось вместе с локальной сетью: раньше связь возникала при совпадении трёх
+     * условий разом (одна сеть · открытый экран «Устройства» · нажатие на компьютере за минуту), и
+     * ни об одном не было сказано. Теперь единственное условие названо вслух и выполняется само —
+     * вход в один аккаунт. Круг приехал, компьютер в нём есть — телефон его запомнил.
+     *
+     * Круг может рассказать про несколько компьютеров; берём тот, что отзывался последним. Выбор
+     * между ними — работа, которой у человека сегодня нет, и выдумывать ему экран ради неё рано.
      */
-    private suspend fun linkToPcOnLan(host: String, port: Int) {
-        val pairing = runCatching { pcTransport.pair(host, port, deviceName()) }.getOrNull() ?: return
-        runCatching { pcPairings.save(pairing) }
-        runCatching { pcTransport.fetchCaps(pairing)?.let { caps -> pcCaps.save(caps) } }
-        runCatching { pcTransport.pushPhoneCaps(pairing, PHONE_ADVERTISED) }
-        refreshFromPc(force = true)
+    /**
+     * Спросить сервер о круге фоном — тихо, без экрана и без слов (#475).
+     *
+     * Человек этого не заказывал, поэтому отказ здесь молчит: экран устройств спросит сам и
+     * скажет своё. Не чаще раза в пять минут — круг меняется редко, а платить за него
+     * запросом на каждый шаг незачем.
+     */
+    private fun syncCircle() {
+        val account = accountStore.current() ?: return
+        val now = System.currentTimeMillis()
+        if (now - lastCircleSyncMs < CIRCLE_SYNC_THROTTLE_MS) return
+        lastCircleSyncMs = now
+        announceKey(account)
+        viewModelScope.launch {
+            val answer = runCatching { accountClient.circle(account) }.getOrNull()
+            if (answer is com.point.core.flow.CircleAnswer.Circle) rememberPc(answer.devices)
+        }
+    }
+
+    private fun rememberPc(devices: List<com.point.core.flow.CircleDevice>) {
+        // Круг без единого устройства — это не ответ про круг: в нём обязано быть хотя бы то, что
+        // спрашивало. Стирать по такому ответу память значило бы гасить пузырёк «На компьютер» от
+        // одной странности сервера.
+        if (devices.isEmpty()) return
+        val pc = devices
+            .filter { !it.self && it.kind == com.point.core.flow.DeviceKind.PC }
+            .maxByOrNull { it.lastSeenMillis ?: 0L }
+        viewModelScope.launch {
+            if (pc == null) {
+                // Компьютера в круге не стало — и пузырёк «На компьютер» обязан исчезнуть вместе с
+                // ним. Оставить память значило бы предлагать дорогу, которой больше нет.
+                runCatching { pcLinks.clear() }
+                runCatching { pcCaps.clear() }
+                return@launch
+            }
+            val known = com.point.core.flow.LinkedPc(pc.id, pc.name, pc.key)
+            if (pcLinks.current() == known) return@launch
+            runCatching { pcLinks.save(known) }
+            // Что компьютер умеет и что он про нас знает — сразу же: иначе первые действия из
+            // «Почти доступно» появились бы только со второго открытия экрана.
+            runCatching { pcTransport.fetchCaps(known)?.let { caps -> pcCaps.save(caps) } }
+            runCatching { pcTransport.pushPhoneCaps(known, PHONE_ADVERTISED) }
+            refreshFromPc(force = true)
+        }
+    }
+
+    /**
+     * Объявить кругу открытый ключ этого телефона (#475).
+     *
+     * Молчаливая работа сразу после входа: пока ключа нет в круге, компьютеру нечем запечатать
+     * письмо телефону, и он честно скажет «не могу», а не отправит открытым текстом. Не вышло —
+     * попробуем при следующем входе; человеку тут сказать нечего, он ничего не заказывал.
+     */
+    private fun announceKey(account: com.point.core.flow.PointAccount) {
+        val key = runCatching { deviceKeys.keys().publicKey }.getOrNull() ?: return
+        viewModelScope.launch { runCatching { accountClient.enroll(account, key) } }
     }
 
     /** Как это устройство представляется в круге. */
@@ -2245,6 +2289,9 @@ private const val MAX_CLIP = 2000
 /** How rarely Home re-asks the PC for its outbox (#161) — app switches with the PC away
  *  must not burn a connect timeout every time. */
 private const val OUTBOX_THROTTLE_MS = 30_000L
+
+/** Как часто телефон тихо переспрашивает круг (#475): устройства прибавляются редко. */
+private const val CIRCLE_SYNC_THROTTLE_MS = 5 * 60_000L
 
 /** The phone-side actions advertised to the paired PC (#161 v2) — deliberately few and
  *  non-interactive: each opens a system screen the user finishes themselves. */

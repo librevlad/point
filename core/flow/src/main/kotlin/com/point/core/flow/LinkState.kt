@@ -1,7 +1,7 @@
 package com.point.core.flow
 
 /**
- * Есть ли связь между телефоном и компьютером — и каким путём (#412).
+ * Есть ли связь между телефоном и компьютером (#412).
  *
  * Владелец: «на телефоне не видно подключен ли пк и наоборот». До этого обе стороны молчали:
  * человек тапал «Напечатать на ПК», ничего не происходило, и понять, сломалось оно или связи нет,
@@ -10,18 +10,14 @@ package com.point.core.flow
  * Живёт в `:core:flow`, потому что обе стороны обязаны говорить об этом **одинаково**: если
  * телефон считает связь живой, а компьютер — потерянной, спорить будут они, а виноватым окажется
  * человек.
+ *
+ * Пути с #475 один, и вопроса «каким» больше нет: раньше состояние возило с собой [LinkPath] и
+ * говорило «в этой сети» или «через интернет». Человеку это объясняло скорость, но теперь
+ * объяснять нечего — выбора нет, и лишнее слово только просило бы его о чём-то подумать.
  */
-enum class LinkPath {
-    /** Прямое соединение по локальной сети — быстро и без облака. */
-    LAN,
-
-    /** Через релей: устройства в разных сетях (или роутер разводит их изоляцией клиентов). */
-    RELAY,
-}
-
 sealed interface LinkState {
-    /** Слышали недавно: [path] — каким путём, [agoMillis] — сколько назад. */
-    data class Live(val path: LinkPath, val agoMillis: Long) : LinkState
+    /** Слышали недавно: [agoMillis] — сколько назад. */
+    data class Live(val agoMillis: Long) : LinkState
 
     /** Слышали давно. Молчание названо, а не спрятано: «наверное, всё хорошо» — не ответ. */
     data class Silent(val agoMillis: Long) : LinkState
@@ -44,43 +40,30 @@ const val LINK_SILENCE_AFTER_MS = 3 * 60 * 1000L
 /**
  * Состояние связи по последнему контакту.
  *
- * Путь берётся из последнего контакта намеренно: он объясняет человеку скорость и то, почему в
- * чужой сети всё медленнее. Отсутствие пути при наличии контакта невозможно по построению — но
- * если такое случится, честнее показать молчание, чем выдумать путь.
- *
  * [probing] — «запрос к компьютеру сейчас в пути» (#451). Он перебивает ответ о прошлом, но
  * только когда прошлое молчит: свежий контакт уже отвечает на вопрос человека, и гасить «на
  * связи» ради секунды «проверяю» значило бы мигать вместо того, чтобы сообщать.
  */
 fun linkStateOf(
     lastContactAt: Long?,
-    path: LinkPath?,
     now: Long,
     probing: Boolean = false,
     silenceAfterMs: Long = LINK_SILENCE_AFTER_MS,
 ): LinkState {
-    val settled = settledLink(lastContactAt, path, now, silenceAfterMs)
+    val settled = settledLink(lastContactAt, now, silenceAfterMs)
     return if (probing && settled !is LinkState.Live) LinkState.Checking else settled
 }
 
-private fun settledLink(lastContactAt: Long?, path: LinkPath?, now: Long, silenceAfterMs: Long): LinkState {
+private fun settledLink(lastContactAt: Long?, now: Long, silenceAfterMs: Long): LinkState {
     if (lastContactAt == null) return LinkState.Never
     val ago = (now - lastContactAt).coerceAtLeast(0)
-    if (ago >= silenceAfterMs || path == null) return LinkState.Silent(ago)
-    return LinkState.Live(path, ago)
+    if (ago >= silenceAfterMs) return LinkState.Silent(ago)
+    return LinkState.Live(ago)
 }
 
-/**
- * Как это сказать человеку.
- *
- * Словами продукта, а не техники: «в этой сети» и «через интернет» вместо «LAN» и «relay» —
- * человеку важно, быстро ли и работает ли вдали от дома, а не название транспорта.
- */
+/** Как это сказать человеку — словами продукта, а не техники. */
 fun linkLabel(state: LinkState): String = when (state) {
-    is LinkState.Live -> when (state.path) {
-        LinkPath.LAN -> "на связи · в этой сети"
-        LinkPath.RELAY -> "на связи · через интернет"
-    }
+    is LinkState.Live -> "на связи"
     is LinkState.Silent -> "не отвечает · молчит ${minutesWord(state.agoMillis)}"
     LinkState.Checking -> "проверяю связь…"
     LinkState.Never -> "ещё не связывались"

@@ -50,9 +50,8 @@ import com.point.core.flow.keyFor
 import com.point.core.flow.speechKeyNeeds
 import com.point.core.flow.UrlOpener
 import com.point.core.flow.ChosenApps
-import com.point.core.flow.PcDiscovery
 import com.point.core.flow.PcCapsStore
-import com.point.core.flow.PcPairings
+import com.point.core.flow.PcLinks
 import com.point.core.flow.PcTransport
 import com.point.core.flow.UsageJournal
 import com.point.core.flow.UserKeyStore
@@ -77,17 +76,11 @@ import com.point.data.IdentifierEnricher
 import com.point.data.MlKitEntityExtractor
 import com.point.data.FallbackLlmClient
 import com.point.data.FileChosenApps
-import com.point.data.AndroidPcDiscovery
 import com.point.data.FilePcCaps
-import com.point.data.FilePcPairings
+import com.point.data.FilePcLinks
 import com.point.data.HttpAiKeyCheck
-import com.point.data.HttpPcClipboardSync
-import com.point.data.HttpUrlPcTransport
-import com.point.data.LanThenRelayClipboardSync
-import com.point.data.LanThenRelayTransport
 import com.point.data.RelayPcClipboardSync
 import com.point.data.RelayPcTransport
-import com.point.data.SelfHealingPcTransport
 import com.point.data.FileUsageJournal
 import com.point.data.FileCapabilityUsage
 import com.point.data.FileHistoryStore
@@ -286,16 +279,16 @@ abstract class DataModule {
     @Binds
     abstract fun chosenApps(impl: FileChosenApps): ChosenApps
 
-    /** The paired PC (#147) and the LAN transport to it. */
+    /** Компьютер из круга (#475) — последний слепок того, что рассказал сервер. */
     @Binds
-    abstract fun pcPairings(impl: FilePcPairings): PcPairings
+    abstract fun pcLinks(impl: FilePcLinks): PcLinks
 
     @Binds
     abstract fun pcCaps(impl: FilePcCaps): PcCapsStore
 
-    /** LAN autodiscovery of Point-for-PC (#147 slice C) — sugar over manual entry. */
+    /** Ключи этого телефона (#475): закрытая половина не покидает устройство. */
     @Binds
-    abstract fun pcDiscovery(impl: AndroidPcDiscovery): PcDiscovery
+    abstract fun deviceKeys(impl: com.point.data.EncryptedDeviceKeys): com.point.core.flow.DeviceKeyStore
 
     /** Где последний контакт с компьютером переживает перезапуск (#451). */
     @Binds
@@ -405,21 +398,35 @@ abstract class DataModule {
         fun dropInbox(account: com.point.core.flow.AccountStore): com.point.core.flow.DropInbox =
             com.point.data.RelayDropInbox(serverUrl(), devicePass(account))
 
-        /** #161 v2 «железобетонно»: the LAN transport self-heals a stale PC IP via mDNS (re-resolve +
-         *  retry with the token), and when it still can't be reached — different network, LTE — the
-         *  object falls back to the always-works relay (outbound-only, E2E-encrypted). */
+        /**
+         * Общий ключ с компьютером (#475): своя закрытая половина и его открытая из круга.
+         *
+         * Сервер в вычислении не участвует и участвовать не может — в этом весь смысл: он возит
+         * запечатанное, а ключ рождается на устройствах.
+         */
         @Provides
-        fun pcTransport(
-            http: HttpUrlPcTransport,
-            discovery: PcDiscovery,
-            pairings: PcPairings,
-            monitor: com.point.core.flow.LinkMonitor,
+        @Singleton
+        fun pcSecrets(keys: com.point.core.flow.DeviceKeyStore): com.point.core.flow.PcSecrets =
+            com.point.core.flow.KeyStoreSecrets(keys)
+
+        /**
+         * Единственная дорога до компьютера (#475) — ящики сервера Point.
+         *
+         * Второго транспорта нет и выбора между путями нет: ни mDNS, ни своего HTTP-сервера на
+         * ПК, ни «сначала быстро, потом надёжно». Одна логика, один набор отказов, одно место,
+         * где может сломаться.
+         */
+        @Provides
+        @Singleton
+        fun pcRpc(
             account: com.point.core.flow.AccountStore,
-        ): PcTransport = LanThenRelayTransport(
-            lan = SelfHealingPcTransport(http, discovery, pairings),
-            relay = RelayPcTransport(devicePass(account)),
-            monitor = monitor,
-        )
+            secrets: com.point.core.flow.PcSecrets,
+            monitor: com.point.core.flow.LinkMonitor,
+        ): com.point.data.RelayRpcClient =
+            com.point.data.RelayRpcClient(serverUrl(), { account.current() }, secrets, monitor)
+
+        @Provides
+        fun pcTransport(rpc: com.point.data.RelayRpcClient): PcTransport = RelayPcTransport(rpc)
 
         /** Кто помнит последний контакт с компьютером (#412) — один на приложение: экран и
          *  транспорт обязаны говорить об одном и том же. Помнит и после перезапуска (#451):
@@ -429,17 +436,10 @@ abstract class DataModule {
         fun linkMonitor(log: com.point.core.flow.LinkLog): com.point.core.flow.LinkMonitor =
             com.point.core.flow.RememberingLinkMonitor(log)
 
-        /** Shared clipboard (#161 «общий буфер»): LAN hop first, relay fallback when off-network —
-         *  same «безотказно» shape as [pcTransport]. */
+        /** Общий буфер (#161) — тот же клиент, что у объектов: второй правды о связи нет. */
         @Provides
-        fun pcClipboardSync(
-            http: HttpPcClipboardSync,
-            account: com.point.core.flow.AccountStore,
-        ): com.point.core.flow.PcClipboardSync =
-            LanThenRelayClipboardSync(
-                lan = http,
-                relay = RelayPcClipboardSync(devicePass(account)),
-            )
+        fun pcClipboardSync(rpc: com.point.data.RelayRpcClient): com.point.core.flow.PcClipboardSync =
+            RelayPcClipboardSync(rpc)
 
         /**
          * Разговор с сервером Point (#472): вход, круг устройств, отзыв.
@@ -448,8 +448,8 @@ abstract class DataModule {
          */
         @Provides
         @Singleton
-        fun accountClient(): com.point.core.flow.AccountClient =
-            com.point.core.flow.HttpAccountClient(serverUrl())
+        fun accountClient(keys: com.point.core.flow.DeviceKeyStore): com.point.core.flow.AccountClient =
+            com.point.core.flow.HttpAccountClient(serverUrl(), keys.keys().publicKey)
 
         /**
          * Адрес сервера — сборка без секрета (#419).

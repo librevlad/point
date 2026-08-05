@@ -282,14 +282,14 @@ abstract class CapabilityModule {
         // #80: the paired PC's advertised actions join the SAME graph — one pair per
         // cached advertisement (refreshed on pairing; visible from the next launch).
         @Provides @ElementsIntoSet
-        fun pcRemoteCapabilities(caps: com.point.core.flow.PcCapsStore, pairings: com.point.core.flow.PcPairings): Set<Capability> =
-            caps.all().map { RemotePcCapability(it, pairings) }.toSet()
+        fun pcRemoteCapabilities(caps: com.point.core.flow.PcCapsStore, links: com.point.core.flow.PcLinks): Set<Capability> =
+            caps.all().map { RemotePcCapability(it, links) }.toSet()
 
         @Provides @ElementsIntoSet
         fun pcRemoteRealizers(
             caps: com.point.core.flow.PcCapsStore,
-            pairings: com.point.core.flow.PcPairings,
+            links: com.point.core.flow.PcLinks,
             transport: com.point.core.flow.PcTransport,
-        ): Set<Realizer> = caps.all().map { RemotePcRealizer(it, pairings, transport) }.toSet()
+        ): Set<Realizer> = caps.all().map { RemotePcRealizer(it, links, transport) }.toSet()
     }
 }

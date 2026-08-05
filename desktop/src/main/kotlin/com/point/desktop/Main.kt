@@ -15,14 +15,15 @@ import java.io.File
  * desktop seams live here and only here; everything below them is pure and tested.
  */
 fun main(args: Array<String>) {
+    val pointDir = File(System.getProperty("user.home"), ".point-pc")
     // «Отправить в Point» из проводника (#252). Point на компьютере обычно уже открыт, поэтому
     // файл сначала предлагается живому экземпляру — второе окно на каждый пункт меню человеку не
-    // нужно, да и порт у сервера уже занят. Никто не ответил — открываемся сами с этим файлом.
-    val handed = runCatching {
-        SendToRunning.handOff(filesFromArgs(args), FilePcConfig(File(System.getProperty("user.home"), ".point-pc")).load())
-    }.getOrDefault(false)
+    // нужно. Никого живого нет — открываемся сами с этим файлом.
+    val handed = runCatching { SendToRunning.handOff(filesFromArgs(args), pointDir) }.getOrDefault(false)
     if (handed) return
-    val config = FilePcConfig(File(System.getProperty("user.home"), ".point-pc")).load()
+    // Замок держится до конца процесса: по нему следующий запуск и понимает, что мы живы.
+    val instanceLock = SendToRunning.takeLock(pointDir)
+    val config = FilePcConfig(pointDir).load()
     val inbox = Inbox(File(System.getProperty("user.home"), "Point"))
 
     val clipboard = TextClipboard { text ->
@@ -84,27 +85,26 @@ fun main(args: Array<String>) {
     )
     // Аккаунт этого компьютера (#473). Раньше ПК знал о себе только токен, имя и порт — владельца
     // у него не было вовсе. Вход, круг устройств и пропуск — тем же кодом, что на телефоне.
-    val pointDir = File(System.getProperty("user.home"), ".point-pc")
     val serverUrl = com.point.core.flow.PointServer.base(config.server)
     val accountStore = FileAccountStore(pointDir)
+    // Ключи компьютера (#475): закрытая половина не покидает эту машину, открытая едет в круг.
+    val deviceKeys = FileDeviceKeys(pointDir)
     val accountScope = kotlinx.coroutines.CoroutineScope(
         kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default,
     )
     val account = DesktopAccount(
         scope = accountScope,
         store = accountStore,
-        client = com.point.core.flow.HttpAccountClient(serverUrl),
+        client = com.point.core.flow.HttpAccountClient(serverUrl, deviceKeys.keys().publicKey),
         // Своего окна для чужих страниц у Point нет и не будет — вход открывает системный браузер.
         browser = { url -> runCatching { java.awt.Desktop.getDesktop().browse(java.net.URI(url)) } },
         deviceName = config.name,
+        keys = deviceKeys,
     )
-    // Пропуск для всех клиентов релея: функция, а не значение, — он появляется после входа
-    // и исчезает после «Выйти», а демоны живут дольше и того и другого.
-    val devicePass = account.pass()
 
-    val phoneCapsFile = File(File(System.getProperty("user.home"), ".point-pc"), "phone-caps")
+    val phoneCapsFile = File(pointDir, "phone-caps")
     // Память о пути объектов (#407) — рядом с остальным состоянием ПК, тем же способом хранения.
-    val journalStore = FileJournalStore(File(File(System.getProperty("user.home"), ".point-pc"), "journal"))
+    val journalStore = FileJournalStore(File(pointDir, "journal"))
     state = DesktopState(
         registry, resolver, clipboard, outbox,
         persistPhoneCaps = { caps ->
@@ -118,8 +118,8 @@ fun main(args: Array<String>) {
     runCatching { com.point.core.flow.decodePcCaps(phoneCapsFile.readText()) }
         .getOrNull()?.let(state::setPhoneCaps)
 
-    // Что этот компьютер умеет — один список на оба канала: и для локальной сети, и для
-    // релея (#161). Второй правды о возможностях ПК в проекте не заводится.
+    // Что этот компьютер умеет. Канал один (#475), и список у него тоже один: второй правды о
+    // возможностях ПК в проекте не заводится.
     val pcRemoteActions = buildList {
             add(com.point.core.flow.PcRemoteAction("pc-open", "Открыть на компьютере"))
             add(com.point.core.flow.PcRemoteAction("pc-copy", "В буфер компьютера"))
@@ -145,70 +145,51 @@ fun main(args: Array<String>) {
             )
         }
 
-    val server = PcServer(
-        inbox = inbox,
-        token = config.token,
-        pcName = config.name,
-        pairGate = state::askPair,
-        onReceived = state::onReceived,
-        onContact = { state.heard(com.point.core.flow.LinkPath.LAN) },
-        // #80: advertise the actions the phone may run here. Save-as stays local-only —
-        // it opens a target dialog, which nobody expects to pop from a remote tap.
-        //
-        // #316: то, что этот компьютер умеет, но сейчас не может, объявляется с причиной
-        // (`unavailable`), а не молчанием. Кнопкой оно не станет — станет строкой «Почти
-        // доступно · нет принтера». Молчание человек читал как «Point не умеет печатать».
-        remoteActions = pcRemoteActions,
-        // #114: телефон ждёт исход, а не факт доставки — по домашней сети ответить ему есть чем.
-        runAction = state::runRemoteActionNow,
-        outbox = outbox,
-        onPhoneCaps = state::setPhoneCaps,
-        clipboardGet = ::readSystemClipboard,
-        clipboardSet = ::writeSystemClipboard,
-    )
     // Открылись сами: файл из меню становится объектом сразу, без лишнего действия человека.
     filesFromArgs(args).forEach { file ->
         state.onReceived(inbox.addFile(file.absolutePath), ObjectSource.LOCAL)
     }
-    server.start(preferredPort = config.port)
-    // Slice C: let phones discover this PC by themselves (best-effort mDNS).
-    val advertiser = Advertiser(config.name, server.port).also { it.start() }
-    // #161 v2 (P4): also receive over the always-works relay — the PC polls the mailbox and an
-    // object the phone sent off-LAN lands in the SAME inbox flow as a LAN /receive.
-    val relayPoller = RelayPoller(
-        relayUrl = serverUrl,
-        pass = devicePass,
-        token = config.token,
-        onObject = { name, mime, meta, bytes, action ->
-            val item = inbox.receive(name, mime, meta, bytes.inputStream())
-            state.onReceived(item, ObjectSource.PHONE_RELAY)
-            action?.let { runCatching { state.runRemoteAction(it, item) } }
-        },
-    ).also { it.start() }
-    // #161 «общий буфер» через релей: the shared clipboard also works off-LAN — the PC applies a
-    // phone push and answers a phone pull over the same blind relay, on its own daemon.
-    val relayClipPoller = RelayClipPoller(
-        relayUrl = serverUrl,
-        pass = devicePass,
-        token = config.token,
-        clipboardGet = ::readSystemClipboard,
-        clipboardSet = ::writeSystemClipboard,
-    ).also { it.start() }
 
-    // #161: компьютер отвечает телефону через релей — что умеет, что приготовил, отдай сделанное.
-    // Без этого через релей ходило одно направление, и вне общей сети телефон не мог ни узнать про
-    // принтер и сборку PDF, ни забрать результат.
-    val relayRequestPoller = RelayRequestPoller(
-        relayUrl = serverUrl,
-        pass = devicePass,
-        token = config.token,
+    // Что компьютер отвечает телефону (#475). Одна дорога — один разбор почты: своего
+    // HTTP-сервера у ПК больше нет, входящих соединений он не слушает, и запроса брандмауэра при
+    // запуске человек не видит.
+    val requests = RelayRequests(
         remoteActions = { pcRemoteActions },
         outbox = outbox,
         onPhoneCaps = state::setPhoneCaps,
-        onContact = { state.heard(com.point.core.flow.LinkPath.RELAY) },
-        runAction = state::runRemoteAction,
-        log = { line -> println("[relay-rpc] " + line) },
+        clipboardGet = ::readSystemClipboard,
+        clipboardSet = ::writeSystemClipboard,
+        onObject = { name, mime, meta, bytes, action ->
+            val item = inbox.receive(name, mime, meta, bytes.inputStream())
+            state.onReceived(item, ObjectSource.PHONE_RELAY)
+            // #114: телефон ждёт исход, а не факт доставки, — и теперь ему есть чем ответить и
+            // через сервер: письмо с ответом кладётся в его ящик.
+            action?.let { state.runRemoteActionNow(it, item) }
+        },
+        log = { line -> println("[mailbox] " + line) },
+    )
+    val relayPoller = RelayPoller(
+        serverUrl = serverUrl,
+        account = { accountStore.current() },
+        peers = account::peers,
+        secrets = com.point.core.flow.KeyStoreSecrets(deviceKeys),
+        requests = requests,
+        onContact = state::heard,
+        onUnknownSender = account::refreshCircleNow,
+        log = { line -> println("[mailbox] " + line) },
     ).also { it.start() }
+
+    // Переданное из проводника живому Point (#252): пути кладут в каталог, мы их подбираем.
+    val handOffs = Thread({
+        while (true) {
+            runCatching {
+                SendToRunning.collectHandOffs(pointDir).forEach { file ->
+                    state.onReceived(inbox.addFile(file.absolutePath), ObjectSource.LOCAL)
+                }
+            }
+            runCatching { Thread.sleep(1_000) }.getOrElse { return@Thread }
+        }
+    }, "point-handoff").apply { isDaemon = true }.also { it.start() }
 
     application {
         // Окно мокапа — 1440x900 (#285). Берём чуть меньше, чтобы влезало и на ноутбучный экран,
@@ -219,11 +200,9 @@ fun main(args: Array<String>) {
         Window(
             state = windowState,
             onCloseRequest = {
-                relayClipPoller.stop()
-                relayRequestPoller.stop()
                 relayPoller.stop()
-                advertiser.stop()
-                server.stop()
+                handOffs.interrupt()
+                runCatching { instanceLock?.release() }
                 exitApplication()
             },
             title = "Point для ПК",
@@ -238,8 +217,6 @@ fun main(args: Array<String>) {
                 state = state,
                 config = config,
                 account = account,
-                addresses = siteLocalAddresses(),
-                port = server.port,
                 // Происхождение объекта разделено (#407): перетащенный мышью и взятый из буфера —
                 // разные ответы на вопрос «откуда это здесь взялось», и журнал обязан их различать.
                 onFilesDropped = { files ->

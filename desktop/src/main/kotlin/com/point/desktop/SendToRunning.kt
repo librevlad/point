@@ -1,19 +1,20 @@
 package com.point.desktop
 
 import java.io.File
-import java.net.HttpURLConnection
-import java.net.URI
-import java.util.Base64
+import java.io.RandomAccessFile
+import java.nio.channels.FileLock
 
 /**
  * «Отправить в Point» из проводника (#252): файл, названный в командной строке, попадает в Point.
  *
  * Тонкость, ради которой это отдельный файл: Point на компьютере обычно **уже открыт**. Запускать
- * второй экземпляр на каждый пункт меню — значит плодить окна и ронять сервер, у которого занят
- * порт. Поэтому сначала стучимся в уже работающий Point по его же `/receive` — тому самому, каким
- * присылает объекты телефон, — и только если никто не ответил, запускаемся сами.
+ * второй экземпляр на каждый пункт меню — значит плодить окна.
  *
- * Наружу ничего не уходит: стук идёт на `127.0.0.1`.
+ * Раньше живой экземпляр находили стуком по `127.0.0.1` в его же HTTP-сервер. Сервера больше нет
+ * (#475), и передача идёт через файлы: работающий Point держит замок на `~/.point-pc/lock`, а
+ * новый запуск, не сумевший его взять, кладёт пути в `~/.point-pc/handoff` и уходит. Замок вместо
+ * стука — не обходной путь, а честный: слушающий сокет на Windows вызывает окно брандмауэра при
+ * первом же запуске, и человек читает его как «Point лезет в сеть», хотя он не лез никуда.
  */
 object SendToRunning {
 
@@ -22,49 +23,49 @@ object SendToRunning {
      *
      * `true` — всё отдано и запускаться незачем. `false` — живого Point нет, работаем сами.
      */
-    fun handOff(files: List<File>, config: PcConfig): Boolean {
+    fun handOff(files: List<File>, pointDir: File): Boolean {
         if (files.isEmpty()) return false
-        val port = livePort(config) ?: return false
-        return files.filter { it.isFile }.all { send(it, port, config.token) }
+        // Замок берётся и тут же отпускается: он нужен как ВОПРОС «есть ли живой», а не как право.
+        val free = takeLock(pointDir)
+        if (free != null) {
+            runCatching { free.release() }
+            return false
+        }
+        return runCatching {
+            val drop = File(pointDir.apply { mkdirs() }, HANDOFF).apply { mkdirs() }
+            val letter = File(drop, "${System.currentTimeMillis()}-${files.size}.paths")
+            // Пишем во временное имя и переименовываем: живой Point читает каталог всё время, и
+            // недописанный файл он прочитал бы как список из половины путей.
+            val partial = File(drop, letter.name + ".part")
+            partial.writeText(files.joinToString("\n") { it.absolutePath }, Charsets.UTF_8)
+            partial.renameTo(letter)
+        }.getOrDefault(false)
     }
 
     /**
-     * На каком порту отвечает живой Point.
+     * Занять место живого экземпляра. `null` — место уже занято.
      *
-     * Перебор — не лень, а следствие того, как поднимается сервер: занятый порт он сдвигает на
-     * следующий (`bind` в [PcServer]), и в конфиге остаётся желаемый, а не занятый.
+     * Замок держится, пока жив процесс, и умирает вместе с ним: убитый Point не оставляет после
+     * себя «занято навсегда», в отличие от файла-метки.
      */
-    private fun livePort(config: PcConfig): Int? =
-        (config.port..config.port + 8).firstOrNull { candidate ->
-            runCatching {
-                val connection = URI("http://127.0.0.1:$candidate/caps").toURL()
-                    .openConnection() as HttpURLConnection
-                connection.connectTimeout = 300
-                connection.readTimeout = 500
-                connection.requestMethod = "GET"
-                connection.setRequestProperty("X-Point-Token", config.token)
-                val ok = connection.responseCode in 200..299
-                connection.disconnect()
-                ok
-            }.getOrDefault(false)
+    fun takeLock(pointDir: File): FileLock? = runCatching {
+        val file = File(pointDir.apply { mkdirs() }, LOCK)
+        RandomAccessFile(file, "rw").channel.tryLock()
+    }.getOrNull()
+
+    /** Что передали живому Point с прошлого раза. Прочитанное удаляется — иначе вернётся эхом. */
+    fun collectHandOffs(pointDir: File): List<File> {
+        val drop = File(pointDir, HANDOFF)
+        val letters = drop.listFiles { f: File -> f.isFile && f.name.endsWith(".paths") }.orEmpty()
+        return letters.sortedBy { it.name }.flatMap { letter ->
+            val paths = runCatching { letter.readLines(Charsets.UTF_8) }.getOrDefault(emptyList())
+            runCatching { letter.delete() }
+            paths.map(::File).filter { it.isFile }
         }
+    }
 
-    private fun send(file: File, port: Int, token: String): Boolean = runCatching {
-        val connection = URI("http://127.0.0.1:$port/receive").toURL().openConnection() as HttpURLConnection
-        connection.requestMethod = "POST"
-        connection.doOutput = true
-        connection.connectTimeout = 1000
-        connection.setRequestProperty("X-Point-Token", token)
-        connection.setRequestProperty("X-Point-Mime", mimeFor(file.name))
-        connection.setRequestProperty("X-Point-Name", b64(file.name))
-        file.inputStream().use { input -> connection.outputStream.use { output -> input.copyTo(output) } }
-        val ok = connection.responseCode in 200..299
-        connection.disconnect()
-        ok
-    }.getOrDefault(false)
-
-    private fun b64(text: String): String =
-        Base64.getEncoder().encodeToString(text.toByteArray(Charsets.UTF_8))
+    private const val LOCK = "lock"
+    private const val HANDOFF = "handoff"
 }
 
 /**

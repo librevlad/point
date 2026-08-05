@@ -14,7 +14,9 @@ import com.point.core.flow.ClipPull
 import com.point.core.flow.ClipPush
 import com.point.core.flow.ClipboardPayload
 import com.point.core.flow.PcClipboardSync
-import com.point.core.flow.PcPairings
+import com.point.core.flow.PcLinks
+import com.point.core.flow.PcUnreachable
+import com.point.core.flow.pcUnreachableText
 import dagger.hilt.android.AndroidEntryPoint
 import java.io.File
 import javax.inject.Inject
@@ -31,7 +33,7 @@ import kotlinx.coroutines.launch
 @AndroidEntryPoint
 class ClipboardSyncActivity : ComponentActivity() {
 
-    @Inject lateinit var pcPairings: PcPairings
+    @Inject lateinit var pcLinks: PcLinks
     @Inject lateinit var clipboardSync: PcClipboardSync
     private var handled = false
 
@@ -50,7 +52,7 @@ class ClipboardSyncActivity : ComponentActivity() {
     }
 
     private suspend fun sync() {
-        val pairing = pcPairings.current() ?: return toast("Сначала подключите компьютер")
+        val pc = pcLinks.current() ?: return toast(pcUnreachableText(PcUnreachable.NOT_IN_CIRCLE))
         val phone = readPhoneClipboard()
         val prefs = getSharedPreferences(PREFS, MODE_PRIVATE)
         val lastSig = prefs.getString(KEY_LAST, "").orEmpty()
@@ -58,22 +60,22 @@ class ClipboardSyncActivity : ComponentActivity() {
 
         if (phone != null && phoneSig != lastSig) {
             // The phone copied something new — send it to the PC.
-            when (val sent = clipboardSync.push(pairing, phone)) {
+            when (val sent = clipboardSync.push(pc, phone)) {
                 is ClipPush.Sent -> {
                     prefs.edit().putString(KEY_LAST, phoneSig).apply()
                     toast(if (phone.isText) "Буфер → компьютер" else "Файл → компьютер")
                 }
-                is ClipPush.Unreachable -> toast("Компьютер недоступен")
+                is ClipPush.Unreachable -> toast(pcUnreachableText(PcUnreachable.PC_ASLEEP))
                 is ClipPush.Failed -> toast(failText(sent.why))
             }
         } else {
-            // Nothing new on the phone — take what the PC has (LAN, or the relay when off-network).
-            when (val pc = clipboardSync.pull(pairing)) {
-                is ClipPull.Unreachable -> toast("Компьютер недоступен")
-                is ClipPull.Failed -> toast(failText(pc.why))
+            // На телефоне нового нет — берём то, что у компьютера.
+            when (val answer = clipboardSync.pull(pc)) {
+                is ClipPull.Unreachable -> toast(pcUnreachableText(PcUnreachable.PC_ASLEEP))
+                is ClipPull.Failed -> toast(failText(answer.why))
                 is ClipPull.Empty -> toast("Буфер уже синхронизирован")
                 is ClipPull.Got -> {
-                    val payload = pc.payload
+                    val payload = answer.payload
                     if (payload.signature() == phoneSig) {
                         toast("Буфер уже синхронизирован")
                     } else {
@@ -128,10 +130,10 @@ class ClipboardSyncActivity : ComponentActivity() {
 
     /** Terminal failures say what actually happened (#272) — «Компьютер недоступен» was a lie for
      *  each of these: the PC is fine, the payload/key/channel is the problem. */
+    /** Те же слова, что у объектов (#524): одно событие — одна формулировка, где бы оно ни случилось. */
     private fun failText(why: ClipFail): String = when (why) {
-        ClipFail.TOO_BIG -> "Слишком большой буфер для отправки через релей"
-        ClipFail.AUTH -> "Релей не принял ключ приложения — обновите сборку"
-        ClipFail.TAMPERED -> "Защищённое соединение не удалось — синхронизация отменена"
+        ClipFail.TOO_BIG -> pcUnreachableText(PcUnreachable.TOO_BIG)
+        ClipFail.AUTH -> com.point.core.flow.PC_DEVICE_REVOKED
     }
 
     private companion object {

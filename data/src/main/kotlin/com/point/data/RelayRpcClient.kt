@@ -1,145 +1,138 @@
 package com.point.data
 
-import com.point.core.flow.PcPairing
+import com.point.core.flow.LinkMonitor
+import com.point.core.flow.LinkedPc
+import com.point.core.flow.Mailbox
+import com.point.core.flow.PC_MAX_LETTER_BYTES
+import com.point.core.flow.PcSecrets
+import com.point.core.flow.PcUnreachable
+import com.point.core.flow.PointAccount
 import com.point.core.flow.RelayCrypto
 import com.point.core.flow.RelayRpc
 import com.point.core.flow.decodePcFrame
 import com.point.core.flow.encodePcFrame
 import com.point.core.flow.isOurReply
-import java.net.URL
 import java.util.UUID
-import javax.net.ssl.HttpsURLConnection
-import javax.net.ssl.SSLHandshakeException
 import kotlin.coroutines.coroutineContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 /**
- * Спросить компьютер через релей и дождаться ответа (#161).
+ * Спросить компьютер через ящики сервера и дождаться ответа (#161, переписано в #475).
  *
- * Релей — слепой ящик, поэтому «запрос» и «ответ» здесь два письма: телефон кладёт вопрос в ящик
- * «на ПК» и ждёт свой ответ в ящике «на телефон». Приём взят у общего буфера, где он уже год
- * работает, — вместе со всеми его уроками: дренаж протухшего, `reqId`, дедлайн, гейт размера до
- * сети.
+ * Ящик односторонний, поэтому «вопрос» и «ответ» — два письма: телефон кладёт вопрос в ящик
+ * компьютера и ждёт свой ответ в своём. Через это ходит ВСЁ — объект, буфер, вопросы о
+ * возможностях: второго пути в проекте больше нет, а значит и второй логики отказов.
  *
- * Зачем это нужно вообще: без него через релей ходила ровно одна операция — отправка объекта на
- * ПК. Всё остальное (что компьютер умеет, что он приготовил, забрать сделанное) требовало общей
- * локальной сети, которой у человека может не быть никогда — например, когда роутер разделяет
- * клиентов.
+ * Отказ различается по причине, а не сводится к `null`. Это и было главной бедой прежней связи:
+ * «компьютера нет в круге», «он не запущен» и «сервер молчит» чинятся тремя разными движениями, а
+ * человек видел одно слово «недоступен» и шёл проверять брандмауэр, которого дело не касалось.
  */
 class RelayRpcClient(
-    /** Пропуск устройства в аккаунте (#473): общего пароля приложения больше нет, у каждого свой. */
-    private val pass: () -> String?,
+    private val serverUrl: String,
+    /** Пропуск и свой адрес в круге; `null` — не вошли, писать не с чего и некому. */
+    private val account: () -> PointAccount?,
+    private val secrets: PcSecrets,
+    /** Кому рассказать, что компьютер ответил (#412): экран сам этого узнать не может. */
+    private val monitor: LinkMonitor? = null,
+    /** Сколько ждём ответа компьютера, который опрашивает ящик раз в пару секунд. */
     private val waitSeconds: Int = 25,
+    /** Пауза между опросами своего ящика — у сервера долгого ожидания нет. */
+    private val pollMillis: Long = 1_000,
     private val connectTimeoutMs: Int = 5_000,
 ) {
 
-    /** Ответ компьютера: мета и байты (у большинства запросов байт нет). */
-    class Reply(val meta: Map<String, String>, val body: ByteArray)
+    /** Чем кончился вопрос: ответ компьютера либо причина, по которой ответа нет. */
+    sealed interface Asked {
+        class Answer(val meta: Map<String, String>, val body: ByteArray) : Asked
+
+        /** Сервер не признал это устройство: его отключили из круга. */
+        data object Rejected : Asked
+
+        data class Failed(val why: PcUnreachable) : Asked
+    }
 
     /**
-     * Задать вопрос и дождаться ответа; `null` — компьютер не ответил (или релея нет).
+     * Вопрос за раз — потому что ящик один.
      *
-     * Молчание намеренно не отличается от отказа: для вызывающего это одинаково «через релей не
-     * вышло», и решение, что показать человеку, принимается выше — там, где известно, чего он
-     * просил.
+     * Ответы всех вопросов приходят в ОДИН ящик телефона, и тот, кто спросил вторым, забрал бы
+     * чужой ответ и выбросил его: письмо подтверждается сразу, вернуть его в очередь нельзя.
+     * Первый ждал бы до конца срока и услышал «компьютер не запущен» про работающий компьютер —
+     * ровно ту ложь, ради устранения которой всё и делалось. Компьютер отвечает по одному письму
+     * за раз, так что очередь здесь ничего не замедляет.
+     */
+    private val turn = Mutex()
+
+    /**
+     * Задать вопрос и дождаться ответа.
+     *
+     * Порядок проверок не случаен: сначала то, что видно без сети (нет пропуска, нет ключа, письмо
+     * больше предела), потом сеть. Иначе «слишком большой файл» приезжал бы как «недоступен» — тот
+     * самый обмен правды на общее слово, из-за которого человек чинил не то.
      */
     suspend fun ask(
-        pairing: PcPairing,
+        pc: LinkedPc,
         kind: String,
         meta: Map<String, String> = emptyMap(),
         body: ByteArray = ByteArray(0),
-    ): Reply? = withContext(Dispatchers.IO) {
-        val base = pairing.relay?.trimEnd('/')?.takeIf { it.isNotBlank() && !pass().isNullOrBlank() }
-            ?: return@withContext null
+    ): Asked = withContext(Dispatchers.IO) { turn.withLock { asked(pc, kind, meta, body) } }
 
-        val toPc = RelayCrypto.mailboxId(pairing.token, RelayRpc.TO_PC)
-        val toPhone = RelayCrypto.mailboxId(pairing.token, RelayRpc.TO_PHONE)
+    private suspend fun asked(
+        pc: LinkedPc,
+        kind: String,
+        meta: Map<String, String>,
+        body: ByteArray,
+    ): Asked = withContext(Dispatchers.IO) {
+        val me = account() ?: return@withContext Asked.Failed(PcUnreachable.NOT_IN_CIRCLE)
+        // Ключа нет — компьютер в круге есть, но объявиться ещё не успел (или вошёл сборкой без
+        // ключей). Написать ему нечем: запечатать письмо не на чем, а слать открытым текстом
+        // значило бы нарушить единственное обещание, которое Point даёт про сервер.
+        val key = secrets.sharedWith(pc) ?: return@withContext Asked.Failed(PcUnreachable.NOT_IN_CIRCLE)
+
         val requestId = UUID.randomUUID().toString()
-
-        drain(base, toPhone) // чужие ответы прошлых попыток — чтобы ждать только свой
-
-        val request = RelayCrypto.seal(
-            pairing.token,
+        val letter = RelayCrypto.seal(
+            key,
             encodePcFrame(meta + mapOf(RelayRpc.KIND to kind, RelayRpc.ID to requestId), body),
         )
-        // Гейт размера ДО сети: релей режет по Content-Length, и запись в поток умирает раньше,
-        // чем читается код ответа, — «слишком большой» превратился бы в «недоступен».
-        if (request.size > MAX_RELAY_BLOB) return@withContext null
-        if (post(base, toPc, request) != 200) return@withContext null
+        if (letter.size > PC_MAX_LETTER_BYTES) return@withContext Asked.Failed(PcUnreachable.TOO_BIG)
+
+        val mailbox = Mailbox(serverUrl.trimEnd('/'), { me.deviceToken }, connectTimeoutMs)
+        mailbox.drain(me.deviceId) // чужие ответы прошлых попыток — чтобы ждать только свой
+
+        when (mailbox.post(pc.deviceId, letter)) {
+            200 -> Unit
+            401, 403 -> return@withContext Asked.Rejected
+            // 404 — сервер не знает такого устройства: компьютер отключили из круга, а телефон
+            // помнит его по прошлой жизни. Это не «связь плохая», и чинится оно входом на ПК.
+            404 -> return@withContext Asked.Failed(PcUnreachable.NOT_IN_CIRCLE)
+            413, 507 -> return@withContext Asked.Failed(PcUnreachable.TOO_BIG)
+            // Всё остальное — включая «не дозвонились» — про сервер, а не про компьютер: письмо
+            // не легло, и утверждать что-либо про тот конец мы не вправе.
+            else -> return@withContext Asked.Failed(PcUnreachable.SERVER_SILENT)
+        }
 
         val deadline = System.nanoTime() + waitSeconds * 1_000_000_000L
-        while (true) {
-            coroutineContext.ensureActive()
-            val remaining = ((deadline - System.nanoTime()) / 1_000_000_000L).toInt()
-            if (remaining <= 0) return@withContext null
-
-            val polled = poll(base, toPhone, remaining) ?: return@withContext null
-            val frame = runCatching { decodePcFrame(RelayCrypto.open(pairing.token, polled)) }.getOrNull()
-                ?: continue // мусор в публичном ящике — уже подтверждён, ждём дальше
+        while (System.nanoTime() < deadline) {
+            coroutineContext.ensureActive() // отменённый вопрос не должен дожёвывать четверть минуты
+            val got = mailbox.take(me.deviceId)
+            if (got.code == 401 || got.code == 403) return@withContext Asked.Rejected
+            val blob = got.blob
+            if (blob == null) {
+                delay(pollMillis)
+                continue
+            }
+            val frame = runCatching { decodePcFrame(RelayCrypto.open(key, blob)) }.getOrNull()
+                ?: continue // не наше или испорчено — уже подтверждено, ждём дальше
             if (!isOurReply(frame.meta, requestId)) continue
-            return@withContext Reply(frame.meta, frame.bytes)
+            monitor?.heard()
+            return@withContext Asked.Answer(frame.meta, frame.bytes)
         }
-        @Suppress("UNREACHABLE_CODE")
-        null
-    }
-
-    private fun post(base: String, mailbox: String, blob: ByteArray): Int = runCatching {
-        val c = open("$base/mbx/$mailbox", waitSeconds + 10)
-        c.requestMethod = "POST"
-        c.doOutput = true
-        c.setFixedLengthStreamingMode(blob.size)
-        c.outputStream.use { it.write(blob) }
-        val code = c.responseCode
-        c.disconnect()
-        code
-    }.getOrElse { -1 }
-
-    /** Один долгий опрос: запечатанный блоб или `null`. Забранное сразу подтверждается — то, чем
-     *  мы не смогли воспользоваться, обязано покинуть очередь, иначе оно вернётся вечным эхом. */
-    private fun poll(base: String, mailbox: String, wait: Int): ByteArray? = runCatching {
-        val c = open("$base/mbx/$mailbox?wait=$wait", wait + 10)
-        val code = c.responseCode
-        val blob = if (code == 200) c.inputStream.readBytes() else null
-        val blobId = c.getHeaderField("X-Blob-Id")
-        c.disconnect()
-        if (blob != null && blobId != null) ack(base, mailbox, blobId)
-        blob
-    }.getOrElse { if (it is SSLHandshakeException) null else null }
-
-    private fun drain(base: String, mailbox: String) {
-        repeat(MAX_DRAIN) {
-            val c = runCatching { open("$base/mbx/$mailbox?wait=0", 10) }.getOrNull() ?: return
-            val id = if (c.responseCode == 200) c.getHeaderField("X-Blob-Id") else null
-            runCatching { c.inputStream.readBytes() }
-            c.disconnect()
-            if (id == null) return
-            ack(base, mailbox, id)
-        }
-    }
-
-    private fun ack(base: String, mailbox: String, blobId: String) {
-        runCatching {
-            val c = open("$base/mbx/$mailbox/ack", 10)
-            c.requestMethod = "POST"
-            c.setRequestProperty("X-Blob-Id", blobId)
-            c.doOutput = true
-            c.outputStream.use { it.write(ByteArray(0)) }
-            c.responseCode
-            c.disconnect()
-        }
-    }
-
-    private fun open(url: String, readSeconds: Int): HttpsURLConnection =
-        (URL(url).openConnection() as HttpsURLConnection).apply {
-            connectTimeout = connectTimeoutMs
-            readTimeout = readSeconds * 1000
-            pass()?.let { setRequestProperty("Authorization", "Bearer $it") }
-        }
-
-    companion object {
-        private const val MAX_DRAIN = 8
-        private const val MAX_RELAY_BLOB = 50 * 1024 * 1024
+        // Письмо легло в ящик, а забирать его некому: «Point для ПК» не запущен. Раньше это
+        // выдавалось за доставку, и человек шёл к компьютеру за тем, чего там не случилось.
+        Asked.Failed(PcUnreachable.PC_ASLEEP)
     }
 }

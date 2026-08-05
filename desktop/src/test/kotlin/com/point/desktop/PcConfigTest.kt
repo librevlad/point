@@ -7,26 +7,38 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 
+/**
+ * Что компьютер знает о себе — и чего он больше не знает (#475).
+ *
+ * Токена быстрого пути и порта своего сервера в записи нет: слушать компьютеру нечего. Осталось
+ * имя, под которым он виден человеку в круге, и адрес сервера.
+ */
 class PcConfigTest {
 
     @get:Rule val tmp = TemporaryFolder()
 
     @Test
-    fun `first load generates and persists a hex token`() {
+    fun `первая загрузка даёт имя и переживает новый запуск`() {
         val store = FilePcConfig(tmp.root)
         val first = store.load()
-        assertTrue(first.token.matches(Regex("[0-9a-f]{32}")))
-        assertEquals(FilePcConfig.DEFAULT_PORT, first.port)
-        assertEquals(first, FilePcConfig(tmp.root).load()) // survives a new instance
+
+        assertTrue("имя обязано быть — под ним компьютер виден в круге", first.name.isNotBlank())
+        assertEquals(first, FilePcConfig(tmp.root).load())
     }
 
     @Test
-    fun `resetToken revokes by changing the token but keeps identity`() {
-        val store = FilePcConfig(tmp.root)
-        val before = store.load()
-        val after = store.resetToken()
-        assertNotEquals(before.token, after.token)
-        assertEquals(before.name, after.name)
-        assertEquals(after, store.load())
+    fun `ключи компьютера рождаются один раз и переживают перезапуск`() {
+        val first = FileDeviceKeys(tmp.root).keys()
+        val again = FileDeviceKeys(tmp.root).keys()
+
+        assertEquals("сменившийся ключ сделал бы нечитаемым всё, что уже лежит в ящике", first, again)
+        assertTrue(first.publicKey.isNotBlank() && first.privateKey.isNotBlank())
+    }
+
+    @Test
+    fun `у другого компьютера — другие ключи`() {
+        val other = TemporaryFolder().apply { create() }
+        assertNotEquals(FileDeviceKeys(tmp.root).keys().publicKey, FileDeviceKeys(other.root).keys().publicKey)
+        other.delete()
     }
 }

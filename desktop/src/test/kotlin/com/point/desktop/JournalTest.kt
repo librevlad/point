@@ -205,8 +205,10 @@ class JournalTest {
 
     @Test
     fun `происхождение названо словами продукта, а не транспортом`() {
-        assertEquals("с телефона · в этой сети", sourceLabel(ObjectSource.PHONE_LAN))
-        assertEquals("с телефона · через интернет", sourceLabel(ObjectSource.PHONE_RELAY))
+        // Дорога одна (#475): «с телефона» — весь ответ на вопрос «откуда это здесь взялось».
+        // Старый журнал читается по-прежнему — и говорит теми же словами, что сегодняшний.
+        assertEquals("с телефона", sourceLabel(ObjectSource.PHONE_LAN))
+        assertEquals("с телефона", sourceLabel(ObjectSource.PHONE_RELAY))
         assertEquals("взят из буфера", sourceLabel(ObjectSource.CLIPBOARD))
         assertEquals("с телефона", sourceShort(ObjectSource.PHONE_RELAY))
     }

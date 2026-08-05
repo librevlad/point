@@ -34,8 +34,6 @@ dependencies {
     implementation(compose.desktop.currentOs)
     implementation(compose.material3)
     implementation(libs.kotlinx.coroutines.core)
-    // mDNS advertising so the phone finds this PC by itself (#147 slice C).
-    implementation("org.jmdns:jmdns:3.6.1")
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

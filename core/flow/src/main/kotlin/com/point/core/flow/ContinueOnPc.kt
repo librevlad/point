@@ -3,62 +3,31 @@ package com.point.core.flow
 import java.nio.ByteBuffer
 
 /**
- * Continue on PC (#147) — the protocol both sides share. Pure Kotlin: the phone builds
- * requests from it, the desktop parses them, and the pairing QR payload round-trips
- * through [qrPayload]/[parsePcPairing]. First embodiment of the "Liquid Software"
- * phase: the object's state (bytes + understanding metadata) crosses devices.
+ * Продолжение на компьютере (#147) — язык, на котором говорят обе стороны. Чистый Kotlin: телефон
+ * собирает им кадры, компьютер их разбирает. Первое воплощение «текучего софта»: состояние объекта
+ * (байты И понимание о нём) переезжает между устройствами.
  */
-data class PcPairing(
-    val host: String,
-    val port: Int,
-    val token: String,
-    /** The always-works relay base URL (#161 v2), when the pairing offers the firewall-proof
-     *  fallback. The same [token] both authenticates the LAN hop and derives the relay E2E key. */
-    val relay: String? = null,
-) {
-    /** `point-pc://host:port/token` — plus `?r=<base64url(relay)>` when a relay is offered. */
-    fun qrPayload(): String {
-        val base = "$SCHEME$host:$port/$token"
-        return if (relay.isNullOrBlank()) {
-            base
-        } else {
-            base + "?r=" + java.util.Base64.getUrlEncoder().withoutPadding()
-                .encodeToString(relay.toByteArray(Charsets.UTF_8))
-        }
-    }
-}
-
-const val PC_SCHEME = "point-pc://"
-private const val SCHEME = PC_SCHEME
-
-/** Parse a pairing payload; null for anything that is not a well-formed `point-pc://` URI. */
-fun parsePcPairing(payload: String): PcPairing? {
-    if (!payload.startsWith(SCHEME)) return null
-    val rest = payload.removePrefix(SCHEME)
-    val slash = rest.indexOf('/')
-    if (slash <= 0 || slash == rest.length - 1) return null
-    val hostPort = rest.substring(0, slash)
-    var token = rest.substring(slash + 1)
-    var relay: String? = null
-    val q = token.indexOf('?')
-    if (q >= 0) {
-        val query = token.substring(q + 1)
-        token = token.substring(0, q)
-        query.split('&').firstOrNull { it.startsWith("r=") }?.removePrefix("r=")
-            ?.takeIf { it.isNotBlank() }
-            ?.let { relay = runCatching { String(java.util.Base64.getUrlDecoder().decode(it), Charsets.UTF_8) }.getOrNull() }
-    }
-    val colon = hostPort.lastIndexOf(':')
-    if (colon <= 0) return null
-    val host = hostPort.substring(0, colon)
-    val port = hostPort.substring(colon + 1).toIntOrNull() ?: return null
-    if (host.isBlank() || token.isBlank() || port !in 1..65535) return null
-    return PcPairing(host, port, token, relay)
-}
 
 /**
- * The object as it crosses the relay: [meta] (name/mime/understanding) + raw [bytes], framed so the
- * far side reconstructs it. The whole frame is sealed by RelayCrypto (#161 v2) — the relay server
+ * Компьютер из круга аккаунта — всё, что телефону нужно, чтобы с ним заговорить (#475).
+ *
+ * Связывания как действия больше нет: устройство, вошедшее в тот же аккаунт, оказывается в круге
+ * само, и здесь остаётся ровно то, что круг про него рассказал. Ни адреса, ни порта, ни токена
+ * пары: адрес письма — [deviceId], а [key] — открытая половина ключа соседа, из которой считается
+ * общий секрет ([DeviceKeys.sharedSecret]).
+ *
+ * Пустой [key] — законное состояние, а не поломка: компьютер вошёл сборкой без ключей или круг
+ * приехал раньше, чем тот успел объявиться. Отправить туда нечего, и отказ об этом скажет словами.
+ */
+data class LinkedPc(
+    val deviceId: String,
+    val name: String,
+    val key: String = "",
+)
+
+/**
+ * The object as it crosses the server: [meta] (name/mime/understanding) + raw [bytes], framed so the
+ * far side reconstructs it. The whole frame is sealed by RelayCrypto (#161 v2) — the server
  * only ever holds the ciphertext.
  */
 class PcFrame(val meta: Map<String, String>, val bytes: ByteArray)
