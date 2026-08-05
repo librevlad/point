@@ -4,6 +4,7 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -35,6 +36,10 @@ import org.robolectric.annotation.Config
  * и так пять разделов. Каждый абзац по делу, а вместе стена: чтобы найти «Звук действий», человек
  * прокручивал три экрана текста про ключ AI. Ловится это только тестом на СОСТАВ первого экрана —
  * ни один тест на отдельную возможность такого не видит, потому что все возможности были на месте.
+ *
+ * Плоского списка из пяти строк оказалось мало: владелец, увидев его, сказал «настройки надо по
+ * секциям! как в телеграме, как в Claude, как везде». Поэтому здесь проверяются и группы — их
+ * заголовки и то, что каждая строка лежит в своей.
  *
  * Размер окна назван вслух ([Config]) по той же причине, что в [SettingsCompositionTest]: «видно без
  * прокрутки» — утверждение про экран телефона, и без заданного окна оно означало бы «видно на том,
@@ -84,19 +89,54 @@ class SettingsListTest {
         }
     }
 
-    // --- Общий экран — список, и он весь помещается ---
+    // --- Общий экран — группы со своими заголовками, и в них все строки ---
 
-    @Test fun `все разделы видны на первом экране без прокрутки`() {
+    @Test fun `все группы и строки достижимы, ни одна не потеряна`() {
         settings(config = savedKey)
 
-        // Без `performScrollTo` намеренно: тест провалится ровно тогда, когда список снова начнёт
-        // расти абзацами и нижние разделы уедут за край.
+        // Заголовки групп говорят разрядкой заглавными — это и есть их текст на экране.
+        compose.onNodeWithText("AI И ОБЛАКО").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("АККАУНТ").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("ПРИЛОЖЕНИЕ").performScrollTo().assertIsDisplayed()
+
+        compose.onNodeWithText("Ключ AI").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Отправка и приватность").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText(MY_DEVICES_TITLE).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Звук действий").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Приватная статистика").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test fun `список начинается со строк, а не с абзацев — первая группа видна сразу`() {
+        settings(config = savedKey)
+
+        // Без `performScrollTo` намеренно: тест провалится ровно тогда, когда наверху экрана снова
+        // вырастет объяснение и строки начнут уезжать за край.
+        compose.onNodeWithText("AI И ОБЛАКО").assertIsDisplayed()
         compose.onNodeWithText("Ключ AI").assertIsDisplayed()
         compose.onNodeWithText("Отправка и приватность").assertIsDisplayed()
-        compose.onNodeWithText(MY_DEVICES_TITLE).assertIsDisplayed()
-        compose.onNodeWithText("Звук действий").assertIsDisplayed()
-        compose.onNodeWithText("Приватная статистика").assertIsDisplayed()
     }
+
+    @Test fun `каждая строка лежит в своей группе`() {
+        settings(config = savedKey)
+
+        // Порядок сверху вниз — то единственное, чем на экране выражена принадлежность строки
+        // группе. Судим по настоящим координатам, а не по порядку вызовов в коде.
+        val order = listOf(
+            "AI И ОБЛАКО", "Ключ AI", "Отправка и приватность",
+            "АККАУНТ", MY_DEVICES_TITLE,
+            "ПРИЛОЖЕНИЕ", "Звук действий", "Приватная статистика",
+        )
+        order.zipWithNext { above, below ->
+            assertTrue(
+                "«$below» ушла из своей группы — она стоит не под «$above»",
+                topOf(above) < topOf(below),
+            )
+        }
+    }
+
+    /** Где строка начинается по вертикали — в точках корня экрана. */
+    private fun topOf(text: String): Float =
+        compose.onNodeWithText(text).getUnclippedBoundsInRoot().top.value
 
     @Test fun `на общем экране нет ни одного абзаца — они внутри разделов`() {
         settings(config = savedKey)

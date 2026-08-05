@@ -190,6 +190,12 @@ fun PortalPlate(
  *
  * [trailing] — то, что стоит справа вместо шеврона, когда у строки есть второе, отдельное желание
  * («сходить за ключом» — не то же, что «выбрать этого»).
+ *
+ * [surface] — рисует ли строка собственную карточку. `false` ставит её ВНУТРЬ чужой: так собраны
+ * группы настроек (#563), где поверхность одна на всю группу, а строки разделены волосяной чертой.
+ * Вторая поверхность под каждой строкой сломала бы ровно то, ради чего группа существует, — «это
+ * одно целое». Ни одного нового цвета и ни одной новой формы при этом не заводится: карточку рисует
+ * группа тем же [portalCard], каким её рисовала строка.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -205,6 +211,7 @@ fun PortalRow(
     enabled: Boolean = true,
     ring: Color? = null,
     chevron: Boolean = true,
+    surface: Boolean = true,
     /** Сколько строк отдано подписи. Больше двух — когда подпись это **цена выбора**, и обрезать
      *  её значит скрыть половину того, за что человек платит. */
     subtitleMaxLines: Int = 2,
@@ -228,14 +235,18 @@ fun PortalRow(
             alpha = presence.value
             translationY = (1f - presence.value) * 10.dp.toPx()
         }
-    val surface = if (primary) base.portalPrimary(shape) else base.portalCard(shape)
+    val body = when {
+        primary -> base.portalPrimary(shape)
+        surface -> base.portalCard(shape)
+        else -> base // карточку рисует группа, в которой строка стоит
+    }
 
     val labelColor = if (primary) Color.White else MaterialTheme.colorScheme.onSurface
     val subColor = if (primary) Color.White.copy(alpha = 0.80f) else MaterialTheme.colorScheme.onSurfaceVariant
     val chevronColor = if (primary) Color.White.copy(alpha = 0.85f) else MaterialTheme.colorScheme.onSurfaceVariant
 
     Box(
-        modifier = surface.combinedClickable(enabled = enabled, onClick = onClick, onLongClick = onLongClick),
+        modifier = body.combinedClickable(enabled = enabled, onClick = onClick, onLongClick = onLongClick),
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 14.dp, vertical = if (primary) 16.dp else 13.dp),
@@ -315,15 +326,23 @@ fun PortalDoor(
 /**
  * Лейбл секции — «ИЗВЛЕЧЬ» / «ПРЕВРАТИТЬ» / «ОТПРАВИТЬ» с экрана объекта: тихая разрядка заглавными,
  * которой разделены группы строк. Ею же разделены группы на остальных экранах.
+ *
+ * [color] — на случай, когда лейбл стоит не НАД группой, а внутри её карточки шапкой (группы
+ * настроек, #563): там он называет карточку, и цвет у него акцентный (АКЦЕНТ1), а не тихий. Другого
+ * цвета при этом не заводится — берётся тот же `primary` темы.
  */
 @Composable
-fun SectionLabel(text: String, modifier: Modifier = Modifier) {
+fun SectionLabel(
+    text: String,
+    modifier: Modifier = Modifier,
+    color: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+) {
     Text(
         text = text.uppercase(),
         style = MaterialTheme.typography.labelMedium,
         fontWeight = FontWeight.SemiBold,
         letterSpacing = 1.5.sp,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        color = color,
         modifier = modifier,
     )
 }

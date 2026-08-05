@@ -7,6 +7,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -20,6 +21,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -279,10 +281,20 @@ fun KeyScreen(
 private enum class SettingsSection { KEY, PRIVACY, APP }
 
 /**
- * Общий экран настроек: пять строк, и у каждой видно состояние (#563).
+ * Общий экран настроек: три группы, пять строк, и у каждой видно состояние (#563).
  *
  * Ни одного абзаца: всё, что длиннее строки, живёт внутри своего раздела. Строка = название +
- * подпись в одну строку + состояние (текстом или тумблером). Добавить настройку — добавить строку.
+ * подпись в одну строку + состояние (текстом или тумблером).
+ *
+ * **Строки собраны в группы с заголовками** — так настройки устроены везде, где человек их читал до
+ * Point (системные, Telegram, Claude), и взгляд ищет именно эту структуру. Плоский список из пяти
+ * строк владелец забраковал ровно за это: «настройки надо по секциям! как в телеграме, как в
+ * Claude, как везде». Группа названа тем, что в ней лежит, а не повторяет строку: «Ключ AI» и
+ * «Отправка и приватность» — это всё про AI и облако; «Мои устройства» — про аккаунт; звук со
+ * статистикой — про само приложение.
+ *
+ * Добавить настройку — добавить строку в нужную группу; появится настройка не из этих трёх — новую
+ * группу из двух строчек кода. Абзацу места по-прежнему нет.
  */
 @Composable
 private fun SettingsList(
@@ -296,53 +308,103 @@ private fun SettingsList(
     onOpen: (SettingsSection) -> Unit,
     onOpenDevices: () -> Unit,
 ) {
-    // Экран называется тем, что он есть (#447), и ровно тем же словом, что дверь, которой сюда
-    // пришли (#544). Подпись перечисляет то, что за экраном ПРАВДА лежит.
-    ScreenHeader(
-        title = SETTINGS_TITLE,
-        subtitle = "Ключ AI, отправка в облако, звук, аккаунт и устройства. " +
-            "Больше Point ни о чём не спрашивает.",
-        modifier = Modifier.padding(bottom = 9.dp),
-    )
+    Column(verticalArrangement = Arrangement.spacedBy(GroupGap)) {
+        // Экран называется тем, что он есть (#447), и ровно тем же словом, что дверь, которой сюда
+        // пришли (#544). Подпись перечисляет то, что за экраном ПРАВДА лежит.
+        ScreenHeader(
+            title = SETTINGS_TITLE,
+            subtitle = "Ключ AI, отправка в облако, звук, аккаунт и устройства. " +
+                "Больше Point ни о чём не спрашивает.",
+            modifier = Modifier.padding(bottom = 2.dp),
+        )
 
-    // Состояние ключа — той же строкой, что стоит внутри раздела (`keySetLabel`): задан ли ключ,
-    // человек узнаёт, не открывая ничего. Про «работает» она молчит — это знает только сервис.
-    SettingsRow(
-        title = KEY_SECTION_TITLE,
-        subtitle = keyLine,
-        onClick = { onOpen(SettingsSection.KEY) },
-        appearIndex = 0,
-    )
-    SettingsRow(
-        title = PRIVACY_SECTION_TITLE,
-        // Оба состояния раздела разом: отпущен ли объект наружу вообще и кому его можно предлагать.
-        subtitle = (if (cloudEnabled) "Облако разрешено" else "Облако выключено") +
-            " · ${privacyLevel.title}",
-        onClick = { onOpen(SettingsSection.PRIVACY) },
-        appearIndex = 1,
-    )
-    // Строка ведёт в тот же экран (#472), что и прежняя вторая дверь «Недавнего» (#544).
-    SettingsRow(
-        title = MY_DEVICES_TITLE,
-        subtitle = "Вход, круг устройств и выход.",
-        onClick = onOpenDevices,
-        appearIndex = 2,
-    )
-    // Тумблер стоит здесь, а не внутри: включить звук — одно движение. Тап по строке открывает
-    // «Приложение», где то же самое объяснено полностью.
-    SettingsRow(
-        title = SOUND_TITLE,
-        subtitle = "Тихий фирменный отклик на каждое действие.",
-        onClick = { onOpen(SettingsSection.APP) },
-        appearIndex = 3,
-        trailing = { Switch(checked = soundEnabled, onCheckedChange = onToggleSound) },
-    )
-    SettingsRow(
-        title = USAGE_TITLE,
-        subtitle = "Обезличенно, только на устройстве",
-        onClick = { onOpen(SettingsSection.APP) },
-        appearIndex = 4,
-        trailing = { Switch(checked = usageEnabled, onCheckedChange = onToggleUsage) },
+        SettingsGroup(AI_GROUP_TITLE) {
+            // Состояние ключа — той же строкой, что стоит внутри раздела (`keySetLabel`): задан ли
+            // ключ, человек узнаёт, не открывая ничего. Про «работает» она молчит — это знает
+            // только сервис.
+            SettingsRow(
+                title = KEY_SECTION_TITLE,
+                subtitle = keyLine,
+                onClick = { onOpen(SettingsSection.KEY) },
+                appearIndex = 0,
+            )
+            GroupSeam()
+            SettingsRow(
+                title = PRIVACY_SECTION_TITLE,
+                // Оба состояния раздела разом: отпущен ли объект наружу вообще и кому его можно
+                // предлагать.
+                subtitle = (if (cloudEnabled) "Облако разрешено" else "Облако выключено") +
+                    " · ${privacyLevel.title}",
+                onClick = { onOpen(SettingsSection.PRIVACY) },
+                appearIndex = 1,
+            )
+        }
+
+        SettingsGroup(ACCOUNT_GROUP_TITLE) {
+            // Строка ведёт в тот же экран (#472), что и прежняя вторая дверь «Недавнего» (#544).
+            SettingsRow(
+                title = MY_DEVICES_TITLE,
+                subtitle = "Вход, круг устройств и выход.",
+                onClick = onOpenDevices,
+                appearIndex = 2,
+            )
+        }
+
+        SettingsGroup(APP_SECTION_TITLE) {
+            // Тумблер стоит здесь, а не внутри: включить звук — одно движение. Тап по строке
+            // открывает «Приложение», где то же самое объяснено полностью.
+            SettingsRow(
+                title = SOUND_TITLE,
+                subtitle = "Тихий фирменный отклик на каждое действие.",
+                onClick = { onOpen(SettingsSection.APP) },
+                appearIndex = 3,
+                trailing = { Switch(checked = soundEnabled, onCheckedChange = onToggleSound) },
+            )
+            GroupSeam()
+            SettingsRow(
+                title = USAGE_TITLE,
+                subtitle = "Обезличенно, только на устройстве",
+                onClick = { onOpen(SettingsSection.APP) },
+                appearIndex = 4,
+                trailing = { Switch(checked = usageEnabled, onCheckedChange = onToggleUsage) },
+            )
+        }
+    }
+}
+
+/**
+ * Группа настроек: карточка с шапкой-именем и строками внутри неё, вплотную.
+ *
+ * Эталон — настройки Telegram, которые владелец прислал словами «как в телеграме, как везде»:
+ * группы стоят карточками с крупным скруглением, между карточками воздух, имя группы написано
+ * вверху самой карточки акцентным цветом. Ни поверхность, ни скругление, ни цвет для этого не
+ * выдуманы: карточку рисует тот же [portalCard], каким её рисовала каждая строка по отдельности
+ * (теперь она одна на группу, а строки стоят без своей — `surface = false`), скругление — общее
+ * `PortalCardShape`, а акцент шапки — `primary` темы, то есть АКЦЕНТ1 портала.
+ *
+ * Шов между строками ([GroupSeam]) — волосяная черта ГРАНИЦЫ. У Telegram его нет, потому что там
+ * строку опознаёт цветная плита; у нас плит на этом экране нет намеренно (см. [SettingsRow]), и без
+ * шва две двустрочные строки сливаются в один абзац — ровно то, от чего лечит весь этот срез.
+ */
+@Composable
+private fun SettingsGroup(title: String, rows: @Composable ColumnScope.() -> Unit) {
+    Column(modifier = Modifier.fillMaxWidth().portalCard()) {
+        SectionLabel(
+            text = title,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(start = 14.dp, end = 14.dp, top = 13.dp, bottom = 2.dp),
+        )
+        rows()
+    }
+}
+
+/** Шов между строками одной группы: волосяная черта ГРАНИЦЫ, с отступом слева — как везде. */
+@Composable
+private fun GroupSeam() {
+    HorizontalDivider(
+        modifier = Modifier.padding(start = 14.dp),
+        thickness = 1.dp,
+        color = MaterialTheme.colorScheme.outline,
     )
 }
 
@@ -354,6 +416,8 @@ private fun SettingsList(
  * шестьдесят точек ширины, и состояние («Ключа пока нет — без него AI-действия молчат») в одну
  * строку перестаёт помещаться. [subtitleMaxLines] = 1 — это и есть правило «на общем экране нет
  * абзацев», записанное в коде, а не в договорённости (#563).
+ *
+ * Собственной поверхности у строки нет: её рисует [SettingsGroup] — одну на всю группу.
  */
 @Composable
 private fun SettingsRow(
@@ -368,11 +432,15 @@ private fun SettingsRow(
         subtitle = subtitle,
         onClick = onClick,
         chevron = trailing == null,
+        surface = false,
         subtitleMaxLines = 1,
         appearIndex = appearIndex,
         trailing = trailing,
     )
 }
+
+/** Воздух между карточками групп. Заметно больше шага внутри группы — иначе они сливаются. */
+private val GroupGap = 16.dp
 
 /** Возврат к списку разделов — тем же словом, каким назван экран, и той же стрелкой, что выход. */
 @Composable
@@ -752,6 +820,16 @@ private fun AppSection(
             ?.let { "Объектов: ${it.objects} · действий: ${it.actions} · завершено в Point: ${it.completed}" },
     )
 }
+
+/**
+ * Как называются группы общего экрана (#563).
+ *
+ * Группа называет то, что в ней лежит, а не повторяет строку: над «Ключом AI» и «Отправкой и
+ * приватностью» стоит «AI и облако», а не «Ключ AI». «Приложение» — то же слово, что у раздела за
+ * этими двумя строками: группа на списке и раздел за ним — одно и то же место.
+ */
+private const val AI_GROUP_TITLE = "AI и облако"
+private const val ACCOUNT_GROUP_TITLE = "Аккаунт"
 
 /** Как называются разделы — одним словом на список и на сам раздел, чтобы они не разъехались. */
 private const val KEY_SECTION_TITLE = "Ключ AI"
