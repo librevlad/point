@@ -506,25 +506,26 @@ def create_app(
     def inbox_page(box_id: str, d: Deps = Depends(deps)):
         """Страница, на которой ЧУЖОЙ человек кладёт файл. Пропуска у него нет."""
         if not mailbox.inbox_find(_blobs_root(d), box_id):
-            return HTMLResponse(pages.gone_page(), status_code=404)
+            return HTMLResponse(pages.link_gone_page(), status_code=404)
         return HTMLResponse(pages.page("Отправить файл", _upload_form(box_id)))
 
     @app.post("/u/{box_id}")
     async def inbox_accept(box_id: str, request: Request, d: Deps = Depends(deps)):
         box = mailbox.inbox_find(_blobs_root(d), box_id)
         if not box:
-            return HTMLResponse(pages.gone_page(), status_code=404)
+            return HTMLResponse(pages.link_gone_page(), status_code=404)
         form = await request.form()
         item = form.get("file")
         if item is None:
-            return HTMLResponse(pages.gone_page(), status_code=400)
+            return HTMLResponse(pages.too_big_page("Файл не выбран — вернитесь и выберите его."),
+                                status_code=400)
         data = await item.read()
         try:
             mailbox.inbox_accept(box, data, getattr(item, "filename", "file") or "file",
                                  getattr(item, "content_type", "") or "application/octet-stream")
         except mailbox.Full as e:
-            return HTMLResponse(pages.page("Не поместилось", "<h1>Не поместилось</h1><p>" + str(e) + "</p>"), status_code=507)
-        return HTMLResponse(pages.done_page())
+            return HTMLResponse(pages.too_big_page(str(e)), status_code=507)
+        return HTMLResponse(pages.sent_page())
 
     @app.get("/u/{box_id}/take")
     def inbox_take(box_id: str, me: store.Caller = Depends(caller), d: Deps = Depends(deps)):
@@ -537,5 +538,12 @@ def create_app(
             "X-File-Id": fid,
             "X-File-Name": base64.b64encode(name.encode("utf-8")).decode("ascii"),
         })
+
+    @app.post("/u/{box_id}/ack")
+    def inbox_ack(box_id: str, request: Request, me: store.Caller = Depends(caller),
+                  d: Deps = Depends(deps)):
+        """«Файл дошёл» — только после этого он уходит из ящика."""
+        fid = request.headers.get("X-File-Id", "")
+        return {"acked": mailbox.inbox_ack(_blobs_root(d), me.user_id, box_id, fid)}
 
     return app

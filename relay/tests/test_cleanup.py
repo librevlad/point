@@ -81,6 +81,52 @@ def test_удалить_всё_моё_уносит_байты_а_не_тольк
     assert point.client.get("/d/" + drop_id).status_code == 404
 
 
+def test_принять_файл_проходит_целиком_и_только_один_раз(point):
+    """Путь «Принять файл» от начала до конца: адрес ящика называет сервер, а не клиент.
+
+    Здесь же проверяется, что забранное подтверждается: без этого тот же файл приезжал бы на
+    каждом круге ожидания, и человек получал бы его снова и снова.
+    """
+    me = point.sign_in(sub="five")
+    opened = point.as_device(me["device_token"], "POST", "/u/open")
+    assert opened.status_code == 200, opened.text
+    box = opened.json()["box"]
+    assert opened.json()["url"].endswith("/u/" + box)
+
+    # Пока никто ничего не положил — «пусто», а не отказ.
+    assert point.as_device(me["device_token"], "GET", "/u/" + box + "/take").status_code == 204
+
+    # Чужой человек: пропуска нет, есть только адрес.
+    assert point.client.get("/u/" + box).status_code == 200
+    sent = point.client.post("/u/" + box, files={"file": ("письмо.txt", "привет".encode("utf-8"), "text/plain")})
+    assert sent.status_code == 200, sent.text
+
+    got = point.as_device(me["device_token"], "GET", "/u/" + box + "/take")
+    assert got.status_code == 200
+    assert got.content == "привет".encode("utf-8")
+    fid = got.headers["X-File-Id"]
+
+    # До подтверждения файл на месте: разрыв связи не должен терять присланное молча.
+    assert point.as_device(me["device_token"], "GET", "/u/" + box + "/take").status_code == 200
+
+    acked = point.as_device(me["device_token"], "POST", "/u/" + box + "/ack",
+                            headers={"X-File-Id": fid})
+    assert acked.json()["acked"] is True
+    assert point.as_device(me["device_token"], "GET", "/u/" + box + "/take").status_code == 204
+
+
+def test_чужой_ящик_не_забрать(point):
+    me = point.sign_in(sub="six")
+    stranger = point.sign_in(sub="seven")
+    box = point.as_device(me["device_token"], "POST", "/u/open").json()["box"]
+    point.client.post("/u/" + box, files={"file": ("f.txt", b"data", "text/plain")})
+
+    # Адрес ящика знает и чужой браузер — он в ссылке. Забрать по нему может только владелец.
+    taken = point.as_device(stranger["device_token"], "GET", "/u/" + box + "/take")
+    assert taken.status_code == 204
+    assert point.as_device(me["device_token"], "GET", "/u/" + box + "/take").status_code == 200
+
+
 def test_свежее_обход_не_трогает(point, tmp_path):
     """Сторож не должен быть опаснее мусора: только что положенное остаётся на месте."""
     me = point.sign_in(sub="four")
