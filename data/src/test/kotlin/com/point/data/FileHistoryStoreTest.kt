@@ -1,5 +1,7 @@
 package com.point.data
 
+import com.point.core.flow.META_OCR_ATOMS_REF
+import com.point.core.flow.META_OCR_TEXT_REF
 import com.point.core.flow.META_SIZE
 import com.point.core.flow.ObjectClassifier
 import com.point.core.model.Feature
@@ -107,6 +109,89 @@ class FileHistoryStoreTest {
         val entry = store.recent().single()
         assertTrue(Feature.HAS_PHONE in entry.features)
         assertEquals("+380671234567", entry.entities["phone"])
+    }
+
+    // --- Переоткрытие не начинает с нуля (#532) ---------------------------------------------
+
+    @Test
+    fun `переоткрытый объект приносит понятое раньше, а не пустое состояние`() = runTest {
+        // Живой замер: переоткрытие того же чека снова показывало «Распознаю текст…» 20–30 секунд,
+        // и всё это время объект стоял без «Позвонить» — хотя телефон лежал в журнале.
+        store.record(textObject("a", "звони +380671234567", "чек.txt"))
+        store.update(
+            textObject("a", "звони +380671234567", "чек.txt").copy(
+                state = ObjectState(ObjectKind.TEXT, setOf(Feature.HAS_PHONE, Feature.HAS_DATE)),
+                metadata = mapOf(
+                    "name" to "чек.txt",
+                    "entity.phone" to "+380671234567",
+                    "entity.date" to "завтра 18:00",
+                ),
+            ),
+        )
+
+        val reopened = store.open("a")!!
+
+        assertTrue("признак телефона потерян", Feature.HAS_PHONE in reopened.state.features)
+        assertTrue("признак даты потерян", Feature.HAS_DATE in reopened.state.features)
+        assertEquals("+380671234567", reopened.metadata["entity.phone"])
+        assertEquals("завтра 18:00", reopened.metadata["entity.date"])
+    }
+
+    /**
+     * Признак, за которым стоит написанный распознаванием файл, из журнала не возвращается: сам
+     * файл живёт в scratch и стирается с работой. «Найти в документе» на странице без слоя слов —
+     * предложение, которому нечем ответить.
+     */
+    @Test
+    fun `признаки, опирающиеся на стёртые файлы, не воскресают`() = runTest {
+        store.record(textObject("a", "текст", "скан.txt"))
+        store.update(
+            textObject("a", "текст", "скан.txt").copy(
+                state = ObjectState(
+                    ObjectKind.TEXT,
+                    setOf(Feature.HAS_PHONE, Feature.HAS_TEXT, Feature.HAS_WORD_LAYER),
+                ),
+                metadata = mapOf(
+                    "name" to "скан.txt",
+                    "entity.phone" to "+380671234567",
+                    // Указатели на файлы прогона: в журнал они не попадают вовсе — здесь это
+                    // проверяется от начала до конца, а не по устройству записи.
+                    META_OCR_TEXT_REF to "/scratch/старый.txt",
+                    META_OCR_ATOMS_REF to "/scratch/старый.tsv",
+                ),
+            ),
+        )
+
+        val reopened = store.open("a")!!
+
+        assertTrue("вернулся признак прочитанного текста без самого текста", Feature.HAS_TEXT !in reopened.state.features)
+        assertTrue("вернулся слой слов без слоя слов", Feature.HAS_WORD_LAYER !in reopened.state.features)
+        assertTrue("сущность потеряна вместе с ним", Feature.HAS_PHONE in reopened.state.features)
+        assertNull("протухший указатель на файл приехал в новый прогон", reopened.metadata[META_OCR_TEXT_REF])
+        assertNull("протухший указатель на слой слов приехал в новый прогон", reopened.metadata[META_OCR_ATOMS_REF])
+    }
+
+    /**
+     * #533: имя объекта теперь фраза из содержимого. Расширение — свойство файла, и брать его из
+     * фразы нельзя: «1.5 кг сахара» дало бы копию `<id>.5 кг сахара`, а имя со слэшем — путь в
+     * несуществующую папку и молча потерянную запись истории.
+     */
+    @Test
+    fun `имя-фраза не превращается в расширение файла`() = runTest {
+        store.record(textObject("a", "содержимое", "Купить 1.5 кг сахара и хлеб"))
+
+        val entry = store.recent().single()
+        assertEquals("Купить 1.5 кг сахара и хлеб", entry.name)
+        assertTrue("расширение взято из фразы: ${File(entry.ref.value).name}", File(entry.ref.value).name.endsWith(".txt"))
+        assertEquals(ObjectKind.TEXT, store.open("a")!!.state.kind)
+    }
+
+    /** А настоящее имя файла расширение по-прежнему отдаёт — иначе бы чинили одно и ломали другое. */
+    @Test
+    fun `у настоящего имени файла расширение сохраняется`() = runTest {
+        store.record(textObject("a", "содержимое", "отчёт.md"))
+
+        assertTrue(File(store.recent().single().ref.value).name.endsWith(".md"))
     }
 
     @Test

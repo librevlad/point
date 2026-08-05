@@ -301,6 +301,8 @@ class FlowViewModel @Inject constructor(
      * Расшаренный текст входит во флоу файлом — тем же путём, что и всё остальное.
      *
      * Файл заводит [SharedTexts], а не сама Activity: тогда его есть кому убрать в конце флоу.
+     * Имя объекту даёт содержимое, а не временный файл: `shared-5631909340713910696.txt` — самое
+     * частое, что человек шлёт в Point, и первое, что он потом читает в «Недавнем».
      */
     fun onSharedText(text: String) {
         val path = runCatching { sharedTexts.create(text) }.getOrNull()
@@ -308,7 +310,11 @@ class FlowViewModel @Inject constructor(
             _ui.update { it.copy(message = "Не удалось принять текст", messageOutcome = Outcome.FAILED) }
             return
         }
-        onShared(java.io.File(path).toURI().toString(), "text/plain")
+        onShared(
+            java.io.File(path).toURI().toString(),
+            "text/plain",
+            name = com.point.core.flow.textObjectName(text),
+        )
     }
 
     /**
@@ -328,7 +334,15 @@ class FlowViewModel @Inject constructor(
         }
     }
 
-    fun onShared(sourceUri: String, mime: String, autoAction: String? = null) {
+    /**
+     * [name] — имя объекта, если дверь знает его лучше файловой системы (#533).
+     *
+     * Приёмник (`ObjectStore`) называет объект по имени файла — единственному, что у него есть.
+     * Для того, что Point родил сам, это имя машинное (`shared-563190….txt`, `record-1754….m4a`),
+     * и человеческое знает только источник. Поэтому имя ставится здесь, ОДНИМ местом на все двери:
+     * иначе «Недавнее» и экран объекта разъехались бы в том, как объект называется.
+     */
+    fun onShared(sourceUri: String, mime: String, autoAction: String? = null, name: String? = null) {
         freshShareArrived = true
         val voice = claimVoice()
         // Отменить нечем: за приёмом расшаренного файла экрана Point ещё нет, и кнопка увела бы
@@ -338,7 +352,10 @@ class FlowViewModel @Inject constructor(
             val obj = runCatching {
                 store.clear()
                 store.ingest(sourceUri, mime)
-            }.getOrNull()
+            }.getOrNull()?.let { ingested ->
+                if (name.isNullOrBlank()) ingested
+                else ingested.copy(metadata = ingested.metadata + ("name" to name))
+            }
             if (!owns(voice)) return@launch
             if (obj == null) {
                 // Хвост исключения человеку ничего не говорит («…FileNotFoundException: /storage/…»),

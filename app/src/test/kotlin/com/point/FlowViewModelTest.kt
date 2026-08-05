@@ -406,6 +406,32 @@ class FlowViewModelTest {
         assertEquals(1, history.recorded.size)
     }
 
+    /**
+     * #533: имя, которое знает дверь, побеждает имя файла.
+     *
+     * Приёмник называет объект по имени файла — а у того, что Point родил сам, оно машинное:
+     * `shared-5631909340713910696.txt`, `record-1754325912345.m4a`. Человеческое имя знает только
+     * источник, и ставится оно ровно здесь — одним местом на все двери, иначе «Недавнее» и экран
+     * объекта звали бы один объект по-разному.
+     */
+    @Test fun `имя от двери доезжает и до экрана, и до «Недавнего»`() = runTest(dispatcher) {
+        val vm = vm()
+        vm.onShared("uri", "text/plain", name = "Пришлите договор до пятницы")
+        advanceUntilIdle()
+
+        assertEquals("Пришлите договор до пятницы", vm.ui.value.frame?.obj?.metadata?.get("name"))
+        assertEquals("Пришлите договор до пятницы", history.recorded.single().metadata["name"])
+    }
+
+    /** Дверь молчит — имя остаётся тем, что дал приёмник: у файла из чужих рук оно настоящее. */
+    @Test fun `без имени от двери объект остаётся с именем файла`() = runTest(dispatcher) {
+        val vm = vm()
+        vm.onShared("uri", "image/png")
+        advanceUntilIdle()
+
+        assertNull(vm.ui.value.frame?.obj?.metadata?.get("name"))
+    }
+
     @Test fun `onShared surfaces an ingest failure and pushes no frame`() = runTest(dispatcher) {
         store.failIngest = true
         val vm = vm()

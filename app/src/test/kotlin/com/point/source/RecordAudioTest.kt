@@ -13,6 +13,10 @@ import org.junit.Test
  */
 class RecordAudioTest {
 
+    /** Момент записи. Ожидаемое время берётся у той же `stampLabel` — иначе тест судил бы часовой
+     *  пояс машины, а не имя записи (сам формат пришит `AgoLabelTest`). */
+    private val recordedAt = 1_754_325_912_345L
+
     @Test
     fun `записанный файл становится объектом`() {
         val produced = recordedToProduced(
@@ -20,10 +24,30 @@ class RecordAudioTest {
             mime = "audio/mp4",
             exists = { true },
             toUri = { "file://$it" },
+            recordedAt = { recordedAt },
         )
 
         assertEquals("file:///cache/record-1.m4a", produced?.uri)
         assertEquals("audio/mp4", produced?.mime)
+    }
+
+    /**
+     * #533: имя записи — «Запись, 4 авг 19:25», а не `record-1754325912345.m4a`.
+     *
+     * Живой замер: в «Недавнем» две записи подряд назывались одинаково-нечитаемо, и отличить
+     * вчерашний разговор от сегодняшней диктовки можно было только по времени под строкой.
+     */
+    @Test
+    fun `запись называется собой и временем, а не именем файла`() {
+        val produced = recordedToProduced(
+            path = "/cache/record-1754325912345.m4a",
+            mime = "audio/mp4",
+            exists = { true },
+            toUri = { "file://$it" },
+            recordedAt = { recordedAt },
+        )
+
+        assertEquals("Запись, " + com.point.core.flow.stampLabel(recordedAt), produced?.name)
     }
 
     @Test

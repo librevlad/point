@@ -1,7 +1,6 @@
 package com.point
 
 import android.content.Intent
-import android.net.Uri
 import dagger.hilt.android.AndroidEntryPoint
 
 /**
@@ -24,6 +23,7 @@ class ProcessTextActivity : FlowHostActivity() {
             finish()
             return
         }
+        // Выделенное называется своими первыми словами (#533) — то же имя, что у текста из Share.
         viewModel.onSharedText(text)
     }
 }

@@ -332,12 +332,28 @@ private fun FromPcBanner(count: Int, onPull: () -> Unit, onHide: () -> Unit) {
     }
 }
 
-/** The progressive object (#96): the pile keeps growing across flows; one tap opens
- *  it as a COLLECTION whose actions apply to everything together. */
+/**
+ * The progressive object (#96): the pile keeps growing across flows; one tap opens
+ * it as a COLLECTION whose actions apply to everything together.
+ *
+ * Крестика здесь больше нет (#540). На трёх соседних плашках — падение, буфер, «с компьютера» — тот
+ * же значок означает «скрыть», то есть «убери эту строку с глаз»; здесь он одним тапом стирал всё
+ * собранное, и вернуть это было нечем. Одинаковый знак с разной ценой — ловушка по построению:
+ * человек, который убирал плашку, терял работу.
+ *
+ * Теперь разрушительное действие названо словом и спрашивает подтверждения прямо в плашке —
+ * отдельный экран ради одного вопроса Point не заводит (тем же приёмом, что согласие на облако:
+ * соглашаются СЛОВОМ ДЕЙСТВИЯ, а не «да/нет»).
+ */
 @Composable
 private fun BasketBanner(count: Int, onOpen: () -> Unit, onClear: () -> Unit) {
+    // Вопрос забывается при повороте намеренно: сброс ведёт в безопасную сторону — к «ничего не
+    // стёрли», а не к «стёрли, пока экран пересоздавался».
+    var confirming by remember { mutableStateOf(false) }
     Surface(
-        onClick = onOpen,
+        // Пока висит вопрос, плашка перестаёт быть дверью: тап мимо кнопок не должен открывать
+        // корзину поверх незаданного вопроса.
+        onClick = { if (!confirming) onOpen() },
         color = MaterialTheme.colorScheme.tertiaryContainer,
         shape = MaterialTheme.shapes.large,
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
@@ -349,22 +365,34 @@ private fun BasketBanner(count: Int, onOpen: () -> Unit, onClear: () -> Unit) {
         ) {
             Column(Modifier.weight(1f)) {
                 Text(
-                    "Корзина: $count",
+                    if (confirming) "Очистить корзину?" else "Корзина: $count",
                     style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.onTertiaryContainer,
                 )
                 Text(
-                    "Открыть всё вместе как один объект",
+                    // Цена названа до тапа, а не после: сколько именно пропадёт и что это навсегда.
+                    if (confirming) "Собранное ($count) пропадёт — вернуть будет нечем"
+                    else "Открыть всё вместе как один объект",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onTertiaryContainer,
                 )
             }
-            IconButton(onClick = onClear) {
-                Icon(
-                    imageVector = Icons.Filled.Close,
-                    contentDescription = "Очистить корзину",
-                    tint = MaterialTheme.colorScheme.onTertiaryContainer,
-                )
+            if (confirming) {
+                TextButton(onClick = { confirming = false }) {
+                    Text("Отмена", color = MaterialTheme.colorScheme.onTertiaryContainer)
+                }
+                TextButton(
+                    onClick = {
+                        confirming = false
+                        onClear()
+                    },
+                ) {
+                    Text("Очистить", color = MaterialTheme.colorScheme.error)
+                }
+            } else {
+                TextButton(onClick = { confirming = true }) {
+                    Text("Очистить", color = MaterialTheme.colorScheme.onTertiaryContainer)
+                }
             }
         }
     }
@@ -470,11 +498,14 @@ private fun HistoryRow(entry: HistoryEntry, onClick: () -> Unit) {
                 // #114: a person remembers the object, not the clock — the kind leads,
                 // the relative time only seconds it.
                 Text(
-                    // Время говорит по-русски всегда (дизайн-ревью 04.08.2026): системный
-                    // DateUtils берёт язык телефона, и на английской системе строка выходила
-                    // наполовину чужой — «Изображение · 3 hours ago».
-                    text = kindLabel(entry.kind) + " · " +
-                        agoLabel(System.currentTimeMillis() - entry.epochMillis),
+                    text = historySubtitle(
+                        name = entry.name,
+                        kind = kindLabel(entry.kind),
+                        // Время говорит по-русски всегда (дизайн-ревью 04.08.2026): системный
+                        // DateUtils берёт язык телефона, и на английской системе строка выходила
+                        // наполовину чужой — «Изображение · 3 hours ago».
+                        ago = agoLabel(System.currentTimeMillis() - entry.epochMillis),
+                    ),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -494,6 +525,16 @@ private fun HistoryRow(entry: HistoryEntry, onClick: () -> Unit) {
         }
     }
 }
+
+/**
+ * Вторая строка «Недавнего»: чем объект является и когда он появился.
+ *
+ * Вид не называется дважды (#533). С тех пор как запись и снимок называют себя сами («Запись,
+ * 4 авг 19:25»), прежняя строка давала «Запись · 3 часа назад» прямо под словом «Запись» — вид
+ * повторялся, а сказать ему было уже нечего. Тогда остаётся только время: имя вид уже назвало.
+ */
+internal fun historySubtitle(name: String?, kind: String, ago: String): String =
+    if (name != null && name.startsWith(kind, ignoreCase = true)) ago else "$kind · $ago"
 
 /** The understood facts of a history entry — the same derivation the first screen uses,
  *  rebuilt from the persisted features + entity values (#114). */

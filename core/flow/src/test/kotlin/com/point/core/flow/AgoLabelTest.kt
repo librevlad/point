@@ -76,4 +76,27 @@ class AgoLabelTest {
             assertEquals("латиница в «$said»", 0, said.count { it in 'a'..'z' || it in 'A'..'Z' })
         }
     }
+
+    // --- Точное время: имя объекта (#533) ---------------------------------------------------
+
+    private val plus3 = java.time.ZoneOffset.ofHours(3)
+
+    private fun at(month: Int, day: Int, hour: Int, minute: Int): Long =
+        java.time.ZonedDateTime.of(2026, month, day, hour, minute, 0, 0, plus3).toInstant().toEpochMilli()
+
+    @Test
+    fun `точное время пишется днём, месяцем и часами`() {
+        assertEquals("4 авг 19:25", stampLabel(at(8, 4, 19, 25), plus3))
+        assertEquals("31 дек 00:05", stampLabel(at(12, 31, 0, 5), plus3))
+        assertEquals("1 янв 09:00", stampLabel(at(1, 1, 9, 0), plus3))
+    }
+
+    /** Тот же довод, что у относительного времени: системный форматтер сказал бы «4 Aug». */
+    @Test
+    fun `в точном времени тоже нет латиницы`() {
+        (1..12).forEach { month ->
+            val said = stampLabel(at(month, 15, 12, 30), plus3)
+            assertEquals("латиница в «$said»", 0, said.count { it in 'a'..'z' || it in 'A'..'Z' })
+        }
+    }
 }

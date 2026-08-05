@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import com.point.core.flow.stampedObjectName
 import java.io.File
 import javax.inject.Inject
 
@@ -40,6 +41,10 @@ class VoiceSource @Inject constructor() : ObjectSource {
         mime = data?.getStringExtra(RecordAudioActivity.EXTRA_MIME),
         exists = { path -> File(path).let { it.isFile && it.length() > 0 } },
         toUri = { path -> Uri.fromFile(File(path)).toString() },
+        // Когда запись закончилась — по самому файлу, а не по часам этого вызова: экран записи
+        // мог быть выгружен и вернуться минутами позже (#454), а «Запись, 4 авг 19:25» обязана
+        // называть время записи.
+        recordedAt = { path -> File(path).lastModified().takeIf { it > 0 } ?: System.currentTimeMillis() },
     )
 }
 
@@ -48,13 +53,22 @@ class VoiceSource @Inject constructor() : ObjectSource {
  *
  * Пустой файл объектом не становится — как у камеры и приёма: пустая карточка вместо звука хуже
  * честной тишины. Отмена приходит сюда же без пути и молчит: человек сам только что её нажал.
+ *
+ * Имя записи — «Запись, 4 авг 19:25» (#533). Раньше им было `record-1754325912345.m4a`: имя файла,
+ * которое Point сам же и придумал, и в «Недавнем» две записи подряд различались только временем
+ * под строкой.
  */
 fun recordedToProduced(
     path: String?,
     mime: String?,
     exists: (String) -> Boolean,
     toUri: (String) -> String,
+    recordedAt: (String) -> Long = { System.currentTimeMillis() },
 ): Produced? {
     if (path.isNullOrBlank() || !exists(path)) return null
-    return Produced(toUri(path), mime?.takeIf { it.isNotBlank() } ?: RecordAudioActivity.MIME)
+    return Produced(
+        uri = toUri(path),
+        mime = mime?.takeIf { it.isNotBlank() } ?: RecordAudioActivity.MIME,
+        name = stampedObjectName("Запись", recordedAt(path)),
+    )
 }

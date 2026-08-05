@@ -131,6 +131,8 @@ fun PointHost(
     onCloseFind: () -> Unit = {},
     /** Уйти с экрана-сообщения, за которым нет объекта (#114): то же, что «назад» у этой двери. */
     onDismissMessage: () -> Unit = {},
+    /** Как называется выход с экрана объекта — по имени той двери, куда он ведёт (#531). */
+    leaveLabel: String = LEAVE_TO_HOME,
     appIconFor: (String) -> androidx.compose.ui.graphics.ImageBitmap? = { null },
     modifier: Modifier = Modifier,
 ) {
@@ -278,7 +280,7 @@ fun PointHost(
                 // Дверь зовёт тот же [onLeave], что и жест: куда она ведёт, решает сама дверь —
                 // с «Недавнего» на «Недавнее», из «Поделиться» наружу. Обещание и поведение
                 // сходятся, второй правды о выходе не заводится.
-                ExitRow(onLeave = onDismissMessage)
+                ExitRow(onLeave = onDismissMessage, label = leaveLabel)
                 // The journey so far (#114) — stays put while the object below animates.
                 TimelineStrip(path = state.path, onNode = onJumpTo)
                 AnimatedContent(
@@ -662,21 +664,38 @@ private fun PreviewActionPreview() = PointTheme(darkTheme = true) {
     )
 }
 
+/** Выход домой — так он и называется: за ним «Недавнее» (дверь [HomeActivity]). */
+const val LEAVE_TO_HOME = "← Недавнее"
+
+/**
+ * Выход из двери «Поделиться» (#531).
+ *
+ * За ней Point не остаётся: человек пришёл из чужого приложения и туда же и вернётся — ровно так,
+ * как по системному «назад». Обещать здесь «Недавнее» значило врать: живой прогон 04.08.2026 —
+ * расшарил файл, тапнул «← Недавнее», оказался в галерее, из которой шарил. Слово честнее общее:
+ * куда именно ведёт «назад», знает система, а не Point.
+ */
+const val LEAVE_BACK = "← Назад"
+
 /**
  * Дверь наружу с экрана объекта (#114, найдено прогоном 04.08.2026).
  *
  * Стоит над путём объекта и всегда: путь появляется только со второго шага, а выйти человек может
  * захотеть с первого. Слово вместо стрелки — стрелка на этом экране уже занята полосой пути, и
  * второй знак того же смысла читался бы как «шаг назад по цепочке», а не «уйти к списку».
+ *
+ * [label] приходит от двери, потому что от двери зависит и место, куда выход ведёт (#531). Одна
+ * надпись на все двери держалась ровно до первого шаринга: код у выхода общий, а «откуда пришли» —
+ * у каждой двери своё.
  */
 @Composable
-private fun ExitRow(onLeave: () -> Unit) {
+private fun ExitRow(onLeave: () -> Unit, label: String) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(start = 12.dp, top = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         TextButton(onClick = onLeave) {
-            Text("← Недавнее", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(label, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

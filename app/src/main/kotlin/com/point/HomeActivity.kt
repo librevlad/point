@@ -2,7 +2,6 @@ package com.point
 
 import android.content.ClipboardManager
 import android.content.Context
-import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.addCallback
@@ -112,8 +111,10 @@ class HomeActivity : ComponentActivity() {
                             state = state,
                             viewModel = viewModel,
                             // Домашняя дверь: «откуда пришли» — «Недавнее». Выход с
-                            // экрана-сообщения ведёт туда, а не из Point (#114).
+                            // экрана-сообщения ведёт туда, а не из Point (#114), — и только здесь
+                            // надпись «← Недавнее» говорит правду (#531).
                             onLeave = { onBackPressedDispatcher.onBackPressed() },
+                            leaveLabel = LEAVE_TO_HOME,
                         )
                     }
                 }
@@ -165,6 +166,8 @@ class HomeActivity : ComponentActivity() {
 
     private fun useClipboard(text: String) {
         viewModel.dismissClipboard()
+        // Скопированное называется своими первыми словами (#533), как любой другой текст,
+        // и убирается вместе с ним в конце флоу.
         viewModel.onSharedText(text)
     }
 }

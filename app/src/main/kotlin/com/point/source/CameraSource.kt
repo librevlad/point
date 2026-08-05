@@ -58,6 +58,11 @@ class CameraSource @Inject constructor() : ObjectSource {
         target = null
         // Отмена съёмки оставляет заготовленный файл нулевым — объектом он не становится, и
         // говорить об этом человеку нечего: он сам только что нажал «отмена».
-        return captureToProduced(android.net.Uri.fromFile(file).toString(), file.length())
+        //
+        // Имя кадру даёт время самого файла (#533): камера дописала его в момент съёмки, а сюда мы
+        // возвращаемся позже — иногда сильно позже, если Point выгружали из памяти. «Снимок,
+        // 4 авг 19:25» должен говорить, когда СНЯЛИ, а не когда объект дошёл.
+        val takenAt = file.lastModified().takeIf { it > 0 } ?: System.currentTimeMillis()
+        return captureToProduced(android.net.Uri.fromFile(file).toString(), file.length(), takenAt)
     }
 }
