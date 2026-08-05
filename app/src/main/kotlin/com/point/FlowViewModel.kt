@@ -1540,6 +1540,32 @@ class FlowViewModel @Inject constructor(
         }
     }
 
+    /**
+     * «Удалить аккаунт»: учётная запись, круг и все байты сервера — необратимо.
+     *
+     * Не то же, что [signOut]: тот снимает **это** устройство и оставляет аккаунт жить. Пока такой
+     * двери не было, человек, решивший уйти совсем, мог только выйти — и его почта, круг и
+     * невыбранные письма продолжали лежать на сервере.
+     *
+     * Сервер не ответил — не удалено, и говорить «готово» нельзя: местная память остаётся на месте,
+     * человек читает отказ и пробует ещё раз. Стирать своё в ответ на молчание значило бы
+     * потерять доступ к аккаунту, который при этом никуда не делся.
+     */
+    fun deleteAccount() {
+        val account = accountStore.current() ?: return
+        updateDevices { it.copy(busy = true, error = null) }
+        viewModelScope.launch {
+            val gone = runCatching { accountClient.deleteAccount(account) }.getOrDefault(false)
+            if (gone) {
+                forgetAccount(com.point.core.flow.SignIn.SignedOut)
+            } else {
+                updateDevices {
+                    it.copy(busy = false, error = com.point.core.flow.accountRefusal(null).what)
+                }
+            }
+        }
+    }
+
     /** Стереть всё, что это устройство знало про аккаунт и про свой компьютер. */
     private suspend fun forgetAccount(next: com.point.core.flow.SignIn) {
         runCatching { accountStore.clear() }

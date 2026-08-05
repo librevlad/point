@@ -22,7 +22,14 @@ class HttpAccountClientTest {
         val server: HttpServer = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
         val hits = mutableListOf<String>()
         val tokens = mutableListOf<String?>()
+        val bodies = mutableListOf<String>()
         var pendingUntil = 0
+
+        /** Каким сервер завёл вход: со сверкой кода или одним шагом (#561). */
+        var handoff = false
+
+        /** Сервер прежней версии: поля нет вовсе. */
+        var omitHandoff = false
 
         fun base(): String = "http://127.0.0.1:" + server.address.port
 
@@ -38,10 +45,12 @@ class HttpAccountClientTest {
             val path = ex.requestURI.path
             hits += ex.requestMethod + " " + path
             tokens += ex.requestHeaders.getFirst("Authorization")
+            bodies += ex.requestBody.readBytes().toString(Charsets.UTF_8)
             val (status, body) = when {
                 path == "/auth/start" -> 200 to
                     """{"login_id":"lg-1","claim_token":"cl-1","user_code":"K7-42Q",""" +
-                    """"login_url":"$${'$'}","expires_in":300,"interval":2}"""
+                    """"login_url":"$${'$'}","expires_in":300,"interval":2""" +
+                    (if (omitHandoff) "}" else ""","handoff":$handoff}""")
                         .replace("$${'$'}", base() + "/login?d=lg-1")
                 // Чужой или просроченный вход сервер не отличает намеренно: «такого нет» одинаково.
                 path.startsWith("/auth/session/") && path != "/auth/session/lg-1" ->
@@ -83,6 +92,42 @@ class HttpAccountClientTest {
             assertTrue(poll is LoginPoll.Ready)
             assertEquals("dev-1", (poll as LoginPoll.Ready).account.deviceId)
             assertEquals("me@example.com", poll.account.email)
+        }
+    }
+
+    @Test fun `телефон просит вход одним шагом настоящим признаком, а не строкой`() = runTest {
+        withProbe { probe ->
+            probe.handoff = true
+
+            val start = HttpAccountClient(probe.base(), handoff = true).start("Pixel", DeviceKind.PHONE)
+
+            // Именно `true`, а не `"true"`: принимающая сторона вправе понимать булево строго, и
+            // догадка о её доброте — договор, которого никто не заключал.
+            assertTrue("признак уехал строкой: " + probe.bodies.first(), probe.bodies.first().contains("\"handoff\":true"))
+            assertEquals(true, start?.handoff)
+        }
+    }
+
+    @Test fun `каким вышел вход, говорит сервер, а не устройство`() = runTest {
+        withProbe { probe ->
+            probe.handoff = false
+
+            // Устройство попросило один шаг, сервер завёл обычный вход — правда за сервером,
+            // иначе экран спрятал бы код, который сверять всё-таки надо.
+            val start = HttpAccountClient(probe.base(), handoff = true).start("Pixel", DeviceKind.PHONE)
+
+            assertEquals(false, start?.handoff)
+            assertEquals("K7-42Q", start?.code)
+        }
+    }
+
+    @Test fun `старый сервер без этого поля — это вход со сверкой кода`() = runTest {
+        withProbe { probe ->
+            probe.omitHandoff = true
+
+            val start = HttpAccountClient(probe.base(), handoff = true).start("Pixel", DeviceKind.PHONE)
+
+            assertEquals(false, start?.handoff)
         }
     }
 

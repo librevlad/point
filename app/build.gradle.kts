@@ -18,8 +18,10 @@ android {
         applicationId = "com.point"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
-        versionCode = 1
-        versionName = "0.2.0"
+        // Номер сборки для магазина: растёт на каждую загрузку и назад не ходит. Play отвергает
+        // повторный и меньший, поэтому он живёт здесь, а не выводится из имени версии.
+        versionCode = 3
+        versionName = "0.3.0"
 
         // Limit native ABIs so the Tesseract .so libraries don't bloat the APK.
         // arm64 covers all modern phones; armeabi-v7a keeps older 32-bit ones.

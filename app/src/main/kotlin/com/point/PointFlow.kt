@@ -40,6 +40,7 @@ fun PointFlow(
         onContinueAfterSignIn = viewModel::dismissSignIn,
         onRevokeDevice = viewModel::revokeDevice,
         onSignOut = viewModel::signOut,
+        onDeleteAccount = viewModel::deleteAccount,
         onOpenDevices = viewModel::openDevices,
         onCloseDevices = viewModel::closeDevices,
         onSubmitInput = viewModel::submitAmendment,

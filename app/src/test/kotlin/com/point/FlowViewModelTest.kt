@@ -1190,6 +1190,39 @@ class FlowViewModelTest {
         assertTrue(vm.ui.value.signIn is com.point.core.flow.SignIn.SignedOut)
     }
 
+    @Test fun `«Удалить аккаунт» уносит и аккаунт, и память об этом устройстве`() = runTest(dispatcher) {
+        // Отдельная дверь, а не «выйти покрасивее»: выход снимает ЭТО устройство и оставляет
+        // аккаунт жить. Пока такой двери не было, ушедший совсем человек оставлял на сервере свою
+        // почту, круг и невыбранные письма — и магазин за это снимает приложение.
+        val client = FakeCircleClient()
+        val store = FakeAccountStore(TEST_ACCOUNT)
+        pcLinks.pc = com.point.core.flow.LinkedPc("d-pc", "Ноутбук", "ключ-ПК")
+        val vm = vm(account = store, accountClient = client)
+
+        vm.openDevices(); advanceUntilIdle()
+        vm.deleteAccount(); advanceUntilIdle()
+
+        assertTrue("сервер не получил приказа удалить аккаунт", client.deleted)
+        assertNull(store.current())
+        assertNull(pcLinks.pc)
+        assertTrue(vm.ui.value.signIn is com.point.core.flow.SignIn.SignedOut)
+    }
+
+    @Test fun `не удалили — значит не удалили, и молчание сервера не стирает пропуск`() = runTest(dispatcher) {
+        // Стереть своё в ответ на молчание значило бы потерять доступ к аккаунту, который при
+        // этом никуда не делся, — и человек остался бы и без Point, и со своими данными на сервере.
+        val client = FakeCircleClient().apply { deleteFails = true }
+        val store = FakeAccountStore(TEST_ACCOUNT)
+        val vm = vm(account = store, accountClient = client)
+
+        vm.openDevices(); advanceUntilIdle()
+        vm.deleteAccount(); advanceUntilIdle()
+
+        assertNotNull("пропуск стёрт, хотя аккаунт цел", store.current())
+        assertNotNull("экран промолчал о неудаче", vm.ui.value.devicesScreen?.error)
+        assertNull(vm.ui.value.signIn)
+    }
+
     @Test fun `круг устройств приезжает с сервера, а до него экран говорит о себе правду (#472)`() = runTest(dispatcher) {
         val client = FakeCircleClient(
             circle = listOf(
@@ -3112,6 +3145,17 @@ internal class FakeCircleClient(
         signedOut = true
         return revoke(account, account.deviceId)
     }
+
+    /** Сервер не дозвонился — тогда не удалено ничего, и говорить «готово» нельзя. */
+    var deleteFails = false
+    var deleted = false
+        private set
+
+    override suspend fun deleteAccount(account: com.point.core.flow.PointAccount): Boolean {
+        if (deleteFails) return false
+        deleted = true
+        return true
+    }
 }
 
 /**
@@ -3144,6 +3188,7 @@ internal class CountingSignInClient(
         com.point.core.flow.CircleAnswer.Circle(emptyList())
     override suspend fun enroll(account: com.point.core.flow.PointAccount, publicKey: String) = true
     override suspend fun revoke(account: com.point.core.flow.PointAccount, deviceId: String) = true
+    override suspend fun deleteAccount(account: com.point.core.flow.PointAccount) = true
 }
 
 private class FakePcLinks : com.point.core.flow.PcLinks {

@@ -129,6 +129,30 @@
             </intent-filter>
         </activity>
 
+        <!--
+          Возврат из браузера после входа (#561). Вход начат на этом же телефоне, поэтому человека
+          возвращает приложение, а не он сам: страница подтверждения уходит на `point://signed-in`,
+          и Point поднимается на передний план. `singleTask` — чтобы попасть в ЖИВУЮ задачу Point,
+          а не завести вторую поверх неё.
+
+          Схема принадлежит Point и заявлена только здесь. Адрес возврата — константа сервера, из
+          запроса в него не попадает ничего: иначе вход стал бы перенаправлением куда угодно.
+        -->
+        <activity
+            android:name=".SignedInActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="point" android:host="signed-in" />
+            </intent-filter>
+        </activity>
+
         <!-- «Общий буфер» (#161): a Quick Settings tile syncs the clipboard with the paired PC. The
              invisible sync activity is the trick that gets clipboard access from the shade. -->
         <activity

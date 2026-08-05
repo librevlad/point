@@ -63,6 +63,14 @@ CREATE TABLE IF NOT EXISTS logins (
 CREATE INDEX IF NOT EXISTS logins_by_state ON logins(state);
 """
 
+#: Колонки, добавленные после первой версии схемы. `CREATE TABLE IF NOT EXISTS` их не довезёт:
+#: таблица уже есть, и новая колонка молча не появится — сервер начнёт падать на живой базе.
+ADDED_COLUMNS = {
+    # Вход начат там же, где откроется браузер (#561): человеку нечего сверять глазами, и
+    # подтверждать он будет свой собственный вход в приложении, которое сам же открыл.
+    "logins": [("handoff", "INTEGER NOT NULL DEFAULT 0")],
+}
+
 
 def connect(path: str) -> sqlite3.Connection:
     """Соединение под запрос: автокоммит, WAL, каскады включены, ожидание блокировки 10 с."""
@@ -84,5 +92,19 @@ def init(path: str) -> None:
     conn = connect(path)
     try:
         conn.executescript(SCHEMA)
+        migrate(conn)
     finally:
         conn.close()
+
+
+def migrate(conn: sqlite3.Connection) -> None:
+    """Довезти колонки, которых нет в уже существующей базе.
+
+    SQLite не умеет `ADD COLUMN IF NOT EXISTS`, поэтому наличие проверяется списком колонок.
+    Дешевле и честнее номеров версий: список выше и есть описание того, чего не хватает.
+    """
+    for table, columns in ADDED_COLUMNS.items():
+        have = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})")}
+        for name, decl in columns:
+            if name not in have:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {decl}")

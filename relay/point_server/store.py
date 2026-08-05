@@ -39,10 +39,11 @@ def create_login(
     key_sign: str,
     now: int,
     ttl: int,
+    handoff: bool = False,
 ) -> None:
     conn.execute(
         "INSERT INTO logins (id, claim_sha256, user_code, kind, name, key_agree, key_sign,"
-        " created_at, expires_at) VALUES (?,?,?,?,?,?,?,?,?)",
+        " created_at, expires_at, handoff) VALUES (?,?,?,?,?,?,?,?,?,?)",
         (
             login_id,
             ids.sha256_hex(claim_token),
@@ -53,6 +54,7 @@ def create_login(
             key_sign,
             now,
             now + ttl,
+            1 if handoff else 0,
         ),
     )
 
