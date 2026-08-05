@@ -14,12 +14,10 @@ import com.point.executors.PcCapability
 import com.point.executors.PcRealizer
 import com.point.executors.AppOpenRealizer
 import com.point.executors.AiCapability
-import com.point.executors.BasketCapability
 import com.point.executors.RemotePcCapability
 import com.point.executors.WordPlusCapability
 import com.point.executors.WordPlusRealizer
 import com.point.executors.RemotePcRealizer
-import com.point.executors.BasketRealizer
 import com.point.executors.JobReplyCapability
 import com.point.executors.JobReplyRealizer
 import com.point.executors.UnderstandCapability
@@ -193,7 +191,6 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun shoppingListCap(c: ShoppingListCapability): Capability
     /** #260: «Понять глубже» + «Кто есть кто» + «Собрать данные+» свёрнуты в одно «Понять». */
     @Binds @IntoSet abstract fun understandCap(c: UnderstandCapability): Capability
-    @Binds @IntoSet abstract fun basketCap(c: BasketCapability): Capability
     @Binds @IntoSet abstract fun wordPlusCap(c: WordPlusCapability): Capability
     @Binds @IntoSet abstract fun jobReplyCap(c: JobReplyCapability): Capability
 
@@ -250,7 +247,6 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun aiR(r: AiRealizer): Realizer
     @Binds @IntoSet abstract fun shoppingListR(r: ShoppingListRealizer): Realizer
     @Binds @IntoSet abstract fun understandR(r: UnderstandRealizer): Realizer
-    @Binds @IntoSet abstract fun basketR(r: BasketRealizer): Realizer
     @Binds @IntoSet abstract fun wordPlusR(r: WordPlusRealizer): Realizer
     @Binds @IntoSet abstract fun jobReplyR(r: JobReplyRealizer): Realizer
     @Binds @IntoSet abstract fun pcR(r: PcRealizer): Realizer

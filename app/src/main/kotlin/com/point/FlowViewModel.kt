@@ -115,7 +115,6 @@ class FlowViewModel @Inject constructor(
     private val pcPairings: com.point.core.flow.PcPairings,
     private val pcTransport: com.point.core.flow.PcTransport,
     private val pcDiscovery: com.point.core.flow.PcDiscovery,
-    private val basket: com.point.core.flow.Basket,
     private val pcCaps: com.point.core.flow.PcCapsStore,
     /** Кто помнит, когда компьютер отвечал в последний раз и каким путём (#412). */
     private val linkMonitor: com.point.core.flow.LinkMonitor,
@@ -234,10 +233,6 @@ class FlowViewModel @Inject constructor(
     val fromPcCount: StateFlow<Int> = _fromPcCount.asStateFlow()
     private var fromPcEntries: List<com.point.core.flow.PcOutboxEntry> = emptyList()
     private var lastOutboxFetchMs = 0L
-
-    private val _basketCount = MutableStateFlow(0)
-    /** Items accumulated in the basket (#96) — Home offers to open the pile as one COLLECTION. */
-    val basketCount: StateFlow<Int> = _basketCount.asStateFlow()
 
     private val _clipboard = MutableStateFlow<String?>(null)
     /** Actionable text sitting in the clipboard when Point opened — a dismissible Home suggestion (#72). */
@@ -417,7 +412,6 @@ class FlowViewModel @Inject constructor(
         _ui.update { it.copy(aiKeySet = runCatching { userKeys.read() != null }.getOrDefault(false)) }
         viewModelScope.launch {
             _recent.value = runCatching { history.recent() }.getOrDefault(emptyList())
-            _basketCount.value = runCatching { basket.items().size }.getOrDefault(0)
         }
         refreshFromPc()
     }
@@ -487,23 +481,6 @@ class FlowViewModel @Inject constructor(
     /** Hide the banner until the next fetch — the objects stay on the PC (no ack). */
     fun hideFromPc() {
         _fromPcCount.value = 0
-    }
-
-    /** Open the accumulated pile (#96) as one COLLECTION flow — the basket itself
-     *  keeps its copies; the flow works on fresh scratch ones (copy-in invariant). */
-    fun openBasket() {
-        viewModelScope.launch {
-            val paths = runCatching { basket.items() }.getOrDefault(emptyList())
-            if (paths.isEmpty()) { _basketCount.value = 0; return@launch }
-            onSharedMultiple(paths.map { "file://$it" })
-        }
-    }
-
-    fun clearBasket() {
-        viewModelScope.launch {
-            runCatching { basket.clear() }
-            _basketCount.value = 0
-        }
     }
 
     /** Wipe the recent list and its files — the user's "очистить недавнее" (#8). */

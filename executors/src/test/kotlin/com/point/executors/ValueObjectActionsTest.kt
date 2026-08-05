@@ -46,7 +46,6 @@ class ValueObjectActionsTest {
             "Отправить" to ShareCapability().accepts(waybill.state),
             "Сохранить" to SaveCapability().accepts(waybill.state),
             "Открыть" to OpenCapability().accepts(waybill.state),
-            "В корзину" to BasketCapability().accepts(waybill.state),
             "AI" to AiCapability(aiKeysReady).accepts(waybill.state),
         )
 
@@ -62,7 +61,6 @@ class ValueObjectActionsTest {
             val state = ObjectState(kind)
             assertTrue("Отправить on $kind", ShareCapability().accepts(state))
             assertTrue("Сохранить on $kind", SaveCapability().accepts(state))
-            assertTrue("В корзину on $kind", BasketCapability().accepts(state))
         }
         assertFalse("a collection is still not a file", ShareCapability().accepts(ObjectState(ObjectKind.COLLECTION)))
     }

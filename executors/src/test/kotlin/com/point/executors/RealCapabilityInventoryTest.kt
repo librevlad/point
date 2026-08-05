@@ -33,7 +33,7 @@ class RealCapabilityInventoryTest {
      *  (приложения устройства #66, действия ПК #80) сюда не входят — их набор зависит от того,
      *  что человек выбирал и к какому компьютеру подключался. */
     private val builtIn: List<Capability> = listOf(
-        AiCapability(aiKeysReady), ArchiveCapability(), BasketCapability(), BlurBgCapability(),
+        AiCapability(aiKeysReady), ArchiveCapability(), BlurBgCapability(),
         CallCapability(), CloudOcrCapability(), CopyCapability(), CopyCardCapability(),
         CutoutCapability(), DropLinkCapability(), EmailCapability(), EventCapability(),
         ExcelCapability(aiKeysReady), ExtractAllCapability(), FindCapability(), ImageCapability(),

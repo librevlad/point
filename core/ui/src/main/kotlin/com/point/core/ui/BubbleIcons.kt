@@ -50,7 +50,6 @@ import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.SaveAlt
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Send
-import androidx.compose.material.icons.filled.ShoppingBasket
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.Smartphone
@@ -77,7 +76,6 @@ fun bubbleIcon(key: String): ImageVector = when (if (key.startsWith("app:")) "op
     "translate" -> Icons.Filled.Translate
     "ai" -> Icons.Filled.AutoAwesome
     "cart" -> Icons.Filled.ShoppingCart
-    "basket" -> Icons.Filled.ShoppingBasket
     "reply" -> Icons.Filled.Send
     "link" -> Icons.Filled.Link
     "office" -> Icons.Filled.Article
@@ -129,7 +127,6 @@ fun bubbleColor(key: String): Color = when (if (key.startsWith("app:")) "open-in
     "open" -> Color(0xFF2F80ED)     // blue — open externally
     "ai" -> Color(0xFF7C4DFF)       // purple — intelligence
     "cart" -> Color(0xFF16A34A)     // green — groceries
-    "basket" -> Color(0xFFF2994A)   // amber — the growing pile
     "reply" -> Color(0xFF7C4DFF)    // purple — AI-composed reply
     "pdf" -> Color(0xFF2F80ED)      // blue — documents
     "link" -> Color(0xFF2F80ED)     // blue — open link

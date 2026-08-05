@@ -108,9 +108,6 @@ fun HomeScreen(
     crashReport: String? = null,
     onSendCrash: (String) -> Unit = {},
     onDismissCrash: () -> Unit = {},
-    basketCount: Int = 0,
-    onOpenBasket: () -> Unit = {},
-    onClearBasket: () -> Unit = {},
     fromPcCount: Int = 0,
     onPullFromPc: () -> Unit = {},
     onHideFromPc: () -> Unit = {},
@@ -150,10 +147,6 @@ fun HomeScreen(
 
         if (fromPcCount > 0) {
             FromPcBanner(fromPcCount, onPull = onPullFromPc, onHide = onHideFromPc)
-        }
-
-        if (basketCount > 0) {
-            BasketBanner(basketCount, onOpen = onOpenBasket, onClear = onClearBasket)
         }
 
         if (recent.isEmpty()) {
@@ -327,72 +320,6 @@ private fun FromPcBanner(count: Int, onPull: () -> Unit, onHide: () -> Unit) {
                     contentDescription = "Скрыть",
                     tint = MaterialTheme.colorScheme.onPrimaryContainer,
                 )
-            }
-        }
-    }
-}
-
-/**
- * The progressive object (#96): the pile keeps growing across flows; one tap opens
- * it as a COLLECTION whose actions apply to everything together.
- *
- * Крестика здесь больше нет (#540). На трёх соседних плашках — падение, буфер, «с компьютера» — тот
- * же значок означает «скрыть», то есть «убери эту строку с глаз»; здесь он одним тапом стирал всё
- * собранное, и вернуть это было нечем. Одинаковый знак с разной ценой — ловушка по построению:
- * человек, который убирал плашку, терял работу.
- *
- * Теперь разрушительное действие названо словом и спрашивает подтверждения прямо в плашке —
- * отдельный экран ради одного вопроса Point не заводит (тем же приёмом, что согласие на облако:
- * соглашаются СЛОВОМ ДЕЙСТВИЯ, а не «да/нет»).
- */
-@Composable
-private fun BasketBanner(count: Int, onOpen: () -> Unit, onClear: () -> Unit) {
-    // Вопрос забывается при повороте намеренно: сброс ведёт в безопасную сторону — к «ничего не
-    // стёрли», а не к «стёрли, пока экран пересоздавался».
-    var confirming by remember { mutableStateOf(false) }
-    Surface(
-        // Пока висит вопрос, плашка перестаёт быть дверью: тап мимо кнопок не должен открывать
-        // корзину поверх незаданного вопроса.
-        onClick = { if (!confirming) onOpen() },
-        color = MaterialTheme.colorScheme.tertiaryContainer,
-        shape = MaterialTheme.shapes.large,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-    ) {
-        Row(
-            modifier = Modifier.padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text(
-                    if (confirming) "Очистить корзину?" else "Корзина: $count",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onTertiaryContainer,
-                )
-                Text(
-                    // Цена названа до тапа, а не после: сколько именно пропадёт и что это навсегда.
-                    if (confirming) "Собранное ($count) пропадёт — вернуть будет нечем"
-                    else "Открыть всё вместе как один объект",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onTertiaryContainer,
-                )
-            }
-            if (confirming) {
-                TextButton(onClick = { confirming = false }) {
-                    Text("Отмена", color = MaterialTheme.colorScheme.onTertiaryContainer)
-                }
-                TextButton(
-                    onClick = {
-                        confirming = false
-                        onClear()
-                    },
-                ) {
-                    Text("Очистить", color = MaterialTheme.colorScheme.error)
-                }
-            } else {
-                TextButton(onClick = { confirming = true }) {
-                    Text("Очистить", color = MaterialTheme.colorScheme.onTertiaryContainer)
-                }
             }
         }
     }

@@ -114,7 +114,7 @@ class FlowViewModelTest {
         accountClient: com.point.core.flow.AccountClient = FakeCircleClient(),
         browser: com.point.core.flow.BrowserOpener = com.point.core.flow.BrowserOpener { },
         sharedTexts: com.point.core.flow.SharedTexts = FakeSharedTexts(),
-    ) = FlowViewModel(store, FakeRegistry(caps, cloud, slow), resolver, chatResponder, enrichment, history, favorites, usage, chosenApps, userKeys, journal, consent, appLauncher, FakePdfRasterizer(), sensory, sensorySettings, cloudPrivacy, snapshot, crashLog, dispatcher, pins, AppIconResolver { null }, pcPairings, pcTransport, discovery, basket, pcCaps, linkMonitor, PulledFileFactory { name -> java.io.File(java.io.File(System.getProperty("java.io.tmpdir")), "pulled-" + name).absolutePath }, noFrames, keyCheck, account, accountClient, browser, sharedTexts)
+    ) = FlowViewModel(store, FakeRegistry(caps, cloud, slow), resolver, chatResponder, enrichment, history, favorites, usage, chosenApps, userKeys, journal, consent, appLauncher, FakePdfRasterizer(), sensory, sensorySettings, cloudPrivacy, snapshot, crashLog, dispatcher, pins, AppIconResolver { null }, pcPairings, pcTransport, discovery, pcCaps, linkMonitor, PulledFileFactory { name -> java.io.File(java.io.File(System.getProperty("java.io.tmpdir")), "pulled-" + name).absolutePath }, noFrames, keyCheck, account, accountClient, browser, sharedTexts)
 
     /** Проверка ключа (#465): что «ответил сервис», решает тест, а не сеть. */
     private val keyCheck = FakeAiKeyCheck()
@@ -132,7 +132,6 @@ class FlowViewModelTest {
     }
 
     private val chatResponder = FakeChatResponder()
-    private val basket = FakeBasket()
     private val pcCaps = FakePcCaps()
     private val pcPairings = FakePcPairings()
     private val pcTransport = FakePcTransport()
@@ -143,13 +142,6 @@ class FlowViewModelTest {
         override fun all(): List<com.point.core.flow.PcRemoteAction> = saved.orEmpty()
         override suspend fun save(caps: List<com.point.core.flow.PcRemoteAction>) { saved = caps }
         override suspend fun clear() { cleared = true; saved = null }
-    }
-
-    private class FakeBasket : com.point.core.flow.Basket {
-        val added = mutableListOf<String>()
-        override suspend fun add(obj: PointObject): Int { added += obj.uri.value; return added.size }
-        override suspend fun items(): List<String> = added.toList()
-        override suspend fun clear() = added.clear()
     }
 
     private fun bubble(id: String = "a", title: String = "Действие") =
@@ -1389,21 +1381,6 @@ class FlowViewModelTest {
 
         assertEquals(listOf("pc-open"), pcCaps.saved?.map { it.id })
         vm.closeDevices()
-    }
-
-    @Test fun `the basket opens as one collection flow and its count reaches Home (#96)`() = runTest(dispatcher) {
-        basket.added += listOf("/b/1-a.txt", "/b/2-b.jpg")
-        val vm = vm()
-
-        vm.loadRecent(); advanceUntilIdle()
-        assertEquals(2, vm.basketCount.value)
-
-        vm.openBasket(); advanceUntilIdle()
-        assertEquals(ObjectKind.COLLECTION, vm.ui.value.frame?.obj?.state?.kind)
-
-        vm.endFlow()
-        vm.clearBasket(); advanceUntilIdle()
-        assertEquals(0, vm.basketCount.value)
     }
 
     @Test fun `обрезанный набор доносит до экрана настоящее число файлов`() = runTest(dispatcher) {
