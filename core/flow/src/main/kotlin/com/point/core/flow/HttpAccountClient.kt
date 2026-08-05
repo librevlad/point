@@ -160,6 +160,10 @@ class HttpAccountClient(
         ).status == 200
     }
 
+    override suspend fun deleteAccount(account: PointAccount): Boolean = io {
+        request(path = "/account", method = "DELETE", token = account.deviceToken).status == 200
+    }
+
     // --- HTTP, и ничего больше ---
 
     private class Reply(val status: Int?, val body: String?)

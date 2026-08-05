@@ -177,6 +177,20 @@ def create_app(
     def health() -> PlainTextResponse:
         return PlainTextResponse("ok")
 
+    # --- обещания о данных -------------------------------------------------------------
+    #
+    # Обе страницы открыты и не требуют ни пропуска, ни установленного приложения: магазин
+    # требует, чтобы человек мог прочитать их до того, как что-то поставит, и чтобы уйти можно
+    # было даже без доступа к телефону.
+
+    @app.get("/privacy", response_class=HTMLResponse)
+    def privacy() -> HTMLResponse:
+        return HTMLResponse(pages.privacy_page())
+
+    @app.get("/delete-account", response_class=HTMLResponse)
+    def deletion() -> HTMLResponse:
+        return HTMLResponse(pages.deletion_page())
+
     # --- вход --------------------------------------------------------------------------
 
     @app.post("/auth/start")

@@ -359,6 +359,17 @@ internal class FakeAccountClient(
         signedOut = true
         return revoke(account, account.deviceId)
     }
+
+    /** Сервер удалил аккаунт — или не дозвонились, и тогда не удалено ничего. */
+    var deleteFails = false
+    var deleted = false
+        private set
+
+    override suspend fun deleteAccount(account: PointAccount): Boolean {
+        if (deleteFails) return false
+        deleted = true
+        return true
+    }
 }
 
 /** Пропуск в памяти — хранилище для тестов. */

@@ -16,8 +16,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.point.core.flow.CircleDevice
@@ -59,9 +64,20 @@ fun MyDevicesScreen(
     onRevoke: (String) -> Unit,
     onSignOut: () -> Unit,
     onClose: () -> Unit,
+    /**
+     * «Удалить аккаунт» — учётная запись, круг и все байты сервера, необратимо.
+     *
+     * Отдельно от «Выйти» по существу: выход снимает это устройство и оставляет аккаунт на месте.
+     * Пока такой двери не было, человек, решивший уйти совсем, мог только выйти — а его почта,
+     * круг и невыбранные письма продолжали лежать на сервере.
+     */
+    onDeleteAccount: () -> Unit = {},
     /** «Сейчас» отдельным параметром, чтобы «на связи» и «вчера» можно было посудить тестом. */
     now: Long = System.currentTimeMillis(),
 ) {
+    // Необратимое действие спрашивает один раз — и спрашивает СВОИМИ словами, перечисляя, что
+    // исчезнет. «Вы уверены?» не сообщает ничего: уверен человек всегда, пока не прочитал, о чём.
+    var confirmingDelete by rememberSaveable { mutableStateOf(false) }
     val others = state.devices.filterNot { it.self }
     Column(
         modifier = Modifier
@@ -161,8 +177,46 @@ fun MyDevicesScreen(
                 Text("Закрыть", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
+
+        Spacer(Modifier.height(22.dp))
+        Column(
+            modifier = Modifier.widthIn(max = PortalColumnWidth).fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            if (!confirmingDelete) {
+                TextButton(onClick = { confirmingDelete = true }, enabled = !state.busy) {
+                    Text(DELETE_ACCOUNT, color = MaterialTheme.colorScheme.error)
+                }
+            } else {
+                Text(
+                    DELETE_ACCOUNT_WHAT,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    TextButton(onClick = { confirmingDelete = false }) {
+                        Text("Не удалять", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    TextButton(onClick = onDeleteAccount, enabled = !state.busy) {
+                        Text(DELETE_ACCOUNT_CONFIRM, color = MaterialTheme.colorScheme.error)
+                    }
+                }
+            }
+        }
     }
 }
+
+/** Дверь удаления — своими словами, а не «управление аккаунтом». */
+internal const val DELETE_ACCOUNT = "Удалить аккаунт"
+
+/** Что именно исчезнет. Перечислено поимённо: обобщение здесь читается как «что-то удалим». */
+internal const val DELETE_ACCOUNT_WHAT =
+    "Исчезнут: аккаунт Point, все ваши устройства в круге и всё, что лежит на сервере " +
+        "недоставленным. Объекты на самих устройствах останутся. Отменить будет нельзя."
+
+internal const val DELETE_ACCOUNT_CONFIRM = "Удалить навсегда"
 
 private const val NOW = 1_800_000_000_000L
 

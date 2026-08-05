@@ -110,6 +110,8 @@ fun PointHost(
     /** Отключить устройство круга — своё или чужое (#472). */
     onRevokeDevice: (String) -> Unit = {},
     onSignOut: () -> Unit = {},
+    /** «Удалить аккаунт» — учётная запись, круг и байты сервера, необратимо (требование Play). */
+    onDeleteAccount: () -> Unit = {},
     /** Открыть круг устройств — теперь разделом настроек, а не соседней дверью (#544). */
     onOpenDevices: () -> Unit = {},
     onCloseDevices: () -> Unit = {},
@@ -200,6 +202,7 @@ fun PointHost(
                 state = state.devicesScreen,
                 onRevoke = onRevokeDevice,
                 onSignOut = onSignOut,
+                onDeleteAccount = onDeleteAccount,
                 onClose = onCloseDevices,
             )
 
