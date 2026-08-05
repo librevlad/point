@@ -31,6 +31,10 @@ import org.robolectric.RobolectricTestRunner
  * Каждый тест здесь — одна из четырёх претензий владельца: Point молчит о том, что ключ нужен;
  * вставку из буфера приходится делать руками; «Сохранить» ничего не проверяет; отказ говорит
  * «ошибка» вместо причины.
+ *
+ * С #563 мастер живёт внутри раздела «Ключ AI», поэтому [keyScreen] сначала открывает раздел — ровно
+ * тем же тапом, каким это делает человек. Пришедшего с отказом или из проверки экран приводит туда
+ * сам, и второй раз стучаться незачем.
  */
 @RunWith(RobolectricTestRunner::class)
 class KeyOnboardingTest {
@@ -46,21 +50,26 @@ class KeyOnboardingTest {
         onSave: (UserAiConfig) -> Unit = {},
         onPasteKey: () -> String? = { null },
         onForgetKey: () -> Unit = {},
-    ) = compose.setContent {
-        KeyScreen(
-            config = config,
-            onSave = onSave,
-            onCancel = {},
-            usageEnabled = false,
-            usageSummary = null,
-            onToggleUsage = {},
-            note = note,
-            checking = checking,
-            verdict = verdict,
-            onCheck = onCheck,
-            onPasteKey = onPasteKey,
-            onForgetKey = onForgetKey,
-        )
+    ) {
+        compose.setContent {
+            KeyScreen(
+                config = config,
+                onSave = onSave,
+                onCancel = {},
+                usageEnabled = false,
+                usageSummary = null,
+                onToggleUsage = {},
+                note = note,
+                checking = checking,
+                verdict = verdict,
+                onCheck = onCheck,
+                onPasteKey = onPasteKey,
+                onForgetKey = onForgetKey,
+            )
+        }
+        if (note == null && verdict == null && !checking) {
+            compose.onNodeWithText("Ключ AI").performClick()
+        }
     }
 
     @Test fun `экран говорит, зачем нужен ключ, а не только просит его`() {
