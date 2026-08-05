@@ -30,21 +30,29 @@ class CloudDestinationNamesRealCapabilitiesTest {
     }
 
     @Test
-    fun `«Распознать в облаке» называет первого адресата поимённо`() {
+    fun `«Распознать в облаке» получает свой текст, а не общее умолчание`() {
         val text = cloudDestination(CloudOcrCapability.ID)
         assertNotEquals("показано умолчание вместо своего текста", fallback, text)
-        // Куда именно уходит снимок — Mistral, Франция (ЕС). Обещание, которое мы держим:
-        // это первый в очереди, и он же единственный на уровне «только Европа».
-        assertTrue(text, text.contains("Mistral"))
-        assertTrue(text, text.contains("ЕС"))
+        assertTrue(text, text.contains("распознавания"))
     }
 
+    /**
+     * Имени того, кого выбрал Point, здесь больше нет — и это не потеря сцепки, а #560.
+     *
+     * Раньше тест требовал обратного: «называет первого адресата поимённо», `Mistral`, `ЕС`. На
+     * телефоне это прочиталось так, как и было написано, — рассказом про нашу кухню в секунду,
+     * когда человек решает, отпускать ли снимок. Владелец: «мне не интересно, что Mistral во
+     * Франции и кто там вообще читает». Сцепка имён, ради которой этот файл заведён, осталась
+     * целой: она проверяется тем, что у способности **свой** текст, а не умолчание.
+     */
     @Test
-    fun `человеку сказано, что решение за ним, и где это настраивается`() {
+    fun `оба вопроса про распознавание молчат о том, кого выбрал Point`() {
         listOf(OcrCapability.ID, CloudOcrCapability.ID).forEach { id ->
             val text = cloudDestination(id)
-            assertTrue("${id.value}: $text", text.contains("согласия"))
-            assertTrue("${id.value}: $text", text.contains("Куда можно отправлять"))
+            assertTrue("${id.value}: $text", !text.contains("Mistral"))
+            assertTrue("${id.value}: $text", !text.contains("Куда можно отправлять"))
+            // Осталась ровно одна мысль: что уходит и что вернётся.
+            assertTrue("${id.value}: $text", text.contains("уйдёт") && text.contains("вернётся"))
         }
     }
 }

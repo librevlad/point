@@ -7,6 +7,7 @@ import com.point.core.flow.DropLink
 import com.point.core.flow.Latency
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.Realizer
+import com.point.core.flow.reportStage
 import com.point.core.model.ActionResult
 import com.point.core.model.CapabilityId
 import com.point.core.model.ObjectKind
@@ -71,10 +72,23 @@ class DropLinkRealizer @Inject constructor(
 ) : Realizer {
     override val capabilityId = DropLinkCapability.ID
 
+    /**
+     * Одна стадия, и она про самое важное (#288).
+     *
+     * «Дать ссылку» объявлено [Latency.SLOW] и сетевым, поэтому забирает экран целиком — и до сих
+     * пор человек смотрел там на голый счётчик секунд, пока по сети уезжал его файл. Ровно в этом
+     * ожидании вопрос «не зависло ли?» стоит дороже всего: файл уже в дороге, а отменить его
+     * человек ещё может.
+     *
+     * Разбить загрузку честно нечем — контракт [DropLink] отдаёт готовую ссылку одним вызовом и о
+     * своём ходе молчит, — и выдумывать проценты мы не станем. Но назвать работу, которая правда
+     * идёт, — уже правда: тот же случай и то же решение, что у «Распаковать».
+     */
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult {
         val file = File(input.uri.value)
         val name = input.metadata["name"]?.takeIf { it.isNotBlank() } ?: file.name
 
+        reportStage("Загружаю файл")
         val link = drop.give(file.absolutePath, name, input.mime)
             ?: return ActionResult.Failure(
                 "Ссылку выдать не удалось — нет связи с сервером или файл слишком большой",
