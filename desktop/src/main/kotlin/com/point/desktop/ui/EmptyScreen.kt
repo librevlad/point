@@ -38,6 +38,8 @@ import com.point.desktop.PcConfig
 fun EmptyScreen(
     config: PcConfig,
     onTakeClipboard: () -> Unit = {},
+    /** Снять экран (#585) — то, чего на телефоне нет: самое частое на ПК не лежит файлом нигде. */
+    onGrabScreen: () -> Unit = {},
     /** Круг устройств аккаунта (#473) — на месте, где стояла карточка с QR. */
     devices: (@Composable () -> Unit)? = null,
 ) {
@@ -77,6 +79,12 @@ fun EmptyScreen(
                     PointColors.cyan,
                     hotkey = "Ctrl+Shift+V",
                     onClick = onTakeClipboard,
+                )
+                WayIn(
+                    "Снять экран целиком",
+                    PointColors.violet,
+                    hotkey = "Ctrl+Shift+S",
+                    onClick = onGrabScreen,
                 )
                 WayIn("Поделиться с телефона в Point", PointColors.muted)
             }

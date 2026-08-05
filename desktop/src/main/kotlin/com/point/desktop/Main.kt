@@ -14,6 +14,9 @@ import java.io.File
  * Composition root — hand-wired DI (no Hilt on the JVM). AWT implementations of the
  * desktop seams live here and only here; everything below them is pure and tested.
  */
+/** Сколько ждать, пока окно Point уйдёт с глаз перед снимком: меньше — и оно попадёт в кадр. */
+private const val SCREEN_GRAB_DELAY_MS = 220L
+
 fun main(args: Array<String>) {
     val pointDir = File(System.getProperty("user.home"), ".point-pc")
     // «Отправить в Point» из проводника (#252). Point на компьютере обычно уже открыт, поэтому
@@ -59,6 +62,8 @@ fun main(args: Array<String>) {
         target.absolutePath
     }
 
+    // Снимок экрана (#585): AWT-`Robot` живёт здесь, как и весь остальной AWT, — за швом.
+    val screenGrab = ScreenGrab(File(System.getProperty("user.home"), "Point/screens"))
     val downloader = YtDlpDownloader(File(System.getProperty("user.home"), "Point/downloads"))
     val outbox = Outbox(File(System.getProperty("user.home"), "Point/outbox"))
     // Чем компьютер умеет рисовать слайды (#403). Ищется один раз при старте: между запусками
@@ -285,6 +290,16 @@ fun main(args: Array<String>) {
                 },
                 onTextDropped = { text -> state.onReceived(inbox.addText(text), ObjectSource.DROPPED) },
                 onClipboardTaken = { text -> state.onReceived(inbox.addText(text), ObjectSource.CLIPBOARD) },
+                // Снимок экрана (#585). Окно Point убирается на миг: иначе человек снимет сам
+                // Point вместо того, что было под ним.
+                onGrabScreen = {
+                    val was = windowState.isMinimized
+                    windowState.isMinimized = true
+                    Thread.sleep(SCREEN_GRAB_DELAY_MS)
+                    val file = screenGrab.take()
+                    windowState.isMinimized = was
+                    file
+                },
             )
             }
         }

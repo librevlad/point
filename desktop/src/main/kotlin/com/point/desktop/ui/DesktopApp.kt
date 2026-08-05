@@ -70,6 +70,12 @@ fun DesktopApp(
     onTextDropped: (String) -> Unit = {},
     /** Взятое из буфера — отдельный вход: журнал (#407) должен отличать его от перетаскивания. */
     onClipboardTaken: (String) -> Unit = onTextDropped,
+    /**
+     * Снимок экрана как объект (#585) — четвёртый вход, которого нет и не будет у телефона.
+     *
+     * `null` — снять не вышло (среда без экрана): зовущий говорит об этом человеку словами.
+     */
+    onGrabScreen: (() -> File?)? = null,
 ) {
     val items by state.items.collectAsState()
     val message by state.message.collectAsState()
@@ -118,16 +124,25 @@ fun DesktopApp(
         }.getOrNull()
         if (text.isNullOrBlank()) state.say("В буфере пусто") else onClipboardTaken(text)
     }
+    // Снять экран (#585). Окно Point прячется на миг перед съёмкой: иначе человек снимет сам
+    // Point вместо того, что за ним, — и получит объект, которого не просил.
+    val grabScreen = {
+        val file = onGrabScreen?.invoke()
+        if (file == null) state.say("Снять экран не вышло") else onFilesDropped(listOf(file))
+    }
     Surface(
         color = MaterialTheme.colorScheme.surface,
         modifier = Modifier.fillMaxSize()
             .dragAndDropTarget(shouldStartDragAndDrop = { true }, target = dropTarget)
             .onPreviewKeyEvent { event ->
-                val hit = event.type == androidx.compose.ui.input.key.KeyEventType.KeyDown &&
-                    event.isCtrlPressed && event.isShiftPressed &&
+                val down = event.type == androidx.compose.ui.input.key.KeyEventType.KeyDown
+                val paste = down && event.isCtrlPressed && event.isShiftPressed &&
                     event.key == androidx.compose.ui.input.key.Key.V
-                if (hit) takeClipboard()
-                hit
+                val grab = down && event.isCtrlPressed && event.isShiftPressed &&
+                    event.key == androidx.compose.ui.input.key.Key.S
+                if (paste) takeClipboard()
+                if (grab) grabScreen()
+                paste || grab
             },
     ) {
         // Вход стоит перед работой (#473): компьютер без круга и раньше ничего не делал — он
@@ -192,7 +207,7 @@ fun DesktopApp(
             if (items.isEmpty() && remembered.isEmpty()) {
                 // Экран без объекта занят тем, чем работу начать (#285): портал, три способа
                 // дать объект и подключение телефона — а не одним лишь QR.
-                EmptyScreen(config, onTakeClipboard = takeClipboard) {
+                EmptyScreen(config, onTakeClipboard = takeClipboard, onGrabScreen = grabScreen) {
                     MyDevicesPane(
                         email = account.current()?.email.orEmpty(),
                         devices = circle,
@@ -221,7 +236,7 @@ fun DesktopApp(
                         if (selected == null) {
                             // Память есть, объекта на экране нет: место занято тем, чем начать
                             // работу, а не пустотой рядом со списком.
-                            EmptyScreen(config, onTakeClipboard = takeClipboard) {
+                            EmptyScreen(config, onTakeClipboard = takeClipboard, onGrabScreen = grabScreen) {
                                 MyDevicesPane(
                                     email = account.current()?.email.orEmpty(),
                                     devices = circle,
