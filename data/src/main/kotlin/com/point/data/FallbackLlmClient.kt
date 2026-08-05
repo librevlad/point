@@ -57,21 +57,23 @@ class FallbackLlmClient @Inject constructor(
         error(summarise(errors))
     }
 
-    /** One human line instead of every provider's raw error concatenated. */
+    /**
+     * One human line instead of every provider's raw error concatenated.
+     *
+     * Кончившаяся бесплатная квота — не поломка, и ветка у неё та же, что у облачного чтения
+     * ([summariseCloudErrors]): причина одна, а два набора слов про одно и то же — вторая правда.
+     * До неё вся цепочка, упёршаяся в лимит, показывала под объектом «AI недоступен — » и склейку
+     * провайдерских строк: человек читал их как поломку и шёл чинить исправное.
+     *
+     * Признаки — общие ([isNetworkError], [isQuotaError]), а не свой список рядом: пока список
+     * «нет сети» лежал здесь копией, он тихо расходился с тем, по которому судит облако.
+     */
     private fun summarise(errors: List<String>): String = when {
         errors.isNotEmpty() && errors.all { it.isNetworkError() } ->
             "AI недоступен — нет подключения к интернету"
+        errors.isNotEmpty() && errors.all { it.isQuotaError() } ->
+            "Бесплатные лимиты AI исчерпаны — вернитесь позже, платить не идём"
         else -> "AI недоступен — " +
             errors.map { it.substringBefore('\n').take(120) }.distinct().take(2).joinToString("; ")
-    }
-
-    private fun String.isNetworkError(): Boolean = NETWORK_HINTS.any { contains(it, ignoreCase = true) }
-
-    private companion object {
-        val NETWORK_HINTS = listOf(
-            "resolve host", "No address associated", "Unable to resolve",
-            "connection abort", "Network is unreachable", "Failed to connect",
-            "timed out", "timeout",
-        )
     }
 }

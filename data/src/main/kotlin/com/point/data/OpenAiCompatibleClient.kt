@@ -1,5 +1,6 @@
 package com.point.data
 
+import com.point.core.flow.AI_KEY_HINT
 import com.point.core.flow.LlmClient
 import com.point.core.flow.withoutPreamble
 import com.point.core.flow.ObjectStore
@@ -141,7 +142,7 @@ class OpenAiCompatibleClient(
                 mapOf("Authorization" to "Bearer ${provider.apiKey}"),
                 requestBody(obj, promptFor(obj, prompt)),
             )
-            if (res.code !in 200..299) error("${provider.label} HTTP ${res.code}: ${res.body.take(300)}")
+            if (res.code !in 200..299) error(refusal(res.code))
             val answer = parseAnswer(res.body)
             // Deterministic contract, not phrase-guessing: an image request tells the model to
             // reply with exactly the marker if it can't see the image, so a text-only model that
@@ -195,6 +196,37 @@ class OpenAiCompatibleClient(
         if (choices.length() == 0) error("${provider.label}: пустой ответ")
         val content = choices.getJSONObject(0).getJSONObject("message").optString("content")
         return content.ifBlank { error("${provider.label}: пустой текст") }
+    }
+
+    /**
+     * Отказ сервиса — словами человека: без кода ответа и без чужого JSON.
+     *
+     * Здесь стояло `"${'$'}{provider.label} HTTP ${'$'}{res.code}: ${'$'}{res.body.take(300)}"`, и в раздаваемой
+     * сборке, где весь AI — это ключ человека с меткой «свой ключ», под объектом вырастало
+     * `AI недоступен — свой ключ HTTP 429: {"error":{"message":"Rate limit reached for model …`.
+     * Оно не отвечает ни на «что случилось», ни на «что теперь делать», зато показывает кусок
+     * чужого ответа — а сервисы возвращают в теле ошибки и присланный запрос, то есть иногда ключ.
+     * Тело поэтому не доходит до строки отказа вовсе: вычёркивать секрет из того, что уже собрано,
+     * дороже, чем не собирать.
+     *
+     * **401/403 несут [AI_KEY_HINT] не для красоты.** По этой марке экран узнаёт отказ, который
+     * человек может починить сам, и ставит рядом дорогу в настройки ([refusalNeedsKey]). Марка
+     * появлялась, только когда ключа не было ВОВСЕ, — заданный, но неверный ключ оставлял человека
+     * в тупике с JSON и без выхода.
+     *
+     * **Цена, названная вслух:** 403 назван «ключ не принят» вместе с 401, хотя у части сервисов
+     * так же выглядит отказ пустить запрос вообще. Отправить чинить исправный ключ — цена меньшая,
+     * чем не сказать, куда идти; исход проверяется живой проверкой ключа на самом экране.
+     */
+    private fun refusal(code: Int): String = when (code) {
+        401, 403 -> "${provider.label}: ключ не принят — $AI_KEY_HINT в настройках"
+        402 -> "${provider.label}: сервис просит оплату — у этого ключа нет бесплатного доступа"
+        // Не из списка блокера, но из той же ямы: неверно набранное имя модели — вторая по частоте
+        // ошибка настройки, а «сервис отказал» не ведёт никуда.
+        404 -> "${provider.label}: сервис не знает такой модели"
+        429 -> "${provider.label}: $FREE_LIMIT_SPENT — вернитесь позже, платить не идём"
+        in 500..599 -> "${provider.label}: сервис сейчас не отвечает"
+        else -> "${provider.label}: сервис отказал"
     }
 
     private fun isImage(obj: PointObject): Boolean = obj.mime.startsWith("image/")
