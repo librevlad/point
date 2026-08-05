@@ -24,7 +24,6 @@ class ProcessTextActivity : FlowHostActivity() {
             finish()
             return
         }
-        val uri = Uri.fromFile(cacheTextFile(cacheDir, text))
-        viewModel.onShared(uri.toString(), "text/plain")
+        viewModel.onSharedText(text)
     }
 }

@@ -131,6 +131,8 @@ class FlowViewModel @Inject constructor(
     private val accountClient: com.point.core.flow.AccountClient,
     /** Открыть системный браузер — единственное, что вход просит у платформы (#472). */
     private val browser: com.point.core.flow.BrowserOpener,
+    /** Временные копии расшаренного текста: их заводит `:app`, их же и убирает в конце флоу. */
+    private val sharedTexts: com.point.core.flow.SharedTexts,
 ) : ViewModel() {
 
     /**
@@ -292,6 +294,37 @@ class FlowViewModel @Inject constructor(
                     viaTitle = f.viaTitle,
                 )
             }
+        }
+    }
+
+    /**
+     * Расшаренный текст входит во флоу файлом — тем же путём, что и всё остальное.
+     *
+     * Файл заводит [SharedTexts], а не сама Activity: тогда его есть кому убрать в конце флоу.
+     */
+    fun onSharedText(text: String) {
+        val path = runCatching { sharedTexts.create(text) }.getOrNull()
+        if (path == null) {
+            _ui.update { it.copy(message = "Не удалось принять текст", messageOutcome = Outcome.FAILED) }
+            return
+        }
+        onShared(java.io.File(path).toURI().toString(), "text/plain")
+    }
+
+    /**
+     * Пришло то, чего Point разобрать не смог.
+     *
+     * Раньше в этом месте не происходило ничего: экран оставался пустым и чёрным, без слова и без
+     * выхода. Отказ обязан быть виден — иначе человек не знает даже, дошёл ли его файл.
+     */
+    fun refuseIncoming() {
+        _ui.update {
+            it.copy(
+                busy = null,
+                busyStage = null,
+                message = "Point не понял, что ему прислали — попробуйте поделиться файлом",
+                messageOutcome = Outcome.FAILED,
+            )
         }
     }
 
@@ -1754,6 +1787,15 @@ class FlowViewModel @Inject constructor(
             closeDevices()
             return true
         }
+        // Экран входа был единственным местом без выхода: «назад» проваливался мимо всех веток,
+        // Activity закрывалась, и Point исчезал целиком — вместе с объектом, ради которого его
+        // открыли. Кнопка «Отменить» на экране рисуется только в состоянии ожидания, так что
+        // из остальных состояний выхода не было вовсе.
+        if (_ui.value.signIn != null) {
+            cancelSignIn()
+            dismissSignIn()
+            return true
+        }
         if (_ui.value.inputPrompt != null || _ui.value.needsImage != null) {
             cancelInput()
             return true
@@ -1819,6 +1861,13 @@ class FlowViewModel @Inject constructor(
 
     fun endFlow() {
         cancelEnrichment()
+        // Флоу кончился — кончилась и работа над его объектом. Раньше отменялись только обогащение
+        // и разговор, а начатое действие продолжало идти: человек уходил на «Недавнее», и через
+        // минуту поверх него приезжал результат того, от чего он ушёл. Уход — это тоже отмена.
+        busyJob?.cancel()
+        busyJob = null
+        signInJob?.cancel()
+        signInJob = null
         // Флоу кончился — кончился и разговор о его объекте (#453): держать вопрос в пути некому,
         // и ответ, пришедший в пустоту, ляжет в разговор, которого больше нет.
         chatJob?.cancel()
@@ -1829,6 +1878,10 @@ class FlowViewModel @Inject constructor(
         _ui.update { FlowUiState() }
         viewModelScope.launch {
             runCatching { store.clear() }
+            // Расшаренный текст лежал в кэше и переживал всё: инвариант «по окончании флоу —
+            // обязательный clear()» держался только для рабочей копии, а через эту дверь идут
+            // пароли, переписка и реквизиты.
+            runCatching { sharedTexts.clear() }
             runCatching { flowSnapshot.clear() } // the journey ended on purpose — forget it (#7)
         }
     }
@@ -2009,7 +2062,12 @@ class FlowViewModel @Inject constructor(
         val graphChanged = newFound.size != frame.found.size || newRelations.size != frame.relations.size
         if (!objChanged && !graphChanged && update.running == frame.enriching) return
 
-        val newBubbles = if (objChanged) registry.bubblesFor(newState) else frame.bubbles
+        // Порядок уже показанного не трогаем — иначе строка уезжает из-под пальца (см. keepShownOrder).
+        val newBubbles = if (objChanged) {
+            com.point.core.model.keepShownOrder(frame.bubbles, registry.bubblesFor(newState))
+        } else {
+            frame.bubbles
+        }
         val refreshed = frame.copy(
             obj = frame.obj.copy(state = newState, metadata = newMetadata),
             bubbles = newBubbles,

@@ -19,7 +19,7 @@ class SourceRestoreTest {
 
     /** Тот же набор, что собирает Hilt: экран ищет в нём по имени, а не по месту. */
     private val camera = CameraSource()
-    private val sources = listOf(ClipboardSource(), camera, VoiceSource())
+    private val sources = listOf(ClipboardSource(com.point.FakeSharedTexts()), camera, VoiceSource())
 
     @Test fun `сохранённое имя возвращает того самого, кого ждали`() {
         assertSame(camera, restoredSource(sources, "camera"))
@@ -56,7 +56,7 @@ class SourceRestoreTest {
 
     @Test fun `источнику без своей памяти сохранять нечего`() {
         // Буфер и голос ничего не держат между «запросили» и «вернулись» — умолчание контракта.
-        val clipboard = ClipboardSource()
+        val clipboard = ClipboardSource(com.point.FakeSharedTexts())
         assertNull(clipboard.saveState())
         clipboard.restoreState("что-то чужое")
         assertNull(clipboard.saveState())
@@ -72,7 +72,7 @@ class SourceRestoreTest {
 
         // Возвращение: набор собран заново (Hilt отдаёт новые объекты), экран ищет по имени.
         val fresh = CameraSource()
-        val restored = restoredSource(listOf(ClipboardSource(), fresh, VoiceSource()), savedId)
+        val restored = restoredSource(listOf(ClipboardSource(com.point.FakeSharedTexts()), fresh, VoiceSource()), savedId)
         restored?.restoreState(savedState)
 
         assertSame(fresh, restored)

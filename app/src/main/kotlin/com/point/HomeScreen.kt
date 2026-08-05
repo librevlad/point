@@ -64,6 +64,20 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
+ * Что такое Point — одной строкой, на пустом доме, до всякой настройки.
+ *
+ * Продукт нигде не говорил, что он такое: слово «объект» — внутреннее, а первым сообщением стоял
+ * призыв подключить чужой AI-сервис. Новый человек начинал знакомство с рассказа о том, чего
+ * Point без ключа не умеет, — при том что лучшее, что он умеет, работает бесплатно и без сети.
+ *
+ * Строка называет продукт глаголом и примером, а не определением: «дайте — прочитает — подскажет».
+ * Тур, экскурсия и обучающие экраны для этого не нужны и заведены не будут.
+ */
+internal const val WHAT_POINT_IS: String =
+    "Дайте фото, скриншот, документ или текст — Point прочитает его и покажет, что с ним можно " +
+        "сделать"
+
+/**
  * Point's home: the recent objects you brought in. Tap one to keep working with it —
  * no going back to the source app to share again (the metric: fewer switches).
  *
@@ -125,19 +139,6 @@ fun HomeScreen(
             )
         }
 
-        // Зачем ключ — сказанное ДО того, как человек упёрся в отказ (#465). Свежепоставленный
-        // Point молчал об этом вовсе: «Понять», «Перевести», «Спросить AI» и расшифровка отвечали
-        // отказом, и узнавал человек о ключе в худший момент — когда действие уже провалилось.
-        // Приглашение стоит здесь, а не на экране объекта: тот держит бюджет ≤300 мс без I/O.
-        if (!aiKeySet) {
-            Box(
-                Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                ConnectAiRow(onConnect = onSettings)
-            }
-        }
-
         if (crashReport != null) {
             // #11: crash visibility - offered once, leaves the device only by explicit share.
             CrashBanner(onSend = { onSendCrash(crashReport) }, onDismiss = onDismissCrash)
@@ -172,14 +173,20 @@ fun HomeScreen(
                     )
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        // Раньше здесь был один путь внутрь — «поделитесь». Для того, у кого
-                        // объекта ещё нет, это был тупик: сделать прямо тут было нечего (#456).
-                        "Поделитесь объектом из любого приложения — или создайте его здесь",
+                        // Первое, что человек читает, обязано отвечать на «что это такое».
+                        // Прежняя строка звала поделиться объектом — а слова «объект» он ещё не
+                        // знает; и рассказывать про AI-ключ раньше, чем про сам продукт, значило
+                        // начинать знакомство с того, чего Point без чужого сервиса не умеет.
+                        WHAT_POINT_IS,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Spacer(Modifier.height(22.dp))
                     NewObjectDoor(sourceLabels = sourceLabels, onClick = onNewObject)
+                    if (!aiKeySet) {
+                        Spacer(Modifier.height(14.dp))
+                        ConnectAiRow(onConnect = onSettings)
+                    }
                 }
             }
         } else {
@@ -194,6 +201,10 @@ fun HomeScreen(
                         onClick = onNewObject,
                         modifier = Modifier.padding(bottom = 8.dp),
                     )
+                }
+                if (!aiKeySet) {
+                    // Ниже главной двери, а не над ней: сначала то, ради чего Point открыли.
+                    item { ConnectAiRow(onConnect = onSettings, modifier = Modifier.padding(bottom = 8.dp)) }
                 }
                 item {
                     Text(
@@ -266,7 +277,10 @@ internal fun sourcesSubtitle(labels: List<String>): String? =
 @Composable
 private fun ConnectAiRow(onConnect: () -> Unit, modifier: Modifier = Modifier) {
     PortalRow(
-        title = "Подключите AI — пара минут",
+        // Без «пара минут»: выпуск ключа у чужого сервиса за пару минут не делается, а обещание,
+        // которое человек проверит первым же действием, дороже сэкономленной строки. Короткий
+        // заголовок ещё и перестал ломаться на две строки поверх подписи.
+        title = "Подключить AI",
         subtitle = com.point.core.flow.AI_KEY_WHY_SHORT,
         onClick = onConnect,
         icon = com.point.core.ui.bubbleIcon("ai"),

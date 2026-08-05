@@ -86,14 +86,14 @@ class KeyOnboardingTest {
         compose.setContent {
             HomeScreen(recent = oneRecent, onOpen = {}, onSettings = {}, aiKeySet = false)
         }
-        compose.onNodeWithText("Подключите AI", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("Подключить AI", substring = true).assertIsDisplayed()
     }
 
     @Test fun `с ключом «Недавнее» молчит — звать больше некуда`() {
         compose.setContent {
             HomeScreen(recent = oneRecent, onOpen = {}, onSettings = {}, aiKeySet = true)
         }
-        compose.onNodeWithText("Подключите AI", substring = true).assertDoesNotExist()
+        compose.onNodeWithText("Подключить AI", substring = true).assertDoesNotExist()
     }
 
     @Test fun `ключ из буфера встаёт в поле одним тапом`() {

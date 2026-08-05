@@ -112,7 +112,8 @@ class FlowViewModelTest {
         account: com.point.core.flow.AccountStore = FakeAccountStore(TEST_ACCOUNT),
         accountClient: com.point.core.flow.AccountClient = FakeCircleClient(),
         browser: com.point.core.flow.BrowserOpener = com.point.core.flow.BrowserOpener { },
-    ) = FlowViewModel(store, FakeRegistry(caps, cloud, slow), resolver, chatResponder, enrichment, history, favorites, usage, chosenApps, userKeys, journal, consent, appLauncher, FakePdfRasterizer(), sensory, sensorySettings, cloudPrivacy, snapshot, crashLog, dispatcher, pins, AppIconResolver { null }, pcPairings, pcTransport, discovery, basket, pcCaps, linkMonitor, PulledFileFactory { name -> java.io.File(java.io.File(System.getProperty("java.io.tmpdir")), "pulled-" + name).absolutePath }, noFrames, keyCheck, account, accountClient, browser)
+        sharedTexts: com.point.core.flow.SharedTexts = FakeSharedTexts(),
+    ) = FlowViewModel(store, FakeRegistry(caps, cloud, slow), resolver, chatResponder, enrichment, history, favorites, usage, chosenApps, userKeys, journal, consent, appLauncher, FakePdfRasterizer(), sensory, sensorySettings, cloudPrivacy, snapshot, crashLog, dispatcher, pins, AppIconResolver { null }, pcPairings, pcTransport, discovery, basket, pcCaps, linkMonitor, PulledFileFactory { name -> java.io.File(java.io.File(System.getProperty("java.io.tmpdir")), "pulled-" + name).absolutePath }, noFrames, keyCheck, account, accountClient, browser, sharedTexts)
 
     /** Проверка ключа (#465): что «ответил сервис», решает тест, а не сеть. */
     private val keyCheck = FakeAiKeyCheck()
@@ -317,6 +318,61 @@ class FlowViewModelTest {
         vm.endFlow(); advanceUntilIdle()
 
         assertTrue("копия объекта обязана быть стёрта", store.clearedTimes > beforeEnd)
+    }
+
+    /**
+     * Расшаренный текст тоже уходит с диска (RC).
+     *
+     * Инвариант «по окончании флоу — обязательный clear()» держался только для рабочей копии, а
+     * текст из «Поделиться», из выделения и из буфера лежал в кэше приложения и переживал всё. На
+     * эмуляторе после нескольких сеансов там нашлось полтора десятка таких файлов — а через эту
+     * дверь идут пароли, переписка и реквизиты. Смотрим на диск, а не на счётчик вызовов.
+     */
+    @Test fun `конец флоу уносит и расшаренный текст, а не только рабочую копию`() = runTest(dispatcher) {
+        val texts = FakeSharedTexts()
+        val vm = vm(sharedTexts = texts)
+        vm.onSharedText("пароль от почты"); advanceUntilIdle()
+        assertTrue("текст обязан лечь файлом — иначе флоу его не примет", texts.files().isNotEmpty())
+
+        vm.endFlow(); advanceUntilIdle()
+
+        assertTrue("на диске не должно остаться расшаренного текста", texts.files().isEmpty())
+    }
+
+    /**
+     * Уход из флоу — это отмена (RC).
+     *
+     * Раньше `endFlow` снимал обогащение и разговор, но не саму работу: человек уходил на
+     * «Недавнее», а через минуту поверх него приезжал результат того, от чего он ушёл.
+     */
+    @Test fun `уход из флоу снимает начатую работу`() = runTest(dispatcher) {
+        val vm = vm(slow = setOf(CapabilityId("a")))
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        vm.onBubble(bubble("a")) // работа пошла и держит экран ожидания
+        assertNotNull("работа обязана идти — иначе снимать нечего", vm.ui.value.busy)
+
+        vm.endFlow(); advanceUntilIdle()
+
+        assertNull("после ухода работа не продолжается", vm.ui.value.busy)
+        assertNull("и её результат не приезжает поверх «Недавнего»", vm.ui.value.frame)
+    }
+
+    /**
+     * Из входа есть выход (RC).
+     *
+     * Проверено живьём до правки: «Устройства» → назад → Point закрывался целиком, вместе с
+     * объектом, ради которого его открыли. Кнопка «Отменить» на экране входа рисуется только в
+     * состоянии ожидания, так что из остальных состояний выхода не было вовсе.
+     */
+    @Test fun `назад с экрана входа возвращает в Point, а не закрывает его`() = runTest(dispatcher) {
+        val vm = vm()
+        vm.signIn(); advanceUntilIdle()
+        assertNotNull("дверь входа обязана быть на экране", vm.ui.value.signIn)
+
+        val handled = vm.onBack()
+
+        assertTrue("«назад» обязан быть обработан, а не уйти системе", handled)
+        assertNull("экран входа закрылся", vm.ui.value.signIn)
     }
 
     /** Открыли объект из «Недавнего» — предыдущая копия уходит ДО того, как появится новая:

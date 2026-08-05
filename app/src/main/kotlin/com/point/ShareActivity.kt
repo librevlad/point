@@ -32,11 +32,11 @@ class ShareActivity : FlowHostActivity() {
         ) {
             is Incoming.Single -> viewModel.onShared(incoming.uri, incoming.mime)
             is Incoming.Many -> viewModel.onSharedMultiple(incoming.uris)
-            is Incoming.Body -> {
-                val uri = Uri.fromFile(cacheTextFile(cacheDir, incoming.text))
-                viewModel.onShared(uri.toString(), "text/plain")
-            }
-            null -> Unit
+            is Incoming.Body -> viewModel.onSharedText(incoming.text)
+            // Разобрать не вышло — и раньше здесь не происходило ровно ничего: человек видел
+            // пустой чёрный экран без единого слова и без выхода. Молчание в ответ на действие —
+            // худший из отказов: непонятно даже, дошло ли оно.
+            null -> viewModel.refuseIncoming()
         }
     }
 }

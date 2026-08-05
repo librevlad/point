@@ -30,6 +30,24 @@ data class Bubble(
 )
 
 /**
+ * Порядок уже показанных действий не меняется под пальцем.
+ *
+ * Разбор объекта идёт в фоне и заканчивается через секунды после того, как экран нарисован: Point
+ * узнаёт, что на фотографии текст, и набор действий пересобирается. Раньше он пересобирался
+ * целиком — со своим ранжированием, — и строка, в которую человек уже целился, уезжала, а на её
+ * место вставала другая. Тап, нацеленный в бесплатное локальное чтение, попадал в платное сетевое
+ * действие: цена решения менялась между взглядом и касанием.
+ *
+ * Поэтому: показанное остаётся на своих местах в прежнем порядке, новое дописывается следом.
+ * Ранжирование не отменяется — оно решает судьбу только тех действий, которых человек ещё не видел.
+ */
+fun keepShownOrder(shown: List<Bubble>, fresh: List<Bubble>): List<Bubble> {
+    if (shown.isEmpty()) return fresh
+    val seen = shown.withIndex().associate { (i, b) -> b.capabilityId to i }
+    return fresh.sortedBy { seen[it.capabilityId] ?: Int.MAX_VALUE }
+}
+
+/**
  * The action's visual weight class (#114) — derived from the capability's meta, never
  * hand-assigned: INSTANT (local, immediate — copy/share/open), SMART (real on-device
  * work — recognise/transform), AI (leaves the device — cloud models). The three levels

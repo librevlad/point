@@ -165,7 +165,7 @@ class HomeActivity : ComponentActivity() {
 
     private fun useClipboard(text: String) {
         viewModel.dismissClipboard()
-        viewModel.onShared(Uri.fromFile(cacheTextFile(cacheDir, text)).toString(), "text/plain")
+        viewModel.onSharedText(text)
     }
 }
 
