@@ -47,6 +47,33 @@ interface AccountStore {
 }
 
 /**
+ * Где лежит начатый, но не законченный вход (#561).
+ *
+ * Отдельный шов, а не поле в [AccountStore]: у них разные сроки жизни и разный смысл. Пропуск —
+ * годы, начатый вход — пять минут; пропуск говорит «мы вошли», начатый вход — «мы ещё спрашиваем».
+ * Хранится он там же, где пропуск (шифрованно), потому что [PendingLogin.claimToken] — секрет
+ * устройства: по нему забирается пропуск ко всем объектам аккаунта.
+ */
+interface PendingLoginStore {
+    fun current(): PendingLogin?
+    suspend fun save(login: PendingLogin)
+    suspend fun clear()
+}
+
+/**
+ * Начатый вход в памяти — умолчание для тех, кто живёт дольше браузера.
+ *
+ * Окно на компьютере не уничтожают, пока человек ходит в браузер: там опрос переживает поход сам.
+ * Телефону этого мало, и он подставляет сюда шифрованное хранилище.
+ */
+class InMemoryPendingLogins : PendingLoginStore {
+    private var login: PendingLogin? = null
+    override fun current(): PendingLogin? = login
+    override suspend fun save(login: PendingLogin) { this.login = login }
+    override suspend fun clear() { login = null }
+}
+
+/**
  * Адрес сервера Point.
  *
  * Константа сборки **без секрета** — переезд на другой домен правится одной строкой, как владелец и

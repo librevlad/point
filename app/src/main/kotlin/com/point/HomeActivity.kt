@@ -132,6 +132,9 @@ class HomeActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         if (!viewModel.hasFlow()) viewModel.loadRecent()
+        // Вернулся из браузера — вход дожимается здесь (#561). Начатого входа нет — не делается
+        // ни одного запроса.
+        viewModel.resumeSignIn()
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {

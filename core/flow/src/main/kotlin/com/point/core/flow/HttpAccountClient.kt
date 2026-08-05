@@ -61,6 +61,11 @@ class HttpAccountClient(
 
     override suspend fun poll(loginId: String, claimToken: String): LoginPoll = io {
         val reply = request(path = "/auth/session/" + encode(loginId), method = "GET", token = claimToken)
+        // Не дозвонились — это молчание, а не отказ (#561). Разница не косметическая: отказ
+        // терминален, и пока молчание приезжало отказом, один сбой связи навсегда обрывал вход,
+        // который сервер уже подтвердил. Человек читал «до сервера не дозвониться» через секунду
+        // после того, как тот же сервер ответил на «начать вход».
+        if (reply.status == null) return@io LoginPoll.Silent
         // 202 — «человек ещё в браузере». Это не ошибка и не готовность, и отдельный код тут
         // ценнее тела: ждать дальше можно, ничего не разбирая.
         if (reply.status == 202) return@io LoginPoll.Pending

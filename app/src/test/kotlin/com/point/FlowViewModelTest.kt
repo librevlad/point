@@ -109,12 +109,14 @@ class FlowViewModelTest {
         // своими проверками, и ставить её перед каждой чужой значило бы мерять вход в сорока местах.
         account: com.point.core.flow.AccountStore = FakeAccountStore(TEST_ACCOUNT),
         accountClient: com.point.core.flow.AccountClient = FakeCircleClient(),
+        // Начатый вход (#561) живёт ДОЛЬШЕ модели — поэтому в тестах про возврат человека одно и
+        // то же хранилище отдаётся двум моделям подряд, как одному и тому же телефону.
+        pendingLogins: com.point.core.flow.PendingLoginStore = com.point.core.flow.InMemoryPendingLogins(),
         browser: com.point.core.flow.BrowserOpener = com.point.core.flow.BrowserOpener { },
         sharedTexts: com.point.core.flow.SharedTexts = FakeSharedTexts(),
         /** Кому нужен ключ человека (#465): их имена носят приписку «· нужен ключ», пока его нет. */
         keyNeeding: Set<CapabilityId> = emptySet(),
-    ) = FlowViewModel(store, FakeRegistry(caps, cloud, slow, keyNeeding) { userKeys.read() != null }, resolver, chatResponder, enrichment, history, usage, chosenApps, userKeys, journal, consent, appLauncher, FakePdfRasterizer(), sensory, sensorySettings, cloudPrivacy, snapshot, crashLog, dispatcher, pins, AppIconResolver { null }, pcPairings, pcTransport, discovery, pcCaps, linkMonitor, PulledFileFactory { name -> java.io.File(java.io.File(System.getProperty("java.io.tmpdir")), "pulled-" + name).absolutePath }, noFrames, keyCheck, account, accountClient, browser, sharedTexts)
-
+    ) = FlowViewModel(store, FakeRegistry(caps, cloud, slow, keyNeeding) { userKeys.read() != null }, resolver, chatResponder, enrichment, history, usage, chosenApps, userKeys, journal, consent, appLauncher, FakePdfRasterizer(), sensory, sensorySettings, cloudPrivacy, snapshot, crashLog, dispatcher, pins, AppIconResolver { null }, pcPairings, pcTransport, discovery, pcCaps, linkMonitor, PulledFileFactory { name -> java.io.File(java.io.File(System.getProperty("java.io.tmpdir")), "pulled-" + name).absolutePath }, noFrames, keyCheck, account, accountClient, pendingLogins, browser, sharedTexts)
     /** Проверка ключа (#465): что «ответил сервис», решает тест, а не сеть. */
     private val keyCheck = FakeAiKeyCheck()
 
@@ -357,8 +359,9 @@ class FlowViewModelTest {
      * состоянии ожидания, так что из остальных состояний выхода не было вовсе.
      */
     @Test fun `назад с экрана входа возвращает в Point, а не закрывает его`() = runTest(dispatcher) {
-        val vm = vm()
-        vm.signIn(); advanceUntilIdle()
+        // Человек в браузере и ещё не подтвердил: именно из этого состояния он и жмёт «назад».
+        val vm = vm(account = FakeAccountStore(null), accountClient = CountingSignInClient(readyAfter = Int.MAX_VALUE))
+        vm.signIn(); dispatcher.scheduler.advanceTimeBy(5_000)
         assertNotNull("дверь входа обязана быть на экране", vm.ui.value.signIn)
 
         val handled = vm.onBack()
@@ -1261,6 +1264,110 @@ class FlowViewModelTest {
         assertTrue(vm.onBack())
         assertNull(vm.ui.value.signIn)
         assertNotNull("вход увёл человека из настроек вместо возврата в них", vm.ui.value.keyScreen)
+    }
+
+    // --- Вход доходит до конца (#561) ---
+
+    /**
+     * Главная улика закрытого релиза: восемь начатых входов на сервере и НОЛЬ вопросов о том, чем
+     * они кончились. Опрос проверяется счётом на подделке клиента — наблюдением за экраном такое
+     * не ловится, а чтением кода не ловилось.
+     */
+    @Test fun `начатый вход спрашивает сервер, чем он кончился (#561)`() = runTest(dispatcher) {
+        val client = CountingSignInClient(readyAfter = 3)
+        val vm = vm(account = FakeAccountStore(null), accountClient = client)
+        vm.openKeySettings(); advanceUntilIdle()
+        vm.openDevices(); advanceUntilIdle()
+
+        vm.signIn(); advanceUntilIdle()
+
+        assertEquals("вход начат один раз", 1, client.starts)
+        assertTrue("опрос сессии не ушёл ни разу", client.polls > 0)
+    }
+
+    /**
+     * Удача видна и не требует лишнего тапа (#561, критерий приёмки 1).
+     *
+     * Человек нажал «Войти», подтвердил в браузере и вернулся — просить у него ещё одно
+     * «Продолжить» значит держать процедуру там, где её уже нет. Под закрывшейся дверью — то, ради
+     * чего её открывали: круг устройств.
+     */
+    @Test fun `удачный вход сохраняет пропуск и закрывает свой экран сам (#561)`() = runTest(dispatcher) {
+        val store = FakeAccountStore(null)
+        val vm = vm(account = store, accountClient = CountingSignInClient(readyAfter = 2))
+        vm.openKeySettings(); advanceUntilIdle()
+        vm.openDevices(); advanceUntilIdle()
+        assertTrue("дверь входа обязана стоять — иначе нечего закрывать", vm.ui.value.signIn is com.point.core.flow.SignIn.SignedOut)
+
+        vm.signIn(); advanceUntilIdle()
+
+        assertNotNull("пропуск устройства обязан лечь в хранилище", store.current())
+        assertNull("экран входа обязан закрыться сам", vm.ui.value.signIn)
+        assertNotNull("под дверью — круг устройств, ради которого её открывали", vm.ui.value.devicesScreen)
+    }
+
+    /**
+     * Настоящая причина «ноль обращений к сессии» (#561).
+     *
+     * Вход устроен так, что человек УХОДИТ из Point — в браузер, к Google, и возвращается через
+     * полминуты. К этому моменту экрана, который начал вход, может уже не быть: система забрала
+     * фон, Point закрыли, флоу кончился. Пока начатый вход жил только в памяти этого экрана, его
+     * смерть означала, что вход не кончится ничем и никогда.
+     *
+     * Здесь первая модель гибнет посреди ожидания, а вернувшийся человек попадает в НОВУЮ — и она
+     * дожимает начатое, не заводя второго входа.
+     */
+    @Test fun `вход, начатый до смерти экрана, дожимается вернувшимся человеком (#561)`() = runTest(dispatcher) {
+        val store = FakeAccountStore(null)
+        val logins = com.point.core.flow.InMemoryPendingLogins()
+        val client = CountingSignInClient(readyAfter = Int.MAX_VALUE) // человек ещё в браузере
+        val first = vm(account = store, accountClient = client, pendingLogins = logins)
+        first.openDevices(); advanceUntilIdle()
+        first.signIn(); dispatcher.scheduler.advanceTimeBy(5_000) // старт прошёл, опрос пошёл, человек в браузере
+        first.endFlow(); advanceUntilIdle() // Point свернули и убили, пока человек был у Google
+        assertNull(store.current())
+        assertNotNull("начатый вход обязан пережить экран", logins.current())
+
+        client.readyNow() // человек подтвердил вход в браузере
+        val returned = vm(account = store, accountClient = client, pendingLogins = logins)
+        returned.resumeSignIn(); advanceUntilIdle()
+
+        assertEquals("второго входа человек не начинал", 1, client.starts)
+        assertNotNull("вернувшийся человек обязан оказаться вошедшим", store.current())
+        assertNull("законченный вход не остаётся лежать на устройстве", logins.current())
+        assertNull("своего экрана дожатый вход не поднимает", returned.ui.value.signIn)
+    }
+
+    /** Дожимать нечего — значит и спрашивать нечего: возврат без начатого входа не трогает сервер. */
+    @Test fun `возврат без начатого входа не идёт в сеть (#561)`() = runTest(dispatcher) {
+        val client = CountingSignInClient()
+        val vm = vm(account = FakeAccountStore(null), accountClient = client)
+
+        vm.resumeSignIn(); advanceUntilIdle()
+
+        assertEquals(0, client.starts)
+        assertEquals(0, client.polls)
+        assertNull(vm.ui.value.signIn)
+    }
+
+    /** Передумал — опрос гаснет, начатый вход снимается, и за спиной у человека его не дожимают. */
+    @Test fun `отмена входа гасит опрос и снимает начатый вход (#561)`() = runTest(dispatcher) {
+        val logins = com.point.core.flow.InMemoryPendingLogins()
+        val client = CountingSignInClient(readyAfter = Int.MAX_VALUE)
+        val vm = vm(account = FakeAccountStore(null), accountClient = client, pendingLogins = logins)
+        vm.openDevices(); advanceUntilIdle()
+        vm.signIn(); dispatcher.scheduler.advanceTimeBy(5_000) // человек ещё в браузере, опрос идёт
+        val pollsWhenCancelled = client.polls
+        assertTrue("опрос обязан идти — иначе гасить нечего", pollsWhenCancelled > 0)
+
+        vm.cancelSignIn(); advanceUntilIdle()
+
+        assertEquals("опрос продолжился после отмены", pollsWhenCancelled, client.polls)
+        assertNull("снятый вход не дожимается на возврате", logins.current())
+        assertTrue(vm.ui.value.signIn is com.point.core.flow.SignIn.SignedOut)
+
+        vm.resumeSignIn(); advanceUntilIdle()
+        assertEquals("отменённый вход ожил на возврате", pollsWhenCancelled, client.polls)
     }
 
     @Test fun `отозванное устройство узнаёт об этом от сервера и показывает вход (#472)`() = runTest(dispatcher) {
@@ -2966,6 +3073,37 @@ internal class FakeCircleClient(
         signedOut = true
         return revoke(account, account.deviceId)
     }
+}
+
+/**
+ * Сервер входа, который считает, о чём его спросили (#561).
+ *
+ * «Начали вход» и «чем он кончился» — два разных вопроса, и живая проверка показала, что второй
+ * приложение не задавало ни разу: восемь стартов на сервере и ноль обращений к сессии.
+ */
+internal class CountingSignInClient(
+    private var readyAfter: Int = 1,
+    private val startFails: Boolean = false,
+) : com.point.core.flow.AccountClient {
+    var starts = 0
+    var polls = 0
+
+    /** Человек подтвердил вход в браузере — со следующего вопроса сервер отдаёт пропуск. */
+    fun readyNow() { readyAfter = polls + 1 }
+
+    override suspend fun start(deviceName: String, kind: com.point.core.flow.DeviceKind): com.point.core.flow.LoginStart? {
+        starts++
+        return if (startFails) null
+        else com.point.core.flow.LoginStart("l1", "claim-1", "K7-42Q", "https://point.example/login?d=l1")
+    }
+    override suspend fun poll(loginId: String, claimToken: String): com.point.core.flow.LoginPoll {
+        polls++
+        return if (polls >= readyAfter) com.point.core.flow.LoginPoll.Ready(TEST_ACCOUNT)
+        else com.point.core.flow.LoginPoll.Pending
+    }
+    override suspend fun circle(account: com.point.core.flow.PointAccount) =
+        com.point.core.flow.CircleAnswer.Circle(emptyList())
+    override suspend fun revoke(account: com.point.core.flow.PointAccount, deviceId: String) = true
 }
 
 private class FakePcPairings : com.point.core.flow.PcPairings {
