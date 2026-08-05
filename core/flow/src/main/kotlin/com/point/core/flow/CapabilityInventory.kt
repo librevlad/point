@@ -48,7 +48,10 @@ fun derivedYield(capability: Capability, state: ObjectState): ActionYield {
  */
 fun yieldLabel(yields: ActionYield, intent: Intent): String = when (yields) {
     is ActionYield.New -> "вернёт " + (yields.noun ?: yieldNoun(yields.kind))
-    ActionYield.Same -> "объект тот же — Point поймёт больше"
+    // Что человек получит, а не что произойдёт внутри: «Point поймёт больше» описывало механику
+    // обогащения — четверо из шести не смогли сказать, что окажется на экране после тапа (#580).
+    ActionYield.Same -> "найдёт суть, суммы, даты и контакты"
+    ActionYield.Copied -> "ляжет в буфер обмена"
     ActionYield.Unknown -> "вернёт то, что попросите"
     // Терминальное действие говорит, ЧТО сделает, а не чего не сделает. Прежняя формулировка
     // начиналась с отрицания («ничего не вернёт — отправит»), и на экране объекта два таких

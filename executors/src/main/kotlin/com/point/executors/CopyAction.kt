@@ -31,6 +31,10 @@ class CopyCapability @Inject constructor() : Capability {
             !state.kind.isFileBacked
     override fun produces(state: ObjectState) = state // terminal → SEND
 
+    // Копирование объявляет свой исход само: по намерению оно стоит рядом с отправкой и потому
+    // получало её обещание — «отправит и вернётся сюда» у действия, которое никуда не отправляет.
+    override fun yields(state: ObjectState) = com.point.core.model.ActionYield.Copied
+
     companion object { val ID = CapabilityId("copy") }
 }
 
@@ -64,6 +68,9 @@ class CopyCardCapability @Inject constructor() : Capability {
     override fun label(state: ObjectState) = "Скопировать карту"
     override fun accepts(state: ObjectState) = state.has(Feature.HAS_CARD)
     override fun produces(state: ObjectState) = state
+
+    /** Та же правда, что у обычного копирования: карта ложится в буфер, а не уходит наружу. */
+    override fun yields(state: ObjectState) = com.point.core.model.ActionYield.Copied
 
     companion object { val ID = CapabilityId("copy-card") }
 }

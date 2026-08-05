@@ -107,7 +107,11 @@ class RealCapabilityInventoryTest {
 
     private fun shapeOf(y: ActionYield): String = when (y) {
         is ActionYield.New -> "new"
-        ActionYield.None -> "none"
+        // `Copied` — та же ФОРМА исхода, что `None`: нового объекта не будет. Отличается только
+        // слово, которым это сказано человеку («ляжет в буфер обмена» вместо «отправит»), а здесь
+        // считаются расхождения `produces` с реальностью — уточнение формулировки к ним не
+        // относится, как и уточнение существительного у `New`.
+        ActionYield.None, ActionYield.Copied -> "none"
         ActionYield.Same -> "same"
         ActionYield.Unknown -> "unknown"
     }

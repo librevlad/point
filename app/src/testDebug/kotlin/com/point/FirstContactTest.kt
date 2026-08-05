@@ -52,6 +52,15 @@ class FirstContactTest {
         compose.onNodeWithText("работают и без ключа", substring = true).assertExists()
     }
 
+    @Test fun `главный вход в Point назван словом`() {
+        compose.setContent { HomeScreen(recent = emptyList(), onOpen = {}, onSettings = {}, aiKeySet = false) }
+
+        // «Поделиться» — вход, которым нельзя воспользоваться изнутри приложения: он живёт в чужих
+        // приложениях. Поэтому дверь «Новый объект» его не перечисляет, а человек без этой строки
+        // не догадывается, что Point вообще так открывается (#580).
+        compose.onNodeWithText("Поделиться", substring = true).assertExists()
+    }
+
     // --- Песочница на первом запуске (#210) ---
 
     /**

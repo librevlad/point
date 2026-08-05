@@ -27,7 +27,6 @@ import com.point.core.flow.CircleDevice
 import com.point.core.flow.DeviceKind
 import com.point.core.flow.MY_DEVICES_TITLE
 import com.point.core.flow.SIGN_IN_ACTION
-import com.point.core.flow.SIGN_IN_PRIVACY
 import com.point.core.flow.SIGN_IN_TITLE
 import com.point.core.flow.SignIn
 import com.point.core.flow.deviceKindLabel
@@ -100,12 +99,8 @@ fun SignInPane(
                 GlowAction(SIGN_IN_ACTION, onSignIn)
             }
         }
-        Text(
-            SIGN_IN_PRIVACY,
-            style = PointType.small,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.width(520.dp),
-        )
+        // Строки про приватность здесь больше нет (#580) — по той же причине, что и на телефоне:
+        // она отвечала на невысказанное возражение и создавала его.
     }
 }
 

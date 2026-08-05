@@ -60,44 +60,44 @@ class ActionsFoldTest {
         }
     }
 
-    @Test fun `видно верхние действия группы, остальные — за «Ещё N»`() {
+    @Test fun `видно верхние действия группы, остальные — за «Показать ещё N»`() {
         screen()
 
         compose.onNodeWithText("Извлечение 1").assertExists()
         compose.onNodeWithText("Извлечение 3").assertExists()
         compose.onNodeWithText("Извлечение 4").assertDoesNotExist()
-        compose.onNodeWithText("Ещё 5").assertExists()
+        compose.onNodeWithText("Показать ещё 5").assertExists()
     }
 
     @Test fun `число в подписи называет ровно то, что спрятано`() {
-        // Обещание свёртки держится на этом числе: «Ещё 5» и пять открывшихся строк — одно и то
+        // Обещание свёртки держится на этом числе: «Показать ещё 5» и пять открывшихся строк — одно и то
         // же, иначе за строкой оказывается неизвестно что.
         screen()
 
-        compose.onNodeWithText("Ещё 5").performScrollTo().performClick()
+        compose.onNodeWithText("Показать ещё 5").performScrollTo().performClick()
 
         (1..8).forEach { compose.onNodeWithText("Извлечение $it").assertExists() }
     }
 
     @Test fun `раскрытое сворачивается обратно`() {
-        // Иначе тап по «Ещё» был бы дверью в один конец: двадцать пять строк вернулись, и убрать
+        // Иначе тап по «Показать ещё» был бы дверью в один конец: двадцать пять строк вернулись, и убрать
         // их можно только уйдя с экрана.
         screen()
 
-        compose.onNodeWithText("Ещё 5").performScrollTo().performClick()
+        compose.onNodeWithText("Показать ещё 5").performScrollTo().performClick()
         compose.onNodeWithText("Свернуть").performScrollTo().performClick()
 
         compose.onNodeWithText("Извлечение 8").assertDoesNotExist()
-        compose.onNodeWithText("Ещё 5").assertExists()
+        compose.onNodeWithText("Показать ещё 5").assertExists()
     }
 
     @Test fun `короткая группа сворачивать нечего и не предлагает`() {
-        // «Отправить» из двух строк: «Ещё 0» было бы лишней строкой вместо сэкономленной.
+        // «Отправить» из двух строк: «Показать ещё 0» было бы лишней строкой вместо сэкономленной.
         screen()
 
         compose.onNodeWithText("Поделиться").assertExists()
         compose.onNodeWithText("Сохранить").assertExists()
-        compose.onNodeWithText("Ещё 0").assertDoesNotExist()
+        compose.onNodeWithText("Показать ещё 0").assertDoesNotExist()
     }
 
     @Test fun `главное действие остаётся первым и видимым`() {

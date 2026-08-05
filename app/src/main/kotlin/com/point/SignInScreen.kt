@@ -24,7 +24,6 @@ import androidx.compose.ui.unit.dp
 import com.point.core.flow.DeviceKind
 import com.point.core.flow.PointAccount
 import com.point.core.flow.SIGN_IN_ACTION
-import com.point.core.flow.SIGN_IN_PRIVACY
 import com.point.core.flow.SIGN_IN_TITLE
 import com.point.core.flow.SignIn
 import com.point.core.flow.signInWaitingLine
@@ -141,16 +140,11 @@ fun SignInScreen(
             }
         }
 
-        Spacer(Modifier.height(18.dp))
-        // Одна строка про приватность — и она про почту устройств, а не про модели: за чужого
-        // провайдера Point не обещает, тот разговор живёт на экране согласия.
-        Text(
-            SIGN_IN_PRIVACY,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.widthIn(max = PortalColumnWidth),
-        )
+        // Строки про приватность здесь больше нет (#580). «Что вы пересылаете, сервер прочитать
+        // не может» отвечало на возражение, которого человек не высказывал, — и тем самым его
+        // заводило: шесть моделей из шести прочли это как оправдание, а не как спокойствие.
+        // Обещания о данных живут там, где человек их ищет: на странице /privacy и в согласии
+        // перед отправкой наружу.
 
         if (state is SignIn.Waiting) {
             Spacer(Modifier.height(10.dp))

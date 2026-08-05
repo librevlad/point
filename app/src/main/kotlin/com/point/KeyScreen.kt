@@ -202,6 +202,12 @@ fun KeyScreen(
             verticalArrangement = Arrangement.spacedBy(11.dp),
         ) {
             when (section) {
+                // Верхний возврат стоит и на корне (#580): внутри разделов он есть, а здесь был
+                // только нижний «Отмена» — один экран настроек вёл себя двумя разными способами.
+                null -> BackToRoot(onCancel)
+                else -> Unit
+            }
+            when (section) {
                 null -> SettingsList(
                     keyLine = keySetLabel(draft.key, saved = draft.savedIn(config)),
                     cloudEnabled = cloudEnabled,
@@ -310,13 +316,10 @@ private fun SettingsList(
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(GroupGap)) {
         // Экран называется тем, что он есть (#447), и ровно тем же словом, что дверь, которой сюда
-        // пришли (#544). Подпись перечисляет то, что за экраном ПРАВДА лежит.
-        ScreenHeader(
-            title = SETTINGS_TITLE,
-            subtitle = "Ключ AI, отправка в облако, звук, аккаунт и устройства. " +
-                "Больше Point ни о чём не спрашивает.",
-            modifier = Modifier.padding(bottom = 2.dp),
-        )
+        // пришли (#544). Подписи под заголовком больше нет (#580): она перечисляла то, что видно
+        // тремя сантиметрами ниже секциями, и заканчивалась похвальбой — «больше Point ни о чём не
+        // спрашивает». Карту экрана рисует сама раскладка.
+        ScreenHeader(title = SETTINGS_TITLE, modifier = Modifier.padding(bottom = 2.dp))
 
         SettingsGroup(AI_GROUP_TITLE) {
             // Состояние ключа — той же строкой, что стоит внутри раздела (`keySetLabel`): задан ли
@@ -414,8 +417,12 @@ private fun GroupSeam() {
  * Без иконной плиты — в отличие от строки действия на экране объекта. Плита там значит «вот чем это
  * будет сделано»; в списке разделов ей значить нечего, а платит за неё подпись: плита забирает
  * шестьдесят точек ширины, и состояние («Ключа пока нет — без него AI-действия молчат») в одну
- * строку перестаёт помещаться. [subtitleMaxLines] = 1 — это и есть правило «на общем экране нет
- * абзацев», записанное в коде, а не в договорённости (#563).
+ * строку перестаёт помещаться.
+ *
+ * Предела в одну строку здесь БОЛЬШЕ НЕТ (#580). Подпись настройки говорит её состояние, а
+ * обрезанное состояние равно несказанному: человек читал «Ключа пока нет — без него AI-действия
+ * молч…» и не узнавал последствия. В списках действий предел остаётся — там подписи однотипные, и
+ * ровные строки помогают сравнивать; в настройках сравнивать нечего.
  *
  * Собственной поверхности у строки нет: её рисует [SettingsGroup] — одну на всю группу.
  */
@@ -433,7 +440,7 @@ private fun SettingsRow(
         onClick = onClick,
         chevron = trailing == null,
         surface = false,
-        subtitleMaxLines = 1,
+        subtitleMaxLines = Int.MAX_VALUE,
         appearIndex = appearIndex,
         trailing = trailing,
     )
@@ -441,6 +448,16 @@ private fun SettingsRow(
 
 /** Воздух между карточками групп. Заметно больше шага внутри группы — иначе они сливаются. */
 private val GroupGap = 16.dp
+
+/** Выход из настроек — той же стрелкой, что возврат из раздела: один экран, один приём (#580). */
+@Composable
+private fun BackToRoot(onBack: () -> Unit) {
+    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        TextButton(onClick = onBack) {
+            Text("← Назад", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
 
 /** Возврат к списку разделов — тем же словом, каким назван экран, и той же стрелкой, что выход. */
 @Composable

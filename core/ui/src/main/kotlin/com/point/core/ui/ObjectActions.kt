@@ -83,7 +83,10 @@ internal fun ObjectActions(
                 val hidden = section.bubbles.size - shown.size
                 if (hidden > 0 || expanded) {
                     TextButton(onClick = { expanded = !expanded }, enabled = !working) {
-                        Text(if (expanded) "Свернуть" else "Ещё $hidden")
+                        // С глаголом: голое «Ещё 4» не читалось кнопкой — глаз принимал его за
+                        // подпись к списку. Число остаётся: человеку важно, три там строки или
+                        // двадцать (#580).
+                        Text(if (expanded) "Свернуть" else "Показать ещё $hidden")
                     }
                 }
             }
