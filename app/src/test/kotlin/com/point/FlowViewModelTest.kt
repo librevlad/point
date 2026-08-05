@@ -11,7 +11,6 @@ import com.point.core.flow.Latency
 import com.point.core.flow.CapabilityUsage
 import com.point.core.flow.Enrichment
 import com.point.core.flow.EnrichmentUpdate
-import com.point.core.flow.FavoritesStore
 import com.point.core.flow.HistoryStore
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.PrivacyConsent
@@ -26,7 +25,6 @@ import com.point.core.flow.UserKeyStore
 import com.point.core.model.ActionResult
 import com.point.core.model.Bubble
 import com.point.core.model.CapabilityId
-import com.point.core.model.FavoriteChain
 import com.point.core.model.Feature
 import com.point.core.model.HistoryEntry
 import com.point.core.model.Intent
@@ -69,7 +67,6 @@ class FlowViewModelTest {
     private val resolver = FakeResolver()
     private val enrichment = FakeEnrichment()
     private val history = FakeHistory()
-    private val favorites = FakeFavorites()
     private val usage = FakeUsage()
     private val chosenApps = FakeChosenApps()
     private val userKeys = FakeUserKeys()
@@ -114,7 +111,7 @@ class FlowViewModelTest {
         accountClient: com.point.core.flow.AccountClient = FakeCircleClient(),
         browser: com.point.core.flow.BrowserOpener = com.point.core.flow.BrowserOpener { },
         sharedTexts: com.point.core.flow.SharedTexts = FakeSharedTexts(),
-    ) = FlowViewModel(store, FakeRegistry(caps, cloud, slow), resolver, chatResponder, enrichment, history, favorites, usage, chosenApps, userKeys, journal, consent, appLauncher, FakePdfRasterizer(), sensory, sensorySettings, cloudPrivacy, snapshot, crashLog, dispatcher, pins, AppIconResolver { null }, pcPairings, pcTransport, discovery, pcCaps, linkMonitor, PulledFileFactory { name -> java.io.File(java.io.File(System.getProperty("java.io.tmpdir")), "pulled-" + name).absolutePath }, noFrames, keyCheck, account, accountClient, browser, sharedTexts)
+    ) = FlowViewModel(store, FakeRegistry(caps, cloud, slow), resolver, chatResponder, enrichment, history, usage, chosenApps, userKeys, journal, consent, appLauncher, FakePdfRasterizer(), sensory, sensorySettings, cloudPrivacy, snapshot, crashLog, dispatcher, pins, AppIconResolver { null }, pcPairings, pcTransport, discovery, pcCaps, linkMonitor, PulledFileFactory { name -> java.io.File(java.io.File(System.getProperty("java.io.tmpdir")), "pulled-" + name).absolutePath }, noFrames, keyCheck, account, accountClient, browser, sharedTexts)
 
     /** Проверка ключа (#465): что «ответил сервис», решает тест, а не сеть. */
     private val keyCheck = FakeAiKeyCheck()
@@ -530,25 +527,24 @@ class FlowViewModelTest {
         assertNull("и «Отменено» не осталось висеть без объекта", vm.ui.value.message)
     }
 
-    /** Цепочка — самая долгая работа в Point (несколько сетевых шагов). Отмена обязана
-     *  остановить её, а не позволить следующему шагу приземлиться поверх «Отменено». */
-    @Test fun `отменённая цепочка не делает следующий шаг`() = runTest(dispatcher) {
-        favorites.chains = listOf(FavoriteChain("c", "Цепочка", listOf(CapabilityId("a"), CapabilityId("a"))))
+    /** Настоящая долгая работа об отмене не знает — нативный проход движка доходит до конца сам.
+     *  Отмена обязана не пустить её результат на экран, а не только погасить кнопку. */
+    @Test fun `снятая работа не приземляется, даже если сама об отмене не знает`() = runTest(dispatcher) {
         resolver.result = ActionResult.Success(
             ResultObject(ObjectKind.TEXT, "text/plain", ScratchRef("/out")),
         )
         resolver.holdMs = 1_000
         resolver.uninterruptible = true
-        val vm = vm()
+        val vm = vm(slow = setOf(CapabilityId("a"))) // объявлено долгим — с полным экраном ожидания
         vm.onShared("uri", "image/png"); advanceUntilIdle()
 
-        vm.applyFavorite(favorites.chains.first())
+        vm.onBubble(bubble(id = "a"))
         dispatcher.scheduler.advanceTimeBy(10)
-        assertTrue("над цепочкой кнопка есть", showsCancel(vm.ui.value))
+        assertTrue("над идущей работой кнопка есть", showsCancel(vm.ui.value))
         vm.cancelAction()
         advanceUntilIdle()
 
-        assertEquals("ни один шаг не приземлился", 1, vm.ui.value.path.size)
+        assertEquals("объект, доработанный после отмены, не приземлился", 1, vm.ui.value.path.size)
         assertEquals("Отменено", vm.ui.value.message)
     }
 
@@ -715,9 +711,8 @@ class FlowViewModelTest {
      *
      *  Что именно сказано — тоже проверка, а не мелочь: текст исключения написан для
      *  разработчика («No realizer for capability=excel» — так падает настоящий
-     *  `DefaultResolver`), и попасть на экран человека он не должен. На пути избранной
-     *  цепочки та же беда давно говорит по-человечески («Шаг цепочки недоступен») —
-     *  одиночный тап обязан звучать так же. */
+     *  `DefaultResolver`), и попасть на экран человека он не должен: тап отвечает
+     *  «Действие недоступно». */
     @Test fun `пузырёк без реализатора отвечает отказом на языке человека, а не падением`() = runTest(dispatcher) {
         resolver.noRealizer = true
         val vm = vm()
@@ -1041,32 +1036,6 @@ class FlowViewModelTest {
         vm.onShared("uri", "image/png"); advanceUntilIdle()
 
         assertEquals(false, vm.onBack()) // nothing to pop → the Activity handles system back
-    }
-
-    // --- Chain replay ---
-
-    @Test fun `applyFavorite replays each step onto a new frame`() = runTest(dispatcher) {
-        resolver.result = ActionResult.Success(ResultObject(ObjectKind.TEXT, "text/plain", ScratchRef("/o")))
-        val vm = vm()
-        vm.onShared("uri", "image/png"); advanceUntilIdle()
-
-        vm.applyFavorite(FavoriteChain("c", "Цепочка", listOf(CapabilityId("a"), CapabilityId("a"))))
-        advanceUntilIdle()
-
-        assertEquals(ObjectKind.TEXT, vm.ui.value.frame?.obj?.state?.kind)
-        assertNull(vm.ui.value.busy)
-    }
-
-    @Test fun `applyFavorite stops and reports when a step fails`() = runTest(dispatcher) {
-        resolver.result = ActionResult.Failure("шаг упал", recoverable = true)
-        val vm = vm()
-        vm.onShared("uri", "image/png"); advanceUntilIdle()
-
-        vm.applyFavorite(FavoriteChain("c", "Цепочка", listOf(CapabilityId("a"))))
-        advanceUntilIdle()
-
-        assertTrue(vm.ui.value.message?.contains("Цепочка прервана") == true)
-        assertNull(vm.ui.value.busy)
     }
 
     // --- Hints (async enrichment) & collection drill-down ---
@@ -1896,7 +1865,7 @@ class FlowViewModelTest {
     // --- Cloud privacy consent (#10) ---
 
     // "ai" is cloud but now opens the chat (#4), so the generic consent-then-run tests below drive a
-    // neutral cloud action ("cloudx"); "ai" stays cloud for the favorite-chain gating test.
+    // neutral cloud action ("cloudx"); "ai" stays declared cloud so the chat is gated as well.
     private fun cloudVm() = vm(
         caps = mapOf(
             CapabilityId("ai") to setOf(Intent.UNDERSTAND),
@@ -2169,17 +2138,6 @@ class FlowViewModelTest {
         assertNull(vm.ui.value.message)
     }
 
-    @Test fun `a favorite chain hiding a cloud step is gated too — not a back door`() = runTest(dispatcher) {
-        val vm = cloudVm()
-        vm.onShared("uri", "image/png"); advanceUntilIdle()
-
-        vm.applyFavorite(FavoriteChain("c", "Цепочка", listOf(CapabilityId("ai"))))
-        advanceUntilIdle()
-
-        assertTrue(vm.ui.value.cloudConsent)                  // asked before replaying
-        assertEquals("__unset__", resolver.lastAmendment)     // no step reached the cloud
-    }
-
     // --- «Показать модели» ≠ «выложить в открытый доступ» (#114) ---
 
     /** Способности с разной ценой: «Понять» показывает объект модели, «Дать ссылку» кладёт файл
@@ -2261,22 +2219,6 @@ class FlowViewModelTest {
 
         vm.onBubble(bubble(id = "ai")); advanceUntilIdle()
         assertTrue("отозвали — значит спрашиваем снова", vm.ui.value.cloudConsent)
-    }
-
-    /** Шаг «Дать ссылку», спрятанный в избранной цепочке, не проезжает под текстом про AI. */
-    @Test fun `цепочка со ссылкой спрашивает про ссылку, а не про AI`() = runTest(dispatcher) {
-        consent.granted = true
-        val vm = linkVm()
-        vm.onShared("uri", "image/png"); advanceUntilIdle()
-
-        vm.applyFavorite(FavoriteChain("c", "Цепочка", listOf(CapabilityId("ai"), CapabilityId("drop-link"))))
-        advanceUntilIdle()
-
-        assertTrue(vm.ui.value.cloudConsent)
-        assertTrue(
-            "спросили не про то: ${vm.ui.value.cloudDestination}",
-            vm.ui.value.cloudDestination.contains("любому"),
-        )
     }
 
     // --- Согласие называет адресата поимённо (#538) ---
@@ -2619,12 +2561,6 @@ private class FakeHistory : HistoryStore {
     override suspend fun recent(limit: Int): List<HistoryEntry> = emptyList()
     override suspend fun open(entryId: String): PointObject? = opened
     override suspend fun clearAll() = Unit
-}
-
-private class FakeFavorites(var chains: List<FavoriteChain> = emptyList()) : FavoritesStore {
-    override suspend fun save(name: String, steps: List<CapabilityId>) = FavoriteChain("id", name, steps)
-    override suspend fun all(): List<FavoriteChain> = chains
-    override suspend fun delete(id: String) = Unit
 }
 
 private class FakeUsage : CapabilityUsage {

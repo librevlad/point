@@ -43,7 +43,6 @@ import com.point.core.flow.AppTarget
 import com.point.core.flow.UserAiConfig
 import com.point.core.model.Bubble
 import com.point.core.model.ObjectKind
-import com.point.core.model.FavoriteChain
 import com.point.core.model.PointObject
 import com.point.core.model.Preview
 import com.point.core.ui.BusyPortal
@@ -80,8 +79,6 @@ fun PointHost(
     onCancelAction: () -> Unit = {},
     /** Тап по объекту без слоя слов — открыть его (#290). */
     onOpenObject: () -> Unit = {},
-    onApplyFavorite: (FavoriteChain) -> Unit = {},
-    onSaveChain: () -> Unit = {},
     onItem: (PointObject) -> Unit = {},
     onFound: (PointObject) -> Unit = {},
     onJumpTo: (Int) -> Unit = {},
@@ -323,10 +320,6 @@ fun PointHost(
                     inputSuggestions = state.inputSuggestions,
                     onSubmitInput = onSubmitInput,
                     onCancelInput = onCancelInput,
-                    favorites = state.favorites,
-                    onApplyFavorite = onApplyFavorite,
-                    canSaveChain = state.canSaveChain,
-                    onSaveChain = onSaveChain,
                     items = current.items,
                     itemsTotal = current.itemsTotal,
                     itemsTotalAtLeast = current.itemsTotalAtLeast,

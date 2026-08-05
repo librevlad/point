@@ -14,7 +14,6 @@ import com.point.core.flow.CrashLog
 import com.point.core.flow.Enrichment
 import com.point.core.flow.edgeDetail
 import com.point.core.flow.EnrichmentUpdate
-import com.point.core.flow.FavoritesStore
 import com.point.core.flow.FlowSnapshotStore
 import com.point.core.flow.HistoryStore
 import com.point.core.flow.ObjectStore
@@ -55,7 +54,6 @@ import com.point.core.model.ChatMessage
 import com.point.core.model.ChatRole
 import com.point.core.model.Bubble
 import com.point.core.model.CapabilityId
-import com.point.core.model.FavoriteChain
 import com.point.core.model.FlowSnapshotFrame
 import com.point.core.model.HistoryEntry
 import com.point.core.model.Intent
@@ -89,7 +87,7 @@ import javax.inject.Inject
  * Owns the flow as a stack of [FlowFrame]s (the whole navigation model). The top
  * frame is rendered. Back pops; the scratch store is cleared when the flow ends.
  * Records each object into History and each capability into the frame provenance,
- * from which Favorite chains are saved and replayed.
+ * from which the journey path (the timeline above the object) is built.
  */
 @HiltViewModel
 class FlowViewModel @Inject constructor(
@@ -99,7 +97,6 @@ class FlowViewModel @Inject constructor(
     private val aiChatResponder: com.point.core.flow.AiChatResponder,
     private val enrichment: Enrichment,
     private val history: HistoryStore,
-    private val favorites: FavoritesStore,
     private val usage: CapabilityUsage,
     private val chosenApps: ChosenApps,
     private val userKeys: UserKeyStore,
@@ -138,10 +135,10 @@ class FlowViewModel @Inject constructor(
     /**
      * Задача той работы, что подняла экран ожидания, — чтобы её можно было отменить (#288, #114).
      *
-     * Держат её ВСЕ занятости, а не одно действие по пузырю: «Ищу приложения…», «Выполняю
-     * цепочку…», «Забираю с компьютера…» тоже рисуют «Отменить», и кнопка обязана снимать ту
-     * работу, над которой стоит. Задача обнуляется по завершении: снимать законченное значило
-     * бы объявлять отменённым уже сделанное.
+     * Держат её ВСЕ занятости, а не одно действие по пузырю: «Ищу приложения…», «Открываю…»,
+     * «Забираю с компьютера…» тоже рисуют «Отменить», и кнопка обязана снимать ту работу, над
+     * которой стоит. Задача обнуляется по завершении: снимать законченное значило бы объявлять
+     * отменённым уже сделанное.
      */
     private var busyJob: kotlinx.coroutines.Job? = null
 
@@ -197,7 +194,7 @@ class FlowViewModel @Inject constructor(
     @Volatile private var workVoice = 0L
 
     /** Новая занятость забирает голос у прошлой: та замолкает, даже если ещё дышит. Вызывается
-     *  везде, где ставится `busy`, — «Открываю…» и цепочка чужих слов носить тоже не должны. */
+     *  везде, где ставится `busy`, — «Открываю…» чужих слов носить тоже не должно. */
     private fun claimVoice(): Long = ++workVoice
 
     private val stack = ArrayDeque<FlowFrame>()
@@ -219,7 +216,6 @@ class FlowViewModel @Inject constructor(
      *  независимо, и закрытие одного не имеет права обнулять страницу другого. */
     private var findLayer: AtomLayer? = null
     private var findTransform: FrameTransform? = null
-    private var allFavorites: List<FavoriteChain> = emptyList()
 
     private val _ui = MutableStateFlow(FlowUiState())
     val ui: StateFlow<FlowUiState> = _ui.asStateFlow()
@@ -247,7 +243,6 @@ class FlowViewModel @Inject constructor(
     private var freshShareArrived = false
 
     init {
-        viewModelScope.launch { loadFavorites() }
         viewModelScope.launch { _crashReport.value = runCatching { crashLog.pending() }.getOrNull() }
     }
 
@@ -580,8 +575,8 @@ class FlowViewModel @Inject constructor(
         )
         trackWork(viewModelScope.launch {
             // Пузырёк нарисован, а исполнять его нечем (потерян `@IntoSet`): человеку — фраза
-            // на его языке, как давно говорит путь избранной цепочки. Без этой развилки на
-            // экран уезжал текст исключения, написанный для разработчика.
+            // на его языке. Без этой развилки на экран уезжал текст исключения, написанный для
+            // разработчика.
             val realizer = runCatching { resolver.realizerFor(bubble.capabilityId) }.getOrNull()
             if (!owns(voice)) return@launch
             if (realizer == null) {
@@ -1585,80 +1580,6 @@ class FlowViewModel @Inject constructor(
         }
     }
 
-    /** Save the capabilities applied so far as a favorite chain (auto-named). */
-    fun saveCurrentChain() {
-        val steps = stack.mapNotNull { it.viaCapability }
-        if (steps.isEmpty()) return
-        val name = stack.mapNotNull { it.viaTitle }.joinToString(" → ").ifBlank { "Цепочка" }
-        viewModelScope.launch {
-            runCatching { favorites.save(name, steps) }
-            loadFavorites()
-            _ui.update { it.copy(message = "Цепочка сохранена: $name", messageOutcome = Outcome.DONE) }
-        }
-    }
-
-    /** Replay a saved chain on the current object — one tap for a whole workflow. */
-    fun applyFavorite(chain: FavoriteChain) {
-        val start = stack.lastOrNull()?.obj ?: return
-        // A saved chain can hide a cloud step — gate the whole replay on consent (#10),
-        // so a favorite is not a back door around the privacy prompt.
-        val cloudSteps = chain.steps.filter { isCloud(it) }
-        if (cloudSteps.isNotEmpty()) {
-            // Спрашиваем про самое дорогое обещание в цепочке (#114): шаг «Дать ссылку» внутри
-            // избранного не имеет права проехать под текстом про AI-провайдера.
-            val asks = cloudSteps.firstOrNull {
-                com.point.core.flow.cloudScopeOf(it) == com.point.core.flow.CloudScope.PUBLIC_LINK
-            } ?: cloudSteps.first()
-            requireCloudConsent(asks) { replayChain(chain, start) }
-            return
-        }
-        replayChain(chain, start)
-    }
-
-    private fun replayChain(chain: FavoriteChain, start: PointObject) {
-        val voice = claimVoice()
-        // Цепочка идёт минутами и несколькими сетевыми шагами — отмена здесь нужнее всего, и
-        // теперь она настоящая: следующий шаг не начинается, а сделанное не приземляется.
-        raiseBusy("Выполняю цепочку…", cancelable = true)
-        trackWork(viewModelScope.launch {
-            var current = start
-            for (capId in chain.steps) {
-                if (!owns(voice)) return@launch
-                val realizer = runCatching { resolver.realizerFor(capId) }.getOrNull()
-                if (realizer == null) {
-                    _ui.update { it.copy(busy = null, busyStage = null, message = "Шаг цепочки недоступен", messageOutcome = Outcome.FAILED) }
-                    return@launch
-                }
-                val label = runCatching { registry.byId(capId).label(current.state) }.getOrDefault("")
-                val result = runCatching { realizer.perform(current, null) }
-                    .getOrElse { ActionResult.Failure(it.message ?: "Не получилось", recoverable = true) }
-                // Шаг, доработавший после отмены, не приземляется: цепочка остановлена — значит
-                // остановлена, а не «ещё один объект напоследок».
-                if (!owns(voice)) return@launch
-                when (result) {
-                    is ActionResult.Success -> {
-                        current = store.put(result.result)
-                        pushFrame(current, capId, label)
-                    }
-                    is ActionResult.Done -> {
-                        _ui.update { it.copy(busy = null, busyStage = null, message = result.message, messageOutcome = Outcome.DONE) }
-                        return@launch
-                    }
-                    is ActionResult.Failure -> {
-                        _ui.update { it.copy(busy = null, busyStage = null, message = "Цепочка прервана: ${result.reason}", messageOutcome = Outcome.FAILED) }
-                        return@launch
-                    }
-                    is ActionResult.NeedsInput, is ActionResult.NeedsImage -> {
-                        // «Требует ввода» — слово контракта, а не человека: на экране это значит,
-                        // что шаг хочет спросить, а цепочку человек запускал одним тапом.
-                        _ui.update { it.copy(busy = null, busyStage = null, message = "Цепочка остановлена: шагу нужен ваш ответ", messageOutcome = Outcome.FAILED) }
-                        return@launch
-                    }
-                }
-            }
-        })
-    }
-
     private fun dispatch(bubble: Bubble, action: suspend () -> ActionResult) {
         runCatching { sensory.tap() } // M4: the choice answers in the hand at once
         // Задача действия хранится, потому что человек имеет право передумать (#288): «В Excel»
@@ -1841,7 +1762,6 @@ class FlowViewModel @Inject constructor(
         stack.removeLast()
         val top = stack.last()
         _ui.update { it.copy(frame = top, message = null, messageOutcome = Outcome.NONE, path = currentPath()) }
-        refreshFavorites()
         persistJourney()
         return true
     }
@@ -1877,7 +1797,6 @@ class FlowViewModel @Inject constructor(
         while (stack.size - 1 > index) stack.removeLast()
         val top = stack.last()
         _ui.update { it.copy(frame = top, message = null, messageOutcome = Outcome.NONE, path = currentPath()) }
-        refreshFavorites()
         persistJourney()
     }
 
@@ -1955,7 +1874,6 @@ class FlowViewModel @Inject constructor(
                 needsImage = null, preview = null, path = currentPath(),
             )
         }
-        refreshFavorites()
         persistJourney()
         enrichInBackground(known)
         loadChildrenIfCollection(known)
@@ -2042,27 +1960,6 @@ class FlowViewModel @Inject constructor(
         }
     }
 
-    /** Recompute which saved chains apply to the top object + whether the current
-     *  path is savable. Pure/synchronous — reads the in-memory favorites. */
-    private fun refreshFavorites() {
-        val top = stack.lastOrNull()
-        if (top == null) {
-            _ui.update { it.copy(favorites = emptyList(), canSaveChain = false) }
-            return
-        }
-        val applicable = allFavorites.filter { chain ->
-            chain.steps.isNotEmpty() &&
-                runCatching { registry.byId(chain.steps.first()).accepts(top.obj.state) }.getOrDefault(false)
-        }
-        val canSave = stack.any { it.viaCapability != null }
-        _ui.update { it.copy(favorites = applicable, canSaveChain = canSave) }
-    }
-
-    private suspend fun loadFavorites() {
-        allFavorites = runCatching { favorites.all() }.getOrDefault(emptyList())
-        refreshFavorites()
-    }
-
     /** Collect the progressive enrichment stream: every finding lands on screen as it
      *  arrives (bubbles grow one by one), and [FlowFrame.enriching] mirrors the labels of
      *  still-running work — the visible "Point думает" feedback (#64). */
@@ -2133,7 +2030,6 @@ class FlowViewModel @Inject constructor(
         stack[index] = refreshed
         _ui.update { if (it.frame?.obj?.id == source.id) it.copy(frame = refreshed) else it }
         if (objChanged) {
-            refreshFavorites()
             persistJourney() // #7: understanding survives process death together with the step
         }
     }

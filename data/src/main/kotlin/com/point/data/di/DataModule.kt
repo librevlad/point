@@ -17,7 +17,6 @@ import com.point.core.flow.DocxWriter
 import com.point.core.flow.Entitlements
 import com.point.core.flow.EvidenceCropper
 import com.point.core.flow.Exporter
-import com.point.core.flow.FavoritesStore
 import com.point.core.flow.FirstHeardSpeechToText
 import com.point.core.flow.HistoryStore
 import com.point.core.flow.ImageCompositor
@@ -91,7 +90,6 @@ import com.point.data.RelayPcTransport
 import com.point.data.SelfHealingPcTransport
 import com.point.data.FileUsageJournal
 import com.point.data.FileCapabilityUsage
-import com.point.data.FileFavoritesStore
 import com.point.data.FileHistoryStore
 import com.point.data.GeminiLlmClient
 import com.point.data.GroqWhisperSpeechToText
@@ -230,9 +228,6 @@ abstract class DataModule {
 
     @Binds
     abstract fun historyStore(impl: FileHistoryStore): HistoryStore
-
-    @Binds
-    abstract fun favoritesStore(impl: FileFavoritesStore): FavoritesStore
 
     @Binds
     abstract fun capabilityUsage(impl: FileCapabilityUsage): CapabilityUsage
@@ -726,11 +721,6 @@ abstract class DataModule {
         @CrashLogFile
         fun crashLogFile(@ApplicationContext context: Context): java.io.File =
             java.io.File(context.filesDir, "last-crash.txt")
-
-        @Provides
-        @FavoritesDir
-        fun favoritesDir(@ApplicationContext context: Context): java.io.File =
-            java.io.File(context.filesDir, "favorites")
 
         @Provides
         @UsageDir

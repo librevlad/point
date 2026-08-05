@@ -19,7 +19,7 @@ import javax.inject.Inject
  * "Открыть в…" — the device-actions differentiator (#66): show the actual installed apps that can
  * open this object and launch the chosen one. Interactive selection is handled by the ViewModel's
  * inline app-picker (it intercepts this capability's tap, like the cloud-consent gate); this realizer
- * is the non-interactive fallback (e.g. favorite-chain replay) — it opens the first available app.
+ * is the non-interactive fallback for callers without a screen — it opens the first available app.
  */
 class OpenInCapability @Inject constructor() : Capability {
     override val id = ID
