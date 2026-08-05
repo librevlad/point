@@ -56,15 +56,20 @@ compose.desktop {
                 org.jetbrains.compose.desktop.application.dsl.TargetFormat.Exe,
             )
             packageName = "Point"
-            packageVersion = "1.0.0"
+            // Версия та же, что у телефона: одно приложение на два устройства, и расхождение
+            // версий читалось бы как «это разные продукты». Формат jpackage требует X.Y.Z и не
+            // принимает ведущий ноль в первом разряде, поэтому 0.3.0 записывается как 3.0.0
+            // до первого настоящего мажорного релиза.
+            packageVersion = "3.0.0"
+
             vendor = "Point"
             // ASCII only: WiX builds the msi database in code page 1252, so a Cyrillic
             // description fails the light.exe link (LGHT0311, exit 311).
             description = "Point for PC - share from your phone, act instantly"
-            // The LAN receiver lives on the JDK's own http server — jpackage strips
-            // unused modules, so it must be kept explicitly or /receive dies in the
-            // packaged build (works fine from :run, fails silently in the exe).
-            modules("jdk.httpserver")
+            // Модуля `jdk.httpserver` здесь больше нет (#475): он держался ради приёмника
+            // локальной сети, а локальной сети у Point не осталось. Единственный путь между
+            // устройствами — ящики сервера, и они ходят обычным `HttpURLConnection` из
+            // `java.base`. Лишний модуль в образе — это вес, который никто не открывает.
             windows {
                 iconFile.set(project.file("src/main/resources/point.ico"))
                 menu = true

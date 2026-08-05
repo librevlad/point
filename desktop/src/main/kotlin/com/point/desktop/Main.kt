@@ -64,11 +64,26 @@ fun main(args: Array<String>) {
     // Чем компьютер умеет рисовать слайды (#403). Ищется один раз при старте: между запусками
     // Office не появляется, а дёргать файловую систему на каждый тап незачем.
     val officeToPdf = LocalOfficeToPdf()
+    // Аккаунт этого компьютера (#473). Раньше ПК знал о себе только токен, имя и порт — владельца
+    // у него не было вовсе. Вход, круг устройств и пропуск — тем же кодом, что на телефоне.
+    val serverUrl = com.point.core.flow.PointServer.base(config.server)
+    val accountStore = FileAccountStore(pointDir)
+    // Ключи компьютера (#475): закрытая половина не покидает эту машину, открытая едет в круг.
+    val deviceKeys = FileDeviceKeys(pointDir)
+
+    // AI на компьютере (#585): ключ читается из конфига при КАЖДОМ вызове, а не один раз при
+    // старте, — человек вписывает его, не перезапуская Point.
+    val llm = DesktopLlmClient(config = { FilePcConfig(pointDir).load().ai })
+    val entities = com.point.core.flow.RegexEntityExtractor()
     val registry = DesktopRegistry(
         setOf(
             PcOpenCapability(), PcCopyCapability(), PcRevealCapability(), PcSaveAsCapability(),
             PcDownloadCapability(), PcToPhoneCapability(), PcPrintCapability(),
             PcOfficePdfCapability(),
+            // Работа с содержимым, а не с файлом как с файлом (#585).
+            PcEntitiesCapability(), PcUnderstandCapability(), PcTranslateCapability(),
+            PcAskCapability(), PcQrCapability(), PcDropCapability(),
+            PcUnzipCapability(), PcOpenLinkCapability(), PcOfficeTextCapability(),
         ),
     )
     val resolver = DesktopResolver(
@@ -81,14 +96,31 @@ fun main(args: Array<String>) {
             PcToPhoneRealizer(outbox),
             PcPrintRealizer(printer),
             PcOfficePdfRealizer(officeToPdf, outbox),
+            PcEntitiesRealizer(entities, outbox),
+            PcAiRealizer(
+                com.point.core.model.CapabilityId("pc-understand"), llm, PcPrompts.UNDERSTAND,
+                outbox, "Понятое",
+            ),
+            PcAiRealizer(
+                com.point.core.model.CapabilityId("pc-translate"), llm, PcPrompts.TRANSLATE,
+                outbox, "Перевод",
+            ),
+            PcAiRealizer(
+                com.point.core.model.CapabilityId("pc-ask"), llm, PcPrompts.ASK,
+                outbox, "Ответ AI",
+            ),
+            PcQrRealizer(outbox),
+            PcDropRealizer(
+                DesktopDropLink(serverUrl) { accountStore.current()?.deviceToken },
+                clipboard,
+            ),
+            PcUnzipRealizer(revealer),
+            PcOfficeTextRealizer(com.point.core.flow.OoxmlOfficeTextExtractor(), outbox),
+            PcOpenLinkRealizer { url ->
+                runCatching { java.awt.Desktop.getDesktop().browse(java.net.URI(url)) }
+            },
         ),
     )
-    // Аккаунт этого компьютера (#473). Раньше ПК знал о себе только токен, имя и порт — владельца
-    // у него не было вовсе. Вход, круг устройств и пропуск — тем же кодом, что на телефоне.
-    val serverUrl = com.point.core.flow.PointServer.base(config.server)
-    val accountStore = FileAccountStore(pointDir)
-    // Ключи компьютера (#475): закрытая половина не покидает эту машину, открытая едет в круг.
-    val deviceKeys = FileDeviceKeys(pointDir)
     val accountScope = kotlinx.coroutines.CoroutineScope(
         kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default,
     )
@@ -143,6 +175,35 @@ fun main(args: Array<String>) {
                     unavailable = officeToPdf.whyUnavailable(),
                 ),
             )
+            // Работа с содержимым (#585). Она нужна и на телефоне, и на компьютере — но телефон
+            // тянет её к себе только тогда, когда своего пути нет: например, ключ AI вписан на
+            // компьютере, а на телефоне его нет.
+            add(com.point.core.flow.PcRemoteAction("pc-entities", "Найти в тексте на ПК", kinds = setOf("TEXT")))
+            add(
+                com.point.core.flow.PcRemoteAction(
+                    "pc-qr", "Сделать QR на ПК", kinds = setOf("TEXT", "URL"),
+                ),
+            )
+            // Три AI-действия приезжают недоступными, пока ключа на компьютере нет: кнопки на
+            // телефоне не будет вовсе, и человек не потратит тап на молчание (#316).
+            val noKey = if (FilePcConfig(pointDir).load().ai.key.isNotBlank()) {
+                null
+            } else {
+                "на компьютере не задан ключ AI"
+            }
+            add(com.point.core.flow.PcRemoteAction("pc-understand", "Понять на ПК", kinds = setOf("TEXT"), unavailable = noKey))
+            add(com.point.core.flow.PcRemoteAction("pc-translate", "Перевести на ПК", kinds = setOf("TEXT"), unavailable = noKey))
+            add(com.point.core.flow.PcRemoteAction("pc-ask", "Спросить AI на ПК", kinds = setOf("TEXT"), unavailable = noKey))
+            // Ссылку выдаёт сервер, значит нужен вход. Не вошли — действие приезжает недоступным.
+            add(
+                com.point.core.flow.PcRemoteAction(
+                    "pc-drop", "Дать ссылку с ПК",
+                    unavailable = if (accountStore.current() != null) null else "компьютер не вошёл в аккаунт",
+                ),
+            )
+            add(com.point.core.flow.PcRemoteAction("pc-unzip", "Распаковать на ПК", kinds = setOf("ZIP")))
+            add(com.point.core.flow.PcRemoteAction("pc-office-text", "Достать текст на ПК", kinds = setOf("OFFICE")))
+            add(com.point.core.flow.PcRemoteAction("pc-open-link", "Открыть в браузере на ПК", kinds = setOf("URL")))
         }
 
     // Открылись сами: файл из меню становится объектом сразу, без лишнего действия человека.
