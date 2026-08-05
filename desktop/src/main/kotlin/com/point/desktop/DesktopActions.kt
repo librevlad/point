@@ -1,6 +1,7 @@
 package com.point.desktop
 
 import com.point.core.flow.Capability
+import com.point.core.flow.ClipboardPayload
 import com.point.core.flow.CapabilityMeta
 import com.point.core.flow.Latency
 import com.point.core.flow.Realizer
@@ -74,17 +75,48 @@ class PcCopyCapability : Capability {
     override val id = CapabilityId("pc-copy")
     override val icon = "copy"
     override val meta = CapabilityMeta(priority = 15)
-    override fun label(state: ObjectState) = "Копировать"
-    override fun accepts(state: ObjectState) = state.kind == ObjectKind.TEXT
+    override fun label(state: ObjectState) =
+        if (state.kind == ObjectKind.IMAGE) "Копировать картинку" else "Копировать"
+
+    /**
+     * Текст и картинка (#585).
+     *
+     * Картинка добавлена не для полноты: снимок экрана, сделанный тут же, чаще всего нужен не
+     * файлом, а вставкой — в письмо, в задачу, в переписку. Сохранять его на диск ради этого
+     * человек не должен.
+     */
+    override fun accepts(state: ObjectState) =
+        state.kind == ObjectKind.TEXT || state.kind == ObjectKind.IMAGE
+
     override fun produces(state: ObjectState) = state
 }
 
-class PcCopyRealizer(private val clipboard: TextClipboard) : Realizer {
+/**
+ * Копирование кладёт в буфер то, ЧЕМ объект является, а не его байты как текст.
+ *
+ * Картинка, положенная строкой, вставится в письмо кашей из символов; текст, положенный картинкой,
+ * не вставится вовсе. Поэтому вид объекта решает форму, а не наоборот.
+ */
+class PcCopyRealizer(
+    private val clipboard: TextClipboard,
+    /** Картинка в буфер — своим швом: `TextClipboard` по определению кладёт строки. */
+    private val imageClipboard: ((ClipboardPayload) -> Unit)? = null,
+) : Realizer {
     override val capabilityId = CapabilityId("pc-copy")
+
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         runCatching {
-            clipboard.copy(File(input.uri.value).readText())
-            ActionResult.Done("Скопировано в буфер")
+            val file = File(input.uri.value).takeIf(File::isFile)
+                ?: return ActionResult.Failure("Файла объекта нет на диске", recoverable = false)
+            if (input.state.kind == ObjectKind.IMAGE) {
+                val put = imageClipboard
+                    ?: return ActionResult.Failure("Этот компьютер не умеет класть картинку в буфер", recoverable = false)
+                put(ClipboardPayload(input.mime, file.name, file.readBytes()))
+                ActionResult.Done("Картинка в буфере — вставьте куда нужно")
+            } else {
+                clipboard.copy(file.readText())
+                ActionResult.Done("Скопировано в буфер")
+            }
         }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось скопировать", recoverable = true) }
 }
 

@@ -289,6 +289,41 @@ class SmartActionsTest {
         assertTrue((result as ActionResult.Failure).reason.contains("ogg"))
     }
 
+    // --- Копирование по виду объекта ------------------------------------------------------------
+
+    @Test fun `картинка кладётся в буфер картинкой, а не байтами как текст`() = runTest {
+        var asText: String? = null
+        var asImage: com.point.core.flow.ClipboardPayload? = null
+        val source = imageObject(64, 64)
+
+        val result = PcCopyRealizer({ asText = it }, { asImage = it }).perform(source, null)
+
+        assertTrue(result is ActionResult.Done)
+        // Картинка, положенная строкой, вставится в письмо кашей из символов.
+        assertEquals("картинку положили текстом", null, asText)
+        assertTrue("картинка в буфер не попала", asImage != null)
+        assertTrue("в буфер уехало не изображение", asImage!!.isImage)
+    }
+
+    @Test fun `текст по-прежнему кладётся текстом`() = runTest {
+        var asText: String? = null
+        var asImage: com.point.core.flow.ClipboardPayload? = null
+
+        PcCopyRealizer({ asText = it }, { asImage = it }).perform(textObject("накладная 4512"), null)
+
+        assertEquals("накладная 4512", asText)
+        assertEquals("текст положили картинкой", null, asImage)
+    }
+
+    @Test fun `нечем положить картинку — сказано, а не сделано молча текстом`() = runTest {
+        var asText: String? = null
+
+        val result = PcCopyRealizer({ asText = it }, imageClipboard = null).perform(imageObject(32, 32), null)
+
+        assertTrue(result is ActionResult.Failure)
+        assertEquals("картинка всё-таки уехала текстом", null, asText)
+    }
+
     // --- Объявление телефону ------------------------------------------------------------------
 
     @Test fun `каждое новое действие объявлено и телефону, и реестру`() {

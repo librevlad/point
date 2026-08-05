@@ -95,7 +95,7 @@ fun main(args: Array<String>) {
     val resolver = DesktopResolver(
         setOf(
             PcOpenRealizer(opener),
-            PcCopyRealizer(clipboard),
+            PcCopyRealizer(clipboard, imageClipboard = ::writeSystemClipboard),
             PcRevealRealizer(revealer),
             PcSaveAsRealizer(saveTarget),
             PcDownloadRealizer(downloader),
