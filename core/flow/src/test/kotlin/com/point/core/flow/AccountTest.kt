@@ -21,6 +21,12 @@ class AccountTest {
         assertEquals("Подтвердите вход в браузере · код K7-42Q", signInWaitingLine("K7-42Q"))
     }
 
+    @Test fun `когда сверять не с чем, кода на экране нет`() {
+        // Вход начат на этом же телефоне: человек сам нажал «Войти» в приложении, которое сам же
+        // открыл. Число, которое надо сверить с самим собой, — это шаг, а не защита (#561).
+        assertEquals("Подтвердите вход в браузере", signInWaitingLine(""))
+    }
+
     @Test fun `молчание сервера и отказ сервера — разные советы`() {
         val silent = accountRefusal(null)
         val refused = accountRefusal(401)
@@ -58,6 +64,35 @@ class AccountTest {
         assertTrue(seen.last() is SignIn.SignedIn)
         assertEquals("https://point.example/login?d=login-1", client.opened)
         assertEquals(account, store.current())
+    }
+
+    @Test fun `вход одним шагом не показывает кода — ни на экране, ни в записи`() = runTest {
+        val client = FakeAccountClient(readyAfter = 2, handoff = true)
+        val store = MemoryAccountStore()
+        val pending = InMemoryPendingLogins()
+        val seen = mutableListOf<SignIn>()
+        val driver = SignInDriver(client, store, browser = { client.opened = it }, pending = pending)
+
+        driver.signIn("Pixel", DeviceKind.PHONE) { seen += it }
+
+        // Код пуст и на экране, и в записи о начатом входе: иначе он всплыл бы на возврате, когда
+        // экран восстанавливается из неё, — и человек увидел бы то, чего секунду назад не видел.
+        assertEquals("", (seen.first() as SignIn.Waiting).code)
+        assertTrue(seen.last() is SignIn.SignedIn)
+        // Браузер всё равно открывается: одним шагом — это про сверку, а не про то, что Google
+        // спрашивать перестали.
+        assertEquals("https://point.example/login?d=login-1", client.opened)
+    }
+
+    @Test fun `вход со сверкой кода остаётся входом со сверкой кода`() = runTest {
+        // Компьютер и чужое устройство теряют единственную защиту, если код убрать везде.
+        val client = FakeAccountClient(readyAfter = 2, handoff = false)
+        val seen = mutableListOf<SignIn>()
+        val driver = SignInDriver(client, MemoryAccountStore(), browser = { client.opened = it })
+
+        driver.signIn("Рабочий", DeviceKind.PC) { seen += it }
+
+        assertEquals("K7-42Q", (seen.first() as SignIn.Waiting).code)
     }
 
     @Test fun `молчащий сервер не уводит в браузер и говорит, что чинить`() = runTest {
@@ -269,6 +304,8 @@ internal class FakeAccountClient(
     private val silentPolls: Set<Int> = emptySet(),
     /** Связи нет вовсе: каждый опрос уходит в никуда. */
     private val silentAlways: Boolean = false,
+    /** Сервер завёл вход одним шагом: браузер откроется здесь же и вернёт человека сам (#561). */
+    private val handoff: Boolean = false,
 ) : AccountClient {
 
     var opened: String? = null
@@ -282,7 +319,17 @@ internal class FakeAccountClient(
     fun readyNow() { readyAfter = polls + 1 }
 
     override suspend fun start(deviceName: String, kind: DeviceKind): LoginStart? =
-        if (startFails) null else LoginStart("login-1", "claim-1", "K7-42Q", "https://point.example/login?d=login-1")
+        if (startFails) {
+            null
+        } else {
+            LoginStart(
+                loginId = "login-1",
+                claimToken = "claim-1",
+                code = "K7-42Q",
+                url = "https://point.example/login?d=login-1",
+                handoff = handoff,
+            )
+        }
 
     override suspend fun poll(loginId: String, claimToken: String): LoginPoll {
         refuseWith?.let { return it }

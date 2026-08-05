@@ -445,11 +445,13 @@ abstract class DataModule {
          * Разговор с сервером Point (#472): вход, круг устройств, отзыв.
          *
          * Реализация одна на телефон и на ПК и живёт в `:core:flow` — вход одинаков там и там.
+         * Разница ровно одна: телефон умеет принять человека обратно из браузера (схема
+         * `point://` в манифесте), поэтому его вход идёт одним шагом, без сверки кода (#561).
          */
         @Provides
         @Singleton
         fun accountClient(keys: com.point.core.flow.DeviceKeyStore): com.point.core.flow.AccountClient =
-            com.point.core.flow.HttpAccountClient(serverUrl(), keys.keys().publicKey)
+            com.point.core.flow.HttpAccountClient(serverUrl(), keys.keys().publicKey, handoff = true)
 
         /**
          * Адрес сервера — сборка без секрета (#419).

@@ -47,6 +47,17 @@ fun JsonValue?.array(name: String): List<JsonValue> =
 fun jsonObject(vararg fields: Pair<String, String>): String =
     fields.joinToString(",", "{", "}") { (k, v) -> "\"${escapeJson(k)}\":\"${escapeJson(v)}\"" }
 
+/**
+ * То же, плюс поля-признаки: `true` и `false` кавычек не терпят.
+ *
+ * Отдельной функцией, а не «строкой true»: принимающая сторона вправе понимать булево строго, и
+ * догадка о том, что она разберёт `"true"` по-доброму, — это договор, которого никто не заключал.
+ */
+fun jsonObject(fields: List<Pair<String, String>>, flags: List<Pair<String, Boolean>>): String =
+    (fields.map { (k, v) -> "\"${escapeJson(k)}\":\"${escapeJson(v)}\"" } +
+        flags.map { (k, v) -> "\"${escapeJson(k)}\":$v" })
+        .joinToString(",", "{", "}")
+
 private fun escapeJson(s: String): String = buildString(s.length + 8) {
     for (ch in s) when {
         ch == '"' -> append("\\\"")

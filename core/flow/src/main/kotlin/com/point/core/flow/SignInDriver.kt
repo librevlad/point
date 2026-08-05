@@ -59,7 +59,10 @@ class SignInDriver(
         val login = PendingLogin(
             loginId = start.loginId,
             claimToken = start.claimToken,
-            code = start.code,
+            // Вход одним шагом кода не показывает: браузер откроется здесь же и вернёт человека
+            // сам, сверять число не с чем (#561). Пустой код доезжает и до записи о начатом
+            // входе — иначе он всплыл бы на возврате, когда экран восстанавливается из неё.
+            code = if (start.handoff) "" else start.code,
             url = start.url,
             startedAtMillis = now(),
         )

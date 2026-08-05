@@ -43,6 +43,13 @@ from .config import Settings, settings_from_env
 
 DEVICE_KINDS = ("PHONE", "PC")
 
+#: Куда сервер возвращает человека после входа, начатого на том же устройстве (#561).
+#:
+#: Константа, а не поле запроса: адрес возврата, взятый из тела `/auth/start`, превратил бы вход в
+#: перенаправление на любой чужой сайт по нашей ссылке. Схема принадлежит приложению Point и
+#: объявлена в его манифесте — открыть по ней чужое приложение нельзя.
+APP_RETURN = "point://signed-in"
+
 
 @dataclass
 class Deps:
@@ -64,6 +71,11 @@ class StartRequest(BaseModel):
     name: str = Field(default="", max_length=64)
     key_agree: str = Field(default="", max_length=512)
     key_sign: str = Field(default="", max_length=512)
+    #: Браузер откроется на том же устройстве, откуда начали (#561). Тогда сверять код нечем и
+    #: незачем: человек подтверждает вход в приложении, которое сам же секунду назад открыл.
+    #: Куда возвращать, устройство НЕ говорит — адрес возврата у сервера свой (см. `APP_RETURN`),
+    #: иначе ручка стала бы открытым перенаправлением на что угодно.
+    handoff: bool = False
 
 
 class EnrollRequest(BaseModel):
@@ -190,6 +202,7 @@ def create_app(
             key_sign=one_line(body.key_sign),
             now=now,
             ttl=d.settings.login_ttl,
+            handoff=bool(body.handoff),
         )
         return {
             "login_id": login_id,
@@ -200,27 +213,17 @@ def create_app(
             "login_url": d.settings.login_url(login_id),
             "expires_in": d.settings.login_ttl,
             "interval": d.settings.poll_interval,
+            # Каким будет вход, решает сервер и говорит вслух: устройству не нужно помнить, что
+            # оно просило, а экрану — гадать, показывать код или нет.
+            "handoff": bool(body.handoff),
         }
 
-    @app.get("/login", response_class=HTMLResponse)
-    def login_page(d: str = "", conn: sqlite3.Connection = Depends(conn_of), dep: Deps = Depends(deps)):
-        row = store.login(conn, d, dep.now())
-        if not row or row["claimed_at"]:
-            return HTMLResponse(pages.gone_page(), status_code=404)
-        return HTMLResponse(pages.login_page(row["id"], row["user_code"]))
+    def to_google(conn: sqlite3.Connection, login_id: str, dep: Deps):
+        """Отправить человека к Google: PKCE, `state`, перенаправление.
 
-    @app.post("/login")
-    async def login_go(
-        request: Request,
-        conn: sqlite3.Connection = Depends(conn_of),
-        dep: Deps = Depends(deps),
-    ):
-        # Тело формы разбираем сами: одна строка `urllib` против ещё одной зависимости.
-        raw = (await request.body()).decode("utf-8", "replace")
-        login_id = urllib.parse.parse_qs(raw).get("d", [""])[0]
-        row = store.login(conn, login_id, dep.now())
-        if not row or row["claimed_at"] or row["done_at"]:
-            return HTMLResponse(pages.gone_page(), status_code=404)
+        Одна функция на две двери — страницу со сверкой кода и вход одним шагом (#561), — потому
+        что расходиться им не в чем: разница только в том, спрашивают ли человека лишний раз.
+        """
         verifier = ids.opaque(32)
         challenge = (
             base64.urlsafe_b64encode(hashlib.sha256(verifier.encode("ascii")).digest())
@@ -236,6 +239,32 @@ def create_app(
         except google_mod.GoogleError as e:
             return HTMLResponse(pages.failed_page(str(e)), status_code=503)
         return RedirectResponse(url, status_code=303)
+
+    @app.get("/login", response_class=HTMLResponse)
+    def login_page(d: str = "", conn: sqlite3.Connection = Depends(conn_of), dep: Deps = Depends(deps)):
+        row = store.login(conn, d, dep.now())
+        if not row or row["claimed_at"]:
+            return HTMLResponse(pages.gone_page(), status_code=404)
+        # Вход начат на этом же устройстве — страница со сверкой кода была бы лишним экраном между
+        # «Войти» и выбором аккаунта. Человек нажал «Войти» секунду назад; спрашивать его «вы точно
+        # хотели войти?» — это не защита, а шаг.
+        if row["handoff"] and not row["done_at"]:
+            return to_google(conn, row["id"], dep)
+        return HTMLResponse(pages.login_page(row["id"], row["user_code"]))
+
+    @app.post("/login")
+    async def login_go(
+        request: Request,
+        conn: sqlite3.Connection = Depends(conn_of),
+        dep: Deps = Depends(deps),
+    ):
+        # Тело формы разбираем сами: одна строка `urllib` против ещё одной зависимости.
+        raw = (await request.body()).decode("utf-8", "replace")
+        login_id = urllib.parse.parse_qs(raw).get("d", [""])[0]
+        row = store.login(conn, login_id, dep.now())
+        if not row or row["claimed_at"] or row["done_at"]:
+            return HTMLResponse(pages.gone_page(), status_code=404)
+        return to_google(conn, login_id, dep)
 
     @app.get("/auth/callback", response_class=HTMLResponse)
     def auth_callback(
@@ -263,6 +292,12 @@ def create_app(
             now=now,
         )
         store.finish_login(conn, row["id"], user_id, now)
+        # Вход начат в том же устройстве — возвращаем человека в Point сами, а не просим закрыть
+        # вкладку и вернуться (#561). Адрес возврата — наша собственная константа, ничего из
+        # запроса в него не попадает: принимать его от клиента значило бы завести перенаправление
+        # на любой чужой адрес по нашей ссылке.
+        if row["handoff"]:
+            return HTMLResponse(pages.return_page(APP_RETURN))
         return HTMLResponse(pages.done_page(row["user_code"]))
 
     @app.get("/auth/session/{login_id}")

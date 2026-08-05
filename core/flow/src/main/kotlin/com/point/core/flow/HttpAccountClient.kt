@@ -42,6 +42,12 @@ class HttpAccountClient(
      * писать ему будет нечем (см. [CircleDevice.key]).
      */
     private val publicKey: String = "",
+    /**
+     * Это устройство умеет принять человека обратно из браузера (#561) — у телефона есть своя
+     * схема в манифесте, у окна на компьютере её нет. Сервер по этому признаку решает, спрашивать
+     * ли сверку кода: она нужна, только когда вход подтверждают на **другом** устройстве.
+     */
+    private val handoff: Boolean = false,
     private val connectTimeoutMs: Int = 8_000,
     private val readTimeoutMs: Int = 15_000,
 ) : AccountClient {
@@ -52,7 +58,10 @@ class HttpAccountClient(
         val reply = request(
             path = "/auth/start",
             method = "POST",
-            body = jsonObject("kind" to kind.name, "name" to deviceName, "key_agree" to publicKey),
+            body = jsonObject(
+                fields = listOf("kind" to kind.name, "name" to deviceName, "key_agree" to publicKey),
+                flags = listOf("handoff" to handoff),
+            ),
         )
         if (reply.status != 200) return@io null
         val json = parseJson(reply.body ?: "")
@@ -60,7 +69,10 @@ class HttpAccountClient(
         val claim = json.str("claim_token") ?: return@io null
         val code = json.str("user_code") ?: return@io null
         val url = json.str("login_url") ?: return@io null
-        LoginStart(loginId = loginId, claimToken = claim, code = code, url = url)
+        // Каким вышел вход, говорит сервер. Старый сервер поля не знает — тогда это обычный вход
+        // со сверкой кода, то есть ровно то, что он и умеет.
+        val oneStep = json.bool("handoff") ?: false
+        LoginStart(loginId = loginId, claimToken = claim, code = code, url = url, handoff = oneStep)
     }
 
     override suspend fun poll(loginId: String, claimToken: String): LoginPoll = io {

@@ -19,19 +19,19 @@ h1{margin:0 0 8px;font-size:22px;font-weight:600}
 p{margin:0 0 16px;font-size:15px;line-height:1.5;color:#A8ADB8}
 .code{display:block;margin:0 0 16px;padding:14px;border:1px dashed #FFFFFF2E;border-radius:12px;
 background:#00000033;color:#F2F3F5;font-size:28px;font-weight:600;letter-spacing:4px;text-align:center}
-button{width:100%;padding:14px;border:0;border-radius:12px;background:#7C5CFF;color:#fff;
-font-size:16px;font-weight:600;cursor:pointer}
-button:active{background:#6A4BE8}
+button,a.go{display:block;width:100%;padding:14px;border:0;border-radius:12px;background:#7C5CFF;
+color:#fff;font-size:16px;font-weight:600;cursor:pointer;text-align:center;text-decoration:none}
+button:active,a.go:active{background:#6A4BE8}
 small{display:block;margin-top:16px;font-size:13px;line-height:1.5;color:#7E8492}
 """
 
 
-def page(title: str, body: str) -> str:
+def page(title: str, body: str, head: str = "") -> str:
     return (
         '<!doctype html><html lang="ru"><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width,initial-scale=1">'
-        "<title>%s</title><style>%s</style></head><body><main>%s</main></body></html>"
-        % (html.escape(title), PAGE_STYLE, body)
+        "%s<title>%s</title><style>%s</style></head><body><main>%s</main></body></html>"
+        % (head, html.escape(title), PAGE_STYLE, body)
     )
 
 
@@ -57,6 +57,25 @@ def done_page(code: str) -> str:
         "Готово",
         "<h1>Готово</h1><p>Устройство с кодом ниже входит в аккаунт. Можно закрывать страницу.</p>"
         '<span class="code">%s</span>' % html.escape(code),
+    )
+
+
+def return_page(app_url: str) -> str:
+    """Вход кончился там же, где начался, — страница уводит человека обратно сама (#561).
+
+    Переход сделан `meta refresh`, а не скриптом: правило страниц («ни одного чужого домена, ни
+    одного скрипта») держится, и возврат работает с выключенным JS. Браузер может не пустить
+    приложение без нажатия — поэтому под ним стоит та же дверь кнопкой. Тупика нет ни в одном
+    случае: даже если человек не нажмёт ничего, вход уже состоялся, и Point дожмёт его сам, когда
+    человек вернётся (см. `SignInDriver.resume`).
+    """
+    safe = html.escape(app_url, quote=True)
+    return page(
+        "Вход подтверждён",
+        "<h1>Вход подтверждён</h1>"
+        "<p>Возвращаемся в Point. Если ничего не произошло — нажмите кнопку.</p>"
+        '<a class="go" href="%s">Вернуться в Point</a>' % safe,
+        head='<meta http-equiv="refresh" content="0;url=%s">' % safe,
     )
 
 
