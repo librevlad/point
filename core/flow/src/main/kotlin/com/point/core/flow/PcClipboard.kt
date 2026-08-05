@@ -22,7 +22,7 @@ class ClipboardPayload(val mime: String, val name: String, val bytes: ByteArray)
 }
 
 /**
- * Shared clipboard with the paired PC (#161 — «общий буфер, как в Apple»). Android forbids a
+ * Shared clipboard with the linked PC (#161 — «общий буфер, как в Apple»). Android forbids a
  * background app from touching the clipboard, so the sync is triggered from a Quick Settings tile: a
  * momentary foreground activity reads/writes the phone clipboard and calls this. The tile [push]es
  * when the phone's clipboard changed since the last sync, otherwise [pull]s the PC's — so a copy on
@@ -30,28 +30,25 @@ class ClipboardPayload(val mime: String, val name: String, val bytes: ByteArray)
  */
 interface PcClipboardSync {
     /** Send the phone's clipboard [payload] to the PC's system clipboard. */
-    suspend fun push(pairing: PcPairing, payload: ClipboardPayload): ClipPush
+    suspend fun push(pc: LinkedPc, payload: ClipboardPayload): ClipPush
 
-    /** The PC's current clipboard. [ClipPull.Empty] and [ClipPull.Unreachable] are kept distinct so a
-     *  LAN→relay fallback only fires on unreachability, not on a legitimately empty PC clipboard. */
-    suspend fun pull(pairing: PcPairing): ClipPull
+    /** The PC's current clipboard. [ClipPull.Empty] and [ClipPull.Unreachable] are kept distinct
+     *  because they are different answers: «компьютер ответил, и там пусто» — это ответ. */
+    suspend fun pull(pc: LinkedPc): ClipPull
 }
 
 /**
- * Why a clipboard sync failed for a reason that is NOT «try another transport» (#272). Collapsing
- * every failure into one «Компьютер недоступен» hid the real causes: a 60 MB screenshot bounced by
- * the relay's blob cap, a rotated app secret, a TLS-pinning miss — each with the PC online and the
- * owner none the wiser. The invariant is «не глотай ошибки»: distinguishable failures stay distinct.
+ * Почему буфер не синхронизировался — и это не «попробуйте ещё раз» (#272). Одно «Компьютер
+ * недоступен» на все случаи прятало настоящие причины: снимок на 60 МБ, который сервер не берёт, и
+ * отключённое из круга устройство выглядели одинаково, хотя чинятся по-разному. Инвариант тот же:
+ * «не глотай ошибки» — различимые отказы остаются различимыми.
  */
 enum class ClipFail {
-    /** The payload exceeds the relay's blob cap — retrying transports won't shrink it. */
+    /** Больше, чем сервер берёт за раз, — повтор ничего не уменьшит. */
     TOO_BIG,
 
-    /** The relay rejected the app secret — this build's key is stale/rotated. */
+    /** Сервер не признал это устройство: его отключили из круга. */
     AUTH,
-
-    /** The pinned TLS handshake failed — the channel can't be trusted, don't keep talking. */
-    TAMPERED,
 }
 
 /** The outcome of a clipboard [PcClipboardSync.push]. */
@@ -59,10 +56,10 @@ sealed interface ClipPush {
     /** Delivered to (or deposited for) the PC. */
     data object Sent : ClipPush
 
-    /** This transport couldn't reach its far end — a caller may try the relay next. */
+    /** Письмо не легло в ящик: компьютера нет в круге, он не запущен или сервер молчит. */
     data object Unreachable : ClipPush
 
-    /** A terminal failure ([ClipFail]) — falling back to another transport cannot help. */
+    /** Отказ, который повтором не чинится ([ClipFail]). */
     data class Failed(val why: ClipFail) : ClipPush
 }
 
@@ -71,65 +68,30 @@ sealed interface ClipPull {
     /** The PC's clipboard, read successfully. */
     data class Got(val payload: ClipboardPayload) : ClipPull
 
-    /** The PC was reached, but its clipboard is empty — do NOT fall back to another transport. */
+    /** Компьютер ответил, и буфер у него пуст — это ответ, а не молчание. */
     data object Empty : ClipPull
 
-    /** The PC couldn't be reached on this transport — a caller may try the relay next. */
+    /** Компьютер письма не забрал: его нет в круге, он не запущен или сервер молчит. */
     data object Unreachable : ClipPull
 
-    /** A terminal failure ([ClipFail]) — falling back to another transport cannot help. */
+    /** Отказ, который повтором не чинится ([ClipFail]). */
     data class Failed(val why: ClipFail) : ClipPull
 }
 
 /**
- * The relay clipboard protocol (#161 «общий буфер» через релей). The LAN hop is request/response, but
- * the relay is a one-way blind mailbox, so the shared clipboard rides two token-derived mailboxes:
- * the phone deposits pushes and pull-requests into [TO_PC]; the desktop, long-polling [TO_PC], sets
- * its clipboard on a push and answers a pull-request by depositing the PC's clipboard into [TO_PHONE],
- * which the phone then polls. Every message is a sealed [PcFrame] — the relay only sees ciphertext.
- */
-object ClipRelay {
-    const val TO_PC = "clip-to-pc"
-    const val TO_PHONE = "clip-to-phone"
-    const val KIND = "clip"
-    const val PUSH = "push"
-    const val PULL = "pull"
-    const val REPLY = "reply"
-    private const val MIME = "mime"
-    private const val NAME = "name"
-    private const val REQ = "req"
-
-    internal fun metaKeys() = listOf(KIND, MIME, NAME, REQ)
-}
-
-/** A decoded clipboard relay message: its [kind], the [payload] (null for a pull request or an
- *  empty reply — i.e. whenever no content crossed), and the pull-correlation [reqId] (see
- *  [encodeClipFrame]; null on push frames and on frames from builds that predate it). */
-data class ClipFrame(val kind: String, val payload: ClipboardPayload?, val reqId: String? = null)
-
-/**
- * Seal-ready bytes for one clip message. A null [payload] means «no content» (a pull request, or an
- * empty-clipboard reply): no mime meta is written, so [decodeClipFrame] yields a null payload.
+ * Что буфер кладёт в мету письма — те же два поля, что у объекта: чем это открыть и как называется.
  *
- * [reqId] correlates a PULL with its REPLY: the phone stamps a fresh id on the request, the desktop
- * echoes it on the answer, and the phone accepts only the echo. Without it, a stale reply left over
- * from a timed-out pull was indistinguishable from the fresh one — the bounded drain (8 blobs) could
- * miss it, and the phone would silently set yesterday's PC clipboard as today's (#272, minor).
+ * Своего кодека у буфера больше нет (#475). Раньше их было два — один у объектов, другой у буфера,
+ * — и держались они врозь тремя выдуманными адресами ящиков. Ящик стал один на устройство, вид
+ * письма переехал в [RelayRpc.KIND], и второй кодек оказался лишней правдой об одном и том же.
  */
-fun encodeClipFrame(kind: String, payload: ClipboardPayload?, reqId: String? = null): ByteArray {
-    val (kKey, mKey, nKey, rKey) = ClipRelay.metaKeys()
-    val meta = buildMap {
-        put(kKey, kind)
-        payload?.let { put(mKey, it.mime); put(nKey, it.name) }
-        reqId?.let { put(rKey, it) }
-    }
-    return encodePcFrame(meta, payload?.bytes ?: ByteArray(0))
-}
+fun clipMeta(payload: ClipboardPayload): Map<String, String> =
+    mapOf(CLIP_MIME to payload.mime, CLIP_NAME to payload.name)
 
-fun decodeClipFrame(blob: ByteArray): ClipFrame {
-    val (kKey, mKey, nKey, rKey) = ClipRelay.metaKeys()
-    val frame = decodePcFrame(blob)
-    val mime = frame.meta[mKey]
-    val payload = if (mime == null) null else ClipboardPayload(mime, frame.meta[nKey] ?: "", frame.bytes)
-    return ClipFrame(frame.meta[kKey] ?: "", payload, frame.meta[rKey])
-}
+/** Буфер из меты и байтов письма; `null` — содержимого не было (пустой буфер на том конце). */
+fun clipPayloadOf(meta: Map<String, String>, bytes: ByteArray): ClipboardPayload? =
+    meta[CLIP_MIME]?.takeIf { it.isNotBlank() }
+        ?.let { ClipboardPayload(it, meta[CLIP_NAME].orEmpty(), bytes) }
+
+const val CLIP_MIME = "mime"
+const val CLIP_NAME = "name"

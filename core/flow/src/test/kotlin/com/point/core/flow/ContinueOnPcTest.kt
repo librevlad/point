@@ -6,23 +6,10 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * #147 Continue on PC: the pairing QR and the metadata codec are a PROTOCOL shared by
- * the phone (sender) and the desktop (receiver) — pure Kotlin, tested here once.
+ * #147 Continue on PC: кодеки меты, возможностей и очереди — ПРОТОКОЛ, общий для телефона
+ * (отправитель) и компьютера (получатель). Чистый Kotlin, судится здесь один раз.
  */
 class ContinueOnPcTest {
-
-    @Test
-    fun `pairing roundtrip via the QR payload`() {
-        val info = PcPairing(host = "192.168.1.42", port = 8391, token = "abc123XYZ")
-        assertEquals(info, parsePcPairing(info.qrPayload()))
-    }
-
-    @Test
-    fun `garbage and foreign QR payloads are rejected`() {
-        assertNull(parsePcPairing("https://example.com"))
-        assertNull(parsePcPairing("point-pc://noport/tok"))
-        assertNull(parsePcPairing(""))
-    }
 
     @Test
     fun `metadata codec roundtrips understanding`() {

@@ -1,8 +1,8 @@
 package com.point.executors
 
 import com.point.core.flow.Capability
-import com.point.core.flow.PcPairing
-import com.point.core.flow.PcPairings
+import com.point.core.flow.LinkedPc
+import com.point.core.flow.PcLinks
 import com.point.core.flow.SpeechReadiness
 import com.point.core.flow.capabilityInventory
 import com.point.core.flow.derivedYield
@@ -286,9 +286,9 @@ class RealCapabilityInventoryTest {
 
     private companion object {
         /** Компьютер связан — иначе «На компьютер» не предлагается вовсе и выпадет из таблицы. */
-        val pairedPc = object : PcPairings {
-            override fun current() = PcPairing(host = "192.168.0.2", port = 8765, token = "t")
-            override suspend fun save(pairing: PcPairing) = Unit
+        val pairedPc = object : PcLinks {
+            override fun current() = LinkedPc("d-pc", "Домашний ПК", "ключ")
+            override suspend fun save(pc: LinkedPc) = Unit
             override suspend fun clear() = Unit
         }
 

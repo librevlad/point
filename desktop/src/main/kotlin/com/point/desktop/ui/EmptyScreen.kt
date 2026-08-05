@@ -37,8 +37,6 @@ import com.point.desktop.PcConfig
 @Composable
 fun EmptyScreen(
     config: PcConfig,
-    addresses: List<String>,
-    port: Int,
     onTakeClipboard: () -> Unit = {},
     /** Круг устройств аккаунта (#473) — на месте, где стояла карточка с QR. */
     devices: (@Composable () -> Unit)? = null,

@@ -3,6 +3,7 @@ package com.point.desktop
 import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -13,6 +14,9 @@ import org.junit.Test
  * путь не должен ни падать, ни превращаться в пустой объект.
  */
 class SendToRunningTest {
+
+    private fun tempDir(): File =
+        File.createTempFile("point-dir-", "").apply { delete(); mkdirs(); deleteOnExit() }
 
     private fun tempFile(name: String): File =
         File.createTempFile("point-", "-$name").apply { writeText("содержимое"); deleteOnExit() }
@@ -42,18 +46,30 @@ class SendToRunningTest {
 
     @Test
     fun `без файлов передавать нечего — работающий Point не тревожим`() {
-        val handed = SendToRunning.handOff(emptyList(), PcConfig(token = "t", name = "PC", port = 47713))
-        assertFalse(handed)
+        assertFalse(SendToRunning.handOff(emptyList(), tempDir()))
     }
 
     @Test
     fun `живого Point нет — файл остаётся нам, и это не ошибка`() {
-        // Порт заведомо свободен: никто не ответит, и запуск обязан пойти обычным путём.
-        val handed = SendToRunning.handOff(
-            listOf(tempFile("смета.xlsx")),
-            PcConfig(token = "t", name = "PC", port = 59_991),
-        )
-        assertFalse(handed)
+        // Замок свободен: никто его не держит, и запуск обязан пойти обычным путём.
+        assertFalse(SendToRunning.handOff(listOf(tempFile("смета.xlsx")), tempDir()))
+    }
+
+    @Test
+    fun `живой Point забирает переданное, а второго окна не появляется`() {
+        // Стука по `127.0.0.1` больше нет (#475): живой экземпляр узнаётся по замку на файле, а
+        // файлы передаются через каталог. Слушающий сокет на Windows вызывал окно брандмауэра, и человек
+        // читал его как «Point лезет куда-то», хотя тот не лез никуда.
+        val dir = tempDir()
+        val alive = SendToRunning.takeLock(dir)
+        assertNotNull("замок в пустом каталоге обязан взяться", alive)
+        val file = tempFile("смета.xlsx")
+
+        assertTrue("живому Point файл отдан", SendToRunning.handOff(listOf(file), dir))
+        assertEquals(listOf(file), SendToRunning.collectHandOffs(dir))
+        assertTrue("прочитанное не возвращается эхом", SendToRunning.collectHandOffs(dir).isEmpty())
+
+        alive!!.release()
     }
 
     @Test

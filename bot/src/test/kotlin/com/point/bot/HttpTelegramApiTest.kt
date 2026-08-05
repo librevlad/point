@@ -26,8 +26,7 @@ import org.junit.rules.TemporaryFolder
 
 /**
  * The full bot HTTP loop over a REAL local stub Telegram server (#92) — proves
- * getUpdates → parse → engine → sendMessage end-to-end without a @BotFather token,
- * the same headless rigor PcServerTest applies to the desktop.
+ * getUpdates → parse → engine → sendMessage end-to-end without a @BotFather token.
  */
 class HttpTelegramApiTest {
 

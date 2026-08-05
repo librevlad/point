@@ -8,17 +8,17 @@ import kotlinx.coroutines.flow.asStateFlow
  * Кто когда кого слышал (#412).
  *
  * Транспорт — единственное место, которое знает правду о связи: он только что сходил к компьютеру
- * (или не смог) и знает, каким путём. Экран об этом узнать сам не может, поэтому транспорт
- * рассказывает, а монитор помнит.
+ * (или не смог). Экран об этом узнать сам не может, поэтому транспорт рассказывает, а монитор
+ * помнит.
  *
- * Помнит ровно один факт — последний контакт и его путь. Истории здесь нет намеренно: человеку
- * нужен ответ «сейчас есть связь или нет», а не журнал.
+ * Помнит ровно один факт — время последнего контакта. Истории здесь нет намеренно: человеку нужен
+ * ответ «сейчас есть связь или нет», а не журнал. Пути с #475 один, и запоминать его перестали.
  */
 interface LinkMonitor {
     val last: StateFlow<Contact?>
 
-    /** Устройство на том конце ответило — таким путём. */
-    fun heard(path: LinkPath)
+    /** Устройство на том конце ответило. */
+    fun heard()
 
     /**
      * Забыть контакт (#451): устройства разошлись, и помнить о связи с ними больше нечего.
@@ -28,7 +28,7 @@ interface LinkMonitor {
      */
     fun forget()
 
-    data class Contact(val at: Long, val path: LinkPath)
+    data class Contact(val at: Long)
 }
 
 /**
@@ -69,8 +69,8 @@ class RememberingLinkMonitor(
     private val remembered by lazy { MutableStateFlow(log.read()) }
     override val last: StateFlow<LinkMonitor.Contact?> get() = remembered.asStateFlow()
 
-    override fun heard(path: LinkPath) {
-        val contact = LinkMonitor.Contact(clock(), path)
+    override fun heard() {
+        val contact = LinkMonitor.Contact(clock())
         remembered.value = contact
         log.write(contact)
     }

@@ -2,27 +2,11 @@ package com.point.core.flow
 
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
 import org.junit.Test
 
-/** The relay half of the pairing/protocol (#161 v2): the QR carries an optional relay URL, and the
- *  object is framed (meta + raw bytes) before RelayCrypto seals it. Pure — round-trips on any side. */
+/** Кадр объекта (мета + сырые байты) собирается до того, как его запечатает RelayCrypto.
+ *  Чистый кодек — ездит туда и обратно на любой стороне. */
 class RelayProtocolTest {
-
-    @Test
-    fun `pairing QR round-trips the relay url`() {
-        val p = PcPairing("192.168.1.242", 8391, "tok123", relay = "https://point.leerio.app")
-        val back = parsePcPairing(p.qrPayload())
-        assertEquals(p, back)
-        assertEquals("https://point.leerio.app", back!!.relay)
-    }
-
-    @Test
-    fun `a legacy QR without a relay parses with relay null`() {
-        val back = parsePcPairing("point-pc://192.168.1.242:8391/tok123")
-        assertEquals(PcPairing("192.168.1.242", 8391, "tok123"), back)
-        assertNull(back!!.relay)
-    }
 
     @Test
     fun `frame round-trips metadata and raw binary bytes`() {

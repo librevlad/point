@@ -23,7 +23,6 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -57,8 +56,8 @@ import com.point.desktop.InboxItem
 import com.point.desktop.PcConfig
 
 /**
- * One window: the inbox on the left, the selected object's bubbles inline, and the
- * "connect your phone" card with the QR — the whole pairing story on one screen.
+ * Одно окно: док прилетевшего слева, выбранный объект и его действия справа, круг устройств на
+ * месте прежней карточки с QR. Связывать больше нечего и нечем (#475).
  */
 @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
@@ -67,8 +66,6 @@ fun DesktopApp(
     config: PcConfig,
     /** Аккаунт этого компьютера (#473): вход и круг устройств вместо пейринга. */
     account: com.point.desktop.DesktopAccount,
-    addresses: List<String>,
-    port: Int,
     onFilesDropped: (List<File>) -> Unit = {},
     onTextDropped: (String) -> Unit = {},
     /** Взятое из буфера — отдельный вход: журнал (#407) должен отличать его от перетаскивания. */
@@ -76,7 +73,6 @@ fun DesktopApp(
 ) {
     val items by state.items.collectAsState()
     val message by state.message.collectAsState()
-    val pair by state.pairRequest.collectAsState()
     val clipboardText by state.clipboardText.collectAsState()
     val lastContact by state.lastContact.collectAsState()
     val journal by state.journal.collectAsState()
@@ -196,7 +192,7 @@ fun DesktopApp(
             if (items.isEmpty() && remembered.isEmpty()) {
                 // Экран без объекта занят тем, чем работу начать (#285): портал, три способа
                 // дать объект и подключение телефона — а не одним лишь QR.
-                EmptyScreen(config, addresses, port, onTakeClipboard = takeClipboard) {
+                EmptyScreen(config, onTakeClipboard = takeClipboard) {
                     MyDevicesPane(
                         email = account.current()?.email.orEmpty(),
                         devices = circle,
@@ -225,7 +221,7 @@ fun DesktopApp(
                         if (selected == null) {
                             // Память есть, объекта на экране нет: место занято тем, чем начать
                             // работу, а не пустотой рядом со списком.
-                            EmptyScreen(config, addresses, port, onTakeClipboard = takeClipboard) {
+                            EmptyScreen(config, onTakeClipboard = takeClipboard) {
                                 MyDevicesPane(
                                     email = account.current()?.email.orEmpty(),
                                     devices = circle,
@@ -263,15 +259,6 @@ fun DesktopApp(
         )
     }
 
-    pair?.let { request ->
-        AlertDialog(
-            onDismissRequest = { request.deny() },
-            title = { Text("Подключение телефона") },
-            text = { Text("Разрешить «${request.deviceName}» отправлять объекты на этот компьютер?") },
-            confirmButton = { Button(onClick = { request.allow() }) { Text("Разрешить") } },
-            dismissButton = { TextButton(onClick = { request.deny() }) { Text("Отклонить") } },
-        )
-    }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -349,7 +336,6 @@ private fun ClipboardCard(text: String, onCopyAgain: () -> Unit, onClose: () -> 
     }
 }
 
-/** Compact connection status once the desktop is in use — tap to re-show the pairing QR. */
 /**
  * Состояние связи с телефоном: точка-светофор и человеческие слова (#412).
  *
@@ -357,7 +343,7 @@ private fun ClipboardCard(text: String, onCopyAgain: () -> Unit, onClose: () -> 
  * замерший текст врал бы ровно в тот момент, когда человек на него смотрит.
  */
 @Composable
-private fun LinkChip(lastContact: Pair<Long, com.point.core.flow.LinkPath>?) {
+private fun LinkChip(lastContact: Long?) {
     var now by remember { mutableStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
         while (true) {
@@ -365,7 +351,7 @@ private fun LinkChip(lastContact: Pair<Long, com.point.core.flow.LinkPath>?) {
             now = System.currentTimeMillis()
         }
     }
-    val link = com.point.core.flow.linkStateOf(lastContact?.first, lastContact?.second, now)
+    val link = com.point.core.flow.linkStateOf(lastContact, now)
     val dot = when (link) {
         is com.point.core.flow.LinkState.Live -> PointColors.cyan
         is com.point.core.flow.LinkState.Silent -> PointColors.violet

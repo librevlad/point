@@ -6,7 +6,6 @@ import com.point.core.model.ActionResult
 import com.point.core.model.Bubble
 import com.point.core.model.ObjectKind
 import java.io.File
-import java.net.NetworkInterface
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -16,15 +15,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-/** A pending pair request the window must answer (allow/deny). */
-class PairRequest(val deviceName: String, private val decide: (Boolean) -> Unit) {
-    fun allow() = decide(true)
-    fun deny() = decide(false)
-}
-
 /**
  * The desktop's state holder (the VM analogue, hand-wired): received objects, a
- * transient message, the connection card, and the pending pair dialog.
+ * transient message and the link to the phone.
  *
  * Ещё он ведёт журнал (#407): что приезжало, откуда и что с этим делали. Память живёт за швом
  * [JournalStore] — экран читает её тем же способом, каким читает всё остальное состояние.
@@ -65,18 +58,15 @@ class DesktopState(
     /** The paired phone's advertised actions (#161 v2) — cards grow «… · телефон» buttons. */
     val phoneCaps = _phoneCaps.asStateFlow()
 
-    // Когда и каким путём телефон приходил в последний раз (#412). Без этого экран молчал, и
-    // человек не мог отличить «связи нет» от «ничего не произошло».
-    private val _lastContact = MutableStateFlow<Pair<Long, com.point.core.flow.LinkPath>?>(null)
-    val lastContact: StateFlow<Pair<Long, com.point.core.flow.LinkPath>?> = _lastContact.asStateFlow()
+    // Когда телефон приходил в последний раз (#412). Без этого экран молчал, и человек не мог
+    // отличить «связи нет» от «ничего не произошло». Путь один, и запоминать его больше нечего (#475).
+    private val _lastContact = MutableStateFlow<Long?>(null)
+    val lastContact: StateFlow<Long?> = _lastContact.asStateFlow()
 
-    /** Телефон дал о себе знать. Путь запоминается: он объясняет человеку скорость. */
-    fun heard(path: com.point.core.flow.LinkPath) {
-        _lastContact.value = System.currentTimeMillis() to path
+    /** Телефон дал о себе знать. */
+    fun heard() {
+        _lastContact.value = System.currentTimeMillis()
     }
-
-    private val _pairRequest = MutableStateFlow<PairRequest?>(null)
-    val pairRequest: StateFlow<PairRequest?> = _pairRequest.asStateFlow()
 
     fun bubblesFor(item: InboxItem): List<Bubble> = registry.bubblesFor(item.obj.state)
 
@@ -84,7 +74,7 @@ class DesktopState(
     fun say(text: String) { _message.value = text }
 
     /** #80: the phone asked to run one of the advertised actions on the received object.
-     *  Путь через релей: ответить туда нечем, поэтому работа уходит в фон без исхода. */
+     *  Фоновая форма — для тех, кто исхода не ждёт. */
     fun runRemoteAction(id: String, item: InboxItem) {
         scope.launch { perform(id, item) }
     }
@@ -243,18 +233,6 @@ class DesktopState(
         runCatching { journalStore?.save(next) }
     }
 
-    /** Called from the HTTP thread; suspends it until the window answers or 60s pass. */
-    fun askPair(deviceName: String): Boolean {
-        val decision = java.util.concurrent.CompletableFuture<Boolean>()
-        _pairRequest.value = PairRequest(deviceName) { allowed ->
-            _pairRequest.value = null
-            decision.complete(allowed)
-        }
-        return runCatching {
-            decision.get(60, java.util.concurrent.TimeUnit.SECONDS)
-        }.getOrDefault(false).also { _pairRequest.value = null }
-    }
-
     /** Re-copy the current clipboard text (after copying something else on the PC). */
     fun copyClipboardAgain() {
         _clipboardText.value?.let { runCatching { clipboard.copy(it) } }
@@ -269,13 +247,3 @@ class DesktopState(
     }
 }
 
-/** All site-local IPv4 addresses — the multi-homed PC shows every candidate. */
-fun siteLocalAddresses(): List<String> =
-    runCatching {
-        NetworkInterface.getNetworkInterfaces().asSequence()
-            .filter { it.isUp && !it.isLoopback }
-            .flatMap { it.inetAddresses.asSequence() }
-            .filter { it.isSiteLocalAddress && it.address.size == 4 }
-            .map { it.hostAddress }
-            .toList()
-    }.getOrDefault(emptyList())

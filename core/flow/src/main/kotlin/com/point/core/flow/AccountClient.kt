@@ -20,6 +20,15 @@ interface AccountClient {
     /** Один опрос: подтвердил ли человек вход в браузере. [claimToken] — из [LoginStart]. */
     suspend fun poll(loginId: String, claimToken: String): LoginPoll
 
+    /**
+     * Объявить кругу открытый ключ этого устройства (#475).
+     *
+     * Не «зарегистрироваться»: в круг устройство попало входом. Здесь оно лишь рассказывает
+     * остальным, **чем с ним говорить**, — закрытая половина ключа не покидает устройство никогда.
+     * Молчаливая работа: не вышло — попробуем в следующий раз, человеку об этом сказать нечего.
+     */
+    suspend fun enroll(account: PointAccount, publicKey: String): Boolean
+
     /** Круг устройств аккаунта. Пустой список — законный ответ; см. [CircleAnswer]. */
     suspend fun circle(account: PointAccount): CircleAnswer
 

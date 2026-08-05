@@ -36,6 +36,12 @@ import java.net.URL
 class HttpAccountClient(
     /** База сервера; пусто — берётся [PointServer.DEFAULT_URL]. */
     serverUrl: String? = null,
+    /**
+     * Открытый ключ этого устройства (#475) — едет вместе с началом входа, чтобы круг увидел его
+     * сразу, а не после первой отправки. Пусто — устройство без ключей: сервер это допускает, и
+     * писать ему будет нечем (см. [CircleDevice.key]).
+     */
+    private val publicKey: String = "",
     private val connectTimeoutMs: Int = 8_000,
     private val readTimeoutMs: Int = 15_000,
 ) : AccountClient {
@@ -46,9 +52,7 @@ class HttpAccountClient(
         val reply = request(
             path = "/auth/start",
             method = "POST",
-            // Открытые ключи устройства поедут здесь же, когда родятся (#474). Пустые поля — не
-            // забывчивость: ключей сегодня нет ни у кого, и сервер это знает.
-            body = jsonObject("kind" to kind.name, "name" to deviceName),
+            body = jsonObject("kind" to kind.name, "name" to deviceName, "key_agree" to publicKey),
         )
         if (reply.status != 200) return@io null
         val json = parseJson(reply.body ?: "")
@@ -120,9 +124,19 @@ class HttpAccountClient(
                     name = item.str("name")?.takeIf { it.isNotBlank() } ?: "Устройство",
                     lastSeenMillis = item.long("last_seen")?.takeIf { it > 0 }?.times(1_000L),
                     self = item.bool("self") ?: (id == account.deviceId),
+                    key = item.str("key_agree").orEmpty(),
                 )
             },
         )
+    }
+
+    override suspend fun enroll(account: PointAccount, publicKey: String): Boolean = io {
+        request(
+            path = "/enroll",
+            method = "POST",
+            token = account.deviceToken,
+            body = jsonObject("key_agree" to publicKey),
+        ).status == 200
     }
 
     override suspend fun revoke(account: PointAccount, deviceId: String): Boolean = io {

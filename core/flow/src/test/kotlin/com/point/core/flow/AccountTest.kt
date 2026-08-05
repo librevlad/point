@@ -274,6 +274,7 @@ internal class FakeAccountClient(
     var opened: String? = null
     var revoked: String? = null
     var signedOut = false
+    var enrolledKey: String? = null
     var polls = 0
         private set
 
@@ -295,6 +296,11 @@ internal class FakeAccountClient(
     }
 
     override suspend fun circle(account: PointAccount): CircleAnswer = CircleAnswer.Circle(circle)
+
+    override suspend fun enroll(account: PointAccount, publicKey: String): Boolean {
+        enrolledKey = publicKey
+        return true
+    }
 
     override suspend fun revoke(account: PointAccount, deviceId: String): Boolean {
         revoked = deviceId

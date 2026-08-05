@@ -103,7 +103,6 @@ class FlowViewModelTest {
         caps: Map<CapabilityId, Set<Intent>> = mapOf(CapabilityId("a") to setOf(Intent.PREPARE)),
         cloud: Set<CapabilityId> = emptySet(),
         slow: Set<CapabilityId> = emptySet(),
-        discovery: com.point.core.flow.PcDiscovery = com.point.core.flow.PcDiscovery { kotlinx.coroutines.flow.flowOf(emptyList()) },
         linkMonitor: com.point.core.flow.LinkMonitor = com.point.core.flow.RememberingLinkMonitor(),
         // По умолчанию тестовый телефон УЖЕ вошёл (#472): дверь входа — отдельная история со
         // своими проверками, и ставить её перед каждой чужой значило бы мерять вход в сорока местах.
@@ -116,7 +115,7 @@ class FlowViewModelTest {
         sharedTexts: com.point.core.flow.SharedTexts = FakeSharedTexts(),
         /** Кому нужен ключ человека (#465): их имена носят приписку «· нужен ключ», пока его нет. */
         keyNeeding: Set<CapabilityId> = emptySet(),
-    ) = FlowViewModel(store, FakeRegistry(caps, cloud, slow, keyNeeding) { userKeys.read() != null }, resolver, chatResponder, enrichment, history, usage, chosenApps, userKeys, journal, consent, appLauncher, FakePdfRasterizer(), sensory, sensorySettings, cloudPrivacy, snapshot, crashLog, dispatcher, pins, AppIconResolver { null }, pcPairings, pcTransport, discovery, pcCaps, linkMonitor, PulledFileFactory { name -> java.io.File(java.io.File(System.getProperty("java.io.tmpdir")), "pulled-" + name).absolutePath }, noFrames, keyCheck, account, accountClient, pendingLogins, browser, sharedTexts)
+    ) = FlowViewModel(store, FakeRegistry(caps, cloud, slow, keyNeeding) { userKeys.read() != null }, resolver, chatResponder, enrichment, history, usage, chosenApps, userKeys, journal, consent, appLauncher, FakePdfRasterizer(), sensory, sensorySettings, cloudPrivacy, snapshot, crashLog, dispatcher, pins, AppIconResolver { null }, pcLinks, pcTransport, pcCaps, linkMonitor, PulledFileFactory { name -> java.io.File(java.io.File(System.getProperty("java.io.tmpdir")), "pulled-" + name).absolutePath }, noFrames, keyCheck, account, accountClient, pendingLogins, deviceKeys, browser, sharedTexts)
     /** Проверка ключа (#465): что «ответил сервис», решает тест, а не сеть. */
     private val keyCheck = FakeAiKeyCheck()
 
@@ -134,7 +133,10 @@ class FlowViewModelTest {
 
     private val chatResponder = FakeChatResponder()
     private val pcCaps = FakePcCaps()
-    private val pcPairings = FakePcPairings()
+    private val pcLinks = FakePcLinks()
+    private val deviceKeys = object : com.point.core.flow.DeviceKeyStore {
+        override fun keys() = TEST_KEYS
+    }
     private val pcTransport = FakePcTransport()
 
     private class FakePcCaps : com.point.core.flow.PcCapsStore {
@@ -1176,14 +1178,14 @@ class FlowViewModelTest {
         // Уйти и оставить на телефоне память о чужом компьютере — та же ловушка, что с отвязанным
         // пейрингом: следующий человек увидел бы чужие умения и чужую связь.
         val store = FakeAccountStore(TEST_ACCOUNT)
-        pcPairings.pairing = com.point.core.flow.PcPairing("10.0.2.2", 8391, "tok")
+        pcLinks.pc = com.point.core.flow.LinkedPc("d-pc", "Ноутбук", "ключ-ПК")
         val vm = vm(account = store)
 
         vm.openDevices(); advanceUntilIdle()
         vm.signOut(); advanceUntilIdle()
 
         assertNull(store.current())
-        assertNull(pcPairings.pairing)
+        assertNull(pcLinks.pc)
         assertTrue(pcCaps.cleared)
         assertTrue(vm.ui.value.signIn is com.point.core.flow.SignIn.SignedOut)
     }
@@ -1419,7 +1421,7 @@ class FlowViewModelTest {
     }
 
     @Test fun `a paired Home visit lights the from-PC banner, throttled, and pull opens the flow (#161)`() = runTest(dispatcher) {
-        pcPairings.pairing = com.point.core.flow.PcPairing("10.0.2.2", 8391, "tok")
+        pcLinks.pc = com.point.core.flow.LinkedPc("d-pc", "Ноутбук", "ключ-ПК")
         pcTransport.outbox = listOf(com.point.core.flow.PcOutboxEntry(1, mapOf("name" to "чек.jpg", "mime" to "image/jpeg")))
         val vm = vm()
 
@@ -1435,7 +1437,7 @@ class FlowViewModelTest {
     }
 
     @Test fun `pull uses the CURRENT PC outbox, not a stale throttled snapshot (#161)`() = runTest(dispatcher) {
-        pcPairings.pairing = com.point.core.flow.PcPairing("10.0.2.2", 8391, "tok")
+        pcLinks.pc = com.point.core.flow.LinkedPc("d-pc", "Ноутбук", "ключ-ПК")
         pcTransport.outbox = listOf(com.point.core.flow.PcOutboxEntry(1, mapOf("name" to "old.txt", "mime" to "text/plain")))
         val vm = vm()
         vm.loadRecent(); advanceUntilIdle() // throttled fetch → snapshot [1]
@@ -1452,7 +1454,7 @@ class FlowViewModelTest {
     }
 
     @Test fun `closing the devices screen refreshes the from-PC banner for Home (#161)`() = runTest(dispatcher) {
-        pcPairings.pairing = com.point.core.flow.PcPairing("10.0.2.2", 8391, "tok")
+        pcLinks.pc = com.point.core.flow.LinkedPc("d-pc", "Ноутбук", "ключ-ПК")
         pcTransport.outbox = listOf(com.point.core.flow.PcOutboxEntry(2, mapOf("name" to "a.txt", "mime" to "text/plain")))
         val vm = vm()
 
@@ -1463,7 +1465,7 @@ class FlowViewModelTest {
     }
 
     @Test fun `a pulled entry carrying a PC intent runs that action after ingest (#161 v2)`() = runTest(dispatcher) {
-        pcPairings.pairing = com.point.core.flow.PcPairing("10.0.2.2", 8391, "tok")
+        pcLinks.pc = com.point.core.flow.LinkedPc("d-pc", "Ноутбук", "ключ-ПК")
         pcTransport.outbox = listOf(
             com.point.core.flow.PcOutboxEntry(1, mapOf("name" to "т.txt", "mime" to "text/plain", "pc.action" to "call")),
         )
@@ -1489,7 +1491,7 @@ class FlowViewModelTest {
      * ни слова человеку. Фейковый реестр отдавал заглушку на любое имя и прятал это вовсе.
      */
     @Test fun `названного компьютером действия на телефоне нет — объект открыт, человек предупреждён`() = runTest(dispatcher) {
-        pcPairings.pairing = com.point.core.flow.PcPairing("10.0.2.2", 8391, "tok")
+        pcLinks.pc = com.point.core.flow.LinkedPc("d-pc", "Ноутбук", "ключ-ПК")
         pcTransport.outbox = listOf(
             com.point.core.flow.PcOutboxEntry(1, mapOf("name" to "т.txt", "mime" to "text/plain", "pc.action" to "видеомонтаж")),
         )
@@ -1503,35 +1505,64 @@ class FlowViewModelTest {
         assertEquals("Компьютер попросил действие, которого в Point нет", vm.ui.value.message)
     }
 
-    @Test fun `компьютер из сети подхватывается сам, без QR и без адреса руками (#472)`() = runTest(dispatcher) {
-        // Быстрый путь по локальной сети остался, но шагом человека быть перестал: экрана
-        // пейринга нет, адрес приносит mDNS, согласие даёт сам компьютер своим окном.
-        val found = com.point.core.flow.DiscoveredPc("Рабочий ноутбук", "192.168.1.42", 8391)
-        val vm = vm(discovery = com.point.core.flow.PcDiscovery { kotlinx.coroutines.flow.flowOf(listOf(found)) })
+    // --- Связка возникает из общего аккаунта, без сопряжения (#524, #475) ---
+
+    @Test fun `компьютер из круга становится известен сам — сопряжения нет вовсе`() = runTest(dispatcher) {
+        // Прежде связь возникала при совпадении трёх условий разом: одна сеть, открытый экран
+        // «Устройства» и нажатие на компьютере за минуту. Условие осталось одно, и оно названо:
+        // войти в тот же аккаунт.
+        val vm = vm(
+            accountClient = FakeCircleClient(
+                circle = listOf(
+                    com.point.core.flow.CircleDevice("d1", com.point.core.flow.DeviceKind.PHONE, "Pixel", self = true),
+                    com.point.core.flow.CircleDevice(
+                        "d2", com.point.core.flow.DeviceKind.PC, "Ноутбук", lastSeenMillis = 5, key = "ключ-ПК",
+                    ),
+                ),
+            ),
+        )
 
         vm.openDevices(); advanceUntilIdle()
 
-        assertEquals("192.168.1.42", pcPairings.pairing?.host)
+        assertEquals("d2", pcLinks.pc?.deviceId)
+        assertEquals("ключ-ПК", pcLinks.pc?.key)
         assertEquals(listOf("pc-open"), pcCaps.saved?.map { it.id })
         assertTrue(pcTransport.pushedPhoneCaps.any { it.id == "call" })
         vm.closeDevices()
     }
 
-    @Test fun `неудачное рукопожатие по сети никого не тревожит (#472)`() = runTest(dispatcher) {
-        // Шуметь отказом того, чего человек не заказывал, значило бы врать, будто он что-то сделал не так.
-        val found = com.point.core.flow.DiscoveredPc("Чужой ПК", "192.168.1.77", 8391)
-        pcTransport.pairOk = false
-        val vm = vm(discovery = com.point.core.flow.PcDiscovery { kotlinx.coroutines.flow.flowOf(listOf(found)) })
+    @Test fun `компьютер ушёл из круга — память о нём уходит вместе с ним`() = runTest(dispatcher) {
+        // Иначе пузырёк «На компьютер» предлагал бы дорогу, которой больше нет.
+        pcLinks.pc = com.point.core.flow.LinkedPc("d2", "Ноутбук", "ключ-ПК")
+        val vm = vm(
+            accountClient = FakeCircleClient(
+                circle = listOf(
+                    com.point.core.flow.CircleDevice("d1", com.point.core.flow.DeviceKind.PHONE, "Pixel", self = true),
+                ),
+            ),
+        )
 
         vm.openDevices(); advanceUntilIdle()
 
-        assertNull(pcPairings.pairing)
-        assertNull(vm.ui.value.devicesScreen?.error)
+        assertNull(pcLinks.pc)
+        assertTrue(pcCaps.cleared)
+        assertNull("это не отказ, а факт круга", vm.ui.value.devicesScreen?.error)
+        vm.closeDevices()
+    }
+
+    @Test fun `круг не приехал — то, что телефон знает про компьютер, не стирается`() = runTest(dispatcher) {
+        // Молчание сервера — не сообщение «компьютера больше нет».
+        pcLinks.pc = com.point.core.flow.LinkedPc("d2", "Ноутбук", "ключ-ПК")
+        val vm = vm(accountClient = FakeCircleClient(circle = null))
+
+        vm.openDevices(); advanceUntilIdle()
+
+        assertEquals("d2", pcLinks.pc?.deviceId)
         vm.closeDevices()
     }
 
     @Test fun `a failed download keeps the entries un-acked (#161)`() = runTest(dispatcher) {
-        pcPairings.pairing = com.point.core.flow.PcPairing("10.0.2.2", 8391, "tok")
+        pcLinks.pc = com.point.core.flow.LinkedPc("d-pc", "Ноутбук", "ключ-ПК")
         pcTransport.outbox = listOf(com.point.core.flow.PcOutboxEntry(1, mapOf("name" to "a.txt", "mime" to "text/plain")))
         pcTransport.downloadOk = false
         val vm = vm()
@@ -1545,7 +1576,7 @@ class FlowViewModelTest {
 
     @Test fun `opening the devices screen refreshes the cached remote actions (#80 v2)`() = runTest(dispatcher) {
         val vm = vm()
-        pcPairings.pairing = com.point.core.flow.PcPairing("10.0.2.2", 8391, "tok")
+        pcLinks.pc = com.point.core.flow.LinkedPc("d-pc", "Ноутбук", "ключ-ПК")
 
         vm.openDevices(); advanceUntilIdle()
 
@@ -3031,6 +3062,9 @@ private class FakeAppLauncher(
     override suspend fun launch(target: AppTarget, obj: PointObject) { launched = target; launchedObj = obj }
 }
 
+/** Ключи тестового устройства (#475): настоящие, но одни и те же — прогон обязан быть быстрым. */
+internal val TEST_KEYS = com.point.core.flow.DeviceKeys.generate()
+
 /** Тестовый пропуск аккаунта (#472). */
 internal val TEST_ACCOUNT = com.point.core.flow.PointAccount(
     deviceId = "d1",
@@ -3054,6 +3088,7 @@ internal class FakeCircleClient(
 ) : com.point.core.flow.AccountClient {
     var revoked: String? = null
     var signedOut = false
+    var enrolledKey: String? = null
     override suspend fun start(deviceName: String, kind: com.point.core.flow.DeviceKind) =
         com.point.core.flow.LoginStart("l1", "claim-1", "K7-42Q", "https://point.example/login?d=l1")
     override suspend fun poll(loginId: String, claimToken: String): com.point.core.flow.LoginPoll =
@@ -3064,6 +3099,10 @@ internal class FakeCircleClient(
             circle == null -> com.point.core.flow.CircleAnswer.Unreachable
             else -> com.point.core.flow.CircleAnswer.Circle(circle!!)
         }
+    override suspend fun enroll(account: com.point.core.flow.PointAccount, publicKey: String): Boolean {
+        enrolledKey = publicKey
+        return true
+    }
     override suspend fun revoke(account: com.point.core.flow.PointAccount, deviceId: String): Boolean {
         revoked = deviceId
         circle = circle?.filterNot { it.id == deviceId }
@@ -3103,49 +3142,47 @@ internal class CountingSignInClient(
     }
     override suspend fun circle(account: com.point.core.flow.PointAccount) =
         com.point.core.flow.CircleAnswer.Circle(emptyList())
+    override suspend fun enroll(account: com.point.core.flow.PointAccount, publicKey: String) = true
     override suspend fun revoke(account: com.point.core.flow.PointAccount, deviceId: String) = true
 }
 
-private class FakePcPairings : com.point.core.flow.PcPairings {
-    var pairing: com.point.core.flow.PcPairing? = null
-    override fun current() = pairing
-    override suspend fun save(pairing: com.point.core.flow.PcPairing) { this.pairing = pairing }
-    override suspend fun clear() { pairing = null }
+private class FakePcLinks : com.point.core.flow.PcLinks {
+    var pc: com.point.core.flow.LinkedPc? = null
+    override fun current() = pc
+    override suspend fun save(pc: com.point.core.flow.LinkedPc) { this.pc = pc }
+    override suspend fun clear() { pc = null }
 }
 
 private class FakePcTransport : com.point.core.flow.PcTransport {
     var outbox: List<com.point.core.flow.PcOutboxEntry> = emptyList()
     var outboxFetches = 0
     var downloadOk = true
-    var pairOk = true
     /** Сколько компьютер думает над «что ты умеешь» — тот самый запрос, пока он в пути (#451). */
     var capsDelayMs = 0L
     val acked = mutableListOf<Int>()
     var pushedPhoneCaps: List<com.point.core.flow.PcRemoteAction> = emptyList()
-    override suspend fun pair(host: String, port: Int, deviceName: String): com.point.core.flow.PcPairing? =
-        if (pairOk) com.point.core.flow.PcPairing(host, port, "tok") else null
     override suspend fun send(
-        pairing: com.point.core.flow.PcPairing,
+        pc: com.point.core.flow.LinkedPc,
         obj: com.point.core.model.PointObject,
         fileName: String,
         meta: Map<String, String>,
         action: String?,
     ): com.point.core.flow.PcSendOutcome = com.point.core.flow.PcSendOutcome.Sent()
-    override suspend fun fetchCaps(pairing: com.point.core.flow.PcPairing): List<com.point.core.flow.PcRemoteAction>? {
+    override suspend fun fetchCaps(pc: com.point.core.flow.LinkedPc): List<com.point.core.flow.PcRemoteAction>? {
         if (capsDelayMs > 0) kotlinx.coroutines.delay(capsDelayMs)
         return listOf(com.point.core.flow.PcRemoteAction("pc-open", "Открыть на компьютере"))
     }
-    override suspend fun fetchOutbox(pairing: com.point.core.flow.PcPairing): List<com.point.core.flow.PcOutboxEntry>? {
+    override suspend fun fetchOutbox(pc: com.point.core.flow.LinkedPc): List<com.point.core.flow.PcOutboxEntry>? {
         outboxFetches++
         return outbox
     }
-    override suspend fun downloadOutboxFile(pairing: com.point.core.flow.PcPairing, id: Int, targetPath: String): Boolean {
+    override suspend fun downloadOutboxFile(pc: com.point.core.flow.LinkedPc, id: Int, targetPath: String): Boolean {
         if (!downloadOk) return false
         java.io.File(targetPath).apply { parentFile?.mkdirs(); writeText("pulled-$id") }
         return true
     }
-    override suspend fun ackOutbox(pairing: com.point.core.flow.PcPairing, id: Int) { acked += id }
-    override suspend fun pushPhoneCaps(pairing: com.point.core.flow.PcPairing, caps: List<com.point.core.flow.PcRemoteAction>): Boolean {
+    override suspend fun ackOutbox(pc: com.point.core.flow.LinkedPc, id: Int) { acked += id }
+    override suspend fun pushPhoneCaps(pc: com.point.core.flow.LinkedPc, caps: List<com.point.core.flow.PcRemoteAction>): Boolean {
         pushedPhoneCaps = caps
         return true
     }

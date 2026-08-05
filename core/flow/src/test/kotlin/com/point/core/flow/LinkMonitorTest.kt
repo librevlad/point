@@ -28,20 +28,20 @@ class LinkMonitorTest {
         val log = Log()
         val monitor = RememberingLinkMonitor(log) { at }
 
-        monitor.heard(LinkPath.LAN)
+        monitor.heard()
 
-        assertEquals(LinkMonitor.Contact(at, LinkPath.LAN), log.read())
-        assertEquals(LinkMonitor.Contact(at, LinkPath.LAN), monitor.last.value)
+        assertEquals(LinkMonitor.Contact(at), log.read())
+        assertEquals(LinkMonitor.Contact(at), monitor.last.value)
     }
 
     @Test
     fun `новый запуск начинается с вчерашнего контакта, а не с чистого листа`() {
-        val log = Log(LinkMonitor.Contact(at, LinkPath.RELAY))
+        val log = Log(LinkMonitor.Contact(at))
 
         // Приложение перезапустили: монитор собран заново, память — та же.
         val monitor = RememberingLinkMonitor(log) { at }
 
-        assertEquals(LinkMonitor.Contact(at, LinkPath.RELAY), monitor.last.value)
+        assertEquals(LinkMonitor.Contact(at), monitor.last.value)
     }
 
     @Test
@@ -65,7 +65,7 @@ class LinkMonitorTest {
     @Test
     fun `отвязали компьютер — память о связи с ним уходит вместе с ним`() {
         // Иначе вчерашний компьютер рассказывал бы о следующем чужую правду.
-        val log = Log(LinkMonitor.Contact(at, LinkPath.LAN))
+        val log = Log(LinkMonitor.Contact(at))
         val monitor = RememberingLinkMonitor(log) { at }
 
         monitor.forget()
@@ -77,8 +77,8 @@ class LinkMonitorTest {
     @Test
     fun `забывчивый журнал не помнит ничего между запусками`() {
         val monitor = RememberingLinkMonitor(ForgetfulLinkLog()) { at }
-        monitor.heard(LinkPath.LAN)
-        assertEquals(LinkMonitor.Contact(at, LinkPath.LAN), monitor.last.value)
+        monitor.heard()
+        assertEquals(LinkMonitor.Contact(at), monitor.last.value)
 
         // Новый монитор над новым забывчивым журналом — то самое «ни разу».
         assertNull(RememberingLinkMonitor(ForgetfulLinkLog()).last.value)
