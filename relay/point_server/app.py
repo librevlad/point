@@ -20,6 +20,8 @@
 """
 from __future__ import annotations
 
+import os
+
 import base64
 import hashlib
 import hmac
@@ -31,11 +33,12 @@ from typing import Callable, Iterator
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.exceptions import HTTPException
+from fastapi import Response
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
 from pydantic import BaseModel, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from . import db, google as google_mod, ids, pages, store
+from . import db, google as google_mod, ids, mailbox, pages, store
 from .config import Settings, settings_from_env
 
 DEVICE_KINDS = ("PHONE", "PC")
@@ -75,6 +78,18 @@ def fail(status: int, code: str, message: str, headers: dict | None = None):
 
 # --- приложение ------------------------------------------------------------------------
 
+
+
+def _upload_form(box_id: str) -> str:
+    """Страница для чужого человека: одно поле и одна кнопка, без слов о Point и его устройстве."""
+    return (
+        "<h1>Отправить файл</h1>"
+        "<p>Выберите файл — он придёт человеку, который дал вам эту ссылку.</p>"
+        "<form method=post enctype=multipart/form-data>"
+        "<input type=file name=file required>"
+        "<button type=submit>Отправить</button>"
+        "</form>"
+    )
 
 def create_app(
     settings: Settings | None = None,
@@ -384,5 +399,117 @@ def create_app(
         """«Удалить всё моё» — учётная запись и все устройства немедленно."""
         store.delete_account(conn, me.user_id)
         return {"deleted": True}
+
+    # --- Ящики, ссылки и приём файлов под аккаунтом (#476) --------------------------------
+    #
+    # Переезд с релея. Пропуск — токен устройства, а не знание адреса; `user_id` берётся из
+    # пропуска и входит в каждое обращение к диску. Три ручки ниже намеренно открыты для чужого
+    # браузера: у человека, которому дали ссылку, пропуска нет и быть не может.
+
+    def _blobs_root(d: Deps) -> str:
+        return os.path.join(d.settings.root, "blobs")
+
+    @app.post("/mbx/{device_id}")
+    async def mbx_push(
+        device_id: str,
+        request: Request,
+        me: store.Caller = Depends(caller),
+        conn: sqlite3.Connection = Depends(conn_of),
+        d: Deps = Depends(deps),
+    ):
+        """Положить письмо в ящик СВОЕГО устройства: чужому в него не написать."""
+        if not store.device(conn, me.user_id, device_id):
+            raise fail(404, "no_device", "Такого устройства в вашем круге нет.")
+        data = await request.body()
+        try:
+            bid = mailbox.push(_blobs_root(d), me.user_id, device_id, data)
+        except mailbox.Full as e:
+            raise fail(507, "full", str(e))
+        return PlainTextResponse(bid, headers={"X-Blob-Id": bid})
+
+    @app.get("/mbx/{device_id}")
+    def mbx_pull(device_id: str, me: store.Caller = Depends(caller), d: Deps = Depends(deps)):
+        got = mailbox.pull(_blobs_root(d), me.user_id, device_id)
+        if not got:
+            return Response(status_code=204)
+        bid, data = got
+        return Response(data, media_type="application/octet-stream", headers={"X-Blob-Id": bid})
+
+    @app.post("/mbx/{device_id}/ack")
+    def mbx_ack(device_id: str, blob: str = "", me: store.Caller = Depends(caller), d: Deps = Depends(deps)):
+        """Письмо удаляется подтверждением, а не выдачей: на разрыве связи оно бы потерялось."""
+        return {"acked": mailbox.ack(_blobs_root(d), me.user_id, device_id, blob)}
+
+    @app.post("/d")
+    async def drop_put(request: Request, me: store.Caller = Depends(caller), d: Deps = Depends(deps)):
+        data = await request.body()
+        raw = request.headers.get("X-Drop-Name", "")
+        try:
+            name = base64.b64decode(raw).decode("utf-8") if raw else "file"
+        except Exception:
+            name = "file"
+        try:
+            did = mailbox.drop_put(_blobs_root(d), me.user_id, data, name,
+                                   request.headers.get("X-Drop-Mime", "application/octet-stream"))
+        except mailbox.Full as e:
+            raise fail(507, "full", str(e))
+        return PlainTextResponse(did, headers={"X-Drop-Id": did})
+
+    @app.get("/d/{drop_id}")
+    def drop_get(drop_id: str, d: Deps = Depends(deps)):
+        """Открыто нарочно: ссылка и есть пропуск, и эти байты сервер видит (названная цена)."""
+        got = mailbox.drop_find(_blobs_root(d), drop_id)
+        if not got:
+            return PlainTextResponse("Файл больше не доступен", status_code=404)
+        path, name, mime = got
+        with open(path, "rb") as f:
+            data = f.read()
+        quoted = urllib.parse.quote(name)
+        return Response(data, media_type=mime,
+                        headers={"Content-Disposition": "attachment; filename*=UTF-8''" + quoted})
+
+    @app.post("/u/open")
+    def inbox_open(me: store.Caller = Depends(caller), d: Deps = Depends(deps)):
+        try:
+            box = mailbox.inbox_open(_blobs_root(d), me.user_id)
+        except mailbox.Full as e:
+            raise fail(507, "full", str(e))
+        return {"box": box, "url": d.settings.public_url.rstrip("/") + "/u/" + box}
+
+    @app.get("/u/{box_id}")
+    def inbox_page(box_id: str, d: Deps = Depends(deps)):
+        """Страница, на которой ЧУЖОЙ человек кладёт файл. Пропуска у него нет."""
+        if not mailbox.inbox_find(_blobs_root(d), box_id):
+            return HTMLResponse(pages.gone_page(), status_code=404)
+        return HTMLResponse(pages.page("Отправить файл", _upload_form(box_id)))
+
+    @app.post("/u/{box_id}")
+    async def inbox_accept(box_id: str, request: Request, d: Deps = Depends(deps)):
+        box = mailbox.inbox_find(_blobs_root(d), box_id)
+        if not box:
+            return HTMLResponse(pages.gone_page(), status_code=404)
+        form = await request.form()
+        item = form.get("file")
+        if item is None:
+            return HTMLResponse(pages.gone_page(), status_code=400)
+        data = await item.read()
+        try:
+            mailbox.inbox_accept(box, data, getattr(item, "filename", "file") or "file",
+                                 getattr(item, "content_type", "") or "application/octet-stream")
+        except mailbox.Full as e:
+            return HTMLResponse(pages.page("Не поместилось", "<h1>Не поместилось</h1><p>" + str(e) + "</p>"), status_code=507)
+        return HTMLResponse(pages.done_page())
+
+    @app.get("/u/{box_id}/take")
+    def inbox_take(box_id: str, me: store.Caller = Depends(caller), d: Deps = Depends(deps)):
+        """Забрать присланное — уже под пропуском: ящик свой."""
+        got = mailbox.inbox_take(_blobs_root(d), me.user_id, box_id)
+        if not got:
+            return Response(status_code=204)
+        fid, data, name, mime = got
+        return Response(data, media_type=mime, headers={
+            "X-File-Id": fid,
+            "X-File-Name": base64.b64encode(name.encode("utf-8")).decode("ascii"),
+        })
 
     return app
