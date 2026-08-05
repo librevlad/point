@@ -254,6 +254,41 @@ class SmartActionsTest {
         assertTrue("отдали копию того же самого", box.entries().isEmpty())
     }
 
+    // --- Расшифровка речи -----------------------------------------------------------------------
+
+    private fun audioObject(name: String = "voice.ogg", mime: String = "audio/ogg"): PointObject {
+        val file = temp.newFile("audio-" + System.nanoTime() + ".ogg").apply { writeBytes(ByteArray(1024)) }
+        return PointObject(
+            id = "aud-1",
+            uri = ScratchRef(file.absolutePath),
+            mime = mime,
+            state = ObjectState(ObjectKind.AUDIO),
+            metadata = mapOf("name" to name),
+        )
+    }
+
+    @Test fun `без ключа расшифровка не идёт в сеть и называет нужный сервис`() = runTest {
+        val realizer = PcTranscribeRealizer({ SpeechConfig(key = "") }, outbox())
+
+        val result = realizer.perform(audioObject(), null)
+
+        assertTrue(result is ActionResult.Failure)
+        val message = (result as ActionResult.Failure).reason
+        // Ключ OpenRouter тут не подойдёт — сказано прямо, иначе человек будет вставлять не тот.
+        assertTrue("не назван сервис: $message", message.contains("Groq") || message.contains("OpenAI"))
+        assertFalse(result.recoverable)
+    }
+
+    @Test fun `формат, который движок не читает, отсекается до сети`() = runTest {
+        val realizer = PcTranscribeRealizer({ SpeechConfig(key = "есть") }, outbox())
+
+        val result = realizer.perform(audioObject(name = "запись.amr", mime = "audio/amr"), null)
+
+        assertTrue(result is ActionResult.Failure)
+        // 400 от чужого сервиса человеку ничего не говорит; формат называется словами заранее.
+        assertTrue((result as ActionResult.Failure).reason.contains("ogg"))
+    }
+
     // --- Объявление телефону ------------------------------------------------------------------
 
     @Test fun `каждое новое действие объявлено и телефону, и реестру`() {

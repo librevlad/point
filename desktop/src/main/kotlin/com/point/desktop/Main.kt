@@ -89,7 +89,7 @@ fun main(args: Array<String>) {
             PcEntitiesCapability(), PcUnderstandCapability(), PcTranslateCapability(),
             PcAskCapability(), PcQrCapability(), PcDropCapability(),
             PcUnzipCapability(), PcOpenLinkCapability(), PcOfficeTextCapability(),
-            PcShrinkImageCapability(),
+            PcShrinkImageCapability(), PcTranscribeCapability(),
         ),
     )
     val resolver = DesktopResolver(
@@ -123,6 +123,7 @@ fun main(args: Array<String>) {
             PcUnzipRealizer(revealer),
             PcOfficeTextRealizer(com.point.core.flow.OoxmlOfficeTextExtractor(), outbox),
             PcShrinkImageRealizer(outbox),
+            PcTranscribeRealizer({ FilePcConfig(pointDir).load().speech }, outbox),
             PcOpenLinkRealizer { url ->
                 runCatching { java.awt.Desktop.getDesktop().browse(java.net.URI(url)) }
             },
@@ -211,6 +212,16 @@ fun main(args: Array<String>) {
             add(com.point.core.flow.PcRemoteAction("pc-unzip", "Распаковать на ПК", kinds = setOf("ZIP")))
             add(com.point.core.flow.PcRemoteAction("pc-office-text", "Достать текст на ПК", kinds = setOf("OFFICE")))
             add(com.point.core.flow.PcRemoteAction("pc-shrink", "Сделать легче на ПК", kinds = setOf("IMAGE")))
+            add(
+                com.point.core.flow.PcRemoteAction(
+                    "pc-transcribe", "Расшифровать на ПК", kinds = setOf("AUDIO"),
+                    unavailable = if (FilePcConfig(pointDir).load().speech.key.isNotBlank()) {
+                        null
+                    } else {
+                        "на компьютере не задан ключ расшифровки"
+                    },
+                ),
+            )
             add(com.point.core.flow.PcRemoteAction("pc-open-link", "Открыть в браузере на ПК", kinds = setOf("URL")))
         }
 

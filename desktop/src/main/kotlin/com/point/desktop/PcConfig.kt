@@ -24,6 +24,8 @@ data class PcConfig(
     val name: String,
     val server: String = "",
     val ai: AiConfig = AiConfig(),
+    /** Чем слушать речь (#585) — ключ от ДРУГОГО сервиса: у OpenRouter ручки расшифровки нет. */
+    val speech: SpeechConfig = SpeechConfig(),
 )
 
 /**
@@ -43,6 +45,11 @@ class FilePcConfig(private val baseDir: File) {
                 key = stored["ai.key"].orEmpty(),
                 url = stored["ai.url"].orEmpty().ifBlank { AiConfig.DEFAULT_URL },
                 model = stored["ai.model"].orEmpty().ifBlank { AiConfig.DEFAULT_MODEL },
+            ),
+            speech = SpeechConfig(
+                key = stored["speech.key"].orEmpty(),
+                url = stored["speech.url"].orEmpty().ifBlank { SpeechConfig.DEFAULT_URL },
+                model = stored["speech.model"].orEmpty().ifBlank { SpeechConfig.DEFAULT_MODEL },
             ),
         )
         if (stored["name"].isNullOrBlank()) save(config)
