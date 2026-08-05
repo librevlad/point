@@ -85,8 +85,9 @@ class HomeActivity : ComponentActivity() {
                         HomeScreen(
                             recent = recent,
                             onOpen = viewModel::openFromHistory,
+                            // Одна служебная дверь (#544): за ней и ключ, и облако, и звук, и
+                            // аккаунт с кругом устройств. Круг открывается изнутри настроек.
                             onSettings = viewModel::openKeySettings,
-                            onPc = viewModel::openDevices,
                             onNewObject = ::newObject,
                             sourceLabels = sourceLabels,
                             onClear = viewModel::clearHistory,

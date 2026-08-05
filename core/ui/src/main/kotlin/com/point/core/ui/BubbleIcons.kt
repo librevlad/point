@@ -50,6 +50,7 @@ import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.SaveAlt
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.Smartphone
@@ -85,6 +86,9 @@ fun bubbleIcon(key: String): ImageVector = when (if (key.startsWith("app:")) "op
     // Круг устройств (#472): телефон рядом с компьютером, и аккаунт, которым они связаны.
     "phone" -> Icons.Filled.Smartphone
     "account" -> Icons.Filled.AccountCircle
+    // Единственная служебная дверь «Недавнего» (#544). Шестерёнка здесь честна ровно потому, что
+    // под ней стоит слово: голая она была загадкой (#462), подписанная — общий знак настроек.
+    "settings" -> Icons.Filled.Settings
     "scan" -> Icons.Filled.DocumentScanner
     "camera" -> Icons.Filled.PhotoCamera
     "cutout" -> Icons.Filled.ContentCut
@@ -134,6 +138,9 @@ fun bubbleColor(key: String): Color = when (if (key.startsWith("app:")) "open-in
     "pc" -> Color(0xFF0EA5E9)       // sky — continue on PC
     "phone" -> Color(0xFF0EA5E9)    // sky — тот же цвет семьи устройств: телефон и ПК — одно и то же сословие
     "account" -> Color(0xFF7B5CFF) // АКЦЕНТ1 — аккаунт и есть главное действие своего экрана
+    // slate — служебная дверь, а не действие над объектом: она обязана не спорить за внимание с
+    // тем, ради чего Point открыли (#544).
+    "settings" -> Color(0xFF64748B)
     "scan" -> Color(0xFF6366F1)     // indigo — scan
     "camera" -> Color(0xFF6366F1)   // indigo — снять кадр: та же семья, что скан
     "cutout" -> Color(0xFF0EA5A5)   // teal — remove background

@@ -110,6 +110,8 @@ fun PointHost(
     /** Отключить устройство круга — своё или чужое (#472). */
     onRevokeDevice: (String) -> Unit = {},
     onSignOut: () -> Unit = {},
+    /** Открыть круг устройств — теперь разделом настроек, а не соседней дверью (#544). */
+    onOpenDevices: () -> Unit = {},
     onCloseDevices: () -> Unit = {},
     onDismissAppPicker: () -> Unit = {},
     onConfirmPreview: () -> Unit = {},
@@ -221,6 +223,7 @@ fun PointHost(
                 cloudEnabled = state.cloudEnabled,
                 onToggleCloud = onToggleCloud,
                 onOpenUrl = onOpenUrl,
+                onOpenDevices = onOpenDevices,
             )
 
             // M3 (MOTION.md №8): quiet local work keeps the object on screen — it "works"

@@ -1,8 +1,10 @@
 package com.point.data
 
 import com.point.core.flow.ObjectStore
+import com.point.core.flow.SETTINGS_TITLE
 import com.point.core.flow.UserAiConfig
 import com.point.core.flow.UserKeyStore
+import com.point.core.flow.refusalNeedsKey
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
@@ -63,5 +65,26 @@ class UserKeyLlmClientTest {
         }
         val e = runCatching { UserKeyLlmClient(keys(null), http, store).run(obj, "hi") }.exceptionOrNull()
         assertTrue(e?.message?.contains("задайте свой ключ") == true)
+    }
+
+    /**
+     * Отказ зовёт человека туда, что он увидит глазами (#544).
+     *
+     * Он звал к «шестерёнке на домашнем экране» — а шестерёнки там нет с #462, и человек шёл искать
+     * предмет, которого не существует. Слово берётся из общего [SETTINGS_TITLE], поэтому
+     * переименовать дверь и забыть отказ больше нельзя: разъедутся — упадёт этот тест.
+     */
+    @Test
+    fun `отказ по ключу зовёт дверь тем же словом, что на ней написано`() = runTest {
+        val http = object : HttpJson {
+            override suspend fun post(u: String, headers: Map<String, String>, b: String) = HttpResult(200, okBody)
+        }
+
+        val message = runCatching { UserKeyLlmClient(keys(null), http, store).run(obj, "hi") }
+            .exceptionOrNull()?.message.orEmpty()
+
+        assertTrue("отказ не назвал дверь её именем: $message", message.contains(SETTINGS_TITLE))
+        // …и остаётся тем отказом, под которым Point предлагает пойти задать ключ.
+        assertTrue("отказ перестал узнаваться как «чинится ключом»", refusalNeedsKey(message))
     }
 }
