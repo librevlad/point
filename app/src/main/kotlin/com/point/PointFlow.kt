@@ -13,7 +13,7 @@ import androidx.compose.ui.platform.LocalContext
  * У [PointHost] четыре десятка колбэков, и до сих пор этот список лежал в каждой двери своей
  * копией: в [FlowHostActivity] (Поделиться, текст, печать) и в [HomeActivity] (иконка в лаунчере).
  * Копия не падает — она тихо стареет: `onOpenUrl` доехал до первой двери и не доехал до второй, и
- * кнопка «Взять ключ» в настройках, открытых шестерёнкой с домашнего экрана, не делала **ничего**.
+ * кнопка «Взять ключ» в настройках, открытых с домашнего экрана, не делала **ничего**.
  * Поймать это было нечем — колбэки дверей не проверял ни один тест.
  *
  * Поэтому список живёт здесь, в одном месте, и потерять из него строку можно только вместе со
@@ -40,6 +40,7 @@ fun PointFlow(
         onContinueAfterSignIn = viewModel::dismissSignIn,
         onRevokeDevice = viewModel::revokeDevice,
         onSignOut = viewModel::signOut,
+        onOpenDevices = viewModel::openDevices,
         onCloseDevices = viewModel::closeDevices,
         onSubmitInput = viewModel::submitAmendment,
         onCancelInput = viewModel::cancelInput,

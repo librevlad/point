@@ -1106,7 +1106,7 @@ class FlowViewModel @Inject constructor(
                 // …и он же стоит НА экране ключей (#467). Сюда пришли по предложению под отказом —
                 // то есть с вопросом «какой из семи ключей задать»; ответ на него живёт в тексте
                 // отказа, а не в памяти человека, и терять его по дороге незачем. Заполняется
-                // только от отказа: пришедшему дверью «AI-ключ» объяснять нечего.
+                // только от отказа: пришедшему дверью «Настройки» объяснять нечего.
                 keyScreenNote = it.message.takeIf { _ -> refusal },
                 message = it.message.takeIf { _ -> refusal },
                 messageOutcome = if (refusal) it.messageOutcome else Outcome.NONE,
@@ -1287,6 +1287,9 @@ class FlowViewModel @Inject constructor(
     /**
      * «Мои устройства» — тот же экран, что был экраном компьютера.
      *
+     * С #544 сюда приходят разделом настроек, а не отдельной дверью «Недавнего»: `keyScreen` при
+     * этом не гасится, и круг встаёт ПОВЕРХ настроек — закрыть его значит вернуться в них.
+     *
      * Круг приезжает с сервера при открытии экрана и после входа — тем же правилом «не в каждом
      * шаринге», что действует для `/caps` (#80). Пока он едет, на экране уже стоит то устройство,
      * которое Point знает про себя: пустой список был бы враньём о своём же круге.
@@ -1339,10 +1342,17 @@ class FlowViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Закрыть круг устройств.
+     *
+     * Под ним открывается то, откуда в него вошли: с #544 это настройки (`keyScreen` при закрытии
+     * не трогается), а если их нет — «Недавнее». Отдельного «куда вернуться» экран не помнит: он и
+     * не должен, состояние само устроено слоями.
+     */
     fun closeDevices() {
         discoveryJob?.cancel()
         discoveryJob = null
-        refreshFromPc() // #161: Home is about to show — its banner must be current
+        refreshFromPc() // #161: под кругом может показаться «Недавнее» — его плашка должна быть свежей
         _ui.update { it.copy(devicesScreen = null) }
     }
 
@@ -1737,14 +1747,12 @@ class FlowViewModel @Inject constructor(
             closeChat() // #4: back leaves the chat, returning to the object (#453: разговор остаётся)
             return true
         }
-        if (_ui.value.keyScreen != null) {
-            closeKeySettings()
-            return true
-        }
-        if (_ui.value.devicesScreen != null) {
-            closeDevices()
-            return true
-        }
+        // Порядок этих трёх веток — порядок, в котором их рисует [PointHost], и с #544 это уже не
+        // формальность: настройки, круг устройств и вход теперь МОГУТ стоять друг на друге. Круг
+        // открывается разделом настроек, а вход поднимается поверх круга, если аккаунта ещё нет.
+        // «Назад» обязан закрывать верхний экран — тот, который человек видит; закрой он нижний,
+        // и человек остался бы смотреть на экран, которого в состоянии уже нет.
+        //
         // Экран входа был единственным местом без выхода: «назад» проваливался мимо всех веток,
         // Activity закрывалась, и Point исчезал целиком — вместе с объектом, ради которого его
         // открыли. Кнопка «Отменить» на экране рисуется только в состоянии ожидания, так что
@@ -1752,6 +1760,14 @@ class FlowViewModel @Inject constructor(
         if (_ui.value.signIn != null) {
             cancelSignIn()
             dismissSignIn()
+            return true
+        }
+        if (_ui.value.devicesScreen != null) {
+            closeDevices()
+            return true
+        }
+        if (_ui.value.keyScreen != null) {
+            closeKeySettings()
             return true
         }
         if (_ui.value.inputPrompt != null || _ui.value.needsImage != null) {

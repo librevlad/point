@@ -43,6 +43,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.layout.ContentScale
 import com.point.core.flow.META_ENTITY_PREFIX
+import com.point.core.flow.SETTINGS_TITLE
 import com.point.core.flow.agoLabel
 import com.point.core.model.HistoryEntry
 import com.point.core.model.ObjectKind
@@ -81,9 +82,15 @@ internal const val WHAT_POINT_IS: String =
  * Point's home: the recent objects you brought in. Tap one to keep working with it —
  * no going back to the source app to share again (the metric: fewer switches).
  *
- * Дверей на этом экране ровно три, и у каждой есть имя (#462). Раньше в углу стояли три безымянные
+ * Дверей на этом экране ровно две, и у каждой есть имя (#462). Раньше в углу стояли три безымянные
  * иконки — стрелка вниз, монитор, шестерёнка, — и угадать по стрелке вниз «Принять файл» было
  * нельзя никак. Теперь это плиты дизайн-системы с подписями.
+ *
+ * Служебная дверь одна, и называется она «Настройки» (#544). Их было две — «Устройства» и
+ * «AI-ключ», — и обе врали в меньшую сторону: за первой лежал ещё и аккаунт со входом, за второй —
+ * пять настроек вместо одной, так что человек, которому надо выключить звук или запретить облако,
+ * не пошёл бы ни в ту, ни в другую. Теперь всё «про меня в Point» лежит за одним словом; аккаунт и
+ * круг устройств стали разделом внутри и переехали как есть.
  *
  * Дверь «Новый объект» (#456) — та, которой не было вовсе: пять источников (камера, голос, буфер,
  * место, файл из чужих рук) жили за плиткой шторки, а плитку надо было самому найти в редакторе.
@@ -96,7 +103,6 @@ fun HomeScreen(
     recent: List<HistoryEntry>,
     onOpen: (HistoryEntry) -> Unit,
     onSettings: () -> Unit,
-    onPc: () -> Unit = {},
     /** Дверь к выбору источника (#456): камера, голос, буфер, место, файл из чужих рук. */
     onNewObject: () -> Unit = {},
     /** Имена источников — подпись двери. Приходят от самих источников, здесь не переписаны. */
@@ -120,19 +126,15 @@ fun HomeScreen(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End),
         ) {
-            // За дверью теперь круг устройств, а не один компьютер (#472), и подпись обязана
-            // называть то, что там правда лежит: голая или врущая подпись — та же загадка, что в #462.
+            // Одна дверь вместо двух (#544). Подпись обязана называть то, что за ней ПРАВДА лежит:
+            // «AI-ключ» называл одну настройку из пяти, «Устройства» — половину аккаунта. Слово
+            // «Настройки» приходит из общего места (`SETTINGS_TITLE`): им же назван экран за дверью
+            // и им же зовёт человека отказ по ключу.
             PortalDoor(
-                label = "Устройства",
-                onClick = onPc,
-                icon = bubbleIcon("pc"),
-                accent = bubbleColor("pc"),
-            )
-            PortalDoor(
-                label = "AI-ключ",
+                label = SETTINGS_TITLE,
                 onClick = onSettings,
-                icon = bubbleIcon("ai"),
-                accent = bubbleColor("ai"),
+                icon = bubbleIcon("settings"),
+                accent = bubbleColor("settings"),
             )
         }
 

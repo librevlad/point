@@ -11,6 +11,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
+import com.point.core.flow.SETTINGS_TITLE
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -34,14 +35,15 @@ class HomeDoorTest {
     @get:Rule val compose = createAndroidComposeRule<HomeActivity>()
 
     /**
-     * Дверь «AI-ключ» на «Недавнем» — тот самый основной путь за ключом.
+     * Дверь «Настройки» на «Недавнем» — тот самый основной путь за ключом (#544).
      *
-     * Дверь называет то, ЗА ЧЕМ идут, экран — то, ГДЕ оказались (#447): кроме ключа за этой дверью
-     * живут разрешение на облако, «куда можно отправлять» и звук.
+     * Ждём не заголовка экрана: он теперь слово в слово совпадает с подписью самой двери, и
+     * ожидание было бы удовлетворено дверью, по которой только что нажали, — то есть не ждало бы
+     * ничего. Ждём Шага 1: его нет нигде, кроме экрана настроек.
      */
     private fun openKeySettings() {
-        compose.onNodeWithText("AI-ключ").performClick()
-        compose.waitUntilAtLeastOneExists(hasText("Настройки"), TIMEOUT_MS)
+        compose.onNodeWithText(SETTINGS_TITLE).performClick()
+        compose.waitUntilAtLeastOneExists(hasText("ШАГ 1 · ОТКУДА ВЗЯТЬ КЛЮЧ"), TIMEOUT_MS)
     }
 
     /** Сохранить ключ так, как это делает человек: доехать, набрать, нажать. */
@@ -70,6 +72,16 @@ class HomeDoorTest {
         assertEquals(Intent.ACTION_VIEW, opened!!.action)
     }
 
+    @Test fun `за единственной дверью «Недавнего» лежит и аккаунт с устройствами`() {
+        // #544 через настоящую Activity, а не через один composable: колбэк `onOpenDevices` едет
+        // сюда через [PointFlow], и потеряться по дороге он может ровно так же, как когда-то
+        // потерялся `onOpenUrl` (см. KDoc [PointFlow]).
+        openKeySettings()
+
+        compose.onNodeWithText("АККАУНТ И УСТРОЙСТВА").performScrollTo().assertExists()
+        compose.onNodeWithText("Мои устройства").performScrollTo().assertExists()
+    }
+
     @Test fun `«назад» после сохранения ключа возвращает на «Недавнее», а не закрывает Point`() {
         openKeySettings()
         saveKey("ключ-из-буфера")
@@ -78,8 +90,9 @@ class HomeDoorTest {
         compose.waitForIdle()
 
         assertFalse("Point закрылся вместо возврата на «Недавнее»", compose.activity.isFinishing)
-        // Дверь «AI-ключ» есть только на «Недавнем» — значит вернулись именно туда.
-        compose.onNodeWithText("AI-ключ").assertExists()
+        // Дверь «Новый объект» есть только на «Недавнем» — значит вернулись именно туда. Слово
+        // «Настройки» для этого больше не годится: им названы и дверь, и экран за ней (#544).
+        compose.onNodeWithText("Новый объект").assertExists()
         compose.onNodeWithText("Ключ AI сохранён").assertDoesNotExist()
     }
 
@@ -92,7 +105,7 @@ class HomeDoorTest {
 
         assertFalse(compose.activity.isFinishing)
         compose.onNodeWithText("Ключ AI сохранён").assertDoesNotExist()
-        compose.onNodeWithText("AI-ключ").assertExists()
+        compose.onNodeWithText("Новый объект").assertExists()
     }
 }
 

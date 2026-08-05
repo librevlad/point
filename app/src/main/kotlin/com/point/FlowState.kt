@@ -230,7 +230,7 @@ data class FlowUiState(
     /** Non-null while the bring-your-own AI-key screen is shown (its prefilled values). */
     val keyScreen: UserAiConfig? = null,
     /** Отказ, который привёл человека на экран ключей, — чтобы он знал, зачем он тут (#467).
-     *  null — пришёл сам, дверью «AI-ключ», и объяснять ему нечего. */
+     *  null — пришёл сам, дверью «Настройки», и объяснять ему нечего. */
     val keyScreenNote: String? = null,
     /** Идёт ли живая проверка ключа прямо сейчас (#465) — поднимается только явным тапом. */
     val keyChecking: Boolean = false,

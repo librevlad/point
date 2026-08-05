@@ -1169,6 +1169,52 @@ class FlowViewModelTest {
         vm.closeDevices()
     }
 
+    // --- Одна дверь «Настройки» (#544): круг устройств стал разделом внутри ---
+
+    @Test fun `круг устройств встаёт поверх настроек, а не вместо них (#544)`() = runTest(dispatcher) {
+        // Погаси экран настроек при открытии круга — и возвращаться из круга было бы некуда, кроме
+        // «Недавнего»: раздел, из которого нельзя вернуться в свой экран, разделом не является.
+        val vm = vm(account = FakeAccountStore(TEST_ACCOUNT))
+
+        vm.openKeySettings(); advanceUntilIdle()
+        vm.openDevices(); advanceUntilIdle()
+
+        assertNotNull("настройки погасли под кругом устройств", vm.ui.value.keyScreen)
+        assertNotNull(vm.ui.value.devicesScreen)
+        vm.closeDevices()
+    }
+
+    @Test fun `«назад» из круга устройств возвращает в настройки, а из них — на «Недавнее» (#544)`() =
+        runTest(dispatcher) {
+            // Порядок веток «назад» до #544 был формальностью — экраны не могли стоять друг на
+            // друге. Теперь могут, и обратный порядок увёл бы человека с экрана, который он видит.
+            val vm = vm(account = FakeAccountStore(TEST_ACCOUNT))
+            vm.openKeySettings(); advanceUntilIdle()
+            vm.openDevices(); advanceUntilIdle()
+
+            assertTrue(vm.onBack())
+            assertNull("круг не закрылся — «назад» ушёл мимо верхнего экрана", vm.ui.value.devicesScreen)
+            assertNotNull("настройки закрылись вместе с кругом", vm.ui.value.keyScreen)
+
+            assertTrue(vm.onBack())
+            assertNull(vm.ui.value.keyScreen)
+        }
+
+    @Test fun `без аккаунта раздел устройств поднимает вход, не теряя настроек (#544)`() = runTest(dispatcher) {
+        // Вход рисуется поверх всего, поэтому «назад» обязан закрывать сначала его.
+        val vm = vm(account = FakeAccountStore(null))
+        vm.openKeySettings(); advanceUntilIdle()
+
+        vm.openDevices(); advanceUntilIdle()
+
+        assertTrue(vm.ui.value.signIn is com.point.core.flow.SignIn.SignedOut)
+        assertNotNull(vm.ui.value.keyScreen)
+
+        assertTrue(vm.onBack())
+        assertNull(vm.ui.value.signIn)
+        assertNotNull("вход увёл человека из настроек вместо возврата в них", vm.ui.value.keyScreen)
+    }
+
     @Test fun `отозванное устройство узнаёт об этом от сервера и показывает вход (#472)`() = runTest(dispatcher) {
         // Отключили этот телефон с другого устройства. Молчаливо сломанный Point человек прочитал
         // бы как поломку — а сервер уже сказал «вас тут нет».

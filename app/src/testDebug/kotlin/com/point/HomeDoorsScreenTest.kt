@@ -1,5 +1,6 @@
 package com.point
 
+import com.point.core.flow.SETTINGS_TITLE
 import com.point.source.SourcePickerActivity
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
@@ -28,9 +29,9 @@ class HomeDoorsScreenTest {
 
     @Test fun `у каждой двери домашнего экрана есть подпись`() {
         // #462: в углу стояли стрелка вниз, монитор и шестерёнка — три загадки без единого слова.
+        // #544: служебных дверей стало одна, и подпись у неё та же, что заголовок за ней.
         compose.onNodeWithText("Новый объект").assertExists()
-        compose.onNodeWithText("Устройства").assertExists()
-        compose.onNodeWithText("AI-ключ").assertExists()
+        compose.onNodeWithText(SETTINGS_TITLE).assertExists()
     }
 
     @Test fun `«Новый объект» ведёт к выбору источника, а не в редактор плиток`() {
