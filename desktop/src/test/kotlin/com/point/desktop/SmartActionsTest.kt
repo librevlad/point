@@ -324,6 +324,30 @@ class SmartActionsTest {
         assertEquals("картинка всё-таки уехала текстом", null, asText)
     }
 
+    // --- Чтение снимка в облаке -----------------------------------------------------------------
+
+    @Test fun `слишком большой снимок отсекается до сети и советует, что делать`() = runTest {
+        val box = outbox()
+        // Бесплатный уровень сервиса берёт до мегабайта; отправить больше значит подарить человеку
+        // минуту ожидания ради отказа.
+        val big = imageObject(2000, 2000)
+        assertTrue("картинка вышла меньше предела — проверять нечего", File(big.uri.value).length() > 1024 * 1024)
+
+        val result = PcCloudOcrRealizer({ OcrConfig() }, box).perform(big, null)
+
+        assertTrue(result is ActionResult.Failure)
+        val message = (result as ActionResult.Failure).reason
+        assertTrue("отказ не подсказал выход: " + message, message.contains("Сделать легче"))
+        assertTrue(box.entries().isEmpty())
+    }
+
+    @Test fun `чтение в облаке названо облаком, а не распознаванием`() {
+        // На телефоне «Распознать текст» читает сам и бесплатно. Одинаковое имя у разных по цене
+        // действий — это обещание, которое ПК не выполнит: у него локального чтения нет.
+        assertEquals("Прочитать в облаке", PcCloudOcrCapability().label(ObjectState(ObjectKind.IMAGE)))
+        assertTrue("действие не помечено сетевым", PcCloudOcrCapability().meta.network)
+    }
+
     // --- Объявление телефону ------------------------------------------------------------------
 
     @Test fun `каждое новое действие объявлено и телефону, и реестру`() {

@@ -89,7 +89,7 @@ fun main(args: Array<String>) {
             PcEntitiesCapability(), PcUnderstandCapability(), PcTranslateCapability(),
             PcAskCapability(), PcQrCapability(), PcDropCapability(),
             PcUnzipCapability(), PcOpenLinkCapability(), PcOfficeTextCapability(),
-            PcShrinkImageCapability(), PcTranscribeCapability(),
+            PcShrinkImageCapability(), PcTranscribeCapability(), PcCloudOcrCapability(),
         ),
     )
     val resolver = DesktopResolver(
@@ -124,6 +124,7 @@ fun main(args: Array<String>) {
             PcOfficeTextRealizer(com.point.core.flow.OoxmlOfficeTextExtractor(), outbox),
             PcShrinkImageRealizer(outbox),
             PcTranscribeRealizer({ FilePcConfig(pointDir).load().speech }, outbox),
+            PcCloudOcrRealizer({ FilePcConfig(pointDir).load().ocr }, outbox),
             PcOpenLinkRealizer { url ->
                 runCatching { java.awt.Desktop.getDesktop().browse(java.net.URI(url)) }
             },
@@ -212,6 +213,9 @@ fun main(args: Array<String>) {
             add(com.point.core.flow.PcRemoteAction("pc-unzip", "Распаковать на ПК", kinds = setOf("ZIP")))
             add(com.point.core.flow.PcRemoteAction("pc-office-text", "Достать текст на ПК", kinds = setOf("OFFICE")))
             add(com.point.core.flow.PcRemoteAction("pc-shrink", "Сделать легче на ПК", kinds = setOf("IMAGE")))
+            // Чтение снимка на ПК идёт в чужой сервис — телефон читает сам и бесплатно, поэтому
+            // тянуть эту работу на компьютер он будет только по прямому выбору человека.
+            add(com.point.core.flow.PcRemoteAction("pc-ocr", "Прочитать в облаке на ПК", kinds = setOf("IMAGE")))
             add(
                 com.point.core.flow.PcRemoteAction(
                     "pc-transcribe", "Расшифровать на ПК", kinds = setOf("AUDIO"),
