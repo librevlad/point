@@ -668,6 +668,16 @@ Robolectric. Это практический выхлоп принципа «max
   ручки у него нет.
 - **Хранение пропуска**: телефон — `EncryptedAccountStore` (`EncryptedSharedPreferences`, ключ в Android
   Keystore); ПК — `FileAccountStore` (`~/.point-pc/account`, права только владельцу).
+- **Начатый вход переживает экран (#561)**: шов `PendingLoginStore` (телефон —
+  `EncryptedPendingLogins`, ПК — `InMemoryPendingLogins` по умолчанию). Смысл потока в том, что
+  человек уходит в браузер; пока `login_id`/`claim_token` жили только в памяти экрана, вход не мог
+  завершиться, если экран не дожил до ответа — сервер видел восемь начатых входов и ноль обращений
+  к `/auth/session/…`. `SignInDriver.resume()` дожимает начатое на возврате человека
+  (`onResume` обеих дверей → `FlowViewModel.resumeSignIn()`), не заводя второго входа и не открывая
+  браузер второй раз; просроченная запись уходит сама.
+- **Молчание сети ≠ отказ сервера (#561)**: у опроса четыре ответа, а не три — `LoginPoll.Silent`.
+  Отказ терминален, молчание чинится ожиданием; «до сервера не дозвониться» говорится только после
+  полуминуты сплошного молчания, а не после первого сбоя.
 - **Экраны**: `SignInScreen` + `MyDevicesScreen` (телефон, язык `PortalSurfaces`), `SignInPane` +
   `MyDevicesPane` (ПК). `PairPcScreen`, `PairPcAction`, `PcPairingEnricher`, `Feature.HAS_PC_PAIRING`,
   `point-pc://`-intent-filter и QR в окне ПК — удалены.

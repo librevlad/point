@@ -127,6 +127,8 @@ class FlowViewModel @Inject constructor(
     private val accountStore: com.point.core.flow.AccountStore,
     /** Разговор с сервером Point: вход, круг устройств, отзыв (#472). */
     private val accountClient: com.point.core.flow.AccountClient,
+    /** Начатый, но не законченный вход (#561): он переживает экран, потому что человек уходит в браузер. */
+    private val pendingLogins: com.point.core.flow.PendingLoginStore,
     /** Открыть системный браузер — единственное, что вход просит у платформы (#472). */
     private val browser: com.point.core.flow.BrowserOpener,
     /** Временные копии расшаренного текста: их заводит `:app`, их же и убирает в конце флоу. */
@@ -1302,7 +1304,12 @@ class FlowViewModel @Inject constructor(
 
     /** Ход входа — один и тот же на телефоне и на ПК, поэтому живёт в `:core:flow`. */
     private val signInDriver by lazy {
-        com.point.core.flow.SignInDriver(accountClient, accountStore, browser)
+        com.point.core.flow.SignInDriver(
+            client = accountClient,
+            store = accountStore,
+            browser = browser,
+            pending = pendingLogins,
+        )
     }
 
     private var signInJob: Job? = null
@@ -1327,6 +1334,10 @@ class FlowViewModel @Inject constructor(
     private fun gateSignIn() {
         if (accountStore.current() == null) {
             _ui.update { it.copy(signIn = com.point.core.flow.SignIn.SignedOut) }
+            // Вход мог быть начат до того, как этот экран родился: человек ушёл в браузер, а
+            // вернулся уже в другой Point. Дверь тогда обязана продолжить начатое, а не предлагать
+            // войти девятый раз (#561).
+            resumeSignIn()
         }
     }
 
@@ -1335,15 +1346,66 @@ class FlowViewModel @Inject constructor(
         signInJob?.cancel()
         signInJob = viewModelScope.launch {
             signInDriver.signIn(deviceName(), com.point.core.flow.DeviceKind.PHONE) { state ->
-                _ui.update { it.copy(signIn = state) }
+                showSignIn(state)
             }
         }
+    }
+
+    /**
+     * Дожать вход, начатый раньше, — то, чего не делал никто (#561).
+     *
+     * Зовётся дверями на возврате человека в Point: он только что был в браузере, подтвердил вход
+     * и вернулся. Раньше в этот момент не происходило ничего: опрос жил в области экрана, а экрана
+     * к возвращению могло уже не быть — система забирает фон, Point закрывают, флоу кончается.
+     * Сервер это и показал: восемь начатых входов и ноль вопросов о том, чем они кончились.
+     *
+     * Дёшево и молча: без записи о начатом входе не делается ни одного запроса, а сам вопрос
+     * уходит в фоне и **не поднимает экрана**, которого человек не просил, — только закрывает тот,
+     * на который он смотрит.
+     */
+    fun resumeSignIn() {
+        if (signInJob?.isActive == true) return
+        signInJob = viewModelScope.launch {
+            // Начатый вход лежит на диске (шифрованные prefs), а зовут нас на КАЖДОМ возврате двери —
+            // в том числе на пути первого экрана с его бюджетом в 300 мс. Поэтому даже вопрос «есть
+            // ли что дожимать» задаётся не на главном потоке.
+            val started = withContext(ioDispatcher) { runCatching { signInDriver.pendingLogin() }.getOrNull() }
+            if (started == null) return@launch
+            signInDriver.resume(deviceName(), com.point.core.flow.DeviceKind.PHONE) { state ->
+                showSignIn(state, quiet = true)
+            }
+        }
+    }
+
+    /**
+     * Что показать про вход — и показывать ли вообще.
+     *
+     * Удача закрывает дверь САМА (#561): человек нажал «Войти», подтвердил в браузере и вернулся —
+     * просить у него ещё один тап «Продолжить» значит держать процедуру там, где её уже нет. Если
+     * дверь стояла, под ней оказывается то, ради чего её открывали, — круг устройств.
+     *
+     * [quiet] — про дожатый в фоне вход: ожидание и отказ он показывает только при уже поднятой
+     * двери и не имеет права выпрыгнуть поверх объекта, которым человек занят. Вход, начатый
+     * тапом, говорит всегда: его экран человек и открыл.
+     */
+    private fun showSignIn(state: com.point.core.flow.SignIn, quiet: Boolean = false) {
+        if (state is com.point.core.flow.SignIn.SignedIn) {
+            val gateWasUp = _ui.value.signIn != null
+            _ui.update { it.copy(signIn = null) }
+            if (gateWasUp) openDevices()
+            return
+        }
+        if (quiet && _ui.value.signIn == null) return
+        _ui.update { it.copy(signIn = state) }
     }
 
     /** Передумал: опрос гаснет, экран возвращается к одной кнопке. Тупика на входе нет (#114). */
     fun cancelSignIn() {
         signInJob?.cancel()
         signInJob = null
+        // Начатый вход снимается вместе с ожиданием: иначе он дожимался бы за спиной у человека,
+        // который только что сказал «не надо».
+        viewModelScope.launch(NonCancellable) { runCatching { signInDriver.forgetPending() } }
         _ui.update { it.copy(signIn = com.point.core.flow.SignIn.SignedOut) }
     }
 
@@ -1925,6 +1987,9 @@ class FlowViewModel @Inject constructor(
         // минуту поверх него приезжал результат того, от чего он ушёл. Уход — это тоже отмена.
         busyJob?.cancel()
         busyJob = null
+        // Опрос входа гаснет вместе с экраном — и это больше не значит «вход пропал»: сам вход
+        // записан на устройстве и дожимается на возврате человека ([resumeSignIn], #561). Пока
+        // записи не было, эта строка означала «вход не кончится никогда».
         signInJob?.cancel()
         signInJob = null
         // Флоу кончился — кончился и разговор о его объекте (#453): держать вопрос в пути некому,

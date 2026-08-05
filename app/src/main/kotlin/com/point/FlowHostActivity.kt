@@ -73,6 +73,18 @@ abstract class FlowHostActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * Человек вернулся — самое время спросить, чем кончился начатый вход (#561).
+     *
+     * Возврат из браузера и есть та секунда, ради которой всё затевалось: подтверждение уже дано,
+     * осталось забрать пропуск. Без этой строки вход кончался ничем, если экран не дожил до ответа;
+     * с ней ничего не происходит, пока начатого входа нет.
+     */
+    override fun onResume() {
+        super.onResume()
+        viewModel.resumeSignIn()
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)

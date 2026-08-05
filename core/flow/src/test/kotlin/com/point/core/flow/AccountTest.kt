@@ -1,5 +1,6 @@
 package com.point.core.flow
 
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -108,21 +109,176 @@ class AccountTest {
         assertEquals("Рабочий ноутбук", account?.deviceName)
         assertEquals(DeviceKind.PC, account?.kind)
     }
+
+    // --- Вход доходит до конца (#561) ---
+
+    /**
+     * Главная улика закрытого релиза: сервер видел восемь начатых входов и НОЛЬ вопросов о том,
+     * чем они кончились. Опрос — это не деталь реализации, а единственный способ забрать пропуск,
+     * и проверяется он счётом на подделке клиента, а не чтением кода.
+     */
+    @Test fun `после старта приложение спрашивает сервер, чем вход кончился`() = runTest {
+        val client = FakeAccountClient(readyAfter = 3)
+        val driver = SignInDriver(client, MemoryAccountStore(), browser = {})
+
+        val account = driver.signIn("Pixel", DeviceKind.PHONE) {}
+
+        assertEquals(3, client.polls)
+        assertNotNull(account)
+    }
+
+    /**
+     * Один сбой связи не обрывает вход, который сервер уже подтвердил (#561).
+     *
+     * Молчание сети вероятнее всего ровно в ту секунду, когда телефон переключается на браузер, —
+     * и пока оно приезжало отказом, вход умирал именно там, где чаще всего и происходил.
+     */
+    @Test fun `один сбой связи не обрывает вход`() = runTest {
+        val client = FakeAccountClient(readyAfter = 3, silentPolls = setOf(1, 2))
+        val store = MemoryAccountStore()
+        val seen = mutableListOf<SignIn>()
+
+        val account = SignInDriver(client, store, browser = {}).signIn("Pixel", DeviceKind.PHONE) { seen += it }
+
+        assertNotNull("вход обязан дойти до пропуска, пережив молчание", account)
+        assertEquals(account, store.current())
+        assertTrue("человеку нечего было сообщать — сервер ответил", seen.none { it is SignIn.Refused })
+    }
+
+    /**
+     * «До сервера не дозвониться» говорится только тогда, когда это правда (#561).
+     *
+     * Сообщение о неполадке связи через секунду после ответа сервера — ложь на экране поверх
+     * несделанной работы. Правдой оно становится после полуминуты сплошного молчания.
+     */
+    @Test fun `про неполадку связи говорится после долгого молчания, а не после первого сбоя`() = runTest {
+        val client = FakeAccountClient(readyAfter = Int.MAX_VALUE, silentAlways = true)
+        val seen = mutableListOf<SignIn>()
+
+        val account = SignInDriver(client, MemoryAccountStore(), browser = {}, pollIntervalMs = 2_000)
+            .signIn("Pixel", DeviceKind.PHONE) { seen += it }
+
+        assertNull(account)
+        assertTrue("одного сбоя мало для приговора связи", client.polls >= 15)
+        val refused = seen.last() as SignIn.Refused
+        assertTrue(refused.what.contains("не дозвониться"))
+    }
+
+    /**
+     * Начатый вход переживает экран, который его начал (#561).
+     *
+     * Это и есть настоящая причина «ноль обращений к сессии»: человек уходит в браузер, экрана к
+     * возвращению может не быть, и спрашивать сервер становится некому и не о чем. Здесь первый
+     * ход гибнет на полуслове, а вернувшийся человек дожимает вход **новым** ходом — без второго
+     * входа и без второго браузера.
+     */
+    @Test fun `начатый вход переживает смерть экрана и дожимается на возврате`() = runTest {
+        val logins = InMemoryPendingLogins()
+        val store = MemoryAccountStore()
+        val client = FakeAccountClient(readyAfter = Int.MAX_VALUE) // человек ещё в браузере
+        val opened = mutableListOf<String>()
+
+        // Экран умер посреди ожидания — как умирает Activity, пока человек у Google.
+        val died = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Unconfined).launch {
+            SignInDriver(client, store, browser = { opened += it }, pending = logins)
+                .signIn("Pixel", DeviceKind.PHONE) {}
+        }
+        kotlinx.coroutines.yield()
+        died.cancel()
+        assertEquals("браузер обязан был открыться один раз", 1, opened.size)
+        assertNotNull("начатый вход обязан лежать на устройстве", logins.current())
+
+        // Человек подтвердил вход в браузере и вернулся в Point.
+        client.readyNow()
+        val seen = mutableListOf<SignIn>()
+        val account = SignInDriver(client, store, browser = { opened += it }, pending = logins)
+            .resume("Pixel", DeviceKind.PHONE) { seen += it }
+
+        assertNotNull("вернувшийся человек обязан оказаться вошедшим", account)
+        assertEquals(account, store.current())
+        assertTrue(seen.last() is SignIn.SignedIn)
+        assertEquals("второго браузера человек не просил", 1, opened.size)
+        assertNull("законченный вход не остаётся лежать", logins.current())
+    }
+
+    /** Дожимать нечего — значит не задаётся ни одного вопроса: молчаливый возврат ничего не стоит. */
+    @Test fun `без начатого входа возврат не трогает сервер`() = runTest {
+        val client = FakeAccountClient()
+        val seen = mutableListOf<SignIn>()
+
+        val account = SignInDriver(client, MemoryAccountStore(), browser = {}, pending = InMemoryPendingLogins())
+            .resume("Pixel", DeviceKind.PHONE) { seen += it }
+
+        assertNull(account)
+        assertEquals(0, client.polls)
+        assertTrue("человеку нечего показывать", seen.isEmpty())
+    }
+
+    /**
+     * Прерванный вход не оставляет приложение в вечном ожидании (критерий приёмки #3 из #561).
+     *
+     * Человек закрыл браузер и не вернулся; через полчаса он открывает Point. Просроченная запись
+     * уходит сама, вместо опроса — понятное «начните заново».
+     */
+    @Test fun `прерванный вход просрочивается, а не ждёт вечно`() = runTest {
+        val logins = InMemoryPendingLogins()
+        logins.save(PendingLogin("l1", "claim-1", "K7-42Q", "https://point.example/login?d=l1", startedAtMillis = 0L))
+        val client = FakeAccountClient()
+        val seen = mutableListOf<SignIn>()
+
+        val driver = SignInDriver(
+            client, MemoryAccountStore(), browser = {}, pending = logins,
+            now = { 30 * 60_000L }, // полчаса спустя
+        )
+        assertNotNull("просроченная запись обязана быть ВИДНА — иначе её никто не уберёт", driver.pendingLogin())
+
+        val account = driver.resume("Pixel", DeviceKind.PHONE) { seen += it }
+
+        assertNull(account)
+        assertEquals("просроченный вход не опрашивают", 0, client.polls)
+        assertNull("мёртвая запись не остаётся на устройстве", logins.current())
+        assertTrue((seen.single() as SignIn.Refused).what.contains("просрочен"))
+    }
+
+    /** Передумал — начатый вход снимается, и дожимать на возврате нечего. */
+    @Test fun `отмена входа снимает и запись о нём`() = runTest {
+        val logins = InMemoryPendingLogins()
+        val client = FakeAccountClient(readyAfter = Int.MAX_VALUE)
+        val driver = SignInDriver(client, MemoryAccountStore(), browser = {}, pending = logins)
+        val job = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Unconfined).launch {
+            driver.signIn("Pixel", DeviceKind.PHONE) {}
+        }
+        kotlinx.coroutines.yield()
+        job.cancel()
+
+        driver.forgetPending()
+
+        assertNull(logins.current())
+        assertNull(driver.pendingLogin())
+    }
 }
 
 /** Сервер, которого нет: отвечает по сценарию и запоминает, куда нас увели. */
 internal class FakeAccountClient(
-    private val readyAfter: Int = 1,
+    private var readyAfter: Int = 1,
     private val startFails: Boolean = false,
     private val refuseWith: LoginPoll.Refused? = null,
     private val nameFromServer: String = "Pixel",
     var circle: List<CircleDevice> = emptyList(),
+    /** Какие по счёту опросы не дозвонились — молчание сети посреди живого входа (#561). */
+    private val silentPolls: Set<Int> = emptySet(),
+    /** Связи нет вовсе: каждый опрос уходит в никуда. */
+    private val silentAlways: Boolean = false,
 ) : AccountClient {
 
     var opened: String? = null
     var revoked: String? = null
     var signedOut = false
-    private var polls = 0
+    var polls = 0
+        private set
+
+    /** Человек подтвердил вход в браузере — со следующего вопроса сервер отдаёт пропуск. */
+    fun readyNow() { readyAfter = polls + 1 }
 
     override suspend fun start(deviceName: String, kind: DeviceKind): LoginStart? =
         if (startFails) null else LoginStart("login-1", "claim-1", "K7-42Q", "https://point.example/login?d=login-1")
@@ -130,6 +286,7 @@ internal class FakeAccountClient(
     override suspend fun poll(loginId: String, claimToken: String): LoginPoll {
         refuseWith?.let { return it }
         polls++
+        if (silentAlways || polls in silentPolls) return LoginPoll.Silent
         return if (polls >= readyAfter) {
             LoginPoll.Ready(PointAccount("d-1", "tok-1", "me@example.com", nameFromServer, DeviceKind.PHONE))
         } else {

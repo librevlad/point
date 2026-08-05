@@ -329,6 +329,11 @@ abstract class DataModule {
     @Singleton
     abstract fun accountStore(impl: com.point.data.EncryptedAccountStore): com.point.core.flow.AccountStore
 
+    /** Начатый вход (#561) — переживает экран, который его начал: человек уходит в браузер. */
+    @Binds
+    @Singleton
+    abstract fun pendingLogins(impl: com.point.data.EncryptedPendingLogins): com.point.core.flow.PendingLoginStore
+
     /** Страница входа открывается системным браузером (#472). */
     @Binds
     abstract fun browserOpener(impl: com.point.data.AndroidBrowserOpener): com.point.core.flow.BrowserOpener
