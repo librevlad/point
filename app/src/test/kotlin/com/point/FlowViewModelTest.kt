@@ -419,13 +419,25 @@ class FlowViewModelTest {
         assertEquals("Пришлите договор до пятницы", history.recorded.single().metadata["name"])
     }
 
-    /** Дверь молчит — имя остаётся тем, что дал приёмник: у файла из чужих рук оно настоящее. */
-    @Test fun `без имени от двери объект остаётся с именем файла`() = runTest(dispatcher) {
+    /**
+     * Дверь молчит — объект всё равно назван по-человечески (#581).
+     *
+     * Раньше имя оставалось тем, что дал файл, и в «Недавнее» уезжали четыре строки
+     * `shared-19980273…txt` подряд, различимые только цифрами. Правило «имя даёт содержимое»
+     * держалось на том, что каждая из двенадцати дверей помнит его применить, — и та, что
+     * забыла, ломала «Недавнее» молча. Теперь правило стоит одним местом, в самом приёме.
+     */
+    @Test fun `дверь имени не дала — объект всё равно назван человечески`() = runTest(dispatcher) {
         val vm = vm()
         vm.onShared("uri", "image/png")
         advanceUntilIdle()
 
-        assertNull(vm.ui.value.frame?.obj?.metadata?.get("name"))
+        val name = vm.ui.value.frame?.obj?.metadata?.get("name")
+        assertNotNull("объект остался без имени — в «Недавнем» его не узнать", name)
+        assertFalse(
+            "имя осталось машинным: " + name,
+            com.point.core.flow.looksMachineName(name),
+        )
     }
 
     // --- Песочница на первом запуске (#210) ---
@@ -2143,14 +2155,21 @@ class FlowViewModelTest {
         assertEquals("чек.jpg", errand?.objectName)
     }
 
-    /** Имени у объекта может и не быть — тогда он зовётся своим видом, как везде в Point. */
+    /**
+     * Имени у объекта может и не быть — тогда он зовётся своим видом, как везде в Point.
+     *
+     * С #581 вид дополнен временем появления («Изображение, 5 авг 20:15»): двух безымянных
+     * объектов одного вида в «Недавнем» иначе не различить. Здесь проверяется начало — само
+     * время меряется своим тестом (`ObjectNamesTest`), а не этим.
+     */
     @Test fun `безымянный объект зовётся видом, а не пустой строкой`() = runTest(dispatcher) {
         val vm = keyErrandVm()
         vm.onShared("card.jpg", "image/jpeg"); advanceUntilIdle()
 
         vm.onBubble(vm.needsKeyBubble()); advanceUntilIdle()
 
-        assertEquals("Изображение", vm.ui.value.keyErrand?.objectName)
+        val name = vm.ui.value.keyErrand?.objectName
+        assertTrue("объект назван не своим видом: " + name, name?.startsWith("Изображение") == true)
     }
 
     /**

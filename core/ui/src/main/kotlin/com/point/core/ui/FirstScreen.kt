@@ -574,6 +574,9 @@ private fun CollectionItems(
 /** Сколько знаков текста видно сразу; остальное — по тапу «Показать целиком» (#460). */
 const val TEXT_PREVIEW_HEAD = 2_000
 
+/** Сколько СТРОК занимает свёрнутое превью: объект узнаётся, действия остаются на экране (#580). */
+const val COLLAPSED_PREVIEW_LINES = 3
+
 /**
  * Начало длинного текста — по границе строки, чтобы разметка не рвалась посередине слова.
  *
@@ -619,6 +622,12 @@ private fun TextPreview(text: String, markdown: Boolean = false) {
                     .padding(16.dp),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface,
+                // Свёрнутый объект показывает себя тремя строками (#580). Раньше высоту держал
+                // только предел в знаках, и текст в две тысячи символов уводил действия на экран
+                // вниз: человек видел объект, который и так принёс, и не видел, что с ним делать.
+                // Целиком — по тому же тапу, что и раньше.
+                maxLines = if (expanded) Int.MAX_VALUE else COLLAPSED_PREVIEW_LINES,
+                overflow = TextOverflow.Ellipsis,
             )
         }
     }

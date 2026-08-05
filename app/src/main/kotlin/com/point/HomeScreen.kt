@@ -79,6 +79,17 @@ internal const val WHAT_POINT_IS: String =
         "сделать"
 
 /**
+ * Как объект попадает в Point — главным путём, названным словом (#580).
+ *
+ * «Поделиться» — вход, которым нельзя воспользоваться изнутри приложения: он живёт в чужих
+ * приложениях, в системном меню. Поэтому дверь «Новый объект» его и не перечисляет — а человек
+ * без этой строки не догадывается, что Point вообще так открывается. Двое из шести моделей
+ * назвали это первым, чего не хватает новому человеку.
+ */
+internal const val HOW_TO_SHARE: String =
+    "Или нажмите «Поделиться» в любом приложении и выберите Point"
+
+/**
  * Что обещает строка «Посмотреть на примере» (#210).
  *
  * Обещано ровно то, что Point выполнит у человека, поставившего его минуту назад: снимок лежит в
@@ -195,6 +206,12 @@ fun HomeScreen(
                     )
                     Spacer(Modifier.height(22.dp))
                     NewObjectDoor(sourceLabels = sourceLabels, onClick = onNewObject)
+                    Spacer(Modifier.height(9.dp))
+                    Text(
+                        HOW_TO_SHARE,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                     // Пример стоит ТОЛЬКО здесь, на пустом доме (#210): у человека с первым своим
                     // объектом он уже спрошен и отвечен, и навязывать его во второй раз незачем.
                     Spacer(Modifier.height(11.dp))
@@ -294,7 +311,6 @@ private fun ExampleDoor(onClick: () -> Unit, modifier: Modifier = Modifier) {
         // после открытия. Обещание строки и знак над ней говорят одно.
         icon = bubbleIcon("ocr"),
         accent = bubbleColor("ocr"),
-        subtitleMaxLines = 3,
         modifier = modifier.widthIn(max = PortalColumnWidth),
     )
 }
