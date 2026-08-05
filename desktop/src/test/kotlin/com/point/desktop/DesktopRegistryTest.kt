@@ -12,9 +12,12 @@ class DesktopRegistryTest {
     )
 
     @Test
-    fun `an image gets open, reveal and save — in priority order`() {
+    fun `an image gets open, copy, reveal and save — in priority order`() {
+        // Копирование картинки добавилось в #585: снимок экрана чаще нужен вставкой в письмо, а
+        // не файлом на диске. Название у него своё — «Копировать картинку»: у текста и картинки
+        // на этом экране разный смысл одного и того же слова.
         assertEquals(
-            listOf("Открыть", "Показать в папке", "Сохранить в…"),
+            listOf("Открыть", "Копировать картинку", "Показать в папке", "Сохранить в…"),
             registry.bubblesFor(ObjectState(ObjectKind.IMAGE)).map { it.title },
         )
     }

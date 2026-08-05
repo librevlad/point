@@ -26,6 +26,8 @@ data class PcConfig(
     val ai: AiConfig = AiConfig(),
     /** Чем слушать речь (#585) — ключ от ДРУГОГО сервиса: у OpenRouter ручки расшифровки нет. */
     val speech: SpeechConfig = SpeechConfig(),
+    /** Чем читать снимки (#585). Ключ необязателен: без него работает демо-уровень сервиса. */
+    val ocr: OcrConfig = OcrConfig(),
 )
 
 /**
@@ -45,6 +47,10 @@ class FilePcConfig(private val baseDir: File) {
                 key = stored["ai.key"].orEmpty(),
                 url = stored["ai.url"].orEmpty().ifBlank { AiConfig.DEFAULT_URL },
                 model = stored["ai.model"].orEmpty().ifBlank { AiConfig.DEFAULT_MODEL },
+            ),
+            ocr = OcrConfig(
+                key = stored["ocr.key"].orEmpty(),
+                url = stored["ocr.url"].orEmpty().ifBlank { OcrConfig.DEFAULT_URL },
             ),
             speech = SpeechConfig(
                 key = stored["speech.key"].orEmpty(),
