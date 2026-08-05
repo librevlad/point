@@ -17,6 +17,9 @@ LOGIN_TTL_SECONDS = 300
 POLL_INTERVAL_SECONDS = 2
 # Устройство считается «на связи», если сервер слышал его за последние пять минут.
 ONLINE_WINDOW_SECONDS = 300
+# Как часто обходить хранилище в поисках просроченного. Отдельного сторожа нет: обход делает
+# тот, кто кладёт новое, — тем же приёмом, что и уборка незавершённых входов.
+SWEEP_EVERY_SECONDS = 15 * 60
 
 
 @dataclass(frozen=True)
@@ -29,6 +32,7 @@ class Settings:
     login_ttl: int = LOGIN_TTL_SECONDS
     poll_interval: int = POLL_INTERVAL_SECONDS
     online_window: int = ONLINE_WINDOW_SECONDS
+    sweep_every: int = SWEEP_EVERY_SECONDS
 
     @property
     def redirect_uri(self) -> str:

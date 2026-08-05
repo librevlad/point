@@ -389,15 +389,24 @@ def create_app(
         """
         if not store.revoke_device(conn, user_id=me.user_id, device_id=device_id, now=d.now()):
             raise fail(404, "no_device", "Такого устройства в вашем круге нет.")
+        # Пропуск отозван — но письма, лежащие в ящике этого устройства, остались бы на диске
+        # навсегда. «Выйти» означает «меня здесь больше нет», а не «я больше не захожу».
+        mailbox.forget_device(os.path.join(d.settings.root, "blobs"), me.user_id, device_id)
         return {"revoked": device_id, "self": device_id == me.device_id}
 
     @app.delete("/account")
     def delete_account(
         conn: sqlite3.Connection = Depends(conn_of),
         me: store.Caller = Depends(caller),
+        d: Deps = Depends(deps),
     ):
-        """«Удалить всё моё» — учётная запись и все устройства немедленно."""
+        """«Удалить всё моё» — учётная запись, все устройства и все байты немедленно.
+
+        Записи без байтов — это не удаление, а обещание удаления: файл, выложенный по ссылке,
+        продолжал бы раздаваться и после того, как человек ушёл.
+        """
         store.delete_account(conn, me.user_id)
+        mailbox.forget_user(os.path.join(d.settings.root, "blobs"), me.user_id)
         return {"deleted": True}
 
     # --- Ящики, ссылки и приём файлов под аккаунтом (#476) --------------------------------
@@ -409,6 +418,20 @@ def create_app(
     def _blobs_root(d: Deps) -> str:
         return os.path.join(d.settings.root, "blobs")
 
+    # Обещание «сутки» держится обходом, а не комментарием. Сторожа отдельным потоком не заводим —
+    # тем же приёмом, что и просроченные входы: обход делает тот, кто кладёт новое. Дерево
+    # обходится целиком, поэтому чаще раза в четверть часа не ходим.
+    # Часы `d.now()` сюда не годятся: возраст файла читается с диска (`mtime`), а это другая
+    # шкала — подставив в неё управляемое время стенда, обход снёс бы только что созданное.
+    _swept = {"at": 0.0}
+
+    def _sweep_blobs(d: Deps) -> None:
+        now = time.time()
+        if now - _swept["at"] < d.settings.sweep_every:
+            return
+        _swept["at"] = now
+        mailbox.sweep(_blobs_root(d))
+
     @app.post("/mbx/{device_id}")
     async def mbx_push(
         device_id: str,
@@ -418,6 +441,7 @@ def create_app(
         d: Deps = Depends(deps),
     ):
         """Положить письмо в ящик СВОЕГО устройства: чужому в него не написать."""
+        _sweep_blobs(d)
         if not store.device(conn, me.user_id, device_id):
             raise fail(404, "no_device", "Такого устройства в вашем круге нет.")
         data = await request.body()
@@ -442,6 +466,7 @@ def create_app(
 
     @app.post("/d")
     async def drop_put(request: Request, me: store.Caller = Depends(caller), d: Deps = Depends(deps)):
+        _sweep_blobs(d)
         data = await request.body()
         raw = request.headers.get("X-Drop-Name", "")
         try:
@@ -470,6 +495,7 @@ def create_app(
 
     @app.post("/u/open")
     def inbox_open(me: store.Caller = Depends(caller), d: Deps = Depends(deps)):
+        _sweep_blobs(d)
         try:
             box = mailbox.inbox_open(_blobs_root(d), me.user_id)
         except mailbox.Full as e:
