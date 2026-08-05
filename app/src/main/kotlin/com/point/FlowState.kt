@@ -9,7 +9,6 @@ import com.point.core.model.CapabilityId
 import com.point.core.model.ChatMessage
 import com.point.core.flow.CapabilityMeta
 import com.point.core.flow.Latency
-import com.point.core.model.FavoriteChain
 import com.point.core.model.LatentBubble
 import com.point.core.model.ObjectKind
 import com.point.core.model.PointObject
@@ -19,7 +18,7 @@ import com.point.core.model.Relation
 /**
  * One entry on the navigation stack: an object, the bubbles it offers, and the
  * capability that produced it (null for the root). The `via*` provenance is the
- * flow journal from which a favorite chain is built.
+ * flow journal the journey path (and the restored snapshot) is built from.
  */
 data class FlowFrame(
     val obj: PointObject,
@@ -207,10 +206,6 @@ data class FlowUiState(
     val inputSuggestions: List<String> = emptyList(),
     /** Non-null while a capability awaits a picked image (NeedsImage) — the host opens the photo picker. */
     val needsImage: String? = null,
-    /** Saved chains applicable to the current object (first step accepts it). */
-    val favorites: List<FavoriteChain> = emptyList(),
-    /** True when the current flow has ≥1 applied step that can be saved. */
-    val canSaveChain: Boolean = false,
     /** True while a cloud action waits for one-time privacy consent (#10). */
     val cloudConsent: Boolean = false,
     /**

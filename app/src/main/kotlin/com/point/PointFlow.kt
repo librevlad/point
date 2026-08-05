@@ -45,8 +45,6 @@ fun PointFlow(
         onCancelInput = viewModel::cancelInput,
         onCancelAction = viewModel::cancelAction,
         onOpenObject = viewModel::openTopObject,
-        onApplyFavorite = viewModel::applyFavorite,
-        onSaveChain = viewModel::saveCurrentChain,
         onItem = viewModel::onItem,
         onFound = viewModel::onFound,
         onJumpTo = viewModel::jumpTo,
