@@ -82,7 +82,7 @@ graph TD
 | `:data` | android-lib | да | Scratch-store, copy-in, cleanup; Gemini-клиент. |
 | `:executors` | android-lib | да | Все Executor'ы; регистрируются через Hilt multibinding. |
 | `:app` | android-app | да | Share Activity, Compose host, стек-навигация, DI-wiring. |
-| `:desktop` | kotlin-jvm + compose-desktop | **нет Android** | Point для ПК: окно, LAN-приёмник, свои JVM-действия, ручной DI. Переиспользует `:core:model`+`:core:flow`. |
+| `:desktop` | kotlin-jvm + compose-desktop | **нет Android** | Point для ПК: окно, девятнадцать своих JVM-действий (файл + содержимое), снимок экрана, ручной DI. Переиспользует `:core:model`+`:core:flow`. |
 
 ---
 
@@ -515,6 +515,25 @@ Robolectric. Это практический выхлоп принципа «max
   «На компьютер» (`PcCapability`/`PcRealizer`) → `RelayPcTransport` → `RelayRpcClient` →
   `Mailbox`. ПК: `RelayPoller` (один разбор почты) → `RelayRequests` (ответы).
 - Поставка: msi/exe/portable (jpackage поверх Temurin).
+
+**Срез «компьютер работает с содержимым» (#585) — реализован:**
+- Действий на ПК стало **девятнадцать** вместо восьми. Прежние восемь были про файл снаружи
+  (открыть, показать в папке, напечатать, сохранить, скачать видео, на телефон, PDF, скопировать);
+  добавились одиннадцать про содержимое:
+  `pc-entities` (найти телефоны/почты/суммы/даты/карты), `pc-understand`, `pc-translate`,
+  `pc-ask`, `pc-transcribe` (речь → текст), `pc-office-text` (docx/xlsx/pptx → текст),
+  `pc-unzip`, `pc-open-link`, `pc-qr`, `pc-shrink` (картинка легче), `pc-drop` (ссылка).
+- **Что переехало в общее ядро.** `OoxmlOfficeTextExtractor` был чистым (zip + регулярка) и лежал
+  в `:data`, куда компьютеру хода нет, — теперь он в `:core:flow`, а в `:data` остался переходник
+  для Hilt. Туда же добавлен `RegexEntityExtractor`: ML Kit — часть Android, и на ПК его нет.
+- **Свой AI-клиент** (`DesktopLlmClient`) — по OpenAI-совместимой ручке, на разборщике JSON из
+  `:core:flow`: телефонные клиенты используют `org.json` (часть Android SDK), которого на голой
+  JVM нет. Речь слушает отдельная ручка `/audio/transcriptions` — у OpenRouter её не существует,
+  поэтому ключ для неё в конфиге свой (`speech.*`).
+- **Ключи живут только в `~/.point-pc/config`** и не компилируются в артефакт никогда. Нет ключа —
+  действие уезжает на телефон недоступным (`unavailable`), и кнопки там не появляется.
+- **Четвёртый вход: снимок экрана** (`Ctrl+Shift+S`). Три прежних требуют, чтобы объект где-то
+  уже лежал; самое частое на ПК не лежит нигде — это то, что сейчас на экране.
 
 **Срез «действия ПК как пузыри телефона» (#80) — реализован (Distributed Capability Graph по LAN):**
 - ПК объявляет свои действия (`RelayRpc.CAPS`, `id=label[<TAB>KIND]` строки);

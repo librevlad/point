@@ -17,8 +17,16 @@ import java.net.InetAddress
  * разной судьбой.
  *
  * [server] — адрес сервера Point; пусто значит `PointServer.DEFAULT_URL`.
+ * [ai] — ключ, адрес и модель для AI-действий (#585). Ключ живёт ТОЛЬКО здесь, на машине
+ * человека: в артефакт он не компилируется никогда, и пустой ключ значит «AI-действия молчат».
  */
-data class PcConfig(val name: String, val server: String = "")
+data class PcConfig(
+    val name: String,
+    val server: String = "",
+    val ai: AiConfig = AiConfig(),
+    /** Чем слушать речь (#585) — ключ от ДРУГОГО сервиса: у OpenRouter ручки расшифровки нет. */
+    val speech: SpeechConfig = SpeechConfig(),
+)
 
 /**
  * Stored in `~/.point-pc/config` using the protocol's own k=v codec — dogfooding
@@ -33,13 +41,33 @@ class FilePcConfig(private val baseDir: File) {
         val config = PcConfig(
             name = stored["name"] ?: hostName(),
             server = stored["server"].orEmpty(),
+            ai = AiConfig(
+                key = stored["ai.key"].orEmpty(),
+                url = stored["ai.url"].orEmpty().ifBlank { AiConfig.DEFAULT_URL },
+                model = stored["ai.model"].orEmpty().ifBlank { AiConfig.DEFAULT_MODEL },
+            ),
+            speech = SpeechConfig(
+                key = stored["speech.key"].orEmpty(),
+                url = stored["speech.url"].orEmpty().ifBlank { SpeechConfig.DEFAULT_URL },
+                model = stored["speech.model"].orEmpty().ifBlank { SpeechConfig.DEFAULT_MODEL },
+            ),
         )
         if (stored["name"].isNullOrBlank()) save(config)
         return config
     }
 
     private fun save(config: PcConfig) {
-        file.writeText(encodePcMeta(mapOf("name" to config.name, "server" to config.server)))
+        // Ключ AI сюда не дописывается пустым: строка `ai.key=` в файле выглядит как «ключ есть,
+        // но сломан». Нет ключа — нет и строки, а человек видит образец в подсказке экрана.
+        file.writeText(
+            encodePcMeta(
+                buildMap {
+                    put("name", config.name)
+                    put("server", config.server)
+                    if (config.ai.key.isNotBlank()) put("ai.key", config.ai.key)
+                },
+            ),
+        )
     }
 
     private fun hostName(): String =
