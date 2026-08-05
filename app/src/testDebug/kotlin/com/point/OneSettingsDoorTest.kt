@@ -92,15 +92,17 @@ class OneSettingsDoorTest {
     @Test fun `за одной дверью лежит всё, что лежало за двумя`() {
         settings()
 
+        // С #563 это строки списка разделов, а не блоки одного полотна: состав от перекладывания не
+        // изменился, изменилось только то, что теперь он виден весь и сразу.
+        //
         // Ключ AI — то, ради чего дверь звалась «AI-ключ».
-        compose.onNodeWithText("ШАГ 1 · ОТКУДА ВЗЯТЬ КЛЮЧ").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Ключ AI").assertIsDisplayed()
         // Отправка в облако, приватность, звук и статистика — те четыре, о которых подпись молчала.
-        compose.onNodeWithText("ОТПРАВКА И ПРИВАТНОСТЬ").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("Звук действий").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("Приватная статистика").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Отправка и приватность").assertIsDisplayed()
+        compose.onNodeWithText("Звук действий").assertIsDisplayed()
+        compose.onNodeWithText("Приватная статистика").assertIsDisplayed()
         // И аккаунт с кругом устройств — то, ради чего была вторая дверь.
-        compose.onNodeWithText("АККАУНТ И УСТРОЙСТВА").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText(MY_DEVICES_TITLE).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText(MY_DEVICES_TITLE).assertIsDisplayed()
     }
 
     @Test fun `раздел устройств открывает тот же круг, что открывала вторая дверь`() {

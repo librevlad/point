@@ -39,23 +39,34 @@ class SettingsCompositionTest {
     private val openRouter = AI_PROVIDERS.first()
     private val saved = UserAiConfig("sk-or-v1-abcdef123456", openRouter.baseUrl, "gemma")
 
+    /**
+     * Экран с открытым разделом ключа — там, где эти три претензии и живут.
+     *
+     * С #563 общий экран настроек стал списком разделов, и мастер ключа человек открывает строкой
+     * «Ключ AI». Проверяемое от этого не изменилось: состав и порядок блоков внутри мастера — то,
+     * что чинится только композицией и потому было невидимо для CI.
+     */
     private fun screen(
         config: UserAiConfig = UserAiConfig.DEFAULT,
         onOpenUrl: (String) -> Unit = {},
         onCheck: (UserAiConfig) -> Unit = {},
-    ) = compose.setContent {
-        PointTheme(darkTheme = true) {
-            KeyScreen(
-                config = config,
-                onSave = {},
-                onCancel = {},
-                usageEnabled = false,
-                usageSummary = null,
-                onToggleUsage = {},
-                onOpenUrl = onOpenUrl,
-                onCheck = onCheck,
-            )
+        openKey: Boolean = true,
+    ) {
+        compose.setContent {
+            PointTheme(darkTheme = true) {
+                KeyScreen(
+                    config = config,
+                    onSave = {},
+                    onCancel = {},
+                    usageEnabled = false,
+                    usageSummary = null,
+                    onToggleUsage = {},
+                    onOpenUrl = onOpenUrl,
+                    onCheck = onCheck,
+                )
+            }
         }
+        if (openKey) compose.onNodeWithText("Ключ AI").performClick()
     }
 
     // --- «до полей ввода надо скроллить» ---
@@ -118,7 +129,9 @@ class SettingsCompositionTest {
     // --- «задан он или нет — непонятно» ---
 
     @Test fun `заданный ключ виден хвостом, не открывая ключа целиком`() {
-        screen(config = saved)
+        // Без открытия раздела: с #563 та же строка стоит на общем экране — задан ли ключ, человек
+        // узнаёт, не открыв вообще ничего.
+        screen(config = saved, openKey = false)
 
         compose.onNodeWithText("Ключ на устройстве", substring = true).performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("sk-o…3456", substring = true).assertExists()
@@ -140,12 +153,17 @@ class SettingsCompositionTest {
         compose.onNodeWithText("Работает", substring = true).assertDoesNotExist()
     }
 
-    // --- склад получил имена ---
+    // --- склад получил имена, а с #563 — и свои разделы ---
 
-    @Test fun `хвост экрана разбит на названные группы`() {
-        screen(config = saved)
+    @Test fun `бывший склад разбит на названные разделы`() {
+        screen(config = saved, openKey = false)
 
-        compose.onNodeWithText("ОТПРАВКА И ПРИВАТНОСТЬ").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("ПРИЛОЖЕНИЕ").performScrollTo().assertIsDisplayed()
+        // Прежде это были лейблы групп в хвосте одного полотна; теперь — строки списка, каждая со
+        // своим разделом. Имена те же: слова не переписывались, переехало место.
+        compose.onNodeWithText("Отправка и приватность").assertIsDisplayed()
+        compose.onNodeWithText("Звук действий").assertIsDisplayed()
+
+        compose.onNodeWithText("Звук действий").performClick()
+        compose.onNodeWithText("Приложение").assertIsDisplayed()
     }
 }

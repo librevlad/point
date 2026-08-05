@@ -39,10 +39,17 @@ class HomeDoorTest {
      *
      * Ждём не заголовка экрана: он теперь слово в слово совпадает с подписью самой двери, и
      * ожидание было бы удовлетворено дверью, по которой только что нажали, — то есть не ждало бы
-     * ничего. Ждём Шага 1: его нет нигде, кроме экрана настроек.
+     * ничего. Ждём строку «Ключ AI»: её нет нигде, кроме списка настроек.
      */
-    private fun openKeySettings() {
+    private fun openSettings() {
         compose.onNodeWithText(SETTINGS_TITLE).performClick()
+        compose.waitUntilAtLeastOneExists(hasText("Ключ AI"), TIMEOUT_MS)
+    }
+
+    /** И дальше — в раздел ключа (#563): мастер живёт внутри своей строки, а не на общем экране. */
+    private fun openKeySettings() {
+        openSettings()
+        compose.onNodeWithText("Ключ AI").performClick()
         compose.waitUntilAtLeastOneExists(hasText("ШАГ 1 · ОТКУДА ВЗЯТЬ КЛЮЧ"), TIMEOUT_MS)
     }
 
@@ -76,10 +83,12 @@ class HomeDoorTest {
         // #544 через настоящую Activity, а не через один composable: колбэк `onOpenDevices` едет
         // сюда через [PointFlow], и потеряться по дороге он может ровно так же, как когда-то
         // потерялся `onOpenUrl` (см. KDoc [PointFlow]).
-        openKeySettings()
+        openSettings()
 
-        compose.onNodeWithText("АККАУНТ И УСТРОЙСТВА").performScrollTo().assertExists()
-        compose.onNodeWithText("Мои устройства").performScrollTo().assertExists()
+        // С #563 это строка общего экрана, а не блок в хвосте полотна: круг устройств видно сразу,
+        // не прокручивая ключ AI.
+        compose.onNodeWithText("Мои устройства").assertExists()
+        compose.onNodeWithText("Вход, круг устройств и выход.").assertExists()
     }
 
     @Test fun `«назад» после сохранения ключа возвращает на «Недавнее», а не закрывает Point`() {
