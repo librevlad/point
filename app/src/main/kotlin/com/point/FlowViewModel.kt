@@ -370,8 +370,25 @@ class FlowViewModel @Inject constructor(
                 store.clear()
                 store.ingest(sourceUri, mime)
             }.getOrNull()?.let { ingested ->
-                if (name.isNullOrBlank()) ingested
-                else ingested.copy(metadata = ingested.metadata + ("name" to name))
+                if (!name.isNullOrBlank()) {
+                    ingested.copy(metadata = ingested.metadata + ("name" to name))
+                } else {
+                    // Дверь имени не дала — значит его дал файл, а файл называется как угодно
+                    // (#581). Машинное имя доезжало до «Недавнего» и делало объект неотличимым:
+                    // четыре строки `shared-19980273…txt` подряд различаются только цифрами.
+                    // Правило применяется ЗДЕСЬ, одним местом на все двенадцать дверей, а не в
+                    // каждой: дверь, которая забудет, — это следующая такая же поломка.
+                    val fromFile = ingested.metadata["name"]
+                    if (!com.point.core.flow.looksMachineName(fromFile)) {
+                        ingested
+                    } else {
+                        val human = com.point.core.flow.stampedObjectName(
+                            com.point.core.ui.kindLabel(ingested.state.kind),
+                            System.currentTimeMillis(),
+                        )
+                        ingested.copy(metadata = ingested.metadata + ("name" to human))
+                    }
+                }
             }
             if (!owns(voice)) return@launch
             if (obj == null) {
