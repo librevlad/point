@@ -6,6 +6,7 @@ import android.graphics.pdf.PdfDocument
 import com.point.core.flow.Capability
 import com.point.core.flow.CapabilityMeta
 import com.point.core.flow.Latency
+import com.point.core.flow.META_YIELD_NOUN
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.OfficeTextExtractor
 import com.point.core.flow.PdfTextExtractor
@@ -13,6 +14,7 @@ import com.point.core.flow.SpreadsheetReader
 import com.point.core.flow.Realizer
 import com.point.core.flow.reportStage
 import com.point.core.model.ActionResult
+import com.point.core.model.ActionYield
 import com.point.core.model.CapabilityId
 import com.point.core.model.Feature
 import com.point.core.model.ObjectKind
@@ -40,8 +42,56 @@ class PdfCapability @Inject constructor() : Capability {
     override fun produces(state: ObjectState) =
         if (state.kind == ObjectKind.PDF) ObjectState(ObjectKind.TEXT) else ObjectState(ObjectKind.PDF)
 
+    /**
+     * Подпись говорит о результате **по существу**, а не по расширению файла (#558).
+     *
+     * Жалоба владельца дословно: «Word в PDF молча дал не то, что человек хотел». Разбор: офисный
+     * файл на телефоне превращается в PDF **пересказом** — [PdfRealizer.officeToPdf] вынимает из
+     * документа текст и печатает его заново. На выходе настоящий PDF, поэтому вид совпадал с
+     * обещанным и сторож [com.point.core.flow.yieldSurprise] молчал; что внутри пересказ, а не
+     * документ, человек выяснял, открыв файл.
+     *
+     * Пока конвертация такая (её чинит #403), обещать голое «вернёт PDF» — неправда умолчанием.
+     * Здесь чинится подпись, а не поведение: тот же файл, но сказано, что в нём будет.
+     */
+    override fun yields(state: ObjectState) = when (state.kind) {
+        ObjectKind.PDF -> ActionYield.New(ObjectKind.TEXT)
+        ObjectKind.OFFICE -> ActionYield.New(ObjectKind.PDF, "$OFFICE_PDF_SUBSTANCE · без оформления")
+        else -> ActionYield.New(ObjectKind.PDF)
+    }
+
     companion object { val ID = CapabilityId("pdf") }
 }
+
+/**
+ * Чем офисный файл оказывается после «В PDF» — одним словом и в одном месте (#558).
+ *
+ * Слово одно и то же в двух руках: подпись обещает им до тапа ([PdfCapability.yields]), а
+ * реализатор ставит его на результат ([META_YIELD_NOUN]), и сторож сверяет обещание с вышедшим.
+ * Разъедутся — человеку скажут словами; а разъехаться, не заметив, нельзя: константа одна.
+ */
+internal const val OFFICE_PDF_SUBSTANCE = "PDF с текстом документа"
+
+/**
+ * Пересказ, названный пересказом (#558).
+ *
+ * Обе ветки офисного пути — таблица и проза — печатают заново вынутый текст, а не переносят
+ * документ. Слово, которым это обещано до тапа, ставится на результат: разъедутся обещание и
+ * выход — [com.point.core.flow.yieldSurprise] скажет об этом человеку, а не оставит его открывать
+ * файл через час.
+ *
+ * Отдельной функцией, а не строкой внутри реализатора: сам реализатор рисует PDF средствами
+ * телефона и на JVM не запускается, а сверить обещание с помеченным — ровно то, что проверять
+ * надо. Отказ проходит насквозь: помечать нечего.
+ */
+internal fun retoldFromOffice(result: ActionResult): ActionResult =
+    if (result is ActionResult.Success) {
+        ActionResult.Success(
+            result.result.copy(metadata = result.result.metadata + (META_YIELD_NOUN to OFFICE_PDF_SUBSTANCE)),
+        )
+    } else {
+        result
+    }
 
 class PdfRealizer @Inject constructor(
     private val store: ObjectStore,
@@ -59,9 +109,9 @@ class PdfRealizer @Inject constructor(
                     ObjectKind.TEXT -> renderTextToPdf(File(input.uri.value).readText())
                     ObjectKind.PDF -> pdfToText(input)
                     ObjectKind.OFFICE -> officeToPdf(input)
-                    else -> ActionResult.Failure("PDF: неподдерживаемый вход", recoverable = false)
+                    else -> ActionResult.Failure(NOT_THIS_OBJECT, recoverable = false)
                 }
-            }.getOrElse { ActionResult.Failure(it.message ?: "Ошибка PDF", recoverable = true) }
+            }.getOrElse { ActionResult.Failure(it.message ?: PDF_FAILED, recoverable = true) }
         }
 
     private suspend fun imageToPdf(input: PointObject): ActionResult {
@@ -86,14 +136,18 @@ class PdfRealizer @Inject constructor(
         if (isSpreadsheet(input)) {
             val rows = spreadsheet.readRows(input)
             if (rows.any { row -> row.any { it.isNotBlank() } }) {
-                return renderTextToPdf(formatSpreadsheet(rows), mono = true)
+                return retoldFromOffice(renderTextToPdf(formatSpreadsheet(rows), mono = true))
             }
         }
         val text = officeText.extractText(input)
         return if (text.isBlank()) {
-            ActionResult.Failure("Не удалось извлечь текст из документа", recoverable = true)
+            ActionResult.Failure(
+                "В документе не нашлось текста — если это старый формат (.doc/.xls/.ppt), " +
+                    "пересохраните его в новом и попробуйте снова",
+                recoverable = true,
+            )
         } else {
-            renderTextToPdf(text)
+            retoldFromOffice(renderTextToPdf(text))
         }
     }
 
@@ -144,10 +198,7 @@ class PdfRealizer @Inject constructor(
         reportStage("Извлекаю текст из PDF")
         val text = pdfText.extractText(input)
         if (text.isBlank()) {
-            return ActionResult.Failure(
-                "В PDF не найден текст (возможно, это скан — нужен OCR)",
-                recoverable = true,
-            )
+            return ActionResult.Failure(NO_TEXT_LAYER, recoverable = true)
         }
         val ref = store.newScratchFile("txt")
         File(ref.value).writeText(text)
@@ -186,10 +237,38 @@ class PdfRealizer @Inject constructor(
         return result
     }
 
-    private companion object {
+    internal companion object {
         const val PAGE_WIDTH = 595   // A4 @72dpi
         const val PAGE_HEIGHT = 842
         const val MARGIN = 32f
         const val LINE_HEIGHT = 16f
+
+        /**
+         * «Не с этим объектом», сказанное перечислением того, с чем — можно (#541).
+         *
+         * Прежнее «PDF: неподдерживаемый вход» было записью в лог, случайно показанной человеку:
+         * формат «модуль: сообщение», слово «вход» из нашего словаря и ни слова о том, что
+         * делать. Отказ **невосстановимый** — повторять тап бессмысленно, — поэтому строка
+         * называет объекты, на которых действие работает, а не советует «попробуйте ещё раз».
+         */
+        const val NOT_THIS_OBJECT = "В PDF превращаются снимок, текст и документ — этот объект не из них"
+
+        /** Последняя сетка на неизвестный сбой: «Ошибка PDF» называла место в коде, а не новость. */
+        const val PDF_FAILED = "PDF не собрался — попробуйте ещё раз"
+
+        /**
+         * Отказ зовёт действия теми же словами, что написаны на кнопках (#541).
+         *
+         * Прежняя строка советовала «нужен OCR» — слово, которого в продукте нет ни на одной
+         * кнопке: чтение снимка называется «Распознать текст», разбор PDF на страницы —
+         * «Страницы». Совет, ведущий к несуществующей кнопке, хуже молчания: человек ищет её и
+         * не находит.
+         *
+         * Случай снова «не с этим объектом»: извлекать нечего не потому, что Point не умеет, а
+         * потому, что страницы этого PDF сняты картинкой.
+         */
+        const val NO_TEXT_LAYER =
+            "В этом PDF нет текста — страницы сняты картинкой. Разложите его действием «Страницы», " +
+                "потом «Распознать текст»"
     }
 }

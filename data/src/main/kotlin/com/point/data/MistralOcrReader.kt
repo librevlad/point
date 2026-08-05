@@ -83,7 +83,7 @@ class MistralOcrReader(
             .put("include_image_base64", false)
             .toString()
         val res = http.post("$root/ocr", mapOf("Authorization" to "Bearer $key"), body)
-        if (res.code !in 200..299) error(refusal(res.code, res.body))
+        if (res.code !in 200..299) error(refusal(res.code))
         return textOf(res.body)
     }
 
@@ -94,21 +94,31 @@ class MistralOcrReader(
      * смысл документа, и человеку нужен документ.
      */
     private fun textOf(json: String): String {
+        // #541: сюда прежде подклеивались первые двести символов ответа сервиса. Отказ доходит до
+        // человека через [summariseCloudErrors] — то есть на экран уезжал кусок чужого JSON,
+        // который не объясняет ничего и никому. Что случилось, сказано словом; что дальше —
+        // цепочка идёт к следующему читателю.
         val answer = runCatching { JSONObject(json) }.getOrElse {
-            error("$READER: ответ не разобран — ${json.take(200)}")
+            error("$READER: ответ не разобран — пробуем следующий")
         }
-        val pages = answer.optJSONArray("pages") ?: error("$READER: в ответе нет страниц — ${json.take(200)}")
+        val pages = answer.optJSONArray("pages") ?: error("$READER: в ответе нет страниц — пробуем следующий")
         return (0 until pages.length())
             .mapNotNull { pages.optJSONObject(it)?.optString("markdown")?.trim()?.ifEmpty { null } }
             .joinToString("\n\n")
     }
 
-    /** Отказ человеческими словами: 402/429 — «бесплатное кончилось», а не «сломалось». */
-    private fun refusal(code: Int, body: String): String = when (code) {
+    /**
+     * Отказ человеческими словами: 402/429 — «бесплатное кончилось», а не «сломалось».
+     *
+     * Тела ответа здесь больше нет вовсе (#541): раньше незнакомый код приклеивал к строке триста
+     * символов чужого JSON, и они доезжали до экрана человека. Код в скобках остаётся — его читает
+     * не только человек, но и признак «кончилось бесплатное» ([isQuotaError]).
+     */
+    private fun refusal(code: Int): String = when (code) {
         402 -> "$READER: бесплатный лимит исчерпан (402) — покупать не идём, пробуем следующий"
         429 -> "$READER: слишком часто (429) — пробуем следующий"
         401, 403 -> "$READER: ключ не принят ($code)"
-        else -> "$READER HTTP $code: ${body.take(300)}"
+        else -> "$READER: сервис отказал (код $code) — пробуем следующий"
     }
 
     /**

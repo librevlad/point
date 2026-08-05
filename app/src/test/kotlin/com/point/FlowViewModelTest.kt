@@ -1953,10 +1953,24 @@ class FlowViewModelTest {
 
         vm.declineCloud()
 
-        assertNull(vm.ui.value.message)
+        // #541: раньше здесь стояло `assertNull(message)` — и молчание было не недосмотром, а
+        // закреплённым поведением. Прогон по телефону владельца: человек тапнул «Распознать
+        // текст», отказался отправлять снимок — и экран молча вернулся к объекту. «Не вышло»,
+        // «отменено» и «ничего не делали» выглядели одинаково.
+        assertEquals(FlowViewModel.CLOUD_DECLINED, vm.ui.value.message)
+        assertEquals(Outcome.NONE, vm.ui.value.messageOutcome) // решение человека — не сбой
         assertEquals("__unset__", resolver.lastAmendment)     // never ran
         assertEquals(false, vm.ui.value.cloudConsent)
         assertEquals(false, consent.granted)                  // not persisted — asks again next time
+    }
+
+    @Test fun `отказ от отправки говорит и что случилось, и что дальше`() {
+        // Мера та же, что у отказов действий (#541): сначала новость, потом выход.
+        val said = FlowViewModel.CLOUD_DECLINED
+
+        assertTrue(said, "Ничего не отправлено" in said)
+        assertTrue(said, "объект остался на телефоне" in said)
+        assertTrue("нет выхода — человеку некуда деться", "тапните ещё раз" in said)
     }
 
     @Test fun `an already-granted consent lets a cloud action run without asking`() = runTest(dispatcher) {
@@ -2169,6 +2183,50 @@ class FlowViewModelTest {
 
         assertEquals("Ожидался текст — вышел документ", vm.ui.value.message)
         assertEquals(Outcome.NONE, vm.ui.value.messageOutcome)
+    }
+
+    @Test fun `вид совпал, а внутри другое — Point и об этом говорит`() = runTest(dispatcher) {
+        // #558, жалоба владельца: «Word в PDF молча дал не то, что человек хотел». Вид сходился —
+        // на выходе настоящий PDF, — и сверка по виду молчала. Существо реализатор называет сам
+        // ([META_YIELD_NOUN]), и разошедшееся с обещанием доходит до человека словами.
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        resolver.result = ActionResult.Success(
+            ResultObject(
+                ObjectKind.PDF, "application/pdf", ScratchRef("/o"),
+                mapOf(com.point.core.flow.META_YIELD_NOUN to "снимок страницы"),
+            ),
+        )
+
+        vm.onBubble(
+            bubble(id = "a").copy(
+                yields = com.point.core.model.ActionYield.New(ObjectKind.PDF, "PDF с текстом документа · без оформления"),
+            ),
+        )
+        advanceUntilIdle()
+
+        assertEquals("Обещали PDF с текстом документа — вышло снимок страницы", vm.ui.value.message)
+        assertEquals(Outcome.NONE, vm.ui.value.messageOutcome)
+    }
+
+    @Test fun `реализатор назвал сделанное теми же словами — молчим`() = runTest(dispatcher) {
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        resolver.result = ActionResult.Success(
+            ResultObject(
+                ObjectKind.PDF, "application/pdf", ScratchRef("/o"),
+                mapOf(com.point.core.flow.META_YIELD_NOUN to "PDF с текстом документа"),
+            ),
+        )
+
+        vm.onBubble(
+            bubble(id = "a").copy(
+                yields = com.point.core.model.ActionYield.New(ObjectKind.PDF, "PDF с текстом документа · без оформления"),
+            ),
+        )
+        advanceUntilIdle()
+
+        assertNull(vm.ui.value.message)
     }
 
     @Test fun `вышло обещанное — лишних слов нет`() = runTest(dispatcher) {

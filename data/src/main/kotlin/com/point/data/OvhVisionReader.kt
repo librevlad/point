@@ -79,13 +79,14 @@ class OvhVisionReader(
         // Ключа нет — заголовка нет: пустой Bearer сервисы читают как «плохой ключ», а не как «без ключа».
         val headers = if (apiKey.isBlank()) emptyMap() else mapOf("Authorization" to "Bearer $apiKey")
         val res = http.post("$root/chat/completions", headers, body)
-        if (res.code !in 200..299) error(refusal(res.code, res.body))
+        if (res.code !in 200..299) error(refusal(res.code))
         return textOf(res.body)
     }
 
     private fun textOf(json: String): String {
+        // #541: обрезанный по символам ответ сервиса из отказа убран — он доезжал до экрана.
         val answer = runCatching { JSONObject(json) }.getOrElse {
-            error("$READER: ответ не разобран — ${json.take(200)}")
+            error("$READER: ответ не разобран — пробуем следующий")
         }
         return answer.optJSONArray("choices")
             ?.optJSONObject(0)
@@ -95,11 +96,12 @@ class OvhVisionReader(
             .orEmpty()
     }
 
-    private fun refusal(code: Int, body: String): String = when (code) {
+    /** Тело ответа в отказ не идёт (#541): человеку оно ничего не объясняет, а на экран доезжает. */
+    private fun refusal(code: Int): String = when (code) {
         402 -> "$READER: бесплатный лимит исчерпан (402) — покупать не идём, пробуем следующий"
         429 -> "$READER: слишком часто (429) — пробуем следующий"
         401, 403 -> "$READER: доступ не дан ($code)"
-        else -> "$READER HTTP $code: ${body.take(300)}"
+        else -> "$READER: сервис отказал (код $code) — пробуем следующий"
     }
 
     private fun base64(bytes: ByteArray): String = Base64.getEncoder().encodeToString(bytes)

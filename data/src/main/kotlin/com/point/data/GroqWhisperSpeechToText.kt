@@ -90,7 +90,7 @@ class GroqWhisperSpeechToText(
                 // language НЕ передаётся — см. договор класса.
             ),
         )
-        if (res.code !in 200..299) error(refusal(res.code, res.body))
+        if (res.code !in 200..299) error(refusal(res.code))
         heardOf(res.body)
     }
 
@@ -108,21 +108,22 @@ class GroqWhisperSpeechToText(
      * `docs/DECISIONS.md` (#223).
      */
     private fun heardOf(body: String): Transcription {
+        // #541: кусок сырого ответа из отказа убран — он доезжал до экрана человека под объектом.
         val text = runCatching { JSONObject(body).optString("text") }
-            .getOrElse { error("Whisper - ответ не разобран: ${body.take(200)}") }
+            .getOrElse { error("Whisper - ответ не разобран, пробуем следующий движок") }
             .trim()
         return if (text.isEmpty()) Transcription.Silence else Transcription.Heard(text)
     }
 
     /** Отказ человеческими словами: 429 — это «сейчас часто», а не «сломалось». */
-    private fun refusal(code: Int, body: String): String = when (code) {
+    private fun refusal(code: Int): String = when (code) {
         401 -> "Whisper - ключ Groq не принят (401)"
         // 403 у Groq — не обязательно «ключ не тот»: так же выглядит отказ самого сервиса пустить
         // запрос. Назвать одну причину значило бы отправить человека чинить исправный ключ.
         403 -> "Whisper - Groq не пустил запрос (403): ключ не принят или отказал сам сервис"
         413 -> "Whisper - запись слишком большая для бесплатного лимита"
         429 -> "Whisper - слишком часто (429), пробуем следующий движок"
-        else -> "Whisper - HTTP $code: ${body.take(300)}"
+        else -> "Whisper - сервис отказал (код $code), пробуем следующий движок"
     }
 
     /** Канонический тип → расширение, которое сервис ждёт в имени файла. */

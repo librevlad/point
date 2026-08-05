@@ -36,6 +36,7 @@ import com.point.core.flow.META_SELECTION_IDS
 import com.point.core.flow.META_SELECTION_PAGE
 import com.point.core.flow.META_SELECTION_REGION
 import com.point.core.flow.META_SELECTION_SOURCE
+import com.point.core.flow.META_YIELD_NOUN
 import com.point.core.flow.SnappedSelection
 import com.point.core.flow.UserAiConfig
 import com.point.core.flow.UserKeyStore
@@ -1456,9 +1457,26 @@ class FlowViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Отказ от отправки — это исход, и он говорится словами (#541).
+     *
+     * Прогон по телефону владельца: человек тапал «Распознать текст», Point спрашивал про
+     * отправку снимка в сервис, человек отказывался — и экран молча возвращался к объекту. Три
+     * разных события выглядели одинаково: «не вышло», «отменено» и «ничего не делали». Молчание
+     * тут дороже ошибки: ошибку человек прочитает, а из пустого экрана он делает вывод сам, и
+     * вывод этот — «оно сломано».
+     *
+     * Знак исхода — [Outcome.NONE], как у отмены работы: человек не потерпел неудачу, он принял
+     * решение. Ставить «✕» значило бы назвать его выбор сбоем.
+     *
+     * Слова живут здесь, а не рядом с текстами самого вопроса о согласии: там своя работа (#560),
+     * и это не текст согласия, а исход после него.
+     */
     fun declineCloud() {
         pendingCloud = null
-        _ui.update { it.copy(cloudConsent = false) }
+        _ui.update {
+            it.copy(cloudConsent = false, message = CLOUD_DECLINED, messageOutcome = Outcome.NONE)
+        }
     }
 
     /**
@@ -1663,7 +1681,10 @@ class FlowViewModel @Inject constructor(
                 // Point говорит об этом сам: молчать тут хуже, чем ошибиться — ошибка объясняет
                 // экран, а молчание оставляет человека с догадкой «оно сделало что-то не то».
                 // Знака исхода нет (`NONE`): это не отказ и не победа, это уточнение.
-                yieldSurprise(bubble.yields, produced.state.kind)?.let { note ->
+                // #558: сверяется не только вид, но и существо — слово, которым реализатор
+                // назвал сделанное ([META_YIELD_NOUN]). Вид совпадал и у «Word в PDF», где
+                // внутри лежал пересказ документа, а не документ.
+                yieldSurprise(bubble.yields, produced.state.kind, produced.metadata[META_YIELD_NOUN])?.let { note ->
                     _ui.update { it.copy(message = note, messageOutcome = Outcome.NONE) }
                 }
                 runCatching {
@@ -2050,7 +2071,7 @@ class FlowViewModel @Inject constructor(
         }
     }
 
-    private companion object {
+    internal companion object {
         /** Metadata that points at a file enrichment just wrote — a stale pointer would send
          *  «Распознать текст» to a scratch file from a previous run. The atoms sidecar (#257)
          *  is the same class of pointer: each OCR run writes a fresh atoms.tsv, and a stale ref
@@ -2059,6 +2080,17 @@ class FlowViewModel @Inject constructor(
             com.point.core.flow.META_OCR_TEXT_REF,
             com.point.core.flow.META_OCR_ATOMS_REF,
         )
+
+        /**
+         * Что сказано человеку, отказавшемуся отправлять объект наружу (#541).
+         *
+         * Обе половины отказа: что произошло — не отправили, объект дома, действие не сделано; и
+         * что дальше — тап никуда не делся, передумать можно тем же движением. Про сервис сказано
+         * без имени: слова живут одни на все сетевые действия, а уезжают они в разные места.
+         */
+        const val CLOUD_DECLINED =
+            "Ничего не отправлено — объект остался на телефоне, действие не выполнено. " +
+                "Без отправки оно не работает: тапните ещё раз, если передумаете"
     }
 
     private fun cancelEnrichment() {

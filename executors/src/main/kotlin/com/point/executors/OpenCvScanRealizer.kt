@@ -54,7 +54,21 @@ class OpenCvScanRealizer @Inject constructor(
                 )
             }.getOrElse {
                 // Recoverable → the Resolver's FallbackRealizer hands off to the pure ScanRealizer.
-                ActionResult.Failure(it.message ?: "Ошибка OpenCV-скана", recoverable = true)
+                ActionResult.Failure(it.message ?: SCAN_FAILED, recoverable = true)
             }
         }
+
+    internal companion object {
+        /**
+         * Имя библиотеки — не новость для человека (#541).
+         *
+         * Прежняя строка называлась «Ошибка OpenCV-скана»: человек, снявший страницу, узнавал из
+         * неё имя чужого кода и ничего о своём снимке. Отказ теперь говорит про снимок — что с
+         * ним не вышло и как снять его так, чтобы вышло.
+         *
+         * Это «не с этим объектом», а не «не могу вообще»: конвейер жив, не поддался именно
+         * данный кадр.
+         */
+        const val SCAN_FAILED = "Страницу на снимке не удалось выпрямить — снимите её целиком и при ровном свете"
+    }
 }
