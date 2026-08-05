@@ -136,6 +136,52 @@ class CapabilityInventoryTest {
         assertNull(yieldSurprise(ActionYield.None, ObjectKind.OFFICE))
     }
 
+    // --- Расхождение по существу, а не только по виду (#558) ---
+
+    @Test
+    fun `вид совпал, а внутри другое — и об этом сказано`() {
+        // Живая жалоба владельца: «Word в PDF молча дал не то, что человек хотел». PDF настоящий,
+        // вид сошёлся — поэтому старая сверка молчала, а человек узнавал правду, открыв файл.
+        val note = yieldSurprise(
+            ActionYield.New(ObjectKind.PDF, "PDF с текстом документа"),
+            ObjectKind.PDF,
+            actualNoun = "снимок страницы",
+        )
+
+        assertEquals("Обещали PDF с текстом документа — вышло снимок страницы", note)
+    }
+
+    @Test
+    fun `сошлось и по виду, и по существу — лишних слов нет`() {
+        assertNull(
+            yieldSurprise(
+                ActionYield.New(ObjectKind.PDF, "PDF с текстом документа · без оформления"),
+                ObjectKind.PDF,
+                actualNoun = "PDF с текстом документа",
+            ),
+        )
+    }
+
+    @Test
+    fun `приписка про цену в сверку не идёт — она про дорогу, а не про результат`() {
+        // «текст · снимок уйдёт в сервис» обещает текст; уехавший снимок — не второе обещание.
+        assertNull(
+            yieldSurprise(
+                ActionYield.New(ObjectKind.TEXT, "текст · снимок уйдёт в сервис"),
+                ObjectKind.TEXT,
+                actualNoun = "текст",
+            ),
+        )
+    }
+
+    @Test
+    fun `промолчавший о существе не считается разошедшимся`() {
+        // Реализатор, ничего не сказавший о сделанном, — это «нечего сверить», а не «вышло
+        // другое». Судить его по молчанию значило бы выдумать расхождение.
+        assertNull(yieldSurprise(ActionYield.New(ObjectKind.PDF, "PDF с текстом документа"), ObjectKind.PDF))
+        assertNull(yieldSurprise(ActionYield.New(ObjectKind.PDF), ObjectKind.PDF, actualNoun = "снимок страницы"))
+    }
+
     // --- Сама таблица ---
 
     @Test

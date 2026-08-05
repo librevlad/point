@@ -81,7 +81,7 @@ class OcrSpaceReader(
         // Ключ вычёркивается из ВСЕГО, что вернул сервис: текст отказа доходит до экрана и до
         // отчёта о падении, и сервис не обязан заботиться о нашем секрете за нас.
         val body = withoutKey(res.body, key)
-        if (res.code !in 200..299) error(refusal(res.code, body))
+        if (res.code !in 200..299) error(refusal(res.code))
         return textOf(body)
     }
 
@@ -93,8 +93,11 @@ class OcrSpaceReader(
      * договор `CloudTextReader.read`: не дошёл — бросай.
      */
     private fun textOf(json: String): String {
+        // #541: кусок сырого ответа отсюда убран — он доезжал до экрана человека через
+        // [summariseCloudErrors]. То, что сервис сказал **словами** ([errorMessage]), остаётся:
+        // это его собственная фраза, а не обрезанный по символам JSON.
         val answer = runCatching { JSONObject(json) }.getOrElse {
-            error("$READER: ответ не разобран — ${json.take(200)}")
+            error("$READER: ответ не разобран — пробуем следующий")
         }
         if (answer.optBoolean("IsErroredOnProcessing")) error("$READER: ${errorMessage(answer)}")
         val results = answer.optJSONArray("ParsedResults")
@@ -114,12 +117,13 @@ class OcrSpaceReader(
         return message.ifBlank { "чтение не удалось" }.take(300)
     }
 
-    private fun refusal(code: Int, body: String): String = when (code) {
+    /** Тело ответа в отказ не идёт (#541): человеку оно ничего не объясняет, а на экран доезжает. */
+    private fun refusal(code: Int): String = when (code) {
         402 -> "$READER: бесплатный лимит исчерпан (402) — покупать не идём, пробуем следующий"
         // Общий демо-ключ упирается в лимит чаще своего — это ожидаемый исход, а не поломка.
         429 -> "$READER: слишком часто (429) — пробуем следующий"
         401, 403 -> "$READER: ключ не принят ($code)"
-        else -> "$READER HTTP $code: ${body.take(300)}"
+        else -> "$READER: сервис отказал (код $code) — пробуем следующий"
     }
 
     private fun form(vararg fields: Pair<String, String>): String =

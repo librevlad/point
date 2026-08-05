@@ -2,6 +2,7 @@ package com.point.executors
 
 import com.point.core.flow.Capability
 import com.point.core.flow.KEY_NOTE
+import com.point.core.flow.RealizerKind
 import com.point.core.flow.SpeechKeyNeed
 import com.point.core.flow.SpeechReadiness
 import com.point.core.flow.yieldLabel
@@ -134,6 +135,70 @@ class ActionsSayTheirPriceTest {
         // регистрации: в раздаваемой сборке без единого ключа это действие читает страницы.
         // Приписка отправила бы человека заводить ключ ради того, что и так работает.
         assertFalse(KEY_NOTE in CloudOcrCapability().label(image))
+    }
+
+    // --- Подделки для цепочки «Распознать текст» ---
+    //
+    // Ни одну из них не зовут: у реализаторов спрашивают только объявленный `meta.kind`. Поэтому
+    // все они честно падают — вызов любой был бы ошибкой теста, и упасть тут лучше, чем притвориться.
+
+    private val unusedStore = object : com.point.core.flow.ObjectStore {
+        override suspend fun ingest(sourceUri: String, mime: String) = error("не зовут")
+        override suspend fun ingestMultiple(sources: List<String>) = error("не зовут")
+        override suspend fun put(result: com.point.core.model.ResultObject) = error("не зовут")
+        override suspend fun children(collection: com.point.core.model.PointObject, limit: Int) = error("не зовут")
+        override suspend fun readText(obj: com.point.core.model.PointObject, limit: Int) = error("не зовут")
+        override suspend fun newScratchFile(extension: String) = error("не зовут")
+        override suspend fun clear() = Unit
+    }
+
+    private val blindRecognizer = object : com.point.core.flow.TextRecognizer {
+        override suspend fun recognize(obj: com.point.core.model.PointObject): String = error("не зовут")
+    }
+
+    private val closedEye = object : com.point.core.flow.ExternalEye {
+        override fun available() = false
+        override suspend fun read(obj: com.point.core.model.PointObject) = error("не зовут")
+    }
+
+    private val silentLlm = object : com.point.core.flow.LlmClient {
+        override suspend fun run(obj: com.point.core.model.PointObject, prompt: String) = error("не зовут")
+    }
+
+    private val devicePrivacy = privacyAt(com.point.core.flow.PrivacyLevel.DEVICE_ONLY)
+
+    // --- #558: запасной путь назван до тапа, а не после ---
+
+    @Test
+    fun `«Распознать текст» предупреждает о сервисе, потому что запасной путь сетевой`() {
+        // Прогон по телефону владельца: подпись обещала просто «вернёт текст», а тап первым делом
+        // спрашивал про отправку снимка в сервис. Цена появлялась ПОСЛЕ выбора.
+        //
+        // Обе половины проверяются вместе, и в этом весь смысл: слева — правда о цепочке, взятая
+        // у самих реализаторов (`meta.kind`), справа — слова, которые про неё сказаны. Сделай
+        // запасное звено местным — и требование к подписи честно отпадёт; убери слова, оставив
+        // сетевое звено, — тест упадёт.
+        val chain = listOf(
+            DeviceOcrRealizer(unusedStore, blindRecognizer),
+            ExternalEyeOcrRealizer(closedEye, unusedStore),
+            CloudOcrRealizer(silentLlm, devicePrivacy),
+        )
+        val hasCloudFallback = chain.any { it.meta.kind != RealizerKind.LOCAL }
+        val said = said(OcrCapability(), image)
+
+        assertTrue("первым читает не устройство", chain.first().meta.kind == RealizerKind.LOCAL)
+        assertTrue("запасного сетевого пути не стало — проверку пора менять", hasCloudFallback)
+        assertEquals("вернёт текст · не выйдет на устройстве — предложит сервис", said)
+    }
+
+    @Test
+    fun `местное чтение обещано местным — условие названо условием`() {
+        // «предложит сервис» не значит «уедет всегда»: устройство читает первым, и наружу уходит
+        // только то, что оно не взяло. Приговор вместо условия был бы свежей неправдой.
+        val said = said(OcrCapability(), image)
+
+        assertTrue(said, "не выйдет на устройстве" in said)
+        assertFalse("сказано как о неизбежном", "уйдёт в сервис" in said)
     }
 
     @Test

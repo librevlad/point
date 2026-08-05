@@ -12,6 +12,8 @@ import com.point.core.model.ActionYield
 import com.point.core.model.Intent
 import com.point.core.model.ObjectKind
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -204,6 +206,73 @@ class RealCapabilityInventoryTest {
             val e = inventory.single { it.id.value == id }
             assertTrue("«${e.label}» не объявлена сетевой", e.network)
         }
+    }
+
+    // --- Двое рядом не говорят одно и то же (#558) ---
+
+    /** Подпись — ровно то, что человек читает строкой: имя действия и что оно вернёт. */
+    private fun signature(c: Capability, state: com.point.core.model.ObjectState) =
+        c.label(state) + " · " + yieldLabel(c.yields(state), c.intents(state).first())
+
+    @Test
+    fun `у двух действий, предлагаемых на одном объекте, не бывает одинаковой подписи`() {
+        // Одинаковая подпись значит «выбирайте вслепую»: за одними и теми же словами прячется
+        // разная цена («Скан» и «Скан с цветом», «В Word» и «В Word+» — #527) или разное существо
+        // результата («Word в PDF» отдавал пересказ документа — #558). Проверка сильнее, чем
+        // «разная цена → разная подпись», и потому её включает: одинаковых подписей нет вовсе.
+        val clashes = inventoryProbes().flatMap { state ->
+            builtIn.filter { it.accepts(state) }
+                .groupBy { signature(it, state) }
+                .filterValues { it.size > 1 }
+                .map { (said, caps) -> "${state.kind}: ${caps.map { c -> c.id.value }} — «$said»" }
+        }
+
+        assertTrue(clashes.distinct().joinToString("\n"), clashes.isEmpty())
+    }
+
+    @Test
+    fun `пересказ офисного файла помечен тем же словом, каким обещан`() {
+        // Приёмка #558: обещание подписи и то, что реально вышло, — одно слово, а не два похожих.
+        // Сверяются обе стороны сразу: измени слово в обещании или в пометке — тест упадёт.
+        val office = com.point.core.model.ObjectState(ObjectKind.OFFICE)
+        val out = retoldFromOffice(
+            com.point.core.model.ActionResult.Success(
+                com.point.core.model.ResultObject(
+                    ObjectKind.PDF, "application/pdf", com.point.core.model.ScratchRef("/x"),
+                ),
+            ),
+        ) as com.point.core.model.ActionResult.Success
+
+        assertEquals(OFFICE_PDF_SUBSTANCE, out.result.metadata[com.point.core.flow.META_YIELD_NOUN])
+        assertNull(
+            "обещание и вышедшее разошлись",
+            com.point.core.flow.yieldSurprise(
+                PdfCapability().yields(office),
+                ObjectKind.PDF,
+                out.result.metadata[com.point.core.flow.META_YIELD_NOUN],
+            ),
+        )
+    }
+
+    @Test
+    fun `отказ пересказом не помечается — помечать нечего`() {
+        val refused = com.point.core.model.ActionResult.Failure("нет текста", recoverable = true)
+
+        assertSame(refused, retoldFromOffice(refused))
+    }
+
+    @Test
+    fun `офисный файл обещает не «PDF», а то, что в нём будет`() {
+        // Жалоба владельца дословно: «Word в PDF молча дал не то, что человек хотел». Пока
+        // конвертация — пересказ (её чинит #403), подпись обязана это сказать до тапа.
+        val office = com.point.core.model.ObjectState(ObjectKind.OFFICE)
+        val pdf = PdfCapability()
+
+        assertEquals("В PDF", pdf.label(office))
+        assertEquals(
+            "вернёт PDF с текстом документа · без оформления",
+            yieldLabel(pdf.yields(office), pdf.intents(office).first()),
+        )
     }
 
     @Test

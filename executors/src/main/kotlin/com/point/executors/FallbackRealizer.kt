@@ -23,7 +23,7 @@ class FallbackRealizer(
 ) : Realizer {
 
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult {
-        var last: ActionResult = ActionResult.Failure("Нет доступных реализаций", recoverable = true)
+        var last: ActionResult = ActionResult.Failure(NOBODY_TO_DO_IT, recoverable = true)
         for ((index, realizer) in chain.withIndex()) {
             val result = realizer.perform(input, amendment)
             last = result
@@ -31,5 +31,21 @@ class FallbackRealizer(
             if (!defers || index == chain.lastIndex) return result
         }
         return last
+    }
+
+    internal companion object {
+        /**
+         * Пустая цепочка — это «сделать это сейчас нечем», и сказать так надо человеку, а не
+         * себе (#541).
+         *
+         * Прежняя строка звучала «Нет доступных реализаций»: слово из нашего словаря, которое не
+         * помогает даже разработчику — он всё равно пойдёт смотреть код. Человеку же оно не
+         * отвечает ни на «что случилось», ни на «что теперь».
+         *
+         * Случай именно «не могу вообще»: объект тут ни при чём, до него дело не дошло — ни один
+         * исполнитель не оказался доступен. Поэтому совет зовёт назад к объекту, а не к другому
+         * файлу.
+         */
+        const val NOBODY_TO_DO_IT = "Это действие сейчас выполнить нечем — вернитесь к объекту и выберите другое"
     }
 }

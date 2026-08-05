@@ -68,10 +68,13 @@ class LlamaParseAtomRecognizer(
                 FormPart.Field("configuration", configuration()),
             ),
         )
-        if (res.code !in 200..299) error(refusal(res.code, res.body))
-        val json = res.body.asJson() ?: error("$READER: ответ не разобран — ${res.body.take(200)}")
+        if (res.code !in 200..299) error(refusal(res.code))
+        // #541: куски сырого ответа из отказов убраны — они доезжали до экрана человека через
+        // [summariseCloudErrors]. Своя фраза сервиса (`error_message` ниже) остаётся: это слова,
+        // а не обрезанный по символам JSON.
+        val json = res.body.asJson() ?: error("$READER: ответ не разобран — пробуем следующий")
         val id = json.optString("id").ifBlank { json.optJSONObject("job")?.optString("id").orEmpty() }
-        return id.ifBlank { error("$READER: задача не создана — ${res.body.take(200)}") }
+        return id.ifBlank { error("$READER: задача не создана — пробуем следующий") }
     }
 
     /**
@@ -109,12 +112,19 @@ class LlamaParseAtomRecognizer(
         repeat(MAX_POLLS) { attempt ->
             if (attempt > 0) delay(POLL_MS)
             val res = http.get("$root/api/v2/parse/$jobId?expand=items", auth)
-            if (res.code !in 200..299) error(refusal(res.code, res.body))
-            val json = res.body.asJson() ?: error("$READER: ответ не разобран — ${res.body.take(200)}")
+            if (res.code !in 200..299) error(refusal(res.code))
+            val json = res.body.asJson() ?: error("$READER: ответ не разобран — пробуем следующий")
             when (val status = json.optJSONObject("job")?.optString("status")?.uppercase().orEmpty()) {
                 "COMPLETED", "SUCCESS" -> return json
-                "ERROR", "FAILED", "CANCELLED", "CANCELED" ->
-                    error("$READER: задача не выполнена — ${json.optJSONObject("job")?.optString("error_message").orEmpty().take(200)}")
+                "ERROR", "FAILED", "CANCELLED", "CANCELED" -> {
+                    // Своя фраза сервиса — это слова, а не кусок ответа: её видно человеку и
+                    // достают её отдельно от тела, чтобы одно нельзя было принять за другое.
+                    val said = json.optJSONObject("job")?.optString("error_message").orEmpty().trim().take(200)
+                    error(
+                        if (said.isEmpty()) "$READER: задача не выполнена — пробуем следующий"
+                        else "$READER: задача не выполнена — $said",
+                    )
+                }
                 else -> if (status.isEmpty() && json.has("items")) return json
             }
         }
@@ -206,11 +216,12 @@ class LlamaParseAtomRecognizer(
 
     private fun String.asJson(): JSONObject? = runCatching { JSONObject(this) }.getOrNull()
 
-    private fun refusal(code: Int, body: String): String = when (code) {
+    /** Тело ответа в отказ не идёт (#541): человеку оно ничего не объясняет, а на экран доезжает. */
+    private fun refusal(code: Int): String = when (code) {
         402 -> "$READER: бесплатные кредиты кончились (402) — покупать не идём, пробуем следующий"
         429 -> "$READER: слишком часто (429) — пробуем следующий"
         401, 403 -> "$READER: ключ не принят ($code)"
-        else -> "$READER HTTP $code: ${body.take(300)}"
+        else -> "$READER: сервис отказал (код $code) — пробуем следующий"
     }
 
     private companion object {

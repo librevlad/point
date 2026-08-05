@@ -76,7 +76,7 @@ class UnstructuredAtomRecognizer(
                 // «страница пустая». Тихий провал ровно того сорта, ради которого весь слой улик.
             ),
         )
-        if (res.code !in 200..299) error(refusal(res.code, res.body))
+        if (res.code !in 200..299) error(refusal(res.code))
         return layerOf(res.body, frame)
     }
 
@@ -88,8 +88,11 @@ class UnstructuredAtomRecognizer(
      * теряется молча — ровно тот третий путь, которым живёт слой улик (#257).
      */
     private fun layerOf(json: String, frame: OutboundFrame): AtomLayer {
+        // #541: сюда подклеивались первые двести символов ответа сервиса, и они доезжали до экрана
+        // человека через [summariseCloudErrors]. Кусок чужого JSON не объясняет ни что случилось,
+        // ни что делать; цепочка идёт к следующему читателю, и это как раз «что дальше».
         val elements = runCatching { JSONArray(json) }.getOrElse {
-            error("$READER: ответ не разобран — ${json.take(200)}")
+            error("$READER: ответ не разобран — пробуем следующий")
         }
         val atoms = mutableListOf<Atom>()
         val texts = mutableListOf<String>()
@@ -148,12 +151,17 @@ class UnstructuredAtomRecognizer(
         )
     }
 
-    /** Отказ человеческими словами: 402/429 — это «бесплатное кончилось», а не «сломалось». */
-    private fun refusal(code: Int, body: String): String = when (code) {
+    /**
+     * Отказ человеческими словами: 402/429 — это «бесплатное кончилось», а не «сломалось».
+     *
+     * Тела ответа здесь больше нет (#541): незнакомый код приклеивал триста символов чужого JSON
+     * прямо в строку, которую читает человек.
+     */
+    private fun refusal(code: Int): String = when (code) {
         402 -> "$READER: бесплатный лимит исчерпан (402) — покупать не идём, пробуем следующий"
         429 -> "$READER: слишком часто (429) — пробуем следующий"
         401, 403 -> "$READER: ключ не принят ($code)"
-        else -> "$READER HTTP $code: ${body.take(300)}"
+        else -> "$READER: сервис отказал (код $code) — пробуем следующий"
     }
 
     private companion object {
