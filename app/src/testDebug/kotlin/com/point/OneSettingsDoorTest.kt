@@ -96,13 +96,13 @@ class OneSettingsDoorTest {
         // изменился, изменилось только то, что теперь он виден весь и сразу.
         //
         // Ключ AI — то, ради чего дверь звалась «AI-ключ».
-        compose.onNodeWithText("Ключ AI").assertIsDisplayed()
+        compose.onNodeWithText("Ключ AI").performScrollTo().assertIsDisplayed()
         // Отправка в облако, приватность, звук и статистика — те четыре, о которых подпись молчала.
-        compose.onNodeWithText("Отправка и приватность").assertIsDisplayed()
-        compose.onNodeWithText("Звук действий").assertIsDisplayed()
-        compose.onNodeWithText("Приватная статистика").assertIsDisplayed()
+        compose.onNodeWithText("Отправка и приватность").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Звук действий").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Приватная статистика").performScrollTo().assertIsDisplayed()
         // И аккаунт с кругом устройств — то, ради чего была вторая дверь.
-        compose.onNodeWithText(MY_DEVICES_TITLE).assertIsDisplayed()
+        compose.onNodeWithText(MY_DEVICES_TITLE).performScrollTo().assertIsDisplayed()
     }
 
     @Test fun `раздел устройств открывает тот же круг, что открывала вторая дверь`() {
