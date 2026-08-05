@@ -75,10 +75,11 @@ fun ConsentScreen(
         Spacer(Modifier.height(18.dp))
         ScreenHeader(
             title = title.ifBlank { "Отправить в облако?" },
-            subtitle = destination.ifBlank {
-                "Объект уйдёт на сервер AI-провайдера и вернётся результатом. Ничего не " +
-                    "отправляется без вашего согласия."
-            },
+            // #560: подпись — одна мысль, что уходит и что вернётся. Кого Point выбирает из своей
+            // цепочки, здесь не называется: человек в этот момент спрашивает «уходит или нет», а
+            // не «кто это прочитает». Имя приходит только с текстом действия и только тогда,
+            // когда сервис выбрал сам человек (свой ключ AI).
+            subtitle = destination.ifBlank { "Объект уйдёт на сервер AI-провайдера и вернётся результатом." },
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.widthIn(max = PortalColumnWidth),
         )
@@ -120,6 +121,6 @@ private fun PreviewConsentPublish() = PointTheme(darkTheme = true) {
         onDecline = {},
         title = "Выложить файл по ссылке?",
         confirm = "Выложить",
-        destination = "Файл ляжет на сервер Point и будет доступен любому, у кого есть ссылка, сутки.",
+        destination = "Файл уедет на сервер Point и сутки будет открыт любому, у кого есть ссылка.",
     )
 }

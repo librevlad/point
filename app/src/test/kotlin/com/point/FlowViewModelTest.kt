@@ -2547,7 +2547,7 @@ class FlowViewModelTest {
 
         val ask = vm.ui.value
         assertTrue("не сказано, что заберёт любой: ${ask.cloudDestination}", ask.cloudDestination.contains("любому"))
-        assertTrue("не сказано, сколько живёт: ${ask.cloudDestination}", ask.cloudDestination.contains("суток"))
+        assertTrue("не сказано, сколько живёт: ${ask.cloudDestination}", ask.cloudDestination.contains("сутк"))
         assertTrue("вопрос звучит про ссылку: ${ask.cloudTitle}", ask.cloudTitle.contains("ссылке"))
         assertEquals("Выложить", ask.cloudConfirm)
     }
