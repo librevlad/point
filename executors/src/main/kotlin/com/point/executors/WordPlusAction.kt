@@ -1,8 +1,10 @@
 package com.point.executors
 
+import com.point.core.flow.AiReadiness
 import com.point.core.flow.AtomLayer
 import com.point.core.flow.AtomRecognizer
 import com.point.core.flow.Capability
+import com.point.core.flow.labelNeedingKey
 import com.point.core.flow.CapabilityMeta
 import com.point.core.flow.Cost
 import com.point.core.flow.DocBlock
@@ -95,17 +97,34 @@ internal fun parseDocBlocks(
  * читает вовсе, и читателем становится модель: тогда ей едет снимок, а не наш пересказ, и весь
  * прочитанный ею документ помечен как прочитанный ею (#263, #267).
  */
-class WordPlusCapability @Inject constructor() : Capability {
+class WordPlusCapability @Inject constructor(
+    private val keys: AiReadiness,
+) : Capability {
     override val id = ID
     override val icon = "office"
     override val meta = CapabilityMeta(cost = Cost.PAID, latency = Latency.SLOW, network = true, auth = true)
-    override fun label(state: ObjectState) = "В Word+"
+
+    /** Плюс остался: здесь он и значит «AI-двойник соседнего действия» — единственное, что он
+     *  теперь значит во всём наборе (#527, см. «Скан с цветом»). Без ключа имя договаривает
+     *  цену, а не молчит до отказа (#529). */
+    override fun label(state: ObjectState) = labelNeedingKey("В Word+", keys.keySet())
     override fun accepts(state: ObjectState) =
         state.kind == ObjectKind.PDF || state.kind == ObjectKind.TEXT || state.kind == ObjectKind.IMAGE
     override fun produces(state: ObjectState) = ObjectState(ObjectKind.OFFICE)
 
-    /** #491: то же уточнение, что у «В Word» — вид `OFFICE` сам по себе слишком широк. */
-    override fun yields(state: ObjectState) = ActionYield.New(ObjectKind.OFFICE, "документ Word")
+    /**
+     * #491: вид `OFFICE` сам по себе слишком широк — сказано, что это документ Word.
+     *
+     * #527: и сказано, чем он отличается от соседнего «В Word». Оба обещали «вернёт документ
+     * Word», а разница между ними — та самая, ради которой человек и читает строку: местный
+     * двойник раскладывает текст, ничего никуда не отправляя, этот отдаёт объект чужому сервису
+     * за деньги. Слово выбирается по входу: с фотографии уезжает снимок, с PDF и текста — текст;
+     * назвать не то значило бы соврать ровно в той строке, которая заводилась против вранья.
+     */
+    override fun yields(state: ObjectState) = ActionYield.New(
+        ObjectKind.OFFICE,
+        "документ Word · ${if (state.kind == ObjectKind.IMAGE) "снимок" else "текст"} уйдёт в сервис",
+    )
 
     companion object { val ID = CapabilityId("word-plus") }
 }

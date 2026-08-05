@@ -337,7 +337,6 @@ fun PointHost(
                     textPreview = current.textPreview,
                     latent = current.latent,
                     enriching = current.enriching,
-                    discover = current.discover,
                     working = objectWorking(state),
                     // Тихая работа говорит на самом объекте (#288): экран ожидания для неё не
                     // поднимают намеренно (мигал бы на каждом мелком тапе), но и молчать ей

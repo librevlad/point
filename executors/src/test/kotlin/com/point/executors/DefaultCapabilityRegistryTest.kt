@@ -35,8 +35,8 @@ class DefaultCapabilityRegistryTest {
             PagesCapability(),
             ImageCapability(),
             ArchiveCapability(),
-            TranslateCapability(),
-            AiCapability(),
+            TranslateCapability(aiKeysReady),
+            AiCapability(aiKeysReady),
             OpenUrlCapability(),
             OfficeCapability(),
             ScanCapability(),
@@ -236,7 +236,7 @@ class DefaultCapabilityRegistryTest {
     private fun registryWithPc(action: PcRemoteAction, pairing: PcPairing?) = DefaultCapabilityRegistry(
         capabilities = setOf(
             ShareCapability(), SaveCapability(), OpenCapability(), PdfCapability(),
-            ImageCapability(), TranslateCapability(), AiCapability(), OpenUrlCapability(),
+            ImageCapability(), TranslateCapability(aiKeysReady), AiCapability(aiKeysReady), OpenUrlCapability(),
             ScanCapability(), OcrCapability(),
             RemotePcCapability(action, FixedPairing(pairing)),
         ),
@@ -279,6 +279,58 @@ class DefaultCapabilityRegistryTest {
         assertFalse("Напечатать на ПК" in registry.latentBubblesFor(state).map { it.title })
     }
 
+    // --- #528: действие, которое нечем выполнить, себя не обещает ---
+
+    /** Реестр из настоящих деклараций, где «Скану с цветом» выполнять нечем. */
+    private fun registryWithoutScanPack() = DefaultCapabilityRegistry(
+        capabilities = setOf(
+            ScanCapability(), ScanPlusCapability(), OcrCapability(), ShareCapability(),
+        ),
+        policy = DefaultBubblePolicy(),
+        availability = { id -> "нужен пакет обработки снимков".takeIf { id == ScanPlusCapability.ID } },
+    )
+
+    @Test
+    fun `без пака «Скан с цветом» не встаёт в ряд с работающими`() {
+        // До среза он стоял там наравне со «Сканом», и цену обещания человек узнавал тапом:
+        // «Действие недоступно» после ожидания.
+        val ids = idsFor(registryWithoutScanPack(), ObjectState(ObjectKind.IMAGE))
+
+        assertFalse("scan-plus" in ids)
+        assertTrue("соседей это не трогает", ids.containsAll(setOf("scan", "ocr", "share")))
+    }
+
+    @Test
+    fun `вместо ложного обещания — строка с причиной`() {
+        // Исчезнуть молча было бы второй ложью: возможность существует, и человек имеет право
+        // знать, что именно ей мешает.
+        val latent = registryWithoutScanPack().latentBubblesFor(ObjectState(ObjectKind.IMAGE))
+
+        assertEquals(listOf("Скан с цветом"), latent.map { it.title })
+        assertEquals("нужен пакет обработки снимков", latent.single().missing)
+    }
+
+    @Test
+    fun `недоступное действие не приводит с собой и своё намерение`() {
+        // Раздел «Превратить» без единой работающей строки — это заголовок над пустотой.
+        val onlyScanPlus = DefaultCapabilityRegistry(
+            capabilities = setOf(ScanPlusCapability(), OcrCapability()),
+            policy = DefaultBubblePolicy(),
+            availability = { "нужен пакет обработки снимков" },
+        )
+
+        assertEquals(emptyList<Intent>(), onlyScanPlus.intentsFor(ObjectState(ObjectKind.IMAGE)))
+    }
+
+    @Test
+    fun `есть чем выполнить — обычная строка действия, а не причина`() {
+        val ids = idsFor(registry, ObjectState(ObjectKind.IMAGE))
+        val latent = registry.latentBubblesFor(ObjectState(ObjectKind.IMAGE))
+
+        assertTrue("scan" in ids)
+        assertFalse("Скан" in latent.map { it.title })
+    }
+
     // --- Intent layer (Object → Intent → … → Object) ---
 
     @Test
@@ -307,7 +359,7 @@ class DefaultCapabilityRegistryTest {
     @Test
     fun `intent derives from produces — ai understands, share sends, open opens`() {
         // AI produces an unknown object -> UNDERSTAND; a terminal (produces === state) -> SEND.
-        assertEquals(setOf(Intent.UNDERSTAND), AiCapability().intents(ObjectState(ObjectKind.IMAGE)))
+        assertEquals(setOf(Intent.UNDERSTAND), AiCapability(aiKeysReady).intents(ObjectState(ObjectKind.IMAGE)))
         assertEquals(setOf(Intent.SEND), ShareCapability().intents(ObjectState(ObjectKind.IMAGE)))
         // «Открыть» is its own goal, not «Отправить» (#42).
         assertEquals(setOf(Intent.OPEN), OpenCapability().intents(ObjectState(ObjectKind.IMAGE)))

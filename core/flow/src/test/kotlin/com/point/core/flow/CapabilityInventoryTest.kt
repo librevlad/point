@@ -219,4 +219,25 @@ class CapabilityInventoryTest {
 
         assertEquals(emptyList<ObjectKind>(), capabilityInventory(listOf(dead)).single().accepts)
     }
+
+    // --- «нужен ключ» в имени действия (#529) ---
+
+    @Test
+    fun `с ключом имя действия остаётся именем действия`() {
+        assertEquals("В Excel", labelNeedingKey("В Excel", keySet = true))
+    }
+
+    @Test
+    fun `без ключа имя договаривает цену тем же словом на всех`() {
+        // Одно написание на всех — иначе «нужен ключ» на разных строках значило бы разное.
+        assertEquals("В Excel · нужен ключ", labelNeedingKey("В Excel", keySet = false))
+        assertEquals("Расшифровать · $KEY_NOTE", labelNeedingKey("Расшифровать", keySet = false))
+    }
+
+    @Test
+    fun `приписка не прячет действие — она к нему приписана`() {
+        // Договор среза: действие остаётся действием, тап по нему ведёт на экран ключей. Значит
+        // имя обязано начинаться с прежнего имени, а не подменяться сообщением о настройках.
+        assertTrue(labelNeedingKey("Понять", keySet = false).startsWith("Понять"))
+    }
 }

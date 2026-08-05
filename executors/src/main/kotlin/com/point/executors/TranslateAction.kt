@@ -1,5 +1,6 @@
 package com.point.executors
 
+import com.point.core.flow.AiReadiness
 import com.point.core.flow.Capability
 import com.point.core.flow.CapabilityMeta
 import com.point.core.flow.LlmClient
@@ -7,6 +8,7 @@ import com.point.core.flow.Latency
 import com.point.core.flow.PdfTextExtractor
 import com.point.core.flow.Realizer
 import com.point.core.flow.reportStage
+import com.point.core.flow.labelNeedingKey
 import com.point.core.model.ActionResult
 import com.point.core.model.CapabilityId
 import com.point.core.model.ObjectKind
@@ -29,11 +31,13 @@ internal fun translateDefaultTarget(text: String): String {
 }
 
 /** text / pdf -> translated text via the LLM (PDF text extracted first). */
-class TranslateCapability @Inject constructor() : Capability {
+class TranslateCapability @Inject constructor(
+    private val keys: AiReadiness,
+) : Capability {
     override val id = ID
     override val icon = "translate"
     override val meta = CapabilityMeta(latency = Latency.SLOW, network = true, auth = true)
-    override fun label(state: ObjectState) = "Перевести"
+    override fun label(state: ObjectState) = labelNeedingKey("Перевести", keys.keySet())
     override fun accepts(state: ObjectState) =
         state.kind in setOf(ObjectKind.TEXT, ObjectKind.PDF)
     override fun produces(state: ObjectState) = ObjectState(ObjectKind.TEXT)

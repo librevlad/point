@@ -1,5 +1,6 @@
 package com.point.executors
 
+import com.point.core.flow.AiReadiness
 import com.point.core.flow.Capability
 import com.point.core.flow.CapabilityMeta
 import com.point.core.flow.Cost
@@ -7,6 +8,7 @@ import com.point.core.flow.Latency
 import com.point.core.flow.LlmClient
 import com.point.core.flow.Realizer
 import com.point.core.flow.reportStage
+import com.point.core.flow.labelNeedingKey
 import com.point.core.model.ActionResult
 import com.point.core.model.CapabilityId
 import com.point.core.model.Feature
@@ -26,11 +28,13 @@ internal const val SHOPPING_LIST_PROMPT =
  * only once study (#89) has established that the text IS a recipe. The pattern for
  * every future type-specific action: gate on the `IS_*` feature, nothing else.
  */
-class ShoppingListCapability @Inject constructor() : Capability {
+class ShoppingListCapability @Inject constructor(
+    private val keys: AiReadiness,
+) : Capability {
     override val id = ID
     override val icon = "cart"
     override val meta = CapabilityMeta(priority = 30, cost = Cost.PAID, latency = Latency.SLOW, network = true, auth = true)
-    override fun label(state: ObjectState) = "Список покупок"
+    override fun label(state: ObjectState) = labelNeedingKey("Список покупок", keys.keySet())
     override fun accepts(state: ObjectState) = state.has(Feature.IS_RECIPE)
     override fun produces(state: ObjectState) = ObjectState(ObjectKind.TEXT)
 

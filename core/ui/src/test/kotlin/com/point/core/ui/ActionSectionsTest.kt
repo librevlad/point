@@ -52,4 +52,29 @@ class ActionSectionsTest {
     fun `empty input yields no sections`() {
         assertTrue(actionSections(emptyList()).isEmpty())
     }
+
+    // --- #530: сколько строк раздела видно сразу ---
+
+    @Test
+    fun `короткий раздел показывается целиком`() {
+        // Сворачивать ради одной спрятанной строки глупее, чем показать: «Ещё 1» занимает ровно
+        // столько же места, сколько само действие, и стоит человеку лишнего тапа.
+        (0..LIKELY_COUNT + 2).forEach { total ->
+            assertEquals("раздел из $total свернулся зря", total, likelyCount(total))
+        }
+    }
+
+    @Test
+    fun `длинный раздел сворачивается до верхних`() {
+        // Разобранная картинка даёт порядка двадцати пяти действий; открытым списком это и есть
+        // «случайный набор кнопок», от которого продукт уходит.
+        assertEquals(LIKELY_COUNT, likelyCount(LIKELY_COUNT + 3))
+        assertEquals(LIKELY_COUNT, likelyCount(12))
+    }
+
+    @Test
+    fun `видно всегда меньше или столько же, сколько есть`() {
+        // Сторож против арифметики, которая обещала бы строки, которых нет.
+        (0..30).forEach { total -> assertTrue(likelyCount(total) in 0..total) }
+    }
 }

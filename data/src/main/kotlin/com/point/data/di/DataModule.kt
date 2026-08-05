@@ -3,6 +3,7 @@ package com.point.data.di
 import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
 import com.point.core.flow.AiKeyCheck
+import com.point.core.flow.AiReadiness
 import com.point.core.flow.AppLauncher
 import com.point.core.flow.BackgroundRemover
 import com.point.core.flow.CalendarInserter
@@ -574,6 +575,17 @@ abstract class DataModule {
         fun speechReadiness(
             engines: List<@JvmSuppressWildcards SpeechToText>,
         ): SpeechReadiness = SpeechReadiness { speechKeyNeeds(engines) }
+
+        /**
+         * Тот же вопрос про модель, и по той же причине отдельным контрактом (#529): его задаёт
+         * [com.point.core.flow.Capability], а способности нельзя давать клиента, которым можно
+         * сходить в сеть, — иначе «что можно» и «как» перестают быть разными вещами.
+         *
+         * Клиент один и тот же, поэтому имя действия («AI · нужен ключ») и отказ после тапа не
+         * могут разойтись: оба судят по `configured` той же цепочки провайдеров.
+         */
+        @Provides
+        fun aiReadiness(llm: LlmClient): AiReadiness = AiReadiness { llm.configured }
 
         /**
          * Бесплатные читатели страницы (#280), в порядке очереди: Unstructured (15 000

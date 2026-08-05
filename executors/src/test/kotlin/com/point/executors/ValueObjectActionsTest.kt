@@ -47,7 +47,7 @@ class ValueObjectActionsTest {
             "Сохранить" to SaveCapability().accepts(waybill.state),
             "Открыть" to OpenCapability().accepts(waybill.state),
             "В корзину" to BasketCapability().accepts(waybill.state),
-            "AI" to AiCapability().accepts(waybill.state),
+            "AI" to AiCapability(aiKeysReady).accepts(waybill.state),
         )
 
         byteMovers.forEach { (name, accepted) ->

@@ -516,7 +516,7 @@ class UnderstandRealizerTest {
 
     @Test
     fun `принимает текст и распознанную картинку, не сырое фото`() {
-        val cap = UnderstandCapability()
+        val cap = UnderstandCapability(aiKeysReady)
 
         assertTrue(cap.accepts(ObjectState(ObjectKind.TEXT)))
         assertTrue(cap.accepts(ObjectState(ObjectKind.IMAGE, setOf(Feature.HAS_TEXT))))
@@ -525,7 +525,7 @@ class UnderstandRealizerTest {
 
     @Test
     fun `платное, медленное, сетевое — никогда не на первом экране`() {
-        val meta = UnderstandCapability().meta
+        val meta = UnderstandCapability(aiKeysReady).meta
 
         assertTrue(meta.network)
         assertTrue(meta.auth)
@@ -535,7 +535,7 @@ class UnderstandRealizerTest {
 
     @Test
     fun `label — «Понять», produces — тот же state`() {
-        val cap = UnderstandCapability()
+        val cap = UnderstandCapability(aiKeysReady)
         val state = ObjectState(ObjectKind.TEXT)
 
         assertEquals("Понять", cap.label(state))

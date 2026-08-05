@@ -63,7 +63,7 @@ class WordPlusTest {
 
     @Test
     fun `accepts mirror the local twin and the meta is a paid network action`() {
-        val cap = WordPlusCapability()
+        val cap = WordPlusCapability(aiKeysReady)
         assertTrue(cap.accepts(ObjectState(ObjectKind.TEXT)))
         assertTrue(cap.accepts(ObjectState(ObjectKind.PDF)))
         assertTrue("картинку теперь тоже (OCR → Word+)", cap.accepts(ObjectState(ObjectKind.IMAGE)))

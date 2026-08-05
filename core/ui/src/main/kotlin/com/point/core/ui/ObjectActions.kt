@@ -6,10 +6,15 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
@@ -29,6 +34,13 @@ import com.point.core.model.CapabilityId
  *
  * Из чего сделана строка — [PortalRow] и [PortalPlate] (дизайн-система): те же значения, что были
  * здесь, только теперь до них дотягиваются и остальные экраны.
+ *
+ * **Хвост группы свёрнут** (#530). У разобранной картинки набирается порядка двадцати пяти
+ * действий, и до этого среза все они стояли открытым списком в трёх разделах — то самое ощущение
+ * «случайный набор кнопок», от которого Point и уходит: разделы перестают помогать, когда каждый
+ * из них длиной в экран. Видно [likelyCount] верхних (их порядок — приговор `BubblePolicy`, не
+ * вкус экрана), остальные — за одним тапом «Ещё N». Свёртка честная: число в подписи называет,
+ * сколько именно спрятано, и открытое сворачивается обратно.
  */
 @Composable
 internal fun ObjectActions(
@@ -47,9 +59,13 @@ internal fun ObjectActions(
         verticalArrangement = Arrangement.spacedBy(24.dp),
     ) {
         sections.forEachIndexed { sectionIndex, section ->
+            // Раскрытие переживает поворот телефона и не переживает смену объекта: у нового
+            // объекта другие действия, и «раскрыто» от прошлого было бы решением за человека.
+            var expanded by rememberSaveable(section.group, section.bubbles.size) { mutableStateOf(false) }
+            val shown = if (expanded) section.bubbles else section.bubbles.take(likelyCount(section.bubbles.size))
             Column(verticalArrangement = Arrangement.spacedBy(11.dp)) {
                 SectionLabel(section.group.label)
-                section.bubbles.forEachIndexed { index, bubble ->
+                shown.forEachIndexed { index, bubble ->
                     key(bubble.capabilityId.value) {
                         ActionRow(
                             bubble = bubble,
@@ -62,6 +78,12 @@ internal fun ObjectActions(
                             onClick = { onBubble(bubble) },
                             onLongClick = { onBubbleLongPress(bubble) },
                         )
+                    }
+                }
+                val hidden = section.bubbles.size - shown.size
+                if (hidden > 0 || expanded) {
+                    TextButton(onClick = { expanded = !expanded }, enabled = !working) {
+                        Text(if (expanded) "Свернуть" else "Ещё $hidden")
                     }
                 }
             }

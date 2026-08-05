@@ -52,8 +52,12 @@ data class FlowFrame(
     /** Labels of still-running background enrichment («Распознаю текст…») — the visible
      *  "Point думает" feedback; empty when understanding is complete (#64). */
     val enriching: List<String> = emptyList(),
-    /** Discover (#114): one folded, never-tried action offered as a «💡 Попробуйте» hint. */
-    val discover: Bubble? = null,
+    // #530: здесь жила `discover` — «одно свёрнутое действие, которого человек ещё не пробовал».
+    // Её считали на каждом кадре, везли через `PointHost` в `FirstScreen` и не рисовали ни разу
+    // ни на одном экране. Свёртки при этом тоже не было, то есть «свёрнутое» не существовало.
+    // Свёртка появилась (`ObjectActions`), и вместе с ней — честный способ увидеть спрятанное:
+    // «Ещё N» открывает ВСЁ, а не одну строку по выбору Point. Вторая, частичная дверь к тому же
+    // набору только спорила бы с первой, поэтому подсказка убрана, а не дорисована.
     /** User rule (#66): the action pinned first for this object kind, if any. */
     val pinned: CapabilityId? = null,
 )

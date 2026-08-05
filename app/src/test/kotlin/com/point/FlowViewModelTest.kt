@@ -976,35 +976,6 @@ class FlowViewModelTest {
         assertNull(vm.ui.value.busyStage)
     }
 
-    // --- Discover (#114): one never-tried possibility is surfaced as a hint ---
-
-    @Test fun `discover offers the first hidden action the user never tried`() = runTest(dispatcher) {
-        // Six caps → top-3 shown big, three folded; "d" is the first hidden untried one.
-        val vm = vm(
-            caps = listOf("a", "b", "c", "d", "e", "f").associate { CapabilityId(it) to setOf(Intent.PREPARE) },
-        )
-        vm.onShared("uri", "image/png"); advanceUntilIdle()
-
-        assertEquals(CapabilityId("d"), vm.ui.value.frame?.discover?.capabilityId)
-    }
-
-    @Test fun `discover skips actions the user already tried`() = runTest(dispatcher) {
-        usage.counts = mapOf(CapabilityId("d") to 2)
-        val vm = vm(
-            caps = listOf("a", "b", "c", "d", "e", "f").associate { CapabilityId(it) to setOf(Intent.PREPARE) },
-        )
-        vm.onShared("uri", "image/png"); advanceUntilIdle()
-
-        assertEquals(CapabilityId("e"), vm.ui.value.frame?.discover?.capabilityId)
-    }
-
-    @Test fun `no discover when every action is visible anyway`() = runTest(dispatcher) {
-        val vm = vm() // single capability — nothing is folded
-        vm.onShared("uri", "image/png"); advanceUntilIdle()
-
-        assertNull(vm.ui.value.frame?.discover)
-    }
-
     // --- Object Timeline (#114): the journey is visible and tappable ---
 
     @Test fun `the path mirrors the stack — kinds with the actions between them`() = runTest(dispatcher) {

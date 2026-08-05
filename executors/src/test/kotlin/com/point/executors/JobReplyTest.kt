@@ -25,7 +25,7 @@ class JobReplyTest {
 
     @Test
     fun `exists only for a recognised job posting`() {
-        val cap = JobReplyCapability()
+        val cap = JobReplyCapability(aiKeysReady)
         assertTrue(cap.accepts(ObjectState(ObjectKind.TEXT, setOf(Feature.IS_JOB))))
         assertFalse(cap.accepts(ObjectState(ObjectKind.TEXT)))
         assertFalse(cap.accepts(ObjectState(ObjectKind.TEXT, setOf(Feature.IS_RECIPE))))

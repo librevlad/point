@@ -27,7 +27,7 @@ class ShoppingListTest {
 
     @Test
     fun `exists only for a recipe — the semantic feature is the gate`() {
-        val cap = ShoppingListCapability()
+        val cap = ShoppingListCapability(aiKeysReady)
         assertTrue(cap.accepts(ObjectState(ObjectKind.TEXT, setOf(Feature.IS_RECIPE))))
         assertFalse(cap.accepts(ObjectState(ObjectKind.TEXT)))
         assertFalse(cap.accepts(ObjectState(ObjectKind.TEXT, setOf(Feature.IS_MEETING))))

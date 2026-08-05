@@ -57,14 +57,12 @@ import com.point.core.model.FavoriteChain
 import com.point.core.model.FlowSnapshotFrame
 import com.point.core.model.HistoryEntry
 import com.point.core.model.Intent
-import com.point.core.model.BubbleTier
 import com.point.core.model.ObjectKind
 import com.point.core.model.isFileBacked
 import com.point.core.model.ValueRef
 import com.point.core.model.ScratchRef
 import com.point.core.model.ObjectRef
 import com.point.core.model.PointObject
-import com.point.core.ui.likelyCount
 import com.point.executors.Bitmaps
 import com.point.executors.AiCapability
 import com.point.executors.FindCapability
@@ -1906,16 +1904,6 @@ class FlowViewModel @Inject constructor(
     private fun currentPath(): List<PathStep> =
         stack.map { PathStep(it.obj.state.kind, it.viaTitle) }
 
-    /** Discover (#114): the first FOLDED action (beyond the big likely ones) the user has
-     *  never tried — instant terminals are too obvious to be a discovery. Using it records
-     *  usage, which retires the hint on the next frame by itself. */
-    private fun discoverFor(bubbles: List<Bubble>): Bubble? {
-        val counts = runCatching { usage.counts() }.getOrDefault(emptyMap())
-        return bubbles.drop(likelyCount(bubbles.size)).firstOrNull {
-            it.tier != BubbleTier.INSTANT && (counts[it.capabilityId] ?: 0) == 0
-        }
-    }
-
     fun hasFlow(): Boolean = stack.isNotEmpty()
 
     fun endFlow() {
@@ -1950,7 +1938,6 @@ class FlowViewModel @Inject constructor(
         val frame = FlowFrame(
             obj, bubbles, via, viaTitle,
             latent = registry.latentBubblesFor(obj.state),
-            discover = discoverFor(bubbles),
             pinned = runCatching { pins.pinnedFor(obj.state.kind) }.getOrNull(),
         )
         stack.addLast(frame)
@@ -2132,7 +2119,6 @@ class FlowViewModel @Inject constructor(
             bubbles = newBubbles,
             latent = if (objChanged) registry.latentBubblesFor(newState) else frame.latent,
             enriching = update.running,
-            discover = if (objChanged) discoverFor(newBubbles) else frame.discover,
             found = newFound,
             relations = newRelations,
         )

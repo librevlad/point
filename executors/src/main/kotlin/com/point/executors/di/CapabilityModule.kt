@@ -1,5 +1,6 @@
 package com.point.executors.di
 
+import com.point.core.flow.ActionAvailability
 import com.point.core.flow.BubblePolicy
 import com.point.core.flow.AppLauncher
 import com.point.core.flow.Capability
@@ -133,6 +134,8 @@ abstract class CapabilityModule {
 
     @Binds abstract fun registry(impl: DefaultCapabilityRegistry): CapabilityRegistry
     @Binds abstract fun resolver(impl: DefaultResolver): Resolver
+    /** #528: реестр спрашивает «есть ли чем выполнить», не получая при этом чем выполнять. */
+    @Binds abstract fun actionAvailability(impl: com.point.executors.RealizerAvailability): ActionAvailability
     @Binds abstract fun bubblePolicy(impl: LearningBubblePolicy): BubblePolicy
 
     // --- Capabilities (declarations) ---

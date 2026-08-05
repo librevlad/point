@@ -1,5 +1,6 @@
 package com.point.executors
 
+import com.point.core.flow.ActionAvailability
 import com.point.core.flow.BubblePolicy
 import com.point.core.flow.Capability
 import com.point.core.flow.CapabilityMeta
@@ -22,12 +23,22 @@ import javax.inject.Inject
 class DefaultCapabilityRegistry @Inject constructor(
     private val capabilities: Set<@JvmSuppressWildcards Capability>,
     private val policy: BubblePolicy,
+    /**
+     * Умолчание «мешать нечему» — для тех проверок, где речь про сам граф, а не про то, чем его
+     * выполнять. Настоящий ответ приходит от `RealizerAvailability`; здесь он не подставлен
+     * молча, а назван: реестр без реализаторов знает только половину правды, и это видно.
+     */
+    private val availability: ActionAvailability = ActionAvailability { null },
 ) : CapabilityRegistry {
 
     private val byIdMap: Map<CapabilityId, Capability> = capabilities.associateBy { it.id }
 
+    // #528: пузырёк — это «принимает объект» И «есть чем выполнить». Раньше спрашивалась одна
+    // половина, и действие, которого на этом телефоне нет, обещало себя наравне с работающими:
+    // цену обещания человек узнавал тапом. Вторая половина не приводит сюда реализацию — только
+    // её ответ «есть ли кому» ([ActionAvailability]).
     override fun bubblesFor(state: ObjectState): List<Bubble> =
-        policy.rank(state, capabilities.filter { it.accepts(state) })
+        policy.rank(state, capabilities.filter { it.accepts(state) && blockerFor(it) == null })
             .map { c ->
                 Bubble(
                     icon = c.icon,
@@ -58,9 +69,24 @@ class DefaultCapabilityRegistry @Inject constructor(
     }
 
     override fun intentsFor(state: ObjectState): List<Intent> {
-        val accepting = capabilities.filter { it.accepts(state) }
+        val accepting = capabilities.filter { it.accepts(state) && blockerFor(it) == null }
         return Intent.entries.filter { intent -> accepting.any { intent in it.intents(state) } }
     }
+
+    /**
+     * Чего не хватает, чтобы предложить это действие, — и причины две, разной природы.
+     *
+     * Объект не тот ([Capability.missing]) — не хватает **признака**, и добывается он следующим
+     * действием: «сначала распознайте текст». Объект тот, а выполнять нечем
+     * ([ActionAvailability]) — не хватает **устройства**, и этого тапом не добыть.
+     *
+     * Обе одинаково честны до тапа и обе живут в «Почти доступно»: человеку важно, что действие
+     * существует и чего оно ждёт, а не по какой из двух причин оно сегодня не работает.
+     */
+    private fun missingFor(c: Capability, state: ObjectState): String? =
+        if (c.accepts(state)) blockerFor(c) else c.missing(state)
+
+    private fun blockerFor(c: Capability): String? = availability.blockerFor(c.id)
 
     // Near-miss capabilities (#97): not accepting now, but one signal away. Ranked by priority and
     // capped so the hint informs rather than clutters the real action set.
@@ -72,9 +98,8 @@ class DefaultCapabilityRegistry @Inject constructor(
     // от которого лечит #316 (на PDF и тексте причина видна — потому и не заметили). Поэтому
     // сначала берётся по одной подсказке на каждую причину, и только потом вторые.
     override fun latentBubblesFor(state: ObjectState): List<LatentBubble> {
-        val hints = capabilities.filterNot { it.accepts(state) }
-            .sortedBy { it.meta.priority }
-            .mapNotNull { c -> c.missing(state)?.let { LatentBubble(c.icon, c.label(state), it) } }
+        val hints = capabilities.sortedBy { it.meta.priority }
+            .mapNotNull { c -> missingFor(c, state)?.let { LatentBubble(c.icon, c.label(state), it) } }
         // Одна причина — одна новость: группы идут в порядке приоритета первой подсказки в каждой.
         val byReason = hints.groupBy(LatentBubble::missing).values.toList()
         val rounds = byReason.maxOfOrNull { it.size } ?: 0
