@@ -89,6 +89,7 @@ fun main(args: Array<String>) {
             PcEntitiesCapability(), PcUnderstandCapability(), PcTranslateCapability(),
             PcAskCapability(), PcQrCapability(), PcDropCapability(),
             PcUnzipCapability(), PcOpenLinkCapability(), PcOfficeTextCapability(),
+            PcShrinkImageCapability(),
         ),
     )
     val resolver = DesktopResolver(
@@ -121,6 +122,7 @@ fun main(args: Array<String>) {
             ),
             PcUnzipRealizer(revealer),
             PcOfficeTextRealizer(com.point.core.flow.OoxmlOfficeTextExtractor(), outbox),
+            PcShrinkImageRealizer(outbox),
             PcOpenLinkRealizer { url ->
                 runCatching { java.awt.Desktop.getDesktop().browse(java.net.URI(url)) }
             },
@@ -208,6 +210,7 @@ fun main(args: Array<String>) {
             )
             add(com.point.core.flow.PcRemoteAction("pc-unzip", "Распаковать на ПК", kinds = setOf("ZIP")))
             add(com.point.core.flow.PcRemoteAction("pc-office-text", "Достать текст на ПК", kinds = setOf("OFFICE")))
+            add(com.point.core.flow.PcRemoteAction("pc-shrink", "Сделать легче на ПК", kinds = setOf("IMAGE")))
             add(com.point.core.flow.PcRemoteAction("pc-open-link", "Открыть в браузере на ПК", kinds = setOf("URL")))
         }
 

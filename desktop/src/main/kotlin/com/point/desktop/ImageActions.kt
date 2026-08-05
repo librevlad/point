@@ -1,0 +1,101 @@
+package com.point.desktop
+
+import com.point.core.flow.Capability
+import com.point.core.flow.CapabilityMeta
+import com.point.core.flow.Latency
+import com.point.core.flow.Realizer
+import com.point.core.model.ActionResult
+import com.point.core.model.CapabilityId
+import com.point.core.model.ObjectKind
+import com.point.core.model.ObjectState
+import com.point.core.model.PointObject
+import com.point.core.model.ScratchRef
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.awt.Image
+import java.awt.image.BufferedImage
+import java.io.File
+import javax.imageio.ImageIO
+
+/**
+ * Картинка на компьютере: сделать легче (#585).
+ *
+ * Снимок экрана 4K весит десять мегабайт, фотография с телефона — пять. Отправить такое почтой
+ * нельзя, а ссылкой — можно, но получателю качать долго. Уменьшение решает это одним действием и
+ * штатным `javax.imageio`: ни одной чужой библиотеки.
+ *
+ * Формат на выходе — JPEG: PNG хранит точки без потерь, и «сжатие» PNG в PNG обычно не даёт
+ * ничего. Прозрачность при этом теряется — поэтому она проверяется, и картинка с прозрачным фоном
+ * честно остаётся PNG, просто меньшего размера.
+ */
+class PcShrinkImageCapability : Capability {
+    override val id = CapabilityId("pc-shrink")
+    override val icon = "image"
+    override val meta = CapabilityMeta(priority = 23, latency = Latency.FAST)
+    override fun label(state: ObjectState) = "Сделать легче"
+    override fun accepts(state: ObjectState) = state.kind == ObjectKind.IMAGE
+    override fun produces(state: ObjectState) = ObjectState(ObjectKind.IMAGE)
+}
+
+class PcShrinkImageRealizer(private val outbox: Outbox) : Realizer {
+    override val capabilityId = CapabilityId("pc-shrink")
+
+    override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val source = File(input.uri.value).takeIf(File::isFile)
+                    ?: return@withContext ActionResult.Failure("Файла картинки нет на диске", recoverable = false)
+                val image = ImageIO.read(source)
+                    ?: return@withContext ActionResult.Failure(
+                        "Это не картинка или формат, который компьютер не читает",
+                        recoverable = false,
+                    )
+                val scale = minOf(1.0, MAX_SIDE.toDouble() / maxOf(image.width, image.height))
+                val transparent = image.colorModel.hasAlpha()
+                if (scale >= 1.0 && !transparent && source.length() < ALREADY_SMALL) {
+                    // Уменьшать нечего: сказать это честно дешевле, чем отдать копию того же файла
+                    // и заставить человека сравнивать размеры.
+                    return@withContext ActionResult.Failure(
+                        "Эта картинка и так лёгкая — уменьшать нечего",
+                        recoverable = false,
+                    )
+                }
+                val width = (image.width * scale).toInt().coerceAtLeast(1)
+                val height = (image.height * scale).toInt().coerceAtLeast(1)
+                val type = if (transparent) BufferedImage.TYPE_INT_ARGB else BufferedImage.TYPE_INT_RGB
+                val resized = BufferedImage(width, height, type)
+                val g = resized.createGraphics()
+                g.drawImage(image.getScaledInstance(width, height, Image.SCALE_SMOOTH), 0, 0, null)
+                g.dispose()
+                val format = if (transparent) "png" else "jpg"
+                val out = File.createTempFile("pc-small-", ".$format")
+                ImageIO.write(resized, format, out)
+                outbox.add(
+                    input.copy(
+                        id = input.id + "-small",
+                        mime = if (transparent) "image/png" else "image/jpeg",
+                        uri = ScratchRef(out.absolutePath),
+                        state = ObjectState(ObjectKind.IMAGE),
+                        metadata = input.metadata + ("name" to "Лёгкая картинка"),
+                    ),
+                )
+                ActionResult.Done(
+                    "Было " + mb(source.length()) + ", стало " + mb(out.length()) +
+                        " · " + width + "×" + height,
+                )
+            }.getOrElse {
+                ActionResult.Failure(it.message ?: "Не удалось уменьшить картинку", recoverable = true)
+            }
+        }
+
+    private fun mb(bytes: Long): String =
+        if (bytes < 1024 * 1024) (bytes / 1024).toString() + " КБ" else String.format("%.1f МБ", bytes / 1048576.0)
+
+    private companion object {
+        /** Длинная сторона после уменьшения: с запасом на просмотр и чтение текста на снимке. */
+        const val MAX_SIDE = 1920
+
+        /** Меньше этого трогать не за чем — почта и мессенджеры такое пропускают как есть. */
+        const val ALREADY_SMALL = 300L * 1024
+    }
+}

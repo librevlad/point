@@ -203,6 +203,57 @@ class SmartActionsTest {
         assertEquals("в буфер положили пустоту", null, copied)
     }
 
+    // --- Картинка полегче -----------------------------------------------------------------------
+
+    private fun imageObject(width: Int, height: Int, alpha: Boolean = false): PointObject {
+        val type = if (alpha) java.awt.image.BufferedImage.TYPE_INT_ARGB else java.awt.image.BufferedImage.TYPE_INT_RGB
+        val image = java.awt.image.BufferedImage(width, height, type)
+        // Шум, а не заливка: одноцветная картинка жмётся до килобайта и ничего не проверяет.
+        val random = java.util.Random(42)
+        for (y in 0 until height) for (x in 0 until width) image.setRGB(x, y, random.nextInt())
+        val file = temp.newFile("image-" + System.nanoTime() + ".png")
+        javax.imageio.ImageIO.write(image, "png", file)
+        return PointObject(
+            id = "img-1",
+            uri = ScratchRef(file.absolutePath),
+            mime = "image/png",
+            state = ObjectState(ObjectKind.IMAGE),
+        )
+    }
+
+    @Test fun `большой снимок становится легче и меньше по стороне`() = runTest {
+        val box = outbox()
+        val source = imageObject(3000, 2000)
+
+        val result = PcShrinkImageRealizer(box).perform(source, null)
+
+        assertTrue("не уменьшилось: $result", result is ActionResult.Done)
+        val produced = box.entries().single()
+        val out = box.file(produced.id)!!
+        assertTrue("файл не стал легче", out.length() < File(source.uri.value).length())
+        val image = javax.imageio.ImageIO.read(out)
+        assertEquals("длинная сторона не приведена к пределу", 1920, image.width)
+    }
+
+    @Test fun `прозрачность не теряется — такая картинка остаётся PNG`() = runTest {
+        val box = outbox()
+
+        PcShrinkImageRealizer(box).perform(imageObject(2400, 1200, alpha = true), null)
+
+        // JPEG прозрачности не знает: превратив в него логотип, Point залил бы фон чёрным.
+        assertEquals("image/png", box.entries().single().meta["mime"])
+    }
+
+    @Test fun `и без того лёгкая картинка не переделывается зря`() = runTest {
+        val box = outbox()
+
+        val result = PcShrinkImageRealizer(box).perform(imageObject(320, 240), null)
+
+        assertTrue(result is ActionResult.Failure)
+        assertTrue((result as ActionResult.Failure).reason.contains("лёгкая"))
+        assertTrue("отдали копию того же самого", box.entries().isEmpty())
+    }
+
     // --- Объявление телефону ------------------------------------------------------------------
 
     @Test fun `каждое новое действие объявлено и телефону, и реестру`() {
