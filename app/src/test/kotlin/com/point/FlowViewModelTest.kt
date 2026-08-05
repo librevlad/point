@@ -111,7 +111,9 @@ class FlowViewModelTest {
         accountClient: com.point.core.flow.AccountClient = FakeCircleClient(),
         browser: com.point.core.flow.BrowserOpener = com.point.core.flow.BrowserOpener { },
         sharedTexts: com.point.core.flow.SharedTexts = FakeSharedTexts(),
-    ) = FlowViewModel(store, FakeRegistry(caps, cloud, slow), resolver, chatResponder, enrichment, history, usage, chosenApps, userKeys, journal, consent, appLauncher, FakePdfRasterizer(), sensory, sensorySettings, cloudPrivacy, snapshot, crashLog, dispatcher, pins, AppIconResolver { null }, pcPairings, pcTransport, discovery, pcCaps, linkMonitor, PulledFileFactory { name -> java.io.File(java.io.File(System.getProperty("java.io.tmpdir")), "pulled-" + name).absolutePath }, noFrames, keyCheck, account, accountClient, browser, sharedTexts)
+        /** Кому нужен ключ человека (#465): их имена носят приписку «· нужен ключ», пока его нет. */
+        keyNeeding: Set<CapabilityId> = emptySet(),
+    ) = FlowViewModel(store, FakeRegistry(caps, cloud, slow, keyNeeding) { userKeys.read() != null }, resolver, chatResponder, enrichment, history, usage, chosenApps, userKeys, journal, consent, appLauncher, FakePdfRasterizer(), sensory, sensorySettings, cloudPrivacy, snapshot, crashLog, dispatcher, pins, AppIconResolver { null }, pcPairings, pcTransport, discovery, pcCaps, linkMonitor, PulledFileFactory { name -> java.io.File(java.io.File(System.getProperty("java.io.tmpdir")), "pulled-" + name).absolutePath }, noFrames, keyCheck, account, accountClient, browser, sharedTexts)
 
     /** Проверка ключа (#465): что «ответил сервис», решает тест, а не сеть. */
     private val keyCheck = FakeAiKeyCheck()
@@ -419,6 +421,52 @@ class FlowViewModelTest {
         advanceUntilIdle()
 
         assertNull(vm.ui.value.frame?.obj?.metadata?.get("name"))
+    }
+
+    // --- Песочница на первом запуске (#210) ---
+
+    /**
+     * Пример — обычный объект, и доказывается это тем, что он идёт обычной дверью.
+     *
+     * Владелец: «в 0.3 должен быть тестовый объект на первом запуске, это и есть вся песочница».
+     * Значит проверять надо не «есть ли режим демонстрации» (его нет), а что после тапа Point
+     * ведёт себя ровно так же, как с фотографией из чужих рук: копия в рабочую папку, обычные
+     * действия, запись в «Недавнее».
+     */
+    @Test fun `пример открывается как обычный объект`() = runTest(dispatcher) {
+        val vm = vm()
+
+        vm.openExample(exampleObject("com.point", 42))
+        advanceUntilIdle()
+
+        val frame = vm.ui.value.frame
+        assertNotNull("тап по примеру не открыл ничего", frame)
+        assertEquals("Визитка · пример", frame?.obj?.metadata?.get("name"))
+        assertTrue("у примера нет обычных действий — значит это не объект", frame!!.bubbles.isNotEmpty())
+        assertEquals("«Недавнее» обязано помнить пример, как любой объект", 1, history.recorded.size)
+        assertNull(vm.ui.value.busy)
+    }
+
+    /** …и уборка у него тоже обычная: инвариант «по окончании флоу — обязательный clear()». */
+    @Test fun `пример проходит обычную уборку`() = runTest(dispatcher) {
+        val vm = vm()
+        vm.openExample(exampleObject("com.point", 42))
+        advanceUntilIdle()
+        val before = store.clearedTimes
+
+        vm.endFlow()
+        advanceUntilIdle()
+
+        assertTrue("копия примера осталась лежать на диске", store.clearedTimes > before)
+        assertNull(vm.ui.value.frame)
+    }
+
+    /** Байты примера лежат в самом APK: ни сети, ни разрешений на этом пути нет ни одного. */
+    @Test fun `адрес примера ведёт в ресурсы самого приложения`() {
+        val example = exampleObject("com.point", 42)
+
+        assertEquals("android.resource://com.point/42", example.uri)
+        assertEquals("image/jpeg", example.mime)
     }
 
     @Test fun `onShared surfaces an ingest failure and pushes no frame`() = runTest(dispatcher) {
@@ -1886,6 +1934,116 @@ class FlowViewModelTest {
         assertNull(vm.ui.value.keyVerdict)
     }
 
+    // --- Тап по «· нужен ключ»: короткий путь до ключа и обратно к объекту (#465) ---
+
+    /** Способность, которой без ключа человека работать нечем, — как «Понять» или расшифровка. */
+    private val needsKey = CapabilityId("a")
+
+    private fun keyErrandVm() = vm(
+        caps = mapOf(needsKey to setOf(Intent.UNDERSTAND)),
+        keyNeeding = setOf(needsKey),
+    )
+
+    /** Действие, чьё имя договаривает «· нужен ключ», — то самое, по которому человек тапает. */
+    private fun FlowViewModel.needsKeyBubble(): Bubble =
+        ui.value.frame!!.bubbles.single { com.point.core.flow.labelNeedsKey(it.title) }
+
+    @Test fun `тап по действию с «нужен ключ» ведёт за ключом, а не в реализатор`() = runTest(dispatcher) {
+        val vm = keyErrandVm()
+        vm.onShared("card.jpg", "image/jpeg"); advanceUntilIdle()
+
+        vm.onBubble(vm.needsKeyBubble()); advanceUntilIdle()
+
+        assertNotNull("человек остался перед действием, которому нечем работать", vm.ui.value.keyScreen)
+        // Минуту ожидания ради заведомого отказа Point не тратит: отказ известен ДО тапа.
+        assertTrue("действие ушло в реализатор впустую", resolver.performed.isEmpty())
+    }
+
+    @Test fun `экран ключа называет и действие, и объект, к которому вернуться`() = runTest(dispatcher) {
+        val vm = keyErrandVm()
+        vm.onShared("card.jpg", "image/jpeg", name = "чек.jpg"); advanceUntilIdle()
+
+        vm.onBubble(vm.needsKeyBubble()); advanceUntilIdle()
+
+        val errand = vm.ui.value.keyErrand
+        assertNotNull("без поручения экран снова безымянный", errand)
+        // Имя без приписки: за ключом человек пошёл ради «Action a», а не ради «Action a · нужен ключ».
+        assertEquals("Action a", errand?.action)
+        assertEquals("чек.jpg", errand?.objectName)
+    }
+
+    /** Имени у объекта может и не быть — тогда он зовётся своим видом, как везде в Point. */
+    @Test fun `безымянный объект зовётся видом, а не пустой строкой`() = runTest(dispatcher) {
+        val vm = keyErrandVm()
+        vm.onShared("card.jpg", "image/jpeg"); advanceUntilIdle()
+
+        vm.onBubble(vm.needsKeyBubble()); advanceUntilIdle()
+
+        assertEquals("Изображение", vm.ui.value.keyErrand?.objectName)
+    }
+
+    /**
+     * Ради чего весь срез: путь кончается у объекта, а не в настройках.
+     *
+     * И кончается он ТАМ ЖЕ, где начинался: то же действие, тот же объект — только приписки про
+     * ключ на нём больше нет, потому что ключ теперь есть.
+     */
+    @Test fun `после удачной проверки человек возвращается к объекту, и действие ждёт его тапа`() = runTest(dispatcher) {
+        val vm = keyErrandVm()
+        vm.onShared("card.jpg", "image/jpeg", name = "чек.jpg"); advanceUntilIdle()
+        vm.onBubble(vm.needsKeyBubble()); advanceUntilIdle()
+
+        keyCheck.probe = com.point.core.flow.KeyProbe(status = 200, reply = "Готово")
+        vm.checkAiKey(UserAiConfig("sk-1", AI_PROVIDERS.first().baseUrl, "gemma")); advanceUntilIdle()
+        assertEquals(com.point.core.flow.KeyVerdict.Works("Готово"), vm.ui.value.keyVerdict)
+
+        vm.closeKeySettings() // дверь «Вернуться к «чек.jpg»» — она же «Готово», она же «назад»
+
+        assertNull("экран ключей остался поверх объекта", vm.ui.value.keyScreen)
+        val frame = vm.ui.value.frame
+        assertNotNull("человек вернулся в пустоту, а не к своему объекту", frame)
+        assertEquals("чек.jpg", frame?.obj?.metadata?.get("name"))
+        // Приписка ушла вместе с причиной: имя действия обязано говорить правду о ТЕКУЩЕЙ секунде.
+        assertEquals("Action a", frame?.bubbles?.single()?.title)
+    }
+
+    /**
+     * Прерванное действие Point не выполняет за человека — прямо по инварианту «Point никогда не
+     * строит автоматические цепочки». Утверждение о пустоте, и судится оно счётом вызовов.
+     */
+    @Test fun `прерванное действие не выполняется само после починки ключа`() = runTest(dispatcher) {
+        val vm = keyErrandVm()
+        vm.onShared("card.jpg", "image/jpeg"); advanceUntilIdle()
+        vm.onBubble(vm.needsKeyBubble()); advanceUntilIdle()
+
+        vm.checkAiKey(UserAiConfig("sk-1", AI_PROVIDERS.first().baseUrl, "gemma")); advanceUntilIdle()
+        vm.closeKeySettings(); advanceUntilIdle()
+
+        assertTrue("Point сделал выбор за человека", resolver.performed.isEmpty())
+        assertNull("и даже не начал", vm.ui.value.busy)
+    }
+
+    /** Дверь «AI-ключ» с «Недавнего»: объекта нет, возвращать некуда — и экран об этом молчит. */
+    @Test fun `пришедший дверью «AI-ключ» приходит без поручения`() = runTest(dispatcher) {
+        val vm = vm()
+
+        vm.openKeySettings(); advanceUntilIdle()
+
+        assertNull(vm.ui.value.keyErrand)
+    }
+
+    /** Поручение не переживает уход с экрана: следующий заход — своя история. */
+    @Test fun `поручение уходит вместе с экраном`() = runTest(dispatcher) {
+        val vm = keyErrandVm()
+        vm.onShared("card.jpg", "image/jpeg"); advanceUntilIdle()
+        vm.onBubble(vm.needsKeyBubble()); advanceUntilIdle()
+        assertNotNull(vm.ui.value.keyErrand)
+
+        vm.closeKeySettings()
+
+        assertNull(vm.ui.value.keyErrand)
+    }
+
     @Test fun `«Недавнее» знает, задан ли ключ`() = runTest(dispatcher) {
         val vm = vm()
         vm.loadRecent(); advanceUntilIdle()
@@ -2560,6 +2718,9 @@ private class FakeResolver : Resolver {
      */
     var lateStage: String? = null
     var lateAfterMs: Long = 100
+    /** Кого реально исполнили. Нужен там, где проверяется НЕвыполнение (#465): «действие не
+     *  запустилось само» — утверждение о пустоте, и судить его можно только счётом вызовов. */
+    val performed = mutableListOf<CapabilityId>()
     override fun leavesDevice(capabilityId: CapabilityId): Boolean = leavesDevice
 
     override fun realizerFor(capabilityId: CapabilityId): Realizer {
@@ -2567,6 +2728,7 @@ private class FakeResolver : Resolver {
         return object : Realizer {
             override val capabilityId = capabilityId
             override suspend fun perform(input: PointObject, amendment: String?): ActionResult {
+                performed += capabilityId
                 lastAmendment = amendment
                 throwsOnPerform?.let { throw it }
                 stage?.let { com.point.core.flow.reportStage(it) }
@@ -2613,9 +2775,22 @@ private class FakeRegistry(
     private val caps: Map<CapabilityId, Set<Intent>>,
     private val cloud: Set<CapabilityId> = emptySet(),
     private val slow: Set<CapabilityId> = emptySet(),
+    /** Кому для работы нужен ключ человека — как `AiCapability` и расшифровке (#465). */
+    private val keyNeeding: Set<CapabilityId> = emptySet(),
+    /** Задан ли ключ ПРЯМО СЕЙЧАС. Спрашивается на каждой сборке кадра, как у настоящих
+     *  контрактов готовности: ключ вводят на другом экране, и минуту назад его могло не быть. */
+    private val keySet: () -> Boolean = { true },
 ) : CapabilityRegistry {
     override fun bubblesFor(state: ObjectState): List<Bubble> =
-        caps.keys.map { Bubble("x", "Action ${it.value}", it, ObjectState(ObjectKind.TEXT)) }
+        caps.keys.map { id ->
+            // Имя собирается тем же `labelNeedingKey`, что у настоящих способностей: приписка
+            // «· нужен ключ» появляется и исчезает сама, по готовности цепочки.
+            val label = com.point.core.flow.labelNeedingKey(
+                "Action ${id.value}",
+                keySet = id !in keyNeeding || keySet(),
+            )
+            Bubble("x", label, id, ObjectState(ObjectKind.TEXT))
+        }
     override fun intentsFor(state: ObjectState): List<Intent> =
         Intent.entries.filter { intent -> caps.values.any { intent in it } }
     override fun latentBubblesFor(state: ObjectState) = emptyList<com.point.core.model.LatentBubble>()

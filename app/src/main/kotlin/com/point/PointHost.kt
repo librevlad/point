@@ -206,6 +206,10 @@ fun PointHost(
             state.keyScreen != null -> KeyScreen(
                 config = state.keyScreen,
                 note = state.keyScreenNote,
+                // С чем человек сюда пришёл (#465): чьё имя назвать и куда вернуть. Экран ключей
+                // — единственное место в Point, где объект остаётся за кадром, и до сих пор он
+                // там же и терялся.
+                errand = state.keyErrand,
                 onSave = onSaveAiConfig,
                 onCancel = onCloseKeySettings,
                 checking = state.keyChecking,

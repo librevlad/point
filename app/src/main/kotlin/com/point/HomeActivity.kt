@@ -47,6 +47,15 @@ class HomeActivity : ComponentActivity() {
         startActivity(android.content.Intent(this, com.point.source.SourcePickerActivity::class.java))
     }
 
+    /**
+     * «Посмотреть на примере» (#210): снимок из ресурсов Point входит той же дверью, что чужой
+     * файл, — [FlowViewModel.openExample] зовёт обычный `onShared`. Нового экрана здесь нет: под
+     * тем же `state.frame` откроется тот же `PointFlow`, что и у любого другого объекта.
+     */
+    private fun example() {
+        viewModel.openExample(exampleObject(packageName))
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         viewModel.loadRecent()
@@ -89,6 +98,7 @@ class HomeActivity : ComponentActivity() {
                             // аккаунт с кругом устройств. Круг открывается изнутри настроек.
                             onSettings = viewModel::openKeySettings,
                             onNewObject = ::newObject,
+                            onExample = ::example,
                             sourceLabels = sourceLabels,
                             onClear = viewModel::clearHistory,
                             clipboard = clipboard,
