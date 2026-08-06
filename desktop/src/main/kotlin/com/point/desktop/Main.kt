@@ -182,6 +182,22 @@ fun main(args: Array<String>) {
         // нет объекта, и экран об этом скажет вместо того, чтобы открыть пустоту.
         reopenPath = { path -> File(path).takeIf(File::isFile)?.let { inbox.addFile(it.absolutePath) } },
     )
+    // «Открыть в Point» по правой кнопке (#252). Запись для текущего пользователя: прав
+    // администратора не нужно, чужим пользователям машины пункт не навязывается.
+    //
+    // Проверяется при каждом запуске, а не один раз: Point могли переустановить в другую папку, и
+    // тогда пункт вёл бы в пустоту молча. Такое чинится само, без вопроса человеку.
+    val shellMenu = RegistryShellMenu()
+    runCatching {
+        val exe = installedExecutable(ProcessHandle.current().info().command().orElse(null))
+        if (exe != null && FilePcConfig(pointDir).load().rightClick) {
+            val wanted = shellCommandFor(exe)
+            if (shellMenuNeedsUpdate(shellMenu.registeredCommand(), wanted)) {
+                shellMenu.register(wanted, "Открыть в Point")
+            }
+        }
+    }
+
     // Уборка при запуске (#602): всё, что Point положил сюда сам и что пролежало сутки, уходит.
     // Тот же срок, что у сервера, и та же причина, что у стирания рабочей копии на телефоне.
     runCatching { inbox.sweep(System.currentTimeMillis() - 24L * 60 * 60 * 1000) }
@@ -313,7 +329,18 @@ fun main(args: Array<String>) {
                 // Снимок экрана (#585). Окно Point убирается на миг: иначе человек снимет сам
                 // Point вместо того, что было под ним.
                 onWipe = { inbox.wipe() },
-                onSaveSettings = { changed -> runCatching { FilePcConfig(pointDir).save(changed) } },
+                onSaveSettings = { changed ->
+                    runCatching { FilePcConfig(pointDir).save(changed) }
+                    // Выключил — система возвращается к себе прежней немедленно, а не «после
+                    // перезапуска»: обещание про правую кнопку человек проверяет правой кнопкой.
+                    runCatching {
+                        val exe = installedExecutable(ProcessHandle.current().info().command().orElse(null))
+                        when {
+                            !changed.rightClick -> shellMenu.unregister()
+                            exe != null -> shellMenu.register(shellCommandFor(exe), "Открыть в Point")
+                        }
+                    }
+                },
                 onSweepNow = {
                     runCatching { inbox.sweep(System.currentTimeMillis() - 24L * 60 * 60 * 1000) }
                 },

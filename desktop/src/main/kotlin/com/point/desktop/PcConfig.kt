@@ -28,6 +28,13 @@ data class PcConfig(
     val speech: SpeechConfig = SpeechConfig(),
     /** Чем читать снимки (#585). Ключ необязателен: без него работает демо-уровень сервиса. */
     val ocr: OcrConfig = OcrConfig(),
+    /**
+     * Показывать ли «Открыть в Point» по правой кнопке (#252).
+     *
+     * По умолчанию да: это и есть обещание «любой объект сначала открываю в Point». Выключивший
+     * получает обратно свою систему целиком — запись из реестра убирается.
+     */
+    val rightClick: Boolean = true,
 )
 
 /**
@@ -52,6 +59,7 @@ class FilePcConfig(private val baseDir: File) {
                 key = stored["ocr.key"].orEmpty(),
                 url = stored["ocr.url"].orEmpty().ifBlank { OcrConfig.DEFAULT_URL },
             ),
+            rightClick = stored["right.click"] != "no",
             speech = SpeechConfig(
                 key = stored["speech.key"].orEmpty(),
                 url = stored["speech.url"].orEmpty().ifBlank { SpeechConfig.DEFAULT_URL },
@@ -114,6 +122,9 @@ class FilePcConfig(private val baseDir: File) {
         val stored = runCatching { decodePcMeta(file.readText()) }.getOrDefault(emptyMap()).toMutableMap()
         stored["name"] = config.name
         stored["server"] = config.server
+        // «Нет» пишется явно, «да» — умолчание: человек, не трогавший настройку, получает пункт
+        // меню, а выключивший его не получает обратно при обновлении.
+        if (config.rightClick) stored.remove("right.click") else stored["right.click"] = "no"
         listOf(
             "ai.key" to config.ai.key,
             "speech.key" to config.speech.key,

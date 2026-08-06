@@ -56,12 +56,14 @@ fun SettingsScreen(
     var speechKey by remember { mutableStateOf(config.speech.key) }
     var ocrKey by remember { mutableStateOf(config.ocr.key) }
     var server by remember { mutableStateOf(config.server) }
+    var rightClick by remember { mutableStateOf(config.rightClick) }
     var swept by remember { mutableStateOf<Int?>(null) }
 
     fun store() = onSave(
         config.copy(
             name = name.trim().ifBlank { config.name },
             server = server.trim(),
+            rightClick = rightClick,
             ai = config.ai.copy(key = aiKey.trim()),
             speech = config.speech.copy(key = speechKey.trim()),
             ocr = config.ocr.copy(key = ocrKey.trim()),
@@ -93,6 +95,17 @@ fun SettingsScreen(
                 "Файл, который вы перетащили мышью, не трогается никогда",
         ) {
             Action(swept?.let { "Убрано: $it" } ?: "Убрать прямо сейчас") { swept = null; onSweepNow() }
+        }
+
+        Group(
+            "Правая кнопка",
+            "«Открыть в Point» в контекстном меню любого файла — то, ради чего Point и стоит на " +
+                "компьютере. Запись делается только для вас и снимается вместе с этой галкой",
+        ) {
+            Action(if (rightClick) "Показывать · выключить" else "Не показывать · включить") {
+                rightClick = !rightClick
+                store()
+            }
         }
 
         Group("Сервер", "Пусто — сервер Point. Свой адрес нужен, только если вы поднимаете его сами") {
