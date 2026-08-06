@@ -48,6 +48,10 @@ class PcTranscribeRealizer(
 ) : Realizer {
     override val capabilityId = CapabilityId("pc-transcribe")
 
+    /** Уходит к чужому сервису, и это сказано вслух: телефон спросит согласие ДО
+     *  отправки — там, где человек, а не здесь (контракт, граница молчаливого выбора). */
+    override val meta = com.point.core.flow.RealizerMeta(kind = com.point.core.flow.RealizerKind.CLOUD)
+
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
             runCatching {

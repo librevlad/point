@@ -35,25 +35,6 @@ interface Printer {
     fun print(file: File)
 }
 
-/**
- * «Сделать PDF на компьютере» (#403) — ПК как мощность для телефона.
- *
- * Телефон офисный документ разбирает только текстом: нарисовать слайды со шрифтами и вёрсткой
- * ему нечем. У компьютера для этого уже стоит LibreOffice или PowerPoint — и Point спрашивает
- * того, кто умеет, вместо того чтобы учиться сам.
- *
- * Файл при этом никуда не уезжает: конвертация идёт на машине человека, а не в чужом облаке.
- * Готовый PDF кладётся в очередь на телефон — тем же путём, что и всё остальное.
- */
-class PcOfficePdfCapability : Capability {
-    override val id = CapabilityId("pc-office-pdf")
-    override val icon = "pdf"
-    override val meta = CapabilityMeta(priority = 30, latency = Latency.SLOW)
-    override fun label(state: ObjectState) = "Сделать PDF"
-    override fun accepts(state: ObjectState) = state.kind == ObjectKind.OFFICE
-    override fun produces(state: ObjectState) = ObjectState(ObjectKind.PDF)
-}
-
 class PcOpenCapability : Capability {
     override val id = CapabilityId("pc-open")
     override val icon = "open"
@@ -229,11 +210,27 @@ class PcToPhoneRealizer(private val outbox: Outbox) : Realizer {
 }
 
 
+/**
+ * Компьютер делает PDF **только из офисного документа** — настоящим конвертером.
+ *
+ * Общая способность «В PDF» принимает шире: картинку, текст, офис и PDF. До появления
+ * [Realizer.accepts] это различие было невыразимо, и намерение приходилось держать у каждого
+ * устройства своим, лишь бы компьютер не обещал того, чего не сделает (контракт 06.08.2026, И3).
+ */
 class PcOfficePdfRealizer(
     private val converter: OfficeToPdf,
     private val outbox: Outbox,
 ) : Realizer {
-    override val capabilityId = CapabilityId("pc-office-pdf")
+    override val capabilityId = com.point.core.flow.capabilities.PdfCapability.ID
+
+    /**
+     * Компьютер делает PDF **только из офисного документа** — настоящим конвертером.
+     *
+     * Общая способность «В PDF» принимает шире: картинку, текст, офис и PDF. До появления
+     *  это различие было невыразимо, и намерение приходилось держать у каждого
+     * устройства своим — лишь бы компьютер не обещал того, чего не сделает (контракт, И3).
+     */
+    override fun accepts(state: ObjectState) = state.kind == ObjectKind.OFFICE
 
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         runCatching {

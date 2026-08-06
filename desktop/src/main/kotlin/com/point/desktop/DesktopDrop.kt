@@ -86,6 +86,10 @@ class PcDropRealizer(
 ) : Realizer {
     override val capabilityId = com.point.core.flow.capabilities.DropLinkCapability.ID
 
+    /** Уходит к чужому сервису, и это сказано вслух: телефон спросит согласие ДО
+     *  отправки — там, где человек, а не здесь (контракт, граница молчаливого выбора). */
+    override val meta = com.point.core.flow.RealizerMeta(kind = com.point.core.flow.RealizerKind.CLOUD)
+
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult = runCatching {
         val file = File(input.uri.value).takeIf(File::isFile)
             ?: return ActionResult.Failure("Файла объекта нет на диске", recoverable = false)

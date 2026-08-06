@@ -78,6 +78,20 @@ data class PcRemoteAction(
     val label: String,
     val kinds: Set<String> = emptySet(),
     val unavailable: String? = null,
+    /**
+     * Увезёт ли эта реализация объект **из круга устройств** — к чужому сервису (контракт
+     * 06.08.2026, граница молчаливого выбора).
+     *
+     * Между своими устройствами объект едет запечатанным, и спрашивать нечего. Но компьютер умеет
+     * и другое: прочитать снимок чужим сервисом, спросить модель, расшифровать речь. Тап по такому
+     * действию сделан на телефоне — значит и согласие должно спрашиваться там, ДО отправки, а не
+     * на компьютере, где человека в этот момент нет.
+     *
+     * Пока признака не было, объект уходил наружу без единого вопроса на обеих поверхностях:
+     * действия компьютера объявлены на телефоне несетевыми (и правильно — до чужого сервиса
+     * доходит не каждое), а какие именно доходят, телефон знать не мог.
+     */
+    val leavesCircle: Boolean = false,
 )
 
 /**
@@ -96,12 +110,22 @@ fun encodePcCaps(caps: List<PcRemoteAction>): String =
         val label = oneLine(action.label)
         val kinds = action.kinds.joinToString(",")
         val why = action.unavailable
+        // Признак «увезёт из круга» едет ЧЕТВЁРТЫМ полем — одинаково у доступных и недоступных.
+        // Третье у доступного действия не занято, но занимать его значило бы сделать одно и то же
+        // поле причиной в одной строке и признаком в другой. Старый разбор берёт поля по индексу и
+        // лишнее молча игнорирует, поэтому старый телефон ведёт себя как раньше (ворота 10).
+        val out = if (action.leavesCircle) "\tout" else ""
         when {
-            why == null && kinds.isEmpty() -> "${action.id}=$label"
-            why == null -> "${action.id}=$label\t$kinds"
+            // Без признака строка та же, что была, байт в байт: у старой стороны ничего не
+            // меняется, пока компьютер не скажет о себе новое.
+            why == null && kinds.isEmpty() && out.isEmpty() -> "${action.id}=$label"
+            why == null && out.isEmpty() -> "${action.id}=$label\t$kinds"
+            // Третье поле у доступного пустое: причиной оно бывает только у недоступного, и одно
+            // и то же место не должно значить в разных строках разное.
+            why == null -> "${action.id}=$label\t$kinds\t$out"
             // Недоступное — всегда три поля: причина последняя, поэтому пустой гейт видов
             // не делает строку двусмысленной.
-            else -> "$PC_CAP_UNAVAILABLE${action.id}=$label\t$kinds\t${oneLine(why)}"
+            else -> "$PC_CAP_UNAVAILABLE${action.id}=$label\t$kinds\t${oneLine(why)}$out"
         }
     }
 
@@ -118,7 +142,8 @@ fun decodePcCaps(encoded: String): List<PcRemoteAction> =
         val kinds = fields.getOrElse(1) { "" }.split(',')
             .mapNotNull { it.trim().takeIf(String::isNotEmpty) }.toSet()
         val why = if (unavailableLine) fields.getOrElse(2) { "" }.trim() else null
-        if (id.isEmpty() || label.isEmpty()) null else PcRemoteAction(id, label, kinds, why)
+        val leaves = fields.getOrElse(3) { "" }.trim() == "out"
+        if (id.isEmpty() || label.isEmpty()) null else PcRemoteAction(id, label, kinds, why, leaves)
     }.toList()
 
 /** Метка недоступного действия в начале строки (#316) — см. [encodePcCaps]. */

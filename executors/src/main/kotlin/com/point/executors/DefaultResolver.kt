@@ -28,28 +28,39 @@ class DefaultResolver @Inject constructor(
     realizers: Set<@JvmSuppressWildcards Realizer>,
     private val registry: CapabilityRegistry,
     private val entitlements: Entitlements,
+    /** Чем и где выполнять — шов ADR-0001; правило одно на обе поверхности. */
+    private val policy: com.point.core.flow.ExecutionPolicy = com.point.core.flow.DefaultExecutionPolicy(),
 ) : Resolver {
 
+    private companion object {
+        /** «Про объект ничего не известно» — для старого [realizerFor] без состояния. */
+        val ANY_OBJECT = com.point.core.model.ObjectState(com.point.core.model.ObjectKind.UNKNOWN)
+    }
+
+    // Порядок задают сами реализации через `meta.priority`. Второго ключа сортировки по
+    // `meta.kind` здесь больше нет (контракт 06.08.2026, И3): «локальный раньше облачного раньше
+    // удалённого» было философией, объявленной от имени всех будущих реализаций сразу. Сегодняшнее
+    // поведение цепочки чтения не изменилось — его держат объявленные приоритеты самих
+    // реализаций, и это их свойство, а не закон архитектуры.
     private val byCapability: Map<CapabilityId, List<Realizer>> =
         realizers.groupBy { it.capabilityId }
-            .mapValues { (_, candidates) ->
-                candidates.sortedWith(compareBy({ it.meta.priority }, { it.meta.kind.ordinal }))
-            }
 
-    override fun realizerFor(capabilityId: CapabilityId): Realizer {
+    override fun realizerFor(capabilityId: CapabilityId): Realizer =
+        realizerFor(capabilityId, ANY_OBJECT)
+
+    override fun realizerFor(capabilityId: CapabilityId, state: com.point.core.model.ObjectState): Realizer {
         if (isPaywalled(capabilityId)) return PaywallRealizer(capabilityId)
         val candidates = byCapability[capabilityId]
             ?: error("No realizer for capability=${capabilityId.value}")
-        val available = candidates.filter { it.isAvailable() }
+        val chosen = policy.choose(state, candidates)
         return when {
-            // None available: return the top-ranked one so the failure surfaces from
-            // perform() with a real message, not here.
-            available.isEmpty() -> candidates.first()
-            // One available: no wrapper — behaviour of single-realizer capabilities is
-            // exactly as before.
-            available.size == 1 -> available.first()
-            // Several available: an output-based fallback chain (ranked, available).
-            else -> FallbackRealizer(capabilityId, available)
+            // Никто не взялся: отдаём первого, чтобы отказ прозвучал из perform() словами, а не
+            // исключением отсюда.
+            chosen.isEmpty() -> candidates.minByOrNull { it.meta.priority } ?: candidates.first()
+            // Один — без обёртки: поведение способностей с единственной реализацией не меняется.
+            chosen.size == 1 -> chosen.first()
+            // Несколько — цепочка с запасным путём, в выбранном порядке.
+            else -> FallbackRealizer(capabilityId, chosen)
         }
     }
 
@@ -59,7 +70,7 @@ class DefaultResolver @Inject constructor(
      * объявлена локальной, а её запасной путь — облачный, и согласие не спрашивалось.
      */
     override fun leavesDevice(capabilityId: CapabilityId): Boolean =
-        byCapability[capabilityId]?.any { it.meta.kind != RealizerKind.LOCAL } ?: false
+        byCapability[capabilityId]?.any { it.meta.kind == RealizerKind.CLOUD } ?: false
 
     /** A PAID capability blocks only when the user is not entitled. An unknown id
      *  (no capability registered) is never gated — it resolves as before. */

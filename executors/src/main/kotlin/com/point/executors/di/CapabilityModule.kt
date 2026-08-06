@@ -9,7 +9,6 @@ import com.point.core.flow.CapabilityRegistry
 import com.point.core.flow.Realizer
 import com.point.core.flow.AiChatResponder
 import com.point.core.flow.Resolver
-import com.point.executors.PdfCapability
 import com.point.executors.ExtractAllCapability
 import com.point.core.model.CapabilityId
 import com.point.executors.AppCapability
@@ -143,7 +142,6 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun mergePdfCap(c: MergePdfCapability): Capability
     @Binds @IntoSet abstract fun scanPdfCap(c: ScanPdfCapability): Capability
     @Binds @IntoSet abstract fun openCap(c: OpenCapability): Capability
-    @Binds @IntoSet abstract fun pdfCap(c: PdfCapability): Capability
     @Binds @IntoSet abstract fun extractAllCap(c: ExtractAllCapability): Capability
     @Binds @IntoSet abstract fun openInCap(c: OpenInCapability): Capability
     @Binds @IntoSet abstract fun openUrlCap(c: OpenUrlCapability): Capability
@@ -255,6 +253,14 @@ abstract class CapabilityModule {
          * `@Inject`. Ядро Point не имеет сторонних зависимостей, и `javax.inject` туда не поедет
          * ради переезда деклараций — связывание остаётся заботой того, у кого DI есть.
          */
+        /**
+         * Чем и где выполнять (ADR-0001, `ExecutionPolicy`). Правило одно на обе поверхности:
+         * телефон и компьютер обязаны выбирать исполнителя одинаково.
+         */
+        @Provides
+        fun executionPolicy(): com.point.core.flow.ExecutionPolicy =
+            com.point.core.flow.DefaultExecutionPolicy()
+
         @Provides @ElementsIntoSet
         fun sharedCaps(): Set<Capability> =
             com.point.core.flow.capabilities.sharedCapabilities().toSet()

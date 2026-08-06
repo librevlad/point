@@ -424,7 +424,7 @@ class SmartActionsTest {
     private fun pcRealizerIds(): Set<String> = setOf(
         "pc-open", "pc-copy", "pc-reveal", "pc-save-as", "pc-download", "pc-to-phone", "pc-print",
         "pc-open-link", "pc-understand", "pc-translate", "pc-ask", "pc-transcribe",
-        "pc-office-pdf", "pc-entities",
+        "pc-entities",
     ) + com.point.core.flow.capabilities.sharedCapabilities().map { it.id.value }
 
     /** Реестр компьютера так, как его собирает `Main`: свои доставки плюс общий словарь. */
@@ -434,7 +434,7 @@ class SmartActionsTest {
             PcDownloadCapability(), PcToPhoneCapability(), PcPrintCapability(),
             PcOpenLinkCapability(), PcUnderstandCapability(), PcTranslateCapability(),
             PcAskCapability(), PcTranscribeCapability(),
-            PcOfficePdfCapability(), PcEntitiesCapability(),
+            PcEntitiesCapability(),
         ) + com.point.core.flow.capabilities.sharedCapabilities(),
     )
 }

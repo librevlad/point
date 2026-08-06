@@ -31,6 +31,7 @@ fun sharedCapabilities(): List<Capability> = listOf(
     OfficeCapability(),
     ImageCapability(),
     DropLinkCapability(),
+    PdfCapability(),
 )
 
 /**

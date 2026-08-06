@@ -1,5 +1,6 @@
 package com.point.executors
 
+import com.point.core.flow.capabilities.PdfCapability
 import com.point.core.model.Feature
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState

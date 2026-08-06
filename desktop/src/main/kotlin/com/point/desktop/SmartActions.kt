@@ -163,6 +163,10 @@ class PcAiRealizer(
     private val resultName: String,
 ) : Realizer {
 
+    /** Уходит к чужому сервису, и это сказано вслух: телефон спросит согласие ДО отправки — там,
+     *  где человек, а не здесь (контракт 06.08.2026, граница молчаливого выбора). */
+    override val meta = com.point.core.flow.RealizerMeta(kind = com.point.core.flow.RealizerKind.CLOUD)
+
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult = runCatching {
         if (!llm.configured) {
             // Ключа нет — это не ошибка сети, и чинится это не повтором. Говорим, где именно
