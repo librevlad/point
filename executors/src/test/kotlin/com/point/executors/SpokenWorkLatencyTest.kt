@@ -1,5 +1,9 @@
 package com.point.executors
 
+import com.point.core.flow.capabilities.ArchiveCapability
+import com.point.core.flow.capabilities.OfficeCapability
+import com.point.core.flow.capabilities.ImageCapability
+import com.point.core.flow.capabilities.DropLinkCapability
 import com.point.core.flow.capabilities.OcrCapability
 import com.point.core.flow.Capability
 import com.point.core.flow.Latency

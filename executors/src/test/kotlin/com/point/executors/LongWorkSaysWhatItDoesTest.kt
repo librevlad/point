@@ -1,5 +1,7 @@
 package com.point.executors
 
+import com.point.core.flow.capabilities.ImageCapability
+import com.point.core.flow.capabilities.DropLinkCapability
 import com.point.core.flow.Clipboard
 import com.point.core.flow.DropLink
 import com.point.core.flow.Entity

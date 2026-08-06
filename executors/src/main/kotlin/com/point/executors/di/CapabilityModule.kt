@@ -9,6 +9,8 @@ import com.point.core.flow.CapabilityRegistry
 import com.point.core.flow.Realizer
 import com.point.core.flow.AiChatResponder
 import com.point.core.flow.Resolver
+import com.point.executors.PdfCapability
+import com.point.executors.ExtractAllCapability
 import com.point.core.model.CapabilityId
 import com.point.executors.AppCapability
 import com.point.executors.PcCapability
@@ -39,7 +41,6 @@ import com.point.executors.OpenInCapability
 import com.point.executors.OpenInRealizer
 import com.point.executors.SmsCapability
 import com.point.executors.SmsRealizer
-import com.point.executors.ArchiveCapability
 import com.point.executors.ArchiveRealizer
 import com.point.executors.BlurBgCapability
 import com.point.executors.BlurBgRealizer
@@ -48,12 +49,10 @@ import com.point.executors.DefaultCapabilityRegistry
 import com.point.executors.DefaultResolver
 import com.point.executors.ExcelCapability
 import com.point.executors.ExcelRealizer
-import com.point.executors.ExtractAllCapability
 import com.point.executors.ExtractAllRealizer
 import com.point.executors.FindCapability
 import com.point.executors.FindRealizer
 import com.point.executors.LearningBubblePolicy
-import com.point.executors.ImageCapability
 import com.point.executors.ImageRealizer
 import com.point.executors.MergePdfCapability
 import com.point.executors.MergePdfRealizer
@@ -69,7 +68,6 @@ import com.point.executors.CopyRealizer
 import com.point.executors.CutoutCapability
 import com.point.executors.CutoutRealizer
 import com.point.executors.DeviceOcrRealizer
-import com.point.executors.OfficeCapability
 import com.point.executors.OfficeRealizer
 import com.point.executors.OpenCapability
 import com.point.executors.OpenRealizer
@@ -77,11 +75,9 @@ import com.point.executors.OpenUrlCapability
 import com.point.executors.OpenUrlRealizer
 import com.point.executors.PagesCapability
 import com.point.executors.PagesRealizer
-import com.point.executors.PdfCapability
 import com.point.executors.PdfRealizer
 import com.point.executors.ReplaceBgCapability
 import com.point.executors.ReplaceBgRealizer
-import com.point.executors.QrCapability
 import com.point.executors.QrRealizer
 import com.point.executors.ReadQrCapability
 import com.point.executors.ReadQrRealizer
@@ -137,7 +133,6 @@ abstract class CapabilityModule {
     @Binds abstract fun bubblePolicy(impl: LearningBubblePolicy): BubblePolicy
 
     // --- Capabilities (declarations) ---
-    @Binds @IntoSet abstract fun dropLinkCap(c: com.point.executors.DropLinkCapability): Capability
     @Binds @IntoSet abstract fun dropLinkReal(r: com.point.executors.DropLinkRealizer): Realizer
 
     @Binds @IntoSet abstract fun pcCap(c: PcCapability): Capability
@@ -148,6 +143,8 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun mergePdfCap(c: MergePdfCapability): Capability
     @Binds @IntoSet abstract fun scanPdfCap(c: ScanPdfCapability): Capability
     @Binds @IntoSet abstract fun openCap(c: OpenCapability): Capability
+    @Binds @IntoSet abstract fun pdfCap(c: PdfCapability): Capability
+    @Binds @IntoSet abstract fun extractAllCap(c: ExtractAllCapability): Capability
     @Binds @IntoSet abstract fun openInCap(c: OpenInCapability): Capability
     @Binds @IntoSet abstract fun openUrlCap(c: OpenUrlCapability): Capability
     // Entity actions (on-device detection → targeted action) — "right-click" for text.
@@ -161,14 +158,9 @@ abstract class CapabilityModule {
     /** #464: строка карточки готовности «Сохранить контакт» запускает вот эту возможность. */
     @Binds @IntoSet abstract fun saveContactCap(c: SaveContactCapability): Capability
     @Binds @IntoSet abstract fun copyCap(c: CopyCapability): Capability
-    @Binds @IntoSet abstract fun extractAllCap(c: ExtractAllCapability): Capability
     /** #279: искать есть где только там, где страница уже разложена по словам. */
     @Binds @IntoSet abstract fun findCap(c: FindCapability): Capability
-    @Binds @IntoSet abstract fun imageCap(c: ImageCapability): Capability
-    @Binds @IntoSet abstract fun pdfCap(c: PdfCapability): Capability
     @Binds @IntoSet abstract fun pagesCap(c: PagesCapability): Capability
-    @Binds @IntoSet abstract fun officeCap(c: OfficeCapability): Capability
-    @Binds @IntoSet abstract fun archiveCap(c: ArchiveCapability): Capability
     @Binds @IntoSet abstract fun translateCap(c: TranslateCapability): Capability
     /** #223: голосовое — объект, и «Расшифровать» — его действие. Дальше текст живёт по общим
      *  правилам графа: перевести, в PDF, сохранить — всё это уже есть у TEXT. */
@@ -178,7 +170,6 @@ abstract class CapabilityModule {
      *  календарь дат (`Feature.HAS_PERIOD`), — иначе продлевать было бы нечего. */
     @Binds @IntoSet abstract fun renewPeriodCap(c: RenewPeriodCapability): Capability
     @Binds @IntoSet abstract fun wordCap(c: WordCapability): Capability
-    @Binds @IntoSet abstract fun qrCap(c: QrCapability): Capability
     @Binds @IntoSet abstract fun readQrCap(c: ReadQrCapability): Capability
     @Binds @IntoSet abstract fun scanCap(c: ScanCapability): Capability
     @Binds @IntoSet abstract fun scanPlusCap(c: ScanPlusCapability): Capability

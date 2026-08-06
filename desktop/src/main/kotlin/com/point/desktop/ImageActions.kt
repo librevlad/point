@@ -17,28 +17,8 @@ import java.awt.image.BufferedImage
 import java.io.File
 import javax.imageio.ImageIO
 
-/**
- * Картинка на компьютере: сделать легче (#585).
- *
- * Снимок экрана 4K весит десять мегабайт, фотография с телефона — пять. Отправить такое почтой
- * нельзя, а ссылкой — можно, но получателю качать долго. Уменьшение решает это одним действием и
- * штатным `javax.imageio`: ни одной чужой библиотеки.
- *
- * Формат на выходе — JPEG: PNG хранит точки без потерь, и «сжатие» PNG в PNG обычно не даёт
- * ничего. Прозрачность при этом теряется — поэтому она проверяется, и картинка с прозрачным фоном
- * честно остаётся PNG, просто меньшего размера.
- */
-class PcShrinkImageCapability : Capability {
-    override val id = CapabilityId("pc-shrink")
-    override val icon = "image"
-    override val meta = CapabilityMeta(priority = 23, latency = Latency.FAST)
-    override fun label(state: ObjectState) = "Сделать легче"
-    override fun accepts(state: ObjectState) = state.kind == ObjectKind.IMAGE
-    override fun produces(state: ObjectState) = ObjectState(ObjectKind.IMAGE)
-}
-
 class PcShrinkImageRealizer(private val outbox: Outbox) : Realizer {
-    override val capabilityId = CapabilityId("pc-shrink")
+    override val capabilityId = com.point.core.flow.capabilities.ImageCapability.ID
 
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {

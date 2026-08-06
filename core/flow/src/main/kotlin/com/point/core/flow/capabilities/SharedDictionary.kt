@@ -26,6 +26,11 @@ import com.point.core.model.CapabilityId
  */
 fun sharedCapabilities(): List<Capability> = listOf(
     OcrCapability(),
+    QrCapability(),
+    ArchiveCapability(),
+    OfficeCapability(),
+    ImageCapability(),
+    DropLinkCapability(),
 )
 
 /**

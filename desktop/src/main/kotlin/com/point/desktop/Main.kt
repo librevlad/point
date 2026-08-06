@@ -82,17 +82,23 @@ fun main(args: Array<String>) {
     val entities = com.point.core.flow.RegexEntityExtractor()
     val registry = DesktopRegistry(
         setOf(
+            // Своё у компьютера — доставки и эффекты: у них место назначения и есть намерение,
+            // и слить их с телефонными значило бы разрешить выполнить не то, что человек назвал.
             PcOpenCapability(), PcCopyCapability(), PcRevealCapability(), PcSaveAsCapability(),
             PcDownloadCapability(), PcToPhoneCapability(), PcPrintCapability(),
-            PcOfficePdfCapability(),
-            // Работа с содержимым, а не с файлом как с файлом (#585).
-            PcEntitiesCapability(), PcUnderstandCapability(), PcTranslateCapability(),
-            PcAskCapability(), PcQrCapability(), PcDropCapability(),
-            PcUnzipCapability(), PcOpenLinkCapability(), PcOfficeTextCapability(),
-            PcShrinkImageCapability(), PcTranscribeCapability(),
-            // Общий словарь (#И1): «Распознать текст» одно на оба устройства.
-            com.point.core.flow.capabilities.OcrCapability(),
-        ),
+            PcOpenLinkCapability(),
+            // Преобразования, ещё не переехавшие в общий словарь: ждут общего контракта
+            // готовности ключей.
+            PcUnderstandCapability(), PcTranslateCapability(), PcAskCapability(),
+            PcTranscribeCapability(),
+            // Эти двое ждут среза 3: у общей декларации `accepts` шире, чем умеет
+            // реализация ПК («В PDF» с картинки), а «Собрать данные» судит по
+            // признакам, которых компьютер пока не выставляет вовсе.
+            PcOfficePdfCapability(), PcEntitiesCapability(),
+        ) +
+            // Общий словарь намерений (контракт 06.08.2026, И1): одна декларация на оба
+            // устройства, а компьютер даёт им свои реализации.
+            com.point.core.flow.capabilities.sharedCapabilities(),
     )
     val resolver = DesktopResolver(
         setOf(
