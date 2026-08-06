@@ -23,6 +23,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -184,10 +187,16 @@ private fun PathStop(dot: Color, title: String, note: String?, time: String) {
 @Composable
 private fun LiveEnd(state: DesktopState, item: InboxItem, modifier: Modifier = Modifier) {
     val phoneActions = state.phoneActionsFor(item)
+    val working by state.working.collectAsState()
     Column(
         modifier = modifier.verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
+        // Пока работа идёт, список действий уступает место ей: тап уже сделан, и второй тап по
+        // соседней строке человеку сейчас не нужен — ему нужно видеть, что происходит, и иметь
+        // возможность передумать.
+        working?.let { Working(it) { state.cancelWork() } }
+
         val pcActions = state.bubblesFor(item)
         // Заголовок без единого действия под ним — обещание пустоты. Нет действий — нет секции.
         if (pcActions.isNotEmpty()) {
@@ -211,6 +220,63 @@ private fun LiveEnd(state: DesktopState, item: InboxItem, modifier: Modifier = M
                 Station("${action.label} · телефон", PointColors.cyan) { state.sendToPhone(item, action) }
             }
         }
+    }
+}
+
+/**
+ * Идущая работа: имя, что делается сейчас, сколько идёт — и выход.
+ *
+ * Время считается здесь же раз в секунду, потому что оно и есть единственное, что можно сказать
+ * честно, когда реализатор о себе молчит. Выдумывать за него проценты Point не станет.
+ */
+@Composable
+private fun Working(work: com.point.desktop.Working, onCancel: () -> Unit) {
+    var now by remember(work.startedAt) { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(work.startedAt) {
+        while (true) {
+            kotlinx.coroutines.delay(1_000)
+            now = System.currentTimeMillis()
+        }
+    }
+    Column(
+        modifier = Modifier.fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(Brush.verticalGradient(listOf(PointColors.surface, PointColors.surfaceDeep)))
+            .border(1.dp, PointColors.cyan.copy(alpha = 0.45f), RoundedCornerShape(14.dp))
+            .padding(horizontal = 15.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(work.title, style = PointType.body)
+        Text(
+            listOfNotNull(work.stage, secondsWord(now - work.startedAt)).joinToString(" · "),
+            style = PointType.small,
+        )
+        Text(
+            "Отменить",
+            style = PointType.small.copy(color = PointColors.violet),
+            modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = onCancel)
+                .padding(vertical = 4.dp),
+        )
+    }
+}
+
+/** «12 секунд» — по-русски со счётом, иначе строка читается машинным выводом. */
+private fun secondsWord(millis: Long): String {
+    val s = (millis / 1000).coerceAtLeast(0)
+    if (s >= 60) {
+        val m = s / 60
+        return "$m " + when {
+            m % 100 in 11..14 -> "минут"
+            m % 10 == 1L -> "минуту"
+            m % 10 in 2..4 -> "минуты"
+            else -> "минут"
+        }
+    }
+    return "$s " + when {
+        s % 100 in 11..14 -> "секунд"
+        s % 10 == 1L -> "секунда"
+        s % 10 in 2..4 -> "секунды"
+        else -> "секунд"
     }
 }
 

@@ -2,6 +2,7 @@ package com.point.desktop.ui
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
 import androidx.compose.foundation.draganddrop.dragAndDropTarget
 import androidx.compose.foundation.layout.Arrangement
@@ -76,6 +77,12 @@ fun DesktopApp(
      * `null` — снять не вышло (среда без экрана): зовущий говорит об этом человеку словами.
      */
     onGrabScreen: (() -> File?)? = null,
+    /**
+     * Унести всё, что компьютер накопил (#602). Зовётся при выходе из аккаунта: пропуск гаснет —
+     * значит и присланное, и путь уходят вместе с ним. Иначе на общем компьютере следующий человек
+     * видит объекты предыдущего и открывает их одним тапом.
+     */
+    onWipe: () -> Unit = {},
 ) {
     val items by state.items.collectAsState()
     val message by state.message.collectAsState()
@@ -180,7 +187,20 @@ fun DesktopApp(
                 // пока экран открыт, иначе «на связи» застыло бы на весь вечер.
                 LinkChip(lastContact)
                 Spacer(Modifier.width(16.dp))
-                message?.let { Text(it, style = PointType.small) }
+                // Сообщение гаснет само: постоянную память ведёт «ПУТЬ», а строка в полосе окна —
+                // это мимолётное известие. У владельца здесь висело «Перевод готов» через 54
+                // минуты после самого перевода.
+                message?.let { text ->
+                    LaunchedEffect(text) {
+                        kotlinx.coroutines.delay(20_000)
+                        state.dismissMessage()
+                    }
+                    Text(
+                        text,
+                        style = PointType.small,
+                        modifier = Modifier.clickable { state.dismissMessage() },
+                    )
+                }
                 Spacer(Modifier.weight(1f))
                 ConnectionChip(config, onShowDevices = { showDevices = true })
             }
@@ -214,7 +234,7 @@ fun DesktopApp(
                         busy = accountBusy,
                         error = accountError,
                         onRevoke = account::revoke,
-                        onSignOut = account::signOut,
+                        onSignOut = { state.forgetEverything(onWipe); account.signOut() },
                     )
                 }
             } else {

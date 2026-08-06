@@ -22,6 +22,14 @@ import kotlinx.coroutines.launch
  * Ещё он ведёт журнал (#407): что приезжало, откуда и что с этим делали. Память живёт за швом
  * [JournalStore] — экран читает её тем же способом, каким читает всё остальное состояние.
  */
+/**
+ * Идущая работа: что делается, что делается ПРЯМО сейчас и когда началось.
+ *
+ * [stage] пуст, пока реализатор о себе молчит, — и это законно: экран тогда показывает имя работы
+ * и время, а не выдуманный ход. Выдуманный ход хуже пустоты (тот же довод, что у стадий телефона).
+ */
+data class Working(val title: String, val stage: String?, val startedAt: Long)
+
 class DesktopState(
     private val registry: CapabilityRegistry,
     private val resolver: Resolver,
@@ -43,9 +51,38 @@ class DesktopState(
     private val _items = MutableStateFlow<List<InboxItem>>(emptyList())
     val items: StateFlow<List<InboxItem>> = _items.asStateFlow()
 
+    // Уборка файлов (#602) память НЕ трогает, и это разные вещи. Копились гигабайты снимков и
+    // чеков, а путь объекта весит килобайты и есть вся ценность «где я был». Запись, за которой
+    // файла уже нет, честно отказывает тапом («Файла больше нет»), а не исчезает: стёртая история
+    // — это не аккуратность. Уходит она только вместе с человеком, при выходе из аккаунта.
     private val _journal = MutableStateFlow(runCatching { journalStore?.load() }.getOrNull().orEmpty())
     /** Путь объектов, переживший перезапуск (#407): самое свежее первым. */
     val journal: StateFlow<List<JournalEntry>> = _journal.asStateFlow()
+
+    private val _working = MutableStateFlow<Working?>(null)
+
+    /**
+     * Что компьютер делает прямо сейчас — и можно ли передумать.
+     *
+     * До этого тап по действию не менял на экране ничего. «Прочитать в облаке» ждёт ответа сервиса
+     * до двух минут, и всё это время человек смотрел на неподвижный экран без единого слова и без
+     * выхода. На телефоне такое правило уже есть: работа дольше секунды обязана говорить, что она
+     * делает, и обязана отменяться.
+     */
+    val working: StateFlow<Working?> get() = _working.asStateFlow()
+
+    private var work: kotlinx.coroutines.Job? = null
+
+    /**
+     * Передумал.
+     *
+     * Отмена настоящая: корутина действия прекращается, объект остаётся тем, чем был, а в пути
+     * появляется станция «отменено» — потому что стёртая из памяти попытка это не аккуратность,
+     * а враньё.
+     */
+    fun cancelWork() {
+        work?.cancel()
+    }
 
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()
@@ -96,9 +133,35 @@ class DesktopState(
 
     /** Одна работа на оба пути: экран компьютера и его журнал обновляются одинаково. */
     private suspend fun perform(id: String, item: InboxItem, stationTitle: String? = null): ActionResult? {
-        val result = runCatching {
-            resolver.realizerFor(com.point.core.model.CapabilityId(id)).perform(item.obj, null)
-        }.getOrElse { ActionResult.Failure(it.message ?: "не получилось", recoverable = true) }
+        val title = stationTitle ?: titleOf(id, item)
+        _message.value = null
+        _working.value = Working(title, stage = null, startedAt = clock.now())
+        val result = try {
+            runCatching {
+                // Реализатор рассказывает, что делает сейчас, тем же каналом, что и на телефоне:
+                // кто умеет — говорит, кто молчит — тому экран показывает идущее время и отмену.
+                kotlinx.coroutines.withContext(
+                    com.point.core.flow.ActionProgress { stage ->
+                        _working.value = _working.value?.copy(stage = stage)
+                    },
+                ) {
+                    resolver.realizerFor(com.point.core.model.CapabilityId(id), item.obj.state)
+                        .perform(item.obj, null)
+                }
+            }.getOrElse { e ->
+                // Отмену нельзя проглатывать: пойманная как обычная ошибка, она превращает
+                // «передумал» в «сломалось» и оставляет корутину живой.
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                ActionResult.Failure(e.message ?: "не получилось", recoverable = true)
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            _working.value = null
+            _message.value = "Отменено"
+            note(item, id, title, ActionResult.Failure("отменено", recoverable = true))
+            throw e
+        } finally {
+            _working.value = null
+        }
         // Результат становится ОБЪЕКТОМ здесь же (#595). Пока этого не было, работа на компьютере
         // обрывалась после первого действия: «Сделать легче» отдавало сжатый снимок, а на экране
         // оставался исходный — и следующее действие применялось к нему. Журнал владельца поймал
@@ -129,7 +192,7 @@ class DesktopState(
         // не поймёт, откуда взялся результат. Поэтому в пути станция названа с автором (#407).
         // Автор станции важен: вернувшись к компьютеру, человек должен понимать, откуда взялся
         // результат. Тап здесь — просто название; просьба с телефона — с пометкой (#407).
-        note(item, id, stationTitle ?: (titleOf(id, item) + " · с телефона"), result)
+        note(item, id, if (stationTitle != null) title else "$title · с телефона", result)
         return result
     }
 
@@ -189,7 +252,7 @@ class DesktopState(
      * дважды, и второй раз про это забыли бы. Одна работа — одно место.
      */
     fun onBubble(item: InboxItem, bubble: Bubble) {
-        scope.launch(Dispatchers.IO) { perform(bubble.capabilityId.value, item, bubble.title) }
+        work = scope.launch(Dispatchers.IO) { perform(bubble.capabilityId.value, item, bubble.title) }
     }
 
     /**
@@ -256,6 +319,14 @@ class DesktopState(
     /** Re-copy the current clipboard text (after copying something else on the PC). */
     fun copyClipboardAgain() {
         _clipboardText.value?.let { runCatching { clipboard.copy(it) } }
+    }
+
+    /** «Выйти»: компьютер забывает и файлы, и путь — иначе следующий человек увидит чужое. */
+    fun forgetEverything(wipeFiles: () -> Unit) {
+        runCatching { wipeFiles() }
+        _items.value = emptyList()
+        _clipboardText.value = null
+        updateJournal { emptyList() }
     }
 
     fun clearClipboard() {

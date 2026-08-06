@@ -166,6 +166,10 @@ fun main(args: Array<String>) {
         // нет объекта, и экран об этом скажет вместо того, чтобы открыть пустоту.
         reopenPath = { path -> File(path).takeIf(File::isFile)?.let { inbox.addFile(it.absolutePath) } },
     )
+    // Уборка при запуске (#602): всё, что Point положил сюда сам и что пролежало сутки, уходит.
+    // Тот же срок, что у сервера, и та же причина, что у стирания рабочей копии на телефоне.
+    runCatching { inbox.sweep(System.currentTimeMillis() - 24L * 60 * 60 * 1000) }
+
     runCatching { com.point.core.flow.decodePcCaps(phoneCapsFile.readText()) }
         .getOrNull()?.let(state::setPhoneCaps)
 
@@ -292,6 +296,7 @@ fun main(args: Array<String>) {
                 onClipboardTaken = { text -> state.onReceived(inbox.addText(text), ObjectSource.CLIPBOARD) },
                 // Снимок экрана (#585). Окно Point убирается на миг: иначе человек снимет сам
                 // Point вместо того, что было под ним.
+                onWipe = { inbox.wipe() },
                 onGrabScreen = {
                     val was = windowState.isMinimized
                     windowState.isMinimized = true
