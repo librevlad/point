@@ -46,11 +46,36 @@ class RelayPcTransport(
             action?.let { put("action", it) }
         }
         return when (val asked = rpc.ask(pc, RelayRpc.OBJECT, frameMeta, bytes)) {
-            is RelayRpcClient.Asked.Answer ->
-                PcSendOutcome.Sent(decodePcReceiveReply(String(asked.body, Charsets.UTF_8)))
+            is RelayRpcClient.Asked.Answer -> sentFrom(asked)
             RelayRpcClient.Asked.Rejected -> PcSendOutcome.Rejected
             is RelayRpcClient.Asked.Failed -> PcSendOutcome.Unreachable(asked.why.name, asked.why)
         }
+    }
+
+    /**
+     * Что компьютер ответил: объект — если действие его родило, иначе прежнее слово.
+     *
+     * Порядок проверки важен. Сначала смотрим новые поля: в них ответ с объектом, и разбирать его
+     * как текст бессмысленно — там байты файла. Нет их — читаем ответ ровно так, как читали
+     * всегда, поэтому старая сборка компьютера продолжает работать без изменений.
+     */
+    private fun sentFrom(asked: RelayRpcClient.Asked.Answer): PcSendOutcome.Sent {
+        if (!com.point.core.flow.PcResultFields.hasObject(asked.meta)) {
+            return PcSendOutcome.Sent(decodePcReceiveReply(String(asked.body, Charsets.UTF_8)))
+        }
+        val f = com.point.core.flow.PcResultFields
+        val understood = asked.meta
+            .filterKeys { it.startsWith(f.UNDERSTOOD) }
+            .mapKeys { (k, _) -> k.removePrefix(f.UNDERSTOOD) }
+        return PcSendOutcome.Sent(
+            action = com.point.core.flow.PcActionOutcome.Done(asked.meta[f.DETAIL]),
+            returned = com.point.core.flow.PcReturned(
+                name = asked.meta[f.NAME].orEmpty(),
+                mime = asked.meta[f.MIME] ?: "application/octet-stream",
+                bytes = asked.body,
+                understanding = understood,
+            ),
+        )
     }
 
     /** Что умеет компьютер — включая печать и сборку PDF, ради которых человек к нему и идёт. */

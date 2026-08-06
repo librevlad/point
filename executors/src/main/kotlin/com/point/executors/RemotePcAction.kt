@@ -86,6 +86,11 @@ class RemotePcRealizer(
     private val action: PcRemoteAction,
     private val links: PcLinks,
     private val transport: PcTransport,
+    /**
+     * Куда положить то, что вернул компьютер. `null` — старое поведение: вернувшийся объект
+     * останется на компьютере, а сюда придёт только слово.
+     */
+    private val store: com.point.core.flow.ObjectStore? = null,
 ) : Realizer {
     override val capabilityId = RemotePcCapability.idFor(action)
 
@@ -98,6 +103,32 @@ class RemotePcRealizer(
     override val meta = com.point.core.flow.RealizerMeta(
         kind = if (action.leavesCircle) com.point.core.flow.RealizerKind.CLOUD else com.point.core.flow.RealizerKind.LOCAL,
     )
+
+    /**
+     * Компьютер вернул объект — он становится объектом ЗДЕСЬ, где человек и нажимал.
+     *
+     * Ради этого всё и делалось: человек, попросивший с телефона распознать снимок, до сих пор шёл
+     * за текстом к компьютеру. Работа кончалась словом «готово», а результат оставался на другом
+     * устройстве.
+     *
+     * `null` — возвращать нечего либо некуда: тогда зовущий скажет прежними словами.
+     */
+    private suspend fun materialize(outcome: PcSendOutcome.Sent): ActionResult? {
+        val returned = outcome.returned ?: return null
+        val place = store ?: return null
+        return runCatching {
+            val ref = place.newScratchFile(returned.name.substringAfterLast('.', "bin"))
+            java.io.File(ref.value).writeBytes(returned.bytes)
+            ActionResult.Success(
+                com.point.core.model.ResultObject(
+                    type = com.point.core.model.ObjectKind.UNKNOWN,
+                    mime = returned.mime,
+                    uri = ref,
+                    metadata = returned.understanding + ("name" to returned.name),
+                ),
+            )
+        }.getOrNull()
+    }
 
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult {
         // #316: недоступное не отправляется никогда — даже если до реализатора добрались в
@@ -119,7 +150,7 @@ class RemotePcRealizer(
             // #114: «готово» имеет право сказать только тот, кто это сделал. Доставка файла —
             // не выполнение действия: пока компьютер не назвал исход, телефон говорит ровно то,
             // что знает сам, — теми же словами, что и соседнее «На компьютер».
-            is PcSendOutcome.Sent -> when (val done = outcome.action) {
+            is PcSendOutcome.Sent -> materialize(outcome) ?: when (val done = outcome.action) {
                 null -> ActionResult.Done("Отправлено на компьютер")
                 is PcActionOutcome.Done ->
                     // Слова компьютера сильнее наших: «В очереди «HP» · проверьте принтер» честнее

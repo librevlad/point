@@ -315,6 +315,7 @@ abstract class CapabilityModule {
             caps: com.point.core.flow.PcCapsStore,
             links: com.point.core.flow.PcLinks,
             transport: com.point.core.flow.PcTransport,
-        ): Set<Realizer> = caps.all().map { RemotePcRealizer(it, links, transport) }.toSet()
+            store: ObjectStore,
+        ): Set<Realizer> = caps.all().map { RemotePcRealizer(it, links, transport, store) }.toSet()
     }
 }

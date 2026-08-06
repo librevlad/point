@@ -89,10 +89,9 @@ class DesktopState(
      * на сокете ради неё нельзя. Не дождались — `null`, то есть «доставлено, исход неизвестен»:
      * человек прочтёт «Отправлено на компьютер», что правда, а не «готово», что домысел.
      */
-    fun runRemoteActionNow(id: String, item: InboxItem, timeoutMs: Long = 10_000): com.point.core.flow.PcActionOutcome? =
+    fun runRemoteActionNow(id: String, item: InboxItem, timeoutMs: Long = 10_000): ActionResult? =
         kotlinx.coroutines.runBlocking {
-            val result = kotlinx.coroutines.withTimeoutOrNull(timeoutMs) { perform(id, item) }
-            com.point.core.flow.pcActionOutcomeOf(result)
+            kotlinx.coroutines.withTimeoutOrNull(timeoutMs) { perform(id, item) }
         }
 
     /** Одна работа на оба пути: экран компьютера и его журнал обновляются одинаково. */

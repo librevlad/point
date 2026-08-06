@@ -31,7 +31,7 @@ class RelayRequestsTest {
     private var clip: ClipboardPayload? = null
     private var phoneCaps: List<PcRemoteAction> = emptyList()
     private val received = mutableListOf<Triple<String, String, String>>()
-    private var outcome: PcActionOutcome? = null
+    private var result: com.point.core.model.ActionResult? = null
 
     private val actions = listOf(
         PcRemoteAction("pc-open", "Открыть на компьютере"),
@@ -48,13 +48,13 @@ class RelayRequestsTest {
             received += Triple(name, mime, String(bytes, Charsets.UTF_8))
             assertEquals("понимание доезжает целиком", "693,40", meta["entity.money"])
             assertNull("служебные поля дороги в объект не попадают", meta[RelayRpc.KIND])
-            if (action != null) outcome else null
+            if (action != null) result else null
         },
     )
 
     @Test
     fun `объект становится объектом, и в ответ едет исход, а не факт доставки`() {
-        outcome = PcActionOutcome.Done("В очереди «HP LaserJet»")
+        result = com.point.core.model.ActionResult.Done("В очереди «HP LaserJet»")
 
         val reply = requests().answer(
             RelayRpc.OBJECT,

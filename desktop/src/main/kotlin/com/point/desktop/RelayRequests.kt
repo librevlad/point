@@ -32,7 +32,7 @@ class RelayRequests(
      * Объект приехал: положить его на конвейер и, если заказано действие, выполнить и назвать
      * исход. `null` — «исход неизвестен», и телефон скажет «Отправлено», а не «готово» (#114).
      */
-    private val onObject: (name: String, mime: String, meta: Map<String, String>, bytes: ByteArray, action: String?) -> PcActionOutcome?,
+    private val onObject: (name: String, mime: String, meta: Map<String, String>, bytes: ByteArray, action: String?) -> com.point.core.model.ActionResult?,
     /**
      * Обмен ключами сервисов (#589): приехали ключи телефона — слить со своими и вернуть общие.
      *
@@ -47,19 +47,46 @@ class RelayRequests(
     class Reply(val meta: Map<String, String> = emptyMap(), val body: ByteArray = ByteArray(0))
 
     /** Ответ на письмо; `null` — вид письма незнакомый, отвечать нечем и незачем. */
+    /**
+     * Ответ телефону: объект, если действие его родило, иначе — прежнее слово.
+     *
+     * Два разных вида ответа нарочно. Пока объекта нет (напечатали, положили в папку, отказали),
+     * ответ остаётся ровно тем, чем был, — то есть старая сборка телефона продолжает его понимать.
+     * Объект добавляется новыми полями и байтами: старый телефон не найдёт в них знакомой строки и
+     * скажет «Отправлено на компьютер» — это правда, просто без подробностей.
+     */
+    private fun replyFor(result: com.point.core.model.ActionResult?): Reply {
+        val born = (result as? com.point.core.model.ActionResult.Success)?.result
+        val file = born?.let { java.io.File(it.uri.value).takeIf(java.io.File::isFile) }
+        if (born == null || file == null) {
+            return Reply(body = encodePcReceiveReply(com.point.core.flow.pcActionOutcomeOf(result)).toByteArray(Charsets.UTF_8))
+        }
+        val understood = born.metadata
+            .filterKeys { it != "name" }
+            .mapKeys { (k, _) -> com.point.core.flow.PcResultFields.UNDERSTOOD + k }
+        return Reply(
+            meta = understood + mapOf(
+                com.point.core.flow.PcResultFields.NAME to (born.metadata["name"] ?: file.name),
+                com.point.core.flow.PcResultFields.MIME to born.mime,
+                com.point.core.flow.PcResultFields.OUTCOME to com.point.core.flow.PcResultFields.DONE,
+            ),
+            body = file.readBytes(),
+        )
+    }
+
     fun answer(kind: String, meta: Map<String, String>, bytes: ByteArray): Reply? = when (kind) {
         RelayRpc.OBJECT -> {
             val name = meta["name"]?.takeIf { it.isNotBlank() } ?: "объект"
             // Понимание объекта едет с ним, а служебные поля кадра в него не попадают: они про
             // дорогу, а не про объект.
             val understanding = meta - setOf("name", "mime", "action", RelayRpc.KIND, RelayRpc.ID)
-            val outcome = runCatching {
+            val done = runCatching {
                 onObject(name, meta["mime"] ?: "application/octet-stream", understanding, bytes, meta["action"])
             }.getOrElse { e ->
                 log("объект не принят: ${e.javaClass.simpleName}")
-                PcActionOutcome.Failed("компьютер не смог принять объект")
+                com.point.core.model.ActionResult.Failure("компьютер не смог принять объект", recoverable = true)
             }
-            Reply(body = encodePcReceiveReply(outcome).toByteArray(Charsets.UTF_8))
+            replyFor(done)
         }
 
         RelayRpc.CAPS -> Reply(body = encodePcCaps(remoteActions()).toByteArray(Charsets.UTF_8))
