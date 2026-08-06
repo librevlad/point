@@ -60,6 +60,37 @@ class Inbox(private val dir: File) {
         return wrap(f, mimeFor(f.name), mapOf("name" to f.name))
     }
 
+    /**
+     * Убрать то, что пролежало дольше срока (#602).
+     *
+     * На телефоне рабочая копия стирается по окончании работы — это инвариант. На компьютере
+     * такого правила не было вовсе: у владельца в этой папке лежали 23 файла за 11 дней, включая
+     * снимок приложения-аутентификатора с кодами и переписку. Через эту дверь идёт то же, что
+     * через телефон, — чеки, переписка, коды; разница была только в том, что здесь они оставались.
+     *
+     * Убирается **только то, что Point сюда положил сам**: присланное с телефона, снимки экрана,
+     * скачанное, заметки из буфера. Файл, который человек перетащил мышью, здесь не лежит вовсе —
+     * он остаётся там, где был, и Point его не трогает никогда.
+     *
+     * Срок тот же, что у сервера: сутки. Возвращает, сколько убрано.
+     */
+    fun sweep(olderThan: Long): Int {
+        var removed = 0
+        listOf(dir, File(dir, "screens"), File(dir, "downloads")).forEach { where ->
+            where.listFiles()?.forEach { f ->
+                if (f.isFile && f.lastModified() < olderThan && runCatching { f.delete() }.getOrDefault(false)) {
+                    removed++
+                }
+            }
+        }
+        return removed
+    }
+
+    /** «Выйти» — унести всё: и файлы, и подпапки. Аккаунт ушёл, значит и следы его работы. */
+    fun wipe() {
+        dir.listFiles()?.forEach { runCatching { it.deleteRecursively() } }
+    }
+
     private fun wrap(file: File, mime: String, meta: Map<String, String>): InboxItem {
         val state = classifier.classify(mime, file.length(), file.name)
         return InboxItem(
