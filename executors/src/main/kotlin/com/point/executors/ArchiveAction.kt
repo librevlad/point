@@ -1,5 +1,6 @@
 package com.point.executors
 
+import com.point.core.flow.capabilities.ArchiveCapability
 import com.point.core.flow.ArchiveExtractor
 import com.point.core.flow.Capability
 import com.point.core.flow.CapabilityMeta
@@ -16,22 +17,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import javax.inject.Inject
-
-/** Archive (zip/tar/gz/bz2/xz/7z/rar) -> a COLLECTION of the unpacked files. */
-class ArchiveCapability @Inject constructor() : Capability {
-    override val id = ID
-    override val icon = "unzip"
-
-    /** Не [Latency.INSTANT] (#288): большой архив распаковывается секунды и десятки секунд — та же
-     *  правка и по той же причине, что у «Страницы». Работа растёт с содержимым архива, поэтому
-     *  и не [Latency.SLOW]: она рассказывает о себе на объекте, а не забирает экран. */
-    override val meta = CapabilityMeta(latency = Latency.FAST)
-    override fun label(state: ObjectState) = "Распаковать"
-    override fun accepts(state: ObjectState) = state.kind == ObjectKind.ZIP
-    override fun produces(state: ObjectState) = ObjectState(ObjectKind.COLLECTION)
-
-    companion object { val ID = CapabilityId("archive") }
-}
 
 class ArchiveRealizer @Inject constructor(
     private val archive: ArchiveExtractor,

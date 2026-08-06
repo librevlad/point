@@ -73,15 +73,6 @@ class DesktopDropLink(
     }
 }
 
-class PcDropCapability : Capability {
-    override val id = CapabilityId("pc-drop")
-    override val icon = "link"
-    override val meta = CapabilityMeta(priority = 35, latency = Latency.SLOW, network = true, auth = true)
-    override fun label(state: ObjectState) = "Дать ссылку"
-    override fun accepts(state: ObjectState) = true
-    override fun produces(state: ObjectState) = state
-}
-
 /**
  * Ссылка кладётся в буфер компьютера — оттуда её и вставляют в письмо или чат.
  *
@@ -93,7 +84,7 @@ class PcDropRealizer(
     private val drop: DropLink,
     private val clipboard: TextClipboard,
 ) : Realizer {
-    override val capabilityId = CapabilityId("pc-drop")
+    override val capabilityId = com.point.core.flow.capabilities.DropLinkCapability.ID
 
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult = runCatching {
         val file = File(input.uri.value).takeIf(File::isFile)

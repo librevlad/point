@@ -1,5 +1,6 @@
 package com.point.executors
 
+import com.point.core.flow.capabilities.OFFICE_PDF_SUBSTANCE
 import android.graphics.Paint
 import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
@@ -26,6 +27,35 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import javax.inject.Inject
+
+/**
+ * Чем офисный файл оказывается после «В PDF» — одним словом и в одном месте (#558).
+ *
+ * Слово одно и то же в двух руках: подпись обещает им до тапа ([PdfCapability.yields]), а
+ * реализатор ставит его на результат ([META_YIELD_NOUN]), и сторож сверяет обещание с вышедшим.
+ * Разъедутся — человеку скажут словами; а разъехаться, не заметив, нельзя: константа одна.
+ */
+
+/**
+ * Пересказ, названный пересказом (#558).
+ *
+ * Обе ветки офисного пути — таблица и проза — печатают заново вынутый текст, а не переносят
+ * документ. Слово, которым это обещано до тапа, ставится на результат: разъедутся обещание и
+ * выход — [com.point.core.flow.yieldSurprise] скажет об этом человеку, а не оставит его открывать
+ * файл через час.
+ *
+ * Отдельной функцией, а не строкой внутри реализатора: сам реализатор рисует PDF средствами
+ * телефона и на JVM не запускается, а сверить обещание с помеченным — ровно то, что проверять
+ * надо. Отказ проходит насквозь: помечать нечего.
+ */
+internal fun retoldFromOffice(result: ActionResult): ActionResult =
+    if (result is ActionResult.Success) {
+        ActionResult.Success(
+            result.result.copy(metadata = result.result.metadata + (META_YIELD_NOUN to OFFICE_PDF_SUBSTANCE)),
+        )
+    } else {
+        result
+    }
 
 /** image/text/office -> PDF, and PDF -> extracted text. */
 class PdfCapability @Inject constructor() : Capability {
@@ -62,36 +92,6 @@ class PdfCapability @Inject constructor() : Capability {
 
     companion object { val ID = CapabilityId("pdf") }
 }
-
-/**
- * Чем офисный файл оказывается после «В PDF» — одним словом и в одном месте (#558).
- *
- * Слово одно и то же в двух руках: подпись обещает им до тапа ([PdfCapability.yields]), а
- * реализатор ставит его на результат ([META_YIELD_NOUN]), и сторож сверяет обещание с вышедшим.
- * Разъедутся — человеку скажут словами; а разъехаться, не заметив, нельзя: константа одна.
- */
-internal const val OFFICE_PDF_SUBSTANCE = "PDF с текстом документа"
-
-/**
- * Пересказ, названный пересказом (#558).
- *
- * Обе ветки офисного пути — таблица и проза — печатают заново вынутый текст, а не переносят
- * документ. Слово, которым это обещано до тапа, ставится на результат: разъедутся обещание и
- * выход — [com.point.core.flow.yieldSurprise] скажет об этом человеку, а не оставит его открывать
- * файл через час.
- *
- * Отдельной функцией, а не строкой внутри реализатора: сам реализатор рисует PDF средствами
- * телефона и на JVM не запускается, а сверить обещание с помеченным — ровно то, что проверять
- * надо. Отказ проходит насквозь: помечать нечего.
- */
-internal fun retoldFromOffice(result: ActionResult): ActionResult =
-    if (result is ActionResult.Success) {
-        ActionResult.Success(
-            result.result.copy(metadata = result.result.metadata + (META_YIELD_NOUN to OFFICE_PDF_SUBSTANCE)),
-        )
-    } else {
-        result
-    }
 
 class PdfRealizer @Inject constructor(
     private val store: ObjectStore,

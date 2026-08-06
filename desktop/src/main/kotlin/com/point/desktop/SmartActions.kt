@@ -20,6 +20,13 @@ import java.io.File
 import javax.imageio.ImageIO
 
 /**
+ * Телефоны, почты, ссылки, суммы, даты, карты — списком, который можно скопировать целиком.
+ *
+ * На телефоне каждая находка становится отдельным объектом с собственными действиями («позвонить»,
+ * «написать»). На компьютере таких действий нет: звонить с него некуда, а писать он умеет тем же
+ * способом, что и всё остальное. Поэтому здесь честно проще — список, а не иллюзия выбора.
+ */
+/**
  * То, ради чего человек приходит в Point, — теперь и на компьютере (#585).
  *
  * До этого ПК умел восемь вещей, и все восемь — про работу с файлом как с файлом: открыть,
@@ -44,13 +51,6 @@ class PcEntitiesCapability : Capability {
     override fun produces(state: ObjectState) = ObjectState(ObjectKind.TEXT)
 }
 
-/**
- * Телефоны, почты, ссылки, суммы, даты, карты — списком, который можно скопировать целиком.
- *
- * На телефоне каждая находка становится отдельным объектом с собственными действиями («позвонить»,
- * «написать»). На компьютере таких действий нет: звонить с него некуда, а писать он умеет тем же
- * способом, что и всё остальное. Поэтому здесь честно проще — список, а не иллюзия выбора.
- */
 class PcEntitiesRealizer(
     private val extractor: EntityExtractor,
     private val outbox: Outbox,
@@ -196,16 +196,6 @@ object PcPrompts {
 
 // --- QR ------------------------------------------------------------------------------------
 
-class PcQrCapability : Capability {
-    override val id = CapabilityId("pc-qr")
-    override val icon = "qr"
-    override val meta = CapabilityMeta(priority = 40)
-    override fun label(state: ObjectState) = "Сделать QR"
-    override fun accepts(state: ObjectState) =
-        state.kind == ObjectKind.TEXT || state.kind == ObjectKind.URL
-    override fun produces(state: ObjectState) = ObjectState(ObjectKind.IMAGE)
-}
-
 /**
  * Ссылка с компьютера — на экран телефона за одно движение.
  *
@@ -216,7 +206,7 @@ class PcQrCapability : Capability {
  * платформы, и на телефоне его рисует Compose, а на компьютере — обычный PNG.
  */
 class PcQrRealizer(private val outbox: Outbox) : Realizer {
-    override val capabilityId = CapabilityId("pc-qr")
+    override val capabilityId = com.point.core.flow.capabilities.QrCapability.ID
 
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult = runCatching {
         val text = File(input.uri.value).takeIf(File::isFile)?.readText()?.trim()
@@ -261,15 +251,6 @@ class PcQrRealizer(private val outbox: Outbox) : Realizer {
 
 // --- Офисный документ → текст ----------------------------------------------------------------
 
-class PcOfficeTextCapability : Capability {
-    override val id = CapabilityId("pc-office-text")
-    override val icon = "text"
-    override val meta = CapabilityMeta(priority = 24)
-    override fun label(state: ObjectState) = "Достать текст"
-    override fun accepts(state: ObjectState) = state.kind == ObjectKind.OFFICE
-    override fun produces(state: ObjectState) = ObjectState(ObjectKind.TEXT)
-}
-
 /**
  * Текст из docx, xlsx и pptx — без Word и без чужих библиотек (#585).
  *
@@ -284,7 +265,7 @@ class PcOfficeTextRealizer(
     private val extractor: com.point.core.flow.OfficeTextExtractor,
     private val outbox: Outbox,
 ) : Realizer {
-    override val capabilityId = CapabilityId("pc-office-text")
+    override val capabilityId = com.point.core.flow.capabilities.OfficeCapability.ID
 
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult = runCatching {
         val text = extractor.extractText(input)

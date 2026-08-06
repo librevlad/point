@@ -14,29 +14,8 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.zip.ZipInputStream
 
-/**
- * Архив на компьютере: распаковать и показать в папке (#585).
- *
- * На телефоне распаковка отдаёт коллекцию объектов — там это и нужно, потому что дальше человек
- * работает с каждым файлом в самом Point. На компьютере распаковка означает другое: файлы должны
- * оказаться **в папке**, где их ждут проводник, редактор и всё остальное. Поэтому здесь она
- * кончается открытым каталогом, а не списком внутри Point.
- *
- * Zip хватает: он же .docx, .xlsx, .pptx, .apk, .jar и почти всё, что приходит почтой. Rar и 7z
- * требуют чужих библиотек — на телефоне они есть, здесь их заводить не за что, и действие честно
- * скажет, что не смогло, вместо того чтобы распаковать половину.
- */
-class PcUnzipCapability : Capability {
-    override val id = CapabilityId("pc-unzip")
-    override val icon = "unzip"
-    override val meta = CapabilityMeta(priority = 22, latency = Latency.FAST)
-    override fun label(state: ObjectState) = "Распаковать"
-    override fun accepts(state: ObjectState) = state.kind == ObjectKind.ZIP
-    override fun produces(state: ObjectState) = state
-}
-
 class PcUnzipRealizer(private val revealer: FileRevealer) : Realizer {
-    override val capabilityId = CapabilityId("pc-unzip")
+    override val capabilityId = com.point.core.flow.capabilities.ArchiveCapability.ID
 
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {

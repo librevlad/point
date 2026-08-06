@@ -34,25 +34,34 @@ import java.util.Base64
  * действием, как и на телефоне. Работает без регистрации — у OCR.space есть демо-ключ; свой ключ
  * лишь поднимает потолок и вписывается в `~/.point-pc/config` строкой `ocr.key=…`.
  *
- * Локального чтения на ПК по-прежнему нет, и делать вид, что есть, Point не станет: действие
- * названо «Прочитать в облаке», а не «Распознать текст».
+ * **Собственной способности у этого чтения больше нет** (контракт 06.08.2026, И1). Была `pc-ocr`
+ * «Прочитать в облаке» — вторая декларация того же намерения, которое телефон уже объявил как
+ * `ocr` «Распознать текст». Из-за неё компьютер объявлял телефону чтение чужим сервисом рядом с
+ * телефонным — локальным, бесплатным и лучшим по всем признакам разом; владелец назвал это
+ * абсурдом.
+ *
+ * Прежний довод — «одинаковое имя у разного по цене есть обещание, которого ПК не выполнит» —
+ * никуда не делся, но держит его теперь сама декларация строкой «не выйдет на устройстве —
+ * предложит сервис»: на компьютере это просто всегда. Выбирать между этой реализацией и
+ * телефонной — работа `Resolver`, а не человека.
  */
-class PcCloudOcrCapability : Capability {
-    override val id = CapabilityId("pc-ocr")
-    override val icon = "cloud"
-    override val meta = CapabilityMeta(priority = 20, latency = Latency.SLOW, network = true)
-    override fun label(state: ObjectState) = "Прочитать в облаке"
-    override fun accepts(state: ObjectState) = state.kind == ObjectKind.IMAGE
-    override fun produces(state: ObjectState) = ObjectState(ObjectKind.TEXT)
-}
-
+/**
+ * Собственной способности у этого чтения больше нет (контракт 06.08.2026, И1).
+ *
+ * Была `pc-ocr` «Прочитать в облаке» — вторая декларация того же намерения, которое телефон уже
+ * объявил как `ocr` «Распознать текст». Из-за неё компьютер объявлял телефону чтение чужим
+ * сервисом рядом с телефонным, локальным и бесплатным; владелец назвал это абсурдом.
+ *
+ * Осталась только **реализация** общей способности: чем именно читает компьютер. Выбирать между
+ * ней и телефонной — работа `Resolver`, а не человека.
+ */
 class PcCloudOcrRealizer(
     private val config: () -> OcrConfig,
     private val outbox: Outbox,
     private val connectTimeoutMs: Int = 15_000,
     private val readTimeoutMs: Int = 120_000,
 ) : Realizer {
-    override val capabilityId = CapabilityId("pc-ocr")
+    override val capabilityId = com.point.core.flow.capabilities.OcrCapability.ID
 
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {

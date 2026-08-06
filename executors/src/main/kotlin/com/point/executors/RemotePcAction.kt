@@ -60,7 +60,25 @@ class RemotePcCapability(
             links.current() != null
 
     companion object {
-        fun idFor(action: PcRemoteAction) = CapabilityId("pc-do:${action.id}")
+        /**
+         * Под какой способностью живёт то, что объявил компьютер.
+         *
+         * Намерение из общего словаря (контракт 06.08.2026, И1) остаётся **собой**: реализация
+         * компьютера встаёт кандидатом к той же способности, что и местная, и выбирает между ними
+         * `Resolver`. Отдельного `pc-do:ocr` не заводится — это была бы вторая декларация одного
+         * намерения, то есть «Распознать текст на ПК» рядом с «Распознать текст».
+         *
+         * Всё, что в словарь ещё не переехало, живёт по-старому — под своим `pc-do:` — и
+         * переедет вместе со своей способностью.
+         */
+        fun idFor(action: PcRemoteAction): CapabilityId {
+            val shared = CapabilityId(action.id)
+            return if (shared in com.point.core.flow.capabilities.sharedCapabilityIds) {
+                shared
+            } else {
+                CapabilityId("pc-do:${action.id}")
+            }
+        }
     }
 }
 

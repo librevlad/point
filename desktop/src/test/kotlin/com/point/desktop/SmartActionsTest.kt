@@ -342,32 +342,99 @@ class SmartActionsTest {
         assertTrue(box.entries().isEmpty())
     }
 
-    @Test fun `чтение в облаке названо облаком, а не распознаванием`() {
-        // На телефоне «Распознать текст» читает сам и бесплатно. Одинаковое имя у разных по цене
-        // действий — это обещание, которое ПК не выполнит: у него локального чтения нет.
-        assertEquals("Прочитать в облаке", PcCloudOcrCapability().label(ObjectState(ObjectKind.IMAGE)))
-        assertTrue("действие не помечено сетевым", PcCloudOcrCapability().meta.network)
+    @Test fun `у чтения снимка одна декларация на оба устройства, а компьютер даёт реализацию`() {
+        // Прежде здесь стоял обратный приговор: «чтение в облаке названо облаком, а не
+        // распознаванием» — у компьютера была СВОЯ способность `pc-ocr` «Прочитать в облаке».
+        // Довод был разумный: одинаковое имя у разного по цене — обещание, которого ПК не
+        // выполнит. Но лечили не то. Пока деклараций было две, компьютер объявлял телефону чтение
+        // чужим сервисом рядом с телефонным — локальным, бесплатным и лучшим. Владелец назвал это
+        // абсурдом (06.08.2026), и он прав: спорили не реализации, спорили две декларации одного
+        // намерения.
+        //
+        // Контракт (И1): `Capability` не принадлежит устройству. Декларация одна, реализаций
+        // несколько, выбирает `Resolver`. Прежний довод при этом не потерян — цену говорит сама
+        // декларация строкой «не выйдет на устройстве — предложит сервис», и на компьютере, где
+        // локального чтения нет вовсе, это просто всегда.
+        val shared = com.point.core.flow.capabilities.OcrCapability()
+
+        assertEquals(shared.id, PcCloudOcrRealizer({ OcrConfig() }, outbox()).capabilityId)
+        assertEquals("Распознать текст", shared.label(ObjectState(ObjectKind.IMAGE)))
+        assertTrue(
+            "цена дороги не названа до тапа",
+            shared.yields(ObjectState(ObjectKind.IMAGE)).toString().contains("сервис"),
+        )
     }
 
-    // --- Объявление телефону ------------------------------------------------------------------
+    @Test fun `своей способности про облако у компьютера не осталось`() {
+        // Сторож против возврата: своя способность чтения на ПК — это вторая декларация намерения,
+        // которое уже объявлено общим словарём.
+        val forImage = pcRegistry().bubblesFor(ObjectState(ObjectKind.IMAGE)).map { it.capabilityId.value }
 
-    @Test fun `каждое новое действие объявлено и телефону, и реестру`() {
-        // Расхождение этих двух списков — молчаливая поломка: кнопка на телефоне есть, а на
-        // компьютере её некому исполнить (или наоборот).
-        val declared = setOf(
-            "pc-entities", "pc-understand", "pc-translate", "pc-ask", "pc-qr",
-        )
-        val registry = DesktopRegistry(
-            setOf(
-                PcEntitiesCapability(), PcUnderstandCapability(), PcTranslateCapability(),
-                PcAskCapability(), PcQrCapability(),
-            ),
-        )
-
-        // Реестр спрашивается так же, как его спрашивает экран: какие действия он даёт тексту.
-        val known = registry.bubblesFor(ObjectState(ObjectKind.TEXT)).map { it.capabilityId.value }.toSet()
-
-        assertEquals(declared - "pc-qr", known - "pc-qr")
-        assertTrue("QR не предложен тексту", known.contains("pc-qr"))
+        assertTrue("на ПК снова заведена своя способность чтения: $forImage", "pc-ocr" !in forImage)
+        assertTrue("общее чтение не предложено картинке: $forImage", "ocr" in forImage)
     }
+
+    // --- Одно намерение — одна декларация ------------------------------------------------------
+
+    @Test fun `у компьютера нет двух действий с одним именем на одном объекте`() {
+        // Прежде тест сверял два списка идентификаторов и ловил расхождение «кнопка есть, исполнить
+        // некому». Сверять стало нечего — список один. Но настоящая беда, ради которой он писался,
+        // осталась и стала общей: **две декларации одного намерения**. Их видно без списка — по
+        // двум одинаковым именам на одном объекте, как было у «Прочитать в облаке» с «Распознать
+        // текст».
+        listOf(ObjectKind.IMAGE, ObjectKind.TEXT, ObjectKind.OFFICE, ObjectKind.ZIP, ObjectKind.URL)
+            .forEach { kind ->
+                val titles = pcRegistry().bubblesFor(ObjectState(kind)).map { it.title }
+                val twins = titles.groupBy { it }.filterValues { it.size > 1 }.keys
+
+                assertTrue("на $kind одно намерение объявлено дважды: $twins", twins.isEmpty())
+            }
+    }
+
+    @Test fun `компьютер объявляет свои доставки и общие преобразования, и ничего сверх`() {
+        // Доставки остаются своими: «Копировать» значит «в МОЙ буфер». Преобразования — общие.
+        val own = pcRegistry().all().map { it.id.value }.filter { it.startsWith("pc-") }
+        val shared = com.point.core.flow.capabilities.sharedCapabilities().map { it.id.value }
+
+        assertTrue(
+            "общее намерение снова присвоено компьютеру: ${own.intersect(shared.toSet())}",
+            own.none { it.removePrefix("pc-") in shared },
+        )
+    }
+
+    @Test fun `у каждого объявленного действия компьютера есть чем его выполнить`() {
+        // Сторож, которого не хватило в этом же срезе. Слив «В PDF» в общий словарь, компьютер
+        // получил бы кнопку на картинке — а его единственная реализация умеет только офисный
+        // документ. Обещание, которого исполнить нечем, человек читает как поломку продукта.
+        //
+        // Здесь проверяется первая половина: у каждой объявленной способности есть реализация.
+        // Вторая — что реализация покрывает ВЕСЬ объявленный `accepts` — станет проверяемой со
+        // срезом 3, когда появится `ExecutionPolicy`; до тех пор намерения с более узкой
+        // реализацией в общий словарь не едут (`docs/DESKTOP-CONTRACT.md`).
+        val declared = pcRegistry().all().map { it.id.value }.toSet()
+        val realizable = pcRealizerIds()
+
+        assertTrue(
+            "объявлено, но выполнить нечем: ${declared - realizable}",
+            (declared - realizable).isEmpty(),
+        )
+    }
+
+    /** Идентификаторы, на которые у компьютера есть реализация, — из тех же классов, что в `Main`. */
+    private fun pcRealizerIds(): Set<String> = setOf(
+        "pc-open", "pc-copy", "pc-reveal", "pc-save-as", "pc-download", "pc-to-phone", "pc-print",
+        "pc-open-link", "pc-understand", "pc-translate", "pc-ask", "pc-transcribe",
+        "pc-office-pdf", "pc-entities",
+    ) + com.point.core.flow.capabilities.sharedCapabilities().map { it.id.value }
+
+    /** Реестр компьютера так, как его собирает `Main`: свои доставки плюс общий словарь. */
+    private fun pcRegistry() = DesktopRegistry(
+        setOf(
+            PcOpenCapability(), PcCopyCapability(), PcRevealCapability(), PcSaveAsCapability(),
+            PcDownloadCapability(), PcToPhoneCapability(), PcPrintCapability(),
+            PcOpenLinkCapability(), PcUnderstandCapability(), PcTranslateCapability(),
+            PcAskCapability(), PcTranscribeCapability(),
+            PcOfficePdfCapability(), PcEntitiesCapability(),
+        ) + com.point.core.flow.capabilities.sharedCapabilities(),
+    )
 }

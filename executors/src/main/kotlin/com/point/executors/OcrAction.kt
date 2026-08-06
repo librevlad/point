@@ -2,6 +2,7 @@ package com.point.executors
 
 import com.point.core.flow.AI_CHAIN_PRIVACY
 import com.point.core.flow.Capability
+import com.point.core.flow.capabilities.OcrCapability
 import com.point.core.flow.CapabilityMeta
 import com.point.core.flow.CloudPrivacySettings
 import com.point.core.flow.Cost
@@ -46,60 +47,6 @@ internal const val OCR_CLOUD_PROMPT =
  *  звено цепочки, и как отдельная кнопка «Распознать в облаке». */
 internal const val OCR_CLOUD_STAGE = "Читаю снимок в облаке"
 
-/**
- * photo -> recognised text. Tries on-device OCR first (Tesseract, rus+eng — free,
- * offline, no key or quota), and only falls back to the cloud LLM vision path
- * when on-device finds nothing (hard scans) or the user wants tables as Markdown.
- * The result is a TEXT object, so it chains into translate / to-PDF / save.
- */
-class OcrCapability @Inject constructor() : Capability {
-    override val id = ID
-    override val icon = "ocr"
-    /**
-     * Ключей и сети не нужно — с обычным случаем справляется устройство. Но **не быстро**, и
-     * [Latency.FAST] здесь было прямой неправдой (#288): у чтения страницы бюджет в три минуты
-     * (`OCR_READ_BUDGET_MS`), внутри которого помещается до четырёх полных проходов движка.
-     *
-     * Цена этой неправды была не косметическая. Работа, объявленная нескорой, идёт на экране
-     * ожидания — там видно, что действие делает сейчас, и там же живёт кнопка отмены; работа,
-     * объявленная быстрой, остаётся на объекте притушенным списком, без единого слова и **без
-     * возможности передумать**. То есть самое долгое действие Point было единственным, которое
-     * нельзя было ни понять, ни остановить, — ровно то, на что пожаловался владелец.
-     *
-     * Соседний пузырёк «Распознать в облаке» делает ту же работу и объявлен [Latency.SLOW] с
-     * самого начала; отсюда и курьёз, который правка закрывает: одна и та же фраза
-     * [OCR_CLOUD_STAGE] была слышна из одного пузырька и нема из другого.
-     *
-     * Первый экран правка не трогает: место пузырька считается по [Latency.INSTANT] против
-     * «всего остального» ([DefaultCapabilityRegistry]), и FAST с SLOW стоят по одну сторону.
-     */
-    override val meta = CapabilityMeta(cost = Cost.FREE, latency = Latency.SLOW)
-    override fun label(state: ObjectState) = "Распознать текст"
-    override fun accepts(state: ObjectState) = state.kind == ObjectKind.IMAGE
-    override fun produces(state: ObjectState) = ObjectState(ObjectKind.TEXT)
-
-    /**
-     * Запасной путь назван до тапа, а не после (#558).
-     *
-     * Прогон по телефону владельца: подпись обещала просто «вернёт текст», человек тапал — и
-     * первым, что он видел, был вопрос про отправку снимка в сервис. Цена появлялась ПОСЛЕ
-     * выбора, то есть выбор делался вслепую — ровно та же болезнь, что у «Word в PDF», только
-     * не про существо результата, а про дорогу к нему.
-     *
-     * Цепочка здесь честно местная **сначала**: устройство (бесплатно, офлайн) читает первым, и
-     * наружу уходит только то, что оно не взяло ([DeviceOcrRealizer] → [ExternalEyeOcrRealizer] →
-     * [CloudOcrRealizer]). Поэтому и сказано условием, а не приговором: «не выйдет на устройстве».
-     *
-     * Объявление `meta.network` при этом НЕ меняется, и это не забывчивость: `network` красит
-     * пузырёк на первом экране и двигает его в другой ярус (#114), а действие правда начинает
-     * на устройстве. Правда о цепочке живёт в `Resolver.leavesDevice` — здесь она сказана
-     * словами, единственным местом, которое человек читает.
-     */
-    override fun yields(state: ObjectState) =
-        ActionYield.New(ObjectKind.TEXT, "текст · не выйдет на устройстве — предложит сервис")
-
-    companion object { val ID = CapabilityId("ocr") }
-}
 
 /**
  * On-device OCR — the chain's **preferred** realizer (local, priority 10, always

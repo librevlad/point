@@ -1,5 +1,6 @@
 package com.point.executors
 
+import com.point.core.flow.capabilities.DropLinkCapability
 import com.point.core.flow.Capability
 import com.point.core.flow.CapabilityMeta
 import com.point.core.flow.Cost
@@ -17,47 +18,6 @@ import com.point.core.model.PointObject
 import com.point.core.model.ResultObject
 import java.io.File
 import javax.inject.Inject
-
-/**
- * «Дать ссылку» (#388) — отдать файл человеку, у которого Point не стоит.
- *
- * Самая маленькая форма Drop: ни аккаунтов, ни страниц, ни отдельного сервера. Получатель
- * открывает ссылку браузером и получает файл; ссылка живёт сутки и умирает сама.
- *
- * Действие сетевое и **не бесплатное по приватности**: в отличие от всего остального, что возит
- * релей, файл по ссылке лежит на сервере открытым — ключа у чужого человека нет. Поэтому оно
- * стоит за явным тапом и названо прямо.
- */
-class DropLinkCapability @Inject constructor() : Capability {
-    override val id = ID
-    override val icon = "link"
-    override val meta = CapabilityMeta(
-        priority = 35,
-        cost = Cost.FREE,
-        latency = Latency.SLOW,
-        network = true,
-    )
-
-    override fun label(state: ObjectState) = "Дать ссылку"
-
-    /**
-     * Ссылке ссылку не дают (#457).
-     *
-     * Объект-URL — это сорок байт текста со ссылкой внутри, и «Дать ссылку» загрузило бы на
-     * сервер **их**: человек получил бы ссылку на ссылку, а тот, кому он её отправит, — текстовый
-     * файлик вместо страницы. Это единственное действие, чей собственный результат (`produces`
-     * = URL) снова попадал в его же `accepts`: петля, у которой второй виток бессмыслен.
-     *
-     * Исключение то же самое, что уже стоит у «Открыть» и «Открыть в…»: у ссылки свои действия
-     * («Открыть ссылку», «Скопировать», «Код»), и подменять их загрузкой на сервер незачем.
-     */
-    override fun accepts(state: ObjectState) =
-        state.kind.isFileBacked && state.kind != ObjectKind.URL
-
-    override fun produces(state: ObjectState) = ObjectState(ObjectKind.URL)
-
-    companion object { val ID = CapabilityId("drop-link") }
-}
 
 /**
  * Результат — **новый объект-ссылка**, а не сообщение.

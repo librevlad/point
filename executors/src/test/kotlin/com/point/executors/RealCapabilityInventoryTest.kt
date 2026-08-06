@@ -1,5 +1,12 @@
 package com.point.executors
 
+import com.point.core.flow.capabilities.QrCapability
+import com.point.core.flow.capabilities.ArchiveCapability
+import com.point.core.flow.capabilities.OfficeCapability
+import com.point.core.flow.capabilities.ImageCapability
+import com.point.core.flow.capabilities.DropLinkCapability
+import com.point.core.flow.capabilities.OFFICE_PDF_SUBSTANCE
+import com.point.core.flow.capabilities.OcrCapability
 import com.point.core.flow.Capability
 import com.point.core.flow.LinkedPc
 import com.point.core.flow.PcLinks
@@ -142,8 +149,13 @@ class RealCapabilityInventoryTest {
      */
     @Test
     fun `в таблице ровно столько способностей, сколько раздаёт реестр`() {
+        // Способности приходят из двух мест, и сторож обязан знать оба, иначе переезд в общий
+        // словарь выглядел бы как исчезновение способности. Первое — привязки телефона. Второе —
+        // общий словарь (`:core:flow.capabilities`, контракт 06.08.2026 И1): он раздаётся одной
+        // привязкой `Set<Capability>`, поэтому в подсчёт методов не попадает вовсе.
         val bound = com.point.executors.di.CapabilityModule::class.java.declaredMethods
-            .count { it.returnType == Capability::class.java }
+            .count { it.returnType == Capability::class.java } +
+            com.point.core.flow.capabilities.sharedCapabilities().size
 
         assertEquals("в CapabilityModule способностей больше, чем в таблице", bound, builtIn.size)
     }
