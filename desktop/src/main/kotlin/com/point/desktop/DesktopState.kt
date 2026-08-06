@@ -204,10 +204,24 @@ class DesktopState(
     /** Phone actions that make sense for this item — empty kinds means any kind.
      *  #316: объявленное телефоном как недоступное кнопкой на ПК не становится — симметрия
      *  того же признака, каким компьютер объясняет своё «не сейчас» телефону. */
-    fun phoneActionsFor(item: InboxItem): List<com.point.core.flow.PcRemoteAction> =
-        _phoneCaps.value.filter {
-            it.unavailable == null && (it.kinds.isEmpty() || item.obj.state.kind.name in it.kinds)
+    fun phoneActionsFor(item: InboxItem): List<com.point.core.flow.PcRemoteAction> {
+        val mine = registry.all().map { it.id.value }.toSet()
+        val has = item.obj.state.features.map { it.name }.toSet()
+        return _phoneCaps.value.filter { action ->
+            action.unavailable == null &&
+                // Вид объекта — как и было.
+                (action.kinds.isEmpty() || item.obj.state.kind.name in action.kinds) &&
+                // Признак объекта (#597). «Позвонить» живёт телефонным номером внутри объекта, и
+                // предлагать его снимку — это строка, которая откажет. Компьютер признаков не
+                // выставляет вовсе, поэтому признаковые действия здесь и не появятся: это верно,
+                // а не досадно — понимать объект должен тот, кто может.
+                (action.features.isEmpty() || action.features.any { it in has }) &&
+                // Намерение, которое мы умеем сами, вторым не показывается (И1, И2). Иначе рядом
+                // встают «Распознать текст» и «Распознать текст на ПК» — то есть человеку
+                // предлагают выбрать устройство.
+                action.id !in mine
         }
+    }
 
     /** «<действие> · телефон» (#161 v2): queue the object with the intent riding its metadata. */
     fun sendToPhone(item: InboxItem, action: com.point.core.flow.PcRemoteAction) {

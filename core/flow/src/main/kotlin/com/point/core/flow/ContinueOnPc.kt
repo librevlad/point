@@ -92,6 +92,17 @@ data class PcRemoteAction(
      * доходит не каждое), а какие именно доходят, телефон знать не мог.
      */
     val leavesCircle: Boolean = false,
+    /**
+     * Какие признаки объекта нужны этому действию — «любой из перечисленных» (#597).
+     *
+     * Пустое множество: действие смотрит только на вид объекта. Непустое: действие живёт признаком
+     * — «Позвонить» нужен телефонный номер в объекте, «Написать письмо» — почта.
+     *
+     * Без этого поля признаковое измерение схлопывалось: «Позвонить» принимает объект с номером —
+     * значит принимает пробу каждого вида — значит объявлялось принимающим **любой** объект. На
+     * экране компьютера из-за этого стояло 32 строки на картинку, из них десять бессмысленных.
+     */
+    val features: Set<String> = emptySet(),
 )
 
 /**
@@ -110,23 +121,18 @@ fun encodePcCaps(caps: List<PcRemoteAction>): String =
         val label = oneLine(action.label)
         val kinds = action.kinds.joinToString(",")
         val why = action.unavailable
-        // Признак «увезёт из круга» едет ЧЕТВЁРТЫМ полем — одинаково у доступных и недоступных.
-        // Третье у доступного действия не занято, но занимать его значило бы сделать одно и то же
-        // поле причиной в одной строке и признаком в другой. Старый разбор берёт поля по индексу и
-        // лишнее молча игнорирует, поэтому старый телефон ведёт себя как раньше (ворота 10).
-        val out = if (action.leavesCircle) "\tout" else ""
-        when {
-            // Без признака строка та же, что была, байт в байт: у старой стороны ничего не
-            // меняется, пока компьютер не скажет о себе новое.
-            why == null && kinds.isEmpty() && out.isEmpty() -> "${action.id}=$label"
-            why == null && out.isEmpty() -> "${action.id}=$label\t$kinds"
-            // Третье поле у доступного пустое: причиной оно бывает только у недоступного, и одно
-            // и то же место не должно значить в разных строках разное.
-            why == null -> "${action.id}=$label\t$kinds\t$out"
-            // Недоступное — всегда три поля: причина последняя, поэтому пустой гейт видов
-            // не делает строку двусмысленной.
-            else -> "$PC_CAP_UNAVAILABLE${action.id}=$label\t$kinds\t${oneLine(why)}$out"
-        }
+        // Поля строки по порядку: имя · виды · причина недоступности · «увезёт из круга» · какие
+        // признаки нужны. Каждое следующее дописано позже предыдущего, и старая сторона берёт
+        // поля по индексу, а лишнее молча игнорирует (ворота 10). Поэтому хвост строится с
+        // конца: пустые поля отбрасываются, и строка без новостей остаётся байт в байт прежней.
+        val fields = listOf(
+            kinds,
+            why?.let(::oneLine).orEmpty(),
+            if (action.leavesCircle) "out" else "",
+            action.features.sorted().joinToString(","),
+        ).dropLastWhile(String::isEmpty)
+        val head = if (why == null) action.id else PC_CAP_UNAVAILABLE + action.id
+        if (fields.isEmpty()) "$head=$label" else "$head=$label\t" + fields.joinToString("\t")
     }
 
 fun decodePcCaps(encoded: String): List<PcRemoteAction> =
@@ -143,7 +149,9 @@ fun decodePcCaps(encoded: String): List<PcRemoteAction> =
             .mapNotNull { it.trim().takeIf(String::isNotEmpty) }.toSet()
         val why = if (unavailableLine) fields.getOrElse(2) { "" }.trim() else null
         val leaves = fields.getOrElse(3) { "" }.trim() == "out"
-        if (id.isEmpty() || label.isEmpty()) null else PcRemoteAction(id, label, kinds, why, leaves)
+        val needs = fields.getOrElse(4) { "" }.split(',')
+            .mapNotNull { it.trim().takeIf(String::isNotEmpty) }.toSet()
+        if (id.isEmpty() || label.isEmpty()) null else PcRemoteAction(id, label, kinds, why, leaves, needs)
     }.toList()
 
 /** Метка недоступного действия в начале строки (#316) — см. [encodePcCaps]. */
