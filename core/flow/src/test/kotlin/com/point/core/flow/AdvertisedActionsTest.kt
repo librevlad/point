@@ -85,4 +85,32 @@ class AdvertisedActionsTest {
 
         assertEquals(listOf("c", "a", "b"), advertisedActions(caps).map { it.id })
     }
+
+    @Test fun `действие, живущее признаком, объявляет свой признак`() {
+        // Проверка ПРОИЗВОДИТЕЛЯ, а не потребителя. В #597 я проверил только вторую половину —
+        // что компьютер отбрасывает признаковые действия, — и не проверил первую: что телефон
+        // вообще присылает условие признака. Живой прогон 06.08.2026 это и поймал: компьютер
+        // по-прежнему предлагал «Позвонить» на документе, потому что в объявлении признака не было.
+        val caps = listOf(Cap("call", { it.has(com.point.core.model.Feature.HAS_PHONE) }))
+
+        val advertised = advertisedActions(caps).single()
+
+        assertEquals(setOf("HAS_PHONE"), advertised.features)
+    }
+
+    @Test fun `действие по виду объекта признаков не требует`() {
+        val advertised = advertisedActions(listOf(Cap("scan", { it.kind == ObjectKind.IMAGE }))).single()
+
+        assertEquals(emptySet<String>(), advertised.features)
+    }
+
+    @Test fun `условие признака переживает дорогу до второй поверхности`() {
+        // Кодек — то место, где условие теряется молча: строка едет текстом, и лишнее поле
+        // старая сторона игнорирует. Своё же поле обязано доехать.
+        val caps = listOf(Cap("email", { it.has(com.point.core.model.Feature.HAS_EMAIL) }))
+
+        val there = decodePcCaps(encodePcCaps(advertisedActions(caps))).single()
+
+        assertEquals(setOf("HAS_EMAIL"), there.features)
+    }
 }
