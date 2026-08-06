@@ -232,8 +232,21 @@ class DesktopState(
             runCatching {
                 outbox?.add(item.obj.copy(metadata = item.obj.metadata + ("pc.action" to action.id)))
             }.onSuccess {
-                _message.value = "${action.label} — заберите на телефоне (плашка на главном экране)"
-                note(item, action.id, "${action.label} · на телефон", ActionResult.Done("отправлено на телефон"))
+                // Просьба ЖДЁТ телефона, а не «выполнена» (#611, срез 5). Фоновой работы у
+                // телефона нет и не будет — она стоит батареи и означала бы, что Point работает,
+                // пока человек на него не смотрит. Значит просьба лежит в его почте и исполнится,
+                // когда человек откроет Point; врать про «готово» до этого нельзя.
+                //
+                // Молчащий телефон назван отдельно: ждать можно минуту, а можно до вечера, и это
+                // разные вещи. Устройство появляется на экране ровно там, где меняет ожидание.
+                val silent = com.point.core.flow.linkStateOf(_lastContact.value, clock.now()) !is
+                    com.point.core.flow.LinkState.Live
+                _message.value = if (silent) {
+                    "${action.label} — ждёт телефона: он сейчас не на связи"
+                } else {
+                    "${action.label} — ждёт телефона"
+                }
+                note(item, action.id, "${action.label} · ждёт телефона", ActionResult.Done("ждёт телефона"))
             }.onFailure {
                 _message.value = "Не удалось положить в очередь"
                 note(
