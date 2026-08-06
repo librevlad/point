@@ -96,18 +96,41 @@ class DesktopState(
         }
 
     /** Одна работа на оба пути: экран компьютера и его журнал обновляются одинаково. */
-    private suspend fun perform(id: String, item: InboxItem): ActionResult? {
+    private suspend fun perform(id: String, item: InboxItem, stationTitle: String? = null): ActionResult? {
         val result = runCatching {
             resolver.realizerFor(com.point.core.model.CapabilityId(id)).perform(item.obj, null)
         }.getOrElse { ActionResult.Failure(it.message ?: "не получилось", recoverable = true) }
+        // Результат становится ОБЪЕКТОМ здесь же (#595). Пока этого не было, работа на компьютере
+        // обрывалась после первого действия: «Сделать легче» отдавало сжатый снимок, а на экране
+        // оставался исходный — и следующее действие применялось к нему. Журнал владельца поймал
+        // это дословно: «Сделать легче → 124 КБ», затем «Прочитать в облаке → снимок 1 МБ,
+        // сначала Сделать легче».
+        //
+        // Формула продукта одна на оба устройства: Object → Action → Object. На телефоне
+        // последняя стрелка была всегда, на компьютере её не было вовсе.
+        if (result is ActionResult.Success) {
+            val born = runCatching { reopenPath(result.result.uri.value) }.getOrNull()
+            if (born != null) {
+                val named = result.result.metadata["name"]
+                val item2 = if (named.isNullOrBlank()) {
+                    born
+                } else {
+                    born.copy(obj = born.obj.copy(metadata = born.obj.metadata + ("name" to named)))
+                }
+                onReceived(item2, ObjectSource.LOCAL)
+            }
+        }
         _message.value = when (result) {
             is ActionResult.Done -> result.message
             is ActionResult.Failure -> result.reason
+            is ActionResult.Success -> result.result.metadata["name"] ?: "Готово"
             else -> _message.value
         }
         // Тап был на телефоне, а работа шла здесь — иначе, вернувшись к компьютеру, человек
         // не поймёт, откуда взялся результат. Поэтому в пути станция названа с автором (#407).
-        note(item, id, "${titleOf(id, item)} · с телефона", result)
+        // Автор станции важен: вернувшись к компьютеру, человек должен понимать, откуда взялся
+        // результат. Тап здесь — просто название; просьба с телефона — с пометкой (#407).
+        note(item, id, stationTitle ?: (titleOf(id, item) + " · с телефона"), result)
         return result
     }
 
@@ -159,17 +182,15 @@ class DesktopState(
         }
     }
 
+    /**
+     * Тап по действию на самом компьютере.
+     *
+     * Идёт тем же [perform], что и просьба с телефона (#595). Раньше это были ДВА разных пути с
+     * почти одинаковым кодом, и результат действия игнорировался в обоих — но чинить пришлось бы
+     * дважды, и второй раз про это забыли бы. Одна работа — одно место.
+     */
     fun onBubble(item: InboxItem, bubble: Bubble) {
-        scope.launch(Dispatchers.IO) {
-            val result = runCatching { resolver.realizerFor(bubble.capabilityId).perform(item.obj, null) }
-                .getOrElse { ActionResult.Failure(it.message ?: "Ошибка", recoverable = true) }
-            _message.value = when (result) {
-                is ActionResult.Done -> result.message
-                is ActionResult.Failure -> result.reason
-                else -> null
-            }
-            note(item, bubble.capabilityId.value, bubble.title, result)
-        }
+        scope.launch(Dispatchers.IO) { perform(bubble.capabilityId.value, item, bubble.title) }
     }
 
     /**

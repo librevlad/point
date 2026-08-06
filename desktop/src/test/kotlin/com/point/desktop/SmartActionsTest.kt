@@ -45,21 +45,23 @@ class SmartActionsTest {
 
     // --- Найти в тексте ---------------------------------------------------------------------
 
-    @Test fun `находки складываются в объект, который можно забрать на телефон`() = runTest {
-        val box = outbox()
-        val realizer = PcEntitiesRealizer(com.point.core.flow.RegexEntityExtractor(), box)
+    @Test fun `находки становятся объектом, с которым можно работать дальше`() = runTest {
+        // Результат остаётся ЗДЕСЬ (#595): человек, начавший работу на компьютере, продолжает её
+        // на компьютере. Раньше находки уезжали письмом на телефон, а на экране оставался
+        // исходный текст — и следующее действие применялось к нему.
+        val realizer = PcEntitiesRealizer(com.point.core.flow.RegexEntityExtractor(), outbox())
 
         val result = realizer.perform(
             textObject("Ирина, +7 916 123-45-67, irina@example.com, оплата 48500 руб."),
             null,
         )
 
-        assertTrue("действие не дошло до конца: $result", result is ActionResult.Done)
-        val produced = box.entries().single()
-        val report = box.file(produced.id)!!.readText()
-        assertTrue("в отчёте нет телефона:\n$report", report.contains("+7 916 123-45-67"))
-        assertTrue("в отчёте нет почты:\n$report", report.contains("irina@example.com"))
-        assertEquals("Найдено в тексте", produced.meta["name"])
+        assertTrue("действие не вернуло объект: $result", result is ActionResult.Success)
+        val born = (result as ActionResult.Success).result
+        val report = File(born.uri.value).readText()
+        assertTrue("в отчёте нет телефона", report.contains("+7 916 123-45-67"))
+        assertTrue("в отчёте нет почты", report.contains("irina@example.com"))
+        assertTrue("объект без человеческого имени", born.metadata["name"].orEmpty().startsWith("Найдено"))
     }
 
     @Test fun `ничего не нашлось — сказано словами, а не пустым файлом`() = runTest {
@@ -123,10 +125,10 @@ class SmartActionsTest {
 
         val result = realizer.perform(textObject("some english text"), null)
 
-        assertTrue(result is ActionResult.Done)
-        val produced = box.entries().single()
-        assertEquals("Перевод", produced.meta["name"])
-        assertEquals("перевод", box.file(produced.id)!!.readText())
+        assertTrue("ответ модели не стал объектом: $result", result is ActionResult.Success)
+        val born = (result as ActionResult.Success).result
+        assertEquals("Перевод", born.metadata["name"])
+        assertEquals("перевод", File(born.uri.value).readText())
     }
 
     @Test fun `сервис отказал — человек читает слова, а не хвост исключения`() = runTest {
@@ -153,10 +155,10 @@ class SmartActionsTest {
 
         val result = PcQrRealizer(box).perform(textObject("https://point.leerio.app/d/abc123"), null)
 
-        assertTrue("QR не собрался: $result", result is ActionResult.Done)
-        val produced = box.entries().single()
-        assertEquals("image/png", produced.meta["mime"])
-        val image = javax.imageio.ImageIO.read(box.file(produced.id)!!)
+        assertTrue("QR не собрался: $result", result is ActionResult.Success)
+        val born = (result as ActionResult.Success).result
+        assertEquals("image/png", born.mime)
+        val image = javax.imageio.ImageIO.read(File(born.uri.value))
         assertTrue("картинка пустая", image.width > 100 && image.width == image.height)
     }
 
@@ -227,9 +229,8 @@ class SmartActionsTest {
 
         val result = PcShrinkImageRealizer(box).perform(source, null)
 
-        assertTrue("не уменьшилось: $result", result is ActionResult.Done)
-        val produced = box.entries().single()
-        val out = box.file(produced.id)!!
+        assertTrue("не уменьшилось: $result", result is ActionResult.Success)
+        val out = File((result as ActionResult.Success).result.uri.value)
         assertTrue("файл не стал легче", out.length() < File(source.uri.value).length())
         val image = javax.imageio.ImageIO.read(out)
         assertEquals("длинная сторона не приведена к пределу", 1920, image.width)
@@ -238,10 +239,10 @@ class SmartActionsTest {
     @Test fun `прозрачность не теряется — такая картинка остаётся PNG`() = runTest {
         val box = outbox()
 
-        PcShrinkImageRealizer(box).perform(imageObject(2400, 1200, alpha = true), null)
+        val result = PcShrinkImageRealizer(box).perform(imageObject(2400, 1200, alpha = true), null)
 
         // JPEG прозрачности не знает: превратив в него логотип, Point залил бы фон чёрным.
-        assertEquals("image/png", box.entries().single().meta["mime"])
+        assertEquals("image/png", (result as ActionResult.Success).result.mime)
     }
 
     @Test fun `и без того лёгкая картинка не переделывается зря`() = runTest {
