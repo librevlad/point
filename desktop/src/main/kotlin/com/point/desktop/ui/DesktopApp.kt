@@ -37,6 +37,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draganddrop.DragAndDropEvent
 import androidx.compose.ui.input.key.isCtrlPressed
@@ -83,6 +84,10 @@ fun DesktopApp(
      * видит объекты предыдущего и открывает их одним тапом.
      */
     onWipe: () -> Unit = {},
+    /** Настройки записаны (#593): имя компьютера, ключи, адрес сервера. */
+    onSaveSettings: (PcConfig) -> Unit = {},
+    /** «Убрать прямо сейчас» из настроек — та же уборка, что идёт при запуске (#602). */
+    onSweepNow: () -> Unit = {},
 ) {
     val items by state.items.collectAsState()
     val message by state.message.collectAsState()
@@ -113,6 +118,9 @@ fun DesktopApp(
     }
 
     var showDevices by remember { mutableStateOf(false) }
+    // Настройки — своя дверь (#593). Круг устройств рядом, но это не настройка, а состояние.
+    var showSettings by remember { mutableStateOf(false) }
+    var settings by remember { mutableStateOf(config) }
     val signIn by account.signIn.collectAsState()
     val circle by account.circle.collectAsState()
     val accountBusy by account.busy.collectAsState()
@@ -202,7 +210,15 @@ fun DesktopApp(
                     )
                 }
                 Spacer(Modifier.weight(1f))
-                ConnectionChip(config, onShowDevices = { showDevices = true })
+                ConnectionChip(settings, onShowDevices = { showDevices = true })
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    "Настройки",
+                    style = PointType.small.copy(color = PointColors.muted),
+                    modifier = Modifier.clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
+                        .clickable { showSettings = true }
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                )
             }
             Spacer(Modifier.height(1.dp).fillMaxWidth().background(PointColors.border))
             Column(Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 12.dp)) {
@@ -274,6 +290,22 @@ fun DesktopApp(
             }
             }
         }
+    }
+
+    if (showSettings) {
+        AlertDialog(
+            onDismissRequest = { showSettings = false },
+            title = { Text("Point для ПК") },
+            text = {
+                SettingsScreen(
+                    config = settings,
+                    onSave = { changed -> settings = changed; onSaveSettings(changed) },
+                    onSweepNow = onSweepNow,
+                    onClose = { showSettings = false },
+                )
+            },
+            confirmButton = { TextButton(onClick = { showSettings = false }) { Text("Готово") } },
+        )
     }
 
     if (showDevices) {
