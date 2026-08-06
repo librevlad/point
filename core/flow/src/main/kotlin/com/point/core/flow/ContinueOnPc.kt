@@ -236,3 +236,43 @@ fun decodePcOutbox(encoded: String): List<PcOutboxEntry> =
         }.getOrNull() ?: return@mapNotNull null
         PcOutboxEntry(id, meta)
     }.toList()
+
+/**
+ * Что компьютер вернул, выполнив заказанное действие.
+ *
+ * До этого он возвращал только слово: «готово» или «не вышло». Объект оставался у него, и человек,
+ * попросивший с телефона распознать снимок, шёл за текстом к компьютеру. Формула продукта одна на
+ * оба устройства — объект, действие, снова объект, — и последней части здесь не было.
+ *
+ * Понимание возвращается вместе с байтами: заказчик кладёт его в метаданные нового объекта, и тот
+ * приходит уже разобранным, а не голым файлом.
+ */
+class PcReturned(
+    val name: String,
+    val mime: String,
+    val bytes: ByteArray,
+    val understanding: Map<String, String> = emptyMap(),
+)
+
+/**
+ * Имена полей ответа, когда возвращается объект.
+ *
+ * Отдельные имена, а не переиспользование `name`/`mime` из запроса: в одном письме едут и то, что
+ * прислали, и то, что вернули, и одинаковые имена однажды слиплись бы.
+ */
+object PcResultFields {
+    const val NAME = "result.name"
+    const val MIME = "result.mime"
+    const val OUTCOME = "result.outcome"
+    const val DETAIL = "result.detail"
+
+    /** Понимание возвращённого объекта: остальные поля меты с этой приставкой. */
+    const val UNDERSTOOD = "result.understood."
+
+    const val DONE = "done"
+    const val FAILED = "failed"
+
+    /** Есть ли в этом ответе объект, а не только слово. */
+    fun hasObject(meta: Map<String, String>): Boolean = !meta[NAME].isNullOrBlank()
+}
+
