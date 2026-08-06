@@ -133,6 +133,17 @@ interface PcTransport {
     /** Advertise the phone's own actions to the PC (#161 v2) — its cards grow
      *  «… · телефон» buttons. Quiet best-effort. */
     suspend fun pushPhoneCaps(pc: LinkedPc, caps: List<PcRemoteAction>): Boolean
+
+    /**
+     * Обменяться ключами сервисов со своим компьютером (#589).
+     *
+     * Не «отправить», а **обменяться**: в письме едут наши ключи, в ответе приезжают его. Один
+     * раунд выравнивает оба устройства, и не нужно решать, кто главный.
+     *
+     * `null` — не дозвонились; тогда ключи остаются как были, и попробуем в следующий раз. Работа
+     * молчаливая: человек её не заказывал, и рассказывать ему про неё нечего.
+     */
+    suspend fun exchangeSecrets(pc: LinkedPc, mine: SharedSecrets): SharedSecrets?
 }
 
 /** Cached remote actions of the linked PC — warm sync read for capability synthesis

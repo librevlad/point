@@ -38,7 +38,9 @@ class RemotePcCapability(
     override val icon = "pc"
     // Между своими устройствами, запечатанно: network=false НАМЕРЕННО (та же причина, что у
     // «На компьютер»).
-    override val meta = CapabilityMeta(priority = 76, latency = Latency.FAST)
+    // `localOnly`: это и есть действия ЧУЖОГО устройства — объявлять их обратно значит
+    // отправить объект по кругу (#588).
+    override val meta = CapabilityMeta(priority = 76, latency = Latency.FAST, localOnly = true)
     override fun label(state: ObjectState) = action.label
     override fun accepts(state: ObjectState) =
         action.unavailable == null && fitsThisObject(state)

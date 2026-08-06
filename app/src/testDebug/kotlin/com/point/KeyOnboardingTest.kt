@@ -149,7 +149,14 @@ class KeyOnboardingTest {
         compose.onAllNodes(hasSetTextAction()).onFirst().performScrollTo().performTextInput("sk-набранный")
         compose.onNodeWithText("Проверить и включить").performScrollTo().performClick()
 
-        assertEquals(UserAiConfig("sk-набранный", "https://api.example/v1", "модель"), checked)
+        // Метка времени сравнивается отдельно: она ставится в момент набора и потому не может
+        // быть известна заранее. Нужна она для одного — решить спор, когда ключ есть и на
+        // телефоне, и на компьютере и они разные (#589).
+        assertEquals(
+            UserAiConfig("sk-набранный", "https://api.example/v1", "модель"),
+            checked?.copy(savedAt = 0L),
+        )
+        assertTrue("ключ сохранён без метки времени", (checked?.savedAt ?: 0L) > 0L)
     }
 
     @Test fun `без ключа проверять нечего — кнопка погашена`() {

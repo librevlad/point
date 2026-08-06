@@ -33,6 +33,8 @@ class DefaultCapabilityRegistry @Inject constructor(
 
     private val byIdMap: Map<CapabilityId, Capability> = capabilities.associateBy { it.id }
 
+    override fun all(): Collection<Capability> = capabilities
+
     // #528: пузырёк — это «принимает объект» И «есть чем выполнить». Раньше спрашивалась одна
     // половина, и действие, которого на этом телефоне нет, обещало себя наравне с работающими:
     // цену обещания человек узнавал тапом. Вторая половина не приводит сюда реализацию — только

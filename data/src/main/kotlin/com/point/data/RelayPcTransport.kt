@@ -78,6 +78,13 @@ class RelayPcTransport(
     override suspend fun pushPhoneCaps(pc: LinkedPc, caps: List<PcRemoteAction>): Boolean =
         answer(pc, RelayRpc.PHONE_CAPS, body = encodePcCaps(caps).toByteArray(Charsets.UTF_8)) != null
 
+    override suspend fun exchangeSecrets(
+        pc: LinkedPc,
+        mine: com.point.core.flow.SharedSecrets,
+    ): com.point.core.flow.SharedSecrets? =
+        answer(pc, RelayRpc.SECRETS, body = mine.encode().toByteArray(Charsets.UTF_8))
+            ?.let { com.point.core.flow.SharedSecrets.decode(text(it)) }
+
     /**
      * Ответ или `null`.
      *

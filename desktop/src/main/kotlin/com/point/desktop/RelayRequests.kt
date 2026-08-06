@@ -33,6 +33,13 @@ class RelayRequests(
      * исход. `null` — «исход неизвестен», и телефон скажет «Отправлено», а не «готово» (#114).
      */
     private val onObject: (name: String, mime: String, meta: Map<String, String>, bytes: ByteArray, action: String?) -> PcActionOutcome?,
+    /**
+     * Обмен ключами сервисов (#589): приехали ключи телефона — слить со своими и вернуть общие.
+     *
+     * Обмен, а не приём: ответ уезжает обратно, и телефон получает то, что вписано здесь. Один
+     * раунд выравнивает оба устройства.
+     */
+    private val onSecrets: (com.point.core.flow.SharedSecrets) -> com.point.core.flow.SharedSecrets = { it },
     private val log: (String) -> Unit = {},
 ) {
 
@@ -76,6 +83,13 @@ class RelayRequests(
         RelayRpc.ACK -> {
             meta["id"]?.toIntOrNull()?.let { runCatching { outbox.remove(it) } }
             Reply()
+        }
+
+        RelayRpc.SECRETS -> {
+            // Ключи в журнал не пишутся ни при какой погоде: сюда смотрят чужими глазами.
+            val theirs = com.point.core.flow.SharedSecrets.decode(String(bytes, Charsets.UTF_8))
+            val merged = runCatching { onSecrets(theirs) }.getOrDefault(theirs)
+            Reply(body = merged.encode().toByteArray(Charsets.UTF_8))
         }
 
         RelayRpc.PHONE_CAPS -> {

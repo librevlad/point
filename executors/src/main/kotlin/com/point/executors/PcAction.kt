@@ -32,7 +32,8 @@ class PcCapability @Inject constructor(
 ) : Capability {
     override val id = ID
     override val icon = "pc"
-    override val meta = CapabilityMeta(priority = 75, latency = Latency.FAST)
+    // `localOnly`: «на компьютер» с компьютера — это круг сам в себя (#588).
+    override val meta = CapabilityMeta(priority = 75, latency = Latency.FAST, localOnly = true)
     override fun label(state: ObjectState) = "На компьютер"
     override fun accepts(state: ObjectState) =
         state.kind.isFileBacked && links.current() != null

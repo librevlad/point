@@ -876,7 +876,8 @@ private class KeyDraft(config: UserAiConfig) {
     var advancedOpen by mutableStateOf(false)
 
     /** Ровно то, что уйдёт на проверку или в хранилище. */
-    fun entered() = UserAiConfig(key.trim(), baseUrl.trim(), model.trim())
+    /** Метка ставится в момент, когда человек вписал ключ, — она и решает споры между устройствами (#589). */
+    fun entered() = UserAiConfig(key.trim(), baseUrl.trim(), model.trim(), savedAt = System.currentTimeMillis())
 
     /** Лежит ли набранное на устройстве — или человек его только что вписал и ещё не сохранил. */
     fun savedIn(config: UserAiConfig) = key.trim() == config.apiKey.trim() && key.isNotBlank()

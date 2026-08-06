@@ -19,6 +19,8 @@ class BotRegistry(private val capabilities: Set<Capability>) : CapabilityRegistr
             .sortedWith(compareBy({ it.meta.priority }, { it.id.value }))
             .map { Bubble(it.icon, it.label(state), it.id, it.produces(state) ?: state) }
 
+    override fun all(): Collection<Capability> = capabilities
+
     override fun intentsFor(state: ObjectState): List<Intent> = emptyList()
     override fun latentBubblesFor(state: ObjectState): List<LatentBubble> = emptyList()
     override fun byId(id: CapabilityId): Capability = capabilities.first { it.id == id }

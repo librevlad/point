@@ -46,6 +46,10 @@ class PcActionTest {
         override suspend fun downloadOutboxFile(pc: LinkedPc, id: Int, targetPath: String): Boolean = false
         override suspend fun ackOutbox(pc: LinkedPc, id: Int) {}
         override suspend fun pushPhoneCaps(pc: LinkedPc, caps: List<com.point.core.flow.PcRemoteAction>): Boolean = true
+        override suspend fun exchangeSecrets(
+            pc: LinkedPc,
+            mine: com.point.core.flow.SharedSecrets,
+        ): com.point.core.flow.SharedSecrets? = null
     }
 
     private val linked = LinkedPc("d-pc", "Домашний ПК", "ключ")

@@ -39,6 +39,7 @@ class DefaultEnrichmentTest {
     /** A registry whose graph is driven by a lambda — enough for the gate. */
     private fun registry(bubbles: (ObjectState) -> List<Bubble>) = object : CapabilityRegistry {
         override fun bubblesFor(state: ObjectState) = bubbles(state)
+        override fun all() = emptyList<com.point.core.flow.Capability>()
         override fun intentsFor(state: ObjectState) = emptyList<Intent>()
         override fun latentBubblesFor(state: ObjectState) = emptyList<LatentBubble>()
         override fun byId(id: CapabilityId) = throw UnsupportedOperationException()
