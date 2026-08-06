@@ -301,7 +301,7 @@ class PcPrintRealizer(private val printer: Printer) : Realizer {
             // умолчанию, потому что диалог там повиснет и задание не уйдёт вовсе (#591).
             if (com.point.core.flow.askedHere()) {
                 if (!printer.printAsking(File(input.uri.value))) {
-                    return@runCatching ActionResult.Failure("Печать отменена", recoverable = true)
+                    return@runCatching ActionResult.Failure("Печать отменена — задание не ушло", recoverable = true)
                 }
             } else {
                 printer.print(File(input.uri.value))

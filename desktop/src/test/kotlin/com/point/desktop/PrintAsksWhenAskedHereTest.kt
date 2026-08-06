@@ -80,7 +80,7 @@ class PrintAsksWhenAskedHereTest {
         }
 
         assertTrue(result is ActionResult.Failure)
-        assertEquals("Печать отменена", (result as ActionResult.Failure).reason)
+        assertEquals("Печать отменена — задание не ушло", (result as ActionResult.Failure).reason)
         assertTrue("после отмены всё равно напечатали", !printer.printedSilently)
     }
 }

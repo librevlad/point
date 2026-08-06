@@ -78,3 +78,15 @@ compose.desktop {
         }
     }
 }
+
+// Образец сглаживания шрифтов (#590): варианты рядом на одном экране, чтобы владелец выбрал
+// глазами. Живёт в тестовых исходниках — в раздаваемую сборку не попадает.
+//
+//   ./gradlew :desktop:fontSample
+tasks.register<JavaExec>("fontSample") {
+    group = "verification"
+    description = "Показывает варианты сглаживания шрифтов рядом (#590)"
+    mainClass.set("com.point.desktop.FontSampleKt")
+    classpath = sourceSets["test"].runtimeClasspath
+}
+
