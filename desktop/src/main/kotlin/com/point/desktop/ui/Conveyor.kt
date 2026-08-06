@@ -102,7 +102,11 @@ private fun Source(item: InboxItem) {
             }
         }
 
-        val facts = item.obj.metadata.filterKeys { it.startsWith("entity.") }
+        // Только то, что человек назвал бы фактом (#594). Разбор пишет рядом со значением ещё и
+        // свои следы — чем прочитано (`.src = ocr`), чем подтверждено (`.ev = semantic`), в какой
+        // валюте (`.currency`). Это улики для нас, а не сведения для человека: на экране они
+        // читались как «Amount.src · ocr» — жаргон вместо ответа.
+        val facts = item.obj.metadata.filterKeys { it.startsWith("entity.") && isPlainFact(it) }
         if (facts.isNotEmpty()) {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text("ПОНЯЛ", style = PointType.label.copy(color = PointColors.cyan))
@@ -259,6 +263,16 @@ private fun kindLabel(kind: ObjectKind): String = when (kind) {
     ObjectKind.COLLECTION -> "Набор"
     else -> "Файл"
 }
+
+/**
+ * Факт ли это для человека, или служебный след разбора (#594).
+ *
+ * Факт — `entity.amount`. След — `entity.amount.src`, `entity.amount.ev`, `entity.amount.currency`:
+ * у них внутри имени есть вторая точка. Проверка по форме, а не по списку суффиксов: список
+ * пришлось бы дописывать при каждом новом следе, и однажды его бы забыли — ровно так этот и
+ * попал на экран.
+ */
+private fun isPlainFact(key: String): Boolean = !key.removePrefix("entity.").contains('.')
 
 private fun factName(key: String): String = when (key.removePrefix("entity.")) {
     "phone" -> "Телефон"
