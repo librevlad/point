@@ -63,7 +63,7 @@ class PcShrinkImageRealizer(private val outbox: Outbox) : Realizer {
                     ),
                 )
             }.getOrElse {
-                ActionResult.Failure(it.message ?: "Не удалось уменьшить картинку", recoverable = true)
+                ActionResult.Failure("Уменьшить не вышло — этот формат картинки компьютер не открывает", recoverable = true)
             }
         }
 

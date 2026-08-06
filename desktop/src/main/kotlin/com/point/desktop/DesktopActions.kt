@@ -50,7 +50,7 @@ class PcOpenRealizer(private val opener: SystemOpener) : Realizer {
         runCatching {
             opener.open(File(input.uri.value))
             ActionResult.Done("Открыто")
-        }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось открыть", recoverable = true) }
+        }.getOrElse { ActionResult.Failure("Открыть нечем: у этого файла нет программы по умолчанию", recoverable = true) }
 }
 
 class PcRevealCapability : Capability {
@@ -68,7 +68,7 @@ class PcRevealRealizer(private val revealer: FileRevealer) : Realizer {
         runCatching {
             revealer.reveal(File(input.uri.value))
             ActionResult.Done("Папка открыта")
-        }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось показать", recoverable = true) }
+        }.getOrElse { ActionResult.Failure("Проводник не открылся — файл лежит в папке Point", recoverable = true) }
 }
 
 class PcCopyCapability : Capability {
@@ -117,7 +117,7 @@ class PcCopyRealizer(
                 clipboard.copy(file.readText())
                 ActionResult.Done("Скопировано в буфер")
             }
-        }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось скопировать", recoverable = true) }
+        }.getOrElse { ActionResult.Failure("Скопировать не вышло — попробуйте ещё раз", recoverable = true) }
 }
 
 class PcSaveAsCapability : Capability {
@@ -136,7 +136,7 @@ class PcSaveAsRealizer(private val target: SaveTarget) : Realizer {
             val saved = target.pickAndSave(File(input.uri.value))
                 ?: return ActionResult.Done("Отменено")
             ActionResult.Done("Сохранено: $saved")
-        }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось сохранить", recoverable = true) }
+        }.getOrElse { ActionResult.Failure("Сохранить не вышло — выберите другую папку", recoverable = true) }
 }
 
 /** yt-dlp behind a seam (#80 v2): availability decides whether «Скачать видео» is
@@ -179,7 +179,7 @@ class PcDownloadRealizer(private val downloader: VideoDownloader) : Realizer {
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult {
         val url = runCatching { File(input.uri.value).readText() }.getOrDefault("")
             .lineSequence().map(String::trim).firstOrNull { it.startsWith("http://") || it.startsWith("https://") }
-            ?: return ActionResult.Failure("В объекте нет ссылки", recoverable = true)
+            ?: return ActionResult.Failure("Здесь нет ссылки — скачивать нечего", recoverable = true)
         return if (downloader.start(url)) {
             ActionResult.Done("Скачиваю: $url")
         } else {
@@ -206,7 +206,7 @@ class PcToPhoneRealizer(private val outbox: Outbox) : Realizer {
         runCatching {
             outbox.add(input)
             ActionResult.Done("Заберите на телефоне — плашка на главном экране")
-        }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось положить в очередь", recoverable = true) }
+        }.getOrElse { ActionResult.Failure("Не удалось отправить — проверьте, что на диске есть место", recoverable = true) }
 }
 
 
@@ -254,7 +254,7 @@ class PcOfficePdfRealizer(
                 ),
             )
             ActionResult.Done("PDF собран на компьютере — заберите на телефоне")
-        }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось собрать PDF", recoverable = true) }
+        }.getOrElse { ActionResult.Failure("PDF не собрался — закройте документ, если он открыт в Office, и повторите", recoverable = true) }
 }
 
 /**
@@ -290,6 +290,8 @@ class PcPrintRealizer(private val printer: Printer) : Realizer {
             // Мы знаем ровно одно: задание ушло в очередь этого принтера. Включён ли он, есть
             // ли бумага — нам отсюда не видно, и обещать «напечатано» значило бы отчитаться за
             // чужую машину. Человек уйдёт в другую комнату — пусть уходит с правдой.
-            ActionResult.Done("В очереди «$target» · проверьте принтер")
-        }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось напечатать", recoverable = true) }
+            // Что произошло, а не в каком состоянии очередь (#596): «в очереди» человек читал как
+            // «может быть». Задание ушло — это факт; напечаталось ли, отсюда не видно.
+            ActionResult.Done("Отправлено на печать · $target")
+        }.getOrElse { ActionResult.Failure("Напечатать не вышло — проверьте, что принтер включён", recoverable = true) }
 }

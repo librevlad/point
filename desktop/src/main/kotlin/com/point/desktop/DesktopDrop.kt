@@ -103,5 +103,5 @@ class PcDropRealizer(
             )
         clipboard.copy(link)
         ActionResult.Done("Ссылка в буфере — живёт сутки")
-    }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось выдать ссылку", recoverable = true) }
+    }.getOrElse { ActionResult.Failure("Ссылка не выдалась — проверьте интернет и повторите", recoverable = true) }
 }
