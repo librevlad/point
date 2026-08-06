@@ -89,6 +89,16 @@ class RemotePcRealizer(
 ) : Realizer {
     override val capabilityId = RemotePcCapability.idFor(action)
 
+    /**
+     * Между своими устройствами объект едет запечатанным — это `LOCAL`, и согласия не требует
+     * (контракт 06.08.2026, граница молчаливого выбора). Но если компьютер сказал, что ЕГО
+     * реализация увезёт объект к чужому сервису, то путь облачный — и согласие спросит телефон,
+     * до отправки, там, где человек.
+     */
+    override val meta = com.point.core.flow.RealizerMeta(
+        kind = if (action.leavesCircle) com.point.core.flow.RealizerKind.CLOUD else com.point.core.flow.RealizerKind.LOCAL,
+    )
+
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult {
         // #316: недоступное не отправляется никогда — даже если до реализатора добрались в
         // обход экрана (сохранённая цепочка, устаревший кэш действий ПК). Объект остаётся

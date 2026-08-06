@@ -33,8 +33,29 @@ class DesktopRegistry(private val capabilities: Set<Capability>) : CapabilityReg
     override fun byId(id: CapabilityId): Capability = capabilities.first { it.id == id }
 }
 
-class DesktopResolver(realizers: Set<Realizer>) : Resolver {
-    private val byId = realizers.associateBy { it.capabilityId }
+/**
+ * Тот же выбор исполнителя, что на телефоне, и тем же правилом (контракт 06.08.2026, И3).
+ *
+ * `ExecutionPolicy` живёт в общем ядре нарочно: две поверхности обязаны выбирать одинаково, иначе
+ * одно и то же намерение поведёт себя по-разному, а виноватым окажется человек.
+ */
+class DesktopResolver(
+    realizers: Set<Realizer>,
+    private val policy: com.point.core.flow.ExecutionPolicy = com.point.core.flow.DefaultExecutionPolicy(),
+) : Resolver {
+    private val byCapability = realizers.groupBy { it.capabilityId }
+
     override fun realizerFor(capabilityId: CapabilityId): Realizer =
-        byId.getValue(capabilityId)
+        realizerFor(capabilityId, ObjectState(com.point.core.model.ObjectKind.UNKNOWN))
+
+    /** Есть ли у намерения реализация, увозящая объект к чужому сервису. Выводится, не пишется. */
+    override fun leavesDevice(capabilityId: CapabilityId): Boolean =
+        byCapability[capabilityId]?.any { it.meta.kind == com.point.core.flow.RealizerKind.CLOUD } ?: false
+
+    override fun realizerFor(capabilityId: CapabilityId, state: ObjectState): Realizer {
+        val candidates = byCapability.getValue(capabilityId)
+        return policy.choose(state, candidates).firstOrNull()
+            ?: candidates.minByOrNull { it.meta.priority }
+            ?: candidates.first()
+    }
 }

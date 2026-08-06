@@ -1,5 +1,7 @@
 package com.point.executors
 
+import org.junit.Assert.assertEquals
+import com.point.core.flow.PcRemoteAction
 import com.point.core.flow.Capability
 import com.point.core.flow.CapabilityRegistry
 import com.point.core.flow.Entitlements
@@ -60,10 +62,61 @@ class ConsentByRealizersTest {
     }
 
     @Test
-    fun `удалённый путь на компьютер — тоже уход с устройства`() {
+    fun `своё устройство круга — не уход, и согласия не требует`() {
+        // Прежде здесь стоял обратный приговор: «удалённый путь на компьютер — тоже уход». Он был
+        // осторожен, но неверен по существу: между своими устройствами объект едет запечатанным,
+        // сервер везёт шифротекст, и спрашивать человека не о чем. Владелец решил это дословно
+        // 06.08.2026: «свои — молча, чужие — по тапу».
+        //
+        // Дыра, которую эта осторожность НЕ закрывала: настоящий `RemotePcRealizer` объявлял себя
+        // `LOCAL`, поэтому согласие при отправке на компьютер не спрашивалось всё равно — а
+        // компьютер мог увезти объект чужому сервису. Закрывает её не этот флаг, а признак
+        // `PcRemoteAction.leavesCircle`: компьютер сам говорит, какая из ЕГО реализаций уходит
+        // наружу, и тогда телефон спрашивает согласие до отправки (тест ниже).
         val r = resolver(R("pc", RealizerKind.REMOTE))
 
-        assertTrue(r.leavesDevice(CapabilityId("pc")))
+        assertFalse(r.leavesDevice(CapabilityId("pc")))
+    }
+
+    @Test
+    fun `компьютер сказал, что увезёт наружу — телефон спросит согласие до отправки`() {
+        val outward = PcRemoteAction("pc-ocr", "Прочитать на ПК", leavesCircle = true)
+        val inward = PcRemoteAction("pc-print", "Напечатать на ПК")
+
+        assertEquals(
+            RealizerKind.CLOUD,
+            RemotePcRealizer(outward, NoLinks, NoTransport).meta.kind,
+        )
+        assertEquals(
+            RealizerKind.LOCAL,
+            RemotePcRealizer(inward, NoLinks, NoTransport).meta.kind,
+        )
+    }
+
+    private object NoLinks : com.point.core.flow.PcLinks {
+        override fun current(): com.point.core.flow.LinkedPc? = null
+        override suspend fun save(pc: com.point.core.flow.LinkedPc) = Unit
+        override suspend fun clear() = Unit
+    }
+
+    private object NoTransport : com.point.core.flow.PcTransport {
+        override suspend fun send(
+            pc: com.point.core.flow.LinkedPc,
+            obj: com.point.core.model.PointObject,
+            name: String,
+            meta: Map<String, String>,
+            action: String?,
+        ) = com.point.core.flow.PcSendOutcome.Unreachable("тест", com.point.core.flow.PcUnreachable.PC_ASLEEP)
+
+        override suspend fun fetchCaps(pc: com.point.core.flow.LinkedPc): List<PcRemoteAction>? = null
+        override suspend fun fetchOutbox(pc: com.point.core.flow.LinkedPc): List<com.point.core.flow.PcOutboxEntry>? = null
+        override suspend fun downloadOutboxFile(pc: com.point.core.flow.LinkedPc, id: Int, targetPath: String) = false
+        override suspend fun ackOutbox(pc: com.point.core.flow.LinkedPc, id: Int) = Unit
+        override suspend fun pushPhoneCaps(pc: com.point.core.flow.LinkedPc, caps: List<PcRemoteAction>) = false
+        override suspend fun exchangeSecrets(
+            pc: com.point.core.flow.LinkedPc,
+            mine: com.point.core.flow.SharedSecrets,
+        ): com.point.core.flow.SharedSecrets? = null
     }
 
     @Test

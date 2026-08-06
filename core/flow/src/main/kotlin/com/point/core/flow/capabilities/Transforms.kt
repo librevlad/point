@@ -141,3 +141,39 @@ class DropLinkCapability  : Capability {
 
     companion object { val ID = CapabilityId("drop-link") }
 }
+
+/** image/text/office -> PDF, and PDF -> extracted text. */
+class PdfCapability : Capability {
+    override val id = ID
+    override val icon = "pdf"
+    // Real rendering/extraction work — honest latency keeps it out of the «Мгновенные» tier (#114).
+    override val meta = CapabilityMeta(latency = Latency.FAST)
+    override fun label(state: ObjectState) =
+        if (state.kind == ObjectKind.PDF) "Извлечь текст" else "В PDF"
+    override fun accepts(state: ObjectState) =
+        state.kind in setOf(ObjectKind.IMAGE, ObjectKind.TEXT, ObjectKind.OFFICE) ||
+            // A scan (image-only PDF) has no text layer — "Извлечь текст" would only dead-end.
+            (state.kind == ObjectKind.PDF && !state.has(Feature.IS_IMAGE_PDF))
+    override fun produces(state: ObjectState) =
+        if (state.kind == ObjectKind.PDF) ObjectState(ObjectKind.TEXT) else ObjectState(ObjectKind.PDF)
+
+    /**
+     * Подпись говорит о результате **по существу**, а не по расширению файла (#558).
+     *
+     * Жалоба владельца дословно: «Word в PDF молча дал не то, что человек хотел». Разбор: офисный
+     * файл на телефоне превращается в PDF **пересказом** — [PdfRealizer.officeToPdf] вынимает из
+     * документа текст и печатает его заново. На выходе настоящий PDF, поэтому вид совпадал с
+     * обещанным и сторож [com.point.core.flow.yieldSurprise] молчал; что внутри пересказ, а не
+     * документ, человек выяснял, открыв файл.
+     *
+     * Пока конвертация такая (её чинит #403), обещать голое «вернёт PDF» — неправда умолчанием.
+     * Здесь чинится подпись, а не поведение: тот же файл, но сказано, что в нём будет.
+     */
+    override fun yields(state: ObjectState) = when (state.kind) {
+        ObjectKind.PDF -> ActionYield.New(ObjectKind.TEXT)
+        ObjectKind.OFFICE -> ActionYield.New(ObjectKind.PDF, "$OFFICE_PDF_SUBSTANCE · без оформления")
+        else -> ActionYield.New(ObjectKind.PDF)
+    }
+
+    companion object { val ID = CapabilityId("pdf") }
+}

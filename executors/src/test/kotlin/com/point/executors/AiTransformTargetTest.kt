@@ -1,5 +1,6 @@
 package com.point.executors
 
+import com.point.core.flow.capabilities.PdfCapability
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test

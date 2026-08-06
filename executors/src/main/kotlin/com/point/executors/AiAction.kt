@@ -2,6 +2,7 @@ package com.point.executors
 
 import com.point.core.flow.AiReadiness
 import com.point.core.flow.Capability
+import com.point.core.flow.capabilities.PdfCapability
 import com.point.core.flow.CapabilityMeta
 import com.point.core.flow.Cost
 import com.point.core.flow.Latency

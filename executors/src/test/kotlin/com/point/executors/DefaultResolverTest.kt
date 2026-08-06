@@ -75,11 +75,44 @@ class DefaultResolverTest {
     }
 
     @Test
-    fun `kind breaks priority ties — local is tried before cloud`() = runTest {
-        val local = realizer("ai", kind = RealizerKind.LOCAL, done = "local")
-        val cloud = realizer("ai", kind = RealizerKind.CLOUD, done = "cloud")
+    fun `порядок задают объявленные приоритеты, а не вид реализации`() = runTest {
+        // Прежде тест назывался «kind breaks priority ties — local is tried before cloud» и
+        // защищал зашитый закон «локальный раньше облачного». Контракт 06.08.2026 (И3) закон снял:
+        // это была философия, объявленная от имени всех будущих реализаций сразу, — а свезти
+        // трёхмегабайтный снимок на свой же компьютер бывает быстрее, чем читать его здесь.
+        //
+        // Правило, которым закон заменён: порядок объявляют сами реализации числом. Довод при этом
+        // не потерян — цепочка чтения работает как прежде именно потому, что устройство объявило
+        // себе приоритет 10, а облако 50 и 90.
+        val local = realizer("ai", priority = 10, kind = RealizerKind.CLOUD, done = "по приоритету 10")
+        val cloud = realizer("ai", priority = 90, kind = RealizerKind.LOCAL, done = "по приоритету 90")
+
         val result = resolver(setOf(cloud, local)).realizerFor(CapabilityId("ai")).perform(obj())
-        assertEquals("local", (result as ActionResult.Done).message)
+
+        assertEquals("по приоритету 10", (result as ActionResult.Done).message)
+    }
+
+    @Test
+    fun `реализация, не берущаяся за этот объект, в выбор не идёт`() = runTest {
+        // Ради этого шов и заводился: «В PDF» одно на оба устройства, но компьютер делает PDF
+        // только из офисного документа. Пока различие было невыразимо, намерение приходилось
+        // держать у каждого устройства своим — лишь бы компьютер не обещал того, чего не сделает.
+        val narrow = object : Realizer {
+            override val capabilityId = CapabilityId("pdf")
+            override val meta = com.point.core.flow.RealizerMeta(priority = 10)
+            override fun accepts(state: com.point.core.model.ObjectState) =
+                state.kind == com.point.core.model.ObjectKind.OFFICE
+            override suspend fun perform(input: com.point.core.model.PointObject, amendment: String?) =
+                ActionResult.Done("узкая")
+        }
+        val wide = realizer("pdf", priority = 90, done = "широкая")
+        val r = resolver(setOf(narrow, wide))
+
+        val office = r.realizerFor(CapabilityId("pdf"), com.point.core.model.ObjectState(com.point.core.model.ObjectKind.OFFICE))
+        val image = r.realizerFor(CapabilityId("pdf"), com.point.core.model.ObjectState(com.point.core.model.ObjectKind.IMAGE))
+
+        assertEquals("узкая", (office.perform(obj()) as ActionResult.Done).message)
+        assertEquals("широкая", (image.perform(obj()) as ActionResult.Done).message)
     }
 
     @Test
