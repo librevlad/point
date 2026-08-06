@@ -28,6 +28,23 @@ fun advertisedActions(
         val accepted = probes.filter(capability::accepts)
         if (accepted.isEmpty()) return@mapNotNull null
         val kinds = accepted.map { it.kind.name }.distinct().toSet()
+        // Какие признаки объекта нужны действию (#597).
+        //
+        // Пока этого не было, признаковое измерение схлопывалось: «Позвонить» принимает объект с
+        // телефонным номером — значит принимает пробу КАЖДОГО вида — значит объявлялось
+        // принимающим любой объект. На экране компьютера из-за этого стояло 32 строки на
+        // картинку, десять из них бессмысленные («Позвонить» на снимке, «Создать событие» на
+        // документе).
+        //
+        // Считается так: если действие взяло хоть одну голую пробу — признаков ему не нужно.
+        // Иначе нужен любой из тех, с которыми оно пробу взяло.
+        val needsFeature = accepted.none { it.features.isEmpty() }
+        val features = if (!needsFeature) {
+            emptySet()
+        } else {
+            probes.filter { it.features.size == 1 && capability.accepts(it) }
+                .map { it.features.first().name }.toSet()
+        }
         PcRemoteAction(
             id = capability.id.value,
             // Имя берётся у первого принятого состояния: у части способностей оно от него зависит
@@ -37,6 +54,7 @@ fun advertisedActions(
             // Пустой набор видов значит «любой»: если способность принимает всё, перечислять
             // все виды поимённо — это лишний список, который устареет при новом виде объекта.
             kinds = if (kinds.size == ObjectKindCount) emptySet() else kinds,
+            features = features,
         )
     }
 

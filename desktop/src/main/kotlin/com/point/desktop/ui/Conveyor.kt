@@ -198,26 +198,24 @@ private fun LiveEnd(state: DesktopState, item: InboxItem, modifier: Modifier = M
         working?.let { Working(it) { state.cancelWork() } }
 
         val pcActions = state.bubblesFor(item)
-        // Заголовок без единого действия под ним — обещание пустоты. Нет действий — нет секции.
-        if (pcActions.isNotEmpty()) {
-            Section("НА ЭТОМ КОМПЬЮТЕРЕ") {
+
+        // Один список действий, а не две секции по устройствам (контракт 06.08.2026, И2).
+        //
+        // Было «НА ЭТОМ КОМПЬЮТЕРЕ» и «ОТПРАВИТЬ» — то есть человеку предлагали сначала выбрать
+        // устройство, а уже потом действие. Замер 06.08.2026: на картинке 32 строки во второй
+        // секции, из них десять бессмысленных («Позвонить» на снимке) и четыре — двойники того,
+        // что компьютер умеет сам.
+        //
+        // Приписки «· телефон» тоже нет: где исполнится, человека не спрашивают. Устройство
+        // появится на экране только тогда, когда правда меняет ожидание, — этим занят срез 5.
+        if (pcActions.isNotEmpty() || phoneActions.isNotEmpty()) {
+            Section("ЧТО МОЖНО СДЕЛАТЬ") {
                 pcActions.forEach { bubble ->
                     Station(bubble.title, PointColors.violet) { state.onBubble(item, bubble) }
                 }
-            }
-        }
-
-        Section("ОТПРАВИТЬ") {
-            if (phoneActions.isEmpty()) {
-                // Телефон ещё не рассказал, что умеет: молчать было бы хуже — человек решил бы,
-                // что передача сломана, хотя связи просто ещё не было.
-                Text(
-                    "Телефон пока не сказал, что умеет. Откройте Point на телефоне — действия появятся здесь",
-                    style = PointType.small,
-                )
-            }
-            phoneActions.forEach { action ->
-                Station("${action.label} · телефон", PointColors.cyan) { state.sendToPhone(item, action) }
+                phoneActions.forEach { action ->
+                    Station(action.label, PointColors.violet) { state.sendToPhone(item, action) }
+                }
             }
         }
     }
@@ -227,7 +225,7 @@ private fun LiveEnd(state: DesktopState, item: InboxItem, modifier: Modifier = M
  * Идущая работа: имя, что делается сейчас, сколько идёт — и выход.
  *
  * Время считается здесь же раз в секунду, потому что оно и есть единственное, что можно сказать
- * честно, когда реализатор о себе молчит. Выдумывать за него проценты Point не станет.
+ * честно, когда реализация о себе молчит. Выдумывать за неё проценты Point не станет.
  */
 @Composable
 private fun Working(work: com.point.desktop.Working, onCancel: () -> Unit) {

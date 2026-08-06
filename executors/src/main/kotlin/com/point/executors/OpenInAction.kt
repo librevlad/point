@@ -24,7 +24,10 @@ import javax.inject.Inject
 class OpenInCapability @Inject constructor() : Capability {
     override val id = ID
     override val icon = "open-in"
-    override val meta = CapabilityMeta(priority = 60)
+    // `localOnly`: «Открыть другим приложением» значит **здесь** (#597). У второй поверхности для
+    // этого свой двойник, и объявлять ей наш значило бы предложить свезти объект на телефон ради
+    // того, что компьютер делает сам.
+    override val meta = CapabilityMeta(priority = 60, localOnly = true)
     // «Открыть в…» многоточием обещало продолжение, которого в строке нет: на экране объекта это
     // читалось как обрезанный текст. Дизайн-ревью 04.08.2026 — название действия обязано говорить,
     // что произойдёт, целиком. Выбор приложения по-прежнему спрашивается после тапа.

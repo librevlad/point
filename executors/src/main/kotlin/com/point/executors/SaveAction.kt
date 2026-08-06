@@ -16,7 +16,9 @@ import javax.inject.Inject
 class SaveCapability @Inject constructor() : Capability {
     override val id = ID
     override val icon = "save"
-    override val meta = CapabilityMeta(priority = 70)
+    // `localOnly`: «Сохранить» значит на МОЙ диск (#597) — место назначения часть намерения, и
+    // объявлять его второй поверхности незачем: у неё своё «Сохранить как…».
+    override val meta = CapabilityMeta(priority = 70, localOnly = true)
     override fun label(state: ObjectState) = "Сохранить"
     override fun accepts(state: ObjectState) = state.kind.isFileBacked
     override fun produces(state: ObjectState) = state
