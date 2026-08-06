@@ -51,18 +51,21 @@ object PointColors {
  * `desktop/build.gradle.kts`): один файл начертания на проект — иначе телефон и ПК однажды
  * разойдутся, и никто не заметит, какой из них прав.
  */
-private val Unbounded = FontFamily(
-    Font(resource = "unbounded.ttf", weight = FontWeight.Normal),
-    Font(resource = "unbounded.ttf", weight = FontWeight.SemiBold),
-    Font(resource = "unbounded.ttf", weight = FontWeight.Bold),
-)
+/**
+ * Одно начертание — одна насыщенность (#590).
+ *
+ * Прежде один и тот же файл объявлялся под тремя-четырьмя насыщенностями сразу. Настоящих
+ * полужирного и жирного у нас нет — в папке ровно два файла, — и Skia утолщала обычное сама:
+ * буквы разной толщины, неровные штрихи, поплывшая ширина. Владелец назвал это «кривые шрифты».
+ *
+ * На телефоне того же не видно: Android подставляет системное начертание, а не подделывает.
+ *
+ * Объявлять то, чего нет, — обещание, которое рисуется подделкой. Иерархию держат размер, цвет и
+ * разрядка; они честные.
+ */
+private val Unbounded = FontFamily(Font(resource = "unbounded.ttf", weight = FontWeight.Normal))
 
-private val Manrope = FontFamily(
-    Font(resource = "manrope.ttf", weight = FontWeight.Normal),
-    Font(resource = "manrope.ttf", weight = FontWeight.Medium),
-    Font(resource = "manrope.ttf", weight = FontWeight.SemiBold),
-    Font(resource = "manrope.ttf", weight = FontWeight.Bold),
-)
+private val Manrope = FontFamily(Font(resource = "manrope.ttf", weight = FontWeight.Normal))
 
 /** Типографика мокапа: Unbounded говорит, Manrope рассказывает. */
 object PointType {
@@ -70,10 +73,7 @@ object PointType {
     val display = TextStyle(fontFamily = Unbounded, fontSize = 28.sp, color = PointColors.text)
 
     /** Заголовок карточки или станции. */
-    val title = TextStyle(
-        fontFamily = Unbounded, fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
-        color = PointColors.text,
-    )
+    val title = TextStyle(fontFamily = Unbounded, fontSize = 18.sp, color = PointColors.text)
 
     /** Обычный текст. */
     val body = TextStyle(fontFamily = Manrope, fontSize = 14.sp, color = PointColors.text)
@@ -83,7 +83,7 @@ object PointType {
 
     /** Метка секции: «ПРИЛЕТЕЛО», «ИЗВЛЕЧЬ» — разрядка и верхний регистр. */
     val label = TextStyle(
-        fontFamily = Manrope, fontSize = 11.sp, fontWeight = FontWeight.Bold,
+        fontFamily = Manrope, fontSize = 11.sp,
         letterSpacing = 1.6.sp, color = PointColors.muted,
     )
 

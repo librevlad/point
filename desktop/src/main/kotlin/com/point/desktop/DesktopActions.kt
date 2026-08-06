@@ -32,7 +32,18 @@ fun interface SaveTarget { fun pickAndSave(file: File): String? }
 interface Printer {
     /** Имя принтера по умолчанию; `null` — принтера нет, и печатать некуда. */
     fun name(): String?
+
+    /** Отправить на принтер по умолчанию, без вопросов. Так печатается просьба с телефона. */
     fun print(file: File)
+
+    /**
+     * Спросить человека и напечатать (#591). `false` — передумал.
+     *
+     * Диалог системный, а не свой: в нём сразу и принтер, и формат, и страницы, и двусторонняя
+     * печать — всё то, чего в собственном списке принтеров не будет, и что через месяц пришлось бы
+     * добавлять самим.
+     */
+    fun printAsking(file: File): Boolean = run { print(file); true }
 }
 
 class PcOpenCapability : Capability {
@@ -286,7 +297,15 @@ class PcPrintRealizer(private val printer: Printer) : Realizer {
                     "На компьютере сейчас нет принтера по умолчанию",
                     recoverable = true,
                 )
-            printer.print(File(input.uri.value))
+            // Человек перед экраном — спрашиваем; просьба с телефона — печатаем на принтере по
+            // умолчанию, потому что диалог там повиснет и задание не уйдёт вовсе (#591).
+            if (com.point.core.flow.askedHere()) {
+                if (!printer.printAsking(File(input.uri.value))) {
+                    return@runCatching ActionResult.Failure("Печать отменена — задание не ушло", recoverable = true)
+                }
+            } else {
+                printer.print(File(input.uri.value))
+            }
             // Мы знаем ровно одно: задание ушло в очередь этого принтера. Включён ли он, есть
             // ли бумага — нам отсюда не видно, и обещать «напечатано» значило бы отчитаться за
             // чужую машину. Человек уйдёт в другую комнату — пусть уходит с правдой.
