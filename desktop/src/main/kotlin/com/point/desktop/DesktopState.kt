@@ -335,6 +335,23 @@ class DesktopState(
         _clipboardText.value?.let { runCatching { clipboard.copy(it) } }
     }
 
+    /**
+     * Убрать одну запись из памяти — и файл вместе с ней (#543).
+     *
+     * Срок («Point не хранит дольше суток») отвечает на вопрос «а это надолго?». На «уберите вот
+     * это, прямо сейчас» он не отвечает: человек, стёрший чужой чек, не станет ждать сутки.
+     * Поэтому нужны оба ответа, и это решение владельца — «срок плюс поштучное удаление».
+     *
+     * Файл принесённого мышью не трогается: он лежит там, где человек его оставил, и Point им
+     * только пользовался.
+     */
+    fun forget(entry: JournalEntry) {
+        val file = java.io.File(entry.path)
+        if (entry.source != ObjectSource.DROPPED) runCatching { file.delete() }
+        _items.update { list -> list.filterNot { it.obj.uri.value == entry.path } }
+        updateJournal { it.filterNot { e -> e.path == entry.path } }
+    }
+
     /** «Выйти»: компьютер забывает и файлы, и путь — иначе следующий человек увидит чужое. */
     fun forgetEverything(wipeFiles: () -> Unit) {
         runCatching { wipeFiles() }
