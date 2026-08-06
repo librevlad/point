@@ -89,7 +89,7 @@ class ValueObjectActionsTest {
     fun `«Скопировать» puts the value itself on the clipboard, reading no file`() = runTest {
         val clip = RecordingClipboard()
 
-        val result = CopyRealizer(clip).perform(waybill, null)
+        val result = CopyRealizer(clip, com.point.core.flow.CircleClipboard.None).perform(waybill, null)
 
         assertTrue(result is ActionResult.Done)
         assertEquals("20 4514 9154 9395", clip.text)

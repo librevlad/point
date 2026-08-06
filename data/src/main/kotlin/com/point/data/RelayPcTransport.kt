@@ -11,6 +11,7 @@ import com.point.core.flow.decodePcOutbox
 import com.point.core.flow.decodePcReceiveReply
 import com.point.core.flow.encodePcCaps
 import com.point.core.model.PointObject
+import com.point.core.model.isFileBacked
 import java.io.File
 
 /**
@@ -37,12 +38,20 @@ class RelayPcTransport(
     ): PcSendOutcome {
         // Кадр читается целиком: AES-GCM запечатывает всё сразу, а сервер и так не берёт больше
         // 50 МБ за письмо. Гейт по размеру стоит внутри [RelayRpcClient] — ДО сети.
-        val bytes = runCatching { File(obj.uri.value).readBytes() }.getOrNull()
-            ?: return PcSendOutcome.Unreachable("объект не прочитан")
+        // У объекта без файла значение лежит прямо в ссылке (#222) — читать нечего и не нужно.
+        // Номер карты и номер накладной именно такие: это текст, а не файл.
+        val bytes = if (obj.state.kind.isFileBacked) {
+            runCatching { File(obj.uri.value).readBytes() }.getOrNull()
+                ?: return PcSendOutcome.Unreachable("объект не прочитан")
+        } else {
+            obj.uri.value.toByteArray(Charsets.UTF_8)
+        }
         val frameMeta = buildMap {
             putAll(meta)
             put("name", fileName)
-            put("mime", obj.mime)
+            // Мим объекта без файла — обычный текст: на той стороне он и станет текстом, с
+            // которым работают дальше.
+            put("mime", if (obj.state.kind.isFileBacked) obj.mime else "text/plain")
             action?.let { put("action", it) }
         }
         return when (val asked = rpc.ask(pc, RelayRpc.OBJECT, frameMeta, bytes)) {

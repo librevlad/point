@@ -35,8 +35,17 @@ class PcCapability @Inject constructor(
     // `localOnly`: «на компьютер» с компьютера — это круг сам в себя (#588).
     override val meta = CapabilityMeta(priority = 75, latency = Latency.FAST, localOnly = true)
     override fun label(state: ObjectState) = "На компьютер"
+    /**
+     * Объект без файла едет тоже (#611): найденный номер карты или накладной — это текст, и его
+     * значение лежит прямо в ссылке. Прежний гейт `isFileBacked` запрещал отправлять именно то,
+     * ради чего человек чаще всего и тянется ко второму устройству.
+     *
+     * А вот **набор** по-прежнему не едет, и это не забывчивость: набор — не один груз, у него нет
+     * ни одного файла и ни одного значения, а есть список. Как его отправлять — по одному, целиком,
+     * с чем на той стороне — отдельное решение, и до него не дошли.
+     */
     override fun accepts(state: ObjectState) =
-        state.kind.isFileBacked && links.current() != null
+        state.kind != ObjectKind.COLLECTION && links.current() != null
 
     override fun produces(state: ObjectState) = state // terminal — the object leaves for the PC
     override fun missing(state: ObjectState) =
