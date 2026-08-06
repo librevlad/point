@@ -70,18 +70,17 @@ class PcShrinkImageRealizer(private val outbox: Outbox) : Realizer {
                 val format = if (transparent) "png" else "jpg"
                 val out = File.createTempFile("pc-small-", ".$format")
                 ImageIO.write(resized, format, out)
-                outbox.add(
-                    input.copy(
-                        id = input.id + "-small",
+                // Новый объект ЗДЕСЬ (#595): человек, нажавший «Сделать легче», работает дальше
+                // с лёгкой картинкой, а не отправляет её на телефон.
+                ActionResult.Success(
+                    com.point.core.model.ResultObject(
+                        type = ObjectKind.IMAGE,
                         mime = if (transparent) "image/png" else "image/jpeg",
                         uri = ScratchRef(out.absolutePath),
-                        state = ObjectState(ObjectKind.IMAGE),
-                        metadata = input.metadata + ("name" to "Лёгкая картинка"),
+                        metadata = mapOf(
+                            "name" to ("Лёгкая · " + mb(out.length()) + " · " + width + "×" + height),
+                        ),
                     ),
-                )
-                ActionResult.Done(
-                    "Было " + mb(source.length()) + ", стало " + mb(out.length()) +
-                        " · " + width + "×" + height,
                 )
             }.getOrElse {
                 ActionResult.Failure(it.message ?: "Не удалось уменьшить картинку", recoverable = true)

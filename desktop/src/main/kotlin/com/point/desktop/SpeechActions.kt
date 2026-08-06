@@ -80,16 +80,14 @@ class PcTranscribeRealizer(
                     return@withContext ActionResult.Failure("В записи не разобрано ни слова", recoverable = false)
                 }
                 val out = File.createTempFile("pc-voice-", ".txt").apply { writeText(text) }
-                outbox.add(
-                    input.copy(
-                        id = input.id + "-text",
+                ActionResult.Success(
+                    com.point.core.model.ResultObject(
+                        type = ObjectKind.TEXT,
                         mime = "text/plain",
                         uri = ScratchRef(out.absolutePath),
-                        state = ObjectState(ObjectKind.TEXT),
-                        metadata = input.metadata + ("name" to "Расшифровка"),
+                        metadata = mapOf("name" to "Расшифровка"),
                     ),
                 )
-                ActionResult.Done("Расшифровано слов: " + text.split(Regex("\\s+")).count { it.isNotBlank() })
             }.getOrElse {
                 ActionResult.Failure(it.message ?: "Расшифровать не вышло", recoverable = true)
             }

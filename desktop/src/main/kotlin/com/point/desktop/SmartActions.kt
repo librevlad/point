@@ -68,16 +68,16 @@ class PcEntitiesRealizer(
         }
         val report = report(found)
         val file = File.createTempFile("pc-found-", ".txt").apply { writeText(report) }
-        outbox.add(
-            input.copy(
-                id = input.id + "-found",
+        // Результат — новый объект ЗДЕСЬ (#595), а не письмо на телефон: работа продолжается на
+        // том устройстве, где человек её начал.
+        ActionResult.Success(
+            com.point.core.model.ResultObject(
+                type = ObjectKind.TEXT,
                 mime = "text/plain",
                 uri = ScratchRef(file.absolutePath),
-                state = ObjectState(ObjectKind.TEXT),
-                metadata = input.metadata + ("name" to "Найдено в тексте"),
+                metadata = mapOf("name" to ("Найдено · " + summary(found))),
             ),
         )
-        ActionResult.Done("Нашлось: " + summary(found))
     }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось разобрать текст", recoverable = true) }
 
     /** Список по разделам — так его читают глазами и так же копируют кусками. */
@@ -176,16 +176,7 @@ class PcAiRealizer(
         // работу, потом пожелание, а не наоборот.
         val full = if (amendment.isNullOrBlank()) prompt else prompt + "\n" + amendment
         val result = llm.run(input, full)
-        outbox.add(
-            input.copy(
-                id = input.id + "-" + capabilityId.value,
-                mime = result.mime,
-                uri = result.uri as? ScratchRef ?: ScratchRef(result.uri.value),
-                state = ObjectState(result.type),
-                metadata = input.metadata + ("name" to resultName),
-            ),
-        )
-        ActionResult.Done(resultName + " готов — заберите на телефоне")
+        ActionResult.Success(result.copy(metadata = result.metadata + ("name" to resultName)))
     }.getOrElse { ActionResult.Failure(it.message ?: "Сервис AI не ответил", recoverable = true) }
 }
 
@@ -252,16 +243,14 @@ class PcQrRealizer(private val outbox: Outbox) : Realizer {
         g.dispose()
         val file = File.createTempFile("pc-qr-", ".png")
         ImageIO.write(image, "png", file)
-        outbox.add(
-            input.copy(
-                id = input.id + "-qr",
+        ActionResult.Success(
+            com.point.core.model.ResultObject(
+                type = ObjectKind.IMAGE,
                 mime = "image/png",
                 uri = ScratchRef(file.absolutePath),
-                state = ObjectState(ObjectKind.IMAGE),
-                metadata = input.metadata + ("name" to "QR-код"),
+                metadata = mapOf("name" to "QR-код"),
             ),
         )
-        ActionResult.Done("QR собран на компьютере")
     }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось собрать QR", recoverable = true) }
 
     private companion object {
@@ -308,15 +297,13 @@ class PcOfficeTextRealizer(
             )
         }
         val file = File.createTempFile("pc-office-", ".txt").apply { writeText(text) }
-        outbox.add(
-            input.copy(
-                id = input.id + "-text",
+        ActionResult.Success(
+            com.point.core.model.ResultObject(
+                type = ObjectKind.TEXT,
                 mime = "text/plain",
                 uri = ScratchRef(file.absolutePath),
-                state = ObjectState(ObjectKind.TEXT),
-                metadata = input.metadata + ("name" to "Текст документа"),
+                metadata = mapOf("name" to "Текст документа"),
             ),
         )
-        ActionResult.Done("Текст достали — знаков: " + text.length)
     }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось прочитать документ", recoverable = true) }
 }

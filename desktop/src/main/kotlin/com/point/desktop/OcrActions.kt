@@ -72,16 +72,14 @@ class PcCloudOcrRealizer(
                     return@withContext ActionResult.Failure("На снимке не нашлось текста", recoverable = false)
                 }
                 val out = File.createTempFile("pc-ocr-", ".txt").apply { writeText(text) }
-                outbox.add(
-                    input.copy(
-                        id = input.id + "-text",
+                ActionResult.Success(
+                    com.point.core.model.ResultObject(
+                        type = ObjectKind.TEXT,
                         mime = "text/plain",
                         uri = ScratchRef(out.absolutePath),
-                        state = ObjectState(ObjectKind.TEXT),
-                        metadata = input.metadata + ("name" to "Текст со снимка"),
+                        metadata = mapOf("name" to "Текст со снимка"),
                     ),
                 )
-                ActionResult.Done("Прочитано знаков: " + text.length)
             }.getOrElse {
                 ActionResult.Failure(it.message ?: "Прочитать не вышло", recoverable = true)
             }
