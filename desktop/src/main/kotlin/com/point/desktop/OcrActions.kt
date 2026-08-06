@@ -74,8 +74,10 @@ class PcCloudOcrRealizer(
                     ?: return@withContext ActionResult.Failure("Файла картинки нет на диске", recoverable = false)
                 if (file.length() > MAX_BYTES) {
                     return@withContext ActionResult.Failure(
-                        "Снимок " + file.length() / (1024 * 1024) + " МБ — сервис принимает до 1 МБ. " +
-                            "Сначала «Сделать легче».",
+                        // Десятые, а не целые (#596): «Снимок 1 МБ — сервис принимает до 1 МБ»
+                        // читалось как ложь, потому что округление съедало разницу.
+                        "Снимок " + String.format(java.util.Locale.ROOT, "%.1f", file.length() / (1024.0 * 1024)) +
+                            " МБ — сервис принимает до 1 МБ. Сначала «Сделать легче».",
                         recoverable = false,
                     )
                 }
@@ -94,7 +96,7 @@ class PcCloudOcrRealizer(
                     ),
                 )
             }.getOrElse {
-                ActionResult.Failure(it.message ?: "Прочитать не вышло", recoverable = true)
+                ActionResult.Failure("Сервис чтения не ответил — попробуйте позже", recoverable = true)
             }
         }
 

@@ -93,7 +93,7 @@ class PcTranscribeRealizer(
                     ),
                 )
             }.getOrElse {
-                ActionResult.Failure(it.message ?: "Расшифровать не вышло", recoverable = true)
+                ActionResult.Failure("Сервис расшифровки не ответил — попробуйте позже", recoverable = true)
             }
         }
 

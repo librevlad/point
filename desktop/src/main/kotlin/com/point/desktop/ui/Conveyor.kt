@@ -105,18 +105,20 @@ private fun Source(item: InboxItem) {
             }
         }
 
-        // Только то, что человек назвал бы фактом (#594). Разбор пишет рядом со значением ещё и
-        // свои следы — чем прочитано (`.src = ocr`), чем подтверждено (`.ev = semantic`), в какой
-        // валюте (`.currency`). Это улики для нас, а не сведения для человека: на экране они
-        // читались как «Amount.src · ocr» — жаргон вместо ответа.
-        val facts = item.obj.metadata.filterKeys { it.startsWith("entity.") && isPlainFact(it) }
+        // Понятое — одним правилом на обе поверхности (#594). Прежде экран компьютера завёл своё
+        // («во втором имени есть точка — значит служебное») и разошёлся с ядром: спрятал валюту,
+        // которую ядро прямо называет фактом. Правило теперь одно и живёт в ядре.
+        val facts = com.point.core.flow.understoodRows(item.obj.metadata)
         if (facts.isNotEmpty()) {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text("ПОНЯЛ", style = PointType.label.copy(color = PointColors.cyan))
-                facts.entries.take(4).forEach { (key, value) ->
+                facts.forEach { fact ->
                     Row(horizontalArrangement = Arrangement.spacedBy(9.dp), verticalAlignment = Alignment.CenterVertically) {
                         Box(Modifier.size(5.dp).background(PointColors.cyan, CircleShape))
-                        Text("${factName(key)} · $value", style = PointType.body.copy(fontSize = PointType.small.fontSize))
+                        Text(
+                            "${fact.name} · ${fact.value}",
+                            style = PointType.body.copy(fontSize = PointType.small.fontSize),
+                        )
                     }
                 }
             }
@@ -326,28 +328,6 @@ private fun kindLabel(kind: ObjectKind): String = when (kind) {
     ObjectKind.OFFICE -> "Документ"
     ObjectKind.COLLECTION -> "Набор"
     else -> "Файл"
-}
-
-/**
- * Факт ли это для человека, или служебный след разбора (#594).
- *
- * Факт — `entity.amount`. След — `entity.amount.src`, `entity.amount.ev`, `entity.amount.currency`:
- * у них внутри имени есть вторая точка. Проверка по форме, а не по списку суффиксов: список
- * пришлось бы дописывать при каждом новом следе, и однажды его бы забыли — ровно так этот и
- * попал на экран.
- */
-private fun isPlainFact(key: String): Boolean = !key.removePrefix("entity.").contains('.')
-
-private fun factName(key: String): String = when (key.removePrefix("entity.")) {
-    "phone" -> "Телефон"
-    "email" -> "Почта"
-    "url" -> "Ссылка"
-    "address" -> "Адрес"
-    "date" -> "Дата"
-    "card" -> "Карта"
-    "amount" -> "Сумма"
-    "track" -> "Накладная"
-    else -> key.removePrefix("entity.").replaceFirstChar { it.uppercase() }
 }
 
 /** Заголовок пустого дока и подпись под ним — вынесены, чтобы текст жил рядом с конвейером. */

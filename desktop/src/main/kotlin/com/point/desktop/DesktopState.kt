@@ -152,7 +152,7 @@ class DesktopState(
                 // Отмену нельзя проглатывать: пойманная как обычная ошибка, она превращает
                 // «передумал» в «сломалось» и оставляет корутину живой.
                 if (e is kotlinx.coroutines.CancellationException) throw e
-                ActionResult.Failure(e.message ?: "не получилось", recoverable = true)
+                ActionResult.Failure("Действие не выполнилось — попробуйте ещё раз", recoverable = true)
             }
         } catch (e: kotlinx.coroutines.CancellationException) {
             _working.value = null
@@ -235,7 +235,7 @@ class DesktopState(
                 _message.value = "Не удалось положить в очередь"
                 note(
                     item, action.id, "${action.label} · на телефон",
-                    ActionResult.Failure(it.message ?: "не удалось положить в очередь", recoverable = true),
+                    ActionResult.Failure("Не удалось отправить — проверьте, что на диске есть место", recoverable = true),
                 )
             }
         }

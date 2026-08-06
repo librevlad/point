@@ -143,7 +143,11 @@ class SmartActionsTest {
         val result = realizer.perform(textObject("текст"), null)
 
         assertTrue(result is ActionResult.Failure)
-        assertEquals("Сервис AI сейчас не отвечает", (result as ActionResult.Failure).reason)
+        // Прежде сюда пробрасывался текст исключения — и это было ровно то, от чего лечит #596:
+        // человеку показывался хвост стека. Теперь отказ говорит словами и советует, что делать.
+        val reason = (result as ActionResult.Failure).reason
+        assertTrue("отказ не сказал про сервис: " + reason, reason.contains("Сервис AI"))
+        assertTrue("отказ ничего не советует: " + reason, reason.contains("позже"))
         // Сеть чинится ожиданием, поэтому дверь остаётся открытой.
         assertTrue(result.recoverable)
     }

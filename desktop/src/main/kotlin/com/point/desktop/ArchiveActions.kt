@@ -57,7 +57,7 @@ class PcUnzipRealizer(private val revealer: FileRevealer) : Realizer {
                 revealer.reveal(File(target, target.listFiles()?.firstOrNull()?.name ?: "."))
                 ActionResult.Done("Распаковано файлов: $files — папка открыта")
             }.getOrElse {
-                ActionResult.Failure(it.message ?: "Не удалось распаковать", recoverable = true)
+                ActionResult.Failure("Распаковать не вышло — попробуйте ещё раз или откройте архив проводником", recoverable = true)
             }
         }
 
@@ -95,5 +95,5 @@ class PcOpenLinkRealizer(private val browser: (String) -> Unit) : Realizer {
             ?: return ActionResult.Failure("В объекте нет ссылки, которую можно открыть", recoverable = false)
         browser(url)
         ActionResult.Done("Открыто в браузере")
-    }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось открыть ссылку", recoverable = true) }
+    }.getOrElse { ActionResult.Failure("Браузер не открылся — откройте ссылку вручную из буфера", recoverable = true) }
 }

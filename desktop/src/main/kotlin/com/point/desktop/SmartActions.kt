@@ -78,7 +78,7 @@ class PcEntitiesRealizer(
                 metadata = mapOf("name" to ("Найдено · " + summary(found))),
             ),
         )
-    }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось разобрать текст", recoverable = true) }
+    }.getOrElse { ActionResult.Failure("Разобрать текст не вышло — попробуйте ещё раз", recoverable = true) }
 
     /** Список по разделам — так его читают глазами и так же копируют кусками. */
     private fun report(found: List<Entity>): String = buildString {
@@ -181,7 +181,7 @@ class PcAiRealizer(
         val full = if (amendment.isNullOrBlank()) prompt else prompt + "\n" + amendment
         val result = llm.run(input, full)
         ActionResult.Success(result.copy(metadata = result.metadata + ("name" to resultName)))
-    }.getOrElse { ActionResult.Failure(it.message ?: "Сервис AI не ответил", recoverable = true) }
+    }.getOrElse { ActionResult.Failure("Сервис AI не ответил — попробуйте позже", recoverable = true) }
 }
 
 /** Задания моделям — теми же словами, что на телефоне: один продукт говорит одинаково. */
@@ -245,7 +245,7 @@ class PcQrRealizer(private val outbox: Outbox) : Realizer {
                 metadata = mapOf("name" to "QR-код"),
             ),
         )
-    }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось собрать QR", recoverable = true) }
+    }.getOrElse { ActionResult.Failure("QR не собрался — попробуйте текст покороче", recoverable = true) }
 
     private companion object {
         /** Модуль в точках: восемь — читается камерой телефона с экрана ноутбука без прицеливания. */
@@ -290,5 +290,5 @@ class PcOfficeTextRealizer(
                 metadata = mapOf("name" to "Текст документа"),
             ),
         )
-    }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось прочитать документ", recoverable = true) }
+    }.getOrElse { ActionResult.Failure("Текст не достался — документ повреждён или это не офисный файл", recoverable = true) }
 }
