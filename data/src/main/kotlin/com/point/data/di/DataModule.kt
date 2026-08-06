@@ -441,6 +441,13 @@ abstract class DataModule {
         fun pcClipboardSync(rpc: com.point.data.RelayRpcClient): com.point.core.flow.PcClipboardSync =
             RelayPcClipboardSync(rpc)
 
+        /** Буфер круга (#611): «Скопировать» кладёт значение и туда, где человек сядет дальше. */
+        @Provides
+        fun circleClipboard(
+            links: com.point.core.flow.PcLinks,
+            sync: com.point.core.flow.PcClipboardSync,
+        ): com.point.core.flow.CircleClipboard = com.point.data.RelayCircleClipboard(links, sync)
+
         /**
          * Разговор с сервером Point (#472): вход, круг устройств, отзыв.
          *

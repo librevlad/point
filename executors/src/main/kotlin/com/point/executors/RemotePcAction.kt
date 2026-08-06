@@ -55,7 +55,9 @@ class RemotePcCapability(
         action.unavailable?.takeIf { it.isNotBlank() && fitsThisObject(state) }
 
     private fun fitsThisObject(state: ObjectState) =
-        state.kind.isFileBacked &&
+        // Объект без файла отправляется (#611): его значение и есть его содержимое. Набор — нет:
+        // это не один груз, и как его везти, ещё не решено.
+        state.kind != ObjectKind.COLLECTION &&
             (action.kinds.isEmpty() || state.kind.name in action.kinds) &&
             links.current() != null
 

@@ -1,5 +1,6 @@
 package com.point.executors
 
+import com.point.core.flow.CircleClipboard
 import com.point.core.flow.Capability
 import com.point.core.flow.CapabilityMeta
 import com.point.core.flow.Clipboard
@@ -40,6 +41,8 @@ class CopyCapability @Inject constructor() : Capability {
 
 class CopyRealizer @Inject constructor(
     private val clipboard: Clipboard,
+    /** Буфер круга устройств (#611): скопированное здесь ждёт человека и на компьютере. */
+    private val circle: CircleClipboard,
 ) : Realizer {
     override val capabilityId = CopyCapability.ID
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
@@ -54,6 +57,7 @@ class CopyRealizer @Inject constructor(
                     ActionResult.Failure("Нечего копировать", recoverable = true)
                 } else {
                     clipboard.copy(text, "Point")
+                    circle.offer(text)
                     ActionResult.Done("Скопировано")
                 }
             }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось скопировать", recoverable = true) }
@@ -78,13 +82,17 @@ class CopyCardCapability @Inject constructor() : Capability {
 class CopyCardRealizer @Inject constructor(
     private val extractor: EntityExtractor,
     private val clipboard: Clipboard,
+    private val circle: CircleClipboard,
 ) : Realizer {
     override val capabilityId = CopyCardCapability.ID
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
             runCatching {
                 val card = firstEntity(extractor, input, EntityType.PAYMENT_CARD) ?: error("Карта не найдена")
-                clipboard.copy(card.filter { it.isDigit() }, "Card")
+                val digits = card.filter { it.isDigit() }
+                clipboard.copy(digits, "Card")
+                // Номер карты узнают, чтобы на неё заплатить, а платят чаще с компьютера (#611).
+                circle.offer(digits)
                 ActionResult.Done("Скопирован номер карты")
             }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось скопировать", recoverable = true) }
         }

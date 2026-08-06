@@ -46,3 +46,24 @@ class RelayPcClipboardSync(
                 else ClipPull.Unreachable
         }
 }
+
+/**
+ * Буфер круга поверх той же синхронизации, которой пользуется плитка (#611).
+ *
+ * Плитка нужна для **чужого** содержимого: прочитать системный буфер телефона из фона Android не
+ * даёт, поэтому её и завели. Здесь другое: значение Point уже держит в руках — человек только что
+ * тапнул «Скопировать» внутри Point, — и читать системный буфер не надо вовсе. Значит и запрета
+ * нет, и лишнего движения от человека не требуется.
+ */
+class RelayCircleClipboard(
+    private val links: com.point.core.flow.PcLinks,
+    private val sync: com.point.core.flow.PcClipboardSync,
+) : com.point.core.flow.CircleClipboard {
+
+    override suspend fun offer(text: String) {
+        val pc = links.current() ?: return
+        // Тихо: не дошло — человек всё равно скопировал у себя, и говорить ему об этом нечего.
+        runCatching { sync.push(pc, com.point.core.flow.ClipboardPayload.ofText(text)) }
+    }
+}
+

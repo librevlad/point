@@ -30,14 +30,14 @@ class CopyActionTest {
     @Test
     fun `copies the trimmed text content and reports done`() = runTest {
         val clip = FakeClipboard()
-        val result = CopyRealizer(clip).perform(textObj("  привет  "), null)
+        val result = CopyRealizer(clip, com.point.core.flow.CircleClipboard.None).perform(textObj("  привет  "), null)
         assertTrue(result is ActionResult.Done)
         assertEquals("привет", clip.copied)
     }
 
     @Test
     fun `blank text is a recoverable failure`() = runTest {
-        val result = CopyRealizer(FakeClipboard()).perform(textObj("   "), null)
+        val result = CopyRealizer(FakeClipboard(), com.point.core.flow.CircleClipboard.None).perform(textObj("   "), null)
         assertTrue(result is ActionResult.Failure)
     }
 
@@ -48,7 +48,7 @@ class CopyActionTest {
             override suspend fun extract(text: String) =
                 listOf(Entity(EntityType.PAYMENT_CARD, "4111 1111 1111 1111"))
         }
-        val result = CopyCardRealizer(extractor, clip).perform(textObj("карта 4111 1111 1111 1111"), null)
+        val result = CopyCardRealizer(extractor, clip, com.point.core.flow.CircleClipboard.None).perform(textObj("карта 4111 1111 1111 1111"), null)
         assertTrue(result is ActionResult.Done)
         assertEquals("4111111111111111", clip.copied)
     }

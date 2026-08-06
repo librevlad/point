@@ -105,7 +105,7 @@ class LongWorkSaysWhatItDoesTest {
         }
 
         // Одно движение системы: буфер, экспорт, лист «Поделиться», чужое приложение.
-        mustBeSilent("Скопировать") { CopyRealizer(clipboard()).perform(textObject("телефон 050"), null) }
+        mustBeSilent("Скопировать") { CopyRealizer(clipboard(), com.point.core.flow.CircleClipboard.None).perform(textObject("телефон 050"), null) }
         mustBeSilent("Сохранить") { SaveRealizer(exporter()).perform(textObject("а"), null) }
         mustBeSilent("Поделиться") { ShareRealizer(sharer()).perform(textObject("а"), null) }
         mustBeSilent("Открыть") { OpenRealizer(viewer()).perform(textObject("а"), null) }
