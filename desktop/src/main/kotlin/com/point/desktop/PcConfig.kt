@@ -62,6 +62,39 @@ class FilePcConfig(private val baseDir: File) {
         return config
     }
 
+    /**
+     * Слить приехавшие ключи со своими и записать (#589).
+     *
+     * Возвращает то, что стало общим, — этот же ответ уезжает обратно на телефон. Правило слияния
+     * живёт в [SharedSecrets] и одно на оба устройства: спорить о том, чей ключ настоящий, они
+     * будут одинаково.
+     */
+    @Synchronized
+    fun mergeSecrets(theirs: com.point.core.flow.SharedSecrets): com.point.core.flow.SharedSecrets {
+        val config = load()
+        val mine = com.point.core.flow.SharedSecrets(
+            aiKey = config.ai.key,
+            speechKey = config.speech.key,
+            ocrKey = config.ocr.key,
+            at = secretsStamp(),
+        )
+        val merged = mine.mergedWith(theirs)
+        if (merged != mine) {
+            val stored = runCatching { decodePcMeta(file.readText()) }.getOrDefault(emptyMap()).toMutableMap()
+            if (merged.aiKey.isNotBlank()) stored["ai.key"] = merged.aiKey
+            if (merged.speechKey.isNotBlank()) stored["speech.key"] = merged.speechKey
+            if (merged.ocrKey.isNotBlank()) stored["ocr.key"] = merged.ocrKey
+            stored["secrets.at"] = merged.at.toString()
+            file.writeText(encodePcMeta(stored))
+        }
+        return merged
+    }
+
+    /** Когда ключи этой машины трогали в последний раз — метка для разрешения спора. */
+    private fun secretsStamp(): Long =
+        runCatching { decodePcMeta(file.readText())["secrets.at"]?.toLongOrNull() }.getOrNull()
+            ?: file.lastModified()
+
     private fun save(config: PcConfig) {
         // Ключ AI сюда не дописывается пустым: строка `ai.key=` в файле выглядит как «ключ есть,
         // но сломан». Нет ключа — нет и строки, а человек видит образец в подсказке экрана.

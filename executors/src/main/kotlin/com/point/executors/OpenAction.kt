@@ -24,7 +24,8 @@ import javax.inject.Inject
 class OpenCapability @Inject constructor() : Capability {
     override val id = ID
     override val icon = "open"
-    override val meta = CapabilityMeta(priority = 65)
+    // `localOnly`: «Открыть» открывает ЗДЕСЬ — на второй поверхности у неё свой двойник (#588).
+    override val meta = CapabilityMeta(priority = 65, localOnly = true)
     override fun label(state: ObjectState) = "Открыть"
     override fun accepts(state: ObjectState) =
         state.kind.isFileBacked && state.kind != ObjectKind.URL

@@ -9,6 +9,14 @@ data class UserAiConfig(
     val apiKey: String,
     val baseUrl: String,
     val model: String,
+    /**
+     * Когда ключ вписали (#589). Нужен ровно для одного: когда ключ есть и на телефоне, и на
+     * компьютере и они разные, выигрывает тот, который человек вписал позже. Без метки победил бы
+     * тот, кто первым дозвонился, — то есть случайность.
+     *
+     * Ноль — метки нет: так выглядят ключи, сохранённые до этого среза.
+     */
+    val savedAt: Long = 0L,
 ) {
     companion object {
         /** Sensible starting point shown in the key screen: a free OpenRouter model. */

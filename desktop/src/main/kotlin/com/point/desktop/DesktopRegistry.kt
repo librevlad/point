@@ -24,6 +24,8 @@ class DesktopRegistry(private val capabilities: Set<Capability>) : CapabilityReg
             // действие рассказывало бы о себе на телефоне и на ПК по-разному.
             .map { Bubble(it.icon, it.label(state), it.id, it.produces(state) ?: state, yields = it.yields(state)) }
 
+    override fun all(): Collection<Capability> = capabilities
+
     override fun intentsFor(state: ObjectState): List<Intent> = emptyList()
 
     override fun latentBubblesFor(state: ObjectState): List<LatentBubble> = emptyList()

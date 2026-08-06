@@ -1639,12 +1639,17 @@ class FlowViewModel @Inject constructor(
                 return@launch
             }
             val known = com.point.core.flow.LinkedPc(pc.id, pc.name, pc.key)
+            // Ключи сервисов общие для устройств человека (#589): вписанный на телефоне работает
+            // и на компьютере, и наоборот. Обмен идёт КАЖДЫЙ раз, а не только когда компьютер
+            // появился в круге впервые: ключ человек меняет когда угодно, и «уже знакомы» не
+            // значит «ключи те же». Молчаливая работа — человек её не заказывал.
+            runCatching { syncSecrets(known) }
             if (pcLinks.current() == known) return@launch
             runCatching { pcLinks.save(known) }
             // Что компьютер умеет и что он про нас знает — сразу же: иначе первые действия из
             // «Почти доступно» появились бы только со второго открытия экрана.
             runCatching { pcTransport.fetchCaps(known)?.let { caps -> pcCaps.save(caps) } }
-            runCatching { pcTransport.pushPhoneCaps(known, PHONE_ADVERTISED) }
+            runCatching { pcTransport.pushPhoneCaps(known, phoneAdvertised()) }
             refreshFromPc(force = true)
         }
     }
@@ -1660,6 +1665,43 @@ class FlowViewModel @Inject constructor(
         val key = runCatching { deviceKeys.keys().publicKey }.getOrNull() ?: return
         viewModelScope.launch { runCatching { accountClient.enroll(account, key) } }
     }
+
+    /**
+     * Обменяться ключами сервисов с компьютером (#589).
+     *
+     * Ключ AI человек заводит один раз, а устройств у него два. Письмо запечатано ключами
+     * устройств — сервер видит шифротекст и ключа не знает.
+     *
+     * Приехавшее сохраняется, только если это правда что-то новое: лишняя запись в шифрованные
+     * prefs на каждом открытии экрана — работа без причины.
+     */
+    private suspend fun syncSecrets(pc: com.point.core.flow.LinkedPc) {
+        val saved = runCatching { userKeys.read() }.getOrNull()
+        val mine = com.point.core.flow.SharedSecrets(
+            aiKey = saved?.apiKey.orEmpty(),
+            at = saved?.savedAt ?: 0L,
+        )
+        val merged = pcTransport.exchangeSecrets(pc, mine) ?: return
+        if (merged.aiKey.isBlank() || merged.aiKey == mine.aiKey) return
+        // Ключ приехал с компьютера — адрес и модель берём те, что уже выбраны здесь, а если
+        // ничего не выбрано, то умолчание: ключ без адреса никуда не сходит.
+        val config = (saved ?: com.point.core.flow.UserAiConfig.DEFAULT)
+            .copy(apiKey = merged.aiKey, savedAt = merged.at)
+        runCatching { userKeys.save(config) }
+        _ui.update { it.copy(aiKeySet = true) }
+    }
+
+    /**
+     * Что телефон объявляет компьютеру (#588) — выводится из реестра, а не из списка руками.
+     *
+     * Пустой ответ реестра (такого быть не должно, но проверка дешевле разбирательства) не
+     * оставляет вторую поверхность вовсе без умений: тогда едет прежняя пара действий.
+     */
+    private fun phoneAdvertised(): List<com.point.core.flow.PcRemoteAction> =
+        runCatching { com.point.core.flow.advertisedActions(registry.all()) }
+            .getOrNull()
+            ?.takeIf { it.isNotEmpty() }
+            ?: PHONE_ADVERTISED_FALLBACK
 
     /** Как это устройство представляется в круге. */
     private fun deviceName(): String = "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}".trim()
@@ -2336,9 +2378,18 @@ private const val OUTBOX_THROTTLE_MS = 30_000L
 /** Как часто телефон тихо переспрашивает круг (#475): устройства прибавляются редко. */
 private const val CIRCLE_SYNC_THROTTLE_MS = 5 * 60_000L
 
-/** The phone-side actions advertised to the paired PC (#161 v2) — deliberately few and
- *  non-interactive: each opens a system screen the user finishes themselves. */
-private val PHONE_ADVERTISED = listOf(
+/**
+ * Что телефон объявляет компьютеру (#588).
+ *
+ * Раньше здесь лежал список из ДВУХ действий, записанный руками, — при сорока семи умениях
+ * телефона. Он не рос вместе с продуктом: новая способность про вторую поверхность не знала, и
+ * компьютер про неё тоже.
+ *
+ * Теперь список выводится из того же реестра, из которого растут пузырьки: добавил способность —
+ * она поехала на компьютер сама. Не едет только помеченное `localOnly` — то, что зациклится или
+ * чей смысл в самом устройстве.
+ */
+private val PHONE_ADVERTISED_FALLBACK = listOf(
     com.point.core.flow.PcRemoteAction("call", "Позвонить", kinds = setOf("TEXT")),
     com.point.core.flow.PcRemoteAction("event", "Создать событие", kinds = setOf("TEXT")),
 )

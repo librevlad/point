@@ -159,75 +159,41 @@ fun main(args: Array<String>) {
     runCatching { com.point.core.flow.decodePcCaps(phoneCapsFile.readText()) }
         .getOrNull()?.let(state::setPhoneCaps)
 
-    // Что этот компьютер умеет. Канал один (#475), и список у него тоже один: второй правды о
-    // возможностях ПК в проекте не заводится.
-    val pcRemoteActions = buildList {
-            add(com.point.core.flow.PcRemoteAction("pc-open", "Открыть на компьютере"))
-            add(com.point.core.flow.PcRemoteAction("pc-copy", "В буфер компьютера"))
-            add(com.point.core.flow.PcRemoteAction("pc-reveal", "Показать в папке на ПК"))
-            add(
-                com.point.core.flow.PcRemoteAction(
-                    "pc-download", "Скачать видео на ПК", kinds = setOf("URL"),
-                    unavailable = if (downloader.available()) null else "на компьютере нет yt-dlp",
-                ),
-            )
-            // #291: печать отрабатывает, только если система её поддерживает и принтер по
-            // умолчанию есть; #316: если нет — говорим, чего именно не хватает.
-            add(com.point.core.flow.PcRemoteAction("pc-print", "Напечатать на ПК", unavailable = whyCannotPrint()))
-            // Телефон рисовать слайды не умеет, компьютер умеет — и говорит об этом прямо. Нет
-            // конвертера — действие приезжает недоступным, кнопки на телефоне не будет (#316).
-            add(
-                com.point.core.flow.PcRemoteAction(
-                    "pc-office-pdf",
-                    "Сделать PDF на ПК",
-                    kinds = setOf("OFFICE"),
-                    unavailable = officeToPdf.whyUnavailable(),
-                ),
-            )
-            // Работа с содержимым (#585). Она нужна и на телефоне, и на компьютере — но телефон
-            // тянет её к себе только тогда, когда своего пути нет: например, ключ AI вписан на
-            // компьютере, а на телефоне его нет.
-            add(com.point.core.flow.PcRemoteAction("pc-entities", "Найти в тексте на ПК", kinds = setOf("TEXT")))
-            add(
-                com.point.core.flow.PcRemoteAction(
-                    "pc-qr", "Сделать QR на ПК", kinds = setOf("TEXT", "URL"),
-                ),
-            )
-            // Три AI-действия приезжают недоступными, пока ключа на компьютере нет: кнопки на
-            // телефоне не будет вовсе, и человек не потратит тап на молчание (#316).
-            val noKey = if (FilePcConfig(pointDir).load().ai.key.isNotBlank()) {
-                null
-            } else {
-                "на компьютере не задан ключ AI"
-            }
-            add(com.point.core.flow.PcRemoteAction("pc-understand", "Понять на ПК", kinds = setOf("TEXT"), unavailable = noKey))
-            add(com.point.core.flow.PcRemoteAction("pc-translate", "Перевести на ПК", kinds = setOf("TEXT"), unavailable = noKey))
-            add(com.point.core.flow.PcRemoteAction("pc-ask", "Спросить AI на ПК", kinds = setOf("TEXT"), unavailable = noKey))
-            // Ссылку выдаёт сервер, значит нужен вход. Не вошли — действие приезжает недоступным.
-            add(
-                com.point.core.flow.PcRemoteAction(
-                    "pc-drop", "Дать ссылку с ПК",
-                    unavailable = if (accountStore.current() != null) null else "компьютер не вошёл в аккаунт",
-                ),
-            )
-            add(com.point.core.flow.PcRemoteAction("pc-unzip", "Распаковать на ПК", kinds = setOf("ZIP")))
-            add(com.point.core.flow.PcRemoteAction("pc-office-text", "Достать текст на ПК", kinds = setOf("OFFICE")))
-            add(com.point.core.flow.PcRemoteAction("pc-shrink", "Сделать легче на ПК", kinds = setOf("IMAGE")))
-            // Чтение снимка на ПК идёт в чужой сервис — телефон читает сам и бесплатно, поэтому
-            // тянуть эту работу на компьютер он будет только по прямому выбору человека.
-            add(com.point.core.flow.PcRemoteAction("pc-ocr", "Прочитать в облаке на ПК", kinds = setOf("IMAGE")))
-            add(
-                com.point.core.flow.PcRemoteAction(
-                    "pc-transcribe", "Расшифровать на ПК", kinds = setOf("AUDIO"),
-                    unavailable = if (FilePcConfig(pointDir).load().speech.key.isNotBlank()) {
-                        null
-                    } else {
-                        "на компьютере не задан ключ расшифровки"
-                    },
-                ),
-            )
-            add(com.point.core.flow.PcRemoteAction("pc-open-link", "Открыть в браузере на ПК", kinds = setOf("URL")))
-        }
+    // Что этот компьютер умеет (#588). Список ВЫВОДИТСЯ из того же реестра, из которого растут
+    // действия на самом ПК: добавил способность — она поехала на телефон сама. Ручной перечень,
+    // который тут лежал раньше, приходилось дописывать вручную на каждое новое действие, и
+    // разойтись с реестром он мог молча.
+    //
+    // Причины «умею, но не сейчас» (#316) реестр не знает — они про железо и ключи этой машины,
+    // и накладываются здесь, поверх выведенного списка.
+    val pcSuffix = mapOf(
+        "pc-open" to "Открыть на компьютере",
+        "pc-copy" to "В буфер компьютера",
+        "pc-reveal" to "Показать в папке на ПК",
+    )
+    val pcUnavailable: Map<String, String?> = mapOf(
+        "pc-download" to if (downloader.available()) null else "на компьютере нет yt-dlp",
+        // #291: печать отрабатывает, только если система её поддерживает и принтер по умолчанию
+        // есть; #316: если нет — говорим, чего именно не хватает.
+        "pc-print" to whyCannotPrint(),
+        "pc-office-pdf" to officeToPdf.whyUnavailable(),
+        // AI-действия приезжают недоступными, пока ключа на компьютере нет: кнопки на телефоне не
+        // будет вовсе, и человек не потратит тап на молчание.
+        "pc-understand" to aiKeyMissing(pointDir),
+        "pc-translate" to aiKeyMissing(pointDir),
+        "pc-ask" to aiKeyMissing(pointDir),
+        "pc-transcribe" to speechKeyMissing(pointDir),
+        // Ссылку выдаёт сервер, значит нужен вход.
+        "pc-drop" to if (accountStore.current() != null) null else "компьютер не вошёл в аккаунт",
+    )
+    val pcRemoteActions = com.point.core.flow.advertisedActions(registry.all()).map { action ->
+        action.copy(
+            // «на ПК» в имени — не украшение: человек читает список на телефоне, где рядом стоят
+            // его собственные действия, и должен видеть, чьё это умение.
+            label = pcSuffix[action.id] ?: (action.label + " на ПК"),
+            unavailable = pcUnavailable[action.id],
+        )
+    }
 
     // Открылись сами: файл из меню становится объектом сразу, без лишнего действия человека.
     filesFromArgs(args).forEach { file ->
@@ -241,6 +207,9 @@ fun main(args: Array<String>) {
         remoteActions = { pcRemoteActions },
         outbox = outbox,
         onPhoneCaps = state::setPhoneCaps,
+        // Ключи сервисов общие для устройств человека (#589): приехали с телефона — слили со
+        // своими и вернули общие. Канал уже запечатан ключами устройств, сервер видит шифротекст.
+        onSecrets = { theirs -> FilePcConfig(pointDir).mergeSecrets(theirs) },
         clipboardGet = ::readSystemClipboard,
         clipboardSet = ::writeSystemClipboard,
         onObject = { name, mime, meta, bytes, action ->
@@ -330,6 +299,18 @@ fun main(args: Array<String>) {
  * человек читает как «Point не умеет печатать» (#316). Поэтому не булево «можно/нельзя», а
  * причина словами: её увидит тот, кто держит телефон в руках.
  */
+/** Нет ключа AI — три действия приезжают на телефон недоступными, кнопки там не будет (#316). */
+private fun aiKeyMissing(pointDir: java.io.File): String? =
+    if (FilePcConfig(pointDir).load().ai.key.isNotBlank()) null else "на компьютере не задан ключ AI"
+
+/** Расшифровке нужен ключ ДРУГОГО сервиса, поэтому и причина у неё своя. */
+private fun speechKeyMissing(pointDir: java.io.File): String? =
+    if (FilePcConfig(pointDir).load().speech.key.isNotBlank()) {
+        null
+    } else {
+        "на компьютере не задан ключ расшифровки"
+    }
+
 private fun whyCannotPrint(): String? {
     val systemPrints = runCatching {
         java.awt.Desktop.isDesktopSupported() &&

@@ -1202,6 +1202,60 @@ class FlowViewModelTest {
         assertTrue(vm.ui.value.signIn is com.point.core.flow.SignIn.SignedOut)
     }
 
+    // --- Ключи общие для устройств человека (#589) ---
+
+    @Test fun `ключ с компьютера доезжает до телефона и включает AI`() = runTest(dispatcher) {
+        // Ключ человек заводит один раз, а устройств у него два: вводить дважды незачем.
+        pcLinks.pc = com.point.core.flow.LinkedPc("d-pc", "Ноутбук", "ключ-ПК")
+        pcTransport.secretsReply = com.point.core.flow.SharedSecrets(aiKey = "sk-с-компьютера", at = 900)
+        val vm = vm(
+            account = FakeAccountStore(TEST_ACCOUNT),
+            accountClient = FakeCircleClient(listOf(
+                com.point.core.flow.CircleDevice("d-pc", com.point.core.flow.DeviceKind.PC, "Ноутбук", key = "ключ-ПК"),
+            )),
+        )
+
+        vm.openDevices(); advanceUntilIdle()
+
+        assertEquals("sk-с-компьютера", userKeys.saved?.apiKey)
+        assertTrue("экран не узнал, что ключ появился", vm.ui.value.aiKeySet)
+    }
+
+    @Test fun `свой ключ не затирается пустым ответом компьютера`() = runTest(dispatcher) {
+        // На компьютере ключа нет — это не повод стирать свой.
+        userKeys.config = com.point.core.flow.UserAiConfig("sk-мой", "https://api/v1", "m", savedAt = 100)
+        pcLinks.pc = com.point.core.flow.LinkedPc("d-pc", "Ноутбук", "ключ-ПК")
+        pcTransport.secretsReply = com.point.core.flow.SharedSecrets(at = 900)
+        val vm = vm(
+            account = FakeAccountStore(TEST_ACCOUNT),
+            accountClient = FakeCircleClient(listOf(
+                com.point.core.flow.CircleDevice("d-pc", com.point.core.flow.DeviceKind.PC, "Ноутбук", key = "ключ-ПК"),
+            )),
+        )
+
+        vm.openDevices(); advanceUntilIdle()
+
+        assertEquals("ключ перезаписан пустым", null, userKeys.saved)
+    }
+
+    @Test fun `свой ключ уезжает на компьютер вместе с меткой`() = runTest(dispatcher) {
+        userKeys.config = com.point.core.flow.UserAiConfig("sk-мой", "https://api/v1", "m", savedAt = 777)
+        pcLinks.pc = com.point.core.flow.LinkedPc("d-pc", "Ноутбук", "ключ-ПК")
+        val vm = vm(
+            account = FakeAccountStore(TEST_ACCOUNT),
+            accountClient = FakeCircleClient(listOf(
+                com.point.core.flow.CircleDevice("d-pc", com.point.core.flow.DeviceKind.PC, "Ноутбук", key = "ключ-ПК"),
+            )),
+        )
+
+        vm.openDevices(); advanceUntilIdle()
+
+        // Метка нужна, чтобы спор двух непустых ключей решался по времени, а не по тому, кто
+        // первым дозвонился.
+        assertEquals("sk-мой", pcTransport.sentSecrets?.aiKey)
+        assertEquals(777L, pcTransport.sentSecrets?.at)
+    }
+
     @Test fun `«Удалить аккаунт» уносит и аккаунт, и память об этом устройстве`() = runTest(dispatcher) {
         // Отдельная дверь, а не «выйти покрасивее»: выход снимает ЭТО устройство и оставляет
         // аккаунт жить. Пока такой двери не было, ушедший совсем человек оставлял на сервере свою
@@ -2981,6 +3035,9 @@ private class FakeRegistry(
             )
             Bubble("x", label, id, ObjectState(ObjectKind.TEXT))
         }
+    /** Фейк не строит настоящих способностей — объявлять второй поверхности ему нечего (#588). */
+    override fun all(): Collection<com.point.core.flow.Capability> = emptyList()
+
     override fun intentsFor(state: ObjectState): List<Intent> =
         Intent.entries.filter { intent -> caps.values.any { intent in it } }
     override fun latentBubblesFor(state: ObjectState) = emptyList<com.point.core.model.LatentBubble>()
@@ -3249,6 +3306,19 @@ private class FakePcTransport : com.point.core.flow.PcTransport {
     override suspend fun pushPhoneCaps(pc: com.point.core.flow.LinkedPc, caps: List<com.point.core.flow.PcRemoteAction>): Boolean {
         pushedPhoneCaps = caps
         return true
+    }
+
+    /** Ключи, которые телефон отправил компьютеру, и то, что компьютер вернул (#589). */
+    var sentSecrets: com.point.core.flow.SharedSecrets? = null
+        private set
+    var secretsReply: com.point.core.flow.SharedSecrets? = null
+
+    override suspend fun exchangeSecrets(
+        pc: com.point.core.flow.LinkedPc,
+        mine: com.point.core.flow.SharedSecrets,
+    ): com.point.core.flow.SharedSecrets? {
+        sentSecrets = mine
+        return secretsReply
     }
 }
 

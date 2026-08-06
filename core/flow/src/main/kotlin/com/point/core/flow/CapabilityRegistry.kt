@@ -24,4 +24,13 @@ interface CapabilityRegistry {
     fun latentBubblesFor(state: ObjectState): List<LatentBubble>
 
     fun byId(id: CapabilityId): Capability
+
+    /**
+     * Все способности этого устройства — то, из чего выводится список для второй поверхности
+     * ([advertisedActions], #588).
+     *
+     * Не «список умений» отдельной записью: тот однажды разошёлся бы с реестром, и человек увидел
+     * бы на компьютере кнопку, которой на телефоне нет.
+     */
+    fun all(): Collection<Capability>
 }
