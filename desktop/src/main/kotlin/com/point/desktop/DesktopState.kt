@@ -143,7 +143,10 @@ class DesktopState(
                 kotlinx.coroutines.withContext(
                     com.point.core.flow.ActionProgress { stage ->
                         _working.value = _working.value?.copy(stage = stage)
-                    },
+                    } +
+                        // Откуда просьба (#591): тап здесь — человек перед экраном, и печать
+                        // спросит его про принтер; просьба с телефона — за компьютером никого нет.
+                        com.point.core.flow.RequestOrigin(here = stationTitle != null),
                 ) {
                     resolver.realizerFor(com.point.core.model.CapabilityId(id), item.obj.state)
                         .perform(item.obj, null)

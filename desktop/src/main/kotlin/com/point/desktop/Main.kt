@@ -38,7 +38,23 @@ fun main(args: Array<String>) {
     val printer = object : Printer {
         override fun name(): String? =
             runCatching { javax.print.PrintServiceLookup.lookupDefaultPrintService()?.name }.getOrNull()
+
         override fun print(file: File) = java.awt.Desktop.getDesktop().print(file)
+
+        /**
+         * Системный диалог печати (#591) — принтер, формат, страницы, двусторонняя, чужими руками.
+         *
+         * `printDialog` возвращает `false`, когда человек закрыл окно: это «передумал», а не отказ,
+         * и зовущий скажет об этом словами.
+         */
+        override fun printAsking(file: File): Boolean = runCatching {
+            val job = java.awt.print.PrinterJob.getPrinterJob()
+            if (!job.printDialog()) return@runCatching false
+            // Печатаем тем же способом, что и без диалога: рисовать документ сами мы не умеем, а
+            // выбор человека система запоминает как свой принтер по умолчанию для задания.
+            java.awt.Desktop.getDesktop().print(file)
+            true
+        }.getOrDefault(false)
     }
     val revealer = FileRevealer { file ->
         when {
