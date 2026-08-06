@@ -1,5 +1,6 @@
 package com.point.executors
 
+import com.point.core.flow.capabilities.OcrCapability
 import com.point.core.flow.Entitlements
 import com.point.core.flow.LlmClient
 import com.point.core.flow.ObjectStore

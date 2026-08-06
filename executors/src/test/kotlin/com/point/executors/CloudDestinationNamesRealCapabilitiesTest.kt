@@ -1,5 +1,6 @@
 package com.point.executors
 
+import com.point.core.flow.capabilities.OcrCapability
 import com.point.core.flow.cloudDestination
 import com.point.core.model.CapabilityId
 import org.junit.Assert.assertNotEquals

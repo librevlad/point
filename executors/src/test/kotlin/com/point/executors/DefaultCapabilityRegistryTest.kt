@@ -1,5 +1,6 @@
 package com.point.executors
 
+import com.point.core.flow.capabilities.OcrCapability
 import com.point.core.flow.LinkedPc
 import com.point.core.flow.PcLinks
 import com.point.core.flow.PcRemoteAction

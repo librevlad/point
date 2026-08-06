@@ -1,5 +1,6 @@
 package com.point.executors
 
+import com.point.core.flow.capabilities.OcrCapability
 import com.point.core.flow.Capability
 import com.point.core.flow.Latency
 import org.junit.Assert.assertEquals

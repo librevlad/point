@@ -1,5 +1,6 @@
 package com.point.executors
 
+import com.point.core.flow.capabilities.OcrCapability
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import org.junit.Assert.assertFalse

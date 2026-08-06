@@ -342,11 +342,43 @@ class SmartActionsTest {
         assertTrue(box.entries().isEmpty())
     }
 
-    @Test fun `чтение в облаке названо облаком, а не распознаванием`() {
-        // На телефоне «Распознать текст» читает сам и бесплатно. Одинаковое имя у разных по цене
-        // действий — это обещание, которое ПК не выполнит: у него локального чтения нет.
-        assertEquals("Прочитать в облаке", PcCloudOcrCapability().label(ObjectState(ObjectKind.IMAGE)))
-        assertTrue("действие не помечено сетевым", PcCloudOcrCapability().meta.network)
+    @Test fun `у чтения снимка одна декларация на оба устройства, а компьютер даёт реализацию`() {
+        // Прежде здесь стоял обратный приговор: «чтение в облаке названо облаком, а не
+        // распознаванием» — у компьютера была СВОЯ способность `pc-ocr` «Прочитать в облаке».
+        // Довод был разумный: одинаковое имя у разного по цене — обещание, которого ПК не
+        // выполнит. Но лечили не то. Пока деклараций было две, компьютер объявлял телефону чтение
+        // чужим сервисом рядом с телефонным — локальным, бесплатным и лучшим. Владелец назвал это
+        // абсурдом (06.08.2026), и он прав: спорили не реализации, спорили две декларации одного
+        // намерения.
+        //
+        // Контракт (И1): `Capability` не принадлежит устройству. Декларация одна, реализаций
+        // несколько, выбирает `Resolver`. Прежний довод при этом не потерян — цену говорит сама
+        // декларация строкой «не выйдет на устройстве — предложит сервис», и на компьютере, где
+        // локального чтения нет вовсе, это просто всегда.
+        val shared = com.point.core.flow.capabilities.OcrCapability()
+
+        assertEquals(shared.id, PcCloudOcrRealizer({ OcrConfig() }, outbox()).capabilityId)
+        assertEquals("Распознать текст", shared.label(ObjectState(ObjectKind.IMAGE)))
+        assertTrue(
+            "цена дороги не названа до тапа",
+            shared.yields(ObjectState(ObjectKind.IMAGE)).toString().contains("сервис"),
+        )
+    }
+
+    @Test fun `своей способности про облако у компьютера не осталось`() {
+        // Сторож против возврата: любая способность с именем про облако на ПК — это вторая
+        // декларация намерения, которое уже объявлено общим словарём.
+        val mine = DesktopRegistry(
+            setOf(
+                PcEntitiesCapability(), PcUnderstandCapability(), PcTranslateCapability(),
+                PcAskCapability(), PcQrCapability(),
+            ) + com.point.core.flow.capabilities.sharedCapabilities(),
+        )
+
+        val forImage = mine.bubblesFor(ObjectState(ObjectKind.IMAGE)).map { it.capabilityId.value }
+
+        assertTrue("на ПК снова заведена своя способность чтения: $forImage", "pc-ocr" !in forImage)
+        assertTrue("общее чтение не предложено картинке: $forImage", "ocr" in forImage)
     }
 
     // --- Объявление телефону ------------------------------------------------------------------

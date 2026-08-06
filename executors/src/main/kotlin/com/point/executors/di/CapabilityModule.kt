@@ -9,6 +9,7 @@ import com.point.core.flow.CapabilityRegistry
 import com.point.core.flow.Realizer
 import com.point.core.flow.AiChatResponder
 import com.point.core.flow.Resolver
+import com.point.core.model.CapabilityId
 import com.point.executors.AppCapability
 import com.point.executors.PcCapability
 import com.point.executors.PcRealizer
@@ -68,7 +69,6 @@ import com.point.executors.CopyRealizer
 import com.point.executors.CutoutCapability
 import com.point.executors.CutoutRealizer
 import com.point.executors.DeviceOcrRealizer
-import com.point.executors.OcrCapability
 import com.point.executors.OfficeCapability
 import com.point.executors.OfficeRealizer
 import com.point.executors.OpenCapability
@@ -185,7 +185,7 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun cutoutCap(c: CutoutCapability): Capability
     @Binds @IntoSet abstract fun blurBgCap(c: BlurBgCapability): Capability
     @Binds @IntoSet abstract fun replaceBgCap(c: ReplaceBgCapability): Capability
-    @Binds @IntoSet abstract fun ocrCap(c: OcrCapability): Capability
+    // «Распознать текст» переехало в общий словарь (`:core:flow`) — см. companion ниже.
     @Binds @IntoSet abstract fun cloudOcrCap(c: CloudOcrCapability): Capability
     @Binds @IntoSet abstract fun aiCap(c: AiCapability): Capability
     @Binds @IntoSet abstract fun shoppingListCap(c: ShoppingListCapability): Capability
@@ -252,6 +252,22 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun pcR(r: PcRealizer): Realizer
 
     companion object {
+        /**
+         * Общий словарь намерений (`:core:flow.capabilities`) — контракт от 06.08.2026, И1:
+         * `Capability` не принадлежит устройству.
+         *
+         * Одна привязка на весь словарь, а не по одной на способность: следующая переезжающая
+         * способность добавляется строкой в `sharedCapabilities()` и появляется здесь сама. Место,
+         * которое пришлось бы дописывать на каждую, однажды забыли бы дописать.
+         *
+         * `@Provides`, а не `@Binds`, по простой причине: у общей декларации нет и не будет
+         * `@Inject`. Ядро Point не имеет сторонних зависимостей, и `javax.inject` туда не поедет
+         * ради переезда деклараций — связывание остаётся заботой того, у кого DI есть.
+         */
+        @Provides @ElementsIntoSet
+        fun sharedCaps(): Set<Capability> =
+            com.point.core.flow.capabilities.sharedCapabilities().toSet()
+
         // @Provides (not @Binds) keeps the concrete OpenCV realizer out of the binding
         // signature, so Dagger's KSP aggregation never has to resolve the native OpenCV AAR
         // types (which it can't, even though kotlinc can) — the pack still lands @IntoSet (#45).
@@ -281,9 +297,21 @@ abstract class CapabilityModule {
 
         // #80: the paired PC's advertised actions join the SAME graph — one pair per
         // cached advertisement (refreshed on pairing; visible from the next launch).
+        //
+        // Намерение из общего словаря отсюда НЕ синтезируется (контракт 06.08.2026, И1 и И2):
+        // декларация у него одна, и вторая — «Распознать текст на ПК» рядом с «Распознать текст» —
+        // была бы предложением выбрать устройство. Реализация компьютера при этом никуда не
+        // девается: она приходит [pcRemoteRealizers] и встаёт кандидатом к той же способности,
+        // между которыми и выбирает `Resolver`.
+        //
+        // Список сжимается сам по мере переезда способностей в общий словарь и однажды опустеет
+        // вместе с `RemotePcCapability`.
         @Provides @ElementsIntoSet
         fun pcRemoteCapabilities(caps: com.point.core.flow.PcCapsStore, links: com.point.core.flow.PcLinks): Set<Capability> =
-            caps.all().map { RemotePcCapability(it, links) }.toSet()
+            caps.all()
+                .filterNot { CapabilityId(it.id) in com.point.core.flow.capabilities.sharedCapabilityIds }
+                .map { RemotePcCapability(it, links) }
+                .toSet()
 
         @Provides @ElementsIntoSet
         fun pcRemoteRealizers(

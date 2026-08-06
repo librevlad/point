@@ -89,7 +89,9 @@ fun main(args: Array<String>) {
             PcEntitiesCapability(), PcUnderstandCapability(), PcTranslateCapability(),
             PcAskCapability(), PcQrCapability(), PcDropCapability(),
             PcUnzipCapability(), PcOpenLinkCapability(), PcOfficeTextCapability(),
-            PcShrinkImageCapability(), PcTranscribeCapability(), PcCloudOcrCapability(),
+            PcShrinkImageCapability(), PcTranscribeCapability(),
+            // Общий словарь (#И1): «Распознать текст» одно на оба устройства.
+            com.point.core.flow.capabilities.OcrCapability(),
         ),
     )
     val resolver = DesktopResolver(
