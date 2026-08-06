@@ -55,7 +55,11 @@ private val VARIANTS = listOf(
 
 @OptIn(androidx.compose.ui.text.ExperimentalTextApi::class)
 fun main() = application {
-    Window(onCloseRequest = ::exitApplication, title = "Point · образец шрифтов") {
+    Window(
+        onCloseRequest = ::exitApplication,
+        title = "Point · образец шрифтов",
+        state = androidx.compose.ui.window.rememberWindowState(width = 1100.dp, height = 780.dp),
+    ) {
         PointDesktopTheme {
             Column(
                 Modifier.fillMaxSize().background(PointColors.window).padding(24.dp),

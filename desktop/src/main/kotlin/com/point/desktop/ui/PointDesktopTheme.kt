@@ -67,28 +67,73 @@ private val Unbounded = FontFamily(Font(resource = "unbounded.ttf", weight = Fon
 
 private val Manrope = FontFamily(Font(resource = "manrope.ttf", weight = FontWeight.Normal))
 
+/**
+ * Как рисовать буквы (#590). Выбрано владельцем глазами по образцу — вариант 4.
+ *
+ * Текст в окне рисует Skia, а не Windows, и системного ClearType там нет по умолчанию: отсюда
+ * тонкие размытые буквы, непохожие на любое соседнее окно. Владелец: «у java приложений в принципе
+ * проблема со сглаживанием шрифтов как таковая, и это бесит».
+ *
+ * До этой правки стояло умолчание библиотеки — то есть никто ничего не выбирал.
+ *
+ * Обычное сглаживание, а не субпиксельное: субпиксельное подкрашивает края в цвет и красиво только
+ * на одном виде экрана, а этот же Point открывают и на ноутбуке с масштабом 150 %. Полный хинтинг
+ * сажает буквы на пиксельную сетку — именно он и делает мелкий текст читаемым.
+ *
+ * Собрано образцом (`./gradlew :desktop:fontSample`): пять вариантов рядом, снимок владельцу,
+ * выбор одним словом. Описанием такое не выбирают.
+ */
+@OptIn(androidx.compose.ui.text.ExperimentalTextApi::class)
+private val PointRasterization = androidx.compose.ui.text.PlatformTextStyle(
+    null,
+    androidx.compose.ui.text.PlatformParagraphStyle(
+        androidx.compose.ui.text.FontRasterizationSettings(
+            smoothing = androidx.compose.ui.text.FontSmoothing.AntiAlias,
+            hinting = androidx.compose.ui.text.FontHinting.Full,
+            subpixelPositioning = false,
+            autoHintingForced = true,
+        ),
+    ),
+)
+
 /** Типографика мокапа: Unbounded говорит, Manrope рассказывает. */
 object PointType {
     /** Крупное имя экрана — «Point ждёт объект». */
-    val display = TextStyle(fontFamily = Unbounded, fontSize = 28.sp, color = PointColors.text)
+    val display = TextStyle(
+        fontFamily = Unbounded, fontSize = 28.sp, color = PointColors.text,
+        platformStyle = PointRasterization,
+    )
 
     /** Заголовок карточки или станции. */
-    val title = TextStyle(fontFamily = Unbounded, fontSize = 18.sp, color = PointColors.text)
+    val title = TextStyle(
+        fontFamily = Unbounded, fontSize = 18.sp, color = PointColors.text,
+        platformStyle = PointRasterization,
+    )
 
     /** Обычный текст. */
-    val body = TextStyle(fontFamily = Manrope, fontSize = 14.sp, color = PointColors.text)
+    val body = TextStyle(
+        fontFamily = Manrope, fontSize = 14.sp, color = PointColors.text,
+        platformStyle = PointRasterization,
+    )
 
     /** Второстепенное: подписи под объектом, пояснения. */
-    val small = TextStyle(fontFamily = Manrope, fontSize = 13.sp, color = PointColors.muted)
+    val small = TextStyle(
+        fontFamily = Manrope, fontSize = 13.sp, color = PointColors.muted,
+        platformStyle = PointRasterization,
+    )
 
     /** Метка секции: «ПРИЛЕТЕЛО», «ИЗВЛЕЧЬ» — разрядка и верхний регистр. */
     val label = TextStyle(
         fontFamily = Manrope, fontSize = 11.sp,
         letterSpacing = 1.6.sp, color = PointColors.muted,
+        platformStyle = PointRasterization,
     )
 
     /** Горячая клавиша и прочее, что человек набирает руками. */
-    val mono = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 11.sp, color = PointColors.muted)
+    val mono = TextStyle(
+        fontFamily = FontFamily.Monospace, fontSize = 11.sp, color = PointColors.muted,
+        platformStyle = PointRasterization,
+    )
 }
 
 /**
