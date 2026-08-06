@@ -297,6 +297,10 @@ fun main(args: Array<String>) {
                 // Снимок экрана (#585). Окно Point убирается на миг: иначе человек снимет сам
                 // Point вместо того, что было под ним.
                 onWipe = { inbox.wipe() },
+                onSaveSettings = { changed -> runCatching { FilePcConfig(pointDir).save(changed) } },
+                onSweepNow = {
+                    runCatching { inbox.sweep(System.currentTimeMillis() - 24L * 60 * 60 * 1000) }
+                },
                 onGrabScreen = {
                     val was = windowState.isMinimized
                     windowState.isMinimized = true

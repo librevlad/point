@@ -95,18 +95,33 @@ class FilePcConfig(private val baseDir: File) {
         runCatching { decodePcMeta(file.readText())["secrets.at"]?.toLongOrNull() }.getOrNull()
             ?: file.lastModified()
 
-    private fun save(config: PcConfig) {
-        // Ключ AI сюда не дописывается пустым: строка `ai.key=` в файле выглядит как «ключ есть,
-        // но сломан». Нет ключа — нет и строки, а человек видит образец в подсказке экрана.
-        file.writeText(
-            encodePcMeta(
-                buildMap {
-                    put("name", config.name)
-                    put("server", config.server)
-                    if (config.ai.key.isNotBlank()) put("ai.key", config.ai.key)
-                },
-            ),
-        )
+    /**
+     * Записать настройки, **не потеряв того, чего не знаешь** (#593).
+     *
+     * Раньше файл переписывался целиком из трёх полей — имени, адреса сервера и ключа AI. Всё
+     * остальное исчезало: ключ расшифровки, ключ чтения, свои адреса и модели, метка ключей. Пока
+     * запись случалась один раз при первом запуске, это почти не всплывало; с экраном настроек
+     * запись стала обычным делом, и человек, вписавший ключи по образцу из `local.properties.sample`
+     * и не указавший имя, потерял бы их на первом же старте.
+     *
+     * Поэтому не «переписать», а «поправить своё»: читаем, меняем названное, оставляем остальное.
+     *
+     * Пустой ключ в файл не пишется вовсе: строка `ai.key=` выглядит как «ключ есть, но сломан».
+     * Стёртый человеком ключ при этом убирается — иначе стереть его было бы нечем.
+     */
+    @Synchronized
+    fun save(config: PcConfig) {
+        val stored = runCatching { decodePcMeta(file.readText()) }.getOrDefault(emptyMap()).toMutableMap()
+        stored["name"] = config.name
+        stored["server"] = config.server
+        listOf(
+            "ai.key" to config.ai.key,
+            "speech.key" to config.speech.key,
+            "ocr.key" to config.ocr.key,
+        ).forEach { (key, value) ->
+            if (value.isBlank()) stored.remove(key) else stored[key] = value
+        }
+        file.writeText(encodePcMeta(stored))
     }
 
     private fun hostName(): String =
