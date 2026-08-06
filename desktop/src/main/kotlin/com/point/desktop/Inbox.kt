@@ -13,6 +13,53 @@ data class InboxItem(
     val receivedAt: Long = System.currentTimeMillis(),
 )
 
+/**
+ * Пригодное имя файла для объекта, названного по-человечески (#603).
+ *
+ * Человеческое имя приходит с телефона и годится для экрана, но не для диска: в нём бывает
+ * многоточие, двоеточие и прочие знаки, которых файловая система не берёт, нет расширения, и
+ * длина у него любая. Файл без расширения не открывается двойным щелчком — это и была жалоба.
+ *
+ * Здесь имя приводится к пригодному: запрещённые знаки убираются, длина ограничивается,
+ * расширение берётся у типа объекта — компьютер его знает, оно приехало вместе с объектом.
+ */
+fun fileNameFor(humanName: String, mime: String): String {
+    val cleaned = humanName
+        .replace(FORBIDDEN, " ")
+        .replace(Regex("""\s+"""), " ")
+        .trim(' ', '.')
+        .take(MAX_NAME)
+        .trim(' ', '.')
+    val base = cleaned.ifBlank { "объект" }
+    val known = base.substringAfterLast('.', "").lowercase()
+    val wanted = extensionFor(mime)
+    // Расширение уже на месте — второго не приписываем: «отчёт.pdf.pdf» это не аккуратность.
+    return if (wanted.isEmpty() || known == wanted) base else "$base.$wanted"
+}
+
+/** Знаки, которых не берёт файловая система Windows (остальные системы берут меньше). */
+private val FORBIDDEN = Regex("""[\\/:*?"<>|…\n\r\t]""")
+
+/** Столько имени хватает человеку и не упирается в предел пути. */
+private const val MAX_NAME = 80
+
+/** Расширение по типу объекта: компьютер его знает — тип приехал вместе с объектом. */
+private fun extensionFor(mime: String): String = when (mime.substringBefore(';').trim()) {
+    "text/plain" -> "txt"
+    "text/uri-list" -> "txt"
+    "image/png" -> "png"
+    "image/jpeg" -> "jpg"
+    "image/webp" -> "webp"
+    "application/pdf" -> "pdf"
+    "application/zip" -> "zip"
+    "audio/mpeg" -> "mp3"
+    "audio/mp4", "audio/m4a" -> "m4a"
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document" -> "docx"
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" -> "xlsx"
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation" -> "pptx"
+    else -> ""
+}
+
 /** A safe child name inside the inbox: separators/traversal flattened, collisions counted. */
 fun uniqueChildName(existing: Set<String>, desired: String): String {
     val flat = desired.replace('/', '_').replace('\\', '_').trim()
@@ -37,14 +84,24 @@ class Inbox(private val dir: File) {
 
     private val classifier = ObjectClassifier()
 
+    /**
+     * Приехавшее с телефона (#603).
+     *
+     * Имя объекта и имя файла — разные вещи, и раньше они были одним. Телефон называет объекты по
+     * содержимому («Счёт 4512 от ООО Ромашка. Оплатить до 20…»), а компьютер брал это имя для
+     * файла: отсюда многоточие внутри имени, отсутствие расширения — такой файл не открывается
+     * двойным щелчком — и «(2)» из уникализации, попадавшее человеку на экран как часть названия.
+     *
+     * Теперь на экране остаётся то, что прислал телефон, дословно, а на диске лежит пригодное имя.
+     */
     fun receive(name: String, mime: String, meta: Map<String, String>, source: InputStream): InboxItem {
         dir.mkdirs()
-        val safe = uniqueChildName(dir.list()?.toSet() ?: emptySet(), name)
+        val safe = uniqueChildName(dir.list()?.toSet() ?: emptySet(), fileNameFor(name, mime))
         val target = File(dir, safe)
         val part = File(dir, "$safe.part")
         part.outputStream().use { out -> source.copyTo(out) }
         part.renameTo(target)
-        return wrap(target, mime, meta + ("name" to safe))
+        return wrap(target, mime, meta + ("name" to name))
     }
 
     fun addText(text: String): InboxItem {
