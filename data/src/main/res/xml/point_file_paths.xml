@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Matches ScratchObjectStore: filesDir/scratch -->
+    <files-path name="scratch" path="scratch/" />
+    <!--
+      Куда системная камера кладёт свежий кадр (#246). НЕ scratch: scratch — рабочая копия
+      текущей работы, и она стирается по её окончании (`ObjectStore.clear`), поэтому кадр,
+      снятый ДО начала работы, там не доживает до приёма. Отсюда он попадёт в scratch обычным
+      путём — при приёме объекта, как любой входящий файл.
+    -->
+    <cache-path name="capture" path="capture/" />
+    <!-- Куда падает задание печати (#251): тот же принцип, что у съёмки, — кэш, а не scratch. -->
+    <cache-path name="print" path="print/" />
+</paths>

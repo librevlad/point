@@ -1,0 +1,100 @@
+package com.point.core.flow
+
+import com.google.zxing.common.BitMatrix
+import com.google.zxing.qrcode.decoder.Decoder
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class QrMatrixTest {
+
+    private fun roundTrip(text: String): String {
+        val matrix = qrMatrix(text)
+        assertNotNull("не закодировалось: $text", matrix)
+        return Decoder().decode(matrix!!.toZxing()).text
+    }
+
+    private fun QrMatrix.toZxing(): BitMatrix =
+        BitMatrix(size, size).also { bits ->
+            for (y in 0 until size) for (x in 0 until size) if (this[x, y]) bits.set(x, y)
+        }
+
+    @Test
+    fun `a drop link reads back exactly`() {
+        val link = "https://point.leerio.app/d/2f8c1b0a4e6d9c3f5a7b1e2d4c6f8a0b1c3d5e7f"
+        assertEquals(link, roundTrip(link))
+    }
+
+    @Test
+    fun `a receiving link reads back exactly`() {
+        val link = "https://point.leerio.app/u/nQ8vXk2mR7pLdT4wZs1aYbCe9Gh"
+        assertEquals(link, roundTrip(link))
+    }
+
+    @Test
+    fun `both ends of the supported length read back`() {
+        assertEquals("a", roundTrip("a"))
+        val long = "https://example.org/" + "x".repeat(QR_MAX_BYTES - 20)
+        assertEquals(long, roundTrip(long))
+    }
+
+    @Test
+    fun `cyrillic survives the round trip`() {
+        assertEquals("Привет, Point", roundTrip("Привет, Point"))
+    }
+
+    @Test
+    fun `too long is refused instead of truncated`() {
+        assertNull(qrMatrix("x".repeat(QR_MAX_BYTES + 1)))
+        assertNull(qrMatrix(""))
+    }
+
+    @Test
+    fun `the cap counts bytes not characters`() {
+        assertNull(qrMatrix("я".repeat(QR_MAX_BYTES)))
+        assertNotNull(qrMatrix("я".repeat(QR_MAX_BYTES / 2)))
+    }
+
+    @Test
+    fun `the smallest fitting version is chosen`() {
+        assertEquals(21, qrMatrix("x".repeat(14))!!.size)
+        assertEquals(25, qrMatrix("x".repeat(15))!!.size)
+        assertEquals(41, qrMatrix("x".repeat(QR_MAX_BYTES))!!.size)
+    }
+
+    @Test
+    fun `finder patterns stand in three corners`() {
+        val m = qrMatrix("https://point.example/d/abc")!!
+        for ((cx, cy) in listOf(3 to 3, m.size - 4 to 3, 3 to m.size - 4)) {
+
+            assertTrue("зрачок ($cx,$cy)", m[cx, cy] && m[cx - 1, cy] && m[cx + 1, cy])
+            assertTrue("светлое кольцо ($cx,$cy)", !m[cx - 2, cy] && !m[cx + 2, cy] && !m[cx, cy - 2])
+            assertTrue("тёмная рамка ($cx,$cy)", m[cx - 3, cy] && m[cx + 3, cy] && m[cx, cy - 3])
+        }
+    }
+
+    @Test
+    fun `the timing line alternates`() {
+        val m = qrMatrix("https://point.example/d/abc")!!
+        for (i in 8 until m.size - 8) {
+            assertEquals("строка $i", i % 2 == 0, m[i, 6])
+            assertEquals("столбец $i", i % 2 == 0, m[6, i])
+        }
+    }
+
+    @Test
+    fun `outside the matrix is light`() {
+        val m = qrMatrix("point")!!
+        assertTrue(!m[-1, 0] && !m[0, -1] && !m[m.size, 0] && !m[0, m.size])
+    }
+
+    @Test
+    fun `encoding is deterministic`() {
+        val a = qrMatrix("https://point.example/u/box")!!
+        val b = qrMatrix("https://point.example/u/box")!!
+        assertEquals(a.size, b.size)
+        for (y in 0 until a.size) for (x in 0 until a.size) assertEquals(a[x, y], b[x, y])
+    }
+}

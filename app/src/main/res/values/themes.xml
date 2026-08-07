@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Window-level theme only (no ActionBar). Colours come from the Compose PointTheme; this keeps
+         the system window frame dark for the portal redesign: no white launch flash, dark bars,
+         light status-bar icons. -->
+    <style name="Theme.Point" parent="@android:style/Theme.DeviceDefault.NoActionBar">
+        <item name="android:windowBackground">@color/point_dark_bg</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@color/point_dark_bg</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>

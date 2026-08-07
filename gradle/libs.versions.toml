@@ -1,0 +1,95 @@
+# Central version catalog. Bump versions here only.
+# NOTE: this is a from-scratch skeleton — on first Android Studio sync AGP/Kotlin
+# may prompt an upgrade. That is expected; accept it and adjust these refs.
+
+[versions]
+agp = "8.9.1"
+kotlin = "2.1.0"
+ksp = "2.1.0-1.0.29"
+
+# Android SDK levels (android-36 is the only platform installed locally).
+compileSdk = "36"
+minSdk = "26"
+targetSdk = "36"
+
+coreKtx = "1.15.0"
+coroutines = "1.9.0"
+lifecycle = "2.8.7"
+activityCompose = "1.9.3"
+composeBom = "2026.06.01"
+hilt = "2.53.1"
+pdfboxAndroid = "2.0.27.0"
+commonsCompress = "1.27.1"
+tukaaniXz = "1.10"
+junrar = "7.5.5"
+tesseract4android = "4.9.0"
+opencv = "4.14.0"
+mlkitEntityExtraction = "16.0.0-beta6"
+mlkitBarcode = "17.3.0"
+mlkitSubjectSegmentation = "16.0.0-beta1"
+zxing = "3.5.3"
+securityCrypto = "1.1.0-alpha06"
+junit = "4.13.2"
+robolectric = "4.16.1"
+
+[libraries]
+androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
+androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
+androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycle" }
+androidx-lifecycle-runtime-compose = { group = "androidx.lifecycle", name = "lifecycle-runtime-compose", version.ref = "lifecycle" }
+androidx-lifecycle-viewmodel-compose = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-compose", version.ref = "lifecycle" }
+
+kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "coroutines" }
+kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
+kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutines" }
+
+# Compose — versions come from the BOM below.
+androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
+androidx-compose-ui = { group = "androidx.compose.ui", name = "ui" }
+androidx-compose-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics" }
+androidx-compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
+androidx-compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
+androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3" }
+androidx-compose-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended" }
+androidx-compose-animation = { group = "androidx.compose.animation", name = "animation" }
+
+# Hilt (DI) — processed with KSP.
+hilt-android = { group = "com.google.dagger", name = "hilt-android", version.ref = "hilt" }
+hilt-compiler = { group = "com.google.dagger", name = "hilt-compiler", version.ref = "hilt" }
+
+# PDF text extraction (no built-in Android API for this).
+pdfbox-android = { group = "com.tom-roush", name = "pdfbox-android", version.ref = "pdfboxAndroid" }
+
+# Broad archive extraction (tar, gz, bz2, xz — beyond built-in zip).
+commons-compress = { group = "org.apache.commons", name = "commons-compress", version.ref = "commonsCompress" }
+tukaani-xz = { group = "org.tukaani", name = "xz", version.ref = "tukaaniXz" } # 7z/xz (LZMA)
+junrar = { group = "com.github.junrar", name = "junrar", version.ref = "junrar" } # rar
+tesseract4android = { group = "com.github.adaptech-cz.Tesseract4Android", name = "tesseract4android", version.ref = "tesseract4android" } # on-device OCR (Tesseract 5)
+opencv = { group = "org.opencv", name = "opencv", version.ref = "opencv" } # document scan pipeline (perspective + adaptive threshold)
+mlkit-entity-extraction = { group = "com.google.mlkit", name = "entity-extraction", version.ref = "mlkitEntityExtraction" } # on-device entity detection (phone/email/address/date/…)
+mlkit-barcode = { group = "com.google.mlkit", name = "barcode-scanning", version.ref = "mlkitBarcode" } # on-device QR/barcode (bundled model, offline)
+mlkit-subject-segmentation = { group = "com.google.android.gms", name = "play-services-mlkit-subject-segmentation", version.ref = "mlkitSubjectSegmentation" } # on-device subject cutout (transparent PNG)
+kotlinx-coroutines-play-services = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-play-services", version.ref = "coroutines" } # await() for ML Kit Tasks
+zxing-core = { group = "com.google.zxing", name = "core", version.ref = "zxing" } # QR encode (pure Java → BitMatrix)
+
+# Пропуск аккаунта лежит шифрованным (#472): долгоживущий ключ к своим объектам — не то же, что обычные app-private prefs.
+androidx-security-crypto = { group = "androidx.security", name = "security-crypto", version.ref = "securityCrypto" }
+
+junit = { group = "junit", name = "junit", version.ref = "junit" }
+json = { group = "org.json", name = "json", version = "20240303" } # real org.json for JVM unit tests
+
+# Экран под тестом без эмулятора (#114): Robolectric поднимает Android в JVM, compose-ui-test
+# нажимает на узлы и пересоздаёт экран (поворот). Обе — только в тестах, в APK не попадают.
+robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
+androidx-compose-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" }
+androidx-compose-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+android-library = { id = "com.android.library", version.ref = "agp" }
+kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+jetbrains-compose = { id = "org.jetbrains.compose", version = "1.7.3" }
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
+hilt = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }

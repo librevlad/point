@@ -1,0 +1,55 @@
+# Gradle
+.gradle/
+build/
+**/build/
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+.kotlin/
+captures/
+.cxx/
+
+# Local config & secrets — NEVER commit (holds sdk.dir and GEMINI_API_KEY)
+local.properties
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Keystores
+*.jks
+*.keystore
+
+# JVM crash / replay logs — never committed
+hs_err_pid*.log
+replay_pid*.log
+__pycache__/
+.pytest_cache/
+
+# Питоновский кэш харнесса замеров — не артефакт, а след запуска.
+tools/**/__pycache__/
+
+# Окружение службы сервера аккаунтов: там лежат client_id/client_secret Google.
+# Учётные данные Google живут ТОЛЬКО на сервере — образец рядом (point-server.env.sample).
+relay/point-server.env
+
+# Ключ сервисного аккаунта GCP — доступ к виртуалкам владельца. В репозиторий не попадает
+# никогда: он не истекает сам, и утёкший даёт полный контроль над машиной.
+gcp-ops.json
+
+# Рабочее состояние Claude Code: рабочие копии агентов, очереди, локальные отметки.
+# Раньше это лежало в .git/info/exclude и пропало вместе с прежней историей.
+**/.claude/worktrees/
+**/.claude/checkpoints/
+**/.claude/mailbox/
+**/.claude/routines/.state/
+**/.claude/scheduled_tasks.json
+**/.claude/scheduled_tasks.lock
+**/.claude/agent-registry.json
+**/.claude/agent-memory-local
+**/.claude/assistant-daemon-state.json
+**/.claude/first-run
+
+# Локальные разрешения Claude Code на этой машине — не часть проекта.
+**/.claude/settings.local.json

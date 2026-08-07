@@ -1,0 +1,176 @@
+package com.point
+
+import com.point.core.flow.AppTarget
+import com.point.core.ui.Outcome
+import com.point.core.flow.UsageSummary
+import com.point.core.flow.UserAiConfig
+import com.point.core.model.Bubble
+import com.point.core.model.CapabilityId
+import com.point.core.model.ChatMessage
+import com.point.core.flow.CapabilityMeta
+import com.point.core.flow.Latency
+import com.point.core.model.LatentBubble
+import com.point.core.model.ObjectKind
+import com.point.core.model.PointObject
+import com.point.core.model.Preview
+import com.point.core.model.Relation
+
+data class FlowFrame(
+    val obj: PointObject,
+    val bubbles: List<Bubble>,
+    val viaCapability: CapabilityId? = null,
+    val viaTitle: String? = null,
+
+    val items: List<PointObject> = emptyList(),
+
+    val itemsTotal: Int = 0,
+
+    val itemsTotalAtLeast: Boolean = false,
+
+    val found: List<PointObject> = emptyList(),
+
+    val relations: List<Relation> = emptyList(),
+
+    val textPreview: String? = null,
+
+    val preview: androidx.compose.ui.graphics.ImageBitmap? = null,
+
+    val latent: List<LatentBubble> = emptyList(),
+
+    val enriching: List<String> = emptyList(),
+
+    val pinned: CapabilityId? = null,
+)
+
+suspend fun previewSource(obj: PointObject, rasterizer: com.point.core.flow.PdfRasterizer): String? =
+    when (obj.state.kind) {
+        ObjectKind.IMAGE -> obj.uri.value
+        ObjectKind.PDF -> runCatching { rasterizer.rasterizeFirstPage(obj)?.value }.getOrNull()
+        else -> null
+    }
+
+fun quietWork(meta: CapabilityMeta): Boolean = !meta.network && meta.latency != Latency.SLOW
+
+fun showsBusyScreen(ui: FlowUiState): Boolean = ui.busy != null && !ui.busyQuiet
+
+fun showsCancel(ui: FlowUiState): Boolean = showsBusyScreen(ui) && ui.busyCancelable
+
+fun objectWorking(ui: FlowUiState): Boolean = ui.busy != null && ui.busyQuiet
+
+fun quietStage(ui: FlowUiState): String? = ui.busyStage?.takeIf { objectWorking(ui) }
+
+fun openChatOf(ui: FlowUiState): ChatState? = ui.chat?.takeIf { ui.chatOpen }
+
+fun keyOfferLabel(message: String?): String? =
+    if (message != null && com.point.core.flow.refusalNeedsKey(message)) "Задать свой ключ AI" else null
+
+data class KeyErrand(
+
+    val action: String,
+
+    val objectName: String,
+)
+
+data class PathStep(val kind: ObjectKind, val via: String?)
+
+data class FlowUiState(
+
+    val busy: String? = null,
+
+    val busyStage: String? = null,
+
+    val busyNetwork: Boolean = false,
+
+    val busyQuiet: Boolean = false,
+
+    val busyCancelable: Boolean = false,
+    val frame: FlowFrame? = null,
+
+    val chat: ChatState? = null,
+
+    val chatOpen: Boolean = false,
+
+    val path: List<PathStep> = emptyList(),
+
+    val message: String? = null,
+
+    val messageOutcome: Outcome = Outcome.NONE,
+
+    val inputPrompt: String? = null,
+
+    val inputSuggestions: List<String> = emptyList(),
+
+    val needsImage: String? = null,
+
+    val cloudConsent: Boolean = false,
+
+    val cloudDestination: String = "",
+
+    val cloudTitle: String = "",
+
+    val cloudConfirm: String = "",
+
+    val cloudEnabled: Boolean = false,
+
+    val preview: Preview? = null,
+
+    val appPicker: List<AppTarget>? = null,
+
+    val keyScreen: UserAiConfig? = null,
+
+    val keyScreenNote: String? = null,
+
+    val keyErrand: KeyErrand? = null,
+
+    val keyChecking: Boolean = false,
+
+    val keyVerdict: com.point.core.flow.KeyVerdict? = null,
+
+    val aiKeySet: Boolean = false,
+
+    val devicesScreen: DevicesScreenState? = null,
+
+    val signIn: com.point.core.flow.SignIn? = null,
+
+    val usageEnabled: Boolean = false,
+
+    val soundEnabled: Boolean = true,
+
+    val privacyLevel: com.point.core.flow.PrivacyLevel = com.point.core.flow.PrivacyLevel.DEFAULT,
+    val usageSummary: UsageSummary? = null,
+
+    val selection: SelectionUi? = null,
+
+    val find: FindUi? = null,
+)
+
+data class SelectionUi(
+    val image: androidx.compose.ui.graphics.ImageBitmap,
+    val highlights: List<com.point.core.flow.Box> = emptyList(),
+    val text: String? = null,
+)
+
+data class FindUi(
+    val image: androidx.compose.ui.graphics.ImageBitmap,
+    val highlights: List<com.point.core.flow.Box> = emptyList(),
+    val status: String? = null,
+)
+
+data class ChatState(
+    val obj: PointObject,
+    val messages: List<ChatMessage> = emptyList(),
+    val pending: Boolean = false,
+    val suggestions: List<String> = emptyList(),
+
+    val notice: String? = null,
+)
+
+data class DevicesScreenState(
+    val email: String = "",
+    val devices: List<com.point.core.flow.CircleDevice> = emptyList(),
+
+    val busy: Boolean = false,
+    val error: String? = null,
+
+    val loading: Boolean = true,
+)

@@ -1,0 +1,137 @@
+package com.point.desktop
+
+import com.point.core.flow.Capability
+import com.point.core.flow.CapabilityMeta
+import com.point.core.flow.JsonValue
+import com.point.core.flow.Latency
+import com.point.core.flow.Realizer
+import com.point.core.flow.array
+import com.point.core.flow.bool
+import com.point.core.flow.parseJson
+import com.point.core.flow.str
+import com.point.core.model.ActionResult
+import com.point.core.model.CapabilityId
+import com.point.core.model.ObjectKind
+import com.point.core.model.ObjectState
+import com.point.core.model.PointObject
+import com.point.core.model.ScratchRef
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.io.File
+import java.net.HttpURLConnection
+import java.net.URL
+import java.net.URLEncoder
+import java.util.Base64
+
+class PcCloudOcrRealizer(
+    private val config: () -> OcrConfig,
+    private val outbox: Outbox,
+    private val connectTimeoutMs: Int = 15_000,
+    private val readTimeoutMs: Int = 120_000,
+) : Realizer {
+    override val capabilityId = com.point.core.flow.capabilities.OcrCapability.ID
+
+    override val meta = com.point.core.flow.RealizerMeta(kind = com.point.core.flow.RealizerKind.CLOUD)
+
+    override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val file = File(input.uri.value).takeIf(File::isFile)
+                    ?: return@withContext ActionResult.Failure("Файла картинки нет на диске", recoverable = false)
+                if (file.length() > MAX_BYTES) {
+                    return@withContext ActionResult.Failure(
+
+                        "Снимок " + String.format(java.util.Locale.ROOT, "%.1f", file.length() / (1024.0 * 1024)) +
+                            " МБ — сервис принимает до 1 МБ. Сначала «Сделать легче».",
+                        recoverable = false,
+                    )
+                }
+                val cfg = config()
+                val text = read(cfg, file, input.mime)
+                if (text.isBlank()) {
+                    return@withContext ActionResult.Failure("На снимке не нашлось текста", recoverable = false)
+                }
+                val out = File.createTempFile("pc-ocr-", ".txt").apply { writeText(text) }
+                ActionResult.Success(
+                    com.point.core.model.ResultObject(
+                        type = ObjectKind.TEXT,
+                        mime = "text/plain",
+                        uri = ScratchRef(out.absolutePath),
+                        metadata = mapOf("name" to "Текст со снимка"),
+                    ),
+                )
+            }.getOrElse {
+                ActionResult.Failure("Сервис чтения не ответил — попробуйте позже", recoverable = true)
+            }
+        }
+
+    private fun read(cfg: OcrConfig, file: File, mime: String): String {
+        val key = cfg.key.ifBlank { DEMO_KEY }
+        val body = form(
+            "apikey" to key,
+            "OCREngine" to "2",
+            "language" to "rus",
+            "isTable" to "true",
+            "base64Image" to "data:$mime;base64," + Base64.getEncoder().encodeToString(file.readBytes()),
+        )
+        val connection = (URL(cfg.url).openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            doOutput = true
+            connectTimeout = connectTimeoutMs
+            readTimeout = readTimeoutMs
+            setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
+        }
+        val reply = try {
+            connection.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
+            val code = connection.responseCode
+            val raw = (if (code in 200..299) connection.inputStream else connection.errorStream)
+                ?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
+
+            val safe = if (key.isBlank()) raw else raw.replace(key, "…")
+            require(code in 200..299) { refusal(code) }
+            safe
+        } finally {
+            connection.disconnect()
+        }
+        return textOf(reply)
+    }
+
+    private fun textOf(json: String): String {
+        val answer = parseJson(json)
+        if (answer.bool("IsErroredOnProcessing") == true) error("Сервис не прочитал снимок")
+        val pages = answer.array("ParsedResults")
+        require(pages.isNotEmpty()) { "Сервис вернул ответ без страниц" }
+        return pages.mapNotNull { page ->
+            (page as? JsonValue.Obj)?.let { it.str("ParsedText") }?.trim()?.ifEmpty { null }
+        }.joinToString("\n\n")
+    }
+
+    private fun refusal(code: Int): String = when (code) {
+        401, 403 -> "Ключ чтения не подошёл — проверьте ocr.key в ~/.point-pc/config"
+        404 -> "Сервис чтения не отвечает по этому адресу — проверьте ocr.url"
+        429 -> "Бесплатная квота сервиса на сегодня кончилась — попробуйте позже"
+        in 500..599 -> "Сервис чтения сейчас не отвечает"
+        else -> "Сервис чтения отказал ($code)"
+    }
+
+    private fun form(vararg fields: Pair<String, String>): String =
+        fields.joinToString("&") { (k, v) ->
+            URLEncoder.encode(k, "UTF-8") + "=" + URLEncoder.encode(v, "UTF-8")
+        }
+
+    private companion object {
+
+        const val DEMO_KEY = "helloworld"
+
+        const val MAX_BYTES = 1024L * 1024
+    }
+}
+
+data class OcrConfig(
+    val key: String = "",
+    val url: String = DEFAULT_URL,
+) {
+    companion object {
+        const val DEFAULT_URL = "https://api.ocr.space/parse/image"
+    }
+}

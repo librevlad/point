@@ -1,0 +1,246 @@
+package com.point.desktop
+
+import com.point.core.flow.Capability
+import com.point.core.flow.ClipboardPayload
+import com.point.core.flow.CapabilityMeta
+import com.point.core.flow.Latency
+import com.point.core.flow.Realizer
+import com.point.core.model.ActionResult
+import com.point.core.model.CapabilityId
+import com.point.core.model.ObjectKind
+import com.point.core.model.ObjectState
+import com.point.core.model.PointObject
+import java.io.File
+
+fun interface SystemOpener { fun open(file: File) }
+fun interface FileRevealer { fun reveal(file: File) }
+fun interface TextClipboard { fun copy(text: String) }
+fun interface SaveTarget { fun pickAndSave(file: File): String? }
+
+interface Printer {
+
+    fun name(): String?
+
+    fun print(file: File)
+
+    fun printAsking(file: File): Boolean = run { print(file); true }
+}
+
+class PcOpenCapability : Capability {
+    override val id = CapabilityId("pc-open")
+    override val icon = "open"
+    override val meta = CapabilityMeta(priority = 10)
+    override fun label(state: ObjectState) = "Открыть"
+    override fun accepts(state: ObjectState) = true
+    override fun produces(state: ObjectState) = state
+}
+
+class PcOpenRealizer(private val opener: SystemOpener) : Realizer {
+    override val capabilityId = CapabilityId("pc-open")
+    override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
+        runCatching {
+            opener.open(File(input.uri.value))
+            ActionResult.Done("Открыто")
+        }.getOrElse { ActionResult.Failure("Открыть нечем: у этого файла нет программы по умолчанию", recoverable = true) }
+}
+
+class PcRevealCapability : Capability {
+    override val id = CapabilityId("pc-reveal")
+    override val icon = "folder"
+    override val meta = CapabilityMeta(priority = 20)
+    override fun label(state: ObjectState) = "Показать в папке"
+    override fun accepts(state: ObjectState) = true
+    override fun produces(state: ObjectState) = state
+}
+
+class PcRevealRealizer(private val revealer: FileRevealer) : Realizer {
+    override val capabilityId = CapabilityId("pc-reveal")
+    override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
+        runCatching {
+            revealer.reveal(File(input.uri.value))
+            ActionResult.Done("Папка открыта")
+        }.getOrElse { ActionResult.Failure("Проводник не открылся — файл лежит в папке Point", recoverable = true) }
+}
+
+class PcCopyCapability : Capability {
+    override val id = CapabilityId("pc-copy")
+    override val icon = "copy"
+    override val meta = CapabilityMeta(priority = 15)
+    override fun label(state: ObjectState) =
+        if (state.kind == ObjectKind.IMAGE) "Копировать картинку" else "Копировать"
+
+    override fun accepts(state: ObjectState) =
+        state.kind == ObjectKind.TEXT || state.kind == ObjectKind.IMAGE
+
+    override fun produces(state: ObjectState) = state
+}
+
+class PcCopyRealizer(
+    private val clipboard: TextClipboard,
+
+    private val imageClipboard: ((ClipboardPayload) -> Unit)? = null,
+) : Realizer {
+    override val capabilityId = CapabilityId("pc-copy")
+
+    override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
+        runCatching {
+            val file = File(input.uri.value).takeIf(File::isFile)
+                ?: return ActionResult.Failure("Файла объекта нет на диске", recoverable = false)
+            if (input.state.kind == ObjectKind.IMAGE) {
+                val put = imageClipboard
+                    ?: return ActionResult.Failure("Этот компьютер не умеет класть картинку в буфер", recoverable = false)
+                put(ClipboardPayload(input.mime, file.name, file.readBytes()))
+                ActionResult.Done("Картинка в буфере — вставьте куда нужно")
+            } else {
+                clipboard.copy(file.readText())
+                ActionResult.Done("Скопировано в буфер")
+            }
+        }.getOrElse { ActionResult.Failure("Скопировать не вышло — попробуйте ещё раз", recoverable = true) }
+}
+
+class PcSaveAsCapability : Capability {
+    override val id = CapabilityId("pc-save-as")
+    override val icon = "save"
+    override val meta = CapabilityMeta(priority = 30)
+    override fun label(state: ObjectState) = "Сохранить в…"
+    override fun accepts(state: ObjectState) = true
+    override fun produces(state: ObjectState) = state
+}
+
+class PcSaveAsRealizer(private val target: SaveTarget) : Realizer {
+    override val capabilityId = CapabilityId("pc-save-as")
+    override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
+        runCatching {
+            val saved = target.pickAndSave(File(input.uri.value))
+                ?: return ActionResult.Done("Отменено")
+            ActionResult.Done("Сохранено: $saved")
+        }.getOrElse { ActionResult.Failure("Сохранить не вышло — выберите другую папку", recoverable = true) }
+}
+
+interface VideoDownloader {
+    fun available(): Boolean
+
+    fun start(url: String): Boolean
+}
+
+class YtDlpDownloader(private val downloadsDir: File) : VideoDownloader {
+    override fun available(): Boolean = runCatching {
+        ProcessBuilder("yt-dlp", "--version").start().waitFor() == 0
+    }.getOrDefault(false)
+
+    override fun start(url: String): Boolean = runCatching {
+        downloadsDir.mkdirs()
+        ProcessBuilder("yt-dlp", "-P", downloadsDir.absolutePath, url)
+            .redirectErrorStream(true)
+            .redirectOutput(File(downloadsDir, "yt-dlp.log"))
+            .start()
+        true
+    }.getOrDefault(false)
+}
+
+class PcDownloadCapability : Capability {
+    override val id = CapabilityId("pc-download")
+    override val icon = "open"
+    override val meta = CapabilityMeta(priority = 40)
+    override fun label(state: ObjectState) = "Скачать видео"
+    override fun accepts(state: ObjectState) = state.kind == com.point.core.model.ObjectKind.URL
+    override fun produces(state: ObjectState) = state
+}
+
+class PcDownloadRealizer(private val downloader: VideoDownloader) : Realizer {
+    override val capabilityId = CapabilityId("pc-download")
+
+    override suspend fun perform(input: PointObject, amendment: String?): ActionResult {
+        val url = runCatching { File(input.uri.value).readText() }.getOrDefault("")
+            .lineSequence().map(String::trim).firstOrNull { it.startsWith("http://") || it.startsWith("https://") }
+            ?: return ActionResult.Failure("Здесь нет ссылки — скачивать нечего", recoverable = true)
+        return if (downloader.start(url)) {
+            ActionResult.Done("Скачиваю: $url")
+        } else {
+            ActionResult.Failure("Не удалось запустить yt-dlp", recoverable = true)
+        }
+    }
+}
+
+class PcToPhoneCapability : Capability {
+    override val id = CapabilityId("pc-to-phone")
+    override val icon = "pc"
+    override val meta = CapabilityMeta(priority = 15)
+    override fun label(state: ObjectState) = "На телефон"
+    override fun accepts(state: ObjectState) = true
+    override fun produces(state: ObjectState) = state
+}
+
+class PcToPhoneRealizer(private val outbox: Outbox) : Realizer {
+    override val capabilityId = CapabilityId("pc-to-phone")
+
+    override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
+        runCatching {
+            outbox.add(input)
+            ActionResult.Done("Заберите на телефоне — плашка на главном экране")
+        }.getOrElse { ActionResult.Failure("Не удалось отправить — проверьте, что на диске есть место", recoverable = true) }
+}
+
+class PcOfficePdfRealizer(
+    private val converter: OfficeToPdf,
+    private val outbox: Outbox,
+) : Realizer {
+    override val capabilityId = com.point.core.flow.capabilities.PdfCapability.ID
+
+    override fun accepts(state: ObjectState) = state.kind == ObjectKind.OFFICE
+
+    override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
+        runCatching {
+
+            converter.whyUnavailable()?.let {
+                return ActionResult.Failure(it, recoverable = true)
+            }
+            val pdf = converter.convert(File(input.uri.value))
+                ?: return ActionResult.Failure(
+                    "Компьютер не смог собрать PDF из этого документа",
+                    recoverable = true,
+                )
+            outbox.add(
+                input.copy(
+                    id = input.id + "-pdf",
+                    mime = "application/pdf",
+                    uri = com.point.core.model.ScratchRef(pdf.absolutePath),
+                    state = ObjectState(ObjectKind.PDF),
+                    metadata = input.metadata + ("name" to pdf.name),
+                ),
+            )
+            ActionResult.Done("PDF собран на компьютере — заберите на телефоне")
+        }.getOrElse { ActionResult.Failure("PDF не собрался — закройте документ, если он открыт в Office, и повторите", recoverable = true) }
+}
+
+class PcPrintCapability : Capability {
+    override val id = CapabilityId("pc-print")
+    override val icon = "print"
+    override val meta = CapabilityMeta(priority = 25)
+    override fun label(state: ObjectState) = "Напечатать"
+    override fun accepts(state: ObjectState) = true
+    override fun produces(state: ObjectState) = state
+}
+
+class PcPrintRealizer(private val printer: Printer) : Realizer {
+    override val capabilityId = CapabilityId("pc-print")
+    override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
+        runCatching {
+
+            val target = printer.name()
+                ?: return ActionResult.Failure(
+                    "На компьютере сейчас нет принтера по умолчанию",
+                    recoverable = true,
+                )
+
+            if (com.point.core.flow.askedHere()) {
+                if (!printer.printAsking(File(input.uri.value))) {
+                    return@runCatching ActionResult.Failure("Печать отменена — задание не ушло", recoverable = true)
+                }
+            } else {
+                printer.print(File(input.uri.value))
+            }
+
+            ActionResult.Done("Отправлено на печать · $target")
+        }.getOrElse { ActionResult.Failure("Напечатать не вышло — проверьте, что принтер включён", recoverable = true) }
+}

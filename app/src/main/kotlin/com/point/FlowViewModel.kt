@@ -1,0 +1,1751 @@
+package com.point
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.ensureActive
+import com.point.core.flow.AppLauncher
+import com.point.core.flow.AppTarget
+import com.point.core.flow.CapabilityRegistry
+import com.point.core.flow.CapabilityUsage
+import com.point.core.flow.ChosenApp
+import com.point.core.flow.ChosenApps
+import com.point.core.flow.CollectionContent
+import com.point.core.flow.CrashLog
+import com.point.core.flow.Enrichment
+import com.point.core.flow.edgeDetail
+import com.point.core.flow.EnrichmentUpdate
+import com.point.core.flow.FlowSnapshotStore
+import com.point.core.flow.HistoryStore
+import com.point.core.flow.ObjectStore
+import com.point.core.flow.PdfRasterizer
+import com.point.core.flow.PinnedActions
+import com.point.core.flow.PrivacyConsent
+import com.point.core.flow.Resolver
+import com.point.core.flow.SensoryFeedback
+import com.point.core.flow.SensorySettings
+import com.point.core.flow.UsageEvent
+import com.point.core.flow.UsageEventType
+import com.point.core.flow.UsageJournal
+import com.point.core.flow.AtomCodec
+import com.point.core.flow.AtomLayer
+import com.point.core.flow.Box
+import com.point.core.flow.FrameTransform
+import com.point.core.flow.META_CLOUD_ATOMS_REF
+import com.point.core.flow.META_OCR_ATOMS_REF
+import com.point.core.flow.META_SELECTION_IDS
+import com.point.core.flow.META_SELECTION_PAGE
+import com.point.core.flow.META_SELECTION_REGION
+import com.point.core.flow.META_SELECTION_SOURCE
+import com.point.core.flow.META_YIELD_NOUN
+import com.point.core.flow.SnappedSelection
+import com.point.core.flow.UserAiConfig
+import com.point.core.flow.UserKeyStore
+import com.point.core.flow.carryKnowledge
+import com.point.core.flow.continuesObject
+import com.point.core.flow.findOnPage
+import com.point.core.flow.foundOnPageLabel
+import com.point.core.ui.Outcome
+import com.point.core.flow.snapSelection
+import com.point.core.flow.yieldSurprise
+import com.point.core.model.Feature
+import com.point.core.model.ObjectState
+import java.io.File
+import com.point.core.model.ActionResult
+import com.point.core.model.ChatMessage
+import com.point.core.model.ChatRole
+import com.point.core.model.Bubble
+import com.point.core.model.CapabilityId
+import com.point.core.model.FlowSnapshotFrame
+import com.point.core.model.HistoryEntry
+import com.point.core.model.Intent
+import com.point.core.model.ObjectKind
+import com.point.core.model.isFileBacked
+import com.point.core.model.ValueRef
+import com.point.core.model.ScratchRef
+import com.point.core.model.ObjectRef
+import com.point.core.model.PointObject
+import com.point.executors.Bitmaps
+import com.point.executors.AiCapability
+import com.point.executors.FindCapability
+import com.point.executors.OpenInCapability
+import com.point.executors.aiSuggestions
+import com.point.executors.aiTransformTarget
+import dagger.hilt.android.lifecycle.HiltViewModel
+import androidx.compose.ui.graphics.asImageBitmap
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import javax.inject.Inject
+
+@HiltViewModel
+class FlowViewModel @Inject constructor(
+    private val store: ObjectStore,
+    private val registry: CapabilityRegistry,
+    private val resolver: Resolver,
+    private val aiChatResponder: com.point.core.flow.AiChatResponder,
+    private val enrichment: Enrichment,
+    private val history: HistoryStore,
+    private val usage: CapabilityUsage,
+    private val chosenApps: ChosenApps,
+    private val userKeys: UserKeyStore,
+    private val journal: UsageJournal,
+    private val consent: PrivacyConsent,
+    private val appLauncher: AppLauncher,
+    private val pdfRasterizer: PdfRasterizer,
+    private val sensory: SensoryFeedback,
+    private val sensorySettings: SensorySettings,
+    private val cloudPrivacy: com.point.core.flow.CloudPrivacySettings,
+    private val flowSnapshot: FlowSnapshotStore,
+    private val crashLog: CrashLog,
+    private val ioDispatcher: CoroutineDispatcher,
+    private val pins: PinnedActions,
+    private val appIcons: AppIconResolver,
+    private val pcLinks: com.point.core.flow.PcLinks,
+    private val pcTransport: com.point.core.flow.PcTransport,
+    private val pcCaps: com.point.core.flow.PcCapsStore,
+
+    private val linkMonitor: com.point.core.flow.LinkMonitor,
+    private val pulledFiles: PulledFileFactory,
+    private val frames: SelectionFrames,
+
+    private val aiKeyCheck: com.point.core.flow.AiKeyCheck,
+
+    private val accountStore: com.point.core.flow.AccountStore,
+
+    private val accountClient: com.point.core.flow.AccountClient,
+
+    private val pendingLogins: com.point.core.flow.PendingLoginStore,
+
+    private val deviceKeys: com.point.core.flow.DeviceKeyStore,
+
+    private val browser: com.point.core.flow.BrowserOpener,
+
+    private val sharedTexts: com.point.core.flow.SharedTexts,
+) : ViewModel() {
+
+    private var busyJob: kotlinx.coroutines.Job? = null
+
+    private fun trackWork(job: kotlinx.coroutines.Job) {
+        busyJob = job
+        job.invokeOnCompletion { if (busyJob === job) busyJob = null }
+    }
+
+    private fun raiseBusy(
+        title: String,
+        network: Boolean = false,
+        quiet: Boolean = false,
+        cancelable: Boolean = false,
+    ) {
+        _ui.update {
+            it.copy(
+                busy = title, busyStage = null, busyNetwork = network, busyQuiet = quiet,
+                busyCancelable = cancelable,
+                message = null, messageOutcome = Outcome.NONE, inputPrompt = null,
+            )
+        }
+    }
+
+    private fun owns(voice: Long) = voice == workVoice
+
+    @Volatile private var workVoice = 0L
+
+    private fun claimVoice(): Long = ++workVoice
+
+    private val stack = ArrayDeque<FlowFrame>()
+    private val enrichJobs = mutableListOf<Job>()
+    private var pendingBubble: Bubble? = null
+
+    private var pendingCloud: (() -> Unit)? = null
+
+    private var pendingCloudScope: com.point.core.flow.CloudScope = com.point.core.flow.CloudScope.MODELS
+
+    private var pendingPreviewBubble: Bubble? = null
+
+    private var selectionLayer: AtomLayer? = null
+    private var selectionTransform: FrameTransform? = null
+    private var selectionSnap: SnappedSelection? = null
+
+    private var findLayer: AtomLayer? = null
+    private var findTransform: FrameTransform? = null
+
+    private val _ui = MutableStateFlow(FlowUiState())
+    val ui: StateFlow<FlowUiState> = _ui.asStateFlow()
+
+    private val _recent = MutableStateFlow<List<HistoryEntry>>(emptyList())
+    val recent: StateFlow<List<HistoryEntry>> = _recent.asStateFlow()
+
+    private val _crashReport = MutableStateFlow<String?>(null)
+
+    val crashReport: StateFlow<String?> = _crashReport.asStateFlow()
+
+    private val _fromPcCount = MutableStateFlow(0)
+
+    val fromPcCount: StateFlow<Int> = _fromPcCount.asStateFlow()
+    private var fromPcEntries: List<com.point.core.flow.PcOutboxEntry> = emptyList()
+    private var lastOutboxFetchMs = 0L
+    private var lastCircleSyncMs = 0L
+
+    private val _clipboard = MutableStateFlow<String?>(null)
+
+    val clipboard: StateFlow<String?> = _clipboard.asStateFlow()
+    private var lastClipboard: String? = null
+
+    private var freshShareArrived = false
+
+    init {
+        viewModelScope.launch { _crashReport.value = runCatching { crashLog.pending() }.getOrNull() }
+    }
+
+    fun appIcon(packageName: String): androidx.compose.ui.graphics.ImageBitmap? =
+        runCatching { appIcons.iconFor(packageName) }.getOrNull()
+
+    fun dismissCrashReport() {
+        _crashReport.value = null
+        viewModelScope.launch { runCatching { crashLog.clear() } }
+    }
+
+    fun restoreJourney() {
+        viewModelScope.launch {
+            val frames = runCatching { flowSnapshot.load() }.getOrDefault(emptyList())
+            if (frames.isEmpty() || freshShareArrived || stack.isNotEmpty()) return@launch
+
+            val alive = frames.filter {
+                !it.kind.isFileBacked || runCatching { java.io.File(it.ref).isFile }.getOrDefault(false)
+            }
+            if (alive.isEmpty()) {
+                runCatching { flowSnapshot.clear() }
+                return@launch
+            }
+
+            alive.forEach { f ->
+                pushFrame(
+                    PointObject(f.id, f.mime, refFor(f.kind, f.ref),
+                        com.point.core.model.ObjectState(f.kind), f.metadata),
+                    via = f.viaCapabilityId?.let { CapabilityId(it) },
+                    viaTitle = f.viaTitle,
+                )
+            }
+        }
+    }
+
+    fun onSharedText(text: String) {
+        val path = runCatching { sharedTexts.create(text) }.getOrNull()
+        if (path == null) {
+            _ui.update { it.copy(message = "Не удалось принять текст", messageOutcome = Outcome.FAILED) }
+            return
+        }
+        onShared(
+            java.io.File(path).toURI().toString(),
+            "text/plain",
+            name = com.point.core.flow.textObjectName(text),
+        )
+    }
+
+    fun openExample(example: ExampleObject) =
+        onShared(example.uri, example.mime, name = example.name)
+
+    fun refuseIncoming() {
+        _ui.update {
+            it.copy(
+                busy = null,
+                busyStage = null,
+                message = "Point не понял, что ему прислали — попробуйте поделиться файлом",
+                messageOutcome = Outcome.FAILED,
+            )
+        }
+    }
+
+    fun onShared(sourceUri: String, mime: String, autoAction: String? = null, name: String? = null) {
+        freshShareArrived = true
+
+        syncCircle()
+        val voice = claimVoice()
+
+        raiseBusy("Открываю…", cancelable = false)
+        trackWork(viewModelScope.launch {
+            val obj = runCatching {
+                store.clear()
+                store.ingest(sourceUri, mime)
+            }.getOrNull()?.let { ingested ->
+                if (!name.isNullOrBlank()) {
+                    ingested.copy(metadata = ingested.metadata + ("name" to name))
+                } else {
+
+                    val fromFile = ingested.metadata["name"]
+                    if (!com.point.core.flow.looksMachineName(fromFile)) {
+                        ingested
+                    } else {
+                        val human = com.point.core.flow.stampedObjectName(
+                            com.point.core.ui.kindLabel(ingested.state.kind),
+                            System.currentTimeMillis(),
+                        )
+                        ingested.copy(metadata = ingested.metadata + ("name" to human))
+                    }
+                }
+            }
+            if (!owns(voice)) return@launch
+            if (obj == null) {
+
+                _ui.update { it.copy(busy = null, busyStage = null, message = "Не удалось открыть объект", messageOutcome = Outcome.FAILED) }
+                return@launch
+            }
+            runCatching { history.record(obj) }
+            runCatching { journal.record(UsageEvent(UsageEventType.SHARED, obj.state.kind.name)) }
+            cancelEnrichment()
+            stack.clear()
+            pushFrame(obj)
+
+            autoAction?.let { id ->
+                val cap = CapabilityId(id)
+                val title = runCatching { registry.byId(cap).label(obj.state) }.getOrNull()
+                if (title == null) {
+                    _ui.update {
+                        it.copy(message = "Компьютер попросил действие, которого в Point нет", messageOutcome = Outcome.FAILED)
+                    }
+                    return@let
+                }
+                onBubble(Bubble("pc", title, cap, obj.state))
+            }
+        })
+    }
+
+    fun onSharedMultiple(sources: List<String>) {
+        freshShareArrived = true
+        val voice = claimVoice()
+        raiseBusy("Открываю…", cancelable = false)
+        trackWork(viewModelScope.launch {
+            val obj = runCatching {
+                store.clear()
+                store.ingestMultiple(sources)
+            }.getOrNull()
+            if (!owns(voice)) return@launch
+            if (obj == null) {
+
+                _ui.update { it.copy(busy = null, busyStage = null, message = "Не удалось открыть объект", messageOutcome = Outcome.FAILED) }
+                return@launch
+            }
+
+            runCatching { journal.record(UsageEvent(UsageEventType.SHARED, obj.state.kind.name)) }
+            cancelEnrichment()
+            stack.clear()
+            pushFrame(obj)
+        })
+    }
+
+    fun loadRecent() {
+
+        _ui.update { it.copy(aiKeySet = runCatching { userKeys.read() != null }.getOrDefault(false)) }
+        viewModelScope.launch {
+            _recent.value = runCatching { history.recent() }.getOrDefault(emptyList())
+        }
+        refreshFromPc()
+        syncCircle()
+    }
+
+    private fun refreshFromPc(force: Boolean = false) {
+        val pc = pcLinks.current() ?: return
+        val now = System.currentTimeMillis()
+        if (!force && now - lastOutboxFetchMs < OUTBOX_THROTTLE_MS) return
+        lastOutboxFetchMs = now
+        viewModelScope.launch {
+            runCatching { pcTransport.fetchOutbox(pc) }.getOrNull()?.let { entries ->
+                fromPcEntries = entries
+                _fromPcCount.value = entries.size
+            }
+        }
+    }
+
+    fun pullFromPc() {
+        val pc = pcLinks.current() ?: return
+        val voice = claimVoice()
+
+        raiseBusy("Забираю с компьютера…", cancelable = true)
+        trackWork(viewModelScope.launch {
+
+            val entries = runCatching { pcTransport.fetchOutbox(pc) }.getOrNull().orEmpty()
+            if (!owns(voice)) return@launch
+            if (entries.isEmpty()) {
+                fromPcEntries = emptyList()
+                _fromPcCount.value = 0
+                _ui.update { it.copy(busy = null) }
+                return@launch
+            }
+            val pulled = entries.map { entry ->
+                val name = entry.meta["name"] ?: "объект"
+                val path = pulledFiles.create("${entry.id}-$name")
+                val ok = runCatching { pcTransport.downloadOutboxFile(pc, entry.id, path) }.getOrDefault(false)
+                Triple(entry, path, ok)
+            }
+            if (!owns(voice)) return@launch
+            if (pulled.any { !it.third }) {
+                _ui.update { it.copy(busy = null, busyStage = null, message = com.point.core.flow.pcUnreachableText(com.point.core.flow.PcUnreachable.PC_ASLEEP), messageOutcome = Outcome.FAILED) }
+                return@launch
+            }
+            when (pulled.size) {
+                1 -> onShared(
+                    "file://${pulled[0].second}",
+                    pulled[0].first.meta["mime"] ?: "application/octet-stream",
+                    autoAction = pulled[0].first.meta["pc.action"]?.takeIf { it.isNotBlank() },
+                )
+                else -> onSharedMultiple(pulled.map { "file://${it.second}" })
+            }
+            pulled.forEach { (entry, _, _) ->
+                runCatching { pcTransport.ackOutbox(pc, entry.id) }
+                    .recoverCatching { pcTransport.ackOutbox(pc, entry.id) }
+            }
+            fromPcEntries = emptyList()
+            _fromPcCount.value = 0
+        })
+    }
+
+    fun hideFromPc() {
+        _fromPcCount.value = 0
+    }
+
+    fun clearHistory() {
+        viewModelScope.launch {
+            runCatching { history.clearAll() }
+            _recent.value = emptyList()
+        }
+    }
+
+    fun offerClipboard(text: String?) {
+        val t = text?.trim().orEmpty()
+        _clipboard.value = t.takeIf { it.isNotBlank() && it.length <= MAX_CLIP && it != lastClipboard }
+    }
+
+    fun refreshClipboard(reader: () -> String?) {
+        if (hasFlow()) return
+        offerClipboard(reader())
+    }
+
+    fun dismissClipboard() {
+        lastClipboard = _clipboard.value
+        _clipboard.value = null
+    }
+
+    fun openFromHistory(entry: HistoryEntry) {
+        freshShareArrived = true
+        val voice = claimVoice()
+
+        raiseBusy("Открываю…", cancelable = true)
+        trackWork(viewModelScope.launch {
+            val obj = runCatching { history.open(entry.id) }.getOrNull()
+            if (!owns(voice)) return@launch
+            if (obj == null) {
+                _ui.update { it.copy(busy = null, busyStage = null, message = "Объект недоступен", messageOutcome = Outcome.FAILED) }
+                return@launch
+            }
+            runCatching { store.clear() }
+            cancelEnrichment()
+            stack.clear()
+            pushFrame(obj)
+        })
+    }
+
+    fun onBubble(bubble: Bubble) {
+        val top = stack.lastOrNull()?.obj ?: return
+
+        if (com.point.core.flow.labelNeedsKey(bubble.title)) {
+            openKeyScreen(
+                KeyErrand(
+                    action = com.point.core.flow.labelWithoutKeyNote(bubble.title),
+                    objectName = top.metadata["name"] ?: com.point.core.ui.kindLabel(top.state.kind),
+                ),
+            )
+            return
+        }
+        if (bubble.capabilityId == OpenInCapability.ID) {
+
+            showAppPicker(top)
+            return
+        }
+        if (bubble.capabilityId == AiCapability.ID) {
+
+            requireCloudConsent { openChat(top) }
+            return
+        }
+        if (bubble.capabilityId == FindCapability.ID) {
+
+            openFind()
+            return
+        }
+        if (isCloud(bubble.capabilityId)) {
+
+            requireCloudConsent(bubble.capabilityId) { maybePreview(bubble, top) }
+            return
+        }
+        maybePreview(bubble, top)
+    }
+
+    private fun maybePreview(bubble: Bubble, top: PointObject) {
+        val voice = claimVoice()
+        raiseBusy(
+            bubble.title,
+            network = isCloud(bubble.capabilityId),
+            quiet = isQuietAction(bubble.capabilityId),
+            cancelable = true,
+        )
+        trackWork(viewModelScope.launch {
+
+            val realizer = runCatching { resolver.realizerFor(bubble.capabilityId) }.getOrNull()
+            if (!owns(voice)) return@launch
+            if (realizer == null) {
+                _ui.update { it.copy(busy = null, busyStage = null, message = "Действие недоступно", messageOutcome = Outcome.FAILED) }
+                return@launch
+            }
+            val preview = runCatching { realizer.preview(top) }.getOrNull()
+            if (!owns(voice)) return@launch
+            if (preview == null) {
+
+                busyJob = null
+                dispatch(bubble) { realizer.perform(top, null) }
+            } else {
+                pendingPreviewBubble = bubble
+                _ui.update { it.copy(busy = null, busyStage = null, preview = preview) }
+            }
+        })
+    }
+
+    fun confirmPreview() {
+        val bubble = pendingPreviewBubble ?: return
+        val top = stack.lastOrNull()?.obj ?: return
+        pendingPreviewBubble = null
+        _ui.update { it.copy(preview = null) }
+        runOnObject(bubble, top)
+    }
+
+    fun cancelPreview() {
+        pendingPreviewBubble = null
+        _ui.update { it.copy(preview = null) }
+    }
+
+    fun openTopObject() {
+        val top = stack.lastOrNull()?.obj ?: return
+        val cap = com.point.core.model.CapabilityId("open")
+        val bubble = runCatching {
+            Bubble("open", registry.byId(cap).label(top.state), cap, top.state)
+        }.getOrNull() ?: return
+        onBubble(bubble)
+    }
+
+    fun openSelection() {
+        val top = stack.lastOrNull()?.obj ?: return
+
+        val atomsRef = top.metadata[META_OCR_ATOMS_REF]
+        viewModelScope.launch {
+            val loaded = withContext(ioDispatcher) {
+                runCatching {
+                    val layer = atomsRef
+                        ?.let { AtomCodec.decode(File(it).readText()) }
+                        ?: AtomLayer(emptyList())
+                    frames.frame(top.uri.value, SELECTION_MAX_PX)?.let { frame ->
+                        Triple(layer, frame.transform, frame.bitmap.asImageBitmap())
+                    }
+                }.getOrNull()
+            }
+            if (loaded == null) {
+                _ui.update { it.copy(message = "Не удалось открыть страницу для выделения", messageOutcome = Outcome.FAILED) }
+                return@launch
+            }
+            selectionLayer = loaded.first
+            selectionTransform = loaded.second
+            selectionSnap = null
+            _ui.update { it.copy(selection = SelectionUi(image = loaded.third)) }
+        }
+    }
+
+    fun onSelectRegion(display: Box) {
+        val layer = selectionLayer ?: return
+        val transform = selectionTransform ?: return
+        val snap = layer.snapSelection(transform.toRaw(display))
+        selectionSnap = snap
+        _ui.update { state ->
+            val sel = state.selection ?: return@update state
+            state.copy(
+                selection = sel.copy(
+
+                    highlights = if (snap.atoms.isEmpty()) {
+                        listOf(transform.toUpright(snap.region))
+                    } else {
+                        snap.lineRegions.map(transform::toUpright)
+                    },
+                    text = snap.text,
+                ),
+            )
+        }
+    }
+
+    fun takeSelection() {
+        val top = stack.lastOrNull()?.obj ?: return
+        val snap = selectionSnap ?: return
+        viewModelScope.launch {
+            val derived = withContext(ioDispatcher) {
+                runCatching {
+                    if (snap.text.isNotBlank()) textCapture(top, snap) else fragmentCapture(top, snap)
+                }.getOrNull()
+            }
+            if (derived == null) {
+                _ui.update { it.copy(message = "Не удалось сохранить выделение", messageOutcome = Outcome.FAILED) }
+                return@launch
+            }
+            closeSelection()
+            pushFrame(derived, viaTitle = "Выделение")
+        }
+    }
+
+    private fun selectionOrigin(top: PointObject, snap: SnappedSelection) = buildMap {
+        put(META_SELECTION_SOURCE, top.id)
+        if (snap.ids.isNotEmpty()) put(META_SELECTION_IDS, snap.ids.joinToString(" "))
+        put(META_SELECTION_REGION, snap.region.let { "${it.left} ${it.top} ${it.right} ${it.bottom}" })
+        put(META_SELECTION_PAGE, "0")
+    }
+
+    private suspend fun textCapture(top: PointObject, snap: SnappedSelection): PointObject {
+        val ref = store.newScratchFile("txt")
+        File(ref.value).writeText(snap.text)
+        return PointObject(
+            id = "sel-${top.id}-${snap.ids.hashCode()}",
+            mime = "text/plain",
+            uri = ref,
+            state = ObjectState(ObjectKind.TEXT, features = setOf(Feature.HAS_TEXT)),
+            metadata = selectionOrigin(top, snap),
+            sourceObjects = listOf(top.id),
+        )
+    }
+
+    private suspend fun fragmentCapture(top: PointObject, snap: SnappedSelection): PointObject? {
+        val r = snap.region
+        val bmp = frames.crop(
+            top.uri.value, r.left.toInt(), r.top.toInt(), r.right.toInt(), r.bottom.toInt(),
+        ) ?: return null
+        val ref = store.newScratchFile("jpg")
+        File(ref.value).outputStream().use {
+            bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, FRAGMENT_JPEG_QUALITY, it)
+        }
+        return PointObject(
+            id = "sel-${top.id}-${r.hashCode()}",
+            mime = "image/jpeg",
+            uri = ref,
+            state = ObjectState(ObjectKind.IMAGE),
+            metadata = selectionOrigin(top, snap),
+            sourceObjects = listOf(top.id),
+        )
+    }
+
+    fun closeSelection() {
+        selectionLayer = null
+        selectionTransform = null
+        selectionSnap = null
+        _ui.update { it.copy(selection = null) }
+    }
+
+    fun openFind() {
+        val top = stack.lastOrNull()?.obj ?: return
+
+        val atomsRef = top.metadata[META_OCR_ATOMS_REF] ?: top.metadata[META_CLOUD_ATOMS_REF]
+        if (atomsRef == null) {
+            _ui.update { it.copy(message = "Страница ещё не прочитана — искать не в чем", messageOutcome = Outcome.FAILED) }
+            return
+        }
+        viewModelScope.launch {
+            val loaded = withContext(ioDispatcher) {
+                runCatching {
+                    val layer = AtomCodec.decode(File(atomsRef).readText())
+                    frames.frame(top.uri.value, SELECTION_MAX_PX)?.let { frame ->
+                        Triple(layer, frame.transform, frame.bitmap.asImageBitmap())
+                    }
+                }.getOrNull()
+            }
+            if (loaded == null) {
+                _ui.update { it.copy(message = "Не удалось открыть страницу для поиска", messageOutcome = Outcome.FAILED) }
+                return@launch
+            }
+            findLayer = loaded.first
+            findTransform = loaded.second
+            _ui.update { it.copy(find = FindUi(image = loaded.third)) }
+        }
+    }
+
+    fun onFindQuery(query: String) {
+        val layer = findLayer ?: return
+        val transform = findTransform ?: return
+        val found = layer.findOnPage(query)
+        val asked = com.point.core.flow.isSearchable(query)
+        _ui.update { state ->
+            val find = state.find ?: return@update state
+            state.copy(
+                find = find.copy(
+                    highlights = found.map { transform.toUpright(it.region) },
+                    status = if (asked) foundOnPageLabel(found.size) else null,
+                ),
+            )
+        }
+    }
+
+    fun closeFind() {
+        findLayer = null
+        findTransform = null
+        _ui.update { it.copy(find = null) }
+    }
+
+    private fun runOnObject(bubble: Bubble, top: PointObject) {
+        raiseBusy(
+            bubble.title,
+            network = isCloud(bubble.capabilityId),
+            quiet = isQuietAction(bubble.capabilityId),
+            cancelable = true,
+        )
+        dispatch(bubble) { resolver.realizerFor(bubble.capabilityId).perform(top, null) }
+    }
+
+    private fun isCloud(id: CapabilityId) =
+        runCatching { registry.byId(id).meta.network }.getOrDefault(false) ||
+            runCatching { resolver.leavesDevice(id) }.getOrDefault(false)
+
+    private fun isQuietAction(id: CapabilityId) =
+        runCatching { quietWork(registry.byId(id).meta) }.getOrDefault(false)
+
+    private fun requireCloudConsent(
+        capabilityId: com.point.core.model.CapabilityId? = null,
+        onGranted: () -> Unit,
+    ) {
+        val id = capabilityId ?: com.point.core.model.CapabilityId("ai")
+        val scope = com.point.core.flow.cloudScopeOf(id)
+        viewModelScope.launch {
+            if (runCatching { consent.allowed(scope) }.getOrDefault(false)) {
+                onGranted()
+            } else {
+                pendingCloud = onGranted
+                pendingCloudScope = scope
+                _ui.update {
+                    it.copy(
+                        cloudConsent = true,
+                        cloudDestination = com.point.core.flow.cloudDestination(id, chosenAiService()),
+                        cloudTitle = com.point.core.flow.cloudAskTitle(scope),
+                        cloudConfirm = com.point.core.flow.cloudAskConfirm(scope),
+                    )
+                }
+            }
+        }
+    }
+
+    private fun chosenAiService(): String? = runCatching {
+        com.point.core.flow.providerForBaseUrl(userKeys.read()?.baseUrl.orEmpty())?.name
+    }.getOrNull()
+
+    fun onItem(item: PointObject) {
+        if (stack.lastOrNull()?.obj?.state?.kind != ObjectKind.COLLECTION) return
+        pushFrame(item)
+    }
+
+    fun onFound(found: PointObject) {
+        if (stack.lastOrNull()?.found?.none { it.id == found.id } != false) return
+        pushFrame(found)
+    }
+
+    fun submitAmendment(text: String) {
+        val bubble = pendingBubble ?: return
+        val top = stack.lastOrNull()?.obj ?: return
+        pendingBubble = null
+        raiseBusy(
+            bubble.title,
+            network = isCloud(bubble.capabilityId),
+            quiet = isQuietAction(bubble.capabilityId),
+            cancelable = true,
+        )
+        _ui.update { it.copy(inputSuggestions = emptyList(), needsImage = null) }
+        dispatch(bubble) { resolver.realizerFor(bubble.capabilityId).perform(top, text) }
+    }
+
+    fun cancelInput() {
+        pendingBubble = null
+        _ui.update { it.copy(inputPrompt = null, inputSuggestions = emptyList(), needsImage = null, busy = null) }
+    }
+
+    private var chatJob: Job? = null
+
+    private fun openChat(obj: PointObject) {
+        _ui.update {
+            val kept = it.chat?.takeIf { c -> c.obj.id == obj.id }
+            it.copy(
+                chat = kept ?: ChatState(obj = obj, suggestions = aiSuggestions(obj.state.kind)),
+                chatOpen = true,
+                busy = null, inputPrompt = null, message = null, messageOutcome = Outcome.NONE,
+            )
+        }
+    }
+
+    fun closeChat() = _ui.update { it.copy(chatOpen = false) }
+
+    fun sendChatMessage(text: String) {
+        val chat = _ui.value.chat ?: return
+        val message = text.trim()
+        if (message.isEmpty() || chat.pending) return
+        val history = chat.messages
+        val obj = chat.obj
+        _ui.update {
+            it.copy(
+                chat = chat.copy(
+                    messages = history + ChatMessage(ChatRole.USER, message),
+                    pending = true,
+                    notice = null,
+                ),
+            )
+        }
+        chatJob?.cancel()
+        chatJob = viewModelScope.launch {
+            val target = aiTransformTarget(message)
+            if (target != null) {
+                val result = runCatching { resolver.realizerFor(target).perform(obj, null) }
+
+                    .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
+                    .getOrNull()
+                if (result is ActionResult.Success) {
+                    runCatching { sensory.success() }
+
+                    _ui.update { s -> s.copy(chat = s.chat?.copy(pending = false), chatOpen = false) }
+                    pushFrame(store.put(result.result), target, null)
+                } else {
+                    appendChatAssistant((result as? ActionResult.Failure)?.reason ?: "Не удалось создать документ")
+                }
+            } else {
+                val reply = runCatching { aiChatResponder.reply(obj, history, message) }
+                    .getOrElse {
+                        if (it is kotlinx.coroutines.CancellationException) throw it
+                        "Не получилось ответить: ${it.message ?: "ошибка"}"
+                    }
+                appendChatAssistant(reply)
+            }
+        }
+    }
+
+    fun cancelChatMessage() {
+        val job = chatJob ?: return
+        chatJob = null
+        job.cancel()
+        _ui.update { s -> s.chat?.let { c -> s.copy(chat = c.copy(pending = false, notice = "Ответ остановлен")) } ?: s }
+    }
+
+    fun takeChatAnswer() {
+        val chat = _ui.value.chat ?: return
+        if (chat.pending) return
+        val answer = chat.messages.lastOrNull { it.role == ChatRole.ASSISTANT }
+            ?.text?.takeIf { it.isNotBlank() } ?: return
+        val source = chat.obj
+        viewModelScope.launch {
+            val obj = runCatching { chatAnswerObject(source, answer, chat.messages.size) }.getOrNull()
+            if (obj == null) {
+                _ui.update { it.copy(message = "Не удалось забрать ответ", messageOutcome = Outcome.FAILED) }
+                return@launch
+            }
+            runCatching { sensory.success() }
+
+            _ui.update { it.copy(chatOpen = false) }
+            pushFrame(obj, viaTitle = "Ответ AI")
+        }
+    }
+
+    private suspend fun chatAnswerObject(source: PointObject, answer: String, turn: Int): PointObject {
+        val ref = store.newScratchFile("md")
+        File(ref.value).writeText(answer)
+        return PointObject(
+            id = "chat-${source.id}-$turn",
+            mime = "text/markdown",
+            uri = ref,
+            state = ObjectState(ObjectKind.TEXT, features = setOf(Feature.HAS_TEXT)),
+            metadata = mapOf("name" to "Ответ AI"),
+
+            provenance = com.point.core.model.Provenance.MODEL,
+            sourceObjects = listOf(source.id),
+            creatorAction = AiCapability.ID.value,
+        )
+    }
+
+    private fun appendChatAssistant(text: String) {
+        chatJob = null
+        _ui.update { s ->
+            val c = s.chat ?: return@update s
+            s.copy(
+                chat = c.copy(
+                    messages = c.messages + ChatMessage(ChatRole.ASSISTANT, text),
+                    pending = false,
+                    notice = null,
+                ),
+            )
+        }
+    }
+
+    fun openKeySettings() = openKeyScreen(errand = null)
+
+    private fun openKeyScreen(errand: KeyErrand?) {
+
+        val saved = userKeys.read()
+        _ui.update {
+
+            val refusal = keyOfferLabel(it.message) != null
+            it.copy(
+                keyScreen = saved ?: UserAiConfig.DEFAULT, busy = null,
+
+                keyScreenNote = it.message.takeIf { _ -> refusal },
+
+                keyErrand = errand,
+                message = it.message.takeIf { _ -> refusal },
+                messageOutcome = if (refusal) it.messageOutcome else Outcome.NONE,
+                inputPrompt = null,
+
+                keyChecking = false,
+                keyVerdict = null,
+                aiKeySet = saved != null,
+                soundEnabled = runCatching { sensorySettings.isSoundEnabled() }.getOrDefault(true),
+                privacyLevel = runCatching { cloudPrivacy.level() }
+                    .getOrDefault(com.point.core.flow.PrivacyLevel.DEFAULT),
+            )
+        }
+        refreshUsage()
+        viewModelScope.launch { refreshCloudConsent() }
+    }
+
+    fun checkAiKey(config: UserAiConfig) {
+        if (config.apiKey.isBlank() || _ui.value.keyChecking) return
+        _ui.update { it.copy(keyChecking = true, keyVerdict = null) }
+        viewModelScope.launch {
+            val probe = runCatching { aiKeyCheck.check(config) }
+                .getOrElse { com.point.core.flow.KeyProbe(error = com.point.core.flow.withoutKey(it.message.orEmpty(), config.apiKey)) }
+            val verdict = com.point.core.flow.keyVerdict(probe)
+            if (verdict is com.point.core.flow.KeyVerdict.Works) runCatching { userKeys.save(config) }
+            _ui.update {
+                it.copy(
+                    keyChecking = false,
+                    keyVerdict = verdict,
+                    aiKeySet = it.aiKeySet || verdict is com.point.core.flow.KeyVerdict.Works,
+                )
+            }
+        }
+    }
+
+    fun forgetAiKey() {
+        viewModelScope.launch {
+            runCatching { userKeys.clear() }
+            _ui.update {
+                it.copy(
+                    keyScreen = it.keyScreen?.copy(apiKey = ""),
+                    keyVerdict = null,
+                    keyChecking = false,
+                    aiKeySet = false,
+                    message = "Ключ AI забыт", messageOutcome = Outcome.DONE,
+                )
+            }
+        }
+    }
+
+    private fun refreshUsage() {
+        viewModelScope.launch {
+            val enabled = journal.isEnabled()
+            val summary = if (enabled) runCatching { journal.summary() }.getOrNull() else null
+            _ui.update { it.copy(usageEnabled = enabled, usageSummary = summary) }
+        }
+    }
+
+    fun setSoundEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            runCatching { sensorySettings.setSoundEnabled(enabled) }
+            _ui.update { it.copy(soundEnabled = enabled) }
+        }
+    }
+
+    fun setPrivacyLevel(level: com.point.core.flow.PrivacyLevel) {
+        viewModelScope.launch {
+            runCatching { cloudPrivacy.setLevel(level) }
+            _ui.update { it.copy(privacyLevel = level) }
+        }
+    }
+
+    fun setUsageEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            runCatching { journal.setEnabled(enabled) }
+            refreshUsage()
+        }
+    }
+
+    fun closeKeySettings() {
+        _ui.update {
+            it.copy(
+                keyScreen = null, keyScreenNote = null, keyErrand = null,
+                keyVerdict = null, keyChecking = false,
+            )
+        }
+        refreshTopBubbles()
+    }
+
+    private fun refreshTopBubbles() {
+        val index = stack.lastIndex
+        val frame = stack.getOrNull(index) ?: return
+        val refreshed = frame.copy(
+            bubbles = registry.bubblesFor(frame.obj.state),
+            latent = registry.latentBubblesFor(frame.obj.state),
+        )
+        stack[index] = refreshed
+        _ui.update { it.copy(frame = refreshed) }
+    }
+
+    private fun updateDevices(block: (DevicesScreenState) -> DevicesScreenState) {
+        _ui.update { s -> s.devicesScreen?.let { s.copy(devicesScreen = block(it)) } ?: s }
+    }
+
+    private val signInDriver by lazy {
+        com.point.core.flow.SignInDriver(
+            client = accountClient,
+            store = accountStore,
+            browser = browser,
+            pending = pendingLogins,
+        )
+    }
+
+    private var signInJob: Job? = null
+
+    private fun gateSignIn() {
+        if (accountStore.current() == null) {
+            _ui.update { it.copy(signIn = com.point.core.flow.SignIn.SignedOut) }
+
+            resumeSignIn()
+        }
+    }
+
+    fun signIn() {
+        signInJob?.cancel()
+        signInJob = viewModelScope.launch {
+            signInDriver.signIn(deviceName(), com.point.core.flow.DeviceKind.PHONE) { state ->
+                showSignIn(state)
+            }
+        }
+    }
+
+    fun resumeSignIn() {
+        if (signInJob?.isActive == true) return
+        signInJob = viewModelScope.launch {
+
+            val started = withContext(ioDispatcher) { runCatching { signInDriver.pendingLogin() }.getOrNull() }
+            if (started == null) return@launch
+            signInDriver.resume(deviceName(), com.point.core.flow.DeviceKind.PHONE) { state ->
+                showSignIn(state, quiet = true)
+            }
+        }
+    }
+
+    private fun showSignIn(state: com.point.core.flow.SignIn, quiet: Boolean = false) {
+        if (state is com.point.core.flow.SignIn.SignedIn) {
+            val gateWasUp = _ui.value.signIn != null
+            _ui.update { it.copy(signIn = null) }
+
+            announceKey(state.account)
+            if (gateWasUp) openDevices()
+            return
+        }
+        if (quiet && _ui.value.signIn == null) return
+        _ui.update { it.copy(signIn = state) }
+    }
+
+    fun cancelSignIn() {
+        signInJob?.cancel()
+        signInJob = null
+
+        viewModelScope.launch(NonCancellable) { runCatching { signInDriver.forgetPending() } }
+        _ui.update { it.copy(signIn = com.point.core.flow.SignIn.SignedOut) }
+    }
+
+    fun dismissSignIn() {
+        _ui.update { it.copy(signIn = null) }
+    }
+
+    fun openSignInPage(url: String) = browser.open(url)
+
+    fun hasSignInGate(): Boolean = _ui.value.signIn != null
+
+    fun openDevices() {
+        val account = accountStore.current()
+        if (account == null) {
+            gateSignIn()
+            return
+        }
+        val self = com.point.core.flow.CircleDevice(
+            id = account.deviceId,
+            kind = com.point.core.flow.DeviceKind.PHONE,
+            name = account.deviceName.ifBlank { deviceName() },
+            lastSeenMillis = System.currentTimeMillis(),
+            self = true,
+        )
+        _ui.update {
+            it.copy(
+                devicesScreen = DevicesScreenState(email = account.email, devices = listOf(self), loading = true),
+                busy = null, message = null, messageOutcome = Outcome.NONE,
+            )
+        }
+        viewModelScope.launch { loadCircle(account) }
+
+        pcLinks.current()?.let { pc ->
+            viewModelScope.launch {
+                runCatching { pcTransport.fetchCaps(pc)?.let { caps -> pcCaps.save(caps) } }
+            }
+        }
+    }
+
+    fun closeDevices() {
+        refreshFromPc()
+        _ui.update { it.copy(devicesScreen = null) }
+    }
+
+    private suspend fun loadCircle(account: com.point.core.flow.PointAccount) {
+        val answer = runCatching { accountClient.circle(account) }
+            .getOrDefault(com.point.core.flow.CircleAnswer.Unreachable)
+        when (answer) {
+            is com.point.core.flow.CircleAnswer.Circle -> {
+                rememberPc(answer.devices)
+                updateDevices { it.copy(devices = answer.devices, loading = false, error = null) }
+            }
+            com.point.core.flow.CircleAnswer.Unreachable -> updateDevices {
+                it.copy(
+                    loading = false,
+                    error = "Не удалось спросить сервер о ваших устройствах — проверьте интернет",
+                )
+            }
+            com.point.core.flow.CircleAnswer.Revoked -> forgetAccount(com.point.core.flow.ACCOUNT_REVOKED)
+        }
+    }
+
+    fun revokeDevice(deviceId: String) {
+        val account = accountStore.current() ?: return
+        updateDevices { it.copy(busy = true, error = null) }
+        viewModelScope.launch {
+            val ok = runCatching { accountClient.revoke(account, deviceId) }.getOrDefault(false)
+            if (!ok) {
+                updateDevices { it.copy(busy = false, error = "Сервер не отключил устройство — попробуйте ещё раз") }
+                return@launch
+            }
+            if (deviceId == account.deviceId) {
+                forgetAccount(com.point.core.flow.SignIn.SignedOut)
+                return@launch
+            }
+            updateDevices { it.copy(busy = false) }
+            loadCircle(account)
+        }
+    }
+
+    fun signOut() {
+        val account = accountStore.current() ?: return
+        updateDevices { it.copy(busy = true, error = null) }
+        viewModelScope.launch {
+            runCatching { accountClient.signOut(account) }
+            forgetAccount(com.point.core.flow.SignIn.SignedOut)
+        }
+    }
+
+    fun deleteAccount() {
+        val account = accountStore.current() ?: return
+        updateDevices { it.copy(busy = true, error = null) }
+        viewModelScope.launch {
+            val gone = runCatching { accountClient.deleteAccount(account) }.getOrDefault(false)
+            if (gone) {
+                forgetAccount(com.point.core.flow.SignIn.SignedOut)
+            } else {
+                updateDevices {
+                    it.copy(busy = false, error = com.point.core.flow.accountRefusal(null).what)
+                }
+            }
+        }
+    }
+
+    private suspend fun forgetAccount(next: com.point.core.flow.SignIn) {
+        runCatching { accountStore.clear() }
+        runCatching { pcLinks.clear() }
+        runCatching { pcCaps.clear() }
+        runCatching { linkMonitor.forget() }
+        _ui.update { it.copy(devicesScreen = null, signIn = next) }
+    }
+
+    private fun syncCircle() {
+        val account = accountStore.current() ?: return
+        val now = System.currentTimeMillis()
+        if (now - lastCircleSyncMs < CIRCLE_SYNC_THROTTLE_MS) return
+        lastCircleSyncMs = now
+        announceKey(account)
+        viewModelScope.launch {
+            val answer = runCatching { accountClient.circle(account) }.getOrNull()
+            if (answer is com.point.core.flow.CircleAnswer.Circle) rememberPc(answer.devices)
+        }
+    }
+
+    private fun rememberPc(devices: List<com.point.core.flow.CircleDevice>) {
+
+        if (devices.isEmpty()) return
+        val pc = devices
+            .filter { !it.self && it.kind == com.point.core.flow.DeviceKind.PC }
+            .maxByOrNull { it.lastSeenMillis ?: 0L }
+        viewModelScope.launch {
+            if (pc == null) {
+
+                runCatching { pcLinks.clear() }
+                runCatching { pcCaps.clear() }
+                return@launch
+            }
+            val known = com.point.core.flow.LinkedPc(pc.id, pc.name, pc.key)
+
+            runCatching { syncSecrets(known) }
+            if (pcLinks.current() == known) return@launch
+            runCatching { pcLinks.save(known) }
+
+            runCatching { pcTransport.fetchCaps(known)?.let { caps -> pcCaps.save(caps) } }
+            runCatching { pcTransport.pushPhoneCaps(known, phoneAdvertised()) }
+            refreshFromPc(force = true)
+        }
+    }
+
+    private fun announceKey(account: com.point.core.flow.PointAccount) {
+        val key = runCatching { deviceKeys.keys().publicKey }.getOrNull() ?: return
+        viewModelScope.launch { runCatching { accountClient.enroll(account, key) } }
+    }
+
+    private suspend fun syncSecrets(pc: com.point.core.flow.LinkedPc) {
+        val saved = runCatching { userKeys.read() }.getOrNull()
+        val mine = com.point.core.flow.SharedSecrets(
+            aiKey = saved?.apiKey.orEmpty(),
+            at = saved?.savedAt ?: 0L,
+        )
+        val merged = pcTransport.exchangeSecrets(pc, mine) ?: return
+        if (merged.aiKey.isBlank() || merged.aiKey == mine.aiKey) return
+
+        val config = (saved ?: com.point.core.flow.UserAiConfig.DEFAULT)
+            .copy(apiKey = merged.aiKey, savedAt = merged.at)
+        runCatching { userKeys.save(config) }
+        _ui.update { it.copy(aiKeySet = true) }
+    }
+
+    private fun phoneAdvertised(): List<com.point.core.flow.PcRemoteAction> =
+        runCatching { com.point.core.flow.advertisedActions(registry.all()) }
+            .getOrNull()
+            ?.takeIf { it.isNotEmpty() }
+            ?: PHONE_ADVERTISED_FALLBACK
+
+    private fun deviceName(): String = "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}".trim()
+
+    fun confirmCloud() {
+        val run = pendingCloud ?: return
+        val scope = pendingCloudScope
+        pendingCloud = null
+        _ui.update { it.copy(cloudConsent = false) }
+        viewModelScope.launch {
+
+            runCatching { consent.allow(scope) }
+            run()
+        }
+    }
+
+    fun declineCloud() {
+        pendingCloud = null
+        _ui.update {
+            it.copy(cloudConsent = false, message = CLOUD_DECLINED, messageOutcome = Outcome.NONE)
+        }
+    }
+
+    fun setCloudAllowed(allowed: Boolean) {
+        viewModelScope.launch {
+            runCatching {
+                if (allowed) consent.allow(com.point.core.flow.CloudScope.MODELS)
+                else consent.revoke(com.point.core.flow.CloudScope.MODELS)
+            }
+            refreshCloudConsent()
+        }
+    }
+
+    private suspend fun refreshCloudConsent() {
+        val allowed = runCatching { consent.allowed(com.point.core.flow.CloudScope.MODELS) }.getOrDefault(false)
+        _ui.update { it.copy(cloudEnabled = allowed) }
+    }
+
+    private fun showAppPicker(obj: PointObject) {
+        val voice = claimVoice()
+        raiseBusy("Ищу приложения…", cancelable = true)
+        trackWork(viewModelScope.launch {
+            val direct = runCatching { appLauncher.handlers(obj) }.getOrDefault(emptyList())
+
+            val apps = (direct + bridgedHandlers(obj)).distinctBy { it.packageName }
+            if (!owns(voice)) return@launch
+            _ui.update {
+                if (apps.isEmpty()) it.copy(busy = null, busyStage = null, message = "Нет приложения для этого объекта", messageOutcome = Outcome.FAILED)
+                else it.copy(busy = null, busyStage = null, appPicker = apps)
+            }
+        })
+    }
+
+    private suspend fun bridgedHandlers(obj: PointObject): List<AppTarget> {
+        val state = stack.lastOrNull()?.obj?.state ?: return emptyList()
+        val transforms = registry.bubblesFor(state).mapNotNull { bubble ->
+            val produced = runCatching { registry.byId(bubble.capabilityId).produces(state) }.getOrNull()
+            val kind = produced?.kind?.takeIf { it != state.kind } ?: return@mapNotNull null
+            openableMime(kind)?.let { Triple(bubble.capabilityId, kind, it) }
+        }.distinctBy { it.third }
+        return transforms.flatMap { (capId, kind, mime) ->
+            runCatching { appLauncher.handlersForMime(mime) }.getOrDefault(emptyList())
+                .map { it.copy(label = "${it.label} · ${kindShort(kind)}", via = capId.value) }
+        }
+    }
+
+    fun onPickApp(target: AppTarget) {
+        val obj = stack.lastOrNull()?.obj ?: return
+        _ui.update { it.copy(appPicker = null) }
+        val via = target.via
+
+        trackWork(viewModelScope.launch {
+
+            if (via == null) {
+                val pick = ChosenApp(obj.state.kind, target.packageName, target.activity, target.label)
+                runCatching { chosenApps.record(pick) }
+                runCatching { usage.record(CapabilityId("app:${target.packageName}#${obj.state.kind.name}")) }
+            }
+            val toOpen = if (via != null) bridge(obj, via) else obj
+
+            ensureActive()
+            if (toOpen == null) {
+                _ui.update {
+                    it.copy(
+                        busy = null, busyStage = null, messageOutcome = Outcome.FAILED,
+                        message = "Не удалось подготовить объект для этого приложения",
+                    )
+                }
+                return@launch
+            }
+            runCatching { appLauncher.launch(target, toOpen) }
+                .onSuccess { _ui.update { it.copy(busy = null, busyStage = null, message = "Открываю в ${target.label}", messageOutcome = Outcome.DONE) } }
+                .onFailure { e -> _ui.update { it.copy(busy = null, busyStage = null, message = e.message ?: "Не удалось открыть", messageOutcome = Outcome.FAILED) } }
+        })
+    }
+
+    private suspend fun bridge(obj: PointObject, viaCapId: String): PointObject? {
+        claimVoice()
+        raiseBusy("Преобразую…", cancelable = true)
+        val result = runCatching { resolver.realizerFor(CapabilityId(viaCapId)).perform(obj, null) }.getOrNull()
+        return (result as? ActionResult.Success)?.let { runCatching { store.put(it.result) }.getOrNull() }
+    }
+
+    private fun openableMime(kind: ObjectKind): String? = when (kind) {
+        ObjectKind.PDF -> "application/pdf"
+        ObjectKind.IMAGE -> "image/png"
+        ObjectKind.TEXT -> "text/plain"
+        else -> null
+    }
+
+    private fun kindShort(kind: ObjectKind): String = when (kind) {
+        ObjectKind.PDF -> "PDF"
+        ObjectKind.IMAGE -> "картинка"
+        ObjectKind.TEXT -> "текст"
+        else -> kind.name
+    }
+
+    fun dismissAppPicker() = _ui.update { it.copy(appPicker = null) }
+
+    fun saveAiConfig(config: UserAiConfig) {
+        viewModelScope.launch {
+            runCatching { userKeys.save(config) }
+            _ui.update {
+                it.copy(
+                    keyScreen = null, keyScreenNote = null, keyErrand = null,
+                    keyVerdict = null,
+                    aiKeySet = config.apiKey.isNotBlank(),
+                    message = "Ключ AI сохранён", messageOutcome = Outcome.DONE,
+                )
+            }
+
+            refreshTopBubbles()
+        }
+    }
+
+    private fun dispatch(bubble: Bubble, action: suspend () -> ActionResult) {
+        runCatching { sensory.tap() }
+
+        busyJob?.cancel()
+        val voice = claimVoice()
+        trackWork(viewModelScope.launch {
+            runCatching { usage.record(bubble.capabilityId) }
+            runCatching { journal.record(UsageEvent(UsageEventType.ACTION, bubble.capabilityId.value)) }
+            runCatching {
+
+                kotlinx.coroutines.withContext(
+                    com.point.core.flow.ActionProgress { stage ->
+                        if (voice == workVoice) _ui.update { it.copy(busyStage = stage) }
+                    },
+                ) { action() }
+            }
+
+                .onSuccess { result -> if (owns(voice)) handleResult(result, bubble) }
+                .onFailure { e ->
+
+                    if (e is kotlinx.coroutines.CancellationException) throw e
+                    if (!owns(voice)) return@onFailure
+
+                    _ui.update { it.copy(busy = null, busyStage = null, message = e.message ?: "Не получилось", messageOutcome = Outcome.FAILED) }
+                }
+        })
+    }
+
+    fun cancelAction() {
+        val job = busyJob ?: return
+        busyJob = null
+        job.cancel()
+        claimVoice()
+
+        val hasObject = _ui.value.frame != null
+        _ui.update {
+            it.copy(
+                busy = null, busyStage = null, busyCancelable = false,
+                message = if (hasObject) "Отменено" else null, messageOutcome = Outcome.NONE,
+            )
+        }
+    }
+
+    private suspend fun handleResult(result: ActionResult, bubble: Bubble) {
+        when (result) {
+            is ActionResult.Success -> {
+                runCatching { sensory.success() }
+
+                val fromKind = stack.lastOrNull()?.obj?.state?.kind?.name ?: "?"
+                val produced = store.put(result.result)
+                pushFrame(produced, bubble.capabilityId, bubble.title)
+
+                yieldSurprise(bubble.yields, produced.state.kind, produced.metadata[META_YIELD_NOUN])?.let { note ->
+                    _ui.update { it.copy(message = note, messageOutcome = Outcome.NONE) }
+                }
+                runCatching {
+                    journal.record(
+                        UsageEvent(
+                            UsageEventType.EDGE,
+                            edgeDetail(fromKind, bubble.capabilityId.value, result.result.type.name),
+                        ),
+                    )
+                }
+            }
+            is ActionResult.Done -> {
+                runCatching { sensory.success() }
+
+                runCatching { journal.record(UsageEvent(UsageEventType.COMPLETED, bubble.capabilityId.value)) }
+                _ui.update { it.copy(busy = null, busyStage = null, message = result.message, messageOutcome = Outcome.DONE) }
+            }
+            is ActionResult.Failure -> {
+                runCatching { sensory.failure() }
+                runCatching { journal.record(UsageEvent(UsageEventType.FAILED, bubble.capabilityId.value)) }
+
+                _ui.update { it.copy(busy = null, busyStage = null, message = result.reason, messageOutcome = Outcome.FAILED) }
+            }
+            is ActionResult.NeedsInput -> {
+                pendingBubble = bubble
+                _ui.update { it.copy(busy = null, busyStage = null, inputPrompt = result.prompt, inputSuggestions = result.suggestions) }
+            }
+            is ActionResult.NeedsImage -> {
+
+                pendingBubble = bubble
+                _ui.update { it.copy(busy = null, busyStage = null, needsImage = result.prompt) }
+            }
+        }
+    }
+
+    fun dismissMessage(): Boolean {
+        val state = _ui.value
+        if (state.frame != null || state.message == null) return false
+        _ui.update { it.copy(message = null, messageOutcome = Outcome.NONE) }
+        return true
+    }
+
+    fun onBack(): Boolean {
+        if (_ui.value.selection != null) {
+            closeSelection()
+            return true
+        }
+        if (_ui.value.find != null) {
+            closeFind()
+            return true
+        }
+        if (_ui.value.preview != null) {
+            cancelPreview()
+            return true
+        }
+        if (_ui.value.appPicker != null) {
+            dismissAppPicker()
+            return true
+        }
+        if (_ui.value.cloudConsent) {
+            declineCloud()
+            return true
+        }
+        if (openChatOf(_ui.value) != null) {
+            closeChat()
+            return true
+        }
+
+        if (_ui.value.signIn != null) {
+            cancelSignIn()
+            dismissSignIn()
+            return true
+        }
+        if (_ui.value.devicesScreen != null) {
+            closeDevices()
+            return true
+        }
+        if (_ui.value.keyScreen != null) {
+            closeKeySettings()
+            return true
+        }
+        if (_ui.value.inputPrompt != null || _ui.value.needsImage != null) {
+            cancelInput()
+            return true
+        }
+        if (stack.size <= 1) return false
+        stack.removeLast()
+        val top = stack.last()
+        _ui.update { it.copy(frame = top, message = null, messageOutcome = Outcome.NONE, path = currentPath()) }
+        persistJourney()
+        return true
+    }
+
+    fun togglePin(bubble: Bubble) {
+        val top = stack.lastOrNull() ?: return
+        val kind = top.obj.state.kind
+        viewModelScope.launch {
+            val already = runCatching { pins.pinnedFor(kind) }.getOrNull() == bubble.capabilityId
+            runCatching { if (already) pins.unpin(kind) else pins.pin(kind, bubble.capabilityId) }
+            val index = stack.lastIndex
+            val frame = stack.getOrNull(index) ?: return@launch
+            val refreshed = frame.copy(
+                bubbles = registry.bubblesFor(frame.obj.state),
+                pinned = if (already) null else bubble.capabilityId,
+            )
+            stack[index] = refreshed
+            _ui.update {
+                it.copy(
+                    frame = refreshed,
+                    message = if (already) "Откреплено" else "Закреплено: ${bubble.title}",
+                    messageOutcome = Outcome.DONE,
+                )
+            }
+        }
+    }
+
+    fun jumpTo(index: Int) {
+        if (index < 0 || index >= stack.size - 1) return
+        while (stack.size - 1 > index) stack.removeLast()
+        val top = stack.last()
+        _ui.update { it.copy(frame = top, message = null, messageOutcome = Outcome.NONE, path = currentPath()) }
+        persistJourney()
+    }
+
+    private fun currentPath(): List<PathStep> =
+        stack.map { PathStep(it.obj.state.kind, it.viaTitle) }
+
+    fun hasFlow(): Boolean = stack.isNotEmpty()
+
+    fun endFlow() {
+        cancelEnrichment()
+
+        busyJob?.cancel()
+        busyJob = null
+
+        signInJob?.cancel()
+        signInJob = null
+
+        chatJob?.cancel()
+        chatJob = null
+        stack.clear()
+        pendingBubble = null
+        pendingPreviewBubble = null
+        _ui.update { FlowUiState() }
+
+        viewModelScope.launch(NonCancellable) {
+            runCatching { store.clear() }
+
+            runCatching { sharedTexts.clear() }
+            runCatching { flowSnapshot.clear() }
+        }
+    }
+
+    private fun pushFrame(obj: PointObject, via: CapabilityId? = null, viaTitle: String? = null) {
+        val carried = stack.lastOrNull()?.takeIf { continuesObject(it.obj, obj) }
+        val known = carried?.let { carryKnowledge(it.obj, obj) } ?: obj
+        val bubbles = registry.bubblesFor(known.state)
+        val frame = FlowFrame(
+            known, bubbles, via, viaTitle,
+
+            found = carried?.found.orEmpty(),
+            relations = carried?.relations.orEmpty(),
+            latent = registry.latentBubblesFor(known.state),
+            pinned = runCatching { pins.pinnedFor(known.state.kind) }.getOrNull(),
+        )
+        stack.addLast(frame)
+        _ui.update {
+            it.copy(
+                busy = null, busyStage = null, frame = frame, message = null, messageOutcome = Outcome.NONE, inputPrompt = null, inputSuggestions = emptyList(),
+                needsImage = null, preview = null, path = currentPath(),
+            )
+        }
+        persistJourney()
+        enrichInBackground(known)
+        loadChildrenIfCollection(known)
+        loadTextPreviewIfText(known)
+        loadObjectPreview(known)
+    }
+
+    private fun persistJourney() {
+        val frames = stack.map { f ->
+            FlowSnapshotFrame(
+                id = f.obj.id, kind = f.obj.state.kind, mime = f.obj.mime, ref = f.obj.uri.value,
+                metadata = f.obj.metadata,
+                viaCapabilityId = f.viaCapability?.value, viaTitle = f.viaTitle,
+            )
+        }
+        viewModelScope.launch { runCatching { flowSnapshot.save(frames) } }
+    }
+
+    private fun refFor(kind: ObjectKind, ref: String): ObjectRef =
+        if (kind.isFileBacked) ScratchRef(ref) else ValueRef(ref)
+
+    private fun loadObjectPreview(obj: PointObject) {
+        if (obj.state.kind != ObjectKind.IMAGE && obj.state.kind != ObjectKind.PDF) return
+        viewModelScope.launch {
+            val bitmap = withContext(ioDispatcher) {
+                val source = previewSource(obj, pdfRasterizer) ?: return@withContext null
+                runCatching { Bitmaps.decodeThumbnail(source, PREVIEW_MAX_PX)?.asImageBitmap() }.getOrNull()
+            } ?: return@launch
+
+            val index = stack.indexOfLast { it.obj.id == obj.id }
+            val top = stack.getOrNull(index) ?: return@launch
+            val refreshed = top.copy(preview = bitmap)
+            stack[index] = refreshed
+            _ui.update { if (it.frame?.obj?.id == obj.id) it.copy(frame = refreshed) else it }
+        }
+    }
+
+    private fun loadTextPreviewIfText(obj: PointObject) {
+        if (obj.state.kind != ObjectKind.TEXT) return
+        viewModelScope.launch {
+            val raw = runCatching { store.readText(obj, limit = 100_000) }.getOrDefault("")
+            if (raw.isBlank()) return@launch
+            val text = sanitizeTextPreview(raw)
+
+            val topIndex = stack.lastIndex
+            val top = stack.getOrNull(topIndex) ?: return@launch
+            if (top.obj.id != obj.id) return@launch
+
+            val refreshed = top.copy(textPreview = text)
+            stack[topIndex] = refreshed
+            _ui.update { if (it.frame?.obj?.id == obj.id) it.copy(frame = refreshed) else it }
+        }
+    }
+
+    private fun loadChildrenIfCollection(obj: PointObject) {
+        if (obj.state.kind != ObjectKind.COLLECTION) return
+        viewModelScope.launch {
+            val content = runCatching { store.children(obj) }
+                .getOrDefault(CollectionContent.empty())
+            if (content.shown.isEmpty()) return@launch
+
+            val topIndex = stack.lastIndex
+            val top = stack.getOrNull(topIndex) ?: return@launch
+            if (top.obj.id != obj.id) return@launch
+
+            val refreshed = top.copy(
+                items = content.shown,
+                itemsTotal = content.total,
+                itemsTotalAtLeast = content.atLeast,
+            )
+            stack[topIndex] = refreshed
+            _ui.update { if (it.frame?.obj?.id == obj.id) it.copy(frame = refreshed) else it }
+        }
+    }
+
+    private fun enrichInBackground(obj: PointObject) {
+        enrichJobs += viewModelScope.launch {
+            enrichment.enrich(obj)
+                .catch {  }
+                .collect { update -> applyEnrichment(obj, update) }
+
+            stack.lastOrNull { it.obj.id == obj.id }?.let { frame ->
+                if (frame.obj.state.features.isNotEmpty()) runCatching { history.update(frame.obj) }
+            }
+        }
+    }
+
+    private fun enrichmentAdditions(
+        known: Map<String, String>,
+        fresh: Map<String, String>,
+    ): Map<String, String> =
+        fresh.filterKeys { it !in known || it in REFRESHABLE_META }
+
+    private fun applyEnrichment(source: PointObject, update: EnrichmentUpdate) {
+        val index = stack.indexOfLast { it.obj.id == source.id }
+        val frame = stack.getOrNull(index) ?: return
+        val newState = update.features.fold(frame.obj.state) { state, feature -> state.with(feature) }
+        val newMetadata = frame.obj.metadata + enrichmentAdditions(frame.obj.metadata, update.metadata)
+
+        val newFound = (frame.found + update.objects).distinctBy { it.id }
+        val newRelations = (frame.relations + update.relations).distinct()
+        val objChanged = newState != frame.obj.state || newMetadata != frame.obj.metadata
+        val graphChanged = newFound.size != frame.found.size || newRelations.size != frame.relations.size
+        if (!objChanged && !graphChanged && update.running == frame.enriching) return
+
+        val newBubbles = if (objChanged) {
+            com.point.core.model.keepShownOrder(frame.bubbles, registry.bubblesFor(newState))
+        } else {
+            frame.bubbles
+        }
+        val refreshed = frame.copy(
+            obj = frame.obj.copy(state = newState, metadata = newMetadata),
+            bubbles = newBubbles,
+            latent = if (objChanged) registry.latentBubblesFor(newState) else frame.latent,
+            enriching = update.running,
+            found = newFound,
+            relations = newRelations,
+        )
+        stack[index] = refreshed
+        _ui.update { if (it.frame?.obj?.id == source.id) it.copy(frame = refreshed) else it }
+        if (objChanged) {
+            persistJourney()
+        }
+    }
+
+    internal companion object {
+
+        val REFRESHABLE_META = setOf(
+            com.point.core.flow.META_OCR_TEXT_REF,
+            com.point.core.flow.META_OCR_ATOMS_REF,
+        )
+
+        const val CLOUD_DECLINED =
+            "Ничего не отправлено — объект остался на телефоне, действие не выполнено. " +
+                "Без отправки оно не работает: тапните ещё раз, если передумаете"
+    }
+
+    private fun cancelEnrichment() {
+        enrichJobs.forEach { it.cancel() }
+        enrichJobs.clear()
+    }
+}
+
+private const val MAX_CLIP = 2000
+
+private const val OUTBOX_THROTTLE_MS = 30_000L
+
+private const val CIRCLE_SYNC_THROTTLE_MS = 5 * 60_000L
+
+private val PHONE_ADVERTISED_FALLBACK = listOf(
+    com.point.core.flow.PcRemoteAction("call", "Позвонить", kinds = setOf("TEXT")),
+    com.point.core.flow.PcRemoteAction("event", "Создать событие", kinds = setOf("TEXT")),
+)
+private const val PREVIEW_MAX_PX = 640
+
+private const val SELECTION_MAX_PX = 2048
+
+private const val FRAGMENT_JPEG_QUALITY = 92

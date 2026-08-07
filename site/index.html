@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Point — the right-click for everything</title>
+<meta name="description" content="Share any object into Point — a photo, a document, a link, an archive — and it shows what can be done with it right now. No menus, no settings, no chat." />
+<meta property="og:title" content="Point — the right-click for everything" />
+<meta property="og:description" content="Share an object, see what can be done with it right now. Open source, Android." />
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://librevlad.github.io/point/" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=&apos;http://www.w3.org/2000/svg&apos; viewBox=&apos;0 0 32 32&apos;%3E%3Ccircle cx=&apos;16&apos; cy=&apos;16&apos; r=&apos;13&apos; fill=&apos;none&apos; stroke=&apos;%237B5CFF&apos; stroke-width=&apos;6&apos;/%3E%3C/svg%3E" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;600;700&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:#0B0D10;color:#FFFFFF;font-family:Manrope,system-ui,sans-serif;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+a{color:#00E0FF;text-decoration:none}
+a:hover{color:#A98CFF}
+button{font-family:inherit}
+::selection{background:#7B5CFF;color:#fff}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes spinRev{to{transform:rotate(-360deg)}}
+@keyframes breathe{0%,100%{transform:scale(1);opacity:.9}50%{transform:scale(1.05);opacity:1}}
+@keyframes bornIn{from{opacity:0;transform:translateY(10px) scale(.97)}to{opacity:1;transform:none}}
+@keyframes factIn{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:none}}
+@keyframes pulseRing{0%{transform:scale(.85);opacity:.55}70%{transform:scale(1.35);opacity:0}100%{transform:scale(1.35);opacity:0}}
+@keyframes drift{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
+@keyframes sheen{0%{transform:translateX(-140%)}100%{transform:translateX(240%)}}
+@keyframes riseIn{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+@keyframes dash{to{stroke-dashoffset:-200}}
+
+/* ——— Узкий экран ————————————————————————————————————————————————————————————
+   Макет свёрстан инлайновыми стилями под десктоп: его сетки требуют колонку не уже
+   360–372 px, и вместе с отступами 32 px это шире телефона — страница уезжала вправо, а
+   заголовок обрезался. Point — приложение для Android, и с телефона на этот лендинг придут
+   чаще, чем с ноутбука, поэтому правила ниже перебивают инлайн там, где он не помещается.
+   Значения дизайна (цвета, шрифты, радиусы) не трогаются — только раскладка.            */
+@media (max-width:820px){
+  header>div{padding:12px 16px!important;gap:14px!important;flex-wrap:wrap}
+  header nav{order:3;width:100%;margin-left:0!important;flex-wrap:nowrap!important;overflow-x:auto;gap:18px!important;padding-bottom:2px;-webkit-overflow-scrolling:touch}
+  header nav a{white-space:nowrap}
+  header nav{scrollbar-width:none}
+  header nav::-webkit-scrollbar{display:none}
+  section{padding-left:18px!important;padding-right:18px!important}
+  [style*="minmax(360px"],[style*="minmax(372px"],[style*="minmax(340px"],[style*="minmax(330px"]{grid-template-columns:1fr!important;gap:32px!important}
+  [style*="44px 1fr minmax(120px,180px)"]{grid-template-columns:36px 1fr!important;gap:14px!important}
+  h1{font-size:clamp(34px,9.5vw,54px)!important;letter-spacing:-1.4px!important}
+  h2{letter-spacing:-.8px!important}
+}
+/* Телефон в демо — витрина, а не окно: на узком экране он ужимается вместе со страницей. */
+@media (max-width:460px){
+  [style*="height:780px"]{height:640px!important;border-radius:34px!important}
+  section{padding-top:52px!important}
+}
+</style>
+</head>
+<body>
+
+<div style="background:#0B0D10;min-height:100vh;position:relative;overflow:hidden">
+
+<div style="position:absolute;top:-260px;left:50%;margin-left:-520px;width:1040px;height:760px;border-radius:50%;background:radial-gradient(circle at 50% 50%, rgba(123,92,255,.30), rgba(0,224,255,.10) 45%, rgba(11,13,16,0) 70%);filter:blur(30px);pointer-events:none"></div>
+
+<header style="position:sticky;top:0;z-index:40;backdrop-filter:blur(14px);background:rgba(11,13,16,.72);border-bottom:1px solid #191C24">
+  <div style="max-width:1200px;margin:0 auto;padding:14px 32px;display:flex;align-items:center;gap:32px">
+    <div style="display:flex;align-items:center;gap:12px">
+      <div style="position:relative;width:26px;height:26px;border-radius:50%">
+        <div style="position:absolute;inset:0;border-radius:50%;background:conic-gradient(from 210deg,#00E0FF,#7B5CFF,#C7B3FF,#00E0FF);filter:blur(3px)"></div>
+        <div style="position:absolute;inset:5px;border-radius:50%;background:#0B0D10"></div>
+      </div>
+      <span style="font-family:Unbounded,sans-serif;font-weight:700;font-size:17px;letter-spacing:-.3px">Point</span>
+    </div>
+    <nav style="display:flex;flex-wrap:wrap;gap:26px;margin-left:auto;font-size:14px;font-weight:500;color:#A1A6B3">
+      <a href="#demo" style="color:#A1A6B3" style-hover="color:#FFFFFF">Try it</a>
+      <a href="#how" style="color:#A1A6B3" style-hover="color:#FFFFFF">How it works</a>
+      <a href="#capabilities" style="color:#A1A6B3" style-hover="color:#FFFFFF">Capabilities</a>
+      <a href="#entry" style="color:#A1A6B3" style-hover="color:#FFFFFF">Entry points</a>
+      <a href="#philosophy" style="color:#A1A6B3" style-hover="color:#FFFFFF">Philosophy</a>
+      <a href="#roadmap" style="color:#A1A6B3" style-hover="color:#FFFFFF">Roadmap</a>
+    </nav>
+    <a href="https://github.com/librevlad/point/releases/latest" style="color:#FFFFFF;font-size:14px;font-weight:600;padding:9px 16px;border-radius:12px;background:linear-gradient(135deg,#7B5CFF,#5B3BEF);box-shadow:0 6px 24px rgba(123,92,255,.35)" style-hover="box-shadow:0 8px 30px rgba(123,92,255,.6);color:#FFFFFF">Download</a>
+  </div>
+</header>
+
+<section style="max-width:1200px;margin:0 auto;padding:96px 32px 60px;display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:56px;align-items:center;position:relative">
+  <div>
+    <div style="display:inline-flex;align-items:center;gap:9px;padding:6px 14px;border-radius:999px;border:1px solid #242833;background:#14161C;font-size:12px;font-weight:600;letter-spacing:.5px;color:#A1A6B3;text-transform:uppercase;white-space:nowrap">
+      <span style="width:6px;height:6px;border-radius:50%;background:#00E0FF;box-shadow:0 0 10px #00E0FF"></span>
+      Android · v0.2 · open source
+    </div>
+    <h1 style="font-family:Unbounded,sans-serif;font-weight:700;font-size:clamp(44px,6vw,76px);line-height:.96;letter-spacing:-2.5px;margin:22px 0 0">The right-click<br />for everything</h1>
+    <p style="font-size:19px;line-height:1.55;color:#A1A6B3;max-width:520px;margin:24px 0 0;text-wrap:pretty">Share any object into Point — a photo, a document, a link, an archive — and it shows you what can be done with it <em style="color:#FFFFFF;font-style:normal;font-weight:600">right now</em>. Pick one. You get a new object, and a new set of possibilities.</p>
+    <p style="font-size:19px;line-height:1.55;color:#A1A6B3;max-width:520px;margin:14px 0 0">No menus. No settings. No chat. Just the object and its next moves.</p>
+    <div style="display:flex;gap:14px;margin-top:36px;flex-wrap:wrap">
+      <a href="https://github.com/librevlad/point/releases/latest" style="display:flex;align-items:center;gap:11px;padding:15px 24px;border-radius:16px;background:linear-gradient(135deg,#7B5CFF,#5B3BEF);color:#FFFFFF;font-size:15px;font-weight:700;box-shadow:0 10px 34px rgba(123,92,255,.4)" style-hover="color:#FFFFFF;box-shadow:0 14px 44px rgba(123,92,255,.65);transform:translateY(-1px)">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M8 11l4 4 4-4M4 19h16"></path></svg>
+        APK for Android
+      </a>
+      <a href="https://github.com/librevlad/point/releases/latest" style="display:flex;align-items:center;gap:11px;padding:15px 24px;border-radius:16px;background:#14161C;border:1px solid #242833;color:#FFFFFF;font-size:15px;font-weight:700" style-hover="color:#FFFFFF;border-color:#3A3F52;background:#1B1E27">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18v11H3zM8 20h8M12 16v4"></path></svg>
+        EXE for Windows
+      </a>
+      <a href="https://github.com/librevlad/point" style="display:flex;align-items:center;gap:11px;padding:15px 20px;border-radius:16px;color:#A1A6B3;font-size:15px;font-weight:600" style-hover="color:#FFFFFF">Source on GitHub →</a>
+    </div>
+    <div data-build style="margin-top:20px;font-size:13px;color:#575E70;line-height:1.6">Checking the latest build…</div>
+
+    <div style="display:flex;gap:30px;margin-top:38px;padding-top:26px;border-top:1px solid #191C24;flex-wrap:wrap">
+      <div><div style="font-family:Unbounded,sans-serif;font-weight:600;font-size:26px">44</div><div style="font-size:12px;color:#A1A6B3;letter-spacing:.4px;margin-top:2px">capabilities</div></div>
+      <div><div style="font-family:Unbounded,sans-serif;font-weight:600;font-size:26px">5</div><div style="font-size:12px;color:#A1A6B3;letter-spacing:.4px;margin-top:2px">entry points</div></div>
+      <div><div style="font-family:Unbounded,sans-serif;font-weight:600;font-size:26px">≤300<span style="font-size:15px">ms</span></div><div style="font-size:12px;color:#A1A6B3;letter-spacing:.4px;margin-top:2px">to first screen</div></div>
+      <div><div style="font-family:Unbounded,sans-serif;font-weight:600;font-size:26px">0</div><div style="font-size:12px;color:#A1A6B3;letter-spacing:.4px;margin-top:2px">menus</div></div>
+    </div>
+  </div>
+
+  <div style="display:flex;align-items:center;justify-content:center;position:relative;min-height:520px">
+    <div style="position:absolute;width:520px;height:520px;border-radius:50%;background:radial-gradient(circle,rgba(123,92,255,.22),rgba(11,13,16,0) 62%);filter:blur(10px)"></div>
+    <div style="position:absolute;width:430px;height:430px;animation:spinRev 46s linear infinite">
+      <div style="position:absolute;top:0;left:50%;width:4px;height:4px;border-radius:50%;background:#00E0FF;box-shadow:0 0 12px #00E0FF"></div>
+      <div style="position:absolute;bottom:24px;left:14%;width:3px;height:3px;border-radius:50%;background:#7B5CFF;box-shadow:0 0 10px #7B5CFF"></div>
+      <div style="position:absolute;top:38%;right:0;width:3px;height:3px;border-radius:50%;background:#C7B3FF;box-shadow:0 0 10px #C7B3FF"></div>
+    </div>
+    <div style="position:absolute;width:340px;height:340px;animation:spin 30s linear infinite">
+      <div style="position:absolute;top:6px;right:22%;width:3px;height:3px;border-radius:50%;background:#00E0FF;box-shadow:0 0 10px #00E0FF"></div>
+      <div style="position:absolute;bottom:0;left:44%;width:4px;height:4px;border-radius:50%;background:#7B5CFF;box-shadow:0 0 12px #7B5CFF"></div>
+    </div>
+    <div style="position:relative;width:300px;height:300px;animation:breathe 7s ease-in-out infinite">
+      <div style="position:absolute;inset:-40px;border-radius:50%;background:conic-gradient(from 200deg,rgba(0,224,255,.55),rgba(123,92,255,.75),rgba(199,179,255,.5),rgba(0,224,255,.55));filter:blur(44px)"></div>
+      <div style="position:absolute;inset:0;border-radius:50%;background:conic-gradient(from 200deg,#00E0FF,#7B5CFF,#E4DBFF,#8A6BFF,#00E0FF);animation:spin 18s linear infinite"></div>
+      <div style="position:absolute;inset:22px;border-radius:50%;background:#0B0D10;box-shadow:inset 0 0 60px rgba(123,92,255,.35)"></div>
+      <div style="position:absolute;inset:20px;border-radius:50%;border:1px solid rgba(255,255,255,.22)"></div>
+    </div>
+  </div>
+</section>
+
+<section id="demo" style="max-width:1200px;margin:0 auto;padding:70px 32px 40px">
+  <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:32px;flex-wrap:wrap;margin-bottom:34px">
+    <div>
+      <div style="font-size:12px;font-weight:700;letter-spacing:1.6px;color:#7B5CFF;text-transform:uppercase;margin-bottom:12px">Live model</div>
+      <h2 style="font-family:Unbounded,sans-serif;font-weight:700;font-size:clamp(32px,3.7vw,44px);line-height:1.05;letter-spacing:-1.2px;margin:0">Travel through an object</h2>
+      <p style="font-size:17px;line-height:1.55;color:#A1A6B3;max-width:620px;margin:16px 0 0;text-wrap:pretty">This is the real flow graph, not a video. Start with something, tap an action, and watch the object become another object — then keep going.</p>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px;font-size:13px;color:#A1A6B3">
+      <div style="display:flex;align-items:center;gap:8px"><span style="width:6px;height:6px;border-radius:50%;background:#7B5CFF"></span><span data-step-label>no steps taken</span></div>
+      <div style="display:flex;align-items:center;gap:8px"><span style="width:6px;height:6px;border-radius:50%;background:#00E0FF"></span><span data-action-count>0</span> actions offered here</div>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(372px,1fr));gap:40px;align-items:start">
+
+    <div style="position:relative">
+      <div style="position:absolute;inset:-30px;border-radius:60px;background:radial-gradient(circle at 50% 30%,rgba(123,92,255,.28),rgba(11,13,16,0) 68%);filter:blur(16px);pointer-events:none"></div>
+      <div style="position:relative;width:100%;max-width:400px;height:780px;border-radius:44px;padding:9px;background:linear-gradient(160deg,#2A2F3D,#14161C 40%,#0B0D10);box-shadow:0 40px 90px rgba(0,0,0,.7),0 0 0 1px rgba(255,255,255,.05)">
+        <div style="position:relative;width:100%;height:100%;border-radius:36px;background:#0B0D10;overflow:hidden;display:flex;flex-direction:column">
+
+          <div style="position:absolute;top:-140px;left:50%;margin-left:-180px;width:360px;height:300px;border-radius:50%;background:radial-gradient(circle,rgba(123,92,255,.20),rgba(11,13,16,0) 70%);pointer-events:none"></div>
+
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 22px 6px;font-size:12px;font-weight:600;color:#A1A6B3;position:relative">
+            <span>9:41</span>
+            <span style="display:flex;gap:5px;align-items:center">
+              <svg width="15" height="11" viewBox="0 0 15 11" fill="none" stroke="#A1A6B3" stroke-width="1.4"><path d="M1 9h1.5M4.5 6.5V9M8 4v5M11.5 1.5V9"></path></svg>
+              <svg width="13" height="11" viewBox="0 0 13 11" fill="none" stroke="#A1A6B3" stroke-width="1.3"><path d="M1 4a8 8 0 0 1 11 0M3.4 6.4a5 5 0 0 1 6.2 0M6.5 9h.01"></path></svg>
+              <span style="width:19px;height:10px;border:1px solid #A1A6B3;border-radius:3px;display:inline-block;position:relative"><span style="position:absolute;inset:1.5px;right:5px;background:#A1A6B3;border-radius:1px"></span></span>
+            </span>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:10px;padding:6px 18px 10px;position:relative">
+            <button data-back type="button" aria-label="Back" style="width:34px;height:34px;border-radius:12px;border:1px solid #242833;background:#14161C;color:#A1A6B3;display:flex;align-items:center;justify-content:center;cursor:pointer;opacity:.35" style-hover="border-color:#3A3F52;color:#FFFFFF">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 6l-6 6 6 6"></path></svg>
+            </button>
+            <div data-screen-title style="font-family:Unbounded,sans-serif;font-size:13px;font-weight:600;letter-spacing:.2px;color:#FFFFFF;margin:0 auto">Object</div>
+            <div style="width:34px;height:34px;display:flex;align-items:center;justify-content:center;color:#A1A6B3">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.6"></circle><circle cx="12" cy="12" r="1.6"></circle><circle cx="19" cy="12" r="1.6"></circle></svg>
+            </div>
+          </div>
+
+          <div data-screen="idle" style="flex:1;overflow:hidden;display:flex;flex-direction:column">
+            <div style="padding:6px 18px 0;display:flex;gap:14px;align-items:center">
+              <div style="position:relative;width:74px;height:74px;flex:none;animation:drift 6s ease-in-out infinite">
+                <div style="position:absolute;inset:-8px;border-radius:26px;background:radial-gradient(circle,rgba(123,92,255,.45),rgba(11,13,16,0) 70%);filter:blur(6px)"></div>
+                <div style="position:absolute;inset:0;border-radius:22px;background:linear-gradient(150deg,#1B1E27,#14161C);border:1px solid #2C3142;display:flex;align-items:center;justify-content:center;overflow:hidden">
+                  <div style="position:absolute;top:0;left:0;width:40%;height:100%;background:linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,.07),rgba(255,255,255,0));animation:sheen 5s ease-in-out infinite"></div>
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#C7B3FF" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path data-obj-icon d=""></path></svg>
+                </div>
+              </div>
+              <div style="min-width:0">
+                <div data-obj-title style="font-size:17px;font-weight:700;letter-spacing:-.2px"></div>
+                <div data-obj-sub style="font-size:12px;color:#A1A6B3;margin-top:3px"></div>
+                <div data-obj-kind style="display:inline-flex;margin-top:8px;padding:3px 9px;border-radius:8px;background:rgba(123,92,255,.14);border:1px solid rgba(123,92,255,.35);font-size:10px;font-weight:700;letter-spacing:1px;color:#C7B3FF"></div>
+              </div>
+            </div>
+
+            <div style="margin:16px 18px 0;padding:13px 15px;border-radius:18px;background:linear-gradient(160deg,rgba(0,224,255,.06),#14161C);border:1px solid #242833">
+              <div style="font-size:10px;font-weight:700;letter-spacing:1.3px;color:#00E0FF;text-transform:uppercase;margin-bottom:9px">Understood</div>
+              <div data-facts></div>
+            </div>
+
+            <div data-sections style="flex:1;overflow-y:auto;padding:18px 18px 22px;margin-top:2px"></div>
+          </div>
+
+          <div data-screen="running" hidden style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 34px 60px;position:relative">
+            <div style="position:relative;width:200px;height:200px">
+              <div style="position:absolute;inset:-24px;border-radius:50%;background:radial-gradient(circle,rgba(123,92,255,.35),rgba(11,13,16,0) 70%);filter:blur(18px)"></div>
+              <div style="position:absolute;inset:0;border-radius:50%;background:conic-gradient(from 0deg,rgba(0,224,255,0),#00E0FF,#7B5CFF,rgba(123,92,255,0));animation:spin 1.15s linear infinite"></div>
+              <div style="position:absolute;inset:9px;border-radius:50%;background:#0B0D10"></div>
+              <div style="position:absolute;inset:0;border-radius:50%;border:1px solid rgba(123,92,255,.5);animation:pulseRing 1.8s ease-out infinite"></div>
+              <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#C7B3FF" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path data-run-icon d=""></path></svg>
+              </div>
+            </div>
+            <div data-run-progress style="font-family:Unbounded,sans-serif;font-size:19px;font-weight:600;margin-top:36px;text-align:center"></div>
+            <div data-run-sub style="font-size:13px;color:#A1A6B3;margin-top:8px;text-align:center;text-wrap:pretty"></div>
+            <button data-cancel type="button" style="margin-top:32px;padding:12px 26px;border-radius:14px;background:#14161C;border:1px solid #242833;color:#A1A6B3;font-size:13px;font-weight:600;cursor:pointer" style-hover="color:#FFFFFF;border-color:#3A3F52">Stop</button>
+          </div>
+
+          <div data-screen="result" hidden style="flex:1;display:flex;flex-direction:column;align-items:center;padding:22px 26px 26px">
+            <div style="position:relative;width:150px;height:150px;margin-top:14px">
+              <div style="position:absolute;inset:-20px;border-radius:50%;background:radial-gradient(circle,rgba(0,224,255,.28),rgba(11,13,16,0) 70%);filter:blur(14px)"></div>
+              <div style="position:absolute;inset:0;border-radius:50%;background:conic-gradient(from 160deg,#00E0FF,#7B5CFF,#E4DBFF,#00E0FF);animation:spin 22s linear infinite"></div>
+              <div style="position:absolute;inset:7px;border-radius:50%;background:#0B0D10"></div>
+              <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
+                <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4.5 4.5L19 7"></path></svg>
+              </div>
+            </div>
+            <div data-res-headline style="font-family:Unbounded,sans-serif;font-size:22px;font-weight:600;margin-top:26px"></div>
+            <div data-res-note style="font-size:13px;color:#A1A6B3;margin-top:7px;text-align:center;text-wrap:pretty;max-width:280px"></div>
+
+            <div data-res-made hidden style="width:100%;margin-top:26px">
+              <div style="font-size:10px;font-weight:700;letter-spacing:1.4px;color:#A1A6B3;text-transform:uppercase;margin-bottom:10px">New object</div>
+              <button data-open-made type="button" style="display:flex;align-items:center;gap:13px;width:100%;text-align:left;padding:14px;border-radius:18px;background:linear-gradient(150deg,rgba(123,92,255,.14),#14161C);border:1px solid rgba(123,92,255,.4);color:#FFFFFF;cursor:pointer;animation:riseIn .5s both" style-hover="border-color:#7B5CFF;box-shadow:0 0 0 4px rgba(123,92,255,.14)">
+                <span style="width:42px;height:42px;flex:none;border-radius:14px;background:#1B1E27;border:1px solid #2C3142;display:flex;align-items:center;justify-content:center">
+                  <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#C7B3FF" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path data-made-icon d=""></path></svg>
+                </span>
+                <span style="flex:1;min-width:0">
+                  <span data-made-title style="display:block;font-size:14.5px;font-weight:700"></span>
+                  <span data-made-sub style="display:block;font-size:11.5px;color:#A1A6B3;margin-top:2px"></span>
+                </span>
+                <span style="font-size:12px;font-weight:700;color:#C7B3FF">Open</span>
+              </button>
+              <div style="font-size:11.5px;color:#575E70;margin-top:14px;line-height:1.5">Point never chains actions by itself. The new object simply offers its own possibilities.</div>
+            </div>
+
+            <div data-res-terminal hidden style="width:100%;margin-top:26px;display:flex;flex-direction:column;gap:10px">
+              <div style="padding:13px 15px;border-radius:16px;background:#14161C;border:1px solid #242833;font-size:12px;color:#A1A6B3;line-height:1.5">The journey ends here. Point clears its scratch copy of your file — nothing is left behind.</div>
+              <button data-back type="button" style="padding:13px;border-radius:14px;background:#14161C;border:1px solid #242833;color:#FFFFFF;font-size:13px;font-weight:600;cursor:pointer" style-hover="border-color:#3A3F52;background:#1B1E27">Back to the object</button>
+            </div>
+          </div>
+
+          <div style="height:22px;display:flex;align-items:center;justify-content:center;flex:none">
+            <div style="width:120px;height:4px;border-radius:3px;background:#2C3142"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="padding-top:8px">
+      <div style="font-size:11px;font-weight:700;letter-spacing:1.4px;color:#A1A6B3;text-transform:uppercase;margin-bottom:14px">Share something into Point</div>
+      <div data-starters style="display:flex;gap:10px;flex-wrap:wrap"></div>
+
+      <div style="margin-top:34px;padding:22px;border-radius:24px;background:#14161C;border:1px solid #242833">
+        <div style="font-size:11px;font-weight:700;letter-spacing:1.4px;color:#7B5CFF;text-transform:uppercase;margin-bottom:16px">Your journey</div>
+        <div data-trail style="display:flex;flex-direction:column;gap:0"></div>
+        <div data-hint style="font-size:12.5px;color:#575E70;line-height:1.55;margin-top:16px;padding-top:16px;border-top:1px solid #242833;text-wrap:pretty"></div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-top:20px">
+        <div style="padding:18px;border-radius:20px;background:linear-gradient(160deg,rgba(123,92,255,.09),#14161C);border:1px solid #242833">
+          <div style="font-family:Unbounded,sans-serif;font-size:15px;font-weight:600;margin-bottom:7px">Nothing is hardcoded</div>
+          <div style="font-size:12.5px;line-height:1.55;color:#A1A6B3">The bubbles you see are every capability that accepts this exact object state — ranked by how often you use them. There is no transition table anywhere in the app.</div>
+        </div>
+        <div style="padding:18px;border-radius:20px;background:linear-gradient(160deg,rgba(0,224,255,.07),#14161C);border:1px solid #242833">
+          <div style="font-family:Unbounded,sans-serif;font-size:15px;font-weight:600;margin-bottom:7px">You always steer</div>
+          <div style="font-size:12.5px;line-height:1.55;color:#A1A6B3">Every step is your explicit choice. Point offers, never decides — and every result is a real file you can share, save or keep working on.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<section id="how" style="max-width:1200px;margin:0 auto;padding:90px 32px 40px">
+  <div style="font-size:12px;font-weight:700;letter-spacing:1.6px;color:#7B5CFF;text-transform:uppercase;margin-bottom:12px">The model</div>
+  <h2 style="font-family:Unbounded,sans-serif;font-weight:700;font-size:clamp(32px,3.7vw,44px);line-height:1.05;letter-spacing:-1.2px;margin:0 0 16px">One formula, five words</h2>
+  <p style="font-size:17px;line-height:1.55;color:#A1A6B3;max-width:660px;margin:0 0 44px;text-wrap:pretty">Point doesn't have features. It has objects and the capabilities that accept them — which is why adding an action never means redesigning a screen.</p>
+
+  <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:34px;border-radius:28px;background:linear-gradient(140deg,#14161C,#0F1116);border:1px solid #242833;position:relative;overflow:hidden">
+    <div style="position:absolute;top:-90px;left:10%;width:420px;height:260px;border-radius:50%;background:radial-gradient(circle,rgba(123,92,255,.16),rgba(11,13,16,0) 70%)"></div>
+    <div style="position:relative;flex:1;min-width:150px;padding:20px;border-radius:20px;background:#0B0D10;border:1px solid rgba(123,92,255,.45);box-shadow:0 0 0 4px rgba(123,92,255,.08)">
+      <div style="font-family:Unbounded,sans-serif;font-size:16px;font-weight:600">Object</div>
+      <div style="font-size:12px;color:#A1A6B3;margin-top:6px;line-height:1.5">A file plus cheap signals: kind, and features like has-text or zip-of-images.</div>
+    </div>
+    <svg width="26" height="14" viewBox="0 0 26 14" fill="none" stroke="#575E70" stroke-width="1.6" stroke-linecap="round"><path d="M1 7h22M18 2l5 5-5 5"></path></svg>
+    <div style="position:relative;flex:1;min-width:150px;padding:20px;border-radius:20px;background:#0B0D10;border:1px solid #242833">
+      <div style="font-family:Unbounded,sans-serif;font-size:16px;font-weight:600">Intent</div>
+      <div style="font-size:12px;color:#A1A6B3;margin-top:6px;line-height:1.5">Extract, transform or send — the three things a person actually wants.</div>
+    </div>
+    <svg width="26" height="14" viewBox="0 0 26 14" fill="none" stroke="#575E70" stroke-width="1.6" stroke-linecap="round"><path d="M1 7h22M18 2l5 5-5 5"></path></svg>
+    <div style="position:relative;flex:1;min-width:150px;padding:20px;border-radius:20px;background:#0B0D10;border:1px solid #242833">
+      <div style="font-family:Unbounded,sans-serif;font-size:16px;font-weight:600">Capability</div>
+      <div style="font-size:12px;color:#A1A6B3;margin-top:6px;line-height:1.5">What is possible. The UI knows only this — never how it is done.</div>
+    </div>
+    <svg width="26" height="14" viewBox="0 0 26 14" fill="none" stroke="#575E70" stroke-width="1.6" stroke-linecap="round"><path d="M1 7h22M18 2l5 5-5 5"></path></svg>
+    <div style="position:relative;flex:1;min-width:150px;padding:20px;border-radius:20px;background:#0B0D10;border:1px solid #242833">
+      <div style="font-family:Unbounded,sans-serif;font-size:16px;font-weight:600">Realizer</div>
+      <div style="font-size:12px;color:#A1A6B3;margin-top:6px;line-height:1.5">How. On device, in the cloud, on your PC — swappable without touching the UI.</div>
+    </div>
+    <svg width="26" height="14" viewBox="0 0 26 14" fill="none" stroke="#575E70" stroke-width="1.6" stroke-linecap="round"><path d="M1 7h22M18 2l5 5-5 5"></path></svg>
+    <div style="position:relative;flex:1;min-width:150px;padding:20px;border-radius:20px;background:#0B0D10;border:1px solid rgba(0,224,255,.4);box-shadow:0 0 0 4px rgba(0,224,255,.06)">
+      <div style="font-family:Unbounded,sans-serif;font-size:16px;font-weight:600">Object</div>
+      <div style="font-size:12px;color:#A1A6B3;margin-top:6px;line-height:1.5">A new object with its own possibilities. The loop closes.</div>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:18px;margin-top:22px">
+    <div style="padding:24px;border-radius:22px;background:#14161C;border:1px solid #242833">
+      <div style="font-family:Unbounded,sans-serif;font-size:30px;font-weight:600;color:#7B5CFF">≤300ms</div>
+      <div style="font-size:14px;font-weight:700;margin:10px 0 7px">The first screen never waits</div>
+      <div style="font-size:13px;line-height:1.55;color:#A1A6B3">Actions appear from zero-cost signals only. Deeper reading of a PDF or archive happens after, and quietly adds more.</div>
+    </div>
+    <div style="padding:24px;border-radius:22px;background:#14161C;border:1px solid #242833">
+      <div style="font-family:Unbounded,sans-serif;font-size:30px;font-weight:600;color:#00E0FF">Inferred</div>
+      <div style="font-size:14px;font-weight:700;margin:10px 0 7px">The graph builds itself</div>
+      <div style="font-size:13px;line-height:1.55;color:#A1A6B3">Add a capability and the graph grows. Nobody maintains a map of what leads where — the contracts are the map.</div>
+    </div>
+    <div style="padding:24px;border-radius:22px;background:#14161C;border:1px solid #242833">
+      <div style="font-family:Unbounded,sans-serif;font-size:30px;font-weight:600;color:#C7B3FF">Your copy</div>
+      <div style="font-size:14px;font-weight:700;margin:10px 0 7px">Nothing leaks, nothing lingers</div>
+      <div style="font-size:13px;line-height:1.55;color:#A1A6B3">The shared file is copied into a private scratch space immediately and wiped when the journey ends. AI runs only after you ask for it.</div>
+    </div>
+  </div>
+</section>
+
+<section id="capabilities" style="max-width:1200px;margin:0 auto;padding:90px 32px 40px">
+  <div style="font-size:12px;font-weight:700;letter-spacing:1.6px;color:#7B5CFF;text-transform:uppercase;margin-bottom:12px">Capabilities</div>
+  <h2 style="font-family:Unbounded,sans-serif;font-weight:700;font-size:clamp(32px,3.7vw,44px);line-height:1.05;letter-spacing:-1.2px;margin:0 0 16px">44 things Point can do</h2>
+  <p style="font-size:17px;line-height:1.55;color:#A1A6B3;max-width:660px;margin:0 0 40px;text-wrap:pretty">Grouped by what you're trying to do, not by which screen they live on. You only ever see the ones that fit the object in front of you.</p>
+
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:18px">
+    <div style="padding:26px;border-radius:24px;background:linear-gradient(160deg,rgba(0,224,255,.07),#14161C);border:1px solid #242833">
+      <div style="display:flex;align-items:center;gap:11px;margin-bottom:8px">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#00E0FF" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h11M4 18h7"></path></svg>
+        <div style="font-family:Unbounded,sans-serif;font-size:18px;font-weight:600">Extract</div>
+      </div>
+      <div style="font-size:13px;color:#A1A6B3;margin-bottom:16px">Get what's inside out.</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px">
+        <span style="padding:7px 12px;border-radius:11px;background:#0F1116;border:1px solid #242833;font-size:12.5px;font-weight:500">Recognise text (OCR)</span>
+        <span style="padding:7px 12px;border-radius:11px;background:#0F1116;border:1px solid #242833;font-size:12.5px;font-weight:500">Cloud OCR</span>
+        <span style="padding:7px 12px;border-radius:11px;background:#0F1116;border:1px solid #242833;font-size:12.5px;font-weight:500">Extract table</span>
+        <span style="padding:7px 12px;border-radius:11px;background:#0F1116;border:1px solid #242833;font-size:12.5px;font-weight:500">Extract everything</span>
+        <span style="padding:7px 12px;border-radius:11px;background:#0F1116;border:1px solid #242833;font-size:12.5px;font-weight:500">Read QR</span>
+        <span style="padding:7px 12px;border-radius:11px;background:#0F1116;border:1px solid #242833;font-size:12.5px;font-weight:500">Split into pages</span>
+        <span style="padding:7px 12px;border-radius:11px;background:#0F1116;border:1px solid #242833;font-size:12.5px;font-weight:500">Unpack archive</span>
+        <span style="padding:7px 12px;border-radius:11px;background:#0F1116;border:1px solid #242833;font-size:12.5px;font-weight:500">Understand deeply</span>
+        <span style="padding:7px 12px;border-radius:11px;background:#0F1116;border:1px solid #242833;font-size:12.5px;font-weight:500">Classify</span>
+        <span style="padding:7px 12px;border-radius:11px;background:#0F1116;border:1px solid #242833;font-size:12.5px;font-weight:500">Shopping list</span>
+        <span style="padding:7px 12px;border-radius:11px;background:#0F1116;border:1px solid #242833;font-size:12.5px;font-weight:500">Collect+</span>
+        <span style="padding:7px 12px;border-radius:11px;background:#0F1116;border:1px solid #242833;font-size:12.5px;font-weight:500">Job reply</span>
+        <span style="padding:7px 12px;border-radius:11px;background:rgba(0,224,255,.1);border:1px solid rgba(0,224,255,.35);font-size:12.5px;font-weight:600;color:#8FF0FF">Ask AI</span>
+      </div>
+    </div>
+
+    <div style="padding:26px;border-radius:24px;background:linear-gradient(160deg,rgba(123,92,255,.09),#14161C);border:1px solid #242833">
+      <div style="display:flex;align-items:center;gap:11px;margin-bottom:8px">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#7B5CFF" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8V4h4M20 8V4h-4M4 16v4h4M20 16v4h-4M8 12h8"></path></svg>
+        <div style="font-family:Unbounded,sans-serif;font-size:18px;font-weight:600">Transform</div>
+      </div>
+      <div style="font-size:13px;color:#A1A6B3;margin-bottom:16px">Turn it into something else.</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px">
+        <span style="padding:7px 12px;border-radius:11px;background:#0F1116;border:1px solid #242833;font-size:12.5px;font-weight:500">Make PDF</span>
+        <span style="padding:7px 12px;border-radius:11px;background:#0F1116;border:1px solid #242833;font-size:12.5px;font-weight:500">Merge into PDF</span>
+        <span style="padding:7px 12px;border-radius:11px;background:#0F1116;border:1px solid #242833;font-size:12.5px;font-weight:500">Scan to PDF</span>
+        <span style="padding:7px 12px;border-radius:11px;background:#0F1116;border:1px solid #242833;font-size:12.5px;font-weight:500">Scan</span>
+        <span style="padding:7px 12px;border-radius:11px;background:rgba(123,92,255,.12);border:1px solid rgba(123,92,255,.35);font-size:12.5px;font-weight:600;color:#C7B3FF">Scan+ (dewarp, CLAHE)</span>
+        <span style="padding:7px 12px;border-radius:11px;background:#0F1116;border:1px solid #242833;font-size:12.5px;font-weight:500">Convert image</span>
+        <span style="padding:7px 12px;border-radius:11px;background:#0F1116;border:1px solid #242833;font-size:12.5px;font-weight:500">Cut out subject</span>
+        <span style="padding:7px 12px;border-radius:11px;background:#0F1116;border:1px solid #242833;font-size:12.5px;font-weight:500">Blur background</span>
+        <span style="padding:7px 12px;border-radius:11px;background:#0F1116;border:1px solid #242833;font-size:12.5px;font-weight:500">Replace background</span>
+        <span style="padding:7px 12px;border-radius:11px;background:#0F1116;border:1px solid #242833;font-size:12.5px;font-weight:500">Translate</span>
+        <span style="padding:7px 12px;border-radius:11px;background:#0F1116;border:1px solid #242833;font-size:12.5px;font-weight:500">To Word</span>
+        <span style="padding:7px 12px;border-radius:11px;background:#0F1116;border:1px solid #242833;font-size:12.5px;font-weight:500">Word+</span>
+        <span style="padding:7px 12px;border-radius:11px;background:#0F1116;border:1px solid #242833;font-size:12.5px;font-weight:500">Make QR</span>
+      </div>
+    </div>
+
+    <div style="padding:26px;border-radius:24px;background:#14161C;border:1px solid #242833">
+      <div style="display:flex;align-items:center;gap:11px;margin-bottom:8px">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#C7B3FF" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v7h16v-7M12 3v12M8 7l4-4 4 4"></path></svg>
+        <div style="font-family:Unbounded,sans-serif;font-size:18px;font-weight:600">Send &amp; keep</div>
+      </div>
+      <div style="font-size:13px;color:#A1A6B3;margin-bottom:16px">Finish the journey.</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px">
+        <span style="padding:7px 12px;border-radius:11px;background:#0F1116;border:1px solid #242833;font-size:12.5px;font-weight:500">Share</span>
+        <span style="padding:7px 12px;border-radius:11px;background:#0F1116;border:1px solid #242833;font-size:12.5px;font-weight:500">Share all</span>
+        <span style="padding:7px 12px;border-radius:11px;background:#0F1116;border:1px solid #242833;font-size:12.5px;font-weight:500">Save</span>
+        <span style="padding:7px 12px;border-radius:11px;background:#0F1116;border:1px solid #242833;font-size:12.5px;font-weight:500">Save all</span>
+        <span style="padding:7px 12px;border-radius:11px;background:#0F1116;border:1px solid #242833;font-size:12.5px;font-weight:500">Copy</span>
+        <span style="padding:7px 12px;border-radius:11px;background:#0F1116;border:1px solid #242833;font-size:12.5px;font-weight:500">Copy card</span>
+        <span style="padding:7px 12px;border-radius:11px;background:#0F1116;border:1px solid #242833;font-size:12.5px;font-weight:500">Open</span>
+        <span style="padding:7px 12px;border-radius:11px;background:#0F1116;border:1px solid #242833;font-size:12.5px;font-weight:500">Open in…</span>
+        <span style="padding:7px 12px;border-radius:11px;background:#0F1116;border:1px solid #242833;font-size:12.5px;font-weight:500">Open link</span>
+      </div>
+    </div>
+
+    <div style="padding:26px;border-radius:24px;background:#14161C;border:1px solid #242833">
+      <div style="display:flex;align-items:center;gap:11px;margin-bottom:8px">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8FF0FF" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h4l2 5-2 2a12 12 0 0 0 4 4l2-2 5 2v4a15 15 0 0 1-15-15z"></path></svg>
+        <div style="font-family:Unbounded,sans-serif;font-size:18px;font-weight:600">Reach out &amp; across</div>
+      </div>
+      <div style="font-size:13px;color:#A1A6B3;margin-bottom:16px">Phone numbers, addresses, events — and your desktop.</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px">
+        <span style="padding:7px 12px;border-radius:11px;background:#0F1116;border:1px solid #242833;font-size:12.5px;font-weight:500">Call</span>
+        <span style="padding:7px 12px;border-radius:11px;background:#0F1116;border:1px solid #242833;font-size:12.5px;font-weight:500">Message</span>
+        <span style="padding:7px 12px;border-radius:11px;background:#0F1116;border:1px solid #242833;font-size:12.5px;font-weight:500">Email</span>
+        <span style="padding:7px 12px;border-radius:11px;background:#0F1116;border:1px solid #242833;font-size:12.5px;font-weight:500">Show on map</span>
+        <span style="padding:7px 12px;border-radius:11px;background:#0F1116;border:1px solid #242833;font-size:12.5px;font-weight:500">Add to calendar</span>
+        <span style="padding:7px 12px;border-radius:11px;background:#0F1116;border:1px solid #242833;font-size:12.5px;font-weight:500">Save as contact</span>
+        <span style="padding:7px 12px;border-radius:11px;background:rgba(123,92,255,.12);border:1px solid rgba(123,92,255,.35);font-size:12.5px;font-weight:600;color:#C7B3FF">Continue on PC</span>
+        <span style="padding:7px 12px;border-radius:11px;background:#0F1116;border:1px solid #242833;font-size:12.5px;font-weight:500">Pair a PC</span>
+      </div>
+      <div style="font-size:12px;color:#575E70;line-height:1.55;margin-top:18px;padding-top:16px;border-top:1px solid #242833">Behind these 44 declarations sit 44 realizers and 9 enrichers. Some capabilities have several realizers: OCR tries your device first, then the cloud — same bubble, better result.</div>
+    </div>
+  </div>
+</section>
+
+<section id="entry" style="max-width:1200px;margin:0 auto;padding:90px 32px 40px">
+  <div style="font-size:12px;font-weight:700;letter-spacing:1.6px;color:#7B5CFF;text-transform:uppercase;margin-bottom:12px">Entry points</div>
+  <h2 style="font-family:Unbounded,sans-serif;font-weight:700;font-size:clamp(32px,3.7vw,44px);line-height:1.05;letter-spacing:-1.2px;margin:0 0 16px">Five ways in, no home screen needed</h2>
+  <p style="font-size:17px;line-height:1.55;color:#A1A6B3;max-width:660px;margin:0 0 40px;text-wrap:pretty">Point is a layer over the apps you already use. You reach it from wherever the object already is.</p>
+
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px">
+    <div style="padding:22px;border-radius:22px;background:linear-gradient(170deg,rgba(123,92,255,.10),#14161C);border:1px solid #242833">
+      <div style="width:40px;height:40px;border-radius:14px;background:#1B1E27;border:1px solid #2C3142;display:flex;align-items:center;justify-content:center;margin-bottom:14px">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#C7B3FF" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v7h16v-7M12 3v12M8 7l4-4 4 4"></path></svg>
+      </div>
+      <div style="font-size:15px;font-weight:700;margin-bottom:7px">Share sheet</div>
+      <div style="font-size:12.5px;line-height:1.55;color:#A1A6B3">The main road. Share anything from any app — Point opens on the object itself.</div>
+    </div>
+    <div style="padding:22px;border-radius:22px;background:#14161C;border:1px solid #242833">
+      <div style="width:40px;height:40px;border-radius:14px;background:#1B1E27;border:1px solid #2C3142;display:flex;align-items:center;justify-content:center;margin-bottom:14px">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#C7B3FF" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7v5l3 2M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z"></path></svg>
+      </div>
+      <div style="font-size:15px;font-weight:700;margin-bottom:7px">Launcher</div>
+      <div style="font-size:12.5px;line-height:1.55;color:#A1A6B3">Recent objects. Reopen last week's receipt without sharing it again.</div>
+    </div>
+    <div style="padding:22px;border-radius:22px;background:#14161C;border:1px solid #242833">
+      <div style="width:40px;height:40px;border-radius:14px;background:#1B1E27;border:1px solid #2C3142;display:flex;align-items:center;justify-content:center;margin-bottom:14px">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#C7B3FF" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h9M4 18h5M16 15l5 3-5 3z"></path></svg>
+      </div>
+      <div style="font-size:15px;font-weight:700;margin-bottom:7px">Selected text</div>
+      <div style="font-size:12.5px;line-height:1.55;color:#A1A6B3">Highlight text anywhere and send it to Point — literally the right-click.</div>
+    </div>
+    <div style="padding:22px;border-radius:22px;background:#14161C;border:1px solid #242833">
+      <div style="width:40px;height:40px;border-radius:14px;background:#1B1E27;border:1px solid #2C3142;display:flex;align-items:center;justify-content:center;margin-bottom:14px">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#C7B3FF" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v6H4zM4 15h7v4H4zM14 15h6v4h-6z"></path></svg>
+      </div>
+      <div style="font-size:15px;font-weight:700;margin-bottom:7px">Quick Settings</div>
+      <div style="font-size:12.5px;line-height:1.55;color:#A1A6B3">A tile for the clipboard and screenshots — two taps from anywhere.</div>
+    </div>
+    <div style="padding:22px;border-radius:22px;background:linear-gradient(170deg,rgba(0,224,255,.08),#14161C);border:1px solid #242833">
+      <div style="width:40px;height:40px;border-radius:14px;background:#1B1E27;border:1px solid #2C3142;display:flex;align-items:center;justify-content:center;margin-bottom:14px">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#8FF0FF" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h2v2h-2zM18 18h2v2h-2z"></path></svg>
+      </div>
+      <div style="font-size:15px;font-weight:700;margin-bottom:7px">QR to your PC</div>
+      <div style="font-size:12.5px;line-height:1.55;color:#A1A6B3">Scan once to pair a desktop. Then objects and the clipboard flow both ways.</div>
+    </div>
+  </div>
+</section>
+
+<section id="philosophy" style="max-width:1200px;margin:0 auto;padding:90px 32px 40px">
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:56px;align-items:center">
+    <div>
+      <div style="font-size:12px;font-weight:700;letter-spacing:1.6px;color:#7B5CFF;text-transform:uppercase;margin-bottom:12px">Philosophy</div>
+      <h2 style="font-family:Unbounded,sans-serif;font-weight:700;font-size:clamp(32px,3.7vw,44px);line-height:1.05;letter-spacing:-1.2px;margin:0 0 22px">One question, asked well</h2>
+      <div style="padding:26px 28px;border-radius:24px;background:linear-gradient(150deg,rgba(123,92,255,.12),#14161C);border:1px solid rgba(123,92,255,.3)">
+        <div style="font-family:Unbounded,sans-serif;font-size:23px;font-weight:600;line-height:1.35;letter-spacing:-.5px">“What can I do with this object right now?”</div>
+        <div style="font-size:13.5px;color:#A1A6B3;margin-top:14px;line-height:1.6">Every feature is judged against that sentence. If it needs its own domain, its own state and its own navigation, it belongs in a different app.</div>
+      </div>
+      <div style="margin-top:26px">
+        <div style="font-size:11px;font-weight:700;letter-spacing:1.4px;color:#A1A6B3;text-transform:uppercase;margin-bottom:14px">What Point never becomes</div>
+        <div style="display:flex;flex-wrap:wrap;gap:9px">
+          <span style="padding:9px 14px;border-radius:12px;border:1px dashed #3A3F52;color:#575E70;font-size:13px;font-weight:600;text-decoration:line-through">A browser</span>
+          <span style="padding:9px 14px;border-radius:12px;border:1px dashed #3A3F52;color:#575E70;font-size:13px;font-weight:600;text-decoration:line-through">A task manager</span>
+          <span style="padding:9px 14px;border-radius:12px;border:1px dashed #3A3F52;color:#575E70;font-size:13px;font-weight:600;text-decoration:line-through">A CRM</span>
+          <span style="padding:9px 14px;border-radius:12px;border:1px dashed #3A3F52;color:#575E70;font-size:13px;font-weight:600;text-decoration:line-through">A notes app</span>
+          <span style="padding:9px 14px;border-radius:12px;border:1px dashed #3A3F52;color:#575E70;font-size:13px;font-weight:600;text-decoration:line-through">An AI chat</span>
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <div style="padding:26px;border-radius:24px;background:#14161C;border:1px solid #242833">
+        <div style="font-size:11px;font-weight:700;letter-spacing:1.4px;color:#00E0FF;text-transform:uppercase;margin-bottom:12px">North star</div>
+        <div style="font-family:Unbounded,sans-serif;font-size:22px;font-weight:600;line-height:1.3;letter-spacing:-.5px">Every release must reduce the number of times you switch apps.</div>
+        <div style="font-size:13.5px;color:#A1A6B3;margin-top:14px;line-height:1.6">A feature that doesn't shorten a cross-app path probably shouldn't ship. That's the whole ship / no-ship test.</div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:16px">
+        <div style="padding:22px;border-radius:22px;background:#14161C;border:1px solid #242833">
+          <div style="font-size:14px;font-weight:700;margin-bottom:8px">Every action, a little joy</div>
+          <div style="font-size:12.5px;line-height:1.55;color:#A1A6B3">Even “Copy”. Nothing appears instantly — it is born. Objects breathe, bubbles are drawn out of them, understanding glows.</div>
+        </div>
+        <div style="padding:22px;border-radius:22px;background:#14161C;border:1px solid #242833">
+          <div style="font-size:14px;font-weight:700;margin-bottom:8px">Never a spinner</div>
+          <div style="font-size:12.5px;line-height:1.55;color:#A1A6B3">While Point is thinking, it pulses light through the object. Motion explains the model — otherwise it isn't there.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<section id="roadmap" style="max-width:1200px;margin:0 auto;padding:90px 32px 40px">
+  <div style="font-size:12px;font-weight:700;letter-spacing:1.6px;color:#7B5CFF;text-transform:uppercase;margin-bottom:12px">Roadmap</div>
+  <h2 style="font-family:Unbounded,sans-serif;font-weight:700;font-size:clamp(32px,3.7vw,44px);line-height:1.05;letter-spacing:-1.2px;margin:0 0 16px">From an app to a network of capabilities</h2>
+  <p style="font-size:17px;line-height:1.55;color:#A1A6B3;max-width:660px;margin:0 0 40px;text-wrap:pretty">Each phase reuses the seams of the previous one. Because the UI only knows <em style="font-style:normal;color:#fff;font-weight:600">what</em> is possible, the answers to <em style="font-style:normal;color:#fff;font-weight:600">how</em> can move to the cloud, to your desktop, or to somebody else's capability pack without a redesign.</p>
+
+  <div style="display:flex;flex-direction:column;gap:12px">
+    <div style="display:grid;grid-template-columns:44px 1fr minmax(120px,180px);gap:24px;align-items:center;padding:22px 26px;border-radius:20px;background:#14161C;border:1px solid #242833">
+      <div style="font-family:Unbounded,sans-serif;font-size:22px;font-weight:600;color:#7B5CFF">01</div>
+      <div>
+        <div style="font-size:16px;font-weight:700;margin-bottom:5px">Product — real actions, offline, history, brand</div>
+        <div style="font-size:13px;color:#A1A6B3;line-height:1.5">44 capabilities, 44 realizers, 9 enrichers, 108 test classes. The flow works end to end.</div>
+      </div>
+      <div>
+        <div style="height:6px;border-radius:4px;background:#242833;overflow:hidden"><div style="width:100%;height:100%;background:linear-gradient(90deg,#7B5CFF,#00E0FF)"></div></div>
+        <div style="font-size:11px;font-weight:700;letter-spacing:1px;color:#8FF0FF;margin-top:9px;text-transform:uppercase">Done</div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:44px 1fr minmax(120px,180px);gap:24px;align-items:center;padding:22px 26px;border-radius:20px;background:#14161C;border:1px solid #242833">
+      <div style="font-family:Unbounded,sans-serif;font-size:22px;font-weight:600;color:#7B5CFF">02</div>
+      <div>
+        <div style="font-size:16px;font-weight:700;margin-bottom:5px">A layer over Android</div>
+        <div style="font-size:13px;color:#A1A6B3;line-height:1.5">Reached through five real entry points instead of a floating bubble — share, launcher, selected text, tile, QR.</div>
+      </div>
+      <div>
+        <div style="height:6px;border-radius:4px;background:#242833;overflow:hidden"><div style="width:88%;height:100%;background:linear-gradient(90deg,#7B5CFF,#00E0FF)"></div></div>
+        <div style="font-size:11px;font-weight:700;letter-spacing:1px;color:#A1A6B3;margin-top:9px;text-transform:uppercase">Mostly there</div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:44px 1fr minmax(120px,180px);gap:24px;align-items:center;padding:22px 26px;border-radius:20px;background:#14161C;border:1px solid #242833">
+      <div style="font-family:Unbounded,sans-serif;font-size:22px;font-weight:600;color:#575E70">03</div>
+      <div>
+        <div style="font-size:16px;font-weight:700;margin-bottom:5px">Platform — third-party capability packs</div>
+        <div style="font-size:13px;color:#A1A6B3;line-height:1.5">Declarative registration plus metadata (cost, latency, auth) as the basis for paid capabilities. Seams proven on OCR; no packs yet.</div>
+      </div>
+      <div>
+        <div style="height:6px;border-radius:4px;background:#242833;overflow:hidden"><div style="width:22%;height:100%;background:linear-gradient(90deg,#7B5CFF,#00E0FF)"></div></div>
+        <div style="font-size:11px;font-weight:700;letter-spacing:1px;color:#575E70;margin-top:9px;text-transform:uppercase">Seams ready</div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:44px 1fr minmax(120px,180px);gap:24px;align-items:center;padding:22px 26px;border-radius:20px;background:#14161C;border:1px solid #242833">
+      <div style="font-family:Unbounded,sans-serif;font-size:22px;font-weight:600;color:#575E70">04</div>
+      <div>
+        <div style="font-size:16px;font-weight:700;margin-bottom:5px">Internet Capability Graph</div>
+        <div style="font-size:13px;color:#A1A6B3;line-height:1.5">Actions are discovered in a network of capabilities rather than compiled into the app.</div>
+      </div>
+      <div>
+        <div style="height:6px;border-radius:4px;background:#242833;overflow:hidden"><div style="width:8%;height:100%;background:linear-gradient(90deg,#7B5CFF,#00E0FF)"></div></div>
+        <div style="font-size:11px;font-weight:700;letter-spacing:1px;color:#575E70;margin-top:9px;text-transform:uppercase">Designed</div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:44px 1fr minmax(120px,180px);gap:24px;align-items:center;padding:22px 26px;border-radius:20px;background:#14161C;border:1px solid #242833">
+      <div style="font-family:Unbounded,sans-serif;font-size:22px;font-weight:600;color:#575E70">05</div>
+      <div>
+        <div style="font-size:16px;font-weight:700;margin-bottom:5px">Liquid software — capabilities flow between devices</div>
+        <div style="font-size:13px;color:#A1A6B3;line-height:1.5">Objects already travel to your PC and back. Next: a capability declared on one device, executed on another.</div>
+      </div>
+      <div>
+        <div style="height:6px;border-radius:4px;background:#242833;overflow:hidden"><div style="width:15%;height:100%;background:linear-gradient(90deg,#7B5CFF,#00E0FF)"></div></div>
+        <div style="font-size:11px;font-weight:700;letter-spacing:1px;color:#575E70;margin-top:9px;text-transform:uppercase">Groundwork</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<section style="max-width:1200px;margin:0 auto;padding:80px 32px 100px">
+  <div style="position:relative;padding:64px 48px;border-radius:36px;background:linear-gradient(150deg,#171326,#0F1116 55%);border:1px solid #242833;overflow:hidden;text-align:center">
+    <div style="position:absolute;top:-180px;left:50%;margin-left:-300px;width:600px;height:420px;border-radius:50%;background:radial-gradient(circle,rgba(123,92,255,.30),rgba(11,13,16,0) 68%);filter:blur(20px)"></div>
+    <div style="position:relative;width:96px;height:96px;margin:0 auto 30px;animation:breathe 7s ease-in-out infinite">
+      <div style="position:absolute;inset:-14px;border-radius:50%;background:conic-gradient(from 200deg,rgba(0,224,255,.5),rgba(123,92,255,.7),rgba(0,224,255,.5));filter:blur(16px)"></div>
+      <div style="position:absolute;inset:0;border-radius:50%;background:conic-gradient(from 200deg,#00E0FF,#7B5CFF,#E4DBFF,#00E0FF);animation:spin 16s linear infinite"></div>
+      <div style="position:absolute;inset:9px;border-radius:50%;background:#0D0F14"></div>
+    </div>
+    <h2 style="position:relative;font-family:Unbounded,sans-serif;font-weight:700;font-size:clamp(34px,3.9vw,46px);line-height:1.05;letter-spacing:-1.4px;margin:0 0 16px">Share something. See what happens.</h2>
+    <p style="position:relative;font-size:17px;color:#A1A6B3;max-width:520px;margin:0 auto 34px;line-height:1.55">Point is open source and free. The Android build and the desktop companion both live on the releases page.</p>
+    <div style="position:relative;display:flex;gap:14px;justify-content:center;flex-wrap:wrap">
+      <a href="https://github.com/librevlad/point/releases/latest" style="display:flex;align-items:center;gap:11px;padding:16px 28px;border-radius:16px;background:linear-gradient(135deg,#7B5CFF,#5B3BEF);color:#FFFFFF;font-size:15px;font-weight:700;box-shadow:0 12px 40px rgba(123,92,255,.45)" style-hover="color:#FFFFFF;box-shadow:0 16px 50px rgba(123,92,255,.7);transform:translateY(-1px)">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M8 11l4 4 4-4M4 19h16"></path></svg>
+        APK for Android
+      </a>
+      <a href="https://github.com/librevlad/point/releases/latest" style="display:flex;align-items:center;gap:11px;padding:16px 28px;border-radius:16px;background:#14161C;border:1px solid #242833;color:#FFFFFF;font-size:15px;font-weight:700" style-hover="color:#FFFFFF;border-color:#3A3F52;background:#1B1E27">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18v11H3zM8 20h8M12 16v4"></path></svg>
+        EXE for Windows
+      </a>
+    </div>
+    <div style="position:relative;font-size:12.5px;color:#575E70;margin-top:22px">Android 8+ · no account · AI is optional and uses your own key</div>
+  </div>
+</section>
+
+<footer style="border-top:1px solid #191C24">
+  <div style="max-width:1200px;margin:0 auto;padding:34px 32px;display:flex;align-items:center;gap:24px;flex-wrap:wrap">
+    <div style="display:flex;align-items:center;gap:11px">
+      <div style="position:relative;width:22px;height:22px;border-radius:50%">
+        <div style="position:absolute;inset:0;border-radius:50%;background:conic-gradient(from 210deg,#00E0FF,#7B5CFF,#00E0FF);filter:blur(2px)"></div>
+        <div style="position:absolute;inset:4px;border-radius:50%;background:#0B0D10"></div>
+      </div>
+      <span style="font-family:Unbounded,sans-serif;font-weight:600;font-size:14px">Point</span>
+    </div>
+    <span style="font-size:13px;color:#575E70">The right-click for everything.</span>
+    <div style="margin-left:auto;display:flex;gap:22px;font-size:13px">
+      <a href="https://github.com/librevlad/point">Repository</a>
+      <a href="https://github.com/librevlad/point/releases/latest">Releases</a>
+      <a href="https://github.com/librevlad/point/issues">Issues</a>
+      <a href="https://github.com/librevlad/point/blob/main/docs/ARCHITECTURE.md">Architecture</a>
+    </div>
+  </div>
+</footer>
+
+</div>
+
+<script src="./app.js"></script>
+<script src="./releases.js"></script>
+</body>
+</html>

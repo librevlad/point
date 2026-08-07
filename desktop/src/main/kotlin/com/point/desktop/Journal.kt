@@ -1,0 +1,205 @@
+package com.point.desktop
+
+import com.point.core.flow.decodePcMeta
+import com.point.core.flow.encodePcMeta
+import com.point.core.model.ActionResult
+import java.io.File
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.util.Base64
+
+enum class ObjectSource {
+
+    PHONE_LAN,
+
+    PHONE_RELAY,
+
+    DROPPED,
+
+    CLIPBOARD,
+
+    LOCAL,
+}
+
+data class JournalStep(
+    val capabilityId: String,
+    val title: String,
+    val at: Long,
+    val ok: Boolean,
+    val note: String,
+)
+
+data class JournalEntry(
+    val path: String,
+    val name: String,
+
+    val kind: String,
+    val mime: String,
+    val source: ObjectSource,
+    val at: Long,
+    val steps: List<JournalStep> = emptyList(),
+)
+
+const val JOURNAL_LIMIT = 40
+
+const val JOURNAL_STEPS_LIMIT = 20
+
+fun recordArrival(
+    entries: List<JournalEntry>,
+    arrival: JournalEntry,
+    limit: Int = JOURNAL_LIMIT,
+): List<JournalEntry> {
+    val known = entries.firstOrNull { it.path == arrival.path }
+    val merged = arrival.copy(steps = known?.steps ?: arrival.steps)
+    return (listOf(merged) + entries.filterNot { it.path == arrival.path }).take(limit)
+}
+
+fun recordStep(
+    entries: List<JournalEntry>,
+    path: String,
+    step: JournalStep,
+    stepsLimit: Int = JOURNAL_STEPS_LIMIT,
+): List<JournalEntry> =
+    entries.map { entry ->
+        if (entry.path != path) entry else entry.copy(steps = (entry.steps + step).takeLast(stepsLimit))
+    }
+
+fun recentBesides(
+    entries: List<JournalEntry>,
+    livePaths: Set<String>,
+    limit: Int = 8,
+): List<JournalEntry> = entries.filterNot { it.path in livePaths }.take(limit)
+
+fun stepOf(capabilityId: String, title: String, at: Long, result: ActionResult): JournalStep = when (result) {
+    is ActionResult.Done -> JournalStep(capabilityId, title, at, ok = true, note = result.message)
+    is ActionResult.Success -> JournalStep(capabilityId, title, at, ok = true, note = "получился новый объект")
+    is ActionResult.Failure -> JournalStep(capabilityId, title, at, ok = false, note = result.reason)
+    is ActionResult.NeedsInput -> JournalStep(capabilityId, title, at, ok = false, note = "остановилось на вопросе: ${result.prompt}")
+    is ActionResult.NeedsImage -> JournalStep(capabilityId, title, at, ok = false, note = "остановилось на выборе картинки")
+}
+
+fun sourceLabel(source: ObjectSource): String = when (source) {
+    ObjectSource.PHONE_LAN, ObjectSource.PHONE_RELAY -> "с телефона"
+    ObjectSource.DROPPED -> "перетащен в окно"
+    ObjectSource.CLIPBOARD -> "взят из буфера"
+    ObjectSource.LOCAL -> "с этого компьютера"
+}
+
+fun sourceShort(source: ObjectSource): String = when (source) {
+    ObjectSource.PHONE_LAN, ObjectSource.PHONE_RELAY -> "с телефона"
+    ObjectSource.DROPPED -> "перетащен"
+    ObjectSource.CLIPBOARD -> "из буфера"
+    ObjectSource.LOCAL -> "с компьютера"
+}
+
+fun stepsWord(count: Int): String {
+    val mod100 = count % 100
+    val word = when {
+        mod100 in 11..14 -> "действий"
+        count % 10 == 1 -> "действие"
+        count % 10 in 2..4 -> "действия"
+        else -> "действий"
+    }
+    return "$count $word"
+}
+
+fun whenLabel(at: Long, now: Long, zone: ZoneId): String {
+    val day = Instant.ofEpochMilli(at).atZone(zone)
+    val today = Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
+    val clock = "%02d:%02d".format(day.hour, day.minute)
+    val date = day.toLocalDate()
+
+    val year = if (date.year == today.year) "" else " ${date.year}"
+    return when (date) {
+        today -> "сегодня $clock"
+        today.minusDays(1) -> "вчера $clock"
+        else -> "${date.dayOfMonth} ${monthOf(date)}$year · $clock"
+    }
+}
+
+private fun monthOf(date: LocalDate): String = listOf(
+    "января", "февраля", "марта", "апреля", "мая", "июня",
+    "июля", "августа", "сентября", "октября", "ноября", "декабря",
+)[date.monthValue - 1]
+
+interface JournalStore {
+    fun load(): List<JournalEntry>
+    fun save(entries: List<JournalEntry>)
+}
+
+fun interface Clock {
+    fun now(): Long
+}
+
+fun encodeJournal(entries: List<JournalEntry>): String =
+    entries.joinToString("\n") { entry ->
+        val meta = buildMap {
+            put("path", entry.path)
+            put("name", entry.name)
+            put("kind", entry.kind)
+            put("mime", entry.mime)
+            put("source", entry.source.name)
+            put("at", entry.at.toString())
+            entry.steps.forEachIndexed { i, step ->
+                put("step.$i.id", step.capabilityId)
+                put("step.$i.title", step.title)
+                put("step.$i.at", step.at.toString())
+                put("step.$i.ok", if (step.ok) "1" else "0")
+                put("step.$i.note", step.note)
+            }
+        }
+        Base64.getEncoder().encodeToString(encodePcMeta(meta).toByteArray(Charsets.UTF_8))
+    }
+
+fun decodeJournal(encoded: String): List<JournalEntry> =
+    encoded.lineSequence().mapNotNull { line ->
+        runCatching {
+            val meta = decodePcMeta(String(Base64.getDecoder().decode(line.trim()), Charsets.UTF_8))
+            val path = meta["path"].orEmpty()
+            if (path.isBlank()) return@mapNotNull null
+            JournalEntry(
+                path = path,
+                name = meta["name"].orEmpty(),
+                kind = meta["kind"].orEmpty(),
+                mime = meta["mime"].orEmpty(),
+                source = runCatching { ObjectSource.valueOf(meta["source"].orEmpty()) }
+                    .getOrDefault(ObjectSource.LOCAL),
+                at = meta["at"]?.toLongOrNull() ?: 0L,
+                steps = decodeSteps(meta),
+            )
+        }.getOrNull()
+    }.toList()
+
+private fun decodeSteps(meta: Map<String, String>): List<JournalStep> =
+    meta.keys.filter { it.startsWith("step.") && it.endsWith(".id") }
+        .mapNotNull { it.removePrefix("step.").removeSuffix(".id").toIntOrNull() }
+        .sorted().mapNotNull { i ->
+        val id = meta["step.$i.id"] ?: return@mapNotNull null
+        JournalStep(
+            capabilityId = id,
+            title = meta["step.$i.title"].orEmpty(),
+            at = meta["step.$i.at"]?.toLongOrNull() ?: 0L,
+            ok = meta["step.$i.ok"] != "0",
+            note = meta["step.$i.note"].orEmpty(),
+        )
+    }
+
+class FileJournalStore(private val file: File) : JournalStore {
+
+    @Synchronized
+    override fun load(): List<JournalEntry> =
+        runCatching { decodeJournal(file.readText()) }.getOrDefault(emptyList())
+
+    @Synchronized
+    override fun save(entries: List<JournalEntry>) {
+        runCatching {
+            file.parentFile?.mkdirs()
+            val part = File(file.parentFile, file.name + ".part")
+            part.writeText(encodeJournal(entries))
+            Files.move(part.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING)
+        }
+    }
+}

@@ -1,0 +1,233 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+      Единственное разрешение Point (#246). Просится только по тапу «Место» в шторке и только
+      тогда, когда его ещё нет; без него источник честно говорит, что не получится. Фонового
+      доступа к месту нет и не будет — Point узнаёт место, когда человек сам попросил.
+    -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <!-- Звукозапись (#246): Point пишет сам, потому что на телефоне может не быть ни одного
+         диктофона. Просьба приходит по тапу человека, а не на старте. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <!--
+      Кого Point спрашивает у системы (#246). С Android 11 приложение не видит чужих приложений
+      без этого списка, и `resolveActivity` молча отвечает «никого нет»: источники «Камера» и
+      «Голос» просто не появлялись бы на экране выбора — не потому, что снимать нечем, а потому,
+      что мы не имели права спросить.
+    -->
+    <queries>
+        <intent>
+            <action android:name="android.media.action.IMAGE_CAPTURE" />
+        </intent>
+        <intent>
+            <action android:name="android.provider.MediaStore.RECORD_SOUND" />
+        </intent>
+    </queries>
+
+    <application
+        android:networkSecurityConfig="@xml/network_security_config"
+        android:name=".PointApplication"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Point">
+
+        <!-- Home / launcher: recent objects (History). Point is now a place you
+             open to continue working with an object, not only a share target. -->
+        <activity
+            android:name=".HomeActivity"
+            android:exported="true"
+            android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!--
+          ShareActivity receives Android Share for the MVP object types — the
+          other entry point beside the HomeActivity launcher above.
+          (A debug-only SandboxActivity with a launcher icon is added by the
+          `debug` source set for testing without re-sharing / re-flashing.)
+        -->
+        <activity
+            android:name=".ShareActivity"
+            android:exported="true"
+            android:launchMode="singleTop">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+                <data android:mimeType="text/plain" />
+                <data android:mimeType="text/uri-list" />
+                <data android:mimeType="application/pdf" />
+                <data android:mimeType="application/zip" />
+                <!--
+                  Голосовые и любые записи (#223). Мессенджеры шлют голосовуху как `audio/ogg`
+                  или `audio/mpeg`, а иногда как родовой `application/ogg` — без этих строк
+                  Point просто не появлялся в списке «Поделиться», и дверь была закрыта
+                  снаружи, а не сломана внутри (та же беда, что была у офисных документов).
+                -->
+                <data android:mimeType="audio/*" />
+                <data android:mimeType="application/ogg" />
+                <!--
+                  Офисные документы (#403). Разбирать их Point умел давно — классификатор знает
+                  docx/xlsx/pptx, текст читается из слайдов и листов, «В PDF» для них есть, — но в
+                  списке «Поделиться» этих типов не было, и человек упирался в то, что Point
+                  просто не предлагается. Дверь была закрыта снаружи, а не сломана внутри.
+                -->
+                <data android:mimeType="application/vnd.openxmlformats-officedocument.presentationml.presentation" />
+                <data android:mimeType="application/vnd.openxmlformats-officedocument.wordprocessingml.document" />
+                <data android:mimeType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
+                <data android:mimeType="application/vnd.ms-powerpoint" />
+                <data android:mimeType="application/msword" />
+                <data android:mimeType="application/vnd.ms-excel" />
+            </intent-filter>
+            <!-- Several files at once (e.g. multi-photo) -> a COLLECTION in Point. -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+                <data android:mimeType="application/pdf" />
+            </intent-filter>
+            <!--
+              «Открыть с помощью Point» (#249): дверь не для «Поделиться», а для «Открыть».
+              Тип `*/*` — решение владельца: Point виден для любого файла. На незнакомом типе
+              экран не пустой — поделиться, сохранить и «открыть в другом приложении» принимают
+              что угодно.
+            -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="file" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+        </activity>
+
+        <!--
+          "Right-click for text": PROCESS_TEXT puts Point in the text-selection toolbar of
+          every app. Selecting text anywhere and tapping Point opens the flow on that text.
+        -->
+        <activity
+            android:name=".ProcessTextActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:launchMode="singleTop">
+            <intent-filter>
+                <action android:name="android.intent.action.PROCESS_TEXT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
+
+        <!--
+          Возврат из браузера после входа (#561). Вход начат на этом же телефоне, поэтому человека
+          возвращает приложение, а не он сам: страница подтверждения уходит на `point://signed-in`,
+          и Point поднимается на передний план. `singleTask` — чтобы попасть в ЖИВУЮ задачу Point,
+          а не завести вторую поверх неё.
+
+          Схема принадлежит Point и заявлена только здесь. Адрес возврата — константа сервера, из
+          запроса в него не попадает ничего: иначе вход стал бы перенаправлением куда угодно.
+        -->
+        <activity
+            android:name=".SignedInActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="point" android:host="signed-in" />
+            </intent-filter>
+        </activity>
+
+        <!-- «Общий буфер» (#161): a Quick Settings tile syncs the clipboard with the paired PC. The
+             invisible sync activity is the trick that gets clipboard access from the shade. -->
+        <activity
+            android:name=".ClipboardSyncActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:excludeFromRecents="true"
+            android:noHistory="true" />
+
+        <service
+            android:name=".ClipboardTileService"
+            android:exported="true"
+            android:icon="@android:drawable/ic_popup_sync"
+            android:label="Общий буфер"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
+        <!--
+          Шторка рождает объект (#246): плитка открывает выбор источника, экран живёт поверх того,
+          откуда пришли, и исчезает, как только объект родился.
+
+          `exported="false"` намеренно: экран открывают только сам Point — плитка шторки и дверь
+          «Новый объект» с домашнего экрана (#456). Наружу отдавать его незачем.
+        -->
+        <activity
+            android:name=".source.SourcePickerActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTop" />
+
+        <!-- «Принять файл» (#388): экран ожидания со ссылкой и кодом — по ним ЧУЖОЙ человек
+             кладёт файл сюда браузером. Живёт только пока открыт: фонового приёма нет. -->
+        <activity
+            android:name=".source.ReceiveActivity"
+            android:exported="false"
+            android:label="Принять файл" />
+
+        <!-- Звукозапись (#246): свой экран записи вместо чужого диктофона — его на устройстве
+             может не быть вовсе. Живёт только пока открыт: в фоне Point не пишет. -->
+        <activity
+            android:name=".source.RecordAudioActivity"
+            android:exported="false"
+            android:label="Звукозапись" />
+
+        <!-- Point как принтер (#251): печатать умеет почти любое приложение, поэтому это самый
+             широкий вход. Службу человек включает руками в системных настройках печати. -->
+        <service
+            android:name=".print.PointPrintService"
+            android:exported="true"
+            android:label="Point"
+            android:permission="android.permission.BIND_PRINT_SERVICE">
+            <intent-filter>
+                <action android:name="android.printservice.PrintService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.printservice"
+                android:resource="@xml/point_printservice" />
+        </service>
+
+        <!-- Плитка «Point» (#246) со своим знаком (#456): в редакторе шторки её надо УЗНАТЬ среди
+             сотни чужих, а системный «плюс» этого не позволял. -->
+        <service
+            android:name=".source.PointTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_tile_point"
+            android:label="Point"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
+    </application>
+</manifest>

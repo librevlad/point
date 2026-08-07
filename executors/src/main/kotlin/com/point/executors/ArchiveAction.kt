@@ -1,0 +1,48 @@
+package com.point.executors
+
+import com.point.core.flow.capabilities.ArchiveCapability
+import com.point.core.flow.ArchiveExtractor
+import com.point.core.flow.Capability
+import com.point.core.flow.CapabilityMeta
+import com.point.core.flow.Latency
+import com.point.core.flow.Realizer
+import com.point.core.flow.reportStage
+import com.point.core.model.ActionResult
+import com.point.core.model.CapabilityId
+import com.point.core.model.ObjectKind
+import com.point.core.model.ObjectState
+import com.point.core.model.PointObject
+import com.point.core.model.ResultObject
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.io.File
+import javax.inject.Inject
+
+class ArchiveRealizer @Inject constructor(
+    private val archive: ArchiveExtractor,
+) : Realizer {
+    override val capabilityId = ArchiveCapability.ID
+
+    override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
+        withContext(Dispatchers.IO) {
+            runCatching {
+
+                reportStage("Распаковываю архив")
+                val dir = archive.extract(input)
+                val count = File(dir.value).walkTopDown().count { it.isFile }
+                if (count == 0) {
+                    ActionResult.Failure("Пустой или неподдерживаемый архив", recoverable = true)
+                } else {
+
+                    ActionResult.Success(
+                        ResultObject(
+                            ObjectKind.COLLECTION,
+                            "inode/directory",
+                            dir,
+                            mapOf("op" to "unpack", "count" to count.toString()),
+                        ),
+                    )
+                }
+            }.getOrElse { ActionResult.Failure(it.message ?: "Ошибка распаковки", recoverable = true) }
+        }
+}
