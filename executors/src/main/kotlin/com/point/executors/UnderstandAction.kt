@@ -49,6 +49,7 @@ import com.point.core.flow.s10CheckDigitValid
 import com.point.core.flow.semanticFits
 import com.point.core.flow.labelNeedingKey
 import com.point.core.model.ActionResult
+import com.point.core.model.Findings
 import com.point.core.model.ActionYield
 import com.point.core.model.CapabilityId
 import com.point.core.model.Feature
@@ -287,13 +288,16 @@ class UnderstandRealizer @Inject constructor(
                         .filter { key -> !merged[key].isNullOrBlank() }
                         .filter { key -> Provenance.MODEL > provenanceOf(merged, key) }
                         .map { key -> key + META_SOURCE_SUFFIX to Provenance.MODEL.wire }
-                    ActionResult.Success(
-                        ResultObject(
-                            input.state.kind, input.mime, input.uri,
+
+                    // «Понять» — знание о том же объекте, а не превращение (ADR-0001 §18):
+                    // человек остаётся на исходнике, факты прирастают. Success здесь ронял
+                    // его в дубль-объект со знаком вопроса.
+                    ActionResult.Done(
+                        UNDERSTOOD,
+                        Findings(
                             metadata = merged +
                                 annotations(merged, fields, judgedByLayer = layer != null, blocked = blocked) +
-                                roleAlts + roleSources +
-                                ("op" to "understand"),
+                                roleAlts + roleSources,
                         ),
                     )
                 }
@@ -311,13 +315,12 @@ class UnderstandRealizer @Inject constructor(
         }
         val values = withoutHumanFacts(fields.mapValues { it.value.text } + parsed.single, input.metadata)
         val merged = mergeFacts(input.metadata, values)
-        return ActionResult.Success(
-            ResultObject(
-                input.state.kind, input.mime, input.uri,
+        return ActionResult.Done(
+            UNDERSTOOD,
+            Findings(
                 metadata = merged +
                     annotations(merged, fields, judgedByLayer = false, blocked = judged.blocked) +
-                    (META_READING_MODE to ReadingMode.HANDWRITTEN.name) +
-                    ("op" to "understand"),
+                    (META_READING_MODE to ReadingMode.HANDWRITTEN.name),
             ),
         )
     }
@@ -363,6 +366,8 @@ class UnderstandRealizer @Inject constructor(
         const val MAX_CHARS = 6_000
 
         const val NOTHING_NEW = "Point уже прочитал всё, что здесь есть"
+
+        const val UNDERSTOOD = "Стало понятнее"
 
         const val VISUAL_PROMPT =
             "Прочитай, что написано на снимке. Это может быть табло счётчика, рукописная " +

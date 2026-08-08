@@ -1837,6 +1837,11 @@ class FlowViewModel @Inject constructor(
                 viewModelScope.launch { runCatching { history.update(frame.obj) } }
             }
         }
+
+        // Существенное обогащение меняет пространство возможностей (ADR-0001 §10):
+        // исследования пересматриваются над обновлённым объектом. Отвеченные вопросы
+        // не переспрашиваются — их держат состояния знания.
+        stack.lastOrNull { it.obj.id == top.obj.id }?.let { enrichInBackground(it.obj) }
     }
 
     private fun applyEnrichment(source: PointObject, update: EnrichmentUpdate) {

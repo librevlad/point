@@ -86,40 +86,38 @@ class UnderstandRealizerTest {
         val result = realizer("PHONE=+380671234567\nsender=P2\nSUMMARY=накладная на посылку")
             .perform(textObject())
 
-        assertTrue(result is ActionResult.Success)
-        val meta = (result as ActionResult.Success).result.metadata
+        assertTrue(result is ActionResult.Done)
+        val meta = (result as ActionResult.Done).findings!!.metadata
         assertEquals("+380671234567", meta["entity.phone"])
 
         assertEquals("ТОВ «Агротрейд»", meta["graph.role.sender"])
         assertEquals("накладная на посылку", meta["semantic.summary"])
-        assertEquals("understand", meta["op"])
     }
 
     @Test
-    fun `тот же объект, те же байты — понимание богаче, uri не меняется`() = runTest {
-        val obj = textObject()
-        val result = realizer("PHONE=+380671234567").perform(obj) as ActionResult.Success
+    fun `понимание — знание о том же объекте, дубль не рождается`() = runTest {
+        val result = realizer("PHONE=+380671234567").perform(textObject()) as ActionResult.Done
 
-        assertEquals(obj.uri, result.result.uri)
-        assertEquals(obj.state.kind, result.result.type)
+        assertTrue("знание не приносит новых объектов", result.findings!!.objects.isEmpty())
+        assertEquals("+380671234567", result.findings!!.metadata["entity.phone"])
     }
 
     @Test
     fun `TRACK — законный ключ контракта, у идентификатора нет универсальной формы`() = runTest {
 
-        val result = realizer("TRACK=RA123456785UA").perform(textObject()) as ActionResult.Success
+        val result = realizer("TRACK=RA123456785UA").perform(textObject()) as ActionResult.Done
 
-        assertEquals("RA123456785UA", result.result.metadata[META_ENTITY_TRACK])
+        assertEquals("RA123456785UA", result.findings!!.metadata[META_ENTITY_TRACK])
     }
 
     @Test
     fun `METER и GEO — законные ключи контракта там, где правило формы слепо`() = runTest {
 
         val result = realizer("METER=00154\nGEO=50°27'0\"N 30°31'24\"E")
-            .perform(textObject()) as ActionResult.Success
+            .perform(textObject()) as ActionResult.Done
 
-        assertEquals("00154", result.result.metadata[META_ENTITY_METER])
-        assertEquals("50°27'0\"N 30°31'24\"E", result.result.metadata[META_ENTITY_GEO])
+        assertEquals("00154", result.findings!!.metadata[META_ENTITY_METER])
+        assertEquals("50°27'0\"N 30°31'24\"E", result.findings!!.metadata[META_ENTITY_GEO])
     }
 
     @Test
@@ -135,7 +133,7 @@ class UnderstandRealizerTest {
     fun `выдуманный идентификатор роли отброшен, факты того же ответа живут`() = runTest {
         val result = realizer("PHONE=+380671234567\nsender=P99").perform(textObject())
 
-        val meta = (result as ActionResult.Success).result.metadata
+        val meta = (result as ActionResult.Done).findings!!.metadata
         assertEquals("+380671234567", meta["entity.phone"])
         assertNull(meta["graph.role.sender"])
     }
@@ -152,8 +150,8 @@ class UnderstandRealizerTest {
     fun `проза вместо контракта не рождает ни фактов, ни ролей`() = runTest {
         val result = realizer("Конечно! Отправителем является ТОВ «Агротрейд».").perform(textObject())
 
-        assertFalse("проза не имеет права стать фактом", result is ActionResult.Success)
         assertTrue(result is ActionResult.Done)
+        assertNull("проза не имеет права стать фактом", (result as ActionResult.Done).findings)
     }
 
     @Test
@@ -166,16 +164,16 @@ class UnderstandRealizerTest {
 
     @Test
     fun `выдуманный моделью TYPE не сохраняется`() = runTest {
-        val result = realizer("TYPE=POEM\nPHONE=+380671234567").perform(textObject()) as ActionResult.Success
+        val result = realizer("TYPE=POEM\nPHONE=+380671234567").perform(textObject()) as ActionResult.Done
 
-        assertNull(result.result.metadata["semantic.type"])
+        assertNull(result.findings!!.metadata["semantic.type"])
     }
 
     @Test
     fun `TYPE из закрытого списка становится semantic type`() = runTest {
-        val result = realizer("TYPE=PURCHASE\nSUMMARY=чек із супермаркету").perform(textObject()) as ActionResult.Success
+        val result = realizer("TYPE=PURCHASE\nSUMMARY=чек із супермаркету").perform(textObject()) as ActionResult.Done
 
-        assertEquals("purchase", result.result.metadata["semantic.type"])
+        assertEquals("purchase", result.findings!!.metadata["semantic.type"])
     }
 
     @Test
@@ -221,9 +219,9 @@ class UnderstandRealizerTest {
     @Test
     fun `кандидат с метками собирается со страницы — происхождение прочитано, улики есть`() = runTest {
         val result = realizer("TRACK=20 4514 9154 9395 [w1 w2 w3]")
-            .perform(imageWithLayer()) as ActionResult.Success
+            .perform(imageWithLayer()) as ActionResult.Done
 
-        val meta = result.result.metadata
+        val meta = result.findings!!.metadata
         assertEquals("20 4514 9154 9395", meta[META_ENTITY_TRACK])
         assertEquals("ocr", meta["entity.track.src"])
         assertTrue(meta["entity.track.ev"]!!.split(",").size >= 2)
@@ -231,9 +229,9 @@ class UnderstandRealizerTest {
 
     @Test
     fun `диктовка без меток — происхождение модель и одно доказательство`() = runTest {
-        val result = realizer("TRACK=99 9999 9999 9995").perform(imageWithLayer()) as ActionResult.Success
+        val result = realizer("TRACK=99 9999 9999 9995").perform(imageWithLayer()) as ActionResult.Done
 
-        val meta = result.result.metadata
+        val meta = result.findings!!.metadata
         assertEquals("model", meta["entity.track.src"])
         assertEquals("semantic", meta["entity.track.ev"])
     }
@@ -241,9 +239,9 @@ class UnderstandRealizerTest {
     @Test
     fun `из двух кандидатов побеждает богатый уликами, оба остаются в alt`() = runTest {
         val result = realizer("TRACK=99 9999 9999 9995\nTRACK=20 4514 9154 9395 [w1 w2 w3]")
-            .perform(imageWithLayer()) as ActionResult.Success
+            .perform(imageWithLayer()) as ActionResult.Done
 
-        val meta = result.result.metadata
+        val meta = result.findings!!.metadata
         assertEquals("20 4514 9154 9395", meta[META_ENTITY_TRACK])
 
         assertEquals(
@@ -261,9 +259,9 @@ class UnderstandRealizerTest {
             ),
         )
 
-        val result = realizer("TRACK=20 4514 9154 9395").perform(known) as ActionResult.Success
+        val result = realizer("TRACK=20 4514 9154 9395").perform(known) as ActionResult.Done
 
-        val meta = result.result.metadata
+        val meta = result.findings!!.metadata
         assertEquals(Provenance.OCR.wire, meta["entity.track.src"])
         assertNull("без слоя суд не состоялся — .ev не пишется", meta["entity.track.ev"])
     }
@@ -277,17 +275,17 @@ class UnderstandRealizerTest {
             ),
         )
 
-        val result = realizer("TRACK=20 4514 9154 9395").perform(edited) as ActionResult.Success
+        val result = realizer("TRACK=20 4514 9154 9395").perform(edited) as ActionResult.Done
 
-        assertEquals(Provenance.HUMAN.wire, result.result.metadata["entity.track.src"])
+        assertEquals(Provenance.HUMAN.wire, result.findings!!.metadata["entity.track.src"])
     }
 
     @Test
     fun `роль уходит в метаданные с происхождением, а не молча`() = runTest {
         val result = realizer("sender=Іваненко Іван [w6 w7]")
-            .perform(imageWithLayer()) as ActionResult.Success
+            .perform(imageWithLayer()) as ActionResult.Done
 
-        val meta = result.result.metadata
+        val meta = result.findings!!.metadata
         assertEquals("Іваненко Іван", meta["graph.role.sender"])
         assertEquals(Provenance.MODEL.wire, meta["graph.role.sender.src"])
     }
@@ -301,17 +299,17 @@ class UnderstandRealizerTest {
             ),
         )
 
-        val result = realizer("sender=P2").perform(known) as ActionResult.Success
+        val result = realizer("sender=P2").perform(known) as ActionResult.Done
 
-        assertEquals(Provenance.HUMAN.wire, result.result.metadata["graph.role.sender.src"])
+        assertEquals(Provenance.HUMAN.wire, result.findings!!.metadata["graph.role.sender.src"])
     }
 
     @Test
     fun `отклонённое контрольной цифрой не исчезает — blocked виден`() = runTest {
         val result = realizer("TRACK=RA123456789UA\nSUMMARY=лист", "TRACK=RA123456780UA")
-            .perform(imageWithLayer()) as ActionResult.Success
+            .perform(imageWithLayer()) as ActionResult.Done
 
-        val meta = result.result.metadata
+        val meta = result.findings!!.metadata
         assertNull(meta[META_ENTITY_TRACK])
         val blocked = meta["entity.track" + com.point.core.flow.META_BLOCKED_SUFFIX]!!.split("\n")
         assertTrue(blocked.contains("RA123456789UA"))
@@ -329,32 +327,32 @@ class UnderstandRealizerTest {
     @Test
     fun `метка подписи в указании отрезается кодом`() = runTest {
         val result = realizer("sender=Іваненко Іван [m2 w6 w7]")
-            .perform(imageWithLayer()) as ActionResult.Success
+            .perform(imageWithLayer()) as ActionResult.Done
 
-        assertEquals("Іваненко Іван", result.result.metadata["graph.role.sender"])
+        assertEquals("Іваненко Іван", result.findings!!.metadata["graph.role.sender"])
     }
 
     @Test
     fun `указание из одной подписи не отрезается в пустоту`() = runTest {
-        val result = realizer("sender=Відправник [m2]").perform(imageWithLayer()) as ActionResult.Success
+        val result = realizer("sender=Відправник [m2]").perform(imageWithLayer()) as ActionResult.Done
 
-        assertEquals("Відправник", result.result.metadata["graph.role.sender"])
+        assertEquals("Відправник", result.findings!!.metadata["graph.role.sender"])
     }
 
     @Test
     fun `роль с галлюцинированными метками не пишется и не тратится`() = runTest {
         val result = realizer("sender=Хтось [z9]\nsender=Іваненко Іван [w6 w7]")
-            .perform(imageWithLayer()) as ActionResult.Success
+            .perform(imageWithLayer()) as ActionResult.Done
 
-        assertEquals("Іваненко Іван", result.result.metadata["graph.role.sender"])
+        assertEquals("Іваненко Іван", result.findings!!.metadata["graph.role.sender"])
     }
 
     @Test
     fun `переписанное целиком имя — страница побеждает, спор виден`() = runTest {
         val result = realizer("sender=Зовсім Інша Людина [w6 w7]")
-            .perform(imageWithLayer()) as ActionResult.Success
+            .perform(imageWithLayer()) as ActionResult.Done
 
-        val meta = result.result.metadata
+        val meta = result.findings!!.metadata
         assertEquals("1ваненко ван", meta["graph.role.sender"])
         assertTrue(alternativesOf(meta, "graph.role.sender").contains("Зовсім Інша Людина"))
     }
@@ -363,10 +361,10 @@ class UnderstandRealizerTest {
     fun `при победе известного кандидаты модели не тонут`() = runTest {
         val known = textObject(metadata = mapOf("entity.phone" to "+380671234567"))
 
-        val result = realizer("PHONE=+380679999999\nPHONE=+380671111111").perform(known) as ActionResult.Success
+        val result = realizer("PHONE=+380679999999\nPHONE=+380671111111").perform(known) as ActionResult.Done
 
-        assertEquals("+380671234567", result.result.metadata["entity.phone"])
-        val alt = alternativesOf(result.result.metadata, "entity.phone")
+        assertEquals("+380671234567", result.findings!!.metadata["entity.phone"])
+        val alt = alternativesOf(result.findings!!.metadata, "entity.phone")
         assertTrue(alt.contains("+380679999999"))
         assertTrue("второй кандидат не исчез", alt.contains("+380671111111"))
     }
@@ -374,9 +372,9 @@ class UnderstandRealizerTest {
     @Test
     fun `тронутая цифра — не ремонт, а второй кандидат, страница побеждает`() = runTest {
         val result = realizer("TRACK=20 4614 9154 9395 [w1 w2 w3]")
-            .perform(imageWithLayer()) as ActionResult.Success
+            .perform(imageWithLayer()) as ActionResult.Done
 
-        val meta = result.result.metadata
+        val meta = result.findings!!.metadata
         assertEquals("20 4514 9154 9395", meta[META_ENTITY_TRACK])
         assertTrue(alternativesOf(meta, META_ENTITY_TRACK).contains("20 4614 9154 9395"))
     }
@@ -384,11 +382,11 @@ class UnderstandRealizerTest {
     @Test
     fun `checksum S10 отклоняет кандидатов и даёт один повторный вызов`() = runTest {
         val result = realizer("TRACK=RA123456789UA\nSUMMARY=лист", "TRACK=RA123456785UA [w1]")
-            .perform(imageWithLayer()) as ActionResult.Success
+            .perform(imageWithLayer()) as ActionResult.Done
 
         assertEquals(2, prompts.size)
         assertTrue(prompts[1].contains("контрольной цифры"))
-        assertEquals("RA123456785UA", result.result.metadata[META_ENTITY_TRACK])
+        assertEquals("RA123456785UA", result.findings!!.metadata[META_ENTITY_TRACK])
     }
 
     @Test
@@ -397,8 +395,8 @@ class UnderstandRealizerTest {
             .perform(imageWithLayer())
 
         assertEquals(2, prompts.size)
-        assertTrue(result is ActionResult.Success)
-        assertNull((result as ActionResult.Success).result.metadata[META_ENTITY_TRACK])
+        assertTrue(result is ActionResult.Done)
+        assertNull((result as ActionResult.Done).findings!!.metadata[META_ENTITY_TRACK])
     }
 
     @Test
@@ -413,12 +411,12 @@ class UnderstandRealizerTest {
     fun `известный факт не затирается — расхождение видно в alt`() = runTest {
         val known = textObject(metadata = mapOf("entity.phone" to "+380671234567"))
 
-        val result = realizer("PHONE=+380679999999").perform(known) as ActionResult.Success
+        val result = realizer("PHONE=+380679999999").perform(known) as ActionResult.Done
 
-        assertEquals("+380671234567", result.result.metadata["entity.phone"])
+        assertEquals("+380671234567", result.findings!!.metadata["entity.phone"])
         assertEquals(
             listOf("+380671234567", "+380679999999"),
-            alternativesOf(result.result.metadata, "entity.phone"),
+            alternativesOf(result.findings!!.metadata, "entity.phone"),
         )
     }
 
@@ -432,12 +430,12 @@ class UnderstandRealizerTest {
             ),
         )
 
-        val result = realizer("TRACK=20 4514 9154 9395").perform(known) as ActionResult.Success
+        val result = realizer("TRACK=20 4514 9154 9395").perform(known) as ActionResult.Done
 
-        assertEquals("20 4514 9154 9395", result.result.metadata[META_ENTITY_TRACK])
+        assertEquals("20 4514 9154 9395", result.findings!!.metadata[META_ENTITY_TRACK])
         assertEquals(
             listOf("20 4514 9154 9395", "20451491549396"),
-            com.point.core.flow.moreOf(result.result.metadata, META_ENTITY_TRACK),
+            com.point.core.flow.moreOf(result.findings!!.metadata, META_ENTITY_TRACK),
         )
     }
 
@@ -513,8 +511,8 @@ class UnderstandRealizerTest {
 
         val result = realizer("METER=20842\nSUMMARY=табло электросчётчика").perform(photo)
 
-        assertTrue(result is ActionResult.Success)
-        val meta = (result as ActionResult.Success).result.metadata
+        assertTrue(result is ActionResult.Done)
+        val meta = (result as ActionResult.Done).findings!!.metadata
         assertEquals("20842", meta["entity.meter"])
         assertEquals("табло электросчётчика", meta["semantic.summary"])
     }
@@ -525,7 +523,7 @@ class UnderstandRealizerTest {
             "img", "image/jpeg", ScratchRef("/tmp/meter.jpg"), ObjectState(ObjectKind.IMAGE),
         )
 
-        val meta = (realizer("METER=154").perform(photo) as ActionResult.Success).result.metadata
+        val meta = (realizer("METER=154").perform(photo) as ActionResult.Done).findings!!.metadata
 
         assertEquals("model", meta["entity.meter.src"])
         assertEquals("HANDWRITTEN", meta["reading.mode"])
@@ -569,7 +567,7 @@ class UnderstandRealizerTest {
         // Модель предлагает «ремонтную» форму того же адреса — близкую, с совпадающими цифрами.
         val result = realizer("ADDRESS=вул. Хрещатик, 16").perform(human, null)
 
-        val merged = (result as com.point.core.model.ActionResult.Success).result.metadata
+        val merged = (result as com.point.core.model.ActionResult.Done).findings!!.metadata
         org.junit.Assert.assertEquals("вул. Хрещатик, 1б", merged["entity.address"])
         org.junit.Assert.assertEquals(
             com.point.core.model.Provenance.HUMAN,

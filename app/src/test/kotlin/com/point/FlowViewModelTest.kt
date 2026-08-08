@@ -1401,6 +1401,44 @@ class FlowViewModelTest {
         assertEquals(listOf(born.id), persisted.found.map { it.id })
     }
 
+    @Test fun `понять остаётся на исходнике — знание прирастает, дубль не рождается`() = runTest(dispatcher) {
+        resolver.result = ActionResult.Done(
+            "Стало понятнее",
+            com.point.core.model.Findings(
+                metadata = mapOf("semantic.type" to "purchase", "entity.amount" to "128500"),
+            ),
+        )
+        val vm = vm()
+        vm.onShared("uri", "text/plain"); advanceUntilIdle()
+
+        vm.onBubble(bubble()); advanceUntilIdle()
+
+        val frame = vm.ui.value.frame!!
+        assertEquals("человек остаётся на своём объекте", "in", frame.obj.id)
+        assertEquals("кадр один — дубля нет", 1, vm.ui.value.path.size)
+        assertEquals("purchase", frame.obj.metadata["semantic.type"])
+        assertEquals("128500", frame.obj.metadata["entity.amount"])
+    }
+
+    @Test fun `новое знание действия перезапускает исследования над исходником`() = runTest(dispatcher) {
+        resolver.result = ActionResult.Done(
+            "Стало понятнее",
+            com.point.core.model.Findings(metadata = mapOf("entity.phone" to "+79161234567")),
+        )
+        val vm = vm()
+        vm.onShared("uri", "text/plain"); advanceUntilIdle()
+        val before = enrichment.runs
+
+        vm.onBubble(bubble()); advanceUntilIdle()
+
+        assertEquals("пространство пересматривается после обогащения", before + 1, enrichment.runs)
+        assertEquals(
+            "пересмотр видит новое знание",
+            "+79161234567",
+            enrichment.seen.last().metadata["entity.phone"],
+        )
+    }
+
     @Test fun `повторный результат с компьютера обновляет chip, а не остаётся первым`() = runTest(dispatcher) {
         fun run(uri: String) = ActionResult.Done(
             "Прочитать — готово: страница.txt",
