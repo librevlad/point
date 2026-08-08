@@ -80,10 +80,43 @@ class DesktopState(
         scope.launch { perform(id, item) }
     }
 
-    fun runRemoteActionNow(id: String, item: InboxItem, timeoutMs: Long = 10_000): ActionResult? =
-        kotlinx.coroutines.runBlocking {
-            kotlinx.coroutines.withTimeoutOrNull(timeoutMs) { perform(id, item) }
+    /**
+     * Бюджет здесь — про синхронный ответ телефону, не про работу (телефон ждёт
+     * ответа считанные секунды). Долгое действие не обрывается: оно доводится в
+     * scope компьютера, а готовый результат уезжает существующей очередью
+     * ПК→телефон вместе со знанием (Product Constitution PC2/PC4). Телефону сразу
+     * уходит честное «ещё работаю» вместо ложного «отправлено».
+     */
+    fun runRemoteActionNow(id: String, item: InboxItem, budgetMs: Long = 10_000): ActionResult? {
+        val work = kotlinx.coroutines.CompletableDeferred<ActionResult?>()
+        scope.launch { work.complete(runCatching { perform(id, item) }.getOrNull()) }
+        val quick = kotlinx.coroutines.runBlocking {
+            kotlinx.coroutines.withTimeoutOrNull(budgetMs) { work.await() }
         }
+        if (quick != null) return quick
+
+        scope.launch {
+            val late = runCatching { work.await() }.getOrNull()
+            if (late is ActionResult.Success) {
+                runCatching {
+                    outbox?.add(
+                        com.point.core.model.PointObject(
+                            id = java.util.UUID.randomUUID().toString(),
+                            mime = late.result.mime,
+                            uri = late.result.uri,
+                            state = com.point.core.model.ObjectState(late.result.type),
+                            metadata = late.result.metadata,
+                        ),
+                    )
+                }
+            }
+        }
+        return ActionResult.Done(STILL_WORKING)
+    }
+
+    companion object {
+        const val STILL_WORKING = "Компьютер ещё работает — готовое появится в списке «с компьютера»"
+    }
 
     private suspend fun perform(id: String, item: InboxItem, stationTitle: String? = null): ActionResult? {
         val title = stationTitle ?: titleOf(id, item)
