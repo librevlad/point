@@ -1829,6 +1829,14 @@ class FlowViewModel @Inject constructor(
         top.obj.sourceObjects.firstOrNull()
             ?.let { parentId -> stack.lastOrNull { it.obj.id == parentId }?.obj }
             ?.let { parent -> applyEnrichment(parent, update) }
+
+        // Карточка «Недавнего» несёт факты объекта: правка человека обязана дойти и до неё
+        // сейчас — фоновое обогащение могло уже завершиться и историю не перепишет.
+        setOfNotNull(top.obj.id, top.obj.sourceObjects.firstOrNull()).forEach { id ->
+            stack.lastOrNull { it.obj.id == id }?.let { frame ->
+                viewModelScope.launch { runCatching { history.update(frame.obj) } }
+            }
+        }
     }
 
     private fun applyEnrichment(source: PointObject, update: EnrichmentUpdate) {
