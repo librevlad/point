@@ -42,12 +42,28 @@ class LearningBubblePolicy @Inject constructor(
 
                 { if (keyless && it.meta.auth) 1 else 0 },
 
+                // Shape #644: главная граница Point видима всегда — при живой паре
+                // (без неё accepts «pc» не пропускает) «На компьютер» не тонет в фолде.
+                { if (it.id == PcCapability.ID) 0 else 1 },
+
+                // Shape #642: облачное чтение — главное только когда локально не вышло.
+                // Богато прочитанное фото (HAS_TEXT) опускает его ниже локальных путей;
+                // слабое чтение — рукопись, мусор — оставляет облако первым.
+                { if (cloudReadOfAlreadyRead(it, state)) 1 else 0 },
+
                 { if (intent == null || intent in it.intents(state)) 0 else 1 },
                 { effectivePriority(it, counts) },
                 { it.id.value },
             ),
         )
     }
+
+    private fun cloudReadOfAlreadyRead(c: Capability, state: ObjectState): Boolean =
+        state.kind == com.point.core.model.ObjectKind.IMAGE &&
+            state.has(com.point.core.model.Feature.HAS_TEXT) &&
+            c.meta.cost == com.point.core.flow.Cost.PAID &&
+            c.meta.network &&
+            c.produces(state)?.kind == com.point.core.model.ObjectKind.TEXT
 
     private fun effectivePriority(c: Capability, counts: Map<CapabilityId, Int>): Int =
         c.meta.priority - min(counts[c.id] ?: 0, MAX_BOOST)
