@@ -46,7 +46,7 @@ class ScratchObjectStore @Inject constructor(
                     id = id,
                     mime = mime,
                     uri = ScratchRef(dest.absolutePath),
-                    state = classifier.classify(mime, size, name),
+                    state = classifier.classify(mime, size, name, headOf(dest)),
 
                     metadata = buildMap {
                         name?.let { put("name", it) }
@@ -109,7 +109,7 @@ class ScratchObjectStore @Inject constructor(
                     id = UUID.randomUUID().toString(),
                     mime = mime,
                     uri = ScratchRef(file.absolutePath),
-                    state = classifier.classify(mime, size, file.name),
+                    state = classifier.classify(mime, size, file.name, headOf(file)),
                     metadata = mapOf("name" to file.name, META_SIZE to size.toString()),
                 )
             }
@@ -119,6 +119,11 @@ class ScratchObjectStore @Inject constructor(
         val ext = name.substringAfterLast('.', "").lowercase()
         return MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext) ?: "application/octet-stream"
     }
+
+    // Первые байты объекта для классификации: имя и mime могут молчать, байты — нет.
+    private fun headOf(file: File): ByteArray = runCatching {
+        file.inputStream().use { it.readNBytes(512) }
+    }.getOrDefault(ByteArray(0))
 
     private fun uniqueFile(dir: File, name: String): File {
         var candidate = File(dir, name)

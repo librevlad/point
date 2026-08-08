@@ -192,6 +192,17 @@ class UnderstandRealizerTest {
     }
 
     @Test
+    fun `None от модели — отсутствие значения, а не значение`() {
+        val parsed = parseFieldCandidates(
+            "PHONE=None\nTRACK=null\nCARD=N/A\nAMOUNT=—\nPLACE=не найдено\n" +
+                "RECEIPT=None [w1 w2]\nSUMMARY=None\nDATE=01.07.24",
+        )
+
+        assertEquals(setOf("entity.date"), parsed.fields.keys)
+        assertNull("пустой итог не подписывает объект", parsed.single["semantic.summary"])
+    }
+
+    @Test
     fun `скобки с метками — указание, скобки с текстом — текст`() {
         val parsed = parseFieldCandidates(
             "TRACK=20 4514 9154 9395 [w1 w2, w3 rule=track-shaped]\nADDRESS=Відділення №9 [нове]",

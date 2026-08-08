@@ -6,11 +6,21 @@ import com.point.core.model.ObjectState
 
 class ObjectClassifier {
 
-    fun classify(mime: String, sizeBytes: Long = 0L, fileName: String? = null): ObjectState {
+    fun classify(
+        mime: String,
+        sizeBytes: Long = 0L,
+        fileName: String? = null,
+        head: ByteArray = EMPTY_HEAD,
+    ): ObjectState {
         val features = buildSet {
             if (sizeBytes >= LARGE_THRESHOLD_BYTES) add(Feature.LARGE)
         }
-        return ObjectState(kindOf(mime, fileName), features)
+        val declared = kindOf(mime, fileName)
+
+        // Имя и mime промолчали — спрашиваем сами байты (файл без расширения из
+        // менеджера иначе становился мёртвым «неизвестным» при читаемом тексте внутри).
+        val kind = if (declared == ObjectKind.UNKNOWN) kindFromBytes(head) else declared
+        return ObjectState(kind, features)
     }
 
     private fun kindOf(mime: String, fileName: String?): ObjectKind {
@@ -39,7 +49,46 @@ class ObjectClassifier {
         else -> ObjectKind.UNKNOWN
     }
 
+    private fun kindFromBytes(head: ByteArray): ObjectKind {
+        fun startsWith(vararg sig: Int) =
+            head.size >= sig.size && sig.withIndex().all { (i, b) -> (head[i].toInt() and 0xFF) == b }
+
+        fun riffSubtype(sub: String) =
+            head.size >= 12 && startsWith(0x52, 0x49, 0x46, 0x46) &&
+                String(head, 8, 4, Charsets.ISO_8859_1) == sub
+        return when {
+            startsWith(0x25, 0x50, 0x44, 0x46) -> ObjectKind.PDF
+            startsWith(0x50, 0x4B, 0x03, 0x04) -> ObjectKind.ZIP
+            startsWith(0x89, 0x50, 0x4E, 0x47) -> ObjectKind.IMAGE
+            startsWith(0xFF, 0xD8, 0xFF) -> ObjectKind.IMAGE
+            startsWith(0x47, 0x49, 0x46, 0x38) -> ObjectKind.IMAGE
+            startsWith(0x42, 0x4D) -> ObjectKind.IMAGE
+            riffSubtype("WEBP") -> ObjectKind.IMAGE
+            riffSubtype("WAVE") -> ObjectKind.AUDIO
+            startsWith(0x4F, 0x67, 0x67, 0x53) -> ObjectKind.AUDIO
+            startsWith(0x49, 0x44, 0x33) -> ObjectKind.AUDIO
+            startsWith(0x66, 0x4C, 0x61, 0x43) -> ObjectKind.AUDIO
+            looksLikeText(head) -> ObjectKind.TEXT
+            else -> ObjectKind.UNKNOWN
+        }
+    }
+
+    // Печатный текст: без NUL и почти без управляющих байтов. Кириллица и любой
+    // UTF-8 проходят — старшие байты не считаются управляющими.
+    private fun looksLikeText(head: ByteArray): Boolean {
+        if (head.isEmpty()) return false
+        var control = 0
+        for (b in head) {
+            val u = b.toInt() and 0xFF
+            if (u == 0) return false
+            if (u < 0x09 || u in 0x0E..0x1F) control++
+        }
+        return control * 20 < head.size
+    }
+
     private companion object {
+
+        val EMPTY_HEAD = ByteArray(0)
 
         const val LARGE_THRESHOLD_BYTES = 20L * 1024 * 1024
 
