@@ -22,8 +22,9 @@ private val NUMBER_TOKEN = Regex("""\d[\d \-]*\d|\d""")
 
 internal val BARE_CLOCK = Regex("""\d{1,2}:\d{2}(\s*[AaPp][Mm])?""")
 
-fun Entity.isBareClock(): Boolean =
-    type == EntityType.DATE_TIME && BARE_CLOCK.matches(value.trim())
+fun bareClock(value: String): Boolean = BARE_CLOCK.matches(value.trim())
+
+fun Entity.isBareClock(): Boolean = type == EntityType.DATE_TIME && bareClock(value)
 
 private fun Entity.isFragmentOf(numbers: List<String>): Boolean {
     if (type != EntityType.PHONE) return false
