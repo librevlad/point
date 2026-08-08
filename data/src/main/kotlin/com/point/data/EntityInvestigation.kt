@@ -178,6 +178,7 @@ internal fun focusedDelta(
         }
 
         if (sameAsKnown) return@forEach
+        if (kind == KIND_DATE && bareTimestamp(value)) return@forEach
         val id = "${source.id}:$suffix:${value.filter(Char::isLetterOrDigit).uppercase()}"
         objects.getOrPut(id) {
             PointObject(
@@ -232,6 +233,21 @@ internal fun entityDelta(
 
 internal const val ENTITY_CREATOR = "entity-enricher"
 
+/**
+ * Голая отметка времени — не дата (#244, самый частый ложный chip корпуса): часы «18:02»
+ * без даты рядом и словесные относительные «вчера»/«сегодня» из хрома переписок и статус-бара.
+ * Знание остаётся — факт и признак живут (заметка «15:12 Встреча…» ими пользуется), но объект
+ * «Дата» из такого значения не рождается: chip обещал бы дату, которой на кадре нет.
+ * Значения с датой рядом («завтра о 09:00», «29.07 до 18:00») — не отметка, а срок.
+ */
+internal fun bareTimestamp(value: String): Boolean {
+    val v = value.trim()
+    return com.point.core.flow.bareClock(v) || CHROME_RELATIVE_DAY.matches(v)
+}
+
+private val CHROME_RELATIVE_DAY =
+    Regex("""(?iu)(?:вчера|сегодня|вчора|сьогодні|yesterday|today)[.,!]?""")
+
 internal fun entityObjects(
     source: PointObject,
     facts: Map<String, String>,
@@ -244,6 +260,7 @@ internal fun entityObjects(
         val key = META_ENTITY_PREFIX + suffix
         val value = facts[key]?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
         val (kind, feature) = kindAndFeature
+        if (kind == KIND_DATE && bareTimestamp(value)) return@mapNotNull null
 
         val alternatives = alternativesOf(facts, key)
 

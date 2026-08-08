@@ -86,6 +86,47 @@ class EntityInvestigationTest {
     }
 
     @Test
+    fun `таймстамп переписки остаётся знанием, но объект даты не рождает`() = runTest {
+
+        // Кадр 03 корпуса- «18:02» у сообщения становился chip «Дата» (#244).
+        val enricher = EntityInvestigationRealizer(extractor(Entity(EntityType.DATE_TIME, "18:02")))
+
+        val delta = enricher.look(obj("Добрый день 18:02\nСообщение..."))
+
+        assertEquals("18:02", delta.metadata[META_ENTITY_PREFIX + "date"])
+        assertTrue(Feature.HAS_DATE in delta.features)
+        assertTrue(
+            "время без даты рядом — не chip «Дата»",
+            delta.objects.none { it.state.kind == com.point.core.flow.KIND_DATE },
+        )
+    }
+
+    @Test
+    fun `вчера из хрома переписки не рождает объект даты`() = runTest {
+
+        // Кадр 02 корпуса- дословно из фикстуры neg_viber.
+        val enricher = EntityInvestigationRealizer(extractor(Entity(EntityType.DATE_TIME, "вчера")))
+
+        val delta = enricher.look(obj("Ремкомплекты отправил\nвчера.\n10:00"))
+
+        assertTrue(delta.objects.none { it.state.kind == com.point.core.flow.KIND_DATE })
+    }
+
+    @Test
+    fun `фокус на таймстампе оставляет знание, но объект даты не рождает`() {
+
+        // Кадр 11 корпуса- «11:41» из шапки скриншота.
+        val delta = focusedDelta(
+            obj("Прибула до пункту Сьогоднi, 11:41"),
+            listOf(Entity(EntityType.DATE_TIME, "11:41")),
+            at = "0,0,10,10",
+        )
+
+        assertEquals("11:41", delta.metadata[META_ENTITY_PREFIX + "date"])
+        assertTrue(delta.objects.isEmpty())
+    }
+
+    @Test
     fun `адрес с кадра карты находится и тогда, когда извлекатель молчит`() = runTest {
         val enricher = EntityInvestigationRealizer(extractor())
 

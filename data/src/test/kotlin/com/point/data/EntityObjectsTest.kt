@@ -67,6 +67,42 @@ class EntityObjectsTest {
     }
 
     @Test
+    fun `голое время из хрома переписки не рождает объект даты`() {
+
+        // Дословные значения ловушки корпуса 08.08.2026 (#244)- кадры 03, 11, 14, 22.
+        listOf("18:02", "11:41", "21:44", "09:48").forEach { clock ->
+            val (objects, _) = entityObjects(source(), facts("date" to clock), "t")
+
+            assertTrue("«$clock» — таймстамп переписки, а не дата", objects.isEmpty())
+        }
+    }
+
+    @Test
+    fun `словесное относительное из хрома переписки не рождает объект даты`() {
+
+        // Кадр 02 корпуса- «вчера» из шапки переписки становился chip «Дата».
+        val (objects, _) = entityObjects(source(), facts("date" to "вчера"), "t")
+
+        assertTrue(objects.isEmpty())
+    }
+
+    @Test
+    fun `относительное с временем — назначенная встреча, объект даты рождается`() {
+        val (objects, _) = entityObjects(source(), facts("date" to "завтра о 09:00"), "t")
+
+        assertEquals(KIND_DATE, objects.single().state.kind)
+    }
+
+    @Test
+    fun `сохранённый таймстамп после перезапуска не воскресает объектом даты`() = runTest {
+        val restored = source(id = "restored").copy(metadata = facts("date" to "21:44"))
+
+        val delta = MetadataEntityInvestigationRealizer().look(restored)
+
+        assertTrue(delta.objects.isEmpty())
+    }
+
+    @Test
     fun `the same fact from the extractor and from stored metadata is one node`() {
         val live = entityObjects(source(id = "p"), facts("address" to "Київ"), "entity").first.single()
         val stored = entityObjects(source(id = "p"), facts("address" to "Київ"), "metadata").first.single()
