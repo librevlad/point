@@ -108,6 +108,10 @@ class DesktopState(
                             metadata = late.result.metadata,
                         ),
                     )
+                }.onFailure {
+                    val why = "Результат не лёг в очередь для телефона — проверьте, что на диске есть место"
+                    _message.value = why
+                    note(item, id, titleOf(id, item) + " · результат в очередь", ActionResult.Failure(why, recoverable = true))
                 }
             }
         }
