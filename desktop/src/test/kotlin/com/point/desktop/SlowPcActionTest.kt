@@ -134,4 +134,18 @@ class SlowPcActionTest {
         Thread.sleep(100)
         assertTrue(outbox.entries().isEmpty())
     }
+
+    @Test
+    fun `очередь не приняла результат — компьютер говорит об этом, а не молчит`() {
+        val broken = Outbox(temp.newFile("не-папка"))
+        val slow = Slow("read", temp.newFolder("r4"), delayMs = 200)
+        val (state, item) = harness(slow, broken)
+
+        state.runRemoteActionNow("read", item, 50)
+
+        waitUntil { slow.finished }
+        waitUntil {
+            state.message.value == "Результат не лёг в очередь для телефона — проверьте, что на диске есть место"
+        }
+    }
 }
