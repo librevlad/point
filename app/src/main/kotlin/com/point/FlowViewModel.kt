@@ -1842,6 +1842,43 @@ class FlowViewModel @Inject constructor(
         // исследования пересматриваются над обновлённым объектом. Отвеченные вопросы
         // не переспрашиваются — их держат состояния знания.
         stack.lastOrNull { it.obj.id == top.obj.id }?.let { enrichInBackground(it.obj) }
+
+        // Прибывший объект (результат компьютера) — не просто доставленные байты:
+        // он сразу продолжает цикл понимания, и его знание видно у находки без входа
+        // (Product Constitution PC2). Вход в находку получит объект уже понятым.
+        findings.objects.forEach { born -> enrichFoundInBackground(born, top.obj.id) }
+    }
+
+    /** Понимание найденного узла: знание ложится в сам узел кадра-хозяина. */
+    private fun enrichFoundInBackground(node: PointObject, hostId: String) {
+        enrichJobs += viewModelScope.launch {
+            enrichment.enrich(node)
+                .catch { }
+                .collect { update ->
+                    if (update.features.isEmpty() && update.metadata.isEmpty()) return@collect
+                    val index = stack.indexOfLast { it.obj.id == hostId }
+                    val frame = stack.getOrNull(index) ?: return@collect
+                    val updated = frame.found.map { n ->
+                        if (n.id != node.id) {
+                            n
+                        } else {
+                            n.copy(
+                                state = update.features.fold(n.state) { s, f -> s.with(f) },
+                                metadata = com.point.core.flow.mergeKnowledge(
+                                    n.metadata,
+                                    update.metadata,
+                                    REFRESHABLE_META,
+                                ),
+                            )
+                        }
+                    }
+                    if (updated == frame.found) return@collect
+                    val refreshed = frame.copy(found = updated)
+                    stack[index] = refreshed
+                    _ui.update { if (it.frame?.obj?.id == hostId) it.copy(frame = refreshed) else it }
+                    persistJourney()
+                }
+        }
     }
 
     private fun applyEnrichment(source: PointObject, update: EnrichmentUpdate) {

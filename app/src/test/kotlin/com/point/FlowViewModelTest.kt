@@ -1439,6 +1439,39 @@ class FlowViewModelTest {
         )
     }
 
+    @Test fun `результат с компьютера исследуется сразу — знание видно у находки без входа`() = runTest(dispatcher) {
+        val born = PointObject(
+            "in:pc:read:txt", "text/plain", ScratchRef("/pc-born.txt"),
+            ObjectState(ObjectKind.TEXT), mapOf("name" to "Текст со снимка"),
+            sourceObjects = listOf("in"),
+        )
+        resolver.result = ActionResult.Done(
+            "Прочитать — готово: Текст со снимка",
+            com.point.core.model.Findings(
+                objects = listOf(born),
+                relations = listOf(
+                    com.point.core.model.Relation(born.id, com.point.core.model.RelationType.FOUND_IN, "in"),
+                ),
+            ),
+        )
+        enrichment.updates = listOf(
+            EnrichmentUpdate(setOf(Feature.HAS_PHONE), mapOf("entity.phone" to "+380671234567"), emptyList()),
+        )
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.onBubble(bubble()); advanceUntilIdle()
+
+        assertTrue("прибывший объект прошёл цикл понимания", enrichment.seen.any { it.id == born.id })
+        val chip = vm.ui.value.frame!!.found.single()
+        assertEquals("знание видно у находки без входа", "+380671234567", chip.metadata["entity.phone"])
+        assertEquals(
+            "журнал хранит знание находки",
+            "+380671234567",
+            snapshot.saved.last().first().found.single().metadata["entity.phone"],
+        )
+    }
+
     @Test fun `повторный результат с компьютера обновляет chip, а не остаётся первым`() = runTest(dispatcher) {
         fun run(uri: String) = ActionResult.Done(
             "Прочитать — готово: страница.txt",
