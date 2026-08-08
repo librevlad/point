@@ -10,7 +10,8 @@ import com.point.core.flow.CalendarInserter
 import com.point.core.flow.CapabilityUsage
 import com.point.core.flow.Clipboard
 import com.point.core.flow.ContactInserter
-import com.point.core.flow.Enricher
+import com.point.core.flow.Capability
+import com.point.core.flow.Realizer
 import com.point.core.flow.Enrichment
 import com.point.core.flow.EntityExtractor
 import com.point.core.flow.DocxWriter
@@ -67,12 +68,16 @@ import com.point.data.AndroidViewer
 import com.point.data.BitmapEvidenceCropper
 import com.point.data.ClaudeLlmClient
 import com.point.data.CommonsArchiveExtractor
-import com.point.data.DocumentTypeEnricher
-import com.point.data.GraphMetadataEnricher
+import com.point.data.DocumentTypeInvestigation
+import com.point.data.DocumentTypeInvestigationRealizer
+import com.point.data.GraphRolesInvestigation
+import com.point.data.GraphRolesInvestigationRealizer
 import com.point.data.DefaultEnrichment
 import com.point.data.DefaultEntitlements
-import com.point.data.EntityEnricher
-import com.point.data.IdentifierEnricher
+import com.point.data.EntityInvestigation
+import com.point.data.EntityInvestigationRealizer
+import com.point.data.IdentifierInvestigation
+import com.point.data.IdentifierInvestigationRealizer
 import com.point.data.MlKitEntityExtractor
 import com.point.data.FallbackLlmClient
 import com.point.data.FileChosenApps
@@ -103,10 +108,12 @@ import com.point.data.OcrSpaceReader
 import com.point.data.OvhVisionReader
 import com.point.data.PrefsCloudPrivacySettings
 import com.point.data.MediaStoreExporter
-import com.point.data.MetadataEntityEnricher
+import com.point.data.MetadataEntityInvestigation
+import com.point.data.MetadataEntityInvestigationRealizer
 import com.point.data.MlKitBackgroundRemover
 import com.point.data.MlKitQrReader
-import com.point.data.OcrEnricher
+import com.point.data.OcrInvestigation
+import com.point.data.OcrInvestigationRealizer
 import com.point.data.OoxmlDocxWriter
 import com.point.data.OoxmlOfficeTextExtractor
 import com.point.data.OoxmlSpreadsheetReader
@@ -117,8 +124,10 @@ import com.point.data.OpenAiProvider
 import com.point.data.configured
 import com.point.data.openAiModels
 import com.point.data.PdfBoxTextExtractor
-import com.point.data.PdfImageEnricher
-import com.point.data.PeriodEnricher
+import com.point.data.PdfImageInvestigation
+import com.point.data.PdfImageInvestigationRealizer
+import com.point.data.PeriodInvestigation
+import com.point.data.PeriodInvestigationRealizer
 import com.point.data.PrefsPrivacyConsent
 import com.point.data.PrefsSensorySettings
 import com.point.data.FileFlowSnapshotStore
@@ -126,17 +135,21 @@ import com.point.data.FileCrashLog
 import com.point.data.PrefsPinnedActions
 import com.point.data.VibratorSensoryFeedback
 import com.point.data.PrefsUserKeyStore
-import com.point.data.QrEnricher
+import com.point.data.QrInvestigation
+import com.point.data.QrInvestigationRealizer
 import com.point.data.UserKeyLlmClient
 import com.point.data.PdfRendererRasterizer
 import com.point.data.ScratchObjectStore
 import com.point.data.LlmSpeechToText
 import com.point.data.TesseractTextRecognizer
-import com.point.data.TextUrlEnricher
-import com.point.data.VCardEnricher
+import com.point.data.TextUrlInvestigation
+import com.point.data.TextUrlInvestigationRealizer
+import com.point.data.VCardInvestigation
+import com.point.data.VCardInvestigationRealizer
 import com.point.data.ZxingQrEncoder
 import com.point.data.ZxingQrReader
-import com.point.data.ZipImagesEnricher
+import com.point.data.ZipImagesInvestigation
+import com.point.data.ZipImagesInvestigationRealizer
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
@@ -296,40 +309,76 @@ abstract class DataModule {
     abstract fun browserOpener(impl: com.point.data.AndroidBrowserOpener): com.point.core.flow.BrowserOpener
 
     @Binds @IntoSet
-    abstract fun textUrlEnricher(e: TextUrlEnricher): Enricher
+    abstract fun ocrInvestigation(c: OcrInvestigation): Capability
 
     @Binds @IntoSet
-    abstract fun entityEnricher(e: EntityEnricher): Enricher
+    abstract fun ocrInvestigationRealizer(r: OcrInvestigationRealizer): Realizer
 
     @Binds @IntoSet
-    abstract fun vcardEnricher(e: VCardEnricher): Enricher
+    abstract fun qrInvestigation(c: QrInvestigation): Capability
 
     @Binds @IntoSet
-    abstract fun qrEnricher(e: QrEnricher): Enricher
+    abstract fun qrInvestigationRealizer(r: QrInvestigationRealizer): Realizer
 
     @Binds @IntoSet
-    abstract fun ocrEnricher(e: OcrEnricher): Enricher
+    abstract fun entityInvestigation(c: EntityInvestigation): Capability
 
     @Binds @IntoSet
-    abstract fun metadataEntityEnricher(e: MetadataEntityEnricher): Enricher
+    abstract fun entityInvestigationRealizer(r: EntityInvestigationRealizer): Realizer
 
     @Binds @IntoSet
-    abstract fun zipImagesEnricher(e: ZipImagesEnricher): Enricher
+    abstract fun metadataEntityInvestigation(c: MetadataEntityInvestigation): Capability
 
     @Binds @IntoSet
-    abstract fun pdfImageEnricher(e: PdfImageEnricher): Enricher
+    abstract fun metadataEntityInvestigationRealizer(r: MetadataEntityInvestigationRealizer): Realizer
 
     @Binds @IntoSet
-    abstract fun identifierEnricher(e: IdentifierEnricher): Enricher
+    abstract fun identifierInvestigation(c: IdentifierInvestigation): Capability
 
     @Binds @IntoSet
-    abstract fun documentTypeEnricher(e: DocumentTypeEnricher): Enricher
+    abstract fun identifierInvestigationRealizer(r: IdentifierInvestigationRealizer): Realizer
 
     @Binds @IntoSet
-    abstract fun graphMetadataEnricher(e: GraphMetadataEnricher): Enricher
+    abstract fun textUrlInvestigation(c: TextUrlInvestigation): Capability
 
     @Binds @IntoSet
-    abstract fun periodEnricher(e: PeriodEnricher): Enricher
+    abstract fun textUrlInvestigationRealizer(r: TextUrlInvestigationRealizer): Realizer
+
+    @Binds @IntoSet
+    abstract fun vCardInvestigation(c: VCardInvestigation): Capability
+
+    @Binds @IntoSet
+    abstract fun vCardInvestigationRealizer(r: VCardInvestigationRealizer): Realizer
+
+    @Binds @IntoSet
+    abstract fun zipImagesInvestigation(c: ZipImagesInvestigation): Capability
+
+    @Binds @IntoSet
+    abstract fun zipImagesInvestigationRealizer(r: ZipImagesInvestigationRealizer): Realizer
+
+    @Binds @IntoSet
+    abstract fun pdfImageInvestigation(c: PdfImageInvestigation): Capability
+
+    @Binds @IntoSet
+    abstract fun pdfImageInvestigationRealizer(r: PdfImageInvestigationRealizer): Realizer
+
+    @Binds @IntoSet
+    abstract fun periodInvestigation(c: PeriodInvestigation): Capability
+
+    @Binds @IntoSet
+    abstract fun periodInvestigationRealizer(r: PeriodInvestigationRealizer): Realizer
+
+    @Binds @IntoSet
+    abstract fun documentTypeInvestigation(c: DocumentTypeInvestigation): Capability
+
+    @Binds @IntoSet
+    abstract fun documentTypeInvestigationRealizer(r: DocumentTypeInvestigationRealizer): Realizer
+
+    @Binds @IntoSet
+    abstract fun graphRolesInvestigation(c: GraphRolesInvestigation): Capability
+
+    @Binds @IntoSet
+    abstract fun graphRolesInvestigationRealizer(r: GraphRolesInvestigationRealizer): Realizer
 
     companion object {
 

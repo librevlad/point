@@ -16,20 +16,24 @@ class MlKitEntityExtractor : EntityExtractor {
 
     private val clients = HashMap<String, com.google.mlkit.nl.entityextraction.EntityExtractor>()
 
+    /**
+     * Пустой список — только честный итог отработавшего движка: «посмотрели, сущностей нет».
+     *
+     * Сбой модели или разметки уходит исключением в существующий Failure-путь исследования —
+     * «не смогли посмотреть» не превращается в «ничего нет» (ADR-0001 §9).
+     */
     override suspend fun extract(text: String): List<Entity> = withContext(Dispatchers.IO) {
-        runCatching {
-            val lang = languageOf(text)
-            val client = clients.getOrPut(lang) {
-                EntityExtraction.getClient(EntityExtractorOptions.Builder(lang).build())
-            }
-            client.downloadModelIfNeeded().await()
-            val params = EntityExtractionParams.Builder(text).build()
-            val raw = client.annotate(params).await().flatMap { annotation: EntityAnnotation ->
-                annotation.entities.mapNotNull { map(it, annotation.annotatedText) }
-            }
+        val lang = languageOf(text)
+        val client = clients.getOrPut(lang) {
+            EntityExtraction.getClient(EntityExtractorOptions.Builder(lang).build())
+        }
+        client.downloadModelIfNeeded().await()
+        val params = EntityExtractionParams.Builder(text).build()
+        val raw = client.annotate(params).await().flatMap { annotation: EntityAnnotation ->
+            annotation.entities.mapNotNull { map(it, annotation.annotatedText) }
+        }
 
-            com.point.core.flow.plausibleEntities(raw, text)
-        }.getOrDefault(emptyList())
+        com.point.core.flow.plausibleEntities(raw, text)
     }
 
     private fun languageOf(text: String): String {

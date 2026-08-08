@@ -128,6 +128,9 @@ abstract class CapabilityModule {
 
     @Binds @IntoSet abstract fun dropLinkReal(r: com.point.executors.DropLinkRealizer): Realizer
 
+    @Binds @IntoSet abstract fun correctValueCap(c: com.point.executors.CorrectValueCapability): Capability
+    @Binds @IntoSet abstract fun correctValueReal(r: com.point.executors.CorrectValueRealizer): Realizer
+
     @Binds @IntoSet abstract fun pcCap(c: PcCapability): Capability
     @Binds @IntoSet abstract fun shareCap(c: ShareCapability): Capability
     @Binds @IntoSet abstract fun saveCap(c: SaveCapability): Capability

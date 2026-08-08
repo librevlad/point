@@ -114,6 +114,13 @@ interface BackgroundRemover {
 }
 
 interface QrReader {
+
+    /**
+     * `null` означает ровно одно: изображение открыли и посмотрели, QR в нём нет.
+     *
+     * Нечитаемый файл или неоткрывшийся bitmap — исключение: «не смогли посмотреть»
+     * не равно «кода нет» (ADR-0001 §9).
+     */
     suspend fun decode(imagePath: String): String?
 }
 

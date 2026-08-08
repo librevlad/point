@@ -258,7 +258,10 @@ class UnderstandRealizer @Inject constructor(
                     ActionResult.Done(NOTHING_NEW)
                 } else {
 
-                    val values = fields.mapValues { it.value.text } + parsed.single + roles
+                    val values = withoutHumanFacts(
+                        fields.mapValues { it.value.text } + parsed.single + roles,
+                        input.metadata,
+                    )
                     val merged = mergeFacts(input.metadata, values)
 
                     val roleAlts = roleDisputes
@@ -293,7 +296,7 @@ class UnderstandRealizer @Inject constructor(
         if (fields.isEmpty() && parsed.single.isEmpty()) {
             return ActionResult.Failure("На снимке ничего не разобрать", recoverable = true)
         }
-        val values = fields.mapValues { it.value.text } + parsed.single
+        val values = withoutHumanFacts(fields.mapValues { it.value.text } + parsed.single, input.metadata)
         val merged = mergeFacts(input.metadata, values)
         return ActionResult.Success(
             ResultObject(
@@ -372,6 +375,13 @@ class UnderstandRealizer @Inject constructor(
         }
     }
 }
+
+/**
+ * Слово человека не участвует в машинном премерже: модельное чтение не смеет ни вытеснить,
+ * ни «отремонтировать» подтверждённый человеком факт (ADR-0001 §8) — оно просто не претендует.
+ */
+private fun withoutHumanFacts(values: Map<String, String>, known: Map<String, String>): Map<String, String> =
+    values.filterKeys { provenanceOf(known, it) != Provenance.HUMAN }
 
 internal fun roleReadings(
     answer: String,

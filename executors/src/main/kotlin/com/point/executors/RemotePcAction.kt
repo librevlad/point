@@ -68,22 +68,45 @@ class RemotePcRealizer(
         kind = if (action.leavesCircle) com.point.core.flow.RealizerKind.CLOUD else com.point.core.flow.RealizerKind.LOCAL,
     )
 
-    private suspend fun materialize(outcome: PcSendOutcome.Sent): ActionResult? {
+    /**
+     * ADR-0001 §20, вариант A (Этап 9): знание с компьютера возвращается ЗНАНИЕМ исходника
+     * через `Done.findings`, а произведённый файл — новым объектом Graph. Автоперехода нет:
+     * человек остаётся на исходном объекте и видит результат как найденное.
+     */
+    private suspend fun materialize(outcome: PcSendOutcome.Sent, input: PointObject): ActionResult? {
         val returned = outcome.returned ?: return null
         val place = store ?: return null
         return runCatching {
             val ref = place.newScratchFile(returned.name.substringAfterLast('.', "bin"))
             java.io.File(ref.value).writeBytes(returned.bytes)
-            ActionResult.Success(
-                com.point.core.model.ResultObject(
-                    type = com.point.core.model.ObjectKind.UNKNOWN,
-                    mime = returned.mime,
-                    uri = ref,
-                    metadata = returned.understanding + ("name" to returned.name),
+            val produced = PointObject(
+                id = resultId(input.id, returned.name),
+                mime = returned.mime,
+                uri = ref,
+                state = com.point.core.model.ObjectState(com.point.core.model.ObjectKind.UNKNOWN),
+                metadata = mapOf("name" to returned.name),
+                sourceObjects = listOf(input.id),
+                creatorAction = capabilityId.value,
+            )
+            ActionResult.Done(
+                "${action.label} — готово: ${returned.name}",
+                com.point.core.model.Findings(
+                    metadata = returned.understanding,
+                    objects = listOf(produced),
+                    relations = listOf(
+                        com.point.core.model.Relation(
+                            produced.id,
+                            com.point.core.model.RelationType.FOUND_IN,
+                            input.id,
+                        ),
+                    ),
                 ),
             )
         }.getOrNull()
     }
+
+    private fun resultId(sourceId: String, name: String): String =
+        sourceId + ":pc:" + action.id + ":" + name.filter(Char::isLetterOrDigit).lowercase()
 
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult {
 
@@ -101,7 +124,7 @@ class RemotePcRealizer(
         reportStage(PC_SEND_STAGE)
         return when (val outcome = transport.send(pc, input, name, input.metadata, action.id)) {
 
-            is PcSendOutcome.Sent -> materialize(outcome) ?: when (val done = outcome.action) {
+            is PcSendOutcome.Sent -> materialize(outcome, input) ?: when (val done = outcome.action) {
                 null -> ActionResult.Done("Отправлено на компьютер")
                 is PcActionOutcome.Done ->
 

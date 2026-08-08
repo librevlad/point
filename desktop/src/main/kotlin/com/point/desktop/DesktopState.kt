@@ -67,7 +67,12 @@ class DesktopState(
         _lastContact.value = System.currentTimeMillis()
     }
 
-    fun bubblesFor(item: InboxItem): List<Bubble> = registry.bubblesFor(item.obj.state)
+    fun bubblesFor(item: InboxItem): List<Bubble> {
+
+        // Тот же вывод уместного смысла, что и на телефоне: из знания объекта (ADR-0001 §14).
+        val graph = com.point.core.flow.GraphState(item.obj)
+        return registry.bubblesFor(graph.copy(intent = com.point.core.flow.leadingIntent(graph)))
+    }
 
     fun say(text: String) { _message.value = text }
 

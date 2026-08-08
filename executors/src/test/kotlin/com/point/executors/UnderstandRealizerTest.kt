@@ -543,4 +543,26 @@ class UnderstandRealizerTest {
         assertTrue(result is ActionResult.Failure)
         assertTrue((result as ActionResult.Failure).recoverable)
     }
+
+    @Test
+    fun `слово человека не ремонтируется моделью при повторном понимании`() = kotlinx.coroutines.test.runTest {
+
+        val human = textObject(
+            metadata = mapOf(
+                "entity.address" to "вул. Хрещатик, 1б",
+                "entity.address" + com.point.core.flow.META_SOURCE_SUFFIX to
+                    com.point.core.model.Provenance.HUMAN.wire,
+            ),
+        )
+
+        // Модель предлагает «ремонтную» форму того же адреса — близкую, с совпадающими цифрами.
+        val result = realizer("ADDRESS=вул. Хрещатик, 16").perform(human, null)
+
+        val merged = (result as com.point.core.model.ActionResult.Success).result.metadata
+        org.junit.Assert.assertEquals("вул. Хрещатик, 1б", merged["entity.address"])
+        org.junit.Assert.assertEquals(
+            com.point.core.model.Provenance.HUMAN,
+            com.point.core.flow.provenanceOf(merged, "entity.address"),
+        )
+    }
 }

@@ -27,6 +27,7 @@ class PageScreensTest {
                 capturedText = "Відділення №9, вул. Хрещатик, 1",
                 onSelect = {},
                 onTake = { taken = true },
+                onFocus = {},
                 onClose = {},
             )
         }
@@ -35,6 +36,27 @@ class PageScreensTest {
         compose.onNodeWithText("Взять").performClick()
 
         assertTrue("«Взять» перестало брать после переезда в дизайн-систему", taken)
+    }
+
+    @Test fun `выделение — «Смотреть сюда» это Focus, а не crop`() {
+        var focused = false
+        var taken = false
+        compose.setContent {
+            SelectionScreen(
+                image = ImageBitmap(8, 8),
+                highlights = emptyList(),
+                capturedText = "+380671234567",
+                onSelect = {},
+                onTake = { taken = true },
+                onFocus = { focused = true },
+                onClose = {},
+            )
+        }
+
+        compose.onNodeWithText("Смотреть сюда").performClick()
+
+        assertTrue("жест области должен уметь становиться Focus", focused)
+        assertFalse("Focus не создаёт объект-вырезку", taken)
     }
 
     @Test fun `выделение — пока пальцем ничего не обведено, брать нечем`() {
@@ -46,6 +68,7 @@ class PageScreensTest {
                 capturedText = null,
                 onSelect = {},
                 onTake = { taken = true },
+                onFocus = {},
                 onClose = {},
             )
         }
@@ -65,6 +88,7 @@ class PageScreensTest {
                 capturedText = "",
                 onSelect = {},
                 onTake = {},
+                onFocus = {},
                 onClose = {},
             )
         }

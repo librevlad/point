@@ -15,7 +15,23 @@ class LearningBubblePolicy @Inject constructor(
     private val llm: com.point.core.flow.LlmClient,
 ) : BubblePolicy {
 
-    override fun rank(state: ObjectState, candidates: List<Capability>): List<Capability> {
+    override fun rank(state: ObjectState, candidates: List<Capability>): List<Capability> =
+        order(state, candidates, intent = null)
+
+    /**
+     * Тот же порядок, но с Intent из состояния: уместный сейчас смысл поднимается выше,
+     * оставаясь ранжированием, а не фильтром (Конституция §8, ADR-0001 §14).
+     */
+    override fun rank(
+        graph: com.point.core.flow.GraphState,
+        candidates: List<Capability>,
+    ): List<Capability> = order(graph.state, candidates, graph.intent)
+
+    private fun order(
+        state: ObjectState,
+        candidates: List<Capability>,
+        intent: com.point.core.model.Intent?,
+    ): List<Capability> {
         val counts = usage.counts()
 
         val pinned = runCatching { pins.pinnedFor(state.kind) }.getOrNull()
@@ -25,6 +41,8 @@ class LearningBubblePolicy @Inject constructor(
                 { if (it.id == pinned) 0 else 1 },
 
                 { if (keyless && it.meta.auth) 1 else 0 },
+
+                { if (intent == null || intent in it.intents(state)) 0 else 1 },
                 { effectivePriority(it, counts) },
                 { it.id.value },
             ),

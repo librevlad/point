@@ -217,6 +217,109 @@ class FlowViewModelTest {
         assertEquals("+380671234567", vm.ui.value.path.let { snapshot.frames.first().metadata["entity.phone"] })
     }
 
+    private fun waybill(id: String, value: String, region: String) = PointObject(
+        id = id,
+        mime = "text/plain",
+        uri = ValueRef(value),
+        state = ObjectState(com.point.core.flow.KIND_IDENTIFIER),
+        metadata = mapOf(
+            com.point.core.flow.META_ENTITY_TRACK to value,
+            com.point.core.flow.META_AT_REGION to region,
+        ),
+        sourceObjects = listOf("root"),
+    )
+
+    @Test fun `restore returns found objects, relations and focus to the frame`() = runTest(dispatcher) {
+        val a = waybill("root:identifier:A", "20 4514 9154 9395", "10.0 20.0 210.0 60.0")
+        val b = waybill("root:identifier:B", "59 0012 3456 7890", "10.0 120.0 210.0 160.0")
+        snapshot.frames = listOf(
+            com.point.core.model.FlowSnapshotFrame(
+                "root", ObjectKind.IMAGE, "image/png", tempFile("img"),
+                found = listOf(a, b),
+                relations = listOf(
+                    com.point.core.model.Relation(a.id, com.point.core.model.RelationType.FOUND_IN, "root"),
+                    com.point.core.model.Relation(b.id, com.point.core.model.RelationType.FOUND_IN, "root"),
+                ),
+                focusRegion = "10.0 120.0 210.0 160.0",
+                focusIds = "w3 w4",
+            ),
+        )
+        val vm = vm(); vm.restoreJourney(); advanceUntilIdle()
+
+        val frame = vm.ui.value.frame!!
+        assertEquals(listOf(a.id, b.id), frame.found.map { it.id })
+        assertEquals(2, frame.relations.size)
+        assertEquals(listOf("w3", "w4"), frame.focus?.atomIds)
+        assertEquals(120f, frame.focus?.region?.top)
+
+        val (first, second) = frame.found
+        assertTrue("объекты одного kind различимы по id", first.id != second.id)
+        assertTrue(
+            "и по месту на источнике",
+            first.metadata[com.point.core.flow.META_AT_REGION] !=
+                second.metadata[com.point.core.flow.META_AT_REGION],
+        )
+    }
+
+    @Test fun `entering a found object carries only its own relations`() = runTest(dispatcher) {
+        val a = waybill("root:identifier:A", "20 4514 9154 9395", "10.0 20.0 210.0 60.0")
+        val b = waybill("root:identifier:B", "59 0012 3456 7890", "10.0 120.0 210.0 160.0")
+        enrichment.updates = listOf(
+            EnrichmentUpdate(
+                emptySet(), emptyMap(), emptyList(),
+                objects = listOf(a, b),
+                relations = listOf(
+                    com.point.core.model.Relation(a.id, com.point.core.model.RelationType.FOUND_IN, "root"),
+                    com.point.core.model.Relation(b.id, com.point.core.model.RelationType.FOUND_IN, "root"),
+                ),
+            ),
+        )
+        enrichment.understandsOnce = true
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        val root = vm.ui.value.frame!!
+        assertEquals(2, root.found.size)
+
+        vm.onFound(root.found.first { it.id == a.id }); advanceUntilIdle()
+
+        val child = vm.ui.value.frame!!
+        assertEquals(a.id, child.obj.id)
+        assertEquals("только связи самого объекта", listOf(a.id), child.relations.map { it.fromId })
+        assertTrue("чужие находки не тащим", child.found.isEmpty())
+
+        vm.onBack()
+        assertEquals("родительский кадр цел", 2, vm.ui.value.frame?.found?.size)
+    }
+
+    @Test fun `persist writes found, relations and focus so the journey survives`() = runTest(dispatcher) {
+        val a = waybill("root:identifier:A", "20 4514 9154 9395", "10.0 20.0 210.0 60.0")
+        enrichment.updates = listOf(
+            EnrichmentUpdate(
+                emptySet(), emptyMap(), emptyList(),
+                objects = listOf(a),
+                relations = listOf(
+                    com.point.core.model.Relation(a.id, com.point.core.model.RelationType.FOUND_IN, "root"),
+                ),
+            ),
+        )
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        vm.focusOn(
+            com.point.core.flow.Focus(
+                objectId = vm.ui.value.frame!!.obj.id,
+                region = com.point.core.flow.Box(10f, 120f, 210f, 160f),
+                atomIds = listOf("w3", "w4"),
+            ),
+        )
+        advanceUntilIdle()
+
+        val persisted = snapshot.saved.last().first()
+        assertEquals(listOf(a.id), persisted.found.map { it.id })
+        assertEquals(1, persisted.relations.size)
+        assertEquals("10.0 120.0 210.0 160.0", persisted.focusRegion)
+        assertEquals("w3 w4", persisted.focusIds)
+    }
+
     @Test fun `a snapshot does not auto-open without an explicit restore — launcher lands on Home`() = runTest(dispatcher) {
         snapshot.frames = listOf(
             com.point.core.model.FlowSnapshotFrame("root", ObjectKind.IMAGE, "image/png", tempFile("img")),
@@ -966,6 +1069,524 @@ class FlowViewModelTest {
         val end = vm.ui.value.frame
         assertTrue(end?.obj?.state?.has(Feature.HAS_PHONE) == true)
         assertTrue(end?.enriching?.isEmpty() == true)
+    }
+
+    private fun humanFindings(key: String, value: String) = com.point.core.model.Findings(
+        metadata = mapOf(
+            key to value,
+            key + com.point.core.flow.META_SOURCE_SUFFIX to com.point.core.model.Provenance.HUMAN.wire,
+        ),
+    )
+
+    @Test fun `done findings from a user action land in the graph and persist`() = runTest(dispatcher) {
+        enrichment.updates = listOf(
+            EnrichmentUpdate(setOf(Feature.HAS_PHONE), mapOf("entity.phone" to "111"), emptyList()),
+        )
+        resolver.result = ActionResult.Done("Исправлено", humanFindings("entity.phone", "112"))
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        vm.onBubble(bubble()); advanceUntilIdle()
+
+        val meta = vm.ui.value.frame!!.obj.metadata
+        assertEquals("человеческое слово стало главным", "112", meta["entity.phone"])
+        assertEquals(
+            com.point.core.model.Provenance.HUMAN,
+            com.point.core.flow.provenanceOf(meta, "entity.phone"),
+        )
+        assertTrue("машинное чтение осталось историей",
+            com.point.core.flow.alternativesOf(meta, "entity.phone").contains("111"))
+        assertTrue("спора нет", !com.point.core.flow.isDisputed(meta, "entity.phone"))
+
+        val persisted = snapshot.saved.last().first().metadata
+        assertEquals("112", persisted["entity.phone"])
+    }
+
+    @Test fun `done without findings behaves exactly as before`() = runTest(dispatcher) {
+        resolver.result = ActionResult.Done("done")
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        val before = vm.ui.value.frame!!.obj.metadata
+        vm.onBubble(bubble()); advanceUntilIdle()
+
+        assertEquals("done", vm.ui.value.message)
+        assertEquals(before, vm.ui.value.frame!!.obj.metadata)
+    }
+
+    @Test fun `a correction made inside the found value reaches the parent fact`() = runTest(dispatcher) {
+        val node = PointObject(
+            id = "in:phone",
+            mime = "text/plain",
+            uri = ValueRef("111"),
+            state = ObjectState(com.point.core.flow.KIND_PHONE),
+            metadata = mapOf("entity.phone" to "111"),
+            sourceObjects = listOf("in"),
+        )
+        enrichment.updates = listOf(
+            EnrichmentUpdate(
+                setOf(Feature.HAS_PHONE), mapOf("entity.phone" to "111"), emptyList(),
+                objects = listOf(node),
+                relations = listOf(com.point.core.model.Relation(node.id, com.point.core.model.RelationType.FOUND_IN, "in")),
+            ),
+        )
+        enrichment.understandsOnce = true
+        resolver.result = ActionResult.Done("Исправлено", humanFindings("entity.phone", "112"))
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        vm.onFound(vm.ui.value.frame!!.found.single()); advanceUntilIdle()
+
+        vm.onBubble(bubble()); advanceUntilIdle()
+
+        assertEquals("правка легла в кадр значения", "112", vm.ui.value.frame!!.obj.metadata["entity.phone"])
+
+        vm.onBack()
+        val parent = vm.ui.value.frame!!
+        assertEquals("носитель истины — родительский факт", "112", parent.obj.metadata["entity.phone"])
+        assertEquals(
+            com.point.core.model.Provenance.HUMAN,
+            com.point.core.flow.provenanceOf(parent.obj.metadata, "entity.phone"),
+        )
+
+        val chip = parent.found.single()
+        assertEquals("найденный узел не остался со старым значением", "112", chip.metadata["entity.phone"])
+        assertEquals(com.point.core.model.Provenance.HUMAN, chip.provenance)
+
+        val persisted = snapshot.saved.last().first()
+        assertEquals("112", persisted.metadata["entity.phone"])
+        assertEquals("112", persisted.found.single().metadata["entity.phone"])
+    }
+
+    @Test fun `human provenance never comes from focus or navigation`() = runTest(dispatcher) {
+        enrichment.updates = listOf(
+            EnrichmentUpdate(setOf(Feature.HAS_PHONE), mapOf("entity.phone" to "111"), emptyList()),
+        )
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        vm.focusOn(com.point.core.flow.Focus(vm.ui.value.frame!!.obj.id, com.point.core.flow.Box(0f, 0f, 5f, 5f)))
+        advanceUntilIdle()
+
+        val meta = vm.ui.value.frame!!.obj.metadata
+        assertTrue(
+            "ни один факт не стал человеческим от жеста",
+            meta.keys.none {
+                it.endsWith(com.point.core.flow.META_SOURCE_SUFFIX) &&
+                    meta[it] == com.point.core.model.Provenance.HUMAN.wire
+            },
+        )
+    }
+
+    @Test fun `a restored journey keeps the human word as primary`() = runTest(dispatcher) {
+        snapshot.frames = listOf(
+            com.point.core.model.FlowSnapshotFrame(
+                "root", ObjectKind.IMAGE, "image/png", tempFile("img"),
+                metadata = mapOf(
+                    "entity.phone" to "112",
+                    "entity.phone" + com.point.core.flow.META_SOURCE_SUFFIX to
+                        com.point.core.model.Provenance.HUMAN.wire,
+                    "entity.phone" + com.point.core.flow.META_ALT_SUFFIX to "111",
+                ),
+            ),
+        )
+        val vm = vm(); vm.restoreJourney(); advanceUntilIdle()
+
+        val meta = vm.ui.value.frame!!.obj.metadata
+        assertEquals("112", meta["entity.phone"])
+        assertEquals(com.point.core.model.Provenance.HUMAN, com.point.core.flow.provenanceOf(meta, "entity.phone"))
+        assertEquals(listOf("111"), com.point.core.flow.alternativesOf(meta, "entity.phone"))
+    }
+
+    @Test fun `machine repair of the primary also updates the found node`() = runTest(dispatcher) {
+        val ocrRead = "Іваненко 1ван"
+        val repaired = "Іваненко Іван"
+        val node = PointObject(
+            "in:address", "text/plain", ValueRef(ocrRead),
+            ObjectState(com.point.core.flow.KIND_ADDRESS), mapOf("entity.address" to ocrRead),
+            sourceObjects = listOf("in"),
+        )
+        enrichment.updates = listOf(
+            EnrichmentUpdate(emptySet(), mapOf("entity.address" to ocrRead), emptyList(), objects = listOf(node)),
+            EnrichmentUpdate(emptySet(), mapOf("entity.address" to repaired), emptyList()),
+        )
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        val frame = vm.ui.value.frame!!
+        assertEquals("ремонт стал главным значением", repaired, frame.obj.metadata["entity.address"])
+
+        val chip = frame.found.single()
+        assertEquals("узел не остался со старым прочтением", repaired, chip.metadata["entity.address"])
+        assertEquals("идентичность узла стабильна", "in:address", chip.id)
+
+        // идемпотентность: то же самое ещё раз ничего не меняет
+        val again = vm.ui.value.frame!!.found.single()
+        assertEquals(repaired, again.metadata["entity.address"])
+        assertEquals(1, vm.ui.value.frame!!.found.size)
+    }
+
+    @Test fun `a failed look reaches the frame so the human can see it`() = runTest(dispatcher) {
+        enrichment.updates = listOf(
+            EnrichmentUpdate(
+                emptySet(), emptyMap(), emptyList(),
+                failed = listOf(
+                    com.point.core.flow.FailedInvestigation(
+                        CapabilityId("qr"), "QR", "изображение не открылось",
+                    ),
+                ),
+            ),
+        )
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        val failed = vm.ui.value.frame!!.failed
+        assertEquals(listOf("изображение не открылось"), failed.map { it.reason })
+    }
+
+    @Test fun `a successful retry clears the failed note for that question`() = runTest(dispatcher) {
+        enrichment.updates = listOf(
+            EnrichmentUpdate(
+                emptySet(), emptyMap(), emptyList(),
+                failed = listOf(
+                    com.point.core.flow.FailedInvestigation(CapabilityId("qr"), "QR", "изображение не открылось"),
+                ),
+            ),
+            EnrichmentUpdate(
+                setOf(Feature.HAS_QR),
+                com.point.core.flow.withInvestigation(
+                    mapOf("entity.qr" to "https://x"),
+                    CapabilityId("qr"),
+                    com.point.core.flow.InvestigationState.FOUND,
+                ),
+                emptyList(),
+            ),
+        )
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        assertTrue("получилось — упрёк снят", vm.ui.value.frame!!.failed.isEmpty())
+        assertEquals("https://x", vm.ui.value.frame!!.obj.metadata["entity.qr"])
+    }
+
+    @Test fun `operation failures are not knowledge and are not persisted`() = runTest(dispatcher) {
+        enrichment.updates = listOf(
+            EnrichmentUpdate(
+                emptySet(), mapOf("entity.phone" to "111"), emptyList(),
+                failed = listOf(
+                    com.point.core.flow.FailedInvestigation(CapabilityId("qr"), "QR", "изображение не открылось"),
+                ),
+            ),
+        )
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        val persisted = snapshot.saved.last().first()
+        assertEquals("знание — в журнале", "111", persisted.metadata["entity.phone"])
+        assertTrue(
+            "состояние операции журналом не является",
+            persisted.metadata.keys.none { it.contains("fail", ignoreCase = true) },
+        )
+    }
+
+    // ---- Этап 9 G2: знание объекта переживает pull с компьютера (ADR-0001 §20) ----
+
+    private fun outboxEntry(meta: Map<String, String>) =
+        com.point.core.flow.PcOutboxEntry(1, meta)
+
+    @Test fun `pull приносит знание объекта, а не только файл`() = runTest(dispatcher) {
+        pcLinks.pc = com.point.core.flow.LinkedPc("pc-1", "Рабочий")
+        pcTransport.outbox = listOf(
+            outboxEntry(
+                mapOf(
+                    "name" to "накладная.txt",
+                    "mime" to "text/plain",
+                    "entity.track" to "20 4514 9154 9395",
+                    "entity.track" + com.point.core.flow.META_ALT_SUFFIX to "20 4514 9154 9999",
+                    "entity.track" + com.point.core.flow.META_SOURCE_SUFFIX to
+                        com.point.core.model.Provenance.HUMAN.wire,
+                    com.point.core.flow.investigationKey(CapabilityId("qr")) to
+                        com.point.core.flow.InvestigationState.NOT_FOUND.wire,
+                ),
+            ),
+        )
+        val vm = vm()
+        vm.pullFromPc(); advanceUntilIdle()
+
+        val meta = vm.ui.value.frame!!.obj.metadata
+        assertEquals("знание доехало", "20 4514 9154 9395", meta["entity.track"])
+        assertEquals("история доехала", listOf("20 4514 9154 9999"),
+            com.point.core.flow.alternativesOf(meta, "entity.track"))
+        assertEquals("слово человека не потеряло происхождение",
+            com.point.core.model.Provenance.HUMAN,
+            com.point.core.flow.provenanceOf(meta, "entity.track"))
+        assertEquals("состояние знания доехало",
+            com.point.core.flow.InvestigationState.NOT_FOUND,
+            com.point.core.flow.investigationStateOf(meta, CapabilityId("qr")))
+        assertEquals("имя работает как раньше", "накладная.txt", meta["name"])
+        assertTrue("служебные ключи не мусорят объект",
+            meta.keys.none { it == "mime" || it == "pc.action" })
+
+        val persisted = snapshot.saved.last().first().metadata
+        assertEquals("20 4514 9154 9395", persisted["entity.track"])
+        assertEquals(com.point.core.model.Provenance.HUMAN.wire,
+            persisted["entity.track" + com.point.core.flow.META_SOURCE_SUFFIX])
+    }
+
+    @Test fun `pull нескольких объектов работает как раньше`() = runTest(dispatcher) {
+        pcLinks.pc = com.point.core.flow.LinkedPc("pc-1", "Рабочий")
+        pcTransport.outbox = listOf(
+            outboxEntry(mapOf("name" to "a.txt", "mime" to "text/plain", "entity.phone" to "111")),
+            outboxEntry(mapOf("name" to "b.txt", "mime" to "text/plain")).copy(id = 2),
+        )
+        val vm = vm()
+        vm.pullFromPc(); advanceUntilIdle()
+
+        assertEquals(ObjectKind.COLLECTION, vm.ui.value.frame?.obj?.state?.kind)
+        assertEquals(0, vm.fromPcCount.value)
+    }
+
+    @Test fun `pc result stays a found chip while its knowledge lands on the source`() = runTest(dispatcher) {
+        val born = PointObject(
+            "in:pc:read:txt", "text/plain", ScratchRef("/pc-born.txt"),
+            ObjectState(ObjectKind.UNKNOWN), mapOf("name" to "страница.txt"),
+            sourceObjects = listOf("in"),
+        )
+        resolver.result = ActionResult.Done(
+            "Прочитать — готово: страница.txt",
+            com.point.core.model.Findings(
+                metadata = mapOf("entity.phone" to "+380671234567"),
+                objects = listOf(born),
+                relations = listOf(
+                    com.point.core.model.Relation(born.id, com.point.core.model.RelationType.FOUND_IN, "in"),
+                ),
+            ),
+        )
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        vm.onBubble(bubble()); advanceUntilIdle()
+
+        val frame = vm.ui.value.frame!!
+        assertEquals("человек остаётся на исходном объекте", "in", frame.obj.id)
+        assertEquals("знание с компьютера — в исходнике", "+380671234567", frame.obj.metadata["entity.phone"])
+        assertEquals("результат — найденный объект", listOf(born.id), frame.found.map { it.id })
+        assertEquals(1, vm.ui.value.path.size)
+
+        val persisted = snapshot.saved.last().first()
+        assertEquals("+380671234567", persisted.metadata["entity.phone"])
+        assertEquals(listOf(born.id), persisted.found.map { it.id })
+    }
+
+    @Test fun `повторный результат с компьютера обновляет chip, а не остаётся первым`() = runTest(dispatcher) {
+        fun run(uri: String) = ActionResult.Done(
+            "Прочитать — готово: страница.txt",
+            com.point.core.model.Findings(
+                objects = listOf(
+                    PointObject(
+                        "in:pc:read:txt", "text/plain", ScratchRef(uri),
+                        ObjectState(ObjectKind.UNKNOWN), mapOf("name" to "страница.txt"),
+                        sourceObjects = listOf("in"),
+                    ),
+                ),
+                relations = listOf(
+                    com.point.core.model.Relation("in:pc:read:txt", com.point.core.model.RelationType.FOUND_IN, "in"),
+                ),
+            ),
+        )
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        resolver.result = run("/pc-born-1.txt")
+        vm.onBubble(bubble()); advanceUntilIdle()
+        resolver.result = run("/pc-born-2.txt")
+        vm.onBubble(bubble()); advanceUntilIdle()
+
+        val chips = vm.ui.value.frame!!.found
+        assertEquals("тот же результат — один chip", 1, chips.size)
+        assertEquals("chip показывает свежие байты", ScratchRef("/pc-born-2.txt"), chips.single().uri)
+        assertEquals(
+            "журнал хранит свежий результат",
+            "/pc-born-2.txt",
+            snapshot.saved.last().first().found.single().uri.value,
+        )
+    }
+
+    @Test fun `navigation alone does not change the offered order`() = runTest(dispatcher) {
+        val node = PointObject(
+            "in:phone", "text/plain", ValueRef("111"),
+            ObjectState(com.point.core.flow.KIND_PHONE), mapOf("entity.phone" to "111"),
+            sourceObjects = listOf("in"),
+        )
+        enrichment.updates = listOf(
+            EnrichmentUpdate(emptySet(), emptyMap(), emptyList(), objects = listOf(node)),
+        )
+        enrichment.understandsOnce = true
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        val before = vm.ui.value.frame!!.bubbles
+
+        vm.onFound(node); advanceUntilIdle()
+        vm.onBack()
+
+        assertEquals("вход и возврат не меняют порядок действий", before, vm.ui.value.frame!!.bubbles)
+    }
+
+    @Test fun `picking a bubble does not change the offered order`() = runTest(dispatcher) {
+        resolver.result = ActionResult.Done("done")
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        val before = vm.ui.value.frame!!.bubbles
+
+        vm.onBubble(bubble()); advanceUntilIdle()
+
+        assertEquals("выбор действия — не намерение", before, vm.ui.value.frame!!.bubbles)
+    }
+
+    @Test fun `intent is never persisted — it is derived, not stored`() = runTest(dispatcher) {
+
+        assertTrue(
+            "у кадра журнала нет поля intent",
+            com.point.core.model.FlowSnapshotFrame::class.java.declaredFields.none {
+                it.name.contains("intent", ignoreCase = true)
+            },
+        )
+
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        vm.focusOn(com.point.core.flow.Focus(vm.ui.value.frame!!.obj.id, com.point.core.flow.Box(0f, 0f, 5f, 5f)))
+        advanceUntilIdle()
+
+        val persisted = snapshot.saved.last().first()
+        assertTrue(
+            "intent не просочился в metadata журнала",
+            persisted.metadata.keys.none { it.contains("intent", ignoreCase = true) },
+        )
+    }
+
+    @Test fun `focusOn hands the captured area to the background cycle`() = runTest(dispatcher) {
+        enrichment.updates = listOf(
+            EnrichmentUpdate(setOf(Feature.HAS_PHONE), mapOf("entity.phone" to "+380671234567"), emptyList()),
+        )
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        assertEquals(1, enrichment.runs)
+
+        vm.focusOn(
+            com.point.core.flow.Focus(
+                objectId = vm.ui.value.frame!!.obj.id,
+                region = com.point.core.flow.Box(10f, 20f, 110f, 60f),
+            ),
+        )
+        advanceUntilIdle()
+
+        assertEquals("Focus запускает ровно один новый проход", 2, enrichment.runs)
+        val handed = enrichment.seen.last()
+        assertEquals("10.0 20.0 110.0 60.0", handed.metadata[com.point.core.flow.META_FOCUS_REGION])
+        assertEquals(
+            "накопленное знание едет вместе с областью",
+            "+380671234567",
+            handed.metadata["entity.phone"],
+        )
+        assertEquals("объект тот же, не новый", vm.ui.value.frame!!.obj.id, handed.id)
+    }
+
+    @Test fun `clearFocus does not start another cycle`() = runTest(dispatcher) {
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        vm.focusOn(com.point.core.flow.Focus(vm.ui.value.frame!!.obj.id, com.point.core.flow.Box(0f, 0f, 5f, 5f)))
+        advanceUntilIdle()
+        val runsAfterFocus = enrichment.runs
+
+        vm.clearFocus(); advanceUntilIdle()
+
+        assertEquals("clearFocus не запускает исследования", runsAfterFocus, enrichment.runs)
+        assertNull(vm.ui.value.frame?.focus)
+    }
+
+    @Test fun `a late result of area A lands while the current focus is already B`() = runTest(dispatcher) {
+        enrichment.updates = listOf(
+            EnrichmentUpdate(setOf(Feature.HAS_PHONE), mapOf("entity.phone" to "+380671234567"), emptyList()),
+        )
+        enrichment.stepDelayMs = 200
+        val vm = vm()
+        vm.onShared("uri", "image/png")
+        dispatcher.scheduler.advanceTimeBy(300)
+
+        val id = vm.ui.value.frame!!.obj.id
+        val areaA = com.point.core.flow.Focus(id, com.point.core.flow.Box(0f, 0f, 50f, 50f))
+        val areaB = com.point.core.flow.Focus(id, com.point.core.flow.Box(0f, 100f, 50f, 150f))
+        vm.focusOn(areaA)
+        dispatcher.scheduler.advanceTimeBy(50)
+        vm.focusOn(areaB)
+        advanceUntilIdle()
+
+        assertEquals("текущий Focus остаётся B", 100f, vm.ui.value.frame?.focus?.region?.top)
+
+        assertEquals("поздний результат A всё равно знание объекта", "+380671234567",
+            vm.ui.value.frame?.obj?.metadata?.get("entity.phone"))
+    }
+
+    @Test fun `restore with focus does not run an unexpected focused cycle`() = runTest(dispatcher) {
+        snapshot.frames = listOf(
+            com.point.core.model.FlowSnapshotFrame(
+                "root", ObjectKind.IMAGE, "image/png", tempFile("img"),
+                metadata = mapOf("entity.phone" to "+380671234567"),
+                focusRegion = "10.0 20.0 110.0 60.0",
+                focusIds = "w3 w4",
+            ),
+        )
+        val vm = vm(); vm.restoreJourney(); advanceUntilIdle()
+
+        assertEquals("только обычный проход кадра, focused не самозапускается", 1, enrichment.runs)
+        assertEquals(listOf("w3", "w4"), vm.ui.value.frame?.focus?.atomIds)
+        assertEquals("+380671234567", vm.ui.value.frame?.obj?.metadata?.get("entity.phone"))
+    }
+
+    @Test fun `a second reading that disagrees is kept beside the first, not dropped`() = runTest(dispatcher) {
+        enrichment.updates = listOf(
+            EnrichmentUpdate(setOf(Feature.HAS_PHONE), mapOf("entity.phone" to "+380671234567"), emptyList()),
+            EnrichmentUpdate(setOf(Feature.HAS_PHONE), mapOf("entity.phone" to "+380671234599"), emptyList()),
+        )
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        val metadata = vm.ui.value.frame!!.obj.metadata
+        val kept = com.point.core.flow.alternativesOf(metadata, "entity.phone") + metadata.getValue("entity.phone")
+
+        assertTrue("оба прочтения обязаны остаться-" + kept, kept.contains("+380671234567"))
+        assertTrue("оба прочтения обязаны остаться-" + kept, kept.contains("+380671234599"))
+    }
+
+    @Test fun `focus reaches the executor without losing what the object already knows`() = runTest(dispatcher) {
+        enrichment.updates = listOf(
+            EnrichmentUpdate(setOf(Feature.HAS_PHONE), mapOf("entity.phone" to "+380671234567"), emptyList()),
+        )
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.focusOn(
+            com.point.core.flow.Focus(
+                objectId = vm.ui.value.frame!!.obj.id,
+                region = com.point.core.flow.Box(10f, 20f, 110f, 60f),
+                atomIds = listOf("w3", "w4"),
+            ),
+        )
+        vm.onBubble(bubble()); advanceUntilIdle()
+
+        val seen = resolver.lastInput!!
+
+        assertEquals("+380671234567", seen.metadata["entity.phone"])
+
+        assertEquals("10.0 20.0 110.0 60.0", seen.metadata[com.point.core.flow.META_FOCUS_REGION])
+        assertEquals("w3 w4", seen.metadata[com.point.core.flow.META_FOCUS_IDS])
+    }
+
+    @Test fun `focus does not replace the object with a new one`() = runTest(dispatcher) {
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        val before = vm.ui.value.frame!!.obj
+
+        vm.focusOn(com.point.core.flow.Focus(before.id, com.point.core.flow.Box(0f, 0f, 5f, 5f)))
+
+        assertEquals(before.id, vm.ui.value.frame?.obj?.id)
+        assertEquals(1, vm.ui.value.path.size)
+        assertEquals(before.uri, vm.ui.value.frame?.obj?.uri)
     }
 
     @Test fun `enrichment merges discovered metadata into the frame object`() = runTest(dispatcher) {
@@ -2571,6 +3192,8 @@ private class FakeResolver : Resolver {
     var lateAfterMs: Long = 100
 
     val performed = mutableListOf<CapabilityId>()
+
+    var lastInput: PointObject? = null
     override fun leavesDevice(capabilityId: CapabilityId): Boolean = leavesDevice
 
     override fun realizerFor(capabilityId: CapabilityId): Realizer {
@@ -2579,6 +3202,7 @@ private class FakeResolver : Resolver {
             override val capabilityId = capabilityId
             override suspend fun perform(input: PointObject, amendment: String?): ActionResult {
                 performed += capabilityId
+                lastInput = input
                 lastAmendment = amendment
                 throwsOnPerform?.let { throw it }
                 stage?.let { com.point.core.flow.reportStage(it) }
@@ -2642,8 +3266,6 @@ private class FakeRegistry(
 
     override fun all(): Collection<com.point.core.flow.Capability> = emptyList()
 
-    override fun intentsFor(state: ObjectState): List<Intent> =
-        Intent.entries.filter { intent -> caps.values.any { intent in it } }
     override fun latentBubblesFor(state: ObjectState) = emptyList<com.point.core.model.LatentBubble>()
 
     override fun byId(id: CapabilityId): Capability =
@@ -2657,10 +3279,12 @@ private class FakeEnrichment(var features: Set<Feature> = emptySet()) : Enrichme
     var stepDelayMs: Long = 0
 
     var understandsOnce = false
-    private var runs = 0
+    var runs = 0
+    val seen = mutableListOf<PointObject>()
     override fun enrich(obj: PointObject): kotlinx.coroutines.flow.Flow<EnrichmentUpdate> =
         kotlinx.coroutines.flow.flow {
             runs++
+            seen += obj
             val script = when {
                 understandsOnce && runs > 1 -> listOf(EnrichmentUpdate(emptySet(), emptyMap(), emptyList()))
                 else -> updates ?: listOf(EnrichmentUpdate(features, emptyMap(), emptyList()))

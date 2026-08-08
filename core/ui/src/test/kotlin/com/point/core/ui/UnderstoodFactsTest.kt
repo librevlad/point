@@ -61,4 +61,38 @@ class UnderstoodFactsTest {
     fun `an empty state yields no facts`() {
         assertTrue(understoodFacts(obj()).isEmpty())
     }
+
+    // ---- Этап 10, F6: слово человека видно и на родительском факте, не только на chip ----
+
+    @Test
+    fun `подтверждённый человеком факт несёт подпись — подтверждено вами`() {
+        val facts = understoodFacts(
+            obj(
+                features = setOf(Feature.HAS_PHONE),
+                metadata = mapOf(
+                    "entity.phone" to "112",
+                    "entity.phone" + com.point.core.flow.META_ALT_SUFFIX to "111",
+                    "entity.phone" + com.point.core.flow.META_SOURCE_SUFFIX to
+                        com.point.core.model.Provenance.HUMAN.wire,
+                ),
+            ),
+        )
+        assertEquals("112", facts.single().value)
+        assertEquals("подтверждено вами", facts.single().note)
+    }
+
+    @Test
+    fun `машинное происхождение подписью факта не становится`() {
+        val facts = understoodFacts(
+            obj(
+                features = setOf(Feature.HAS_PHONE),
+                metadata = mapOf(
+                    "entity.phone" to "111",
+                    "entity.phone" + com.point.core.flow.META_SOURCE_SUFFIX to
+                        com.point.core.model.Provenance.OCR.wire,
+                ),
+            ),
+        )
+        assertNull("машинные подписи живут на chips, строка фактов молчит", facts.single().note)
+    }
 }

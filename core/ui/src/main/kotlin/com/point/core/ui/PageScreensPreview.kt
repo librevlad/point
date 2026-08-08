@@ -39,6 +39,7 @@ private fun PreviewSelectionCaptured() = PointTheme(darkTheme = true) {
         capturedText = "Строк захвачено две — и обе видны на самой странице",
         onSelect = {},
         onTake = {},
+        onFocus = {},
         onClose = {},
     )
 }
@@ -53,6 +54,7 @@ private fun PreviewSelectionEmpty() = PointTheme(darkTheme = true) {
         capturedText = null,
         onSelect = {},
         onTake = {},
+        onFocus = {},
         onClose = {},
     )
 }

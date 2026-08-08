@@ -40,6 +40,11 @@ data class FlowFrame(
     val enriching: List<String> = emptyList(),
 
     val pinned: CapabilityId? = null,
+
+    val focus: com.point.core.flow.Focus? = null,
+
+    /** Состояние операций, не знания: исследования, которые не удались (ADR-0001 §9, §18). */
+    val failed: List<com.point.core.flow.FailedInvestigation> = emptyList(),
 )
 
 suspend fun previewSource(obj: PointObject, rasterizer: com.point.core.flow.PdfRasterizer): String? =

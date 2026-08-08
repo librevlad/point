@@ -41,6 +41,7 @@ fun SelectionScreen(
     capturedText: String?,
     onSelect: (PageBox) -> Unit,
     onTake: () -> Unit,
+    onFocus: () -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -146,6 +147,17 @@ fun SelectionScreen(
                 enabled = canTake,
                 modifier = Modifier.graphicsLayer { alpha = if (canTake) 1f else 0.45f },
             )
+
+            // «Смотреть сюда» — Focus, не crop: объект остаётся тем же, Point исследует
+            // указанную область (ADR-0001 §10).
+            PortalRow(
+                title = "Смотреть сюда",
+                onClick = onFocus,
+                icon = bubbleIcon(FOCUS_ICON),
+                chevron = false,
+                enabled = canTake,
+                modifier = Modifier.graphicsLayer { alpha = if (canTake) 1f else 0.45f },
+            )
             TextButton(
                 onClick = onClose,
                 modifier = Modifier.align(Alignment.CenterHorizontally),
@@ -157,5 +169,7 @@ fun SelectionScreen(
 }
 
 private const val SELECT_ICON = "cutout"
+
+private const val FOCUS_ICON = "find"
 
 private val SheetShape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp)

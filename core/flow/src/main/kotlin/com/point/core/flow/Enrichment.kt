@@ -1,36 +1,20 @@
 package com.point.core.flow
 
+import com.point.core.model.CapabilityId
 import com.point.core.model.Feature
-import com.point.core.model.ObjectKind
-import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
 import com.point.core.model.Relation
 import kotlinx.coroutines.flow.Flow
 
-interface Enricher {
-
-    val meta: EnricherMeta get() = EnricherMeta()
-
-    fun appliesTo(state: ObjectState): Boolean
-
-    suspend fun enrich(obj: PointObject): EnrichmentDelta
+/**
+ * Порт цикла Progressive Understanding (RFC §11).
+ *
+ * Механизм под ним — обычный: Capability → Resolver → Realizer. Отдельного контракта
+ * исследования не существует (ADR-0001 §11).
+ */
+interface Enrichment {
+    fun enrich(obj: PointObject): Flow<EnrichmentUpdate>
 }
-
-enum class EnrichCost { INSTANT, FAST, SLOW }
-
-data class EnricherMeta(
-    val cost: EnrichCost = EnrichCost.FAST,
-    val mayYield: Set<Feature> = emptySet(),
-    val label: String? = null,
-    val mayYieldKinds: Set<ObjectKind> = emptySet(),
-)
-
-data class EnrichmentDelta(
-    val features: Set<Feature> = emptySet(),
-    val metadata: Map<String, String> = emptyMap(),
-    val objects: List<PointObject> = emptyList(),
-    val relations: List<Relation> = emptyList(),
-)
 
 data class EnrichmentUpdate(
     val features: Set<Feature>,
@@ -38,11 +22,33 @@ data class EnrichmentUpdate(
     val running: List<String>,
     val objects: List<PointObject> = emptyList(),
     val relations: List<Relation> = emptyList(),
+
+    /**
+     * Состояние операции, а не знания: исследования, которые сорвались (ADR-0001 §9, §18).
+     * Провал не переводит знание в `NOT_FOUND` и не стирает найденное раньше.
+     */
+    val failed: List<FailedInvestigation> = emptyList(),
+
+    /**
+     * Тоже состояние операции: шаг не закончился, а ждёт человека (ADR-0001 §18).
+     * Ожидание не является исходом и знанием не становится.
+     */
+    val awaiting: List<AwaitingInvestigation> = emptyList(),
 )
 
-interface Enrichment {
-    fun enrich(obj: PointObject): Flow<EnrichmentUpdate>
-}
+data class FailedInvestigation(
+    val id: CapabilityId,
+    val label: String?,
+    val reason: String,
+)
+
+data class AwaitingInvestigation(
+    val id: CapabilityId,
+    val label: String?,
+    val prompt: String,
+
+    val needsImage: Boolean = false,
+)
 
 const val META_OCR_TEXT_REF = "ocr.text.ref"
 

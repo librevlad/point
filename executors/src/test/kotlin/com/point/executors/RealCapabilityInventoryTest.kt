@@ -30,6 +30,7 @@ class RealCapabilityInventoryTest {
     private val builtIn: List<Capability> = listOf(
         AiCapability(aiKeysReady), ArchiveCapability(), BlurBgCapability(),
         CallCapability(), CloudOcrCapability(), CopyCapability(), CopyCardCapability(),
+        CorrectValueCapability(),
         CutoutCapability(), DropLinkCapability(), EmailCapability(), EventCapability(),
         ExcelCapability(aiKeysReady), ExtractAllCapability(), FindCapability(), ImageCapability(),
         JobReplyCapability(aiKeysReady), MapCapability(), MergePdfCapability(), OcrCapability(),
@@ -43,7 +44,14 @@ class RealCapabilityInventoryTest {
         WordPlusCapability(aiKeysReady),
     )
 
-    private val inventory = capabilityInventory(builtIn)
+    // Пробы шире базовых видов: кадры извлечённых значений — полноправные объекты,
+    // и способность, живущая только на них, обязана быть видна инвентарю.
+    private val inventory = capabilityInventory(
+        builtIn,
+        com.point.core.flow.inventoryProbes(
+            com.point.core.model.ObjectKind.entries + com.point.core.flow.EXTRACTED_KINDS,
+        ),
+    )
 
     @Test
     fun `таблица — что каждая способность принимает и что возвращает`() {

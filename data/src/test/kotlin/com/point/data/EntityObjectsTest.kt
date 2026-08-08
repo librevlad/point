@@ -111,7 +111,7 @@ class EntityObjectsTest {
 
         val restored = source(id = "restored").copy(metadata = facts("address" to "Київ"))
 
-        val delta = MetadataEntityEnricher().enrich(restored)
+        val delta = MetadataEntityInvestigationRealizer().look(restored)
 
         assertEquals(KIND_ADDRESS, delta.objects.single().state.kind)
         assertEquals("restored", delta.objects.single().sourceObjects.single())

@@ -87,7 +87,7 @@ data class CapabilityEntry(
     val auth: Boolean get() = meta.auth
 }
 
-fun inventoryProbes(): List<ObjectState> = ObjectKind.entries.flatMap { kind ->
+fun inventoryProbes(kinds: List<ObjectKind> = ObjectKind.entries): List<ObjectState> = kinds.flatMap { kind ->
     listOf(ObjectState(kind), ObjectState(kind, Feature.entries.toSet())) +
         Feature.entries.map { ObjectState(kind, setOf(it)) }
 }

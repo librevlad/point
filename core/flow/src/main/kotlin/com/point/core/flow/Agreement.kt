@@ -91,6 +91,9 @@ fun altValue(readings: List<String>): String = readings.joinToString(ALT_SEPARAT
 fun alternativesOf(metadata: Map<String, String>, key: String): List<String> =
     metadata[key + META_ALT_SUFFIX]?.split(ALT_SEPARATOR)?.filter { it.isNotBlank() }.orEmpty()
 
+fun altLines(value: String): List<String> =
+    value.split(ALT_SEPARATOR).map(String::trim).filter { it.isNotBlank() }
+
 const val MAX_REPAIR_RATIO = 0.2
 
 private const val MIN_REPAIRABLE = 8

@@ -67,7 +67,10 @@ class ResultComesBackTest {
         state = ObjectState(ObjectKind.IMAGE),
     )
 
-    @Test fun `компьютер вернул текст — он становится объектом здесь, а не остаётся там`() = runTest {
+    // Переписан по решению владельца (Этап 9, вариант A): раньше тест фиксировал
+    // Success-автопереход, и понимание жило на результате. Теперь знание возвращается
+    // исходнику через Done.findings, а результат — новый объект Graph.
+    @Test fun `компьютер вернул текст — он становится объектом здесь, а знание — исходнику`() = runTest {
         val returned = PcReturned(
             name = "Текст со снимка",
             mime = "text/plain",
@@ -83,12 +86,14 @@ class ResultComesBackTest {
 
         val result = realizer.perform(snapshot(), null)
 
-        assertTrue("работа снова кончилась словом: $result", result is ActionResult.Success)
-        val born = (result as ActionResult.Success).result
+        assertTrue("работа снова кончилась словом: $result", result is ActionResult.Done)
+        val findings = (result as ActionResult.Done).findings!!
+        val born = findings.objects.single()
         assertEquals("Текст со снимка", born.metadata["name"])
         assertEquals("Счёт 4512, оплатить до 20 сентября", File(born.uri.value).readText())
 
-        assertEquals("4512", born.metadata["entity.amount"])
+        assertEquals("понимание адресовано исходнику", "4512", findings.metadata["entity.amount"])
+        assertEquals("результат помнит источник", listOf("obj"), born.sourceObjects)
     }
 
     @Test fun `компьютер вернул только слово — говорим словом, как раньше`() = runTest {

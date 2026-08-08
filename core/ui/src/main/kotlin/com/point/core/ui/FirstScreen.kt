@@ -101,6 +101,7 @@ fun FirstScreen(
     textPreview: String? = null,
     latent: List<LatentBubble> = emptyList(),
     enriching: List<String> = emptyList(),
+    failed: List<com.point.core.flow.FailedInvestigation> = emptyList(),
     working: Boolean = false,
 
     workingStage: String? = null,
@@ -132,7 +133,7 @@ fun FirstScreen(
         val plainFacts = facts.filter { it.key !in promoted }
 
         val shownValues = remember(shownAbove) { shownAbove.values.mapTo(mutableSetOf()) { it.trim() } }
-        val visibleFound = found.filter { it.uri.value.trim() !in shownValues }
+        val visibleFound = visibleFoundChips(found, shownValues)
 
         ObjectHeader(
             obj,
@@ -160,7 +161,7 @@ fun FirstScreen(
             LinkCard(url = link, title = "Ссылка на файл", warning = issuedLinkWarning(obj.metadata))
         }
 
-        UnderstoodSection(facts = plainFacts, enriching = enriching)
+        UnderstoodSection(facts = plainFacts, enriching = enriching, failed = failed)
 
         ReadinessSection(
             metadata = obj.metadata,
@@ -314,7 +315,7 @@ private fun FoundObjects(
                         )
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = obj.uri.value,
+                                text = foundHeadline(obj),
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.Medium,
                                 color = MaterialTheme.colorScheme.onSurface,
@@ -351,10 +352,28 @@ private fun FoundObjects(
     }
 }
 
-private fun otherReading(obj: PointObject): String? =
+/**
+ * Заголовок найденного объекта — текущее значение его факта, а не `uri`:
+ * после правки человеком uri продолжает хранить прежнее значение (ADR-0001 §4 —
+ * одно значение в двух ролях; носитель истины — факт).
+ */
+fun foundHeadline(obj: PointObject): String =
+    obj.metadata.entries.firstOrNull { (key, _) ->
+        (key.startsWith(META_ENTITY_PREFIX) || key.startsWith(com.point.core.flow.META_GRAPH_ROLE_PREFIX)) &&
+            !com.point.core.flow.isAnnotationKey(key) && !com.point.core.flow.isStateKey(key)
+    }?.value?.takeIf { it.isNotBlank() } ?: obj.uri.value
+
+/**
+ * Chip прячется, только если ЕГО ФАКТ уже показан строкой выше: сравнение по `uri`
+ * после правки человеком прятало не тот дубль (§4 — одно значение, не две копии).
+ */
+fun visibleFoundChips(found: List<PointObject>, shownValues: Set<String>): List<PointObject> =
+    found.filter { foundHeadline(it).trim() !in shownValues }
+
+fun otherReading(obj: PointObject): String? =
     obj.metadata.keys.firstOrNull { it.endsWith(META_ALT_SUFFIX) }
         ?.let { alternativesOf(obj.metadata, it.removeSuffix(META_ALT_SUFFIX)) }
-        ?.firstOrNull { it.trim() != obj.uri.value.trim() }
+        ?.firstOrNull { it.trim() != foundHeadline(obj).trim() }
 
 private fun roleOf(obj: PointObject, relations: List<Relation>): String? =
     relations.asSequence().filter { it.fromId == obj.id }.mapNotNull { relationLabel(it.type) }.firstOrNull()

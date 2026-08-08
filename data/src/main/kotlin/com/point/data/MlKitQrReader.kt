@@ -20,10 +20,8 @@ class MlKitQrReader(
     }
 
     override suspend fun decode(imagePath: String): String? = withContext(Dispatchers.IO) {
-        val bitmap = decodeBoundedUpright(imagePath, MAX_PX)
-        val viaMlKit = if (bitmap == null) {
-            null
-        } else {
+        val bitmap = decodeBoundedUpright(imagePath, MAX_PX) ?: error(UNREADABLE_IMAGE)
+        val viaMlKit = run {
             try {
                 scanner.process(InputImage.fromBitmap(bitmap, 0)).await()
                     .firstNotNullOfOrNull { it.rawValue?.takeIf(String::isNotBlank) }

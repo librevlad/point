@@ -59,4 +59,17 @@ class ReadQrActionTest {
         assertTrue(cap.accepts(ObjectState(ObjectKind.IMAGE, setOf(Feature.HAS_QR))))
         assertFalse(cap.accepts(ObjectState(ObjectKind.IMAGE)))
     }
+
+    @Test
+    fun `an unreadable image is an honest read failure, not a missing QR`() = runTest {
+        val blind = object : QrReader {
+            override suspend fun decode(imagePath: String): String? = error("изображение не открылось")
+        }
+
+        val result = ReadQrRealizer(TempStore(), blind).perform(imageObj(), null)
+
+        assertTrue(result is ActionResult.Failure)
+        assertEquals("изображение не открылось", (result as ActionResult.Failure).reason)
+        assertFalse("нельзя врать про отсутствие кода", result.reason.contains("не распознан"))
+    }
 }

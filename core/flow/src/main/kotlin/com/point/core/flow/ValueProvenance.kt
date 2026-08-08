@@ -22,6 +22,9 @@ fun isAssumption(metadata: Map<String, String>, key: String): Boolean {
 }
 
 fun isDisputed(metadata: Map<String, String>, key: String): Boolean {
+
+    // Спор, разрешённый человеком, — больше не спор (RFC §19): альтернативы остаются историей.
+    if (provenanceOf(metadata, key) == Provenance.HUMAN) return false
     val value = metadata[key]?.trim()
     return alternativesOf(metadata, key).any { it.trim() != value }
 }

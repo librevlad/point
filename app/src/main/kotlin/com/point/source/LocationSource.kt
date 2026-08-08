@@ -16,7 +16,10 @@ class LocationSource @Inject constructor() : ObjectSource {
     override val label = "Место"
     override val icon = "map"
 
-    override val permissions = listOf(Manifest.permission.ACCESS_FINE_LOCATION)
+    override val permissions = listOf(
+        Manifest.permission.ACCESS_FINE_LOCATION,
+        Manifest.permission.ACCESS_COARSE_LOCATION,
+    )
 
     override fun isAvailable(context: Context): Boolean =
         ContextCompat.getSystemService(context, LocationManager::class.java) != null
@@ -25,11 +28,13 @@ class LocationSource @Inject constructor() : ObjectSource {
 
     override suspend fun read(context: Context, data: Intent?): Produced? {
         val manager = ContextCompat.getSystemService(context, LocationManager::class.java)
-        val location = runCatching {
-            manager?.getProviders(true).orEmpty()
-                .mapNotNull { provider -> manager?.getLastKnownLocation(provider) }
+        // С одним лишь «примерным» местом точные провайдеры бросаются — это не повод
+        // терять сетевые: каждый провайдер читается сам за себя.
+        val location = manager?.let { m ->
+            runCatching { m.getProviders(true) }.getOrDefault(emptyList())
+                .mapNotNull { provider -> runCatching { m.getLastKnownLocation(provider) }.getOrNull() }
                 .maxByOrNull { it.time }
-        }.getOrNull()
+        }
 
         if (location == null) {
 

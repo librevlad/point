@@ -42,16 +42,30 @@ import com.point.core.flow.META_SIZE
 import com.point.core.flow.documentLabel
 import com.point.core.flow.humanWeight
 import com.point.core.flow.maskedForScreen
+import com.point.core.flow.provenanceLabel
+import com.point.core.flow.provenanceOf
 import com.point.core.flow.recordingLength
 import com.point.core.model.Feature
 import com.point.core.model.ObjectKind
 import com.point.core.model.PointObject
 
-data class UnderstoodFact(val key: String, val label: String, val value: String? = null)
+data class UnderstoodFact(
+    val key: String,
+    val label: String,
+    val value: String? = null,
+    val note: String? = null,
+)
 
 fun understoodFacts(obj: PointObject): List<UnderstoodFact> {
     val state = obj.state
     fun entity(key: String) = obj.metadata[META_ENTITY_PREFIX + key]
+
+    // Слово человека видно и здесь, не только на chip (ADR-0001 §14): машинные
+    // происхождения строку фактов не подписывают — их место на самих значениях.
+    fun note(key: String): String? =
+        com.point.core.model.Provenance.HUMAN
+            .takeIf { provenanceOf(obj.metadata, META_ENTITY_PREFIX + key) == it }
+            ?.let { provenanceLabel(it) }
     val summary = obj.metadata[com.point.core.flow.META_SEMANTIC_SUMMARY]
     return buildList {
 
@@ -59,15 +73,22 @@ fun understoodFacts(obj: PointObject): List<UnderstoodFact> {
         if (state.has(Feature.IS_PURCHASE)) add(UnderstoodFact("semantic", "Это покупка", summary))
         if (state.has(Feature.IS_RECIPE)) add(UnderstoodFact("semantic", "Это рецепт", summary))
         if (state.has(Feature.IS_JOB)) add(UnderstoodFact("semantic", "Это вакансия", summary))
-        if (state.has(Feature.HAS_PHONE)) add(UnderstoodFact("phone", "Нашёл телефон", entity("phone")))
-        if (state.has(Feature.HAS_EMAIL)) add(UnderstoodFact("email", "Нашёл почту", entity("email")))
-        if (state.has(Feature.HAS_URL)) add(UnderstoodFact("url", "Нашёл ссылку", entity("url")?.readableUrl()))
-        if (state.has(Feature.HAS_ADDRESS)) add(UnderstoodFact("address", "Нашёл адрес", entity("address")))
-        if (state.has(Feature.HAS_DATE)) add(UnderstoodFact("date", "Нашёл дату", entity("date")))
+        if (state.has(Feature.HAS_PHONE)) add(UnderstoodFact("phone", "Нашёл телефон", entity("phone"), note("phone")))
+        if (state.has(Feature.HAS_EMAIL)) add(UnderstoodFact("email", "Нашёл почту", entity("email"), note("email")))
+        if (state.has(Feature.HAS_URL)) add(UnderstoodFact("url", "Нашёл ссылку", entity("url")?.readableUrl(), note("url")))
+        if (state.has(Feature.HAS_ADDRESS)) add(UnderstoodFact("address", "Нашёл адрес", entity("address"), note("address")))
+        if (state.has(Feature.HAS_DATE)) add(UnderstoodFact("date", "Нашёл дату", entity("date"), note("date")))
         if (state.has(Feature.HAS_CARD)) {
-            add(UnderstoodFact("card", "Нашёл карту", entity("card")?.let { maskedForScreen(META_ENTITY_PREFIX + "card", it) }))
+            add(
+                UnderstoodFact(
+                    "card",
+                    "Нашёл карту",
+                    entity("card")?.let { maskedForScreen(META_ENTITY_PREFIX + "card", it) },
+                    note("card"),
+                ),
+            )
         }
-        if (state.has(Feature.HAS_QR)) add(UnderstoodFact("qr", "Есть QR-код", entity("qr")?.readableUrl()))
+        if (state.has(Feature.HAS_QR)) add(UnderstoodFact("qr", "Есть QR-код", entity("qr")?.readableUrl(), note("qr")))
         if (state.has(Feature.HAS_VCARD)) add(UnderstoodFact("vcard", "Это визитка"))
         if (state.has(Feature.IS_IMAGE_PDF)) add(UnderstoodFact("scan", "Это скан — текст не выделяется"))
         if (state.has(Feature.ZIP_OF_IMAGES)) add(UnderstoodFact("zip-images", "Архив из фотографий"))
@@ -104,11 +125,26 @@ private fun heroKindLabel(obj: PointObject): String =
 private fun String.readableUrl() =
     removePrefix("https://").removePrefix("http://").removePrefix("www.").trimEnd('/')
 
+/**
+ * «Не удалось посмотреть» — не «не найдено»: причина от ридера уже человеческая
+ * (Этап 4), объект жив, повтор возможен. Пусто — молчим.
+ */
+fun failedNote(failed: List<com.point.core.flow.FailedInvestigation>): String? {
+    val reasons = failed.map { it.reason.trim() }.filter { it.isNotBlank() }.distinct()
+    if (reasons.isEmpty()) return null
+    return "Не удалось посмотреть: " + reasons.joinToString("; ")
+}
+
 @Composable
-internal fun UnderstoodSection(facts: List<UnderstoodFact>, enriching: List<String>) {
+internal fun UnderstoodSection(
+    facts: List<UnderstoodFact>,
+    enriching: List<String>,
+    failed: List<com.point.core.flow.FailedInvestigation> = emptyList(),
+) {
 
     val detail = facts.filter { it.key != "semantic" }
-    if (detail.isEmpty() && enriching.isEmpty()) return
+    val trouble = failedNote(failed)
+    if (detail.isEmpty() && enriching.isEmpty() && trouble == null) return
     Surface(
         shape = PortalCardShape,
         color = MaterialTheme.colorScheme.surface,
@@ -119,6 +155,14 @@ internal fun UnderstoodSection(facts: List<UnderstoodFact>, enriching: List<Stri
     ) {
         Column(modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp)) {
             detail.forEach { fact -> key(fact.key) { FactRow(fact) } }
+            trouble?.let { note ->
+                Text(
+                    text = note,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(vertical = 4.dp),
+                )
+            }
             enriching.forEach { label ->
                 key("running-$label") {
                     Row(
@@ -214,6 +258,15 @@ private fun FactRow(fact: UnderstoodFact) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+            )
+        }
+        fact.note?.let { note ->
+            Spacer(Modifier.width(6.dp))
+            Text(
+                text = note,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+                maxLines = 1,
             )
         }
     }

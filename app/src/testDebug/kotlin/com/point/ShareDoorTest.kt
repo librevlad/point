@@ -99,7 +99,13 @@ class ScratchWipedTest {
             scenario.onActivity { it.finish() }
         }
 
-        runCatching { compose.waitUntil(TIMEOUT_MS) { leftovers().isEmpty() } }
+        // Очистка уходит на фоновый поток уже закрытого экрана: compose-часы здесь мертвы,
+        // поэтому ждём сами — прокачивая главный looper до дедлайна, без гонки с диском.
+        val deadline = System.currentTimeMillis() + TIMEOUT_MS
+        while (leftovers().isNotEmpty() && System.currentTimeMillis() < deadline) {
+            org.robolectric.shadows.ShadowLooper.idleMainLooper()
+            Thread.sleep(20)
+        }
 
         assertTrue(
             "флоу кончился, а байты объекта остались на диске: ${leftovers().map(File::getName)}",

@@ -14,7 +14,7 @@ import javax.inject.Inject
 class ZxingQrReader @Inject constructor() : QrReader {
 
     override suspend fun decode(imagePath: String): String? = withContext(Dispatchers.IO) {
-        val bitmap = decodeBoundedUpright(imagePath, MAX_PX) ?: return@withContext null
+        val bitmap = decodeBoundedUpright(imagePath, MAX_PX) ?: error(UNREADABLE_IMAGE)
         try {
             val pixels = IntArray(bitmap.width * bitmap.height)
             bitmap.getPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
@@ -32,3 +32,5 @@ class ZxingQrReader @Inject constructor() : QrReader {
 
     private companion object { const val MAX_PX = 2048 }
 }
+
+internal const val UNREADABLE_IMAGE = "изображение не открылось"

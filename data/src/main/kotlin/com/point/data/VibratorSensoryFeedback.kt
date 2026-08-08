@@ -59,7 +59,7 @@ class VibratorSensoryFeedback @Inject constructor(
         }
         runCatching {
             val v = vibrator ?: return
-            val effect = VibrationEffect.createPredefined(effectId)
+            val effect = effectOf(effectId)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 v.vibrate(effect, VibrationAttributes.createForUsage(VibrationAttributes.USAGE_TOUCH))
             } else {
@@ -67,6 +67,22 @@ class VibratorSensoryFeedback @Inject constructor(
             }
         }
     }
+
+    // Готовые системные образцы появились в Android 10; раньше — свои импульсы того же
+    // характера, иначе на 8.0–9.0 отклик тихо пропадал бы целиком.
+    private fun effectOf(effectId: Int): VibrationEffect =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            VibrationEffect.createPredefined(effectId)
+        } else {
+            when (effectId) {
+                VibrationEffect.EFFECT_DOUBLE_CLICK ->
+                    VibrationEffect.createWaveform(longArrayOf(0, 20, 60, 20), -1)
+                VibrationEffect.EFFECT_TICK ->
+                    VibrationEffect.createOneShot(10, VibrationEffect.DEFAULT_AMPLITUDE)
+                else ->
+                    VibrationEffect.createOneShot(20, VibrationEffect.DEFAULT_AMPLITUDE)
+            }
+        }
 
     private companion object { const val VOLUME = 0.6f }
 }

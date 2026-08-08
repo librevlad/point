@@ -121,6 +121,7 @@ fun PointHost(
     onOpenSelection: () -> Unit = {},
     onSelectRegion: (com.point.core.flow.Box) -> Unit = {},
     onTakeSelection: () -> Unit = {},
+    onFocusSelection: () -> Unit = {},
     onCloseSelection: () -> Unit = {},
     onFindQuery: (String) -> Unit = {},
     onCloseFind: () -> Unit = {},
@@ -235,6 +236,7 @@ fun PointHost(
                 capturedText = state.selection.text,
                 onSelect = onSelectRegion,
                 onTake = onTakeSelection,
+                onFocus = onFocusSelection,
                 onClose = onCloseSelection,
                 modifier = Modifier.fillMaxSize(),
             )
@@ -310,6 +312,7 @@ fun PointHost(
                     textPreview = current.textPreview,
                     latent = current.latent,
                     enriching = current.enriching,
+                    failed = current.failed,
                     working = objectWorking(state),
 
                     workingStage = quietStage(state),

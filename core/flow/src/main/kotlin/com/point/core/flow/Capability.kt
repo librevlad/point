@@ -18,6 +18,15 @@ interface Capability {
 
     fun accepts(state: ObjectState): Boolean
 
+    /**
+     * Применимость по всему состоянию: знание объекта, найденные объекты, отношения, Focus,
+     * Investigation State (ADR-0001 §14, RFC §7).
+     *
+     * По умолчанию — прежний ответ по форме объекта. Capability, которой нужен факт,
+     * отношение или Focus, переопределяет именно это, не расширяя `Feature`.
+     */
+    fun accepts(graph: GraphState): Boolean = accepts(graph.state)
+
     fun produces(state: ObjectState): ObjectState?
 
     fun yields(state: ObjectState): ActionYield = derivedYield(this, state)

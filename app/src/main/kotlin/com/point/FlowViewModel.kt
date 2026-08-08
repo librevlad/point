@@ -231,6 +231,7 @@ class FlowViewModel @Inject constructor(
                     via = f.viaCapabilityId?.let { CapabilityId(it) },
                     viaTitle = f.viaTitle,
                 )
+                restoreGraph(f)
             }
         }
     }
@@ -262,7 +263,18 @@ class FlowViewModel @Inject constructor(
         }
     }
 
-    fun onShared(sourceUri: String, mime: String, autoAction: String? = null, name: String? = null) {
+    fun onShared(
+        sourceUri: String,
+        mime: String,
+        autoAction: String? = null,
+        name: String? = null,
+
+        /**
+         * Знание, приехавшее вместе с объектом с другого устройства (ADR-0001 §20):
+         * потеря знания при переносе — дефект. Вливается единым mergeKnowledge.
+         */
+        carried: Map<String, String> = emptyMap(),
+    ) {
         freshShareArrived = true
 
         syncCircle()
@@ -274,6 +286,12 @@ class FlowViewModel @Inject constructor(
                 store.clear()
                 store.ingest(sourceUri, mime)
             }.getOrNull()?.let { ingested ->
+                if (carried.isEmpty()) {
+                    ingested
+                } else {
+                    ingested.copy(metadata = com.point.core.flow.mergeKnowledge(ingested.metadata, carried))
+                }
+            }?.let { ingested ->
                 if (!name.isNullOrBlank()) {
                     ingested.copy(metadata = ingested.metadata + ("name" to name))
                 } else {
@@ -393,6 +411,9 @@ class FlowViewModel @Inject constructor(
                     "file://${pulled[0].second}",
                     pulled[0].first.meta["mime"] ?: "application/octet-stream",
                     autoAction = pulled[0].first.meta["pc.action"]?.takeIf { it.isNotBlank() },
+                    name = pulled[0].first.meta["name"],
+
+                    carried = pulled[0].first.meta - PC_SERVICE_META,
                 )
                 else -> onSharedMultiple(pulled.map { "file://${it.second}" })
             }
@@ -450,8 +471,18 @@ class FlowViewModel @Inject constructor(
         })
     }
 
+    /**
+     * Объект, каким его видит исполнитель- тот же объект, но с указанным человеком Focus
+     * (ADR-0001 §10). Focus не подменяет объект и не создаёт новый.
+     */
+    private fun focused(): PointObject? {
+        val frame = stack.lastOrNull() ?: return null
+        val focus = frame.focus ?: return frame.obj
+        return frame.obj.copy(metadata = com.point.core.flow.withFocus(frame.obj.metadata, focus))
+    }
+
     fun onBubble(bubble: Bubble) {
-        val top = stack.lastOrNull()?.obj ?: return
+        val top = focused() ?: return
 
         if (com.point.core.flow.labelNeedsKey(bubble.title)) {
             openKeyScreen(
@@ -495,7 +526,7 @@ class FlowViewModel @Inject constructor(
         )
         trackWork(viewModelScope.launch {
 
-            val realizer = runCatching { resolver.realizerFor(bubble.capabilityId) }.getOrNull()
+            val realizer = runCatching { resolver.realizerFor(bubble.capabilityId, top.state) }.getOrNull()
             if (!owns(voice)) return@launch
             if (realizer == null) {
                 _ui.update { it.copy(busy = null, busyStage = null, message = "Действие недоступно", messageOutcome = Outcome.FAILED) }
@@ -516,7 +547,7 @@ class FlowViewModel @Inject constructor(
 
     fun confirmPreview() {
         val bubble = pendingPreviewBubble ?: return
-        val top = stack.lastOrNull()?.obj ?: return
+        val top = focused() ?: return
         pendingPreviewBubble = null
         _ui.update { it.copy(preview = null) }
         runOnObject(bubble, top)
@@ -581,6 +612,51 @@ class FlowViewModel @Inject constructor(
                 ),
             )
         }
+    }
+
+    /**
+     * «Смотреть сюда»- Focus как сигнал- ADR-0001 §10.
+     *
+     * Объект остаётся прежним со всем уже накопленным знанием- в отличие от [takeSelection],
+     * которое сознательно создаёт из области самостоятельный объект.
+     */
+    fun focusOnSelection() {
+        val frame = stack.lastOrNull() ?: return
+        val snap = selectionSnap ?: return
+        focusOn(
+            com.point.core.flow.Focus(
+                objectId = frame.obj.id,
+                region = snap.region,
+                atomIds = snap.ids,
+                text = snap.text.takeIf { it.isNotBlank() },
+            ),
+        )
+        closeSelection()
+    }
+
+    fun focusOn(focus: com.point.core.flow.Focus) {
+        val index = stack.lastIndex
+        val frame = stack.getOrNull(index) ?: return
+        val refreshed = frame.copy(focus = focus)
+        stack[index] = refreshed.copy(bubbles = registry.bubblesFor(graphOf(refreshed)))
+        _ui.update { it.copy(frame = stack[index]) }
+        persistJourney()
+
+        // Focused-проход- контекст области захватывается сейчас, в metadata копии объекта.
+        // Поздний результат останется знанием этой области, какой бы Focus ни был текущим.
+        enrichInBackground(
+            refreshed.obj.copy(metadata = com.point.core.flow.withFocus(refreshed.obj.metadata, focus)),
+        )
+    }
+
+    fun clearFocus() {
+        val index = stack.lastIndex
+        val frame = stack.getOrNull(index) ?: return
+        if (frame.focus == null) return
+        val refreshed = frame.copy(focus = null)
+        stack[index] = refreshed.copy(bubbles = registry.bubblesFor(graphOf(refreshed)))
+        _ui.update { it.copy(frame = stack[index]) }
+        persistJourney()
     }
 
     fun takeSelection() {
@@ -703,7 +779,7 @@ class FlowViewModel @Inject constructor(
             quiet = isQuietAction(bubble.capabilityId),
             cancelable = true,
         )
-        dispatch(bubble) { resolver.realizerFor(bubble.capabilityId).perform(top, null) }
+        dispatch(bubble) { resolver.realizerFor(bubble.capabilityId, top.state).perform(top, null) }
     }
 
     private fun isCloud(id: CapabilityId) =
@@ -753,7 +829,7 @@ class FlowViewModel @Inject constructor(
 
     fun submitAmendment(text: String) {
         val bubble = pendingBubble ?: return
-        val top = stack.lastOrNull()?.obj ?: return
+        val top = focused() ?: return
         pendingBubble = null
         raiseBusy(
             bubble.title,
@@ -762,7 +838,7 @@ class FlowViewModel @Inject constructor(
             cancelable = true,
         )
         _ui.update { it.copy(inputSuggestions = emptyList(), needsImage = null) }
-        dispatch(bubble) { resolver.realizerFor(bubble.capabilityId).perform(top, text) }
+        dispatch(bubble) { resolver.realizerFor(bubble.capabilityId, top.state).perform(top, text) }
     }
 
     fun cancelInput() {
@@ -804,7 +880,7 @@ class FlowViewModel @Inject constructor(
         chatJob = viewModelScope.launch {
             val target = aiTransformTarget(message)
             if (target != null) {
-                val result = runCatching { resolver.realizerFor(target).perform(obj, null) }
+                val result = runCatching { resolver.realizerFor(target, obj.state).perform(obj, null) }
 
                     .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
                     .getOrNull()
@@ -985,11 +1061,26 @@ class FlowViewModel @Inject constructor(
         refreshTopBubbles()
     }
 
+    /**
+     * Вход обоих решений — всё состояние, а не одна форма объекта- ADR-0001 §14.
+     */
+    private fun graphOf(frame: FlowFrame, obj: PointObject = frame.obj): com.point.core.flow.GraphState {
+        val graph = com.point.core.flow.GraphState(
+            obj = obj,
+            found = frame.found,
+            relations = frame.relations,
+            focus = frame.focus,
+        )
+        return graph.copy(
+            intent = com.point.core.flow.leadingIntent(graph, working = frame.enriching.isNotEmpty()),
+        )
+    }
+
     private fun refreshTopBubbles() {
         val index = stack.lastIndex
         val frame = stack.getOrNull(index) ?: return
         val refreshed = frame.copy(
-            bubbles = registry.bubblesFor(frame.obj.state),
+            bubbles = registry.bubblesFor(graphOf(frame)),
             latent = registry.latentBubblesFor(frame.obj.state),
         )
         stack[index] = refreshed
@@ -1330,7 +1421,7 @@ class FlowViewModel @Inject constructor(
     private suspend fun bridge(obj: PointObject, viaCapId: String): PointObject? {
         claimVoice()
         raiseBusy("Преобразую…", cancelable = true)
-        val result = runCatching { resolver.realizerFor(CapabilityId(viaCapId)).perform(obj, null) }.getOrNull()
+        val result = runCatching { resolver.realizerFor(CapabilityId(viaCapId), obj.state).perform(obj, null) }.getOrNull()
         return (result as? ActionResult.Success)?.let { runCatching { store.put(it.result) }.getOrNull() }
     }
 
@@ -1434,6 +1525,10 @@ class FlowViewModel @Inject constructor(
                 runCatching { sensory.success() }
 
                 runCatching { journal.record(UsageEvent(UsageEventType.COMPLETED, bubble.capabilityId.value)) }
+
+                // ADR-0001 §18: «выполнено» может нести новое знание — оно идёт тем же
+                // merge-путём, что и находки исследований, а не выбрасывается.
+                result.findings?.takeIf { !it.isEmpty }?.let(::landFindings)
                 _ui.update { it.copy(busy = null, busyStage = null, message = result.message, messageOutcome = Outcome.DONE) }
             }
             is ActionResult.Failure -> {
@@ -1521,7 +1616,7 @@ class FlowViewModel @Inject constructor(
             val index = stack.lastIndex
             val frame = stack.getOrNull(index) ?: return@launch
             val refreshed = frame.copy(
-                bubbles = registry.bubblesFor(frame.obj.state),
+                bubbles = registry.bubblesFor(graphOf(frame)),
                 pinned = if (already) null else bubble.capabilityId,
             )
             stack[index] = refreshed
@@ -1573,14 +1668,21 @@ class FlowViewModel @Inject constructor(
     }
 
     private fun pushFrame(obj: PointObject, via: CapabilityId? = null, viaTitle: String? = null) {
-        val carried = stack.lastOrNull()?.takeIf { continuesObject(it.obj, obj) }
+        val parent = stack.lastOrNull()
+        val carried = parent?.takeIf { continuesObject(it.obj, obj) }
         val known = carried?.let { carryKnowledge(it.obj, obj) } ?: obj
-        val bubbles = registry.bubblesFor(known.state)
+        val carriedFound = carried?.found.orEmpty()
+
+        val carriedRelations = carried?.relations
+            ?: parent?.relations?.filter { it.fromId == obj.id || it.toId == obj.id }.orEmpty()
+        val bubbles = registry.bubblesFor(
+            com.point.core.flow.GraphState(known, carriedFound, carriedRelations),
+        )
         val frame = FlowFrame(
             known, bubbles, via, viaTitle,
 
-            found = carried?.found.orEmpty(),
-            relations = carried?.relations.orEmpty(),
+            found = carriedFound,
+            relations = carriedRelations,
             latent = registry.latentBubblesFor(known.state),
             pinned = runCatching { pins.pinnedFor(known.state.kind) }.getOrNull(),
         )
@@ -1598,12 +1700,43 @@ class FlowViewModel @Inject constructor(
         loadObjectPreview(known)
     }
 
+    /**
+     * Возвращает кадру найденные объекты, связи и Focus из снапшота и пересчитывает список
+     * действий по полному состоянию. Исследования повторно не запускаются: только знание
+     * и порядок действий.
+     */
+    private fun restoreGraph(f: FlowSnapshotFrame) {
+        if (f.found.isEmpty() && f.relations.isEmpty() && f.focusRegion == null && f.focusIds == null) return
+        val index = stack.lastIndex
+        val frame = stack.getOrNull(index)?.takeIf { it.obj.id == f.id } ?: return
+        val focus = com.point.core.flow.focusOf(
+            buildMap {
+                f.focusRegion?.let { put(com.point.core.flow.META_FOCUS_REGION, it) }
+                f.focusIds?.let { put(com.point.core.flow.META_FOCUS_IDS, it) }
+            },
+            frame.obj.id,
+        )
+        val restored = frame.copy(
+            found = (frame.found + f.found).distinctBy { it.id },
+            relations = (frame.relations + f.relations).distinct(),
+            focus = frame.focus ?: focus,
+        )
+        stack[index] = restored.copy(bubbles = registry.bubblesFor(graphOf(restored)))
+        _ui.update { if (it.frame?.obj?.id == f.id) it.copy(frame = stack[index]) else it }
+    }
+
     private fun persistJourney() {
         val frames = stack.map { f ->
+
+            val focusWire = com.point.core.flow.withFocus(emptyMap(), f.focus)
             FlowSnapshotFrame(
                 id = f.obj.id, kind = f.obj.state.kind, mime = f.obj.mime, ref = f.obj.uri.value,
                 metadata = f.obj.metadata,
                 viaCapabilityId = f.viaCapability?.value, viaTitle = f.viaTitle,
+                found = f.found,
+                relations = f.relations,
+                focusRegion = focusWire[com.point.core.flow.META_FOCUS_REGION],
+                focusIds = focusWire[com.point.core.flow.META_FOCUS_IDS],
             )
         }
         viewModelScope.launch { runCatching { flowSnapshot.save(frames) } }
@@ -1678,45 +1811,123 @@ class FlowViewModel @Inject constructor(
         }
     }
 
-    private fun enrichmentAdditions(
-        known: Map<String, String>,
-        fresh: Map<String, String>,
-    ): Map<String, String> =
-        fresh.filterKeys { it !in known || it in REFRESHABLE_META }
+    /**
+     * Знание из пользовательского действия. Носитель смыслового факта — кадр-источник:
+     * правка на кадре извлечённого значения дойдёт и до родителя, иначе следующий пересбор
+     * узлов из родительской metadata затёр бы её.
+     */
+    private fun landFindings(findings: com.point.core.model.Findings) {
+        val update = EnrichmentUpdate(
+            features = findings.features,
+            metadata = findings.metadata,
+            running = emptyList(),
+            objects = findings.objects,
+            relations = findings.relations,
+        )
+        val top = stack.lastOrNull() ?: return
+        applyEnrichment(top.obj, update)
+        top.obj.sourceObjects.firstOrNull()
+            ?.let { parentId -> stack.lastOrNull { it.obj.id == parentId }?.obj }
+            ?.let { parent -> applyEnrichment(parent, update) }
+    }
 
     private fun applyEnrichment(source: PointObject, update: EnrichmentUpdate) {
         val index = stack.indexOfLast { it.obj.id == source.id }
         val frame = stack.getOrNull(index) ?: return
         val newState = update.features.fold(frame.obj.state) { state, feature -> state.with(feature) }
-        val newMetadata = frame.obj.metadata + enrichmentAdditions(frame.obj.metadata, update.metadata)
 
-        val newFound = (frame.found + update.objects).distinctBy { it.id }
+        val newMetadata = com.point.core.flow.mergeKnowledge(
+            frame.obj.metadata,
+            update.metadata,
+            REFRESHABLE_META,
+        )
+
+        // Тот же id — тот же объект: свежий результат (повтор действия на PC, пересбор узла)
+        // занимает место прежнего, а не отбрасывается. Порядок появления сохраняется.
+        val newFound = (frame.found + update.objects).associateBy { it.id }.values
+            .map { node -> syncNodeFact(node, newMetadata) }
         val newRelations = (frame.relations + update.relations).distinct()
-        val objChanged = newState != frame.obj.state || newMetadata != frame.obj.metadata
-        val graphChanged = newFound.size != frame.found.size || newRelations.size != frame.relations.size
-        if (!objChanged && !graphChanged && update.running == frame.enriching) return
 
+        // Неудача — состояние операции: показывается человеку, но не становится знанием
+        // и не переживает журнал. Удавшийся повтор снимает упрёк по своему вопросу.
+        val newFailed = (frame.failed + update.failed)
+            .distinctBy { it.id to it.reason }
+            .filter {
+                com.point.core.flow.investigationStateOf(newMetadata, it.id) !=
+                    com.point.core.flow.InvestigationState.FOUND
+            }
+        val objChanged = newState != frame.obj.state || newMetadata != frame.obj.metadata
+        val graphChanged = newFound != frame.found || newRelations != frame.relations
+        if (!objChanged && !graphChanged && update.running == frame.enriching && newFailed == frame.failed) return
+
+        val enriched = frame.obj.copy(state = newState, metadata = newMetadata)
         val newBubbles = if (objChanged) {
-            com.point.core.model.keepShownOrder(frame.bubbles, registry.bubblesFor(newState))
+            com.point.core.model.keepShownOrder(
+                frame.bubbles,
+                registry.bubblesFor(
+                    graphOf(
+                        frame.copy(found = newFound, relations = newRelations, enriching = update.running),
+                        enriched,
+                    ),
+                ),
+            )
         } else {
             frame.bubbles
         }
         val refreshed = frame.copy(
-            obj = frame.obj.copy(state = newState, metadata = newMetadata),
+            obj = enriched,
             bubbles = newBubbles,
             latent = if (objChanged) registry.latentBubblesFor(newState) else frame.latent,
             enriching = update.running,
             found = newFound,
             relations = newRelations,
+            failed = newFailed,
         )
         stack[index] = refreshed
         _ui.update { if (it.frame?.obj?.id == source.id) it.copy(frame = refreshed) else it }
-        if (objChanged) {
+        if (objChanged || graphChanged) {
             persistJourney()
         }
     }
 
+    /**
+     * Узел и факт родителя — одно значение в двух ролях (ADR-0001 §4): после ЛЮБОГО merge,
+     * сменившего primary (человек, машинный repair), узел зеркалит факт кадра — значение,
+     * историю `.alt` и происхождение. Идентичность узла не меняется.
+     */
+    private fun syncNodeFact(node: PointObject, merged: Map<String, String>): PointObject {
+        val key = node.metadata.keys.firstOrNull {
+            (
+                it.startsWith(com.point.core.flow.META_ENTITY_PREFIX) ||
+                    it.startsWith(com.point.core.flow.META_GRAPH_ROLE_PREFIX)
+                ) &&
+                !com.point.core.flow.isAnnotationKey(it) && !com.point.core.flow.isStateKey(it)
+        } ?: return node
+        val primary = merged[key] ?: return node
+        if (com.point.core.flow.normConsensus(primary) ==
+            com.point.core.flow.normConsensus(node.metadata[key].orEmpty())
+        ) {
+            return node
+        }
+        val alt = key + com.point.core.flow.META_ALT_SUFFIX
+        val src = key + com.point.core.flow.META_SOURCE_SUFFIX
+        val slice = buildMap {
+            put(key, primary)
+            merged[alt]?.let { put(alt, it) }
+            merged[src]?.let { put(src, it) }
+        }
+        return node.copy(
+
+            metadata = node.metadata - alt + slice,
+            provenance = maxOf(node.provenance, com.point.core.flow.provenanceOf(merged, key)),
+        )
+    }
+
     internal companion object {
+
+        /** Служебные ключи письма с компьютера — знанием объекта не являются. */
+        val PC_SERVICE_META = setOf("name", "mime", "pc.action", "id")
+
 
         val REFRESHABLE_META = setOf(
             com.point.core.flow.META_OCR_TEXT_REF,

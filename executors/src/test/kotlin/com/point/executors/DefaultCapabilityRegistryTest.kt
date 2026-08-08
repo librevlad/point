@@ -296,7 +296,7 @@ class DefaultCapabilityRegistryTest {
             availability = { "нужен пакет обработки снимков" },
         )
 
-        assertEquals(emptyList<Intent>(), onlyScanPlus.intentsFor(ObjectState(ObjectKind.IMAGE)))
+        assertTrue(onlyScanPlus.bubblesFor(ObjectState(ObjectKind.IMAGE)).isEmpty())
     }
 
     @Test
@@ -311,16 +311,16 @@ class DefaultCapabilityRegistryTest {
     @Test
     fun `an image offers understand, prepare, open and send`() {
         assertEquals(
-            listOf(Intent.UNDERSTAND, Intent.PREPARE, Intent.OPEN, Intent.SEND),
-            registry.intentsFor(ObjectState(ObjectKind.IMAGE)),
+            setOf(Intent.UNDERSTAND, Intent.PREPARE, Intent.OPEN, Intent.SEND),
+            registry.bubblesFor(ObjectState(ObjectKind.IMAGE)).map { it.intent }.toSet(),
         )
     }
 
     @Test
     fun `a collection has prepare and send but nothing to understand`() {
         assertEquals(
-            listOf(Intent.PREPARE, Intent.SEND),
-            registry.intentsFor(ObjectState(ObjectKind.COLLECTION)),
+            setOf(Intent.PREPARE, Intent.SEND),
+            registry.bubblesFor(ObjectState(ObjectKind.COLLECTION)).map { it.intent }.toSet(),
         )
     }
 

@@ -6,7 +6,7 @@ fun advertisedActions(
     capabilities: Collection<Capability>,
     probes: List<ObjectState> = inventoryProbes(),
 ): List<PcRemoteAction> = capabilities
-    .filterNot { it.meta.localOnly }
+    .filterNot { it.meta.localOnly || it.meta.investigation }
     .sortedWith(compareBy({ it.meta.priority }, { it.id.value }))
     .mapNotNull { capability ->
         val accepted = probes.filter(capability::accepts)

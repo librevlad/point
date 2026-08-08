@@ -75,4 +75,38 @@ class PermissionsTest {
     fun `спрашивать было нечего — это удача, а не отказ`() {
         assertEquals(PermissionOutcome.GRANTED, permissionOutcome(emptyMap(), willAskAgain = { false }))
     }
+
+    // ---- Android 12+: «точно или примерно» — один вопрос, а не два разрешения ----
+
+    private val coarse = "android.permission.ACCESS_COARSE_LOCATION"
+
+    @Test
+    fun `выбранное «примерное» место — выдача, а не отказ`() {
+        assertEquals(
+            PermissionOutcome.GRANTED,
+            permissionOutcome(
+                mapOf(place to false, coarse to true),
+                willAskAgain = { false },
+            ),
+        )
+    }
+
+    @Test
+    fun `уже данное примерное место не переспрашивается точным`() {
+        assertEquals(
+            emptyList<String>(),
+            missingPermissions(required = listOf(place, coarse), granted = setOf(coarse)),
+        )
+    }
+
+    @Test
+    fun `отказ по всему месту остаётся отказом`() {
+        assertEquals(
+            PermissionOutcome.DENIED,
+            permissionOutcome(
+                mapOf(place to false, coarse to false),
+                willAskAgain = { true },
+            ),
+        )
+    }
 }

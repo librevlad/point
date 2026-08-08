@@ -26,19 +26,28 @@ class DefaultCapabilityRegistry @Inject constructor(
     override fun all(): Collection<Capability> = capabilities
 
     override fun bubblesFor(state: ObjectState): List<Bubble> =
-        policy.rank(state, capabilities.filter { it.accepts(state) && blockerFor(it) == null })
-            .map { c ->
-                Bubble(
-                    icon = c.icon,
-                    title = c.label(state),
-                    capabilityId = c.id,
-                    expectedNextState = c.produces(state) ?: state,
-                    tier = tierOf(c.meta),
-                    intent = primaryIntentOf(c, state),
+        policy.rank(state, offered.filter { it.accepts(state) && blockerFor(it) == null })
+            .map { c -> bubbleOf(c, state) }
 
-                    yields = c.yields(state),
-                )
-            }
+    override fun bubblesFor(graph: com.point.core.flow.GraphState): List<Bubble> =
+        policy.rank(graph, offered.filter { it.accepts(graph) && blockerFor(it) == null })
+            .map { c -> bubbleOf(c, graph.state) }
+
+    /**
+     * Исследования человеку не предлагаются- их выбирает Discovery, а не Planner (ADR-0001 §11).
+     */
+    private val offered: List<Capability> = capabilities.filterNot { it.meta.investigation }
+
+    private fun bubbleOf(c: Capability, state: ObjectState) = Bubble(
+        icon = c.icon,
+        title = c.label(state),
+        capabilityId = c.id,
+        expectedNextState = c.produces(state) ?: state,
+        tier = tierOf(c.meta),
+        intent = primaryIntentOf(c, state),
+
+        yields = c.yields(state),
+    )
 
     private fun tierOf(meta: CapabilityMeta): BubbleTier = when {
         meta.network -> BubbleTier.AI
@@ -51,10 +60,6 @@ class DefaultCapabilityRegistry @Inject constructor(
         return Intent.entries.firstOrNull { it in served } ?: Intent.UNDERSTAND
     }
 
-    override fun intentsFor(state: ObjectState): List<Intent> {
-        val accepting = capabilities.filter { it.accepts(state) && blockerFor(it) == null }
-        return Intent.entries.filter { intent -> accepting.any { intent in it.intents(state) } }
-    }
 
     private fun missingFor(c: Capability, state: ObjectState): String? =
         if (c.accepts(state)) blockerFor(c) else c.missing(state)
@@ -62,7 +67,7 @@ class DefaultCapabilityRegistry @Inject constructor(
     private fun blockerFor(c: Capability): String? = availability.blockerFor(c.id)
 
     override fun latentBubblesFor(state: ObjectState): List<LatentBubble> {
-        val hints = capabilities.sortedBy { it.meta.priority }
+        val hints = offered.sortedBy { it.meta.priority }
             .mapNotNull { c -> missingFor(c, state)?.let { LatentBubble(c.icon, c.label(state), it) } }
 
         val byReason = hints.groupBy(LatentBubble::missing).values.toList()

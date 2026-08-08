@@ -42,6 +42,16 @@ class AdvertisedActionsTest {
         assertEquals(listOf("understand"), advertisedActions(caps).map { it.id })
     }
 
+    @Test fun `исследование не объявляется второй поверхности как действие`() {
+
+        val caps = listOf(
+            Cap("ocr", { true }, CapabilityMeta(investigation = true)),
+            Cap("understand", { it.kind == ObjectKind.TEXT }),
+        )
+
+        assertEquals(listOf("understand"), advertisedActions(caps).map { it.id })
+    }
+
     @Test fun `способность, не принимающая ничего, не объявляется`() {
 
         assertTrue(advertisedActions(listOf(Cap("never", { false }))).isEmpty())
