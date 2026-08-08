@@ -1155,6 +1155,34 @@ class FlowViewModelTest {
         assertEquals("112", persisted.found.single().metadata["entity.phone"])
     }
 
+    @Test fun `правка человека доезжает до карточки «Недавнего», а не только до журнала`() = runTest(dispatcher) {
+        val node = PointObject(
+            id = "in:email",
+            mime = "text/plain",
+            uri = ValueRef("greatfloridaagent321@gmail.com"),
+            state = ObjectState(com.point.core.flow.KIND_EMAIL),
+            metadata = mapOf("entity.email" to "greatfloridaagent321@gmail.com"),
+            sourceObjects = listOf("in"),
+        )
+        enrichment.updates = listOf(
+            EnrichmentUpdate(
+                setOf(Feature.HAS_EMAIL), mapOf("entity.email" to "greatfloridaagent321@gmail.com"), emptyList(),
+                objects = listOf(node),
+                relations = listOf(com.point.core.model.Relation(node.id, com.point.core.model.RelationType.FOUND_IN, "in")),
+            ),
+        )
+        enrichment.understandsOnce = true
+        resolver.result = ActionResult.Done("Исправлено", humanFindings("entity.email", "liz321@gmail.com"))
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        vm.onFound(vm.ui.value.frame!!.found.single()); advanceUntilIdle()
+
+        vm.onBubble(bubble()); advanceUntilIdle()
+
+        val card = history.updated.last { it.id == history.recorded.single().id }
+        assertEquals("карточка несёт слово человека", "liz321@gmail.com", card.metadata["entity.email"])
+    }
+
     @Test fun `human provenance never comes from focus or navigation`() = runTest(dispatcher) {
         enrichment.updates = listOf(
             EnrichmentUpdate(setOf(Feature.HAS_PHONE), mapOf("entity.phone" to "111"), emptyList()),
