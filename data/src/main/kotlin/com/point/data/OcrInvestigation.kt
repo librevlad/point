@@ -68,7 +68,10 @@ class OcrInvestigation @Inject constructor() : Capability {
 
     companion object {
 
-        val ID = com.point.core.model.CapabilityId("ocr")
+        // Не «ocr»: этот id носит пользовательское действие «Распознать текст». Резолвер
+        // группирует реализаторы по id, и общий id подсовывал циклу знания реализатор
+        // действия — знание превращалось в «вернуло объект вместо знания».
+        val ID = com.point.core.model.CapabilityId("image-text")
     }
 }
 

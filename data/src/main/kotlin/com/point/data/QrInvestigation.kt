@@ -34,7 +34,9 @@ class QrInvestigation @Inject constructor() : Capability {
 
     companion object {
 
-        val ID = com.point.core.model.CapabilityId("qr")
+        // Не «qr»: этот id носит действие «QR-код» (сделать QR из текста). Общий id
+        // сталкивает реализаторы в резолвере — как у пары «ocr»/«Распознать текст».
+        val ID = com.point.core.model.CapabilityId("qr-content")
     }
 }
 

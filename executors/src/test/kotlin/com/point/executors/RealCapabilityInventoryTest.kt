@@ -53,6 +53,34 @@ class RealCapabilityInventoryTest {
         ),
     )
 
+    /**
+     * Живой дефект 2026-08-08: действие «Распознать текст» и OCR-исследование делили id
+     * `ocr`, резолвер группирует реализаторы по id и подсовывал циклу знания реализатор
+     * действия — на экране вырастало «исследование вернуло объект вместо знания».
+     * Разные вопросы — разные id: пространство исследований не пересекается с действиями.
+     */
+    @Test
+    fun `id исследований не пересекаются с id действий`() {
+        val investigations = listOf(
+            com.point.data.OcrInvestigation.ID,
+            com.point.data.QrInvestigation.ID,
+            com.point.data.EntityInvestigation.ID,
+            com.point.data.IdentifierInvestigation.ID,
+            com.point.data.GraphRolesInvestigation.ID,
+            com.point.data.DocumentTypeInvestigation.ID,
+            com.point.data.MetadataEntityInvestigation.ID,
+            com.point.data.PeriodInvestigation.ID,
+            com.point.data.TextUrlInvestigation.ID,
+            com.point.data.VCardInvestigation.ID,
+            com.point.data.PdfImageInvestigation.ID,
+            com.point.data.ZipImagesInvestigation.ID,
+        )
+        val actions = builtIn.map { it.id }.toSet()
+
+        val clashes = investigations.filter { it in actions }
+        assertEquals("исследование и действие не смеют делить id", emptyList<Any>(), clashes)
+    }
+
     @Test
     fun `таблица — что каждая способность принимает и что возвращает`() {
         val lines = inventory.map { e ->
