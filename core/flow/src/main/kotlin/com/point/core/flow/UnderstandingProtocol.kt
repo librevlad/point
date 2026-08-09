@@ -21,9 +21,35 @@ val UNDERSTAND_CONTRACT_KEYS: Map<String, String> = mapOf(
     "SUBJECT" to "subject",
 )
 
+/** Пара «имя + номер» из строки CONTACT (#653): «в идеале я хочу 3 подписанных контакта». */
+data class PersonContact(val name: String, val phone: String)
+
+/**
+ * Несколько значений этих видов — несколько объектов, а не спор прочтений одного
+ * (#652): второй телефон в переписке — не конфликт первого. Спор остаётся
+ * одиночным полям (сумма, трек, показание, квитанция).
+ */
+val MULTI_VALUE_FACTS: Set<String> =
+    setOf("phone", "email", "url", "card", "date").mapTo(mutableSetOf()) { META_ENTITY_PREFIX + it }
+
+fun isMultiValueFact(key: String): Boolean = key in MULTI_VALUE_FACTS
+
 fun parseFieldCandidates(answer: String): ParsedUnderstanding {
     val fields = LinkedHashMap<String, MutableList<FieldCandidate>>()
     val single = LinkedHashMap<String, String>()
+    val contacts = mutableListOf<PersonContact>()
+
+    fun offerPhone(candidate: FieldCandidate) {
+        val bucket = fields.getOrPut(META_ENTITY_PREFIX + "phone") { mutableListOf() }
+        val twin = bucket.indexOfFirst { normConsensus(it.text) == normConsensus(candidate.text) }
+        when {
+            twin >= 0 && candidate.person != null && bucket[twin].person == null ->
+                bucket[twin] = bucket[twin].copy(person = candidate.person)
+            twin >= 0 -> Unit
+            bucket.size < MAX_FIELD_CANDIDATES -> bucket += candidate
+        }
+    }
+
     answer.lineSequence().forEach { raw ->
         val line = raw.trim()
         val eq = line.indexOf('=')
@@ -36,6 +62,11 @@ fun parseFieldCandidates(answer: String): ParsedUnderstanding {
                 ?.let { single.putIfAbsent(META_SEMANTIC_TYPE, it) }
             key == "SUMMARY" -> rest.takeIf { !saysNothing(it) }
                 ?.let { single.putIfAbsent(META_SEMANTIC_SUMMARY, it.take(120)) }
+
+            key == "CONTACT" -> parseContact(rest)?.let { (name, phone) ->
+                if (name != null) contacts += PersonContact(name, phone)
+                offerPhone(FieldCandidate(phone, person = name))
+            }
             else -> UNDERSTAND_CONTRACT_KEYS[key]?.let { suffix ->
                 val metaKey = META_ENTITY_PREFIX + suffix
                 val candidate = splitCandidate(rest) ?: return@forEach
@@ -55,6 +86,10 @@ fun parseFieldCandidates(answer: String): ParsedUnderstanding {
                 } else {
                     listOf(candidate)
                 }
+                if (suffix == "phone") {
+                    pieces.forEach(::offerPhone)
+                    return@let
+                }
                 val bucket = fields.getOrPut(metaKey) { mutableListOf() }
                 pieces.forEach { piece ->
                     if (bucket.size < MAX_FIELD_CANDIDATES && bucket.none { it.text == piece.text && it.ids == piece.ids }) {
@@ -64,12 +99,27 @@ fun parseFieldCandidates(answer: String): ParsedUnderstanding {
             }
         }
     }
-    return ParsedUnderstanding(fields, single)
+    return ParsedUnderstanding(fields, single, contacts)
+}
+
+/**
+ * «Номер | имя» (порядок прощается): сторона с группой цифр — номер, другая — имя.
+ * Имя без правдоподобия ([plausiblePersonName]) парой не становится — номер остаётся.
+ */
+private fun parseContact(rest: String): Pair<String?, String>? {
+    val parts = rest.split('|', ';').map(String::trim).filter { it.isNotEmpty() }
+    if (parts.isEmpty()) return null
+    val phone = parts.firstOrNull { it.count(Char::isDigit) >= 7 } ?: return null
+    val name = parts.firstOrNull { it != phone && plausiblePersonName(it) }
+    return name to phone
 }
 
 data class ParsedUnderstanding(
     val fields: Map<String, List<FieldCandidate>>,
     val single: Map<String, String>,
+
+    /** Пары «имя+номер», которые модель связала по тексту (#653). */
+    val contacts: List<PersonContact> = emptyList(),
 )
 
 fun splitCandidate(rest: String): FieldCandidate? {

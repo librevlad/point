@@ -27,6 +27,35 @@ class FoundChipDisplayTest {
     )
 
     @Test
+    fun `телефон, подписанный человеком, вторым узлом не показывается`() {
+
+        // #653: «в идеале я хочу 3 подписанных контакта» — человек с номером внутри
+        // заменяет сырой узел номера, а неподписанный номер остаётся виден.
+        val person = PointObject(
+            id = "doc:person:андріященко",
+            mime = "text/plain",
+            uri = ValueRef("АНДРІЯЩЕНКО Артур"),
+            state = ObjectState(com.point.core.flow.KIND_PERSON),
+            metadata = mapOf(
+                "graph.role.contact" to "АНДРІЯЩЕНКО Артур",
+                "entity.phone" to "+380 66 526 2706",
+            ),
+        )
+        val claimedPhone = node(mapOf("entity.phone" to "+380665262706"))
+        val loosePhone = PointObject(
+            id = "doc:phone:2",
+            mime = "text/plain",
+            uri = ValueRef("+380 93 242 37 59"),
+            state = ObjectState(KIND_PHONE),
+            metadata = mapOf("entity.phone" to "+380 93 242 37 59"),
+        )
+
+        val visible = visibleFoundChips(listOf(person, claimedPhone, loosePhone), emptySet())
+
+        assertEquals(listOf("doc:person:андріященко", "doc:phone:2"), visible.map { it.id })
+    }
+
+    @Test
     fun `после правки человеком заголовок — новое значение, а не старое uri`() {
         val corrected = node(
             mapOf(

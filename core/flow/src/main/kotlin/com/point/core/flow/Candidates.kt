@@ -5,6 +5,9 @@ data class FieldCandidate(
     val text: String,
 
     val ids: List<String> = emptyList(),
+
+    /** Имя человека при значении — пара «номер | имя» из CONTACT-строк (#653). */
+    val person: String? = null,
 )
 
 const val MAX_FIELD_CANDIDATES = 3

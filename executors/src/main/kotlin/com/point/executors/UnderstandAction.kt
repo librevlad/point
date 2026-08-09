@@ -54,7 +54,12 @@ import com.point.core.flow.s10CheckDigitValid
 import com.point.core.flow.semanticFits
 import com.point.core.flow.labelNeedingKey
 import com.point.core.model.ActionResult
+import com.point.core.flow.KIND_PERSON
+import com.point.core.flow.plausiblePersonName
 import com.point.core.model.Findings
+import com.point.core.model.Relation
+import com.point.core.model.RelationType
+import com.point.core.model.ValueRef
 import com.point.core.model.ActionYield
 import com.point.core.model.CapabilityId
 import com.point.core.model.Feature
@@ -109,6 +114,13 @@ internal fun understandPrompt(
         "Если ты не уверен, каких кандидатов на поле несколько — перечисли до " +
             "$MAX_FIELD_CANDIDATES строк с одним KEY, лучший первым; не выдумывай кандидатов " +
             "ради количества. " +
+
+            // #653, решение владельца: «просто дергай контакты и по возможности
+            // связывай их с именами, ллм это умеет».
+            "Каждый номер телефона, у которого в тексте видно имя владельца, дай ОТДЕЛЬНОЙ " +
+            "строкой CONTACT=<номер> | <имя полностью>. Имя пиши правильно, исправляя явные " +
+            "искажения распознавания; должность и звание в имя не включай. Если имени рядом " +
+            "нет — строку CONTACT не пиши, номер оставь строкой PHONE. " +
             "Дополнительно определи, ЧТО это за текст: если он целиком является " +
             "встречей/приглашением — строка TYPE=MEETING, покупкой/чеком/заказом — TYPE=PURCHASE, " +
             "кулинарным рецептом — TYPE=RECIPE, вакансией — TYPE=JOB; в остальных случаях строку " +
@@ -191,7 +203,7 @@ class UnderstandRealizer @Inject constructor(
                 }
 
                 val (roles, roleDisputes) = roleReadings(answer, elements, layer)
-                if (fields.isEmpty() && parsed.single.isEmpty() && roles.isEmpty()) {
+                if (fields.isEmpty() && parsed.single.isEmpty() && roles.isEmpty() && parsed.contacts.isEmpty()) {
 
                     ActionResult.Done(NOTHING_NEW)
                 } else {
@@ -216,12 +228,15 @@ class UnderstandRealizer @Inject constructor(
                     // «Понять» — знание о том же объекте, а не превращение (ADR-0001 §18):
                     // человек остаётся на исходнике, факты прирастают. Success здесь ронял
                     // его в дубль-объект со знаком вопроса.
+                    val people = contactNodes(input, parsed.contacts)
                     ActionResult.Done(
                         UNDERSTOOD,
                         Findings(
                             metadata = merged +
                                 annotations(merged, fields, judgedByLayer = layer != null, blocked = blocked) +
                                 roleAlts + roleSources,
+                            objects = people.objects,
+                            relations = people.relations,
                         ),
                     )
                 }
@@ -260,7 +275,17 @@ class UnderstandRealizer @Inject constructor(
     ): Map<String, String> = buildMap {
         fields.forEach { (key, field) ->
             val readings = (listOfNotNull(merged[key]) + alternativesOf(merged, key) + field.candidates).distinct()
-            if (readings.size > 1) put(key + META_ALT_SUFFIX, altValue(readings))
+            if (com.point.core.flow.isMultiValueFact(key)) {
+
+                // #652: второй телефон — «ещё один», а не спор первого. Прежний спор
+                // этого ключа тоже переезжает в «ещё» и гаснет.
+                val primary = normConsensus(merged[key].orEmpty())
+                val more = (com.point.core.flow.moreOf(merged, key) + readings)
+                    .distinctBy { normConsensus(it) }
+                    .filterNot { normConsensus(it) == primary }
+                if (more.isNotEmpty()) put(key + com.point.core.flow.META_MORE_SUFFIX, altValue(more))
+                if (merged[key + META_ALT_SUFFIX] != null) put(key + META_ALT_SUFFIX, altValue(emptyList()))
+            } else if (readings.size > 1) put(key + META_ALT_SUFFIX, altValue(readings))
 
             if (normConsensus(merged[key].orEmpty()) != normConsensus(field.text)) return@forEach
             if (judgedByLayer) {
@@ -326,19 +351,36 @@ private fun withoutHumanFacts(values: Map<String, String>, known: Map<String, St
     values.filterKeys { provenanceOf(known, it) != Provenance.HUMAN }
 
 /**
- * Роль без правдоподобного имени — не человек (#654): модель, отвечая ролью на целый
- * текст или номер, не рождает «человека» из документа.
+ * Подписанные контакты (#653): каждая пара «имя+номер» от модели — узел «Человек»
+ * с телефоном внутри. Имя — заголовочный факт узла, номер — его знание: «Позвонить»
+ * и «Сохранить контакт» на узле работают от этого номера.
  */
-internal fun plausiblePersonName(text: String): Boolean {
-    val t = text.trim()
-    if (t.isEmpty() || t.length > 60) return false
-    if (!t.any(Char::isLetter)) return false
-
-    // Группа цифр — номер или сумма, не имя; одиночная цифра в слове — искажение
-    // распознавания («1ваненко ван»), это ещё имя.
-    if (Regex("""\d{2,}""").containsMatchIn(t)) return false
-    if (t.count(Char::isDigit) > t.length / 5) return false
-    return t.split(Regex("""\s+""")).size <= 5
+internal fun contactNodes(source: PointObject, contacts: List<com.point.core.flow.PersonContact>): Findings {
+    if (contacts.isEmpty()) return Findings()
+    val objects = LinkedHashMap<String, PointObject>()
+    val relations = mutableListOf<Relation>()
+    contacts.forEach { contact ->
+        val id = source.id + ":person:" + contact.name.lowercase().replace(Regex("""\s+"""), " ").trim()
+        objects.getOrPut(id) {
+            PointObject(
+                id = id,
+                mime = "text/plain",
+                uri = ValueRef(contact.name),
+                state = ObjectState(KIND_PERSON, setOf(Feature.HAS_PHONE)),
+                metadata = linkedMapOf(
+                    META_GRAPH_ROLE_PREFIX + "contact" to contact.name,
+                    META_GRAPH_ROLE_PREFIX + "contact" + META_SOURCE_SUFFIX to Provenance.MODEL.wire,
+                    META_ENTITY_PREFIX + "phone" to contact.phone,
+                    META_ENTITY_PREFIX + "phone" + META_SOURCE_SUFFIX to Provenance.MODEL.wire,
+                ),
+                provenance = Provenance.MODEL,
+                sourceObjects = listOf(source.id),
+                creatorAction = "understand",
+            )
+        }
+        relations += Relation(id, RelationType.FOUND_IN, source.id)
+    }
+    return Findings(objects = objects.values.toList(), relations = relations.toList())
 }
 
 internal fun roleReadings(

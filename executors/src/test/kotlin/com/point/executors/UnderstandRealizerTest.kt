@@ -373,14 +373,17 @@ class UnderstandRealizerTest {
 
     @Test
     fun `при победе известного кандидаты модели не тонут`() = runTest {
+
+        // #652: телефоны — multi-value, другие номера живут «ещё»-значениями, не спором.
         val known = textObject(metadata = mapOf("entity.phone" to "+380671234567"))
 
         val result = realizer("PHONE=+380679999999\nPHONE=+380671111111").perform(known) as ActionResult.Done
 
         assertEquals("+380671234567", result.findings!!.metadata["entity.phone"])
-        val alt = alternativesOf(result.findings!!.metadata, "entity.phone")
-        assertTrue(alt.contains("+380679999999"))
-        assertTrue("второй кандидат не исчез", alt.contains("+380671111111"))
+        val more = com.point.core.flow.moreOf(result.findings!!.metadata, "entity.phone")
+        assertTrue(more.contains("+380679999999"))
+        assertTrue("второй кандидат не исчез", more.contains("+380671111111"))
+        assertTrue(alternativesOf(result.findings!!.metadata, "entity.phone").isEmpty())
     }
 
     @Test
@@ -422,15 +425,18 @@ class UnderstandRealizerTest {
     }
 
     @Test
-    fun `известный факт не затирается — расхождение видно в alt`() = runTest {
+    fun `известный факт не затирается — другой номер виден «ещё»-значением`() = runTest {
+
+        // #652: раньше расхождение лежало спором (.alt); телефон — multi-value,
+        // второй номер — «ещё один», первый не тронут.
         val known = textObject(metadata = mapOf("entity.phone" to "+380671234567"))
 
         val result = realizer("PHONE=+380679999999").perform(known) as ActionResult.Done
 
         assertEquals("+380671234567", result.findings!!.metadata["entity.phone"])
         assertEquals(
-            listOf("+380671234567", "+380679999999"),
-            alternativesOf(result.findings!!.metadata, "entity.phone"),
+            listOf("+380679999999"),
+            com.point.core.flow.moreOf(result.findings!!.metadata, "entity.phone"),
         )
     }
 
@@ -587,5 +593,55 @@ class UnderstandRealizerTest {
             com.point.core.model.Provenance.HUMAN,
             com.point.core.flow.provenanceOf(merged, "entity.address"),
         )
+    }
+
+    @Test
+    fun `пары имя-номер рождают подписанных людей, а номера — «ещё», не спор`() = runTest {
+
+        // #653 (кейс 24): «в идеале я хочу 3 подписанных контакта, не или».
+        val chat = textObject(
+            "Начальник капітан АНДРІЯЩЕНКО Артур Миколайович +380 66 526 2706\n" +
+                "сержант ДУМБРОВАН Олександр Миколайович +380 96 199 2869\n" +
+                "сержант НОВІК Владислав Анатолійович +380 93 242 37 59",
+        )
+
+        val result = realizer(
+            "CONTACT=+380 66 526 2706 | АНДРІЯЩЕНКО Артур Миколайович\n" +
+                "CONTACT=+380 96 199 2869 | ДУМБРОВАН Олександр Миколайович\n" +
+                "CONTACT=+380 93 242 37 59 | НОВІК Владислав Анатолійович\n" +
+                "SUMMARY=Контакти служби",
+        ).perform(chat, null)
+
+        val findings = (result as ActionResult.Done).findings!!
+        val people = findings.objects.filter { it.state.kind == com.point.core.flow.KIND_PERSON }
+        assertEquals(3, people.size)
+
+        val first = people.single { it.uri.value == "АНДРІЯЩЕНКО Артур Миколайович" }
+        assertEquals("+380 66 526 2706", first.metadata["entity.phone"])
+        assertTrue("человек умеет звонить", Feature.HAS_PHONE in first.state.features)
+        assertTrue(findings.relations.any { it.fromId == first.id && it.toId == "doc" })
+
+        val merged = findings.metadata
+        assertTrue("номера — «ещё», не спор: " + merged["entity.phone.alt"],
+            alternativesOf(merged, "entity.phone").isEmpty())
+        assertEquals(2, com.point.core.flow.moreOf(merged, "entity.phone").size)
+    }
+
+    @Test
+    fun `прежний спор телефонов переезжает в «ещё» при новом понимании`() = runTest {
+
+        // #652: спор одного значения — не судьба второго телефона.
+        val disputed = textObject(
+            metadata = mapOf(
+                "entity.phone" to "+380665262706",
+                "entity.phone" + com.point.core.flow.META_ALT_SUFFIX to "+380961992869",
+            ),
+        )
+
+        val result = realizer("PHONE=+380665262706\nPHONE=+380961992869").perform(disputed, null)
+
+        val merged = (result as ActionResult.Done).findings!!.metadata
+        assertTrue(alternativesOf(merged, "entity.phone").isEmpty())
+        assertEquals(listOf("+380961992869"), com.point.core.flow.moreOf(merged, "entity.phone"))
     }
 }

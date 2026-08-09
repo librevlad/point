@@ -371,9 +371,19 @@ fun foundHeadline(obj: PointObject): String =
 /**
  * Chip прячется, только если ЕГО ФАКТ уже показан строкой выше: сравнение по `uri`
  * после правки человеком прятало не тот дубль (§4 — одно значение, не две копии).
+ * Телефон, уже подписанный человеком (#653), вторым узлом не показывается — знание
+ * не удалено, оно внутри человека.
  */
-fun visibleFoundChips(found: List<PointObject>, shownValues: Set<String>): List<PointObject> =
-    found.filter { foundHeadline(it).trim() !in shownValues }
+fun visibleFoundChips(found: List<PointObject>, shownValues: Set<String>): List<PointObject> {
+    val claimed = found.filter { it.state.kind == com.point.core.flow.KIND_PERSON }
+        .mapNotNullTo(mutableSetOf()) { person ->
+            person.metadata[META_ENTITY_PREFIX + "phone"]?.let { com.point.core.flow.normConsensus(it) }
+        }
+    return found.filter { chip ->
+        foundHeadline(chip).trim() !in shownValues &&
+            !(chip.state.kind == KIND_PHONE && com.point.core.flow.normConsensus(foundHeadline(chip)) in claimed)
+    }
+}
 
 fun otherReading(obj: PointObject): String? =
     obj.metadata.keys.firstOrNull { it.endsWith(META_ALT_SUFFIX) }
