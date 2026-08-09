@@ -87,9 +87,6 @@ fun HomeScreen(
 
     sourceLabels: List<String> = emptyList(),
     onClear: () -> Unit = {},
-    clipboard: String? = null,
-    onUseClipboard: (String) -> Unit = {},
-    onDismissClipboard: () -> Unit = {},
     crashReport: String? = null,
     onSendCrash: (String) -> Unit = {},
     onDismissCrash: () -> Unit = {},
@@ -117,10 +114,6 @@ fun HomeScreen(
         if (crashReport != null) {
 
             CrashBanner(onSend = { onSendCrash(crashReport) }, onDismiss = onDismissCrash)
-        }
-
-        if (clipboard != null) {
-            ClipboardBanner(clipboard, onUse = { onUseClipboard(clipboard) }, onDismiss = onDismissClipboard)
         }
 
         if (fromPcCount > 0) {
@@ -287,43 +280,6 @@ private fun FromPcBanner(count: Int, onPull: () -> Unit, onHide: () -> Unit) {
     }
 }
 
-@Composable
-private fun ClipboardBanner(text: String, onUse: () -> Unit, onDismiss: () -> Unit) {
-    Surface(
-        onClick = onUse,
-        color = MaterialTheme.colorScheme.secondaryContainer,
-        shape = MaterialTheme.shapes.large,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-    ) {
-        Row(
-            modifier = Modifier.padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text(
-                    "Действие из буфера",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                )
-                Text(
-                    text,
-                    style = MaterialTheme.typography.bodySmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                )
-            }
-            IconButton(onClick = onDismiss) {
-                Icon(
-                    imageVector = Icons.Filled.Close,
-                    contentDescription = "Скрыть",
-                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                )
-            }
-        }
-    }
-}
 
 @Composable
 private fun CrashBanner(onSend: () -> Unit, onDismiss: () -> Unit) {

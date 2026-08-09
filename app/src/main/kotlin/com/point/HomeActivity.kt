@@ -1,7 +1,5 @@
 package com.point
 
-import android.content.ClipboardManager
-import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.addCallback
@@ -60,13 +58,12 @@ class HomeActivity : ComponentActivity() {
                         state.keyScreen == null && state.devicesScreen == null && state.signIn == null
                     ) {
                         val recent by viewModel.recent.collectAsStateWithLifecycle()
-                        val clipboard by viewModel.clipboard.collectAsStateWithLifecycle()
                         val crash by viewModel.crashReport.collectAsStateWithLifecycle()
                         val fromPcCount by viewModel.fromPcCount.collectAsStateWithLifecycle()
 
-                        androidx.compose.runtime.LaunchedEffect(Unit) {
-                            viewModel.refreshClipboard(::readClipboardText)
-                        }
+                        // Point не заглядывает в буфер сам (#677, решение владельца
+                        // «только по жесту»): Android палил чтение тостом «Point pasted
+                        // from your clipboard», а человек ничего не просил.
                         HomeScreen(
                             recent = recent,
                             onOpen = viewModel::openFromHistory,
@@ -76,9 +73,6 @@ class HomeActivity : ComponentActivity() {
                             onExample = ::example,
                             sourceLabels = sourceLabels,
                             onClear = viewModel::clearHistory,
-                            clipboard = clipboard,
-                            onUseClipboard = ::useClipboard,
-                            onDismissClipboard = viewModel::dismissClipboard,
                             crashReport = crash,
                             onSendCrash = ::shareCrashReport,
                             onDismissCrash = viewModel::dismissCrashReport,
@@ -109,29 +103,10 @@ class HomeActivity : ComponentActivity() {
         viewModel.resumeSignIn()
     }
 
-    override fun onWindowFocusChanged(hasFocus: Boolean) {
-        super.onWindowFocusChanged(hasFocus)
-
-        if (hasFocus && !viewModel.hasFlow()) {
-            val text = readClipboardText()
-            viewModel.offerClipboard(text)
-
-            if (text.isNullOrBlank()) {
-                window.decorView.postDelayed({
-                    if (hasWindowFocus() && !viewModel.hasFlow()) {
-                        viewModel.offerClipboard(readClipboardText())
-                    }
-                }, CLIPBOARD_RETRY_MS)
-            }
-        }
-    }
-
-    private fun readClipboardText(): String? {
-        val cm = getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager ?: return null
-        val clip = cm.primaryClip ?: return null
-        if (clip.itemCount == 0) return null
-        return clip.getItemAt(0).coerceToText(this)?.toString()
-    }
+    // Буфер обмена Point сам не читает (#677/#638, решение владельца «только по
+    // жесту»): чтение при каждом фокусе окна показывало человеку системный тост
+    // «Point pasted from your clipboard» и выкладывало чужое содержимое на экран.
+    // Буфер остаётся полноценным источником — через «Новый объект → Буфер обмена».
 
     private fun shareCrashReport(report: String) {
         val send = android.content.Intent(android.content.Intent.ACTION_SEND)
@@ -142,11 +117,5 @@ class HomeActivity : ComponentActivity() {
         viewModel.dismissCrashReport()
     }
 
-    private fun useClipboard(text: String) {
-        viewModel.dismissClipboard()
-
-        viewModel.onSharedText(text)
-    }
 }
 
-private const val CLIPBOARD_RETRY_MS = 300L
