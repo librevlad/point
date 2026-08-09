@@ -9,10 +9,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -56,8 +54,10 @@ fun SettingsScreen(
         ),
     )
 
+    // Скролл отдан единственному хозяину — компакт-настройкам: свой verticalScroll
+    // внутри их скролла ронял окно (краш владельца 2026-08-09, «настройки»).
     Column(
-        modifier = Modifier.width(560.dp).verticalScroll(rememberScrollState()),
+        modifier = Modifier.width(560.dp),
         verticalArrangement = Arrangement.spacedBy(22.dp),
     ) {
         Text("НАСТРОЙКИ", style = PointType.label)
