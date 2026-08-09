@@ -277,9 +277,8 @@ fun main(args: Array<String>) {
         // Компакт живёт у трея: закрыть = спрятаться, выход — из меню трея.
         // Непросмотренное прибытие оставляет след на иконке (PC3): peek легко пропустить.
         val freshIds by state.fresh.collectAsState()
-        val base = painterResource("point-icon.png")
-        val icon = androidx.compose.runtime.remember(base, freshIds.isNotEmpty()) {
-            badgedIcon(base, badge = freshIds.isNotEmpty())
+        val icon = androidx.compose.runtime.remember(freshIds.isNotEmpty()) {
+            trayPortalIcon(badge = freshIds.isNotEmpty())
         }
         Tray(
             icon = icon,
@@ -391,19 +390,33 @@ fun main(args: Array<String>) {
     }
 }
 
-/** Иконка трея с точкой-бейджем: след непросмотренного прибытия. */
-private fun badgedIcon(base: androidx.compose.ui.graphics.painter.Painter, badge: Boolean): androidx.compose.ui.graphics.painter.Painter =
-    if (!badge) {
-        base
-    } else {
-        object : androidx.compose.ui.graphics.painter.Painter() {
-            override val intrinsicSize get() = base.intrinsicSize
-            override fun androidx.compose.ui.graphics.drawscope.DrawScope.onDraw() {
-                with(base) { draw(size) }
+/**
+ * Иконка трея рисуется кодом: прозрачный фон (png сидел чёрным квадратом —
+ * замечание владельца), знак — портал-кольца, бейдж — след непросмотренного.
+ */
+private fun trayPortalIcon(badge: Boolean): androidx.compose.ui.graphics.painter.Painter =
+    object : androidx.compose.ui.graphics.painter.Painter() {
+        override val intrinsicSize = androidx.compose.ui.geometry.Size(64f, 64f)
+        override fun androidx.compose.ui.graphics.drawscope.DrawScope.onDraw() {
+            val c = center
+            val r = size.minDimension / 2f
+            drawCircle(
+                color = androidx.compose.ui.graphics.Color(0xFF7B5CFF),
+                radius = r * 0.62f,
+                center = c,
+                style = androidx.compose.ui.graphics.drawscope.Stroke(width = r * 0.18f),
+            )
+            drawCircle(
+                color = androidx.compose.ui.graphics.Color(0xFF00E0FF),
+                radius = r * 0.32f,
+                center = c,
+                style = androidx.compose.ui.graphics.drawscope.Stroke(width = r * 0.11f),
+            )
+            if (badge) {
                 drawCircle(
                     color = androidx.compose.ui.graphics.Color(0xFF00E0FF),
-                    radius = size.minDimension * 0.18f,
-                    center = androidx.compose.ui.geometry.Offset(size.width * 0.78f, size.height * 0.22f),
+                    radius = r * 0.22f,
+                    center = androidx.compose.ui.geometry.Offset(size.width * 0.8f, size.height * 0.2f),
                 )
             }
         }
