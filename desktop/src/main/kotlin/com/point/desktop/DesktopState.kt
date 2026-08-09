@@ -231,9 +231,12 @@ class DesktopState(
         updateJournal { recordKnowledge(it, updated.obj.uri.value, newMeta) }
     }
 
-    fun setPhoneCaps(caps: List<com.point.core.flow.PcRemoteAction>) {
+    fun setPhoneCaps(caps: List<com.point.core.flow.PcRemoteAction>, persist: Boolean = true) {
+
+        // Загрузка кэша с диска не пишет его обратно: иначе метка времени файла
+        // выглядит свежей, хотя телефон мог не объявляться неделю (#624).
         _phoneCaps.value = caps
-        runCatching { persistPhoneCaps(caps) }
+        if (persist) runCatching { persistPhoneCaps(caps) }
     }
 
     fun phoneActionsFor(item: InboxItem): List<com.point.core.flow.PcRemoteAction> {

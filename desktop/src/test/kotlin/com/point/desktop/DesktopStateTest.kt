@@ -21,6 +21,26 @@ class DesktopStateTest {
         InboxItem(PointObject("id", mime, ScratchRef("/tmp/объект"), ObjectState(kind)))
 
     @Test
+    fun `загрузка кэша объявлений не молодит его на диске`() {
+
+        // #624- при старте кэш загружался и тут же сохранялся обратно, поэтому метка
+        // времени файла выглядела свежей, хотя телефон мог не объявляться неделю.
+        var persisted = 0
+        val s = DesktopState(
+            registry = DesktopRegistry(emptySet()),
+            resolver = DesktopResolver(emptySet()),
+            clipboard = { },
+            persistPhoneCaps = { persisted++ },
+        )
+
+        s.setPhoneCaps(listOf(PcRemoteAction("call", "Позвонить")), persist = false)
+        assertEquals("чтение с диска — не новое объявление", 0, persisted)
+
+        s.setPhoneCaps(listOf(PcRemoteAction("call", "Позвонить")))
+        assertEquals("настоящее объявление телефона сохраняется", 1, persisted)
+    }
+
+    @Test
     fun `недоступное действие телефона видно с причиной, а не скрыто`() {
         // Аудит, блок 2.3 (PC5): раньше недоступное исчезало молча — телефон в зеркальной
         // ситуации показывает причину. Теперь виден весь список, недоступное — с причиной.

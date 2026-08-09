@@ -189,7 +189,7 @@ fun main(args: Array<String>) {
     runCatching { inbox.sweep(System.currentTimeMillis() - 24L * 60 * 60 * 1000) }
 
     runCatching { com.point.core.flow.decodePcCaps(phoneCapsFile.readText()) }
-        .getOrNull()?.let(state::setPhoneCaps)
+        .getOrNull()?.let { state.setPhoneCaps(it, persist = false) }
 
     val pcSuffix = mapOf(
         "pc-open" to "Открыть на компьютере",

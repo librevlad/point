@@ -1289,11 +1289,15 @@ class FlowViewModel @Inject constructor(
             val known = com.point.core.flow.LinkedPc(pc.id, pc.name, pc.key)
 
             runCatching { syncSecrets(known) }
-            if (pcLinks.current() == known) return@launch
-            runCatching { pcLinks.save(known) }
 
+            // Объявления обеих сторон освежаются и для давно известного ПК: он мог
+            // обновиться, пока связь жила, — «На телефон на ПК» держалось у телефона
+            // кэшем вечно, до захода в «Устройства» (#627, скрин владельца 2026-08-09).
             runCatching { pcTransport.fetchCaps(known)?.let { caps -> pcCaps.save(caps) } }
             runCatching { pcTransport.pushPhoneCaps(known, phoneAdvertised()) }
+
+            if (pcLinks.current() == known) return@launch
+            runCatching { pcLinks.save(known) }
             refreshFromPc(force = true)
         }
     }
