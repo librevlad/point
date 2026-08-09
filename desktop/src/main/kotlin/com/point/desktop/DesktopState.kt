@@ -142,7 +142,11 @@ class DesktopState(
             }.getOrElse { e ->
 
                 if (e is kotlinx.coroutines.CancellationException) throw e
-                ActionResult.Failure("Действие не выполнилось — попробуйте ещё раз", recoverable = true)
+                if (e is NoWayHere) {
+                    ActionResult.Failure(e.why, recoverable = false)
+                } else {
+                    ActionResult.Failure("Действие не выполнилось — попробуйте ещё раз", recoverable = true)
+                }
             }
         } catch (e: kotlinx.coroutines.CancellationException) {
             _working.value = null

@@ -76,21 +76,6 @@ fun main(args: Array<String>) {
 
     val llm = DesktopLlmClient(config = { FilePcConfig(pointDir).load().ai })
     val entities = com.point.core.flow.RegexEntityExtractor()
-    val registry = DesktopRegistry(
-        setOf(
-
-            PcOpenCapability(), PcCopyCapability(), PcRevealCapability(), PcSaveAsCapability(),
-            PcDownloadCapability(), PcToPhoneCapability(), PcPrintCapability(),
-            PcOpenLinkCapability(),
-
-            PcUnderstandCapability(), PcTranslateCapability(), PcAskCapability(),
-            PcTranscribeCapability(),
-
-            PcEntitiesCapability(),
-        ) +
-
-            com.point.core.flow.capabilities.sharedCapabilities(),
-    )
     val resolver = DesktopResolver(
         setOf(
             PcOpenRealizer(opener),
@@ -128,6 +113,24 @@ fun main(args: Array<String>) {
                 runCatching { java.awt.Desktop.getDesktop().browse(java.net.URI(url)) }
             },
         ),
+    )
+    val registry = DesktopRegistry(
+        setOf(
+
+            PcOpenCapability(), PcCopyCapability(), PcRevealCapability(), PcSaveAsCapability(),
+            PcDownloadCapability(), PcToPhoneCapability(), PcPrintCapability(),
+            PcOpenLinkCapability(),
+
+            PcUnderstandCapability(), PcTranslateCapability(), PcAskCapability(),
+            PcTranscribeCapability(),
+
+            PcEntitiesCapability(),
+        ) +
+
+            com.point.core.flow.capabilities.sharedCapabilities(),
+
+        // Дверь видна, только когда за ней есть исполнитель под этот объект (аудит, блок 1.6).
+        runnable = resolver::canRun,
     )
     val accountScope = kotlinx.coroutines.CoroutineScope(
         kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default,

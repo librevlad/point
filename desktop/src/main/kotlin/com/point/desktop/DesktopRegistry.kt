@@ -9,7 +9,12 @@ import com.point.core.model.CapabilityId
 import com.point.core.model.LatentBubble
 import com.point.core.model.ObjectState
 
-class DesktopRegistry(private val capabilities: Set<Capability>) : CapabilityRegistry {
+class DesktopRegistry(
+    private val capabilities: Set<Capability>,
+
+    /** Дверь показывается, только если за ней есть исполнитель под этот объект (аудит, блок 1.6). */
+    private val runnable: (CapabilityId, ObjectState) -> Boolean = { _, _ -> true },
+) : CapabilityRegistry {
 
     override fun bubblesFor(state: ObjectState): List<Bubble> =
         bubblesFor(com.point.core.flow.GraphState(placeholder(state)))
@@ -28,6 +33,7 @@ class DesktopRegistry(private val capabilities: Set<Capability>) : CapabilityReg
 
             .filterNot { it.meta.investigation }
             .filter { it.accepts(state) }
+            .filter { runnable(it.id, state) }
             .sortedWith(
                 compareBy(
                     { if (intent == null || intent in it.intents(state)) 0 else 1 },
@@ -52,6 +58,9 @@ class DesktopRegistry(private val capabilities: Set<Capability>) : CapabilityReg
     override fun byId(id: CapabilityId): Capability = capabilities.first { it.id == id }
 }
 
+/** Исполнителя нет — это честный отказ с причиной, а не молчаливый «первый попавшийся». */
+class NoWayHere(val why: String) : IllegalStateException(why)
+
 class DesktopResolver(
     realizers: Set<Realizer>,
     private val policy: com.point.core.flow.ExecutionPolicy = com.point.core.flow.DefaultExecutionPolicy(),
@@ -64,10 +73,18 @@ class DesktopResolver(
     override fun leavesDevice(capabilityId: CapabilityId): Boolean =
         byCapability[capabilityId]?.any { it.meta.kind == com.point.core.flow.RealizerKind.CLOUD } ?: false
 
+    fun canRun(capabilityId: CapabilityId, state: ObjectState): Boolean =
+        byCapability[capabilityId].orEmpty().any { it.isAvailable() && it.accepts(state) }
+
     override fun realizerFor(capabilityId: CapabilityId, state: ObjectState): Realizer {
-        val candidates = byCapability.getValue(capabilityId)
+        val candidates = byCapability[capabilityId].orEmpty()
+
+        // Аудит, блок 1.6: fallback на «первого попавшегося» превращал двери в обманки
+        // («В PDF» на картинке всегда падало). Нет исполнителя — честная причина.
         return policy.choose(state, candidates).firstOrNull()
-            ?: candidates.minByOrNull { it.meta.priority }
-            ?: candidates.first()
+            ?: throw NoWayHere(
+                candidates.firstNotNullOfOrNull { it.unavailableReason() }
+                    ?: "На компьютере это действие для такого объекта не выполняется",
+            )
     }
 }

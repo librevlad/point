@@ -86,4 +86,47 @@ class DesktopRegistryTest {
 
         assertEquals("равные по смыслу — по прежнему priority", listOf("open-b", "open-c"), titles.take(2))
     }
+
+    // ---- Фаза A редизайна: двери-обманки исчезают, отказ исполнителя честен ----
+
+    private class OfficeOnlyRealizer : com.point.core.flow.Realizer {
+        override val capabilityId = com.point.core.model.CapabilityId("pdf")
+        override fun accepts(state: ObjectState) = state.kind == ObjectKind.OFFICE
+        override fun unavailableReason() = "В PDF на компьютере превращаются только документы"
+        override suspend fun perform(
+            input: com.point.core.model.PointObject,
+            amendment: String?,
+        ): com.point.core.model.ActionResult = com.point.core.model.ActionResult.Done("ок")
+    }
+
+    @Test
+    fun `дверь без исполнителя под этот объект не показывается`() {
+        // Живой аналог: «В PDF» на картинке всегда падало — capability шире реализатора.
+        val wide = Declared("pdf", priority = 5, serves = emptySet())
+        val resolver = DesktopResolver(setOf(OfficeOnlyRealizer()))
+        val honest = DesktopRegistry(setOf(wide), runnable = resolver::canRun)
+
+        assertEquals(
+            emptyList<String>(),
+            honest.bubblesFor(ObjectState(ObjectKind.IMAGE)).map { it.capabilityId.value },
+        )
+        assertEquals(
+            listOf("pdf"),
+            honest.bubblesFor(ObjectState(ObjectKind.OFFICE)).map { it.capabilityId.value },
+        )
+    }
+
+    @Test
+    fun `нет исполнителя — честная причина, а не первый попавшийся`() {
+        val resolver = DesktopResolver(setOf(OfficeOnlyRealizer()))
+
+        val thrown = runCatching {
+            resolver.realizerFor(com.point.core.model.CapabilityId("pdf"), ObjectState(ObjectKind.IMAGE))
+        }.exceptionOrNull()
+
+        assertEquals(
+            "В PDF на компьютере превращаются только документы",
+            (thrown as NoWayHere).why,
+        )
+    }
 }
