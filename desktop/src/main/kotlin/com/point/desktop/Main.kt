@@ -1,10 +1,13 @@
 package com.point.desktop
 
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Tray
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
-import com.point.desktop.ui.DesktopApp
 import java.awt.FileDialog
 import java.awt.Toolkit
 import java.awt.datatransfer.StringSelection
@@ -52,6 +55,10 @@ fun main(args: Array<String>) {
     }
 
     lateinit var state: DesktopState
+
+    val compactVisible = kotlinx.coroutines.flow.MutableStateFlow(true)
+    val openRequest = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+    val peek = PeekState { System.currentTimeMillis() }
     val saveTarget = SaveTarget { file ->
         val dialog = FileDialog(null as java.awt.Frame?, "Сохранить в…", FileDialog.SAVE)
         dialog.file = file.name
@@ -224,6 +231,8 @@ fun main(args: Array<String>) {
             val item = inbox.receive(name, mime, meta, bytes.inputStream())
             state.onReceived(item, ObjectSource.PHONE_RELAY)
 
+            // «Скинули с телефона — высветилась часть окна»: своя плашка, не системное уведомление.
+            peek.arrived(item, compactVisible.value)
             action?.let { state.runRemoteActionNow(it, item) }
         },
         log = { line -> println("[mailbox] " + line) },
@@ -245,66 +254,130 @@ fun main(args: Array<String>) {
             runCatching {
                 SendToRunning.collectHandOffs(pointDir).forEach { file ->
                     state.onReceived(inbox.addFile(file.absolutePath), ObjectSource.LOCAL)
+
+                    // «Открыть в Point» — человек сам позвал: окошко выходит само.
+                    compactVisible.value = true
                 }
             }
             runCatching { Thread.sleep(1_000) }.getOrElse { return@Thread }
         }
     }, "point-handoff").apply { isDaemon = true }.also { it.start() }
 
-    application {
+    // Рабочая область (без таскбара) — в координатах интерфейса.
+    val workArea = runCatching {
+        val b = java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment().maximumWindowBounds
+        ScreenArea(b.x, b.y, b.width, b.height)
+    }.getOrDefault(ScreenArea(0, 0, 1280, 720))
 
-        val windowState = androidx.compose.ui.window.rememberWindowState(
-            width = 1320.dp, height = 900.dp,
+    application {
+        val visible by compactVisible.collectAsState()
+        val compact = compactBounds(workArea)
+
+        // Компакт живёт у трея: закрыть = спрятаться, выход — из меню трея.
+        Tray(
+            icon = painterResource("point-icon.png"),
+            tooltip = "Point",
+            onAction = { compactVisible.value = !compactVisible.value },
+            menu = {
+                Item("Открыть Point") { compactVisible.value = true }
+                Item("Выход") {
+                    relayPoller.stop()
+                    handOffs.interrupt()
+                    runCatching { instanceLock?.release() }
+                    exitApplication()
+                }
+            },
+        )
+
+        val compactState = androidx.compose.ui.window.rememberWindowState(
+            position = androidx.compose.ui.window.WindowPosition(compact.x.dp, compact.y.dp),
+            size = androidx.compose.ui.unit.DpSize(compact.width.dp, compact.height.dp),
         )
         Window(
-            state = windowState,
-            onCloseRequest = {
-                relayPoller.stop()
-                handOffs.interrupt()
-                runCatching { instanceLock?.release() }
-                exitApplication()
-            },
-            title = "Point для ПК",
+            visible = visible,
+            state = compactState,
+            onCloseRequest = { compactVisible.value = false },
+            undecorated = true,
+            transparent = true,
+            resizable = false,
+            alwaysOnTop = true,
+            title = "Point",
             icon = painterResource("point-icon.png"),
         ) {
-
             com.point.desktop.ui.PointDesktopTheme {
+                com.point.desktop.ui.CompactApp(
+                    state = state,
+                    config = config,
+                    account = account,
+                    openObject = openRequest,
+                    onObjectOpened = { openRequest.value = null },
+                    onFilesDropped = { files ->
+                        files.forEach { state.onReceived(inbox.addFile(it.absolutePath), ObjectSource.DROPPED) }
+                    },
+                    onTextDropped = { text -> state.onReceived(inbox.addText(text), ObjectSource.DROPPED) },
+                    onClipboardTaken = { text -> state.onReceived(inbox.addText(text), ObjectSource.CLIPBOARD) },
+                    onWipe = { inbox.wipe() },
+                    onSaveSettings = { changed ->
+                        runCatching { FilePcConfig(pointDir).save(changed) }
 
-            DesktopApp(
-                state = state,
-                config = config,
-                account = account,
-
-                onFilesDropped = { files ->
-                    files.forEach { state.onReceived(inbox.addFile(it.absolutePath), ObjectSource.DROPPED) }
-                },
-                onTextDropped = { text -> state.onReceived(inbox.addText(text), ObjectSource.DROPPED) },
-                onClipboardTaken = { text -> state.onReceived(inbox.addText(text), ObjectSource.CLIPBOARD) },
-
-                onWipe = { inbox.wipe() },
-                onSaveSettings = { changed ->
-                    runCatching { FilePcConfig(pointDir).save(changed) }
-
-                    runCatching {
-                        val exe = installedExecutable(ProcessHandle.current().info().command().orElse(null))
-                        when {
-                            !changed.rightClick -> shellMenu.unregister()
-                            exe != null -> shellMenu.register(shellCommandFor(exe), "Открыть в Point")
+                        runCatching {
+                            val exe = installedExecutable(ProcessHandle.current().info().command().orElse(null))
+                            when {
+                                !changed.rightClick -> shellMenu.unregister()
+                                exe != null -> shellMenu.register(shellCommandFor(exe), "Открыть в Point")
+                            }
                         }
-                    }
-                },
-                onSweepNow = {
-                    runCatching { inbox.sweep(System.currentTimeMillis() - 24L * 60 * 60 * 1000) }
-                },
-                onGrabScreen = {
-                    val was = windowState.isMinimized
-                    windowState.isMinimized = true
-                    Thread.sleep(SCREEN_GRAB_DELAY_MS)
-                    val file = screenGrab.take()
-                    windowState.isMinimized = was
-                    file
-                },
-            )
+                    },
+                    onSweepNow = {
+                        runCatching { inbox.sweep(System.currentTimeMillis() - 24L * 60 * 60 * 1000) }
+                    },
+                    onGrabScreen = {
+                        compactVisible.value = false
+                        Thread.sleep(SCREEN_GRAB_DELAY_MS)
+                        val file = screenGrab.take()
+                        compactVisible.value = true
+                        file
+                    },
+                    onHide = { compactVisible.value = false },
+                )
+            }
+        }
+
+        // «Высветилась часть окна»: плашка на месте будущего компакта, сама гаснет по сроку.
+        val peekTick by peek.pulse.collectAsState()
+        val shown = peekTick?.let { peek.current() }
+        if (shown != null && !visible) {
+            LaunchedEffect(peekTick) {
+                kotlinx.coroutines.delay(PEEK_LIFETIME_MS + 100)
+                peek.current()
+            }
+            val place = peekBounds(workArea)
+            Window(
+                visible = true,
+                state = androidx.compose.ui.window.rememberWindowState(
+                    position = androidx.compose.ui.window.WindowPosition(place.x.dp, place.y.dp),
+                    size = androidx.compose.ui.unit.DpSize(place.width.dp, place.height.dp),
+                ),
+                onCloseRequest = { peek.dismiss() },
+                undecorated = true,
+                transparent = true,
+                resizable = false,
+                alwaysOnTop = true,
+                focusable = false,
+                title = "Point — пришло",
+            ) {
+                com.point.desktop.ui.PointDesktopTheme {
+                    com.point.desktop.ui.PeekCard(
+                        item = shown,
+                        onOpen = {
+                            peek.take()?.let { arrived ->
+                                openRequest.value = arrived.obj.id
+                                compactVisible.value = true
+                            }
+                        },
+                        onDismiss = { peek.dismiss() },
+                    )
+                }
             }
         }
     }

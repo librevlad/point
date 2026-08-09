@@ -7,121 +7,35 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.point.core.model.Bubble
 import com.point.core.model.ObjectKind
-import com.point.desktop.DesktopState
 import com.point.desktop.InboxItem
 import com.point.desktop.JournalEntry
 import com.point.desktop.sourceLabel
 import com.point.desktop.whenLabel
 import java.time.ZoneId
 
+/** Сам объект виден сразу: текст читается, картинка показана (P2/P3). */
 @Composable
-fun Conveyor(state: DesktopState, item: InboxItem) {
-    val journal by state.journal.collectAsState()
-    val now = rememberNow()
-    Row(
-        modifier = Modifier.fillMaxSize(),
-        horizontalArrangement = Arrangement.spacedBy(28.dp),
-    ) {
-        Column(
-            modifier = Modifier.weight(0.58f).fillMaxHeight().verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(18.dp),
-        ) {
-            Source(item, onCopyFact = state::copyFact, questionName = { id ->
-                state.questionName(id, item.obj.state)
-            })
-            Path(journal.firstOrNull { it.path == item.obj.uri.value }, now)
-        }
-
-        LiveEnd(
-            state,
-            item,
-            modifier = Modifier.weight(0.42f).widthIn(min = 260.dp).fillMaxHeight(),
-        )
-    }
-}
-
-@Composable
-private fun Source(
-    item: InboxItem,
-    onCopyFact: (String) -> Unit = {},
-    questionName: (com.point.core.model.CapabilityId) -> String? = { null },
-) {
-    Column(
-        modifier = Modifier.fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
-            .background(Brush.verticalGradient(listOf(PointColors.surface, PointColors.surfaceDeep)))
-            .border(1.dp, PointColors.border, RoundedCornerShape(20.dp))
-            .padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            Box(
-                Modifier.size(56.dp)
-                    .clip(RoundedCornerShape(18.dp))
-                    .background(PointColors.violet.copy(alpha = 0.16f))
-                    .border(1.dp, PointColors.violet.copy(alpha = 0.35f), RoundedCornerShape(18.dp)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(kindMark(item.obj.state.kind), style = PointType.title.copy(color = PointColors.violet))
-            }
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text(
-                    item.obj.metadata["name"] ?: "Объект",
-                    style = PointType.title,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-
-                // Суть, когда она понята, — вместо голого типа (P7: результат, не механизм).
-                Text(
-                    item.obj.metadata[com.point.core.flow.META_SEMANTIC_SUMMARY]
-                        ?: kindLabel(item.obj.state.kind),
-                    style = PointType.small,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-
-        Preview(item)
-        Knowledge(item, onCopyFact, questionName)
-    }
-}
-
-/** Сам объект виден сразу: текст читается, картинка показана (P2/P3 — экран без объекта был дефектом). */
-@Composable
-private fun Preview(item: InboxItem) {
+internal fun Preview(item: InboxItem) {
     when (item.obj.state.kind) {
         ObjectKind.TEXT -> {
             val text = remember(item.obj.uri.value) {
@@ -154,7 +68,7 @@ private fun Preview(item: InboxItem) {
                     contentDescription = null,
                     contentScale = androidx.compose.ui.layout.ContentScale.Fit,
                     modifier = Modifier.fillMaxWidth()
-                        .heightIn(max = 320.dp)
+                        .heightIn(max = 300.dp)
                         .clip(RoundedCornerShape(12.dp)),
                 )
             }
@@ -164,7 +78,7 @@ private fun Preview(item: InboxItem) {
 }
 
 @Composable
-private fun Knowledge(
+internal fun Knowledge(
     item: InboxItem,
     onCopyFact: (String) -> Unit,
     questionName: (com.point.core.model.CapabilityId) -> String?,
@@ -220,43 +134,51 @@ private fun Knowledge(
     }
 }
 
-private const val PREVIEW_CHARS = 2_000
-
+/** Путь-хроника: складная строка — разворачивается по клику. */
 @Composable
-private fun Path(entry: JournalEntry?, now: Long) {
+internal fun FoldedPath(entry: JournalEntry?, now: Long) {
     if (entry == null) return
     val zone = remember { ZoneId.systemDefault() }
+    var open by remember(entry.path) { mutableStateOf(false) }
     Column(
         modifier = Modifier.fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .border(1.dp, PointColors.border, RoundedCornerShape(16.dp))
-            .padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalArrangement = Arrangement.spacedBy(11.dp),
+            .clip(RoundedCornerShape(12.dp))
+            .border(1.dp, PointColors.border, RoundedCornerShape(12.dp))
+            .clickable { open = !open }
+            .padding(horizontal = 12.dp, vertical = 9.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Text("ПУТЬ", style = PointType.label)
-        PathStop(
-            dot = PointColors.violet,
-            title = "Приехал · ${sourceLabel(entry.source)}",
-            note = null,
-            time = whenLabel(entry.at, now, zone),
-        )
-        entry.steps.forEach { step ->
-            PathStop(
-
-                dot = if (step.ok) PointColors.cyan else PointColors.muted,
-                title = step.title,
-                note = step.note.takeIf { it.isNotBlank() },
-                time = whenLabel(step.at, now, zone),
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("ПУТЬ", style = PointType.label)
+            Text(
+                if (open) "▾" else "▸ ${entry.steps.size + 1}",
+                style = PointType.small,
             )
         }
-        if (entry.steps.isEmpty()) {
-            Text("Пока ничего не делали — действия справа", style = PointType.small)
+        if (open) {
+            PathStop(
+                dot = PointColors.violet,
+                title = "Приехал · ${sourceLabel(entry.source)}",
+                note = null,
+                time = whenLabel(entry.at, now, zone),
+            )
+            entry.steps.forEach { step ->
+                PathStop(
+                    dot = if (step.ok) PointColors.cyan else PointColors.muted,
+                    title = step.title,
+                    note = step.note.takeIf { it.isNotBlank() },
+                    time = whenLabel(step.at, now, zone),
+                )
+            }
+            if (entry.steps.isEmpty()) {
+                Text("Пока ничего не делали — действия ниже", style = PointType.small)
+            }
         }
     }
 }
 
 @Composable
-private fun PathStop(dot: Color, title: String, note: String?, time: String) {
+internal fun PathStop(dot: Color, title: String, note: String?, time: String) {
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Top) {
         Box(Modifier.padding(top = 6.dp).size(7.dp).background(dot, CircleShape))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -268,49 +190,7 @@ private fun PathStop(dot: Color, title: String, note: String?, time: String) {
 }
 
 @Composable
-private fun LiveEnd(state: DesktopState, item: InboxItem, modifier: Modifier = Modifier) {
-    val working by state.working.collectAsState()
-    Column(
-        modifier = modifier.verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(18.dp),
-    ) {
-
-        working?.let { Working(it) { state.cancelWork() } }
-
-        // Один список: свои и телефонные вместе, порядок — по пользе, недоступное — с причиной.
-        val actions = state.actionsFor(item)
-        if (actions.isNotEmpty()) {
-            val primary = actions.indexOfFirst { it.unavailable == null }
-            Section("ЧТО МОЖНО СДЕЛАТЬ") {
-                actions.forEachIndexed { i, action ->
-                    when {
-                        action.unavailable != null -> MutedStation(
-                            action.title,
-                            where = if (action.onPhone) "на телефоне" else null,
-                            reason = action.unavailable,
-                        ) { state.say(action.unavailable) }
-
-                        action.bubble != null -> Station(
-                            action.title,
-                            PointColors.violet,
-                            primary = i == primary,
-                        ) { state.onBubble(item, action.bubble) }
-
-                        action.remote != null -> Station(
-                            action.title,
-                            PointColors.violet,
-                            where = "на телефоне",
-                            primary = i == primary,
-                        ) { state.sendToPhone(item, action.remote) }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun Working(work: com.point.desktop.Working, onCancel: () -> Unit) {
+internal fun Working(work: com.point.desktop.Working, onCancel: () -> Unit) {
     var now by remember(work.startedAt) { mutableStateOf(System.currentTimeMillis()) }
     LaunchedEffect(work.startedAt) {
         while (true) {
@@ -321,7 +201,7 @@ private fun Working(work: com.point.desktop.Working, onCancel: () -> Unit) {
     Column(
         modifier = Modifier.fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
-            .background(Brush.verticalGradient(listOf(PointColors.surface, PointColors.surfaceDeep)))
+            .background(PointColors.surface)
             .border(1.dp, PointColors.cyan.copy(alpha = 0.45f), RoundedCornerShape(14.dp))
             .padding(horizontal = 15.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -340,7 +220,7 @@ private fun Working(work: com.point.desktop.Working, onCancel: () -> Unit) {
     }
 }
 
-private fun secondsWord(millis: Long): String {
+internal fun secondsWord(millis: Long): String {
     val s = (millis / 1000).coerceAtLeast(0)
     if (s >= 60) {
         val m = s / 60
@@ -360,15 +240,7 @@ private fun secondsWord(millis: Long): String {
 }
 
 @Composable
-private fun Section(title: String, content: @Composable () -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
-        Text(title, style = PointType.label)
-        content()
-    }
-}
-
-@Composable
-private fun Station(
+internal fun Station(
     title: String,
     accent: Color,
     where: String? = null,
@@ -378,7 +250,7 @@ private fun Station(
     Row(
         modifier = Modifier.fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
-            .background(Brush.verticalGradient(listOf(PointColors.surface, PointColors.surfaceDeep)))
+            .background(PointColors.surface)
             .border(
                 1.dp,
                 if (primary) accent.copy(alpha = 0.65f) else Color.White.copy(alpha = 0.06f),
@@ -396,9 +268,9 @@ private fun Station(
     }
 }
 
-/** Недоступное действие видно с причиной, а не скрыто (PC5) — и по клику причина повторяется. */
+/** Недоступное действие видно с причиной, а не скрыто (PC5). */
 @Composable
-private fun MutedStation(title: String, where: String?, reason: String, onClick: () -> Unit) {
+internal fun MutedStation(title: String, where: String?, reason: String, onClick: () -> Unit) {
     Column(
         modifier = Modifier.fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
@@ -422,7 +294,7 @@ private fun MutedStation(title: String, where: String?, reason: String, onClick:
     }
 }
 
-private fun kindMark(kind: ObjectKind): String = when (kind) {
+internal fun kindMark(kind: ObjectKind): String = when (kind) {
     ObjectKind.IMAGE -> "IMG"
     ObjectKind.PDF -> "PDF"
     ObjectKind.TEXT -> "TXT"
@@ -433,7 +305,7 @@ private fun kindMark(kind: ObjectKind): String = when (kind) {
     else -> "•"
 }
 
-private fun kindLabel(kind: ObjectKind): String = when (kind) {
+internal fun kindLabel(kind: ObjectKind): String = when (kind) {
     ObjectKind.IMAGE -> "Изображение"
     ObjectKind.PDF -> "PDF"
     ObjectKind.TEXT -> "Текст"
@@ -444,4 +316,4 @@ private fun kindLabel(kind: ObjectKind): String = when (kind) {
     else -> "Файл"
 }
 
-internal val DOCK_HINT = "Брось файл сюда"
+internal const val PREVIEW_CHARS = 2_000
