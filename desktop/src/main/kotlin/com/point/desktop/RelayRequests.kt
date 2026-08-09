@@ -22,6 +22,8 @@ class RelayRequests(
 
     private val onSecrets: (com.point.core.flow.SharedSecrets) -> com.point.core.flow.SharedSecrets = { it },
     private val log: (String) -> Unit = {},
+
+    private val seen: SeenLetters? = null,
 ) {
 
     class Reply(val meta: Map<String, String> = emptyMap(), val body: ByteArray = ByteArray(0))
@@ -47,16 +49,26 @@ class RelayRequests(
 
     fun answer(kind: String, meta: Map<String, String>, bytes: ByteArray): Reply? = when (kind) {
         RelayRpc.OBJECT -> {
-            val name = meta["name"]?.takeIf { it.isNotBlank() } ?: "объект"
+            val letterId = meta[RelayRpc.ID].orEmpty()
+            if (letterId.isNotBlank() && seen?.firstTime(letterId) == false) {
+                // Сервер доставляет «хотя бы раз» — повтор письма не рождает второй объект.
+                log("письмо уже приносили — принято не будет")
+                Reply(
+                    body = encodePcReceiveReply(com.point.core.flow.PcActionOutcome.Done("уже получено"))
+                        .toByteArray(Charsets.UTF_8),
+                )
+            } else {
+                val name = meta["name"]?.takeIf { it.isNotBlank() } ?: "объект"
 
-            val understanding = meta - setOf("name", "mime", "action", RelayRpc.KIND, RelayRpc.ID)
-            val done = runCatching {
-                onObject(name, meta["mime"] ?: "application/octet-stream", understanding, bytes, meta["action"])
-            }.getOrElse { e ->
-                log("объект не принят: ${e.javaClass.simpleName}")
-                com.point.core.model.ActionResult.Failure("компьютер не смог принять объект", recoverable = true)
+                val understanding = meta - setOf("name", "mime", "action", RelayRpc.KIND, RelayRpc.ID)
+                val done = runCatching {
+                    onObject(name, meta["mime"] ?: "application/octet-stream", understanding, bytes, meta["action"])
+                }.getOrElse { e ->
+                    log("объект не принят: ${e.javaClass.simpleName}")
+                    com.point.core.model.ActionResult.Failure("компьютер не смог принять объект", recoverable = true)
+                }
+                replyFor(done)
             }
-            replyFor(done)
         }
 
         RelayRpc.CAPS -> Reply(body = encodePcCaps(remoteActions()).toByteArray(Charsets.UTF_8))

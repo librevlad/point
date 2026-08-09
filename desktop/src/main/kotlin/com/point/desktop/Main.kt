@@ -218,6 +218,7 @@ fun main(args: Array<String>) {
             action?.let { state.runRemoteActionNow(it, item) }
         },
         log = { line -> println("[mailbox] " + line) },
+        seen = SeenLetters(File(pointDir, "seen-letters")),
     )
     val relayPoller = RelayPoller(
         serverUrl = serverUrl,

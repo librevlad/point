@@ -31,7 +31,10 @@ class RelayRequestsTest {
         PcRemoteAction("pc-print", "Напечатать на ПК", unavailable = "на компьютере нет принтера"),
     )
 
-    private fun requests(outbox: Outbox = Outbox(tmp.newFolder())) = RelayRequests(
+    private fun requests(
+        outbox: Outbox = Outbox(tmp.newFolder()),
+        seen: SeenLetters? = null,
+    ) = RelayRequests(
         remoteActions = { actions },
         outbox = outbox,
         onPhoneCaps = { phoneCaps = it },
@@ -43,6 +46,7 @@ class RelayRequestsTest {
             assertNull("служебные поля дороги в объект не попадают", meta[RelayRpc.KIND])
             if (action != null) result else null
         },
+        seen = seen,
     )
 
     @Test
@@ -161,5 +165,63 @@ class RelayRequestsTest {
     @Test
     fun `незнакомый вид письма остаётся без ответа — отвечать за будущее мы не будем`() {
         assertNull(requests().answer("что-то-из-завтра", emptyMap(), ByteArray(0)))
+    }
+
+    // Сервер доставляет «хотя бы раз»: недоподтверждённое письмо приходит снова —
+    // живой прогон 2026-08-09, «Встречи…» дублировались при каждом рестарте ПК.
+
+    @Test
+    fun `то же письмо второй раз не рождает второй объект`() {
+        val requests = requests(seen = SeenLetters(File(tmp.newFolder(), "seen")))
+        val letter = mapOf(
+            "name" to "Встречи.txt", "mime" to "text/plain",
+            "entity.money" to "693,40", RelayRpc.ID to "письмо-1",
+        )
+
+        requests.answer(RelayRpc.OBJECT, letter, "встречи".toByteArray(Charsets.UTF_8))
+        val second = requests.answer(RelayRpc.OBJECT, letter, "встречи".toByteArray(Charsets.UTF_8))
+
+        assertEquals("объект принят ровно один раз", 1, received.size)
+        assertEquals(
+            "повтору отвечаем «уже получено», а не молчанием",
+            PcActionOutcome.Done("уже получено"),
+            decodePcReceiveReply(String(second!!.body, Charsets.UTF_8)),
+        )
+    }
+
+    @Test
+    fun `память о письмах переживает рестарт компьютера`() {
+        val memory = File(tmp.newFolder(), "seen")
+        val letter = mapOf(
+            "name" to "Встречи.txt", "mime" to "text/plain",
+            "entity.money" to "693,40", RelayRpc.ID to "письмо-1",
+        )
+
+        requests(seen = SeenLetters(memory)).answer(RelayRpc.OBJECT, letter, ByteArray(0))
+        requests(seen = SeenLetters(memory)).answer(RelayRpc.OBJECT, letter, ByteArray(0))
+
+        assertEquals(1, received.size)
+    }
+
+    @Test
+    fun `письмо без номера принимается всегда — дедупу не за что зацепиться`() {
+        val requests = requests(seen = SeenLetters(File(tmp.newFolder(), "seen")))
+        val letter = mapOf("name" to "Встречи.txt", "mime" to "text/plain", "entity.money" to "693,40")
+
+        requests.answer(RelayRpc.OBJECT, letter, ByteArray(0))
+        requests.answer(RelayRpc.OBJECT, letter, ByteArray(0))
+
+        assertEquals(2, received.size)
+    }
+
+    @Test
+    fun `память о письмах не растёт без предела`() {
+        val memory = File(tmp.newFolder(), "seen")
+        val seen = SeenLetters(memory, keep = 3)
+
+        (1..5).forEach { seen.firstTime("письмо-$it") }
+
+        assertTrue("старое забыто", seen.firstTime("письмо-1"))
+        assertTrue("свежее помнится", !seen.firstTime("письмо-5"))
     }
 }
