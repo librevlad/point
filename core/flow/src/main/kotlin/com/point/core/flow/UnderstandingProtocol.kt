@@ -72,8 +72,10 @@ fun parseFieldCandidates(answer: String): ParsedUnderstanding {
         val rest = line.substring(eq + 1).trim()
         if (rest.isEmpty()) return@forEach
         when {
-            key == "TYPE" -> rest.lowercase().takeIf { it in KNOWN_SEMANTIC_TAGS }
-                ?.let { single.putIfAbsent(META_SEMANTIC_TYPE, it) }
+            // «Убрать TYPE вообще» (#663, решение владельца): ярлык от модели —
+            // догадка без признаков («Встреча» на переписке об оплате). Суть несёт
+            // SUMMARY; документные типы остаются за офлайн-правилами страницы.
+            key == "TYPE" -> Unit
             // Метки слов лепятся и к SUMMARY: «…службы [w38 w39]» уходило на экран
             // подзаголовком (живой прогон 2026-08-09) — хвост снимается всегда.
             key == "SUMMARY" -> splitCandidate(rest)?.text?.takeIf { !saysNothing(it) }

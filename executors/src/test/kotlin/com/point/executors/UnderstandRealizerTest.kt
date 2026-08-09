@@ -164,17 +164,24 @@ class UnderstandRealizerTest {
     }
 
     @Test
-    fun `выдуманный моделью TYPE не сохраняется`() = runTest {
-        val result = realizer("TYPE=POEM\nPHONE=+380671234567").perform(textObject()) as ActionResult.Done
+    fun `ярлык-тип от модели не становится знанием — суть несёт SUMMARY`() = runTest {
+
+        // «Убрать TYPE вообще» (#663, решение владельца 2026-08-09): «Встреча» на
+        // переписке об оплате уводила смысл; типы-ярлыки у модели больше не просим.
+        val result = realizer("TYPE=PURCHASE\nSUMMARY=чек із супермаркету\nPHONE=+380671234567")
+            .perform(textObject()) as ActionResult.Done
 
         assertNull(result.findings!!.metadata["semantic.type"])
+        assertEquals("чек із супермаркету", result.findings!!.metadata["semantic.summary"])
+        assertEquals("+380671234567", result.findings!!.metadata["entity.phone"])
     }
 
     @Test
-    fun `TYPE из закрытого списка становится semantic type`() = runTest {
-        val result = realizer("TYPE=PURCHASE\nSUMMARY=чек із супермаркету").perform(textObject()) as ActionResult.Done
+    fun `промпт не просит у модели ярлыков-типов`() {
+        val prompt = understandPrompt(layoutOf(document))
 
-        assertEquals("purchase", result.findings!!.metadata["semantic.type"])
+        assertFalse(prompt.contains("TYPE=MEETING"))
+        assertTrue("суть по-прежнему просим", prompt.contains("SUMMARY="))
     }
 
     @Test

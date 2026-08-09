@@ -164,7 +164,10 @@ class SmartActionsTest {
         val meta = done.findings!!.metadata
         assertEquals("+380671234567", meta["entity.phone"])
         assertEquals("500", meta["entity.amount"])
-        assertEquals("purchase", meta[com.point.core.flow.META_SEMANTIC_TYPE])
+
+        // «Убрать TYPE вообще» (#663): ярлык модели знанием не становится ни на
+        // одной стороне — суть несёт SUMMARY.
+        assertEquals(null, meta[com.point.core.flow.META_SEMANTIC_TYPE])
         assertEquals("Оплата счёта", meta[com.point.core.flow.META_SEMANTIC_SUMMARY])
         assertEquals("model", meta["entity.phone.src"])
         assertEquals("found", meta["investigated.pc-understand"])
