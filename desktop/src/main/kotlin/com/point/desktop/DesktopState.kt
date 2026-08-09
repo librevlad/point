@@ -230,14 +230,62 @@ class DesktopState(
         val mine = registry.all().map { it.id.value }.toSet()
         val has = item.obj.state.features.map { it.name }.toSet()
         return _phoneCaps.value.filter { action ->
-            action.unavailable == null &&
 
-                (action.kinds.isEmpty() || item.obj.state.kind.name in action.kinds) &&
+            (action.kinds.isEmpty() || item.obj.state.kind.name in action.kinds) &&
 
                 (action.features.isEmpty() || action.features.any { it in has }) &&
 
                 action.id !in mine
         }
+    }
+
+    /** Одно действие единого списка: здешнее или телефонное, порядок — по пользе (P10). */
+    data class ActionChoice(
+        val title: String,
+        val onPhone: Boolean,
+        val unavailable: String? = null,
+        val bubble: Bubble? = null,
+        val remote: com.point.core.flow.PcRemoteAction? = null,
+    )
+
+    /**
+     * Единый список действий: свои и телефонные ранжируются вместе — по смыслу и пользе,
+     * а не по тому, чей реестр их родил (аудит, блок 2.3). Недоступное телефонное видно
+     * с причиной, а не скрыто (PC5: возможности дорастают на глазах).
+     */
+    fun actionsFor(item: InboxItem): List<ActionChoice> {
+        val graph = com.point.core.flow.GraphState(item.obj)
+        val intent = com.point.core.flow.leadingIntent(graph)
+        val here = bubblesFor(item).map { bubble ->
+            val capability = runCatching { registry.byId(bubble.capabilityId) }.getOrNull()
+            Triple(
+                ActionChoice(bubble.title, onPhone = false, bubble = bubble),
+                capability?.meta?.priority ?: com.point.core.flow.PC_CAP_DEFAULT_PRIORITY,
+                intent != null && capability != null && intent in capability.intents(item.obj.state),
+            )
+        }
+        val phone = phoneActionsFor(item).map { action ->
+            Triple(
+                ActionChoice(
+                    action.label,
+                    onPhone = true,
+                    unavailable = action.unavailable?.ifBlank { "телефон сейчас не может это сделать" },
+                    remote = action,
+                ),
+                action.priority,
+                false,
+            )
+        }
+        return (here + phone)
+            .sortedWith(
+                compareBy(
+                    { (_, _, servesIntent) -> if (servesIntent) 0 else 1 },
+                    { (choice, _, _) -> if (choice.unavailable == null) 0 else 1 },
+                    { (_, priority, _) -> priority },
+                    { (choice, _, _) -> choice.title },
+                ),
+            )
+            .map { it.first }
     }
 
     fun sendToPhone(item: InboxItem, action: com.point.core.flow.PcRemoteAction) {

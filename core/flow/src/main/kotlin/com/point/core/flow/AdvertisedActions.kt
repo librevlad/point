@@ -27,6 +27,7 @@ fun advertisedActions(
 
             kinds = if (kinds.size == ObjectKindCount) emptySet() else kinds,
             features = features,
+            priority = capability.meta.priority,
         )
     }
 

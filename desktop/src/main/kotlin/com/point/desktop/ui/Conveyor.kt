@@ -269,7 +269,6 @@ private fun PathStop(dot: Color, title: String, note: String?, time: String) {
 
 @Composable
 private fun LiveEnd(state: DesktopState, item: InboxItem, modifier: Modifier = Modifier) {
-    val phoneActions = state.phoneActionsFor(item)
     val working by state.working.collectAsState()
     Column(
         modifier = modifier.verticalScroll(rememberScrollState()),
@@ -278,15 +277,32 @@ private fun LiveEnd(state: DesktopState, item: InboxItem, modifier: Modifier = M
 
         working?.let { Working(it) { state.cancelWork() } }
 
-        val pcActions = state.bubblesFor(item)
-
-        if (pcActions.isNotEmpty() || phoneActions.isNotEmpty()) {
+        // Один список: свои и телефонные вместе, порядок — по пользе, недоступное — с причиной.
+        val actions = state.actionsFor(item)
+        if (actions.isNotEmpty()) {
+            val primary = actions.indexOfFirst { it.unavailable == null }
             Section("ЧТО МОЖНО СДЕЛАТЬ") {
-                pcActions.forEach { bubble ->
-                    Station(bubble.title, PointColors.violet) { state.onBubble(item, bubble) }
-                }
-                phoneActions.forEach { action ->
-                    Station(action.label, PointColors.violet) { state.sendToPhone(item, action) }
+                actions.forEachIndexed { i, action ->
+                    when {
+                        action.unavailable != null -> MutedStation(
+                            action.title,
+                            where = if (action.onPhone) "на телефоне" else null,
+                            reason = action.unavailable,
+                        ) { state.say(action.unavailable) }
+
+                        action.bubble != null -> Station(
+                            action.title,
+                            PointColors.violet,
+                            primary = i == primary,
+                        ) { state.onBubble(item, action.bubble) }
+
+                        action.remote != null -> Station(
+                            action.title,
+                            PointColors.violet,
+                            where = "на телефоне",
+                            primary = i == primary,
+                        ) { state.sendToPhone(item, action.remote) }
+                    }
                 }
             }
         }
@@ -352,20 +368,57 @@ private fun Section(title: String, content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun Station(title: String, accent: Color, onClick: () -> Unit) {
+private fun Station(
+    title: String,
+    accent: Color,
+    where: String? = null,
+    primary: Boolean = false,
+    onClick: () -> Unit,
+) {
     Row(
         modifier = Modifier.fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
             .background(Brush.verticalGradient(listOf(PointColors.surface, PointColors.surfaceDeep)))
-            .border(1.dp, Color.White.copy(alpha = 0.06f), RoundedCornerShape(14.dp))
+            .border(
+                1.dp,
+                if (primary) accent.copy(alpha = 0.65f) else Color.White.copy(alpha = 0.06f),
+                RoundedCornerShape(14.dp),
+            )
             .clickable(onClick = onClick)
-            .padding(horizontal = 15.dp, vertical = 12.dp),
+            .padding(horizontal = 15.dp, vertical = if (primary) 14.dp else 12.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(Modifier.size(8.dp).background(accent, CircleShape))
         Text(title, style = PointType.body, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        where?.let { Text(it, style = PointType.small) }
         Text("→", style = PointType.small)
+    }
+}
+
+/** Недоступное действие видно с причиной, а не скрыто (PC5) — и по клику причина повторяется. */
+@Composable
+private fun MutedStation(title: String, where: String?, reason: String, onClick: () -> Unit) {
+    Column(
+        modifier = Modifier.fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .border(1.dp, PointColors.border.copy(alpha = 0.5f), RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 15.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(3.dp),
+    ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(8.dp).background(PointColors.muted, CircleShape))
+            Text(
+                title,
+                style = PointType.body.copy(color = PointColors.muted),
+                modifier = Modifier.weight(1f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            where?.let { Text(it, style = PointType.small) }
+        }
+        Text(reason, style = PointType.small, modifier = Modifier.padding(start = 20.dp))
     }
 }
 

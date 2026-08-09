@@ -21,7 +21,9 @@ class DesktopStateTest {
         InboxItem(PointObject("id", mime, ScratchRef("/tmp/объект"), ObjectState(kind)))
 
     @Test
-    fun `недоступное действие телефона не становится кнопкой на ПК`() {
+    fun `недоступное действие телефона видно с причиной, а не скрыто`() {
+        // Аудит, блок 2.3 (PC5): раньше недоступное исчезало молча — телефон в зеркальной
+        // ситуации показывает причину. Теперь виден весь список, недоступное — с причиной.
         val s = state()
         s.setPhoneCaps(
             listOf(
@@ -30,17 +32,20 @@ class DesktopStateTest {
             ),
         )
 
-        val offered = s.phoneActionsFor(item(ObjectKind.TEXT, "text/plain"))
+        val offered = s.actionsFor(item(ObjectKind.TEXT, "text/plain"))
 
-        assertEquals(listOf("call"), offered.map { it.id })
+        assertEquals(listOf("Позвонить", "Создать событие"), offered.map { it.title })
+        assertEquals("нет доступа к календарю", offered.last().unavailable)
     }
 
     @Test
-    fun `недоступное без причины тоже не становится кнопкой`() {
+    fun `недоступное без причины получает честные слова, а не пустую строку`() {
         val s = state()
         s.setPhoneCaps(listOf(PcRemoteAction("event", "Создать событие", unavailable = "")))
 
-        assertTrue(s.phoneActionsFor(item(ObjectKind.TEXT, "text/plain")).isEmpty())
+        val offered = s.actionsFor(item(ObjectKind.TEXT, "text/plain"))
+
+        assertEquals("телефон сейчас не может это сделать", offered.single().unavailable)
     }
 
     @Test

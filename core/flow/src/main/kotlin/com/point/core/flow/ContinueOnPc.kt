@@ -47,7 +47,12 @@ data class PcRemoteAction(
     val leavesCircle: Boolean = false,
 
     val features: Set<String> = emptySet(),
+
+    /** Польза действия по его собственной поверхности: чужие действия ранжируются вместе со своими (P10). */
+    val priority: Int = PC_CAP_DEFAULT_PRIORITY,
 )
+
+const val PC_CAP_DEFAULT_PRIORITY = 1000
 
 fun encodePcCaps(caps: List<PcRemoteAction>): String =
     caps.joinToString("\n") { action ->
@@ -60,6 +65,7 @@ fun encodePcCaps(caps: List<PcRemoteAction>): String =
             why?.let(::oneLine).orEmpty(),
             if (action.leavesCircle) "out" else "",
             action.features.sorted().joinToString(","),
+            if (action.priority == PC_CAP_DEFAULT_PRIORITY) "" else action.priority.toString(),
         ).dropLastWhile(String::isEmpty)
         val head = if (why == null) action.id else PC_CAP_UNAVAILABLE + action.id
         if (fields.isEmpty()) "$head=$label" else "$head=$label\t" + fields.joinToString("\t")
@@ -81,7 +87,8 @@ fun decodePcCaps(encoded: String): List<PcRemoteAction> =
         val leaves = fields.getOrElse(3) { "" }.trim() == "out"
         val needs = fields.getOrElse(4) { "" }.split(',')
             .mapNotNull { it.trim().takeIf(String::isNotEmpty) }.toSet()
-        if (id.isEmpty() || label.isEmpty()) null else PcRemoteAction(id, label, kinds, why, leaves, needs)
+        val priority = fields.getOrElse(5) { "" }.trim().toIntOrNull() ?: PC_CAP_DEFAULT_PRIORITY
+        if (id.isEmpty() || label.isEmpty()) null else PcRemoteAction(id, label, kinds, why, leaves, needs, priority)
     }.toList()
 
 const val PC_CAP_UNAVAILABLE = "="
