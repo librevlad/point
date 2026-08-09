@@ -97,13 +97,13 @@ class ReadinessActionTest {
     }
 
     private class FakeContacts : ContactInserter {
-        var phone: String? = null
-        var email: String? = null
+        var contact: com.point.core.flow.NewContact? = null
+        val phone: String? get() = contact?.phone
+        val email: String? get() = contact?.email
         var calls = 0
-        override suspend fun insertContact(phone: String?, email: String?) {
+        override suspend fun insertContact(contact: com.point.core.flow.NewContact) {
             calls++
-            this.phone = phone
-            this.email = email
+            this.contact = contact
         }
     }
 
@@ -126,6 +126,33 @@ class ReadinessActionTest {
         assertTrue(result is ActionResult.Done)
         assertEquals("+380504327707", contacts.phone)
         assertEquals("olena@example.com", contacts.email)
+    }
+
+    @Test
+    fun `в карточку контакта едет всё знание о человеке — имя и адрес тоже`() = runTest {
+
+        // #673/#679 (охота 2026-08-09): системный лист открывался с пустым именем,
+        // хотя «Олена Ковальчук» напечатана на визитке крупнее всего.
+        val contacts = FakeContacts()
+        val known = textObject(
+            "визитка",
+            mapOf(
+                "entity.phone" to "+380671234567",
+                "entity.email" to "olena@tihiy-dvor.example",
+                "entity.address" to "Київ, вулиця Ярославська, 14",
+                "graph.role.contact" to "Олена Ковальчук",
+            ),
+        )
+
+        val result = SaveContactRealizer(extractor(), contacts).perform(known)
+
+        assertEquals("Олена Ковальчук", contacts.contact?.name)
+        assertEquals("Київ, вулиця Ярославська, 14", contacts.contact?.address)
+        assertEquals("+380671234567", contacts.phone)
+
+        // Карточка ОТКРЫТА — сохранит человек (#674): отмена не должна выглядеть успехом.
+        val said = (result as ActionResult.Done).message
+        assertTrue("исход обещает больше, чем сделал: «$said»", said.startsWith("Открыл"))
     }
 
     @Test

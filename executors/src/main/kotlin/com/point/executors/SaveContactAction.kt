@@ -42,14 +42,33 @@ class SaveContactRealizer @Inject constructor(
             runCatching {
                 val phone = contactValue(input, "phone", EntityType.PHONE)
                 val email = contactValue(input, "email", EntityType.EMAIL)
+                phone ?: email ?: error("Ни телефона, ни почты не нашлось")
 
-                val shown = phone ?: email ?: error("Ни телефона, ни почты не нашлось")
-                inserter.insertContact(phone, email)
-                ActionResult.Done("Сохраняю контакт: $shown")
+                // Всё знание о человеке — в карточку (#679): имя и адрес Point уже
+                // прочитал, человеку не нужно вписывать их заново.
+                val contact = com.point.core.flow.NewContact(
+                    name = personName(input),
+                    phone = phone,
+                    email = email,
+                    address = input.metadata[META_ENTITY_PREFIX + "address"]?.takeIf { it.isNotBlank() },
+                )
+                inserter.insertContact(contact)
+
+                // Карточка ОТКРЫТА, а не сохранена: сохранит человек (#679/#674).
+                ActionResult.Done(contact.name?.let { "Открыл карточку контакта: $it" }
+                    ?: "Открыл карточку контакта — допишите и сохраните")
             }.getOrElse {
-                ActionResult.Failure(it.message ?: "Не удалось сохранить контакт", recoverable = true)
+                ActionResult.Failure(it.message ?: "Не удалось открыть карточку контакта", recoverable = true)
             }
         }
+
+    /** Имя человека из знания: подписанный контакт (#653) или роль на объекте. */
+    private fun personName(input: PointObject): String? = input.metadata.entries
+        .firstOrNull {
+            it.key.startsWith(com.point.core.flow.META_GRAPH_ROLE_PREFIX) &&
+                !com.point.core.flow.isAnnotationKey(it.key) &&
+                com.point.core.flow.plausiblePersonName(it.value)
+        }?.value
 
     private suspend fun contactValue(input: PointObject, key: String, type: EntityType): String? =
         input.metadata[META_ENTITY_PREFIX + key]?.takeIf { it.isNotBlank() }

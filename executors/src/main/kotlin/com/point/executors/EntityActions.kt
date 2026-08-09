@@ -76,7 +76,7 @@ class CallRealizer @Inject constructor(
             runCatching {
                 val phone = firstEntity(extractor, input, EntityType.PHONE) ?: error("Номер не найден")
                 opener.open("tel:" + dialable(phone))
-                ActionResult.Done("Звоню: $phone")
+                ActionResult.Done("Открыл набор: $phone")
             }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось позвонить", recoverable = true) }
         }
 }
@@ -103,7 +103,7 @@ class SmsRealizer @Inject constructor(
             runCatching {
                 val phone = firstEntity(extractor, input, EntityType.PHONE) ?: error("Номер не найден")
                 opener.open("smsto:" + dialable(phone))
-                ActionResult.Done("Сообщение: $phone")
+                ActionResult.Done("Открыл сообщение: $phone")
             }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось открыть сообщения", recoverable = true) }
         }
 }
@@ -130,7 +130,7 @@ class EmailRealizer @Inject constructor(
             runCatching {
                 val email = firstEntity(extractor, input, EntityType.EMAIL) ?: error("Email не найден")
                 opener.open("mailto:$email")
-                ActionResult.Done("Письмо: $email")
+                ActionResult.Done("Открыл письмо: $email")
             }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось открыть почту", recoverable = true) }
         }
 }
@@ -162,7 +162,7 @@ class MapRealizer @Inject constructor(
             runCatching {
                 val address = firstEntity(extractor, input, EntityType.ADDRESS) ?: error("Адрес не найден")
                 opener.open("geo:0,0?q=" + URLEncoder.encode(address, "UTF-8"))
-                ActionResult.Done("Открываю на карте: $address")
+                ActionResult.Done("Открыл на карте: $address")
             }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось открыть карту", recoverable = true) }
         }
 }

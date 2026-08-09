@@ -12,6 +12,19 @@ fun looksLikeNetworkFailure(error: String): Boolean =
 fun looksLikeQuotaFailure(error: String): Boolean =
     QUOTA_FAILURE_HINTS.any { error.contains(it, ignoreCase = true) }
 
+/**
+ * Нечем открыть — человеческими словами и с выходом (#675/#679): системное
+ * «No Activity found to handle Intent { … dat=geo: … }» уходило человеку в лицо.
+ */
+fun noAppFor(scheme: String?): String = when (scheme?.lowercase()) {
+    "tel" -> "На этом устройстве нечем звонить — номер можно скопировать"
+    "smsto", "sms" -> "На этом устройстве нет приложения сообщений — номер можно скопировать"
+    "mailto" -> "На этом устройстве нет почты — адрес можно скопировать"
+    "geo" -> "На этом устройстве нет карт — адрес можно скопировать"
+    "http", "https" -> "На этом устройстве нет браузера — ссылку можно скопировать"
+    else -> "На этом устройстве нечем это открыть — значение можно скопировать"
+}
+
 const val FREE_LIMIT_SPENT = "бесплатный лимит исчерпан"
 
 private val NETWORK_FAILURE_HINTS = listOf(

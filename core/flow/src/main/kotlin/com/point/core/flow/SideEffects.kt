@@ -47,8 +47,20 @@ interface CalendarInserter {
 }
 
 interface ContactInserter {
-    suspend fun insertContact(phone: String?, email: String?)
+    suspend fun insertContact(contact: NewContact)
 }
+
+/**
+ * Всё знание, которое Point уже прочитал о человеке, едет в карточку контакта
+ * (#673/#679): имя с визитки терялось, и человек дописывал руками то, что Point знал.
+ */
+data class NewContact(
+    val name: String? = null,
+    val phone: String? = null,
+    val email: String? = null,
+    val address: String? = null,
+    val company: String? = null,
+)
 
 interface PdfTextExtractor {
     suspend fun extractText(obj: PointObject): String
