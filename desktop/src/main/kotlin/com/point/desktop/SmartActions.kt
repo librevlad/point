@@ -57,43 +57,53 @@ class PcEntitiesRealizer(
         ActionResult.Done("Нашёл: " + summary(found), entityFindings(found))
     }.getOrElse { ActionResult.Failure("Разобрать текст не вышло — попробуйте ещё раз", recoverable = true) }
 
-    private fun entityFindings(found: List<Entity>): com.point.core.model.Findings {
-        val metadata = buildMap {
-            found.groupBy { it.type }.forEach { (type, list) ->
-                val key = type.asMetaKey() ?: return@forEach
-                val values = list.map { it.value.trim() }.filter { it.isNotBlank() }
-                    .distinctBy { com.point.core.flow.normConsensus(it) }
-                if (values.isEmpty()) return@forEach
-                put(key, values.first())
-                val more = values.drop(1)
-                if (more.isNotEmpty()) {
-                    put(key + com.point.core.flow.META_MORE_SUFFIX, com.point.core.flow.altValue(more))
-                }
+    private fun entityFindings(found: List<Entity>): com.point.core.model.Findings =
+        entityKnowledge(found, capabilityId)
+
+    private fun summary(found: List<Entity>): String = entitySummary(found)
+}
+
+/** Знание из найденных сущностей: первое значение вида, «ещё»-значения, признаки, состояние вопроса. */
+fun entityKnowledge(found: List<Entity>, question: CapabilityId): com.point.core.model.Findings {
+    val metadata = buildMap {
+        found.groupBy { it.type }.forEach { (type, list) ->
+            val key = type.asMetaKey() ?: return@forEach
+            val values = list.map { it.value.trim() }.filter { it.isNotBlank() }
+                .distinctBy { com.point.core.flow.normConsensus(it) }
+            if (values.isEmpty()) return@forEach
+            put(key, values.first())
+            val more = values.drop(1)
+            if (more.isNotEmpty()) {
+                put(key + com.point.core.flow.META_MORE_SUFFIX, com.point.core.flow.altValue(more))
             }
-            put(
-                com.point.core.flow.investigationKey(capabilityId),
-                com.point.core.flow.InvestigationState.FOUND.wire,
-            )
         }
-        return com.point.core.model.Findings(
-            features = found.mapNotNull { it.type.asFeature() }.toSet(),
-            metadata = metadata,
+        put(
+            com.point.core.flow.investigationKey(question),
+            if (found.any { it.type.asMetaKey() != null }) {
+                com.point.core.flow.InvestigationState.FOUND.wire
+            } else {
+                com.point.core.flow.InvestigationState.NOT_FOUND.wire
+            },
         )
     }
+    return com.point.core.model.Findings(
+        features = found.mapNotNull { it.type.asFeature() }.toSet(),
+        metadata = metadata,
+    )
+}
 
-    private fun summary(found: List<Entity>): String =
-        found.groupBy { it.type }.entries
-            .joinToString(", ") { (type, list) -> title(type).lowercase() + " — " + list.size }
+internal fun entitySummary(found: List<Entity>): String =
+    found.groupBy { it.type }.entries
+        .joinToString(", ") { (type, list) -> entityTitle(type).lowercase() + " — " + list.size }
 
-    private fun title(type: EntityType): String = when (type) {
-        EntityType.PHONE -> "Телефоны"
-        EntityType.EMAIL -> "Почты"
-        EntityType.URL -> "Ссылки"
-        EntityType.ADDRESS -> "Адреса"
-        EntityType.DATE_TIME -> "Даты"
-        EntityType.PAYMENT_CARD -> "Карты"
-        EntityType.MONEY -> "Суммы"
-    }
+private fun entityTitle(type: EntityType): String = when (type) {
+    EntityType.PHONE -> "Телефоны"
+    EntityType.EMAIL -> "Почты"
+    EntityType.URL -> "Ссылки"
+    EntityType.ADDRESS -> "Адреса"
+    EntityType.DATE_TIME -> "Даты"
+    EntityType.PAYMENT_CARD -> "Карты"
+    EntityType.MONEY -> "Суммы"
 }
 
 private fun aiMeta(priority: Int) = CapabilityMeta(

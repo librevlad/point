@@ -25,7 +25,7 @@ import java.util.Base64
 
 class PcCloudOcrRealizer(
     private val config: () -> OcrConfig,
-    private val outbox: Outbox,
+    private val extractor: com.point.core.flow.EntityExtractor = com.point.core.flow.RegexEntityExtractor(),
     private val connectTimeoutMs: Int = 15_000,
     private val readTimeoutMs: Int = 120_000,
 ) : Realizer {
@@ -49,15 +49,34 @@ class PcCloudOcrRealizer(
                 val cfg = config()
                 val text = read(cfg, file, input.mime)
                 if (text.isBlank()) {
-                    return@withContext ActionResult.Failure("На снимке не нашлось текста", recoverable = false)
+
+                    // «Не нашлось» — знание, а не сбой (Конституция §13).
+                    return@withContext ActionResult.Done(
+                        "На снимке не нашлось текста",
+                        com.point.core.model.Findings(
+                            metadata = mapOf(
+                                com.point.core.flow.investigationKey(capabilityId) to
+                                    com.point.core.flow.InvestigationState.NOT_FOUND.wire,
+                            ),
+                        ),
+                    )
                 }
-                val out = File.createTempFile("pc-ocr-", ".txt").apply { writeText(text) }
-                ActionResult.Success(
-                    com.point.core.model.ResultObject(
-                        type = ObjectKind.TEXT,
-                        mime = "text/plain",
-                        uri = ScratchRef(out.absolutePath),
-                        metadata = mapOf("name" to "Текст со снимка"),
+
+                // Прочитанное — знание об этом же снимке (Конституция §4): текст остаётся
+                // слоем исходника, сущности — его фактами; нового объекта не рождается.
+                val ref = File.createTempFile("pc-ocr-", ".txt").apply { writeText(text) }
+                val found = com.point.core.flow.plausibleEntities(extractor.extract(text), text)
+                val entities = entityKnowledge(found, CapabilityId("pc-entities"))
+                ActionResult.Done(
+                    "Прочитал снимок" +
+                        if (found.isEmpty()) "" else ". Нашёл: " + entitySummary(found),
+                    com.point.core.model.Findings(
+                        features = entities.features + com.point.core.model.Feature.HAS_TEXT,
+                        metadata = entities.metadata + mapOf(
+                            com.point.core.flow.META_OCR_TEXT_REF to ref.absolutePath,
+                            com.point.core.flow.investigationKey(capabilityId) to
+                                com.point.core.flow.InvestigationState.FOUND.wire,
+                        ),
                     ),
                 )
             }.getOrElse {

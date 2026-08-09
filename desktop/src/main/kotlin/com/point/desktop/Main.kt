@@ -108,7 +108,7 @@ fun main(args: Array<String>) {
             PcOfficeTextRealizer(com.point.core.flow.OoxmlOfficeTextExtractor(), outbox),
             PcShrinkImageRealizer(outbox),
             PcTranscribeRealizer({ FilePcConfig(pointDir).load().speech }, outbox),
-            PcCloudOcrRealizer({ FilePcConfig(pointDir).load().ocr }, outbox),
+            PcCloudOcrRealizer({ FilePcConfig(pointDir).load().ocr }, entities),
             PcOpenLinkRealizer { url ->
                 runCatching { java.awt.Desktop.getDesktop().browse(java.net.URI(url)) }
             },

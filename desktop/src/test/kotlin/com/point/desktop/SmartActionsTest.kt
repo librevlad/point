@@ -328,7 +328,7 @@ class SmartActionsTest {
         val big = imageObject(2000, 2000)
         assertTrue("картинка вышла меньше предела — проверять нечего", File(big.uri.value).length() > 1024 * 1024)
 
-        val result = PcCloudOcrRealizer({ OcrConfig() }, box).perform(big, null)
+        val result = PcCloudOcrRealizer({ OcrConfig() }).perform(big, null)
 
         assertTrue(result is ActionResult.Failure)
         val message = (result as ActionResult.Failure).reason
@@ -340,7 +340,7 @@ class SmartActionsTest {
 
         val shared = com.point.core.flow.capabilities.OcrCapability()
 
-        assertEquals(shared.id, PcCloudOcrRealizer({ OcrConfig() }, outbox()).capabilityId)
+        assertEquals(shared.id, PcCloudOcrRealizer({ OcrConfig() }).capabilityId)
         assertEquals("Распознать текст", shared.label(ObjectState(ObjectKind.IMAGE)))
         assertTrue(
             "цена дороги не названа до тапа",
