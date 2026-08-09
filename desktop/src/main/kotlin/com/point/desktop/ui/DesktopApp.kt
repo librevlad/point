@@ -4,6 +4,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.draganddrop.dragAndDropTarget
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -40,6 +41,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draganddrop.DragAndDropEvent
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
@@ -124,10 +127,16 @@ fun DesktopApp(
         val file = onGrabScreen?.invoke()
         if (file == null) state.say("Снять экран не вышло") else onFilesDropped(listOf(file))
     }
+    // Без сфокусированного узла Compose не доставляет клавиатуру — Ctrl+Shift+V молчал
+    // на любом экране (живой прогон 2026-08-09), хотя подсказки его обещали.
+    val hotkeys = remember { FocusRequester() }
+    LaunchedEffect(Unit) { hotkeys.requestFocus() }
     Surface(
         color = MaterialTheme.colorScheme.surface,
         modifier = Modifier.fillMaxSize()
             .dragAndDropTarget(shouldStartDragAndDrop = { true }, target = dropTarget)
+            .focusRequester(hotkeys)
+            .focusable()
             .onPreviewKeyEvent { event ->
                 val down = event.type == androidx.compose.ui.input.key.KeyEventType.KeyDown
                 val paste = down && event.isCtrlPressed && event.isShiftPressed &&
@@ -228,6 +237,7 @@ fun DesktopApp(
                         onOpenAgain = { entry ->
                             state.openAgain(entry)?.let { selectedId = it.obj.id }
                         },
+                        onTakeClipboard = takeClipboard,
                     )
                     Spacer(Modifier.width(1.dp).fillMaxHeight().background(PointColors.border))
                     Box(Modifier.weight(1f).fillMaxHeight().padding(24.dp)) {

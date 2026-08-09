@@ -44,6 +44,7 @@ fun Dock(
     modifier: Modifier = Modifier,
     recent: List<JournalEntry> = emptyList(),
     onOpenAgain: (JournalEntry) -> Unit = {},
+    onTakeClipboard: (() -> Unit)? = null,
 ) {
     val now = rememberNow()
     val zone = remember { ZoneId.systemDefault() }
@@ -75,7 +76,7 @@ fun Dock(
             }
         }
 
-        DropHint()
+        DropHint(onTakeClipboard)
     }
 }
 
@@ -144,11 +145,13 @@ private fun RecentItem(entry: JournalEntry, now: Long, zone: ZoneId, onClick: ()
 }
 
 @Composable
-private fun DropHint() {
+private fun DropHint(onTakeClipboard: (() -> Unit)? = null) {
+    // Подсказка — дверь: клик берёт буфер, чтобы с открытым объектом путь к буферу оставался.
     Column(
         modifier = Modifier.fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .border(1.dp, PointColors.border, RoundedCornerShape(12.dp))
+            .let { m -> if (onTakeClipboard != null) m.clickable(onClick = onTakeClipboard) else m }
             .padding(horizontal = 12.dp, vertical = 16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(8.dp),
