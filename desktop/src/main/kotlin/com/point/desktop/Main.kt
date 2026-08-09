@@ -421,7 +421,7 @@ private fun pointGlyph(badge: Boolean = false): androidx.compose.ui.graphics.pai
                 color = androidx.compose.ui.graphics.Color(0xFF7B5CFF).copy(alpha = 0.30f),
                 radius = r * 0.60f,
                 center = c,
-                style = androidx.compose.ui.graphics.drawscope.Stroke(width = r * 0.26f),
+                style = androidx.compose.ui.graphics.drawscope.Stroke(width = r * 0.36f),
             )
 
             // Само кольцо: светлое кверху, фиолетовое, синее книзу — как на телефоне.
@@ -431,9 +431,9 @@ private fun pointGlyph(badge: Boolean = false): androidx.compose.ui.graphics.pai
                     0.45f to androidx.compose.ui.graphics.Color(0xFF9B7BFF),
                     1f to androidx.compose.ui.graphics.Color(0xFF00A6FF),
                 ),
-                radius = r * 0.58f,
+                radius = r * 0.56f,
                 center = c,
-                style = androidx.compose.ui.graphics.drawscope.Stroke(width = r * 0.20f),
+                style = androidx.compose.ui.graphics.drawscope.Stroke(width = r * 0.30f),
             )
             if (badge) {
                 drawCircle(

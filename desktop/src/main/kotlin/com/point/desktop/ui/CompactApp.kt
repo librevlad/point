@@ -40,6 +40,7 @@ import androidx.compose.ui.draganddrop.awtTransferable
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
@@ -323,10 +324,7 @@ private fun CompactHeader(
         if (onBack != null) {
             HeaderButton("←", onBack)
         } else {
-            Box(
-                Modifier.size(12.dp)
-                    .border(2.dp, PointColors.violet, CircleShape),
-            )
+            HeaderGlyph()
         }
         Text(
             title,
@@ -337,6 +335,25 @@ private fun CompactHeader(
         )
         trailing?.invoke()
         onHide?.let { HeaderButton("✕", it) }
+    }
+}
+
+/** Мини-знак Point — то же кольцо, что лончер телефона и трей. */
+@Composable
+private fun HeaderGlyph() {
+    androidx.compose.foundation.Canvas(Modifier.size(16.dp)) {
+        val c = center
+        val r = size.minDimension / 2f
+        drawCircle(
+            brush = androidx.compose.ui.graphics.Brush.verticalGradient(
+                0f to Color(0xFFEAF0FF),
+                0.45f to Color(0xFF9B7BFF),
+                1f to Color(0xFF00A6FF),
+            ),
+            radius = r * 0.62f,
+            center = c,
+            style = androidx.compose.ui.graphics.drawscope.Stroke(width = r * 0.55f),
+        )
     }
 }
 
