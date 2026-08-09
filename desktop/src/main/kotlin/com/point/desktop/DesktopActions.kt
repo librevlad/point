@@ -10,6 +10,7 @@ import com.point.core.model.CapabilityId
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
+import com.point.core.model.isFileBacked
 import java.io.File
 
 fun interface SystemOpener { fun open(file: File) }
@@ -49,7 +50,10 @@ class PcRevealCapability : Capability {
     override val icon = "folder"
     override val meta = CapabilityMeta(priority = 20)
     override fun label(state: ObjectState) = "Показать в папке"
-    override fun accepts(state: ObjectState) = true
+
+    // Файловое действие — только файловому виду (#655, слова владельца:
+    // «открыть ссылку в папке тоже не очень логично»).
+    override fun accepts(state: ObjectState) = state.kind.isFileBacked
     override fun produces(state: ObjectState) = state
 }
 
@@ -103,7 +107,9 @@ class PcSaveAsCapability : Capability {
     override val icon = "save"
     override val meta = CapabilityMeta(priority = 30)
     override fun label(state: ObjectState) = "Сохранить в…"
-    override fun accepts(state: ObjectState) = true
+
+    // Файловое действие — только файловому виду (#655).
+    override fun accepts(state: ObjectState) = state.kind.isFileBacked
     override fun produces(state: ObjectState) = state
 }
 
@@ -237,7 +243,9 @@ class PcPrintCapability : Capability {
     override val icon = "print"
     override val meta = CapabilityMeta(priority = 25)
     override fun label(state: ObjectState) = "Напечатать"
-    override fun accepts(state: ObjectState) = true
+
+    // Печатается файл — не ссылка и не узел знания (#655).
+    override fun accepts(state: ObjectState) = state.kind.isFileBacked
     override fun produces(state: ObjectState) = state
 }
 

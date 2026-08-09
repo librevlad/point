@@ -50,6 +50,11 @@ internal const val PC_SENT_WHERE = "Отправлено на компьютер
  * текст называется своей первой строкой, остальное — словами вида.
  */
 internal fun humanSendName(input: PointObject): String {
+
+    // «Смысл → файл → дата» (#665, решение владельца 2026-08-09): понятая суть
+    // называет объект лучше, чем «Изображение, 9 авг 17:39».
+    input.metadata[com.point.core.flow.META_SEMANTIC_SUMMARY]
+        ?.takeIf { it.isNotBlank() }?.let { return it.take(60) }
     input.metadata["name"]?.takeIf { it.isNotBlank() }?.let { return it }
     if (input.state.kind == com.point.core.model.ObjectKind.TEXT) {
         val firstLine = runCatching {

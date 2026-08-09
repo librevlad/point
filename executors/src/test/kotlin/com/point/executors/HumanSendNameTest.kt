@@ -22,6 +22,20 @@ class HumanSendNameTest {
         PointObject("6e9a92c3-id", "text/plain", ScratchRef(path), ObjectState(kind), metadata)
 
     @Test
+    fun `понятая суть называет объект вперёд имени файла и даты`() {
+
+        // «Смысл → файл → дата» (#665, решение владельца 2026-08-09): на ПК
+        // приезжало «Изображение, 9 авг 17:39» вместо сути.
+        val file = temp.newFile("IMG_20260809.jpg")
+        val meaningful = obj(
+            ObjectKind.IMAGE, file.absolutePath,
+            mapOf("semantic.summary" to "Чек монобанк на 500 грн", "name" to "IMG_20260809.jpg"),
+        )
+
+        assertEquals("Чек монобанк на 500 грн", humanSendName(meaningful))
+    }
+
+    @Test
     fun `своё имя всегда важнее выдуманного`() {
         val file = temp.newFile("а.txt")
         assertEquals(
