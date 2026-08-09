@@ -71,7 +71,19 @@ class RelayPoller(
         }
         if (opened == null) {
 
-            log("письмо не открылось ни одним ключом круга — пропущено")
+            // Молчаливый пропуск прятал причину три часа (2026-08-09): круг может
+            // быть пуст, ключ может не сходиться, формат может не читаться — говорим.
+            val told = peers().joinToString("; ") { peer ->
+                val key = secrets.sharedWith(peer)
+                val why = if (key == null) {
+                    "нет общего ключа"
+                } else {
+                    runCatching { decodePcFrame(RelayCrypto.open(key, blob)) }
+                        .exceptionOrNull()?.let { "${it.javaClass.simpleName}: ${it.message}" } ?: "?"
+                }
+                "${peer.name}: $why"
+            }.ifEmpty { "круг пуст" }
+            log("письмо (${blob.size} байт) не открылось — пропущено [$told]")
             return true
         }
         val (peer, key, frame) = opened

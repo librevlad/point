@@ -127,6 +127,16 @@ class UnderstandingProtocolTest {
     }
 
     @Test
+    fun `SUMMARY приходит без хвоста меток слов`() {
+
+        // Живой прогон 2026-08-09: «Контактные данные… [w38 w39 w40 w41 w42]» ушло
+        // подзаголовком объекта на экран.
+        val parsed = parseFieldCandidates("SUMMARY=Контактные данные службы [w38 w39 w40]")
+
+        assertEquals("Контактные данные службы", parsed.single[META_SEMANTIC_SUMMARY])
+    }
+
+    @Test
     fun `multi-value виды названы, одиночные — нет`() {
         assertEquals(true, isMultiValueFact(META_ENTITY_PREFIX + "phone"))
         assertEquals(true, isMultiValueFact(META_ENTITY_PREFIX + "date"))

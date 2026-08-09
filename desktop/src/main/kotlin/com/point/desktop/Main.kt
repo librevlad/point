@@ -245,6 +245,10 @@ fun main(args: Array<String>) {
         log = { line -> println("[mailbox] " + line) },
         seen = SeenLetters(File(pointDir, "seen-letters")),
     )
+    // Круг загружается при старте, а не после первого сбоя: пустые peers делали
+    // каждое письмо «не открылось» до удачного refreshCircleNow (2026-08-09).
+    account.refreshCircle()
+
     val relayPoller = RelayPoller(
         serverUrl = serverUrl,
         account = { accountStore.current() },

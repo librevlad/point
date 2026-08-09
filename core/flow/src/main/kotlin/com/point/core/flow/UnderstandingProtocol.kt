@@ -70,7 +70,9 @@ fun parseFieldCandidates(answer: String): ParsedUnderstanding {
         when {
             key == "TYPE" -> rest.lowercase().takeIf { it in KNOWN_SEMANTIC_TAGS }
                 ?.let { single.putIfAbsent(META_SEMANTIC_TYPE, it) }
-            key == "SUMMARY" -> rest.takeIf { !saysNothing(it) }
+            // Метки слов лепятся и к SUMMARY: «…службы [w38 w39]» уходило на экран
+            // подзаголовком (живой прогон 2026-08-09) — хвост снимается всегда.
+            key == "SUMMARY" -> splitCandidate(rest)?.text?.takeIf { !saysNothing(it) }
                 ?.let { single.putIfAbsent(META_SEMANTIC_SUMMARY, it.take(120)) }
 
             // Метки слов приходят и к CONTACT-строкам: «…| Іваненко [w47 w48]» —
