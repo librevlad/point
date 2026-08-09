@@ -325,6 +325,22 @@ class UnderstandRealizer @Inject constructor(
 private fun withoutHumanFacts(values: Map<String, String>, known: Map<String, String>): Map<String, String> =
     values.filterKeys { provenanceOf(known, it) != Provenance.HUMAN }
 
+/**
+ * Роль без правдоподобного имени — не человек (#654): модель, отвечая ролью на целый
+ * текст или номер, не рождает «человека» из документа.
+ */
+internal fun plausiblePersonName(text: String): Boolean {
+    val t = text.trim()
+    if (t.isEmpty() || t.length > 60) return false
+    if (!t.any(Char::isLetter)) return false
+
+    // Группа цифр — номер или сумма, не имя; одиночная цифра в слове — искажение
+    // распознавания («1ваненко ван»), это ещё имя.
+    if (Regex("""\d{2,}""").containsMatchIn(t)) return false
+    if (t.count(Char::isDigit) > t.length / 5) return false
+    return t.split(Regex("""\s+""")).size <= 5
+}
+
 internal fun roleReadings(
     answer: String,
     elements: List<LayoutElement>,
@@ -332,6 +348,7 @@ internal fun roleReadings(
 ): Pair<Map<String, String>, Map<String, List<String>>> {
     val fromElements = parseClassification(answer, elements)
         .associate { META_GRAPH_ROLE_PREFIX + it.role.key to it.element.text }
+        .filterValues(::plausiblePersonName)
     if (layer == null) return fromElements to emptyMap()
 
     val byKey = CLASSIFIER_ROLES.associateBy { it.key }
@@ -356,14 +373,19 @@ internal fun roleReadings(
         if (resolved.atoms.isEmpty()) return@forEach
         val page = resolved.text
         val model = candidate.text
-        values[metaKey] = when {
+        val chosen = when {
             normConsensus(model) == normConsensus(page) -> page
             isRepairOf(page, model) -> model
             else -> {
-                disputes[metaKey] = listOf(page, model)
+                if (plausiblePersonName(page)) disputes[metaKey] = listOf(page, model)
                 page
             }
         }
+        if (!plausiblePersonName(chosen)) {
+            disputes.remove(metaKey)
+            return@forEach
+        }
+        values[metaKey] = chosen
     }
 
     fromElements.forEach { (key, text) -> values.putIfAbsent(key, text) }
