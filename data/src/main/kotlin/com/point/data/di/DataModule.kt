@@ -467,11 +467,15 @@ abstract class DataModule {
         @Singleton
         fun llmClient(
             impl: FallbackLlmClient,
+            privacy: com.point.core.flow.CloudPrivacySettings,
             @ApplicationContext context: Context,
-        ): LlmClient = com.point.core.flow.LoggingLlmClient(
-            inner = impl,
-            dir = java.io.File(context.filesDir, "llm-log"),
-            enabled = BuildConfig.DEBUG,
+        ): LlmClient = com.point.core.flow.PrivacyGuardedLlmClient(
+            inner = com.point.core.flow.LoggingLlmClient(
+                inner = impl,
+                dir = java.io.File(context.filesDir, "llm-log"),
+                enabled = BuildConfig.DEBUG,
+            ),
+            privacy = privacy,
         )
 
         @Provides
