@@ -90,6 +90,51 @@ class ConveyorRenderTest {
     }
 
     @Test
+    fun `экран объекта показывает сам текст, спор, ещё-значения и открытый вопрос`() {
+        // Фаза B редизайна (аудит, блоки 2.1-2.2): раньше — 4 факта без превью и споров.
+        val file = File.createTempFile("превью-", ".txt").apply {
+            writeText("Оплатите счёт 4411 до 26.04.2026.\nТел: +380671234567")
+            deleteOnExit()
+        }
+        val rich = InboxItem(
+            PointObject(
+                id = "rich",
+                mime = "text/plain",
+                uri = ScratchRef(file.absolutePath),
+                state = ObjectState(ObjectKind.TEXT),
+                metadata = mapOf(
+                    "name" to "Счёт 4411",
+                    "semantic.summary" to "Оплата счёта до срока",
+                    "entity.phone" to "+380671234567",
+                    "entity.phone.more" to "+380509876543",
+                    "entity.amount" to "500",
+                    "entity.amount.alt" to "0.00",
+                    "entity.date" to "26.04.2026",
+                    "entity.date.src" to "human",
+                    "investigated.qr-content" to "not_found",
+                ),
+            ),
+        )
+        val scene = ImageComposeScene(width = 1100, height = 900, density = Density(1f)) {
+            PointDesktopTheme {
+                Box(Modifier.fillMaxSize().background(PointColors.window).padding(24.dp)) {
+                    Conveyor(state(), rich)
+                }
+            }
+        }
+
+        val image = scene.render()
+        scene.close()
+
+        val out = File("build/render/conveyor-knowledge.png").apply { parentFile.mkdirs() }
+        out.writeBytes(
+            image.encodeToData(org.jetbrains.skia.EncodedImageFormat.PNG)?.bytes
+                ?: error("не удалось закодировать снимок"),
+        )
+        assertTrue("снимок не записан", out.length() > 0)
+    }
+
+    @Test
     fun `конвейер рисует пройденный путь объекта`() {
         val scene = ImageComposeScene(width = 1100, height = 720, density = Density(1f)) {
             PointDesktopTheme {

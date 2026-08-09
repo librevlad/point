@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -56,7 +57,9 @@ fun Conveyor(state: DesktopState, item: InboxItem) {
             modifier = Modifier.weight(0.58f).fillMaxHeight().verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(18.dp),
         ) {
-            Source(item)
+            Source(item, onCopyFact = state::copyFact, questionName = { id ->
+                state.questionName(id, item.obj.state)
+            })
             Path(journal.firstOrNull { it.path == item.obj.uri.value }, now)
         }
 
@@ -69,7 +72,11 @@ fun Conveyor(state: DesktopState, item: InboxItem) {
 }
 
 @Composable
-private fun Source(item: InboxItem) {
+private fun Source(
+    item: InboxItem,
+    onCopyFact: (String) -> Unit = {},
+    questionName: (com.point.core.model.CapabilityId) -> String? = { null },
+) {
     Column(
         modifier = Modifier.fillMaxWidth()
             .clip(RoundedCornerShape(20.dp))
@@ -95,27 +102,125 @@ private fun Source(item: InboxItem) {
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                Text(kindLabel(item.obj.state.kind), style = PointType.small)
+
+                // Суть, когда она понята, — вместо голого типа (P7: результат, не механизм).
+                Text(
+                    item.obj.metadata[com.point.core.flow.META_SEMANTIC_SUMMARY]
+                        ?: kindLabel(item.obj.state.kind),
+                    style = PointType.small,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
         }
 
-        val facts = com.point.core.flow.understoodRows(item.obj.metadata)
-        if (facts.isNotEmpty()) {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("ПОНЯЛ", style = PointType.label.copy(color = PointColors.cyan))
-                facts.forEach { fact ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(9.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(5.dp).background(PointColors.cyan, CircleShape))
-                        Text(
-                            "${fact.name} · ${fact.value}",
-                            style = PointType.body.copy(fontSize = PointType.small.fontSize),
-                        )
+        Preview(item)
+        Knowledge(item, onCopyFact, questionName)
+    }
+}
+
+/** Сам объект виден сразу: текст читается, картинка показана (P2/P3 — экран без объекта был дефектом). */
+@Composable
+private fun Preview(item: InboxItem) {
+    when (item.obj.state.kind) {
+        ObjectKind.TEXT -> {
+            val text = remember(item.obj.uri.value) {
+                runCatching { java.io.File(item.obj.uri.value).readText() }.getOrNull()
+            }
+            if (!text.isNullOrBlank()) {
+                Text(
+                    text.take(PREVIEW_CHARS),
+                    style = PointType.body.copy(fontSize = PointType.small.fontSize),
+                    maxLines = 14,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(PointColors.window.copy(alpha = 0.55f))
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                )
+            }
+        }
+        ObjectKind.IMAGE -> {
+            val bitmap = remember(item.obj.uri.value) {
+                runCatching {
+                    java.io.File(item.obj.uri.value).inputStream().use {
+                        androidx.compose.ui.res.loadImageBitmap(it)
                     }
+                }.getOrNull()
+            }
+            if (bitmap != null) {
+                androidx.compose.foundation.Image(
+                    bitmap = bitmap,
+                    contentDescription = null,
+                    contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                    modifier = Modifier.fillMaxWidth()
+                        .heightIn(max = 320.dp)
+                        .clip(RoundedCornerShape(12.dp)),
+                )
+            }
+        }
+        else -> Unit
+    }
+}
+
+@Composable
+private fun Knowledge(
+    item: InboxItem,
+    onCopyFact: (String) -> Unit,
+    questionName: (com.point.core.model.CapabilityId) -> String?,
+) {
+    val facts = com.point.core.flow.knowledgeRows(item.obj.metadata)
+    val questions = com.point.core.flow.openQuestions(item.obj.metadata, questionName)
+    if (facts.isEmpty() && questions.isEmpty()) return
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        if (facts.isNotEmpty()) Text("ПОНЯЛ", style = PointType.label.copy(color = PointColors.cyan))
+        facts.forEach { fact ->
+            Column(
+                modifier = Modifier.fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable { onCopyFact(fact.value) }
+                    .padding(horizontal = 6.dp, vertical = 3.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(9.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(5.dp).background(PointColors.cyan, CircleShape))
+                    Text(
+                        "${fact.name} · ${fact.value}" +
+                            if (fact.confirmed) " · подтверждено вами" else "",
+                        style = PointType.body.copy(fontSize = PointType.small.fontSize),
+                    )
                 }
+
+                // Спор виден (P8); «ещё» — другие значения того же вида, не спор.
+                if (fact.disputed.isNotEmpty()) {
+                    Text(
+                        "или: " + fact.disputed.joinToString(", "),
+                        style = PointType.small,
+                        modifier = Modifier.padding(start = 14.dp),
+                    )
+                }
+                if (fact.more.isNotEmpty()) {
+                    Text(
+                        "ещё: " + fact.more.joinToString(", "),
+                        style = PointType.small,
+                        modifier = Modifier.padding(start = 14.dp),
+                    )
+                }
+            }
+        }
+        questions.forEach { q ->
+            Row(horizontalArrangement = Arrangement.spacedBy(9.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(5.dp).background(PointColors.muted, CircleShape))
+                Text(
+                    "${q.name} · " + com.point.core.flow.openQuestionLabel(q.state),
+                    style = PointType.small,
+                )
             }
         }
     }
 }
+
+private const val PREVIEW_CHARS = 2_000
 
 @Composable
 private fun Path(entry: JournalEntry?, now: Long) {

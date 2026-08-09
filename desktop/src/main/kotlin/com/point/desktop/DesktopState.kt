@@ -78,6 +78,16 @@ class DesktopState(
 
     fun say(text: String) { _message.value = text }
 
+    /** Факт забирается в буфер одним кликом — на ПК буфер и есть главная валюта (P4). */
+    fun copyFact(value: String) {
+        runCatching { clipboard.copy(value) }
+        _message.value = "В буфере: $value"
+    }
+
+    /** Человеческое имя вопроса знания; вопросы без имени на экран не выходят (P2). */
+    fun questionName(id: com.point.core.model.CapabilityId, state: com.point.core.model.ObjectState): String? =
+        runCatching { registry.byId(id).label(state) }.getOrNull() ?: PHONE_QUESTIONS[id.value]
+
     fun runRemoteAction(id: String, item: InboxItem) {
         scope.launch { perform(id, item) }
     }
@@ -122,6 +132,14 @@ class DesktopState(
 
     companion object {
         const val STILL_WORKING = "Компьютер ещё работает — готовое появится в списке «с компьютера»"
+
+        /** Имена вопросов, заданных другой поверхностью: её capability здесь не зарегистрированы. */
+        private val PHONE_QUESTIONS = mapOf(
+            "image-text" to "Текст на снимке",
+            "qr-content" to "QR-код",
+            "understand" to "Понимание",
+            "entities" to "Контакты и номера",
+        )
     }
 
     private suspend fun perform(id: String, item: InboxItem, stationTitle: String? = null): ActionResult? {
