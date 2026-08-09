@@ -66,7 +66,7 @@ class ReadinessRowActionTest {
         var tapped: Bubble? = null
         section(parcelWithPhone) { tapped = it }
 
-        compose.onNodeWithText("Отследить отправление", substring = true).performClick()
+        compose.onNodeWithText("Номер отправления", substring = true).performClick()
 
         assertNull(tapped)
     }
@@ -75,7 +75,7 @@ class ReadinessRowActionTest {
         var tapped: Bubble? = null
         section(mapOf(META_GRAPH_ROLE_PREFIX + "carrier" to "Нова Пошта")) { tapped = it }
 
-        compose.onNodeWithText("Отследить отправление", substring = true).performClick()
+        compose.onNodeWithText("Номер отправления", substring = true).performClick()
 
         compose.onNodeWithText("офлайн не нашлось", substring = true).assertExists()
         assertNull("неготовое ничего не запускает", tapped)

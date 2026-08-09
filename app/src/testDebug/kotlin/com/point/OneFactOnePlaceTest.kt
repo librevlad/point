@@ -139,7 +139,7 @@ class OneFactOnePlaceTest {
         screen(parcel, listOf(found("p:num", KIND_IDENTIFIER, "20 4514 9154 9395")))
 
         assertEquals(1, timesOnScreen("20 4514 9154 9395"))
-        compose.onNodeWithText("Отследить отправление", substring = true).assertExists()
+        compose.onNodeWithText("Номер отправления", substring = true).assertExists()
     }
 
     @Test fun `«Point понял» не повторяет того, что уже названо карточкой готовности`() {

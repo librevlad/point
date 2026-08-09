@@ -14,7 +14,7 @@ class ActionSchemaTest {
 
     private val track = ActionSchema(
         id = "t",
-        label = "Отследить отправление",
+        label = "Номер отправления",
         fields = listOf(
             FieldSpec("entity.track", "трек-номер", critical = true),
             FieldSpec("graph.role.carrier", "перевозчик"),

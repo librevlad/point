@@ -130,9 +130,12 @@ fun actionReadiness(
 }
 
 val ACTION_SCHEMAS: List<ActionSchema> = listOf(
+    // Строка без действия называет ЗНАНИЕ существительным, а не обещает глаголом
+    // (#671, слова владельца: «не вижу смысла в "передать показания счетчика".
+    // куда передать? как передать?»; «у нас и так нет функции отслеживания»).
     ActionSchema(
         id = "track-parcel",
-        label = "Отследить отправление",
+        label = "Номер отправления",
 
         runs = null,
         fields = listOf(
@@ -175,7 +178,7 @@ val ACTION_SCHEMAS: List<ActionSchema> = listOf(
 
     ActionSchema(
         id = "meter-reading",
-        label = "Передать показание счётчика",
+        label = "Показание счётчика",
 
         runs = null,
         fields = listOf(
@@ -189,7 +192,7 @@ val ACTION_SCHEMAS: List<ActionSchema> = listOf(
 
     ActionSchema(
         id = "pay-by-requisites",
-        label = "Перевести по реквизитам",
+        label = "Реквизиты перевода",
 
         runs = null,
         fields = listOf(
