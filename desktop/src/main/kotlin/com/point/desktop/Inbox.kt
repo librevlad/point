@@ -104,7 +104,12 @@ class Inbox(private val dir: File) {
     }
 
     private fun wrap(file: File, mime: String, meta: Map<String, String>): InboxItem {
-        val state = classifier.classify(mime, file.length(), file.name)
+        // Ноль-сигналы: голова файла спрашивается всегда, иначе файл без расширения —
+        // мёртвый UNKNOWN (прецедент P1, повторён на ПК — аудит 2026-08-09, блок 1.5).
+        val head = runCatching {
+            file.inputStream().use { it.readNBytes(512) }
+        }.getOrDefault(ByteArray(0))
+        val state = classifier.classify(mime, file.length(), file.name, head)
         return InboxItem(
             PointObject(
                 id = UUID.randomUUID().toString(),
