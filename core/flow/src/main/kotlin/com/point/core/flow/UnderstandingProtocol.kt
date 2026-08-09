@@ -73,8 +73,13 @@ fun parseFieldCandidates(answer: String): ParsedUnderstanding {
             key == "SUMMARY" -> rest.takeIf { !saysNothing(it) }
                 ?.let { single.putIfAbsent(META_SEMANTIC_SUMMARY, it.take(120)) }
 
-            key == "CONTACT" -> parseContact(rest)?.let { (name, phone) ->
-                offerPhone(FieldCandidate(phone, person = name))
+            // Метки слов приходят и к CONTACT-строкам: «…| Іваненко [w47 w48]» —
+            // хвост снимается до проверки имени, иначе метки браковали пару
+            // (журнал обменов, 2026-08-09).
+            key == "CONTACT" -> splitCandidate(rest)?.let { c ->
+                parseContact(c.text)?.let { (name, phone) ->
+                    offerPhone(FieldCandidate(phone, c.ids, person = name))
+                }
             }
             else -> UNDERSTAND_CONTRACT_KEYS[key]?.let { suffix ->
                 val metaKey = META_ENTITY_PREFIX + suffix

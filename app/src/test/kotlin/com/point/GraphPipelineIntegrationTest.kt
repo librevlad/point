@@ -177,7 +177,7 @@ class GraphPipelineIntegrationTest {
         val real = DefaultResolver(
             realizers = setOf(
                 QrInvestigationRealizer(qrEngine),
-                EntityInvestigationRealizer(phoneEngine),
+                EntityInvestigationRealizer(phoneEngine, dispatcher),
                 MetadataEntityInvestigationRealizer(),
                 ReadQrRealizer(store, qrEngine),
                 CorrectValueRealizer(),

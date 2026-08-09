@@ -107,6 +107,18 @@ class UnderstandingProtocolTest {
     }
 
     @Test
+    fun `CONTACT с метками слов — имя чистое, пара живёт`() {
+
+        // Журнал обменов 2026-08-09: модель дала все три пары с хвостом меток
+        // «…| АНДРІЯЩЕНКО Артур [w47 w48 w59 w60]» — метки браковали имя.
+        val parsed = parseFieldCandidates("CONTACT=+380 66 526 2706 | Іваненко Іван [w47 w48 w59]")
+
+        assertEquals(listOf(PersonContact("Іваненко Іван", "+380 66 526 2706")), parsed.contacts)
+        val phone = parsed.fields[META_ENTITY_PREFIX + "phone"]!!.single()
+        assertEquals(listOf("w47", "w48", "w59"), phone.ids)
+    }
+
+    @Test
     fun `чистый номер без имени пары не рождает`() {
         val parsed = parseFieldCandidates("PHONE=+380671234567")
 

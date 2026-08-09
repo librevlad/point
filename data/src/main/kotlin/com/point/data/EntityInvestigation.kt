@@ -81,9 +81,15 @@ class EntityInvestigation @Inject constructor() : Capability {
     }
 }
 
-class EntityInvestigationRealizer @Inject constructor(
+class EntityInvestigationRealizer(
     private val extractor: EntityExtractor,
+
+    // Тестовый планировщик видит IO-работу целиком: хвост на реальном пуле доживал
+    // после конца теста и ронял соседний (UncaughtExceptionsBeforeTest, 2026-08-09).
+    private val io: kotlin.coroutines.CoroutineContext,
 ) : Realizer {
+
+    @Inject constructor(extractor: EntityExtractor) : this(extractor, Dispatchers.IO)
 
     override val capabilityId = EntityInvestigation.ID
 
@@ -94,7 +100,7 @@ class EntityInvestigationRealizer @Inject constructor(
             onFailure = { ActionResult.Failure(it.message ?: FAILED, recoverable = true) },
         )
 
-    private suspend fun findings(obj: PointObject): Findings = withContext(Dispatchers.IO) {
+    private suspend fun findings(obj: PointObject): Findings = withContext(io) {
         val focus = com.point.core.flow.focusOf(obj.metadata, obj.id)
         val atomsRef = obj.metadata[com.point.core.flow.META_OCR_ATOMS_REF]
         if (focus != null && atomsRef != null && obj.state.kind == ObjectKind.IMAGE) {
