@@ -150,6 +150,51 @@ class JournalTest {
     }
 
     @Test
+    fun `знание объекта переживает запись и чтение — включая многострочные значения`() {
+        val entries = recordArrival(
+            emptyList(),
+            entry("/дом/квитанция.jpg").copy(
+                meta = mapOf(
+                    "entity.phone" to "+380222222222",
+                    "text.value" to "строка 1\nстрока 2",
+                    "name" to "Квитанция",
+                ),
+            ),
+        )
+
+        assertEquals(entries, decodeJournal(encodeJournal(entries)))
+    }
+
+    @Test
+    fun `повторный приезд не стирает журнальное знание, свежее знание побеждает`() {
+        val first = recordArrival(
+            emptyList(),
+            entry("/a").copy(meta = mapOf("entity.phone" to "+380111111111", "ai.verdict" to "Квитанция")),
+        )
+
+        val again = recordArrival(first, entry("/a").copy(meta = mapOf("entity.phone" to "+380222222222")))
+
+        assertEquals(
+            mapOf("entity.phone" to "+380222222222", "ai.verdict" to "Квитанция"),
+            again.single().meta,
+        )
+    }
+
+    @Test
+    fun `огромное значение в журнал не пишется, остальное знание остаётся`() {
+        val entries = recordArrival(
+            emptyList(),
+            entry("/a").copy(
+                meta = mapOf("text.value" to "х".repeat(10_000), "entity.phone" to "+380222222222"),
+            ),
+        )
+
+        val back = decodeJournal(encodeJournal(entries))
+
+        assertEquals(mapOf("entity.phone" to "+380222222222"), back.single().meta)
+    }
+
+    @Test
     fun `битая строка выбрасывается, остальная память остаётся`() {
         val good = encodeJournal(listOf(entry("/a"), entry("/b")))
 

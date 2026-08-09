@@ -85,4 +85,32 @@ class LinkStateTest {
 
         assertEquals(LinkState.Never, linkStateOf(lastContactAt = null, now = now, probing = false))
     }
+
+    @Test
+    fun `телефон знаком, но эта сессия его ещё не слышала — «ждёт связи», а не молчание с 1970 года`() {
+
+        // Живой прогон 2026-08-09: свежий процесс ПК показывал «не отвечает · молчит 496177 часов».
+        val state = linkStateOf(lastContactAt = null, now = now, knownButUnheard = true)
+        assertEquals(LinkState.Waiting, state)
+        assertEquals("ждёт связи", linkLabel(state))
+    }
+
+    @Test
+    fun `знакомый телефон уже слышали — «ждёт связи» уступает реальному времени`() {
+
+        assertEquals(LinkState.Live(5_000), linkStateOf(now - 5_000, now, knownButUnheard = true))
+        assertEquals(
+            LinkState.Silent(10 * minute),
+            linkStateOf(now - 10 * minute, now, knownButUnheard = true),
+        )
+    }
+
+    @Test
+    fun `запрос в пути поверх «ждёт связи» — «проверяю»`() {
+
+        assertEquals(
+            LinkState.Checking,
+            linkStateOf(lastContactAt = null, now = now, probing = true, knownButUnheard = true),
+        )
+    }
 }

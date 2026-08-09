@@ -225,7 +225,9 @@ fun DesktopApp(
                         selected = selected,
                         onSelect = { selectedId = it.obj.id },
                         recent = remembered,
-                        onOpenAgain = { entry -> state.openAgain(entry) },
+                        onOpenAgain = { entry ->
+                            state.openAgain(entry)?.let { selectedId = it.obj.id }
+                        },
                     )
                     Spacer(Modifier.width(1.dp).fillMaxHeight().background(PointColors.border))
                     Box(Modifier.weight(1f).fillMaxHeight().padding(24.dp)) {
@@ -362,13 +364,14 @@ private fun LinkChip(lastContact: Long?, phoneSeen: Boolean = false) {
         }
     }
 
-    val link = com.point.core.flow.linkStateOf(lastContact ?: if (phoneSeen) 0L else null, now)
+    val link = com.point.core.flow.linkStateOf(lastContact, now, knownButUnheard = phoneSeen)
     val dot = when (link) {
         is com.point.core.flow.LinkState.Live -> PointColors.cyan
         is com.point.core.flow.LinkState.Silent -> PointColors.violet
 
         com.point.core.flow.LinkState.Checking -> PointColors.violet
         com.point.core.flow.LinkState.Never -> PointColors.border
+        com.point.core.flow.LinkState.Waiting -> PointColors.border
     }
     Row(verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(7.dp).background(dot, androidx.compose.foundation.shape.CircleShape))

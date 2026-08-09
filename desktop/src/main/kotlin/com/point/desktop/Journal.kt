@@ -41,11 +41,17 @@ data class JournalEntry(
     val source: ObjectSource,
     val at: Long,
     val steps: List<JournalStep> = emptyList(),
+
+    /** Знание объекта (metadata): переживает рестарт, иначе перенос теряет знание (PC2/PC5). */
+    val meta: Map<String, String> = emptyMap(),
 )
 
 const val JOURNAL_LIMIT = 40
 
 const val JOURNAL_STEPS_LIMIT = 20
+
+/** Значения длиннее — содержимое, а не строка знания: в журнал не пишутся. */
+const val JOURNAL_META_VALUE_LIMIT = 4_000
 
 fun recordArrival(
     entries: List<JournalEntry>,
@@ -53,7 +59,10 @@ fun recordArrival(
     limit: Int = JOURNAL_LIMIT,
 ): List<JournalEntry> {
     val known = entries.firstOrNull { it.path == arrival.path }
-    val merged = arrival.copy(steps = known?.steps ?: arrival.steps)
+    val merged = arrival.copy(
+        steps = known?.steps ?: arrival.steps,
+        meta = (known?.meta ?: emptyMap()) + arrival.meta,
+    )
     return (listOf(merged) + entries.filterNot { it.path == arrival.path }).take(limit)
 }
 
@@ -150,6 +159,12 @@ fun encodeJournal(entries: List<JournalEntry>): String =
                 put("step.$i.ok", if (step.ok) "1" else "0")
                 put("step.$i.note", step.note)
             }
+            entry.meta.forEach { (key, value) ->
+                if (value.length <= JOURNAL_META_VALUE_LIMIT) {
+                    // Base64 — чтобы многострочное знание не расплющилось кодеком строк.
+                    put("meta.$key", Base64.getEncoder().encodeToString(value.toByteArray(Charsets.UTF_8)))
+                }
+            }
         }
         Base64.getEncoder().encodeToString(encodePcMeta(meta).toByteArray(Charsets.UTF_8))
     }
@@ -169,9 +184,20 @@ fun decodeJournal(encoded: String): List<JournalEntry> =
                     .getOrDefault(ObjectSource.LOCAL),
                 at = meta["at"]?.toLongOrNull() ?: 0L,
                 steps = decodeSteps(meta),
+                meta = decodeMeta(meta),
             )
         }.getOrNull()
     }.toList()
+
+private fun decodeMeta(fields: Map<String, String>): Map<String, String> =
+    fields.entries
+        .filter { it.key.startsWith("meta.") }
+        .mapNotNull { (key, value) ->
+            runCatching {
+                key.removePrefix("meta.") to String(Base64.getDecoder().decode(value), Charsets.UTF_8)
+            }.getOrNull()
+        }
+        .toMap()
 
 private fun decodeSteps(meta: Map<String, String>): List<JournalStep> =
     meta.keys.filter { it.startsWith("step.") && it.endsWith(".id") }

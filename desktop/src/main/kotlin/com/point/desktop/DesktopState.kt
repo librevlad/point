@@ -239,17 +239,25 @@ class DesktopState(
         work = scope.launch(Dispatchers.IO) { perform(bubble.capabilityId.value, item, bubble.title) }
     }
 
-    fun openAgain(entry: JournalEntry) {
+    /**
+     * Клик по истории всегда отвечает: живым объектом ленты, переоткрытым файлом
+     * или честным «файла больше нет». Молчание выглядело мёртвой кнопкой
+     * (живой прогон 2026-08-09) — выбор возвращённого делает вызвавший экран.
+     */
+    fun openAgain(entry: JournalEntry): InboxItem? {
         val live = _items.value.firstOrNull { it.obj.uri.value == entry.path }
-        if (live != null) return
-        val item = runCatching { reopenPath(entry.path) }.getOrNull()
-        if (item == null) {
+        if (live != null) return live
+        val reopened = runCatching { reopenPath(entry.path) }.getOrNull()
+        if (reopened == null) {
 
             _message.value = "Файла больше нет: ${entry.name}"
-            return
+            return null
         }
 
+        // Переоткрытый файл — тот же объект: журнальное знание и имя возвращаются к нему (PC2/PC5).
+        val item = reopened.copy(obj = reopened.obj.copy(metadata = reopened.obj.metadata + entry.meta))
         _items.update { listOf(item) + it }
+        return item
     }
 
     fun pathOf(item: InboxItem): JournalEntry? =
@@ -267,6 +275,7 @@ class DesktopState(
                     mime = item.obj.mime,
                     source = source,
                     at = item.receivedAt,
+                    meta = item.obj.metadata,
                 ),
             )
         }

@@ -9,6 +9,9 @@ sealed interface LinkState {
     data object Checking : LinkState
 
     data object Never : LinkState
+
+    /** Устройство знакомо, но эта сессия его ещё не слышала: «ждёт связи», а не молчание. */
+    data object Waiting : LinkState
 }
 
 const val LINK_SILENCE_AFTER_MS = 3 * 60 * 1000L
@@ -18,13 +21,19 @@ fun linkStateOf(
     now: Long,
     probing: Boolean = false,
     silenceAfterMs: Long = LINK_SILENCE_AFTER_MS,
+    knownButUnheard: Boolean = false,
 ): LinkState {
-    val settled = settledLink(lastContactAt, now, silenceAfterMs)
+    val settled = settledLink(lastContactAt, now, silenceAfterMs, knownButUnheard)
     return if (probing && settled !is LinkState.Live) LinkState.Checking else settled
 }
 
-private fun settledLink(lastContactAt: Long?, now: Long, silenceAfterMs: Long): LinkState {
-    if (lastContactAt == null) return LinkState.Never
+private fun settledLink(
+    lastContactAt: Long?,
+    now: Long,
+    silenceAfterMs: Long,
+    knownButUnheard: Boolean,
+): LinkState {
+    if (lastContactAt == null) return if (knownButUnheard) LinkState.Waiting else LinkState.Never
     val ago = (now - lastContactAt).coerceAtLeast(0)
     if (ago >= silenceAfterMs) return LinkState.Silent(ago)
     return LinkState.Live(ago)
@@ -35,6 +44,7 @@ fun linkLabel(state: LinkState): String = when (state) {
     is LinkState.Silent -> "не отвечает · молчит ${minutesWord(state.agoMillis)}"
     LinkState.Checking -> "проверяю связь…"
     LinkState.Never -> "ещё не связывались"
+    LinkState.Waiting -> "ждёт связи"
 }
 
 private fun minutesWord(agoMillis: Long): String {
