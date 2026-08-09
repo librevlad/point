@@ -133,4 +133,36 @@ class FallbackLlmClientTest {
         assertTrue(error?.message?.contains("с поддержкой аудио") == true)
         assertFalse("картинка тут ни при чём", error?.message?.contains("изображени") == true)
     }
+
+    private fun unconfigured() = object : LlmClient {
+        override val configured = false
+        override suspend fun run(obj: PointObject, prompt: String): ResultObject =
+            error("задайте свой ключ — откройте «Настройки» на домашнем экране")
+    }
+
+    private fun offline() = object : LlmClient {
+        override suspend fun run(obj: PointObject, prompt: String): ResultObject =
+            error("Unable to resolve host \"openrouter.ai\": No address associated with hostname")
+    }
+
+    @Test
+    fun `без сети человек читает «нет подключения», а не про ключ и хвост исключения`() = runTest {
+        // Живой прогон 2026-08-09 (эмулятор, offline): «AI недоступен — задайте свой
+        // ключ …; Unable to resolve host…» — ненастроенный провайдер шумел в диагноз.
+        val error = runCatching {
+            FallbackLlmClient(listOf(unconfigured(), offline())).run(obj, "пойми")
+        }.exceptionOrNull()
+
+        assertEquals("AI недоступен — нет подключения к интернету", error?.message)
+    }
+
+    @Test
+    fun `совсем нет настроенных провайдеров — честное «задайте ключ», без списка обломков`() = runTest {
+        val error = runCatching {
+            FallbackLlmClient(listOf(unconfigured())).run(obj, "пойми")
+        }.exceptionOrNull()
+
+        assertTrue(error?.message?.contains("задайте свой ключ") == true)
+        assertFalse(error?.message?.contains("resolve host") == true)
+    }
 }

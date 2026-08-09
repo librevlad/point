@@ -22,7 +22,16 @@ class FallbackLlmClient @Inject constructor(
         }
         val errors = mutableListOf<String>()
         var considered = 0
+        var skippedUnconfigured = 0
         for (provider in ordered) {
+
+            // Ненастроенный провайдер не пытается и не шумит в диагноз: без него
+            // «нет сети» остаётся «нет сети», а не «задайте ключ; resolve host…»
+            // (живой прогон 2026-08-09, offline).
+            if (!provider.configured) {
+                skippedUnconfigured++
+                continue
+            }
             if (!provider.canHandle(obj)) continue
             considered++
             try {
@@ -32,6 +41,9 @@ class FallbackLlmClient @Inject constructor(
             }
         }
         if (considered == 0) {
+            if (skippedUnconfigured > 0 && errors.isEmpty()) {
+                error("AI не настроен — $AI_KEY_HINT")
+            }
 
             val needed = if (obj.mime.startsWith("audio/") || obj.mime == "application/ogg") {
                 "с поддержкой аудио"
