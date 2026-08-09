@@ -46,8 +46,11 @@ fun ActionSchema.readiness(facts: Map<String, String>): Readiness {
     val present = fields.mapNotNull { spec ->
         facts[spec.key]?.takeIf { it.isNotBlank() }?.let { value ->
 
+            // Равенство прочтений меряется той же нормализацией, что и merge:
+            // буквальное сравнение рождало «или: 26.04.2026 26.04.2026».
             val readings = (alternativesOf(facts, spec.key) + moreOf(facts, spec.key))
-                .distinct().filter { it != value }
+                .distinctBy { normConsensus(it) }
+                .filter { normConsensus(it) != normConsensus(value) }
             FieldReading(
                 spec, value, readings,
                 assumption = isAssumption(facts, spec.key),

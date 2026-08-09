@@ -447,6 +447,24 @@ class ActionSchemaTest {
     }
 
     @Test
+    fun `альтернатива, неотличимая от значения, спором не показывается`() {
+
+        // Живой прогон 2026-08-09: «дата — или: 26.04.2026 26.04.2026» — спор
+        // одинаковых на взгляд значений. Равенство меряется той же нормализацией,
+        // что и merge, а не буквальной строкой.
+        val row = actionReadiness(
+            mapOf(
+                META_ENTITY_RECEIPT to "PPA5-0M79",
+                META_ENTITY_PREFIX + "date" to "26.04.2026",
+                META_ENTITY_PREFIX + "date" + META_ALT_SUFFIX to "26.04.2026 ",
+            ),
+        ).single { it.schema.id == "forward-receipt" }
+
+        val date = (row.readiness as Readiness.Ready).present.single { it.spec.key.endsWith("date") }
+        assertTrue("хвост-пробел — не второе прочтение", date.alternatives.isEmpty())
+    }
+
+    @Test
     fun `переслать квитанцию — настоящая дверь, объект уходит шарингом`() {
 
         // Живой прогон 2026-08-09: «✓ Переслать квитанцию PPA5…» обещал готовое,
