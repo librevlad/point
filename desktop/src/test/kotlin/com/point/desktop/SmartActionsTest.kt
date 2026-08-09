@@ -38,30 +38,51 @@ class SmartActionsTest {
 
     @Test fun `находки становятся объектом, с которым можно работать дальше`() = runTest {
 
-        val realizer = PcEntitiesRealizer(com.point.core.flow.RegexEntityExtractor(), outbox())
+        val realizer = PcEntitiesRealizer(com.point.core.flow.RegexEntityExtractor())
 
         val result = realizer.perform(
             textObject("Ирина, +7 916 123-45-67, irina@example.com, оплата 48500 руб."),
             null,
         )
 
-        assertTrue("действие не вернуло объект: $result", result is ActionResult.Success)
-        val born = (result as ActionResult.Success).result
-        val report = File(born.uri.value).readText()
-        assertTrue("в отчёте нет телефона", report.contains("+7 916 123-45-67"))
-        assertTrue("в отчёте нет почты", report.contains("irina@example.com"))
-        assertTrue("объект без человеческого имени", born.metadata["name"].orEmpty().startsWith("Найдено"))
+        // Аудит 2026-08-09, блок 1.1: найденное — знание на исходнике, а не объект-отчёт.
+        assertTrue("исследование обязано вернуть знание: $result", result is ActionResult.Done)
+        val findings = (result as ActionResult.Done).findings!!
+        assertEquals("+7 916 123-45-67", findings.metadata["entity.phone"])
+        assertEquals("irina@example.com", findings.metadata["entity.email"])
+        assertEquals("found", findings.metadata["investigated.pc-entities"])
+        assertTrue(findings.features.contains(com.point.core.model.Feature.HAS_PHONE))
+        assertTrue("сводка — человеческая", result.message.startsWith("Нашёл"))
     }
 
-    @Test fun `ничего не нашлось — сказано словами, а не пустым файлом`() = runTest {
-        val box = outbox()
-        val realizer = PcEntitiesRealizer(com.point.core.flow.RegexEntityExtractor(), box)
+    @Test fun `второй телефон не теряется — остаётся ещё-значением`() = runTest {
+        val realizer = PcEntitiesRealizer(com.point.core.flow.RegexEntityExtractor())
+
+        val result = realizer.perform(
+            textObject("Отправитель +380671234567, получатель +380509876543"),
+            null,
+        ) as ActionResult.Done
+
+        val meta = result.findings!!.metadata
+        assertEquals("+380671234567", meta["entity.phone"])
+        assertTrue(
+            "второе значение обязано остаться",
+            meta["entity.phone.more"].orEmpty().contains("+380509876543"),
+        )
+    }
+
+    @Test fun `ничего не нашлось — это знание, а не ошибка`() = runTest {
+        val realizer = PcEntitiesRealizer(com.point.core.flow.RegexEntityExtractor())
 
         val result = realizer.perform(textObject("Просто текст без единого контакта"), null)
 
-        assertTrue(result is ActionResult.Failure)
-        assertTrue((result as ActionResult.Failure).reason.contains("не нашлось"))
-        assertTrue("в почту компьютера уехал пустой объект", box.entries().isEmpty())
+        // Конституция §13: «исследовано, не найдено» — состояние знания, не сбой операции.
+        assertTrue("не нашлось — Done, не Failure: $result", result is ActionResult.Done)
+        assertEquals(
+            "not_found",
+            (result as ActionResult.Done).findings!!.metadata["investigated.pc-entities"],
+        )
+        assertTrue(result.message.contains("не нашлось"))
     }
 
     private class FakeLlm(

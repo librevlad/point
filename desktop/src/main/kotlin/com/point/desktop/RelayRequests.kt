@@ -32,7 +32,14 @@ class RelayRequests(
         val born = (result as? com.point.core.model.ActionResult.Success)?.result
         val file = born?.let { java.io.File(it.uri.value).takeIf(java.io.File::isFile) }
         if (born == null || file == null) {
-            return Reply(body = encodePcReceiveReply(com.point.core.flow.pcActionOutcomeOf(result)).toByteArray(Charsets.UTF_8))
+            // Знание из Done едет телефону теми же understood-полями, что и объект-результат:
+            // перенос не теряет понятое (PC2; аудит 2026-08-09).
+            val understood = (result as? com.point.core.model.ActionResult.Done)?.findings?.metadata.orEmpty()
+                .mapKeys { (k, _) -> com.point.core.flow.PcResultFields.UNDERSTOOD + k }
+            return Reply(
+                meta = understood,
+                body = encodePcReceiveReply(com.point.core.flow.pcActionOutcomeOf(result)).toByteArray(Charsets.UTF_8),
+            )
         }
         val understood = born.metadata
             .filterKeys { it != "name" }

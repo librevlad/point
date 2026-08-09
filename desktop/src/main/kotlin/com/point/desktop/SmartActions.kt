@@ -5,6 +5,8 @@ import com.point.core.flow.CapabilityMeta
 import com.point.core.flow.Entity
 import com.point.core.flow.EntityExtractor
 import com.point.core.flow.EntityType
+import com.point.core.flow.asFeature
+import com.point.core.flow.asMetaKey
 import com.point.core.flow.Latency
 import com.point.core.flow.LlmClient
 import com.point.core.flow.Realizer
@@ -30,40 +32,54 @@ class PcEntitiesCapability : Capability {
 
 class PcEntitiesRealizer(
     private val extractor: EntityExtractor,
-    private val outbox: Outbox,
 ) : Realizer {
     override val capabilityId = CapabilityId("pc-entities")
 
+    // «Найти в тексте» — исследование: результат — знание на исходнике, а не новый
+    // объект-отчёт (Конституция §4; аудит 2026-08-09, блок 1.1).
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult = runCatching {
         val text = File(input.uri.value).takeIf(File::isFile)?.readText()
             ?: return ActionResult.Failure("Файла объекта нет на диске", recoverable = false)
-        val found = extractor.extract(text)
+        val found = com.point.core.flow.plausibleEntities(extractor.extract(text), text)
         if (found.isEmpty()) {
 
-            return ActionResult.Failure("В тексте не нашлось ни телефона, ни почты, ни суммы", recoverable = false)
+            // «Не нашлось» — знание, а не сбой (Конституция §13).
+            return ActionResult.Done(
+                "В тексте не нашлось ни контактов, ни дат, ни сумм",
+                com.point.core.model.Findings(
+                    metadata = mapOf(
+                        com.point.core.flow.investigationKey(capabilityId) to
+                            com.point.core.flow.InvestigationState.NOT_FOUND.wire,
+                    ),
+                ),
+            )
         }
-        val report = report(found)
-        val file = File.createTempFile("pc-found-", ".txt").apply { writeText(report) }
-
-        ActionResult.Success(
-            com.point.core.model.ResultObject(
-                type = ObjectKind.TEXT,
-                mime = "text/plain",
-                uri = ScratchRef(file.absolutePath),
-                metadata = mapOf("name" to ("Найдено · " + summary(found))),
-            ),
-        )
+        ActionResult.Done("Нашёл: " + summary(found), entityFindings(found))
     }.getOrElse { ActionResult.Failure("Разобрать текст не вышло — попробуйте ещё раз", recoverable = true) }
 
-    private fun report(found: List<Entity>): String = buildString {
-        EntityType.entries.forEach { type ->
-            val values = found.filter { it.type == type }.map(Entity::value).distinct()
-            if (values.isEmpty()) return@forEach
-            appendLine(title(type))
-            values.forEach { appendLine(it) }
-            appendLine()
+    private fun entityFindings(found: List<Entity>): com.point.core.model.Findings {
+        val metadata = buildMap {
+            found.groupBy { it.type }.forEach { (type, list) ->
+                val key = type.asMetaKey() ?: return@forEach
+                val values = list.map { it.value.trim() }.filter { it.isNotBlank() }
+                    .distinctBy { com.point.core.flow.normConsensus(it) }
+                if (values.isEmpty()) return@forEach
+                put(key, values.first())
+                val more = values.drop(1)
+                if (more.isNotEmpty()) {
+                    put(key + com.point.core.flow.META_MORE_SUFFIX, com.point.core.flow.altValue(more))
+                }
+            }
+            put(
+                com.point.core.flow.investigationKey(capabilityId),
+                com.point.core.flow.InvestigationState.FOUND.wire,
+            )
         }
-    }.trim()
+        return com.point.core.model.Findings(
+            features = found.mapNotNull { it.type.asFeature() }.toSet(),
+            metadata = metadata,
+        )
+    }
 
     private fun summary(found: List<Entity>): String =
         found.groupBy { it.type }.entries

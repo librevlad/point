@@ -173,6 +173,28 @@ class RemotePcActionTest {
     }
 
     @Test
+    fun `понятое компьютером доезжает знанием на исходник, а не только словами`() = runTest {
+        // PC2: перенос не теряет знание — Done с той стороны несёт understood-поля,
+        // и телефон кладёт их тем же путём Done+findings.
+        val transport = FakeTransport(
+            PcSendOutcome.Sent(
+                action = com.point.core.flow.PcActionOutcome.Done("Нашёл: телефоны — 1"),
+                understanding = mapOf(
+                    "entity.phone" to "+380671234567",
+                    "investigated.pc-entities" to "found",
+                ),
+            ),
+        )
+
+        val result = RemotePcRealizer(action, FakeLinks(), transport).perform(obj(), null)
+
+        val done = result as ActionResult.Done
+        assertEquals("Нашёл: телефоны — 1", done.message)
+        assertEquals("+380671234567", done.findings!!.metadata["entity.phone"])
+        assertEquals("found", done.findings!!.metadata["investigated.pc-entities"])
+    }
+
+    @Test
     fun `действие компьютера отказывает теми же словами, что и «На компьютер»`() = runTest {
 
         val rejected = RemotePcRealizer(action, FakeLinks(), FakeTransport(PcSendOutcome.Rejected))

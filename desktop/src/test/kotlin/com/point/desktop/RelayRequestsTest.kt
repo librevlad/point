@@ -67,6 +67,29 @@ class RelayRequestsTest {
     }
 
     @Test
+    fun `знание из Done уезжает телефону understood-полями`() {
+        result = com.point.core.model.ActionResult.Done(
+            "Нашёл: телефоны — 1",
+            com.point.core.model.Findings(
+                metadata = mapOf("entity.phone" to "+380671234567", "investigated.pc-entities" to "found"),
+            ),
+        )
+
+        val reply = requests().answer(
+            RelayRpc.OBJECT,
+            mapOf("name" to "чек.txt", "mime" to "text/plain", "action" to "pc-entities", "entity.money" to "693,40"),
+            "чек".toByteArray(Charsets.UTF_8),
+        )!!
+
+        assertEquals("+380671234567", reply.meta["result.understood.entity.phone"])
+        assertEquals("found", reply.meta["result.understood.investigated.pc-entities"])
+        assertEquals(
+            PcActionOutcome.Done("Нашёл: телефоны — 1"),
+            decodePcReceiveReply(String(reply.body, Charsets.UTF_8)),
+        )
+    }
+
+    @Test
     fun `действия не заказывали — исход неизвестен, и телефон скажет «отправлено»`() {
         val reply = requests().answer(
             RelayRpc.OBJECT,

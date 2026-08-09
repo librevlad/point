@@ -47,13 +47,16 @@ class RelayPcTransport(
     }
 
     private fun sentFrom(asked: RelayRpcClient.Asked.Answer): PcSendOutcome.Sent {
-        if (!com.point.core.flow.PcResultFields.hasObject(asked.meta)) {
-            return PcSendOutcome.Sent(decodePcReceiveReply(String(asked.body, Charsets.UTF_8)))
-        }
         val f = com.point.core.flow.PcResultFields
         val understood = asked.meta
             .filterKeys { it.startsWith(f.UNDERSTOOD) }
             .mapKeys { (k, _) -> k.removePrefix(f.UNDERSTOOD) }
+        if (!com.point.core.flow.PcResultFields.hasObject(asked.meta)) {
+            return PcSendOutcome.Sent(
+                decodePcReceiveReply(String(asked.body, Charsets.UTF_8)),
+                understanding = understood,
+            )
+        }
         return PcSendOutcome.Sent(
             action = com.point.core.flow.PcActionOutcome.Done(asked.meta[f.DETAIL]),
             returned = com.point.core.flow.PcReturned(

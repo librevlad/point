@@ -101,7 +101,7 @@ fun main(args: Array<String>) {
             PcToPhoneRealizer(outbox),
             PcPrintRealizer(printer),
             PcOfficePdfRealizer(officeToPdf, outbox),
-            PcEntitiesRealizer(entities, outbox),
+            PcEntitiesRealizer(entities),
             PcAiRealizer(
                 com.point.core.model.CapabilityId("pc-understand"), llm, PcPrompts.UNDERSTAND,
                 outbox, "Понятое",

@@ -8,6 +8,9 @@ sealed interface PcSendOutcome {
         val action: PcActionOutcome? = null,
 
         val returned: PcReturned? = null,
+
+        /** Знание об исходнике, добытое той стороной: перенос не теряет понятое (PC2). */
+        val understanding: Map<String, String> = emptyMap(),
     ) : PcSendOutcome
 
     data object Rejected : PcSendOutcome

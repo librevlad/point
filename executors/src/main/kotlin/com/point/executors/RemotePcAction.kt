@@ -128,7 +128,13 @@ class RemotePcRealizer(
                 null -> ActionResult.Done("Отправлено на компьютер")
                 is PcActionOutcome.Done ->
 
-                    ActionResult.Done(done.detail?.takeIf { it.isNotBlank() } ?: "${action.label} — готово")
+                    ActionResult.Done(
+                        done.detail?.takeIf { it.isNotBlank() } ?: "${action.label} — готово",
+                        // Понятое компьютером ложится в исходник тем же путём Done+findings:
+                        // перенос не теряет знание (PC2).
+                        com.point.core.model.Findings(metadata = outcome.understanding)
+                            .takeIf { outcome.understanding.isNotEmpty() },
+                    )
                 is PcActionOutcome.Failed -> ActionResult.Failure(
                     done.reason.takeIf { it.isNotBlank() }
                         ?: "Компьютер не смог выполнить «${action.label}»",
