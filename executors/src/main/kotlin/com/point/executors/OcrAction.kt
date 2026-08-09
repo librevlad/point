@@ -176,9 +176,13 @@ private suspend fun readWithExternalEye(
     degeneratedReading(reading.text)?.let { why ->
         return ActionResult.Failure(unreadable(reading.reader, why), recoverable = true)
     }
+
+    // Markdown-обёртка провайдера — не текст страницы (#661): «![img-0.jpeg](…)» и
+    // «# Відділення 1» уходили в объект и дальше в знание (живой прогон 2026-08-09).
+    val page = com.point.core.flow.stripMarkdownChrome(reading.text)
     return runCatching {
         val ref = store.newScratchFile("txt")
-        File(ref.value).writeText(reading.text)
+        File(ref.value).writeText(page)
         ActionResult.Success(
             ResultObject(
                 ObjectKind.TEXT,
@@ -193,7 +197,7 @@ private suspend fun readWithExternalEye(
                     reading.promise.takeIf { it.isNotBlank() }?.let { put("promise", it) }
                     input.metadata[META_READING_MODE]?.let { put(META_READING_MODE, it) }
 
-                    readingDoubts(reading.text).takeIf { it.isNotEmpty() }?.let { doubts ->
+                    readingDoubts(page).takeIf { it.isNotEmpty() }?.let { doubts ->
                         put(META_READING_DOUBT, doubts.joinToString("; ") { it.what })
                     }
 

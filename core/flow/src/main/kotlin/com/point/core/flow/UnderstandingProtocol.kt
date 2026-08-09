@@ -91,6 +91,13 @@ fun parseFieldCandidates(answer: String): ParsedUnderstanding {
                 val metaKey = META_ENTITY_PREFIX + suffix
                 val candidate = splitCandidate(rest) ?: return@forEach
 
+                // Отказ-фраза — не значение ни для какого поля (#656).
+                if (startsWithRefusal(candidate.text)) return@forEach
+
+                // Относительное слово — не дата (#659); арифметика — не сумма (#662).
+                if (suffix == "date" && relativeDayWord(candidate.text)) return@forEach
+                if (suffix == "amount" && looksLikeExpression(candidate.text)) return@forEach
+
                 // Форма IBAN — не трек: «UA79…» с квитанции становился готовым
                 // «Отследить отправление» (живой прогон 2026-08-09).
                 if (suffix == "track" && looksLikeIban(candidate.text)) return@forEach

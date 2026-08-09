@@ -26,6 +26,18 @@ fun bareClock(value: String): Boolean = BARE_CLOCK.matches(value.trim())
 
 fun Entity.isBareClock(): Boolean = type == EntityType.DATE_TIME && bareClock(value)
 
+/**
+ * Относительное слово — указатель на день, а не день (#659): «вчера» из переписки и
+ * «next minute» из письма становились знанием о дате, которого на кадре нет. Смысл
+ * такого слова истёк в момент снимка — календарём оно не является ни в каком виде.
+ */
+fun relativeDayWord(value: String): Boolean = RELATIVE_DAY.matches(value.trim())
+
+private val RELATIVE_DAY = Regex(
+    """(?iu)(?:поза)?(?:вчера|вчора)[.,!]?|сегодн[яi]|сьогодн[іi]|(?:після)?завтра|післязавтра|
+       |yesterday|today|tomorrow|tonight|(?:next|last|this)\s+\p{L}+""".trimMargin().replace("\n", ""),
+)
+
 private fun Entity.isFragmentOf(numbers: List<String>): Boolean {
     if (type != EntityType.PHONE) return false
     val digits = value.filter(Char::isDigit)
