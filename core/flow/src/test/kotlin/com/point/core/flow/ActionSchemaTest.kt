@@ -73,8 +73,10 @@ class ActionSchemaTest {
     }
 
     @Test
-    fun `второй номер страницы (more) виден на поле той же строкой «или»`() {
+    fun `второй номер страницы (more) — «ещё», а не «или» — это другой объект`() {
 
+        // Живой прогон S6 (2026-08-09): «ещё значения» вида — другие объекты,
+        // не спор прочтений одного. Раньше more показывались строкой «или».
         val facts = mapOf(
             "entity.track" to "20 4514 9154 9395",
             "entity.track.more" to altValue(listOf("20 4514 9154 9395", "20451491549396")),
@@ -82,7 +84,8 @@ class ActionSchemaTest {
 
         val r = track.readiness(facts) as Readiness.Ready
 
-        assertEquals(listOf("20451491549396"), r.present.single().alternatives)
+        assertTrue(r.present.single().alternatives.isEmpty())
+        assertEquals(listOf("20451491549396"), r.present.single().extras)
     }
 
     @Test

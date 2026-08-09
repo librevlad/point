@@ -1946,6 +1946,12 @@ class FlowViewModel @Inject constructor(
      * историю `.alt` и происхождение. Идентичность узла не меняется.
      */
     private fun syncNodeFact(node: PointObject, merged: Map<String, String>): PointObject {
+
+        // Узел «ещё одного» значения (id вида host:вид:значение) — другой объект того же
+        // вида: зеркалить его под primary кадра значит затирать второй телефон первым
+        // (живой прогон S6). Его правда — его собственное значение.
+        val hostId = node.sourceObjects.firstOrNull()
+        if (hostId != null && node.id.removePrefix("$hostId:").contains(':')) return node
         val key = node.metadata.keys.firstOrNull {
             (
                 it.startsWith(com.point.core.flow.META_ENTITY_PREFIX) ||

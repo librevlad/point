@@ -37,6 +37,9 @@ data class FieldReading(
     val value: String,
     val alternatives: List<String> = emptyList(),
 
+    /** «Ещё значения» того же вида — другие объекты, а не спор прочтений одного. */
+    val extras: List<String> = emptyList(),
+
     val assumption: Boolean = false,
 
     val hint: String? = null,
@@ -47,12 +50,15 @@ fun ActionSchema.readiness(facts: Map<String, String>): Readiness {
         facts[spec.key]?.takeIf { it.isNotBlank() }?.let { value ->
 
             // Равенство прочтений меряется той же нормализацией, что и merge:
-            // буквальное сравнение рождало «или: 26.04.2026 26.04.2026».
-            val readings = (alternativesOf(facts, spec.key) + moreOf(facts, spec.key))
+            // буквальное сравнение рождало «или: 26.04.2026 26.04.2026». Спор (.alt)
+            // и «ещё значения» (.more) — разные вещи: второй телефон — не конфликт.
+            fun distinctReadings(raw: List<String>) = raw
                 .distinctBy { normConsensus(it) }
                 .filter { normConsensus(it) != normConsensus(value) }
             FieldReading(
-                spec, value, readings,
+                spec, value,
+                alternatives = distinctReadings(alternativesOf(facts, spec.key)),
+                extras = distinctReadings(moreOf(facts, spec.key)),
                 assumption = isAssumption(facts, spec.key),
                 hint = fieldHint(spec.key, value),
             )

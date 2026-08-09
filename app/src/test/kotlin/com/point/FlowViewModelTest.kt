@@ -1439,6 +1439,39 @@ class FlowViewModelTest {
         )
     }
 
+    @Test fun `узел второго значения не зеркалится под первый — два телефона остаются двумя`() = runTest(dispatcher) {
+        val first = PointObject(
+            "in:phone", "text/plain", ValueRef("+380111111111"),
+            ObjectState(com.point.core.flow.KIND_PHONE), mapOf("entity.phone" to "+380111111111"),
+            sourceObjects = listOf("in"),
+        )
+        val second = PointObject(
+            "in:phone:+380222222222", "text/plain", ValueRef("+380222222222"),
+            ObjectState(com.point.core.flow.KIND_PHONE), mapOf("entity.phone" to "+380222222222"),
+            sourceObjects = listOf("in"),
+        )
+        enrichment.updates = listOf(
+            EnrichmentUpdate(
+                setOf(Feature.HAS_PHONE),
+                mapOf(
+                    "entity.phone" to "+380111111111",
+                    "entity.phone" + com.point.core.flow.META_MORE_SUFFIX to "+380222222222",
+                ),
+                emptyList(),
+                objects = listOf(first, second),
+            ),
+        )
+        val vm = vm()
+        vm.onShared("uri", "text/plain"); advanceUntilIdle()
+
+        val chips = vm.ui.value.frame!!.found
+        assertEquals(
+            "второй узел хранит своё значение, не первое",
+            "+380222222222",
+            chips.single { it.id == second.id }.metadata["entity.phone"],
+        )
+    }
+
     @Test fun `подтверждение того же значения делает узел подтверждённым вами`() = runTest(dispatcher) {
         val node = PointObject(
             "in:phone", "text/plain", ValueRef("111"),

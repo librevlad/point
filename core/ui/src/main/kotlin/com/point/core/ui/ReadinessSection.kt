@@ -215,6 +215,19 @@ private fun ReadinessRow(
                 modifier = Modifier.padding(start = 18.dp, top = 2.dp),
             )
         }
+
+        // «Ещё» — другие объекты того же вида, не спор прочтений (S6).
+        present.filter { it.extras.isNotEmpty() }.forEach { field ->
+            Text(
+                text = "${field.spec.label} — ещё: " +
+                    field.extras.joinToString(", ") { maskedForScreen(field.spec.key, it) },
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(start = 18.dp, top = 2.dp),
+            )
+        }
         if (!ready) {
             Text(
                 text = "не хватает только: " + missing.joinToString(", ") { it.label },
