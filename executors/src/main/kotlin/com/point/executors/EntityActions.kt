@@ -30,6 +30,11 @@ internal fun entitySourceText(input: PointObject): String {
     if (sidecar != null) return sidecar
 
     if (!input.state.kind.isFileBacked) return input.uri.value
+
+    // Файл читается как текст только у текстового вида: сырые байты JPEG уходили
+    // в облако «текстом страницы» вместе с EXIF (модель телефона, дата съёмки) —
+    // и запирали визуальный путь понимания (охота 2026-08-09, HUNT2-F1).
+    if (input.state.kind != com.point.core.model.ObjectKind.TEXT) return ""
     return File(input.uri.value).takeIf { it.isFile }?.readText().orEmpty()
 }
 

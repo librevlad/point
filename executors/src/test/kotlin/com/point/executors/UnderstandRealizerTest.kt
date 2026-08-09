@@ -506,6 +506,29 @@ class UnderstandRealizerTest {
     }
 
     @Test
+    fun `сырое фото уходит в модель картинкой, а не байтами файла`() = runTest {
+
+        // Охота 2026-08-09, HUNT2-F1: байты JPEG (EXIF с моделью телефона и датой
+        // съёмки) уходили провайдеру «текстом страницы», визуальный путь был заперт,
+        // человеку — ложное «уже прочитал всё».
+        val jpeg = File.createTempFile("meter", ".jpg").apply {
+            deleteOnExit()
+            writeBytes(byteArrayOf(-1, -40, -1, -31) + "Exif junk samsung".toByteArray() + ByteArray(64) { 7 })
+        }
+        val photo = PointObject(
+            "img", "image/jpeg", ScratchRef(jpeg.absolutePath), ObjectState(ObjectKind.IMAGE),
+        )
+
+        realizer("METER=00075").perform(photo, null)
+
+        assertTrue("в модель должен уйти снимок, не текст: ${lastLlmObject!!.mime}",
+            lastLlmObject!!.mime.startsWith("image/"))
+        assertFalse("байты файла не смеют попасть в промпт", lastPrompt!!.contains("Exif"))
+        assertTrue("сырое фото читается глазами (VISUAL_PROMPT)",
+            lastPrompt!!.contains("Прочитай, что написано на снимке"))
+    }
+
+    @Test
     fun `принимает текст и любое фото — сырое читается глазами`() {
 
         // Решение владельца (#664, 2026-08-09): «понять, понять сильнее и т.п.
