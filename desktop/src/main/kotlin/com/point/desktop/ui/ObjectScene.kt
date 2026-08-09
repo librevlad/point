@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -24,6 +25,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.point.core.model.ObjectKind
@@ -32,6 +35,86 @@ import com.point.desktop.JournalEntry
 import com.point.desktop.sourceLabel
 import com.point.desktop.whenLabel
 import java.time.ZoneId
+
+/** Объект живёт в портале — тот же язык, что на телефоне (дизайн-система). */
+@Composable
+internal fun PortalPreview(item: InboxItem) {
+    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+        PortalHalo(size = 180.dp)
+        val hasPreview = item.obj.state.kind == ObjectKind.TEXT || item.obj.state.kind == ObjectKind.IMAGE
+        if (hasPreview) {
+            Preview(item)
+        } else {
+            Text(
+                kindMark(item.obj.state.kind),
+                style = PointType.title.copy(color = PointColors.violet),
+            )
+        }
+    }
+}
+
+/** Портал телефона, перенесённый на ПК: свечение и два встречных кольца. */
+@Composable
+internal fun PortalHalo(size: androidx.compose.ui.unit.Dp, intensity: Float = 1f) {
+    val transition = androidx.compose.animation.core.rememberInfiniteTransition(label = "portal")
+    val spin by transition.animateFloat(
+        0f, 360f,
+        androidx.compose.animation.core.infiniteRepeatable(
+            androidx.compose.animation.core.tween(9000, easing = androidx.compose.animation.core.LinearEasing),
+        ),
+        label = "spin",
+    )
+    val spinBack by transition.animateFloat(
+        360f, 0f,
+        androidx.compose.animation.core.infiniteRepeatable(
+            androidx.compose.animation.core.tween(6500, easing = androidx.compose.animation.core.LinearEasing),
+        ),
+        label = "spinBack",
+    )
+    androidx.compose.foundation.Canvas(Modifier.size(size)) {
+        val c = center
+        val rad = this.size.minDimension / 2f
+        val a = intensity.coerceIn(0f, 1.4f)
+        drawCircle(
+            brush = androidx.compose.ui.graphics.Brush.radialGradient(
+                0f to PointColors.violet.copy(alpha = 0.28f * a),
+                0.55f to PointColors.cyan.copy(alpha = 0.13f * a),
+                1f to Color.Transparent,
+                center = c, radius = rad,
+            ),
+            radius = rad,
+        )
+        val core = Color(0xFFEAF0FF)
+        val glow = Color(0xFFB39DFF)
+        val bloom = listOf(0.14f to 4.0f, 0.9f to 1.0f)
+        rotate(spin, c) {
+            for ((alpha, widthMul) in bloom) {
+                drawCircle(
+                    brush = androidx.compose.ui.graphics.Brush.sweepGradient(
+                        listOf(Color.Transparent, PointColors.cyan, glow, core, glow, PointColors.cyan, Color.Transparent),
+                        center = c,
+                    ),
+                    radius = rad * 0.80f,
+                    style = Stroke(width = rad * 0.055f * widthMul),
+                    alpha = (alpha * a).coerceIn(0f, 1f),
+                )
+            }
+        }
+        rotate(spinBack, c) {
+            for ((alpha, widthMul) in bloom) {
+                drawCircle(
+                    brush = androidx.compose.ui.graphics.Brush.sweepGradient(
+                        listOf(Color.Transparent, PointColors.violet, core, PointColors.violet, Color.Transparent),
+                        center = c,
+                    ),
+                    radius = rad * 0.54f,
+                    style = Stroke(width = rad * 0.042f * widthMul),
+                    alpha = (alpha * a).coerceIn(0f, 1f),
+                )
+            }
+        }
+    }
+}
 
 /** Сам объект виден сразу: текст читается, картинка показана (P2/P3). */
 @Composable

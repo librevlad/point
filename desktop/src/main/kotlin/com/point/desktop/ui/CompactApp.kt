@@ -400,7 +400,7 @@ internal fun CompactObject(
             Text(it, style = PointType.small)
         } ?: Text(kindLabel(item.obj.state.kind), style = PointType.small)
 
-        Preview(item)
+        PortalPreview(item)
         Knowledge(
             item,
             onCopyFact = state::copyFact,
@@ -517,7 +517,7 @@ internal fun CompactList(
             com.point.desktop.recentBesides(journal, items.map { it.obj.uri.value }.toSet())
         }
         if (remembered.isNotEmpty()) {
-            Text("БЫЛО РАНЬШЕ", style = PointType.label, modifier = Modifier.padding(top = 4.dp))
+            Text("ИСТОРИЯ", style = PointType.label, modifier = Modifier.padding(top = 4.dp))
             remembered.forEach { entry ->
                 ListRow(
                     name = entry.name.ifBlank { "Объект" },
