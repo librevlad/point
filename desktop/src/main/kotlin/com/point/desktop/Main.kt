@@ -64,7 +64,15 @@ fun main(args: Array<String>) {
     }
 
     val screenGrab = ScreenGrab(File(System.getProperty("user.home"), "Point/screens"))
-    val downloader = YtDlpDownloader(File(System.getProperty("user.home"), "Point/downloads"))
+    val downloader = YtDlpDownloader(File(System.getProperty("user.home"), "Point/downloads")) { files ->
+
+        // Скачанное приходит в ленту объектом; пусто — честный отказ со следом (PC3/P9).
+        if (files.isEmpty()) {
+            state.say("Видео не скачалось — подробности в ~/Point/downloads/yt-dlp.log")
+        } else {
+            files.forEach { state.onReceived(inbox.addFile(it.absolutePath), ObjectSource.LOCAL) }
+        }
+    }
     val outbox = Outbox(File(System.getProperty("user.home"), "Point/outbox"))
 
     val officeToPdf = LocalOfficeToPdf()
@@ -85,7 +93,7 @@ fun main(args: Array<String>) {
             PcDownloadRealizer(downloader),
             PcToPhoneRealizer(outbox),
             PcPrintRealizer(printer),
-            PcOfficePdfRealizer(officeToPdf, outbox),
+            PcOfficePdfRealizer(officeToPdf),
             PcEntitiesRealizer(entities),
             PcUnderstandRealizer(llm),
             PcAiRealizer(

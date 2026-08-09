@@ -40,6 +40,27 @@ class PcCapability @Inject constructor(
 
 internal const val PC_SEND_STAGE = "Отправляю на компьютер"
 
+/**
+ * Имя, под которым объект появится на той стороне. Безымянный объект уезжал как
+ * «point-6e9a92c3» — внутренний идентификатор наружу (аудит 2026-08-09, P2):
+ * текст называется своей первой строкой, остальное — словами вида.
+ */
+internal fun humanSendName(input: PointObject): String {
+    input.metadata["name"]?.takeIf { it.isNotBlank() }?.let { return it }
+    if (input.state.kind == com.point.core.model.ObjectKind.TEXT) {
+        val firstLine = runCatching {
+            java.io.File(input.uri.value).useLines { lines -> lines.firstOrNull { it.isNotBlank() } }
+        }.getOrNull()?.trim()?.take(40)
+        if (!firstLine.isNullOrBlank()) return firstLine
+    }
+    return when (input.state.kind) {
+        com.point.core.model.ObjectKind.IMAGE -> "Снимок"
+        com.point.core.model.ObjectKind.URL -> "Ссылка"
+        com.point.core.model.ObjectKind.TEXT -> "Текст"
+        else -> "Объект"
+    }
+}
+
 class PcRealizer @Inject constructor(
     private val links: PcLinks,
     private val transport: PcTransport,
@@ -49,7 +70,7 @@ class PcRealizer @Inject constructor(
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult {
         val pc = links.current()
             ?: return ActionResult.Failure(pcUnreachableText(PcUnreachable.NOT_IN_CIRCLE), recoverable = true)
-        val name = input.metadata["name"] ?: "point-${input.id.take(8)}"
+        val name = humanSendName(input)
 
         reportStage(PC_SEND_STAGE)
         return when (val outcome = transport.send(pc, input, name, input.metadata)) {

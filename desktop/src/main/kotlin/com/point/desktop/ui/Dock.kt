@@ -56,7 +56,9 @@ fun Dock(
     ) {
 
         if (items.isNotEmpty()) {
-            Text("ПРИЛЕТЕЛО", style = PointType.label, modifier = Modifier.padding(horizontal = 4.dp))
+
+            // «Прилетело» врало для переоткрытого из истории — человек достал его сам.
+            Text("СЕЙЧАС", style = PointType.label, modifier = Modifier.padding(horizontal = 4.dp))
         }
 
         Column(

@@ -119,7 +119,7 @@ class RemotePcRealizer(
                 pcUnreachableText(com.point.core.flow.PcUnreachable.NOT_IN_CIRCLE),
                 recoverable = true,
             )
-        val name = input.metadata["name"] ?: "объект"
+        val name = humanSendName(input)
 
         reportStage(PC_SEND_STAGE)
         return when (val outcome = transport.send(pc, input, name, input.metadata, action.id)) {

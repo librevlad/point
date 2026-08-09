@@ -123,17 +123,30 @@ interface VideoDownloader {
     fun start(url: String): Boolean
 }
 
-class YtDlpDownloader(private val downloadsDir: File) : VideoDownloader {
+class YtDlpDownloader(
+    private val downloadsDir: File,
+
+    /** Скачанное — объект, а не файл «где-то» (PC3): по завершении оно приходит в ленту. */
+    private val onDownloaded: (List<File>) -> Unit = {},
+) : VideoDownloader {
     override fun available(): Boolean = runCatching {
         ProcessBuilder("yt-dlp", "--version").start().waitFor() == 0
     }.getOrDefault(false)
 
     override fun start(url: String): Boolean = runCatching {
         downloadsDir.mkdirs()
-        ProcessBuilder("yt-dlp", "-P", downloadsDir.absolutePath, url)
+        val before = downloadsDir.list()?.toSet() ?: emptySet()
+        val process = ProcessBuilder("yt-dlp", "-P", downloadsDir.absolutePath, url)
             .redirectErrorStream(true)
             .redirectOutput(File(downloadsDir, "yt-dlp.log"))
             .start()
+        Thread({
+            val code = runCatching { process.waitFor() }.getOrDefault(-1)
+            val fresh = downloadsDir.listFiles().orEmpty()
+                .filter { it.isFile && it.name !in before }
+                .filterNot { it.name == "yt-dlp.log" || it.name.endsWith(".part") }
+            runCatching { onDownloaded(if (code == 0) fresh else emptyList()) }
+        }, "yt-dlp-watch").apply { isDaemon = true }.start()
         true
     }.getOrDefault(false)
 }
@@ -186,11 +199,12 @@ class PcToPhoneRealizer(private val outbox: Outbox) : Realizer {
 
 class PcOfficePdfRealizer(
     private val converter: OfficeToPdf,
-    private val outbox: Outbox,
 ) : Realizer {
     override val capabilityId = com.point.core.flow.capabilities.PdfCapability.ID
 
     override fun accepts(state: ObjectState) = state.kind == ObjectKind.OFFICE
+
+    override fun unavailableReason(): String? = converter.whyUnavailable()
 
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         runCatching {
@@ -203,16 +217,18 @@ class PcOfficePdfRealizer(
                     "Компьютер не смог собрать PDF из этого документа",
                     recoverable = true,
                 )
-            outbox.add(
-                input.copy(
-                    id = input.id + "-pdf",
+
+            // Результат появляется здесь, на компьютере (PC3/P4 — раньше он уезжал только
+            // в очередь телефона, и на самом ПК PDF было не открыть). Телефону при его
+            // команде тот же Success уедет ответом, а поздний — очередью компьютера.
+            ActionResult.Success(
+                com.point.core.model.ResultObject(
+                    type = ObjectKind.PDF,
                     mime = "application/pdf",
                     uri = com.point.core.model.ScratchRef(pdf.absolutePath),
-                    state = ObjectState(ObjectKind.PDF),
-                    metadata = input.metadata + ("name" to pdf.name),
+                    metadata = mapOf("name" to pdf.name),
                 ),
             )
-            ActionResult.Done("PDF собран на компьютере — заберите на телефоне")
         }.getOrElse { ActionResult.Failure("PDF не собрался — закройте документ, если он открыт в Office, и повторите", recoverable = true) }
 }
 
