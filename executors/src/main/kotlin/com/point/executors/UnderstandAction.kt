@@ -27,7 +27,12 @@ import com.point.core.flow.META_READING_MODE
 import com.point.core.flow.META_SEMANTIC_SUMMARY
 import com.point.core.flow.META_SEMANTIC_TYPE
 import com.point.core.flow.META_SOURCE_SUFFIX
+import com.point.core.flow.ParsedUnderstanding
 import com.point.core.flow.Realizer
+import com.point.core.flow.UNDERSTAND_CONTRACT_KEYS
+import com.point.core.flow.parseFieldCandidates
+import com.point.core.flow.saysNothing
+import com.point.core.flow.splitCandidate
 import com.point.core.flow.AtomAddress
 import com.point.core.flow.altValue
 import com.point.core.flow.alternativesOf
@@ -63,22 +68,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import javax.inject.Inject
-
-private val CONTRACT_KEYS = mapOf(
-    "PHONE" to "phone",
-    "EMAIL" to "email",
-    "URL" to "url",
-    "ADDRESS" to "address",
-    "DATE" to "date",
-    "CARD" to "card",
-    "TRACK" to "track",
-    "METER" to "meter",
-    "GEO" to "geo",
-    "PLACE" to "place",
-    "AMOUNT" to "amount",
-    "RECEIPT" to "receipt",
-    "SUBJECT" to "subject",
-)
 
 internal fun understandPrompt(
     elements: List<LayoutElement>,
@@ -146,80 +135,6 @@ internal fun understandPrompt(
     }
     append("Без пояснений. Если не нашлось вообще ничего — ответь ровно NONE.\n")
 }
-
-internal fun parseFieldCandidates(answer: String): ParsedUnderstanding {
-    val fields = LinkedHashMap<String, MutableList<FieldCandidate>>()
-    val single = LinkedHashMap<String, String>()
-    answer.lineSequence().forEach { raw ->
-        val line = raw.trim()
-        val eq = line.indexOf('=')
-        if (eq <= 0) return@forEach
-        val key = line.substring(0, eq).trim().uppercase()
-        val rest = line.substring(eq + 1).trim()
-        if (rest.isEmpty()) return@forEach
-        when {
-            key == "TYPE" -> rest.lowercase().takeIf { it in KNOWN_SEMANTIC_TAGS }
-                ?.let { single.putIfAbsent(META_SEMANTIC_TYPE, it) }
-            key == "SUMMARY" -> rest.takeIf { !saysNothing(it) }
-                ?.let { single.putIfAbsent(META_SEMANTIC_SUMMARY, it.take(120)) }
-            else -> CONTRACT_KEYS[key]?.let { suffix ->
-                val metaKey = META_ENTITY_PREFIX + suffix
-                val candidate = splitCandidate(rest) ?: return@forEach
-
-                // Форма IBAN — не трек: «UA79…» с квитанции становился готовым
-                // «Отследить отправление» (живой прогон 2026-08-09).
-                if (suffix == "track" && looksLikeIban(candidate.text)) return@forEach
-                val bucket = fields.getOrPut(metaKey) { mutableListOf() }
-                if (bucket.size < MAX_FIELD_CANDIDATES && bucket.none { it.text == candidate.text && it.ids == candidate.ids }) {
-                    bucket += candidate
-                }
-            }
-        }
-    }
-    return ParsedUnderstanding(fields, single)
-}
-
-internal data class ParsedUnderstanding(
-    val fields: Map<String, List<FieldCandidate>>,
-    val single: Map<String, String>,
-)
-
-private fun splitCandidate(rest: String): FieldCandidate? {
-    if (saysNothing(rest)) return null
-    val m = TRAILING_IDS.find(rest)
-    if (m != null) {
-        val ids = m.groupValues[2].split(',')
-            .flatMap { part -> part.trim().split(WHITESPACE) }
-            .map(String::trim)
-            .filter { it.isNotEmpty() && !it.startsWith("rule=") }
-            .map(::bareIndexId)
-        if (ids.isNotEmpty() && ids.all { ID_SHAPED.matches(it) }) {
-            val text = m.groupValues[1].trim()
-            return if (text.isEmpty() || saysNothing(text)) null else FieldCandidate(text, ids)
-        }
-    }
-    return FieldCandidate(rest)
-}
-
-// Контракт требует отвечать NONE на весь документ, но модели пишут «None»/«null»/
-// «не найдено» и в отдельные поля — это отсутствие значения, а не значение
-// (живой прогон 2026-08-08: семь действий со значением «None»).
-private val NO_VALUE = setOf(
-    "none", "null", "nil", "n/a", "na", "-", "—", "–",
-    "нет", "не найдено", "не найдена", "отсутствует",
-    "немає", "не знайдено", "відсутнє", "відсутній",
-)
-
-private fun saysNothing(text: String): Boolean = text.trim().trim('.').lowercase() in NO_VALUE
-
-private val IBAN_SHAPED = Regex("""[A-Z]{2}\d{2}[A-Z0-9]{11,30}""")
-
-private fun looksLikeIban(text: String): Boolean =
-    IBAN_SHAPED.matches(text.filterNot(Char::isWhitespace).uppercase())
-
-private val TRAILING_IDS = Regex("""^(.*?)\s*\[([^\[\]]+)]$""")
-private val ID_SHAPED = Regex("""[A-Za-z]+\d+""")
-private val WHITESPACE = Regex("""\s+""")
 
 class UnderstandCapability @Inject constructor(
     private val keys: AiReadiness,
@@ -393,7 +308,7 @@ class UnderstandRealizer @Inject constructor(
 
         fun retryPrompt(keys: Set<String>, elements: List<LayoutElement>, index: String?): String {
             val names = keys.mapNotNull { key ->
-                CONTRACT_KEYS.entries.firstOrNull { META_ENTITY_PREFIX + it.value == key }?.key
+                UNDERSTAND_CONTRACT_KEYS.entries.firstOrNull { META_ENTITY_PREFIX + it.value == key }?.key
             }
             return understandPrompt(elements, index = index) +
                 "\nКандидаты полей ${names.joinToString(", ")} не прошли проверку контрольной цифры. " +

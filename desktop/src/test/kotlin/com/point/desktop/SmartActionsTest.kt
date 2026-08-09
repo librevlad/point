@@ -103,7 +103,7 @@ class SmartActionsTest {
 
     @Test fun `без ключа AI не идёт в сеть и говорит, где его вписать`() = runTest {
         val llm = FakeLlm(configured = false)
-        val realizer = PcAiRealizer(CapabilityId("pc-understand"), llm, PcPrompts.UNDERSTAND, outbox(), "Понятое")
+        val realizer = PcUnderstandRealizer(llm)
 
         val result = realizer.perform(textObject("любой текст"), null)
 
@@ -139,13 +139,7 @@ class SmartActionsTest {
     }
 
     @Test fun `сервис отказал — человек читает слова, а не хвост исключения`() = runTest {
-        val realizer = PcAiRealizer(
-            CapabilityId("pc-understand"),
-            FakeLlm(fail = "Сервис AI сейчас не отвечает"),
-            PcPrompts.UNDERSTAND,
-            outbox(),
-            "Понятое",
-        )
+        val realizer = PcUnderstandRealizer(FakeLlm(fail = "Сервис AI сейчас не отвечает"))
 
         val result = realizer.perform(textObject("текст"), null)
 
@@ -156,6 +150,37 @@ class SmartActionsTest {
         assertTrue("отказ ничего не советует: " + reason, reason.contains("позже"))
 
         assertTrue(result.recoverable)
+    }
+
+    @Test fun `понятое моделью — знание на исходнике по общему протоколу`() = runTest {
+        // Аудит, блок 1.1: «Понять» рождало объект «Понятое». Теперь — Done+findings,
+        // как на телефоне; поля — по строгому контракту, источник — MODEL.
+        val llm = FakeLlm(answer = "PHONE=+380671234567\nAMOUNT=500\nTYPE=PURCHASE\nSUMMARY=Оплата счёта")
+
+        val result = PcUnderstandRealizer(llm).perform(textObject("текст квитанции"), null)
+
+        val done = result as ActionResult.Done
+        assertEquals("Стало понятнее", done.message)
+        val meta = done.findings!!.metadata
+        assertEquals("+380671234567", meta["entity.phone"])
+        assertEquals("500", meta["entity.amount"])
+        assertEquals("purchase", meta[com.point.core.flow.META_SEMANTIC_TYPE])
+        assertEquals("Оплата счёта", meta[com.point.core.flow.META_SEMANTIC_SUMMARY])
+        assertEquals("model", meta["entity.phone.src"])
+        assertEquals("found", meta["investigated.pc-understand"])
+    }
+
+    @Test fun `болтовня модели вместо полей — честное «ничего нового», а не мусор в фактах`() = runTest {
+        val llm = FakeLlm(answer = "Это документ об оплате, но точных данных нет. NONE")
+
+        val result = PcUnderstandRealizer(llm).perform(textObject("текст"), null)
+
+        val done = result as ActionResult.Done
+        assertEquals("not_found", done.findings!!.metadata["investigated.pc-understand"])
+        assertTrue(
+            "в знание не должно попасть ничего, кроме состояния вопроса",
+            done.findings!!.metadata.keys.all { it.startsWith("investigated.") },
+        )
     }
 
     @Test fun `ссылка превращается в картинку, которую можно снять камерой`() = runTest {

@@ -8,6 +8,7 @@ import com.point.core.flow.META_ENTITY_TRACK
 import com.point.core.flow.META_OCR_TEXT_REF
 import com.point.core.flow.alternativesOf
 import com.point.core.flow.layoutOf
+import com.point.core.flow.parseFieldCandidates
 import com.point.core.model.ActionResult
 import com.point.core.model.Feature
 import com.point.core.model.ObjectKind

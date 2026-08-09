@@ -87,10 +87,7 @@ fun main(args: Array<String>) {
             PcPrintRealizer(printer),
             PcOfficePdfRealizer(officeToPdf, outbox),
             PcEntitiesRealizer(entities),
-            PcAiRealizer(
-                com.point.core.model.CapabilityId("pc-understand"), llm, PcPrompts.UNDERSTAND,
-                outbox, "Понятое",
-            ),
+            PcUnderstandRealizer(llm),
             PcAiRealizer(
                 com.point.core.model.CapabilityId("pc-translate"), llm, PcPrompts.TRANSLATE,
                 outbox, "Перевод",
@@ -184,14 +181,14 @@ fun main(args: Array<String>) {
         "pc-download" to if (downloader.available()) null else "на компьютере нет yt-dlp",
 
         "pc-print" to whyCannotPrint(),
-        "pc-office-pdf" to officeToPdf.whyUnavailable(),
+        "pdf" to officeToPdf.whyUnavailable(),
 
         "pc-understand" to aiKeyMissing(pointDir),
         "pc-translate" to aiKeyMissing(pointDir),
         "pc-ask" to aiKeyMissing(pointDir),
         "pc-transcribe" to speechKeyMissing(pointDir),
 
-        "pc-drop" to if (accountStore.current() != null) null else "компьютер не вошёл в аккаунт",
+        "drop-link" to if (accountStore.current() != null) null else "компьютер не вошёл в аккаунт",
     )
     val pcRemoteActions = com.point.core.flow.advertisedActions(registry.all()).map { action ->
         action.copy(

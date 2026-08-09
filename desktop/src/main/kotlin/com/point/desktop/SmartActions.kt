@@ -140,6 +140,77 @@ class PcAskCapability : Capability {
     override fun produces(state: ObjectState) = ObjectState(ObjectKind.TEXT)
 }
 
+/**
+ * «Понять» на компьютере — тот же протокол понимания, что на телефоне (строгий контракт
+ * полей + общий парсер), результат — знание на исходнике, а не новый объект (Конституция
+ * §4; аудит 2026-08-09, блок 1.1). Слоя атомов на ПК нет, поэтому судьи нет — источник MODEL.
+ */
+class PcUnderstandRealizer(
+    private val llm: LlmClient,
+) : Realizer {
+    override val capabilityId = CapabilityId("pc-understand")
+
+    override val meta = com.point.core.flow.RealizerMeta(kind = com.point.core.flow.RealizerKind.CLOUD)
+
+    override suspend fun perform(input: PointObject, amendment: String?): ActionResult = runCatching {
+        if (!llm.configured) {
+            return ActionResult.Failure(
+                "Ключ AI не задан — впишите его в ~/.point-pc/config строкой ai.key=…",
+                recoverable = false,
+            )
+        }
+        val answer = File(llm.run(input, pcUnderstandPrompt()).uri.value).readText()
+        val parsed = com.point.core.flow.parseFieldCandidates(answer)
+        val fields = parsed.fields.mapNotNull { (key, candidates) ->
+            candidates.firstOrNull { com.point.core.flow.semanticFits(key, it.text) != false }
+                ?.let { key to it.text }
+        }.toMap()
+        if (fields.isEmpty() && parsed.single.isEmpty()) {
+
+            return ActionResult.Done(
+                "Point уже прочитал всё, что здесь есть",
+                com.point.core.model.Findings(
+                    metadata = mapOf(
+                        com.point.core.flow.investigationKey(capabilityId) to
+                            com.point.core.flow.InvestigationState.NOT_FOUND.wire,
+                    ),
+                ),
+            )
+        }
+        val sources = fields.keys.associate {
+            it + com.point.core.flow.META_SOURCE_SUFFIX to com.point.core.model.Provenance.MODEL.wire
+        }
+        ActionResult.Done(
+            "Стало понятнее",
+            com.point.core.model.Findings(
+                metadata = fields + parsed.single + sources + mapOf(
+                    com.point.core.flow.investigationKey(capabilityId) to
+                        com.point.core.flow.InvestigationState.FOUND.wire,
+                ),
+            ),
+        )
+    }.getOrElse { ActionResult.Failure("Сервис AI не ответил — попробуйте позже", recoverable = true) }
+
+    private fun pcUnderstandPrompt(): String = buildString {
+        append("Ниже текст документа. Найди контактные данные и номера. ")
+        append(
+            "Значение приводи ПОЛНОСТЬЮ, как оно есть в документе. НИЧЕГО не додумывай: " +
+                "если чего-то в тексте нет — не пиши строку. Цифры не меняй. " +
+                "Отвечай строками вида KEY=значение, по одной на строку. Разрешённые KEY: " +
+                "PHONE, EMAIL, URL, ADDRESS, DATE, CARD, TRACK (номер отправления, дословно), " +
+                "METER (показание счётчика — только цифры), GEO (координаты), PLACE (куда ехать, " +
+                "если адреса нет), AMOUNT (сумма к оплате — только цифры), RECEIPT (номер " +
+                "квитанции), SUBJECT (тема письма; если это не письмо — не пиши). ",
+        )
+        append(
+            "Дополнительно: если текст целиком — встреча, строка TYPE=MEETING; покупка или " +
+                "чек — TYPE=PURCHASE; рецепт — TYPE=RECIPE; вакансия — TYPE=JOB; иначе TYPE " +
+                "не пиши. Добавь строку SUMMARY=<суть текста в 3-6 словах>. ",
+        )
+        append("Без пояснений. Если не нашлось вообще ничего — ответь ровно NONE.\n")
+    }
+}
+
 class PcAiRealizer(
     override val capabilityId: CapabilityId,
     private val llm: LlmClient,
