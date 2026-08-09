@@ -39,7 +39,17 @@ fun parseFieldCandidates(answer: String): ParsedUnderstanding {
     val single = LinkedHashMap<String, String>()
     val contacts = mutableListOf<PersonContact>()
 
-    fun offerPhone(candidate: FieldCandidate) {
+    fun offerPhone(raw: FieldCandidate) {
+
+        // Модель нередко клеит имя и номер одной строкой PHONE — это пара, а не
+        // длинный номер: «НОВІК Владислав +380 93 242 37 59» (живой прогон 2026-08-09).
+        val glued = if (raw.person == null) splitPersonPhone(raw.text) else null
+        val candidate = when {
+            glued != null -> raw.copy(text = glued.phone, person = glued.name)
+            else -> raw
+        }
+        candidate.person?.let { contacts += PersonContact(it, candidate.text) }
+
         val bucket = fields.getOrPut(META_ENTITY_PREFIX + "phone") { mutableListOf() }
         val twin = bucket.indexOfFirst { normConsensus(it.text) == normConsensus(candidate.text) }
         when {
@@ -64,7 +74,6 @@ fun parseFieldCandidates(answer: String): ParsedUnderstanding {
                 ?.let { single.putIfAbsent(META_SEMANTIC_SUMMARY, it.take(120)) }
 
             key == "CONTACT" -> parseContact(rest)?.let { (name, phone) ->
-                if (name != null) contacts += PersonContact(name, phone)
                 offerPhone(FieldCandidate(phone, person = name))
             }
             else -> UNDERSTAND_CONTRACT_KEYS[key]?.let { suffix ->
@@ -99,7 +108,20 @@ fun parseFieldCandidates(answer: String): ParsedUnderstanding {
             }
         }
     }
-    return ParsedUnderstanding(fields, single, contacts)
+    return ParsedUnderstanding(fields, single, contacts.distinct())
+}
+
+private val PHONE_CHUNK = Regex("""\+?\d[\d\s\-()./]{6,}\d""")
+
+/** Склейка «имя и номер» в одном значении — пара, а не длинный номер (#653). */
+fun splitPersonPhone(text: String): PersonContact? {
+    val chunk = PHONE_CHUNK.findAll(text).maxByOrNull { it.value.count(Char::isDigit) } ?: return null
+    if (chunk.value.count(Char::isDigit) < 7) return null
+    val name = text.removeRange(chunk.range)
+        .trim { it.isWhitespace() || it in ",|;:-·" }
+        .replace(Regex("""\s+"""), " ")
+    if (!plausiblePersonName(name)) return null
+    return PersonContact(name, chunk.value.trim())
 }
 
 /**

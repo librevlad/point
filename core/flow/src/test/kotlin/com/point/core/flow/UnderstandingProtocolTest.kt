@@ -80,6 +80,41 @@ class UnderstandingProtocolTest {
     }
 
     @Test
+    fun `склейка имени и номера одной строкой PHONE — пара, а не длинный номер`() {
+
+        // Живой прогон 2026-08-09: модель ответила «PHONE=НОВІК Владислав
+        // Анатолійович +380 93 242 37 59» — узел телефона показывал склейку целиком.
+        val parsed = parseFieldCandidates("PHONE=НОВІК Владислав Анатолійович +380 93 242 37 59")
+
+        assertEquals(
+            listOf(PersonContact("НОВІК Владислав Анатолійович", "+380 93 242 37 59")),
+            parsed.contacts,
+        )
+        val phone = parsed.fields[META_ENTITY_PREFIX + "phone"]!!.single()
+        assertEquals("+380 93 242 37 59", phone.text)
+        assertEquals("НОВІК Владислав Анатолійович", phone.person)
+    }
+
+    @Test
+    fun `склейка не дублирует уже названный чистый номер`() {
+        val parsed = parseFieldCandidates(
+            "PHONE=+380 93 242 37 59\nPHONE=НОВІК Владислав +380 93 242 37 59",
+        )
+
+        val phones = parsed.fields[META_ENTITY_PREFIX + "phone"]!!
+        assertEquals(1, phones.size)
+        assertEquals("НОВІК Владислав", phones.single().person)
+    }
+
+    @Test
+    fun `чистый номер без имени пары не рождает`() {
+        val parsed = parseFieldCandidates("PHONE=+380671234567")
+
+        assertEquals(emptyList<PersonContact>(), parsed.contacts)
+        assertEquals(null, parsed.fields[META_ENTITY_PREFIX + "phone"]!!.single().person)
+    }
+
+    @Test
     fun `multi-value виды названы, одиночные — нет`() {
         assertEquals(true, isMultiValueFact(META_ENTITY_PREFIX + "phone"))
         assertEquals(true, isMultiValueFact(META_ENTITY_PREFIX + "date"))
