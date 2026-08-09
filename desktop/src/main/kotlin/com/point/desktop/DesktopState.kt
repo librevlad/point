@@ -165,6 +165,11 @@ class DesktopState(
                 onReceived(item2, ObjectSource.LOCAL)
             }
         }
+
+        // Знание из шага ложится в сам объект — тем же mergeKnowledge, что и на телефоне
+        // (Конституция §4: обогащение не создаёт версию объекта; аудит 2026-08-09, блок 1.1).
+        val findings = (result as? ActionResult.Done)?.findings
+        if (findings != null && !findings.isEmpty) landFindings(item, findings)
         _message.value = when (result) {
             is ActionResult.Done -> result.message
             is ActionResult.Failure -> result.reason
@@ -174,6 +179,22 @@ class DesktopState(
 
         note(item, id, if (stationTitle != null) title else "$title · с телефона", result)
         return result
+    }
+
+    private fun landFindings(item: InboxItem, findings: com.point.core.model.Findings) {
+        val current = _items.value.firstOrNull { it.obj.id == item.obj.id } ?: item
+        val newState = findings.features.fold(current.obj.state) { state, feature -> state.with(feature) }
+        val newMeta = com.point.core.flow.mergeKnowledge(
+            current.obj.metadata,
+            findings.metadata,
+            com.point.core.flow.REFRESHABLE_KNOWLEDGE,
+        )
+        if (newState == current.obj.state && newMeta == current.obj.metadata) return
+        val updated = current.copy(obj = current.obj.copy(state = newState, metadata = newMeta))
+        _items.update { list -> list.map { if (it.obj.id == item.obj.id) updated else it } }
+
+        // findings.objects (узлы-сущности) появятся на экране ПК в фазе B редизайна.
+        updateJournal { recordKnowledge(it, updated.obj.uri.value, newMeta) }
     }
 
     fun setPhoneCaps(caps: List<com.point.core.flow.PcRemoteAction>) {

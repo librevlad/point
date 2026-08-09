@@ -1994,10 +1994,7 @@ class FlowViewModel @Inject constructor(
         val PC_SERVICE_META = setOf("name", "mime", "pc.action", "id")
 
 
-        val REFRESHABLE_META = setOf(
-            com.point.core.flow.META_OCR_TEXT_REF,
-            com.point.core.flow.META_OCR_ATOMS_REF,
-        )
+        val REFRESHABLE_META = com.point.core.flow.REFRESHABLE_KNOWLEDGE
 
         const val CLOUD_DECLINED =
             "Ничего не отправлено — объект остался на телефоне, действие не выполнено. " +

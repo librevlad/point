@@ -76,6 +76,14 @@ fun recordStep(
         if (entry.path != path) entry else entry.copy(steps = (entry.steps + step).takeLast(stepsLimit))
     }
 
+/** Знание объекта после merge: журнал держит уже слитое состояние, не дельту. */
+fun recordKnowledge(
+    entries: List<JournalEntry>,
+    path: String,
+    meta: Map<String, String>,
+): List<JournalEntry> =
+    entries.map { entry -> if (entry.path != path) entry else entry.copy(meta = meta) }
+
 fun recentBesides(
     entries: List<JournalEntry>,
     livePaths: Set<String>,
