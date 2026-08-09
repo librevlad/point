@@ -437,13 +437,25 @@ class ActionSchemaTest {
     @Test
     fun `действие без реализации кнопкой не становится — глагол без действия и был находкой`() {
 
-        val tails = setOf("track-parcel", "meter-reading", "pay-by-requisites", "forward-receipt")
+        val tails = setOf("track-parcel", "meter-reading", "pay-by-requisites")
         val all = ACTION_SCHEMAS.map { it.id to it.runs }.toMap()
 
         assertEquals(tails, all.filterValues { it == null }.keys)
         val parcel = actionReadiness(mapOf(META_ENTITY_TRACK to "20 4514 9154 9395")).single()
         assertTrue(parcel.readiness is Readiness.Ready)
         assertNull(parcel.runner(listOf(bubbleOf("share"), bubbleOf("copy"))))
+    }
+
+    @Test
+    fun `переслать квитанцию — настоящая дверь, объект уходит шарингом`() {
+
+        // Живой прогон 2026-08-09: «✓ Переслать квитанцию PPA5…» обещал готовое,
+        // а двери не было. Пересылка квитанции = поделиться самим объектом.
+        assertEquals(CapabilityId("share"), ACTION_SCHEMAS.single { it.id == "forward-receipt" }.runs)
+
+        val row = actionReadiness(mapOf(META_ENTITY_RECEIPT to "PPA5-0M79-APX4-5X6H"))
+            .single { it.schema.id == "forward-receipt" }
+        assertEquals("share", row.runner(listOf(bubbleOf("share")))?.capabilityId?.value)
     }
 
     @Test

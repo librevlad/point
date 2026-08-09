@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -178,6 +179,16 @@ private fun ReadinessRow(
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(20.dp),
+                )
+            } else if (copyable != null) {
+
+                // Дверь этой строки — тихая копия ключевого значения: без значка
+                // тап выглядел кнопкой в никуда (живой прогон 2026-08-09).
+                Icon(
+                    imageVector = Icons.Filled.ContentCopy,
+                    contentDescription = "Скопировать",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(16.dp),
                 )
             }
         }

@@ -165,7 +165,10 @@ class PcDownloadRealizer(private val downloader: VideoDownloader) : Realizer {
 class PcToPhoneCapability : Capability {
     override val id = CapabilityId("pc-to-phone")
     override val icon = "pc"
-    override val meta = CapabilityMeta(priority = 15)
+
+    // Локальное действие компьютера: телефону его не рекламируем — там оно
+    // звучало «На телефон на ПК» и не значило ничего (живой прогон 2026-08-09).
+    override val meta = CapabilityMeta(priority = 15, localOnly = true)
     override fun label(state: ObjectState) = "На телефон"
     override fun accepts(state: ObjectState) = true
     override fun produces(state: ObjectState) = state

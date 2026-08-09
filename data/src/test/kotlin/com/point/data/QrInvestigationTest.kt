@@ -26,6 +26,27 @@ class QrInvestigationTest {
     }
 
     @Test
+    fun `QR со ссылкой открывает дверь ссылки — HAS_URL и сам адрес`() = runTest {
+
+        // Живой прогон 2026-08-09: ссылка из QR показана фактом, а «Открыть ссылку»
+        // сидело в «сначала распознайте текст» — Point знал ссылку и не давал открыть.
+        val enricher = QrInvestigationRealizer(object : QrReader { override suspend fun decode(imagePath: String) = "https://check.monobank.ua/p/NaXzz" })
+        val delta = enricher.look(imageObj())
+
+        assertTrue(Feature.HAS_URL in delta.features)
+        assertEquals("https://check.monobank.ua/p/NaXzz", delta.metadata[com.point.core.flow.META_ENTITY_PREFIX + "url"])
+    }
+
+    @Test
+    fun `QR с не-ссылкой дверь ссылки не открывает`() = runTest {
+        val enricher = QrInvestigationRealizer(object : QrReader { override suspend fun decode(imagePath: String) = "WIFI:T:WPA;S:home;P:secret;;" })
+        val delta = enricher.look(imageObj())
+
+        assertFalse(Feature.HAS_URL in delta.features)
+        assertEquals(null, delta.metadata[com.point.core.flow.META_ENTITY_PREFIX + "url"])
+    }
+
+    @Test
     fun `no flag when there is no QR`() = runTest {
         val enricher = QrInvestigationRealizer(object : QrReader { override suspend fun decode(imagePath: String): String? = null })
         assertTrue(enricher.look(imageObj()).features.isEmpty())

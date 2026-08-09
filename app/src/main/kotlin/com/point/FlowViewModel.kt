@@ -1957,7 +1957,16 @@ class FlowViewModel @Inject constructor(
         if (com.point.core.flow.normConsensus(primary) ==
             com.point.core.flow.normConsensus(node.metadata[key].orEmpty())
         ) {
-            return node
+
+            // Значение не изменилось, но слово могло стать весомее: подтверждение
+            // человеком того же значения обязано быть видно и на узле.
+            val stronger = com.point.core.flow.provenanceOf(merged, key)
+            if (stronger <= node.provenance) return node
+            val srcKey = key + com.point.core.flow.META_SOURCE_SUFFIX
+            return node.copy(
+                metadata = node.metadata + listOfNotNull(merged[srcKey]?.let { srcKey to it }),
+                provenance = stronger,
+            )
         }
         val alt = key + com.point.core.flow.META_ALT_SUFFIX
         val src = key + com.point.core.flow.META_SOURCE_SUFFIX

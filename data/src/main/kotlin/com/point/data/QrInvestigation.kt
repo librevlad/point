@@ -55,7 +55,17 @@ class QrInvestigationRealizer @Inject constructor(
 
     private suspend fun findings(obj: PointObject): Findings {
         val found = reader.decode(obj.uri.value) ?: return Findings()
-        return Findings(setOf(Feature.HAS_QR), mapOf(META_ENTITY_PREFIX + "qr" to found))
+
+        // QR-ссылка — это и есть ссылка объекта: без этого «Открыть ссылку»
+        // требовало «сначала распознайте текст» при уже показанном адресе.
+        val link = found.trim().takeIf { it.startsWith("http://", true) || it.startsWith("https://", true) }
+        return Findings(
+            setOf(Feature.HAS_QR) + if (link != null) setOf(Feature.HAS_URL) else emptySet(),
+            buildMap {
+                put(META_ENTITY_PREFIX + "qr", found)
+                link?.let { put(META_ENTITY_PREFIX + "url", it) }
+            },
+        )
     }
 }
 

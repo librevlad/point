@@ -35,6 +35,7 @@ class ReadinessActionTest {
             EventCapability(),
             SaveContactCapability(),
             VCardCapability(),
+            ShareCapability(),
         ),
         policy = DefaultBubblePolicy(),
     )

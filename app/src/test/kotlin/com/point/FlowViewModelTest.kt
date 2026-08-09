@@ -1439,6 +1439,29 @@ class FlowViewModelTest {
         )
     }
 
+    @Test fun `подтверждение того же значения делает узел подтверждённым вами`() = runTest(dispatcher) {
+        val node = PointObject(
+            "in:phone", "text/plain", ValueRef("111"),
+            ObjectState(com.point.core.flow.KIND_PHONE), mapOf("entity.phone" to "111"),
+            sourceObjects = listOf("in"),
+        )
+        enrichment.updates = listOf(
+            EnrichmentUpdate(emptySet(), mapOf("entity.phone" to "111"), emptyList(), objects = listOf(node)),
+        )
+        resolver.result = ActionResult.Done("Подтверждено вами", humanFindings("entity.phone", "111"))
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.onBubble(bubble()); advanceUntilIdle()
+
+        val chip = vm.ui.value.frame!!.found.single()
+        assertEquals(
+            "слово человека видно на узле даже при том же значении",
+            com.point.core.model.Provenance.HUMAN,
+            chip.provenance,
+        )
+    }
+
     @Test fun `результат с компьютера исследуется сразу — знание видно у находки без входа`() = runTest(dispatcher) {
         val born = PointObject(
             "in:pc:read:txt", "text/plain", ScratchRef("/pc-born.txt"),

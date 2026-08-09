@@ -149,3 +149,15 @@ class SlowPcActionTest {
         }
     }
 }
+
+/**
+ * «На телефон» — действие самого компьютера: рекламировать его телефону бессмысленно
+ * (объект и так на телефоне; на экране телефона строка звучала «На телефон на ПК»).
+ */
+class PcCapsAdvertisedTest {
+    @org.junit.Test
+    fun `на телефон не рекламируется телефону`() {
+        val advertised = com.point.core.flow.advertisedActions(setOf(PcToPhoneCapability()))
+        org.junit.Assert.assertTrue(advertised.none { it.id == "pc-to-phone" })
+    }
+}

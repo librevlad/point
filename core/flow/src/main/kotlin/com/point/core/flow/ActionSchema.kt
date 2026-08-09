@@ -187,7 +187,9 @@ val ACTION_SCHEMAS: List<ActionSchema> = listOf(
         id = "forward-receipt",
         label = "Переслать квитанцию",
 
-        runs = null,
+        // Пересылка квитанции — это поделиться самим объектом: дверь настоящая,
+        // а не глагол без действия (живой прогон 2026-08-09).
+        runs = CapabilityId("share"),
         fields = listOf(
             FieldSpec(META_ENTITY_RECEIPT, "номер квитанции", critical = true),
             FieldSpec(
