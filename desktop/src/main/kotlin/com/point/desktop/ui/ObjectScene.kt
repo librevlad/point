@@ -36,15 +36,18 @@ import com.point.desktop.sourceLabel
 import com.point.desktop.whenLabel
 import java.time.ZoneId
 
-/** Объект живёт в портале — тот же язык, что на телефоне (дизайн-система). */
+/**
+ * Превью объекта. Портал — только за знаком вида, когда содержимого не показать:
+ * за текстом и картинкой портала нет (решение владельца 2026-08-09).
+ */
 @Composable
 internal fun PortalPreview(item: InboxItem) {
-    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-        PortalHalo(size = 180.dp)
-        val hasPreview = item.obj.state.kind == ObjectKind.TEXT || item.obj.state.kind == ObjectKind.IMAGE
-        if (hasPreview) {
-            Preview(item)
-        } else {
+    val hasPreview = item.obj.state.kind == ObjectKind.TEXT || item.obj.state.kind == ObjectKind.IMAGE
+    if (hasPreview) {
+        Preview(item)
+    } else {
+        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            PortalHalo(size = 180.dp)
             Text(
                 kindMark(item.obj.state.kind),
                 style = PointType.title.copy(color = PointColors.violet),
