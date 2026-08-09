@@ -95,7 +95,7 @@ private fun ReadinessRow(
         is Readiness.Missing -> r.present
     }
     val missing = (row.readiness as? Readiness.Missing)?.missing.orEmpty()
-    val disputed = present.filter { it.alternatives.isNotEmpty() }
+    val disputed = com.point.core.flow.ownDisputes(present)
     val hinted = present.mapNotNull { field -> field.hint?.let { field to it } }
 
     var expanded by rememberSaveable(row.schema.id) { mutableStateOf(false) }
@@ -217,7 +217,7 @@ private fun ReadinessRow(
         }
 
         // «Ещё» — другие объекты того же вида, не спор прочтений (S6).
-        present.filter { it.extras.isNotEmpty() }.forEach { field ->
+        com.point.core.flow.ownExtras(present).forEach { field ->
             Text(
                 text = "${field.spec.label} — ещё: " +
                     field.extras.joinToString(", ") { maskedForScreen(field.spec.key, it) },

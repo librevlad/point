@@ -17,6 +17,7 @@ import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
 import com.point.core.model.isFileBacked
 import com.point.core.flow.asExtractedKind
+import com.point.core.flow.asMetaKey
 import com.point.core.model.Preview
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -33,6 +34,12 @@ internal fun entitySourceText(input: PointObject): String {
 }
 
 internal suspend fun firstEntity(extractor: EntityExtractor, input: PointObject, type: EntityType): String? {
+
+    // Уже добытое знание — первый источник: узел ссылки из QR — не файл, и «Открыть
+    // ссылку» отвечало «Ссылка не найдена» рядом с «Нашёл ссылку» (скрин 2026-08-09).
+    type.asMetaKey()?.let { key ->
+        input.metadata[key]?.takeIf { it.isNotBlank() }?.let { return it }
+    }
 
     if (type.asExtractedKind() == input.state.kind) return input.uri.value.takeIf { it.isNotBlank() }
     val text = entitySourceText(input)

@@ -51,4 +51,27 @@ class HumanDatesTest {
 
         assertTrue(hasUpcomingDate(meta, today))
     }
+
+    @Test
+    fun `день значения читается и рядом с временем или подписью`() {
+        assertEquals(LocalDate.of(2026, 4, 26), humanDayOf("26.04.2026 20:04"))
+        assertEquals(LocalDate.of(2020, 12, 1), humanDayOf("01.12.2020 в 11:09"))
+        assertEquals(null, humanDayOf("11:09"))
+        assertEquals(null, humanDayOf("Оплата 2500"))
+    }
+
+    @Test
+    fun `дата с временем открывает дверь события наравне с чистой датой`() {
+        assertTrue(hasUpcomingDate(mapOf("entity.date" to "15.08.2026 09:30"), today))
+        assertFalse(hasUpcomingDate(mapOf("entity.date" to "01.12.2020 в 11:09"), today))
+    }
+
+    @Test
+    fun `слипшиеся даты режутся на значения, одиночные остаются целыми`() {
+        // Скрин владельца 2026-08-09: «дата — или: 26.04.2026 26.04.2026» с чека.
+        assertEquals(listOf("26.04.2026"), splitHumanDates("26.04.2026 26.04.2026"))
+        assertEquals(listOf("26.04.2026", "28.04.2026"), splitHumanDates("26.04.2026 28.04.2026"))
+        assertEquals(listOf("26.04.2026 20:04"), splitHumanDates("26.04.2026 20:04"))
+        assertEquals(listOf("просто текст"), splitHumanDates("просто текст"))
+    }
 }

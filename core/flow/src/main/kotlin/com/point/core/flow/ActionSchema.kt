@@ -52,13 +52,23 @@ fun ActionSchema.readiness(facts: Map<String, String>): Readiness {
             // Равенство прочтений меряется той же нормализацией, что и merge:
             // буквальное сравнение рождало «или: 26.04.2026 26.04.2026». Спор (.alt)
             // и «ещё значения» (.more) — разные вещи: второй телефон — не конфликт.
+            // Даты равны по календарному дню: «26.04.2026 20:04» — не ещё одна дата.
+            fun readingKey(text: String) =
+                (if (spec.key.endsWith("date")) humanDayOf(text)?.toString() else null)
+                    ?: normConsensus(text)
             fun distinctReadings(raw: List<String>) = raw
-                .distinctBy { normConsensus(it) }
-                .filter { normConsensus(it) != normConsensus(value) }
+                .distinctBy { readingKey(it) }
+                .filter { readingKey(it) != readingKey(value) }
+            val alternatives = distinctReadings(alternativesOf(facts, spec.key))
+
+            // Одно значение не бывает сразу и спором, и «ещё»: списки «или/ещё»
+            // с одинаковыми номерами дублировали друг друга (#652, кейс 24).
+            val claimed = alternatives.map { readingKey(it) }.toSet()
             FieldReading(
                 spec, value,
-                alternatives = distinctReadings(alternativesOf(facts, spec.key)),
-                extras = distinctReadings(moreOf(facts, spec.key)),
+                alternatives = alternatives,
+                extras = distinctReadings(moreOf(facts, spec.key))
+                    .filterNot { readingKey(it) in claimed },
                 assumption = isAssumption(facts, spec.key),
                 hint = fieldHint(spec.key, value),
             )
@@ -226,14 +236,26 @@ val ACTION_SCHEMAS: List<ActionSchema> = listOf(
     ),
 )
 
+// «Мне в буфере целиковые блоки не нужны» (владелец, 2026-08-09): копия строки
+// действия кладёт одно ключевое значение — то же, что строка показывает, — а не
+// склейку всех полей с подписями.
 fun copyableValue(readiness: Readiness): String? {
     val present = when (readiness) {
         is Readiness.Ready -> readiness.present
         is Readiness.Missing -> readiness.present
     }.filter { it.value.isNotBlank() }
-    return when {
-        present.isEmpty() -> null
-        present.size == 1 -> present.single().value
-        else -> present.joinToString("\n") { "${it.spec.label}: ${it.value}" }
-    }
+    return (present.firstOrNull { it.spec.critical } ?: present.singleOrNull())?.value
 }
+
+/**
+ * «Или/ещё» под строкой действия — только про собственное (critical) значение
+ * действия. Споры вспомогательных полей (дата, валюта) живут на своих узлах и не
+ * повторяются под каждым действием: на чеке один спор даты печатался трижды —
+ * «это непонятно и неюзабельно» (владелец, 2026-08-09). Знание не прячется (P8):
+ * узел поля показывает спор полностью.
+ */
+fun ownDisputes(present: List<FieldReading>): List<FieldReading> =
+    present.filter { it.spec.critical && it.alternatives.isNotEmpty() }
+
+fun ownExtras(present: List<FieldReading>): List<FieldReading> =
+    present.filter { it.spec.critical && it.extras.isNotEmpty() }

@@ -47,9 +47,19 @@ fun parseFieldCandidates(answer: String): ParsedUnderstanding {
                 // «Голое время это никогда не дата, это мусор» (#651): 11:09 из чата
                 // становилось «Нашёл дату».
                 if (suffix == "date" && bareClock(candidate.text)) return@forEach
+
+                // Несколько дат в одном значении — несколько кандидатов: «26.04.2026
+                // 26.04.2026» с чека рождало слипшийся спор (живой прогон 2026-08-09).
+                val pieces = if (suffix == "date") {
+                    splitHumanDates(candidate.text).map { candidate.copy(text = it) }
+                } else {
+                    listOf(candidate)
+                }
                 val bucket = fields.getOrPut(metaKey) { mutableListOf() }
-                if (bucket.size < MAX_FIELD_CANDIDATES && bucket.none { it.text == candidate.text && it.ids == candidate.ids }) {
-                    bucket += candidate
+                pieces.forEach { piece ->
+                    if (bucket.size < MAX_FIELD_CANDIDATES && bucket.none { it.text == piece.text && it.ids == piece.ids }) {
+                        bucket += piece
+                    }
                 }
             }
         }

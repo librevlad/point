@@ -13,7 +13,6 @@ import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.io.File
 import javax.inject.Inject
 
 class OpenUrlCapability @Inject constructor() : Capability {
@@ -33,6 +32,7 @@ class OpenUrlCapability @Inject constructor() : Capability {
 }
 
 class OpenUrlRealizer @Inject constructor(
+    private val extractor: com.point.core.flow.EntityExtractor,
     private val opener: UrlOpener,
 ) : Realizer {
     override val capabilityId = OpenUrlCapability.ID
@@ -40,18 +40,14 @@ class OpenUrlRealizer @Inject constructor(
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
             runCatching {
-                val url = firstUrl(input) ?: error("Ссылка не найдена")
+
+                // Общий порядок: знание (entity.url) → сам объект-ссылка → текст.
+                // Свой файл-путь отвечал «Ссылка не найдена» рядом с «Нашёл ссылку»
+                // на узле ссылки из QR (скрин владельца 2026-08-09).
+                val url = firstEntity(extractor, input, com.point.core.flow.EntityType.URL)
+                    ?: error("Ссылка не найдена")
                 opener.open(url)
                 ActionResult.Done("Открываю: $url")
             }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось открыть", recoverable = true) }
         }
-
-    private fun firstUrl(input: PointObject): String? {
-        val text = File(input.uri.value).takeIf { it.exists() }?.readText().orEmpty()
-        return URL_REGEX.find(text)?.value
-    }
-
-    private companion object {
-        val URL_REGEX = Regex("""https?://\S+""")
-    }
 }

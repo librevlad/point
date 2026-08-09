@@ -468,6 +468,74 @@ class ActionSchemaTest {
     }
 
     @Test
+    fun `дата с временем того же дня — та же дата, а не ещё одна`() {
+
+        // Скрин владельца 2026-08-09: «дата — ещё: 26.04.2026 20:04» при значении
+        // «26.04.2026». Даты равны по календарному дню; слипшееся «26.04.2026
+        // 26.04.2026» из старого знания тоже гаснет — его день совпадает.
+        val row = actionReadiness(
+            mapOf(
+                META_ENTITY_RECEIPT to "PPA5-0M79",
+                META_ENTITY_PREFIX + "date" to "26.04.2026",
+                META_ENTITY_PREFIX + "date" + META_ALT_SUFFIX to "26.04.2026 26.04.2026",
+                META_ENTITY_PREFIX + "date" + META_MORE_SUFFIX to altValue(listOf("26.04.2026 20:04")),
+            ),
+        ).single { it.schema.id == "forward-receipt" }
+
+        val date = (row.readiness as Readiness.Ready).present.single { it.spec.key.endsWith("date") }
+        assertTrue("тот же день — не спор: ${date.alternatives}", date.alternatives.isEmpty())
+        assertTrue("тот же день — не «ещё»: ${date.extras}", date.extras.isEmpty())
+    }
+
+    @Test
+    fun `другой день остаётся честным спором`() {
+        val row = actionReadiness(
+            mapOf(
+                META_ENTITY_RECEIPT to "PPA5-0M79",
+                META_ENTITY_PREFIX + "date" to "26.04.2026",
+                META_ENTITY_PREFIX + "date" + META_ALT_SUFFIX to "28.04.2026",
+            ),
+        ).single { it.schema.id == "forward-receipt" }
+
+        val date = (row.readiness as Readiness.Ready).present.single { it.spec.key.endsWith("date") }
+        assertEquals(listOf("28.04.2026"), date.alternatives)
+    }
+
+    @Test
+    fun `значение из спора не повторяется «ещё»-значением`() {
+
+        // #652 (кейс 24): «телефон — или: №2, №3» и «телефон — ещё: №2, №3» — одни
+        // и те же номера двумя списками. Спор и «ещё» не пересекаются.
+        val row = actionReadiness(
+            mapOf(
+                META_ENTITY_PREFIX + "phone" to "+380671111111",
+                META_ENTITY_PREFIX + "phone" + META_ALT_SUFFIX to "+380672222222",
+                META_ENTITY_PREFIX + "phone" + META_MORE_SUFFIX to
+                    altValue(listOf("+380672222222", "+380673333333")),
+            ),
+        ).single { it.schema.id == "save-contact" }
+
+        val phone = (row.readiness as Readiness.Ready).present.single()
+        assertEquals(listOf("+380672222222"), phone.alternatives)
+        assertEquals(listOf("+380673333333"), phone.extras)
+    }
+
+    @Test
+    fun `или-ещё под действием — только про собственное значение действия`() {
+
+        // Скрин владельца 2026-08-09: один спор даты печатался под тремя действиями —
+        // «это непонятно и неюзабельно». Спор вспомогательного поля живёт на узле.
+        val present = listOf(
+            FieldReading(FieldSpec("entity.card", "карта", critical = true), "•• 5427", alternatives = listOf("•• 7189")),
+            FieldReading(FieldSpec("entity.date", "дата"), "26.04.2026", alternatives = listOf("28.04.2026")),
+            FieldReading(FieldSpec("entity.amount", "сумма", critical = true), "500", extras = listOf("300")),
+        )
+
+        assertEquals(listOf("entity.card"), ownDisputes(present).map { it.spec.key })
+        assertEquals(listOf("entity.amount"), ownExtras(present).map { it.spec.key })
+    }
+
+    @Test
     fun `переслать квитанцию — настоящая дверь, объект уходит шарингом`() {
 
         // Живой прогон 2026-08-09: «✓ Переслать квитанцию PPA5…» обещал готовое,
