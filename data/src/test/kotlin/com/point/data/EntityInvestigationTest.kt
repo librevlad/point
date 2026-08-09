@@ -126,6 +126,39 @@ class EntityInvestigationTest {
     }
 
     @Test
+    fun `один день — один узел даты, побеждает значение с временем`() = runTest {
+
+        // #660 (решение владельца 2026-08-09): на чеке рождались два узла одного дня —
+        // «26.04.2026» и «26.04.2026 20:04».
+        val enricher = EntityInvestigationRealizer(
+            extractor(
+                Entity(EntityType.DATE_TIME, "26.04.2026"),
+                Entity(EntityType.DATE_TIME, "26.04.2026 20:04"),
+            ),
+        )
+
+        val delta = enricher.look(obj("Квитанція від 26.04.2026\nДата операції 26.04.2026 20:04"))
+
+        val dates = delta.objects.filter { it.state.kind == com.point.core.flow.KIND_DATE }
+        assertEquals("одна дата — один узел: " + dates.map { it.uri.value }, 1, dates.size)
+        assertEquals("26.04.2026 20:04", dates.single().uri.value)
+    }
+
+    @Test
+    fun `разные дни остаются разными узлами`() = runTest {
+        val enricher = EntityInvestigationRealizer(
+            extractor(
+                Entity(EntityType.DATE_TIME, "26.04.2026"),
+                Entity(EntityType.DATE_TIME, "28.04.2026"),
+            ),
+        )
+
+        val delta = enricher.look(obj("з 26.04.2026 по 28.04.2026"))
+
+        assertEquals(2, delta.objects.count { it.state.kind == com.point.core.flow.KIND_DATE })
+    }
+
+    @Test
     fun `чужая товарная строка адресом не становится`() = runTest {
 
         // #632, решение владельца: «проверять правдоподобие адреса». ML Kit звал

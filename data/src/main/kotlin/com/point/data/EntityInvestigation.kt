@@ -271,6 +271,26 @@ internal fun entityDelta(
     return Findings(features, facts, objects, relations)
 }
 
+/**
+ * Один день — один узел (#660): узлы дат схлопываются по календарному дню,
+ * побеждает более информативное значение (с временем). Остальные виды остаются
+ * как есть — их тождество решается общей нормализацией.
+ */
+private fun List<PointObject>.dedupedNodes(
+    kind: com.point.core.model.ObjectKind,
+    key: String,
+): List<PointObject> {
+    if (kind != KIND_DATE) return this
+    val byDay = LinkedHashMap<String, PointObject>()
+    forEach { node ->
+        val value = node.metadata[key].orEmpty()
+        val day = com.point.core.flow.humanDayOf(value)?.toString() ?: normConsensus(value)
+        val kept = byDay[day]
+        if (kept == null || value.length > kept.metadata[key].orEmpty().length) byDay[day] = node
+    }
+    return byDay.values.toList()
+}
+
 internal const val ENTITY_CREATOR = "entity-enricher"
 
 /**
@@ -334,7 +354,10 @@ internal fun entityObjects(
             .filter { !(kind == KIND_DATE && bareTimestamp(it)) }
             .map { extra -> node("${source.id}:$suffix:$extra", extra, withAlternatives = false) }
 
-        listOfNotNull(primary) + others
+        // «Один день — один узел» (#660, решение владельца): «26.04.2026» и
+        // «26.04.2026 20:04» — одна дата; побеждает значение с временем, оно
+        // информативнее. Другие виды дедупятся по своей нормализации.
+        (listOfNotNull(primary) + others).dedupedNodes(kind, key)
     }
     return objects to objects.map { Relation(it.id, RelationType.FOUND_IN, source.id) }
 }
