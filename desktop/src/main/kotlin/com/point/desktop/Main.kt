@@ -156,6 +156,7 @@ fun main(args: Array<String>) {
         journalStore = journalStore,
 
         reopenPath = { path -> File(path).takeIf(File::isFile)?.let { inbox.addFile(it.absolutePath) } },
+        consent = FileConsent(File(pointDir, "consent")),
     )
 
     val shellMenu = RegistryShellMenu()

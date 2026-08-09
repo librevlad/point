@@ -29,6 +29,8 @@ class DesktopState(
     private val clock: Clock = Clock { System.currentTimeMillis() },
 
     private val reopenPath: (String) -> InboxItem? = { null },
+
+    private val consent: com.point.core.flow.PrivacyConsent? = null,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
@@ -281,8 +283,53 @@ class DesktopState(
         }
     }
 
+    /** Вопрос согласия в момент выбора: объект уходит с устройств только после «да» (P11). */
+    data class CloudAsk(
+        val item: InboxItem,
+        val bubble: Bubble,
+        val scope: com.point.core.flow.CloudScope,
+        val title: String,
+        val destination: String,
+        val confirm: String,
+    )
+
+    private val _cloudAsk = MutableStateFlow<CloudAsk?>(null)
+    val cloudAsk: StateFlow<CloudAsk?> = _cloudAsk.asStateFlow()
+
     fun onBubble(item: InboxItem, bubble: Bubble) {
-        work = scope.launch(Dispatchers.IO) { perform(bubble.capabilityId.value, item, bubble.title) }
+        work = scope.launch(Dispatchers.IO) {
+            val guard = consent
+            if (guard != null && resolver.leavesDevice(bubble.capabilityId)) {
+                val needed = com.point.core.flow.cloudScopeOf(bubble.capabilityId)
+                val ok = runCatching { guard.allowed(needed) }.getOrDefault(false)
+                if (!ok) {
+                    _cloudAsk.value = CloudAsk(
+                        item, bubble, needed,
+                        title = com.point.core.flow.cloudAskTitle(needed),
+                        destination = com.point.core.flow.cloudDestination(bubble.capabilityId),
+                        confirm = com.point.core.flow.cloudAskConfirm(needed),
+                    )
+                    return@launch
+                }
+            }
+            perform(bubble.capabilityId.value, item, bubble.title)
+        }
+    }
+
+    fun approveCloud() {
+        val ask = _cloudAsk.value ?: return
+        _cloudAsk.value = null
+        work = scope.launch(Dispatchers.IO) {
+            runCatching { consent?.allow(ask.scope) }
+            perform(ask.bubble.capabilityId.value, ask.item, ask.bubble.title)
+        }
+    }
+
+    fun declineCloud() {
+        _cloudAsk.value = null
+
+        // Отказ не наказывает: действие остаётся доступным на потом (P11).
+        _message.value = "Ничего не отправлено — объект остался на компьютере. Действие доступно, если передумаете"
     }
 
     /**

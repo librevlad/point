@@ -263,6 +263,23 @@ fun DesktopApp(
         }
     }
 
+    // Согласие в момент выбора, словами последствий (P11): объект уходит с устройств
+    // только после явного «да»; отказ не наказывает.
+    val cloudAsk by state.cloudAsk.collectAsState()
+    cloudAsk?.let { ask ->
+        AlertDialog(
+            onDismissRequest = { state.declineCloud() },
+            title = { Text(ask.title) },
+            text = { Text(ask.destination) },
+            confirmButton = {
+                TextButton(onClick = { state.approveCloud() }) { Text(ask.confirm) }
+            },
+            dismissButton = {
+                TextButton(onClick = { state.declineCloud() }) { Text("Не сейчас") }
+            },
+        )
+    }
+
     if (showSettings) {
         AlertDialog(
             onDismissRequest = { showSettings = false },
