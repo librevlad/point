@@ -13,9 +13,21 @@ class AndroidSharer @Inject constructor(
     @ApplicationContext private val context: Context,
 ) : Sharer {
 
-    override suspend fun share(obj: PointObject) {
+    // Наружу файл уходит под именем объекта, а не scratch-идентификатором:
+    // адресат «Переслать квитанцию» получал «4f94c663-….bin» (живой прогон 2026-08-09).
+    private fun outboundUri(obj: PointObject): android.net.Uri {
         val authority = "${context.packageName}.fileprovider"
-        val uri = FileProvider.getUriForFile(context, authority, File(obj.uri.value))
+        val file = File(obj.uri.value)
+        val name = obj.metadata["name"]?.takeIf { it.isNotBlank() }
+        return if (name != null) {
+            FileProvider.getUriForFile(context, authority, file, name)
+        } else {
+            FileProvider.getUriForFile(context, authority, file)
+        }
+    }
+
+    override suspend fun share(obj: PointObject) {
+        val uri = outboundUri(obj)
 
         val send = Intent(Intent.ACTION_SEND).apply {
             type = obj.mime
@@ -29,8 +41,7 @@ class AndroidSharer @Inject constructor(
     }
 
     override suspend fun shareAll(objs: List<PointObject>) {
-        val authority = "${context.packageName}.fileprovider"
-        val uris = ArrayList(objs.map { FileProvider.getUriForFile(context, authority, File(it.uri.value)) })
+        val uris = ArrayList(objs.map { outboundUri(it) })
 
         val send = Intent(Intent.ACTION_SEND_MULTIPLE).apply {
             type = "*/*"
