@@ -11,21 +11,25 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.platform.Font
 import androidx.compose.ui.unit.sp
 
+/**
+ * Токены — мобильной тёмной темы (core:ui PointTheme.DarkColors): палитры поверхностей
+ * не расходятся, приоритет у телефонной (решение владельца 2026-08-09).
+ */
 object PointColors {
 
-    val canvas = Color(0xFF07080A)
+    val canvas = Color(0xFF0B0D10)
 
     val window = Color(0xFF0B0D10)
 
-    val surface = Color(0xFF1A1D25)
+    val surface = Color(0xFF14161C)
 
-    val surfaceDeep = Color(0xFF121419)
+    val surfaceDeep = Color(0xFF1B1E27)
 
     val border = Color(0xFF242833)
 
     val text = Color(0xFFFFFFFF)
 
-    val muted = Color(0xFFC6CBD7)
+    val muted = Color(0xFFA1A6B3)
 
     val violet = Color(0xFF7B5CFF)
 
