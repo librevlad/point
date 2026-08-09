@@ -284,11 +284,11 @@ fun PeekCard(
             .background(PointColors.surface)
             .border(1.dp, PointColors.violet.copy(alpha = 0.55f), RoundedCornerShape(14.dp))
             .clickable(onClick = onOpen)
-            .padding(horizontal = 14.dp, vertical = 10.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(11.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.size(8.dp).background(PointColors.violet, CircleShape))
+        PeekThumb(item)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
                 when (source) {
@@ -303,8 +303,62 @@ fun PeekCard(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+            PeekHint(item)
         }
         HeaderButton("✕") { onDismiss() }
+    }
+}
+
+/** Превью в плашке: картинке — миниатюра, тексту — первые слова, остальному — знак вида. */
+@Composable
+private fun PeekThumb(item: InboxItem) {
+    val image = if (item.obj.state.kind == com.point.core.model.ObjectKind.IMAGE) {
+        remember(item.obj.uri.value) {
+            runCatching {
+                java.io.File(item.obj.uri.value).inputStream().use {
+                    androidx.compose.ui.res.loadImageBitmap(it)
+                }
+            }.getOrNull()
+        }
+    } else {
+        null
+    }
+    if (image != null) {
+        androidx.compose.foundation.Image(
+            bitmap = image,
+            contentDescription = null,
+            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+            modifier = Modifier.size(56.dp).clip(RoundedCornerShape(10.dp)),
+        )
+    } else {
+        Box(
+            Modifier.size(56.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(PointColors.surfaceDeep),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(kindMark(item.obj.state.kind), style = PointType.body.copy(color = PointColors.violet))
+        }
+    }
+}
+
+@Composable
+private fun PeekHint(item: InboxItem) {
+    if (item.obj.state.kind != com.point.core.model.ObjectKind.TEXT) return
+    val line = remember(item.obj.uri.value) {
+        runCatching {
+            java.io.File(item.obj.uri.value).useLines { lines ->
+                lines.firstOrNull { it.isNotBlank() }
+            }
+        }.getOrNull()?.trim()?.take(70)
+    }
+    if (!line.isNullOrBlank()) {
+        Text(
+            line,
+            style = PointType.small,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
@@ -352,7 +406,7 @@ private fun HeaderGlyph() {
             ),
             radius = r * 0.62f,
             center = c,
-            style = androidx.compose.ui.graphics.drawscope.Stroke(width = r * 0.55f),
+            style = androidx.compose.ui.graphics.drawscope.Stroke(width = r * 0.34f),
         )
     }
 }

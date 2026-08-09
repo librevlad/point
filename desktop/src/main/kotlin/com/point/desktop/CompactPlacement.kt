@@ -16,7 +16,7 @@ data class WindowBounds(val x: Int, val y: Int, val width: Int, val height: Int)
 const val COMPACT_WIDTH = 380
 const val COMPACT_HEIGHT = 620
 const val PEEK_WIDTH = 340
-const val PEEK_HEIGHT = 88
+const val PEEK_HEIGHT = 100
 const val SCREEN_MARGIN = 12
 
 fun compactBounds(work: ScreenArea): WindowBounds {
