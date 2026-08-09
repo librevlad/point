@@ -1,7 +1,19 @@
 package com.point.core.ui
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Canvas
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
 import com.point.core.flow.KIND_ADDRESS
 import com.point.core.flow.KIND_DATE
 import com.point.core.flow.KIND_IDENTIFIER
@@ -331,6 +343,80 @@ private fun PreviewReadingBeat() = PointTheme {
 private fun PreviewImage() = PointTheme {
     val obj = sampleObject(ObjectKind.IMAGE, "image/jpeg", "photo.jpg")
     FirstScreen(obj = obj, bubbles = sampleBubbles(ObjectKind.IMAGE), onBubble = {})
+}
+
+/**
+ * Широкий кадр с цветными углами и заметной серединой: по превью сразу видно,
+ * что круг взял центр, а углы остались за кадром.
+ */
+private fun previewPhoto(width: Int = 480, height: Int = 300): ImageBitmap {
+    val bitmap = ImageBitmap(width, height)
+    val canvas = Canvas(bitmap)
+    val paint = Paint()
+    val w = width.toFloat()
+    val h = height.toFloat()
+
+    paint.color = Color(0xFF2C6E63)
+    canvas.drawRect(Rect(0f, 0f, w, h), paint)
+
+    val corner = minOf(w, h) * 0.28f
+    paint.color = Color(0xFFE24A3B)
+    canvas.drawRect(Rect(0f, 0f, corner, corner), paint)
+    canvas.drawRect(Rect(w - corner, 0f, w, corner), paint)
+    canvas.drawRect(Rect(0f, h - corner, corner, h), paint)
+    canvas.drawRect(Rect(w - corner, h - corner, w, h), paint)
+
+    paint.color = Color(0xFFF6D65C)
+    val band = h * 0.22f
+    canvas.drawRect(Rect(w * 0.22f, h / 2f - band / 2f, w * 0.78f, h / 2f + band / 2f), paint)
+
+    paint.color = Color(0xFF101418)
+    canvas.drawCircle(Offset(w / 2f, h / 2f), minOf(w, h) * 0.11f, paint)
+    return bitmap
+}
+
+@Preview(name = "Снимок в портале · круг внутри кольца (#667)", showBackground = true, backgroundColor = 0xFF07070C)
+@Composable
+private fun PreviewRoundPreviewInPortal() = PointTheme(darkTheme = true) {
+
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Portal(size = PortalPreviewSize + 68.dp)
+        RoundPreview(
+            image = remember { previewPhoto() },
+            size = PortalPreviewSize,
+            contentDescription = "фото.jpg",
+        )
+    }
+}
+
+@Preview(name = "Фото · шапка первого экрана (#667)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@Composable
+private fun PreviewFirstScreenWithPhoto() = PointTheme(darkTheme = true) {
+
+    val obj = sampleObject(
+        ObjectKind.IMAGE, "image/jpeg", "фото.jpg",
+        features = setOf(com.point.core.model.Feature.HAS_PHONE),
+        metadata = mapOf("entity.phone" to "+380 67 123 45 67"),
+    )
+    FirstScreen(
+        obj = obj,
+        bubbles = sampleBubbles(ObjectKind.IMAGE),
+        onBubble = {},
+        previewBitmap = remember { previewPhoto() },
+    )
+}
+
+@Preview(name = "Фото · вертикальный кадр в шапке (#667)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@Composable
+private fun PreviewFirstScreenWithTallPhoto() = PointTheme(darkTheme = true) {
+
+    val obj = sampleObject(ObjectKind.IMAGE, "image/jpeg", "скриншот.png")
+    FirstScreen(
+        obj = obj,
+        bubbles = sampleBubbles(ObjectKind.IMAGE),
+        onBubble = {},
+        previewBitmap = remember { previewPhoto(width = 300, height = 640) },
+    )
 }
 
 @Preview(name = "PDF", showBackground = true)
