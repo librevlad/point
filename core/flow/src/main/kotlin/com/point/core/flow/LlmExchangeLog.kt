@@ -37,12 +37,12 @@ class LoggingLlmClient(
         val answer = result.fold(
             onSuccess = { res ->
                 runCatching { File(res.uri.value).takeIf(File::isFile)?.readText() }.getOrNull()
-                    ?: "<ответ не текстом: ${res.mime}>"
+                    ?: "<ответ не текстом>"
             },
             onFailure = { "<ошибка: ${it.message}>" },
         )
         File(dir, "llm-%013d-%03d.txt".format(now(), seq.incrementAndGet() % 1000)).writeText(
-            "=== OBJECT ===\n${obj.id} · ${obj.mime}\n=== PROMPT ===\n$prompt\n=== ANSWER ===\n$answer\n",
+            "=== OBJECT ===\n${obj.id}\n=== PROMPT ===\n$prompt\n=== ANSWER ===\n$answer\n",
         )
         dir.listFiles { f -> f.name.startsWith("llm-") }
             ?.sortedByDescending(File::getName)
