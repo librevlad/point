@@ -89,7 +89,13 @@ fun main(args: Array<String>) {
 
     val deviceKeys = FileDeviceKeys(pointDir)
 
-    val llm = DesktopLlmClient(config = { FilePcConfig(pointDir).load().ai })
+    // Стендовый журнал обменов с моделью; перед публичным дистрибутивом — за флаг
+    // (просьба владельца 2026-08-09). Папка приватная, живут последние 30 обменов.
+    val llm = com.point.core.flow.LoggingLlmClient(
+        inner = DesktopLlmClient(config = { FilePcConfig(pointDir).load().ai }),
+        dir = File(pointDir, "llm-log"),
+        enabled = true,
+    )
     val entities = com.point.core.flow.RegexEntityExtractor()
     val resolver = DesktopResolver(
         setOf(

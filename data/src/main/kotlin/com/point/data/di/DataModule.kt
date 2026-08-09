@@ -172,9 +172,6 @@ abstract class DataModule {
     abstract fun exporter(impl: MediaStoreExporter): Exporter
 
     @Binds
-    abstract fun llmClient(impl: FallbackLlmClient): LlmClient
-
-    @Binds
     abstract fun urlOpener(impl: AndroidUrlOpener): UrlOpener
 
     @Binds
@@ -463,6 +460,19 @@ abstract class DataModule {
 
             return listOf<LlmClient>(userKey) + free + native
         }
+
+        // Журнал обменов с моделью — только на отладочном стенде: содержимое —
+        // личные данные человека (просьба владельца 2026-08-09).
+        @Provides
+        @Singleton
+        fun llmClient(
+            impl: FallbackLlmClient,
+            @ApplicationContext context: Context,
+        ): LlmClient = com.point.core.flow.LoggingLlmClient(
+            inner = impl,
+            dir = java.io.File(context.filesDir, "llm-log"),
+            enabled = BuildConfig.DEBUG,
+        )
 
         @Provides
         fun speechEngines(

@@ -101,7 +101,8 @@ internal fun understandPrompt(
             "нет: название отделения, магазина, населённого пункта — дословно с экрана), " +
             "AMOUNT (сумма к оплате или переводу — ТОЛЬКО цифры, без валюты), " +
             "RECEIPT (номер квитанции или чека, дословно), " +
-            "SUBJECT (тема письма или сообщения; если это не письмо и не переписка — не пиши). ",
+            "SUBJECT (тема письма или сообщения; если это не письмо и не переписка — не пиши), " +
+            "CONTACT (телефон вместе с именем его владельца: <номер> | <имя>). ",
     )
     if (index != null) {
         append(
@@ -361,7 +362,10 @@ internal fun contactNodes(source: PointObject, contacts: List<com.point.core.flo
     val objects = LinkedHashMap<String, PointObject>()
     val relations = mutableListOf<Relation>()
     contacts.forEach { contact ->
-        val id = source.id + ":person:" + contact.name.lowercase().replace(Regex("""\s+"""), " ").trim()
+
+        // Тот же id-неймспейс, что у ролевых людей (GraphRoles.nodeId): «НОВІК» из
+        // роли отправителя и «НОВІК» из пары — один человек, а не два узла.
+        val id = source.id + ":party:" + contact.name.lowercase().replace(Regex("""\s+"""), " ").trim()
         objects.getOrPut(id) {
             PointObject(
                 id = id,
