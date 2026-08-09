@@ -46,9 +46,13 @@ class ExtractAllCapability @Inject constructor() : Capability {
 
     override val meta = CapabilityMeta(priority = 30, latency = Latency.FAST)
     override fun label(state: ObjectState) = "Собрать данные"
+
+    // Собирать имеет смысл там, где есть ЧТО собирать: на узле-одиночке действие
+    // возвращало копию самого себя новым объектом (#676, охота 2026-08-09).
     override fun accepts(state: ObjectState) =
-        state.has(Feature.HAS_PHONE) || state.has(Feature.HAS_EMAIL) ||
-            state.has(Feature.HAS_URL) || state.has(Feature.HAS_ADDRESS)
+        state.kind !in com.point.core.flow.EXTRACTED_KINDS &&
+            listOf(Feature.HAS_PHONE, Feature.HAS_EMAIL, Feature.HAS_URL, Feature.HAS_ADDRESS)
+                .count(state::has) >= 2
     override fun produces(state: ObjectState) = ObjectState(ObjectKind.TEXT)
     override fun intents(state: ObjectState) = setOf(Intent.PREPARE)
 

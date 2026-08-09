@@ -36,11 +36,23 @@ class ExtractAllActionTest {
     }
 
     @Test
-    fun `accepts any object with entities — a text or an OCR-enriched image`() {
-        val cap = ExtractAllCapability()
-        assertTrue(cap.accepts(ObjectState(ObjectKind.TEXT, setOf(Feature.HAS_PHONE))))
-        assertFalse(cap.accepts(ObjectState(ObjectKind.TEXT)))
+    fun `собирать предлагается там, где есть что собирать`() {
 
-        assertTrue(cap.accepts(ObjectState(ObjectKind.IMAGE, setOf(Feature.HAS_PHONE))))
+        // #676 (охота 2026-08-09): на узле «Адрес» действие возвращало копию
+        // самого себя новым объектом — пустая работа при формальном успехе.
+        val cap = ExtractAllCapability()
+
+        assertTrue(
+            "два вида — есть что сводить",
+            cap.accepts(ObjectState(ObjectKind.TEXT, setOf(Feature.HAS_PHONE, Feature.HAS_EMAIL))),
+        )
+        assertTrue(cap.accepts(ObjectState(ObjectKind.IMAGE, setOf(Feature.HAS_PHONE, Feature.HAS_ADDRESS))))
+
+        assertFalse("одно значение собирать не из чего", cap.accepts(ObjectState(ObjectKind.TEXT, setOf(Feature.HAS_PHONE))))
+        assertFalse(cap.accepts(ObjectState(ObjectKind.TEXT)))
+        assertFalse(
+            "узел знания — не источник сводки",
+            cap.accepts(ObjectState(com.point.core.flow.KIND_ADDRESS, setOf(Feature.HAS_ADDRESS, Feature.HAS_PHONE))),
+        )
     }
 }
