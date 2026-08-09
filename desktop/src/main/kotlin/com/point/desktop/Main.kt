@@ -169,6 +169,10 @@ fun main(args: Array<String>) {
 
         reopenPath = { path -> File(path).takeIf(File::isFile)?.let { inbox.addFile(it.absolutePath) } },
         consent = FileConsent(File(pointDir, "consent")),
+
+        // «Скинули с телефона — высветилась часть окна»: своя плашка, не системное
+        // уведомление. Готовое здесь (PDF, скачанное) объявляется тем же путём.
+        announce = { item, source -> peek.arrived(item, compactVisible.value, source) },
     )
 
     val shellMenu = RegistryShellMenu()
@@ -230,9 +234,6 @@ fun main(args: Array<String>) {
         onObject = { name, mime, meta, bytes, action ->
             val item = inbox.receive(name, mime, meta, bytes.inputStream())
             state.onReceived(item, ObjectSource.PHONE_RELAY)
-
-            // «Скинули с телефона — высветилась часть окна»: своя плашка, не системное уведомление.
-            peek.arrived(item, compactVisible.value)
             action?.let { state.runRemoteActionNow(it, item) }
         },
         log = { line -> println("[mailbox] " + line) },
@@ -274,10 +275,16 @@ fun main(args: Array<String>) {
         val compact = compactBounds(workArea)
 
         // Компакт живёт у трея: закрыть = спрятаться, выход — из меню трея.
+        // Непросмотренное прибытие оставляет след на иконке (PC3): peek легко пропустить.
+        val freshIds by state.fresh.collectAsState()
+        val base = painterResource("point-icon.png")
+        val icon = androidx.compose.runtime.remember(base, freshIds.isNotEmpty()) {
+            badgedIcon(base, badge = freshIds.isNotEmpty())
+        }
         Tray(
-            icon = painterResource("point-icon.png"),
-            tooltip = "Point",
-            onAction = { compactVisible.value = !compactVisible.value },
+            icon = icon,
+            tooltip = if (freshIds.isEmpty()) "Point" else "Point — есть новое",
+            onAction = { compactVisible.value = true },
             menu = {
                 Item("Открыть Point") { compactVisible.value = true }
                 Item("Выход") {
@@ -369,6 +376,7 @@ fun main(args: Array<String>) {
                 com.point.desktop.ui.PointDesktopTheme {
                     com.point.desktop.ui.PeekCard(
                         item = shown,
+                        source = peek.sourceOfCurrent() ?: ObjectSource.PHONE_RELAY,
                         onOpen = {
                             peek.take()?.let { arrived ->
                                 openRequest.value = arrived.obj.id
@@ -382,6 +390,24 @@ fun main(args: Array<String>) {
         }
     }
 }
+
+/** Иконка трея с точкой-бейджем: след непросмотренного прибытия. */
+private fun badgedIcon(base: androidx.compose.ui.graphics.painter.Painter, badge: Boolean): androidx.compose.ui.graphics.painter.Painter =
+    if (!badge) {
+        base
+    } else {
+        object : androidx.compose.ui.graphics.painter.Painter() {
+            override val intrinsicSize get() = base.intrinsicSize
+            override fun androidx.compose.ui.graphics.drawscope.DrawScope.onDraw() {
+                with(base) { draw(size) }
+                drawCircle(
+                    color = androidx.compose.ui.graphics.Color(0xFF00E0FF),
+                    radius = size.minDimension * 0.18f,
+                    center = androidx.compose.ui.geometry.Offset(size.width * 0.78f, size.height * 0.22f),
+                )
+            }
+        }
+    }
 
 private fun aiKeyMissing(pointDir: java.io.File): String? =
     if (FilePcConfig(pointDir).load().ai.key.isNotBlank()) null else "на компьютере не задан ключ AI"

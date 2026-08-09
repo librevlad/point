@@ -74,4 +74,31 @@ class PeekTest {
         assertEquals("a", opened?.obj?.id)
         assertNull(peek.current())
     }
+
+    @Test
+    fun `брошенное руками не пикает — человек сам это сделал и видит`() {
+        val peek = PeekState(now = { 0L })
+
+        peek.arrived(item(), compactVisible = false, source = ObjectSource.DROPPED)
+        assertNull(peek.current())
+
+        peek.arrived(item(), compactVisible = false, source = ObjectSource.CLIPBOARD)
+        assertNull(peek.current())
+    }
+
+    @Test
+    fun `готовое на компьютере пикает со своей подписью`() {
+        val peek = PeekState(now = { 0L })
+
+        peek.arrived(item(), compactVisible = false, source = ObjectSource.LOCAL)
+
+        assertEquals("a", peek.current()?.obj?.id)
+        assertEquals(ObjectSource.LOCAL, peek.sourceOfCurrent())
+    }
+
+    @Test
+    fun `из списка новое открывается, из чужой сцены — приглашение`() {
+        assertEquals(ArrivalReaction.OPEN, arrivalReaction(openedId = null))
+        assertEquals(ArrivalReaction.INVITE, arrivalReaction(openedId = "другой"))
+    }
 }

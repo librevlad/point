@@ -91,6 +91,20 @@ class KnowledgeLandsOnSourceTest {
     }
 
     @Test
+    fun `прибытие оставляет след, пока объект не открыли`() {
+        // Аудит компакта, раунд 2: peek легко пропустить — след живёт до первого открытия.
+        val file = temp.newFile("новое.txt").apply { writeText("текст") }
+        val st = state(ActionResult.Done("не нужен"))
+        val item = textItem(file, mapOf("name" to "новое.txt"))
+
+        st.onReceived(item)
+        assertTrue("след нового обязан появиться", item.obj.id in st.fresh.value)
+
+        st.markSeen(item.obj.id)
+        assertTrue("после открытия след снят", item.obj.id !in st.fresh.value)
+    }
+
+    @Test
     fun `узнанное на компьютере переживает его рестарт`() {
         val store = FileJournalStore(File(temp.root, "journal"))
         val file = temp.newFile("живучий.txt").apply { writeText("текст") }

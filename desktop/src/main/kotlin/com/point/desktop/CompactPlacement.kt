@@ -39,23 +39,34 @@ fun peekBounds(work: ScreenArea): WindowBounds = WindowBounds(
 
 const val PEEK_LIFETIME_MS = 8_000L
 
+/** Реакция на новое прибытие: из списка — открыть сразу, из чужой сцены — пригласить. */
+enum class ArrivalReaction { OPEN, INVITE }
+
+fun arrivalReaction(openedId: String?): ArrivalReaction =
+    if (openedId == null) ArrivalReaction.OPEN else ArrivalReaction.INVITE
+
 /**
  * Peek — собственная плашка Point, не системное уведомление: прибыло с телефона →
  * высветилась, клик — вылезло окошко на этом объекте, сама гаснет по сроку.
  */
 class PeekState(private val now: () -> Long) {
 
-    private data class Shown(val item: InboxItem, val at: Long)
+    private data class Shown(val item: InboxItem, val at: Long, val source: ObjectSource)
 
     private val shown = MutableStateFlow<Shown?>(null)
 
     /** Тик для UI: смена значения — повод перечитать current(). */
     val pulse: StateFlow<Any?> get() = shown.asStateFlow()
 
-    fun arrived(item: InboxItem, compactVisible: Boolean) {
+    fun arrived(item: InboxItem, compactVisible: Boolean, source: ObjectSource = ObjectSource.PHONE_RELAY) {
         if (compactVisible) return
-        shown.value = Shown(item, now())
+
+        // Брошенное в окно и взятое из буфера не пикает: человек сам это сделал и видит.
+        if (source == ObjectSource.DROPPED || source == ObjectSource.CLIPBOARD) return
+        shown.value = Shown(item, now(), source)
     }
+
+    fun sourceOfCurrent(): ObjectSource? = shown.value?.takeIf { now() - it.at < PEEK_LIFETIME_MS }?.source
 
     fun current(): InboxItem? {
         val s = shown.value ?: return null

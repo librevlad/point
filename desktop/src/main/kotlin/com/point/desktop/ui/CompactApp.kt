@@ -91,13 +91,26 @@ fun CompactApp(
     var showSettings by remember { mutableStateOf(false) }
 
     var openedId by remember { mutableStateOf<String?>(null) }
+    var invited by remember { mutableStateOf<String?>(null) }
 
-    // Прибывшее раскрывается само: и посланное с телефона, и брошенное сюда.
+    // Прибывшее из списка раскрывается само; человека внутри другого объекта
+    // не выдёргивают — ему предлагают (аудит компакта, раунд 2).
     var lastTop by remember { mutableStateOf(items.firstOrNull()?.obj?.id) }
     LaunchedEffect(items.firstOrNull()?.obj?.id) {
         val top = items.firstOrNull()?.obj?.id
-        if (top != null && top != lastTop) openedId = top
+        if (top != null && top != lastTop) {
+            when (com.point.desktop.arrivalReaction(openedId)) {
+                com.point.desktop.ArrivalReaction.OPEN -> openedId = top
+                com.point.desktop.ArrivalReaction.INVITE -> invited = top
+            }
+        }
         lastTop = top
+    }
+
+    // Открытый объект просмотрен: след «нового» снимается.
+    LaunchedEffect(openedId) {
+        openedId?.let { state.markSeen(it) }
+        if (invited == openedId) invited = null
     }
 
     // Клик по peek-плашке открывает именно тот объект.
@@ -143,6 +156,16 @@ fun CompactApp(
 
     val hotkeys = remember { FocusRequester() }
     LaunchedEffect(Unit) { hotkeys.requestFocus() }
+
+    // Флайаут: потерял фокус — спрятался (alwaysOnTop честен, только пока окно нужно).
+    val windowInfo = androidx.compose.ui.platform.LocalWindowInfo.current
+    val asking by state.cloudAsk.collectAsState()
+    LaunchedEffect(windowInfo.isWindowFocused) {
+        if (!windowInfo.isWindowFocused && asking == null) {
+            kotlinx.coroutines.delay(250)
+            if (!windowInfo.isWindowFocused && state.cloudAsk.value == null) onHide()
+        }
+    }
     Surface(
         color = MaterialTheme.colorScheme.surface,
         modifier = Modifier.fillMaxSize()
@@ -157,9 +180,13 @@ fun CompactApp(
                     event.key == androidx.compose.ui.input.key.Key.V
                 val grab = down && event.isCtrlPressed && event.isShiftPressed &&
                     event.key == androidx.compose.ui.input.key.Key.S
+                val esc = down && event.key == androidx.compose.ui.input.key.Key.Escape
                 if (paste) takeClipboard()
                 if (grab) grabScreen()
-                paste || grab
+                if (esc) {
+                    if (openedId != null) openedId = null else onHide()
+                }
+                paste || grab || esc
             },
     ) {
         signIn?.let { gate ->
@@ -193,8 +220,9 @@ fun CompactApp(
                     modifier = Modifier.weight(1f),
                     state = state,
                     item = opened,
+                    invited = items.firstOrNull { it.obj.id == invited && it.obj.id != opened.obj.id },
+                    onOpenInvited = { openedId = it.obj.id },
                     onBack = { openedId = null },
-                    onHide = onHide,
                 )
 
                 else -> CompactList(
@@ -243,7 +271,12 @@ fun CompactApp(
 
 /** Плашка прибытия — своё окошко Point, не системное уведомление. Клик — открыть. */
 @Composable
-fun PeekCard(item: InboxItem, onOpen: () -> Unit, onDismiss: () -> Unit) {
+fun PeekCard(
+    item: InboxItem,
+    onOpen: () -> Unit,
+    onDismiss: () -> Unit,
+    source: com.point.desktop.ObjectSource = com.point.desktop.ObjectSource.PHONE_RELAY,
+) {
     Row(
         modifier = Modifier.fillMaxSize()
             .clip(RoundedCornerShape(14.dp))
@@ -256,7 +289,13 @@ fun PeekCard(item: InboxItem, onOpen: () -> Unit, onDismiss: () -> Unit) {
     ) {
         Box(Modifier.size(8.dp).background(PointColors.violet, CircleShape))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text("ПРИШЛО С ТЕЛЕФОНА", style = PointType.label)
+            Text(
+                when (source) {
+                    com.point.desktop.ObjectSource.LOCAL -> "ГОТОВО НА КОМПЬЮТЕРЕ"
+                    else -> "ПРИШЛО С ТЕЛЕФОНА"
+                },
+                style = PointType.label,
+            )
             Text(
                 item.obj.metadata["name"] ?: "Объект",
                 style = PointType.body,
@@ -272,7 +311,7 @@ fun PeekCard(item: InboxItem, onOpen: () -> Unit, onDismiss: () -> Unit) {
 private fun CompactHeader(
     title: String,
     onBack: (() -> Unit)?,
-    onHide: () -> Unit,
+    onHide: (() -> Unit)?,
     trailing: (@Composable () -> Unit)? = null,
 ) {
     Row(
@@ -297,7 +336,7 @@ private fun CompactHeader(
             modifier = Modifier.weight(1f).padding(start = 2.dp),
         )
         trailing?.invoke()
-        HeaderButton("✕", onHide)
+        onHide?.let { HeaderButton("✕", it) }
     }
 }
 
@@ -317,7 +356,8 @@ internal fun CompactObject(
     state: DesktopState,
     item: InboxItem,
     onBack: () -> Unit,
-    onHide: () -> Unit,
+    invited: InboxItem? = null,
+    onOpenInvited: (InboxItem) -> Unit = {},
     modifier: Modifier = Modifier,
 ) = Column(modifier) {
     val journal by state.journal.collectAsState()
@@ -326,8 +366,30 @@ internal fun CompactObject(
     CompactHeader(
         title = item.obj.metadata["name"] ?: "Объект",
         onBack = onBack,
-        onHide = onHide,
+        onHide = null,
     )
+
+    // Пришло новое, пока человек здесь работает: не выдёргиваем — приглашаем.
+    invited?.let { fresh ->
+        Row(
+            modifier = Modifier.fillMaxWidth()
+                .background(PointColors.surfaceDeep)
+                .clickable { onOpenInvited(fresh) }
+                .padding(horizontal = 14.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(Modifier.size(6.dp).background(PointColors.cyan, CircleShape))
+            Text(
+                "Пришло: " + (fresh.obj.metadata["name"] ?: "объект"),
+                style = PointType.small,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            Text("открыть →", style = PointType.small.copy(color = PointColors.cyan))
+        }
+    }
     Column(
         modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())
             .padding(horizontal = 12.dp)
@@ -393,6 +455,8 @@ internal fun CompactList(
 ) = Column(modifier) {
     val journal by state.journal.collectAsState()
     val lastContact by state.lastContact.collectAsState()
+    val fresh by state.fresh.collectAsState()
+    val working by state.working.collectAsState()
     val now = rememberNow()
     val zone = remember { ZoneId.systemDefault() }
     CompactHeader(
@@ -401,6 +465,31 @@ internal fun CompactList(
         onHide = onHide,
         trailing = { HeaderButton("⚙", onSettings) },
     )
+
+    // Работа идёт — видно и из списка, с дорогой обратно к объекту.
+    working?.let { work ->
+        Row(
+            modifier = Modifier.fillMaxWidth()
+                .background(PointColors.surfaceDeep)
+                .clickable {
+                    work.objectId?.let { id ->
+                        state.items.value.firstOrNull { it.obj.id == id }?.let(onOpen)
+                    }
+                }
+                .padding(horizontal = 14.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(Modifier.size(6.dp).background(PointColors.cyan, CircleShape))
+            Text(
+                work.title + (work.stage?.let { " · $it" } ?: ""),
+                style = PointType.small,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+        }
+    }
     Column(
         modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())
             .padding(horizontal = 12.dp).padding(bottom = 12.dp),
@@ -419,6 +508,7 @@ internal fun CompactList(
                     name = item.obj.metadata["name"] ?: "Объект",
                     note = kindLabel(item.obj.state.kind),
                     accent = true,
+                    fresh = item.obj.id in fresh,
                 ) { onOpen(item) }
             }
         }
@@ -453,7 +543,13 @@ internal fun CompactList(
 }
 
 @Composable
-private fun ListRow(name: String, note: String, accent: Boolean, onClick: () -> Unit) {
+private fun ListRow(
+    name: String,
+    note: String,
+    accent: Boolean,
+    fresh: Boolean = false,
+    onClick: () -> Unit,
+) {
     Row(
         modifier = Modifier.fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
@@ -472,6 +568,7 @@ private fun ListRow(name: String, note: String, accent: Boolean, onClick: () -> 
             Text(name, style = PointType.body.copy(fontSize = PointType.small.fontSize), maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(note, style = PointType.mono, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
+        if (fresh) Text("новое", style = PointType.small.copy(color = PointColors.cyan))
     }
 }
 

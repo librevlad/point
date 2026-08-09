@@ -99,7 +99,7 @@ class CompactRenderTest {
         st.onReceived(item)
 
         snap("compact-object", COMPACT_WIDTH, COMPACT_HEIGHT) {
-            CompactObject(state = st, item = item, onBack = {}, onHide = {})
+            CompactObject(state = st, item = item, onBack = {})
         }
     }
 

@@ -15,7 +15,14 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-data class Working(val title: String, val stage: String?, val startedAt: Long)
+data class Working(
+    val title: String,
+    val stage: String?,
+    val startedAt: Long,
+
+    /** Чей это шаг: из списка видно, куда вернуться к работе. */
+    val objectId: String? = null,
+)
 
 class DesktopState(
     private val registry: CapabilityRegistry,
@@ -31,6 +38,9 @@ class DesktopState(
     private val reopenPath: (String) -> InboxItem? = { null },
 
     private val consent: com.point.core.flow.PrivacyConsent? = null,
+
+    /** Прибытие объявляется наружу (peek-плашка): и с телефона, и готовое здесь. */
+    private val announce: (InboxItem, ObjectSource) -> Unit = { _, _ -> },
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
@@ -145,7 +155,7 @@ class DesktopState(
     private suspend fun perform(id: String, item: InboxItem, stationTitle: String? = null): ActionResult? {
         val title = stationTitle ?: titleOf(id, item)
         _message.value = null
-        _working.value = Working(title, stage = null, startedAt = clock.now())
+        _working.value = Working(title, stage = null, startedAt = clock.now(), objectId = item.obj.id)
         val result = try {
             runCatching {
 
@@ -312,9 +322,19 @@ class DesktopState(
         }
     }
 
+    /** Непросмотренные прибытия: след живёт, пока человек не открыл объект (PC3). */
+    private val _fresh = MutableStateFlow<Set<String>>(emptySet())
+    val fresh: StateFlow<Set<String>> = _fresh.asStateFlow()
+
+    fun markSeen(objectId: String) {
+        _fresh.update { it - objectId }
+    }
+
     fun onReceived(item: InboxItem, source: ObjectSource = ObjectSource.LOCAL) {
         _items.update { listOf(item) + it }
+        _fresh.update { it + item.obj.id }
         rememberArrival(item, source)
+        runCatching { announce(item, source) }
 
         if (item.obj.state.kind == ObjectKind.TEXT) {
             val text = runCatching { File(item.obj.uri.value).readText() }.getOrNull()
