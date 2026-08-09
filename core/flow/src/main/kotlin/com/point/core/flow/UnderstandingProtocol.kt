@@ -43,6 +43,10 @@ fun parseFieldCandidates(answer: String): ParsedUnderstanding {
                 // Форма IBAN — не трек: «UA79…» с квитанции становился готовым
                 // «Отследить отправление» (живой прогон 2026-08-09).
                 if (suffix == "track" && looksLikeIban(candidate.text)) return@forEach
+
+                // «Голое время это никогда не дата, это мусор» (#651): 11:09 из чата
+                // становилось «Нашёл дату».
+                if (suffix == "date" && bareClock(candidate.text)) return@forEach
                 val bucket = fields.getOrPut(metaKey) { mutableListOf() }
                 if (bucket.size < MAX_FIELD_CANDIDATES && bucket.none { it.text == candidate.text && it.ids == candidate.ids }) {
                     bucket += candidate

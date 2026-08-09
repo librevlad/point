@@ -65,8 +65,11 @@ class PcEntitiesRealizer(
 
 /** Знание из найденных сущностей: первое значение вида, «ещё»-значения, признаки, состояние вопроса. */
 fun entityKnowledge(found: List<Entity>, question: CapabilityId): com.point.core.model.Findings {
+
+    // «Голое время это никогда не дата, это мусор» (#651).
+    val meaningful = found.filterNot { it.type == EntityType.DATE_TIME && com.point.core.flow.bareClock(it.value) }
     val metadata = buildMap {
-        found.groupBy { it.type }.forEach { (type, list) ->
+        meaningful.groupBy { it.type }.forEach { (type, list) ->
             val key = type.asMetaKey() ?: return@forEach
             val values = list.map { it.value.trim() }.filter { it.isNotBlank() }
                 .distinctBy { com.point.core.flow.normConsensus(it) }
@@ -87,7 +90,7 @@ fun entityKnowledge(found: List<Entity>, question: CapabilityId): com.point.core
         )
     }
     return com.point.core.model.Findings(
-        features = found.mapNotNull { it.type.asFeature() }.toSet(),
+        features = meaningful.mapNotNull { it.type.asFeature() }.toSet(),
         metadata = metadata,
     )
 }

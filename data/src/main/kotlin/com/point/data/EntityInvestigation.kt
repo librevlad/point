@@ -157,17 +157,25 @@ internal fun focusedDelta(
     at: String,
 ): Findings {
     if (source.state.kind in EXTRACTED_KINDS) return Findings()
-    val features = entities.mapNotNullTo(mutableSetOf()) { it.type.asFeature() }
+
+    // «Голое время это никогда не дата, это мусор» (#651): и признака не даёт.
+    val meaningful = entities.filterNot {
+        it.type == com.point.core.flow.EntityType.DATE_TIME && it.isBareClock()
+    }
+    val features = meaningful.mapNotNullTo(mutableSetOf()) { it.type.asFeature() }
 
     val facts = LinkedHashMap<String, String>()
     val more = LinkedHashMap<String, MutableList<String>>()
     val objects = LinkedHashMap<String, PointObject>()
 
-    entities.sortedBy { it.isBareClock() }.forEach { e ->
+    meaningful.sortedBy { it.isBareClock() }.forEach { e ->
         val key = e.type.asMetaKey() ?: return@forEach
         val suffix = key.removePrefix(META_ENTITY_PREFIX)
         val (kind, feature) = ENTITY_KINDS[suffix] ?: return@forEach
         val value = e.value.trim().takeIf { it.isNotBlank() } ?: return@forEach
+
+        // «Голое время это никогда не дата, это мусор» (#651): ни фактом, ни узлом.
+        if (kind == KIND_DATE && bareTimestamp(value)) return@forEach
 
         val known = source.metadata[key]
         val sameAsKnown = known != null && com.point.core.flow.normConsensus(known) ==
@@ -181,7 +189,6 @@ internal fun focusedDelta(
         }
 
         if (sameAsKnown) return@forEach
-        if (kind == KIND_DATE && bareTimestamp(value)) return@forEach
         val id = "${source.id}:$suffix:${value.filter(Char::isLetterOrDigit).uppercase()}"
         objects.getOrPut(id) {
             PointObject(
@@ -210,14 +217,19 @@ internal fun entityDelta(
     entities: List<com.point.core.flow.Entity>,
     text: String = "",
 ): Findings {
-    val features = entities.mapNotNullTo(mutableSetOf()) { it.type.asFeature() }
+
+    // «Голое время это никогда не дата, это мусор» (#651): и признака HAS_DATE не даёт.
+    val meaningful = entities.filterNot {
+        it.type == com.point.core.flow.EntityType.DATE_TIME && it.isBareClock()
+    }
+    val features = meaningful.mapNotNullTo(mutableSetOf()) { it.type.asFeature() }
 
     // Второе значение того же вида — «ещё один», а не проигравший и не спор (S6,
     // живой прогон 2026-08-09): два телефона в тексте остаются двумя телефонами.
     val more = LinkedHashMap<String, MutableList<String>>()
     val extracted = buildMap {
 
-        entities.sortedBy { it.isBareClock() }.forEach { e ->
+        meaningful.sortedBy { it.isBareClock() }.forEach { e ->
             e.type.asMetaKey()?.let { key ->
 
                 val value = if (e.type == com.point.core.flow.EntityType.ADDRESS && text.isNotEmpty()) {

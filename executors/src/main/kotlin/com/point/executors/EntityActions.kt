@@ -155,13 +155,28 @@ class MapRealizer @Inject constructor(
         }
 }
 
-class EventCapability @Inject constructor() : Capability {
+class EventCapability(
+    private val today: () -> java.time.LocalDate,
+) : Capability {
+
+    @Inject constructor() : this({ java.time.LocalDate.now() })
+
     override val id = ID
     override val icon = "event"
     override val meta = CapabilityMeta(priority = 16)
     override fun label(state: ObjectState) = "Создать событие"
 
     override fun accepts(state: ObjectState) = state.has(Feature.HAS_DATE) || state.has(Feature.IS_MEETING)
+
+    // «Дата в прошлом не может создавать событие» (#651): дата остаётся знанием,
+    // но дверь события открывает только дата сегодня и позже — или сама встреча.
+    override fun accepts(graph: com.point.core.flow.GraphState) =
+        graph.state.has(Feature.IS_MEETING) ||
+            (
+                graph.state.has(Feature.HAS_DATE) &&
+                    com.point.core.flow.hasUpcomingDate(graph.obj.metadata, today())
+                )
+
     override fun produces(state: ObjectState) = state
     override fun intents(state: ObjectState) = setOf(Intent.OPEN)
 
