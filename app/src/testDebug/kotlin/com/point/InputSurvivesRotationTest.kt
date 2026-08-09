@@ -10,7 +10,8 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
-import com.point.core.flow.UserAiConfig
+import com.point.core.flow.AI_PROVIDERS
+import com.point.core.flow.UserAiKey
 import com.point.core.model.ChatMessage
 import com.point.core.model.ChatRole
 import com.point.core.model.ObjectKind
@@ -29,11 +30,11 @@ class InputSurvivesRotationTest {
     @get:Rule val compose = createComposeRule()
 
     @Test fun `набранный AI-ключ переживает поворот`() {
-        var saved: UserAiConfig? = null
+        var saved: UserAiKey? = null
         val rotation = StateRestorationTester(compose)
         rotation.setContent {
             KeyScreen(
-                config = UserAiConfig.DEFAULT,
+                screen = aiKeysScreenOf(),
                 onSave = { saved = it },
                 onCancel = {},
                 usageEnabled = false,
@@ -43,7 +44,8 @@ class InputSurvivesRotationTest {
             )
         }
 
-        compose.onNodeWithText("Ключ AI").performClick()
+        compose.onNodeWithText("Ключи AI").performClick()
+        compose.onNodeWithText(AI_PROVIDERS.first().name).performScrollTo().performClick()
 
         compose.onAllNodes(hasSetTextAction())[0].performScrollTo()
             .performTextInput("sk-очень-длинный-ключ-из-буфера")

@@ -44,18 +44,24 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.point.core.flow.AI_KEY_WHY
 import com.point.core.flow.AI_PROVIDERS
+import com.point.core.flow.AiFact
+import com.point.core.flow.AiOutcome
 import com.point.core.flow.AiProvider
+import com.point.core.flow.AiServiceLine
 import com.point.core.flow.KeyVerdict
 import com.point.core.flow.MY_DEVICES_TITLE
+import com.point.core.flow.OWN_SERVICE_ID
 import com.point.core.flow.PRIVACY_SETTING_HINT
 import com.point.core.flow.PRIVACY_SETTING_TITLE
 import com.point.core.flow.PrivacyLevel
 import com.point.core.flow.SETTINGS_TITLE
 import com.point.core.flow.UsageSummary
-import com.point.core.flow.UserAiConfig
-import com.point.core.flow.keySetLabel
+import com.point.core.flow.UserAiKey
+import com.point.core.flow.UserAiKeys
+import com.point.core.flow.aiCheckedLine
+import com.point.core.flow.aiKeysSummary
+import com.point.core.flow.aiServiceLines
 import com.point.core.flow.looksLikeApiKey
-import com.point.core.flow.providerForBaseUrl
 import com.point.core.ui.Outcome
 import com.point.core.ui.OutcomeBanner
 import com.point.core.ui.OutcomeCard
@@ -70,26 +76,30 @@ import com.point.core.ui.theme.PointTheme
 
 @Composable
 fun KeyScreen(
-    config: UserAiConfig,
+    screen: AiKeysScreen,
 
     note: String? = null,
 
     errand: KeyErrand? = null,
-    onSave: (UserAiConfig) -> Unit,
+    onSave: (UserAiKey) -> Unit,
     onCancel: () -> Unit,
     usageEnabled: Boolean,
     usageSummary: UsageSummary?,
     onToggleUsage: (Boolean) -> Unit,
 
-    checking: Boolean = false,
+    checking: String? = null,
 
     verdict: KeyVerdict? = null,
 
-    onCheck: (UserAiConfig) -> Unit = {},
+    verdictFor: String? = null,
+
+    onCheck: (UserAiKey) -> Unit = {},
+
+    onCheckAll: () -> Unit = {},
 
     onPasteKey: () -> String? = { null },
 
-    onForgetKey: () -> Unit = {},
+    onForgetKey: (String) -> Unit = {},
     soundEnabled: Boolean = true,
     onToggleSound: (Boolean) -> Unit = {},
 
@@ -105,11 +115,13 @@ fun KeyScreen(
     modifier: Modifier = Modifier,
 ) {
 
-    val draft = rememberSaveable(config, saver = KeyDraft.Saver) { KeyDraft(config) }
-
     var section by rememberSaveable(note, errand, checking, verdict) {
         mutableStateOf(
-            if (note != null || errand != null || checking || verdict != null) SettingsSection.KEY else null,
+            if (note != null || errand != null || checking != null || verdict != null) {
+                SettingsSection.KEY
+            } else {
+                null
+            },
         )
     }
 
@@ -131,7 +143,7 @@ fun KeyScreen(
             }
             when (section) {
                 null -> SettingsList(
-                    keyLine = keySetLabel(draft.key, saved = draft.savedIn(config)),
+                    keyLine = aiKeysSummary(screen.keys),
                     cloudEnabled = cloudEnabled,
                     privacyLevel = privacyLevel,
                     soundEnabled = soundEnabled,
@@ -143,13 +155,15 @@ fun KeyScreen(
                 )
 
                 SettingsSection.KEY -> KeySection(
-                    config = config,
-                    draft = draft,
+                    screen = screen,
                     note = note,
                     errand = errand,
                     checking = checking,
                     verdict = verdict,
+                    verdictFor = verdictFor,
+                    onSave = onSave,
                     onCheck = onCheck,
+                    onCheckAll = onCheckAll,
                     onPasteKey = onPasteKey,
                     onForgetKey = onForgetKey,
                     onOpenUrl = onOpenUrl,
@@ -179,11 +193,6 @@ fun KeyScreen(
 
         Spacer(Modifier.height(18.dp))
 
-        if (section == SettingsSection.KEY && draft.key.isNotBlank() && verdict !is KeyVerdict.Works) {
-            TextButton(onClick = { onSave(draft.entered()) }) {
-                Text("Сохранить без проверки", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
         TextButton(onClick = onCancel) {
 
             Text(
@@ -323,17 +332,23 @@ private fun BackToList(onBack: () -> Unit) {
     }
 }
 
+/**
+ * Все известные сервисы списком — в том порядке, в каком Point к ним обращается
+ * (#699). В строке: имя, что умеет, есть ли ключ и последний факт о нём.
+ */
 @Composable
 private fun KeySection(
-    config: UserAiConfig,
-    draft: KeyDraft,
+    screen: AiKeysScreen,
     note: String?,
     errand: KeyErrand?,
-    checking: Boolean,
+    checking: String?,
     verdict: KeyVerdict?,
-    onCheck: (UserAiConfig) -> Unit,
+    verdictFor: String?,
+    onSave: (UserAiKey) -> Unit,
+    onCheck: (UserAiKey) -> Unit,
+    onCheckAll: () -> Unit,
     onPasteKey: () -> String?,
-    onForgetKey: () -> Unit,
+    onForgetKey: (String) -> Unit,
     onOpenUrl: (String) -> Unit,
     onBack: () -> Unit,
     onLeave: () -> Unit,
@@ -351,187 +366,58 @@ private fun KeySection(
         )
     }
 
-    val chosen = providerForBaseUrl(draft.baseUrl)
-    SectionLabel("Шаг 1 · Откуда взять ключ")
-
     Text(
-        "$AI_KEY_WHY Point работает на вашем ключе и вашей квоте — чужие ключи он не " +
-            "хранит и не просит.",
+        "$AI_KEY_WHY Ключ живёт только на этом устройстве, и Point работает на " +
+            "вашей квоте. Ниже — все сервисы, к которым Point обращается, сверху вниз.",
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
 
+    val checkingAll = checking == CHECK_ALL_SERVICES
     PortalRow(
-        title = if (chosen != null) "Открыть сайт ${chosen.name}" else "Сначала выберите сервис",
-        subtitle = if (chosen != null) {
-            "Там выдают ключ: заведите аккаунт, скопируйте ключ — и вернитесь сюда. Откроется браузер."
+        title = if (checkingAll) "Проверяю…" else "Проверить все",
+        subtitle = if (checkingAll) {
+            "Point спрашивает каждый сервис одним коротким словом. Ваш объект никуда не уходит."
         } else {
-            "Ключ выдаёт сервис — выберите его строкой ниже, и сюда встанет ссылка на его страницу."
+            "${screen.checkedLine}. Сам Point ничего не проверяет — только по этому тапу."
         },
-        onClick = { if (chosen != null) onOpenUrl(chosen.keyUrl) else draft.servicesOpen = true },
-        icon = bubbleIcon("open"),
-        accent = bubbleColor("open"),
-        chevron = false,
-        subtitleMaxLines = 3,
-    )
-
-    DisclosureRow(
-        title = "Сервис",
-        subtitle = chosen?.let { "${it.name} · ${it.what}" } ?: "не выбран",
-        open = draft.servicesOpen,
-        onToggle = { draft.servicesOpen = !draft.servicesOpen },
-    )
-    Reveal(draft.servicesOpen) {
-        Column(verticalArrangement = Arrangement.spacedBy(11.dp)) {
-            AI_PROVIDERS.forEachIndexed { index, provider ->
-                ProviderRow(
-                    provider = provider,
-                    selected = chosen?.id == provider.id,
-                    index = index,
-                    onChoose = {
-
-                        if (chosen?.id != provider.id) {
-                            draft.key = ""
-                            draft.pasteNote = ""
-                        }
-                        draft.baseUrl = provider.baseUrl
-                        draft.model = provider.models.substringBefore(',')
-                        draft.servicesOpen = false
-                    },
-                )
-            }
-        }
-    }
-
-    Spacer(Modifier.height(6.dp))
-    SectionLabel("Шаг 2 · Вставьте ключ")
-    OutlinedTextField(
-        value = draft.key,
-        onValueChange = {
-            draft.key = it
-            draft.pasteNote = ""
-        },
-        label = { Text("API-ключ") },
-        singleLine = true,
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-        visualTransformation = PasswordVisualTransformation(),
-        modifier = Modifier.fillMaxWidth(),
-    )
-
-    if (draft.key.isBlank()) {
-        PortalRow(
-            title = "Вставить из буфера",
-            subtitle = "Скопировали ключ на странице сервиса — он встанет сюда одним тапом.",
-            onClick = {
-                val pasted = onPasteKey()
-                if (looksLikeApiKey(pasted)) {
-                    draft.key = pasted!!.trim()
-                    draft.pasteNote = ""
-                } else {
-
-                    draft.pasteNote = "В буфере нет ключа — скопируйте его на странице сервиса и вернитесь."
-                }
-            },
-            icon = bubbleIcon("copy"),
-            chevron = false,
-        )
-    }
-    if (draft.pasteNote.isNotEmpty()) {
-        Text(
-            draft.pasteNote,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-
-    OutcomeCard(
-        title = keySetLabel(draft.key, saved = draft.savedIn(config)),
-        outcome = Outcome.NONE,
-        modifier = Modifier.fillMaxWidth(),
-    )
-
-    if (config.apiKey.isNotBlank()) {
-        PortalRow(
-            title = "Забыть ключ",
-            subtitle = "Point сотрёт его с устройства. «Понять», «Перевести», «Спросить AI» " +
-                "и расшифровка записи снова замолчат, пока не впишете новый.",
-            onClick = {
-
-                draft.key = ""
-                draft.pasteNote = ""
-                onForgetKey()
-            },
-            chevron = false,
-            subtitleMaxLines = 3,
-        )
-    }
-
-    DisclosureRow(
-        title = "Модель и адрес",
-        subtitle = listOf(draft.model, draft.baseUrl).filter { it.isNotBlank() }.joinToString(" · ")
-            .ifBlank { "подставятся вместе с сервисом" },
-        open = draft.advancedOpen,
-        onToggle = { draft.advancedOpen = !draft.advancedOpen },
-    )
-    Reveal(draft.advancedOpen) {
-        Column(verticalArrangement = Arrangement.spacedBy(11.dp)) {
-            OutlinedTextField(
-                value = draft.model,
-                onValueChange = { draft.model = it },
-                label = { Text("Модель") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            OutlinedTextField(
-                value = draft.baseUrl,
-                onValueChange = { draft.baseUrl = it },
-                label = { Text("Адрес сервиса") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
-    }
-
-    Spacer(Modifier.height(6.dp))
-    SectionLabel("Шаг 3 · Проверьте, что работает")
-    Text(
-
-        "Point спросит сервис одним коротким словом и покажет ответ. Ваш объект при этом " +
-            "никуда не отправляется.",
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
-
-    val canCheck = draft.key.isNotBlank() && !checking
-    PortalRow(
-
-        title = if (checking) "Проверяю…" else "Проверить и включить",
-        onClick = { onCheck(draft.entered()) },
+        onClick = onCheckAll,
         icon = bubbleIcon(AI_ICON),
-
-        primary = verdict !is KeyVerdict.Works,
+        accent = bubbleColor(AI_ICON),
+        primary = !checkingAll,
         chevron = false,
-        enabled = canCheck,
-        modifier = Modifier.graphicsLayer { alpha = if (canCheck) 1f else 0.45f },
+        enabled = checking == null,
+        subtitleMaxLines = 3,
+        modifier = Modifier.graphicsLayer { alpha = if (checking == null) 1f else 0.45f },
     )
 
-    when (verdict) {
-        is KeyVerdict.Works -> OutcomeCard(
-            title = "Работает — сервис ответил: «${verdict.reply}». Ключ сохранён.",
-            detail = "Теперь «Понять», «Перевести», «Спросить AI» и расшифровка записи работают.",
-            outcome = Outcome.DONE,
-            modifier = Modifier.fillMaxWidth(),
+    var open by rememberSaveable { mutableStateOf<String?>(null) }
+
+    screen.services.forEachIndexed { index, line ->
+        ServiceRow(
+            line = line,
+            checking = checking == line.providerId,
+            open = open == line.providerId,
+            index = index,
+            onToggle = { open = if (open == line.providerId) null else line.providerId },
         )
-        is KeyVerdict.Refused -> OutcomeCard(
-            title = verdict.what,
-            detail = verdict.fix,
-            outcome = Outcome.FAILED,
-            modifier = Modifier.fillMaxWidth(),
-        )
-        null -> Unit
+        Reveal(open == line.providerId) {
+            ServiceEditor(
+                line = line,
+                saved = screen.keys.of(line.providerId),
+                checking = checking == line.providerId,
+                verdict = verdict.takeIf { verdictFor == line.providerId },
+                onSave = onSave,
+                onCheck = onCheck,
+                onPasteKey = onPasteKey,
+                onForgetKey = onForgetKey,
+                onOpenUrl = onOpenUrl,
+            )
+        }
     }
 
     if (errand != null && verdict is KeyVerdict.Works) {
+        Spacer(Modifier.height(6.dp))
         PortalRow(
             title = "Вернуться к «${errand.objectName}»",
             subtitle = "«${errand.action}» ждёт там — уже без приписки про ключ. Тапнуть по нему " +
@@ -542,6 +428,192 @@ private fun KeySection(
             chevron = false,
             subtitleMaxLines = 3,
         )
+    }
+}
+
+@Composable
+private fun ServiceRow(
+    line: AiServiceLine,
+    checking: Boolean,
+    open: Boolean,
+    index: Int,
+    onToggle: () -> Unit,
+) {
+    PortalRow(
+        title = line.name,
+        subtitle = "${line.what}\n${line.keyLine} · ${if (checking) "проверяю…" else line.factLine}",
+        onClick = onToggle,
+        icon = bubbleIcon(AI_ICON),
+        accent = bubbleColor(AI_ICON),
+        primary = line.mine,
+        chevron = false,
+        subtitleMaxLines = 4,
+        appearIndex = index,
+        trailing = {
+            Icon(
+                imageVector = Icons.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .size(20.dp)
+                    .graphicsLayer { rotationZ = if (open) 90f else 0f },
+            )
+        },
+    )
+}
+
+@Composable
+private fun ServiceEditor(
+    line: AiServiceLine,
+    saved: UserAiKey?,
+    checking: Boolean,
+    verdict: KeyVerdict?,
+    onSave: (UserAiKey) -> Unit,
+    onCheck: (UserAiKey) -> Unit,
+    onPasteKey: () -> String?,
+    onForgetKey: (String) -> Unit,
+    onOpenUrl: (String) -> Unit,
+) {
+    val provider = AI_PROVIDERS.firstOrNull { it.id == line.providerId }
+    val draft = rememberSaveable(line.providerId, saved, saver = KeyDraft.Saver) {
+        KeyDraft(saved ?: UserAiKey(line.providerId, ""))
+    }
+
+    Column(
+        modifier = Modifier.fillMaxWidth().portalCard().padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(11.dp),
+    ) {
+        if (provider != null) {
+            PortalRow(
+                title = "Открыть сайт ${provider.name}",
+                subtitle = listOfNotNull(
+                    "Там выдают ключ: заведите аккаунт, скопируйте ключ — и вернитесь сюда.",
+                    provider.freeNote,
+                ).joinToString(" "),
+                onClick = { onOpenUrl(provider.keyUrl) },
+                icon = bubbleIcon("open"),
+                accent = bubbleColor("open"),
+                chevron = false,
+                subtitleMaxLines = 3,
+            )
+        }
+
+        OutlinedTextField(
+            value = draft.key,
+            onValueChange = {
+                draft.key = it
+                draft.pasteNote = ""
+            },
+            label = { Text("Ключ ${line.name}") },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+            visualTransformation = PasswordVisualTransformation(),
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        if (draft.key.isBlank()) {
+            PortalRow(
+                title = "Вставить из буфера",
+                subtitle = "Скопировали ключ на странице сервиса — он встанет сюда одним тапом.",
+                onClick = {
+                    val pasted = onPasteKey()
+                    if (looksLikeApiKey(pasted)) {
+                        draft.key = pasted!!.trim()
+                        draft.pasteNote = ""
+                    } else {
+
+                        draft.pasteNote = "В буфере нет ключа — скопируйте его на странице сервиса и вернитесь."
+                    }
+                },
+                icon = bubbleIcon("copy"),
+                chevron = false,
+            )
+        }
+        if (draft.pasteNote.isNotEmpty()) {
+            Text(
+                draft.pasteNote,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        DisclosureRow(
+            title = "Модель и адрес",
+            subtitle = listOf(draft.model, draft.baseUrl).filter { it.isNotBlank() }.joinToString(" · ")
+                .ifBlank { "как у сервиса — набирать не нужно" },
+            open = draft.advancedOpen,
+            onToggle = { draft.advancedOpen = !draft.advancedOpen },
+        )
+        Reveal(draft.advancedOpen) {
+            Column(verticalArrangement = Arrangement.spacedBy(11.dp)) {
+                OutlinedTextField(
+                    value = draft.model,
+                    onValueChange = { draft.model = it },
+                    label = { Text("Модель") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = draft.baseUrl,
+                    onValueChange = { draft.baseUrl = it },
+                    label = { Text("Адрес сервиса") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
+
+        val canCheck = draft.key.isNotBlank() && !checking
+        PortalRow(
+
+            title = if (checking) "Проверяю…" else "Проверить и включить",
+            subtitle = "Point спросит сервис одним коротким словом. Ваш объект при этом никуда не отправляется.",
+            onClick = { onCheck(draft.entered()) },
+            icon = bubbleIcon(AI_ICON),
+
+            primary = verdict !is KeyVerdict.Works,
+            chevron = false,
+            enabled = canCheck,
+            subtitleMaxLines = 3,
+            modifier = Modifier.graphicsLayer { alpha = if (canCheck) 1f else 0.45f },
+        )
+
+        if (draft.key.isNotBlank() && verdict !is KeyVerdict.Works) {
+            TextButton(onClick = { onSave(draft.entered()) }) {
+                Text("Сохранить без проверки", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+
+        if (line.mine) {
+            PortalRow(
+                title = "Удалить ключ",
+                subtitle = "Point сотрёт его с устройства. ${line.name} снова замолчит, пока не впишете новый.",
+                onClick = {
+
+                    draft.key = ""
+                    draft.pasteNote = ""
+                    onForgetKey(line.providerId)
+                },
+                chevron = false,
+                subtitleMaxLines = 3,
+            )
+        }
+
+        when (verdict) {
+            is KeyVerdict.Works -> OutcomeCard(
+                title = "Работает — сервис ответил: «${verdict.reply}». Ключ сохранён.",
+                detail = "Теперь «Понять», «Перевести», «Спросить AI» и расшифровка записи работают.",
+                outcome = Outcome.DONE,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            is KeyVerdict.Refused -> OutcomeCard(
+                title = verdict.what,
+                detail = verdict.fix,
+                outcome = Outcome.FAILED,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            null -> Unit
+        }
     }
 }
 
@@ -620,63 +692,43 @@ private fun AppSection(
 private const val AI_GROUP_TITLE = "AI и облако"
 private const val ACCOUNT_GROUP_TITLE = "Аккаунт"
 
-private const val KEY_SECTION_TITLE = "Ключ AI"
+private const val KEY_SECTION_TITLE = "Ключи AI"
 private const val PRIVACY_SECTION_TITLE = "Отправка и приватность"
 private const val APP_SECTION_TITLE = "Приложение"
 private const val SOUND_TITLE = "Звук действий"
 private const val USAGE_TITLE = "Приватная статистика"
 
-private class KeyDraft(config: UserAiConfig) {
-    var key by mutableStateOf(config.apiKey)
-    var model by mutableStateOf(config.model)
-    var baseUrl by mutableStateOf(config.baseUrl)
+private class KeyDraft(saved: UserAiKey) {
+    var providerId by mutableStateOf(saved.providerId)
+    var key by mutableStateOf(saved.apiKey)
+    var model by mutableStateOf(saved.model)
+    var baseUrl by mutableStateOf(saved.baseUrl)
 
     var pasteNote by mutableStateOf("")
 
-    var servicesOpen by mutableStateOf(false)
     var advancedOpen by mutableStateOf(false)
 
-    fun entered() = UserAiConfig(key.trim(), baseUrl.trim(), model.trim(), savedAt = System.currentTimeMillis())
-
-    fun savedIn(config: UserAiConfig) = key.trim() == config.apiKey.trim() && key.isNotBlank()
+    fun entered() = UserAiKey(providerId, key.trim(), model.trim(), baseUrl.trim())
 
     companion object {
         val Saver = listSaver<KeyDraft, Any>(
 
-            save = { listOf(it.key, it.baseUrl, it.model, it.pasteNote, it.servicesOpen, it.advancedOpen) },
+            save = { listOf(it.providerId, it.key, it.baseUrl, it.model, it.pasteNote, it.advancedOpen) },
             restore = {
-                KeyDraft(UserAiConfig(it[0] as String, it[1] as String, it[2] as String)).apply {
-                    pasteNote = it[3] as String
-                    servicesOpen = it[4] as Boolean
+                KeyDraft(
+                    UserAiKey(
+                        providerId = it[0] as String,
+                        apiKey = it[1] as String,
+                        baseUrl = it[2] as String,
+                        model = it[3] as String,
+                    ),
+                ).apply {
+                    pasteNote = it[4] as String
                     advancedOpen = it[5] as Boolean
                 }
             },
         )
     }
-}
-
-@Composable
-private fun ProviderRow(
-    provider: AiProvider,
-    selected: Boolean,
-    index: Int,
-    onChoose: () -> Unit,
-) {
-    PortalRow(
-        title = provider.name,
-        subtitle = listOfNotNull(provider.what, provider.freeNote).joinToString(" · "),
-        onClick = onChoose,
-        icon = bubbleIcon(AI_ICON),
-        accent = bubbleColor(AI_ICON),
-        primary = selected,
-        chevron = false,
-        appearIndex = index,
-        trailing = if (selected) {
-            { Text("выбран", style = MaterialTheme.typography.labelMedium, color = Color.White) }
-        } else {
-            null
-        },
-    )
 }
 
 @Composable
@@ -742,12 +794,29 @@ private fun SwitchCard(
     }
 }
 
+/** Экран ключей для превью и тестов — из тех же чистых правил, что и в бою. */
+fun aiKeysScreenOf(
+    keys: UserAiKeys = UserAiKeys.NONE,
+    builtIn: Set<String> = emptySet(),
+    facts: Map<String, AiFact> = emptyMap(),
+    now: Long = System.currentTimeMillis(),
+): AiKeysScreen = AiKeysScreen(
+    keys = keys,
+    services = aiServiceLines(keys, builtIn, facts, now),
+    checkedLine = aiCheckedLine(facts, now),
+)
+
+private val previewProvider: AiProvider = AI_PROVIDERS.first()
+
 @Preview(name = "Настройки · список разделов (#563)", showBackground = true, backgroundColor = 0xFF0B0D10)
 @Composable
 private fun PreviewSettingsList() = PointTheme(darkTheme = true) {
 
     KeyScreen(
-        config = UserAiConfig("sk-or-v1-9c2f4d7ab31e", AI_PROVIDERS.first().baseUrl, "google/gemma-4-31b-it:free"),
+        screen = aiKeysScreenOf(
+            keys = UserAiKeys.NONE.with(UserAiKey(previewProvider.id, "sk-or-v1-9c2f4d7ab31e")),
+            builtIn = setOf("groq", "mistral"),
+        ),
         onSave = {},
         onCancel = {},
         usageEnabled = true,
@@ -758,92 +827,51 @@ private fun PreviewSettingsList() = PointTheme(darkTheme = true) {
     )
 }
 
-@Preview(name = "Настройки · ключа ещё нет (#563)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@Preview(name = "Ключи AI · все сервисы списком (#699)", showBackground = true, backgroundColor = 0xFF0B0D10)
 @Composable
-private fun PreviewSettingsListEmpty() = PointTheme(darkTheme = true) {
+private fun PreviewKeysAllServices() = PointTheme(darkTheme = true) {
 
+    val now = System.currentTimeMillis()
     KeyScreen(
-        config = UserAiConfig("", "", ""),
-        onSave = {},
-        onCancel = {},
-        usageEnabled = false,
-        usageSummary = null,
-        onToggleUsage = {},
-        soundEnabled = false,
-        privacyLevel = PrivacyLevel.DEVICE_ONLY,
-    )
-}
-
-@Preview(name = "Ключ AI · проверка сказала «работает» (#465)", showBackground = true, backgroundColor = 0xFF0B0D10)
-@Composable
-private fun PreviewKeyScreenWorks() = PointTheme(darkTheme = true) {
-
-    KeyScreen(
-        config = UserAiConfig(apiKey = "sk-demo-ключ", baseUrl = AI_PROVIDERS.first().baseUrl, model = "gemma"),
-        onSave = {},
-        onCancel = {},
-        usageEnabled = false,
-        usageSummary = null,
-        onToggleUsage = {},
-        verdict = KeyVerdict.Works("Готово"),
-    )
-}
-
-@Preview(name = "Ключ AI · отказ говорит, что чинить (#465)", showBackground = true, backgroundColor = 0xFF0B0D10)
-@Composable
-private fun PreviewKeyScreenRefused() = PointTheme(darkTheme = true) {
-
-    KeyScreen(
-        config = UserAiConfig(apiKey = "не-тот-ключ", baseUrl = AI_PROVIDERS[1].baseUrl, model = "llama"),
-        onSave = {},
-        onCancel = {},
-        usageEnabled = false,
-        usageSummary = null,
-        onToggleUsage = {},
-        note = "AI недоступен — задайте свой ключ",
-        verdict = KeyVerdict.Refused(
-            what = "Ключ не подошёл",
-            fix = "Скопируйте ключ целиком, без пробелов по краям, и проверьте, что он от того " +
-                "сервиса, который выбран выше.",
+        screen = aiKeysScreenOf(
+            keys = UserAiKeys.NONE.with(UserAiKey(previewProvider.id, "sk-or-v1-9c2f4d7ab31e")),
+            builtIn = setOf("groq", "mistral", "gemini"),
+            facts = mapOf(
+                previewProvider.id to AiFact(AiOutcome.ANSWERED, now - 3 * 60_000),
+                "groq" to AiFact(AiOutcome.LIMIT, now - 26 * 60 * 60_000L),
+                "mistral" to AiFact(AiOutcome.BAD_KEY, now - 5 * 60 * 60_000L),
+            ),
+            now = now,
         ),
-    )
-}
-
-@Preview(name = "Ключ AI · проверка идёт (#465)", showBackground = true, backgroundColor = 0xFF0B0D10)
-@Composable
-private fun PreviewKeyScreenChecking() = PointTheme(darkTheme = true) {
-    KeyScreen(
-        config = UserAiConfig(apiKey = "sk-demo-ключ", baseUrl = AI_PROVIDERS.first().baseUrl, model = "gemma"),
+        note = "AI недоступен — задайте свой ключ",
         onSave = {},
         onCancel = {},
         usageEnabled = false,
         usageSummary = null,
         onToggleUsage = {},
-        checking = true,
     )
 }
 
-@Preview(name = "Ключ AI · пришли с действия (#465)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@Preview(name = "Ключи AI · проверка идёт (#699)", showBackground = true, backgroundColor = 0xFF0B0D10)
 @Composable
-private fun PreviewKeyScreenErrand() = PointTheme(darkTheme = true) {
-
+private fun PreviewKeysChecking() = PointTheme(darkTheme = true) {
     KeyScreen(
-        config = UserAiConfig(apiKey = "", baseUrl = AI_PROVIDERS.first().baseUrl, model = "gemma"),
+        screen = aiKeysScreenOf(builtIn = setOf("groq")),
         onSave = {},
         onCancel = {},
         usageEnabled = false,
         usageSummary = null,
         onToggleUsage = {},
-        errand = KeyErrand(action = "Понять", objectName = "чек.jpg"),
+        checking = CHECK_ALL_SERVICES,
     )
 }
 
-@Preview(name = "Ключ AI · путь кончился, объект ждёт (#465)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@Preview(name = "Ключи AI · пришли с действия (#699)", showBackground = true, backgroundColor = 0xFF0B0D10)
 @Composable
-private fun PreviewKeyScreenErrandDone() = PointTheme(darkTheme = true) {
+private fun PreviewKeysErrand() = PointTheme(darkTheme = true) {
 
     KeyScreen(
-        config = UserAiConfig(apiKey = "sk-demo-ключ", baseUrl = AI_PROVIDERS.first().baseUrl, model = "gemma"),
+        screen = aiKeysScreenOf(keys = UserAiKeys.NONE.with(UserAiKey(OWN_SERVICE_ID, "ключ", baseUrl = "https://мой/v1"))),
         onSave = {},
         onCancel = {},
         usageEnabled = false,
@@ -851,5 +879,6 @@ private fun PreviewKeyScreenErrandDone() = PointTheme(darkTheme = true) {
         onToggleUsage = {},
         errand = KeyErrand(action = "Понять", objectName = "чек.jpg"),
         verdict = KeyVerdict.Works("Готово"),
+        verdictFor = OWN_SERVICE_ID,
     )
 }

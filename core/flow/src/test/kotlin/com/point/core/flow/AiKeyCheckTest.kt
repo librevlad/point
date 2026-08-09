@@ -121,23 +121,4 @@ class AiKeyCheckTest {
         assertFalse("у короткого ключа нечего показать, не открыв половину", maskedKey("sk-123").contains("sk"))
     }
 
-    @Test
-    fun `три состояния ключа, а не два`() {
-        assertTrue(keySetLabel("", saved = true).contains("Ключа пока нет"))
-        assertTrue(keySetLabel("sk-or-v1-abcdef123456", saved = true).contains("на устройстве"))
-        assertTrue(keySetLabel("sk-or-v1-abcdef123456", saved = false).contains("ещё не сохранён"))
-    }
-
-    @Test
-    fun `состояние ключа не обещает, что он работает`() {
-
-        val said = keySetLabel("sk-or-v1-abcdef123456", saved = true)
-        assertFalse(said.contains("работа"))
-        assertFalse(said.contains("Работа"))
-    }
-
-    @Test
-    fun `середина ключа не попадает на экран`() {
-        assertFalse(keySetLabel("sk-or-v1-abcdef123456", saved = true).contains("abcdef"))
-    }
 }

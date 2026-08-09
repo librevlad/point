@@ -5,12 +5,15 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
-import androidx.compose.ui.test.performTextInput
 import com.point.core.flow.AI_PROVIDERS
-import com.point.core.flow.UserAiConfig
+import com.point.core.flow.AiFact
+import com.point.core.flow.AiOutcome
+import com.point.core.flow.UserAiKey
+import com.point.core.flow.UserAiKeys
 import com.point.core.ui.theme.PointTheme
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -26,18 +29,22 @@ class SettingsCompositionTest {
     @get:Rule val compose = createComposeRule()
 
     private val openRouter = AI_PROVIDERS.first()
-    private val saved = UserAiConfig("sk-or-v1-abcdef123456", openRouter.baseUrl, "gemma")
+    private val groq = AI_PROVIDERS.first { it.id == "groq" }
+    private val saved = UserAiKeys.NONE.with(UserAiKey(openRouter.id, "sk-or-v1-abcdef123456", model = "gemma"))
 
     private fun screen(
-        config: UserAiConfig = UserAiConfig.DEFAULT,
+        keys: UserAiKeys = UserAiKeys.NONE,
+        builtIn: Set<String> = emptySet(),
+        facts: Map<String, AiFact> = emptyMap(),
         onOpenUrl: (String) -> Unit = {},
-        onCheck: (UserAiConfig) -> Unit = {},
+        onCheck: (UserAiKey) -> Unit = {},
+        onCheckAll: () -> Unit = {},
         openKey: Boolean = true,
     ) {
         compose.setContent {
             PointTheme(darkTheme = true) {
                 KeyScreen(
-                    config = config,
+                    screen = aiKeysScreenOf(keys = keys, builtIn = builtIn, facts = facts),
                     onSave = {},
                     onCancel = {},
                     usageEnabled = false,
@@ -45,35 +52,48 @@ class SettingsCompositionTest {
                     onToggleUsage = {},
                     onOpenUrl = onOpenUrl,
                     onCheck = onCheck,
+                    onCheckAll = onCheckAll,
                 )
             }
         }
-        if (openKey) compose.onNodeWithText("Ключ AI").performClick()
+        if (openKey) compose.onNodeWithText("Ключи AI").performClick()
     }
 
-    @Test fun `поле ключа видно сразу, без прокрутки`() {
+    @Test fun `в разделе стоят все известные сервисы, а не только те, где есть ключ`() {
+        screen(keys = saved)
+
+        AI_PROVIDERS.forEach { compose.onNodeWithText(it.name).performScrollTo().assertIsDisplayed() }
+    }
+
+    @Test fun `сервисы идут в том порядке, в каком Point к ним обращается`() {
         screen()
 
-        compose.onAllNodes(hasSetTextAction()).onFirst().assertIsDisplayed()
+        val order = AI_PROVIDERS.map { it.name }
+        order.zipWithNext { above, below ->
+            compose.onNodeWithText(above).performScrollTo()
+            compose.onNodeWithText(below).performScrollTo().assertIsDisplayed()
+        }
     }
 
-    @Test fun `сервисы свёрнуты в строку и раскрываются тапом`() {
-        screen(config = saved)
+    @Test fun `строка сервиса говорит, что он умеет`() {
+        screen()
 
-        compose.onNodeWithText("Сервис").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText(openRouter.what, substring = true).assertExists()
-        compose.onNodeWithText("Groq").assertDoesNotExist()
-
-        compose.onNodeWithText("Сервис").performScrollTo().performClick()
-
-        compose.onNodeWithText("Groq").assertExists()
+        compose.onNodeWithText(openRouter.what, substring = true).performScrollTo().assertIsDisplayed()
     }
 
-    @Test fun `модель и адрес свёрнуты, но их значения видны строкой`() {
-        screen(config = saved)
+    @Test fun `поля ключа нет, пока человек не открыл строку сервиса`() {
+        screen(keys = saved)
+
+        compose.onAllNodes(hasSetTextAction()).assertCountEquals(0)
+
+        compose.onNodeWithText(openRouter.name).performScrollTo().performClick()
 
         compose.onAllNodes(hasSetTextAction()).assertCountEquals(1)
-        compose.onNodeWithText("gemma", substring = true).assertExists()
+    }
+
+    @Test fun `модель и адрес свёрнуты внутри строки сервиса`() {
+        screen(keys = saved)
+        compose.onNodeWithText(openRouter.name).performScrollTo().performClick()
 
         compose.onNodeWithText("Модель и адрес").performScrollTo().performClick()
 
@@ -82,53 +102,92 @@ class SettingsCompositionTest {
 
     @Test fun `ссылка на страницу сервиса называет его и ведёт туда`() {
         var opened: String? = null
-        screen(config = saved, onOpenUrl = { opened = it })
+        screen(keys = saved, onOpenUrl = { opened = it })
+        compose.onNodeWithText(openRouter.name).performScrollTo().performClick()
 
         compose.onNodeWithText("Открыть сайт ${openRouter.name}").performScrollTo().performClick()
 
         assertEquals(openRouter.keyUrl, opened)
     }
 
-    @Test fun `без выбранного сервиса ссылка не врёт, а зовёт выбрать`() {
-        var opened: String? = null
-        screen(config = UserAiConfig("", "https://мой.прокси/v1", "м"), onOpenUrl = { opened = it })
+    @Test fun `свой ключ виден хвостом, не открывая ключа целиком`() {
+        screen(keys = saved)
 
-        compose.onNodeWithText("Сначала выберите сервис").performScrollTo().performClick()
-
-        assertEquals(null, opened)
-        compose.onNodeWithText("Groq").assertExists()
-    }
-
-    @Test fun `заданный ключ виден хвостом, не открывая ключа целиком`() {
-
-        screen(config = saved, openKey = false)
-
-        compose.onNodeWithText("Ключ на устройстве", substring = true).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("ваш ключ", substring = true).performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("sk-o…3456", substring = true).assertExists()
     }
 
-    @Test fun `набранный, но не сохранённый ключ так и называется`() {
-        screen(config = UserAiConfig("", openRouter.baseUrl, "gemma"))
-        compose.onNodeWithText("Ключа пока нет", substring = true).assertExists()
+    @Test fun `сервис на ключе Point не выдаёт его за ключ человека`() {
+        screen(builtIn = setOf(groq.id))
 
-        compose.onAllNodes(hasSetTextAction()).onFirst().performScrollTo().performTextInput("sk-новый-ключ-1234")
-
-        compose.onNodeWithText("ещё не сохранён", substring = true).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("работает на ключе Point", substring = true).performScrollTo().assertIsDisplayed()
     }
 
-    @Test fun `про «работает» строка состояния молчит — это знает только сервис`() {
-        screen(config = saved)
+    @Test fun `сервис без ключа честно говорит, что молчит`() {
+        screen()
+
+        compose.onAllNodesWithText("этот сервис молчит", substring = true).onFirst()
+            .performScrollTo().assertIsDisplayed()
+    }
+
+    @Test fun `«Проверить все» стоит на экране и ждёт тапа человека`() {
+        var asked = false
+        screen(onCheckAll = { asked = true })
+
+        compose.onNodeWithText("Проверить все").performScrollTo().performClick()
+
+        assertEquals(true, asked)
+    }
+
+    @Test fun `пока не проверяли — так и написано`() {
+        screen()
+
+        compose.onNodeWithText("Ещё не проверяли", substring = true).performScrollTo().assertIsDisplayed()
+    }
+
+    @Test fun `последний факт стоит в строке своего сервиса`() {
+        val now = System.currentTimeMillis()
+        screen(
+            builtIn = setOf(groq.id),
+            facts = mapOf(groq.id to AiFact(AiOutcome.LIMIT, now - 3 * 60_000)),
+        )
+
+        compose.onNodeWithText("лимит исчерпан 3 минуты назад", substring = true)
+            .performScrollTo().assertIsDisplayed()
+    }
+
+    @Test fun `у сервиса без обращений факта нет, и он этим не притворяется`() {
+        screen()
+
+        compose.onAllNodesWithText("ещё не обращались", substring = true).onFirst()
+            .performScrollTo().assertIsDisplayed()
+    }
+
+    @Test fun `про «работает» строка сервиса молчит — это знает только сам сервис`() {
+        screen(keys = saved)
 
         compose.onNodeWithText("Работает", substring = true).assertDoesNotExist()
     }
 
     @Test fun `бывший склад разбит на названные разделы`() {
-        screen(config = saved, openKey = false)
+        screen(keys = saved, openKey = false)
 
         compose.onNodeWithText("Отправка и приватность").assertIsDisplayed()
         compose.onNodeWithText("Звук действий").assertIsDisplayed()
 
         compose.onNodeWithText("Звук действий").performClick()
         compose.onNodeWithText("Приложение").assertIsDisplayed()
+    }
+
+    @Test fun `экран, открытый с чужого сервиса, не путает поля ключей`() {
+        var checked: UserAiKey? = null
+        screen(keys = saved, onCheck = { checked = it })
+
+        compose.onNodeWithText(groq.name).performScrollTo().performClick()
+        compose.onAllNodes(hasSetTextAction()).onFirst().performScrollTo()
+        compose.onNodeWithText("Проверить и включить").performScrollTo()
+
+        compose.onNodeWithText("Ключ ${groq.name}").performScrollTo().assertIsDisplayed()
+        assertEquals(null, checked)
     }
 }

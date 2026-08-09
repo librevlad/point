@@ -23,6 +23,8 @@ class ClaudeLlmClient @Inject constructor(
 
     override val strongVision = true
 
+    override val serviceId = "anthropic"
+
     override fun canHandle(obj: PointObject): Boolean = !isAudio(obj)
 
     override suspend fun run(obj: PointObject, prompt: String): ResultObject =

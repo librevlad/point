@@ -11,6 +11,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
+import com.point.core.flow.AI_PROVIDERS
 import com.point.core.flow.SETTINGS_TITLE
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -30,13 +31,19 @@ class HomeDoorTest {
 
     private fun openSettings() {
         compose.onNodeWithText(SETTINGS_TITLE).performClick()
-        compose.waitUntilAtLeastOneExists(hasText("Ключ AI"), TIMEOUT_MS)
+        compose.waitUntilAtLeastOneExists(hasText("Ключи AI"), TIMEOUT_MS)
     }
 
     private fun openKeySettings() {
         openSettings()
-        compose.onNodeWithText("Ключ AI").performClick()
-        compose.waitUntilAtLeastOneExists(hasText("ШАГ 1 · ОТКУДА ВЗЯТЬ КЛЮЧ"), TIMEOUT_MS)
+        compose.onNodeWithText("Ключи AI").performClick()
+        compose.waitUntilAtLeastOneExists(hasText("Проверить все"), TIMEOUT_MS)
+    }
+
+    private fun openFirstService() {
+        openKeySettings()
+        compose.onNodeWithText(AI_PROVIDERS.first().name).performScrollTo().performClick()
+        compose.waitUntilAtLeastOneExists(hasText("Вставить из буфера"), TIMEOUT_MS)
     }
 
     private fun saveKey(key: String) {
@@ -45,11 +52,11 @@ class HomeDoorTest {
 
         compose.onNodeWithText("Сохранить без проверки").performScrollTo().performClick()
 
-        compose.waitUntilAtLeastOneExists(hasText("Ключ AI сохранён"), TIMEOUT_MS)
+        compose.waitUntilAtLeastOneExists(hasText("ваш ключ", substring = true), TIMEOUT_MS)
     }
 
     @Test fun `ссылка на страницу сервиса с домашнего экрана открывает браузер`() {
-        openKeySettings()
+        openFirstService()
 
         compose.onAllNodesWithText("Открыть сайт", substring = true).onFirst()
             .performScrollTo().performClick()
@@ -70,7 +77,7 @@ class HomeDoorTest {
     }
 
     @Test fun `«назад» после сохранения ключа возвращает на «Недавнее», а не закрывает Point`() {
-        openKeySettings()
+        openFirstService()
         saveKey("ключ-из-буфера")
 
         compose.runOnUiThread { compose.activity.onBackPressedDispatcher.onBackPressed() }
@@ -79,18 +86,18 @@ class HomeDoorTest {
         assertFalse("Point закрылся вместо возврата на «Недавнее»", compose.activity.isFinishing)
 
         compose.onNodeWithText("Новый объект").assertExists()
-        compose.onNodeWithText("Ключ AI сохранён").assertDoesNotExist()
     }
 
-    @Test fun `с экрана-сообщения есть видимый выход, а не одна карточка`() {
-        openKeySettings()
+    @Test fun `сохранённый ключ виден строкой своего сервиса, а не карточкой поверх экрана`() {
+        openFirstService()
         saveKey("ключ")
 
-        compose.onNodeWithText("Готово").performClick()
+        compose.onAllNodesWithText("ваш ключ", substring = true).onFirst().assertExists()
+
+        compose.onNodeWithText("Отмена").performScrollTo().performClick()
         compose.waitForIdle()
 
         assertFalse(compose.activity.isFinishing)
-        compose.onNodeWithText("Ключ AI сохранён").assertDoesNotExist()
         compose.onNodeWithText("Новый объект").assertExists()
     }
 }

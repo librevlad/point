@@ -16,6 +16,10 @@ class FallbackLlmClientTest {
 
     private val obj = PointObject("id", "text/plain", ScratchRef("/x"), ObjectState(ObjectKind.TEXT))
 
+    private val facts = TestAiFacts()
+
+    private fun chain(providers: List<LlmClient>) = FallbackLlmClient(providers, facts)
+
     private fun ok(tag: String) = object : LlmClient {
         override suspend fun run(obj: PointObject, prompt: String) =
             ResultObject(ObjectKind.TEXT, "text/markdown", ScratchRef("/out/$tag"))
@@ -27,19 +31,19 @@ class FallbackLlmClientTest {
 
     @Test
     fun `returns the first provider that succeeds`() = runTest {
-        val client = FallbackLlmClient(listOf(ok("primary"), ok("secondary")))
+        val client = chain(listOf(ok("primary"), ok("secondary")))
         assertEquals("/out/primary", client.run(obj, "hi").uri.value)
     }
 
     @Test
     fun `falls back to the next provider when the first fails (e g 429)`() = runTest {
-        val client = FallbackLlmClient(listOf(failing("Gemini HTTP 429"), ok("openai")))
+        val client = chain(listOf(failing("Gemini HTTP 429"), ok("openai")))
         assertEquals("/out/openai", client.run(obj, "hi").uri.value)
     }
 
     @Test
     fun `surfaces combined errors when all providers fail`() = runTest {
-        val client = FallbackLlmClient(listOf(failing("Gemini HTTP 429"), failing("OPENAI_API_KEY не задан")))
+        val client = chain(listOf(failing("Gemini HTTP 429"), failing("OPENAI_API_KEY не задан")))
         val error = runCatching { client.run(obj, "hi") }.exceptionOrNull()
         assertTrue(error?.message?.contains("Gemini HTTP 429") == true)
         assertTrue(error?.message?.contains("OPENAI_API_KEY") == true)
@@ -47,7 +51,7 @@ class FallbackLlmClientTest {
 
     @Test
     fun `collapses a wall of network errors into one line (issue 48)`() = runTest {
-        val client = FallbackLlmClient(
+        val client = chain(
             List(8) { failing("""Unable to resolve host "api.groq.com": No address associated with hostname""") },
         )
         val error = runCatching { client.run(obj, "hi") }.exceptionOrNull()
@@ -58,7 +62,7 @@ class FallbackLlmClientTest {
     @Test
     fun `исчерпанная квота — одна фраза про бесплатное, а не склейка провайдерских строк`() = runTest {
 
-        val client = FallbackLlmClient(
+        val client = chain(
             listOf(
                 failing("openrouter: бесплатный лимит исчерпан — вернитесь позже, платить не идём"),
                 failing("Gemini HTTP 429"),
@@ -74,7 +78,7 @@ class FallbackLlmClientTest {
 
     @Test
     fun `no providers asks the user to set a key`() = runTest {
-        val error = runCatching { FallbackLlmClient(emptyList()).run(obj, "hi") }.exceptionOrNull()
+        val error = runCatching { chain(emptyList()).run(obj, "hi") }.exceptionOrNull()
         assertTrue(error?.message?.contains("задайте свой ключ") == true)
     }
 
@@ -87,13 +91,13 @@ class FallbackLlmClientTest {
 
     @Test
     fun `an image skips text-only providers and reaches a vision one`() = runTest {
-        val client = FallbackLlmClient(listOf(textOnly(), ok("vision")))
+        val client = chain(listOf(textOnly(), ok("vision")))
         assertEquals("/out/vision", client.run(image, "опиши").uri.value)
     }
 
     @Test
     fun `an image with only text-only providers gives a clear no-model error, not a false answer`() = runTest {
-        val error = runCatching { FallbackLlmClient(listOf(textOnly())).run(image, "опиши") }.exceptionOrNull()
+        val error = runCatching { chain(listOf(textOnly())).run(image, "опиши") }.exceptionOrNull()
         assertTrue(error?.message?.contains("нет подходящей AI-модели") == true)
     }
 
@@ -105,7 +109,7 @@ class FallbackLlmClientTest {
 
     @Test
     fun `an image leads with a strong vision model, but text keeps the original order`() = runTest {
-        val client = FallbackLlmClient(listOf(ok("weak"), strong("strong")))
+        val client = chain(listOf(ok("weak"), strong("strong")))
         assertEquals("/out/strong", client.run(image, "опиши").uri.value)
         assertEquals("/out/weak", client.run(obj, "hi").uri.value)
     }
@@ -121,14 +125,14 @@ class FallbackLlmClientTest {
     @Test
     fun `запись минует глухих провайдеров и доходит до слышащего`() = runTest {
 
-        val client = FallbackLlmClient(listOf(deaf(), ok("audio")))
+        val client = chain(listOf(deaf(), ok("audio")))
 
         assertEquals("/out/audio", client.run(voice, "расшифруй").uri.value)
     }
 
     @Test
     fun `на записи подсказка просит ключ с поддержкой аудио, а не изображений`() = runTest {
-        val error = runCatching { FallbackLlmClient(listOf(deaf())).run(voice, "расшифруй") }.exceptionOrNull()
+        val error = runCatching { chain(listOf(deaf())).run(voice, "расшифруй") }.exceptionOrNull()
 
         assertTrue(error?.message?.contains("с поддержкой аудио") == true)
         assertFalse("картинка тут ни при чём", error?.message?.contains("изображени") == true)
@@ -150,7 +154,7 @@ class FallbackLlmClientTest {
         // Живой прогон 2026-08-09 (эмулятор, offline): «AI недоступен — задайте свой
         // ключ …; Unable to resolve host…» — ненастроенный провайдер шумел в диагноз.
         val error = runCatching {
-            FallbackLlmClient(listOf(unconfigured(), offline())).run(obj, "пойми")
+            chain(listOf(unconfigured(), offline())).run(obj, "пойми")
         }.exceptionOrNull()
 
         assertEquals("AI недоступен — нет подключения к интернету", error?.message)
@@ -159,10 +163,20 @@ class FallbackLlmClientTest {
     @Test
     fun `совсем нет настроенных провайдеров — честное «задайте ключ», без списка обломков`() = runTest {
         val error = runCatching {
-            FallbackLlmClient(listOf(unconfigured())).run(obj, "пойми")
+            chain(listOf(unconfigured())).run(obj, "пойми")
         }.exceptionOrNull()
 
         assertTrue(error?.message?.contains("задайте свой ключ") == true)
         assertFalse(error?.message?.contains("resolve host") == true)
+    }
+}
+
+/** Память об исходах для тестов цепочки — настоящая, но без диска. */
+internal class TestAiFacts : com.point.core.flow.AiFacts {
+    val seen = mutableMapOf<String, com.point.core.flow.AiOutcome>()
+    override fun all(): Map<String, com.point.core.flow.AiFact> =
+        seen.mapValues { com.point.core.flow.AiFact(it.value, 0L) }
+    override fun remember(providerId: String, outcome: com.point.core.flow.AiOutcome) {
+        seen[providerId] = outcome
     }
 }

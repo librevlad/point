@@ -102,9 +102,13 @@ class FlowViewModelTest {
         sharedTexts: com.point.core.flow.SharedTexts = FakeSharedTexts(),
 
         keyNeeding: Set<CapabilityId> = emptySet(),
-    ) = FlowViewModel(store, FakeRegistry(caps, cloud, slow, keyNeeding) { userKeys.read() != null }, resolver, chatResponder, enrichment, history, usage, chosenApps, userKeys, journal, consent, appLauncher, FakePdfRasterizer(), sensory, sensorySettings, cloudPrivacy, snapshot, crashLog, dispatcher, pins, AppIconResolver { null }, pcLinks, pcTransport, pcCaps, linkMonitor, PulledFileFactory { name -> java.io.File(java.io.File(System.getProperty("java.io.tmpdir")), "pulled-" + name).absolutePath }, noFrames, keyCheck, account, accountClient, pendingLogins, deviceKeys, browser, sharedTexts)
+    ) = FlowViewModel(store, FakeRegistry(caps, cloud, slow, keyNeeding) { userKeys.keys().mine.isNotEmpty() }, resolver, chatResponder, enrichment, history, usage, chosenApps, userKeys, aiFacts, builtInKeys, journal, consent, appLauncher, FakePdfRasterizer(), sensory, sensorySettings, cloudPrivacy, snapshot, crashLog, dispatcher, pins, AppIconResolver { null }, pcLinks, pcTransport, pcCaps, linkMonitor, PulledFileFactory { name -> java.io.File(java.io.File(System.getProperty("java.io.tmpdir")), "pulled-" + name).absolutePath }, noFrames, keyCheck, account, accountClient, pendingLogins, deviceKeys, browser, sharedTexts)
 
     private val keyCheck = FakeAiKeyCheck()
+
+    private val aiFacts = FakeAiFacts()
+
+    private val builtInKeys = FakeBuiltInKeys()
 
     private class FakeAiKeyCheck : com.point.core.flow.AiKeyCheck {
         var probe = com.point.core.flow.KeyProbe(status = 200, reply = "Готово")
@@ -623,11 +627,11 @@ class FlowViewModelTest {
     @Test fun `сохранённый ключ AI — это удача, а не сорванный шаринг`() = runTest(dispatcher) {
         val vm = vm()
 
-        vm.saveAiConfig(UserAiConfig.DEFAULT); advanceUntilIdle()
+        vm.saveAiKey(com.point.core.flow.UserAiKey("openrouter", "sk-1")); advanceUntilIdle()
 
         val s = vm.ui.value
         assertNull(s.frame)
-        assertEquals("Ключ AI сохранён", s.message)
+        assertEquals("Ключ сохранён", s.message)
         assertEquals(Outcome.DONE, s.messageOutcome)
         assertNull(shareAgainHint(s.messageOutcome))
     }
@@ -635,8 +639,8 @@ class FlowViewModelTest {
     @Test fun `сообщение без объекта убирается, а не запирает человека`() = runTest(dispatcher) {
         val vm = vm()
 
-        vm.saveAiConfig(UserAiConfig.DEFAULT); advanceUntilIdle()
-        assertEquals("Ключ AI сохранён", vm.ui.value.message)
+        vm.saveAiKey(com.point.core.flow.UserAiKey("openrouter", "sk-1")); advanceUntilIdle()
+        assertEquals("Ключ сохранён", vm.ui.value.message)
 
         assertTrue("из состояния-сообщения нет выхода", vm.dismissMessage())
         assertNull(vm.ui.value.message)
@@ -1829,7 +1833,8 @@ class FlowViewModelTest {
 
     @Test fun `свой ключ не затирается пустым ответом компьютера`() = runTest(dispatcher) {
 
-        userKeys.config = com.point.core.flow.UserAiConfig("sk-мой", "https://api/v1", "m", savedAt = 100)
+        userKeys.stored = com.point.core.flow.UserAiKeys.NONE
+            .with(com.point.core.flow.UserAiKey("openrouter", "sk-мой", savedAt = 100))
         pcLinks.pc = com.point.core.flow.LinkedPc("d-pc", "Ноутбук", "ключ-ПК")
         pcTransport.secretsReply = com.point.core.flow.SharedSecrets(at = 900)
         val vm = vm(
@@ -1845,7 +1850,8 @@ class FlowViewModelTest {
     }
 
     @Test fun `свой ключ уезжает на компьютер вместе с меткой`() = runTest(dispatcher) {
-        userKeys.config = com.point.core.flow.UserAiConfig("sk-мой", "https://api/v1", "m", savedAt = 777)
+        userKeys.stored = com.point.core.flow.UserAiKeys.NONE
+            .with(com.point.core.flow.UserAiKey("openrouter", "sk-мой", savedAt = 777))
         pcLinks.pc = com.point.core.flow.LinkedPc("d-pc", "Ноутбук", "ключ-ПК")
         val vm = vm(
             account = FakeAccountStore(TEST_ACCOUNT),
@@ -2475,10 +2481,55 @@ class FlowViewModelTest {
         assertTrue(vm.ui.value.frame?.obj?.state?.has(Feature.HAS_QR) == true)
     }
 
-    @Test fun `openKeySettings shows the key screen prefilled`() = runTest(dispatcher) {
+    @Test fun `экран ключей открывается всеми известными сервисами списком`() = runTest(dispatcher) {
         val vm = vm()
         vm.openKeySettings(); advanceUntilIdle()
-        assertEquals(UserAiConfig.DEFAULT, vm.ui.value.keyScreen)
+
+        val screen = vm.ui.value.keyScreen
+        assertNotNull(screen)
+        assertEquals(AI_PROVIDERS.map { it.id }, screen?.services?.map { it.providerId })
+        assertEquals("Ещё не проверяли", screen?.checkedLine)
+    }
+
+    @Test fun `в строке сервиса стоит и то, что он умеет, и последний факт о нём`() = runTest(dispatcher) {
+        val groq = AI_PROVIDERS.first { it.id == "groq" }
+        aiFacts.facts["groq"] = com.point.core.flow.AiFact(com.point.core.flow.AiOutcome.LIMIT, 1L)
+        builtInKeys.ours = mapOf("groq" to "встроенный")
+        val vm = vm()
+
+        vm.openKeySettings(); advanceUntilIdle()
+
+        val line = vm.ui.value.keyScreen?.services?.single { it.providerId == "groq" }
+        assertEquals(groq.what, line?.what)
+        assertEquals("работает на ключе Point", line?.keyLine)
+        assertTrue("последний факт пропал из строки", line?.factLine?.startsWith("лимит исчерпан") == true)
+    }
+
+    @Test fun `«Проверить все» спрашивает каждый сервис с ключом ровно один раз`() = runTest(dispatcher) {
+        builtInKeys.ours = mapOf("groq" to "встроенный", "cerebras" to "встроенный")
+        userKeys.stored = com.point.core.flow.UserAiKeys.NONE
+            .with(com.point.core.flow.UserAiKey("openrouter", "sk-мой"))
+        val vm = vm()
+        vm.openKeySettings(); advanceUntilIdle()
+
+        vm.checkAllAiKeys(); advanceUntilIdle()
+
+        assertEquals(setOf("openrouter", "groq", "cerebras"), aiFacts.facts.keys)
+        assertNull("кнопка осталась бы в «Проверяю…»", vm.ui.value.keyChecking)
+        assertTrue(
+            "возраст сведений не обновился",
+            vm.ui.value.keyScreen?.checkedLine?.startsWith("Проверено") == true,
+        )
+    }
+
+    @Test fun `сервис без единого ключа проверять нечем — сеть туда не идёт`() = runTest(dispatcher) {
+        val vm = vm()
+        vm.openKeySettings(); advanceUntilIdle()
+
+        vm.checkAllAiKeys(); advanceUntilIdle()
+
+        assertTrue("проверка ушла туда, где нет ключа", aiFacts.facts.isEmpty())
+        assertNull(keyCheck.asked)
     }
 
     @Test fun `отказ «нет ключа» остаётся сказанным, а не подменяется экраном настроек`() = runTest(dispatcher) {
@@ -2567,44 +2618,47 @@ class FlowViewModelTest {
         assertNull(vm.ui.value.keyScreenNote)
     }
 
-    @Test fun `saveAiConfig stores the key and closes the screen`() = runTest(dispatcher) {
+    @Test fun `сохранённый ключ ложится к своему сервису, а экран остаётся на месте`() = runTest(dispatcher) {
         val vm = vm()
         vm.openKeySettings(); advanceUntilIdle()
-        val config = UserAiConfig("sk-1", "https://h/v1", "m")
 
-        vm.saveAiConfig(config); advanceUntilIdle()
+        vm.saveAiKey(com.point.core.flow.UserAiKey("groq", "gsk-1")); advanceUntilIdle()
 
-        assertEquals(config, userKeys.saved)
-        assertNull(vm.ui.value.keyScreen)
+        assertEquals("gsk-1", userKeys.saved?.apiKey)
+        assertEquals("groq", userKeys.saved?.providerId)
+        assertEquals("gsk-1", vm.ui.value.keyScreen?.keys?.keyFor("groq"))
     }
 
     @Test fun `«Забыть ключ» стирает его с устройства и возвращает приглашение подключить AI`() = runTest(dispatcher) {
-        userKeys.config = UserAiConfig("sk-1", AI_PROVIDERS.first().baseUrl, "gemma")
+        userKeys.stored = com.point.core.flow.UserAiKeys.NONE
+            .with(com.point.core.flow.UserAiKey("openrouter", "sk-1"))
         val vm = vm()
         vm.openKeySettings(); advanceUntilIdle()
         assertTrue("ключ был задан — иначе забывать нечего", vm.ui.value.aiKeySet)
 
-        vm.forgetAiKey(); advanceUntilIdle()
+        vm.forgetAiKey("openrouter"); advanceUntilIdle()
 
-        assertNull("ключ остался на устройстве", userKeys.config)
+        assertEquals("", userKeys.stored.keyFor("openrouter"))
         assertFalse("«Недавнее» обязано снова звать подключить AI", vm.ui.value.aiKeySet)
     }
 
-    @Test fun `забытый ключ не уносит с собой экран и выбранный сервис`() = runTest(dispatcher) {
+    @Test fun `забытый ключ не уносит с собой экран и остальные сервисы`() = runTest(dispatcher) {
         val openRouter = AI_PROVIDERS.first()
-        userKeys.config = UserAiConfig("sk-1", openRouter.baseUrl, "gemma")
+        userKeys.stored = com.point.core.flow.UserAiKeys.NONE
+            .with(com.point.core.flow.UserAiKey(openRouter.id, "sk-1"))
+            .with(com.point.core.flow.UserAiKey("groq", "gsk-1"))
         val vm = vm()
         vm.openKeySettings(); advanceUntilIdle()
-        vm.checkAiKey(UserAiConfig("sk-1", openRouter.baseUrl, "gemma")); advanceUntilIdle()
+        vm.checkAiKey(com.point.core.flow.UserAiKey(openRouter.id, "sk-1")); advanceUntilIdle()
         assertNotNull("проверка сказала «работает»", vm.ui.value.keyVerdict)
 
-        vm.forgetAiKey(); advanceUntilIdle()
+        vm.forgetAiKey(openRouter.id); advanceUntilIdle()
 
         val screen = vm.ui.value.keyScreen
         assertNotNull("человек остался бы гадать, случилось ли что-нибудь", screen)
-        assertEquals("ключа на экране больше нет", "", screen?.apiKey)
+        assertEquals("ключа на экране больше нет", "", screen?.keys?.keyFor(openRouter.id))
 
-        assertEquals(openRouter.baseUrl, screen?.baseUrl)
+        assertEquals("чужой ключ ушёл заодно", "gsk-1", screen?.keys?.keyFor("groq"))
 
         assertNull(vm.ui.value.keyVerdict)
     }
@@ -2612,14 +2666,20 @@ class FlowViewModelTest {
     @Test fun `удачная проверка сохраняет ключ и показывает слова сервиса`() = runTest(dispatcher) {
         val vm = vm()
         vm.openKeySettings(); advanceUntilIdle()
-        val config = UserAiConfig("sk-1", "https://h/v1", "m")
+        val key = com.point.core.flow.UserAiKey("groq", "gsk-1")
         keyCheck.probe = com.point.core.flow.KeyProbe(status = 200, reply = "Готово")
 
-        vm.checkAiKey(config); advanceUntilIdle()
+        vm.checkAiKey(key); advanceUntilIdle()
 
-        assertEquals("проверять надо ровно то, что человек набрал", config, keyCheck.asked)
+        assertEquals("проверять надо ровно то, что человек набрал", "gsk-1", keyCheck.asked?.apiKey)
         assertEquals(com.point.core.flow.KeyVerdict.Works("Готово"), vm.ui.value.keyVerdict)
-        assertEquals("доказанный ключ обязан сохраниться сам", config, userKeys.saved)
+        assertEquals("приговор потерял, к чьей строке он относится", "groq", vm.ui.value.keyVerdictFor)
+        assertEquals("доказанный ключ обязан сохраниться сам", "gsk-1", userKeys.saved?.apiKey)
+        assertEquals(
+            "исход проверки не запомнился за сервисом",
+            com.point.core.flow.AiOutcome.ANSWERED,
+            aiFacts.facts["groq"]?.outcome,
+        )
 
         assertNotNull(vm.ui.value.keyScreen)
         assertTrue(vm.ui.value.aiKeySet)
@@ -2630,9 +2690,14 @@ class FlowViewModelTest {
         vm.openKeySettings(); advanceUntilIdle()
         keyCheck.probe = com.point.core.flow.KeyProbe(status = 401, error = "unauthorized")
 
-        vm.checkAiKey(UserAiConfig("не-тот", "https://h/v1", "m")); advanceUntilIdle()
+        vm.checkAiKey(com.point.core.flow.UserAiKey("groq", "не-тот")); advanceUntilIdle()
 
         assertNull("отказавший ключ не имеет права осесть на диске", userKeys.saved)
+        assertEquals(
+            "«ключ не подошёл» обязан пережить перезапуск",
+            com.point.core.flow.AiOutcome.BAD_KEY,
+            aiFacts.facts["groq"]?.outcome,
+        )
         val verdict = vm.ui.value.keyVerdict as com.point.core.flow.KeyVerdict.Refused
         assertTrue(verdict.what.contains("не подошёл"))
         assertNotNull("с отказом человек остаётся на экране, где стоит его ключ", vm.ui.value.keyScreen)
@@ -2643,28 +2708,28 @@ class FlowViewModelTest {
         vm.openKeySettings(); advanceUntilIdle()
         keyCheck.explode = true
 
-        vm.checkAiKey(UserAiConfig("sk-1", "https://h/v1", "m")); advanceUntilIdle()
+        vm.checkAiKey(com.point.core.flow.UserAiKey("groq", "gsk-1")); advanceUntilIdle()
 
-        assertFalse("кнопка осталась бы в «Проверяю…» навсегда", vm.ui.value.keyChecking)
+        assertNull("кнопка осталась бы в «Проверяю…» навсегда", vm.ui.value.keyChecking)
         assertTrue(vm.ui.value.keyVerdict is com.point.core.flow.KeyVerdict.Refused)
     }
 
     @Test fun `приговор не переживает закрытие экрана`() = runTest(dispatcher) {
         val vm = vm()
         vm.openKeySettings(); advanceUntilIdle()
-        vm.checkAiKey(UserAiConfig("sk-1", "https://h/v1", "m")); advanceUntilIdle()
+        vm.checkAiKey(com.point.core.flow.UserAiKey("groq", "gsk-1")); advanceUntilIdle()
         assertNotNull(vm.ui.value.keyVerdict)
 
         vm.closeKeySettings()
         vm.openKeySettings(); advanceUntilIdle()
 
         assertNull(vm.ui.value.keyVerdict)
-        assertFalse(vm.ui.value.keyChecking)
+        assertNull(vm.ui.value.keyChecking)
     }
 
     @Test fun `пустой ключ не гоняет сеть`() = runTest(dispatcher) {
         val vm = vm()
-        vm.checkAiKey(UserAiConfig("   ", "https://h/v1", "m")); advanceUntilIdle()
+        vm.checkAiKey(com.point.core.flow.UserAiKey("groq", "   ")); advanceUntilIdle()
 
         assertNull("сеть не имеет права уйти без ключа", keyCheck.asked)
         assertNull(vm.ui.value.keyVerdict)
@@ -2720,7 +2785,7 @@ class FlowViewModelTest {
         vm.onBubble(vm.needsKeyBubble()); advanceUntilIdle()
 
         keyCheck.probe = com.point.core.flow.KeyProbe(status = 200, reply = "Готово")
-        vm.checkAiKey(UserAiConfig("sk-1", AI_PROVIDERS.first().baseUrl, "gemma")); advanceUntilIdle()
+        vm.checkAiKey(com.point.core.flow.UserAiKey(AI_PROVIDERS.first().id, "sk-1")); advanceUntilIdle()
         assertEquals(com.point.core.flow.KeyVerdict.Works("Готово"), vm.ui.value.keyVerdict)
 
         vm.closeKeySettings()
@@ -2738,7 +2803,7 @@ class FlowViewModelTest {
         vm.onShared("card.jpg", "image/jpeg"); advanceUntilIdle()
         vm.onBubble(vm.needsKeyBubble()); advanceUntilIdle()
 
-        vm.checkAiKey(UserAiConfig("sk-1", AI_PROVIDERS.first().baseUrl, "gemma")); advanceUntilIdle()
+        vm.checkAiKey(com.point.core.flow.UserAiKey(AI_PROVIDERS.first().id, "sk-1")); advanceUntilIdle()
         vm.closeKeySettings(); advanceUntilIdle()
 
         assertTrue("Point сделал выбор за человека", resolver.performed.isEmpty())
@@ -2769,7 +2834,8 @@ class FlowViewModelTest {
         vm.loadRecent(); advanceUntilIdle()
         assertFalse("приглашение подключить AI должно быть видно", vm.ui.value.aiKeySet)
 
-        userKeys.config = UserAiConfig("sk-1", "https://h/v1", "m")
+        userKeys.stored = com.point.core.flow.UserAiKeys.NONE
+            .with(com.point.core.flow.UserAiKey("openrouter", "sk-1"))
         vm.loadRecent(); advanceUntilIdle()
         assertTrue("ключ есть — звать больше некуда", vm.ui.value.aiKeySet)
     }
@@ -3154,7 +3220,8 @@ class FlowViewModelTest {
 
     @Test fun `вопрос про облако называет тот сервис, ключ которого задан`() = runTest(dispatcher) {
         val openRouter = AI_PROVIDERS.first()
-        userKeys.config = UserAiConfig("sk-1", openRouter.baseUrl, "gemma")
+        userKeys.stored = com.point.core.flow.UserAiKeys.NONE
+            .with(com.point.core.flow.UserAiKey(openRouter.id, "sk-1"))
         val vm = linkVm()
         vm.onShared("uri", "image/png"); advanceUntilIdle()
 
@@ -3166,7 +3233,8 @@ class FlowViewModelTest {
     }
 
     @Test fun `незнакомому адресу имя не выдумывается`() = runTest(dispatcher) {
-        userKeys.config = UserAiConfig("sk-1", "https://мой.прокси/v1", "м")
+        userKeys.stored = com.point.core.flow.UserAiKeys.NONE
+            .with(com.point.core.flow.UserAiKey(com.point.core.flow.OWN_SERVICE_ID, "sk-1", baseUrl = "https://мой.прокси/v1"))
         val vm = linkVm()
         vm.onShared("uri", "image/png"); advanceUntilIdle()
 
@@ -3470,11 +3538,28 @@ private class FakeUsage : CapabilityUsage {
     override suspend fun record(id: CapabilityId) { recorded += id }
 }
 
-private class FakeUserKeys(var config: UserAiConfig? = null) : UserKeyStore {
-    var saved: UserAiConfig? = null
-    override fun read() = config
-    override suspend fun save(config: UserAiConfig) { saved = config; this.config = config }
-    override suspend fun clear() { config = null }
+private class FakeUserKeys(var stored: com.point.core.flow.UserAiKeys = com.point.core.flow.UserAiKeys.NONE) :
+    UserKeyStore {
+    var saved: com.point.core.flow.UserAiKey? = null
+    var forgotten: String? = null
+    override fun keys() = stored
+    override suspend fun save(key: com.point.core.flow.UserAiKey) { saved = key; stored = stored.with(key) }
+    override suspend fun forget(providerId: String) { forgotten = providerId; stored = stored.without(providerId) }
+    override suspend fun clear() { stored = com.point.core.flow.UserAiKeys.NONE }
+}
+
+private class FakeAiFacts : com.point.core.flow.AiFacts {
+    var facts = mutableMapOf<String, com.point.core.flow.AiFact>()
+    var now = 1_000_000L
+    override fun all(): Map<String, com.point.core.flow.AiFact> = facts
+    override fun remember(providerId: String, outcome: com.point.core.flow.AiOutcome) {
+        facts[providerId] = com.point.core.flow.AiFact(outcome, now)
+    }
+}
+
+private class FakeBuiltInKeys(var ours: Map<String, String> = emptyMap()) : com.point.core.flow.BuiltInAiKeys {
+    override fun key(providerId: String) = ours[providerId].orEmpty()
+    override fun have(): Set<String> = ours.filterValues { it.isNotBlank() }.keys
 }
 
 private class FakePrivacyConsent(var granted: Boolean = false) : PrivacyConsent {

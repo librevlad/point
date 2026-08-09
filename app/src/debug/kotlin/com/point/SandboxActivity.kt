@@ -74,7 +74,7 @@ class SandboxActivity : ComponentActivity() {
                             onCloseChat = viewModel::closeChat,
                             onCancelChat = viewModel::cancelChatMessage,
                             onBubbleLongPress = viewModel::togglePin,
-                            onSaveAiConfig = viewModel::saveAiConfig,
+                            onSaveAiKey = viewModel::saveAiKey,
                             onOpenKeySettings = viewModel::openKeySettings,
                             onCloseKeySettings = viewModel::closeKeySettings,
                             onToggleUsage = viewModel::setUsageEnabled,

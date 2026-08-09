@@ -7,7 +7,6 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import com.point.core.flow.MY_DEVICES_TITLE
 import com.point.core.flow.SETTINGS_TITLE
-import com.point.core.flow.UserAiConfig
 import com.point.core.model.HistoryEntry
 import com.point.core.model.ObjectKind
 import com.point.core.model.ScratchRef
@@ -45,7 +44,7 @@ class OneSettingsDoorTest {
     private fun settings(onOpenDevices: () -> Unit = {}) = compose.setContent {
         PointTheme(darkTheme = true) {
             KeyScreen(
-                config = UserAiConfig.DEFAULT,
+                screen = aiKeysScreenOf(),
                 onSave = {},
                 onCancel = {},
                 usageEnabled = false,
@@ -77,7 +76,7 @@ class OneSettingsDoorTest {
     @Test fun `за одной дверью лежит всё, что лежало за двумя`() {
         settings()
 
-        compose.onNodeWithText("Ключ AI").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Ключи AI").performScrollTo().assertIsDisplayed()
 
         compose.onNodeWithText("Отправка и приватность").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Звук действий").performScrollTo().assertIsDisplayed()
@@ -100,6 +99,6 @@ class OneSettingsDoorTest {
 
         compose.onNodeWithText("Больше Point ни о чём не спрашивает", substring = true)
             .assertDoesNotExist()
-        compose.onNodeWithText("Ключ AI, отправка в облако", substring = true).assertDoesNotExist()
+        compose.onNodeWithText("Ключи AI, отправка в облако", substring = true).assertDoesNotExist()
     }
 }

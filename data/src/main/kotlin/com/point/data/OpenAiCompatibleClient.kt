@@ -22,6 +22,9 @@ data class OpenAiProvider(
     val vision: Boolean = false,
 
     val strongVision: Boolean = false,
+
+    /** Сервис, за которым запоминается исход обращения (#699). */
+    val id: String = label,
 )
 
 fun List<OpenAiProvider>.configured(): List<OpenAiProvider> = filter { it.apiKey.isNotBlank() }
@@ -70,6 +73,8 @@ class OpenAiCompatibleClient(
 
     override val strongVision: Boolean = provider.strongVision
 
+    override val serviceId: String = provider.id
+
     override fun canHandle(obj: PointObject): Boolean = when {
         isImage(obj) -> provider.vision
         obj.mime == "application/pdf" -> false
@@ -86,7 +91,9 @@ class OpenAiCompatibleClient(
                 mapOf("Authorization" to "Bearer ${provider.apiKey}"),
                 requestBody(obj, promptFor(obj, prompt)),
             )
-            if (res.code !in 200..299) error(refusal(res.code))
+            if (res.code !in 200..299) {
+                throw com.point.core.flow.AiServiceRefusal(provider.id, res.code, refusal(res.code))
+            }
             val answer = parseAnswer(res.body)
 
             if (isImage(obj) && answer.trimStart().startsWith(NO_IMAGE_MARKER)) {
@@ -139,7 +146,7 @@ class OpenAiCompatibleClient(
     }
 
     private fun refusal(code: Int): String = when (code) {
-        401, 403 -> "${provider.label}: ключ не принят — $AI_KEY_HINT в настройках"
+        401, 403 -> "${provider.label}: ${com.point.core.flow.KEY_NOT_ACCEPTED} — $AI_KEY_HINT в настройках"
         402 -> "${provider.label}: сервис просит оплату — у этого ключа нет бесплатного доступа"
 
         404 -> "${provider.label}: сервис не знает такой модели"

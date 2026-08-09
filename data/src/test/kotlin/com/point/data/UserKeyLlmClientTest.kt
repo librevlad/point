@@ -1,8 +1,12 @@
 package com.point.data
 
+import com.point.core.flow.AiFact
+import com.point.core.flow.AiFacts
+import com.point.core.flow.AiOutcome
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.SETTINGS_TITLE
-import com.point.core.flow.UserAiConfig
+import com.point.core.flow.UserAiKey
+import com.point.core.flow.UserAiKeys
 import com.point.core.flow.UserKeyStore
 import com.point.core.flow.refusalNeedsKey
 import com.point.core.model.ObjectKind
@@ -32,9 +36,16 @@ class UserKeyLlmClientTest {
         override suspend fun clear() = Unit
     }
 
-    private fun keys(config: UserAiConfig?) = object : UserKeyStore {
-        override fun read() = config
-        override suspend fun save(config: UserAiConfig) = Unit
+    private class RememberedFacts : AiFacts {
+        val seen = mutableMapOf<String, AiOutcome>()
+        override fun all(): Map<String, AiFact> = seen.mapValues { AiFact(it.value, 0L) }
+        override fun remember(providerId: String, outcome: AiOutcome) { seen[providerId] = outcome }
+    }
+
+    private fun keys(vararg entries: UserAiKey) = object : UserKeyStore {
+        override fun keys() = entries.fold(UserAiKeys.NONE) { acc, key -> acc.with(key) }
+        override suspend fun save(key: UserAiKey) = Unit
+        override suspend fun forget(providerId: String) = Unit
         override suspend fun clear() = Unit
     }
 
@@ -47,9 +58,9 @@ class UserKeyLlmClientTest {
                 return HttpResult(200, okBody)
             }
         }
-        val config = UserAiConfig("sk-user", "https://my.host/v1", "my-model")
+        val mine = UserAiKey("own", "sk-user", model = "my-model", baseUrl = "https://my.host/v1")
 
-        val res = UserKeyLlmClient(keys(config), http, store).run(obj, "hi")
+        val res = UserKeyLlmClient(keys(mine), http, store, RememberedFacts()).run(obj, "hi")
 
         assertEquals("ответ", File(res.uri.value).readText())
         assertTrue(url.startsWith("https://my.host/v1/chat/completions"))
@@ -62,7 +73,8 @@ class UserKeyLlmClientTest {
         val http = object : HttpJson {
             override suspend fun post(u: String, headers: Map<String, String>, b: String) = HttpResult(200, okBody)
         }
-        val e = runCatching { UserKeyLlmClient(keys(null), http, store).run(obj, "hi") }.exceptionOrNull()
+        val e = runCatching { UserKeyLlmClient(keys(), http, store, RememberedFacts()).run(obj, "hi") }
+            .exceptionOrNull()
         assertTrue(e?.message?.contains("задайте свой ключ") == true)
     }
 
@@ -72,11 +84,44 @@ class UserKeyLlmClientTest {
             override suspend fun post(u: String, headers: Map<String, String>, b: String) = HttpResult(200, okBody)
         }
 
-        val message = runCatching { UserKeyLlmClient(keys(null), http, store).run(obj, "hi") }
+        val message = runCatching { UserKeyLlmClient(keys(), http, store, RememberedFacts()).run(obj, "hi") }
             .exceptionOrNull()?.message.orEmpty()
 
         assertTrue("отказ не назвал дверь её именем: $message", message.contains(SETTINGS_TITLE))
 
         assertTrue("отказ перестал узнаваться как «чинится ключом»", refusalNeedsKey(message))
+    }
+
+    @Test
+    fun `второй свой ключ подхватывает работу, когда первый отказал`() = runTest {
+        val asked = mutableListOf<String>()
+        val http = object : HttpJson {
+            override suspend fun post(u: String, headers: Map<String, String>, b: String): HttpResult {
+                asked += headers["Authorization"].orEmpty()
+                return if (asked.size == 1) HttpResult(429, "too many") else HttpResult(200, okBody)
+            }
+        }
+        val facts = RememberedFacts()
+
+        val res = UserKeyLlmClient(
+            keys(UserAiKey("openrouter", "sk-or"), UserAiKey("groq", "gsk")),
+            http, store, facts,
+        ).run(obj, "hi")
+
+        assertEquals("ответ", File(res.uri.value).readText())
+        assertEquals(AiOutcome.LIMIT, facts.seen["openrouter"])
+        assertEquals(AiOutcome.ANSWERED, facts.seen["groq"])
+    }
+
+    @Test
+    fun `не подошедший ключ запоминается за своим сервисом`() = runTest {
+        val http = object : HttpJson {
+            override suspend fun post(u: String, headers: Map<String, String>, b: String) = HttpResult(401, "nope")
+        }
+        val facts = RememberedFacts()
+
+        runCatching { UserKeyLlmClient(keys(UserAiKey("groq", "gsk")), http, store, facts).run(obj, "hi") }
+
+        assertEquals(AiOutcome.BAD_KEY, facts.seen["groq"])
     }
 }

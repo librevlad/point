@@ -77,15 +77,17 @@ fun PointHost(
     onFound: (PointObject) -> Unit = {},
     onJumpTo: (Int) -> Unit = {},
     onBubbleLongPress: (Bubble) -> Unit = {},
-    onSaveAiConfig: (UserAiConfig) -> Unit = {},
+    onSaveAiKey: (com.point.core.flow.UserAiKey) -> Unit = {},
 
     onOpenKeySettings: () -> Unit = {},
 
-    onCheckAiKey: (UserAiConfig) -> Unit = {},
+    onCheckAiKey: (com.point.core.flow.UserAiKey) -> Unit = {},
+
+    onCheckAllAiKeys: () -> Unit = {},
 
     onPasteKey: () -> String? = { null },
 
-    onForgetAiKey: () -> Unit = {},
+    onForgetAiKey: (String) -> Unit = {},
     onCloseKeySettings: () -> Unit = {},
     onToggleUsage: (Boolean) -> Unit = {},
     onToggleSound: (Boolean) -> Unit = {},
@@ -197,15 +199,17 @@ fun PointHost(
             )
 
             state.keyScreen != null -> KeyScreen(
-                config = state.keyScreen,
+                screen = state.keyScreen,
                 note = state.keyScreenNote,
 
                 errand = state.keyErrand,
-                onSave = onSaveAiConfig,
+                onSave = onSaveAiKey,
                 onCancel = onCloseKeySettings,
                 checking = state.keyChecking,
                 verdict = state.keyVerdict,
+                verdictFor = state.keyVerdictFor,
                 onCheck = onCheckAiKey,
+                onCheckAll = onCheckAllAiKeys,
                 onPasteKey = onPasteKey,
                 onForgetKey = onForgetAiKey,
                 usageEnabled = state.usageEnabled,

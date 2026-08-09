@@ -2,8 +2,10 @@ package com.point.data.di
 
 import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
+import com.point.core.flow.AiFacts
 import com.point.core.flow.AiKeyCheck
 import com.point.core.flow.AiReadiness
+import com.point.core.flow.BuiltInAiKeys
 import com.point.core.flow.AppLauncher
 import com.point.core.flow.BackgroundRemover
 import com.point.core.flow.CalendarInserter
@@ -47,7 +49,6 @@ import com.point.core.flow.MISTRAL_PROVIDER_ID
 import com.point.core.flow.SpeechReadiness
 import com.point.core.flow.SpeechToText
 import com.point.core.flow.TextRecognizer
-import com.point.core.flow.keyFor
 import com.point.core.flow.speechKeyNeeds
 import com.point.core.flow.UrlOpener
 import com.point.core.flow.ChosenApps
@@ -134,7 +135,9 @@ import com.point.data.FileFlowSnapshotStore
 import com.point.data.FileCrashLog
 import com.point.data.PrefsPinnedActions
 import com.point.data.VibratorSensoryFeedback
+import com.point.data.PrefsAiFacts
 import com.point.data.PrefsUserKeyStore
+import com.point.data.BuildConfigAiKeys
 import com.point.data.QrInvestigation
 import com.point.data.QrInvestigationRealizer
 import com.point.data.UserKeyLlmClient
@@ -254,6 +257,13 @@ abstract class DataModule {
 
     @Binds
     abstract fun userKeyStore(impl: PrefsUserKeyStore): UserKeyStore
+
+    @Binds
+    @Singleton
+    abstract fun aiFacts(impl: PrefsAiFacts): AiFacts
+
+    @Binds
+    abstract fun builtInAiKeys(impl: BuildConfigAiKeys): BuiltInAiKeys
 
     @Binds
     abstract fun aiKeyCheck(impl: HttpAiKeyCheck): AiKeyCheck
@@ -482,7 +492,7 @@ abstract class DataModule {
         ): List<@JvmSuppressWildcards SpeechToText> = listOf(
             GroqWhisperSpeechToText(
                 http,
-                { userKeys.read().keyFor(GROQ_PROVIDER_ID).ifBlank { BuildConfig.GROQ_API_KEY } },
+                { userKeys.keys().keyFor(GROQ_PROVIDER_ID).ifBlank { BuildConfig.GROQ_API_KEY } },
                 BuildConfig.GROQ_BASE_URL,
                 BuildConfig.GROQ_WHISPER_MODEL,
             ),
@@ -526,12 +536,14 @@ abstract class DataModule {
             http: HttpJson,
             frames: OutboundFrames,
             userKeys: UserKeyStore,
+            facts: AiFacts,
         ): List<@JvmSuppressWildcards CloudTextReader> = listOf(
             MistralOcrReader(
                 http, frames,
 
-                { userKeys.read().keyFor(MISTRAL_PROVIDER_ID).ifBlank { BuildConfig.MISTRAL_API_KEY } },
+                { userKeys.keys().keyFor(MISTRAL_PROVIDER_ID).ifBlank { BuildConfig.MISTRAL_API_KEY } },
                 BuildConfig.MISTRAL_BASE_URL,
+                facts,
             ),
             OcrSpaceReader(
                 http, frames,

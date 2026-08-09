@@ -10,9 +10,11 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import com.point.core.flow.AI_PROVIDERS
+import com.point.core.flow.AiFact
 import com.point.core.flow.KeyProbe
 import com.point.core.flow.KeyVerdict
-import com.point.core.flow.UserAiConfig
+import com.point.core.flow.UserAiKey
+import com.point.core.flow.UserAiKeys
 import com.point.core.flow.keyVerdict
 import com.point.core.model.HistoryEntry
 import com.point.core.model.ObjectKind
@@ -30,21 +32,30 @@ class KeyOnboardingTest {
 
     @get:Rule val compose = createComposeRule()
 
+    private val openRouter = AI_PROVIDERS.first()
+    private val savedKey = UserAiKeys.NONE.with(UserAiKey(openRouter.id, "sk-or-v1-abcdef123456", model = "gemma"))
+
     private fun keyScreen(
-        config: UserAiConfig = UserAiConfig.DEFAULT,
+        keys: UserAiKeys = UserAiKeys.NONE,
+        builtIn: Set<String> = emptySet(),
+        facts: Map<String, AiFact> = emptyMap(),
         note: String? = null,
         errand: KeyErrand? = null,
-        checking: Boolean = false,
+        checking: String? = null,
         verdict: KeyVerdict? = null,
-        onCheck: (UserAiConfig) -> Unit = {},
-        onSave: (UserAiConfig) -> Unit = {},
+        verdictFor: String? = openRouter.id,
+        onCheck: (UserAiKey) -> Unit = {},
+        onCheckAll: () -> Unit = {},
+        onSave: (UserAiKey) -> Unit = {},
         onCancel: () -> Unit = {},
         onPasteKey: () -> String? = { null },
-        onForgetKey: () -> Unit = {},
+        onForgetKey: (String) -> Unit = {},
+
+        openService: String? = openRouter.name,
     ) {
         compose.setContent {
             KeyScreen(
-                config = config,
+                screen = aiKeysScreenOf(keys = keys, builtIn = builtIn, facts = facts),
                 onSave = onSave,
                 onCancel = onCancel,
                 usageEnabled = false,
@@ -54,24 +65,25 @@ class KeyOnboardingTest {
                 errand = errand,
                 checking = checking,
                 verdict = verdict,
+                verdictFor = verdictFor,
                 onCheck = onCheck,
+                onCheckAll = onCheckAll,
                 onPasteKey = onPasteKey,
                 onForgetKey = onForgetKey,
             )
         }
 
-        if (note == null && errand == null && verdict == null && !checking) {
-            compose.onNodeWithText("Ключ AI").performClick()
+        if (note == null && errand == null && verdict == null && checking == null) {
+            compose.onNodeWithText("Ключи AI").performClick()
         }
+        if (openService != null) compose.onNodeWithText(openService).performScrollTo().performClick()
     }
 
     @Test fun `экран говорит, зачем нужен ключ, а не только просит его`() {
-        keyScreen()
+        keyScreen(openService = null)
 
         compose.onNodeWithText("Понять", substring = true).assertExists()
-
-        compose.onNodeWithText("ШАГ 1 · ОТКУДА ВЗЯТЬ КЛЮЧ").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("ШАГ 3 · ПРОВЕРЬТЕ, ЧТО РАБОТАЕТ").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Проверить все").performScrollTo().assertIsDisplayed()
     }
 
     private val oneRecent = listOf(
@@ -100,9 +112,8 @@ class KeyOnboardingTest {
     }
 
     @Test fun `ключ из буфера встаёт в поле одним тапом`() {
-        var checked: UserAiConfig? = null
+        var checked: UserAiKey? = null
         keyScreen(
-            config = UserAiConfig("", "https://api.example/v1", "m"),
             onCheck = { checked = it },
             onPasteKey = { "sk-or-v1-0123456789abcdefghij" },
         )
@@ -111,13 +122,11 @@ class KeyOnboardingTest {
         compose.onNodeWithText("Проверить и включить").performScrollTo().performClick()
 
         assertEquals("sk-or-v1-0123456789abcdefghij", checked?.apiKey)
+        assertEquals("ключ ушёл проверяться не за тот сервис", openRouter.id, checked?.providerId)
     }
 
     @Test fun `в буфере не ключ — Point говорит об этом, а не молчит`() {
-        keyScreen(
-            config = UserAiConfig("", "https://api.example/v1", "m"),
-            onPasteKey = { "какой-то скопированный абзац текста" },
-        )
+        keyScreen(onPasteKey = { "какой-то скопированный абзац текста" })
 
         compose.onNodeWithText("Вставить из буфера").performScrollTo().performClick()
 
@@ -125,54 +134,43 @@ class KeyOnboardingTest {
     }
 
     @Test fun `«Проверить и включить» отдаёт наверх ровно набранное`() {
-        var checked: UserAiConfig? = null
-        keyScreen(config = UserAiConfig("", "https://api.example/v1", "модель"), onCheck = { checked = it })
+        var checked: UserAiKey? = null
+        keyScreen(onCheck = { checked = it })
 
         compose.onAllNodes(hasSetTextAction()).onFirst().performScrollTo().performTextInput("sk-набранный")
         compose.onNodeWithText("Проверить и включить").performScrollTo().performClick()
 
-        assertEquals(
-            UserAiConfig("sk-набранный", "https://api.example/v1", "модель"),
-            checked?.copy(savedAt = 0L),
-        )
-        assertTrue("ключ сохранён без метки времени", (checked?.savedAt ?: 0L) > 0L)
+        assertEquals(UserAiKey(openRouter.id, "sk-набранный"), checked)
     }
 
     @Test fun `без ключа проверять нечего — кнопка погашена`() {
-        var checked: UserAiConfig? = null
-        keyScreen(config = UserAiConfig("", "https://api.example/v1", "m"), onCheck = { checked = it })
+        var checked: UserAiKey? = null
+        keyScreen(onCheck = { checked = it })
 
         compose.onNodeWithText("Проверить и включить").performScrollTo().assertIsNotEnabled()
         assertNull(checked)
     }
 
-    @Test fun `идущая проверка говорит о себе и не запускается второй раз`() {
-        var checked: UserAiConfig? = null
-        keyScreen(
-            config = UserAiConfig("sk-1", "https://api.example/v1", "m"),
-            checking = true,
-            onCheck = { checked = it },
-        )
+    @Test fun `идущая проверка всех говорит о себе и не запускается второй раз`() {
+        var asked = 0
+        keyScreen(checking = CHECK_ALL_SERVICES, onCheckAll = { asked++ }, openService = null)
 
         compose.onNodeWithText("Проверяю…").performScrollTo().assertIsNotEnabled()
-        assertNull(checked)
+        assertEquals(0, asked)
     }
 
     @Test fun `«работает» человек видит словами сервиса`() {
-        keyScreen(
-            config = UserAiConfig("sk-1", "https://api.example/v1", "m"),
-            verdict = KeyVerdict.Works("Готово"),
-        )
+        keyScreen(keys = savedKey, verdict = KeyVerdict.Works("Готово"))
 
         compose.onNodeWithText("Работает", substring = true).performScrollTo().assertIsDisplayed()
 
-        compose.onNodeWithText("Готово").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("Сохранить без проверки").assertDoesNotExist()
+        compose.onNodeWithText("сервис ответил: «Готово»", substring = true)
+            .performScrollTo().assertIsDisplayed()
     }
 
     @Test fun `отказ называет причину и что с ней делать`() {
         keyScreen(
-            config = UserAiConfig("не-тот", "https://api.example/v1", "m"),
+            keys = savedKey,
             verdict = KeyVerdict.Refused("Ключ не подошёл", "Скопируйте ключ целиком, без пробелов."),
         )
 
@@ -180,18 +178,26 @@ class KeyOnboardingTest {
         compose.onNodeWithText("Скопируйте ключ целиком", substring = true).performScrollTo().assertIsDisplayed()
     }
 
+    @Test fun `приговор стоит у того сервиса, который проверяли`() {
+        keyScreen(
+            keys = savedKey,
+            verdict = KeyVerdict.Refused("Ключ не подошёл", "Скопируйте ключ целиком, без пробелов."),
+            verdictFor = "groq",
+            openService = openRouter.name,
+        )
+
+        compose.onNodeWithText("Ключ не подошёл").assertDoesNotExist()
+    }
+
     @Test fun `экран, открытый с отказа, повторяет его причину`() {
 
-        keyScreen(note = "AI недоступен — задайте свой ключ")
+        keyScreen(note = "AI недоступен — задайте свой ключ", openService = null)
 
         compose.onNodeWithText("AI недоступен", substring = true).performScrollTo().assertIsDisplayed()
     }
 
-    private val openRouter = AI_PROVIDERS.first()
-    private val savedKey = UserAiConfig("sk-or-v1-abcdef123456", openRouter.baseUrl, "gemma")
-
     @Test fun `совет про исчерпанную квоту не обещает переключения на второй ключ`() {
-        keyScreen(config = savedKey, verdict = keyVerdict(KeyProbe(status = 429)))
+        keyScreen(keys = savedKey, verdict = keyVerdict(KeyProbe(status = 429)))
 
         compose.onNodeWithText("квота", substring = true).performScrollTo().assertIsDisplayed()
 
@@ -199,71 +205,56 @@ class KeyOnboardingTest {
         compose.onNodeWithText("второй ключ", substring = true).assertDoesNotExist()
     }
 
-    @Test fun `заданный ключ можно забыть, и поле пустеет сразу`() {
-        var forgotten = false
-        keyScreen(config = savedKey, onForgetKey = { forgotten = true })
+    @Test fun `заданный ключ можно удалить, и поле пустеет сразу`() {
+        var forgotten: String? = null
+        keyScreen(keys = savedKey, onForgetKey = { forgotten = it })
 
-        compose.onNodeWithText("Забыть ключ").performScrollTo().performClick()
+        compose.onNodeWithText("Удалить ключ").performScrollTo().performClick()
 
-        assertTrue("ключ не ушёл с устройства", forgotten)
-
-        compose.onNodeWithText("Ключа пока нет", substring = true).performScrollTo().assertIsDisplayed()
+        assertEquals("ключ не ушёл с устройства", openRouter.id, forgotten)
     }
 
-    @Test fun `забывать нечего, пока ключ не задан`() {
-        keyScreen(config = UserAiConfig("", openRouter.baseUrl, "gemma"))
+    @Test fun `удалять нечего, пока ключ не задан`() {
+        keyScreen()
 
-        compose.onNodeWithText("Забыть ключ").assertDoesNotExist()
+        compose.onNodeWithText("Удалить ключ").assertDoesNotExist()
     }
 
-    @Test fun `выбор другого сервиса очищает поле ключа`() {
-        keyScreen(config = savedKey)
-        compose.onNodeWithText("Ключ на устройстве", substring = true).performScrollTo().assertIsDisplayed()
+    @Test fun `у каждого сервиса своё поле ключа, а не одно на всех`() {
+        keyScreen(keys = savedKey, openService = "Groq")
 
-        compose.onNodeWithText("Сервис").performScrollTo().performClick()
-        compose.onNodeWithText("Groq").performScrollTo().performClick()
-
-        compose.onNodeWithText("Ключа пока нет", substring = true).performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("sk-o…3456", substring = true).assertDoesNotExist()
-    }
-
-    @Test fun `повторный выбор того же сервиса ключ не трогает`() {
-        keyScreen(config = savedKey)
-
-        compose.onNodeWithText("Сервис").performScrollTo().performClick()
-        compose.onNodeWithText(openRouter.name).performScrollTo().performClick()
-
-        compose.onNodeWithText("Ключ на устройстве", substring = true).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Ключ Groq").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Ключ ${openRouter.name}").assertDoesNotExist()
     }
 
     private val errand = KeyErrand(action = "Понять", objectName = "чек.jpg")
 
-    @Test fun `пришедший с действия сразу оказывается в разделе ключа`() {
-        keyScreen(errand = errand)
+    @Test fun `пришедший с действия сразу оказывается в разделе ключей`() {
+        keyScreen(errand = errand, openService = null)
 
-        compose.onNodeWithText("ШАГ 1 · ОТКУДА ВЗЯТЬ КЛЮЧ").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Проверить все").performScrollTo().assertIsDisplayed()
     }
 
     @Test fun `экран, открытый действием, называет это действие по имени`() {
-        keyScreen(errand = errand)
+        keyScreen(errand = errand, openService = null)
 
         compose.onNodeWithText("«Понять» ждёт ключа", substring = true).performScrollTo().assertIsDisplayed()
     }
 
     @Test fun `экран, открытый действием, обещает возврат к объекту`() {
-        keyScreen(errand = errand)
+        keyScreen(errand = errand, openService = null)
 
         compose.onNodeWithText("вернётесь к своему объекту", substring = true).performScrollTo().assertIsDisplayed()
     }
 
     @Test fun `после «работает» дверь обратно названа именем объекта`() {
-        keyScreen(config = savedKey, errand = errand, verdict = KeyVerdict.Works("Готово"))
+        keyScreen(keys = savedKey, errand = errand, verdict = KeyVerdict.Works("Готово"), openService = null)
 
         compose.onNodeWithText("Вернуться к «чек.jpg»").performScrollTo().assertIsDisplayed()
     }
 
     @Test fun `дверь обратно не обещает выполнить действие сама`() {
-        keyScreen(config = savedKey, errand = errand, verdict = KeyVerdict.Works("Готово"))
+        keyScreen(keys = savedKey, errand = errand, verdict = KeyVerdict.Works("Готово"), openService = null)
 
         compose.onNodeWithText("Тапнуть по нему Point за вас не станет", substring = true)
             .performScrollTo().assertIsDisplayed()
@@ -271,21 +262,27 @@ class KeyOnboardingTest {
 
     @Test fun `дверь обратно ведёт тем же выходом, что и «Готово»`() {
         var left = 0
-        keyScreen(config = savedKey, errand = errand, verdict = KeyVerdict.Works("Готово"), onCancel = { left++ })
+        keyScreen(
+            keys = savedKey,
+            errand = errand,
+            verdict = KeyVerdict.Works("Готово"),
+            onCancel = { left++ },
+            openService = null,
+        )
 
         compose.onNodeWithText("Вернуться к «чек.jpg»").performScrollTo().performClick()
 
-        assertEquals("строка есть, а выхода за ней нет", 1, left)
+        assertTrue("строка есть, а выхода за ней нет", left == 1)
     }
 
     @Test fun `до проверки двери обратно нет`() {
-        keyScreen(errand = errand)
+        keyScreen(errand = errand, openService = null)
 
         compose.onNodeWithText("Вернуться к", substring = true).assertDoesNotExist()
     }
 
     @Test fun `без поручения экран не зовёт ни к какому объекту`() {
-        keyScreen(config = savedKey, verdict = KeyVerdict.Works("Готово"))
+        keyScreen(keys = savedKey, verdict = KeyVerdict.Works("Готово"), openService = null)
 
         compose.onNodeWithText("Вернуться к", substring = true).assertDoesNotExist()
     }

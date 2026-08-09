@@ -105,15 +105,6 @@ fun maskedKey(apiKey: String): String {
     return "${key.take(MASK_EDGE)}…${key.takeLast(MASK_EDGE)}"
 }
 
-fun keySetLabel(apiKey: String, saved: Boolean): String {
-    val key = apiKey.trim()
-    return when {
-        key.isEmpty() -> "Ключа пока нет — без него AI-действия молчат."
-        saved -> "Ключ на устройстве: ${maskedKey(key)}"
-        else -> "Ключ набран, но ещё не сохранён: ${maskedKey(key)}"
-    }
-}
-
 private const val MIN_MASKABLE = 12
 private const val MASK_EDGE = 4
 private const val MASK_DOTS = 8
