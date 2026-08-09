@@ -369,4 +369,17 @@ class ExcelLayoutTest {
         )
     }
 
+    @Test
+    fun `сокетная ошибка не уходит человеку сырыми словами`() {
+
+        // Живая находка владельца 2026-08-09: «Software caused connection abort»
+        // стоял исходом «В Excel» на экране телефона.
+        val said = refusalOf(listOf("Software caused connection abort"), noReaders = false)
+
+        assertFalse(said.contains("abort"))
+        assertTrue("отказ зовёт попробовать снова: «$said»", said.contains("ещё раз"))
+
+        val quota = refusalOf(listOf("HTTP 429 Too Many Requests"), noReaders = false)
+        assertFalse(quota.contains("429"))
+    }
 }

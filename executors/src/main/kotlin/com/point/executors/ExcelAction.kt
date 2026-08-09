@@ -492,6 +492,15 @@ internal fun refusalOf(errors: List<String>, noReaders: Boolean): String {
     if (noReaders) return "Читать таблицу некем — $KEY_SETTINGS_CALL"
     val substantive = errors.firstOrNull { !refusalNeedsKey(it) }
     val chosen = substantive ?: errors.firstOrNull() ?: return "Не удалось распознать таблицу"
+
+    // «Software caused connection abort» уходил исходом на экран (живая находка
+    // владельца, 2026-08-09): транспортная ошибка — не слова для человека.
+    if (com.point.core.flow.looksLikeNetworkFailure(chosen)) {
+        return "Связь оборвалась, таблица не дочиталась — проверьте интернет и попробуйте ещё раз"
+    }
+    if (com.point.core.flow.looksLikeQuotaFailure(chosen)) {
+        return "Бесплатные лимиты чтения исчерпаны — вернитесь позже, платить не идём"
+    }
     return chosen.substringBefore('\n').take(120)
 }
 
