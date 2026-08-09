@@ -125,7 +125,9 @@ class RemotePcRealizer(
         return when (val outcome = transport.send(pc, input, name, input.metadata, action.id)) {
 
             is PcSendOutcome.Sent -> materialize(outcome, input) ?: when (val done = outcome.action) {
-                null -> ActionResult.Done("Отправлено на компьютер")
+
+                // «Назвать место словами» (#646): человек знает, где искать файл (PC3).
+                null -> ActionResult.Done(PC_SENT_WHERE)
                 is PcActionOutcome.Done ->
 
                     ActionResult.Done(

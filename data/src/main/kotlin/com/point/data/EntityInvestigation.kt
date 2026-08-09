@@ -219,8 +219,15 @@ internal fun entityDelta(
 ): Findings {
 
     // «Голое время это никогда не дата, это мусор» (#651): и признака HAS_DATE не даёт.
+    // Неправдоподобный адрес извне (#632: «Розчинник Уайт-Спірит ХімРезерв 1л» от
+    // ML Kit) отбрасывается целиком — расширение до строки лишь усиливало ошибку;
+    // настоящий адрес в тексте найдёт правило-читатель (addressFacts) ниже.
     val meaningful = entities.filterNot {
         it.type == com.point.core.flow.EntityType.DATE_TIME && it.isBareClock()
+    }.filterNot { e ->
+        e.type == com.point.core.flow.EntityType.ADDRESS &&
+            !com.point.core.flow.plausibleAddress(expandAddressToLine(e.value, text)) &&
+            !com.point.core.flow.plausibleAddress(e.value)
     }
     val features = meaningful.mapNotNullTo(mutableSetOf()) { it.type.asFeature() }
 

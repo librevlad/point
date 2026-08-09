@@ -40,6 +40,10 @@ class PcCapability @Inject constructor(
 
 internal const val PC_SEND_STAGE = "Отправляю на компьютер"
 
+// Решение владельца (#646): «Отправлено на компьютер — появится в окне Point
+// и в папке Point» — одна строка, боль «куда исчез» закрыта.
+internal const val PC_SENT_WHERE = "Отправлено на компьютер — появится в окне Point и в папке Point"
+
 /**
  * Имя, под которым объект появится на той стороне. Безымянный объект уезжал как
  * «point-6e9a92c3» — внутренний идентификатор наружу (аудит 2026-08-09, P2):
@@ -74,7 +78,9 @@ class PcRealizer @Inject constructor(
 
         reportStage(PC_SEND_STAGE)
         return when (val outcome = transport.send(pc, input, name, input.metadata)) {
-            is PcSendOutcome.Sent -> ActionResult.Done("Отправлено на компьютер")
+
+            // «Назвать место словами» (#646): человек знает, где искать файл (PC3).
+            is PcSendOutcome.Sent -> ActionResult.Done(PC_SENT_WHERE)
             is PcSendOutcome.Rejected -> ActionResult.Failure(PC_DEVICE_REVOKED, recoverable = true)
 
             is PcSendOutcome.Unreachable ->

@@ -126,6 +126,21 @@ class EntityInvestigationTest {
     }
 
     @Test
+    fun `чужая товарная строка адресом не становится`() = runTest {
+
+        // #632, решение владельца: «проверять правдоподобие адреса». ML Kit звал
+        // адресом строку товара из акта, а расширение до строки усиливало ошибку.
+        val enricher = EntityInvestigationRealizer(
+            extractor(Entity(EntityType.ADDRESS, "Розчинник Уайт-Спірит ХімРезерв 1л")),
+        )
+
+        val delta = enricher.look(obj("Акт передачі\nРозчинник Уайт-Спірит ХімРезерв 1л\nКількість: 2"))
+
+        assertEquals(null, delta.metadata[META_ENTITY_ADDRESS])
+        assertFalse("догадка разметчика — не признак адреса", Feature.HAS_ADDRESS in delta.features)
+    }
+
+    @Test
     fun `адрес с кадра карты находится и тогда, когда извлекатель молчит`() = runTest {
         val enricher = EntityInvestigationRealizer(extractor())
 

@@ -19,6 +19,22 @@ class PostalAddressTest {
     }
 
     @Test
+    fun `правдоподобие адреса — товарная строка не адрес`() {
+
+        // #632, решение владельца: «проверять правдоподобие адреса». ML Kit звал
+        // адресом строку товара из акта — дословно из живого прогона 06.08.2026.
+        assertTrue(!plausibleAddress("Розчинник Уайт-Спірит ХімРезерв 1л"))
+        assertTrue(!plausibleAddress("Київ"))
+        assertTrue(!plausibleAddress(""))
+        assertTrue(!plausibleAddress("Цукор, пачка, 25"))
+
+        assertTrue(plausibleAddress("ул. Крещатик, 12"))
+        assertTrue(plausibleAddress("вул. Сонячна 15"))
+        assertTrue(plausibleAddress("Олексіївка, вул. Сонячна, 15"))
+        assertTrue(plausibleAddress("Київська обл, Бучанський р-н"))
+    }
+
+    @Test
     fun `адрес с кадра карты становится фактом с происхождением и одной уликой`() {
         val facts = addressFacts(ocr("parcel_3"))
 

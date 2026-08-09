@@ -82,6 +82,18 @@ class PcActionTest {
     }
 
     @Test
+    fun `отправленное называет место — окно Point и папку Point`() = runTest {
+
+        // #646, решение владельца: «Отправлено на компьютер — появится в окне Point
+        // и в папке Point». Боль «куда исчез файл» (PC3): место названо словами.
+        val result = PcRealizer(FakeLinks(linked), FakeTransport()).perform(obj(), null)
+
+        val said = (result as ActionResult.Done).message
+        assertTrue("не названо окно: «$said»", said.contains("окне Point"))
+        assertTrue("не названа папка: «$said»", said.contains("папке Point"))
+    }
+
+    @Test
     fun `отправка на компьютер называет себя, пока идёт`() = runTest {
         val heard = stagesHeard {
             PcRealizer(FakeLinks(linked), FakeTransport()).perform(obj(), null)

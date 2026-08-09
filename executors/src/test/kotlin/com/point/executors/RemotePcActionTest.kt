@@ -82,7 +82,11 @@ class RemotePcActionTest {
         val result = RemotePcRealizer(action, FakeLinks(), transport).perform(obj(), null)
 
         assertEquals("pc-open", transport.sentAction)
-        assertEquals("Отправлено на компьютер", (result as ActionResult.Done).message)
+
+        // #646: сообщение отправки называет место (окно и папка Point), но «готово»
+        // без исхода по-прежнему не говорится.
+        assertTrue((result as ActionResult.Done).message.contains("окне Point"))
+        assertTrue(result.message.contains("папке Point"))
         assertFalse("«готово» — слово того, кто это сделал", result.message.contains("готово"))
     }
 

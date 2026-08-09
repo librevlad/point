@@ -22,6 +22,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
@@ -45,6 +47,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.AnnotatedString
@@ -642,6 +647,9 @@ fun actionSections(bubbles: List<Bubble>): List<ActionSection> =
             ?.let { ActionSection(group, it) }
     }
 
+/** Enter отправляет только осмысленный ответ (#645): пустой ввод — не ответ. */
+internal fun meaningfulAmendment(text: String): String? = text.takeIf { it.isNotBlank() }
+
 @Composable
 @OptIn(ExperimentalLayoutApi::class)
 private fun AmendmentInput(
@@ -652,6 +660,12 @@ private fun AmendmentInput(
 ) {
 
     var text by rememberSaveable { mutableStateOf("") }
+
+    // Решение владельца (#645): Enter отправляет, автофокус, без многострочности —
+    // значения здесь короткие, а кнопка «Готово» пряталась под клавиатурой.
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) { focusRequester.requestFocus() }
+    val submit = { meaningfulAmendment(text)?.let(onSubmit) ?: Unit }
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -679,8 +693,10 @@ private fun AmendmentInput(
         OutlinedTextField(
             value = text,
             onValueChange = { text = it },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = false,
+            modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = { submit() }),
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             TextButton(onClick = onCancel) { Text("Отмена") }
