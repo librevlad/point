@@ -33,13 +33,21 @@ fun addressFacts(text: String): Map<String, String> {
  * Правдоподобие чужой адресной находки (#632, решение владельца: «проверять
  * правдоподобие адреса»). ML Kit звал адресом товарную строку «Розчинник
  * Уайт-Спірит ХімРезерв 1л», а расширение до строки усиливало ошибку. Адресом
- * считается строка адресной формы либо уличный маркер с номером.
+ * считается строка адресной формы либо уличный маркер с номером; слово-мешанина
+ * алфавитов («ZeHTpaJIbHa», прогон 2026-08-09) — мусор чтения, не адрес.
  */
 fun plausibleAddress(value: String): Boolean {
     val line = value.trim()
     if (line.isEmpty()) return false
+    if (line.words().any(::mixedScriptWord)) return false
     if (addressForm(line) != null) return true
     return line.hasStreetMarker() && line.any(Char::isDigit)
+}
+
+private fun mixedScriptWord(word: String): Boolean {
+    val letters = word.filter(Char::isLetter)
+    val cyr = letters.count { it in 'Ѐ'..'ӿ' }
+    return cyr > 0 && cyr < letters.length
 }
 
 internal enum class AddressForm {

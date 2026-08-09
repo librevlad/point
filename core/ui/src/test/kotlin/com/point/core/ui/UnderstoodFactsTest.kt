@@ -32,10 +32,13 @@ class UnderstoodFactsTest {
     }
 
     @Test
-    fun `masks a card number down to its last four digits`() {
+    fun `номер карты показывается целиком — без cvv в нём нет смысла`() {
+
+        // Решение владельца (2026-08-09, сказано трижды): маскировка карт удалена,
+        // номер — рабочее значение для сверки и копирования.
         val facts = understoodFacts(obj(setOf(Feature.HAS_CARD), mapOf("entity.card" to "5375 4141 1234 5678")))
         assertEquals("Нашёл карту", facts.single().label)
-        assertEquals("•• 5678", facts.single().value)
+        assertEquals("5375 4141 1234 5678", facts.single().value)
     }
 
     @Test

@@ -157,8 +157,12 @@ class UnderstandCapability @Inject constructor(
     override val icon = "ai"
     override val meta = CapabilityMeta(priority = 31, cost = Cost.PAID, latency = Latency.SLOW, network = true, auth = true)
     override fun label(state: ObjectState) = labelNeedingKey("Понять", keys.keySet())
+
+    // Фото без распознанного текста — тоже понимается: реализатор при пустых
+    // elements читает снимок глазами (readWithEyes). Дверь была заперта на HAS_TEXT,
+    // и счётчики/накладные/рукописи оставались без пути (#664, прогон 2026-08-09).
     override fun accepts(state: ObjectState) =
-        state.kind == ObjectKind.TEXT || state.has(Feature.HAS_TEXT)
+        state.kind == ObjectKind.TEXT || state.kind == ObjectKind.IMAGE || state.has(Feature.HAS_TEXT)
     override fun produces(state: ObjectState) = state
 
     override fun yields(state: ObjectState) = ActionYield.Same

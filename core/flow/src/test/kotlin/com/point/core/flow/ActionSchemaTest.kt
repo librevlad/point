@@ -376,8 +376,10 @@ class ActionSchemaTest {
     }
 
     @Test
-    fun `номер карты на экране показывается хвостом, а значение остаётся дословным`() {
+    fun `номер карты никогда не маскируется — без cvv в нём нет смысла`() {
 
+        // Решение владельца (2026-08-09, сказано трижды): номер — рабочее значение,
+        // его сверяют и копируют; «•• 1111» ломал главное действие.
         val pay = ACTION_SCHEMAS.single { it.id == "pay-by-requisites" }
         val r = pay.readiness(
             mapOf(META_ENTITY_PREFIX + "card" to "4111 1111 1111 1111", META_ENTITY_AMOUNT to "300"),
@@ -385,7 +387,7 @@ class ActionSchemaTest {
 
         val card = r.present.single { it.spec.key.endsWith("card") }
         assertEquals("4111 1111 1111 1111", card.value)
-        assertEquals("•• 1111", maskedForScreen(card.spec.key, card.value))
+        assertEquals("4111 1111 1111 1111", maskedForScreen(card.spec.key, card.value))
         assertEquals("300", maskedForScreen(META_ENTITY_AMOUNT, "300"))
     }
 

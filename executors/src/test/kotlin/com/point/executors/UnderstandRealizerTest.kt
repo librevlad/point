@@ -216,8 +216,11 @@ class UnderstandRealizerTest {
 
     @Test
     fun `скобки с метками — указание, скобки с текстом — текст`() {
+
+        // Семантика скобок проверяется на ключе без гейта формы: «Відділення №9» —
+        // место, а не адрес, и адресное правдоподобие (#657) его гасит законно.
         val parsed = parseFieldCandidates(
-            "TRACK=20 4514 9154 9395 [w1 w2, w3 rule=track-shaped]\nADDRESS=Відділення №9 [нове]",
+            "TRACK=20 4514 9154 9395 [w1 w2, w3 rule=track-shaped]\nSUBJECT=Про зустріч [важливо]",
         )
 
         assertEquals(
@@ -225,9 +228,16 @@ class UnderstandRealizerTest {
             parsed.fields["entity.track"]!!.single(),
         )
         assertEquals(
-            com.point.core.flow.FieldCandidate("Відділення №9 [нове]"),
-            parsed.fields["entity.address"]!!.single(),
+            com.point.core.flow.FieldCandidate("Про зустріч [важливо]"),
+            parsed.fields["entity.subject"]!!.single(),
         )
+    }
+
+    @Test
+    fun `неадресное место в ADDRESS гаснет правдоподобием`() {
+        // «Відділення №9» — место; кандидат на миграцию ADDRESS→PLACE в следующем
+        // срезе #657 («не плодим сущности без полной уверенности»).
+        assertEquals(null, parseFieldCandidates("ADDRESS=Відділення №9 [нове]").fields["entity.address"])
     }
 
     @Test
@@ -496,12 +506,16 @@ class UnderstandRealizerTest {
     }
 
     @Test
-    fun `принимает текст и распознанную картинку, не сырое фото`() {
+    fun `принимает текст и любое фото — сырое читается глазами`() {
+
+        // Решение владельца (#664, 2026-08-09): «понять, понять сильнее и т.п.
+        // полезно на всём. учитывая слабость локальных алгоритмов я буду часто
+        // ее жать» — прежний тест закреплял запертую дверь.
         val cap = UnderstandCapability(aiKeysReady)
 
         assertTrue(cap.accepts(ObjectState(ObjectKind.TEXT)))
         assertTrue(cap.accepts(ObjectState(ObjectKind.IMAGE, setOf(Feature.HAS_TEXT))))
-        assertFalse(cap.accepts(ObjectState(ObjectKind.IMAGE)))
+        assertTrue(cap.accepts(ObjectState(ObjectKind.IMAGE)))
     }
 
     @Test

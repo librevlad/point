@@ -48,6 +48,10 @@ fun parseFieldCandidates(answer: String): ParsedUnderstanding {
             glued != null -> raw.copy(text = glued.phone, person = glued.name)
             else -> raw
         }
+
+        // Номер карты — не телефон (#657): 16 цифр в phone рождали «Сохранить
+        // контакт 5169 3351 09…» и светили карту без маски.
+        if (semanticFits(META_ENTITY_PREFIX + "phone", candidate.text) == false) return
         candidate.person?.let { contacts += PersonContact(it, candidate.text) }
 
         val bucket = fields.getOrPut(META_ENTITY_PREFIX + "phone") { mutableListOf() }
@@ -94,6 +98,15 @@ fun parseFieldCandidates(answer: String): ParsedUnderstanding {
                 // «Голое время это никогда не дата, это мусор» (#651): 11:09 из чата
                 // становилось «Нашёл дату».
                 if (suffix == "date" && bareClock(candidate.text)) return@forEach
+
+                // «Не плодим сущности без полной уверенности» (#657, решение владельца):
+                // здесь — безопасная часть. Дата без цифр («[нет даты]») — не дата;
+                // адрес сторожит правдоподобие (товарные строки и слова-мешанины
+                // алфавитов гаснут). Общий гейт формы НЕ ставится: правила geo/meter
+                // беднее жизни — градусные координаты падали первым же тестом.
+                // Типизация «номер»/Луна/миграция типов — следующий срез #657.
+                if (suffix == "date" && semanticFits(metaKey, candidate.text) == false) return@forEach
+                if (suffix == "address" && !plausibleAddress(candidate.text)) return@forEach
 
                 // Несколько дат в одном значении — несколько кандидатов: «26.04.2026
                 // 26.04.2026» с чека рождало слипшийся спор (живой прогон 2026-08-09).
