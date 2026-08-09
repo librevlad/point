@@ -65,6 +65,27 @@ class SendToRunningTest {
     }
 
     @Test
+    fun `второй запуск без файлов не живёт второй копией — будит первую и уходит`() {
+        // Живой запуск 2026-08-09: у владельца оказалось две копии Point — запуск
+        // без аргументов не смотрел на замок вовсе.
+        val dir = tempDir()
+        val alive = SendToRunning.takeLock(dir)
+
+        assertTrue("при живом Point второй обязан уйти", SendToRunning.handOff(emptyList(), dir))
+        assertTrue("первому оставлен сигнал «покажись»", SendToRunning.takeWake(dir))
+        assertTrue("сигнал одноразовый", !SendToRunning.takeWake(dir))
+
+        alive!!.release()
+    }
+
+    @Test
+    fun `никого нет — запуск без файлов стартует сам`() {
+        val dir = tempDir()
+
+        assertTrue("замок свободен — жить самому", !SendToRunning.handOff(emptyList(), dir))
+    }
+
+    @Test
     fun `презентация едет на ПК своим типом, а не «неизвестно чем»`() {
         assertEquals(
             "application/vnd.openxmlformats-officedocument.presentationml.presentation",

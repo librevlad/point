@@ -259,6 +259,9 @@ fun main(args: Array<String>) {
                     // «Открыть в Point» — человек сам позвал: окошко выходит само.
                     compactVisible.value = true
                 }
+
+                // Вторая копия не живёт — она будит эту и уходит.
+                if (SendToRunning.takeWake(pointDir)) compactVisible.value = true
             }
             runCatching { Thread.sleep(1_000) }.getOrElse { return@Thread }
         }
@@ -278,7 +281,7 @@ fun main(args: Array<String>) {
         // Непросмотренное прибытие оставляет след на иконке (PC3): peek легко пропустить.
         val freshIds by state.fresh.collectAsState()
         val icon = androidx.compose.runtime.remember(freshIds.isNotEmpty()) {
-            trayPortalIcon(badge = freshIds.isNotEmpty())
+            pointGlyph(badge = freshIds.isNotEmpty())
         }
         Tray(
             icon = icon,
@@ -308,7 +311,7 @@ fun main(args: Array<String>) {
             resizable = false,
             alwaysOnTop = true,
             title = "Point",
-            icon = painterResource("point-icon.png"),
+            icon = androidx.compose.runtime.remember { pointGlyph() },
         ) {
             com.point.desktop.ui.PointDesktopTheme {
                 com.point.desktop.ui.CompactApp(
@@ -391,32 +394,52 @@ fun main(args: Array<String>) {
 }
 
 /**
- * Иконка трея рисуется кодом: прозрачный фон (png сидел чёрным квадратом —
- * замечание владельца), знак — портал-кольца, бейдж — след непросмотренного.
+ * Знак Point на ПК — тот же, что лончер-иконка телефона (решение владельца:
+ * все иконки — портал-кольцо из дизайна): тёмная плашка, светящееся кольцо
+ * светлым кверху и синим книзу. Рисуется кодом — фон прозрачен, читается в 16 px.
  */
-private fun trayPortalIcon(badge: Boolean): androidx.compose.ui.graphics.painter.Painter =
+private fun pointGlyph(badge: Boolean = false): androidx.compose.ui.graphics.painter.Painter =
     object : androidx.compose.ui.graphics.painter.Painter() {
         override val intrinsicSize = androidx.compose.ui.geometry.Size(64f, 64f)
         override fun androidx.compose.ui.graphics.drawscope.DrawScope.onDraw() {
             val c = center
             val r = size.minDimension / 2f
+
+            // Тёмная плашка — как поле мобильной иконки.
             drawCircle(
-                color = androidx.compose.ui.graphics.Color(0xFF7B5CFF),
-                radius = r * 0.62f,
+                brush = androidx.compose.ui.graphics.Brush.radialGradient(
+                    0f to androidx.compose.ui.graphics.Color(0xFF141021),
+                    1f to androidx.compose.ui.graphics.Color(0xFF08080E),
+                    center = c, radius = r,
+                ),
+                radius = r * 0.94f,
                 center = c,
-                style = androidx.compose.ui.graphics.drawscope.Stroke(width = r * 0.18f),
             )
+
+            // Мягкий ореол кольца.
             drawCircle(
-                color = androidx.compose.ui.graphics.Color(0xFF00E0FF),
-                radius = r * 0.32f,
+                color = androidx.compose.ui.graphics.Color(0xFF7B5CFF).copy(alpha = 0.30f),
+                radius = r * 0.60f,
                 center = c,
-                style = androidx.compose.ui.graphics.drawscope.Stroke(width = r * 0.11f),
+                style = androidx.compose.ui.graphics.drawscope.Stroke(width = r * 0.26f),
+            )
+
+            // Само кольцо: светлое кверху, фиолетовое, синее книзу — как на телефоне.
+            drawCircle(
+                brush = androidx.compose.ui.graphics.Brush.verticalGradient(
+                    0f to androidx.compose.ui.graphics.Color(0xFFEAF0FF),
+                    0.45f to androidx.compose.ui.graphics.Color(0xFF9B7BFF),
+                    1f to androidx.compose.ui.graphics.Color(0xFF00A6FF),
+                ),
+                radius = r * 0.58f,
+                center = c,
+                style = androidx.compose.ui.graphics.drawscope.Stroke(width = r * 0.20f),
             )
             if (badge) {
                 drawCircle(
                     color = androidx.compose.ui.graphics.Color(0xFF00E0FF),
-                    radius = r * 0.22f,
-                    center = androidx.compose.ui.geometry.Offset(size.width * 0.8f, size.height * 0.2f),
+                    radius = r * 0.20f,
+                    center = androidx.compose.ui.geometry.Offset(size.width * 0.82f, size.height * 0.18f),
                 )
             }
         }

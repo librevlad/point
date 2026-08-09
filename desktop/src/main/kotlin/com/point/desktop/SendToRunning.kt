@@ -6,22 +6,34 @@ import java.nio.channels.FileLock
 
 object SendToRunning {
 
+    /**
+     * true — Point уже живёт: файлы (если есть) отданы ему, оставлен сигнал «покажись»,
+     * вызвавший обязан выйти. Вторая копия не живёт и при запуске без аргументов
+     * (живой запуск 2026-08-09: у владельца оказалось две копии).
+     */
     fun handOff(files: List<File>, pointDir: File): Boolean {
-        if (files.isEmpty()) return false
-
         val free = takeLock(pointDir)
         if (free != null) {
             runCatching { free.release() }
             return false
         }
-        return runCatching {
+        runCatching {
             val drop = File(pointDir.apply { mkdirs() }, HANDOFF).apply { mkdirs() }
-            val letter = File(drop, "${System.currentTimeMillis()}-${files.size}.paths")
+            if (files.isNotEmpty()) {
+                val letter = File(drop, "${System.currentTimeMillis()}-${files.size}.paths")
+                val partial = File(drop, letter.name + ".part")
+                partial.writeText(files.joinToString("\n") { it.absolutePath }, Charsets.UTF_8)
+                partial.renameTo(letter)
+            }
+            File(drop, WAKE).writeText("")
+        }
+        return true
+    }
 
-            val partial = File(drop, letter.name + ".part")
-            partial.writeText(files.joinToString("\n") { it.absolutePath }, Charsets.UTF_8)
-            partial.renameTo(letter)
-        }.getOrDefault(false)
+    /** Одноразовый сигнал «покажись» от второй копии. */
+    fun takeWake(pointDir: File): Boolean {
+        val wake = File(File(pointDir, HANDOFF), WAKE)
+        return wake.isFile && runCatching { wake.delete() }.getOrDefault(false)
     }
 
     fun takeLock(pointDir: File): FileLock? = runCatching {
@@ -41,6 +53,7 @@ object SendToRunning {
 
     private const val LOCK = "lock"
     private const val HANDOFF = "handoff"
+    private const val WAKE = "wake"
 }
 
 fun filesFromArgs(args: Array<String>): List<File> =
