@@ -165,6 +165,10 @@ internal fun parseFieldCandidates(answer: String): ParsedUnderstanding {
             else -> CONTRACT_KEYS[key]?.let { suffix ->
                 val metaKey = META_ENTITY_PREFIX + suffix
                 val candidate = splitCandidate(rest) ?: return@forEach
+
+                // Форма IBAN — не трек: «UA79…» с квитанции становился готовым
+                // «Отследить отправление» (живой прогон 2026-08-09).
+                if (suffix == "track" && looksLikeIban(candidate.text)) return@forEach
                 val bucket = fields.getOrPut(metaKey) { mutableListOf() }
                 if (bucket.size < MAX_FIELD_CANDIDATES && bucket.none { it.text == candidate.text && it.ids == candidate.ids }) {
                     bucket += candidate
@@ -207,6 +211,11 @@ private val NO_VALUE = setOf(
 )
 
 private fun saysNothing(text: String): Boolean = text.trim().trim('.').lowercase() in NO_VALUE
+
+private val IBAN_SHAPED = Regex("""[A-Z]{2}\d{2}[A-Z0-9]{11,30}""")
+
+private fun looksLikeIban(text: String): Boolean =
+    IBAN_SHAPED.matches(text.filterNot(Char::isWhitespace).uppercase())
 
 private val TRAILING_IDS = Regex("""^(.*?)\s*\[([^\[\]]+)]$""")
 private val ID_SHAPED = Regex("""[A-Za-z]+\d+""")

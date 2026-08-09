@@ -190,6 +190,19 @@ class UnderstandRealizerTest {
     }
 
     @Test
+    fun `IBAN не становится трек-номером`() {
+
+        // Живой прогон 2026-08-09: «✓ Отследить отправление UA7932…» — IBAN отправителя
+        // с квитанции стал готовым действием. Форма IBAN — не трек.
+        val parsed = parseFieldCandidates(
+            "TRACK=UA793220010000026208373515609\nCARD=4149609057165427",
+        )
+
+        assertNull(parsed.fields["entity.track"])
+        assertEquals("4149609057165427", parsed.fields["entity.card"]!!.single().text)
+    }
+
+    @Test
     fun `None от модели — отсутствие значения, а не значение`() {
         val parsed = parseFieldCandidates(
             "PHONE=None\nTRACK=null\nCARD=N/A\nAMOUNT=—\nPLACE=не найдено\n" +

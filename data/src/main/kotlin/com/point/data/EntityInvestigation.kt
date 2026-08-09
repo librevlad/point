@@ -11,7 +11,10 @@ import com.point.core.flow.addressFacts
 import com.point.core.flow.expandAddressToLine
 import com.point.core.flow.alternativesOf
 import com.point.core.flow.altValue
+import com.point.core.flow.moreOf
+import com.point.core.flow.normConsensus
 import com.point.core.flow.META_ALT_SUFFIX
+import com.point.core.flow.META_MORE_SUFFIX
 import com.point.core.flow.META_EVIDENCE_SUFFIX
 import com.point.core.flow.META_SOURCE_SUFFIX
 import com.point.core.flow.provenanceOf
@@ -208,6 +211,10 @@ internal fun entityDelta(
     text: String = "",
 ): Findings {
     val features = entities.mapNotNullTo(mutableSetOf()) { it.type.asFeature() }
+
+    // Второе значение того же вида — «ещё один», а не проигравший и не спор (S6,
+    // живой прогон 2026-08-09): два телефона в тексте остаются двумя телефонами.
+    val more = LinkedHashMap<String, MutableList<String>>()
     val extracted = buildMap {
 
         entities.sortedBy { it.isBareClock() }.forEach { e ->
@@ -218,13 +225,21 @@ internal fun entityDelta(
                 } else {
                     e.value
                 }
-                putIfAbsent(key, value)
+                val first = this[key]
+                if (first == null) {
+                    put(key, value)
+                } else if (normConsensus(value) != normConsensus(first)) {
+                    val bucket = more.getOrPut(key) { mutableListOf() }
+                    if (bucket.none { normConsensus(it) == normConsensus(value) }) bucket += value
+                }
             }
         }
     }
+    val moreFacts = more.mapKeys { (key, _) -> key + META_MORE_SUFFIX }
+        .mapValues { (_, values) -> altValue(values) }
 
     val ruled = if (META_ENTITY_ADDRESS in extracted) emptyMap() else addressFacts(text)
-    val facts = extracted + ruled
+    val facts = extracted + moreFacts + ruled
 
     if (ruled.isNotEmpty()) features += Feature.HAS_ADDRESS
     val (objects, relations) = entityObjects(source, facts, creator = ENTITY_CREATOR)
@@ -256,33 +271,45 @@ internal fun entityObjects(
 
     if (source.state.kind in EXTRACTED_KINDS) return emptyList<PointObject>() to emptyList()
 
-    val objects = ENTITY_KINDS.mapNotNull { (suffix, kindAndFeature) ->
+    val objects = ENTITY_KINDS.flatMap { (suffix, kindAndFeature) ->
         val key = META_ENTITY_PREFIX + suffix
-        val value = facts[key]?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+        val value = facts[key]?.takeIf { it.isNotBlank() } ?: return@flatMap emptyList()
         val (kind, feature) = kindAndFeature
-        if (kind == KIND_DATE && bareTimestamp(value)) return@mapNotNull null
 
         val alternatives = alternativesOf(facts, key)
 
-        val slice = buildMap {
-            put(key, value)
-            if (alternatives.isNotEmpty()) {
-                put(key + META_ALT_SUFFIX, altValue(alternatives))
-            }
-
-            facts[key + META_EVIDENCE_SUFFIX]?.let { put(key + META_EVIDENCE_SUFFIX, it) }
-            facts[key + META_SOURCE_SUFFIX]?.let { put(key + META_SOURCE_SUFFIX, it) }
-        }
-        PointObject(
-            id = "${source.id}:$suffix",
+        fun node(id: String, nodeValue: String, withAlternatives: Boolean) = PointObject(
+            id = id,
             mime = "text/plain",
-            uri = ValueRef(value),
+            uri = ValueRef(nodeValue),
             state = ObjectState(kind, setOf(feature)),
-            metadata = slice,
-            provenance = provenanceOf(slice, key),
+            metadata = buildMap {
+                put(key, nodeValue)
+                if (withAlternatives && alternatives.isNotEmpty()) {
+                    put(key + META_ALT_SUFFIX, altValue(alternatives))
+                }
+
+                facts[key + META_EVIDENCE_SUFFIX]?.let { put(key + META_EVIDENCE_SUFFIX, it) }
+                facts[key + META_SOURCE_SUFFIX]?.let { put(key + META_SOURCE_SUFFIX, it) }
+            },
+            provenance = provenanceOf(facts, key),
             sourceObjects = listOf(source.id),
             creatorAction = creator,
         )
+
+        val primary = if (kind == KIND_DATE && bareTimestamp(value)) {
+            null
+        } else {
+            node("${source.id}:$suffix", value, withAlternatives = true)
+        }
+
+        // «Ещё значения» того же вида — самостоятельные объекты со значением в
+        // идентичности (прецедент focused/identifiers): второй телефон — не спор.
+        val others = moreOf(facts, key)
+            .filter { !(kind == KIND_DATE && bareTimestamp(it)) }
+            .map { extra -> node("${source.id}:$suffix:$extra", extra, withAlternatives = false) }
+
+        listOfNotNull(primary) + others
     }
     return objects to objects.map { Relation(it.id, RelationType.FOUND_IN, source.id) }
 }
