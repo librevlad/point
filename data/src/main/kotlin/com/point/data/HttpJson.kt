@@ -24,10 +24,12 @@ class UrlConnectionHttpJson @Inject constructor() : HttpJson {
                 pointHeaders(mapOf("Content-Type" to "application/json; charset=utf-8"), headers)
                     .forEach { (k, v) -> setRequestProperty(k, v) }
             }
-            conn.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
-            val code = conn.responseCode
-            val text = (if (code in 200..299) conn.inputStream else conn.errorStream)
-                ?.bufferedReader()?.use { it.readText() }.orEmpty()
-            HttpResult(code, text)
+            conn.callClosingOnCancel {
+                outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
+                val code = responseCode
+                val text = (if (code in 200..299) inputStream else errorStream)
+                    ?.bufferedReader()?.use { it.readText() }.orEmpty()
+                HttpResult(code, text)
+            }
         }
 }
