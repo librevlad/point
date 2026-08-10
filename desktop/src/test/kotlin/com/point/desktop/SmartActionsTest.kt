@@ -348,16 +348,9 @@ class SmartActionsTest {
 
     private fun pcRealizerIds(): Set<String> = setOf(
         "pc-open", "pc-copy", "pc-reveal", "pc-save-as", "pc-download", "pc-to-phone", "pc-print",
-        "pc-open-link", "pc-transcribe",
+        "pc-open-link", "transcribe",
         "pc-entities",
     ) + com.point.core.flow.capabilities.sharedCapabilities().map { it.id.value }
 
-    private fun pcRegistry() = DesktopRegistry(
-        setOf(
-            PcOpenCapability(), PcCopyCapability(), PcRevealCapability(), PcSaveAsCapability(),
-            PcDownloadCapability(), PcToPhoneCapability(), PcPrintCapability(),
-            PcOpenLinkCapability(), PcTranscribeCapability(),
-            PcEntitiesCapability(),
-        ) + com.point.core.flow.capabilities.sharedCapabilities(),
-    )
+    private fun pcRegistry() = DesktopRegistry(desktopCapabilities())
 }

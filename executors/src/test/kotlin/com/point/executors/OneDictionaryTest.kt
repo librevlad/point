@@ -27,12 +27,11 @@ class OneDictionaryTest {
         PcRemoteAction("pc-print", "Напечатать на ПК"),
     )
 
+    private val phoneOwn: Set<com.point.core.flow.Capability> =
+        setOf(ShareCapability(), SaveCapability()) + sharedCapabilities()
+
     private fun phoneRegistry() = DefaultCapabilityRegistry(
-        capabilities = setOf(ShareCapability(), SaveCapability()) +
-            sharedCapabilities() +
-            fromPc
-                .filterNot { CapabilityId(it.id) in com.point.core.flow.capabilities.sharedCapabilityIds }
-                .map { RemotePcCapability(it, FixedPc(pc)) },
+        capabilities = phoneOwn + remotePcCapabilities(phoneOwn, fromPc, FixedPc(pc)),
         policy = DefaultBubblePolicy(),
     )
 
@@ -53,14 +52,14 @@ class OneDictionaryTest {
 
     @Test fun `реализация компьютера не потерялась — она кандидат к той же способности`() {
 
-        val remote = RemotePcRealizer(fromPc[0], FixedPc(pc), NoTransport)
+        val remote = remotePcRealizers(phoneOwn, listOf(fromPc[0]), FixedPc(pc), NoTransport).single()
 
         assertEquals(OcrCapability.ID, remote.capabilityId)
     }
 
     @Test fun `непереехавшее объявляется по-старому и остаётся видимым`() {
 
-        val remote = RemotePcRealizer(fromPc[1], FixedPc(pc), NoTransport)
+        val remote = remotePcRealizers(phoneOwn, listOf(fromPc[1]), FixedPc(pc), NoTransport).single()
 
         assertEquals(CapabilityId("pc-do:pc-print"), remote.capabilityId)
         assertTrue(

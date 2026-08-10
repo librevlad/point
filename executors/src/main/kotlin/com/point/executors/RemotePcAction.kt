@@ -19,9 +19,47 @@ import com.point.core.model.ObjectState
 import com.point.core.model.isFileBacked
 import com.point.core.model.PointObject
 
+/**
+ * Способности, которые добавляет объявление компьютера (#628, решение владельца
+ * «одна способность — одна кнопка»).
+ *
+ * То, что телефон умеет сам, второй строкой не становится- компьютер там просто ещё
+ * один исполнитель той же способности, а кого позвать, решает Resolver. Устройство
+ * остаётся отдельной способностью только там, где от него зависит внешний результат
+ * (ADR-0001 §7)- у таких умений и id свой, компьютерный.
+ */
+fun remotePcCapabilities(
+    own: Set<Capability>,
+    fromPc: List<PcRemoteAction>,
+    links: PcLinks,
+
+    /** Свежо ли объявление того устройства (#633): устаревшая причина молчит. */
+    fresh: () -> Boolean = { true },
+): Set<Capability> {
+    val ownIds = own.map { it.id }.toSet()
+    return fromPc
+        .filterNot { CapabilityId(it.id) in ownIds }
+        .map { RemotePcCapability(it, links, ownIds, fresh) }
+        .toSet()
+}
+
+/** Исполнитель заводится на каждое объявленное умение — и на слитое со своим тоже. */
+fun remotePcRealizers(
+    own: Set<Capability>,
+    fromPc: List<PcRemoteAction>,
+    links: PcLinks,
+    transport: PcTransport,
+    store: com.point.core.flow.ObjectStore? = null,
+    classifier: com.point.core.flow.ObjectClassifier? = null,
+): Set<Realizer> {
+    val ownIds = own.map { it.id }.toSet()
+    return fromPc.map { RemotePcRealizer(it, links, transport, store, classifier, ownIds) }.toSet()
+}
+
 class RemotePcCapability(
     private val action: PcRemoteAction,
     private val links: PcLinks,
+    ownIds: Set<CapabilityId> = emptySet(),
 
     /**
      * Свежо ли объявление того устройства (#633). Устарело — причина недоступности не
@@ -29,7 +67,7 @@ class RemotePcCapability(
      */
     private val fresh: () -> Boolean = { true },
 ) : Capability {
-    override val id = idFor(action)
+    override val id = idFor(action, ownIds)
     override val icon = "pc"
 
     override val meta = CapabilityMeta(priority = 76, latency = Latency.FAST, localOnly = true)
@@ -50,13 +88,13 @@ class RemotePcCapability(
 
     companion object {
 
-        fun idFor(action: PcRemoteAction): CapabilityId {
-            val shared = CapabilityId(action.id)
-            return if (shared in com.point.core.flow.capabilities.sharedCapabilityIds) {
-                shared
-            } else {
-                CapabilityId("pc-do:${action.id}")
-            }
+        /**
+         * Умение компьютера, которое телефон знает под тем же именем, — та же способность.
+         * Незнакомое остаётся отдельной способностью со своим id.
+         */
+        fun idFor(action: PcRemoteAction, ownIds: Set<CapabilityId> = emptySet()): CapabilityId {
+            val same = CapabilityId(action.id)
+            return if (same in ownIds) same else CapabilityId("pc-do:${action.id}")
         }
     }
 }
@@ -68,8 +106,9 @@ class RemotePcRealizer(
 
     private val store: com.point.core.flow.ObjectStore? = null,
     private val classifier: com.point.core.flow.ObjectClassifier? = null,
+    ownIds: Set<CapabilityId> = emptySet(),
 ) : Realizer {
-    override val capabilityId = RemotePcCapability.idFor(action)
+    override val capabilityId = RemotePcCapability.idFor(action, ownIds)
 
     override val meta = com.point.core.flow.RealizerMeta(
         kind = if (action.leavesCircle) com.point.core.flow.RealizerKind.CLOUD else com.point.core.flow.RealizerKind.LOCAL,
