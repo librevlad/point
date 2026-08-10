@@ -405,7 +405,8 @@ abstract class DataModule {
             account: com.point.core.flow.AccountStore,
             network: NetworkAvailability,
         ): com.point.core.flow.DropInbox =
-            com.point.data.RelayDropInbox(serverUrl(), devicePass(account), network)
+            // Приём — один код на телефон и компьютер (#727): своей копии у Android больше нет.
+            com.point.core.flow.HttpDropInbox({ serverUrl() }, devicePass(account), network)
 
         @Provides
         @Singleton
