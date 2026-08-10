@@ -22,6 +22,10 @@ import com.point.executors.WordPlusRealizer
 import com.point.executors.RemotePcRealizer
 import com.point.executors.JobReplyCapability
 import com.point.executors.JobReplyRealizer
+import com.point.executors.FixErrorsCapability
+import com.point.executors.FixErrorsRealizer
+import com.point.executors.FixErrorsStrongerCapability
+import com.point.executors.FixErrorsStrongerRealizer
 import com.point.executors.UnderstandCapability
 import com.point.executors.UnderstandRealizer
 import com.point.executors.ShoppingListCapability
@@ -176,6 +180,9 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun shoppingListCap(c: ShoppingListCapability): Capability
 
     @Binds @IntoSet abstract fun understandCap(c: UnderstandCapability): Capability
+
+    @Binds @IntoSet abstract fun fixErrorsCap(c: FixErrorsCapability): Capability
+    @Binds @IntoSet abstract fun fixErrorsStrongerCap(c: FixErrorsStrongerCapability): Capability
     @Binds @IntoSet abstract fun wordPlusCap(c: WordPlusCapability): Capability
     @Binds @IntoSet abstract fun jobReplyCap(c: JobReplyCapability): Capability
 
@@ -225,6 +232,9 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun aiR(r: AiRealizer): Realizer
     @Binds @IntoSet abstract fun shoppingListR(r: ShoppingListRealizer): Realizer
     @Binds @IntoSet abstract fun understandR(r: UnderstandRealizer): Realizer
+
+    @Binds @IntoSet abstract fun fixErrorsR(r: FixErrorsRealizer): Realizer
+    @Binds @IntoSet abstract fun fixErrorsStrongerR(r: FixErrorsStrongerRealizer): Realizer
     @Binds @IntoSet abstract fun wordPlusR(r: WordPlusRealizer): Realizer
     @Binds @IntoSet abstract fun jobReplyR(r: JobReplyRealizer): Realizer
     @Binds @IntoSet abstract fun pcR(r: PcRealizer): Realizer

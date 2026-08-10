@@ -223,7 +223,7 @@ fun saysNothing(text: String): Boolean = text.trim().trim('.').lowercase() in NO
 
 private val IBAN_SHAPED = Regex("""[A-Z]{2}\d{2}[A-Z0-9]{11,30}""")
 
-private fun looksLikeIban(text: String): Boolean =
+internal fun looksLikeIban(text: String): Boolean =
     IBAN_SHAPED.matches(text.filterNot(Char::isWhitespace).uppercase())
 
 private val TRAILING_IDS = Regex("""^(.*?)\s*\[([^\[\]]+)]$""")
