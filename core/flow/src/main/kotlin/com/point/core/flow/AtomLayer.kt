@@ -149,7 +149,15 @@ class AtomLayer(
      * 2. он держится на нескольких строках сразу, а не на одной.
      */
     private fun columnGaps(band: List<List<Pair<Atom, Box>>>): List<ClosedFloatingPointRange<Float>> {
-        val placed = band.flatten()
+
+        // Где колонка — решают уверенно прочитанные слова. На настоящей наклейке по левому
+        // полю висели обрывки распознавания — «ez», «ia», «=)» с уверенностью 0.0–0.4, —
+        // и столбец вставал по ним, а настоящий просвет между отправителем и получателем
+        // оставался незамеченным (#747).
+        val sure = band.map { row -> row.filter { (atom, _) -> atom.confidence >= CONFIDENT_ENOUGH } }
+            .filter { it.isNotEmpty() }
+        val solid = if (sure.size >= MIN_ROWS_ACROSS) sure else band
+        val placed = solid.flatten()
         val heights = placed.map { (_, box) -> box.height }.sorted()
         val line = heights[heights.size / 2].takeIf { it > 0f } ?: return emptyList()
         val minGap = line * COLUMN_GAP_IN_LINES
@@ -161,7 +169,7 @@ class AtomLayer(
             if (left - edge > minGap) gaps += edge..left
             edge = maxOf(edge, right)
         }
-        return blocksApart(gaps.filter { gap -> rowsAcross(band, gap) >= MIN_ROWS_ACROSS }, placed)
+        return blocksApart(gaps.filter { gap -> rowsAcross(solid, gap) >= MIN_ROWS_ACROSS }, placed)
     }
 
     /** На скольких строках полосы просвет разделяет написанное, а не обрывается краем строки. */
@@ -239,5 +247,8 @@ class AtomLayer(
 
         /** Столбец стоит на нескольких строках: на одной это подпись со значением рядом. */
         const val MIN_ROWS_ACROSS = 2
+
+        /** Обрывок распознавания — не слово страницы и не решает, где проходит столбец. */
+        const val CONFIDENT_ENOUGH = 0.6f
     }
 }
