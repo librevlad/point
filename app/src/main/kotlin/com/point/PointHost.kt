@@ -54,7 +54,7 @@ import com.point.core.ui.Portal
 import com.point.core.ui.PortalColumnWidth
 import com.point.core.ui.PortalRow
 import com.point.core.ui.ScreenHeader
-import com.point.core.ui.SelectionScreen
+import com.point.core.ui.FocusScreen
 import com.point.core.ui.ThinkingDot
 import com.point.core.ui.bubbleIcon
 import com.point.core.ui.livingBackground
@@ -230,14 +230,13 @@ fun PointHost(
                     onCancel = onCancelAction.takeIf { showsCancel(state) },
                 )
 
-            state.selection != null -> SelectionScreen(
+            // Focus — отдельный инструмент, а не форма перед распознаванием (ТЗ владельца
+            // 10.08.2026): кисть по умолчанию, ✓ — единственное завершение.
+            state.selection != null -> FocusScreen(
                 image = state.selection.image,
-                highlights = state.selection.highlights,
-                capturedText = state.selection.text,
-                onSelect = onSelectRegion,
-                onTake = onTakeSelection,
-                onFocus = onFocusSelection,
-                onClose = onCloseSelection,
+                layer = state.selection.layer,
+                onDone = onSelectRegion,
+                onCancel = onCloseSelection,
                 modifier = Modifier.fillMaxSize(),
             )
 

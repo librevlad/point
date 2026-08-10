@@ -42,6 +42,18 @@ internal const val OCR_CLOUD_PROMPT =
     "Извлеки весь текст с изображения дословно, сохраняя порядок строк. " +
         "Таблицы оформи в Markdown. Верни только текст, без комментариев."
 
+/**
+ * Узкий вопрос вместо вопроса о странице (#426): человек показал область, и на картинке
+ * теперь только она. Замер 04.08.2026 показал, чем опасен широкий вопрос — модель уверенно
+ * отдаёт числа с шильдика вместо показания, и человек получает то, чего не было.
+ */
+internal const val OCR_FOCUS_PROMPT =
+    "На изображении только один фрагмент документа. Прочитай его дословно, целиком и ничего " +
+        "не добавляя от себя. Не додумывай то, что обрезано краем. Верни только текст."
+
+internal fun ocrPromptFor(obj: PointObject): String =
+    if (com.point.core.flow.focusOf(obj.metadata, obj.id)?.region != null) OCR_FOCUS_PROMPT else OCR_CLOUD_PROMPT
+
 internal const val OCR_CLOUD_STAGE = "Читаю снимок в облаке"
 
 class DeviceOcrRealizer @Inject constructor(
@@ -119,7 +131,7 @@ class CloudOcrRealizer @Inject constructor(
             if (!isAvailable()) return@withContext ActionResult.Failure(chainClosed(privacy.level()), recoverable = true)
 
             reportStage(OCR_CLOUD_STAGE)
-            runCatching { guarded(llm.run(input, OCR_CLOUD_PROMPT), "модель") }
+            runCatching { guarded(llm.run(input, ocrPromptFor(input)), "модель") }
                 .getOrElse { ActionResult.Failure(it.message ?: "Ошибка распознавания в облаке", recoverable = true) }
         }
 }
@@ -164,7 +176,7 @@ class CloudOcrDirectRealizer @Inject constructor(
         withContext(Dispatchers.IO) {
             if (!isAvailable()) return@withContext ActionResult.Failure(chainClosed(privacy.level()), recoverable = true)
             reportStage(OCR_CLOUD_STAGE)
-            runCatching { guarded(llm.run(input, OCR_CLOUD_PROMPT), "модель") }
+            runCatching { guarded(llm.run(input, ocrPromptFor(input)), "модель") }
                 .getOrElse { ActionResult.Failure(it.message ?: "Ошибка распознавания в облаке", recoverable = true) }
         }
 }
