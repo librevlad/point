@@ -3,11 +3,10 @@ package com.point
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
-import androidx.compose.ui.test.performTouchInput
-import androidx.compose.ui.test.swipeLeft
 import com.point.core.model.HistoryEntry
 import com.point.core.model.ObjectKind
 import com.point.core.model.ScratchRef
@@ -20,8 +19,9 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 
 /**
- * «Недавнее» отдаёт запись обратно человеку (#543): одна убирается свайпом влево, очистка всего
- * сначала спрашивает. Экран проверяется тем же, чем пользуется человек — жестом и тапом.
+ * «Недавнее» отдаёт запись обратно человеку (#543): одна убирается через меню записи, очистка
+ * всего сначала спрашивает. Меню пришло на смену свайпу решением владельца 10.08.2026 — жест был
+ * невидим, и человек не знал, что запись вообще можно убрать.
  */
 @RunWith(RobolectricTestRunner::class)
 class HomeRecentRemoveTest {
@@ -59,27 +59,27 @@ class HomeRecentRemoveTest {
         }
     }
 
-    @Test fun `до свайпа «Убрать» не показано — список остаётся списком`() {
+    @Test fun `«Убрать» не висит на экране — оно в меню записи`() {
         home()
 
         compose.onNodeWithText(REMOVE_ENTRY).assertDoesNotExist()
     }
 
-    @Test fun `свайп влево по записи открывает «Убрать»`() {
+    @Test fun `меню записи видно всегда и открывает «Убрать»`() {
         home()
 
-        compose.onNodeWithText("Счёт за свет.pdf").performTouchInput { swipeLeft() }
+        compose.onAllNodesWithContentDescription(ENTRY_MENU)[0].performClick()
         compose.waitForIdle()
 
         compose.onNodeWithText(REMOVE_ENTRY).assertExists()
     }
 
-    @Test fun `сам свайп ничего не уносит — запись убирает тап по «Убрать»`() {
+    @Test fun `открытое меню ничего не уносит — запись убирает тап по «Убрать»`() {
         home()
 
-        compose.onNodeWithText("Счёт за свет.pdf").performTouchInput { swipeLeft() }
+        compose.onAllNodesWithContentDescription(ENTRY_MENU)[0].performClick()
         compose.waitForIdle()
-        assertTrue("свайп унёс запись, ничего не спросив — $removed", removed.isEmpty())
+        assertTrue("меню унесло запись, ничего не спросив — $removed", removed.isEmpty())
 
         compose.onNodeWithText(REMOVE_ENTRY).performClick()
         compose.waitForIdle()
@@ -87,10 +87,10 @@ class HomeRecentRemoveTest {
         assertEquals(listOf("a"), removed)
     }
 
-    @Test fun `свайп открывает «Убрать» именно у той записи, по которой провели`() {
+    @Test fun `убирается та запись, чьё меню открыли`() {
         home()
 
-        compose.onNodeWithText("Расписка от соседа").performTouchInput { swipeLeft() }
+        compose.onAllNodesWithContentDescription(ENTRY_MENU)[1].performClick()
         compose.waitForIdle()
         compose.onNodeWithText(REMOVE_ENTRY).performClick()
         compose.waitForIdle()

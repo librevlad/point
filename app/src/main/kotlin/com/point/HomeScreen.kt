@@ -1,15 +1,10 @@
 package com.point
 
-import androidx.compose.animation.core.Animatable
-import androidx.compose.foundation.gestures.Orientation
-import androidx.compose.foundation.gestures.draggable
-import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -27,6 +22,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddCircleOutline
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -90,16 +88,25 @@ internal const val EXAMPLE_DOOR_WHAT: String =
 
 internal const val REMOVE_ENTRY: String = "Убрать"
 
+internal const val ENTRY_MENU: String = "Что можно с записью"
+
 internal const val CLEAR_RECENT: String = "Очистить недавнее"
 
 internal const val CLEAR_RECENT_ASK: String = "Убрать всё недавнее?"
 
 internal const val CLEAR_RECENT_WHAT: String =
-    "Уйдут все записи и всё, что Point о них узнал. Одну запись можно убрать свайпом влево."
+    "Уйдут все записи и всё, что Point о них узнал. Одну запись можно убрать через её меню."
 
 internal const val CLEAR_RECENT_CONFIRM: String = "Убрать всё"
 
 internal const val CANCEL: String = "Отмена"
+
+/** Дверь входа спрашивает человека, а не перечисляет наши источники (макет владельца 10.08.2026). */
+internal const val WHAT_YOU_HAVE: String = "Что у вас есть?"
+
+internal const val RECENT_TITLE: String = "Недавнее"
+
+internal const val RECENT_WHAT: String = "Последние объекты"
 
 @Composable
 fun HomeScreen(
@@ -203,11 +210,14 @@ fun HomeScreen(
                     item { ConnectAiRow(onConnect = onSettings, modifier = Modifier.padding(bottom = 8.dp)) }
                 }
                 item {
-                    Text(
-                        "Недавнее",
-                        style = MaterialTheme.typography.titleLarge,
-                        modifier = Modifier.padding(bottom = 6.dp),
-                    )
+                    Column(modifier = Modifier.padding(bottom = 6.dp)) {
+                        Text(RECENT_TITLE, style = MaterialTheme.typography.titleLarge)
+                        Text(
+                            RECENT_WHAT,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
                 items(recent, key = { it.id }) { entry ->
                     RemovableHistoryRow(
@@ -246,7 +256,12 @@ private fun NewObjectDoor(
 ) {
     PortalRow(
         title = "Новый объект",
-        subtitle = sourcesSubtitle(sourceLabels),
+
+        // Дверь спрашивает человека, а не перечисляет наши источники: «Буфер обмена ·
+        // Звукозапись · Камера · Место · Принять файл» — это наш список, а не его вопрос
+        // (макет владельца 10.08.2026, «чуть чище главное окно»). Источники он увидит,
+        // как только войдёт.
+        subtitle = WHAT_YOU_HAVE,
         onClick = onClick,
         icon = Icons.Filled.AddCircleOutline,
         primary = true,
@@ -284,39 +299,35 @@ private fun ConnectAiRow(onConnect: () -> Unit, modifier: Modifier = Modifier) {
     )
 }
 
+/**
+ * Ждущее на компьютере — обычная карточка над входом, а не цветная плашка-объявление
+ * (макет владельца 10.08.2026). Компьютер здесь такое же место, откуда приходит объект,
+ * как камера или буфер: кричать об этом незачем.
+ */
 @Composable
 private fun FromPcBanner(count: Int, onPull: () -> Unit, onHide: () -> Unit) {
-    Surface(
-        onClick = onPull,
-        color = MaterialTheme.colorScheme.primaryContainer,
-        shape = MaterialTheme.shapes.large,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(
-            modifier = Modifier.padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text(
-                    "С компьютера: $count",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                )
-                Text(
-                    "Забрать и открыть здесь",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                )
-            }
-            IconButton(onClick = onHide) {
-                Icon(
-                    imageVector = Icons.Filled.Close,
-                    contentDescription = "Скрыть",
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                )
-            }
-        }
+        PortalRow(
+            title = "Компьютер · $count",
+            subtitle = "Забрать и открыть здесь",
+            onClick = onPull,
+            icon = bubbleIcon("pc"),
+            accent = bubbleColor("pc"),
+            chevron = false,
+            modifier = Modifier.weight(1f).widthIn(max = PortalColumnWidth),
+            trailing = {
+                IconButton(onClick = onHide) {
+                    Icon(
+                        imageVector = Icons.Filled.Close,
+                        contentDescription = "Скрыть",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            },
+        )
     }
 }
 
@@ -392,51 +403,46 @@ private fun ClearRecentPanel(
 }
 
 /** Ширина открывающегося «Убрать» — она же порог, после которого строка остаётся открытой. */
-private val RemoveRevealWidth = 104.dp
-
-/** Быстрый бросок влево открывает «Убрать», даже если палец не дошёл до половины. */
-private const val FLING_TO_OPEN = -700f
-
 /**
- * Свайп влево открывает «Убрать» (#543, решение владельца) — первый свайп-жест в Point. Сам свайп
- * ничего не уносит: запись убирает уже тап по открывшемуся «Убрать» — движение пальца по списку
- * слишком дёшево, чтобы стоить человеку объекта.
+ * Меню у записи (решение владельца 10.08.2026: «делаем меню вместо свайпа»).
+ *
+ * Свайп прожил полдня и ушёл: жест невидим — человек не знает, что запись вообще можно убрать, —
+ * и спорит с прокруткой списка под пальцем. Три точки видно всегда, и они честно говорят, что у
+ * записи есть свои действия.
  */
 @Composable
 private fun RemovableHistoryRow(entry: HistoryEntry, onClick: () -> Unit, onRemove: () -> Unit) {
-    val revealPx = with(LocalDensity.current) { RemoveRevealWidth.toPx() }
-    val shift = remember(entry.id) { Animatable(0f) }
-    val scope = rememberCoroutineScope()
-    val opened by remember(entry.id) { derivedStateOf { shift.value < -1f } }
+    var open by rememberSaveable(entry.id) { mutableStateOf(false) }
     Box(Modifier.fillMaxWidth()) {
-        if (opened) {
-            Box(Modifier.matchParentSize(), contentAlignment = Alignment.CenterEnd) {
-                TextButton(onClick = onRemove, modifier = Modifier.width(RemoveRevealWidth)) {
-                    Text(REMOVE_ENTRY, color = MaterialTheme.colorScheme.error)
-                }
-            }
-        }
         HistoryRow(
             entry = entry,
-            onClick = { if (opened) scope.launch { shift.animateTo(0f) } else onClick() },
-            modifier = Modifier
-                .offset { IntOffset(shift.value.roundToInt(), 0) }
-                .draggable(
-                    orientation = Orientation.Horizontal,
-                    state = rememberDraggableState { delta ->
-                        scope.launch { shift.snapTo((shift.value + delta).coerceIn(-revealPx, 0f)) }
-                    },
-                    onDragStopped = { velocity ->
-                        val open = shift.value <= -revealPx / 2 || velocity <= FLING_TO_OPEN
-                        shift.animateTo(if (open) -revealPx else 0f)
-                    },
-                ),
+            onClick = onClick,
+            trailing = {
+                IconButton(onClick = { open = true }) {
+                    Icon(
+                        imageVector = Icons.Filled.MoreVert,
+                        contentDescription = ENTRY_MENU,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            },
         )
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            DropdownMenuItem(
+                text = { Text(REMOVE_ENTRY, color = MaterialTheme.colorScheme.error) },
+                onClick = { open = false; onRemove() },
+            )
+        }
     }
 }
 
 @Composable
-private fun HistoryRow(entry: HistoryEntry, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun HistoryRow(
+    entry: HistoryEntry,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    trailing: (@Composable () -> Unit)? = null,
+) {
     Surface(
         onClick = onClick,
         shape = MaterialTheme.shapes.large,
@@ -445,12 +451,12 @@ private fun HistoryRow(entry: HistoryEntry, onClick: () -> Unit, modifier: Modif
         modifier = modifier.fillMaxWidth(),
     ) {
         androidx.compose.foundation.layout.Row(
-            modifier = Modifier.padding(14.dp),
+            modifier = Modifier.padding(start = 14.dp, top = 14.dp, bottom = 14.dp, end = if (trailing == null) 14.dp else 4.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             HistoryAvatar(entry)
-            Column(Modifier.fillMaxWidth()) {
+            Column(Modifier.weight(1f)) {
                 Text(
                     text = entry.name ?: kindLabel(entry.kind),
                     style = MaterialTheme.typography.titleMedium,
@@ -480,6 +486,7 @@ private fun HistoryRow(entry: HistoryEntry, onClick: () -> Unit, modifier: Modif
                     )
                 }
             }
+            trailing?.invoke()
         }
     }
 }
