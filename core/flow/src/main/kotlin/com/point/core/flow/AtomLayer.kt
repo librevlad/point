@@ -52,16 +52,164 @@ class AtomLayer(
         get() = readerText
             ?: lines(atoms).joinToString("\n") { line -> line.joinToString(" ") { it.text } }
 
+    /**
+     * Строки документа — с оглядкой на колонки (#747).
+     *
+     * Прежде строка собиралась через всю ширину страницы, и на почтовой наклейке «Тарасенко
+     * Світлана Сергіївна» из левого столбца склеивалась с «Думброван Олександр» из правого:
+     * отправитель и получатель смешивались, а имя получателя разрывалось. Владелец, замерив
+     * разбор: «структура наша боль».
+     *
+     * Теперь страница сначала делится на столбцы по широким пустым просветам, и каждый
+     * читается сверху донизу целиком. Блок во всю ширину — шапка, подвал — остаётся строкой
+     * и разделяет столбцы выше и ниже себя: две таблицы подряд не сливаются в одну.
+     */
     fun lines(subset: List<Atom> = atoms): List<List<Atom>> {
         val placed = subset.map { it to (transform?.toUpright(it.box) ?: it.box) }
-        val lines = mutableListOf<MutableList<Pair<Atom, Box>>>()
+        if (placed.isEmpty()) return emptyList()
+
+        val rows = rowsOf(placed)
+        val out = mutableListOf<List<Atom>>()
+        var band = mutableListOf<List<Pair<Atom, Box>>>()
+
+        fun flush() {
+            if (band.isEmpty()) return
+            val gaps = columnGaps(band)
+            out += if (gaps.isEmpty()) band.map { ordered(it) } else columnsOf(band, gaps)
+            band = mutableListOf()
+        }
+
+        rows.forEach { row ->
+            // Полоса живёт, пока столбцы в ней различимы. Строка во всю ширину — шапка,
+            // подвал, итог — закрывает полосу: ниже начинается другая раскладка.
+            val grown = band + listOf(row)
+            when {
+                band.isEmpty() -> band = mutableListOf(row)
+                columnGaps(grown).isNotEmpty() -> band = grown.toMutableList()
+                else -> { flush(); band = mutableListOf(row) }
+            }
+        }
+        flush()
+        return out
+    }
+
+    /** Сырые строки: слова на одной высоте. Столбцы здесь ещё не различаются. */
+    private fun rowsOf(placed: List<Pair<Atom, Box>>): List<List<Pair<Atom, Box>>> {
+        val rows = mutableListOf<MutableList<Pair<Atom, Box>>>()
         placed.sortedBy { (_, box) -> box.centerY }.forEach { entry ->
             val (_, box) = entry
-            val line = lines.lastOrNull()
-            val sameLine = line != null &&
-                kotlin.math.abs(line.last().second.centerY - box.centerY) <= box.height / 2f
-            if (sameLine) line.add(entry) else lines.add(mutableListOf(entry))
+            val row = rows.lastOrNull()
+            val sameRow = row != null &&
+                kotlin.math.abs(row.last().second.centerY - box.centerY) <= box.height / 2f
+            if (sameRow) row.add(entry) else rows.add(mutableListOf(entry))
         }
-        return lines.map { line -> line.sortedBy { (_, box) -> box.left }.map { (atom, _) -> atom } }
+        return rows
+    }
+
+    private fun ordered(row: List<Pair<Atom, Box>>): List<Atom> =
+        row.sortedBy { (_, box) -> box.left }.map { (atom, _) -> atom }
+
+    /**
+     * Просветы между столбцами: полосы по оси X, где во всей полосе нет ни одного слова.
+     *
+     * Широкий просвет сам по себе столбцом не делает. «Артикул · Наименование · Кол» и
+     * «ТТН   20 4514 9154» разнесены так же далеко, но это одна строка: ячейки таблицы и
+     * подпись со значением. Поэтому просвет считается границей столбцов, только если
+     * выполняются оба условия:
+     *
+     * 1. по обе стороны стоят блоки текста, а не ячейки — каждый заметно шире самого просвета;
+     * 2. он держится на нескольких строках сразу, а не на одной.
+     */
+    private fun columnGaps(band: List<List<Pair<Atom, Box>>>): List<ClosedFloatingPointRange<Float>> {
+        val placed = band.flatten()
+        val heights = placed.map { (_, box) -> box.height }.sorted()
+        val line = heights[heights.size / 2].takeIf { it > 0f } ?: return emptyList()
+        val minGap = line * COLUMN_GAP_IN_LINES
+
+        val spans = placed.map { (_, box) -> box.left to box.right }.sortedBy { it.first }
+        val gaps = mutableListOf<ClosedFloatingPointRange<Float>>()
+        var edge = spans.first().second
+        spans.forEach { (left, right) ->
+            if (left - edge > minGap) gaps += edge..left
+            edge = maxOf(edge, right)
+        }
+        return blocksApart(gaps.filter { gap -> rowsAcross(band, gap) >= MIN_ROWS_ACROSS }, placed)
+    }
+
+    /** На скольких строках полосы просвет разделяет написанное, а не обрывается краем строки. */
+    private fun rowsAcross(band: List<List<Pair<Atom, Box>>>, gap: ClosedFloatingPointRange<Float>): Int =
+        band.count { row ->
+            row.any { (_, box) -> box.right <= gap.start } && row.any { (_, box) -> box.left >= gap.endInclusive }
+        }
+
+    /**
+     * Оставить только те просветы, по обе стороны которых написанное шире самого просвета:
+     * колонка — это блок текста, а ячейка таблицы отделена больше, чем занимает сама.
+     */
+    private fun blocksApart(
+        gaps: List<ClosedFloatingPointRange<Float>>,
+        placed: List<Pair<Atom, Box>>,
+    ): List<ClosedFloatingPointRange<Float>> {
+        var kept = gaps
+        while (kept.isNotEmpty()) {
+            val widths = blockWidths(kept, placed)
+            val weakest = kept.indices.minByOrNull { i ->
+                minOf(widths[i], widths[i + 1]) / (kept[i].endInclusive - kept[i].start)
+            } ?: break
+            val gap = kept[weakest]
+            val narrower = minOf(widths[weakest], widths[weakest + 1])
+            if (narrower >= (gap.endInclusive - gap.start) * COLUMN_TO_GAP) break
+            kept = kept.filterIndexed { i, _ -> i != weakest }
+        }
+        return kept
+    }
+
+    private fun blockWidths(
+        gaps: List<ClosedFloatingPointRange<Float>>,
+        placed: List<Pair<Atom, Box>>,
+    ): List<Float> {
+        val edges = edgesOf(gaps)
+        return List(edges.size - 1) { i ->
+            val block = placed.filter { (_, box) -> columnOf(box, edges) == i }
+            if (block.isEmpty()) 0f else block.maxOf { it.second.right } - block.minOf { it.second.left }
+        }
+    }
+
+    private fun edgesOf(gaps: List<ClosedFloatingPointRange<Float>>): List<Float> =
+        listOf(Float.NEGATIVE_INFINITY) + gaps.map { it.endInclusive } + Float.POSITIVE_INFINITY
+
+    /** Полоса из нескольких строк: сначала левый столбец целиком, потом соседний. */
+    private fun columnsOf(
+        band: List<List<Pair<Atom, Box>>>,
+        gaps: List<ClosedFloatingPointRange<Float>>,
+    ): List<List<Atom>> {
+        val edges = edgesOf(gaps)
+        val columns = List(edges.size - 1) { mutableListOf<List<Pair<Atom, Box>>>() }
+
+        band.forEach { row ->
+            row.groupBy { (_, box) -> columnOf(box, edges) }.forEach { (index, part) ->
+                columns[index] += listOf(part)
+            }
+        }
+        return columns.flatMap { column -> column.map { row -> ordered(row) } }
+    }
+
+    private fun columnOf(box: Box, edges: List<Float>): Int {
+        for (i in 0 until edges.size - 1) {
+            if (box.centerX >= edges[i] && box.centerX < edges[i + 1]) return i
+        }
+        return edges.size - 2
+    }
+
+    private companion object {
+
+        /** Столбец отделён просветом в несколько строчных высот, а не пробелом между словами. */
+        const val COLUMN_GAP_IN_LINES = 1.5f
+
+        /** Написанное в столбце шире просвета, который его отделяет: это блок, а не ячейка. */
+        const val COLUMN_TO_GAP = 2f
+
+        /** Столбец стоит на нескольких строках: на одной это подпись со значением рядом. */
+        const val MIN_ROWS_ACROSS = 2
     }
 }
