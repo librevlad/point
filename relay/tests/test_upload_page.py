@@ -48,3 +48,31 @@ def test_ни_одного_чужого_домена(point):
 
 def test_ссылки_больше_нет_говорится_словами(point):
     assert point.client.get("/u/нетакого").status_code == 404
+
+
+def test_без_разбора_формы_сервер_не_поднимается(monkeypatch):
+    """Половина рабочего сервера хуже честно упавшего.
+
+    Живой отказ 2026-08-10: python-multipart не был установлен, приём файла отвечал 500 на
+    КАЖДУЮ загрузку, а /health отдавал 200 — сервер выглядел здоровым, и причину искали в
+    интернете, в форме, в чём угодно.
+    """
+    import builtins
+
+    import pytest
+
+    from point_server import app as app_mod
+
+    real_import = builtins.__import__
+
+    def no_multipart(name, *a, **kw):
+        if name in ("multipart", "python_multipart"):
+            raise ModuleNotFoundError("нет такого модуля")
+        return real_import(name, *a, **kw)
+
+    monkeypatch.setattr(builtins, "__import__", no_multipart)
+    with pytest.raises(RuntimeError) as boom:
+        app_mod.create_app()
+
+    assert "python-multipart" in str(boom.value)
+    assert "requirements.txt" in str(boom.value), "отказ обязан сказать, что делать"

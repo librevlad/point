@@ -101,11 +101,34 @@ def _upload_form(box_id: str) -> str:
     return upload_page.upload_body()
 
 
+def _require_form_parsing() -> None:
+    """Упасть при старте, а не по одной загрузке за раз.
+
+    Живой отказ 2026-08-10: `python-multipart` был объявлен в requirements, но не установлен на
+    сервере — и приём файла отвечал 500 на КАЖДУЮ попытку, пока сервер выглядел здоровым:
+    `/health` отдавал 200, журнал молчал по существу, а человек видел, что файл «не уходит».
+    Половина рабочего сервера хуже честно упавшего: упавший чинят сразу.
+    """
+    try:
+        # Пакет переехал с `multipart` на `python_multipart`; Starlette умеет оба,
+        # поэтому и проверка спрашивает оба, а не цементирует одно имя.
+        try:
+            import python_multipart  # noqa: F401
+        except ModuleNotFoundError:
+            import multipart  # noqa: F401
+    except ModuleNotFoundError as e:  # pragma: no cover - проверяется тестом через подмену
+        raise RuntimeError(
+            "Не установлен python-multipart — без него приём файла отвечает 500 на каждую "
+            "загрузку. Выполните: pip install -r requirements.txt"
+        ) from e
+
+
 def create_app(
     settings: Settings | None = None,
     google: google_mod.GoogleIdentity | None = None,
     now: Callable[[], int] | None = None,
 ) -> FastAPI:
+    _require_form_parsing()
     settings = settings or settings_from_env()
     if google is None:
         google = (
