@@ -594,11 +594,11 @@ private fun ObjectHeader(
 ) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
 
-        val headerSize = if (preview != null) PortalPreviewSize else 96.dp
-
-        // Снимок обрезается кругом и садится внутрь кольца портала; нарисованный знак
-        // остаётся цельным — его форму круг не трогает.
-        val headerShape = if (preview != null) CircleShape else RoundedCornerShape(26.dp)
+        // Портал один на любой объект: круг одного размера. Прежде круглым он был только
+        // у снимка, а всё остальное садилось скруглённым квадратом и меньшего размера —
+        // вместе с ним прыгало и кольцо портала. Форма объекта не меняет форму двери.
+        val headerSize = PortalPreviewSize
+        val headerShape = CircleShape
 
         Box(
             contentAlignment = Alignment.Center,
@@ -626,10 +626,11 @@ private fun ObjectHeader(
                     )
                 } else if (objectMark(obj) == ObjectMark.SPREADSHEET) {
 
-                    SpreadsheetMark(size = headerSize)
+                    // Знак нарисован, а не обрезан: круг его вписывает, а не срезает углы.
+                    SpreadsheetMark(size = headerSize * MARK_IN_CIRCLE)
                 } else {
                     Surface(
-                        shape = RoundedCornerShape(26.dp),
+                        shape = CircleShape,
                         color = MaterialTheme.colorScheme.secondary,
                         shadowElevation = 0.dp,
                         modifier = Modifier.size(headerSize),
@@ -639,7 +640,7 @@ private fun ObjectHeader(
                             contentDescription = obj.state.kind.name,
                             tint = MaterialTheme.colorScheme.onSecondary,
                             modifier = Modifier
-                                .padding(26.dp)
+                                .padding(headerSize * ICON_INSET)
                                 .fillMaxSize(),
                         )
                     }
@@ -763,3 +764,12 @@ private fun AmendmentInput(
         }
     }
 }
+
+/**
+ * Квадрат, вписанный в круг, — сторона не больше диаметра/√2. Рисованный знак садится
+ * с запасом, чтобы круг его не срезал (#650-соседнее: единый портал у всех объектов).
+ */
+private const val MARK_IN_CIRCLE = 0.62f
+
+/** Отступ значка внутри круга: та же зрительная величина, что была у квадрата 96 dp. */
+private const val ICON_INSET = 0.27f
