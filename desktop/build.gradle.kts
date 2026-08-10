@@ -26,6 +26,7 @@ dependencies {
     implementation(compose.desktop.currentOs)
     implementation(compose.material3)
     implementation(libs.kotlinx.coroutines.core)
+    implementation(libs.pdfbox)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

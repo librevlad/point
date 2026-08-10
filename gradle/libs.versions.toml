@@ -19,6 +19,7 @@ activityCompose = "1.9.3"
 composeBom = "2026.06.01"
 hilt = "2.53.1"
 pdfboxAndroid = "2.0.27.0"
+pdfbox = "2.0.27"
 commonsCompress = "1.27.1"
 tukaaniXz = "1.10"
 junrar = "7.5.5"
@@ -59,6 +60,10 @@ hilt-compiler = { group = "com.google.dagger", name = "hilt-compiler", version.r
 
 # PDF text extraction (no built-in Android API for this).
 pdfbox-android = { group = "com.tom-roush", name = "pdfbox-android", version.ref = "pdfboxAndroid" }
+
+# Тот же PDFBox для компьютера: телефонный порт — обёртка над этой же версией,
+# поэтому обе поверхности читают PDF одинаково (#631).
+pdfbox = { group = "org.apache.pdfbox", name = "pdfbox", version.ref = "pdfbox" }
 
 # Broad archive extraction (tar, gz, bz2, xz — beyond built-in zip).
 commons-compress = { group = "org.apache.commons", name = "commons-compress", version.ref = "commonsCompress" }
