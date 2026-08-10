@@ -2,7 +2,6 @@ package com.point
 
 import com.point.core.flow.AppTarget
 import com.point.core.ui.Outcome
-import com.point.core.flow.UsageSummary
 import com.point.core.flow.AiServiceLine
 import com.point.core.flow.UserAiKeys
 import com.point.core.model.Bubble
@@ -159,12 +158,9 @@ data class FlowUiState(
 
     val signIn: com.point.core.flow.SignIn? = null,
 
-    val usageEnabled: Boolean = false,
-
     val soundEnabled: Boolean = true,
 
     val privacyLevel: com.point.core.flow.PrivacyLevel = com.point.core.flow.PrivacyLevel.DEFAULT,
-    val usageSummary: UsageSummary? = null,
 
     val selection: SelectionUi? = null,
 

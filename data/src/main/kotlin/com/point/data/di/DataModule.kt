@@ -56,7 +56,6 @@ import com.point.core.flow.ChosenApps
 import com.point.core.flow.PcCapsStore
 import com.point.core.flow.PcLinks
 import com.point.core.flow.PcTransport
-import com.point.core.flow.UsageJournal
 import com.point.core.flow.UserKeyStore
 import com.point.core.flow.Viewer
 import com.point.data.AndroidAppLauncher
@@ -89,7 +88,6 @@ import com.point.data.FilePcLinks
 import com.point.data.HttpAiKeyCheck
 import com.point.data.RelayPcClipboardSync
 import com.point.data.RelayPcTransport
-import com.point.data.FileUsageJournal
 import com.point.data.FileCapabilityUsage
 import com.point.data.FileHistoryStore
 import com.point.data.GeminiLlmClient
@@ -273,9 +271,6 @@ abstract class DataModule {
 
     @Binds
     abstract fun aiKeyCheck(impl: HttpAiKeyCheck): AiKeyCheck
-
-    @Binds
-    abstract fun usageJournal(impl: FileUsageJournal): UsageJournal
 
     @Binds
     abstract fun chosenApps(impl: FileChosenApps): ChosenApps

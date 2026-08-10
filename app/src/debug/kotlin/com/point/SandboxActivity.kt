@@ -77,7 +77,6 @@ class SandboxActivity : ComponentActivity() {
                             onSaveAiKey = viewModel::saveAiKey,
                             onOpenKeySettings = viewModel::openKeySettings,
                             onCloseKeySettings = viewModel::closeKeySettings,
-                            onToggleUsage = viewModel::setUsageEnabled,
                             onToggleSound = viewModel::setSoundEnabled,
                             onConfirmCloud = viewModel::confirmCloud,
                             onDeclineCloud = viewModel::declineCloud,

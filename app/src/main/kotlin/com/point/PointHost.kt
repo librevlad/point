@@ -89,7 +89,6 @@ fun PointHost(
 
     onForgetAiKey: (String) -> Unit = {},
     onCloseKeySettings: () -> Unit = {},
-    onToggleUsage: (Boolean) -> Unit = {},
     onToggleSound: (Boolean) -> Unit = {},
     onPickPrivacyLevel: (com.point.core.flow.PrivacyLevel) -> Unit = {},
 
@@ -212,9 +211,6 @@ fun PointHost(
                 onCheckAll = onCheckAllAiKeys,
                 onPasteKey = onPasteKey,
                 onForgetKey = onForgetAiKey,
-                usageEnabled = state.usageEnabled,
-                usageSummary = state.usageSummary,
-                onToggleUsage = onToggleUsage,
                 soundEnabled = state.soundEnabled,
                 onToggleSound = onToggleSound,
                 privacyLevel = state.privacyLevel,
