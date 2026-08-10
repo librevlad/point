@@ -38,6 +38,7 @@ fun parseFieldCandidates(answer: String): ParsedUnderstanding {
     val fields = LinkedHashMap<String, MutableList<FieldCandidate>>()
     val single = LinkedHashMap<String, String>()
     val contacts = mutableListOf<PersonContact>()
+    val unsure = mutableSetOf<String>()
 
     fun offerPhone(raw: FieldCandidate) {
 
@@ -76,6 +77,13 @@ fun parseFieldCandidates(answer: String): ParsedUnderstanding {
             // догадка без признаков («Встреча» на переписке об оплате). Суть несёт
             // SUMMARY; документные типы остаются за офлайн-правилами страницы.
             key == "TYPE" -> Unit
+
+            // Сомнение модели — часть ответа (#670): называет уже известные имена полей,
+            // чужие молчат. Значение при этом остаётся значением, а не исчезает.
+            key == "UNSURE" -> rest.split(',').forEach { name ->
+                UNDERSTAND_CONTRACT_KEYS[name.trim().uppercase()]
+                    ?.let { unsure += META_ENTITY_PREFIX + it }
+            }
             // Метки слов лепятся и к SUMMARY: «…службы [w38 w39]» уходило на экран
             // подзаголовком (живой прогон 2026-08-09) — хвост снимается всегда.
             key == "SUMMARY" -> splitCandidate(rest)?.text?.takeIf { !saysNothing(it) }
@@ -137,7 +145,7 @@ fun parseFieldCandidates(answer: String): ParsedUnderstanding {
             }
         }
     }
-    return ParsedUnderstanding(fields, single, contacts.distinct())
+    return ParsedUnderstanding(fields, single, contacts.distinct(), unsure)
 }
 
 private val PHONE_CHUNK = Regex("""\+?\d[\d\s\-()./]{6,}\d""")
@@ -171,6 +179,13 @@ data class ParsedUnderstanding(
 
     /** Пары «имя+номер», которые модель связала по тексту (#653). */
     val contacts: List<PersonContact> = emptyList(),
+
+    /**
+     * Ключи, которые модель прочитала неуверенно (#670): спорная цифра на барабане
+     * счётчика — знание с оговоркой, а не наравне с бесспорным. Молчание сомнением
+     * не считается: не сказали — значит уверены.
+     */
+    val unsure: Set<String> = emptySet(),
 )
 
 fun splitCandidate(rest: String): FieldCandidate? {
