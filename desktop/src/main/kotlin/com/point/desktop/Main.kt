@@ -154,6 +154,9 @@ fun main(args: Array<String>) {
     val phoneCapsFile = File(pointDir, "phone-caps")
 
     val journalStore = FileJournalStore(File(pointDir, "journal"))
+
+    // Настройка спрашивается на каждом звуке, а не запоминается: выключили — замолчал сразу.
+    val portalSound = JvmPortalSound { FilePcConfig(pointDir).load().sound }
     state = DesktopState(
         registry, resolver, clipboard, outbox,
         persistPhoneCaps = { caps ->
@@ -166,7 +169,13 @@ fun main(args: Array<String>) {
 
         // «Скинули с телефона — высветилась часть окна»: своя плашка, не системное
         // уведомление. Готовое здесь (PDF, скачанное) объявляется тем же путём.
-        announce = { item, source -> peek.arrived(item, compactVisible.value, source) },
+        announce = { item, source ->
+            peek.arrived(item, compactVisible.value, source)
+
+            // Звучит только прилёт с телефона (#650): пара к свипу ухода на той стороне.
+            // Своё, здешнее и принесённое мышью, звука не просит — оно и так на глазах.
+            if (source == ObjectSource.PHONE_RELAY) portalSound.arrived()
+        },
     )
 
     val shellMenu = RegistryShellMenu()

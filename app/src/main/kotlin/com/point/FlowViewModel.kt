@@ -840,6 +840,13 @@ class FlowViewModel @Inject constructor(
         runCatching { registry.byId(id).meta.network }.getOrDefault(false) ||
             runCatching { resolver.leavesDevice(id) }.getOrDefault(false)
 
+    /**
+     * Объект уходит отсюда на компьютер (#650): либо «На компьютер», либо действие,
+     * которое исполняет компьютер, — в обоих случаях объект физически покидает телефон.
+     */
+    private fun leavesForPc(id: CapabilityId) =
+        id == com.point.executors.PcCapability.ID || id.value.startsWith("pc-do:")
+
     private fun isQuietAction(id: CapabilityId) =
         runCatching { quietWork(registry.byId(id).meta) }.getOrDefault(false)
 
@@ -1670,7 +1677,10 @@ class FlowViewModel @Inject constructor(
                 }
             }
             is ActionResult.Done -> {
-                runCatching { sensory.success() }
+
+                // Уход объекта на соседнее устройство звучит своим звуком, а не общим
+                // успехом (#650): на той стороне его подхватит парный, того же тембра.
+                runCatching { if (leavesForPc(bubble.capabilityId)) sensory.sent() else sensory.success() }
 
                 runCatching { journal.record(UsageEvent(UsageEventType.COMPLETED, bubble.capabilityId.value)) }
 
