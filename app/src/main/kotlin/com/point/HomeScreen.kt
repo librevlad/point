@@ -202,6 +202,11 @@ fun HomeScreen(
                     NewObjectDoor(
                         sourceLabels = sourceLabels,
                         onClick = onNewObject,
+
+                        // Вровень с записями и карточкой компьютера: узкая колонка (340.dp)
+                        // хороша на пустом экране по центру, но в списке дверь входа
+                        // не дотягивала до края и выглядела случайно уже соседей.
+                        wide = true,
                         modifier = Modifier.padding(bottom = 8.dp),
                     )
                 }
@@ -253,6 +258,7 @@ private fun NewObjectDoor(
     sourceLabels: List<String>,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    wide: Boolean = false,
 ) {
     PortalRow(
         title = "Новый объект",
@@ -265,7 +271,7 @@ private fun NewObjectDoor(
         onClick = onClick,
         icon = Icons.Filled.AddCircleOutline,
         primary = true,
-        modifier = modifier.widthIn(max = PortalColumnWidth),
+        modifier = if (wide) modifier else modifier.widthIn(max = PortalColumnWidth),
     )
 }
 
@@ -317,7 +323,7 @@ private fun FromPcBanner(count: Int, onPull: () -> Unit, onHide: () -> Unit) {
             icon = bubbleIcon("pc"),
             accent = bubbleColor("pc"),
             chevron = false,
-            modifier = Modifier.weight(1f).widthIn(max = PortalColumnWidth),
+            modifier = Modifier.weight(1f),
             trailing = {
                 IconButton(onClick = onHide) {
                     Icon(
@@ -413,11 +419,14 @@ private fun ClearRecentPanel(
 @Composable
 private fun RemovableHistoryRow(entry: HistoryEntry, onClick: () -> Unit, onRemove: () -> Unit) {
     var open by rememberSaveable(entry.id) { mutableStateOf(false) }
-    Box(Modifier.fillMaxWidth()) {
-        HistoryRow(
-            entry = entry,
-            onClick = onClick,
-            trailing = {
+    HistoryRow(
+        entry = entry,
+        onClick = onClick,
+        trailing = {
+
+            // Меню растёт от самих трёх точек, а не от края строки: иначе оно вылезает
+            // слева и накрывает соседнюю запись (видно в живом прогоне 10.08.2026).
+            Box {
                 IconButton(onClick = { open = true }) {
                     Icon(
                         imageVector = Icons.Filled.MoreVert,
@@ -425,15 +434,15 @@ private fun RemovableHistoryRow(entry: HistoryEntry, onClick: () -> Unit, onRemo
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-            },
-        )
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            DropdownMenuItem(
-                text = { Text(REMOVE_ENTRY, color = MaterialTheme.colorScheme.error) },
-                onClick = { open = false; onRemove() },
-            )
-        }
-    }
+                DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+                    DropdownMenuItem(
+                        text = { Text(REMOVE_ENTRY, color = MaterialTheme.colorScheme.error) },
+                        onClick = { open = false; onRemove() },
+                    )
+                }
+            }
+        },
+    )
 }
 
 @Composable
