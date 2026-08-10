@@ -57,6 +57,10 @@ fun main(args: Array<String>) {
     lateinit var state: DesktopState
 
     val compactVisible = kotlinx.coroutines.flow.MutableStateFlow(true)
+
+    // Просьба человека «побудь открытым»: без неё окно уходит по потере фокуса и
+    // принести в него файл мышью нечем — за файлом человек уходит в проводник (#546).
+    val keepOpen = kotlinx.coroutines.flow.MutableStateFlow(false)
     val openRequest = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
     val peek = PeekState { System.currentTimeMillis() }
     val saveTarget = SaveTarget { file ->
@@ -288,6 +292,7 @@ fun main(args: Array<String>) {
         // Компакт живёт у трея: закрыть = спрятаться, выход — из меню трея.
         // Непросмотренное прибытие оставляет след на иконке (PC3): peek легко пропустить.
         val freshIds by state.fresh.collectAsState()
+        val kept by keepOpen.collectAsState()
         val icon = androidx.compose.runtime.remember(freshIds.isNotEmpty()) {
             pointGlyph(badge = freshIds.isNotEmpty())
         }
@@ -297,6 +302,19 @@ fun main(args: Array<String>) {
             onAction = { compactVisible.value = true },
             menu = {
                 Item("Открыть Point") { compactVisible.value = true }
+
+                // Сама иконка трея принять перетаскивание не может: AWT TrayIcon —
+                // не Component, а DropTarget вешается только на Component; у иконки
+                // есть клик и меню, событий перетаскивания нет. Дорога к окну
+                // открывается отсюда — из того же меню трея (#546).
+                CheckboxItem(
+                    "Не прятать окно",
+                    checked = kept,
+                    onCheckedChange = { wanted ->
+                        keepOpen.value = wanted
+                        if (wanted) compactVisible.value = true
+                    },
+                )
                 Item("Выход") {
                     relayPoller.stop()
                     handOffs.interrupt()
@@ -332,7 +350,26 @@ fun main(args: Array<String>) {
                         files.forEach { state.onReceived(inbox.addFile(it.absolutePath), ObjectSource.DROPPED) }
                     },
                     onTextDropped = { text -> state.onReceived(inbox.addText(text), ObjectSource.DROPPED) },
+
+                    // Картинка со страницы приходит пикселями, а не файлом: чтобы стать
+                    // объектом, ей нужен свой файл — снимок ложится в ту же папку (#546).
+                    onImageDropped = { picture ->
+                        val png = java.io.ByteArrayOutputStream()
+                        val written = runCatching {
+                            javax.imageio.ImageIO.write(picture, "png", png)
+                        }.getOrDefault(false)
+                        if (!written) {
+                            state.say("Картинку не удалось сохранить — сохраните её на диск и бросьте файлом")
+                        } else {
+                            state.onReceived(
+                                inbox.receive("Картинка.png", "image/png", emptyMap(), png.toByteArray().inputStream()),
+                                ObjectSource.DROPPED,
+                            )
+                        }
+                    },
                     onClipboardTaken = { text -> state.onReceived(inbox.addText(text), ObjectSource.CLIPBOARD) },
+                    keepOpen = keepOpen,
+                    onKeepOpen = { wanted -> keepOpen.value = wanted },
                     onWipe = { inbox.wipe() },
                     onSaveSettings = { changed ->
                         runCatching { FilePcConfig(pointDir).save(changed) }
