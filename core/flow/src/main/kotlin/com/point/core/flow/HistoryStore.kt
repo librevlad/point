@@ -13,5 +13,11 @@ interface HistoryStore {
 
     suspend fun open(entryId: String): PointObject?
 
+    /**
+     * Убрать одну запись со всем, что она оставила (#543): и сам файл, и копии улик рядом с ним.
+     * Половинчатое удаление — дефект: человек убирал не строку списка, а распознанный текст.
+     */
+    suspend fun remove(entryId: String)
+
     suspend fun clearAll()
 }

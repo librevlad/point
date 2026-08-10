@@ -246,6 +246,7 @@ class GraphPipelineIntegrationTest {
             override suspend fun update(obj: PointObject) = Unit
             override suspend fun recent(limit: Int): List<HistoryEntry> = emptyList()
             override suspend fun open(entryId: String): PointObject? = null
+            override suspend fun remove(entryId: String) = Unit
             override suspend fun clearAll() = Unit
         },
         object : CapabilityUsage {

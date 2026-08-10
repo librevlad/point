@@ -1,10 +1,15 @@
 package com.point
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -12,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -34,13 +40,18 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.Image
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.layout.ContentScale
 import com.point.core.flow.SETTINGS_TITLE
 import com.point.core.flow.agoLabel
@@ -56,12 +67,15 @@ import com.point.core.ui.bubbleColor
 import com.point.core.ui.bubbleIcon
 import com.point.core.ui.kindIcon
 import com.point.core.ui.kindLabel
+import com.point.core.ui.portalCard
 import com.point.core.ui.theme.PointTheme
 import com.point.core.ui.understoodFacts
 import com.point.executors.Bitmaps
 import androidx.compose.ui.tooling.preview.Preview
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.math.roundToInt
 
 internal const val WHAT_POINT_IS: String =
     "Дайте фото, скриншот, документ или текст — Point прочитает его и покажет, что с ним можно " +
@@ -74,6 +88,19 @@ internal const val EXAMPLE_DOOR_WHAT: String =
     "Снимок визитки лежит в самом Point. Откроется как обычный объект — без ключа, без сети и без " +
         "разрешений."
 
+internal const val REMOVE_ENTRY: String = "Убрать"
+
+internal const val CLEAR_RECENT: String = "Очистить недавнее"
+
+internal const val CLEAR_RECENT_ASK: String = "Убрать всё недавнее?"
+
+internal const val CLEAR_RECENT_WHAT: String =
+    "Уйдут все записи и всё, что Point о них узнал. Одну запись можно убрать свайпом влево."
+
+internal const val CLEAR_RECENT_CONFIRM: String = "Убрать всё"
+
+internal const val CANCEL: String = "Отмена"
+
 @Composable
 fun HomeScreen(
     recent: List<HistoryEntry>,
@@ -85,6 +112,7 @@ fun HomeScreen(
     onExample: () -> Unit = {},
 
     sourceLabels: List<String> = emptyList(),
+    onRemove: (HistoryEntry) -> Unit = {},
     onClear: () -> Unit = {},
     crashReport: String? = null,
     onSendCrash: (String) -> Unit = {},
@@ -182,14 +210,27 @@ fun HomeScreen(
                     )
                 }
                 items(recent, key = { it.id }) { entry ->
-                    HistoryRow(entry = entry, onClick = { onOpen(entry) })
+                    RemovableHistoryRow(
+                        entry = entry,
+                        onClick = { onOpen(entry) },
+                        onRemove = { onRemove(entry) },
+                    )
                 }
                 item {
-                    TextButton(
-                        onClick = onClear,
-                        modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
-                    ) {
-                        Text("Очистить недавнее", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    var asking by rememberSaveable { mutableStateOf(false) }
+                    if (asking) {
+                        ClearRecentPanel(
+                            onConfirm = { asking = false; onClear() },
+                            onCancel = { asking = false },
+                            modifier = Modifier.padding(top = 6.dp),
+                        )
+                    } else {
+                        TextButton(
+                            onClick = { asking = true },
+                            modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+                        ) {
+                            Text(CLEAR_RECENT, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                     }
                 }
             }
@@ -316,14 +357,92 @@ private fun CrashBanner(onSend: () -> Unit, onDismiss: () -> Unit) {
     }
 }
 
+/**
+ * Вопрос задаётся на месте, панелью в списке (#543, решение владельца): диалогов в Point нет ни
+ * одного, а промах пальцем по «Очистить недавнее» стирал всю работу без единого вопроса.
+ */
 @Composable
-private fun HistoryRow(entry: HistoryEntry, onClick: () -> Unit) {
+private fun ClearRecentPanel(
+    onConfirm: () -> Unit,
+    onCancel: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier.fillMaxWidth().portalCard().padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(CLEAR_RECENT_ASK, style = MaterialTheme.typography.titleMedium)
+        Text(
+            CLEAR_RECENT_WHAT,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+        ) {
+            TextButton(onClick = onCancel) {
+                Text(CANCEL, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            TextButton(onClick = onConfirm) {
+                Text(CLEAR_RECENT_CONFIRM, color = MaterialTheme.colorScheme.error)
+            }
+        }
+    }
+}
+
+/** Ширина открывающегося «Убрать» — она же порог, после которого строка остаётся открытой. */
+private val RemoveRevealWidth = 104.dp
+
+/** Быстрый бросок влево открывает «Убрать», даже если палец не дошёл до половины. */
+private const val FLING_TO_OPEN = -700f
+
+/**
+ * Свайп влево открывает «Убрать» (#543, решение владельца) — первый свайп-жест в Point. Сам свайп
+ * ничего не уносит: запись убирает уже тап по открывшемуся «Убрать» — движение пальца по списку
+ * слишком дёшево, чтобы стоить человеку объекта.
+ */
+@Composable
+private fun RemovableHistoryRow(entry: HistoryEntry, onClick: () -> Unit, onRemove: () -> Unit) {
+    val revealPx = with(LocalDensity.current) { RemoveRevealWidth.toPx() }
+    val shift = remember(entry.id) { Animatable(0f) }
+    val scope = rememberCoroutineScope()
+    val opened by remember(entry.id) { derivedStateOf { shift.value < -1f } }
+    Box(Modifier.fillMaxWidth()) {
+        if (opened) {
+            Box(Modifier.matchParentSize(), contentAlignment = Alignment.CenterEnd) {
+                TextButton(onClick = onRemove, modifier = Modifier.width(RemoveRevealWidth)) {
+                    Text(REMOVE_ENTRY, color = MaterialTheme.colorScheme.error)
+                }
+            }
+        }
+        HistoryRow(
+            entry = entry,
+            onClick = { if (opened) scope.launch { shift.animateTo(0f) } else onClick() },
+            modifier = Modifier
+                .offset { IntOffset(shift.value.roundToInt(), 0) }
+                .draggable(
+                    orientation = Orientation.Horizontal,
+                    state = rememberDraggableState { delta ->
+                        scope.launch { shift.snapTo((shift.value + delta).coerceIn(-revealPx, 0f)) }
+                    },
+                    onDragStopped = { velocity ->
+                        val open = shift.value <= -revealPx / 2 || velocity <= FLING_TO_OPEN
+                        shift.animateTo(if (open) -revealPx else 0f)
+                    },
+                ),
+        )
+    }
+}
+
+@Composable
+private fun HistoryRow(entry: HistoryEntry, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Surface(
         onClick = onClick,
         shape = MaterialTheme.shapes.large,
         color = MaterialTheme.colorScheme.surfaceVariant,
         tonalElevation = 1.dp,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
     ) {
         androidx.compose.foundation.layout.Row(
             modifier = Modifier.padding(14.dp),

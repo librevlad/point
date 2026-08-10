@@ -81,12 +81,14 @@ class FileHistoryStore @Inject constructor(
 
     private fun copyEvidence(id: String, key: String, path: String): String? {
         val source = File(path).takeIf { it.isFile } ?: return null
-        val dest = File(dir, "$id.${key.replace('.', '-')}")
+        val dest = evidenceFile(id, key)
         return runCatching {
             source.copyTo(dest, overwrite = true)
             dest.absolutePath
         }.getOrNull()
     }
+
+    private fun evidenceFile(id: String, key: String) = File(dir, "$id.${key.replace('.', '-')}")
 
     override suspend fun recent(limit: Int): List<HistoryEntry> = withContext(Dispatchers.IO) {
 
@@ -127,20 +129,42 @@ class FileHistoryStore @Inject constructor(
         }
     }
 
+    override suspend fun remove(entryId: String): Unit = withContext(Dispatchers.IO) {
+        mutex.withLock {
+            val entries = readEntries()
+            val entry = entries[entryId] ?: return@withLock
+            forget(entry)
+            rewriteIndex(entries.values.filterNot { it.id == entryId })
+        }
+    }
+
     override suspend fun clearAll() {
         withContext(Dispatchers.IO) { mutex.withLock { dir.deleteRecursively() } }
+    }
+
+    /**
+     * Запись оставляет на диске не только копию объекта, но и копии улик рядом с ней
+     * (`<id>.ocr-text-ref` и подобные, см. [copyEvidence]). Уходит запись — уходит всё её: иначе
+     * распознанный текст переживает и «Убрать», и вытеснение по лимиту, а Point обещал обратное.
+     */
+    private fun forget(entry: HistoryEntry) {
+        runCatching { File(entry.ref.value).delete() }
+        REF_KEYS.forEach { key -> runCatching { evidenceFile(entry.id, key).delete() } }
+    }
+
+    private fun rewriteIndex(entries: List<HistoryEntry>) {
+        index.writeText(
+            entries.joinToString("") {
+                row(it.id, it.mime, it.kind.name, it.name, it.epochMillis, it.ref.value, it.features, it.metadata) + "\n"
+            },
+        )
     }
 
     private fun pruneToLimit() {
         val entries = readEntries().values.toList()
         if (entries.size <= MAX_ENTRIES) return
-        entries.dropLast(MAX_ENTRIES).forEach { runCatching { File(it.ref.value).delete() } }
-        val survivors = entries.takeLast(MAX_ENTRIES)
-        index.writeText(
-            survivors.joinToString("") {
-                row(it.id, it.mime, it.kind.name, it.name, it.epochMillis, it.ref.value, it.features, it.metadata) + "\n"
-            },
-        )
+        entries.dropLast(MAX_ENTRIES).forEach { forget(it) }
+        rewriteIndex(entries.takeLast(MAX_ENTRIES))
     }
 
     private fun row(

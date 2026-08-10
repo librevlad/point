@@ -2190,6 +2190,27 @@ class FlowViewModelTest {
         vm.closeDevices()
     }
 
+    @Test fun `убранная запись уходит из «Недавнего», соседняя остаётся (#543)`() = runTest(dispatcher) {
+        history.entries += historyEntry("a", "чек.jpg")
+        history.entries += historyEntry("b", "смета.pdf")
+        val vm = vm()
+        vm.loadRecent(); advanceUntilIdle()
+
+        vm.removeFromHistory("a"); advanceUntilIdle()
+
+        assertEquals(listOf("a"), history.removed)
+        assertEquals(listOf("b"), vm.recent.value.map { it.id })
+    }
+
+    private fun historyEntry(id: String, name: String) = HistoryEntry(
+        id = id,
+        mime = "image/jpeg",
+        kind = ObjectKind.IMAGE,
+        name = name,
+        epochMillis = 1L,
+        ref = ScratchRef("/scratch/$id"),
+    )
+
     @Test fun `a paired Home visit lights the from-PC banner, throttled, and pull opens the flow (#161)`() = runTest(dispatcher) {
         pcLinks.pc = com.point.core.flow.LinkedPc("d-pc", "Ноутбук", "ключ-ПК")
         pcTransport.outbox = listOf(com.point.core.flow.PcOutboxEntry(1, mapOf("name" to "чек.jpg", "mime" to "image/jpeg")))
@@ -3607,12 +3628,20 @@ private class FakeHistory : HistoryStore {
     val recorded = mutableListOf<PointObject>()
     val updated = mutableListOf<PointObject>()
 
+    /** Что лежит в «Недавнем»: [remove] уносит запись отсюда, как настоящий store — с диска. */
+    val entries = mutableListOf<HistoryEntry>()
+    val removed = mutableListOf<String>()
+
     var opened: PointObject? = null
     override suspend fun record(obj: PointObject) { recorded += obj }
     override suspend fun update(obj: PointObject) { updated += obj }
-    override suspend fun recent(limit: Int): List<HistoryEntry> = emptyList()
+    override suspend fun recent(limit: Int): List<HistoryEntry> = entries.toList()
     override suspend fun open(entryId: String): PointObject? = opened
-    override suspend fun clearAll() = Unit
+    override suspend fun remove(entryId: String) {
+        removed += entryId
+        entries.removeAll { it.id == entryId }
+    }
+    override suspend fun clearAll() { entries.clear() }
 }
 
 private class FakeUsage : CapabilityUsage {

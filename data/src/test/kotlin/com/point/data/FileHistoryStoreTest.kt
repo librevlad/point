@@ -290,4 +290,95 @@ class FileHistoryStoreTest {
         assertEquals(50, objectFiles)
         assertEquals("id54", store.recent().first().id)
     }
+
+    /** Улика, положенная рядом с объектом: то же, что делает настоящее обогащение. */
+    private suspend fun withEvidence(id: String, name: String, text: String) {
+        store.record(textObject(id, "страница", name))
+        val scratch = File.createTempFile("ocr-", ".txt").apply { writeText(text); deleteOnExit() }
+        store.update(
+            textObject(id, "страница", name).copy(
+                state = ObjectState(ObjectKind.TEXT, setOf(Feature.HAS_TEXT)),
+                metadata = mapOf("name" to name, META_OCR_TEXT_REF to scratch.absolutePath),
+            ),
+        )
+        scratch.delete()
+    }
+
+    private fun filesOnDisk(): List<String> =
+        dir.listFiles().orEmpty().map { it.name }.filter { it != "index.jsonl" }.sorted()
+
+    @Test
+    fun `убранная запись уходит из «Недавнего», соседние остаются (#543)`() = runTest {
+        store.record(textObject("a", "первый", "a.txt"))
+        store.record(textObject("b", "второй", "b.txt"))
+
+        store.remove("a")
+
+        assertEquals(listOf("b"), store.recent().map { it.id })
+        assertNull("убранная запись всё ещё открывается", store.open("a"))
+        assertEquals("второй", File(store.open("b")!!.uri.value).readText())
+    }
+
+    @Test
+    fun `файл убранной записи исчезает с диска, чужой — нет (#543)`() = runTest {
+        store.record(textObject("a", "первый", "a.txt"))
+        store.record(textObject("b", "второй", "b.txt"))
+        val gone = File(store.recent().first { it.id == "a" }.ref.value)
+        val kept = File(store.recent().first { it.id == "b" }.ref.value)
+
+        store.remove("a")
+
+        assertTrue("файл убранной записи остался на диске: ${gone.name}", !gone.exists())
+        assertTrue("под руку попал соседний файл", kept.exists())
+    }
+
+    @Test
+    fun `убрать запись — значит убрать и распознанный текст рядом с ней (#543)`() = runTest {
+        withEvidence("a", "скан.txt", "распознанный текст ведомости")
+        withEvidence("b", "чек.txt", "чужой текст")
+        val evidence = File(store.open("a")!!.metadata[META_OCR_TEXT_REF]!!)
+        assertTrue("улика не легла рядом с объектом", evidence.isFile)
+
+        store.remove("a")
+
+        assertTrue("распознанный текст остался на диске: ${evidence.name}", !evidence.exists())
+        assertTrue(
+            "рядом с убранной записью что-то осталось: ${filesOnDisk()}",
+            filesOnDisk().none { it.startsWith("a") },
+        )
+        assertEquals("чужой текст", File(store.open("b")!!.metadata[META_OCR_TEXT_REF]!!).readText())
+    }
+
+    @Test
+    fun `вытесненная по лимиту запись не оставляет улик — иначе текст копится вечно (#543)`() = runTest {
+        withEvidence("id0", "0.txt", "текст самой старой ведомости")
+        val evidence = File(store.open("id0")!!.metadata[META_OCR_TEXT_REF]!!)
+        assertTrue(evidence.isFile)
+
+        repeat(55) { i -> store.record(textObject("later$i", "c$i", "$i.txt")) }
+
+        assertNull("вытеснение не убрало саму запись", store.open("id0"))
+        assertTrue("улика вытесненной записи копится на диске: ${evidence.name}", !evidence.exists())
+        assertEquals(50, filesOnDisk().size)
+    }
+
+    @Test
+    fun `убрать несуществующую запись — не потерять существующие (#543)`() = runTest {
+        store.record(textObject("a", "первый", "a.txt"))
+
+        store.remove("missing")
+
+        assertEquals(listOf("a"), store.recent().map { it.id })
+    }
+
+    @Test
+    fun `убранная запись не возвращается после перезапуска — журнал переписан (#543)`() = runTest {
+        store.record(textObject("a", "первый", "a.txt"))
+        store.record(textObject("b", "второй", "b.txt"))
+
+        store.remove("a")
+
+        val afterRestart = FileHistoryStore(dir, ObjectClassifier())
+        assertEquals(listOf("b"), afterRestart.recent().map { it.id })
+    }
 }
