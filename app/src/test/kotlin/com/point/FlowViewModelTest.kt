@@ -661,6 +661,80 @@ class FlowViewModelTest {
         }
     }
 
+    private fun alreadyAsked(id: String) = listOf(
+        EnrichmentUpdate(
+            emptySet(),
+            com.point.core.flow.withInvestigation(
+                emptyMap(),
+                CapabilityId(id),
+                com.point.core.flow.InvestigationState.FOUND,
+            ),
+            emptyList(),
+        ),
+    )
+
+    @Test fun `уход с экрана посреди работы снимает её, а не бросает лететь в пустоту (#668)`() =
+        runTest(dispatcher) {
+            // Решение владельца: брошенное действие отменяется. Иначе облачный вызов долетает
+            // и оплачивается уже после того, как человек ушёл, а исход не увидит никто.
+            resolver.result = ActionResult.Success(
+                ResultObject(ObjectKind.TEXT, "text/plain", ScratchRef("/out")),
+            )
+            resolver.holdMs = 10_000
+            resolver.uninterruptible = true
+            val vm = vm(slow = setOf(CapabilityId("a")))
+            vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+            vm.onBubble(bubble(id = "a"))
+            dispatcher.scheduler.advanceTimeBy(10)
+            assertTrue("работа идёт и отменяема", showsCancel(vm.ui.value))
+
+            assertTrue("уход обязан быть обработан, а не улететь мимо", vm.onBack())
+            advanceUntilIdle()
+
+            assertNull("экран ожидания остался висеть после ухода", vm.ui.value.busy)
+            assertEquals("брошенная работа всё-таки приземлилась", 1, vm.ui.value.path.size)
+        }
+
+    @Test fun `повторное облачное действие спрашивает, а не жжёт облако молча (#668)`() =
+        runTest(dispatcher) {
+            enrichment.updates = alreadyAsked("a")
+            val vm = vm(cloud = setOf(CapabilityId("a")))
+            vm.onShared("uri", "image/png"); advanceUntilIdle()
+            consent.granted = true
+            val before = resolver.performed.size
+
+            vm.onBubble(bubble(id = "a")); advanceUntilIdle()
+
+            assertNotNull("повторный тап обязан спросить", vm.ui.value.preview)
+            assertEquals("а до тех пор — ни одного вызова", before, resolver.performed.size)
+        }
+
+    @Test fun `согласие на повтор доводит облачное действие до конца (#668)`() = runTest(dispatcher) {
+        enrichment.updates = alreadyAsked("a")
+        val vm = vm(cloud = setOf(CapabilityId("a")))
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        consent.granted = true
+        vm.onBubble(bubble(id = "a")); advanceUntilIdle()
+        assertNotNull("спросить обязаны до того, как соглашаться", vm.ui.value.preview)
+
+        vm.confirmPreview(); advanceUntilIdle()
+
+        assertNull("вопрос остался висеть после согласия", vm.ui.value.preview)
+        assertTrue("согласились повторить — а вызова не было", CapabilityId("a") in resolver.performed)
+    }
+
+    @Test fun `первый раз облачное действие ничего не переспрашивает (#668)`() = runTest(dispatcher) {
+        val vm = vm(cloud = setOf(CapabilityId("a")))
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        consent.granted = true
+
+        vm.onBubble(bubble(id = "a")); advanceUntilIdle()
+
+        assertNull("не спрашивали — не о чем и переспрашивать", vm.ui.value.preview)
+        assertTrue(CapabilityId("a") in resolver.performed)
+    }
+
     @Test fun `нечего отменять — нечего и объявлять отменённым`() = runTest(dispatcher) {
         val vm = vm()
         vm.onShared("uri", "image/png"); advanceUntilIdle()

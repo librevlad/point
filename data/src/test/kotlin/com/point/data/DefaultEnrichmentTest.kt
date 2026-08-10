@@ -518,6 +518,45 @@ class DefaultEnrichmentTest {
     }
 
     @Test
+    fun `дорогой вопрос, ответивший «не нашлось», тоже не задают заново (#669)`() = runTest {
+        // Решение владельца: «исследовано, не нашлось» — знание, а не пустое место. Тессеракт
+        // (SLOW) не гоняется заново при каждом входе в неизменный объект: батарея и время.
+        val pricey = Look(
+            CapabilityMeta(investigation = true, latency = Latency.SLOW),
+            delta = Findings(setOf(Feature.HAS_QR)),
+            id = CapabilityId("pricey-look"),
+        )
+        val asked = obj.copy(
+            metadata = withInvestigation(emptyMap(), CapabilityId("pricey-look"), InvestigationState.NOT_FOUND),
+        )
+
+        enrichmentOf(setOf(pricey), openingRegistry).enrich(asked).toList()
+
+        assertFalse("«смотрели — не нашлось» не повод смотреть снова", pricey.started)
+    }
+
+    @Test
+    fun `дорогой вопрос, исследованный недостаточно, остаётся открытым (#669)`() = runTest {
+        // «Недостаточно» буквально значит, что смотреть ещё есть смысл — в отличие от «не нашлось».
+        val pricey = Look(
+            CapabilityMeta(investigation = true, latency = Latency.SLOW),
+            delta = Findings(setOf(Feature.HAS_QR)),
+            id = CapabilityId("pricey-look"),
+        )
+        val asked = obj.copy(
+            metadata = withInvestigation(
+                emptyMap(),
+                CapabilityId("pricey-look"),
+                InvestigationState.INSUFFICIENTLY_INVESTIGATED,
+            ),
+        )
+
+        enrichmentOf(setOf(pricey), openingRegistry).enrich(asked).toList()
+
+        assertTrue("недостаточно исследованное — повод посмотреть ещё раз", pricey.started)
+    }
+
+    @Test
     fun `a question answered as not found is still open for a cheap re-ask`() = runTest {
         val cheap = Look(
             CapabilityMeta(investigation = true, latency = Latency.FAST),

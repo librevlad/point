@@ -78,7 +78,7 @@ class DefaultEnrichment @Inject constructor(
                 if (latency == Latency.SLOW) {
                     wave.filter {
 
-                        investigationStateOf(obj.metadata, it.id, focus) != InvestigationState.FOUND &&
+                        investigationStateOf(obj.metadata, it.id, focus) !in ANSWERED &&
                             worthRunning(soFar, objects, it)
                     }
                 } else {
@@ -248,5 +248,13 @@ class DefaultEnrichment @Inject constructor(
         const val WRONG_SHAPE = "исследование вернуло объект вместо знания"
 
         val ANY = com.point.core.model.ObjectState(ObjectKind.UNKNOWN)
+
+        /**
+         * Вопрос считается отвеченным, и дорогое исследование не задаёт его снова, пока объект
+         * не изменился (#669). «Не нашлось» — такой же ответ, как «нашлось»: гонять Тессеракт
+         * заново при каждом входе в тот же объект значит тратить батарею на уже известное.
+         * «Недостаточно» и «спорят» ответом не считаются — там смотреть ещё есть смысл.
+         */
+        val ANSWERED = setOf(InvestigationState.FOUND, InvestigationState.NOT_FOUND)
     }
 }

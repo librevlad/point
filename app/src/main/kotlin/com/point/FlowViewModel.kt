@@ -30,6 +30,8 @@ import com.point.core.flow.AtomCodec
 import com.point.core.flow.AtomLayer
 import com.point.core.flow.Box
 import com.point.core.flow.FrameTransform
+import com.point.core.flow.InvestigationState
+import com.point.core.flow.investigationStateOf
 import com.point.core.flow.META_CLOUD_ATOMS_REF
 import com.point.core.flow.META_OCR_ATOMS_REF
 import com.point.core.flow.META_SELECTION_IDS
@@ -537,6 +539,7 @@ class FlowViewModel @Inject constructor(
     }
 
     private fun maybePreview(bubble: Bubble, top: PointObject) {
+        if (asksRepeat(bubble, top)) return
         val voice = claimVoice()
         raiseBusy(
             bubble.title,
@@ -565,6 +568,35 @@ class FlowViewModel @Inject constructor(
                 _ui.update { it.copy(busy = null, busyStage = null, preview = preview) }
             }
         }
+    }
+
+    /**
+     * Повторное облачное действие спрашивает, а не жжёт квоту молча (#668).
+     *
+     * Спрашиваем только там, где ответ у объекта уже есть: состояние знания по паре
+     * (объект, вопрос) — единственное, что честно отличает «делали» от «не делали».
+     * Действие, не оставляющее состояния, не переспрашивается — иначе вопрос был бы догадкой.
+     * Согласие ведёт в тот же `confirmPreview`, что и обычный предпросмотр, и так же снимается
+     * кнопкой «назад».
+     */
+    private fun asksRepeat(bubble: Bubble, top: PointObject): Boolean {
+        if (!isCloud(bubble.capabilityId)) return false
+        if (investigationStateOf(top.metadata, bubble.capabilityId) == InvestigationState.NOT_INVESTIGATED) {
+            return false
+        }
+        pendingPreviewBubble = bubble
+        _ui.update {
+            it.copy(
+                busy = null,
+                busyStage = null,
+                preview = com.point.core.model.Preview(
+                    title = "«${bubble.title}» здесь уже делали",
+                    lines = listOf("Ответ уже есть. Повтор — ещё одно обращение к облаку."),
+                    confirmLabel = "Повторить",
+                ),
+            )
+        }
+        return true
     }
 
     fun confirmPreview() {
@@ -1673,6 +1705,14 @@ class FlowViewModel @Inject constructor(
     }
 
     fun onBack(): Boolean {
+
+        // Уход с экрана ожидания — отказ от работы, а не согласие ждать её в пустоте (#668):
+        // облачный вызов иначе долетал и оплачивался уже после того, как человек ушёл.
+        // Ровно то же, что делает видимая кнопка «Отменить», — и ровно там, где она видна.
+        if (showsCancel(_ui.value)) {
+            cancelAction()
+            return true
+        }
         if (_ui.value.selection != null) {
             closeSelection()
             return true
