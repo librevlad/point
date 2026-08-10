@@ -34,7 +34,7 @@ fun semanticFits(key: String, value: String): Boolean? {
         META_ENTITY_TRACK -> digits in 13..14 || S10_SHAPED.matches(value.trim().uppercase().replace(" ", ""))
         META_ENTITY_PREFIX + "phone" -> digits in 10..13
         META_ENTITY_PREFIX + "email" -> value.contains('@') && value.substringAfter('@').contains('.')
-        META_ENTITY_PREFIX + "card" -> digits in 15..19
+        META_ENTITY_PREFIX + "card" -> digits in 15..19 || looksLikeIban(value)
         META_ENTITY_PREFIX + "date" -> value.any(Char::isDigit) && value.any { it in ".:/-" }
 
         META_ENTITY_METER -> meterDigitsFit(value)

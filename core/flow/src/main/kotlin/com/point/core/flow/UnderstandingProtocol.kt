@@ -130,6 +130,12 @@ fun parseFieldCandidates(answer: String): ParsedUnderstanding {
                 if (suffix == "date" && semanticFits(metaKey, candidate.text) == false) return@forEach
                 if (suffix == "address" && !plausibleAddress(candidate.text)) return@forEach
 
+                // Дата — не карта (#747): «ВІД: 29.07/12:59» с почтовой наклейки становилось
+                // «Нашёл карту», и Point предлагал перевести деньги на счёт, которого нет.
+                // Счёт узнаётся по себе: длина номера карты или форма IBAN, — а не по тому,
+                // что модель назвала строку картой.
+                if (suffix == "card" && semanticFits(metaKey, candidate.text) == false) return@forEach
+
                 // Несколько дат в одном значении — несколько кандидатов: «26.04.2026
                 // 26.04.2026» с чека рождало слипшийся спор (живой прогон 2026-08-09).
                 val pieces = if (suffix == "date") {
