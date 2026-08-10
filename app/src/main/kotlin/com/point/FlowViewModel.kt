@@ -12,7 +12,6 @@ import com.point.core.flow.ChosenApps
 import com.point.core.flow.CollectionContent
 import com.point.core.flow.CrashLog
 import com.point.core.flow.Enrichment
-import com.point.core.flow.edgeDetail
 import com.point.core.flow.EnrichmentUpdate
 import com.point.core.flow.FlowSnapshotStore
 import com.point.core.flow.HistoryStore
@@ -23,9 +22,6 @@ import com.point.core.flow.PrivacyConsent
 import com.point.core.flow.Resolver
 import com.point.core.flow.SensoryFeedback
 import com.point.core.flow.SensorySettings
-import com.point.core.flow.UsageEvent
-import com.point.core.flow.UsageEventType
-import com.point.core.flow.UsageJournal
 import com.point.core.flow.AtomCodec
 import com.point.core.flow.AtomLayer
 import com.point.core.flow.Box
@@ -107,7 +103,6 @@ class FlowViewModel @Inject constructor(
     private val userKeys: UserKeyStore,
     private val aiFacts: AiFacts,
     private val builtInKeys: BuiltInAiKeys,
-    private val journal: UsageJournal,
     private val consent: PrivacyConsent,
     private val appLauncher: AppLauncher,
     private val pdfRasterizer: PdfRasterizer,
@@ -337,7 +332,6 @@ class FlowViewModel @Inject constructor(
                 return@trackWork
             }
             runCatching { history.record(obj) }
-            runCatching { journal.record(UsageEvent(UsageEventType.SHARED, obj.state.kind.name)) }
             cancelEnrichment()
             stack.clear()
             pushFrame(obj)
@@ -372,7 +366,6 @@ class FlowViewModel @Inject constructor(
                 return@trackWork
             }
 
-            runCatching { journal.record(UsageEvent(UsageEventType.SHARED, obj.state.kind.name)) }
             cancelEnrichment()
             stack.clear()
             pushFrame(obj)
@@ -1047,7 +1040,6 @@ class FlowViewModel @Inject constructor(
                     .getOrDefault(com.point.core.flow.PrivacyLevel.DEFAULT),
             )
         }
-        refreshUsage()
         viewModelScope.launch { refreshCloudConsent() }
     }
 
@@ -1154,14 +1146,6 @@ class FlowViewModel @Inject constructor(
         }
     }
 
-    private fun refreshUsage() {
-        viewModelScope.launch {
-            val enabled = journal.isEnabled()
-            val summary = if (enabled) runCatching { journal.summary() }.getOrNull() else null
-            _ui.update { it.copy(usageEnabled = enabled, usageSummary = summary) }
-        }
-    }
-
     fun setSoundEnabled(enabled: Boolean) {
         viewModelScope.launch {
             runCatching { sensorySettings.setSoundEnabled(enabled) }
@@ -1173,13 +1157,6 @@ class FlowViewModel @Inject constructor(
         viewModelScope.launch {
             runCatching { cloudPrivacy.setLevel(level) }
             _ui.update { it.copy(privacyLevel = level) }
-        }
-    }
-
-    fun setUsageEnabled(enabled: Boolean) {
-        viewModelScope.launch {
-            runCatching { journal.setEnabled(enabled) }
-            refreshUsage()
         }
     }
 
@@ -1612,7 +1589,6 @@ class FlowViewModel @Inject constructor(
 
     private suspend fun runAction(bubble: Bubble, voice: Long, action: suspend () -> ActionResult) {
         runCatching { usage.record(bubble.capabilityId) }
-        runCatching { journal.record(UsageEvent(UsageEventType.ACTION, bubble.capabilityId.value)) }
         runCatching {
 
             kotlinx.coroutines.withContext(
@@ -1660,20 +1636,11 @@ class FlowViewModel @Inject constructor(
             is ActionResult.Success -> {
                 runCatching { sensory.success() }
 
-                val fromKind = stack.lastOrNull()?.obj?.state?.kind?.name ?: "?"
                 val produced = store.put(result.result)
                 pushFrame(produced, bubble.capabilityId, bubble.title)
 
                 yieldSurprise(bubble.yields, produced.state.kind, produced.metadata[META_YIELD_NOUN])?.let { note ->
                     _ui.update { it.copy(message = note, messageOutcome = Outcome.NONE) }
-                }
-                runCatching {
-                    journal.record(
-                        UsageEvent(
-                            UsageEventType.EDGE,
-                            edgeDetail(fromKind, bubble.capabilityId.value, result.result.type.name),
-                        ),
-                    )
                 }
             }
             is ActionResult.Done -> {
@@ -1682,8 +1649,6 @@ class FlowViewModel @Inject constructor(
                 // успехом (#650): на той стороне его подхватит парный, того же тембра.
                 runCatching { if (leavesForPc(bubble.capabilityId)) sensory.sent() else sensory.success() }
 
-                runCatching { journal.record(UsageEvent(UsageEventType.COMPLETED, bubble.capabilityId.value)) }
-
                 // ADR-0001 §18: «выполнено» может нести новое знание — оно идёт тем же
                 // merge-путём, что и находки исследований, а не выбрасывается.
                 result.findings?.takeIf { !it.isEmpty }?.let(::landFindings)
@@ -1691,7 +1656,6 @@ class FlowViewModel @Inject constructor(
             }
             is ActionResult.Failure -> {
                 runCatching { sensory.failure() }
-                runCatching { journal.record(UsageEvent(UsageEventType.FAILED, bubble.capabilityId.value)) }
 
                 _ui.update { it.copy(busy = null, busyStage = null, message = result.reason, messageOutcome = Outcome.FAILED) }
             }

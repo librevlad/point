@@ -16,10 +16,6 @@ import com.point.core.flow.ObjectStore
 import com.point.core.flow.PrivacyConsent
 import com.point.core.flow.Realizer
 import com.point.core.flow.Resolver
-import com.point.core.flow.UsageEvent
-import com.point.core.flow.UsageEventType
-import com.point.core.flow.UsageJournal
-import com.point.core.flow.UsageSummary
 import com.point.core.flow.UserAiConfig
 import com.point.core.flow.UserKeyStore
 import com.point.core.model.ActionResult
@@ -66,7 +62,6 @@ class FlowViewModelTest {
     private val usage = FakeUsage()
     private val chosenApps = FakeChosenApps()
     private val userKeys = FakeUserKeys()
-    private val journal = FakeUsageJournal()
     private val consent = FakePrivacyConsent()
     private val appLauncher = FakeAppLauncher()
     private val sensory = FakeSensoryFeedback()
@@ -103,7 +98,7 @@ class FlowViewModelTest {
         sharedTexts: com.point.core.flow.SharedTexts = FakeSharedTexts(),
 
         keyNeeding: Set<CapabilityId> = emptySet(),
-    ) = FlowViewModel(store, FakeRegistry(caps, cloud, slow, keyNeeding) { userKeys.keys().mine.isNotEmpty() }, resolver, chatResponder, enrichment, history, usage, chosenApps, userKeys, aiFacts, builtInKeys, journal, consent, appLauncher, FakePdfRasterizer(), sensory, sensorySettings, cloudPrivacy, snapshot, crashLog, dispatcher, pins, AppIconResolver { null }, pcLinks, pcTransport, pcCaps, linkMonitor, PulledFileFactory { name -> java.io.File(java.io.File(System.getProperty("java.io.tmpdir")), "pulled-" + name).absolutePath }, noFrames, keyCheck, account, accountClient, pendingLogins, deviceKeys, browser, sharedTexts)
+    ) = FlowViewModel(store, FakeRegistry(caps, cloud, slow, keyNeeding) { userKeys.keys().mine.isNotEmpty() }, resolver, chatResponder, enrichment, history, usage, chosenApps, userKeys, aiFacts, builtInKeys, consent, appLauncher, FakePdfRasterizer(), sensory, sensorySettings, cloudPrivacy, snapshot, crashLog, dispatcher, pins, AppIconResolver { null }, pcLinks, pcTransport, pcCaps, linkMonitor, PulledFileFactory { name -> java.io.File(java.io.File(System.getProperty("java.io.tmpdir")), "pulled-" + name).absolutePath }, noFrames, keyCheck, account, accountClient, pendingLogins, deviceKeys, browser, sharedTexts)
 
     private val keyCheck = FakeAiKeyCheck()
 
@@ -800,26 +795,6 @@ class FlowViewModelTest {
 
         assertEquals(ObjectKind.TEXT, vm.ui.value.frame?.obj?.state?.kind)
         assertTrue(usage.recorded.contains(CapabilityId("a")))
-    }
-
-    @Test fun `a Success step journals the traversed graph edge`() = runTest(dispatcher) {
-        resolver.result = ActionResult.Success(ResultObject(ObjectKind.TEXT, "text/plain", ScratchRef("/o")))
-        val vm = vm()
-        vm.onShared("uri", "image/png"); advanceUntilIdle()
-
-        vm.onBubble(bubble()); advanceUntilIdle()
-
-        assertEquals(mapOf("IMAGE>a>TEXT" to 1), journal.graph())
-    }
-
-    @Test fun `a Failure step journals a FAILED event`() = runTest(dispatcher) {
-        resolver.result = ActionResult.Failure("Не удалось", recoverable = true)
-        val vm = vm()
-        vm.onShared("uri", "image/png"); advanceUntilIdle()
-
-        vm.onBubble(bubble()); advanceUntilIdle()
-
-        assertEquals(1, journal.events.count { it.type == UsageEventType.FAILED })
     }
 
     @Test fun `a Done step shows its message and keeps the frame`() = runTest(dispatcher) {
@@ -2961,18 +2936,6 @@ class FlowViewModelTest {
         assertTrue("ключ есть — звать больше некуда", vm.ui.value.aiKeySet)
     }
 
-    @Test fun `records usage events for the North Star (shared, action, completed)`() = runTest(dispatcher) {
-        resolver.result = ActionResult.Done("готово")
-        val vm = vm()
-        vm.onShared("uri", "image/png"); advanceUntilIdle()
-        vm.onBubble(bubble()); advanceUntilIdle()
-
-        val types = journal.events.map { it.type }
-        assertTrue(types.contains(UsageEventType.SHARED))
-        assertTrue(types.contains(UsageEventType.ACTION))
-        assertTrue(types.contains(UsageEventType.COMPLETED))
-    }
-
     private fun cloudVm() = vm(
         caps = mapOf(
             CapabilityId("ai") to setOf(Intent.UNDERSTAND),
@@ -3893,19 +3856,4 @@ private class FakeChosenApps : com.point.core.flow.ChosenApps {
     val recorded = mutableListOf<com.point.core.flow.ChosenApp>()
     override fun all() = recorded.toList()
     override suspend fun record(app: com.point.core.flow.ChosenApp) { recorded += app }
-}
-
-private class FakeUsageJournal(private var enabled: Boolean = true) : UsageJournal {
-    val events = mutableListOf<UsageEvent>()
-    override suspend fun isEnabled() = enabled
-    override suspend fun setEnabled(enabled: Boolean) { this.enabled = enabled }
-    override suspend fun record(event: UsageEvent) { if (enabled) events += event }
-    override suspend fun graph(): Map<String, Int> =
-        events.filter { it.type == UsageEventType.EDGE }.groupingBy { it.detail }.eachCount()
-    override suspend fun summary() = UsageSummary(
-        events.count { it.type == UsageEventType.SHARED },
-        events.count { it.type == UsageEventType.ACTION },
-        events.count { it.type == UsageEventType.COMPLETED },
-    )
-    override suspend fun clear() { events.clear() }
 }

@@ -55,7 +55,6 @@ import com.point.core.flow.PRIVACY_SETTING_HINT
 import com.point.core.flow.PRIVACY_SETTING_TITLE
 import com.point.core.flow.PrivacyLevel
 import com.point.core.flow.SETTINGS_TITLE
-import com.point.core.flow.UsageSummary
 import com.point.core.flow.UserAiKey
 import com.point.core.flow.UserAiKeys
 import com.point.core.flow.aiCheckedLine
@@ -83,9 +82,6 @@ fun KeyScreen(
     errand: KeyErrand? = null,
     onSave: (UserAiKey) -> Unit,
     onCancel: () -> Unit,
-    usageEnabled: Boolean,
-    usageSummary: UsageSummary?,
-    onToggleUsage: (Boolean) -> Unit,
 
     checking: String? = null,
 
@@ -148,8 +144,6 @@ fun KeyScreen(
                     privacyLevel = privacyLevel,
                     soundEnabled = soundEnabled,
                     onToggleSound = onToggleSound,
-                    usageEnabled = usageEnabled,
-                    onToggleUsage = onToggleUsage,
                     onOpen = { section = it },
                     onOpenDevices = onOpenDevices,
                 )
@@ -183,9 +177,6 @@ fun KeyScreen(
                 SettingsSection.APP -> AppSection(
                     soundEnabled = soundEnabled,
                     onToggleSound = onToggleSound,
-                    usageEnabled = usageEnabled,
-                    usageSummary = usageSummary,
-                    onToggleUsage = onToggleUsage,
                     onBack = { section = null },
                 )
             }
@@ -212,8 +203,6 @@ private fun SettingsList(
     privacyLevel: PrivacyLevel,
     soundEnabled: Boolean,
     onToggleSound: (Boolean) -> Unit,
-    usageEnabled: Boolean,
-    onToggleUsage: (Boolean) -> Unit,
     onOpen: (SettingsSection) -> Unit,
     onOpenDevices: () -> Unit,
 ) {
@@ -258,14 +247,6 @@ private fun SettingsList(
                 onClick = { onOpen(SettingsSection.APP) },
                 appearIndex = 3,
                 trailing = { Switch(checked = soundEnabled, onCheckedChange = onToggleSound) },
-            )
-            GroupSeam()
-            SettingsRow(
-                title = USAGE_TITLE,
-                subtitle = "Обезличенно, только на устройстве",
-                onClick = { onOpen(SettingsSection.APP) },
-                appearIndex = 4,
-                trailing = { Switch(checked = usageEnabled, onCheckedChange = onToggleUsage) },
             )
         }
     }
@@ -666,9 +647,6 @@ private fun PrivacySection(
 private fun AppSection(
     soundEnabled: Boolean,
     onToggleSound: (Boolean) -> Unit,
-    usageEnabled: Boolean,
-    usageSummary: UsageSummary?,
-    onToggleUsage: (Boolean) -> Unit,
     onBack: () -> Unit,
 ) {
     BackToList(onBack)
@@ -680,16 +658,6 @@ private fun AppSection(
         checked = soundEnabled,
         onCheckedChange = onToggleSound,
     )
-    SwitchCard(
-        title = USAGE_TITLE,
-        description = "Обезличенно, только на устройстве — мерит, экономит ли Point переключения между приложениями.",
-        checked = usageEnabled,
-        onCheckedChange = onToggleUsage,
-
-        tally = usageSummary
-            ?.takeIf { usageEnabled }
-            ?.let { "Объектов: ${it.objects} · действий: ${it.actions} · завершено в Point: ${it.completed}" },
-    )
 }
 
 private const val AI_GROUP_TITLE = "AI и облако"
@@ -699,7 +667,6 @@ private const val KEY_SECTION_TITLE = "Ключи AI"
 private const val PRIVACY_SECTION_TITLE = "Отправка и приватность"
 private const val APP_SECTION_TITLE = "Приложение"
 private const val SOUND_TITLE = "Звук действий"
-private const val USAGE_TITLE = "Приватная статистика"
 
 private class KeyDraft(saved: UserAiKey) {
     var providerId by mutableStateOf(saved.providerId)
@@ -771,7 +738,6 @@ private fun SwitchCard(
     description: String,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
-    tally: String? = null,
 ) {
     Row(
         modifier = Modifier
@@ -788,10 +754,6 @@ private fun SwitchCard(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            if (tally != null) {
-                Spacer(Modifier.height(6.dp))
-                Text(tally, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-            }
         }
         Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
@@ -822,9 +784,6 @@ private fun PreviewSettingsList() = PointTheme(darkTheme = true) {
         ),
         onSave = {},
         onCancel = {},
-        usageEnabled = true,
-        usageSummary = UsageSummary(objects = 42, actions = 118, completed = 31),
-        onToggleUsage = {},
         soundEnabled = true,
         cloudEnabled = true,
     )
@@ -849,9 +808,6 @@ private fun PreviewKeysAllServices() = PointTheme(darkTheme = true) {
         note = "AI недоступен — задайте свой ключ",
         onSave = {},
         onCancel = {},
-        usageEnabled = false,
-        usageSummary = null,
-        onToggleUsage = {},
     )
 }
 
@@ -862,9 +818,6 @@ private fun PreviewKeysChecking() = PointTheme(darkTheme = true) {
         screen = aiKeysScreenOf(builtIn = setOf("groq")),
         onSave = {},
         onCancel = {},
-        usageEnabled = false,
-        usageSummary = null,
-        onToggleUsage = {},
         checking = CHECK_ALL_SERVICES,
     )
 }
@@ -877,9 +830,6 @@ private fun PreviewKeysErrand() = PointTheme(darkTheme = true) {
         screen = aiKeysScreenOf(keys = UserAiKeys.NONE.with(UserAiKey(OWN_SERVICE_ID, "ключ", baseUrl = "https://мой/v1"))),
         onSave = {},
         onCancel = {},
-        usageEnabled = false,
-        usageSummary = null,
-        onToggleUsage = {},
         errand = KeyErrand(action = "Понять", objectName = "чек.jpg"),
         verdict = KeyVerdict.Works("Готово"),
         verdictFor = OWN_SERVICE_ID,

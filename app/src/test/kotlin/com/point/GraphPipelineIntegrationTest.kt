@@ -43,9 +43,6 @@ import com.point.core.flow.SensoryFeedback
 import com.point.core.flow.SensorySettings
 import com.point.core.flow.SharedSecrets
 import com.point.core.flow.SharedTexts
-import com.point.core.flow.UsageEvent
-import com.point.core.flow.UsageJournal
-import com.point.core.flow.UsageSummary
 import com.point.core.flow.UserAiConfig
 import com.point.core.flow.UserKeyStore
 import com.point.core.flow.alternativesOf
@@ -273,14 +270,6 @@ class GraphPipelineIntegrationTest {
         object : com.point.core.flow.BuiltInAiKeys {
             override fun key(providerId: String) = ""
             override fun have(): Set<String> = emptySet()
-        },
-        object : UsageJournal {
-            override suspend fun isEnabled() = false
-            override suspend fun setEnabled(enabled: Boolean) = Unit
-            override suspend fun record(event: UsageEvent) = Unit
-            override suspend fun graph(): Map<String, Int> = emptyMap()
-            override suspend fun summary() = UsageSummary(0, 0, 0)
-            override suspend fun clear() = Unit
         },
         consent,
         object : AppLauncher {

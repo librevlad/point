@@ -49,7 +49,6 @@ fun PointFlow(
         onPasteKey = { clipboardText(context) },
         onForgetAiKey = viewModel::forgetAiKey,
         onCloseKeySettings = viewModel::closeKeySettings,
-        onToggleUsage = viewModel::setUsageEnabled,
         onToggleSound = viewModel::setSoundEnabled,
         onPickPrivacyLevel = viewModel::setPrivacyLevel,
         onToggleCloud = viewModel::setCloudAllowed,

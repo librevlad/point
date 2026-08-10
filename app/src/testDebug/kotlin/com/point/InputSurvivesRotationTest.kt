@@ -37,9 +37,6 @@ class InputSurvivesRotationTest {
                 screen = aiKeysScreenOf(),
                 onSave = { saved = it },
                 onCancel = {},
-                usageEnabled = false,
-                usageSummary = null,
-                onToggleUsage = {},
                 onToggleSound = {},
             )
         }

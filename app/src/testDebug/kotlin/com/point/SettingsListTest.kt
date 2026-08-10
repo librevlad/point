@@ -3,7 +3,6 @@ package com.point
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsOff
-import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.isToggleable
@@ -17,7 +16,6 @@ import com.point.core.flow.AI_PROVIDERS
 import com.point.core.flow.MY_DEVICES_TITLE
 import com.point.core.flow.PRIVACY_SETTING_HINT
 import com.point.core.flow.PrivacyLevel
-import com.point.core.flow.UsageSummary
 import com.point.core.flow.UserAiKey
 import com.point.core.flow.UserAiKeys
 import com.point.core.ui.theme.PointTheme
@@ -42,12 +40,9 @@ class SettingsListTest {
         keys: UserAiKeys = UserAiKeys.NONE,
         note: String? = null,
         soundEnabled: Boolean = true,
-        usageEnabled: Boolean = false,
-        usageSummary: UsageSummary? = null,
         cloudEnabled: Boolean = false,
         privacyLevel: PrivacyLevel = PrivacyLevel.DEFAULT,
         onToggleSound: (Boolean) -> Unit = {},
-        onToggleUsage: (Boolean) -> Unit = {},
         onToggleCloud: (Boolean) -> Unit = {},
         onPickPrivacyLevel: (PrivacyLevel) -> Unit = {},
         onOpenDevices: () -> Unit = {},
@@ -59,9 +54,6 @@ class SettingsListTest {
                 note = note,
                 onSave = {},
                 onCancel = onCancel,
-                usageEnabled = usageEnabled,
-                usageSummary = usageSummary,
-                onToggleUsage = onToggleUsage,
                 soundEnabled = soundEnabled,
                 onToggleSound = onToggleSound,
                 cloudEnabled = cloudEnabled,
@@ -84,7 +76,17 @@ class SettingsListTest {
         compose.onNodeWithText("Отправка и приватность").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText(MY_DEVICES_TITLE).performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Звук действий").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("Приватная статистика").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test fun `настройки, которой никто не мог объяснить, в списке больше нет`() {
+        settings(keys = savedKey)
+
+        compose.onNodeWithText("Приватная статистика").assertDoesNotExist()
+        compose.onNodeWithText("Обезличенно", substring = true).assertDoesNotExist()
+
+        compose.onNodeWithText("Звук действий").performClick()
+        compose.onNodeWithText("Приватная статистика").assertDoesNotExist()
+        compose.onNodeWithText("Объектов:", substring = true).assertDoesNotExist()
     }
 
     @Test fun `список начинается со строк, а не с абзацев — первая группа видна сразу`() {
@@ -101,7 +103,7 @@ class SettingsListTest {
         val order = listOf(
             "AI И ОБЛАКО", "Ключи AI", "Отправка и приватность",
             "АККАУНТ", MY_DEVICES_TITLE,
-            "ПРИЛОЖЕНИЕ", "Звук действий", "Приватная статистика",
+            "ПРИЛОЖЕНИЕ", "Звук действий",
         )
         order.zipWithNext { above, below ->
             assertTrue(
@@ -123,7 +125,6 @@ class SettingsListTest {
         compose.onNodeWithText(PRIVACY_SETTING_HINT, substring = true).assertDoesNotExist()
         compose.onNodeWithText(PrivacyLevel.FREE_FIRST.what, substring = true).assertDoesNotExist()
         compose.onNodeWithText("Вибрация управляется", substring = true).assertDoesNotExist()
-        compose.onNodeWithText("мерит, экономит ли Point", substring = true).assertDoesNotExist()
     }
 
     @Test fun `сколько своих ключей задано — видно строкой, не открывая раздел`() {
@@ -152,12 +153,11 @@ class SettingsListTest {
         compose.onNodeWithText(PrivacyLevel.NO_TRAINING.title, substring = true).assertIsDisplayed()
     }
 
-    @Test fun `звук и статистика показывают своё состояние тумблерами`() {
-        settings(keys = savedKey, soundEnabled = true, usageEnabled = false)
+    @Test fun `звук показывает своё состояние тумблером — и он на экране один`() {
+        settings(keys = savedKey, soundEnabled = false)
 
-        compose.onAllNodes(isToggleable()).assertCountEquals(2)
-        compose.onAllNodes(isToggleable())[0].assertIsOn()
-        compose.onAllNodes(isToggleable())[1].assertIsOff()
+        compose.onAllNodes(isToggleable()).assertCountEquals(1)
+        compose.onAllNodes(isToggleable())[0].assertIsOff()
     }
 
     @Test fun `звук переключается прямо с общего экрана`() {
@@ -167,15 +167,6 @@ class SettingsListTest {
         compose.onAllNodes(isToggleable())[0].performClick()
 
         assertEquals(false, sound)
-    }
-
-    @Test fun `статистика переключается прямо с общего экрана`() {
-        var usage: Boolean? = null
-        settings(keys = savedKey, usageEnabled = false, onToggleUsage = { usage = it })
-
-        compose.onAllNodes(isToggleable())[1].performClick()
-
-        assertEquals(true, usage)
     }
 
     @Test fun `раздел ключей доступен изнутри своей строки`() {
@@ -221,14 +212,11 @@ class SettingsListTest {
     }
 
     @Test fun `строка звука открывает раздел с полным объяснением`() {
-        settings(keys = savedKey, usageEnabled = true, usageSummary = UsageSummary(4, 9, 2))
+        settings(keys = savedKey)
 
         compose.onNodeWithText("Звук действий").performClick()
 
         compose.onNodeWithText("Вибрация управляется", substring = true).performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("мерит, экономит ли Point", substring = true).performScrollTo().assertIsDisplayed()
-
-        compose.onNodeWithText("Объектов: 4", substring = true).performScrollTo().assertIsDisplayed()
     }
 
     @Test fun `ни одна прежняя возможность не потеряна`() {
@@ -238,8 +226,6 @@ class SettingsListTest {
         var picked: PrivacyLevel? = null
         settings(
             keys = savedKey,
-            usageEnabled = true,
-            usageSummary = UsageSummary(objects = 42, actions = 118, completed = 31),
             onOpenDevices = { devices = true },
             onCancel = { cancelled = true },
             onToggleCloud = { cloud = it },
@@ -268,9 +254,8 @@ class SettingsListTest {
         assertEquals(PrivacyLevel.NO_TRAINING, picked)
 
         compose.onNodeWithText("← Настройки").performScrollTo().performClick()
-        compose.onNodeWithText("Приватная статистика").performClick()
-        compose.onNodeWithText("Звук действий").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("Объектов: 42", substring = true).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Звук действий").performClick()
+        compose.onNodeWithText("Вибрация управляется", substring = true).performScrollTo().assertIsDisplayed()
 
         compose.onNodeWithText("← Настройки").performScrollTo().performClick()
         compose.onNodeWithText(MY_DEVICES_TITLE).performClick()

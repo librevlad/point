@@ -47,9 +47,6 @@ class OneSettingsDoorTest {
                 screen = aiKeysScreenOf(),
                 onSave = {},
                 onCancel = {},
-                usageEnabled = false,
-                usageSummary = null,
-                onToggleUsage = {},
                 onOpenDevices = onOpenDevices,
             )
         }
@@ -80,7 +77,6 @@ class OneSettingsDoorTest {
 
         compose.onNodeWithText("Отправка и приватность").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Звук действий").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("Приватная статистика").performScrollTo().assertIsDisplayed()
 
         compose.onNodeWithText(MY_DEVICES_TITLE).performScrollTo().assertIsDisplayed()
     }
