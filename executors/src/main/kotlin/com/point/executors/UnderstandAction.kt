@@ -207,6 +207,29 @@ class UnderstandRealizer @Inject constructor(
                 val window = readWindowOf(full, already, MAX_CHARS)
                 val elements = layoutOf(window)
 
+                // Черновик читают глазами (#770).
+                //
+                // Когда почти каждое второе слово прочитано движком неуверенно, разбор по
+                // странице строится на догадках: на почтовой наклейке он менял местами
+                // отправителя с получателем, выдавал телефон за номер накладной и сочинял
+                // «г. Лумброван» — и всё это с провенансом «прочитано», то есть твёрдым на
+                // вид. Зрячее чтение той же наклейки бесплатно и за пять секунд отдаёт и
+                // имена, и номер целиком.
+                //
+                // Прочитанное уверенно остаётся за страницей: там разбор ловит выдумки
+                // модели — исправляет цифру по словам страницы и гасит номер, не сошедшийся
+                // с контрольной суммой. Слой слов никуда не девается и в черновике: он нужен
+                // подсветке и обводке, — решать по нему, что написано, вот чего нельзя.
+                if (input.state.kind == ObjectKind.IMAGE && llm.canHandle(input) &&
+                    com.point.core.flow.draftReading(atomLayer(input))
+                ) {
+                    val seen = readWithEyes(input)
+
+                    // Глаза не справились — остаётся то, что есть. Молчаливой цепочки нет:
+                    // без текста отказ уходит человеку как отказ.
+                    if (seen !is ActionResult.Failure || elements.isEmpty()) return@withContext seen
+                }
+
                 if (elements.isEmpty()) {
                     return@withContext when {
 
@@ -335,8 +358,16 @@ class UnderstandRealizer @Inject constructor(
         if (fields.isEmpty() && parsed.single.isEmpty()) {
             return ActionResult.Failure("На снимке ничего не разобрать", recoverable = true)
         }
-        val values = withoutHumanFacts(fields.mapValues { it.value.text } + parsed.single, input.metadata)
+        val (roles, _) = roleReadings(answer, elements = emptyList(), layer = null)
+        val values = withoutHumanFacts(
+            fields.mapValues { it.value.text } + parsed.single + roles,
+            input.metadata,
+        )
         val merged = mergeFacts(input.metadata, values)
+
+        // Человек с телефоном — узел графа и здесь: иначе номер висел бы без хозяина,
+        // ровно как в кейсе наклейки (#747, пункт 12).
+        val people = contactNodes(input, parsed.contacts)
         return ActionResult.Done(
             UNDERSTOOD,
             Findings(
@@ -344,6 +375,8 @@ class UnderstandRealizer @Inject constructor(
                     annotations(merged, fields, judgedByLayer = false, blocked = judged.blocked) +
                     doubts(merged, parsed.unsure) +
                     (META_READING_MODE to ReadingMode.HANDWRITTEN.name),
+                objects = people.objects,
+                relations = people.relations,
             ),
         )
     }
@@ -435,6 +468,16 @@ class UnderstandRealizer @Inject constructor(
                 "TRACK (номер отправления), PHONE, EMAIL, URL, ADDRESS, DATE, CARD, " +
                 "GEO (координаты), PLACE (куда ехать: название места дословно), " +
                 "AMOUNT (сумма — ТОЛЬКО цифры, без валюты), RECEIPT (номер квитанции или чека). " +
+                // Зрячее чтение спрашивало меньше текстового, и «Понять» на снимке
+                // отдавало меньше знания, чем «Понять» на тексте того же снимка (#770,
+                // живая охота 11.08.2026): телефон приходил без хозяина, роли не приходили
+                // вовсе. Одно действие — один состав знания, кто бы его ни исполнил.
+                "Если рядом с номером телефона стоит имя его владельца, вместо PHONE дай " +
+                "строку CONTACT=<номер> | <имя полностью>, по одной на каждого человека. " +
+                "Отдельно назови, кто играет роли: sender (отправитель), receiver " +
+                "(получатель), carrier (перевозчик), issuer (кто выдал документ), — строками " +
+                "вида роль=имя. Ролей может не быть ни одной: визитка, вывеска, меню, " +
+                "фотография — не документ с отправителем. Ни одной роли лучше, чем натянутая. " +
                 "Добавь строку SUMMARY=<что на снимке, 3-6 слов>. " +
                 // Живой прогон 2026-08-09: SUMMARY приходило по-английски («blue water
                 // meter in dirt») и ложилось подзаголовком объекта — Point говорит с

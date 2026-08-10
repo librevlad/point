@@ -135,8 +135,23 @@ fun objectVerdict(obj: PointObject): ObjectVerdict {
     val unusable = unusableReasonOf(obj.metadata).takeIf { state.has(Feature.UNUSABLE) }
     val summary = obj.metadata[META_SEMANTIC_SUMMARY]?.takeIf { it.isNotBlank() }
     val name = obj.metadata["name"]?.takeIf { it.isNotBlank() && it != headline }
+
+    // Найденное зовут его собственным значением (#769). В списке карточка человека
+    // подписана именем, а внутри объект назывался «Человек» — вход терял имя, хотя это
+    // главное, что о человеке известно. Вид при этом не пропадает: он уходит подписью.
+    val own = valueHeadline(obj)
+    if (own != null) return ObjectVerdict(own, unusable ?: headline, objectMeasure(obj))
     return ObjectVerdict(headline, unusable ?: summary ?: name, objectMeasure(obj))
 }
+
+/**
+ * Значение, которым объект зовётся сам: имя человека, номер, дата.
+ *
+ * Такие узлы рождает понимание, и живут они значением, а не файлом, — поэтому и признак
+ * тот же: содержимое лежит прямо в ссылке. У файла имя берётся иначе, его это не трогает.
+ */
+private fun valueHeadline(obj: PointObject): String? =
+    if (obj.uri is com.point.core.model.ValueRef) foundHeadline(obj).takeIf { it.isNotBlank() } else null
 
 private fun heroKindLabel(obj: PointObject): String =
     if (objectMark(obj) == ObjectMark.SPREADSHEET) "Таблица" else kindLabel(obj.state.kind)

@@ -2102,7 +2102,14 @@ class FlowViewModel @Inject constructor(
 
         // Тот же id — тот же объект: свежий результат (повтор действия на PC, пересбор узла)
         // занимает место прежнего, а не отбрасывается. Порядок появления сохраняется.
-        val newFound = (frame.found + update.objects).associateBy { it.id }.values
+        //
+        // Занимает место — но не стирает знание (#769). Одного человека объявляют двое:
+        // роль на документе даёт имя, пара «имя + номер» — телефон. Прежде второй молча
+        // заменял первого целиком, и внутри найденного человека не оставалось ни телефона,
+        // ни признака, по которому предлагают «Сохранить контакт».
+        val newFound = (frame.found + update.objects)
+            .groupBy { it.id }
+            .map { (_, nodes) -> nodes.reduce(::sameNodeKnown) }
             .map { node -> syncNodeFact(node, newMetadata) }
         val newRelations = (frame.relations + update.relations).distinct()
 
@@ -2153,6 +2160,19 @@ class FlowViewModel @Inject constructor(
      * сменившего primary (человек, машинный repair), узел зеркалит факт кадра — значение,
      * историю `.alt` и происхождение. Идентичность узла не меняется.
      */
+    /**
+     * Один и тот же узел, объявленный дважды: знание складывается, а не заменяется (#769).
+     *
+     * На почтовой наклейке человека объявляют двое — роль на документе даёт имя, пара
+     * «имя + номер» даёт телефон. Свежее значение по спорному ключу побеждает, но ключи и
+     * признаки прежнего остаются: иначе телефон исчезал вместе с «Сохранить контакт».
+     */
+    private fun sameNodeKnown(known: PointObject, fresh: PointObject): PointObject =
+        fresh.copy(
+            metadata = com.point.core.flow.mergeFacts(known.metadata, fresh.metadata),
+            state = fresh.state.copy(features = known.state.features + fresh.state.features),
+        )
+
     private fun syncNodeFact(node: PointObject, merged: Map<String, String>): PointObject {
 
         // Узел «ещё одного» значения (id вида host:вид:значение) — другой объект того же

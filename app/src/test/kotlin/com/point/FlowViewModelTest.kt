@@ -289,6 +289,38 @@ class FlowViewModelTest {
         )
     }
 
+    // #769, живая охота 11.08.2026 на почтовой наклейке: человека объявляют двое — роль на
+    // документе даёт имя, пара «имя + номер» даёт телефон. Второй молча заменял первого, и
+    // внутри найденного человека не оставалось ни телефона, ни «Сохранить контакт».
+    @Test fun `один человек объявлен дважды — знание складывается, а не заменяется`() = runTest(dispatcher) {
+        val named = PointObject(
+            id = "root:party:думброван",
+            mime = "text/plain",
+            uri = ValueRef("Думброван Олександр"),
+            state = ObjectState(com.point.core.flow.KIND_PERSON),
+            metadata = mapOf(com.point.core.flow.META_GRAPH_ROLE_PREFIX + "receiver" to "Думброван Олександр"),
+            sourceObjects = listOf("root"),
+        )
+        val withPhone = named.copy(
+            state = ObjectState(com.point.core.flow.KIND_PERSON, setOf(com.point.core.model.Feature.HAS_PHONE)),
+            metadata = mapOf(com.point.core.flow.META_ENTITY_PREFIX + "phone" to "067 636 05 60"),
+        )
+        enrichment.updates = listOf(
+            EnrichmentUpdate(emptySet(), emptyMap(), emptyList(), objects = listOf(named)),
+            EnrichmentUpdate(emptySet(), emptyMap(), emptyList(), objects = listOf(withPhone)),
+        )
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        val person = vm.ui.value.frame!!.found.single { it.id == named.id }
+        assertEquals("067 636 05 60", person.metadata[com.point.core.flow.META_ENTITY_PREFIX + "phone"])
+        assertEquals(
+            named.uri.value,
+            person.metadata[com.point.core.flow.META_GRAPH_ROLE_PREFIX + "receiver"],
+        )
+        assertTrue("телефон объявлен признаком", person.state.has(com.point.core.model.Feature.HAS_PHONE))
+    }
+
     @Test fun `entering a found object carries only its own relations`() = runTest(dispatcher) {
         val a = waybill("root:identifier:A", "20 4514 9154 9395", "10.0 20.0 210.0 60.0")
         val b = waybill("root:identifier:B", "59 0012 3456 7890", "10.0 120.0 210.0 160.0")
