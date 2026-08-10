@@ -92,6 +92,17 @@ class AtomLayer(
      */
     fun blocks(subset: List<Atom> = atoms): List<List<Atom>> = blocksOf(subset).map { it.flatten() }
 
+    /**
+     * Текст страницы блоками: столбец отдельно, шапка и подвал отдельно (#768).
+     *
+     * Нужен там, где важна принадлежность строки, а не только её порядок: подпись колонки
+     * должна остаться при своей колонке.
+     */
+    fun blockTexts(subset: List<Atom> = atoms): List<String> =
+        blocksOf(subset).map { block ->
+            block.joinToString("\n") { line -> line.joinToString(" ") { it.text } }
+        }
+
     private fun blocksOf(subset: List<Atom>): List<List<List<Atom>>> {
         val placed = placed(subset)
         if (placed.isEmpty()) return emptyList()
@@ -118,6 +129,7 @@ class AtomLayer(
             }
         }
         flush()
+
         return out
     }
 

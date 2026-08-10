@@ -98,7 +98,23 @@ internal fun understandPrompt(
 ): String = buildString {
     append("Текст распознан с фотографии и может содержать ошибки распознавания. ")
     append("Ниже его элементы, у каждого свой идентификатор.\n\n")
-    elements.forEach { append(it.id).append(": ").append(it.text).append('\n') }
+
+    // Блоки страницы названы прямо (#768). На почтовой наклейке подпись правой колонки
+    // «КОМУ:» стоит чуть выше подписи левой «ВІД:» — кадр снят под наклоном, — и сплошным
+    // списком строк это читается как «сначала КОМУ, потом Тарасенко»: отправитель с
+    // получателем менялись местами. Блок держит подпись при своей колонке.
+    val blocks = elements.groupBy { it.block }
+    if (blocks.size > 1) {
+        append("Страница разбита на блоки — колонки, шапка, подвал. Значение и подпись к нему ")
+        append("ищи внутри одного блока: соседний блок про другое.\n\n")
+        blocks.forEach { (number, group) ->
+            append("Блок ").append(number + 1).append(":\n")
+            group.forEach { append(it.id).append(": ").append(it.text).append('\n') }
+            append('\n')
+        }
+    } else {
+        elements.forEach { append(it.id).append(": ").append(it.text).append('\n') }
+    }
     if (index != null) {
         append(
             "\nСлова страницы, каждое с меткой (атрибут rule= — подсказка офлайн-правила о " +
@@ -252,16 +268,28 @@ class UnderstandRealizer @Inject constructor(
                 val fullyRead = readSoFar >= full.length
 
                 val layer = atomLayer(input)
+
+                // Пока страница читается целиком за раз, элементы берутся блоками — тогда
+                // подпись колонки остаётся при своей колонке (#768). Длинный объект идёт
+                // окнами, и там блоков не собрать: окно режет страницу поперёк.
+                val laidOut = layer
+                    ?.takeIf { already == 0 && fullyRead }
+                    ?.blockTexts()
+                    ?.takeIf { it.size > 1 }
+                    ?.let { com.point.core.flow.layoutOfBlocks(it) }
+                    ?.takeIf { it.isNotEmpty() }
+                    ?: elements
+
                 val index = layer?.promptIndex()
                 reportStage("Отправляю страницу модели")
-                val answer = ask(input, understandPrompt(elements, index = index))
+                val answer = ask(input, understandPrompt(laidOut, index = index))
                 reportStage("Проверяю прочитанное по странице")
                 val parsed = parseFieldCandidates(answer)
                 val judged = judgeFields(parsed.fields, layer)
 
                 val retried = judged.retry.takeIf { it.isNotEmpty() }?.let { keys ->
                     reportStage("Контрольная цифра не сошлась — перечитываю")
-                    val again = ask(input, retryPrompt(keys, elements, index))
+                    val again = ask(input, retryPrompt(keys, laidOut, index))
                     judgeFields(parseFieldCandidates(again).fields.filterKeys { it in keys }, layer)
                 }
                 val fields = judged.won + retried?.won.orEmpty()
@@ -270,7 +298,7 @@ class UnderstandRealizer @Inject constructor(
                     (judged.blocked[key].orEmpty() + retried?.blocked?.get(key).orEmpty()).distinct()
                 }
 
-                val (roles, roleDisputes) = roleReadings(answer, elements, layer)
+                val (roles, roleDisputes) = roleReadings(answer, laidOut, layer)
 
                 // Курсор для следующего нажатия «Понять» — пока не дочитано, окно сдвигается
                 // дальше; дочитано — курсор больше не нужен (#682/#683).
