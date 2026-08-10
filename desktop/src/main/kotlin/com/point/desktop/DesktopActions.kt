@@ -203,6 +203,41 @@ class PcToPhoneRealizer(private val outbox: Outbox) : Realizer {
         }.getOrElse { ActionResult.Failure("Не удалось отправить — проверьте, что на диске есть место", recoverable = true) }
 }
 
+/**
+ * Текст из PDF на компьютере (#631): та же способность и те же слова, что на телефоне.
+ * Скан сюда не доходит — его дверь не рисуется вовсе (`IS_IMAGE_PDF` ставится при приёме),
+ * и «Извлечь текст» больше не заканчивается пустотой.
+ */
+class PcPdfTextRealizer(
+    private val pdf: PdfText,
+) : Realizer {
+    override val capabilityId = com.point.core.flow.capabilities.PdfCapability.ID
+
+    override fun accepts(state: ObjectState) =
+        state.kind == ObjectKind.PDF && !state.has(com.point.core.model.Feature.IS_IMAGE_PDF)
+
+    override suspend fun perform(input: PointObject, amendment: String?): ActionResult {
+        val source = File(input.uri.value)
+        val text = pdf.of(source)
+            ?: return ActionResult.Failure("Компьютер не смог открыть этот PDF", recoverable = true)
+        if (text.isBlank()) {
+            return ActionResult.Failure("В этом PDF нет текстового слоя — это снимки страниц", recoverable = false)
+        }
+        val out = File(source.parentFile, source.nameWithoutExtension + ".txt")
+        return runCatching {
+            out.writeText(text)
+            ActionResult.Success(
+                com.point.core.model.ResultObject(
+                    type = ObjectKind.TEXT,
+                    mime = "text/plain",
+                    uri = com.point.core.model.ScratchRef(out.absolutePath),
+                    metadata = mapOf("name" to out.name),
+                ),
+            )
+        }.getOrElse { ActionResult.Failure("Текст не сохранился — проверьте, что на диске есть место", recoverable = true) }
+    }
+}
+
 class PcOfficePdfRealizer(
     private val converter: OfficeToPdf,
 ) : Realizer {

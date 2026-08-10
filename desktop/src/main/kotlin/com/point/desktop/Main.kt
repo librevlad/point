@@ -100,6 +100,7 @@ fun main(args: Array<String>) {
             PcToPhoneRealizer(outbox),
             PcPrintRealizer(printer),
             PcOfficePdfRealizer(officeToPdf),
+            PcPdfTextRealizer(PdfBoxText()),
             PcEntitiesRealizer(entities),
             PcQrRealizer(outbox),
             PcDropRealizer(

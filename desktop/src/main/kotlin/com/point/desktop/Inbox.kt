@@ -4,6 +4,7 @@ import com.point.core.flow.EMPTY_FILE_REASON
 import com.point.core.flow.META_UNUSABLE_REASON
 import com.point.core.flow.ObjectClassifier
 import com.point.core.model.Feature
+import com.point.core.model.ObjectKind
 import com.point.core.model.PointObject
 import com.point.core.model.ScratchRef
 import java.io.File
@@ -63,7 +64,7 @@ fun uniqueChildName(existing: Set<String>, desired: String): String {
     }
 }
 
-class Inbox(private val dir: File) {
+class Inbox(private val dir: File, private val pdf: PdfText = PdfBoxText()) {
 
     private val classifier = ObjectClassifier()
 
@@ -112,7 +113,16 @@ class Inbox(private val dir: File) {
         val head = runCatching {
             file.inputStream().use { it.readNBytes(512) }
         }.getOrDefault(ByteArray(0))
-        val state = classifier.classify(mime, file.length(), file.name, head)
+        val classified = classifier.classify(mime, file.length(), file.name, head)
+
+        // Скан узнаётся при приёме (#631): своего цикла обогащения у компьютера нет, а знать
+        // про текстовый слой нужно раньше, чем человек увидит двери, — иначе «Извлечь текст»
+        // на снимках страниц заканчивается пустотой вместо честного отсутствия двери.
+        val state = if (classified.kind == ObjectKind.PDF && looksScanned(pdf, file)) {
+            classified.with(Feature.IS_IMAGE_PDF)
+        } else {
+            classified
+        }
 
         // Годность — часть состояния объекта (#684): та же пустота, что и на телефоне,
         // называет себя здесь же, а не только в Feature без объяснения человеку.
