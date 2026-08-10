@@ -76,7 +76,7 @@ class DesktopState(
     val lastContact: StateFlow<Long?> = _lastContact.asStateFlow()
 
     fun heard() {
-        _lastContact.value = System.currentTimeMillis()
+        _lastContact.value = clock.now()
     }
 
     fun bubblesFor(item: InboxItem): List<Bubble> {
@@ -301,16 +301,60 @@ class DesktopState(
             .map { it.first }
     }
 
+    /**
+     * Вопрос до дела: телефон, который ответит через час, не может быть выбран за спиной
+     * (срез 5 контракта связки, #611). Живой телефон выбирается молча — как любой свой
+     * исполнитель; молчащий становится выбором человека: подождать или отказаться.
+     */
+    data class PhoneAsk(
+        val item: InboxItem,
+        val action: com.point.core.flow.PcRemoteAction,
+        val title: String,
+        val what: String,
+    )
+
+    private val _phoneAsk = MutableStateFlow<PhoneAsk?>(null)
+    val phoneAsk: StateFlow<PhoneAsk?> = _phoneAsk.asStateFlow()
+
     fun sendToPhone(item: InboxItem, action: com.point.core.flow.PcRemoteAction) {
+        val link = com.point.core.flow.linkStateOf(_lastContact.value, clock.now())
+        if (link !is com.point.core.flow.LinkState.Live) {
+            _phoneAsk.value = PhoneAsk(
+                item = item,
+                action = action,
+                title = "«${action.label}» делает телефон, а он сейчас не на связи",
+                what = "Просьба подождёт в его почте и выполнится, когда вы откроете Point на телефоне. " +
+                    "Пока этого не случилось, здесь ничего не изменится.",
+            )
+            return
+        }
+        queueForPhone(item, action)
+    }
+
+    /** Согласился ждать — просьба ложится в почту телефона. */
+    fun approvePhone() {
+        val ask = _phoneAsk.value ?: return
+        _phoneAsk.value = null
+        queueForPhone(ask.item, ask.action, silent = true)
+    }
+
+    /** Отказ не наказывает: действие остаётся доступным на потом. */
+    fun declinePhone() {
+        _phoneAsk.value = null
+        _message.value = "Ничего не отправлено — объект остался на компьютере. Действие доступно, если передумаете"
+    }
+
+    private fun queueForPhone(
+        item: InboxItem,
+        action: com.point.core.flow.PcRemoteAction,
+        silent: Boolean = false,
+    ) {
         scope.launch(Dispatchers.IO) {
             runCatching {
                 outbox?.add(item.obj.copy(metadata = item.obj.metadata + ("pc.action" to action.id)))
             }.onSuccess {
-
-                val silent = com.point.core.flow.linkStateOf(_lastContact.value, clock.now()) !is
-                    com.point.core.flow.LinkState.Live
                 _message.value = if (silent) {
-                    "${action.label} — ждёт телефона: он сейчас не на связи"
+                    "${action.label} — ждёт телефона: выполнится, когда вы его откроете"
                 } else {
                     "${action.label} — ждёт телефона"
                 }
