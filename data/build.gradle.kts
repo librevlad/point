@@ -60,6 +60,13 @@ android {
         buildConfigField("String", "ZHIPU_BASE_URL", prop("ZHIPU_BASE_URL", "https://api.z.ai/api/paas/v4"))
         buildConfigField("String", "ZHIPU_MODELS", prop("ZHIPU_MODELS", "glm-4.6v-flash"))
 
+        // Workers AI живёт под номером аккаунта: адрес собирается из него, поэтому без
+        // номера провайдера нет, даже если ключ задан.
+        buildConfigField("String", "CLOUDFLARE_API_KEY", "\"\"")
+        buildConfigField("String", "CLOUDFLARE_ACCOUNT_ID", "\"\"")
+        buildConfigField("String", "CLOUDFLARE_BASE_URL", prop("CLOUDFLARE_BASE_URL", "https://api.cloudflare.com/client/v4/accounts"))
+        buildConfigField("String", "CLOUDFLARE_MODELS", prop("CLOUDFLARE_MODELS", "@cf/mistralai/mistral-small-3.1-24b-instruct,@cf/meta/llama-3.3-70b-instruct-fp8-fast"))
+
         buildConfigField("String", "GITHUB_API_KEY", "\"\"")
         buildConfigField("String", "GITHUB_BASE_URL", prop("GITHUB_BASE_URL", "https://models.github.ai/inference"))
         buildConfigField("String", "GITHUB_MODELS", prop("GITHUB_MODELS", ""))
@@ -92,6 +99,8 @@ android {
             buildConfigField("String", "SAMBANOVA_API_KEY", prop("SAMBANOVA_API_KEY"))
             buildConfigField("String", "ZHIPU_API_KEY", prop("ZHIPU_API_KEY"))
             buildConfigField("String", "OCRSPACE_API_KEY", prop("OCRSPACE_API_KEY"))
+            buildConfigField("String", "CLOUDFLARE_API_KEY", prop("CLOUDFLARE_API_KEY"))
+            buildConfigField("String", "CLOUDFLARE_ACCOUNT_ID", prop("CLOUDFLARE_ACCOUNT_ID"))
             buildConfigField("String", "GITHUB_API_KEY", prop("GITHUB_API_KEY"))
             buildConfigField("String", "UNSTRUCTURED_API_KEY", prop("UNSTRUCTURED_API_KEY"))
             buildConfigField("String", "LLAMA_CLOUD_API_KEY", prop("LLAMA_CLOUD_API_KEY"))
