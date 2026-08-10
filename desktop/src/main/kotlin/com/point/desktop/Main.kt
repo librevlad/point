@@ -255,6 +255,10 @@ fun main(args: Array<String>) {
         peers = account::peers,
         secrets = com.point.core.flow.KeyStoreSecrets(deviceKeys),
         requests = requests,
+
+        // Скачанное письмо ложится сюда до того, как приём подтверждён серверу, и
+        // лежит, пока не разобрано: падение на разборе не стоит человеку объекта (#680).
+        letters = com.point.core.flow.KeptLetters(File(pointDir, "letters")),
         onContact = state::heard,
         onUnknownSender = account::refreshCircleNow,
         log = { line -> println("[mailbox] " + line) },

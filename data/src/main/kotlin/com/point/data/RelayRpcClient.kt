@@ -85,7 +85,10 @@ class RelayRpcClient(
         val deadline = System.nanoTime() + waitSeconds * 1_000_000_000L
         while (System.nanoTime() < deadline) {
             coroutineContext.ensureActive()
-            val got = mailbox.take(me.deviceId)
+            // Здесь едет ответ на вопрос, заданный секунду назад, — класть его на диск
+            // незачем: если телефон умрёт, он спросит заново. Письмо с объектом,
+            // которое нельзя терять, приходит на компьютер, и там оно сохраняется.
+            val got = mailbox.take(me.deviceId) { }
             if (got.code == 401 || got.code == 403) return@withContext Asked.Rejected
             val blob = got.blob
             if (blob == null) {

@@ -1,5 +1,6 @@
 package com.point.desktop
 
+import com.point.core.flow.KeptLetters
 import com.point.core.flow.LinkedPc
 import com.point.core.flow.Mailbox
 import com.point.core.flow.PcSecrets
@@ -17,6 +18,8 @@ class RelayPoller(
     private val peers: () -> List<LinkedPc>,
     private val secrets: PcSecrets,
     private val requests: RelayRequests,
+
+    private val letters: KeptLetters,
 
     private val onUnknownSender: () -> Unit = {},
 
@@ -42,7 +45,7 @@ class RelayPoller(
     private fun loop() {
         var lastFailure: String? = null
         while (running) {
-            val handled = runCatching { pollOnce() }
+            val handled = runCatching { once() }
                 .onFailure { e ->
 
                     val failure = "${e.javaClass.simpleName}: ${e.message}"
@@ -59,12 +62,42 @@ class RelayPoller(
         }
     }
 
-    private fun pollOnce(): Boolean {
+    internal fun once(): Boolean {
         val me = account() ?: return false
         val mailbox = Mailbox(serverUrl.trimEnd('/'), { me.deviceToken })
 
-        val blob = mailbox.take(me.deviceId).blob ?: return false
+        // Сначала на диск, потом подтверждение. Пока письмо не сохранено, сервер его не
+        // отпускает; сохранённое подтверждается сразу — второй раз его не привезут (#680).
+        val arrived = mailbox.take(me.deviceId) { letter ->
+            letters.keep(letter.id, letter.blob ?: ByteArray(0))
+        }.blob != null
 
+        // Разбор — отдельный шаг. Он читает письмо с диска, поэтому падение на нём
+        // (в живом прогоне 2026-08-09 — падение приложения целиком) стоит времени,
+        // а не объекта: непонятое письмо дождётся следующего запуска.
+        val sorted = sortOut(mailbox)
+        return arrived || sorted
+    }
+
+    private fun sortOut(mailbox: Mailbox): Boolean {
+        var any = false
+        letters.waiting().forEach { id ->
+            val blob = letters.blob(id)
+            if (blob == null) {
+                letters.done(id)
+                return@forEach
+            }
+            if (letters.tried(id) >= letters.tries) {
+                log("письмо не удаётся разобрать — эта попытка последняя, дальше оно просто полежит")
+            }
+            handle(mailbox, blob)
+            letters.done(id)
+            any = true
+        }
+        return any
+    }
+
+    private fun handle(mailbox: Mailbox, blob: ByteArray) {
         val opened = tryOpen(blob) ?: run {
             runCatching { onUnknownSender() }
             tryOpen(blob)
@@ -84,16 +117,15 @@ class RelayPoller(
                 "${peer.name}: $why"
             }.ifEmpty { "круг пуст" }
             log("письмо (${blob.size} байт) не открылось — пропущено [$told]")
-            return true
+            return
         }
         val (peer, key, frame) = opened
         onContact()
 
-        val kind = frame.meta[RelayRpc.KIND] ?: return true
+        val kind = frame.meta[RelayRpc.KIND] ?: return
         val requestId = frame.meta[RelayRpc.ID].orEmpty()
-        val reply = requests.answer(kind, frame.meta, frame.bytes) ?: return true
+        val reply = requests.answer(kind, frame.meta, frame.bytes) ?: return
         send(mailbox, peer, key, requestId, reply)
-        return true
     }
 
     private fun tryOpen(blob: ByteArray): Triple<LinkedPc, ByteArray, com.point.core.flow.PcFrame>? =
