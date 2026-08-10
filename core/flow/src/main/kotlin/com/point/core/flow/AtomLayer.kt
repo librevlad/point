@@ -82,18 +82,28 @@ class AtomLayer(
     private fun placed(subset: List<Atom>): List<Pair<Atom, Box>> =
         subset.map { it to (transform?.toUpright(it.box) ?: it.box) }
 
-    fun lines(subset: List<Atom> = atoms): List<List<Atom>> {
+    fun lines(subset: List<Atom> = atoms): List<List<Atom>> = blocksOf(subset).flatten()
+
+    /**
+     * Блоки страницы: столбец полосы целиком, а блок во всю ширину — сам по себе.
+     *
+     * Найденное в одном блоке относится к одному и тому же (#747): телефон под именем
+     * отправителя принадлежит отправителю, а не получателю в соседнем столбце.
+     */
+    fun blocks(subset: List<Atom> = atoms): List<List<Atom>> = blocksOf(subset).map { it.flatten() }
+
+    private fun blocksOf(subset: List<Atom>): List<List<List<Atom>>> {
         val placed = placed(subset)
         if (placed.isEmpty()) return emptyList()
 
         val rows = rowsOf(placed)
-        val out = mutableListOf<List<Atom>>()
+        val out = mutableListOf<List<List<Atom>>>()
         var band = mutableListOf<List<Pair<Atom, Box>>>()
 
         fun flush() {
             if (band.isEmpty()) return
             val gaps = columnGaps(band)
-            out += if (gaps.isEmpty()) band.map { ordered(it) } else columnsOf(band, gaps)
+            out += if (gaps.isEmpty()) listOf(band.map { ordered(it) }) else columnsOf(band, gaps)
             band = mutableListOf()
         }
 
@@ -200,7 +210,7 @@ class AtomLayer(
     private fun columnsOf(
         band: List<List<Pair<Atom, Box>>>,
         gaps: List<ClosedFloatingPointRange<Float>>,
-    ): List<List<Atom>> {
+    ): List<List<List<Atom>>> {
         val edges = edgesOf(gaps)
         val columns = List(edges.size - 1) { mutableListOf<List<Pair<Atom, Box>>>() }
 
@@ -209,7 +219,7 @@ class AtomLayer(
                 columns[index] += listOf(part)
             }
         }
-        return columns.flatMap { column -> column.map { row -> ordered(row) } }
+        return columns.filter { it.isNotEmpty() }.map { column -> column.map { row -> ordered(row) } }
     }
 
     private fun columnOf(box: Box, edges: List<Float>): Int {
