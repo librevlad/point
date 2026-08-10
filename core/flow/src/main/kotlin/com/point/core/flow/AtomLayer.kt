@@ -48,9 +48,24 @@ class AtomLayer(
 
     fun doubtful(below: Float): List<Atom> = atoms.filter { it.confidence < below }
 
+    /**
+     * Текст ридера побеждает пересобранный, пока страница одноколоночная: ридер знает про
+     * переносы и пунктуацию больше, чем склейка слов.
+     *
+     * Но колонки ридер отдаёт строкой поперёк страницы (#747): просвет между отправителем и
+     * получателем виден только по геометрии. Нашлись колонки — читаем по ним, иначе весь
+     * разбор ниже опирается на строку, которой на наклейке нет.
+     */
     val text: String
-        get() = readerText
-            ?: lines(atoms).joinToString("\n") { line -> line.joinToString(" ") { it.text } }
+        get() {
+            val rebuilt = lines(atoms)
+            val reader = readerText
+            if (reader != null && !splitIntoColumns(rebuilt)) return reader
+            return rebuilt.joinToString("\n") { line -> line.joinToString(" ") { it.text } }
+        }
+
+    private fun splitIntoColumns(rebuilt: List<List<Atom>>): Boolean =
+        atoms.isNotEmpty() && rebuilt.size > rowsOf(placed(atoms)).size
 
     /**
      * Строки документа — с оглядкой на колонки (#747).
@@ -64,8 +79,11 @@ class AtomLayer(
      * читается сверху донизу целиком. Блок во всю ширину — шапка, подвал — остаётся строкой
      * и разделяет столбцы выше и ниже себя: две таблицы подряд не сливаются в одну.
      */
+    private fun placed(subset: List<Atom>): List<Pair<Atom, Box>> =
+        subset.map { it to (transform?.toUpright(it.box) ?: it.box) }
+
     fun lines(subset: List<Atom> = atoms): List<List<Atom>> {
-        val placed = subset.map { it to (transform?.toUpright(it.box) ?: it.box) }
+        val placed = placed(subset)
         if (placed.isEmpty()) return emptyList()
 
         val rows = rowsOf(placed)

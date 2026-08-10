@@ -96,6 +96,20 @@ class ColumnsAreReadApartTest {
     }
 
     @Test
+    fun `ридер склеил колонки поперёк — читаем по геометрии, а не по его строке`() {
+        val merged = AtomLayer(
+            label.atoms,
+            readerText = "ВІД: 29.07/12:59 КОМУ:\nПриватна особа Приватна особа\n" +
+                "Тарасенко Світлана Сергіївна Думброван Олександр",
+        )
+
+        assertTrue(
+            "склейка ридера осталась в тексте:\n${merged.text}",
+            "Думброван Олександр Миколайович" in merged.text.replace("\n", " "),
+        )
+    }
+
+    @Test
     fun `редкие ячейки таблицы — всё ещё одна строка, а не столбцы`() {
         val sheet = AtomLayer(
             listOf(
