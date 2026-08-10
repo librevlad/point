@@ -67,6 +67,7 @@ import com.point.core.ui.kindIcon
 import com.point.core.ui.kindLabel
 import com.point.core.ui.portalCard
 import com.point.core.ui.theme.PointTheme
+import com.point.core.ui.objectVerdict
 import com.point.core.ui.understoodFacts
 import com.point.executors.Bitmaps
 import androidx.compose.ui.tooling.preview.Preview
@@ -467,7 +468,7 @@ private fun HistoryRow(
             HistoryAvatar(entry)
             Column(Modifier.weight(1f)) {
                 Text(
-                    text = entry.name ?: kindLabel(entry.kind),
+                    text = entryTitle(entry),
                     style = MaterialTheme.typography.titleMedium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -475,7 +476,7 @@ private fun HistoryRow(
 
                 Text(
                     text = historySubtitle(
-                        name = entry.name,
+                        name = entry.name.takeIf { entryTitle(entry) != it },
                         kind = kindLabel(entry.kind),
 
                         ago = agoLabel(System.currentTimeMillis() - entry.epochMillis),
@@ -500,18 +501,44 @@ private fun HistoryRow(
     }
 }
 
-internal fun historySubtitle(name: String?, kind: String, ago: String): String =
-    if (name != null && name.startsWith(kind, ignoreCase = true)) ago else "$kind · $ago"
+/**
+ * Подзаголовок досказывает то, чего нет в заголовке: имя файла — когда заголовок назвал смысл,
+ * вид объекта — когда заголовком стало имя. Одно и то же дважды не печатается.
+ */
+internal fun historySubtitle(name: String?, kind: String, ago: String): String = when {
+    name == null -> "$kind · $ago"
+    name.startsWith(kind, ignoreCase = true) -> ago
+    else -> "$name · $ago"
+}
 
-private fun entryFacts(entry: HistoryEntry) = understoodFacts(
-    PointObject(
-        id = entry.id,
-        mime = entry.mime,
-        uri = entry.ref,
-        state = ObjectState(entry.kind, entry.features),
-        metadata = entry.metadata,
-    ),
+private fun entryFacts(entry: HistoryEntry) = understoodFacts(entryObject(entry))
+
+/**
+ * Запись «Недавнего» — тот же объект со всем знанием (#687): в истории лежит его метадата
+ * целиком, а не одни сущности. Значит и назвать его можно так же, как на экране объекта.
+ */
+private fun entryObject(entry: HistoryEntry) = PointObject(
+    id = entry.id,
+    mime = entry.mime,
+    uri = entry.ref,
+    state = ObjectState(entry.kind, entry.features),
+    metadata = entry.metadata,
 )
+
+/**
+ * Заголовок карточки — смысл, а не файл (#639): «Покупка», «Визитка», «Договор» вместо
+ * «probe.jpg». Имя файла уходит подзаголовком: оно всё ещё нужно, чтобы узнать свою вещь,
+ * но человек ищет глазами не его.
+ *
+ * Тем же словарём, что на экране объекта (`objectVerdict`), — второго языка для тех же
+ * вещей не заводим. Старые записи, у которых знания нет, называются как раньше.
+ */
+internal fun entryTitle(entry: HistoryEntry): String {
+    val verdict = objectVerdict(entryObject(entry))
+    val named = entry.name?.takeIf { it.isNotBlank() }
+    val meaningful = verdict.headline.takeIf { it != kindLabel(entry.kind) }
+    return meaningful ?: named ?: kindLabel(entry.kind)
+}
 
 private const val THUMB_PX = 96
 
