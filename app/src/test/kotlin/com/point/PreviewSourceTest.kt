@@ -1,6 +1,7 @@
 package com.point
 
 import com.point.core.flow.PdfRasterizer
+import com.point.core.flow.READER_NO_PAGES
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
@@ -15,10 +16,10 @@ class PreviewSourceTest {
     private fun obj(kind: ObjectKind) =
         PointObject("id", "x", ScratchRef("/scratch/object.bin"), ObjectState(kind))
 
-    private fun rasterizer(first: String?, fail: Boolean = false) = object : PdfRasterizer {
+    private fun rasterizer(first: String?, fails: String? = null) = object : PdfRasterizer {
         override suspend fun rasterize(obj: PointObject) = ScratchRef("/pages")
         override suspend fun rasterizeFirstPage(obj: PointObject): ScratchRef? {
-            if (fail) error("broken pdf")
+            if (fails != null) error(fails)
             return first?.let { ScratchRef(it) }
         }
     }
@@ -34,9 +35,19 @@ class PreviewSourceTest {
     }
 
     @Test
-    fun `a broken or empty pdf yields no preview instead of failing`() = runTest {
+    fun `нечего показать — это просто нет предпросмотра`() = runTest {
         assertNull(previewSource(obj(ObjectKind.PDF), rasterizer(null)))
-        assertNull(previewSource(obj(ObjectKind.PDF), rasterizer(null, fail = true)))
+    }
+
+    /**
+     * #570: причину, по которой страницы не вышло, глотать нельзя — из неё человеку
+     * достаются слова «в документе нет ни одной страницы», а не общее «файл не открылся».
+     */
+    @Test
+    fun `причина, по которой страницы не вышло, не тонет по дороге`() = runTest {
+        val thrown = runCatching { previewSource(obj(ObjectKind.PDF), rasterizer(null, fails = READER_NO_PAGES)) }
+
+        assertEquals(READER_NO_PAGES, thrown.exceptionOrNull()?.message)
     }
 
     @Test

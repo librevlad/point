@@ -333,6 +333,19 @@ class DefaultCapabilityRegistryTest {
         assertTrue(bubbles.all { it.unusableReason == reason })
     }
 
+    /** #570: обломок вместо архива — но передать его дальше человек по-прежнему может. */
+    @Test
+    fun `битым архивом всё ещё есть чем поделиться`() {
+        val obj = objectOf(
+            ObjectState(ObjectKind.ZIP, setOf(Feature.UNUSABLE)),
+            mapOf(META_UNUSABLE_REASON to com.point.core.flow.BROKEN_ARCHIVE_REASON),
+        )
+
+        val bubbles = registry.bubblesFor(GraphState(obj))
+
+        assertTrue("share" in bubbles.map { it.capabilityId.value })
+    }
+
     @Test
     fun `обычный объект — у пузырьков причины нет`() {
         val obj = objectOf(ObjectState(ObjectKind.TEXT))

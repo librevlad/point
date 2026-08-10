@@ -23,6 +23,11 @@ class PagesActionTest {
         override suspend fun rasterizeFirstPage(obj: PointObject): ScratchRef? = null
     }
 
+    private fun rasterizerFailing(reason: String) = object : PdfRasterizer {
+        override suspend fun rasterize(obj: PointObject): ScratchRef = error(reason)
+        override suspend fun rasterizeFirstPage(obj: PointObject): ScratchRef? = error(reason)
+    }
+
     private val pdf = PointObject("id", "application/pdf", ScratchRef("/tmp/x.pdf"), ObjectState(ObjectKind.PDF))
 
     @Test
@@ -45,6 +50,27 @@ class PagesActionTest {
 
         assertTrue(result is ActionResult.Failure)
         assertTrue((result as ActionResult.Failure).recoverable)
+    }
+
+    /**
+     * #570: раньше человек читал «Не удалось разобрать PDF на страницы» — как будто сломался
+     * Point. В документе просто нет страниц, и так это и называется.
+     */
+    @Test
+    fun `документ без страниц называет пустоту, а не поломку разбора`() = runTest {
+        val result = PagesRealizer(rasterizerFailing(com.point.core.flow.READER_NO_PAGES)).perform(pdf, null)
+
+        assertTrue(result is ActionResult.Failure)
+        assertEquals("В документе нет ни одной страницы", (result as ActionResult.Failure).reason)
+        assertTrue(result.recoverable)
+    }
+
+    @Test
+    fun `чужие слова о сбое наружу не выходят`() = runTest {
+        val result = PagesRealizer(rasterizerFailing("Central Directory Entry not found")).perform(pdf, null)
+
+        val reason = (result as ActionResult.Failure).reason
+        assertEquals("Не удалось разобрать PDF на страницы", reason)
     }
 
     @Test

@@ -64,4 +64,16 @@ class ReaderFailureTest {
         assertFalse(readerFailureIsFatal("error: OutOfMemoryError"))
         assertFalse(readerFailureIsFatal(null))
     }
+
+    // ---- #570: документ без единой страницы — не «битый файл», а названная пустота. ----
+
+    @Test
+    fun `документ без страниц назван пустотой, а не поломкой`() {
+        assertEquals("В документе нет ни одной страницы", readerFailure(READER_NO_PAGES))
+    }
+
+    @Test
+    fun `документ без страниц — это про сам объект`() {
+        assertTrue(readerFailureIsFatal(READER_NO_PAGES))
+    }
 }

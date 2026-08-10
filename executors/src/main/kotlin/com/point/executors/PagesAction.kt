@@ -4,7 +4,9 @@ import com.point.core.flow.Capability
 import com.point.core.flow.CapabilityMeta
 import com.point.core.flow.Latency
 import com.point.core.flow.PdfRasterizer
+import com.point.core.flow.READER_NO_PAGES
 import com.point.core.flow.Realizer
+import com.point.core.flow.readerFailure
 import com.point.core.flow.reportStage
 import com.point.core.model.ActionResult
 import com.point.core.model.CapabilityId
@@ -41,7 +43,7 @@ class PagesRealizer @Inject constructor(
                 val dir = rasterizer.rasterize(input)
                 val count = File(dir.value).walkTopDown().count { it.isFile }
                 if (count == 0) {
-                    ActionResult.Failure("Не удалось разобрать PDF на страницы", recoverable = true)
+                    ActionResult.Failure(NOT_SPLIT, recoverable = true)
                 } else {
                     ActionResult.Success(
                         ResultObject(
@@ -52,6 +54,18 @@ class PagesRealizer @Inject constructor(
                         ),
                     )
                 }
-            }.getOrElse { ActionResult.Failure(it.message ?: "Ошибка рендера страниц", recoverable = true) }
+            }.getOrElse { ActionResult.Failure(refusal(it.message), recoverable = true) }
         }
+
+    /**
+     * #570: «в документе нет ни одной страницы» — это про документ, и так это и говорится.
+     * Всё, чего мы не знаем точно, остаётся прежним отказом разбора, а чужой текст
+     * исключения человеку не показывается.
+     */
+    private fun refusal(reason: String?): String =
+        if (READER_NO_PAGES in reason.orEmpty()) readerFailure(reason) else NOT_SPLIT
+
+    private companion object {
+        const val NOT_SPLIT = "Не удалось разобрать PDF на страницы"
+    }
 }
