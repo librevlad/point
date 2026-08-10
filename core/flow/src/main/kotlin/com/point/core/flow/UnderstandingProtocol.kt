@@ -26,11 +26,13 @@ data class PersonContact(val name: String, val phone: String)
 
 /**
  * Несколько значений этих видов — несколько объектов, а не спор прочтений одного
- * (#652): второй телефон в переписке — не конфликт первого. Спор остаётся
- * одиночным полям (сумма, трек, показание, квитанция).
+ * (#652): второй телефон в переписке — не конфликт первого. Сумма здесь же (#662):
+ * разные числа — разные суммы документа («сумма — ещё: 300»), а спор остаётся только
+ * неразличимым прочтениям одного числа. Спор по-прежнему у трека, показания, квитанции.
  */
 val MULTI_VALUE_FACTS: Set<String> =
-    setOf("phone", "email", "url", "card", "date").mapTo(mutableSetOf()) { META_ENTITY_PREFIX + it }
+    setOf("phone", "email", "url", "card", "date", "amount")
+        .mapTo(mutableSetOf()) { META_ENTITY_PREFIX + it }
 
 fun isMultiValueFact(key: String): Boolean = key in MULTI_VALUE_FACTS
 
@@ -107,6 +109,9 @@ fun parseFieldCandidates(answer: String): ParsedUnderstanding {
                 // Относительное слово — не дата (#659); арифметика — не сумма (#662).
                 if (suffix == "date" && relativeDayWord(candidate.text)) return@forEach
                 if (suffix == "amount" && looksLikeExpression(candidate.text)) return@forEach
+
+                // Ноль — не сумма документа (#662): комиссия-ноль вставала «ещё»-суммой.
+                if (suffix == "amount" && zeroAmount(candidate.text)) return@forEach
 
                 // Форма IBAN — не трек: «UA79…» с квитанции становился готовым
                 // «Отследить отправление» (живой прогон 2026-08-09).

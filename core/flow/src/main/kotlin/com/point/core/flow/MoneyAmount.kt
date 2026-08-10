@@ -20,6 +20,16 @@ private const val AMOUNT_MAX_DIGITS = 12
 internal fun amountDigitsFit(value: String): Boolean =
     value.substringBefore(',').substringBefore('.').count(Char::isDigit) in 1..AMOUNT_MAX_DIGITS
 
+/**
+ * Ноль — не сумма документа (#662): «Комісія (грн) 0.00» с квитанции вставало «ещё»-суммой
+ * рядом с настоящим платежом. О деньгах, ради которых человек открыл объект, ноль не говорит
+ * ничего.
+ */
+fun zeroAmount(value: String): Boolean =
+    value.filter { it.isDigit() || it == ',' || it == '.' }
+        .replace(',', '.')
+        .toBigDecimalOrNull()?.signum() == 0
+
 fun moneyAmounts(text: String): List<MoneyAmount> =
     AMOUNT_SHAPED.findAll(text)
         .map { m ->
@@ -28,7 +38,7 @@ fun moneyAmounts(text: String): List<MoneyAmount> =
             val currency = m.groupValues[1].ifEmpty { m.groupValues[4] }
             MoneyAmount(value.trim(), currency.trim())
         }
-        .filter { amountDigitsFit(it.value) }
+        .filter { amountDigitsFit(it.value) && !zeroAmount(it.value) }
         .distinctBy { it.value.filter { c -> c.isDigit() || c == ',' || c == '.' } + "|" + it.currency.lowercase() }
         .toList()
 

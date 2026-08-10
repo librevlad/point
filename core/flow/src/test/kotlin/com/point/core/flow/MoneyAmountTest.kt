@@ -37,7 +37,22 @@ class MoneyAmountTest {
 
         assertEquals("500.00", facts[META_ENTITY_AMOUNT])
         assertEquals("грн", facts[META_ENTITY_AMOUNT_CURRENCY])
-        assertEquals(altValue(listOf("500.00", "0.00")), facts[META_ENTITY_AMOUNT + META_MORE_SUFFIX])
+    }
+
+    @Test
+    fun `нулевая комиссия не становится суммой документа (#662)`() {
+        // Прогон 2026-08-09, кадр 20: «сумма — ещё: 0.00» — комиссия-ноль стояла рядом
+        // с настоящим платежом. Ноль ничего не говорит о деньгах, ради которых открыли объект.
+        val facts = amountFacts("Сума (грн)      500.00\nКомісія (грн)      0.00")
+
+        assertEquals(null, facts[META_ENTITY_AMOUNT + META_MORE_SUFFIX])
+        assertEquals(listOf("500.00"), moneyAmounts("Сума 500.00 грн\nКомісія 0.00 грн").map { it.value })
+    }
+
+    @Test
+    fun `ноль не становится суммой и в одиночестве (#662)`() {
+        assertTrue(moneyAmounts("Комісія 0.00 грн").isEmpty())
+        assertTrue(moneyAmounts("0 грн").isEmpty())
     }
 
     @Test

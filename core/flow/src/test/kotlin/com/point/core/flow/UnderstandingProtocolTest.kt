@@ -161,7 +161,27 @@ class UnderstandingProtocolTest {
     fun `multi-value виды названы, одиночные — нет`() {
         assertEquals(true, isMultiValueFact(META_ENTITY_PREFIX + "phone"))
         assertEquals(true, isMultiValueFact(META_ENTITY_PREFIX + "date"))
-        assertEquals(false, isMultiValueFact(META_ENTITY_AMOUNT))
         assertEquals(false, isMultiValueFact(META_ENTITY_TRACK))
+    }
+
+    @Test
+    fun `разные числа — разные суммы документа, а не спор прочтений (#662)`() {
+        // Решение владельца: «сумма — ещё: 300». Спор остаётся только неразличимым
+        // прочтениям одного числа, как у телефонов (#652).
+        assertEquals(true, isMultiValueFact(META_ENTITY_AMOUNT))
+    }
+
+    @Test
+    fun `ноль суммой не становится — комиссия-ноль не кандидат (#662)`() {
+        assertEquals(null, parseFieldCandidates("AMOUNT=0.00").fields[META_ENTITY_AMOUNT])
+        assertEquals(null, parseFieldCandidates("AMOUNT=0").fields[META_ENTITY_AMOUNT])
+    }
+
+    @Test
+    fun `настоящая сумма остаётся кандидатом (#662)`() {
+        assertEquals(
+            listOf("500.00"),
+            parseFieldCandidates("AMOUNT=500.00").fields[META_ENTITY_AMOUNT]!!.map { it.text },
+        )
     }
 }
