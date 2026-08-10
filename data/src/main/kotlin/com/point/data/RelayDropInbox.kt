@@ -73,10 +73,15 @@ class RelayDropInbox(
                 val path = target(name)
                 File(path).apply { parentFile?.mkdirs() }.writeBytes(bytes)
 
-                ack(base, box.id, fileId)
-                DropWait.Arrived(DropArrival(path, name, mime))
+                // Подтверждение НЕ здесь: пока объект не создан, стирать файл на сервере
+                // нельзя — прислал его чужой человек, и повторить он не сможет.
+                DropWait.Arrived(DropArrival(path, name, mime, fileId.orEmpty()))
             }.getOrElse { e -> DropWait.Failed(e.message ?: "Нет связи с сервером Point") }
         }
+
+    override suspend fun ack(box: DropInboxBox, fileId: String): Unit = withContext(Dispatchers.IO) {
+        ack(base() ?: return@withContext, box.id, fileId)
+    }
 
     private fun ack(base: String, box: String, fileId: String?) {
         if (fileId.isNullOrBlank()) return

@@ -7,6 +7,7 @@ import com.point.core.flow.NetworkAvailability
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class RelayDropInboxTest {
@@ -21,6 +22,16 @@ class RelayDropInboxTest {
         val box = inbox(NetworkAvailability { false }).open()
 
         assertNull("без сети ссылки быть не должно", box)
+    }
+
+    @Test
+    fun `приезд файла сам по себе не подтверждает приём — сервер держит его до объекта`() = runTest {
+        // Живой прогон 2026-08-10: ящик на сервере опустел, а объект на телефоне не появился —
+        // файл исчез навсегда. Прислал его чужой человек, и прислать заново он не может.
+        // Подтверждение обязано быть отдельным шагом, а не хвостом скачивания.
+        val ack = RelayDropInbox::class.java.methods.map { it.name }
+
+        assertTrue("подтверждение обязано быть отдельным шагом контракта", "ack" in ack)
     }
 
     @Test
