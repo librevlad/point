@@ -32,6 +32,17 @@
         <intent>
             <action android:name="android.provider.MediaStore.RECORD_SOUND" />
         </intent>
+
+        <!-- Кто на этом телефоне умеет номер (#466): без объявления Android 11+ не покажет
+             ни одного приложения, и список у номера остался бы нашей выдумкой. -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="tel" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.SENDTO" />
+            <data android:scheme="smsto" />
+        </intent>
     </queries>
 
     <application

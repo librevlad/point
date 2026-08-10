@@ -27,6 +27,18 @@ interface AppLauncher {
     suspend fun handlersForMime(mime: String): List<AppTarget>
 
     suspend fun launch(target: AppTarget, obj: PointObject)
+
+    /**
+     * Кто на этом телефоне умеет работать с номером (#466).
+     *
+     * Владелец: «мне часто надо взять номер и пробить, кто это… звоню я как правило по
+     * WhatsApp». Список даёт система, а не мы: ни одного имени стороннего сервиса в коде
+     * Point нет и быть не должно — сегодня это один сервис, завтра другой.
+     */
+    suspend fun handlersForPhone(phone: String): List<AppTarget> = emptyList()
+
+    /** Открыть найденное приложение с этим номером. */
+    suspend fun launchWithPhone(target: AppTarget, phone: String) = Unit
 }
 
 interface Exporter {

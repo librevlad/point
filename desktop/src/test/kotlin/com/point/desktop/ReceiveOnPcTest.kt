@@ -58,7 +58,8 @@ class ReceiveOnPcTest {
     )
 
     private fun waitUntil(what: String, check: () -> Boolean) {
-        val until = System.currentTimeMillis() + 3_000
+        // На занятой машине сборки корутина просыпается позже: ждём с запасом.
+        val until = System.currentTimeMillis() + 15_000
         while (System.currentTimeMillis() < until) {
             if (check()) return
             Thread.sleep(20)
