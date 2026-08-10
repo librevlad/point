@@ -86,7 +86,7 @@ class RealCapabilityInventoryTest {
     fun `таблица — что каждая способность принимает и что возвращает`() {
         val lines = inventory.map { e ->
             val takes = e.accepts.joinToString("·") { it.name }.ifEmpty { "—" }
-            val gives = e.yields.joinToString(" / ") { yieldLabel(it, e.intents.first()).orEmpty() }
+            val gives = e.yields.joinToString(" / ") { yieldLabel(it).orEmpty() }
             val marks = buildList {
                 if (e.network) add("сеть")
                 if (e.paid) add("платно")
@@ -176,9 +176,10 @@ class RealCapabilityInventoryTest {
             assertTrue("${e.id.value} не сказала о выходе ничего", e.yields.isNotEmpty())
             e.yields.forEach { y ->
 
-                // Подписи может не быть вовсе (#629): у «Сохранить» и «Поделиться» имя уже
-                // сказало всё. А вот пустая строка — не подпись, а дырка на экране.
-                val said = yieldLabel(y, e.intents.first())
+                // Подписи может не быть вовсе (#629, #582): имя действия уже сказало всё, а
+                // выведенная из типа строка только повторяла его. Пустая строка — не подпись,
+                // а дырка на экране.
+                val said = yieldLabel(y)
                 assertTrue("${e.id.value} оставила пустую подпись вместо её отсутствия", said == null || said.isNotBlank())
             }
         }
@@ -226,7 +227,7 @@ class RealCapabilityInventoryTest {
     }
 
     private fun signature(c: Capability, state: com.point.core.model.ObjectState) =
-        c.label(state) + " · " + yieldLabel(c.yields(state), c.intents(state).first())
+        listOfNotNull(c.label(state), yieldLabel(c.yields(state))).joinToString(" · ")
 
     @Test
     fun `у двух действий, предлагаемых на одном объекте, не бывает одинаковой подписи`() {
@@ -279,8 +280,8 @@ class RealCapabilityInventoryTest {
 
         assertEquals("В PDF", pdf.label(office))
         assertEquals(
-            "вернёт PDF с текстом документа · без оформления",
-            yieldLabel(pdf.yields(office), pdf.intents(office).first()),
+            "PDF с текстом документа · без оформления",
+            yieldLabel(pdf.yields(office)),
         )
     }
 

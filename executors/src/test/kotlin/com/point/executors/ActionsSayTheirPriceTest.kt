@@ -8,7 +8,6 @@ import com.point.core.flow.SpeechKeyNeed
 import com.point.core.flow.SpeechReadiness
 import com.point.core.flow.yieldLabel
 import com.point.core.model.Feature
-import com.point.core.model.Intent
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import org.junit.Assert.assertEquals
@@ -22,18 +21,18 @@ class ActionsSayTheirPriceTest {
     private val image = ObjectState(ObjectKind.IMAGE)
     private val text = ObjectState(ObjectKind.TEXT)
 
-    // Подписи может не быть вовсе (#629) — для проверок «сказано / не сказано» это то же
-    // самое, что не сказать ничего.
+    // Подписи может не быть вовсе (#629, #582) — для проверок «сказано / не сказано» это то
+    // же самое, что не сказать ничего.
     private fun said(cap: Capability, state: ObjectState) =
-        yieldLabel(cap.yields(state), cap.intents(state).first()).orEmpty()
+        yieldLabel(cap.yields(state)).orEmpty()
 
     @Test
     fun `два скана обещают разное, и по обещанию видно какой зачем`() {
         val plain = said(ScanCapability(), image)
         val colour = said(ScanPlusCapability(), image)
 
-        assertEquals("вернёт чёрно-белую страницу", plain)
-        assertEquals("вернёт картинку · дольше, зато на устройстве", colour)
+        assertEquals("чёрно-белую страницу", plain)
+        assertEquals("картинку · дольше, зато на устройстве", colour)
         assertNotEquals("двойники снова неразличимы", plain, colour)
     }
 
@@ -49,10 +48,10 @@ class ActionsSayTheirPriceTest {
         val local = said(WordCapability(), text)
         val cloud = WordPlusCapability(aiKeysReady)
 
-        assertEquals("вернёт документ Word", local)
-        assertEquals("вернёт документ Word · текст уйдёт в сервис", said(cloud, text))
+        assertEquals("документ Word", local)
+        assertEquals("документ Word · текст уйдёт в сервис", said(cloud, text))
 
-        assertEquals("вернёт документ Word · снимок уйдёт в сервис", said(cloud, image))
+        assertEquals("документ Word · снимок уйдёт в сервис", said(cloud, image))
     }
 
     @Test
@@ -155,7 +154,7 @@ class ActionsSayTheirPriceTest {
 
         assertTrue("первым читает не устройство", chain.first().meta.kind == RealizerKind.LOCAL)
         assertTrue("запасного сетевого пути не стало — проверку пора менять", hasCloudFallback)
-        assertEquals("вернёт текст · сначала на телефоне, потом спрошу про сервис", said)
+        assertEquals("текст · сначала на телефоне, потом спрошу про сервис", said)
     }
 
     @Test
@@ -171,8 +170,8 @@ class ActionsSayTheirPriceTest {
     fun `цена сетевого чтения по-прежнему сказана подписью`() {
 
         assertEquals(
-            "вернёт текст · снимок уйдёт в сервис",
-            yieldLabel(CloudOcrCapability().yields(image), Intent.UNDERSTAND),
+            "текст · снимок уйдёт в сервис",
+            yieldLabel(CloudOcrCapability().yields(image)),
         )
     }
 }

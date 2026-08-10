@@ -3,7 +3,6 @@ package com.point.core.flow
 import com.point.core.model.ActionYield
 import com.point.core.model.CapabilityId
 import com.point.core.model.Feature
-import com.point.core.model.Intent
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import org.junit.Assert.assertEquals
@@ -63,27 +62,39 @@ class CapabilityInventoryTest {
     }
 
     @Test
-    fun `вернёт текст — так и написано`() {
-        assertEquals("вернёт текст", yieldLabel(ActionYield.New(ObjectKind.TEXT), Intent.UNDERSTAND))
+    fun `действие без своего слова второй строки не получает (#582)`() {
+
+        // «вернёт текст», «вернёт картинку», «вернёт документ» — пересказ типа результата
+        // теми же словами, что и имя действия. Решение владельца: такой подписи нет.
+        ObjectKind.entries.forEach { kind ->
+            assertNull("$kind снова договаривает тип результата", yieldLabel(ActionYield.New(kind)))
+        }
     }
 
     @Test
-    fun `вид OFFICE слишком широк — уточнение способности выигрывает`() {
+    fun `слово, написанное у самого действия, подписью остаётся (#582)`() {
 
-        assertEquals("вернёт таблицу", yieldLabel(ActionYield.New(ObjectKind.OFFICE, "таблицу"), Intent.PREPARE))
-        assertEquals("вернёт документ", yieldLabel(ActionYield.New(ObjectKind.OFFICE), Intent.PREPARE))
+        // Здесь сказан не тип результата, а то, что человеку правда нужно знать заранее.
+        assertEquals(
+            "текст · сначала на телефоне, потом спрошу про сервис",
+            yieldLabel(ActionYield.New(ObjectKind.TEXT, "текст · сначала на телефоне, потом спрошу про сервис")),
+        )
+        assertEquals(
+            "PDF с текстом документа · без оформления",
+            yieldLabel(ActionYield.New(ObjectKind.PDF, "PDF с текстом документа · без оформления")),
+        )
     }
 
     @Test
     fun `копирование ничего не дописывает — имя уже сказало всё (#629)`() {
 
-        assertNull(yieldLabel(ActionYield.Copied, Intent.SEND))
+        assertNull(yieldLabel(ActionYield.Copied))
     }
 
     @Test
     fun `подпись «Понять» называет результат, а не механику`() {
 
-        val label = yieldLabel(ActionYield.Same, Intent.UNDERSTAND)!!
+        val label = yieldLabel(ActionYield.Same)!!
 
         assertFalse("подпись снова про механику: " + label, label.contains("объект тот же"))
         assertTrue("подпись не называет ничего из того, что человек получит: " + label,
@@ -91,21 +102,18 @@ class CapabilityInventoryTest {
     }
 
     @Test
-    fun `у терминального действия второй строки нет, если ей нечего добавить (#629)`() {
+    fun `терминальное и неизвестное молчат — механику пересказывать нечем (#582)`() {
 
-        // Решение владельца: у «Сохранить», «Поделиться», «Напечатать» имя уже описывает
-        // работу — одинаковая подпись под шестью действиями подряд не добавляла ничего.
-        assertNull(yieldLabel(ActionYield.None, Intent.SEND))
-
-        // А там, где подписи есть что сказать, она остаётся: куда уйдёт и где покажется.
-        assertEquals("откроет в другом приложении", yieldLabel(ActionYield.None, Intent.OPEN))
-        assertEquals("покажет здесь же", yieldLabel(ActionYield.None, Intent.UNDERSTAND))
+        // «откроет в другом приложении» стояло под «Открыть другим приложением», а «вернёт
+        // то, что попросите» — под «AI». Подпись повторяла имя и ушла вместе с шаблоном.
+        assertNull(yieldLabel(ActionYield.None))
+        assertNull(yieldLabel(ActionYield.Unknown))
     }
 
     @Test
     fun `негодный объект — подпись становится причиной, а не обещанием`() {
 
-        val label = yieldLabel(ActionYield.Same, Intent.UNDERSTAND, unusableReason = "Файл пустой — в нём нечего читать")
+        val label = yieldLabel(ActionYield.Same, unusableReason = "Файл пустой — в нём нечего читать")
 
         assertEquals("Файл пустой — в нём нечего читать", label)
     }
@@ -114,15 +122,26 @@ class CapabilityInventoryTest {
     fun `причина перекрывает любой исход — New, Copied, Unknown, None`() {
         val reason = "Файл не открылся — он повреждён или это не изображение"
 
-        assertEquals(reason, yieldLabel(ActionYield.New(ObjectKind.TEXT), Intent.UNDERSTAND, reason))
-        assertEquals(reason, yieldLabel(ActionYield.Copied, Intent.SEND, reason))
-        assertEquals(reason, yieldLabel(ActionYield.Unknown, Intent.UNDERSTAND, reason))
-        assertEquals(reason, yieldLabel(ActionYield.None, Intent.OPEN, reason))
+        assertEquals(reason, yieldLabel(ActionYield.New(ObjectKind.TEXT), reason))
+        assertEquals(reason, yieldLabel(ActionYield.Copied, reason))
+        assertEquals(reason, yieldLabel(ActionYield.Unknown, reason))
+        assertEquals(reason, yieldLabel(ActionYield.None, reason))
     }
 
     @Test
     fun `без причины подпись работает как раньше`() {
-        assertEquals("найдёт суть, суммы, даты и контакты", yieldLabel(ActionYield.Same, Intent.UNDERSTAND))
+        assertEquals("найдёт суть, суммы, даты и контакты", yieldLabel(ActionYield.Same))
+    }
+
+    @Test
+    fun `убрана надпись, а не пометки состояния (#582)`() {
+
+        // Ключ и негодность говорят о положении дел, а не о типе результата, — они на месте.
+        assertEquals("Понять · $KEY_NOTE", labelNeedingKey("Понять", keySet = false))
+        assertEquals(
+            "Файл пустой — в нём нечего читать",
+            yieldLabel(ActionYield.New(ObjectKind.TEXT), "Файл пустой — в нём нечего читать"),
+        )
     }
 
     @Test
@@ -130,10 +149,19 @@ class CapabilityInventoryTest {
         val all = listOf(
             ActionYield.None, ActionYield.Same, ActionYield.Unknown,
         ) + ObjectKind.entries.map { ActionYield.New(it) }
-        val said = all.flatMap { y -> Intent.entries.map { yieldLabel(y, it) } }
+        val said = all.map { yieldLabel(it) }
 
         // Пустая строка — не подпись, а дырка на экране: подпись либо есть, либо её нет вовсе.
         assertTrue(said.none { it != null && it.isBlank() })
+    }
+
+    @Test
+    fun `надписи нет, а обещание живо — разошедшийся исход по-прежнему досказан (#582)`() {
+
+        val promise = ActionYield.New(ObjectKind.TEXT)
+
+        assertNull("подпись вернулась на экран", yieldLabel(promise))
+        assertEquals("Ожидался текст — вышел документ", yieldSurprise(promise, ObjectKind.OFFICE))
     }
 
     @Test
