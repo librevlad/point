@@ -3,13 +3,16 @@ package com.point
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.point.core.flow.META_SIZE
+import com.point.core.flow.META_UNUSABLE_REASON
 import com.point.core.flow.ObjectClassifier
+import com.point.core.model.Feature
 import com.point.core.model.ObjectKind
 import com.point.data.ScratchObjectStore
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -52,6 +55,24 @@ class ScratchObjectStoreTest {
         assertTrue(original.delete())
 
         assertEquals("Мука, вода, соль", copy.readText())
+    }
+
+    @Test fun `пустой файл называет свою причину сразу, на первом экране`() = runBlocking {
+        val empty = source("prazdno.txt", "")
+
+        val obj = store.ingest(link(empty), "text/plain")
+
+        assertTrue("пустой файл обязан быть отмечен негодным", obj.state.has(Feature.UNUSABLE))
+        assertEquals("Файл пустой — в нём нечего читать", obj.metadata[META_UNUSABLE_REASON])
+    }
+
+    @Test fun `файл с содержимым не несёт пометки негодности`() = runBlocking {
+        val filled = source("nakladnaya.txt", "№ 4512 · до пятницы")
+
+        val obj = store.ingest(link(filled), "text/plain")
+
+        assertFalse(obj.state.has(Feature.UNUSABLE))
+        assertNull(obj.metadata[META_UNUSABLE_REASON])
     }
 
     @Test fun `clear уносит байты объекта с диска`() = runBlocking {

@@ -18,6 +18,17 @@ fun readerFailure(reason: String?): String {
     }
 }
 
+/**
+ * Только это действительно говорит о самом объекте, а не о попытке прочитать его сейчас
+ * (#684/#685): байты не декодируются, это не изображение вовсе. Долгое чтение, слишком
+ * большой снимок, не запустившийся движок — про исполнение здесь и сейчас, а не про
+ * годность объекта, и не должны навсегда закрывать путь наружу.
+ */
+fun readerFailureIsFatal(reason: String?): Boolean {
+    val said = reason.orEmpty().lowercase()
+    return NOT_AN_IMAGE.any { it in said }
+}
+
 private const val BROKEN_FILE = "Файл не открылся — он повреждён или это не изображение"
 
 private val NOT_AN_IMAGE = listOf("decode", "not an image", "unsupported", "corrupt", "malformed")

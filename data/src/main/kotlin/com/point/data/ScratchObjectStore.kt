@@ -6,7 +6,9 @@ import android.provider.OpenableColumns
 import android.util.Log
 import android.webkit.MimeTypeMap
 import com.point.core.flow.CollectionContent
+import com.point.core.flow.EMPTY_FILE_REASON
 import com.point.core.flow.META_SIZE
+import com.point.core.flow.META_UNUSABLE_REASON
 import com.point.core.flow.ObjectClassifier
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.collectionContent
@@ -51,6 +53,7 @@ class ScratchObjectStore @Inject constructor(
                     metadata = buildMap {
                         name?.let { put("name", it) }
                         put(META_SIZE, size.toString())
+                        putAll(emptyFileFact(size))
                     },
                 )
             }
@@ -88,7 +91,7 @@ class ScratchObjectStore @Inject constructor(
                 uri = result.uri,
                 state = classifier.classify(result.mime, size),
 
-                metadata = result.metadata + (META_SIZE to size.toString()),
+                metadata = result.metadata + (META_SIZE to size.toString()) + emptyFileFact(size),
             )
         }
 
@@ -110,7 +113,7 @@ class ScratchObjectStore @Inject constructor(
                     mime = mime,
                     uri = ScratchRef(file.absolutePath),
                     state = classifier.classify(mime, size, file.name, headOf(file)),
-                    metadata = mapOf("name" to file.name, META_SIZE to size.toString()),
+                    metadata = mapOf("name" to file.name, META_SIZE to size.toString()) + emptyFileFact(size),
                 )
             }
         }
@@ -119,6 +122,14 @@ class ScratchObjectStore @Inject constructor(
         val ext = name.substringAfterLast('.', "").lowercase()
         return MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext) ?: "application/octet-stream"
     }
+
+    /**
+     * Годность — часть состояния объекта (#684): нулевой размер уже классификатор отметил
+     * как `Feature.UNUSABLE` (`ObjectClassifier`) — здесь та же проверка кладёт причину
+     * рядом, человеческими словами, чтобы знание не разошлось с фактом.
+     */
+    private fun emptyFileFact(size: Long): Map<String, String> =
+        if (size == 0L) mapOf(META_UNUSABLE_REASON to EMPTY_FILE_REASON) else emptyMap()
 
     // Первые байты объекта для классификации: имя и mime могут молчать, байты — нет.
     private fun headOf(file: File): ByteArray = runCatching {

@@ -6,8 +6,10 @@ import com.point.core.flow.Entitlements
 import com.point.core.flow.Realizer
 import com.point.core.flow.RealizerKind
 import com.point.core.flow.Resolver
+import com.point.core.flow.unusableReasonOf
 import com.point.core.model.ActionResult
 import com.point.core.model.CapabilityId
+import com.point.core.model.Feature
 import com.point.core.model.PointObject
 import javax.inject.Inject
 
@@ -34,10 +36,22 @@ class DefaultResolver @Inject constructor(
         if (isPaywalled(capabilityId)) return PaywallRealizer(capabilityId)
         val candidates = byCapability[capabilityId]
             ?: error("No realizer for capability=${capabilityId.value}")
-        val chosen = policy.choose(state, candidates)
+
+        // Годность — часть состояния объекта (#684/#685): негодный исходник не уезжает
+        // наружу ни ради распознавания, ни ради понимания. Внешние исполнители убираются
+        // из выбора здесь же, до похода в облако; местная попытка этого не касается — она
+        // и раньше честно отказывала без сетевого следа.
+        val usable = if (state.has(Feature.UNUSABLE)) {
+            candidates.filterNot { sendsOutward(capabilityId, it) }
+        } else {
+            candidates
+        }
+        if (usable.isEmpty()) return UnusableRealizer(capabilityId)
+
+        val chosen = policy.choose(state, usable)
         return when {
 
-            chosen.isEmpty() -> candidates.minByOrNull { it.meta.priority } ?: candidates.first()
+            chosen.isEmpty() -> usable.minByOrNull { it.meta.priority } ?: usable.first()
 
             chosen.size == 1 -> chosen.first()
 
@@ -48,6 +62,17 @@ class DefaultResolver @Inject constructor(
     override fun leavesDevice(capabilityId: CapabilityId): Boolean =
         byCapability[capabilityId]?.any { it.meta.kind == RealizerKind.CLOUD } ?: false
 
+    /**
+     * Реализатор объявляет себя внешним (`RealizerKind.CLOUD`) сам по себе. Но у части
+     * сетевых способностей — «Понять», «Перевести», AI, «Дать ссылку» — единственный
+     * реализатор почему-то назван местным, хотя внутри зовёт модель или отдаёт байты наружу.
+     * Способность здесь надёжнее: `CapabilityMeta.network` объявлен именно там и не разъезжается
+     * с реализацией так, как это уже случилось однажды с `RealizerKind`.
+     */
+    private fun sendsOutward(capabilityId: CapabilityId, realizer: Realizer): Boolean =
+        realizer.meta.kind == RealizerKind.CLOUD ||
+            runCatching { registry.byId(capabilityId).meta.network }.getOrDefault(false)
+
     private fun isPaywalled(capabilityId: CapabilityId): Boolean =
         !entitlements.allowsPaid() &&
             runCatching { registry.byId(capabilityId).meta.cost == Cost.PAID }.getOrDefault(false)
@@ -56,4 +81,17 @@ class DefaultResolver @Inject constructor(
 private class PaywallRealizer(override val capabilityId: CapabilityId) : Realizer {
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         ActionResult.Failure("Это Pro-функция — доступна по подписке", recoverable = true)
+}
+
+/**
+ * Единственный местный кандидат оказался внешним, а объект уже негоден (#684/#685) — отказ
+ * называется сразу, тем же словом, что и на экране, без сетевого похода.
+ */
+private class UnusableRealizer(override val capabilityId: CapabilityId) : Realizer {
+    override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
+        ActionResult.Failure(unusableReasonOf(input.metadata) ?: DEFAULT_REASON, recoverable = true)
+
+    private companion object {
+        const val DEFAULT_REASON = "С этим файлом нечего делать"
+    }
 }

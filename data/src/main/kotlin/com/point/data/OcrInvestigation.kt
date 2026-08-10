@@ -25,6 +25,8 @@ import com.point.core.flow.META_OCR_ATOMS_REF
 import com.point.core.flow.META_OCR_TEXT_REF
 import com.point.core.flow.META_READ_UPSCALE
 import com.point.core.flow.META_READING_MODE
+import com.point.core.flow.META_UNUSABLE_REASON
+import com.point.core.flow.readerFailureIsFatal
 import com.point.core.flow.readingModeOf
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.amountFacts
@@ -101,7 +103,20 @@ class OcrInvestigationRealizer @Inject constructor(
         val broken = layer.incomplete
         if (broken != null && layer.atoms.isEmpty() && layer.text.isBlank()) {
             // Человеку — свои слова, чужое «decode failed» остаётся в журнале (#686).
-            error(readerFailure(broken))
+            val reason = readerFailure(broken)
+
+            // Годность — часть состояния объекта (#684/#685): когда дело в самом объекте
+            // (испорчен, не изображение вовсе), это не провал операции, а знание — оно
+            // остаётся с объектом и закрывает путь наружу, а не гаснет после этого тапа.
+            // Долгое чтение или слишком большой снимок — про попытку сейчас, не про объект,
+            // и по-прежнему уходят как неудача операции (ADR-0001 §9, §18).
+            if (readerFailureIsFatal(broken)) {
+                return@withContext Findings(
+                    features = setOf(Feature.UNUSABLE),
+                    metadata = mapOf(META_UNUSABLE_REASON to reason),
+                )
+            }
+            error(reason)
         }
 
         val atomsRef = if (layer.atoms.isNotEmpty()) {

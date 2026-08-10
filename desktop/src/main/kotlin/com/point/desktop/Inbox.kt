@@ -1,6 +1,9 @@
 package com.point.desktop
 
+import com.point.core.flow.EMPTY_FILE_REASON
+import com.point.core.flow.META_UNUSABLE_REASON
 import com.point.core.flow.ObjectClassifier
+import com.point.core.model.Feature
 import com.point.core.model.PointObject
 import com.point.core.model.ScratchRef
 import java.io.File
@@ -110,13 +113,21 @@ class Inbox(private val dir: File) {
             file.inputStream().use { it.readNBytes(512) }
         }.getOrDefault(ByteArray(0))
         val state = classifier.classify(mime, file.length(), file.name, head)
+
+        // Годность — часть состояния объекта (#684): та же пустота, что и на телефоне,
+        // называет себя здесь же, а не только в Feature без объяснения человеку.
+        val withFitness = if (state.has(Feature.UNUSABLE)) {
+            meta + (META_UNUSABLE_REASON to EMPTY_FILE_REASON)
+        } else {
+            meta
+        }
         return InboxItem(
             PointObject(
                 id = UUID.randomUUID().toString(),
                 mime = mime,
                 uri = ScratchRef(file.absolutePath),
                 state = state,
-                metadata = meta,
+                metadata = withFitness,
             ),
         )
     }

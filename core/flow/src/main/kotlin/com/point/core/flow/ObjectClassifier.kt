@@ -12,14 +12,19 @@ class ObjectClassifier {
         fileName: String? = null,
         head: ByteArray = EMPTY_HEAD,
     ): ObjectState {
-        val features = buildSet {
-            if (sizeBytes >= LARGE_THRESHOLD_BYTES) add(Feature.LARGE)
-        }
         val declared = kindOf(mime, fileName)
 
         // Имя и mime промолчали — спрашиваем сами байты (файл без расширения из
         // менеджера иначе становился мёртвым «неизвестным» при читаемом тексте внутри).
         val kind = if (declared == ObjectKind.UNKNOWN) kindFromBytes(head) else declared
+
+        val features = buildSet {
+            if (sizeBytes >= LARGE_THRESHOLD_BYTES) add(Feature.LARGE)
+
+            // Годность — часть состояния объекта (#684): нулевой размер виден без единого
+            // чтения. COLLECTION — папка, у неё «размер» ничего не значит и это не она.
+            if (sizeBytes == 0L && kind != ObjectKind.COLLECTION) add(Feature.UNUSABLE)
+        }
         return ObjectState(kind, features)
     }
 

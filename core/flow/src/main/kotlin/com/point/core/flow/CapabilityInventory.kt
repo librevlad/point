@@ -16,17 +16,25 @@ fun derivedYield(capability: Capability, state: ObjectState): ActionYield {
     }
 }
 
-fun yieldLabel(yields: ActionYield, intent: Intent): String = when (yields) {
-    is ActionYield.New -> "вернёт " + (yields.noun ?: yieldNoun(yields.kind))
+/**
+ * Подпись под дверью действия. Негодный объект (#684/#685) договаривает причину сразу здесь,
+ * вместо обычного «что вернёт», — дверь при этом никуда не девается, только у обещания
+ * меняются слова.
+ */
+fun yieldLabel(yields: ActionYield, intent: Intent, unusableReason: String? = null): String {
+    if (unusableReason != null) return unusableReason
+    return when (yields) {
+        is ActionYield.New -> "вернёт " + (yields.noun ?: yieldNoun(yields.kind))
 
-    ActionYield.Same -> "найдёт суть, суммы, даты и контакты"
-    ActionYield.Copied -> "ляжет в буфер обмена"
-    ActionYield.Unknown -> "вернёт то, что попросите"
+        ActionYield.Same -> "найдёт суть, суммы, даты и контакты"
+        ActionYield.Copied -> "ляжет в буфер обмена"
+        ActionYield.Unknown -> "вернёт то, что попросите"
 
-    ActionYield.None -> when (intent) {
-        Intent.OPEN -> "откроет в другом приложении"
-        Intent.UNDERSTAND -> "покажет здесь же"
-        else -> "отправит и вернётся сюда"
+        ActionYield.None -> when (intent) {
+            Intent.OPEN -> "откроет в другом приложении"
+            Intent.UNDERSTAND -> "покажет здесь же"
+            else -> "отправит и вернётся сюда"
+        }
     }
 }
 
