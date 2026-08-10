@@ -406,9 +406,11 @@ abstract class DataModule {
         @Provides
         @Singleton
         fun atomRecognizer(
-            paddle: com.point.data.PaddleOcrRecognizer,
+            @ApplicationContext context: Context,
             tesseract: TesseractTextRecognizer,
-        ): AtomRecognizer = com.point.data.ChainedAtomRecognizer(paddle, tesseract)
+        ): AtomRecognizer = com.point.data.LocalOcr.reader(context)
+            ?.let { com.point.data.ChainedAtomRecognizer(it, tesseract) }
+            ?: tesseract
 
 
         @Provides
