@@ -39,8 +39,12 @@ class UrlConnectionHttpFiles @Inject constructor() : HttpFiles {
         val conn = (URL(url).openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
             doOutput = true
-            connectTimeout = 30_000
-            readTimeout = 120_000
+
+            // См. HttpJson.kt — короткий предел на попытку (#690, #691). Чтение чуть
+            // щедрее, чем у HttpJson: сюда ходят вложения (снимок, запись), им нужно
+            // больше времени на отправку.
+            connectTimeout = 10_000
+            readTimeout = 45_000
             pointHeaders(
                 mapOf(
                     "Content-Type" to "multipart/form-data; boundary=$boundary",
@@ -59,8 +63,8 @@ class UrlConnectionHttpFiles @Inject constructor() : HttpFiles {
         withContext(Dispatchers.IO) {
             val conn = (URL(url).openConnection() as HttpURLConnection).apply {
                 requestMethod = "GET"
-                connectTimeout = 30_000
-                readTimeout = 60_000
+                connectTimeout = 10_000
+                readTimeout = 30_000
                 pointHeaders(mapOf("Accept" to "application/json"), headers)
                     .forEach { (k, v) -> setRequestProperty(k, v) }
             }

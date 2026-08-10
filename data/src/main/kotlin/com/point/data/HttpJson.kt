@@ -19,8 +19,12 @@ class UrlConnectionHttpJson @Inject constructor() : HttpJson {
             val conn = (URL(url).openConnection() as HttpURLConnection).apply {
                 requestMethod = "POST"
                 doOutput = true
-                connectTimeout = 30_000
-                readTimeout = 60_000
+
+                // Короткий предел на попытку (#690, #691): NetworkAvailability на входе
+                // ловит полное офлайн сразу, а эти числа — предел на один настоящий
+                // запрос, чтобы молчащий сервис не держал очередь провайдеров минутами.
+                connectTimeout = 10_000
+                readTimeout = 30_000
                 pointHeaders(mapOf("Content-Type" to "application/json; charset=utf-8"), headers)
                     .forEach { (k, v) -> setRequestProperty(k, v) }
             }

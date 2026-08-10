@@ -1,5 +1,6 @@
 package com.point.data
 
+import com.point.core.flow.NetworkAvailability
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.refusalNeedsKey
 import com.point.core.model.ObjectKind
@@ -105,6 +106,7 @@ class OpenAiCompatibleClientTest {
             val chain = FallbackLlmClient(
                 listOf(OpenAiCompatibleClient(http(code, RATE_LIMIT_JSON), store, mine)),
                 TestAiFacts(),
+                NetworkAvailability { true },
             )
             return runCatching { chain.run(textObj, "hi") }.exceptionOrNull()?.message
         }

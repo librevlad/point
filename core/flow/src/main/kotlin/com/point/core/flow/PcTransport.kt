@@ -28,6 +28,9 @@ enum class PcUnreachable {
     SERVER_SILENT,
 
     TOO_BIG,
+
+    /** Телефон сам знает, что сети нет (#690) — до сервера дело не дошло вообще. */
+    NO_NETWORK,
 }
 
 const val PC_MAX_LETTER_BYTES = 50 * 1024 * 1024
@@ -41,6 +44,7 @@ fun pcUnreachableText(why: PcUnreachable): String = when (why) {
         "До сервера Point не дозвониться. Проверьте интернет и попробуйте ещё раз."
     PcUnreachable.TOO_BIG ->
         "Объект больше 50 МБ — столько за раз между устройствами не переслать."
+    PcUnreachable.NO_NETWORK -> NO_NETWORK_TEXT
 }
 
 const val PC_DEVICE_REVOKED = "Это устройство отключили от аккаунта. Войдите заново."

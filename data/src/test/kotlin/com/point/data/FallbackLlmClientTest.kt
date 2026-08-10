@@ -1,6 +1,7 @@
 package com.point.data
 
 import com.point.core.flow.LlmClient
+import com.point.core.flow.NetworkAvailability
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
@@ -18,7 +19,8 @@ class FallbackLlmClientTest {
 
     private val facts = TestAiFacts()
 
-    private fun chain(providers: List<LlmClient>) = FallbackLlmClient(providers, facts)
+    private fun chain(providers: List<LlmClient>, network: NetworkAvailability = NetworkAvailability { true }) =
+        FallbackLlmClient(providers, facts, network)
 
     private fun ok(tag: String) = object : LlmClient {
         override suspend fun run(obj: PointObject, prompt: String) =
@@ -168,6 +170,37 @@ class FallbackLlmClientTest {
 
         assertTrue(error?.message?.contains("задайте свой ключ") == true)
         assertFalse(error?.message?.contains("resolve host") == true)
+    }
+
+    @Test
+    fun `на телефоне нет сети — ни один провайдер не получает запрос`() = runTest {
+        // Решение владельца (#690, #691): «Перед выходом наружу Point спрашивает у
+        // телефона, есть ли сеть. Нет — говорит сразу, не отправив ни одного запроса».
+        val calls = mutableListOf<String>()
+        val spies = listOf(spy("primary", calls), spy("secondary", calls))
+
+        val error = runCatching {
+            chain(spies, network = NetworkAvailability { false }).run(obj, "пойми")
+        }.exceptionOrNull()
+
+        assertEquals("AI недоступен — нет подключения к интернету", error?.message)
+        assertTrue("офлайн ни один провайдер не должен получить запрос", calls.isEmpty())
+    }
+
+    @Test
+    fun `провайдер без ключа не требует сети — до неё не доходит`() = runTest {
+        val error = runCatching {
+            chain(listOf(unconfigured()), network = NetworkAvailability { false }).run(obj, "пойми")
+        }.exceptionOrNull()
+
+        assertTrue(error?.message?.contains("задайте свой ключ") == true)
+    }
+
+    private fun spy(tag: String, calls: MutableList<String>) = object : LlmClient {
+        override suspend fun run(obj: PointObject, prompt: String): ResultObject {
+            calls += tag
+            return ResultObject(ObjectKind.TEXT, "text/markdown", ScratchRef("/out/$tag"))
+        }
     }
 }
 
