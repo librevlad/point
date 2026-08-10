@@ -138,6 +138,8 @@ import com.point.data.VibratorSensoryFeedback
 import com.point.data.PrefsAiFacts
 import com.point.data.PrefsUserKeyStore
 import com.point.data.BuildConfigAiKeys
+import com.point.data.ExifInvestigation
+import com.point.data.ExifInvestigationRealizer
 import com.point.data.QrInvestigation
 import com.point.data.QrInvestigationRealizer
 import com.point.data.UserKeyLlmClient
@@ -321,6 +323,12 @@ abstract class DataModule {
 
     @Binds @IntoSet
     abstract fun ocrInvestigationRealizer(r: OcrInvestigationRealizer): Realizer
+
+    @Binds @IntoSet
+    abstract fun exifInvestigation(c: ExifInvestigation): Capability
+
+    @Binds @IntoSet
+    abstract fun exifInvestigationRealizer(r: ExifInvestigationRealizer): Realizer
 
     @Binds @IntoSet
     abstract fun qrInvestigation(c: QrInvestigation): Capability

@@ -261,6 +261,14 @@ abstract class CapabilityModule {
         fun appCapabilities(chosen: ChosenApps): Set<Capability> =
             chosen.all().map { AppCapability(it) }.toSet()
 
+        // @Provides, а не @Binds: у реализатора, который трогает графику Android, @Binds
+        // роняет разрешение типов во всём модуле KSP — тот же урок, что с OpenCV.
+        @Provides @IntoSet
+        fun cleanMetadataR(store: ObjectStore): Realizer = com.point.executors.CleanMetadataRealizer(store)
+
+        @Provides @IntoSet
+        fun cleanMetadataCap(): Capability = com.point.executors.CleanMetadataCapability()
+
         @Provides @ElementsIntoSet
         fun appRealizers(chosen: ChosenApps, launcher: AppLauncher): Set<Realizer> =
             chosen.all().map { AppOpenRealizer(it, launcher) }.toSet()

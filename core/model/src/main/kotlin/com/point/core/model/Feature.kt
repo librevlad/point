@@ -15,6 +15,10 @@ enum class Feature {
 
     HAS_QR,
 
+    /** Снимок знает, когда он снят и где (#547) — это факты объекта, а не съёмочная кухня. */
+    HAS_SHOT_AT,
+    HAS_GEO,
+
     HAS_PERIOD,
 
     HAS_TEXT,
