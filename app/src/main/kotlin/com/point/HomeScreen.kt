@@ -42,7 +42,6 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.layout.ContentScale
-import com.point.core.flow.META_ENTITY_PREFIX
 import com.point.core.flow.SETTINGS_TITLE
 import com.point.core.flow.agoLabel
 import com.point.core.model.HistoryEntry
@@ -375,7 +374,7 @@ private fun entryFacts(entry: HistoryEntry) = understoodFacts(
         mime = entry.mime,
         uri = entry.ref,
         state = ObjectState(entry.kind, entry.features),
-        metadata = entry.entities.mapKeys { META_ENTITY_PREFIX + it.key },
+        metadata = entry.metadata,
     ),
 )
 

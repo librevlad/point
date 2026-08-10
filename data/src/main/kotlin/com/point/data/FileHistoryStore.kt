@@ -1,7 +1,10 @@
 package com.point.data
 
 import com.point.core.flow.HistoryStore
+import com.point.core.flow.META_CLOUD_ATOMS_REF
 import com.point.core.flow.META_ENTITY_PREFIX
+import com.point.core.flow.META_OCR_ATOMS_REF
+import com.point.core.flow.META_OCR_TEXT_REF
 import com.point.core.flow.META_SIZE
 import com.point.core.flow.ObjectClassifier
 import com.point.core.model.Feature
@@ -17,7 +20,6 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
-import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -42,7 +44,7 @@ class FileHistoryStore @Inject constructor(
             index.appendText(
                 row(
                     obj.id, obj.mime, obj.state.kind.name, name, System.currentTimeMillis(),
-                    dest.absolutePath, obj.state.features, entityValues(obj.metadata),
+                    dest.absolutePath, obj.state.features, persistedMetadata(obj.id, obj.metadata),
                 ) + "\n",
             )
             pruneToLimit()
@@ -55,15 +57,36 @@ class FileHistoryStore @Inject constructor(
             index.appendText(
                 row(
                     existing.id, existing.mime, existing.kind.name, existing.name, existing.epochMillis,
-                    existing.ref.value, obj.state.features, entityValues(obj.metadata),
+                    existing.ref.value, obj.state.features, persistedMetadata(obj.id, obj.metadata),
                 ) + "\n",
             )
         }
     }
 
-    private fun entityValues(metadata: Map<String, String>): Map<String, String> =
-        metadata.filterKeys { it.startsWith(META_ENTITY_PREFIX) }
-            .mapKeys { it.key.removePrefix(META_ENTITY_PREFIX) }
+    /**
+     * Знание объекта пишется целиком, а не только сущностями (#687): суть, роли, статус
+     * исследования — те же ключи метаданных, что несёт сам объект. Улики (`ocr.text.ref` и
+     * подобные) — исключение: это путь к scratch-файлу, которого после flow не станет
+     * (ObjectStore.clear()). Копируем содержимое рядом с самим объектом и переписываем путь на
+     * постоянный; источника нет — ключ не переживает запись: висящий путь хуже честно забытого
+     * факта.
+     */
+    private fun persistedMetadata(id: String, metadata: Map<String, String>): Map<String, String> =
+        REF_KEYS.fold(metadata) { acc, key ->
+            val value = acc[key]
+            if (value.isNullOrBlank()) return@fold acc
+            val copied = copyEvidence(id, key, value)
+            if (copied != null) acc + (key to copied) else acc - key
+        }
+
+    private fun copyEvidence(id: String, key: String, path: String): String? {
+        val source = File(path).takeIf { it.isFile } ?: return null
+        val dest = File(dir, "$id.${key.replace('.', '-')}")
+        return runCatching {
+            source.copyTo(dest, overwrite = true)
+            dest.absolutePath
+        }.getOrNull()
+    }
 
     override suspend fun recent(limit: Int): List<HistoryEntry> = withContext(Dispatchers.IO) {
 
@@ -80,18 +103,28 @@ class FileHistoryStore @Inject constructor(
         val size = file.length()
         val fresh = classifier.classify(entry.mime, size, file.name)
         PointObject(
-            id = UUID.randomUUID().toString(),
+            id = entry.id,
             mime = entry.mime,
             uri = ScratchRef(file.absolutePath),
-            state = entry.features.filter { it !in EVIDENCE_BACKED }
-                .fold(fresh) { state, feature -> state.with(feature) },
-
-            metadata = buildMap {
-                entry.name?.let { put("name", it) }
-                put(META_SIZE, size.toString())
-                entry.entities.forEach { (key, value) -> put(META_ENTITY_PREFIX + key, value) }
-            },
+            state = entry.features.fold(fresh) { state, feature -> state.with(feature) },
+            metadata = restoredMetadata(entry, size),
         )
+    }
+
+    /**
+     * Улики, потерявшие свой файл — записанные до #687 (путь никогда не копировался) или
+     * переживающие сбой копирования, — не воскресают: висящий путь хуже честно забытого факта.
+     */
+    private fun restoredMetadata(entry: HistoryEntry, size: Long): Map<String, String> {
+        val alive = REF_KEYS.fold(entry.metadata) { acc, key ->
+            val value = acc[key]
+            if (value != null && !File(value).isFile) acc - key else acc
+        }
+        return buildMap {
+            putAll(alive)
+            entry.name?.let { put("name", it) }
+            put(META_SIZE, size.toString())
+        }
     }
 
     override suspend fun clearAll() {
@@ -105,7 +138,7 @@ class FileHistoryStore @Inject constructor(
         val survivors = entries.takeLast(MAX_ENTRIES)
         index.writeText(
             survivors.joinToString("") {
-                row(it.id, it.mime, it.kind.name, it.name, it.epochMillis, it.ref.value, it.features, it.entities) + "\n"
+                row(it.id, it.mime, it.kind.name, it.name, it.epochMillis, it.ref.value, it.features, it.metadata) + "\n"
             },
         )
     }
@@ -118,7 +151,7 @@ class FileHistoryStore @Inject constructor(
         t: Long,
         path: String,
         features: Set<Feature>,
-        entities: Map<String, String>,
+        metadata: Map<String, String>,
     ): String = JSONObject()
         .put("id", id)
         .put("mime", mime)
@@ -127,7 +160,7 @@ class FileHistoryStore @Inject constructor(
         .put("t", t)
         .put("path", path)
         .put("features", JSONArray(features.map { it.name }))
-        .put("entities", JSONObject(entities))
+        .put("meta", JSONObject(metadata))
         .toString()
 
     private fun readEntries(): Map<String, HistoryEntry> {
@@ -151,14 +184,21 @@ class FileHistoryStore @Inject constructor(
                             runCatching { Feature.valueOf(arr.getString(i)) }.getOrNull()
                         }
                     } ?: emptySet(),
-                    entities = json.optJSONObject("entities")?.let { obj ->
-                        obj.keys().asSequence().associateWith { key -> obj.getString(key) }
-                    } ?: emptyMap(),
+                    metadata = json.optJSONObject("meta")?.toMetadata() ?: legacyMetadata(json),
                 )
             }
         }
         return result
     }
+
+    private fun JSONObject.toMetadata(): Map<String, String> =
+        keys().asSequence().associateWith { key -> getString(key) }
+
+    /** Журнал до #687 писал только сущности — из них восстанавливается хотя бы это. */
+    private fun legacyMetadata(json: JSONObject): Map<String, String> =
+        json.optJSONObject("entities")?.toMetadata()
+            ?.mapKeys { META_ENTITY_PREFIX + it.key }
+            ?: emptyMap()
 
     private fun extensionFor(name: String?, mime: String): String {
         val fromName = name?.substringAfterLast('.', "")?.lowercase().orEmpty()
@@ -181,6 +221,6 @@ class FileHistoryStore @Inject constructor(
 
         const val MAX_EXT = 5
 
-        val EVIDENCE_BACKED = setOf(Feature.HAS_TEXT, Feature.HAS_WORD_LAYER)
+        val REF_KEYS = setOf(META_OCR_TEXT_REF, META_OCR_ATOMS_REF, META_CLOUD_ATOMS_REF)
     }
 }

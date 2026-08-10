@@ -1,9 +1,15 @@
 package com.point.data
 
+import com.point.core.flow.META_CLOUD_ATOMS_REF
+import com.point.core.flow.META_GRAPH_ROLE_PREFIX
 import com.point.core.flow.META_OCR_ATOMS_REF
 import com.point.core.flow.META_OCR_TEXT_REF
+import com.point.core.flow.META_SEMANTIC_SUMMARY
 import com.point.core.flow.META_SIZE
 import com.point.core.flow.ObjectClassifier
+import com.point.core.flow.InvestigationState
+import com.point.core.flow.withInvestigation
+import com.point.core.model.CapabilityId
 import com.point.core.model.Feature
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
@@ -11,6 +17,7 @@ import com.point.core.model.PointObject
 import com.point.core.model.ScratchRef
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -104,7 +111,7 @@ class FileHistoryStoreTest {
 
         val entry = store.recent().single()
         assertTrue(Feature.HAS_PHONE in entry.features)
-        assertEquals("+380671234567", entry.entities["phone"])
+        assertEquals("+380671234567", entry.metadata["entity.phone"])
     }
 
     @Test
@@ -131,7 +138,7 @@ class FileHistoryStoreTest {
     }
 
     @Test
-    fun `признаки, опирающиеся на стёртые файлы, не воскресают`() = runTest {
+    fun `улика без настоящего scratch-файла не переживает запись — путь не воскресает`() = runTest {
         store.record(textObject("a", "текст", "скан.txt"))
         store.update(
             textObject("a", "текст", "скан.txt").copy(
@@ -151,11 +158,86 @@ class FileHistoryStoreTest {
 
         val reopened = store.open("a")!!
 
-        assertTrue("вернулся признак прочитанного текста без самого текста", Feature.HAS_TEXT !in reopened.state.features)
-        assertTrue("вернулся слой слов без слоя слов", Feature.HAS_WORD_LAYER !in reopened.state.features)
         assertTrue("сущность потеряна вместе с ним", Feature.HAS_PHONE in reopened.state.features)
-        assertNull("протухший указатель на файл приехал в новый прогон", reopened.metadata[META_OCR_TEXT_REF])
-        assertNull("протухший указатель на слой слов приехал в новый прогон", reopened.metadata[META_OCR_ATOMS_REF])
+        assertNull("несуществующий путь к улике приехал в новый прогон", reopened.metadata[META_OCR_TEXT_REF])
+        assertNull("несуществующий путь к слою слов приехал в новый прогон", reopened.metadata[META_OCR_ATOMS_REF])
+    }
+
+    @Test
+    fun `улика — не просто путь, а содержимое — копия переживает запись даже после очистки scratch (#687)`() = runTest {
+        store.record(textObject("a", "страница счёта", "скан.txt"))
+        val scratchText = File.createTempFile("ocr-", ".txt").apply { writeText("распознанный текст страницы") }
+        val scratchAtoms = File.createTempFile("ocr-", ".tsv").apply { writeText("word\t0\t0\t10\t10") }
+        val scratchCloud = File.createTempFile("cloud-", ".tsv").apply { writeText("cloud\t0\t0\t10\t10") }
+        store.update(
+            textObject("a", "страница счёта", "скан.txt").copy(
+                state = ObjectState(ObjectKind.TEXT, setOf(Feature.HAS_TEXT, Feature.HAS_WORD_LAYER)),
+                metadata = mapOf(
+                    "name" to "скан.txt",
+                    META_OCR_TEXT_REF to scratchText.absolutePath,
+                    META_OCR_ATOMS_REF to scratchAtoms.absolutePath,
+                    META_CLOUD_ATOMS_REF to scratchCloud.absolutePath,
+                ),
+            ),
+        )
+
+        // Point чистит scratch после каждого flow (ObjectStore.clear()) — здесь это смоделировано явно.
+        scratchText.delete()
+        scratchAtoms.delete()
+        scratchCloud.delete()
+
+        val reopened = store.open("a")!!
+
+        assertTrue("признак прочитанного текста потерян", Feature.HAS_TEXT in reopened.state.features)
+        assertTrue("признак слоя слов потерян", Feature.HAS_WORD_LAYER in reopened.state.features)
+        val textRef = reopened.metadata[META_OCR_TEXT_REF]
+        assertTrue("улика не пережила очистку scratch", textRef != null && File(textRef).isFile)
+        assertNotEquals("это обязана быть копия, а не тот же протухший путь", scratchText.absolutePath, textRef)
+        assertEquals("распознанный текст страницы", File(textRef!!).readText())
+        val cloudRef = reopened.metadata[META_CLOUD_ATOMS_REF]
+        assertTrue("облачная улика не пережила очистку scratch", cloudRef != null && File(cloudRef).isFile)
+    }
+
+    @Test
+    fun `тот же id возвращается при повторном входе — это тот же объект, а не новый (#687)`() = runTest {
+        store.record(textObject("a", "hello", "a.txt"))
+
+        assertEquals("a", store.open("a")!!.id)
+    }
+
+    @Test
+    fun `суть, роли и статус исследования переживают повторный вход — не только сущности (#687)`() = runTest {
+        store.record(textObject("a", "перевод от Иванова", "чек.txt"))
+        store.update(
+            textObject("a", "перевод от Иванова", "чек.txt").copy(
+                metadata = mapOf(
+                    "name" to "чек.txt",
+                    META_SEMANTIC_SUMMARY to "Перевод от Иванова на 1000 грн",
+                    (META_GRAPH_ROLE_PREFIX + "sender") to "Иванов",
+                ) + withInvestigation(emptyMap(), CapabilityId("ocr-investigation"), InvestigationState.FOUND),
+            ),
+        )
+
+        val reopened = store.open("a")!!
+
+        assertEquals("Перевод от Иванова на 1000 грн", reopened.metadata[META_SEMANTIC_SUMMARY])
+        assertEquals("Иванов", reopened.metadata[META_GRAPH_ROLE_PREFIX + "sender"])
+        assertEquals("found", reopened.metadata["investigated.ocr-investigation"])
+    }
+
+    @Test
+    fun `журнал версии до #687 отдаёт сущности через metadata`() = runTest {
+        val copy = File(dir, "old.txt").apply { writeText("x") }
+        val legacy = org.json.JSONObject()
+            .put("id", "old").put("mime", "text/plain").put("kind", "TEXT")
+            .put("name", "old.txt").put("t", 123L).put("path", copy.absolutePath)
+            .put("entities", org.json.JSONObject().put("phone", "+380671234567"))
+        File(dir, "index.jsonl").appendText(legacy.toString() + "\n")
+
+        val reopened = store.open("old")!!
+
+        assertEquals("old", reopened.id)
+        assertEquals("+380671234567", reopened.metadata["entity.phone"])
     }
 
     @Test
@@ -192,7 +274,7 @@ class FileHistoryStoreTest {
         val entry = store.recent().single()
         assertEquals("old", entry.id)
         assertTrue(entry.features.isEmpty())
-        assertTrue(entry.entities.isEmpty())
+        assertTrue(entry.metadata.isEmpty())
     }
 
     @Test
