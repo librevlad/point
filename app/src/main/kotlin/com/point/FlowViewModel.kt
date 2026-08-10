@@ -297,8 +297,13 @@ class FlowViewModel @Inject constructor(
         syncCircle()
         val voice = claimVoice()
 
-        raiseBusy("Открываю…", cancelable = false)
+        // Имя — до копии, и передумать можно (#640): большой файл копируется секундами, и
+        // всё это время человек видел голое «Открываю…» без единого способа выйти.
+        raiseBusy("Открываю…", cancelable = true)
         trackWork {
+            (name ?: runCatching { store.nameOf(sourceUri) }.getOrNull())
+                ?.takeIf { it.isNotBlank() }
+                ?.let { known -> _ui.update { it.copy(busy = "Открываю $known…") } }
             val obj = runCatching {
                 store.clear()
                 store.ingest(sourceUri, mime)
@@ -1635,6 +1640,10 @@ class FlowViewModel @Inject constructor(
 
         busyJob?.cancel()
         busyJob = null
+
+        // Отменённый вход не оставляет недокопированного в scratch (#640): объекта ещё нет,
+        // а байты уже легли — и лежали бы до следующего приёма.
+        if (_ui.value.frame == null) viewModelScope.launch { runCatching { store.clear() } }
 
         // Новый голос глушит работу, которую уже не отменить: её результат не приземлится.
         claimVoice()

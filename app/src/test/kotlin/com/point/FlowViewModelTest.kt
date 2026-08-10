@@ -559,6 +559,28 @@ class FlowViewModelTest {
         assertEquals(Outcome.DONE, vm.ui.value.messageOutcome)
     }
 
+    @Test fun `вход спрашивает имя у системы, а не ждёт копии`() = runTest(dispatcher) {
+        store.systemName = "договор.pdf"
+        val vm = vm()
+
+        vm.onShared("content://док", "application/pdf")
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals("имя не спрошено до копии", 1, store.nameAsked)
+        assertNotNull("объект не открылся", vm.ui.value.frame)
+    }
+
+    @Test fun `отменённый вход убирает недокопированное`() = runTest(dispatcher) {
+        val vm = vm()
+        vm.onShared("content://большой", "application/zip")
+        val clearedBefore = store.clearedTimes
+
+        vm.cancelAction()
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue("scratch не убран после отмены входа", store.clearedTimes > clearedBefore)
+    }
+
     @Test fun `отменённое человеком не выдаёт себя за сделанное`() = runTest(dispatcher) {
         resolver.holdMs = 10_000
         val vm = vm()
@@ -580,7 +602,10 @@ class FlowViewModelTest {
 
         vm.onShared("uri", "image/png")
         assertTrue("экран ожидания поднят", showsBusyScreen(vm.ui.value))
-        assertFalse("а отменять нечем — кнопки нет", showsCancel(vm.ui.value))
+
+        // #640: вход тоже отменяем — большой файл копируется секундами, и человек вправе
+        // передумать, не убивая приложение.
+        assertTrue("вход обязан быть отменяемым", showsCancel(vm.ui.value))
         advanceUntilIdle()
 
         resolver.holdMs = 1_000
@@ -3499,6 +3524,16 @@ class FlowViewModelTest {
 
 private class FakeStore : ObjectStore {
     var failIngest = false
+
+    /** Как вещь зовётся у системы: спрашивается до копии (#640). */
+    var systemName: String? = null
+
+    var nameAsked = 0
+
+    override suspend fun nameOf(sourceUri: String): String? {
+        nameAsked++
+        return systemName
+    }
 
     /** Приём отдаёт снимок, пока тест не скажет иначе. Для PDF важен именно вид объекта. */
     var kind = ObjectKind.IMAGE
