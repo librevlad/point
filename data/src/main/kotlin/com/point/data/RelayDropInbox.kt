@@ -4,6 +4,8 @@ import com.point.core.flow.DropArrival
 import com.point.core.flow.DropInbox
 import com.point.core.flow.DropInboxBox
 import com.point.core.flow.DropWait
+import com.point.core.flow.NO_NETWORK_TEXT
+import com.point.core.flow.NetworkAvailability
 import com.point.core.flow.dropFileName
 import com.point.core.flow.dropInboxLink
 import java.io.File
@@ -16,9 +18,13 @@ class RelayDropInbox(
     private val relayUrl: String,
 
     private val pass: () -> String?,
+
+    private val network: NetworkAvailability,
 ) : DropInbox {
 
     override suspend fun open(): DropInboxBox? = withContext(Dispatchers.IO) {
+        // Перед выходом наружу — спросить телефон, есть ли сеть вообще (#690, #691).
+        if (!network.isAvailable()) return@withContext null
         val base = base() ?: return@withContext null
         runCatching {
             val c = connect("$base/u/open", "POST").apply {
@@ -43,6 +49,7 @@ class RelayDropInbox(
 
     override suspend fun await(box: DropInboxBox, target: (name: String) -> String): DropWait =
         withContext(Dispatchers.IO) {
+            if (!network.isAvailable()) return@withContext DropWait.Failed(NO_NETWORK_TEXT)
             val base = base() ?: return@withContext DropWait.Failed("Сервер Point не настроен")
             runCatching {
                 val c = connect("$base/u/${box.id}/take", "GET")
@@ -103,8 +110,12 @@ class RelayDropInbox(
     private fun connect(url: String, method: String): HttpsURLConnection =
         (URL(url).openConnection() as HttpsURLConnection).apply {
             requestMethod = method
-            connectTimeout = 10_000
-            readTimeout = 20_000
+
+            // Короткий предел на попытку (#690, #691) — второй рубеж за
+            // NetworkAvailability выше; readTimeout — таймаут на отдельное чтение, не
+            // на всю передачу, так что живая, но медленная закачка файла не обрывается.
+            connectTimeout = 8_000
+            readTimeout = 15_000
             pass()?.let { setRequestProperty("Authorization", "Bearer $it") }
         }
 }

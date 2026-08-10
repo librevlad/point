@@ -7,6 +7,7 @@ import com.point.core.flow.DeviceKeyStore
 import com.point.core.flow.DeviceKeys
 import com.point.core.flow.KeyStoreSecrets
 import com.point.core.flow.LinkedPc
+import com.point.core.flow.NetworkAvailability
 import com.point.core.flow.PcActionOutcome
 import com.point.core.flow.PcSendOutcome
 import com.point.core.flow.PcUnreachable
@@ -150,15 +151,17 @@ class PhoneToPcTest {
 
     private val pc get() = LinkedPc("d-pc", "Домашний ПК", pcKeys.publicKey)
 
-    private fun rpc(waitSeconds: Int = 5) = RelayRpcClient(
+    private fun rpc(waitSeconds: Int = 5, network: NetworkAvailability = NetworkAvailability { true }) = RelayRpcClient(
         serverUrl = base(),
         account = { phoneAccount },
         secrets = KeyStoreSecrets(object : DeviceKeyStore { override fun keys() = phoneKeys }),
+        network = network,
         waitSeconds = waitSeconds,
         pollMillis = 50,
     )
 
-    private fun phone(waitSeconds: Int = 5) = RelayPcTransport(rpc(waitSeconds))
+    private fun phone(waitSeconds: Int = 5, network: NetworkAvailability = NetworkAvailability { true }) =
+        RelayPcTransport(rpc(waitSeconds, network))
 
     private fun clipboard(waitSeconds: Int = 5) = RelayPcClipboardSync(rpc(waitSeconds))
 
@@ -277,6 +280,19 @@ class PhoneToPcTest {
         val onPc = ClipboardPayload.ofText("ответ компьютера")
         pcAnswers { _, _, _ -> clipMeta(onPc) to onPc.bytes }
         assertEquals("ответ компьютера", (again.await() as ClipPull.Got).payload.text())
+    }
+
+    @Test
+    fun `на телефоне нет сети — компьютеру ничего не уходит`() {
+        // Решение владельца (#690, #691): «Перед выходом наружу Point спрашивает у
+        // телефона, есть ли сеть. Нет — говорит сразу, не отправив ни одного запроса».
+        val outcome = runBlocking {
+            phone(waitSeconds = 1, network = NetworkAvailability { false })
+                .send(pc, objectOnPhone(), "чек.txt", emptyMap())
+        }
+
+        assertEquals(PcUnreachable.NO_NETWORK, (outcome as PcSendOutcome.Unreachable).why)
+        assertNull("без сети письмо не должно уйти на сервер", letterFor("d-pc"))
     }
 
     @Test

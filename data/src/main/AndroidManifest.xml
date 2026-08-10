@@ -4,6 +4,10 @@
     <!-- GeminiLlmClient makes HTTPS calls; merged into the app manifest. -->
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- AndroidNetworkAvailability asks whether the network is validated before Point goes
+         outside (#690, #691); normal-protection, granted at install; merged into the app manifest. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
     <!-- Android 11+ package visibility: so queryIntentActivities can list the installed apps
          that open/send an object (#66 device actions). We only see VIEW/SEND handlers. -->
     <queries>

@@ -44,6 +44,7 @@ import com.point.core.flow.SpreadsheetWriter
 import com.point.core.flow.AtomRecognizer
 import com.point.core.flow.CloudPrivacySettings
 import com.point.core.flow.ExternalEye
+import com.point.core.flow.NetworkAvailability
 import com.point.core.flow.GROQ_PROVIDER_ID
 import com.point.core.flow.MISTRAL_PROVIDER_ID
 import com.point.core.flow.SpeechReadiness
@@ -63,6 +64,7 @@ import com.point.data.AndroidCalendarInserter
 import com.point.data.AndroidClipboard
 import com.point.data.AndroidContactInserter
 import com.point.data.AndroidImageCompositor
+import com.point.data.AndroidNetworkAvailability
 import com.point.data.AndroidSharer
 import com.point.data.AndroidUrlOpener
 import com.point.data.AndroidViewer
@@ -256,6 +258,10 @@ abstract class DataModule {
     abstract fun cloudPrivacy(impl: PrefsCloudPrivacySettings): CloudPrivacySettings
 
     @Binds
+    @Singleton
+    abstract fun networkAvailability(impl: AndroidNetworkAvailability): NetworkAvailability
+
+    @Binds
     abstract fun userKeyStore(impl: PrefsUserKeyStore): UserKeyStore
 
     @Binds
@@ -397,8 +403,11 @@ abstract class DataModule {
             com.point.data.RelayDropLink(serverUrl(), devicePass(account))
 
         @Provides
-        fun dropInbox(account: com.point.core.flow.AccountStore): com.point.core.flow.DropInbox =
-            com.point.data.RelayDropInbox(serverUrl(), devicePass(account))
+        fun dropInbox(
+            account: com.point.core.flow.AccountStore,
+            network: NetworkAvailability,
+        ): com.point.core.flow.DropInbox =
+            com.point.data.RelayDropInbox(serverUrl(), devicePass(account), network)
 
         @Provides
         @Singleton
@@ -411,8 +420,9 @@ abstract class DataModule {
             account: com.point.core.flow.AccountStore,
             secrets: com.point.core.flow.PcSecrets,
             monitor: com.point.core.flow.LinkMonitor,
+            network: NetworkAvailability,
         ): com.point.data.RelayRpcClient =
-            com.point.data.RelayRpcClient(serverUrl(), { account.current() }, secrets, monitor)
+            com.point.data.RelayRpcClient(serverUrl(), { account.current() }, secrets, monitor, network)
 
         @Provides
         fun pcTransport(rpc: com.point.data.RelayRpcClient): PcTransport = RelayPcTransport(rpc)

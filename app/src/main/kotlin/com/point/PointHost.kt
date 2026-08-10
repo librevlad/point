@@ -404,12 +404,18 @@ internal fun shareAgainHint(outcome: Outcome): String? =
 internal fun messageExitLabel(outcome: Outcome): String =
     if (outcome == Outcome.FAILED) "Понятно" else "Готово"
 
+// «Долгая страница» — утверждение о самом объекте, а Point на этом экране не знает,
+// длинная страница или нет: сеть сама по себе проверена заранее (#690, #691) и не
+// заставит ждать без причины, но провайдер может отвечать медленно и на короткой
+// странице. «Долгое ожидание» — то же самое честно: про сам факт ожидания, не про
+// выдуманную причину (живой прогон 2026-08-09: одна строка текста, «долгая
+// страница», 11.5 минуты).
 internal fun waitingSubtitle(elapsed: Int, network: Boolean, cancelable: Boolean = true): String = when {
     !network -> if (elapsed < 3) "Обрабатываю…" else "Идёт $elapsed с"
     elapsed < 5 -> "Идёт $elapsed с"
     elapsed < 30 -> "Идёт $elapsed с · модель читает документ"
-    cancelable -> "Идёт $elapsed с · долгая страница, можно отменить"
-    else -> "Идёт $elapsed с · долгая страница"
+    cancelable -> "Идёт $elapsed с · долгое ожидание, можно отменить"
+    else -> "Идёт $elapsed с · долгое ожидание"
 }
 
 @Composable

@@ -16,7 +16,11 @@ class Mailbox(
 
     private val pass: () -> String?,
     private val connectTimeoutMs: Int = 5_000,
-    private val readTimeoutMs: Int = 30_000,
+
+    // Короткий предел на попытку (#690): письма здесь маленькие, и если релей
+    // молчит на живой сети, знать об этом за 30 секунд незачем — быстрее уступить
+    // место следующей попытке, чем держать человека перед крутящимся кругом.
+    private val readTimeoutMs: Int = 15_000,
 ) {
 
     class Letter(val code: Int, val blob: ByteArray?, val id: String = "")

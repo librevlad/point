@@ -4,6 +4,7 @@ import com.point.core.flow.AI_KEY_HINT
 import com.point.core.flow.AiFacts
 import com.point.core.flow.AiOutcome
 import com.point.core.flow.LlmClient
+import com.point.core.flow.NetworkAvailability
 import com.point.core.flow.aiOutcomeOf
 import com.point.core.model.PointObject
 import com.point.core.model.ResultObject
@@ -13,6 +14,8 @@ class FallbackLlmClient @Inject constructor(
     private val providers: List<@JvmSuppressWildcards LlmClient>,
 
     private val facts: AiFacts,
+
+    private val network: NetworkAvailability,
 ) : LlmClient {
 
     override val configured: Boolean get() = providers.any { it.configured }
@@ -39,7 +42,19 @@ class FallbackLlmClient @Inject constructor(
             }
             if (!provider.canHandle(obj)) continue
             considered++
+
+            // Перед выходом наружу — спросить телефон, есть ли сеть вообще (#690,
+            // #691). Нашёлся хоть один настоящий кандидат, и только тогда: без ключей
+            // идти наружу всё равно было не за чем, а спрашивать раньше — рано.
+            // Офлайн все провайдеры в цепочке одинаково молчат — ждать каждого по
+            // очереди значит тратить минуты на то, что телефон уже знает сам.
+            if (!network.isAvailable()) error(NO_NETWORK_MESSAGE)
+
             try {
+                // Короткий предел на попытку живёт не здесь, а в самом транспорте
+                // (HttpJson/HttpFiles connectTimeout/readTimeout, #690, #691): молчащий
+                // сервис отпускает очередь за секунды, не за полторы минуты, и это
+                // верно для любого провайдера в цепочке, кем бы он ни был вызван.
                 val result = provider.run(obj, prompt)
                 facts.remember(provider.serviceId, AiOutcome.ANSWERED)
                 return result
@@ -67,11 +82,14 @@ class FallbackLlmClient @Inject constructor(
     }
 
     private fun summarise(errors: List<String>): String = when {
-        errors.isNotEmpty() && errors.all { it.isNetworkError() } ->
-            "AI недоступен — нет подключения к интернету"
+        errors.isNotEmpty() && errors.all { it.isNetworkError() } -> NO_NETWORK_MESSAGE
         errors.isNotEmpty() && errors.all { it.isQuotaError() } ->
             "Бесплатные лимиты AI исчерпаны — вернитесь позже, платить не идём"
         else -> "AI недоступен — " +
             errors.map { it.substringBefore('\n').take(120) }.distinct().take(2).joinToString("; ")
+    }
+
+    private companion object {
+        const val NO_NETWORK_MESSAGE = "AI недоступен — нет подключения к интернету"
     }
 }

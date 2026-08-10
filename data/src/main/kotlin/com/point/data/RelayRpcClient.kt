@@ -3,6 +3,7 @@ package com.point.data
 import com.point.core.flow.LinkMonitor
 import com.point.core.flow.LinkedPc
 import com.point.core.flow.Mailbox
+import com.point.core.flow.NetworkAvailability
 import com.point.core.flow.PC_MAX_LETTER_BYTES
 import com.point.core.flow.PcSecrets
 import com.point.core.flow.PcUnreachable
@@ -29,6 +30,8 @@ class RelayRpcClient(
 
     private val monitor: LinkMonitor? = null,
 
+    private val network: NetworkAvailability = NetworkAvailability { true },
+
     private val waitSeconds: Int = 25,
 
     private val pollMillis: Long = 1_000,
@@ -50,7 +53,13 @@ class RelayRpcClient(
         kind: String,
         meta: Map<String, String> = emptyMap(),
         body: ByteArray = ByteArray(0),
-    ): Asked = withContext(Dispatchers.IO) { turn.withLock { asked(pc, kind, meta, body) } }
+    ): Asked {
+        // Перед выходом наружу — спросить телефон, есть ли сеть вообще (#690): нет
+        // сети — ни один запрос не уходит, а «до сервера не дозвониться» больше не
+        // выясняется перебором сетевых таймаутов по четыре минуты.
+        if (!network.isAvailable()) return Asked.Failed(PcUnreachable.NO_NETWORK)
+        return withContext(Dispatchers.IO) { turn.withLock { asked(pc, kind, meta, body) } }
+    }
 
     private suspend fun asked(
         pc: LinkedPc,
