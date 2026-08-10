@@ -305,11 +305,14 @@ class PhoneToPcTest {
     }
 
     @Test
-    fun `компьютер в круге, но не запущен — письмо лежит, забирать его некому`() {
+    fun `компьютер в круге, но не запущен — письмо ждёт его, и это не отказ (#672)`() {
 
+        // Охота 2026-08-09, HUNT2-F7: телефон говорил «Компьютер не отвечает», а письмо
+        // ДОЕХАЛО — после подъёма ПК объект появлялся в журнале. Человек, поверив отказу,
+        // отправлял заново и получал дубль на той стороне.
         val outcome = runBlocking { phone(waitSeconds = 1).send(pc, objectOnPhone(), "чек.txt", emptyMap()) }
 
-        assertEquals(PcUnreachable.PC_ASLEEP, (outcome as PcSendOutcome.Unreachable).why)
+        assertEquals(PcSendOutcome.Parked, outcome)
         assertTrue("письмо всё-таки легло в ящик", letterFor("d-pc") != null)
     }
 

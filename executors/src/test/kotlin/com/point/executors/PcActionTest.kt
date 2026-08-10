@@ -133,6 +133,16 @@ class PcActionTest {
     }
 
     @Test
+    fun `письмо ждёт компьютер — это исход, а не отказ (#672)`() = runTest {
+        val transport = FakeTransport(PcSendOutcome.Parked)
+
+        val result = PcRealizer(FakeLinks(linked), transport).perform(obj(), null)
+
+        assertTrue("доставленное письмо не может быть провалом: $result", result is ActionResult.Done)
+        assertEquals(com.point.core.flow.PC_PARKED_TEXT, (result as ActionResult.Done).message)
+    }
+
+    @Test
     fun `сервер молчит — виноват не компьютер, и про него ничего не утверждается`() = runTest {
         val transport = FakeTransport(PcSendOutcome.Unreachable("нет связи", PcUnreachable.SERVER_SILENT))
 

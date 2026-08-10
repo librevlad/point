@@ -86,6 +86,9 @@ class PcRealizer @Inject constructor(
 
             // «Назвать место словами» (#646): человек знает, где искать файл (PC3).
             is PcSendOutcome.Sent -> ActionResult.Done(PC_SENT_WHERE)
+
+            // Письмо доставлено, получатель ещё не пришёл — это исход, а не отказ (#672).
+            is PcSendOutcome.Parked -> ActionResult.Done(com.point.core.flow.PC_PARKED_TEXT)
             is PcSendOutcome.Rejected -> ActionResult.Failure(PC_DEVICE_REVOKED, recoverable = true)
 
             is PcSendOutcome.Unreachable ->

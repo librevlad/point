@@ -41,6 +41,9 @@ class RelayRpcClient(
     sealed interface Asked {
         class Answer(val meta: Map<String, String>, val body: ByteArray) : Asked
 
+        /** Письмо принято сервером, а ответа не дождались: судьба письма — «ждёт» (#672). */
+        data object Parked : Asked
+
         data object Rejected : Asked
 
         data class Failed(val why: PcUnreachable) : Asked
@@ -111,6 +114,9 @@ class RelayRpcClient(
             return@withContext Asked.Answer(frame.meta, frame.bytes)
         }
 
-        Asked.Failed(PcUnreachable.PC_ASLEEP)
+        // Ответа не дождались, но письмо приняли (post вернул 200) — это судьба письма,
+        // а не статус RPC (#672): объект лежит на сервере и дождётся компьютера. Прежнее
+        // «компьютер не отвечает» звучало как «не доставлено», и человек отправлял заново.
+        Asked.Parked
     }
 }

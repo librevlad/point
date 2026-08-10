@@ -41,6 +41,7 @@ class RelayPcTransport(
         }
         return when (val asked = rpc.ask(pc, RelayRpc.OBJECT, frameMeta, bytes)) {
             is RelayRpcClient.Asked.Answer -> sentFrom(asked)
+            RelayRpcClient.Asked.Parked -> PcSendOutcome.Parked
             RelayRpcClient.Asked.Rejected -> PcSendOutcome.Rejected
             is RelayRpcClient.Asked.Failed -> PcSendOutcome.Unreachable(asked.why.name, asked.why)
         }
