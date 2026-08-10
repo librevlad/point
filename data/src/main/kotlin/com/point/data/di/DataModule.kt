@@ -240,9 +240,6 @@ abstract class DataModule {
     abstract fun textRecognizer(impl: TesseractTextRecognizer): TextRecognizer
 
     @Binds
-    abstract fun atomRecognizer(impl: TesseractTextRecognizer): AtomRecognizer
-
-    @Binds
     abstract fun httpJson(impl: UrlConnectionHttpJson): HttpJson
 
     @Binds
@@ -397,6 +394,24 @@ abstract class DataModule {
     abstract fun graphRolesInvestigationRealizer(r: GraphRolesInvestigationRealizer): Realizer
 
     companion object {
+
+        /**
+         * Читатель на устройстве — цепочка (#747): сначала PP-OCRv5 с кириллическим словарём,
+         * запасным остаётся прежний движок. Он берёт то, на чём новый молчит, и выбрасывать
+         * его незачем: у них разные слабости.
+         *
+         * @Provides, а не @Binds: класс тянет нативную библиотеку вывода, и @Binds роняет
+         * разрешение типов во всём модуле KSP — тот же урок, что с OpenCV.
+         */
+        @Provides
+        @Singleton
+        fun atomRecognizer(
+            @ApplicationContext context: Context,
+            tesseract: TesseractTextRecognizer,
+        ): AtomRecognizer = com.point.data.LocalOcr.reader(context)
+            ?.let { com.point.data.ChainedAtomRecognizer(it, tesseract) }
+            ?: tesseract
+
 
         @Provides
         fun objectClassifier(): ObjectClassifier = ObjectClassifier()

@@ -119,6 +119,18 @@ android {
         }
     }
 
+    // Своё чтение на устройстве — только в тех сборках, где его меряют (#747, решение
+    // владельца «только в dogfood, пока не померяем»): модели и распознаватель лежат
+    // отдельно и в релиз не попадают.
+    sourceSets {
+        listOf("debug", "dogfood").forEach { variant ->
+            getByName(variant) {
+                kotlin.srcDir("src/localOcr/kotlin")
+                assets.srcDir("src/localOcr/assets")
+            }
+        }
+    }
+
     buildFeatures {
         buildConfig = true
     }
@@ -144,6 +156,8 @@ dependencies {
     implementation(libs.tukaani.xz)
     implementation(libs.junrar)
     implementation(libs.tesseract4android)
+    debugImplementation(libs.onnxruntime)
+    "dogfoodImplementation"(libs.onnxruntime)
     implementation(libs.mlkit.entity.extraction)
     implementation(libs.mlkit.barcode)
     implementation(libs.mlkit.subject.segmentation)
