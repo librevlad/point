@@ -31,6 +31,10 @@ class ScratchObjectStore @Inject constructor(
     private val scratchDir: File
         get() = File(context.filesDir, "scratch").apply { mkdirs() }
 
+    override suspend fun nameOf(sourceUri: String): String? = withContext(Dispatchers.IO) {
+        runCatching { displayName(Uri.parse(sourceUri)) }.getOrNull()
+    }
+
     override suspend fun ingest(sourceUri: String, mime: String): PointObject =
         withContext(Dispatchers.IO) {
 

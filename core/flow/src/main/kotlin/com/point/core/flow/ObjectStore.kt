@@ -6,6 +6,15 @@ import com.point.core.model.ScratchRef
 
 interface ObjectStore {
 
+    /**
+     * Как эта вещь называется у системы — до того, как её начали копировать (#640).
+     *
+     * Спрашивается имя, а не содержимое: человеку нужно видеть, что именно открывается,
+     * ещё до первого прочитанного байта. Система имени не знает — `null`, и Point молчит,
+     * а не выдумывает.
+     */
+    suspend fun nameOf(sourceUri: String): String? = null
+
     suspend fun ingest(sourceUri: String, mime: String): PointObject
 
     suspend fun ingestMultiple(sources: List<String>): PointObject
