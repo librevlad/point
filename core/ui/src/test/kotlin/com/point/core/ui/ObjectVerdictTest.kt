@@ -3,6 +3,7 @@ package com.point.core.ui
 import com.point.core.flow.META_SEMANTIC_SUMMARY
 import com.point.core.flow.META_SEMANTIC_TYPE
 import com.point.core.flow.META_SIZE
+import com.point.core.flow.META_UNUSABLE_REASON
 import com.point.core.flow.TYPE_PARCEL
 import com.point.core.model.Feature
 import com.point.core.model.ObjectKind
@@ -155,6 +156,38 @@ class ObjectVerdictTest {
 
         assertNull(objectMeasure(obj(kind = ObjectKind.IMAGE, metadata = size)))
         assertNull(objectMeasure(obj(kind = ObjectKind.PDF, metadata = size)))
+    }
+
+    // ---- #684/#685: годность видна на экране раньше первого тапа. ----
+
+    @Test
+    fun `негодный объект называет причину в подстроке — раньше имени файла`() {
+        val o = obj(
+            features = setOf(Feature.UNUSABLE),
+            metadata = mapOf("name" to "note.txt", META_UNUSABLE_REASON to "Файл пустой — в нём нечего читать"),
+        )
+
+        assertEquals("Файл пустой — в нём нечего читать", objectVerdict(o).subline)
+    }
+
+    @Test
+    fun `причина видна и сильнее модельного резюме`() {
+        val o = obj(
+            features = setOf(Feature.UNUSABLE, Feature.IS_RECIPE),
+            metadata = mapOf(
+                META_SEMANTIC_SUMMARY to "Борщ на говяжьем бульоне",
+                META_UNUSABLE_REASON to "Файл не открылся — он повреждён или это не изображение",
+            ),
+        )
+
+        assertEquals("Файл не открылся — он повреждён или это не изображение", objectVerdict(o).subline)
+    }
+
+    @Test
+    fun `метка без выставленного состояния — не считово, экран её не подхватывает`() {
+        val o = obj(metadata = mapOf("name" to "note.txt", META_UNUSABLE_REASON to "залежавшийся ключ"))
+
+        assertEquals("note.txt", objectVerdict(o).subline)
     }
 
     @Test

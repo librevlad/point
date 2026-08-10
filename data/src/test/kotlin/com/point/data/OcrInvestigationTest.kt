@@ -276,17 +276,41 @@ class OcrInvestigationTest {
     }
 
     @Test
-    fun `нераскрывшийся снимок — неудача, а не пустая страница`() = runTest {
-        val broken = recognizer("", incomplete = "decode failed")
-        val result = OcrInvestigationRealizer(FakeStore(), broken, extractor()).perform(image, null)
+    fun `нераскрывшийся снимок — знание о негодности объекта, а не провал операции`() = runTest {
 
-        assertTrue(result is com.point.core.model.ActionResult.Failure)
+        // #684/#685: «decode failed» — это про сам объект, не про попытку сейчас. Такое
+        // знание остаётся с объектом (Feature.UNUSABLE) и после этого тапа — не гаснет
+        // разовым отказом, как раньше.
+        val broken = recognizer("", incomplete = "decode failed")
+        val delta = OcrInvestigationRealizer(FakeStore(), broken, extractor()).look(image)
+
+        assertEquals(setOf(Feature.UNUSABLE), delta.features)
 
         // Причина ридера не теряется — но и не выходит к человеку чужим языком:
         // «decode failed» на экране был жаргоном (#686), теперь это только журнал.
-        val reason = (result as com.point.core.model.ActionResult.Failure).reason
-        assertTrue("что-то сказано", reason.isNotBlank())
+        val reason = delta.metadata[com.point.core.flow.META_UNUSABLE_REASON]
+        assertNotNull("что-то сказано", reason)
+        assertTrue("что-то сказано", reason!!.isNotBlank())
         assertTrue("без латиницы платформы", reason.none { it in 'a'..'z' || it in 'A'..'Z' })
+    }
+
+    @Test
+    fun `не изображение вовсе — та же негодность, что и битые байты`() = runTest {
+        val notAnImage = recognizer("", incomplete = "not an image")
+        val delta = OcrInvestigationRealizer(FakeStore(), notAnImage, extractor()).look(image)
+
+        assertEquals(setOf(Feature.UNUSABLE), delta.features)
+    }
+
+    @Test
+    fun `движок не завёлся — неудача операции, объект не порочится навсегда`() = runTest {
+
+        // В отличие от битых байт — это про попытку сейчас (устройство, движок), а не про
+        // содержимое: закрывать путь наружу навсегда здесь нельзя (#684/#685).
+        val enginedown = recognizer("", incomplete = "engine init failed")
+        val result = OcrInvestigationRealizer(FakeStore(), enginedown, extractor()).perform(image, null)
+
+        assertTrue(result is com.point.core.model.ActionResult.Failure)
     }
 
     @Test

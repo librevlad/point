@@ -1,7 +1,11 @@
 package com.point.desktop
 
+import com.point.core.flow.META_UNUSABLE_REASON
+import com.point.core.model.Feature
 import com.point.core.model.ObjectKind
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -52,5 +56,25 @@ class InboxTest {
         val item = Inbox(tmp.root).addFile(f.absolutePath)
         assertEquals(ObjectKind.PDF, item.obj.state.kind)
         assertEquals(f.absolutePath, item.obj.uri.value)
+    }
+
+    // ---- #684: та же пустота, что и на телефоне, называет себя и на компьютере. ----
+
+    @Test
+    fun `пустой файл на компьютере тоже называет свою причину сразу`() {
+        val f = tmp.newFile("prazdno.txt")
+        val item = Inbox(tmp.root).addFile(f.absolutePath)
+
+        assertTrue(item.obj.state.has(Feature.UNUSABLE))
+        assertEquals("Файл пустой — в нём нечего читать", item.obj.metadata[META_UNUSABLE_REASON])
+    }
+
+    @Test
+    fun `файл с содержимым на компьютере не несёт пометки негодности`() {
+        val f = tmp.newFile("local.pdf").apply { writeBytes(byteArrayOf(1)) }
+        val item = Inbox(tmp.root).addFile(f.absolutePath)
+
+        assertFalse(item.obj.state.has(Feature.UNUSABLE))
+        assertNull(item.obj.metadata[META_UNUSABLE_REASON])
     }
 }

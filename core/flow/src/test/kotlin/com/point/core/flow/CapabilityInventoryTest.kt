@@ -109,6 +109,29 @@ class CapabilityInventoryTest {
     }
 
     @Test
+    fun `негодный объект — подпись становится причиной, а не обещанием`() {
+
+        val label = yieldLabel(ActionYield.Same, Intent.UNDERSTAND, unusableReason = "Файл пустой — в нём нечего читать")
+
+        assertEquals("Файл пустой — в нём нечего читать", label)
+    }
+
+    @Test
+    fun `причина перекрывает любой исход — New, Copied, Unknown, None`() {
+        val reason = "Файл не открылся — он повреждён или это не изображение"
+
+        assertEquals(reason, yieldLabel(ActionYield.New(ObjectKind.TEXT), Intent.UNDERSTAND, reason))
+        assertEquals(reason, yieldLabel(ActionYield.Copied, Intent.SEND, reason))
+        assertEquals(reason, yieldLabel(ActionYield.Unknown, Intent.UNDERSTAND, reason))
+        assertEquals(reason, yieldLabel(ActionYield.None, Intent.OPEN, reason))
+    }
+
+    @Test
+    fun `без причины подпись работает как раньше`() {
+        assertEquals("найдёт суть, суммы, даты и контакты", yieldLabel(ActionYield.Same, Intent.UNDERSTAND))
+    }
+
+    @Test
     fun `у каждого исхода есть свои слова, и они не пустые`() {
         val all = listOf(
             ActionYield.None, ActionYield.Same, ActionYield.Unknown,

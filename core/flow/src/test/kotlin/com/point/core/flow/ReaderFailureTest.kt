@@ -42,4 +42,26 @@ class ReaderFailureTest {
         assertTrue(readerFailure(null).isNotBlank())
         assertTrue(readerFailure("").isNotBlank())
     }
+
+    // ---- #685: только «сам объект испорчен» закрывает путь наружу насовсем. ----
+
+    @Test
+    fun `битый файл и не-изображение — это про сам объект`() {
+        assertTrue(readerFailureIsFatal("decode failed"))
+        assertTrue(readerFailureIsFatal("not an image"))
+        assertTrue(readerFailureIsFatal("CORRUPT stream"))
+    }
+
+    @Test
+    fun `долгое чтение и большой снимок — про попытку сейчас, не про объект`() {
+        assertFalse(readerFailureIsFatal("read timed out"))
+        assertFalse(readerFailureIsFatal("413 payload too large"))
+    }
+
+    @Test
+    fun `движок не завёлся или бросил исключение — тоже не про объект`() {
+        assertFalse(readerFailureIsFatal("engine init failed"))
+        assertFalse(readerFailureIsFatal("error: OutOfMemoryError"))
+        assertFalse(readerFailureIsFatal(null))
+    }
 }

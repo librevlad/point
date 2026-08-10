@@ -10,6 +10,13 @@ data class Bubble(
     val intent: Intent = Intent.UNDERSTAND,
 
     val yields: ActionYield = ActionYield.Unknown,
+
+    /**
+     * Причина, по которой исходник негоден (#684/#685, `Feature.UNUSABLE`) — если объект уже
+     * так отмечен. Дверь остаётся в списке: причина становится подписью вместо обычного
+     * «что вернёт», а не прячет действие (решение владельца — «дверь не исчезает»).
+     */
+    val unusableReason: String? = null,
 )
 
 fun keepShownOrder(shown: List<Bubble>, fresh: List<Bubble>): List<Bubble> {

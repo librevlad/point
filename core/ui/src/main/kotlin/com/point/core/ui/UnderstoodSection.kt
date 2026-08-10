@@ -44,6 +44,7 @@ import com.point.core.flow.META_ENTITY_PREFIX
 import com.point.core.flow.META_SEMANTIC_SUMMARY
 import com.point.core.flow.META_SEMANTIC_TYPE
 import com.point.core.flow.META_SIZE
+import com.point.core.flow.unusableReasonOf
 import com.point.core.flow.documentLabel
 import com.point.core.flow.humanWeight
 import com.point.core.flow.maskedForScreen
@@ -119,9 +120,13 @@ fun objectVerdict(obj: PointObject): ObjectVerdict {
 
         else -> documentLabel(obj.metadata[META_SEMANTIC_TYPE]) ?: heroKindLabel(obj)
     }
+
+    // Годность — часть состояния объекта (#684/#685): человек читает её здесь же, до
+    // первого тапа, — она важнее названия файла или того, что успела сказать модель.
+    val unusable = unusableReasonOf(obj.metadata).takeIf { state.has(Feature.UNUSABLE) }
     val summary = obj.metadata[META_SEMANTIC_SUMMARY]?.takeIf { it.isNotBlank() }
     val name = obj.metadata["name"]?.takeIf { it.isNotBlank() && it != headline }
-    return ObjectVerdict(headline, summary ?: name, objectMeasure(obj))
+    return ObjectVerdict(headline, unusable ?: summary ?: name, objectMeasure(obj))
 }
 
 private fun heroKindLabel(obj: PointObject): String =

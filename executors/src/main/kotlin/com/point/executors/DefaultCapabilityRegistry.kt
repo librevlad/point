@@ -6,6 +6,7 @@ import com.point.core.flow.Capability
 import com.point.core.flow.CapabilityMeta
 import com.point.core.flow.CapabilityRegistry
 import com.point.core.flow.Latency
+import com.point.core.flow.unusableReason
 import com.point.core.model.Bubble
 import com.point.core.model.BubbleTier
 import com.point.core.model.CapabilityId
@@ -29,16 +30,18 @@ class DefaultCapabilityRegistry @Inject constructor(
         policy.rank(state, offered.filter { it.accepts(state) && blockerFor(it) == null })
             .map { c -> bubbleOf(c, state) }
 
-    override fun bubblesFor(graph: com.point.core.flow.GraphState): List<Bubble> =
-        policy.rank(graph, offered.filter { it.accepts(graph) && blockerFor(it) == null })
-            .map { c -> bubbleOf(c, graph.state) }
+    override fun bubblesFor(graph: com.point.core.flow.GraphState): List<Bubble> {
+        val reason = graph.unusableReason()
+        return policy.rank(graph, offered.filter { it.accepts(graph) && blockerFor(it) == null })
+            .map { c -> bubbleOf(c, graph.state, reason) }
+    }
 
     /**
      * Исследования человеку не предлагаются- их выбирает Discovery, а не Planner (ADR-0001 §11).
      */
     private val offered: List<Capability> = capabilities.filterNot { it.meta.investigation }
 
-    private fun bubbleOf(c: Capability, state: ObjectState) = Bubble(
+    private fun bubbleOf(c: Capability, state: ObjectState, unusableReason: String? = null) = Bubble(
         icon = c.icon,
         title = c.label(state),
         capabilityId = c.id,
@@ -47,6 +50,7 @@ class DefaultCapabilityRegistry @Inject constructor(
         intent = primaryIntentOf(c, state),
 
         yields = c.yields(state),
+        unusableReason = unusableReason,
     )
 
     private fun tierOf(meta: CapabilityMeta): BubbleTier = when {

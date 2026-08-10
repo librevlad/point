@@ -36,7 +36,9 @@ import com.point.core.flow.META_SELECTION_IDS
 import com.point.core.flow.META_SELECTION_PAGE
 import com.point.core.flow.META_SELECTION_REGION
 import com.point.core.flow.META_SELECTION_SOURCE
+import com.point.core.flow.META_UNUSABLE_REASON
 import com.point.core.flow.META_YIELD_NOUN
+import com.point.core.flow.readerFailure
 import com.point.core.flow.SnappedSelection
 import com.point.core.flow.AiFacts
 import com.point.core.flow.BuiltInAiKeys
@@ -1862,10 +1864,17 @@ class FlowViewModel @Inject constructor(
     private fun loadObjectPreview(obj: PointObject) {
         if (obj.state.kind != ObjectKind.IMAGE && obj.state.kind != ObjectKind.PDF) return
         viewModelScope.launch {
+            var failure: Throwable? = null
             val bitmap = withContext(ioDispatcher) {
                 val source = previewSource(obj, pdfRasterizer) ?: return@withContext null
-                runCatching { Bitmaps.decodeThumbnail(source, PREVIEW_MAX_PX)?.asImageBitmap() }.getOrNull()
-            } ?: return@launch
+                runCatching { Bitmaps.decodeThumbnail(source, PREVIEW_MAX_PX)?.asImageBitmap() }
+                    .onFailure { failure = it }
+                    .getOrNull()
+            }
+            if (bitmap == null) {
+                markPreviewUnusable(obj, failure?.message)
+                return@launch
+            }
 
             val index = stack.indexOfLast { it.obj.id == obj.id }
             val top = stack.getOrNull(index) ?: return@launch
@@ -1873,6 +1882,25 @@ class FlowViewModel @Inject constructor(
             stack[index] = refreshed
             _ui.update { if (it.frame?.obj?.id == obj.id) it.copy(frame = refreshed) else it }
         }
+    }
+
+    /**
+     * Неудачный предпросмотр — тоже знание об объекте (#685), не разовая надпись экрана:
+     * снимок или страница, которые не открылись, остаются негодными и после этого кадра, а
+     * не только в момент, когда предпросмотр только что сорвался. Уже отмеченный объект не
+     * переотмечается — сюда можно попасть дважды при повторном открытии одного узла.
+     */
+    private fun markPreviewUnusable(obj: PointObject, reason: String?) {
+        val known = stack.lastOrNull { it.obj.id == obj.id }?.obj ?: return
+        if (known.state.has(Feature.UNUSABLE)) return
+        applyEnrichment(
+            obj,
+            EnrichmentUpdate(
+                features = setOf(Feature.UNUSABLE),
+                metadata = mapOf(META_UNUSABLE_REASON to readerFailure(reason)),
+                running = emptyList(),
+            ),
+        )
     }
 
     private fun loadTextPreviewIfText(obj: PointObject) {

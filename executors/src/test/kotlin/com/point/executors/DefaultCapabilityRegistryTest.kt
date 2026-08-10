@@ -6,7 +6,9 @@ import com.point.core.flow.capabilities.OfficeCapability
 import com.point.core.flow.capabilities.ImageCapability
 import com.point.core.flow.capabilities.DropLinkCapability
 import com.point.core.flow.capabilities.OcrCapability
+import com.point.core.flow.GraphState
 import com.point.core.flow.LinkedPc
+import com.point.core.flow.META_UNUSABLE_REASON
 import com.point.core.flow.PcLinks
 import com.point.core.flow.PcRemoteAction
 import com.point.core.flow.Latency
@@ -16,6 +18,8 @@ import com.point.core.model.Feature
 import com.point.core.model.Intent
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
+import com.point.core.model.PointObject
+import com.point.core.model.ScratchRef
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -306,6 +310,37 @@ class DefaultCapabilityRegistryTest {
 
         assertTrue("scan" in ids)
         assertFalse("Скан" in latent.map { it.title })
+    }
+
+    // ---- #684/#685: годность видна и в подписи действия, а дверь не пропадает. ----
+
+    private fun objectOf(state: ObjectState, metadata: Map<String, String> = emptyMap()) =
+        PointObject("id", "text/plain", ScratchRef("/x"), state, metadata)
+
+    @Test
+    fun `негодный объект — подпись каждого пузырька несёт причину, а не пропадает`() {
+        val reason = "Файл пустой — в нём нечего читать"
+        val obj = objectOf(ObjectState(ObjectKind.TEXT, setOf(Feature.UNUSABLE)), mapOf(META_UNUSABLE_REASON to reason))
+
+        val bubbles = registry.bubblesFor(GraphState(obj))
+
+        assertTrue("действия остаются в списке", bubbles.isNotEmpty())
+        assertEquals(
+            "то же множество дверей, что и у обычного текста",
+            idsFor(ObjectState(ObjectKind.TEXT)),
+            bubbles.map { it.capabilityId.value }.toSet(),
+        )
+        assertTrue(bubbles.all { it.unusableReason == reason })
+    }
+
+    @Test
+    fun `обычный объект — у пузырьков причины нет`() {
+        val obj = objectOf(ObjectState(ObjectKind.TEXT))
+
+        val bubbles = registry.bubblesFor(GraphState(obj))
+
+        assertTrue(bubbles.isNotEmpty())
+        assertTrue(bubbles.all { it.unusableReason == null })
     }
 
     @Test
