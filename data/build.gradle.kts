@@ -129,6 +129,7 @@ dependencies {
     implementation(libs.tukaani.xz)
     implementation(libs.junrar)
     implementation(libs.tesseract4android)
+    implementation(libs.onnxruntime)
     implementation(libs.mlkit.entity.extraction)
     implementation(libs.mlkit.barcode)
     implementation(libs.mlkit.subject.segmentation)
