@@ -1823,7 +1823,25 @@ class FlowViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Спросить компьютер, что он умеет, — фоном, при появлении объекта (#633).
+     *
+     * Первый экран рисуется как прежде, без сети: вопрос уходит после отрисовки, а пришедший
+     * ответ обновляет пространство действий — так же, как это делают обогатители признаков.
+     * Прежде объявление освежалось только при заходе в «Мои устройства», и телефон показывал
+     * состояние недельной давности как нынешнее.
+     */
+    private fun refreshPcCapsInBackground() {
+        val pc = runCatching { pcLinks.current() }.getOrNull() ?: return
+        if (com.point.core.flow.capsFresh(pcCaps.savedAt(), System.currentTimeMillis())) return
+        viewModelScope.launch(ioDispatcher) {
+            val fresh = runCatching { pcTransport.fetchCaps(pc) }.getOrNull() ?: return@launch
+            runCatching { pcCaps.save(fresh) }
+        }
+    }
+
     private fun pushFrame(obj: PointObject, via: CapabilityId? = null, viaTitle: String? = null) {
+        refreshPcCapsInBackground()
         val parent = stack.lastOrNull()
         val carried = parent?.takeIf { continuesObject(it.obj, obj) }
         val known = carried?.let { carryKnowledge(it.obj, obj) } ?: obj

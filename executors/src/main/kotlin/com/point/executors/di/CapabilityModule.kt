@@ -270,7 +270,11 @@ abstract class CapabilityModule {
         fun pcRemoteCapabilities(caps: com.point.core.flow.PcCapsStore, links: com.point.core.flow.PcLinks): Set<Capability> =
             caps.all()
                 .filterNot { CapabilityId(it.id) in com.point.core.flow.capabilities.sharedCapabilityIds }
-                .map { RemotePcCapability(it, links) }
+                .map { action ->
+                    RemotePcCapability(action, links) {
+                        com.point.core.flow.capsFresh(caps.savedAt(), System.currentTimeMillis())
+                    }
+                }
                 .toSet()
 
         @Provides @ElementsIntoSet

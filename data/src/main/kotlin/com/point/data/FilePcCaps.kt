@@ -26,6 +26,12 @@ class FilePcCaps @Inject constructor(
 
     override fun all(): List<PcRemoteAction> = cache ?: load().also { cache = it }
 
+    /**
+     * Метка файла и есть «когда объявлялся»: чтение с диска её не молодит, потому что читаем
+     * мы, а не телефон говорит (тот же урок, что на компьютере — #624).
+     */
+    override fun savedAt(): Long? = file.takeIf { it.exists() }?.lastModified()?.takeIf { it > 0 }
+
     override suspend fun save(caps: List<PcRemoteAction>): Unit = withContext(Dispatchers.IO) {
         lock.withLock {
             file.writeText(encodePcCaps(caps))

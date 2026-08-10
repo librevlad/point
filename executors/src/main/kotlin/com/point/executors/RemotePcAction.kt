@@ -22,6 +22,12 @@ import com.point.core.model.PointObject
 class RemotePcCapability(
     private val action: PcRemoteAction,
     private val links: PcLinks,
+
+    /**
+     * Свежо ли объявление того устройства (#633). Устарело — причина недоступности не
+     * показывается: «компьютер не вошёл в аккаунт» недельной давности это выдумка, а не факт.
+     */
+    private val fresh: () -> Boolean = { true },
 ) : Capability {
     override val id = idFor(action)
     override val icon = "pc"
@@ -29,12 +35,12 @@ class RemotePcCapability(
     override val meta = CapabilityMeta(priority = 76, latency = Latency.FAST, localOnly = true)
     override fun label(state: ObjectState) = action.label
     override fun accepts(state: ObjectState) =
-        action.unavailable == null && fitsThisObject(state)
+        (action.unavailable == null || !fresh()) && fitsThisObject(state)
 
     override fun produces(state: ObjectState) = state
 
     override fun missing(state: ObjectState): String? =
-        action.unavailable?.takeIf { it.isNotBlank() && fitsThisObject(state) }
+        action.unavailable?.takeIf { it.isNotBlank() && fresh() && fitsThisObject(state) }
 
     private fun fitsThisObject(state: ObjectState) =
 
