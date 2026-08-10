@@ -38,7 +38,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Red
 from pydantic import BaseModel, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from . import db, google as google_mod, ids, mailbox, pages, store
+from . import db, google as google_mod, ids, mailbox, pages, store, upload_page
 from .config import Settings, settings_from_env
 
 DEVICE_KINDS = ("PHONE", "PC")
@@ -93,15 +93,13 @@ def fail(status: int, code: str, message: str, headers: dict | None = None):
 
 
 def _upload_form(box_id: str) -> str:
-    """Страница для чужого человека: одно поле и одна кнопка, без слов о Point и его устройстве."""
-    return (
-        "<h1>Отправить файл</h1>"
-        "<p>Выберите файл — он придёт человеку, который дал вам эту ссылку.</p>"
-        "<form method=post enctype=multipart/form-data>"
-        "<input type=file name=file required>"
-        "<button type=submit>Отправить</button>"
-        "</form>"
-    )
+    """Страница для чужого человека: одно действие и ни одного слова о Point.
+
+    Разметка, стиль и скрипт живут в `upload_page` — там же объяснено, почему портал
+    здесь работает индикатором отправки.
+    """
+    return upload_page.upload_body()
+
 
 def create_app(
     settings: Settings | None = None,
@@ -556,7 +554,9 @@ def create_app(
         """Страница, на которой ЧУЖОЙ человек кладёт файл. Пропуска у него нет."""
         if not mailbox.inbox_find(_blobs_root(d), box_id):
             return HTMLResponse(pages.link_gone_page(), status_code=404)
-        return HTMLResponse(pages.page("Отправить файл", _upload_form(box_id)))
+        return HTMLResponse(
+            pages.page("Отправить файл", _upload_form(box_id), head=upload_page.UPLOAD_HEAD)
+        )
 
     @app.post("/u/{box_id}")
     async def inbox_accept(box_id: str, request: Request, d: Deps = Depends(deps)):
