@@ -644,15 +644,24 @@ class FlowViewModel @Inject constructor(
             selectionLayer = loaded.first
             selectionTransform = loaded.second
             selectionSnap = null
-            _ui.update { it.copy(selection = SelectionUi(image = loaded.third)) }
+            _ui.update { it.copy(selection = SelectionUi(image = loaded.third, layer = loaded.first)) }
         }
     }
 
+    /**
+     * ✓ на экране Focus: показанная область становится Focus объекта и экран закрывается
+     * (ТЗ владельца 10.08.2026 — «нажал → Focus исчез → Point получает region»).
+     *
+     * Мазок кистью тянет строку целиком: человек метит серединой пальца, а не выцеливает
+     * начало и конец.
+     */
     fun onSelectRegion(display: Box) {
         val layer = selectionLayer ?: return
         val transform = selectionTransform ?: return
-        val snap = layer.snapSelection(transform.toRaw(display))
+        val snap = layer.snapSelection(transform.toRaw(display), wholeLine = true)
         selectionSnap = snap
+        focusOnSelection()
+        return
         _ui.update { state ->
             val sel = state.selection ?: return@update state
             state.copy(

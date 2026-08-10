@@ -84,6 +84,19 @@ class OcrInvestigationRealizer @Inject constructor(
     private val extractor: EntityExtractor,
 ) : Realizer {
 
+    private val crops = FocusCrop(store)
+
+    /**
+     * Объект, каким его увидит читатель: та же вещь, но вырезанная по показанной области и
+     * увеличенная. Focus не подменяет объект — он адресует его часть (ADR-0001 §10), поэтому
+     * знание вернётся к исходнику, а вырезка исчезнет вместе со scratch.
+     */
+    private suspend fun focused(obj: PointObject): PointObject? {
+        val region = com.point.core.flow.focusOf(obj.metadata, obj.id)?.region ?: return null
+        val cut = runCatching { crops.of(obj.uri.value, region) }.getOrNull() ?: return null
+        return obj.copy(uri = com.point.core.model.ScratchRef(cut.absolutePath))
+    }
+
     override val capabilityId = OcrInvestigation.ID
 
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
@@ -95,7 +108,10 @@ class OcrInvestigationRealizer @Inject constructor(
 
     private suspend fun findings(obj: PointObject): Findings = withContext(Dispatchers.IO) {
 
-        val layer = recognizer.read(obj)
+        // Человек показал область — читаем её, а не страницу целиком (#426). Мелкое на большом
+        // кадре иначе не читается вовсе: вопрос «что на странице» неправильный, когда нужное
+        // занимает считанные проценты кадра.
+        val layer = recognizer.read(focused(obj) ?: obj)
 
         // Ридер честно сигналит, что не смог посмотреть (decode failed / not an image /
         // таймаут). Пусто И оборвано = не «текста нет», а «не смогли посмотреть» (ADR-0001 §9).
