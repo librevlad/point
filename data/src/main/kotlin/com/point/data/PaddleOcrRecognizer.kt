@@ -5,6 +5,7 @@ import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtSession
 import android.content.Context
 import android.graphics.Bitmap
+import android.os.Build
 import com.point.core.flow.Atom
 import com.point.core.flow.AtomLayer
 import com.point.core.flow.AtomRecognizer
@@ -12,9 +13,11 @@ import com.point.core.flow.Box
 import com.point.core.flow.readerFailure
 import com.point.core.model.PointObject
 import dagger.hilt.android.qualifiers.ApplicationContext
+import java.io.File
 import java.nio.FloatBuffer
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.math.abs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -44,9 +47,33 @@ class PaddleOcrRecognizer @Inject constructor(
         context.assets.open("ppocr/rec_keys.txt").bufferedReader().readLines()
     }
 
+    /**
+     * Пробел — отдельный класс распознавателя, идущий сразу за словарём.
+     *
+     * Пока его не отдавали, слова слипались: «ОДЕСАПОСИЛКОВИЙ», «067.6360560». Читалось
+     * при этом верно — терялись именно границы слов, а по ним потом ищут телефон и адрес.
+     */
+    private val spaceClass: Int get() = alphabet.size + 1
+
+    /**
+     * Родная ли машина для движка.
+     *
+     * Если библиотеку для чужого процессора запускают через трансляцию, движок падает ещё
+     * при загрузке — в собственном определении возможностей CPU — и уносит весь процесс:
+     * такой обвал не поймать ни `runCatching`, ни чем-либо ещё. Поэтому берёмся за чтение
+     * только там, где библиотека своя; иначе читает запасной движок.
+     */
+    private val runsNatively: Boolean by lazy {
+        nativeAbiFolder(Build.SUPPORTED_ABIS.firstOrNull()) ==
+            File(context.applicationInfo.nativeLibraryDir).name
+    }
+
     override suspend fun read(obj: PointObject): AtomLayer = withContext(Dispatchers.IO) {
         if (!obj.mime.startsWith("image/")) {
             return@withContext AtomLayer(emptyList(), incomplete = "not an image")
+        }
+        if (!runsNatively) {
+            return@withContext AtomLayer(emptyList(), incomplete = FOREIGN_ABI)
         }
         val source = decodeBoundedUpright(obj.uri.value, MAX_PX)
             ?: return@withContext AtomLayer(emptyList(), incomplete = readerFailure(null))
@@ -56,8 +83,17 @@ class PaddleOcrRecognizer @Inject constructor(
                 return@withContext AtomLayer(emptyList(), incomplete = it.message ?: "detect failed")
             }
             val atoms = lines.mapIndexedNotNull { index, box ->
-                val text = runCatching { readLine(source, box) }.getOrNull()?.takeIf { it.isNotBlank() }
-                text?.let { Atom(id = "ppocr-$index", text = it, box = box, reader = READER, readerVersion = VERSION) }
+                val reading = runCatching { readLine(source, box) }.getOrNull()
+                reading?.takeIf { it.text.isNotBlank() }?.let {
+                    Atom(
+                        id = "ppocr-$index",
+                        text = it.text,
+                        box = box,
+                        confidence = it.confidence,
+                        reader = READER,
+                        readerVersion = VERSION,
+                    )
+                }
             }
             AtomLayer(atoms)
         } finally {
@@ -81,16 +117,19 @@ class PaddleOcrRecognizer @Inject constructor(
                 (result[0].value as Array<Array<Array<FloatArray>>>)[0][0]
             }
         }
-        return boxesOf(out, source.width.toFloat() / width, source.height.toFloat() / height)
+        return textRows(blobs(out))
+            .map { grown(it, out.firstOrNull()?.size ?: 0, out.size) }
+            .map { it.scaled(source.width.toFloat() / width, source.height.toFloat() / height) }
+            .sortedWith(compareBy({ it.top }, { it.left }))
     }
 
     /**
-     * Строки как прямоугольники: карта вероятностей → связные пятна → их границы.
+     * Пятна текста: карта вероятностей → связные области → их границы.
      *
-     * Разметка волной по строкам, а не рекурсией: у наклейки с мелким шрифтом пятен сотни, и
-     * рекурсия по пикселям кладёт стек.
+     * Разметка волной, а не рекурсией: у наклейки с мелким шрифтом пятен сотни, и рекурсия
+     * по пикселям кладёт стек.
      */
-    private fun boxesOf(map: Array<FloatArray>, scaleX: Float, scaleY: Float): List<Box> {
+    private fun blobs(map: Array<FloatArray>): List<Box> {
         val height = map.size
         val width = map.firstOrNull()?.size ?: return emptyList()
         val seen = Array(height) { BooleanArray(width) }
@@ -125,32 +164,45 @@ class PaddleOcrRecognizer @Inject constructor(
                         }
                     }
                 }
-                if (pixels < MIN_PIXELS) continue
-
-                // Небольшой запас: DB даёт ядро строки, буквы по краям чуть шире.
-                val padX = ((right - left) * PAD_SHARE).toInt() + 1
-                val padY = ((bottom - top) * PAD_SHARE).toInt() + 1
-                found += Box(
-                    ((left - padX).coerceAtLeast(0)) * scaleX,
-                    ((top - padY).coerceAtLeast(0)) * scaleY,
-                    ((right + padX).coerceAtMost(width - 1)) * scaleX,
-                    ((bottom + padY).coerceAtMost(height - 1)) * scaleY,
-                )
+                if (pixels >= MIN_PIXELS) {
+                    found += Box(left.toFloat(), top.toFloat(), right.toFloat(), bottom.toFloat())
+                }
             }
         }
-        return found.sortedWith(compareBy({ it.top }, { it.left }))
+        return found
     }
 
+    /**
+     * Запас вокруг найденной строки.
+     *
+     * DB обучен на суженной разметке и отдаёт ядро строки — у́же и ниже самих букв. Без
+     * запаса верх и низ букв срезало, и распознаватель видел обрубки: «БІЛГОРОД» читалось
+     * как «БИЛГОРОД», «БРИТІВКА» — как «БРИТИВКА», а последний знак строки пропадал совсем.
+     * Запас считается от высоты строки, чтобы одинаково работать и на заголовке, и на мелком.
+     */
+    private fun grown(box: Box, width: Int, height: Int): Box {
+        val padX = box.height * PAD_X + 1f
+        val padY = box.height * PAD_Y + 1f
+        return Box(
+            (box.left - padX).coerceAtLeast(0f),
+            (box.top - padY).coerceAtLeast(0f),
+            (box.right + padX).coerceAtMost(width - 1f),
+            (box.bottom + padY).coerceAtMost(height - 1f),
+        )
+    }
+
+    private fun Box.scaled(x: Float, y: Float) = Box(left * x, top * y, right * x, bottom * y)
+
     /** Распознаватель CTC: кусок строки → текст. */
-    private fun readLine(source: Bitmap, box: Box): String {
+    private fun readLine(source: Bitmap, box: Box): Reading {
         val left = box.left.toInt().coerceIn(0, source.width - 1)
         val top = box.top.toInt().coerceIn(0, source.height - 1)
         val width = (box.right - box.left).toInt().coerceIn(1, source.width - left)
         val height = (box.bottom - box.top).toInt().coerceIn(1, source.height - top)
-        if (width < MIN_LINE_PX || height < MIN_LINE_PX) return ""
+        if (width < MIN_LINE_PX || height < MIN_LINE_PX) return Reading("", 0f)
 
         val crop = Bitmap.createBitmap(source, left, top, width, height)
-        val scaled = (REC_HEIGHT * width / height.toFloat()).toInt().coerceIn(REC_HEIGHT, REC_MAX_WIDTH)
+        val scaled = (REC_HEIGHT * width / height.toFloat()).toInt().coerceIn(MIN_REC_WIDTH, REC_MAX_WIDTH)
         val line = Bitmap.createScaledBitmap(crop, scaled, REC_HEIGHT, true)
         crop.recycle()
 
@@ -166,22 +218,31 @@ class PaddleOcrRecognizer @Inject constructor(
         return decode(logits)
     }
 
-    /** CTC: подряд идущие одинаковые знаки схлопываются, нулевой класс — пропуск. */
-    private fun decode(logits: Array<FloatArray>): String {
+    /**
+     * CTC: подряд идущие одинаковые знаки схлопываются, нулевой класс — пропуск.
+     *
+     * Слабый знак не выбрасывается: сомнение — это уверенность строки, а не молчание.
+     * По ней [com.point.core.flow.weaklyRead] и решает, честно ли называть это чтением.
+     */
+    private fun decode(logits: Array<FloatArray>): Reading {
         val text = StringBuilder()
         var previous = -1
+        var sum = 0f
+        var count = 0
         logits.forEach { step ->
             var best = 0
             var bestValue = step[0]
             for (i in step.indices) {
                 if (step[i] > bestValue) { bestValue = step[i]; best = i }
             }
-            if (best != 0 && best != previous && bestValue >= MIN_CONFIDENCE) {
-                alphabet.getOrNull(best - 1)?.let(text::append)
+            if (best != 0 && best != previous) {
+                if (best == spaceClass) text.append(' ') else alphabet.getOrNull(best - 1)?.let(text::append)
+                sum += bestValue
+                count++
             }
             previous = best
         }
-        return text.toString().trim()
+        return Reading(text.toString().trim(), if (count == 0) 0f else sum / count)
     }
 
     private fun normalized(bitmap: Bitmap, mean: FloatArray, std: FloatArray): FloatArray {
@@ -205,6 +266,8 @@ class PaddleOcrRecognizer @Inject constructor(
         return env.createSession(bytes, OrtSession.SessionOptions())
     }
 
+    private data class Reading(val text: String, val confidence: Float)
+
     private companion object {
 
         const val READER = "ppocr"
@@ -213,21 +276,26 @@ class PaddleOcrRecognizer @Inject constructor(
 
         const val MAX_PX = 2048
 
-        const val DET_SIDE = 960
+        const val DET_SIDE = 1280
 
         const val DET_THRESHOLD = 0.3f
 
         const val MIN_PIXELS = 12
 
-        const val PAD_SHARE = 0.12f
+        const val PAD_X = 0.5f
+
+        const val PAD_Y = 0.4f
 
         const val REC_HEIGHT = 48
 
         const val REC_MAX_WIDTH = 1600
 
+        // Ниже этого распознавателю нечего свернуть: он сжимает ширину в восемь раз.
+        const val MIN_REC_WIDTH = 12
+
         const val MIN_LINE_PX = 4
 
-        const val MIN_CONFIDENCE = 0.15f
+        const val FOREIGN_ABI = "ppocr build does not match device abi"
 
         val DET_MEAN = floatArrayOf(0.485f, 0.456f, 0.406f)
 
@@ -238,3 +306,72 @@ class PaddleOcrRecognizer @Inject constructor(
         val REC_STD = floatArrayOf(0.5f, 0.5f, 0.5f)
     }
 }
+
+/**
+ * Одна строка — один кусок: пятна, стоящие на общей строке рядом, склеиваются.
+ *
+ * Номер отправления набран широко, и детектор отдаёт его четырьмя пятнами: «59», «0017»,
+ * «2462», «6327». Порознь они и уходили дальше порознь — отсюда «номер обрезан» в #747:
+ * следующий шаг брал первый кусок и терял хвост.
+ *
+ * Склейка идёт до неподвижности: за один проход к «59 0017» ещё не примыкает «2462».
+ */
+internal fun textRows(blobs: List<Box>): List<Box> {
+    var current = blobs
+    while (true) {
+        val merged = mergedOnce(current)
+        if (merged.size == current.size) return merged
+        current = merged
+    }
+}
+
+private fun mergedOnce(blobs: List<Box>): List<Box> {
+    val sorted = blobs.sortedWith(compareBy({ it.top }, { it.left }))
+    val taken = BooleanArray(sorted.size)
+    val out = mutableListOf<Box>()
+    for (i in sorted.indices) {
+        if (taken[i]) continue
+        var box = sorted[i]
+        taken[i] = true
+        for (j in sorted.indices) {
+            if (taken[j] || !sameRow(box, sorted[j])) continue
+            box = box.union(sorted[j])
+            taken[j] = true
+        }
+        out += box
+    }
+    return out
+}
+
+/**
+ * Общая строка: куски перекрываются по высоте, сравнимы ростом и стоят рядом.
+ *
+ * Рост важен наравне с соседством: иначе к крупной «3.00» прилипает мелкое «(об'єм)»
+ * под ней, а к строке адреса — соседняя графа таблицы.
+ */
+private fun sameRow(a: Box, b: Box): Boolean {
+    val shorter = minOf(a.height, b.height)
+    val overlap = minOf(a.bottom, b.bottom) - maxOf(a.top, b.top)
+    if (overlap < ROW_OVERLAP * shorter) return false
+    if (abs(a.height - b.height) > ROW_SPREAD * maxOf(a.height, b.height)) return false
+    return maxOf(a.left, b.left) - minOf(a.right, b.right) <= ROW_GAP * shorter
+}
+
+/**
+ * Как Android называет папку с библиотеками для этого процессора.
+ *
+ * Совпала с той, откуда взяты библиотеки, — машина своя; не совпала — работает трансляция.
+ */
+internal fun nativeAbiFolder(abi: String?): String = when (abi) {
+    "arm64-v8a" -> "arm64"
+    "armeabi-v7a", "armeabi" -> "arm"
+    "x86_64" -> "x86_64"
+    "x86" -> "x86"
+    else -> ""
+}
+
+private const val ROW_OVERLAP = 0.5f
+
+private const val ROW_SPREAD = 0.6f
+
+private const val ROW_GAP = 0.8f
