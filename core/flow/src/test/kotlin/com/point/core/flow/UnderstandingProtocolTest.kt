@@ -184,4 +184,25 @@ class UnderstandingProtocolTest {
             parseFieldCandidates("AMOUNT=500.00").fields[META_ENTITY_AMOUNT]!!.map { it.text },
         )
     }
+
+    private fun cards(answer: String): List<String> =
+        parseFieldCandidates(answer).fields[META_ENTITY_PREFIX + "card"].orEmpty().map { it.text }
+
+    // #747, кейс почтовой наклейки: «Нашёл карту В1Д: 29.07/12:59», и следом Point
+    // предлагал реквизиты перевода, где «не хватает только суммы». Перевод на дату.
+    @Test
+    fun `дата картой не становится — перевода на несуществующий счёт не предлагаем (#747)`() {
+        assertEquals(emptyList<String>(), cards("CARD=В1Д: 29.07/12:59"))
+        assertEquals(emptyList<String>(), cards("CARD=30.07 18:00"))
+    }
+
+    @Test
+    fun `настоящая карта остаётся картой (#747)`() {
+        assertEquals(listOf("5169 3351 0987 6543"), cards("CARD=5169 3351 0987 6543"))
+    }
+
+    @Test
+    fun `IBAN — тоже счёт, хотя цифр в нём больше (#747)`() {
+        assertEquals(listOf("UA903052992990004149123456789"), cards("CARD=UA903052992990004149123456789"))
+    }
 }
