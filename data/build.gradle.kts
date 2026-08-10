@@ -67,6 +67,11 @@ android {
         buildConfigField("String", "CLOUDFLARE_BASE_URL", prop("CLOUDFLARE_BASE_URL", "https://api.cloudflare.com/client/v4/accounts"))
         buildConfigField("String", "CLOUDFLARE_MODELS", prop("CLOUDFLARE_MODELS", "@cf/mistralai/mistral-small-3.1-24b-instruct,@cf/meta/llama-3.3-70b-instruct-fp8-fast"))
 
+        // Домен важен: .cn отвечает на токен 401, международный .ai — работает.
+        buildConfigField("String", "MODELSCOPE_API_KEY", "\"\"")
+        buildConfigField("String", "MODELSCOPE_BASE_URL", prop("MODELSCOPE_BASE_URL", "https://api-inference.modelscope.ai/v1"))
+        buildConfigField("String", "MODELSCOPE_MODELS", prop("MODELSCOPE_MODELS", "Qwen/Qwen3-VL-235B-A22B-Instruct,Qwen/Qwen3-VL-8B-Instruct"))
+
         buildConfigField("String", "GITHUB_API_KEY", "\"\"")
         buildConfigField("String", "GITHUB_BASE_URL", prop("GITHUB_BASE_URL", "https://models.github.ai/inference"))
         buildConfigField("String", "GITHUB_MODELS", prop("GITHUB_MODELS", ""))
@@ -101,6 +106,7 @@ android {
             buildConfigField("String", "OCRSPACE_API_KEY", prop("OCRSPACE_API_KEY"))
             buildConfigField("String", "CLOUDFLARE_API_KEY", prop("CLOUDFLARE_API_KEY"))
             buildConfigField("String", "CLOUDFLARE_ACCOUNT_ID", prop("CLOUDFLARE_ACCOUNT_ID"))
+            buildConfigField("String", "MODELSCOPE_API_KEY", prop("MODELSCOPE_API_KEY"))
             buildConfigField("String", "GITHUB_API_KEY", prop("GITHUB_API_KEY"))
             buildConfigField("String", "UNSTRUCTURED_API_KEY", prop("UNSTRUCTURED_API_KEY"))
             buildConfigField("String", "LLAMA_CLOUD_API_KEY", prop("LLAMA_CLOUD_API_KEY"))
