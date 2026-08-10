@@ -28,6 +28,9 @@ class PcCloudOcrRealizer(
     private val extractor: com.point.core.flow.EntityExtractor = com.point.core.flow.RegexEntityExtractor(),
     private val connectTimeoutMs: Int = 15_000,
     private val readTimeoutMs: Int = 120_000,
+
+    /** Поход к сервису — за швом: то, что уходит наружу, проверяется тестом без сети (#592). */
+    private val readOutside: ((OcrConfig, File, String) -> String)? = null,
 ) : Realizer {
     override val capabilityId = com.point.core.flow.capabilities.OcrCapability.ID
 
@@ -38,21 +41,26 @@ class PcCloudOcrRealizer(
             runCatching {
                 val file = File(input.uri.value).takeIf(File::isFile)
                     ?: return@withContext ActionResult.Failure("Файла картинки нет на диске", recoverable = false)
-                if (file.length() > MAX_BYTES) {
-                    return@withContext ActionResult.Failure(
 
+                // Снимок тяжелее предела сервиса Point укладывает сам (#592): прежде он отказывал
+                // и советовал сначала нажать «Сделать легче» — два тапа там, где человек хотел
+                // один. Второго объекта на конвейере не появляется: копия живёт ровно один поход.
+                val fitted = if (file.length() > MAX_BYTES) ImageFit.toFit(file, MAX_BYTES) else null
+                if (file.length() > MAX_BYTES && fitted == null) {
+                    return@withContext ActionResult.Failure(
                         "Снимок " + String.format(java.util.Locale.ROOT, "%.1f", file.length() / (1024.0 * 1024)) +
-                            " МБ — сервис принимает до 1 МБ. Сначала «Сделать легче».",
+                            " МБ — сервис принимает до 1 МБ, а уменьшить этот снимок не вышло.",
                         recoverable = false,
                     )
                 }
                 val cfg = config()
-                val text = read(cfg, file, input.mime)
+                val toRead = fitted?.file ?: file
+                val text = (readOutside ?: ::read)(cfg, toRead, if (fitted != null) "image/jpeg" else input.mime)
                 if (text.isBlank()) {
 
                     // «Не нашлось» — знание, а не сбой (Конституция §13).
                     return@withContext ActionResult.Done(
-                        "На снимке не нашлось текста",
+                        "На снимке не нашлось текста" + if (fitted == null) "" else " · " + shrunkNote(fitted),
                         com.point.core.model.Findings(
                             metadata = mapOf(
                                 com.point.core.flow.investigationKey(capabilityId) to
@@ -69,6 +77,7 @@ class PcCloudOcrRealizer(
                 val entities = entityKnowledge(found, CapabilityId("pc-entities"))
                 ActionResult.Done(
                     "Прочитал снимок" +
+                        (if (fitted == null) "" else " · " + shrunkNote(fitted)) +
                         if (found.isEmpty()) "" else ". Нашёл: " + entitySummary(found),
                     com.point.core.model.Findings(
                         features = entities.features + com.point.core.model.Feature.HAS_TEXT,

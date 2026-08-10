@@ -250,18 +250,21 @@ class SmartActionsTest {
         assertEquals("картинка всё-таки уехала текстом", null, asText)
     }
 
-    @Test fun `слишком большой снимок отсекается до сети и советует, что делать`() = runTest {
-        val box = outbox()
-
+    @Test fun `тяжёлый снимок Point укладывает сам, а не отсылает человека жать «Сделать легче»`() = runTest {
         val big = imageObject(2000, 2000)
         assertTrue("картинка вышла меньше предела — проверять нечего", File(big.uri.value).length() > 1024 * 1024)
+        var wentOutside: File? = null
 
-        val result = PcCloudOcrRealizer({ OcrConfig() }).perform(big, null)
+        val result = PcCloudOcrRealizer(
+            { OcrConfig() },
+            readOutside = { _, file, _ -> wentOutside = file; "накладная 4512" },
+        ).perform(big, null)
 
-        assertTrue(result is ActionResult.Failure)
-        val message = (result as ActionResult.Failure).reason
-        assertTrue("отказ не подсказал выход: " + message, message.contains("Сделать легче"))
-        assertTrue(box.entries().isEmpty())
+        assertTrue("наружу ушёл исходник, а не уложенная копия", wentOutside!!.length() <= 1024 * 1024)
+        assertTrue(result is ActionResult.Done)
+        val said = (result as ActionResult.Done).message
+        assertTrue("человеку не сказано про подмену: " + said, said.contains("уменьшенн"))
+        assertTrue("остался совет из прежнего отказа: " + said, !said.contains("Сделать легче"))
     }
 
     @Test fun `у чтения снимка одна декларация на оба устройства, а компьютер даёт реализацию`() {
