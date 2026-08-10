@@ -35,6 +35,9 @@ class VibratorSensoryFeedback @Inject constructor(
     private val successSound by lazy { runCatching { sounds?.load(context, R.raw.point_success, 1) }.getOrNull() }
     private val failureSound by lazy { runCatching { sounds?.load(context, R.raw.point_failure, 1) }.getOrNull() }
 
+    /** Уход с телефона — свип вверх; на той стороне тот же тембр опустится вниз (#650). */
+    private val sentSound by lazy { runCatching { sounds?.load(context, R.raw.point_portal_out, 1) }.getOrNull() }
+
     private val vibrator: Vibrator? by lazy {
         runCatching {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -52,6 +55,8 @@ class VibratorSensoryFeedback @Inject constructor(
     override fun success() = play(VibrationEffect.EFFECT_TICK, successSound)
 
     override fun failure() = play(VibrationEffect.EFFECT_DOUBLE_CLICK, failureSound)
+
+    override fun sent() = play(VibrationEffect.EFFECT_TICK, sentSound)
 
     private fun play(effectId: Int, soundId: Int?) {
         if (soundId != null && runCatching { settings.isSoundEnabled() }.getOrDefault(true)) {

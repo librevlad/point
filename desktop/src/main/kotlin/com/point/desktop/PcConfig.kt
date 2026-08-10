@@ -15,6 +15,9 @@ data class PcConfig(
     val ocr: OcrConfig = OcrConfig(),
 
     val rightClick: Boolean = true,
+
+    /** Звук прибытия объекта с телефона (#650). Пара к свипу ухода на той стороне. */
+    val sound: Boolean = true,
 )
 
 class FilePcConfig(private val baseDir: File) {
@@ -36,6 +39,7 @@ class FilePcConfig(private val baseDir: File) {
                 url = stored["ocr.url"].orEmpty().ifBlank { OcrConfig.DEFAULT_URL },
             ),
             rightClick = stored["right.click"] != "no",
+            sound = stored["sound"] != "no",
             speech = SpeechConfig(
                 key = stored["speech.key"].orEmpty(),
                 url = stored["speech.url"].orEmpty().ifBlank { SpeechConfig.DEFAULT_URL },
@@ -78,6 +82,7 @@ class FilePcConfig(private val baseDir: File) {
         stored["server"] = config.server
 
         if (config.rightClick) stored.remove("right.click") else stored["right.click"] = "no"
+        if (config.sound) stored.remove("sound") else stored["sound"] = "no"
         listOf(
             "ai.key" to config.ai.key,
             "speech.key" to config.speech.key,

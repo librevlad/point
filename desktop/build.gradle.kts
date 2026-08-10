@@ -11,6 +11,9 @@ kotlin { jvmToolchain(17) }
 
 sourceSets.main {
     resources.srcDir(rootProject.file("core/ui/src/main/res/font"))
+
+    // Звуки-порталы лежат там же, откуда их берёт телефон: общий файл — общий тембр (#650).
+    resources.srcDir(rootProject.file("data/src/main/res/raw"))
 }
 
 tasks.test {
