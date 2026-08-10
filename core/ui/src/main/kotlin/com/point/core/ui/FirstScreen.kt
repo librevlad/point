@@ -631,14 +631,18 @@ private fun ObjectHeader(
                 } else {
                     Surface(
                         shape = CircleShape,
-                        color = MaterialTheme.colorScheme.secondary,
+
+                        // Та же пара, что у аватара «Недавнего»: тёмная подложка и светлый
+                        // знак. Прежний `secondary` — светло-серый, и на диаметре портала
+                        // он превращался в яркое пятно, чужое тёмному кольцу.
+                        color = MaterialTheme.colorScheme.secondaryContainer,
                         shadowElevation = 0.dp,
                         modifier = Modifier.size(headerSize),
                     ) {
                         Icon(
                             imageVector = kindIcon(obj.state.kind),
                             contentDescription = obj.state.kind.name,
-                            tint = MaterialTheme.colorScheme.onSecondary,
+                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
                             modifier = Modifier
                                 .padding(headerSize * ICON_INSET)
                                 .fillMaxSize(),
