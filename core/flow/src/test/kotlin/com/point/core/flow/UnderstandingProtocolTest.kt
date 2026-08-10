@@ -137,6 +137,27 @@ class UnderstandingProtocolTest {
     }
 
     @Test
+    fun `модель назвала неуверенно прочитанное — протокол это доносит (#670)`() {
+        // Охота 2026-08-09: пятая цифра на барабане счётчика читалась спорно, а знание
+        // приходило без единой оговорки. Сомнение модели — часть ответа, а не шум.
+        val parsed = parseFieldCandidates("METER=20842\nAMOUNT=500\nUNSURE=METER")
+
+        assertEquals(setOf(META_ENTITY_METER), parsed.unsure)
+    }
+
+    @Test
+    fun `несколько неуверенных перечисляются через запятую, чужие имена молчат (#670)`() {
+        val parsed = parseFieldCandidates("METER=1\nAMOUNT=2\nUNSURE=METER, AMOUNT, ЧУШЬ")
+
+        assertEquals(setOf(META_ENTITY_METER, META_ENTITY_AMOUNT), parsed.unsure)
+    }
+
+    @Test
+    fun `без строки UNSURE сомнений нет — молчание не означает «возможно» (#670)`() {
+        assertEquals(emptySet<String>(), parseFieldCandidates("METER=20842").unsure)
+    }
+
+    @Test
     fun `multi-value виды названы, одиночные — нет`() {
         assertEquals(true, isMultiValueFact(META_ENTITY_PREFIX + "phone"))
         assertEquals(true, isMultiValueFact(META_ENTITY_PREFIX + "date"))

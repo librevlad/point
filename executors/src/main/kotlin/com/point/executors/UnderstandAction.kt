@@ -333,6 +333,7 @@ class UnderstandRealizer @Inject constructor(
             Findings(
                 metadata = merged +
                     annotations(merged, fields, judgedByLayer = false, blocked = judged.blocked) +
+                    doubts(merged, parsed.unsure) +
                     (META_READING_MODE to ReadingMode.HANDWRITTEN.name),
             ),
         )
@@ -340,6 +341,15 @@ class UnderstandRealizer @Inject constructor(
 
     private suspend fun ask(input: PointObject, prompt: String): String =
         File(llm.run(textOnly(input), prompt).uri.value).readText()
+
+    /**
+     * Сомнение модели становится обычной оговоркой знания (#670): у зрячего чтения нет ни
+     * слоя слов, ни судьи, поэтому подтверждающих улик у значения нет — пустой список улик
+     * и означает «возможно». Значение при этом остаётся значением: сомнение не отменяет факт.
+     */
+    private fun doubts(merged: Map<String, String>, unsure: Set<String>): Map<String, String> =
+        unsure.filter { merged[it]?.isNotBlank() == true }
+            .associate { it + META_EVIDENCE_SUFFIX to "" }
 
     private fun annotations(
         merged: Map<String, String>,
@@ -417,8 +427,16 @@ class UnderstandRealizer @Inject constructor(
                 "GEO (координаты), PLACE (куда ехать: название места дословно), " +
                 "AMOUNT (сумма — ТОЛЬКО цифры, без валюты), RECEIPT (номер квитанции или чека). " +
                 "Добавь строку SUMMARY=<что на снимке, 3-6 слов>. " +
+                // Живой прогон 2026-08-09: SUMMARY приходило по-английски («blue water
+                // meter in dirt») и ложилось подзаголовком объекта — Point говорит с
+                // человеком по-русски, и знание об объекте тоже (#670).
+                "SUMMARY и любые словесные значения пиши по-русски, даже если надпись на " +
+                "снимке на другом языке. " +
                 "Цифры читай ровно так, как видишь: не додумывай и не выравнивай под привычный " +
                 "формат. Если цифра не видна — не пиши строку вовсе. " +
+                // Сомнение — часть ответа, а не повод молчать (#670).
+                "Если какое-то значение разобрал неуверенно, добавь строку UNSURE=<KEY через " +
+                "запятую>. " +
                 "Если разобрать нечего — ответь ровно NONE."
 
         fun retryPrompt(keys: Set<String>, elements: List<LayoutElement>, index: String?): String {

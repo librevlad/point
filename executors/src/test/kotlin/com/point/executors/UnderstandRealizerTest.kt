@@ -582,6 +582,40 @@ class UnderstandRealizerTest {
     }
 
     @Test
+    fun `зрячее чтение просит отвечать на языке человека (#670)`() = runTest {
+        // Живой прогон 2026-08-09: SUMMARY пришло по-английски («blue water meter in dirt»)
+        // и легло подзаголовком объекта. Промпт обязан называть язык ответа.
+        val photo = PointObject(
+            "img", "image/jpeg", ScratchRef("/tmp/meter.jpg"), ObjectState(ObjectKind.IMAGE),
+        )
+
+        realizer("METER=1").perform(photo)
+
+        assertTrue("промпт не называет язык ответа", lastPrompt!!.contains("по-русски"))
+    }
+
+    @Test
+    fun `спорно прочитанная глазами цифра помечена «возможно» (#670)`() = runTest {
+        // Охота 2026-08-09: пятая цифра на барабане счётчика читалась спорно, а знание
+        // приходило без оговорки — наравне с бесспорным.
+        val photo = PointObject(
+            "img", "image/jpeg", ScratchRef("/tmp/meter.jpg"), ObjectState(ObjectKind.IMAGE),
+        )
+
+        val meta = (realizer("METER=20842\nAMOUNT=500\nUNSURE=METER").perform(photo) as ActionResult.Done)
+            .findings!!.metadata
+
+        assertTrue(
+            "спорная цифра обязана нести сомнение",
+            com.point.core.flow.isAssumption(meta, "entity.meter"),
+        )
+        assertFalse(
+            "уверенное значение сомнением не метится",
+            com.point.core.flow.isAssumption(meta, "entity.amount"),
+        )
+    }
+
+    @Test
     fun `зрячее чтение помечает происхождение как модель и режим как рукопись`() = runTest {
         val photo = PointObject(
             "img", "image/jpeg", ScratchRef("/tmp/meter.jpg"), ObjectState(ObjectKind.IMAGE),
