@@ -38,7 +38,10 @@ class ArrivalUnderstandsItselfTest {
     @Test
     fun `прибывший текст исследует себя сам — телефон в фактах без единого клика`() {
         val st = DesktopState(
-            DesktopRegistry(emptySet()),
+            // Автозапуск теперь берёт вопросы из реестра способностей (владелец,
+            // 10.08.2026: «единообразно, а не по одному жёстко зашитому id») —
+            // способность обязана быть объявлена, а не только выполнима.
+            DesktopRegistry(setOf(PcEntitiesCapability())),
             DesktopResolver(setOf(PcEntitiesRealizer(com.point.core.flow.RegexEntityExtractor()))),
             clipboard = { },
         )
@@ -71,7 +74,7 @@ class ArrivalUnderstandsItselfTest {
             }
         }
         val st = DesktopState(
-            DesktopRegistry(emptySet()),
+            DesktopRegistry(setOf(PcEntitiesCapability())),
             object : Resolver {
                 override fun realizerFor(capabilityId: CapabilityId) = counting
             },

@@ -356,19 +356,26 @@ class DesktopState(
      * Прибывший объект сразу продолжает цикл понимания (Конституция §9, §11): дешёвое
      * локальное исследование — без клика и без индикации операции. Облачные исполнители
      * сюда не попадают: автоматизм не пересекает границу устройств.
+     *
+     * Единообразно, а не по одному жёстко зашитому id (владелец, 10.08.2026): любая
+     * Capability компьютера с `investigation = true`, подходящая объекту, подключается
+     * сама — новой способности обогащения на ПК не нужна отдельная правка здесь.
      */
     private fun autoInvestigate(item: InboxItem) {
-        if (item.obj.state.kind != ObjectKind.TEXT) return
-        val question = com.point.core.model.CapabilityId("pc-entities")
-        val asked = com.point.core.flow.investigationStateOf(item.obj.metadata, question)
-        if (asked != com.point.core.flow.InvestigationState.NOT_INVESTIGATED) return
-        scope.launch {
-            val realizer = runCatching { resolver.realizerFor(question, item.obj.state) }.getOrNull()
-                ?: return@launch
-            if (realizer.meta.kind == com.point.core.flow.RealizerKind.CLOUD) return@launch
-            val result = runCatching { realizer.perform(item.obj, null) }.getOrNull()
-            val findings = (result as? ActionResult.Done)?.findings ?: return@launch
-            if (!findings.isEmpty) landFindings(item, findings)
+        val questions = registry.all()
+            .filter { it.meta.investigation && it.accepts(item.obj.state) }
+            .map { it.id }
+        questions.forEach { question ->
+            val asked = com.point.core.flow.investigationStateOf(item.obj.metadata, question)
+            if (asked != com.point.core.flow.InvestigationState.NOT_INVESTIGATED) return@forEach
+            scope.launch {
+                val realizer = runCatching { resolver.realizerFor(question, item.obj.state) }.getOrNull()
+                    ?: return@launch
+                if (realizer.meta.kind == com.point.core.flow.RealizerKind.CLOUD) return@launch
+                val result = runCatching { realizer.perform(item.obj, null) }.getOrNull()
+                val findings = (result as? ActionResult.Done)?.findings ?: return@launch
+                if (!findings.isEmpty) landFindings(item, findings)
+            }
         }
     }
 
