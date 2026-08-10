@@ -89,7 +89,7 @@ private fun ActionRow(
     val ai = bubble.tier == BubbleTier.AI
     PortalRow(
         title = if (pinned) "★ ${bubble.title}" else bubble.title,
-        subtitle = yieldLabel(bubble.yields, bubble.unusableReason),
+        subtitle = yieldLabel(bubble.yields, bubble.unusableReason, bubble.capabilityId),
         subtitleMaxLines = 1,
         onClick = onClick,
         onLongClick = onLongClick,
