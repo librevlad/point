@@ -117,31 +117,15 @@ class DesktopState(
         }
         if (quick != null) return quick
 
-        scope.launch {
-            val late = runCatching { work.await() }.getOrNull()
-            if (late is ActionResult.Success) {
-                runCatching {
-                    outbox?.add(
-                        com.point.core.model.PointObject(
-                            id = java.util.UUID.randomUUID().toString(),
-                            mime = late.result.mime,
-                            uri = late.result.uri,
-                            state = com.point.core.model.ObjectState(late.result.type),
-                            metadata = late.result.metadata,
-                        ),
-                    )
-                }.onFailure {
-                    val why = "Результат не лёг в очередь для телефона — проверьте, что на диске есть место"
-                    _message.value = why
-                    note(item, id, titleOf(id, item) + " · результат в очередь", ActionResult.Failure(why, recoverable = true))
-                }
-            }
-        }
+        // Работа не обрывается бюджетом ответа и доводится до конца: готовое ложится
+        // объектом на самом компьютере (см. Success в `perform`). В очередь к телефону
+        // оно само не уезжает — «только по кнопке „На телефон“» (решение владельца, #598):
+        // телефон забирает лишь то, что человек отправил явно.
         return ActionResult.Done(STILL_WORKING)
     }
 
     companion object {
-        const val STILL_WORKING = "Компьютер ещё работает — готовое появится в списке «с компьютера»"
+        const val STILL_WORKING = "Компьютер ещё работает — готовое останется у него, заберите кнопкой «На телефон»"
 
         /** Имена вопросов, заданных другой поверхностью: её capability здесь не зарегистрированы. */
         private val PHONE_QUESTIONS = mapOf(

@@ -21,9 +21,10 @@ import org.junit.rules.TemporaryFolder
 import java.io.File
 
 /**
- * Бюджет ответа телефону — не таймаут работы (Product Constitution PC4): долгое
- * действие не обрывается, телефону сразу уходит честное «ещё работаю», а готовый
- * результат уезжает существующей очередью ПК→телефон вместе со знанием.
+ * Бюджет ответа телефону — не таймаут работы: долгое действие не обрывается, телефону
+ * сразу уходит честное «ещё работаю», а готовое остаётся объектом на самом компьютере.
+ * Само в очередь к телефону оно не уезжает — «только по кнопке „На телефон“»
+ * (решение владельца, #598).
  */
 class SlowPcActionTest {
 
@@ -105,7 +106,7 @@ class SlowPcActionTest {
     }
 
     @Test
-    fun `долгое действие не обрывается — телефону честный ответ, результат в очереди со знанием`() {
+    fun `долгое действие не обрывается, но само в очередь к телефону не уезжает (#598)`() {
         val outbox = Outbox(temp.newFolder("out-slow"))
         val slow = Slow("read", temp.newFolder("r2"), delayMs = 400)
         val (state, item) = harness(slow, outbox)
@@ -114,15 +115,14 @@ class SlowPcActionTest {
 
         assertEquals(DesktopState.STILL_WORKING, (result as ActionResult.Done).message)
 
-        waitUntil { slow.finished && outbox.entries().isNotEmpty() }
+        waitUntil { slow.finished }
+        Thread.sleep(100)
         assertFalse("работа не смеет отменяться бюджетом ответа", slow.cancelled)
-        val entry = outbox.entries().single()
-        assertEquals("Текст со снимка", entry.meta["name"])
-        assertEquals("знание едет вместе с результатом", "+380671234567", entry.meta["entity.phone"])
+        assertTrue("телефон забирает только отправленное человеком", outbox.entries().isEmpty())
     }
 
     @Test
-    fun `долгий провал не кладёт ничего в очередь`() {
+    fun `долгий провал тоже ничего не кладёт в очередь`() {
         val outbox = Outbox(temp.newFolder("out-fail"))
         val slow = Slow("read", temp.newFolder("r3"), delayMs = 200, fail = true)
         val (state, item) = harness(slow, outbox)
@@ -133,20 +133,6 @@ class SlowPcActionTest {
         waitUntil { slow.finished }
         Thread.sleep(100)
         assertTrue(outbox.entries().isEmpty())
-    }
-
-    @Test
-    fun `очередь не приняла результат — компьютер говорит об этом, а не молчит`() {
-        val broken = Outbox(temp.newFile("не-папка"))
-        val slow = Slow("read", temp.newFolder("r4"), delayMs = 200)
-        val (state, item) = harness(slow, broken)
-
-        state.runRemoteActionNow("read", item, 50)
-
-        waitUntil { slow.finished }
-        waitUntil {
-            state.message.value == "Результат не лёг в очередь для телефона — проверьте, что на диске есть место"
-        }
     }
 }
 
