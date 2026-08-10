@@ -22,8 +22,10 @@ class ActionsSayTheirPriceTest {
     private val image = ObjectState(ObjectKind.IMAGE)
     private val text = ObjectState(ObjectKind.TEXT)
 
+    // Подписи может не быть вовсе (#629) — для проверок «сказано / не сказано» это то же
+    // самое, что не сказать ничего.
     private fun said(cap: Capability, state: ObjectState) =
-        yieldLabel(cap.yields(state), cap.intents(state).first())
+        yieldLabel(cap.yields(state), cap.intents(state).first()).orEmpty()
 
     @Test
     fun `два скана обещают разное, и по обещанию видно какой зачем`() {

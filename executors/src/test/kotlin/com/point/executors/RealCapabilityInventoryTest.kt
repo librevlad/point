@@ -85,7 +85,7 @@ class RealCapabilityInventoryTest {
     fun `таблица — что каждая способность принимает и что возвращает`() {
         val lines = inventory.map { e ->
             val takes = e.accepts.joinToString("·") { it.name }.ifEmpty { "—" }
-            val gives = e.yields.joinToString(" / ") { yieldLabel(it, e.intents.first()) }
+            val gives = e.yields.joinToString(" / ") { yieldLabel(it, e.intents.first()).orEmpty() }
             val marks = buildList {
                 if (e.network) add("сеть")
                 if (e.paid) add("платно")
@@ -164,12 +164,15 @@ class RealCapabilityInventoryTest {
     }
 
     @Test
-    fun `каждая способность говорит, что вернёт, и говорит это словами`() {
+    fun `каждая способность объявляет свой выход, а подпись — только когда ей есть что сказать`() {
         inventory.forEach { e ->
             assertTrue("${e.id.value} не сказала о выходе ничего", e.yields.isNotEmpty())
             e.yields.forEach { y ->
+
+                // Подписи может не быть вовсе (#629): у «Сохранить» и «Поделиться» имя уже
+                // сказало всё. А вот пустая строка — не подпись, а дырка на экране.
                 val said = yieldLabel(y, e.intents.first())
-                assertTrue("${e.id.value} промолчала о выходе", said.isNotBlank())
+                assertTrue("${e.id.value} оставила пустую подпись вместо её отсутствия", said == null || said.isNotBlank())
             }
         }
     }
