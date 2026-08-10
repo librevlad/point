@@ -159,7 +159,7 @@ class FallbackLlmClientTest {
             chain(listOf(unconfigured(), offline())).run(obj, "пойми")
         }.exceptionOrNull()
 
-        assertEquals("AI недоступен — нет подключения к интернету", error?.message)
+        assertEquals(FallbackLlmClient.NO_NETWORK_MESSAGE, error?.message)
     }
 
     @Test
@@ -183,7 +183,7 @@ class FallbackLlmClientTest {
             chain(spies, network = NetworkAvailability { false }).run(obj, "пойми")
         }.exceptionOrNull()
 
-        assertEquals("AI недоступен — нет подключения к интернету", error?.message)
+        assertEquals(FallbackLlmClient.NO_NETWORK_MESSAGE, error?.message)
         assertTrue("офлайн ни один провайдер не должен получить запрос", calls.isEmpty())
     }
 
