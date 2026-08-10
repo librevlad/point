@@ -72,7 +72,12 @@ fun CompactApp(
     onObjectOpened: () -> Unit,
     onFilesDropped: (List<File>) -> Unit = {},
     onTextDropped: (String) -> Unit = {},
+    onImageDropped: (java.awt.image.BufferedImage) -> Unit = {},
     onClipboardTaken: (String) -> Unit = onTextDropped,
+
+    /** Человек попросил окно не прятаться: пока просьба в силе, флайаут стоит. */
+    keepOpen: StateFlow<Boolean> = kotlinx.coroutines.flow.MutableStateFlow(false),
+    onKeepOpen: (Boolean) -> Unit = {},
 
     onGrabScreen: (() -> File?)? = null,
 
@@ -94,17 +99,24 @@ fun CompactApp(
     var openedId by remember { mutableStateOf<String?>(null) }
     var invited by remember { mutableStateOf<String?>(null) }
 
+    // Принесли пачку файлов: они все стали объектами, но выбирает из них человек.
+    var broughtBatch by remember { mutableStateOf(false) }
+
     // Прибывшее из списка раскрывается само; человека внутри другого объекта
     // не выдёргивают — ему предлагают (аудит компакта, раунд 2).
     var lastTop by remember { mutableStateOf(items.firstOrNull()?.obj?.id) }
     LaunchedEffect(items.firstOrNull()?.obj?.id) {
         val top = items.firstOrNull()?.obj?.id
         if (top != null && top != lastTop) {
-            when (com.point.desktop.arrivalReaction(openedId)) {
-                com.point.desktop.ArrivalReaction.OPEN -> openedId = top
-                com.point.desktop.ArrivalReaction.INVITE -> invited = top
+            when {
+                broughtBatch -> openedId = null
+                else -> when (com.point.desktop.arrivalReaction(openedId)) {
+                    com.point.desktop.ArrivalReaction.OPEN -> openedId = top
+                    com.point.desktop.ArrivalReaction.INVITE -> invited = top
+                }
             }
         }
+        broughtBatch = false
         lastTop = top
     }
 
@@ -135,23 +147,31 @@ fun CompactApp(
         if (file == null) state.say("Снять экран не вышло") else onFilesDropped(listOf(file))
     }
 
+    // Пока над окном тянут файл, флайаут не исчезает из-под руки (#546).
+    var dragging by remember { mutableStateOf(false) }
+
     val dropTarget = remember {
         object : DragAndDropTarget {
-            override fun onDrop(event: DragAndDropEvent): Boolean = runCatching {
-                val t = event.awtTransferable
-                when {
-                    t.isDataFlavorSupported(DataFlavor.javaFileListFlavor) -> {
-                        @Suppress("UNCHECKED_CAST")
-                        onFilesDropped(t.getTransferData(DataFlavor.javaFileListFlavor) as List<File>)
-                        true
-                    }
-                    t.isDataFlavorSupported(DataFlavor.stringFlavor) -> {
-                        onTextDropped(t.getTransferData(DataFlavor.stringFlavor) as String)
-                        true
-                    }
-                    else -> false
-                }
-            }.getOrDefault(false)
+            override fun onStarted(event: DragAndDropEvent) { dragging = true }
+
+            override fun onEnded(event: DragAndDropEvent) { dragging = false }
+
+            override fun onDrop(event: DragAndDropEvent): Boolean {
+                dragging = false
+                val brought = runCatching { com.point.desktop.readDropped(event.awtTransferable) }
+                    .getOrElse { com.point.desktop.Dropped.NotTaken(com.point.desktop.DROP_UNREADABLE) }
+
+                // Пачку Point не открывает за человека — она ложится списком.
+                broughtBatch = com.point.desktop.droppedAsBatch(brought)
+                if (broughtBatch) openedId = null
+                return com.point.desktop.takeDropped(
+                    brought,
+                    files = onFilesDropped,
+                    text = onTextDropped,
+                    picture = onImageDropped,
+                    say = state::say,
+                )
+            }
         }
     }
 
@@ -159,12 +179,23 @@ fun CompactApp(
     LaunchedEffect(Unit) { hotkeys.requestFocus() }
 
     // Флайаут: потерял фокус — спрятался (alwaysOnTop честен, только пока окно нужно).
+    // Но не посреди жеста: перетаскивание и просьба «не прятать» держат окно на месте.
     val windowInfo = androidx.compose.ui.platform.LocalWindowInfo.current
     val asking by state.cloudAsk.collectAsState()
-    LaunchedEffect(windowInfo.isWindowFocused) {
-        if (!windowInfo.isWindowFocused && asking == null) {
+    val kept by keepOpen.collectAsState()
+    LaunchedEffect(windowInfo.isWindowFocused, dragging, kept) {
+        if (com.point.desktop.flyoutHides(windowInfo.isWindowFocused, dragging, kept, asking != null)) {
             kotlinx.coroutines.delay(250)
-            if (!windowInfo.isWindowFocused && state.cloudAsk.value == null) onHide()
+            if (
+                com.point.desktop.flyoutHides(
+                    focused = windowInfo.isWindowFocused,
+                    dragging = dragging,
+                    keptOpen = kept,
+                    asking = state.cloudAsk.value != null,
+                )
+            ) {
+                onHide()
+            }
         }
     }
     Surface(
@@ -235,6 +266,18 @@ fun CompactApp(
                     onGrabScreen = grabScreen,
                     onSettings = { showSettings = true },
                     onHide = onHide,
+                    keptOpen = kept,
+                    onKeepOpen = {
+                        val wanted = !kept
+                        onKeepOpen(wanted)
+                        state.say(
+                            if (wanted) {
+                                "Окно останется открытым — можно уйти за файлом и принести его мышью"
+                            } else {
+                                "Окно снова прячется, когда вы уходите в другое"
+                            },
+                        )
+                    },
                 )
             }
 
@@ -523,6 +566,8 @@ internal fun CompactList(
     onSettings: () -> Unit,
     onHide: () -> Unit,
     modifier: Modifier = Modifier,
+    keptOpen: Boolean = false,
+    onKeepOpen: () -> Unit = {},
 ) = Column(modifier) {
     val journal by state.journal.collectAsState()
     val lastContact by state.lastContact.collectAsState()
@@ -610,6 +655,13 @@ internal fun CompactList(
         Spacer(Modifier.height(4.dp))
         Station("Взять то, что в буфере", PointColors.cyan) { onTakeClipboard() }
         Station("Снять экран целиком", PointColors.violet) { onGrabScreen() }
+
+        // Дверь для мыши: окно у трея уходит по потере фокуса, а за файлом человек
+        // уходит в проводник — принести файл нечем, пока окно не попросили остаться (#546).
+        Station(
+            if (keptOpen) "Снова прятать окно, когда ухожу" else "Не прятать окно — принесу файл",
+            PointColors.cyan,
+        ) { onKeepOpen() }
     }
 }
 

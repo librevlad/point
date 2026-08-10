@@ -37,6 +37,15 @@ fun peekBounds(work: ScreenArea): WindowBounds = WindowBounds(
     height = PEEK_HEIGHT,
 )
 
+/**
+ * Флайаут уходит, когда человек ушёл, — но не из-под руки. Пока над окном тянут
+ * файл, пока задан вопрос согласия или пока человек сам попросил окно остаться,
+ * оно стоит на месте: иначе принести объект мышью нечем — окно исчезает раньше,
+ * чем человек добрался до файла (#546).
+ */
+fun flyoutHides(focused: Boolean, dragging: Boolean, keptOpen: Boolean, asking: Boolean): Boolean =
+    !focused && !dragging && !keptOpen && !asking
+
 const val PEEK_LIFETIME_MS = 8_000L
 
 /** Реакция на новое прибытие: из списка — открыть сразу, из чужой сцены — пригласить. */
