@@ -14,6 +14,8 @@ class LocationSource @Inject constructor() : ObjectSource {
 
     override val id = "location"
     override val label = "Место"
+
+    override val what = "превратить в объект то, где вы сейчас"
     override val icon = "map"
 
     override val permissions = listOf(

@@ -256,6 +256,9 @@ internal fun SourcePickerScreen(
                 sources.forEachIndexed { index, source ->
                     PortalRow(
                         title = source.label,
+
+                        // Зачем это Point — сказано до системного окна, а не после (#568).
+                        subtitle = source.what,
                         onClick = { onPick(source) },
                         icon = bubbleIcon(source.icon),
                         accent = bubbleColor(source.icon),

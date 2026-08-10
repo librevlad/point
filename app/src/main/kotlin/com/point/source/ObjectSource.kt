@@ -9,6 +9,15 @@ interface ObjectSource {
 
     val label: String
 
+    /**
+     * Что человек получит, если сюда войти (#568).
+     *
+     * Разрешения просились молча: тап по «Месту» сразу поднимал системное окно, и первый
+     * разговор о доверии шёл от имени Android, а не Point. Слова — про пользу, а не про само
+     * разрешение: «записать голос и расшифровать», а не «нужен доступ к микрофону».
+     */
+    val what: String? get() = null
+
     val icon: String get() = "open-in"
 
     fun isAvailable(context: Context): Boolean
