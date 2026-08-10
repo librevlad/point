@@ -149,7 +149,7 @@ class ExternalEyeOcrTest {
 
         assertFalse(realizer.isAvailable())
         val result = realizer.perform(image)
-        assertTrue((result as ActionResult.Failure).reason.contains("Только на телефоне"))
+        assertTrue((result as ActionResult.Failure).reason.contains("настройк"))
     }
 
     @Test
