@@ -452,6 +452,14 @@ class FlowViewModel @Inject constructor(
         _fromPcCount.value = 0
     }
 
+    /** Убрать одну запись (#543): список после этого перечитывается с диска, а не правится на глаз. */
+    fun removeFromHistory(entryId: String) {
+        viewModelScope.launch {
+            runCatching { history.remove(entryId) }
+            _recent.value = runCatching { history.recent() }.getOrDefault(emptyList())
+        }
+    }
+
     fun clearHistory() {
         viewModelScope.launch {
             runCatching { history.clearAll() }

@@ -72,6 +72,7 @@ class HomeActivity : ComponentActivity() {
                             onNewObject = ::newObject,
                             onExample = ::example,
                             sourceLabels = sourceLabels,
+                            onRemove = { viewModel.removeFromHistory(it.id) },
                             onClear = viewModel::clearHistory,
                             crashReport = crash,
                             onSendCrash = ::shareCrashReport,
