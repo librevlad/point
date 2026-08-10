@@ -1,6 +1,7 @@
 package com.point.data
 
 import com.point.core.flow.CloudPrivacySettings
+import com.point.core.flow.NetworkAvailability
 import com.point.core.flow.PrivacyLevel
 import com.point.core.flow.ReaderPrivacy
 import com.point.core.flow.ReaderPromise
@@ -36,8 +37,11 @@ class DefaultExternalEyeTest {
         override suspend fun read(obj: PointObject) = answer()
     }
 
-    private fun chain(vararg readers: CloudTextReader, at: PrivacyLevel = PrivacyLevel.FREE_FIRST) =
-        DefaultExternalEye(readers.toList(), level(at))
+    private fun chain(
+        vararg readers: CloudTextReader,
+        at: PrivacyLevel = PrivacyLevel.FREE_FIRST,
+        network: NetworkAvailability = NetworkAvailability { true },
+    ) = DefaultExternalEye(readers.toList(), level(at), network)
 
     @Test
     fun `первый прочитавший выигрывает`() = runTest {
@@ -198,11 +202,29 @@ class DefaultExternalEyeTest {
             override fun level() = current
             override suspend fun setLevel(level: PrivacyLevel) { current = level }
         }
-        val chain = DefaultExternalEye(listOf(eye("учащийся", learns) { "прочитано" }), settings)
+        val chain = DefaultExternalEye(listOf(eye("учащийся", learns) { "прочитано" }), settings, NetworkAvailability { true })
 
         assertTrue(chain.available())
         current = PrivacyLevel.DEVICE_ONLY
 
         assertFalse(chain.available())
+    }
+
+    @Test
+    fun `на телефоне нет сети — ни один читатель не получает запрос`() = runTest {
+        // Решение владельца (#690, #691), тот же гейт, что и в FallbackLlmClient:
+        // офлайн вся очередь читателей одинаково молчит — ждать каждого по очереди
+        // незачем, если телефон уже знает, что сети нет.
+        val calls = mutableListOf<String>()
+
+        val error = runCatching {
+            chain(
+                eye("primary") { calls += "primary"; "текст" },
+                network = NetworkAvailability { false },
+            ).read(pageObject)
+        }.exceptionOrNull()
+
+        assertTrue(error?.message!!, error.message!!.contains("нет подключения к интернету"))
+        assertTrue("офлайн ни один читатель не должен получить запрос", calls.isEmpty())
     }
 }
