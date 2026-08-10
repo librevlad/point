@@ -38,7 +38,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Red
 from pydantic import BaseModel, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from . import db, google as google_mod, ids, mailbox, pages, store
+from . import db, google as google_mod, ids, mailbox, pages, store, upload_page
 from .config import Settings, settings_from_env
 
 DEVICE_KINDS = ("PHONE", "PC")
@@ -93,21 +93,42 @@ def fail(status: int, code: str, message: str, headers: dict | None = None):
 
 
 def _upload_form(box_id: str) -> str:
-    """Страница для чужого человека: одно поле и одна кнопка, без слов о Point и его устройстве."""
-    return (
-        "<h1>Отправить файл</h1>"
-        "<p>Выберите файл — он придёт человеку, который дал вам эту ссылку.</p>"
-        "<form method=post enctype=multipart/form-data>"
-        "<input type=file name=file required>"
-        "<button type=submit>Отправить</button>"
-        "</form>"
-    )
+    """Страница для чужого человека: одно действие и ни одного слова о Point.
+
+    Разметка, стиль и скрипт живут в `upload_page` — там же объяснено, почему портал
+    здесь работает индикатором отправки.
+    """
+    return upload_page.upload_body()
+
+
+def _require_form_parsing() -> None:
+    """Упасть при старте, а не по одной загрузке за раз.
+
+    Живой отказ 2026-08-10: `python-multipart` был объявлен в requirements, но не установлен на
+    сервере — и приём файла отвечал 500 на КАЖДУЮ попытку, пока сервер выглядел здоровым:
+    `/health` отдавал 200, журнал молчал по существу, а человек видел, что файл «не уходит».
+    Половина рабочего сервера хуже честно упавшего: упавший чинят сразу.
+    """
+    try:
+        # Пакет переехал с `multipart` на `python_multipart`; Starlette умеет оба,
+        # поэтому и проверка спрашивает оба, а не цементирует одно имя.
+        try:
+            import python_multipart  # noqa: F401
+        except ModuleNotFoundError:
+            import multipart  # noqa: F401
+    except ModuleNotFoundError as e:  # pragma: no cover - проверяется тестом через подмену
+        raise RuntimeError(
+            "Не установлен python-multipart — без него приём файла отвечает 500 на каждую "
+            "загрузку. Выполните: pip install -r requirements.txt"
+        ) from e
+
 
 def create_app(
     settings: Settings | None = None,
     google: google_mod.GoogleIdentity | None = None,
     now: Callable[[], int] | None = None,
 ) -> FastAPI:
+    _require_form_parsing()
     settings = settings or settings_from_env()
     if google is None:
         google = (
@@ -556,7 +577,9 @@ def create_app(
         """Страница, на которой ЧУЖОЙ человек кладёт файл. Пропуска у него нет."""
         if not mailbox.inbox_find(_blobs_root(d), box_id):
             return HTMLResponse(pages.link_gone_page(), status_code=404)
-        return HTMLResponse(pages.page("Отправить файл", _upload_form(box_id)))
+        return HTMLResponse(
+            pages.page("Отправить файл", _upload_form(box_id), head=upload_page.UPLOAD_HEAD)
+        )
 
     @app.post("/u/{box_id}")
     async def inbox_accept(box_id: str, request: Request, d: Deps = Depends(deps)):
