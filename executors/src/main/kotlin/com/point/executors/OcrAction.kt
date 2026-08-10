@@ -1,6 +1,7 @@
 package com.point.executors
 
 import com.point.core.flow.AI_CHAIN_PRIVACY
+import com.point.core.flow.AtomRecognizer
 import com.point.core.flow.Capability
 import com.point.core.flow.capabilities.OcrCapability
 import com.point.core.flow.CapabilityMeta
@@ -18,7 +19,7 @@ import com.point.core.flow.allowedAt
 import com.point.core.flow.META_READING_DOUBT
 import com.point.core.flow.degeneratedReading
 import com.point.core.flow.readingDoubts
-import com.point.core.flow.looksLikeOcrGarbage
+import com.point.core.flow.poorlyRead
 import com.point.core.flow.Realizer
 import com.point.core.flow.RealizerKind
 import com.point.core.flow.RealizerMeta
@@ -67,10 +68,14 @@ class DeviceOcrRealizer @Inject constructor(
             }
 
             reportStage("Читаю текст на устройстве")
-            val text = runCatching { recognizer.recognize(input) }.getOrDefault("")
-            if (text.isBlank() || looksLikeOcrGarbage(text)) {
 
-                return@withContext ActionResult.Failure("На устройстве текст не распознан", recoverable = true)
+            // Сначала спрашиваем сам движок: он отдаёт уверенность по каждому слову.
+            // Где уверенности нет, судить остаётся по составу ответа (#694).
+            val layer = (recognizer as? AtomRecognizer)?.let { runCatching { it.read(input) }.getOrNull() }
+            val text = layer?.text ?: runCatching { recognizer.recognize(input) }.getOrDefault("")
+            if (poorlyRead(text, layer)) {
+
+                return@withContext ActionResult.Failure("Не разобрал текст на этом снимке", recoverable = true)
             }
             runCatching {
                 val ref = store.newScratchFile("txt")

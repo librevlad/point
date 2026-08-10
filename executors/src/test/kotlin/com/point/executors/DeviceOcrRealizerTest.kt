@@ -1,5 +1,9 @@
 package com.point.executors
 
+import com.point.core.flow.Atom
+import com.point.core.flow.AtomLayer
+import com.point.core.flow.AtomRecognizer
+import com.point.core.flow.Box
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.TextRecognizer
 import com.point.core.model.ActionResult
@@ -33,6 +37,12 @@ class DeviceOcrRealizerTest {
 
     private fun throwingRecognizer() = object : TextRecognizer {
         override suspend fun recognize(obj: PointObject): String = error("engine init failed")
+    }
+
+    private fun engine(vararg words: Pair<String, Float>) = object : AtomRecognizer {
+        override suspend fun read(obj: PointObject) = AtomLayer(
+            words.mapIndexed { i, (t, c) -> Atom("w$i", t, Box(0f, i * 20f, 100f, i * 20f + 18f), c) },
+        )
     }
 
     private val image = PointObject("id", "image/png", ScratchRef("/tmp/x.png"), ObjectState(ObjectKind.IMAGE))
@@ -99,6 +109,45 @@ class DeviceOcrRealizerTest {
 
         val out = (result as ActionResult.Success).result
         assertTrue(com.point.core.flow.META_READ_UPSCALE !in out.metadata)
+    }
+
+    @Test
+    fun `движок сам признался, что угадывал — объект не рождается`() = runTest {
+        val guessed = engine(
+            "Накладна" to 0.3f, "59000123456789" to 0.25f, "від" to 0.28f, "12.05.2026" to 0.31f,
+            "отримувач" to 0.27f, "Іваненко" to 0.32f, "Іван" to 0.29f, "Іванович" to 0.3f,
+        )
+
+        val result = DeviceOcrRealizer(store, guessed).perform(image)
+
+        assertTrue("угаданное чтение не текст снимка- " + result, result is ActionResult.Failure)
+        assertTrue((result as ActionResult.Failure).recoverable)
+    }
+
+    @Test
+    fun `уверенно прочитанная страница объектом становится`() = runTest {
+        val sure = engine(
+            "Накладна" to 0.93f, "59000123456789" to 0.91f, "від" to 0.88f, "12.05.2026" to 0.9f,
+            "отримувач" to 0.87f, "Іваненко" to 0.92f, "Іван" to 0.9f, "Іванович" to 0.89f,
+        )
+
+        assertTrue(DeviceOcrRealizer(store, sure).perform(image) is ActionResult.Success)
+    }
+
+    @Test
+    fun `короткий мусор не становится текстом снимка`() = runTest {
+        val result = DeviceOcrRealizer(store, recognizer(". aa - 11 ВЕНЕ")).perform(image)
+
+        assertTrue("обрывки без единого значения- " + result, result is ActionResult.Failure)
+        assertTrue((result as ActionResult.Failure).recoverable)
+    }
+
+    @Test
+    fun `короткое настоящее чтение выживает`() = runTest {
+        val result = DeviceOcrRealizer(store, recognizer("2500 грн")).perform(image)
+
+        assertTrue("сумма — это чтение- " + result, result is ActionResult.Success)
+        assertEquals("2500 грн", File((result as ActionResult.Success).result.uri.value).readText())
     }
 
     @Test
