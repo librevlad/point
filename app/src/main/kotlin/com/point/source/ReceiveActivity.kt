@@ -116,11 +116,17 @@ class ReceiveActivity : ComponentActivity() {
                     delay(FAIL_PAUSE_MS)
                 }
                 is DropWait.Arrived -> {
+
+                    // Файл на диске, но объекта из него ещё нет: подтверждение приёма уходит
+                    // позже, у того, кто объект создаст (`ReceiveFileSource.read`). Пока не
+                    // создан — файл обязан остаться на сервере: прислал его чужой человек.
                     setResult(
                         RESULT_OK,
                         Intent()
                             .putExtra(EXTRA_PATH, outcome.arrival.path)
-                            .putExtra(EXTRA_MIME, outcome.arrival.mime),
+                            .putExtra(EXTRA_MIME, outcome.arrival.mime)
+                            .putExtra(EXTRA_BOX, opened.id)
+                            .putExtra(EXTRA_FILE_ID, outcome.arrival.fileId),
                     )
                     finish()
                     return
@@ -148,6 +154,8 @@ class ReceiveActivity : ComponentActivity() {
     companion object {
         const val EXTRA_PATH = "com.point.receive.PATH"
         const val EXTRA_MIME = "com.point.receive.MIME"
+        const val EXTRA_BOX = "com.point.receive.BOX"
+        const val EXTRA_FILE_ID = "com.point.receive.FILE_ID"
         private const val RETRY_PAUSE_MS = 1_000L
 
         private const val FAIL_PAUSE_MS = 3_000L

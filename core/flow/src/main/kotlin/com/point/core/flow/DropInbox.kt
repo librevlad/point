@@ -5,6 +5,15 @@ interface DropInbox {
     suspend fun open(): DropInboxBox?
 
     suspend fun await(box: DropInboxBox, target: (name: String) -> String): DropWait
+
+    /**
+     * «Файл дошёл» — сервер отдаёт его из ящика только после этого (#598-соседнее).
+     *
+     * Отдельный шаг, а не часть `await`: подтверждение стирает файл на сервере навсегда, и
+     * посылал его чужой человек — прислать заново он не сможет. Пока объект не создан у нас,
+     * подтверждать нечего: лучше получить тот же файл дважды, чем не получить ни разу.
+     */
+    suspend fun ack(box: DropInboxBox, fileId: String)
 }
 
 sealed interface DropWait {
@@ -24,7 +33,7 @@ fun receiveWaitStatus(failures: Int): String = when {
 
 data class DropInboxBox(val id: String, val link: String)
 
-data class DropArrival(val path: String, val name: String, val mime: String)
+data class DropArrival(val path: String, val name: String, val mime: String, val fileId: String = "")
 
 fun dropInboxId(random: ByteArray): String =
     java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(random)
