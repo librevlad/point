@@ -34,16 +34,30 @@ fun derivedYield(capability: Capability, state: ObjectState): ActionYield {
  * Само обещание (`ActionYield`) при этом никуда не девается: на нём держится `yieldSurprise`
  * — честное «вышло другое». Убрана надпись на экране, а не знание о том, что действие обещает.
  */
-fun yieldLabel(yields: ActionYield, unusableReason: String? = null): String? {
+fun yieldLabel(
+    yields: ActionYield,
+    unusableReason: String? = null,
+
+    /** Чьё это действие: обещание названо руками и принадлежит одному из них, а не типу. */
+    capability: com.point.core.model.CapabilityId? = null,
+): String? {
     if (unusableReason != null) return unusableReason
     return when (yields) {
         is ActionYield.New -> yields.noun
 
-        ActionYield.Same -> "найдёт суть, суммы, даты и контакты"
+        // Обещание «Понять» (#580). «Исправить ошибки» обещает то же самое типом результата,
+        // но делает другую работу — и на найденном человеке сулило «суммы и даты», которых
+        // у человека не бывает (#771, живая охота 11.08.2026).
+        ActionYield.Same ->
+            UNDERSTAND_NOTE.takeIf { capability == null || capability.value == UNDERSTAND_ID }
 
         ActionYield.Unknown, ActionYield.Copied, ActionYield.None -> null
     }
 }
+
+private const val UNDERSTAND_NOTE = "найдёт суть, суммы, даты и контакты"
+
+private const val UNDERSTAND_ID = "understand"
 
 const val KEY_NOTE: String = "нужен ключ"
 
