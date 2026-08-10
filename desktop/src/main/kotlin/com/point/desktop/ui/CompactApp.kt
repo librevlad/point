@@ -181,17 +181,19 @@ fun CompactApp(
     // Флайаут: потерял фокус — спрятался (alwaysOnTop честен, только пока окно нужно).
     // Но не посреди жеста: перетаскивание и просьба «не прятать» держат окно на месте.
     val windowInfo = androidx.compose.ui.platform.LocalWindowInfo.current
-    val asking by state.cloudAsk.collectAsState()
+    val cloudAsking by state.cloudAsk.collectAsState()
+    val phoneAsking by state.phoneAsk.collectAsState()
+    val asking = cloudAsking != null || phoneAsking != null
     val kept by keepOpen.collectAsState()
-    LaunchedEffect(windowInfo.isWindowFocused, dragging, kept) {
-        if (com.point.desktop.flyoutHides(windowInfo.isWindowFocused, dragging, kept, asking != null)) {
+    LaunchedEffect(windowInfo.isWindowFocused, dragging, kept, asking) {
+        if (com.point.desktop.flyoutHides(windowInfo.isWindowFocused, dragging, kept, asking)) {
             kotlinx.coroutines.delay(250)
             if (
                 com.point.desktop.flyoutHides(
                     focused = windowInfo.isWindowFocused,
                     dragging = dragging,
                     keptOpen = kept,
-                    asking = state.cloudAsk.value != null,
+                    asking = state.cloudAsk.value != null || state.phoneAsk.value != null,
                 )
             ) {
                 onHide()
@@ -309,6 +311,19 @@ fun CompactApp(
             text = { Text(ask.destination) },
             confirmButton = { TextButton(onClick = { state.approveCloud() }) { Text(ask.confirm) } },
             dismissButton = { TextButton(onClick = { state.declineCloud() }) { Text("Не сейчас") } },
+        )
+    }
+
+    // Молчащий телефон — выбор человека, а не наш (#611, срез 5): исполнитель, который
+    // ответит через час, не может быть выбран за спиной.
+    val phoneAsk by state.phoneAsk.collectAsState()
+    phoneAsk?.let { ask ->
+        AlertDialog(
+            onDismissRequest = { state.declinePhone() },
+            title = { Text(ask.title) },
+            text = { Text(ask.what) },
+            confirmButton = { TextButton(onClick = { state.approvePhone() }) { Text("Подождать телефон") } },
+            dismissButton = { TextButton(onClick = { state.declinePhone() }) { Text("Не сейчас") } },
         )
     }
 }
