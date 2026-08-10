@@ -61,6 +61,7 @@ class RemotePcRealizer(
     private val transport: PcTransport,
 
     private val store: com.point.core.flow.ObjectStore? = null,
+    private val classifier: com.point.core.flow.ObjectClassifier? = null,
 ) : Realizer {
     override val capabilityId = RemotePcCapability.idFor(action)
 
@@ -78,12 +79,19 @@ class RemotePcRealizer(
         val place = store ?: return null
         return runCatching {
             val ref = place.newScratchFile(returned.name.substringAfterLast('.', "bin"))
-            java.io.File(ref.value).writeBytes(returned.bytes)
+            val bytes = returned.bytes
+            java.io.File(ref.value).writeBytes(bytes)
+
+            // Результат с компьютера приезжал объектом вида UNKNOWN — телефон рисовал
+            // «Объект» со знаком вопроса вместо «Перевод · Текст», хотя вид известен
+            // по mime и байтам не хуже, чем у любого другого объекта (#681).
+            val state = classifier?.classify(returned.mime, bytes.size.toLong(), returned.name, bytes.take(64).toByteArray())
+                ?: com.point.core.model.ObjectState(com.point.core.model.ObjectKind.UNKNOWN)
             val produced = PointObject(
                 id = resultId(input.id, returned.name),
                 mime = returned.mime,
                 uri = ref,
-                state = com.point.core.model.ObjectState(com.point.core.model.ObjectKind.UNKNOWN),
+                state = state,
                 metadata = mapOf("name" to returned.name),
                 sourceObjects = listOf(input.id),
                 creatorAction = capabilityId.value,

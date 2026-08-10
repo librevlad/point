@@ -3,13 +3,10 @@ package com.point.desktop
 import com.point.core.flow.Entity
 import com.point.core.flow.EntityExtractor
 import com.point.core.flow.EntityType
-import com.point.core.flow.LlmClient
 import com.point.core.model.ActionResult
-import com.point.core.model.CapabilityId
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
-import com.point.core.model.ResultObject
 import com.point.core.model.ScratchRef
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -85,106 +82,9 @@ class SmartActionsTest {
         assertTrue(result.message.contains("не нашлось"))
     }
 
-    private class FakeLlm(
-        override val configured: Boolean = true,
-        private val answer: String = "ответ модели",
-        private val fail: String? = null,
-    ) : LlmClient {
-        var lastPrompt: String? = null
-            private set
-
-        override suspend fun run(obj: PointObject, prompt: String): ResultObject {
-            lastPrompt = prompt
-            fail?.let { error(it) }
-            val file = File.createTempFile("fake-ai-", ".txt").apply { writeText(answer) }
-            return ResultObject(ObjectKind.TEXT, "text/plain", ScratchRef(file.absolutePath))
-        }
-    }
-
-    @Test fun `без ключа AI не идёт в сеть и говорит, где его вписать`() = runTest {
-        val llm = FakeLlm(configured = false)
-        val realizer = PcUnderstandRealizer(llm)
-
-        val result = realizer.perform(textObject("любой текст"), null)
-
-        assertTrue(result is ActionResult.Failure)
-        val message = (result as ActionResult.Failure).reason
-        assertTrue("отказ не называет, где ключ: $message", message.contains(".point-pc/config"))
-
-        assertFalse("отказ предложил попробовать ещё раз", result.recoverable)
-        assertEquals("клиент всё-таки позвали без ключа", null, llm.lastPrompt)
-    }
-
-    @Test fun `уточнение человека идёт после задания, а не вместо него`() = runTest {
-        val llm = FakeLlm()
-        val realizer = PcAiRealizer(CapabilityId("pc-ask"), llm, PcPrompts.ASK, outbox(), "Ответ AI")
-
-        realizer.perform(textObject("текст договора"), "какая сумма?")
-
-        val prompt = llm.lastPrompt.orEmpty()
-        assertTrue("задание пропало: $prompt", prompt.startsWith(PcPrompts.ASK))
-        assertTrue("вопрос человека пропал: $prompt", prompt.contains("какая сумма?"))
-    }
-
-    @Test fun `ответ модели становится объектом с человеческим именем`() = runTest {
-        val box = outbox()
-        val realizer = PcAiRealizer(CapabilityId("pc-translate"), FakeLlm(answer = "перевод"), PcPrompts.TRANSLATE, box, "Перевод")
-
-        val result = realizer.perform(textObject("some english text"), null)
-
-        assertTrue("ответ модели не стал объектом: $result", result is ActionResult.Success)
-        val born = (result as ActionResult.Success).result
-        assertEquals("Перевод", born.metadata["name"])
-        assertEquals("перевод", File(born.uri.value).readText())
-    }
-
-    @Test fun `сервис отказал — человек читает слова, а не хвост исключения`() = runTest {
-        val realizer = PcUnderstandRealizer(FakeLlm(fail = "Сервис AI сейчас не отвечает"))
-
-        val result = realizer.perform(textObject("текст"), null)
-
-        assertTrue(result is ActionResult.Failure)
-
-        val reason = (result as ActionResult.Failure).reason
-        assertTrue("отказ не сказал про сервис: " + reason, reason.contains("Сервис AI"))
-        assertTrue("отказ ничего не советует: " + reason, reason.contains("позже"))
-
-        assertTrue(result.recoverable)
-    }
-
-    @Test fun `понятое моделью — знание на исходнике по общему протоколу`() = runTest {
-        // Аудит, блок 1.1: «Понять» рождало объект «Понятое». Теперь — Done+findings,
-        // как на телефоне; поля — по строгому контракту, источник — MODEL.
-        val llm = FakeLlm(answer = "PHONE=+380671234567\nAMOUNT=500\nTYPE=PURCHASE\nSUMMARY=Оплата счёта")
-
-        val result = PcUnderstandRealizer(llm).perform(textObject("текст квитанции"), null)
-
-        val done = result as ActionResult.Done
-        assertEquals("Стало понятнее", done.message)
-        val meta = done.findings!!.metadata
-        assertEquals("+380671234567", meta["entity.phone"])
-        assertEquals("500", meta["entity.amount"])
-
-        // «Убрать TYPE вообще» (#663): ярлык модели знанием не становится ни на
-        // одной стороне — суть несёт SUMMARY.
-        assertEquals(null, meta[com.point.core.flow.META_SEMANTIC_TYPE])
-        assertEquals("Оплата счёта", meta[com.point.core.flow.META_SEMANTIC_SUMMARY])
-        assertEquals("model", meta["entity.phone.src"])
-        assertEquals("found", meta["investigated.pc-understand"])
-    }
-
-    @Test fun `болтовня модели вместо полей — честное «ничего нового», а не мусор в фактах`() = runTest {
-        val llm = FakeLlm(answer = "Это документ об оплате, но точных данных нет. NONE")
-
-        val result = PcUnderstandRealizer(llm).perform(textObject("текст"), null)
-
-        val done = result as ActionResult.Done
-        assertEquals("not_found", done.findings!!.metadata["investigated.pc-understand"])
-        assertTrue(
-            "в знание не должно попасть ничего, кроме состояния вопроса",
-            done.findings!!.metadata.keys.all { it.startsWith("investigated.") },
-        )
-    }
+    // «Понять»/«Спросить AI»/«Перевести» на компьютере убраны (#701, решение владельца
+    // «Убрать, ПК — только исполнитель») — тесты этих исполнителей ушли вместе с ними,
+    // а не переписаны: продукт больше не делает того, что они проверяли.
 
     @Test fun `ссылка превращается в картинку, которую можно снять камерой`() = runTest {
         val box = outbox()
@@ -419,7 +319,7 @@ class SmartActionsTest {
 
     private fun pcRealizerIds(): Set<String> = setOf(
         "pc-open", "pc-copy", "pc-reveal", "pc-save-as", "pc-download", "pc-to-phone", "pc-print",
-        "pc-open-link", "pc-understand", "pc-translate", "pc-ask", "pc-transcribe",
+        "pc-open-link", "pc-transcribe",
         "pc-entities",
     ) + com.point.core.flow.capabilities.sharedCapabilities().map { it.id.value }
 
@@ -427,8 +327,7 @@ class SmartActionsTest {
         setOf(
             PcOpenCapability(), PcCopyCapability(), PcRevealCapability(), PcSaveAsCapability(),
             PcDownloadCapability(), PcToPhoneCapability(), PcPrintCapability(),
-            PcOpenLinkCapability(), PcUnderstandCapability(), PcTranslateCapability(),
-            PcAskCapability(), PcTranscribeCapability(),
+            PcOpenLinkCapability(), PcTranscribeCapability(),
             PcEntitiesCapability(),
         ) + com.point.core.flow.capabilities.sharedCapabilities(),
     )

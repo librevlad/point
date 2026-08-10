@@ -370,7 +370,12 @@ fun foundHeadline(obj: PointObject): String =
     obj.metadata.entries.firstOrNull { (key, _) ->
         (key.startsWith(META_ENTITY_PREFIX) || key.startsWith(com.point.core.flow.META_GRAPH_ROLE_PREFIX)) &&
             !com.point.core.flow.isAnnotationKey(key) && !com.point.core.flow.isStateKey(key)
-    }?.value?.takeIf { it.isNotBlank() } ?: obj.uri.value
+    }?.value?.takeIf { it.isNotBlank() }
+
+        // Результат чужого исполнителя (ПК) не несёт entity/role-фактов — только имя:
+        // без этого запасного шага чип показывал путь до scratch-файла (#681).
+        ?: obj.metadata["name"]?.takeIf { it.isNotBlank() }
+        ?: obj.uri.value
 
 /**
  * Chip прячется, только если ЕГО ФАКТ уже показан строкой выше: сравнение по `uri`

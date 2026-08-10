@@ -89,13 +89,6 @@ fun main(args: Array<String>) {
 
     val deviceKeys = FileDeviceKeys(pointDir)
 
-    // Стендовый журнал обменов с моделью; перед публичным дистрибутивом — за флаг
-    // (просьба владельца 2026-08-09). Папка приватная, живут последние 30 обменов.
-    val llm = com.point.core.flow.LoggingLlmClient(
-        inner = DesktopLlmClient(config = { FilePcConfig(pointDir).load().ai }),
-        dir = File(pointDir, "llm-log"),
-        enabled = true,
-    )
     val entities = com.point.core.flow.RegexEntityExtractor()
     val resolver = DesktopResolver(
         setOf(
@@ -108,15 +101,6 @@ fun main(args: Array<String>) {
             PcPrintRealizer(printer),
             PcOfficePdfRealizer(officeToPdf),
             PcEntitiesRealizer(entities),
-            PcUnderstandRealizer(llm),
-            PcAiRealizer(
-                com.point.core.model.CapabilityId("pc-translate"), llm, PcPrompts.TRANSLATE,
-                outbox, "Перевод",
-            ),
-            PcAiRealizer(
-                com.point.core.model.CapabilityId("pc-ask"), llm, PcPrompts.ASK,
-                outbox, "Ответ AI",
-            ),
             PcQrRealizer(outbox),
             PcDropRealizer(
                 DesktopDropLink(serverUrl) { accountStore.current()?.deviceToken },
@@ -139,7 +123,10 @@ fun main(args: Array<String>) {
             PcDownloadCapability(), PcToPhoneCapability(), PcPrintCapability(),
             PcOpenLinkCapability(),
 
-            PcUnderstandCapability(), PcTranslateCapability(), PcAskCapability(),
+            // «Понять»/«Перевести»/«Спросить AI» на компьютере убраны (#701, решение
+            // владельца «Убрать, ПК — только исполнитель»): результат для человека тот
+            // же, что и на телефоне, — компьютер не должен быть отдельной дверью к
+            // тому же самому. Остаются действия, привязанные к месту исполнения.
             PcTranscribeCapability(),
 
             PcEntitiesCapability(),
@@ -208,9 +195,6 @@ fun main(args: Array<String>) {
         "pc-print" to whyCannotPrint(),
         "pdf" to officeToPdf.whyUnavailable(),
 
-        "pc-understand" to aiKeyMissing(pointDir),
-        "pc-translate" to aiKeyMissing(pointDir),
-        "pc-ask" to aiKeyMissing(pointDir),
         "pc-transcribe" to speechKeyMissing(pointDir),
 
         "drop-link" to if (accountStore.current() != null) null else "компьютер не вошёл в аккаунт",

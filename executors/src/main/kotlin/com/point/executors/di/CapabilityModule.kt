@@ -106,6 +106,7 @@ import com.point.executors.SaveContactCapability
 import com.point.executors.SaveContactRealizer
 import com.point.executors.VCardCapability
 import com.point.executors.VCardRealizer
+import com.point.core.flow.ObjectClassifier
 import com.point.core.flow.ObjectStore
 import com.point.executors.OpenCvScanRealizer
 import dagger.Binds
@@ -268,6 +269,7 @@ abstract class CapabilityModule {
             links: com.point.core.flow.PcLinks,
             transport: com.point.core.flow.PcTransport,
             store: ObjectStore,
-        ): Set<Realizer> = caps.all().map { RemotePcRealizer(it, links, transport, store) }.toSet()
+            classifier: ObjectClassifier,
+        ): Set<Realizer> = caps.all().map { RemotePcRealizer(it, links, transport, store, classifier) }.toSet()
     }
 }

@@ -7,8 +7,6 @@ import com.point.core.flow.EntityExtractor
 import com.point.core.flow.EntityType
 import com.point.core.flow.asFeature
 import com.point.core.flow.asMetaKey
-import com.point.core.flow.Latency
-import com.point.core.flow.LlmClient
 import com.point.core.flow.Realizer
 import com.point.core.flow.qrMatrix
 import com.point.core.model.ActionResult
@@ -109,148 +107,10 @@ private fun entityTitle(type: EntityType): String = when (type) {
     EntityType.MONEY -> "Суммы"
 }
 
-private fun aiMeta(priority: Int) = CapabilityMeta(
-    priority = priority,
-    latency = Latency.SLOW,
-    network = true,
-    auth = true,
-)
-
-class PcUnderstandCapability : Capability {
-    override val id = CapabilityId("pc-understand")
-    override val icon = "ai"
-    override val meta = aiMeta(26)
-    override fun label(state: ObjectState) = "Понять"
-    override fun accepts(state: ObjectState) = state.kind == ObjectKind.TEXT
-    override fun produces(state: ObjectState) = ObjectState(ObjectKind.TEXT)
-}
-
-class PcTranslateCapability : Capability {
-    override val id = CapabilityId("pc-translate")
-    override val icon = "translate"
-    override val meta = aiMeta(27)
-    override fun label(state: ObjectState) = "Перевести"
-    override fun accepts(state: ObjectState) = state.kind == ObjectKind.TEXT
-    override fun produces(state: ObjectState) = ObjectState(ObjectKind.TEXT)
-}
-
-class PcAskCapability : Capability {
-    override val id = CapabilityId("pc-ask")
-    override val icon = "ai"
-    override val meta = aiMeta(28)
-    override fun label(state: ObjectState) = "Спросить AI"
-    override fun accepts(state: ObjectState) = state.kind == ObjectKind.TEXT
-    override fun produces(state: ObjectState) = ObjectState(ObjectKind.TEXT)
-}
-
-/**
- * «Понять» на компьютере — тот же протокол понимания, что на телефоне (строгий контракт
- * полей + общий парсер), результат — знание на исходнике, а не новый объект (Конституция
- * §4; аудит 2026-08-09, блок 1.1). Слоя атомов на ПК нет, поэтому судьи нет — источник MODEL.
- */
-class PcUnderstandRealizer(
-    private val llm: LlmClient,
-) : Realizer {
-    override val capabilityId = CapabilityId("pc-understand")
-
-    override val meta = com.point.core.flow.RealizerMeta(kind = com.point.core.flow.RealizerKind.CLOUD)
-
-    override suspend fun perform(input: PointObject, amendment: String?): ActionResult = runCatching {
-        if (!llm.configured) {
-            return ActionResult.Failure(
-                "Ключ AI не задан — впишите его в ~/.point-pc/config строкой ai.key=…",
-                recoverable = false,
-            )
-        }
-        val answer = File(llm.run(input, pcUnderstandPrompt()).uri.value).readText()
-        val parsed = com.point.core.flow.parseFieldCandidates(answer)
-        val fields = parsed.fields.mapNotNull { (key, candidates) ->
-            candidates.firstOrNull { com.point.core.flow.semanticFits(key, it.text) != false }
-                ?.let { key to it.text }
-        }.toMap()
-        if (fields.isEmpty() && parsed.single.isEmpty()) {
-
-            return ActionResult.Done(
-                "Point уже прочитал всё, что здесь есть",
-                com.point.core.model.Findings(
-                    metadata = mapOf(
-                        com.point.core.flow.investigationKey(capabilityId) to
-                            com.point.core.flow.InvestigationState.NOT_FOUND.wire,
-                    ),
-                ),
-            )
-        }
-        val sources = fields.keys.associate {
-            it + com.point.core.flow.META_SOURCE_SUFFIX to com.point.core.model.Provenance.MODEL.wire
-        }
-        ActionResult.Done(
-            "Стало понятнее",
-            com.point.core.model.Findings(
-                metadata = fields + parsed.single + sources + mapOf(
-                    com.point.core.flow.investigationKey(capabilityId) to
-                        com.point.core.flow.InvestigationState.FOUND.wire,
-                ),
-            ),
-        )
-    }.getOrElse { ActionResult.Failure("Сервис AI не ответил — попробуйте позже", recoverable = true) }
-
-    private fun pcUnderstandPrompt(): String = buildString {
-        append("Ниже текст документа. Найди контактные данные и номера. ")
-        append(
-            "Значение приводи ПОЛНОСТЬЮ, как оно есть в документе. НИЧЕГО не додумывай: " +
-                "если чего-то в тексте нет — не пиши строку. Цифры не меняй. " +
-                "Отвечай строками вида KEY=значение, по одной на строку. Разрешённые KEY: " +
-                "PHONE, EMAIL, URL, ADDRESS, DATE, CARD, TRACK (номер отправления, дословно), " +
-                "METER (показание счётчика — только цифры), GEO (координаты), PLACE (куда ехать, " +
-                "если адреса нет), AMOUNT (сумма к оплате — только цифры), RECEIPT (номер " +
-                "квитанции), SUBJECT (тема письма; если это не письмо — не пиши). ",
-        )
-        append(
-            "Дополнительно: если текст целиком — встреча, строка TYPE=MEETING; покупка или " +
-                "чек — TYPE=PURCHASE; рецепт — TYPE=RECIPE; вакансия — TYPE=JOB; иначе TYPE " +
-                "не пиши. Добавь строку SUMMARY=<суть текста в 3-6 словах>. ",
-        )
-        append("Без пояснений. Если не нашлось вообще ничего — ответь ровно NONE.\n")
-    }
-}
-
-class PcAiRealizer(
-    override val capabilityId: CapabilityId,
-    private val llm: LlmClient,
-    private val prompt: String,
-    private val outbox: Outbox,
-    private val resultName: String,
-) : Realizer {
-
-    override val meta = com.point.core.flow.RealizerMeta(kind = com.point.core.flow.RealizerKind.CLOUD)
-
-    override suspend fun perform(input: PointObject, amendment: String?): ActionResult = runCatching {
-        if (!llm.configured) {
-
-            return ActionResult.Failure(
-                "Ключ AI не задан — впишите его в ~/.point-pc/config строкой ai.key=…",
-                recoverable = false,
-            )
-        }
-
-        val full = if (amendment.isNullOrBlank()) prompt else prompt + "\n" + amendment
-        val result = llm.run(input, full)
-        ActionResult.Success(result.copy(metadata = result.metadata + ("name" to resultName)))
-    }.getOrElse { ActionResult.Failure("Сервис AI не ответил — попробуйте позже", recoverable = true) }
-}
-
-object PcPrompts {
-    const val UNDERSTAND =
-        "Прочитай текст и выпиши по-русски: о чём он, какие в нём есть суммы, даты, сроки, " +
-            "имена и контакты, и что от человека требуется. Без вступлений и без пересказа " +
-            "целиком — только суть и факты."
-
-    const val TRANSLATE =
-        "Переведи текст на русский язык. Если он уже на русском — переведи на английский. " +
-            "Верни только перевод, без пояснений."
-
-    const val ASK = "Ответь на вопрос человека по этому тексту. Коротко и по делу."
-}
+// «Понять»/«Перевести»/«Спросить AI» на компьютере убраны (#701, решение владельца
+// «Убрать, ПК — только исполнитель»): результат для человека был тот же самый, что
+// и на телефоне, — устройство не становится отдельной способностью ради самого
+// исполнителя (Конституция, «Capability / Realizer»).
 
 class PcQrRealizer(private val outbox: Outbox) : Realizer {
     override val capabilityId = com.point.core.flow.capabilities.QrCapability.ID
