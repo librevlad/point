@@ -20,6 +20,14 @@ class DefaultCapabilityRegistry @Inject constructor(
     private val policy: BubblePolicy,
 
     private val availability: ActionAvailability = ActionAvailability { null },
+
+    /**
+     * Есть ли сеть прямо сейчас (#569). Нет — сетевое действие называет это причиной вместо
+     * обещания результата: человек видит своё положение до тапа, а не после тридцати секунд
+     * ожидания. Действие при этом остаётся на месте и нажимаемо — прятать его нельзя.
+     */
+    private val network: com.point.core.flow.NetworkAvailability =
+        com.point.core.flow.NetworkAvailability { true },
 ) : CapabilityRegistry {
 
     private val byIdMap: Map<CapabilityId, Capability> = capabilities.associateBy { it.id }
@@ -50,8 +58,12 @@ class DefaultCapabilityRegistry @Inject constructor(
         intent = primaryIntentOf(c, state),
 
         yields = c.yields(state),
-        unusableReason = unusableReason,
+        unusableReason = unusableReason ?: offlineReason(c),
     )
+
+    /** Про сеть спрашиваем один раз на список, а не у каждого действия. */
+    private fun offlineReason(c: Capability): String? =
+        if (c.meta.network && !runCatching { network.isAvailable() }.getOrDefault(true)) NO_INTERNET else null
 
     private fun tierOf(meta: CapabilityMeta): BubbleTier = when {
         meta.network -> BubbleTier.AI
@@ -87,5 +99,8 @@ class DefaultCapabilityRegistry @Inject constructor(
     private companion object {
 
         const val MAX_LATENT = 2
+
+        /** Слово человеку про его положение, а не про устройство продукта (#569). */
+        const val NO_INTERNET = "нет интернета"
     }
 }
