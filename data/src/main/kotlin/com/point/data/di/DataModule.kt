@@ -399,8 +399,11 @@ abstract class DataModule {
         fun objectClassifier(): ObjectClassifier = ObjectClassifier()
 
         @Provides
-        fun dropLink(account: com.point.core.flow.AccountStore): com.point.core.flow.DropLink =
-            com.point.data.RelayDropLink(serverUrl(), devicePass(account))
+        fun dropLink(
+            account: com.point.core.flow.AccountStore,
+            network: NetworkAvailability,
+        ): com.point.core.flow.DropLink =
+            com.point.data.RelayDropLink(serverUrl(), devicePass(account), network)
 
         @Provides
         fun dropInbox(

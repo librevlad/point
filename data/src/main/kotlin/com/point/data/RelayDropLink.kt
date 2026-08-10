@@ -2,6 +2,7 @@ package com.point.data
 
 import android.util.Base64
 import com.point.core.flow.DropLink
+import com.point.core.flow.NetworkAvailability
 import java.io.File
 import java.net.URL
 import javax.net.ssl.HttpsURLConnection
@@ -12,10 +13,14 @@ class RelayDropLink(
     private val relayUrl: String,
 
     private val pass: () -> String?,
+
+    private val network: NetworkAvailability,
 ) : DropLink {
 
     override suspend fun give(path: String, fileName: String, mime: String): String? =
         withContext(Dispatchers.IO) {
+            // Перед выходом наружу — спросить телефон, есть ли сеть вообще (#690, #691).
+            if (!network.isAvailable()) return@withContext null
             val base = relayUrl.trimEnd('/').takeIf { it.isNotBlank() && !pass().isNullOrBlank() }
                 ?: return@withContext null
             val file = File(path).takeIf { it.isFile } ?: return@withContext null
