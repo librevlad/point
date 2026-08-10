@@ -91,10 +91,16 @@ class OneFactOnePlaceTest {
         compose.onNode(hasText(phone) and hasText("Сохранить контакт")).assertExists()
     }
 
-    @Test fun `счёт «Нашёл» считает то, что показано`() {
+    // #696 (охота 2026-08-10): владелец видел на визитке телефон, почту и адрес —
+    // три значения, — а заголовок над списком говорил «Нашёл · 2» (телефон уехал
+    // в строку «Сохранить контакт» и в счёт не попадал). Решение владельца:
+    // «Без числа, когда часть выше» — там, где знание разнесено по экрану, число
+    // не врёт, потому что его просто нет.
+    @Test fun `часть «Нашёл» показана строкой действия — счёт без числа`() {
         screen(card, cardFound)
 
-        compose.onNodeWithText("Нашёл · 2").assertExists()
+        compose.onNodeWithText("Нашёл").assertExists()
+        compose.onNodeWithText("Нашёл · 2").assertDoesNotExist()
         compose.onNodeWithText("Нашёл · 3").assertDoesNotExist()
     }
 

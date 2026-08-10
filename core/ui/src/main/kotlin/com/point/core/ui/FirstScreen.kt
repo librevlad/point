@@ -174,7 +174,12 @@ fun FirstScreen(
         )
 
         if (visibleFound.isNotEmpty() && inputPrompt == null) {
-            FoundObjects(found = visibleFound, relations = relations, onFound = onFound)
+            FoundObjects(
+                found = visibleFound,
+                relations = relations,
+                partShownAbove = shownAbove.isNotEmpty(),
+                onFound = onFound,
+            )
         }
 
         Spacer(Modifier.height(28.dp))
@@ -284,6 +289,7 @@ private fun WorkingStage(stage: String?) {
 private fun FoundObjects(
     found: List<PointObject>,
     relations: List<Relation>,
+    partShownAbove: Boolean,
     onFound: (PointObject) -> Unit,
 ) {
     Spacer(Modifier.height(16.dp))
@@ -292,7 +298,7 @@ private fun FoundObjects(
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text(
-            text = "Нашёл · ${found.size}",
+            text = foundHeader(found.size, partShownAbove),
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -372,6 +378,14 @@ fun foundHeadline(obj: PointObject): String =
  * Телефон, уже подписанный человеком (#653), вторым узлом не показывается — знание
  * не удалено, оно внутри человека.
  */
+/**
+ * Число рядом с «Нашёл» — только когда всё найденное собрано в одном списке.
+ * На визитке телефон уезжал в строку «Сохранить контакт», и человек читал
+ * «Нашёл · 2», видя три значения (#696). Нет числа — нет и вранья.
+ */
+fun foundHeader(count: Int, partShownAbove: Boolean): String =
+    if (partShownAbove) "Нашёл" else "Нашёл · $count"
+
 fun visibleFoundChips(found: List<PointObject>, shownValues: Set<String>): List<PointObject> {
     val claimed = found.filter { it.state.kind == com.point.core.flow.KIND_PERSON }
         .mapNotNullTo(mutableSetOf()) { person ->

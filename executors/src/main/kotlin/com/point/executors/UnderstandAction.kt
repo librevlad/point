@@ -74,6 +74,14 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import javax.inject.Inject
 
+/**
+ * Роль можно не называть вовсе. Без этой оговорки модель выбирала ближайшую из
+ * предложенных, и студия на визитке оказывалась «выдавшей документ» (#698).
+ */
+internal const val ROLES_MAY_BE_ABSENT =
+    "Ролей может не быть ни одной: визитка, вывеска, меню, фотография — не документ " +
+        "с отправителем или выдавшим. Ни одной роли лучше, чем натянутая.\n"
+
 internal fun understandPrompt(
     elements: List<LayoutElement>,
     roles: List<ClassifierRole> = CLASSIFIER_ROLES,
@@ -126,8 +134,11 @@ internal fun understandPrompt(
             // Ярлыков-типов у модели больше не просим (#663): суть несёт SUMMARY.
             "Добавь строку SUMMARY=<суть текста в 3-6 словах, на языке документа>.\n\n",
     )
+    // #698, решение владельца «Нет подходящей — нет подписи»: роль натягивалась на
+    // визитку («выдал документ»), потому что выбора «ни одной» модели не давали.
     append("2) Определи, кто играет каждую из ролей:\n")
     roles.forEach { append("- ").append(it.key).append(" — ").append(it.question).append('\n') }
+    append(ROLES_MAY_BE_ABSENT)
     if (index != null) {
         append(
             "Отвечай строками вида роль=имя [метки слов имени]. Метки — из списка слов страницы; " +

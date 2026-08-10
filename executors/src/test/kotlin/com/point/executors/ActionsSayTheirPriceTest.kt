@@ -153,7 +153,7 @@ class ActionsSayTheirPriceTest {
 
         assertTrue("первым читает не устройство", chain.first().meta.kind == RealizerKind.LOCAL)
         assertTrue("запасного сетевого пути не стало — проверку пора менять", hasCloudFallback)
-        assertEquals("вернёт текст · не выйдет на устройстве — предложит сервис", said)
+        assertEquals("вернёт текст · сначала на телефоне, потом спрошу про сервис", said)
     }
 
     @Test
@@ -161,7 +161,7 @@ class ActionsSayTheirPriceTest {
 
         val said = said(OcrCapability(), image)
 
-        assertTrue(said, "не выйдет на устройстве" in said)
+        assertTrue(said, "сначала на телефоне" in said)
         assertFalse("сказано как о неизбежном", "уйдёт в сервис" in said)
     }
 

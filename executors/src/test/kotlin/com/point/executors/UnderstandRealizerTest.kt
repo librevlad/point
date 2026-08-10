@@ -688,4 +688,17 @@ class UnderstandRealizerTest {
         assertTrue(alternativesOf(merged, "entity.phone").isEmpty())
         assertEquals(listOf("+380961992869"), com.point.core.flow.moreOf(merged, "entity.phone"))
     }
+
+    /**
+     * #698 (охота 2026-08-10): студия на визитке оказалась «выдавшей документ» —
+     * модель выбирала ближайшую роль, потому что выбора «ни одной» ей не давали.
+     */
+    @Test
+    fun `промпт разрешает не называть роль вовсе`() {
+        val card = "СТУДИЯ «ТИХИЙ ДВОР»\nОлена Ковальчук\n+380 67 123 45 67"
+        val prompt = understandPrompt(layoutOf(card))
+
+        assertTrue(prompt.contains("Ролей может не быть ни одной"))
+        assertTrue(prompt.contains("лучше, чем натянутая"))
+    }
 }

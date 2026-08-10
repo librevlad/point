@@ -20,7 +20,7 @@ class OcrCapability : Capability {
     override fun produces(state: ObjectState) = ObjectState(ObjectKind.TEXT)
 
     override fun yields(state: ObjectState) =
-        ActionYield.New(ObjectKind.TEXT, "текст · не выйдет на устройстве — предложит сервис")
+        ActionYield.New(ObjectKind.TEXT, "текст · сначала на телефоне, потом спрошу про сервис")
 
     companion object { val ID = CapabilityId("ocr") }
 }

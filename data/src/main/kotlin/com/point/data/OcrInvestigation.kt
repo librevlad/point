@@ -3,6 +3,7 @@ package com.point.data
 import com.point.core.flow.Capability
 import com.point.core.flow.CapabilityMeta
 import com.point.core.flow.Latency
+import com.point.core.flow.readerFailure
 import com.point.core.flow.Realizer
 import com.point.core.model.ActionResult
 import com.point.core.model.Findings
@@ -99,7 +100,8 @@ class OcrInvestigationRealizer @Inject constructor(
         // Частичное чтение с атомами остаётся частичным знанием.
         val broken = layer.incomplete
         if (broken != null && layer.atoms.isEmpty() && layer.text.isBlank()) {
-            error("не удалось прочитать страницу — $broken")
+            // Человеку — свои слова, чужое «decode failed» остаётся в журнале (#686).
+            error(readerFailure(broken))
         }
 
         val atomsRef = if (layer.atoms.isNotEmpty()) {

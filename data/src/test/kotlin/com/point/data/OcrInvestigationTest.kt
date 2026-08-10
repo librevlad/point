@@ -281,8 +281,12 @@ class OcrInvestigationTest {
         val result = OcrInvestigationRealizer(FakeStore(), broken, extractor()).perform(image, null)
 
         assertTrue(result is com.point.core.model.ActionResult.Failure)
-        assertTrue("причина ридера не теряется",
-            (result as com.point.core.model.ActionResult.Failure).reason.contains("decode failed"))
+
+        // Причина ридера не теряется — но и не выходит к человеку чужим языком:
+        // «decode failed» на экране был жаргоном (#686), теперь это только журнал.
+        val reason = (result as com.point.core.model.ActionResult.Failure).reason
+        assertTrue("что-то сказано", reason.isNotBlank())
+        assertTrue("без латиницы платформы", reason.none { it in 'a'..'z' || it in 'A'..'Z' })
     }
 
     @Test

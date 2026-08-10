@@ -7,6 +7,7 @@ import com.google.zxing.MultiFormatReader
 import com.google.zxing.RGBLuminanceSource
 import com.google.zxing.common.HybridBinarizer
 import com.point.core.flow.QrReader
+import com.point.core.flow.readerFailure
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -15,6 +16,7 @@ class ZxingQrReader @Inject constructor() : QrReader {
 
     override suspend fun decode(imagePath: String): String? = withContext(Dispatchers.IO) {
         val bitmap = decodeBoundedUpright(imagePath, MAX_PX) ?: error(UNREADABLE_IMAGE)
+
         try {
             val pixels = IntArray(bitmap.width * bitmap.height)
             bitmap.getPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
@@ -33,4 +35,7 @@ class ZxingQrReader @Inject constructor() : QrReader {
     private companion object { const val MAX_PX = 2048 }
 }
 
-internal const val UNREADABLE_IMAGE = "изображение не открылось"
+// Тот же факт, что и у распознавания текста (#686): «файл не открылся» — одними
+// словами, чтобы дедуп в failedNote() схлопывал совпавшие причины, а не печатал
+// одну беду дважды.
+internal val UNREADABLE_IMAGE = readerFailure(null)
