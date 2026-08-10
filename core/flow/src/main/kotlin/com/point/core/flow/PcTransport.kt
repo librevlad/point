@@ -95,7 +95,27 @@ interface PcCapsStore {
     fun all(): List<PcRemoteAction>
     suspend fun save(caps: List<PcRemoteAction>)
     suspend fun clear()
+
+    /** Когда устройство объявлялось в последний раз; `null` — не объявлялось вовсе. */
+    fun savedAt(): Long? = null
 }
+
+/**
+ * Сколько живёт объявление чужого устройства (#633, #624).
+ *
+ * Правило одно на обе стороны связки: телефон судит о компьютере и компьютер о телефоне
+ * по одному сроку. Порознь у них разъехались бы и сроки, и поведение — молча.
+ */
+const val CAPS_FRESH_MS: Long = 6 * 60 * 60 * 1000
+
+/**
+ * Можно ли выдавать чужое состояние за нынешнее.
+ *
+ * Устарело — Point молчит: причина недоступности не показывается вовсе. Молчание честнее
+ * выдуманного текста, а «компьютер не вошёл в аккаунт» недельной давности — именно выдумка.
+ */
+fun capsFresh(savedAt: Long?, now: Long, ttl: Long = CAPS_FRESH_MS): Boolean =
+    savedAt != null && savedAt > 0 && now - savedAt < ttl
 
 interface PcLinks {
     fun current(): LinkedPc?
