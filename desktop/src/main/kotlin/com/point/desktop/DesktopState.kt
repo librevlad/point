@@ -313,6 +313,12 @@ class DesktopState(
         val what: String,
     )
 
+    /** Ожидание файла по ссылке — на компьютере оно тоже есть (#727). */
+    private val _receiving = MutableStateFlow<ReceiveOnPc.Waiting?>(null)
+    val receiving: StateFlow<ReceiveOnPc.Waiting?> = _receiving.asStateFlow()
+
+    fun showReceiving(waiting: ReceiveOnPc.Waiting?) { _receiving.value = waiting }
+
     private val _phoneAsk = MutableStateFlow<PhoneAsk?>(null)
     val phoneAsk: StateFlow<PhoneAsk?> = _phoneAsk.asStateFlow()
 

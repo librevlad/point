@@ -121,6 +121,23 @@ fun main(args: Array<String>) {
             },
         ),
     )
+    // Приём файла по ссылке на компьютере (#727): разговор с сервером — общий с телефоном.
+    val receiver = ReceiveOnPc(
+        inbox = com.point.core.flow.HttpDropInbox(
+            { serverUrl },
+            { accountStore.current()?.deviceToken },
+        ),
+        scope = kotlinx.coroutines.CoroutineScope(
+            kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO,
+        ),
+        tmpDir = java.io.File(pointDir, "received").apply { mkdirs() },
+        onArrived = { name, mime, path ->
+            val item = inbox.receive(name, mime, emptyMap(), java.io.File(path).inputStream())
+            state.onReceived(item, ObjectSource.DROPPED)
+        },
+    )
+    receiver.onWaiting = { state.showReceiving(it) }
+
     val registry = DesktopRegistry(
         setOf(
 
@@ -370,6 +387,8 @@ fun main(args: Array<String>) {
                     onClipboardTaken = { text -> state.onReceived(inbox.addText(text), ObjectSource.CLIPBOARD) },
                     keepOpen = keepOpen,
                     onKeepOpen = { wanted -> keepOpen.value = wanted },
+                    onReceiveFile = { receiver.start { why -> state.say(why) } },
+                    onCancelReceive = { receiver.cancel() },
                     onWipe = { inbox.wipe() },
                     onSaveSettings = { changed ->
                         runCatching { FilePcConfig(pointDir).save(changed) }

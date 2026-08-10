@@ -81,6 +81,10 @@ fun CompactApp(
 
     onGrabScreen: (() -> File?)? = null,
 
+    /** Приём файла по ссылке — на компьютере он тоже есть (#727). */
+    onReceiveFile: () -> Unit = {},
+    onCancelReceive: () -> Unit = {},
+
     onWipe: () -> Unit = {},
     onSaveSettings: (PcConfig) -> Unit = {},
     onSweepNow: () -> Unit = {},
@@ -266,6 +270,9 @@ fun CompactApp(
                     onOpen = { openedId = it.obj.id },
                     onTakeClipboard = takeClipboard,
                     onGrabScreen = grabScreen,
+                    onReceiveFile = onReceiveFile,
+                    onCopyReceiveLink = { link -> state.copyFact(link) },
+                    onCancelReceive = onCancelReceive,
                     onSettings = { showSettings = true },
                     onHide = onHide,
                     keptOpen = kept,
@@ -581,6 +588,9 @@ internal fun CompactList(
     onSettings: () -> Unit,
     onHide: () -> Unit,
     modifier: Modifier = Modifier,
+    onReceiveFile: () -> Unit = {},
+    onCopyReceiveLink: (String) -> Unit = {},
+    onCancelReceive: () -> Unit = {},
     keptOpen: Boolean = false,
     onKeepOpen: () -> Unit = {},
 ) = Column(modifier) {
@@ -668,6 +678,29 @@ internal fun CompactList(
         }
 
         Spacer(Modifier.height(4.dp))
+
+        // Приём файла есть и здесь (#727): «и на пк тоже и прием и отправка».
+        val awaiting by state.receiving.collectAsState()
+        if (awaiting == null) {
+            Station("Принять файл по ссылке", PointColors.violet) { onReceiveFile() }
+        } else {
+            awaiting?.let { wait ->
+                Column(
+                    modifier = Modifier.fillMaxWidth()
+                        .background(PointColors.surfaceDeep, RoundedCornerShape(12.dp))
+                        .padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Text("Пусть отправят файл сюда", style = PointType.body)
+                    Text(wait.link, style = PointType.small, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(wait.failed ?: wait.status, style = PointType.small)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        HeaderButton("⧉") { onCopyReceiveLink(wait.link) }
+                        HeaderButton("×") { onCancelReceive() }
+                    }
+                }
+            }
+        }
         Station("Взять то, что в буфере", PointColors.cyan) { onTakeClipboard() }
         Station("Снять экран целиком", PointColors.violet) { onGrabScreen() }
 
