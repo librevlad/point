@@ -1,6 +1,12 @@
 package com.point.core.flow
 
-data class LayoutElement(val id: String, val text: String)
+data class LayoutElement(
+    val id: String,
+    val text: String,
+
+    /** Каким блоком страницы прочитан этот кусок: столбец, шапка, подвал (#768). */
+    val block: Int = 0,
+)
 
 /**
  * Режет текст на пронумерованные куски для промпта модели.
@@ -23,6 +29,28 @@ fun layoutOf(text: String, limit: Int = MAX_LAYOUT_ELEMENTS): List<LayoutElement
         .take(limit)
         .mapIndexed { i, chunk -> LayoutElement("P${i + 1}", chunk) }
         .toList()
+
+/**
+ * То же, но с оглядкой на блоки страницы (#768).
+ *
+ * На почтовой наклейке подпись правой колонки «КОМУ:» стоит чуть выше подписи левой «ВІД:»
+ * — кадр снят под наклоном. Сплошным списком строк это читается как «сначала КОМУ, потом
+ * Тарасенко», и отправитель с получателем менялись местами. Блок держит подпись при своей
+ * колонке, и порядок строк внутри страницы перестаёт лгать о принадлежности.
+ */
+fun layoutOfBlocks(blocks: List<String>, limit: Int = MAX_LAYOUT_ELEMENTS): List<LayoutElement> {
+    val out = mutableListOf<LayoutElement>()
+    blocks.forEachIndexed { index, block ->
+        block.lineSequence()
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .flatMap(::sentenceChunksOf)
+            .forEach { chunk ->
+                if (out.size < limit) out += LayoutElement("P${out.size + 1}", chunk, block = index)
+            }
+    }
+    return out
+}
 
 const val MAX_LAYOUT_ELEMENTS = 120
 
