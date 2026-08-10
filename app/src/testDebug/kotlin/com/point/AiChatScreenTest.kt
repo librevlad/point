@@ -60,7 +60,8 @@ class AiChatScreenTest {
             )
         }
 
-        compose.onNodeWithText("вернёт текст").assertExists()
+        // Под строкой нет второй строки про тип результата (#582) — имя сказало всё.
+        compose.onNodeWithText("вернёт текст").assertDoesNotExist()
         compose.onNodeWithText("Забрать ответ").performClick()
 
         assertTrue("строка нарисована, но ничего не забирает", taken)

@@ -44,11 +44,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.point.core.flow.yieldLabel
-import com.point.core.model.ActionYield
 import com.point.core.model.ChatMessage
 import com.point.core.model.ChatRole
-import com.point.core.model.Intent
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
@@ -149,10 +146,8 @@ fun AiChatScreen(
             ) {
                 Column(Modifier.widthIn(max = PortalColumnWidth).fillMaxWidth()) {
                     PortalRow(
+                        // Второй строки нет (#582): имя строки уже сказало, что произойдёт.
                         title = "Забрать ответ",
-
-                        subtitle = yieldLabel(ActionYield.New(ObjectKind.TEXT), Intent.PREPARE),
-                        subtitleMaxLines = 1,
                         onClick = onTakeAnswer,
                         icon = bubbleIcon("text"),
                         accent = bubbleColor("text"),
