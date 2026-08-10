@@ -1888,7 +1888,12 @@ class FlowViewModel @Inject constructor(
         viewModelScope.launch {
             var failure: Throwable? = null
             val bitmap = withContext(ioDispatcher) {
-                val source = previewSource(obj, pdfRasterizer) ?: return@withContext null
+
+                // Сорвавшееся чтение страницы — не «нечего показать» (#570): по его причине
+                // человеку скажут, что документ пуст, а не общее «файл не открылся».
+                val source = runCatching { previewSource(obj, pdfRasterizer) }
+                    .onFailure { failure = it }
+                    .getOrNull() ?: return@withContext null
                 runCatching { Bitmaps.decodeThumbnail(source, PREVIEW_MAX_PX)?.asImageBitmap() }
                     .onFailure { failure = it }
                     .getOrNull()

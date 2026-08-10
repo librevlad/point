@@ -98,7 +98,9 @@ class FlowViewModelTest {
         sharedTexts: com.point.core.flow.SharedTexts = FakeSharedTexts(),
 
         keyNeeding: Set<CapabilityId> = emptySet(),
-    ) = FlowViewModel(store, FakeRegistry(caps, cloud, slow, keyNeeding) { userKeys.keys().mine.isNotEmpty() }, resolver, chatResponder, enrichment, history, usage, chosenApps, userKeys, aiFacts, builtInKeys, consent, appLauncher, FakePdfRasterizer(), sensory, sensorySettings, cloudPrivacy, snapshot, crashLog, dispatcher, pins, AppIconResolver { null }, pcLinks, pcTransport, pcCaps, linkMonitor, PulledFileFactory { name -> java.io.File(java.io.File(System.getProperty("java.io.tmpdir")), "pulled-" + name).absolutePath }, noFrames, keyCheck, account, accountClient, pendingLogins, deviceKeys, browser, sharedTexts)
+
+        pdf: com.point.core.flow.PdfRasterizer = FakePdfRasterizer(),
+    ) = FlowViewModel(store, FakeRegistry(caps, cloud, slow, keyNeeding) { userKeys.keys().mine.isNotEmpty() }, resolver, chatResponder, enrichment, history, usage, chosenApps, userKeys, aiFacts, builtInKeys, consent, appLauncher, pdf, sensory, sensorySettings, cloudPrivacy, snapshot, crashLog, dispatcher, pins, AppIconResolver { null }, pcLinks, pcTransport, pcCaps, linkMonitor, PulledFileFactory { name -> java.io.File(java.io.File(System.getProperty("java.io.tmpdir")), "pulled-" + name).absolutePath }, noFrames, keyCheck, account, accountClient, pendingLogins, deviceKeys, browser, sharedTexts)
 
     private val keyCheck = FakeAiKeyCheck()
 
@@ -136,6 +138,32 @@ class FlowViewModelTest {
 
     private fun bubble(id: String = "a", title: String = "Действие") =
         Bubble("x", title, CapabilityId(id), ObjectState(ObjectKind.TEXT))
+
+    /**
+     * #570: у документа без единой страницы предпросмотр не выходит — и человек читал общее
+     * «файл не открылся — он повреждён или это не изображение». Пустой документ обязан
+     * сказать про себя правду, и это знание остаётся с объектом (#684/#685).
+     */
+    @Test fun `документ без страниц сам говорит, что страниц в нём нет`() = runTest(dispatcher) {
+        store.kind = ObjectKind.PDF
+        val vm = vm(
+            pdf = object : com.point.core.flow.PdfRasterizer {
+                override suspend fun rasterize(obj: PointObject) = ScratchRef("/pages")
+                override suspend fun rasterizeFirstPage(obj: PointObject): ScratchRef? =
+                    error(com.point.core.flow.READER_NO_PAGES)
+            },
+        )
+
+        vm.onShared("doc.pdf", "application/pdf"); advanceUntilIdle()
+
+        val obj = vm.ui.value.frame?.obj
+        assertNotNull("объект остаётся на экране", obj)
+        assertTrue("годность — часть состояния объекта", obj!!.state.has(Feature.UNUSABLE))
+        assertEquals(
+            "В документе нет ни одной страницы",
+            obj.metadata[com.point.core.flow.META_UNUSABLE_REASON],
+        )
+    }
 
     @Test fun `выделение открывается и без слоя слов — отказ приходит от картинки, а не от чтения`() =
         runTest(dispatcher) {
@@ -3472,9 +3500,12 @@ class FlowViewModelTest {
 private class FakeStore : ObjectStore {
     var failIngest = false
 
+    /** Приём отдаёт снимок, пока тест не скажет иначе. Для PDF важен именно вид объекта. */
+    var kind = ObjectKind.IMAGE
+
     var clearedTimes = 0
     override suspend fun ingest(sourceUri: String, mime: String): PointObject =
-        if (failIngest) error("boom") else PointObject("in", mime, ScratchRef("/in"), ObjectState(ObjectKind.IMAGE))
+        if (failIngest) error("boom") else PointObject("in", mime, ScratchRef("/in"), ObjectState(kind))
     override suspend fun ingestMultiple(sources: List<String>): PointObject =
         PointObject("coll", "inode/directory", ScratchRef("/coll"), ObjectState(ObjectKind.COLLECTION))
     override suspend fun put(result: ResultObject): PointObject =

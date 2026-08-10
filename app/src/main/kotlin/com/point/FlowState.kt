@@ -50,10 +50,14 @@ data class FlowFrame(
     val failed: List<com.point.core.flow.FailedInvestigation> = emptyList(),
 )
 
+/**
+ * Причина, по которой страницы не вышло, здесь не гасится (#570): именно из неё человеку
+ * достаются слова о пустом или испорченном документе. Ловит её вызывающий.
+ */
 suspend fun previewSource(obj: PointObject, rasterizer: com.point.core.flow.PdfRasterizer): String? =
     when (obj.state.kind) {
         ObjectKind.IMAGE -> obj.uri.value
-        ObjectKind.PDF -> runCatching { rasterizer.rasterizeFirstPage(obj)?.value }.getOrNull()
+        ObjectKind.PDF -> rasterizer.rasterizeFirstPage(obj)?.value
         else -> null
     }
 
