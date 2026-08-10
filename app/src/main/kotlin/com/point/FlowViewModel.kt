@@ -1906,7 +1906,8 @@ class FlowViewModel @Inject constructor(
     private fun loadTextPreviewIfText(obj: PointObject) {
         if (obj.state.kind != ObjectKind.TEXT) return
         viewModelScope.launch {
-            val raw = runCatching { store.readText(obj, limit = 100_000) }.getOrDefault("")
+            val limit = com.point.core.ui.TEXT_PREVIEW_LOAD_LIMIT
+            val raw = runCatching { store.readText(obj, limit = limit) }.getOrDefault("")
             if (raw.isBlank()) return@launch
             val text = sanitizeTextPreview(raw)
 
@@ -1914,7 +1915,9 @@ class FlowViewModel @Inject constructor(
             val top = stack.getOrNull(topIndex) ?: return@launch
             if (top.obj.id != obj.id) return@launch
 
-            val refreshed = top.copy(textPreview = text)
+            // Честность «Показать целиком» (#682/#683): считается по сырому чтению, а не
+            // по санитайзеру — тот может укоротить текст и спрятать, что предел был достигнут.
+            val refreshed = top.copy(textPreview = text, textPreviewTruncated = raw.length >= limit)
             stack[topIndex] = refreshed
             _ui.update { if (it.frame?.obj?.id == obj.id) it.copy(frame = refreshed) else it }
         }

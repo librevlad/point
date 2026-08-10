@@ -5,10 +5,12 @@ import com.point.core.model.PointObject
 fun continuesObject(before: PointObject, after: PointObject): Boolean = before.uri == after.uri
 
 /**
- * Ключи-ссылки на пересчитываемые слои (OCR): не прочтения, всегда обновляются свежим
- * значением. Общая конвенция знания — одна для всех поверхностей.
+ * Ключи-ссылки на пересчитываемые слои (OCR) и курсор чтения «Понять»: не прочтения,
+ * всегда обновляются свежим значением. Общая конвенция знания — одна для всех поверхностей.
  */
-val REFRESHABLE_KNOWLEDGE: Set<String> = setOf(META_OCR_TEXT_REF, META_OCR_ATOMS_REF)
+val REFRESHABLE_KNOWLEDGE: Set<String> = setOf(
+    META_OCR_TEXT_REF, META_OCR_ATOMS_REF, META_READ_CHARS, META_READ_TOTAL_CHARS,
+)
 
 fun carryKnowledge(known: PointObject, produced: PointObject): PointObject = produced.copy(
     id = known.id,

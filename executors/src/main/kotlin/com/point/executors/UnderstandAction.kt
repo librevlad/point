@@ -10,6 +10,7 @@ import com.point.core.flow.ClassifierRole
 import com.point.core.flow.Cost
 import com.point.core.flow.EvidenceClass
 import com.point.core.flow.FieldCandidate
+import com.point.core.flow.InvestigationState
 import com.point.core.flow.KNOWN_SEMANTIC_TAGS
 import com.point.core.flow.Latency
 import com.point.core.flow.LayoutElement
@@ -22,6 +23,13 @@ import com.point.core.flow.META_EVIDENCE_SUFFIX
 import com.point.core.flow.META_GRAPH_ROLE_PREFIX
 import com.point.core.flow.META_OCR_ATOMS_REF
 import com.point.core.flow.META_OCR_TEXT_REF
+import com.point.core.flow.META_READ_CHARS
+import com.point.core.flow.META_READ_TOTAL_CHARS
+import com.point.core.flow.investigationOutcome
+import com.point.core.flow.partialReadMessage
+import com.point.core.flow.readProgressOf
+import com.point.core.flow.readWindowOf
+import com.point.core.flow.withInvestigation
 import com.point.core.flow.ReadingMode
 import com.point.core.flow.META_READING_MODE
 import com.point.core.flow.META_SEMANTIC_SUMMARY
@@ -188,16 +196,37 @@ class UnderstandRealizer @Inject constructor(
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
             runCatching {
-                val text = entitySourceText(input).take(MAX_CHARS)
-                val elements = layoutOf(text)
+
+                // #682/#683: объект читается частями по MAX_CHARS. already>0 значит, что
+                // прошлое нажатие «Понять» уже прочитало начало — это окно продолжает
+                // именно с того места, а не перечитывает его вслепую заново.
+                val full = entitySourceText(input)
+                val already = readProgressOf(input.metadata)
+                val resuming = already > 0
+                val window = readWindowOf(full, already, MAX_CHARS)
+                val elements = layoutOf(window)
 
                 if (elements.isEmpty()) {
-                    return@withContext if (input.state.kind == ObjectKind.IMAGE) {
-                        readWithEyes(input)
-                    } else {
-                        ActionResult.Failure("Нет текста для понимания", recoverable = true)
+                    return@withContext when {
+
+                        // Продолжение дочитало объект до конца, новых слов не осталось.
+                        // Итог судится по всему, что накопилось за прошлые окна — не только
+                        // за это пустое: найденное раньше не становится «не найдено» только
+                        // потому, что здесь добавить было нечего.
+                        resuming -> ActionResult.Done(
+                            NOTHING_NEW,
+                            Findings(
+                                metadata = investigationOutcome(input.metadata, cumulativeFactKeys(input.metadata))
+                                    .orEmptyInvestigation(),
+                            ),
+                        )
+                        input.state.kind == ObjectKind.IMAGE -> readWithEyes(input)
+                        else -> ActionResult.Failure("Нет текста для понимания", recoverable = true)
                     }
                 }
+                val readSoFar = already + window.length
+                val fullyRead = readSoFar >= full.length
+
                 val layer = atomLayer(input)
                 val index = layer?.promptIndex()
                 reportStage("Отправляю страницу модели")
@@ -218,9 +247,33 @@ class UnderstandRealizer @Inject constructor(
                 }
 
                 val (roles, roleDisputes) = roleReadings(answer, elements, layer)
+
+                // Курсор для следующего нажатия «Понять» — пока не дочитано, окно сдвигается
+                // дальше; дочитано — курсор больше не нужен (#682/#683).
+                val progress = if (fullyRead) {
+                    emptyMap()
+                } else {
+                    mapOf(META_READ_CHARS to readSoFar.toString(), META_READ_TOTAL_CHARS to full.length.toString())
+                }
+                val message = if (fullyRead) null else partialReadMessage(readSoFar, full.length)
+
                 if (fields.isEmpty() && parsed.single.isEmpty() && roles.isEmpty() && parsed.contacts.isEmpty()) {
 
-                    ActionResult.Done(NOTHING_NEW)
+                    // Investigation State (ADR-0001 §9): пока не дочитано — «недостаточно»,
+                    // не «не найдено». Дочитанное продолжение судится по всему накопленному
+                    // знанию, а не только по пустому итогу этого окна — найденное в прошлом
+                    // окне не гаснет. Однократное прочтение целиком не трогает состояние
+                    // вовсе — оно и раньше не заводилось у «Понять» без причины.
+                    val state = when {
+                        !fullyRead -> InvestigationState.INSUFFICIENTLY_INVESTIGATED
+                        resuming -> investigationOutcome(input.metadata, cumulativeFactKeys(input.metadata))
+                        else -> null
+                    }
+                    val extra = progress + state.orEmptyInvestigation()
+                    ActionResult.Done(
+                        message ?: NOTHING_NEW,
+                        extra.takeIf { it.isNotEmpty() }?.let { Findings(metadata = it) },
+                    )
                 } else {
 
                     val values = withoutHumanFacts(
@@ -240,16 +293,22 @@ class UnderstandRealizer @Inject constructor(
                         .filter { key -> Provenance.MODEL > provenanceOf(merged, key) }
                         .map { key -> key + META_SOURCE_SUFFIX to Provenance.MODEL.wire }
 
+                    val state = when {
+                        !fullyRead -> InvestigationState.INSUFFICIENTLY_INVESTIGATED
+                        resuming -> investigationOutcome(merged, values.keys)
+                        else -> null
+                    }
+
                     // «Понять» — знание о том же объекте, а не превращение (ADR-0001 §18):
                     // человек остаётся на исходнике, факты прирастают. Success здесь ронял
                     // его в дубль-объект со знаком вопроса.
                     val people = contactNodes(input, parsed.contacts)
                     ActionResult.Done(
-                        UNDERSTOOD,
+                        message ?: UNDERSTOOD,
                         Findings(
                             metadata = merged +
                                 annotations(merged, fields, judgedByLayer = layer != null, blocked = blocked) +
-                                roleAlts + roleSources,
+                                roleAlts + roleSources + progress + state.orEmptyInvestigation(),
                             objects = people.objects,
                             relations = people.relations,
                         ),
@@ -326,8 +385,24 @@ class UnderstandRealizer @Inject constructor(
             runCatching { AtomCodec.decode(File(ref).readText()) }.getOrNull()
         }
 
+    /** `null` — состояние сейчас не пересматривается, а не «сбросить на не исследовано». */
+    private fun InvestigationState?.orEmptyInvestigation(): Map<String, String> =
+        this?.let { withInvestigation(emptyMap(), UnderstandCapability.ID, it) }.orEmpty()
+
+    /**
+     * Все накопленные ключи знания без пересчитываемых ссылок и курсора чтения — курсор
+     * («сколько уже прочитано») и ссылка на слой OCR не факты о содержимом и не обязаны
+     * считаться находкой при итоговом суде.
+     */
+    private fun cumulativeFactKeys(metadata: Map<String, String>): Set<String> =
+        metadata.keys - com.point.core.flow.REFRESHABLE_KNOWLEDGE
+
     private companion object {
-        const val MAX_CHARS = 6_000
+
+        // Решение владельца (#682/#683) «брать за раз больше текста»: было 6 000 —
+        // втрое-вчетверо разумнее для одного разбора, но не «убрать предел вовсе»,
+        // квота бесплатных сервисов конечна.
+        const val MAX_CHARS = 24_000
 
         const val NOTHING_NEW = "Point уже прочитал всё, что здесь есть"
 

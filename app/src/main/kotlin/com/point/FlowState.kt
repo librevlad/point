@@ -34,6 +34,9 @@ data class FlowFrame(
 
     val textPreview: String? = null,
 
+    /** Предпросмотр упёрся в свой предел чтения — «Показать целиком» честно об этом скажет. */
+    val textPreviewTruncated: Boolean = false,
+
     val preview: androidx.compose.ui.graphics.ImageBitmap? = null,
 
     val latent: List<LatentBubble> = emptyList(),
