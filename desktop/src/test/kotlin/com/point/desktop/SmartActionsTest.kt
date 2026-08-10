@@ -295,6 +295,32 @@ class SmartActionsTest {
             }
     }
 
+    /**
+     * Разбор скрина владельца без live-теста: «Найти в тексте» уже отработала сама при
+     * получении объекта (autoInvestigate) и записала «смотрели — не нашлось», а в списке
+     * «что можно сделать» всё равно стояла кликабельной кнопкой поверх готового ответа.
+     * Причина — Capability исследования без meta.investigation = true.
+     */
+    @Test fun `«найти в тексте» — знание, а не кнопка поверх готового ответа`() {
+
+        val forText = pcRegistry().bubblesFor(ObjectState(ObjectKind.TEXT)).map { it.capabilityId.value }
+
+        assertTrue(
+            "исследование осталось пользовательской кнопкой: $forText",
+            "pc-entities" !in forText,
+        )
+    }
+
+    @Test fun `«найти в тексте» не уезжает на телефон вторым дублем`() {
+
+        val advertised = com.point.core.flow.advertisedActions(pcRegistry().all()).map { it.id }
+
+        assertTrue(
+            "исследование объявлено телефону как отдельное действие «на ПК»: $advertised",
+            "pc-entities" !in advertised,
+        )
+    }
+
     @Test fun `компьютер объявляет свои доставки и общие преобразования, и ничего сверх`() {
 
         val own = pcRegistry().all().map { it.id.value }.filter { it.startsWith("pc-") }

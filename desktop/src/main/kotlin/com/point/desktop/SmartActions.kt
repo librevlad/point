@@ -22,7 +22,12 @@ import javax.imageio.ImageIO
 class PcEntitiesCapability : Capability {
     override val id = CapabilityId("pc-entities")
     override val icon = "search"
-    override val meta = CapabilityMeta(priority = 25)
+
+    // Исследование — знание на исходнике, а не пользовательское действие (см. PcEntitiesRealizer
+    // ниже). Без этого флага она оставалась кликабельной кнопкой поверх уже готового ответа
+    // (autoInvestigate уже запускает её сама при получении объекта) и лишним дублем «на ПК»
+    // уезжала на телефон через advertisedActions() — разбор скрина владельца без live-теста.
+    override val meta = CapabilityMeta(priority = 25, investigation = true)
     override fun label(state: ObjectState) = "Найти в тексте"
     override fun accepts(state: ObjectState) = state.kind == ObjectKind.TEXT
     override fun produces(state: ObjectState) = ObjectState(ObjectKind.TEXT)
