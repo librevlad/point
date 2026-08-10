@@ -145,6 +145,7 @@ fun FirstScreen(
             factCount = facts.size,
             preview = previewBitmap,
             onTap = onHeroTap,
+            focusEntry = obj.state.kind == ObjectKind.IMAGE,
         )
 
         WorkingStage(workingStage)
@@ -584,6 +585,28 @@ private fun TextPreview(text: String, markdown: Boolean = false, truncated: Bool
     }
 }
 
+internal const val FOCUS_ENTRY_LABEL = "Выделить область"
+
+/** Значок в углу превью: одна иконка, без текста — не шумит, но говорит, что обводка есть. */
+@Composable
+private fun FocusEntryMark(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Surface(
+        onClick = onClick,
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+        modifier = modifier.size(34.dp),
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                imageVector = bubbleIcon("find"),
+                contentDescription = FOCUS_ENTRY_LABEL,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(18.dp),
+            )
+        }
+    }
+}
+
 @Composable
 private fun ObjectHeader(
     obj: PointObject,
@@ -591,6 +614,9 @@ private fun ObjectHeader(
     factCount: Int = 0,
     preview: ImageBitmap? = null,
     onTap: (() -> Unit)? = null,
+
+    /** Обводка — целая функция, а тап по картинке о ней не сообщает (#641). */
+    focusEntry: Boolean = false,
 ) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
 
@@ -609,8 +635,20 @@ private fun ObjectHeader(
                 enabled = onTap != null,
             ) { onTap?.invoke() },
         ) {
+
             val glow = ((if (thinking) 0.9f else 0.62f) + 0.09f * factCount.coerceAtMost(4)).coerceAtMost(1f)
             Portal(size = headerSize + 68.dp, intensity = glow)
+
+            // Тихий, но видимый вход в обводку (#641): без него целая функция Focus
+            // открывалась только тапом по картинке, о котором ниоткуда не узнать.
+            if (focusEntry && onTap != null) {
+                Box(
+                    modifier = Modifier.size(headerSize),
+                    contentAlignment = Alignment.BottomEnd,
+                ) {
+                    FocusEntryMark(onClick = onTap)
+                }
+            }
             AliveSurface(
                 kind = obj.state.kind,
                 thinking = thinking,
