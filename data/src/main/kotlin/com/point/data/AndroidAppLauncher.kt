@@ -32,6 +32,34 @@ class AndroidAppLauncher @Inject constructor(
             .toList()
     }
 
+    /**
+     * Спрашиваем систему, кто объявил себя умеющим номер: звонилки, SMS-приложения,
+     * определители. Своего списка имён у Point нет (#466).
+     */
+    override suspend fun handlersForPhone(phone: String): List<AppTarget> = withContext(Dispatchers.IO) {
+        val pm = context.packageManager
+        val digits = phone.filter { it.isDigit() || it == '+' }
+        listOf(
+            Intent(Intent.ACTION_VIEW, android.net.Uri.parse("tel:$digits")),
+            Intent(Intent.ACTION_SENDTO, android.net.Uri.parse("smsto:$digits")),
+        )
+            .flatMap { pm.queryIntentActivities(it, 0) }
+            .asSequence()
+            .filter { it.activityInfo.packageName != context.packageName }
+            .map { AppTarget(it.loadLabel(pm).toString(), it.activityInfo.packageName, it.activityInfo.name) }
+            .distinctBy { it.packageName }
+            .toList()
+    }
+
+    override suspend fun launchWithPhone(target: AppTarget, phone: String): Unit = withContext(Dispatchers.IO) {
+        val digits = phone.filter { it.isDigit() || it == '+' }
+        val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse("tel:$digits")).apply {
+            setClassName(target.packageName, target.activity)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        context.startActivity(intent)
+    }
+
     override suspend fun handlersForMime(mime: String): List<AppTarget> = withContext(Dispatchers.IO) {
         val pm = context.packageManager
         val query = Intent(Intent.ACTION_VIEW).setType(mime)

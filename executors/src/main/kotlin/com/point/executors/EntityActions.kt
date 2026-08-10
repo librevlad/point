@@ -63,7 +63,10 @@ private fun dialable(phone: String) = phone.filter { it.isDigit() || it == '+' }
 class CallCapability @Inject constructor() : Capability {
     override val id = ID
     override val icon = "call"
-    override val meta = CapabilityMeta(priority = 12)
+
+    // #466: «я всё равно на незнакомый номер звонить не буду». Звонок больше не стоит высоко
+    // сам по себе — порядок решает то, чем человек пользуется (обучение на выборах).
+    override val meta = CapabilityMeta(priority = 40)
     override fun label(state: ObjectState) = "Позвонить"
     override fun accepts(state: ObjectState) = state.has(Feature.HAS_PHONE)
     override fun produces(state: ObjectState) = state
@@ -90,7 +93,7 @@ class CallRealizer @Inject constructor(
 class SmsCapability @Inject constructor() : Capability {
     override val id = ID
     override val icon = "message"
-    override val meta = CapabilityMeta(priority = 14)
+    override val meta = CapabilityMeta(priority = 42)
     override fun label(state: ObjectState) = "Сообщение"
     override fun accepts(state: ObjectState) = state.has(Feature.HAS_PHONE)
     override fun produces(state: ObjectState) = state
