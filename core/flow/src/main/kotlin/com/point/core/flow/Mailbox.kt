@@ -3,6 +3,14 @@ package com.point.core.flow
 import java.net.URL
 import java.net.HttpURLConnection
 
+/**
+ * Почта между своими устройствами.
+ *
+ * Сервер отдаёт письмо, но держит его у себя, пока приём не подтверждён. Значит
+ * подтверждение — это слово «сохранено», а не «скачано»: пока письмо не легло на
+ * диск, подтверждать нечего. Раньше подтверждение уходило сразу после скачивания, и
+ * падение на разборе стирало объект человека с сервера навсегда (#680).
+ */
 class Mailbox(
     private val base: String,
 
@@ -11,7 +19,7 @@ class Mailbox(
     private val readTimeoutMs: Int = 30_000,
 ) {
 
-    class Letter(val code: Int, val blob: ByteArray?)
+    class Letter(val code: Int, val blob: ByteArray?, val id: String = "")
 
     fun post(deviceId: String, blob: ByteArray): Int = runCatching {
         val c = open("$base/mbx/$deviceId")
@@ -24,23 +32,41 @@ class Mailbox(
         code
     }.getOrElse { NETWORK }
 
-    fun take(deviceId: String): Letter = runCatching {
-        val c = open("$base/mbx/$deviceId")
-        val code = c.responseCode
-        val blob = if (code == 200) c.inputStream.readBytes() else null
-        val blobId = c.getHeaderField("X-Blob-Id")
-        c.disconnect()
-        if (blob != null && blobId != null) ack(deviceId, blobId)
-        Letter(code, blob)
-    }.getOrElse { Letter(NETWORK, null) }
+    /**
+     * Забрать одно письмо. Приём подтверждается только после того, как [keep]
+     * вернулся: сначала на диск, потом подтверждение.
+     *
+     * Сбой сохранения выходит наружу и оставляет письмо на сервере — оно приедет
+     * снова. Разбор к этому моменту ещё не начинался: он отдельный шаг, и упасть
+     * на нём уже не страшно.
+     */
+    fun take(deviceId: String, keep: (Letter) -> Unit): Letter {
+        val letter = runCatching {
+            val c = open("$base/mbx/$deviceId")
+            val code = c.responseCode
+            val blob = if (code == 200) c.inputStream.readBytes() else null
+            val id = c.getHeaderField("X-Blob-Id").orEmpty()
+            c.disconnect()
+            Letter(code, blob, id)
+        }.getOrElse { Letter(NETWORK, null) }
 
-    fun drain(deviceId: String) {
-        repeat(MAX_DRAIN) { if (take(deviceId).blob == null) return }
+        if (letter.blob == null || letter.id.isBlank()) return letter
+        keep(letter)
+        confirm(deviceId, letter.id)
+        return letter
     }
 
-    private fun ack(deviceId: String, blobId: String) {
+    /**
+     * Выбросить то, что осталось в ящике с прошлых разговоров. Хранить нечего:
+     * здесь лежат ответы на вопросы, которые уже никто не ждёт.
+     */
+    fun drain(deviceId: String) {
+        repeat(MAX_DRAIN) { if (take(deviceId) { }.blob == null) return }
+    }
+
+    private fun confirm(deviceId: String, letterId: String) {
         runCatching {
-            val c = open("$base/mbx/$deviceId/ack?blob=$blobId")
+            val c = open("$base/mbx/$deviceId/ack?blob=$letterId")
             c.requestMethod = "POST"
             c.doOutput = true
             c.outputStream.use { it.write(ByteArray(0)) }
