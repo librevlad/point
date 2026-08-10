@@ -12,6 +12,8 @@ class VoiceSource @Inject constructor() : ObjectSource {
 
     override val id = "voice"
     override val label = "Звукозапись"
+
+    override val what = "записать голос и расшифровать словами"
     override val icon = "transcribe"
 
     override fun isAvailable(context: Context) = true
