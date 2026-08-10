@@ -721,4 +721,121 @@ class UnderstandRealizerTest {
         assertTrue(result is ActionResult.Done)
         assertTrue("текст QR дошёл до модели", lastPrompt!!.contains("Ночь: связь после реанимации"))
     }
+
+    // #682/#683 — «читать больше и умнее»: за раз берётся больше текста, а объект
+    // длиннее одного разбора читается частями с честным «прочитано начало — N из M».
+
+    private fun longDocument(paragraphs: Int = 700): String =
+        (1..paragraphs).joinToString(" ") { "Строка номер $it содержит немного текста для примера." }
+
+    @Test
+    fun `предел разбора поднят вчетверо — документ на 10 тысяч знаков читается одним заходом`() = runTest {
+
+        // Старый предел был 6 000: документ на ~10 000 не проходил бы одним окном.
+        val doc = (1..5).joinToString(" ") { "Абзац $it: " + "слово ".repeat(300) }
+        assertTrue(doc.length in 6_001..24_000)
+
+        val result = realizer("PHONE=+380671234567").perform(textObject(content = doc))
+
+        assertTrue(result is ActionResult.Done)
+        assertEquals("+380671234567", (result as ActionResult.Done).findings!!.metadata["entity.phone"])
+        assertEquals("Стало понятнее", result.message)
+    }
+
+    @Test
+    fun `длинный объект — первое нажатие читает начало и честно называет, сколько`() = runTest {
+        val doc = longDocument()
+        assertTrue("документ обязан быть длиннее одного окна разбора", doc.length > 24_000)
+
+        // Окно обрезается по границе слова (не ровно 24 000) — ожидание считается той же
+        // функцией, которой пользуется сам исполнитель, а не постоянным числом.
+        val expectedRead = com.point.core.flow.readWindowOf(doc, already = 0, limit = 24_000).length
+
+        val result = realizer("PHONE=+380671234567").perform(textObject(content = doc)) as ActionResult.Done
+
+        assertEquals(com.point.core.flow.partialReadMessage(expectedRead, doc.length), result.message)
+        assertTrue(result.message.contains("Прочитано начало"))
+        assertTrue("дверь «читать дальше» — то же действие «Понять»", result.message.contains("«Понять»"))
+
+        val meta = result.findings!!.metadata
+        assertEquals("+380671234567", meta["entity.phone"])
+        assertEquals(expectedRead.toString(), meta[com.point.core.flow.META_READ_CHARS])
+        assertEquals(doc.length.toString(), meta[com.point.core.flow.META_READ_TOTAL_CHARS])
+    }
+
+    @Test
+    fun `частично прочитанный объект — исследовано недостаточно, а не найдено`() = runTest {
+        val doc = longDocument()
+
+        val result = realizer("PHONE=+380671234567").perform(textObject(content = doc)) as ActionResult.Done
+
+        assertEquals(
+            com.point.core.flow.InvestigationState.INSUFFICIENTLY_INVESTIGATED,
+            com.point.core.flow.investigationStateOf(result.findings!!.metadata, UnderstandCapability.ID),
+        )
+    }
+
+    @Test
+    fun `дверь «читать дальше» — второе нажатие продолжает со второго окна, не с начала`() = runTest {
+        val doc = longDocument()
+        assertTrue("документ обязан требовать больше одного окна", doc.length > 24_000)
+        assertTrue("для этого теста весь хвост обязан укладываться во второе окно", doc.length <= 2 * 24_000)
+
+        val engine = realizer("PHONE=+380671234567", "EMAIL=a@b.com")
+
+        val first = engine.perform(textObject(content = doc)) as ActionResult.Done
+        val partiallyRead = textObject(content = doc, metadata = first.findings!!.metadata)
+
+        engine.perform(partiallyRead)
+
+        // Второй запрос модели обязан нести хвост документа, а не тот же кусок начала.
+        val secondPrompt = prompts.last()
+        assertFalse(
+            "второй запрос не должен снова начинаться с первой строки",
+            secondPrompt.contains("Строка номер 1 содержит"),
+        )
+        assertTrue("второй запрос обязан донести хвост документа", secondPrompt.contains("Строка номер 700"))
+    }
+
+    @Test
+    fun `дочитанное продолжение больше не частично и не молчит о найденном в первом окне`() = runTest {
+
+        // Документ укладывается в два окна: второе окно не находит ничего нового,
+        // но телефон из первого окна не должен превратиться в «не найдено».
+        val doc = longDocument()
+        assertTrue(doc.length <= 2 * 24_000)
+        val engine = realizer("PHONE=+380671234567", "NONE")
+
+        val first = engine.perform(textObject(content = doc)) as ActionResult.Done
+        val partiallyRead = textObject(content = doc, metadata = first.findings!!.metadata)
+
+        val second = engine.perform(partiallyRead) as ActionResult.Done
+
+        assertFalse("дочитанный объект больше не частичен", second.message.contains("Прочитано начало"))
+        assertEquals(
+            com.point.core.flow.InvestigationState.FOUND,
+            com.point.core.flow.investigationStateOf(
+                second.findings?.metadata ?: partiallyRead.metadata, UnderstandCapability.ID,
+            ),
+        )
+    }
+
+    @Test
+    fun `дочитанный до конца объект — повторное «Понять» не зовёт модель заново`() = runTest {
+        val doc = "Короткий документ без ничего интересного."
+        val done = textObject(
+            content = doc,
+            metadata = mapOf(
+                com.point.core.flow.META_READ_CHARS to doc.length.toString(),
+                com.point.core.flow.META_READ_TOTAL_CHARS to doc.length.toString(),
+            ),
+        )
+
+        val before = prompts.size
+        val result = realizer().perform(done)
+
+        assertEquals(before, prompts.size)
+        assertTrue(result is ActionResult.Done)
+        assertEquals("Point уже прочитал всё, что здесь есть", (result as ActionResult.Done).message)
+    }
 }

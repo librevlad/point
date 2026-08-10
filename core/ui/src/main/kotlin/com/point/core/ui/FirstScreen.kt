@@ -102,6 +102,7 @@ fun FirstScreen(
     relations: List<Relation> = emptyList(),
     onFound: (PointObject) -> Unit = {},
     textPreview: String? = null,
+    textPreviewTruncated: Boolean = false,
     latent: List<LatentBubble> = emptyList(),
     enriching: List<String> = emptyList(),
     failed: List<com.point.core.flow.FailedInvestigation> = emptyList(),
@@ -195,7 +196,11 @@ fun FirstScreen(
         }
 
         if (textPreview != null && inputPrompt == null) {
-            TextPreview(text = textPreview, markdown = obj.mime == "text/markdown")
+            TextPreview(
+                text = textPreview,
+                markdown = obj.mime == "text/markdown",
+                truncated = textPreviewTruncated,
+            )
             Spacer(Modifier.height(28.dp))
         }
 
@@ -501,6 +506,13 @@ const val TEXT_PREVIEW_HEAD = 2_000
 
 const val COLLAPSED_PREVIEW_LINES = 3
 
+/**
+ * Предел, до которого предпросмотр читает объект (см. вызывающую сторону — она читает
+ * ровно столько же). Раньше этот предел знала только вызывающая сторона, а кнопка
+ * «Показать целиком» обещала «целиком», даже упёршись в него (#682/#683).
+ */
+const val TEXT_PREVIEW_LOAD_LIMIT = 100_000
+
 fun textPreviewHead(text: String, limit: Int = TEXT_PREVIEW_HEAD): String {
     if (text.length <= limit) return text
     val head = text.take(limit)
@@ -508,8 +520,23 @@ fun textPreviewHead(text: String, limit: Int = TEXT_PREVIEW_HEAD): String {
     return if (cut > limit / 2) head.substring(0, cut) else head
 }
 
+/**
+ * «Показать целиком» показывает целиком либо честно называет, сколько показывает
+ * (#682/#683): если сам предпросмотр упёрся в свой предел чтения, кнопка не обещает
+ * «целиком» — за пределом может быть ещё, и число становится нижней границей.
+ */
+fun expandTextLabel(hiddenChars: Int, atLimit: Boolean): String = if (atLimit) {
+    "Показать больше · ещё не менее ${grouped(hiddenChars)} символов"
+} else {
+    "Показать целиком · ещё ${grouped(hiddenChars)} символов"
+}
+
+/** Подпись под развёрнутым текстом, который сам упёрся в предел чтения. */
+fun truncatedPreviewNotice(shownChars: Int): String =
+    "Показаны первые ${grouped(shownChars)} символов — в объекте может быть ещё"
+
 @Composable
-private fun TextPreview(text: String, markdown: Boolean = false) {
+private fun TextPreview(text: String, markdown: Boolean = false, truncated: Boolean = false) {
 
     var expanded by rememberSaveable(text.length) { mutableStateOf(false) }
     val head = remember(text) { textPreviewHead(text) }
@@ -545,11 +572,15 @@ private fun TextPreview(text: String, markdown: Boolean = false) {
     }
     if (head.length < text.length) {
         TextButton(onClick = { expanded = !expanded }) {
-            Text(
-                if (expanded) "Свернуть"
-                else "Показать целиком · ещё ${grouped(text.length - head.length)} символов",
-            )
+            Text(if (expanded) "Свернуть" else expandTextLabel(text.length - head.length, truncated))
         }
+    }
+    if (expanded && truncated) {
+        Text(
+            text = truncatedPreviewNotice(text.length),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

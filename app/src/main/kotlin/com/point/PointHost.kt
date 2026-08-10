@@ -314,6 +314,7 @@ fun PointHost(
                     relations = current.relations,
                     onFound = onFound,
                     textPreview = current.textPreview,
+                    textPreviewTruncated = current.textPreviewTruncated,
                     latent = current.latent,
                     enriching = current.enriching,
                     failed = current.failed,
