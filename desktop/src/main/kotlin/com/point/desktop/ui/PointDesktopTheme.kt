@@ -38,7 +38,29 @@ object PointColors {
 
 private val Unbounded = FontFamily(Font(resource = "unbounded.ttf", weight = FontWeight.Normal))
 
-private val Manrope = FontFamily(Font(resource = "manrope.ttf", weight = FontWeight.Normal))
+/**
+ * Manrope — variable-шрифт с осью веса 200…800, и по умолчанию эта ось стоит на 200:
+ * телефон уводит её на 400–700 явно (`core:ui` Type.kt), а ПК объявлял просто «файл» и потому
+ * рисовал весь свой текст ExtraLight. Отсюда и «слишком тонкие шрифты на ПК» (#626) — не
+ * оттенок вкуса, а начертание, которого дизайн не выбирал.
+ *
+ * Ось задаётся здесь через skia: desktop-обёртка `Font(resource = …)` вариаций не принимает,
+ * а одно семейство держит одно начертание — поэтому вес выбирается семейством, не `fontWeight`.
+ */
+internal fun manropeFace(weight: Int): org.jetbrains.skia.Typeface {
+    val bytes = PointColors::class.java.getResourceAsStream("/manrope.ttf")!!.use { it.readBytes() }
+    return org.jetbrains.skia.FontMgr.default
+        .makeFromData(org.jetbrains.skia.Data.makeFromBytes(bytes))!!
+        .makeClone(org.jetbrains.skia.FontVariation("wght", weight.toFloat()))
+}
+
+private fun manrope(weight: Int): FontFamily =
+    FontFamily(androidx.compose.ui.text.platform.Typeface(manropeFace(weight)))
+
+private val Manrope = manrope(400)
+
+/** На ступень плотнее — подписи, метки и вторые строки компакта (решение владельца, #626). */
+private val ManropeDense = manrope(500)
 
 @OptIn(androidx.compose.ui.text.ExperimentalTextApi::class)
 private val PointRasterization = androidx.compose.ui.text.PlatformTextStyle(
@@ -71,12 +93,12 @@ object PointType {
     )
 
     val small = TextStyle(
-        fontFamily = Manrope, fontSize = 14.sp, color = PointColors.muted,
+        fontFamily = ManropeDense, fontSize = 14.sp, color = PointColors.muted,
         platformStyle = PointRasterization,
     )
 
     val label = TextStyle(
-        fontFamily = Manrope, fontSize = 12.sp,
+        fontFamily = ManropeDense, fontSize = 12.sp,
         letterSpacing = 1.4.sp, color = PointColors.muted,
         platformStyle = PointRasterization,
     )
