@@ -14,6 +14,12 @@ data class AiProvider(
     val models: String,
 
     val freeNote: String? = null,
+
+    /**
+     * Когда бесплатность проверяли (#575). Список стареет, и знать это нужно — но человеку
+     * на глаза дата не выходит: в подписи остаётся цена, а не наша бухгалтерия.
+     */
+    val checkedAt: String? = null,
 )
 
 const val GROQ_PROVIDER_ID = "groq"
@@ -28,7 +34,8 @@ val AI_PROVIDERS: List<AiProvider> = listOf(
         keyUrl = "https://openrouter.ai/keys",
         baseUrl = "https://openrouter.ai/api/v1",
         models = "google/gemma-4-31b-it:free,openai/gpt-oss-20b:free",
-        freeNote = "бесплатные модели есть (проверено 08.2026)",
+        freeNote = "бесплатные модели есть",
+        checkedAt = "08.2026",
     ),
     AiProvider(
         id = GROQ_PROVIDER_ID,
@@ -37,7 +44,8 @@ val AI_PROVIDERS: List<AiProvider> = listOf(
         keyUrl = "https://console.groq.com/keys",
         baseUrl = "https://api.groq.com/openai/v1",
         models = "llama-3.3-70b-versatile,llama-3.1-8b-instant",
-        freeNote = "бесплатный уровень с лимитом в минуту (проверено 08.2026)",
+        freeNote = "бесплатный уровень с лимитом в минуту",
+        checkedAt = "08.2026",
     ),
     AiProvider(
         id = MISTRAL_PROVIDER_ID,
@@ -47,7 +55,8 @@ val AI_PROVIDERS: List<AiProvider> = listOf(
         keyUrl = "https://console.mistral.ai/api-keys",
         baseUrl = "https://api.mistral.ai/v1",
         models = "pixtral-12b-2409,mistral-medium-latest",
-        freeNote = "бесплатный уровень после подтверждения телефона (проверено 08.2026)",
+        freeNote = "бесплатный уровень после подтверждения телефона",
+        checkedAt = "08.2026",
     ),
     AiProvider(
         id = "sambanova",
@@ -56,7 +65,8 @@ val AI_PROVIDERS: List<AiProvider> = listOf(
         keyUrl = "https://cloud.sambanova.ai/apis",
         baseUrl = "https://api.sambanova.ai/v1",
         models = "gemma-4-31B-it",
-        freeNote = "бесплатный уровень (проверено 08.2026)",
+        freeNote = "бесплатный уровень",
+        checkedAt = "08.2026",
     ),
     AiProvider(
         id = "gemini",
@@ -66,7 +76,8 @@ val AI_PROVIDERS: List<AiProvider> = listOf(
 
         baseUrl = "https://generativelanguage.googleapis.com/v1beta/openai",
         models = "gemini-flash-latest,gemini-pro-latest",
-        freeNote = "бесплатная квота в сутки (проверено 08.2026)",
+        freeNote = "бесплатная квота в сутки",
+        checkedAt = "08.2026",
     ),
     AiProvider(
         id = "cerebras",
@@ -75,7 +86,8 @@ val AI_PROVIDERS: List<AiProvider> = listOf(
         keyUrl = "https://cloud.cerebras.ai",
         baseUrl = "https://api.cerebras.ai/v1",
         models = "gpt-oss-120b",
-        freeNote = "бесплатный уровень (проверено 08.2026)",
+        freeNote = "бесплатный уровень",
+        checkedAt = "08.2026",
     ),
     AiProvider(
         id = "zhipu",
@@ -85,7 +97,8 @@ val AI_PROVIDERS: List<AiProvider> = listOf(
         keyUrl = "https://z.ai/manage-apikey/apikey-list",
         baseUrl = "https://api.z.ai/api/paas/v4",
         models = "glm-4.6v-flash",
-        freeNote = "бесплатная модель, лимит не назван (проверено 08.2026)",
+        freeNote = "бесплатная модель, лимит не назван",
+        checkedAt = "08.2026",
     ),
     AiProvider(
         id = "openai",

@@ -359,7 +359,7 @@ private fun CrashBanner(onSend: () -> Unit, onDismiss: () -> Unit) {
                     color = MaterialTheme.colorScheme.onErrorContainer,
                 )
                 Text(
-                    "Нажмите, чтобы отправить отчёт разработчику - только по вашему решению.",
+                    "Нажмите, чтобы отправить отчёт разработчику.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onErrorContainer,
                 )

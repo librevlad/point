@@ -55,8 +55,11 @@ class AiProvidersTest {
     @Test
     fun `обещание бесплатности всегда с датой проверки`() {
 
-        AI_PROVIDERS.mapNotNull { it.freeNote }.forEach { note ->
-            assertTrue("«$note» — обещание без даты проверки", note.contains("проверено"))
+        // Дата известна, но человеку на глаза не выходит (#575): список стареет, и знать это
+        // нужно нам, а в подписи человеку остаётся цена, а не наша бухгалтерия.
+        AI_PROVIDERS.filter { it.freeNote != null }.forEach { provider ->
+            assertTrue("«${provider.freeNote}» — обещание без даты проверки", provider.checkedAt != null)
+            assertTrue("дата проверки вышла человеку на глаза", "проверено" !in provider.freeNote!!)
         }
     }
 

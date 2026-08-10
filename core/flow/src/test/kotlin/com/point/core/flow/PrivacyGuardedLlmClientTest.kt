@@ -44,7 +44,7 @@ class PrivacyGuardedLlmClientTest {
         assertEquals(0, spy.calls)
         assertTrue(
             "причина названа словами человека: ${failure?.message}",
-            failure?.message?.contains("Только на телефоне") == true,
+            failure?.message?.contains("настройк") == true,
         )
     }
 

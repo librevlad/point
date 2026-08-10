@@ -38,7 +38,7 @@ class PrivacyGuardedLlmClient(
 
 fun chainClosedBy(level: PrivacyLevel): String = when (level) {
     PrivacyLevel.DEVICE_ONLY ->
-        "Наружу ничего не отправляется — в настройках выбрано «Только на телефоне»"
+        "Наружу сейчас не отправляем — это меняется в настройках"
     PrivacyLevel.NO_TRAINING ->
         "Наружу можно только к тем, кто обещал не учиться на присланном, — такого сейчас нет"
     PrivacyLevel.FREE_FIRST -> "Отправка наружу закрыта настройками"

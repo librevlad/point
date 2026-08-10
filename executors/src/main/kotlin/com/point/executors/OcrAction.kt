@@ -236,7 +236,7 @@ private fun unreadable(who: String, why: String): String =
         "Лучше переснять при ровном свете и поближе."
 
 private fun chainClosed(level: PrivacyLevel): String = when (level) {
-    PrivacyLevel.DEVICE_ONLY -> "Наружу ничего не отправляется — в настройках выбрано «Только на телефоне»"
+    PrivacyLevel.DEVICE_ONLY -> "Наружу сейчас не отправляем — это меняется в настройках"
     else -> "Читают только те, кто обещал не учиться на присланном, — так выбрано в настройке " +
         "«Куда можно отправлять»"
 }

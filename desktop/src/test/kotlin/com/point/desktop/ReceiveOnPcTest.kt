@@ -117,10 +117,14 @@ class ReceiveOnPcTest {
         val server = Server(box, mutableListOf(DropWait.Failed("Сервер Point не отвечает")))
         val pc = receiver(server) { _, _, _ -> }
 
+        // Состояние сменяется быстро — ловим всё сказанное, а не мгновенный снимок.
+        val said = java.util.concurrent.CopyOnWriteArrayList<String>()
+        pc.onWaiting = { waiting -> waiting?.failed?.let { said += it } }
+
         pc.start { }
 
-        waitUntil("причина не показана") { pc.waiting.value?.failed != null }
-        assertEquals("Сервер Point не отвечает", pc.waiting.value?.failed)
+        waitUntil("причина не показана") { said.isNotEmpty() }
+        assertEquals("Сервер Point не отвечает", said.first())
         waitUntil("ожидание прекратилось после одной неудачи") { server.awaits > 1 }
         pc.cancel()
     }

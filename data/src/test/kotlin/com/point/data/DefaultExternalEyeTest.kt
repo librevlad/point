@@ -111,7 +111,7 @@ class DefaultExternalEyeTest {
         assertFalse(chain.available())
         val error = runCatching { chain.read(pageObject) }.exceptionOrNull()
 
-        assertTrue(error?.message!!, error.message!!.contains("Только на телефоне"))
+        assertTrue(error?.message!!, error.message!!.contains("настройк"))
         assertFalse(error.message!!, error.message!!.contains("ключ"))
     }
 
