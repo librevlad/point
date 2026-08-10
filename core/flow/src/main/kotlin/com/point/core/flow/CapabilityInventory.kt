@@ -21,19 +21,26 @@ fun derivedYield(capability: Capability, state: ObjectState): ActionYield {
  * вместо обычного «что вернёт», — дверь при этом никуда не девается, только у обещания
  * меняются слова.
  */
-fun yieldLabel(yields: ActionYield, intent: Intent, unusableReason: String? = null): String {
+/**
+ * `null` — второй строки нет вовсе (#629): у «Сохранить», «Поделиться», «Напечатать» имя уже
+ * сказало всё, а одинаковая подпись под шестью действиями подряд ничего не добавляла.
+ * Подпись остаётся там, где ей есть что добавить: что вернётся, куда уйдёт, почему нельзя.
+ */
+fun yieldLabel(yields: ActionYield, intent: Intent, unusableReason: String? = null): String? {
     if (unusableReason != null) return unusableReason
     return when (yields) {
         is ActionYield.New -> "вернёт " + (yields.noun ?: yieldNoun(yields.kind))
 
         ActionYield.Same -> "найдёт суть, суммы, даты и контакты"
-        ActionYield.Copied -> "ляжет в буфер обмена"
         ActionYield.Unknown -> "вернёт то, что попросите"
+
+        // «Копировать» и так говорит, что произойдёт.
+        ActionYield.Copied -> null
 
         ActionYield.None -> when (intent) {
             Intent.OPEN -> "откроет в другом приложении"
             Intent.UNDERSTAND -> "покажет здесь же"
-            else -> "отправит и вернётся сюда"
+            else -> null
         }
     }
 }

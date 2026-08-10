@@ -75,18 +75,15 @@ class CapabilityInventoryTest {
     }
 
     @Test
-    fun `копирование не обещает отправки — оно кладёт в буфер`() {
+    fun `копирование ничего не дописывает — имя уже сказало всё (#629)`() {
 
-        val label = yieldLabel(ActionYield.Copied, Intent.SEND)
-
-        assertEquals("ляжет в буфер обмена", label)
-        assertFalse("копирование снова обещает отправку: " + label, label.contains("отправ"))
+        assertNull(yieldLabel(ActionYield.Copied, Intent.SEND))
     }
 
     @Test
     fun `подпись «Понять» называет результат, а не механику`() {
 
-        val label = yieldLabel(ActionYield.Same, Intent.UNDERSTAND)
+        val label = yieldLabel(ActionYield.Same, Intent.UNDERSTAND)!!
 
         assertFalse("подпись снова про механику: " + label, label.contains("объект тот же"))
         assertTrue("подпись не называет ничего из того, что человек получит: " + label,
@@ -94,18 +91,15 @@ class CapabilityInventoryTest {
     }
 
     @Test
-    fun `терминальное договаривает, что оно вместо объекта сделает`() {
+    fun `у терминального действия второй строки нет, если ей нечего добавить (#629)`() {
 
-        assertEquals("отправит и вернётся сюда", yieldLabel(ActionYield.None, Intent.SEND))
+        // Решение владельца: у «Сохранить», «Поделиться», «Напечатать» имя уже описывает
+        // работу — одинаковая подпись под шестью действиями подряд не добавляла ничего.
+        assertNull(yieldLabel(ActionYield.None, Intent.SEND))
+
+        // А там, где подписи есть что сказать, она остаётся: куда уйдёт и где покажется.
         assertEquals("откроет в другом приложении", yieldLabel(ActionYield.None, Intent.OPEN))
         assertEquals("покажет здесь же", yieldLabel(ActionYield.None, Intent.UNDERSTAND))
-
-        Intent.entries.forEach { intent ->
-            assertFalse(
-                "подпись начинается с отрицания: " + yieldLabel(ActionYield.None, intent),
-                yieldLabel(ActionYield.None, intent).startsWith("ничего"),
-            )
-        }
     }
 
     @Test
@@ -138,7 +132,8 @@ class CapabilityInventoryTest {
         ) + ObjectKind.entries.map { ActionYield.New(it) }
         val said = all.flatMap { y -> Intent.entries.map { yieldLabel(y, it) } }
 
-        assertTrue(said.none { it.isBlank() })
+        // Пустая строка — не подпись, а дырка на экране: подпись либо есть, либо её нет вовсе.
+        assertTrue(said.none { it != null && it.isBlank() })
     }
 
     @Test
