@@ -122,22 +122,7 @@ fun main(args: Array<String>) {
         ),
     )
     val registry = DesktopRegistry(
-        setOf(
-
-            PcOpenCapability(), PcCopyCapability(), PcRevealCapability(), PcSaveAsCapability(),
-            PcDownloadCapability(), PcToPhoneCapability(), PcPrintCapability(),
-            PcOpenLinkCapability(),
-
-            // «Понять»/«Перевести»/«Спросить AI» на компьютере убраны (#701, решение
-            // владельца «Убрать, ПК — только исполнитель»): результат для человека тот
-            // же, что и на телефоне, — компьютер не должен быть отдельной дверью к
-            // тому же самому. Остаются действия, привязанные к месту исполнения.
-            PcTranscribeCapability(),
-
-            PcEntitiesCapability(),
-        ) +
-
-            com.point.core.flow.capabilities.sharedCapabilities(),
+        desktopCapabilities(),
 
         // Дверь видна, только когда за ней есть исполнитель под этот объект (аудит, блок 1.6).
         runnable = resolver::canRun,
@@ -198,25 +183,20 @@ fun main(args: Array<String>) {
     runCatching { com.point.core.flow.decodePcCaps(phoneCapsFile.readText()) }
         .getOrNull()?.let { state.setPhoneCaps(it, persist = false) }
 
-    val pcSuffix = mapOf(
-        "pc-open" to "Открыть на компьютере",
-        "pc-copy" to "В буфер компьютера",
-        "pc-reveal" to "Показать в папке на ПК",
-    )
     val pcUnavailable: Map<String, String?> = mapOf(
         "pc-download" to if (downloader.available()) null else "на компьютере нет yt-dlp",
 
         "pc-print" to whyCannotPrint(),
         "pdf" to officeToPdf.whyUnavailable(),
 
-        "pc-transcribe" to speechKeyMissing(pointDir),
+        "transcribe" to speechKeyMissing(pointDir),
 
         "drop-link" to if (accountStore.current() != null) null else "компьютер не вошёл в аккаунт",
     )
     val pcRemoteActions = com.point.core.flow.advertisedActions(registry.all()).map { action ->
         action.copy(
 
-            label = pcSuffix[action.id] ?: (action.label + " на ПК"),
+            label = phoneFacingLabel(action),
             unavailable = pcUnavailable[action.id],
 
             leavesCircle = resolver.leavesDevice(com.point.core.model.CapabilityId(action.id)),

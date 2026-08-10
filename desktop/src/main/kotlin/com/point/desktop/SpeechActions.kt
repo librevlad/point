@@ -19,8 +19,15 @@ import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 
+/** Тот же идентификатор, что у расшифровки на телефоне (`:executors`, TranscribeCapability). */
+private val TRANSCRIBE = CapabilityId("transcribe")
+
 class PcTranscribeCapability : Capability {
-    override val id = CapabilityId("pc-transcribe")
+
+    // Не своё умение компьютера, а общая способность: расшифровка одинакова, где бы её ни
+    // сделали, — телефон узнаёт её по тому же id и ставит одной строкой, а компьютер
+    // становится вторым исполнителем (#628).
+    override val id = TRANSCRIBE
     override val icon = "voice"
     override val meta = CapabilityMeta(priority = 21, latency = Latency.SLOW, network = true, auth = true)
     override fun label(state: ObjectState) = "Расшифровать"
@@ -34,7 +41,7 @@ class PcTranscribeRealizer(
     private val connectTimeoutMs: Int = 15_000,
     private val readTimeoutMs: Int = 180_000,
 ) : Realizer {
-    override val capabilityId = CapabilityId("pc-transcribe")
+    override val capabilityId = TRANSCRIBE
 
     override val meta = com.point.core.flow.RealizerMeta(kind = com.point.core.flow.RealizerKind.CLOUD)
 

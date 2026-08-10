@@ -10,16 +10,15 @@ import com.point.core.flow.Realizer
 import com.point.core.flow.AiChatResponder
 import com.point.core.flow.Resolver
 import com.point.executors.ExtractAllCapability
-import com.point.core.model.CapabilityId
 import com.point.executors.AppCapability
 import com.point.executors.PcCapability
 import com.point.executors.PcRealizer
 import com.point.executors.AppOpenRealizer
 import com.point.executors.AiCapability
-import com.point.executors.RemotePcCapability
+import com.point.executors.remotePcCapabilities
 import com.point.executors.WordPlusCapability
 import com.point.executors.WordPlusRealizer
-import com.point.executors.RemotePcRealizer
+import com.point.executors.remotePcRealizers
 import com.point.executors.JobReplyCapability
 import com.point.executors.JobReplyRealizer
 import com.point.executors.FixErrorsCapability
@@ -133,58 +132,58 @@ abstract class CapabilityModule {
 
     @Binds @IntoSet abstract fun dropLinkReal(r: com.point.executors.DropLinkRealizer): Realizer
 
-    @Binds @IntoSet abstract fun correctValueCap(c: com.point.executors.CorrectValueCapability): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun correctValueCap(c: com.point.executors.CorrectValueCapability): Capability
     @Binds @IntoSet abstract fun correctValueReal(r: com.point.executors.CorrectValueRealizer): Realizer
 
-    @Binds @IntoSet abstract fun pcCap(c: PcCapability): Capability
-    @Binds @IntoSet abstract fun shareCap(c: ShareCapability): Capability
-    @Binds @IntoSet abstract fun saveCap(c: SaveCapability): Capability
-    @Binds @IntoSet abstract fun saveAllCap(c: SaveAllCapability): Capability
-    @Binds @IntoSet abstract fun shareAllCap(c: ShareAllCapability): Capability
-    @Binds @IntoSet abstract fun mergePdfCap(c: MergePdfCapability): Capability
-    @Binds @IntoSet abstract fun scanPdfCap(c: ScanPdfCapability): Capability
-    @Binds @IntoSet abstract fun openCap(c: OpenCapability): Capability
-    @Binds @IntoSet abstract fun extractAllCap(c: ExtractAllCapability): Capability
-    @Binds @IntoSet abstract fun openInCap(c: OpenInCapability): Capability
-    @Binds @IntoSet abstract fun openUrlCap(c: OpenUrlCapability): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun pcCap(c: PcCapability): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun shareCap(c: ShareCapability): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun saveCap(c: SaveCapability): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun saveAllCap(c: SaveAllCapability): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun shareAllCap(c: ShareAllCapability): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun mergePdfCap(c: MergePdfCapability): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun scanPdfCap(c: ScanPdfCapability): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun openCap(c: OpenCapability): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun extractAllCap(c: ExtractAllCapability): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun openInCap(c: OpenInCapability): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun openUrlCap(c: OpenUrlCapability): Capability
 
-    @Binds @IntoSet abstract fun callCap(c: CallCapability): Capability
-    @Binds @IntoSet abstract fun smsCap(c: SmsCapability): Capability
-    @Binds @IntoSet abstract fun emailCap(c: EmailCapability): Capability
-    @Binds @IntoSet abstract fun mapCap(c: MapCapability): Capability
-    @Binds @IntoSet abstract fun eventCap(c: EventCapability): Capability
-    @Binds @IntoSet abstract fun copyCardCap(c: CopyCardCapability): Capability
-    @Binds @IntoSet abstract fun vcardCap(c: VCardCapability): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun callCap(c: CallCapability): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun smsCap(c: SmsCapability): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun emailCap(c: EmailCapability): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun mapCap(c: MapCapability): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun eventCap(c: EventCapability): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun copyCardCap(c: CopyCardCapability): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun vcardCap(c: VCardCapability): Capability
 
-    @Binds @IntoSet abstract fun saveContactCap(c: SaveContactCapability): Capability
-    @Binds @IntoSet abstract fun copyCap(c: CopyCapability): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun saveContactCap(c: SaveContactCapability): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun copyCap(c: CopyCapability): Capability
 
-    @Binds @IntoSet abstract fun findCap(c: FindCapability): Capability
-    @Binds @IntoSet abstract fun pagesCap(c: PagesCapability): Capability
-    @Binds @IntoSet abstract fun translateCap(c: TranslateCapability): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun findCap(c: FindCapability): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun pagesCap(c: PagesCapability): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun translateCap(c: TranslateCapability): Capability
 
-    @Binds @IntoSet abstract fun transcribeCap(c: TranscribeCapability): Capability
-    @Binds @IntoSet abstract fun excelCap(c: ExcelCapability): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun transcribeCap(c: TranscribeCapability): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun excelCap(c: ExcelCapability): Capability
 
-    @Binds @IntoSet abstract fun renewPeriodCap(c: RenewPeriodCapability): Capability
-    @Binds @IntoSet abstract fun wordCap(c: WordCapability): Capability
-    @Binds @IntoSet abstract fun readQrCap(c: ReadQrCapability): Capability
-    @Binds @IntoSet abstract fun scanCap(c: ScanCapability): Capability
-    @Binds @IntoSet abstract fun scanPlusCap(c: ScanPlusCapability): Capability
-    @Binds @IntoSet abstract fun cutoutCap(c: CutoutCapability): Capability
-    @Binds @IntoSet abstract fun blurBgCap(c: BlurBgCapability): Capability
-    @Binds @IntoSet abstract fun replaceBgCap(c: ReplaceBgCapability): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun renewPeriodCap(c: RenewPeriodCapability): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun wordCap(c: WordCapability): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun readQrCap(c: ReadQrCapability): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun scanCap(c: ScanCapability): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun scanPlusCap(c: ScanPlusCapability): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun cutoutCap(c: CutoutCapability): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun blurBgCap(c: BlurBgCapability): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun replaceBgCap(c: ReplaceBgCapability): Capability
 
-    @Binds @IntoSet abstract fun cloudOcrCap(c: CloudOcrCapability): Capability
-    @Binds @IntoSet abstract fun aiCap(c: AiCapability): Capability
-    @Binds @IntoSet abstract fun shoppingListCap(c: ShoppingListCapability): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun cloudOcrCap(c: CloudOcrCapability): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun aiCap(c: AiCapability): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun shoppingListCap(c: ShoppingListCapability): Capability
 
-    @Binds @IntoSet abstract fun understandCap(c: UnderstandCapability): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun understandCap(c: UnderstandCapability): Capability
 
-    @Binds @IntoSet abstract fun fixErrorsCap(c: FixErrorsCapability): Capability
-    @Binds @IntoSet abstract fun fixErrorsStrongerCap(c: FixErrorsStrongerCapability): Capability
-    @Binds @IntoSet abstract fun wordPlusCap(c: WordPlusCapability): Capability
-    @Binds @IntoSet abstract fun jobReplyCap(c: JobReplyCapability): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun fixErrorsCap(c: FixErrorsCapability): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun fixErrorsStrongerCap(c: FixErrorsStrongerCapability): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun wordPlusCap(c: WordPlusCapability): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun jobReplyCap(c: JobReplyCapability): Capability
 
     @Binds @IntoSet abstract fun shareR(r: ShareRealizer): Realizer
     @Binds @IntoSet abstract fun saveR(r: SaveRealizer): Realizer
@@ -245,7 +244,7 @@ abstract class CapabilityModule {
         fun executionPolicy(): com.point.core.flow.ExecutionPolicy =
             com.point.core.flow.DefaultExecutionPolicy()
 
-        @Provides @ElementsIntoSet
+        @Provides @ElementsIntoSet @OwnCapabilities
         fun sharedCaps(): Set<Capability> =
             com.point.core.flow.capabilities.sharedCapabilities().toSet()
 
@@ -258,7 +257,7 @@ abstract class CapabilityModule {
         @Provides
         fun aiChatResponder(llm: com.point.core.flow.LlmClient): AiChatResponder = AiChatResponderImpl(llm)
 
-        @Provides @ElementsIntoSet
+        @Provides @ElementsIntoSet @OwnCapabilities
         fun appCapabilities(chosen: ChosenApps): Set<Capability> =
             chosen.all().map { AppCapability(it) }.toSet()
 
@@ -266,24 +265,27 @@ abstract class CapabilityModule {
         fun appRealizers(chosen: ChosenApps, launcher: AppLauncher): Set<Realizer> =
             chosen.all().map { AppOpenRealizer(it, launcher) }.toSet()
 
+        /** Свои способности — часть общего набора- отдельный набор нужен только для сверки с чужими. */
         @Provides @ElementsIntoSet
-        fun pcRemoteCapabilities(caps: com.point.core.flow.PcCapsStore, links: com.point.core.flow.PcLinks): Set<Capability> =
-            caps.all()
-                .filterNot { CapabilityId(it.id) in com.point.core.flow.capabilities.sharedCapabilityIds }
-                .map { action ->
-                    RemotePcCapability(action, links) {
-                        com.point.core.flow.capsFresh(caps.savedAt(), System.currentTimeMillis())
-                    }
-                }
-                .toSet()
+        fun ownCaps(@OwnCapabilities own: Set<@JvmSuppressWildcards Capability>): Set<Capability> = own
+
+        @Provides @ElementsIntoSet
+        fun pcRemoteCapabilities(
+            @OwnCapabilities own: Set<@JvmSuppressWildcards Capability>,
+            caps: com.point.core.flow.PcCapsStore,
+            links: com.point.core.flow.PcLinks,
+        ): Set<Capability> = remotePcCapabilities(own, caps.all(), links) {
+            com.point.core.flow.capsFresh(caps.savedAt(), System.currentTimeMillis())
+        }
 
         @Provides @ElementsIntoSet
         fun pcRemoteRealizers(
+            @OwnCapabilities own: Set<@JvmSuppressWildcards Capability>,
             caps: com.point.core.flow.PcCapsStore,
             links: com.point.core.flow.PcLinks,
             transport: com.point.core.flow.PcTransport,
             store: ObjectStore,
             classifier: ObjectClassifier,
-        ): Set<Realizer> = caps.all().map { RemotePcRealizer(it, links, transport, store, classifier) }.toSet()
+        ): Set<Realizer> = remotePcRealizers(own, caps.all(), links, transport, store, classifier)
     }
 }
