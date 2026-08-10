@@ -42,7 +42,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.graphicsLayer
@@ -158,20 +157,38 @@ fun FocusScreen(
             // Всё вне выделения затемняется, выделение остаётся полностью видимым.
             Box(
                 Modifier.fillMaxSize().drawWithContent {
-                    drawRect(color = Color.Black.copy(alpha = DIM))
-                    if (region != null) {
-                        val rect = fit.toScreen(region)
-                        drawRoundRect(
-                            color = Color.Transparent,
-                            topLeft = zoomed(rect.topLeft, zoom, pan, Offset(size.width / 2f, size.height / 2f)),
-                            size = rect.size * zoom,
-                            cornerRadius = androidx.compose.ui.geometry.CornerRadius(CORNER),
-                            blendMode = BlendMode.Clear,
+                    val dim = Color.Black.copy(alpha = DIM)
+                    val window = region?.let { shown ->
+                        val rect = fit.toScreen(shown)
+                        val at = zoomed(rect.topLeft, zoom, pan, Offset(size.width / 2f, size.height / 2f))
+                        androidx.compose.ui.geometry.Rect(at, rect.size * zoom)
+                    }
+                    if (window == null) {
+                        drawRect(color = dim)
+                    } else {
+                        // Темнит всё, КРОМЕ показанного: четыре полосы вокруг окна. Прежде
+                        // окно вырезалось BlendMode.Clear — и вместе с затемнением выедало
+                        // сам снимок, оставляя чёрную дыру там, где человек только что мазнул.
+                        drawRect(color = dim, size = androidx.compose.ui.geometry.Size(size.width, window.top))
+                        drawRect(
+                            color = dim,
+                            topLeft = Offset(0f, window.bottom),
+                            size = androidx.compose.ui.geometry.Size(size.width, size.height - window.bottom),
+                        )
+                        drawRect(
+                            color = dim,
+                            topLeft = Offset(0f, window.top),
+                            size = androidx.compose.ui.geometry.Size(window.left, window.height),
+                        )
+                        drawRect(
+                            color = dim,
+                            topLeft = Offset(window.right, window.top),
+                            size = androidx.compose.ui.geometry.Size(size.width - window.right, window.height),
                         )
                         drawRoundRect(
                             color = accent,
-                            topLeft = zoomed(rect.topLeft, zoom, pan, Offset(size.width / 2f, size.height / 2f)),
-                            size = rect.size * zoom,
+                            topLeft = window.topLeft,
+                            size = window.size,
                             cornerRadius = androidx.compose.ui.geometry.CornerRadius(CORNER),
                             style = Stroke(width = 2.dp.toPx()),
                         )
@@ -195,13 +212,10 @@ fun FocusScreen(
                 },
             )
 
-            if (tool != FocusTool.ERASER) {
-                BrushSlider(
-                    value = brush,
-                    onChange = { brush = it },
-                    modifier = Modifier.align(Alignment.CenterStart).padding(start = 8.dp),
-                )
-            }
+        }
+
+        if (tool != FocusTool.ERASER) {
+            BrushSlider(value = brush, onChange = { brush = it })
         }
 
         FocusTools(
@@ -276,10 +290,10 @@ private fun FocusTopBar(
 /** Панель компактная и документ не съедает: один ряд, без подписей-простыней. */
 @Composable
 private fun FocusTools(tool: FocusTool, onTool: (FocusTool) -> Unit, onClear: () -> Unit) {
-    Row(
+    androidx.compose.foundation.layout.FlowRow(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         FocusTool.entries.forEach { each ->
             ToolChip(
@@ -305,6 +319,7 @@ private fun ToolChip(label: String, selected: Boolean, onClick: () -> Unit) {
     ) {
         Text(
             text = label,
+            maxLines = 1,
             style = MaterialTheme.typography.labelMedium,
             color = if (selected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.75f),
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
@@ -312,26 +327,21 @@ private fun ToolChip(label: String, selected: Boolean, onClick: () -> Unit) {
     }
 }
 
+/** Толщина кисти — под документом, где ползунок ничего не закрывает. */
 @Composable
 private fun BrushSlider(value: Float, onChange: (Float) -> Unit, modifier: Modifier = Modifier) {
-    Surface(
-        shape = RoundedCornerShape(20.dp),
-        color = Color.Black.copy(alpha = 0.55f),
-        modifier = modifier.width(44.dp).height(180.dp),
+    Row(
+        modifier = modifier.fillMaxWidth().padding(horizontal = 24.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-        ) {
-            Slider(
-                value = value,
-                onValueChange = onChange,
-                valueRange = MIN_BRUSH..MAX_BRUSH,
-                modifier = Modifier
-                    .graphicsLayer { rotationZ = 270f }
-                    .width(140.dp),
-            )
-        }
+        Text("Кисть", style = MaterialTheme.typography.labelMedium, color = Color.White.copy(alpha = 0.6f))
+        Slider(
+            value = value,
+            onValueChange = onChange,
+            valueRange = MIN_BRUSH..MAX_BRUSH,
+            modifier = Modifier.weight(1f),
+        )
     }
 }
 
