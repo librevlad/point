@@ -21,6 +21,7 @@ class BuildConfigAiKeys @Inject constructor() : BuiltInAiKeys {
         "zhipu" to BuildConfig.ZHIPU_API_KEY,
         "openai" to BuildConfig.OPENAI_API_KEY,
         "cloudflare" to BuildConfig.CLOUDFLARE_API_KEY,
+        "modelscope" to BuildConfig.MODELSCOPE_API_KEY,
         "anthropic" to BuildConfig.ANTHROPIC_API_KEY,
     )
 
