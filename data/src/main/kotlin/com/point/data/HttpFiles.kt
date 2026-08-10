@@ -49,8 +49,10 @@ class UrlConnectionHttpFiles @Inject constructor() : HttpFiles {
                 headers,
             ).forEach { (k, v) -> setRequestProperty(k, v) }
         }
-        conn.outputStream.use { it.write(body) }
-        conn.read()
+        conn.callClosingOnCancel {
+            outputStream.use { it.write(body) }
+            read()
+        }
     }
 
     override suspend fun get(url: String, headers: Map<String, String>): HttpResult =
@@ -62,7 +64,7 @@ class UrlConnectionHttpFiles @Inject constructor() : HttpFiles {
                 pointHeaders(mapOf("Accept" to "application/json"), headers)
                     .forEach { (k, v) -> setRequestProperty(k, v) }
             }
-            conn.read()
+            conn.callClosingOnCancel { read() }
         }
 
     private fun HttpURLConnection.read(): HttpResult {

@@ -40,6 +40,7 @@ import com.point.executors.OpenInCapability
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -608,6 +609,52 @@ class FlowViewModelTest {
 
         assertNull("выбор приложений не всплыл", vm.ui.value.appPicker)
         assertEquals("Отменено", vm.ui.value.message)
+    }
+
+    /**
+     * Живой прогон #692: экран «Понять» без связи держался 11 минут, «Отменить» нажали трижды-
+     * и ничего. На телефоне работа начинается прямо в потоке нажатия, поэтому шаг, начатый
+     * внутри подготовки, успевал увести отслеживание на себя, а конец подготовки стирал его.
+     * Экран оставался занят, а отменять было нечего.
+     */
+    @Test fun `экран занят — значит есть что отменять, даже если работа сменилась внутри`() {
+        val onTap = UnconfinedTestDispatcher(dispatcher.scheduler)
+        Dispatchers.setMain(onTap)
+        runTest(onTap) {
+            resolver.holdMs = 10_000
+            val vm = vm(slow = setOf(CapabilityId("a")))
+            vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+            vm.onBubble(bubble(id = "a"))
+            assertTrue("экран ожидания с кнопкой отмены поднят", showsCancel(vm.ui.value))
+
+            vm.cancelAction()
+            advanceUntilIdle()
+
+            assertNull("экран ожидания не ушёл по отказу", vm.ui.value.busy)
+            assertEquals("Отменено", vm.ui.value.message)
+            assertEquals("работа доехала до конца вопреки отказу", 1, vm.ui.value.path.size)
+        }
+    }
+
+    @Test fun `отказ гасит и саму работу, а не только экран`() {
+        val onTap = UnconfinedTestDispatcher(dispatcher.scheduler)
+        Dispatchers.setMain(onTap)
+        runTest(onTap) {
+            resolver.result = ActionResult.Success(
+                ResultObject(ObjectKind.TEXT, "text/plain", ScratchRef("/out")),
+            )
+            resolver.holdMs = 10_000
+            val vm = vm(slow = setOf(CapabilityId("a")))
+            vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+            vm.onBubble(bubble(id = "a"))
+            vm.cancelAction()
+            advanceUntilIdle()
+
+            assertEquals("снятая работа всё-таки приземлилась", 1, vm.ui.value.path.size)
+            assertNull(vm.ui.value.busy)
+        }
     }
 
     @Test fun `нечего отменять — нечего и объявлять отменённым`() = runTest(dispatcher) {

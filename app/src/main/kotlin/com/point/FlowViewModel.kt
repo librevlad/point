@@ -132,9 +132,19 @@ class FlowViewModel @Inject constructor(
 
     private var busyJob: kotlinx.coroutines.Job? = null
 
-    private fun trackWork(job: kotlinx.coroutines.Job) {
+    /**
+     * Работа, которую человек может отменить.
+     *
+     * Ссылка на работу ставится до её первого шага. Раньше работа запускалась первой, и шаг,
+     * успевший начаться внутри неё, записывал себя раньше внешнего: конец внешнего шага стирал
+     * запись целиком- экран занят, а отменять уже нечего (#692).
+     */
+    private fun trackWork(work: suspend kotlinx.coroutines.CoroutineScope.() -> Unit): Job {
+        val job = viewModelScope.launch(start = kotlinx.coroutines.CoroutineStart.LAZY, block = work)
         busyJob = job
         job.invokeOnCompletion { if (busyJob === job) busyJob = null }
+        job.start()
+        return job
     }
 
     private fun raiseBusy(
@@ -281,7 +291,7 @@ class FlowViewModel @Inject constructor(
         val voice = claimVoice()
 
         raiseBusy("Открываю…", cancelable = false)
-        trackWork(viewModelScope.launch {
+        trackWork {
             val obj = runCatching {
                 store.clear()
                 store.ingest(sourceUri, mime)
@@ -308,11 +318,11 @@ class FlowViewModel @Inject constructor(
                     }
                 }
             }
-            if (!owns(voice)) return@launch
+            if (!owns(voice)) return@trackWork
             if (obj == null) {
 
                 _ui.update { it.copy(busy = null, busyStage = null, message = "Не удалось открыть объект", messageOutcome = Outcome.FAILED) }
-                return@launch
+                return@trackWork
             }
             runCatching { history.record(obj) }
             runCatching { journal.record(UsageEvent(UsageEventType.SHARED, obj.state.kind.name)) }
@@ -331,30 +341,30 @@ class FlowViewModel @Inject constructor(
                 }
                 onBubble(Bubble("pc", title, cap, obj.state))
             }
-        })
+        }
     }
 
     fun onSharedMultiple(sources: List<String>) {
         freshShareArrived = true
         val voice = claimVoice()
         raiseBusy("Открываю…", cancelable = false)
-        trackWork(viewModelScope.launch {
+        trackWork {
             val obj = runCatching {
                 store.clear()
                 store.ingestMultiple(sources)
             }.getOrNull()
-            if (!owns(voice)) return@launch
+            if (!owns(voice)) return@trackWork
             if (obj == null) {
 
                 _ui.update { it.copy(busy = null, busyStage = null, message = "Не удалось открыть объект", messageOutcome = Outcome.FAILED) }
-                return@launch
+                return@trackWork
             }
 
             runCatching { journal.record(UsageEvent(UsageEventType.SHARED, obj.state.kind.name)) }
             cancelEnrichment()
             stack.clear()
             pushFrame(obj)
-        })
+        }
     }
 
     fun loadRecent() {
@@ -385,15 +395,15 @@ class FlowViewModel @Inject constructor(
         val voice = claimVoice()
 
         raiseBusy("Забираю с компьютера…", cancelable = true)
-        trackWork(viewModelScope.launch {
+        trackWork {
 
             val entries = runCatching { pcTransport.fetchOutbox(pc) }.getOrNull().orEmpty()
-            if (!owns(voice)) return@launch
+            if (!owns(voice)) return@trackWork
             if (entries.isEmpty()) {
                 fromPcEntries = emptyList()
                 _fromPcCount.value = 0
                 _ui.update { it.copy(busy = null) }
-                return@launch
+                return@trackWork
             }
             val pulled = entries.map { entry ->
                 val name = entry.meta["name"] ?: "объект"
@@ -401,10 +411,10 @@ class FlowViewModel @Inject constructor(
                 val ok = runCatching { pcTransport.downloadOutboxFile(pc, entry.id, path) }.getOrDefault(false)
                 Triple(entry, path, ok)
             }
-            if (!owns(voice)) return@launch
+            if (!owns(voice)) return@trackWork
             if (pulled.any { !it.third }) {
                 _ui.update { it.copy(busy = null, busyStage = null, message = com.point.core.flow.pcUnreachableText(com.point.core.flow.PcUnreachable.PC_ASLEEP), messageOutcome = Outcome.FAILED) }
-                return@launch
+                return@trackWork
             }
             when (pulled.size) {
                 1 -> onShared(
@@ -423,7 +433,7 @@ class FlowViewModel @Inject constructor(
             }
             fromPcEntries = emptyList()
             _fromPcCount.value = 0
-        })
+        }
     }
 
     fun hideFromPc() {
@@ -457,18 +467,18 @@ class FlowViewModel @Inject constructor(
         val voice = claimVoice()
 
         raiseBusy("Открываю…", cancelable = true)
-        trackWork(viewModelScope.launch {
+        trackWork {
             val obj = runCatching { history.open(entry.id) }.getOrNull()
-            if (!owns(voice)) return@launch
+            if (!owns(voice)) return@trackWork
             if (obj == null) {
                 _ui.update { it.copy(busy = null, busyStage = null, message = "Объект недоступен", messageOutcome = Outcome.FAILED) }
-                return@launch
+                return@trackWork
             }
             runCatching { store.clear() }
             cancelEnrichment()
             stack.clear()
             pushFrame(obj)
-        })
+        }
     }
 
     /**
@@ -524,25 +534,27 @@ class FlowViewModel @Inject constructor(
             quiet = isQuietAction(bubble.capabilityId),
             cancelable = true,
         )
-        trackWork(viewModelScope.launch {
+        trackWork {
 
             val realizer = runCatching { resolver.realizerFor(bubble.capabilityId, top.state) }.getOrNull()
-            if (!owns(voice)) return@launch
+            if (!owns(voice)) return@trackWork
             if (realizer == null) {
                 _ui.update { it.copy(busy = null, busyStage = null, message = "Действие недоступно", messageOutcome = Outcome.FAILED) }
-                return@launch
+                return@trackWork
             }
             val preview = runCatching { realizer.preview(top) }.getOrNull()
-            if (!owns(voice)) return@launch
+            if (!owns(voice)) return@trackWork
             if (preview == null) {
 
-                busyJob = null
-                dispatch(bubble) { realizer.perform(top, null) }
+                // Само действие идёт этой же работой. Отдельный запуск изнутри уводил отслеживание
+                // на себя, а конец подготовки стирал его- и «Отменить» переставало действовать (#692).
+                runCatching { sensory.tap() }
+                runAction(bubble, voice) { realizer.perform(top, null) }
             } else {
                 pendingPreviewBubble = bubble
                 _ui.update { it.copy(busy = null, busyStage = null, preview = preview) }
             }
-        })
+        }
     }
 
     fun confirmPreview() {
@@ -1367,16 +1379,16 @@ class FlowViewModel @Inject constructor(
     private fun showAppPicker(obj: PointObject) {
         val voice = claimVoice()
         raiseBusy("Ищу приложения…", cancelable = true)
-        trackWork(viewModelScope.launch {
+        trackWork {
             val direct = runCatching { appLauncher.handlers(obj) }.getOrDefault(emptyList())
 
             val apps = (direct + bridgedHandlers(obj)).distinctBy { it.packageName }
-            if (!owns(voice)) return@launch
+            if (!owns(voice)) return@trackWork
             _ui.update {
                 if (apps.isEmpty()) it.copy(busy = null, busyStage = null, message = "Нет приложения для этого объекта", messageOutcome = Outcome.FAILED)
                 else it.copy(busy = null, busyStage = null, appPicker = apps)
             }
-        })
+        }
     }
 
     private suspend fun bridgedHandlers(obj: PointObject): List<AppTarget> {
@@ -1397,7 +1409,7 @@ class FlowViewModel @Inject constructor(
         _ui.update { it.copy(appPicker = null) }
         val via = target.via
 
-        trackWork(viewModelScope.launch {
+        trackWork {
 
             if (via == null) {
                 val pick = ChosenApp(obj.state.kind, target.packageName, target.activity, target.label)
@@ -1414,12 +1426,12 @@ class FlowViewModel @Inject constructor(
                         message = "Не удалось подготовить объект для этого приложения",
                     )
                 }
-                return@launch
+                return@trackWork
             }
             runCatching { appLauncher.launch(target, toOpen) }
                 .onSuccess { _ui.update { it.copy(busy = null, busyStage = null, message = "Открываю в ${target.label}", messageOutcome = Outcome.DONE) } }
                 .onFailure { e -> _ui.update { it.copy(busy = null, busyStage = null, message = e.message ?: "Не удалось открыть", messageOutcome = Outcome.FAILED) } }
-        })
+        }
     }
 
     private suspend fun bridge(obj: PointObject, viaCapId: String): PointObject? {
@@ -1466,33 +1478,43 @@ class FlowViewModel @Inject constructor(
 
         busyJob?.cancel()
         val voice = claimVoice()
-        trackWork(viewModelScope.launch {
-            runCatching { usage.record(bubble.capabilityId) }
-            runCatching { journal.record(UsageEvent(UsageEventType.ACTION, bubble.capabilityId.value)) }
-            runCatching {
-
-                kotlinx.coroutines.withContext(
-                    com.point.core.flow.ActionProgress { stage ->
-                        if (voice == workVoice) _ui.update { it.copy(busyStage = stage) }
-                    },
-                ) { action() }
-            }
-
-                .onSuccess { result -> if (owns(voice)) handleResult(result, bubble) }
-                .onFailure { e ->
-
-                    if (e is kotlinx.coroutines.CancellationException) throw e
-                    if (!owns(voice)) return@onFailure
-
-                    _ui.update { it.copy(busy = null, busyStage = null, message = e.message ?: "Не получилось", messageOutcome = Outcome.FAILED) }
-                }
-        })
+        trackWork { runAction(bubble, voice, action) }
     }
 
+    private suspend fun runAction(bubble: Bubble, voice: Long, action: suspend () -> ActionResult) {
+        runCatching { usage.record(bubble.capabilityId) }
+        runCatching { journal.record(UsageEvent(UsageEventType.ACTION, bubble.capabilityId.value)) }
+        runCatching {
+
+            kotlinx.coroutines.withContext(
+                com.point.core.flow.ActionProgress { stage ->
+                    if (voice == workVoice) _ui.update { it.copy(busyStage = stage) }
+                },
+            ) { action() }
+        }
+
+            .onSuccess { result -> if (owns(voice)) handleResult(result, bubble) }
+            .onFailure { e ->
+
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                if (!owns(voice)) return@onFailure
+
+                _ui.update { it.copy(busy = null, busyStage = null, message = e.message ?: "Не получилось", messageOutcome = Outcome.FAILED) }
+            }
+    }
+
+    /**
+     * Отказ человека всегда снимает экран ожидания- даже если работу к этому моменту
+     * не за что взять. Оставлять человека запертым из-за того, что Point потерял
+     * собственную работу, нельзя (#692).
+     */
     fun cancelAction() {
-        val job = busyJob ?: return
+        if (_ui.value.busy == null) return
+
+        busyJob?.cancel()
         busyJob = null
-        job.cancel()
+
+        // Новый голос глушит работу, которую уже не отменить: её результат не приземлится.
         claimVoice()
 
         val hasObject = _ui.value.frame != null
