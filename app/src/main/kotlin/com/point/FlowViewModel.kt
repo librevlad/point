@@ -38,8 +38,14 @@ import com.point.core.flow.META_SELECTION_REGION
 import com.point.core.flow.META_SELECTION_SOURCE
 import com.point.core.flow.META_YIELD_NOUN
 import com.point.core.flow.SnappedSelection
-import com.point.core.flow.UserAiConfig
+import com.point.core.flow.AiFacts
+import com.point.core.flow.BuiltInAiKeys
+import com.point.core.flow.UserAiKey
 import com.point.core.flow.UserKeyStore
+import com.point.core.flow.aiCall
+import com.point.core.flow.aiCheckedLine
+import com.point.core.flow.aiOutcomeOfStatus
+import com.point.core.flow.aiServiceLines
 import com.point.core.flow.carryKnowledge
 import com.point.core.flow.continuesObject
 import com.point.core.flow.findOnPage
@@ -95,6 +101,8 @@ class FlowViewModel @Inject constructor(
     private val usage: CapabilityUsage,
     private val chosenApps: ChosenApps,
     private val userKeys: UserKeyStore,
+    private val aiFacts: AiFacts,
+    private val builtInKeys: BuiltInAiKeys,
     private val journal: UsageJournal,
     private val consent: PrivacyConsent,
     private val appLauncher: AppLauncher,
@@ -369,7 +377,7 @@ class FlowViewModel @Inject constructor(
 
     fun loadRecent() {
 
-        _ui.update { it.copy(aiKeySet = runCatching { userKeys.read() != null }.getOrDefault(false)) }
+        _ui.update { it.copy(aiKeySet = runCatching { userKeys.keys().mine.isNotEmpty() }.getOrDefault(false)) }
         viewModelScope.launch {
             _recent.value = runCatching { history.recent() }.getOrDefault(emptyList())
         }
@@ -826,7 +834,8 @@ class FlowViewModel @Inject constructor(
     }
 
     private fun chosenAiService(): String? = runCatching {
-        com.point.core.flow.providerForBaseUrl(userKeys.read()?.baseUrl.orEmpty())?.name
+        val mine = userKeys.keys().mine.firstOrNull() ?: return@runCatching null
+        com.point.core.flow.AI_PROVIDERS.firstOrNull { it.id == mine.providerId }?.name
     }.getOrNull()
 
     fun onItem(item: PointObject) {
@@ -975,12 +984,11 @@ class FlowViewModel @Inject constructor(
 
     private fun openKeyScreen(errand: KeyErrand?) {
 
-        val saved = userKeys.read()
         _ui.update {
 
             val refusal = keyOfferLabel(it.message) != null
             it.copy(
-                keyScreen = saved ?: UserAiConfig.DEFAULT, busy = null,
+                keyScreen = aiKeysScreen(), busy = null,
 
                 keyScreenNote = it.message.takeIf { _ -> refusal },
 
@@ -989,9 +997,10 @@ class FlowViewModel @Inject constructor(
                 messageOutcome = if (refusal) it.messageOutcome else Outcome.NONE,
                 inputPrompt = null,
 
-                keyChecking = false,
+                keyChecking = null,
                 keyVerdict = null,
-                aiKeySet = saved != null,
+                keyVerdictFor = null,
+                aiKeySet = runCatching { userKeys.keys().mine.isNotEmpty() }.getOrDefault(false),
                 soundEnabled = runCatching { sensorySettings.isSoundEnabled() }.getOrDefault(true),
                 privacyLevel = runCatching { cloudPrivacy.level() }
                     .getOrDefault(com.point.core.flow.PrivacyLevel.DEFAULT),
@@ -1001,34 +1010,104 @@ class FlowViewModel @Inject constructor(
         viewModelScope.launch { refreshCloudConsent() }
     }
 
-    fun checkAiKey(config: UserAiConfig) {
-        if (config.apiKey.isBlank() || _ui.value.keyChecking) return
-        _ui.update { it.copy(keyChecking = true, keyVerdict = null) }
+    /**
+     * Все известные сервисы списком, в том порядке, в каком Point к ним
+     * обращается: ключ, что умеет и последний факт (#699).
+     */
+    private fun aiKeysScreen(): AiKeysScreen {
+        val keys = runCatching { userKeys.keys() }.getOrDefault(com.point.core.flow.UserAiKeys.NONE)
+        val facts = runCatching { aiFacts.all() }.getOrDefault(emptyMap())
+        val ours = runCatching { builtInKeys.have() }.getOrDefault(emptySet())
+        val now = System.currentTimeMillis()
+        return AiKeysScreen(
+            keys = keys,
+            services = aiServiceLines(keys, ours, facts, now),
+            checkedLine = aiCheckedLine(facts, now),
+        )
+    }
+
+    private fun refreshKeyScreen() {
+        _ui.update { if (it.keyScreen == null) it else it.copy(keyScreen = aiKeysScreen()) }
+    }
+
+    /** Одна дешёвая проверка одного сервиса — только по тапу человека. */
+    fun checkAiKey(key: UserAiKey) {
+        if (key.apiKey.isBlank() || _ui.value.keyChecking != null) return
+        _ui.update { it.copy(keyChecking = key.providerId, keyVerdict = null, keyVerdictFor = null) }
         viewModelScope.launch {
-            val probe = runCatching { aiKeyCheck.check(config) }
-                .getOrElse { com.point.core.flow.KeyProbe(error = com.point.core.flow.withoutKey(it.message.orEmpty(), config.apiKey)) }
-            val verdict = com.point.core.flow.keyVerdict(probe)
-            if (verdict is com.point.core.flow.KeyVerdict.Works) runCatching { userKeys.save(config) }
+            val verdict = probe(key.providerId, aiCall(key))
+            if (verdict is com.point.core.flow.KeyVerdict.Works) {
+                runCatching { userKeys.save(key.copy(savedAt = System.currentTimeMillis())) }
+            }
             _ui.update {
                 it.copy(
-                    keyChecking = false,
+                    keyChecking = null,
                     keyVerdict = verdict,
+                    keyVerdictFor = key.providerId,
+                    keyScreen = if (it.keyScreen == null) null else aiKeysScreen(),
                     aiKeySet = it.aiKeySet || verdict is com.point.core.flow.KeyVerdict.Works,
                 )
             }
         }
     }
 
-    fun forgetAiKey() {
+    /**
+     * «Проверить все» — по одному дешёвому запросу к каждому сервису, у которого
+     * есть ключ. Фоном Point не проверяет ничего.
+     */
+    fun checkAllAiKeys() {
+        if (_ui.value.keyChecking != null) return
+        _ui.update { it.copy(keyChecking = CHECK_ALL_SERVICES, keyVerdict = null, keyVerdictFor = null) }
         viewModelScope.launch {
-            runCatching { userKeys.clear() }
+            val keys = runCatching { userKeys.keys() }.getOrDefault(com.point.core.flow.UserAiKeys.NONE)
+            for (provider in com.point.core.flow.AI_PROVIDERS) {
+                val mine = keys.of(provider.id)
+                val key = mine?.apiKey ?: runCatching { builtInKeys.key(provider.id) }.getOrDefault("")
+                if (key.isBlank()) continue
+                val call = mine?.let(::aiCall) ?: com.point.core.flow.UserAiConfig(
+                    apiKey = key,
+                    baseUrl = provider.baseUrl,
+                    model = provider.models.substringBefore(','),
+                )
+                probe(provider.id, call)
+                refreshKeyScreen()
+            }
+            keys.of(com.point.core.flow.OWN_SERVICE_ID)?.let {
+                probe(com.point.core.flow.OWN_SERVICE_ID, aiCall(it))
+            }
+            _ui.update { it.copy(keyChecking = null, keyScreen = if (it.keyScreen == null) null else aiKeysScreen()) }
+        }
+    }
+
+    private suspend fun probe(
+        providerId: String,
+        call: com.point.core.flow.UserAiConfig,
+    ): com.point.core.flow.KeyVerdict {
+        val probe = runCatching { aiKeyCheck.check(call) }
+            .getOrElse {
+                com.point.core.flow.KeyProbe(
+                    error = com.point.core.flow.withoutKey(it.message.orEmpty(), call.apiKey),
+                )
+            }
+        runCatching { aiFacts.remember(providerId, aiOutcomeOfStatus(probe.status)) }
+        return com.point.core.flow.keyVerdict(probe)
+    }
+
+    fun forgetAiKey(providerId: String) {
+        viewModelScope.launch {
+            runCatching { userKeys.forget(providerId) }
             _ui.update {
                 it.copy(
-                    keyScreen = it.keyScreen?.copy(apiKey = ""),
+                    keyScreen = if (it.keyScreen == null) null else aiKeysScreen(),
                     keyVerdict = null,
-                    keyChecking = false,
-                    aiKeySet = false,
-                    message = "Ключ AI забыт", messageOutcome = Outcome.DONE,
+                    keyVerdictFor = null,
+                    keyChecking = null,
+                    aiKeySet = runCatching { userKeys.keys().mine.isNotEmpty() }.getOrDefault(false),
+
+                    // Экран ключей показывает исход своей строкой — карточка
+                    // поверх неё была бы вторым ответом на тот же вопрос.
+                    message = if (it.keyScreen == null) "Ключ забыт" else it.message,
+                    messageOutcome = if (it.keyScreen == null) Outcome.DONE else it.messageOutcome,
                 )
             }
         }
@@ -1067,7 +1146,7 @@ class FlowViewModel @Inject constructor(
         _ui.update {
             it.copy(
                 keyScreen = null, keyScreenNote = null, keyErrand = null,
-                keyVerdict = null, keyChecking = false,
+                keyVerdict = null, keyVerdictFor = null, keyChecking = null,
             )
         }
         refreshTopBubbles()
@@ -1320,7 +1399,7 @@ class FlowViewModel @Inject constructor(
     }
 
     private suspend fun syncSecrets(pc: com.point.core.flow.LinkedPc) {
-        val saved = runCatching { userKeys.read() }.getOrNull()
+        val saved = runCatching { userKeys.keys().mine.maxByOrNull { key -> key.savedAt } }.getOrNull()
         val mine = com.point.core.flow.SharedSecrets(
             aiKey = saved?.apiKey.orEmpty(),
             at = saved?.savedAt ?: 0L,
@@ -1328,9 +1407,16 @@ class FlowViewModel @Inject constructor(
         val merged = pcTransport.exchangeSecrets(pc, mine) ?: return
         if (merged.aiKey.isBlank() || merged.aiKey == mine.aiKey) return
 
-        val config = (saved ?: com.point.core.flow.UserAiConfig.DEFAULT)
-            .copy(apiKey = merged.aiKey, savedAt = merged.at)
-        runCatching { userKeys.save(config) }
+        // Ключ с компьютера ложится к тому же сервису, что и здешний:
+        // чужой сервис ему приписывать не за что.
+        val key = UserAiKey(
+            providerId = saved?.providerId ?: com.point.core.flow.AI_PROVIDERS.first().id,
+            apiKey = merged.aiKey,
+            model = saved?.model.orEmpty(),
+            baseUrl = saved?.baseUrl.orEmpty(),
+            savedAt = merged.at,
+        )
+        runCatching { userKeys.save(key) }
         _ui.update { it.copy(aiKeySet = true) }
     }
 
@@ -1457,15 +1543,17 @@ class FlowViewModel @Inject constructor(
 
     fun dismissAppPicker() = _ui.update { it.copy(appPicker = null) }
 
-    fun saveAiConfig(config: UserAiConfig) {
+    fun saveAiKey(key: UserAiKey) {
         viewModelScope.launch {
-            runCatching { userKeys.save(config) }
+            runCatching { userKeys.save(key.copy(savedAt = System.currentTimeMillis())) }
             _ui.update {
                 it.copy(
-                    keyScreen = null, keyScreenNote = null, keyErrand = null,
-                    keyVerdict = null,
-                    aiKeySet = config.apiKey.isNotBlank(),
-                    message = "Ключ AI сохранён", messageOutcome = Outcome.DONE,
+                    keyScreen = if (it.keyScreen == null) null else aiKeysScreen(),
+                    keyVerdict = null, keyVerdictFor = null, keyChecking = null,
+                    aiKeySet = runCatching { userKeys.keys().mine.isNotEmpty() }.getOrDefault(false),
+
+                    message = if (it.keyScreen == null) "Ключ сохранён" else it.message,
+                    messageOutcome = if (it.keyScreen == null) Outcome.DONE else it.messageOutcome,
                 )
             }
 

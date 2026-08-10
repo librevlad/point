@@ -1,5 +1,9 @@
 package com.point.core.flow
 
+/**
+ * Одно обращение к сервису: адрес, ключ и модель. Не хранилище — хранилище
+ * держит ключ на каждый сервис ([UserAiKeys], #699).
+ */
 data class UserAiConfig(
     val apiKey: String,
     val baseUrl: String,
@@ -22,13 +26,15 @@ const val AI_KEY_HINT = "задайте свой ключ"
 const val SETTINGS_TITLE = "Настройки"
 
 interface UserKeyStore {
-    fun read(): UserAiConfig?
-    suspend fun save(config: UserAiConfig)
+
+    fun keys(): UserAiKeys
+
+    suspend fun save(key: UserAiKey)
+
+    suspend fun forget(providerId: String)
+
     suspend fun clear()
 }
-
-fun UserAiConfig?.keyFor(providerId: String): String =
-    if (this != null && providerForBaseUrl(baseUrl)?.id == providerId) apiKey.trim() else ""
 
 const val KEY_SETTINGS_CALL = "Задайте ключ в настройках"
 

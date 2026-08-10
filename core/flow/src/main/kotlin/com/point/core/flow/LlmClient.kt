@@ -12,6 +12,12 @@ interface LlmClient {
     val strongVision: Boolean get() = false
 
     val configured: Boolean get() = true
+
+    /**
+     * Сервис, к которому обращается этот исполнитель. Пусто — исполнитель сам
+     * обходит несколько сервисов и запоминает исходы сам (#699).
+     */
+    val serviceId: String get() = ""
 }
 
 fun interface AiReadiness {

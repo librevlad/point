@@ -3,7 +3,8 @@ package com.point
 import com.point.core.flow.AppTarget
 import com.point.core.ui.Outcome
 import com.point.core.flow.UsageSummary
-import com.point.core.flow.UserAiConfig
+import com.point.core.flow.AiServiceLine
+import com.point.core.flow.UserAiKeys
 import com.point.core.model.Bubble
 import com.point.core.model.CapabilityId
 import com.point.core.model.ChatMessage
@@ -76,6 +77,22 @@ data class KeyErrand(
     val objectName: String,
 )
 
+/**
+ * Экран ключей: все известные сервисы списком — имя, что умеет, есть ли ключ и
+ * последний факт о нём (#699).
+ */
+data class AiKeysScreen(
+
+    val keys: UserAiKeys,
+
+    val services: List<AiServiceLine>,
+
+    val checkedLine: String,
+)
+
+/** «Проверить все» — одна проверка на каждый сервис по тапу человека. */
+const val CHECK_ALL_SERVICES = "*"
+
 data class PathStep(val kind: ObjectKind, val via: String?)
 
 data class FlowUiState(
@@ -121,15 +138,17 @@ data class FlowUiState(
 
     val appPicker: List<AppTarget>? = null,
 
-    val keyScreen: UserAiConfig? = null,
+    val keyScreen: AiKeysScreen? = null,
 
     val keyScreenNote: String? = null,
 
     val keyErrand: KeyErrand? = null,
 
-    val keyChecking: Boolean = false,
+    val keyChecking: String? = null,
 
     val keyVerdict: com.point.core.flow.KeyVerdict? = null,
+
+    val keyVerdictFor: String? = null,
 
     val aiKeySet: Boolean = false,
 

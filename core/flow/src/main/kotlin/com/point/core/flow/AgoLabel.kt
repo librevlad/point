@@ -28,7 +28,7 @@ private val MONTHS = listOf(
     "янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек",
 )
 
-private fun plural(n: Long, one: String, few: String, many: String): String {
+internal fun plural(n: Long, one: String, few: String, many: String): String {
     val mod100 = n % 100
     if (mod100 in 11..14) return many
     return when (n % 10) {

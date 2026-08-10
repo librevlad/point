@@ -102,7 +102,10 @@ class OpenAiCompatibleClientTest {
 
         val mine = OpenAiProvider("свой ключ", "https://x/v1", "sk-key", "some-model")
         suspend fun said(code: Int): String? {
-            val chain = FallbackLlmClient(listOf(OpenAiCompatibleClient(http(code, RATE_LIMIT_JSON), store, mine)))
+            val chain = FallbackLlmClient(
+                listOf(OpenAiCompatibleClient(http(code, RATE_LIMIT_JSON), store, mine)),
+                TestAiFacts(),
+            )
             return runCatching { chain.run(textObj, "hi") }.exceptionOrNull()?.message
         }
 

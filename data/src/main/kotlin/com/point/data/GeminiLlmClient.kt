@@ -30,6 +30,8 @@ class GeminiLlmClient(
 
     override val strongVision = true
 
+    override val serviceId = "gemini"
+
     override fun canHandle(obj: PointObject): Boolean =
         if (isAudio(obj)) geminiAttachmentMime(obj) != null else true
 

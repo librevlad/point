@@ -260,9 +260,19 @@ class GraphPipelineIntegrationTest {
             override suspend fun record(app: ChosenApp) = Unit
         },
         object : UserKeyStore {
-            override fun read(): UserAiConfig? = UserAiConfig("k", "https://api.example", "m")
-            override suspend fun save(config: UserAiConfig) = Unit
+            override fun keys() = com.point.core.flow.UserAiKeys.NONE
+                .with(com.point.core.flow.UserAiKey("openrouter", "k"))
+            override suspend fun save(key: com.point.core.flow.UserAiKey) = Unit
+            override suspend fun forget(providerId: String) = Unit
             override suspend fun clear() = Unit
+        },
+        object : com.point.core.flow.AiFacts {
+            override fun all(): Map<String, com.point.core.flow.AiFact> = emptyMap()
+            override fun remember(providerId: String, outcome: com.point.core.flow.AiOutcome) = Unit
+        },
+        object : com.point.core.flow.BuiltInAiKeys {
+            override fun key(providerId: String) = ""
+            override fun have(): Set<String> = emptySet()
         },
         object : UsageJournal {
             override suspend fun isEnabled() = false

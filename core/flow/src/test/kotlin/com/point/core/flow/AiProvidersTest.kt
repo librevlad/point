@@ -77,20 +77,18 @@ class AiProvidersTest {
 
     @Test
     fun `ключ Groq из настроек виден тому, кто спрашивает про Groq`() {
-        val groq = AI_PROVIDERS.first { it.id == GROQ_PROVIDER_ID }
-        val config = UserAiConfig(" gsk-мой ", groq.baseUrl, groq.models.substringBefore(','))
+        val keys = UserAiKeys.NONE.with(UserAiKey(GROQ_PROVIDER_ID, " gsk-мой "))
 
-        assertEquals("gsk-мой", config.keyFor(GROQ_PROVIDER_ID))
+        assertEquals("gsk-мой", keys.keyFor(GROQ_PROVIDER_ID))
     }
 
     @Test
     fun `ключ другого провайдера за ключ Groq не выдаётся`() {
 
-        val other = AI_PROVIDERS.first { it.id == "openrouter" }
+        val keys = UserAiKeys.NONE.with(UserAiKey("openrouter", "sk-or-мой"))
 
-        assertEquals("", UserAiConfig("sk-or-мой", other.baseUrl, "").keyFor(GROQ_PROVIDER_ID))
-        assertEquals("", UserAiConfig("ключ", "https://мой-прокси.local/v1", "").keyFor(GROQ_PROVIDER_ID))
-        assertEquals("", null.keyFor(GROQ_PROVIDER_ID))
+        assertEquals("", keys.keyFor(GROQ_PROVIDER_ID))
+        assertEquals("", UserAiKeys.NONE.keyFor(GROQ_PROVIDER_ID))
     }
 
     @Test

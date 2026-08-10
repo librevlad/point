@@ -11,6 +11,8 @@ class MistralOcrReader(
     private val frames: OutboundFrames,
     private val apiKey: () -> String,
     private val baseUrl: String,
+
+    private val facts: com.point.core.flow.AiFacts? = null,
 ) : CloudTextReader {
 
     override val reader = READER
@@ -39,7 +41,13 @@ class MistralOcrReader(
 
             .put("include_image_base64", false)
             .toString()
-        val res = http.post("$root/ocr", mapOf("Authorization" to "Bearer $key"), body)
+        val res = runCatching { http.post("$root/ocr", mapOf("Authorization" to "Bearer $key"), body) }
+            .onFailure { facts?.remember(com.point.core.flow.MISTRAL_PROVIDER_ID, com.point.core.flow.AiOutcome.SILENT) }
+            .getOrThrow()
+
+        // Исход чтения страницы — такой же настоящий факт о сервисе, как ответ
+        // модели: экран ключей показывает последнее обращение, а не догадку (#699).
+        facts?.remember(com.point.core.flow.MISTRAL_PROVIDER_ID, com.point.core.flow.aiOutcomeOfStatus(res.code))
         if (res.code !in 200..299) error(refusal(res.code))
         return textOf(res.body)
     }

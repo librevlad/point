@@ -1,13 +1,18 @@
 package com.point.data
 
 import com.point.core.flow.AI_KEY_HINT
+import com.point.core.flow.AiFacts
+import com.point.core.flow.AiOutcome
 import com.point.core.flow.LlmClient
+import com.point.core.flow.aiOutcomeOf
 import com.point.core.model.PointObject
 import com.point.core.model.ResultObject
 import javax.inject.Inject
 
 class FallbackLlmClient @Inject constructor(
     private val providers: List<@JvmSuppressWildcards LlmClient>,
+
+    private val facts: AiFacts,
 ) : LlmClient {
 
     override val configured: Boolean get() = providers.any { it.configured }
@@ -35,8 +40,14 @@ class FallbackLlmClient @Inject constructor(
             if (!provider.canHandle(obj)) continue
             considered++
             try {
-                return provider.run(obj, prompt)
+                val result = provider.run(obj, prompt)
+                facts.remember(provider.serviceId, AiOutcome.ANSWERED)
+                return result
             } catch (e: Exception) {
+
+                // Исход обращения помнит сам сервис: экран ключей показывает
+                // последний настоящий факт, а не догадку (#699).
+                facts.remember(provider.serviceId, aiOutcomeOf(e))
                 errors += e.message ?: e.javaClass.simpleName
             }
         }
