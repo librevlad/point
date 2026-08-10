@@ -493,7 +493,7 @@ private fun PreviewOutcomeFailure() = PointTheme(darkTheme = true) {
         obj = sampleObject(ObjectKind.IMAGE, "image/jpeg", "meter.jpg"),
         bubbles = sampleBubbles(ObjectKind.IMAGE),
         onBubble = {},
-        message = "На устройстве текст не распознан",
+        message = "Не разобрал текст на этом снимке",
         messageOutcome = Outcome.FAILED,
     )
 }

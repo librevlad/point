@@ -1,0 +1,57 @@
+package com.point.core.flow
+
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+/**
+ * Годность прочитанного судится двумя сигналами (#694). Первый — уверенность самого
+ * движка, он отдаёт её по каждому слову. Второй — состав ответа, и он нужен там, где
+ * уверенности нет вовсе: чтение снаружи её не возвращает.
+ */
+class PoorReadingTest {
+
+    private fun layer(vararg words: Pair<String, Float>) = AtomLayer(
+        words.mapIndexed { i, (t, c) -> Atom("w$i", t, Box(0f, i * 20f, 100f, i * 20f + 18f), c) },
+    )
+
+    private val confident = layer(
+        "Накладна" to 0.93f, "59000123456789" to 0.91f, "від" to 0.88f, "12.05.2026" to 0.9f,
+        "отримувач" to 0.87f, "Іваненко" to 0.92f, "Іван" to 0.9f, "Іванович" to 0.89f,
+    )
+
+    private val guessed = layer(
+        "Накладна" to 0.33f, "59000123456789" to 0.21f, "від" to 0.28f, "12.05.2026" to 0.3f,
+        "отримувач" to 0.27f, "Іваненко" to 0.32f, "Іван" to 0.3f, "Іванович" to 0.29f,
+    )
+
+    @Test
+    fun `пусто — читать нечего`() {
+        assertTrue(poorlyRead(""))
+        assertTrue(poorlyRead("   \n\t "))
+    }
+
+    @Test
+    fun `движок сам признался, что угадывал — объект не рождается`() {
+        assertTrue("уверенность движка спрошена первой", poorlyRead(guessed.text, guessed))
+    }
+
+    @Test
+    fun `уверенный движок и живая страница — чтение принято`() {
+        assertFalse(poorlyRead(confident.text, confident))
+    }
+
+    @Test
+    fun `уверенности нет — судим по составу ответа`() {
+        assertTrue("короткий мусор снаружи", poorlyRead(". aa - 11 ВЕНЕ"))
+        assertFalse("короткая сумма снаружи", poorlyRead("2500 грн"))
+        assertFalse("дата снаружи", poorlyRead("12.05.2026"))
+    }
+
+    @Test
+    fun `короткий мусор не спасается тем, что движок молчит про уверенность`() {
+        val silent = AtomLayer(emptyList(), readerText = ". aa - 11 ВЕНЕ")
+
+        assertTrue(poorlyRead(silent.text, silent))
+    }
+}

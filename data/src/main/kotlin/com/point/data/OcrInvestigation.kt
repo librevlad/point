@@ -29,7 +29,7 @@ import com.point.core.flow.readingModeOf
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.amountFacts
 import com.point.core.flow.geoFacts
-import com.point.core.flow.weaklyRead
+import com.point.core.flow.poorlyRead
 import com.point.core.flow.meterFacts
 import com.point.core.flow.receiptFacts
 import com.point.core.flow.trackFacts
@@ -124,7 +124,9 @@ class OcrInvestigationRealizer @Inject constructor(
         )
         val raw = layer.text
 
-        if (raw.isBlank() || weaklyRead(layer)) return@withContext evidenceOnly
+        // Неудачное чтение не должно объявляться знанием: вопрос «что написано на снимке»
+        // закрылся бы навсегда, а на бессмыслице дальше строились бы действия (#694).
+        if (poorlyRead(raw, layer)) return@withContext evidenceOnly
 
         val text = stripStatusBar(raw)
 
