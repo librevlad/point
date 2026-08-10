@@ -31,6 +31,7 @@ class RealCapabilityInventoryTest {
         AiCapability(aiKeysReady), ArchiveCapability(), BlurBgCapability(),
         CallCapability(), CloudOcrCapability(), CopyCapability(), CopyCardCapability(),
         CorrectValueCapability(),
+        FixErrorsCapability(aiKeysReady), FixErrorsStrongerCapability(aiKeysReady),
         CutoutCapability(), DropLinkCapability(), EmailCapability(), EventCapability(),
         ExcelCapability(aiKeysReady), ExtractAllCapability(), FindCapability(), ImageCapability(),
         JobReplyCapability(aiKeysReady), MapCapability(), MergePdfCapability(), OcrCapability(),
@@ -135,7 +136,13 @@ class RealCapabilityInventoryTest {
     @Test
     fun `produces разошёлся с реальностью ровно там, где сказано вслух`() {
 
-        assertEquals(listOf("understand"), reshaped.map { it.value })
+        // Знание о том же объекте: produces возвращает тот же state, из чего механически
+        // следует «ничего не вернёт», — а человеку возвращается понятое. Эти способности
+        // говорят о своём выходе сами, и список тут именно для того, чтобы их было видно.
+        assertEquals(
+            listOf("fix-errors", "fix-errors-stronger", "understand"),
+            reshaped.map { it.value }.sorted(),
+        )
     }
 
     private fun kindOfYield(e: com.point.core.flow.CapabilityEntry): String = when {
