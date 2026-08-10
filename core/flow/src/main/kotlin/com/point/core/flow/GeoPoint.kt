@@ -4,6 +4,25 @@ import com.point.core.model.Provenance
 
 const val META_ENTITY_GEO = META_ENTITY_PREFIX + "geo"
 
+/**
+ * Когда снят снимок (#547). Отдельно от `entity.date`: там даты, найденные **в содержимом** —
+ * в договоре это срок или число подписи, а не момент съёмки. Смешать их значит сделать
+ * «Нашёл дату» словом, которое означает то одно, то другое.
+ */
+const val META_SHOT_AT = "shot.at"
+
+/** EXIF пишет «2024:03:12 14:07:33»; человеку нужно «12.03.2024, 14:07». */
+fun shotDateLabel(raw: String?): String? {
+    val text = raw?.trim().orEmpty()
+    if (text.length < 19) return null
+    val date = text.substring(0, 10).split(':', '-', '.')
+    val time = text.substring(11, 16)
+    if (date.size != 3 || date.any { it.isEmpty() }) return null
+    val (year, month, day) = date
+    if (year.toIntOrNull() == null || month.toIntOrNull() == null || day.toIntOrNull() == null) return null
+    return "$day.$month.$year, $time"
+}
+
 private const val MIN_FRACTION = 4
 
 fun geoPoints(text: String): List<String> =

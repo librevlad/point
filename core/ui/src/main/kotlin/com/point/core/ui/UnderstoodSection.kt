@@ -95,6 +95,15 @@ fun understoodFacts(obj: PointObject): List<UnderstoodFact> {
             )
         }
         if (state.has(Feature.HAS_QR)) add(UnderstoodFact("qr", "Есть QR-код", entity("qr")?.readableUrl(), note("qr")))
+
+        // Снимок рассказывает о себе (#547). Координаты показываются и когда их нашла модель
+        // в тексте, и когда они пришли из самого снимка — строка одна на оба источника.
+        if (state.has(Feature.HAS_SHOT_AT)) {
+            add(UnderstoodFact("shot-at", "Снято", obj.metadata[com.point.core.flow.META_SHOT_AT]))
+        }
+        if (state.has(Feature.HAS_GEO) || obj.metadata[com.point.core.flow.META_ENTITY_GEO] != null) {
+            add(UnderstoodFact("geo", "Место съёмки", entity("geo"), note("geo")))
+        }
         if (state.has(Feature.HAS_VCARD)) add(UnderstoodFact("vcard", "Это визитка"))
         if (state.has(Feature.IS_IMAGE_PDF)) add(UnderstoodFact("scan", "Это скан — текст не выделяется"))
         if (state.has(Feature.ZIP_OF_IMAGES)) add(UnderstoodFact("zip-images", "Архив из фотографий"))
