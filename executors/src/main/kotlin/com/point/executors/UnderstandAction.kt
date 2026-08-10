@@ -59,6 +59,7 @@ import com.point.core.flow.provenanceOf
 import com.point.core.flow.resolve
 import com.point.core.flow.ruleEvidence
 import com.point.core.flow.s10CheckDigitValid
+import com.point.core.flow.phoneOwners
 import com.point.core.flow.semanticFits
 import com.point.core.flow.labelNeedingKey
 import com.point.core.model.ActionResult
@@ -302,7 +303,15 @@ class UnderstandRealizer @Inject constructor(
                     // «Понять» — знание о том же объекте, а не превращение (ADR-0001 §18):
                     // человек остаётся на исходнике, факты прирастают. Success здесь ронял
                     // его в дубль-объект со знаком вопроса.
-                    val people = contactNodes(input, parsed.contacts)
+                    // Телефон принадлежит своему столбцу (#747): на наклейке номер стоит под
+                    // именем отправителя, и «чей он» видно по странице, даже когда модель
+                    // пары не назвала. Роль перевозчика сюда не идёт — служба не человек.
+                    val owners = layer?.phoneOwners(
+                        parsed.fields[META_ENTITY_PREFIX + "phone"].orEmpty(),
+                        roles.filterKeys { it != META_GRAPH_ROLE_PREFIX + "carrier" }.values,
+                    ).orEmpty()
+
+                    val people = contactNodes(input, (parsed.contacts + owners).distinct())
                     ActionResult.Done(
                         message ?: UNDERSTOOD,
                         Findings(

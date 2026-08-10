@@ -601,6 +601,22 @@ abstract class DataModule {
                 BuildConfig.GEMINI_MODELS.split(',').map(String::trim).filter(String::isNotBlank),
             )
 
+        /**
+         * Workers AI отвечает по OpenAI-совместимому адресу, но живёт под номером аккаунта:
+         * без номера адрес не собрать, поэтому провайдера нет, даже если ключ задан.
+         */
+        private fun cloudflareModels(): List<OpenAiProvider> =
+            if (BuildConfig.CLOUDFLARE_ACCOUNT_ID.isBlank()) {
+                emptyList()
+            } else {
+                openAiModels(
+                    "cloudflare",
+                    "${BuildConfig.CLOUDFLARE_BASE_URL}/${BuildConfig.CLOUDFLARE_ACCOUNT_ID}/ai/v1",
+                    BuildConfig.CLOUDFLARE_API_KEY,
+                    BuildConfig.CLOUDFLARE_MODELS,
+                )
+            }
+
         private fun openAiProviders(): List<OpenAiProvider> =
             openAiModels("openrouter", BuildConfig.OPENROUTER_BASE_URL, BuildConfig.OPENROUTER_API_KEY, BuildConfig.OPENROUTER_MODELS) +
                 openAiModels("sambanova", BuildConfig.SAMBANOVA_BASE_URL, BuildConfig.SAMBANOVA_API_KEY, BuildConfig.SAMBANOVA_MODELS) +
@@ -609,7 +625,12 @@ abstract class DataModule {
                 openAiModels("groq", BuildConfig.GROQ_BASE_URL, BuildConfig.GROQ_API_KEY, BuildConfig.GROQ_MODELS) +
                 openAiModels("zhipu", BuildConfig.ZHIPU_BASE_URL, BuildConfig.ZHIPU_API_KEY, BuildConfig.ZHIPU_MODELS) +
                 openAiModels("github", BuildConfig.GITHUB_BASE_URL, BuildConfig.GITHUB_API_KEY, BuildConfig.GITHUB_MODELS) +
-                openAiModels("openai", BuildConfig.OPENAI_BASE_URL, BuildConfig.OPENAI_API_KEY, BuildConfig.OPENAI_MODELS)
+                openAiModels("openai", BuildConfig.OPENAI_BASE_URL, BuildConfig.OPENAI_API_KEY, BuildConfig.OPENAI_MODELS) +
+
+                // Место в очереди — за замером, а не за новизной: пока Workers AI не
+                // померян на корпусе, он стоит после тех, кого уже знаем.
+                openAiModels("modelscope", BuildConfig.MODELSCOPE_BASE_URL, BuildConfig.MODELSCOPE_API_KEY, BuildConfig.MODELSCOPE_MODELS) +
+                cloudflareModels()
 
         @Provides
         @HistoryDir

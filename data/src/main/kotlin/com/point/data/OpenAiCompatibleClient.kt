@@ -61,6 +61,14 @@ fun isMeasuredStrongVision(model: String): Boolean {
 
 private val STRONG_VISION_MEASURED = listOf(
     "gemma-4", "gemma4", "qwen3.6", "qwen2.5-vl", "qwen2-vl",
+
+    // Замер 10.08.2026 на почтовой наклейке владельца: прочитана целиком —
+    // имя получателя, телефон, срок, отделение и полный номер накладной.
+    "mistral-small-3.1",
+
+    // Замер 10.08.2026 на той же наклейке: обе Qwen3-VL отдали полный номер
+    // накладной и держали строгий формат ответа.
+    "qwen3-vl",
 )
 
 class OpenAiCompatibleClient(
