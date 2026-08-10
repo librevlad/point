@@ -8,6 +8,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -27,12 +28,16 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import kotlinx.coroutines.delay
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.point.core.flow.META_ENTITY_PREFIX
@@ -221,6 +226,19 @@ private fun FactRow(fact: UnderstoodFact) {
         label = "fact-ignite",
     )
     val accent = MaterialTheme.colorScheme.primary
+
+    // Любое показанное значение берётся одним касанием — «мне в буфере целиковые
+    // блоки не нужны» (владелец, #650/#652/#693). В буфер идёт только value, без
+    // подписи и без note: ровно то, что человек хотел скопировать.
+    val clipboard = LocalClipboardManager.current
+    var copied by rememberSaveable(fact.key) { mutableStateOf(false) }
+    LaunchedEffect(copied) {
+        if (copied) {
+            delay(FACT_COPIED_SHOWN_MS)
+            copied = false
+        }
+    }
+
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
@@ -229,6 +247,16 @@ private fun FactRow(fact: UnderstoodFact) {
                 translationY = (1f - progress) * 8.dp.toPx()
             }
             .clip(RoundedCornerShape(8.dp))
+            .let {
+                if (fact.value != null) {
+                    it.clickable {
+                        clipboard.setText(AnnotatedString(fact.value))
+                        copied = true
+                    }
+                } else {
+                    it
+                }
+            }
             .background(accent.copy(alpha = 0.16f * flash))
             .padding(horizontal = 6.dp, vertical = 4.dp),
     ) {
@@ -253,9 +281,9 @@ private fun FactRow(fact: UnderstoodFact) {
         fact.value?.let { value ->
             Spacer(Modifier.width(6.dp))
             Text(
-                text = value,
+                text = if (copied) "Скопировано" else value,
                 style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = if (copied) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -271,3 +299,5 @@ private fun FactRow(fact: UnderstoodFact) {
         }
     }
 }
+
+private const val FACT_COPIED_SHOWN_MS = 1_600L

@@ -701,4 +701,24 @@ class UnderstandRealizerTest {
         assertTrue(prompt.contains("Ролей может не быть ни одной"))
         assertTrue(prompt.contains("лучше, чем натянутая"))
     }
+
+    /**
+     * #693 (охота 2026-08-10): текст, который QR уже отдал, был тупиком — не
+     * копируется, не читается «Понять»/«Перевести»/«AI». Теперь он источник
+     * наравне с сидекаром OCR: та же логика, что уже вела «Открыть ссылку»
+     * на HAS_URL из QR.
+     */
+    @Test
+    fun `текст из QR доходит до понимания без распознавания и без сети на пустом снимке`() = runTest {
+        val qrOnly = PointObject(
+            "img-qr", "image/png", ScratchRef("/tmp/qr.png"),
+            ObjectState(ObjectKind.IMAGE, setOf(Feature.HAS_QR)),
+            metadata = mapOf(com.point.core.flow.META_ENTITY_PREFIX + "qr" to "Ночь: связь после реанимации"),
+        )
+
+        val result = realizer("SUMMARY=короткая заметка").perform(qrOnly)
+
+        assertTrue(result is ActionResult.Done)
+        assertTrue("текст QR дошёл до модели", lastPrompt!!.contains("Ночь: связь после реанимации"))
+    }
 }

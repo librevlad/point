@@ -5,6 +5,7 @@ import com.point.core.flow.Capability
 import com.point.core.flow.CapabilityMeta
 import com.point.core.flow.EntityExtractor
 import com.point.core.flow.EntityType
+import com.point.core.flow.META_ENTITY_PREFIX
 import com.point.core.flow.META_OCR_TEXT_REF
 import com.point.core.flow.Realizer
 import com.point.core.flow.UrlOpener
@@ -28,6 +29,11 @@ internal fun entitySourceText(input: PointObject): String {
     val sidecar = input.metadata[META_OCR_TEXT_REF]
         ?.let { path -> runCatching { File(path).takeIf(File::isFile)?.readText() }.getOrNull() }
     if (sidecar != null) return sidecar
+
+    // Уже добытое знание — источник наравне с сидекаром OCR: текст, который QR уже
+    // отдал, «Понять»/«Перевести»/«AI» читают напрямую, а не молчат на пустых байтах
+    // картинки. Та же логика, что уже вела «Открыть ссылку» на HAS_URL из QR (#693).
+    input.metadata[META_ENTITY_PREFIX + "qr"]?.takeIf { it.isNotBlank() }?.let { return it }
 
     if (!input.state.kind.isFileBacked) return input.uri.value
 
