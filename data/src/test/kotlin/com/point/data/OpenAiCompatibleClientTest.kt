@@ -111,13 +111,13 @@ class OpenAiCompatibleClientTest {
             return runCatching { chain.run(textObj, "hi") }.exceptionOrNull()?.message
         }
 
-        assertEquals("AI недоступен — свой ключ: ключ не принят — задайте свой ключ в настройках", said(401))
-        assertEquals("Бесплатные лимиты AI исчерпаны — вернитесь позже, платить не идём", said(429))
+        assertEquals("Модель недоступна — свой ключ: ключ не принят — задайте свой ключ в настройках", said(401))
+        assertEquals(FallbackLlmClient.FREE_LIMITS_SPENT, said(429))
         assertEquals(
-            "AI недоступен — свой ключ: сервис просит оплату — у этого ключа нет бесплатного доступа",
+            "Модель недоступна — свой ключ: сервис просит оплату — у этого ключа нет бесплатного доступа",
             said(402),
         )
-        assertEquals("AI недоступен — свой ключ: сервис сейчас не отвечает", said(500))
+        assertEquals("Модель недоступна — свой ключ: сервис сейчас не отвечает", said(500))
     }
 
     @Test

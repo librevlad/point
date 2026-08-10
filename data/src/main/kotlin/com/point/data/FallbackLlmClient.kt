@@ -84,12 +84,21 @@ class FallbackLlmClient @Inject constructor(
     private fun summarise(errors: List<String>): String = when {
         errors.isNotEmpty() && errors.all { it.isNetworkError() } -> NO_NETWORK_MESSAGE
         errors.isNotEmpty() && errors.all { it.isQuotaError() } ->
-            "Бесплатные лимиты AI исчерпаны — вернитесь позже, платить не идём"
-        else -> "AI недоступен — " +
+            FREE_LIMITS_SPENT
+
+        // Живая охота 11.08.2026: на экране всплывало «AI недоступен». Весь остальной
+        // Point говорит про модель и чтение, а не аббревиатурой — человеку она ничего
+        // не объясняет.
+        else -> "Модель недоступна — " +
             errors.map { it.substringBefore('\n').take(120) }.distinct().take(2).joinToString("; ")
     }
 
-    private companion object {
-        const val NO_NETWORK_MESSAGE = "AI недоступен — нет подключения к интернету"
+    companion object {
+
+        /** Одна формулировка на всех, кто её показывает и проверяет. */
+        const val NO_NETWORK_MESSAGE = "Модель недоступна — нет подключения к интернету"
+
+        /** Та же, что у облачного чтения: человеку без разницы, кто именно упёрся в лимит. */
+        const val FREE_LIMITS_SPENT = "Бесплатные лимиты чтения исчерпаны — вернитесь позже, платить не идём"
     }
 }
