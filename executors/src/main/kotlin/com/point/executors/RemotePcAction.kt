@@ -152,6 +152,10 @@ class RemotePcRealizer(
                 )
             }
 
+            // Письмо доставлено, компьютер придёт за ним позже — это исход, а не отказ
+            // (#672). Готовое останется у компьютера: забирают его кнопкой «На телефон» (#598).
+            PcSendOutcome.Parked -> ActionResult.Done(com.point.core.flow.PC_PARKED_TEXT)
+
             PcSendOutcome.Rejected -> ActionResult.Failure(PC_DEVICE_REVOKED, recoverable = true)
             is PcSendOutcome.Unreachable ->
                 ActionResult.Failure(pcUnreachableText(outcome.why), recoverable = true)

@@ -13,11 +13,23 @@ sealed interface PcSendOutcome {
         val understanding: Map<String, String> = emptyMap(),
     ) : PcSendOutcome
 
+    /**
+     * Письмо легло на сервер, а компьютер за ним ещё не пришёл (#672).
+     *
+     * Это не отказ: объект доставлен и дождётся получателя. Прежнее «компьютер не
+     * отвечает» описывало неответ RPC, а не судьбу письма, — человек верил и отправлял
+     * заново, рискуя дублем на той стороне.
+     */
+    data object Parked : PcSendOutcome
+
     data object Rejected : PcSendOutcome
 
     data class Unreachable(val detail: String, val why: PcUnreachable = PcUnreachable.SERVER_SILENT) :
         PcSendOutcome
 }
+
+/** Судьба письма, а не статус RPC: доставлено и ждёт получателя (#672). */
+const val PC_PARKED_TEXT = "Отправлено — компьютер заберёт, когда включится"
 
 enum class PcUnreachable {
 
