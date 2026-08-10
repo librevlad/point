@@ -10,5 +10,5 @@ data class HistoryEntry(
 
     val features: Set<Feature> = emptySet(),
 
-    val entities: Map<String, String> = emptyMap(),
+    val metadata: Map<String, String> = emptyMap(),
 )
