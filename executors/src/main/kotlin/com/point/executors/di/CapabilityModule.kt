@@ -45,6 +45,8 @@ import com.point.executors.SmsCapability
 import com.point.executors.SmsRealizer
 import com.point.executors.ArchiveRealizer
 import com.point.executors.BlurBgCapability
+import com.point.executors.TakeFragmentCapability
+import com.point.executors.TakeFragmentRealizer
 import com.point.executors.BlurBgRealizer
 import com.point.executors.DefaultBubblePolicy
 import com.point.executors.DefaultCapabilityRegistry
@@ -172,6 +174,8 @@ abstract class CapabilityModule {
     @Binds @IntoSet @OwnCapabilities abstract fun scanPlusCap(c: ScanPlusCapability): Capability
     @Binds @IntoSet @OwnCapabilities abstract fun cutoutCap(c: CutoutCapability): Capability
     @Binds @IntoSet @OwnCapabilities abstract fun blurBgCap(c: BlurBgCapability): Capability
+
+    @Binds @IntoSet @OwnCapabilities abstract fun takeFragmentCap(c: TakeFragmentCapability): Capability
     @Binds @IntoSet @OwnCapabilities abstract fun replaceBgCap(c: ReplaceBgCapability): Capability
 
     @Binds @IntoSet @OwnCapabilities abstract fun cloudOcrCap(c: CloudOcrCapability): Capability
@@ -220,6 +224,8 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun scanR(r: ScanRealizer): Realizer
     @Binds @IntoSet abstract fun cutoutR(r: CutoutRealizer): Realizer
     @Binds @IntoSet abstract fun blurBgR(r: BlurBgRealizer): Realizer
+
+    @Binds @IntoSet abstract fun takeFragmentR(r: TakeFragmentRealizer): Realizer
     @Binds @IntoSet abstract fun replaceBgR(r: ReplaceBgRealizer): Realizer
 
     @Binds @IntoSet abstract fun deviceOcrR(r: DeviceOcrRealizer): Realizer
