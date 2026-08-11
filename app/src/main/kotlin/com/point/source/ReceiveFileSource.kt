@@ -15,6 +15,7 @@ class ReceiveFileSource @Inject constructor(
     override val id = "receive"
     override val label = "Принять файл"
     override val icon = "link"
+    override val network = true
 
     override fun isAvailable(context: Context) = true
 

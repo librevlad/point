@@ -55,6 +55,8 @@ class SourcePickerActivity : ComponentActivity() {
 
     @Inject lateinit var sources: Set<@JvmSuppressWildcards ObjectSource>
 
+    @Inject lateinit var network: com.point.core.flow.NetworkAvailability
+
     private var pending: ObjectSource? = null
 
     private var blocked by mutableStateOf<String?>(null)
@@ -99,12 +101,16 @@ class SourcePickerActivity : ComponentActivity() {
         pending?.restoreState(savedInstanceState?.getString(STATE_SOURCE_STATE))
         blocked = savedInstanceState?.getString(STATE_BLOCKED)
         val visible = sources.filter { it.isAvailable(this) }.sortedBy { it.label }
+
+        // Про сеть спрашиваем один раз на список, а не у каждого источника (#569, #759).
+        val online = runCatching { network.isAvailable() }.getOrDefault(true)
         tileOffer = tileOfferVisible(Build.VERSION.SDK_INT, shadeTileKnown(this))
         setContent {
             PointTheme {
                 SourcePickerScreen(
                     sources = visible,
                     onPick = ::start,
+                    online = online,
                     blocked = blocked,
                     onOpenSettings = ::openAppSettings,
                     onDismissBlocked = ::finish,
@@ -236,6 +242,7 @@ internal fun SourcePickerScreen(
     onDismissBlocked: () -> Unit = {},
     tileOffer: Boolean = false,
     onAddTile: () -> Unit = {},
+    online: Boolean = true,
 ) {
     Box(
         modifier = modifier
@@ -258,7 +265,8 @@ internal fun SourcePickerScreen(
                         title = source.label,
 
                         // Зачем это Point — сказано до системного окна, а не после (#568).
-                        subtitle = source.what,
+                        // А если сети нет — об этом сказано до тапа, а не отказом после (#759).
+                        subtitle = sourceNote(source, online),
                         onClick = { onPick(source) },
                         icon = bubbleIcon(source.icon),
                         accent = bubbleColor(source.icon),
