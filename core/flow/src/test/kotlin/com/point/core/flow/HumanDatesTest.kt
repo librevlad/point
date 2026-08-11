@@ -69,9 +69,9 @@ class HumanDatesTest {
     @Test
     fun `слипшиеся даты режутся на значения, одиночные остаются целыми`() {
         // Скрин владельца 2026-08-09: «дата — или: 26.04.2026 26.04.2026» с чека.
-        assertEquals(listOf("26.04.2026"), splitHumanDates("26.04.2026 26.04.2026"))
-        assertEquals(listOf("26.04.2026", "28.04.2026"), splitHumanDates("26.04.2026 28.04.2026"))
-        assertEquals(listOf("26.04.2026 20:04"), splitHumanDates("26.04.2026 20:04"))
-        assertEquals(listOf("просто текст"), splitHumanDates("просто текст"))
+        assertEquals(listOf("26.04.2026"), readDates("26.04.2026 26.04.2026"))
+        assertEquals(listOf("26.04.2026", "28.04.2026"), readDates("26.04.2026 28.04.2026"))
+        assertEquals(listOf("26.04.2026 20:04"), readDates("26.04.2026 20:04"))
+        assertTrue("текст без даты стал датой", readDates("просто текст").isEmpty())
     }
 }

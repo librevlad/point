@@ -16,6 +16,7 @@ import com.point.core.flow.normConsensus
 import com.point.core.flow.META_ALT_SUFFIX
 import com.point.core.flow.META_MORE_SUFFIX
 import com.point.core.flow.META_EVIDENCE_SUFFIX
+import com.point.core.flow.META_LINE_SUFFIX
 import com.point.core.flow.META_SOURCE_SUFFIX
 import com.point.core.flow.provenanceOf
 import com.point.core.flow.EXTRACTED_KINDS
@@ -187,7 +188,10 @@ internal fun focusedDelta(
         val sameAsKnown = known != null && com.point.core.flow.normConsensus(known) ==
             com.point.core.flow.normConsensus(value)
         when {
-            known.isNullOrBlank() && key !in facts -> facts[key] = value
+            known.isNullOrBlank() && key !in facts -> {
+                facts[key] = value
+                e.line?.let { facts[key + META_LINE_SUFFIX] = it }
+            }
             sameAsKnown || com.point.core.flow.normConsensus(facts[key].orEmpty()) ==
                 com.point.core.flow.normConsensus(value) -> Unit
 
@@ -202,7 +206,11 @@ internal fun focusedDelta(
                 mime = "text/plain",
                 uri = ValueRef(value),
                 state = ObjectState(kind, setOf(feature)),
-                metadata = mapOf(key to value, com.point.core.flow.META_AT_REGION to at),
+                metadata = buildMap {
+                    put(key, value)
+                    put(com.point.core.flow.META_AT_REGION, at)
+                    e.line?.let { put(key + META_LINE_SUFFIX, it) }
+                },
                 sourceObjects = listOf(source.id),
                 creatorAction = ENTITY_CREATOR,
             )
@@ -240,6 +248,10 @@ internal fun entityDelta(
     // Второе значение того же вида — «ещё один», а не проигравший и не спор (S6,
     // живой прогон 2026-08-09): два телефона в тексте остаются двумя телефонами.
     val more = LinkedHashMap<String, MutableList<String>>()
+
+    // Строка документа вокруг значения — подпись при нём (#782): видно, что это за день,
+    // но значением она не является и в спор, в «ещё» и в тождество узла не входит.
+    val lines = LinkedHashMap<String, String>()
     val extracted = buildMap {
 
         meaningful.sortedBy { it.isBareClock() }.forEach { e ->
@@ -250,6 +262,7 @@ internal fun entityDelta(
                 } else {
                     e.value
                 }
+                e.line?.let { lines.putIfAbsent(value, it) }
                 val first = this[key]
                 if (first == null) {
                     put(key, value)
@@ -264,10 +277,13 @@ internal fun entityDelta(
         .mapValues { (_, values) -> altValue(values) }
 
     val ruled = if (META_ENTITY_ADDRESS in extracted) emptyMap() else addressFacts(text)
-    val facts = extracted + moreFacts + ruled
+    val captions = extracted.mapNotNull { (key, value) ->
+        lines[value]?.let { key + META_LINE_SUFFIX to it }
+    }.toMap()
+    val facts = extracted + moreFacts + ruled + captions
 
     if (ruled.isNotEmpty()) features += Feature.HAS_ADDRESS
-    val (objects, relations) = entityObjects(source, facts, creator = ENTITY_CREATOR)
+    val (objects, relations) = entityObjects(source, facts, creator = ENTITY_CREATOR, lines = lines)
     return Findings(features, facts, objects, relations)
 }
 
@@ -312,6 +328,9 @@ internal fun entityObjects(
     source: PointObject,
     facts: Map<String, String>,
     creator: String,
+
+    /** Строка документа для значения — подпись узла, не его значение (#782). */
+    lines: Map<String, String> = emptyMap(),
 ): Pair<List<PointObject>, List<Relation>> {
 
     if (source.state.kind in EXTRACTED_KINDS) return emptyList<PointObject>() to emptyList()
@@ -336,6 +355,11 @@ internal fun entityObjects(
 
                 facts[key + META_EVIDENCE_SUFFIX]?.let { put(key + META_EVIDENCE_SUFFIX, it) }
                 facts[key + META_SOURCE_SUFFIX]?.let { put(key + META_SOURCE_SUFFIX, it) }
+
+                // Подпись принадлежит значению узла, а не полю вообще: «ещё»-значение
+                // несёт свою строку документа, а не строку соседа (#782).
+                (lines[nodeValue] ?: facts[key + META_LINE_SUFFIX]?.takeIf { nodeValue == value })
+                    ?.let { put(key + META_LINE_SUFFIX, it) }
             },
             provenance = provenanceOf(facts, key),
             sourceObjects = listOf(source.id),

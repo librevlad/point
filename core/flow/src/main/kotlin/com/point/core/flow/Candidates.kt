@@ -8,6 +8,9 @@ data class FieldCandidate(
 
     /** Имя человека при значении — пара «номер | имя» из CONTACT-строк (#653). */
     val person: String? = null,
+
+    /** Строка документа вокруг значения — подпись при нём, а не оно само (#782). */
+    val line: String? = null,
 )
 
 const val MAX_FIELD_CANDIDATES = 3
@@ -22,10 +25,16 @@ const val META_SOURCE_SUFFIX = ".src"
 
 const val META_BLOCKED_SUFFIX = ".blocked"
 
+/**
+ * Строка документа, из которой вычитано значение — подпись при нём, а не оно само (#782).
+ * В спор, в «ещё» и в тождество объекта подпись не входит: это контекст значения.
+ */
+const val META_LINE_SUFFIX = ".line"
+
 fun isAnnotationKey(key: String): Boolean =
     key.endsWith(META_ALT_SUFFIX) || key.endsWith(META_MORE_SUFFIX) ||
         key.endsWith(META_EVIDENCE_SUFFIX) || key.endsWith(META_SOURCE_SUFFIX) ||
-        key.endsWith(META_BLOCKED_SUFFIX)
+        key.endsWith(META_BLOCKED_SUFFIX) || key.endsWith(META_LINE_SUFFIX)
 
 fun semanticFits(key: String, value: String): Boolean? {
     val digits = value.count(Char::isDigit)
@@ -38,7 +47,9 @@ fun semanticFits(key: String, value: String): Boolean? {
         META_ENTITY_PREFIX + "phone" -> digits in 10..13 && !WORDY.containsMatchIn(value)
         META_ENTITY_PREFIX + "email" -> value.contains('@') && value.substringAfter('@').contains('.')
         META_ENTITY_PREFIX + "card" -> digits in 15..19 || looksLikeIban(value)
-        META_ENTITY_PREFIX + "date" -> value.any(Char::isDigit) && value.any { it in ".:/-" }
+        // Дата — это дата, а не всё, где есть цифра и точка: «4.» из нумерации пункта
+        // вставало отдельной находкой рядом с настоящими днями (#782).
+        META_ENTITY_PREFIX + "date" -> holdsDate(value)
 
         META_ENTITY_METER -> meterDigitsFit(value)
 

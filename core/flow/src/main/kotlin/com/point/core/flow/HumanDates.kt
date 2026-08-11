@@ -20,15 +20,73 @@ fun humanDayOf(value: String): LocalDate? =
     HUMAN_DATE.find(value)?.let(::toLocalDate)
 
 /**
- * Несколько календарных дат внутри одного значения — это несколько значений,
- * а не одно: «26.04.2026 26.04.2026» с чека рождало слипшийся спор. Значение
- * с одной датой (в т.ч. с временем) возвращается нетронутым.
+ * Одно правило чтения даты на все входы знания (#782, решение владельца).
+ *
+ * Значение даты — сама дата, а не фраза вокруг неё. «зазначених в Акті від 03.01.2026
+ * № 432/69» — это 03.01.2026; «Дійсний з 05.06.2025 0:00:00 по 04.06.2027 23:59:59» —
+ * два дня, а не один интервал строкой; «4.» датой не становится вовсе. Один и тот же
+ * день не возвращается дважды: побеждает более информативное чтение (#660).
+ *
+ * Час при дате остаётся при ней — «01.12.2020 в 11:09» и «29.07 до 18:00» это срок, а
+ * не отметка (#651). Значение вовсе без даты, но со временем или относительным словом,
+ * судится своими правилами и проходит нетронутым: выдумывать вместо него день нельзя.
  */
-fun splitHumanDates(value: String): List<String> {
-    val matches = HUMAN_DATE.findAll(value).toList()
-    if (matches.size < 2) return listOf(value)
-    return matches.map { it.value }.distinct()
+fun readDates(value: String): List<String> {
+    val text = value.trim()
+    if (text.isEmpty()) return emptyList()
+
+    val found = DATE_TOKEN.findAll(text).filter { calendarShaped(it.value) }.toList()
+    if (found.isEmpty()) {
+        return if (CLOCK_INSIDE.containsMatchIn(text) || relativeDayWord(text)) listOf(text) else emptyList()
+    }
+
+    val byDay = LinkedHashMap<String, String>()
+    found.forEach { m ->
+        val piece = (m.value + DATE_TAIL.matchAt(text, m.range.last + 1)?.value.orEmpty()).trim()
+        val day = humanDayOf(piece)?.toString() ?: normalizedPiece(piece)
+        val kept = byDay[day]
+        if (kept == null || piece.length > kept.length) byDay[day] = piece
+    }
+    return byDay.values.toList()
 }
+
+/** Есть ли внутри значения настоящая дата — а не только цифры и точка. */
+fun holdsDate(value: String): Boolean = readDates(value).isNotEmpty()
+
+private fun normalizedPiece(piece: String) = piece.lowercase().replace(WHITESPACE, " ")
+
+private val WHITESPACE = Regex("""\s+""")
+
+/**
+ * Число, похожее на день и месяц: «432/69» и «4.» календарём не становятся. Порядок
+ * день/месяц не навязывается — «12/25/2026» тоже дата, просто прочитанная наоборот.
+ */
+private fun calendarShaped(token: String): Boolean {
+    if (token.any(Char::isLetter)) return true
+    if (ISO_DATE.matches(token)) return humanDayOf(token) != null
+    val parts = token.split('.', '/', '-').mapNotNull(String::toIntOrNull)
+    if (parts.size < 2) return false
+    val (a, b) = parts
+    return (a in 1..31 && b in 1..12) || (a in 1..12 && b in 1..31)
+}
+
+private val ISO_DATE = Regex("""\d{4}-\d{2}-\d{2}""")
+
+private val DATE_TOKEN = Regex(
+    """(?iu)(?<!\d)\d{1,2}[./-]\d{1,2}[./-]\d{2,4}(?!\d)""" +
+        """|(?<!\d)\d{4}-\d{2}-\d{2}(?!\d)""" +
+        """|(?<!\d)\d{1,2}[./]\d{1,2}(?![./\d])""" +
+        """|(?<!\d)\d{1,2}\s+(?:$MONTH_STEMS)\p{L}*(?:\s+\d{4})?(?!\d)""",
+)
+
+private const val MONTH_STEMS =
+    "январ|феврал|март|апрел|ма[йя]|июн|июл|август|сентябр|октябр|ноябр|декабр|" +
+        "січн|лют|берез|квітн|травн|червн|липн|серпн|вересн|жовтн|листопад|грудн"
+
+/** Час принадлежит своей дате: «в 11:09», «до 18:00», «0:00:00» — часть того же срока. */
+private val DATE_TAIL = Regex("""(?:\s+\p{L}{1,3})?\s*(?<!\d)\d{1,2}:\d{2}(?::\d{2})?""")
+
+private val CLOCK_INSIDE = Regex("""(?<!\d)\d{1,2}:\d{2}""")
 
 private fun toLocalDate(m: MatchResult): LocalDate? = runCatching {
     if (m.groupValues[4].isNotEmpty()) {
