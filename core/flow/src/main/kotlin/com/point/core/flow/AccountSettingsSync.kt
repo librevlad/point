@@ -24,10 +24,20 @@ class AccountSettingsSync(
     suspend fun sync(account: PointAccount, keys: DeviceKeyPair, mine: AccountSettings): AccountSettings? {
         val circle = (client.circle(account) as? CircleAnswer.Circle)?.devices ?: return null
 
-        val theirs = client.settings(account)
-            ?.let { seal.open(it, account.deviceId, keys.privateKey) }
-            ?.let(AccountSettings::decode)
-            ?: AccountSettings()
+        // Пока это устройство не объявило серверу свою публичную часть, конверта себе оно не
+        // положит — и записало бы общее, которого само потом не прочитает. Объявление идёт
+        // своим чередом; до него настройки просто не едут.
+        if (circle.none { it.id == account.deviceId && it.key.isNotBlank() }) return null
+
+        val lying = client.settings(account)
+        val opened = lying?.let { seal.open(it, account.deviceId, keys.privateKey) }
+
+        // На сервере что-то лежит, а вскрыть его нечем — значит, это чужая работа, а не
+        // пустое место. Записать поверх означало бы стереть ключи, введённые на других
+        // устройствах, молча и безвозвратно.
+        if (lying != null && opened == null) return null
+
+        val theirs = opened?.let(AccountSettings::decode) ?: AccountSettings()
 
         val merged = theirs.mergedWith(mine)
         if (merged == theirs) return merged
