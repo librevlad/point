@@ -41,6 +41,18 @@ class DesktopState(
 
     /** Прибытие объявляется наружу (peek-плашка): и с телефона, и готовое здесь. */
     private val announce: (InboxItem, ObjectSource) -> Unit = { _, _ -> },
+
+    /**
+     * Исполняет ли телефон просьбы компьютера (#785).
+     *
+     * Пока нет: свою почту он читает только ради ответа на собственный запрос, а всё
+     * остальное выбрасывает `Mailbox.drain` при первом же исходящем обращении. Значит
+     * просьба не «подождёт» — она будет стёрта, и обещать её доставку означает врать.
+     *
+     * Связка от этого не становится сломанной: она односторонняя, и человек это видит.
+     * День, когда телефон научится, — это один `true` здесь и снятая причина.
+     */
+    internal val phoneRunsRequests: Boolean = false,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
@@ -288,7 +300,13 @@ class DesktopState(
                 ActionChoice(
                     action.label,
                     onPhone = true,
-                    unavailable = action.unavailable?.ifBlank { "телефон сейчас не может это сделать" },
+
+                    // Причина видна до нажатия, а не после (#785): человек не должен
+                    // узнавать о границе связки, ткнув в действие и подождав напрасно.
+                    unavailable = when {
+                        !phoneRunsRequests -> PHONE_DOES_NOT_RUN_REQUESTS
+                        else -> action.unavailable?.ifBlank { "телефон сейчас не может это сделать" }
+                    },
                     remote = action,
                     icon = "phone",
                 ),
@@ -330,6 +348,13 @@ class DesktopState(
     val phoneAsk: StateFlow<PhoneAsk?> = _phoneAsk.asStateFlow()
 
     fun sendToPhone(item: InboxItem, action: com.point.core.flow.PcRemoteAction) {
+
+        // Страховка на случай вызова мимо списка действий: обещать доставку, зная, что
+        // просьбу выбросят, нельзя ни из какого места (#785).
+        if (!phoneRunsRequests) {
+            _message.value = PHONE_DOES_NOT_RUN_REQUESTS
+            return
+        }
         val link = com.point.core.flow.linkStateOf(_lastContact.value, clock.now())
         if (link !is com.point.core.flow.LinkState.Live) {
             _phoneAsk.value = PhoneAsk(
@@ -570,3 +595,13 @@ class DesktopState(
         _message.value = null
     }
 }
+
+/**
+ * Что компьютер честно говорит про работу, которую делает телефон (#785).
+ *
+ * Прежде здесь стояло обещание «просьба подождёт в его почте и выполнится, когда вы
+ * откроете Point на телефоне». Не выполнялась никогда: телефон стирал её `Mailbox.drain`
+ * при первом же своём обращении к серверу. Обещание было хуже отсутствия действия —
+ * человек ждал результата, которого никто не собирался делать.
+ */
+const val PHONE_DOES_NOT_RUN_REQUESTS = "телефон пока не выполняет просьбы с компьютера"
