@@ -23,6 +23,7 @@ from __future__ import annotations
 import os
 
 import base64
+import re
 import hashlib
 import hmac
 import sqlite3
@@ -121,6 +122,61 @@ def _require_form_parsing() -> None:
             "Не установлен python-multipart — без него приём файла отвечает 500 на каждую "
             "загрузку. Выполните: pip install -r requirements.txt"
         ) from e
+
+
+MAX_READABLE_TEXT = 200_000
+
+GEO_SHAPED = re.compile(r"^-?\d{1,2}\.\d+\s*,\s*-?\d{1,3}\.\d+$")
+
+
+def _vcard_fields(text: str) -> tuple[str, list[tuple[str, str]]]:
+    """Имя, телефоны и почты присланной карточки — ровно то, что человек хочет увидеть сразу."""
+    name, fields = "", []
+    for line in text.splitlines():
+        head, _, value = line.partition(":")
+        key = head.split(";")[0].strip().upper()
+        value = value.strip()
+        if not value:
+            continue
+        if key == "FN" and not name:
+            name = value
+        elif key == "TEL":
+            fields.append(("Телефон", value))
+        elif key == "EMAIL":
+            fields.append(("Почта", value))
+        elif key == "ORG":
+            fields.append(("Организация", value))
+        elif key == "ADR":
+            fields.append(("Адрес", value.replace(";", " ").strip()))
+    return name, fields
+
+
+def _geo_point(text: str) -> str | None:
+    """`geo:50.45,30.52` или просто пара координат — место, а не файл."""
+    body = text.strip()
+    if body.lower().startswith("geo:"):
+        body = body[4:].split("?")[0].strip()
+    return body if GEO_SHAPED.match(body) else None
+
+
+def _readable_text(mime: str, data: bytes) -> bool:
+    """
+    Присланное можно прочитать глазами прямо на странице.
+
+    Судим по содержимому, а не только по заявленному типу: имя файла и mime приходят от
+    отправителя, а решать, что показать человеку, приходится по тому, что действительно
+    лежит в байтах. Большой текст остаётся файлом — страница на мегабайт не помощь.
+    """
+    if len(data) > MAX_READABLE_TEXT:
+        return False
+    base = (mime or "").split(";")[0].strip().lower()
+    if base and not (base.startswith("text/") or base in ("application/json", "application/xml")):
+        return False
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError:
+        return False
+    return bool(text.strip()) and "\x00" not in text
 
 
 def create_app(
@@ -551,14 +607,34 @@ def create_app(
         return PlainTextResponse(did, headers={"X-Drop-Id": did})
 
     @app.get("/d/{drop_id}")
-    def drop_get(drop_id: str, d: Deps = Depends(deps)):
+    def drop_get(drop_id: str, raw: int = 0, d: Deps = Depends(deps)):
         """Открыто нарочно: ссылка и есть пропуск, и эти байты сервер видит (названная цена)."""
         got = mailbox.drop_find(_blobs_root(d), drop_id)
         if not got:
-            return PlainTextResponse("Файл больше не доступен", status_code=404)
+            return HTMLResponse(pages.drop_gone_page(), status_code=404)
         path, name, mime = got
         with open(path, "rb") as f:
             data = f.read()
+
+        # Присланный текст читается прямо со страницы, а не скачивается файлом. Point держал
+        # текст в руках и отдавал его в худшей форме: браузер сохранял вложение, и прочитать
+        # присланное можно было только открыв его чем-то ещё. `?raw=1` отдаёт тот же файл.
+        if not raw and _readable_text(mime, data):
+            text = data.decode("utf-8")
+            here = "/d/" + drop_id + "?raw=1"
+
+            # Присланное показывается тем, что оно есть (#737): контакт — контактом, место —
+            # картой. Файл никуда не делся и лежит рядом, для тех, кому нужен именно файл.
+            if "BEGIN:VCARD" in text.upper():
+                who, fields = _vcard_fields(text)
+                return HTMLResponse(pages.drop_contact_page(who or name, fields, here))
+
+            point = _geo_point(text)
+            if point:
+                return HTMLResponse(pages.drop_place_page(name, point, here))
+
+            return HTMLResponse(pages.drop_text_page(name, text, here))
+
         quoted = urllib.parse.quote(name)
         return Response(data, media_type=mime,
                         headers={"Content-Disposition": "attachment; filename*=UTF-8''" + quoted})

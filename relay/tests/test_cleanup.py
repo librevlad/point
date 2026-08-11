@@ -9,6 +9,7 @@
 Возраст файла живёт в файловом времени (`mtime`), а не в управляемых часах стенда, поэтому
 старение делается `os.utime` — так же, как его увидит боевой сервер.
 """
+import base64
 import os
 import time
 
@@ -154,3 +155,52 @@ def test_ящик_закрывается_по_просьбе_и_чужой_не_
 
     # Ссылка перестала работать для того, кому её отдали.
     assert point.client.get("/u/" + box).status_code == 404
+
+
+def _drop(point, me, body: bytes, name: str, mime: str) -> str:
+    return point.as_device(
+        me["device_token"], "POST", "/d",
+        content=body,
+        headers={
+            "X-Drop-Name": base64.b64encode(name.encode("utf-8")).decode("ascii"),
+            "X-Drop-Mime": mime,
+        },
+    ).text
+
+
+def test_присланное_показано_тем_что_оно_есть(point):
+    """
+    По ссылке человек получал вложение на скачивание — даже когда прислали текст (#780-класс),
+    контакт или место (#737). Point держал вещь в руках и отдавал её в худшей форме.
+    """
+    me = point.sign_in(sub="dropper")
+
+    text_id = _drop(point, me, "просто заметка".encode("utf-8"), "заметка.txt", "text/plain")
+    shown = point.client.get("/d/" + text_id)
+    assert shown.status_code == 200
+    assert "text/html" in shown.headers["content-type"]
+    assert "просто заметка" in shown.text
+
+    # Файл никуда не делся — он рядом, для тех, кому нужен именно файл.
+    raw = point.client.get("/d/" + text_id + "?raw=1")
+    assert raw.headers["content-disposition"].startswith("attachment")
+    assert raw.content == "просто заметка".encode("utf-8")
+
+    card = "BEGIN:VCARD\nVERSION:3.0\nFN:Тарасенко Світлана\nTEL:067 636 05 60\nEND:VCARD\n"
+    card_id = _drop(point, me, card.encode("utf-8"), "контакт.vcf", "text/vcard")
+    page = point.client.get("/d/" + card_id).text
+    assert "Тарасенко Світлана" in page
+    assert "067 636 05 60" in page
+    assert "Добавить в контакты" in page
+
+    place_id = _drop(point, me, b"geo:50.4501,30.5234", "место.txt", "text/plain")
+    place = point.client.get("/d/" + place_id).text
+    assert "geo:50.4501,30.5234" in place
+    assert "Открыть в картах" in place
+
+
+def test_мёртвая_ссылка_дропа_отвечает_страницей(point):
+    gone = point.client.get("/d/" + "0" * 32)
+
+    assert gone.status_code == 404
+    assert "text/html" in gone.headers["content-type"]
