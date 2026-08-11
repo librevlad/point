@@ -26,7 +26,14 @@ class HttpDropInbox(
 
     override suspend fun open(): DropOpen {
         if (!network.isAvailable()) return DropOpen.Refused(dropOpenRefusal(0, null, online = false))
-        val base = base() ?: return DropOpen.Refused(NO_SERVER_TEXT)
+
+        // У каждой беды своё имя (#797, решение владельца 11.08.2026). Прежде все три ветки
+        // этого метода печатали «Сервер Point не ответил» — и человек шёл проверять сервер,
+        // который мог быть ни при чём, а найти настоящую причину было нечем.
+        val address = serverUrl()?.trimEnd('/')?.takeIf { it.isNotBlank() }
+            ?: return DropOpen.Refused(NO_SERVER_ADDRESS_TEXT)
+        if (pass().isNullOrBlank()) return DropOpen.Refused(NOT_IN_ACCOUNT_TEXT)
+        val base = address
         return runCatching {
             val c = connect("$base/u/open", "POST").apply {
                 doOutput = true
@@ -49,9 +56,9 @@ class HttpDropInbox(
 
             val answer = parseJson(body)
             val box = answer.str("box")?.takeIf { it.isNotBlank() }
-                ?: return@runCatching DropOpen.Refused(NO_SERVER_TEXT)
+                ?: return@runCatching DropOpen.Refused(ODD_ANSWER_TEXT)
             val link = answer.str("url")?.takeIf { it.isNotBlank() }
-                ?: dropInboxLink(base, box) ?: return@runCatching DropOpen.Refused(NO_SERVER_TEXT)
+                ?: dropInboxLink(base, box) ?: return@runCatching DropOpen.Refused(NO_LINK_TEXT)
             DropOpen.Opened(DropInboxBox(box, link))
         }.getOrElse { DropOpen.Refused(NO_SERVER_TEXT) }
     }
