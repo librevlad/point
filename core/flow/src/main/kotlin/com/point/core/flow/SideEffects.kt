@@ -137,6 +137,17 @@ interface BackgroundRemover {
     suspend fun cutout(imagePath: String): ScratchRef
 }
 
+/** Что за код прочитан: от этого зависят слова на экране, и только они. */
+enum class CodeKind {
+
+    QR,
+
+    /** Товарный или книжный код под полосками: EAN, UPC, ISBN. */
+    PRODUCT,
+}
+
+data class ScannedCode(val text: String, val kind: CodeKind)
+
 interface QrReader {
 
     /**
@@ -146,6 +157,16 @@ interface QrReader {
      * не равно «кода нет» (ADR-0001 §9).
      */
     suspend fun decode(imagePath: String): String?
+
+    /**
+     * Тот же взгляд, но с ответом «что это за код» (#445).
+     *
+     * Штрихкод на упаковке — не QR, и называть его QR значит соврать человеку о том, что
+     * Point увидел. Вид кода нужен именно для этого, а не для рассказа о товаре: про сам
+     * товар Point не утверждает ничего.
+     */
+    suspend fun scan(imagePath: String): ScannedCode? =
+        decode(imagePath)?.let { ScannedCode(it, CodeKind.QR) }
 }
 
 interface ImageCompositor {

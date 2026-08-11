@@ -23,7 +23,7 @@ class QrInvestigation @Inject constructor() : Capability {
     override val meta = CapabilityMeta(
         investigation = true,
         latency = Latency.FAST,
-        mayYield = setOf(Feature.HAS_QR),
+        mayYield = setOf(Feature.HAS_QR, Feature.HAS_BARCODE),
     )
 
     override fun label(state: ObjectState) = ""
@@ -54,15 +54,24 @@ class QrInvestigationRealizer @Inject constructor(
         )
 
     private suspend fun findings(obj: PointObject): Findings {
-        val found = reader.decode(obj.uri.value) ?: return Findings()
+        val found = reader.scan(obj.uri.value) ?: return Findings()
+
+        // Штрихкод на упаковке — не QR (#445). Признак и слово на экране идут от вида кода,
+        // иначе Point говорит про EAN-13 «Есть QR-код» и врёт о том, что сам же увидел.
+        if (found.kind == com.point.core.flow.CodeKind.PRODUCT) {
+            return Findings(
+                setOf(Feature.HAS_BARCODE),
+                mapOf(META_ENTITY_PREFIX + "barcode" to found.text),
+            )
+        }
 
         // QR-ссылка — это и есть ссылка объекта: без этого «Открыть ссылку»
         // требовало «сначала распознайте текст» при уже показанном адресе.
-        val link = found.trim().takeIf { it.startsWith("http://", true) || it.startsWith("https://", true) }
+        val link = found.text.trim().takeIf { it.startsWith("http://", true) || it.startsWith("https://", true) }
         return Findings(
             setOf(Feature.HAS_QR) + if (link != null) setOf(Feature.HAS_URL) else emptySet(),
             buildMap {
-                put(META_ENTITY_PREFIX + "qr", found)
+                put(META_ENTITY_PREFIX + "qr", found.text)
                 link?.let { put(META_ENTITY_PREFIX + "url", it) }
             },
         )

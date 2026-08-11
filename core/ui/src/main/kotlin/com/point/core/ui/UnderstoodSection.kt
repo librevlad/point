@@ -96,6 +96,12 @@ fun understoodFacts(obj: PointObject): List<UnderstoodFact> {
         }
         if (state.has(Feature.HAS_QR)) add(UnderstoodFact("qr", "Есть QR-код", entity("qr")?.readableUrl(), note("qr")))
 
+        // Цифры кода видны и копируются одним тапом (#445). Про сам товар Point молчит:
+        // название, производитель и цена — чужая уверенность, а не наблюдение Point.
+        if (state.has(Feature.HAS_BARCODE)) {
+            add(UnderstoodFact("barcode", "Штрихкод", entity("barcode"), note("barcode")))
+        }
+
         // Снимок рассказывает о себе (#547). Координаты показываются и когда их нашла модель
         // в тексте, и когда они пришли из самого снимка — строка одна на оба источника.
         if (state.has(Feature.HAS_SHOT_AT)) {
