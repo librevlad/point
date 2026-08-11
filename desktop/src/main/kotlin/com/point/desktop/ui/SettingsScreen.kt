@@ -16,6 +16,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -26,7 +27,16 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import com.point.core.flow.AI_PROVIDERS
+import com.point.core.flow.AiProvider
+import com.point.core.flow.KeyVerdict
+import com.point.core.flow.UserAiConfig
+import com.point.core.flow.keyVerdict
+import com.point.core.flow.looksLikeApiKey
+import com.point.desktop.AiConfig
+import com.point.desktop.DesktopAiKeyCheck
 import com.point.desktop.PcConfig
+import kotlinx.coroutines.launch
 
 @Composable
 fun SettingsScreen(
@@ -34,6 +44,10 @@ fun SettingsScreen(
     onSave: (PcConfig) -> Unit,
     onSweepNow: () -> Unit,
     onClose: () -> Unit,
+
+    /** Проверка ключа — та же, что на телефоне (#610). */
+    keyCheck: com.point.core.flow.AiKeyCheck = DesktopAiKeyCheck(),
+    onOpenUrl: (String) -> Unit = {},
 ) {
     var name by remember { mutableStateOf(config.name) }
     var aiKey by remember { mutableStateOf(config.ai.key) }
@@ -42,13 +56,18 @@ fun SettingsScreen(
     var server by remember { mutableStateOf(config.server) }
     var rightClick by remember { mutableStateOf(config.rightClick) }
     var swept by remember { mutableStateOf<Int?>(null) }
+    var aiUrl by remember { mutableStateOf(config.ai.url) }
+    var aiModel by remember { mutableStateOf(config.ai.model) }
+    var verdict by remember { mutableStateOf<KeyVerdict?>(null) }
+    var checking by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
     fun store() = onSave(
         config.copy(
             name = name.trim().ifBlank { config.name },
             server = server.trim(),
             rightClick = rightClick,
-            ai = config.ai.copy(key = aiKey.trim()),
+            ai = config.ai.copy(key = aiKey.trim(), url = aiUrl, model = aiModel),
             speech = config.speech.copy(key = speechKey.trim()),
             ocr = config.ocr.copy(key = ocrKey.trim()),
         ),
@@ -70,7 +89,32 @@ fun SettingsScreen(
             "Ключи сервисов",
             "Обычно вписывать их здесь не нужно: ключ, введённый на телефоне, приезжает сюда сам",
         ) {
-            Field(aiKey, { aiKey = it; store() }, "Ключ AI — понять, перевести, спросить", secret = true)
+            // Сервис называется своим именем и говорит, для чего он, — теми же словами, что и
+            // на телефоне (#610): голое поле «Ключ AI» не сообщало ни того, ни другого.
+            AI_PROVIDERS.forEach { provider ->
+                Service(provider, chosen = chosenFor(aiUrl, provider)) {
+                    aiUrl = provider.baseUrl
+                    aiModel = provider.models.substringBefore(',')
+                    verdict = null
+                    store()
+                }
+            }
+            Field(aiKey, { aiKey = it; verdict = null; store() }, "Ключ выбранного сервиса", secret = true)
+
+            Action(if (checking) "Проверяю…" else "Проверить ключ") {
+                if (!checking && looksLikeApiKey(aiKey)) {
+                    checking = true
+                    scope.launch {
+                        val probe = keyCheck.check(
+                            UserAiConfig(apiKey = aiKey.trim(), baseUrl = aiUrl, model = aiModel),
+                        )
+                        verdict = keyVerdict(probe)
+                        checking = false
+                    }
+                }
+            }
+            verdict?.let { Verdict(it) }
+
             Field(speechKey, { speechKey = it; store() }, "Ключ расшифровки речи", secret = true)
             Field(ocrKey, { ocrKey = it; store() }, "Ключ чтения снимков — необязателен", secret = true)
         }
@@ -100,6 +144,44 @@ fun SettingsScreen(
         }
 
         Action("Закрыть", onClose)
+    }
+}
+
+/** Выбран ли сервис: адрес вызова у компьютера полный, у списка — база. */
+internal fun chosenFor(url: String, provider: AiProvider): Boolean =
+    url.trim().trimEnd('/').startsWith(provider.baseUrl.trimEnd('/'))
+
+@Composable
+private fun Service(provider: AiProvider, chosen: Boolean, onChoose: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .border(
+                1.dp,
+                if (chosen) PointColors.violet else Color.White.copy(alpha = 0.08f),
+                RoundedCornerShape(12.dp),
+            )
+            .clickable(onClick = onChoose)
+            .padding(horizontal = 14.dp, vertical = 11.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(provider.name, style = PointType.body)
+            Text(provider.what, style = PointType.small.copy(color = PointColors.muted))
+        }
+        provider.freeNote?.let { Text(it, style = PointType.small) }
+    }
+}
+
+@Composable
+private fun Verdict(verdict: KeyVerdict) {
+    when (verdict) {
+        is KeyVerdict.Works -> Text("Ключ работает: " + verdict.reply, style = PointType.small)
+        is KeyVerdict.Refused -> Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(verdict.what, style = PointType.body)
+            Text(verdict.fix, style = PointType.small.copy(color = PointColors.muted))
+        }
     }
 }
 

@@ -71,13 +71,16 @@ class DesktopLlmClient(
         }
     }
 
-    private fun refusal(code: Int, reply: String): String = when (code) {
-        401, 403 -> "Ключ AI не подошёл — проверьте его в ~/.point-pc/config"
-        402 -> "У этого ключа кончилась бесплатная квота"
-        429 -> "Сервис просит подождать — слишком много запросов подряд"
-        in 500..599 -> "Сервис AI сейчас не отвечает"
-        else -> "Сервис AI отказал (" + code + ")" + reply.take(200).let { if (it.isBlank()) "" else ": $it" }
-    }
+    /**
+     * Отказ сервиса называется теми же словами, что и на телефоне (#610): свой набор фраз
+     * здесь означал, что одно и то же положение человека описано на двух устройствах
+     * по-разному — и на компьютере ещё и адресом файла настроек вместо того, что делать.
+     */
+    private fun refusal(code: Int, reply: String): String =
+        when (val verdict = com.point.core.flow.keyVerdict(com.point.core.flow.KeyProbe(code, error = reply))) {
+            is com.point.core.flow.KeyVerdict.Refused -> verdict.what + " — " + verdict.fix
+            is com.point.core.flow.KeyVerdict.Works -> verdict.reply
+        }
 
     private fun answerOf(reply: String): String? {
         val json = parseJson(reply)
