@@ -22,7 +22,15 @@ object DeviceKeys {
         )
     }
 
-    fun sharedSecret(privateKey: String, peerPublicKey: String): ByteArray? = runCatching {
+    /**
+     * Общий секрет с чужим устройством. [context] разводит назначения: один и тот же ключ
+     * устройства не должен запечатывать и связку, и настройки одним и тем же секретом (#610).
+     */
+    fun sharedSecret(
+        privateKey: String,
+        peerPublicKey: String,
+        context: String = PC_CONTEXT,
+    ): ByteArray? = runCatching {
         if (privateKey.isBlank() || peerPublicKey.isBlank()) return null
         val factory = KeyFactory.getInstance("EC")
         val mine = factory.generatePrivate(PKCS8EncodedKeySpec(unBase64(privateKey)))
@@ -32,8 +40,17 @@ object DeviceKeys {
             doPhase(theirs, true)
         }.generateSecret()
 
-        MessageDigest.getInstance("SHA-256").digest(agreed + "point-pc".toByteArray(Charsets.UTF_8))
+        MessageDigest.getInstance("SHA-256").digest(agreed + context.toByteArray(Charsets.UTF_8))
     }.getOrNull()
+
+    const val PC_CONTEXT = "point-pc"
+
+    /** Назначение «настройки аккаунта»: секрет связки для них не годится по построению. */
+    const val SETTINGS_CONTEXT = "point-settings"
+
+    internal fun base64Of(bytes: ByteArray): String = base64(bytes)
+
+    internal fun bytesOf(text: String): ByteArray = unBase64(text)
 
     private fun base64(bytes: ByteArray): String =
         Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)

@@ -155,6 +155,8 @@ fun main(args: Array<String>) {
         browser = { url -> runCatching { java.awt.Desktop.getDesktop().browse(java.net.URI(url)) } },
         deviceName = config.name,
         keys = deviceKeys,
+        mySettings = { FilePcConfig(pointDir).accountSettings() },
+        onSettings = { merged -> runCatching { FilePcConfig(pointDir).applyAccountSettings(merged) } },
     )
 
     val phoneCapsFile = File(pointDir, "phone-caps")

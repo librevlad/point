@@ -23,7 +23,17 @@ class DesktopAccount(
     private val deviceName: String,
 
     private val keys: com.point.core.flow.DeviceKeyStore,
+
+    /** Настройки этого компьютера в общем виде — то, что уедет за человеком (#610). */
+    private val mySettings: () -> com.point.core.flow.AccountSettings = {
+        com.point.core.flow.AccountSettings()
+    },
+
+    /** Что приехало общего — сюда. */
+    private val onSettings: (com.point.core.flow.AccountSettings) -> Unit = {},
 ) {
+
+    private val settingsSync = com.point.core.flow.AccountSettingsSync(client)
 
     private val driver = SignInDriver(client, store, browser)
 
@@ -55,6 +65,7 @@ class DesktopAccount(
 
                 runCatching { client.enroll(account, keys.keys().publicKey) }
                 refreshCircle()
+                syncSettings()
             }
         }
     }
@@ -87,11 +98,24 @@ class DesktopAccount(
                 is CircleAnswer.Circle -> {
                     _error.value = null
                     _circle.value = answer.devices
+                    syncSettings()
                 }
                 CircleAnswer.Unreachable -> _error.value = "Не удалось спросить сервер о ваших устройствах"
 
                 CircleAnswer.Revoked -> forget()
             }
+        }
+    }
+
+    /**
+     * Свести настройки с общими (#610). Молча: обмен предпочтениями — не событие для
+     * человека, а его отсутствие не повод для сообщения об ошибке.
+     */
+    fun syncSettings() {
+        val account = store.current() ?: return
+        scope.launch {
+            val merged = runCatching { settingsSync.sync(account, keys.keys(), mySettings()) }.getOrNull()
+            merged?.let(onSettings)
         }
     }
 

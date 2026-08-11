@@ -75,11 +75,78 @@ class FilePcConfig(private val baseDir: File) {
         runCatching { decodePcMeta(file.readText())["secrets.at"]?.toLongOrNull() }.getOrNull()
             ?: file.lastModified()
 
+    /**
+     * Настройки компьютера в общем виде — том, в каком они едут за человеком (#610).
+     *
+     * Своё у компьютера сюда не идёт: имя устройства и правый клик остаются здесь, потому
+     * что у них отличается сам мир, а не предпочтение человека.
+     */
+    @Synchronized
+    fun accountSettings(): com.point.core.flow.AccountSettings {
+        val config = load()
+        val at = stamp()
+        val provider = com.point.core.flow.providerForBaseUrl(config.ai.url)
+        val keys = if (config.ai.key.isBlank()) {
+            com.point.core.flow.UserAiKeys.NONE
+        } else {
+            com.point.core.flow.UserAiKeys.NONE.with(
+                com.point.core.flow.UserAiKey(
+                    providerId = provider?.id ?: com.point.core.flow.OWN_SERVICE_ID,
+                    apiKey = config.ai.key,
+                    model = config.ai.model,
+                    baseUrl = if (provider == null) config.ai.url else "",
+                    savedAt = at,
+                ),
+            )
+        }
+        return com.point.core.flow.AccountSettings(
+            aiKeys = keys,
+            speechKey = config.speech.key,
+            ocrKey = config.ocr.key,
+            sound = config.sound,
+            at = at,
+        )
+    }
+
+    /** Приехавшее ложится сюда, и только то, что отличается. */
+    @Synchronized
+    fun applyAccountSettings(merged: com.point.core.flow.AccountSettings) {
+        val config = load()
+        val best = merged.aiKeys.mine.firstOrNull()
+        val provider = best?.let { key ->
+            com.point.core.flow.AI_PROVIDERS.firstOrNull { it.id == key.providerId }
+        }
+        val next = config.copy(
+            ai = config.ai.copy(
+                key = best?.apiKey ?: config.ai.key,
+                url = best?.baseUrl?.takeIf { it.isNotBlank() } ?: provider?.baseUrl ?: config.ai.url,
+                model = best?.model?.takeIf { it.isNotBlank() }
+                    ?: provider?.models?.substringBefore(',') ?: config.ai.model,
+            ),
+            speech = config.speech.copy(key = merged.speechKey.ifBlank { config.speech.key }),
+            ocr = config.ocr.copy(key = merged.ocrKey.ifBlank { config.ocr.key }),
+            sound = merged.sound ?: config.sound,
+        )
+        if (next != config) save(next)
+        stamp(merged.at)
+    }
+
+    private fun stamp(): Long =
+        runCatching { decodePcMeta(file.readText())["settings.at"]?.toLongOrNull() }.getOrNull() ?: 0L
+
+    private fun stamp(at: Long) {
+        val stored = runCatching { decodePcMeta(file.readText()) }.getOrDefault(emptyMap()).toMutableMap()
+        stored["settings.at"] = at.toString()
+        file.writeText(encodePcMeta(stored))
+    }
+
     @Synchronized
     fun save(config: PcConfig) {
         val stored = runCatching { decodePcMeta(file.readText()) }.getOrDefault(emptyMap()).toMutableMap()
         stored["name"] = config.name
         stored["server"] = config.server
+        stored["ai.url"] = config.ai.url
+        stored["ai.model"] = config.ai.model
 
         if (config.rightClick) stored.remove("right.click") else stored["right.click"] = "no"
         if (config.sound) stored.remove("sound") else stored["sound"] = "no"

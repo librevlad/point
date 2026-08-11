@@ -1143,6 +1143,7 @@ class FlowViewModel @Inject constructor(
             val verdict = probe(key.providerId, aiCall(key))
             if (verdict is com.point.core.flow.KeyVerdict.Works) {
                 runCatching { userKeys.save(key.copy(savedAt = System.currentTimeMillis())) }
+                syncAccountSettings(justChanged = true)
             }
             _ui.update {
                 it.copy(
@@ -1222,6 +1223,7 @@ class FlowViewModel @Inject constructor(
         viewModelScope.launch {
             runCatching { sensorySettings.setSoundEnabled(enabled) }
             _ui.update { it.copy(soundEnabled = enabled) }
+            syncAccountSettings(justChanged = true)
         }
     }
 
@@ -1229,6 +1231,7 @@ class FlowViewModel @Inject constructor(
         viewModelScope.launch {
             runCatching { cloudPrivacy.setLevel(level) }
             _ui.update { it.copy(privacyLevel = level) }
+            syncAccountSettings(justChanged = true)
         }
     }
 
@@ -1318,6 +1321,7 @@ class FlowViewModel @Inject constructor(
             _ui.update { it.copy(signIn = null) }
 
             announceKey(state.account)
+            syncAccountSettings()
             if (gateWasUp) openDevices()
             return
         }
@@ -1361,6 +1365,7 @@ class FlowViewModel @Inject constructor(
             )
         }
         viewModelScope.launch { loadCircle(account) }
+        syncAccountSettings()
 
         pcLinks.current()?.let { pc ->
             viewModelScope.launch {
@@ -1486,6 +1491,58 @@ class FlowViewModel @Inject constructor(
     private fun announceKey(account: com.point.core.flow.PointAccount) {
         val key = runCatching { deviceKeys.keys().publicKey }.getOrNull() ?: return
         viewModelScope.launch { runCatching { accountClient.enroll(account, key) } }
+    }
+
+    private val settingsSync by lazy { com.point.core.flow.AccountSettingsSync(accountClient) }
+
+    /**
+     * Настройки едут за человеком через аккаунт (#610): ключи сервисов, «куда можно
+     * отправлять» и звук. Сервер получает их запечатанными и прочитать не может.
+     *
+     * [justChanged] — человек прямо сейчас что-то поменял, и это новее общего. Без правки
+     * своя отметка берётся у ключей: перезапуск приложения не должен выигрывать спор с
+     * устройством, где человек действительно менял настройки позже.
+     */
+    private fun syncAccountSettings(justChanged: Boolean = false) {
+        val account = accountStore.current() ?: return
+        viewModelScope.launch(ioDispatcher) {
+            val keys = runCatching { userKeys.keys() }.getOrDefault(com.point.core.flow.UserAiKeys.NONE)
+            val mine = com.point.core.flow.AccountSettings(
+                aiKeys = keys,
+                privacy = runCatching { cloudPrivacy.level() }.getOrNull(),
+                sound = runCatching { sensorySettings.isSoundEnabled() }.getOrNull(),
+                at = if (justChanged) {
+                    System.currentTimeMillis()
+                } else {
+                    keys.mine.maxOfOrNull { it.savedAt } ?: 0L
+                },
+            )
+            val merged = runCatching { settingsSync.sync(account, deviceKeys.keys(), mine) }
+                .getOrNull() ?: return@launch
+            applyAccountSettings(merged, mine)
+        }
+    }
+
+    /** Приехавшее применяется только там, где оно отличается: лишних записей не делаем. */
+    private suspend fun applyAccountSettings(
+        merged: com.point.core.flow.AccountSettings,
+        mine: com.point.core.flow.AccountSettings,
+    ) {
+        merged.aiKeys.mine
+            .filter { key -> mine.aiKeys.of(key.providerId)?.apiKey != key.apiKey }
+            .forEach { key -> runCatching { userKeys.save(key) } }
+
+        merged.privacy?.takeIf { it != mine.privacy }?.let { runCatching { cloudPrivacy.setLevel(it) } }
+        merged.sound?.takeIf { it != mine.sound }?.let { runCatching { sensorySettings.setSoundEnabled(it) } }
+
+        _ui.update {
+            it.copy(
+                aiKeySet = runCatching { userKeys.keys().mine.isNotEmpty() }.getOrDefault(it.aiKeySet),
+                privacyLevel = merged.privacy ?: it.privacyLevel,
+                soundEnabled = merged.sound ?: it.soundEnabled,
+                keyScreen = if (it.keyScreen == null) null else aiKeysScreen(),
+            )
+        }
     }
 
     private suspend fun syncSecrets(pc: com.point.core.flow.LinkedPc) {
