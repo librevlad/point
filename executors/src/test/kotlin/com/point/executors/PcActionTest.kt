@@ -17,6 +17,17 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PcActionTest {
+    /** Читателя текста тут нет: у объектов прогона нет прочитанного текста (#811). */
+    private val noText = object : com.point.core.flow.ObjectStore {
+        override suspend fun ingest(sourceUri: String, mime: String) = error("не зовут")
+        override suspend fun ingestMultiple(sources: List<String>) = error("не зовут")
+        override suspend fun put(result: com.point.core.model.ResultObject) = error("не зовут")
+        override suspend fun children(collection: PointObject, limit: Int) = error("не зовут")
+        override suspend fun readText(obj: PointObject, limit: Int): String = ""
+        override suspend fun newScratchFile(extension: String) = error("не зовут")
+        override suspend fun clear() = Unit
+    }
+
 
     private class FakeLinks(var pc: LinkedPc? = null) : PcLinks {
         override fun current() = pc
@@ -72,7 +83,7 @@ class PcActionTest {
     @Test
     fun `понимание об объекте едет вместе с ним`() = runTest {
         val transport = FakeTransport()
-        val realizer = PcRealizer(FakeLinks(linked), transport)
+        val realizer = PcRealizer(FakeLinks(linked), transport, noText)
 
         val result = realizer.perform(obj(mapOf("name" to "чек.jpg", "entity.phone" to "+3806")), null)
 
@@ -86,7 +97,7 @@ class PcActionTest {
 
         // #646, решение владельца: «Отправлено на компьютер — появится в окне Point
         // и в папке Point». Боль «куда исчез файл» (PC3): место названо словами.
-        val result = PcRealizer(FakeLinks(linked), FakeTransport()).perform(obj(), null)
+        val result = PcRealizer(FakeLinks(linked), FakeTransport(), noText).perform(obj(), null)
 
         val said = (result as ActionResult.Done).message
         assertTrue("не названо окно: «$said»", said.contains("окне Point"))
@@ -96,7 +107,7 @@ class PcActionTest {
     @Test
     fun `отправка на компьютер называет себя, пока идёт`() = runTest {
         val heard = stagesHeard {
-            PcRealizer(FakeLinks(linked), FakeTransport()).perform(obj(), null)
+            PcRealizer(FakeLinks(linked), FakeTransport(), noText).perform(obj(), null)
         }
 
         assertEquals(listOf("Отправляю на компьютер"), heard)
@@ -105,7 +116,7 @@ class PcActionTest {
     @Test
     fun `без компьютера в круге ждать нечего — и слов о работе нет`() = runTest {
 
-        val heard = stagesHeard { PcRealizer(FakeLinks(null), FakeTransport()).perform(obj(), null) }
+        val heard = stagesHeard { PcRealizer(FakeLinks(null), FakeTransport(), noText).perform(obj(), null) }
 
         assertTrue(heard.isEmpty())
     }
@@ -114,7 +125,7 @@ class PcActionTest {
     fun `компьютера нет в круге — сказано, что войти надо на нём`() = runTest {
         val transport = FakeTransport(PcSendOutcome.Unreachable("404", PcUnreachable.NOT_IN_CIRCLE))
 
-        val reason = reasonOf(PcRealizer(FakeLinks(linked), transport).perform(obj(), null))
+        val reason = reasonOf(PcRealizer(FakeLinks(linked), transport, noText).perform(obj(), null))
 
         assertEquals(
             "Компьютера нет в вашем круге. Запустите «Point для ПК» и войдите в тот же аккаунт.",
@@ -127,7 +138,7 @@ class PcActionTest {
 
         val transport = FakeTransport(PcSendOutcome.Unreachable("нет ответа", PcUnreachable.PC_ASLEEP))
 
-        val reason = reasonOf(PcRealizer(FakeLinks(linked), transport).perform(obj(), null))
+        val reason = reasonOf(PcRealizer(FakeLinks(linked), transport, noText).perform(obj(), null))
 
         assertEquals("Компьютер не отвечает. Проверьте, что «Point для ПК» на нём запущен.", reason)
     }
@@ -136,7 +147,7 @@ class PcActionTest {
     fun `письмо ждёт компьютер — это исход, а не отказ (#672)`() = runTest {
         val transport = FakeTransport(PcSendOutcome.Parked)
 
-        val result = PcRealizer(FakeLinks(linked), transport).perform(obj(), null)
+        val result = PcRealizer(FakeLinks(linked), transport, noText).perform(obj(), null)
 
         assertTrue("доставленное письмо не может быть провалом: $result", result is ActionResult.Done)
         assertEquals(com.point.core.flow.PC_PARKED_TEXT, (result as ActionResult.Done).message)
@@ -146,7 +157,7 @@ class PcActionTest {
     fun `сервер молчит — виноват не компьютер, и про него ничего не утверждается`() = runTest {
         val transport = FakeTransport(PcSendOutcome.Unreachable("нет связи", PcUnreachable.SERVER_SILENT))
 
-        val reason = reasonOf(PcRealizer(FakeLinks(linked), transport).perform(obj(), null))
+        val reason = reasonOf(PcRealizer(FakeLinks(linked), transport, noText).perform(obj(), null))
 
         assertEquals("До сервера Point не дозвониться. Проверьте интернет и попробуйте ещё раз.", reason)
     }
@@ -155,7 +166,7 @@ class PcActionTest {
     fun `упёрлись в размер — сказано словами и с числом`() = runTest {
         val transport = FakeTransport(PcSendOutcome.Unreachable("507", PcUnreachable.TOO_BIG))
 
-        val reason = reasonOf(PcRealizer(FakeLinks(linked), transport).perform(obj(), null))
+        val reason = reasonOf(PcRealizer(FakeLinks(linked), transport, noText).perform(obj(), null))
 
         assertEquals("Объект больше 50 МБ — столько за раз между устройствами не переслать.", reason)
     }
@@ -164,7 +175,7 @@ class PcActionTest {
     fun `устройство отключили от аккаунта — зовём войти заново`() = runTest {
         val transport = FakeTransport(PcSendOutcome.Rejected)
 
-        val reason = reasonOf(PcRealizer(FakeLinks(linked), transport).perform(obj(), null))
+        val reason = reasonOf(PcRealizer(FakeLinks(linked), transport, noText).perform(obj(), null))
 
         assertEquals("Это устройство отключили от аккаунта. Войдите заново.", reason)
     }
@@ -174,7 +185,7 @@ class PcActionTest {
         val links = FakeLinks(linked)
         PcUnreachable.values().forEach { why ->
             val transport = FakeTransport(PcSendOutcome.Unreachable("x", why))
-            val result = PcRealizer(links, transport).perform(obj(), null)
+            val result = PcRealizer(links, transport, noText).perform(obj(), null)
             assertTrue("$why оставил человека в тупике", (result as ActionResult.Failure).recoverable)
         }
     }

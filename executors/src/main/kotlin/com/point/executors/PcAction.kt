@@ -72,9 +72,35 @@ internal fun humanSendName(input: PointObject): String {
     }
 }
 
+/**
+ * Знание в дорогу едет значением, а не ссылкой на файл этого телефона (#811).
+ *
+ * `ocr.text.ref` — путь в scratch того устройства, где читали: на компьютере он ведёт в
+ * никуда, и снимок приезжал «непрочитанным» — там первым делом предлагали распознать его
+ * заново. Забирать текст с собой дешевле, чем читать второй раз.
+ */
+internal suspend fun travellingMeta(
+    obj: PointObject,
+    store: com.point.core.flow.ObjectStore,
+): Map<String, String> {
+    val ref = obj.metadata[com.point.core.flow.META_OCR_TEXT_REF]?.takeIf { it.isNotBlank() }
+        ?: return obj.metadata
+    val text = runCatching {
+        store.readText(
+            obj.copy(uri = com.point.core.model.ScratchRef(ref)),
+            limit = com.point.core.flow.READ_TEXT_TRAVEL_LIMIT,
+        )
+    }.getOrNull()?.takeIf { it.isNotBlank() } ?: return obj.metadata
+
+    // Ссылка на чужой scratch на той стороне бессмысленна и только притворяется знанием.
+    return obj.metadata - com.point.core.flow.META_OCR_TEXT_REF +
+        (com.point.core.flow.META_READ_TEXT to text)
+}
+
 class PcRealizer @Inject constructor(
     private val links: PcLinks,
     private val transport: PcTransport,
+    private val store: com.point.core.flow.ObjectStore,
 ) : Realizer {
     override val capabilityId = PcCapability.ID
 
@@ -84,7 +110,7 @@ class PcRealizer @Inject constructor(
         val name = humanSendName(input)
 
         reportStage(PC_SEND_STAGE)
-        return when (val outcome = transport.send(pc, input, name, input.metadata)) {
+        return when (val outcome = transport.send(pc, input, name, travellingMeta(input, store))) {
 
             // «Назвать место словами» (#646): человек знает, где искать файл (PC3).
             is PcSendOutcome.Sent -> ActionResult.Done(PC_SENT_WHERE)
