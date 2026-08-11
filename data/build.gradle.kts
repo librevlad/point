@@ -72,9 +72,6 @@ android {
         buildConfigField("String", "MODELSCOPE_BASE_URL", prop("MODELSCOPE_BASE_URL", "https://api-inference.modelscope.ai/v1"))
         buildConfigField("String", "MODELSCOPE_MODELS", prop("MODELSCOPE_MODELS", "Qwen/Qwen3-VL-235B-A22B-Instruct,Qwen/Qwen3-VL-8B-Instruct"))
 
-        buildConfigField("String", "GITHUB_API_KEY", "\"\"")
-        buildConfigField("String", "GITHUB_BASE_URL", prop("GITHUB_BASE_URL", "https://models.github.ai/inference"))
-        buildConfigField("String", "GITHUB_MODELS", prop("GITHUB_MODELS", ""))
 
         buildConfigField("String", "UNSTRUCTURED_API_KEY", "\"\"")
         buildConfigField("String", "UNSTRUCTURED_API_URL", prop("UNSTRUCTURED_API_URL", "https://api.unstructuredapp.io/general/v0/general"))
@@ -107,7 +104,6 @@ android {
             buildConfigField("String", "CLOUDFLARE_API_KEY", prop("CLOUDFLARE_API_KEY"))
             buildConfigField("String", "CLOUDFLARE_ACCOUNT_ID", prop("CLOUDFLARE_ACCOUNT_ID"))
             buildConfigField("String", "MODELSCOPE_API_KEY", prop("MODELSCOPE_API_KEY"))
-            buildConfigField("String", "GITHUB_API_KEY", prop("GITHUB_API_KEY"))
             buildConfigField("String", "UNSTRUCTURED_API_KEY", prop("UNSTRUCTURED_API_KEY"))
             buildConfigField("String", "LLAMA_CLOUD_API_KEY", prop("LLAMA_CLOUD_API_KEY"))
             buildConfigField("String", "OVH_API_KEY", prop("OVH_API_KEY"))
