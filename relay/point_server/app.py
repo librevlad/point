@@ -79,6 +79,12 @@ class StartRequest(BaseModel):
     handoff: bool = False
 
 
+class SettingsRequest(BaseModel):
+    """Запечатанные настройки. Для сервера это строка и ничего больше (#610)."""
+
+    sealed: str = Field(default="", max_length=64_000)
+
+
 class EnrollRequest(BaseModel):
     name: str | None = Field(default=None, max_length=64)
     key_agree: str | None = Field(default=None, max_length=512)
@@ -501,6 +507,38 @@ def create_app(
             "account": {"email": me.email, "name": me.name},
             "device": device_json(row, me, d.now(), d.settings.online_window),
         }
+
+    # --- настройки аккаунта в закрытом виде (#610) ---------------------------------
+
+    @app.get("/settings")
+    def get_settings(
+        conn: sqlite3.Connection = Depends(conn_of),
+        me: store.Caller = Depends(caller),
+    ):
+        row = store.settings(conn, me.user_id)
+        return {"sealed": row["sealed"] if row else "", "at": row["at"] if row else 0}
+
+    @app.put("/settings")
+    def put_settings(
+        body: SettingsRequest,
+        conn: sqlite3.Connection = Depends(conn_of),
+        me: store.Caller = Depends(caller),
+        d: Deps = Depends(deps),
+    ):
+        sealed = (body.sealed or "").strip()
+        if not sealed:
+            raise fail(400, "no_settings", "Настройки приехали пустыми.")
+
+        # Число «когда запечатано» сервер достаёт из конверта, не заглядывая в содержимое:
+        # оно и есть единственное, что ему нужно знать, чтобы не положить старое поверх нового.
+        at = 0
+        for line in sealed.splitlines():
+            if line.startswith("at="):
+                at = int(line[3:]) if line[3:].isdigit() else 0
+                break
+        if not store.put_settings(conn, user_id=me.user_id, sealed=sealed, at=at, now=d.now()):
+            raise fail(409, "stale_settings", "На сервере лежат более новые настройки.")
+        return {"ok": True, "at": at}
 
     @app.post("/devices/{device_id}/revoke")
     def revoke(

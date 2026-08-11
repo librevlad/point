@@ -15,6 +15,15 @@ interface AccountClient {
     suspend fun signOut(account: PointAccount): Boolean = revoke(account, account.deviceId)
 
     suspend fun deleteAccount(account: PointAccount): Boolean
+
+    /**
+     * Настройки аккаунта в закрытом виде (#610). Сервер хранит нечитаемое и расшифровать
+     * не может: он для этих байтов — почтовый ящик, а не читатель.
+     */
+    suspend fun settings(account: PointAccount): SealedSettings? = null
+
+    /** `false` — не сохранилось: сеть, отзыв пропуска или чужие настройки оказались новее. */
+    suspend fun saveSettings(account: PointAccount, sealed: SealedSettings): Boolean = false
 }
 
 interface AccountStore {

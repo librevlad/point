@@ -121,6 +121,21 @@ class HttpAccountClient(
         request(path = "/account", method = "DELETE", token = account.deviceToken).status == 200
     }
 
+    override suspend fun settings(account: PointAccount): SealedSettings? = io {
+        val reply = request(path = SETTINGS, method = "GET", token = account.deviceToken)
+        if (reply.status != 200) return@io null
+        parseJson(reply.body ?: "").str("sealed")?.let(SealedSettings::decode)
+    }
+
+    override suspend fun saveSettings(account: PointAccount, sealed: SealedSettings): Boolean = io {
+        request(
+            path = SETTINGS,
+            method = "PUT",
+            token = account.deviceToken,
+            body = jsonObject("sealed" to sealed.encode()),
+        ).status == 200
+    }
+
     private class Reply(val status: Int?, val body: String?)
 
     private fun refusal(reply: Reply): LoginPoll.Refused {
@@ -156,6 +171,8 @@ class HttpAccountClient(
     private fun encode(s: String): String = java.net.URLEncoder.encode(s, "UTF-8")
 
     private companion object {
+
+        const val SETTINGS = "/settings"
     }
 }
 

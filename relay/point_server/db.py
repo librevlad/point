@@ -61,6 +61,16 @@ CREATE TABLE IF NOT EXISTS logins (
   claimed_at   INTEGER
 );
 CREATE INDEX IF NOT EXISTS logins_by_state ON logins(state);
+
+-- Настройки аккаунта в закрытом виде (#610). Сервер для этих байтов — почтовый ящик,
+-- а не читатель: содержимое зашифровано на устройстве, ключ вложен в конверт под
+-- публичную часть каждого устройства круга. Расшифровать сервер не может и не должен.
+CREATE TABLE IF NOT EXISTS settings (
+  user_id    TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  sealed     TEXT NOT NULL,
+  at         INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
 """
 
 #: Колонки, добавленные после первой версии схемы. `CREATE TABLE IF NOT EXISTS` их не довезёт:
