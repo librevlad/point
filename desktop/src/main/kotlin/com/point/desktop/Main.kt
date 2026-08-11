@@ -185,6 +185,7 @@ fun main(args: Array<String>) {
     )
 
     val shellMenu = RegistryShellMenu()
+    val sendTo = ShortcutSendToMenu()
     runCatching {
         val exe = installedExecutable(ProcessHandle.current().info().command().orElse(null))
         if (exe != null && FilePcConfig(pointDir).load().rightClick) {
@@ -192,6 +193,9 @@ fun main(args: Array<String>) {
             if (shellMenuNeedsUpdate(shellMenu.registeredCommand(), wanted)) {
                 shellMenu.register(wanted, "Открыть в Point")
             }
+
+            // «Отправить → Point» — другое меню Windows и живёт своей записью (#255).
+            if (shellMenuNeedsUpdate(sendTo.target(), exe.absolutePath)) sendTo.register(exe)
         }
     }
 
@@ -376,8 +380,15 @@ fun main(args: Array<String>) {
                         runCatching {
                             val exe = installedExecutable(ProcessHandle.current().info().command().orElse(null))
                             when {
-                                !changed.rightClick -> shellMenu.unregister()
-                                exe != null -> shellMenu.register(shellCommandFor(exe), "Открыть в Point")
+                                !changed.rightClick -> {
+                                    shellMenu.unregister()
+                                    sendTo.unregister()
+                                }
+
+                                exe != null -> {
+                                    shellMenu.register(shellCommandFor(exe), "Открыть в Point")
+                                    sendTo.register(exe)
+                                }
                             }
                         }
                     },

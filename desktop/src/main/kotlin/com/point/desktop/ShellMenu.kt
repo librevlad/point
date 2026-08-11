@@ -54,6 +54,66 @@ class RegistryShellMenu(
     }
 }
 
+/**
+ * Пункт «Отправить → Point» в Проводнике (#255, решение владельца 10.08.2026).
+ *
+ * Исходная формулировка карточки — «выделил текст, правая кнопка, Point» — Windows не
+ * позволяет: меню на выделенном тексте принадлежит браузеру или Word, а не системе. Поэтому
+ * вход другой и выполнимый: привычное «Отправить», работающее и для нескольких файлов сразу.
+ *
+ * Меню «Отправить» — не реестр, а папка с ярлыками, поэтому запись здесь не `reg`, а ярлык;
+ * снимается тем же выключателем правой кнопки — оба пункта человек видит одним движением руки.
+ */
+interface SendToMenu {
+
+    /** Куда сейчас указывает ярлык «Отправить → Point», или `null` — его нет. */
+    fun target(): String?
+
+    fun register(exe: File)
+
+    fun unregister()
+}
+
+fun sendToFolder(appData: String? = System.getenv("APPDATA")): File? =
+    appData?.takeIf { it.isNotBlank() }?.let { File(it, "Microsoft/Windows/SendTo") }
+
+fun sendToShortcut(folder: File): File = File(folder, "Point.lnk")
+
+/** Скрипт создания ярлыка: тот же способ, каким Windows делает их сама. */
+fun sendToScript(exe: File, link: File): String =
+    "\$s = (New-Object -ComObject WScript.Shell).CreateShortcut('${link.absolutePath}'); " +
+        "\$s.TargetPath = '${exe.absolutePath}'; " +
+        "\$s.WorkingDirectory = '${exe.parentFile?.absolutePath.orEmpty()}'; " +
+        "\$s.Save()"
+
+private fun sendToReadScript(link: File): String =
+    "(New-Object -ComObject WScript.Shell).CreateShortcut('${link.absolutePath}').TargetPath"
+
+class ShortcutSendToMenu(
+    private val folder: File? = sendToFolder(),
+    private val run: (List<String>) -> Pair<Int, String> = ::runProcess,
+) : SendToMenu {
+
+    override fun target(): String? {
+        val link = folder?.let(::sendToShortcut)?.takeIf { it.isFile } ?: return null
+        val (code, out) = run(powershell(sendToReadScript(link)))
+        return if (code != 0) null else out.trim().takeIf { it.isNotEmpty() }
+    }
+
+    override fun register(exe: File) {
+        val place = folder ?: return
+        place.mkdirs()
+        run(powershell(sendToScript(exe, sendToShortcut(place))))
+    }
+
+    override fun unregister() {
+        folder?.let(::sendToShortcut)?.takeIf { it.isFile }?.delete()
+    }
+
+    private fun powershell(script: String) =
+        listOf("powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script)
+}
+
 private fun runProcess(command: List<String>): Pair<Int, String> = runCatching {
     val process = ProcessBuilder(command).redirectErrorStream(true).start()
     val text = process.inputStream.bufferedReader().use { it.readText() }
