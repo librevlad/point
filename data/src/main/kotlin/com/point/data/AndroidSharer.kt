@@ -5,6 +5,7 @@ import android.content.Intent
 import androidx.core.content.FileProvider
 import com.point.core.flow.Sharer
 import com.point.core.model.PointObject
+import com.point.core.model.ScratchRef
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import javax.inject.Inject
@@ -27,12 +28,18 @@ class AndroidSharer @Inject constructor(
     }
 
     override suspend fun share(obj: PointObject) {
-        val uri = outboundUri(obj)
-
-        val send = Intent(Intent.ACTION_SEND).apply {
-            type = obj.mime
-            putExtra(Intent.EXTRA_STREAM, uri)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        val text = shareableTextOf(obj)
+        val send = if (text != null) {
+            Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_TEXT, text)
+            }
+        } else {
+            Intent(Intent.ACTION_SEND).apply {
+                type = obj.mime
+                putExtra(Intent.EXTRA_STREAM, outboundUri(obj))
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
         }
         val chooser = Intent.createChooser(send, "Поделиться").apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -54,3 +61,27 @@ class AndroidSharer @Inject constructor(
         context.startActivity(chooser)
     }
 }
+
+/**
+ * Текстом делятся текстом, а не файлом (владелец 11.08.2026: «текст принимается, отправить
+ * не даёт»).
+ *
+ * Наружу всегда уходил файл через FileProvider. Для сообщения это значит вложение «.txt»
+ * вместо самого сообщения — половина приложений его просто не берёт. А у найденного
+ * значения — телефона, даты, номера — файла нет вовсе: там в ссылке лежит само значение,
+ * FileProvider на нём срывается, и отправка обрывается молча.
+ *
+ * Длинный документ остаётся файлом: в сообщение такого размера его всё равно не положить.
+ */
+internal fun shareableTextOf(obj: PointObject): String? = when {
+    obj.uri !is ScratchRef -> obj.uri.value.takeIf { it.isNotBlank() }
+
+    obj.mime.startsWith("text/") -> runCatching { File(obj.uri.value).readText() }
+        .getOrNull()
+        ?.takeIf { it.isNotBlank() && it.length <= MAX_TEXT_IN_MESSAGE }
+
+    else -> null
+}
+
+/** Длиннее — уже документ, а не сообщение: такой уходит файлом. */
+private const val MAX_TEXT_IN_MESSAGE = 100_000
