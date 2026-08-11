@@ -201,10 +201,14 @@ class UnderstandCapability @Inject constructor(
         state.kind == ObjectKind.TEXT || state.kind == ObjectKind.IMAGE || state.has(Feature.HAS_TEXT)
     override fun produces(state: ObjectState) = state
 
-    override fun yields(state: ObjectState) = ActionYield.Same
+    /** Обещание названо руками и принадлежит этому действию, а не типу исхода (#580, #734). */
+    override fun yields(state: ObjectState) = ActionYield.Same(UNDERSTAND_NOTE)
     override fun intents(state: ObjectState) = setOf(Intent.UNDERSTAND)
 
-    companion object { val ID = CapabilityId("understand") }
+    companion object {
+        const val UNDERSTAND_NOTE = "найдёт суть, суммы, даты и контакты"
+
+        val ID = CapabilityId("understand") }
 }
 
 class UnderstandRealizer @Inject constructor(

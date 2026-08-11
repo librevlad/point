@@ -44,7 +44,7 @@ class GraphStateDrivesActionsTest {
         override fun accepts(state: ObjectState) = false
         override fun accepts(graph: GraphState) = takes(graph)
         override fun produces(state: ObjectState) = state
-        override fun yields(state: ObjectState) = ActionYield.Same
+        override fun yields(state: ObjectState) = ActionYield.Same()
         override fun intents(state: ObjectState) = serves
     }
 

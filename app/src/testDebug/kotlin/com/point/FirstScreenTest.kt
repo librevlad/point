@@ -42,7 +42,7 @@ class FirstScreenTest {
         expectedNextState = ObjectState(ObjectKind.TEXT),
         tier = BubbleTier.SMART,
         intent = Intent.UNDERSTAND,
-        yields = ActionYield.Same,
+        yields = ActionYield.Same(),
     )
 
     private val share = Bubble(
