@@ -18,8 +18,24 @@ class ActionSectionsTest {
     fun `each intent maps to its section`() {
         assertEquals(ActionGroup.EXTRACT, actionGroupOf(Intent.UNDERSTAND))
         assertEquals(ActionGroup.TRANSFORM, actionGroupOf(Intent.PREPARE))
-        assertEquals(ActionGroup.SEND, actionGroupOf(Intent.OPEN))
+        // «Позвонить», «Сохранить контакт», «Построить маршрут» — не «Отправить» (охота
+        // 11.08.2026): у них своя группа, и на объекте-значении она идёт первой.
+        assertEquals(ActionGroup.USE, actionGroupOf(Intent.OPEN))
         assertEquals(ActionGroup.SEND, actionGroupOf(Intent.SEND))
+    }
+
+    @Test
+    fun `у значения сначала то, чем им пользуются, а исправления после`() {
+        val bubbles = listOf(bubble("fix", Intent.UNDERSTAND), bubble("call", Intent.OPEN))
+
+        assertEquals(
+            listOf(ActionGroup.USE, ActionGroup.EXTRACT),
+            actionSections(bubbles, useFirst = true).map { it.group },
+        )
+        assertEquals(
+            listOf(ActionGroup.EXTRACT, ActionGroup.USE),
+            actionSections(bubbles).map { it.group },
+        )
     }
 
     @Test
