@@ -33,19 +33,24 @@ class SharedTextGoesAsTextTest {
 
     @Test
     fun `текстовый объект уходит своим текстом`() {
-        assertEquals("Заказ 4512, оплатить до 12.08", shareableTextOf(textFile("Заказ 4512, оплатить до 12.08")))
+        // Сверяется тождество «что положили, то и уходит», а не конкретная фраза: цементировать
+        // тут нечего — текст принадлежит человеку, а не Point (#584).
+        val message = "Заказ 4512, оплатить до 12.08"
+
+        assertEquals(message, shareableTextOf(textFile(message)))
     }
 
     @Test
     fun `найденное значение уходит собой — файла у него нет`() {
+        val number = "067 636 05 60"
         val phone = PointObject(
             id = "t:phone",
             mime = "text/plain",
-            uri = ValueRef("067 636 05 60"),
+            uri = ValueRef(number),
             state = ObjectState(KIND_PHONE),
         )
 
-        assertEquals("067 636 05 60", shareableTextOf(phone))
+        assertEquals(number, shareableTextOf(phone))
     }
 
     @Test
