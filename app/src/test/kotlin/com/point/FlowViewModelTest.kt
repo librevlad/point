@@ -3199,23 +3199,29 @@ class FlowViewModelTest {
         return vm
     }
 
-    @Test fun `«назад» из разговора закрывает экран, а не стирает разговор`() = runTest(dispatcher) {
+    // Прежде «назад» лишь сворачивало разговор и сказанное оставалось. Решение владельца
+    // 11.08.2026 (#794): «назад -> ai = заново» — уход человека завершает разговор.
+    @Test fun `«назад» из разговора завершает разговор`() = runTest(dispatcher) {
         val vm = chattingVm()
         assertEquals(2, vm.ui.value.chat?.messages?.size)
 
         assertTrue(vm.onBack())
 
         assertNull("экрана разговора нет", openChatOf(vm.ui.value))
-        assertEquals("сказанное осталось", 2, vm.ui.value.chat?.messages?.size)
+        assertNull("разговор завершён", vm.ui.value.chat)
     }
 
-    @Test fun `повторное «Спросить AI» возвращает в тот же разговор`() = runTest(dispatcher) {
+    // Решение владельца 11.08.2026 (#794), дословно: «назад -> ai = заново». Вместе с прежней
+    // перепиской возвращался пустой экран без вариантов вопросов — единственного места, где
+    // сказано, о чём вообще можно спросить объект.
+    @Test fun `после «назад» разговор начинается заново`() = runTest(dispatcher) {
         val vm = chattingVm()
         vm.onBack()
 
         vm.onBubble(bubble(id = "ai")); advanceUntilIdle()
 
-        assertEquals(2, openChatOf(vm.ui.value)?.messages?.size)
+        assertEquals(0, openChatOf(vm.ui.value)?.messages?.size)
+        assertTrue("варианты вопросов вернулись", openChatOf(vm.ui.value)?.suggestions?.isNotEmpty() == true)
     }
 
     @Test fun `новый объект начинает разговор заново`() = runTest(dispatcher) {
@@ -3246,7 +3252,11 @@ class FlowViewModelTest {
         assertEquals(1, vm.ui.value.chat?.messages?.size)
     }
 
-    @Test fun `ответ, пришедший после выхода, не пропадает`() = runTest(dispatcher) {
+    // Уход из разговора — отказ от работы, а не согласие ждать её в пустоте (#668): вопрос
+    // отменяется, и облачный вызов не оплачивается после того, как человек ушёл. Вместе с
+    // решением «назад -> ai = заново» (#794) это значит, что ответу некуда и незачем
+    // возвращаться.
+    @Test fun `уход из разговора отменяет заданный вопрос`() = runTest(dispatcher) {
         consent.granted = true
         val late = kotlinx.coroutines.CompletableDeferred<String>()
         chatResponder.inFlight = late
@@ -3259,8 +3269,7 @@ class FlowViewModelTest {
         late.complete("ответ издалека"); advanceUntilIdle()
 
         assertNull(openChatOf(vm.ui.value))
-        assertEquals(2, vm.ui.value.chat?.messages?.size)
-        assertEquals("ответ издалека", vm.ui.value.chat?.messages?.last()?.text)
+        assertNull("разговор завершён, ответу некуда лечь", vm.ui.value.chat)
     }
 
     @Test fun `забрать ответ — и разговор кончился объектом`() = runTest(dispatcher) {
@@ -3278,12 +3287,13 @@ class FlowViewModelTest {
         assertEquals("Ответ AI", frame.viaTitle)
     }
 
-    @Test fun `сам разговор забиранием не стирается`() = runTest(dispatcher) {
+    // Забранный ответ стал объектом и живёт в «Недавнем» — разговор на этом кончился (#794).
+    @Test fun `забирание ответа завершает разговор`() = runTest(dispatcher) {
         val vm = chattingVm()
 
         vm.takeChatAnswer(); advanceUntilIdle()
 
-        assertEquals("сказанное осталось при своём объекте", 2, vm.ui.value.chat?.messages?.size)
+        assertNull("разговор завершён", vm.ui.value.chat)
     }
 
     @Test fun `забирать нечего, пока модель не ответила`() = runTest(dispatcher) {
