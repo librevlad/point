@@ -25,7 +25,9 @@ fun factFits(key: String, value: String): Boolean {
         "amount" -> !looksLikeExpression(text) && !zeroAmount(text)
 
         // Форма IBAN — не трек: «UA79…» с квитанции становился готовым отслеживанием.
-        "track" -> !looksLikeIban(text)
+        // Слово — тем более: «квитанцію» и «№ 7 36ір» с кадров прогона вставали трек-номерами
+        // и получали готовое «отследить» на пустом месте (#657).
+        "track" -> !looksLikeIban(text) && semanticFits(key, text) != false
 
         "address" -> plausibleAddress(text)
 
