@@ -25,8 +25,14 @@ class OpenUrlCapability @Inject constructor() : Capability {
     override fun produces(state: ObjectState) = state
     override fun intents(state: ObjectState) = setOf(Intent.OPEN)
 
+    // Снимок уже прочитан, а ссылки в нём нет — читать второй раз незачем, и обещать это
+    // человеку нельзя (#792). Причина остаётся только там, где чтение и правда поможет.
     override fun missing(state: ObjectState) =
-        if (state.kind == ObjectKind.IMAGE) "сначала распознайте текст" else null
+        if (state.kind == ObjectKind.IMAGE && !state.has(Feature.HAS_TEXT)) {
+            "сначала распознайте текст"
+        } else {
+            null
+        }
 
     companion object { val ID = CapabilityId("open-url") }
 }
