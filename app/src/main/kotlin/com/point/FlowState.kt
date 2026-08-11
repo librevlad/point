@@ -114,6 +114,9 @@ data class FlowUiState(
     val busyCancelable: Boolean = false,
     val frame: FlowFrame? = null,
 
+    /** Показанная область, в которую Point сейчас смотрит, — картинкой для человека (#757). */
+    val focusPreview: androidx.compose.ui.graphics.ImageBitmap? = null,
+
     val chat: ChatState? = null,
 
     val chatOpen: Boolean = false,

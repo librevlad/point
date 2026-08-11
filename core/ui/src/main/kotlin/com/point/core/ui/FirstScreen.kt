@@ -5,6 +5,7 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -31,6 +32,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SuggestionChip
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -49,7 +53,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -116,6 +122,11 @@ fun FirstScreen(
     appIconFor: (String) -> ImageBitmap? = { null },
 
     onHeroTap: (() -> Unit)? = null,
+
+    /** Показанная человеком область — та самая, в которую Point сейчас смотрит (#757). */
+    focusPreview: ImageBitmap? = null,
+    focused: Boolean = false,
+    onClearFocus: () -> Unit = {},
 ) {
 
     val scroll = rememberScrollState()
@@ -153,6 +164,11 @@ fun FirstScreen(
             onTap = onHeroTap,
             focusEntry = obj.state.kind == ObjectKind.IMAGE,
         )
+
+        if (focused) {
+            Spacer(Modifier.height(12.dp))
+            FocusStrip(preview = focusPreview, onClear = onClearFocus)
+        }
 
         WorkingStage(workingStage)
 
@@ -428,6 +444,56 @@ fun foundCaption(obj: PointObject): String? {
         ?.value
         ?.takeIf { it.trim() != value }
 }
+
+/**
+ * След Focus между кадром и действиями (#757, решение владельца — вариант A).
+ *
+ * Focus меняет поведение всех следующих действий: «Понять» и «Распознать текст» читают только
+ * показанную область. Знание, меняющее поведение, не может быть невидимым — иначе человек
+ * показал область и не знает, применилось ли это. Здесь видно и что Point смотрит в область,
+ * и саму область, и как это снять одним движением.
+ */
+@Composable
+internal fun FocusStrip(preview: ImageBitmap?, onClear: () -> Unit) {
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.primaryContainer,
+        modifier = Modifier.widthIn(max = PortalColumnWidth).fillMaxWidth(),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            preview?.let {
+                Image(
+                    bitmap = it,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.size(44.dp).clip(RoundedCornerShape(8.dp)),
+                )
+            }
+            Text(
+                text = FOCUS_HERE,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                modifier = Modifier.weight(1f),
+            )
+            IconButton(onClick = onClear) {
+                Icon(
+                    imageVector = Icons.Rounded.Close,
+                    contentDescription = FOCUS_DROP,
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+            }
+        }
+    }
+}
+
+const val FOCUS_HERE = "Смотрю сюда"
+
+const val FOCUS_DROP = "Смотреть на весь объект"
 
 fun otherReading(obj: PointObject): String? =
     obj.metadata.keys.firstOrNull { it.endsWith(META_ALT_SUFFIX) }

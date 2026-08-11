@@ -1838,6 +1838,10 @@ class FlowViewModelTest {
 
         assertEquals("clearFocus не запускает исследования", runsAfterFocus, enrichment.runs)
         assertNull(vm.ui.value.frame?.focus)
+
+        // Снятый фокус уходит с экрана вместе со своей картинкой (#757): иначе человек
+        // видит область, в которую Point уже не смотрит.
+        assertNull("превью снятой области осталось на экране", vm.ui.value.focusPreview)
     }
 
     @Test fun `a late result of area A lands while the current focus is already B`() = runTest(dispatcher) {

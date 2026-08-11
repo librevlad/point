@@ -77,6 +77,7 @@ import com.point.executors.OpenInCapability
 import com.point.executors.aiSuggestions
 import com.point.executors.aiTransformTarget
 import dagger.hilt.android.lifecycle.HiltViewModel
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Job
@@ -709,7 +710,26 @@ class FlowViewModel @Inject constructor(
                 parts = selectionParts,
             ),
         )
+        _ui.update { it.copy(focusPreview = focusPreviewOf(snap.region)) }
         closeSelection()
+    }
+
+    /**
+     * Показанная область картинкой (#757): Focus меняет поведение всех следующих действий,
+     * и человек обязан видеть не только слова «Смотрю сюда», но и саму область.
+     */
+    private fun focusPreviewOf(region: Box?): androidx.compose.ui.graphics.ImageBitmap? {
+        val page = _ui.value.selection?.image ?: return null
+        val transform = selectionTransform ?: return null
+        val at = transform.toUpright(region ?: return null)
+        return runCatching {
+            val source = page.asAndroidBitmap()
+            val left = at.left.toInt().coerceIn(0, source.width - 1)
+            val top = at.top.toInt().coerceIn(0, source.height - 1)
+            val width = (at.right.toInt() - left).coerceIn(1, source.width - left)
+            val height = (at.bottom.toInt() - top).coerceIn(1, source.height - top)
+            android.graphics.Bitmap.createBitmap(source, left, top, width, height).asImageBitmap()
+        }.getOrNull()
     }
 
     fun focusOn(focus: com.point.core.flow.Focus) {
@@ -753,7 +773,7 @@ class FlowViewModel @Inject constructor(
         if (frame.focus == null) return
         val refreshed = frame.copy(focus = null)
         stack[index] = refreshed.copy(bubbles = registry.bubblesFor(graphOf(refreshed)))
-        _ui.update { it.copy(frame = stack[index]) }
+        _ui.update { it.copy(frame = stack[index], focusPreview = null) }
         persistJourney()
     }
 
