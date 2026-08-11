@@ -101,6 +101,31 @@ val AI_PROVIDERS: List<AiProvider> = listOf(
         checkedAt = "08.2026",
     ),
     AiProvider(
+        id = "modelscope",
+        name = "ModelScope",
+        what = "большие Qwen3-VL даром — читает фото документа целиком",
+        keyUrl = "https://modelscope.cn/my/myaccesstoken",
+        baseUrl = "https://api-inference.modelscope.ai/v1",
+        models = "Qwen/Qwen3-VL-235B-A22B-Instruct,Qwen/Qwen3-VL-8B-Instruct",
+        freeNote = "бесплатно после регистрации, суточный предел вызовов",
+        checkedAt = "08.2026",
+    ),
+
+    /**
+     * Workers AI живёт под номером аккаунта: адрес собирается из него, поэтому одного ключа
+     * мало — без номера провайдера нет (`DataModule.cloudflareModels`).
+     */
+    AiProvider(
+        id = "cloudflare",
+        name = "Cloudflare Workers AI",
+        what = "бесплатная дневная норма у сети, которая рядом с человеком",
+        keyUrl = "https://dash.cloudflare.com/profile/api-tokens",
+        baseUrl = "https://api.cloudflare.com/client/v4/accounts",
+        models = "@cf/mistralai/mistral-small-3.1-24b-instruct,@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+        freeNote = "бесплатная дневная норма",
+        checkedAt = "08.2026",
+    ),
+    AiProvider(
         id = "openai",
         name = "OpenAI",
         what = "платно, зато предсказуемо",
