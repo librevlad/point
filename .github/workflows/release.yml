@@ -82,9 +82,11 @@ jobs:
           [ -f "$aab" ] || { echo "::error::Нет $aab — в Play выкладывать нечего."; exit 1; }
           # Манифест бандла — другой формат, aapt его не читает; имена компонентов лежат в нём
           # строками. Отладочная поверхность, доехавшая до Play, страшнее её же в APK.
+          # Печатаемые куски достаёт `tr`, как и в tools/release-gate.sh: один и тот же вопрос
+          # обязан задаваться одинаково, иначе поезд и ворота разойдутся на первой же правке.
           unzip -qo "$aab" base/manifest/AndroidManifest.xml -d "$RUNNER_TEMP/aab" || {
             echo "::error::Манифест бандла не читается — непроверенное не публикуется."; exit 1; }
-          if strings "$RUNNER_TEMP/aab/base/manifest/AndroidManifest.xml" |
+          if LC_ALL=C tr -cs '[:print:]' '\n' < "$RUNNER_TEMP/aab/base/manifest/AndroidManifest.xml" |
               grep -qE 'SandboxActivity|PrintProbeActivity|debuggable'; then
             echo "::error::В бандле отладочная поверхность или debuggable — в Play такое нельзя."
             exit 1

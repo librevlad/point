@@ -131,12 +131,16 @@ done
 
 # Манифест бандла — не тот формат, что у APK: aapt2 его не читает, а имена компонентов лежат
 # в нём строками. Разные носители одного и того же вопроса — разный способ спросить.
+#
+# Печатаемые куски достаются `tr`, а не `strings`: последнего нет в Git Bash у владельца, и
+# ворота на его машине блокировали бандл всегда — той же бедой, что чинилась выше для aapt2.
+# Проверка, которая не проходится там, где публикуют, не проверяет ничего.
 manifest_of() {
     case "$1" in
         *.aab)
             local out; out="$(mktemp -d)"
             (cd "$out" && unzip -qo "$1" base/manifest/AndroidManifest.xml >/dev/null 2>&1) || return 1
-            strings "$out/base/manifest/AndroidManifest.xml" 2>/dev/null
+            LC_ALL=C tr -cs '[:print:]' '\n' < "$out/base/manifest/AndroidManifest.xml" 2>/dev/null
             rm -rf "$out"
             ;;
         *) [ -n "$aapt" ] || return 1; "$aapt" dump xmltree --file AndroidManifest.xml "$1" 2>/dev/null ;;
