@@ -986,7 +986,23 @@ class FlowViewModel @Inject constructor(
         }
     }
 
-    fun closeChat() = _ui.update { it.copy(chatOpen = false) }
+    /**
+     * Уход человека завершает разговор (#794, решение владельца 11.08.2026: «назад → ai =
+     * заново»).
+     *
+     * Прежде разговор сворачивался и следующий вход возвращал ту же переписку — а вместе с
+     * ней исчезал стартовый экран с вариантами вопросов: единственное место, где сказано, о
+     * чём вообще можно спросить объект. Забранные ответы при этом не теряются: они уже стали
+     * объектами и живут в «Недавнем».
+     */
+    fun closeChat() {
+
+        // Уход — отказ от работы, а не согласие ждать её в пустоте (#668): заданный вопрос
+        // отменяется вместе с разговором, и облачный вызов не оплачивается после ухода.
+        chatJob?.cancel()
+        chatJob = null
+        _ui.update { it.copy(chatOpen = false, chat = null) }
+    }
 
     fun sendChatMessage(text: String) {
         val chat = _ui.value.chat ?: return
@@ -1014,7 +1030,8 @@ class FlowViewModel @Inject constructor(
                 if (result is ActionResult.Success) {
                     runCatching { sensory.success() }
 
-                    _ui.update { s -> s.copy(chat = s.chat?.copy(pending = false), chatOpen = false) }
+                    // Разговор кончился рождением объекта — следующий вход начинается заново (#794).
+                    _ui.update { s -> s.copy(chat = null, chatOpen = false) }
                     pushFrame(store.put(result.result), target, null)
                 } else {
                     appendChatAssistant((result as? ActionResult.Failure)?.reason ?: "Не удалось создать документ")
@@ -1051,7 +1068,7 @@ class FlowViewModel @Inject constructor(
             }
             runCatching { sensory.success() }
 
-            _ui.update { it.copy(chatOpen = false) }
+            _ui.update { it.copy(chat = null, chatOpen = false) }
             pushFrame(obj, viaTitle = "Ответ AI")
         }
     }
