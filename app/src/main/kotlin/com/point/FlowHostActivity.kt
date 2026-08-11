@@ -1,6 +1,9 @@
 package com.point
 
 import android.content.Intent
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.addCallback
@@ -21,6 +24,34 @@ abstract class FlowHostActivity : ComponentActivity() {
     protected abstract fun accept(intent: Intent)
 
     protected open val restoresJourney: Boolean get() = false
+
+    /**
+     * Пропажа и возврат сети видны на открытом экране, без перезахода в объект (#758).
+     *
+     * Слушаем, пока экран перед человеком: за окном приложения состояние сети всё равно
+     * спросят заново при следующей сборке списка.
+     */
+    private val networkWatch = object : ConnectivityManager.NetworkCallback() {
+
+        override fun onAvailable(network: Network) = viewModel.networkChanged()
+
+        override fun onLost(network: Network) = viewModel.networkChanged()
+
+        override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) =
+            viewModel.networkChanged()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        runCatching {
+            getSystemService(ConnectivityManager::class.java)?.registerDefaultNetworkCallback(networkWatch)
+        }
+    }
+
+    override fun onStop() {
+        runCatching { getSystemService(ConnectivityManager::class.java)?.unregisterNetworkCallback(networkWatch) }
+        super.onStop()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
