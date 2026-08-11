@@ -24,28 +24,36 @@ class HttpDropInbox(
     private val readTimeoutMs: Int = 15_000,
 ) : DropInbox {
 
-    override suspend fun open(): DropInboxBox? {
-        if (!network.isAvailable()) return null
-        val base = base() ?: return null
+    override suspend fun open(): DropOpen {
+        if (!network.isAvailable()) return DropOpen.Refused(dropOpenRefusal(0, null, online = false))
+        val base = base() ?: return DropOpen.Refused(NO_SERVER_TEXT)
         return runCatching {
             val c = connect("$base/u/open", "POST").apply {
                 doOutput = true
                 setFixedLengthStreamingMode(0)
             }
             c.outputStream.close()
-            if (c.responseCode !in 200..299) {
+            val status = c.responseCode
+            if (status !in 200..299) {
+
+                // Сервер прислал человеческий текст — он и есть причина. Выбрасывать его,
+                // чтобы напечатать «нет связи», значит отправить человека чинить не то (#729).
+                val said = runCatching { c.errorStream?.readBytes()?.decodeToString() }.getOrNull()
                 c.disconnect()
-                return@runCatching null
+                return@runCatching DropOpen.Refused(
+                    dropOpenRefusal(status, said?.let { parseJson(it).str("message") }, online = true),
+                )
             }
             val body = c.inputStream.readBytes().decodeToString()
             c.disconnect()
 
             val answer = parseJson(body)
-            val box = answer.str("box")?.takeIf { it.isNotBlank() } ?: return@runCatching null
+            val box = answer.str("box")?.takeIf { it.isNotBlank() }
+                ?: return@runCatching DropOpen.Refused(NO_SERVER_TEXT)
             val link = answer.str("url")?.takeIf { it.isNotBlank() }
-                ?: dropInboxLink(base, box) ?: return@runCatching null
-            DropInboxBox(box, link)
-        }.getOrNull()
+                ?: dropInboxLink(base, box) ?: return@runCatching DropOpen.Refused(NO_SERVER_TEXT)
+            DropOpen.Opened(DropInboxBox(box, link))
+        }.getOrElse { DropOpen.Refused(NO_SERVER_TEXT) }
     }
 
     override suspend fun await(box: DropInboxBox, target: (name: String) -> String): DropWait {
@@ -72,6 +80,19 @@ class HttpDropInbox(
             // прислал его чужой человек, и повторить он не сможет (#726).
             DropWait.Arrived(DropArrival(path, name, mime, fileId.orEmpty()))
         }.getOrElse { e -> DropWait.Failed(e.message ?: "Нет связи с сервером Point") }
+    }
+
+    override suspend fun close(box: DropInboxBox) {
+        val base = base() ?: return
+        runCatching {
+            val c = connect("$base/u/${box.id}/close", "POST").apply {
+                doOutput = true
+                setFixedLengthStreamingMode(0)
+            }
+            c.outputStream.close()
+            c.responseCode
+            c.disconnect()
+        }
     }
 
     override suspend fun ack(box: DropInboxBox, fileId: String) {

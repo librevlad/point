@@ -170,6 +170,24 @@ def inbox_open(root: str, user_id: str) -> str:
     return box_id
 
 
+def inbox_close(root: str, user_id: str, box_id: str) -> bool:
+    """
+    Ящик закрывается, когда он больше не нужен (#729).
+
+    Прежде его убирал только суточный sweep: пять открытий экрана «Принять файл» за сутки —
+    и приём переставал работать до утра. Предел в пять ссылок защищает от злоупотребления,
+    а не от обычного использования.
+    """
+    safe = "".join(c for c in box_id if c.isalnum())[:80]
+    if not safe:
+        return False
+    box = os.path.join(inboxes_dir(root, user_id), safe)
+    if not os.path.isdir(box):
+        return False
+    shutil.rmtree(box, ignore_errors=True)
+    return not os.path.isdir(box)
+
+
 def inbox_find(root: str, box_id: str) -> str | None:
     """Открытый ящик по адресу — тоже без владельца: страницу открывает чужой браузер."""
     safe = "".join(c for c in box_id if c.isalnum())[:80]

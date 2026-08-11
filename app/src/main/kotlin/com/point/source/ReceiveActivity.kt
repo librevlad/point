@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
 import com.point.PulledFileFactory
 import com.point.core.flow.DropInbox
+import com.point.core.flow.DropOpen
 import com.point.core.flow.DropInboxBox
 import com.point.core.flow.DropWait
 import com.point.core.flow.receiveWaitStatus
@@ -65,6 +66,9 @@ class ReceiveActivity : ComponentActivity() {
 
     private var failures by mutableIntStateOf(0)
 
+    /** Файл дошёл — ящик закроет тот, кто подтвердит приём, вместе с `ack` (#729). */
+    private var arrived = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -87,6 +91,22 @@ class ReceiveActivity : ComponentActivity() {
         lifecycleScope.launch { wait() }
     }
 
+    /**
+     * Человек ушёл, не дождавшись, — дверь закрывается за ним (#729).
+     *
+     * Прежде ящик убирала только суточная уборка: пять открытий этого экрана за день
+     * выбирали весь предел, и приём переставал работать до утра. Поворот экрана не
+     * закрывает: там ящик переживает пересоздание вместе с состоянием.
+     */
+    override fun onDestroy() {
+        val open = box
+        if (open != null && !arrived && !isChangingConfigurations) {
+            box = null
+            com.point.core.flow.closeInBackground(inbox, open)
+        }
+        super.onDestroy()
+    }
+
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         box?.let {
@@ -97,10 +117,15 @@ class ReceiveActivity : ComponentActivity() {
 
     private suspend fun wait() {
 
-        val opened = box ?: inbox.open()?.also { box = it }
-        if (opened == null) {
-            failure = "Ссылку выдать не удалось — нет связи с сервером Point"
-            return
+        // Три разных положения — три разных текста (#729): «ссылок слишком много»,
+        // «устройство не в аккаунте» и «связи нет» звучали одинаково, и человек шёл
+        // проверять Wi-Fi там, где чинить нужно было другое.
+        val opened = box ?: when (val outcome = inbox.open()) {
+            is DropOpen.Opened -> outcome.box.also { box = it }
+            is DropOpen.Refused -> {
+                failure = outcome.reason
+                return
+            }
         }
         link = opened.link
         while (lifecycleScope.isActive) {
@@ -128,6 +153,7 @@ class ReceiveActivity : ComponentActivity() {
                             .putExtra(EXTRA_BOX, opened.id)
                             .putExtra(EXTRA_FILE_ID, outcome.arrival.fileId),
                     )
+                    arrived = true
                     finish()
                     return
                 }

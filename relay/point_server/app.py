@@ -572,6 +572,11 @@ def create_app(
             raise fail(507, "full", str(e))
         return {"box": box, "url": d.settings.public_url.rstrip("/") + "/u/" + box}
 
+    @app.post("/u/{box_id}/close")
+    def inbox_close(box_id: str, me: store.Caller = Depends(caller), d: Deps = Depends(deps)):
+        """Дверь закрывается, когда в неё больше не ждут (#729)."""
+        return {"closed": mailbox.inbox_close(_blobs_root(d), me.user_id, box_id)}
+
     @app.get("/u/{box_id}")
     def inbox_page(box_id: str, d: Deps = Depends(deps)):
         """Страница, на которой ЧУЖОЙ человек кладёт файл. Пропуска у него нет."""
