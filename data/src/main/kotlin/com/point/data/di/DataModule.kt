@@ -63,6 +63,7 @@ import com.point.data.AndroidCalendarInserter
 import com.point.data.AndroidClipboard
 import com.point.data.AndroidContactInserter
 import com.point.data.AndroidImageCompositor
+import com.point.data.AndroidImageRedactor
 import com.point.data.AndroidNetworkAvailability
 import com.point.data.AndroidSharer
 import com.point.data.AndroidUrlOpener
@@ -223,6 +224,9 @@ abstract class DataModule {
 
     @Binds
     abstract fun imageCompositor(impl: AndroidImageCompositor): ImageCompositor
+
+    @Binds
+    abstract fun imageRedactor(impl: AndroidImageRedactor): com.point.core.flow.ImageRedactor
 
     @Binds
     abstract fun officeTextExtractor(impl: OoxmlOfficeTextExtractor): OfficeTextExtractor

@@ -20,7 +20,19 @@ data class Focus(
     val atomIds: List<String> = emptyList(),
 
     val text: String? = null,
-)
+
+    /**
+     * Части показанной области, когда человек обвёл не одно место, а несколько (#549).
+     *
+     * [region] остаётся их объединением: тому, кому важна только «где смотреть», ничего
+     * знать про части не нужно. Части нужны там, где каждая обведённая штука обрабатывается
+     * сама по себе, — например когда их замазывают.
+     */
+    val parts: List<Box> = emptyList(),
+) {
+    /** Показанные места: части, если человек обвёл несколько, иначе — сама область. */
+    val places: List<Box> get() = parts.ifEmpty { listOfNotNull(region) }
+}
 
 /**
  * Graph State — то, из чего принимаются оба решения: что предложить человеку и что исследовать
@@ -69,6 +81,9 @@ const val META_FOCUS_REGION = "focus.region"
 
 const val META_FOCUS_IDS = "focus.ids"
 
+/** Части показанной области — «l t r b» через `;` (#549). */
+const val META_FOCUS_PARTS = "focus.parts"
+
 /**
  * Локализация найденного объекта на его источнике — где именно он там находится.
  *
@@ -97,14 +112,21 @@ fun withFocus(metadata: Map<String, String>, focus: Focus?): Map<String, String>
         listOfNotNull(
             focus.region?.let { META_FOCUS_REGION to regionWire(it) },
             focus.atomIds.takeIf { it.isNotEmpty() }?.let { META_FOCUS_IDS to it.joinToString(" ") },
+            focus.parts.takeIf { it.isNotEmpty() }?.let { META_FOCUS_PARTS to partsWire(it) },
         )
 }
 
 fun focusOf(metadata: Map<String, String>, objectId: String): Focus? {
     val region = regionOfWire(metadata[META_FOCUS_REGION])
     val ids = metadata[META_FOCUS_IDS]?.split(' ')?.filter { it.isNotBlank() }.orEmpty()
-    return if (region == null && ids.isEmpty()) null else Focus(objectId, region, ids)
+    val parts = partsOfWire(metadata[META_FOCUS_PARTS])
+    return if (region == null && ids.isEmpty()) null else Focus(objectId, region, ids, parts = parts)
 }
+
+fun partsWire(parts: List<Box>): String = parts.joinToString(";", transform = ::regionWire)
+
+fun partsOfWire(wire: String?): List<Box> =
+    wire?.split(';')?.mapNotNull { regionOfWire(it.trim()) }.orEmpty()
 
 /**
  * Смысл, который сейчас уместен для объекта (Конституция §6, ADR-0001 §14).

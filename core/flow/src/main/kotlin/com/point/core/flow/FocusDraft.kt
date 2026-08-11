@@ -84,6 +84,26 @@ data class FocusDraft(
         return if (page == null) padded else padded.clampedTo(page)
     }
 
+    /**
+     * Показанные места по отдельности (#549): человек обвёл три штуки — это три места,
+     * а не один прямоугольник, накрывший половину кадра вместе со всем, что между ними.
+     *
+     * Пересекающиеся мазки сливаются: два движения по одному месту — одно место.
+     */
+    fun parts(pad: Float = 0f, page: Box? = null): List<Box> {
+        val boxes = keptStrokes().mapNotNull { it.bounds() }
+            .map { Box(it.left - pad, it.top - pad, it.right + pad, it.bottom + pad) }
+            .map { if (page == null) it else it.clampedTo(page) }
+
+        val merged = mutableListOf<Box>()
+        boxes.forEach { box ->
+            val touching = merged.filter { it.intersects(box) }
+            merged.removeAll(touching)
+            merged += touching.fold(box, Box::union)
+        }
+        return merged
+    }
+
     private fun keptStrokes(): List<FocusStroke> {
         val kept = mutableListOf<FocusStroke>()
         strokes.forEach { stroke ->
