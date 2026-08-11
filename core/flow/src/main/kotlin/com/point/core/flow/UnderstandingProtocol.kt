@@ -140,10 +140,13 @@ fun parseFieldCandidates(answer: String): ParsedUnderstanding {
                 // что модель назвала строку картой.
                 if (suffix == "card" && semanticFits(metaKey, candidate.text) == false) return@forEach
 
-                // Несколько дат в одном значении — несколько кандидатов: «26.04.2026
-                // 26.04.2026» с чека рождало слипшийся спор (живой прогон 2026-08-09).
+                // Дата читается тем же правилом, что и на любом другом входе знания (#782):
+                // фраза обрезается до дня, интервал даёт два дня, слипшиеся «26.04.2026
+                // 26.04.2026» с чека не рождают спор. Обёртка остаётся подписью.
                 val pieces = if (suffix == "date") {
-                    splitHumanDates(candidate.text).map { candidate.copy(text = it) }
+                    readDates(candidate.text).map { day ->
+                        candidate.copy(text = day, line = candidate.text.trim().takeIf { it != day })
+                    }
                 } else {
                     listOf(candidate)
                 }

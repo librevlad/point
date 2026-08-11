@@ -57,6 +57,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.point.core.flow.META_ALT_SUFFIX
 import com.point.core.flow.META_ENTITY_PREFIX
+import com.point.core.flow.META_LINE_SUFFIX
 import com.point.core.flow.alternativesOf
 import com.point.core.flow.isDoubtful
 import com.point.core.flow.provenanceLabel
@@ -348,6 +349,16 @@ private fun FoundObjects(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
 
+                            foundCaption(obj)?.let { said ->
+                                Text(
+                                    text = said,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+
                             otherReading(obj)?.let { other ->
                                 Text(
                                     text = "или: $other",
@@ -404,6 +415,18 @@ fun visibleFoundChips(found: List<PointObject>, shownValues: Set<String>): List<
         foundHeadline(chip).trim() !in shownValues &&
             !(chip.state.kind == KIND_PHONE && com.point.core.flow.normConsensus(foundHeadline(chip)) in claimed)
     }
+}
+
+/**
+ * Подпись найденного — строка документа, из которой вычитано значение (#782): видно,
+ * что это за день, но значением подпись не является и заголовком чипа не становится.
+ */
+fun foundCaption(obj: PointObject): String? {
+    val value = foundHeadline(obj).trim()
+    return obj.metadata.entries
+        .firstOrNull { (key, said) -> key.endsWith(META_LINE_SUFFIX) && said.isNotBlank() }
+        ?.value
+        ?.takeIf { it.trim() != value }
 }
 
 fun otherReading(obj: PointObject): String? =

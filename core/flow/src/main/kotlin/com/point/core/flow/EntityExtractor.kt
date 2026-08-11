@@ -2,7 +2,13 @@ package com.point.core.flow
 
 import com.point.core.model.Feature
 
-data class Entity(val type: EntityType, val value: String)
+data class Entity(
+    val type: EntityType,
+    val value: String,
+
+    /** Строка документа вокруг значения — подпись при нём, а не оно само (#782). */
+    val line: String? = null,
+)
 
 enum class EntityType { PHONE, EMAIL, URL, ADDRESS, DATE_TIME, PAYMENT_CARD, MONEY }
 
@@ -13,6 +19,20 @@ interface EntityExtractor {
 fun plausibleEntities(entities: List<Entity>, sourceText: String = ""): List<Entity> {
     val numbers = numberRuns(sourceText)
     return entities.filter { it.isPlausible() && !it.isFragmentOf(numbers) }
+        .flatMap { it.readDatesApart() }
+}
+
+/**
+ * Один вход знания читает дату тем же правилом, что и все остальные (#782): движок
+ * отдаёт весь размеченный кусок текста, а датой является только дата внутри него.
+ * Интервал распадается на два дня, обёртка вокруг даты становится подписью.
+ */
+private fun Entity.readDatesApart(): List<Entity> {
+    if (type != EntityType.DATE_TIME) return listOf(this)
+    val whole = value.trim()
+    return readDates(whole).map { day ->
+        copy(value = day, line = line ?: whole.takeIf { it != day })
+    }
 }
 
 private fun numberRuns(text: String): List<String> =

@@ -191,6 +191,11 @@ internal fun Knowledge(
                     )
                 }
 
+                // Строка документа при значении — подпись, а не второе значение (#782).
+                fact.said?.let { said ->
+                    Text(said, style = PointType.small, modifier = Modifier.padding(start = 14.dp))
+                }
+
                 // Спор виден (P8); «ещё» — другие значения того же вида, не спор.
                 if (fact.disputed.isNotEmpty()) {
                     Text(

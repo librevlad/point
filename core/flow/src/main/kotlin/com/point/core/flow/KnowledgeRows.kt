@@ -22,6 +22,9 @@ data class KnowledgeRow(
 
     /** Подтверждено человеком. */
     val confirmed: Boolean = false,
+
+    /** Строка документа вокруг значения — подпись при нём, а не оно само (#782). */
+    val said: String? = null,
 )
 
 data class OpenQuestion(val name: String, val state: InvestigationState)
@@ -46,6 +49,7 @@ fun knowledgeRows(metadata: Map<String, String>): List<KnowledgeRow> =
                 disputed = alternativesOf(metadata, key),
                 more = moreOf(metadata, key),
                 confirmed = provenanceOf(metadata, key) == Provenance.HUMAN,
+                said = metadata[key + META_LINE_SUFFIX]?.takeIf { it.isNotBlank() && it != value },
             )
         }
 

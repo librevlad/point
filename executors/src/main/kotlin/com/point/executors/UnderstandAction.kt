@@ -450,6 +450,9 @@ class UnderstandRealizer @Inject constructor(
             }
             val source = if (field.grounded) Provenance.OCR else Provenance.MODEL
             if (source > provenanceOf(merged, key)) put(key + META_SOURCE_SUFFIX, source.wire)
+
+            // Обрезанная до даты фраза не исчезает — она остаётся подписью значения (#782).
+            field.line?.let { put(key + com.point.core.flow.META_LINE_SUFFIX, it) }
         }
         blocked.forEach { (key, texts) ->
             if (texts.isNotEmpty()) put(key + META_BLOCKED_SUFFIX, altValue(texts))
@@ -661,6 +664,9 @@ internal data class JudgedField(
     val evidence: Set<EvidenceClass>,
     val grounded: Boolean,
     val candidates: List<String>,
+
+    /** Строка документа вокруг значения — подпись при нём, а не оно само (#782). */
+    val line: String? = null,
 )
 
 internal data class JudgedFields(
@@ -698,6 +704,7 @@ internal fun judgeFields(
             evidence = winner.third,
             grounded = winner.second,
             candidates = scored.map { it.first.text }.distinct(),
+            line = winner.first.line,
         )
     }
     return JudgedFields(won, retry, blockedByKey)
