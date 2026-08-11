@@ -86,7 +86,10 @@ class PaddleOcrRecognizer @Inject constructor(
                 val reading = runCatching { readLine(source, box) }.getOrNull()
                 reading?.takeIf { it.text.isNotBlank() }?.let {
                     Atom(
-                        id = "ppocr-$index",
+                        // Метка слова у всех читателей одна и та же (w47): по ней модель ссылается на
+                        // слово страницы, а Point её снимает перед показом человеку. Своя форма
+                        // «ppocr-24» правилу снятия незнакома — и метки уезжали на экран.
+                        id = com.point.core.flow.atomLabel(index),
                         text = it.text,
                         box = box,
                         confidence = it.confidence,

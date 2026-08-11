@@ -179,7 +179,7 @@ class TesseractTextRecognizer @Inject constructor(
                     rect.bottom.toFloat(),
                 )
                 atoms += Atom(
-                    id = "w${atoms.size}",
+                    id = com.point.core.flow.atomLabel(atoms.size),
                     text = text,
                     box = toRawFrame.toRaw(upright),
 

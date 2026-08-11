@@ -128,16 +128,21 @@ fun FirstScreen(
     ) {
         val facts = understoodFacts(obj)
 
-        val shownAbove = remember(obj.metadata) { readinessShownFacts(obj.metadata) }
-
+        // Найденное живёт внизу, а не строкой действия наверху (решение владельца 11.08.2026:
+        // «сущности вверху имеют одно действие и не то, которое мне надо; хочу видеть их внизу
+        // и правильно сгруппированными»). Наверху блок навязывал по одному действию на
+        // значение — телефону «Сохранить контакт», номеру «Отследить», — и оно почти никогда
+        // не было тем, что человеку нужно. Действия остались там, где им место: у самого
+        // объекта, когда в него входят.
         val promoted = found.mapNotNullTo(mutableSetOf()) { factKeyFor(it.state.kind) }
-        shownAbove.keys.mapNotNullTo(promoted) {
-            it.substringAfter(META_ENTITY_PREFIX, "").takeIf(String::isNotEmpty)
-        }
-        val plainFacts = facts.filter { it.key !in promoted }
 
-        val shownValues = remember(shownAbove) { shownAbove.values.mapTo(mutableSetOf()) { it.trim() } }
-        val visibleFound = visibleFoundChips(found, shownValues)
+        // Объект, который сам и есть значение, не рассказывает о себе второй раз: внутри
+        // телефона «067 636 05 60» строка «Нашёл телефон 067 636 05 60» повторяла заголовок.
+        val own = objectVerdict(obj).headline.trim()
+        val plainFacts = facts
+            .filter { it.key !in promoted }
+            .filterNot { it.value?.trim() == own }
+        val visibleFound = found
 
         ObjectHeader(
             obj,
@@ -168,18 +173,11 @@ fun FirstScreen(
 
         UnderstoodSection(facts = plainFacts, enriching = enriching, failed = failed)
 
-        ReadinessSection(
-            metadata = obj.metadata,
-            bubbles = bubbles,
-            enabled = !working && inputPrompt == null,
-            onBubble = onBubble,
-        )
-
         if (visibleFound.isNotEmpty() && inputPrompt == null) {
             FoundObjects(
                 found = visibleFound,
                 relations = relations,
-                partShownAbove = shownAbove.isNotEmpty(),
+                partShownAbove = false,
                 onFound = onFound,
             )
         }
