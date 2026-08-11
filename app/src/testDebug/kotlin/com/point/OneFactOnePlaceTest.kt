@@ -87,8 +87,6 @@ class OneFactOnePlaceTest {
         screen(card, cardFound)
 
         assertEquals("номер написан на экране дважды — ровно то, что увидел владелец", 1, timesOnScreen(phone))
-
-        compose.onNode(hasText(phone) and hasText("Сохранить контакт")).assertExists()
     }
 
     // #696 (охота 2026-08-10): владелец видел на визитке телефон, почту и адрес —
@@ -96,12 +94,12 @@ class OneFactOnePlaceTest {
     // в строку «Сохранить контакт» и в счёт не попадал). Решение владельца:
     // «Без числа, когда часть выше» — там, где знание разнесено по экрану, число
     // не врёт, потому что его просто нет.
-    @Test fun `часть «Нашёл» показана строкой действия — счёт без числа`() {
+    // Решение владельца 11.08.2026: найденное живёт внизу одним списком, действия — внутри
+    // объекта. Раз ничего не уезжает наверх строкой действия, число снова честное и нужное.
+    @Test fun `всё найденное в одном списке — число говорит правду`() {
         screen(card, cardFound)
 
-        compose.onNodeWithText("Нашёл").assertExists()
-        compose.onNodeWithText("Нашёл · 2").assertDoesNotExist()
-        compose.onNodeWithText("Нашёл · 3").assertDoesNotExist()
+        compose.onNodeWithText("Нашёл · 3").assertExists()
     }
 
     @Test fun `факты без готового действия остаются на месте — почта и адрес никуда не делись`() {
@@ -145,16 +143,26 @@ class OneFactOnePlaceTest {
         screen(parcel, listOf(found("p:num", KIND_IDENTIFIER, "20 4514 9154 9395")))
 
         assertEquals(1, timesOnScreen("20 4514 9154 9395"))
-        compose.onNodeWithText("Номер отправления", substring = true).assertExists()
     }
 
-    @Test fun `«Point понял» не повторяет того, что уже названо карточкой готовности`() {
+    @Test fun `узла ещё нет — знание всё равно названо, и ровно один раз`() {
 
         screen(card)
 
         assertEquals(1, timesOnScreen(phone))
-        compose.onNodeWithText("Нашёл телефон").assertDoesNotExist()
-
+        compose.onNodeWithText("Нашёл телефон").assertExists()
         compose.onNodeWithText("Нашёл почту").assertExists()
+    }
+
+    // Само значение объекта не рассказывается второй раз строкой знания: внутри телефона
+    // «067 636 05 60» висело «Нашёл телефон 067 636 05 60» — заголовок и знание об одном.
+    @Test fun `объект-значение не повторяет себя строкой знания`() {
+        val number = found("card:phone", KIND_PHONE, phone, Feature.HAS_PHONE)
+            .let { it.copy(metadata = mapOf(META_ENTITY_PREFIX + "phone" to phone)) }
+
+        screen(number)
+
+        assertEquals(1, timesOnScreen(phone))
+        compose.onNodeWithText("Нашёл телефон").assertDoesNotExist()
     }
 }

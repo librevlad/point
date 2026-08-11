@@ -32,7 +32,10 @@ fun semanticFits(key: String, value: String): Boolean? {
     return when (key) {
 
         META_ENTITY_TRACK -> digits in 13..14 || S10_SHAPED.matches(value.trim().uppercase().replace(" ", ""))
-        META_ENTITY_PREFIX + "phone" -> digits in 10..13
+        // В телефоне не бывает слов. Модель дала чистый «067 636 05 60», но метки указывали
+        // и на имя рядом, и заземление по странице возвращало склейку «Тарасенко Світлана
+        // Сергіївна 067 636 05 60» — она и вставала значением телефона (охота 11.08.2026).
+        META_ENTITY_PREFIX + "phone" -> digits in 10..13 && !WORDY.containsMatchIn(value)
         META_ENTITY_PREFIX + "email" -> value.contains('@') && value.substringAfter('@').contains('.')
         META_ENTITY_PREFIX + "card" -> digits in 15..19 || looksLikeIban(value)
         META_ENTITY_PREFIX + "date" -> value.any(Char::isDigit) && value.any { it in ".:/-" }
@@ -125,6 +128,8 @@ fun AtomLayer.fieldEvidence(
     }
     return classes
 }
+
+private val WORDY = Regex("""\p{L}{3,}""")
 
 private const val LABEL_GAP_HEIGHTS = 2f
 

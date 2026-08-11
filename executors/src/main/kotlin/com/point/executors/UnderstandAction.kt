@@ -223,29 +223,6 @@ class UnderstandRealizer @Inject constructor(
                 val window = readWindowOf(full, already, MAX_CHARS)
                 val elements = layoutOf(window)
 
-                // Черновик читают глазами (#770).
-                //
-                // Когда почти каждое второе слово прочитано движком неуверенно, разбор по
-                // странице строится на догадках: на почтовой наклейке он менял местами
-                // отправителя с получателем, выдавал телефон за номер накладной и сочинял
-                // «г. Лумброван» — и всё это с провенансом «прочитано», то есть твёрдым на
-                // вид. Зрячее чтение той же наклейки бесплатно и за пять секунд отдаёт и
-                // имена, и номер целиком.
-                //
-                // Прочитанное уверенно остаётся за страницей: там разбор ловит выдумки
-                // модели — исправляет цифру по словам страницы и гасит номер, не сошедшийся
-                // с контрольной суммой. Слой слов никуда не девается и в черновике: он нужен
-                // подсветке и обводке, — решать по нему, что написано, вот чего нельзя.
-                if (input.state.kind == ObjectKind.IMAGE && llm.canHandle(input) &&
-                    com.point.core.flow.draftReading(atomLayer(input))
-                ) {
-                    val seen = readWithEyes(input)
-
-                    // Глаза не справились — остаётся то, что есть. Молчаливой цепочки нет:
-                    // без текста отказ уходит человеку как отказ.
-                    if (seen !is ActionResult.Failure || elements.isEmpty()) return@withContext seen
-                }
-
                 if (elements.isEmpty()) {
                     return@withContext when {
 
@@ -281,15 +258,26 @@ class UnderstandRealizer @Inject constructor(
                     ?: elements
 
                 val index = layer?.promptIndex()
-                reportStage("Отправляю страницу модели")
-                val answer = ask(input, understandPrompt(laidOut, index = index))
+
+                // Снимок уходит модели вместе со страницей, а не вместо неё (#770, решение
+                // владельца 11.08.2026: «чтобы зрячей моделью получить всё на местах»).
+                //
+                // Слова, снятые движком на телефоне, — черновик: на почтовой наклейке разбор
+                // поверх них менял местами отправителя с получателем, выдавал телефон за
+                // номер накладной и сочинял «г. Лумброван». Но и выбрасывать страницу нельзя:
+                // по её словам разбор исправляет цифру и гасит номер, не сошедшийся с
+                // контрольной суммой. Модель, которая ВИДИТ кадр и при этом ссылается на
+                // слова страницы, даёт и то, и другое.
+                val eyes = input.state.kind == ObjectKind.IMAGE && llm.canHandle(input)
+                reportStage(if (eyes) "Смотрю на снимок" else "Отправляю страницу модели")
+                val answer = ask(input, understandPrompt(laidOut, index = index), eyes = eyes)
                 reportStage("Проверяю прочитанное по странице")
                 val parsed = parseFieldCandidates(answer)
                 val judged = judgeFields(parsed.fields, layer)
 
                 val retried = judged.retry.takeIf { it.isNotEmpty() }?.let { keys ->
                     reportStage("Контрольная цифра не сошлась — перечитываю")
-                    val again = ask(input, retryPrompt(keys, laidOut, index))
+                    val again = ask(input, retryPrompt(keys, laidOut, index), eyes = eyes)
                     judgeFields(parseFieldCandidates(again).fields.filterKeys { it in keys }, layer)
                 }
                 val fields = judged.won + retried?.won.orEmpty()
@@ -409,8 +397,9 @@ class UnderstandRealizer @Inject constructor(
         )
     }
 
-    private suspend fun ask(input: PointObject, prompt: String): String =
-        File(llm.run(textOnly(input), prompt).uri.value).readText()
+    /** [eyes] — отдать модели сам снимок; иначе уходит только текст объекта. */
+    private suspend fun ask(input: PointObject, prompt: String, eyes: Boolean = false): String =
+        File(llm.run(if (eyes) input else textOnly(input), prompt).uri.value).readText()
 
     /**
      * Сомнение модели становится обычной оговоркой знания (#670): у зрячего чтения нет ни

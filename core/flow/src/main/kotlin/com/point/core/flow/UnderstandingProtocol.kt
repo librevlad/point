@@ -234,4 +234,16 @@ internal fun looksLikeIban(text: String): Boolean =
 
 private val TRAILING_IDS = Regex("""^(.*?)\s*\[([^\[\]]+)]$""")
 private val ID_SHAPED = Regex("""[A-Za-z]+\d+""")
+
+/**
+ * Метка слова страницы: ею модель ссылается на прочитанное, и Point снимает её перед
+ * показом человеку.
+ *
+ * Имя одно на всех читателей. Локальный движок называл слова по-своему — «ppocr-24», —
+ * правило снятия такую метку не узнавало, и на экран владельцу уехало «Номер отправления
+ * 59 0017 2462 6327 [ppocr-24]» (охота 11.08.2026).
+ */
+fun atomLabel(index: Int): String = "w" + index
+
+fun looksLikeAtomLabel(id: String): Boolean = ID_SHAPED.matches(id)
 private val WHITESPACE = Regex("""\s+""")

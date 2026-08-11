@@ -476,8 +476,13 @@ class UnderstandRealizerTest {
         )
     }
 
+    // Решение владельца 11.08.2026: «чтобы зрячей моделью получить всё на местах, контакты
+    // с номерами». Прежде картинка уходила в облако текстом, не пикселями, — и разбор
+    // строился на словах, снятых движком: на почтовой наклейке он менял местами отправителя
+    // с получателем и выдавал телефон за номер накладной. Теперь модель видит кадр и при
+    // этом получает слова страницы, чтобы ссылаться на них метками.
     @Test
-    fun `картинка с распознанным текстом уходит в облако текстом, не пикселями`() = runTest {
+    fun `снимок уходит модели вместе со страницей, а не вместо неё`() = runTest {
         val sidecar = File.createTempFile("point-ocr", ".txt").apply { deleteOnExit(); writeText(document) }
         val image = PointObject(
             "img", "image/png", ScratchRef("/tmp/x.png"),
@@ -487,9 +492,15 @@ class UnderstandRealizerTest {
 
         realizer("PHONE=+380671234567").perform(image)
 
+        assertEquals("image/png", lastLlmObject!!.mime)
+        assertTrue("страница ушла вместе со снимком", lastPrompt!!.contains("Агротрейд"))
+    }
+
+    @Test
+    fun `текстовый объект пикселями не становится — уходит текстом, как и был`() = runTest {
+        realizer("PHONE=+380671234567").perform(textObject())
+
         assertEquals("text/plain", lastLlmObject!!.mime)
-        assertNull(lastLlmObject!!.metadata[META_OCR_TEXT_REF])
-        assertTrue(lastPrompt!!.contains("Агротрейд"))
     }
 
     @Test
