@@ -59,6 +59,8 @@ import com.point.core.flow.provenanceOf
 import com.point.core.flow.resolve
 import com.point.core.flow.ruleEvidence
 import com.point.core.flow.s10CheckDigitValid
+import com.point.core.flow.META_ENTITY_PLACE
+import com.point.core.flow.placeOfReceiver
 import com.point.core.flow.phoneOwners
 import com.point.core.flow.semanticFits
 import com.point.core.flow.labelNeedingKey
@@ -280,13 +282,18 @@ class UnderstandRealizer @Inject constructor(
                     val again = ask(input, retryPrompt(keys, laidOut, index), eyes = eyes)
                     judgeFields(parseFieldCandidates(again).fields.filterKeys { it in keys }, layer)
                 }
-                val fields = judged.won + retried?.won.orEmpty()
+                val readFields = judged.won + retried?.won.orEmpty()
 
                 val blocked = (judged.blocked.keys + retried?.blocked?.keys.orEmpty()).associateWith { key ->
                     (judged.blocked[key].orEmpty() + retried?.blocked?.get(key).orEmpty()).distinct()
                 }
 
                 val (roles, roleDisputes) = roleReadings(answer, laidOut, layer)
+
+                // Маршрут ведёт туда, куда едет посылка (#772): у наклейки два адреса, и они
+                // не равноправны — шапка склада отправления не место назначения. Роль
+                // получателя к этому месту уже известна, и место в его блоке и есть «куда».
+                val fields = withPlaceOfReceiver(readFields, parsed.fields, roles, layer)
 
                 // Курсор для следующего нажатия «Понять» — пока не дочитано, окно сдвигается
                 // дальше; дочитано — курсор больше не нужен (#682/#683).
@@ -612,6 +619,37 @@ internal fun roleReadings(
 
     fromElements.forEach { (key, text) -> values.putIfAbsent(key, text) }
     return values to disputes
+}
+
+/**
+ * Место назначения — при получателе (#772).
+ *
+ * Судья полей выбирает значение по уликам страницы, и два отделения на наклейке для него
+ * одинаковы: побеждает первое. Роль получателя судье неизвестна — она разбирается позже,
+ * из того же ответа модели. Здесь эти два знания встречаются: если место стоит в блоке
+ * получателя, оно и есть «куда ехать», а прежний выбор остаётся в прочтениях.
+ */
+internal fun withPlaceOfReceiver(
+    fields: Map<String, JudgedField>,
+    candidates: Map<String, List<FieldCandidate>>,
+    roles: Map<String, String>,
+    layer: AtomLayer?,
+): Map<String, JudgedField> {
+    val judged = fields[META_ENTITY_PLACE] ?: return fields
+    if (layer == null) return fields
+
+    val receiver = roles[META_GRAPH_ROLE_PREFIX + "receiver"]
+    val chosen = layer.placeOfReceiver(candidates[META_ENTITY_PLACE].orEmpty(), receiver) ?: return fields
+    if (normConsensus(chosen.text) == normConsensus(judged.text)) return fields
+
+    return fields + (
+        META_ENTITY_PLACE to JudgedField(
+            text = chosen.text,
+            evidence = layer.fieldEvidence(META_ENTITY_PLACE, chosen, layer.ruleEvidence()),
+            grounded = true,
+            candidates = (listOf(chosen.text) + judged.candidates).distinct(),
+        )
+        )
 }
 
 internal data class JudgedField(
