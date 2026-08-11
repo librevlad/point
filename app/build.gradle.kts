@@ -118,6 +118,13 @@ dependencies {
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
 
+    // Point не пишет ни одного Worker — WorkManager приходит транзитивно с ML Kit, и
+    // приходит версией 2.7.0 от 2021 года: она старше и Android 14 с его правилами о
+    // foreground-сервисах, и targetSdk, под который Point собирается. Библиотека, живущая
+    // в приложении, но не знающая правил его целевой системы, — это отложенный отказ на
+    // чужой стороне. Зависимость объявлена явно только ради версии.
+    implementation(libs.androidx.work.runtime)
+
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
 

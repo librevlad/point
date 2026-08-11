@@ -48,7 +48,9 @@ fi
 step "Релизная сборка"
 if [ "$build" -eq 1 ]; then
     export JAVA_HOME="${JAVA_HOME:-C:/Program Files/Android/Android Studio/jbr}"
-    if (cd "$root" && ./gradlew --quiet clean :app:assembleRelease >/tmp/release-gate-build.log 2>&1); then
+    # Собирается и bundle: в Play уезжает именно он, и проверять надо то, что уедет,
+    # а не его APK-двойника (#513).
+    if (cd "$root" && ./gradlew --quiet clean :app:assembleRelease :app:bundleRelease >/tmp/release-gate-build.log 2>&1); then
         echo "  собрано начисто"
     else
         block "сборка не прошла — публиковать нечего (лог: /tmp/release-gate-build.log)"
@@ -113,10 +115,37 @@ fi
 # Проверяется СОБРАННЫЙ манифест, а не исходники: `app/src/debug/AndroidManifest.xml` может быть
 # сколь угодно правильным, а в артефакт компоненты попадут из другого варианта или из библиотеки.
 step "Отладочные поверхности"
-aapt="$(ls -d "$HOME/AppData/Local/Android/Sdk/build-tools"/*/aapt2.exe 2>/dev/null | tail -1)"
-if [ -n "$aapt" ] && [ "${#release_apks[@]}" -gt 0 ]; then
+# Инструмент ищется там, где он бывает на всех трёх машинах: у владельца, на раннере и в
+# контейнере. Один Windows-путь означал, что ворота нигде, кроме одной машины, не проходятся
+# вовсе — и «непроверенное не публикуется» превращалось в «не публикуется ничего».
+aapt=""
+for candidate in \
+    "${ANDROID_HOME:-}/build-tools" "${ANDROID_SDK_ROOT:-}/build-tools" \
+    "$HOME/AppData/Local/Android/Sdk/build-tools" "$HOME/Android/Sdk/build-tools" \
+    "$HOME/Library/Android/sdk/build-tools"
+do
+    [ -d "$candidate" ] || continue
+    found="$(ls -d "$candidate"/*/aapt2 "$candidate"/*/aapt2.exe 2>/dev/null | sort | tail -1)"
+    [ -n "$found" ] && { aapt="$found"; break; }
+done
+
+# Манифест бандла — не тот формат, что у APK: aapt2 его не читает, а имена компонентов лежат
+# в нём строками. Разные носители одного и того же вопроса — разный способ спросить.
+manifest_of() {
+    case "$1" in
+        *.aab)
+            local out; out="$(mktemp -d)"
+            (cd "$out" && unzip -qo "$1" base/manifest/AndroidManifest.xml >/dev/null 2>&1) || return 1
+            strings "$out/base/manifest/AndroidManifest.xml" 2>/dev/null
+            rm -rf "$out"
+            ;;
+        *) [ -n "$aapt" ] || return 1; "$aapt" dump xmltree --file AndroidManifest.xml "$1" 2>/dev/null ;;
+    esac
+}
+
+if [ "${#release_apks[@]}" -gt 0 ]; then
     for f in "${release_apks[@]}"; do
-        dump="$("$aapt" dump xmltree --file AndroidManifest.xml "$f" 2>/dev/null || true)"
+        dump="$(manifest_of "$f" || true)"
         [ -n "$dump" ] || { block "$(basename "$f"): манифест не читается — непроверенное не публикуется"; continue; }
         printf '%s' "$dump" | grep -q 'SandboxActivity\|PrintProbeActivity' &&
             block "$(basename "$f"): в релизе отладочная поверхность (Sandbox/PrintProbe)"
@@ -125,7 +154,7 @@ if [ -n "$aapt" ] && [ "${#release_apks[@]}" -gt 0 ]; then
         echo "  $(basename "$f"): отладочных компонентов нет"
     done
 else
-    block "aapt2 не найден — отладочные поверхности не проверены (непроверенное не публикуется)"
+    block "релизных артефактов нет — отладочные поверхности не проверены"
 fi
 
 # ── Вердикт ────────────────────────────────────────────────────────────────────────────────
