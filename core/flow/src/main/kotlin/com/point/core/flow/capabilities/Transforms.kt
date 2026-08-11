@@ -4,6 +4,8 @@ import com.point.core.flow.Capability
 import com.point.core.flow.CapabilityMeta
 import com.point.core.flow.Cost
 import com.point.core.flow.Latency
+import com.point.core.flow.OfficeAlwaysHere
+import com.point.core.flow.OfficeOrgan
 import com.point.core.model.ActionYield
 import com.point.core.model.CapabilityId
 import com.point.core.model.Feature
@@ -11,8 +13,6 @@ import com.point.core.model.Intent
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.isFileBacked
-
-const val OFFICE_PDF_SUBSTANCE = "PDF с текстом документа"
 
 class QrCapability  : Capability {
     override val id = ID
@@ -83,7 +83,13 @@ class DropLinkCapability  : Capability {
     companion object { val ID = CapabilityId("drop-link") }
 }
 
-class PdfCapability : Capability {
+/**
+ * «В PDF» — и для офисного документа тоже, но только настоящим конвертером (#403).
+ *
+ * Пересказа больше нет: офисный файл превращается в PDF, когда есть орган, который сделает
+ * это слайд в слайд. Органа нет — действие не исчезает, а называет, чего не хватает.
+ */
+class PdfCapability(private val office: OfficeOrgan = OfficeAlwaysHere) : Capability {
     override val id = ID
     override val icon = "pdf"
 
@@ -91,15 +97,20 @@ class PdfCapability : Capability {
     override fun label(state: ObjectState) =
         if (state.kind == ObjectKind.PDF) "Извлечь текст" else "В PDF"
     override fun accepts(state: ObjectState) =
-        state.kind in setOf(ObjectKind.IMAGE, ObjectKind.TEXT, ObjectKind.OFFICE) ||
+        state.kind in setOf(ObjectKind.IMAGE, ObjectKind.TEXT) ||
+            (state.kind == ObjectKind.OFFICE && office.missing() == null) ||
 
             (state.kind == ObjectKind.PDF && !state.has(Feature.IS_IMAGE_PDF))
+
+    /** Органа нет — «Почти доступно» с причиной, а не тишина в списке действий. */
+    override fun missing(state: ObjectState): String? =
+        if (state.kind == ObjectKind.OFFICE) office.missing() else null
+
     override fun produces(state: ObjectState) =
         if (state.kind == ObjectKind.PDF) ObjectState(ObjectKind.TEXT) else ObjectState(ObjectKind.PDF)
 
     override fun yields(state: ObjectState) = when (state.kind) {
         ObjectKind.PDF -> ActionYield.New(ObjectKind.TEXT)
-        ObjectKind.OFFICE -> ActionYield.New(ObjectKind.PDF, "$OFFICE_PDF_SUBSTANCE · без оформления")
         else -> ActionYield.New(ObjectKind.PDF)
     }
 

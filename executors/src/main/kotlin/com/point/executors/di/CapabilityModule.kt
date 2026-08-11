@@ -250,9 +250,19 @@ abstract class CapabilityModule {
         fun executionPolicy(): com.point.core.flow.ExecutionPolicy =
             com.point.core.flow.DefaultExecutionPolicy()
 
+        /**
+         * Орган «офис → PDF» живёт на компьютере (#403): телефон его не имеет и пересказом
+         * не подменяет. Способность видит орган и сама решает, действие это или причина.
+         */
+        @Provides
+        fun officeOrgan(
+            caps: com.point.core.flow.PcCapsStore,
+            links: com.point.core.flow.PcLinks,
+        ): com.point.core.flow.OfficeOrgan = com.point.core.flow.PcOfficeOrgan(caps, links)
+
         @Provides @ElementsIntoSet @OwnCapabilities
-        fun sharedCaps(): Set<Capability> =
-            com.point.core.flow.capabilities.sharedCapabilities().toSet()
+        fun sharedCaps(office: com.point.core.flow.OfficeOrgan): Set<Capability> =
+            com.point.core.flow.capabilities.sharedCapabilities(office).toSet()
 
         @Provides @IntoSet
         fun openCvScanR(store: ObjectStore): Realizer = OpenCvScanRealizer(store)
