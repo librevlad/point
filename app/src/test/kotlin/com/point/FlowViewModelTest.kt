@@ -46,6 +46,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -2946,6 +2947,43 @@ class FlowViewModelTest {
 
     private fun FlowViewModel.needsKeyBubble(): Bubble =
         ui.value.frame!!.bubbles.single { com.point.core.flow.labelNeedsKey(it.title) }
+
+    /**
+     * Пропажа сети видна на открытом экране (#758).
+     *
+     * Причина «нет интернета» появлялась только при следующем открытии объекта: список
+     * действий собирается один раз, а состояние мира спрашивается в момент сборки. Здесь
+     * под открытым экраном меняется то, чем действие может работать, — и подписи обязаны
+     * догнать это без перезахода. Ключ вместо сети взят потому, что оба живут одинаково:
+     * список пересобирается тем же ходом.
+     */
+    @Test fun `смена мира под открытым экраном пересобирает действия`() = runTest(dispatcher) {
+        val vm = keyErrandVm()
+        vm.onShared("card.jpg", "image/jpeg"); advanceUntilIdle()
+        assertTrue("до правки нечего проверять", vm.ui.value.frame!!.bubbles.any {
+            com.point.core.flow.labelNeedsKey(it.title)
+        })
+
+        userKeys.stored = com.point.core.flow.UserAiKeys(
+            listOf(com.point.core.flow.UserAiKey(providerId = "openai", apiKey = "sk-появился")),
+        )
+        vm.networkChanged(); advanceUntilIdle()
+
+        assertTrue(
+            "экран остался с прежним обещанием до перезахода",
+            vm.ui.value.frame!!.bubbles.none { com.point.core.flow.labelNeedsKey(it.title) },
+        )
+    }
+
+    @Test fun `пересборка без изменений не трогает экран`() = runTest(dispatcher) {
+        val vm = keyErrandVm()
+        vm.onShared("card.jpg", "image/jpeg"); advanceUntilIdle()
+        val before = vm.ui.value.frame
+
+        vm.networkChanged(); advanceUntilIdle()
+
+        assertSame("кадр пересоздан впустую", before, vm.ui.value.frame)
+    }
 
     @Test fun `тап по действию с «нужен ключ» ведёт за ключом, а не в реализатор`() = runTest(dispatcher) {
         val vm = keyErrandVm()

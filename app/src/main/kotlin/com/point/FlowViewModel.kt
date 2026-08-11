@@ -718,6 +718,26 @@ class FlowViewModel @Inject constructor(
         )
     }
 
+    /**
+     * Мир снаружи сменился под открытым экраном (#758).
+     *
+     * Причина «нет интернета» появлялась только при следующем открытии объекта: список
+     * действий собирается один раз, а состояние сети спрашивается в момент сборки. Человек
+     * упирался в отказ после тапа — ровно то, ради чего правило и делалось. Симметрично и
+     * обратное: сеть вернулась, а подпись висела до перезахода.
+     *
+     * Пересборка — тот же самый ход, каким пространство действий расширяется от нового
+     * знания: изменилось не знание об объекте, а то, чем его можно обработать.
+     */
+    fun networkChanged() {
+        val index = stack.lastIndex
+        val frame = stack.getOrNull(index) ?: return
+        val rebuilt = registry.bubblesFor(graphOf(frame))
+        if (rebuilt == frame.bubbles) return
+        stack[index] = frame.copy(bubbles = rebuilt)
+        _ui.update { it.copy(frame = stack[index]) }
+    }
+
     fun clearFocus() {
         val index = stack.lastIndex
         val frame = stack.getOrNull(index) ?: return
