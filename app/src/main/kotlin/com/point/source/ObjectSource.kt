@@ -2,6 +2,7 @@ package com.point.source
 
 import android.content.Context
 import android.content.Intent
+import com.point.core.flow.NO_INTERNET_NOTE
 
 interface ObjectSource {
 
@@ -20,6 +21,15 @@ interface ObjectSource {
 
     val icon: String get() = "open-in"
 
+    /**
+     * Источник выйдет в сеть (#759).
+     *
+     * Дверь остаётся видимой и нажимаемой — прятать её нельзя, — но пока сети нет, она
+     * говорит об этом до тапа, как и действия над объектом (#569). Прежде «Принять файл»
+     * выглядел обычной строкой и отказывал уже после нажатия.
+     */
+    val network: Boolean get() = false
+
     fun isAvailable(context: Context): Boolean
 
     val permissions: List<String> get() = emptyList()
@@ -32,3 +42,13 @@ interface ObjectSource {
 
     fun restoreState(state: String?) = Unit
 }
+
+/**
+ * Подпись источника в списке (#759).
+ *
+ * Пока сети нет, сетевой источник говорит об этом вместо обещания пользы — ровно так же,
+ * как действие над объектом называет причину вместо своего обещания. Строка остаётся
+ * нажимаемой: прятать дверь, ради которой человек сюда пришёл, нельзя.
+ */
+fun sourceNote(source: ObjectSource, online: Boolean): String? =
+    if (source.network && !online) NO_INTERNET_NOTE else source.what
