@@ -128,6 +128,10 @@ fun parseFieldCandidates(answer: String): ParsedUnderstanding {
                 // беднее жизни — градусные координаты падали первым же тестом.
                 // Типизация «номер»/Луна/миграция типов — следующий срез #657.
                 if (suffix == "date" && semanticFits(metaKey, candidate.text) == false) return@forEach
+
+                // Трек — это цифры, а не слово: «квитанцію» и «№ 7 36ір…» с кадров прогона
+                // становились трек-номерами, и Point предлагал отследить несуществующее.
+                if (suffix == "track" && semanticFits(metaKey, candidate.text) == false) return@forEach
                 if (suffix == "address" && !plausibleAddress(candidate.text)) return@forEach
 
                 // Дата — не карта (#747): «ВІД: 29.07/12:59» с почтовой наклейки становилось
