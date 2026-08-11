@@ -189,6 +189,9 @@ class FlowViewModel @Inject constructor(
     private var selectionTransform: FrameTransform? = null
     private var selectionSnap: SnappedSelection? = null
 
+    /** Обведённые места по отдельности, как их нарисовал палец (#549). */
+    private var selectionParts: List<Box> = emptyList()
+
     private var findLayer: AtomLayer? = null
     private var findTransform: FrameTransform? = null
 
@@ -649,6 +652,7 @@ class FlowViewModel @Inject constructor(
             selectionLayer = loaded.first
             selectionTransform = loaded.second
             selectionSnap = null
+            selectionParts = emptyList()
             _ui.update { it.copy(selection = SelectionUi(image = loaded.third, layer = loaded.first)) }
         }
     }
@@ -660,11 +664,15 @@ class FlowViewModel @Inject constructor(
      * Мазок кистью тянет строку целиком: человек метит серединой пальца, а не выцеливает
      * начало и конец.
      */
-    fun onSelectRegion(display: Box) {
+    fun onSelectRegion(display: Box, parts: List<Box> = emptyList()) {
         val layer = selectionLayer ?: return
         val transform = selectionTransform ?: return
         val snap = layer.snapSelection(transform.toRaw(display), wholeLine = true)
         selectionSnap = snap
+
+        // Обведённые места остаются как нарисованы, без прилипания к строкам (#549):
+        // замазывают ровно то, что человек показал, а не строку целиком вокруг него.
+        selectionParts = parts.map(transform::toRaw)
         focusOnSelection()
         return
         _ui.update { state ->
@@ -698,6 +706,7 @@ class FlowViewModel @Inject constructor(
                 region = snap.region,
                 atomIds = snap.ids,
                 text = snap.text.takeIf { it.isNotBlank() },
+                parts = selectionParts,
             ),
         )
         closeSelection()
@@ -809,6 +818,7 @@ class FlowViewModel @Inject constructor(
         selectionLayer = null
         selectionTransform = null
         selectionSnap = null
+        selectionParts = emptyList()
         _ui.update { it.copy(selection = null) }
     }
 

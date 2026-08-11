@@ -45,6 +45,8 @@ import com.point.executors.SmsCapability
 import com.point.executors.SmsRealizer
 import com.point.executors.ArchiveRealizer
 import com.point.executors.BlurBgCapability
+import com.point.executors.HideAreaCapability
+import com.point.executors.HideAreaRealizer
 import com.point.executors.TakeFragmentCapability
 import com.point.executors.TakeFragmentRealizer
 import com.point.executors.BlurBgRealizer
@@ -176,6 +178,8 @@ abstract class CapabilityModule {
     @Binds @IntoSet @OwnCapabilities abstract fun blurBgCap(c: BlurBgCapability): Capability
 
     @Binds @IntoSet @OwnCapabilities abstract fun takeFragmentCap(c: TakeFragmentCapability): Capability
+
+    @Binds @IntoSet @OwnCapabilities abstract fun hideAreaCap(c: HideAreaCapability): Capability
     @Binds @IntoSet @OwnCapabilities abstract fun replaceBgCap(c: ReplaceBgCapability): Capability
 
     @Binds @IntoSet @OwnCapabilities abstract fun cloudOcrCap(c: CloudOcrCapability): Capability
@@ -226,6 +230,8 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun blurBgR(r: BlurBgRealizer): Realizer
 
     @Binds @IntoSet abstract fun takeFragmentR(r: TakeFragmentRealizer): Realizer
+
+    @Binds @IntoSet abstract fun hideAreaR(r: HideAreaRealizer): Realizer
     @Binds @IntoSet abstract fun replaceBgR(r: ReplaceBgRealizer): Realizer
 
     @Binds @IntoSet abstract fun deviceOcrR(r: DeviceOcrRealizer): Realizer

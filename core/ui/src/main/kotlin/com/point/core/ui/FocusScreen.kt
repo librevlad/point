@@ -84,7 +84,7 @@ internal const val FOCUS_HINT = "Выделите область, в котор�
 fun FocusScreen(
     image: ImageBitmap,
     layer: AtomLayer? = null,
-    onDone: (PageBox) -> Unit,
+    onDone: (PageBox, List<PageBox>) -> Unit,
     onCancel: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -103,6 +103,10 @@ fun FocusScreen(
     // что нарисовал палец, чтобы человек видел ровно своё движение.
     val region = draft.region(pad = SNAP_PAD, page = page)
 
+    // Обведённые места по отдельности (#549): человек мог показать три штуки, и каждая
+    // из них — своё место, а не общий прямоугольник, накрывший всё между ними.
+    val parts = draft.parts(pad = SNAP_PAD, page = page)
+
     Column(modifier = modifier.fillMaxSize().background(Color.Black)) {
         FocusTopBar(
             canUndo = draft.canUndo,
@@ -110,7 +114,7 @@ fun FocusScreen(
             canFinish = region != null,
             onUndo = { draft = draft.undo() },
             onRedo = { draft = draft.redo() },
-            onDone = { region?.let(onDone) },
+            onDone = { region?.let { onDone(it, parts) } },
             onCancel = onCancel,
         )
 
