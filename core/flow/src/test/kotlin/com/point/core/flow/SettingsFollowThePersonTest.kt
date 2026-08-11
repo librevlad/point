@@ -142,6 +142,38 @@ class SettingsFollowThePersonTest {
         assertNull(server.shelf)
     }
 
+    /**
+     * Дефект, найденный при разборе своей же работы: устройство, ещё не объявившее серверу
+     * публичную часть, вскрыть общее не может — и записало бы своё поверх чужого, стерев
+     * ключи, введённые на других устройствах, молча и безвозвратно.
+     */
+    @Test
+    fun `нечем вскрыть общее — своё поверх чужого не пишется`() = runTest {
+        val server = server()
+        sync(server, at = 2_000).sync(phone, phoneKeys, enteredOnPhone)
+        val wasOnServer = server.shelf
+        val newcomer = DeviceKeys.generate()
+
+        val outcome = sync(server, at = 5_000).sync(
+            pc,
+            newcomer,
+            AccountSettings(aiKeys = UserAiKeys.NONE.with(UserAiKey("groq", fromPc)), at = 4_000),
+        )
+
+        assertNull("чужие настройки затёрты вслепую", outcome)
+        assertEquals(wasOnServer, server.shelf)
+    }
+
+    @Test
+    fun `пока устройство не объявило свой ключ, настройки не едут`() = runTest {
+        val server = Server(mapOf("phone" to phoneKeys.publicKey, "pc" to ""))
+
+        val outcome = sync(server, at = 2_000).sync(pc, pcKeys, enteredOnPhone)
+
+        assertNull("устройство записало общее, которого само не прочитает", outcome)
+        assertNull(server.shelf)
+    }
+
     @Test
     fun `устройства вне круга общего не читают`() = runTest {
         val server = server()
