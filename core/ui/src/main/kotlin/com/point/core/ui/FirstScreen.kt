@@ -43,6 +43,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.key
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.runtime.remember
@@ -681,15 +682,19 @@ private fun FocusEntryMark(onClick: () -> Unit, modifier: Modifier = Modifier) {
     Surface(
         onClick = onClick,
         shape = CircleShape,
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
-        modifier = modifier.size(34.dp),
+        color = MaterialTheme.colorScheme.primary,
+
+        // Ободок цветом экрана отделяет значок от превью: без него яркий круг на светлом
+        // снимке сливается краем и читается пятном, а не кнопкой.
+        border = BorderStroke(3.dp, MaterialTheme.colorScheme.background),
+        modifier = modifier.size(44.dp),
     ) {
         Box(contentAlignment = Alignment.Center) {
             Icon(
                 imageVector = bubbleIcon("find"),
                 contentDescription = FOCUS_ENTRY_LABEL,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.onPrimary,
+                modifier = Modifier.size(22.dp),
             )
         }
     }
@@ -727,16 +732,6 @@ private fun ObjectHeader(
             val glow = ((if (thinking) 0.9f else 0.62f) + 0.09f * factCount.coerceAtMost(4)).coerceAtMost(1f)
             Portal(size = headerSize + 68.dp, intensity = glow)
 
-            // Тихий, но видимый вход в обводку (#641): без него целая функция Focus
-            // открывалась только тапом по картинке, о котором ниоткуда не узнать.
-            if (focusEntry && onTap != null) {
-                Box(
-                    modifier = Modifier.size(headerSize),
-                    contentAlignment = Alignment.BottomEnd,
-                ) {
-                    FocusEntryMark(onClick = onTap)
-                }
-            }
             AliveSurface(
                 kind = obj.state.kind,
                 thinking = thinking,
@@ -774,6 +769,19 @@ private fun ObjectHeader(
                                 .fillMaxSize(),
                         )
                     }
+                }
+            }
+
+            // Вход в обводку рисуется ПОВЕРХ превью и в цвете портала (#798, решение
+            // владельца 11.08.2026: «вынести вперёд и подсветить»). Прежде он лежал под
+            // кругом почти прозрачным пятном и на тёмном снимке терялся: за ним прячутся
+            // три способности — «Понять область», «Взять фрагмент» и «Замазать».
+            if (focusEntry && onTap != null) {
+                Box(
+                    modifier = Modifier.size(headerSize),
+                    contentAlignment = Alignment.BottomEnd,
+                ) {
+                    FocusEntryMark(onClick = onTap)
                 }
             }
         }

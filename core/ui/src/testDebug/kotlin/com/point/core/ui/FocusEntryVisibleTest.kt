@@ -10,6 +10,7 @@ import com.point.core.model.PointObject
 import com.point.core.model.ScratchRef
 import com.point.core.ui.theme.PointTheme
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -43,6 +44,20 @@ class FocusEntryVisibleTest {
         screen(ObjectKind.IMAGE)
 
         compose.onNodeWithContentDescription(FOCUS_ENTRY_LABEL).assertHasClickAction()
+    }
+
+    /**
+     * Решение владельца 11.08.2026 (#798): «вынести вперёд и подсветить». Значок рисуется
+     * поверх превью — на живом прогоне тёмный кружок под кругом терялся на снимке, и три
+     * способности за ним прятались.
+     */
+    @Test fun `значок обводки нарисован поверх превью, а не под ним`() {
+        screen(ObjectKind.IMAGE)
+
+        val mark = compose.onNodeWithContentDescription(FOCUS_ENTRY_LABEL).fetchSemanticsNode()
+        val hero = compose.onNodeWithContentDescription(ObjectKind.IMAGE.name).fetchSemanticsNode()
+
+        assertTrue("значок объявлен после превью", mark.id > hero.id)
     }
 
     @Test fun `у текста значка обводки нет — обводить нечего`() {
