@@ -1,0 +1,196 @@
+package com.point.desktop.ui
+
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
+
+/*
+ * Поверхности телефона на ПК (порт `core/ui/PortalSurfaces.kt`).
+ *
+ * Одно и то же действие выглядело двумя разными продуктами: на телефоне — карточка со
+ * скруглением 18, вертикальным градиентом, светлой кромкой сверху и плашкой-иконкой 46;
+ * на ПК — плоская строка со скруглением 14, точкой 8 и стрелкой-текстом. Общего модуля у
+ * Android-UI и Compose Desktop нет, поэтому токены переносятся, а не переиспользуются.
+ * Источник правды — телефонный файл: расходиться им нельзя.
+ */
+
+private val RowTop = Color(0xFF1A1D25)
+private val RowBottom = Color(0xFF121419)
+private val PlateBase = Color(0xFF1F222B)
+private val TopHighlight = Color(0x12FFFFFF)
+private val PrimaryStart = Color(0xFF7B5CFF)
+private val PrimaryEnd = Color(0xFF4E7BFF)
+
+val PortalCardShape = RoundedCornerShape(18.dp)
+
+val PortalPlateShape = RoundedCornerShape(14.dp)
+
+fun Modifier.portalCard(
+    shape: Shape = PortalCardShape,
+    elevation: Dp = 6.dp,
+    accent: Color? = null,
+): Modifier = this
+    .then(
+        if (elevation > 0.dp) {
+            Modifier.shadow(elevation, shape, ambientColor = Color.Black, spotColor = Color.Black)
+        } else {
+            Modifier
+        },
+    )
+    .clip(shape)
+    .background(Brush.verticalGradient(listOf(RowTop, RowBottom)))
+    .then(
+        if (accent != null) {
+            Modifier.background(Brush.horizontalGradient(listOf(accent.copy(alpha = 0.16f), Color.Transparent)))
+        } else {
+            Modifier
+        },
+    )
+    .border(1.dp, Brush.verticalGradient(listOf(TopHighlight, Color.Transparent)), shape)
+
+fun Modifier.portalPrimary(
+    shape: Shape = PortalCardShape,
+    elevation: Dp = 20.dp,
+): Modifier = this
+    .then(
+        if (elevation > 0.dp) {
+            Modifier.shadow(elevation, shape, ambientColor = PrimaryStart, spotColor = PrimaryStart)
+        } else {
+            Modifier
+        },
+    )
+    .clip(shape)
+    .background(Brush.horizontalGradient(listOf(PrimaryStart, PrimaryEnd)))
+
+/** Плашка действия: цвет действия светится изнутри, а не стоит точкой рядом. */
+@Composable
+fun PortalPlate(
+    accent: Color,
+    icon: ImageVector?,
+    modifier: Modifier = Modifier,
+    onGlass: Boolean = false,
+    size: Dp = 40.dp,
+    shape: Shape = PortalPlateShape,
+) {
+    val plate = modifier
+        .size(size)
+        .clip(shape)
+        .then(
+            if (onGlass) {
+                Modifier
+                    .background(Color.White.copy(alpha = 0.18f))
+                    .border(1.dp, Color.White.copy(alpha = 0.30f), shape)
+            } else {
+                Modifier
+                    .background(PlateBase)
+                    .background(Brush.radialGradient(listOf(accent.copy(alpha = 0.34f), Color.Transparent)))
+                    .border(1.dp, accent.copy(alpha = 0.30f), shape)
+            },
+        )
+
+    Box(plate, contentAlignment = Alignment.Center) {
+        if (icon != null) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = if (onGlass) Color.White else accent,
+                modifier = Modifier.size(size * 0.5f),
+            )
+        }
+    }
+}
+
+/**
+ * Строка действия — та же, что на телефоне (`core/ui` PortalRow).
+ *
+ * Обещание живёт под названием второй строкой, а не хвостом справа: человек читает сверху
+ * вниз, и «что будет, если нажать» стоит там же, где он привык его видеть.
+ */
+@Composable
+fun PortalRow(
+    title: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    subtitle: String? = null,
+    icon: ImageVector? = null,
+    accent: Color = PointColors.violet,
+    primary: Boolean = false,
+    enabled: Boolean = true,
+    appearIndex: Int = 0,
+    trailing: (@Composable () -> Unit)? = null,
+) {
+    val presence = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        delay(appearIndex * 40L)
+        presence.animateTo(1f, spring(stiffness = Spring.StiffnessMediumLow))
+    }
+
+    val base = modifier
+        .fillMaxWidth()
+        .graphicsLayer {
+            alpha = presence.value
+            translationY = (1f - presence.value) * 10.dp.toPx()
+        }
+    val body = if (primary) base.portalPrimary() else base.portalCard()
+
+    val labelColor = if (primary) Color.White else PointColors.text
+    val subColor = if (primary) Color.White.copy(alpha = 0.80f) else PointColors.muted
+
+    Box(body.clickable(enabled = enabled, onClick = onClick)) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = if (primary) 15.dp else 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(13.dp),
+        ) {
+            PortalPlate(accent = accent, icon = icon, onGlass = primary)
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = PointType.body.copy(color = labelColor),
+                    fontWeight = if (primary) FontWeight.SemiBold else FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (!subtitle.isNullOrBlank()) {
+                    Text(
+                        text = subtitle,
+                        style = PointType.small.copy(color = subColor),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            trailing?.invoke()
+        }
+    }
+}

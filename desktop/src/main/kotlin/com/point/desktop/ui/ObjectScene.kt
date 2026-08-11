@@ -331,53 +331,42 @@ internal fun Station(
     accent: Color,
     where: String? = null,
     primary: Boolean = false,
+    icon: String = "ai",
+    note: String? = null,
+    appearIndex: Int = 0,
     onClick: () -> Unit,
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(PointColors.surface)
-            .border(
-                1.dp,
-                if (primary) accent.copy(alpha = 0.65f) else Color.White.copy(alpha = 0.06f),
-                RoundedCornerShape(14.dp),
-            )
-            .clickable(onClick = onClick)
-            .padding(horizontal = 15.dp, vertical = if (primary) 14.dp else 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(Modifier.size(8.dp).background(accent, CircleShape))
-        Text(title, style = PointType.body, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-        where?.let { Text(it, style = PointType.small) }
-        Text("→", style = PointType.small)
-    }
+    PortalRow(
+        title = title,
+        subtitle = listOfNotNull(note, where).firstOrNull(),
+        icon = bubbleIcon(icon),
+        accent = accent,
+        primary = primary,
+        appearIndex = appearIndex,
+        onClick = onClick,
+    )
 }
 
 /** Недоступное действие видно с причиной, а не скрыто (PC5). */
 @Composable
-internal fun MutedStation(title: String, where: String?, reason: String, onClick: () -> Unit) {
-    Column(
-        modifier = Modifier.fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .border(1.dp, PointColors.border.copy(alpha = 0.5f), RoundedCornerShape(14.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 15.dp, vertical = 10.dp),
-        verticalArrangement = Arrangement.spacedBy(3.dp),
-    ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(8.dp).background(PointColors.muted, CircleShape))
-            Text(
-                title,
-                style = PointType.body.copy(color = PointColors.muted),
-                modifier = Modifier.weight(1f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            where?.let { Text(it, style = PointType.small) }
-        }
-        Text(reason, style = PointType.small, modifier = Modifier.padding(start = 20.dp))
-    }
+internal fun MutedStation(
+    title: String,
+    where: String?,
+    reason: String,
+    icon: String = "ai",
+    appearIndex: Int = 0,
+    onClick: () -> Unit,
+) {
+    // Недоступное действие видно с причиной, а не скрыто (PC5). Оно остаётся такой же
+    // строкой, как остальные: гаснет плашка и название, а не форма.
+    PortalRow(
+        title = title,
+        subtitle = listOfNotNull(reason, where).joinToString(" · "),
+        icon = bubbleIcon(icon),
+        accent = PointColors.muted,
+        appearIndex = appearIndex,
+        onClick = onClick,
+    )
 }
 
 internal fun kindMark(kind: ObjectKind): String = when (kind) {
@@ -388,18 +377,7 @@ internal fun kindMark(kind: ObjectKind): String = when (kind) {
     ObjectKind.ZIP -> "ZIP"
     ObjectKind.OFFICE -> "DOC"
     ObjectKind.COLLECTION -> "SET"
-    else -> "•"
-}
-
-internal fun kindLabel(kind: ObjectKind): String = when (kind) {
-    ObjectKind.IMAGE -> "Изображение"
-    ObjectKind.PDF -> "PDF"
-    ObjectKind.TEXT -> "Текст"
-    ObjectKind.URL -> "Ссылка"
-    ObjectKind.ZIP -> "Архив"
-    ObjectKind.OFFICE -> "Документ"
-    ObjectKind.COLLECTION -> "Набор"
-    else -> "Файл"
+    else -> "\u2022"
 }
 
 internal const val PREVIEW_CHARS = 2_000

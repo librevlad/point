@@ -28,6 +28,10 @@ dependencies {
     implementation(project(":core:flow"))
     implementation(compose.desktop.currentOs)
     implementation(compose.material3)
+
+    // Плашки действий на ПК рисуются теми же иконками, что и на телефоне (#626-соседнее):
+    // общего модуля у Android-UI и Compose Desktop нет, значит набор берётся напрямую.
+    implementation(compose.materialIconsExtended)
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.pdfbox)
 

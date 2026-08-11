@@ -259,6 +259,12 @@ class DesktopState(
         val unavailable: String? = null,
         val bubble: Bubble? = null,
         val remote: com.point.core.flow.PcRemoteAction? = null,
+
+        /**
+         * Тот же значок, что у этого действия на телефоне. Одно действие с двумя разными
+         * лицами на двух экранах — два продукта, а не один.
+         */
+        val icon: String = bubble?.icon.orEmpty().ifBlank { "ai" },
     )
 
     /**
@@ -272,7 +278,7 @@ class DesktopState(
         val here = bubblesFor(item).map { bubble ->
             val capability = runCatching { registry.byId(bubble.capabilityId) }.getOrNull()
             Triple(
-                ActionChoice(bubble.title, onPhone = false, bubble = bubble),
+                ActionChoice(bubble.title, onPhone = false, bubble = bubble, icon = bubble.icon),
                 capability?.meta?.priority ?: com.point.core.flow.PC_CAP_DEFAULT_PRIORITY,
                 intent != null && capability != null && intent in capability.intents(item.obj.state),
             )
@@ -284,6 +290,7 @@ class DesktopState(
                     onPhone = true,
                     unavailable = action.unavailable?.ifBlank { "телефон сейчас не может это сделать" },
                     remote = action,
+                    icon = "phone",
                 ),
                 action.priority,
                 false,

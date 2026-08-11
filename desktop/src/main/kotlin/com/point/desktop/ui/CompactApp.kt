@@ -26,6 +26,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import com.point.core.flow.yieldLabel
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -555,19 +556,26 @@ internal fun CompactObject(
                         action.title,
                         where = if (action.onPhone) "на телефоне" else null,
                         reason = action.unavailable,
+                        icon = action.icon,
+                        appearIndex = i,
                     ) { state.say(action.unavailable) }
 
                     action.bubble != null -> Station(
                         action.title,
-                        PointColors.violet,
+                        bubbleColor(action.icon),
                         primary = i == primary,
+                        icon = action.icon,
+                        note = yieldLabel(action.bubble.yields, action.bubble.unusableReason, action.bubble.capabilityId),
+                        appearIndex = i,
                     ) { state.onBubble(item, action.bubble) }
 
                     action.remote != null -> Station(
                         action.title,
-                        PointColors.violet,
+                        bubbleColor(action.icon),
                         where = "на телефоне",
                         primary = i == primary,
+                        icon = action.icon,
+                        appearIndex = i,
                     ) { state.sendToPhone(item, action.remote) }
                 }
             }
@@ -682,7 +690,7 @@ internal fun CompactList(
         // Приём файла есть и здесь (#727): «и на пк тоже и прием и отправка».
         val awaiting by state.receiving.collectAsState()
         if (awaiting == null) {
-            Station("Принять файл по ссылке", PointColors.violet) { onReceiveFile() }
+            Station("Принять файл по ссылке", bubbleColor("link"), icon = "link") { onReceiveFile() }
         } else {
             awaiting?.let { wait ->
                 Column(
@@ -701,14 +709,15 @@ internal fun CompactList(
                 }
             }
         }
-        Station("Взять то, что в буфере", PointColors.cyan) { onTakeClipboard() }
-        Station("Снять экран целиком", PointColors.violet) { onGrabScreen() }
+        Station("Взять то, что в буфере", bubbleColor("copy"), icon = "copy") { onTakeClipboard() }
+        Station("Снять экран целиком", bubbleColor("camera"), icon = "camera") { onGrabScreen() }
 
         // Дверь для мыши: окно у трея уходит по потере фокуса, а за файлом человек
         // уходит в проводник — принести файл нечем, пока окно не попросили остаться (#546).
         Station(
             if (keptOpen) "Снова прятать окно, когда ухожу" else "Не прятать окно — принесу файл",
-            PointColors.cyan,
+            bubbleColor("pc"),
+            icon = "pc",
         ) { onKeepOpen() }
     }
 }
