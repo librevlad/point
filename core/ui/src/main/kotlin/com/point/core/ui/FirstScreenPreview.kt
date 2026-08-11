@@ -53,7 +53,7 @@ private fun previewIntent(id: String, next: ObjectKind): Intent = when {
 
 private fun previewYield(id: String, next: ObjectKind, intent: Intent): ActionYield = when (id) {
     "ai" -> ActionYield.Unknown
-    "understand" -> ActionYield.Same
+    "understand" -> ActionYield.Same()
     "excel" -> ActionYield.New(ObjectKind.OFFICE, "таблицу")
     "word", "word-plus" -> ActionYield.New(ObjectKind.OFFICE, "документ Word")
     else -> if (intent == Intent.OPEN || intent == Intent.SEND) ActionYield.None else ActionYield.New(next)

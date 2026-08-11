@@ -55,9 +55,9 @@ class CapabilityInventoryTest {
     @Test
     fun `способность вправе сказать о себе точнее, чем умолчание`() {
 
-        val understand = Cap("understand", out = { it }, yield = { ActionYield.Same })
+        val understand = Cap("understand", out = { it }, yield = { ActionYield.Same() })
 
-        assertEquals(ActionYield.Same, understand.yields(image))
+        assertEquals(ActionYield.Same(), understand.yields(image))
         assertEquals(ActionYield.None, derivedYield(understand, image))
     }
 
@@ -91,14 +91,23 @@ class CapabilityInventoryTest {
         assertNull(yieldLabel(ActionYield.Copied))
     }
 
+    /**
+     * Слова принадлежат способности, а не типу исхода (#734).
+     *
+     * Одна фраза, написанная для «Понять», доставалась каждому, кто объявлял «объект тот же»:
+     * «Исправить ошибки» обещало найти суммы и контакты, а правило опечатки распознавания.
+     * Теперь исход несёт слова того, кто их сказал, — унаследовать чужое обещание нечему.
+     */
     @Test
-    fun `подпись «Понять» называет результат, а не механику`() {
+    fun `исход «тот же объект» говорит словами своей способности`() {
+        val mine = "поправит опечатки распознавания"
 
-        val label = yieldLabel(ActionYield.Same)!!
+        assertEquals(mine, yieldLabel(ActionYield.Same(mine)))
+    }
 
-        assertFalse("подпись снова про механику: " + label, label.contains("объект тот же"))
-        assertTrue("подпись не называет ничего из того, что человек получит: " + label,
-            listOf("суть", "суммы", "даты", "контакты").any { label.contains(it) })
+    @Test
+    fun `не сказавшая своих слов способность молчит, а не берёт чужие`() {
+        assertNull("подпись досталась по типу исхода", yieldLabel(ActionYield.Same()))
     }
 
     @Test
@@ -113,7 +122,7 @@ class CapabilityInventoryTest {
     @Test
     fun `негодный объект — подпись становится причиной, а не обещанием`() {
 
-        val label = yieldLabel(ActionYield.Same, unusableReason = "Файл пустой — в нём нечего читать")
+        val label = yieldLabel(ActionYield.Same(), unusableReason = "Файл пустой — в нём нечего читать")
 
         assertEquals("Файл пустой — в нём нечего читать", label)
     }
@@ -129,8 +138,10 @@ class CapabilityInventoryTest {
     }
 
     @Test
-    fun `без причины подпись работает как раньше`() {
-        assertEquals("найдёт суть, суммы, даты и контакты", yieldLabel(ActionYield.Same))
+    fun `без причины подпись остаётся словами способности`() {
+        val mine = "найдёт суть, суммы, даты и контакты"
+
+        assertEquals(mine, yieldLabel(ActionYield.Same(mine)))
     }
 
     @Test
@@ -147,7 +158,7 @@ class CapabilityInventoryTest {
     @Test
     fun `у каждого исхода есть свои слова, и они не пустые`() {
         val all = listOf(
-            ActionYield.None, ActionYield.Same, ActionYield.Unknown,
+            ActionYield.None, ActionYield.Same(), ActionYield.Unknown,
         ) + ObjectKind.entries.map { ActionYield.New(it) }
         val said = all.map { yieldLabel(it) }
 
@@ -180,7 +191,7 @@ class CapabilityInventoryTest {
     fun `кто ничего не обещал, тот и не ошибся`() {
 
         assertNull(yieldSurprise(ActionYield.Unknown, ObjectKind.OFFICE))
-        assertNull(yieldSurprise(ActionYield.Same, ObjectKind.OFFICE))
+        assertNull(yieldSurprise(ActionYield.Same(), ObjectKind.OFFICE))
         assertNull(yieldSurprise(ActionYield.None, ObjectKind.OFFICE))
     }
 
@@ -263,7 +274,7 @@ class CapabilityInventoryTest {
 
     @Test
     fun `способность, сказавшая о себе сама, в таблице помечена`() {
-        val understand = Cap("understand", out = { it }, yield = { ActionYield.Same })
+        val understand = Cap("understand", out = { it }, yield = { ActionYield.Same() })
         val share = Cap("share", out = { it })
 
         val rows = capabilityInventory(listOf(understand, share)).associateBy { it.id.value }

@@ -130,7 +130,7 @@ class RealCapabilityInventoryTest {
         is ActionYield.New -> "new"
 
         ActionYield.None, ActionYield.Copied -> "none"
-        ActionYield.Same -> "same"
+        is ActionYield.Same -> "same"
         ActionYield.Unknown -> "unknown"
     }
 
@@ -148,7 +148,7 @@ class RealCapabilityInventoryTest {
 
     private fun kindOfYield(e: com.point.core.flow.CapabilityEntry): String = when {
         e.yields.any { it is ActionYield.New } -> "новый объект"
-        e.yields.contains(ActionYield.Same) -> "тот же"
+        e.yields.any { it is ActionYield.Same } -> "тот же"
         e.yields.contains(ActionYield.Unknown) -> "неизвестно"
         else -> "ничего"
     }

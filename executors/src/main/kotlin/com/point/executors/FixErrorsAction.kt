@@ -55,7 +55,7 @@ class FixErrorsCapability @Inject constructor(
 
     override fun produces(state: ObjectState) = state
 
-    override fun yields(state: ObjectState) = ActionYield.Same
+    override fun yields(state: ObjectState) = ActionYield.Same()
     override fun intents(state: ObjectState) = setOf(Intent.UNDERSTAND)
 
     companion object { val ID = CapabilityId("fix-errors") }
@@ -86,7 +86,7 @@ class FixErrorsStrongerCapability @Inject constructor(
 
     // Знание того же объекта, как и у первой ступени. Что снимок уйдёт наружу, человек
     // узнаёт запросом согласия перед выполнением (ADR-0001 §19) — там названо и куда именно.
-    override fun yields(state: ObjectState) = ActionYield.Same
+    override fun yields(state: ObjectState) = ActionYield.Same()
     override fun intents(state: ObjectState) = setOf(Intent.UNDERSTAND)
 
     companion object { val ID = CapabilityId("fix-errors-stronger") }

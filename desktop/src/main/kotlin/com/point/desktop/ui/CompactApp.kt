@@ -565,7 +565,7 @@ internal fun CompactObject(
                         bubbleColor(action.icon),
                         primary = i == primary,
                         icon = action.icon,
-                        note = yieldLabel(action.bubble.yields, action.bubble.unusableReason, action.bubble.capabilityId),
+                        note = yieldLabel(action.bubble.yields, action.bubble.unusableReason),
                         appearIndex = i,
                     ) { state.onBubble(item, action.bubble) }
 

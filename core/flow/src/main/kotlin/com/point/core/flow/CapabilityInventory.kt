@@ -37,9 +37,6 @@ fun derivedYield(capability: Capability, state: ObjectState): ActionYield {
 fun yieldLabel(
     yields: ActionYield,
     unusableReason: String? = null,
-
-    /** Чьё это действие: обещание названо руками и принадлежит одному из них, а не типу. */
-    capability: com.point.core.model.CapabilityId? = null,
 ): String? {
     if (unusableReason != null) return unusableReason
     return when (yields) {
@@ -48,16 +45,15 @@ fun yieldLabel(
         // Обещание «Понять» (#580). «Исправить ошибки» обещает то же самое типом результата,
         // но делает другую работу — и на найденном человеке сулило «суммы и даты», которых
         // у человека не бывает (#771, живая охота 11.08.2026).
-        ActionYield.Same ->
-            UNDERSTAND_NOTE.takeIf { capability == null || capability.value == UNDERSTAND_ID }
+        // Слова принадлежат способности, а не типу исхода (#734): наследовать чужое
+        // обещание молча больше нечему — здесь его просто нет.
+        is ActionYield.Same -> yields.note
 
         ActionYield.Unknown, ActionYield.Copied, ActionYield.None -> null
     }
 }
 
-private const val UNDERSTAND_NOTE = "найдёт суть, суммы, даты и контакты"
 
-private const val UNDERSTAND_ID = "understand"
 
 const val KEY_NOTE: String = "нужен ключ"
 
