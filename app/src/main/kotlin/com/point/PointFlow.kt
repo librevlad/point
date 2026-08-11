@@ -60,6 +60,7 @@ fun PointFlow(
         onCancelPreview = viewModel::cancelPreview,
         onOpenSelection = viewModel::openSelection,
         onSelectRegion = viewModel::onSelectRegion,
+        onClearFocus = viewModel::clearFocus,
         onTakeSelection = viewModel::takeSelection,
         onFocusSelection = viewModel::focusOnSelection,
         onCloseSelection = viewModel::closeSelection,

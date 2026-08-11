@@ -121,6 +121,7 @@ fun PointHost(
     onTakeChatAnswer: () -> Unit = {},
     onOpenSelection: () -> Unit = {},
     onSelectRegion: (com.point.core.flow.Box, List<com.point.core.flow.Box>) -> Unit = { _, _ -> },
+    onClearFocus: () -> Unit = {},
     onTakeSelection: () -> Unit = {},
     onFocusSelection: () -> Unit = {},
     onCloseSelection: () -> Unit = {},
@@ -320,6 +321,10 @@ fun PointHost(
                     pinned = current.pinned,
                     onBubbleLongPress = onBubbleLongPress,
                     appIconFor = appIconFor,
+
+                    focusPreview = state.focusPreview,
+                    focused = current.focus != null,
+                    onClearFocus = onClearFocus,
 
                     onHeroTap = when (
                         heroTapOf(
