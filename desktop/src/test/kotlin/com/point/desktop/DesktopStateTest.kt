@@ -11,10 +11,12 @@ import org.junit.Test
 
 class DesktopStateTest {
 
+    /** Механика связки включена: правила ниже переживут день, когда телефон научится (#785). */
     private fun state() = DesktopState(
         registry = DesktopRegistry(emptySet()),
         resolver = DesktopResolver(emptySet()),
         clipboard = { },
+        phoneRunsRequests = true,
     )
 
     private fun item(kind: ObjectKind, mime: String) =

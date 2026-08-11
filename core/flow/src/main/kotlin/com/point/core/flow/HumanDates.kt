@@ -28,8 +28,9 @@ fun humanDayOf(value: String): LocalDate? =
  * день не возвращается дважды: побеждает более информативное чтение (#660).
  *
  * Час при дате остаётся при ней — «01.12.2020 в 11:09» и «29.07 до 18:00» это срок, а
- * не отметка (#651). Значение вовсе без даты, но со временем или относительным словом,
- * судится своими правилами и проходит нетронутым: выдумывать вместо него день нельзя.
+ * не отметка (#651). А относительное слово датой не становится ни с чем рядом (#784):
+ * «завтра до 09:00» — указатель на день, а не день. Голое время судится своим правилом
+ * и проходит нетронутым: выдумывать вместо него день нельзя.
  */
 fun readDates(value: String): List<String> {
     val text = value.trim()
@@ -37,7 +38,12 @@ fun readDates(value: String): List<String> {
 
     val found = DATE_TOKEN.findAll(text).filter { calendarShaped(it.value) }.toList()
     if (found.isEmpty()) {
-        return if (CLOCK_INSIDE.containsMatchIn(text) || relativeDayWord(text)) listOf(text) else emptyList()
+
+        // «завтра до 09:00 это не дата» (#784, решение владельца 11.08.2026). Относительное
+        // слово остаётся указателем на день, с чем бы ни стояло рядом: смысл его истёк в тот
+        // момент, когда сняли кадр, и час рядом этого не чинит.
+        if (holdsRelativeDayWord(text)) return emptyList()
+        return if (CLOCK_INSIDE.containsMatchIn(text)) listOf(text) else emptyList()
     }
 
     val byDay = LinkedHashMap<String, String>()

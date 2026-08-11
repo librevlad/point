@@ -53,6 +53,21 @@ fun Entity.isBareClock(): Boolean = type == EntityType.DATE_TIME && bareClock(va
  */
 fun relativeDayWord(value: String): Boolean = RELATIVE_DAY.matches(value.trim())
 
+/**
+ * Есть ли относительное слово ВНУТРИ значения (#784, решение владельца 11.08.2026:
+ * «завтра до 09:00 это не дата»).
+ *
+ * Прежнее правило сверяло значение целиком, поэтому ловило «завтра» и пропускало «завтра до
+ * 09:00» — а это тот же указатель на день, только с часом рядом. Час не чинит главного:
+ * какого дня этот час, неизвестно никому, включая Point.
+ */
+fun holdsRelativeDayWord(value: String): Boolean = RELATIVE_INSIDE.containsMatchIn(value)
+
+private val RELATIVE_INSIDE = Regex(
+    "(?iu)(?<!\\p{L})(?:(?:поза)?(?:вчера|вчора)|сегодн[яi]|сьогодн[\u0456i]|" +
+        "(?:після)?завтра|післязавтра|yesterday|today|tomorrow|tonight)(?!\\p{L})",
+)
+
 private val RELATIVE_DAY = Regex(
     """(?iu)(?:поза)?(?:вчера|вчора)[.,!]?|сегодн[яi]|сьогодн[іi]|(?:після)?завтра|післязавтра|
        |yesterday|today|tomorrow|tonight|(?:next|last|this)\s+\p{L}+""".trimMargin().replace("\n", ""),

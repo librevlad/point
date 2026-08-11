@@ -28,6 +28,12 @@ class UnifiedActionsTest {
         override fun produces(state: ObjectState) = state
     }
 
+    /**
+     * Механика включена намеренно (#785): сегодня телефон просьбы не исполняет, и все
+     * его действия закрыты одной причиной. Правило же — «свои и чужие ранжируются вместе,
+     * недоступное видно с причиной» — переживёт этот день, и проверять его надо на живой
+     * механике, а не на выключенной.
+     */
     private fun state(vararg mine: Pair<String, Int>): DesktopState {
         val caps = mine.map { (id, p) -> Declared(id, p) }.toSet<Capability>()
         return DesktopState(
@@ -36,6 +42,7 @@ class UnifiedActionsTest {
                 override fun realizerFor(capabilityId: CapabilityId) = error("не нужен")
             },
             clipboard = { },
+            phoneRunsRequests = true,
         )
     }
 

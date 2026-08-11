@@ -17,6 +17,10 @@ import org.junit.rules.TemporaryFolder
  * Срез 5 контракта связки (#611): исполнитель, который ответит через час, не может быть выбран
  * за спиной. Телефон отвечает сейчас — берётся молча; телефон молчит — вопрос человеку до дела,
  * а не отчёт после.
+ *
+ * Правило проверяется на включённой механике: сегодня телефон просьбы компьютера не исполняет
+ * вовсе (#785), и это отдельная проверка в конце. Правило же переживёт тот день, когда
+ * научится, — иначе его пришлось бы восстанавливать по памяти.
  */
 class PhoneAskedBeforeWaitingTest {
 
@@ -29,7 +33,12 @@ class PhoneAskedBeforeWaitingTest {
         override fun now(): Long = at
     }
 
-    private fun state(box: Outbox, now: Long, lastContact: Long?): DesktopState {
+    private fun state(
+        box: Outbox,
+        now: Long,
+        lastContact: Long?,
+        runsRequests: Boolean = true,
+    ): DesktopState {
         val hands = Hands(lastContact ?: now)
         val state = DesktopState(
             registry = DesktopRegistry(emptySet()),
@@ -37,6 +46,7 @@ class PhoneAskedBeforeWaitingTest {
             clipboard = { },
             outbox = box,
             clock = hands,
+            phoneRunsRequests = runsRequests,
         )
         if (lastContact != null) state.heard()
         hands.at = now
@@ -113,5 +123,23 @@ class PhoneAskedBeforeWaitingTest {
 
         assertNotNull("неизвестный телефон — не молчаливый выбор", state.phoneAsk.value)
         assertTrue(box.entries().isEmpty())
+    }
+
+    /**
+     * Сегодняшняя правда (#785): телефон свою почту разбирает только ради ответа на
+     * собственный запрос, а всё прочее выбрасывает `Mailbox.drain`. Значит просьба не
+     * подождёт — её сотрут. Ни очереди, ни вопроса: обещание хуже отсутствия действия.
+     */
+    @Test
+    fun `пока телефон не исполняет просьбы — ни очереди, ни вопроса`() {
+        val box = Outbox(temp.newFolder("outbox-off"))
+        val state = state(box, now = 10_000, lastContact = 9_000, runsRequests = false)
+
+        state.sendToPhone(item(), action)
+        Thread.sleep(200)
+
+        assertNull("человека спросили про работу, которой не будет", state.phoneAsk.value)
+        assertEquals("просьба ушла в почту, где её сотрут", 0, box.entries().size)
+        assertEquals(PHONE_DOES_NOT_RUN_REQUESTS, state.message.value)
     }
 }
