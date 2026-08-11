@@ -1,6 +1,5 @@
 package com.point.executors
 
-import com.point.core.flow.capabilities.OFFICE_PDF_SUBSTANCE
 import com.point.core.flow.capabilities.PdfCapability
 import android.graphics.Paint
 import android.graphics.Typeface
@@ -29,22 +28,21 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import javax.inject.Inject
 
-internal fun retoldFromOffice(result: ActionResult): ActionResult =
-    if (result is ActionResult.Success) {
-        ActionResult.Success(
-            result.result.copy(metadata = result.result.metadata + (META_YIELD_NOUN to OFFICE_PDF_SUBSTANCE)),
-        )
-    } else {
-        result
-    }
-
+/**
+ * Телефонного пути «офис → PDF» здесь нет намеренно (#403, решение владельца 05.08.2026).
+ *
+ * Он существовал пересказом: из документа вынимался текст и печатался заново — слайд терял
+ * картинки, разметку и порядок и переставал быть слайдом. Настоящую конвертацию делает
+ * компьютер с офисом, и он же объявляет это умение телефону обычным исполнителем той же
+ * способности «В PDF».
+ */
 class PdfRealizer @Inject constructor(
     private val store: ObjectStore,
     private val pdfText: PdfTextExtractor,
-    private val officeText: OfficeTextExtractor,
-    private val spreadsheet: SpreadsheetReader,
 ) : Realizer {
     override val capabilityId = PdfCapability.ID
+
+    override fun accepts(state: ObjectState) = state.kind != ObjectKind.OFFICE
 
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
@@ -53,7 +51,6 @@ class PdfRealizer @Inject constructor(
                     ObjectKind.IMAGE -> imageToPdf(input)
                     ObjectKind.TEXT -> renderTextToPdf(File(input.uri.value).readText())
                     ObjectKind.PDF -> pdfToText(input)
-                    ObjectKind.OFFICE -> officeToPdf(input)
                     else -> ActionResult.Failure(NOT_THIS_OBJECT, recoverable = false)
                 }
             }.getOrElse { ActionResult.Failure(it.message ?: PDF_FAILED, recoverable = true) }
@@ -69,35 +66,6 @@ class PdfRealizer @Inject constructor(
         val ref = write(document)
         bitmap.recycle()
         return ActionResult.Success(ResultObject(ObjectKind.PDF, "application/pdf", ref))
-    }
-
-    private suspend fun officeToPdf(input: PointObject): ActionResult {
-
-        reportStage(OFFICE_READ_STAGE)
-
-        if (isSpreadsheet(input)) {
-            val rows = spreadsheet.readRows(input)
-            if (rows.any { row -> row.any { it.isNotBlank() } }) {
-                return retoldFromOffice(renderTextToPdf(formatSpreadsheet(rows), mono = true))
-            }
-        }
-        val text = officeText.extractText(input)
-        return if (text.isBlank()) {
-            ActionResult.Failure(
-                "В документе не нашлось текста — если это старый формат (.doc/.xls/.ppt), " +
-                    "пересохраните его в новом и попробуйте снова",
-                recoverable = true,
-            )
-        } else {
-            retoldFromOffice(renderTextToPdf(text))
-        }
-    }
-
-    private fun isSpreadsheet(input: PointObject): Boolean {
-        val mime = input.mime.lowercase()
-        val path = input.uri.value.lowercase()
-        return "spreadsheet" in mime || mime == "application/vnd.ms-excel" ||
-            path.endsWith(".xlsx") || path.endsWith(".xls")
     }
 
     private suspend fun renderTextToPdf(text: String, mono: Boolean = false): ActionResult {

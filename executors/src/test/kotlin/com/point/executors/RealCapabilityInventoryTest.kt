@@ -6,7 +6,6 @@ import com.point.core.flow.capabilities.ArchiveCapability
 import com.point.core.flow.capabilities.OfficeCapability
 import com.point.core.flow.capabilities.ImageCapability
 import com.point.core.flow.capabilities.DropLinkCapability
-import com.point.core.flow.capabilities.OFFICE_PDF_SUBSTANCE
 import com.point.core.flow.capabilities.OcrCapability
 import com.point.core.flow.Capability
 import com.point.core.flow.LinkedPc
@@ -243,46 +242,25 @@ class RealCapabilityInventoryTest {
         assertTrue(clashes.distinct().joinToString("\n"), clashes.isEmpty())
     }
 
+    /**
+     * Пересказа офисного файла в PDF больше нет (#403): телефон не выдаёт текстовую выжимку
+     * за превращение документа. Обещание способности — обычный PDF, потому что делает его
+     * настоящий конвертер на компьютере.
+     */
     @Test
-    fun `пересказ офисного файла помечен тем же словом, каким обещан`() {
-
-        val office = com.point.core.model.ObjectState(ObjectKind.OFFICE)
-        val out = retoldFromOffice(
-            com.point.core.model.ActionResult.Success(
-                com.point.core.model.ResultObject(
-                    ObjectKind.PDF, "application/pdf", com.point.core.model.ScratchRef("/x"),
-                ),
-            ),
-        ) as com.point.core.model.ActionResult.Success
-
-        assertEquals(OFFICE_PDF_SUBSTANCE, out.result.metadata[com.point.core.flow.META_YIELD_NOUN])
-        assertNull(
-            "обещание и вышедшее разошлись",
-            com.point.core.flow.yieldSurprise(
-                PdfCapability().yields(office),
-                ObjectKind.PDF,
-                out.result.metadata[com.point.core.flow.META_YIELD_NOUN],
-            ),
-        )
-    }
-
-    @Test
-    fun `отказ пересказом не помечается — помечать нечего`() {
-        val refused = com.point.core.model.ActionResult.Failure("нет текста", recoverable = true)
-
-        assertSame(refused, retoldFromOffice(refused))
-    }
-
-    @Test
-    fun `офисный файл обещает не «PDF», а то, что в нём будет`() {
+    fun `офис в PDF обещает документ, а не выжимку из него`() {
 
         val office = com.point.core.model.ObjectState(ObjectKind.OFFICE)
         val pdf = PdfCapability()
 
         assertEquals("В PDF", pdf.label(office))
-        assertEquals(
-            "PDF с текстом документа · без оформления",
-            yieldLabel(pdf.yields(office)),
+        assertNull(
+            "обещание и вышедшее разошлись",
+            com.point.core.flow.yieldSurprise(pdf.yields(office), ObjectKind.PDF, null),
+        )
+        assertTrue(
+            "обещание всё ещё говорит про выжимку: " + yieldLabel(pdf.yields(office)),
+            "текстом" !in yieldLabel(pdf.yields(office)).orEmpty(),
         )
     }
 
