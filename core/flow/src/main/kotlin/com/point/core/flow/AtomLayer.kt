@@ -4,6 +4,7 @@ data class Box(val left: Float, val top: Float, val right: Float, val bottom: Fl
     val centerX: Float get() = (left + right) / 2f
     val centerY: Float get() = (top + bottom) / 2f
     val height: Float get() = bottom - top
+    val width: Float get() = right - left
 
     fun contains(x: Float, y: Float): Boolean = x in left..right && y in top..bottom
 
@@ -107,16 +108,21 @@ class AtomLayer(
         val placed = placed(subset)
         if (placed.isEmpty()) return emptyList()
 
-        val rows = rowsOf(placed)
-        val out = mutableListOf<List<List<Atom>>>()
-        var band = mutableListOf<List<Pair<Atom, Box>>>()
+        val bands = bandsOf(rowsOf(placed))
+        val gaps = bands.map { columnGaps(it) }
+        bindCaptions(bands, gaps)
 
-        fun flush() {
-            if (band.isEmpty()) return
-            val gaps = columnGaps(band)
-            out += if (gaps.isEmpty()) listOf(band.map { ordered(it) }) else columnsOf(band, gaps)
-            band = mutableListOf()
+        val out = mutableListOf<List<List<Atom>>>()
+        bands.forEachIndexed { index, band ->
+            if (band.isEmpty()) return@forEachIndexed
+            out += if (gaps[index].isEmpty()) listOf(band.map { ordered(it) }) else columnsOf(band, gaps[index])
         }
+        return out
+    }
+
+    private fun bandsOf(rows: List<List<Pair<Atom, Box>>>): List<MutableList<List<Pair<Atom, Box>>>> {
+        val bands = mutableListOf<MutableList<List<Pair<Atom, Box>>>>()
+        var band = mutableListOf<List<Pair<Atom, Box>>>()
 
         rows.forEach { row ->
             // Полоса живёт, пока столбцы в ней различимы. Строка во всю ширину — шапка,
@@ -125,12 +131,85 @@ class AtomLayer(
             when {
                 band.isEmpty() -> band = mutableListOf(row)
                 columnGaps(grown).isNotEmpty() -> band = grown.toMutableList()
-                else -> { flush(); band = mutableListOf(row) }
+                else -> { bands += band; band = mutableListOf(row) }
             }
         }
-        flush()
+        if (band.isNotEmpty()) bands += band
 
-        return out
+        return bands
+    }
+
+    /**
+     * Подпись колонки возвращается своей колонке (#768).
+     *
+     * Строка над полосой просвета не образует: подпереть столбец ей нечем, и она выпадает
+     * отдельным блоком. Из-за этого «КОМУ:» на снятой с наклоном наклейке оказывалась выше
+     * всех столбцов, модель читала её сверху вниз и приписывала левому — отправитель и
+     * получатель менялись местами.
+     *
+     * Полоса забирает такую строку, если строка ложится на её столбцы: ни одно слово не
+     * стоит поперёк просвета. Дальше строку разбирают те же столбцы — «ВІД:» уходит налево,
+     * «КОМУ:» направо. Шапка страницы этим и отсекается: она идёт поперёк просвета.
+     */
+    private fun bindCaptions(
+        bands: List<MutableList<List<Pair<Atom, Box>>>>,
+        gaps: List<List<ClosedFloatingPointRange<Float>>>,
+    ) {
+        bands.indices.forEach { index ->
+            val columns = gaps[index]
+            if (columns.isEmpty()) return@forEach
+            val line = lineHeight(bands[index].flatten())
+            if (line <= 0f) return@forEach
+
+            var above = index - 1
+            while (above >= 0 && bands[above].size == 1 && gaps[above].isEmpty()) {
+                val caption = bands[above].single()
+                if (!sitsInColumns(caption, columns, line)) break
+                if (!closeAbove(caption, bands[index].first(), line)) break
+                bands[above].clear()
+                bands[index].add(0, caption)
+                above--
+            }
+        }
+    }
+
+    /**
+     * Строка ложится на столбцы полосы: ни одно её слово не стоит поперёк просвета.
+     *
+     * Судят только слова. На настоящей наклейке поперёк просвета висела волосяная черта в три
+     * точки шириной при высоте строки — сгиб бумаги, прочитанный уверенно (0.83). По ней
+     * строка «КОМУ:» и оставалась без своей колонки: уверенность такую черту не отсеивает,
+     * а ширина отсеивает.
+     */
+    private fun sitsInColumns(
+        row: List<Pair<Atom, Box>>,
+        gaps: List<ClosedFloatingPointRange<Float>>,
+        line: Float,
+    ): Boolean {
+        val words = row.filter { (atom, box) ->
+            atom.confidence >= CONFIDENT_ENOUGH && box.width >= line * WORD_MIN_WIDTH
+        }
+        if (words.isEmpty()) return false
+
+        return words.none { (_, box) ->
+            gaps.any { gap -> box.right > gap.start && box.left < gap.endInclusive }
+        }
+    }
+
+    /** Подпись стоит вплотную над своей полосой, а не где-то выше по странице. */
+    private fun closeAbove(
+        caption: List<Pair<Atom, Box>>,
+        top: List<Pair<Atom, Box>>,
+        line: Float,
+    ): Boolean =
+        top.minOf { (_, box) -> box.top } - caption.maxOf { (_, box) -> box.bottom } <= line * CAPTION_REACH
+
+    /** Высота строки полосы — по уверенно прочитанным словам, чтобы её не занижали крапины. */
+    private fun lineHeight(placed: List<Pair<Atom, Box>>): Float {
+        val heights = placed.filter { (atom, _) -> atom.confidence >= CONFIDENT_ENOUGH }
+            .map { (_, box) -> box.height }
+            .sorted()
+        return if (heights.isEmpty()) 0f else heights[heights.size / 2]
     }
 
     /** Сырые строки: слова на одной высоте. Столбцы здесь ещё не различаются. */
@@ -262,5 +341,11 @@ class AtomLayer(
 
         /** Обрывок распознавания — не слово страницы и не решает, где проходит столбец. */
         const val CONFIDENT_ENOUGH = 0.6f
+
+        /** Подпись стоит вплотную над своей полосой: дальше это уже другая часть страницы. */
+        const val CAPTION_REACH = 1.5f
+
+        /** Волосяная черта поперёк просвета — сгиб или линейка бланка, а не слово страницы. */
+        const val WORD_MIN_WIDTH = 0.15f
     }
 }
