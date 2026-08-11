@@ -21,8 +21,11 @@ class ReadQrCapability @Inject constructor() : Capability {
     override val id = ID
     override val icon = "qr-scan"
     override val meta = CapabilityMeta(priority = 22)
-    override fun label(state: ObjectState) = "Считать QR"
-    override fun accepts(state: ObjectState) = state.has(Feature.HAS_QR)
+    /** Код называется тем, что он есть: «Считать QR» на QR, «Скопировать цифры кода» на штрихкоде. */
+    override fun label(state: ObjectState) =
+        if (state.has(Feature.HAS_BARCODE) && !state.has(Feature.HAS_QR)) "Скопировать цифры кода" else "Считать QR"
+
+    override fun accepts(state: ObjectState) = state.has(Feature.HAS_QR) || state.has(Feature.HAS_BARCODE)
     override fun produces(state: ObjectState) = ObjectState(com.point.core.model.ObjectKind.TEXT)
     override fun intents(state: ObjectState) = setOf(Intent.UNDERSTAND)
 
@@ -38,16 +41,26 @@ class ReadQrRealizer @Inject constructor(
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
             runCatching {
-                val text = reader.decode(input.uri.value)
+                val found = reader.scan(input.uri.value)
+                val text = found?.text
                 if (text.isNullOrBlank()) {
-                    ActionResult.Failure("QR-код не распознан", recoverable = true)
+                    // Не прочитан — так и сказано, без догадок (приёмка #445.3).
+                    ActionResult.Failure(
+                        if (input.state.has(Feature.HAS_BARCODE)) "Код не прочитан" else "QR-код не распознан",
+                        recoverable = true,
+                    )
                 } else {
                     val ref = store.newScratchFile("txt")
                     File(ref.value).writeText(text)
                     ActionResult.Success(
-                        ResultObject(com.point.core.model.ObjectKind.TEXT, "text/plain", ref, mapOf("op" to "read-qr")),
+                        ResultObject(
+                            com.point.core.model.ObjectKind.TEXT,
+                            "text/plain",
+                            ref,
+                            mapOf("op" to "read-qr"),
+                        ),
                     )
                 }
-            }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось прочитать QR", recoverable = true) }
+            }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось прочитать код", recoverable = true) }
         }
 }
