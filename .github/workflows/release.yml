@@ -60,8 +60,11 @@ jobs:
 
       # ТОЛЬКО release-вариант. assembleDebug в этом workflow не существует; юнит-тесты
       # компилируют debug-классы, но APK из них не рождается — ворота ниже это сторожат.
+      # AAB собирается вместе с APK: в Play уезжает именно он, и он обязан пройти те же
+      # ворота. Собранный мимо поезда бандл — ровно тот класс аварии, от которого поезд и
+      # заведён (v0.2.0: к релизу руками приложили не то, что собирали).
       - name: Тесты + сборка release
-        run: ./gradlew test :app:assembleRelease --no-daemon --stacktrace
+        run: ./gradlew test :app:assembleRelease :app:bundleRelease --no-daemon --stacktrace
 
       - name: Ворота происхождения — единственный APK собран release-вариантом
         run: |
@@ -75,6 +78,17 @@ jobs:
           fi
           apk=app/build/outputs/apk/release/app-release.apk
           [ -f "$apk" ] || { echo "::error::Нет $apk — release-сборка не дала APK."; exit 1; }
+          aab=app/build/outputs/bundle/release/app-release.aab
+          [ -f "$aab" ] || { echo "::error::Нет $aab — в Play выкладывать нечего."; exit 1; }
+          # Манифест бандла — другой формат, aapt его не читает; имена компонентов лежат в нём
+          # строками. Отладочная поверхность, доехавшая до Play, страшнее её же в APK.
+          unzip -qo "$aab" base/manifest/AndroidManifest.xml -d "$RUNNER_TEMP/aab" || {
+            echo "::error::Манифест бандла не читается — непроверенное не публикуется."; exit 1; }
+          if strings "$RUNNER_TEMP/aab/base/manifest/AndroidManifest.xml" |
+              grep -qE 'SandboxActivity|PrintProbeActivity|debuggable'; then
+            echo "::error::В бандле отладочная поверхность или debuggable — в Play такое нельзя."
+            exit 1
+          fi
           # Debug-вариант выдаёт себя флагом debuggable в манифесте — проверяем им,
           # а не именем файла. Нет инструмента — падаем: «не проверили» ≠ «чисто».
           tool=$(ls "$ANDROID_HOME"/build-tools/*/aapt2 "$ANDROID_HOME"/build-tools/*/aapt 2>/dev/null | sort | tail -1)
@@ -91,8 +105,11 @@ jobs:
       # (--content-only: файл НЕ публикуется, поэтому правило подписи к нему не
       # применяется — на чистом раннере keystore нет, и release-APK по построению
       # подписан fallback-ключом debug, см. app/build.gradle.kts).
-      - name: Скан секретов в release-APK (последний рубеж, не основная защита)
-        run: bash tools/release-scan.sh --content-only app/build/outputs/apk/release/app-release.apk
+      - name: Скан секретов в release-APK и AAB (последний рубеж, не основная защита)
+        run: |
+          bash tools/release-scan.sh --content-only \
+            app/build/outputs/apk/release/app-release.apk \
+            app/build/outputs/bundle/release/app-release.aab
 
       # НЕ ассет релиза: подпись у него отладочная (см. выше), публиковать такое нельзя —
       # подписанный APK владелец собирает локально по чек-листу черновика. «debug-signed»
@@ -103,6 +120,16 @@ jobs:
         with:
           name: Point-apk-release-ci-debug-signed-DO-NOT-PUBLISH
           path: app/build/outputs/apk/release/app-release.apk
+          retention-days: 14
+
+      # Тоже НЕ для выкладывания: подпись отладочная, а в Play уходит бандл, подписанный
+      # ключом загрузки. Здесь он живёт затем, чтобы владелец мог сверить свой локальный
+      # бандл с тем, что собрал чистый раннер.
+      - name: Сохранить AAB артефактом прогона
+        uses: actions/upload-artifact@v4
+        with:
+          name: Point-aab-release-ci-debug-signed-DO-NOT-PUBLISH
+          path: app/build/outputs/bundle/release/app-release.aab
           retention-days: 14
 
   desktop:
@@ -219,7 +246,12 @@ jobs:
           - [ ] MSI из CI собран без RELAY_* (чистый раннер): релей в нём выключен, LAN работает.
                 Если релиз должен нести релей — собери MSI локально и прогони скан, либо заведи
                 RELAY_* в секреты репозитория (решение владельца).
-          - [ ] Смоук release-сборки на устройстве — ворота поезда A (docs/RELEASE-PLAN.md).
+          - [ ] Play (закрытый тест): бандл собран и подписан локально ключом загрузки —
+                `./gradlew :app:bundleRelease`, затем
+                `bash tools/release-scan.sh app/build/outputs/bundle/release/app-release.aab`,
+                затем `bash tools/release-gate.sh --no-build` — PASS.
+                В Play Console загружается ТОЛЬКО этот бандл; APK из ассетов релиза туда не идёт.
+          - [ ] Смоук release-сборки на устройстве.
           - [ ] Заметки релиза написаны (что нового, что изменилось).
           EOF
           gh release create "$tag" --draft --verify-tag \
