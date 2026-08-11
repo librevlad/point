@@ -189,6 +189,84 @@ def link_gone_page() -> str:
     )
 
 
+def drop_text_page(name: str, text: str, download_url: str) -> str:
+    """
+    Присланный текст читается прямо со страницы (#780-класс).
+
+    Текст уходил вложением: человек получал ссылку, браузер скачивал файл, и прочитать
+    присланное можно было только открыв его чем-то ещё. Point держал текст в руках и отдавал
+    в худшей форме. Файл никуда не делся — он рядом, для тех, кому нужен именно файл.
+    """
+    return page(
+        name or "Текст",
+        "<h1>%s</h1>"
+        '<textarea id="t" readonly rows="16">%s</textarea>'
+        '<p><button id="c" type="button">Скопировать</button> '
+        '<a href="%s" download>Скачать файлом</a></p>'
+        "<small>Ссылка живёт сутки.</small>"
+        % (html.escape(name or "Текст"), html.escape(text), html.escape(download_url)),
+        head="<script>"
+        "document.addEventListener('DOMContentLoaded',function(){"
+        "var b=document.getElementById('c'),t=document.getElementById('t');"
+        "b.addEventListener('click',function(){"
+        "t.select();navigator.clipboard.writeText(t.value).then(function(){b.textContent='Скопировано'},"
+        "function(){document.execCommand('copy');b.textContent='Скопировано'})})})"
+        "</script>",
+    )
+
+
+def drop_contact_page(name: str, fields: list[tuple[str, str]], download_url: str) -> str:
+    """
+    Присланный контакт показан контактом, а не файлом (#737).
+
+    Человеку по ссылке приходило вложение `.vcf`: чтобы узнать хотя бы имя, его надо было
+    скачать и чем-то открыть. Имя, телефон и почта видны сразу; файл рядом — для того, кто
+    хочет положить контакт в телефонную книжку.
+    """
+    rows = "".join(
+        "<p><b>%s</b><br>%s</p>" % (html.escape(label), html.escape(value))
+        for label, value in fields
+    )
+    return page(
+        name or "Контакт",
+        "<h1>%s</h1>%s"
+        '<p><a href="%s" download>Добавить в контакты</a></p>'
+        "<small>Ссылка живёт сутки.</small>"
+        % (html.escape(name or "Контакт"), rows, html.escape(download_url)),
+    )
+
+
+def drop_place_page(name: str, coordinates: str, download_url: str) -> str:
+    """
+    Присланное место открывается картой, а не скачивается (#737).
+
+    Куда именно идти — вопрос человека и его телефона, поэтому здесь ссылка `geo:`, которую
+    подхватит установленная карта, а не чужой сервис, выбранный за него.
+    """
+    return page(
+        name or "Место",
+        "<h1>%s</h1>"
+        '<p><a href="geo:%s">Открыть в картах</a></p>'
+        "<p>%s</p>"
+        '<p><a href="%s" download>Скачать файлом</a></p>'
+        "<small>Ссылка живёт сутки.</small>"
+        % (
+            html.escape(name or "Место"),
+            html.escape(coordinates),
+            html.escape(coordinates),
+            html.escape(download_url),
+        ),
+    )
+
+
+def drop_gone_page() -> str:
+    return page(
+        "Файла больше нет",
+        "<h1>Файла больше нет</h1>"
+        "<p>Присланное живёт сутки. Попросите новую ссылку у того, кто её дал.</p>",
+    )
+
+
 def too_big_page(reason: str) -> str:
     return page(
         "Не поместилось",
