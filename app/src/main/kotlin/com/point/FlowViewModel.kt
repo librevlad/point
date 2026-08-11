@@ -1017,15 +1017,20 @@ class FlowViewModel @Inject constructor(
                     _ui.update { s -> s.copy(chat = s.chat?.copy(pending = false), chatOpen = false) }
                     pushFrame(store.put(result.result), target, null)
                 } else {
-                    appendChatAssistant((result as? ActionResult.Failure)?.reason ?: "Не удалось создать документ")
+                    appendChatAssistant(
+                        (result as? ActionResult.Failure)?.reason ?: "Не удалось создать документ",
+                        failed = true,
+                    )
                 }
             } else {
+                var failed = false
                 val reply = runCatching { aiChatResponder.reply(obj, history, message) }
                     .getOrElse {
                         if (it is kotlinx.coroutines.CancellationException) throw it
+                        failed = true
                         "Не получилось ответить: ${it.message ?: "ошибка"}"
                     }
-                appendChatAssistant(reply)
+                appendChatAssistant(reply, failed = failed)
             }
         }
     }
@@ -1072,13 +1077,13 @@ class FlowViewModel @Inject constructor(
         )
     }
 
-    private fun appendChatAssistant(text: String) {
+    private fun appendChatAssistant(text: String, failed: Boolean = false) {
         chatJob = null
         _ui.update { s ->
             val c = s.chat ?: return@update s
             s.copy(
                 chat = c.copy(
-                    messages = c.messages + ChatMessage(ChatRole.ASSISTANT, text),
+                    messages = c.messages + ChatMessage(ChatRole.ASSISTANT, text, failed = failed),
                     pending = false,
                     notice = null,
                 ),

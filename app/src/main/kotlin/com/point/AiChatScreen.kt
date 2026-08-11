@@ -160,9 +160,19 @@ fun AiChatScreen(
     }
 }
 
+/**
+ * Забрать можно ответ, а не исход операции (#793, решение владельца 11.08.2026).
+ *
+ * Офлайн-прогон: вопрос не прошёл, в чате осталось «Не получилось ответить: Модель недоступна»
+ * — и «Забрать ответ» рождало из этой фразы объект «Текст · Ответ AI», который дальше можно
+ * было понять, перевести и отправить на компьютер. Неудача — свойство операции и знанием об
+ * объекте не становится.
+ */
 fun takeableAnswer(chat: ChatState): String? {
     if (chat.pending) return null
-    return chat.messages.lastOrNull { it.role == ChatRole.ASSISTANT }?.text?.takeIf { it.isNotBlank() }
+    val last = chat.messages.lastOrNull { it.role == ChatRole.ASSISTANT } ?: return null
+    if (last.failed) return null
+    return last.text.takeIf { it.isNotBlank() }
 }
 
 @Composable
