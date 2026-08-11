@@ -137,3 +137,20 @@ def test_свежее_обход_не_трогает(point, tmp_path):
     point.as_device(me["device_token"], "POST", "/u/open")
 
     assert point.client.get("/d/" + drop_id).status_code == 200
+
+
+def test_ящик_закрывается_по_просьбе_и_чужой_не_закрыть(point):
+    """Дверь закрывается, когда в неё больше не ждут (#729)."""
+    me = point.sign_in(sub="closing")
+    box = point.as_device(me["device_token"], "POST", "/u/open").json()["box"]
+
+    stranger = point.sign_in(sub="stranger")
+    refused = point.as_device(stranger["device_token"], "POST", "/u/" + box + "/close")
+    assert refused.json()["closed"] is False
+    assert point.client.get("/u/" + box).status_code == 200
+
+    closed = point.as_device(me["device_token"], "POST", "/u/" + box + "/close")
+    assert closed.json()["closed"] is True
+
+    # Ссылка перестала работать для того, кому её отдали.
+    assert point.client.get("/u/" + box).status_code == 404

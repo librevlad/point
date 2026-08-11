@@ -44,11 +44,13 @@ class ReceiveOnPc(
     fun start(onFailure: (String) -> Unit) {
         if (work?.isActive == true) return
         work = scope.launch(Dispatchers.IO) {
-            val box = inbox.open()
-            if (box == null) {
-                onFailure("Ссылку выдать не удалось — проверьте вход в аккаунт и связь")
+            // Отказ называет свою причину словами сервера (#729), а не одной фразой на все беды.
+            val opened = inbox.open()
+            if (opened !is com.point.core.flow.DropOpen.Opened) {
+                onFailure((opened as com.point.core.flow.DropOpen.Refused).reason)
                 return@launch
             }
+            val box = opened.box
             show(Waiting(box.link, receiveWaitStatus(0)))
             wait(box)
         }

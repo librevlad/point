@@ -91,3 +91,30 @@ def test_уход_человека_стирает_его_байты(root):
     assert mailbox.drop_find(root, did) is None
     # Соседа это не задело.
     assert mailbox.pull(root, "u2", "dev1") is not None
+
+
+def test_ящик_закрывается_и_освобождает_предел(root):
+    """
+    Пять открытий экрана «Принять файл» за сутки не должны выключать приём до утра (#729).
+
+    Ящик убирала только суточная уборка, поэтому предел выбирался обычным использованием,
+    а не злоупотреблением.
+    """
+    boxes = [mailbox.inbox_open(root, "u1") for _ in range(mailbox.MAX_INBOXES)]
+    with pytest.raises(mailbox.Full):
+        mailbox.inbox_open(root, "u1")
+
+    assert mailbox.inbox_close(root, "u1", boxes[0]) is True
+    assert mailbox.inbox_find(root, boxes[0]) is None
+
+    # Место освободилось — дверь снова открывается.
+    mailbox.inbox_open(root, "u1")
+
+
+def test_закрыть_можно_только_свой_ящик(root):
+    box = mailbox.inbox_open(root, "u1")
+
+    assert mailbox.inbox_close(root, "u2", box) is False
+    assert mailbox.inbox_find(root, box) is not None
+
+    assert mailbox.inbox_close(root, "u1", "нет-такого") is False

@@ -80,7 +80,8 @@ class SourceSaysThereIsNoNetworkTest {
     private companion object {
 
         val SilentInbox = object : DropInbox {
-            override suspend fun open(): DropInboxBox? = null
+            override suspend fun open(): com.point.core.flow.DropOpen =
+                com.point.core.flow.DropOpen.Refused("не нужен этому тесту")
             override suspend fun await(box: DropInboxBox, target: (name: String) -> String): DropWait =
                 DropWait.Empty
 

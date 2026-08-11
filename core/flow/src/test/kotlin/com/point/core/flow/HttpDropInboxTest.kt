@@ -17,8 +17,10 @@ class HttpDropInboxTest {
         HttpDropInbox({ "https://127.0.0.1:1" }, { pass }, network)
 
     @Test
-    fun `нет сети — ссылку не готовим, соединение не открываем`() = runTest {
-        assertNull("без сети ссылки быть не должно", inbox(NetworkAvailability { false }).open())
+    fun `нет сети — ссылку не готовим, и отказ говорит именно про сеть`() = runTest {
+        val outcome = inbox(NetworkAvailability { false }).open()
+
+        assertEquals(DropOpen.Refused(NO_NETWORK_TEXT), outcome)
     }
 
     @Test
@@ -31,7 +33,21 @@ class HttpDropInboxTest {
 
     @Test
     fun `устройство не в круге — наружу не ходим вовсе`() = runTest {
-        assertNull(inbox(NetworkAvailability { true }, pass = null).open())
+        val outcome = inbox(NetworkAvailability { true }, pass = null).open()
+
+        assertTrue("отказ обязан назвать причину, а не молчать", outcome is DropOpen.Refused)
+    }
+
+    /**
+     * Ящик закрывается тем же адресом, каким сервер его закрывает (#729). Разъедутся —
+     * дверь останется открытой, и предел в пять ссылок выберется обычным приёмом.
+     */
+    @Test
+    fun `закрытие ящика есть в контракте приёма`() {
+        assertTrue(
+            "без закрытия ящик убирает только суточная уборка",
+            "close" in HttpDropInbox::class.java.methods.map { it.name },
+        )
     }
 
     @Test

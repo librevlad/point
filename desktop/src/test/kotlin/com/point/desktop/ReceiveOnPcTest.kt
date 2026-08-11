@@ -32,7 +32,13 @@ class ReceiveOnPcTest {
         var acked: String? = null
         var awaits = 0
 
-        override suspend fun open(): DropInboxBox? = opened
+        var closed = 0
+
+        override suspend fun open(): com.point.core.flow.DropOpen =
+            opened?.let { com.point.core.flow.DropOpen.Opened(it) }
+                ?: com.point.core.flow.DropOpen.Refused("сервер не дал ссылку")
+
+        override suspend fun close(box: DropInboxBox) { closed++ }
 
         override suspend fun await(box: DropInboxBox, target: (name: String) -> String): DropWait {
             awaits++
@@ -109,7 +115,10 @@ class ReceiveOnPcTest {
         pc.start { why -> said = why }
 
         waitUntil("отказ не назван") { said != null }
-        assertTrue(said!!.contains("Ссылку выдать не удалось"))
+
+        // Причину называет сервер, а не экран одной фразой на все беды (#729): «ящиков
+        // слишком много», «устройство не в аккаунте» и «нет связи» — три разных положения.
+        assertEquals("сервер не дал ссылку", said)
         assertNull(pc.waiting.value)
     }
 

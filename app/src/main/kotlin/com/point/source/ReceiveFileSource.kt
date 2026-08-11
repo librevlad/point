@@ -37,7 +37,12 @@ class ReceiveFileSource @Inject constructor(
         val box = data?.getStringExtra(ReceiveActivity.EXTRA_BOX)
         val fileId = data?.getStringExtra(ReceiveActivity.EXTRA_FILE_ID)
         if (!box.isNullOrBlank() && !fileId.isNullOrBlank()) {
-            runCatching { inbox.ack(DropInboxBox(box, ""), fileId) }
+            val opened = DropInboxBox(box, "")
+            runCatching { inbox.ack(opened, fileId) }
+
+            // Файл дошёл и подтверждён — дверь больше не нужна (#729). Прежде её убирала
+            // только суточная уборка, и предел в пять ссылок выбирался обычным приёмом.
+            runCatching { inbox.close(opened) }
         }
         return produced
     }
