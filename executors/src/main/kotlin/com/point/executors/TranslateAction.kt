@@ -11,6 +11,7 @@ import com.point.core.flow.reportStage
 import com.point.core.flow.labelNeedingKey
 import com.point.core.model.ActionResult
 import com.point.core.model.CapabilityId
+import com.point.core.model.Feature
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
@@ -32,12 +33,18 @@ class TranslateCapability @Inject constructor(
     override val icon = "translate"
     override val meta = CapabilityMeta(latency = Latency.SLOW, network = true, auth = true)
     override fun label(state: ObjectState) = labelNeedingKey("Перевести", keys.keySet())
+    // Переводить есть что там, где есть текст, — а не там, где объект нужного вида (#792):
+    // прочитанный снимок это объект с текстом, и требовать распознать его второй раз незачем.
     override fun accepts(state: ObjectState) =
-        state.kind in setOf(ObjectKind.TEXT, ObjectKind.PDF)
+        state.kind in setOf(ObjectKind.TEXT, ObjectKind.PDF) || state.has(Feature.HAS_TEXT)
     override fun produces(state: ObjectState) = ObjectState(ObjectKind.TEXT)
 
     override fun missing(state: ObjectState) =
-        if (state.kind == ObjectKind.IMAGE) "сначала распознайте текст" else null
+        if (state.kind == ObjectKind.IMAGE && !state.has(Feature.HAS_TEXT)) {
+            "сначала распознайте текст"
+        } else {
+            null
+        }
 
     companion object { val ID = CapabilityId("translate") }
 }

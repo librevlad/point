@@ -2073,11 +2073,21 @@ class FlowViewModel @Inject constructor(
         )
     }
 
+    /**
+     * Прочитанное показывается человеку, чем бы объект ни был (#792, решение владельца
+     * 11.08.2026: «текст виден»).
+     *
+     * Раньше превью грузилось только у текстового объекта, поэтому снимок, прочитанный
+     * фоновым исследованием, молчал: список действий уже знал про текст, а человек — нет и
+     * проверить прочитанное не мог.
+     */
     private fun loadTextPreviewIfText(obj: PointObject) {
-        if (obj.state.kind != ObjectKind.TEXT) return
+        val readText = obj.metadata[com.point.core.flow.META_OCR_TEXT_REF]?.takeIf { it.isNotBlank() }
+        if (obj.state.kind != ObjectKind.TEXT && readText == null) return
         viewModelScope.launch {
             val limit = com.point.core.ui.TEXT_PREVIEW_LOAD_LIMIT
-            val raw = runCatching { store.readText(obj, limit = limit) }.getOrDefault("")
+            val source = readText?.let { obj.copy(uri = com.point.core.model.ScratchRef(it)) } ?: obj
+            val raw = runCatching { store.readText(source, limit = limit) }.getOrDefault("")
             if (raw.isBlank()) return@launch
             val text = sanitizeTextPreview(raw)
 
@@ -2257,6 +2267,10 @@ class FlowViewModel @Inject constructor(
         )
         stack[index] = refreshed
         _ui.update { if (it.frame?.obj?.id == source.id) it.copy(frame = refreshed) else it }
+
+        // Текст приходит обогащением, а не при открытии кадра: снимок читается фоново уже
+        // после того, как экран показан (#792).
+        if (refreshed.textPreview == null) loadTextPreviewIfText(enriched)
         if (objChanged || graphChanged) {
             persistJourney()
         }
