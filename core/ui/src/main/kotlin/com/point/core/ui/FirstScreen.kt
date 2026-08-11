@@ -81,6 +81,7 @@ import com.point.core.model.LatentBubble
 import com.point.core.model.PointObject
 import com.point.core.model.RelationType
 import com.point.core.model.Relation
+import com.point.core.model.ValueRef
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -230,7 +231,7 @@ fun FirstScreen(
         } else {
 
             ObjectActions(
-                sections = actionSections(bubbles, useFirst = obj.uri is com.point.core.model.ValueRef),
+                sections = actionSections(bubbles, useFirst = obj.uri is ValueRef),
                 working = working,
                 pinned = pinned,
                 onBubble = onBubble,
