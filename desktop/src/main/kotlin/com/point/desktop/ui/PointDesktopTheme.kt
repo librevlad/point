@@ -2,9 +2,9 @@ package com.point.desktop.ui
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
-import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import com.point.core.ui.PointDarkColors
 import com.point.core.ui.PointPalette
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -116,18 +116,7 @@ object PointType {
 @Composable
 fun PointDesktopTheme(content: @Composable () -> Unit) {
     MaterialTheme(
-        colorScheme = darkColorScheme(
-            primary = PointColors.violet,
-            onPrimary = PointColors.text,
-            secondary = PointColors.cyan,
-            background = PointColors.window,
-            onBackground = PointColors.text,
-            surface = PointColors.surface,
-            onSurface = PointColors.text,
-            surfaceVariant = PointColors.surfaceDeep,
-            onSurfaceVariant = PointColors.muted,
-            outline = PointColors.border,
-        ),
+        colorScheme = PointDarkColors,
         typography = Typography(
             headlineSmall = PointType.display,
             titleMedium = PointType.title,
