@@ -78,7 +78,11 @@ fun Modifier.portalCard(
 
 fun Modifier.portalPrimary(
     shape: Shape = PortalCardShape,
-    elevation: Dp = 20.dp,
+
+    // Главное действие — первая строка списка, а не отдельная кнопка над ним (#879).
+    // Тень в 20 dp делала из него баннер: он читался как призыв к действию из лендинга,
+    // а не как часть общей системы действий.
+    elevation: Dp = 10.dp,
 ): Modifier = this
     .then(
         if (elevation > 0.dp) {
@@ -175,13 +179,17 @@ fun PortalRow(
 
     val labelColor = if (primary) Color.White else MaterialTheme.colorScheme.onSurface
     val subColor = if (primary) Color.White.copy(alpha = 0.80f) else MaterialTheme.colorScheme.onSurfaceVariant
-    val chevronColor = if (primary) Color.White.copy(alpha = 0.85f) else MaterialTheme.colorScheme.onSurfaceVariant
+    val chevronColor = if (primary) {
+        Color.White.copy(alpha = 0.7f)
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
+    }
 
     Box(
         modifier = body.combinedClickable(enabled = enabled, onClick = onClick, onLongClick = onLongClick),
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = if (primary) 16.dp else 13.dp),
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 13.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp),
         ) {
@@ -213,7 +221,7 @@ fun PortalRow(
                     imageVector = Icons.Filled.KeyboardArrowRight,
                     contentDescription = null,
                     tint = chevronColor,
-                    modifier = Modifier.size(20.dp),
+                    modifier = Modifier.size(18.dp),
                 )
             }
         }
@@ -248,16 +256,21 @@ fun PortalDoor(
 }
 
 @Composable
+/**
+ * Заголовок группы — свой уровень типографики (#879). Раньше он был набран так же тихо,
+ * как вторичный текст внутри строк, и терялся между ними: список читался как набор
+ * разрозненных карточек, а не как «заголовок → однородные строки».
+ */
 fun SectionLabel(
     text: String,
     modifier: Modifier = Modifier,
-    color: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    color: Color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.82f),
 ) {
     Text(
         text = text.uppercase(),
-        style = MaterialTheme.typography.labelMedium,
+        style = MaterialTheme.typography.labelLarge,
         fontWeight = FontWeight.SemiBold,
-        letterSpacing = 1.5.sp,
+        letterSpacing = 1.3.sp,
         color = color,
         modifier = modifier,
     )

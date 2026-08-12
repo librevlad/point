@@ -809,11 +809,13 @@ private fun ObjectHeader(
             overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.Center,
         )
+        // Вид крупно, имя тише, мера самым тихим (#879). Раньше три строки шли почти одним
+        // весом, и глаз не знал, что здесь главное.
         verdict.subline?.let { sub ->
             Text(
                 text = sub,
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.78f),
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center,
@@ -824,7 +826,7 @@ private fun ObjectHeader(
             Text(
                 text = measure,
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.62f),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center,
