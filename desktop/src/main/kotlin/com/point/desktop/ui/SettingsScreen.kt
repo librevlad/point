@@ -216,6 +216,10 @@ fun SettingsPrivacy(
                 subtitle = it.what,
                 onClick = { onPickLevel(it) },
                 primary = it == level,
+                // Выбор, а не переход: шеврон обещал бы следующий экран, которого нет.
+                // Разницу между режимами надо прочитать целиком — она про приватность.
+                chevron = false,
+                subtitleMaxLines = 4,
             )
         }
 

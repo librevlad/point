@@ -43,8 +43,10 @@ import java.time.ZoneId
  */
 @Composable
 internal fun PortalPreview(item: InboxItem) {
-    val hasPreview = item.obj.state.kind == ObjectKind.TEXT || item.obj.state.kind == ObjectKind.IMAGE
-    if (hasPreview) {
+    // Снимок — сам себе опознание, его видно наверху. Текст — нет: четырнадцать строк
+    // сырого текста занимали весь экран, а вид, знание и действия уезжали под сгиб. Текст
+    // теперь стоит там же, где на телефоне, — ниже знания (#898).
+    if (item.obj.state.kind == ObjectKind.IMAGE) {
         Preview(item)
     } else {
         // Кольцо было пустым, и объект узнавался только по имени файла в шапке (#879).
@@ -138,7 +140,8 @@ internal fun Preview(item: InboxItem) {
                 Text(
                     text.take(PREVIEW_CHARS),
                     style = PointType.body.copy(fontSize = PointType.small.fontSize),
-                    maxLines = 14,
+                    // В окне 475 px четырнадцать строк — это весь экран (#898).
+                    maxLines = 6,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.fillMaxWidth()
                         .clip(RoundedCornerShape(12.dp))

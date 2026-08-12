@@ -153,6 +153,8 @@ fun PortalRow(
     primary: Boolean = false,
     enabled: Boolean = true,
     appearIndex: Int = 0,
+    chevron: Boolean = true,
+    subtitleMaxLines: Int = 2,
     trailing: (@Composable () -> Unit)? = null,
 ) {
     val presence = remember { Animatable(0f) }
@@ -208,14 +210,14 @@ fun PortalRow(
                     Text(
                         text = subtitle,
                         style = PointType.small.copy(color = subColor),
-                        maxLines = 2,
+                        maxLines = subtitleMaxLines,
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
             }
             if (trailing != null) {
                 trailing()
-            } else {
+            } else if (chevron) {
                 // Шеврон говорит, что за строкой продолжение, а не мгновенный результат.
                 // Приглушён: повторённый десять раз в полную силу он становится шумом (#879).
                 Text(
