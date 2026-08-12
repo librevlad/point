@@ -54,16 +54,6 @@ fun readingSweepSpecFor(kind: ObjectKind): ReadingSweepSpec = when (kind) {
 fun auraLevel(factCount: Int): Float =
     if (factCount <= 0) 0f else minOf(1f, 0.55f + 0.15f * (factCount - 1))
 
-data class DriftSpec(val amplitudeDp: Float, val periodMs: Int, val phaseRad: Float)
-
-fun driftSpecFor(index: Int): DriftSpec = DriftSpec(
-    amplitudeDp = 1.4f + (index % 3) * 0.4f,
-    periodMs = 2_900 + (index % 5) * 340,
-    phaseRad = (index * 0.9f) % (2f * Math.PI.toFloat()),
-)
-
-const val BUBBLE_DEPART_MS = 180
-
 @Composable
 fun rememberMotionEnabled(): Boolean {
     val context = LocalContext.current
