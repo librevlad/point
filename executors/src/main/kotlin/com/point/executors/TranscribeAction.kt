@@ -16,7 +16,7 @@ import com.point.core.flow.labelNeedingKey
 import com.point.core.flow.listeningStage
 import com.point.core.flow.reportStage
 import com.point.core.flow.speechKeyRefusal
-import com.point.core.flow.transcriptMarkdown
+import com.point.core.flow.transcriptFileText
 import com.point.core.model.ActionResult
 import com.point.core.model.CapabilityId
 import com.point.core.model.ObjectKind
@@ -80,12 +80,14 @@ class TranscribeRealizer @Inject constructor(
                     ActionResult.Failure("В записи не слышно речи", recoverable = false)
 
                 is Transcription.Heard -> runCatching {
-                    val ref = store.newScratchFile("md")
-                    File(ref.value).writeText(transcriptMarkdown(heard))
+                    // Расшифровка — обычный текст, а не размеченный документ (#873):
+                    // разделов в ней больше нет, и открывается она проще.
+                    val ref = store.newScratchFile("txt")
+                    File(ref.value).writeText(transcriptFileText(heard))
                     ActionResult.Success(
                         ResultObject(
                             ObjectKind.TEXT,
-                            "text/markdown",
+                            "text/plain",
                             ref,
                             buildMap {
                                 put("op", "transcribe")
