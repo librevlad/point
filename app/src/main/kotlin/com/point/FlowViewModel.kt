@@ -576,7 +576,14 @@ class FlowViewModel @Inject constructor(
             val realizer = runCatching { resolver.realizerFor(bubble.capabilityId, top.state) }.getOrNull()
             if (!owns(voice)) return@trackWork
             if (realizer == null) {
-                _ui.update { it.copy(busy = null, busyStage = null, message = "Действие недоступно", messageOutcome = Outcome.FAILED) }
+                _ui.update {
+                    it.copy(
+                        busy = null,
+                        busyStage = null,
+                        message = com.point.core.flow.NO_WAY_HERE_REASON,
+                        messageOutcome = Outcome.FAILED,
+                    )
+                }
                 return@trackWork
             }
             val preview = runCatching { realizer.preview(top) }.getOrNull()

@@ -953,7 +953,7 @@ class FlowViewModelTest {
         vm.onBubble(bubble()); advanceUntilIdle()
 
         assertEquals(Outcome.FAILED, vm.ui.value.messageOutcome)
-        assertEquals("Действие недоступно", vm.ui.value.message)
+        assertEquals(com.point.core.flow.NO_WAY_HERE_REASON, vm.ui.value.message)
         assertEquals(Outcome.FAILED, vm.ui.value.messageOutcome)
         assertNull(vm.ui.value.busy)
     }
@@ -3734,7 +3734,7 @@ private class FakeResolver : Resolver {
     override fun leavesDevice(capabilityId: CapabilityId): Boolean = leavesDevice
 
     override fun realizerFor(capabilityId: CapabilityId): Realizer {
-        if (noRealizer) error("No realizer for capability=${capabilityId.value}")
+        if (noRealizer) error(com.point.core.flow.NO_WAY_HERE_REASON)
         return object : Realizer {
             override val capabilityId = capabilityId
             override suspend fun perform(input: PointObject, amendment: String?): ActionResult {

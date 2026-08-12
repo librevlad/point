@@ -1,7 +1,7 @@
 # Список исключений #584: сколько проверок точной строки экрана есть в файле сегодня.
 # Может только уменьшаться. Числа правит тот, кто разобрал цемент в файле.
 2 app/src/test/kotlin/com/point/ConsentSaysWhatLeavesTest.kt
-62 app/src/test/kotlin/com/point/FlowViewModelTest.kt
+61 app/src/test/kotlin/com/point/FlowViewModelTest.kt
 1 app/src/test/kotlin/com/point/GraphPipelineIntegrationTest.kt
 5 app/src/test/kotlin/com/point/HomeDoorsTest.kt
 1 app/src/test/kotlin/com/point/NoGearInProductTest.kt
