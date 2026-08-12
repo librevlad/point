@@ -101,11 +101,13 @@ fun AiChatScreen(
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
+                // Про что спрашиваем — двумя строками: одной обрезанной строки не хватало,
+                // чтобы вспомнить объект, а он тут единственная тема разговора (#900).
                 Text(
                     text = chat.obj.metadata["name"] ?: kindLabel(chat.obj.state.kind),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
@@ -197,9 +199,11 @@ fun takeableAnswer(chat: ChatState): String? {
 
 @Composable
 private fun ChatSuggestions(suggestions: List<String>, onSend: (String) -> Unit, modifier: Modifier = Modifier) {
+    // Подсказки стоят сразу под шапкой, а не посередине экрана (#900). Пустая треть
+    // экрана над ними читалась как незагрузившийся интерфейс, а не как «разговор пуст».
     Column(
-        modifier = modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(11.dp, Alignment.CenterVertically),
+        modifier = modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(11.dp, Alignment.Top),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Column(
@@ -207,6 +211,13 @@ private fun ChatSuggestions(suggestions: List<String>, onSend: (String) -> Unit,
             verticalArrangement = Arrangement.spacedBy(11.dp),
         ) {
             SectionLabel("О чём спросить")
+            // Подсказка — не весь выбор: своё можно написать внизу. Без этой строки три
+            // строки читались как список того, что вообще позволено.
+            Text(
+                "Нажмите готовое или напишите своё внизу.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
             suggestions.forEachIndexed { index, s ->
                 PortalRow(
                     title = s,
