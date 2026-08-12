@@ -21,7 +21,7 @@ android {
         versionName = "0.3.0"
 
         ndk {
-            abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+            abiFilters += "arm64-v8a"
         }
     }
 
@@ -69,8 +69,6 @@ android {
             isShrinkResources = false
             signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
             matchingFallbacks += listOf("release")
-
-            packaging { jniLibs { excludes += "**/armeabi-v7a/**" } }
         }
     }
 
