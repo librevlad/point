@@ -54,7 +54,7 @@ class DropInboxTest {
 
     @Test
     fun `control characters and separators never reach the disk`() {
-        assertEquals("отчет.pdf", dropFileName("от\nчет?.pdf"))
+        assertEquals("от чет.pdf", dropFileName("от\nчет?.pdf"))
         assertTrue(dropFileName("a".repeat(300)).length <= 120)
     }
 
