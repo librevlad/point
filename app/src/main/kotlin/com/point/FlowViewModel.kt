@@ -237,17 +237,26 @@ class FlowViewModel @Inject constructor(
             val frames = runCatching { flowSnapshot.load() }.getOrDefault(emptyList())
             if (frames.isEmpty() || freshShareArrived || stack.isNotEmpty()) return@launch
 
-            val alive = frames.filter {
-                !it.kind.isFileBacked || runCatching { java.io.File(it.ref).isFile }.getOrDefault(false)
+            // Кадр помнит путь в scratch, а scratch не переживает ни завершения flow, ни
+            // открытия другого объекта. Копия того же объекта при этом лежит в истории —
+            // оттуда файл и поднимается (#812). Прежде кадр либо пропадал целиком, либо
+            // оставался с мёртвым путём, и Focus отвечал «не удалось открыть страницу»,
+            // хотя объект был на месте.
+            val alive = frames.mapNotNull { f ->
+                if (!f.kind.isFileBacked) return@mapNotNull f to f.ref
+                val own = runCatching { java.io.File(f.ref).isFile }.getOrDefault(false)
+                if (own) return@mapNotNull f to f.ref
+                val kept = runCatching { history.open(f.id) }.getOrNull()?.uri?.value
+                kept?.let { f to it }
             }
             if (alive.isEmpty()) {
                 runCatching { flowSnapshot.clear() }
                 return@launch
             }
 
-            alive.forEach { f ->
+            alive.forEach { (f, path) ->
                 pushFrame(
-                    PointObject(f.id, f.mime, refFor(f.kind, f.ref),
+                    PointObject(f.id, f.mime, refFor(f.kind, path),
                         com.point.core.model.ObjectState(f.kind), f.metadata),
                     via = f.viaCapabilityId?.let { CapabilityId(it) },
                     viaTitle = f.viaTitle,
@@ -641,7 +650,14 @@ class FlowViewModel @Inject constructor(
                     val layer = atomsRef
                         ?.let { AtomCodec.decode(File(it).readText()) }
                         ?: AtomLayer(emptyList())
-                    frames.frame(top.uri.value, SELECTION_MAX_PX)?.let { frame ->
+
+                    // Файл объекта мог уйти вместе со scratch, пока кадр оставался открытым
+                    // (#812). Копия того же объекта живёт в истории — обводке хватит её,
+                    // и человеку не приходится узнавать о пропаже тапом.
+                    val path = top.uri.value.takeIf { File(it).isFile }
+                        ?: runCatching { history.open(top.id) }.getOrNull()?.uri?.value
+                        ?: top.uri.value
+                    frames.frame(path, SELECTION_MAX_PX)?.let { frame ->
                         Triple(layer, frame.transform, frame.bitmap.asImageBitmap())
                     }
                 }.getOrNull()
