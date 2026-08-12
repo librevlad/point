@@ -41,6 +41,7 @@ fun PointFlow(
         onCloseChat = viewModel::closeChat,
         onCancelChat = viewModel::cancelChatMessage,
         onTakeChatAnswer = viewModel::takeChatAnswer,
+        onRunChatOffer = viewModel::runChatOffer,
         onBubbleLongPress = viewModel::togglePin,
         onSaveAiKey = viewModel::saveAiKey,
         onOpenKeySettings = { viewModel.openKeySettings() },

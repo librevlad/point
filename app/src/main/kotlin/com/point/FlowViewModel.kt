@@ -1047,25 +1047,22 @@ class FlowViewModel @Inject constructor(
         }
         chatJob?.cancel()
         chatJob = viewModelScope.launch {
+
+            // Разговор вещей не делает (#804, решение владельца 12.08.2026 «Только в
+            // действиях, чат подсказывает»). Прежде развилка по списку слов молча рождала
+            // объект: человек не знал, что получит — реплику или файл. Узнанную просьбу
+            // разговор показывает действием, и решает человек.
             val target = aiTransformTarget(message)
             if (target != null) {
-                val result = runCatching { resolver.realizerFor(target, obj.state).perform(obj, null) }
-
-                    .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
-                    .getOrNull()
-                if (result is ActionResult.Success) {
-                    runCatching { sensory.success() }
-
-                    // Разговор кончился рождением объекта — следующий вход начинается заново (#794).
-                    _ui.update { s -> s.copy(chat = null, chatOpen = false) }
-                    pushFrame(store.put(result.result), target, null)
-                } else {
-                    appendChatAssistant(
-                        (result as? ActionResult.Failure)?.reason ?: "Не удалось создать документ",
-                        failed = true,
-                    )
+                val title = runCatching { registry.byId(target).label(obj.state) }.getOrNull()
+                _ui.update { s ->
+                    s.chat?.let { c ->
+                        s.copy(chat = c.copy(pending = false, offer = title?.let { ChatOffer(target, it) }))
+                    } ?: s
                 }
-            } else {
+                if (title != null) return@launch
+            }
+            run {
                 var failed = false
                 val reply = runCatching { aiChatResponder.reply(obj, history, message) }
                     .getOrElse {
@@ -1077,6 +1074,24 @@ class FlowViewModel @Inject constructor(
             }
         }
     }
+
+    /**
+     * Тап по предложенному действию — обычный путь действия (#804): та же цена, тот же
+     * исполнитель, тот же результат, что из списка объекта. Разговор при этом закрывается:
+     * он кончился делом, а не репликой.
+     */
+    fun runChatOffer() {
+        val chat = _ui.value.chat ?: return
+        val offer = chat.offer ?: return
+        val obj = chat.obj
+        chatJob?.cancel()
+        chatJob = null
+        _ui.update { it.copy(chat = null, chatOpen = false) }
+        onBubble(Bubble(bubbleIconOf(offer.capabilityId), offer.title, offer.capabilityId, obj.state))
+    }
+
+    private fun bubbleIconOf(id: com.point.core.model.CapabilityId): String =
+        runCatching { registry.byId(id).icon }.getOrDefault("ai")
 
     fun cancelChatMessage() {
         val job = chatJob ?: return

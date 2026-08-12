@@ -73,6 +73,8 @@ fun AiChatScreen(
     onCancel: () -> Unit = {},
 
     onTakeAnswer: () -> Unit = {},
+
+    onRunOffer: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxSize().imePadding()) {
@@ -137,6 +139,24 @@ fun AiChatScreen(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                 textAlign = TextAlign.Center,
             )
+        }
+
+        // Разговор вещей не делает: узнанную просьбу он показывает действием (#804).
+        chat.offer?.let { offer ->
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Column(Modifier.widthIn(max = PortalColumnWidth).fillMaxWidth()) {
+                    PortalRow(
+                        title = offer.title,
+                        subtitle = OFFER_WHAT,
+                        onClick = onRunOffer,
+                        icon = bubbleIcon("pdf"),
+                        accent = bubbleColor("pdf"),
+                    )
+                }
+            }
         }
 
         if (takeableAnswer(chat) != null) {
@@ -357,3 +377,6 @@ private fun PreviewChatThread() = PointTheme(darkTheme = true) {
         onClose = {},
     )
 }
+
+/** Разговор не делает вещей сам: он называет действие, которое их делает (#804). */
+private const val OFFER_WHAT = "Это делает действие объекта — тапните, и оно выполнится"

@@ -3217,6 +3217,38 @@ class FlowViewModelTest {
         assertEquals("__unset__", resolver.lastAmendment)
     }
 
+    /**
+     * Разговор вещей не делает (#804, решение владельца 12.08.2026 «Только в действиях, чат
+     * подсказывает»). Прежде одно поле ввода делало две разные вещи, а различал их список
+     * слов: «сделай pdf» молча рождало объект, «сделай выжимку» — реплику модели.
+     */
+    @Test fun `просьба сделать вещь приходит действием, а не объектом из ниоткуда`() = runTest(dispatcher) {
+        consent.granted = true
+        val vm = vm(
+            caps = mapOf(
+                CapabilityId("ai") to setOf(Intent.UNDERSTAND),
+                CapabilityId("pdf") to setOf(Intent.PREPARE),
+            ),
+            cloud = setOf(CapabilityId("ai")),
+        )
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        vm.onBubble(bubble(id = "ai")); advanceUntilIdle()
+
+        vm.sendChatMessage("сделай pdf"); advanceUntilIdle()
+
+        val chat = vm.ui.value.chat
+        assertNotNull("разговор закрылся сам — объект родился молча", chat)
+        assertEquals(CapabilityId("pdf"), chat?.offer?.capabilityId)
+        assertTrue("предложение без имени действия", chat?.offer?.title.orEmpty().isNotBlank())
+    }
+
+    @Test fun `вопрос остаётся разговором, а не превращается в действие`() = runTest(dispatcher) {
+        val vm = chattingVm()
+
+        assertNull("вопрос не должен становиться действием", vm.ui.value.chat?.offer)
+        assertTrue("модель не ответила", vm.ui.value.chat?.messages?.size == 2)
+    }
+
     private fun kotlinx.coroutines.test.TestScope.chattingVm(): FlowViewModel {
         consent.granted = true
         val vm = cloudVm()

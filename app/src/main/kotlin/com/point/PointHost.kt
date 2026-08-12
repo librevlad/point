@@ -123,6 +123,7 @@ fun PointHost(
     onCancelChat: () -> Unit = {},
 
     onTakeChatAnswer: () -> Unit = {},
+    onRunChatOffer: () -> Unit = {},
     onOpenSelection: () -> Unit = {},
     onSelectRegion: (com.point.core.flow.Box, List<com.point.core.flow.Box>) -> Unit = { _, _ -> },
     onClearFocus: () -> Unit = {},
@@ -268,6 +269,7 @@ fun PointHost(
                 onClose = onCloseChat,
                 onCancel = onCancelChat,
                 onTakeAnswer = onTakeChatAnswer,
+                onRunOffer = onRunChatOffer,
                 modifier = Modifier.fillMaxSize(),
             )
 
