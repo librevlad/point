@@ -44,4 +44,36 @@ class DesktopKeepsPhoneLookTest {
         assertTrue("ПК не компилирует общий каталог", here.contains("core/ui/src/shared/kotlin"))
         assertTrue("телефон не компилирует общий каталог", phone.contains("src/shared/kotlin"))
     }
+
+    /**
+     * Цвет палитры, набранный литералом второй раз, — это и есть будущее расхождение (#851).
+     * Сторож смотрит только на два файла тем: там литерал означает «палитру завели заново».
+     */
+    @Test
+    fun `палитра не набрана литералами второй раз`() {
+        val palette = File("../core/ui/src/shared/kotlin/com/point/core/ui/PointPalette.kt")
+        assertTrue("общая палитра пропала: $palette", palette.isFile)
+
+        // Белый — не токен, а отсутствие оттенка: он же стоит контрастом на акценте
+        // (`onPrimary`), и сторожить его значило бы ловить шум вместо расхождения.
+        val declared = Regex("""Color\((0x[0-9A-F]{8})\)""").findAll(palette.readText())
+            .map { it.groupValues[1] }
+            .filterNot { it == "0xFFFFFFFF" }
+            .toSet()
+
+        val desktop = File("src/main/kotlin/com/point/desktop/ui/PointDesktopTheme.kt")
+        val phone = File("../core/ui/src/main/kotlin/com/point/core/ui/theme/PointTheme.kt")
+
+        // У телефона есть ещё светлая схема — там белый и есть белый, а не токен палитры.
+        val themes = listOf(
+            desktop.name to desktop.readText(),
+            phone.name to phone.readText().substringAfter("darkColorScheme(").substringBefore("\n)"),
+        )
+
+        val repeated = themes.flatMap { (name, text) ->
+            declared.filter { text.contains("Color($it)") }.map { "$name: $it" }
+        }
+
+        assertTrue("цвет палитры объявлен заново: $repeated", repeated.isEmpty())
+    }
 }

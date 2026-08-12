@@ -25,6 +25,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import com.point.core.ui.PointPalette
+import com.point.core.ui.PortalCardShape
+import com.point.core.ui.PortalPlateShape
+import com.point.core.ui.PortalTones
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -44,16 +48,13 @@ import kotlinx.coroutines.delay
  * Источник правды — телефонный файл: расходиться им нельзя.
  */
 
-private val RowTop = Color(0xFF1A1D25)
-private val RowBottom = Color(0xFF121419)
-private val PlateBase = Color(0xFF1F222B)
-private val TopHighlight = Color(0x12FFFFFF)
-private val PrimaryStart = Color(0xFF7B5CFF)
-private val PrimaryEnd = Color(0xFF4E7BFF)
-
-val PortalCardShape = RoundedCornerShape(18.dp)
-
-val PortalPlateShape = RoundedCornerShape(14.dp)
+// Тона и скругления — из общей палитры (#851): те же самые, что у телефона.
+private val RowTop = PortalTones.rowTop
+private val RowBottom = PortalTones.rowBottom
+private val PlateBase = PortalTones.plateBase
+private val TopHighlight = PortalTones.topHighlight
+private val PrimaryStart = PointPalette.violet
+private val PrimaryEnd = PointPalette.blue
 
 fun Modifier.portalCard(
     shape: Shape = PortalCardShape,

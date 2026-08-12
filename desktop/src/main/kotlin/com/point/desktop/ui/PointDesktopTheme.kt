@@ -5,6 +5,7 @@ import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import com.point.core.ui.PointPalette
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -12,28 +13,31 @@ import androidx.compose.ui.text.platform.Font
 import androidx.compose.ui.unit.sp
 
 /**
- * Токены — мобильной тёмной темы (core:ui PointTheme.DarkColors): палитры поверхностей
- * не расходятся, приоритет у телефонной (решение владельца 2026-08-09).
+ * Имена цветов, которыми пишет ПК. Значения — из общей палитры `core/ui` (#851).
+ *
+ * Раньше здесь стояли те же десять литералов с припиской «палитры не расходятся, приоритет
+ * у телефонной». Приписка не мешала поменять оттенок на телефоне и забыть про ПК — теперь
+ * менять нечего: цвет объявлен один раз.
  */
 object PointColors {
 
-    val canvas = Color(0xFF0B0D10)
+    val canvas = PointPalette.canvas
 
-    val window = Color(0xFF0B0D10)
+    val window = PointPalette.canvas
 
-    val surface = Color(0xFF14161C)
+    val surface = PointPalette.surface
 
-    val surfaceDeep = Color(0xFF1B1E27)
+    val surfaceDeep = PointPalette.surfaceDeep
 
-    val border = Color(0xFF242833)
+    val border = PointPalette.border
 
-    val text = Color(0xFFFFFFFF)
+    val text = PointPalette.text
 
-    val muted = Color(0xFFA1A6B3)
+    val muted = PointPalette.muted
 
-    val violet = Color(0xFF7B5CFF)
+    val violet = PointPalette.violet
 
-    val cyan = Color(0xFF00E0FF)
+    val cyan = PointPalette.cyan
 }
 
 private val Unbounded = FontFamily(Font(resource = "unbounded.ttf", weight = FontWeight.Normal))

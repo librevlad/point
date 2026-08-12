@@ -40,8 +40,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.point.core.ui.theme.PointTheme
 
-private val PortalPurple = Color(0xFF7B5CFF)
-private val PortalBlue = Color(0xFF00E0FF)
+private val PortalPurple = PointPalette.violet
+private val PortalBlue = PointPalette.cyan
 private val PortalGlow = Color(0xFFB39DFF)
 
 internal val PortalCore = Color(0xFFEAF0FF)
