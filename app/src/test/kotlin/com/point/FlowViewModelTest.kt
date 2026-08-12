@@ -78,7 +78,13 @@ class FlowViewModelTest {
     private val pins = FakePinnedActions()
 
     private val noFrames = object : SelectionFrames {
-        override fun frame(path: String, maxPx: Int) = null
+
+        /** Последний путь, по которому спрашивали картинку (#812). */
+        var askedPath: String? = null
+        override fun frame(path: String, maxPx: Int): com.point.data.SelectionFrame? {
+            askedPath = path
+            return null
+        }
         override fun crop(path: String, left: Int, top: Int, right: Int, bottom: Int) = null
     }
 
@@ -164,6 +170,27 @@ class FlowViewModelTest {
             "В документе нет ни одной страницы",
             obj.metadata[com.point.core.flow.META_UNUSABLE_REASON],
         )
+    }
+
+    /**
+     * Живая охота 12.08.2026 (#812): объект остался открытым, а его файл ушёл вместе со
+     * scratch — обводка отвечала «Не удалось открыть страницу для выделения», хотя копия
+     * того же объекта лежала в истории.
+     */
+    @Test fun `обводка берёт файл из истории, когда scratch уже убран`() = runTest(dispatcher) {
+        val vm = vm()
+        vm.onShared("uri", "image/jpeg"); advanceUntilIdle()
+        val kept = java.io.File.createTempFile("kept", ".jpg").apply { writeBytes(ByteArray(8)) }
+        history.opened = PointObject(
+            id = vm.ui.value.frame!!.obj.id,
+            mime = "image/jpeg",
+            uri = ScratchRef(kept.absolutePath),
+            state = ObjectState(ObjectKind.IMAGE),
+        )
+
+        vm.openSelection(); advanceUntilIdle()
+
+        assertEquals("к истории обратились за файлом", kept.absolutePath, noFrames.askedPath)
     }
 
     @Test fun `выделение открывается и без слоя слов — отказ приходит от картинки, а не от чтения`() =
