@@ -1,4 +1,6 @@
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Properties
 
 plugins {
@@ -63,6 +65,38 @@ compose.desktop {
         }
     }
 }
+
+/**
+ * Версия и дата сборки — в самой сборке (#822). Живой случай: у человека стоял Point от
+ * 6 августа, действие приехало 10-го, и падение выглядело загадкой. Теперь «у меня старое»
+ * видно в настройках окна, не спрашивая никого.
+ */
+val buildInfoDir = layout.buildDirectory.dir("generated/source/buildinfo")
+
+val generateBuildInfo by tasks.registering {
+    val version = "3.0.0"
+    val out = buildInfoDir
+    inputs.property("version", version)
+    outputs.dir(out)
+    doLast {
+        val dir = out.get().asFile.resolve("com/point/desktop").apply { mkdirs() }
+        val day = SimpleDateFormat("yyyy-MM-dd").format(Date())
+        val text = buildString {
+            appendLine("package com.point.desktop")
+            appendLine()
+            appendLine("/** Что за сборка сейчас работает (#822). */")
+            appendLine("object BuildInfo {")
+            appendLine("    const val VERSION: String = \"" + version + "\"")
+            appendLine("    const val BUILT_ON: String = \"" + day + "\"")
+            appendLine("}")
+        }
+        dir.resolve("BuildInfo.kt").writeText(text)
+    }
+}
+
+kotlin.sourceSets["main"].kotlin.srcDir(buildInfoDir)
+
+tasks.named("compileKotlin") { dependsOn(generateBuildInfo) }
 
 tasks.register<JavaExec>("fontSample") {
     group = "verification"
