@@ -5,6 +5,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -79,7 +80,7 @@ fun SettingsScreen(
     // Скролл отдан единственному хозяину — компакт-настройкам: свой verticalScroll
     // внутри их скролла ронял окно (краш владельца 2026-08-09, «настройки»).
     Column(
-        modifier = Modifier.width(560.dp),
+        modifier = Modifier.fillMaxWidth().widthIn(max = 560.dp),
         verticalArrangement = Arrangement.spacedBy(22.dp),
     ) {
         Text("НАСТРОЙКИ", style = PointType.label)
@@ -176,11 +177,14 @@ private fun Service(provider: AiProvider, chosen: Boolean, onChoose: () -> Unit)
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // Примечание про бесплатность живёт под описанием, а не отдельным столбцом (#876).
+        // Столбцом оно забирало себе всю нужную ему ширину, а описанию доставался остаток —
+        // на узком окне остатка не было вовсе, и текст рассыпался в колонку по одной букве.
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(provider.name, style = PointType.body)
             Text(provider.what, style = PointType.small.copy(color = PointColors.muted))
+            provider.freeNote?.let { Text(it, style = PointType.small.copy(color = PointColors.cyan)) }
         }
-        provider.freeNote?.let { Text(it, style = PointType.small) }
     }
 }
 
