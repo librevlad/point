@@ -647,8 +647,13 @@ class FlowViewModel @Inject constructor(
         viewModelScope.launch {
             val loaded = withContext(ioDispatcher) {
                 runCatching {
+
+                    // Слой слов — подспорье, а не условие: его файл мог уйти вместе со
+                    // scratch, пока кадр оставался открытым (#812). Прежде исключение отсюда
+                    // роняло всю загрузку, и обводка отвечала «не удалось открыть страницу»
+                    // даже там, где сама картинка была на месте.
                     val layer = atomsRef
-                        ?.let { AtomCodec.decode(File(it).readText()) }
+                        ?.let { runCatching { AtomCodec.decode(File(it).readText()) }.getOrNull() }
                         ?: AtomLayer(emptyList())
 
                     // Файл объекта мог уйти вместе со scratch, пока кадр оставался открытым
