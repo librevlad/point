@@ -543,6 +543,12 @@ internal fun CompactObject(
             questionName = { id -> state.questionName(id, item.obj.state) },
         )
 
+        // Сам текст — после знания о нём, как на телефоне (#898).
+        if (item.obj.state.kind == ObjectKind.TEXT) {
+            Text(kindLabel(item.obj.state.kind).uppercase(), style = PointType.label)
+            Preview(item)
+        }
+
         working?.let { Working(it) { state.cancelWork() } }
 
         val actions = state.actionsFor(item)
