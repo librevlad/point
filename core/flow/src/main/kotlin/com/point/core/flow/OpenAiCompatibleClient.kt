@@ -1,9 +1,5 @@
-package com.point.data
+package com.point.core.flow
 
-import com.point.core.flow.AI_KEY_HINT
-import com.point.core.flow.LlmClient
-import com.point.core.flow.withoutPreamble
-import com.point.core.flow.ObjectStore
 import com.point.core.model.ObjectKind
 import com.point.core.model.PointObject
 import com.point.core.model.ResultObject
@@ -75,6 +71,8 @@ class OpenAiCompatibleClient(
     private val http: HttpJson,
     private val store: ObjectStore,
     private val provider: OpenAiProvider,
+
+    private val frames: FrameForModel = FrameForModel.NONE,
 ) : LlmClient {
 
     private val baseUrl: String = provider.baseUrl.ifBlank { DEFAULT_BASE_URL }.trimEnd('/')
@@ -139,7 +137,7 @@ class OpenAiCompatibleClient(
 
     private fun maybeImage(obj: PointObject): JSONObject? {
         if (!obj.mime.startsWith("image/")) return null
-        val attachment = inlineAttachment(obj.uri.value, obj.mime) ?: return null
+        val attachment = frames.of(obj.uri.value, obj.mime) ?: return null
         return JSONObject()
             .put("type", "image_url")
             .put("image_url", JSONObject().put("url", "data:${attachment.mime};base64,${attachment.base64}"))

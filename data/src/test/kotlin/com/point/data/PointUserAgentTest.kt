@@ -2,6 +2,8 @@ package com.point.data
 
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import com.point.core.flow.pointHeaders
+import com.point.core.flow.POINT_USER_AGENT
 
 class PointUserAgentTest {
 

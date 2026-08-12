@@ -1,8 +1,5 @@
-package com.point.data
+package com.point.core.flow
 
-import com.point.core.flow.KeyVerdict
-import com.point.core.flow.UserAiConfig
-import com.point.core.flow.keyVerdict
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse

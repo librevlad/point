@@ -1,4 +1,4 @@
-package com.point.data
+package com.point.core.flow
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse

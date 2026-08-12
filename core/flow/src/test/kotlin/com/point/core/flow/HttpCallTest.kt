@@ -1,4 +1,4 @@
-package com.point.data
+package com.point.core.flow
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch

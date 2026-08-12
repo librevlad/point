@@ -1,8 +1,5 @@
-package com.point.data
+package com.point.core.flow
 
-import com.point.core.flow.LlmClient
-import com.point.core.flow.withoutPreamble
-import com.point.core.flow.ObjectStore
 import com.point.core.model.ObjectKind
 import com.point.core.model.PointObject
 import com.point.core.model.ResultObject
@@ -11,15 +8,21 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
-import javax.inject.Inject
 
-class ClaudeLlmClient @Inject constructor(
+class ClaudeLlmClient(
     private val http: HttpJson,
     private val store: ObjectStore,
+
+    /** Ключ и адрес приходят снаружи: сборка знает их, ядро — нет (#828). */
+    private val apiKey: String,
+    baseUrl: String = "",
+    model: String = "",
+
+    private val frames: FrameForModel = FrameForModel.NONE,
 ) : LlmClient {
 
-    private val model: String get() = BuildConfig.CLAUDE_MODEL.ifBlank { DEFAULT_MODEL }
-    private val baseUrl: String get() = BuildConfig.ANTHROPIC_BASE_URL.ifBlank { DEFAULT_BASE_URL }.trimEnd('/')
+    private val model: String = model.ifBlank { DEFAULT_MODEL }
+    private val baseUrl: String = baseUrl.ifBlank { DEFAULT_BASE_URL }.trimEnd('/')
 
     override val strongVision = true
 
@@ -29,7 +32,7 @@ class ClaudeLlmClient @Inject constructor(
 
     override suspend fun run(obj: PointObject, prompt: String): ResultObject =
         withContext(Dispatchers.IO) {
-            val key = BuildConfig.ANTHROPIC_API_KEY
+            val key = apiKey
             require(key.isNotBlank()) { "ANTHROPIC_API_KEY не задан" }
             val res = http.post(
                 "$baseUrl/v1/messages",
@@ -66,7 +69,7 @@ class ClaudeLlmClient @Inject constructor(
         val isImage = obj.mime.startsWith("image/")
         val isPdf = obj.mime == "application/pdf"
         if (!isImage && !isPdf) return null
-        val attachment = inlineAttachment(obj.uri.value, obj.mime) ?: return null
+        val attachment = frames.of(obj.uri.value, obj.mime) ?: return null
         val source = JSONObject()
             .put("type", "base64")
             .put("media_type", attachment.mime)

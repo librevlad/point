@@ -15,6 +15,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 import java.io.RandomAccessFile
+import com.point.core.flow.HttpResult
 
 class GroqWhisperSpeechToTextTest {
 

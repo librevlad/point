@@ -1,9 +1,5 @@
-package com.point.data
+package com.point.core.flow
 
-import com.point.core.flow.LlmClient
-import com.point.core.flow.withoutPreamble
-import com.point.core.flow.ObjectStore
-import com.point.core.flow.modelReadableAudio
 import com.point.core.model.ObjectKind
 import com.point.core.model.PointObject
 import com.point.core.model.ResultObject
@@ -26,6 +22,8 @@ class GeminiLlmClient(
     private val store: ObjectStore,
     private val apiKey: String,
     private val models: List<String>,
+
+    private val frames: FrameForModel = FrameForModel.NONE,
 ) : LlmClient {
 
     override val strongVision = true
@@ -76,7 +74,7 @@ class GeminiLlmClient(
     private fun maybeAttachFile(obj: PointObject): JSONObject? {
         val declared = geminiAttachmentMime(obj) ?: return null
 
-        val attachment = inlineAttachment(obj.uri.value, declared) ?: return null
+        val attachment = frames.of(obj.uri.value, declared) ?: return null
         return JSONObject().put(
             "inlineData",
             JSONObject().put("mimeType", attachment.mime).put("data", attachment.base64),

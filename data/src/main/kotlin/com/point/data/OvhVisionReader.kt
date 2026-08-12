@@ -6,6 +6,7 @@ import com.point.core.model.PointObject
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.Base64
+import com.point.core.flow.HttpJson
 
 class OvhVisionReader(
     private val http: HttpJson,
