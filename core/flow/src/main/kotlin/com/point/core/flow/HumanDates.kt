@@ -9,9 +9,6 @@ import java.time.LocalDate
  */
 private val HUMAN_DATE = Regex("""(\d{1,2})[./](\d{1,2})[./](\d{2,4})|(\d{4})-(\d{2})-(\d{2})""")
 
-fun parseHumanDate(value: String): LocalDate? =
-    HUMAN_DATE.matchEntire(value.trim())?.let(::toLocalDate)
-
 /**
  * Календарный день значения, даже когда рядом живёт время или подпись:
  * «26.04.2026 20:04» и «01.12.2020 в 11:09» — это дни, а не нечитаемые строки.

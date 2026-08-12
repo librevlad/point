@@ -252,5 +252,4 @@ private val ID_SHAPED = Regex("""[A-Za-z]+\d+""")
  */
 fun atomLabel(index: Int): String = "w" + index
 
-fun looksLikeAtomLabel(id: String): Boolean = ID_SHAPED.matches(id)
 private val WHITESPACE = Regex("""\s+""")

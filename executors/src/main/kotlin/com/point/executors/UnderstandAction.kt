@@ -62,8 +62,8 @@ import com.point.core.flow.s10CheckDigitValid
 import com.point.core.flow.META_ENTITY_PLACE
 import com.point.core.flow.placeOfReceiver
 import com.point.core.flow.phoneOwners
-import com.point.core.flow.asRepair
 import com.point.core.flow.foundLiterally
+import com.point.core.flow.standsInReadText
 import com.point.core.flow.semanticFits
 import com.point.core.flow.labelNeedingKey
 import com.point.core.model.ActionResult
@@ -763,8 +763,10 @@ private fun withoutMarks(
         // Читать нечем — сверять не с чем: снимок без распознанных слов читается глазами,
         // и там всё остаётся как было (#664).
         readText.isBlank() -> listOf(bare to false)
+
+        // Слово страницы — значение прочитано; починка искажения — слово модели (#809).
         foundLiterally(candidate.text, readText) -> listOf(bare to true)
-        asRepair(candidate.text, readText) -> listOf(bare to false)
+        standsInReadText(candidate.text, readText) -> listOf(bare to false)
         else -> emptyList()
     }
 }
