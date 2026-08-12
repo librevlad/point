@@ -76,4 +76,24 @@ class DesktopKeepsPhoneLookTest {
 
         assertTrue("цвет палитры объявлен заново: $repeated", repeated.isEmpty())
     }
+
+    /**
+     * Схема — то, чем красятся стандартные компоненты. Собранная второй раз, она молча
+     * назначает те же цвета другим ролям: до #853 `secondary` на телефоне был приглушённым
+     * серым, а на ПК — cyan.
+     */
+    @Test
+    fun `тёмная схема собрана один раз — в общем каталоге`() {
+        val shared = File("../core/ui/src/shared/kotlin/com/point/core/ui/PointColorSchemes.kt")
+        assertTrue("общая схема пропала: $shared", shared.isFile)
+
+        val themes = listOf(
+            File("src/main/kotlin/com/point/desktop/ui/PointDesktopTheme.kt"),
+            File("../core/ui/src/main/kotlin/com/point/core/ui/theme/PointTheme.kt"),
+        )
+
+        val rebuilt = themes.filter { it.readText().contains("darkColorScheme(") }.map { it.name }
+
+        assertTrue("схема собирается заново: $rebuilt", rebuilt.isEmpty())
+    }
 }
