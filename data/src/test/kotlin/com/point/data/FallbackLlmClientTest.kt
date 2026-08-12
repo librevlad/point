@@ -19,8 +19,16 @@ class FallbackLlmClientTest {
 
     private val facts = TestAiFacts()
 
-    private fun chain(providers: List<LlmClient>, network: NetworkAvailability = NetworkAvailability { true }) =
-        FallbackLlmClient(providers, facts, network)
+    private fun chain(
+        providers: List<LlmClient>,
+        network: NetworkAvailability = NetworkAvailability { true },
+        yolo: com.point.core.flow.YoloMode = com.point.core.flow.YoloMode.OFF,
+    ) = FallbackLlmClient(providers, facts, network, yolo)
+
+    private fun yoloOn() = object : com.point.core.flow.YoloMode {
+        override fun enabled() = true
+        override suspend fun setEnabled(enabled: Boolean) = Unit
+    }
 
     private fun ok(tag: String) = object : LlmClient {
         override suspend fun run(obj: PointObject, prompt: String) =
@@ -194,6 +202,24 @@ class FallbackLlmClientTest {
         }.exceptionOrNull()
 
         assertTrue(error?.message?.contains("задайте свой ключ") == true)
+    }
+
+    /**
+     * Режим YOLO (#795): человек попросил лучшее, и сильная модель идёт первой даже там,
+     * где обычный порядок бережёт очередь — на простом тексте.
+     */
+    @Test
+    fun `в режиме YOLO сильная модель идёт первой и на тексте`() = runTest {
+        val client = chain(listOf(ok("weak"), strong("strong")), yolo = yoloOn())
+
+        assertEquals("/out/strong", client.run(obj, "hi").uri.value)
+    }
+
+    @Test
+    fun `без режима порядок цепочки на тексте прежний`() = runTest {
+        val client = chain(listOf(ok("weak"), strong("strong")))
+
+        assertEquals("/out/weak", client.run(obj, "hi").uri.value)
     }
 
     private fun spy(tag: String, calls: MutableList<String>) = object : LlmClient {

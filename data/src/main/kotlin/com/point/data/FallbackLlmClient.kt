@@ -5,6 +5,7 @@ import com.point.core.flow.AiFacts
 import com.point.core.flow.AiOutcome
 import com.point.core.flow.LlmClient
 import com.point.core.flow.NetworkAvailability
+import com.point.core.flow.YoloMode
 import com.point.core.flow.aiOutcomeOf
 import com.point.core.model.PointObject
 import com.point.core.model.ResultObject
@@ -16,6 +17,8 @@ class FallbackLlmClient @Inject constructor(
     private val facts: AiFacts,
 
     private val network: NetworkAvailability,
+
+    private val yolo: YoloMode = YoloMode.OFF,
 ) : LlmClient {
 
     override val configured: Boolean get() = providers.any { it.configured }
@@ -23,11 +26,11 @@ class FallbackLlmClient @Inject constructor(
     override suspend fun run(obj: PointObject, prompt: String): ResultObject {
         if (providers.isEmpty()) error("AI не настроен — $AI_KEY_HINT")
 
-        val ordered = if (obj.mime.startsWith("image/")) {
-            providers.sortedByDescending { it.strongVision }
-        } else {
-            providers
-        }
+        // Снимок читает тот, кто видит. В режиме YOLO сильная модель идёт первой всегда
+        // (#795): человек попросил лучший результат, а не самый бережный порядок.
+        val strongestFirst = obj.mime.startsWith("image/") ||
+            runCatching { yolo.enabled() }.getOrDefault(false)
+        val ordered = if (strongestFirst) providers.sortedByDescending { it.strongVision } else providers
         val errors = mutableListOf<String>()
         var considered = 0
         var skippedUnconfigured = 0

@@ -107,7 +107,7 @@ class FlowViewModelTest {
         keyNeeding: Set<CapabilityId> = emptySet(),
 
         pdf: com.point.core.flow.PdfRasterizer = FakePdfRasterizer(),
-    ) = FlowViewModel(store, FakeRegistry(caps, cloud, slow, keyNeeding) { userKeys.keys().mine.isNotEmpty() }, resolver, chatResponder, enrichment, history, usage, chosenApps, userKeys, aiFacts, builtInKeys, consent, appLauncher, pdf, sensory, sensorySettings, cloudPrivacy, snapshot, crashLog, dispatcher, pins, AppIconResolver { null }, pcLinks, pcTransport, pcCaps, linkMonitor, PulledFileFactory { name -> java.io.File(java.io.File(System.getProperty("java.io.tmpdir")), "pulled-" + name).absolutePath }, noFrames, keyCheck, account, accountClient, pendingLogins, deviceKeys, browser, sharedTexts)
+    ) = FlowViewModel(store, FakeRegistry(caps, cloud, slow, keyNeeding) { userKeys.keys().mine.isNotEmpty() }, resolver, chatResponder, enrichment, history, usage, chosenApps, userKeys, aiFacts, builtInKeys, consent, appLauncher, pdf, sensory, sensorySettings, cloudPrivacy, com.point.core.flow.YoloMode.OFF, snapshot, crashLog, dispatcher, pins, AppIconResolver { null }, pcLinks, pcTransport, pcCaps, linkMonitor, PulledFileFactory { name -> java.io.File(java.io.File(System.getProperty("java.io.tmpdir")), "pulled-" + name).absolutePath }, noFrames, keyCheck, account, accountClient, pendingLogins, deviceKeys, browser, sharedTexts)
 
     private val keyCheck = FakeAiKeyCheck()
 

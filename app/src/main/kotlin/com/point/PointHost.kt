@@ -93,6 +93,7 @@ fun PointHost(
     onPickPrivacyLevel: (com.point.core.flow.PrivacyLevel) -> Unit = {},
 
     onToggleCloud: (Boolean) -> Unit = {},
+    onToggleYolo: (Boolean) -> Unit = {},
 
     onOpenUrl: (String) -> Unit = {},
     onConfirmCloud: () -> Unit = {},
@@ -218,6 +219,8 @@ fun PointHost(
                 onPickPrivacyLevel = onPickPrivacyLevel,
                 cloudEnabled = state.cloudEnabled,
                 onToggleCloud = onToggleCloud,
+                yoloEnabled = state.yoloEnabled,
+                onToggleYolo = onToggleYolo,
                 onOpenUrl = onOpenUrl,
                 onOpenDevices = onOpenDevices,
             )

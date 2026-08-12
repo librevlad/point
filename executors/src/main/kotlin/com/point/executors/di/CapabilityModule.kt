@@ -253,8 +253,10 @@ abstract class CapabilityModule {
     companion object {
 
         @Provides
-        fun executionPolicy(): com.point.core.flow.ExecutionPolicy =
-            com.point.core.flow.DefaultExecutionPolicy()
+        fun executionPolicy(
+            yolo: com.point.core.flow.YoloMode,
+        ): com.point.core.flow.ExecutionPolicy =
+            com.point.core.flow.DefaultExecutionPolicy(yolo)
 
         /**
          * Орган «офис → PDF» живёт на компьютере (#403): телефон его не имеет и пересказом

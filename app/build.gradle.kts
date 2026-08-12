@@ -74,6 +74,10 @@ android {
 
     buildFeatures {
         compose = true
+
+        // Тип сборки читается в рантайме: режим YOLO приходит включённым в сборках для
+        // своих и выключенным в релизе (#795).
+        buildConfig = true
     }
 
     compileOptions {
