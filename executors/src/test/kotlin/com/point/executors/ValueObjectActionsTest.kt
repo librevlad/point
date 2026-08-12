@@ -32,7 +32,6 @@ class ValueObjectActionsTest {
     @Test
     fun `actions that move bytes do not offer themselves on a value`() {
         val byteMovers = mapOf(
-            "Отправить" to ShareCapability().accepts(waybill.state),
             "Сохранить" to SaveCapability().accepts(waybill.state),
             "Открыть" to OpenCapability().accepts(waybill.state),
             "AI" to AiCapability(aiKeysReady).accepts(waybill.state),
@@ -41,6 +40,19 @@ class ValueObjectActionsTest {
         byteMovers.forEach { (name, accepted) ->
             assertFalse("«$name» must not accept an object with no file", accepted)
         }
+    }
+
+    /**
+     * «Поделиться» из этого списка ушло (#820, решение владельца 12.08.2026 «Всем, кроме
+     * набора»). Правило писалось, когда отправить значение было нечем: наружу уходил только
+     * файл. С #584 значение уходит собой — текстом, — и прятать действие стало не от чего:
+     * «не могу отправить в гетконтакт» (живой прогон 12.08.2026).
+     */
+    @Test
+    fun `у значения есть чем поделиться — оно уходит текстом, а не файлом`() {
+        assertTrue(ShareCapability().accepts(waybill.state))
+        assertTrue(ShareCapability().accepts(address.state))
+        assertTrue(ShareCapability().accepts(deadline.state))
     }
 
     @Test
