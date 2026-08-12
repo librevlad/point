@@ -87,22 +87,26 @@ class SpeechToTextTest {
         assertTrue(NO_SUMMARY_MARKER in SUMMARIZE_PROMPT)
     }
 
+    /**
+     * Решение владельца 12.08.2026: «внизу лучше писать полный текст». Суть отвечает на
+     * «о чём это» и говорится подписью сверху; файл расшифровки — это расшифровка (#873).
+     */
     @Test
-    fun `суть стоит над расшифровкой — ради неё и не слушают три минуты`() {
-        val md = transcriptMarkdown(Transcription.Heard("Дословный текст", "Коротко о главном"))
+    fun `в файле расшифровки — только сама расшифровка`() {
+        val said = "Дословный текст"
+        val gist = "Коротко о главном"
 
-        assertTrue(md.indexOf("## Суть") < md.indexOf("## Расшифровка"))
-        assertTrue("Коротко о главном" in md)
-        assertTrue("Дословный текст" in md)
+        val file = transcriptFileText(Transcription.Heard(said, gist))
+
+        assertEquals(said, file.trim())
+        assertTrue("суть в файле не повторяется", gist !in file)
     }
 
     @Test
-    fun `без сути нет и заголовка сути`() {
+    fun `суть не пропадает — она остаётся знанием об объекте`() {
+        val gist = "Коротко о главном"
 
-        val md = transcriptMarkdown(Transcription.Heard("Дословный текст"))
-
-        assertTrue("## Суть" !in md)
-        assertTrue("## Расшифровка" in md)
+        assertEquals(gist, Transcription.Heard("Дословный текст", gist).summary)
     }
 
     @Test

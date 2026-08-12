@@ -125,19 +125,25 @@ class TranscribeActionTest {
         assertEquals("«Слушаю запись…» над работой, которой не будет, — обещание впустую", emptyList<String>(), stages)
     }
 
+    /**
+     * Решение владельца 12.08.2026: «внизу лучше писать полный текст». Суть говорится
+     * подписью объекта — сверху и один раз; в файле лежит сама расшифровка (#873).
+     */
     @Test
-    fun `один тап приносит и суть, и дословный текст`() = runTest {
+    fun `один тап приносит и суть, и дословный текст — но каждое в своём месте`() = runTest {
 
-        val heard = Transcription.Heard("Перезвони мне до шести", "Просят перезвонить до шести")
-        val result = TranscribeRealizer(store, engine(heard), ready).perform(recording(1024))
+        val said = "Перезвони мне до шести"
+        val gist = "Просят перезвонить до шести"
+
+        val result = TranscribeRealizer(store, engine(Transcription.Heard(said, gist)), ready)
+            .perform(recording(1024))
 
         assertTrue(result is ActionResult.Success)
         val out = (result as ActionResult.Success).result
         assertEquals(ObjectKind.TEXT, out.type)
         val text = File(out.uri.value).readText()
-        assertTrue("Перезвони мне до шести" in text)
-        assertTrue("Просят перезвонить до шести" in text)
-        assertTrue("суть стоит выше расшифровки", text.indexOf("## Суть") < text.indexOf("## Расшифровка"))
+        assertEquals(said, text.trim())
+        assertEquals(gist, out.metadata[com.point.core.flow.META_SEMANTIC_SUMMARY])
     }
 
     @Test

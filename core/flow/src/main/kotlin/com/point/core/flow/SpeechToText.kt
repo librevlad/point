@@ -91,16 +91,18 @@ fun parseSummary(raw: String, text: String): String {
     return answer
 }
 
-fun transcriptMarkdown(heard: Transcription.Heard): String = buildString {
-    if (heard.summary.isNotBlank()) {
-        append("## Суть\n\n")
-        append(heard.summary.trim())
-        append("\n\n")
-    }
-    append("## Расшифровка\n\n")
-    append(heard.text.trim())
-    append("\n")
-}
+/**
+ * Что ложится в файл расшифровки (#873).
+ *
+ * Раньше сюда вклеивалась ещё и суть, разделом перед текстом. На экране она от этого
+ * писалась дважды подряд: сначала подписью под заголовком объекта, потом первой строкой
+ * карточки — один источник, два пути показа, которые друг о друге не знают.
+ *
+ * Решение владельца 12.08.2026: «внизу лучше писать полный текст». Суть отвечает на «о чём
+ * это» и остаётся знанием объекта — она живёт в metadata и говорится сверху один раз.
+ * А файл расшифровки — это расшифровка, и внизу человек читает её целиком.
+ */
+fun transcriptFileText(heard: Transcription.Heard): String = heard.text.trim() + "\n"
 
 fun modelReadableAudio(mime: String, fileName: String? = null): String? {
     val m = mime.lowercase().substringBefore(';').trim()
