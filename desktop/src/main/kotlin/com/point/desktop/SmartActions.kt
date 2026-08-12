@@ -20,7 +20,9 @@ import java.io.File
 import javax.imageio.ImageIO
 
 class PcEntitiesCapability : Capability {
-    override val id = CapabilityId("pc-entities")
+    // Имя общее с телефоном (#840): работа одна — найти значения в тексте, — и Point
+    // не должен считать её двумя разными вопросами только потому, что исполнители разные.
+    override val id = com.point.core.flow.KnownCapabilities.ENTITIES
     override val icon = "search"
 
     // Исследование — знание на исходнике, а не пользовательское действие (см. PcEntitiesRealizer
@@ -36,7 +38,7 @@ class PcEntitiesCapability : Capability {
 class PcEntitiesRealizer(
     private val extractor: EntityExtractor,
 ) : Realizer {
-    override val capabilityId = CapabilityId("pc-entities")
+    override val capabilityId = com.point.core.flow.KnownCapabilities.ENTITIES
 
     // «Найти в тексте» — исследование: результат — знание на исходнике, а не новый
     // объект-отчёт (Конституция §4; аудит 2026-08-09, блок 1.1).

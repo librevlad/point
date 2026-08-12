@@ -47,7 +47,7 @@ class SmartActionsTest {
         val findings = (result as ActionResult.Done).findings!!
         assertEquals("+7 916 123-45-67", findings.metadata["entity.phone"])
         assertEquals("irina@example.com", findings.metadata["entity.email"])
-        assertEquals("found", findings.metadata["investigated.pc-entities"])
+        assertEquals("found", findings.metadata["investigated.entities"])
         assertTrue(findings.features.contains(com.point.core.model.Feature.HAS_PHONE))
         assertTrue("сводка — человеческая", result.message.startsWith("Нашёл"))
     }
@@ -77,7 +77,7 @@ class SmartActionsTest {
         assertTrue("не нашлось — Done, не Failure: $result", result is ActionResult.Done)
         assertEquals(
             "not_found",
-            (result as ActionResult.Done).findings!!.metadata["investigated.pc-entities"],
+            (result as ActionResult.Done).findings!!.metadata["investigated.entities"],
         )
         assertTrue(result.message.contains("не нашлось"))
     }
@@ -310,7 +310,7 @@ class SmartActionsTest {
 
         assertTrue(
             "исследование осталось пользовательской кнопкой: $forText",
-            "pc-entities" !in forText,
+            "entities" !in forText,
         )
     }
 
@@ -320,7 +320,7 @@ class SmartActionsTest {
 
         assertTrue(
             "исследование объявлено телефону как отдельное действие «на ПК»: $advertised",
-            "pc-entities" !in advertised,
+            "entities" !in advertised,
         )
     }
 
@@ -349,7 +349,10 @@ class SmartActionsTest {
     private fun pcRealizerIds(): Set<String> = setOf(
         "pc-open", "pc-copy", "pc-reveal", "pc-save-as", "pc-download", "pc-to-phone", "pc-print",
         "pc-open-link", "transcribe",
-        "pc-entities",
+
+        // Поиск значений в тексте зовётся так же, как на телефоне (#840): работа одна,
+        // исполнители разные.
+        "entities",
     ) + com.point.core.flow.capabilities.sharedCapabilities().map { it.id.value }
 
     private fun pcRegistry() = DesktopRegistry(desktopCapabilities())

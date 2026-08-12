@@ -78,7 +78,7 @@ class EntityInvestigation @Inject constructor() : Capability {
 
     companion object {
 
-        val ID = com.point.core.model.CapabilityId("entities")
+        val ID = com.point.core.flow.KnownCapabilities.ENTITIES
     }
 }
 
