@@ -308,8 +308,16 @@ internal fun Working(work: com.point.desktop.Working, onCancel: () -> Unit) {
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Text(work.title, style = PointType.body)
+        // Та же строка, что на телефоне (#901): и время, и честность про затянувшееся
+        // ожидание. Раньше компьютер говорил «12 секунд» и про долгое ожидание молчал.
         Text(
-            listOfNotNull(work.stage, secondsWord(now - work.startedAt)).joinToString(" · "),
+            listOfNotNull(
+                work.stage,
+                com.point.core.flow.waitingLine(
+                    elapsed = ((now - work.startedAt) / 1000).toInt().coerceAtLeast(0),
+                    network = work.network,
+                ),
+            ).joinToString(" · "),
             style = PointType.small,
         )
         Text(

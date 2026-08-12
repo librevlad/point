@@ -426,12 +426,8 @@ internal fun messageExitLabel(outcome: Outcome): String =
 // и выводить из этого «модель читает документ» нельзя (#810): на живом прогоне так
 // объяснялась отправка файла на СОБСТВЕННЫЙ компьютер, где никакой модели нет. Это ещё и
 // неверно про приватность — Point сам учит смотреть, куда уезжает объект.
-internal fun waitingSubtitle(elapsed: Int, network: Boolean, cancelable: Boolean = true): String = when {
-    !network -> if (elapsed < 3) "Обрабатываю…" else "Идёт $elapsed с"
-    elapsed < 30 -> "Идёт $elapsed с"
-    cancelable -> "Идёт $elapsed с · долгое ожидание, можно отменить"
-    else -> "Идёт $elapsed с · долгое ожидание"
-}
+internal fun waitingSubtitle(elapsed: Int, network: Boolean, cancelable: Boolean = true): String =
+    com.point.core.flow.waitingLine(elapsed, network, cancelable)
 
 @Composable
 private fun PickingImageScreen(title: String) {

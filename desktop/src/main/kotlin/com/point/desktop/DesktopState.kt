@@ -22,6 +22,9 @@ data class Working(
 
     /** Чей это шаг: из списка видно, куда вернуться к работе. */
     val objectId: String? = null,
+
+    /** Уходит ли работа наружу: от этого зависит, что честно сказать про ожидание (#901). */
+    val network: Boolean = false,
 )
 
 class DesktopState(
@@ -171,7 +174,13 @@ class DesktopState(
     private suspend fun perform(id: String, item: InboxItem, stationTitle: String? = null): ActionResult? {
         val title = stationTitle ?: titleOf(id, item)
         _message.value = null
-        _working.value = Working(title, stage = null, startedAt = clock.now(), objectId = item.obj.id)
+        _working.value = Working(
+            title,
+            stage = null,
+            startedAt = clock.now(),
+            objectId = item.obj.id,
+            network = runCatching { resolver.leavesDevice(com.point.core.model.CapabilityId(id)) }.getOrDefault(false),
+        )
         val result = try {
             runCatching {
 
