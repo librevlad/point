@@ -19,22 +19,14 @@ data class InboxItem(
 )
 
 fun fileNameFor(humanName: String, mime: String): String {
-    val cleaned = humanName
-        .replace(FORBIDDEN, " ")
-        .replace(Regex("""\s+"""), " ")
-        .trim(' ', '.')
-        .take(MAX_NAME)
-        .trim(' ', '.')
-    val base = cleaned.ifBlank { "объект" }
+    val base = com.point.core.flow.safeFileName(humanName)
     val known = base.substringAfterLast('.', "").lowercase()
     val wanted = extensionFor(mime)
 
     return if (wanted.isEmpty() || known == wanted) base else "$base.$wanted"
 }
 
-private val FORBIDDEN = Regex("""[\\/:*?"<>|…\n\r\t]""")
 
-private const val MAX_NAME = 80
 
 private fun extensionFor(mime: String): String = when (mime.substringBefore(';').trim()) {
     "text/plain" -> "txt"

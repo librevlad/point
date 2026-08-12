@@ -100,7 +100,7 @@ class ClipboardSyncActivity : ComponentActivity() {
         } else {
 
             val dir = File(filesDir, "scratch/clip").apply { mkdirs() }
-            val safe = payload.name.ifBlank { "clip" }.replace('/', '_').replace('\\', '_')
+            val safe = com.point.core.flow.safeFileName(payload.name, ifBlank = "clip")
             val file = File(dir, safe).apply { writeBytes(payload.bytes) }
             val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
             cm.setPrimaryClip(ClipData.newUri(contentResolver, "Point", uri))

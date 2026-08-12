@@ -108,11 +108,7 @@ fun dropInboxId(random: ByteArray): String =
 fun isDropInboxId(id: String): Boolean =
     id.length in 22..64 && id.all { it in 'a'..'z' || it in 'A'..'Z' || it in '0'..'9' || it == '-' || it == '_' }
 
-fun dropFileName(raw: String): String {
-    val base = raw.replace('\\', '/').substringAfterLast('/').trim().trimStart('.')
-    val safe = base.filter { it.code >= 0x20 && it !in "\\/:*?\"<>|" }.take(120)
-    return safe.ifBlank { "файл" }
-}
+fun dropFileName(raw: String): String = safeFileName(raw, ifBlank = "файл")
 
 fun dropInboxLink(relayUrl: String, id: String): String? {
     val base = relayUrl.trim().trimEnd('/')

@@ -70,7 +70,11 @@ class ScratchObjectStore @Inject constructor(
                 val dir = File(scratchDir, id).apply { mkdirs() }
                 sources.forEachIndexed { index, source ->
                     val uri = Uri.parse(source)
-                    val name = displayName(uri) ?: "file-${index + 1}"
+                    // Имя даёт чужое приложение — в путь оно не годится (#865).
+                    val name = com.point.core.flow.safeFileName(
+                        displayName(uri).orEmpty(),
+                        ifBlank = "file-${index + 1}",
+                    )
                     context.contentResolver.openInputStream(uri)?.use { input ->
                         uniqueFile(dir, name).outputStream().use { output -> input.copyTo(output) }
                     }
