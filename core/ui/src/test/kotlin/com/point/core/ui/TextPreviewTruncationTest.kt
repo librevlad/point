@@ -1,6 +1,8 @@
 package com.point.core.ui
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -26,6 +28,21 @@ class TextPreviewTruncationTest {
             "Показать больше · ещё не менее 99${nbsp}500 символов",
             expandTextLabel(hiddenChars = 99_500, atLimit = true),
         )
+    }
+
+    /**
+     * Текст короче предела предпросмотра, но длиннее трёх строк на экране: скрытых символов
+     * не считано, а раскрывать есть что (#871). Число тут было бы враньём про то, что человек
+     * видит своими глазами.
+     */
+    @Test
+    fun `обрезано экраном, а не пределом — кнопка зовёт без числа`() {
+        listOf(0 to false, 0 to true, -1 to true).forEach { (hidden, atLimit) ->
+            val label = expandTextLabel(hiddenChars = hidden, atLimit = atLimit)
+
+            assertFalse("число в надписи: $label", label.any { it.isDigit() })
+            assertTrue("кнопка не зовёт раскрыть: $label", label.contains("Показать"))
+        }
     }
 
     @Test
