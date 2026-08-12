@@ -499,7 +499,7 @@ internal fun refusalOf(errors: List<String>, noReaders: Boolean): String {
         return "Связь оборвалась, таблица не дочиталась — проверьте интернет и попробуйте ещё раз"
     }
     if (com.point.core.flow.looksLikeQuotaFailure(chosen)) {
-        return "Бесплатные лимиты чтения исчерпаны — вернитесь позже, платить не идём"
+        return com.point.core.flow.FREE_LIMITS_SPENT_TEXT
     }
     return chosen.substringBefore('\n').take(120)
 }

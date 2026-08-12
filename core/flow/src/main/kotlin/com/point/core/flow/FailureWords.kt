@@ -27,6 +27,14 @@ fun noAppFor(scheme: String?): String = when (scheme?.lowercase()) {
 
 const val FREE_LIMIT_SPENT = "бесплатный лимит исчерпан"
 
+/**
+ * Что человек читает, когда бесплатное кончилось (#840, #416: «платить не идём»).
+ *
+ * Фраза была записана трижды — в цепочке моделей, у облачного чтения и в «В Excel». Человеку
+ * без разницы, кто именно упёрся в лимит, и слова у всех должны быть одни.
+ */
+const val FREE_LIMITS_SPENT_TEXT = "Бесплатные лимиты чтения исчерпаны — вернитесь позже, платить не идём"
+
 private val NETWORK_FAILURE_HINTS = listOf(
     "resolve host", "No address associated", "Unable to resolve",
     "connection abort", "Network is unreachable", "Failed to connect",

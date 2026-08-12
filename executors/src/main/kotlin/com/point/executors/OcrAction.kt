@@ -38,9 +38,8 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import javax.inject.Inject
 
-internal const val OCR_CLOUD_PROMPT =
-    "Извлеки весь текст с изображения дословно, сохраняя порядок строк. " +
-        "Таблицы оформи в Markdown. Верни только текст, без комментариев."
+/** Просьба к зрячей модели — общая на все облачные пути (#840). */
+internal val OCR_CLOUD_PROMPT: String = com.point.core.flow.CLOUD_READING_PROMPT
 
 /**
  * Узкий вопрос вместо вопроса о странице (#426): человек показал область, и на картинке
@@ -235,11 +234,12 @@ private fun unreadable(who: String, why: String): String =
     "Не смог прочитать этот снимок: $who отдала бессмыслицу ($why). " +
         "Лучше переснять при ровном свете и поближе."
 
-private fun chainClosed(level: PrivacyLevel): String = when (level) {
-    PrivacyLevel.DEVICE_ONLY -> "Наружу сейчас не отправляем — это меняется в настройках"
-    else -> "Читают только те, кто обещал не учиться на присланном, — так выбрано в настройке " +
-        "«Куда можно отправлять»"
-}
+/**
+ * Слова отказа по режиму приватности — общие (#840): они были записаны здесь, в `:data` и в
+ * `:core:flow` тремя копиями, и любая правка формулировки расходилась молча.
+ */
+private fun chainClosed(level: PrivacyLevel): String =
+    com.point.core.flow.chainClosedBy(level)
 
 private fun ocrMeta(input: PointObject): Map<String, String> = buildMap {
     put("op", "ocr")

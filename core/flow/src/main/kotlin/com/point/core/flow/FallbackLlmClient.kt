@@ -94,6 +94,6 @@ class FallbackLlmClient(
         const val NO_NETWORK_MESSAGE = "Модель недоступна — нет подключения к интернету"
 
         /** Та же, что у облачного чтения: человеку без разницы, кто именно упёрся в лимит. */
-        const val FREE_LIMITS_SPENT = "Бесплатные лимиты чтения исчерпаны — вернитесь позже, платить не идём"
+        const val FREE_LIMITS_SPENT = FREE_LIMITS_SPENT_TEXT
     }
 }
