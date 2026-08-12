@@ -163,3 +163,22 @@ class FilePcConfig(private val baseDir: File) {
     private fun hostName(): String =
         runCatching { InetAddress.getLocalHost().hostName }.getOrDefault("Point PC")
 }
+
+/**
+ * Ключ AI на компьютере: сам ключ, адрес и модель (#610).
+ *
+ * Жил рядом с самодельным клиентом `DesktopLlmClient`; клиента не стало (#828 — он не
+ * использовался ни одной строкой), а настройка осталась и переехала туда, где ей место.
+ */
+data class AiConfig(
+    val key: String = "",
+    val url: String = DEFAULT_URL,
+    val model: String = DEFAULT_MODEL,
+) {
+    companion object {
+
+        const val DEFAULT_URL = "https://openrouter.ai/api/v1/chat/completions"
+
+        const val DEFAULT_MODEL = "meta-llama/llama-3.3-70b-instruct:free"
+    }
+}

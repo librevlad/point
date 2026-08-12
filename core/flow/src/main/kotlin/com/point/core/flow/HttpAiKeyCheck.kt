@@ -9,7 +9,6 @@ class HttpAiKeyCheck(
 
     override suspend fun check(config: UserAiConfig): KeyProbe {
         val key = config.apiKey.trim()
-        val base = config.baseUrl.trim().trimEnd('/').ifBlank { UserAiConfig.DEFAULT.baseUrl }
         val model = config.model.trim().ifBlank { UserAiConfig.DEFAULT.model }
         val body = JSONObject()
             .put("model", model)
@@ -22,7 +21,7 @@ class HttpAiKeyCheck(
             .toString()
 
         val result = runCatching {
-            http.post("$base/chat/completions", mapOf("Authorization" to "Bearer $key"), body)
+            http.post(probeUrl(config.baseUrl), mapOf("Authorization" to "Bearer $key"), body)
         }
 
         val response = result.getOrElse { failure ->
@@ -44,4 +43,16 @@ class HttpAiKeyCheck(
     private companion object {
         const val PROBE_TOKENS = 16
     }
+}
+
+/**
+ * Адрес проверки: у сервиса записана «база», а компьютер до сих пор хранил полный адрес
+ * вызова. Оба вида читаются одинаково — иначе проверка стучалась бы не туда (#610).
+ *
+ * Правило приехало с компьютера в общий код (#828): своя копия проверки ключа там больше не
+ * живёт, а устойчивость к полному адресу досталась заодно и телефону.
+ */
+fun probeUrl(baseUrl: String): String {
+    val base = baseUrl.trim().trimEnd('/').ifBlank { UserAiConfig.DEFAULT.baseUrl }
+    return if (base.endsWith("/chat/completions")) base else "$base/chat/completions"
 }
