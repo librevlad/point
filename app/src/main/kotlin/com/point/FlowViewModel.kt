@@ -96,7 +96,7 @@ class FlowViewModel @Inject constructor(
     private val store: ObjectStore,
     private val registry: CapabilityRegistry,
     private val resolver: Resolver,
-    private val aiChatResponder: com.point.core.flow.AiChatResponder,
+    private val talk: ChatTalk,
     private val enrichment: Enrichment,
     private val history: HistoryStore,
     private val usage: CapabilityUsage,
@@ -1003,9 +1003,8 @@ class FlowViewModel @Inject constructor(
 
     private fun openChat(obj: PointObject) {
         _ui.update {
-            val kept = it.chat?.takeIf { c -> c.obj.id == obj.id }
             it.copy(
-                chat = kept ?: ChatState(obj = obj, suggestions = aiSuggestions(obj.state.kind)),
+                chat = talk.opened(obj, it.chat),
                 chatOpen = true,
                 busy = null, inputPrompt = null, message = null, messageOutcome = Outcome.NONE,
             )
@@ -1035,43 +1034,14 @@ class FlowViewModel @Inject constructor(
         val message = text.trim()
         if (message.isEmpty() || chat.pending) return
         val history = chat.messages
-        val obj = chat.obj
-        _ui.update {
-            it.copy(
-                chat = chat.copy(
-                    messages = history + ChatMessage(ChatRole.USER, message),
-                    pending = true,
-                    notice = null,
-                ),
-            )
-        }
+        _ui.update { it.copy(chat = talk.said(chat, message)) }
         chatJob?.cancel()
         chatJob = viewModelScope.launch {
-
-            // Разговор вещей не делает (#804, решение владельца 12.08.2026 «Только в
-            // действиях, чат подсказывает»). Прежде развилка по списку слов молча рождала
-            // объект: человек не знал, что получит — реплику или файл. Узнанную просьбу
-            // разговор показывает действием, и решает человек.
-            val target = aiTransformTarget(message)
-            if (target != null) {
-                val title = runCatching { registry.byId(target).label(obj.state) }.getOrNull()
-                _ui.update { s ->
-                    s.chat?.let { c ->
-                        s.copy(chat = c.copy(pending = false, offer = title?.let { ChatOffer(target, it) }))
-                    } ?: s
-                }
-                if (title != null) return@launch
+            val answered = talk.answered(_ui.value.chat ?: chat, message, history) { id, state ->
+                runCatching { registry.byId(id).label(state) }.getOrNull()
             }
-            run {
-                var failed = false
-                val reply = runCatching { aiChatResponder.reply(obj, history, message) }
-                    .getOrElse {
-                        if (it is kotlinx.coroutines.CancellationException) throw it
-                        failed = true
-                        "Не получилось ответить: ${it.message ?: "ошибка"}"
-                    }
-                appendChatAssistant(reply, failed = failed)
-            }
+            chatJob = null
+            _ui.update { s -> if (s.chat == null) s else s.copy(chat = answered) }
         }
     }
 
@@ -1097,7 +1067,7 @@ class FlowViewModel @Inject constructor(
         val job = chatJob ?: return
         chatJob = null
         job.cancel()
-        _ui.update { s -> s.chat?.let { c -> s.copy(chat = c.copy(pending = false, notice = "Ответ остановлен")) } ?: s }
+        _ui.update { s -> s.chat?.let { c -> s.copy(chat = talk.stopped(c)) } ?: s }
     }
 
     fun takeChatAnswer() {
@@ -1105,9 +1075,8 @@ class FlowViewModel @Inject constructor(
         if (chat.pending) return
         val answer = chat.messages.lastOrNull { it.role == ChatRole.ASSISTANT }
             ?.text?.takeIf { it.isNotBlank() } ?: return
-        val source = chat.obj
         viewModelScope.launch {
-            val obj = runCatching { chatAnswerObject(source, answer, chat.messages.size) }.getOrNull()
+            val obj = runCatching { talk.answerObject(chat, answer) }.getOrNull()
             if (obj == null) {
                 _ui.update { it.copy(message = "Не удалось забрать ответ", messageOutcome = Outcome.FAILED) }
                 return@launch
@@ -1119,35 +1088,7 @@ class FlowViewModel @Inject constructor(
         }
     }
 
-    private suspend fun chatAnswerObject(source: PointObject, answer: String, turn: Int): PointObject {
-        val ref = store.newScratchFile("md")
-        File(ref.value).writeText(answer)
-        return PointObject(
-            id = "chat-${source.id}-$turn",
-            mime = "text/markdown",
-            uri = ref,
-            state = ObjectState(ObjectKind.TEXT, features = setOf(Feature.HAS_TEXT)),
-            metadata = mapOf("name" to "Ответ AI"),
 
-            provenance = com.point.core.model.Provenance.MODEL,
-            sourceObjects = listOf(source.id),
-            creatorAction = AiCapability.ID.value,
-        )
-    }
-
-    private fun appendChatAssistant(text: String, failed: Boolean = false) {
-        chatJob = null
-        _ui.update { s ->
-            val c = s.chat ?: return@update s
-            s.copy(
-                chat = c.copy(
-                    messages = c.messages + ChatMessage(ChatRole.ASSISTANT, text, failed = failed),
-                    pending = false,
-                    notice = null,
-                ),
-            )
-        }
-    }
 
     fun openKeySettings() {
         openKeyScreen(errand = null)
