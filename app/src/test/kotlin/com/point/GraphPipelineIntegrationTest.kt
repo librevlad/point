@@ -237,9 +237,16 @@ class GraphPipelineIntegrationTest {
 
     private fun vm(): FlowViewModel = FlowViewModel(
         store, registry, resolver,
-        object : AiChatResponder {
-            override suspend fun reply(obj: PointObject, history: List<com.point.core.model.ChatMessage>, message: String) = "ok"
-        },
+        ChatTalk(
+            object : AiChatResponder {
+                override suspend fun reply(
+                    obj: PointObject,
+                    history: List<com.point.core.model.ChatMessage>,
+                    message: String,
+                ) = "ok"
+            },
+            store,
+        ),
         enrichment,
         object : HistoryStore {
             override suspend fun record(obj: PointObject) = Unit
