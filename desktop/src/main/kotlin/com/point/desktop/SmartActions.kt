@@ -23,7 +23,7 @@ class PcEntitiesCapability : Capability {
     // Имя общее с телефоном (#840): работа одна — найти значения в тексте, — и Point
     // не должен считать её двумя разными вопросами только потому, что исполнители разные.
     override val id = com.point.core.flow.KnownCapabilities.ENTITIES
-    override val icon = "search"
+    override val icon = "find"
 
     // Исследование — знание на исходнике, а не пользовательское действие (см. PcEntitiesRealizer
     // ниже). Без этого флага она оставалась кликабельной кнопкой поверх уже готового ответа

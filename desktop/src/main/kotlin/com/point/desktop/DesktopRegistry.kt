@@ -34,7 +34,19 @@ class DesktopRegistry(
             .filter { it.accepts(state) }
             .filter { runnable(it.id, state) }
             .sortedWith(com.point.core.flow.byIntentThenPriority(state, intent))
-            .map { Bubble(it.icon, it.label(state), it.id, it.produces(state) ?: state, yields = it.yields(state)) }
+            .map {
+                Bubble(
+                    it.icon,
+                    it.label(state),
+                    it.id,
+                    it.produces(state) ?: state,
+
+                    // Намерение — то же правило, что на телефоне (#879): без него все
+                    // действия попадали в одну группу.
+                    intent = com.point.core.flow.primaryIntentOf(it, state),
+                    yields = it.yields(state),
+                )
+            }
     }
 
     private fun placeholder(state: ObjectState) = com.point.core.model.PointObject(

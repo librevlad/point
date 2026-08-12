@@ -520,9 +520,23 @@ internal fun CompactObject(
 
         val actions = state.actionsFor(item)
         if (actions.isNotEmpty()) {
-            Text("ЧТО МОЖНО СДЕЛАТЬ", style = PointType.label)
+
+            // Группы по смыслу — те же, что на телефоне (#879). Раньше здесь был один
+            // список «Что можно сделать»: порядок совпадал с телефонным, но человеку это
+            // было не видно. Действие без пузыря (просьба к телефону) идёт последней
+            // группой — у него нет своего намерения, кроме «отправить».
             val primary = actions.indexOfFirst { it.unavailable == null }
-            actions.forEachIndexed { i, action ->
+            val grouped = com.point.core.ui.actionGroupOrder().mapNotNull { group ->
+                actions.filter { choice ->
+                    val intent = choice.bubble?.intent
+                    if (intent == null) group == com.point.core.ui.ActionGroup.SEND
+                    else com.point.core.ui.actionGroupOf(intent) == group
+                }.takeIf { it.isNotEmpty() }?.let { group to it }
+            }
+            grouped.forEach { (group, rows) ->
+                Text(group.label.uppercase(), style = PointType.label)
+                rows.forEach { action ->
+                val i = actions.indexOf(action)
                 when {
                     action.unavailable != null -> MutedStation(
                         action.title,
@@ -549,6 +563,7 @@ internal fun CompactObject(
                         icon = action.icon,
                         appearIndex = i,
                     ) { state.sendToPhone(item, action.remote) }
+                }
                 }
             }
         }

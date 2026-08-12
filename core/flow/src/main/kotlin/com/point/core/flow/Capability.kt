@@ -43,3 +43,15 @@ interface Capability {
 
     fun missing(state: ObjectState): String? = null
 }
+
+/**
+ * Главное намерение действия — то, по которому оно попадает в свою группу на экране (#879).
+ *
+ * Жило в телефонном реестре, и компьютер о нём не знал: там все действия получали намерение
+ * по умолчанию и сливались в одну группу. Правило смотрит только на саму способность и
+ * состояние объекта — Android ему не нужен.
+ */
+fun primaryIntentOf(capability: Capability, state: ObjectState): Intent {
+    val served = capability.intents(state)
+    return Intent.entries.firstOrNull { it in served } ?: Intent.UNDERSTAND
+}

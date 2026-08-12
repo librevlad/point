@@ -28,7 +28,7 @@ class PcTranscribeCapability : Capability {
     // сделали, — телефон узнаёт её по тому же id и ставит одной строкой, а компьютер
     // становится вторым исполнителем (#628).
     override val id = TRANSCRIBE
-    override val icon = "voice"
+    override val icon = "transcribe"
     override val meta = CapabilityMeta(priority = 21, latency = Latency.SLOW, network = true, auth = true)
     override fun label(state: ObjectState) = "Расшифровать"
     override fun accepts(state: ObjectState) = state.kind == ObjectKind.AUDIO

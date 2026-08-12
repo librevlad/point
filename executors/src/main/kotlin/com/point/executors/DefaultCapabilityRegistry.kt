@@ -71,10 +71,8 @@ class DefaultCapabilityRegistry @Inject constructor(
         else -> BubbleTier.SMART
     }
 
-    private fun primaryIntentOf(c: Capability, state: ObjectState): Intent {
-        val served = c.intents(state)
-        return Intent.entries.firstOrNull { it in served } ?: Intent.UNDERSTAND
-    }
+    private fun primaryIntentOf(c: Capability, state: ObjectState): Intent =
+        com.point.core.flow.primaryIntentOf(c, state)
 
 
     private fun missingFor(c: Capability, state: ObjectState): String? =
