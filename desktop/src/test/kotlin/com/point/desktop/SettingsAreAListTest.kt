@@ -102,10 +102,15 @@ class SettingsAreAListTest {
     }
 
     @Test
-    fun `строка ключей говорит, есть ли свой ключ`() {
+    fun `строка ключей считает свои ключи так же, как на телефоне`() {
         val empty = PcConfig(name = "User-PC")
+        val one = empty.copy(
+            aiKeys = empty.aiKeys.with(com.point.core.flow.UserAiKey("openrouter", "sk-мой")),
+        )
 
-        assertTrue(keysLine(empty).contains("Своего ключа нет"))
-        assertTrue(keysLine(empty.copy(ai = empty.ai.copy(key = "sk-мой"))).contains("Свой ключ задан"))
+        assertEquals(com.point.core.flow.aiKeysSummary(empty.aiKeys), keysLine(empty))
+        assertEquals(com.point.core.flow.aiKeysSummary(one.aiKeys), keysLine(one))
+        assertTrue("ноль не сосчитан", keysLine(empty).contains("0"))
+        assertTrue("свой ключ не сосчитан", keysLine(one).contains("1"))
     }
 }

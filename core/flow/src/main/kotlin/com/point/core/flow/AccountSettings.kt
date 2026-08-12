@@ -65,12 +65,8 @@ data class AccountSettings(
     fun encode(): String = encodePcMeta(
         buildMap {
             put(AT, at.toString())
-            aiKeys.entries.forEach { key ->
-                put(AI + key.providerId, key.apiKey)
-                put(AI + key.providerId + SAVED, key.savedAt.toString())
-                if (key.model.isNotBlank()) put(AI + key.providerId + MODEL, key.model)
-                if (key.baseUrl.isNotBlank()) put(AI + key.providerId + URL, key.baseUrl)
-            }
+            // Раскладка ключей общая с файлом настроек компьютера (#888).
+            putAll(AiKeyFields.of(aiKeys))
             if (speechKey.isNotBlank()) put(SPEECH, speechKey)
             if (ocrKey.isNotBlank()) put(OCR, ocrKey)
             privacy?.let { put(PRIVACY, it.name) }
@@ -81,10 +77,6 @@ data class AccountSettings(
     companion object {
 
         private const val AT = "at"
-        private const val AI = "ai."
-        private const val MODEL = ".model"
-        private const val URL = ".url"
-        private const val SAVED = ".at"
         private const val SPEECH = "speech.key"
         private const val OCR = "ocr.key"
         private const val PRIVACY = "privacy"
@@ -93,31 +85,8 @@ data class AccountSettings(
         fun decode(encoded: String): AccountSettings {
             val fields = decodePcMeta(encoded)
             val at = fields[AT]?.toLongOrNull() ?: 0L
-            var keys = UserAiKeys.NONE
-            fields.keys
-                .filter {
-                    it.startsWith(AI) && !it.endsWith(MODEL) && !it.endsWith(URL) && !it.endsWith(SAVED)
-                }
-                .forEach { field ->
-                    val provider = field.removePrefix(AI)
-                    val apiKey = fields[field].orEmpty()
-                    if (apiKey.isNotBlank()) {
-                        keys = keys.with(
-                            UserAiKey(
-                                providerId = provider,
-                                apiKey = apiKey,
-                                model = fields[field + MODEL].orEmpty(),
-                                baseUrl = fields[field + URL].orEmpty(),
-
-                                // Когда ключ вписали, важно для слияния: без своей отметки
-                                // приехавший ключ выглядел бы ровесником всей посылки.
-                                savedAt = fields[field + SAVED]?.toLongOrNull() ?: at,
-                            ),
-                        )
-                    }
-                }
             return AccountSettings(
-                aiKeys = keys,
+                aiKeys = AiKeyFields.from(fields, at),
                 speechKey = fields[SPEECH].orEmpty(),
                 ocrKey = fields[OCR].orEmpty(),
                 privacy = fields[PRIVACY]?.let { name -> PrivacyLevel.entries.firstOrNull { it.name == name } },

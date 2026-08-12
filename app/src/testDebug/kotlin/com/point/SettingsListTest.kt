@@ -272,6 +272,8 @@ class SettingsListTest {
 
         compose.onNodeWithText("Ключи AI").performClick()
         AI_PROVIDERS.forEach { compose.onNodeWithText(it.name).performScrollTo().assertIsDisplayed() }
+        compose.onNodeWithText(com.point.core.flow.AiServiceGroup.MINE.title.uppercase(), substring = true)
+            .performScrollTo().assertIsDisplayed()
         compose.onNodeWithText(openRouter.name).performScrollTo().performClick()
         compose.onNodeWithText("Открыть сайт ${openRouter.name}").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Ключ ${openRouter.name}").performScrollTo().assertIsDisplayed()

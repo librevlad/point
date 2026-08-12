@@ -30,11 +30,14 @@ class SettingsRowKeepsWidthTest {
     }
 
     @Test
-    fun `примечание живёт внутри взвешенной колонки, а не отдельным столбцом`() {
-        val row = source.substringAfter("private fun Service(").substringBefore("\n@Composable")
-        val column = row.substringAfter("Modifier.weight(1f)").substringBefore("\n        }")
+    fun `примечание не делит строку с текстом`() {
+        val nearRow = Regex("Row\\(").findAll(source).map { it.range.first }.any { start ->
+            val block = source.substring(start, minOf(source.length, start + 900))
+            "freeNote" in block && "weight(1f)" in block
+        }
 
-        assertTrue("примечание вынесено из колонки — ширина снова уедет", "freeNote" in column)
+        assertTrue("примечание снова стоит столбцом рядом с текстом — ширина уедет", !nearRow)
+        assertTrue("примечание пропало с экрана вовсе", "freeNote" in source)
     }
 
     /**

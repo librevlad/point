@@ -503,9 +503,6 @@ private fun pointGlyph(badge: Boolean = false): androidx.compose.ui.graphics.pai
         }
     }
 
-private fun aiKeyMissing(pointDir: java.io.File): String? =
-    if (FilePcConfig(pointDir).load().ai.key.isNotBlank()) null else "на компьютере не задан ключ AI"
-
 private fun speechKeyMissing(pointDir: java.io.File): String? =
     if (FilePcConfig(pointDir).load().speech.key.isNotBlank()) {
         null

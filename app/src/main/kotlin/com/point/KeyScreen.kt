@@ -410,53 +410,71 @@ private fun KeySection(
         )
     }
 
+    // Очередь названа прямо: без этого главный вопрос человека — «мне что, выбрать один из
+    // одиннадцати?» — оставался без ответа (#887).
     Text(
-        "$AI_KEY_WHY Ключ живёт только на этом устройстве, и Point работает на " +
-            "вашей квоте. Ниже — все сервисы, к которым Point обращается, сверху вниз.",
+        AI_KEY_WHY + " " + com.point.core.flow.AI_CHAIN_WHAT +
+            " Ключ живёт только на этом устройстве.",
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
 
     val checkingAll = checking == CHECK_ALL_SERVICES
+
+    // Счёт и массовая проверка — одной тихой строкой. Раньше «Проверить все» стояло главным
+    // действием экрана и спорило со списком, ради которого сюда и заходят.
     PortalRow(
-        title = if (checkingAll) "Проверяю…" else "Проверить все",
+        title = com.point.core.flow.aiKeysCount(screen.keys),
         subtitle = if (checkingAll) {
             "Point спрашивает каждый сервис одним коротким словом. Ваш объект никуда не уходит."
         } else {
             "${screen.checkedLine}. Сам Point ничего не проверяет — только по этому тапу."
         },
         onClick = onCheckAll,
-        icon = bubbleIcon(AI_ICON),
-        accent = bubbleColor(AI_ICON),
-        primary = !checkingAll,
+        icon = null,
+        primary = false,
         chevron = false,
         enabled = checking == null,
         subtitleMaxLines = 3,
+        trailing = {
+            Text(
+                if (checkingAll) "Проверяю…" else "Проверить все",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.tertiary,
+            )
+        },
         modifier = Modifier.graphicsLayer { alpha = if (checking == null) 1f else 0.45f },
     )
 
     var open by rememberSaveable { mutableStateOf<String?>(null) }
 
-    screen.services.forEachIndexed { index, line ->
-        ServiceRow(
-            line = line,
-            checking = checking == line.providerId,
-            open = open == line.providerId,
-            index = index,
-            onToggle = { open = if (open == line.providerId) null else line.providerId },
-        )
-        Reveal(open == line.providerId) {
-            ServiceEditor(
+    // Общее сказано заголовком группы один раз, а не девятью одинаковыми хвостами в строках
+    // (решение владельца по мокапам 12.08.2026 — вариант Б).
+    var index = 0
+    com.point.core.flow.aiServiceGroups(screen.services).forEach { (group, rows) ->
+        Spacer(Modifier.height(4.dp))
+        SectionLabel(group.title)
+        rows.forEach { line ->
+            ServiceRow(
                 line = line,
-                saved = screen.keys.of(line.providerId),
                 checking = checking == line.providerId,
-                verdict = verdict.takeIf { verdictFor == line.providerId },
-                onSave = onSave,
-                onCheck = onCheck,
-                onPasteKey = onPasteKey,
-                onForgetKey = onForgetKey,
-                onOpenUrl = onOpenUrl,
+                open = open == line.providerId,
+                index = index++,
+                onToggle = { open = if (open == line.providerId) null else line.providerId },
             )
+            Reveal(open == line.providerId) {
+                ServiceEditor(
+                    line = line,
+                    saved = screen.keys.of(line.providerId),
+                    checking = checking == line.providerId,
+                    verdict = verdict.takeIf { verdictFor == line.providerId },
+                    onSave = onSave,
+                    onCheck = onCheck,
+                    onPasteKey = onPasteKey,
+                    onForgetKey = onForgetKey,
+                    onOpenUrl = onOpenUrl,
+                )
+            }
         }
     }
 
@@ -485,13 +503,14 @@ private fun ServiceRow(
 ) {
     PortalRow(
         title = line.name,
-        subtitle = "${line.what}\n${line.keyLine} · ${if (checking) "проверяю…" else line.factLine}",
+        // Что умеет сервис — по раскрытию: в закрытой строке это девять абзацев подряд.
+        // Здесь остаётся то, что отличает эту строку от соседних (#887).
+        subtitle = serviceState(line, checking, open),
         onClick = onToggle,
-        icon = bubbleIcon(AI_ICON),
-        accent = bubbleColor(AI_ICON),
-        primary = line.mine,
+        icon = null,
+        primary = false,
         chevron = false,
-        subtitleMaxLines = 4,
+        subtitleMaxLines = 2,
         appearIndex = index,
         trailing = {
             Icon(
@@ -504,6 +523,19 @@ private fun ServiceRow(
             )
         },
     )
+}
+
+/**
+ * Что стоит во второй строке сервиса. Общее про группу уже сказано её заголовком, поэтому
+ * здесь остаётся личное: свой ключ, последний факт, ход проверки.
+ */
+private fun serviceState(line: AiServiceLine, checking: Boolean, open: Boolean): String? = when {
+    checking -> "проверяю…"
+    open && line.mine -> line.what + "\n" + line.keyLine + " · " + line.factLine
+    open -> line.what
+    line.mine -> "${line.keyLine} · ${line.factLine}"
+    line.factLine != com.point.core.flow.NEVER_ASKED -> line.factLine
+    else -> null
 }
 
 @Composable

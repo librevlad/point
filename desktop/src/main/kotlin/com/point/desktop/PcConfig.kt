@@ -8,7 +8,13 @@ import java.net.InetAddress
 data class PcConfig(
     val name: String,
     val server: String = "",
-    val ai: AiConfig = AiConfig(),
+
+    /**
+     * Ключ на каждый сервис — та же схема, что на телефоне (#888). Раньше здесь лежал один
+     * `AiConfig`: приехавшая связка схлопывалась в самый свежий ключ, и на компьютере
+     * оставался один сервис из одиннадцати.
+     */
+    val aiKeys: com.point.core.flow.UserAiKeys = com.point.core.flow.UserAiKeys.NONE,
 
     val speech: SpeechConfig = SpeechConfig(),
 
@@ -29,11 +35,10 @@ class FilePcConfig(private val baseDir: File) {
         val config = PcConfig(
             name = stored["name"] ?: hostName(),
             server = stored["server"].orEmpty(),
-            ai = AiConfig(
-                key = stored["ai.key"].orEmpty(),
-                url = stored["ai.url"].orEmpty().ifBlank { AiConfig.DEFAULT_URL },
-                model = stored["ai.model"].orEmpty().ifBlank { AiConfig.DEFAULT_MODEL },
-            ),
+            // Единственный старый ключ не теряется при обновлении: он встаёт своему сервису.
+            aiKeys = com.point.core.flow.AiKeyFields.from(stored, stamp()).let { keys ->
+                if (keys.entries.isNotEmpty()) keys else oldSingleKey(stored)
+            },
             ocr = OcrConfig(
                 key = stored["ocr.key"].orEmpty(),
                 url = stored["ocr.url"].orEmpty().ifBlank { OcrConfig.DEFAULT_URL },
@@ -54,7 +59,8 @@ class FilePcConfig(private val baseDir: File) {
     fun mergeSecrets(theirs: com.point.core.flow.SharedSecrets): com.point.core.flow.SharedSecrets {
         val config = load()
         val mine = com.point.core.flow.SharedSecrets(
-            aiKey = config.ai.key,
+            // Старый путь возит один ключ — самый свежий. Всё остальное едет `AccountSettings`.
+            aiKey = config.aiKeys.mine.maxByOrNull { it.savedAt }?.apiKey.orEmpty(),
             speechKey = config.speech.key,
             ocrKey = config.ocr.key,
             at = secretsStamp(),
@@ -62,7 +68,20 @@ class FilePcConfig(private val baseDir: File) {
         val merged = mine.mergedWith(theirs)
         if (merged != mine) {
             val stored = runCatching { decodePcMeta(file.readText()) }.getOrDefault(emptyMap()).toMutableMap()
-            if (merged.aiKey.isNotBlank()) stored["ai.key"] = merged.aiKey
+            if (merged.aiKey.isNotBlank() && config.aiKeys.mine.none { it.apiKey == merged.aiKey }) {
+                val provider = com.point.core.flow.AI_PROVIDERS.first()
+                stored.putAll(
+                    com.point.core.flow.AiKeyFields.of(
+                        config.aiKeys.with(
+                            com.point.core.flow.UserAiKey(
+                                providerId = provider.id,
+                                apiKey = merged.aiKey,
+                                savedAt = merged.at,
+                            ),
+                        ),
+                    ),
+                )
+            }
             if (merged.speechKey.isNotBlank()) stored["speech.key"] = merged.speechKey
             if (merged.ocrKey.isNotBlank()) stored["ocr.key"] = merged.ocrKey
             stored["secrets.at"] = merged.at.toString()
@@ -85,22 +104,9 @@ class FilePcConfig(private val baseDir: File) {
     fun accountSettings(): com.point.core.flow.AccountSettings {
         val config = load()
         val at = stamp()
-        val provider = com.point.core.flow.providerForBaseUrl(config.ai.url)
-        val keys = if (config.ai.key.isBlank()) {
-            com.point.core.flow.UserAiKeys.NONE
-        } else {
-            com.point.core.flow.UserAiKeys.NONE.with(
-                com.point.core.flow.UserAiKey(
-                    providerId = provider?.id ?: com.point.core.flow.OWN_SERVICE_ID,
-                    apiKey = config.ai.key,
-                    model = config.ai.model,
-                    baseUrl = if (provider == null) config.ai.url else "",
-                    savedAt = at,
-                ),
-            )
-        }
         return com.point.core.flow.AccountSettings(
-            aiKeys = keys,
+            // Едут все ключи, а не самый свежий из них (#888).
+            aiKeys = config.aiKeys,
             speechKey = config.speech.key,
             ocrKey = config.ocr.key,
             sound = config.sound,
@@ -112,23 +118,35 @@ class FilePcConfig(private val baseDir: File) {
     @Synchronized
     fun applyAccountSettings(merged: com.point.core.flow.AccountSettings) {
         val config = load()
-        val best = merged.aiKeys.mine.firstOrNull()
-        val provider = best?.let { key ->
-            com.point.core.flow.AI_PROVIDERS.firstOrNull { it.id == key.providerId }
-        }
+
+        // Приехавшая связка ложится целиком: каждый ключ своему сервису. Раньше здесь
+        // брался только первый — на компьютере из одиннадцати оставался один (#888).
         val next = config.copy(
-            ai = config.ai.copy(
-                key = best?.apiKey ?: config.ai.key,
-                url = best?.baseUrl?.takeIf { it.isNotBlank() } ?: provider?.baseUrl ?: config.ai.url,
-                model = best?.model?.takeIf { it.isNotBlank() }
-                    ?: provider?.models?.substringBefore(',') ?: config.ai.model,
-            ),
+            aiKeys = merged.aiKeys.mine.fold(config.aiKeys) { keys, key -> keys.with(key) },
             speech = config.speech.copy(key = merged.speechKey.ifBlank { config.speech.key }),
             ocr = config.ocr.copy(key = merged.ocrKey.ifBlank { config.ocr.key }),
             sound = merged.sound ?: config.sound,
         )
         if (next != config) save(next)
         stamp(merged.at)
+    }
+
+    /**
+     * Ключ, вписанный до #888, — один на всех, с адресом сервиса. Он встаёт тому сервису,
+     * чей это адрес, а свой адрес человека остаётся своим сервисом: терять вписанное при
+     * обновлении нельзя.
+     */
+    private fun oldSingleKey(stored: Map<String, String>): com.point.core.flow.UserAiKeys {
+        val key = stored["ai.key"].orEmpty()
+        if (key.isBlank()) return com.point.core.flow.UserAiKeys.NONE
+        return com.point.core.flow.keysFromSingleKey(
+            com.point.core.flow.UserAiConfig(
+                apiKey = key,
+                baseUrl = stored["ai.url"].orEmpty(),
+                model = stored["ai.model"].orEmpty(),
+                savedAt = stamp(),
+            ),
+        )
     }
 
     private fun stamp(): Long =
@@ -145,13 +163,16 @@ class FilePcConfig(private val baseDir: File) {
         val stored = runCatching { decodePcMeta(file.readText()) }.getOrDefault(emptyMap()).toMutableMap()
         stored["name"] = config.name
         stored["server"] = config.server
-        stored["ai.url"] = config.ai.url
-        stored["ai.model"] = config.ai.model
+
+        // Ключи лежат по сервисам, той же раскладкой, что едет между устройствами (#888).
+        // Убранный ключ уходит из файла, а не остаётся висеть полем.
+        com.point.core.flow.AiKeyFields.stale(stored, config.aiKeys).forEach(stored::remove)
+        stored.remove(com.point.core.flow.AiKeyFields.LEGACY_SINGLE)
+        stored.putAll(com.point.core.flow.AiKeyFields.of(config.aiKeys))
 
         if (config.rightClick) stored.remove("right.click") else stored["right.click"] = "no"
         if (config.sound) stored.remove("sound") else stored["sound"] = "no"
         listOf(
-            "ai.key" to config.ai.key,
             "speech.key" to config.speech.key,
             "ocr.key" to config.ocr.key,
         ).forEach { (key, value) ->

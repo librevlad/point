@@ -72,8 +72,12 @@ class SettingsCompositionTest {
         }
     }
 
-    @Test fun `строка сервиса говорит, что он умеет`() {
+    @Test fun `сервис говорит, что он умеет, когда его открыли`() {
         screen()
+
+        // В закрытой строке этого нет намеренно (#887): одиннадцать описаний подряд читаются
+        // как каталог, а не как настройка. Узнать, что умеет сервис, человек по-прежнему может.
+        compose.onNodeWithText(openRouter.name).performScrollTo().performClick()
 
         compose.onNodeWithText(openRouter.what, substring = true).performScrollTo().assertIsDisplayed()
     }
@@ -117,13 +121,16 @@ class SettingsCompositionTest {
     @Test fun `сервис на ключе Point не выдаёт его за ключ человека`() {
         screen(builtIn = setOf(groq.id))
 
-        compose.onNodeWithText("работает на ключе Point", substring = true).performScrollTo().assertIsDisplayed()
+        // Общее про группу сказано её заголовком один раз, а не хвостом у каждой строки (#887).
+        compose.onNodeWithText(com.point.core.flow.AiServiceGroup.OURS.title.uppercase(), substring = true)
+            .performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("ваш ключ", substring = true).assertDoesNotExist()
     }
 
     @Test fun `сервис без ключа честно говорит, что молчит`() {
         screen()
 
-        compose.onAllNodesWithText("этот сервис молчит", substring = true).onFirst()
+        compose.onNodeWithText(com.point.core.flow.AiServiceGroup.SILENT.title.uppercase(), substring = true)
             .performScrollTo().assertIsDisplayed()
     }
 
@@ -156,8 +163,10 @@ class SettingsCompositionTest {
     @Test fun `у сервиса без обращений факта нет, и он этим не притворяется`() {
         screen()
 
-        compose.onAllNodesWithText("ещё не обращались", substring = true).onFirst()
-            .performScrollTo().assertIsDisplayed()
+        // Строка молчит про то, чего не было, — и не выдумывает ни ответа, ни отказа.
+        compose.onNodeWithText("ответил", substring = true).assertDoesNotExist()
+        compose.onNodeWithText("лимит исчерпан", substring = true).assertDoesNotExist()
+        compose.onNodeWithText("не отвечал", substring = true).assertDoesNotExist()
     }
 
     @Test fun `про «работает» строка сервиса молчит — это знает только сам сервис`() {
