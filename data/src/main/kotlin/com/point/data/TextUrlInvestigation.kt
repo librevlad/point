@@ -45,11 +45,7 @@ class TextUrlInvestigationRealizer @Inject constructor() : Realizer {
     override val capabilityId = TextUrlInvestigation.ID
 
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
-        runCatching { findings(input) }.fold(
-            onSuccess = { ActionResult.Done("", it) },
-
-            onFailure = { ActionResult.Failure(it.message ?: FAILED, recoverable = true) },
-        )
+        com.point.core.flow.investigated { findings(input) }
 
     private suspend fun findings(obj: PointObject): Findings = withContext(Dispatchers.IO) {
         val head = readHead(obj.uri.value)
@@ -60,7 +56,7 @@ class TextUrlInvestigationRealizer @Inject constructor() : Realizer {
     private fun readHead(path: String, limit: Int = 64 * 1024): String {
         val file = File(path)
 
-        if (!file.isFile) error(NO_PAYLOAD)
+        if (!file.isFile) error(com.point.core.flow.NO_TEXT_PAYLOAD)
         return file.inputStream().bufferedReader().use { reader ->
             val buffer = CharArray(limit)
             val read = reader.read(buffer)
@@ -73,6 +69,4 @@ class TextUrlInvestigationRealizer @Inject constructor() : Realizer {
     }
 }
 
-private const val FAILED = "исследование не удалось"
 
-private const val NO_PAYLOAD = "текст объекта недоступен"

@@ -51,11 +51,7 @@ class GraphRolesInvestigationRealizer @Inject constructor() : Realizer {
     override val capabilityId = GraphRolesInvestigation.ID
 
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
-        runCatching { findings(input) }.fold(
-            onSuccess = { ActionResult.Done("", it) },
-
-            onFailure = { ActionResult.Failure(it.message ?: FAILED, recoverable = true) },
-        )
+        com.point.core.flow.investigated { findings(input) }
 
     private suspend fun findings(obj: PointObject): Findings {
 
@@ -114,4 +110,3 @@ class GraphRolesInvestigationRealizer @Inject constructor() : Realizer {
     }
 }
 
-private const val FAILED = "исследование не удалось"
