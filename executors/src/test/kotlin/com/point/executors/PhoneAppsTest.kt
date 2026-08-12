@@ -100,4 +100,25 @@ class PhoneAppsTest {
             assertTrue("«$name» попал в код Point", !source.contains(name))
         }
     }
+
+    /**
+     * Действие существует для человека, а не только в коде (#840).
+     *
+     * Оно приехало 10.08.2026 (#466), но в реестр не попало — и на живом прогоне 12.08.2026
+     * владелец сказал ровно то, что из этого следует: «не могу отправить в гетконтакт».
+     * Регистрация в модуле — часть действия, а не формальность.
+     */
+    @Test
+    fun `действие зарегистрировано в модуле, иначе его для человека нет`() {
+        val module = java.io.File("src/main/kotlin/com/point/executors/di/CapabilityModule.kt").readText()
+
+        org.junit.Assert.assertTrue(
+            "способность не в реестре — человек её не увидит",
+            module.contains("PhoneAppsCapability"),
+        )
+        org.junit.Assert.assertTrue(
+            "исполнителя нет — действие упадёт при нажатии",
+            module.contains("PhoneAppsRealizer"),
+        )
+    }
 }
