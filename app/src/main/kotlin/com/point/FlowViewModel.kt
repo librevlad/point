@@ -110,6 +110,7 @@ class FlowViewModel @Inject constructor(
     private val sensory: SensoryFeedback,
     private val sensorySettings: SensorySettings,
     private val cloudPrivacy: com.point.core.flow.CloudPrivacySettings,
+    private val yolo: com.point.core.flow.YoloMode,
     private val flowSnapshot: FlowSnapshotStore,
     private val crashLog: CrashLog,
     private val ioDispatcher: CoroutineDispatcher,
@@ -1273,8 +1274,30 @@ class FlowViewModel @Inject constructor(
     fun setPrivacyLevel(level: com.point.core.flow.PrivacyLevel) {
         viewModelScope.launch {
             runCatching { cloudPrivacy.setLevel(level) }
+
+            // Человек выбрал беречь — режим «не спрашивай» снимается сам (#795). Иначе
+            // экран показывал бы выбранный уровень, а работал бы по другому: выбор,
+            // который ничего не меняет, — обман.
+            if (level != com.point.core.flow.PrivacyLevel.FREE_FIRST) setYoloEnabled(false)
             _ui.update { it.copy(privacyLevel = level) }
             syncAccountSettings(justChanged = true)
+        }
+    }
+
+    /**
+     * Режим «делай лучшее и не спрашивай» (#795). Выключение возвращает и вопрос перед
+     * облаком, и прежде выбранный уровень отправки: режим их не стирал.
+     */
+    fun setYoloEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            runCatching { yolo.setEnabled(enabled) }
+            refreshCloudConsent()
+            _ui.update {
+                it.copy(
+                    yoloEnabled = enabled,
+                    privacyLevel = runCatching { cloudPrivacy.level() }.getOrDefault(it.privacyLevel),
+                )
+            }
         }
     }
 
@@ -1643,13 +1666,20 @@ class FlowViewModel @Inject constructor(
                 if (allowed) consent.allow(com.point.core.flow.CloudScope.MODELS)
                 else consent.revoke(com.point.core.flow.CloudScope.MODELS)
             }
+
+            // «Не отправлять» сильнее режима: он и был заранее данным согласием (#795).
+            if (!allowed) {
+                runCatching { yolo.setEnabled(false) }
+                _ui.update { it.copy(yoloEnabled = false) }
+            }
             refreshCloudConsent()
         }
     }
 
     private suspend fun refreshCloudConsent() {
         val allowed = runCatching { consent.allowed(com.point.core.flow.CloudScope.MODELS) }.getOrDefault(false)
-        _ui.update { it.copy(cloudEnabled = allowed) }
+        val yoloOn = runCatching { yolo.enabled() }.getOrDefault(false)
+        _ui.update { it.copy(cloudEnabled = allowed, yoloEnabled = yoloOn) }
     }
 
     private fun showAppPicker(obj: PointObject) {

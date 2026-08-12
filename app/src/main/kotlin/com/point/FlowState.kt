@@ -143,6 +143,9 @@ data class FlowUiState(
 
     val cloudEnabled: Boolean = false,
 
+    /** Режим «делай лучшее и не спрашивай» (#795). */
+    val yoloEnabled: Boolean = false,
+
     val preview: Preview? = null,
 
     val appPicker: List<AppTarget>? = null,

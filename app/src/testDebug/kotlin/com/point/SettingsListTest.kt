@@ -18,6 +18,7 @@ import com.point.core.flow.PRIVACY_SETTING_HINT
 import com.point.core.flow.PrivacyLevel
 import com.point.core.flow.UserAiKey
 import com.point.core.flow.UserAiKeys
+import com.point.core.flow.YOLO_TITLE
 import com.point.core.ui.theme.PointTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -41,6 +42,8 @@ class SettingsListTest {
         note: String? = null,
         soundEnabled: Boolean = true,
         cloudEnabled: Boolean = false,
+        yoloEnabled: Boolean = false,
+        onToggleYolo: (Boolean) -> Unit = {},
         privacyLevel: PrivacyLevel = PrivacyLevel.DEFAULT,
         onToggleSound: (Boolean) -> Unit = {},
         onToggleCloud: (Boolean) -> Unit = {},
@@ -58,6 +61,8 @@ class SettingsListTest {
                 onToggleSound = onToggleSound,
                 cloudEnabled = cloudEnabled,
                 onToggleCloud = onToggleCloud,
+                yoloEnabled = yoloEnabled,
+                onToggleYolo = onToggleYolo,
                 privacyLevel = privacyLevel,
                 onPickPrivacyLevel = onPickPrivacyLevel,
                 onOpenDevices = onOpenDevices,
@@ -151,6 +156,33 @@ class SettingsListTest {
 
         compose.onNodeWithText("Облако разрешено", substring = true).assertIsDisplayed()
         compose.onNodeWithText(PrivacyLevel.NO_TRAINING.title, substring = true).assertIsDisplayed()
+    }
+
+    /**
+     * Режим YOLO (#795) виден с общего экрана, но своего тумблера туда не приносит: правило
+     * «один тумблер на списке» остаётся, переключается режим в своём разделе.
+     */
+    @Test fun `включённый режим виден строкой раздела отправки`() {
+        settings(keys = savedKey, cloudEnabled = true, yoloEnabled = true)
+
+        compose.onNodeWithText(YOLO_TITLE, substring = true).performScrollTo().assertIsDisplayed()
+    }
+
+    @Test fun `режим не приносит на общий экран второй тумблер`() {
+        settings(keys = savedKey, yoloEnabled = true)
+
+        compose.onAllNodes(isToggleable()).assertCountEquals(1)
+    }
+
+    @Test fun `режим переключается в разделе отправки`() {
+        var asked: Boolean? = null
+        settings(keys = savedKey, yoloEnabled = false, onToggleYolo = { asked = it })
+
+        compose.onNodeWithText("Отправка и приватность").performClick()
+        compose.onNodeWithText(YOLO_TITLE, substring = true).performScrollTo().assertIsDisplayed()
+        compose.onAllNodes(isToggleable())[1].performScrollTo().performClick()
+
+        assertEquals(true, asked)
     }
 
     @Test fun `звук показывает своё состояние тумблером — и он на экране один`() {

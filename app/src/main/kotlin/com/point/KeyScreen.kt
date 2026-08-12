@@ -57,6 +57,8 @@ import com.point.core.flow.PrivacyLevel
 import com.point.core.flow.SETTINGS_TITLE
 import com.point.core.flow.UserAiKey
 import com.point.core.flow.UserAiKeys
+import com.point.core.flow.YOLO_TITLE
+import com.point.core.flow.YOLO_WHAT
 import com.point.core.flow.aiCheckedLine
 import com.point.core.flow.aiKeysSummary
 import com.point.core.flow.aiServiceLines
@@ -105,6 +107,9 @@ fun KeyScreen(
     cloudEnabled: Boolean = false,
     onToggleCloud: (Boolean) -> Unit = {},
 
+    yoloEnabled: Boolean = false,
+    onToggleYolo: (Boolean) -> Unit = {},
+
     onOpenUrl: (String) -> Unit = {},
 
     onOpenDevices: () -> Unit = {},
@@ -142,6 +147,7 @@ fun KeyScreen(
                     keyLine = aiKeysSummary(screen.keys),
                     cloudEnabled = cloudEnabled,
                     privacyLevel = privacyLevel,
+                    yoloEnabled = yoloEnabled,
                     soundEnabled = soundEnabled,
                     onToggleSound = onToggleSound,
                     onOpen = { section = it },
@@ -169,6 +175,8 @@ fun KeyScreen(
                 SettingsSection.PRIVACY -> PrivacySection(
                     cloudEnabled = cloudEnabled,
                     onToggleCloud = onToggleCloud,
+                    yoloEnabled = yoloEnabled,
+                    onToggleYolo = onToggleYolo,
                     privacyLevel = privacyLevel,
                     onPickPrivacyLevel = onPickPrivacyLevel,
                     onBack = { section = null },
@@ -201,6 +209,7 @@ private fun SettingsList(
     keyLine: String,
     cloudEnabled: Boolean,
     privacyLevel: PrivacyLevel,
+    yoloEnabled: Boolean,
     soundEnabled: Boolean,
     onToggleSound: (Boolean) -> Unit,
     onOpen: (SettingsSection) -> Unit,
@@ -223,7 +232,7 @@ private fun SettingsList(
                 title = PRIVACY_SECTION_TITLE,
 
                 subtitle = (if (cloudEnabled) "Облако разрешено" else "Облако выключено") +
-                    " · ${privacyLevel.title}",
+                    " · ${privacyLevel.title}" + (if (yoloEnabled) " · $YOLO_TITLE" else ""),
                 onClick = { onOpen(SettingsSection.PRIVACY) },
                 appearIndex = 1,
             )
@@ -602,6 +611,8 @@ private fun ServiceEditor(
 private fun PrivacySection(
     cloudEnabled: Boolean,
     onToggleCloud: (Boolean) -> Unit,
+    yoloEnabled: Boolean,
+    onToggleYolo: (Boolean) -> Unit,
     privacyLevel: PrivacyLevel,
     onPickPrivacyLevel: (PrivacyLevel) -> Unit,
     onBack: () -> Unit,
@@ -619,6 +630,14 @@ private fun PrivacySection(
             "про такое спрашивают каждый раз.",
         checked = cloudEnabled,
         onCheckedChange = onToggleCloud,
+    )
+
+    Spacer(Modifier.height(6.dp))
+    SwitchCard(
+        title = YOLO_TITLE,
+        description = YOLO_WHAT,
+        checked = yoloEnabled,
+        onCheckedChange = onToggleYolo,
     )
 
     Spacer(Modifier.height(6.dp))
@@ -667,6 +686,7 @@ private const val KEY_SECTION_TITLE = "Ключи AI"
 private const val PRIVACY_SECTION_TITLE = "Отправка и приватность"
 private const val APP_SECTION_TITLE = "Приложение"
 private const val SOUND_TITLE = "Звук действий"
+
 
 private class KeyDraft(saved: UserAiKey) {
     var providerId by mutableStateOf(saved.providerId)

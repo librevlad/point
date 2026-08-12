@@ -295,6 +295,7 @@ class GraphPipelineIntegrationTest {
             override fun level() = com.point.core.flow.PrivacyLevel.DEFAULT
             override suspend fun setLevel(level: com.point.core.flow.PrivacyLevel) = Unit
         },
+        com.point.core.flow.YoloMode.OFF,
         snapshot,
         object : CrashLog {
             override fun record(report: String) = Unit

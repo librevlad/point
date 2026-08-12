@@ -294,6 +294,9 @@ abstract class DataModule {
     abstract fun privacyConsent(impl: PrefsPrivacyConsent): PrivacyConsent
 
     @Binds
+    abstract fun yoloMode(impl: com.point.data.PrefsYoloMode): com.point.core.flow.YoloMode
+
+    @Binds
     abstract fun sensoryFeedback(impl: VibratorSensoryFeedback): SensoryFeedback
 
     @Binds
