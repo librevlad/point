@@ -30,6 +30,7 @@ import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.point.core.model.ObjectKind
+import com.point.core.ui.bubbleIcon
 import com.point.desktop.InboxItem
 import com.point.desktop.JournalEntry
 import com.point.desktop.sourceLabel

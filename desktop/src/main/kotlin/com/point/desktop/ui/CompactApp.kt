@@ -50,6 +50,8 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.point.core.flow.CircleDevice
+import com.point.core.ui.bubbleColor
+import com.point.core.ui.kindLabel
 import com.point.desktop.DesktopState
 import com.point.desktop.InboxItem
 import com.point.desktop.PcConfig
