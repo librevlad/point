@@ -93,8 +93,12 @@ fun main(args: Array<String>) {
     val deviceKeys = FileDeviceKeys(pointDir)
 
     val entities = com.point.core.flow.RegexEntityExtractor()
+
+    // Сетевая ли способность — знание живёт у самой способности (#855): исполнители
+    // «Понять», «Перевести», «Дать ссылку» называют себя местными, хотя отдают байты наружу.
+    val capabilities = desktopCapabilities()
     val resolver = DesktopResolver(
-        setOf(
+        realizers = setOf(
             PcOpenRealizer(opener),
             PcCopyRealizer(clipboard, imageClipboard = ::writeSystemClipboard),
             PcRevealRealizer(revealer),
@@ -119,6 +123,7 @@ fun main(args: Array<String>) {
                 runCatching { java.awt.Desktop.getDesktop().browse(java.net.URI(url)) }
             },
         ),
+        capabilityIsNetwork = { id -> capabilities.any { it.id == id && it.meta.network } },
     )
     // Приём файла по ссылке на компьютере (#727): разговор с сервером — общий с телефоном.
     val receiver = ReceiveOnPc(
@@ -138,7 +143,7 @@ fun main(args: Array<String>) {
     receiver.onWaiting = { state.showReceiving(it) }
 
     val registry = DesktopRegistry(
-        desktopCapabilities(),
+        capabilities,
 
         // Дверь видна, только когда за ней есть исполнитель под этот объект (аудит, блок 1.6).
         runnable = resolver::canRun,

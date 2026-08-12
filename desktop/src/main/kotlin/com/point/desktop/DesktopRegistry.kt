@@ -57,6 +57,9 @@ class NoWayHere(val why: String) : IllegalStateException(why)
 class DesktopResolver(
     realizers: Set<Realizer>,
     private val policy: com.point.core.flow.ExecutionPolicy = com.point.core.flow.DefaultExecutionPolicy(),
+
+    /** Сетевая ли способность — знание живёт у неё, а не у исполнителя (#855). */
+    private val capabilityIsNetwork: (CapabilityId) -> Boolean = { false },
 ) : Resolver {
     private val byCapability = realizers.groupBy { it.capabilityId }
 
@@ -70,7 +73,16 @@ class DesktopResolver(
         byCapability[capabilityId].orEmpty().any { it.isAvailable() && it.accepts(state) }
 
     override fun realizerFor(capabilityId: CapabilityId, state: ObjectState): Realizer {
-        val candidates = byCapability[capabilityId].orEmpty()
+        val all = byCapability[capabilityId].orEmpty()
+
+        // Негодный объект не уезжает наружу — то же правило, что и на телефоне (#855).
+        // Компьютер сам помечает пустой файл при приёме, а наружу его до сих пор отпускал.
+        val candidates = com.point.core.flow.staysHomeWhenUnfit(state, all) { realizer ->
+            com.point.core.flow.sendsOutward(realizer, capabilityIsNetwork)
+        }
+        if (all.isNotEmpty() && candidates.isEmpty()) {
+            throw NoWayHere(com.point.core.flow.UNFIT_DEFAULT_REASON)
+        }
 
         // Аудит, блок 1.6: fallback на «первого попавшегося» превращал двери в обманки
         // («В PDF» на картинке всегда падало). Нет исполнителя — честная причина.
