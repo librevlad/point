@@ -25,7 +25,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.point.core.flow.CircleDevice
 import com.point.core.flow.DeviceKind
-import com.point.core.flow.MY_DEVICES_TITLE
 import com.point.core.flow.SIGN_IN_ACTION
 import com.point.core.flow.SIGN_IN_TITLE
 import com.point.core.flow.SignIn
@@ -101,10 +100,11 @@ fun MyDevicesPane(
     now: Long = System.currentTimeMillis(),
 ) {
     Column(
-        modifier = Modifier.width(380.dp),
+        modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(MY_DEVICES_TITLE.uppercase(), style = PointType.label)
+        // Имя экрана говорит шапка окна — второй раз оно здесь только шумит (#886, тот же
+        // класс, что двойное «Настройки» из #878).
         if (email.isNotBlank()) Text(email, style = PointType.small)
         error?.let { Text(it, style = PointType.small.copy(color = PointColors.violet)) }
         devices.forEach { device ->

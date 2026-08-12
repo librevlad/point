@@ -4,12 +4,18 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Text
@@ -34,31 +40,224 @@ import com.point.core.flow.KeyVerdict
 import com.point.core.flow.UserAiConfig
 import com.point.core.flow.keyVerdict
 import com.point.core.flow.looksLikeApiKey
-import com.point.desktop.AiConfig
 import com.point.desktop.PcConfig
 import kotlinx.coroutines.launch
 
+/**
+ * Куда человек зашёл внутри настроек (#886).
+ *
+ * Раньше настройки компьютера были одним полотном длиной в три с половиной окна: круг
+ * устройств, имя компьютера, одиннадцать сервисов AI, три поля ключей, данные, интеграции.
+ * Тот, кто пришёл переименовать компьютер, прокручивал мимо чужой ему инфраструктуры.
+ * Разделы те же, что на телефоне, и открываются так же — строкой.
+ */
+enum class SettingsPage(val title: String) {
+    ROOT("Настройки"),
+    DEVICES("Мои устройства"),
+    KEYS("Ключи AI"),
+    PRIVACY("Отправка и приватность"),
+    DATA("Что Point помнит"),
+}
+
+/** Корень настроек: пять разделов, за строками — свои экраны. */
 @Composable
-fun SettingsScreen(
+fun SettingsRoot(
+    config: PcConfig,
+    devices: Int,
+    email: String,
+    cloudAllowed: Boolean,
+    onSave: (PcConfig) -> Unit,
+    onOpen: (SettingsPage) -> Unit,
+) {
+    var rightClick by remember { mutableStateOf(config.rightClick) }
+    var sound by remember { mutableStateOf(config.sound) }
+
+    Column(
+        modifier = Modifier.fillMaxWidth().widthIn(max = 560.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        // Порядок и слова разделов — те же, что на телефоне (#881).
+        Section("Аккаунт и устройства") {
+            PortalRow(
+                title = "Мои устройства",
+                subtitle = devicesLine(email, devices),
+                onClick = { onOpen(SettingsPage.DEVICES) },
+            )
+        }
+
+        Section("AI и приватность") {
+            PortalRow(
+                title = "Ключи AI",
+                subtitle = keysLine(config),
+                onClick = { onOpen(SettingsPage.KEYS) },
+            )
+            // Согласие на облако компьютер спрашивал и запоминал, но показать его было
+            // негде — и забрать обратно тоже. Разрешение без выхода из него нарушает
+            // §11: объект уходит с устройства только по живому согласию (#886).
+            PortalRow(
+                title = "Отправка и приватность",
+                subtitle = cloudLine(cloudAllowed),
+                onClick = { onOpen(SettingsPage.PRIVACY) },
+            )
+        }
+
+        // Звук на компьютере играет и приезжает с телефона, но выключателя здесь не было:
+        // поменять настройку можно было только с той стороны (#886).
+        Section("Поведение Point") {
+            SwitchRow(
+                title = "Звук действий",
+                subtitle = "Тихий отклик, когда объект приезжает с телефона.",
+                on = sound,
+            ) {
+                sound = !sound
+                onSave(config.copy(sound = sound))
+            }
+        }
+
+        Section("Данные") {
+            PortalRow(
+                title = "Что Point помнит",
+                subtitle = "Убирается через сутки · перетащенный файл не трогается",
+                onClick = { onOpen(SettingsPage.DATA) },
+            )
+        }
+
+        // «Показывать · выключить» читалось как загадка: состояние это или действие (#878).
+        // Переключатель говорит состояние словом, а нажатие меняет его.
+        Section("Интеграции") {
+            SwitchRow(
+                title = "«Открыть в Point» в меню файла",
+                subtitle = if (rightClick) "Показывается" else "Не показывается",
+                on = rightClick,
+            ) {
+                rightClick = !rightClick
+                onSave(config.copy(rightClick = rightClick))
+            }
+        }
+
+        // Версия видна человеку, а не только в свойствах файла (#822): падение из-за старой
+        // установки перестаёт быть загадкой — «у меня от шестого августа» видно сразу.
+        // Номер один на оба устройства: телефон говорил 0.3.0, компьютер — 3.0.0 (#886).
+        Text(
+            "Point ${com.point.desktop.BuildInfo.VERSION} · сборка ${com.point.desktop.BuildInfo.BUILT_ON}",
+            style = PointType.small.copy(color = PointColors.muted),
+        )
+    }
+}
+
+internal fun devicesLine(email: String, devices: Int): String {
+    val count = when {
+        devices <= 0 -> "устройств пока нет"
+        devices == 1 -> "одно устройство"
+        devices in 2..4 -> "$devices устройства"
+        else -> "$devices устройств"
+    }
+    return listOf(email, count).filter { it.isNotBlank() }.joinToString(" · ")
+}
+
+/**
+ * Пока компьютер знает один ключ, а не очередь из одиннадцати, строка говорит именно это.
+ * После #888 здесь встанет общий с телефоном счёт «Свой ключ у N из 11».
+ */
+internal fun keysLine(config: PcConfig): String =
+    if (config.ai.key.isBlank()) {
+        "Своего ключа нет — Point работает на своих"
+    } else {
+        "Свой ключ задан · " + (AI_PROVIDERS.firstOrNull { chosenFor(config.ai.url, it) }?.name ?: "свой адрес")
+    }
+
+/** Экран круга устройств: сюда же переехало имя компьютера — его видят другие устройства. */
+@Composable
+fun SettingsDevices(
     config: PcConfig,
     onSave: (PcConfig) -> Unit,
-    onSweepNow: () -> Unit,
-    onClose: () -> Unit,
-
-    /**
-     * Проверка ключа — буквально та же, что на телефоне (#610, #828): общий
-     * `HttpAiKeyCheck` из ядра вместо своей копии на компьютере.
-     */
-    keyCheck: com.point.core.flow.AiKeyCheck =
-        com.point.core.flow.HttpAiKeyCheck(com.point.core.flow.UrlConnectionHttpJson()),
-    onOpenUrl: (String) -> Unit = {},
+    devicesPane: @Composable () -> Unit,
 ) {
     var name by remember { mutableStateOf(config.name) }
+
+    Column(
+        modifier = Modifier.fillMaxWidth().widthIn(max = 560.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        devicesPane()
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("ИМЯ ЭТОГО КОМПЬЮТЕРА", style = PointType.label)
+            Field(
+                value = name,
+                onChange = { name = it; onSave(config.copy(name = it.trim().ifBlank { config.name })) },
+                hint = "Так его видят ваши другие устройства",
+            )
+        }
+    }
+}
+
+internal fun cloudLine(allowed: Boolean): String =
+    if (allowed) "Облако разрешено" else "Облако спрашивается каждый раз"
+
+/**
+ * Экран отправки: что уже разрешено и как это забрать.
+ *
+ * Компьютер знает про облако ровно одно разрешение — показывать объект моделям. Про открытую
+ * ссылку он спрашивает каждый раз и не запоминает ответ, и здесь об этом сказано прямо,
+ * а не умолчанием.
+ */
+@Composable
+fun SettingsPrivacy(allowed: Boolean, onRevoke: () -> Unit) {
+    Column(
+        modifier = Modifier.fillMaxWidth().widthIn(max = 560.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text("Показывать объект моделям", style = PointType.body)
+        Text(
+            if (allowed) {
+                "Разрешено. Point показывает объект сервису, когда вы нажали действие, " +
+                    "которое без этого не работает. Заберите разрешение — и он спросит заново."
+            } else {
+                "Пока не разрешено. Point спросит перед первым действием, которому нужен сервис."
+            },
+            style = PointType.small,
+        )
+        if (allowed) Action("Забрать разрешение", onRevoke)
+
+        Text("Выложить по открытой ссылке", style = PointType.body)
+        Text(
+            "Про такое Point спрашивает каждый раз и ответ не запоминает: ссылка на сутки — " +
+                "каждый раз новая ставка.",
+            style = PointType.small,
+        )
+    }
+}
+
+/** Экран данных: что лежит и как это убрать. */
+@Composable
+fun SettingsData(swept: Int?, onSweepNow: () -> Unit) {
+    Column(
+        modifier = Modifier.fillMaxWidth().widthIn(max = 560.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text(
+            "Point не хранит дольше суток: присланное с телефона и сделанное здесь убирается " +
+                "само. Файл, который вы перетащили мышью, не трогается никогда.",
+            style = PointType.small,
+        )
+        Action(swept?.let { "Убрано: $it" } ?: "Убрать прямо сейчас", onSweepNow)
+    }
+}
+
+/**
+ * Экран ключей. Пока — тот же список сервисов и то же поле, что стояли в корне настроек:
+ * переезд экрана и смена модели AI (#888) — разные работы.
+ */
+@Composable
+fun SettingsKeys(
+    config: PcConfig,
+    onSave: (PcConfig) -> Unit,
+    keyCheck: com.point.core.flow.AiKeyCheck =
+        com.point.core.flow.HttpAiKeyCheck(com.point.core.flow.UrlConnectionHttpJson()),
+) {
     var aiKey by remember { mutableStateOf(config.ai.key) }
     var speechKey by remember { mutableStateOf(config.speech.key) }
     var ocrKey by remember { mutableStateOf(config.ocr.key) }
-    var rightClick by remember { mutableStateOf(config.rightClick) }
-    var swept by remember { mutableStateOf<Int?>(null) }
     var aiUrl by remember { mutableStateOf(config.ai.url) }
     var aiModel by remember { mutableStateOf(config.ai.model) }
     var verdict by remember { mutableStateOf<KeyVerdict?>(null) }
@@ -67,35 +266,24 @@ fun SettingsScreen(
 
     fun store() = onSave(
         config.copy(
-            name = name.trim().ifBlank { config.name },
-            rightClick = rightClick,
             ai = config.ai.copy(key = aiKey.trim(), url = aiUrl, model = aiModel),
             speech = config.speech.copy(key = speechKey.trim()),
             ocr = config.ocr.copy(key = ocrKey.trim()),
         ),
     )
 
-    // Скролл отдан единственному хозяину — компакт-настройкам: свой verticalScroll
-    // внутри их скролла ронял окно (краш владельца 2026-08-09, «настройки»).
     Column(
         modifier = Modifier.fillMaxWidth().widthIn(max = 560.dp),
-        verticalArrangement = Arrangement.spacedBy(22.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Text("НАСТРОЙКИ", style = PointType.label)
+        Text(
+            "Ключ, введённый на телефоне, приезжает сюда сам — обычно вписывать его здесь не нужно.",
+            style = PointType.small,
+        )
 
-        // Порядок разделов один на телефон и компьютер (#881): аккаунт и устройства →
-        // AI и приватность → данные → интеграции → о Point. Часть пунктов существует только
-        // здесь — имя компьютера, правая кнопка, — но раздел, где их искать, тот же.
-        Group("Аккаунт и устройства", "Имя этого компьютера видят ваши другие устройства") {
-            Field(name, { name = it; store() }, "Рабочий ноутбук")
-        }
-
-        Group(
-            "AI и приватность",
-            "Ключ, введённый на телефоне, приезжает сюда сам — обычно вписывать его здесь не нужно",
-        ) {
-            // Сервис называется своим именем и говорит, для чего он, — теми же словами, что
-            // и на телефоне (#610). Отдельный экран ключей — следующий заход (#881).
+        // Сервис называется своим именем и говорит, для чего он, — теми же словами, что
+        // и на телефоне (#610).
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             AI_PROVIDERS.forEach { provider ->
                 Service(provider, chosen = chosenFor(aiUrl, provider)) {
                     aiUrl = provider.baseUrl
@@ -104,54 +292,26 @@ fun SettingsScreen(
                     store()
                 }
             }
-            Field(aiKey, { aiKey = it; verdict = null; store() }, "Ключ выбранного сервиса", secret = true)
+        }
 
-            Action(if (checking) "Проверяю…" else "Проверить ключ") {
-                if (!checking && looksLikeApiKey(aiKey)) {
-                    checking = true
-                    scope.launch {
-                        val probe = keyCheck.check(
-                            UserAiConfig(apiKey = aiKey.trim(), baseUrl = aiUrl, model = aiModel),
-                        )
-                        verdict = keyVerdict(probe)
-                        checking = false
-                    }
+        Field(aiKey, { aiKey = it; verdict = null; store() }, "Ключ выбранного сервиса", secret = true)
+
+        Action(if (checking) "Проверяю…" else "Проверить ключ") {
+            if (!checking && looksLikeApiKey(aiKey)) {
+                checking = true
+                scope.launch {
+                    val probe = keyCheck.check(
+                        UserAiConfig(apiKey = aiKey.trim(), baseUrl = aiUrl, model = aiModel),
+                    )
+                    verdict = keyVerdict(probe)
+                    checking = false
                 }
             }
-            verdict?.let { Verdict(it) }
-
-            Field(speechKey, { speechKey = it; store() }, "Ключ расшифровки речи", secret = true)
-            Field(ocrKey, { ocrKey = it; store() }, "Ключ чтения снимков — необязателен", secret = true)
         }
+        verdict?.let { Verdict(it) }
 
-        Group(
-            "Данные",
-            "Point не хранит дольше суток: присланное с телефона и сделанное здесь убирается само. " +
-                "Файл, который вы перетащили мышью, не трогается никогда",
-        ) {
-            Action(swept?.let { "Убрано: $it" } ?: "Убрать прямо сейчас") { swept = null; onSweepNow() }
-        }
-
-        Group(
-            "Интеграции",
-            "«Открыть в Point» и «Отправить → Point» в контекстном меню любого файла — то, ради " +
-                "чего Point и стоит на компьютере. Записи делаются только для вас и снимаются " +
-                "вместе с этой галкой",
-        ) {
-            Action(if (rightClick) "Показывать · выключить" else "Не показывать · включить") {
-                rightClick = !rightClick
-                store()
-            }
-        }
-
-        // Версия видна человеку, а не только в свойствах файла (#822): падение из-за старой
-        // установки перестаёт быть загадкой — «у меня от шестого августа» видно сразу.
-        Text(
-            "Point ${com.point.desktop.BuildInfo.VERSION} · сборка ${com.point.desktop.BuildInfo.BUILT_ON}",
-            style = PointType.small.copy(color = PointColors.muted),
-        )
-
-        Action("Закрыть", onClose)
+        Field(speechKey, { speechKey = it; store() }, "Ключ расшифровки речи", secret = true)
+        Field(ocrKey, { ocrKey = it; store() }, "Ключ чтения снимков — необязателен", secret = true)
     }
 }
 
@@ -196,13 +356,42 @@ private fun Verdict(verdict: KeyVerdict) {
     }
 }
 
+/**
+ * Раздел настроек: мелкая метка капсом, как на телефоне.
+ *
+ * Раньше здесь стоял заголовок кеглем в 20 px — раздел выглядел заголовком статьи и спорил
+ * с самими настройками за внимание (#886).
+ */
 @Composable
-private fun Group(title: String, hint: String, content: @Composable () -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(title, style = PointType.title)
-        Text(hint, style = PointType.small)
+private fun Section(title: String, content: @Composable ColumnScope.() -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(title.uppercase(), style = PointType.label)
         content()
     }
+}
+
+/** Строка-переключатель: состояние сказано словом под названием и видно справа. */
+@Composable
+private fun SwitchRow(title: String, subtitle: String, on: Boolean, onToggle: () -> Unit) {
+    PortalRow(
+        title = title,
+        subtitle = subtitle,
+        onClick = onToggle,
+        trailing = {
+            Box(
+                modifier = Modifier.width(40.dp).height(23.dp)
+                    .clip(CircleShape)
+                    .background(if (on) PointColors.violet else PointColors.surfaceDeep)
+                    .border(1.dp, Color.White.copy(alpha = 0.10f), CircleShape),
+                contentAlignment = if (on) Alignment.CenterEnd else Alignment.CenterStart,
+            ) {
+                Box(
+                    Modifier.padding(horizontal = 3.dp).size(17.dp).clip(CircleShape)
+                        .background(if (on) Color.White else PointColors.muted),
+                )
+            }
+        },
+    )
 }
 
 @Composable
@@ -220,15 +409,11 @@ private fun Field(
             singleLine = true,
             textStyle = PointType.body,
             cursorBrush = SolidColor(PointColors.violet),
-            visualTransformation = if (secret && value.isNotEmpty()) {
-                PasswordVisualTransformation()
-            } else {
-                VisualTransformation.None
-            },
+            visualTransformation = if (secret) PasswordVisualTransformation() else VisualTransformation.None,
             modifier = Modifier.fillMaxWidth()
                 .clip(RoundedCornerShape(12.dp))
-                .background(Brush.verticalGradient(listOf(PointColors.surface, PointColors.surfaceDeep)))
-                .border(1.dp, PointColors.border, RoundedCornerShape(12.dp))
+                .background(PointColors.surfaceDeep)
+                .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(12.dp))
                 .padding(horizontal = 14.dp, vertical = 11.dp),
         )
     }
@@ -239,10 +424,10 @@ private fun Action(title: String, onClick: () -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
+            .background(Brush.verticalGradient(listOf(PointColors.surface, PointColors.surfaceDeep)))
             .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(12.dp))
             .clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 11.dp),
-        verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(title, style = PointType.body)
     }

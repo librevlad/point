@@ -185,14 +185,14 @@ class AiFactsTest {
 
     @Test
     fun `сводка настроек считает свои ключи, а не выдумывает проценты`() {
-        assertEquals("Своих ключей пока нет — Point работает на своих", aiKeysSummary(UserAiKeys.NONE))
-        assertEquals(
-            "Свой ключ у 2 сервисов из ${AI_PROVIDERS.size}",
-            aiKeysSummary(UserAiKeys.NONE.with(UserAiKey("groq", "g")).with(UserAiKey("openrouter", "o"))),
-        )
-        assertEquals(
-            "Свой ключ у 1 сервиса из ${AI_PROVIDERS.size}",
-            aiKeysSummary(UserAiKeys.NONE.with(UserAiKey("groq", "g"))),
-        )
+        val none = aiKeysSummary(UserAiKeys.NONE)
+        val one = aiKeysSummary(UserAiKeys.NONE.with(UserAiKey("groq", "g")))
+        val two = aiKeysSummary(UserAiKeys.NONE.with(UserAiKey("groq", "g")).with(UserAiKey("openrouter", "o")))
+
+        val all = AI_PROVIDERS.size
+        assertTrue(none, none.startsWith("Свои ключи: 0 из $all"))
+        assertTrue("в нуле не сказано, на чьих ключах Point работает", none.contains("Point"))
+        assertEquals("Свои ключи: 1 из $all", one)
+        assertEquals("Свои ключи: 2 из $all", two)
     }
 }

@@ -36,13 +36,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Тег и versionName не должны расходиться
+      - name: Тег и версия Point не должны расходиться
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
           tag="${GITHUB_REF_NAME#v}"
-          vn=$(grep -o 'versionName = "[^"]*"' app/build.gradle.kts | head -1 | cut -d'"' -f2)
+          vn=$(grep -o '^pointVersion=.*' gradle.properties | head -1 | cut -d'=' -f2)
           if [ "$tag" != "$vn" ]; then
-            echo "::error::Тег v$tag ≠ versionName=$vn (app/build.gradle.kts): не тот коммит или забыт бамп версии."
+            echo "::error::Тег v$tag ≠ pointVersion=$vn (gradle.properties): не тот коммит или забыт бамп версии."
             exit 1
           fi
 

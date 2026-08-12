@@ -26,12 +26,14 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import kotlinx.coroutines.launch
 import com.point.core.flow.yieldLabel
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -229,6 +231,7 @@ fun CompactApp(
             when {
                 showSettings -> CompactSettings(
                     modifier = Modifier.weight(1f),
+                    state = state,
                     config = settings,
                     account = account,
                     circle = circle,
@@ -835,6 +838,7 @@ private fun ListRow(
 
 @Composable
 private fun CompactSettings(
+    state: DesktopState,
     config: PcConfig,
     account: com.point.desktop.DesktopAccount,
     circle: List<CircleDevice>,
@@ -846,25 +850,57 @@ private fun CompactSettings(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) = Column(modifier) {
-    CompactHeader(title = "Настройки", onBack = onBack, onHide = onBack)
+    // Настройки — список разделов со своими экранами, как на телефоне (#886). Слово
+    // «Настройки» при этом сказано один раз: шапкой окна, а не ещё и меткой внутри (#878).
+    var page by remember { mutableStateOf(SettingsPage.ROOT) }
+    var swept by remember { mutableStateOf<Int?>(null) }
+    var cloudAllowed by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    LaunchedEffect(page) {
+        cloudAllowed = state.consent?.allowed(com.point.core.flow.CloudScope.MODELS) == true
+    }
+
+    CompactHeader(
+        title = page.title,
+        onBack = { if (page == SettingsPage.ROOT) onBack() else page = SettingsPage.ROOT },
+        onHide = onBack,
+    )
     Column(
         modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())
             .padding(horizontal = 12.dp).padding(bottom = 12.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        MyDevicesPane(
-            email = account.current()?.email.orEmpty(),
-            devices = circle,
-            busy = busy,
-            error = error,
-            onRevoke = account::revoke,
-            onSignOut = { onWipe(); account.signOut() },
-        )
-        SettingsScreen(
-            config = config,
-            onSave = onSave,
-            onSweepNow = onSweepNow,
-            onClose = onBack,
-        )
+        when (page) {
+            SettingsPage.ROOT -> SettingsRoot(
+                config = config,
+                devices = circle.size,
+                email = account.current()?.email.orEmpty(),
+                cloudAllowed = cloudAllowed,
+                onSave = onSave,
+                onOpen = { page = it },
+            )
+
+            SettingsPage.DEVICES -> SettingsDevices(config = config, onSave = onSave) {
+                MyDevicesPane(
+                    email = account.current()?.email.orEmpty(),
+                    devices = circle,
+                    busy = busy,
+                    error = error,
+                    onRevoke = account::revoke,
+                    onSignOut = { onWipe(); account.signOut() },
+                )
+            }
+
+            SettingsPage.KEYS -> SettingsKeys(config = config, onSave = onSave)
+
+            SettingsPage.PRIVACY -> SettingsPrivacy(allowed = cloudAllowed) {
+                scope.launch {
+                    state.consent?.revoke(com.point.core.flow.CloudScope.MODELS)
+                    cloudAllowed = false
+                }
+            }
+
+            SettingsPage.DATA -> SettingsData(swept = swept) { swept = null; onSweepNow() }
+        }
     }
 }

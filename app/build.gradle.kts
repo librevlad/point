@@ -18,7 +18,7 @@ android {
         targetSdk = libs.versions.targetSdk.get().toInt()
 
         versionCode = 3
-        versionName = "0.3.0"
+        versionName = providers.gradleProperty("pointVersion").get()
 
         ndk {
             abiFilters += "arm64-v8a"
