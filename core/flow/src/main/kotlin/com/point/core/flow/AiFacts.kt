@@ -59,9 +59,12 @@ fun aiOutcomeOfFailure(message: String): AiOutcome = when {
 private val KEY_FAILURE_MARKS =
     listOf(KEY_NOT_ACCEPTED, "HTTP 401", "HTTP 403", "(401)", "(403)")
 
+/** Пока к сервису не обращались — говорить о нём в строке нечего (#887). */
+const val NEVER_ASKED = "ещё не обращались"
+
 /** Последний факт словами человека: «ответил 3 минуты назад», «лимит исчерпан в 23:26». */
 fun aiFactLine(fact: AiFact?, now: Long, zone: ZoneId = ZoneId.systemDefault()): String {
-    if (fact == null) return "ещё не обращались"
+    if (fact == null) return NEVER_ASKED
     val what = when (fact.outcome) {
         AiOutcome.ANSWERED -> "ответил"
         AiOutcome.LIMIT -> "лимит исчерпан"
@@ -159,10 +162,12 @@ private fun line(
  * стоит ли туда заходить, можно было только зайдя (#886).
  */
 fun aiKeysSummary(keys: UserAiKeys): String {
-    val count = keys.mine.size
-    val counted = "Свои ключи: $count из ${AI_PROVIDERS.size}"
-    return if (count == 0) "$counted — Point работает на своих" else counted
+    val counted = aiKeysCount(keys)
+    return if (keys.mine.isEmpty()) "$counted — Point работает на своих" else counted
 }
+
+/** Только счёт: на самом экране ключей длинная приписка уже сказана выше (#887). */
+fun aiKeysCount(keys: UserAiKeys): String = "Свои ключи: ${keys.mine.size} из ${AI_PROVIDERS.size}"
 
 fun encodeAiFacts(facts: Map<String, AiFact>): String = facts.entries.joinToString("\n") {
     "${it.key}\t${it.value.outcome.name}\t${it.value.at}"
@@ -188,3 +193,38 @@ private val MONTHS_OF = listOf(
 
 private const val MINUTE = 60_000L
 private const val HOUR = 60 * MINUTE
+
+/**
+ * Группы сервисов на экране ключей (#887).
+ *
+ * Одиннадцать строк подряд носили один и тот же хвост — «работает на ключе Point · ещё не
+ * обращались». Девять раз одно и то же читается как шум, а главный вопрос человека — «мне
+ * что, выбрать один из одиннадцати?» — оставался без ответа.
+ *
+ * Общее говорится заголовком группы один раз, а в строке остаётся имя сервиса. Решение
+ * владельца по мокапам 12.08.2026: «вариант Б — общее сказано один раз».
+ */
+enum class AiServiceGroup(val title: String) {
+    MINE("Ваши ключи"),
+    OURS("Работают на ключе Point"),
+    SILENT("Молчат — нужен ваш ключ"),
+}
+
+fun aiServiceGroupOf(line: AiServiceLine): AiServiceGroup = when {
+    line.mine -> AiServiceGroup.MINE
+    line.ready -> AiServiceGroup.OURS
+    else -> AiServiceGroup.SILENT
+}
+
+/** Список по группам, в том же порядке обращения. Пустая группа не показывается. */
+fun aiServiceGroups(lines: List<AiServiceLine>): List<Pair<AiServiceGroup, List<AiServiceLine>>> =
+    AiServiceGroup.entries.mapNotNull { group ->
+        lines.filter { aiServiceGroupOf(it) == group }
+            .takeIf { it.isNotEmpty() }
+            ?.let { group to it }
+    }
+
+/** Очередь названа прямо: это снимает вопрос «надо выбрать один?». */
+const val AI_CHAIN_WHAT =
+    "Point обращается к сервисам по очереди, сверху вниз: отвечает первый доступный. " +
+        "Свой ключ не обязателен — он снимает общий лимит и пускает Point работать на вашей квоте."

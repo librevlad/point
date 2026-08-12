@@ -35,7 +35,7 @@ class PcSettingsTravelTest {
     fun `ключ компьютера уезжает под именем своего сервиса`() {
         val store = config()
         val was = store.load()
-        store.save(was.copy(ai = was.ai.copy(key = "sk-1", url = openRouter.baseUrl)))
+        store.save(was.copy(aiKeys = was.aiKeys.with(UserAiKey("openrouter", "sk-1"))))
 
         val mine = store.accountSettings()
 
@@ -46,7 +46,13 @@ class PcSettingsTravelTest {
     fun `свой адрес сервиса не выдаётся за чужой`() {
         val store = config()
         val was = store.load()
-        store.save(was.copy(ai = was.ai.copy(key = "sk-1", url = ownUrl)))
+        store.save(
+            was.copy(
+                aiKeys = was.aiKeys.with(
+                    UserAiKey(com.point.core.flow.OWN_SERVICE_ID, "sk-1", baseUrl = ownUrl),
+                ),
+            ),
+        )
 
         val key = store.accountSettings().aiKeys.mine.single()
 
@@ -55,7 +61,7 @@ class PcSettingsTravelTest {
     }
 
     @Test
-    fun `приехавший с телефона ключ ложится вместе с адресом и моделью`() {
+    fun `приехавший с телефона ключ ложится своему сервису`() {
         val store = config()
 
         store.applyAccountSettings(
@@ -65,10 +71,43 @@ class PcSettingsTravelTest {
             ),
         )
 
-        val now = store.load()
-        assertEquals(fromPhone, now.ai.key)
-        assertEquals(openRouter.baseUrl, now.ai.url)
-        assertTrue("модель не подставилась: " + now.ai.model, now.ai.model.isNotBlank())
+        assertEquals(fromPhone, store.load().aiKeys.keyFor("openrouter"))
+    }
+
+    @Test
+    fun `с телефона приезжает вся связка, а не самый свежий ключ`() {
+        val store = config()
+
+        store.applyAccountSettings(
+            AccountSettings(
+                aiKeys = UserAiKeys.NONE
+                    .with(UserAiKey("openrouter", "sk-router", savedAt = 100))
+                    .with(UserAiKey("groq", "sk-groq", savedAt = 200))
+                    .with(UserAiKey("mistral", "sk-mistral", savedAt = 300)),
+                at = 1_000,
+            ),
+        )
+
+        val keys = store.load().aiKeys
+        assertEquals(3, keys.mine.size)
+        assertEquals("sk-router", keys.keyFor("openrouter"))
+        assertEquals("sk-groq", keys.keyFor("groq"))
+        assertEquals("sk-mistral", keys.keyFor("mistral"))
+    }
+
+    @Test
+    fun `единственный старый ключ не теряется при обновлении`() {
+        val old = "sk-" + "старый"
+        val dir = java.io.File(temp.root, "point-pc").apply { mkdirs() }
+        java.io.File(dir, "config").writeText(
+            listOf("name=User-PC", "ai.key=" + old, "ai.url=" + openRouter.baseUrl)
+                .joinToString("\n", postfix = "\n"),
+        )
+
+        val keys = FilePcConfig(dir).load().aiKeys
+
+        assertEquals(1, keys.mine.size)
+        assertEquals(old, keys.keyFor("openrouter"))
     }
 
     @Test
@@ -84,11 +123,16 @@ class PcSettingsTravelTest {
     fun `пустое приехавшее ничего не стирает`() {
         val store = config()
         val was = store.load()
-        store.save(was.copy(ai = was.ai.copy(key = myKey), speech = was.speech.copy(key = speech)))
+        store.save(
+            was.copy(
+                aiKeys = was.aiKeys.with(UserAiKey("openrouter", myKey)),
+                speech = was.speech.copy(key = speech),
+            ),
+        )
 
         store.applyAccountSettings(AccountSettings(at = 5_000))
 
-        assertEquals(myKey, store.load().ai.key)
+        assertEquals(myKey, store.load().aiKeys.keyFor("openrouter"))
         assertEquals(speech, store.load().speech.key)
     }
 
@@ -96,7 +140,13 @@ class PcSettingsTravelTest {
     fun `имя устройства и правый клик за человеком не едут`() {
         val store = config()
         val was = store.load()
-        store.save(was.copy(name = "Рабочий ноутбук", rightClick = false, ai = was.ai.copy(key = "sk-1")))
+        store.save(
+            was.copy(
+                name = "Рабочий ноутбук",
+                rightClick = false,
+                aiKeys = was.aiKeys.with(UserAiKey("openrouter", "sk-1")),
+            ),
+        )
 
         val wire = store.accountSettings().encode()
 

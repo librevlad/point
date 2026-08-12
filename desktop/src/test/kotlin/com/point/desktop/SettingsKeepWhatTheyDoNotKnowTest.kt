@@ -42,7 +42,7 @@ class SettingsKeepWhatTheyDoNotKnowTest {
         File(home, "config").writeText("name=ПК\nai.key=sk-старый")
         val store = FilePcConfig(home)
 
-        store.save(store.load().let { it.copy(ai = it.ai.copy(key = "")) })
+        store.save(store.load().copy(aiKeys = com.point.core.flow.UserAiKeys.NONE))
 
         assertTrue("стёртый ключ остался в файле", "sk-старый" !in File(home, "config").readText())
     }

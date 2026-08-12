@@ -5,7 +5,6 @@ import com.point.core.flow.KeyProbe
 import com.point.core.flow.KeyVerdict
 import com.point.core.flow.UserAiConfig
 import com.point.core.flow.keyVerdict
-import com.point.desktop.ui.chosenFor
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -31,13 +30,6 @@ class SameKeysOnBothDevicesTest {
             assertTrue("сервис ${provider.id} не говорит, для чего он", provider.what.isNotBlank())
             assertTrue("сервис ${provider.id} не говорит, где взять ключ", provider.keyUrl.isNotBlank())
         }
-    }
-
-    @Test
-    fun `выбранный сервис узнаётся по полному адресу вызова компьютера`() {
-        assertTrue(chosenFor(openRouter.baseUrl + "/chat/completions", openRouter))
-        assertTrue(chosenFor(openRouter.baseUrl, openRouter))
-        assertFalse(chosenFor("https://api.groq.com/openai/v1", openRouter))
     }
 
     /** Проверка стучится туда же, куда идёт работа, — и от базы, и от полного адреса. */

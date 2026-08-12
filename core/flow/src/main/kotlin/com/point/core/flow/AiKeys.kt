@@ -123,3 +123,71 @@ fun decodeUserAiKeys(text: String?): UserAiKeys {
 }
 
 private const val FIELDS = 5
+
+/**
+ * Ключи в виде полей `имя=значение` — и в посылке между устройствами, и в файле настроек
+ * компьютера (#888).
+ *
+ * Раньше эта раскладка жила только внутри `AccountSettings`, а компьютер хранил один ключ
+ * с одним адресом и одной моделью. Из-за этого приехавшая связка из нескольких ключей
+ * схлопывалась в самый свежий, и на компьютере оставался один сервис из одиннадцати.
+ */
+object AiKeyFields {
+
+    const val PREFIX = "ai."
+    const val MODEL = ".model"
+    const val URL = ".url"
+    const val SAVED = ".at"
+
+    /** Одиночный ключ компьютера до #888. */
+    const val LEGACY_SINGLE = "ai.key"
+
+    fun of(keys: UserAiKeys): Map<String, String> = buildMap {
+        keys.entries.forEach { key ->
+            put(PREFIX + key.providerId, key.apiKey)
+            put(PREFIX + key.providerId + SAVED, key.savedAt.toString())
+            if (key.model.isNotBlank()) put(PREFIX + key.providerId + MODEL, key.model)
+            if (key.baseUrl.isNotBlank()) put(PREFIX + key.providerId + URL, key.baseUrl)
+        }
+    }
+
+    /** `at` — отметка всей посылки: ключ без своей выглядел бы её ровесником. */
+    fun from(fields: Map<String, String>, at: Long = 0L): UserAiKeys {
+        var keys = UserAiKeys.NONE
+        fields.keys
+            .filter {
+                // `ai.key` — старое одиночное поле компьютера, а не сервис по имени «key»:
+                // без этой оговорки при обновлении в списке заводился сервис-призрак (#888).
+                it.startsWith(PREFIX) && it != LEGACY_SINGLE &&
+                    !it.endsWith(MODEL) && !it.endsWith(URL) && !it.endsWith(SAVED)
+            }
+            .forEach { field ->
+                val apiKey = fields[field].orEmpty()
+                if (apiKey.isNotBlank()) {
+                    keys = keys.with(
+                        UserAiKey(
+                            providerId = field.removePrefix(PREFIX),
+                            apiKey = apiKey,
+                            model = fields[field + MODEL].orEmpty(),
+                            baseUrl = fields[field + URL].orEmpty(),
+                            savedAt = fields[field + SAVED]?.toLongOrNull() ?: at,
+                        ),
+                    )
+                }
+            }
+        return keys
+    }
+
+    /**
+     * Поля тех сервисов, чей ключ убрали: они уходят из файла, а не висят в нём.
+     *
+     * Считаются только поля, которые эта же раскладка и писала. Чужое рядом не трогается:
+     * настройки не должны терять то, о чём они не спрашивали.
+     */
+    fun stale(stored: Map<String, String>, keys: UserAiKeys): Set<String> {
+        val gone = from(stored).entries.map { it.providerId }.filter { keys.of(it) == null }
+        return gone.flatMap { id ->
+            listOf(PREFIX + id, PREFIX + id + SAVED, PREFIX + id + MODEL, PREFIX + id + URL)
+        }.filter { it in stored }.toSet()
+    }
+}
