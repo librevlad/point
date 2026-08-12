@@ -16,7 +16,6 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertSame
-import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -111,10 +110,11 @@ class DefaultResolverTest {
     }
 
     @Test
-    fun `unknown capability id throws`() {
-        assertThrows(IllegalStateException::class.java) {
-            resolver(setOf(realizer("ocr"))).realizerFor(CapabilityId("nope"))
-        }
+    fun `unknown capability id refuses in words, not with an identifier`() = runTest {
+        val result = resolver(setOf(realizer("ocr"))).realizerFor(CapabilityId("nope")).perform(obj())
+
+        assertTrue(result is ActionResult.Failure)
+        assertEquals(com.point.core.flow.NO_WAY_HERE_REASON, (result as ActionResult.Failure).reason)
     }
 
     @Test

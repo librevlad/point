@@ -35,8 +35,10 @@ class DefaultResolver @Inject constructor(
 
     override fun realizerFor(capabilityId: CapabilityId, state: com.point.core.model.ObjectState): Realizer {
         if (isPaywalled(capabilityId)) return PaywallRealizer(capabilityId)
-        val candidates = byCapability[capabilityId]
-            ?: error("No realizer for capability=${capabilityId.value}")
+        // Нет исполнителя — честный отказ словами, а не падение с идентификатором внутри
+        // (#857): `FlowViewModel` показывает человеку `e.message`, и туда уезжало
+        // `No realizer for capability=…`.
+        val candidates = byCapability[capabilityId] ?: return NoWayRealizer(capabilityId)
 
         // Годность — часть состояния объекта (#684/#685): негодный исходник не уезжает
         // наружу ни ради распознавания, ни ради понимания. Правило одно на оба устройства
@@ -78,6 +80,12 @@ private class PaywallRealizer(override val capabilityId: CapabilityId) : Realize
  * Единственный местный кандидат оказался внешним, а объект уже негоден (#684/#685) — отказ
  * называется сразу, тем же словом, что и на экране, без сетевого похода.
  */
+/** Способность объявлена, а исполнить её на этом устройстве нечем (#857). */
+private class NoWayRealizer(override val capabilityId: CapabilityId) : Realizer {
+    override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
+        ActionResult.Failure(com.point.core.flow.NO_WAY_HERE_REASON, recoverable = false)
+}
+
 private class UnusableRealizer(override val capabilityId: CapabilityId) : Realizer {
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         ActionResult.Failure(
