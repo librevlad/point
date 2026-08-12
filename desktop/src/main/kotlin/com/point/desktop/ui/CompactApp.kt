@@ -597,6 +597,49 @@ internal fun CompactObject(
 }
 
 /** Список: «сейчас» + «было раньше» + двери входа. */
+/**
+ * Строка списка «Недавнее». Живой объект и запись журнала попадают в один поток и режутся
+ * на секции времени вместе — иначе одна и та же «СЕГОДНЯ» встречается в списке дважды (#884).
+ */
+internal sealed interface RecentLine {
+    val at: Long
+
+    data class Live(
+        val item: InboxItem,
+        val source: com.point.desktop.ObjectSource? = null,
+    ) : RecentLine {
+        override val at: Long get() = item.receivedAt
+    }
+
+    data class Kept(val entry: com.point.desktop.JournalEntry) : RecentLine {
+        override val at: Long get() = entry.at
+    }
+}
+
+/**
+ * Два источника — один поток, от свежего к старому.
+ *
+ * Живой объект берёт своё происхождение из журнала: та же запись, просто ещё открытая.
+ * Пока он его не брал, вторая строка означала в одном списке разное — у одних «Документ»,
+ * у других «с телефона», — и человек не мог понять, вид это или место (#884).
+ */
+internal fun recentLines(
+    items: List<InboxItem>,
+    remembered: List<com.point.desktop.JournalEntry>,
+    journal: List<com.point.desktop.JournalEntry> = emptyList(),
+): List<RecentLine> {
+    val sourceOf = journal.associate { it.path to it.source }
+    return (
+        items.map { RecentLine.Live(it, sourceOf[it.obj.uri.value]) } +
+            remembered.map { RecentLine.Kept(it) }
+        ).sortedByDescending { it.at }
+}
+
+/** Вторая строка одна на весь список: что это, и — если известно — откуда пришло. */
+internal fun recentNote(kind: ObjectKind, source: com.point.desktop.ObjectSource?): String =
+    listOfNotNull(kindLabel(kind), source?.let { com.point.desktop.sourceShort(it) })
+        .joinToString(" · ")
+
 @Composable
 internal fun CompactList(
     state: DesktopState,
@@ -671,40 +714,42 @@ internal fun CompactList(
         }
 
         // Время — структура списка, а не подпись в каждой строке. Правило общее с телефоном.
-        com.point.core.flow.byTimeSection(items) { now - it.receivedAt }
+        //
+        // Объекты, открытые прямо сейчас, и записи журнала — два источника одного списка, и
+        // резать на секции их нужно вместе. Пока каждый резался отдельно, «СЕГОДНЯ» стояло
+        // в списке дважды: сначала над живыми объектами, потом над журналом (#884).
+        val lines = remember(items, remembered, journal) { recentLines(items, remembered, journal) }
+        com.point.core.flow.byTimeSection(lines) { now - it.at }
             .forEach { (section, rows) ->
                 Text(
                     section.label.uppercase(),
                     style = PointType.label.copy(color = PointColors.text.copy(alpha = 0.72f)),
                     modifier = Modifier.padding(top = 6.dp),
                 )
-                rows.forEach { item ->
-                    ListRow(
-                        name = item.obj.metadata["name"] ?: "Объект",
-                        note = kindLabel(item.obj.state.kind),
-                        accent = true,
-                        kind = item.obj.state.kind,
-                        clock = com.point.desktop.clockLabel(item.receivedAt, zone),
-                        fresh = item.obj.id in fresh,
-                    ) { onOpen(item) }
-                }
-            }
+                rows.forEach { line ->
+                    when (line) {
+                        is RecentLine.Live -> ListRow(
+                            name = line.item.obj.metadata["name"] ?: "Объект",
+                            note = recentNote(line.item.obj.state.kind, line.source),
+                            accent = true,
+                            kind = line.item.obj.state.kind,
+                            clock = com.point.desktop.clockLabel(line.at, zone),
+                            fresh = line.item.obj.id in fresh,
+                        ) { onOpen(line.item) }
 
-        com.point.core.flow.byTimeSection(remembered) { now - it.at }
-            .forEach { (section, rows) ->
-                Text(
-                    section.label.uppercase(),
-                    style = PointType.label.copy(color = PointColors.text.copy(alpha = 0.72f)),
-                    modifier = Modifier.padding(top = 6.dp),
-                )
-                rows.forEach { entry ->
-                    ListRow(
-                        name = entry.name.ifBlank { "Объект" },
-                        note = com.point.desktop.sourceShort(entry.source),
-                        accent = false,
-                        kind = runCatching { ObjectKind.valueOf(entry.kind) }.getOrDefault(ObjectKind.UNKNOWN),
-                        clock = com.point.desktop.clockLabel(entry.at, zone),
-                    ) { state.openAgain(entry)?.let(onOpen) }
+                        is RecentLine.Kept -> ListRow(
+                            name = line.entry.name.ifBlank { "Объект" },
+                            note = recentNote(
+                                runCatching { ObjectKind.valueOf(line.entry.kind) }
+                                    .getOrDefault(ObjectKind.UNKNOWN),
+                                line.entry.source,
+                            ),
+                            accent = false,
+                            kind = runCatching { ObjectKind.valueOf(line.entry.kind) }
+                                .getOrDefault(ObjectKind.UNKNOWN),
+                            clock = com.point.desktop.clockLabel(line.at, zone),
+                        ) { state.openAgain(line.entry)?.let(onOpen) }
+                    }
                 }
             }
 
