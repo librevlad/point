@@ -57,6 +57,8 @@ class SourcePickerActivity : ComponentActivity() {
 
     @Inject lateinit var network: com.point.core.flow.NetworkAvailability
 
+    @Inject lateinit var account: com.point.core.flow.AccountStore
+
     private var pending: ObjectSource? = null
 
     private var blocked by mutableStateOf<String?>(null)
@@ -108,6 +110,10 @@ class SourcePickerActivity : ComponentActivity() {
 
         // Про сеть спрашиваем один раз на список, а не у каждого источника (#569, #759).
         val online = runCatching { network.isAvailable() }.getOrDefault(true)
+
+        // Про вход спрашиваем там же, где про сеть: причина стоит до тапа, а не отказом
+        // после него (#897).
+        val signedIn = runCatching { account.current() != null }.getOrDefault(true)
         tileOffer = tileOfferVisible(Build.VERSION.SDK_INT, shadeTileKnown(this))
         setContent {
             PointTheme {
@@ -115,6 +121,7 @@ class SourcePickerActivity : ComponentActivity() {
                     sources = visible,
                     onPick = ::start,
                     online = online,
+                    signedIn = signedIn,
                     blocked = blocked,
                     onOpenSettings = ::openAppSettings,
                     onDismissBlocked = ::finish,
@@ -247,6 +254,7 @@ internal fun SourcePickerScreen(
     tileOffer: Boolean = false,
     onAddTile: () -> Unit = {},
     online: Boolean = true,
+    signedIn: Boolean = true,
 ) {
     Box(
         modifier = modifier
@@ -272,7 +280,7 @@ internal fun SourcePickerScreen(
 
                         // Зачем это Point — сказано до системного окна, а не после (#568).
                         // А если сети нет — об этом сказано до тапа, а не отказом после (#759).
-                        subtitle = sourceNote(source, online),
+                        subtitle = sourceNote(source, online, signedIn),
                         onClick = { onPick(source) },
                         icon = bubbleIcon(source.icon),
                         accent = bubbleColor(source.icon),

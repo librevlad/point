@@ -30,6 +30,14 @@ interface ObjectSource {
      */
     val network: Boolean get() = false
 
+    /**
+     * Источнику нужен аккаунт (#897).
+     *
+     * «Принять файл по ссылке» без входа отказывал уже ПОСЛЕ тапа — экраном с одной красной
+     * плашкой. Причина должна стоять до тапа, ровно как у сети.
+     */
+    val account: Boolean get() = false
+
     fun isAvailable(context: Context): Boolean
 
     val permissions: List<String> get() = emptyList()
@@ -50,5 +58,8 @@ interface ObjectSource {
  * как действие над объектом называет причину вместо своего обещания. Строка остаётся
  * нажимаемой: прятать дверь, ради которой человек сюда пришёл, нельзя.
  */
-fun sourceNote(source: ObjectSource, online: Boolean): String? =
-    if (source.network && !online) NO_INTERNET_NOTE else source.what
+fun sourceNote(source: ObjectSource, online: Boolean, signedIn: Boolean = true): String? = when {
+    source.network && !online -> NO_INTERNET_NOTE
+    source.account && !signedIn -> com.point.core.flow.NOT_IN_ACCOUNT_NOTE
+    else -> source.what
+}

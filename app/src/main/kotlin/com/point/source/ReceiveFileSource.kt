@@ -15,6 +15,7 @@ class ReceiveFileSource @Inject constructor(
     override val id = "receive"
     override val label = "Принять файл по ссылке"
     override val what = "дайте ссылку тому, кто пришлёт вам файл"
+    override val account = true
     override val icon = "link"
     override val network = true
 

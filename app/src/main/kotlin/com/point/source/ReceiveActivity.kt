@@ -84,6 +84,9 @@ class ReceiveActivity : ComponentActivity() {
                         onCopy = ::copyLink,
                         onSend = ::sendLink,
                         onCancel = ::finish,
+                        onSignIn = ::openSignIn.takeIf {
+                            failure == com.point.core.flow.NOT_IN_ACCOUNT_TEXT
+                        },
                     )
                 }
             }
@@ -161,6 +164,14 @@ class ReceiveActivity : ComponentActivity() {
         }
     }
 
+    /** Дверь, которая чинит причину: вход живёт своим экраном, туда и ведём. */
+    private fun openSignIn() {
+        runCatching {
+            startActivity(Intent(this, Class.forName("com.point.SignedInActivity")))
+        }
+        finish()
+    }
+
     private fun copyLink() {
         val text = link ?: return
         val cm = getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager ?: return
@@ -202,6 +213,7 @@ private fun ReceiveScreen(
     onCopy: () -> Unit,
     onSend: () -> Unit,
     onCancel: () -> Unit,
+    onSignIn: (() -> Unit)? = null,
 ) {
     Column(
         modifier = Modifier
@@ -213,7 +225,32 @@ private fun ReceiveScreen(
     ) {
         when {
 
-            failure != null -> OutcomeBanner(failure, Outcome.FAILED)
+            // Отказ называл причину и оставлял человека с ней наедине: пустой экран, красная
+            // плашка и «Отмена». Причина, из-за которой не открылось, теперь стоит под
+            // именем экрана, а дверь, которая её чинит, — тут же (#897).
+            failure != null -> {
+                ScreenHeader(
+                    title = "Приём не открылся",
+                    subtitle = failure,
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                )
+                if (onSignIn != null) {
+                    Column(
+                        modifier = Modifier.widthIn(max = PortalColumnWidth).fillMaxWidth(),
+                    ) {
+                        PortalRow(
+                            title = "Войти",
+                            subtitle = "Ссылку приёма выдаёт сервер — для этого устройство должно быть в вашем аккаунте.",
+                            onClick = onSignIn,
+                            icon = bubbleIcon("account"),
+                            accent = bubbleColor("account"),
+                            primary = true,
+                            chevron = false,
+                            subtitleMaxLines = 3,
+                        )
+                    }
+                }
+            }
 
             link == null -> {
                 Portal(size = 148.dp)
