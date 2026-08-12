@@ -137,18 +137,11 @@ class PcTranscribeRealizer(
         },
     )
 
-    private fun extensionOf(mime: String): String = when {
-        mime.contains("ogg") -> "ogg"
-        mime.contains("mpeg") || mime.contains("mp3") -> "mp3"
-        mime.contains("mp4") || mime.contains("m4a") || mime.contains("aac") -> "m4a"
-        mime.contains("wav") -> "wav"
-        mime.contains("flac") -> "flac"
-        else -> "audio"
-    }
+    private fun extensionOf(mime: String): String = com.point.core.flow.audioExtensionFor(mime)
 
     private companion object {
 
-        const val MAX_BYTES = 25L * 1024 * 1024
+        val MAX_BYTES = com.point.core.flow.MAX_SPEECH_BYTES
     }
 }
 

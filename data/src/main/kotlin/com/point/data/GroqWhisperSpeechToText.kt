@@ -67,7 +67,7 @@ class GroqWhisperSpeechToText(
     private fun refusal(code: Int): String =
         com.point.core.flow.serviceRefusal(code, hint = if (code in KEY_CODES) KEY_SETTINGS_CALL else null)
 
-    private fun extensionOf(mime: String): String = EXTENSIONS[mime] ?: "ogg"
+    private fun extensionOf(mime: String): String = com.point.core.flow.audioExtensionFor(mime)
 
     private companion object {
 
@@ -78,17 +78,6 @@ class GroqWhisperSpeechToText(
 
         const val DEFAULT_BASE_URL = "https://api.groq.com/openai/v1"
 
-        const val MAX_WHISPER_BYTES = 25L * 1024 * 1024
-
-        val EXTENSIONS: Map<String, String> = mapOf(
-            "audio/ogg" to "ogg",
-            "audio/mpeg" to "mp3",
-            "audio/wav" to "wav",
-            "audio/flac" to "flac",
-            "audio/mp4" to "m4a",
-            "audio/aac" to "aac",
-
-            "audio/aiff" to "aiff",
-        )
+        val MAX_WHISPER_BYTES = com.point.core.flow.MAX_SPEECH_BYTES
     }
 }
