@@ -1,5 +1,6 @@
 package com.point.data
 
+import com.point.core.flow.HistoryFootprint
 import com.point.core.flow.HistoryStore
 import com.point.core.flow.META_CLOUD_ATOMS_REF
 import com.point.core.flow.META_ENTITY_PREFIX
@@ -140,6 +141,21 @@ class FileHistoryStore @Inject constructor(
 
     override suspend fun clearAll() {
         withContext(Dispatchers.IO) { mutex.withLock { dir.deleteRecursively() } }
+    }
+
+    /**
+     * Считается то, что лежит на диске, а не то, что записано в перечне (#821): рядом с
+     * копией объекта живут копии улик, и место занимают именно они.
+     */
+    override suspend fun footprint(): HistoryFootprint = withContext(Dispatchers.IO) {
+        mutex.withLock {
+            runCatching {
+                HistoryFootprint(
+                    count = readEntries().size,
+                    bytes = dir.walkTopDown().filter { it.isFile }.sumOf { it.length() },
+                )
+            }.getOrDefault(HistoryFootprint(0, 0L))
+        }
     }
 
     /**

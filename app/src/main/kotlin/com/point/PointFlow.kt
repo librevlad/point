@@ -53,6 +53,12 @@ fun PointFlow(
         onPickPrivacyLevel = viewModel::setPrivacyLevel,
         onToggleCloud = viewModel::setCloudAllowed,
         onToggleYolo = viewModel::setYoloEnabled,
+        onUnpin = viewModel::unpin,
+        onForgetAll = viewModel::clearHistory,
+
+        // Плитка — точка входа, о которой человек мог не знать (#821). Её наличие знает
+        // система, а не Graph: спрашиваем здесь, а не тащим Context в модель.
+        tileAdded = com.point.source.shadeTileKnown(context),
         onConfirmCloud = viewModel::confirmCloud,
         onDeclineCloud = viewModel::declineCloud,
         onPickApp = viewModel::onPickApp,

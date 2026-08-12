@@ -143,6 +143,10 @@ data class FlowUiState(
 
     val cloudEnabled: Boolean = false,
 
+    /** Что уже работает и негде увидеть: закрепления, точки входа, память (#821). */
+    val pinned: List<PinnedLine> = emptyList(),
+    val memory: com.point.core.flow.HistoryFootprint? = null,
+
     /** Режим «делай лучшее и не спрашивай» (#795). */
     val yoloEnabled: Boolean = false,
 
@@ -209,4 +213,11 @@ data class DevicesScreenState(
     val error: String? = null,
 
     val loading: Boolean = true,
+)
+
+/** Закреплённое действие для показа: чей вид объекта и что закреплено (#821). */
+data class PinnedLine(
+    val kind: com.point.core.model.ObjectKind,
+    val kindLabel: String,
+    val actionLabel: String,
 )
