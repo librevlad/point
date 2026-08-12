@@ -114,8 +114,6 @@ fun KeyScreen(
 
     onOpenDevices: () -> Unit = {},
 
-    pinned: List<PinnedLine> = emptyList(),
-    onUnpin: (com.point.core.model.ObjectKind) -> Unit = {},
     tileAdded: Boolean = false,
     memory: com.point.core.flow.HistoryFootprint? = null,
     onForgetAll: () -> Unit = {},
@@ -159,7 +157,6 @@ fun KeyScreen(
                     onToggleSound = onToggleSound,
                     onOpen = { section = it },
                     onOpenDevices = onOpenDevices,
-                    pinnedCount = pinned.size,
                     tileAdded = tileAdded,
                     memory = memory,
                     version = version,
@@ -199,12 +196,6 @@ fun KeyScreen(
                     onBack = { section = null },
                 )
 
-                SettingsSection.PINS -> PinsSection(
-                    pinned = pinned,
-                    onUnpin = onUnpin,
-                    onBack = { section = null },
-                )
-
                 SettingsSection.ENTRIES -> EntriesSection(
                     tileAdded = tileAdded,
                     onBack = { section = null },
@@ -230,7 +221,7 @@ fun KeyScreen(
     }
 }
 
-private enum class SettingsSection { KEY, PRIVACY, APP, PINS, ENTRIES, MEMORY }
+private enum class SettingsSection { KEY, PRIVACY, APP, ENTRIES, MEMORY }
 
 @Composable
 private fun SettingsList(
@@ -242,7 +233,6 @@ private fun SettingsList(
     onToggleSound: (Boolean) -> Unit,
     onOpen: (SettingsSection) -> Unit,
     onOpenDevices: () -> Unit,
-    pinnedCount: Int,
     tileAdded: Boolean,
     memory: com.point.core.flow.HistoryFootprint?,
     version: String,
@@ -251,13 +241,27 @@ private fun SettingsList(
 
         ScreenHeader(title = SETTINGS_TITLE, modifier = Modifier.padding(bottom = 2.dp))
 
-        SettingsGroup(AI_GROUP_TITLE) {
+        // Порядок разделов один на телефон и компьютер (#881): аккаунт и устройства →
+        // AI и приватность → поведение → данные → интеграции. «Мои устройства» стоит первым
+        // не по важности настройки, а потому что это состояние: вошёл ли человек и видят ли
+        // его устройства друг друга — первый вопрос, с которым сюда приходят.
+        SettingsGroup(ACCOUNT_GROUP_TITLE) {
+            SettingsRow(
+                title = MY_DEVICES_TITLE,
+                subtitle = "Вход, круг устройств и выход.",
+                onClick = onOpenDevices,
+                appearIndex = 0,
+            )
+        }
 
+        // Ключи и приватность — одна область: кто читает объект и что ему позволено.
+        // Раньше они стояли соседними строками в разделе «AI и облако» (#881).
+        SettingsGroup(AI_GROUP_TITLE) {
             SettingsRow(
                 title = KEY_SECTION_TITLE,
                 subtitle = keyLine,
                 onClick = { onOpen(SettingsSection.KEY) },
-                appearIndex = 0,
+                appearIndex = 1,
             )
             GroupSeam()
             SettingsRow(
@@ -266,22 +270,11 @@ private fun SettingsList(
                 subtitle = (if (cloudEnabled) "Облако разрешено" else "Облако выключено") +
                     " · ${privacyLevel.title}" + (if (yoloEnabled) " · $YOLO_TITLE" else ""),
                 onClick = { onOpen(SettingsSection.PRIVACY) },
-                appearIndex = 1,
-            )
-        }
-
-        SettingsGroup(ACCOUNT_GROUP_TITLE) {
-
-            SettingsRow(
-                title = MY_DEVICES_TITLE,
-                subtitle = "Вход, круг устройств и выход.",
-                onClick = onOpenDevices,
                 appearIndex = 2,
             )
         }
 
         SettingsGroup(APP_SECTION_TITLE) {
-
             SettingsRow(
                 title = SOUND_TITLE,
                 subtitle = "Тихий фирменный отклик на каждое действие.",
@@ -289,31 +282,25 @@ private fun SettingsList(
                 appearIndex = 3,
                 trailing = { Switch(checked = soundEnabled, onCheckedChange = onToggleSound) },
             )
-            GroupSeam()
+        }
 
-            // Четыре обзора того, что уже работает и негде было увидеть (#821): жест
-            // закрепления есть, а списка закреплённого нет; плитка бывает, а знать о ней
-            // неоткуда; копии объектов лежат на диске молча; версию спрашивает первый же
-            // тестер.
+        // Копии объектов лежат на диске молча — здесь видно сколько и как забыть (#821).
+        SettingsGroup(DATA_GROUP_TITLE) {
             SettingsRow(
-                title = PINS_TITLE,
-                subtitle = pinnedLine(pinnedCount),
-                onClick = { onOpen(SettingsSection.PINS) },
+                title = MEMORY_TITLE,
+                subtitle = memoryLine(memory),
+                onClick = { onOpen(SettingsSection.MEMORY) },
                 appearIndex = 4,
             )
-            GroupSeam()
+        }
+
+        // Точки входа — это способы запустить Point из системы, а не настройка приложения.
+        SettingsGroup(INTEGRATIONS_GROUP_TITLE) {
             SettingsRow(
                 title = ENTRIES_TITLE,
                 subtitle = entriesLine(tileAdded),
                 onClick = { onOpen(SettingsSection.ENTRIES) },
                 appearIndex = 5,
-            )
-            GroupSeam()
-            SettingsRow(
-                title = MEMORY_TITLE,
-                subtitle = memoryLine(memory),
-                onClick = { onOpen(SettingsSection.MEMORY) },
-                appearIndex = 6,
             )
         }
 
@@ -729,47 +716,6 @@ private fun PrivacySection(
     }
 }
 
-/** Обзор закреплённого: увидеть и снять, не вспоминая жеста (#821). */
-@Composable
-private fun PinsSection(
-    pinned: List<PinnedLine>,
-    onUnpin: (com.point.core.model.ObjectKind) -> Unit,
-    onBack: () -> Unit,
-) {
-    BackToList(onBack)
-    ScreenHeader(title = PINS_TITLE, modifier = Modifier.padding(bottom = 9.dp))
-
-    if (pinned.isEmpty()) {
-        Text(
-            "Пока ничего не закреплено. $PIN_GESTURE",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        return
-    }
-    Text(
-        PIN_GESTURE,
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
-    pinned.forEachIndexed { index, line ->
-        PortalRow(
-            title = line.kindLabel,
-            subtitle = line.actionLabel,
-            onClick = { onUnpin(line.kind) },
-            chevron = false,
-            appearIndex = index,
-            trailing = {
-                Text(
-                    "Открепить",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            },
-        )
-    }
-}
-
 /** Откуда Point открывается — про плитку человек мог не знать вовсе (#821). */
 @Composable
 private fun EntriesSection(tileAdded: Boolean, onBack: () -> Unit) {
@@ -850,19 +796,21 @@ private fun AppSection(
     )
 }
 
-private const val AI_GROUP_TITLE = "AI и облако"
-private const val ACCOUNT_GROUP_TITLE = "Аккаунт"
+private const val AI_GROUP_TITLE = "AI и приватность"
+private const val ACCOUNT_GROUP_TITLE = "Аккаунт и устройства"
 
 private const val KEY_SECTION_TITLE = "Ключи AI"
 private const val PRIVACY_SECTION_TITLE = "Отправка и приватность"
-private const val APP_SECTION_TITLE = "Приложение"
+private const val APP_SECTION_TITLE = "Поведение Point"
+
+private const val DATA_GROUP_TITLE = "Данные"
+
+private const val INTEGRATIONS_GROUP_TITLE = "Интеграции"
 private const val SOUND_TITLE = "Звук действий"
 
-private const val PINS_TITLE = "Закреплённые действия"
 private const val ENTRIES_TITLE = "Точки входа"
 private const val MEMORY_TITLE = "Что Point помнит"
 
-private const val PIN_GESTURE = "Закрепляется долгим нажатием на действие."
 
 private const val SHARE_ENTRY = "Системное «Поделиться» — Point принимает объект из любого приложения."
 private const val TILE_ENTRY_ON = "Плитка в шторке — Point открывается одним касанием сверху."
@@ -875,9 +823,6 @@ private const val MEMORY_WHAT =
 private const val DROP_LINKS_LIVE = "Ссылки, которыми вы делились через сервер, перестают действовать через сутки."
 
 private const val FORGET_ALL = "Забыть всё"
-
-private fun pinnedLine(count: Int): String =
-    if (count == 0) "Пока ничего не закреплено. $PIN_GESTURE" else "Закреплено действий: $count"
 
 private fun entriesLine(tileAdded: Boolean): String =
     if (tileAdded) "Системное «Поделиться» и плитка в шторке" else "Системное «Поделиться»"

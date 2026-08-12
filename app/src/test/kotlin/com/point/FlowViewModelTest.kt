@@ -75,7 +75,6 @@ class FlowViewModelTest {
     }
     private val snapshot = FakeFlowSnapshotStore()
     private val crashLog = FakeCrashLog()
-    private val pins = FakePinnedActions()
 
     private val noFrames = object : SelectionFrames {
 
@@ -107,7 +106,7 @@ class FlowViewModelTest {
         keyNeeding: Set<CapabilityId> = emptySet(),
 
         pdf: com.point.core.flow.PdfRasterizer = FakePdfRasterizer(),
-    ) = FlowViewModel(store, FakeRegistry(caps, cloud, slow, keyNeeding) { userKeys.keys().mine.isNotEmpty() }, resolver, ChatTalk(chatResponder, store), enrichment, history, usage, chosenApps, userKeys, aiFacts, builtInKeys, consent, appLauncher, pdf, sensory, sensorySettings, cloudPrivacy, com.point.core.flow.YoloMode.OFF, snapshot, crashLog, dispatcher, pins, AppIconResolver { null }, pcLinks, pcTransport, pcCaps, linkMonitor, PulledFileFactory { name -> java.io.File(java.io.File(System.getProperty("java.io.tmpdir")), "pulled-" + name).absolutePath }, noFrames, keyCheck, account, accountClient, pendingLogins, deviceKeys, browser, sharedTexts)
+    ) = FlowViewModel(store, FakeRegistry(caps, cloud, slow, keyNeeding) { userKeys.keys().mine.isNotEmpty() }, resolver, ChatTalk(chatResponder, store), enrichment, history, usage, chosenApps, userKeys, aiFacts, builtInKeys, consent, appLauncher, pdf, sensory, sensorySettings, cloudPrivacy, com.point.core.flow.YoloMode.OFF, snapshot, crashLog, dispatcher, AppIconResolver { null }, pcLinks, pcTransport, pcCaps, linkMonitor, PulledFileFactory { name -> java.io.File(java.io.File(System.getProperty("java.io.tmpdir")), "pulled-" + name).absolutePath }, noFrames, keyCheck, account, accountClient, pendingLogins, deviceKeys, browser, sharedTexts)
 
     private val keyCheck = FakeAiKeyCheck()
 
@@ -205,20 +204,6 @@ class FlowViewModelTest {
             assertEquals(Outcome.FAILED, vm.ui.value.messageOutcome)
         }
 
-    @Test fun `long-press pins, second long-press unpins — with a spoken confirmation`() = runTest(dispatcher) {
-        val vm = vm()
-        vm.onShared("uri", "image/png"); advanceUntilIdle()
-
-        vm.togglePin(bubble(id = "a", title = "Действие")); advanceUntilIdle()
-        assertEquals("a", pins.pinned[ObjectKind.IMAGE]?.value)
-        assertTrue(vm.ui.value.message?.contains("Закреплено") == true)
-        assertEquals(CapabilityId("a"), vm.ui.value.frame?.pinned)
-
-        vm.togglePin(bubble(id = "a", title = "Действие")); advanceUntilIdle()
-        assertNull(pins.pinned[ObjectKind.IMAGE])
-        assertTrue(vm.ui.value.message?.contains("Откреплено") == true)
-        assertNull(vm.ui.value.frame?.pinned)
-    }
 
     @Test fun `a direct app pick is remembered and trains usage`() = runTest(dispatcher) {
         val vm = vm()
@@ -613,9 +598,10 @@ class FlowViewModelTest {
         vm.onBubble(bubble()); advanceUntilIdle()
         assertEquals(Outcome.FAILED, vm.ui.value.messageOutcome)
 
-        vm.togglePin(bubble(id = "a", title = "Действие")); advanceUntilIdle()
+        resolver.throwsOnPerform = null
+        resolver.result = ActionResult.Done("Готово")
+        vm.onBubble(bubble()); advanceUntilIdle()
 
-        assertTrue(vm.ui.value.message?.contains("Закреплено") == true)
         assertEquals(Outcome.DONE, vm.ui.value.messageOutcome)
     }
 
@@ -3905,12 +3891,6 @@ private class FakeSensoryFeedback : com.point.core.flow.SensoryFeedback {
     override fun failure() { events += "failure" }
 }
 
-private class FakePinnedActions : com.point.core.flow.PinnedActions {
-    val pinned = mutableMapOf<ObjectKind, CapabilityId?>()
-    override fun pinnedFor(kind: ObjectKind) = pinned[kind]
-    override suspend fun pin(kind: ObjectKind, id: CapabilityId) { pinned[kind] = id }
-    override suspend fun unpin(kind: ObjectKind) { pinned[kind] = null }
-}
 
 private class FakeCrashLog : com.point.core.flow.CrashLog {
     var report: String? = null

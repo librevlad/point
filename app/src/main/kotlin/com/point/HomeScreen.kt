@@ -225,13 +225,26 @@ fun HomeScreen(
                         )
                     }
                 }
-                items(recent, key = { it.id }) { entry ->
-                    RemovableHistoryRow(
-                        entry = entry,
-                        onClick = { onOpen(entry) },
-                        onRemove = { onRemove(entry) },
-                    )
-                }
+
+                // Время — структура списка, а не подпись в каждой строке (#880). Правило
+                // общее с компьютером: секции те же, оформление своё.
+                val now = System.currentTimeMillis()
+                com.point.core.flow.byTimeSection(recent) { now - it.epochMillis }
+                    .forEach { (section, entries) ->
+                        item(key = "section-${section.name}") {
+                            com.point.core.ui.SectionLabel(
+                                section.label,
+                                modifier = Modifier.padding(top = 10.dp, bottom = 2.dp),
+                            )
+                        }
+                        items(entries, key = { it.id }) { entry ->
+                            RemovableHistoryRow(
+                                entry = entry,
+                                onClick = { onOpen(entry) },
+                                onRemove = { onRemove(entry) },
+                            )
+                        }
+                    }
                 item {
                     var asking by rememberSaveable { mutableStateOf(false) }
                     if (asking) {
@@ -474,28 +487,37 @@ private fun HistoryRow(
                     overflow = TextOverflow.Ellipsis,
                 )
 
+                // Время ушло в заголовок секции (#880): строке остаётся то, чего в секции
+                // нет — имя файла и вид объекта.
                 Text(
-                    text = historySubtitle(
+                    text = rowSubtitle(
                         name = entry.name.takeIf { entryTitle(entry) != it },
                         kind = kindLabel(entry.kind),
-
-                        ago = agoLabel(System.currentTimeMillis() - entry.epochMillis),
                     ),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
 
+                // Знание выглядит знанием, а не ссылкой (#880): раньше номер телефона был
+                // написан цветом действия и читался как «нажми меня».
                 val facts = entryFacts(entry)
                 if (facts.isNotEmpty()) {
                     Text(
                         text = facts.take(2).joinToString(" · ") { it.value ?: it.label },
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
             }
+            Text(
+                text = clockLabel(entry.epochMillis),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+            )
             trailing?.invoke()
         }
     }
@@ -505,11 +527,15 @@ private fun HistoryRow(
  * Подзаголовок досказывает то, чего нет в заголовке: имя файла — когда заголовок назвал смысл,
  * вид объекта — когда заголовком стало имя. Одно и то же дважды не печатается.
  */
-internal fun historySubtitle(name: String?, kind: String, ago: String): String = when {
-    name == null -> "$kind · $ago"
-    name.startsWith(kind, ignoreCase = true) -> ago
-    else -> "$name · $ago"
+internal fun rowSubtitle(name: String?, kind: String): String = when {
+    name == null -> kind
+    name.startsWith(kind, ignoreCase = true) -> name
+    else -> "$kind · $name"
 }
+
+/** Час строки: время сказано секцией, здесь остаётся только «когда именно». */
+internal fun clockLabel(epochMillis: Long): String =
+    java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date(epochMillis))
 
 private fun entryFacts(entry: HistoryEntry) = understoodFacts(entryObject(entry))
 

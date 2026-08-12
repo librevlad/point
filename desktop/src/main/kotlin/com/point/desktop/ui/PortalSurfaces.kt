@@ -18,13 +18,17 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.onPointerEvent
 import com.point.core.ui.PointPalette
 import com.point.core.ui.PortalCardShape
 import com.point.core.ui.PortalPlateShape
@@ -138,6 +142,7 @@ fun PortalPlate(
  * вниз, и «что будет, если нажать» стоит там же, где он привык его видеть.
  */
 @Composable
+@OptIn(ExperimentalComposeUiApi::class)
 fun PortalRow(
     title: String,
     onClick: () -> Unit,
@@ -167,11 +172,26 @@ fun PortalRow(
     val labelColor = if (primary) Color.White else PointColors.text
     val subColor = if (primary) Color.White.copy(alpha = 0.80f) else PointColors.muted
 
-    Box(body.clickable(enabled = enabled, onClick = onClick)) {
+    // Наведение — то, чего нет и не может быть на телефоне (#879): курсор отвечает «сюда
+    // попаду» до нажатия. Модель строки при этом та же, меняется только подсветка.
+    val hovered = remember { mutableStateOf(false) }
+    val lit = if (hovered.value && !primary) {
+        body.border(1.dp, PointColors.violet.copy(alpha = 0.55f), PortalCardShape)
+    } else {
+        body
+    }
+
+    Box(
+        lit
+            .onPointerEvent(PointerEventType.Enter) { hovered.value = true }
+            .onPointerEvent(PointerEventType.Exit) { hovered.value = false }
+            .clickable(enabled = enabled, onClick = onClick),
+    ) {
         Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = if (primary) 15.dp else 12.dp),
+            // Плотнее телефона: мышь точнее пальца, а в окне вертикаль дороже (#879).
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = if (primary) 11.dp else 9.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(13.dp),
+            horizontalArrangement = Arrangement.spacedBy(11.dp),
         ) {
             PortalPlate(accent = accent, icon = icon, onGlass = primary)
             Column(modifier = Modifier.weight(1f)) {
@@ -191,7 +211,18 @@ fun PortalRow(
                     )
                 }
             }
-            trailing?.invoke()
+            if (trailing != null) {
+                trailing()
+            } else {
+                // Шеврон говорит, что за строкой продолжение, а не мгновенный результат.
+                // Приглушён: повторённый десять раз в полную силу он становится шумом (#879).
+                Text(
+                    "›",
+                    style = PointType.body.copy(
+                        color = if (primary) Color.White.copy(alpha = 0.7f) else PointColors.muted.copy(alpha = 0.45f),
+                    ),
+                )
+            }
         }
     }
 }

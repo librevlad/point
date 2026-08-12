@@ -35,7 +35,6 @@ import com.point.core.flow.SensoryFeedback
 import com.point.core.flow.SensorySettings
 import com.point.core.flow.FlowSnapshotStore
 import com.point.core.flow.CrashLog
-import com.point.core.flow.PinnedActions
 import com.point.core.flow.QrEncoder
 import com.point.core.flow.QrReader
 import com.point.core.flow.Sharer
@@ -132,7 +131,6 @@ import com.point.data.PrefsPrivacyConsent
 import com.point.data.PrefsSensorySettings
 import com.point.data.FileFlowSnapshotStore
 import com.point.data.FileCrashLog
-import com.point.data.PrefsPinnedActions
 import com.point.data.VibratorSensoryFeedback
 import com.point.data.PrefsAiFacts
 import com.point.data.PrefsUserKeyStore
@@ -305,9 +303,6 @@ abstract class DataModule {
 
     @Binds
     abstract fun crashLog(impl: FileCrashLog): CrashLog
-
-    @Binds
-    abstract fun pinnedActions(impl: PrefsPinnedActions): PinnedActions
 
     @Binds
     @Singleton

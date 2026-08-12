@@ -44,6 +44,14 @@ clip:rect(0 0 0 0);white-space:nowrap;border:0}
 padding:14px;border:1px dashed #FFFFFF2E;border-radius:12px;background:#00000033;color:#A8ADB8}
 .no-js .portal{display:none}
 button[disabled]{opacity:.5;cursor:default}
+.tabs{display:flex;gap:4px;background:#00000033;border-radius:12px;padding:4px;margin:0 0 16px}
+.tab{flex:1;padding:9px 0;border:0;border-radius:9px;background:transparent;color:#9AA3B2;
+font-size:14px;font-weight:500;cursor:pointer}
+.tab.on{background:#1A1D25;color:#EAF0FF;font-weight:600}
+#text{display:none;width:100%;margin:0 0 14px;padding:12px;border:1px solid #FFFFFF2E;
+border-radius:12px;background:#00000033;color:#F2F3F5;font:inherit;font-size:15px;resize:vertical}
+.no-js #text{display:block}
+.no-js .tabs{display:none}
 .said{margin:0 0 14px;font-size:14px;line-height:1.5;min-height:1.2em}
 .bad{color:#FF9A9A}
 </style>
@@ -52,17 +60,22 @@ button[disabled]{opacity:.5;cursor:default}
 
 def upload_body() -> str:
     return (
-        "<h1>Отправить файл</h1>"
-        "<p>Он придёт человеку, который дал вам эту ссылку.</p>"
+        "<h1>Отправить в Point</h1>"
+        "<p>Придёт человеку, который дал вам эту ссылку.</p>"
+        '<div class="tabs" id="tabs">'
+        '<button type="button" class="tab on" id="tab-file">Файл</button>'
+        '<button type="button" class="tab" id="tab-text">Текст</button>'
+        "</div>"
         '<form method="post" enctype="multipart/form-data" id="f">'
         '<label class="portal" id="zone" for="file">'
         '<span class="ring r-out"></span><span class="ring r-in"></span>'
         '<span class="ring r-fill" id="fill"></span>'
         '<span class="core" id="core"><b>Выберите файл</b><span id="name">или перетащите сюда</span></span>'
         "</label>"
-        '<input type="file" name="file" id="file" required>'
+        '<input type="file" name="file" id="file">'
+        '<textarea name="text" id="text" rows="7" placeholder="Напишите или вставьте текст…"></textarea>'
         '<p class="said" id="said" role="status" aria-live="polite"></p>'
-        '<button type="submit" id="go">Отправить</button>'
+        '<button type="submit" id="go">Отправить файл</button>'
         "</form>"
         '<small id="note">Файл уходит сразу после нажатия — до 50 МБ. '
         "Пока идёт отправка, не закрывайте страницу.</small>"
@@ -94,6 +107,25 @@ UPLOAD_SCRIPT = r"""
  }
  i.addEventListener('change',chosen);
 
+ // Вкладки «Файл | Текст». Ссылку чаще всего дают ради куска текста — адреса, номера
+ // заказа, обрывка переписки, — а форма умела только файл.
+ var mode='file', text=document.getElementById('text'),
+     tabFile=document.getElementById('tab-file'), tabText=document.getElementById('tab-text');
+ function pick(next){
+  mode=next;
+  var isFile=mode==='file';
+  tabFile.className='tab'+(isFile?' on':''); tabText.className='tab'+(isFile?'':' on');
+  zone.style.display=isFile?'':'none';
+  text.style.display=isFile?'none':'block';
+  go.textContent=isFile?'Отправить файл':'Отправить текст';
+  note.textContent=isFile
+   ?'Файл уходит сразу после нажатия — до 50 МБ. Пока идёт отправка, не закрывайте страницу.'
+   :'Текст придёт текстом, а не файлом.';
+  say('');
+ }
+ tabFile.addEventListener('click',function(){ pick('file'); });
+ tabText.addEventListener('click',function(){ pick('text'); });
+
  ['dragenter','dragover'].forEach(function(e){
   zone.addEventListener(e,function(ev){ ev.preventDefault(); zone.classList.add('over'); });
  });
@@ -107,9 +139,12 @@ UPLOAD_SCRIPT = r"""
 
  f.addEventListener('submit',function(ev){
   var file=i.files&&i.files[0];
-  if(!file) return;                      // без файла пусть браузер сам скажет своё
+  var body=(text.value||'').trim();
+  if(mode==='text'&&!body){ ev.preventDefault(); say('Напишите текст — пока отправлять нечего',true); return; }
+  if(mode==='file'&&!file){ ev.preventDefault(); say('Выберите файл — пока отправлять нечего',true); return; }
   ev.preventDefault();
-  var data=new FormData(); data.append('file',file,file.name);
+  var data=new FormData();
+  if(mode==='text'){ data.append('text',body); } else { data.append('file',file,file.name); }
   var x=new XMLHttpRequest();
   x.open('POST',location.pathname);
   go.disabled=true; zone.classList.add('sending');
@@ -124,7 +159,7 @@ UPLOAD_SCRIPT = r"""
   x.onload=function(){
    if(x.status===200){
     fill.style.setProperty('--p',100);
-    core.innerHTML='<b>Готово</b><span>файл ушёл</span>';
+    core.innerHTML='<b>Готово</b><span>'+(mode==='text'?'текст ушёл':'файл ушёл')+'</span>';
     note.textContent='Можно закрывать страницу.';
     say(''); go.remove();
    } else {

@@ -4,6 +4,7 @@ import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
@@ -90,7 +91,10 @@ class HomeRecentRemoveTest {
     @Test fun `убирается та запись, чьё меню открыли`() {
         home()
 
-        compose.onAllNodesWithContentDescription(ENTRY_MENU)[1].performClick()
+        // До второй записи сначала доезжают — как и человек: список разрезан секциями
+        // времени (#880), и не всё помещается на первый экран.
+        compose.onNode(hasScrollAction()).performScrollToNode(hasText("Расписка от соседа"))
+        compose.onAllNodesWithContentDescription(ENTRY_MENU).onLast().performClick()
         compose.waitForIdle()
         compose.onNodeWithText(REMOVE_ENTRY).performClick()
         compose.waitForIdle()

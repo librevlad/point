@@ -28,7 +28,15 @@ button,a.go{display:block;width:100%;padding:14px;border:0;border-radius:12px;ba
 color:#fff;font-size:16px;font-weight:600;cursor:pointer;text-align:center;text-decoration:none}
 button:active,a.go:active{background:#6A4BE8}
 small{display:block;margin-top:16px;font-size:13px;line-height:1.5;color:#7E8492}
+small.warn{border-left:2px solid #FF6B6B80;padding-left:10px;margin-top:12px}
+.shot{display:block;width:100%;border-radius:12px;border:1px solid #FFFFFF14;margin:0 0 12px}
+.player{display:block;width:100%;margin:0 0 12px}
+.what{color:#F2F3F5;font-weight:600;margin-bottom:4px}
 """
+
+
+#: Срок жизни ссылки человек читает одинаково на всех страницах отдачи (#883).
+LIVES_A_DAY = "<small>Ссылка живёт сутки, потом присланное стирается само.</small>"
 
 
 def page(title: str, body: str, head: str = "") -> str:
@@ -181,6 +189,20 @@ def sent_page() -> str:
     )
 
 
+def nothing_to_send_page() -> str:
+    """
+    Отправлять нечего — это состояние человека, а не ошибка формы (#883).
+
+    Раньше здесь показывалась страница «не поместилось» с чужой причиной: человек не
+    выбирал файл, а ему отвечали про размер.
+    """
+    return page(
+        "Пока нечего отправлять",
+        "<h1>Пока нечего отправлять</h1>"
+        "<p>Выберите файл или напишите текст — и нажмите «Отправить».</p>",
+    )
+
+
 def link_gone_page() -> str:
     return page(
         "Ссылка больше не работает",
@@ -255,6 +277,82 @@ def drop_place_page(name: str, coordinates: str, download_url: str) -> str:
             html.escape(coordinates),
             html.escape(coordinates),
             html.escape(download_url),
+        ),
+    )
+
+
+def drop_image_page(name: str, download_url: str, size: str) -> str:
+    """
+    Присланный снимок виден сразу, а не скачивается вслепую (#883).
+
+    Чужой человек открывал ссылку — и браузер молча начинал качать файл, о котором тот
+    ничего не знал. Показать снимок можно прямо здесь; скачивание остаётся вторым шагом
+    для тех, кому нужен именно файл.
+    """
+    return page(
+        name or "Снимок",
+        "<h1>Вам прислали снимок</h1>"
+        '<img class="shot" src="%s" alt="%s">'
+        "<p class=\"what\">%s%s</p>"
+        '<a class="go" href="%s" download>Скачать</a>'
+        "%s"
+        % (
+            html.escape(download_url),
+            html.escape(name or "Снимок"),
+            html.escape(name or "Снимок"),
+            (" · " + html.escape(size)) if size else "",
+            html.escape(download_url),
+            LIVES_A_DAY,
+        ),
+    )
+
+
+def drop_audio_page(name: str, download_url: str, mime: str, size: str) -> str:
+    """
+    Присланную запись можно послушать прямо здесь (#883).
+
+    Голосовое — самое частое, чем делятся ссылкой, и самое бесполезное вложением: чтобы
+    услышать десять секунд, человек скачивал файл и искал, чем его открыть.
+    """
+    return page(
+        name or "Запись",
+        "<h1>Вам прислали запись</h1>"
+        '<audio class="player" controls preload="metadata" src="%s"></audio>'
+        "<p class=\"what\">%s%s</p>"
+        '<a class="go" href="%s" download>Скачать</a>'
+        "%s"
+        % (
+            html.escape(download_url),
+            html.escape(name or "Запись"),
+            (" · " + html.escape(size)) if size else "",
+            html.escape(download_url),
+            LIVES_A_DAY,
+        ),
+    )
+
+
+def drop_file_page(name: str, download_url: str, what: str, size: str) -> str:
+    """
+    Файл, который нельзя показать, хотя бы называет себя (#883).
+
+    PDF, архив, документ по-прежнему скачиваются — но человек сначала видит, что именно
+    ему прислали и сколько это весит, и решает сам. Ссылку могли переслать дальше, чем
+    рассчитывал хозяин, поэтому здесь же стоит тихое предупреждение.
+    """
+    return page(
+        name or "Файл",
+        "<h1>Вам прислали файл</h1>"
+        "<p class=\"what\">%s</p>"
+        "<p>%s%s</p>"
+        '<a class="go" href="%s" download>Скачать</a>'
+        "%s"
+        '<small class="warn">Если вы не ждали эту ссылку — не скачивайте файл.</small>'
+        % (
+            html.escape(name or "Файл"),
+            html.escape(what),
+            (" · " + html.escape(size)) if size else "",
+            html.escape(download_url),
+            LIVES_A_DAY,
         ),
     )
 

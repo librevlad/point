@@ -76,7 +76,6 @@ fun PointHost(
     onItem: (PointObject) -> Unit = {},
     onFound: (PointObject) -> Unit = {},
     onJumpTo: (Int) -> Unit = {},
-    onBubbleLongPress: (Bubble) -> Unit = {},
     onSaveAiKey: (com.point.core.flow.UserAiKey) -> Unit = {},
 
     onOpenKeySettings: () -> Unit = {},
@@ -225,8 +224,6 @@ fun PointHost(
                 onToggleCloud = onToggleCloud,
                 yoloEnabled = state.yoloEnabled,
                 onToggleYolo = onToggleYolo,
-                pinned = state.pinned,
-                onUnpin = onUnpin,
                 tileAdded = tileAdded,
                 memory = state.memory,
                 onForgetAll = onForgetAll,
@@ -332,8 +329,6 @@ fun PointHost(
 
                     workingStage = quietStage(state),
                     previewBitmap = current.preview,
-                    pinned = current.pinned,
-                    onBubbleLongPress = onBubbleLongPress,
                     appIconFor = appIconFor,
 
                     focusPreview = state.focusPreview,

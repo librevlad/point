@@ -47,11 +47,17 @@ internal fun PortalPreview(item: InboxItem) {
     if (hasPreview) {
         Preview(item)
     } else {
+        // Кольцо было пустым, и объект узнавался только по имени файла в шапке (#879).
+        // Значок вида — тот же, что на телефоне: он лежит в общей таблице с #849.
+        // Портал компактнее телефонного: в окне вертикаль дороже, площадь принадлежит
+        // действиям, а не иллюстрации.
         Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-            PortalHalo(size = 180.dp)
-            Text(
-                kindMark(item.obj.state.kind),
-                style = PointType.title.copy(color = PointColors.violet),
+            PortalHalo(size = 132.dp)
+            androidx.compose.material3.Icon(
+                imageVector = com.point.core.ui.kindIcon(item.obj.state.kind),
+                contentDescription = com.point.core.ui.kindLabel(item.obj.state.kind),
+                tint = PointColors.text,
+                modifier = Modifier.size(34.dp),
             )
         }
     }

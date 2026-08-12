@@ -42,7 +42,6 @@ fun PointFlow(
         onCancelChat = viewModel::cancelChatMessage,
         onTakeChatAnswer = viewModel::takeChatAnswer,
         onRunChatOffer = viewModel::runChatOffer,
-        onBubbleLongPress = viewModel::togglePin,
         onSaveAiKey = viewModel::saveAiKey,
         onOpenKeySettings = { viewModel.openKeySettings() },
         onCheckAiKey = viewModel::checkAiKey,
@@ -54,7 +53,6 @@ fun PointFlow(
         onPickPrivacyLevel = viewModel::setPrivacyLevel,
         onToggleCloud = viewModel::setCloudAllowed,
         onToggleYolo = viewModel::setYoloEnabled,
-        onUnpin = viewModel::unpin,
         onForgetAll = viewModel::clearHistory,
 
         // Плитка — точка входа, о которой человек мог не знать (#821). Её наличие знает

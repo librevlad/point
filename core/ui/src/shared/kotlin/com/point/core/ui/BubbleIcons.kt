@@ -42,6 +42,7 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.PictureAsPdf
+import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.QrCode2
 import androidx.compose.material.icons.filled.RecordVoiceOver
@@ -72,6 +73,8 @@ fun bubbleIcon(key: String): ImageVector = when (if (key.startsWith("app:")) "op
     "pdf" -> Icons.Filled.PictureAsPdf
     "compress" -> Icons.Filled.Compress
     "unzip" -> Icons.Filled.FolderZip
+    "folder" -> Icons.Filled.FolderOpen
+    "print" -> Icons.Filled.Print
     "pages" -> Icons.Filled.Collections
     "translate" -> Icons.Filled.Translate
     "ai" -> Icons.Filled.AutoAwesome
@@ -147,6 +150,8 @@ fun bubbleColor(key: String): Color = when (if (key.startsWith("app:")) "open-in
     "excel" -> Color(0xFF15803D)
     "renew" -> Color(0xFF0F766E)
     "unzip" -> Color(0xFFF2994A)
+    "folder" -> Color(0xFF8B93A7)
+    "print" -> Color(0xFF5B8DEF)
     "pages" -> Color(0xFF2F80ED)
     "translate" -> Color(0xFFEC4899)
     "call" -> Color(0xFF16A34A)

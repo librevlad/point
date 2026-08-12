@@ -50,6 +50,7 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.point.core.flow.CircleDevice
+import com.point.core.model.ObjectKind
 import com.point.core.ui.bubbleColor
 import com.point.core.ui.kindLabel
 import com.point.desktop.DesktopState
@@ -472,8 +473,10 @@ internal fun CompactObject(
     val journal by state.journal.collectAsState()
     val working by state.working.collectAsState()
     val now = rememberNow()
+    // Шапка — рама окна, а не место объекта (#879): имя файла там отрывало идентичность
+    // объекта от самого объекта. Объект называется у портала, ниже.
     CompactHeader(
-        title = item.obj.metadata["name"] ?: "Объект",
+        title = "Point",
         onBack = onBack,
         onHide = null,
     )
@@ -505,11 +508,32 @@ internal fun CompactObject(
             .padding(bottom = 12.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        item.obj.metadata[com.point.core.flow.META_SEMANTIC_SUMMARY]?.let {
-            Text(it, style = PointType.small)
-        } ?: Text(kindLabel(item.obj.state.kind), style = PointType.small)
-
         PortalPreview(item)
+
+        // Вид крупно, имя тише, мера самым тихим — одна иерархия с телефоном (#879).
+        // Раньше вид стоял подписью над порталом, а имя — в шапке окна, оторванное от
+        // самого объекта.
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(1.dp),
+        ) {
+            Text(
+                item.obj.metadata[com.point.core.flow.META_SEMANTIC_SUMMARY]
+                    ?: kindLabel(item.obj.state.kind),
+                style = PointType.body,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            item.obj.metadata["name"]?.takeIf { it.isNotBlank() }?.let {
+                Text(
+                    it,
+                    style = PointType.small.copy(color = PointColors.muted),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
         Knowledge(
             item,
             onCopyFact = state::copyFact,
@@ -520,9 +544,23 @@ internal fun CompactObject(
 
         val actions = state.actionsFor(item)
         if (actions.isNotEmpty()) {
-            Text("ЧТО МОЖНО СДЕЛАТЬ", style = PointType.label)
+
+            // Группы по смыслу — те же, что на телефоне (#879). Раньше здесь был один
+            // список «Что можно сделать»: порядок совпадал с телефонным, но человеку это
+            // было не видно. Действие без пузыря (просьба к телефону) идёт последней
+            // группой — у него нет своего намерения, кроме «отправить».
             val primary = actions.indexOfFirst { it.unavailable == null }
-            actions.forEachIndexed { i, action ->
+            val grouped = com.point.core.ui.actionGroupOrder().mapNotNull { group ->
+                actions.filter { choice ->
+                    val intent = choice.bubble?.intent
+                    if (intent == null) group == com.point.core.ui.ActionGroup.SEND
+                    else com.point.core.ui.actionGroupOf(intent) == group
+                }.takeIf { it.isNotEmpty() }?.let { group to it }
+            }
+            grouped.forEach { (group, rows) ->
+                Text(group.label.uppercase(), style = PointType.label)
+                rows.forEach { action ->
+                val i = actions.indexOf(action)
                 when {
                     action.unavailable != null -> MutedStation(
                         action.title,
@@ -549,6 +587,7 @@ internal fun CompactObject(
                         icon = action.icon,
                         appearIndex = i,
                     ) { state.sendToPhone(item, action.remote) }
+                }
                 }
             }
         }
@@ -620,32 +659,54 @@ internal fun CompactList(
             style = PointType.small,
         )
 
-        if (items.isNotEmpty()) {
-            Text("СЕЙЧАС", style = PointType.label, modifier = Modifier.padding(top = 4.dp))
-            items.forEach { item ->
-                ListRow(
-                    name = item.obj.metadata["name"] ?: "Объект",
-                    note = kindLabel(item.obj.state.kind),
-                    accent = true,
-                    fresh = item.obj.id in fresh,
-                ) { onOpen(item) }
-            }
-        }
-
         val remembered = remember(journal, items) {
             com.point.desktop.recentBesides(journal, items.map { it.obj.uri.value }.toSet())
         }
-        if (remembered.isNotEmpty()) {
-            Text("ИСТОРИЯ", style = PointType.label, modifier = Modifier.padding(top = 4.dp))
-            remembered.forEach { entry ->
-                ListRow(
-                    name = entry.name.ifBlank { "Объект" },
-                    note = com.point.desktop.sourceShort(entry.source) + " · " +
-                        com.point.desktop.whenLabel(entry.at, now, zone),
-                    accent = false,
-                ) { state.openAgain(entry)?.let(onOpen) }
-            }
+
+        // Один список с одним именем — «Недавнее» (#880). Раньше здесь были «СЕЙЧАС» и
+        // «ИСТОРИЯ»: телефон показывал свои объекты, компьютер — журнал событий, и это
+        // читалось как два разных продукта.
+        if (items.isNotEmpty() || remembered.isNotEmpty()) {
+            Text("НЕДАВНЕЕ", style = PointType.label, modifier = Modifier.padding(top = 4.dp))
         }
+
+        // Время — структура списка, а не подпись в каждой строке. Правило общее с телефоном.
+        com.point.core.flow.byTimeSection(items) { now - it.receivedAt }
+            .forEach { (section, rows) ->
+                Text(
+                    section.label.uppercase(),
+                    style = PointType.label.copy(color = PointColors.text.copy(alpha = 0.72f)),
+                    modifier = Modifier.padding(top = 6.dp),
+                )
+                rows.forEach { item ->
+                    ListRow(
+                        name = item.obj.metadata["name"] ?: "Объект",
+                        note = kindLabel(item.obj.state.kind),
+                        accent = true,
+                        kind = item.obj.state.kind,
+                        clock = com.point.desktop.clockLabel(item.receivedAt, zone),
+                        fresh = item.obj.id in fresh,
+                    ) { onOpen(item) }
+                }
+            }
+
+        com.point.core.flow.byTimeSection(remembered) { now - it.at }
+            .forEach { (section, rows) ->
+                Text(
+                    section.label.uppercase(),
+                    style = PointType.label.copy(color = PointColors.text.copy(alpha = 0.72f)),
+                    modifier = Modifier.padding(top = 6.dp),
+                )
+                rows.forEach { entry ->
+                    ListRow(
+                        name = entry.name.ifBlank { "Объект" },
+                        note = com.point.desktop.sourceShort(entry.source),
+                        accent = false,
+                        kind = runCatching { ObjectKind.valueOf(entry.kind) }.getOrDefault(ObjectKind.UNKNOWN),
+                        clock = com.point.desktop.clockLabel(entry.at, zone),
+                    ) { state.openAgain(entry)?.let(onOpen) }
+                }
+            }
 
         if (items.isEmpty() && remembered.isEmpty()) {
             Spacer(Modifier.height(8.dp))
@@ -655,7 +716,11 @@ internal fun CompactList(
             )
         }
 
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(10.dp))
+
+        // Станции — не история (#880): это способы породить новый объект, а не прошлые
+        // объекты. Раньше они продолжали тот же список и читались как его хвост.
+        Text("СОЗДАТЬ ОБЪЕКТ", style = PointType.label)
 
         // Приём файла есть и здесь (#727): «и на пк тоже и прием и отправка».
         val awaiting by state.receiving.collectAsState()
@@ -689,6 +754,8 @@ private fun ListRow(
     name: String,
     note: String,
     accent: Boolean,
+    kind: ObjectKind,
+    clock: String,
     fresh: Boolean = false,
     onClick: () -> Unit,
 ) {
@@ -698,19 +765,26 @@ private fun ListRow(
             .background(if (accent) PointColors.surface else PointColors.surfaceDeep.copy(alpha = 0.6f))
             .border(1.dp, PointColors.border.copy(alpha = 0.7f), RoundedCornerShape(12.dp))
             .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+            .padding(horizontal = 12.dp, vertical = 9.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(
-            Modifier.size(7.dp)
-                .background(if (accent) PointColors.violet else PointColors.muted, CircleShape),
+        // Значок вида вместо безымянной точки (#880): точка занимала место и не говорила
+        // ничего — ни что это за объект, ни на что он похож на экране объекта.
+        androidx.compose.material3.Icon(
+            imageVector = com.point.core.ui.kindIcon(kind),
+            contentDescription = com.point.core.ui.kindLabel(kind),
+            tint = if (accent) PointColors.text else PointColors.muted,
+            modifier = Modifier.size(18.dp),
         )
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
             Text(name, style = PointType.body.copy(fontSize = PointType.small.fontSize), maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(note, style = PointType.mono, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(note, style = PointType.small.copy(color = PointColors.muted), maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         if (fresh) Text("новое", style = PointType.small.copy(color = PointColors.cyan))
+
+        // Час справа: время сказано заголовком секции, здесь остаётся «когда именно».
+        Text(clock, style = PointType.small.copy(color = PointColors.muted.copy(alpha = 0.8f)))
     }
 }
 

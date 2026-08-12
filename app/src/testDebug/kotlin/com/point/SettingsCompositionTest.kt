@@ -173,7 +173,7 @@ class SettingsCompositionTest {
         compose.onNodeWithText("Звук действий").assertIsDisplayed()
 
         compose.onNodeWithText("Звук действий").performClick()
-        compose.onNodeWithText("Приложение").assertIsDisplayed()
+        compose.onNodeWithText("Поведение Point").assertIsDisplayed()
     }
 
     @Test fun `экран, открытый с чужого сервиса, не путает поля ключей`() {

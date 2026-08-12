@@ -6,7 +6,6 @@ import com.point.core.flow.CapabilityUsage
 import com.point.core.flow.Focus
 import com.point.core.flow.GraphState
 import com.point.core.flow.LlmClient
-import com.point.core.flow.PinnedActions
 import com.point.core.model.ActionYield
 import com.point.core.model.CapabilityId
 import com.point.core.model.Intent
@@ -51,11 +50,6 @@ class GraphStateDrivesActionsTest {
     private fun registryOf(vararg caps: Capability) = DefaultCapabilityRegistry(
         capabilities = caps.toSet(),
         policy = LearningBubblePolicy(
-            pins = object : PinnedActions {
-                override fun pinnedFor(kind: ObjectKind): CapabilityId? = null
-                override suspend fun pin(kind: ObjectKind, id: CapabilityId) = Unit
-                override suspend fun unpin(kind: ObjectKind) = Unit
-            },
             usage = object : CapabilityUsage {
                 override fun counts(): Map<CapabilityId, Int> = emptyMap()
                 override suspend fun record(id: CapabilityId) = Unit

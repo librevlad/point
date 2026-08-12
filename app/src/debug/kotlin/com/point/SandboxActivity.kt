@@ -73,7 +73,6 @@ class SandboxActivity : ComponentActivity() {
                             onSendChat = viewModel::sendChatMessage,
                             onCloseChat = viewModel::closeChat,
                             onCancelChat = viewModel::cancelChatMessage,
-                            onBubbleLongPress = viewModel::togglePin,
                             onSaveAiKey = viewModel::saveAiKey,
                             onOpenKeySettings = viewModel::openKeySettings,
                             onCloseKeySettings = viewModel::closeKeySettings,
