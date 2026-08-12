@@ -43,16 +43,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 
-internal val RowTop = Color(0xFF1A1D25)
-internal val RowBottom = Color(0xFF121419)
-internal val PlateBase = Color(0xFF1F222B)
-internal val TopHighlight = Color(0x12FFFFFF)
-private val PrimaryStart = Color(0xFF7B5CFF)
-private val PrimaryEnd = Color(0xFF4E7BFF)
-
-val PortalCardShape = RoundedCornerShape(18.dp)
-
-val PortalPlateShape = RoundedCornerShape(14.dp)
+// Тона и скругления — из общей палитры (#851): у ПК те же самые.
+internal val RowTop = PortalTones.rowTop
+internal val RowBottom = PortalTones.rowBottom
+internal val PlateBase = PortalTones.plateBase
+internal val TopHighlight = PortalTones.topHighlight
+private val PrimaryStart = PointPalette.violet
+private val PrimaryEnd = PointPalette.blue
 
 val PortalColumnWidth = 340.dp
 
