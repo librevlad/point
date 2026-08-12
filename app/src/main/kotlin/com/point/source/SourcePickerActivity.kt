@@ -100,7 +100,11 @@ class SourcePickerActivity : ComponentActivity() {
         pending = restoredSource(sources, savedInstanceState?.getString(STATE_SOURCE))
         pending?.restoreState(savedInstanceState?.getString(STATE_SOURCE_STATE))
         blocked = savedInstanceState?.getString(STATE_BLOCKED)
-        val visible = sources.filter { it.isAvailable(this) }.sortedBy { it.label }
+        // Порядок — по пользе, а не по алфавиту (#895). Алфавит держался на том, что все
+        // названия начинались с разных букв; с глагольным строем «Взять…», «Взять…»,
+        // «Записать…» он перестал что-либо значить и просто перемешал список.
+        val visible = sources.filter { it.isAvailable(this) }
+            .sortedBy { com.point.core.flow.sourceOrder(it.id) }
 
         // Про сеть спрашиваем один раз на список, а не у каждого источника (#569, #759).
         val online = runCatching { network.isAvailable() }.getOrDefault(true)
@@ -247,7 +251,9 @@ internal fun SourcePickerScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background.copy(alpha = 0.88f))
+            // Непрозрачно: сквозь 0.88 просвечивал домашний экран, и его слова налезали
+            // на строки списка — экран выглядел сломанным, а не «поверх» (#895).
+            .background(MaterialTheme.colorScheme.background)
             .systemBarsPadding()
 
             .verticalScroll(rememberScrollState())

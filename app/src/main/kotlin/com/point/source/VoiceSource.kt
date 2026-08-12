@@ -11,9 +11,9 @@ import javax.inject.Inject
 class VoiceSource @Inject constructor() : ObjectSource {
 
     override val id = "voice"
-    override val label = "Звукозапись"
+    override val label = "Записать голос"
 
-    override val what = "записать голос и расшифровать словами"
+    override val what = "Point расшифрует запись словами"
     override val icon = "transcribe"
 
     override fun isAvailable(context: Context) = true
