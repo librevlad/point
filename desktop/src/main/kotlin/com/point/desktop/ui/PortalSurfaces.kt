@@ -193,7 +193,9 @@ fun PortalRow(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(11.dp),
         ) {
-            PortalPlate(accent = accent, icon = icon, onGlass = primary)
+            // Плашка нужна действию, а не строке настроек: пустой квадрат без значка —
+            // обещание картинки, которой нет. На телефоне строки настроек стоят без неё (#886).
+            if (icon != null) PortalPlate(accent = accent, icon = icon, onGlass = primary)
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = title,

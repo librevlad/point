@@ -141,13 +141,13 @@ class SettingsListTest {
     @Test fun `сколько своих ключей задано — видно строкой, не открывая раздел`() {
         settings(keys = savedKey)
 
-        compose.onNodeWithText("Свой ключ у 1 сервиса", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("Свои ключи: 1 из", substring = true).assertIsDisplayed()
     }
 
     @Test fun `отсутствие своих ключей тоже видно строкой`() {
         settings()
 
-        compose.onNodeWithText("Своих ключей пока нет", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("Свои ключи: 0 из", substring = true).assertIsDisplayed()
     }
 
     @Test fun `выбранный уровень приватности виден строкой`() {

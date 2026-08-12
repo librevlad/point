@@ -80,7 +80,7 @@ compose.desktop {
 val buildInfoDir = layout.buildDirectory.dir("generated/source/buildinfo")
 
 val generateBuildInfo by tasks.registering {
-    val version = "3.0.0"
+    val version = providers.gradleProperty("pointVersion").get()
     val out = buildInfoDir
     inputs.property("version", version)
     outputs.dir(out)

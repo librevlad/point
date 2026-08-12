@@ -151,11 +151,17 @@ private fun line(
     )
 }
 
-/** Строка раздела в настройках: сколько своих ключей, без выдуманных процентов. */
+/**
+ * Строка раздела в настройках: сколько своих ключей, без выдуманных процентов.
+ *
+ * Счёт стоит и в нуле: «Свои ключи: 0 из 11» человек читает за долю секунды и сразу видит,
+ * сколько их вообще бывает. Прежнее «Своих ключей пока нет» этого не говорило, и понять,
+ * стоит ли туда заходить, можно было только зайдя (#886).
+ */
 fun aiKeysSummary(keys: UserAiKeys): String {
     val count = keys.mine.size
-    if (count == 0) return "Своих ключей пока нет — Point работает на своих"
-    return "Свой ключ у $count ${plural(count.toLong(), "сервиса", "сервисов", "сервисов")} из ${AI_PROVIDERS.size}"
+    val counted = "Свои ключи: $count из ${AI_PROVIDERS.size}"
+    return if (count == 0) "$counted — Point работает на своих" else counted
 }
 
 fun encodeAiFacts(facts: Map<String, AiFact>): String = facts.entries.joinToString("\n") {

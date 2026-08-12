@@ -37,7 +37,7 @@ class DesktopState(
 
     private val reopenPath: (String) -> InboxItem? = { null },
 
-    private val consent: com.point.core.flow.PrivacyConsent? = null,
+    internal val consent: com.point.core.flow.PrivacyConsent? = null,
 
     /** Прибытие объявляется наружу (peek-плашка): и с телефона, и готовое здесь. */
     private val announce: (InboxItem, ObjectSource) -> Unit = { _, _ -> },
