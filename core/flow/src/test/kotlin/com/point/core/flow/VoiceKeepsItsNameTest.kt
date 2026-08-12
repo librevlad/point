@@ -41,6 +41,39 @@ class VoiceKeepsItsNameTest {
         assertEquals("mp3", extensionForMime("AUDIO/MPEG"))
     }
 
+    /**
+     * На компьютере тип объекта определяется по имени файла. Пока общая таблица не знала
+     * `opus`, `amr` и `3gp`, голосовое приезжало туда «потоком байтов» — и этот неверный тип
+     * ехал с ним дальше: в имя копии, в отправку на телефон, в запрос к сервису (#869).
+     */
+    @Test
+    fun `запись узнаётся по имени файла, а не остаётся потоком байтов`() {
+        listOf("голос.opus", "запись.oga", "диктофон.amr", "звук.3gp", "трек.wma", "старое.aif")
+            .forEach { name ->
+                assertTrue(name, mimeForName(name).startsWith("audio/"))
+            }
+    }
+
+    /**
+     * Обратный ход не должен сбиться: у `audio/ogg` расширение `ogg`, хотя тот же тип теперь
+     * знают ещё `oga` и `opus`.
+     */
+    @Test
+    fun `у типа остаётся своё привычное расширение`() {
+        assertEquals("ogg", extensionForMime("audio/ogg"))
+        assertEquals("aiff", extensionForMime("audio/aiff"))
+    }
+
+    @Test
+    fun `набор форматов записи у классификатора и общей таблицы не расходится`() {
+        val known = listOf(
+            "ogg", "oga", "opus", "m4a", "mp3", "wav", "amr", "aac", "flac", "aiff", "aif", "3gp", "wma",
+        )
+        val unknown = known.filterNot { mimeForName("x.$it").startsWith("audio/") }
+
+        assertTrue("общая таблица не знает: $unknown", unknown.isEmpty())
+    }
+
     @Test
     fun `никто не заводит свою таблицу типов заново`() {
         val guilty = listOf(
