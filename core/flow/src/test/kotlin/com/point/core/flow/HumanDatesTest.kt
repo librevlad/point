@@ -17,17 +17,17 @@ class HumanDatesTest {
 
     @Test
     fun `человеческие форматы дат читаются`() {
-        assertEquals(LocalDate.of(2026, 8, 15), parseHumanDate("15.08.2026"))
-        assertEquals(LocalDate.of(2026, 8, 15), parseHumanDate("15/08/2026"))
-        assertEquals(LocalDate.of(2026, 8, 15), parseHumanDate("2026-08-15"))
-        assertEquals(LocalDate.of(2026, 8, 15), parseHumanDate("15.08.26"))
+        assertEquals(LocalDate.of(2026, 8, 15), humanDayOf("15.08.2026"))
+        assertEquals(LocalDate.of(2026, 8, 15), humanDayOf("15/08/2026"))
+        assertEquals(LocalDate.of(2026, 8, 15), humanDayOf("2026-08-15"))
+        assertEquals(LocalDate.of(2026, 8, 15), humanDayOf("15.08.26"))
     }
 
     @Test
     fun `мусор и голое время датой не читаются`() {
-        assertEquals(null, parseHumanDate("11:09"))
-        assertEquals(null, parseHumanDate("Оплата 2500"))
-        assertEquals(null, parseHumanDate(""))
+        assertEquals(null, humanDayOf("11:09"))
+        assertEquals(null, humanDayOf("Оплата 2500"))
+        assertEquals(null, humanDayOf(""))
     }
 
     @Test

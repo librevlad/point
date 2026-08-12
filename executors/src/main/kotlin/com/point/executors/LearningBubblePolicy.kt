@@ -51,6 +51,9 @@ class LearningBubblePolicy @Inject constructor(
                 // слабое чтение — рукопись, мусор — оставляет облако первым.
                 { if (cloudReadOfAlreadyRead(it, state)) 1 else 0 },
 
+                // Дальше — общий хвост обоих устройств (#840): намерение, приоритет, имя.
+                // Своя ступень здесь одна: приоритет смягчается тем, как часто человек берёт
+                // это действие.
                 { if (intent == null || intent in it.intents(state)) 0 else 1 },
                 { effectivePriority(it, counts) },
                 { it.id.value },

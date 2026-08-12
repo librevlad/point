@@ -93,7 +93,6 @@ const val META_FOCUS_PARTS = "focus.parts"
  */
 const val META_AT_REGION = "at.region"
 
-const val META_AT_IDS = "at.ids"
 
 fun regionWire(box: Box): String = "${box.left} ${box.top} ${box.right} ${box.bottom}"
 
