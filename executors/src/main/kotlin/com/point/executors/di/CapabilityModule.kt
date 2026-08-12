@@ -41,6 +41,8 @@ import com.point.executors.MapCapability
 import com.point.executors.MapRealizer
 import com.point.executors.OpenInCapability
 import com.point.executors.OpenInRealizer
+import com.point.executors.PhoneAppsCapability
+import com.point.executors.PhoneAppsRealizer
 import com.point.executors.SmsCapability
 import com.point.executors.SmsRealizer
 import com.point.executors.ArchiveRealizer
@@ -153,6 +155,11 @@ abstract class CapabilityModule {
 
     @Binds @IntoSet @OwnCapabilities abstract fun callCap(c: CallCapability): Capability
     @Binds @IntoSet @OwnCapabilities abstract fun smsCap(c: SmsCapability): Capability
+
+    // Действие приехало 10.08.2026 (#466), но в реестр не попало — и для человека его не
+    // существовало: «не могу отправить в гетконтакт» (живой прогон 12.08.2026). Регистрация
+    // и есть вся починка.
+    @Binds @IntoSet @OwnCapabilities abstract fun phoneAppsCap(c: PhoneAppsCapability): Capability
     @Binds @IntoSet @OwnCapabilities abstract fun emailCap(c: EmailCapability): Capability
     @Binds @IntoSet @OwnCapabilities abstract fun mapCap(c: MapCapability): Capability
     @Binds @IntoSet @OwnCapabilities abstract fun eventCap(c: EventCapability): Capability
@@ -243,6 +250,7 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun aiR(r: AiRealizer): Realizer
     @Binds @IntoSet abstract fun shoppingListR(r: ShoppingListRealizer): Realizer
     @Binds @IntoSet abstract fun understandR(r: UnderstandRealizer): Realizer
+    @Binds @IntoSet abstract fun phoneAppsR(r: PhoneAppsRealizer): Realizer
 
     @Binds @IntoSet abstract fun fixErrorsR(r: FixErrorsRealizer): Realizer
     @Binds @IntoSet abstract fun fixErrorsStrongerR(r: FixErrorsStrongerRealizer): Realizer
