@@ -203,7 +203,16 @@ data class ChatState(
     val suggestions: List<String> = emptyList(),
 
     val notice: String? = null,
+
+    /**
+     * Узнанная в сообщении просьба сделать вещь (#804). Разговор её не исполняет — он
+     * показывает само действие, и человек решает сам.
+     */
+    val offer: ChatOffer? = null,
 )
+
+/** Действие, предложенное разговором: у него есть имя, цена и исполнитель (#804). */
+data class ChatOffer(val capabilityId: CapabilityId, val title: String)
 
 data class DevicesScreenState(
     val email: String = "",
