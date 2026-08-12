@@ -93,7 +93,7 @@ class AiRealizerTest {
 
         val heard = stagesHeard { ai(llm = chatLlm).perform(image, amendment = "что тут?") }
 
-        assertEquals(listOf("Спрашиваю модель"), heard)
+        assertEquals(listOf("Читаю объект"), heard)
     }
 
     @Test

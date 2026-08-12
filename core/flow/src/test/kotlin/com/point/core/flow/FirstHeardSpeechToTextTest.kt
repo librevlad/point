@@ -115,14 +115,14 @@ class FirstHeardSpeechToTextTest {
         val chain = FirstHeardSpeechToText(
             listOf(
                 FakeEngine.keyless("Whisper слушает по ключу Groq", GROQ_PROVIDER_ID),
-                FakeEngine.keyless("модель общего назначения — по любому ключу AI"),
+                FakeEngine.keyless("любой сервис AI — по вашему ключу"),
             ),
         )
 
         val said = runCatching { chain.transcribe(recording) }.exceptionOrNull()!!.message!!
 
         assertTrue("назван конкретный провайдер: $said", said.contains("ключу Groq"))
-        assertTrue("сказано, что годится и любой другой: $said", said.contains("любому ключу AI"))
+        assertTrue("сказано, что годится и любой другой: $said", said.contains("любой сервис AI"))
         assertTrue("сказано, куда идти: $said", said.contains(KEY_SETTINGS_CALL))
         assertTrue("экран узнаёт такой отказ и откроет ключи", refusalNeedsKey(said))
     }
@@ -155,7 +155,7 @@ class FirstHeardSpeechToTextTest {
         val chain = FirstHeardSpeechToText(
             listOf(
                 FakeEngine.keyless("Whisper слушает по ключу Groq", GROQ_PROVIDER_ID),
-                FakeEngine.keyless("модель общего назначения — по любому ключу AI"),
+                FakeEngine.keyless("любой сервис AI — по вашему ключу"),
             ),
         )
 

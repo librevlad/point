@@ -18,21 +18,21 @@ class LlmSpeechToText @Inject constructor(
 ) : SpeechToText {
 
     override fun missingKey(): SpeechKeyNeed? =
-        if (llm.configured) null else SpeechKeyNeed("модель общего назначения — по любому ключу AI")
+        if (llm.configured) null else SpeechKeyNeed("любой сервис AI — по вашему ключу")
 
     override suspend fun transcribe(obj: PointObject): Transcription = withContext(Dispatchers.IO) {
 
         if (modelReadableAudio(obj.mime, obj.metadata["name"]) == null) {
-            error("Этот формат записи модель не читает — подойдут ogg, mp3, m4a, wav, flac")
+            error("Этот формат записи не читается — подойдут ogg, mp3, m4a, wav, flac")
         }
 
         val bytes = File(obj.uri.value).length()
         if (bytes > MAX_INLINE_BYTES) {
-            error("Запись слишком большая (${bytes / (1024 * 1024)} МБ) — модель принимает до 15 МБ")
+            error("Запись слишком большая (${bytes / (1024 * 1024)} МБ) — берётся до 15 МБ")
         }
         val answer = llm.run(obj, TRANSCRIBE_PROMPT)
         val raw = runCatching { File(answer.uri.value).readText() }
-            .getOrElse { error("Ответ модели не прочитался: ${it.message}") }
+            .getOrElse { error("Ответ не прочитался: ${it.message}") }
         parseTranscription(raw)
     }
 }

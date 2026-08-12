@@ -113,7 +113,7 @@ class FallbackAtomRecognizerTest {
     }
 
     @Test
-    fun `все уперлись в лимит — отказ говорит про лимит и не предлагает платить`() = runTest {
+    fun `все уперлись в лимит — отказ говорит про лимит и не выдаёт нашу кухню`() = runTest {
         val chain = FallbackAtomRecognizer(
             listOf(
                 cloudReader("a") { error("unstructured HTTP 402") },
@@ -122,7 +122,7 @@ class FallbackAtomRecognizerTest {
         )
         val error = runCatching { chain.read(pageObject) }.exceptionOrNull()
 
-        assertTrue(error?.message?.contains("Бесплатные лимиты") == true)
+        assertTrue(error?.message?.contains("бесплатное чтение закончилось") == true)
     }
 
     @Test

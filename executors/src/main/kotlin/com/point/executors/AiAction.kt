@@ -89,7 +89,7 @@ class AiRealizer @Inject constructor(
         return withContext(Dispatchers.IO) {
             runCatching {
 
-                reportStage("Спрашиваю модель")
+                reportStage("Читаю объект")
                 ActionResult.Success(llm.run(input, buildPrompt(input, amendment)))
             }.getOrElse { ActionResult.Failure(it.message ?: "Ошибка AI", recoverable = true) }
         }

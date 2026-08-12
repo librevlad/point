@@ -162,7 +162,7 @@ class ExcelRealizer(
 
                             val cells = gridRows.flatten()
                             if (addressable && cells.all { it.isBlank() || it == "⚠" } && "⚠" in cells) {
-                                errors += "Модель не смогла указать на слова страницы"
+                                errors += "Не вышло показать, где эти слова на странице"
                                 continue
                             }
                             layouts += layout
@@ -314,7 +314,7 @@ class ExcelRealizer(
                     val i = cursor.getAndIncrement()
                     if (i >= ordered.size) break
 
-                    if (retry) heard.withLock { reportStage("Модель отказала — читаю следующей") }
+                    if (retry) heard.withLock { reportStage("Не вышло — пробую другим путём") }
                     val read = try {
                         Result.success(File(ordered[i].run(input, prompt).uri.value).readText())
                     } catch (cancelled: CancellationException) {
@@ -339,8 +339,8 @@ class ExcelRealizer(
     }
 
     private fun readingStage(n: Int, firstRound: Boolean): String = when {
-        !firstRound && n > 1 -> "Перечитываю другими моделями"
-        !firstRound -> "Перечитываю другой моделью"
+        !firstRound && n > 1 -> "Перечитываю другими путями"
+        !firstRound -> "Перечитываю другим путём"
         n > 1 -> "Таблицу читают $n ${modelsWord(n)} одновременно"
         else -> "Читаю таблицу"
     }

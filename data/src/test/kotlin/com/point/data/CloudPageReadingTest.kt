@@ -70,6 +70,6 @@ class CloudPageReadingTest {
         val reading = CloudPageReading(store, chain { error("unstructured HTTP 402") })
         val error = runCatching { reading.read(pageObject) }.exceptionOrNull()
 
-        assertTrue(error?.message?.contains("Бесплатные лимиты") == true)
+        assertTrue(error?.message?.contains("бесплатное чтение закончилось") == true)
     }
 }

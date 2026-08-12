@@ -75,7 +75,7 @@ fun <T> allowedBy(level: PrivacyLevel, readers: List<T>, privacyOf: (T) -> Reade
     readers.filter { allowedAt(level, privacyOf(it)) }
 
 val AI_CHAIN_PRIVACY = ReaderPrivacy(
-    where = "сервер AI-провайдера",
+    where = "чужой сервер",
     promise = ReaderPromise.UNKNOWN,
 )
 

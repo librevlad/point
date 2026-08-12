@@ -144,14 +144,14 @@ class DefaultExternalEyeTest {
     }
 
     @Test
-    fun `все уперлись в лимит — отказ говорит про лимит и не предлагает платить`() = runTest {
+    fun `все уперлись в лимит — отказ говорит про лимит и не выдаёт нашу кухню`() = runTest {
         val chain = chain(
             eye("a") { error("mistral-ocr: лимит (402)") },
             eye("b") { error("ovh: слишком часто (429)") },
         )
         val error = runCatching { chain.read(pageObject) }.exceptionOrNull()
 
-        assertTrue(error?.message!!, error.message!!.contains("Бесплатные лимиты"))
+        assertTrue(error?.message!!, error.message!!.contains("бесплатное чтение закончилось"))
         assertFalse(error.message!!, error.message!!.contains("купить"))
     }
 

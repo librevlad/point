@@ -58,13 +58,13 @@ class LlmSpeechToTextTest {
     }
 
     @Test
-    fun `нечитаемый формат отказывает до сети — и до траты квоты`() = runTest {
+    fun `нечитаемый формат отказывает до сети — и до траты бесплатного`() = runTest {
         val llm = FakeLlm("неважно")
 
         val e = runCatching { LlmSpeechToText(llm).transcribe(recording("audio/amr", name = "заметка.amr")) }
             .exceptionOrNull()
 
-        assertTrue(e!!.message!!.contains("Этот формат записи модель не читает"))
+        assertTrue(e!!.message!!.contains("Этот формат записи не читается"))
         assertEquals("провайдера не тревожили", 0, llm.calls)
     }
 

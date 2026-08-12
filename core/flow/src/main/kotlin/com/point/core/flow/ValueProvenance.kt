@@ -8,7 +8,7 @@ fun provenanceOf(metadata: Map<String, String>, key: String): Provenance =
 fun provenanceLabel(provenance: Provenance): String? = when (provenance) {
     Provenance.OCR -> "прочитано"
     Provenance.RULE -> "выведено правилом"
-    Provenance.MODEL -> "прочитано моделью"
+    Provenance.MODEL -> "понято по смыслу"
     Provenance.HUMAN -> "подтверждено вами"
     Provenance.GIVEN -> null
 }

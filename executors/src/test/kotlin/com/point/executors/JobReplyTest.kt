@@ -72,6 +72,6 @@ class JobReplyTest {
         val realizer = JobReplyRealizer(llm)
 
         assertTrue(stagesHeard { realizer.perform(obj, null) }.isEmpty())
-        assertEquals(listOf("Модель пишет отклик"), stagesHeard { realizer.perform(obj, "5 лет Android") })
+        assertEquals(listOf("Пишу отклик"), stagesHeard { realizer.perform(obj, "5 лет Android") })
     }
 }

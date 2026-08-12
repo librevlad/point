@@ -128,7 +128,7 @@ class WordPlusRealizer @Inject constructor(
                 if (text.isBlank() && !modelReads) {
                     return@withContext ActionResult.Failure("Нет текста (возможно, это скан — сначала распознайте текст)", recoverable = true)
                 }
-                reportStage(if (modelReads) "Модель читает страницу" else "Модель размечает документ")
+                reportStage(if (modelReads) "Читаю страницу" else "Размечаю документ")
                 val answer =
                     if (modelReads) llm.run(input, WORD_PLUS_HANDWRITING_PROMPT)
                     else llm.run(textStandIn(input), WORD_PLUS_PROMPT + text)

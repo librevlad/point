@@ -156,7 +156,7 @@ class OpenAiCompatibleClient(
         402 -> "${provider.label}: сервис просит оплату — у этого ключа нет бесплатного доступа"
 
         404 -> "${provider.label}: сервис не знает такой модели"
-        429 -> "${provider.label}: $FREE_LIMIT_SPENT — вернитесь позже, платить не идём"
+        429 -> "${provider.label}: $FREE_LIMIT_SPENT — попробуйте завтра"
         in 500..599 -> "${provider.label}: сервис сейчас не отвечает"
         else -> "${provider.label}: сервис отказал"
     }

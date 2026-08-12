@@ -40,7 +40,7 @@ class GraphRolesInvestigationTest {
         val org = enricher.look(doc("carrier" to "Нова Пошта")).objects.single()
 
         assertEquals(Provenance.MODEL, org.provenance)
-        assertEquals("прочитано моделью", com.point.core.flow.provenanceLabel(org.provenance))
+        assertEquals("понято по смыслу", com.point.core.flow.provenanceLabel(org.provenance))
         assertEquals("classifier", org.creatorAction)
         assertEquals(listOf("cmr"), org.sourceObjects)
     }

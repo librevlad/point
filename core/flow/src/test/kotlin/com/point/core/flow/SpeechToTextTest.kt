@@ -53,7 +53,7 @@ class SpeechToTextTest {
         val e = runCatching { parseTranscription(NO_AUDIO_MARKER) }.exceptionOrNull()
 
         assertTrue(e is IllegalStateException)
-        assertTrue(e!!.message!!.contains("не получила запись"))
+        assertTrue(e!!.message!!.contains("Запись не дошла"))
     }
 
     @Test
@@ -122,7 +122,7 @@ class SpeechToTextTest {
     }
 
     @Test
-    fun `формат, которого модель не читает, называется несчитаемым — а не отправляется наугад`() {
+    fun `формат, который не читается, называется несчитаемым — а не отправляется наугад`() {
 
         assertNull(modelReadableAudio("audio/amr", "заметка.amr"))
         assertNull(modelReadableAudio("audio/x-ms-wma", "запись.wma"))

@@ -58,7 +58,7 @@ class TranscribeActionTest {
     private val keyless = SpeechReadiness {
         listOf(
             SpeechKeyNeed("Whisper слушает по ключу Groq", GROQ_PROVIDER_ID),
-            SpeechKeyNeed("модель общего назначения — по любому ключу AI"),
+            SpeechKeyNeed("любой сервис AI — по вашему ключу"),
         )
     }
 
@@ -116,7 +116,7 @@ class TranscribeActionTest {
             assertTrue(result is ActionResult.Failure)
             result as ActionResult.Failure
             assertTrue("назван Groq: ${result.reason}", result.reason.contains("ключу Groq"))
-            assertTrue("назван любой AI: ${result.reason}", result.reason.contains("любому ключу AI"))
+            assertTrue("назван любой AI: ${result.reason}", result.reason.contains("любой сервис AI"))
             assertTrue("сказано, куда идти", result.reason.contains(KEY_SETTINGS_CALL))
             assertTrue("экран откроет ключи сам", refusalNeedsKey(result.reason))
             assertTrue("это чинится ключом", result.recoverable)
@@ -171,12 +171,12 @@ class TranscribeActionTest {
 
     @Test
     fun `сбой движка доходит до человека его же словами, а не пустым текстом`() = runTest {
-        val result = TranscribeRealizer(store, brokenEngine("Этот формат записи модель не читает"), ready)
+        val result = TranscribeRealizer(store, brokenEngine("Этот формат записи не читается"), ready)
             .perform(recording(1024, mime = "audio/amr"))
 
         assertTrue(result is ActionResult.Failure)
         result as ActionResult.Failure
-        assertEquals("Этот формат записи модель не читает", result.reason)
+        assertEquals("Этот формат записи не читается", result.reason)
         assertTrue("это чинится — ключом, сетью, другим файлом", result.recoverable)
     }
 

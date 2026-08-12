@@ -137,7 +137,7 @@ class PcCloudOcrRealizer(
     private fun refusal(code: Int): String = when (code) {
         401, 403 -> "Ключ чтения не подошёл — проверьте ocr.key в ~/.point-pc/config"
         404 -> "Сервис чтения не отвечает по этому адресу — проверьте ocr.url"
-        429 -> "Бесплатная квота сервиса на сегодня кончилась — попробуйте позже"
+        429 -> com.point.core.flow.FREE_LIMITS_SPENT_TEXT
         in 500..599 -> "Сервис чтения сейчас не отвечает"
         else -> "Сервис чтения отказал ($code)"
     }

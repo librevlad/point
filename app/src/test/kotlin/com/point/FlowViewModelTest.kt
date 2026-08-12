@@ -3541,7 +3541,7 @@ class FlowViewModelTest {
 
         vm.onBubble(bubble(id = "ai")); advanceUntilIdle()
 
-        assertTrue(vm.ui.value.cloudDestination.contains("AI-провайдера"))
+        assertTrue(vm.ui.value.cloudDestination.contains("чужой сервер"))
     }
 
     @Test fun `open-in shows the device's installed apps`() = runTest(dispatcher) {

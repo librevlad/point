@@ -120,7 +120,7 @@ class WordPlusTest {
 
         val heard = stagesHeard { realizer.perform(pdf, null) }
 
-        assertEquals(listOf("Читаю текст PDF", "Модель размечает документ", "Собираю документ"), heard)
+        assertEquals(listOf("Читаю текст PDF", "Размечаю документ", "Собираю документ"), heard)
     }
 
     @Test
@@ -146,7 +146,7 @@ class WordPlusTest {
 
         val heard = stagesHeard { realizer.perform(obj, null) }
 
-        assertEquals(listOf("Модель размечает документ", "Собираю документ"), heard)
+        assertEquals(listOf("Размечаю документ", "Собираю документ"), heard)
     }
 
     @Test
@@ -318,7 +318,7 @@ class WordPlusTest {
 
         val heard = stagesHeard { realizer.perform(photo("10b.jpg", mode = null), null) }
 
-        assertEquals(listOf("Распознаю текст на фото", "Модель читает страницу", "Собираю документ"), heard)
+        assertEquals(listOf("Распознаю текст на фото", "Читаю страницу", "Собираю документ"), heard)
     }
 
     @Test

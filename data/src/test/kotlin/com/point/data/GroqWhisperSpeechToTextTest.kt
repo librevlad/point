@@ -77,7 +77,7 @@ class GroqWhisperSpeechToTextTest {
         val e = runCatching { whisper(http).transcribe(recording("audio/amr", name = "заметка.amr")) }
             .exceptionOrNull()
 
-        assertTrue(e!!.message!!.contains("Этот формат записи модель не читает"))
+        assertTrue(e!!.message!!.contains("Этот формат записи не читается"))
         assertTrue("сервис не тревожили", http.posts.isEmpty())
     }
 

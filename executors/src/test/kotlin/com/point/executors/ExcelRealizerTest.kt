@@ -418,7 +418,7 @@ class ExcelRealizerTest {
 
         assertTrue(result is ActionResult.Success)
         assertEquals("2", (result as ActionResult.Success).result.metadata["models"])
-        assertTrue(heard.contains("Модель отказала — читаю следующей"))
+        assertTrue(heard.contains("Не вышло — пробую другим путём"))
     }
 
     @Test
@@ -434,7 +434,7 @@ class ExcelRealizerTest {
 
         assertTrue(result is ActionResult.Success)
         assertEquals(listOf(listOf("A", "B")), lastRows)
-        assertTrue(heard.contains("Перечитываю другой моделью"))
+        assertTrue(heard.contains("Перечитываю другим путём"))
     }
 
     @Test
