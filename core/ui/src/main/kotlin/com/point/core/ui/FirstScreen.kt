@@ -621,11 +621,15 @@ fun textPreviewHead(text: String, limit: Int = TEXT_PREVIEW_HEAD): String {
  * «Показать целиком» показывает целиком либо честно называет, сколько показывает
  * (#682/#683): если сам предпросмотр упёрся в свой предел чтения, кнопка не обещает
  * «целиком» — за пределом может быть ещё, и число становится нижней границей.
+ *
+ * Скрытых символов может не быть вовсе, а текст всё равно обрезан — тремя строками на
+ * экране (#871). Тогда числа нет: обещать «ещё 0 символов» — врать про то, что человек
+ * видит своими глазами.
  */
-fun expandTextLabel(hiddenChars: Int, atLimit: Boolean): String = if (atLimit) {
-    "Показать больше · ещё не менее ${grouped(hiddenChars)} символов"
-} else {
-    "Показать целиком · ещё ${grouped(hiddenChars)} символов"
+fun expandTextLabel(hiddenChars: Int, atLimit: Boolean): String = when {
+    hiddenChars <= 0 -> "Показать целиком"
+    atLimit -> "Показать больше · ещё не менее ${grouped(hiddenChars)} символов"
+    else -> "Показать целиком · ещё ${grouped(hiddenChars)} символов"
 }
 
 /** Подпись под развёрнутым текстом, который сам упёрся в предел чтения. */
@@ -636,6 +640,11 @@ fun truncatedPreviewNotice(shownChars: Int): String =
 private fun TextPreview(text: String, markdown: Boolean = false, truncated: Boolean = false) {
 
     var expanded by rememberSaveable(text.length) { mutableStateOf(false) }
+
+    // Текст обрезается дважды: по символам (голова) и по строкам на экране. Раньше кнопка
+    // знала только про первое, и всё, что короче двух тысяч символов, но длиннее трёх
+    // строк, обрывалось многоточием без всякого способа раскрыть (#871).
+    var clipped by rememberSaveable(text.length) { mutableStateOf(false) }
     val head = remember(text) { textPreviewHead(text) }
     val shown = if (expanded) text else head
 
@@ -664,10 +673,11 @@ private fun TextPreview(text: String, markdown: Boolean = false, truncated: Bool
 
                 maxLines = if (expanded) Int.MAX_VALUE else COLLAPSED_PREVIEW_LINES,
                 overflow = TextOverflow.Ellipsis,
+                onTextLayout = { if (it.hasVisualOverflow) clipped = true },
             )
         }
     }
-    if (head.length < text.length) {
+    if (clipped || head.length < text.length) {
         TextButton(onClick = { expanded = !expanded }) {
             Text(if (expanded) "Свернуть" else expandTextLabel(text.length - head.length, truncated))
         }
