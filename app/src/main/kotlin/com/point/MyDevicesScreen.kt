@@ -97,15 +97,12 @@ fun MyDevicesScreen(
             }
 
             state.devices.forEachIndexed { index, device ->
-                val icon = if (device.kind == DeviceKind.PC) "pc" else "phone"
+                val icon = com.point.core.flow.deviceIconKey(device.kind)
                 PortalRow(
                     title = device.name,
 
-                    subtitle = listOfNotNull(
-                        "это устройство".takeIf { device.self },
-                        deviceKindLabel(device.kind),
-                        lastSeenLabel(device.lastSeenMillis, now),
-                    ).joinToString(" · "),
+                    // Правило второй строки общее с компьютером (#891).
+                    subtitle = com.point.core.flow.deviceLine(device, now),
 
                     onClick = { },
                     enabled = false,

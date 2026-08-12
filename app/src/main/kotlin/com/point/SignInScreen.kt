@@ -60,7 +60,10 @@ fun SignInScreen(
         Spacer(Modifier.height(16.dp))
         ScreenHeader(
             title = if (state is SignIn.SignedIn) "Вы вошли" else SIGN_IN_TITLE,
-            subtitle = (state as? SignIn.SignedIn)?.account?.email?.takeIf { it.isNotBlank() },
+            // Экран просил действие, не назвав причины: заголовок обещал, что устройства
+            // увидят друг друга, но зачем это человеку — оставалось догадкой (#891).
+            subtitle = (state as? SignIn.SignedIn)?.account?.email?.takeIf { it.isNotBlank() }
+                ?: com.point.core.flow.SIGN_IN_WHY.takeIf { state is SignIn.SignedOut },
             horizontalAlignment = Alignment.CenterHorizontally,
         )
         Spacer(Modifier.height(22.dp))
