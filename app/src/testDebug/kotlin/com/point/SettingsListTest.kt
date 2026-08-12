@@ -73,9 +73,11 @@ class SettingsListTest {
     @Test fun `все группы и строки достижимы, ни одна не потеряна`() {
         settings(keys = savedKey)
 
-        compose.onNodeWithText("AI И ОБЛАКО").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("АККАУНТ").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("ПРИЛОЖЕНИЕ").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("АККАУНТ И УСТРОЙСТВА").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("AI И ПРИВАТНОСТЬ").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("ПОВЕДЕНИЕ POINT").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("ДАННЫЕ").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("ИНТЕГРАЦИИ").performScrollTo().assertIsDisplayed()
 
         compose.onNodeWithText("Ключи AI").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Отправка и приватность").performScrollTo().assertIsDisplayed()
@@ -97,18 +99,22 @@ class SettingsListTest {
     @Test fun `список начинается со строк, а не с абзацев — первая группа видна сразу`() {
         settings(keys = savedKey)
 
-        compose.onNodeWithText("AI И ОБЛАКО").assertIsDisplayed()
+        compose.onNodeWithText("АККАУНТ И УСТРОЙСТВА").assertIsDisplayed()
+        compose.onNodeWithText(MY_DEVICES_TITLE).assertIsDisplayed()
         compose.onNodeWithText("Ключи AI").assertIsDisplayed()
-        compose.onNodeWithText("Отправка и приватность").assertIsDisplayed()
     }
 
     @Test fun `каждая строка лежит в своей группе`() {
         settings(keys = savedKey)
 
+        // Порядок разделов один на телефон и компьютер (#881): состояние аккаунта первым,
+        // дальше AI и приватность, поведение, данные, интеграции.
         val order = listOf(
-            "AI И ОБЛАКО", "Ключи AI", "Отправка и приватность",
-            "АККАУНТ", MY_DEVICES_TITLE,
-            "ПРИЛОЖЕНИЕ", "Звук действий",
+            "АККАУНТ И УСТРОЙСТВА", MY_DEVICES_TITLE,
+            "AI И ПРИВАТНОСТЬ", "Ключи AI", "Отправка и приватность",
+            "ПОВЕДЕНИЕ POINT", "Звук действий",
+            "ДАННЫЕ", "Что Point помнит",
+            "ИНТЕГРАЦИИ", "Точки входа",
         )
         order.zipWithNext { above, below ->
             assertTrue(

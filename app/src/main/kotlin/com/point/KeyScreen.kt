@@ -241,13 +241,27 @@ private fun SettingsList(
 
         ScreenHeader(title = SETTINGS_TITLE, modifier = Modifier.padding(bottom = 2.dp))
 
-        SettingsGroup(AI_GROUP_TITLE) {
+        // Порядок разделов один на телефон и компьютер (#881): аккаунт и устройства →
+        // AI и приватность → поведение → данные → интеграции. «Мои устройства» стоит первым
+        // не по важности настройки, а потому что это состояние: вошёл ли человек и видят ли
+        // его устройства друг друга — первый вопрос, с которым сюда приходят.
+        SettingsGroup(ACCOUNT_GROUP_TITLE) {
+            SettingsRow(
+                title = MY_DEVICES_TITLE,
+                subtitle = "Вход, круг устройств и выход.",
+                onClick = onOpenDevices,
+                appearIndex = 0,
+            )
+        }
 
+        // Ключи и приватность — одна область: кто читает объект и что ему позволено.
+        // Раньше они стояли соседними строками в разделе «AI и облако» (#881).
+        SettingsGroup(AI_GROUP_TITLE) {
             SettingsRow(
                 title = KEY_SECTION_TITLE,
                 subtitle = keyLine,
                 onClick = { onOpen(SettingsSection.KEY) },
-                appearIndex = 0,
+                appearIndex = 1,
             )
             GroupSeam()
             SettingsRow(
@@ -256,22 +270,11 @@ private fun SettingsList(
                 subtitle = (if (cloudEnabled) "Облако разрешено" else "Облако выключено") +
                     " · ${privacyLevel.title}" + (if (yoloEnabled) " · $YOLO_TITLE" else ""),
                 onClick = { onOpen(SettingsSection.PRIVACY) },
-                appearIndex = 1,
-            )
-        }
-
-        SettingsGroup(ACCOUNT_GROUP_TITLE) {
-
-            SettingsRow(
-                title = MY_DEVICES_TITLE,
-                subtitle = "Вход, круг устройств и выход.",
-                onClick = onOpenDevices,
                 appearIndex = 2,
             )
         }
 
         SettingsGroup(APP_SECTION_TITLE) {
-
             SettingsRow(
                 title = SOUND_TITLE,
                 subtitle = "Тихий фирменный отклик на каждое действие.",
@@ -279,23 +282,25 @@ private fun SettingsList(
                 appearIndex = 3,
                 trailing = { Switch(checked = soundEnabled, onCheckedChange = onToggleSound) },
             )
-            GroupSeam()
+        }
 
-            // Обзор того, что уже работает и негде было увидеть (#821): плитка бывает, а
-            // знать о ней неоткуда; копии объектов лежат на диске молча; версию спрашивает
-            // первый же тестер.
+        // Копии объектов лежат на диске молча — здесь видно сколько и как забыть (#821).
+        SettingsGroup(DATA_GROUP_TITLE) {
+            SettingsRow(
+                title = MEMORY_TITLE,
+                subtitle = memoryLine(memory),
+                onClick = { onOpen(SettingsSection.MEMORY) },
+                appearIndex = 4,
+            )
+        }
+
+        // Точки входа — это способы запустить Point из системы, а не настройка приложения.
+        SettingsGroup(INTEGRATIONS_GROUP_TITLE) {
             SettingsRow(
                 title = ENTRIES_TITLE,
                 subtitle = entriesLine(tileAdded),
                 onClick = { onOpen(SettingsSection.ENTRIES) },
                 appearIndex = 5,
-            )
-            GroupSeam()
-            SettingsRow(
-                title = MEMORY_TITLE,
-                subtitle = memoryLine(memory),
-                onClick = { onOpen(SettingsSection.MEMORY) },
-                appearIndex = 6,
             )
         }
 
@@ -791,12 +796,16 @@ private fun AppSection(
     )
 }
 
-private const val AI_GROUP_TITLE = "AI и облако"
-private const val ACCOUNT_GROUP_TITLE = "Аккаунт"
+private const val AI_GROUP_TITLE = "AI и приватность"
+private const val ACCOUNT_GROUP_TITLE = "Аккаунт и устройства"
 
 private const val KEY_SECTION_TITLE = "Ключи AI"
 private const val PRIVACY_SECTION_TITLE = "Отправка и приватность"
-private const val APP_SECTION_TITLE = "Приложение"
+private const val APP_SECTION_TITLE = "Поведение Point"
+
+private const val DATA_GROUP_TITLE = "Данные"
+
+private const val INTEGRATIONS_GROUP_TITLE = "Интеграции"
 private const val SOUND_TITLE = "Звук действий"
 
 private const val ENTRIES_TITLE = "Точки входа"
