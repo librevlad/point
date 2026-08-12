@@ -24,6 +24,13 @@ data class PcConfig(
 
     /** Звук прибытия объекта с телефона (#650). Пара к свипу ухода на той стороне. */
     val sound: Boolean = true,
+
+    /**
+     * Куда человеку можно отправлять объект (#893). Выбор ехал между устройствами и раньше,
+     * но компьютер его не хранил и не спрашивал: выбранное на телефоне «только на этом
+     * устройстве» здесь ничего не значило, и запись всё равно уходила на чужой сервер.
+     */
+    val privacy: com.point.core.flow.PrivacyLevel = com.point.core.flow.PrivacyLevel.DEFAULT,
 )
 
 class FilePcConfig(private val baseDir: File) {
@@ -45,6 +52,7 @@ class FilePcConfig(private val baseDir: File) {
             ),
             rightClick = stored["right.click"] != "no",
             sound = stored["sound"] != "no",
+            privacy = com.point.core.flow.PrivacyLevel.of(stored["privacy"]),
             speech = SpeechConfig(
                 key = stored["speech.key"].orEmpty(),
                 url = stored["speech.url"].orEmpty().ifBlank { SpeechConfig.DEFAULT_URL },
@@ -109,6 +117,7 @@ class FilePcConfig(private val baseDir: File) {
             aiKeys = config.aiKeys,
             speechKey = config.speech.key,
             ocrKey = config.ocr.key,
+            privacy = config.privacy,
             sound = config.sound,
             at = at,
         )
@@ -126,6 +135,7 @@ class FilePcConfig(private val baseDir: File) {
             speech = config.speech.copy(key = merged.speechKey.ifBlank { config.speech.key }),
             ocr = config.ocr.copy(key = merged.ocrKey.ifBlank { config.ocr.key }),
             sound = merged.sound ?: config.sound,
+            privacy = merged.privacy ?: config.privacy,
         )
         if (next != config) save(next)
         stamp(merged.at)
@@ -172,6 +182,7 @@ class FilePcConfig(private val baseDir: File) {
 
         if (config.rightClick) stored.remove("right.click") else stored["right.click"] = "no"
         if (config.sound) stored.remove("sound") else stored["sound"] = "no"
+        stored["privacy"] = config.privacy.name
         listOf(
             "speech.key" to config.speech.key,
             "ocr.key" to config.ocr.key,
