@@ -58,10 +58,7 @@ class ExifInvestigationRealizer @Inject constructor() : Realizer {
     override val capabilityId = ExifInvestigation.ID
 
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
-        runCatching { findings(input) }.fold(
-            onSuccess = { ActionResult.Done("", it) },
-            onFailure = { ActionResult.Failure(it.message ?: "исследование не удалось", recoverable = true) },
-        )
+        com.point.core.flow.investigated { findings(input) }
 
     private suspend fun findings(obj: PointObject): Findings = withContext(Dispatchers.IO) {
         val file = File(obj.uri.value).takeIf { it.isFile } ?: return@withContext Findings()

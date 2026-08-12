@@ -46,11 +46,7 @@ class PdfImageInvestigationRealizer @Inject constructor(
     override val capabilityId = PdfImageInvestigation.ID
 
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
-        runCatching { findings(input) }.fold(
-            onSuccess = { ActionResult.Done("", it) },
-
-            onFailure = { ActionResult.Failure(it.message ?: FAILED, recoverable = true) },
-        )
+        com.point.core.flow.investigated { findings(input) }
 
     private suspend fun findings(obj: PointObject): Findings = withContext(Dispatchers.IO) {
         val text = pdfText.extractText(obj)
@@ -58,4 +54,3 @@ class PdfImageInvestigationRealizer @Inject constructor(
     }
 }
 
-private const val FAILED = "исследование не удалось"

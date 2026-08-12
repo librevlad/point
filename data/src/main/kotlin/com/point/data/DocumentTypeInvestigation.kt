@@ -44,26 +44,19 @@ class DocumentTypeInvestigationRealizer @Inject constructor() : Realizer {
     override val capabilityId = DocumentTypeInvestigation.ID
 
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
-        runCatching { findings(input) }.fold(
-            onSuccess = { ActionResult.Done("", it) },
-
-            onFailure = { ActionResult.Failure(it.message ?: FAILED, recoverable = true) },
-        )
+        com.point.core.flow.investigated { findings(input) }
 
     private suspend fun findings(obj: PointObject): Findings = withContext(Dispatchers.IO) {
         val file = File(obj.uri.value)
 
-        if (!file.isFile) error(NO_PAYLOAD)
-        val text = file.readText().take(MAX_CHARS)
+        if (!file.isFile) error(com.point.core.flow.NO_TEXT_PAYLOAD)
+        val text = file.readText().take(com.point.core.flow.INVESTIGATION_TEXT_CHARS)
         val type = documentType(text) ?: return@withContext Findings()
         Findings(metadata = mapOf(META_SEMANTIC_TYPE to type))
     }
 
     private companion object {
-        const val MAX_CHARS = 20_000
     }
 }
 
-private const val FAILED = "исследование не удалось"
 
-private const val NO_PAYLOAD = "текст объекта недоступен"

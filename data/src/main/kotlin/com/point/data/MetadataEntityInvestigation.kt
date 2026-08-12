@@ -47,11 +47,7 @@ class MetadataEntityInvestigationRealizer @javax.inject.Inject constructor() : R
     override val capabilityId = MetadataEntityInvestigation.ID
 
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
-        runCatching { findings(input) }.fold(
-            onSuccess = { ActionResult.Done("", it) },
-
-            onFailure = { ActionResult.Failure(it.message ?: FAILED, recoverable = true) },
-        )
+        com.point.core.flow.investigated { findings(input) }
 
     private suspend fun findings(obj: PointObject): Findings {
 
@@ -87,4 +83,3 @@ internal val FEATURE_BY_SUFFIX = mapOf(
     "card" to Feature.HAS_CARD,
 )
 
-private const val FAILED = "исследование не удалось"

@@ -100,11 +100,7 @@ class OcrInvestigationRealizer @Inject constructor(
     override val capabilityId = OcrInvestigation.ID
 
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
-        runCatching { findings(input) }.fold(
-            onSuccess = { ActionResult.Done("", it) },
-
-            onFailure = { ActionResult.Failure(it.message ?: FAILED, recoverable = true) },
-        )
+        com.point.core.flow.investigated { findings(input) }
 
     private suspend fun findings(obj: PointObject): Findings = withContext(Dispatchers.IO) {
 
@@ -161,10 +157,10 @@ class OcrInvestigationRealizer @Inject constructor(
 
         val text = stripStatusBar(raw)
 
-        val entities = entityDelta(obj, extractor.extract(text.take(MAX_CHARS)), text.take(MAX_CHARS))
+        val entities = entityDelta(obj, extractor.extract(text.take(com.point.core.flow.INVESTIGATION_TEXT_CHARS)), text.take(com.point.core.flow.INVESTIGATION_TEXT_CHARS))
 
-        val trackMeta = trackFacts(text.take(MAX_CHARS))
-        val (identifiers, idRelations) = identifierObjects(obj, text.take(MAX_CHARS), trackMeta)
+        val trackMeta = trackFacts(text.take(com.point.core.flow.INVESTIGATION_TEXT_CHARS))
+        val (identifiers, idRelations) = identifierObjects(obj, text.take(com.point.core.flow.INVESTIGATION_TEXT_CHARS), trackMeta)
         val url = URL_REGEX.find(text)?.value
         val ref = store.newScratchFile("txt")
         File(ref.value).writeText(text)
@@ -180,11 +176,11 @@ class OcrInvestigationRealizer @Inject constructor(
 
                 putAll(trackMeta)
 
-                putAll(meterFacts(text.take(MAX_CHARS)))
-                putAll(geoFacts(text.take(MAX_CHARS)))
+                putAll(meterFacts(text.take(com.point.core.flow.INVESTIGATION_TEXT_CHARS)))
+                putAll(geoFacts(text.take(com.point.core.flow.INVESTIGATION_TEXT_CHARS)))
 
-                putAll(amountFacts(text.take(MAX_CHARS)))
-                putAll(receiptFacts(text.take(MAX_CHARS)))
+                putAll(amountFacts(text.take(com.point.core.flow.INVESTIGATION_TEXT_CHARS)))
+                putAll(receiptFacts(text.take(com.point.core.flow.INVESTIGATION_TEXT_CHARS)))
                 mode?.let { put(META_READING_MODE, it.name) }
                 zoom?.let { put(META_READ_UPSCALE, it) }
                 put(META_OCR_TEXT_REF, ref.value)
@@ -211,9 +207,7 @@ class OcrInvestigationRealizer @Inject constructor(
     }
 
     private companion object {
-        const val MAX_CHARS = 20_000
         val URL_REGEX = Regex("""https?://\S+""")
     }
 }
 
-private const val FAILED = "исследование не удалось"

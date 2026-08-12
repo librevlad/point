@@ -47,11 +47,7 @@ class QrInvestigationRealizer @Inject constructor(
     override val capabilityId = QrInvestigation.ID
 
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
-        runCatching { findings(input) }.fold(
-            onSuccess = { ActionResult.Done("", it) },
-
-            onFailure = { ActionResult.Failure(it.message ?: FAILED, recoverable = true) },
-        )
+        com.point.core.flow.investigated { findings(input) }
 
     private suspend fun findings(obj: PointObject): Findings {
         val found = reader.scan(obj.uri.value) ?: return Findings()
@@ -78,4 +74,3 @@ class QrInvestigationRealizer @Inject constructor(
     }
 }
 
-private const val FAILED = "исследование не удалось"

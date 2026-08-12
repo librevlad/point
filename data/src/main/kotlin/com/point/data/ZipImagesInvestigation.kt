@@ -48,13 +48,7 @@ class ZipImagesInvestigationRealizer @Inject constructor() : Realizer {
     override val capabilityId = ZipImagesInvestigation.ID
 
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
-        runCatching { findings(input) }.fold(
-            onSuccess = { ActionResult.Done("", it) },
-
-            // Чужой текст исключения человеку не показывается ни при каком исходе (#570):
-            // в нём бывает и путь из недр, и «Central Directory Entry not found».
-            onFailure = { ActionResult.Failure(FAILED, recoverable = true) },
-        )
+        com.point.core.flow.investigated(whenFailed = FAILED) { findings(input) }
 
     private suspend fun findings(obj: PointObject): Findings = withContext(Dispatchers.IO) {
         var files = 0
