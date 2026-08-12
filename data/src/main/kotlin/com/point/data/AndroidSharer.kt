@@ -16,15 +16,21 @@ class AndroidSharer @Inject constructor(
 
     // Наружу файл уходит под именем объекта, а не scratch-идентификатором:
     // адресат «Переслать квитанцию» получал «4f94c663-….bin» (живой прогон 2026-08-09).
+    //
+    // Имя есть не всегда: часть провайдеров не отдаёт `DISPLAY_NAME`, и голосовое из
+    // мессенджера приходит безымянным. Тип при этом известен всегда — значит и расширение
+    // известно (#867). Раньше в этом случае наружу уходил голый идентификатор, и адресат
+    // снова видел «.bin».
     private fun outboundUri(obj: PointObject): android.net.Uri {
         val authority = "${context.packageName}.fileprovider"
         val file = File(obj.uri.value)
-        val name = obj.metadata["name"]?.takeIf { it.isNotBlank() }
-        return if (name != null) {
-            FileProvider.getUriForFile(context, authority, file, name)
-        } else {
-            FileProvider.getUriForFile(context, authority, file)
-        }
+        val name = obj.metadata["name"]?.takeIf { it.isNotBlank() } ?: unnamed(obj.mime)
+        return FileProvider.getUriForFile(context, authority, file, name)
+    }
+
+    private fun unnamed(mime: String): String {
+        val ext = com.point.core.flow.extensionForMime(mime)
+        return if (ext.isBlank()) "объект" else "объект.$ext"
     }
 
     override suspend fun share(obj: PointObject) {

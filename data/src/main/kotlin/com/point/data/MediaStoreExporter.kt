@@ -45,14 +45,12 @@ class MediaStoreExporter @Inject constructor(
         }
     }
 
+    /**
+     * Имя, когда своего у объекта нет. Тип известен всегда — значит и расширение известно
+     * (#867): своя таблица не знала аудио вовсе, и голосовое сохранялось как `point-export.bin`.
+     */
     private fun defaultName(mime: String): String {
-        val ext = when {
-            mime.startsWith("image/") -> mime.substringAfter('/')
-            mime == "application/pdf" -> "pdf"
-            mime == "application/zip" -> "zip"
-            mime.startsWith("text/") -> "txt"
-            else -> "bin"
-        }
-        return "point-export.$ext"
+        val ext = com.point.core.flow.extensionForMime(mime)
+        return if (ext.isBlank()) "point-export" else "point-export.$ext"
     }
 }

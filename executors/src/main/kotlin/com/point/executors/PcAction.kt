@@ -68,6 +68,10 @@ internal fun humanSendName(input: PointObject): String {
         com.point.core.model.ObjectKind.IMAGE -> "Снимок"
         com.point.core.model.ObjectKind.URL -> "Ссылка"
         com.point.core.model.ObjectKind.TEXT -> "Текст"
+
+        // Голосовое приезжало на компьютер «Объектом», хотя вид известен (#867).
+        com.point.core.model.ObjectKind.AUDIO -> "Запись"
+        com.point.core.model.ObjectKind.PDF -> "PDF"
         else -> "Объект"
     }
 }
