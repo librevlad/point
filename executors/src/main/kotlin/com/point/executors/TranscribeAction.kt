@@ -48,7 +48,7 @@ class TranscribeCapability @Inject constructor(
     override fun accepts(state: ObjectState) = state.kind == ObjectKind.AUDIO
     override fun produces(state: ObjectState) = ObjectState(ObjectKind.TEXT)
 
-    companion object { val ID = CapabilityId("transcribe") }
+    companion object { val ID = com.point.core.flow.KnownCapabilities.TRANSCRIBE }
 }
 
 class TranscribeRealizer @Inject constructor(

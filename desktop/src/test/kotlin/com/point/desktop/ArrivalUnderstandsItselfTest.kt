@@ -60,14 +60,14 @@ class ArrivalUnderstandsItselfTest {
         }
         val meta = st.items.value.first().obj.metadata
         assertEquals("+380671234567", meta["entity.phone"])
-        assertEquals("found", meta["investigated.pc-entities"])
+        assertEquals("found", meta["investigated.entities"])
     }
 
     @Test
     fun `уже исследованное телефоном не переспрашивается`() {
         var asked = 0
         val counting = object : Realizer {
-            override val capabilityId = CapabilityId("pc-entities")
+            override val capabilityId = com.point.core.flow.KnownCapabilities.ENTITIES
             override suspend fun perform(input: PointObject, amendment: String?): com.point.core.model.ActionResult {
                 asked++
                 return com.point.core.model.ActionResult.Done("не должно случиться")
@@ -84,7 +84,7 @@ class ArrivalUnderstandsItselfTest {
         val item = InboxItem(
             PointObject(
                 "t2", "text/plain", ScratchRef(file.absolutePath), ObjectState(ObjectKind.TEXT),
-                metadata = mapOf("investigated.pc-entities" to "found", "entity.phone" to "+380111111111"),
+                metadata = mapOf("investigated.entities" to "found", "entity.phone" to "+380111111111"),
             ),
         )
 

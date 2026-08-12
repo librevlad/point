@@ -185,7 +185,7 @@ class RemotePcActionTest {
                 action = com.point.core.flow.PcActionOutcome.Done("Нашёл: телефоны — 1"),
                 understanding = mapOf(
                     "entity.phone" to "+380671234567",
-                    "investigated.pc-entities" to "found",
+                    "investigated.entities" to "found",
                 ),
             ),
         )
@@ -195,7 +195,7 @@ class RemotePcActionTest {
         val done = result as ActionResult.Done
         assertEquals("Нашёл: телефоны — 1", done.message)
         assertEquals("+380671234567", done.findings!!.metadata["entity.phone"])
-        assertEquals("found", done.findings!!.metadata["investigated.pc-entities"])
+        assertEquals("found", done.findings!!.metadata["investigated.entities"])
     }
 
     @Test

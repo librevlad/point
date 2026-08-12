@@ -74,7 +74,7 @@ class PcCloudOcrRealizer(
                 // слоем исходника, сущности — его фактами; нового объекта не рождается.
                 val ref = File.createTempFile("pc-ocr-", ".txt").apply { writeText(text) }
                 val found = com.point.core.flow.plausibleEntities(extractor.extract(text), text)
-                val entities = entityKnowledge(found, CapabilityId("pc-entities"))
+                val entities = entityKnowledge(found, com.point.core.flow.KnownCapabilities.ENTITIES)
                 ActionResult.Done(
                     "Прочитал снимок" +
                         (if (fitted == null) "" else " · " + shrunkNote(fitted)) +

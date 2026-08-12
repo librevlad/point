@@ -20,7 +20,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /** Тот же идентификатор, что у расшифровки на телефоне (`:executors`, TranscribeCapability). */
-private val TRANSCRIBE = CapabilityId("transcribe")
+private val TRANSCRIBE = com.point.core.flow.KnownCapabilities.TRANSCRIBE
 
 class PcTranscribeCapability : Capability {
 
