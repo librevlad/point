@@ -41,11 +41,18 @@ class UnderstandRealizerTest {
         }
     }
 
+    // Значения, которые «находит» модель в тестах, стоят в самом документе: с #809 знанием
+    // становится только то, что Point прочитал сам, и фикстура обязана быть такой же
+    // самосогласованной, как настоящая накладная.
     private val document = """
         Нова Пошта
         ТОВ «Агротрейд»
         Відділення №9, вул. Хрещатик, 1
         20 4514 9154 9395
+        Тел. +380671234567
+        Лист RA123456785UA
+        Лічильник 00154
+        50°27'0"N 30°31'24"E
     """.trimIndent()
 
     private fun textObject(content: String = document, metadata: Map<String, String> = emptyMap()): PointObject {
@@ -56,13 +63,17 @@ class UnderstandRealizerTest {
     private fun realizer(vararg answers: String) = UnderstandRealizer(llm(*answers))
 
     private fun imageWithLayer(): PointObject {
-        val pageText = "ТТН 20 4514 9154 9395\nВідправник 1ваненко ван"
+        val pageText = "ТТН 20 4514 9154 9395  99 9999 9999 9995  RA123456789UA  RA123456780UA\n" +
+            "Відправник 1ваненко ван"
         val layer = com.point.core.flow.AtomLayer(
             listOf(
                 com.point.core.flow.Atom("m1", "ТТН", com.point.core.flow.Box(10f, 100f, 60f, 120f)),
                 com.point.core.flow.Atom("w1", "20", com.point.core.flow.Box(200f, 100f, 230f, 120f)),
                 com.point.core.flow.Atom("w2", "4514 9154", com.point.core.flow.Box(235f, 100f, 330f, 120f)),
                 com.point.core.flow.Atom("w3", "9395", com.point.core.flow.Box(335f, 100f, 380f, 120f)),
+                com.point.core.flow.Atom("w4", "99 9999 9999 9995", com.point.core.flow.Box(390f, 100f, 520f, 120f)),
+                com.point.core.flow.Atom("w8", "RA123456789UA", com.point.core.flow.Box(525f, 100f, 640f, 120f)),
+                com.point.core.flow.Atom("w9", "RA123456780UA", com.point.core.flow.Box(645f, 100f, 760f, 120f)),
                 com.point.core.flow.Atom("m2", "Відправник", com.point.core.flow.Box(10f, 200f, 150f, 220f)),
                 com.point.core.flow.Atom("w6", "1ваненко", com.point.core.flow.Box(200f, 200f, 300f, 220f)),
                 com.point.core.flow.Atom("w7", "ван", com.point.core.flow.Box(305f, 200f, 350f, 220f)),
@@ -259,12 +270,22 @@ class UnderstandRealizerTest {
     }
 
     @Test
-    fun `диктовка без меток — происхождение модель и одно доказательство`() = runTest {
+    fun `диктовка без меток остаётся знанием, когда слова стоят на странице`() = runTest {
         val result = realizer("TRACK=99 9999 9999 9995").perform(imageWithLayer()) as ActionResult.Done
 
         val meta = result.findings!!.metadata
-        assertEquals("model", meta["entity.track.src"])
-        assertEquals("semantic", meta["entity.track.ev"])
+        assertEquals("99 9999 9999 9995", meta[META_ENTITY_TRACK])
+    }
+
+    /**
+     * «Нет в тексте — нет знания» (#809, решение владельца 12.08.2026): на снимке рабочего
+     * стола модель назвала дату, которой на кадре нет, и та встала рядом с настоящей.
+     */
+    @Test
+    fun `названного моделью нет на странице — знанием оно не становится`() = runTest {
+        val result = realizer("TRACK=88 8888 8888 8887").perform(imageWithLayer()) as ActionResult.Done
+
+        assertNull(result.findings?.metadata?.get(META_ENTITY_TRACK))
     }
 
     @Test
@@ -392,7 +413,10 @@ class UnderstandRealizerTest {
     fun `при победе известного кандидаты модели не тонут`() = runTest {
 
         // #652: телефоны — multi-value, другие номера живут «ещё»-значениями, не спором.
-        val known = textObject(metadata = mapOf("entity.phone" to "+380671234567"))
+        val known = textObject(
+            content = document + "\n+380679999999\n+380671111111",
+            metadata = mapOf("entity.phone" to "+380671234567"),
+        )
 
         val result = realizer("PHONE=+380679999999\nPHONE=+380671111111").perform(known) as ActionResult.Done
 
@@ -446,7 +470,10 @@ class UnderstandRealizerTest {
 
         // #652: раньше расхождение лежало спором (.alt); телефон — multi-value,
         // второй номер — «ещё один», первый не тронут.
-        val known = textObject(metadata = mapOf("entity.phone" to "+380671234567"))
+        val known = textObject(
+            content = document + "\n+380679999999",
+            metadata = mapOf("entity.phone" to "+380671234567"),
+        )
 
         val result = realizer("PHONE=+380679999999").perform(known) as ActionResult.Done
 
@@ -666,6 +693,7 @@ class UnderstandRealizerTest {
     fun `слово человека не ремонтируется моделью при повторном понимании`() = kotlinx.coroutines.test.runTest {
 
         val human = textObject(
+            content = document.replace("вул. Хрещатик, 1", "вул. Хрещатик, 16"),
             metadata = mapOf(
                 "entity.address" to "вул. Хрещатик, 1б",
                 "entity.address" + com.point.core.flow.META_SOURCE_SUFFIX to
@@ -721,6 +749,7 @@ class UnderstandRealizerTest {
 
         // #652: спор одного значения — не судьба второго телефона.
         val disputed = textObject(
+            content = document + "\n+380665262706\n+380961992869",
             metadata = mapOf(
                 "entity.phone" to "+380665262706",
                 "entity.phone" + com.point.core.flow.META_ALT_SUFFIX to "+380961992869",
@@ -770,14 +799,18 @@ class UnderstandRealizerTest {
     // #682/#683 — «читать больше и умнее»: за раз берётся больше текста, а объект
     // длиннее одного разбора читается частями с честным «прочитано начало — N из M».
 
+    // Телефон стоит в самом тексте: знанием становится только прочитанное (#809), и
+    // длинная фикстура обязана содержать то, что модель в ней «находит».
     private fun longDocument(paragraphs: Int = 700): String =
-        (1..paragraphs).joinToString(" ") { "Строка номер $it содержит немного текста для примера." }
+        "Телефон +380671234567. " +
+            (1..paragraphs).joinToString(" ") { "Строка номер $it содержит немного текста для примера." }
 
     @Test
     fun `предел разбора поднят вчетверо — документ на 10 тысяч знаков читается одним заходом`() = runTest {
 
         // Старый предел был 6 000: документ на ~10 000 не проходил бы одним окном.
-        val doc = (1..5).joinToString(" ") { "Абзац $it: " + "слово ".repeat(300) }
+        val doc = "Телефон +380671234567. " +
+            (1..5).joinToString(" ") { "Абзац $it: " + "слово ".repeat(300) }
         assertTrue(doc.length in 6_001..24_000)
 
         val result = realizer("PHONE=+380671234567").perform(textObject(content = doc))
