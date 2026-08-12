@@ -16,6 +16,10 @@ android {
         compose = true
     }
 
+    // Исходники, которые телефон и ПК компилируют оба — каждый своим Compose (#849).
+    // Тем же швом, что шрифты и звуки: общий файл, а не копия с припиской «переносится сюда».
+    sourceSets["main"].kotlin.srcDir("src/shared/kotlin")
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17

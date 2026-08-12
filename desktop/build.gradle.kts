@@ -12,6 +12,12 @@ plugins {
 kotlin { jvmToolchain(17) }
 
 sourceSets.main {
+
+    // Значки и цвета действий — один исходник на два устройства (#849). До этого файл лежал
+    // копией в `desktop/ui/BubbleIcons.kt` с припиской «меняется там — переносится сюда»:
+    // сторож ловил пропавший ключ, но не ловил разъехавшийся цвет.
+    kotlin.srcDir(rootProject.file("core/ui/src/shared/kotlin"))
+
     resources.srcDir(rootProject.file("core/ui/src/main/res/font"))
 
     // Звуки-порталы лежат там же, откуда их берёт телефон: общий файл — общий тембр (#650).
