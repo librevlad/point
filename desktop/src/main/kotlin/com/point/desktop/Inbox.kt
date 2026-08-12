@@ -1,6 +1,8 @@
 package com.point.desktop
 
 import com.point.core.flow.EMPTY_FILE_REASON
+import com.point.core.flow.META_OCR_TEXT_REF
+import com.point.core.flow.META_READ_TEXT
 import com.point.core.flow.META_UNUSABLE_REASON
 import com.point.core.flow.ObjectClassifier
 import com.point.core.model.Feature
@@ -131,13 +133,31 @@ class Inbox(private val dir: File, private val pdf: PdfText = PdfBoxText()) {
         } else {
             meta
         }
+
+        // Прочитанное на телефоне приезжает значением и здесь снова становится знанием
+        // (#811): текст ложится файлом рядом с объектом, а объект получает признак «текст
+        // есть». Иначе компьютер предлагал распознать заново то, что уже прочитано.
+        val arrivedText = withFitness[META_READ_TEXT]?.takeIf { it.isNotBlank() }
+        val landed = if (arrivedText == null) {
+            withFitness to state
+        } else {
+            val sidecar = File(file.parentFile, file.nameWithoutExtension + ".read.txt")
+            val kept = runCatching { sidecar.writeText(arrivedText); sidecar.absolutePath }.getOrNull()
+            val meta2 = if (kept == null) {
+                withFitness - META_READ_TEXT
+            } else {
+                withFitness - META_READ_TEXT + (META_OCR_TEXT_REF to kept)
+            }
+            meta2 to state.with(Feature.HAS_TEXT)
+        }
+
         return InboxItem(
             PointObject(
                 id = UUID.randomUUID().toString(),
                 mime = mime,
                 uri = ScratchRef(file.absolutePath),
-                state = state,
-                metadata = withFitness,
+                state = landed.second,
+                metadata = landed.first,
             ),
         )
     }

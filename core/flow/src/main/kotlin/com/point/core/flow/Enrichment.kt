@@ -52,6 +52,19 @@ data class AwaitingInvestigation(
 
 const val META_OCR_TEXT_REF = "ocr.text.ref"
 
+/**
+ * Прочитанный текст **значением**, а не ссылкой на файл устройства (#811).
+ *
+ * `ocr.text.ref` указывает на scratch-файл того телефона, где читали, и при переносе на
+ * компьютер ведёт в никуда: снимок приезжал «непрочитанным», и человеку предлагали
+ * распознать его заново. Знание, живущее ссылкой на локальный файл, не переносимо по
+ * построению — поэтому на ту сторону едет само содержимое.
+ */
+const val META_READ_TEXT = "read.text"
+
+/** Длиннее в дорогу не берём: это уже документ, а не знание о нём. */
+const val READ_TEXT_TRAVEL_LIMIT = 100_000
+
 const val META_OCR_ATOMS_REF = "ocr.atoms.ref"
 
 const val META_CLOUD_ATOMS_REF = "cloud.atoms.ref"
