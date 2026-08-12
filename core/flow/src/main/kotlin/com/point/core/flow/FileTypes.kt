@@ -33,13 +33,21 @@ private val MIME_BY_EXT: Map<String, String> = mapOf(
     "doc" to "application/msword",
     "xls" to "application/vnd.ms-excel",
     "ppt" to "application/vnd.ms-powerpoint",
+    // Форматы записи — все, которые Point и так принимает (#869). Порядок важен: первым
+    // стоит расширение, под которым тип называется обратно (`audio/ogg` → `ogg`, не `opus`).
     "ogg" to "audio/ogg",
+    "oga" to "audio/ogg",
+    "opus" to "audio/ogg",
     "mp3" to "audio/mpeg",
     "m4a" to "audio/mp4",
     "wav" to "audio/wav",
     "flac" to "audio/flac",
     "aac" to "audio/aac",
     "aiff" to "audio/aiff",
+    "aif" to "audio/aiff",
+    "amr" to "audio/amr",
+    "3gp" to "audio/3gpp",
+    "wma" to "audio/x-ms-wma",
 )
 
 const val UNKNOWN_MIME = "application/octet-stream"
