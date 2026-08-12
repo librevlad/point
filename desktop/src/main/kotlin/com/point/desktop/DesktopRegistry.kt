@@ -20,11 +20,10 @@ class DesktopRegistry(
         bubblesFor(com.point.core.flow.GraphState(placeholder(state)))
 
     /**
-     * Тот же принцип ранжирования, что и на телефоне (ADR-0001 §14): Intent поднимает
-     * совпадающие по смыслу действия и никого не убирает; без Intent порядок прежний.
-     *
-     * Клаузула повторена, а не переиспользована: desktop не видит `:executors`
-     * (стрелки модулей только вниз), а выносить одну строку в новый общий API запрещено объёмом.
+     * Тот же порядок, что и на телефоне, — и буквально тот же код (#840): правило живёт в
+     * `:core:flow`, который виден обоим. Прежде клаузула была повторена здесь с оговоркой
+     * «desktop не видит :executors»; копия правила нормы конституции — приглашение к
+     * расхождению.
      */
     override fun bubblesFor(graph: com.point.core.flow.GraphState): List<Bubble> {
         val state = graph.state
@@ -34,13 +33,7 @@ class DesktopRegistry(
             .filterNot { it.meta.investigation }
             .filter { it.accepts(state) }
             .filter { runnable(it.id, state) }
-            .sortedWith(
-                compareBy(
-                    { if (intent == null || intent in it.intents(state)) 0 else 1 },
-                    { it.meta.priority },
-                    { it.id.value },
-                ),
-            )
+            .sortedWith(com.point.core.flow.byIntentThenPriority(state, intent))
             .map { Bubble(it.icon, it.label(state), it.id, it.produces(state) ?: state, yields = it.yields(state)) }
     }
 

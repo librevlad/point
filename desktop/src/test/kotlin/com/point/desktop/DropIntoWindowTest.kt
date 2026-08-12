@@ -171,32 +171,23 @@ class DropIntoWindowTest {
         assertEquals(listOf(DROP_EMPTY, DROP_EMPTY), heard.said)
     }
 
+    /**
+     * Окно ведёт себя как окно (владелец 12.08.2026: «сделай десктопное окно нормальным,
+     * чтобы не пришлось жать кнопку не закрывать»).
+     *
+     * Прежде это был флайаут: ушёл в другое приложение — окно исчезло. Человек, отправившийся
+     * за файлом, возвращался к пустому месту, и поверх этого выросла кнопка «Не прятать
+     * окно». Правила исчезновения больше нет — вместе с кнопкой и пунктом в меню трея.
+     */
     @Test
-    fun `окно не прячется, пока над ним тянут файл`() {
-        assertFalse(
-            "флайаут исчез из-под руки — бросать стало некуда",
-            flyoutHides(focused = false, dragging = true, keptOpen = false, asking = false),
-        )
-    }
+    fun `правила исчезновения по уходу человека в коде больше нет`() {
+        val placement = java.io.File("src/main/kotlin/com/point/desktop/CompactPlacement.kt").readText()
+        val window = java.io.File("src/main/kotlin/com/point/desktop/ui/CompactApp.kt").readText()
 
-    @Test
-    fun `окно не прячется, пока человек попросил его остаться`() {
-        assertFalse(
-            "человек ушёл за файлом, а окно закрылось",
-            flyoutHides(focused = false, dragging = false, keptOpen = true, asking = false),
-        )
-    }
+        assertFalse("окно снова прячется само", placement.contains("fun flyoutHides"))
 
-    @Test
-    fun `человек ушёл в другое окно — флайаут ушёл`() {
-        assertTrue(flyoutHides(focused = false, dragging = false, keptOpen = false, asking = false))
-        assertFalse(
-            "окно с вопросом согласия закрывать нельзя",
-            flyoutHides(focused = false, dragging = false, keptOpen = false, asking = true),
-        )
-        assertFalse(
-            "окно в руках человека не прячется",
-            flyoutHides(focused = true, dragging = false, keptOpen = false, asking = false),
-        )
+        // Ищется строка на экране, а не упоминание в объяснении: рассказывать, почему
+        // костыля больше нет, можно и нужно.
+        assertFalse("костыль «не прятать окно» вернулся", window.contains("\"Не прятать окно"))
     }
 }

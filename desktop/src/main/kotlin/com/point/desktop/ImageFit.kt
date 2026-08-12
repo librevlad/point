@@ -93,9 +93,5 @@ object ImageFit {
 fun shrunkNote(fitted: Fitted): String =
     "читал уменьшенную копию — " + weight(fitted.was) + " не принимает сервис, ушло " + weight(fitted.now)
 
-private fun weight(bytes: Long): String =
-    if (bytes < 1024 * 1024) {
-        (bytes / 1024).toString() + " КБ"
-    } else {
-        String.format(Locale.ROOT, "%.1f", bytes / 1048576.0).replace('.', ',') + " МБ"
-    }
+/** Сколько это весит — общим правилом обоих устройств (#840). */
+private fun weight(bytes: Long): String = com.point.core.flow.humanWeight(bytes).orEmpty()

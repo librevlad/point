@@ -60,7 +60,6 @@ fun main(args: Array<String>) {
 
     // Просьба человека «побудь открытым»: без неё окно уходит по потере фокуса и
     // принести в него файл мышью нечем — за файлом человек уходит в проводник (#546).
-    val keepOpen = kotlinx.coroutines.flow.MutableStateFlow(false)
     val openRequest = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
     val peek = PeekState { System.currentTimeMillis() }
     val saveTarget = SaveTarget { file ->
@@ -303,7 +302,6 @@ fun main(args: Array<String>) {
         // Компакт живёт у трея: закрыть = спрятаться, выход — из меню трея.
         // Непросмотренное прибытие оставляет след на иконке (PC3): peek легко пропустить.
         val freshIds by state.fresh.collectAsState()
-        val kept by keepOpen.collectAsState()
         val icon = androidx.compose.runtime.remember(freshIds.isNotEmpty()) {
             pointGlyph(badge = freshIds.isNotEmpty())
         }
@@ -314,18 +312,6 @@ fun main(args: Array<String>) {
             menu = {
                 Item("Открыть Point") { compactVisible.value = true }
 
-                // Сама иконка трея принять перетаскивание не может: AWT TrayIcon —
-                // не Component, а DropTarget вешается только на Component; у иконки
-                // есть клик и меню, событий перетаскивания нет. Дорога к окну
-                // открывается отсюда — из того же меню трея (#546).
-                CheckboxItem(
-                    "Не прятать окно",
-                    checked = kept,
-                    onCheckedChange = { wanted ->
-                        keepOpen.value = wanted
-                        if (wanted) compactVisible.value = true
-                    },
-                )
                 Item("Выход") {
                     relayPoller.stop()
                     handOffs.interrupt()
@@ -346,7 +332,11 @@ fun main(args: Array<String>) {
             undecorated = true,
             transparent = true,
             resizable = false,
-            alwaysOnTop = true,
+
+            // Обычное окно не висит поверх чужой работы (владелец 12.08.2026: «сделай
+            // десктопное окно нормальным»). Поверх всех оно было честно ровно до тех пор,
+            // пока само исчезало по уходу человека.
+            alwaysOnTop = false,
             title = "Point",
             icon = androidx.compose.runtime.remember { pointGlyph() },
         ) {
@@ -379,8 +369,6 @@ fun main(args: Array<String>) {
                         }
                     },
                     onClipboardTaken = { text -> state.onReceived(inbox.addText(text), ObjectSource.CLIPBOARD) },
-                    keepOpen = keepOpen,
-                    onKeepOpen = { wanted -> keepOpen.value = wanted },
                     onReceiveFile = { receiver.start { why -> state.say(why) } },
                     onCancelReceive = { receiver.cancel() },
                     onWipe = { inbox.wipe() },

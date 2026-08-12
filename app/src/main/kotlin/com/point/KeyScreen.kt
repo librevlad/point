@@ -885,18 +885,12 @@ private fun entriesLine(tileAdded: Boolean): String =
 private fun memoryLine(memory: com.point.core.flow.HistoryFootprint?): String = when {
     memory == null -> MEMORY_TITLE_UNKNOWN
     memory.count == 0 -> "Пока ничего не сохранено"
-    else -> "Объектов: ${memory.count} · ${humanSize(memory.bytes)}"
+    else -> "Объектов: ${memory.count} · ${com.point.core.flow.humanWeight(memory.bytes) ?: NOTHING_KEPT}"
 }
+
+private const val NOTHING_KEPT = "пусто"
 
 private const val MEMORY_TITLE_UNKNOWN = "Сколько занято — сейчас посчитаем"
-
-/** Размер человеку, а не в байтах: «12,4 МБ» вместо 13 002 342. */
-internal fun humanSize(bytes: Long): String = when {
-    bytes < 1_024 -> "$bytes Б"
-    bytes < 1_024 * 1_024 -> "${bytes / 1_024} КБ"
-    bytes < 10L * 1_024 * 1_024 -> String.format(java.util.Locale.getDefault(), "%.1f МБ", bytes / (1_024f * 1_024f))
-    else -> "${bytes / (1_024 * 1_024)} МБ"
-}
 
 
 private class KeyDraft(saved: UserAiKey) {

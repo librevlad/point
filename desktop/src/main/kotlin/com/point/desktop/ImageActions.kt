@@ -65,8 +65,8 @@ class PcShrinkImageRealizer(private val outbox: Outbox) : Realizer {
             }
         }
 
-    private fun mb(bytes: Long): String =
-        if (bytes < 1024 * 1024) (bytes / 1024).toString() + " КБ" else String.format("%.1f МБ", bytes / 1048576.0)
+    /** Сколько это весит — общим правилом обоих устройств (#840). */
+    private fun mb(bytes: Long): String = com.point.core.flow.humanWeight(bytes).orEmpty()
 
     private companion object {
 
