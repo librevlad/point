@@ -49,7 +49,7 @@ class OcrSpaceReader(
     private fun textOf(json: String): String {
 
         val answer = runCatching { JSONObject(json) }.getOrElse {
-            error("$READER: ответ не разобран — пробуем следующий")
+            error(com.point.core.flow.UNREADABLE_ANSWER)
         }
         if (answer.optBoolean("IsErroredOnProcessing")) error("$READER: ${errorMessage(answer)}")
         val results = answer.optJSONArray("ParsedResults")
@@ -68,13 +68,7 @@ class OcrSpaceReader(
         return message.ifBlank { "чтение не удалось" }.take(300)
     }
 
-    private fun refusal(code: Int): String = when (code) {
-        402 -> "$READER: бесплатный лимит исчерпан (402) — покупать не идём, пробуем следующий"
-
-        429 -> "$READER: слишком часто (429) — пробуем следующий"
-        401, 403 -> "$READER: ключ не принят ($code)"
-        else -> "$READER: сервис отказал (код $code) — пробуем следующий"
-    }
+    private fun refusal(code: Int): String = com.point.core.flow.serviceRefusal(code)
 
     private fun form(vararg fields: Pair<String, String>): String =
         fields.joinToString("&") { (name, value) -> "$name=${encode(value)}" }

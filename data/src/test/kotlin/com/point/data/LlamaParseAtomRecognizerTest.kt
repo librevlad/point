@@ -95,19 +95,21 @@ class LlamaParseAtomRecognizerTest {
     }
 
     @Test
-    fun `429 при опросе — отказ, а не пустая страница`() = runTest {
+    fun `слишком часто при опросе — отказ, а не пустая страница`() = runTest {
         val http = FakeHttpFiles(onPost = { created }, onGet = { HttpResult(429, "slow down") })
-        val error = runCatching { reader(http).read(pageObject) }.exceptionOrNull()
+        val said = runCatching { reader(http).read(pageObject) }.exceptionOrNull()!!.message!!
 
-        assertTrue(error?.message?.contains("429") == true)
+        assertTrue(said, com.point.core.flow.looksLikeQuotaFailure(said))
+        assertFalse("код протокола человеку ни о чём не говорит: $said", said.contains("429"))
     }
 
     @Test
-    fun `402 не ведёт в кассу`() = runTest {
+    fun `кончившееся бесплатное не ведёт в кассу`() = runTest {
         val http = FakeHttpFiles(onPost = { HttpResult(402, "add a card") })
-        val error = runCatching { reader(http).read(pageObject) }.exceptionOrNull()
+        val said = runCatching { reader(http).read(pageObject) }.exceptionOrNull()!!.message!!
 
-        assertTrue(error?.message?.contains("покупать не идём") == true)
+        assertTrue(said, com.point.core.flow.looksLikeQuotaFailure(said))
+        assertFalse("наша кухня: $said", said.contains("покупать"))
     }
 
     @Test

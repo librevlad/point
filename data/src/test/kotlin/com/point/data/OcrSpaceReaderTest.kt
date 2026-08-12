@@ -83,18 +83,20 @@ class OcrSpaceReaderTest {
     }
 
     @Test
-    fun `429 переводит очередь дальше, а не в кассу`() = runTest {
-        val error = runCatching { reader(FakeHttpJson { HttpResult(429, "slow down") }).read(pageObject) }
-            .exceptionOrNull()
-        assertTrue(error?.message!!, error.message!!.contains("(429)"))
-        assertFalse(error.message!!, error.message!!.contains("купить"))
+    fun `слишком часто — очередь идёт дальше, а человек слышит про бесплатное`() = runTest {
+        val said = runCatching { reader(FakeHttpJson { HttpResult(429, "slow down") }).read(pageObject) }
+            .exceptionOrNull()!!.message!!
+
+        assertTrue(said, com.point.core.flow.looksLikeQuotaFailure(said))
+        assertFalse("код протокола человеку ни о чём не говорит: $said", said.contains("429"))
+        assertFalse("наша касса — не его дело: $said", said.contains("купить"))
     }
 
     @Test
     fun `ключ не принят — так и сказано, а не «сломалось»`() = runTest {
         val error = runCatching { reader(FakeHttpJson { HttpResult(403, "forbidden") }).read(pageObject) }
             .exceptionOrNull()
-        assertTrue(error?.message!!, error.message!!.contains("ключ не принят"))
+        assertEquals(com.point.core.flow.serviceRefusal(403), error?.message)
     }
 
     @Test
@@ -111,7 +113,7 @@ class OcrSpaceReaderTest {
     fun `битый ответ — отказ, а не пустая страница`() = runTest {
         val error = runCatching { reader(FakeHttpJson { HttpResult(200, "не json") }).read(pageObject) }
             .exceptionOrNull()
-        assertTrue(error?.message!!, error.message!!.contains("не разобран"))
+        assertEquals(com.point.core.flow.UNREADABLE_ANSWER, error?.message)
     }
 
     @Test

@@ -129,14 +129,13 @@ class PcTranscribeRealizer(
         }
     }
 
-    private fun refusal(code: Int): String = when (code) {
-        401, 403 -> "Ключ расшифровки не подошёл — нужен ключ Groq или OpenAI"
-        404 -> "У этого сервиса нет ручки расшифровки — подойдут Groq или OpenAI, но не OpenRouter"
-        413 -> "Запись слишком большая для этого сервиса"
-        429 -> "Сервис просит подождать — слишком много запросов подряд"
-        in 500..599 -> "Сервис расшифровки сейчас не отвечает"
-        else -> "Сервис расшифровки отказал ($code)"
-    }
+    private fun refusal(code: Int): String = com.point.core.flow.serviceRefusal(
+        code,
+        hint = when (code) {
+            401, 403, 404 -> "расшифровку умеют Groq и OpenAI, но не OpenRouter"
+            else -> null
+        },
+    )
 
     private fun extensionOf(mime: String): String = when {
         mime.contains("ogg") -> "ogg"

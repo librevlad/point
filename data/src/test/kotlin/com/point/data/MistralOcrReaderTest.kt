@@ -56,32 +56,37 @@ class MistralOcrReaderTest {
     }
 
     @Test
-    fun `402 — это не касса, а причина отказа для следующего в очереди`() = runTest {
-        val error = runCatching { reader(FakeHttpJson { HttpResult(402, "payment required") }).read(pageObject) }
-            .exceptionOrNull()
-        assertTrue(error?.message!!, error.message!!.contains("(402)"))
-        assertTrue(error.message!!, error.message!!.contains("покупать не идём"))
+    fun `упёрлись в предел — это причина отказа для следующего в очереди, а не касса`() = runTest {
+        val said = runCatching { reader(FakeHttpJson { HttpResult(402, "payment required") }).read(pageObject) }
+            .exceptionOrNull()!!.message!!
+
+        assertTrue(said, com.point.core.flow.looksLikeQuotaFailure(said))
+        assertFalse("код протокола человеку ни о чём не говорит: $said", said.contains("402"))
+        assertFalse("наша кухня: $said", said.contains("покупать"))
     }
 
     @Test
-    fun `429 переводит очередь дальше`() = runTest {
-        val error = runCatching { reader(FakeHttpJson { HttpResult(429, "slow down") }).read(pageObject) }
-            .exceptionOrNull()
-        assertTrue(error?.message!!, error.message!!.contains("(429)"))
+    fun `слишком часто — очередь идёт дальше, и человек слышит про бесплатное, а не про частоту`() = runTest {
+        val said = runCatching { reader(FakeHttpJson { HttpResult(429, "slow down") }).read(pageObject) }
+            .exceptionOrNull()!!.message!!
+
+        assertTrue(said, com.point.core.flow.looksLikeQuotaFailure(said))
+        assertFalse("код протокола человеку ни о чём не говорит: $said", said.contains("429"))
+        assertFalse("наша кухня: $said", said.contains("покупать"))
     }
 
     @Test
     fun `ключ не принят — так и сказано, а не «сломалось»`() = runTest {
         val error = runCatching { reader(FakeHttpJson { HttpResult(401, "unauthorized") }).read(pageObject) }
             .exceptionOrNull()
-        assertTrue(error?.message!!, error.message!!.contains("ключ не принят"))
+        assertEquals(com.point.core.flow.serviceRefusal(401), error?.message)
     }
 
     @Test
     fun `битый ответ — отказ, а не пустая страница`() = runTest {
         val error = runCatching { reader(FakeHttpJson { HttpResult(200, "не json") }).read(pageObject) }
             .exceptionOrNull()
-        assertTrue(error?.message!!, error.message!!.contains("не разобран"))
+        assertEquals(com.point.core.flow.UNREADABLE_ANSWER, error?.message)
     }
 
     @Test

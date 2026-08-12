@@ -59,23 +59,21 @@ class GroqWhisperSpeechToText(
     private fun heardOf(body: String): Transcription {
 
         val text = runCatching { JSONObject(body).optString("text") }
-            .getOrElse { error("Whisper - ответ не разобран, пробуем следующий движок") }
+            .getOrElse { error(com.point.core.flow.UNREADABLE_ANSWER) }
             .trim()
         return if (text.isEmpty()) Transcription.Silence else Transcription.Heard(text)
     }
 
-    private fun refusal(code: Int): String = when (code) {
-        401 -> "Whisper - ключ Groq не принят (401)"
-
-        403 -> "Whisper - Groq не пустил запрос (403): ключ не принят или отказал сам сервис"
-        413 -> "Whisper - запись слишком большая для бесплатного лимита"
-        429 -> "Whisper - слишком часто (429), пробуем следующий движок"
-        else -> "Whisper - сервис отказал (код $code), пробуем следующий движок"
-    }
+    private fun refusal(code: Int): String =
+        com.point.core.flow.serviceRefusal(code, hint = if (code in KEY_CODES) KEY_SETTINGS_CALL else null)
 
     private fun extensionOf(mime: String): String = EXTENSIONS[mime] ?: "ogg"
 
     private companion object {
+
+        /** Коды, на которые человеку есть что сделать: ключ. */
+        val KEY_CODES = setOf(401, 403)
+
         const val PATH = "/audio/transcriptions"
 
         const val DEFAULT_BASE_URL = "https://api.groq.com/openai/v1"

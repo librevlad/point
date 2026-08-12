@@ -45,9 +45,9 @@ class LlamaParseAtomRecognizer(
         )
         if (res.code !in 200..299) error(refusal(res.code))
 
-        val json = res.body.asJson() ?: error("$READER: ответ не разобран — пробуем следующий")
+        val json = res.body.asJson() ?: error(com.point.core.flow.UNREADABLE_ANSWER)
         val id = json.optString("id").ifBlank { json.optJSONObject("job")?.optString("id").orEmpty() }
-        return id.ifBlank { error("$READER: задача не создана — пробуем следующий") }
+        return id.ifBlank { error(com.point.core.flow.UNREADABLE_ANSWER) }
     }
 
     private fun configuration(): String = JSONObject()
@@ -63,14 +63,14 @@ class LlamaParseAtomRecognizer(
             if (attempt > 0) delay(POLL_MS)
             val res = http.get("$root/api/v2/parse/$jobId?expand=items", auth)
             if (res.code !in 200..299) error(refusal(res.code))
-            val json = res.body.asJson() ?: error("$READER: ответ не разобран — пробуем следующий")
+            val json = res.body.asJson() ?: error(com.point.core.flow.UNREADABLE_ANSWER)
             when (val status = json.optJSONObject("job")?.optString("status")?.uppercase().orEmpty()) {
                 "COMPLETED", "SUCCESS" -> return json
                 "ERROR", "FAILED", "CANCELLED", "CANCELED" -> {
 
                     val said = json.optJSONObject("job")?.optString("error_message").orEmpty().trim().take(200)
                     error(
-                        if (said.isEmpty()) "$READER: задача не выполнена — пробуем следующий"
+                        if (said.isEmpty()) com.point.core.flow.UNREADABLE_ANSWER
                         else "$READER: задача не выполнена — $said",
                     )
                 }
@@ -149,12 +149,7 @@ class LlamaParseAtomRecognizer(
 
     private fun String.asJson(): JSONObject? = runCatching { JSONObject(this) }.getOrNull()
 
-    private fun refusal(code: Int): String = when (code) {
-        402 -> "$READER: бесплатные кредиты кончились (402) — покупать не идём, пробуем следующий"
-        429 -> "$READER: слишком часто (429) — пробуем следующий"
-        401, 403 -> "$READER: ключ не принят ($code)"
-        else -> "$READER: сервис отказал (код $code) — пробуем следующий"
-    }
+    private fun refusal(code: Int): String = com.point.core.flow.serviceRefusal(code)
 
     private companion object {
         const val READER = "llamaparse"

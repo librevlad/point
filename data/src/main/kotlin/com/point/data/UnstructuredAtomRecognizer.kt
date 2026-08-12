@@ -46,7 +46,7 @@ class UnstructuredAtomRecognizer(
     private fun layerOf(json: String, frame: OutboundFrame): AtomLayer {
 
         val elements = runCatching { JSONArray(json) }.getOrElse {
-            error("$READER: ответ не разобран — пробуем следующий")
+            error(com.point.core.flow.UNREADABLE_ANSWER)
         }
         val atoms = mutableListOf<Atom>()
         val texts = mutableListOf<String>()
@@ -101,12 +101,7 @@ class UnstructuredAtomRecognizer(
         )
     }
 
-    private fun refusal(code: Int): String = when (code) {
-        402 -> "$READER: бесплатный лимит исчерпан (402) — покупать не идём, пробуем следующий"
-        429 -> "$READER: слишком часто (429) — пробуем следующий"
-        401, 403 -> "$READER: ключ не принят ($code)"
-        else -> "$READER: сервис отказал (код $code) — пробуем следующий"
-    }
+    private fun refusal(code: Int): String = com.point.core.flow.serviceRefusal(code)
 
     private companion object {
         const val READER = "unstructured"

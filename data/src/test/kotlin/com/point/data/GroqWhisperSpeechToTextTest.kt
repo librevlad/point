@@ -10,6 +10,7 @@ import com.point.core.model.PointObject
 import com.point.core.model.ScratchRef
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -139,18 +140,20 @@ class GroqWhisperSpeechToTextTest {
 
         val e = runCatching { whisper(http).transcribe(recording("audio/ogg")) }.exceptionOrNull()
 
-        assertTrue(e!!.message!!.contains("слишком часто"))
+        val said = e!!.message!!
+        assertTrue(said, com.point.core.flow.looksLikeQuotaFailure(said))
+        assertFalse("код протокола человеку ни о чём не говорит: $said", said.contains("429"))
     }
 
     @Test
-    fun `403 не выдаёт себя за «ключ не принят» — причина названа осторожно`() = runTest {
+    fun `не пустили — сказано про ключ и куда идти, без кода протокола`() = runTest {
 
         val http = FakeHttpFiles(onPost = { HttpResult(403, "forbidden") })
 
         val e = runCatching { whisper(http).transcribe(recording("audio/ogg")) }.exceptionOrNull()
 
         val said = e!!.message!!
-        assertTrue(said.contains("403"))
-        assertTrue(said.contains("отказал сам сервис"))
+        assertFalse("код протокола человеку ни о чём не говорит: $said", said.contains("403"))
+        assertTrue("сказано, куда идти: $said", said.contains(com.point.core.flow.KEY_SETTINGS_CALL))
     }
 }
