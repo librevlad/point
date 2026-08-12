@@ -12,7 +12,10 @@ class ClipboardSource @Inject constructor(
 ) : ObjectSource {
 
     override val id = "clipboard"
-    override val label = "Буфер обмена"
+    override val label = "Взять из буфера"
+    // У каждой строки есть пояснение — иначе список читается как две разных вещи:
+    // с обещанием и без (#895).
+    override val what = "то, что вы скопировали, станет объектом"
     override val icon = "copy"
 
     override fun isAvailable(context: Context) =

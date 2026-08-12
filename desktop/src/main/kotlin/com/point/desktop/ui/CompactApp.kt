@@ -773,7 +773,12 @@ internal fun CompactList(
         // Приём файла есть и здесь (#727): «и на пк тоже и прием и отправка».
         val awaiting by state.receiving.collectAsState()
         if (awaiting == null) {
-            Station("Принять файл по ссылке", bubbleColor("link"), icon = "link") { onReceiveFile() }
+            Station(
+                "Принять файл по ссылке",
+                bubbleColor("link"),
+                icon = "link",
+                note = "дайте ссылку тому, кто пришлёт вам файл",
+            ) { onReceiveFile() }
         } else {
             awaiting?.let { wait ->
                 Column(
@@ -792,8 +797,19 @@ internal fun CompactList(
                 }
             }
         }
-        Station("Взять то, что в буфере", bubbleColor("copy"), icon = "copy") { onTakeClipboard() }
-        Station("Снять экран целиком", bubbleColor("camera"), icon = "camera") { onGrabScreen() }
+        // Строй названий и пояснения — те же, что на телефоне (#895).
+        Station(
+            "Взять из буфера",
+            bubbleColor("copy"),
+            icon = "copy",
+            note = "то, что вы скопировали, станет объектом",
+        ) { onTakeClipboard() }
+        Station(
+            "Снять экран целиком",
+            bubbleColor("camera"),
+            icon = "camera",
+            note = "снимок всего, что сейчас на экране",
+        ) { onGrabScreen() }
     }
 }
 

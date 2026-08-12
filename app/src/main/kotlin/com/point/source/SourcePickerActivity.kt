@@ -57,6 +57,8 @@ class SourcePickerActivity : ComponentActivity() {
 
     @Inject lateinit var network: com.point.core.flow.NetworkAvailability
 
+    @Inject lateinit var account: com.point.core.flow.AccountStore
+
     private var pending: ObjectSource? = null
 
     private var blocked by mutableStateOf<String?>(null)
@@ -100,10 +102,18 @@ class SourcePickerActivity : ComponentActivity() {
         pending = restoredSource(sources, savedInstanceState?.getString(STATE_SOURCE))
         pending?.restoreState(savedInstanceState?.getString(STATE_SOURCE_STATE))
         blocked = savedInstanceState?.getString(STATE_BLOCKED)
-        val visible = sources.filter { it.isAvailable(this) }.sortedBy { it.label }
+        // Порядок — по пользе, а не по алфавиту (#895). Алфавит держался на том, что все
+        // названия начинались с разных букв; с глагольным строем «Взять…», «Взять…»,
+        // «Записать…» он перестал что-либо значить и просто перемешал список.
+        val visible = sources.filter { it.isAvailable(this) }
+            .sortedBy { com.point.core.flow.sourceOrder(it.id) }
 
         // Про сеть спрашиваем один раз на список, а не у каждого источника (#569, #759).
         val online = runCatching { network.isAvailable() }.getOrDefault(true)
+
+        // Про вход спрашиваем там же, где про сеть: причина стоит до тапа, а не отказом
+        // после него (#897).
+        val signedIn = runCatching { account.current() != null }.getOrDefault(true)
         tileOffer = tileOfferVisible(Build.VERSION.SDK_INT, shadeTileKnown(this))
         setContent {
             PointTheme {
@@ -111,6 +121,7 @@ class SourcePickerActivity : ComponentActivity() {
                     sources = visible,
                     onPick = ::start,
                     online = online,
+                    signedIn = signedIn,
                     blocked = blocked,
                     onOpenSettings = ::openAppSettings,
                     onDismissBlocked = ::finish,
@@ -243,11 +254,14 @@ internal fun SourcePickerScreen(
     tileOffer: Boolean = false,
     onAddTile: () -> Unit = {},
     online: Boolean = true,
+    signedIn: Boolean = true,
 ) {
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background.copy(alpha = 0.88f))
+            // Непрозрачно: сквозь 0.88 просвечивал домашний экран, и его слова налезали
+            // на строки списка — экран выглядел сломанным, а не «поверх» (#895).
+            .background(MaterialTheme.colorScheme.background)
             .systemBarsPadding()
 
             .verticalScroll(rememberScrollState())
@@ -266,7 +280,7 @@ internal fun SourcePickerScreen(
 
                         // Зачем это Point — сказано до системного окна, а не после (#568).
                         // А если сети нет — об этом сказано до тапа, а не отказом после (#759).
-                        subtitle = sourceNote(source, online),
+                        subtitle = sourceNote(source, online, signedIn),
                         onClick = { onPick(source) },
                         icon = bubbleIcon(source.icon),
                         accent = bubbleColor(source.icon),
