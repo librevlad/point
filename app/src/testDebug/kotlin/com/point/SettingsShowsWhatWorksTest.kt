@@ -2,6 +2,8 @@ package com.point
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -106,12 +108,12 @@ class SettingsShowsWhatWorksTest {
         assertEquals(true, forgotten)
     }
 
+    /** Размер человеку считает общее правило ядра (#840): своей копии у настроек нет. */
     @Test fun `размер показан человеку, а не числом байт`() {
-        val threeMegabytes = humanSize(3L * 1024 * 1024)
+        settings(memory = HistoryFootprint(count = 2, bytes = 3L * 1024 * 1024))
 
-        assertTrue(threeMegabytes, threeMegabytes.startsWith("3"))
-        assertFalse("три мегабайта не показываются числом 3145728", threeMegabytes.contains("3145728"))
-        assertTrue(humanSize(512L * 1024).startsWith("512"))
-        assertTrue(humanSize(42).startsWith("42"))
+        compose.onNodeWithText("Что Point помнит").performScrollTo().performClick()
+        compose.onNodeWithText("3", substring = true).performScrollTo().assertIsDisplayed()
+        compose.onAllNodesWithText("3145728", substring = true).assertCountEquals(0)
     }
 }

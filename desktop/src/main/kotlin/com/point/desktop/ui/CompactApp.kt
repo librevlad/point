@@ -77,8 +77,6 @@ fun CompactApp(
     onClipboardTaken: (String) -> Unit = onTextDropped,
 
     /** Человек попросил окно не прятаться: пока просьба в силе, флайаут стоит. */
-    keepOpen: StateFlow<Boolean> = kotlinx.coroutines.flow.MutableStateFlow(false),
-    onKeepOpen: (Boolean) -> Unit = {},
 
     onGrabScreen: (() -> File?)? = null,
 
@@ -183,28 +181,12 @@ fun CompactApp(
     val hotkeys = remember { FocusRequester() }
     LaunchedEffect(Unit) { hotkeys.requestFocus() }
 
-    // Флайаут: потерял фокус — спрятался (alwaysOnTop честен, только пока окно нужно).
-    // Но не посреди жеста: перетаскивание и просьба «не прятать» держат окно на месте.
-    val windowInfo = androidx.compose.ui.platform.LocalWindowInfo.current
-    val cloudAsking by state.cloudAsk.collectAsState()
-    val phoneAsking by state.phoneAsk.collectAsState()
-    val asking = cloudAsking != null || phoneAsking != null
-    val kept by keepOpen.collectAsState()
-    LaunchedEffect(windowInfo.isWindowFocused, dragging, kept, asking) {
-        if (com.point.desktop.flyoutHides(windowInfo.isWindowFocused, dragging, kept, asking)) {
-            kotlinx.coroutines.delay(250)
-            if (
-                com.point.desktop.flyoutHides(
-                    focused = windowInfo.isWindowFocused,
-                    dragging = dragging,
-                    keptOpen = kept,
-                    asking = state.cloudAsk.value != null || state.phoneAsk.value != null,
-                )
-            ) {
-                onHide()
-            }
-        }
-    }
+    // Окно ведёт себя как окно: уход в другое приложение его не закрывает (владелец
+    // 12.08.2026: «сделай десктопное окно нормальным, чтобы не пришлось жать кнопку не
+    // закрывать»). Прежде это был флайаут — потерял фокус и исчез, — и человек, уходивший
+    // за файлом, возвращался к пустому месту. Отсюда же взялась кнопка «Не прятать окно»:
+    // костыль поверх поведения, которого человек не просил. Закрыть можно крестиком в шапке
+    // и клавишей Escape.
     Surface(
         color = MaterialTheme.colorScheme.surface,
         modifier = Modifier.fillMaxSize()
@@ -276,18 +258,6 @@ fun CompactApp(
                     onCancelReceive = onCancelReceive,
                     onSettings = { showSettings = true },
                     onHide = onHide,
-                    keptOpen = kept,
-                    onKeepOpen = {
-                        val wanted = !kept
-                        onKeepOpen(wanted)
-                        state.say(
-                            if (wanted) {
-                                "Окно останется открытым — можно уйти за файлом и принести его мышью"
-                            } else {
-                                "Окно снова прячется, когда вы уходите в другое"
-                            },
-                        )
-                    },
                 )
             }
 
@@ -599,8 +569,6 @@ internal fun CompactList(
     onReceiveFile: () -> Unit = {},
     onCopyReceiveLink: (String) -> Unit = {},
     onCancelReceive: () -> Unit = {},
-    keptOpen: Boolean = false,
-    onKeepOpen: () -> Unit = {},
 ) = Column(modifier) {
     val journal by state.journal.collectAsState()
     val lastContact by state.lastContact.collectAsState()
@@ -711,14 +679,6 @@ internal fun CompactList(
         }
         Station("Взять то, что в буфере", bubbleColor("copy"), icon = "copy") { onTakeClipboard() }
         Station("Снять экран целиком", bubbleColor("camera"), icon = "camera") { onGrabScreen() }
-
-        // Дверь для мыши: окно у трея уходит по потере фокуса, а за файлом человек
-        // уходит в проводник — принести файл нечем, пока окно не попросили остаться (#546).
-        Station(
-            if (keptOpen) "Снова прятать окно, когда ухожу" else "Не прятать окно — принесу файл",
-            bubbleColor("pc"),
-            icon = "pc",
-        ) { onKeepOpen() }
     }
 }
 

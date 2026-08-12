@@ -53,7 +53,9 @@ class CloudReadFitsItselfTest {
         val note = shrunkNote(Fitted(File("x"), was = 3_500_000, now = 700_000, width = 1200, height = 900))
 
         assertTrue(note, note.contains("уменьшенн"))
-        assertTrue("названы обе величины: " + note, note.contains("3,3 МБ") && note.contains("683 КБ"))
+        // Вес считает общее правило обоих устройств (#840). Своя формула компьютера делила
+        // килобайты нацело и говорила «683 КБ» там, где их 683,6, — общая округляет честно.
+        assertTrue("названы обе величины: " + note, note.contains("3,3 МБ") && note.contains("684 КБ"))
     }
 
     @Test
