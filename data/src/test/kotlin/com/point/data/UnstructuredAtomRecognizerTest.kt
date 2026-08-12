@@ -124,20 +124,23 @@ class UnstructuredAtomRecognizerTest {
     }
 
     @Test
-    fun `402 не покупает, а становится отказом`() = runTest {
+    fun `упёрлись в предел — это отказ, а не касса`() = runTest {
         val http = FakeHttpFiles(onPost = { HttpResult(402, "payment required") })
-        val error = runCatching { reader(http).read(pageObject) }.exceptionOrNull()
+        val said = runCatching { reader(http).read(pageObject) }.exceptionOrNull()!!.message!!
 
-        assertTrue(error?.message?.contains("402") == true)
-        assertTrue(error?.message?.contains("покупать не идём") == true)
+        assertTrue(said, com.point.core.flow.looksLikeQuotaFailure(said))
+        assertFalse("код протокола человеку ни о чём не говорит: $said", said.contains("402"))
+        assertFalse("наша кухня: $said", said.contains("покупать"))
     }
 
     @Test
-    fun `429 тоже отказ, а не пустая страница`() = runTest {
+    fun `слишком часто — тоже отказ, а не пустая страница`() = runTest {
         val http = FakeHttpFiles(onPost = { HttpResult(429, "slow down") })
-        val error = runCatching { reader(http).read(pageObject) }.exceptionOrNull()
+        val said = runCatching { reader(http).read(pageObject) }.exceptionOrNull()!!.message!!
 
-        assertTrue(error?.message?.contains("429") == true)
+        assertTrue(said, com.point.core.flow.looksLikeQuotaFailure(said))
+        assertFalse("код протокола человеку ни о чём не говорит: $said", said.contains("429"))
+        assertFalse("наша кухня: $said", said.contains("покупать"))
     }
 
     @Test

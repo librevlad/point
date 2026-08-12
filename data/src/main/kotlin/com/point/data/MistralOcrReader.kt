@@ -56,20 +56,15 @@ class MistralOcrReader(
     private fun textOf(json: String): String {
 
         val answer = runCatching { JSONObject(json) }.getOrElse {
-            error("$READER: ответ не разобран — пробуем следующий")
+            error(com.point.core.flow.UNREADABLE_ANSWER)
         }
-        val pages = answer.optJSONArray("pages") ?: error("$READER: в ответе нет страниц — пробуем следующий")
+        val pages = answer.optJSONArray("pages") ?: error(com.point.core.flow.UNREADABLE_ANSWER)
         return (0 until pages.length())
             .mapNotNull { pages.optJSONObject(it)?.optString("markdown")?.trim()?.ifEmpty { null } }
             .joinToString("\n\n")
     }
 
-    private fun refusal(code: Int): String = when (code) {
-        402 -> "$READER: бесплатный лимит исчерпан (402) — покупать не идём, пробуем следующий"
-        429 -> "$READER: слишком часто (429) — пробуем следующий"
-        401, 403 -> "$READER: ключ не принят ($code)"
-        else -> "$READER: сервис отказал (код $code) — пробуем следующий"
-    }
+    private fun refusal(code: Int): String = com.point.core.flow.serviceRefusal(code)
 
     private fun base64(bytes: ByteArray): String = Base64.getEncoder().encodeToString(bytes)
 

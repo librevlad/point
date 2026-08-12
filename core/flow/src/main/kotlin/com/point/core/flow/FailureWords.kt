@@ -55,4 +55,12 @@ private val NETWORK_FAILURE_HINTS = listOf(
     "timed out", "timeout", "Connection reset", "Broken pipe",
 )
 
-private val QUOTA_FAILURE_HINTS = listOf("(402)", "(429)", "HTTP 402", "HTTP 429", FREE_LIMIT_SPENT)
+/**
+ * Признак «уперлись в бесплатный предел». Первое — объявленное слово, остальное — следы
+ * чужих ответов, которые к нам приходят как есть.
+ *
+ * До #859 признак держался на скобках `(402)` и `(429)`, случайно уцелевших в человеческой
+ * фразе: переписать фразу по-человечески значило молча потерять признак. Теперь фраза одна
+ * и объявлена, а коды остались только для чужих строк.
+ */
+private val QUOTA_FAILURE_HINTS = listOf(FREE_LIMIT_SPENT, FREE_LIMITS_SPENT_TEXT, "(402)", "(429)", "HTTP 402", "HTTP 429")
