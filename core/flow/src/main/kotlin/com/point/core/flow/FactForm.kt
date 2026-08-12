@@ -16,10 +16,19 @@ fun factFits(key: String, value: String): Boolean {
     // Отказ-фраза — не значение ни для какого поля (#656).
     if (startsWithRefusal(text)) return false
 
+    // Форму спрашивают у всех видов знания одинаково (#657, решение владельца): гейт один,
+    // а не по списку избранных полей. Прогон 2026-08-09: номер карты вставал телефоном,
+    // «квитанцію» — трек-номером, товарная строка — адресом; правило существовало, но не
+    // для всех.
+    //
+    // `semanticFits` отвечает `null` там, где жизнь богаче правила, и это по-прежнему значит
+    // «пропустить»: гейт отсекает только явно чужое, а не всё незнакомое.
+    if (semanticFits(key, text) == false) return false
+
     return when (key.removePrefix(META_ENTITY_PREFIX)) {
 
         // Относительное слово и голое время — не дата (#659, #651); дата без цифр — тоже.
-        "date" -> !relativeDayWord(text) && !bareClock(text) && semanticFits(key, text) != false
+        "date" -> !relativeDayWord(text) && !bareClock(text)
 
         // Арифметика и ноль — не сумма документа (#662).
         "amount" -> !looksLikeExpression(text) && !zeroAmount(text)
@@ -27,7 +36,7 @@ fun factFits(key: String, value: String): Boolean {
         // Форма IBAN — не трек: «UA79…» с квитанции становился готовым отслеживанием.
         // Слово — тем более: «квитанцію» и «№ 7 36ір» с кадров прогона вставали трек-номерами
         // и получали готовое «отследить» на пустом месте (#657).
-        "track" -> !looksLikeIban(text) && semanticFits(key, text) != false
+        "track" -> !looksLikeIban(text)
 
         "address" -> plausibleAddress(text)
 
