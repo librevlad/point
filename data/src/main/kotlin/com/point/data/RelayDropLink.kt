@@ -47,6 +47,7 @@ class RelayDropLink(
 
     private companion object {
 
-        const val MAX_DROP_BYTES = 50L * 1024 * 1024
+        // Предел один на оба устройства (#861).
+        val MAX_DROP_BYTES = com.point.core.flow.MAX_DROP_BYTES
     }
 }

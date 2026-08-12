@@ -197,12 +197,7 @@ class TesseractTextRecognizer @Inject constructor(
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeFile(path, bounds)
         if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
-        var sample = 1
-        var edge = maxOf(bounds.outWidth, bounds.outHeight)
-        while (edge / 2 >= maxPx) {
-            edge /= 2
-            sample *= 2
-        }
+        val sample = com.point.core.flow.sampleSizeFor(bounds.outWidth, bounds.outHeight, maxPx)
         val decoded = BitmapFactory.decodeFile(path, BitmapFactory.Options().apply { inSampleSize = sample })
             ?: return null
         val degrees = exifDegrees(path)

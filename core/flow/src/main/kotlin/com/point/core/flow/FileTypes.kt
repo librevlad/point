@@ -37,6 +37,9 @@ private val MIME_BY_EXT: Map<String, String> = mapOf(
     "mp3" to "audio/mpeg",
     "m4a" to "audio/mp4",
     "wav" to "audio/wav",
+    "flac" to "audio/flac",
+    "aac" to "audio/aac",
+    "aiff" to "audio/aiff",
 )
 
 const val UNKNOWN_MIME = "application/octet-stream"
@@ -72,3 +75,12 @@ fun extensionForFile(name: String?, mime: String): String {
 }
 
 private const val MAX_EXT = 5
+
+/**
+ * Расширение записи, которую отдают на расшифровку (#861).
+ *
+ * Телефон брал его из своей таблицы по точному mime, ПК — поиском подстроки; незнакомое
+ * телефон звал `ogg`, а ПК — `audio`. Один и тот же файл уезжал на сервис под разными
+ * именами. Имя тут не украшение: сервис по нему решает, как читать байты.
+ */
+fun audioExtensionFor(mime: String): String = extensionForMime(mime).ifBlank { "ogg" }

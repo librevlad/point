@@ -23,16 +23,8 @@ object Bitmaps {
         return BitmapFactory.decodeFile(path, opts)?.let { uprighted(it, path) }
     }
 
-    fun sampleSize(width: Int, height: Int, maxPx: Int): Int {
-        if (maxPx <= 0) return 1
-        var sample = 1
-        var longEdge = maxOf(width, height)
-        while (longEdge / 2 >= maxPx) {
-            longEdge /= 2
-            sample *= 2
-        }
-        return sample
-    }
+    fun sampleSize(width: Int, height: Int, maxPx: Int): Int =
+        com.point.core.flow.sampleSizeFor(width, height, maxPx)
 
     fun rotationDegrees(orientation: Int): Float = when (orientation) {
         ExifInterface.ORIENTATION_ROTATE_90 -> 90f
