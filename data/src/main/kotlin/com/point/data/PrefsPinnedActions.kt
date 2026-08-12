@@ -20,6 +20,15 @@ class PrefsPinnedActions @Inject constructor(
     override fun pinnedFor(kind: ObjectKind): CapabilityId? =
         runCatching { prefs.getString(kind.name, null)?.let { CapabilityId(it) } }.getOrNull()
 
+    override fun all(): Map<ObjectKind, CapabilityId> = runCatching {
+        prefs.all
+            .mapNotNull { (kind, id) ->
+                val value = (id as? String)?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                ObjectKind.of(kind) to CapabilityId(value)
+            }
+            .toMap()
+    }.getOrDefault(emptyMap())
+
     override suspend fun pin(kind: ObjectKind, id: CapabilityId): Unit = withContext(Dispatchers.IO) {
         prefs.edit().putString(kind.name, id.value).apply()
     }

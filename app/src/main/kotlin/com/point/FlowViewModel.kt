@@ -476,6 +476,10 @@ class FlowViewModel @Inject constructor(
         viewModelScope.launch {
             runCatching { history.clearAll() }
             _recent.value = emptyList()
+
+            // Обзор «Что Point помнит» показывает то же самое хранилище (#821): забыли —
+            // и в настройках сразу видно, что помнить нечего.
+            refreshWhatWorks()
         }
     }
 
@@ -1130,7 +1134,37 @@ class FlowViewModel @Inject constructor(
         }
     }
 
-    fun openKeySettings() = openKeyScreen(errand = null)
+    fun openKeySettings() {
+        openKeyScreen(errand = null)
+        refreshWhatWorks()
+    }
+
+    /**
+     * Что уже работает и негде было увидеть (#821): закрепления, точки входа, память.
+     * Читается при открытии настроек — на первый экран это не влияет.
+     */
+    private fun refreshWhatWorks() {
+        viewModelScope.launch {
+            val lines = runCatching { pins.all() }.getOrDefault(emptyMap())
+                .mapNotNull { (kind, id) ->
+                    val label = runCatching { registry.byId(id).label(ObjectState(kind)) }.getOrNull()
+                        ?: return@mapNotNull null
+                    PinnedLine(kind, com.point.core.ui.kindLabel(kind), label)
+                }
+                .sortedBy { it.kindLabel }
+            val footprint = runCatching { history.footprint() }.getOrNull()
+            _ui.update { it.copy(pinned = lines, memory = footprint) }
+        }
+    }
+
+    /** Открепить прямо из обзора — жест закрепления знать для этого не нужно (#821). */
+    fun unpin(kind: com.point.core.model.ObjectKind) {
+        viewModelScope.launch {
+            runCatching { pins.unpin(kind) }
+            refreshWhatWorks()
+        }
+    }
+
 
     private fun openKeyScreen(errand: KeyErrand?) {
 

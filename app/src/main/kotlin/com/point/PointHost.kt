@@ -94,6 +94,9 @@ fun PointHost(
 
     onToggleCloud: (Boolean) -> Unit = {},
     onToggleYolo: (Boolean) -> Unit = {},
+    onUnpin: (com.point.core.model.ObjectKind) -> Unit = {},
+    onForgetAll: () -> Unit = {},
+    tileAdded: Boolean = false,
 
     onOpenUrl: (String) -> Unit = {},
     onConfirmCloud: () -> Unit = {},
@@ -221,6 +224,12 @@ fun PointHost(
                 onToggleCloud = onToggleCloud,
                 yoloEnabled = state.yoloEnabled,
                 onToggleYolo = onToggleYolo,
+                pinned = state.pinned,
+                onUnpin = onUnpin,
+                tileAdded = tileAdded,
+                memory = state.memory,
+                onForgetAll = onForgetAll,
+                version = BuildConfig.VERSION_NAME,
                 onOpenUrl = onOpenUrl,
                 onOpenDevices = onOpenDevices,
             )

@@ -113,6 +113,13 @@ fun KeyScreen(
     onOpenUrl: (String) -> Unit = {},
 
     onOpenDevices: () -> Unit = {},
+
+    pinned: List<PinnedLine> = emptyList(),
+    onUnpin: (com.point.core.model.ObjectKind) -> Unit = {},
+    tileAdded: Boolean = false,
+    memory: com.point.core.flow.HistoryFootprint? = null,
+    onForgetAll: () -> Unit = {},
+    version: String = "",
     modifier: Modifier = Modifier,
 ) {
 
@@ -152,6 +159,10 @@ fun KeyScreen(
                     onToggleSound = onToggleSound,
                     onOpen = { section = it },
                     onOpenDevices = onOpenDevices,
+                    pinnedCount = pinned.size,
+                    tileAdded = tileAdded,
+                    memory = memory,
+                    version = version,
                 )
 
                 SettingsSection.KEY -> KeySection(
@@ -187,6 +198,23 @@ fun KeyScreen(
                     onToggleSound = onToggleSound,
                     onBack = { section = null },
                 )
+
+                SettingsSection.PINS -> PinsSection(
+                    pinned = pinned,
+                    onUnpin = onUnpin,
+                    onBack = { section = null },
+                )
+
+                SettingsSection.ENTRIES -> EntriesSection(
+                    tileAdded = tileAdded,
+                    onBack = { section = null },
+                )
+
+                SettingsSection.MEMORY -> MemorySection(
+                    memory = memory,
+                    onForgetAll = onForgetAll,
+                    onBack = { section = null },
+                )
             }
         }
 
@@ -202,7 +230,7 @@ fun KeyScreen(
     }
 }
 
-private enum class SettingsSection { KEY, PRIVACY, APP }
+private enum class SettingsSection { KEY, PRIVACY, APP, PINS, ENTRIES, MEMORY }
 
 @Composable
 private fun SettingsList(
@@ -214,6 +242,10 @@ private fun SettingsList(
     onToggleSound: (Boolean) -> Unit,
     onOpen: (SettingsSection) -> Unit,
     onOpenDevices: () -> Unit,
+    pinnedCount: Int,
+    tileAdded: Boolean,
+    memory: com.point.core.flow.HistoryFootprint?,
+    version: String,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(GroupGap)) {
 
@@ -256,6 +288,41 @@ private fun SettingsList(
                 onClick = { onOpen(SettingsSection.APP) },
                 appearIndex = 3,
                 trailing = { Switch(checked = soundEnabled, onCheckedChange = onToggleSound) },
+            )
+            GroupSeam()
+
+            // Четыре обзора того, что уже работает и негде было увидеть (#821): жест
+            // закрепления есть, а списка закреплённого нет; плитка бывает, а знать о ней
+            // неоткуда; копии объектов лежат на диске молча; версию спрашивает первый же
+            // тестер.
+            SettingsRow(
+                title = PINS_TITLE,
+                subtitle = pinnedLine(pinnedCount),
+                onClick = { onOpen(SettingsSection.PINS) },
+                appearIndex = 4,
+            )
+            GroupSeam()
+            SettingsRow(
+                title = ENTRIES_TITLE,
+                subtitle = entriesLine(tileAdded),
+                onClick = { onOpen(SettingsSection.ENTRIES) },
+                appearIndex = 5,
+            )
+            GroupSeam()
+            SettingsRow(
+                title = MEMORY_TITLE,
+                subtitle = memoryLine(memory),
+                onClick = { onOpen(SettingsSection.MEMORY) },
+                appearIndex = 6,
+            )
+        }
+
+        if (version.isNotBlank()) {
+            Text(
+                "Point $version",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 14.dp),
             )
         }
     }
@@ -662,6 +729,110 @@ private fun PrivacySection(
     }
 }
 
+/** Обзор закреплённого: увидеть и снять, не вспоминая жеста (#821). */
+@Composable
+private fun PinsSection(
+    pinned: List<PinnedLine>,
+    onUnpin: (com.point.core.model.ObjectKind) -> Unit,
+    onBack: () -> Unit,
+) {
+    BackToList(onBack)
+    ScreenHeader(title = PINS_TITLE, modifier = Modifier.padding(bottom = 9.dp))
+
+    if (pinned.isEmpty()) {
+        Text(
+            "Пока ничего не закреплено. $PIN_GESTURE",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        return
+    }
+    Text(
+        PIN_GESTURE,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    pinned.forEachIndexed { index, line ->
+        PortalRow(
+            title = line.kindLabel,
+            subtitle = line.actionLabel,
+            onClick = { onUnpin(line.kind) },
+            chevron = false,
+            appearIndex = index,
+            trailing = {
+                Text(
+                    "Открепить",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            },
+        )
+    }
+}
+
+/** Откуда Point открывается — про плитку человек мог не знать вовсе (#821). */
+@Composable
+private fun EntriesSection(tileAdded: Boolean, onBack: () -> Unit) {
+    BackToList(onBack)
+    ScreenHeader(title = ENTRIES_TITLE, modifier = Modifier.padding(bottom = 9.dp))
+
+    listOf(SHARE_ENTRY, if (tileAdded) TILE_ENTRY_ON else TILE_ENTRY_OFF).forEach {
+        Text(
+            it,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 6.dp),
+        )
+    }
+}
+
+/** Сколько объектов Point помнит, сколько это занимает и как забыть (#821). */
+@Composable
+private fun MemorySection(
+    memory: com.point.core.flow.HistoryFootprint?,
+    onForgetAll: () -> Unit,
+    onBack: () -> Unit,
+) {
+    BackToList(onBack)
+    ScreenHeader(title = MEMORY_TITLE, modifier = Modifier.padding(bottom = 9.dp))
+
+    Text(
+        memoryLine(memory),
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.onSurface,
+    )
+    listOf(MEMORY_WHAT, DROP_LINKS_LIVE).forEach {
+        Text(
+            it,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 6.dp),
+        )
+    }
+
+    var asking by rememberSaveable { mutableStateOf(false) }
+    if (asking) {
+        Text(
+            CLEAR_RECENT_WHAT,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 10.dp),
+        )
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TextButton(onClick = { asking = false }) {
+                Text("Отмена", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            TextButton(onClick = { asking = false; onForgetAll() }) {
+                Text(CLEAR_RECENT_CONFIRM, color = MaterialTheme.colorScheme.error)
+            }
+        }
+    } else {
+        TextButton(onClick = { asking = true }, modifier = Modifier.padding(top = 8.dp)) {
+            Text(FORGET_ALL, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
 @Composable
 private fun AppSection(
     soundEnabled: Boolean,
@@ -686,6 +857,46 @@ private const val KEY_SECTION_TITLE = "Ключи AI"
 private const val PRIVACY_SECTION_TITLE = "Отправка и приватность"
 private const val APP_SECTION_TITLE = "Приложение"
 private const val SOUND_TITLE = "Звук действий"
+
+private const val PINS_TITLE = "Закреплённые действия"
+private const val ENTRIES_TITLE = "Точки входа"
+private const val MEMORY_TITLE = "Что Point помнит"
+
+private const val PIN_GESTURE = "Закрепляется долгим нажатием на действие."
+
+private const val SHARE_ENTRY = "Системное «Поделиться» — Point принимает объект из любого приложения."
+private const val TILE_ENTRY_ON = "Плитка в шторке — Point открывается одним касанием сверху."
+private const val TILE_ENTRY_OFF = "Плитку в шторке можно добавить из «Нового объекта»."
+
+private const val MEMORY_WHAT =
+    "Point держит последние ${com.point.core.flow.HistoryFootprint.KEPT} объектов — копии " +
+        "лежат на телефоне, чтобы «Недавнее» открывалось без исходника. Старое забывается само."
+
+private const val DROP_LINKS_LIVE = "Ссылки, которыми вы делились через сервер, перестают действовать через сутки."
+
+private const val FORGET_ALL = "Забыть всё"
+
+private fun pinnedLine(count: Int): String =
+    if (count == 0) "Пока ничего не закреплено. $PIN_GESTURE" else "Закреплено действий: $count"
+
+private fun entriesLine(tileAdded: Boolean): String =
+    if (tileAdded) "Системное «Поделиться» и плитка в шторке" else "Системное «Поделиться»"
+
+private fun memoryLine(memory: com.point.core.flow.HistoryFootprint?): String = when {
+    memory == null -> MEMORY_TITLE_UNKNOWN
+    memory.count == 0 -> "Пока ничего не сохранено"
+    else -> "Объектов: ${memory.count} · ${humanSize(memory.bytes)}"
+}
+
+private const val MEMORY_TITLE_UNKNOWN = "Сколько занято — сейчас посчитаем"
+
+/** Размер человеку, а не в байтах: «12,4 МБ» вместо 13 002 342. */
+internal fun humanSize(bytes: Long): String = when {
+    bytes < 1_024 -> "$bytes Б"
+    bytes < 1_024 * 1_024 -> "${bytes / 1_024} КБ"
+    bytes < 10L * 1_024 * 1_024 -> String.format(java.util.Locale.getDefault(), "%.1f МБ", bytes / (1_024f * 1_024f))
+    else -> "${bytes / (1_024 * 1_024)} МБ"
+}
 
 
 private class KeyDraft(saved: UserAiKey) {
