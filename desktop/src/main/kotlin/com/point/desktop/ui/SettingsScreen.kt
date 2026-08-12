@@ -34,7 +34,6 @@ import com.point.core.flow.UserAiConfig
 import com.point.core.flow.keyVerdict
 import com.point.core.flow.looksLikeApiKey
 import com.point.desktop.AiConfig
-import com.point.desktop.DesktopAiKeyCheck
 import com.point.desktop.PcConfig
 import kotlinx.coroutines.launch
 
@@ -45,8 +44,12 @@ fun SettingsScreen(
     onSweepNow: () -> Unit,
     onClose: () -> Unit,
 
-    /** Проверка ключа — та же, что на телефоне (#610). */
-    keyCheck: com.point.core.flow.AiKeyCheck = DesktopAiKeyCheck(),
+    /**
+     * Проверка ключа — буквально та же, что на телефоне (#610, #828): общий
+     * `HttpAiKeyCheck` из ядра вместо своей копии на компьютере.
+     */
+    keyCheck: com.point.core.flow.AiKeyCheck =
+        com.point.core.flow.HttpAiKeyCheck(com.point.core.flow.UrlConnectionHttpJson()),
     onOpenUrl: (String) -> Unit = {},
 ) {
     var name by remember { mutableStateOf(config.name) }
