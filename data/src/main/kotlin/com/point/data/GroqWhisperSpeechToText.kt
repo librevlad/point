@@ -32,7 +32,7 @@ class GroqWhisperSpeechToText(
         if (key.isBlank()) error("Whisper не настроен — нужен ключ Groq. $KEY_SETTINGS_CALL")
 
         val mime = modelReadableAudio(obj.mime, obj.metadata["name"])
-            ?: error("Этот формат записи модель не читает — подойдут ogg, mp3, m4a, wav, flac")
+            ?: error("Этот формат записи не читается — подойдут ogg, mp3, m4a, wav, flac")
 
         val file = File(obj.uri.value)
         val bytes = file.length()

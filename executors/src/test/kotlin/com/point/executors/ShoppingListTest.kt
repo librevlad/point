@@ -69,6 +69,6 @@ class ShoppingListTest {
 
         val heard = stagesHeard { ShoppingListRealizer(llm).perform(obj, null) }
 
-        assertEquals(listOf("Модель собирает список"), heard)
+        assertEquals(listOf("Собираю список"), heard)
     }
 }

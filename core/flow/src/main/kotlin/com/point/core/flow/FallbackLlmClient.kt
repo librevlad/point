@@ -71,7 +71,7 @@ class FallbackLlmClient(
             } else {
                 "с поддержкой изображений"
             }
-            error("Для этого объекта нет подходящей AI-модели — $AI_KEY_HINT $needed")
+            error("Такой объект прочитать нечем — $AI_KEY_HINT $needed")
         }
         error(summarise(errors))
     }
@@ -84,16 +84,16 @@ class FallbackLlmClient(
         // Живая охота 11.08.2026: на экране всплывало «AI недоступен». Весь остальной
         // Point говорит про модель и чтение, а не аббревиатурой — человеку она ничего
         // не объясняет.
-        else -> "Модель недоступна — " +
+        else -> "Прочитать не вышло — " +
             errors.map { it.substringBefore('\n').take(120) }.distinct().take(2).joinToString("; ")
     }
 
     companion object {
 
         /** Одна формулировка на всех, кто её показывает и проверяет. */
-        const val NO_NETWORK_MESSAGE = "Модель недоступна — нет подключения к интернету"
+        const val NO_NETWORK_MESSAGE = "Нет интернета — прочитать не получится"
 
         /** Та же, что у облачного чтения: человеку без разницы, кто именно упёрся в лимит. */
-        const val FREE_LIMITS_SPENT = "Бесплатные лимиты чтения исчерпаны — вернитесь позже, платить не идём"
+        const val FREE_LIMITS_SPENT = FREE_LIMITS_SPENT_TEXT
     }
 }

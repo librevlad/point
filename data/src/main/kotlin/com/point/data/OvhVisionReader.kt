@@ -87,8 +87,7 @@ class OvhVisionReader(
         const val DEFAULT_BASE_URL = "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1"
         const val DEFAULT_MODEL = "Qwen2.5-VL-72B-Instruct"
 
-        const val PROMPT =
-            "Извлеки весь текст с изображения дословно, сохраняя порядок строк. " +
-                "Таблицы оформи в Markdown. Верни только текст, без комментариев."
+        /** Та же просьба, что у всех остальных путей чтения (#840). */
+        val PROMPT: String = com.point.core.flow.CLOUD_READING_PROMPT
     }
 }

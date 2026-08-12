@@ -69,9 +69,9 @@ class CloudDestinationTest {
     }
 
     @Test
-    fun `без известного имени остаётся честное умолчание про AI-провайдера`() {
+    fun `без известного имени остаётся честное умолчание про чужой сервер`() {
         val text = cloudDestination(CapabilityId("ai"))
-        assertTrue(text, text.contains("AI-провайдера"))
+        assertTrue(text, text.contains("чужой сервер"))
     }
 
     @Test

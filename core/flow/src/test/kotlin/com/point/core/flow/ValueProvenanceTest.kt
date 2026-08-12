@@ -43,7 +43,7 @@ class ValueProvenanceTest {
     fun `каждое происхождение подписано своим словом`() {
         assertEquals("прочитано", provenanceLabel(Provenance.OCR))
         assertEquals("выведено правилом", provenanceLabel(Provenance.RULE))
-        assertEquals("прочитано моделью", provenanceLabel(Provenance.MODEL))
+        assertEquals("понято по смыслу", provenanceLabel(Provenance.MODEL))
         assertEquals("подтверждено вами", provenanceLabel(Provenance.HUMAN))
     }
 
@@ -127,14 +127,14 @@ class ValueProvenanceTest {
     }
 
     @Test
-    fun `происхождение и сомнение — разные вещи, и «прочитано моделью» не значит «возможно»`() {
+    fun `происхождение и сомнение — разные вещи, и «понято по смыслу» не значит «возможно»`() {
 
         val role = facts(
             META_GRAPH_ROLE_PREFIX + "carrier" to "Нова Пошта",
             META_GRAPH_ROLE_PREFIX + "carrier" + META_SOURCE_SUFFIX to Provenance.MODEL.wire,
         )
 
-        assertEquals("прочитано моделью", provenanceLabel(provenanceOf(role, META_GRAPH_ROLE_PREFIX + "carrier")))
+        assertEquals("понято по смыслу", provenanceLabel(provenanceOf(role, META_GRAPH_ROLE_PREFIX + "carrier")))
         assertFalse("«возможно» не наследуется от происхождения", isDoubtful(role))
     }
 

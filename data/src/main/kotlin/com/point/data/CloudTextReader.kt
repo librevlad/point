@@ -81,8 +81,9 @@ class DefaultExternalEye @Inject constructor(
         const val NOT_CONFIGURED =
             "Чтение снаружи не настроено — задайте бесплатный ключ Mistral (см. настройки)"
 
-        const val DEVICE_ONLY =
-            "Наружу сейчас не отправляем — это меняется в настройках"
+        /** Общие слова отказа по режиму (#840): своей копии у читателя нет. */
+        val DEVICE_ONLY: String =
+            com.point.core.flow.chainClosedBy(com.point.core.flow.PrivacyLevel.DEVICE_ONLY)
 
         const val STRICT_LEVEL_EMPTY =
             "Читателей, обещавших не учиться на присланном, сейчас нет — смягчите настройку «Куда можно отправлять»"

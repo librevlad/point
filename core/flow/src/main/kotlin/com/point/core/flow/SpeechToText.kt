@@ -56,7 +56,7 @@ private const val TEXT_MARKER = "РАСШИФРОВКА:"
 
 fun parseTranscription(raw: String): Transcription {
     val answer = raw.trim()
-    if (answer.startsWith(NO_AUDIO_MARKER)) error("Модель не получила запись — расшифровать нечего")
+    if (answer.startsWith(NO_AUDIO_MARKER)) error("Запись не дошла — расшифровывать нечего")
     if (answer.startsWith(NO_SPEECH_MARKER)) return Transcription.Silence
     if (answer.isBlank()) return Transcription.Silence
 

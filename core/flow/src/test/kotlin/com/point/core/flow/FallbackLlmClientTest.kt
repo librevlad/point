@@ -63,7 +63,7 @@ class FallbackLlmClientTest {
             List(8) { failing("""Unable to resolve host "api.groq.com": No address associated with hostname""") },
         )
         val error = runCatching { client.run(obj, "hi") }.exceptionOrNull()
-        assertTrue(error?.message?.contains("нет подключения к интернету") == true)
+        assertTrue(error?.message?.contains("Нет интернета") == true)
         assertFalse(error?.message?.contains("resolve host") == true)
     }
 
@@ -72,15 +72,15 @@ class FallbackLlmClientTest {
 
         val client = chain(
             listOf(
-                failing("openrouter: бесплатный лимит исчерпан — вернитесь позже, платить не идём"),
+                failing("openrouter: бесплатное чтение на сегодня закончилось — попробуйте завтра"),
                 failing("Gemini HTTP 429"),
             ),
         )
 
         val error = runCatching { client.run(obj, "hi") }.exceptionOrNull()
 
-        assertTrue(error?.message, error?.message?.contains("вернитесь позже") == true)
-        assertTrue(error?.message, error?.message?.contains("платить не идём") == true)
+        assertTrue(error?.message, error?.message?.contains("попробуйте завтра") == true)
+        assertFalse("нашей кухни в отказе быть не должно", error?.message?.contains("платить") == true)
         assertFalse(error?.message, error?.message?.contains("HTTP") == true)
     }
 
@@ -106,7 +106,7 @@ class FallbackLlmClientTest {
     @Test
     fun `an image with only text-only providers gives a clear no-model error, not a false answer`() = runTest {
         val error = runCatching { chain(listOf(textOnly())).run(image, "опиши") }.exceptionOrNull()
-        assertTrue(error?.message?.contains("нет подходящей AI-модели") == true)
+        assertTrue(error?.message?.contains("прочитать нечем") == true)
     }
 
     private fun strong(tag: String) = object : LlmClient {

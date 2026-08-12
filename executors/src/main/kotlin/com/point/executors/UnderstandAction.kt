@@ -277,7 +277,7 @@ class UnderstandRealizer @Inject constructor(
                 // контрольной суммой. Модель, которая ВИДИТ кадр и при этом ссылается на
                 // слова страницы, даёт и то, и другое.
                 val eyes = input.state.kind == ObjectKind.IMAGE && llm.canHandle(input)
-                reportStage(if (eyes) "Смотрю на снимок" else "Отправляю страницу модели")
+                reportStage(if (eyes) "Смотрю на снимок" else "Читаю страницу")
                 val answer = ask(input, understandPrompt(laidOut, index = index), eyes = eyes)
                 reportStage("Проверяю прочитанное по странице")
                 val parsed = parseFieldCandidates(answer)

@@ -233,7 +233,7 @@ private fun PreviewBusyPortalNetwork() = PointTheme(darkTheme = true) {
     BusyPortal(
         title = "Распознаём текст…",
         subtitle = "Это займёт несколько секунд",
-        steps = listOf("Отправляю в облако…", "Модель обрабатывает запрос…", "Собираю ответ…"),
+        steps = listOf("Отправляю в облако…", "Читаю…", "Собираю ответ…"),
         activeStep = 1,
     )
 }
