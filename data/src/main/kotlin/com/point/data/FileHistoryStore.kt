@@ -2,6 +2,7 @@ package com.point.data
 
 import com.point.core.flow.HistoryFootprint
 import com.point.core.flow.HistoryStore
+import com.point.core.flow.extensionForFile
 import com.point.core.flow.META_CLOUD_ATOMS_REF
 import com.point.core.flow.META_ENTITY_PREFIX
 import com.point.core.flow.META_OCR_ATOMS_REF
@@ -38,7 +39,7 @@ class FileHistoryStore @Inject constructor(
         val source = File(obj.uri.value)
         if (!source.exists()) return@withContext
         val name = obj.metadata["name"]
-        val ext = extensionFor(name, obj.mime)
+        val ext = extensionForFile(name, obj.mime)
         val dest = File(dir, if (ext.isBlank()) obj.id else "${obj.id}.$ext")
         mutex.withLock {
             source.inputStream().use { input -> dest.outputStream().use { input.copyTo(it) } }
@@ -240,26 +241,10 @@ class FileHistoryStore @Inject constructor(
             ?.mapKeys { META_ENTITY_PREFIX + it.key }
             ?: emptyMap()
 
-    private fun extensionFor(name: String?, mime: String): String {
-        val fromName = name?.substringAfterLast('.', "")?.lowercase().orEmpty()
-        if (fromName.isNotBlank() && fromName.length <= MAX_EXT && fromName.all { it.isLetterOrDigit() }) {
-            return fromName
-        }
-        return when {
-            mime.startsWith("image/") -> mime.substringAfter('/').substringBefore('+')
-            mime == "application/pdf" -> "pdf"
-            mime == "text/markdown" -> "md"
-            mime.startsWith("text/") -> "txt"
-            mime == "application/zip" -> "zip"
-            else -> ""
-        }
-    }
-
     private companion object {
 
         const val MAX_ENTRIES = 50
 
-        const val MAX_EXT = 5
 
         val REF_KEYS = setOf(META_OCR_TEXT_REF, META_OCR_ATOMS_REF, META_CLOUD_ATOMS_REF)
     }
