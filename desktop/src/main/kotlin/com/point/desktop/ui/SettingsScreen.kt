@@ -96,7 +96,7 @@ fun SettingsRoot(
             // §11: объект уходит с устройства только по живому согласию (#886).
             PortalRow(
                 title = "Отправка и приватность",
-                subtitle = cloudLine(cloudAllowed),
+                subtitle = cloudLine(cloudAllowed) + " · " + config.privacy.title,
                 onClick = { onOpen(SettingsPage.PRIVACY) },
             )
         }
@@ -195,11 +195,30 @@ internal fun cloudLine(allowed: Boolean): String =
  * а не умолчанием.
  */
 @Composable
-fun SettingsPrivacy(allowed: Boolean, onRevoke: () -> Unit) {
+fun SettingsPrivacy(
+    allowed: Boolean,
+    level: com.point.core.flow.PrivacyLevel,
+    onRevoke: () -> Unit,
+    onPickLevel: (com.point.core.flow.PrivacyLevel) -> Unit,
+) {
     Column(
         modifier = Modifier.fillMaxWidth().widthIn(max = 560.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        // Те же три режима и те же слова, что на телефоне (#893). Раньше выбор человека
+        // сюда просто не доезжал: «только на этом устройстве» на компьютере не значило
+        // ничего, и запись всё равно уходила на чужой сервер.
+        Text(com.point.core.flow.PRIVACY_SETTING_TITLE.uppercase(), style = PointType.label)
+        Text(com.point.core.flow.PRIVACY_SETTING_HINT, style = PointType.small)
+        com.point.core.flow.PrivacyLevel.entries.forEach { it ->
+            PortalRow(
+                title = it.title,
+                subtitle = it.what,
+                onClick = { onPickLevel(it) },
+                primary = it == level,
+            )
+        }
+
         Text("Показывать объект моделям", style = PointType.body)
         Text(
             if (allowed) {

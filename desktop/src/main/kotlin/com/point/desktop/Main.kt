@@ -179,6 +179,9 @@ fun main(args: Array<String>) {
         reopenPath = { path -> File(path).takeIf(File::isFile)?.let { inbox.addFile(it.absolutePath) } },
         consent = FileConsent(File(pointDir, "consent")),
 
+        // Режим спрашивается на каждом действии, как и звук: поменяли — подействовало сразу.
+        privacyLevel = { FilePcConfig(pointDir).load().privacy },
+
         // «Скинули с телефона — высветилась часть окна»: своя плашка, не системное
         // уведомление. Готовое здесь (PDF, скачанное) объявляется тем же путём.
         announce = { item, source ->

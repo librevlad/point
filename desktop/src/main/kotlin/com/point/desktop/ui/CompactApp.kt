@@ -893,12 +893,17 @@ private fun CompactSettings(
 
             SettingsPage.KEYS -> SettingsKeys(config = config, onSave = onSave)
 
-            SettingsPage.PRIVACY -> SettingsPrivacy(allowed = cloudAllowed) {
-                scope.launch {
-                    state.consent?.revoke(com.point.core.flow.CloudScope.MODELS)
-                    cloudAllowed = false
-                }
-            }
+            SettingsPage.PRIVACY -> SettingsPrivacy(
+                allowed = cloudAllowed,
+                level = config.privacy,
+                onRevoke = {
+                    scope.launch {
+                        state.consent?.revoke(com.point.core.flow.CloudScope.MODELS)
+                        cloudAllowed = false
+                    }
+                },
+                onPickLevel = { onSave(config.copy(privacy = it)) },
+            )
 
             SettingsPage.DATA -> SettingsData(swept = swept) { swept = null; onSweepNow() }
         }

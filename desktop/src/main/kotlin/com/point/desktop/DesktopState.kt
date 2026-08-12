@@ -39,6 +39,10 @@ class DesktopState(
 
     internal val consent: com.point.core.flow.PrivacyConsent? = null,
 
+    /** Выбранный человеком режим отправки: спрашивается у настроек, а не помнится копией. */
+    private val privacyLevel: () -> com.point.core.flow.PrivacyLevel =
+        { com.point.core.flow.PrivacyLevel.DEFAULT },
+
     /** Прибытие объявляется наружу (peek-плашка): и с телефона, и готовое здесь. */
     private val announce: (InboxItem, ObjectSource) -> Unit = { _, _ -> },
 
@@ -478,6 +482,14 @@ class DesktopState(
         work = scope.launch(Dispatchers.IO) {
             val guard = consent
             if (guard != null && resolver.leavesDevice(bubble.capabilityId)) {
+                // Выбранный человеком режим спрашивается ДО согласия: если он сказал
+                // «только на этом устройстве», спрашивать «отправить?» уже поздно и
+                // нечестно — объект туда не поедет в любом случае (#893).
+                val level = privacyLevel()
+                if (!com.point.core.flow.allowedAt(level, com.point.core.flow.AI_CHAIN_PRIVACY)) {
+                    _message.value = com.point.core.flow.chainClosedBy(level)
+                    return@launch
+                }
                 val needed = com.point.core.flow.cloudScopeOf(bubble.capabilityId)
                 val ok = runCatching { guard.allowed(needed) }.getOrDefault(false)
                 if (!ok) {
