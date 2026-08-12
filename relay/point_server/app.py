@@ -165,6 +165,30 @@ def _geo_point(text: str) -> str | None:
     return body if GEO_SHAPED.match(body) else None
 
 
+def _weight(size: int) -> str:
+    """Вес человеческими словами: «4,2 МБ» вместо 4404019."""
+    if size < 1024:
+        return "%d Б" % size
+    if size < 1024 * 1024:
+        return "%d КБ" % round(size / 1024)
+    return ("%.1f МБ" % (size / (1024 * 1024))).replace(".", ",")
+
+
+def _kind_word(mime: str, name: str) -> str:
+    """Чем названо присланное на странице отдачи: PDF, архив, документ, файл."""
+    base = (mime or "").split(";")[0].strip().lower()
+    tail = name.rsplit(".", 1)[-1].lower() if "." in name else ""
+    if base == "application/pdf" or tail == "pdf":
+        return "PDF"
+    if base in ("application/zip", "application/x-7z-compressed", "application/vnd.rar") or tail in ("zip", "rar", "7z"):
+        return "Архив"
+    if tail in ("doc", "docx", "xls", "xlsx", "ppt", "pptx"):
+        return "Документ"
+    if base.startswith("video/"):
+        return "Видео"
+    return "Файл"
+
+
 def _readable_text(mime: str, data: bytes) -> bool:
     """
     Присланное можно прочитать глазами прямо на странице.
@@ -673,6 +697,20 @@ def create_app(
 
             return HTMLResponse(pages.drop_text_page(name, text, here))
 
+        # Снимок видно, запись слышно, файл хотя бы называет себя (#883). Раньше всё, кроме
+        # текста, контакта и места, браузер молча качал: человек не знал ни что ему прислали,
+        # ни сколько это весит, ни до когда живёт ссылка. `?raw=1` отдаёт сам файл.
+        base = (mime or "").split(";")[0].strip().lower()
+        here = "/d/" + drop_id + "?raw=1"
+        if not raw and base.startswith("image/"):
+            return HTMLResponse(pages.drop_image_page(name, here, _weight(len(data))))
+        if not raw and base.startswith("audio/"):
+            return HTMLResponse(pages.drop_audio_page(name, here, mime, _weight(len(data))))
+        if not raw:
+            return HTMLResponse(
+                pages.drop_file_page(name, here, _kind_word(mime, name), _weight(len(data)))
+            )
+
         quoted = urllib.parse.quote(name)
         return Response(data, media_type=mime,
                         headers={"Content-Disposition": "attachment; filename*=UTF-8''" + quoted})
@@ -697,7 +735,7 @@ def create_app(
         if not mailbox.inbox_find(_blobs_root(d), box_id):
             return HTMLResponse(pages.link_gone_page(), status_code=404)
         return HTMLResponse(
-            pages.page("Отправить файл", _upload_form(box_id), head=upload_page.UPLOAD_HEAD)
+            pages.page("Отправить в Point", _upload_form(box_id), head=upload_page.UPLOAD_HEAD)
         )
 
     @app.post("/u/{box_id}")
@@ -706,14 +744,22 @@ def create_app(
         if not box:
             return HTMLResponse(pages.link_gone_page(), status_code=404)
         form = await request.form()
+
+        # Ссылку чаще всего дают ради куска текста — адреса, номера заказа, обрывка
+        # переписки (#883). Он приходит текстом, а не выдуманным файлом: на той стороне
+        # Point получает обычный текстовый объект.
         item = form.get("file")
+        typed = (form.get("text") or "").strip() if isinstance(form.get("text"), str) else ""
+        if item is None and not typed:
+            return HTMLResponse(pages.nothing_to_send_page(), status_code=400)
         if item is None:
-            return HTMLResponse(pages.too_big_page("Файл не выбран — вернитесь и выберите его."),
-                                status_code=400)
-        data = await item.read()
+            data, name, mime = typed.encode("utf-8"), "Текст", "text/plain; charset=utf-8"
+        else:
+            data = await item.read()
+            name = getattr(item, "filename", "file") or "file"
+            mime = getattr(item, "content_type", "") or "application/octet-stream"
         try:
-            mailbox.inbox_accept(box, data, getattr(item, "filename", "file") or "file",
-                                 getattr(item, "content_type", "") or "application/octet-stream")
+            mailbox.inbox_accept(box, data, name, mime)
         except mailbox.Full as e:
             return HTMLResponse(pages.too_big_page(str(e)), status_code=507)
         return HTMLResponse(pages.sent_page())
