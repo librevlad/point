@@ -150,8 +150,19 @@ class SignInScreensTest {
 
         compose.onNodeWithText("Pixel 8").assertExists()
 
-        compose.onNodeWithText("это устройство · Телефон · на связи").assertExists()
-        compose.onNodeWithText("Компьютер · вчера").assertExists()
+        // У своего устройства время последней связи не спрашивают: оно здесь, в руках (#891).
+        compose.onNodeWithText(
+            com.point.core.flow.deviceLine(
+                CircleDevice("d1", DeviceKind.PHONE, "Pixel 8", NOW - 20_000, self = true),
+                NOW,
+            ),
+        ).assertExists()
+        compose.onNodeWithText(
+            com.point.core.flow.deviceLine(
+                CircleDevice("d2", DeviceKind.PC, "Рабочий ноутбук", NOW - 30 * 60 * 60_000L),
+                NOW,
+            ),
+        ).assertExists()
     }
 
     @Test fun `«Отключить» отключает именно то устройство, на строке которого нажали`() {

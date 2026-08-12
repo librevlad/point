@@ -53,7 +53,15 @@ fun SignInPane(
             modifier = Modifier.width(560.dp),
         )
         when (state) {
-            SignIn.SignedOut -> GlowAction(SIGN_IN_ACTION, onSignIn)
+            SignIn.SignedOut -> {
+                Text(
+                    com.point.core.flow.SIGN_IN_WHY,
+                    style = PointType.small,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.width(460.dp),
+                )
+                GlowAction(SIGN_IN_ACTION, onSignIn)
+            }
 
             is SignIn.Waiting -> {
                 Text(signInWaitingLine(state.code), style = PointType.body)
@@ -117,22 +125,17 @@ fun MyDevicesPane(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Box(
-                    Modifier.size(8.dp).background(
-                        if (device.kind == DeviceKind.PC) PointColors.cyan else PointColors.violet,
-                        CircleShape,
-                    ),
+                // Значок вида, а не цветная точка: точка ничего не называет, и человеку
+                // приходилось догадываться, что голубая — компьютер (#891). Значки —
+                // из общей с телефоном таблицы.
+                PortalPlate(
+                    accent = com.point.core.ui.bubbleColor(com.point.core.flow.deviceIconKey(device.kind)),
+                    icon = com.point.core.ui.bubbleIcon(com.point.core.flow.deviceIconKey(device.kind)),
+                    size = 34.dp,
                 )
                 Column(Modifier.weight(1f)) {
                     Text(device.name, style = PointType.body)
-                    Text(
-                        listOfNotNull(
-                            "это устройство".takeIf { device.self },
-                            deviceKindLabel(device.kind),
-                            lastSeenLabel(device.lastSeenMillis, now),
-                        ).joinToString(" · "),
-                        style = PointType.small,
-                    )
+                    Text(com.point.core.flow.deviceLine(device, now), style = PointType.small)
                 }
                 QuietAction("Отключить", enabled = !busy) { onRevoke(device.id) }
             }
