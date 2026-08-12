@@ -28,9 +28,7 @@ import com.point.core.model.CapabilityId
 internal fun ObjectActions(
     sections: List<ActionSection>,
     working: Boolean,
-    pinned: CapabilityId?,
     onBubble: (Bubble) -> Unit,
-    onBubbleLongPress: (Bubble) -> Unit = {},
     appIconFor: (String) -> ImageBitmap? = { null },
 ) {
     val dim by animateFloatAsState(if (working) 0.5f else 1f, tween(200), label = "actions-dim")
@@ -54,10 +52,8 @@ internal fun ObjectActions(
 
                             primary = sectionIndex == 0 && index == 0,
                             enabled = !working,
-                            pinned = bubble.capabilityId == pinned,
                             appIconFor = appIconFor,
                             onClick = { onBubble(bubble) },
-                            onLongClick = { onBubbleLongPress(bubble) },
                         )
                     }
                 }
@@ -79,20 +75,17 @@ private fun ActionRow(
     index: Int,
     primary: Boolean,
     enabled: Boolean,
-    pinned: Boolean,
     appIconFor: (String) -> ImageBitmap?,
     onClick: () -> Unit,
-    onLongClick: () -> Unit,
 ) {
     val isApp = bubble.icon.startsWith("app:")
     val appIcon = if (isApp) remember(bubble.icon) { appIconFor(bubble.icon.removePrefix("app:")) } else null
     val ai = bubble.tier == BubbleTier.AI
     PortalRow(
-        title = if (pinned) "★ ${bubble.title}" else bubble.title,
+        title = bubble.title,
         subtitle = yieldLabel(bubble.yields, bubble.unusableReason),
         subtitleMaxLines = 1,
         onClick = onClick,
-        onLongClick = onLongClick,
         icon = bubbleIcon(bubble.icon),
         image = appIcon,
         accent = if (isApp) MaterialTheme.colorScheme.primary else bubbleColor(bubble.icon),

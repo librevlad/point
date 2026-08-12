@@ -33,16 +33,11 @@ class SettingsShowsWhatWorksTest {
 
     @get:Rule val compose = createComposeRule()
 
-    private val pinned = listOf(
-        PinnedLine(ObjectKind.IMAGE, "Изображение", "Распознать текст"),
-    )
 
     private fun settings(
-        pinned: List<PinnedLine> = emptyList(),
         tileAdded: Boolean = false,
         memory: HistoryFootprint? = null,
         version: String = "0.3.0",
-        onUnpin: (ObjectKind) -> Unit = {},
         onForgetAll: () -> Unit = {},
     ) = compose.setContent {
         PointTheme(darkTheme = true) {
@@ -50,8 +45,6 @@ class SettingsShowsWhatWorksTest {
                 screen = aiKeysScreenOf(),
                 onSave = {},
                 onCancel = {},
-                pinned = pinned,
-                onUnpin = onUnpin,
                 tileAdded = tileAdded,
                 memory = memory,
                 onForgetAll = onForgetAll,
@@ -60,32 +53,15 @@ class SettingsShowsWhatWorksTest {
         }
     }
 
-    @Test fun `все четыре обзора видны на общем экране`() {
-        settings(pinned = pinned, memory = HistoryFootprint(count = 7, bytes = 3 * 1024 * 1024))
+    @Test fun `обзоры того, что уже работает, видны на общем экране`() {
+        settings(memory = HistoryFootprint(count = 7, bytes = 3 * 1024 * 1024))
 
-        compose.onNodeWithText("Закреплённые действия").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Точки входа").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Что Point помнит").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("0.3.0", substring = true).performScrollTo().assertIsDisplayed()
     }
 
-    @Test fun `закреплённое видно и снимается прямо из обзора`() {
-        var unpinned: ObjectKind? = null
-        settings(pinned = pinned, onUnpin = { unpinned = it })
 
-        compose.onNodeWithText("Закреплённые действия").performScrollTo().performClick()
-        compose.onNodeWithText("Распознать текст", substring = true).performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("Изображение", substring = true).performScrollTo().performClick()
-
-        assertEquals(ObjectKind.IMAGE, unpinned)
-    }
-
-    @Test fun `пустое закрепление объясняет жест, а не молчит`() {
-        settings()
-
-        compose.onNodeWithText("Закрепляется долгим нажатием", substring = true)
-            .performScrollTo().assertIsDisplayed()
-    }
 
     @Test fun `про плитку сказано по-разному — есть она или нет`() {
         settings(tileAdded = true)

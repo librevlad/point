@@ -119,8 +119,6 @@ fun FirstScreen(
 
     workingStage: String? = null,
     previewBitmap: ImageBitmap? = null,
-    pinned: CapabilityId? = null,
-    onBubbleLongPress: (Bubble) -> Unit = {},
     appIconFor: (String) -> ImageBitmap? = { null },
 
     onHeroTap: (() -> Unit)? = null,
@@ -241,9 +239,7 @@ fun FirstScreen(
             ObjectActions(
                 sections = actionSections(bubbles, useFirst = obj.uri is ValueRef),
                 working = working,
-                pinned = pinned,
                 onBubble = onBubble,
-                onBubbleLongPress = onBubbleLongPress,
                 appIconFor = appIconFor,
             )
             if (latent.isNotEmpty()) {

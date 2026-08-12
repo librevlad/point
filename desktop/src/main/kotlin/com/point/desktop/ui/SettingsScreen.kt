@@ -57,7 +57,6 @@ fun SettingsScreen(
     var aiKey by remember { mutableStateOf(config.ai.key) }
     var speechKey by remember { mutableStateOf(config.speech.key) }
     var ocrKey by remember { mutableStateOf(config.ocr.key) }
-    var server by remember { mutableStateOf(config.server) }
     var rightClick by remember { mutableStateOf(config.rightClick) }
     var swept by remember { mutableStateOf<Int?>(null) }
     var aiUrl by remember { mutableStateOf(config.ai.url) }
@@ -69,7 +68,6 @@ fun SettingsScreen(
     fun store() = onSave(
         config.copy(
             name = name.trim().ifBlank { config.name },
-            server = server.trim(),
             rightClick = rightClick,
             ai = config.ai.copy(key = aiKey.trim(), url = aiUrl, model = aiModel),
             speech = config.speech.copy(key = speechKey.trim()),
@@ -85,16 +83,19 @@ fun SettingsScreen(
     ) {
         Text("НАСТРОЙКИ", style = PointType.label)
 
-        Group("Этот компьютер", "Имя видят ваши другие устройства") {
+        // Порядок разделов один на телефон и компьютер (#881): аккаунт и устройства →
+        // AI и приватность → данные → интеграции → о Point. Часть пунктов существует только
+        // здесь — имя компьютера, правая кнопка, — но раздел, где их искать, тот же.
+        Group("Аккаунт и устройства", "Имя этого компьютера видят ваши другие устройства") {
             Field(name, { name = it; store() }, "Рабочий ноутбук")
         }
 
         Group(
-            "Ключи сервисов",
-            "Обычно вписывать их здесь не нужно: ключ, введённый на телефоне, приезжает сюда сам",
+            "AI и приватность",
+            "Ключ, введённый на телефоне, приезжает сюда сам — обычно вписывать его здесь не нужно",
         ) {
-            // Сервис называется своим именем и говорит, для чего он, — теми же словами, что и
-            // на телефоне (#610): голое поле «Ключ AI» не сообщало ни того, ни другого.
+            // Сервис называется своим именем и говорит, для чего он, — теми же словами, что
+            // и на телефоне (#610). Отдельный экран ключей — следующий заход (#881).
             AI_PROVIDERS.forEach { provider ->
                 Service(provider, chosen = chosenFor(aiUrl, provider)) {
                     aiUrl = provider.baseUrl
@@ -124,7 +125,7 @@ fun SettingsScreen(
         }
 
         Group(
-            "Присланное",
+            "Данные",
             "Point не хранит дольше суток: присланное с телефона и сделанное здесь убирается само. " +
                 "Файл, который вы перетащили мышью, не трогается никогда",
         ) {
@@ -132,7 +133,7 @@ fun SettingsScreen(
         }
 
         Group(
-            "Правая кнопка",
+            "Интеграции",
             "«Открыть в Point» и «Отправить → Point» в контекстном меню любого файла — то, ради " +
                 "чего Point и стоит на компьютере. Записи делаются только для вас и снимаются " +
                 "вместе с этой галкой",
@@ -141,10 +142,6 @@ fun SettingsScreen(
                 rightClick = !rightClick
                 store()
             }
-        }
-
-        Group("Сервер", "Пусто — сервер Point. Свой адрес нужен, только если вы поднимаете его сами") {
-            Field(server, { server = it; store() }, "https://point.leerio.app")
         }
 
         // Версия видна человеку, а не только в свойствах файла (#822): падение из-за старой

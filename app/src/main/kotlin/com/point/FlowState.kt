@@ -42,8 +42,6 @@ data class FlowFrame(
 
     val enriching: List<String> = emptyList(),
 
-    val pinned: CapabilityId? = null,
-
     val focus: com.point.core.flow.Focus? = null,
 
     /** Состояние операций, не знания: исследования, которые не удались (ADR-0001 §9, §18). */
@@ -144,7 +142,6 @@ data class FlowUiState(
     val cloudEnabled: Boolean = false,
 
     /** Что уже работает и негде увидеть: закрепления, точки входа, память (#821). */
-    val pinned: List<PinnedLine> = emptyList(),
     val memory: com.point.core.flow.HistoryFootprint? = null,
 
     /** Режим «делай лучшее и не спрашивай» (#795). */
@@ -225,8 +222,3 @@ data class DevicesScreenState(
 )
 
 /** Закреплённое действие для показа: чей вид объекта и что закреплено (#821). */
-data class PinnedLine(
-    val kind: com.point.core.model.ObjectKind,
-    val kindLabel: String,
-    val actionLabel: String,
-)

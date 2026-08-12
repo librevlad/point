@@ -17,7 +17,6 @@ import com.point.core.flow.FlowSnapshotStore
 import com.point.core.flow.HistoryStore
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.PdfRasterizer
-import com.point.core.flow.PinnedActions
 import com.point.core.flow.PrivacyConsent
 import com.point.core.flow.Resolver
 import com.point.core.flow.SensoryFeedback
@@ -114,7 +113,6 @@ class FlowViewModel @Inject constructor(
     private val flowSnapshot: FlowSnapshotStore,
     private val crashLog: CrashLog,
     private val ioDispatcher: CoroutineDispatcher,
-    private val pins: PinnedActions,
     private val appIcons: AppIconResolver,
     private val pcLinks: com.point.core.flow.PcLinks,
     private val pcTransport: com.point.core.flow.PcTransport,
@@ -1103,28 +1101,13 @@ class FlowViewModel @Inject constructor(
     }
 
     /**
-     * Что уже работает и негде было увидеть (#821): закрепления, точки входа, память.
+     * Что уже работает и негде было увидеть (#821): точки входа и память.
      * Читается при открытии настроек — на первый экран это не влияет.
      */
     private fun refreshWhatWorks() {
         viewModelScope.launch {
-            val lines = runCatching { pins.all() }.getOrDefault(emptyMap())
-                .mapNotNull { (kind, id) ->
-                    val label = runCatching { registry.byId(id).label(ObjectState(kind)) }.getOrNull()
-                        ?: return@mapNotNull null
-                    PinnedLine(kind, com.point.core.ui.kindLabel(kind), label)
-                }
-                .sortedBy { it.kindLabel }
             val footprint = runCatching { history.footprint() }.getOrNull()
-            _ui.update { it.copy(pinned = lines, memory = footprint) }
-        }
-    }
-
-    /** Открепить прямо из обзора — жест закрепления знать для этого не нужно (#821). */
-    fun unpin(kind: com.point.core.model.ObjectKind) {
-        viewModelScope.launch {
-            runCatching { pins.unpin(kind) }
-            refreshWhatWorks()
+            _ui.update { it.copy(memory = footprint) }
         }
     }
 
@@ -1940,28 +1923,6 @@ class FlowViewModel @Inject constructor(
         return true
     }
 
-    fun togglePin(bubble: Bubble) {
-        val top = stack.lastOrNull() ?: return
-        val kind = top.obj.state.kind
-        viewModelScope.launch {
-            val already = runCatching { pins.pinnedFor(kind) }.getOrNull() == bubble.capabilityId
-            runCatching { if (already) pins.unpin(kind) else pins.pin(kind, bubble.capabilityId) }
-            val index = stack.lastIndex
-            val frame = stack.getOrNull(index) ?: return@launch
-            val refreshed = frame.copy(
-                bubbles = registry.bubblesFor(graphOf(frame)),
-                pinned = if (already) null else bubble.capabilityId,
-            )
-            stack[index] = refreshed
-            _ui.update {
-                it.copy(
-                    frame = refreshed,
-                    message = if (already) "Откреплено" else "Закреплено: ${bubble.title}",
-                    messageOutcome = Outcome.DONE,
-                )
-            }
-        }
-    }
 
     fun jumpTo(index: Int) {
         if (index < 0 || index >= stack.size - 1) return
@@ -2035,7 +1996,6 @@ class FlowViewModel @Inject constructor(
             found = carriedFound,
             relations = carriedRelations,
             latent = registry.latentBubblesFor(known.state),
-            pinned = runCatching { pins.pinnedFor(known.state.kind) }.getOrNull(),
         )
         stack.addLast(frame)
         _ui.update {

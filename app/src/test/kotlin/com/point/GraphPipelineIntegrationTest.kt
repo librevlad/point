@@ -34,7 +34,6 @@ import com.point.core.flow.PcRemoteAction
 import com.point.core.flow.PcSendOutcome
 import com.point.core.flow.PcTransport
 import com.point.core.flow.PdfRasterizer
-import com.point.core.flow.PinnedActions
 import com.point.core.flow.PrivacyConsent
 import com.point.core.flow.QrReader
 import com.point.core.flow.Realizer
@@ -152,11 +151,6 @@ class GraphPipelineIntegrationTest {
             Probe("probe-send", priority = 10, serves = setOf(Intent.SEND)),
         ),
         policy = LearningBubblePolicy(
-            pins = object : PinnedActions {
-                override fun pinnedFor(kind: ObjectKind): CapabilityId? = null
-                override suspend fun pin(kind: ObjectKind, id: CapabilityId) = Unit
-                override suspend fun unpin(kind: ObjectKind) = Unit
-            },
             usage = object : CapabilityUsage {
                 override fun counts(): Map<CapabilityId, Int> = emptyMap()
                 override suspend fun record(id: CapabilityId) = Unit
@@ -310,11 +304,6 @@ class GraphPipelineIntegrationTest {
             override suspend fun clear() = Unit
         },
         dispatcher as CoroutineDispatcher,
-        object : PinnedActions {
-            override fun pinnedFor(kind: ObjectKind): CapabilityId? = null
-            override suspend fun pin(kind: ObjectKind, id: CapabilityId) = Unit
-            override suspend fun unpin(kind: ObjectKind) = Unit
-        },
         AppIconResolver { null },
         object : PcLinks {
             override fun current(): com.point.core.flow.LinkedPc? = null
