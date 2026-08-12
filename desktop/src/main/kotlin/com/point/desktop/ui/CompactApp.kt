@@ -472,8 +472,10 @@ internal fun CompactObject(
     val journal by state.journal.collectAsState()
     val working by state.working.collectAsState()
     val now = rememberNow()
+    // Шапка — рама окна, а не место объекта (#879): имя файла там отрывало идентичность
+    // объекта от самого объекта. Объект называется у портала, ниже.
     CompactHeader(
-        title = item.obj.metadata["name"] ?: "Объект",
+        title = "Point",
         onBack = onBack,
         onHide = null,
     )
@@ -505,11 +507,32 @@ internal fun CompactObject(
             .padding(bottom = 12.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        item.obj.metadata[com.point.core.flow.META_SEMANTIC_SUMMARY]?.let {
-            Text(it, style = PointType.small)
-        } ?: Text(kindLabel(item.obj.state.kind), style = PointType.small)
-
         PortalPreview(item)
+
+        // Вид крупно, имя тише, мера самым тихим — одна иерархия с телефоном (#879).
+        // Раньше вид стоял подписью над порталом, а имя — в шапке окна, оторванное от
+        // самого объекта.
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(1.dp),
+        ) {
+            Text(
+                item.obj.metadata[com.point.core.flow.META_SEMANTIC_SUMMARY]
+                    ?: kindLabel(item.obj.state.kind),
+                style = PointType.body,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            item.obj.metadata["name"]?.takeIf { it.isNotBlank() }?.let {
+                Text(
+                    it,
+                    style = PointType.small.copy(color = PointColors.muted),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
         Knowledge(
             item,
             onCopyFact = state::copyFact,
