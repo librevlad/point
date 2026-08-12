@@ -23,6 +23,13 @@ const val EMPTY_FILE_REASON = "Файл пустой — в нём нечего 
  */
 const val BROKEN_ARCHIVE_REASON = "Архив не открылся — он повреждён или обрезан"
 
+/**
+ * Когда причина не сказана, а негодность известна. Одна на оба устройства (#855): телефон
+ * говорил это из `UnusableRealizer`, компьютер — «действие для такого объекта не
+ * выполняется», то есть про действие вместо объекта.
+ */
+const val UNFIT_DEFAULT_REASON = "С этим файлом нечего делать"
+
 /** Причина, только когда она действительно сказана — пустая строка не считается знанием. */
 fun unusableReasonOf(metadata: Map<String, String>): String? =
     metadata[META_UNUSABLE_REASON]?.takeIf { it.isNotBlank() }
