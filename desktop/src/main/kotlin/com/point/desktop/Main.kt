@@ -201,6 +201,14 @@ fun main(args: Array<String>) {
         }
     }
 
+    // Беда говорит словами, а не именем класса (#822): системное окно `Error` с
+    // `CompactAppKt$CompactApp$18$2$11$1$1` человеку не объясняет ничего. След остаётся на
+    // диске рядом с настройками, человеку достаётся фраза и совет.
+    Thread.setDefaultUncaughtExceptionHandler { _, error ->
+        keepTrouble(pointDir, error)
+        runCatching { state.say(troubleWords(error)) }
+    }
+
     runCatching { inbox.sweep(System.currentTimeMillis() - 24L * 60 * 60 * 1000) }
 
     runCatching { com.point.core.flow.decodePcCaps(phoneCapsFile.readText()) }

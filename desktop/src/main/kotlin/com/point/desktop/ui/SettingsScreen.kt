@@ -143,6 +143,13 @@ fun SettingsScreen(
             Field(server, { server = it; store() }, "https://point.leerio.app")
         }
 
+        // Версия видна человеку, а не только в свойствах файла (#822): падение из-за старой
+        // установки перестаёт быть загадкой — «у меня от шестого августа» видно сразу.
+        Text(
+            "Point ${com.point.desktop.BuildInfo.VERSION} · сборка ${com.point.desktop.BuildInfo.BUILT_ON}",
+            style = PointType.small.copy(color = PointColors.muted),
+        )
+
         Action("Закрыть", onClose)
     }
 }
