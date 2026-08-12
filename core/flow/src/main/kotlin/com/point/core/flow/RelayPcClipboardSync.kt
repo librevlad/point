@@ -1,15 +1,5 @@
-package com.point.data
+package com.point.core.flow
 
-import com.point.core.flow.ClipFail
-import com.point.core.flow.ClipPull
-import com.point.core.flow.ClipPush
-import com.point.core.flow.ClipboardPayload
-import com.point.core.flow.LinkedPc
-import com.point.core.flow.PcClipboardSync
-import com.point.core.flow.PcUnreachable
-import com.point.core.flow.RelayRpc
-import com.point.core.flow.clipMeta
-import com.point.core.flow.clipPayloadOf
 
 class RelayPcClipboardSync(
     private val rpc: RelayRpcClient,
