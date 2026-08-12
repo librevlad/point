@@ -28,21 +28,10 @@ fun fileNameFor(humanName: String, mime: String): String {
 
 
 
-private fun extensionFor(mime: String): String = when (mime.substringBefore(';').trim()) {
-    "text/plain" -> "txt"
-    "text/uri-list" -> "txt"
-    "image/png" -> "png"
-    "image/jpeg" -> "jpg"
-    "image/webp" -> "webp"
-    "application/pdf" -> "pdf"
-    "application/zip" -> "zip"
-    "audio/mpeg" -> "mp3"
-    "audio/mp4", "audio/m4a" -> "m4a"
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document" -> "docx"
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" -> "xlsx"
-    "application/vnd.openxmlformats-officedocument.presentationml.presentation" -> "pptx"
-    else -> ""
-}
+// Расширение спрашивается там же, где его спрашивает `MimeMap`, — в общей таблице (#867).
+// Своя таблица знала тринадцать типов и не знала ogg: голосовое ложилось на компьютер файлом
+// без расширения, и проводник не мог его открыть.
+private fun extensionFor(mime: String): String = com.point.core.flow.extensionForMime(mime)
 
 fun uniqueChildName(existing: Set<String>, desired: String): String {
     val flat = desired.replace('/', '_').replace('\\', '_').trim()
