@@ -10,6 +10,13 @@ dependencies {
     api(project(":core:model"))
     implementation(libs.kotlinx.coroutines.core)
 
+    // Разбор ответов моделей переехал сюда вместе с цепочкой (#828, решение владельца
+    // 12.08.2026 «Дать ядру org.json»). Это обычная Java-библиотека, а не Android: правило
+    // «:core:flow — чистый Kotlin, Android-free» остаётся в силе. Переписывать 43 места
+    // разбора на свой парсер значило бы рисковать тем самым кодом, где ошибка тихая:
+    // модель ответила, а Point не прочёл.
+    implementation(libs.json)
+
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
 

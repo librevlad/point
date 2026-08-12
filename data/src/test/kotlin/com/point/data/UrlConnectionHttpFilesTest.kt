@@ -12,6 +12,8 @@ import java.io.InputStream
 import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
+import com.point.core.flow.UrlConnectionHttpFiles
+import com.point.core.flow.FormPart
 
 class UrlConnectionHttpFilesTest {
 

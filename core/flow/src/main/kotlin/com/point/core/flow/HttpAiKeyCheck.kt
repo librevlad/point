@@ -1,15 +1,9 @@
-package com.point.data
+package com.point.core.flow
 
-import com.point.core.flow.AiKeyCheck
-import com.point.core.flow.KEY_PROBE_PROMPT
-import com.point.core.flow.KeyProbe
-import com.point.core.flow.UserAiConfig
-import com.point.core.flow.withoutKey
 import org.json.JSONArray
 import org.json.JSONObject
-import javax.inject.Inject
 
-class HttpAiKeyCheck @Inject constructor(
+class HttpAiKeyCheck(
     private val http: HttpJson,
 ) : AiKeyCheck {
 

@@ -1,7 +1,5 @@
-package com.point.data
+package com.point.core.flow
 
-import com.point.core.flow.LlmClient
-import com.point.core.flow.NetworkAvailability
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject

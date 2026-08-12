@@ -6,6 +6,8 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import com.point.core.flow.HttpResult
+import com.point.core.flow.HttpJson
 
 class MistralOcrReaderTest {
 

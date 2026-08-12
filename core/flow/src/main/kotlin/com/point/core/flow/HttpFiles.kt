@@ -1,11 +1,10 @@
-package com.point.data
+package com.point.core.flow
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
-import javax.inject.Inject
 
 sealed interface FormPart {
     val name: String
@@ -27,7 +26,7 @@ interface HttpFiles {
     suspend fun get(url: String, headers: Map<String, String>): HttpResult
 }
 
-class UrlConnectionHttpFiles @Inject constructor() : HttpFiles {
+class UrlConnectionHttpFiles() : HttpFiles {
 
     override suspend fun postMultipart(
         url: String,

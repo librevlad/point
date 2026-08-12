@@ -1,4 +1,4 @@
-package com.point.data
+package com.point.core.flow
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -15,7 +15,7 @@ import java.net.HttpURLConnection
  * свой таймаут в тишине и тратил бесплатный лимит уже после того, как человек отказался (#692).
  * Поэтому отказ закрывает соединение сам.
  */
-internal suspend fun <T> HttpURLConnection.callClosingOnCancel(call: HttpURLConnection.() -> T): T =
+suspend fun <T> HttpURLConnection.callClosingOnCancel(call: HttpURLConnection.() -> T): T =
     coroutineScope {
         val step = coroutineContext[Job]
         val closeOnCancel = launch(Dispatchers.Default) {

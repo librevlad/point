@@ -4,6 +4,7 @@ import com.point.core.flow.AtomLayer
 import com.point.core.flow.AtomRecognizer
 import com.point.core.model.PointObject
 import javax.inject.Inject
+import com.point.core.flow.summariseCloudErrors
 
 class FallbackAtomRecognizer @Inject constructor(
     private val readers: List<@JvmSuppressWildcards CloudAtomRecognizer>,

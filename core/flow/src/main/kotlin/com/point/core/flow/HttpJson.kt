@@ -1,10 +1,9 @@
-package com.point.data
+package com.point.core.flow
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
 import java.net.URL
-import javax.inject.Inject
 
 data class HttpResult(val code: Int, val body: String)
 
@@ -13,7 +12,7 @@ interface HttpJson {
     suspend fun post(url: String, headers: Map<String, String>, body: String): HttpResult
 }
 
-class UrlConnectionHttpJson @Inject constructor() : HttpJson {
+class UrlConnectionHttpJson() : HttpJson {
     override suspend fun post(url: String, headers: Map<String, String>, body: String): HttpResult =
         withContext(Dispatchers.IO) {
             val conn = (URL(url).openConnection() as HttpURLConnection).apply {

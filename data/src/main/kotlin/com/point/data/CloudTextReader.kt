@@ -10,6 +10,7 @@ import com.point.core.flow.allowedAt
 import com.point.core.flow.allowedBy
 import com.point.core.model.PointObject
 import javax.inject.Inject
+import com.point.core.flow.summariseCloudErrors
 
 interface CloudTextReader {
 

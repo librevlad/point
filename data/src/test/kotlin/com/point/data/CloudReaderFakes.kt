@@ -5,6 +5,10 @@ import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
 import com.point.core.model.ScratchRef
+import com.point.core.flow.HttpResult
+import com.point.core.flow.HttpJson
+import com.point.core.flow.HttpFiles
+import com.point.core.flow.FormPart
 
 class SentForm(val url: String, val headers: Map<String, String>, val parts: List<FormPart>) {
     fun field(name: String): String? =

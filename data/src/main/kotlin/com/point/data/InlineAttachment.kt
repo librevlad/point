@@ -10,6 +10,10 @@ import kotlin.math.roundToInt
 
 internal class InlineAttachment(val base64: String, val mime: String)
 
+/** Готовилка кадра для моделей на телефоне: ужать через Bitmap и закодировать (#828). */
+fun inlineFrame(path: String, mime: String): com.point.core.flow.InlineFrame? =
+    inlineAttachment(path, mime)?.let { com.point.core.flow.InlineFrame(it.base64, it.mime) }
+
 internal fun inlineAttachment(path: String, mime: String): InlineAttachment? {
     val file = File(path)
     val size = if (file.exists()) file.length() else 0L

@@ -69,7 +69,7 @@ import com.point.data.AndroidSharer
 import com.point.data.AndroidUrlOpener
 import com.point.data.AndroidViewer
 import com.point.data.BitmapEvidenceCropper
-import com.point.data.ClaudeLlmClient
+import com.point.core.flow.ClaudeLlmClient
 import com.point.data.CommonsArchiveExtractor
 import com.point.data.DocumentTypeInvestigation
 import com.point.data.DocumentTypeInvestigationRealizer
@@ -82,20 +82,20 @@ import com.point.data.EntityInvestigationRealizer
 import com.point.data.IdentifierInvestigation
 import com.point.data.IdentifierInvestigationRealizer
 import com.point.data.MlKitEntityExtractor
-import com.point.data.FallbackLlmClient
+import com.point.core.flow.FallbackLlmClient
 import com.point.data.FileChosenApps
 import com.point.data.FilePcCaps
 import com.point.data.FilePcLinks
-import com.point.data.HttpAiKeyCheck
+import com.point.core.flow.HttpAiKeyCheck
 import com.point.data.FileCapabilityUsage
 import com.point.data.FileHistoryStore
-import com.point.data.GeminiLlmClient
+import com.point.core.flow.GeminiLlmClient
 import com.point.data.GroqWhisperSpeechToText
 import com.point.data.SummarizingSpeechToText
-import com.point.data.HttpJson
-import com.point.data.UrlConnectionHttpJson
-import com.point.data.HttpFiles
-import com.point.data.UrlConnectionHttpFiles
+import com.point.core.flow.HttpJson
+import com.point.core.flow.UrlConnectionHttpJson
+import com.point.core.flow.HttpFiles
+import com.point.core.flow.UrlConnectionHttpFiles
 import com.point.data.OutboundFrames
 import com.point.data.BitmapOutboundFrames
 import com.point.data.CloudAtomRecognizer
@@ -119,10 +119,10 @@ import com.point.data.OoxmlOfficeTextExtractor
 import com.point.data.OoxmlSpreadsheetReader
 import com.point.data.OoxmlSpreadsheetWriter
 import com.point.data.BuildConfig
-import com.point.data.OpenAiCompatibleClient
-import com.point.data.OpenAiProvider
-import com.point.data.configured
-import com.point.data.openAiModels
+import com.point.core.flow.OpenAiCompatibleClient
+import com.point.core.flow.OpenAiProvider
+import com.point.core.flow.configured
+import com.point.core.flow.openAiModels
 import com.point.data.PdfBoxTextExtractor
 import com.point.data.PdfImageInvestigation
 import com.point.data.PdfImageInvestigationRealizer
@@ -141,7 +141,7 @@ import com.point.data.ExifInvestigation
 import com.point.data.ExifInvestigationRealizer
 import com.point.data.QrInvestigation
 import com.point.data.QrInvestigationRealizer
-import com.point.data.UserKeyLlmClient
+import com.point.core.flow.UserKeyLlmClient
 import com.point.data.PdfRendererRasterizer
 import com.point.data.ScratchObjectStore
 import com.point.data.LlmSpeechToText
@@ -242,10 +242,10 @@ abstract class DataModule {
     abstract fun textRecognizer(impl: TesseractTextRecognizer): TextRecognizer
 
     @Binds
-    abstract fun httpJson(impl: UrlConnectionHttpJson): HttpJson
+    abstract fun httpJsonImpl(impl: UrlConnectionHttpJson): HttpJson
 
     @Binds
-    abstract fun httpFiles(impl: UrlConnectionHttpFiles): HttpFiles
+    abstract fun httpFilesImpl(impl: UrlConnectionHttpFiles): HttpFiles
 
     @Binds
     abstract fun outboundFrames(impl: BitmapOutboundFrames): OutboundFrames
@@ -271,7 +271,7 @@ abstract class DataModule {
     abstract fun builtInAiKeys(impl: BuildConfigAiKeys): BuiltInAiKeys
 
     @Binds
-    abstract fun aiKeyCheck(impl: HttpAiKeyCheck): AiKeyCheck
+    abstract fun aiKeyCheckImpl(impl: HttpAiKeyCheck): AiKeyCheck
 
     @Binds
     abstract fun chosenApps(impl: FileChosenApps): ChosenApps
@@ -498,8 +498,9 @@ abstract class DataModule {
             userKey: UserKeyLlmClient,
             gemini: GeminiLlmClient,
             claude: ClaudeLlmClient,
+            frames: com.point.core.flow.FrameForModel,
         ): List<@JvmSuppressWildcards LlmClient> {
-            val free = openAiProviders().configured().map { OpenAiCompatibleClient(http, store, it) }
+            val free = openAiProviders().configured().map { OpenAiCompatibleClient(http, store, it, frames) }
             val native = buildList {
                 if (BuildConfig.GEMINI_API_KEY.isNotBlank()) add(gemini)
                 if (BuildConfig.ANTHROPIC_API_KEY.isNotBlank()) add(claude)
@@ -600,13 +601,72 @@ abstract class DataModule {
         )
 
         @Provides
-        fun geminiClient(http: HttpJson, store: ObjectStore): GeminiLlmClient =
+        fun geminiClient(
+            http: HttpJson,
+            store: ObjectStore,
+            frames: com.point.core.flow.FrameForModel,
+        ): GeminiLlmClient =
             GeminiLlmClient(
                 http,
                 store,
                 BuildConfig.GEMINI_API_KEY,
                 BuildConfig.GEMINI_MODELS.split(',').map(String::trim).filter(String::isNotBlank),
+                frames,
             )
+
+        /**
+         * Ключ, адрес и модель Claude знает сборка, а не ядро (#828): сама цепочка живёт в
+         * `:core:flow` и о `BuildConfig` не знает.
+         */
+        @Provides
+        fun claudeClient(
+            http: HttpJson,
+            store: ObjectStore,
+            frames: com.point.core.flow.FrameForModel,
+        ): ClaudeLlmClient = ClaudeLlmClient(
+            http,
+            store,
+            apiKey = BuildConfig.ANTHROPIC_API_KEY,
+            baseUrl = BuildConfig.ANTHROPIC_BASE_URL,
+            model = BuildConfig.CLAUDE_MODEL,
+            frames = frames,
+        )
+
+        /**
+         * Перенесённые в `:core:flow` классы собираются здесь (#828): в чистом ядре нет
+         * аннотаций Hilt — ровно как у связки устройств после #819.
+         */
+        @Provides
+        fun urlConnectionHttpJson(): UrlConnectionHttpJson = UrlConnectionHttpJson()
+
+        @Provides
+        fun urlConnectionHttpFiles(): UrlConnectionHttpFiles = UrlConnectionHttpFiles()
+
+        @Provides
+        fun httpAiKeyCheck(http: HttpJson): HttpAiKeyCheck = HttpAiKeyCheck(http)
+
+        @Provides
+        fun userKeyLlmClient(
+            userKeys: UserKeyStore,
+            http: HttpJson,
+            store: ObjectStore,
+            facts: AiFacts,
+        ): UserKeyLlmClient = UserKeyLlmClient(userKeys, http, store, facts)
+
+        @Provides
+        fun fallbackLlmClient(
+            providers: List<@JvmSuppressWildcards LlmClient>,
+            facts: AiFacts,
+            network: NetworkAvailability,
+            yolo: com.point.core.flow.YoloMode,
+        ): FallbackLlmClient = FallbackLlmClient(providers, facts, network, yolo)
+
+        /** Ужать снимок умеет телефон — цепочка провайдеров об этом не знает (#828). */
+        @Provides
+        fun frameForModel(): com.point.core.flow.FrameForModel =
+            com.point.core.flow.FrameForModel { path, mime ->
+                com.point.data.inlineFrame(path, mime)
+            }
 
         /**
          * Workers AI отвечает по OpenAI-совместимому адресу, но живёт под номером аккаунта:

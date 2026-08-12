@@ -1,26 +1,13 @@
-package com.point.data
+package com.point.core.flow
 
-import com.point.core.flow.AI_KEY_HINT
-import com.point.core.flow.AI_PROVIDERS
-import com.point.core.flow.AiFacts
-import com.point.core.flow.AiOutcome
-import com.point.core.flow.LlmClient
-import com.point.core.flow.OWN_SERVICE_NAME
-import com.point.core.flow.ObjectStore
-import com.point.core.flow.SETTINGS_TITLE
-import com.point.core.flow.UserAiKey
-import com.point.core.flow.UserKeyStore
-import com.point.core.flow.aiCall
-import com.point.core.flow.aiOutcomeOf
 import com.point.core.model.PointObject
 import com.point.core.model.ResultObject
-import javax.inject.Inject
 
 /**
  * Ключи человека — по одному на сервис (#699). Идут в том порядке, в каком Point
  * обращается к сервисам, и каждый исход запоминается за своим сервисом.
  */
-class UserKeyLlmClient @Inject constructor(
+class UserKeyLlmClient(
     private val userKeys: UserKeyStore,
     private val http: HttpJson,
     private val store: ObjectStore,

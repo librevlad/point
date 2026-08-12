@@ -8,6 +8,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.net.URLEncoder
 import java.util.Base64
+import com.point.core.flow.HttpJson
 
 class OcrSpaceReader(
     private val http: HttpJson,
