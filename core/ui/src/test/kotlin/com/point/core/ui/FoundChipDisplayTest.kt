@@ -9,6 +9,7 @@ import com.point.core.model.PointObject
 import com.point.core.model.Provenance
 import com.point.core.model.ValueRef
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Assert.assertNull
 import org.junit.Test
 
@@ -137,5 +138,22 @@ class FoundChipDisplayTest {
         val plain = node(mapOf("entity.phone" to "111"))
 
         assertEquals(listOf(plain), visibleFoundChips(listOf(plain), setOf("+380000000000")))
+    }
+
+    /**
+     * Правило живёт на экране, а не только в тесте (#840).
+     *
+     * При перестройке экрана 11.08.2026 (#747) фильтр отключили строкой
+     * `val visibleFound = found`, и полтора дня чипы дублировали показанное выше, хотя
+     * тесты были зелёными: они звали функцию напрямую.
+     */
+    @Test
+    fun `экран действительно фильтрует чипы, а не показывает всё подряд`() {
+        val screen = java.io.File("src/main/kotlin/com/point/core/ui/FirstScreen.kt").readText()
+
+        assertTrue(
+            "фильтр найденного снова отключён — тесты этого не заметят",
+            screen.contains("visibleFoundChips(found"),
+        )
     }
 }

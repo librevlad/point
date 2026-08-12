@@ -156,7 +156,14 @@ fun FirstScreen(
         val plainFacts = facts
             .filter { it.key !in promoted }
             .filterNot { it.value?.trim() == own }
-        val visibleFound = found
+        // Найденное не повторяет показанное выше (#696, #747): телефон, уже стоящий в
+        // карточке человека, вторым чипом не приходит, и исправленное значение не двоится
+        // со своей же строкой. Правило было отключено при перестройке экрана 11.08.2026 —
+        // строкой `val visibleFound = found`, — и полтора дня жило только в тестах.
+        val shownValues = remember(plainFacts, own) {
+            plainFacts.mapNotNullTo(mutableSetOf()) { it.value?.trim() } + own
+        }
+        val visibleFound = visibleFoundChips(found, shownValues)
 
         ObjectHeader(
             obj,
