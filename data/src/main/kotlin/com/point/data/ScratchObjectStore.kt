@@ -47,7 +47,9 @@ class ScratchObjectStore @Inject constructor(
                     dest.outputStream().use { output -> input.copyTo(output) }
                 } ?: error("Не удалось открыть источник: $sourceUri")
 
-                val name = displayName(uri)
+                // Имя показывается человеку и уезжает дальше — в «Сохранить», в имя копии
+                // на компьютере, в экспорт. Чистится один раз здесь, у входа (#865).
+                val name = displayName(uri)?.let { com.point.core.flow.safeFileName(it) }
                 PointObject(
                     id = id,
                     mime = mime,
