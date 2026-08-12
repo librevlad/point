@@ -1,15 +1,5 @@
-package com.point.data
+package com.point.core.flow
 
-import com.point.core.flow.LinkedPc
-import com.point.core.flow.PcOutboxEntry
-import com.point.core.flow.PcRemoteAction
-import com.point.core.flow.PcSendOutcome
-import com.point.core.flow.PcTransport
-import com.point.core.flow.RelayRpc
-import com.point.core.flow.decodePcCaps
-import com.point.core.flow.decodePcOutbox
-import com.point.core.flow.decodePcReceiveReply
-import com.point.core.flow.encodePcCaps
 import com.point.core.model.PointObject
 import com.point.core.model.isFileBacked
 import java.io.File

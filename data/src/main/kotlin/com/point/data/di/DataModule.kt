@@ -87,8 +87,6 @@ import com.point.data.FileChosenApps
 import com.point.data.FilePcCaps
 import com.point.data.FilePcLinks
 import com.point.data.HttpAiKeyCheck
-import com.point.data.RelayPcClipboardSync
-import com.point.data.RelayPcTransport
 import com.point.data.FileCapabilityUsage
 import com.point.data.FileHistoryStore
 import com.point.data.GeminiLlmClient
@@ -450,11 +448,11 @@ abstract class DataModule {
             secrets: com.point.core.flow.PcSecrets,
             monitor: com.point.core.flow.LinkMonitor,
             network: NetworkAvailability,
-        ): com.point.data.RelayRpcClient =
-            com.point.data.RelayRpcClient(serverUrl(), { account.current() }, secrets, monitor, network)
+        ): com.point.core.flow.RelayRpcClient =
+            com.point.core.flow.RelayRpcClient(serverUrl(), { account.current() }, secrets, monitor, network)
 
         @Provides
-        fun pcTransport(rpc: com.point.data.RelayRpcClient): PcTransport = RelayPcTransport(rpc)
+        fun pcTransport(rpc: com.point.core.flow.RelayRpcClient): PcTransport = com.point.core.flow.RelayPcTransport(rpc)
 
         @Provides
         @Singleton
@@ -462,14 +460,14 @@ abstract class DataModule {
             com.point.core.flow.RememberingLinkMonitor(log)
 
         @Provides
-        fun pcClipboardSync(rpc: com.point.data.RelayRpcClient): com.point.core.flow.PcClipboardSync =
-            RelayPcClipboardSync(rpc)
+        fun pcClipboardSync(rpc: com.point.core.flow.RelayRpcClient): com.point.core.flow.PcClipboardSync =
+            com.point.core.flow.RelayPcClipboardSync(rpc)
 
         @Provides
         fun circleClipboard(
             links: com.point.core.flow.PcLinks,
             sync: com.point.core.flow.PcClipboardSync,
-        ): com.point.core.flow.CircleClipboard = com.point.data.RelayCircleClipboard(links, sync)
+        ): com.point.core.flow.CircleClipboard = com.point.core.flow.RelayCircleClipboard(links, sync)
 
         @Provides
         @Singleton
