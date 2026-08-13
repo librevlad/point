@@ -55,11 +55,15 @@ internal fun PortalPreview(item: InboxItem) {
         // действиям, а не иллюстрации.
         Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
             PortalHalo(size = 132.dp)
-            androidx.compose.material3.Icon(
-                imageVector = com.point.core.ui.kindIcon(item.obj.state.kind),
-                contentDescription = com.point.core.ui.kindLabel(item.obj.state.kind),
-                tint = PointColors.text,
-                modifier = Modifier.size(34.dp),
+
+            // Та же марка, что на телефоне (#825): она живёт в общем шве, и компьютер не
+            // рисует свой знак. Плоская иконка делала объект строкой из списка приложений.
+            com.point.core.ui.KindMarkIcon(
+                mark = com.point.core.ui.kindMarkOf(item.obj),
+                size = 74.dp,
+                contentDescription = com.point.core.ui.kindMarkLabel(
+                    com.point.core.ui.kindMarkOf(item.obj),
+                ),
             )
         }
     }

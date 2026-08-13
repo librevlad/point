@@ -55,7 +55,9 @@ class FocusEntryVisibleTest {
         screen(ObjectKind.IMAGE)
 
         val mark = compose.onNodeWithContentDescription(FOCUS_ENTRY_LABEL).fetchSemanticsNode()
-        val hero = compose.onNodeWithContentDescription(ObjectKind.IMAGE.name).fetchSemanticsNode()
+        // Знак объекта называется человеческим словом, а не именем вида в коде (#825):
+        // голосовой доступ читает «Изображение», а не «IMAGE».
+        val hero = compose.onNodeWithContentDescription(kindMarkLabel(KindMark.IMAGE)).fetchSemanticsNode()
 
         assertTrue("значок объявлен после превью", mark.id > hero.id)
     }
