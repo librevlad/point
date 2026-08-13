@@ -58,14 +58,28 @@ class PrivacyGuardedLlmClientTest {
         assertEquals(1, spy.calls)
     }
 
+    /**
+     * #945: у каждого сервиса своё обещание, и средний режим сужает цепочку, а не обнуляет
+     * её. Общий шов пропускает — кого именно из сервисов брать, решает сама цепочка.
+     */
     @Test
-    fun `«не учатся на моём» закрыт для цепочки, которая ничего не обещала`() = runBlocking {
+    fun `«не учатся на моём» пропускает — сервисы разбирает цепочка`() = runBlocking {
         val spy = Spy()
         val guarded = PrivacyGuardedLlmClient(spy, Level(PrivacyLevel.NO_TRAINING))
 
+        guarded.run(obj, "прочитай")
+
+        assertEquals(1, spy.calls)
+    }
+
+    @Test
+    fun `цепочке, которая ничего не обещала, средний режим по-прежнему закрыт`() = runBlocking {
+        val spy = Spy()
+        val guarded = PrivacyGuardedLlmClient(spy, Level(PrivacyLevel.NO_TRAINING), AI_CHAIN_PRIVACY)
+
         runCatching { guarded.run(obj, "прочитай") }
 
-        assertEquals("цепочка AI про обучение ничего не обещала", 0, spy.calls)
+        assertEquals("сервис про обучение ничего не обещал", 0, spy.calls)
     }
 
     @Test

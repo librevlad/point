@@ -650,7 +650,8 @@ abstract class DataModule {
             http: HttpJson,
             store: ObjectStore,
             facts: AiFacts,
-        ): UserKeyLlmClient = UserKeyLlmClient(userKeys, http, store, facts)
+            privacy: com.point.core.flow.CloudPrivacySettings,
+        ): UserKeyLlmClient = UserKeyLlmClient(userKeys, http, store, facts, privacy)
 
         @Provides
         fun fallbackLlmClient(
@@ -658,7 +659,8 @@ abstract class DataModule {
             facts: AiFacts,
             network: NetworkAvailability,
             yolo: com.point.core.flow.YoloMode,
-        ): FallbackLlmClient = FallbackLlmClient(providers, facts, network, yolo)
+            privacy: com.point.core.flow.CloudPrivacySettings,
+        ): FallbackLlmClient = FallbackLlmClient(providers, facts, network, yolo, privacy)
 
         /** Ужать снимок умеет телефон — цепочка провайдеров об этом не знает (#828). */
         @Provides

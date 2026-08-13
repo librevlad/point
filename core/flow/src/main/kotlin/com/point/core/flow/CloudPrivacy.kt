@@ -82,6 +82,31 @@ val AI_CHAIN_PRIVACY = ReaderPrivacy(
     promise = ReaderPromise.UNKNOWN,
 )
 
+/**
+ * Лучшее, чем внешний сервис вообще бывает: он обещал не учиться на присланном.
+ *
+ * Мерка для вопроса «пускает ли этот режим наружу хоть кого-нибудь» (#945). Раньше вопрос
+ * задавался про [AI_CHAIN_PRIVACY] — цепочку без единого обещания, — и средний режим
+ * получался равен «выключить AI целиком», хотя называется иначе.
+ */
+val PROMISED_SERVICE = ReaderPrivacy(
+    where = "сервис, обещавший не учиться на присланном",
+    promise = ReaderPromise.NO_TRAINING,
+)
+
+/** Пускает ли режим наружу хоть кого-нибудь. */
+fun anyoneAllowedAt(level: PrivacyLevel): Boolean = allowedAt(level, PROMISED_SERVICE)
+
+/**
+ * Что сервис обещает про присланное (#945).
+ *
+ * Незнакомый сервис — [ReaderPromise.UNKNOWN]: своё, не объявленное в списке, обещанием не
+ * считается.
+ */
+fun promiseOfService(id: String): ReaderPrivacy =
+    AI_PROVIDERS.firstOrNull { it.id == id }?.privacy
+        ?: ReaderPrivacy(where = id.ifBlank { "сервис" }, promise = ReaderPromise.UNKNOWN)
+
 interface CloudPrivacySettings {
     fun level(): PrivacyLevel
     suspend fun setLevel(level: PrivacyLevel)
