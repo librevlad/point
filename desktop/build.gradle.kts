@@ -57,7 +57,9 @@ compose.desktop {
             )
             packageName = "Point"
 
-            packageVersion = "3.0.0"
+            // Номер установщика тот же, что у приложения (#886). Раньше здесь стояло 3.0.0,
+            // а Point в настройках говорил 0.3.0 — одна сборка под двумя номерами.
+            packageVersion = providers.gradleProperty("pointVersion").get()
 
             vendor = "Point"
 

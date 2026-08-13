@@ -24,7 +24,7 @@ class SettingsAreAListTest {
 
     private val screen = File("src/main/kotlin/com/point/desktop/ui/SettingsScreen.kt").readText()
 
-    private val window = File("src/main/kotlin/com/point/desktop/ui/CompactApp.kt").readText()
+    private val window = File("src/main/kotlin/com/point/desktop/ui/SettingsPane.kt").readText()
 
     @Test
     fun `у каждого раздела свой экран, а не кусок общего полотна`() {
@@ -51,7 +51,7 @@ class SettingsAreAListTest {
 
     @Test
     fun `слово «Настройки» сказано один раз — шапкой окна`() {
-        val settings = window.substringAfter("private fun CompactSettings(").substringBefore("\n@Composable")
+        val settings = window.substringAfter("internal fun CompactSettings(")
 
         assertTrue("заголовок окна не следует за экраном", settings.contains("title = page.title"))
         assertTrue("«Настройки» написано ещё раз внутри", !settings.contains("\"НАСТРОЙКИ\""))

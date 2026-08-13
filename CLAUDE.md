@@ -52,6 +52,8 @@ Point не является AI-чатом, менеджером файлов и�
 
 - Gradle wrapper: `8.14.3`.
 - CLI JDK: `C:\Program Files\Android\Android Studio\jbr`.
+- Установщик Windows (`:desktop:packageMsi`) этим JDK **не собирается**: в JBR нет `jpackage.exe`.
+  Для него `JAVA_HOME=C:\Program Files\Eclipse Adoptium\jdk-17.0.17.10-hotspot` (Temurin 17).
 - Toolchain: JDK 17 через `jvmToolchain(17)` + `foojay-resolver`.
 - `compileSdk = 36`.
 - Версии — в `gradle/libs.versions.toml`.
