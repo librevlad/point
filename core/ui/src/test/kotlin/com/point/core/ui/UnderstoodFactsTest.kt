@@ -27,7 +27,10 @@ class UnderstoodFactsTest {
             ),
         )
         assertEquals(listOf("Нашёл телефон", "Нашёл ссылку"), facts.map { it.label })
-        assertEquals("+380671234567", facts[0].value)
+
+        // Номер показывается по-человечески (#932): слитная запись из документа
+        // разбирается библиотекой и выходит на экран разбитой на группы.
+        assertEquals("067 123 4567", facts[0].value)
         assertEquals("github.com/librevlad", facts[1].value)
     }
 

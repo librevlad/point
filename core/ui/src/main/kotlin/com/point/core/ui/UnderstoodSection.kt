@@ -89,7 +89,14 @@ fun understoodFacts(obj: PointObject): List<UnderstoodFact> {
         if (state.has(Feature.IS_PURCHASE)) add(UnderstoodFact("semantic", "Это покупка", summary))
         if (state.has(Feature.IS_RECIPE)) add(UnderstoodFact("semantic", "Это рецепт", summary))
         if (state.has(Feature.IS_JOB)) add(UnderstoodFact("semantic", "Это вакансия", summary))
-        if (state.has(Feature.HAS_PHONE)) add(UnderstoodFact("phone", "Нашёл телефон", entity("phone"), note("phone"), known("phone")))
+        // Номер показывается по-человечески (#932): разобранным, а не так, как он лежал в
+        // покорёженном тексте кадра — `06 1 ) 2 80-44-2 1`. Рядом то, что про номер известно:
+        // вид и чужая страна словом. Своя страна не называется — человек знает, где живёт.
+        if (state.has(Feature.HAS_PHONE)) {
+            val phone = entity("phone")
+                ?.let { com.point.core.flow.shownKnowledge(com.point.core.flow.META_ENTITY_PHONE, it, obj.metadata) }
+            add(UnderstoodFact("phone", "Нашёл телефон", phone, note("phone"), known("phone")))
+        }
         if (state.has(Feature.HAS_EMAIL)) add(UnderstoodFact("email", "Нашёл почту", entity("email"), note("email"), known("email")))
         if (state.has(Feature.HAS_URL)) add(UnderstoodFact("url", "Нашёл ссылку", entity("url")?.readableUrl(), note("url"), known("url")))
         if (state.has(Feature.HAS_ADDRESS)) add(UnderstoodFact("address", "Нашёл адрес", entity("address"), note("address"), known("address")))
@@ -124,6 +131,23 @@ fun understoodFacts(obj: PointObject): List<UnderstoodFact> {
         if (state.has(Feature.HAS_VCARD)) add(UnderstoodFact("vcard", "Это визитка"))
         if (state.has(Feature.IS_IMAGE_PDF)) add(UnderstoodFact("scan", "Это скан — текст не выделяется"))
         if (state.has(Feature.ZIP_OF_IMAGES)) add(UnderstoodFact("zip-images", "Архив из фотографий"))
+
+        // Всё остальное знание — тем же списком (#935).
+        //
+        // Строки выше — перечисление признаков, и оно всегда отставало от того, что Point
+        // успел узнать. Сумма счёта лежала в графе разобранная («7 800 грн», прочитано с
+        // текста) и на экран не попадала вовсе, потому что своей строки в перечислении у неё
+        // не было. Компьютер тот же объект показывал целиком: у него список общий.
+        //
+        // Один объект — одно знание на обоих устройствах. Признаковые строки остаются: у них
+        // человеческие формулировки и своя обработка значения (маска карты, читаемая ссылка).
+        val shown = map { it.key }.toSet()
+        com.point.core.flow.knowledgeRows(obj.metadata)
+            .map { it.key.removePrefix(META_ENTITY_PREFIX) to it }
+            .filterNot { (key, _) -> key in shown }
+            .forEach { (key, row) ->
+                add(UnderstoodFact(key, row.name, row.value, note(key), known(key)))
+            }
     }
 }
 

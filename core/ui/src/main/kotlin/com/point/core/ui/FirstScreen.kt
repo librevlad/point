@@ -153,7 +153,7 @@ fun FirstScreen(
         val own = objectVerdict(obj).headline.trim()
         val plainFacts = facts
             .filter { it.key !in promoted }
-            .filterNot { it.value?.trim() == own }
+            .filterNot { sameAsOwnValue(it, own) }
         // Найденное не повторяет показанное выше (#696, #747): телефон, уже стоящий в
         // карточке человека, вторым чипом не приходит, и исправленное значение не двоится
         // со своей же строкой. Правило было отключено при перестройке экрана 11.08.2026 —
@@ -402,11 +402,29 @@ private fun FoundObjects(
  * после правки человеком uri продолжает хранить прежнее значение (ADR-0001 §4 —
  * одно значение в двух ролях; носитель истины — факт).
  */
+/**
+ * Строка знания повторяет само значение объекта (#932).
+ *
+ * Внутри телефона «067 636 0560» строка «Нашёл телефон 067 636 0560» говорила бы то же
+ * самое дважды. Сравнение по тексту здесь мало: тот же номер приходит записанным и
+ * `+380676360560`, и `067 636 05 60`. Одинаковость номера считает библиотека.
+ */
+private fun sameAsOwnValue(fact: com.point.core.ui.UnderstoodFact, own: String): Boolean {
+    val value = fact.value?.trim() ?: return false
+    if (value == own) return true
+    return fact.key == "phone" && com.point.core.flow.PhoneNumbers.same(value, own)
+}
+
 fun foundHeadline(obj: PointObject): String =
     obj.metadata.entries.firstOrNull { (key, _) ->
         (key.startsWith(META_ENTITY_PREFIX) || key.startsWith(com.point.core.flow.META_GRAPH_ROLE_PREFIX)) &&
             !com.point.core.flow.isAnnotationKey(key) && !com.point.core.flow.isStateKey(key)
-    }?.value?.takeIf { it.isNotBlank() }
+    }?.takeIf { it.value.isNotBlank() }
+
+        // Номер и здесь показывается по-человечески (#932): чип, заголовок объекта и строка
+        // знания говорят об одном номере одним видом — иначе одно и то же значение выглядит
+        // на экране двумя разными.
+        ?.let { (key, value) -> com.point.core.flow.shownKnowledge(key, value) }
 
         // Результат чужого исполнителя (ПК) не несёт entity/role-фактов — только имя:
         // без этого запасного шага чип показывал путь до scratch-файла (#681).
@@ -429,12 +447,17 @@ fun foundHeader(count: Int, partShownAbove: Boolean): String =
 
 fun visibleFoundChips(found: List<PointObject>, shownValues: Set<String>): List<PointObject> {
     val claimed = found.filter { it.state.kind == com.point.core.flow.KIND_PERSON }
-        .mapNotNullTo(mutableSetOf()) { person ->
-            person.metadata[META_ENTITY_PREFIX + "phone"]?.let { com.point.core.flow.normConsensus(it) }
-        }
+        .mapNotNull { person -> person.metadata[com.point.core.flow.META_ENTITY_PHONE] }
+
+    // Один номер, записанный по-разному, — один номер (#932): у человека внутри он стоит
+    // `+380 66 526 2706`, а узлом рождён `+380665262706`. Тождество считает библиотека, а не
+    // текст, — иначе тот же номер показывался бы вторым чипом.
     return found.filter { chip ->
-        foundHeadline(chip).trim() !in shownValues &&
-            !(chip.state.kind == KIND_PHONE && com.point.core.flow.normConsensus(foundHeadline(chip)) in claimed)
+        val headline = foundHeadline(chip).trim()
+        val phone = chip.state.kind == KIND_PHONE
+        val repeated = headline in shownValues ||
+            (phone && shownValues.any { com.point.core.flow.PhoneNumbers.same(headline, it) })
+        !repeated && !(phone && claimed.any { com.point.core.flow.PhoneNumbers.same(headline, it) })
     }
 }
 

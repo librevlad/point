@@ -163,6 +163,14 @@ fun mergeFacts(known: Map<String, String>, fresh: Map<String, String>): Map<Stri
             return@forEach
         }
 
+        // Один номер, записанный по-разному, — одно знание (#932). `067 636 05 60`,
+        // `+380676360560` и `0676360560` расходились в спор «или:», и человек видел
+        // разногласие там, где его нет. Тождество считает библиотека, а не текст.
+        if (key == META_ENTITY_PHONE && PhoneNumbers.same(was, value)) {
+            merged.remove(key + META_ALT_SUFFIX)
+            return@forEach
+        }
+
         if (isRepairOf(was, value)) {
             merged[key] = value
             merged.remove(key + META_ALT_SUFFIX)

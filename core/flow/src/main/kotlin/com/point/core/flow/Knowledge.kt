@@ -92,7 +92,7 @@ fun mergeKnowledge(
  * между операторами расходятся с правдой. Их здесь нет намеренно.
  */
 internal fun withPhoneKnowledge(metadata: Map<String, String>): Map<String, String> {
-    val key = META_ENTITY_PREFIX + "phone"
+    val key = META_ENTITY_PHONE
     val value = metadata[key]?.takeIf { it.isNotBlank() } ?: return metadata
     val country = PhoneNumbers.country(value) ?: return metadata
     val out = LinkedHashMap(metadata)
