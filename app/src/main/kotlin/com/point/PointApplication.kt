@@ -6,6 +6,7 @@ import com.point.core.flow.formatCrashReport
 import com.point.data.RemovedUsageJournal
 import dagger.hilt.android.HiltAndroidApp
 import javax.inject.Inject
+import kotlinx.coroutines.launch
 
 @HiltAndroidApp
 class PointApplication : Application() {
@@ -14,9 +15,14 @@ class PointApplication : Application() {
 
     @Inject lateinit var removedUsageJournal: RemovedUsageJournal
 
+    @Inject lateinit var accounts: com.point.core.flow.AccountStore
+
+    @Inject lateinit var accountClient: com.point.core.flow.AccountClient
+
     override fun onCreate() {
         super.onCreate()
         tellPhoneRegion()
+        tellWhereToKnock()
         warmUpScanPack()
         eraseRemovedUsageJournal()
         val system = Thread.getDefaultUncaughtExceptionHandler()
@@ -28,6 +34,28 @@ class PointApplication : Application() {
                 crashLog.record(formatCrashReport(version, thread.name, error))
             }
             system?.uncaughtException(thread, error)
+        }
+    }
+
+    /**
+     * Сказать серверу, куда стучать в этот телефон (#817).
+     *
+     * Адрес выдаёт Google и меняет, когда захочет, — помнить его нельзя, надо спрашивать.
+     * Без настроек Firebase спрашивать не у кого: тогда стука просто нет, и просьба
+     * компьютера разбирается, когда человек откроет Point сам.
+     */
+    private fun tellWhereToKnock() {
+        val account = accounts.current() ?: return
+        val app = runCatching { com.google.firebase.FirebaseApp.getApps(this) }.getOrNull()
+        if (app.isNullOrEmpty()) return
+
+        runCatching {
+            com.google.firebase.messaging.FirebaseMessaging.getInstance().token
+                .addOnSuccessListener { address ->
+                    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                        runCatching { accountClient.tellPushAddress(account, address) }
+                    }
+                }
         }
     }
 

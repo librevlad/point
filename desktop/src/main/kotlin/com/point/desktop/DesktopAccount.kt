@@ -57,6 +57,20 @@ class DesktopAccount(
     fun peers(): List<com.point.core.flow.LinkedPc> =
         _circle.value.filterNot { it.self }.map { com.point.core.flow.LinkedPc(it.id, it.name, it.key) }
 
+    /**
+     * Постучать в телефоны круга: «зайдите, для вас что-то есть» (#817).
+     *
+     * Стучим во все телефоны, а не в один: у человека их может быть два, и угадывать, за
+     * каким он сейчас сидит, неоткуда. Молчание сервера не ошибка — просьба дождётся.
+     */
+    suspend fun knockPhones() {
+        val account = store.current() ?: return
+        _circle.value
+            .filterNot { it.self }
+            .filter { it.kind == DeviceKind.PHONE }
+            .forEach { runCatching { client.knock(account, it.id) } }
+    }
+
     fun signIn() {
         job?.cancel()
         job = scope.launch {

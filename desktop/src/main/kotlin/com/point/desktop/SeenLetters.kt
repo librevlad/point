@@ -1,4 +1,4 @@
-package com.point.core.flow
+package com.point.desktop
 
 import java.io.File
 

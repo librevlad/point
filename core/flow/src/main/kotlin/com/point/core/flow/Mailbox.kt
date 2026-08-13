@@ -72,11 +72,9 @@ class Mailbox(
      * Ответы на протухшие свои вопросы по-прежнему уходят: иначе ящик станет свалкой. Всё
      * непонятое доживёт своё на сервере — там письма живут сутки.
      */
-    fun drain(deviceId: String, keep: (Letter) -> Boolean = { false }) {
+    fun drain(deviceId: String) {
         repeat(MAX_DRAIN) {
-            val letter = take(deviceId) { }
-            if (letter.blob == null) return
-            runCatching { keep(letter) }
+            if (take(deviceId) { }.blob == null) return
         }
     }
 

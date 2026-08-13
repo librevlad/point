@@ -61,10 +61,19 @@ class DesktopState(
      * `pc.action`, и `FlowViewModel` делает его сразу после приёма. Работа была сделана и
      * просто выключена флагом.
      *
-     * Что остаётся правдой и сказано человеку прямо: просьба ждёт, пока он откроет Point и
-     * заберёт объект. Мгновенной она станет со «стуком» уведомлением — это следующий шаг.
+     * Чтобы просьба не ждала случайного открытия Point, компьютер просит сервер постучать
+     * в телефон. Стук несёт одно слово «зайди»; чего именно от него хотят, телефон
+     * спрашивает у компьютера напрямую.
      */
     internal val phoneRunsRequests: Boolean = true,
+
+    /**
+     * Постучать в телефон: «зайди, для тебя что-то есть» (#817).
+     *
+     * Молчание не ломает работу: без ключа, без разрешения на уведомления и без сети
+     * просьба всё равно дождётся — просто человек узнает о ней, открыв Point сам.
+     */
+    private val knockPhone: suspend () -> Unit = {},
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
@@ -408,7 +417,16 @@ class DesktopState(
     ) {
         scope.launch(Dispatchers.IO) {
             runCatching {
-                outbox?.add(item.obj.copy(metadata = item.obj.metadata + ("pc.action" to action.id)))
+                outbox?.add(
+                    item.obj.copy(
+                        metadata = item.obj.metadata +
+                            ("pc.action" to action.id) +
+                            // Название работы человеческими словами кладёт компьютер: он его
+                            // и показывал человеку. Телефону иначе неоткуда взять слова для
+                            // уведомления, а звать реестр ради названия — лишний путь.
+                            ("pc.action.label" to action.label),
+                    )
+                )
             }.onSuccess {
                 _message.value = if (silent) {
                     "${action.label} — ждёт телефона: выполнится, когда вы его откроете"
@@ -416,6 +434,7 @@ class DesktopState(
                     "${action.label} — ждёт телефона: откройте Point на телефоне и заберите объект"
                 }
                 note(item, action.id, "${action.label} · ждёт телефона", ActionResult.Done("ждёт телефона"))
+                runCatching { knockPhone() }
             }.onFailure {
                 _message.value = "Не удалось положить в очередь"
                 note(
