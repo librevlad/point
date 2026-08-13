@@ -7,6 +7,7 @@ import com.point.core.flow.NO_VOICE_TEXT
 import com.point.core.flow.Spoken
 import com.point.core.flow.TextToSpeech
 import com.point.core.flow.Wav
+import com.point.core.flow.noOfflineVoice
 import com.point.core.flow.noVoiceForLanguage
 import com.point.core.flow.speechParts
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -42,6 +43,7 @@ class AndroidTextToSpeech @Inject constructor(
         text: String,
         language: String?,
         into: String,
+        onDeviceOnly: Boolean,
         onPart: suspend (Int, Int) -> Unit,
     ): Spoken {
         val said = withVoice { voice ->
@@ -49,6 +51,13 @@ class AndroidTextToSpeech @Inject constructor(
             val set = voice.setLanguage(locale)
             if (set == SystemVoice.LANG_MISSING_DATA || set == SystemVoice.LANG_NOT_SUPPORTED) {
                 return@withVoice Spoken.Refused(noVoiceForLanguage(locale.displayLanguage))
+            }
+
+            // Режим закрыт — читает только голос, живущий на устройстве (#924). Голос по
+            // умолчанию система нередко выбирает серверный, и тогда текст человека уезжает
+            // в чужой сервис без спроса.
+            if (onDeviceOnly && !takeOfflineVoice(voice, locale)) {
+                return@withVoice Spoken.Refused(noOfflineVoice(locale.displayLanguage))
             }
 
             val limit = runCatching { SystemVoice.getMaxSpeechInputLength() }.getOrDefault(3_900)
@@ -72,6 +81,24 @@ class AndroidTextToSpeech @Inject constructor(
             Spoken.Done(into)
         }
         return said ?: Spoken.Refused(NO_VOICE_TEXT)
+    }
+
+    /**
+     * Взять голос, который читает на самом устройстве (#924).
+     *
+     * `isNetworkConnectionRequired` голос объявляет сам; не установленный до конца
+     * (`FEATURE_NOT_INSTALLED`) тоже уйдёт в сеть за данными. `false` — такого голоса на
+     * этом языке нет.
+     */
+    private fun takeOfflineVoice(voice: SystemVoice, locale: Locale): Boolean {
+        val offline = runCatching {
+            voice.voices.orEmpty()
+                .filter { it.locale.language == locale.language }
+                .filterNot { it.isNetworkConnectionRequired }
+                .filterNot { SystemVoice.Engine.KEY_FEATURE_NOT_INSTALLED in it.features.orEmpty() }
+                .minByOrNull { it.latency }
+        }.getOrNull() ?: return false
+        return runCatching { voice.setVoice(offline) == SystemVoice.SUCCESS }.getOrDefault(false)
     }
 
     /**
