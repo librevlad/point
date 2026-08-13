@@ -1,5 +1,6 @@
 package com.point.desktop
 
+import com.point.core.flow.SeenLetters
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue

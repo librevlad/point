@@ -27,7 +27,16 @@ class PcCapability @Inject constructor(
 
     // Телефон и компьютер разговаривают через сервер, а не по проводу: без интернета
     // «На компьютер» не работает, и человек должен видеть это до тапа (#569).
-    override val meta = CapabilityMeta(priority = 75, latency = Latency.FAST, network = true)
+    //
+    // Компьютеру это действие не рекламируется (#920): там объект уже на компьютере, и
+    // строка звучала «На компьютер · на телефоне» с припиской, что телефон просьб не
+    // выполняет. Зеркало той же беды, что чинилась у «На телефон» на телефоне.
+    override val meta = CapabilityMeta(
+        priority = 75,
+        latency = Latency.FAST,
+        network = true,
+        localOnly = true,
+    )
     override fun label(state: ObjectState) = "На компьютер"
 
     override fun accepts(state: ObjectState) =

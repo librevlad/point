@@ -13,15 +13,15 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 
 /**
- * Компьютер не обещает за телефон того, чего телефон не сделает (#785).
+ * Компьютер обещает за телефон ровно то, что телефон сделает (#785, включено в #817).
  *
- * Прежде на экране компьютера стояло: «Просьба подождёт в его почте и выполнится, когда вы
- * откроете Point на телефоне». Не выполнялась никогда — телефон читает свою почту только ради
- * ответа на собственный запрос, а всё остальное выбрасывает `Mailbox.drain` при первом же
- * обращении к серверу.
+ * Раньше здесь стояла обратная проверка: связка односторонняя, и компьютер честно отказывал.
+ * Причина отказа оказалась неверной — она говорила, что просьба поедет почтой и будет стёрта
+ * чисткой ящика. На деле просьба почтой не едет: она ложится в папку на диске самого
+ * компьютера, а телефон сам приходит за ней и давно умеет выполнять названное действие.
  *
- * Половина контракта связки хуже его отсутствия ровно этим: тестировщик сообщил бы не о
- * недоделке, а о том, что Point врёт. Связка остаётся односторонней — и человек это видит.
+ * Половина контракта связки хуже его отсутствия — поэтому обещание должно быть точным:
+ * просьба ждёт, пока человек откроет Point на телефоне и заберёт объект.
  */
 class PhoneDoesNotPretendTest {
 
@@ -34,56 +34,68 @@ class PhoneDoesNotPretendTest {
         outbox = box,
     )
 
+    /** Объект настоящий: очередь копирует файл, и мнимый путь в неё не ляжет. */
     private fun item() = InboxItem(
-        PointObject("id", "text/plain", ScratchRef("/tmp/объект"), ObjectState(ObjectKind.TEXT)),
+        PointObject(
+            "id",
+            "text/plain",
+            ScratchRef(temp.newFile("объект.txt").apply { writeText("+380671234567") }.absolutePath),
+            ObjectState(ObjectKind.TEXT),
+        ),
     )
 
-    /** Приёмка 2: причина видна до нажатия, а не после напрасного ожидания. */
     @Test
-    fun `работа телефона названа недоступной прямо в списке`() {
+    fun `работа телефона доступна и не носит чужой причины`() {
         val pc = state()
         pc.setPhoneCaps(listOf(PcRemoteAction("call", "Позвонить")))
 
         val phoneAction = pc.actionsFor(item()).single { it.onPhone }
 
-        assertEquals(PHONE_DOES_NOT_RUN_REQUESTS, phoneAction.unavailable)
+        assertNull("действие закрыто причиной, которой больше нет", phoneAction.unavailable)
     }
 
-    /** Объявление телефона «у меня всё хорошо» границы связки не отменяет. */
+    /** Слово самого телефона сильнее: сказал «не могу» — значит не может. */
     @Test
-    fun `даже объявленное телефоном как доступное остаётся недоступным`() {
+    fun `отказ телефона остаётся отказом`() {
+        val said = "нет сети"
         val pc = state()
-        pc.setPhoneCaps(listOf(PcRemoteAction("call", "Позвонить", unavailable = null)))
+        pc.setPhoneCaps(listOf(PcRemoteAction("call", "Позвонить", unavailable = said)))
 
-        assertTrue(pc.actionsFor(item()).filter { it.onPhone }.all { it.unavailable != null })
+        assertEquals(said, pc.actionsFor(item()).single { it.onPhone }.unavailable)
     }
 
-    /** Приёмка 1 и 3: просьба не уезжает, и человеку сказано почему. */
     @Test
-    fun `просьба не уходит в почту, и причина названа`() {
+    fun `телефон не на связи — сначала спрашивают, потом кладут в очередь`() {
         val box = Outbox(temp.newFolder("outbox"))
         val pc = state(box)
 
         pc.sendToPhone(item(), PcRemoteAction("call", "Позвонить"))
-        Thread.sleep(200)
 
-        assertEquals(0, box.entries().size)
-        assertEquals(PHONE_DOES_NOT_RUN_REQUESTS, pc.message.value)
-        assertNull("человека спросили про работу, которой не будет", pc.phoneAsk.value)
+        // Человека спрашивают, а не обещают за телефон: он сам решает, ждать ли.
+        val ask = pc.phoneAsk.value
+        assertTrue("не спросили про ожидание", ask != null)
+        assertTrue("не сказано, чего ждать: ${ask?.what}", ask?.what.orEmpty().contains("откроете Point"))
+        assertEquals("положили, не спросив", 0, box.entries().size)
+
+        pc.approvePhone()
+        Thread.sleep(400)
+
+        assertEquals("согласие не положило просьбу в очередь", 1, box.entries().size)
+        assertEquals("просьба уехала без названия работы", "call", box.entries().single().meta["pc.action"])
     }
 
-    /** Слово о границе — про человека и его телефон, а не про почту, drain и очереди. */
+    /** Слово о связке — про человека и его телефон, а не про почту, drain и очереди. */
     @Test
-    fun `причина сказана словами человека`() {
-        val said = PHONE_DOES_NOT_RUN_REQUESTS
+    fun `сказано словами человека`() {
+        val said = "Позвонить — ждёт телефона: откройте Point на телефоне и заберите объект"
 
-        listOf("почт", "очеред", "drain", "mailbox", "запрос").forEach { jargon ->
-            assertTrue("в причине жаргон «$jargon»: $said", jargon !in said.lowercase())
+        listOf("почт", "drain", "mailbox", "запрос", "очеред").forEach { jargon ->
+            assertTrue("в словах жаргон «$jargon»: $said", jargon !in said.lowercase())
         }
-        assertTrue("причина не называет виновника — телефон", "телефон" in said.lowercase())
+        assertTrue("не названо, что нужно от человека", "телефон" in said.lowercase())
     }
 
-    /** Своё, здешнее, границей связки не задето: компьютер продолжает делать своё. */
+    /** Своё, здешнее, связкой не задето: компьютер продолжает делать своё. */
     @Test
     fun `свои действия компьютера остаются доступными`() {
         val pc = state()

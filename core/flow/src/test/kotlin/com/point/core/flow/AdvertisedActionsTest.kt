@@ -110,4 +110,35 @@ class AdvertisedActionsTest {
 
         assertEquals(setOf("HAS_EMAIL"), there.features)
     }
+
+    /**
+     * Действие, которое отдаёт объект другому устройству, тому устройству не рекламируется
+     * (#920).
+     *
+     * Владелец увидел на экране: «На компьютер · телефон пока не выполняет просьбы с
+     * компьютера · на телефоне». Объект уже на компьютере — предлагать отправить его туда
+     * бессмысленно. Это зеркало беды, чинённой на телефоне: там компьютерное «На телефон»
+     * звучало «На телефон на ПК».
+     *
+     * Сторожим класс, а не два случая: всё, что называет чужое устройство в своём имени,
+     * рекламироваться не должно.
+     */
+    @Test
+    fun `действие про чужое устройство не уезжает на это устройство`() {
+        val caps = listOf(
+            Cap("pc", { true }, CapabilityMeta(localOnly = true), { "На компьютер" }),
+            Cap("understand", { true }, name = { "Понять" }),
+        )
+
+        val advertised = advertisedActions(caps)
+
+        val aboutOtherDevice = advertised.filter { action ->
+            listOf("компьютер", "телефон", " пк").any { action.label.lowercase().contains(it) }
+        }
+        assertTrue(
+            "рекламируется действие про чужое устройство: ${aboutOtherDevice.map { it.label }}",
+            aboutOtherDevice.isEmpty(),
+        )
+    }
+
 }
