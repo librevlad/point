@@ -54,6 +54,11 @@ border-radius:12px;background:#00000033;color:#F2F3F5;font:inherit;font-size:15p
 .no-js .tabs{display:none}
 .said{margin:0 0 14px;font-size:14px;line-height:1.5;min-height:1.2em}
 .bad{color:#FF9A9A}
+#contact{display:none}
+#contact input{width:100%;box-sizing:border-box;margin:0 0 8px;padding:12px 14px;
+border-radius:12px;border:1px solid #ffffff14;background:#1B1E27;color:#EAF0FF;font-size:15px}
+#contact input::placeholder{color:#6C7488}
+#place{display:none;text-align:center;padding:10px 0 4px;color:#9AA3B2;font-size:14px}
 </style>
 """
 
@@ -65,6 +70,11 @@ def upload_body() -> str:
         '<div class="tabs" id="tabs">'
         '<button type="button" class="tab on" id="tab-file">Файл</button>'
         '<button type="button" class="tab" id="tab-text">Текст</button>'
+        # Отдача уже понимает контакт и место — страницами с именем и картой (#737, #883).
+        # Приём умел только файл и текст: контакт можно было прислать разве что файлом, а
+        # место — никак (#916).
+        '<button type="button" class="tab" id="tab-contact">Контакт</button>'
+        '<button type="button" class="tab" id="tab-place">Место</button>'
         "</div>"
         '<form method="post" enctype="multipart/form-data" id="f">'
         '<label class="portal" id="zone" for="file">'
@@ -74,6 +84,13 @@ def upload_body() -> str:
         "</label>"
         '<input type="file" name="file" id="file">'
         '<textarea name="text" id="text" rows="7" placeholder="Напишите или вставьте текст…"></textarea>'
+        '<div id="contact">'
+        '<input id="c-name" placeholder="Имя" autocomplete="name">'
+        '<input id="c-phone" placeholder="Телефон" inputmode="tel" autocomplete="tel">'
+        '<input id="c-mail" placeholder="Почта — если есть" inputmode="email" autocomplete="email">'
+        "</div>"
+        '<p id="place">Point попросит у браузера, где вы сейчас. Точку увидит только тот, '
+        "кто дал вам ссылку.</p>"
         '<p class="said" id="said" role="status" aria-live="polite"></p>'
         '<button type="submit" id="go">Отправить файл</button>'
         "</form>"
@@ -110,21 +127,28 @@ UPLOAD_SCRIPT = r"""
  // Вкладки «Файл | Текст». Ссылку чаще всего дают ради куска текста — адреса, номера
  // заказа, обрывка переписки, — а форма умела только файл.
  var mode='file', text=document.getElementById('text'),
-     tabFile=document.getElementById('tab-file'), tabText=document.getElementById('tab-text');
+     contact=document.getElementById('contact'), place=document.getElementById('place'),
+     tabs={file:document.getElementById('tab-file'),text:document.getElementById('tab-text'),
+           contact:document.getElementById('tab-contact'),place:document.getElementById('tab-place')},
+     verbs={file:'Отправить файл',text:'Отправить текст',
+            contact:'Отправить контакт',place:'Отправить место'},
+     notes={
+      file:'Файл уходит сразу после нажатия — до 50 МБ. Пока идёт отправка, не закрывайте страницу.',
+      text:'Текст придёт текстом, а не файлом.',
+      contact:'Придёт контактом — его можно сохранить в телефон одним нажатием.',
+      place:'Придёт точкой на карте.'};
  function pick(next){
   mode=next;
-  var isFile=mode==='file';
-  tabFile.className='tab'+(isFile?' on':''); tabText.className='tab'+(isFile?'':' on');
-  zone.style.display=isFile?'':'none';
-  text.style.display=isFile?'none':'block';
-  go.textContent=isFile?'Отправить файл':'Отправить текст';
-  note.textContent=isFile
-   ?'Файл уходит сразу после нажатия — до 50 МБ. Пока идёт отправка, не закрывайте страницу.'
-   :'Текст придёт текстом, а не файлом.';
+  for(var k in tabs){ tabs[k].className='tab'+(k===mode?' on':''); }
+  zone.style.display=mode==='file'?'':'none';
+  text.style.display=mode==='text'?'block':'none';
+  contact.style.display=mode==='contact'?'block':'none';
+  place.style.display=mode==='place'?'block':'none';
+  go.textContent=verbs[mode];
+  note.textContent=notes[mode];
   say('');
  }
- tabFile.addEventListener('click',function(){ pick('file'); });
- tabText.addEventListener('click',function(){ pick('text'); });
+ for(var key in tabs){ (function(k){ tabs[k].addEventListener('click',function(){ pick(k); }); })(key); }
 
  ['dragenter','dragover'].forEach(function(e){
   zone.addEventListener(e,function(ev){ ev.preventDefault(); zone.classList.add('over'); });
@@ -137,14 +161,19 @@ UPLOAD_SCRIPT = r"""
   i.files=ev.dataTransfer.files; chosen();
  });
 
- f.addEventListener('submit',function(ev){
-  var file=i.files&&i.files[0];
-  var body=(text.value||'').trim();
-  if(mode==='text'&&!body){ ev.preventDefault(); say('Напишите текст — пока отправлять нечего',true); return; }
-  if(mode==='file'&&!file){ ev.preventDefault(); say('Выберите файл — пока отправлять нечего',true); return; }
-  ev.preventDefault();
-  var data=new FormData();
-  if(mode==='text'){ data.append('text',body); } else { data.append('file',file,file.name); }
+ function vcard(){
+  var n=(document.getElementById('c-name').value||'').trim(),
+      p=(document.getElementById('c-phone').value||'').trim(),
+      m=(document.getElementById('c-mail').value||'').trim();
+  if(!n&&!p&&!m) return null;
+  var out='BEGIN:VCARD\r\nVERSION:3.0\r\n';
+  if(n) out+='FN:'+n+'\r\n';
+  if(p) out+='TEL;TYPE=CELL:'+p+'\r\n';
+  if(m) out+='EMAIL:'+m+'\r\n';
+  return {text:out+'END:VCARD\r\n', name:(n||'Контакт')+'.vcf'};
+ }
+
+ function send(data){
   var x=new XMLHttpRequest();
   x.open('POST',location.pathname);
   go.disabled=true; zone.classList.add('sending');
@@ -159,24 +188,63 @@ UPLOAD_SCRIPT = r"""
   x.onload=function(){
    if(x.status===200){
     fill.style.setProperty('--p',100);
-    core.innerHTML='<b>Готово</b><span>'+(mode==='text'?'текст ушёл':'файл ушёл')+'</span>';
+    core.innerHTML='<b>Готово</b><span>'+({file:'файл ушёл',text:'текст ушёл',
+      contact:'контакт ушёл',place:'место ушло'}[mode])+'</span>';
     note.textContent='Можно закрывать страницу.';
     say(''); go.remove();
    } else {
     fail(x.status===404?'Ссылка больше не работает — попросите новую.'
         :x.status===507?'Файл слишком большой для этого ящика.'
-        :'Сервер не принял файл. Попробуйте ещё раз.');
+        :'Сервер не принял отправку. Попробуйте ещё раз.');
    }
   };
   x.onerror=function(){ fail('Связь прервалась. Проверьте интернет и попробуйте ещё раз.'); };
   x.onabort=function(){ fail('Отправка прервана.'); };
-  function fail(text){
-   zone.classList.remove('sending'); go.disabled=false;
-   core.innerHTML='<b>Выберите файл</b><span id="name"></span>';
-   name=document.getElementById('name'); chosen();
-   say(text,true);
-  }
   x.send(data);
+ }
+
+ f.addEventListener('submit',function(ev){
+  ev.preventDefault();
+  var file=i.files&&i.files[0];
+  var body=(text.value||'').trim();
+  if(mode==='text'&&!body){ say('Напишите текст — пока отправлять нечего',true); return; }
+  if(mode==='file'&&!file){ say('Выберите файл — пока отправлять нечего',true); return; }
+
+  // Место спрашивается у браузера здесь и сейчас: чужой человек нажал «Отправить место»,
+  // и это его согласие. Без разрешения не уходит ничего (#916).
+  if(mode==='place'){
+   if(!navigator.geolocation){ say('Браузер не умеет определять место',true); return; }
+   say('Спрашиваю, где вы…');
+   navigator.geolocation.getCurrentPosition(function(pos){
+    var d=new FormData();
+    d.append('text',pos.coords.latitude.toFixed(6)+', '+pos.coords.longitude.toFixed(6));
+    d.append('name','Место.txt');
+    send(d);
+   },function(){ say('Место не разрешено — точку отправить нечем',true); },
+   {enableHighAccuracy:true,timeout:15000});
+   return;
+  }
+
+  if(mode==='contact'){
+   var card=vcard();
+   if(!card){ say('Заполните хотя бы имя или телефон',true); return; }
+   var dc=new FormData();
+   dc.append('text',card.text);
+   dc.append('name',card.name);
+   send(dc);
+   return;
+  }
+
+  var data=new FormData();
+  if(mode==='text'){ data.append('text',body); } else { data.append('file',file,file.name); }
+  send(data);
  });
+
+ function fail(text){
+  zone.classList.remove('sending'); go.disabled=false;
+  core.innerHTML='<b>Выберите файл</b><span id="name"></span>';
+  name=document.getElementById('name'); chosen();
+  say(text,true);
+ }
 })();
 """
