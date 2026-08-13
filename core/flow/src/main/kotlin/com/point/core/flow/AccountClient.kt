@@ -24,6 +24,22 @@ interface AccountClient {
 
     /** `false` — не сохранилось: сеть, отзыв пропуска или чужие настройки оказались новее. */
     suspend fun saveSettings(account: PointAccount, sealed: SealedSettings): Boolean = false
+
+    /**
+     * Сказать серверу, куда стучать в это устройство (#817).
+     *
+     * Адрес — про себя и только про себя. Пустая строка стирает его: человек выключил
+     * уведомления, и стучать больше некуда.
+     */
+    suspend fun tellPushAddress(account: PointAccount, address: String): Boolean = false
+
+    /**
+     * Попросить сервер постучать в другое своё устройство: «зайди, для тебя что-то есть».
+     *
+     * `false` — не постучали. Это не отказ в работе: просьба всё равно ждёт, и человек
+     * разберёт её, когда откроет Point сам.
+     */
+    suspend fun knock(account: PointAccount, deviceId: String): Boolean = false
 }
 
 interface AccountStore {

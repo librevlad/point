@@ -240,6 +240,24 @@ def update_device(
     return cur.rowcount
 
 
+def set_push_address(conn: sqlite3.Connection, *, user_id: str, device_id: str, address: str) -> int:
+    """Запомнить, куда стучать в это устройство (#817).
+
+    Адрес присылает само устройство и только про себя: чужой адрес — это возможность
+    дёргать чужой телефон.
+    """
+    cur = conn.execute(
+        "UPDATE devices SET push_token = ? WHERE id = ? AND user_id = ? AND revoked_at IS NULL",
+        (address, device_id, user_id),
+    )
+    return cur.rowcount
+
+
+def push_address(conn: sqlite3.Connection, user_id: str, device_id: str) -> str:
+    row = device(conn, user_id, device_id)
+    return "" if row is None else (row["push_token"] or "")
+
+
 def revoke_device(conn: sqlite3.Connection, *, user_id: str, device_id: str, now: int) -> int:
     """Отключить может любое устройство круга — и себя тоже («Выйти»).
 

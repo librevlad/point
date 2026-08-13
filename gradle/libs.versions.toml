@@ -82,6 +82,9 @@ onnxruntime = { group = "com.microsoft.onnxruntime", name = "onnxruntime-android
 opencv = { group = "org.opencv", name = "opencv", version.ref = "opencv" } # document scan pipeline (perspective + adaptive threshold)
 mlkit-entity-extraction = { group = "com.google.mlkit", name = "entity-extraction", version.ref = "mlkitEntityExtraction" } # on-device entity detection (phone/email/address/date/…)
 mlkit-barcode = { group = "com.google.mlkit", name = "barcode-scanning", version.ref = "mlkitBarcode" } # on-device QR/barcode (bundled model, offline)
+firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version = "33.7.0" }
+firebase-messaging = { group = "com.google.firebase", name = "firebase-messaging-ktx" }
+
 mlkit-subject-segmentation = { group = "com.google.android.gms", name = "play-services-mlkit-subject-segmentation", version.ref = "mlkitSubjectSegmentation" } # on-device subject cutout (transparent PNG)
 kotlinx-coroutines-play-services = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-play-services", version.ref = "coroutines" } # await() for ML Kit Tasks
 zxing-core = { group = "com.google.zxing", name = "core", version.ref = "zxing" } # QR encode (pure Java → BitMatrix)
@@ -108,3 +111,6 @@ kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "ko
 jetbrains-compose = { id = "org.jetbrains.compose", version = "1.7.3" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 hilt = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
+# Стук уведомлением (#817). Плагин применяется, только если рядом лежит
+# `app/google-services.json`: без него Point собирается и работает, просто без стука.
+google-services = { id = "com.google.gms.google-services", version = "4.4.2" }

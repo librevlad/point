@@ -117,6 +117,25 @@ class HttpAccountClient(
         ).status == 200
     }
 
+    override suspend fun tellPushAddress(account: PointAccount, address: String): Boolean = io {
+        request(
+            path = "/devices/" + encode(account.deviceId) + "/push",
+            method = "PUT",
+            token = account.deviceToken,
+            body = address,
+        ).status == 200
+    }
+
+    override suspend fun knock(account: PointAccount, deviceId: String): Boolean = io {
+        val reply = request(
+            path = "/devices/" + encode(deviceId) + "/knock",
+            method = "POST",
+            token = account.deviceToken,
+            body = "",
+        )
+        reply.status == 200 && parseJson(reply.body ?: "").bool("knocked") == true
+    }
+
     override suspend fun deleteAccount(account: PointAccount): Boolean = io {
         request(path = "/account", method = "DELETE", token = account.deviceToken).status == 200
     }

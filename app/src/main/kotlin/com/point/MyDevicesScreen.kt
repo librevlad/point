@@ -51,6 +51,15 @@ fun MyDevicesScreen(
 
     onDeleteAccount: () -> Unit = {},
 
+    /**
+     * Стучать ли, когда компьютер о чём-то просит (#817).
+     *
+     * Спрашивается здесь, а не на старте: до того, как в круге появился компьютер, стучать
+     * некому, и разрешение просилось бы ни за чем.
+     */
+    knockOff: Boolean = false,
+    onAllowKnock: () -> Unit = {},
+
     now: Long = System.currentTimeMillis(),
 ) {
 
@@ -120,6 +129,17 @@ fun MyDevicesScreen(
                             )
                         }
                     },
+                )
+            }
+
+            if (knockOff && others.any { it.kind == com.point.core.flow.DeviceKind.PC }) {
+                Spacer(Modifier.height(6.dp))
+                PortalRow(
+                    title = KNOCK_TITLE,
+                    subtitle = KNOCK_WHAT,
+                    onClick = onAllowKnock,
+                    icon = bubbleIcon("pc"),
+                    accent = bubbleColor("pc"),
                 )
             }
 
@@ -252,3 +272,7 @@ private fun PreviewFailed() = PointTheme(darkTheme = true) {
         now = NOW,
     )
 }
+
+/** Разрешение спрашивается словами человека: что он получит, а не как это устроено. */
+private const val KNOCK_TITLE = "Сообщать о просьбах компьютера"
+private const val KNOCK_WHAT = "Сейчас просьба ждёт, пока вы откроете Point сами"

@@ -27,11 +27,14 @@ class PhoneDoesNotPretendTest {
 
     @get:Rule val temp = TemporaryFolder()
 
+    private val knocks = java.util.concurrent.atomic.AtomicInteger()
+
     private fun state(box: Outbox? = null) = DesktopState(
         registry = DesktopRegistry(emptySet()),
         resolver = DesktopResolver(emptySet()),
         clipboard = { },
         outbox = box,
+        knockPhone = { knocks.incrementAndGet() },
     )
 
     /** Объект настоящий: очередь копирует файл, и мнимый путь в неё не ляжет. */
@@ -81,7 +84,32 @@ class PhoneDoesNotPretendTest {
         Thread.sleep(400)
 
         assertEquals("согласие не положило просьбу в очередь", 1, box.entries().size)
-        assertEquals("просьба уехала без названия работы", "call", box.entries().single().meta["pc.action"])
+        val left = box.entries().single()
+        assertEquals("просьба уехала без названия работы", "call", left.meta["pc.action"])
+
+        // Уведомление на телефоне называет работу словами человека. Взять их телефону
+        // больше неоткуда: через Google едет одно слово «зайди».
+        assertEquals("просьба уехала без человеческого имени", "Позвонить", left.meta["pc.action.label"])
+        assertEquals("в телефон не постучали", 1, knocks.get())
+    }
+
+    /** Стук — про своевременность, а не про работу: он не должен решать, случится ли она. */
+    @Test
+    fun `молчание стука не отменяет просьбу`() {
+        val box = Outbox(temp.newFolder("outbox"))
+        val pc = DesktopState(
+            registry = DesktopRegistry(emptySet()),
+            resolver = DesktopResolver(emptySet()),
+            clipboard = { },
+            outbox = box,
+            knockPhone = { error("сервер молчит") },
+        )
+
+        pc.sendToPhone(item(), PcRemoteAction("call", "Позвонить"))
+        pc.approvePhone()
+        Thread.sleep(400)
+
+        assertEquals("просьба пропала из-за неудачного стука", 1, box.entries().size)
     }
 
     /** Слово о связке — про человека и его телефон, а не про почту, drain и очереди. */

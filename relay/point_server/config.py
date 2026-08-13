@@ -29,6 +29,9 @@ class Settings:
     public_url: str
     google_client_id: str
     google_client_secret: str
+    # Ключ служебной учётки Firebase — им сервер стучит в телефон (#817). Пуст —
+    # значит стука нет, и это рабочее состояние: просьба разбирается при открытии Point.
+    fcm_key_path: str = ""
     login_ttl: int = LOGIN_TTL_SECONDS
     poll_interval: int = POLL_INTERVAL_SECONDS
     online_window: int = ONLINE_WINDOW_SECONDS
@@ -58,4 +61,5 @@ def settings_from_env(env: dict[str, str] | None = None) -> Settings:
         google_client_id=env.get("POINT_GOOGLE_CLIENT_ID", ""),
         google_client_secret=env.get("POINT_GOOGLE_CLIENT_SECRET", ""),
         login_ttl=int(env.get("POINT_LOGIN_TTL", LOGIN_TTL_SECONDS)),
+        fcm_key_path=env.get("POINT_FCM_KEY", ""),
     )

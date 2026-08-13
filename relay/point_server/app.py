@@ -39,7 +39,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Red
 from pydantic import BaseModel, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from . import db, google as google_mod, ids, mailbox, pages, store, upload_page
+from . import db, google as google_mod, ids, mailbox, pages, push as push_mod, store, upload_page
 from .config import Settings, settings_from_env
 
 DEVICE_KINDS = ("PHONE", "PC")
@@ -57,6 +57,8 @@ class Deps:
     settings: Settings
     google: google_mod.GoogleIdentity
     now: Callable[[], int]
+    # Кому стучать в телефон (#817). `None` — стучать нечем, и это рабочее состояние.
+    knocker: object = None
 
 
 # --- тела запросов ---------------------------------------------------------------------
@@ -213,6 +215,7 @@ def create_app(
     settings: Settings | None = None,
     google: google_mod.GoogleIdentity | None = None,
     now: Callable[[], int] | None = None,
+    knocker: object | None = None,
 ) -> FastAPI:
     _require_form_parsing()
     settings = settings or settings_from_env()
@@ -227,7 +230,15 @@ def create_app(
     db.init(settings.db_path)
 
     app = FastAPI(title="Point server", docs_url=None, redoc_url=None, openapi_url=None)
-    app.state.deps = Deps(settings=settings, google=google, now=now or (lambda: int(time.time())))
+    if knocker is None:
+        # Ключа нет — Point работает без стука: просьба разбирается при открытии.
+        knocker = push_mod.knocker(settings.fcm_key_path)
+    app.state.deps = Deps(
+        settings=settings,
+        google=google,
+        now=now or (lambda: int(time.time())),
+        knocker=knocker,
+    )
 
     def deps(request: Request) -> Deps:
         return request.app.state.deps
@@ -581,6 +592,52 @@ def create_app(
         # навсегда. «Выйти» означает «меня здесь больше нет», а не «я больше не захожу».
         mailbox.forget_device(os.path.join(d.settings.root, "blobs"), me.user_id, device_id)
         return {"revoked": device_id, "self": device_id == me.device_id}
+
+    @app.put("/devices/{device_id}/push")
+    async def push_address(
+        device_id: str,
+        request: Request,
+        conn: sqlite3.Connection = Depends(conn_of),
+        me: store.Caller = Depends(caller),
+    ):
+        """Устройство говорит, куда в него стучать (#817).
+
+        Только про себя: чужой адрес здесь означал бы возможность дёргать чужой телефон.
+        """
+        if device_id != me.device_id:
+            raise fail(403, "not_yours", "Адрес для стука устройство сообщает только про себя.")
+        address = one_line((await request.body()).decode("utf-8", "replace"))
+        store.set_push_address(conn, user_id=me.user_id, device_id=device_id, address=address)
+        return {"heard": bool(address)}
+
+    @app.post("/devices/{device_id}/knock")
+    def knock(
+        device_id: str,
+        conn: sqlite3.Connection = Depends(conn_of),
+        me: store.Caller = Depends(caller),
+        d: Deps = Depends(deps),
+    ):
+        """Постучать в устройство своего круга: «зайди, для тебя что-то есть».
+
+        Через Google уходит одно слово. Что именно ждёт человека, знает только его
+        собственное устройство — оно и сходит за просьбой.
+
+        Молчание — не ошибка: без ключа Firebase, без адреса и с мёртвым адресом Point
+        продолжает работать, просто человек узнает о просьбе, когда откроет Point сам.
+        """
+        if not store.device(conn, me.user_id, device_id):
+            raise fail(404, "no_device", "Такого устройства в вашем круге нет.")
+        address = store.push_address(conn, me.user_id, device_id)
+        if d.knocker is None or not address:
+            return {"knocked": False, "why": "no_key" if d.knocker is None else "no_address"}
+        try:
+            heard = d.knocker.knock(address)
+        except push_mod.Silent:
+            return {"knocked": False, "why": "silent"}
+        if not heard:
+            # Адрес умер вместе с переустановкой приложения — держать его незачем.
+            store.set_push_address(conn, user_id=me.user_id, device_id=device_id, address="")
+        return {"knocked": heard}
 
     @app.delete("/account")
     def delete_account(

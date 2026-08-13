@@ -19,6 +19,10 @@
          половина отклика мертва при живом звуке. -->
     <uses-permission android:name="android.permission.VIBRATE" />
 
+    <!-- Стук компьютера (#817): «зайди, для тебя что-то есть». Спрашивается не на старте,
+         а там, где человек видит свой компьютер, — до этого стучать всё равно некому. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <!--
       Кого Point спрашивает у системы (#246). С Android 11 приложение не видит чужих приложений
       без этого списка, и `resolveActivity` молча отвечает «никого нет»: источники «Камера» и
@@ -233,6 +237,16 @@
             <meta-data
                 android:name="android.printservice"
                 android:resource="@xml/point_printservice" />
+        </service>
+
+        <!-- Стук компьютера (#817). Письмо несёт одно слово «зайди»: что именно просят,
+             телефон спрашивает у самого компьютера, минуя Google. -->
+        <service
+            android:name=".knock.KnockService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
         </service>
 
         <!-- Плитка «Point» (#246) со своим знаком (#456): в редакторе шторки её надо УЗНАТЬ среди

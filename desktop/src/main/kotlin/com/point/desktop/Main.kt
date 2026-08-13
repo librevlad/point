@@ -1,6 +1,5 @@
 package com.point.desktop
 
-import com.point.core.flow.SeenLetters
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -177,6 +176,7 @@ fun main(args: Array<String>) {
             runCatching { phoneCapsFile.apply { parentFile?.mkdirs() }.writeText(com.point.core.flow.encodePcCaps(caps)) }
         },
         journalStore = journalStore,
+        knockPhone = account::knockPhones,
 
         reopenPath = { path -> File(path).takeIf(File::isFile)?.let { inbox.addFile(it.absolutePath) } },
         consent = FileConsent(File(pointDir, "consent")),

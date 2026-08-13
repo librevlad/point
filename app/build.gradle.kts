@@ -8,6 +8,14 @@ plugins {
     alias(libs.plugins.hilt)
 }
 
+// Стук уведомлением (#817). Настройки Firebase в открытом репозитории не лежат, поэтому
+// плагин применяется, только если файл рядом. Библиотека подключена всегда — код от неё
+// собирается у любого, — а без настроек Firebase просто не поднимается, и Point работает
+// как раньше: просьба компьютера разбирается, когда человек откроет Point сам.
+if (file("google-services.json").exists()) {
+    apply(plugin = libs.plugins.google.services.get().pluginId)
+}
+
 android {
     namespace = "com.point"
     compileSdk = libs.versions.compileSdk.get().toInt()
@@ -97,6 +105,9 @@ kotlin {
 }
 
 dependencies {
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.messaging)
+
     implementation(project(":core:model"))
     implementation(project(":core:flow"))
     implementation(project(":core:ui"))

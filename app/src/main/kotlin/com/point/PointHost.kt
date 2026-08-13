@@ -139,6 +139,20 @@ fun PointHost(
     modifier: Modifier = Modifier,
 ) {
 
+    // Стук компьютера (#817): разрешение спрашивается там, где человек видит свой компьютер.
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var knockOff by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(knockNotAllowed(context)) }
+    val askKnockLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted -> knockOff = !granted }
+    val askKnock = {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            askKnockLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            knockOff = false
+        }
+    }
+
     val pickBackground = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) onSubmitInput(uri.toString()) else onCancelInput()
     }
@@ -200,6 +214,8 @@ fun PointHost(
                 onSignOut = onSignOut,
                 onDeleteAccount = onDeleteAccount,
                 onClose = onCloseDevices,
+                knockOff = knockOff,
+                onAllowKnock = { askKnock() },
             )
 
             state.keyScreen != null -> KeyScreen(
@@ -596,3 +612,16 @@ private fun ExitRow(onLeave: () -> Unit, label: String) {
         }
     }
 }
+
+/**
+ * Некому сказать про просьбу компьютера: разрешения на уведомления нет.
+ *
+ * До Android 13 разрешение не спрашивают вовсе — там уведомления разрешены сразу, и строка
+ * про них была бы разговором ни о чём.
+ */
+private fun knockNotAllowed(context: android.content.Context): Boolean =
+    android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU &&
+        androidx.core.content.ContextCompat.checkSelfPermission(
+            context,
+            android.Manifest.permission.POST_NOTIFICATIONS,
+        ) != android.content.pm.PackageManager.PERMISSION_GRANTED
