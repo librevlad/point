@@ -308,6 +308,7 @@ class FlowViewModel @Inject constructor(
 
         syncCircle()
         val voice = claimVoice()
+        makeWayForIncoming()
 
         // Имя — до копии, и передумать можно (#640): большой файл копируется секундами, и
         // всё это время человек видел голое «Открываю…» без единого способа выйти.
@@ -349,8 +350,6 @@ class FlowViewModel @Inject constructor(
                 return@trackWork
             }
             runCatching { history.record(obj) }
-            cancelEnrichment()
-            stack.clear()
             pushFrame(obj)
 
             autoAction?.let { id ->
@@ -370,6 +369,7 @@ class FlowViewModel @Inject constructor(
     fun onSharedMultiple(sources: List<String>) {
         freshShareArrived = true
         val voice = claimVoice()
+        makeWayForIncoming()
         raiseBusy("Открываю…", cancelable = false)
         trackWork {
             val obj = runCatching {
@@ -383,8 +383,6 @@ class FlowViewModel @Inject constructor(
                 return@trackWork
             }
 
-            cancelEnrichment()
-            stack.clear()
             pushFrame(obj)
         }
     }
@@ -1934,6 +1932,23 @@ class FlowViewModel @Inject constructor(
             val fresh = runCatching { pcTransport.fetchCaps(pc) }.getOrNull() ?: return@launch
             runCatching { pcCaps.save(fresh) }
         }
+    }
+
+    /**
+     * Прошлый объект уходит с экрана сразу, как только пришёл новый (#939).
+     *
+     * Раньше кадр менялся только в конце: скопировать файл, разобрать, положить в историю.
+     * Всё это время человек видел **прежний** объект со всеми его живыми кнопками — и мог
+     * нажать действие, не зная, к чему оно относится. Живая охота 13.08.2026 ловила окно до
+     * полуминуты, а на фотографиях экран так и оставался чужим.
+     *
+     * Показывать нечего — значит и не показываем: остаётся «Открываю…», а объект встаёт на
+     * место, как только его есть чем показать.
+     */
+    private fun makeWayForIncoming() {
+        cancelEnrichment()
+        stack.clear()
+        _ui.update { it.copy(frame = null, focusPreview = null, path = emptyList()) }
     }
 
     private fun pushFrame(obj: PointObject, via: CapabilityId? = null, viaTitle: String? = null) {

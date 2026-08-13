@@ -187,9 +187,19 @@ class ScratchObjectStore @Inject constructor(
         withContext(Dispatchers.IO) { scratchDir.deleteRecursively() }
     }
 
+    /**
+     * След остаётся у любого отказа, включая отмену (#939).
+     *
+     * Отмена не логировалась вовсе — «это же не ошибка». А оказалось, что единственный
+     * отказ, который сейчас случается на приёме объекта, — ровно она: человек видел красный
+     * экран, а в журнале устройства за всю серию провалов не было ни одной строки. Отмена
+     * пишется тише обычного сбоя, но пишется.
+     */
     private inline fun <T> logFailure(what: String, block: () -> T): T =
         runCatching(block)
-            .onFailure { if (it !is CancellationException) Log.w(TAG, what, it) }
+            .onFailure {
+                if (it is CancellationException) Log.i(TAG, "$what — отменено") else Log.w(TAG, what, it)
+            }
             .getOrThrow()
 
     private fun displayName(uri: Uri): String? = runCatching {
