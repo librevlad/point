@@ -1,5 +1,6 @@
 package com.point.desktop
 
+import com.point.core.flow.SeenLetters
 import com.point.core.flow.Capability
 import com.point.core.flow.CapabilityMeta
 import com.point.core.flow.PcResultFields

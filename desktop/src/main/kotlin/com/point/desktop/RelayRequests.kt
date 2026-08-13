@@ -1,5 +1,6 @@
 package com.point.desktop
 
+import com.point.core.flow.SeenLetters
 import com.point.core.flow.ClipboardPayload
 import com.point.core.flow.PcActionOutcome
 import com.point.core.flow.PcRemoteAction
