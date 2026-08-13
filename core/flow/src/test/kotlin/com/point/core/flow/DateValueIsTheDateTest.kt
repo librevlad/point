@@ -114,8 +114,10 @@ class DateValueIsTheDateTest {
             "05.06.2025 0:00:00",
         )
 
+        // Порядок частей берёт у самого кадра: там кириллица и однозначные даты рядом (#802).
+        val hint = dayOrderOf(onScreen.joinToString(" "))
         val days = onScreen.flatMap(::readDates)
-            .mapNotNull { humanDayOf(it)?.toString() }
+            .mapNotNull { humanDayOf(it, hint)?.toString() }
             .distinct()
 
         assertEquals(listOf("2026-01-03", "2025-06-05", "2027-06-04", "2026-04-29"), days)

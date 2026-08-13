@@ -12,9 +12,80 @@ private val HUMAN_DATE = Regex("""(\d{1,2})[./](\d{1,2})[./](\d{2,4})|(\d{4})-(\
 /**
  * Календарный день значения, даже когда рядом живёт время или подпись:
  * «26.04.2026 20:04» и «01.12.2020 в 11:09» — это дни, а не нечитаемые строки.
+ *
+ * Решение владельца (#802): **однозначное — читаем, спорное — остаётся текстом**.
+ *
+ * `11/25/2025` однозначно: двадцать пятого месяца не бывает, значит это 25 ноября. А вот
+ * `03/05/2026` разрешить нечем — и день у него не появляется вовсе. Прежнее чтение всегда
+ * считало первым день и молча превращало `11/25/2025` в «месяц 25», то есть ни во что.
+ *
+ * Месяц словом читается на русском и украинском: «5 серпня 2026» — тоже день, а раньше он
+ * был датой без дня, и правило «дата в прошлом не создаёт событие» на нём не работало.
+ *
+ * `hint` — то, что известно про порядок частей из самого объекта (язык документа, соседние
+ * даты кадра). Не известно — спорная запись остаётся текстом, и никакой «вероятный день»
+ * не подставляется: выдумать день хуже, чем не прочитать.
  */
-fun humanDayOf(value: String): LocalDate? =
-    HUMAN_DATE.find(value)?.let(::toLocalDate)
+fun humanDayOf(value: String, hint: DayOrder = DayOrder.UNKNOWN): LocalDate? =
+    monthByWordDay(value) ?: HUMAN_DATE.find(value)?.let { toLocalDate(it, hint) }
+
+/** Что известно про порядок частей в записи вроде `03/05/2026`. */
+enum class DayOrder { DAY_FIRST, MONTH_FIRST, UNKNOWN }
+
+/**
+ * Порядок частей по самому объекту (#802).
+ *
+ * Кириллица в тексте — день первым: так пишут там, где на этом языке говорят. Соседняя
+ * однозначная дата того же текста весит больше языка: если рядом стоит `11/25/2025`, значит
+ * автор пишет месяц первым, и `03/05` в том же тексте читается так же.
+ */
+fun dayOrderOf(text: String): DayOrder {
+    HUMAN_DATE.findAll(text).forEach { m ->
+        if (m.groupValues[4].isNotEmpty()) return@forEach
+        val first = m.groupValues[1].toIntOrNull() ?: return@forEach
+        val second = m.groupValues[2].toIntOrNull() ?: return@forEach
+        if (first > 12 && second <= 12) return DayOrder.DAY_FIRST
+        if (second > 12 && first <= 12) return DayOrder.MONTH_FIRST
+    }
+    return if (CYRILLIC.containsMatchIn(text)) DayOrder.DAY_FIRST else DayOrder.UNKNOWN
+}
+
+private val CYRILLIC = Regex("""\p{IsCyrillic}""")
+
+/** Два дня — одно знание, даже когда записаны по-разному: `03.01.2026` и «3 січня 2026». */
+fun sameDay(left: String, right: String, hint: DayOrder = DayOrder.UNKNOWN): Boolean {
+    val a = humanDayOf(left, hint) ?: return false
+    val b = humanDayOf(right, hint) ?: return false
+    return a == b
+}
+
+/** «5 серпня 2026», «5 августа 2026» — день, месяц словом, год. Без года дня нет. */
+private fun monthByWordDay(value: String): LocalDate? {
+    val m = MONTH_BY_WORD.find(value) ?: return null
+    val day = m.groupValues[1].toIntOrNull() ?: return null
+    val year = m.groupValues[3].toIntOrNull() ?: return null
+    val word = m.groupValues[2].lowercase()
+    val month = MONTH_ORDER.indexOfFirst { word.startsWith(it) }
+        .takeIf { it >= 0 }
+        ?: MONTH_ORDER_UA.indexOfFirst { word.startsWith(it) }.takeIf { it >= 0 }
+        ?: return null
+    return runCatching { LocalDate.of(year, month + 1, day) }.getOrNull()
+}
+
+private val MONTH_BY_WORD = Regex(
+    """(?iu)(?<!\d)(\d{1,2})\s+(\p{L}+)\s+(\d{4})(?!\d)""",
+)
+
+/** Основы месяцев по порядку: русский и украинский вперемешку, оба варианта на месяц. */
+private val MONTH_ORDER: List<String> = listOf(
+    "январ", "феврал", "март", "апрел", "ма", "июн", "июл", "август",
+    "сентябр", "октябр", "ноябр", "декабр",
+)
+
+private val MONTH_ORDER_UA: List<String> = listOf(
+    "січн", "лют", "берез", "квітн", "травн", "червн",
+    "липн", "серпн", "вересн", "жовтн", "листопад", "грудн",
+)
 
 /**
  * Одно правило чтения даты на все входы знания (#782, решение владельца).
@@ -91,18 +162,37 @@ private val DATE_TAIL = Regex("""(?:\s+\p{L}{1,3})?\s*(?<!\d)\d{1,2}:\d{2}(?::\d
 
 private val CLOCK_INSIDE = Regex("""(?<!\d)\d{1,2}:\d{2}""")
 
-private fun toLocalDate(m: MatchResult): LocalDate? = runCatching {
+private fun toLocalDate(m: MatchResult, hint: DayOrder): LocalDate? = runCatching {
     if (m.groupValues[4].isNotEmpty()) {
-        LocalDate.of(m.groupValues[4].toInt(), m.groupValues[5].toInt(), m.groupValues[6].toInt())
-    } else {
-        val year = m.groupValues[3].toInt().let { if (it < 100) 2000 + it else it }
-        LocalDate.of(year, m.groupValues[2].toInt(), m.groupValues[1].toInt())
+        return@runCatching LocalDate.of(
+            m.groupValues[4].toInt(), m.groupValues[5].toInt(), m.groupValues[6].toInt(),
+        )
     }
+    val year = m.groupValues[3].toInt().let { if (it < 100) 2000 + it else it }
+    val first = m.groupValues[1].toInt()
+    val second = m.groupValues[2].toInt()
+    val dayFirst = when {
+
+        // Двадцать пятого месяца не бывает: запись читается однозначно самой собой.
+        first > 12 -> true
+        second > 12 -> false
+
+        // Обе части могли бы быть месяцем — решает то, что известно про объект. Ничего не
+        // известно — дня нет: выдумать его хуже, чем не прочитать (#802).
+        hint == DayOrder.DAY_FIRST -> true
+        hint == DayOrder.MONTH_FIRST -> false
+        else -> return@runCatching null
+    }
+    if (dayFirst) LocalDate.of(year, second, first) else LocalDate.of(year, first, second)
 }.getOrNull()
 
 /** Есть ли среди дат знания (primary и «ещё») дата сегодня или позже. */
 fun hasUpcomingDate(metadata: Map<String, String>, today: LocalDate): Boolean {
     val key = META_ENTITY_PREFIX + "date"
     val values = listOfNotNull(metadata[key]) + moreOf(metadata, key)
-    return values.any { humanDayOf(it)?.let { d -> !d.isBefore(today) } == true }
+
+    // Порядок частей берётся у самого объекта, а не у телефона (#802): соседние даты и язык
+    // его текста. Спорная запись без такой опоры днём не становится.
+    val hint = dayOrderOf((values + metadata.values).joinToString(" "))
+    return values.any { humanDayOf(it, hint)?.let { d -> !d.isBefore(today) } == true }
 }
