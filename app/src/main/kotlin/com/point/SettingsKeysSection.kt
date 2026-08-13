@@ -8,6 +8,7 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -115,14 +116,28 @@ internal fun KeySection(
         )
     }
 
-    // Очередь названа прямо: без этого главный вопрос человека — «мне что, выбрать один из
-    // одиннадцати?» — оставался без ответа (#887).
+    // Экран ключей — панель состояния, а не документация (#902). Наверху две мысли: очередь
+    // и необязательность ключа; всё остальное ждёт за «Как это работает».
     Text(
-        AI_KEY_WHY + " " + com.point.core.flow.AI_CHAIN_WHAT +
-            " Ключ живёт только на этом устройстве.",
+        com.point.core.flow.AI_CHAIN_WHAT,
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
+    var howOpen by rememberSaveable { mutableStateOf(false) }
+    TextButton(onClick = { howOpen = !howOpen }, contentPadding = PaddingValues(horizontal = 4.dp)) {
+        Text(
+            if (howOpen) "Свернуть" else "Как это работает",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.tertiary,
+        )
+    }
+    Reveal(howOpen) {
+        Text(
+            com.point.core.flow.AI_CHAIN_MORE,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
 
     val checkingAll = checking == CHECK_ALL_SERVICES
 
@@ -130,17 +145,19 @@ internal fun KeySection(
     // действием экрана и спорило со списком, ради которого сюда и заходят.
     PortalRow(
         title = com.point.core.flow.aiKeysCount(screen.keys),
+        // Состояние, а не механика: «сам Point ничего не проверяет» уехало в «Как это
+        // работает» — оно объясняет устройство, а здесь стоит то, что происходит (#902).
         subtitle = if (checkingAll) {
             "Point спрашивает каждый сервис одним коротким словом. Ваш объект никуда не уходит."
         } else {
-            "${screen.checkedLine}. Сам Point ничего не проверяет — только по этому тапу."
+            screen.checkedLine
         },
         onClick = onCheckAll,
         icon = null,
         primary = false,
         chevron = false,
         enabled = checking == null,
-        subtitleMaxLines = 3,
+        subtitleMaxLines = 2,
         trailing = {
             Text(
                 if (checkingAll) "Проверяю…" else "Проверить все",
@@ -207,7 +224,9 @@ internal fun ServiceRow(
     onToggle: () -> Unit,
 ) {
     PortalRow(
-        title = line.name,
+        // Номер — место в очереди обращения. Девять имён подряд читались как меню
+        // равноправных настроек; номер объясняет порядок без единого слова (#902).
+        title = serviceTitle(line),
         // Что умеет сервис — по раскрытию: в закрытой строке это девять абзацев подряд.
         // Здесь остаётся то, что отличает эту строку от соседних (#887).
         subtitle = serviceState(line, checking, open),
@@ -234,13 +253,18 @@ internal fun ServiceRow(
  * Что стоит во второй строке сервиса. Общее про группу уже сказано её заголовком, поэтому
  * здесь остаётся личное: свой ключ, последний факт, ход проверки.
  */
+/** Имя сервиса с его местом в очереди: «03  Mistral». */
+internal fun serviceTitle(line: AiServiceLine): String =
+    if (line.place <= 0) line.name else "%02d  %s".format(line.place, line.name)
+
 internal fun serviceState(line: AiServiceLine, checking: Boolean, open: Boolean): String? = when {
     checking -> "проверяю…"
     open && line.mine -> line.what + "\n" + line.keyLine + " · " + line.factLine
     open -> line.what
     line.mine -> "${line.keyLine} · ${line.factLine}"
-    line.factLine != com.point.core.flow.NEVER_ASKED -> line.factLine
-    else -> null
+    // «Ответил» — ожидаемое, о нём строка молчит. Новость — отказ, исчерпанный лимит или
+    // молчание сервиса: их видно, не раскрывая строку (#902).
+    else -> line.trouble
 }
 
 @Composable

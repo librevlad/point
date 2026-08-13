@@ -42,7 +42,7 @@ class HomeDoorTest {
 
     private fun openFirstService() {
         openKeySettings()
-        compose.onNodeWithText(AI_PROVIDERS.first().name).performScrollTo().performClick()
+        compose.onNodeWithText(AI_PROVIDERS.first().name, substring = true).performScrollTo().performClick()
         compose.waitUntilAtLeastOneExists(hasText("Вставить из буфера"), TIMEOUT_MS)
     }
 

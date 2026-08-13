@@ -106,6 +106,12 @@ data class AiServiceLine(
     val factLine: String,
     val mine: Boolean,
     val ready: Boolean,
+
+    /** Беда сервиса, если она была: «ответил» — ожидаемое, о нём строка молчит (#902). */
+    val trouble: String? = null,
+
+    /** Место в очереди обращения: «03» перед именем объясняет порядок без слов. */
+    val place: Int = 0,
 )
 
 /**
@@ -143,6 +149,8 @@ private fun line(
         providerId = id,
         name = name,
         what = what,
+        trouble = aiTroubleLine(facts[id], now, zone),
+        place = aiChainPlace(id),
         keyLine = when {
             mine.isNotEmpty() -> "ваш ключ ${maskedKey(mine)}"
             ours -> "работает на ключе Point"
@@ -207,7 +215,7 @@ private const val HOUR = 60 * MINUTE
 enum class AiServiceGroup(val title: String) {
     MINE("Ваши ключи"),
     OURS("Работают на ключе Point"),
-    SILENT("Молчат — нужен ваш ключ"),
+    SILENT("Нужен ваш ключ"),
 }
 
 fun aiServiceGroupOf(line: AiServiceLine): AiServiceGroup = when {
@@ -224,7 +232,31 @@ fun aiServiceGroups(lines: List<AiServiceLine>): List<Pair<AiServiceGroup, List<
             ?.let { group to it }
     }
 
-/** Очередь названа прямо: это снимает вопрос «надо выбрать один?». */
+/**
+ * Очередь названа прямо: это снимает вопрос «надо выбрать один?».
+ *
+ * Две мысли, а не семь строк: экран ключей — панель состояния, а не документация. Остальное
+ * ждёт за «Как это работает» (#902, разбор 13.08.2026).
+ */
 const val AI_CHAIN_WHAT =
-    "Point обращается к сервисам по очереди, сверху вниз: отвечает первый доступный. " +
-        "Свой ключ не обязателен — он снимает общий лимит и пускает Point работать на вашей квоте."
+    "Point обращается к сервисам по очереди — отвечает первый доступный. Свой ключ не " +
+        "обязателен: он снимает общий лимит и пускает Point работать на вашей квоте."
+
+/** Подробное объяснение — по запросу, а не поверх экрана. */
+const val AI_CHAIN_MORE =
+    "«Понять», «Перевести», «AI» и расшифровку записи делает модель. У большинства сервисов " +
+        "ключ бесплатный. Ключ живёт только на этом устройстве. Проверка сервисов идёт только " +
+        "по вашему нажатию — сам Point ничего не проверяет."
+
+/** Место сервиса в очереди: «03» перед именем объясняет порядок обращения без слов. */
+fun aiChainPlace(providerId: String): Int =
+    AI_PROVIDERS.indexOfFirst { it.id == providerId }.let { if (it >= 0) it + 1 else AI_PROVIDERS.size + 1 }
+
+/**
+ * Что сказать про сервис в закрытой строке.
+ *
+ * «Ответил» — ожидаемое, и говорить о нём нечего: строка молчит. Новость — это отказ,
+ * исчерпанный лимит или молчание сервиса: их человек и должен увидеть, не раскрывая строку.
+ */
+fun aiTroubleLine(fact: AiFact?, now: Long, zone: ZoneId = ZoneId.systemDefault()): String? =
+    fact?.takeIf { it.outcome != AiOutcome.ANSWERED }?.let { aiFactLine(it, now, zone) }
