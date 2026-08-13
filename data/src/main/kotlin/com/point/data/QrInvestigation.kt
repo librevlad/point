@@ -57,7 +57,13 @@ class QrInvestigationRealizer @Inject constructor(
         if (found.kind == com.point.core.flow.CodeKind.PRODUCT) {
             return Findings(
                 setOf(Feature.HAS_BARCODE),
-                mapOf(META_ENTITY_PREFIX + "barcode" to found.text),
+                mapOf(
+                    META_ENTITY_PREFIX + "barcode" to found.text,
+                    // Откуда значение: прочитано с кадра (#948). Без этого оно молча
+                    // становилось «дано» и получало галочку наравне с датой из Exif.
+                    META_ENTITY_PREFIX + "barcode" + com.point.core.flow.META_SOURCE_SUFFIX to
+                        com.point.core.model.Provenance.OCR.wire,
+                ),
             )
         }
 

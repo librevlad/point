@@ -93,8 +93,19 @@ class GraphRolesInvestigationRealizer @Inject constructor() : Realizer {
     private companion object {
         const val CREATOR = "classifier"
 
+        /**
+         * Роль назвала модель — так и записываем.
+         *
+         * Правило опиралось на молчаливое умолчание: «если происхождение не GIVEN, взять его,
+         * иначе MODEL». Пока отсутствие `.src` означало GIVEN, это работало случайно; с
+         * появлением отдельного «неизвестно» (#948) стало видно, что никто здесь про
+         * происхождение и не говорил. Роли выводит классификатор из ответа модели — это MODEL,
+         * и только правка человеком сильнее.
+         */
         fun roleProvenance(metadata: Map<String, String>, roleKey: String): Provenance =
-            provenanceOf(metadata, roleKey).takeIf { it != Provenance.GIVEN } ?: Provenance.MODEL
+            provenanceOf(metadata, roleKey)
+                .takeIf { it == Provenance.HUMAN }
+                ?: Provenance.MODEL
 
         fun roleSlice(metadata: Map<String, String>, roleKey: String, value: String) = buildMap {
             put(roleKey, value)

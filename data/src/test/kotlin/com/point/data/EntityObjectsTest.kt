@@ -235,7 +235,7 @@ class EntityObjectsTest {
     fun `факт без происхождения не получает выдуманного — молчим, а не врём`() {
         val obj = entityObjects(source(), facts("phone" to "+380671112233"), "t").first.single()
 
-        assertEquals(Provenance.GIVEN, obj.provenance)
+        assertEquals("неизвестное происхождение подменили на «дано» (#948)", Provenance.UNKNOWN, obj.provenance)
         assertNull(obj.metadata["entity.phone.src"])
     }
 

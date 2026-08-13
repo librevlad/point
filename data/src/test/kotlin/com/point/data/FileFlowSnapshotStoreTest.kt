@@ -191,7 +191,7 @@ class FileFlowSnapshotStoreTest {
             ),
         ).objects.single()
 
-        assertEquals(com.point.core.model.Provenance.GIVEN, node.provenance)
+        assertEquals(com.point.core.model.Provenance.UNKNOWN, node.provenance)
         assertNull(com.point.core.flow.provenanceLabel(node.provenance))
     }
 }

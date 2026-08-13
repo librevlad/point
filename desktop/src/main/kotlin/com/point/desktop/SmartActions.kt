@@ -80,6 +80,11 @@ fun entityKnowledge(found: List<Entity>, question: CapabilityId): com.point.core
                 .distinctBy { com.point.core.flow.normConsensus(it) }
             if (values.isEmpty()) return@forEach
             put(key, values.first())
+
+            // Откуда значение: вычитано из текста объекта (#948). Без этой строки оно молча
+            // становилось «дано» — как будто человек ввёл его сам, — и показывалось на экране
+            // спокойнее всего, хотя пришло из распознанного кадра.
+            put(key + com.point.core.flow.META_SOURCE_SUFFIX, com.point.core.model.Provenance.OCR.wire)
             val more = values.drop(1)
             if (more.isNotEmpty()) {
                 put(key + com.point.core.flow.META_MORE_SUFFIX, com.point.core.flow.altValue(more))

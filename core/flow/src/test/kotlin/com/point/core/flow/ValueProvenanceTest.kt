@@ -28,15 +28,29 @@ class ValueProvenanceTest {
             META_ENTITY_TRACK + META_SOURCE_SUFFIX to Provenance.HUMAN.wire,
         )
 
-        assertEquals(Provenance.GIVEN, provenanceOf(meta, META_ENTITY_PREFIX + "phone"))
+        assertEquals(Provenance.UNKNOWN, provenanceOf(meta, META_ENTITY_PREFIX + "phone"))
     }
 
     @Test
-    fun `легаси-журнал без src не врёт — GIVEN и молчание вместо подписи`() {
+    /**
+     * Знание без `.src` — «неизвестно», а не «дано» (#948): и молчит, и галочки не получает.
+     */
+    fun `легаси-журнал без src не врёт — «неизвестно» и молчание вместо подписи`() {
         val meta = facts(META_ENTITY_TRACK to "20 4514 9154 9395")
 
-        assertEquals(Provenance.GIVEN, provenanceOf(meta, META_ENTITY_TRACK))
+        assertEquals(Provenance.UNKNOWN, provenanceOf(meta, META_ENTITY_TRACK))
         assertNull(provenanceLabel(provenanceOf(meta, META_ENTITY_TRACK)))
+        assertFalse("неизвестное получило галочку", isKnownFor(meta, META_ENTITY_TRACK))
+    }
+
+    @Test
+    fun `названное происхождение галочку получает`() {
+        val meta = facts(
+            META_ENTITY_TRACK to "20 4514 9154 9395",
+            META_ENTITY_TRACK + META_SOURCE_SUFFIX to Provenance.OCR.wire,
+        )
+
+        assertTrue(isKnownFor(meta, META_ENTITY_TRACK))
     }
 
     @Test
