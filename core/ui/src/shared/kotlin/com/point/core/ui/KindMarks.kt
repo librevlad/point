@@ -14,13 +14,17 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -51,7 +55,7 @@ import com.point.core.model.PointObject
 enum class KindMark { SPREADSHEET, TEXT, IMAGE, PDF, ARCHIVE, AUDIO, LINK, COLLECTION, DOCUMENT, UNKNOWN }
 
 fun kindMarkOf(kind: ObjectKind, mime: String, name: String? = null): KindMark = when {
-    objectMark(kind, mime, name) == ObjectMark.SPREADSHEET -> KindMark.SPREADSHEET
+    kind == ObjectKind.OFFICE && isSpreadsheet(mime, name) -> KindMark.SPREADSHEET
     kind == ObjectKind.TEXT -> KindMark.TEXT
     kind == ObjectKind.IMAGE -> KindMark.IMAGE
     kind == ObjectKind.PDF -> KindMark.PDF
@@ -65,6 +69,39 @@ fun kindMarkOf(kind: ObjectKind, mime: String, name: String? = null): KindMark =
 
 fun kindMarkOf(obj: PointObject): KindMark =
     kindMarkOf(obj.state.kind, obj.mime, obj.metadata["name"])
+
+/**
+ * Таблица ли это.
+ *
+ * Своя проверка, а не общая с android-исходниками: марки живут в шве, который компилируют обе
+ * стороны, и тянуть за собой android-файл шов не может.
+ */
+private fun isSpreadsheet(mime: String, name: String?): Boolean {
+    val m = mime.lowercase().substringBefore(';').trim()
+    if (m in SPREADSHEET_MIMES) return true
+    if (m in DECIDED_OFFICE_MIMES) return false
+    return name?.substringAfterLast('.', "")?.lowercase().orEmpty() in SPREADSHEET_EXTS
+}
+
+private val SPREADSHEET_MIMES = setOf(
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.ms-excel",
+    "application/vnd.ms-excel.sheet.macroenabled.12",
+    "application/vnd.ms-excel.sheet.binary.macroenabled.12",
+    "application/vnd.oasis.opendocument.spreadsheet",
+    "text/csv",
+)
+
+private val DECIDED_OFFICE_MIMES = setOf(
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "application/vnd.ms-powerpoint",
+    "application/vnd.oasis.opendocument.text",
+    "application/vnd.oasis.opendocument.presentation",
+)
+
+private val SPREADSHEET_EXTS = setOf("xlsx", "xls", "xlsm", "xlsb", "ods", "csv")
 
 /** Как марка называется голосовому доступу: тем же словом, что и вид объекта на экране. */
 fun kindMarkLabel(mark: KindMark): String = when (mark) {
@@ -101,7 +138,33 @@ private fun paletteOf(mark: KindMark): MarkPalette = when (mark) {
     KindMark.UNKNOWN -> MarkPalette(Color(0xFFA8B0C8), Color(0xFF4A5168), Color(0xFF1A1D26), Color(0xFF0B0D12))
 }
 
+/**
+ * Фазы рождения марки: плашка, содержимое, наполнение, вспышка.
+ *
+ * Свои, а не общие с `SpreadsheetMark`: та живёт в android-исходниках, а марки видов — в общем
+ * шве, который компилируют обе стороны.
+ */
+private val PLATE = 0f to 0.34f
+private val SHAPE = 0.18f to 0.62f
+private val FILL = 0.38f to 0.88f
+private val SPARK = 0.66f to 1f
+
+private fun phase(progress: Float, from: Float, to: Float): Float =
+    if (to <= from) (if (progress >= to) 1f else 0f)
+    else ((progress - from) / (to - from)).coerceIn(0f, 1f)
+
+private fun phase(progress: Float, span: Pair<Float, Float>): Float = phase(progress, span.first, span.second)
+
 private const val MARK_LIFE_MS = 900
+
+/**
+ * Перетекание одного вида в другой (#825).
+ *
+ * Превращение — не «пропал один объект, появился другой»: это тот же объект, ставший другим.
+ * Поэтому плашка остаётся на месте и перекрашивается, прежний знак уходит, а новый прорастает
+ * сквозь него. Снимок, ставший текстом, на глазах теряет рамку и обзаводится строками.
+ */
+private const val MARK_MORPH_MS = 700
 
 /** Дыхание: марка живёт и после рождения, иначе экран замирает. */
 private const val MARK_BREATH_MS = 2600
@@ -117,13 +180,31 @@ fun KindMarkIcon(
     mark: KindMark,
     modifier: Modifier = Modifier,
     size: Dp = 96.dp,
+
+    /**
+     * Движётся ли марка. Общий шов не знает, где он выполняется: телефон передаёт сюда
+     * системную настройку анимаций, компьютер — свою.
+     */
+    motion: Boolean = true,
     contentDescription: String = kindMarkLabel(mark),
 ) {
-    val motion = rememberMotionEnabled()
-    val birth = remember(mark, motion) { Animatable(if (motion) 0f else 1f) }
-    LaunchedEffect(mark, motion) {
+    val birth = remember(motion) { Animatable(if (motion) 0f else 1f) }
+    LaunchedEffect(motion) {
         if (motion) birth.animateTo(1f, tween(MARK_LIFE_MS, easing = LinearEasing))
     }
+
+    // Откуда перетекаем. Первый показ превращением не считается: перетекать не из чего.
+    var was by remember { mutableStateOf(mark) }
+    val morph = remember(motion) { Animatable(1f) }
+    LaunchedEffect(mark, motion) {
+        if (mark == was) return@LaunchedEffect
+        if (motion) {
+            morph.snapTo(0f)
+            morph.animateTo(1f, tween(MARK_MORPH_MS, easing = LinearEasing))
+        }
+        was = mark
+    }
+
     val breath by if (motion) {
         rememberInfiniteTransition(label = "mark-breath").animateFloat(
             initialValue = 0f,
@@ -134,34 +215,110 @@ fun KindMarkIcon(
             label = "mark-breath",
         )
     } else {
-        remember { androidx.compose.runtime.mutableFloatStateOf(0.5f) }
+        remember { mutableStateOf(0.5f) }
     }
+
     val label = contentDescription
+    val from = was
+    val flow = morph.value
     Canvas(modifier.size(size).semantics { this.contentDescription = label }) {
-        drawKindMark(mark, birth.value, breath)
+        drawKindMark(mark, from, flow, birth.value, breath)
     }
 }
 
-private fun DrawScope.drawKindMark(mark: KindMark, progress: Float, breath: Float) {
-    val palette = paletteOf(mark)
-    val born = EaseOutCubic.transform(markSegment(progress, MARK_SHEET))
+private fun DrawScope.drawKindMark(
+    mark: KindMark,
+    from: KindMark,
+    flow: Float,
+    progress: Float,
+    breath: Float,
+) {
+    val born = EaseOutCubic.transform(phase(progress, PLATE))
     if (born <= 0f) return
 
+    // Плашка не мигает и не рождается заново: она перекрашивается из прежнего вида в новый.
+    // Объект остался тем же — он лишь стал другим.
+    val palette = blend(paletteOf(from), paletteOf(mark), flow)
     val side = size.minDimension
     val corner = CornerRadius(side * 0.27f)
     scale(0.90f + 0.10f * born, pivot = center) {
         plate(palette, corner, born, breath)
-        when (mark) {
-            KindMark.TEXT -> textMark(palette, progress, born)
-            KindMark.IMAGE -> imageMark(palette, progress, born, breath)
-            KindMark.PDF -> pdfMark(palette, progress, born)
-            KindMark.ARCHIVE -> archiveMark(palette, progress, born)
-            KindMark.AUDIO -> audioMark(palette, progress, born, breath)
-            KindMark.LINK -> linkMark(palette, progress, born, breath)
-            KindMark.COLLECTION -> collectionMark(palette, progress, born)
-            KindMark.DOCUMENT -> documentMark(palette, progress, born)
-            KindMark.UNKNOWN -> unknownMark(palette, progress, born, breath)
-            KindMark.SPREADSHEET -> Unit
+
+        // Прежний знак уходит, уменьшаясь; новый прорастает сквозь него.
+        if (from != mark && flow < 1f) {
+            scale(1f - 0.18f * flow, pivot = center) {
+                markContent(from, paletteOf(from), progress, born * (1f - flow), breath)
+            }
+        }
+        markContent(mark, paletteOf(mark), progress, born * flow, breath)
+    }
+}
+
+private fun blend(a: MarkPalette, b: MarkPalette, t: Float) = MarkPalette(
+    neon = lerp(a.neon, b.neon, t),
+    deep = lerp(a.deep, b.deep, t),
+    glassTop = lerp(a.glassTop, b.glassTop, t),
+    glassBottom = lerp(a.glassBottom, b.glassBottom, t),
+)
+
+private fun DrawScope.markContent(
+    mark: KindMark,
+    palette: MarkPalette,
+    progress: Float,
+    born: Float,
+    breath: Float,
+) {
+    if (born <= 0f) return
+    when (mark) {
+        KindMark.TEXT -> textMark(palette, progress, born)
+        KindMark.IMAGE -> imageMark(palette, progress, born, breath)
+        KindMark.PDF -> pdfMark(palette, progress, born)
+        KindMark.ARCHIVE -> archiveMark(palette, progress, born)
+        KindMark.AUDIO -> audioMark(palette, progress, born, breath)
+        KindMark.LINK -> linkMark(palette, progress, born, breath)
+        KindMark.COLLECTION -> collectionMark(palette, progress, born)
+        KindMark.DOCUMENT -> documentMark(palette, progress, born)
+        KindMark.UNKNOWN -> unknownMark(palette, progress, born, breath)
+        KindMark.SPREADSHEET -> spreadsheetMark(palette, progress, born)
+    }
+}
+
+/** Таблица: шапка, сетка и строки, набегающие сверху вниз. */
+private fun DrawScope.spreadsheetMark(p: MarkPalette, progress: Float, born: Float) {
+    val (pad, w, h) = contentBox()
+    val side = size.minDimension
+    val lay = EaseOutCubic.transform(phase(progress, SHAPE))
+    if (lay <= 0f) return
+    val headerH = h * 0.24f
+    drawRoundRect(
+        brush = Brush.horizontalGradient(listOf(p.neon, p.deep)),
+        topLeft = Offset(pad, pad),
+        size = Size(w * lay, headerH),
+        cornerRadius = CornerRadius(side * 0.045f),
+        alpha = 0.92f * born,
+    )
+    val rows = 3
+    val cols = 3
+    val rowH = (h - headerH) / rows
+    val colW = w / cols
+    repeat(cols - 1) { c ->
+        val x = pad + colW * (c + 1)
+        drawLine(p.neon, Offset(x, pad + headerH), Offset(x, pad + headerH + (h - headerH) * lay),
+            strokeWidth = side * 0.011f, alpha = 0.45f * born)
+    }
+    repeat(rows) { r ->
+        val filled = phase(progress, FILL.first + r * 0.12f, FILL.first + r * 0.12f + 0.4f)
+        if (filled <= 0f) return@repeat
+        val barH = side * 0.026f
+        repeat(cols) { c ->
+            val barW = colW * 0.46f
+            drawRoundRect(
+                color = p.neon,
+                topLeft = Offset(pad + colW * c + (colW - barW) / 2f, pad + headerH + rowH * r + (rowH - barH) / 2f),
+                size = Size(barW, barH),
+                cornerRadius = CornerRadius(barH / 2f),
+                alpha = 0.55f * filled * born,
+            )
         }
     }
 }
@@ -206,7 +363,7 @@ private fun DrawScope.textMark(p: MarkPalette, progress: Float, born: Float) {
     val gap = h / lines
     val thick = side * 0.045f
     repeat(lines) { i ->
-        val typed = markSegment(progress, MARK_GRID.from + i * 0.11f, MARK_GRID.from + i * 0.11f + 0.30f)
+        val typed = phase(progress, SHAPE.first + i * 0.11f, SHAPE.first + i * 0.11f + 0.30f)
         if (typed <= 0f) return@repeat
         val full = if (i == lines - 1) w * 0.55f else w * (0.82f + 0.18f * ((i * 7) % 3) / 2f)
         drawRoundRect(
@@ -223,7 +380,7 @@ private fun DrawScope.textMark(p: MarkPalette, progress: Float, born: Float) {
 private fun DrawScope.imageMark(p: MarkPalette, progress: Float, born: Float, breath: Float) {
     val (pad, w, h) = contentBox()
     val side = size.minDimension
-    val frame = markSegment(progress, MARK_GRID)
+    val frame = phase(progress, SHAPE)
     if (frame <= 0f) return
     drawRoundRect(
         color = p.neon,
@@ -233,7 +390,7 @@ private fun DrawScope.imageMark(p: MarkPalette, progress: Float, born: Float, br
         style = Stroke(width = side * 0.022f),
         alpha = 0.85f * born,
     )
-    val hill = markSegment(progress, MARK_ROWS)
+    val hill = phase(progress, FILL)
     if (hill > 0f) {
         val path = Path().apply {
             moveTo(pad, pad + h)
@@ -245,7 +402,7 @@ private fun DrawScope.imageMark(p: MarkPalette, progress: Float, born: Float, br
         }
         drawPath(path, brush = Brush.verticalGradient(listOf(p.neon, p.deep)), alpha = 0.75f * born)
     }
-    val sun = markSegment(progress, MARK_IGNITE)
+    val sun = phase(progress, SPARK)
     if (sun > 0f) {
         val c = Offset(pad + w * 0.74f, pad + h * 0.28f)
         val r = side * (0.055f + 0.012f * breath)
@@ -258,7 +415,7 @@ private fun DrawScope.imageMark(p: MarkPalette, progress: Float, born: Float, br
 private fun DrawScope.pdfMark(p: MarkPalette, progress: Float, born: Float) {
     val (pad, w, h) = contentBox()
     val side = size.minDimension
-    val page = markSegment(progress, MARK_GRID)
+    val page = phase(progress, SHAPE)
     if (page <= 0f) return
     val fold = side * 0.18f
     val path = Path().apply {
@@ -280,7 +437,7 @@ private fun DrawScope.pdfMark(p: MarkPalette, progress: Float, born: Float) {
     }
     drawPath(corner, color = p.neon, alpha = 0.55f * page * born)
 
-    val ribbon = markSegment(progress, MARK_IGNITE)
+    val ribbon = phase(progress, SPARK)
     if (ribbon > 0f) {
         val rh = side * 0.17f
         val rw = w * 0.72f
@@ -298,7 +455,7 @@ private fun DrawScope.pdfMark(p: MarkPalette, progress: Float, born: Float) {
 private fun DrawScope.archiveMark(p: MarkPalette, progress: Float, born: Float) {
     val (pad, w, h) = contentBox()
     val side = size.minDimension
-    val box = markSegment(progress, MARK_GRID)
+    val box = phase(progress, SHAPE)
     if (box <= 0f) return
     drawRoundRect(
         color = p.deep.copy(alpha = 0.5f * born),
@@ -322,11 +479,11 @@ private fun DrawScope.archiveMark(p: MarkPalette, progress: Float, born: Float) 
         alpha = 0.85f * box * born,
     )
 
-    val zip = markSegment(progress, MARK_ROWS)
+    val zip = phase(progress, FILL)
     val x = pad + w / 2f
     val teeth = 6
     repeat(teeth) { i ->
-        val t = markSegment(zip, i * 0.13f, i * 0.13f + 0.4f)
+        val t = phase(zip, i * 0.13f, i * 0.13f + 0.4f)
         if (t <= 0f) return@repeat
         val y = pad + h * 0.30f + (h * 0.62f / teeth) * i
         drawRoundRect(
@@ -348,7 +505,7 @@ private fun DrawScope.audioMark(p: MarkPalette, progress: Float, born: Float, br
     val step = w / bars
     val heights = listOf(0.35f, 0.62f, 0.95f, 0.72f, 1f, 0.5f, 0.28f)
     repeat(bars) { i ->
-        val up = markSegment(progress, MARK_GRID.from + i * 0.07f, MARK_GRID.from + i * 0.07f + 0.34f)
+        val up = phase(progress, SHAPE.first + i * 0.07f, SHAPE.first + i * 0.07f + 0.34f)
         if (up <= 0f) return@repeat
         val wave = 0.86f + 0.14f * kotlin.math.sin((breath + i * 0.18f) * 6.28f)
         val bh = h * heights[i] * up * wave
@@ -365,7 +522,7 @@ private fun DrawScope.audioMark(p: MarkPalette, progress: Float, born: Float, br
 /** Ссылка: два звена сцепляются, и по ним пробегает свет. */
 private fun DrawScope.linkMark(p: MarkPalette, progress: Float, born: Float, breath: Float) {
     val side = size.minDimension
-    val join = EaseOutCubic.transform(markSegment(progress, MARK_GRID))
+    val join = EaseOutCubic.transform(phase(progress, SHAPE))
     if (join <= 0f) return
     val r = side * 0.17f
     val gap = side * (0.20f - 0.09f * join)
@@ -380,7 +537,7 @@ private fun DrawScope.linkMark(p: MarkPalette, progress: Float, born: Float, bre
             alpha = (0.85f + 0.15f * breath) * born,
         )
     }
-    val spark = markSegment(progress, MARK_IGNITE)
+    val spark = phase(progress, SPARK)
     if (spark > 0f) {
         drawCircle(
             p.neon.copy(alpha = 0.35f * spark * born),
@@ -396,7 +553,7 @@ private fun DrawScope.collectionMark(p: MarkPalette, progress: Float, born: Floa
     val cards = 3
     repeat(cards) { i ->
         val out = EaseOutCubic.transform(
-            markSegment(progress, MARK_GRID.from + i * 0.12f, MARK_GRID.from + i * 0.12f + 0.42f),
+            phase(progress, SHAPE.first + i * 0.12f, SHAPE.first + i * 0.12f + 0.42f),
         )
         if (out <= 0f) return@repeat
         val shift = side * 0.075f * (i - 1) * out
@@ -424,7 +581,7 @@ private fun DrawScope.collectionMark(p: MarkPalette, progress: Float, born: Floa
 private fun DrawScope.documentMark(p: MarkPalette, progress: Float, born: Float) {
     val (pad, w, h) = contentBox()
     val side = size.minDimension
-    val page = markSegment(progress, MARK_GRID)
+    val page = phase(progress, SHAPE)
     if (page <= 0f) return
     drawRoundRect(
         color = p.deep.copy(alpha = 0.5f * born),
@@ -442,7 +599,7 @@ private fun DrawScope.documentMark(p: MarkPalette, progress: Float, born: Float)
     )
     val lines = 4
     repeat(lines) { i ->
-        val typed = markSegment(progress, MARK_ROWS.from + i * 0.1f, MARK_ROWS.from + i * 0.1f + 0.3f)
+        val typed = phase(progress, FILL.first + i * 0.1f, FILL.first + i * 0.1f + 0.3f)
         if (typed <= 0f) return@repeat
         val thick = side * 0.035f
         val inner = w * 0.72f
@@ -459,7 +616,7 @@ private fun DrawScope.documentMark(p: MarkPalette, progress: Float, born: Float)
 /** Неизвестное: грань, которая ещё не сложилась в фигуру, и тихо пульсирует. */
 private fun DrawScope.unknownMark(p: MarkPalette, progress: Float, born: Float, breath: Float) {
     val side = size.minDimension
-    val draw = markSegment(progress, MARK_GRID)
+    val draw = phase(progress, SHAPE)
     if (draw <= 0f) return
     val r = side * 0.24f
     val path = Path()

@@ -758,10 +758,6 @@ private fun ObjectHeader(
                         size = headerSize,
                         contentDescription = obj.metadata["name"] ?: obj.state.kind.name,
                     )
-                } else if (objectMark(obj) == ObjectMark.SPREADSHEET) {
-
-                    // Знак нарисован, а не обрезан: круг его вписывает, а не срезает углы.
-                    SpreadsheetMark(size = headerSize * MARK_IN_CIRCLE)
                 } else if (kindMarkOf(obj) != KindMark.UNKNOWN) {
 
                     // Марка на каждый вид (#825): экран объекта одинаково живой, чем бы объект
@@ -771,6 +767,7 @@ private fun ObjectHeader(
                     KindMarkIcon(
                         mark = kindMarkOf(obj),
                         size = headerSize * MARK_IN_CIRCLE,
+                        motion = rememberMotionEnabled(),
                         contentDescription = obj.metadata["name"] ?: kindMarkLabel(kindMarkOf(obj)),
                     )
                 } else {

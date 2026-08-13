@@ -112,7 +112,11 @@ fun AliveSurface(
 
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
         Box(
-            Modifier
+            // Знак меньше слота и обязан стоять в середине круга (#825). Прежняя плоская
+            // иконка занимала слот целиком, и перекос был не виден; нарисованная марка занимает
+            // 0.62 диаметра и без этого уезжала в угол портала.
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
                 .size(size)
                 .graphicsLayer {
                     scaleX = breath
