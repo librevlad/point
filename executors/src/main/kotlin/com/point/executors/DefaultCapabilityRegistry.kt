@@ -90,7 +90,7 @@ class DefaultCapabilityRegistry @Inject constructor(
      */
     private fun modeReason(): String? {
         val level = runCatching { privacy.level() }.getOrDefault(com.point.core.flow.PrivacyLevel.DEFAULT)
-        val open = com.point.core.flow.allowedAt(level, com.point.core.flow.AI_CHAIN_PRIVACY)
+        val open = com.point.core.flow.anyoneAllowedAt(level)
         return if (open) null else com.point.core.flow.chainClosedBy(level)
     }
 

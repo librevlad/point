@@ -951,7 +951,7 @@ class FlowViewModel @Inject constructor(
         if (runCatching { registry.byId(id).meta.localOnly }.getOrDefault(false)) return null
         val level = runCatching { cloudPrivacy.level() }
             .getOrDefault(com.point.core.flow.PrivacyLevel.DEFAULT)
-        if (com.point.core.flow.allowedAt(level, com.point.core.flow.AI_CHAIN_PRIVACY)) return null
+        if (com.point.core.flow.anyoneAllowedAt(level)) return null
         return com.point.core.flow.chainClosedBy(level)
     }
 

@@ -11,6 +11,14 @@ class FallbackLlmClient(
     private val network: NetworkAvailability,
 
     private val yolo: YoloMode = YoloMode.OFF,
+
+    /**
+     * Режим приватности сужает цепочку, а не обнуляет её (#945).
+     *
+     * У каждого сервиса своё обещание про присланное. В режиме «Не учатся на моём» идут
+     * только те, кто это обещал письменно, — остальные пропускаются с названной причиной.
+     */
+    private val privacy: CloudPrivacySettings = OPEN_TO_EVERYONE,
 ) : LlmClient {
 
     override val configured: Boolean get() = providers.any { it.configured }
@@ -23,10 +31,16 @@ class FallbackLlmClient(
         val strongestFirst = obj.mime.startsWith("image/") ||
             runCatching { yolo.enabled() }.getOrDefault(false)
         val ordered = if (strongestFirst) providers.sortedByDescending { it.strongVision } else providers
+
+        // Сначала режим, потом всё остальное: сервис, который режим не пускает, не должен
+        // даже пробоваться.
+        val level = runCatching { privacy.level() }.getOrDefault(PrivacyLevel.DEFAULT)
+        val allowed = allowedBy(level, ordered) { promiseOfService(it.serviceId) }
+        if (allowed.isEmpty() && ordered.any { it.configured }) error(chainClosedBy(level))
         val errors = mutableListOf<String>()
         var considered = 0
         var skippedUnconfigured = 0
-        for (provider in ordered) {
+        for (provider in allowed) {
 
             // Ненастроенный провайдер не пытается и не шумит в диагноз: без него
             // «нет сети» остаётся «нет сети», а не «задайте ключ; resolve host…»
@@ -89,6 +103,12 @@ class FallbackLlmClient(
     }
 
     companion object {
+
+        /** Пока режим не подсказан снаружи: тестам и старым вызовам — прежнее поведение. */
+        internal val OPEN_TO_EVERYONE = object : CloudPrivacySettings {
+            override fun level() = PrivacyLevel.FREE_FIRST
+            override suspend fun setLevel(level: PrivacyLevel) = Unit
+        }
 
         /** Одна формулировка на всех, кто её показывает и проверяет. */
         const val NO_NETWORK_MESSAGE = "Нет интернета — прочитать не получится"

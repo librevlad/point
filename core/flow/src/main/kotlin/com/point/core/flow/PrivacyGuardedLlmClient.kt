@@ -17,7 +17,11 @@ import com.point.core.model.ResultObject
 class PrivacyGuardedLlmClient(
     private val inner: LlmClient,
     private val privacy: CloudPrivacySettings,
-    private val outsidePrivacy: ReaderPrivacy = AI_CHAIN_PRIVACY,
+    /**
+     * Мерка режима: пускает ли он наружу хоть кого-нибудь (#945). Кого именно из сервисов
+     * пускать, решает цепочка — у каждого своё обещание.
+     */
+    private val outsidePrivacy: ReaderPrivacy = PROMISED_SERVICE,
 ) : LlmClient {
 
     private val allowed: Boolean get() = allowedAt(privacy.level(), outsidePrivacy)

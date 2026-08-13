@@ -12,6 +12,9 @@ class UserKeyLlmClient(
     private val http: HttpJson,
     private val store: ObjectStore,
     private val facts: AiFacts,
+
+    /** Режим приватности сужает и ключи человека: у каждого сервиса своё обещание (#945). */
+    private val privacy: CloudPrivacySettings = FallbackLlmClient.OPEN_TO_EVERYONE,
 ) : LlmClient {
 
     override val strongVision = true
@@ -19,8 +22,12 @@ class UserKeyLlmClient(
     override val configured: Boolean get() = userKeys.keys().mine.isNotEmpty()
 
     override suspend fun run(obj: PointObject, prompt: String): ResultObject {
-        val mine = userKeys.keys().mine
-        if (mine.isEmpty()) error("$AI_KEY_HINT — откройте «$SETTINGS_TITLE» на домашнем экране")
+        val all = userKeys.keys().mine
+        if (all.isEmpty()) error("$AI_KEY_HINT — откройте «$SETTINGS_TITLE» на домашнем экране")
+
+        val level = runCatching { privacy.level() }.getOrDefault(PrivacyLevel.DEFAULT)
+        val mine = allowedBy(level, all) { promiseOfService(it.providerId) }
+        if (mine.isEmpty()) error(chainClosedBy(level))
 
         val errors = mutableListOf<String>()
         for (key in mine) {
