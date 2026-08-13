@@ -1992,13 +1992,22 @@ class FlowViewModel @Inject constructor(
         // помнит, вышел — забыл; отношения между объектами не создавались вовсе.
         val born = via?.let { bornOf(parent, known, it) }
         val relations = carriedRelations + listOfNotNull(born)
+
+        // Исходник, из которого объект получен, стоит рядом (#925): это и путь к нему, и
+        // опора для порядка действий — обратное преобразование того, что Point только что
+        // сделал, первым стоять не должно.
+        val cameFrom = parent?.obj?.takeIf {
+            born?.type == com.point.core.model.RelationType.DERIVED_FROM &&
+                carriedFound.none { seen -> seen.id == it.id }
+        }
+        val found = carriedFound + listOfNotNull(cameFrom)
         val bubbles = registry.bubblesFor(
-            com.point.core.flow.GraphState(known, carriedFound, relations),
+            com.point.core.flow.GraphState(known, found, relations),
         )
         val frame = FlowFrame(
             known, bubbles, via, viaTitle,
 
-            found = carriedFound,
+            found = found,
             relations = relations,
             latent = registry.latentBubblesFor(known.state),
         )
