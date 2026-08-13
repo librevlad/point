@@ -179,7 +179,9 @@ internal fun RecordScreen(
     ) {
         Portal(size = 148.dp, intensity = if (recording) 1f else 0.35f)
         ScreenHeader(
-            title = if (recording) recordClock(seconds) else "Звукозапись",
+            // Экран носит то же имя, по которому сюда вошли (#895): в списке «с чего
+            // начать» это «Записать голос», а не «Звукозапись».
+            title = if (recording) recordClock(seconds) else "Записать голос",
             subtitle = if (recording) "Идёт запись — остановите, когда закончите" else "Запишет Point, ничего больше не нужно",
             horizontalAlignment = Alignment.CenterHorizontally,
         )
@@ -187,7 +189,7 @@ internal fun RecordScreen(
         Column(modifier = Modifier.widthIn(max = PortalColumnWidth).fillMaxWidth()) {
             PortalRow(
                 title = if (recording) "Остановить" else "Записать",
-                subtitle = if (recording) "получится звукозапись" else null,
+                subtitle = if (recording) "получится звукозапись" else "Point расшифрует запись словами",
                 onClick = onToggle,
                 icon = bubbleIcon("transcribe"),
                 accent = bubbleColor("transcribe"),
