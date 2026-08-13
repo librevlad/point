@@ -63,11 +63,14 @@ class ReasonStandsBeforeTapTest {
     }
 
     @Test
-    fun `экран отказа даёт дверь, а не только причину`() {
+    fun `экран отказа даёт действие, а не только причину`() {
         val screen = File("src/main/kotlin/com/point/source/ReceiveActivity.kt").readText()
 
         assertTrue("отказ снова оставлен одной плашкой", screen.contains("Приём не открылся"))
-        assertTrue("дверь не ведёт ко входу", screen.contains("onSignIn"))
-        assertTrue("дверь открывается не на своей причине", screen.contains(NOT_IN_ACCOUNT_TEXT.let { "NOT_IN_ACCOUNT_TEXT" }))
+        assertTrue("на экране нечем войти", screen.contains("onSignIn"))
+        assertTrue(
+            "«Войти» показывается не на своей причине",
+            screen.contains("NOT_IN_ACCOUNT_TEXT"),
+        )
     }
 }
