@@ -1,7 +1,9 @@
 package com.point.core.flow
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -64,5 +66,46 @@ class PhoneIsJudgedByLibraryTest {
     @Test
     fun `чужая страна не выдаётся за свою`() {
         assertEquals("PL", PhoneNumbers.country("+48221234567", "UA"))
+    }
+
+    /**
+     * Страна устройства — подсказка, а не приговор (#936).
+     *
+     * У украинца с телефоном на английском страна оказывалась `US`, и его собственные номера
+     * переставали существовать — молча, все до единого. Решение владельца 13.08.2026:
+     * «Несколько стран, годится любая».
+     */
+    @Test
+    fun `украинский номер существует и на устройстве с чужой страной`() {
+        assertTrue("номер потерян из-за страны телефона", PhoneNumbers.exists("067 636 05 60", "US"))
+    }
+
+    /** Страна названа, когда телефон человека и документ из одной страны — обычный случай. */
+    @Test
+    fun `страна называется, когда сомнений нет`() {
+        assertEquals("UA", PhoneNumbers.country("+380 67 636 05 60", "UA"))
+    }
+
+    @Test
+    fun `американский номер существует и на украинском телефоне`() {
+        assertTrue(PhoneNumbers.exists("918-682-1551", "UA"))
+    }
+
+    /**
+     * Существование проверяется по нескольким странам — значит номер может подойти сразу
+     * двум. Выдумывать одну из них нельзя: номер есть, страна неизвестна.
+     */
+    @Test
+    fun `страна не называется, когда номер годится нескольким странам`() {
+        assertNull(PhoneNumbers.country("918-682-1551", "UA"))
+        assertEquals("US", PhoneNumbers.country("+1 918-682-1551", "UA"))
+    }
+
+    /** Что номером не является, номером не становится ни в одной стране. */
+    @Test
+    fun `код и индекс не превращаются в номер ни в одной стране`() {
+        listOf("32490244", "04128", "49000").forEach {
+            assertFalse("«$it» сочли номером", PhoneNumbers.exists(it, "US"))
+        }
     }
 }
