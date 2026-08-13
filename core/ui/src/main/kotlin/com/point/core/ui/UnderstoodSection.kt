@@ -60,6 +60,12 @@ data class UnderstoodFact(
     val label: String,
     val value: String? = null,
     val note: String? = null,
+
+    /**
+     * Названо ли происхождение значения (#948). Галочка достаётся только известному:
+     * прочитанному, выведенному, понятому, подтверждённому. Неизвестное показывается тише.
+     */
+    val known: Boolean = true,
 )
 
 fun understoodFacts(obj: PointObject): List<UnderstoodFact> {
@@ -72,6 +78,10 @@ fun understoodFacts(obj: PointObject): List<UnderstoodFact> {
         com.point.core.model.Provenance.HUMAN
             .takeIf { provenanceOf(obj.metadata, META_ENTITY_PREFIX + key) == it }
             ?.let { provenanceLabel(it) }
+
+    // Откуда значение — известно? Неизвестное не получает галочки (#948).
+    fun known(key: String): Boolean =
+        com.point.core.flow.isKnownFor(obj.metadata, META_ENTITY_PREFIX + key)
     val summary = obj.metadata[com.point.core.flow.META_SEMANTIC_SUMMARY]
     return buildList {
 
@@ -79,11 +89,11 @@ fun understoodFacts(obj: PointObject): List<UnderstoodFact> {
         if (state.has(Feature.IS_PURCHASE)) add(UnderstoodFact("semantic", "Это покупка", summary))
         if (state.has(Feature.IS_RECIPE)) add(UnderstoodFact("semantic", "Это рецепт", summary))
         if (state.has(Feature.IS_JOB)) add(UnderstoodFact("semantic", "Это вакансия", summary))
-        if (state.has(Feature.HAS_PHONE)) add(UnderstoodFact("phone", "Нашёл телефон", entity("phone"), note("phone")))
-        if (state.has(Feature.HAS_EMAIL)) add(UnderstoodFact("email", "Нашёл почту", entity("email"), note("email")))
-        if (state.has(Feature.HAS_URL)) add(UnderstoodFact("url", "Нашёл ссылку", entity("url")?.readableUrl(), note("url")))
-        if (state.has(Feature.HAS_ADDRESS)) add(UnderstoodFact("address", "Нашёл адрес", entity("address"), note("address")))
-        if (state.has(Feature.HAS_DATE)) add(UnderstoodFact("date", "Нашёл дату", entity("date"), note("date")))
+        if (state.has(Feature.HAS_PHONE)) add(UnderstoodFact("phone", "Нашёл телефон", entity("phone"), note("phone"), known("phone")))
+        if (state.has(Feature.HAS_EMAIL)) add(UnderstoodFact("email", "Нашёл почту", entity("email"), note("email"), known("email")))
+        if (state.has(Feature.HAS_URL)) add(UnderstoodFact("url", "Нашёл ссылку", entity("url")?.readableUrl(), note("url"), known("url")))
+        if (state.has(Feature.HAS_ADDRESS)) add(UnderstoodFact("address", "Нашёл адрес", entity("address"), note("address"), known("address")))
+        if (state.has(Feature.HAS_DATE)) add(UnderstoodFact("date", "Нашёл дату", entity("date"), note("date"), known("date")))
         if (state.has(Feature.HAS_CARD)) {
             add(
                 UnderstoodFact(
@@ -91,10 +101,11 @@ fun understoodFacts(obj: PointObject): List<UnderstoodFact> {
                     "Нашёл карту",
                     entity("card")?.let { maskedForScreen(META_ENTITY_PREFIX + "card", it) },
                     note("card"),
+                    known("card"),
                 ),
             )
         }
-        if (state.has(Feature.HAS_QR)) add(UnderstoodFact("qr", "Есть QR-код", entity("qr")?.readableUrl(), note("qr")))
+        if (state.has(Feature.HAS_QR)) add(UnderstoodFact("qr", "Есть QR-код", entity("qr")?.readableUrl(), note("qr"), known("qr")))
 
         // Цифры кода видны и копируются одним тапом (#445). Про сам товар Point молчит:
         // название, производитель и цена — чужая уверенность, а не наблюдение Point.
@@ -295,11 +306,17 @@ private fun FactRow(fact: UnderstoodFact) {
             .background(accent.copy(alpha = 0.16f * flash))
             .padding(horizontal = 6.dp, vertical = 4.dp),
     ) {
+        // Галочка — знак «Point это знает». Значение неизвестно откуда её не получает:
+        // выдуманное не имеет права выглядеть увереннее прочитанного (#948, #940).
         Text(
-            text = "✓",
+            text = if (fact.known) "✓" else "·",
             style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary,
+            color = if (fact.known) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
             modifier = Modifier.graphicsLayer {
                 val s = 1f + 0.35f * flash
                 scaleX = s

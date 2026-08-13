@@ -11,7 +11,26 @@ fun provenanceLabel(provenance: Provenance): String? = when (provenance) {
     Provenance.MODEL -> "понято по смыслу"
     Provenance.HUMAN -> "подтверждено вами"
     Provenance.GIVEN -> null
+    Provenance.UNKNOWN -> null
 }
+
+/**
+ * Заслужило ли знание галочку (#948).
+ *
+ * Галочка означает «Point это знает», и доставаться она должна только тому, у чего названо
+ * происхождение: прочитано, выведено правилом, понято по смыслу, подтверждено человеком.
+ * Значение неизвестно откуда показывается тише — без галочки и без подписи.
+ *
+ * Решение владельца 13.08.2026: «Происхождение обязательно у каждого знания», «без галочки и
+ * без подписи».
+ */
+fun isKnownFor(provenance: Provenance): Boolean = when (provenance) {
+    Provenance.UNKNOWN -> false
+    Provenance.GIVEN, Provenance.OCR, Provenance.RULE, Provenance.MODEL, Provenance.HUMAN -> true
+}
+
+fun isKnownFor(metadata: Map<String, String>, key: String): Boolean =
+    isKnownFor(provenanceOf(metadata, key))
 
 fun factKeyOf(metadata: Map<String, String>): String? =
     metadata.keys.firstOrNull { !isAnnotationKey(it) }

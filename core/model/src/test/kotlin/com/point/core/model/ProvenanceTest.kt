@@ -13,12 +13,13 @@ class ProvenanceTest {
         assertTrue(Provenance.OCR > Provenance.RULE)
         assertTrue(Provenance.RULE > Provenance.MODEL)
         assertTrue(Provenance.MODEL > Provenance.GIVEN)
+        assertTrue("«дано» должно быть сильнее, чем «неизвестно»", Provenance.GIVEN > Provenance.UNKNOWN)
     }
 
     @Test
     fun `«никто не читал» — слабейшее, а не среднее`() {
 
-        assertEquals(Provenance.GIVEN, Provenance.entries.min())
+        assertEquals(Provenance.UNKNOWN, Provenance.entries.min())
         assertEquals(Provenance.HUMAN, Provenance.entries.max())
     }
 
@@ -27,13 +28,20 @@ class ProvenanceTest {
         Provenance.entries.forEach { assertEquals(it, provenanceOf(it.wire)) }
     }
 
+    /**
+     * Отсутствие происхождения — это «неизвестно», а не «дано» (#948).
+     *
+     * Прежде пустота молча означала `GIVEN`: значение, вычитанное OCR-ом с уличного снимка,
+     * записывалось так же, как введённое человеком руками, и выглядело на экране спокойнее
+     * всего. Самое сомнительное знание получало самый уверенный вид.
+     */
     @Test
-    fun `незнакомое слово и пустота — GIVEN, а не падение и не выдуманное чтение`() {
+    fun `незнакомое слово и пустота — «неизвестно», а не «дано»`() {
 
-        assertEquals(Provenance.GIVEN, provenanceOf(null))
-        assertEquals(Provenance.GIVEN, provenanceOf(""))
-        assertEquals(Provenance.GIVEN, provenanceOf("llm"))
-        assertEquals(Provenance.GIVEN, provenanceOf("OCR"))
+        assertEquals(Provenance.UNKNOWN, provenanceOf(null))
+        assertEquals(Provenance.UNKNOWN, provenanceOf(""))
+        assertEquals(Provenance.UNKNOWN, provenanceOf("llm"))
+        assertEquals(Provenance.UNKNOWN, provenanceOf("OCR"))
     }
 
     @Test
