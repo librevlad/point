@@ -17,7 +17,7 @@ class AiChatShowsItselfTest {
 
     @Test
     fun `подсказки начинаются сверху, а не посреди экрана`() {
-        val block = screen.substringAfter("private fun ChatSuggestions(").substringBefore("private const val AI_ICON")
+        val block = screen.substringAfter("private fun ChatSuggestions(").substringBefore("private val BubbleMaxWidth")
 
         assertTrue("подсказки снова по центру", !block.contains("Alignment.CenterVertically"))
         assertTrue("подсказки не прижаты к верху", block.contains("Alignment.Top"))
@@ -25,7 +25,7 @@ class AiChatShowsItselfTest {
 
     @Test
     fun `сказано, что можно написать своё, а не только выбрать готовое`() {
-        val block = screen.substringAfter("private fun ChatSuggestions(").substringBefore("private const val AI_ICON")
+        val block = screen.substringAfter("private fun ChatSuggestions(").substringBefore("private val BubbleMaxWidth")
 
         assertTrue("подсказки выглядят единственным выбором", block.contains("напишите своё"))
     }
