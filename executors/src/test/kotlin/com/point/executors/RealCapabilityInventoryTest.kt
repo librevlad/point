@@ -38,6 +38,7 @@ class RealCapabilityInventoryTest {
         PagesCapability(), PcCapability(pairedPc), PdfCapability(), PhoneAppsCapability(),
         QrCapability(), ReadQrCapability(), RenewPeriodCapability(), ReplaceBgCapability(),
         SaveAllCapability(), SaveCapability(), SaveContactCapability(), ScanCapability(),
+        SpeakCapability(),
         TakeFragmentCapability(), HideAreaCapability(),
         ScanPdfCapability(), ScanPlusCapability(), ShareAllCapability(), ShareCapability(),
         ShoppingListCapability(aiKeysReady), SmsCapability(), TranscribeCapability(keysReady),
