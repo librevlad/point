@@ -151,6 +151,9 @@ fun PortalRow(
     surface: Boolean = true,
 
     subtitleMaxLines: Int = 2,
+
+    /** Место в очереди перед именем: метка, а не часть названия (#911). */
+    place: Int = 0,
     appearIndex: Int = 0,
     onLongClick: (() -> Unit)? = null,
     trailing: (@Composable () -> Unit)? = null,
@@ -195,6 +198,13 @@ fun PortalRow(
         ) {
             if (icon != null || image != null) {
                 PortalPlate(accent = accent, icon = icon, image = image, onGlass = primary, ring = ring)
+            }
+            if (place > 0) {
+                Text(
+                    text = "%02d".format(place),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                )
             }
             Column(modifier = Modifier.weight(1f)) {
                 Text(

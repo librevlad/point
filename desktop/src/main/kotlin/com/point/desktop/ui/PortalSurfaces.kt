@@ -153,6 +153,9 @@ fun PortalRow(
     primary: Boolean = false,
     enabled: Boolean = true,
     appearIndex: Int = 0,
+
+    /** Место в очереди перед именем: метка, а не часть названия (#911). */
+    place: Int = 0,
     chevron: Boolean = true,
     subtitleMaxLines: Int = 2,
     trailing: (@Composable () -> Unit)? = null,
@@ -198,6 +201,12 @@ fun PortalRow(
             // Плашка нужна действию, а не строке настроек: пустой квадрат без значка —
             // обещание картинки, которой нет. На телефоне строки настроек стоят без неё (#886).
             if (icon != null) PortalPlate(accent = accent, icon = icon, onGlass = primary)
+            if (place > 0) {
+                Text(
+                    "%02d".format(place),
+                    style = PointType.small.copy(color = PointColors.muted.copy(alpha = 0.7f)),
+                )
+            }
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = title,

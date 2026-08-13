@@ -191,3 +191,22 @@ object AiKeyFields {
         }.filter { it in stored }.toSet()
     }
 }
+
+/**
+ * Ключ для расшифровки записи — из той же очереди, а не отдельным полем (#912).
+ *
+ * На телефоне отдельного «ключа расшифровки» нет вовсе: берётся ключ Groq из очереди.
+ * Компьютер спрашивал его вторым полем, и человек, уже вписавший Groq выше, не понимал,
+ * что у него просят ещё раз и откуда это взять.
+ *
+ * Расшифровку умеют Groq и OpenAI: у обоих один и тот же адрес `…/audio/transcriptions`.
+ */
+fun speechKeyFromChain(keys: UserAiKeys): UserAiKey? =
+    SPEECH_PROVIDER_IDS.firstNotNullOfOrNull { id -> keys.of(id) }
+
+val SPEECH_PROVIDER_IDS: List<String> = listOf(GROQ_PROVIDER_ID, "openai")
+
+/** Кто в очереди умеет расшифровывать: этими именами и объясняем, чего не хватает. */
+fun speechProviderNames(): String =
+    SPEECH_PROVIDER_IDS.mapNotNull { id -> AI_PROVIDERS.firstOrNull { it.id == id }?.name }
+        .joinToString(" или ")

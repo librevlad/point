@@ -214,3 +214,19 @@ data class AiConfig(
         const val DEFAULT_MODEL = "meta-llama/llama-3.3-70b-instruct:free"
     }
 }
+
+/**
+ * Чем расшифровывать запись на компьютере (#912).
+ *
+ * Ключ берётся из общей очереди — Groq или OpenAI, — как и на телефоне. Отдельное поле
+ * «Ключ расшифровки речи» осталось только затем, чтобы не потерять то, что человек уже
+ * вписал в него раньше: оно живёт в файле и в настройках больше не спрашивается.
+ */
+fun speechCall(config: PcConfig): SpeechConfig {
+    val fromChain = com.point.core.flow.speechKeyFromChain(config.aiKeys) ?: return config.speech
+    val provider = com.point.core.flow.AI_PROVIDERS.firstOrNull { it.id == fromChain.providerId }
+    return config.speech.copy(
+        key = fromChain.apiKey,
+        url = (provider?.baseUrl?.trimEnd('/') ?: return config.speech) + "/audio/transcriptions",
+    )
+}
