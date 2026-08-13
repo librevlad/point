@@ -73,12 +73,18 @@ class KeyOnboardingTest {
         if (note == null && errand == null && verdict == null && checking == null) {
             compose.onNodeWithText("Ключи AI").performClick()
         }
-        if (openService != null) compose.onNodeWithText(openService).performScrollTo().performClick()
+        if (openService != null) {
+            compose.onNodeWithText(openService, substring = true).performScrollTo().performClick()
+        }
     }
 
     @Test fun `экран говорит, зачем нужен ключ, а не только просит его`() {
         keyScreen(openService = null)
 
+        // Наверху — две мысли: очередь и необязательность ключа. Подробное объяснение
+        // (какие действия просят модель) ждёт за «Как это работает» (#902).
+        compose.onNodeWithText("не обязателен", substring = true).assertExists()
+        compose.onNodeWithText("Как это работает").performScrollTo().performClick()
         compose.onNodeWithText("Понять", substring = true).assertExists()
         compose.onNodeWithText("Проверить все").performScrollTo().assertIsDisplayed()
     }

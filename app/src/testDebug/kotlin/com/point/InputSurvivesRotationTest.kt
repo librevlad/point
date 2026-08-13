@@ -42,7 +42,7 @@ class InputSurvivesRotationTest {
         }
 
         compose.onNodeWithText("Ключи AI").performClick()
-        compose.onNodeWithText(AI_PROVIDERS.first().name).performScrollTo().performClick()
+        compose.onNodeWithText(AI_PROVIDERS.first().name, substring = true).performScrollTo().performClick()
 
         compose.onAllNodes(hasSetTextAction())[0].performScrollTo()
             .performTextInput("sk-очень-длинный-ключ-из-буфера")

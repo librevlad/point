@@ -301,11 +301,24 @@ fun SettingsKeys(
         modifier = Modifier.fillMaxWidth().widthIn(max = 560.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        // Панель состояния, а не документация (#902): наверху две мысли, подробности —
+        // за «Как это работает».
         Text(com.point.core.flow.AI_CHAIN_WHAT, style = PointType.small)
+        var howOpen by remember { mutableStateOf(false) }
         Text(
-            "Ключи общие с телефоном: вписанный здесь появится там, и наоборот.",
-            style = PointType.small.copy(color = PointColors.muted),
+            if (howOpen) "Свернуть" else "Как это работает",
+            style = PointType.small.copy(color = PointColors.cyan),
+            modifier = Modifier.clip(RoundedCornerShape(8.dp))
+                .clickable { howOpen = !howOpen }
+                .padding(vertical = 3.dp),
         )
+        if (howOpen) {
+            Text(
+                com.point.core.flow.AI_CHAIN_MORE + " Ключи общие с телефоном: вписанный " +
+                    "здесь появится там, и наоборот.",
+                style = PointType.small.copy(color = PointColors.muted),
+            )
+        }
         Text(com.point.core.flow.aiKeysCount(keys), style = PointType.body)
 
         com.point.core.flow.aiServiceGroups(lines).forEach { (group, rows) ->
@@ -313,8 +326,12 @@ fun SettingsKeys(
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 rows.forEach { line ->
                     PortalRow(
-                        title = line.name,
-                        subtitle = if (open == line.providerId) line.what else null,
+                        // Номер — место в очереди обращения, то же, что на телефоне (#902).
+                        title = if (line.place <= 0) line.name else "%02d  %s".format(line.place, line.name),
+                        subtitle = when {
+                            open == line.providerId -> line.what
+                            else -> line.trouble
+                        },
                         onClick = { open = if (open == line.providerId) null else line.providerId },
                     )
                     if (open == line.providerId) {

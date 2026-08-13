@@ -59,7 +59,7 @@ class SettingsCompositionTest {
     @Test fun `в разделе стоят все известные сервисы, а не только те, где есть ключ`() {
         screen(keys = saved)
 
-        AI_PROVIDERS.forEach { compose.onNodeWithText(it.name).performScrollTo().assertIsDisplayed() }
+        AI_PROVIDERS.forEach { compose.onNodeWithText(it.name, substring = true).performScrollTo().assertIsDisplayed() }
     }
 
     @Test fun `сервисы идут в том порядке, в каком Point к ним обращается`() {
@@ -67,8 +67,8 @@ class SettingsCompositionTest {
 
         val order = AI_PROVIDERS.map { it.name }
         order.zipWithNext { above, below ->
-            compose.onNodeWithText(above).performScrollTo()
-            compose.onNodeWithText(below).performScrollTo().assertIsDisplayed()
+            compose.onNodeWithText(above, substring = true).performScrollTo()
+            compose.onNodeWithText(below, substring = true).performScrollTo().assertIsDisplayed()
         }
     }
 
@@ -77,7 +77,7 @@ class SettingsCompositionTest {
 
         // В закрытой строке этого нет намеренно (#887): одиннадцать описаний подряд читаются
         // как каталог, а не как настройка. Узнать, что умеет сервис, человек по-прежнему может.
-        compose.onNodeWithText(openRouter.name).performScrollTo().performClick()
+        compose.onNodeWithText(openRouter.name, substring = true).performScrollTo().performClick()
 
         compose.onNodeWithText(openRouter.what, substring = true).performScrollTo().assertIsDisplayed()
     }
@@ -87,14 +87,14 @@ class SettingsCompositionTest {
 
         compose.onAllNodes(hasSetTextAction()).assertCountEquals(0)
 
-        compose.onNodeWithText(openRouter.name).performScrollTo().performClick()
+        compose.onNodeWithText(openRouter.name, substring = true).performScrollTo().performClick()
 
         compose.onAllNodes(hasSetTextAction()).assertCountEquals(1)
     }
 
     @Test fun `модель и адрес свёрнуты внутри строки сервиса`() {
         screen(keys = saved)
-        compose.onNodeWithText(openRouter.name).performScrollTo().performClick()
+        compose.onNodeWithText(openRouter.name, substring = true).performScrollTo().performClick()
 
         compose.onNodeWithText("Модель и адрес").performScrollTo().performClick()
 
@@ -104,7 +104,7 @@ class SettingsCompositionTest {
     @Test fun `ссылка на страницу сервиса называет его и ведёт туда`() {
         var opened: String? = null
         screen(keys = saved, onOpenUrl = { opened = it })
-        compose.onNodeWithText(openRouter.name).performScrollTo().performClick()
+        compose.onNodeWithText(openRouter.name, substring = true).performScrollTo().performClick()
 
         compose.onNodeWithText("Открыть сайт ${openRouter.name}").performScrollTo().performClick()
 
@@ -189,7 +189,7 @@ class SettingsCompositionTest {
         var checked: UserAiKey? = null
         screen(keys = saved, onCheck = { checked = it })
 
-        compose.onNodeWithText(groq.name).performScrollTo().performClick()
+        compose.onNodeWithText(groq.name, substring = true).performScrollTo().performClick()
         compose.onAllNodes(hasSetTextAction()).onFirst().performScrollTo()
         compose.onNodeWithText("Проверить и включить").performScrollTo()
 

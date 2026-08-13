@@ -213,7 +213,7 @@ class SettingsListTest {
         compose.onNodeWithText("Ключи AI").performClick()
 
         compose.onNodeWithText("Проверить все").performScrollTo().assertIsDisplayed()
-        AI_PROVIDERS.forEach { compose.onNodeWithText(it.name).performScrollTo().assertIsDisplayed() }
+        AI_PROVIDERS.forEach { compose.onNodeWithText(it.name, substring = true).performScrollTo().assertIsDisplayed() }
         compose.onAllNodes(hasSetTextAction()).assertCountEquals(0)
     }
 
@@ -271,10 +271,10 @@ class SettingsListTest {
         )
 
         compose.onNodeWithText("Ключи AI").performClick()
-        AI_PROVIDERS.forEach { compose.onNodeWithText(it.name).performScrollTo().assertIsDisplayed() }
+        AI_PROVIDERS.forEach { compose.onNodeWithText(it.name, substring = true).performScrollTo().assertIsDisplayed() }
         compose.onNodeWithText(com.point.core.flow.AiServiceGroup.MINE.title.uppercase(), substring = true)
             .performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText(openRouter.name).performScrollTo().performClick()
+        compose.onNodeWithText(openRouter.name, substring = true).performScrollTo().performClick()
         compose.onNodeWithText("Открыть сайт ${openRouter.name}").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Ключ ${openRouter.name}").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("ваш ключ", substring = true).performScrollTo().assertIsDisplayed()
