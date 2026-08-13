@@ -1004,96 +1004,54 @@ class FlowViewModel @Inject constructor(
         _ui.update { it.copy(inputPrompt = null, inputSuggestions = emptyList(), needsImage = null, busy = null) }
     }
 
-    private var chatJob: Job? = null
-
-    private fun openChat(obj: PointObject) {
-        _ui.update {
-            it.copy(
-                chat = talk.opened(obj, it.chat),
-                chatOpen = true,
-                busy = null, inputPrompt = null, message = null, messageOutcome = Outcome.NONE,
-            )
-        }
-    }
-
     /**
-     * Уход человека завершает разговор (#794, решение владельца 11.08.2026: «назад → ai =
-     * заново»).
-     *
-     * Прежде разговор сворачивался и следующий вход возвращал ту же переписку — а вместе с
-     * ней исчезал стартовый экран с вариантами вопросов: единственное место, где сказано, о
-     * чём вообще можно спросить объект. Забранные ответы при этом не теряются: они уже стали
-     * объектами и живут в «Недавнем».
+     * Разговор живёт своим держателем (#833): здесь остаются только двери, которыми его
+     * открывает экран. Что делать с идущим вопросом при уходе и как забрать ответ — знает
+     * `ChatFlow`, и правки этих правил больше не трогают этот файл.
      */
-    fun closeChat() {
-
-        // Уход — отказ от работы, а не согласие ждать её в пустоте (#668): заданный вопрос
-        // отменяется вместе с разговором, и облачный вызов не оплачивается после ухода.
-        chatJob?.cancel()
-        chatJob = null
-        _ui.update { it.copy(chatOpen = false, chat = null) }
+    private val chatFlow by lazy {
+        ChatFlow(
+            talk = talk,
+            scope = viewModelScope,
+            chat = { _ui.value.chat },
+            setChat = { chat, open ->
+                _ui.update {
+                    if (open) {
+                        it.copy(
+                            chat = chat,
+                            chatOpen = true,
+                            busy = null,
+                            inputPrompt = null,
+                            message = null,
+                            messageOutcome = Outcome.NONE,
+                        )
+                    } else {
+                        it.copy(chat = chat, chatOpen = false)
+                    }
+                }
+            },
+            labelOf = { id, state -> runCatching { registry.byId(id).label(state) }.getOrNull() },
+            iconOf = { id -> runCatching { registry.byId(id).icon }.getOrDefault("ai") },
+            runBubble = ::onBubble,
+            keepAnswer = { obj -> pushFrame(obj, viaTitle = "Ответ AI") },
+            onSuccess = { runCatching { sensory.success() } },
+            onFailure = { why ->
+                _ui.update { it.copy(message = why, messageOutcome = Outcome.FAILED) }
+            },
+        )
     }
 
-    fun sendChatMessage(text: String) {
-        val chat = _ui.value.chat ?: return
-        val message = text.trim()
-        if (message.isEmpty() || chat.pending) return
-        val history = chat.messages
-        _ui.update { it.copy(chat = talk.said(chat, message)) }
-        chatJob?.cancel()
-        chatJob = viewModelScope.launch {
-            val answered = talk.answered(_ui.value.chat ?: chat, message, history) { id, state ->
-                runCatching { registry.byId(id).label(state) }.getOrNull()
-            }
-            chatJob = null
-            _ui.update { s -> if (s.chat == null) s else s.copy(chat = answered) }
-        }
-    }
+    private fun openChat(obj: PointObject) = chatFlow.open(obj)
 
-    /**
-     * Тап по предложенному действию — обычный путь действия (#804): та же цена, тот же
-     * исполнитель, тот же результат, что из списка объекта. Разговор при этом закрывается:
-     * он кончился делом, а не репликой.
-     */
-    fun runChatOffer() {
-        val chat = _ui.value.chat ?: return
-        val offer = chat.offer ?: return
-        val obj = chat.obj
-        chatJob?.cancel()
-        chatJob = null
-        _ui.update { it.copy(chat = null, chatOpen = false) }
-        onBubble(Bubble(bubbleIconOf(offer.capabilityId), offer.title, offer.capabilityId, obj.state))
-    }
+    fun closeChat() = chatFlow.close()
 
-    private fun bubbleIconOf(id: com.point.core.model.CapabilityId): String =
-        runCatching { registry.byId(id).icon }.getOrDefault("ai")
+    fun sendChatMessage(text: String) = chatFlow.send(text)
 
-    fun cancelChatMessage() {
-        val job = chatJob ?: return
-        chatJob = null
-        job.cancel()
-        _ui.update { s -> s.chat?.let { c -> s.copy(chat = talk.stopped(c)) } ?: s }
-    }
+    fun runChatOffer() = chatFlow.runOffer()
 
-    fun takeChatAnswer() {
-        val chat = _ui.value.chat ?: return
-        if (chat.pending) return
-        val answer = chat.messages.lastOrNull { it.role == ChatRole.ASSISTANT }
-            ?.text?.takeIf { it.isNotBlank() } ?: return
-        viewModelScope.launch {
-            val obj = runCatching { talk.answerObject(chat, answer) }.getOrNull()
-            if (obj == null) {
-                _ui.update { it.copy(message = "Не удалось забрать ответ", messageOutcome = Outcome.FAILED) }
-                return@launch
-            }
-            runCatching { sensory.success() }
+    fun cancelChatMessage() = chatFlow.cancelMessage()
 
-            _ui.update { it.copy(chat = null, chatOpen = false) }
-            pushFrame(obj, viaTitle = "Ответ AI")
-        }
-    }
-
-
+    fun takeChatAnswer() = chatFlow.takeAnswer()
 
     fun openKeySettings() {
         openKeyScreen(errand = null)
@@ -1946,8 +1904,8 @@ class FlowViewModel @Inject constructor(
         signInJob?.cancel()
         signInJob = null
 
-        chatJob?.cancel()
-        chatJob = null
+        // Разговор сворачивает свой держатель — здесь про его внутренности не знают (#833).
+        chatFlow.close()
         stack.clear()
         pendingBubble = null
         pendingPreviewBubble = null
