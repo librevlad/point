@@ -762,6 +762,17 @@ private fun ObjectHeader(
 
                     // Знак нарисован, а не обрезан: круг его вписывает, а не срезает углы.
                     SpreadsheetMark(size = headerSize * MARK_IN_CIRCLE)
+                } else if (kindMarkOf(obj) != KindMark.UNKNOWN) {
+
+                    // Марка на каждый вид (#825): экран объекта одинаково живой, чем бы объект
+                    // ни был. Раньше нарисованной была одна таблица, а всё прочее брало плоскую
+                    // системную иконку — и объект то оживал, то становился строкой из списка
+                    // приложений.
+                    KindMarkIcon(
+                        mark = kindMarkOf(obj),
+                        size = headerSize * MARK_IN_CIRCLE,
+                        contentDescription = obj.metadata["name"] ?: kindMarkLabel(kindMarkOf(obj)),
+                    )
                 } else {
                     Surface(
                         shape = CircleShape,
