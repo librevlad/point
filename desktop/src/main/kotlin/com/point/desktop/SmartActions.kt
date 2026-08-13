@@ -46,7 +46,20 @@ class PcEntitiesRealizer(
         val text = File(input.uri.value).takeIf(File::isFile)?.readText()
             ?: return ActionResult.Failure("Файла объекта нет на диске", recoverable = false)
         val found = com.point.core.flow.plausibleEntities(extractor.extract(text), text)
-        if (found.isEmpty()) {
+
+        // Правила знания написаны один раз и работают на обоих устройствах (#935).
+        //
+        // Сумма, показание, координаты, квитанция и номер накладной разбираются правилами из
+        // `:core:flow`. Телефон их звал, компьютер — нет, и счёт на 12 500 грн оставался на
+        // ПК без суммы: движок сущностей о деньгах знает («Суммы — 1»), а ключа знания у него
+        // для них нет.
+        val byRules = com.point.core.flow.amountFacts(text) +
+            com.point.core.flow.meterFacts(text) +
+            com.point.core.flow.geoFacts(text) +
+            com.point.core.flow.receiptFacts(text) +
+            com.point.core.flow.trackFacts(text)
+
+        if (found.isEmpty() && byRules.isEmpty()) {
 
             // «Не нашлось» — знание, а не сбой (Конституция §13).
             return ActionResult.Done(
@@ -59,13 +72,27 @@ class PcEntitiesRealizer(
                 ),
             )
         }
-        ActionResult.Done("Нашёл: " + summary(found), entityFindings(found))
+        ActionResult.Done(summaryLine(found, byRules), entityFindings(found, byRules))
     }.getOrElse { ActionResult.Failure("Разобрать текст не вышло — попробуйте ещё раз", recoverable = true) }
 
-    private fun entityFindings(found: List<Entity>): com.point.core.model.Findings =
-        entityKnowledge(found, capabilityId)
+    private fun entityFindings(found: List<Entity>, byRules: Map<String, String>): com.point.core.model.Findings {
+        val knowledge = entityKnowledge(found, capabilityId)
+        if (byRules.isEmpty()) return knowledge
 
-    private fun summary(found: List<Entity>): String = entitySummary(found)
+        // Нашли правила — вопрос отвечен, даже если движок сущностей промолчал: «не найдено»
+        // при найденной сумме было бы ложью о знании (Конституция §13).
+        val answered = mapOf(
+            com.point.core.flow.investigationKey(capabilityId) to
+                com.point.core.flow.InvestigationState.FOUND.wire,
+        )
+        return knowledge.copy(metadata = byRules + knowledge.metadata + answered)
+    }
+
+    private fun summaryLine(found: List<Entity>, byRules: Map<String, String>): String = when {
+        found.isEmpty() -> "Нашёл: " + com.point.core.flow.knowledgeRows(byRules)
+            .joinToString(", ") { it.name.lowercase() }
+        else -> "Нашёл: " + entitySummary(found)
+    }
 }
 
 /** Знание из найденных сущностей: первое значение вида, «ещё»-значения, признаки, состояние вопроса. */

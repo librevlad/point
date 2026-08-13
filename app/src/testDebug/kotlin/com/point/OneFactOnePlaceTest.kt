@@ -22,6 +22,7 @@ import com.point.core.model.ValueRef
 import com.point.core.ui.FirstScreen
 import com.point.core.ui.theme.PointTheme
 import org.junit.Assert.assertEquals
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -33,6 +34,17 @@ class OneFactOnePlaceTest {
     @get:Rule val compose = createComposeRule()
 
     private val phone = "+380 67 123 45 67"
+
+    /**
+     * Так номер выходит на экран: разобранным библиотекой, а не как записан в документе (#932).
+     * Вид зависит от страны устройства — украинский номер украинцу показывается местным, —
+     * поэтому страна названа прямо, а не берётся из окружения теста.
+     */
+    private val phoneShown = "067 123 4567"
+
+    @Before fun ukrainianDevice() {
+        com.point.core.flow.PhoneNumbers.region = "UA"
+    }
     private val email = "olena@tihiy-dvor.example"
     private val address = "Київ, вулиця Ярославська, 14"
 
@@ -149,7 +161,7 @@ class OneFactOnePlaceTest {
 
         screen(card)
 
-        assertEquals(1, timesOnScreen(phone))
+        assertEquals(1, timesOnScreen(phoneShown))
         compose.onNodeWithText("Нашёл телефон").assertExists()
         compose.onNodeWithText("Нашёл почту").assertExists()
     }
@@ -162,7 +174,7 @@ class OneFactOnePlaceTest {
 
         screen(number)
 
-        assertEquals(1, timesOnScreen(phone))
+        assertEquals(1, timesOnScreen(phoneShown))
         compose.onNodeWithText("Нашёл телефон").assertDoesNotExist()
     }
 }

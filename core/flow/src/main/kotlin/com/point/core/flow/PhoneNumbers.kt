@@ -22,6 +22,8 @@ import com.google.i18n.phonenumbers.PhoneNumberUtil.PhoneNumberType
  * мобильный, а в другой стране это другой номер или не номер вовсе. Подсказка приходит
  * снаружи — от локали или SIM, — и `:core:flow` остаётся Android-free.
  */
+const val META_ENTITY_PHONE = META_ENTITY_PREFIX + "phone"
+
 object PhoneNumbers {
 
     private val util: PhoneNumberUtil by lazy { PhoneNumberUtil.getInstance() }
@@ -172,6 +174,27 @@ object PhoneNumbers {
             null
         }
     }
+
+        /**
+     * Как показать значение человеку.
+     *
+     * Номер, вычитанный с кадра, приходит покорёженным: `06 1 ) 2 80-44-2 1`. Библиотека его
+     * разобрала — иначе он не прошёл бы отбор и не появился бы на экране, — значит
+     * канонический вид у Point есть, и показывать мусор незачем (#932). Что не разобралось,
+     * показывается как есть: выдумывать нельзя.
+     */
+    fun shown(text: String, region: String = PhoneNumbers.region): String =
+        human(text, region) ?: text
+
+    /**
+     * Страна словом человека, а не кодом.
+     *
+     * `UA` — адрес для машины; на экране должно стоять «Польша». Имена стран уже есть в
+     * системе — своего справочника Point не заводит.
+     */
+    fun countryName(code: String): String? =
+        java.util.Locale("", code).getDisplayCountry(java.util.Locale.forLanguageTag("ru"))
+            ?.takeIf { it.isNotBlank() && it != code }
 
     /** Пока страна не подсказана снаружи. */
     const val DEFAULT_REGION = "UA"

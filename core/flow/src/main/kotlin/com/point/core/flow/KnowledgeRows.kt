@@ -27,6 +27,34 @@ data class KnowledgeRow(
     val said: String? = null,
 )
 
+/**
+ * Как значение читается человеком (#932).
+ *
+ * Вложенные смысловые ключи — валюта суммы, страна и вид номера — часть значения, а не
+ * аннотация: сумма без валюты не сумма. Но приклеивать их сырыми нельзя. Номер, вычитанный с
+ * кадра, приходит покорёженным (`06 1 ) 2 80-44-2 1`), а рядом с ним вставал код страны для
+ * машины: «06 1 ) 2 80-44-2 1 UA городской». Библиотека номер разобрала — иначе он не прошёл
+ * бы отбор, — значит канонический вид у Point есть.
+ *
+ * Своя страна не называется: человек и так знает, где живёт. Чужая называется словом, а не
+ * кодом.
+ */
+fun shownKnowledge(key: String, value: String, metadata: Map<String, String> = emptyMap()): String {
+    if (key == META_ENTITY_PHONE) return shownPhone(value, metadata["$key.kind"])
+
+    val extras = metadata
+        .filterKeys { it.startsWith("$key.") && !isAnnotationKey(it) }
+        .values.filter { it.isNotBlank() }
+    return (listOf(value) + extras).joinToString(" ")
+}
+
+private fun shownPhone(value: String, kind: String?): String {
+    val shown = PhoneNumbers.shown(value)
+    val abroad = PhoneNumbers.country(value)?.takeIf { it != PhoneNumbers.region }
+        ?.let { PhoneNumbers.countryName(it) }
+    return listOfNotNull(shown, abroad, kind).joinToString(" · ")
+}
+
 data class OpenQuestion(val name: String, val state: InvestigationState)
 
 fun knowledgeRows(metadata: Map<String, String>): List<KnowledgeRow> =
@@ -38,14 +66,10 @@ fun knowledgeRows(metadata: Map<String, String>): List<KnowledgeRow> =
             val value = metadata[key].orEmpty()
             if (value.isBlank()) return@mapNotNull null
 
-            // Вложенные смысловые ключи (валюта суммы) — часть значения, не аннотация.
-            val extras = metadata
-                .filterKeys { it.startsWith("$key.") && !isAnnotationKey(it) }
-                .values.filter { it.isNotBlank() }
             KnowledgeRow(
                 key = key,
                 name = name,
-                value = (listOf(value) + extras).joinToString(" "),
+                value = shownKnowledge(key, value, metadata),
                 disputed = alternativesOf(metadata, key),
                 more = moreOf(metadata, key),
                 confirmed = provenanceOf(metadata, key) == Provenance.HUMAN,
