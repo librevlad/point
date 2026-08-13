@@ -28,6 +28,15 @@ class DefaultCapabilityRegistry @Inject constructor(
      */
     private val network: com.point.core.flow.NetworkAvailability =
         com.point.core.flow.NetworkAvailability { true },
+
+    /**
+     * Режим приватности прямо сейчас (#943).
+     *
+     * В закрытом режиме действие обещало человеку то, чего режим не разрешает: «снимок уйдёт
+     * в сервис» — в режиме, который отправку запретил. Дверь остаётся на месте и нажимаема:
+     * по тапу человек узнаёт причину и может сменить режим. Меняются слова, а не список.
+     */
+    private val privacy: com.point.core.flow.CloudPrivacySettings = OPEN_TO_EVERYONE,
 ) : CapabilityRegistry {
 
     private val byIdMap: Map<CapabilityId, Capability> = capabilities.associateBy { it.id }
@@ -62,8 +71,28 @@ class DefaultCapabilityRegistry @Inject constructor(
     )
 
     /** Про сеть спрашиваем один раз на список, а не у каждого действия. */
-    private fun offlineReason(c: Capability): String? =
-        if (c.meta.network && !runCatching { network.isAvailable() }.getOrDefault(true)) NO_INTERNET else null
+    private fun offlineReason(c: Capability): String? = when {
+        !c.meta.network -> null
+        !runCatching { network.isAvailable() }.getOrDefault(true) -> NO_INTERNET
+
+        // Своё устройство — не «наружу»: «На компьютер» уносит объект на компьютер того же
+        // человека, и режим приватности к нему не относится.
+        c.meta.localOnly -> null
+        else -> modeReason()
+    }
+
+    /**
+     * Режим закрыл дорогу наружу — об этом говорит подпись, а не молчание (#943).
+     *
+     * Спрашивается не название режима, а то же правило, по которому цепочка и отказывает:
+     * пускает ли этот режим наружу вообще. Когда у сервисов появятся собственные обещания,
+     * подпись переменится вместе с ними и переписывать её не придётся.
+     */
+    private fun modeReason(): String? {
+        val level = runCatching { privacy.level() }.getOrDefault(com.point.core.flow.PrivacyLevel.DEFAULT)
+        val open = com.point.core.flow.allowedAt(level, com.point.core.flow.AI_CHAIN_PRIVACY)
+        return if (open) null else com.point.core.flow.chainClosedBy(level)
+    }
 
     private fun tierOf(meta: CapabilityMeta): BubbleTier = when {
         meta.network -> BubbleTier.AI
@@ -97,6 +126,12 @@ class DefaultCapabilityRegistry @Inject constructor(
     private companion object {
 
         const val MAX_LATENT = 2
+
+        /** Пока режим не подсказан снаружи: тестам и старым вызовам — прежнее поведение. */
+        val OPEN_TO_EVERYONE = object : com.point.core.flow.CloudPrivacySettings {
+            override fun level() = com.point.core.flow.PrivacyLevel.FREE_FIRST
+            override suspend fun setLevel(level: com.point.core.flow.PrivacyLevel) = Unit
+        }
 
         /** Одно слово про сеть на все экраны — оно живёт в `:core:flow` (#569, #759). */
         const val NO_INTERNET = com.point.core.flow.NO_INTERNET_NOTE
