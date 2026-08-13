@@ -71,8 +71,9 @@ class PhoneDoesNotPretendTest {
     fun `телефон не на связи — сначала спрашивают, потом кладут в очередь`() {
         val box = Outbox(temp.newFolder("outbox"))
         val pc = state(box)
+        val call = PcRemoteAction("call", "Позвонить")
 
-        pc.sendToPhone(item(), PcRemoteAction("call", "Позвонить"))
+        pc.sendToPhone(item(), call)
 
         // Человека спрашивают, а не обещают за телефон: он сам решает, ждать ли.
         val ask = pc.phoneAsk.value
@@ -85,11 +86,12 @@ class PhoneDoesNotPretendTest {
 
         assertEquals("согласие не положило просьбу в очередь", 1, box.entries().size)
         val left = box.entries().single()
-        assertEquals("просьба уехала без названия работы", "call", left.meta["pc.action"])
+        assertEquals("просьба уехала без названия работы", call.id, left.meta["pc.action"])
 
         // Уведомление на телефоне называет работу словами человека. Взять их телефону
-        // больше неоткуда: через Google едет одно слово «зайди».
-        assertEquals("просьба уехала без человеческого имени", "Позвонить", left.meta["pc.action.label"])
+        // больше неоткуда: через Google едет одно слово «зайди». Сверяется связь, а не
+        // конкретное слово: поменяется название действия — поменяется и в уведомлении.
+        assertEquals("просьба уехала без человеческого имени", call.label, left.meta["pc.action.label"])
         assertEquals("в телефон не постучали", 1, knocks.get())
     }
 
