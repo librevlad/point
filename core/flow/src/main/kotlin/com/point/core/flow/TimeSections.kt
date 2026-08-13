@@ -20,26 +20,48 @@ enum class TimeSection(val label: String) {
 
 private const val MINUTE = 60_000L
 private const val HOUR = 60 * MINUTE
-private const val DAY = 24 * HOUR
 
 /**
- * В какую секцию попадает объект. «Сейчас» — последний час: это то, с чем человек работает
- * прямо сегодня и сейчас, и ради чего он чаще всего открывает список.
+ * В какую секцию попадает объект.
+ *
+ * «Сейчас» — последний час: это то, с чем человек работает прямо сейчас, и ради чего он чаще
+ * всего открывает список. Дальше режем по **календарю**, а не по прошедшим часам (#931).
+ *
+ * Раньше «сегодня» означало «меньше суток назад», и вчерашние объекты стояли под заголовком
+ * «СЕГОДНЯ» ровно до тех пор, пока им не исполнялось двадцать четыре часа: утром в девять
+ * сегодняшним числился весь вчерашний рабочий день. Заголовок секции — единственная карта в
+ * длинном списке, и она врала.
+ *
+ * Решение владельца 13.08.2026: «Резать по календарю + свести с подписью». День здесь и день
+ * в подписи строки считает один код — чтобы разойтись снова было негде.
  */
-fun timeSectionOf(millisAgo: Long): TimeSection = when {
-    millisAgo < HOUR -> TimeSection.NOW
-    millisAgo < DAY -> TimeSection.TODAY
-    millisAgo < 2 * DAY -> TimeSection.YESTERDAY
-    else -> TimeSection.EARLIER
+fun timeSectionOf(at: Long, now: Long, zone: java.time.ZoneId): TimeSection {
+    if (now - at < HOUR) return TimeSection.NOW
+    val day = dayOf(at, zone)
+    val today = dayOf(now, zone)
+    return when {
+        day == today -> TimeSection.TODAY
+        day == today.minusDays(1) -> TimeSection.YESTERDAY
+        else -> TimeSection.EARLIER
+    }
 }
+
+/** Календарный день метки времени. Один ответ на вопрос «какой это был день» на весь продукт. */
+fun dayOf(at: Long, zone: java.time.ZoneId): java.time.LocalDate =
+    java.time.Instant.ofEpochMilli(at).atZone(zone).toLocalDate()
 
 /**
  * Список, разрезанный на секции, в порядке от свежего к старому. Пустые секции не
  * появляются: заголовок без строк — обещание, за которым ничего нет.
  */
-fun <T> byTimeSection(items: List<T>, millisAgoOf: (T) -> Long): List<Pair<TimeSection, List<T>>> =
+fun <T> byTimeSection(
+    items: List<T>,
+    now: Long,
+    zone: java.time.ZoneId = java.time.ZoneId.systemDefault(),
+    atOf: (T) -> Long,
+): List<Pair<TimeSection, List<T>>> =
     TimeSection.entries.mapNotNull { section ->
-        items.filter { timeSectionOf(millisAgoOf(it)) == section }
+        items.filter { timeSectionOf(atOf(it), now, zone) == section }
             .takeIf { it.isNotEmpty() }
             ?.let { section to it }
     }

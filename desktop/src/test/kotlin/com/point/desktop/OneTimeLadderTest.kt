@@ -22,7 +22,15 @@ import org.junit.Test
  */
 class OneTimeLadderTest {
 
-    private val now = 1_700_000_000_000L
+    /**
+     * Полдень, а не произвольная метка: секции режутся по календарю (#931), и «два часа
+     * назад» от полуночи — это уже вчера. Полдень делает намерение теста однозначным.
+     */
+    private val now = java.time.LocalDate.of(2026, 8, 13)
+        .atTime(12, 0)
+        .atZone(java.time.ZoneId.systemDefault())
+        .toInstant()
+        .toEpochMilli()
 
     private fun live(minutesAgo: Long) = InboxItem(
         obj = PointObject(
@@ -48,7 +56,7 @@ class OneTimeLadderTest {
     fun `у одной секции один заголовок, из скольких бы источников она ни собралась`() {
         val lines = recentLines(listOf(live(120)), listOf(kept(200)))
 
-        val sections = byTimeSection(lines) { now - it.at }.map { it.first }
+        val sections = byTimeSection(lines, now) { it.at }.map { it.first }
 
         assertEquals(listOf(TimeSection.TODAY), sections)
     }
@@ -86,7 +94,7 @@ class OneTimeLadderTest {
             listOf(kept(120), kept(60 * 50)),
         )
 
-        val sections = byTimeSection(lines) { now - it.at }.map { it.first }
+        val sections = byTimeSection(lines, now) { it.at }.map { it.first }
 
         assertEquals(
             listOf(TimeSection.NOW, TimeSection.TODAY, TimeSection.YESTERDAY, TimeSection.EARLIER),

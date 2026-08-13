@@ -229,7 +229,7 @@ fun HomeScreen(
                 // Время — структура списка, а не подпись в каждой строке (#880). Правило
                 // общее с компьютером: секции те же, оформление своё.
                 val now = System.currentTimeMillis()
-                com.point.core.flow.byTimeSection(recent) { now - it.epochMillis }
+                com.point.core.flow.byTimeSection(recent, now) { it.epochMillis }
                     .forEach { (section, entries) ->
                         item(key = "section-${section.name}") {
                             com.point.core.ui.SectionLabel(
