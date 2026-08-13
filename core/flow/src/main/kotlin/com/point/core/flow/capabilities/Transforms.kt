@@ -30,7 +30,7 @@ class ArchiveCapability  : Capability {
     override val id = ID
     override val icon = "unzip"
 
-    override val meta = CapabilityMeta(latency = Latency.FAST)
+    override val meta = CapabilityMeta(latency = Latency.FAST, revealsInside = true)
     override fun label(state: ObjectState) = "Распаковать"
     override fun accepts(state: ObjectState) = state.kind == ObjectKind.ZIP
     override fun produces(state: ObjectState) = ObjectState(ObjectKind.COLLECTION)
@@ -42,7 +42,7 @@ class OfficeCapability  : Capability {
     override val id = ID
     override val icon = "office"
 
-    override val meta = CapabilityMeta(latency = Latency.FAST)
+    override val meta = CapabilityMeta(latency = Latency.FAST, revealsInside = true)
     override fun label(state: ObjectState) = "Извлечь текст"
     override fun accepts(state: ObjectState) = state.kind == ObjectKind.OFFICE
     override fun produces(state: ObjectState) = ObjectState(ObjectKind.TEXT)

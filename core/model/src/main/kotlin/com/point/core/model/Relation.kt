@@ -15,6 +15,23 @@ value class RelationType(val name: String) {
 
         val FOUND_IN = RelationType("found_in")
 
+        /**
+         * Исходник содержит этот объект (#946).
+         *
+         * Архив содержит файлы, документ содержит страницы, набор содержит вложения: объект
+         * был внутри и достали его целиком, а не сделали заново.
+         */
+        val CONTAINS = RelationType("contains")
+
+        /**
+         * Объект получен из исходника (#946).
+         *
+         * Запись получена из текста, перевод — из документа, снимок страницы — из PDF.
+         * Решение владельца 13.08.2026: связи разные и в графе не сливаются — «архив
+         * содержит файлы» и «запись получена из текста» это не одно и то же.
+         */
+        val DERIVED_FROM = RelationType("derived_from")
+
         val IDENTIFIES = RelationType("identifies")
 
         val ISSUED_BY = RelationType("issued_by")

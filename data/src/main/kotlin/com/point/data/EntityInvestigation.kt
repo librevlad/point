@@ -200,7 +200,7 @@ internal fun focusedDelta(
                 id = id,
                 mime = "text/plain",
                 uri = ValueRef(value),
-                state = ObjectState(kind, setOf(feature)),
+                state = ObjectState(kind, setOfNotNull(feature)),
                 metadata = buildMap {
                     put(key, value)
                     put(com.point.core.flow.META_AT_REGION, at)
@@ -330,10 +330,10 @@ internal fun entityObjects(
 
     if (source.state.kind in EXTRACTED_KINDS) return emptyList<PointObject>() to emptyList()
 
-    val objects = ENTITY_KINDS.flatMap { (suffix, kindAndFeature) ->
+    val objects = ENTITY_KINDS.flatMap { (suffix, node) ->
         val key = META_ENTITY_PREFIX + suffix
         val value = facts[key]?.takeIf { it.isNotBlank() } ?: return@flatMap emptyList()
-        val (kind, feature) = kindAndFeature
+        val (kind, feature) = node
 
         val alternatives = alternativesOf(facts, key)
 
@@ -341,7 +341,7 @@ internal fun entityObjects(
             id = id,
             mime = "text/plain",
             uri = ValueRef(nodeValue),
-            state = ObjectState(kind, setOf(feature)),
+            state = ObjectState(kind, setOfNotNull(feature)),
             metadata = buildMap {
                 put(key, nodeValue)
                 if (withAlternatives && alternatives.isNotEmpty()) {
@@ -381,12 +381,40 @@ internal fun entityObjects(
     return objects to objects.map { Relation(it.id, RelationType.FOUND_IN, source.id) }
 }
 
-private val ENTITY_KINDS: Map<String, Pair<ObjectKind, Feature>> = mapOf(
-    "phone" to (KIND_PHONE to Feature.HAS_PHONE),
-    "email" to (KIND_EMAIL to Feature.HAS_EMAIL),
-    "url" to (KIND_URL to Feature.HAS_URL),
-    "address" to (KIND_ADDRESS to Feature.HAS_ADDRESS),
-    "date" to (KIND_DATE to Feature.HAS_DATE),
+/**
+ * Во что можно войти (#947).
+ *
+ * Объектом становились пять видов сущностей из пятнадцати: телефон, почта, ссылка, адрес,
+ * дата. Прочитанный с кадра штрихкод, сумма счёта, показание счётчика, номер квитанции,
+ * координаты и место оставались строкой знания — войти в них было нельзя, а конституция
+ * говорит ровно обратное: человек входит в найденный объект и продолжает его понимание.
+ *
+ * Признак `Feature` есть не у каждого вида, и выдумывать его ради узла незачем: узлу нужен
+ * вид, а признак — это про то, что умеет исходник.
+ *
+ * Коды разного назначения — один вид: накладная, штрихкод, счётчик, квитанция и карта — всё
+ * это идентификаторы. Новый вид заводится, только когда он и правда другой: сумма это деньги,
+ * место это «где».
+ *
+ * Карты здесь нет намеренно и по-прежнему: в номер карты не входят, им расплачиваются.
+ */
+/** Вид узла и признак исходника, если он у этого вида есть. */
+private data class NodeKind(val kind: ObjectKind, val feature: Feature? = null)
+
+private val ENTITY_KINDS: Map<String, NodeKind> = mapOf(
+    "phone" to NodeKind(KIND_PHONE, Feature.HAS_PHONE),
+    "email" to NodeKind(KIND_EMAIL, Feature.HAS_EMAIL),
+    "url" to NodeKind(KIND_URL, Feature.HAS_URL),
+    "address" to NodeKind(KIND_ADDRESS, Feature.HAS_ADDRESS),
+    "date" to NodeKind(KIND_DATE, Feature.HAS_DATE),
+
+    "amount" to NodeKind(com.point.core.flow.KIND_AMOUNT),
+    "barcode" to NodeKind(com.point.core.flow.KIND_IDENTIFIER, Feature.HAS_BARCODE),
+    "meter" to NodeKind(com.point.core.flow.KIND_IDENTIFIER),
+    "receipt" to NodeKind(com.point.core.flow.KIND_IDENTIFIER),
+    "geo" to NodeKind(com.point.core.flow.KIND_PLACE, Feature.HAS_GEO),
+    "place" to NodeKind(com.point.core.flow.KIND_PLACE),
 )
+
 
 
