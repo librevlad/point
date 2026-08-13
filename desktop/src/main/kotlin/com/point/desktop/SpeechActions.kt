@@ -51,8 +51,8 @@ class PcTranscribeRealizer(
                 val cfg = config()
                 if (cfg.key.isBlank()) {
                     return@withContext ActionResult.Failure(
-                        "Расшифровке нужен ключ Groq или OpenAI — впишите его в ~/.point-pc/config " +
-                            "строкой speech.key=…",
+                        "Расшифровке нужен ключ " + com.point.core.flow.speechProviderNames() +
+                            " — впишите его в «Ключи AI», там же, где остальные",
                         recoverable = false,
                     )
                 }

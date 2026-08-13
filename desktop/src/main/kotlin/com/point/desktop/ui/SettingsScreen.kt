@@ -260,156 +260,8 @@ fun SettingsData(swept: Int?, onSweepNow: () -> Unit) {
     }
 }
 
-/**
- * Экран ключей: те же группы и та же очередь, что на телефоне (#887, #888).
- *
- * Раньше здесь выбирался ОДИН сервис и к нему одно поле ключа — модель, которой нет на
- * телефоне. Теперь у каждого сервиса свой ключ, и связка целиком ездит между устройствами.
- */
 @Composable
-fun SettingsKeys(
-    config: PcConfig,
-    onSave: (PcConfig) -> Unit,
-    keyCheck: com.point.core.flow.AiKeyCheck =
-        com.point.core.flow.HttpAiKeyCheck(com.point.core.flow.UrlConnectionHttpJson()),
-    onOpenUrl: (String) -> Unit = {},
-) {
-    var keys by remember { mutableStateOf(config.aiKeys) }
-    var speechKey by remember { mutableStateOf(config.speech.key) }
-    var ocrKey by remember { mutableStateOf(config.ocr.key) }
-    var open by remember { mutableStateOf<String?>(null) }
-    var verdict by remember { mutableStateOf<KeyVerdict?>(null) }
-    var verdictFor by remember { mutableStateOf<String?>(null) }
-    var checking by remember { mutableStateOf<String?>(null) }
-    val scope = rememberCoroutineScope()
-
-    fun store(next: com.point.core.flow.UserAiKeys = keys) {
-        keys = next
-        onSave(
-            config.copy(
-                aiKeys = next,
-                speech = config.speech.copy(key = speechKey.trim()),
-                ocr = config.ocr.copy(key = ocrKey.trim()),
-            ),
-        )
-    }
-
-    // Своих ключей у Point на компьютере нет: здесь работает то, к чему вписан ваш ключ.
-    val lines = com.point.core.flow.aiServiceLines(keys, emptySet(), emptyMap(), 0L)
-
-    Column(
-        modifier = Modifier.fillMaxWidth().widthIn(max = 560.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        // Панель состояния, а не документация (#902): наверху две мысли, подробности —
-        // за «Как это работает».
-        Text(com.point.core.flow.AI_CHAIN_WHAT, style = PointType.small)
-        var howOpen by remember { mutableStateOf(false) }
-        Text(
-            if (howOpen) "Свернуть" else "Как это работает",
-            style = PointType.small.copy(color = PointColors.cyan),
-            modifier = Modifier.clip(RoundedCornerShape(8.dp))
-                .clickable { howOpen = !howOpen }
-                .padding(vertical = 3.dp),
-        )
-        if (howOpen) {
-            Text(
-                com.point.core.flow.AI_CHAIN_MORE + " Ключи общие с телефоном: вписанный " +
-                    "здесь появится там, и наоборот.",
-                style = PointType.small.copy(color = PointColors.muted),
-            )
-        }
-        Text(com.point.core.flow.aiKeysCount(keys), style = PointType.body)
-
-        com.point.core.flow.aiServiceGroups(lines).forEach { (group, rows) ->
-            Text(group.title.uppercase(), style = PointType.label)
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                rows.forEach { line ->
-                    PortalRow(
-                        // Номер — место в очереди обращения, то же, что на телефоне (#902).
-                        title = if (line.place <= 0) line.name else "%02d  %s".format(line.place, line.name),
-                        subtitle = when {
-                            open == line.providerId -> line.what
-                            else -> line.trouble
-                        },
-                        onClick = { open = if (open == line.providerId) null else line.providerId },
-                    )
-                    if (open == line.providerId) {
-                        ServiceKey(
-                            line = line,
-                            saved = keys.of(line.providerId),
-                            checking = checking == line.providerId,
-                            verdict = verdict.takeIf { verdictFor == line.providerId },
-                            onOpenUrl = onOpenUrl,
-                            onSave = { key -> verdict = null; store(keys.with(key)) },
-                            onForget = { store(keys.without(line.providerId)) },
-                            onCheck = { key ->
-                                if (checking == null && looksLikeApiKey(key.apiKey)) {
-                                    checking = line.providerId
-                                    scope.launch {
-                                        verdict = keyVerdict(keyCheck.check(com.point.core.flow.aiCall(key)))
-                                        verdictFor = line.providerId
-                                        checking = null
-                                    }
-                                }
-                            },
-                        )
-                    }
-                }
-            }
-        }
-
-        Text("ДЛЯ ЗАПИСЕЙ И СНИМКОВ", style = PointType.label)
-        Field(speechKey, { speechKey = it; store() }, "Ключ расшифровки речи", secret = true)
-        Field(ocrKey, { ocrKey = it; store() }, "Ключ чтения снимков — необязателен", secret = true)
-    }
-}
-
-/** Что открывается под сервисом: сайт, поле ключа, проверка. */
-@Composable
-private fun ServiceKey(
-    line: com.point.core.flow.AiServiceLine,
-    saved: com.point.core.flow.UserAiKey?,
-    checking: Boolean,
-    verdict: KeyVerdict?,
-    onOpenUrl: (String) -> Unit,
-    onSave: (com.point.core.flow.UserAiKey) -> Unit,
-    onForget: () -> Unit,
-    onCheck: (com.point.core.flow.UserAiKey) -> Unit,
-) {
-    val provider = AI_PROVIDERS.firstOrNull { it.id == line.providerId }
-    var draft by remember(line.providerId, saved) { mutableStateOf(saved?.apiKey.orEmpty()) }
-
-    Column(
-        modifier = Modifier.fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(PointColors.surfaceDeep)
-            .padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(9.dp),
-    ) {
-        provider?.freeNote?.let { Text(it, style = PointType.small.copy(color = PointColors.cyan)) }
-        provider?.let { Action("Открыть сайт ${it.name}") { onOpenUrl(it.keyUrl) } }
-
-        Field(draft, { draft = it }, "Ключ ${line.name}", secret = true)
-
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Action(if (checking) "Проверяю…" else "Сохранить и проверить") {
-                val key = com.point.core.flow.UserAiKey(
-                    providerId = line.providerId,
-                    apiKey = draft.trim(),
-                    savedAt = saved?.savedAt ?: 0L,
-                )
-                onSave(key)
-                onCheck(key)
-            }
-            if (saved != null) Action("Забыть ключ", onForget)
-        }
-        verdict?.let { Verdict(it) }
-    }
-}
-
-@Composable
-private fun Verdict(verdict: KeyVerdict) {
+internal fun Verdict(verdict: KeyVerdict) {
     when (verdict) {
         is KeyVerdict.Works -> Text("Ключ работает: " + verdict.reply, style = PointType.small)
         is KeyVerdict.Refused -> Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -458,7 +310,7 @@ private fun SwitchRow(title: String, subtitle: String, on: Boolean, onToggle: ()
 }
 
 @Composable
-private fun Field(
+internal fun Field(
     value: String,
     onChange: (String) -> Unit,
     hint: String,
@@ -483,7 +335,7 @@ private fun Field(
 }
 
 @Composable
-private fun Action(title: String, onClick: () -> Unit) {
+internal fun Action(title: String, onClick: () -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))

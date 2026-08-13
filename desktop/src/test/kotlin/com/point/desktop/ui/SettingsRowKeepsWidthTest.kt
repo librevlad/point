@@ -19,7 +19,9 @@ import org.junit.Test
  */
 class SettingsRowKeepsWidthTest {
 
-    private val source = File("src/main/kotlin/com/point/desktop/ui/SettingsScreen.kt").readText()
+    // Раздел ключей живёт своим файлом (#834): примечание про бесплатность теперь там.
+    private val source = File("src/main/kotlin/com/point/desktop/ui/SettingsKeysPane.kt").readText() +
+        File("src/main/kotlin/com/point/desktop/ui/SettingsScreen.kt").readText()
 
     @Test
     fun `примечания у сервисов действительно длинные — короткими они не станут`() {

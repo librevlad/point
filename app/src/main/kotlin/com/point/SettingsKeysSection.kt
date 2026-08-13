@@ -176,6 +176,14 @@ internal fun KeySection(
     com.point.core.flow.aiServiceGroups(screen.services).forEach { (group, rows) ->
         Spacer(Modifier.height(4.dp))
         SectionLabel(group.title)
+        // Почему «Ваши ключи» стоят не подряд: 05, 09, 12 — их места в общей очереди (#911).
+        if (group == com.point.core.flow.AiServiceGroup.MINE) {
+            Text(
+                com.point.core.flow.AI_MINE_KEEP_PLACE,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
         rows.forEach { line ->
             ServiceRow(
                 line = line,
@@ -226,7 +234,9 @@ internal fun ServiceRow(
     PortalRow(
         // Номер — место в очереди обращения. Девять имён подряд читались как меню
         // равноправных настроек; номер объясняет порядок без единого слова (#902).
-        title = serviceTitle(line),
+        // Он вторичен: главное в строке — имя сервиса (#911).
+        title = line.name,
+        place = line.place,
         // Что умеет сервис — по раскрытию: в закрытой строке это девять абзацев подряд.
         // Здесь остаётся то, что отличает эту строку от соседних (#887).
         subtitle = serviceState(line, checking, open),
@@ -253,10 +263,6 @@ internal fun ServiceRow(
  * Что стоит во второй строке сервиса. Общее про группу уже сказано её заголовком, поэтому
  * здесь остаётся личное: свой ключ, последний факт, ход проверки.
  */
-/** Имя сервиса с его местом в очереди: «03  Mistral». */
-internal fun serviceTitle(line: AiServiceLine): String =
-    if (line.place <= 0) line.name else "%02d  %s".format(line.place, line.name)
-
 internal fun serviceState(line: AiServiceLine, checking: Boolean, open: Boolean): String? = when {
     checking -> "проверяю…"
     open && line.mine -> line.what + "\n" + line.keyLine + " · " + line.factLine
