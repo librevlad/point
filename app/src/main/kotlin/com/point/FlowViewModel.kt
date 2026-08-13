@@ -526,6 +526,14 @@ class FlowViewModel @Inject constructor(
     fun onBubble(bubble: Bubble) {
         val top = focused() ?: return
 
+        // Режим закрыл дорогу наружу (#943): спрашивать согласие незачем — согласие тут не
+        // поможет. Дверь была видна и нажата, значит человек услышит причину и то, где она
+        // меняется, а не молчаливое «сделали меньше обещанного».
+        wayOutClosed(bubble.capabilityId)?.let { reason ->
+            _ui.update { it.copy(message = reason, messageOutcome = Outcome.FAILED) }
+            return
+        }
+
         if (com.point.core.flow.labelNeedsKey(bubble.title)) {
             openKeyScreen(
                 KeyErrand(
@@ -928,6 +936,23 @@ class FlowViewModel @Inject constructor(
             cancelable = true,
         )
         dispatch(bubble) { resolver.realizerFor(bubble.capabilityId, top.state).perform(top, null) }
+    }
+
+    /**
+     * Почему это действие сейчас наружу не пойдёт — словами режима (#943).
+     *
+     * Спрашивается то же правило, по которому отказывает сама цепочка: пускает ли режим
+     * наружу вообще.
+     */
+    private fun wayOutClosed(id: CapabilityId): String? {
+        if (!isCloud(id)) return null
+
+        // Своё устройство — не «наружу»: «На компьютер» режим не закрывает.
+        if (runCatching { registry.byId(id).meta.localOnly }.getOrDefault(false)) return null
+        val level = runCatching { cloudPrivacy.level() }
+            .getOrDefault(com.point.core.flow.PrivacyLevel.DEFAULT)
+        if (com.point.core.flow.allowedAt(level, com.point.core.flow.AI_CHAIN_PRIVACY)) return null
+        return com.point.core.flow.chainClosedBy(level)
     }
 
     private fun isCloud(id: CapabilityId) =
