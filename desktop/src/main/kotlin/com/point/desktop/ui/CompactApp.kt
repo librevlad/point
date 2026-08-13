@@ -434,23 +434,10 @@ internal fun CompactHeader(
     }
 }
 
-/** Мини-знак Point — то же кольцо, что лончер телефона и трей. */
+/** Мини-знак Point — тот же портал, что у иконки: доли берутся из `PointMark`. */
 @Composable
 private fun HeaderGlyph() {
-    androidx.compose.foundation.Canvas(Modifier.size(16.dp)) {
-        val c = center
-        val r = size.minDimension / 2f
-        drawCircle(
-            brush = androidx.compose.ui.graphics.Brush.verticalGradient(
-                0f to Color(0xFFEAF0FF),
-                0.45f to Color(0xFF9B7BFF),
-                1f to Color(0xFF00A6FF),
-            ),
-            radius = r * 0.62f,
-            center = c,
-            style = androidx.compose.ui.graphics.drawscope.Stroke(width = r * 0.34f),
-        )
-    }
+    androidx.compose.foundation.Canvas(Modifier.size(16.dp)) { drawPointMark(field = false) }
 }
 
 @Composable
