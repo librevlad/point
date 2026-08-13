@@ -48,6 +48,8 @@ button[disabled]{opacity:.5;cursor:default}
 .tab{flex:1;padding:9px 0;border:0;border-radius:9px;background:transparent;color:#9AA3B2;
 font-size:14px;font-weight:500;cursor:pointer}
 .tab.on{background:#1A1D25;color:#EAF0FF;font-weight:600}
+/* Отправка состоялась: вкладки видно, но нажимать нечего — страница больше не принимает. */
+.tab.done{opacity:.4;cursor:default}
 #text{display:none;width:100%;margin:0 0 14px;padding:12px;border:1px solid #FFFFFF2E;
 border-radius:12px;background:#00000033;color:#F2F3F5;font:inherit;font-size:15px;resize:vertical}
 .no-js #text{display:block}
@@ -137,7 +139,13 @@ UPLOAD_SCRIPT = r"""
       text:'Текст придёт текстом, а не файлом.',
       contact:'Придёт контактом — его можно сохранить в телефон одним нажатием.',
       place:'Придёт точкой на карте.'};
+ // Отправка была одна и она состоялась — страница больше ничего не принимает (#928).
+ // Раньше кнопка убиралась, а вкладки продолжали работать: человек жал «Контакт», видел
+ // живую форму с полями и обещанием — и не находил, чем отправить. «Готово» при этом
+ // стиралось. Ссылка приёма — на одну вещь; второе присылается по новой ссылке.
+ var sent=false;
  function pick(next){
+  if(sent) return;
   mode=next;
   for(var k in tabs){ tabs[k].className='tab'+(k===mode?' on':''); }
   zone.style.display=mode==='file'?'':'none';
@@ -190,7 +198,9 @@ UPLOAD_SCRIPT = r"""
     fill.style.setProperty('--p',100);
     core.innerHTML='<b>Готово</b><span>'+({file:'файл ушёл',text:'текст ушёл',
       contact:'контакт ушёл',place:'место ушло'}[mode])+'</span>';
-    note.textContent='Можно закрывать страницу.';
+    note.textContent='Можно закрывать страницу. Чтобы прислать ещё что-то, попросите новую ссылку.';
+    sent=true;
+    for(var k in tabs){ tabs[k].className='tab done'; }
     say(''); go.remove();
    } else {
     fail(x.status===404?'Ссылка больше не работает — попросите новую.'
