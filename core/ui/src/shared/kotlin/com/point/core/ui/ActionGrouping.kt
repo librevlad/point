@@ -1,7 +1,9 @@
 package com.point.core.ui
 
 import com.point.core.model.Bubble
+import com.point.core.model.Feature
 import com.point.core.model.Intent
+import com.point.core.model.ObjectState
 
 /*
  * Группировка действий по смыслу — одна на телефон и компьютер (#879).
@@ -40,9 +42,33 @@ fun actionGroupOf(intent: Intent): ActionGroup = when (intent) {
 data class ActionSection(val group: ActionGroup, val bubbles: List<Bubble>)
 
 /**
- * [useFirst] — объект сам является значением (телефон, адрес, номер). Там главное им
- * воспользоваться, а не понимать его заново: «Исправить ошибки» стояло первым и
- * подсвеченным внутри телефона, а «Позвонить» пряталось ниже сгиба.
+ * Знание поднимает своё действие (#937, решение владельца 13.08.2026).
+ *
+ * Человек делится ссылкой — «Открыть» стояло одиннадцатым, под свёрткой, ниже предложения
+ * превратить ссылку в таблицу Excel. Единственное действие, ради которого ссылкой и делятся.
+ * Порядок не спрашивал, что Point уже знает об объекте.
+ *
+ * Есть ссылка — выше «Открыть», есть номер — выше «Позвонить», есть адрес — выше карты.
+ * Ничего не прячется: меняется только порядок групп, как и требует конституция — Intent
+ * влияет на порядок, а не на список.
+ */
+fun knowsUsableValue(state: ObjectState): Boolean = USABLE_VALUE.any(state::has)
+
+private val USABLE_VALUE = listOf(
+    Feature.HAS_URL,
+    Feature.HAS_PHONE,
+    Feature.HAS_EMAIL,
+    Feature.HAS_ADDRESS,
+    Feature.HAS_GEO,
+    Feature.HAS_QR,
+)
+
+/**
+ * [useFirst] — объектом можно воспользоваться прямо сейчас: он сам является значением
+ * (телефон, адрес, номер) либо такое значение про него известно.
+ *
+ * Внутри телефона «Исправить ошибки» стояло первым и подсвеченным, а «Позвонить» пряталось
+ * ниже сгиба.
  */
 fun actionGroupOrder(useFirst: Boolean = false): List<ActionGroup> = if (useFirst) {
     listOf(ActionGroup.USE, ActionGroup.EXTRACT, ActionGroup.TRANSFORM, ActionGroup.SEND)

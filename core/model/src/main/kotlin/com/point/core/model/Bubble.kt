@@ -19,10 +19,36 @@ data class Bubble(
     val unusableReason: String? = null,
 )
 
+/**
+ * Пространство действий расширилось знанием — порядок на экране не переставляется под пальцем.
+ *
+ * Показанные действия остаются на своих местах: человек уже прицелился, и уезжающая строка —
+ * промах вместо действия.
+ *
+ * Новое действие при этом дописывалось в самый конец, и знание не поднимало своего действия
+ * (#937): человек делится ссылкой, «Открыть ссылку» появляется вместе с найденной ссылкой —
+ * то есть позже всех, — и встаёт одиннадцатым, под свёрткой, ниже предложения сделать из
+ * ссылки таблицу Excel.
+ *
+ * Теперь новое действие встаёт туда, куда его ставит ранжирование: перед первым показанным
+ * действием, которое ранжирование ставит ниже него. Показанные при этом друг друга не
+ * обгоняют — двигаться под пальцем по-прежнему нечему.
+ */
 fun keepShownOrder(shown: List<Bubble>, fresh: List<Bubble>): List<Bubble> {
     if (shown.isEmpty()) return fresh
     val seen = shown.withIndex().associate { (i, b) -> b.capabilityId to i }
-    return fresh.sortedBy { seen[it.capabilityId] ?: Int.MAX_VALUE }
+
+    // Место новичка — там, где ранжированный список упирается в уже показанное.
+    val place = IntArray(fresh.size)
+    var next = shown.size
+    for (i in fresh.indices.reversed()) {
+        val at = seen[fresh[i].capabilityId]
+        if (at != null) next = at
+        place[i] = at ?: next
+    }
+    return fresh.indices
+        .sortedWith(compareBy({ place[it] }, { if (fresh[it].capabilityId in seen) 1 else 0 }, { it }))
+        .map { fresh[it] }
 }
 
 enum class BubbleTier { INSTANT, SMART, AI }
