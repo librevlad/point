@@ -15,6 +15,7 @@
 """
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import time
@@ -107,6 +108,54 @@ def ack(root: str, user_id: str, device_id: str, blob_id: str) -> bool:
     return False
 
 
+# --- описание присланного: имя и тип -----------------------------------------------------
+
+
+def write_meta(path: str, name: str, mime: str) -> None:
+    """Записать имя и тип присланного.
+
+    Разделять поля переводом строки нельзя: значение вправе его содержать, и тогда хвост
+    имени становится типом. Чужой человек, кладущий файл в ящик приёма, выбирал этим тип
+    того, что попадёт в Point, а хозяин видел безобидное имя (#927).
+
+    Поэтому поля пишутся JSON-ом: там значение закавычено, и сдвинуть соседнее поле оно не
+    может — чем бы его ни наполнили.
+    """
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump({"name": _plain(name) or "file", "mime": _plain(mime) or DEFAULT_MIME}, f)
+
+
+def read_meta(path: str) -> tuple[str, str]:
+    """Прочитать имя и тип. Пусто или нечитаемо — безобидные значения по умолчанию.
+
+    Старые записи лежат двумя строками: на боевом сервере они есть прямо сейчас, и человек
+    не должен потерять присланное из-за смены формата.
+    """
+    try:
+        with open(path, encoding="utf-8") as f:
+            raw = f.read()
+    except OSError:
+        return "file", DEFAULT_MIME
+
+    try:
+        got = json.loads(raw)
+        return _plain(got.get("name")) or "file", _plain(got.get("mime")) or DEFAULT_MIME
+    except (ValueError, AttributeError):
+        lines = raw.splitlines()
+        name = _plain(lines[0] if lines else "") or "file"
+        mime = _plain(lines[1] if len(lines) > 1 else "") or DEFAULT_MIME
+        return name, mime
+
+
+def _plain(value: str | None) -> str:
+    """Строка без управляющих знаков: человеку они не значат ничего, формату — многое."""
+    text = value or ""
+    return "".join(" " if ch.isspace() or not ch.isprintable() else ch for ch in text).strip()
+
+
+DEFAULT_MIME = "application/octet-stream"
+
+
 # --- «Дать ссылку»: файл забирает чужой человек ------------------------------------------
 
 
@@ -121,8 +170,7 @@ def drop_put(root: str, user_id: str, data: bytes, name: str, mime: str) -> str:
         raise Full("Больше 20 живых ссылок сразу не бывает — дождитесь, пока старые истекут")
     did = uuid.uuid4().hex + uuid.uuid4().hex[:8]  # 160 бит: ссылку не перебрать
     box = _dir(box_root, did)
-    with open(os.path.join(box, "meta"), "w", encoding="utf-8") as f:
-        f.write((name or "file").replace("\n", " ") + "\n" + (mime or "application/octet-stream").replace("\n", " "))
+    write_meta(os.path.join(box, "meta"), name, mime)
     tmp = os.path.join(box, "blob.part")
     with open(tmp, "wb") as f:
         f.write(data)
@@ -142,14 +190,7 @@ def drop_find(root: str, drop_id: str) -> tuple[str, str, str] | None:
         box = os.path.join(users, uid, "d", safe)
         blob = os.path.join(box, "blob.bin")
         if os.path.isfile(blob):
-            name, mime = "file", "application/octet-stream"
-            try:
-                with open(os.path.join(box, "meta"), encoding="utf-8") as f:
-                    lines = f.read().split("\n")
-                    name = lines[0] or name
-                    mime = (lines[1] if len(lines) > 1 else "") or mime
-            except OSError:
-                pass
+            name, mime = read_meta(os.path.join(box, "meta"))
             return blob, name, mime
     return None
 
@@ -209,8 +250,7 @@ def inbox_accept(box: str, data: bytes, name: str, mime: str) -> None:
     if len([n for n in os.listdir(box) if n.endswith(".bin")]) >= MAX_INBOX_FILES:
         raise Full("В этот ящик больше не помещается — заберите присланное")
     fid = "%020d-%s" % (time.time_ns(), uuid.uuid4().hex[:8])
-    with open(os.path.join(box, fid + ".meta"), "w", encoding="utf-8") as f:
-        f.write((name or "file").replace("\n", " ") + "\n" + (mime or "application/octet-stream").replace("\n", " "))
+    write_meta(os.path.join(box, fid + ".meta"), name, mime)
     tmp = os.path.join(box, fid + ".part")
     with open(tmp, "wb") as f:
         f.write(data)
@@ -246,14 +286,7 @@ def inbox_take(root: str, user_id: str, box_id: str) -> tuple[str, bytes, str, s
     if not names:
         return None
     fid = names[0][:-4]
-    name, mime = "file", "application/octet-stream"
-    try:
-        with open(os.path.join(box, fid + ".meta"), encoding="utf-8") as f:
-            lines = f.read().split("\n")
-            name = lines[0] or name
-            mime = (lines[1] if len(lines) > 1 else "") or mime
-    except OSError:
-        pass
+    name, mime = read_meta(os.path.join(box, fid + ".meta"))
     with open(os.path.join(box, fid + ".bin"), "rb") as f:
         return fid, f.read(), name, mime
 
