@@ -56,6 +56,13 @@ class SpeakCapability @Inject constructor() : Capability {
 class SpeakRealizer @Inject constructor(
     private val store: ObjectStore,
     private val voice: TextToSpeech,
+
+    /**
+     * Чтение вслух подчиняется тому же режиму, что и всё уходящее наружу (#924, решение
+     * владельца 13.08.2026): закрытый режим — только голос, читающий на устройстве;
+     * открытый — любой, включая лучший серверный.
+     */
+    private val privacy: com.point.core.flow.CloudPrivacySettings,
 ) : Realizer {
     override val capabilityId = SpeakCapability.ID
     override val meta = RealizerMeta(priority = 10, kind = RealizerKind.LOCAL)
@@ -75,7 +82,10 @@ class SpeakRealizer @Inject constructor(
             val ref = store.newScratchFile("wav")
             // Длинный текст читается кусками. Молчаливое ожидание на статье в тридцать тысяч
             // знаков выглядит как зависание, поэтому стадия называет, где мы.
-            val said = voice.speak(text, languageOfText(text), ref.value) { done, all ->
+            val level = runCatching { privacy.level() }
+                .getOrDefault(com.point.core.flow.PrivacyLevel.DEFAULT)
+            val onDeviceOnly = !com.point.core.flow.allowedAt(level, com.point.core.flow.AI_CHAIN_PRIVACY)
+            val said = voice.speak(text, languageOfText(text), ref.value, onDeviceOnly) { done, all ->
                 if (all > 1) reportStage("$READING — $done из $all")
             }
 
