@@ -40,3 +40,21 @@ fun unusableReasonOf(metadata: Map<String, String>): String? =
  */
 fun GraphState.unusableReason(): String? =
     if (state.has(Feature.UNUSABLE)) fact(META_UNUSABLE_REASON) else null
+
+/**
+ * Причина, общая для всех действий сразу (#874).
+ *
+ * Когда с объектом нечего делать, причина одна на всё: «Файл пустой — в нём нечего читать».
+ * Она уже сказана подписью объекта, а `yieldLabel` подставлял её ещё и второй строкой у
+ * каждого действия — на экране получалось шесть одинаковых фраз подряд, а под прокруткой
+ * больше. Экран кричал одно вместо того, чтобы сказать это один раз.
+ *
+ * Правило то же, что у групп на экране ключей (#887): общее говорится один раз, а в строке
+ * остаётся то, что её отличает. Причина у действия остаётся, когда она СВОЯ, — например
+ * «нет интернета» у сетевого действия рядом с местным.
+ */
+fun sharedUnusableReason(reasons: List<String?>): String? {
+    val first = reasons.firstOrNull()?.takeIf { it.isNotBlank() } ?: return null
+    if (reasons.size < 2) return null
+    return first.takeIf { reasons.all { reason -> reason == first } }
+}

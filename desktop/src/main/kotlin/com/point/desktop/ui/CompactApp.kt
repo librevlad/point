@@ -554,6 +554,12 @@ internal fun CompactObject(
         val actions = state.actionsFor(item)
         if (actions.isNotEmpty()) {
 
+            // Причина, общая для всех действий, сказана подписью объекта — у действий
+            // остаётся их обещание (#874).
+            val sharedReason = com.point.core.flow.sharedUnusableReason(
+                actions.map { it.bubble?.unusableReason },
+            )
+
             // Группы по смыслу — те же, что на телефоне (#879). Раньше здесь был один
             // список «Что можно сделать»: порядок совпадал с телефонным, но человеку это
             // было не видно. Действие без пузыря (просьба к телефону) идёт последней
@@ -584,7 +590,10 @@ internal fun CompactObject(
                         bubbleColor(action.icon),
                         primary = i == primary,
                         icon = action.icon,
-                        note = yieldLabel(action.bubble.yields, action.bubble.unusableReason),
+                        note = yieldLabel(
+                            action.bubble.yields,
+                            action.bubble.unusableReason.takeIf { it != sharedReason },
+                        ),
                         appearIndex = i,
                     ) { state.onBubble(item, action.bubble) }
 

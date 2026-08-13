@@ -32,6 +32,12 @@ internal fun ObjectActions(
     appIconFor: (String) -> ImageBitmap? = { null },
 ) {
     val dim by animateFloatAsState(if (working) 0.5f else 1f, tween(200), label = "actions-dim")
+
+    // Причина, общая для всех действий, уже сказана подписью объекта — у действий остаётся
+    // их обещание (#874). Своя причина у отдельного действия никуда не девается.
+    val shared = com.point.core.flow.sharedUnusableReason(
+        sections.flatMap { it.bubbles }.map { it.unusableReason },
+    )
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -48,6 +54,7 @@ internal fun ObjectActions(
                     key(bubble.capabilityId.value) {
                         ActionRow(
                             bubble = bubble,
+                            shared = shared,
                             index = index,
 
                             primary = sectionIndex == 0 && index == 0,
@@ -72,6 +79,7 @@ internal fun ObjectActions(
 @Composable
 private fun ActionRow(
     bubble: Bubble,
+    shared: String?,
     index: Int,
     primary: Boolean,
     enabled: Boolean,
@@ -83,7 +91,7 @@ private fun ActionRow(
     val ai = bubble.tier == BubbleTier.AI
     PortalRow(
         title = bubble.title,
-        subtitle = yieldLabel(bubble.yields, bubble.unusableReason),
+        subtitle = yieldLabel(bubble.yields, bubble.unusableReason.takeIf { it != shared }),
         subtitleMaxLines = 1,
         onClick = onClick,
         icon = bubbleIcon(bubble.icon),
