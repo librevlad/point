@@ -44,7 +44,10 @@ fun semanticFits(key: String, value: String): Boolean? {
         // В телефоне не бывает слов. Модель дала чистый «067 636 05 60», но метки указывали
         // и на имя рядом, и заземление по странице возвращало склейку «Тарасенко Світлана
         // Сергіївна 067 636 05 60» — она и вставала значением телефона (охота 11.08.2026).
-        META_ENTITY_PREFIX + "phone" -> digits in 10..13 && !WORDY.containsMatchIn(value)
+        // Телефон судит библиотека: номер либо существует, либо нет (#801). Самодельное
+        // «от десяти до тринадцати цифр» пропускало номер карты и не отличало украинский
+        // номер от американского.
+        META_ENTITY_PREFIX + "phone" -> PhoneNumbers.exists(value)
         META_ENTITY_PREFIX + "email" -> value.contains('@') && value.substringAfter('@').contains('.')
         META_ENTITY_PREFIX + "card" -> digits in 15..19 || looksLikeIban(value)
         // Дата — это дата, а не всё, где есть цифра и точка: «4.» из нумерации пункта
@@ -140,7 +143,7 @@ fun AtomLayer.fieldEvidence(
     return classes
 }
 
-private val WORDY = Regex("""\p{L}{3,}""")
+internal val WORDY = Regex("""\p{L}{3,}""")
 
 private const val LABEL_GAP_HEIGHTS = 2f
 

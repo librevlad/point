@@ -16,6 +16,7 @@ class PointApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        tellPhoneRegion()
         warmUpScanPack()
         eraseRemovedUsageJournal()
         val system = Thread.getDefaultUncaughtExceptionHandler()
@@ -27,6 +28,26 @@ class PointApplication : Application() {
                 crashLog.record(formatCrashReport(version, thread.name, error))
             }
             system?.uncaughtException(thread, error)
+        }
+    }
+
+    /**
+     * Откуда Point знает страну номера без «+» (#801).
+     *
+     * `067 636 05 60` — украинский мобильный, а в другой стране это другой номер или не
+     * номер вовсе. Подсказку даёт SIM, а если её нет — язык устройства. Само правило живёт
+     * в `:core:flow`, и Android-у оно ничего не должно: сюда приходит только код страны.
+     */
+    private fun tellPhoneRegion() {
+        val fromSim = runCatching {
+            (getSystemService(TELEPHONY_SERVICE) as? android.telephony.TelephonyManager)
+                ?.networkCountryIso?.takeIf { it.isNotBlank() }
+        }.getOrNull()
+        val fromLocale = runCatching {
+            resources.configuration.locales[0].country.takeIf { it.isNotBlank() }
+        }.getOrNull()
+        (fromSim ?: fromLocale)?.let {
+            com.point.core.flow.PhoneNumbers.region = it.uppercase()
         }
     }
 

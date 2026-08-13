@@ -36,6 +36,12 @@ robolectric = "4.16.1"
 androidxWork = "2.10.0"
 
 [libraries]
+# Телефон судит библиотека, а не самодельное «10–13 цифр» (#801, решение владельца
+# «отдать libphonenumber, заодно обогащать знания»). Чистая Java — годится и ядру, и ПК.
+libphonenumber = { module = "com.googlecode.libphonenumber:libphonenumber", version = "8.13.52" }
+libphonenumber-carrier = { module = "com.googlecode.libphonenumber:carrier", version = "1.222" }
+libphonenumber-geocoder = { module = "com.googlecode.libphonenumber:geocoder", version = "2.235" }
+
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
 androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycle" }

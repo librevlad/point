@@ -17,6 +17,9 @@ dependencies {
     // модель ответила, а Point не прочёл.
     implementation(libs.json)
 
+    // Телефон судит библиотека, а не самодельное «10–13 цифр» (#801). Тоже обычная Java.
+    implementation(libs.libphonenumber)
+
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
 
