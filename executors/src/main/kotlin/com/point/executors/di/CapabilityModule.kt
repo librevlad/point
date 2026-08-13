@@ -174,6 +174,7 @@ abstract class CapabilityModule {
     @Binds @IntoSet @OwnCapabilities abstract fun translateCap(c: TranslateCapability): Capability
 
     @Binds @IntoSet @OwnCapabilities abstract fun transcribeCap(c: TranscribeCapability): Capability
+    @Binds @IntoSet @OwnCapabilities abstract fun speakCap(c: com.point.executors.SpeakCapability): Capability
     @Binds @IntoSet @OwnCapabilities abstract fun excelCap(c: ExcelCapability): Capability
 
     @Binds @IntoSet @OwnCapabilities abstract fun renewPeriodCap(c: RenewPeriodCapability): Capability
@@ -227,6 +228,7 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun archiveR(r: ArchiveRealizer): Realizer
     @Binds @IntoSet abstract fun translateR(r: TranslateRealizer): Realizer
     @Binds @IntoSet abstract fun transcribeR(r: TranscribeRealizer): Realizer
+    @Binds @IntoSet abstract fun speakR(r: com.point.executors.SpeakRealizer): Realizer
     @Binds @IntoSet abstract fun excelR(r: ExcelRealizer): Realizer
     @Binds @IntoSet abstract fun renewPeriodR(r: RenewPeriodRealizer): Realizer
     @Binds @IntoSet abstract fun wordR(r: WordRealizer): Realizer

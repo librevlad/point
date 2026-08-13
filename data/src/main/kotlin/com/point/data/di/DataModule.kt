@@ -170,6 +170,10 @@ abstract class DataModule {
     @Binds
     abstract fun sharer(impl: AndroidSharer): Sharer
 
+    /** Голос устройства читает текст вслух (#442): бесплатно, без сети, а значит приватно. */
+    @Binds
+    abstract fun textToSpeech(impl: com.point.data.AndroidTextToSpeech): com.point.core.flow.TextToSpeech
+
     @Binds
     abstract fun exporter(impl: MediaStoreExporter): Exporter
 
