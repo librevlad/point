@@ -15,7 +15,7 @@ class ObjectShowsItselfFirstTest {
 
     private val scene = File("src/main/kotlin/com/point/desktop/ui/ObjectScene.kt").readText()
 
-    private val screen = File("src/main/kotlin/com/point/desktop/ui/CompactApp.kt").readText()
+    private val screen = File("src/main/kotlin/com/point/desktop/ui/ObjectPane.kt").readText()
 
     @Test
     fun `наверху стоит портал, а не текст`() {
