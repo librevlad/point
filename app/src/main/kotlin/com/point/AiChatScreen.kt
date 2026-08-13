@@ -232,8 +232,6 @@ private fun ChatSuggestions(suggestions: List<String>, onSend: (String) -> Unit,
     }
 }
 
-private const val AI_ICON = "ai"
-
 private val BubbleMaxWidth = 300.dp
 
 @Composable

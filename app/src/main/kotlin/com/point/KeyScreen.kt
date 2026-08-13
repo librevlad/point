@@ -368,7 +368,7 @@ private fun BackToRoot(onBack: () -> Unit) {
 }
 
 @Composable
-private fun BackToList(onBack: () -> Unit) {
+internal fun BackToList(onBack: () -> Unit) {
     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         TextButton(onClick = onBack) {
             Text("← $SETTINGS_TITLE", color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -376,501 +376,49 @@ private fun BackToList(onBack: () -> Unit) {
     }
 }
 
-/**
- * Все известные сервисы списком — в том порядке, в каком Point к ним обращается
- * (#699). В строке: имя, что умеет, есть ли ключ и последний факт о нём.
- */
-@Composable
-private fun KeySection(
-    screen: AiKeysScreen,
-    note: String?,
-    errand: KeyErrand?,
-    checking: String?,
-    verdict: KeyVerdict?,
-    verdictFor: String?,
-    onSave: (UserAiKey) -> Unit,
-    onCheck: (UserAiKey) -> Unit,
-    onCheckAll: () -> Unit,
-    onPasteKey: () -> String?,
-    onForgetKey: (String) -> Unit,
-    onOpenUrl: (String) -> Unit,
-    onBack: () -> Unit,
-    onLeave: () -> Unit,
-) {
-    BackToList(onBack)
-    ScreenHeader(title = KEY_SECTION_TITLE, modifier = Modifier.padding(bottom = if (note == null) 9.dp else 0.dp))
-
-    if (note != null) OutcomeBanner(message = note, outcome = Outcome.FAILED)
-
-    if (errand != null) {
-        OutcomeCard(
-            title = com.point.core.flow.keyErrandWhy(errand.action),
-            outcome = Outcome.NONE,
-            modifier = Modifier.fillMaxWidth(),
-        )
-    }
-
-    // Очередь названа прямо: без этого главный вопрос человека — «мне что, выбрать один из
-    // одиннадцати?» — оставался без ответа (#887).
-    Text(
-        AI_KEY_WHY + " " + com.point.core.flow.AI_CHAIN_WHAT +
-            " Ключ живёт только на этом устройстве.",
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
-
-    val checkingAll = checking == CHECK_ALL_SERVICES
-
-    // Счёт и массовая проверка — одной тихой строкой. Раньше «Проверить все» стояло главным
-    // действием экрана и спорило со списком, ради которого сюда и заходят.
-    PortalRow(
-        title = com.point.core.flow.aiKeysCount(screen.keys),
-        subtitle = if (checkingAll) {
-            "Point спрашивает каждый сервис одним коротким словом. Ваш объект никуда не уходит."
-        } else {
-            "${screen.checkedLine}. Сам Point ничего не проверяет — только по этому тапу."
-        },
-        onClick = onCheckAll,
-        icon = null,
-        primary = false,
-        chevron = false,
-        enabled = checking == null,
-        subtitleMaxLines = 3,
-        trailing = {
-            Text(
-                if (checkingAll) "Проверяю…" else "Проверить все",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.tertiary,
-            )
-        },
-        modifier = Modifier.graphicsLayer { alpha = if (checking == null) 1f else 0.45f },
-    )
-
-    var open by rememberSaveable { mutableStateOf<String?>(null) }
-
-    // Общее сказано заголовком группы один раз, а не девятью одинаковыми хвостами в строках
-    // (решение владельца по мокапам 12.08.2026 — вариант Б).
-    var index = 0
-    com.point.core.flow.aiServiceGroups(screen.services).forEach { (group, rows) ->
-        Spacer(Modifier.height(4.dp))
-        SectionLabel(group.title)
-        rows.forEach { line ->
-            ServiceRow(
-                line = line,
-                checking = checking == line.providerId,
-                open = open == line.providerId,
-                index = index++,
-                onToggle = { open = if (open == line.providerId) null else line.providerId },
-            )
-            Reveal(open == line.providerId) {
-                ServiceEditor(
-                    line = line,
-                    saved = screen.keys.of(line.providerId),
-                    checking = checking == line.providerId,
-                    verdict = verdict.takeIf { verdictFor == line.providerId },
-                    onSave = onSave,
-                    onCheck = onCheck,
-                    onPasteKey = onPasteKey,
-                    onForgetKey = onForgetKey,
-                    onOpenUrl = onOpenUrl,
-                )
-            }
-        }
-    }
-
-    if (errand != null && verdict is KeyVerdict.Works) {
-        Spacer(Modifier.height(6.dp))
-        PortalRow(
-            title = "Вернуться к «${errand.objectName}»",
-            subtitle = "«${errand.action}» ждёт там — уже без приписки про ключ. Тапнуть по нему " +
-                "Point за вас не станет.",
-            onClick = onLeave,
-
-            primary = true,
-            chevron = false,
-            subtitleMaxLines = 3,
-        )
-    }
-}
-
-@Composable
-private fun ServiceRow(
-    line: AiServiceLine,
-    checking: Boolean,
-    open: Boolean,
-    index: Int,
-    onToggle: () -> Unit,
-) {
-    PortalRow(
-        title = line.name,
-        // Что умеет сервис — по раскрытию: в закрытой строке это девять абзацев подряд.
-        // Здесь остаётся то, что отличает эту строку от соседних (#887).
-        subtitle = serviceState(line, checking, open),
-        onClick = onToggle,
-        icon = null,
-        primary = false,
-        chevron = false,
-        subtitleMaxLines = 2,
-        appearIndex = index,
-        trailing = {
-            Icon(
-                imageVector = Icons.Filled.KeyboardArrowRight,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier
-                    .size(20.dp)
-                    .graphicsLayer { rotationZ = if (open) 90f else 0f },
-            )
-        },
-    )
-}
-
-/**
- * Что стоит во второй строке сервиса. Общее про группу уже сказано её заголовком, поэтому
- * здесь остаётся личное: свой ключ, последний факт, ход проверки.
- */
-private fun serviceState(line: AiServiceLine, checking: Boolean, open: Boolean): String? = when {
-    checking -> "проверяю…"
-    open && line.mine -> line.what + "\n" + line.keyLine + " · " + line.factLine
-    open -> line.what
-    line.mine -> "${line.keyLine} · ${line.factLine}"
-    line.factLine != com.point.core.flow.NEVER_ASKED -> line.factLine
-    else -> null
-}
-
-@Composable
-private fun ServiceEditor(
-    line: AiServiceLine,
-    saved: UserAiKey?,
-    checking: Boolean,
-    verdict: KeyVerdict?,
-    onSave: (UserAiKey) -> Unit,
-    onCheck: (UserAiKey) -> Unit,
-    onPasteKey: () -> String?,
-    onForgetKey: (String) -> Unit,
-    onOpenUrl: (String) -> Unit,
-) {
-    val provider = AI_PROVIDERS.firstOrNull { it.id == line.providerId }
-    val draft = rememberSaveable(line.providerId, saved, saver = KeyDraft.Saver) {
-        KeyDraft(saved ?: UserAiKey(line.providerId, ""))
-    }
-
-    Column(
-        modifier = Modifier.fillMaxWidth().portalCard().padding(14.dp),
-        verticalArrangement = Arrangement.spacedBy(11.dp),
-    ) {
-        if (provider != null) {
-            PortalRow(
-                title = "Открыть сайт ${provider.name}",
-                subtitle = listOfNotNull(
-                    "Там выдают ключ: заведите аккаунт, скопируйте ключ — и вернитесь сюда.",
-                    provider.freeNote,
-                ).joinToString(" "),
-                onClick = { onOpenUrl(provider.keyUrl) },
-                icon = bubbleIcon("open"),
-                accent = bubbleColor("open"),
-                chevron = false,
-                subtitleMaxLines = 3,
-            )
-        }
-
-        OutlinedTextField(
-            value = draft.key,
-            onValueChange = {
-                draft.key = it
-                draft.pasteNote = ""
-            },
-            label = { Text("Ключ ${line.name}") },
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-            visualTransformation = PasswordVisualTransformation(),
-            modifier = Modifier.fillMaxWidth(),
-        )
-
-        if (draft.key.isBlank()) {
-            PortalRow(
-                title = "Вставить из буфера",
-                subtitle = "Скопировали ключ на странице сервиса — он встанет сюда одним тапом.",
-                onClick = {
-                    val pasted = onPasteKey()
-                    if (looksLikeApiKey(pasted)) {
-                        draft.key = pasted!!.trim()
-                        draft.pasteNote = ""
-                    } else {
-
-                        draft.pasteNote = "В буфере нет ключа — скопируйте его на странице сервиса и вернитесь."
-                    }
-                },
-                icon = bubbleIcon("copy"),
-                chevron = false,
-            )
-        }
-        if (draft.pasteNote.isNotEmpty()) {
-            Text(
-                draft.pasteNote,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-
-        DisclosureRow(
-            title = "Модель и адрес",
-            subtitle = listOf(draft.model, draft.baseUrl).filter { it.isNotBlank() }.joinToString(" · ")
-                .ifBlank { "как у сервиса — набирать не нужно" },
-            open = draft.advancedOpen,
-            onToggle = { draft.advancedOpen = !draft.advancedOpen },
-        )
-        Reveal(draft.advancedOpen) {
-            Column(verticalArrangement = Arrangement.spacedBy(11.dp)) {
-                OutlinedTextField(
-                    value = draft.model,
-                    onValueChange = { draft.model = it },
-                    label = { Text("Модель") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                OutlinedTextField(
-                    value = draft.baseUrl,
-                    onValueChange = { draft.baseUrl = it },
-                    label = { Text("Адрес сервиса") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-        }
-
-        val canCheck = draft.key.isNotBlank() && !checking
-        PortalRow(
-
-            title = if (checking) "Проверяю…" else "Проверить и включить",
-            subtitle = "Point спросит сервис одним коротким словом. Ваш объект при этом никуда не отправляется.",
-            onClick = { onCheck(draft.entered()) },
-            icon = bubbleIcon(AI_ICON),
-
-            primary = verdict !is KeyVerdict.Works,
-            chevron = false,
-            enabled = canCheck,
-            subtitleMaxLines = 3,
-            modifier = Modifier.graphicsLayer { alpha = if (canCheck) 1f else 0.45f },
-        )
-
-        if (draft.key.isNotBlank() && verdict !is KeyVerdict.Works) {
-            TextButton(onClick = { onSave(draft.entered()) }) {
-                Text("Сохранить без проверки", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-
-        if (line.mine) {
-            PortalRow(
-                title = "Удалить ключ",
-                subtitle = "Point сотрёт его с устройства. ${line.name} снова замолчит, пока не впишете новый.",
-                onClick = {
-
-                    draft.key = ""
-                    draft.pasteNote = ""
-                    onForgetKey(line.providerId)
-                },
-                chevron = false,
-                subtitleMaxLines = 3,
-            )
-        }
-
-        when (verdict) {
-            is KeyVerdict.Works -> OutcomeCard(
-                title = "Работает — сервис ответил: «${verdict.reply}». Ключ сохранён.",
-                detail = "Теперь «Понять», «Перевести», «Спросить AI» и расшифровка записи работают.",
-                outcome = Outcome.DONE,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            is KeyVerdict.Refused -> OutcomeCard(
-                title = verdict.what,
-                detail = verdict.fix,
-                outcome = Outcome.FAILED,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            null -> Unit
-        }
-    }
-}
-
-@Composable
-private fun PrivacySection(
-    cloudEnabled: Boolean,
-    onToggleCloud: (Boolean) -> Unit,
-    yoloEnabled: Boolean,
-    onToggleYolo: (Boolean) -> Unit,
-    privacyLevel: PrivacyLevel,
-    onPickPrivacyLevel: (PrivacyLevel) -> Unit,
-    onBack: () -> Unit,
-) {
-    BackToList(onBack)
-    ScreenHeader(title = PRIVACY_SECTION_TITLE, modifier = Modifier.padding(bottom = 9.dp))
-
-    SwitchCard(
-        title = "Отправка в облако",
-        // #688, охота 2026-08-10: обещание «с названием того, куда он уедет» система
-        // не выполняла — подписи действий называли только «сервис». Кто читает объект,
-        // теперь видно в «Ключи AI» (#699): вся цепочка по порядку, с последним фактом.
-        description = "Разрешает показывать объект моделям — по вашему тапу. Выключите, и " +
-            "Point спросит заново. Выложить файл по открытой ссылке этим тумблером нельзя: " +
-            "про такое спрашивают каждый раз.",
-        checked = cloudEnabled,
-        onCheckedChange = onToggleCloud,
-    )
-
-    Spacer(Modifier.height(6.dp))
-    SwitchCard(
-        title = YOLO_TITLE,
-        description = YOLO_WHAT,
-        checked = yoloEnabled,
-        onCheckedChange = onToggleYolo,
-    )
-
-    Spacer(Modifier.height(6.dp))
-    SectionLabel(PRIVACY_SETTING_TITLE)
-    Text(
-        PRIVACY_SETTING_HINT,
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
-    PrivacyLevel.entries.forEachIndexed { index, level ->
-        PortalRow(
-            title = level.title,
-
-            subtitle = level.what,
-            onClick = { onPickPrivacyLevel(level) },
-
-            primary = level == privacyLevel,
-            chevron = false,
-            subtitleMaxLines = 4,
-            appearIndex = index,
-        )
-    }
-}
-
-/** Откуда Point открывается — про плитку человек мог не знать вовсе (#821). */
-@Composable
-private fun EntriesSection(tileAdded: Boolean, onBack: () -> Unit) {
-    BackToList(onBack)
-    ScreenHeader(title = ENTRIES_TITLE, modifier = Modifier.padding(bottom = 9.dp))
-
-    listOf(SHARE_ENTRY, if (tileAdded) TILE_ENTRY_ON else TILE_ENTRY_OFF).forEach {
-        Text(
-            it,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 6.dp),
-        )
-    }
-}
-
-/** Сколько объектов Point помнит, сколько это занимает и как забыть (#821). */
-@Composable
-private fun MemorySection(
-    memory: com.point.core.flow.HistoryFootprint?,
-    onForgetAll: () -> Unit,
-    onBack: () -> Unit,
-) {
-    BackToList(onBack)
-    ScreenHeader(title = MEMORY_TITLE, modifier = Modifier.padding(bottom = 9.dp))
-
-    Text(
-        memoryLine(memory),
-        style = MaterialTheme.typography.titleSmall,
-        color = MaterialTheme.colorScheme.onSurface,
-    )
-    listOf(MEMORY_WHAT, DROP_LINKS_LIVE).forEach {
-        Text(
-            it,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 6.dp),
-        )
-    }
-
-    var asking by rememberSaveable { mutableStateOf(false) }
-    if (asking) {
-        Text(
-            CLEAR_RECENT_WHAT,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 10.dp),
-        )
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            TextButton(onClick = { asking = false }) {
-                Text("Отмена", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            TextButton(onClick = { asking = false; onForgetAll() }) {
-                Text(CLEAR_RECENT_CONFIRM, color = MaterialTheme.colorScheme.error)
-            }
-        }
-    } else {
-        TextButton(onClick = { asking = true }, modifier = Modifier.padding(top = 8.dp)) {
-            Text(FORGET_ALL, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-    }
-}
-
-@Composable
-private fun AppSection(
-    soundEnabled: Boolean,
-    onToggleSound: (Boolean) -> Unit,
-    onBack: () -> Unit,
-) {
-    BackToList(onBack)
-    ScreenHeader(title = APP_SECTION_TITLE, modifier = Modifier.padding(bottom = 9.dp))
-
-    SwitchCard(
-        title = SOUND_TITLE,
-        description = "Тихий фирменный отклик на каждое действие. Вибрация управляется системной настройкой касаний.",
-        checked = soundEnabled,
-        onCheckedChange = onToggleSound,
-    )
-}
-
 private const val AI_GROUP_TITLE = "AI и приватность"
 private const val ACCOUNT_GROUP_TITLE = "Аккаунт и устройства"
 
-private const val KEY_SECTION_TITLE = "Ключи AI"
-private const val PRIVACY_SECTION_TITLE = "Отправка и приватность"
-private const val APP_SECTION_TITLE = "Поведение Point"
+internal const val KEY_SECTION_TITLE = "Ключи AI"
+internal const val PRIVACY_SECTION_TITLE = "Отправка и приватность"
+internal const val APP_SECTION_TITLE = "Поведение Point"
 
 private const val DATA_GROUP_TITLE = "Данные"
 
 private const val INTEGRATIONS_GROUP_TITLE = "Интеграции"
-private const val SOUND_TITLE = "Звук действий"
+internal const val SOUND_TITLE = "Звук действий"
 
-private const val ENTRIES_TITLE = "Точки входа"
-private const val MEMORY_TITLE = "Что Point помнит"
+internal const val ENTRIES_TITLE = "Точки входа"
+internal const val MEMORY_TITLE = "Что Point помнит"
 
 
-private const val SHARE_ENTRY = "Системное «Поделиться» — Point принимает объект из любого приложения."
-private const val TILE_ENTRY_ON = "Плитка в шторке — Point открывается одним касанием сверху."
-private const val TILE_ENTRY_OFF = "Плитку в шторке можно добавить из «Нового объекта»."
+internal const val SHARE_ENTRY = "Системное «Поделиться» — Point принимает объект из любого приложения."
+internal const val TILE_ENTRY_ON = "Плитка в шторке — Point открывается одним касанием сверху."
+internal const val TILE_ENTRY_OFF = "Плитку в шторке можно добавить из «Нового объекта»."
 
-private const val MEMORY_WHAT =
+internal const val MEMORY_WHAT =
     "Point держит последние ${com.point.core.flow.HistoryFootprint.KEPT} объектов — копии " +
         "лежат на телефоне, чтобы «Недавнее» открывалось без исходника. Старое забывается само."
 
-private const val DROP_LINKS_LIVE = "Ссылки, которыми вы делились через сервер, перестают действовать через сутки."
+internal const val DROP_LINKS_LIVE = "Ссылки, которыми вы делились через сервер, перестают действовать через сутки."
 
-private const val FORGET_ALL = "Забыть всё"
+internal const val FORGET_ALL = "Забыть всё"
 
-private fun entriesLine(tileAdded: Boolean): String =
+internal fun entriesLine(tileAdded: Boolean): String =
     if (tileAdded) "Системное «Поделиться» и плитка в шторке" else "Системное «Поделиться»"
 
-private fun memoryLine(memory: com.point.core.flow.HistoryFootprint?): String = when {
+internal fun memoryLine(memory: com.point.core.flow.HistoryFootprint?): String = when {
     memory == null -> MEMORY_TITLE_UNKNOWN
     memory.count == 0 -> "Пока ничего не сохранено"
     else -> "Объектов: ${memory.count} · ${com.point.core.flow.humanWeight(memory.bytes) ?: NOTHING_KEPT}"
 }
 
-private const val NOTHING_KEPT = "пусто"
+internal const val NOTHING_KEPT = "пусто"
 
-private const val MEMORY_TITLE_UNKNOWN = "Сколько занято — сейчас посчитаем"
+internal const val MEMORY_TITLE_UNKNOWN = "Сколько занято — сейчас посчитаем"
 
 
-private class KeyDraft(saved: UserAiKey) {
+internal class KeyDraft(saved: UserAiKey) {
     var providerId by mutableStateOf(saved.providerId)
     var key by mutableStateOf(saved.apiKey)
     var model by mutableStateOf(saved.model)
@@ -904,7 +452,7 @@ private class KeyDraft(saved: UserAiKey) {
 }
 
 @Composable
-private fun DisclosureRow(title: String, subtitle: String, open: Boolean, onToggle: () -> Unit) {
+internal fun DisclosureRow(title: String, subtitle: String, open: Boolean, onToggle: () -> Unit) {
     PortalRow(
         title = title,
         subtitle = subtitle,
@@ -924,7 +472,7 @@ private fun DisclosureRow(title: String, subtitle: String, open: Boolean, onTogg
 }
 
 @Composable
-private fun Reveal(open: Boolean, content: @Composable () -> Unit) {
+internal fun Reveal(open: Boolean, content: @Composable () -> Unit) {
     AnimatedVisibility(
         visible = open,
         enter = fadeIn() + expandVertically(),
@@ -932,10 +480,10 @@ private fun Reveal(open: Boolean, content: @Composable () -> Unit) {
     ) { content() }
 }
 
-private const val AI_ICON = "ai"
+internal const val AI_ICON = "ai"
 
 @Composable
-private fun SwitchCard(
+internal fun SwitchCard(
     title: String,
     description: String,
     checked: Boolean,
