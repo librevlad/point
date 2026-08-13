@@ -223,6 +223,23 @@ class PcPdfTextRealizer(
         if (text.isBlank()) {
             return ActionResult.Failure("В этом PDF нет текстового слоя — это снимки страниц", recoverable = false)
         }
+
+        // Слой бывает и нечитаемым: у документа своя раскладка шрифта, и кириллица лежит под
+        // латинскими кодами. Раньше этот мусор становился текстом объекта, и над ним писалось
+        // «ПОНЯЛ» с телефоном и датой, выведенными из бессмыслицы (#933). Так устроены очень
+        // многие украинские бухгалтерские PDF — ровно тот корпус, ради которого Point и нужен.
+        if (com.point.core.flow.ReadableText.unreadable(text)) {
+            val page = runCatching { renderFirstPage(source) }.getOrNull()
+                ?: return ActionResult.Failure(UNREADABLE_LAYER, recoverable = true)
+            return ActionResult.Success(
+                com.point.core.model.ResultObject(
+                    type = ObjectKind.IMAGE,
+                    mime = "image/png",
+                    uri = com.point.core.model.ScratchRef(page.absolutePath),
+                    metadata = mapOf("name" to page.name),
+                ),
+            )
+        }
         val out = File(source.parentFile, source.nameWithoutExtension + ".txt")
         return runCatching {
             out.writeText(text)
@@ -235,6 +252,24 @@ class PcPdfTextRealizer(
                 ),
             )
         }.getOrElse { ActionResult.Failure("Текст не сохранился — проверьте, что на диске есть место", recoverable = true) }
+    }
+
+    /** Первая страница картинкой — её и прочитает распознавание, как любой другой кадр. */
+    private fun renderFirstPage(source: File): File {
+        val out = File(source.parentFile, source.nameWithoutExtension + " — страница.png")
+        org.apache.pdfbox.pdmodel.PDDocument.load(source).use { document ->
+            val image = org.apache.pdfbox.rendering.PDFRenderer(document).renderImageWithDPI(0, PAGE_DPI)
+            javax.imageio.ImageIO.write(image, "png", out)
+        }
+        return out
+    }
+
+    private companion object {
+        const val PAGE_DPI = 200f
+
+        const val UNREADABLE_LAYER =
+            "Текст в этом PDF нечитаем — у документа своя раскладка шрифта. Прочитать страницу " +
+                "снимком не вышло"
     }
 }
 

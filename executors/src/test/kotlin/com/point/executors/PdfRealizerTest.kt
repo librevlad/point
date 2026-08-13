@@ -40,7 +40,7 @@ class PdfRealizerTest {
 
     @Test
     fun `pdf with text extracts to a TEXT object`() = runTest {
-        val realizer = PdfRealizer(store, pdfExtractor("Привет из PDF"))
+        val realizer = PdfRealizer(store, pdfExtractor("Привет из PDF"), NoPages)
         val result = realizer.perform(pdfObject())
 
         assertTrue(result is ActionResult.Success)
@@ -51,7 +51,7 @@ class PdfRealizerTest {
 
     @Test
     fun `scanned pdf with no text is a recoverable failure`() = runTest {
-        val realizer = PdfRealizer(store, pdfExtractor("   "))
+        val realizer = PdfRealizer(store, pdfExtractor("   "), NoPages)
         val result = realizer.perform(pdfObject())
 
         assertTrue(result is ActionResult.Failure)
@@ -61,7 +61,7 @@ class PdfRealizerTest {
     /** Офисный файл этому исполнителю не по зубам — и он честно за него не берётся (#403). */
     @Test
     fun `офисный документ телефон в PDF не превращает`() {
-        val realizer = PdfRealizer(store, pdfExtractor(""))
+        val realizer = PdfRealizer(store, pdfExtractor(""), NoPages)
 
         assertTrue(realizer.accepts(ObjectState(ObjectKind.PDF)))
         assertTrue(
@@ -72,7 +72,7 @@ class PdfRealizerTest {
 
     @Test
     fun `извлечение текста из PDF называет себя`() = runTest {
-        val realizer = PdfRealizer(store, pdfExtractor("Привет из PDF"))
+        val realizer = PdfRealizer(store, pdfExtractor("Привет из PDF"), NoPages)
 
         val heard = stagesHeard { realizer.perform(pdfObject()) }
 

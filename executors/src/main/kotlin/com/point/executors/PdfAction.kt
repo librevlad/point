@@ -39,6 +39,9 @@ import javax.inject.Inject
 class PdfRealizer @Inject constructor(
     private val store: ObjectStore,
     private val pdfText: PdfTextExtractor,
+
+    /** Страница снимком — когда текстовый слой есть, но прочитать его нельзя (#933). */
+    private val rasterizer: com.point.core.flow.PdfRasterizer,
 ) : Realizer {
     override val capabilityId = PdfCapability.ID
 
@@ -103,12 +106,34 @@ class PdfRealizer @Inject constructor(
         if (text.isBlank()) {
             return ActionResult.Failure(NO_TEXT_LAYER, recoverable = true)
         }
+
+        // У части документов внутри своя раскладка шрифта: кириллица лежит под латинскими
+        // кодами, и слой отдаётся мусором вроде `ToeapucrBo 3 o6MexeHop`. Раньше этот мусор
+        // становился текстом объекта, и над ним писалось «ПОНЯЛ» (#933). Решение владельца
+        // 13.08.2026: «Заметить и самому прочитать снимком» — страница отдаётся снимком, и
+        // дальше её читает OCR, как любой другой кадр.
+        if (com.point.core.flow.ReadableText.unreadable(text)) {
+            reportStage(UNREADABLE_STAGE)
+            val page = runCatching { rasterizer.rasterize(input) }.getOrNull()
+                ?: return ActionResult.Failure(UNREADABLE_LAYER, recoverable = true)
+            return ActionResult.Success(
+                ResultObject(
+                    ObjectKind.IMAGE, "image/png", page,
+                    mapOf("op" to "pdf-unreadable", "name" to pageName(input)),
+                ),
+            )
+        }
         val ref = store.newScratchFile("txt")
         File(ref.value).writeText(text)
         return ActionResult.Success(
             ResultObject(ObjectKind.TEXT, "text/plain", ref, mapOf("op" to "pdf-extract")),
         )
     }
+
+    /** Имя снимка страницы — от документа: человек ищет в списке свой счёт, а не «страницу». */
+    private fun pageName(input: PointObject): String =
+        (input.metadata["name"]?.substringBeforeLast('.')?.takeIf { it.isNotBlank() } ?: "Документ") +
+            " — страница.png"
 
     private suspend fun write(document: PdfDocument): ScratchRef {
         val ref = store.newScratchFile("pdf")
@@ -148,6 +173,13 @@ class PdfRealizer @Inject constructor(
         const val NOT_THIS_OBJECT = "В PDF превращаются снимок, текст и документ — этот объект не из них"
 
         const val PDF_FAILED = "PDF не собрался — попробуйте ещё раз"
+
+        /** Слой есть, а прочитать его нельзя: шрифт документа подменяет буквы (#933). */
+        const val UNREADABLE_LAYER =
+            "Текст в этом PDF нечитаем — у документа своя раскладка шрифта. Прочитать страницу " +
+                "снимком не вышло, попробуйте ещё раз"
+
+        const val UNREADABLE_STAGE = "Текст нечитаем — читаю страницу снимком"
 
         const val NO_TEXT_LAYER =
             "В этом PDF нет текста — страницы сняты картинкой. Разложите его действием «Страницы», " +
