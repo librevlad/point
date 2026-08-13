@@ -31,6 +31,17 @@ data class CapabilityMeta(
     val mayYield: Set<com.point.core.model.Feature> = emptySet(),
 
     val mayYieldKinds: Set<com.point.core.model.ObjectKind> = emptySet(),
+
+    /**
+     * Действие достаёт то, что было внутри, а не делает новое (#946).
+     *
+     * Распаковка архива, страницы документа, вложения набора: объект был внутри исходника, и
+     * связь между ними — «содержит». Всё остальное — «получено из»: запись, сделанная из
+     * текста, внутри текста не лежала.
+     *
+     * Решение владельца 13.08.2026: связи разные и в графе не сливаются.
+     */
+    val revealsInside: Boolean = false,
 )
 
 enum class Cost { FREE, LOCAL, PAID }

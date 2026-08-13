@@ -1985,16 +1985,27 @@ class FlowViewModel @Inject constructor(
 
         val carriedRelations = carried?.relations
             ?: parent?.relations?.filter { it.fromId == obj.id || it.toId == obj.id }.orEmpty()
+
+        // Порождённый объект знает, откуда он взялся (#946). Связь именованная: архив
+        // содержит файлы, а запись получена из текста — это не одно и то же, и в графе они
+        // не сливаются. Раньше вложенность жила стопкой экранов: пока человек внутри — путь
+        // помнит, вышел — забыл; отношения между объектами не создавались вовсе.
+        val born = via?.let { bornOf(parent, known, it) }
+        val relations = carriedRelations + listOfNotNull(born)
         val bubbles = registry.bubblesFor(
-            com.point.core.flow.GraphState(known, carriedFound, carriedRelations),
+            com.point.core.flow.GraphState(known, carriedFound, relations),
         )
         val frame = FlowFrame(
             known, bubbles, via, viaTitle,
 
             found = carriedFound,
-            relations = carriedRelations,
+            relations = relations,
             latent = registry.latentBubblesFor(known.state),
         )
+
+        // Исходник помнит, что из него вышло: вернулся человек назад — узел на месте, и
+        // пространство действий исходника считается уже с ним.
+        parent?.let { rememberBorn(it, known, born) }
         stack.addLast(frame)
         _ui.update {
             it.copy(
@@ -2007,6 +2018,43 @@ class FlowViewModel @Inject constructor(
         loadChildrenIfCollection(known)
         loadTextPreviewIfText(known)
         loadObjectPreview(known)
+    }
+
+    /**
+     * Какой связью новый объект держится за исходник (#946).
+     *
+     * Решение владельца 13.08.2026: связи разные — «содержит» и «получено из». Что действие
+     * достаёт из исходника, а что делает заново, объявляет само действие.
+     */
+    private fun bornOf(
+        parent: FlowFrame?,
+        born: PointObject,
+        via: CapabilityId,
+    ): com.point.core.model.Relation? {
+        val source = parent?.obj ?: return null
+        if (source.id == born.id) return null
+        val inside = runCatching { registry.byId(via).meta.revealsInside }.getOrDefault(false)
+        val type = if (inside) {
+            com.point.core.model.RelationType.CONTAINS
+        } else {
+            com.point.core.model.RelationType.DERIVED_FROM
+        }
+        return if (inside) {
+            com.point.core.model.Relation(source.id, type, born.id)
+        } else {
+            com.point.core.model.Relation(born.id, type, source.id)
+        }
+    }
+
+    /** Исходник запоминает вышедший из него объект — иначе шаг назад стирает его. */
+    private fun rememberBorn(parent: FlowFrame, born: PointObject, relation: com.point.core.model.Relation?) {
+        if (relation == null || parent.found.any { it.id == born.id }) return
+        val index = stack.indexOfFirst { it === parent }
+        if (index < 0) return
+        stack[index] = parent.copy(
+            found = parent.found + born,
+            relations = parent.relations + relation,
+        )
     }
 
     /**
