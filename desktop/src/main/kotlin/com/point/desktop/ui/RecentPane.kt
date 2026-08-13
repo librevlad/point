@@ -192,7 +192,7 @@ internal fun CompactList(
         // резать на секции их нужно вместе. Пока каждый резался отдельно, «СЕГОДНЯ» стояло
         // в списке дважды: сначала над живыми объектами, потом над журналом (#884).
         val lines = remember(items, remembered, journal) { recentLines(items, remembered, journal) }
-        com.point.core.flow.byTimeSection(lines) { now - it.at }
+        com.point.core.flow.byTimeSection(lines, now, zone) { it.at }
             .forEach { (section, rows) ->
                 Text(
                     section.label.uppercase(),
