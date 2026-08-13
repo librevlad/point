@@ -753,7 +753,17 @@ def create_app(
         if item is None and not typed:
             return HTMLResponse(pages.nothing_to_send_page(), status_code=400)
         if item is None:
-            data, name, mime = typed.encode("utf-8"), "Текст", "text/plain; charset=utf-8"
+            # Контакт и место присылаются тем же полем, но своим именем и своим типом:
+            # на той стороне контакт должен стать контактом, а не «Текстом» (#916).
+            given = form.get("name")
+            given = given.strip() if isinstance(given, str) else ""
+            if "BEGIN:VCARD" in typed.upper():
+                name = given or "Контакт.vcf"
+                mime = "text/vcard; charset=utf-8"
+            else:
+                name = given or "Текст"
+                mime = "text/plain; charset=utf-8"
+            data = typed.encode("utf-8")
         else:
             data = await item.read()
             name = getattr(item, "filename", "file") or "file"
