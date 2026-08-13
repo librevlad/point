@@ -171,7 +171,8 @@ internal fun CompactObject(
             // было не видно. Действие без пузыря (просьба к телефону) идёт последней
             // группой — у него нет своего намерения, кроме «отправить».
             val primary = actions.indexOfFirst { it.unavailable == null }
-            val grouped = com.point.core.ui.actionGroupOrder().mapNotNull { group ->
+            val useFirst = com.point.core.ui.knowsUsableValue(item.obj.state)
+            val grouped = com.point.core.ui.actionGroupOrder(useFirst).mapNotNull { group ->
                 actions.filter { choice ->
                     val intent = choice.bubble?.intent
                     if (intent == null) group == com.point.core.ui.ActionGroup.SEND

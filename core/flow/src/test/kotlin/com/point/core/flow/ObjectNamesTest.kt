@@ -34,9 +34,16 @@ class ObjectNamesTest {
     }
 
     @Test
-    fun `знаки, ломающие имя файла, в имя не попадают`() {
-        val name = textObjectName("отчёт/квартал: 2026\\Q3")
-        assertTrue("в имени остался разделитель пути: $name", name.none { it in "/\\:*?\"<>|" })
+    fun `имя человеку — не путь на диске`() {
+
+        // #937: раньше отсюда вычищались знаки, запрещённые файловым системам, и присланная
+        // ссылка становилась именем `https point.leerio.app privacy». Путь строится не
+        // здесь: имя, из которого делают файл, проходит через `safeFileName`.
+        val raw = "отчёт/квартал: 2026\\Q3"
+        val forFile = safeFileName(textObjectName(raw))
+
+        assertEquals(raw, textObjectName(raw))
+        assertTrue("в путь ушёл разделитель: $forFile", forFile.none { it in "/\\:*?\"<>|" })
     }
 
     @Test
@@ -89,5 +96,32 @@ class ObjectNamesTest {
             "Отчёт за август.docx",
             "photo от Ирины.jpg",
         ).forEach { assertTrue("принято за машинное: " + it, !looksMachineName(it)) }
+    }
+
+    /**
+     * Имя человеку — не путь на диске (#937). Присланная ссылка становилась именем
+     * `https point.leerio.app privacy`: человек видел изувеченную ссылку вместо ссылки.
+     */
+    @Test
+    fun `ссылка остаётся ссылкой, а дата датой`() {
+        val link = "https://point.leerio.app/privacy"
+        val dated = "12/03/2026 отчёт"
+
+        assertEquals(link, textObjectName(link))
+        assertEquals(dated, textObjectName(dated))
+    }
+
+    @Test
+    fun `имя, из которого делают файл, всё равно годится в путь`() {
+        val file = safeFileName(textObjectName("https://point.leerio.app/privacy"))
+
+        assertTrue("в путь ушло имя с разделителем: " + file, '/' !in file && '\\' !in file)
+    }
+
+    @Test
+    fun `поломанный экран именем не становится`() {
+        val name = textObjectName("Счёт\u0000 4417")
+
+        assertTrue("в имени остался управляющий символ: " + name, name.none(Char::isISOControl))
     }
 }
