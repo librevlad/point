@@ -13,6 +13,13 @@ captures/
 # Local config & secrets — NEVER commit (holds sdk.dir and GEMINI_API_KEY)
 local.properties
 
+# Firebase: настройки проекта владельца. Репозиторий открытый, а внутри ключ API,
+# и рядом легко оказывается приватный ключ служебного аккаунта — такой файл лежал
+# в `app/` 13.08.2026. Сборка без этих файлов проходит: стук уведомлением просто
+# не включается, а просьбы разбираются при открытии Point.
+google-services.json
+**/*firebase-adminsdk*.json
+
 # OS
 .DS_Store
 Thumbs.db

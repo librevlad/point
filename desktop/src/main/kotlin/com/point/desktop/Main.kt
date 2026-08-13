@@ -5,6 +5,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.res.painterResource
+import com.point.desktop.ui.drawPointMark
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Tray
 import androidx.compose.ui.window.Window
@@ -464,46 +465,7 @@ private fun pointGlyph(badge: Boolean = false): androidx.compose.ui.graphics.pai
     object : androidx.compose.ui.graphics.painter.Painter() {
         override val intrinsicSize = androidx.compose.ui.geometry.Size(64f, 64f)
         override fun androidx.compose.ui.graphics.drawscope.DrawScope.onDraw() {
-            val c = center
-            val r = size.minDimension / 2f
-
-            // Тёмная плашка — как поле мобильной иконки.
-            drawCircle(
-                brush = androidx.compose.ui.graphics.Brush.radialGradient(
-                    0f to androidx.compose.ui.graphics.Color(0xFF141021),
-                    1f to androidx.compose.ui.graphics.Color(0xFF08080E),
-                    center = c, radius = r,
-                ),
-                radius = r * 0.94f,
-                center = c,
-            )
-
-            // Мягкий ореол кольца.
-            drawCircle(
-                color = androidx.compose.ui.graphics.Color(0xFF7B5CFF).copy(alpha = 0.30f),
-                radius = r * 0.60f,
-                center = c,
-                style = androidx.compose.ui.graphics.drawscope.Stroke(width = r * 0.36f),
-            )
-
-            // Само кольцо: светлое кверху, фиолетовое, синее книзу — как на телефоне.
-            drawCircle(
-                brush = androidx.compose.ui.graphics.Brush.verticalGradient(
-                    0f to androidx.compose.ui.graphics.Color(0xFFEAF0FF),
-                    0.45f to androidx.compose.ui.graphics.Color(0xFF9B7BFF),
-                    1f to androidx.compose.ui.graphics.Color(0xFF00A6FF),
-                ),
-                radius = r * 0.56f,
-                center = c,
-                style = androidx.compose.ui.graphics.drawscope.Stroke(width = r * 0.30f),
-            )
-            if (badge) {
-                drawCircle(
-                    color = androidx.compose.ui.graphics.Color(0xFF00E0FF),
-                    radius = r * 0.20f,
-                    center = androidx.compose.ui.geometry.Offset(size.width * 0.82f, size.height * 0.18f),
-                )
-            }
+            drawPointMark(badge = badge)
         }
     }
 
