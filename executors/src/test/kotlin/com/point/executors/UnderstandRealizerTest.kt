@@ -197,12 +197,14 @@ class UnderstandRealizerTest {
 
     @Test
     fun `повторные строки ключа — кандидаты по порядку, пустые отброшены, потолок три`() {
+        // Номера настоящие: с #801 телефон судит библиотека, и выдуманные «+380000000000»
+        // до кандидатов не доходят вовсе. Здесь же проверяется порядок и потолок.
         val parsed = parseFieldCandidates(
-            "PHONE=+380671234567\nPHONE=+380000000000\nPHONE=+380111111111\nPHONE=+380222222222\nEMAIL=",
+            "PHONE=+380671234567\nPHONE=+380501112233\nPHONE=+380932223344\nPHONE=+380664445566\nEMAIL=",
         )
 
         assertEquals(
-            listOf("+380671234567", "+380000000000", "+380111111111"),
+            listOf("+380671234567", "+380501112233", "+380932223344"),
             parsed.fields["entity.phone"]!!.map { it.text },
         )
         assertNull(parsed.fields["entity.email"])

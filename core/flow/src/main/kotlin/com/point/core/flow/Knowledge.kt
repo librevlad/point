@@ -78,7 +78,27 @@ fun mergeKnowledge(
             isAnnotationKey(key) -> mergeAnnotation(merged, key, value)
         }
     }
-    return merged
+    return withPhoneKnowledge(merged)
+}
+
+/**
+ * Что библиотека знает о номере сверх самого номера (#801).
+ *
+ * Раньше Point не знал про телефон ничего, кроме цифр. Теперь у номера видно страну и вид —
+ * мобильный он или городской. Это знание, а не украшение: по нему видно, что «+48 22…» с
+ * украинского документа — польский городской, а не опечатка.
+ *
+ * Оператор и город библиотека тоже умеет, но их метаданные тяжёлые и после переноса номера
+ * между операторами расходятся с правдой. Их здесь нет намеренно.
+ */
+internal fun withPhoneKnowledge(metadata: Map<String, String>): Map<String, String> {
+    val key = META_ENTITY_PREFIX + "phone"
+    val value = metadata[key]?.takeIf { it.isNotBlank() } ?: return metadata
+    val country = PhoneNumbers.country(value) ?: return metadata
+    val out = LinkedHashMap(metadata)
+    out["$key.country"] = country
+    PhoneNumbers.kind(value)?.let { out["$key.kind"] = it }
+    return out
 }
 
 private fun humanSaid(metadata: Map<String, String>, key: String): Boolean =

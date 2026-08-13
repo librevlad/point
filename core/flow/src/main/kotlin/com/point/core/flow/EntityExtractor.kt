@@ -82,7 +82,8 @@ private fun Entity.isFragmentOf(numbers: List<String>): Boolean {
 
 fun Entity.isPlausible(): Boolean = when (type) {
 
-    EntityType.PHONE -> value.count(Char::isDigit) in 10..13
+    // Та же мерка, что у ответа модели: одна библиотека на все входы знания (#801).
+    EntityType.PHONE -> PhoneNumbers.exists(value)
 
     EntityType.ADDRESS -> value.trim().length >= 5 && Regex("""\p{L}{3,}""").containsMatchIn(value)
 
