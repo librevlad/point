@@ -480,7 +480,9 @@ abstract class DataModule {
 
         @Provides
         @Singleton
-        fun entityExtractor(): EntityExtractor = MlKitEntityExtractor()
+        fun entityExtractor(): EntityExtractor = com.point.core.flow.BothEntityExtractors(
+            listOf(MlKitEntityExtractor(), com.point.core.flow.RegexEntityExtractor()),
+        )
 
         @Provides
         @Singleton
