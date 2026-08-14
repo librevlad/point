@@ -172,8 +172,8 @@ NO DIFFERENTIATING FACTOR
 | AND-017 | Android | ShareActivity | FindScreen | телефон | TEXT | совпадений нет | ввод запроса без совпадений | find-in-text | локальный | офлайн | «не найдено» вместо «нет совпадений в тексте» | нет перехода | — | — | — |
 | AND-018 | Android | ShareActivity | FindScreen | телефон | TEXT | совпадения есть | переход по совпадению | find-in-text | локальный | офлайн | подсветка не совпадает с найденным | N/A (визуальное) | — | — | — |
 | AND-019 | Android | ShareActivity | FindScreen | телефон | TEXT | запрос введён | очистка запроса и закрытие | — | — | офлайн | закрытие теряет позицию в тексте | N/A (визуальное) | — | — | — |
-| AND-020 | Android | ShareActivity | FocusScreen | телефон | IMAGE | вход без выделения | открытие | read-region | — | офлайн | непонятно, что делать | N/A (визуальное) | — | — | — |
-| AND-021 | Android | ShareActivity | FocusScreen | телефон | IMAGE | область выделена | применение фокуса | read-region | локальный OCR | офлайн | Focus подменён Intent | Focus + область → знание с provenance области | — | — | — |
+| AND-020 | Android | ShareActivity | FocusScreen | телефон | IMAGE | вход без выделения | открытие | read-region | — | офлайн | непонятно, что делать | N/A (визуальное) | PASS | эмулятор 14.08, chek.jpg: экран открылся с инструментами Кисть/Прямоугольник/Лассо/Ластик и подсказкой «Выделите область…»; заголовок при этом английский | #1001 |
+| AND-021 | Android | ShareActivity | FocusScreen | телефон | IMAGE | область выделена | применение фокуса | read-region | локальный OCR | офлайн | Focus подменён Intent | Focus + область → знание с provenance области | FAIL | эмулятор 14.08: выделена колонка сумм чека, фокус применён и виден как «Смотрю сюда» с превью; в графе investigated.entities@region=not_found, на экране ответа нет | #1000 |
 | AND-022 | Android | ShareActivity | FocusScreen | телефон | IMAGE | область выделена | сброс выделения | — | — | офлайн | сброс оставляет половину фокуса | Focus снят | — | — | — |
 | AND-023 | Android | ShareActivity | FocusScreen | телефон | IMAGE | фокус применён | повторное выделение другой области | read-region | локальный OCR | офлайн | второе знание затирает первое | два знания с разными provenance, без замещения | — | — | — |
 | AND-024 | Android | ShareActivity | SelectionScreen | телефон | IMAGE | несколько кандидатов | выбор кандидата | take-fragment | локальный | офлайн | выбранное не то, что показано | выбранный фрагмент → объект-находка | — | — | — |
@@ -352,7 +352,7 @@ NO DIFFERENTIATING FACTOR
 | ENT-002 | системный Share | HomeActivity | HomeScreen | телефон | — | тёплый старт | возврат в живое приложение | — | — | офлайн | состояние потеряно при возврате | граф прежний | — | — | — |
 | ENT-003 | системный Share | ShareActivity | FirstScreen | телефон | IMAGE | SEND image/* | поделиться фотографией | — | Incoming → ObjectStore | офлайн | первый кадр > 300 мс или с чтением диска | дверь → узел объекта в scratch | — | — | — |
 | ENT-004 | системный Share | ShareActivity | FirstScreen | телефон | TEXT | SEND text/plain | поделиться текстом | — | Incoming → ObjectStore | офлайн | первый кадр > 300 мс или с чтением диска | дверь → узел объекта в scratch | PASS | эмулятор 14.08, text_ru.txt: дверь открылась, kind=TEXT, знание собрано сразу | — |
-| ENT-005 | системный Share | ShareActivity | FirstScreen | телефон | URL | SEND text/uri-list | поделиться ссылкой | — | Incoming → ObjectStore | офлайн | первый кадр > 300 мс или с чтением диска | дверь → узел объекта в scratch | — | — | — |
+| ENT-005 | системный Share | ShareActivity | FirstScreen | телефон | URL | SEND text/uri-list | поделиться ссылкой | — | Incoming → ObjectStore | офлайн | первый кадр > 300 мс или с чтением диска | дверь → узел объекта в scratch | FAIL | эмулятор 14.08, link.txt как text/uri-list: kind=URL, но адрес не прочитан — ни entity.url, ни investigated.url | #999 |
 | ENT-006 | системный Share | ShareActivity | FirstScreen | телефон | PDF | SEND application/pdf | поделиться PDF | — | Incoming → ObjectStore | офлайн | первый кадр > 300 мс или с чтением диска | дверь → узел объекта в scratch | PASS | эмулятор 14.08, schet.pdf и scan.pdf: дверь открылась, kind=PDF, объект в scratch | — |
 | ENT-007 | системный Share | ShareActivity | FirstScreen | телефон | ZIP | SEND application/zip | поделиться архивом | — | Incoming → ObjectStore | офлайн | первый кадр > 300 мс или с чтением диска | дверь → узел объекта в scratch | PASS | эмулятор 14.08, docs.zip 177 КБ: дверь открылась, объект скопирован в scratch, kind=ZIP | — |
 | ENT-008 | системный Share | ShareActivity | FirstScreen | телефон | AUDIO | SEND audio/* и application/ogg | поделиться голосовым | — | Incoming → ObjectStore | офлайн | первый кадр > 300 мс или с чтением диска | дверь → узел объекта в scratch | — | — | — |
@@ -361,7 +361,7 @@ NO DIFFERENTIATING FACTOR
 | ENT-011 | системный Share | ShareActivity | FirstScreen | телефон | COLLECTION | SEND_MULTIPLE application/pdf | поделиться несколькими PDF | — | Incoming → ObjectStore | офлайн | несколько объектов слиты в один | дверь → узел коллекции + дети | — | — | — |
 | ENT-012 | системный Share | ShareActivity | FirstScreen | телефон | любой | VIEW content://*/* | открыть файл в Point | — | Incoming → ObjectStore | офлайн | первый кадр > 300 мс или с чтением диска | дверь → узел объекта в scratch | — | — | — |
 | ENT-013 | системный Share | ShareActivity | FirstScreen | телефон | любой | VIEW file://*/* | открыть файл по пути | — | Incoming → ObjectStore | офлайн | первый кадр > 300 мс или с чтением диска | дверь → узел объекта в scratch | — | — | — |
-| ENT-014 | системный Share | ProcessTextActivity | FirstScreen | телефон | TEXT | PROCESS_TEXT: выделенный текст | «Point» в меню выделения | — | Incoming → ObjectStore | офлайн | первый кадр > 300 мс или с чтением диска | дверь → узел объекта в scratch | — | — | — |
+| ENT-014 | системный Share | ProcessTextActivity | FirstScreen | телефон | TEXT | PROCESS_TEXT: выделенный текст | «Point» в меню выделения | — | Incoming → ObjectStore | офлайн | первый кадр > 300 мс или с чтением диска | дверь → узел объекта в scratch | PASS | эмулятор 14.08, PROCESS_TEXT со строкой «Invoice 226966 from 14.08.2026, call +380 67 123 45 67»: kind=TEXT, найдены дата и телефон | — |
 | ENT-015 | системный Share | ProcessTextActivity | FirstScreen | телефон | TEXT | PROCESS_TEXT: пустое выделение | «Point» без текста | — | Incoming | офлайн | пустой объект принят как объект | нет узла, причина названа | — | — | — |
 | ENT-016 | системный Share | SignedInActivity | SignInScreen | телефон | — | deep link point://signed-in | возврат из браузера после входа | — | point://signed-in | онлайн | возврат не туда, откуда ушли | N/A | — | — | — |
 | ENT-017 | системный Share | ClipboardSyncActivity | FirstScreen | телефон | TEXT | буфер обмена | синхронизация буфера | — | ClipboardSource | офлайн | взято старое содержимое буфера | буфер → узел объекта | — | — | — |
@@ -379,7 +379,7 @@ NO DIFFERENTIATING FACTOR
 | ENT-029 | системный Share | ShareActivity | FirstScreen | телефон | IMAGE | шаринг во время обработки предыдущего | поделиться вторым объектом посреди работы | — | Incoming → ObjectStore | офлайн | переход первого объекта достался второму | два независимых узла | FAIL | эмулятор 14.08: второй объект переданный через 4 с после первого — первый стёрт, но остался шагом пути и объявлен повреждённым | #998 |
 | ENT-030 | системный Share | ShareActivity | FirstScreen | телефон | IMAGE | вход сразу после убийства процесса | поделиться после process death | — | Incoming → ObjectStore | офлайн | scratch пережил смерть процесса вопреки контракту | чистый scratch → узел объекта | — | — | — |
 | OBJ-001 | Android | ShareActivity | FirstScreen | телефон | текст | обычный текст | принять и посмотреть предложенное | discovery | Resolver → доступный Realizer | офлайн | предложено не то, что человек видит глазами | объект → знание с provenance | PASS | эмулятор 14.08, text_ru.txt: найдены телефон, адрес, дата 14.08.2026 и сумма 2873,60 грн — всё против истины файла верно | — |
-| OBJ-002 | Android | ShareActivity | FirstScreen | телефон | ссылка | http(s)-ссылка | принять и посмотреть предложенное | discovery | Resolver → доступный Realizer | офлайн | ссылка принята как текст | объект → знание с provenance | — | — | — |
+| OBJ-002 | Android | ShareActivity | FirstScreen | телефон | ссылка | http(s)-ссылка | принять и посмотреть предложенное | discovery | Resolver → доступный Realizer | офлайн | ссылка принята как текст | объект → знание с provenance | FAIL | эмулятор 14.08: ссылка строкой (EXTRA_TEXT) читается верно, ссылка файлом (text/uri-list) — нет; «Открыть ссылку» отвечает «Ссылка не найдена» | #999 |
 | OBJ-003 | Android | ShareActivity | FirstScreen | телефон | фотография | снята камерой | принять и посмотреть предложенное | discovery | Resolver → доступный Realizer | офлайн | предложено чтение там, где текста нет | объект → знание с provenance | — | — | — |
 | OBJ-004 | Android | ShareActivity | FirstScreen | телефон | скриншот | снимок экрана | принять и посмотреть предложенное | discovery | Resolver → доступный Realizer | офлайн | скриншот не отличён от фотографии, хотя текст машинный | объект → знание с provenance | — | — | — |
 | OBJ-005 | Android | ShareActivity | FirstScreen | телефон | снятый документ | документ, снятый под углом | принять и посмотреть предложенное | discovery | Resolver → доступный Realizer | офлайн | перспектива не выправлена, чтение врёт | объект → знание с provenance | — | — | — |
@@ -700,11 +700,11 @@ NO DIFFERENTIATING FACTOR
 
 | ОБЛАСТЬ | ПОДЗАДАЧИ | APPLICABLE | PASS | FAIL | BLOCKED | NEEDS INV. | N/A | — | TESTED | COVERAGE |
 |---|---|---|---|---|---|---|---|---|---|---|
-| Android UI | #969 | 91 | 5 | 1 | 0 | 1 | 0 | 84 | 6 | 6,6 % |
+| Android UI | #969 | 91 | 6 | 2 | 0 | 1 | 0 | 82 | 8 | 8,8 % |
 | Desktop UI | #972 | 39 | 0 | 0 | 0 | 0 | 0 | 39 | 0 | 0,0 % |
 | Server / Web UI | #979 | 65 | 0 | 0 | 0 | 0 | 0 | 65 | 0 | 0,0 % |
-| Entry Points | #970 | 30 | 4 | 1 | 0 | 0 | 0 | 25 | 5 | 16,7 % |
-| Input/Object Types | #971 | 33 | 10 | 7 | 0 | 0 | 0 | 16 | 17 | 51,5 % |
+| Entry Points | #970 | 30 | 5 | 2 | 0 | 0 | 0 | 23 | 7 | 23,3 % |
+| Input/Object Types | #971 | 33 | 10 | 8 | 0 | 0 | 0 | 15 | 18 | 54,5 % |
 | Graph Transitions | #974, #975, #976, #984 | 109 | 7 | 6 | 0 | 0 | 0 | 96 | 13 | 11,9 % |
 | Realizer Paths | #978 | 25 | 1 | 0 | 0 | 0 | 0 | 24 | 1 | 4,0 % |
 | Failure Modes | #977 | 32 | 1 | 1 | 0 | 0 | 0 | 30 | 2 | 6,2 % |
@@ -714,7 +714,7 @@ NO DIFFERENTIATING FACTOR
 | Settings | #983 | 16 | 1 | 0 | 0 | 0 | 0 | 15 | 1 | 6,2 % |
 | Constitution | #985 | 20 | 1 | 1 | 0 | 0 | 0 | 18 | 2 | 10,0 % |
 | ADR/RFC | #986 | 13 | 0 | 0 | 0 | 0 | 0 | 13 | 0 | 0,0 % |
-| **TOTAL** | #968–#986 | **539** | 33 | 17 | 0 | 2 | 0 | 487 | **50** | **9,3 %** |
+| **TOTAL** | #968–#986 | **539** | 35 | 20 | 0 | 2 | 0 | 482 | **55** | **10,2 %** |
 
 ## Equivalence Decisions
 
@@ -816,15 +816,15 @@ NO DIFFERENTIATING FACTOR
 
 ```
 APPLICABLE:            539
-PASS:                  33
-FAIL:                  17
+PASS:                  35
+FAIL:                  20
 BLOCKED:               0
 NEEDS INVESTIGATION:   2
 N/A:                   0
-НЕ ПРОХОДИЛОСЬ (—):    487
+НЕ ПРОХОДИЛОСЬ (—):    482
 
-TESTED   = PASS + FAIL = 50
-COVERAGE = TESTED / APPLICABLE = 9,3 %
+TESTED   = PASS + FAIL = 55
+COVERAGE = TESTED / APPLICABLE = 10,2 %
 ```
 
 `RELEASE` запрещён, если выполнено хоть одно условие (#987):
@@ -840,9 +840,9 @@ COVERAGE = TESTED / APPLICABLE = 9,3 %
 
 ### VERDICT: НЕ ГОТОВ
 
-Основание: покрытие 9,3 % и семнадцать незакрытых `FAIL` (#941, #988, #989, #990, #992, #993,
-#994, #995, #996, #997, #998 и потерянные суммы чека). Прогон 14.08.2026 на эмуляторе
-Medium_Phone_API_36.1 закрыл пятьдесят клеток из 539, ещё две остались `NEEDS INVESTIGATION`.
+Основание: покрытие 10,2 % и двадцать незакрытых `FAIL` (#941, #988, #989, #990, #992–#1001 и
+потерянные суммы чека). Прогон 14.08.2026 на эмуляторе Medium_Phone_API_36.1 закрыл пятьдесят
+пять клеток из 539, ещё две остались `NEEDS INVESTIGATION`.
 
 Вердикт пересчитывается только по числам этого раздела и меняется вместе с ними.
 
@@ -850,7 +850,7 @@ Medium_Phone_API_36.1 закрыл пятьдесят клеток из 539, е�
 
 | дата | стенд | сборка | закрыто клеток | находки |
 |---|---|---|---|---|
-| 14.08.2026 | эмулятор Medium_Phone_API_36.1 (API 36) | `f0e70dc` debug | 50 (33 PASS, 17 FAIL) + 2 `NEEDS INVESTIGATION` | причина #941 установлена; заведены #988–#998 |
+| 14.08.2026 | эмулятор Medium_Phone_API_36.1 (API 36) | `f0e70dc` debug | 55 (35 PASS, 20 FAIL) + 2 `NEEDS INVESTIGATION` | причина #941 установлена; заведены #988–#1001 |
 
 **Корпус прогона** — реальные объекты, истина каждого установлена глазами до запуска: демо-визитка,
 чек Family Dollar, фото госномера UA, французское удостоверение, QR с Викисклада (и он же
