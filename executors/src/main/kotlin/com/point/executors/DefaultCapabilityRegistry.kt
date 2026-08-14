@@ -49,8 +49,15 @@ class DefaultCapabilityRegistry @Inject constructor(
 
     override fun bubblesFor(graph: com.point.core.flow.GraphState): List<Bubble> {
         val reason = graph.unusableReason()
+
+        // Действие, возвращающее исходник, из которого объект получен, не прячется, а уходит
+        // вниз и говорит об этом (#925).
+        val source = com.point.core.flow.inverseSourceKind(graph)
         return policy.rank(graph, offered.filter { it.accepts(graph) && blockerFor(it) == null })
-            .map { c -> bubbleOf(c, graph.state, reason) }
+            .map { c ->
+                val back = source?.takeIf { com.point.core.flow.givesBackTheSource(c, graph, it) }
+                bubbleOf(c, graph.state, reason ?: back?.let { com.point.core.flow.sourceIsHere(it) })
+            }
     }
 
     /**

@@ -23,17 +23,35 @@ class LearningBubblePolicy @Inject constructor(
     override fun rank(
         graph: com.point.core.flow.GraphState,
         candidates: List<Capability>,
-    ): List<Capability> = order(graph.state, candidates, graph.intent)
+    ): List<Capability> = order(graph.state, candidates, graph.intent, backTo(graph, candidates))
+
+    /**
+     * Действия, возвращающие исходник, из которого объект и получен (#925). Стоять первым
+     * такому нельзя: человек заплатит квотой и временем за то, что у него уже есть.
+     */
+    private fun backTo(
+        graph: com.point.core.flow.GraphState,
+        candidates: List<Capability>,
+    ): Set<CapabilityId> {
+        val source = com.point.core.flow.inverseSourceKind(graph) ?: return emptySet()
+        return candidates
+            .filter { com.point.core.flow.givesBackTheSource(it, graph, source) }
+            .mapTo(mutableSetOf()) { it.id }
+    }
 
     private fun order(
         state: ObjectState,
         candidates: List<Capability>,
         intent: com.point.core.model.Intent?,
+        backToSource: Set<CapabilityId> = emptySet(),
     ): List<Capability> {
         val counts = usage.counts()
         val keyless = !runCatching { llm.configured }.getOrDefault(true)
         return candidates.sortedWith(
             compareBy(
+
+                // Обратное преобразование — вниз (#925): не прячем, но и не предлагаем первым.
+                { if (it.id in backToSource) 1 else 0 },
 
                 { if (keyless && it.meta.auth) 1 else 0 },
 
