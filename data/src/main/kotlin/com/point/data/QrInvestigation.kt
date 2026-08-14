@@ -55,6 +55,11 @@ class QrInvestigationRealizer @Inject constructor(
         // Штрихкод на упаковке — не QR (#445). Признак и слово на экране идут от вида кода,
         // иначе Point говорит про EAN-13 «Есть QR-код» и врёт о том, что сам же увидел.
         if (found.kind == com.point.core.flow.CodeKind.PRODUCT) {
+
+            // Код товара сходится сам с собой или его нет (#940): на фотографии автомобиля
+            // сканер «прочитал» штрихкод 13821702, и он встал на экран галочкой рядом с
+            // настоящей датой съёмки. Не сошлось — это не находка, а узор.
+            if (!com.point.core.flow.productCodeChecks(found.text)) return Findings()
             return Findings(
                 setOf(Feature.HAS_BARCODE),
                 mapOf(
