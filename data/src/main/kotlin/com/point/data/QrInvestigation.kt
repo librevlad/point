@@ -49,6 +49,8 @@ class QrInvestigationRealizer @Inject constructor(
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         com.point.core.flow.investigated { findings(input) }
 
+    private val READ_FROM_FRAME = com.point.core.model.Provenance.OCR.wire
+
     private suspend fun findings(obj: PointObject): Findings {
         val found = reader.scan(obj.uri.value) ?: return Findings()
 
@@ -74,7 +76,15 @@ class QrInvestigationRealizer @Inject constructor(
             setOf(Feature.HAS_QR) + if (link != null) setOf(Feature.HAS_URL) else emptySet(),
             buildMap {
                 put(META_ENTITY_PREFIX + "qr", found.text)
-                link?.let { put(META_ENTITY_PREFIX + "url", it) }
+
+                // Откуда значение: прочитано с кадра (#948, #941). Штрихкод это говорил, а
+                // сам QR и его ссылка молчали — и знание, прочитанное с кадра, стояло на
+                // экране без галочки, как будто неизвестно откуда взялось.
+                put(META_ENTITY_PREFIX + "qr" + com.point.core.flow.META_SOURCE_SUFFIX, READ_FROM_FRAME)
+                link?.let {
+                    put(META_ENTITY_PREFIX + "url", it)
+                    put(META_ENTITY_PREFIX + "url" + com.point.core.flow.META_SOURCE_SUFFIX, READ_FROM_FRAME)
+                }
             },
         )
     }
