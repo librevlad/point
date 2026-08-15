@@ -46,6 +46,23 @@ fun arrivalReaction(openedId: String?): ArrivalReaction =
     if (openedId == null) ArrivalReaction.OPEN else ArrivalReaction.INVITE
 
 /**
+ * Куда уводит Esc (#1025). У окна на компьютере нет ни рамки, ни системной кнопки, и
+ * выход был только мышью — попасть в «←» или «✕» размером с букву. Esc — то, чем человек
+ * закрывает такое окно: он уводит на шаг назад, и лишь из списка, откуда отступать
+ * некуда, прячет само окно.
+ */
+enum class EscapeExit { DISMISS_ASK, LEAVE_SETTINGS, CLOSE_OBJECT, HIDE_WINDOW }
+
+fun escapeExit(asking: Boolean, atSettings: Boolean, objectOpened: Boolean): EscapeExit = when {
+
+    // Вопрос спрошен посреди действия: Esc снимает вопрос, а не уносит окно из-под него.
+    asking -> EscapeExit.DISMISS_ASK
+    atSettings -> EscapeExit.LEAVE_SETTINGS
+    objectOpened -> EscapeExit.CLOSE_OBJECT
+    else -> EscapeExit.HIDE_WINDOW
+}
+
+/**
  * Peek — собственная плашка Point, не системное уведомление: прибыло с телефона →
  * высветилась, клик — вылезло окошко на этом объекте, сама гаснет по сроку.
  */

@@ -3,6 +3,8 @@ package com.point.desktop
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.res.painterResource
 import com.point.desktop.ui.drawPointMark
 import androidx.compose.ui.unit.dp
@@ -62,6 +64,16 @@ fun main(args: Array<String>) {
     // Просьба человека «побудь открытым»: без неё окно уходит по потере фокуса и
     // принести в него файл мышью нечем — за файлом человек уходит в проводник (#546).
     val openRequest = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+
+    // Esc слышит само окно (#1025). Раньше клавишу ждал корневой узел внутри: пока фокус
+    // внутри никем не взят — а окно, вышедшее без фокуса, ровно такое, — Compose не
+    // доставляет клавиши вовсе, и у безрамочного окна не оставалось выхода, кроме мыши.
+    val escapes = kotlinx.coroutines.flow.MutableStateFlow(0)
+
+    // Зов человека снаружи: окно выходит вперёд, а не просто перестаёт быть скрытым
+    // (#1019). Счётчик, а не флаг: уже видимое, но погребённое окно от `visible = true`
+    // не меняется, и второй зов человека не давал ничего.
+    val raises = kotlinx.coroutines.flow.MutableStateFlow(0)
     val peek = PeekState { System.currentTimeMillis() }
     val saveTarget = SaveTarget { file ->
         val dialog = FileDialog(null as java.awt.Frame?, "Сохранить в…", FileDialog.SAVE)
@@ -288,12 +300,16 @@ fun main(args: Array<String>) {
                 SendToRunning.collectHandOffs(pointDir).forEach { file ->
                     state.onReceived(inbox.addFile(file.absolutePath), ObjectSource.LOCAL)
 
-                    // «Открыть в Point» — человек сам позвал: окошко выходит само.
+                    // «Открыть в Point» — человек сам позвал: окошко выходит само и наверх.
                     compactVisible.value = true
+                    raises.value += 1
                 }
 
                 // Вторая копия не живёт — она будит эту и уходит.
-                if (SendToRunning.takeWake(pointDir)) compactVisible.value = true
+                if (SendToRunning.takeWake(pointDir)) {
+                    compactVisible.value = true
+                    raises.value += 1
+                }
             }
             runCatching { Thread.sleep(1_000) }.getOrElse { return@Thread }
         }
@@ -318,9 +334,9 @@ fun main(args: Array<String>) {
         Tray(
             icon = icon,
             tooltip = if (freshIds.isEmpty()) "Point" else "Point — есть новое",
-            onAction = { compactVisible.value = true },
+            onAction = { compactVisible.value = true; raises.value += 1 },
             menu = {
-                Item("Открыть Point") { compactVisible.value = true }
+                Item("Открыть Point") { compactVisible.value = true; raises.value += 1 }
 
                 Item("Выход") {
                     relayPoller.stop()
@@ -349,7 +365,22 @@ fun main(args: Array<String>) {
             alwaysOnTop = false,
             title = "Point",
             icon = androidx.compose.runtime.remember { pointGlyph() },
+            onPreviewKeyEvent = { event ->
+                val esc = event.type == androidx.compose.ui.input.key.KeyEventType.KeyDown &&
+                    event.key == androidx.compose.ui.input.key.Key.Escape
+                if (esc) escapes.value += 1
+                esc
+            },
         ) {
+            // Человек позвал Point — окно выходит вперёд (#1019). Кадр выдержки: показать
+            // окно и поднять его — разные шаги, и поднимать имеет смысл то, что уже на экране.
+            val raise by raises.collectAsState()
+            LaunchedEffect(raise) {
+                if (raise > 0) {
+                    androidx.compose.runtime.withFrameNanos { }
+                    runCatching { raiseAboveOthers(AwtWindow(window)) }
+                }
+            }
             com.point.desktop.ui.PointDesktopTheme {
                 com.point.desktop.ui.CompactApp(
                     state = state,
@@ -357,6 +388,7 @@ fun main(args: Array<String>) {
                     account = account,
                     openObject = openRequest,
                     onObjectOpened = { openRequest.value = null },
+                    escape = escapes,
                     onFilesDropped = { files ->
                         files.forEach { state.onReceived(inbox.addFile(it.absolutePath), ObjectSource.DROPPED) }
                     },
@@ -446,6 +478,7 @@ fun main(args: Array<String>) {
                             peek.take()?.let { arrived ->
                                 openRequest.value = arrived.obj.id
                                 compactVisible.value = true
+                                raises.value += 1
                             }
                         },
                         onDismiss = { peek.dismiss() },

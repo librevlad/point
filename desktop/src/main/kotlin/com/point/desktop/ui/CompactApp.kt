@@ -76,6 +76,12 @@ fun CompactApp(
     account: com.point.desktop.DesktopAccount,
     openObject: StateFlow<String?>,
     onObjectOpened: () -> Unit,
+
+    /**
+     * Esc, услышанный самим окном (#1025): новое значение — человек попросил выйти.
+     * Клавишу ловит окно, а не узел внутри, поэтому сюда она приходит счётчиком.
+     */
+    escape: StateFlow<Int> = kotlinx.coroutines.flow.MutableStateFlow(0),
     onFilesDropped: (List<File>) -> Unit = {},
     onTextDropped: (String) -> Unit = {},
     onImageDropped: (java.awt.image.BufferedImage) -> Unit = {},
@@ -186,6 +192,37 @@ fun CompactApp(
     val hotkeys = remember { FocusRequester() }
     LaunchedEffect(Unit) { hotkeys.requestFocus() }
 
+    // Выход по Esc (#1025). Один шаг назад: вопрос → настройки → объект → само окно.
+    val cloudAsk by state.cloudAsk.collectAsState()
+    val phoneAsk by state.phoneAsk.collectAsState()
+    val leave = {
+        when (
+            com.point.desktop.escapeExit(
+                asking = cloudAsk != null || phoneAsk != null,
+                atSettings = showSettings,
+                objectOpened = openedId != null,
+            )
+        ) {
+            com.point.desktop.EscapeExit.DISMISS_ASK ->
+                if (cloudAsk != null) state.declineCloud() else state.declinePhone()
+
+            com.point.desktop.EscapeExit.LEAVE_SETTINGS -> showSettings = false
+            com.point.desktop.EscapeExit.CLOSE_OBJECT -> openedId = null
+            com.point.desktop.EscapeExit.HIDE_WINDOW -> onHide()
+        }
+    }
+
+    // Esc приходит от окна, а не от сфокусированного узла: пока фокус внутри никем не
+    // взят, Compose не доставляет клавиши вовсе — так Esc и молчал у каждого объекта.
+    val escaped by escape.collectAsState()
+    var escapesSeen by remember { mutableStateOf(escape.value) }
+    LaunchedEffect(escaped) {
+        if (escaped != escapesSeen) {
+            escapesSeen = escaped
+            leave()
+        }
+    }
+
     // Окно ведёт себя как окно: уход в другое приложение его не закрывает (владелец
     // 12.08.2026: «сделай десктопное окно нормальным, чтобы не пришлось жать кнопку не
     // закрывать»). Прежде это был флайаут — потерял фокус и исчез, — и человек, уходивший
@@ -206,13 +243,9 @@ fun CompactApp(
                     event.key == androidx.compose.ui.input.key.Key.V
                 val grab = down && event.isCtrlPressed && event.isShiftPressed &&
                     event.key == androidx.compose.ui.input.key.Key.S
-                val esc = down && event.key == androidx.compose.ui.input.key.Key.Escape
                 if (paste) takeClipboard()
                 if (grab) grabScreen()
-                if (esc) {
-                    if (openedId != null) openedId = null else onHide()
-                }
-                paste || grab || esc
+                paste || grab
             },
     ) {
         signIn?.let { gate ->
@@ -287,7 +320,6 @@ fun CompactApp(
     }
 
     // Согласие в момент выбора, словами последствий (P11).
-    val cloudAsk by state.cloudAsk.collectAsState()
     cloudAsk?.let { ask ->
         AlertDialog(
             onDismissRequest = { state.declineCloud() },
@@ -300,7 +332,6 @@ fun CompactApp(
 
     // Молчащий телефон — выбор человека, а не наш (#611, срез 5): исполнитель, который
     // ответит через час, не может быть выбран за спиной.
-    val phoneAsk by state.phoneAsk.collectAsState()
     phoneAsk?.let { ask ->
         AlertDialog(
             onDismissRequest = { state.declinePhone() },
