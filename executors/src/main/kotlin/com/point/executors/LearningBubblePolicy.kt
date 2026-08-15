@@ -34,6 +34,7 @@ class LearningBubblePolicy @Inject constructor(
         graph.intent,
         backTo(graph, candidates),
         com.point.core.flow.nothingToRead(graph.state, graph.facts),
+        com.point.core.flow.alreadyUnderstood(graph.facts),
     )
 
     /**
@@ -56,6 +57,7 @@ class LearningBubblePolicy @Inject constructor(
         intent: com.point.core.model.Intent?,
         backToSource: Set<CapabilityId> = emptySet(),
         nothingToRead: Boolean = false,
+        understood: Boolean = false,
     ): List<Capability> {
         val counts = usage.counts()
         val keyless = !runCatching { llm.configured }.getOrDefault(true)
@@ -67,6 +69,10 @@ class LearningBubblePolicy @Inject constructor(
             compareBy(
 
                 { if (nothingToRead && com.point.core.model.Intent.UNDERSTAND in it.intents(state)) 1 else 0 },
+
+                // Понятое не предлагается понять заново (#1010): суть объекта уже в графе, и
+                // лучший следующий шаг — воспользоваться понятым. Действие не исчезает.
+                { if (understood && it.id == UnderstandCapability.ID) 1 else 0 },
 
                 // Обратное преобразование — вниз (#925): не прячем, но и не предлагаем первым.
                 { if (it.id in backToSource) 1 else 0 },

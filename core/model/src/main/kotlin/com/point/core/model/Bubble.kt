@@ -34,9 +34,24 @@ data class Bubble(
  * действием, которое ранжирование ставит ниже него. Показанные при этом друг друга не
  * обгоняют — двигаться под пальцем по-прежнему нечему.
  */
-fun keepShownOrder(shown: List<Bubble>, fresh: List<Bubble>): List<Bubble> {
+fun keepShownOrder(
+    shown: List<Bubble>,
+    fresh: List<Bubble>,
+
+    /**
+     * Действия, которые человек только что выполнил (#1010).
+     *
+     * Правило «не переставляется под пальцем» защищает того, кто целится. К выполненному оно
+     * не относится: человек уже нажал и отпустил, а «Понять» после «✓ Стало понятнее»
+     * оставалось первым и подсвеченным — экран предлагал как лучший следующий шаг ровно то,
+     * что только что сделано. Такое действие ранжируется заново, наравне с новичками.
+     */
+    justDone: Set<CapabilityId> = emptySet(),
+): List<Bubble> {
     if (shown.isEmpty()) return fresh
-    val seen = shown.withIndex().associate { (i, b) -> b.capabilityId to i }
+    val seen = shown.withIndex()
+        .filterNot { (_, b) -> b.capabilityId in justDone }
+        .associate { (i, b) -> b.capabilityId to i }
 
     // Место новичка — там, где ранжированный список упирается в уже показанное.
     val place = IntArray(fresh.size)

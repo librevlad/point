@@ -1818,7 +1818,7 @@ class FlowViewModel @Inject constructor(
 
                 // ADR-0001 §18: «выполнено» может нести новое знание — оно идёт тем же
                 // merge-путём, что и находки исследований, а не выбрасывается.
-                result.findings?.takeIf { !it.isEmpty }?.let(::landFindings)
+                result.findings?.takeIf { !it.isEmpty }?.let { landFindings(it, bubble.capabilityId) }
                 _ui.update { it.copy(busy = null, busyStage = null, message = result.message, messageOutcome = Outcome.DONE) }
             }
             is ActionResult.Failure -> {
@@ -2227,7 +2227,12 @@ class FlowViewModel @Inject constructor(
      * правка на кадре извлечённого значения дойдёт и до родителя, иначе следующий пересбор
      * узлов из родительской metadata затёр бы её.
      */
-    private fun landFindings(findings: com.point.core.model.Findings) {
+    private fun landFindings(
+        findings: com.point.core.model.Findings,
+
+        /** Что человек только что выполнил: выполненное ранжируется заново (#1010). */
+        justDone: com.point.core.model.CapabilityId? = null,
+    ) {
         val update = EnrichmentUpdate(
             features = findings.features,
             metadata = findings.metadata,
@@ -2236,10 +2241,10 @@ class FlowViewModel @Inject constructor(
             relations = findings.relations,
         )
         val top = stack.lastOrNull() ?: return
-        applyEnrichment(top.obj, update)
+        applyEnrichment(top.obj, update, justDone)
         top.obj.sourceObjects.firstOrNull()
             ?.let { parentId -> stack.lastOrNull { it.obj.id == parentId }?.obj }
-            ?.let { parent -> applyEnrichment(parent, update) }
+            ?.let { parent -> applyEnrichment(parent, update, justDone) }
 
         // Карточка «Недавнего» несёт факты объекта: правка человека обязана дойти и до неё
         // сейчас — фоновое обогащение могло уже завершиться и историю не перепишет.
@@ -2292,7 +2297,11 @@ class FlowViewModel @Inject constructor(
         }
     }
 
-    private fun applyEnrichment(source: PointObject, update: EnrichmentUpdate) {
+    private fun applyEnrichment(
+        source: PointObject,
+        update: EnrichmentUpdate,
+        justDone: com.point.core.model.CapabilityId? = null,
+    ) {
         val index = stack.indexOfLast { it.obj.id == source.id }
         val frame = stack.getOrNull(index) ?: return
         val newState = update.features.fold(frame.obj.state) { state, feature -> state.with(feature) }
@@ -2338,6 +2347,7 @@ class FlowViewModel @Inject constructor(
                         enriched,
                     ),
                 ),
+                justDone = setOfNotNull(justDone),
             )
         } else {
             frame.bubbles
