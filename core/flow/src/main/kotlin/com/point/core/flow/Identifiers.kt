@@ -106,7 +106,7 @@ internal fun looksLikeTrackToken(text: String): Boolean {
 
 const val META_ENTITY_TRACK = META_ENTITY_PREFIX + "track"
 
-fun trackFacts(text: String): Map<String, String> {
+fun trackFacts(text: String, from: Provenance = Provenance.OCR): Map<String, String> {
     val hits = trackHits(text)
     val blocked = blockedTracks(text)
     if (hits.isEmpty() && blocked.isEmpty()) return emptyMap()
@@ -114,7 +114,7 @@ fun trackFacts(text: String): Map<String, String> {
         hits.firstOrNull()?.let { first ->
             put(META_ENTITY_TRACK, first.value)
 
-            put(META_ENTITY_TRACK + META_SOURCE_SUFFIX, Provenance.OCR.wire)
+            put(META_ENTITY_TRACK + META_SOURCE_SUFFIX, from.wire)
             put(
                 META_ENTITY_TRACK + META_EVIDENCE_SUFFIX,
                 formEvidence(META_ENTITY_TRACK, first.value)

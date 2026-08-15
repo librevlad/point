@@ -53,11 +53,14 @@ class PcEntitiesRealizer(
         // `:core:flow`. Телефон их звал, компьютер — нет, и счёт на 12 500 грн оставался на
         // ПК без суммы: движок сущностей о деньгах знает («Суммы — 1»), а ключа знания у него
         // для них нет.
-        val byRules = com.point.core.flow.amountFacts(text) +
-            com.point.core.flow.meterFacts(text) +
-            com.point.core.flow.geoFacts(text) +
-            com.point.core.flow.receiptFacts(text) +
-            com.point.core.flow.trackFacts(text)
+        //
+        // Откуда текст, из того и знание (#1024): у присланного текстом распознавания не было.
+        val from = com.point.core.flow.textProvenanceOf(input.state.kind)
+        val byRules = com.point.core.flow.amountFacts(text, from) +
+            com.point.core.flow.meterFacts(text, from) +
+            com.point.core.flow.geoFacts(text, from) +
+            com.point.core.flow.receiptFacts(text, from) +
+            com.point.core.flow.trackFacts(text, from)
 
         if (found.isEmpty() && byRules.isEmpty()) {
 
@@ -72,11 +75,15 @@ class PcEntitiesRealizer(
                 ),
             )
         }
-        ActionResult.Done(summaryLine(found, byRules), entityFindings(found, byRules))
+        ActionResult.Done(summaryLine(found, byRules), entityFindings(found, byRules, from))
     }.getOrElse { ActionResult.Failure("Разобрать текст не вышло — попробуйте ещё раз", recoverable = true) }
 
-    private fun entityFindings(found: List<Entity>, byRules: Map<String, String>): com.point.core.model.Findings {
-        val knowledge = entityKnowledge(found, capabilityId)
+    private fun entityFindings(
+        found: List<Entity>,
+        byRules: Map<String, String>,
+        from: com.point.core.model.Provenance,
+    ): com.point.core.model.Findings {
+        val knowledge = entityKnowledge(found, capabilityId, from)
         if (byRules.isEmpty()) return knowledge
 
         // Нашли правила — вопрос отвечен, даже если движок сущностей промолчал: «не найдено»
@@ -96,7 +103,11 @@ class PcEntitiesRealizer(
 }
 
 /** Знание из найденных сущностей: первое значение вида, «ещё»-значения, признаки, состояние вопроса. */
-fun entityKnowledge(found: List<Entity>, question: CapabilityId): com.point.core.model.Findings {
+fun entityKnowledge(
+    found: List<Entity>,
+    question: CapabilityId,
+    from: com.point.core.model.Provenance = com.point.core.model.Provenance.OCR,
+): com.point.core.model.Findings {
 
     // «Голое время это никогда не дата, это мусор» (#651).
     val meaningful = found.filterNot { it.type == EntityType.DATE_TIME && com.point.core.flow.bareClock(it.value) }
@@ -109,9 +120,9 @@ fun entityKnowledge(found: List<Entity>, question: CapabilityId): com.point.core
             put(key, values.first())
 
             // Откуда значение: вычитано из текста объекта (#948). Без этой строки оно молча
-            // становилось «дано» — как будто человек ввёл его сам, — и показывалось на экране
-            // спокойнее всего, хотя пришло из распознанного кадра.
-            put(key + com.point.core.flow.META_SOURCE_SUFFIX, com.point.core.model.Provenance.OCR.wire)
+            // становилось «дано» — как будто человек ввёл его сам. Прочтение кадра и текст,
+            // присланный человеком, — разные основания, и называются они по-разному (#1024).
+            put(key + com.point.core.flow.META_SOURCE_SUFFIX, from.wire)
             val more = values.drop(1)
             if (more.isNotEmpty()) {
                 put(key + com.point.core.flow.META_MORE_SUFFIX, com.point.core.flow.altValue(more))

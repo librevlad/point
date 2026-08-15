@@ -28,7 +28,7 @@ fun meterReadings(text: String): List<MeterReading> =
         .distinctBy { it.value.filter(Char::isDigit) + "|" + it.unit.lowercase() }
         .toList()
 
-fun meterFacts(text: String): Map<String, String> {
+fun meterFacts(text: String, from: Provenance = Provenance.OCR): Map<String, String> {
     val readings = meterReadings(text)
     val first = readings.firstOrNull() ?: return emptyMap()
 
@@ -37,7 +37,7 @@ fun meterFacts(text: String): Map<String, String> {
         put(META_ENTITY_METER, first.value)
         put(META_ENTITY_METER_UNIT, first.unit)
 
-        put(META_ENTITY_METER + META_SOURCE_SUFFIX, Provenance.OCR.wire)
+        put(META_ENTITY_METER + META_SOURCE_SUFFIX, from.wire)
 
         put(META_ENTITY_METER + META_EVIDENCE_SUFFIX, EvidenceClass.SEMANTIC.name.lowercase())
         if (values.size > 1) put(META_ENTITY_METER + META_MORE_SUFFIX, altValue(values))

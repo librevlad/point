@@ -13,13 +13,13 @@ fun addressLines(text: String): List<String> =
 
 private val ADDRESS_EDGE_NOISE = Regex("""^[^\p{L}\p{Nd}]+|[^\p{L}\p{Nd}.]+$""")
 
-fun addressFacts(text: String): Map<String, String> {
+fun addressFacts(text: String, from: Provenance = Provenance.OCR): Map<String, String> {
     val lines = addressLines(text)
     val first = lines.firstOrNull() ?: return emptyMap()
     return buildMap {
         put(META_ENTITY_ADDRESS, first)
 
-        put(META_ENTITY_ADDRESS + META_SOURCE_SUFFIX, Provenance.OCR.wire)
+        put(META_ENTITY_ADDRESS + META_SOURCE_SUFFIX, from.wire)
 
         put(
             META_ENTITY_ADDRESS + META_EVIDENCE_SUFFIX,

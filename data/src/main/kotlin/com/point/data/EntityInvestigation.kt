@@ -271,7 +271,10 @@ internal fun entityDelta(
     val moreFacts = more.mapKeys { (key, _) -> key + META_MORE_SUFFIX }
         .mapValues { (_, values) -> altValue(values) }
 
-    val ruled = if (META_ENTITY_ADDRESS in extracted) emptyMap() else addressFacts(text)
+    // Откуда текст, из того и знание (#1024): распознанный с кадра — это чтение машиной,
+    // присланный человеком — не распознавался вовсе.
+    val from = com.point.core.flow.textProvenanceOf(source.state.kind)
+    val ruled = if (META_ENTITY_ADDRESS in extracted) emptyMap() else addressFacts(text, from)
     val captions = extracted.mapNotNull { (key, value) ->
         lines[value]?.let { key + META_LINE_SUFFIX to it }
     }.toMap()

@@ -64,12 +64,16 @@ class IdentifierInvestigationTest {
         )
     }
 
+    /**
+     * Происхождение названо и совпадает у узла и у факта. Текст объекта — не прочтение кадра
+     * (#1024): распознавания в этой цепочке не было, и знание об этом не врёт.
+     */
     @Test
-    fun `узел говорит «прочитано» — правило нашло цифры дословно на странице`() = runTest {
+    fun `узел говорит, откуда взял — правило нашло цифры дословно в тексте`() = runTest {
 
         val found = enricher.look(textObject("20 4514 9154 9395")).objects.single()
 
-        assertEquals(Provenance.OCR, found.provenance)
+        assertEquals(Provenance.TEXT, found.provenance)
         assertEquals(
             found.provenance,
             com.point.core.flow.provenanceOf(found.metadata, com.point.core.flow.META_ENTITY_TRACK),
@@ -94,7 +98,7 @@ class IdentifierInvestigationTest {
             listOf("20 4514 9154 9395", "20451491549396"),
             found.map { it.metadata[com.point.core.flow.META_ENTITY_TRACK] },
         )
-        assertTrue(found.all { it.provenance == Provenance.OCR })
+        assertTrue(found.all { it.provenance == Provenance.TEXT })
     }
 
     @Test

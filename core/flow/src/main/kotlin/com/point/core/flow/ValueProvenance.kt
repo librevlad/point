@@ -7,6 +7,7 @@ fun provenanceOf(metadata: Map<String, String>, key: String): Provenance =
 
 fun provenanceLabel(provenance: Provenance): String? = when (provenance) {
     Provenance.OCR -> "прочитано"
+    Provenance.TEXT -> "взято из текста"
     Provenance.RULE -> "выведено правилом"
     Provenance.MODEL -> "понято по смыслу"
     Provenance.HUMAN -> "подтверждено вами"
@@ -26,8 +27,20 @@ fun provenanceLabel(provenance: Provenance): String? = when (provenance) {
  */
 fun isKnownFor(provenance: Provenance): Boolean = when (provenance) {
     Provenance.UNKNOWN -> false
-    Provenance.GIVEN, Provenance.OCR, Provenance.RULE, Provenance.MODEL, Provenance.HUMAN -> true
+    Provenance.GIVEN, Provenance.OCR, Provenance.TEXT, Provenance.RULE,
+    Provenance.MODEL, Provenance.HUMAN,
+    -> true
 }
+
+/**
+ * Откуда знание, вычитанное из текста (#1024).
+ *
+ * Тот же текст приходит двумя разными путями: распознанный с кадра — это чтение машиной со
+ * всеми его ошибками; текст, который человек прислал сам, — не распознавался вовсе. Путь
+ * распознавания называет `Provenance.OCR` прямо; здесь — общий случай по форме объекта.
+ */
+fun textProvenanceOf(kind: com.point.core.model.ObjectKind): Provenance =
+    if (kind == com.point.core.model.ObjectKind.IMAGE) Provenance.OCR else Provenance.TEXT
 
 fun isKnownFor(metadata: Map<String, String>, key: String): Boolean =
     isKnownFor(provenanceOf(metadata, key))

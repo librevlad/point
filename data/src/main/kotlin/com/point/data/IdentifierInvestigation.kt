@@ -66,10 +66,14 @@ class IdentifierInvestigationRealizer @Inject constructor() : Realizer {
         val text = file.readText().take(com.point.core.flow.INVESTIGATION_TEXT_CHARS)
         if (text.isBlank()) return@withContext Findings()
 
-        val facts = trackFacts(text)
+        // Текст здесь — сам объект, а не прочтение кадра (#1024): распознавания в этой
+        // цепочке не было, и знание об этом не врёт.
+        val from = com.point.core.flow.textProvenanceOf(obj.state.kind)
+        val facts = trackFacts(text, from)
         val (objects, relations) = identifierObjects(obj, text, facts)
 
-        val ruleFacts = facts + meterFacts(text) + geoFacts(text) + amountFacts(text) + receiptFacts(text)
+        val ruleFacts = facts + meterFacts(text, from) + geoFacts(text, from) +
+            amountFacts(text, from) + receiptFacts(text, from)
         if (objects.isEmpty() && ruleFacts.isEmpty()) return@withContext Findings()
 
         Findings(objects = objects, relations = relations, metadata = ruleFacts)

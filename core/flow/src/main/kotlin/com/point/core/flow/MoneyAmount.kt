@@ -42,28 +42,28 @@ fun moneyAmounts(text: String): List<MoneyAmount> =
         .distinctBy { it.value.filter { c -> c.isDigit() || c == ',' || c == '.' } + "|" + it.currency.lowercase() }
         .toList()
 
-fun amountFacts(text: String): Map<String, String> {
+fun amountFacts(text: String, from: Provenance = Provenance.OCR): Map<String, String> {
     val amounts = moneyAmounts(text)
 
-    val first = amounts.firstOrNull() ?: return totalFacts(arithmeticTotals(text))
+    val first = amounts.firstOrNull() ?: return totalFacts(arithmeticTotals(text), from)
     val values = amounts.map { it.value }.distinct()
     return buildMap {
         put(META_ENTITY_AMOUNT, first.value)
         put(META_ENTITY_AMOUNT_CURRENCY, first.currency)
 
-        put(META_ENTITY_AMOUNT + META_SOURCE_SUFFIX, Provenance.OCR.wire)
+        put(META_ENTITY_AMOUNT + META_SOURCE_SUFFIX, from.wire)
 
         put(META_ENTITY_AMOUNT + META_EVIDENCE_SUFFIX, EvidenceClass.SEMANTIC.name.lowercase())
         if (values.size > 1) put(META_ENTITY_AMOUNT + META_MORE_SUFFIX, altValue(values))
     }
 }
 
-private fun totalFacts(totals: List<String>): Map<String, String> {
+private fun totalFacts(totals: List<String>, from: Provenance): Map<String, String> {
     val first = totals.firstOrNull() ?: return emptyMap()
     return buildMap {
         put(META_ENTITY_AMOUNT, first)
 
-        put(META_ENTITY_AMOUNT + META_SOURCE_SUFFIX, Provenance.OCR.wire)
+        put(META_ENTITY_AMOUNT + META_SOURCE_SUFFIX, from.wire)
         put(META_ENTITY_AMOUNT + META_EVIDENCE_SUFFIX, EvidenceClass.ARITHMETIC.name.lowercase())
 
         if (totals.size > 1) put(META_ENTITY_AMOUNT + META_MORE_SUFFIX, altValue(totals))
