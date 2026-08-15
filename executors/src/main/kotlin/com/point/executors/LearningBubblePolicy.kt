@@ -74,6 +74,11 @@ class LearningBubblePolicy @Inject constructor(
                 // лучший следующий шаг — воспользоваться понятым. Действие не исчезает.
                 { if (understood && it.id == UnderstandCapability.ID) 1 else 0 },
 
+                // Действие, которому нужен текст, ждёт текста (#996): на PDF без единой
+                // прочитанной строки главным и подсвеченным стояло «Перевести», а «Извлечь
+                // текст» — шаг, открывающий всё остальное, — вторым и без подсветки.
+                { if (it.meta.needsText && !hasText(state)) 1 else 0 },
+
                 // Обратное преобразование — вниз (#925): не прячем, но и не предлагаем первым.
                 { if (it.id in backToSource) 1 else 0 },
 
@@ -97,6 +102,14 @@ class LearningBubblePolicy @Inject constructor(
             ),
         )
     }
+
+    /**
+     * Есть ли у объекта текст, с которым можно работать (#996): сам объект текстовый или
+     * текст с него уже прочитан.
+     */
+    private fun hasText(state: ObjectState): Boolean =
+        state.kind == com.point.core.model.ObjectKind.TEXT ||
+            state.has(com.point.core.model.Feature.HAS_TEXT)
 
     private fun cloudReadOfAlreadyRead(c: Capability, state: ObjectState): Boolean =
         state.kind == com.point.core.model.ObjectKind.IMAGE &&

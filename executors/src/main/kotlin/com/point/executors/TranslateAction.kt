@@ -31,7 +31,10 @@ class TranslateCapability @Inject constructor(
 ) : Capability {
     override val id = ID
     override val icon = "translate"
-    override val meta = CapabilityMeta(latency = Latency.SLOW, network = true, auth = true)
+    // Переводить нечего, пока текст не добыт (#996): действие ждёт текста, а не опережает
+    // того, кто его даст.
+    override val meta =
+        CapabilityMeta(latency = Latency.SLOW, network = true, auth = true, needsText = true)
     override fun label(state: ObjectState) = labelNeedingKey("Перевести", keys.keySet())
     // Переводить есть что там, где есть текст, — а не там, где объект нужного вида (#792):
     // прочитанный снимок это объект с текстом, и требовать распознать его второй раз незачем.

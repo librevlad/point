@@ -28,7 +28,7 @@ class WordCapability @Inject constructor() : Capability {
     override val id = ID
     override val icon = "office"
 
-    override val meta = CapabilityMeta(latency = Latency.SLOW)
+    override val meta = CapabilityMeta(latency = Latency.SLOW, needsText = true)
     override fun label(state: ObjectState) = "В Word"
     override fun accepts(state: ObjectState) =
         state.kind == ObjectKind.PDF || state.kind == ObjectKind.TEXT || state.kind == ObjectKind.IMAGE

@@ -78,7 +78,9 @@ class WordPlusCapability @Inject constructor(
 ) : Capability {
     override val id = ID
     override val icon = "office"
-    override val meta = CapabilityMeta(cost = Cost.PAID, latency = Latency.SLOW, network = true, auth = true)
+    override val meta = CapabilityMeta(
+        cost = Cost.PAID, latency = Latency.SLOW, network = true, auth = true, needsText = true,
+    )
 
     override fun label(state: ObjectState) = labelNeedingKey("В Word+", keys.keySet())
     override fun accepts(state: ObjectState) =

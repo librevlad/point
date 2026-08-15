@@ -87,7 +87,9 @@ class ExcelCapability @Inject constructor(
 ) : Capability {
     override val id = ID
     override val icon = "excel"
-    override val meta = CapabilityMeta(cost = Cost.PAID, latency = Latency.SLOW, network = true, auth = true)
+    override val meta = CapabilityMeta(
+        cost = Cost.PAID, latency = Latency.SLOW, network = true, auth = true, needsText = true,
+    )
     override fun label(state: ObjectState) = labelNeedingKey("В Excel", keys.keySet())
     override fun accepts(state: ObjectState) =
         state.kind in setOf(ObjectKind.IMAGE, ObjectKind.PDF, ObjectKind.TEXT)
