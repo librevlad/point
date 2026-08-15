@@ -55,8 +55,18 @@ interface Clipboard {
 }
 
 interface CalendarInserter {
-    suspend fun insertEvent(title: String)
+    suspend fun insertEvent(event: NewEvent)
 }
+
+/**
+ * Событие, ради которого человек нажал (#1035).
+ *
+ * Дата ехала только словами внутри названия, а сам шов её принять не умел — значит событие
+ * ложилось на сегодня, и человек руками переставлял день: ровно та работа, от которой
+ * действие обещало избавить. День необязателен: встреча из переписки может не иметь его
+ * вовсе, и выдумывать его нельзя.
+ */
+data class NewEvent(val title: String, val on: java.time.LocalDate? = null)
 
 interface ContactInserter {
     suspend fun insertContact(contact: NewContact)

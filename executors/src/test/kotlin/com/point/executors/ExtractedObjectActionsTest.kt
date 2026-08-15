@@ -42,8 +42,9 @@ class ExtractedObjectActionsTest {
     }
 
     private class RecordingCalendar : CalendarInserter {
-        var title: String? = null
-        override suspend fun insertEvent(title: String) { this.title = title }
+        var event: com.point.core.flow.NewEvent? = null
+        val title: String? get() = event?.title
+        override suspend fun insertEvent(event: com.point.core.flow.NewEvent) { this.event = event }
     }
 
     @Test

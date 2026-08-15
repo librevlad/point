@@ -204,22 +204,56 @@ class EventCapability(
     companion object { val ID = CapabilityId("event") }
 }
 
-class EventRealizer @Inject constructor(
+class EventRealizer(
     private val calendar: CalendarInserter,
+    private val today: () -> java.time.LocalDate,
 ) : Realizer {
+
+    @Inject constructor(calendar: CalendarInserter) : this(calendar, { java.time.LocalDate.now() })
+
     override val capabilityId = EventCapability.ID
 
     override suspend fun preview(input: PointObject): Preview = withContext(Dispatchers.IO) {
-        Preview("Создать событие", listOf(eventTitle(input)), confirmLabel = "Создать")
+        val day = eventDay(input)
+        Preview(
+            "Создать событие",
+            listOfNotNull(eventTitle(input), day?.format(EVENT_DAY)),
+            confirmLabel = "Создать",
+        )
     }
 
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
             runCatching {
-                calendar.insertEvent(eventTitle(input))
+                calendar.insertEvent(
+                    com.point.core.flow.NewEvent(eventTitle(input), on = eventDay(input)),
+                )
                 ActionResult.Done("Создаю событие")
             }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось создать событие", recoverable = true) }
         }
+
+    /**
+     * День, ради которого действие и предложено (#1035): тот же ближайший из будущих, что
+     * открыл дверь событию. Встреча без даты остаётся без дня — выдумывать его нельзя.
+     */
+    private fun eventDay(input: PointObject): java.time.LocalDate? {
+        val known = com.point.core.flow.upcomingDateOf(input.metadata, today())
+        if (known != null) return known
+
+        // Найденная дата — самостоятельный объект, и день у неё лежит прямо в значении, а не
+        // в знании о ней: «Создать событие» на нём обязано попасть в тот же день.
+        val own = (input.uri as? com.point.core.model.ValueRef)
+            ?.value?.takeIf { input.state.kind == com.point.core.flow.KIND_DATE } ?: return null
+        return com.point.core.flow.upcomingDateOf(
+            mapOf(com.point.core.flow.META_ENTITY_PREFIX + "date" to own),
+            today(),
+        )
+    }
+
+    private companion object {
+        val EVENT_DAY: java.time.format.DateTimeFormatter =
+            java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy")
+    }
 
     private fun eventTitle(input: PointObject): String =
         entitySourceText(input).lineSequence().map { it.trim() }

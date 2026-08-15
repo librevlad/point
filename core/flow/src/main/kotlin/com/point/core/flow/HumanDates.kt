@@ -187,12 +187,22 @@ private fun toLocalDate(m: MatchResult, hint: DayOrder): LocalDate? = runCatchin
 }.getOrNull()
 
 /** Есть ли среди дат знания (primary и «ещё») дата сегодня или позже. */
-fun hasUpcomingDate(metadata: Map<String, String>, today: LocalDate): Boolean {
+fun hasUpcomingDate(metadata: Map<String, String>, today: LocalDate): Boolean =
+    upcomingDateOf(metadata, today) != null
+
+/**
+ * Ближайший из будущих дней знания — тот самый, ради которого действие и предложено (#1035).
+ *
+ * Дверь события открывает дата сегодня или позже (#651), и она же обязана дойти до
+ * результата: событие вставало на сегодня, а найденный день оставался словами внутри
+ * названия. Одно правило на оба вопроса — «есть ли такой день» и «какой он».
+ */
+fun upcomingDateOf(metadata: Map<String, String>, today: LocalDate): LocalDate? {
     val key = META_ENTITY_PREFIX + "date"
     val values = listOfNotNull(metadata[key]) + moreOf(metadata, key)
 
     // Порядок частей берётся у самого объекта, а не у телефона (#802): соседние даты и язык
     // его текста. Спорная запись без такой опоры днём не становится.
     val hint = dayOrderOf((values + metadata.values).joinToString(" "))
-    return values.any { humanDayOf(it, hint)?.let { d -> !d.isBefore(today) } == true }
+    return values.mapNotNull { humanDayOf(it, hint) }.filter { !it.isBefore(today) }.minOrNull()
 }

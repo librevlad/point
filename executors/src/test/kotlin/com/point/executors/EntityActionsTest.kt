@@ -53,8 +53,9 @@ class EntityActionsTest {
     }
 
     private class FakeCalendar : CalendarInserter {
-        var title: String? = null
-        override suspend fun insertEvent(title: String) { this.title = title }
+        var event: com.point.core.flow.NewEvent? = null
+        val title: String? get() = event?.title
+        override suspend fun insertEvent(event: com.point.core.flow.NewEvent) { this.event = event }
     }
 
     @Test
@@ -102,6 +103,33 @@ class EntityActionsTest {
         val result = EventRealizer(cal).perform(obj("\nВстреча с командой\nзавтра 18:00"))
         assertTrue(result is ActionResult.Done)
         assertEquals("Встреча с командой", cal.title)
+    }
+
+    /**
+     * Знание, ради которого предложено действие, доходит до результата (#1035): событие
+     * вставало на сегодня, а найденный день оставался словами внутри названия, и человек
+     * переставлял дату руками.
+     */
+    @Test
+    fun `событие встаёт на найденный день, а не на сегодня`() = runTest {
+        val cal = FakeCalendar()
+        val bill = obj("Договор №226966 от 14.08.2026").let {
+            it.copy(metadata = it.metadata + ("entity.date" to "14.08.2026"))
+        }
+
+        EventRealizer(cal) { java.time.LocalDate.of(2026, 8, 1) }.perform(bill)
+
+        assertEquals(java.time.LocalDate.of(2026, 8, 14), cal.event?.on)
+    }
+
+    /** Даты нет вовсе — день не выдумывается: встреча из переписки бывает без числа. */
+    @Test
+    fun `без найденной даты событие идёт без дня`() = runTest {
+        val cal = FakeCalendar()
+
+        EventRealizer(cal) { java.time.LocalDate.of(2026, 8, 1) }.perform(obj("Встреча с командой"))
+
+        assertEquals(null, cal.event?.on)
     }
 
     @Test
