@@ -343,68 +343,128 @@ private fun FoundObjects(
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        found.forEach { obj ->
-            key(obj.id) {
-                Surface(
-                    onClick = { onFound(obj) },
-                    shape = RoundedCornerShape(14.dp),
-                    color = MaterialTheme.colorScheme.surface,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        Icon(
-                            imageVector = kindIcon(obj.state.kind),
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(20.dp),
-                        )
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = foundHeadline(obj),
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Medium,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                            Text(
-                                text = listOfNotNull(
-                                    kindLabel(obj.state.kind),
-                                    roleOf(obj, relations),
 
-                                    provenanceLabel(obj.provenance),
+        // Однородное стоит свёрнутым, пока человек его не раскрыл (#1015).
+        val groups = remember(found) { foldFound(found) }
+        groups.forEach { group ->
+            key("found-group-${group.kind.name}") {
+                FoundGroupRows(group = group, relations = relations, onFound = onFound)
+            }
+        }
+    }
+}
 
-                                    "возможно".takeIf { isDoubtful(obj.metadata) },
-                                ).joinToString(" · "),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
+@Composable
+private fun FoundGroupRows(
+    group: FoundGroup,
+    relations: List<Relation>,
+    onFound: (PointObject) -> Unit,
+) {
 
-                            foundCaption(obj)?.let { said ->
-                                Text(
-                                    text = said,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            }
+    // Раскрытие переживает поворот: человек развернул стопку не для того, чтобы искать
+    // её заново.
+    var expanded by rememberSaveable(group.items.size) { mutableStateOf(false) }
+    if (group.folded) {
+        Surface(
+            onClick = { expanded = !expanded },
+            shape = RoundedCornerShape(14.dp),
+            color = MaterialTheme.colorScheme.surface,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Icon(
+                    imageVector = kindIcon(group.kind),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp),
+                )
+                Text(
+                    text = foundGroupLabel(group.kind, group.items.size),
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(
+                    text = if (expanded) FOUND_GROUP_CLOSE else FOUND_GROUP_OPEN,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+        }
+    }
+    if (!group.folded || expanded) {
+        group.items.forEach { obj -> key(obj.id) { FoundRow(obj, relations, onFound) } }
+    }
+}
 
-                            otherReading(obj)?.let { other ->
-                                Text(
-                                    text = "или: $other",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            }
-                        }
-                    }
+@Composable
+private fun FoundRow(
+    obj: PointObject,
+    relations: List<Relation>,
+    onFound: (PointObject) -> Unit,
+) {
+    Surface(
+        onClick = { onFound(obj) },
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surface,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Icon(
+                imageVector = kindIcon(obj.state.kind),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp),
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = foundHeadline(obj),
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = listOfNotNull(
+                        kindLabel(obj.state.kind),
+                        roleOf(obj, relations),
+
+                        provenanceLabel(obj.provenance),
+
+                        "возможно".takeIf { isDoubtful(obj.metadata) },
+                    ).joinToString(" · "),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+
+                foundCaption(obj)?.let { said ->
+                    Text(
+                        text = said,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+
+                otherReading(obj)?.let { other ->
+                    Text(
+                        text = "или: $other",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 }
             }
         }
