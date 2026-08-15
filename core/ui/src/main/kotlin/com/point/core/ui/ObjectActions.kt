@@ -30,6 +30,13 @@ internal fun ObjectActions(
     working: Boolean,
     onBubble: (Bubble) -> Unit,
     appIconFor: (String) -> ImageBitmap? = { null },
+
+    /**
+     * С объектом нечего делать: причина сказана подписью объекта (#684/#685), и обещать над
+     * ней результат нельзя (#994). Закрытый режим и отсутствие сети — другое дело: там объект
+     * годен, действие живо, и его обещание остаётся при нём.
+     */
+    unfit: Boolean = false,
 ) {
     val dim by animateFloatAsState(if (working) 0.5f else 1f, tween(200), label = "actions-dim")
 
@@ -55,6 +62,7 @@ internal fun ObjectActions(
                         ActionRow(
                             bubble = bubble,
                             shared = shared,
+                            unfit = unfit,
                             index = index,
 
                             primary = sectionIndex == 0 && index == 0,
@@ -80,6 +88,7 @@ internal fun ObjectActions(
 private fun ActionRow(
     bubble: Bubble,
     shared: String?,
+    unfit: Boolean,
     index: Int,
     primary: Boolean,
     enabled: Boolean,
@@ -97,7 +106,7 @@ private fun ActionRow(
 
             // Про негодный объект обещаний не дают (#994): причина сказана подписью объекта,
             // а на её месте стояло «найдёт суть, суммы, даты и контакты».
-            promiseHolds = bubble.unusableReason == null,
+            promiseHolds = !unfit,
         ),
         subtitleMaxLines = 1,
         onClick = onClick,

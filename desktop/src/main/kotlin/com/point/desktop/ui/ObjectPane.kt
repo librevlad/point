@@ -202,8 +202,8 @@ internal fun CompactObject(
                             action.bubble.unusableReason.takeIf { it != sharedReason },
 
                             // Про негодный объект обещаний не дают (#994) — правило одно на
-                            // телефон и компьютер.
-                            promiseHolds = action.bubble.unusableReason == null,
+                            // телефон и компьютер. Закрытый режим объекта негодным не делает.
+                            promiseHolds = !item.obj.state.has(com.point.core.model.Feature.UNUSABLE),
                         ),
                         appearIndex = i,
                     ) { state.onBubble(item, action.bubble) }

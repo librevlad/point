@@ -254,6 +254,7 @@ fun FirstScreen(
                 working = working,
                 onBubble = onBubble,
                 appIconFor = appIconFor,
+                unfit = obj.state.has(com.point.core.model.Feature.UNUSABLE),
             )
             if (latent.isNotEmpty()) {
                 Spacer(Modifier.height(22.dp))
