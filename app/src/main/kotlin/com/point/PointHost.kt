@@ -95,6 +95,9 @@ fun PointHost(
     onToggleYolo: (Boolean) -> Unit = {},
     onUnpin: (com.point.core.model.ObjectKind) -> Unit = {},
     onForgetAll: () -> Unit = {},
+
+    /** Человеческое имя вопроса знания: сырой id на экран не выходит (#1016, P2). */
+    questionName: (com.point.core.model.CapabilityId) -> String? = { null },
     tileAdded: Boolean = false,
 
     onOpenUrl: (String) -> Unit = {},
@@ -350,6 +353,11 @@ fun PointHost(
                     focusPreview = state.focusPreview,
                     focused = current.focus != null,
                     onClearFocus = onClearFocus,
+
+                    // «Смотрели — не нашлось» видно и на телефоне (#1016), а под фокусом —
+                    // ответ про показанную область (#1000).
+                    questionName = questionName,
+                    focusScope = current.focus?.let { com.point.core.flow.focusScope(it) },
 
                     onHeroTap = when (
                         heroTapOf(

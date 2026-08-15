@@ -215,11 +215,19 @@ internal fun UnderstoodSection(
     facts: List<UnderstoodFact>,
     enriching: List<String>,
     failed: List<com.point.core.flow.FailedInvestigation> = emptyList(),
+
+    /**
+     * «Смотрели — не нашлось» — знание, а не сбой (Конституция §13), и человеку оно
+     * показывается на обеих поверхностях (#1016). Компьютер показывал, телефон прятал: один
+     * и тот же человек за компьютером видел, что QR искали и не нашли, а на телефоне был
+     * уверен, что не искали вовсе. Под фокусом — ответ про показанную область (#1000).
+     */
+    questions: List<com.point.core.flow.OpenQuestion> = emptyList(),
 ) {
 
     val detail = facts.filter { it.key != "semantic" }
     val trouble = failedNote(failed)
-    if (detail.isEmpty() && enriching.isEmpty() && trouble == null) return
+    if (detail.isEmpty() && enriching.isEmpty() && trouble == null && questions.isEmpty()) return
     Surface(
         shape = PortalCardShape,
         color = MaterialTheme.colorScheme.surface,
@@ -230,6 +238,21 @@ internal fun UnderstoodSection(
     ) {
         Column(modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp)) {
             detail.forEach { fact -> key(fact.key) { FactRow(fact) } }
+
+            // Ненайденное говорится тише найденного, но говорится: человек отличает
+            // «посмотрели и не нашли» от «не смотрели» (#1016, #1000).
+            questions.forEach { question ->
+                key("question-${question.name}-${question.aboutArea}") {
+                    Text(
+                        text = question.name + " · " +
+                            com.point.core.flow.openQuestionLabel(question.state) +
+                            if (question.aboutArea) " в показанной области" else "",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(vertical = 4.dp),
+                    )
+                }
+            }
             trouble?.let { note ->
                 Text(
                     text = note,

@@ -94,6 +94,27 @@ class KnowledgeRowsTest {
         )
     }
 
+    /**
+     * Человек сам обвёл область и ждёт ответа про неё сильнее всего (#1000): раньше ответ был
+     * только в графе, и экран после фокуса выглядел ровно так же, как до него.
+     */
+    @Test
+    fun `ответ про показанную область доходит до человека`() {
+        val graph = mapOf(
+            "investigated.entities" to "not_found",
+            "investigated.entities@10 10 20 20" to "not_found",
+        )
+        val name = { id: com.point.core.model.CapabilityId ->
+            if (id.value == "entities") "Значения" else null
+        }
+
+        val общий = openQuestions(graph, nameOf = name)
+        val подФокусом = openQuestions(graph, scope = "10 10 20 20", nameOf = name)
+
+        assertEquals(listOf(false), общий.map { it.aboutArea })
+        assertEquals("ответ про область не вытеснил общий", listOf(true), подФокусом.map { it.aboutArea })
+    }
+
     @Test
     fun `вопрос без человеческого имени не показывается — сырой id не выходит на экран`() {
         val questions = openQuestions(

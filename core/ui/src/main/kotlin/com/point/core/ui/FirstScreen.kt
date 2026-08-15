@@ -127,6 +127,14 @@ fun FirstScreen(
     focusPreview: ImageBitmap? = null,
     focused: Boolean = false,
     onClearFocus: () -> Unit = {},
+
+    /**
+     * Человеческое имя вопроса знания и показанная область (#1016, #1000): «смотрели — не
+     * нашлось» — знание, и человек видит его на телефоне так же, как на компьютере.
+     * Вопрос без человеческого имени на экран не выходит (P2).
+     */
+    questionName: (com.point.core.model.CapabilityId) -> String? = { null },
+    focusScope: String? = null,
 ) {
 
     val scroll = rememberScrollState()
@@ -195,7 +203,12 @@ fun FirstScreen(
             LinkCard(url = link, title = "Ссылка на файл", warning = issuedLinkWarning(obj.metadata))
         }
 
-        UnderstoodSection(facts = plainFacts, enriching = enriching, failed = failed)
+        UnderstoodSection(
+            facts = plainFacts,
+            enriching = enriching,
+            failed = failed,
+            questions = com.point.core.flow.openQuestions(obj.metadata, focusScope, questionName),
+        )
 
         if (visibleFound.isNotEmpty() && inputPrompt == null) {
             FoundObjects(

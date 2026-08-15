@@ -55,7 +55,13 @@ private fun shownPhone(value: String, kind: String?): String {
     return listOfNotNull(shown, abroad, kind).joinToString(" · ")
 }
 
-data class OpenQuestion(val name: String, val state: InvestigationState)
+data class OpenQuestion(
+    val name: String,
+    val state: InvestigationState,
+
+    /** Ответ про показанную область, а не про весь объект (#1000). */
+    val aboutArea: Boolean = false,
+)
 
 fun knowledgeRows(metadata: Map<String, String>): List<KnowledgeRow> =
     metadata.keys
@@ -80,24 +86,46 @@ fun knowledgeRows(metadata: Map<String, String>): List<KnowledgeRow> =
 /**
  * Открытые вопросы знания: «смотрели — не нашли» отличимо от «не смотрели»
  * (Конституция §13). Отвеченные (`found`) вопросы не показываются — есть сами факты.
- * Вопросы под Focus (`@область`) — контекст области, не объекта: пропускаются.
+ * Вопросы под Focus (`@область`) — контекст области, не объекта: показываются, только пока эта
+ * область и показана, и вытесняют общий ответ по тому же вопросу.
  * Вопрос без человеческого имени не показывается — сырой id не выходит на экран (P2).
  */
 fun openQuestions(
     metadata: Map<String, String>,
+
+    /**
+     * Область, которую человек показал сейчас (#1000).
+     *
+     * Вопрос под Focus — другой вопрос: «что в этой области», а не «что в объекте», и вне
+     * своей области он не показывается. Но пока область показана, ответ на неё человек ждёт
+     * сильнее всего: он сам её и обвёл. Раньше ответ был только в графе — экран после фокуса
+     * выглядел ровно так же, как до него.
+     */
+    scope: String? = null,
     nameOf: (CapabilityId) -> String?,
-): List<OpenQuestion> =
-    metadata.keys
-        .filter { it.startsWith(META_INVESTIGATED_PREFIX) && '@' !in it }
+): List<OpenQuestion> {
+    val mine = metadata.keys.filter { key ->
+        key.startsWith(META_INVESTIGATED_PREFIX) &&
+            ('@' !in key || (scope != null && key.endsWith("@$scope")))
+    }
+
+    // Ответ про показанную область важнее общего: человек спрашивал именно про неё.
+    val aboutArea = mine.filter { '@' in it }
+        .mapTo(mutableSetOf()) { it.removePrefix(META_INVESTIGATED_PREFIX).substringBefore('@') }
+
+    return mine
+        .filterNot { '@' !in it && it.removePrefix(META_INVESTIGATED_PREFIX) in aboutArea }
         .mapNotNull { key ->
-            val id = CapabilityId(key.removePrefix(META_INVESTIGATED_PREFIX))
-            val state = investigationStateOf(metadata, id)
+            val id = CapabilityId(key.removePrefix(META_INVESTIGATED_PREFIX).substringBefore('@'))
+            val state = InvestigationState.entries.firstOrNull { it.wire == metadata[key] }
+                ?: InvestigationState.NOT_INVESTIGATED
             if (state == InvestigationState.FOUND || state == InvestigationState.NOT_INVESTIGATED) {
                 return@mapNotNull null
             }
             val name = nameOf(id) ?: return@mapNotNull null
-            OpenQuestion(name, state)
+            OpenQuestion(name, state, aboutArea = '@' in key)
         }
+}
 
 fun openQuestionLabel(state: InvestigationState): String = when (state) {
     InvestigationState.NOT_FOUND -> "смотрели — не нашлось"

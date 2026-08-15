@@ -54,6 +54,7 @@ fun PointFlow(
         onToggleCloud = viewModel::setCloudAllowed,
         onToggleYolo = viewModel::setYoloEnabled,
         onForgetAll = viewModel::clearHistory,
+        questionName = viewModel::questionName,
 
         // Плитка — точка входа, о которой человек мог не знать (#821). Её наличие знает
         // система, а не Graph: спрашиваем здесь, а не тащим Context в модель.

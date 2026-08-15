@@ -505,6 +505,18 @@ class FlowViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Человеческое имя вопроса знания (#1016).
+     *
+     * «Смотрели — не нашлось» — знание, а не сбой, и на телефоне оно теперь видно так же, как
+     * на компьютере. Имя берётся у самой способности; вопрос без человеческого имени на экран
+     * не выходит — сырой id человеку ничего не говорит (P2).
+     */
+    fun questionName(id: com.point.core.model.CapabilityId): String? {
+        val state = stack.lastOrNull()?.obj?.state ?: return null
+        return runCatching { registry.byId(id).label(state) }.getOrNull()?.takeIf { it.isNotBlank() }
+    }
+
     fun offerClipboard(text: String?) {
         val t = text?.trim().orEmpty()
         _clipboard.value = t.takeIf { it.isNotBlank() && it.length <= MAX_CLIP && it != lastClipboard }

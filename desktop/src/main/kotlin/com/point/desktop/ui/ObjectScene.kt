@@ -184,7 +184,7 @@ internal fun Knowledge(
     questionName: (com.point.core.model.CapabilityId) -> String?,
 ) {
     val facts = com.point.core.flow.knowledgeRows(item.obj.metadata)
-    val questions = com.point.core.flow.openQuestions(item.obj.metadata, questionName)
+    val questions = com.point.core.flow.openQuestions(item.obj.metadata, nameOf = questionName)
     if (facts.isEmpty() && questions.isEmpty()) return
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         if (facts.isNotEmpty()) Text("ПОНЯЛ", style = PointType.label.copy(color = PointColors.cyan))
