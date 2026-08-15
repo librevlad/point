@@ -41,7 +41,13 @@ class PromiseBelongsToItsActionTest {
             val said = yieldLabel(fix.yields(image))
 
             assertNotEquals("«${fix.label(image)}» обещает словами «Понять»", UnderstandCapability.UNDERSTAND_NOTE, said)
-            assertNull("«${fix.label(image)}» договаривает то, чего не делает: $said", said)
+
+            // Своя подпись у правки появилась (#1023): её не было вовсе, и что именно правится,
+            // человек узнавал только по итогу. Чужое обещание ей по-прежнему нельзя.
+            assertTrue(
+                "«${fix.label(image)}» договаривает то, чего не делает: $said",
+                said == null || said.contains("опечат"),
+            )
         }
     }
 

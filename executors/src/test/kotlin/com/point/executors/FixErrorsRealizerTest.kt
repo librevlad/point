@@ -40,8 +40,17 @@ class FixErrorsRealizerTest {
 
     private val sender = META_GRAPH_ROLE_PREFIX + "sender"
 
-    private fun photo(metadata: Map<String, String> = mapOf(sender to "Паринкн")) =
+    // Знание, прочитанное с кадра: происхождение — часть фикстуры, а не украшение (#1023).
+    // Дверь правки распознанного показывается только там, где что-то распознавали.
+    private fun photo(metadata: Map<String, String> = read(sender to "Паринкн")) =
         PointObject("img", "image/jpeg", ScratchRef("/tmp/скан.jpg"), ObjectState(ObjectKind.IMAGE), metadata)
+
+    private fun read(vararg facts: Pair<String, String>): Map<String, String> = buildMap {
+        facts.forEach { (key, value) ->
+            put(key, value)
+            put(key + com.point.core.flow.META_SOURCE_SUFFIX, Provenance.OCR.wire)
+        }
+    }
 
     private val ready = AiReadiness { true }
 
@@ -68,7 +77,7 @@ class FixErrorsRealizerTest {
         val result = FixErrorsRealizer(llm("NONE")).perform(photo(), null)
 
         val done = result as ActionResult.Done
-        assertEquals("Ошибок не нашлось — знание оставлено как было", done.message)
+        assertEquals("В прочитанном ошибок не нашлось", done.message)
         assertNull("пустая правка не должна ехать знанием", done.findings)
     }
 
@@ -112,11 +121,32 @@ class FixErrorsRealizerTest {
         assertFalse("на объекте без знания двери быть не должно", cap.accepts(bare))
     }
 
+    /**
+     * Набранный текст никто не распознавал — ошибкам распознавания взяться неоткуда (#1023).
+     * Прежде дверь показывалась и здесь, человек нажимал её на своём тексте с пятью опечатками
+     * и читал «ошибок не нашлось».
+     */
+    @Test
+    fun `у ненераспознанного знания двери правки нет`() {
+        val typed = PointObject(
+            "t", "text/plain", ScratchRef("/tmp/t.txt"), ObjectState(ObjectKind.TEXT),
+            mapOf(
+                "entity.amount" to "2873,60",
+                "entity.amount" + com.point.core.flow.META_SOURCE_SUFFIX to Provenance.TEXT.wire,
+            ),
+        )
+
+        assertFalse(
+            "дверь правки распознанного показана тому, что не распознавалось",
+            FixErrorsCapability(ready).accepts(GraphState(typed)),
+        )
+    }
+
     @Test
     fun `«сильнее» предлагается только там, где есть источник для сверки`() {
         val cap = FixErrorsStrongerCapability(ready)
         val text = PointObject(
-            "t", "text/plain", ScratchRef("/tmp/t.txt"), ObjectState(ObjectKind.TEXT), mapOf(sender to "Паринкн"),
+            "t", "text/plain", ScratchRef("/tmp/t.txt"), ObjectState(ObjectKind.TEXT), read(sender to "Паринкн"),
         )
 
         assertTrue(cap.accepts(GraphState(photo())))

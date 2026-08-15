@@ -13,6 +13,7 @@ import com.point.core.flow.applyFixes
 import com.point.core.flow.fixPrompt
 import com.point.core.flow.fixableFacts
 import com.point.core.flow.fixedMessage
+import com.point.core.flow.couldHoldReadingErrors
 import com.point.core.flow.hasFixableFacts
 import com.point.core.flow.labelNeedingKey
 import com.point.core.flow.parseFixes
@@ -45,20 +46,31 @@ class FixErrorsCapability @Inject constructor(
 
     override val meta = CapabilityMeta(priority = 32, cost = Cost.PAID, latency = Latency.SLOW, network = true, auth = true)
 
-    override fun label(state: ObjectState) = labelNeedingKey("Исправить ошибки", keys.keySet())
+    // Название говорит о том, что действие делает: правит опечатки в прочитанных значениях,
+    // а не вычитывает текст человека (#1023).
+    override fun label(state: ObjectState) = labelNeedingKey("Исправить прочитанное", keys.keySet())
 
     // Знание не привязано к форме: исправлять бывает что у любого объекта. Сужает не форма,
     // а само знание — им и занимается разбор по Graph State ниже.
     override fun accepts(state: ObjectState) = true
 
-    override fun accepts(graph: GraphState) = hasFixableFacts(graph.facts)
+    // Дверь правки распознанного не показывается тому, что не распознавалось (#1023):
+    // у набранного текста ошибкам распознавания взяться неоткуда.
+    override fun accepts(graph: GraphState) =
+        hasFixableFacts(graph.facts) && couldHoldReadingErrors(graph.facts)
 
     override fun produces(state: ObjectState) = state
 
-    override fun yields(state: ObjectState) = ActionYield.Same()
+    override fun yields(state: ObjectState) = ActionYield.Same(FIX_NOTE)
     override fun intents(state: ObjectState) = setOf(Intent.UNDERSTAND)
 
-    companion object { val ID = CapabilityId("fix-errors") }
+    companion object {
+
+        /** Обещание названо своими словами (#734, #1023): правится прочитанное, а не текст. */
+        const val FIX_NOTE = "поправит опечатки в прочитанных значениях"
+
+        val ID = CapabilityId("fix-errors")
+    }
 }
 
 /**
@@ -80,7 +92,7 @@ class FixErrorsStrongerCapability @Inject constructor(
     override fun accepts(state: ObjectState) = state.kind == ObjectKind.IMAGE
 
     override fun accepts(graph: GraphState) =
-        accepts(graph.state) && hasFixableFacts(graph.facts)
+        accepts(graph.state) && hasFixableFacts(graph.facts) && couldHoldReadingErrors(graph.facts)
 
     override fun produces(state: ObjectState) = state
 

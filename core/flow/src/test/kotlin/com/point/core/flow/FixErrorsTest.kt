@@ -75,7 +75,7 @@ class FixErrorsTest {
 
     @Test
     fun `нечего исправлять — про это сказано словами, а не пустотой`() {
-        assertEquals("Ошибок не нашлось — знание оставлено как было", fixedMessage(0))
+        assertEquals("В прочитанном ошибок не нашлось", fixedMessage(0))
         assertEquals("Исправлено: 2", fixedMessage(2))
     }
 
