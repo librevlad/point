@@ -49,6 +49,9 @@ fun semanticFits(key: String, value: String): Boolean? {
         // номер от американского.
         META_ENTITY_PREFIX + "phone" -> PhoneNumbers.exists(value)
         META_ENTITY_PREFIX + "email" -> value.contains('@') && value.substringAfter('@').contains('.')
+        // Доменная зона — не адрес (#1028, #989): `com.ua` никуда не ведёт, а место рядом с
+        // верно прочитанным телефоном занимает.
+        META_ENTITY_PREFIX + "url" -> looksLikeLink(value)
         META_ENTITY_PREFIX + "card" -> digits in 15..19 || looksLikeIban(value)
         // Дата — это дата, а не всё, где есть цифра и точка: «4.» из нумерации пункта
         // вставало отдельной находкой рядом с настоящими днями (#782).

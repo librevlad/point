@@ -10,6 +10,7 @@ class EntityPlausibilityTest {
     private fun phone(v: String) = Entity(EntityType.PHONE, v)
     private fun address(v: String) = Entity(EntityType.ADDRESS, v)
     private fun date(v: String) = Entity(EntityType.DATE_TIME, v)
+    private fun url(v: String) = Entity(EntityType.URL, v)
 
     private val chatScreen = """
         20451491549395
@@ -77,6 +78,24 @@ class EntityPlausibilityTest {
         assertTrue(address("Москва, Тверская 7").isPlausible())
         assertFalse(address("г.").isPlausible())
         assertFalse(address("ул.").isPlausible())
+    }
+
+    /**
+     * Точка в домене потерялась при распознавании — `edrive.com.ua` прочиталось как
+     * `edrive com.ua`, — и знанием стал хвост `com.ua` (#1028, #989). Он не открывается,
+     * ничего не значит и занимает место настоящей находки рядом с верным телефоном.
+     */
+    @Test
+    fun `доменная зона ссылкой не становится`() {
+        assertFalse(url("com.ua").isPlausible())
+        assertFalse(url("co.uk").isPlausible())
+        assertFalse(url("ua").isPlausible())
+        assertFalse(url("http://com.ua").isPlausible())
+
+        assertTrue(url("edrive.com.ua").isPlausible())
+        assertTrue(url("https://point.leerio.app/x?y=1").isPlausible())
+        assertTrue(url("www.example.com").isPlausible())
+        assertTrue(url("bit.ly/2Ab").isPlausible())
     }
 
     @Test

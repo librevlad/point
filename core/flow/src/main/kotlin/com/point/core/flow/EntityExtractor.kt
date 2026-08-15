@@ -87,6 +87,10 @@ fun Entity.isPlausible(): Boolean = when (type) {
 
     EntityType.ADDRESS -> value.trim().length >= 5 && Regex("""\p{L}{3,}""").containsMatchIn(value)
 
+    // Та же мерка, что и у знания от модели (#1028, #989): у ссылки правдоподобия не
+    // спрашивали вовсе, и обломок домена `com.ua` вставал находкой наравне с телефоном.
+    EntityType.URL -> looksLikeLink(value)
+
     else -> true
 }
 
