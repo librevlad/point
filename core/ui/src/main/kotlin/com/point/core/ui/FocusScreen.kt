@@ -66,7 +66,11 @@ internal val FOCUS_TOOL_LABELS = mapOf(
     FocusTool.ERASER to "Ластик",
 )
 
-internal const val FOCUS_TITLE = "Focus"
+/**
+ * Имя механизма из ADR-0001 на экран не выходит (#1001): весь экран был по-русски, а в
+ * заголовке стояло английское `Focus` — термин архитектуры, а не слово продукта.
+ */
+internal const val FOCUS_TITLE = "Выделение"
 
 internal const val FOCUS_HINT = "Выделите область, в которой находится нужная информация"
 
