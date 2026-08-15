@@ -193,10 +193,15 @@ class DefaultEnrichment @Inject constructor(
         answered: Map<CapabilityId, Answered>,
         focus: com.point.core.flow.Focus?,
     ): Map<String, String> = answered.entries.fold(metadata) { acc, (id, told) ->
-        val state = if (told.keys.isEmpty() && told.fruitful) {
+        // Признак, объект или связь — тоже знание, даже когда строк-фактов исследование не
+        // принесло (#988): удавшееся чтение отдаёт `HAS_TEXT` и ссылку на текст, и служебные
+        // ключи знанием не считаются. Нюансы спора и предположения при этом сохраняются —
+        // их называет сам исход.
+        val judged = investigationOutcome(acc, told.keys)
+        val state = if (judged == InvestigationState.NOT_FOUND && told.fruitful) {
             InvestigationState.FOUND
         } else {
-            investigationOutcome(acc, told.keys)
+            judged
         }
 
         withInvestigation(acc, id, state, focus)

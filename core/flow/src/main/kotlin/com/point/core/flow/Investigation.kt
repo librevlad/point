@@ -58,6 +58,33 @@ fun withInvestigation(
 ): Map<String, String> = metadata + (investigationKey(capabilityId, focus) to state.wire)
 
 /**
+ * Служебный ключ — след механизма, а не знание об объекте (#988).
+ *
+ * Чтение, признанное мусором, знанием не становилось (#694) — и всё равно закрывало вопрос
+ * «что написано на снимке» как `found`: в графе оставались ссылка на слой слов, манера письма
+ * и множитель увеличения, а исход считал знанием любой ключ, кроме аннотации и состояния. На
+ * фотографии без единой буквы вопрос закрывался «найдено» на основании одной догадки о манере
+ * письма, и переисследовать его уже никто не приходил.
+ *
+ * Здесь перечислено то, что рассказывает про саму попытку чтения, а не про объект.
+ */
+fun isMechanismKey(key: String): Boolean = key in MECHANISM_KEYS
+
+private val MECHANISM_KEYS = setOf(
+    META_OCR_TEXT_REF,
+    META_OCR_ATOMS_REF,
+    META_READING_MODE,
+    META_READ_UPSCALE,
+    META_READ_CHARS,
+    META_READ_TOTAL_CHARS,
+
+    // Пришло вместе с объектом, а не найдено исследованием.
+    META_SIZE,
+    "name",
+    "mime",
+)
+
+/**
  * Состояние знания после успешно завершённого исследования.
  *
  * [factKeys] — ключи знания, которые это исследование заявило о себе; [metadata] — состояние
@@ -69,7 +96,7 @@ fun investigationOutcome(
     metadata: Map<String, String>,
     factKeys: Collection<String>,
 ): InvestigationState {
-    val told = factKeys.filterNot { isAnnotationKey(it) || isStateKey(it) }
+    val told = factKeys.filterNot { isAnnotationKey(it) || isStateKey(it) || isMechanismKey(it) }
     return when {
         told.isEmpty() -> InvestigationState.NOT_FOUND
         told.any { isDisputed(metadata, it) } -> InvestigationState.CONTRADICTORY
