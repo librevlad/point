@@ -6,7 +6,9 @@ fun advertisedActions(
     capabilities: Collection<Capability>,
     probes: List<ObjectState> = inventoryProbes(),
 ): List<PcRemoteAction> = capabilities
-    .filterNot { it.meta.localOnly || it.meta.investigation }
+    // Действие, чей результат выходит на самом устройстве, чужому устройству не
+    // рекламируется (#1034): ссылка ложится в буфер того, кто её выдал.
+    .filterNot { it.meta.localOnly || it.meta.investigation || it.meta.resultLandsHere }
     .sortedWith(compareBy({ it.meta.priority }, { it.id.value }))
     .mapNotNull { capability ->
         val accepted = probes.filter(capability::accepts)

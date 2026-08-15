@@ -71,6 +71,11 @@ class DropLinkCapability  : Capability {
         cost = Cost.FREE,
         latency = Latency.SLOW,
         network = true,
+
+        // Ссылка выходит в буфер того устройства, где её выдали (#1034): исполняет тот, у
+        // кого человек нажал. Наружу объект при этом уходит по-прежнему — режим приватности
+        // и согласие остаются в силе.
+        resultLandsHere = true,
     )
 
     override fun label(state: ObjectState) = "Дать ссылку"
