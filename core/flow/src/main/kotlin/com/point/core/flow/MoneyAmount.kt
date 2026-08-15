@@ -45,7 +45,12 @@ fun moneyAmounts(text: String): List<MoneyAmount> =
 fun amountFacts(text: String, from: Provenance = Provenance.OCR): Map<String, String> {
     val amounts = moneyAmounts(text)
 
-    val first = amounts.firstOrNull() ?: return totalFacts(arithmeticTotals(text), from)
+    // На чеке главное число — итог (#1006). Из пяти прочитанных сумм под галочку вставала
+    // первая по порядку — `SUBTOTAL 2.00`, — а `TOTAL 2.18`, ради которого чек и снимают,
+    // уходил третьим в «ещё». Порядок в тексте про важность не говорит ничего; подпись строки
+    // говорит прямо.
+    val first = totalOf(text, amounts) ?: amounts.firstOrNull()
+        ?: return totalFacts(arithmeticTotals(text), from)
     val values = amounts.map { it.value }.distinct()
     return buildMap {
         put(META_ENTITY_AMOUNT, first.value)
@@ -57,6 +62,23 @@ fun amountFacts(text: String, from: Provenance = Provenance.OCR): Map<String, St
         if (values.size > 1) put(META_ENTITY_AMOUNT + META_MORE_SUFFIX, altValue(values))
     }
 }
+
+/**
+ * Сумма, подписанная как итог документа.
+ *
+ * `SUBTOTAL` — подытог, и он не итог: слово «total» внутри него ничего не решает. Строка без
+ * подписи итогом не становится — молчание честнее выбора наугад.
+ */
+private fun totalOf(text: String, amounts: List<MoneyAmount>): MoneyAmount? {
+    if (amounts.size < 2) return null
+    val line = text.lineSequence().firstOrNull { TOTAL_LINE.containsMatchIn(it) } ?: return null
+    val here = moneyAmounts(line).firstOrNull() ?: return null
+    return amounts.firstOrNull { it.value == here.value }
+}
+
+private val TOTAL_LINE = Regex(
+    """(?iu)(?<![\p{L}])(total|итого|итог|всього|усього|разом|до сплати|к оплате|к уплате|сума до сплати)(?![\p{L}])""",
+)
 
 private fun totalFacts(totals: List<String>, from: Provenance): Map<String, String> {
     val first = totals.firstOrNull() ?: return emptyMap()
