@@ -25,7 +25,11 @@ class MlKitBackgroundRemover(
     override suspend fun cutout(imagePath: String): ScratchRef = withContext(Dispatchers.IO) {
         val bitmap = decodeBoundedUpright(imagePath, MAX_PX) ?: error("Не удалось прочитать изображение")
         try {
-            val result = segmenter.process(InputImage.fromBitmap(bitmap, 0)).await()
+            // Чужое сообщение остаётся в журнале, человеку — свои слова (#686, #992). На свежем
+            // устройстве сюда прилетает английское «Waiting for the subject segmentation optional
+            // module to be downloaded» — и уходило прямо на экран, со значком отказа.
+            val result = runCatching { segmenter.process(InputImage.fromBitmap(bitmap, 0)).await() }
+                .getOrElse { error(com.point.core.flow.ourWordsFor(it.message, CUTOUT_FAILED)) }
             val foreground = result.foregroundBitmap ?: error("Объект на фото не найден")
             val opaque = opaqueRatio(foreground)
 
@@ -60,6 +64,9 @@ class MlKitBackgroundRemover(
     }
 
     private companion object {
+
+        const val CUTOUT_FAILED = "Не удалось отделить объект от фона — попробуйте ещё раз"
+
         const val MAX_PX = 2048
         const val GRID = 40
         const val MIN_OPAQUE_RATIO = 0.01
