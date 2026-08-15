@@ -53,8 +53,13 @@ class CodeReadFromFrameSaysSoTest {
         assertEquals(Provenance.OCR.wire, facts[META_ENTITY_PREFIX + "url" + META_SOURCE_SUFFIX])
     }
 
+    /**
+     * Пример — код, который сходится сам с собой: с #940 узор, не прошедший контрольную
+     * цифру, находкой не становится вовсе, и прежний `13821702` проверял уже не происхождение
+     * знания, а его отсутствие.
+     */
     @Test fun `у штрихкода — как и было`() {
-        val facts = knowledge(ScannedCode("13821702", CodeKind.PRODUCT))
+        val facts = knowledge(ScannedCode("13821708", CodeKind.PRODUCT))
 
         assertEquals(Provenance.OCR.wire, facts[META_ENTITY_PREFIX + "barcode" + META_SOURCE_SUFFIX])
     }
