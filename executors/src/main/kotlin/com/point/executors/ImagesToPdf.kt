@@ -16,12 +16,19 @@ internal suspend fun imagesToPdf(
     op: String,
     process: (Bitmap) -> Bitmap = { it },
 ): ActionResult {
-    val files = dir.walkTopDown().filter { it.isFile }.sortedBy { it.name.lowercase() }.toList()
+    val files = pdfPageOrder(dir)
 
     val document = PdfDocument()
     var pages = 0
+
+    // Снимок, который не прочитался, запоминается по имени: молчком он терял страницу (#1002).
+    val unread = mutableListOf<String>()
     for (file in files) {
-        val src = Bitmaps.decodeUpright(file.absolutePath) ?: continue
+        val src = Bitmaps.decodeUpright(file.absolutePath)
+        if (src == null) {
+            unread += file.name
+            continue
+        }
         reportStage("Страница ${pages + 1}")
         val bitmap = process(src)
         val page = document.startPage(
@@ -34,9 +41,9 @@ internal suspend fun imagesToPdf(
         pages++
     }
 
-    if (pages == 0) {
+    pdfRefusal(unread, pages)?.let { reason ->
         document.close()
-        return ActionResult.Failure("В коллекции нет изображений для PDF", recoverable = true)
+        return ActionResult.Failure(reason, recoverable = true)
     }
 
     reportStage("Собираю PDF")
