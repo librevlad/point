@@ -96,7 +96,11 @@ fun SettingsRoot(
             // §11: объект уходит с устройства только по живому согласию (#886).
             PortalRow(
                 title = "Отправка и приватность",
-                subtitle = cloudLine(cloudAllowed) + " · " + config.privacy.title,
+                subtitle = com.point.core.flow.privacySummary(
+                    cloudLine(cloudAllowed),
+                    cloudAllowed,
+                    config.privacy,
+                ),
                 onClick = { onOpen(SettingsPage.PRIVACY) },
             )
         }

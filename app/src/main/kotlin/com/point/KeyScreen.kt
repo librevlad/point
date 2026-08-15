@@ -267,8 +267,11 @@ private fun SettingsList(
             SettingsRow(
                 title = PRIVACY_SECTION_TITLE,
 
-                subtitle = (if (cloudEnabled) "Облако разрешено" else "Облако выключено") +
-                    " · ${privacyLevel.title}" + (if (yoloEnabled) " · $YOLO_TITLE" else ""),
+                subtitle = com.point.core.flow.privacySummary(
+                    if (cloudEnabled) "Облако разрешено" else "Облако выключено",
+                    cloudEnabled,
+                    privacyLevel,
+                ) + (if (yoloEnabled) " · $YOLO_TITLE" else ""),
                 onClick = { onOpen(SettingsSection.PRIVACY) },
                 appearIndex = 2,
             )

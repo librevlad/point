@@ -7,6 +7,7 @@ import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -155,6 +156,17 @@ class SettingsListTest {
 
         compose.onNodeWithText(PrivacyLevel.DEVICE_ONLY.title, substring = true).assertIsDisplayed()
         compose.onNodeWithText("Облако выключено", substring = true).assertIsDisplayed()
+    }
+
+    /**
+     * Сводка не читается противоречием (#1003): «Облако разрешено · Только на этом устройстве»
+     * — если только на этом устройстве, то в каком смысле разрешено?
+     */
+    @Test fun `строгий уровень не обещает облака`() {
+        settings(keys = savedKey, cloudEnabled = true, privacyLevel = PrivacyLevel.DEVICE_ONLY)
+
+        compose.onNodeWithText(PrivacyLevel.DEVICE_ONLY.title, substring = true).assertIsDisplayed()
+        compose.onAllNodesWithText("разрешено", substring = true).assertCountEquals(0)
     }
 
     @Test fun `разрешённое облако видно строкой вместе с уровнем`() {
