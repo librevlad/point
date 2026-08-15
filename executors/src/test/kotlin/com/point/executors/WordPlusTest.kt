@@ -98,6 +98,54 @@ class WordPlusTest {
         assertEquals("Отчёт", styled!![0].text)
     }
 
+    /**
+     * Уже прочитанное не добывается заново (#1031). Point читал кадр второй раз, другим путём,
+     * получал текст хуже — с изменёнными цифрами товарных кодов — и строил документ человека
+     * из него, дословно, как просит промпт.
+     */
+    @Test
+    fun `прочитанное с кадра берётся из графа, а не читается заново`() = runTest {
+        val read = File(tmp.root, "ocr.txt").apply {
+            writeText("FAMILY DOLLAR\nCOCA COLA 1.25 LTR 049000055375")
+        }
+        val ans = File(tmp.root, "ans2.txt").apply { writeText("T=Чек\nB=049000055375") }
+        val out = File(tmp.root, "doc2.docx").apply { writeText("zip") }
+        val writer = object : DocxWriter {
+            override suspend fun write(paragraphs: List<String>): ScratchRef = ScratchRef(out.absolutePath)
+            override suspend fun writeStyled(blocks: List<DocBlock>): ScratchRef = ScratchRef(out.absolutePath)
+        }
+        var asked: String? = null
+        val llm = object : LlmClient {
+            override suspend fun run(obj: PointObject, prompt: String): ResultObject {
+                asked = prompt
+                return ResultObject(ObjectKind.TEXT, "text/plain", ScratchRef(ans.absolutePath))
+            }
+        }
+        var reread = false
+        val ocr = object : TextRecognizer {
+            override suspend fun recognize(obj: PointObject): String {
+                reread = true
+                return "ОСА COLA 1.25 LTR 049000055975"
+            }
+        }
+        val photo = PointObject(
+            "img", "image/jpeg", ScratchRef("/tmp/chek.jpg"),
+            ObjectState(ObjectKind.IMAGE),
+            mapOf(com.point.core.flow.META_OCR_TEXT_REF to read.absolutePath),
+        )
+
+        val result = WordPlusRealizer(
+            llm,
+            object : PdfTextExtractor { override suspend fun extractText(obj: PointObject) = "" },
+            writer,
+            ocr,
+        ).perform(photo, null)
+
+        assertTrue(result is ActionResult.Success)
+        assertFalse("кадр перечитан, хотя чтение уже есть в графе", reread)
+        assertTrue("в документ ушли не те цифры: $asked", asked!!.contains("049000055375"))
+    }
+
     @Test
     fun `на PDF слышно все три шага — чтение, модель, сборка документа`() = runTest {
         val out = File(tmp.root, "doc.docx").apply { writeText("zip") }

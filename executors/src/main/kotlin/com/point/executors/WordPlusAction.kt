@@ -113,10 +113,20 @@ class WordPlusRealizer @Inject constructor(
                         pdfText.extractText(input)
                     }
                     ObjectKind.IMAGE -> {
-                        reportStage("Распознаю текст на фото")
 
-                        layer = (recognizer as? AtomRecognizer)?.read(input)
-                        layer?.text ?: recognizer.recognize(input)
+                        // Уже прочитанное не добывается заново (#1031). Point читал кадр
+                        // второй раз, другим путём и без подготовки, что дала первому чтению
+                        // цепочка, — и получал текст хуже: терялись название магазина и
+                        // телефон, а цифры товарных кодов менялись (`…055375` → `…055975`).
+                        // Из них и строился документ человека, дословно, как просит промпт.
+                        layer = knownLayer(input)
+                        layer?.text?.takeIf { it.isNotBlank() }
+                            ?: entitySourceText(input).takeIf { it.isNotBlank() }
+                            ?: run {
+                                reportStage("Распознаю текст на фото")
+                                layer = (recognizer as? AtomRecognizer)?.read(input)
+                                layer?.text ?: recognizer.recognize(input)
+                            }
                     }
                     else -> File(input.uri.value).takeIf { it.isFile }?.readText().orEmpty()
                 }.take(MAX_TEXT)
@@ -154,6 +164,15 @@ class WordPlusRealizer @Inject constructor(
                 }
             }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось оформить документ", recoverable = true) }
         }
+
+    /** Слой слов, уже прочитанный с этого кадра и лежащий в графе (#1031). */
+    private fun knownLayer(input: PointObject): AtomLayer? =
+        input.metadata[com.point.core.flow.META_OCR_ATOMS_REF]
+            ?.let { path ->
+                runCatching {
+                    com.point.core.flow.AtomCodec.decode(File(path).readText())
+                }.getOrNull()
+            }
 
     private fun textStandIn(input: PointObject) =
         if (input.state.kind == ObjectKind.TEXT) input else input.copy(mime = "text/plain")
