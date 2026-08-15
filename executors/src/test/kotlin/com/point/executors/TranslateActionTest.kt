@@ -79,6 +79,34 @@ class TranslateActionTest {
         assertEquals(listOf("Перевожу на немецкий"), heard)
     }
 
+    /**
+     * Point прочитал чек, показал его текст на экране — и на «Перевести» отвечал «Нет текста
+     * для перевода» (#1030): исполнитель брал текст по виду объекта, а не из графа, и делал
+     * про объект утверждение, которое Point сам же только что опроверг.
+     */
+    @Test
+    fun `переводится прочитанное с кадра, а не отказ «текста нет»`() = runTest {
+        val read = File(tmp.root, "ocr.txt").apply { writeText("FAMILY DOLLAR\nMuskogee OK") }
+        val out = File(tmp.root, "ru4.txt").apply { writeText("Семейный доллар") }
+        val photo = PointObject(
+            "img", "image/jpeg", ScratchRef("/tmp/chek.jpg"),
+            ObjectState(ObjectKind.IMAGE, setOf(com.point.core.model.Feature.HAS_TEXT)),
+            mapOf(com.point.core.flow.META_OCR_TEXT_REF to read.absolutePath),
+        )
+        var asked: String? = null
+        val llm = object : LlmClient {
+            override suspend fun run(obj: PointObject, prompt: String): ResultObject {
+                asked = prompt
+                return ResultObject(ObjectKind.TEXT, "text/plain", ScratchRef(out.absolutePath))
+            }
+        }
+
+        val result = TranslateRealizer(llm, noPdf()).perform(photo, null)
+
+        assertTrue("перевод не состоялся: $result", result is ActionResult.Success)
+        assertTrue("в модель ушёл не прочитанный текст: $asked", asked!!.contains("FAMILY DOLLAR"))
+    }
+
     @Test
     fun `пустому тексту стадии не положено — переводить нечего`() = runTest {
         val src = File(tmp.root, "empty.txt").apply { writeText("   ") }

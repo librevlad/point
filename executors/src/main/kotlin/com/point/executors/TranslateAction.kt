@@ -65,7 +65,12 @@ class TranslateRealizer @Inject constructor(
                         reportStage("Читаю текст PDF")
                         pdfText.extractText(input)
                     }
-                    else -> ""
+
+                    // Прочитанное с кадра — знание объекта, и перевод берёт его оттуда же,
+                    // откуда берут все (#1030). Дверь открыта именно потому, что текст уже
+                    // прочитан (`HAS_TEXT`), а за дверью Point отвечал «Нет текста для
+                    // перевода» — утверждение о мире, которое сам же только что опроверг.
+                    else -> entitySourceText(input)
                 }
                 if (text.isBlank()) {
                     ActionResult.Failure("Нет текста для перевода", recoverable = true)
