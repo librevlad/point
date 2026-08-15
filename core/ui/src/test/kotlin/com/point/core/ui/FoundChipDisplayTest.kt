@@ -9,6 +9,7 @@ import com.point.core.model.PointObject
 import com.point.core.model.Provenance
 import com.point.core.model.ValueRef
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -93,6 +94,26 @@ class FoundChipDisplayTest {
     @Test
     fun `узел без фактов остаётся на uri`() {
         assertEquals("111", foundHeadline(node(emptyMap())))
+    }
+
+    /**
+     * Файл без имени показывается видом вещи, а не путём в служебной папке (#1038): у взятого
+     * фрагмента имени не было вовсе, и заголовком вставало
+     * `/data/user/0/com.point/files/scratch/7fe5bba1-…`.
+     */
+    @Test
+    fun `безымянный файл показан видом вещи, а не путём в scratch`() {
+        val fragment = PointObject(
+            id = "img:fragment",
+            mime = "image/jpeg",
+            uri = com.point.core.model.ScratchRef("/data/user/0/com.point/files/scratch/7fe5bba1-94a9"),
+            state = ObjectState(com.point.core.model.ObjectKind.IMAGE),
+        )
+
+        val headline = foundHeadline(fragment)
+
+        assertFalse("человеку показан путь в служебной папке: $headline", headline.contains("/"))
+        assertEquals(kindLabel(com.point.core.model.ObjectKind.IMAGE), headline)
     }
 
     @Test

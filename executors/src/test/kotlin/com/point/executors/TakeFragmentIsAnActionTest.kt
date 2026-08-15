@@ -115,6 +115,35 @@ class TakeFragmentIsAnActionTest {
         assertEquals("10.0 20.0 110.0 90.0", outcome.result.metadata[META_SELECTION_REGION])
     }
 
+    /**
+     * Имя человеку, а не путь в служебной папке (#1038): без имени показ падал на `uri`, и в
+     * списке найденного рядом с «Телефон» и «Почта» стояло
+     * `/data/user/0/com.point/files/scratch/7fe5bba1-…`.
+     */
+    @Test
+    fun `у фрагмента человеческое имя`() = runTest {
+        val named = focused.copy(metadata = focused.metadata + ("name" to "card.jpg"))
+
+        val outcome = realizer(Scissors(EvidenceImage(byteArrayOf(1, 2, 3), 100, 70)))
+            .perform(named) as ActionResult.Success
+
+        val name = outcome.result.metadata["name"].orEmpty()
+        assertTrue("имя не говорит, что это фрагмент: $name", name.contains("фрагмент"))
+        assertTrue("по имени не видно, откуда фрагмент: $name", name.startsWith("card"))
+        assertFalse("в имени путь до файла: $name", name.contains("/"))
+    }
+
+    /** Имени у исходника может не быть вовсе — путь наружу всё равно не выходит. */
+    @Test
+    fun `безымянный исходник даёт названный фрагмент`() = runTest {
+        val outcome = realizer(Scissors(EvidenceImage(byteArrayOf(1, 2, 3), 100, 70)))
+            .perform(focused) as ActionResult.Success
+
+        val name = outcome.result.metadata["name"].orEmpty()
+        assertTrue("имени нет: $name", name.contains("фрагмент"))
+        assertFalse("в имени путь до файла", name.contains("/"))
+    }
+
     @Test
     fun `вырезать не вышло — сказано, и это поправимо`() = runTest {
         val outcome = realizer(Scissors(image = null)).perform(focused)

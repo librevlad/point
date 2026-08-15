@@ -86,11 +86,23 @@ class TakeFragmentRealizer @Inject constructor(
                         ObjectKind.IMAGE,
                         if (image.extension == "png") "image/png" else "image/jpeg",
                         ref,
-                        origin(input, region),
+                        origin(input, region) + ("name" to fragmentName(input, image.extension)),
                     ),
                 )
             }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось взять фрагмент", recoverable = true) }
         }
+
+    /**
+     * Имя фрагменту дают при рождении (#1038).
+     *
+     * Без имени показ падал на `uri`, и человек читал в списке найденного путь в служебной
+     * папке: `/data/user/0/com.point/files/scratch/7fe5bba1-…`. Рядом стоят «Телефон», «Почта»,
+     * «Адрес» — механизм здесь виден один раз и не по делу.
+     */
+    private fun fragmentName(input: PointObject, extension: String): String {
+        val base = input.metadata["name"]?.substringBeforeLast('.')?.takeIf { it.isNotBlank() } ?: "Снимок"
+        return "$base · фрагмент.$extension"
+    }
 
     /**
      * Знание области остаётся при новом объекте (приёмка #742.3): откуда он вырезан и какая

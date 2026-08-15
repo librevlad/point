@@ -429,7 +429,14 @@ fun foundHeadline(obj: PointObject): String =
         // Результат чужого исполнителя (ПК) не несёт entity/role-фактов — только имя:
         // без этого запасного шага чип показывал путь до scratch-файла (#681).
         ?: obj.metadata["name"]?.takeIf { it.isNotBlank() }
-        ?: obj.uri.value
+
+        // Узел-значение несёт значение прямо в `uri` — это и есть то, что читает человек.
+        ?: (obj.uri as? com.point.core.model.ValueRef)?.value?.takeIf { it.isNotBlank() }
+
+        // А вот файл в служебной папке заголовком не бывает (#1038): у взятого фрагмента имени
+        // не было вовсе, и человек читал `/data/user/0/com.point/files/scratch/7fe5bba1…` —
+        // строку длинную, обрезанную многоточием и бесполезную даже как адрес.
+        ?: kindLabel(obj.state.kind)
 
 /**
  * Chip прячется, только если ЕГО ФАКТ уже показан строкой выше: сравнение по `uri`
