@@ -510,6 +510,20 @@ abstract class DataModule {
             return listOf<LlmClient>(userKey) + free + native
         }
 
+        /**
+         * Места памяти, которые «Забыть всё» обязано забыть наравне с историей (#1026).
+         *
+         * Журнал обменов задуман как след для разбора — но пережить явную просьбу забыть он
+         * не может: в нём перечислены адрес, сумма, дата и телефон человека.
+         */
+        @Provides
+        @Singleton
+        fun memories(
+            @ApplicationContext context: Context,
+        ): Set<@JvmSuppressWildcards com.point.core.flow.Memory> = setOf(
+            com.point.core.flow.Memory { java.io.File(context.filesDir, "llm-log").deleteRecursively() },
+        )
+
         // Журнал обменов с моделью — только на отладочном стенде: содержимое —
         // личные данные человека (просьба владельца 2026-08-09).
         @Provides

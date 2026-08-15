@@ -135,6 +135,13 @@ class FlowViewModel @Inject constructor(
     private val browser: com.point.core.flow.BrowserOpener,
 
     private val sharedTexts: com.point.core.flow.SharedTexts,
+
+    /**
+     * Прочие места, где Point что-то помнит о человеке (#1026): журнал обменов с моделью и
+     * всё, что появится рядом. Каждое умеет забывать себя само — кнопка «Забыть всё» не
+     * должна знать их устройство.
+     */
+    private val memories: Set<@JvmSuppressWildcards com.point.core.flow.Memory> = emptySet(),
 ) : ViewModel() {
 
     private var busyJob: kotlinx.coroutines.Job? = null
@@ -468,9 +475,28 @@ class FlowViewModel @Inject constructor(
         }
     }
 
+    /**
+     * «Забыть всё» забывает всё (#1026).
+     *
+     * Стирался только перечень истории. На устройстве оставались сама копия объекта, слой
+     * прочитанных с него слов, граф последнего объекта и переписка с моделью — та самая, где
+     * перечислены адрес, сумма, дата и телефон человека, — а экран после этого говорил «Пока
+     * ничего не сохранено».
+     */
     fun clearHistory() {
         viewModelScope.launch {
-            runCatching { history.clearAll() }
+            com.point.core.flow.forgetEverything(
+                listOf(
+                    com.point.core.flow.Memory { history.clearAll() },
+
+                    // Копия объекта и всё, что с него прочитано (Конституция: объект живёт в
+                    // scratch и уходит вместе с flow).
+                    com.point.core.flow.Memory { store.clear() },
+
+                    // Граф последнего объекта переживал и закрытие, и смерть процесса.
+                    com.point.core.flow.Memory { flowSnapshot.clear() },
+                ) + memories,
+            )
             _recent.value = emptyList()
 
             // Обзор «Что Point помнит» показывает то же самое хранилище (#821): забыли —
