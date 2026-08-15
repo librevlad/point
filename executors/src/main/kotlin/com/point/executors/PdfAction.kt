@@ -114,14 +114,38 @@ class PdfRealizer @Inject constructor(
         // дальше её читает OCR, как любой другой кадр.
         if (com.point.core.flow.ReadableText.unreadable(text)) {
             reportStage(UNREADABLE_STAGE)
-            val page = runCatching { rasterizer.rasterize(input) }.getOrNull()
+            val rendered = runCatching { rasterizer.rasterize(input) }.getOrNull()
                 ?: return ActionResult.Failure(UNREADABLE_LAYER, recoverable = true)
-            return ActionResult.Success(
-                ResultObject(
-                    ObjectKind.IMAGE, "image/png", page,
-                    mapOf("op" to "pdf-unreadable", "name" to pageName(input)),
-                ),
-            )
+
+            // Отрисованное — папка страниц, и снимком её выдавать нельзя (#995): объект вида
+            // IMAGE указывал на каталог, любой читатель честно падал, и Point тут же объявлял
+            // собственный результат непригодным — «Файл не открылся». Страница при этом лежала
+            // внутри, целая. Одна страница — это снимок, несколько — набор, как у «Страниц».
+            val pages = File(rendered.value).walkTopDown().filter { it.isFile }.sortedBy { it.name }.toList()
+            return when (pages.size) {
+                0 -> ActionResult.Failure(UNREADABLE_LAYER, recoverable = true)
+                1 -> ActionResult.Success(
+                    ResultObject(
+                        ObjectKind.IMAGE,
+                        mimeOfPage(pages.first()),
+                        ScratchRef(pages.first().absolutePath),
+                        mapOf("op" to "pdf-unreadable", "name" to pageName(input, pages.first())),
+                    ),
+                )
+
+                else -> ActionResult.Success(
+                    ResultObject(
+                        ObjectKind.COLLECTION,
+                        "inode/directory",
+                        rendered,
+                        mapOf(
+                            "op" to "pdf-unreadable",
+                            "count" to pages.size.toString(),
+                            "name" to pageName(input, pages.first()),
+                        ),
+                    ),
+                )
+            }
         }
         val ref = store.newScratchFile("txt")
         File(ref.value).writeText(text)
@@ -130,10 +154,18 @@ class PdfRealizer @Inject constructor(
         )
     }
 
-    /** Имя снимка страницы — от документа: человек ищет в списке свой счёт, а не «страницу». */
-    private fun pageName(input: PointObject): String =
-        (input.metadata["name"]?.substringBeforeLast('.')?.takeIf { it.isNotBlank() } ?: "Документ") +
-            " — страница.png"
+    /**
+     * Имя снимка страницы — от документа: человек ищет в списке свой счёт, а не «страницу».
+     *
+     * Расширение берётся у самого файла (#995): имя обещало `.png`, а внутри лежал `.jpg`.
+     */
+    private fun pageName(input: PointObject, page: File): String {
+        val base = input.metadata["name"]?.substringBeforeLast('.')?.takeIf { it.isNotBlank() } ?: "Документ"
+        return "$base — страница.${page.extension.ifBlank { "jpg" }}"
+    }
+
+    private fun mimeOfPage(page: File): String =
+        if (page.extension.equals("png", ignoreCase = true)) "image/png" else "image/jpeg"
 
     private suspend fun write(document: PdfDocument): ScratchRef {
         val ref = store.newScratchFile("pdf")
