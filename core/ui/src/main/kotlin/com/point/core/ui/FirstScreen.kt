@@ -532,7 +532,11 @@ const val FOCUS_DROP = "Смотреть на весь объект"
 
 fun otherReading(obj: PointObject): String? =
     obj.metadata.keys.firstOrNull { it.endsWith(META_ALT_SUFFIX) }
-        ?.let { alternativesOf(obj.metadata, it.removeSuffix(META_ALT_SUFFIX)) }
+
+        // Одно и то же значение, записанное иначе, расхождением не является (#1011): строка
+        // «или:» повторяла победителя — `(918) 682-1561` наверху и `918-682-1561` под ним, —
+        // а настоящая альтернатива до человека не доходила.
+        ?.let { com.point.core.flow.disputedValues(obj.metadata, it.removeSuffix(META_ALT_SUFFIX)) }
         ?.firstOrNull { it.trim() != foundHeadline(obj).trim() }
 
 private fun roleOf(obj: PointObject, relations: List<Relation>): String? =

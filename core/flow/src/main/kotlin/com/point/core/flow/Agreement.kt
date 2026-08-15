@@ -91,6 +91,37 @@ fun altValue(readings: List<String>): String = readings.joinToString(ALT_SEPARAT
 fun alternativesOf(metadata: Map<String, String>, key: String): List<String> =
     metadata[key + META_ALT_SUFFIX]?.split(ALT_SEPARATOR)?.filter { it.isNotBlank() }.orEmpty()
 
+/**
+ * Расхождения прочтения — только те, что и правда расходятся (#1011).
+ *
+ * В списке кандидатов лежит и победитель: строка «или:» показывала его же, только записанного
+ * иначе — `(918) 682-1561` наверху и `918-682-1561` под ним. Настоящая альтернатива, ради
+ * которой строка и нужна, при этом человеку не доставалась.
+ */
+fun disputedValues(metadata: Map<String, String>, key: String): List<String> {
+    val chosen = metadata[key].orEmpty()
+    return alternativesOf(metadata, key).filter { !sameKnowledge(key, chosen, it) }
+}
+
+/**
+ * Одно ли это знание, записанное по-разному.
+ *
+ * Тождество телефона считает библиотека, а не текст (#932); день — чтение дат (#802).
+ * Для остального одинаковость — это одинаковая строка: гадать нельзя.
+ */
+fun sameKnowledge(key: String, left: String, right: String): Boolean {
+    if (left.isBlank() || right.isBlank()) return false
+    if (left.trim().equals(right.trim(), ignoreCase = true)) return true
+    return when (key) {
+        META_ENTITY_PHONE -> PhoneNumbers.same(left, right)
+
+        // Порядок частей спорной записи берётся у самих значений (#802): рядом с «3 січня
+        // 2026» запись `03.01.2026` читается днём вперёд, а сама по себе не читается вовсе.
+        META_ENTITY_PREFIX + "date" -> sameDay(left, right, dayOrderOf("$left $right"))
+        else -> false
+    }
+}
+
 fun altLines(value: String): List<String> =
     value.split(ALT_SEPARATOR).map(String::trim).filter { it.isNotBlank() }
 

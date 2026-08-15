@@ -70,7 +70,7 @@ fun knowledgeRows(metadata: Map<String, String>): List<KnowledgeRow> =
                 key = key,
                 name = name,
                 value = shownKnowledge(key, value, metadata),
-                disputed = alternativesOf(metadata, key),
+                disputed = disputedValues(metadata, key),
                 more = moreOf(metadata, key),
                 confirmed = provenanceOf(metadata, key) == Provenance.HUMAN,
                 said = metadata[key + META_LINE_SUFFIX]?.takeIf { it.isNotBlank() && it != value },
