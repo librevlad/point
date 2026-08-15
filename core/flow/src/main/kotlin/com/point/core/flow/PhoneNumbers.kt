@@ -115,16 +115,36 @@ object PhoneNumbers {
     fun e164(text: String, region: String = PhoneNumbers.region): String? =
         parseAnywhere(text, region)?.let { util.format(it, PhoneNumberUtil.PhoneNumberFormat.E164) }
 
-    /** Как номер показывается человеку: так, как он привык его видеть. */
-    fun human(text: String, region: String = PhoneNumbers.region): String? =
-        parseAnywhere(text, region)?.let { number ->
-            val format = if (number.countryCode == countryCodeOf(region)) {
+    /**
+     * Как номер показывается человеку: так, как он привык его видеть.
+     *
+     * Международный вид называет страну — значит показывать его можно только там, где страна
+     * известна (#1029). Существование номера проверяется по нескольким странам, и телефон чека
+     * из Оклахомы `918-682-1551` существует сразу в двух; `DE` в списке стоит раньше `US`, и
+     * человек читал «+49 9186 821551» — немецкий номер американского магазина. Показ не смеет
+     * называть страну, которую само знание ([country]) назвать отказалось: номер печатается
+     * так, как он написан в документе.
+     */
+    fun human(text: String, region: String = PhoneNumbers.region): String? {
+        val known = country(text, region)
+        if (known != null) {
+            val number = parse(text, known) ?: return null
+            val format = if (countryCodeOf(known) == countryCodeOf(region)) {
                 PhoneNumberUtil.PhoneNumberFormat.NATIONAL
             } else {
                 PhoneNumberUtil.PhoneNumberFormat.INTERNATIONAL
             }
-            util.format(number, format)
+            return util.format(number, format)
         }
+
+        // Страна неизвестна. Свой национальный вид страну не называет — это те же цифры,
+        // сгруппированные так, как человек привык видеть номера у себя (#932: номер, вычитанный
+        // с кадра, приходит покорёженным, и канонический вид у Point есть). А вот номер, который
+        // в своей стране не существует вовсе, печатается ровно как в документе: назвать ему
+        // чужую страну — значит выдумать знание.
+        val own = parse(text, region.uppercase()) ?: return parseAnywhere(text, region)?.let { text.trim() }
+        return util.format(own, PhoneNumberUtil.PhoneNumberFormat.NATIONAL)
+    }
 
     /**
      * Страна номера — только когда она **одна**.
