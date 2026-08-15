@@ -16,7 +16,7 @@ fun desktopCapabilities(): Set<Capability> = setOf(
     PcTranscribeCapability(),
 
     PcEntitiesCapability(),
-) + com.point.core.flow.capabilities.sharedCapabilities()
+) + com.point.core.flow.capabilities.sharedCapabilities(readsFramesHere = false)
 
 /**
  * Имена умений, привязанных к месту исполнения: бумага, файл и окно выходят на компьютере,

@@ -9,9 +9,16 @@ import com.point.core.flow.OfficeOrgan
  *
  * [office] — орган, который превращает офисный документ в PDF слайд в слайд (#403).
  * У компьютера он свой и на месте; телефон подставляет сюда орган из круга.
+ *
+ * [readsFramesHere] — умеет ли это устройство читать кадр само (#1021). Способность общая,
+ * а обещание — про то, что произойдёт здесь: у компьютера своего чтения нет, и обещать ему
+ * шаг на телефоне нельзя.
  */
-fun sharedCapabilities(office: OfficeOrgan = OfficeAlwaysHere): List<Capability> = listOf(
-    OcrCapability(),
+fun sharedCapabilities(
+    office: OfficeOrgan = OfficeAlwaysHere,
+    readsFramesHere: Boolean = true,
+): List<Capability> = listOf(
+    OcrCapability(readsFramesHere),
     QrCapability(),
     ArchiveCapability(),
     OfficeCapability(),
