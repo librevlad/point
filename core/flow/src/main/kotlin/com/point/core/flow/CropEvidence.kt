@@ -54,12 +54,14 @@ private fun AtomLayer.locateIn(lines: List<List<Atom>>, fragment: String): Box? 
     val wanted = evidenceTokens(fragment)
     if (wanted.isEmpty()) return null
     val scored = lines
-        .map { line -> line to wanted.count { token -> line.any { evidenceToken(it.text) == token } } }
+        .map { line -> line to wordsOf(line) }
+        .map { (line, words) -> line to wanted.count { token -> token in words } }
     val best = scored.maxByOrNull { it.second } ?: return null
     if (best.second == 0) return null
     if (scored.count { it.second == best.second } > 1) return null
     if (best.second == 1) {
-        val matched = wanted.firstOrNull { token -> best.first.any { evidenceToken(it.text) == token } }
+        val words = wordsOf(best.first)
+        val matched = wanted.firstOrNull { token -> token in words }
         if (matched == null || matched.length < DISTINCT_TOKEN) return null
     }
     val box = best.first.map { transform?.toUpright(it.box) ?: it.box }.reduce(Box::union)
@@ -95,6 +97,17 @@ fun List<DocBlock>.withCropEvidence(
         "Сверяйте их с исходником."
     return blocks + DocBlock(note, DocStyle.NORMAL)
 }
+
+/**
+ * Слова строки — то, что на ней написано, а не куски, на которые её поделил читатель (#1013).
+ *
+ * Читатель длинного снимка отдаёт строку одним атомом целиком: «Line 077 order OR-01077 sum
+ * 177.77 contact tester77@example.com». Место искали атомом, равным значению, — и у всех 119
+ * найденных почт места на снимке не оказывалось вовсе: перейти к найденному было некуда.
+ * Где значение стоит, решает написанное, а не разбиение читателя на атомы.
+ */
+private fun wordsOf(line: List<Atom>): Set<String> =
+    line.flatMapTo(mutableSetOf()) { atom -> atom.text.split(WHITESPACE).map(::evidenceToken) }
 
 private fun evidenceTokens(fragment: String): Set<String> =
     fragment.replace("⚠", " ").replace("~~", " ")

@@ -52,6 +52,35 @@ class CropEvidenceTest {
         assertNull(sheet.locate("50"))
     }
 
+    /**
+     * Длинный снимок экрана, прочитанный построчно: атом на всю строку (#1013).
+     *
+     * Так читает движок, который берётся за крупные кадры, — и почта из середины строки
+     * своего атома не имеет.
+     */
+    private val longShot = AtomLayer(
+        (1..120).map { n ->
+            val line = "Line %03d order OR-01%03d sum 1%02d.%02d contact tester%d@example.com"
+                .format(n, n, n, n, n)
+            Atom(id = "w$n", text = line, box = Box(15f, n * 100f, 900f, n * 100f + 26f))
+        },
+    )
+
+    @Test
+    fun `читатель отдал строку одним куском — место значения всё равно известно (#1013)`() {
+        val region = longShot.locate("tester77@example.com")
+
+        assertNotNull("к найденному нельзя перейти, пока у него нет места на снимке", region)
+        assertTrue("место стоит на своей строке", region!!.holds(500f, 7700f + 13f))
+        assertTrue("а не на соседней", !region.holds(500f, 7800f + 13f))
+        assertTrue("и не на середине документа", !region.holds(500f, 6000f + 13f))
+    }
+
+    @Test
+    fun `слово, встречающееся в каждой строке, места по-прежнему не даёт`() {
+        assertNull("«contact» стоит везде — такой адрес человеку ничего не говорит", longShot.locate("contact"))
+    }
+
     @Test
     fun `ничья двух строк адресом не считается`() {
         val twice = AtomLayer(
