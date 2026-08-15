@@ -30,7 +30,16 @@ class TextUrlInvestigation @Inject constructor() : Capability {
 
     override fun label(state: ObjectState) = ""
 
-    override fun accepts(state: ObjectState) = state.kind == ObjectKind.TEXT
+    /**
+     * Объект, названный ссылкой, обязан знать свой адрес (#999).
+     *
+     * Ссылка, переданная файлом (`text/uri-list`), получала вид `URL` по MIME двери — и на
+     * этом всё: вопрос «какой это адрес» не задавался вовсе. Человек видел «Ссылка · link.txt»,
+     * три действия ссылки и «✗ Ссылка не найдена» по тапу, а самого адреса не видел нигде.
+     * Тот же адрес, присланный строкой, читался правильно: механизм был, дверь его не звала.
+     */
+    override fun accepts(state: ObjectState) =
+        state.kind == ObjectKind.TEXT || state.kind == ObjectKind.URL
 
     override fun produces(state: ObjectState) = state
 
@@ -50,7 +59,16 @@ class TextUrlInvestigationRealizer @Inject constructor() : Realizer {
     private suspend fun findings(obj: PointObject): Findings = withContext(Dispatchers.IO) {
         val head = readHead(obj.uri.value)
         val url = URL_REGEX.find(head)?.value ?: return@withContext Findings()
-        Findings(setOf(Feature.HAS_URL), mapOf(META_ENTITY_PREFIX + "url" to url))
+        Findings(
+            setOf(Feature.HAS_URL),
+            mapOf(
+                META_ENTITY_PREFIX + "url" to url,
+
+                // Откуда знание: вычитано из текста объекта, а не распознано с кадра (#1024).
+                META_ENTITY_PREFIX + "url" + com.point.core.flow.META_SOURCE_SUFFIX to
+                    com.point.core.model.Provenance.TEXT.wire,
+            ),
+        )
     }
 
     private fun readHead(path: String, limit: Int = 64 * 1024): String {

@@ -44,6 +44,43 @@ class TextUrlInvestigationTest {
         assertFalse(Feature.HAS_URL in features)
     }
 
+    /**
+     * Ссылка, переданная файлом (`text/uri-list`), получала вид `URL` по MIME двери — и на
+     * этом всё: адрес не читался, «Открыть ссылку» отвечало «Ссылка не найдена», а самого
+     * адреса человек не видел нигде (#999).
+     */
+    @Test
+    fun `ссылка, переданная файлом, знает свой адрес`() = runTest {
+        val file = File.createTempFile("link-", ".txt").apply {
+            writeText("https://example.com/pointtest?a=1")
+            deleteOnExit()
+        }
+        val asFile = PointObject(
+            id = "link",
+            mime = "text/uri-list",
+            uri = ScratchRef(file.absolutePath),
+            state = ObjectState(ObjectKind.URL),
+        )
+
+        assertTrue("дверь не зовёт чтение адреса", TextUrlInvestigation().accepts(asFile.state))
+
+        val delta = enricher.look(asFile)
+
+        assertEquals("https://example.com/pointtest?a=1", delta.metadata[com.point.core.flow.META_ENTITY_PREFIX + "url"])
+        assertTrue(Feature.HAS_URL in delta.features)
+    }
+
+    /** У знания названо происхождение: вычитано из текста объекта, а не с кадра (#1024). */
+    @Test
+    fun `у прочитанного адреса названо происхождение`() = runTest {
+        val delta = enricher.look(textObject("смотри тут https://example.com дальше"))
+
+        assertEquals(
+            com.point.core.model.Provenance.TEXT,
+            com.point.core.flow.provenanceOf(delta.metadata, com.point.core.flow.META_ENTITY_PREFIX + "url"),
+        )
+    }
+
     @Test
     fun `a missing payload is a failure, not a text without links`() = runTest {
         val ghost = PointObject("x", "text/plain", ScratchRef("/nowhere/gone.txt"), ObjectState(ObjectKind.TEXT))
