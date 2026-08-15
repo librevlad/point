@@ -2190,12 +2190,35 @@ class FlowViewModel @Inject constructor(
             obj,
             EnrichmentUpdate(
                 features = setOf(Feature.UNUSABLE),
-                // Отказ говорит о принесённом объекте, а не о снимке вообще (#1033).
-                metadata = mapOf(META_UNUSABLE_REASON to readerFailure(reason, known.state.kind)),
+                // Отказ говорит о принесённом объекте, а не о снимке вообще (#1033), и
+                // пропажу байтов не называет поломкой (#998).
+                metadata = mapOf(META_UNUSABLE_REASON to previewVerdict(known, reason)),
                 running = emptyList(),
             ),
         )
     }
+
+    /**
+     * Пропажа не называется поломкой (#998).
+     *
+     * Scratch убирается, как только Point принимает следующий объект, — и у прежнего кадра
+     * просто не остаётся байтов. Человеку при этом говорили про его целый снимок «файл
+     * повреждён»: #570 отделил поломку файла от «Point не смог», а третий случай — «файла
+     * больше нет» — попадал в первый и врал про чужую вещь.
+     *
+     * Названная ридером причина сильнее: пустой документ или оборвавшееся чтение говорят о
+     * себе сами, и только общий приговор пересматривается наличием байтов.
+     */
+    private fun previewVerdict(obj: PointObject, reason: String?): String {
+        // Слова про сам объект, а не про снимок вообще (#1033): вид вещи известен.
+        val said = readerFailure(reason, obj.state.kind)
+        val nothingSaid = said == readerFailure(null, obj.state.kind)
+        return if (nothingSaid && bytesGone(obj)) OBJECT_GONE_REASON else said
+    }
+
+    /** Байтов объекта на устройстве больше нет — и это факт о нём, а не о попытке прочитать. */
+    private fun bytesGone(obj: PointObject): Boolean =
+        obj.state.kind.isFileBacked && runCatching { !File(obj.uri.value).isFile }.getOrDefault(false)
 
     /**
      * Прочитанное показывается человеку, чем бы объект ни был (#792, решение владельца
@@ -2489,6 +2512,12 @@ class FlowViewModel @Inject constructor(
         enrichJobs.clear()
     }
 }
+
+/**
+ * Что говорится об объекте, чьих байтов у Point больше нет (#998). Про сам снимок здесь
+ * ничего не утверждается: у человека он цел, копии не стало только у Point.
+ */
+const val OBJECT_GONE_REASON = "Point больше не хранит этот объект — поделитесь им снова"
 
 private const val MAX_CLIP = 2000
 

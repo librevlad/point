@@ -44,6 +44,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
@@ -169,6 +170,58 @@ class FlowViewModelTest {
             "В документе нет ни одной страницы",
             obj.metadata[com.point.core.flow.META_UNUSABLE_REASON],
         )
+    }
+
+    /**
+     * Живая охота 14.08.2026 (#998): поделиться вторым объектом, пока Point читает первый, —
+     * и первый оставался призраком. Байтов у него уже нет (scratch убирается под новый
+     * объект), а шагом пути он оставался: по крошке человек уходил в чужой снимок, никак со
+     * вторым не связанный, — экран рисовал цепочку, которой в графе нет.
+     */
+    @Test fun `второй принятый объект приходит один, без призрака первого в пути`() = runTest(dispatcher) {
+        val scratch = java.io.File(
+            System.getProperty("java.io.tmpdir"),
+            "point-998-" + System.nanoTime(),
+        ).apply { mkdirs() }
+        store.onClear = { scratch.listFiles()?.forEach { it.delete() } }
+        store.ingested = { source ->
+            val file = java.io.File(scratch, source).apply { writeBytes(ByteArray(8)) }
+            PointObject(source, "image/jpeg", ScratchRef(file.absolutePath), ObjectState(ObjectKind.IMAGE))
+        }
+        val vm = vm()
+
+        vm.onShared("nomer.jpg", "image/jpeg"); advanceUntilIdle()
+        vm.onShared("card.jpg", "image/jpeg"); advanceUntilIdle()
+
+        assertEquals("два отдельно переданных объекта — не одна цепочка", 1, vm.ui.value.path.size)
+        val shown = vm.ui.value.frame?.obj
+        assertEquals("человек смотрит на последний принятый объект", "card.jpg", shown?.id)
+        assertTrue("у объекта в пути есть байты", java.io.File(shown!!.uri.value).isFile)
+    }
+
+    /**
+     * Отсутствие — не поломка (#998). #570 отделил «файл повреждён» от «Point не смог», а
+     * третий случай — «этих байтов больше нет» — попадал в первый: человеку говорили, что
+     * его целый снимок повреждён. Названная ридером причина при этом сильнее наличия байтов
+     * — про пустой документ выше говорит соседний тест.
+     */
+    @Test fun `у объекта, чьих байтов больше нет, отсутствие не названо поломкой`() = runTest(dispatcher) {
+        val gone = java.io.File(System.getProperty("java.io.tmpdir"), "point-998-" + System.nanoTime())
+        store.ingested = { source ->
+            PointObject(source, "image/jpeg", ScratchRef(gone.absolutePath), ObjectState(ObjectKind.IMAGE))
+        }
+        val vm = vm()
+
+        vm.onShared("nomer.jpg", "image/jpeg"); advanceUntilIdle()
+
+        val said = vm.ui.value.frame?.obj?.metadata?.get(com.point.core.flow.META_UNUSABLE_REASON)
+        assertNotNull("объект сказал о себе, почему на него не посмотреть", said)
+        assertNotEquals(
+            "про пропавшие байты нельзя говорить общим приговором о поломке файла",
+            com.point.core.flow.readerFailure(null),
+            said,
+        )
+        assertEquals("пропажа названа пропажей", OBJECT_GONE_REASON, said)
     }
 
     /**
@@ -3668,8 +3721,20 @@ private class FakeStore : ObjectStore {
     var kind = ObjectKind.IMAGE
 
     var clearedTimes = 0
-    override suspend fun ingest(sourceUri: String, mime: String): PointObject =
-        if (failIngest) error("boom") else PointObject("in", mime, ScratchRef("/in"), ObjectState(kind))
+
+    /**
+     * Чем оборачивается приём именно этого источника (#998): чтобы отличить один принятый
+     * объект от другого, а очистке scratch — правда убрать байты первого.
+     */
+    var ingested: ((String) -> PointObject)? = null
+
+    /** Очистка scratch у настоящего хранилища уносит байты — здесь тоже. */
+    var onClear: (() -> Unit)? = null
+    override suspend fun ingest(sourceUri: String, mime: String): PointObject = when {
+        failIngest -> error("boom")
+        else -> ingested?.invoke(sourceUri)
+            ?: PointObject("in", mime, ScratchRef("/in"), ObjectState(kind))
+    }
     override suspend fun ingestMultiple(sources: List<String>): PointObject =
         PointObject("coll", "inode/directory", ScratchRef("/coll"), ObjectState(ObjectKind.COLLECTION))
     override suspend fun put(result: ResultObject): PointObject =
@@ -3681,7 +3746,7 @@ private class FakeStore : ObjectStore {
 
     override suspend fun newScratchFile(extension: String): ScratchRef =
         ScratchRef(java.io.File.createTempFile("point-test-", ".$extension").absolutePath)
-    override suspend fun clear() { clearedTimes++ }
+    override suspend fun clear() { clearedTimes++; onClear?.invoke() }
 }
 
 private class FakeChatResponder : com.point.core.flow.AiChatResponder {
