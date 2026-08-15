@@ -51,15 +51,50 @@ class Inbox(private val dir: File, private val pdf: PdfText = PdfBoxText()) {
 
     private val classifier = ObjectClassifier()
 
+    private companion object { const val BYTES_AT_A_TIME = 64 * 1024 }
+
     fun receive(name: String, mime: String, meta: Map<String, String>, source: InputStream): InboxItem {
         dir.mkdirs()
-        val safe = uniqueChildName(dir.list()?.toSet() ?: emptySet(), fileNameFor(name, mime))
+        val wanted = fileNameFor(name, mime)
+        val safe = uniqueChildName(dir.list()?.toSet() ?: emptySet(), wanted)
         val target = File(dir, safe)
         val part = File(dir, "$safe.part")
         part.outputStream().use { out -> source.copyTo(out) }
+
+        // Одна вещь — один узел (#1027). Защита от повтора была только у письма: вторая
+        // отправка — новое письмо с новым id, и в папке появлялись `card2.jpg` и
+        // `card2 (2).jpg` с одинаковым размером и дословно одинаковым знанием. Хуже всего
+        // это при неосознанном повторе: отклик пропущен, человек жмёт ещё раз, копии растут.
+        //
+        // «То же самое» — это то же имя, тот же вид и те же байты. Совпадения одних байтов
+        // мало: два разных объекта человека могут оказаться побайтно равными, и сливать их в
+        // один узел значило бы решать за него.
+        val twin = File(dir, wanted).takeIf {
+            it.isFile && it.name != part.name && it.length() == part.length() && sameBytes(it, part)
+        }
+        if (twin != null) {
+            part.delete()
+            return wrap(twin, mime, meta + ("name" to name))
+        }
         part.renameTo(target)
         return wrap(target, mime, meta + ("name" to name))
     }
+
+    private fun sameBytes(one: File, other: File): Boolean = runCatching {
+        one.inputStream().buffered().use { a ->
+            other.inputStream().buffered().use { b ->
+                val left = ByteArray(BYTES_AT_A_TIME)
+                val right = ByteArray(BYTES_AT_A_TIME)
+                while (true) {
+                    val read = a.readNBytes(left, 0, left.size)
+                    if (read != b.readNBytes(right, 0, right.size)) return false
+                    if (read == 0) return true
+                    for (i in 0 until read) if (left[i] != right[i]) return false
+                }
+            }
+        }
+        true
+    }.getOrDefault(false)
 
     fun addText(text: String): InboxItem {
         dir.mkdirs()
