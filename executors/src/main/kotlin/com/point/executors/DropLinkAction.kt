@@ -25,14 +25,29 @@ class DropLinkRealizer @Inject constructor(
 ) : Realizer {
     override val capabilityId = DropLinkCapability.ID
 
+    // Согласие на публикацию не спрашивают там, где публикация заведомо невозможна (#1022):
+    // дверь помечена недоступной с настоящей причиной ещё до тапа.
+    override fun isAvailable(): Boolean = runCatching { drop.canGive() }.getOrDefault(true)
+
+    override fun unavailableReason(): String? =
+        if (isAvailable()) null else com.point.core.flow.NOT_SIGNED_IN_TO_GIVE_LINKS
+
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult {
         val file = File(input.uri.value)
         val name = input.metadata["name"]?.takeIf { it.isNotBlank() } ?: file.name
 
+        // Что известно заранее — говорится точно, а не догадкой (#1022).
+        if (!file.isFile) {
+            return ActionResult.Failure("Файла объекта нет на диске", recoverable = false)
+        }
+        if (file.length() > com.point.core.flow.MAX_DROP_BYTES) {
+            return ActionResult.Failure("Файл слишком большой, чтобы выложить его по ссылке", recoverable = false)
+        }
+
         reportStage("Загружаю файл")
         val link = drop.give(file.absolutePath, name, input.mime)
             ?: return ActionResult.Failure(
-                "Ссылку выдать не удалось — нет связи с сервером или файл слишком большой",
+                "Ссылку выдать не удалось — попробуйте ещё раз",
                 recoverable = true,
             )
 

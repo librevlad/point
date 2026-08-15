@@ -17,6 +17,9 @@ class RelayDropLink(
     private val network: NetworkAvailability,
 ) : DropLink {
 
+    // Без аккаунта ссылку выдать нельзя, и это известно до всякого согласия (#1022).
+    override fun canGive(): Boolean = !pass().isNullOrBlank()
+
     override suspend fun give(path: String, fileName: String, mime: String): String? =
         withContext(Dispatchers.IO) {
             // Перед выходом наружу — спросить телефон, есть ли сеть вообще (#690, #691).
