@@ -10,10 +10,19 @@ import javax.inject.Inject
 
 class OoxmlSpreadsheetReader @Inject constructor() : SpreadsheetReader {
 
-    override suspend fun readRows(obj: PointObject): List<List<String>> = withContext(Dispatchers.IO) {
+    override suspend fun readRows(obj: PointObject): List<List<String>> =
+        readSheets(obj).firstOrNull() ?: emptyList()
+
+    /**
+     * Строки всех листов книги, по порядку листов.
+     *
+     * #997: из таблицы человеку нужно всё её содержимое — заголовки, позиции и числа,
+     * а не первый попавшийся лист. Разбор ячеек живёт здесь одним местом, чтобы чтение
+     * таблицы для текста и чтение таблицы для строк не расходились.
+     */
+    internal suspend fun readSheets(obj: PointObject): List<List<List<String>>> = withContext(Dispatchers.IO) {
         var shared: String? = null
-        var sheet1: String? = null
-        var anySheet: String? = null
+        val sheets = sortedMapOf<String, String>(BY_SHEET_ORDER)
         runCatching {
             ZipInputStream(File(obj.uri.value).inputStream().buffered()).use { zis ->
                 var entry = zis.nextEntry
@@ -21,9 +30,8 @@ class OoxmlSpreadsheetReader @Inject constructor() : SpreadsheetReader {
                     if (!entry.isDirectory) {
                         when {
                             entry.name == "xl/sharedStrings.xml" -> shared = zis.readBytes().toString(Charsets.UTF_8)
-                            entry.name == "xl/worksheets/sheet1.xml" -> sheet1 = zis.readBytes().toString(Charsets.UTF_8)
-                            anySheet == null && WORKSHEET.matches(entry.name) ->
-                                anySheet = zis.readBytes().toString(Charsets.UTF_8)
+                            WORKSHEET.matches(entry.name) ->
+                                sheets[entry.name] = zis.readBytes().toString(Charsets.UTF_8)
                         }
                     }
                     zis.closeEntry()
@@ -31,8 +39,11 @@ class OoxmlSpreadsheetReader @Inject constructor() : SpreadsheetReader {
                 }
             }
         }
-        val sheetXml = sheet1 ?: anySheet ?: return@withContext emptyList()
-        parseSheet(sheetXml, shared?.let(::parseShared) ?: emptyList())
+        if (sheets.isEmpty()) return@withContext emptyList()
+        // Общая таблица строк может лежать в архиве после листов, поэтому разбираем её,
+        // когда прочитан весь файл, а не по ходу обхода.
+        val strings = shared?.let(::parseShared) ?: emptyList()
+        sheets.values.map { parseSheet(it, strings) }
     }
 
     private fun parseShared(xml: String): List<String> =
@@ -78,6 +89,14 @@ class OoxmlSpreadsheetReader @Inject constructor() : SpreadsheetReader {
 
     private companion object {
         val WORKSHEET = Regex("""xl/worksheets/sheet\d+\.xml""")
+        val SHEET_NUMBER = Regex("""sheet(\d+)\.xml$""")
+
+        /** Порядок листов книги числовой: sheet2 идёт раньше sheet10, как у человека в книге. */
+        val BY_SHEET_ORDER = compareBy<String>(
+            { SHEET_NUMBER.find(it)?.groupValues?.get(1)?.toIntOrNull() ?: Int.MAX_VALUE },
+            { it },
+        )
+
         val SI = Regex("""<si\b[^>]*>(.*?)</si>""", RegexOption.DOT_MATCHES_ALL)
         val ROW = Regex("""<row\b[^>]*>(.*?)</row>""", RegexOption.DOT_MATCHES_ALL)
         val CELL = Regex("""<c\b([^>]*?)(?:/>|>(.*?)</c>)""", RegexOption.DOT_MATCHES_ALL)
