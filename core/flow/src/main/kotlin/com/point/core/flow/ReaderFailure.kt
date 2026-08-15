@@ -7,17 +7,26 @@ package com.point.core.flow
  * «не удалось прочитать страницу — decode failed» (#686). Техническая причина
  * остаётся в журнале, человеку достаётся одно понятное предложение.
  */
-fun readerFailure(reason: String?): String {
+fun readerFailure(reason: String?, kind: com.point.core.model.ObjectKind? = null): String {
     val said = reason.orEmpty().lowercase()
     return when {
-        said.isBlank() -> BROKEN_FILE
+        said.isBlank() -> brokenFile(kind)
         NO_PAGES.any { it in said } -> EMPTY_DOCUMENT
-        NOT_AN_IMAGE.any { it in said } -> BROKEN_FILE
+        NOT_AN_IMAGE.any { it in said } -> brokenFile(kind)
         TOO_SLOW.any { it in said } -> "Чтение заняло слишком долго и оборвалось"
         TOO_BIG.any { it in said } -> "Снимок слишком большой, чтобы его прочитать"
-        else -> BROKEN_FILE
+        else -> brokenFile(kind)
     }
 }
+
+/**
+ * Отказ говорит о том объекте, который человек принёс (#1033).
+ *
+ * `broken.pdf` из 25 байт мусора объяснялся словами «это не изображение», хотя объект опознан
+ * как PDF и подписан «PDF». Вид вещи известен — значит и слова про неё.
+ */
+private fun brokenFile(kind: com.point.core.model.ObjectKind?): String =
+    if (kind == null || kind == com.point.core.model.ObjectKind.IMAGE) BROKEN_FILE else BROKEN_DOCUMENT
 
 /**
  * Технический сигнал ридера: страниц в документе нет вовсе (#570). Человеку его переводит
@@ -37,6 +46,8 @@ fun readerFailureIsFatal(reason: String?): Boolean {
 }
 
 private const val BROKEN_FILE = "Файл не открылся — он повреждён или это не изображение"
+
+private const val BROKEN_DOCUMENT = "Файл не открылся — похоже, он повреждён"
 
 private const val EMPTY_DOCUMENT = "В документе нет ни одной страницы"
 

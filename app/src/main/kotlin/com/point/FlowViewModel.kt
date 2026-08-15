@@ -2152,7 +2152,8 @@ class FlowViewModel @Inject constructor(
             obj,
             EnrichmentUpdate(
                 features = setOf(Feature.UNUSABLE),
-                metadata = mapOf(META_UNUSABLE_REASON to readerFailure(reason)),
+                // Отказ говорит о принесённом объекте, а не о снимке вообще (#1033).
+                metadata = mapOf(META_UNUSABLE_REASON to readerFailure(reason, known.state.kind)),
                 running = emptyList(),
             ),
         )
