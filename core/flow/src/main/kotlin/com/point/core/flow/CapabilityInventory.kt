@@ -37,8 +37,20 @@ fun derivedYield(capability: Capability, state: ObjectState): ActionYield {
 fun yieldLabel(
     yields: ActionYield,
     unusableReason: String? = null,
+
+    /**
+     * Держится ли обещание на этом объекте (#994).
+     *
+     * Про негодный файл экран дважды сказал, что открыть его не вышло, — и тут же первым и
+     * подсвеченным предлагал «Понять · найдёт суть, суммы, даты и контакты». Причина у всех
+     * действий общая и потому сказана один раз (#874), а на её месте вставало обещание
+     * результата, которого быть не может. Обещание, которое нельзя сдержать, не даётся вовсе:
+     * дверь остаётся, слов при ней нет.
+     */
+    promiseHolds: Boolean = true,
 ): String? {
     if (unusableReason != null) return unusableReason
+    if (!promiseHolds) return null
     return when (yields) {
         is ActionYield.New -> yields.noun
 

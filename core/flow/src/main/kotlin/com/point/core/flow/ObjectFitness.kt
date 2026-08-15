@@ -42,6 +42,22 @@ fun GraphState.unusableReason(): String? =
     if (state.has(Feature.UNUSABLE)) fact(META_UNUSABLE_REASON) else null
 
 /**
+ * Читать нечего (#994).
+ *
+ * Про объект уже известно, что содержимое не открылось, и знания из него не добыто ни одного.
+ * Тогда действия чтения — «Понять», «Распознать текст», «Прочитать сильнее» — не могут быть
+ * лучшим следующим шагом: очевидное на битом файле не «найти суммы», а взять целый файл.
+ *
+ * Знание важнее пометки: у снимка, чей предпросмотр не отрисовался, слова со страницы могли
+ * прочитаться — и тогда читать есть что, что бы ни говорила пометка о годности.
+ */
+fun nothingToRead(state: com.point.core.model.ObjectState, facts: Map<String, String>): Boolean =
+    state.has(Feature.UNUSABLE) &&
+        !state.has(Feature.HAS_TEXT) &&
+        !state.has(Feature.HAS_WORD_LAYER) &&
+        facts.keys.none { it.startsWith(META_ENTITY_PREFIX) }
+
+/**
  * Причина, общая для всех действий сразу (#874).
  *
  * Когда с объектом нечего делать, причина одна на всё: «Файл пустой — в нём нечего читать».

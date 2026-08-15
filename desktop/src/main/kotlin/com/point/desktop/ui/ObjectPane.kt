@@ -200,6 +200,10 @@ internal fun CompactObject(
                         note = yieldLabel(
                             action.bubble.yields,
                             action.bubble.unusableReason.takeIf { it != sharedReason },
+
+                            // Про негодный объект обещаний не дают (#994) — правило одно на
+                            // телефон и компьютер.
+                            promiseHolds = action.bubble.unusableReason == null,
                         ),
                         appearIndex = i,
                     ) { state.onBubble(item, action.bubble) }

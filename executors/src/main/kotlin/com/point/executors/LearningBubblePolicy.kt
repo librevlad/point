@@ -14,7 +14,12 @@ class LearningBubblePolicy @Inject constructor(
 ) : BubblePolicy {
 
     override fun rank(state: ObjectState, candidates: List<Capability>): List<Capability> =
-        order(state, candidates, intent = null)
+        order(
+            state,
+            candidates,
+            intent = null,
+            nothingToRead = com.point.core.flow.nothingToRead(state, emptyMap()),
+        )
 
     /**
      * Тот же порядок, но с Intent из состояния: уместный сейчас смысл поднимается выше,
@@ -23,7 +28,13 @@ class LearningBubblePolicy @Inject constructor(
     override fun rank(
         graph: com.point.core.flow.GraphState,
         candidates: List<Capability>,
-    ): List<Capability> = order(graph.state, candidates, graph.intent, backTo(graph, candidates))
+    ): List<Capability> = order(
+        graph.state,
+        candidates,
+        graph.intent,
+        backTo(graph, candidates),
+        com.point.core.flow.nothingToRead(graph.state, graph.facts),
+    )
 
     /**
      * Действия, возвращающие исходник, из которого объект и получен (#925). Стоять первым
@@ -44,11 +55,18 @@ class LearningBubblePolicy @Inject constructor(
         candidates: List<Capability>,
         intent: com.point.core.model.Intent?,
         backToSource: Set<CapabilityId> = emptySet(),
+        nothingToRead: Boolean = false,
     ): List<Capability> {
         val counts = usage.counts()
         val keyless = !runCatching { llm.configured }.getOrDefault(true)
+
+        // Про негодный объект уже известно, что содержимое не читается (#994): чтение остаётся
+        // в списке — Intent не убирает действия (Конституция §8), — но первым и подсвеченным
+        // стоять не может. Очевидное на битом файле — не «найти суммы», а взять целый файл.
         return candidates.sortedWith(
             compareBy(
+
+                { if (nothingToRead && com.point.core.model.Intent.UNDERSTAND in it.intents(state)) 1 else 0 },
 
                 // Обратное преобразование — вниз (#925): не прячем, но и не предлагаем первым.
                 { if (it.id in backToSource) 1 else 0 },

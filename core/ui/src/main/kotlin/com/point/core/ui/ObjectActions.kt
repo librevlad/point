@@ -91,7 +91,14 @@ private fun ActionRow(
     val ai = bubble.tier == BubbleTier.AI
     PortalRow(
         title = bubble.title,
-        subtitle = yieldLabel(bubble.yields, bubble.unusableReason.takeIf { it != shared }),
+        subtitle = yieldLabel(
+            bubble.yields,
+            bubble.unusableReason.takeIf { it != shared },
+
+            // Про негодный объект обещаний не дают (#994): причина сказана подписью объекта,
+            // а на её месте стояло «найдёт суть, суммы, даты и контакты».
+            promiseHolds = bubble.unusableReason == null,
+        ),
         subtitleMaxLines = 1,
         onClick = onClick,
         icon = bubbleIcon(bubble.icon),
