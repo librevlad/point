@@ -1,0 +1,4 @@
+flow nodes=1
+- f88149b6 kind=TEXT mime=text/plain via=None name=dsk001-proba.txt found=3 rels=['found_in→', 'found_in→', 'found_in→'] meta#=21 h=edcd6e57 | entity.amount.currency=грн; entity.amount.ev=semantic; entity.amount.src=ocr; entity.amount=995; entity.date.alt=17.08.2026
+17.08.2026 15:04; entity.date.more=17.08.2026; entity.date.src=ocr; entity.date=17.08.2026; entity.phone.country=UA; entity.phone.kind=мобильный; entity.phone.src=ocr; entity.phone=+380631234567; investigated.document-type=not_found; investigated.entities=found; investigated.graph-roles=not_found; investigated.identifiers=insufficiently_investigated; investigated.metadata-entities=found; investigated.url=not_found; investigated.vcard-shape=not_found
+history lines=
