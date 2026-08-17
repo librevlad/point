@@ -1,0 +1,3 @@
+flow nodes=1
+- 49d7d0cc kind=IMAGE mime=image/jpeg via=None name=rukopis.jpg found=[] rels=[] meta#=10 | investigated.exif=not_found; investigated.graph-roles=not_found; investigated.image-text=found; investigated.metadata-entities=not_found; investigated.qr-content=not_found; reading.mode=PRINTED; size=355540
+history lines=0
