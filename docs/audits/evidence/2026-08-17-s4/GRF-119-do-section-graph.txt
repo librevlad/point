@@ -1,0 +1,3 @@
+flow nodes=1
+- 432f578b kind=IMAGE mime=image/jpeg via=None name=bolshoy.jpg found=[('Phone', '432f578b'), ('Url', '432f578b')] rels=['found_in', 'found_in'] meta#=13 | entity.phone=098-777-51-76; entity.url=com.ua; investigated.exif=found; investigated.graph-roles=not_found; investigated.image-text=found; investigated.metadata-entities=not_found; investigated.qr-content=not_found; ocr.text.ref=/data/user/0/com.point/files/scratch/79a22997-c23e-4a76-8ebc-8c620f7793f9.txt; reading.mode=PRINTED; size=2454844
+history lines=0
