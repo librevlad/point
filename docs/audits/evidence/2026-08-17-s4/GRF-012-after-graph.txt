@@ -1,0 +1,4 @@
+flow nodes=2
+- 26f9e5bc kind=IMAGE mime=image/jpeg via=None name=Изображение, 18 авг 01:07 found=[('Date', '26f9e5bc'), ('IMAGE', 'fcc48b38')] rels=['found_in', 'derived_from'] meta#=12 | entity.date=01.12.2020; investigated.exif=found; investigated.graph-roles=not_found; investigated.image-text=found; investigated.metadata-entities=not_found; investigated.qr-content=not_found; ocr.text.ref=/data/user/0/com.point/files/scratch/d23b89fb-f315-4ed7-86da-372dded5518a.txt; reading.mode=PRINTED; size=3002212
+- fcc48b38 kind=IMAGE mime=image/jpeg via=Скан name= found=[('IMAGE', '26f9e5bc')] rels=['derived_from'] meta#=6 | investigated.exif=not_found; investigated.graph-roles=not_found; investigated.metadata-entities=not_found; investigated.qr-content=not_found; size=1364752
+history lines=0
