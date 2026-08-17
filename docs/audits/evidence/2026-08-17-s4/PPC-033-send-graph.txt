@@ -1,0 +1,3 @@
+flow nodes=1
+- af426ed2 kind=TEXT mime=text/plain via=None name=Текст без ссылки для PPC-033, 18.08.2026… found=[('Date', 'af426ed2')] rels=['found_in'] meta#=11 | entity.date.more=18.08.2026; entity.date=18.08.2026 00:12; investigated.document-type=not_found; investigated.entities=found; investigated.graph-roles=not_found; investigated.identifiers=not_found; investigated.metadata-entities=not_found; investigated.url=not_found; investigated.vcard-shape=not_found; size=63
+history lines=0
