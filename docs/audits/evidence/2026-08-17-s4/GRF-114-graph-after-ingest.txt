@@ -1,0 +1,3 @@
+flow nodes=1
+- 3aea02b3 kind=OFFICE mime=application/vnd.openxmlformats-officedocument.wordprocessingml.document via=None name=akt.docx found=0 rels=[] meta#=5 h=a700882b | investigated.graph-roles=not_found; investigated.metadata-entities=not_found; investigated.period=not_found
+history lines=

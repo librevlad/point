@@ -1,0 +1,3 @@
+flow nodes=1
+- 293465a9 kind=TEXT mime=text/plain via=None name=text_ru.txt found=3 rels=['found_in→', 'found_in→', 'found_in→'] meta#=18 h=cacf7ade | entity.address=Киев, улица Ярославская, 14; entity.amount.currency=грн; entity.amount.ev=semantic; entity.amount.src=ocr; entity.amount=2873,60; entity.date=14.08.2026; entity.phone.country=UA; entity.phone.kind=мобильный; entity.phone=+380 67 123 45 67; investigated.document-type=not_found; investigated.entities=found; investigated.graph-roles=not_found; investigated.identifiers=insufficiently_investigated; investigated.metadata-entities=not_found; investigated.url=not_found; investigated.vcard-shape=not_found
+history lines=

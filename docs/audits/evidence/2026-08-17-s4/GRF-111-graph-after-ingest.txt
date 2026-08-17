@@ -1,0 +1,3 @@
+flow nodes=1
+- 584ceab6 kind=TEXT mime=text/plain via=None name=link.txt found=1 rels=['found_in→'] meta#=10 h=ab798066 | entity.url=https://example.com/pointtest?a=1; investigated.document-type=not_found; investigated.entities=found; investigated.graph-roles=not_found; investigated.identifiers=not_found; investigated.metadata-entities=not_found; investigated.url=found; investigated.vcard-shape=not_found
+history lines=
