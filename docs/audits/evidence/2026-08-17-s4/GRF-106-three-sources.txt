@@ -1,0 +1,9 @@
+== GRF-106: связка устройств — три источника, 00:01:45
+-- СЕРВЕР /circle:
+  PC User-PC online last_seen 18.08 00:01:47
+  PHONE samsung SM-A346E online last_seen 17.08 23:56:54
+-- ГРАФ/КОНФИГ ПК:
+name=User-PC
+email=librevlad@gmail.com
+name=User-PC
+-- ЭКРАН ПК: DSK-031-my-devices.png (2 устройства, 15:10)
