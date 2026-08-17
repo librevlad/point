@@ -771,7 +771,7 @@ NO DIFFERENTIATING FACTOR
 | Entry Points | #970 | 29 | 5 | 4 | 1 | 7 | 1 | 13 | 2 | 3 | 12 | 41,4 % | 13,8 % |
 | Input/Object Types | #971 | 43 | 19 | 13 | 6 | 22 | 0 | 1 | 0 | 1 | 41 | 95,3 % | 30,2 % |
 | Graph Transitions | #974, #975, #976, #984 | 121 | 69 | 20 | 49 | 43 | 1 | 4 | 0 | 4 | 112 | 92,6 % | 16,5 % |
-| Realizer Paths | #978 | 25 | 16 | 3 | 13 | 4 | 0 | 4 | 0 | 1 | 20 | 80,0 % | 12,0 % |
+| Realizer Paths | #978 | 25 | 17 | 4 | 13 | 4 | 0 | 4 | 0 | 0 | 21 | 84,0 % | 16,0 % |
 | Failure Modes | #977 | 34 | 31 | 19 | 12 | 3 | 0 | 0 | 0 | 0 | 34 | 100,0 % | 55,9 % |
 | Phone ↔ PC | #973, #981 | 34 | 15 | 5 | 10 | 10 | 0 | 6 | 0 | 3 | 25 | 73,5 % | 14,7 % |
 | Drop | #980 | 20 | 10 | 5 | 5 | 5 | 3 | 1 | 0 | 1 | 15 | 75,0 % | 25,0 % |
@@ -779,7 +779,7 @@ NO DIFFERENTIATING FACTOR
 | Settings | #983 | 16 | 11 | 3 | 8 | 3 | 0 | 2 | 0 | 0 | 14 | 87,5 % | 18,8 % |
 | Constitution | #985 | 20 | 8 | 1 | 7 | 11 | 0 | 0 | 0 | 1 | 19 | 95,0 % | 5,0 % |
 | ADR/RFC | #986 | 13 | 11 | 4 | 7 | 2 | 0 | 0 | 0 | 0 | 13 | 100,0 % | 30,8 % |
-| **TOTAL** | #968–#986 | **577** | 349 | **172** | 177 | 148 | 8 | 41 | 2 | 31 | **497** | **86,1 %** | **29,8 %** |
+| **TOTAL** | #968–#986 | **577** | 350 | **173** | 177 | 148 | 8 | 41 | 2 | 30 | **498** | **86,3 %** | **30,0 %** |
 
 ## Equivalence Decisions
 
@@ -933,16 +933,16 @@ NO DIFFERENTIATING FACTOR
 
 ```
 APPLICABLE:            577
-PASS:                  349   (PROVEN 172 · UNPROVEN 177)
+PASS:                  350   (PROVEN 173 · UNPROVEN 177)
 FAIL:                  148
 BLOCKED:               8
 NEEDS INVESTIGATION:   41
 N/A:                   2
-НЕ ПРОХОДИЛОСЬ (—):    31
+НЕ ПРОХОДИЛОСЬ (—):    30
 
-TESTED            = PASS + FAIL         = 497
-COVERAGE (статусы) = TESTED / APPLICABLE = 86,1 %
-PROVEN COVERAGE   = PROVEN PASS / APPLICABLE = 29,8 %
+TESTED            = PASS + FAIL         = 498
+COVERAGE (статусы) = TESTED / APPLICABLE = 86,3 %
+PROVEN COVERAGE   = PROVEN PASS / APPLICABLE = 30,0 %
 ```
 
 `RELEASE` запрещён, если выполнено хоть одно условие (#987):
