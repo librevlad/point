@@ -1,0 +1,5 @@
+flow nodes=3
+- 2cb33aec kind=PDF mime=application/pdf via=None name=dve-stranicy.pdf found=[('COLLECTION', 'd553ba0a')] rels=['derived_from'] meta#=5 | investigated.graph-roles=not_found; investigated.metadata-entities=not_found; investigated.pdf-image-shape=found; size=64687
+- d553ba0a kind=COLLECTION mime=inode/directory via=Страницы name= found=[('PDF', '2cb33aec'), ('PDF', 'bc0592f6')] rels=['derived_from', 'derived_from'] meta#=5 | investigated.graph-roles=not_found; investigated.metadata-entities=not_found; size=3452
+- bc0592f6 kind=PDF mime=application/pdf via=Сканировать в PDF name=скан.pdf found=[('COLLECTION', 'd553ba0a')] rels=['derived_from'] meta#=7 | investigated.graph-roles=not_found; investigated.metadata-entities=not_found; investigated.pdf-image-shape=found; size=186038
+history lines=0
