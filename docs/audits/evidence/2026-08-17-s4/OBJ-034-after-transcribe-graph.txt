@@ -1,0 +1,4 @@
+flow nodes=2
+- 8c95361a kind=AUDIO mime=audio/mp4 via=None name=golos.m4a found=[('TEXT', 'b04c73ac')] rels=['derived_from'] meta#=4 | investigated.graph-roles=not_found; investigated.metadata-entities=not_found; size=484170
+- b04c73ac kind=TEXT mime=text/plain via=Расшифровать name=Расшифровка found=[('AUDIO', '8c95361a')] rels=['derived_from'] meta#=11 | investigated.document-type=not_found; investigated.entities=not_found; investigated.graph-roles=not_found; investigated.identifiers=not_found; investigated.metadata-entities=not_found; investigated.url=not_found; investigated.vcard-shape=not_found; size=1358
+history lines=0

@@ -1,0 +1,4 @@
+flow nodes=2
+- 71e2a9e8 kind=AUDIO mime=audio/wav via=None name=silence20.wav found=[('TEXT', '9cad0dcb')] rels=['derived_from'] meta#=4 | investigated.graph-roles=not_found; investigated.metadata-entities=not_found; size=640044
+- 9cad0dcb kind=TEXT mime=text/plain via=Расшифровать name=Расшифровка found=[('AUDIO', '71e2a9e8')] rels=['derived_from'] meta#=10 | investigated.document-type=not_found; investigated.entities=not_found; investigated.graph-roles=not_found; investigated.identifiers=not_found; investigated.metadata-entities=not_found; investigated.url=not_found; investigated.vcard-shape=not_found; size=11
+history lines=0
