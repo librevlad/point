@@ -766,7 +766,7 @@ NO DIFFERENTIATING FACTOR
 | ОБЛАСТЬ | ПОДЗАДАЧИ | APPLICABLE | PASS | из них PROVEN | UNPROVEN | FAIL | BLOCKED | NEEDS INV. | N/A | — | TESTED | COVERAGE (статусы) | PROVEN COVERAGE |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | Android UI | #969 | 99 | 62 | 35 | 27 | 20 | 0 | 7 | 0 | 10 | 82 | 82,8 % | 35,4 % |
-| Desktop UI | #972 | 40 | 27 | 26 | 1 | 10 | 1 | 0 | 0 | 2 | 37 | 92,5 % | 65,0 % |
+| Desktop UI | #972 | 40 | 28 | 27 | 1 | 9 | 1 | 0 | 0 | 2 | 37 | 92,5 % | 67,5 % |
 | Server / Web UI | #979 | 65 | 47 | 12 | 35 | 0 | 1 | 3 | 0 | 14 | 47 | 72,3 % | 18,5 % |
 | Entry Points | #970 | 29 | 4 | 3 | 1 | 7 | 0 | 13 | 2 | 5 | 11 | 37,9 % | 10,3 % |
 | Input/Object Types | #971 | 43 | 16 | 10 | 6 | 16 | 0 | 1 | 0 | 10 | 32 | 74,4 % | 23,3 % |
@@ -779,7 +779,7 @@ NO DIFFERENTIATING FACTOR
 | Settings | #983 | 16 | 11 | 3 | 8 | 2 | 0 | 2 | 0 | 1 | 13 | 81,2 % | 18,8 % |
 | Constitution | #985 | 20 | 8 | 1 | 7 | 11 | 0 | 0 | 0 | 1 | 19 | 95,0 % | 5,0 % |
 | ADR/RFC | #986 | 13 | 11 | 4 | 7 | 2 | 0 | 0 | 0 | 0 | 13 | 100,0 % | 30,8 % |
-| **TOTAL** | #968–#986 | **577** | 332 | **148** | 184 | 127 | 6 | 41 | 2 | 71 | **459** | **79,5 %** | **25,6 %** |
+| **TOTAL** | #968–#986 | **577** | 333 | **149** | 184 | 126 | 6 | 41 | 2 | 71 | **459** | **79,5 %** | **25,8 %** |
 
 ## Equivalence Decisions
 
@@ -904,8 +904,8 @@ NO DIFFERENTIATING FACTOR
 
 ```
 APPLICABLE:            577
-PASS:                  332   (PROVEN 148 · UNPROVEN 184)
-FAIL:                  127
+PASS:                  333   (PROVEN 149 · UNPROVEN 184)
+FAIL:                  126
 BLOCKED:               6
 NEEDS INVESTIGATION:   41
 N/A:                   2
@@ -913,7 +913,7 @@ N/A:                   2
 
 TESTED            = PASS + FAIL         = 459
 COVERAGE (статусы) = TESTED / APPLICABLE = 79,5 %
-PROVEN COVERAGE   = PROVEN PASS / APPLICABLE = 25,6 %
+PROVEN COVERAGE   = PROVEN PASS / APPLICABLE = 25,8 %
 ```
 
 `RELEASE` запрещён, если выполнено хоть одно условие (#987):
