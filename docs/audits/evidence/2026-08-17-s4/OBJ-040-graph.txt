@@ -1,0 +1,3 @@
+flow nodes=1
+- 9d5d8132 kind=OFFICE mime=application/vnd.openxmlformats-officedocument.presentationml.presentation via=None name=prezentaciya.pptx found=[] rels=[] meta#=5 | investigated.graph-roles=not_found; investigated.metadata-entities=not_found; investigated.period=not_found; size=3032
+history lines=0
