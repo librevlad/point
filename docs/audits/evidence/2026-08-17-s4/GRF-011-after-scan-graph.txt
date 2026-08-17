@@ -1,0 +1,6 @@
+flow nodes=2
+- 06ae45d8 kind=IMAGE mime=image/jpeg via=None name=chek.jpg found=[('Phone', '06ae45d8'), ('IMAGE', '7ac51394')] rels=['found_in', 'derived_from'] meta#=12 | entity.phone=918-682-1551; investigated.exif=found; investigated.graph-roles=not_found; investigated.image-text=found; investigated.metadata-entities=not_found; investigated.qr-content=not_found; ocr.text.ref=/data/user/0/com.point/files/scratch/1c1fbb72-a03b-4467-b5f3-2111dbcf615b.txt; reading.mode=PRINTED; size=130950
+- 7ac51394 kind=IMAGE mime=image/jpeg via=Скан с цветом name= found=[('IMAGE', '06ae45d8'), ('Phone', '7ac51394'), ('Phone', '7ac51394')] rels=['derived_from', 'found_in', 'found_in'] meta#=17 | entity.amount.currency=$; entity.amount.ev=semantic; entity.amount.more=2.0
+1
+0.07; entity.amount.src=ocr; entity.amount=2.0; entity.phone.more=032200002575; entity.phone=918-682-1551; investigated.exif=not_found; investigated.graph-roles=not_found; investigated.image-text=insufficiently_investigated; investigated.metadata-entities=not_found; investigated.qr-content=not_found; ocr.text.ref=/data/user/0/com.point/files/scratch/be6c83a6-d046-45b3-956d-dc12fb45fe56.txt; reading.mode=PRINTED; size=524091
+history lines=0
