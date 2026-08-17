@@ -1,0 +1,4 @@
+flow nodes=1
+- a52b965e kind=TEXT mime=text/plain via=None name=and085.txt found=[('Phone', 'a52b965e'), ('Date', 'a52b965e'), ('Amount', 'a52b965e')] rels=['found_in', 'found_in', 'found_in'] meta#=21 | entity.amount.currency=грн; entity.amount.ev=semantic; entity.amount.src=ocr; entity.amount=1500; entity.date.alt=18.08.2026
+18.08.2026 00:35; entity.date.more=18.08.2026; entity.date.src=ocr; entity.date=18.08.2026; entity.phone.country=UA; entity.phone.kind=мобильный; entity.phone.src=ocr; entity.phone=+380501234599; investigated.document-type=not_found; investigated.entities=found; investigated.graph-roles=not_found; investigated.identifiers=insufficiently_investigated; investigated.metadata-entities=found; investigated.url=not_found; investigated.vcard-shape=not_found; size=112
+history lines=0
