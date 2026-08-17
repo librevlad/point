@@ -1,0 +1,3 @@
+flow nodes=1
+- bc107538 kind=UNKNOWN mime=application/octet-stream via=None name=bolshoy55.bin found=[] rels=[] meta#=4 | investigated.graph-roles=not_found; investigated.metadata-entities=not_found; size=57671680
+history lines=0
