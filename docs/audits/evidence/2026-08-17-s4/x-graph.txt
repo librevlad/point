@@ -1,4 +1,2 @@
-flow nodes=2
-- 49d7d0cc kind=IMAGE mime=image/jpeg via=None name=rukopis.jpg found=[('TEXT', '0da3828a')] rels=['derived_from'] meta#=10 | investigated.exif=not_found; investigated.graph-roles=not_found; investigated.image-text=found; investigated.metadata-entities=not_found; investigated.qr-content=not_found; reading.mode=PRINTED; size=355540
-- 0da3828a kind=TEXT mime=text/markdown via=Прочитать сильнее name= found=[('IMAGE', '49d7d0cc')] rels=['derived_from'] meta#=10 | investigated.document-type=not_found; investigated.entities=not_found; investigated.graph-roles=not_found; investigated.identifiers=not_found; investigated.metadata-entities=not_found; investigated.url=not_found; investigated.vcard-shape=not_found; size=21
-history lines=0
+flow nodes=0
+history lines=
