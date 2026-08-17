@@ -1,0 +1,16 @@
+== SRV-048/050: плохие запросы с живым пропуском, 00:42:05
+-- /enroll без обязательного поля (device_kind):
+HTTP 200
+-- /enroll с неверным типом (public_key числом):
+{"id":"Vm_dfUAP_S22kb6CNr9hOw","kind":"PC","name":"User-PC","key_agree":"MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEqOHBLizeVdOpGoo10gH5edJw4cf9BUNpoJpCibmSPDjnWjEiwBuwk1LOQeKJTAUXXgINpRjCjOfCm9Py-_muow","key_sign":"","code":"AEEU-JANE","created_at":1785994185,"last_seen":1787002928,"online":true,"self":true}
+HTTP 200
+-- /settings PUT без поля sealed:
+{"error":"no_settings","message":"Настройки приехали пустыми."}
+HTTP 400
+-- /settings PUT неверный тип (sealed числом):
+{"error":"http_400","message":"There was an error parsing the body"}
+HTTP 400
+-- /circle после двух кривых /enroll:
+���������: 2
+  PC User-PC key_agree len 122 code AEEU-JANE
+  PHONE samsung SM-A346E key_agree len 122 code MQXP-CEUJ
