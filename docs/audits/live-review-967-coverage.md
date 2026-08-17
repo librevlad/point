@@ -768,7 +768,7 @@ NO DIFFERENTIATING FACTOR
 | Android UI | #969 | 99 | 68 | 41 | 27 | 23 | 0 | 7 | 0 | 1 | 91 | 91,9 % | 41,4 % |
 | Desktop UI | #972 | 40 | 29 | 28 | 1 | 9 | 1 | 0 | 0 | 1 | 38 | 95,0 % | 70,0 % |
 | Server / Web UI | #979 | 65 | 55 | 26 | 29 | 2 | 1 | 3 | 0 | 4 | 57 | 87,7 % | 40,0 % |
-| Entry Points | #970 | 29 | 5 | 4 | 1 | 8 | 1 | 13 | 2 | 2 | 13 | 44,8 % | 13,8 % |
+| Entry Points | #970 | 29 | 5 | 4 | 1 | 9 | 1 | 13 | 2 | 1 | 14 | 48,3 % | 13,8 % |
 | Input/Object Types | #971 | 43 | 19 | 13 | 6 | 23 | 0 | 1 | 0 | 0 | 42 | 97,7 % | 30,2 % |
 | Graph Transitions | #974, #975, #976, #984 | 121 | 70 | 21 | 49 | 44 | 1 | 4 | 0 | 2 | 114 | 94,2 % | 17,4 % |
 | Realizer Paths | #978 | 25 | 17 | 4 | 13 | 4 | 0 | 4 | 0 | 0 | 21 | 84,0 % | 16,0 % |
@@ -779,7 +779,7 @@ NO DIFFERENTIATING FACTOR
 | Settings | #983 | 16 | 11 | 3 | 8 | 3 | 0 | 2 | 0 | 0 | 14 | 87,5 % | 18,8 % |
 | Constitution | #985 | 20 | 8 | 1 | 7 | 12 | 0 | 0 | 0 | 0 | 20 | 100,0 % | 5,0 % |
 | ADR/RFC | #986 | 13 | 11 | 4 | 7 | 2 | 0 | 0 | 0 | 0 | 13 | 100,0 % | 30,8 % |
-| **TOTAL** | #968–#986 | **577** | 361 | **184** | 177 | 157 | 8 | 41 | 2 | 10 | **518** | **89,8 %** | **31,9 %** |
+| **TOTAL** | #968–#986 | **577** | 361 | **184** | 177 | 158 | 8 | 41 | 2 | 9 | **519** | **89,9 %** | **31,9 %** |
 
 ## Equivalence Decisions
 
@@ -936,14 +936,14 @@ NO DIFFERENTIATING FACTOR
 ```
 APPLICABLE:            577
 PASS:                  361   (PROVEN 184 · UNPROVEN 177)
-FAIL:                  157
+FAIL:                  158
 BLOCKED:               8
 NEEDS INVESTIGATION:   41
 N/A:                   2
-НЕ ПРОХОДИЛОСЬ (—):    10
+НЕ ПРОХОДИЛОСЬ (—):    9
 
-TESTED            = PASS + FAIL         = 518
-COVERAGE (статусы) = TESTED / APPLICABLE = 89,8 %
+TESTED            = PASS + FAIL         = 519
+COVERAGE (статусы) = TESTED / APPLICABLE = 89,9 %
 PROVEN COVERAGE   = PROVEN PASS / APPLICABLE = 31,9 %
 ```
 
