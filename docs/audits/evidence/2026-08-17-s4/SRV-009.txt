@@ -1,0 +1,7 @@
+== SRV-009: устройство объявляет ключи (enroll) — клиентская половина, 00:57:57
+-- ключ ПК в круге ДО перезапуска:
+  key_agree[:24] MFkwEwYHKoZIzj0CAQYIKoZI last_seen 00:58:00
+-- перезапуск клиента (он сам вызывает /enroll при входе в круг):
+-- ключ ПК в круге ПОСЛЕ перезапуска:
+  ���������: 2
+  key_agree[:24] MFkwEwYHKoZIzj0CAQYIKoZI len 122 last_seen 00:58:15 code AEEU-JANE
