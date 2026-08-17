@@ -1,0 +1,3 @@
+flow nodes=1
+- 750f36cf kind=TEXT mime=application/x-qqq via=None name=stranno2.qqq found=1 rels=['found_in→'] meta#=10 h=61aed8ed | entity.date=17.08.2026; investigated.document-type=not_found; investigated.entities=found; investigated.graph-roles=not_found; investigated.identifiers=not_found; investigated.metadata-entities=not_found; investigated.url=not_found; investigated.vcard-shape=not_found
+history lines=
