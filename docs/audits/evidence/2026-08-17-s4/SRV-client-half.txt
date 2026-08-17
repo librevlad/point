@@ -1,0 +1,7 @@
+== SRV: клиентская половина через ПК, 17.08.2026 22:37:19
+-- /circle (клиент ПК показывает те же устройства — DSK-031 PASS)
+2 ����������: ['User-PC', 'samsung SM-A346E']
+-- /settings (sealed)
+at 2026-08-17 10:10:52.097000 len 1451
+-- /me
+librevlad@gmail.com PC User-PC online True
