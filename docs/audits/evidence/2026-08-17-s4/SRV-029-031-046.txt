@@ -1,0 +1,18 @@
+== SRV-029/031/046: страницы сервера, доступные получателю, 00:51:13
+GET /login → 404 1787b
+GET /auth/callback → 404 1787b
+GET /d/8835d48a74c2411e975b70f362e8df0bc4cad290 → 200 1951b
+-- /login (страница входа с кодом) — текст:
+Ссылка входа больше не работает *{box-sizing:border-box} body{margin:0;padding:24px;min-height:100vh;display:flex;align-items:center;justify-content:center; background:#0E1014;color:#F2F3F5; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Ar
+-- /auth/callback без параметров:
+Ссылка входа больше не работает *{box-sizing:border-box} body{margin:0;padding:24px;min-height:100vh;display:flex;align-items:center;justify-content:center; background:#0E1014;color:#F2F3F5; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Ar
+-- SRV-029: создаём настоящий вход (POST /auth/start) и открываем /login с этим кодом:
+login_id None code None url None
+-- SRV-029: /auth/start с верной схемой (kind/name), НЕ handoff:
+{'error': 'http_400', 'message': 'There was an error parsing the body'}
+-- SRV-029: страница входа с кодом (получатель открывает login_url):
+HTTP 200 2186b
+�����: Вход в Point Вход в Point Проверьте, что этот же код показан на устройстве, которое просит вход. Не совпал — закройте страницу. K3-QQJ Войти через Google Point получит от Google только имя и почту. Что вы пересылаете между своими устройст
+-- SRV-031: страница возврата в приложение (return_page) — рендерится после Google; проверяем её текст по коду и через /auth/callback с негодным state:
+GET /auth/callback?state=xxx&code=yyy > HTTP 404
+�����: Ссылка входа больше не работает Ссылка больше не работает Вход живёт пять минут и открывается один раз. Начни
