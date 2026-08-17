@@ -1,0 +1,3 @@
+flow nodes=1
+- 70eb7a8e kind=TEXT mime=text/plain via=None name=Проба без ПК 17.08.2026 23:36, счёт… found=[('Date', '70eb7a8e')] rels=['found_in'] meta#=15 | entity.amount.currency=грн; entity.amount.ev=semantic; entity.amount.src=ocr; entity.amount=777; entity.date.more=17.08.2026; entity.date=17.08.2026 23:36; investigated.document-type=not_found; investigated.entities=found; investigated.graph-roles=not_found; investigated.identifiers=insufficiently_investigated; investigated.metadata-entities=not_found; investigated.url=not_found; investigated.vcard-shape=not_found; size=72
+history lines=0
