@@ -1,0 +1,4 @@
+flow nodes=2
+- 5735d685 kind=OFFICE mime=application/vnd.openxmlformats-officedocument.wordprocessingml.document via=None name=akt.docx found=[('TEXT', 'a5e95633')] rels=['contains'] meta#=5 | investigated.graph-roles=not_found; investigated.metadata-entities=not_found; investigated.period=not_found; size=36780
+- a5e95633 kind=TEXT mime=text/plain via=Извлечь текст name= found=[('Phone', 'a5e95633'), ('Date', 'a5e95633')] rels=['contains', 'found_in', 'found_in'] meta#=17 | entity.amount.currency=грн; entity.amount.ev=semantic; entity.amount.src=ocr; entity.amount=7 800; entity.date=05.11.2026; entity.phone.country=UA; entity.phone.kind=мобильный; entity.phone=+380 67 123 45 67; investigated.document-type=not_found; investigated.entities=found; investigated.graph-roles=not_found; investigated.identifiers=insufficiently_investigated; investigated.metadata-entities=not_found; investigated.url=not_found; investigated.vcard-shape=not_found; size=185
+history lines=0
