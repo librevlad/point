@@ -1,0 +1,3 @@
+flow nodes=1
+- 039c43c3 kind=IMAGE mime=image/jpeg via=None name=truncated.jpg found=0 rels=[] meta#=7 h=677fe360 | investigated.exif=not_found; investigated.graph-roles=not_found; investigated.image-text=found; investigated.metadata-entities=not_found; unusable.reason=Файл не открылся — он повреждён или это не изображение
+history lines=

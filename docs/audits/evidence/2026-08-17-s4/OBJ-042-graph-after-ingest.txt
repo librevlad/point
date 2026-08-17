@@ -1,0 +1,3 @@
+flow nodes=1
+- a4fc2f4c kind=UNKNOWN mime=application/octet-stream via=None name=empty.bin found=0 rels=[] meta#=4 h=1e2ebe37 | investigated.graph-roles=not_found; unusable.reason=Файл пустой — в нём нечего читать
+history lines=
