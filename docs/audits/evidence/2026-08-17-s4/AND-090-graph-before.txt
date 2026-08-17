@@ -1,0 +1,3 @@
+flow nodes=1
+- 6fc63dd4 kind=TEXT mime=text/plain via=None name=Превет, Иван! Эт тестовый тектс с пятью… found=1 rels=['found_in→'] meta#=10 h=cdc6bf9f | entity.date=17.08.2026; investigated.document-type=not_found; investigated.entities=found; investigated.graph-roles=not_found; investigated.identifiers=not_found; investigated.metadata-entities=found; investigated.url=not_found; investigated.vcard-shape=not_found
+history lines=
