@@ -1,0 +1,4 @@
+flow nodes=2
+- ecad7f75 kind=PDF mime=application/pdf via=None name=dve-stranicy.pdf found=1 rels=['derived_from→'] meta#=5 h=bb7745b5 | investigated.graph-roles=not_found; investigated.metadata-entities=not_found; investigated.pdf-image-shape=found
+- b7e43a20 kind=COLLECTION mime=inode/directory via=Страницы name= found=1 rels=['derived_from→'] meta#=4 h=05c96182 | investigated.graph-roles=not_found
+history lines=
