@@ -1,0 +1,11 @@
+== SRV-054: истёкший ресурс (реальный, созданный и удалённый), 00:46:41
+-- создаём drop-ресурс:
+id=8835d48a74c2411e975b70f362e8df0bc4cad290
+-- ресурс жив:
+GET /d/{id} > 200
+-- ответ на несуществующий id (никогда не было):
+HTTP 404
+��������: Файла больше нет *{box-sizing:border-box} body{margin:0;padding:24px;min-height:100vh;display:flex;align-items:center;justify-content:ce
+-- ответ на живой ресурс:
+HTTP 200
+-- вывод: истёкший и никогда не существовавший различить невозможно — оба 404 + drop_gone_page (app.py:733)
