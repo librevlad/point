@@ -1,0 +1,4 @@
+flow nodes=2
+- 98c1bbed kind=AUDIO mime=audio/ogg via=None name=voice.opus found=[('TEXT', 'fe37aea0')] rels=['derived_from'] meta#=4 | investigated.graph-roles=not_found; investigated.metadata-entities=not_found; size=36600
+- fe37aea0 kind=TEXT mime=text/plain via=Расшифровать name=Расшифровка found=[('AUDIO', '98c1bbed')] rels=['derived_from'] meta#=11 | investigated.document-type=not_found; investigated.entities=not_found; investigated.graph-roles=not_found; investigated.identifiers=not_found; investigated.metadata-entities=not_found; investigated.url=not_found; investigated.vcard-shape=not_found; size=463
+history lines=0
