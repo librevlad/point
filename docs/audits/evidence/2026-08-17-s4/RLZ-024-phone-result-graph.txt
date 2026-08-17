@@ -1,3 +1,3 @@
 flow nodes=1
 - ababd17e kind=IMAGE mime=image/jpeg via=None name=card.jpg found=[('Phone', 'ababd17e'), ('Email', 'ababd17e'), ('Address', 'ababd17e')] rels=['found_in', 'found_in', 'found_in'] meta#=16 | entity.address=Киев, улица Ярославская, 14; entity.email=olena@tihiy-dvor.example; entity.phone.country=UA; entity.phone.kind=мобильный; entity.phone=+380 67 123 45 67; investigated.exif=not_found; investigated.graph-roles=not_found; investigated.image-text=found; investigated.metadata-entities=not_found; investigated.qr-content=not_found; ocr.text.ref=/data/user/0/com.point/files/scratch/ec004a0e-ee91-4427-97ed-bc9361290c41.txt; reading.mode=PRINTED; size=59585
-history lines=0
+history lines=
