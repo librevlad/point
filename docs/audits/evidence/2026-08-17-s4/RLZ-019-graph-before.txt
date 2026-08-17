@@ -1,0 +1,3 @@
+flow nodes=1
+- 748e38cd kind=IMAGE mime=image/jpeg via=None name=card2.jpg found=3 rels=['found_in→', 'found_in→', 'found_in→'] meta#=16 h=289fc9c9 | entity.address=Киев, улица Ярославская, 14; entity.email=olena@tihiy-dvor.example; entity.phone.country=UA; entity.phone.kind=мобильный; entity.phone=+380 67 123 45 67; investigated.exif=not_found; investigated.graph-roles=not_found; investigated.image-text=found; investigated.metadata-entities=not_found; investigated.qr-content=not_found; ocr.text.ref=/data/user/0/com.point/files/scratch/289a542c-5463-4b97-b0bc-f42a0bf9f6d9.txt; reading.mode=PRINTED
+history lines=
