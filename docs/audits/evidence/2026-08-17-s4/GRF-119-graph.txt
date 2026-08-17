@@ -1,0 +1,4 @@
+flow nodes=1
+- b6826b68 kind=IMAGE mime=image/jpeg via=None name=probe-03.jpg found=[] rels=[] meta#=17 | entity.amount.ev=arithmetic; entity.amount.more=1048,64
+548.64; entity.amount.src=ocr; entity.amount=1048,64; entity.card.more=5452198100477458 18; entity.card=5452198100477458; investigated.exif=found; investigated.graph-roles=not_found; investigated.image-text=insufficiently_investigated; investigated.metadata-entities=not_found; investigated.qr-content=not_found; ocr.text.ref=/data/user/0/com.point/files/scratch/08f88c5b-f60d-45ee-9bf2-c138c99934fa.txt; reading.mode=PRINTED; size=974390
+history lines=0
