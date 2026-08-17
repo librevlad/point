@@ -1,0 +1,3 @@
+flow nodes=1
+- 02bd2a7b kind=TEXT mime=text/plain via=None name=Второй объект во время работы 17.08.2026… found=[('Phone', '02bd2a7b'), ('Date', '02bd2a7b')] rels=['found_in', 'found_in'] meta#=14 | entity.date.more=17.08.2026; entity.date=17.08.2026 21:41; entity.phone.country=UA; entity.phone.kind=мобильный; entity.phone=+380931112233; investigated.document-type=not_found; investigated.entities=found; investigated.graph-roles=not_found; investigated.identifiers=not_found; investigated.metadata-entities=not_found; investigated.url=not_found; investigated.vcard-shape=not_found; size=94
+history lines=0
