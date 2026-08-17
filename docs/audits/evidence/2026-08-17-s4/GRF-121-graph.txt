@@ -1,0 +1,3 @@
+flow nodes=1
+- 7cf33804 kind=TEXT mime=text/plain via=None name=Набранный вручную текст 17.08.2026… found=[('Phone', '7cf33804'), ('Email', '7cf33804'), ('Date', '7cf33804')] rels=['found_in', 'found_in', 'found_in'] meta#=18 | entity.amount.currency=грн; entity.amount.ev=semantic; entity.amount.src=ocr; entity.amount=4500; entity.date=17.08.2026; entity.email=test@example.org; entity.phone.country=UA; entity.phone.kind=мобильный; entity.phone=+380671110022; investigated.document-type=not_found; investigated.entities=found; investigated.graph-roles=not_found; investigated.identifiers=insufficiently_investigated; investigated.metadata-entities=not_found; investigated.url=not_found; investigated.vcard-shape=not_found; size=126
+history lines=0
