@@ -1,0 +1,3 @@
+flow nodes=1
+- 9f7c30e8 kind=IMAGE mime=image/jpeg via=None name=chek.jpg found=[('Phone', '9f7c30e8')] rels=['found_in'] meta#=12 | entity.phone=918-682-1551; investigated.exif=found; investigated.graph-roles=not_found; investigated.image-text=found; investigated.metadata-entities=not_found; investigated.qr-content=not_found; ocr.text.ref=/data/user/0/com.point/files/scratch/bfa1ae92-683b-4f49-97fb-635076ca8ef0.txt; reading.mode=PRINTED; size=130950
+history lines=0
