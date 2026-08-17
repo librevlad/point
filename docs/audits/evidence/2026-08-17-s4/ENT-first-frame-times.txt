@@ -1,0 +1,18 @@
+am start -W, A34 debug 0.3.0 (14.08), 17.08.2026 15:32:57, сеть есть
+TotalTime: 141 WaitTime: 163  <- text/plain text_ru.txt
+TotalTime: 99 WaitTime: 121  <- application/pdf schet.pdf
+TotalTime: 105 WaitTime: 127  <- application/zip docs.zip
+TotalTime: 105 WaitTime: 127  <- audio/ogg voice.ogg
+TotalTime: 96 WaitTime: 115  <- application/vnd.openxmlformats-officedocument.wordprocessingml.document akt.docx
+TotalTime: 99 WaitTime: 118  <- text/plain text_ru.txt
+TotalTime: 153 WaitTime: 178  <- application/pdf schet.pdf
+TotalTime: 94 WaitTime: 116  <- application/zip docs.zip
+TotalTime: 88 WaitTime: 105  <- audio/ogg voice.ogg
+TotalTime: 91 WaitTime: 109  <- application/vnd.openxmlformats-officedocument.wordprocessingml.document akt.docx
+COLD (am force-stop перед каждым), 15:34:02
+TotalTime: 806 WaitTime: 810  <- COLD text/plain text_ru.txt
+TotalTime: 765 WaitTime: 769  <- COLD application/pdf schet.pdf
+TotalTime: 727 WaitTime: 732  <- COLD application/zip docs.zip
+TotalTime: 769 WaitTime: 772  <- COLD audio/ogg voice.ogg
+TotalTime: 726 WaitTime: 729  <- COLD application/vnd.openxmlformats-officedocument.wordprocessingml.document akt.docx
+TotalTime: 763 WaitTime: 767  <- COLD PROCESS_TEXT
