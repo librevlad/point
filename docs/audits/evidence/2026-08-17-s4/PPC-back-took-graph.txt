@@ -1,0 +1,4 @@
+flow nodes=2
+- 0f93b1dc kind=IMAGE mime=image/jpeg via=None name=Изображение, 18 авг 01:07 found=[('Date', '0f93b1dc'), ('IMAGE', '2c578df2')] rels=['found_in', 'derived_from'] meta#=13 | entity.date=01.12.2020; investigated.exif=found; investigated.graph-roles=not_found; investigated.image-text=found; investigated.metadata-entities=found; investigated.qr-content=not_found; ocr.text.ref=C:\Users\User\Point\Изображение, 18 авг 01 07.read.txt; reading.mode=PRINTED; size=3002212
+- 2c578df2 kind=IMAGE mime=image/png via=Убрать фон name= found=[('IMAGE', '0f93b1dc'), ('Date', '2c578df2')] rels=['derived_from', 'found_in'] meta#=11 | entity.date=01.12.2020; investigated.exif=not_found; investigated.graph-roles=not_found; investigated.image-text=found; investigated.metadata-entities=not_found; investigated.qr-content=not_found; ocr.text.ref=/data/user/0/com.point/files/scratch/e7eb6bac-7f40-4714-80ea-f95b0f58b38f.txt; reading.mode=PRINTED; size=9099422
+history lines=0
