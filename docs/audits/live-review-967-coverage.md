@@ -770,16 +770,16 @@ NO DIFFERENTIATING FACTOR
 | Server / Web UI | #979 | 65 | 47 | 12 | 35 | 0 | 1 | 3 | 0 | 14 | 47 | 72,3 % | 18,5 % |
 | Entry Points | #970 | 29 | 4 | 3 | 1 | 7 | 0 | 13 | 2 | 5 | 11 | 37,9 % | 10,3 % |
 | Input/Object Types | #971 | 43 | 16 | 10 | 6 | 16 | 0 | 1 | 0 | 10 | 32 | 74,4 % | 23,3 % |
-| Graph Transitions | #974, #975, #976, #984 | 121 | 67 | 17 | 50 | 36 | 0 | 4 | 0 | 14 | 103 | 85,1 % | 14,0 % |
+| Graph Transitions | #974, #975, #976, #984 | 121 | 67 | 17 | 50 | 38 | 0 | 4 | 0 | 12 | 105 | 86,8 % | 14,0 % |
 | Realizer Paths | #978 | 25 | 16 | 3 | 13 | 4 | 0 | 4 | 0 | 1 | 20 | 80,0 % | 12,0 % |
-| Failure Modes | #977 | 34 | 27 | 15 | 12 | 2 | 0 | 0 | 0 | 5 | 29 | 85,3 % | 44,1 % |
+| Failure Modes | #977 | 34 | 28 | 16 | 12 | 2 | 0 | 0 | 0 | 4 | 30 | 88,2 % | 47,1 % |
 | Phone ↔ PC | #973, #981 | 34 | 15 | 5 | 10 | 7 | 0 | 6 | 0 | 6 | 22 | 64,7 % | 14,7 % |
 | Drop | #980 | 20 | 10 | 5 | 5 | 5 | 3 | 1 | 0 | 1 | 15 | 75,0 % | 25,0 % |
-| History/Lifetime | #982 | 18 | 11 | 9 | 2 | 5 | 1 | 0 | 0 | 1 | 16 | 88,9 % | 50,0 % |
+| History/Lifetime | #982 | 18 | 11 | 9 | 2 | 6 | 1 | 0 | 0 | 0 | 17 | 94,4 % | 50,0 % |
 | Settings | #983 | 16 | 11 | 3 | 8 | 2 | 0 | 2 | 0 | 1 | 13 | 81,2 % | 18,8 % |
 | Constitution | #985 | 20 | 8 | 1 | 7 | 11 | 0 | 0 | 0 | 1 | 19 | 95,0 % | 5,0 % |
 | ADR/RFC | #986 | 13 | 11 | 4 | 7 | 2 | 0 | 0 | 0 | 0 | 13 | 100,0 % | 30,8 % |
-| **TOTAL** | #968–#986 | **577** | 333 | **149** | 184 | 126 | 6 | 41 | 2 | 71 | **459** | **79,5 %** | **25,8 %** |
+| **TOTAL** | #968–#986 | **577** | 334 | **150** | 184 | 129 | 6 | 41 | 2 | 67 | **463** | **80,2 %** | **26,0 %** |
 
 ## Equivalence Decisions
 
@@ -911,16 +911,16 @@ NO DIFFERENTIATING FACTOR
 
 ```
 APPLICABLE:            577
-PASS:                  333   (PROVEN 149 · UNPROVEN 184)
-FAIL:                  126
+PASS:                  334   (PROVEN 150 · UNPROVEN 184)
+FAIL:                  129
 BLOCKED:               6
 NEEDS INVESTIGATION:   41
 N/A:                   2
-НЕ ПРОХОДИЛОСЬ (—):    71
+НЕ ПРОХОДИЛОСЬ (—):    67
 
-TESTED            = PASS + FAIL         = 459
-COVERAGE (статусы) = TESTED / APPLICABLE = 79,5 %
-PROVEN COVERAGE   = PROVEN PASS / APPLICABLE = 25,8 %
+TESTED            = PASS + FAIL         = 463
+COVERAGE (статусы) = TESTED / APPLICABLE = 80,2 %
+PROVEN COVERAGE   = PROVEN PASS / APPLICABLE = 26,0 %
 ```
 
 `RELEASE` запрещён, если выполнено хоть одно условие (#987):
