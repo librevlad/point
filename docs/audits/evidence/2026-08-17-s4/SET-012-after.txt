@@ -1,0 +1,6 @@
+== SET-012 состояние ПОСЛЕ «Забыть всё» → «Убрать всё», 23:27:48
+history файлов: 0
+llm-log файлов: 30
+index.jsonl строк: 0
+flow-snapshot байт: 0
+файлы в files/: PersistedInstallation.W0RFRkFVTFRd+MTo1NDE1NDE4MDc0NzphbmRyb2lkOjdjNjg4Mjc0Njg2NGQzOGJhY2ZjOGU.json generatefid.lock history llm-log mdd_pds_config mlkit_entity_extraction phenotype_storage_info profileInstalled tesseract usage 

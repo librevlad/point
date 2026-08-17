@@ -1,0 +1,6 @@
+== SET-012 состояние ДО «Забыть всё», 23:25:52
+history файлов: 55
+llm-log файлов: 30
+scratch файлов: 0
+index.jsonl строк: 58
+flow-snapshot байт: 0
