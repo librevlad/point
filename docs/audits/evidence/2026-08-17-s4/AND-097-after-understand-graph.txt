@@ -1,0 +1,5 @@
+flow nodes=1
+- 94a12765 kind=IMAGE mime=image/jpeg via=None name=chek.jpg found=[('Phone', '94a12765'), ('Organization', '94a12765'), ('Amount', '94a12765'), ('Amount', '94a12765'), ('Amount', '94a12765'), ('Amount', '94a12765')] rels=['found_in', 'issued_by', 'found_in', 'found_in', 'found_in', 'found_in'] meta#=21 | entity.amount.ev=semantic,structural; entity.amount.more=2.00
+0.18
+2.18; entity.amount.src=ocr; entity.amount=TAX1; entity.phone.ev=semantic; entity.phone.src=model; entity.phone=918-682-1551; investigated.exif=found; investigated.graph-roles=found; investigated.image-text=found; investigated.metadata-entities=found; investigated.qr-content=not_found; ocr.text.ref=/data/user/0/com.point/files/scratch/6f61dae2-adc2-4d0f-a4ad-f14d357ea239.txt; reading.mode=PRINTED; size=130950
+history lines=0
