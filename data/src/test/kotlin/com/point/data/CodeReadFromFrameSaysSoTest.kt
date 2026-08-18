@@ -42,9 +42,20 @@ class CodeReadFromFrameSaysSoTest {
     }
 
     @Test fun `у QR названо, что он прочитан с кадра`() {
-        val facts = knowledge(ScannedCode("https://point.leerio.app/privacy", CodeKind.QR))
+        val facts = knowledge(ScannedCode("Wi-Fi гостям- pointguest", CodeKind.QR))
 
         assertEquals(Provenance.OCR.wire, facts[META_ENTITY_PREFIX + "qr" + META_SOURCE_SUFFIX])
+    }
+
+    /**
+     * Ссылка в коде — одно знание, а не два (#1119). Прежде она записывалась и ссылкой, и
+     * содержимым QR, и человек видел две строки об одном.
+     */
+    @Test fun `ссылка из кода не заводится вторым фактом`() {
+        val facts = knowledge(ScannedCode("https://point.leerio.app/privacy", CodeKind.QR))
+
+        assertEquals(null, facts[META_ENTITY_PREFIX + "qr"])
+        assertEquals("https://point.leerio.app/privacy", facts[META_ENTITY_PREFIX + "url"])
     }
 
     @Test fun `у ссылки из QR — тоже`() {

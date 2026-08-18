@@ -22,7 +22,8 @@ class QrInvestigationTest {
         val enricher = QrInvestigationRealizer(object : QrReader { override suspend fun decode(imagePath: String) = "https://qr.example" })
         val delta = enricher.look(imageObj())
         assertTrue(Feature.HAS_QR in delta.features)
-        assertEquals("https://qr.example", delta.metadata[com.point.core.flow.META_ENTITY_PREFIX + "qr"])
+        // Ссылка в коде — знание об объекте, и знание это одно (#1119).
+        assertEquals("https://qr.example", delta.metadata[com.point.core.flow.META_ENTITY_PREFIX + "url"])
     }
 
     @Test

@@ -12,7 +12,9 @@ import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import com.google.mlkit.nl.entityextraction.Entity as MlEntity
 
-class MlKitEntityExtractor : EntityExtractor {
+class MlKitEntityExtractor(
+    private val region: com.point.core.flow.PhoneRegion = com.point.core.flow.DEFAULT_PHONE_REGION,
+) : EntityExtractor {
 
     private val clients = HashMap<String, com.google.mlkit.nl.entityextraction.EntityExtractor>()
 
@@ -33,7 +35,7 @@ class MlKitEntityExtractor : EntityExtractor {
             annotation.entities.mapNotNull { map(it, annotation.annotatedText) }
         }
 
-        com.point.core.flow.plausibleEntities(raw, text)
+        com.point.core.flow.plausibleEntities(raw, text, region.code())
     }
 
     private fun languageOf(text: String): String {

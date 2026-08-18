@@ -16,9 +16,13 @@ interface EntityExtractor {
     suspend fun extract(text: String): List<Entity>
 }
 
-fun plausibleEntities(entities: List<Entity>, sourceText: String = ""): List<Entity> {
+fun plausibleEntities(
+    entities: List<Entity>,
+    sourceText: String = "",
+    region: String = PhoneNumbers.DEFAULT_REGION,
+): List<Entity> {
     val numbers = numberRuns(sourceText)
-    return entities.filter { it.isPlausible() && !it.isFragmentOf(numbers) }
+    return entities.filter { it.isPlausible(region) && !it.isFragmentOf(numbers) }
         .flatMap { it.readDatesApart() }
 }
 
@@ -80,10 +84,11 @@ private fun Entity.isFragmentOf(numbers: List<String>): Boolean {
     return numbers.any { it.length > digits.length && it.contains(digits) }
 }
 
-fun Entity.isPlausible(): Boolean = when (type) {
+fun Entity.isPlausible(region: String = PhoneNumbers.DEFAULT_REGION): Boolean = when (type) {
 
     // Та же мерка, что у ответа модели: одна библиотека на все входы знания (#801).
-    EntityType.PHONE -> PhoneNumbers.exists(value)
+    // Страна — вход разбора и приходит параметром, а не общей переменной (#1129).
+    EntityType.PHONE -> PhoneNumbers.exists(value, region)
 
     EntityType.ADDRESS -> value.trim().length >= 5 && Regex("""\p{L}{3,}""").containsMatchIn(value)
 

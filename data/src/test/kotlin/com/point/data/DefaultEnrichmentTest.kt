@@ -108,7 +108,7 @@ class DefaultEnrichmentTest {
             override suspend fun allow(scope: CloudScope) = Unit
             override suspend fun revoke(scope: CloudScope) = Unit
         }
-        return DefaultEnrichment(full, resolver, consent)
+        return DefaultEnrichment(full, resolver, consent, com.point.core.flow.DEFAULT_PHONE_REGION)
     }
 
     @Test

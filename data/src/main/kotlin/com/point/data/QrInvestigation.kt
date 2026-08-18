@@ -78,20 +78,23 @@ class QrInvestigationRealizer @Inject constructor(
 
         // QR-ссылка — это и есть ссылка объекта: без этого «Открыть ссылку»
         // требовало «сначала распознайте текст» при уже показанном адресе.
+        //
+        // И это ОДНО знание, а не два (#1119). Прежде ссылка из кода записывалась дважды —
+        // ссылкой и содержимым QR, — и человек видел две строки об одном: «Нашёл ссылку
+        // point.leerio.app/health» и «Есть QR-код point.leerio.app/health». Код здесь не
+        // второй факт, а путь, которым ссылка получена: то, что на кадре есть QR, живёт
+        // признаком состояния, а прочитанное — знанием.
         val link = found.text.trim().takeIf { it.startsWith("http://", true) || it.startsWith("https://", true) }
+        val key = META_ENTITY_PREFIX + if (link != null) "url" else "qr"
         return Findings(
             setOf(Feature.HAS_QR) + if (link != null) setOf(Feature.HAS_URL) else emptySet(),
             buildMap {
-                put(META_ENTITY_PREFIX + "qr", found.text)
+                put(key, link ?: found.text)
 
                 // Откуда значение: прочитано с кадра (#948, #941). Штрихкод это говорил, а
                 // сам QR и его ссылка молчали — и знание, прочитанное с кадра, стояло на
                 // экране без галочки, как будто неизвестно откуда взялось.
-                put(META_ENTITY_PREFIX + "qr" + com.point.core.flow.META_SOURCE_SUFFIX, READ_FROM_FRAME)
-                link?.let {
-                    put(META_ENTITY_PREFIX + "url", it)
-                    put(META_ENTITY_PREFIX + "url" + com.point.core.flow.META_SOURCE_SUFFIX, READ_FROM_FRAME)
-                }
+                put(key + com.point.core.flow.META_SOURCE_SUFFIX, READ_FROM_FRAME)
             },
         )
     }

@@ -480,9 +480,30 @@ abstract class DataModule {
 
         @Provides
         @Singleton
-        fun entityExtractor(): EntityExtractor = com.point.core.flow.BothEntityExtractors(
-            listOf(MlKitEntityExtractor(), com.point.core.flow.RegexEntityExtractor()),
-        )
+        fun entityExtractor(region: com.point.core.flow.PhoneRegion): EntityExtractor =
+            com.point.core.flow.BothEntityExtractors(
+                listOf(MlKitEntityExtractor(region), com.point.core.flow.RegexEntityExtractor(region)),
+            )
+
+        /**
+         * Страна для разбора номеров — app-scoped вход, а не изменяемая глобаль (#1129).
+         *
+         * Подсказку даёт SIM, а если её нет — язык устройства (#801, #936). Спрашивается
+         * один раз: результат разбора не должен зависеть от того, что записали раньше.
+         */
+        @Provides
+        @Singleton
+        fun phoneRegion(@ApplicationContext context: Context): com.point.core.flow.PhoneRegion {
+            val fromSim = runCatching {
+                (context.getSystemService(Context.TELEPHONY_SERVICE) as? android.telephony.TelephonyManager)
+                    ?.networkCountryIso?.takeIf { it.isNotBlank() }
+            }.getOrNull()
+            val fromLocale = runCatching {
+                context.resources.configuration.locales[0].country.takeIf { it.isNotBlank() }
+            }.getOrNull()
+            val code = (fromSim ?: fromLocale)?.uppercase() ?: com.point.core.flow.PhoneNumbers.DEFAULT_REGION
+            return com.point.core.flow.PhoneRegion { code }
+        }
 
         @Provides
         @Singleton

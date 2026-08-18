@@ -43,6 +43,9 @@ class DefaultEnrichment @Inject constructor(
     private val registry: CapabilityRegistry,
     private val resolver: Resolver,
     private val consent: PrivacyConsent,
+
+    // Страна для разбора номеров — вход, а не состояние мира (#1129).
+    private val region: com.point.core.flow.PhoneRegion,
 ) : Enrichment {
 
     override fun enrich(obj: PointObject): Flow<EnrichmentUpdate> = flow {
@@ -110,7 +113,7 @@ class DefaultEnrichment @Inject constructor(
                                 found += findings.features
                                 objects += findings.objects
                                 relations += findings.relations
-                                metadata = mergeKnowledge(metadata, findings.metadata)
+                                metadata = mergeKnowledge(metadata, findings.metadata, region = region.code())
                                 answered[investigation.id] = Answered(
                                     keys = findings.metadata.keys,
                                     fruitful = findings.features.isNotEmpty() ||

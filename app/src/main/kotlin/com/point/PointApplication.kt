@@ -27,7 +27,6 @@ class PointApplication : Application() {
         // Живая охота 13.08.2026 поймала `ANR in com.point · failed to complete startup`:
         // в `onCreate` копилось всё, что кому-то однажды понадобилось на старте, и стоимость
         // этого никто не считал. Конституция требует первый экран за 300 мс и без I/O.
-        tellPhoneRegion()
         warmUpScanPack()
         eraseRemovedUsageJournal()
         offMainThread { tellWhereToKnock() }
@@ -63,26 +62,6 @@ class PointApplication : Application() {
                         runCatching { accountClient.tellPushAddress(account, address) }
                     }
                 }
-        }
-    }
-
-    /**
-     * Откуда Point знает страну номера без «+» (#801).
-     *
-     * `067 636 05 60` — украинский мобильный, а в другой стране это другой номер или не
-     * номер вовсе. Подсказку даёт SIM, а если её нет — язык устройства. Само правило живёт
-     * в `:core:flow`, и Android-у оно ничего не должно: сюда приходит только код страны.
-     */
-    private fun tellPhoneRegion() {
-        val fromSim = runCatching {
-            (getSystemService(TELEPHONY_SERVICE) as? android.telephony.TelephonyManager)
-                ?.networkCountryIso?.takeIf { it.isNotBlank() }
-        }.getOrNull()
-        val fromLocale = runCatching {
-            resources.configuration.locales[0].country.takeIf { it.isNotBlank() }
-        }.getOrNull()
-        (fromSim ?: fromLocale)?.let {
-            com.point.core.flow.PhoneNumbers.region = it.uppercase()
         }
     }
 

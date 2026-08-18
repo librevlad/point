@@ -96,7 +96,7 @@ class FocusedDiscoveryTest {
             override suspend fun allow(scope: CloudScope) = Unit
             override suspend fun revoke(scope: CloudScope) = Unit
         }
-        return DefaultEnrichment(registry, resolver, consent)
+        return DefaultEnrichment(registry, resolver, consent, com.point.core.flow.DEFAULT_PHONE_REGION)
     }
 
     private fun regionLook(

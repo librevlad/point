@@ -197,7 +197,7 @@ class GraphPipelineIntegrationTest {
         override suspend fun revoke(scope: CloudScope) = Unit
     }
 
-    private val enrichment = DefaultEnrichment(registry, resolver, consent)
+    private val enrichment = DefaultEnrichment(registry, resolver, consent, com.point.core.flow.PhoneRegion { "UA" })
 
     private val snapshot = MemorySnapshot()
 
@@ -356,6 +356,7 @@ class GraphPipelineIntegrationTest {
             override fun frame(path: String, maxPx: Int) = null
             override fun crop(path: String, left: Int, top: Int, right: Int, bottom: Int) = null
         },
+        com.point.core.flow.PhoneRegion { "UA" },
         object : com.point.core.flow.AiKeyCheck {
             override suspend fun check(config: UserAiConfig) = KeyProbe(status = 200, reply = "ok")
         },
@@ -407,7 +408,8 @@ class GraphPipelineIntegrationTest {
 
         val enriched = frame(vm)
         assertTrue("настоящий цикл нашёл QR", enriched.obj.state.has(Feature.HAS_QR))
-        assertEquals("https://point.app/x", enriched.obj.metadata["entity.qr"])
+        // Ссылка в коде — одно знание, а не два (#1119): она и есть знание объекта.
+        assertEquals("https://point.app/x", enriched.obj.metadata["entity.url"])
         assertEquals(
             "вопрос закрыт по-настоящему",
             InvestigationState.FOUND,

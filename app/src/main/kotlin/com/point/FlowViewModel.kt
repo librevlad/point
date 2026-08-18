@@ -123,6 +123,9 @@ class FlowViewModel @Inject constructor(
     private val pulledFiles: PulledFileFactory,
     private val frames: SelectionFrames,
 
+    // Страна для разбора номеров — вход, а не изменяемая глобаль (#1129).
+    private val phoneRegion: com.point.core.flow.PhoneRegion,
+
     private val aiKeyCheck: com.point.core.flow.AiKeyCheck,
 
     private val accountStore: com.point.core.flow.AccountStore,
@@ -325,7 +328,13 @@ class FlowViewModel @Inject constructor(
                 if (carried.isEmpty()) {
                     ingested
                 } else {
-                    ingested.copy(metadata = com.point.core.flow.mergeKnowledge(ingested.metadata, carried))
+                    ingested.copy(
+                        metadata = com.point.core.flow.mergeKnowledge(
+                            ingested.metadata,
+                            carried,
+                            region = phoneRegion.code(),
+                        ),
+                    )
                 }
             }?.let { ingested ->
                 if (!name.isNullOrBlank()) {
@@ -2003,7 +2012,7 @@ class FlowViewModel @Inject constructor(
 
         val parent = stack.lastOrNull()
         val carried = parent?.takeIf { continuesObject(it.obj, obj) }
-        val known = carried?.let { carryKnowledge(it.obj, obj) } ?: obj
+        val known = carried?.let { carryKnowledge(it.obj, obj, phoneRegion.code()) } ?: obj
         val carriedFound = carried?.found.orEmpty()
 
         val carriedRelations = carried?.relations
@@ -2066,7 +2075,7 @@ class FlowViewModel @Inject constructor(
         while (stack.size > at + 1) stack.removeLast()
 
         val open = stack.last()
-        val known = carryKnowledge(open.obj, obj)
+        val known = carryKnowledge(open.obj, obj, phoneRegion.code())
         val frame = open.copy(
             obj = known,
             bubbles = registry.bubblesFor(
@@ -2334,6 +2343,7 @@ class FlowViewModel @Inject constructor(
                                     n.metadata,
                                     update.metadata,
                                     REFRESHABLE_META,
+                                    phoneRegion.code(),
                                 ),
                             )
                         }
@@ -2356,6 +2366,7 @@ class FlowViewModel @Inject constructor(
             frame.obj.metadata,
             update.metadata,
             REFRESHABLE_META,
+            phoneRegion.code(),
         )
 
         // Тот же id — тот же объект: свежий результат (повтор действия на PC, пересбор узла)
