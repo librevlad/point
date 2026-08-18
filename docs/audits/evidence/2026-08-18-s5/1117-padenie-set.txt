@@ -1,0 +1,16 @@
+Point 0.3.0 — отчёт о падении
+Поток: ConnectivityThread
+
+java.lang.IndexOutOfBoundsException: index: 0, size: 0
+	at kotlin.collections.AbstractList$Companion.checkElementIndex$kotlin_stdlib(AbstractList.kt:113)
+	at kotlin.collections.ArrayDeque.set(ArrayDeque.kt:370)
+	at com.point.FlowViewModel.networkChanged(FlowViewModel.kt:803)
+	at com.point.FlowHostActivity$networkWatch$1.onAvailable(FlowHostActivity.kt:36)
+	at android.net.ConnectivityManager$NetworkCallback.onAvailable(ConnectivityManager.java:4220)
+	at android.net.ConnectivityManager$NetworkCallback.onAvailable(ConnectivityManager.java:4190)
+	at android.net.ConnectivityManager$CallbackHandler.handleMessage(ConnectivityManager.java:4680)
+	at android.os.Handler.dispatchMessage(Handler.java:132)
+	at android.os.Looper.dispatchMessage(Looper.java:358)
+	at android.os.Looper.loopOnce(Looper.java:288)
+	at android.os.Looper.loop(Looper.java:392)
+	at android.os.HandlerThread.run(HandlerThread.java:139)
