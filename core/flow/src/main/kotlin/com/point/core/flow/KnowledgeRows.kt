@@ -39,8 +39,13 @@ data class KnowledgeRow(
  * Своя страна не называется: человек и так знает, где живёт. Чужая называется словом, а не
  * кодом.
  */
-fun shownKnowledge(key: String, value: String, metadata: Map<String, String> = emptyMap()): String {
-    if (key == META_ENTITY_PHONE) return shownPhone(value, metadata["$key.kind"])
+fun shownKnowledge(
+    key: String,
+    value: String,
+    metadata: Map<String, String> = emptyMap(),
+    region: String = PhoneNumbers.DEFAULT_REGION,
+): String {
+    if (key == META_ENTITY_PHONE) return shownPhone(value, metadata["$key.kind"], region)
 
     val extras = metadata
         .filterKeys { it.startsWith("$key.") && !isAnnotationKey(it) }
@@ -48,16 +53,19 @@ fun shownKnowledge(key: String, value: String, metadata: Map<String, String> = e
     return (listOf(value) + extras).joinToString(" ")
 }
 
-private fun shownPhone(value: String, kind: String?): String {
-    val shown = PhoneNumbers.shown(value)
-    val abroad = PhoneNumbers.country(value)?.takeIf { it != PhoneNumbers.region }
+private fun shownPhone(value: String, kind: String?, region: String): String {
+    val shown = PhoneNumbers.shown(value, region)
+    val abroad = PhoneNumbers.country(value, region)?.takeIf { it != region }
         ?.let { PhoneNumbers.countryName(it) }
     return listOfNotNull(shown, abroad, kind).joinToString(" · ")
 }
 
 data class OpenQuestion(val name: String, val state: InvestigationState)
 
-fun knowledgeRows(metadata: Map<String, String>): List<KnowledgeRow> =
+fun knowledgeRows(
+    metadata: Map<String, String>,
+    region: String = PhoneNumbers.DEFAULT_REGION,
+): List<KnowledgeRow> =
     metadata.keys
         .filter { it.startsWith(META_ENTITY_PREFIX) && !isAnnotationKey(it) }
         .filter { it.removePrefix(META_ENTITY_PREFIX).none { c -> c == '.' } }
@@ -69,7 +77,7 @@ fun knowledgeRows(metadata: Map<String, String>): List<KnowledgeRow> =
             KnowledgeRow(
                 key = key,
                 name = name,
-                value = shownKnowledge(key, value, metadata),
+                value = shownKnowledge(key, value, metadata, region),
                 disputed = alternativesOf(metadata, key),
                 more = moreOf(metadata, key),
                 confirmed = provenanceOf(metadata, key) == Provenance.HUMAN,

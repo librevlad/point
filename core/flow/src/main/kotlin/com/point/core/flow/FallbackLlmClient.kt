@@ -66,7 +66,15 @@ class FallbackLlmClient(
                 // верно для любого провайдера в цепочке, кем бы он ни был вызван.
                 val result = provider.run(obj, prompt)
                 facts.remember(provider.serviceId, AiOutcome.ANSWERED)
-                return result
+
+                // Кто ответил — часть ответа (#1127). Знание, добытое облаком, иначе
+                // приходит в Graph безымянным: «понято по смыслу» — и всё, а каким
+                // сервисом и можно ли сравнить его со вторым, сказать нечем.
+                return if (provider.serviceId.isBlank()) {
+                    result
+                } else {
+                    result.copy(metadata = result.metadata + (META_ANSWERED_BY to provider.serviceId))
+                }
             } catch (e: Exception) {
 
                 // Исход обращения помнит сам сервис: экран ключей показывает

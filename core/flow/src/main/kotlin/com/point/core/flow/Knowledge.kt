@@ -12,10 +12,14 @@ val REFRESHABLE_KNOWLEDGE: Set<String> = setOf(
     META_OCR_TEXT_REF, META_OCR_ATOMS_REF, META_READ_CHARS, META_READ_TOTAL_CHARS,
 )
 
-fun carryKnowledge(known: PointObject, produced: PointObject): PointObject = produced.copy(
+fun carryKnowledge(
+    known: PointObject,
+    produced: PointObject,
+    region: String = PhoneNumbers.DEFAULT_REGION,
+): PointObject = produced.copy(
     id = known.id,
     state = known.state.features.fold(produced.state) { state, feature -> state.with(feature) },
-    metadata = mergeKnowledge(known.metadata, produced.metadata),
+    metadata = mergeKnowledge(known.metadata, produced.metadata, region = region),
     provenance = maxOf(known.provenance, produced.provenance),
     sourceObjects = produced.sourceObjects.ifEmpty { known.sourceObjects },
     creatorAction = produced.creatorAction ?: known.creatorAction,
@@ -35,6 +39,7 @@ fun mergeKnowledge(
     known: Map<String, String>,
     fresh: Map<String, String>,
     refreshable: Set<String> = emptySet(),
+    region: String = PhoneNumbers.DEFAULT_REGION,
 ): Map<String, String> {
     if (fresh.isEmpty()) return known
 
@@ -49,7 +54,7 @@ fun mergeKnowledge(
     val ontoHuman = readings.filterKeys { it !in humanFresh && humanSaid(known, it) }
     val machine = readings - humanFresh.keys - ontoHuman.keys
 
-    val merged = LinkedHashMap(mergeFacts(known, machine))
+    val merged = LinkedHashMap(mergeFacts(known, machine, region))
 
     // Машинное чтение поверх человеческого слова: остаётся историей, primary не трогается.
     ontoHuman.forEach { (key, value) ->
@@ -73,12 +78,12 @@ fun mergeKnowledge(
         when {
             key in refreshable -> merged[key] = value
 
-            isStateKey(key) -> merged[key] = value
+            isStateKey(key) -> merged[key] = keptState(merged[key], value)
 
             isAnnotationKey(key) -> mergeAnnotation(merged, key, value)
         }
     }
-    return withPhoneKnowledge(merged)
+    return withPhoneKnowledge(merged, region)
 }
 
 /**
@@ -91,14 +96,32 @@ fun mergeKnowledge(
  * Оператор и город библиотека тоже умеет, но их метаданные тяжёлые и после переноса номера
  * между операторами расходятся с правдой. Их здесь нет намеренно.
  */
-internal fun withPhoneKnowledge(metadata: Map<String, String>): Map<String, String> {
+internal fun withPhoneKnowledge(
+    metadata: Map<String, String>,
+    region: String = PhoneNumbers.DEFAULT_REGION,
+): Map<String, String> {
     val key = META_ENTITY_PHONE
     val value = metadata[key]?.takeIf { it.isNotBlank() } ?: return metadata
-    val country = PhoneNumbers.country(value) ?: return metadata
+    val country = PhoneNumbers.country(value, region) ?: return metadata
     val out = LinkedHashMap(metadata)
     out["$key.country"] = country
-    PhoneNumbers.kind(value)?.let { out["$key.kind"] = it }
+    PhoneNumbers.kind(value, region)?.let { out["$key.kind"] = it }
     return out
+}
+
+/**
+ * Ответ «нашли» не отменяется чужим «не нашли» (ADR-0001 §9, §20).
+ *
+ * У другого устройства другой набор способностей: компьютер разбирает текст своими
+ * правилами и адреса не находит вовсе. Его «смотрели — не нашлось» приезжало поверх
+ * найденного телефоном и стирало ответ на вопрос, который давно отвечен. «Не смотрели» и
+ * «не нашли» — разные вещи, и ни одна из них не сильнее находки.
+ */
+private fun keptState(known: String?, fresh: String): String {
+    val was = InvestigationState.entries.firstOrNull { it.wire == known }
+    val now = InvestigationState.entries.firstOrNull { it.wire == fresh }
+    val forgets = now == InvestigationState.NOT_FOUND || now == InvestigationState.NOT_INVESTIGATED
+    return if (was == InvestigationState.FOUND && forgets) known!! else fresh
 }
 
 private fun humanSaid(metadata: Map<String, String>, key: String): Boolean =
@@ -126,6 +149,11 @@ private fun mergeAnnotation(target: MutableMap<String, String>, key: String, val
                 com.point.core.model.provenanceOf(existing),
                 com.point.core.model.provenanceOf(value),
             ).wire
+
+        // Одно значение, два исполнителя — не спор, а два пути к одному знанию (#1127).
+        // Имена складываются: по ним видно, что вопрос смотрели дважды и ответ сошёлся.
+        key.endsWith(META_ACTOR_SUFFIX) ->
+            target[key] = actorValue(actorList(existing) + actorList(value))
 
         key.endsWith(META_EVIDENCE_SUFFIX) -> {
             val was = evidenceClasses(existing)

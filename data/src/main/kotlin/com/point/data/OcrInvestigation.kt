@@ -35,6 +35,7 @@ import com.point.core.flow.poorlyRead
 import com.point.core.flow.meterFacts
 import com.point.core.flow.receiptFacts
 import com.point.core.flow.trackFacts
+import com.point.core.flow.by
 import com.point.core.flow.locate
 import com.point.core.flow.regionWire
 import com.point.core.flow.META_AT_REGION
@@ -189,8 +190,16 @@ class OcrInvestigationRealizer @Inject constructor(
 
             objects = locate(entities.objects + identifiers, layer),
             relations = entities.relations + idRelations,
-        )
+
+            // Кто именно прочитал этот кадр (#1127): у чтения нет одного исполнителя — читает
+            // тот движок, которого выбрала цепочка, и по имени видно, чьё это прочтение,
+            // когда второй путь прочтёт то же место иначе.
+        ).by(readBy(layer))
     }
+
+    /** Имена движков, чьими глазами прочитан этот кадр. */
+    private fun readBy(layer: AtomLayer): String =
+        com.point.core.flow.actorValue(layer.atoms.map { it.reader }.filter { it.isNotBlank() })
 
     /**
      * Локализация найденного на источнике (`at.region`) — там, где слой атомов уже есть

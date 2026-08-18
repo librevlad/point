@@ -106,7 +106,7 @@ class FlowViewModelTest {
         keyNeeding: Set<CapabilityId> = emptySet(),
 
         pdf: com.point.core.flow.PdfRasterizer = FakePdfRasterizer(),
-    ) = FlowViewModel(store, FakeRegistry(caps, cloud, slow, keyNeeding) { userKeys.keys().mine.isNotEmpty() }, resolver, ChatTalk(chatResponder, store), enrichment, history, usage, chosenApps, userKeys, aiFacts, builtInKeys, consent, appLauncher, pdf, sensory, sensorySettings, cloudPrivacy, com.point.core.flow.YoloMode.OFF, snapshot, crashLog, dispatcher, AppIconResolver { null }, pcLinks, pcTransport, pcCaps, linkMonitor, PulledFileFactory { name -> java.io.File(java.io.File(System.getProperty("java.io.tmpdir")), "pulled-" + name).absolutePath }, noFrames, keyCheck, account, accountClient, pendingLogins, deviceKeys, browser, sharedTexts)
+    ) = FlowViewModel(store, FakeRegistry(caps, cloud, slow, keyNeeding) { userKeys.keys().mine.isNotEmpty() }, resolver, ChatTalk(chatResponder, store), enrichment, history, usage, chosenApps, userKeys, aiFacts, builtInKeys, consent, appLauncher, pdf, sensory, sensorySettings, cloudPrivacy, com.point.core.flow.YoloMode.OFF, snapshot, crashLog, dispatcher, AppIconResolver { null }, pcLinks, pcTransport, pcCaps, linkMonitor, PulledFileFactory { name -> java.io.File(java.io.File(System.getProperty("java.io.tmpdir")), "pulled-" + name).absolutePath }, noFrames, com.point.core.flow.PhoneRegion { "UA" }, keyCheck, account, accountClient, pendingLogins, deviceKeys, browser, sharedTexts)
 
     private val keyCheck = FakeAiKeyCheck()
 
@@ -521,6 +521,25 @@ class FlowViewModelTest {
 
         assertNull("после ухода работа не продолжается", vm.ui.value.busy)
         assertNull("и её результат не приезжает поверх «Недавнего»", vm.ui.value.frame)
+    }
+
+    /**
+     * Начатое нельзя терять молча (#1133, ADR-0001 §18).
+     *
+     * Прежде новый объект поверх идущей работы обрывал её без единого слова: экран
+     * переключался, облачная работа доживала в пустоту, результат не приходил никуда.
+     */
+    @Test fun `новый объект поверх идущей работы обрывает её со сказанным исходом`() = runTest(dispatcher) {
+        val vm = vm(slow = setOf(CapabilityId("a")))
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        vm.onBubble(bubble("a"))
+        assertNotNull("работа обязана идти — иначе обрывать нечего", vm.ui.value.busy)
+
+        vm.onShared("uri2", "image/png"); advanceUntilIdle()
+
+        val said = vm.ui.value.message.orEmpty()
+        assertTrue("об обрыве не сказано ни слова-$said", said.isNotBlank())
+        assertTrue("прерванный шаг не назван-$said", said.contains(bubble("a").title))
     }
 
     @Test fun `назад с экрана входа возвращает в Point, а не закрывает его`() = runTest(dispatcher) {

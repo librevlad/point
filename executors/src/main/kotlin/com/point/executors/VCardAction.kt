@@ -55,7 +55,9 @@ class VCardRealizer @Inject constructor(
             runCatching {
 
                 viewer.view(input.copy(mime = VCARD_MIME))
-                ActionResult.Done("Открываю контакт…")
+                // Тот же случай, что и с календарём (#1131): Point открыл чужой экран, и
+                // на этом его шаг кончился — многоточие обещало работу, которой уже нет.
+                ActionResult.Done("Открыл карточку контакта")
             }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось открыть контакт", recoverable = true) }
         }
 

@@ -112,7 +112,13 @@ fun understoodFacts(obj: PointObject): List<UnderstoodFact> {
                 ),
             )
         }
-        if (state.has(Feature.HAS_QR)) add(UnderstoodFact("qr", "Есть QR-код", entity("qr")?.readableUrl(), note("qr"), known("qr")))
+        // Код на кадре — состояние объекта; что в нём написано — знание (#1119). Когда в
+        // коде оказалась ссылка, она и есть знание, и повторять её здесь второй строкой
+        // незачем: строка говорит только то, что код на кадре есть, и это Point видел сам.
+        if (state.has(Feature.HAS_QR)) {
+            val content = entity("qr")?.readableUrl()
+            add(UnderstoodFact("qr", "Есть QR-код", content, note("qr"), content?.let { known("qr") } ?: true))
+        }
 
         // Цифры кода видны и копируются одним тапом (#445). Про сам товар Point молчит:
         // название, производитель и цена — чужая уверенность, а не наблюдение Point.

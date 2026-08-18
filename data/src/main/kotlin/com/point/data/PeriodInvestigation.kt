@@ -44,6 +44,8 @@ class PeriodInvestigationRealizer @Inject constructor(
 
     override val capabilityId = PeriodInvestigation.ID
 
+    override val meta = com.point.core.flow.RealizerMeta(actor = "period-rules")
+
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         com.point.core.flow.investigated { findings(input) }
 

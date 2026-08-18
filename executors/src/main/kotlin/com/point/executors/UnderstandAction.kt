@@ -27,7 +27,9 @@ import com.point.core.flow.META_OCR_TEXT_REF
 import com.point.core.flow.META_READING_MODE
 import com.point.core.flow.META_READ_CHARS
 import com.point.core.flow.META_READ_TOTAL_CHARS
+import com.point.core.flow.META_ANSWERED_BY
 import com.point.core.flow.META_SOURCE_SUFFIX
+import com.point.core.flow.addActor
 import com.point.core.flow.ReadingMode
 import com.point.core.flow.Realizer
 import com.point.core.flow.UNDERSTAND_CONTRACT_KEYS
@@ -165,7 +167,7 @@ class UnderstandRealizer @Inject constructor(
                 // слова страницы, даёт и то, и другое.
                 val eyes = input.state.kind == ObjectKind.IMAGE && llm.canHandle(input)
                 reportStage(if (eyes) "Смотрю на снимок" else "Читаю страницу")
-                val answer = ask(input, understandPrompt(laidOut, index = index), eyes = eyes)
+                val (answer, answeredBy) = ask(input, understandPrompt(laidOut, index = index), eyes = eyes)
                 reportStage("Проверяю прочитанное по странице")
                 val parsed = parseFieldCandidates(answer)
                 // Сверять есть с чем всегда, когда Point читал сам: слой слов снимка или
@@ -175,7 +177,7 @@ class UnderstandRealizer @Inject constructor(
 
                 val retried = judged.retry.takeIf { it.isNotEmpty() }?.let { keys ->
                     reportStage("Контрольная цифра не сошлась — перечитываю")
-                    val again = ask(input, retryPrompt(keys, laidOut, index), eyes = eyes)
+                    val again = ask(input, retryPrompt(keys, laidOut, index), eyes = eyes).text
                     judgeFields(parseFieldCandidates(again).fields.filterKeys { it in keys }, layer, readText)
                 }
                 val readFields = judged.won + retried?.won.orEmpty()
@@ -257,9 +259,13 @@ class UnderstandRealizer @Inject constructor(
                     ActionResult.Done(
                         message ?: UNDERSTOOD,
                         Findings(
-                            metadata = merged +
-                                annotations(merged, fields, judgedByLayer = layer != null, blocked = blocked) +
-                                roleAlts + roleSources + progress + state.orEmptyInvestigation(),
+                            metadata = addActor(
+                                merged +
+                                    annotations(merged, fields, judgedByLayer = layer != null, blocked = blocked) +
+                                    roleAlts + roleSources + progress + state.orEmptyInvestigation(),
+                                values.keys,
+                                answeredBy,
+                            ),
                             objects = people.objects,
                             relations = people.relations,
                         ),
@@ -270,7 +276,7 @@ class UnderstandRealizer @Inject constructor(
 
     private suspend fun readWithEyes(input: PointObject): ActionResult {
         reportStage("Смотрю на снимок")
-        val answer = File(llm.run(input, VISUAL_PROMPT).uri.value).readText()
+        val (answer, answeredBy) = ask(input, VISUAL_PROMPT, eyes = true)
         val parsed = parseFieldCandidates(answer)
         val judged = judgeFields(parsed.fields, layer = null)
         val fields = judged.won
@@ -290,19 +296,34 @@ class UnderstandRealizer @Inject constructor(
         return ActionResult.Done(
             UNDERSTOOD,
             Findings(
-                metadata = merged +
-                    annotations(merged, fields, judgedByLayer = false, blocked = judged.blocked) +
-                    doubts(merged, parsed.unsure) +
-                    (META_READING_MODE to ReadingMode.HANDWRITTEN.name),
+                metadata = addActor(
+                    merged +
+                        annotations(merged, fields, judgedByLayer = false, blocked = judged.blocked) +
+                        doubts(merged, parsed.unsure) +
+                        (META_READING_MODE to ReadingMode.HANDWRITTEN.name),
+                    values.keys,
+                    answeredBy,
+                ),
                 objects = people.objects,
                 relations = people.relations,
             ),
         )
     }
 
+    /**
+     * Ответ модели вместе с именем сервиса, который его дал (#1127).
+     *
+     * Кто именно отвечал, знает только цепочка сервисов: она перебирает их по очереди и
+     * возвращает первый живой ответ. Без этого имени знание из облака стояло в графе
+     * безымянным, и сравнить двух исполнителей одного вопроса было нечем.
+     */
+    private data class Answer(val text: String, val by: String)
+
     /** [eyes] — отдать модели сам снимок; иначе уходит только текст объекта. */
-    private suspend fun ask(input: PointObject, prompt: String, eyes: Boolean = false): String =
-        File(llm.run(if (eyes) input else textOnly(input), prompt).uri.value).readText()
+    private suspend fun ask(input: PointObject, prompt: String, eyes: Boolean = false): Answer {
+        val result = llm.run(if (eyes) input else textOnly(input), prompt)
+        return Answer(File(result.uri.value).readText(), result.metadata[META_ANSWERED_BY].orEmpty())
+    }
 
     /**
      * Сомнение модели становится обычной оговоркой знания (#670): у зрячего чтения нет ни

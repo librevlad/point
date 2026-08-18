@@ -38,9 +38,12 @@ object PhoneNumbers {
      *
      * Страна устройства — не страна документа. Человек в Польше открывает украинский счёт;
      * номер в документе от этого не исчезает.
+     *
+     * Подсказка приходит **параметром** (#1129). Прежде она лежала здесь же изменяемой
+     * переменной, и разбор одного и того же текста зависел от того, что записали в неё
+     * раньше: два устройства с разной локалью разбирали документ по-разному, а по графу
+     * этого видно не было. Подсказка — вход разбора, а не состояние мира.
      */
-    @Volatile
-    var region: String = DEFAULT_REGION
 
     /**
      * Существует ли такой номер хотя бы в одной из правдоподобных стран.
@@ -48,7 +51,7 @@ object PhoneNumbers {
      * Решение владельца 13.08.2026: «Несколько стран, годится любая». Принятая цена — на
      * грязном OCR ложных номеров станет чуть больше.
      */
-    fun exists(text: String, region: String = PhoneNumbers.region): Boolean = countryOf(text, region) != null
+    fun exists(text: String, region: String = DEFAULT_REGION): Boolean = countryOf(text, region) != null
 
     /**
      * Первая страна, в которой номер существует, — или `null`, если не существует нигде.
@@ -56,7 +59,7 @@ object PhoneNumbers {
      * Порядок подсказок не случаен: сначала та, что назвал вызывающий (страна устройства
      * или подсказка из самого документа), потом остальные, где Point живёт.
      */
-    fun countryOf(text: String, region: String = PhoneNumbers.region): String? =
+    fun countryOf(text: String, region: String = DEFAULT_REGION): String? =
         candidateRegions(text, region).firstOrNull { parse(text, it) != null }
 
     private fun candidateRegions(text: String, region: String): List<String> =
@@ -101,7 +104,7 @@ object PhoneNumbers {
      * `067 636 05 60`, `+380676360560` и `0676360560` дают одну строку E.164, и тождество
      * считается по ней, а не по тексту.
      */
-    fun same(left: String, right: String, region: String = PhoneNumbers.region): Boolean {
+    fun same(left: String, right: String, region: String = DEFAULT_REGION): Boolean {
         val a = e164(left, region) ?: return false
         val b = e164(right, region) ?: return false
         return a == b
@@ -112,11 +115,11 @@ object PhoneNumbers {
         countryOf(text, region)?.let { parse(text, it) }
 
     /** Как номер хранится: единообразно, без пробелов и скобок. */
-    fun e164(text: String, region: String = PhoneNumbers.region): String? =
+    fun e164(text: String, region: String = DEFAULT_REGION): String? =
         parseAnywhere(text, region)?.let { util.format(it, PhoneNumberUtil.PhoneNumberFormat.E164) }
 
     /** Как номер показывается человеку: так, как он привык его видеть. */
-    fun human(text: String, region: String = PhoneNumbers.region): String? =
+    fun human(text: String, region: String = DEFAULT_REGION): String? =
         parseAnywhere(text, region)?.let { number ->
             val format = if (number.countryCode == countryCodeOf(region)) {
                 PhoneNumberUtil.PhoneNumberFormat.NATIONAL
@@ -136,7 +139,7 @@ object PhoneNumbers {
      *
      * Записанный международно — с `+` — сомнений не оставляет, и страна называется всегда.
      */
-    fun country(text: String, region: String = PhoneNumbers.region): String? {
+    fun country(text: String, region: String = DEFAULT_REGION): String? {
         val fits = candidateRegions(text, region).mapNotNull { parse(text, it) }
             .map { util.getRegionCodeForNumber(it) }
             .distinct()
@@ -144,7 +147,7 @@ object PhoneNumbers {
     }
 
     /** Вид номера словами человека: мобильный, городской. Неизвестное молчит. */
-    fun kind(text: String, region: String = PhoneNumbers.region): String? =
+    fun kind(text: String, region: String = DEFAULT_REGION): String? =
         parseAnywhere(text, region)?.let {
             when (util.getNumberType(it)) {
                 PhoneNumberType.MOBILE -> "мобильный"
@@ -183,7 +186,7 @@ object PhoneNumbers {
      * канонический вид у Point есть, и показывать мусор незачем (#932). Что не разобралось,
      * показывается как есть: выдумывать нельзя.
      */
-    fun shown(text: String, region: String = PhoneNumbers.region): String =
+    fun shown(text: String, region: String = DEFAULT_REGION): String =
         human(text, region) ?: text
 
     /**

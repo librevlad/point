@@ -22,7 +22,6 @@ import com.point.core.model.ValueRef
 import com.point.core.ui.FirstScreen
 import com.point.core.ui.theme.PointTheme
 import org.junit.Assert.assertEquals
-import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -42,9 +41,6 @@ class OneFactOnePlaceTest {
      */
     private val phoneShown = "067 123 4567"
 
-    @Before fun ukrainianDevice() {
-        com.point.core.flow.PhoneNumbers.region = "UA"
-    }
     private val email = "olena@tihiy-dvor.example"
     private val address = "Київ, вулиця Ярославська, 14"
 

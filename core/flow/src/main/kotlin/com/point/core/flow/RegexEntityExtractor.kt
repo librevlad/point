@@ -1,6 +1,8 @@
 package com.point.core.flow
 
-class RegexEntityExtractor : EntityExtractor {
+class RegexEntityExtractor(
+    private val region: PhoneRegion = DEFAULT_PHONE_REGION,
+) : EntityExtractor {
 
     override suspend fun extract(text: String): List<Entity> {
         if (text.isBlank()) return emptyList()
@@ -18,7 +20,7 @@ class RegexEntityExtractor : EntityExtractor {
         }
 
         val unique = found.distinctBy { it.type to it.value.lowercase() }
-        return plausibleEntities(unique, text)
+        return plausibleEntities(unique, text, region.code())
     }
 
     private companion object {

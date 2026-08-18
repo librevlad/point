@@ -47,6 +47,8 @@ class ZipImagesInvestigationRealizer @Inject constructor() : Realizer {
 
     override val capabilityId = ZipImagesInvestigation.ID
 
+    override val meta = com.point.core.flow.RealizerMeta(actor = "zip-pages")
+
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         com.point.core.flow.investigated(whenFailed = FAILED) { findings(input) }
 

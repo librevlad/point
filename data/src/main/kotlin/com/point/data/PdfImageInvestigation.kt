@@ -45,6 +45,8 @@ class PdfImageInvestigationRealizer @Inject constructor(
 
     override val capabilityId = PdfImageInvestigation.ID
 
+    override val meta = com.point.core.flow.RealizerMeta(actor = "pdf-pages")
+
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         com.point.core.flow.investigated { findings(input) }
 

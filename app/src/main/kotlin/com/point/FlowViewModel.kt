@@ -27,6 +27,7 @@ import com.point.core.flow.Box
 import com.point.core.flow.FrameTransform
 import com.point.core.flow.InvestigationState
 import com.point.core.flow.investigationStateOf
+import com.point.core.flow.knownBy
 import com.point.core.flow.META_CLOUD_ATOMS_REF
 import com.point.core.flow.META_OCR_ATOMS_REF
 import com.point.core.flow.META_SELECTION_IDS
@@ -121,6 +122,9 @@ class FlowViewModel @Inject constructor(
     private val linkMonitor: com.point.core.flow.LinkMonitor,
     private val pulledFiles: PulledFileFactory,
     private val frames: SelectionFrames,
+
+    // Страна для разбора номеров — вход, а не изменяемая глобаль (#1129).
+    private val phoneRegion: com.point.core.flow.PhoneRegion,
 
     private val aiKeyCheck: com.point.core.flow.AiKeyCheck,
 
@@ -308,7 +312,7 @@ class FlowViewModel @Inject constructor(
 
         syncCircle()
         val voice = claimVoice()
-        makeWayForIncoming()
+        val interrupted = makeWayForIncoming()
 
         // Имя — до копии, и передумать можно (#640): большой файл копируется секундами, и
         // всё это время человек видел голое «Открываю…» без единого способа выйти.
@@ -324,7 +328,19 @@ class FlowViewModel @Inject constructor(
                 if (carried.isEmpty()) {
                     ingested
                 } else {
-                    ingested.copy(metadata = com.point.core.flow.mergeKnowledge(ingested.metadata, carried))
+                    val (landed, knowledge) = withTravelledText(ingested, carried)
+                    landed.copy(
+                        // Тот же объект, а не новая вещь рядом (#811, ADR-0001 §20): если он
+                        // уезжал отсюда, он возвращается своим узлом и знание прирастает к
+                        // нему. Чужой объект приезжает со своим именем и остаётся собой.
+                        id = knowledge[com.point.core.flow.META_ORIGIN_ID]?.takeIf { it.isNotBlank() }
+                            ?: landed.id,
+                        metadata = com.point.core.flow.mergeKnowledge(
+                            landed.metadata,
+                            knowledge,
+                            region = phoneRegion.code(),
+                        ),
+                    )
                 }
             }?.let { ingested ->
                 if (!name.isNullOrBlank()) {
@@ -351,6 +367,7 @@ class FlowViewModel @Inject constructor(
             }
             runCatching { history.record(obj) }
             pushFrame(obj)
+            tellInterrupted(interrupted)
 
             autoAction?.let { id ->
                 val cap = CapabilityId(id)
@@ -369,7 +386,7 @@ class FlowViewModel @Inject constructor(
     fun onSharedMultiple(sources: List<String>) {
         freshShareArrived = true
         val voice = claimVoice()
-        makeWayForIncoming()
+        val interrupted = makeWayForIncoming()
         raiseBusy("Открываю…", cancelable = false)
         trackWork {
             val obj = runCatching {
@@ -384,6 +401,7 @@ class FlowViewModel @Inject constructor(
             }
 
             pushFrame(obj)
+            tellInterrupted(interrupted)
         }
     }
 
@@ -569,6 +587,7 @@ class FlowViewModel @Inject constructor(
     private fun maybePreview(bubble: Bubble, top: PointObject) {
         if (asksRepeat(bubble, top)) return
         val voice = claimVoice()
+        runningStep = bubble.title
         raiseBusy(
             bubble.title,
             network = isCloud(bubble.capabilityId),
@@ -597,7 +616,10 @@ class FlowViewModel @Inject constructor(
                 // Само действие идёт этой же работой. Отдельный запуск изнутри уводил отслеживание
                 // на себя, а конец подготовки стирал его- и «Отменить» переставало действовать (#692).
                 runCatching { sensory.tap() }
-                runAction(bubble, voice) { realizer.perform(top, null) }
+
+                // Кто исполнил — часть добытого знания (#1127): тот же шов, что и у
+                // исследований, только исполнитель здесь уже выбран строчкой выше.
+                runAction(bubble, voice) { realizer.perform(top, null).knownBy(top, realizer.meta.actor) }
             } else {
                 pendingPreviewBubble = bubble
                 _ui.update { it.copy(busy = null, busyStage = null, preview = preview) }
@@ -935,7 +957,7 @@ class FlowViewModel @Inject constructor(
             quiet = isQuietAction(bubble.capabilityId),
             cancelable = true,
         )
-        dispatch(bubble) { resolver.realizerFor(bubble.capabilityId, top.state).perform(top, null) }
+        dispatch(bubble) { performed(bubble.capabilityId, top, null) }
     }
 
     /**
@@ -1019,7 +1041,7 @@ class FlowViewModel @Inject constructor(
             cancelable = true,
         )
         _ui.update { it.copy(inputSuggestions = emptyList(), needsImage = null) }
-        dispatch(bubble) { resolver.realizerFor(bubble.capabilityId, top.state).perform(top, text) }
+        dispatch(bubble) { performed(bubble.capabilityId, top, text) }
     }
 
     fun cancelInput() {
@@ -1701,6 +1723,17 @@ class FlowViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Исполнить действие и запомнить, кто именно его исполнил (#1127).
+     *
+     * Тот же шов, что и у исследований (`DefaultEnrichment.run`): имя исполнителя знает
+     * только место, где его выбрал Resolver, и знание уходит в Graph уже с ним.
+     */
+    private suspend fun performed(id: CapabilityId, obj: PointObject, amendment: String?): ActionResult {
+        val realizer = resolver.realizerFor(id, obj.state)
+        return realizer.perform(obj, amendment).knownBy(obj, realizer.meta.actor)
+    }
+
     private suspend fun bridge(obj: PointObject, viaCapId: String): PointObject? {
         claimVoice()
         raiseBusy("Преобразую…", cancelable = true)
@@ -1749,8 +1782,17 @@ class FlowViewModel @Inject constructor(
 
         busyJob?.cancel()
         val voice = claimVoice()
+        runningStep = bubble.title
         trackWork { runAction(bubble, voice, action) }
     }
+
+    /**
+     * Как называется идущая сейчас работа (#1133).
+     *
+     * У прерванного шага должно быть имя: «молча потерять начатое нельзя» — человек ждал
+     * таблицу, за которую уже заплатил ожиданием и облачным вызовом.
+     */
+    @Volatile private var runningStep: String? = null
 
     private suspend fun runAction(bubble: Bubble, voice: Long, action: suspend () -> ActionResult) {
         runCatching { usage.record(bubble.capabilityId) }
@@ -1763,11 +1805,17 @@ class FlowViewModel @Inject constructor(
             ) { action() }
         }
 
-            .onSuccess { result -> if (owns(voice)) handleResult(result, bubble) }
+            .onSuccess { result ->
+                if (owns(voice)) {
+                    runningStep = null
+                    handleResult(result, bubble)
+                }
+            }
             .onFailure { e ->
 
                 if (e is kotlinx.coroutines.CancellationException) throw e
                 if (!owns(voice)) return@onFailure
+                runningStep = null
 
                 _ui.update { it.copy(busy = null, busyStage = null, message = e.message ?: "Не получилось", messageOutcome = Outcome.FAILED) }
             }
@@ -1974,10 +2022,28 @@ class FlowViewModel @Inject constructor(
      * Показывать нечего — значит и не показываем: остаётся «Открываю…», а объект встаёт на
      * место, как только его есть чем показать.
      */
-    private fun makeWayForIncoming() {
+    /**
+     * Новый объект приходит поверх начатого — прежняя работа обрывается, и у обрыва есть
+     * исход (#1133, ADR-0001 §18).
+     *
+     * Прежде шаг исчезал молча: экран переключался на новое, облачная работа доживала в
+     * пустоту, результат не приходил никуда, и человеку об этом не говорили ни строки.
+     * Отмена руками так себя не ведёт — она честно говорит «Отменено».
+     */
+    private fun makeWayForIncoming(): String? {
+        val interrupted = runningStep?.takeIf { busyJob?.isActive == true }
+        runningStep = null
+        busyJob?.cancel()
         cancelEnrichment()
         stack.clear()
         _ui.update { it.copy(frame = null, focusPreview = null, path = emptyList()) }
+        return interrupted
+    }
+
+    /** Сказать про оборванный шаг, когда новый объект уже открыт и экран освободился. */
+    private fun tellInterrupted(step: String?) {
+        val what = step ?: return
+        _ui.update { it.copy(message = "«$what» прервано — принят новый объект", messageOutcome = Outcome.NONE) }
     }
 
     private fun pushFrame(obj: PointObject, via: CapabilityId? = null, viaTitle: String? = null) {
@@ -1991,7 +2057,7 @@ class FlowViewModel @Inject constructor(
 
         val parent = stack.lastOrNull()
         val carried = parent?.takeIf { continuesObject(it.obj, obj) }
-        val known = carried?.let { carryKnowledge(it.obj, obj) } ?: obj
+        val known = carried?.let { carryKnowledge(it.obj, obj, phoneRegion.code()) } ?: obj
         val carriedFound = carried?.found.orEmpty()
 
         val carriedRelations = carried?.relations
@@ -2054,7 +2120,7 @@ class FlowViewModel @Inject constructor(
         while (stack.size > at + 1) stack.removeLast()
 
         val open = stack.last()
-        val known = carryKnowledge(open.obj, obj)
+        val known = carryKnowledge(open.obj, obj, phoneRegion.code())
         val frame = open.copy(
             obj = known,
             bubbles = registry.bubblesFor(
@@ -2210,6 +2276,28 @@ class FlowViewModel @Inject constructor(
      * фоновым исследованием, молчал: список действий уже знал про текст, а человек — нет и
      * проверить прочитанное не мог.
      */
+    /**
+     * Прочитанное на той стороне остаётся прочитанным здесь (#811, ADR-0001 §20).
+     *
+     * Текст живёт файлом устройства, и ссылка на него в пути не значит ничего: объект
+     * приезжал снова непрочитанным, и вторая сторона предлагала работу, которая уже сделана.
+     * Приехавшее значение здесь снова становится знанием — файлом рядом с объектом и
+     * признаком «текст есть», как это давно делает компьютер на приёме.
+     */
+    private suspend fun withTravelledText(
+        obj: PointObject,
+        carried: Map<String, String>,
+    ): Pair<PointObject, Map<String, String>> {
+        val text = carried[com.point.core.flow.META_READ_TEXT]?.takeIf { it.isNotBlank() }
+            ?: return obj to carried
+        val ref = runCatching {
+            store.newScratchFile("txt").also { java.io.File(it.value).writeText(text) }
+        }.getOrNull() ?: return obj to (carried - com.point.core.flow.META_READ_TEXT)
+
+        return obj.copy(state = obj.state.with(Feature.HAS_TEXT)) to
+            (carried - com.point.core.flow.META_READ_TEXT + (com.point.core.flow.META_OCR_TEXT_REF to ref.value))
+    }
+
     private fun loadTextPreviewIfText(obj: PointObject) {
         val readText = obj.metadata[com.point.core.flow.META_OCR_TEXT_REF]?.takeIf { it.isNotBlank() }
         if (obj.state.kind != ObjectKind.TEXT && readText == null) return
@@ -2322,6 +2410,7 @@ class FlowViewModel @Inject constructor(
                                     n.metadata,
                                     update.metadata,
                                     REFRESHABLE_META,
+                                    phoneRegion.code(),
                                 ),
                             )
                         }
@@ -2344,6 +2433,7 @@ class FlowViewModel @Inject constructor(
             frame.obj.metadata,
             update.metadata,
             REFRESHABLE_META,
+            phoneRegion.code(),
         )
 
         // Тот же id — тот же объект: свежий результат (повтор действия на PC, пересбор узла)

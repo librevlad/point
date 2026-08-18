@@ -94,6 +94,8 @@ class EntityInvestigationRealizer(
 
     override val capabilityId = EntityInvestigation.ID
 
+    override val meta = com.point.core.flow.RealizerMeta(actor = "entities")
+
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         com.point.core.flow.investigated { findings(input) }
 
@@ -190,6 +192,12 @@ internal fun focusedDelta(
             sameAsKnown || com.point.core.flow.normConsensus(facts[key].orEmpty()) ==
                 com.point.core.flow.normConsensus(value) -> Unit
 
+            // То же знание другими словами — не второй объект области, а прочтение
+            // первого: тождество факта в Point одно (#1122).
+            known != null && com.point.core.flow.sameFact(key, known, value) -> Unit
+
+            facts[key]?.let { com.point.core.flow.sameFact(key, it, value) } == true -> Unit
+
             else -> more.getOrPut(key) { mutableListOf() } += value
         }
 
@@ -244,6 +252,11 @@ internal fun entityDelta(
     // живой прогон 2026-08-09): два телефона в тексте остаются двумя телефонами.
     val more = LinkedHashMap<String, MutableList<String>>()
 
+    // А вот второе прочтение ТОГО ЖЕ факта — спор, и он обязан остаться виден (#1122).
+    // На накладной адрес прочитан дважды, во второй раз с прилипшим отчеством получателя,
+    // и человеку показывали два места, которых на бумаге одно.
+    val disputed = LinkedHashMap<String, MutableList<String>>()
+
     // Строка документа вокруг значения — подпись при нём (#782): видно, что это за день,
     // но значением она не является и в спор, в «ещё» и в тождество узла не входит.
     val lines = LinkedHashMap<String, String>()
@@ -259,11 +272,23 @@ internal fun entityDelta(
                 }
                 e.line?.let { lines.putIfAbsent(value, it) }
                 val first = this[key]
-                if (first == null) {
-                    put(key, value)
-                } else if (normConsensus(value) != normConsensus(first)) {
-                    val bucket = more.getOrPut(key) { mutableListOf() }
-                    if (bucket.none { normConsensus(it) == normConsensus(value) }) bucket += value
+                when {
+                    first == null -> put(key, value)
+
+                    normConsensus(value) == normConsensus(first) -> Unit
+
+                    com.point.core.flow.sameFact(key, first, value) -> {
+                        val fuller = com.point.core.flow.fullerReading(first, value)
+                        val other = if (fuller == first) value else first
+                        put(key, fuller)
+                        val bucket = disputed.getOrPut(key) { mutableListOf() }
+                        if (bucket.none { normConsensus(it) == normConsensus(other) }) bucket += other
+                    }
+
+                    else -> {
+                        val bucket = more.getOrPut(key) { mutableListOf() }
+                        if (bucket.none { normConsensus(it) == normConsensus(value) }) bucket += value
+                    }
                 }
             }
         }
@@ -271,11 +296,14 @@ internal fun entityDelta(
     val moreFacts = more.mapKeys { (key, _) -> key + META_MORE_SUFFIX }
         .mapValues { (_, values) -> altValue(values) }
 
+    val disputes = disputed.mapKeys { (key, _) -> key + META_ALT_SUFFIX }
+        .mapValues { (_, values) -> altValue(values) }
+
     val ruled = if (META_ENTITY_ADDRESS in extracted) emptyMap() else addressFacts(text)
     val captions = extracted.mapNotNull { (key, value) ->
         lines[value]?.let { key + META_LINE_SUFFIX to it }
     }.toMap()
-    val facts = extracted + moreFacts + ruled + captions
+    val facts = extracted + moreFacts + disputes + ruled + captions
 
     if (ruled.isNotEmpty()) features += Feature.HAS_ADDRESS
     val (objects, relations) = entityObjects(source, facts, creator = ENTITY_CREATOR, lines = lines)
@@ -283,23 +311,28 @@ internal fun entityDelta(
 }
 
 /**
- * Один день — один узел (#660): узлы дат схлопываются по календарному дню,
- * побеждает более информативное значение (с временем). Остальные виды остаются
- * как есть — их тождество решается общей нормализацией.
+ * Один факт — один узел (#660, #1122).
+ *
+ * Правило начиналось с дат — «26.04.2026» и «26.04.2026 20:04» один день, — но оно не про
+ * даты: два прочтения одного адреса тоже один адрес, и человеку показывали их как два места.
+ * Тождество считает [com.point.core.flow.sameFact], побеждает более информативное прочтение.
  */
 private fun List<PointObject>.dedupedNodes(
-    kind: com.point.core.model.ObjectKind,
+    @Suppress("UNUSED_PARAMETER") kind: com.point.core.model.ObjectKind,
     key: String,
 ): List<PointObject> {
-    if (kind != KIND_DATE) return this
-    val byDay = LinkedHashMap<String, PointObject>()
+    val kept = mutableListOf<PointObject>()
     forEach { node ->
         val value = node.metadata[key].orEmpty()
-        val day = com.point.core.flow.humanDayOf(value)?.toString() ?: normConsensus(value)
-        val kept = byDay[day]
-        if (kept == null || value.length > kept.metadata[key].orEmpty().length) byDay[day] = node
+        val twin = kept.indexOfFirst { com.point.core.flow.sameFact(key, it.metadata[key].orEmpty(), value) }
+        if (twin < 0) {
+            kept += node
+            return@forEach
+        }
+        val known = kept[twin].metadata[key].orEmpty()
+        if (com.point.core.flow.fullerReading(known, value) != known) kept[twin] = node
     }
-    return byDay.values.toList()
+    return kept.toList()
 }
 
 internal const val ENTITY_CREATOR = "entity-enricher"

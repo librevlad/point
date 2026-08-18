@@ -152,7 +152,11 @@ private fun editDistance(a: String, b: String, budget: Int): Int {
     return prev[b.length]
 }
 
-fun mergeFacts(known: Map<String, String>, fresh: Map<String, String>): Map<String, String> {
+fun mergeFacts(
+    known: Map<String, String>,
+    fresh: Map<String, String>,
+    region: String = PhoneNumbers.DEFAULT_REGION,
+): Map<String, String> {
     val merged = LinkedHashMap(known)
     fresh.forEach { (key, value) ->
 
@@ -163,10 +167,11 @@ fun mergeFacts(known: Map<String, String>, fresh: Map<String, String>): Map<Stri
             return@forEach
         }
 
-        // Один номер, записанный по-разному, — одно знание (#932). `067 636 05 60`,
-        // `+380676360560` и `0676360560` расходились в спор «или:», и человек видел
-        // разногласие там, где его нет. Тождество считает библиотека, а не текст.
-        if (key == META_ENTITY_PHONE && PhoneNumbers.same(was, value)) {
+        // Одно знание, записанное по-разному, спором не становится (#932, #1109, #1122):
+        // номер в трёх видах, один день с временем и без, адрес с прилипшим соседом. Кто
+        // из двух прочтений полнее — видно по ним самим, а не по тому, кто прочитал.
+        if (sameFact(key, was, value, region)) {
+            merged[key] = fullerReading(was, value)
             merged.remove(key + META_ALT_SUFFIX)
             return@forEach
         }
