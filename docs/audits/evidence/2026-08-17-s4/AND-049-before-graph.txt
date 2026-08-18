@@ -1,0 +1,3 @@
+flow nodes=1
+- 76c2b1cd kind=IMAGE mime=image/png via=None name=nakladnaya.png found=[] rels=[] meta#=6 | investigated.exif=not_found; investigated.graph-roles=not_found; investigated.metadata-entities=not_found; investigated.qr-content=not_found; size=10707570
+history lines=0
