@@ -50,6 +50,25 @@ const val MAX_EVIDENCE_CROPS = 12
 
 fun AtomLayer.locate(fragment: String): Box? = locateIn(lines(), fragment)
 
+/**
+ * Уверенно ли прочитано это значение (#1109).
+ *
+ * Ридер знает про каждое слово, насколько он в нём уверен, и знание это до сих пор кончалось
+ * на самом слое: значение, собранное из сомнительных слов, приходило к человеку таким же
+ * спокойным, как прочитанное чисто. Отсюда ложная дата рядом с верной — и ни признака, что
+ * одну из них Point прочитал плохо.
+ *
+ * `null` — про это значение слой ничего не говорит: его слов на странице не нашлось. Молчание
+ * не превращается ни в сомнение, ни в уверенность.
+ */
+fun AtomLayer.readConfidently(value: String, below: Float = AtomLayer.CONFIDENT_ENOUGH): Boolean? {
+    val wanted = evidenceTokens(value)
+    if (wanted.isEmpty()) return null
+    val backing = atoms.filter { evidenceToken(it.text) in wanted }
+    if (backing.isEmpty()) return null
+    return backing.none { it.confidence < below }
+}
+
 private fun AtomLayer.locateIn(lines: List<List<Atom>>, fragment: String): Box? {
     val wanted = evidenceTokens(fragment)
     if (wanted.isEmpty()) return null

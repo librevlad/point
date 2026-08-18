@@ -329,7 +329,11 @@ class FlowViewModel @Inject constructor(
                     ingested
                 } else {
                     val (landed, knowledge) = withTravelledText(ingested, carried)
-                    landed.copy(
+
+                    // Из чего сделан, чем сделан и каким путём — приезжает вместе с ним
+                    // (#1112): результат долгой работы соседа иначе вставал в Graph новой
+                    // вещью с происхождением «дано», как будто его прислал человек.
+                    com.point.core.flow.withLineage(landed, knowledge).copy(
                         // Тот же объект, а не новая вещь рядом (#811, ADR-0001 §20): если он
                         // уезжал отсюда, он возвращается своим узлом и знание прирастает к
                         // нему. Чужой объект приезжает со своим именем и остаётся собой.
@@ -337,7 +341,7 @@ class FlowViewModel @Inject constructor(
                             ?: landed.id,
                         metadata = com.point.core.flow.mergeKnowledge(
                             landed.metadata,
-                            knowledge,
+                            knowledge - com.point.core.flow.PC_EXEC_META,
                             region = phoneRegion.code(),
                         ),
                     )
@@ -454,16 +458,25 @@ class FlowViewModel @Inject constructor(
                 _ui.update { it.copy(busy = null, busyStage = null, message = com.point.core.flow.pcUnreachableText(com.point.core.flow.PcUnreachable.PC_ASLEEP), messageOutcome = Outcome.FAILED) }
                 return@trackWork
             }
-            when (pulled.size) {
-                1 -> onShared(
-                    "file://${pulled[0].second}",
-                    pulled[0].first.meta["mime"] ?: "application/octet-stream",
-                    autoAction = pulled[0].first.meta["pc.action"]?.takeIf { it.isNotBlank() },
-                    name = pulled[0].first.meta["name"],
+            // Просьба исполнить — не переезд объекта (ADR-0001 §7). Дом такого объекта
+            // остался на компьютере: телефон делает работу и отсылает результат домой, а
+            // не открывает вещь у себя и не оставляет сделанное на своей стороне.
+            val (asked, arrived) = pulled.partition {
+                !it.first.meta[com.point.core.flow.PcExecFields.REQUEST].isNullOrBlank()
+            }
+            asked.forEach { (entry, path, _) -> executeForPc(pc, entry.meta, path) }
 
-                    carried = pulled[0].first.meta - PC_SERVICE_META,
+            when (arrived.size) {
+                0 -> _ui.update { it.copy(busy = null, busyStage = null) }
+                1 -> onShared(
+                    "file://${arrived[0].second}",
+                    arrived[0].first.meta["mime"] ?: "application/octet-stream",
+                    autoAction = arrived[0].first.meta["pc.action"]?.takeIf { it.isNotBlank() },
+                    name = arrived[0].first.meta["name"],
+
+                    carried = arrived[0].first.meta - PC_SERVICE_META,
                 )
-                else -> onSharedMultiple(pulled.map { "file://${it.second}" })
+                else -> onSharedMultiple(arrived.map { "file://${it.second}" })
             }
             pulled.forEach { (entry, _, _) ->
                 runCatching { pcTransport.ackOutbox(pc, entry.id) }
@@ -1724,6 +1737,126 @@ class FlowViewModel @Inject constructor(
     }
 
     /**
+     * Исполнить просьбу компьютера, не забирая объект себе (ADR-0001 §7, §20).
+     *
+     * Телефон здесь исполнитель, а не новый дом: работа идёт над рабочей копией, результат
+     * и добытое знание уезжают обратно к тому объекту, который у компьютера, и разбор
+     * человека на телефоне при этом не трогается — он мог смотреть совсем другую вещь.
+     *
+     * Своего жизненного цикла у этого нет: тот же Resolver, тот же Realizer, тот же
+     * `ActionResult` — меняется только то, куда возвращается результат.
+     */
+    private suspend fun executeForPc(
+        pc: com.point.core.flow.LinkedPc,
+        ask: Map<String, String>,
+        path: String,
+    ) {
+        val f = com.point.core.flow.PcExecFields
+        val capability = ask[f.ACTION]?.takeIf { it.isNotBlank() } ?: return
+        val home = ask[f.HOME]?.takeIf { it.isNotBlank() } ?: return
+        val label = ask[f.LABEL]?.takeIf { it.isNotBlank() } ?: capability
+        val mime = ask["mime"] ?: "application/octet-stream"
+
+        _ui.update { it.copy(message = "«$label» — делаю для компьютера", messageOutcome = Outcome.NONE) }
+
+        val outcome = runCatching {
+            val obj = store.ingest("file://$path", mime).let { taken ->
+                val carried = ask - PC_SERVICE_META - com.point.core.flow.PC_EXEC_META
+                taken.copy(
+                    metadata = com.point.core.flow.mergeKnowledge(
+                        taken.metadata,
+                        carried,
+                        region = phoneRegion.code(),
+                    ),
+                )
+            }
+            val realizer = resolver.realizerFor(CapabilityId(capability), obj.state)
+            realizer.perform(obj, null).knownBy(obj, realizer.meta.actor) to obj
+        }.getOrElse { e ->
+            ActionResult.Failure(e.message ?: "не вышло", recoverable = true) to null
+        }
+
+        val (result, worked) = outcome
+        val sent = runCatching { sendExecutionResult(pc, ask, home, capability, label, result, worked) }
+        val said = when {
+            sent.isFailure -> "«$label» — результат не доехал до компьютера"
+            result is ActionResult.Failure -> "«$label» — не вышло, компьютер об этом знает"
+            else -> "«$label» — сделано для компьютера"
+        }
+        _ui.update {
+            it.copy(
+                message = said,
+                messageOutcome = if (sent.isFailure) Outcome.FAILED else Outcome.DONE,
+            )
+        }
+    }
+
+    /** Результат уезжает домой — к объекту компьютера, а не остаётся здесь. */
+    private suspend fun sendExecutionResult(
+        pc: com.point.core.flow.LinkedPc,
+        ask: Map<String, String>,
+        home: String,
+        capability: String,
+        label: String,
+        result: ActionResult,
+        worked: PointObject?,
+    ) {
+        val f = com.point.core.flow.PcResultFields
+        val e = com.point.core.flow.PcExecFields
+        val head = mapOf(
+            e.HOME to home,
+            e.ACTION to capability,
+            e.LABEL to label,
+            e.REQUEST to ask[e.REQUEST].orEmpty(),
+        )
+        val produced = (result as? ActionResult.Success)?.result
+        val findings = (result as? ActionResult.Done)?.findings
+        val understood = findings?.metadata.orEmpty().mapKeys { (k, _) -> f.UNDERSTOOD + k }
+
+        val body = produced?.let { made ->
+            PointObject(
+                id = "$home:pc:$capability",
+                mime = made.mime,
+                uri = made.uri,
+                state = com.point.core.model.ObjectState(made.type),
+                metadata = made.metadata,
+                provenance = made.provenance,
+            )
+        } ?: worked ?: return
+
+        val meta = head + understood + com.point.core.flow.lineageMeta(
+            sourceId = home,
+            creator = capability,
+            provenance = produced?.provenance ?: com.point.core.model.Provenance.RULE,
+            executor = PHONE_EXECUTOR,
+        ) + when (result) {
+            is ActionResult.Failure -> mapOf(
+                f.OUTCOME to f.FAILED,
+                f.DETAIL to result.reason,
+            )
+            is ActionResult.Done -> mapOf(f.OUTCOME to f.DONE, f.DETAIL to result.message)
+            is ActionResult.Success -> mapOf(
+                f.OUTCOME to f.DONE,
+                f.NAME to (produced?.metadata?.get("name") ?: "$label.result"),
+                f.MIME to (produced?.mime ?: body.mime),
+            )
+            else -> mapOf(f.OUTCOME to f.FAILED, f.DETAIL to "«$label» ждёт продолжения на телефоне")
+        }
+
+        // Пустой шаг без нового объекта отправляет только знание: файла у него нет, и
+        // компьютеру он приезжает как знание своего объекта, а не как вещь.
+        val nameForFile = (meta[f.NAME] ?: "$label.txt")
+        pcTransport.send(pc, if (result is ActionResult.Success) body else emptyBody(body), nameForFile, meta)
+    }
+
+    /** Тело письма, когда объекта у результата нет: знание едет, вещь не рождается. */
+    private suspend fun emptyBody(sample: PointObject): PointObject {
+        val ref = store.newScratchFile("txt")
+        java.io.File(ref.value).writeText("")
+        return sample.copy(uri = ref, mime = "text/plain")
+    }
+
+    /**
      * Исполнить действие и запомнить, кто именно его исполнил (#1127).
      *
      * Тот же шов, что и у исследований (`DefaultEnrichment.run`): имя исполнителя знает
@@ -2559,7 +2692,10 @@ class FlowViewModel @Inject constructor(
     internal companion object {
 
         /** Служебные ключи письма с компьютера — знанием объекта не являются. */
-        val PC_SERVICE_META = setOf("name", "mime", "pc.action", "id")
+        val PC_SERVICE_META = setOf("name", "mime", "pc.action", "pc.action.label", "id")
+
+        /** Как телефон называет себя в происхождении знания (#1127). */
+        const val PHONE_EXECUTOR = "phone"
 
 
         val REFRESHABLE_META = com.point.core.flow.REFRESHABLE_KNOWLEDGE

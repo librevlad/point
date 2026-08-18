@@ -328,7 +328,7 @@ class AtomLayer(
         return edges.size - 2
     }
 
-    private companion object {
+    companion object {
 
         /** Столбец отделён просветом в несколько строчных высот, а не пробелом между словами. */
         const val COLUMN_GAP_IN_LINES = 1.5f
