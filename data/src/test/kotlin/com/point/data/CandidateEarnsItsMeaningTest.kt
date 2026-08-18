@@ -30,6 +30,13 @@ class CandidateEarnsItsMeaningTest {
     private fun source(kind: ObjectKind = ObjectKind.TEXT) =
         PointObject("src", "text/plain", ScratchRef("/tmp/src"), ObjectState(kind))
 
+    @Test fun `национальная запись подряд остаётся номером и на чужом устройстве`() {
+        // Прогон корпуса 19.08.2026: номер с накладной пропал на устройстве с чужой страной,
+        // потому что «написано как номер» перестало считать ведущий ноль знаком записи.
+        assertEquals("0932423759", factCandidate(phone, "0932423759"))
+        assertEquals("067 636 05 60", factCandidate(phone, "067 636 05 60"))
+    }
+
     @Test fun `цепочка цифр из адреса и штрихкода телефоном не становится`() {
         assertNull("номер дома со слипшимся номером магазина", factCandidate(phone, "908771 1329"))
         assertNull("товарный штрихкод EAN-13", factCandidate(phone, "4820000000017"))
