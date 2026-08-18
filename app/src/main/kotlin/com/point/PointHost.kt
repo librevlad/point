@@ -144,7 +144,15 @@ fun PointHost(
     var knockOff by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(knockNotAllowed(context)) }
     val askKnockLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
-    ) { granted -> knockOff = !granted }
+    ) { granted ->
+        knockOff = !granted
+
+        // Разрешение получено — адрес доставки уходит на сервер сейчас, а не со следующего
+        // запуска (#1118): иначе настройка включена, а просьбы по-прежнему ждут.
+        if (granted) {
+            (context.applicationContext as? PointApplication)?.tellWhereToKnock()
+        }
+    }
     val askKnock = {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
             askKnockLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
