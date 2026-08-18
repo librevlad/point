@@ -26,10 +26,14 @@ import javax.inject.Inject
 class ScratchObjectStore @Inject constructor(
     @ApplicationContext private val context: Context,
     private val classifier: ObjectClassifier,
+
+    // Каталог копий называется одним местом (#1026): его же стирает «Забыть всё», и
+    // разъехаться этим двоим нельзя.
+    @com.point.data.di.ScratchDir private val place: File,
 ) : ObjectStore {
 
     private val scratchDir: File
-        get() = File(context.filesDir, "scratch").apply { mkdirs() }
+        get() = place.apply { mkdirs() }
 
     override suspend fun nameOf(sourceUri: String): String? = withContext(Dispatchers.IO) {
         runCatching { displayName(Uri.parse(sourceUri)) }.getOrNull()

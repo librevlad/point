@@ -172,9 +172,15 @@ fun SettingsKeys(
                                 if (checking == null && looksLikeApiKey(key.apiKey)) {
                                     checking = line.providerId
                                     scope.launch {
-                                        verdict = keyVerdict(keyCheck.check(com.point.core.flow.aiCall(key)))
+                                        val said = keyVerdict(keyCheck.check(com.point.core.flow.aiCall(key)))
+                                        verdict = said
                                         verdictFor = line.providerId
                                         checking = null
+
+                                        // Ключ, не прошедший проверку, своим не остаётся (#1080):
+                                        // прежде он переезжал в «Ваши ключи» и считался
+                                        // рабочим, хотя Point только что сказал обратное.
+                                        if (said is KeyVerdict.Refused) store(keys.without(line.providerId))
                                     }
                                 }
                             },
@@ -242,7 +248,11 @@ private fun ServiceKey(
                 onSave(key)
                 onCheck(key)
             }
-            if (saved != null) Action("Забыть ключ", onForget)
+            // Дверь «убрать» видна там, где есть что убирать: прежде на её месте была
+            // пустота, и вписанный ключ убрать было нечем (#1080).
+            if (saved != null || draft.isNotBlank()) {
+                Action("Забыть ключ") { draft = ""; onForget() }
+            }
         }
         verdict?.let { Verdict(it) }
     }

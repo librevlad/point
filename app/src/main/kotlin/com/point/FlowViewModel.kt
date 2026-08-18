@@ -139,6 +139,8 @@ class FlowViewModel @Inject constructor(
     private val browser: com.point.core.flow.BrowserOpener,
 
     private val sharedTexts: com.point.core.flow.SharedTexts,
+
+    private val memory: com.point.core.flow.PointMemory,
 ) : ViewModel() {
 
     private var busyJob: kotlinx.coroutines.Job? = null
@@ -499,10 +501,32 @@ class FlowViewModel @Inject constructor(
         }
     }
 
+    /**
+     * «Забыть всё» забывает всё, что обещано (#1026).
+     *
+     * Обещание на экране — «уйдут все записи и всё, что Point о них узнал». Убирался же
+     * только перечень: сам объект, вычитанное из него знание и переписка с моделью
+     * оставались на устройстве. Теперь спрашивается вся память об объектах разом
+     * (`PointMemory`), а человеку сказано, чего именно он лишился.
+     *
+     * Открытый разбор закрывается вместе с ней: его копия только что стёрта, и оставить
+     * человека на объекте, которого больше нет, — тот самый призрак, ради которого всё
+     * и затевалось.
+     */
     fun clearHistory() {
         viewModelScope.launch {
-            runCatching { history.clearAll() }
+            val gone = runCatching { memory.forgetAll() }.getOrNull()
             _recent.value = emptyList()
+            makeWayForIncoming()
+
+            _ui.update {
+                it.copy(
+                    busy = null,
+                    busyStage = null,
+                    message = com.point.core.flow.forgottenText(gone),
+                    messageOutcome = Outcome.DONE,
+                )
+            }
 
             // Обзор «Что Point помнит» показывает то же самое хранилище (#821): забыли —
             // и в настройках сразу видно, что помнить нечего.
@@ -1122,7 +1146,7 @@ class FlowViewModel @Inject constructor(
      */
     private fun refreshWhatWorks() {
         viewModelScope.launch {
-            val footprint = runCatching { history.footprint() }.getOrNull()
+            val footprint = runCatching { memory.footprint() }.getOrNull()
             _ui.update { it.copy(memory = footprint) }
         }
     }

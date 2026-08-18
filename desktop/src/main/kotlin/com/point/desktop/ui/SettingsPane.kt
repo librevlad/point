@@ -79,7 +79,7 @@ internal fun CompactSettings(
     error: String?,
     onWipe: () -> Unit,
     onSave: (PcConfig) -> Unit,
-    onSweepNow: () -> Unit,
+    onSweepNow: () -> Int,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) = Column(modifier) {
@@ -138,7 +138,7 @@ internal fun CompactSettings(
                 onPickLevel = { onSave(config.copy(privacy = it)) },
             )
 
-            SettingsPage.DATA -> SettingsData(swept = swept) { swept = null; onSweepNow() }
+            SettingsPage.DATA -> SettingsData(swept = swept) { swept = onSweepNow() }
         }
     }
 }

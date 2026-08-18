@@ -86,8 +86,16 @@ class Inbox(private val dir: File, private val pdf: PdfText = PdfBoxText()) {
         return removed
     }
 
-    fun wipe() {
-        dir.listFiles()?.forEach { runCatching { it.deleteRecursively() } }
+    /** Сколько места освободила уборка — человеку говорят числом, а не молчанием (#1081). */
+    fun wipe(): Long {
+        var freed = 0L
+        dir.listFiles()?.forEach { entry ->
+            val weight = runCatching {
+                entry.walkTopDown().filter(java.io.File::isFile).sumOf(java.io.File::length)
+            }.getOrDefault(0L)
+            if (runCatching { entry.deleteRecursively() }.getOrDefault(false)) freed += weight
+        }
+        return freed
     }
 
     private fun wrap(file: File, mime: String, meta: Map<String, String>): InboxItem {

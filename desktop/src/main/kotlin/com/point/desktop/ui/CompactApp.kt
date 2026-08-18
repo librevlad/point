@@ -89,9 +89,9 @@ fun CompactApp(
     onReceiveFile: () -> Unit = {},
     onCancelReceive: () -> Unit = {},
 
-    onWipe: () -> Unit = {},
+    onWipe: () -> Long = { 0L },
     onSaveSettings: (PcConfig) -> Unit = {},
-    onSweepNow: () -> Unit = {},
+    onSweepNow: () -> Int = { 0 },
     onHide: () -> Unit = {},
 ) {
     val items by state.items.collectAsState()

@@ -23,8 +23,8 @@ import java.io.File
 class ScratchObjectStoreTest {
 
     private val context: Context = ApplicationProvider.getApplicationContext()
-    private val store = ScratchObjectStore(context, ObjectClassifier())
     private val scratch = File(context.filesDir, "scratch")
+    private val store = ScratchObjectStore(context, ObjectClassifier(), scratch)
 
     private fun source(name: String, text: String): File =
         File(context.cacheDir, name).apply { parentFile?.mkdirs(); writeText(text) }

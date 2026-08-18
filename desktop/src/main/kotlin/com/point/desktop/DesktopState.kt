@@ -540,16 +540,14 @@ class DesktopState(
         rememberArrival(item, source)
         runCatching { announce(item, source) }
 
+        // Буфер обмена компьютера — вещь человека, а не место для приходящего (#1093).
+        // Прежде любой текст, приехавший с телефона, молча переписывал то, что человек
+        // за компьютером только что скопировал себе. Текст держится наготове, а в буфер
+        // попадает по просьбе: «В буфер компьютера» с телефона или кнопка здесь.
         if (item.obj.state.kind == ObjectKind.TEXT) {
-            val text = runCatching { File(item.obj.uri.value).readText() }.getOrNull()
-            if (text != null) {
-                runCatching { clipboard.copy(text) }
-                _clipboardText.value = text
-                _message.value = null
-            }
-        } else {
-            _message.value = "Получено: ${item.obj.metadata["name"]}"
+            _clipboardText.value = runCatching { File(item.obj.uri.value).readText() }.getOrNull()
         }
+        _message.value = "Получено: ${item.obj.metadata["name"]}"
         autoInvestigate(item)
     }
 
@@ -714,11 +712,23 @@ class DesktopState(
         updateJournal { it.filterNot { e -> e.path == entry.path } }
     }
 
-    fun forgetEverything(wipeFiles: () -> Unit) {
-        runCatching { wipeFiles() }
+    /**
+     * Убрать всё, что Point помнит здесь, и сказать сколько (#1081).
+     *
+     * Прежде «Убрать прямо сейчас» трогало только файлы старше суток и молчало: человек
+     * нажимал кнопку, на экране не менялось ничего, а на диске оставалось всё, что он
+     * назвал бы памятью Point. Перетащенный мышью файл не трогается никогда — он не наш.
+     */
+    fun forgetEverything(wipeFiles: () -> Long): Int {
+        val kept = _journal.value.size
+        val freed = runCatching { wipeFiles() }.getOrDefault(0L)
         _items.value = emptyList()
         _clipboardText.value = null
         updateJournal { emptyList() }
+        _message.value = com.point.core.flow.forgottenText(
+            com.point.core.flow.HistoryFootprint(kept, freed),
+        )
+        return kept
     }
 
     fun clearClipboard() {
