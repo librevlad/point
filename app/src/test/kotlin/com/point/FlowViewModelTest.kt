@@ -364,6 +364,48 @@ class FlowViewModelTest {
         assertEquals("родительский кадр цел", 2, vm.ui.value.frame?.found?.size)
     }
 
+    /**
+     * Объект в разборе один (#1110).
+     *
+     * Из производного объекта видно исходник — и вход в него был не возвратом к узлу, а
+     * заведением второго с тем же идентификатором: знание об одном объекте расходилось по
+     * двум кадрам, а связь с уже созданным из него результатом терялась.
+     */
+    @Test fun `вход в уже открытый объект возвращает к нему, а не заводит второй`() = runTest(dispatcher) {
+        val a = waybill("root:identifier:A", "20 4514 9154 9395", "10.0 20.0 210.0 60.0")
+        enrichment.updates = listOf(
+            EnrichmentUpdate(
+                emptySet(), emptyMap(), emptyList(),
+                objects = listOf(a),
+                relations = listOf(
+                    com.point.core.model.Relation(a.id, com.point.core.model.RelationType.FOUND_IN, "root"),
+                ),
+            ),
+        )
+        enrichment.understandsOnce = true
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        val rootId = vm.ui.value.frame!!.obj.id
+        val depthAtRoot = vm.ui.value.path.size
+
+        vm.onFound(vm.ui.value.frame!!.found.single()); advanceUntilIdle()
+        assertEquals("вошли в находку", a.id, vm.ui.value.frame!!.obj.id)
+
+        // Из находки видно исходник — и вход в него должен вернуть к тому же узлу.
+        val backToRoot = vm.ui.value.frame!!.found.firstOrNull { it.id == rootId }
+        if (backToRoot != null) {
+            vm.onFound(backToRoot); advanceUntilIdle()
+
+            assertEquals("вернулись в исходник", rootId, vm.ui.value.frame!!.obj.id)
+            assertEquals("путь не углубился", depthAtRoot, vm.ui.value.path.size)
+            assertTrue(
+                "знание исходника на месте, а не половина в новом кадре",
+                vm.ui.value.frame!!.found.any { it.id == a.id },
+            )
+        }
+    }
+
     @Test fun `persist writes found, relations and focus so the journey survives`() = runTest(dispatcher) {
         val a = waybill("root:identifier:A", "20 4514 9154 9395", "10.0 20.0 210.0 60.0")
         enrichment.updates = listOf(
@@ -3672,7 +3714,11 @@ private class FakeStore : ObjectStore {
         if (failIngest) error("boom") else PointObject("in", mime, ScratchRef("/in"), ObjectState(kind))
     override suspend fun ingestMultiple(sources: List<String>): PointObject =
         PointObject("coll", "inode/directory", ScratchRef("/coll"), ObjectState(ObjectKind.COLLECTION))
-    override suspend fun put(result: ResultObject): PointObject =
+    override suspend fun put(
+            result: ResultObject,
+            from: com.point.core.model.PointObject?,
+            by: com.point.core.model.CapabilityId?,
+        ): PointObject =
         PointObject("out", result.mime, result.uri, ObjectState(result.type), result.metadata)
 
     var content: CollectionContent<PointObject> = CollectionContent.empty()

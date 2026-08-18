@@ -68,7 +68,11 @@ class PcKnowledgeComesBackTest {
 
         override suspend fun ingest(sourceUri: String, mime: String) = throw UnsupportedOperationException()
         override suspend fun ingestMultiple(sources: List<String>) = throw UnsupportedOperationException()
-        override suspend fun put(result: com.point.core.model.ResultObject) = throw UnsupportedOperationException()
+        override suspend fun put(
+            result: com.point.core.model.ResultObject,
+            from: com.point.core.model.PointObject?,
+            by: com.point.core.model.CapabilityId?,
+        ) = throw UnsupportedOperationException()
         override suspend fun children(collection: PointObject, limit: Int) =
             throw UnsupportedOperationException()
         override suspend fun readText(obj: PointObject, limit: Int) = ""

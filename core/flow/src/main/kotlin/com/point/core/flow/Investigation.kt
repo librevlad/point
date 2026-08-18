@@ -65,11 +65,25 @@ fun withInvestigation(
  *
  * Сорвавшееся исследование сюда не попадает: у него нет исхода знания (ADR-0001 §9).
  */
+/**
+ * След работы, а не знание об объекте (#1067).
+ *
+ * Каким шрифтом читали, во сколько раз увеличивали кадр, сколько символов прошли — это про
+ * ход исследования. Прежде такой след один засчитывался за находку: у тёмного снимка, где не
+ * прочиталось ни буквы, оставался `reading.mode`, и вопрос закрывался как «найдено» при
+ * пустых руках.
+ */
+private fun isProcessNote(key: String): Boolean = key in PROCESS_NOTES
+
+private val PROCESS_NOTES: Set<String> = setOf(
+    META_READING_MODE, META_READ_UPSCALE, META_READING_DOUBT, META_READ_CHARS, META_READ_TOTAL_CHARS,
+)
+
 fun investigationOutcome(
     metadata: Map<String, String>,
     factKeys: Collection<String>,
 ): InvestigationState {
-    val told = factKeys.filterNot { isAnnotationKey(it) || isStateKey(it) }
+    val told = factKeys.filterNot { isAnnotationKey(it) || isStateKey(it) || isProcessNote(it) }
     return when {
         told.isEmpty() -> InvestigationState.NOT_FOUND
         told.any { isDisputed(metadata, it) } -> InvestigationState.CONTRADICTORY

@@ -21,13 +21,13 @@ internal fun receiptNumberShaped(value: String): Boolean {
         token.any(Char::isDigit)
 }
 
-fun receiptFacts(text: String): Map<String, String> {
+fun receiptFacts(text: String, source: Provenance = Provenance.OCR): Map<String, String> {
     val numbers = receiptNumbers(text)
     val first = numbers.firstOrNull() ?: return emptyMap()
     return buildMap {
         put(META_ENTITY_RECEIPT, first)
 
-        put(META_ENTITY_RECEIPT + META_SOURCE_SUFFIX, Provenance.OCR.wire)
+        put(META_ENTITY_RECEIPT + META_SOURCE_SUFFIX, source.wire)
 
         put(META_ENTITY_RECEIPT + META_EVIDENCE_SUFFIX, EvidenceClass.SEMANTIC.name.lowercase())
         if (numbers.size > 1) put(META_ENTITY_RECEIPT + META_MORE_SUFFIX, altValue(numbers))

@@ -207,8 +207,28 @@ class GraphPipelineIntegrationTest {
         var next: PointObject? = null
         override suspend fun ingest(sourceUri: String, mime: String): PointObject = next ?: error("нет объекта")
         override suspend fun ingestMultiple(sources: List<String>): PointObject = error("не используется")
-        override suspend fun put(result: ResultObject): PointObject =
-            PointObject("out", result.mime, result.uri, ObjectState(result.type), result.metadata)
+        /** Что пришло вместе с результатом: из чего сделано и чем (#1127). */
+        var lastFrom: String? = null
+        var lastBy: String? = null
+
+        override suspend fun put(
+            result: ResultObject,
+            from: com.point.core.model.PointObject?,
+            by: com.point.core.model.CapabilityId?,
+        ): PointObject {
+            lastFrom = from?.id
+            lastBy = by?.value
+            return PointObject(
+                "out",
+                result.mime,
+                result.uri,
+                ObjectState(result.type),
+                result.metadata,
+                provenance = result.provenance,
+                sourceObjects = listOfNotNull(from?.id),
+                creatorAction = by?.value,
+            )
+        }
         override suspend fun children(collection: PointObject, limit: Int) = CollectionContent.empty<PointObject>()
         override suspend fun readText(obj: PointObject, limit: Int): String = ""
         override suspend fun newScratchFile(extension: String) =
@@ -406,6 +426,13 @@ class GraphPipelineIntegrationTest {
         // N2: Resolver получил фактическое состояние, а не UNKNOWN
         assertEquals(ObjectKind.IMAGE, resolver.seenStates[ReadQrCapability.ID]?.kind)
         assertTrue(resolver.seenStates[ReadQrCapability.ID]?.has(Feature.HAS_QR) == true)
+
+        // N3: рождённый объект помнит, из чего и чем он сделан (#1127). Иначе связь живёт
+        // только в кадре на экране, а в Graph результат стоит сиротой с «дано».
+        assertEquals("объект назвал свой источник", enriched.obj.id, store.lastFrom)
+        assertEquals("объект назвал действие", ReadQrCapability.ID.value, store.lastBy)
+        assertEquals(listOf(enriched.obj.id), produced.obj.sourceObjects)
+        assertEquals(ReadQrCapability.ID.value, produced.obj.creatorAction)
 
         shutdown(vm)
     }

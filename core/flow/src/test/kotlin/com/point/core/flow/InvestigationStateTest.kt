@@ -33,6 +33,33 @@ class InvestigationStateTest {
         assertEquals(InvestigationState.NOT_FOUND, investigationOutcome(emptyMap(), emptyList()))
     }
 
+    /**
+     * След работы — не находка (#1067).
+     *
+     * На тёмном снимке чтение не дало ни буквы, но оставило пометку, каким шрифтом читали, —
+     * и вопрос закрывался как «найдено» при пустых руках. Человеку показывать нечего, а
+     * повторно спросить Point уже не даёт.
+     */
+    @Test
+    fun `пометка о ходе чтения не делает пустое чтение находкой`() {
+        val after = mapOf(META_READING_MODE to "HANDWRITTEN")
+
+        assertEquals(
+            InvestigationState.NOT_FOUND,
+            investigationOutcome(after, listOf(META_READING_MODE)),
+        )
+    }
+
+    @Test
+    fun `прочитанный текст — находка, даже если сущностей в нём не нашлось`() {
+        val after = mapOf(META_OCR_TEXT_REF to "/scratch/text.txt", META_READING_MODE to "PRINTED")
+
+        assertEquals(
+            InvestigationState.FOUND,
+            investigationOutcome(after, listOf(META_OCR_TEXT_REF, META_READING_MODE)),
+        )
+    }
+
     @Test
     fun `a finished investigation with a grounded value is found`() {
         val after = mapOf("entity.qr" to "https-//example.org")
