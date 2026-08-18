@@ -95,7 +95,7 @@ class ExcelRealizerTest {
     }
 
     private fun realizer(vararg answers: String) =
-        ExcelRealizer(answers.map { llm(it) }, writer, noCrops, scratch)
+        ExcelRealizer(answers.map { llm(it) }, writer, noCrops, scratch, testKnowledge())
 
     @Test
     fun `parses TSV into rows and produces an OFFICE xlsx`() = runTest {
@@ -352,7 +352,7 @@ class ExcelRealizerTest {
 
         val result = ExcelRealizer(
             listOf(paired(0, """[["№","42"]]"""), paired(1, """[["№","42"]]""")),
-            writer, noCrops, scratch,
+            writer, noCrops, scratch, testKnowledge(),
         ).perform(image)
 
         assertTrue(result is ActionResult.Success)
@@ -366,7 +366,7 @@ class ExcelRealizerTest {
             override suspend fun run(obj: PointObject, prompt: String): ResultObject = error("HTTP 429 quota")
         }
 
-        val result = ExcelRealizer(listOf(broken, llm("""[["A","B"]]""")), writer, noCrops, scratch)
+        val result = ExcelRealizer(listOf(broken, llm("""[["A","B"]]""")), writer, noCrops, scratch, testKnowledge())
             .perform(image)
 
         assertTrue(result is ActionResult.Success)
@@ -388,7 +388,7 @@ class ExcelRealizerTest {
                 answerOf("""[["№","43"]]""").also { fastAnswered.complete(Unit) }
         }
 
-        ExcelRealizer(listOf(strongButSlow, quick), writer, noCrops, scratch).perform(image)
+        ExcelRealizer(listOf(strongButSlow, quick), writer, noCrops, scratch, testKnowledge()).perform(image)
 
         assertEquals("42⚠", lastRows!![0][1])
         assertEquals(listOf("42", "43"), lastCandidates[0 to 1])
@@ -416,7 +416,7 @@ class ExcelRealizerTest {
         val heard = stagesHeard {
             result = ExcelRealizer(
                 listOf(keyless, waiting("""[["№","42"]]"""), waiting("""[["№","42"]]""")),
-                writer, noCrops, scratch,
+                writer, noCrops, scratch, testKnowledge(),
             ).perform(image)
         }
 
@@ -432,7 +432,7 @@ class ExcelRealizerTest {
         val heard = stagesHeard {
             result = ExcelRealizer(
                 listOf(llm("   "), llm("   "), llm("""[["A","B"]]""")),
-                writer, noCrops, scratch,
+                writer, noCrops, scratch, testKnowledge(),
             ).perform(image)
         }
 
@@ -473,7 +473,7 @@ class ExcelRealizerTest {
             }
         }
         val realizer =
-            ExcelRealizer(listOf(slow("""[["№","42"]]"""), slow("""[["№","42"]]""")), writer, noCrops, scratch)
+            ExcelRealizer(listOf(slow("""[["№","42"]]"""), slow("""[["№","42"]]""")), writer, noCrops, scratch, testKnowledge())
 
         val result = realizer.perform(image)
 
@@ -553,7 +553,7 @@ class ExcelRealizerTest {
 
         val heard = stagesHeard {
             result = ExcelRealizer(
-                listOf(eyes(tableA, "0,120"), eyes(tableB, "0,120")), writer, cropper, scratch,
+                listOf(eyes(tableA, "0,120"), eyes(tableB, "0,120")), writer, cropper, scratch, testKnowledge(),
             ).perform(sheetImage())
         }
 
@@ -569,7 +569,7 @@ class ExcelRealizerTest {
     @Test
     fun `несогласный перечит спор не гасит — третье чтение встаёт в дропдаун (#346)`() = runTest {
         val result = ExcelRealizer(
-            listOf(eyes(tableA, "0,999"), eyes(tableB, "0,999")), writer, RecordingCropper(), scratch,
+            listOf(eyes(tableA, "0,999"), eyes(tableB, "0,999")), writer, RecordingCropper(), scratch, testKnowledge(),
         ).perform(sheetImage())
 
         assertTrue(result is ActionResult.Success)
@@ -588,7 +588,7 @@ class ExcelRealizerTest {
         }
 
         val result = ExcelRealizer(
-            listOf(sleepy(tableA), sleepy(tableB)), writer, RecordingCropper(), scratch,
+            listOf(sleepy(tableA), sleepy(tableB)), writer, RecordingCropper(), scratch, testKnowledge(),
             recropTimeoutMs = 200,
         ).perform(sheetImage())
 
@@ -605,7 +605,7 @@ class ExcelRealizerTest {
         val b = """[["11004","Гречка","0,120"],["11006","Рис","0,500"],["Разом","до видачі","2100"]]"""
 
         val result = ExcelRealizer(
-            listOf(eyes(a, "2400"), eyes(b, "2400")), writer, cropper, scratch,
+            listOf(eyes(a, "2400"), eyes(b, "2400")), writer, cropper, scratch, testKnowledge(),
         ).perform(sheetImage())
 
         assertTrue(result is ActionResult.Success)

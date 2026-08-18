@@ -54,7 +54,12 @@ class EntityActionsTest {
 
     private class FakeCalendar : CalendarInserter {
         var title: String? = null
-        override suspend fun insertEvent(title: String) { this.title = title }
+        override suspend fun insertEvent(title: String, day: java.time.LocalDate?) {
+            this.title = title
+            this.day = day
+        }
+
+        var day: java.time.LocalDate? = null
     }
 
     @Test

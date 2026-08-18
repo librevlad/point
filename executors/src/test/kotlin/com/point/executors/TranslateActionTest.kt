@@ -50,7 +50,7 @@ class TranslateActionTest {
         val out = File(tmp.root, "en.txt").apply { writeText("Hello, how are you") }
         val obj = PointObject("id", "text/plain", ScratchRef(src.absolutePath), ObjectState(ObjectKind.TEXT))
 
-        val heard = stagesHeard { TranslateRealizer(llm(out), noPdf()).perform(obj, null) }
+        val heard = stagesHeard { TranslateRealizer(llm(out), testKnowledge(noPdf())).perform(obj, null) }
 
         assertEquals(listOf("Перевожу на английский"), heard)
     }
@@ -63,7 +63,7 @@ class TranslateActionTest {
             override suspend fun extractText(obj: PointObject) = "Hello from a long PDF"
         }
 
-        val heard = stagesHeard { TranslateRealizer(llm(out), extractor).perform(pdf, null) }
+        val heard = stagesHeard { TranslateRealizer(llm(out), testKnowledge(extractor)).perform(pdf, null) }
 
         assertEquals(listOf("Читаю текст PDF", "Перевожу на русский"), heard)
     }
@@ -74,7 +74,7 @@ class TranslateActionTest {
         val out = File(tmp.root, "de.txt").apply { writeText("Hallo") }
         val obj = PointObject("id", "text/plain", ScratchRef(src.absolutePath), ObjectState(ObjectKind.TEXT))
 
-        val heard = stagesHeard { TranslateRealizer(llm(out), noPdf()).perform(obj, "немецкий") }
+        val heard = stagesHeard { TranslateRealizer(llm(out), testKnowledge(noPdf())).perform(obj, "немецкий") }
 
         assertEquals(listOf("Перевожу на немецкий"), heard)
     }
@@ -86,7 +86,7 @@ class TranslateActionTest {
         val obj = PointObject("id", "text/plain", ScratchRef(src.absolutePath), ObjectState(ObjectKind.TEXT))
         var result: ActionResult? = null
 
-        val heard = stagesHeard { result = TranslateRealizer(llm(out), noPdf()).perform(obj, null) }
+        val heard = stagesHeard { result = TranslateRealizer(llm(out), testKnowledge(noPdf())).perform(obj, null) }
 
         assertTrue(result is ActionResult.Failure)
         assertTrue(heard.isEmpty())

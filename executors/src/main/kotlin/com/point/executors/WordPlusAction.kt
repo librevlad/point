@@ -18,7 +18,6 @@ import com.point.core.flow.DocStyle
 import com.point.core.flow.DocxWriter
 import com.point.core.flow.Latency
 import com.point.core.flow.LlmClient
-import com.point.core.flow.PdfTextExtractor
 import com.point.core.flow.Realizer
 import com.point.core.flow.TextRecognizer
 import com.point.core.flow.reportStage
@@ -95,7 +94,7 @@ class WordPlusCapability @Inject constructor(
 
 class WordPlusRealizer @Inject constructor(
     private val llm: LlmClient,
-    private val pdfText: PdfTextExtractor,
+    private val known: com.point.core.flow.CurrentKnowledge,
     private val docx: DocxWriter,
     private val recognizer: TextRecognizer,
 ) : Realizer {
@@ -105,21 +104,23 @@ class WordPlusRealizer @Inject constructor(
         withContext(Dispatchers.IO) {
             runCatching {
 
-                var layer: AtomLayer? = null
+                // Сначала то, что Point уже знает (#1031, #1138): снятый слой слов и
+                // прочитанный текст живут в графе, и читать кадр заново незачем.
+                var layer: AtomLayer? = known.layerOf(input)
                 val photo = input.state.kind == ObjectKind.IMAGE
-                val text = when (input.state.kind) {
-                    ObjectKind.PDF -> {
-                        reportStage("Читаю текст PDF")
-                        pdfText.extractText(input)
-                    }
-                    ObjectKind.IMAGE -> {
-                        reportStage("Распознаю текст на фото")
+                val text = (
+                    layer?.text?.takeIf { it.isNotBlank() }
+                        ?: known.textOf(input)
+                        ?: when (input.state.kind) {
+                            ObjectKind.IMAGE -> {
+                                reportStage("Распознаю текст на фото")
 
-                        layer = (recognizer as? AtomRecognizer)?.read(input)
-                        layer?.text ?: recognizer.recognize(input)
-                    }
-                    else -> File(input.uri.value).takeIf { it.isFile }?.readText().orEmpty()
-                }.take(MAX_TEXT)
+                                layer = (recognizer as? AtomRecognizer)?.read(input)
+                                layer?.text ?: recognizer.recognize(input)
+                            }
+                            else -> ""
+                        }
+                    ).take(MAX_TEXT)
 
                 val mode = readingModeOf(input.metadata).takeIf { it != ReadingMode.UNKNOWN }
                     ?: if (photo) readingModeOfFrame(layer, text) else readingModeOf(layer)

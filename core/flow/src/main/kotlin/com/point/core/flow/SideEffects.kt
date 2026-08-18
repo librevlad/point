@@ -55,7 +55,15 @@ interface Clipboard {
 }
 
 interface CalendarInserter {
-    suspend fun insertEvent(title: String)
+
+    /**
+     * Событие ставится на найденный день, а не на сегодня (#1035).
+     *
+     * Дата уже лежит в знании объекта — Point находил её, показывал человеку и ею же
+     * открывал дверь события. В сам календарь она не доезжала: событие ложилось на текущий
+     * день, а найденный оставался словами внутри названия. `null` — дня в знании нет.
+     */
+    suspend fun insertEvent(title: String, day: java.time.LocalDate? = null)
 }
 
 interface ContactInserter {

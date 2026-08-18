@@ -737,6 +737,20 @@ abstract class DataModule {
             java.io.File(context.filesDir, "flow-snapshot.json")
 
         /** Копии объектов, с которыми человек работает: их же стирает «Забыть всё» (#1026). */
+        /**
+         * Текущее знание объекта — один вход для всех исполнителей (#1138).
+         *
+         * Прежде каждый решал сам, откуда взять текст, и почти все шли к исходному файлу:
+         * прочитанный кадр отвечал «текста нет», а документ собирался из худшего прочтения,
+         * чем то, что уже лежало в графе.
+         */
+        @Provides
+        @Singleton
+        fun currentKnowledge(
+            store: com.point.core.flow.ObjectStore,
+            pdfText: com.point.core.flow.PdfTextExtractor,
+        ): com.point.core.flow.CurrentKnowledge = com.point.core.flow.GraphKnowledge(store, pdfText)
+
         @Provides
         @ScratchDir
         fun scratchDir(@ApplicationContext context: Context): java.io.File =

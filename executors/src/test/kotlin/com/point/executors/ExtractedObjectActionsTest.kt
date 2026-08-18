@@ -43,7 +43,11 @@ class ExtractedObjectActionsTest {
 
     private class RecordingCalendar : CalendarInserter {
         var title: String? = null
-        override suspend fun insertEvent(title: String) { this.title = title }
+        var day: java.time.LocalDate? = null
+        override suspend fun insertEvent(title: String, day: java.time.LocalDate?) {
+            this.title = title
+            this.day = day
+        }
     }
 
     @Test

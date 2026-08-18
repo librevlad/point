@@ -221,7 +221,11 @@ class EventRealizer @Inject constructor(
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
             runCatching {
-                calendar.insertEvent(eventTitle(input))
+
+                // Действию отдаётся то, что Point уже знает (#1035, #1138): найденный день
+                // лежит в графе — он же открывает дверь события, — и в календарь едет он,
+                // а не сегодняшнее число.
+                calendar.insertEvent(eventTitle(input), eventDay(input))
 
                 // Исход шага — то, что сделал Point, а не то, что случится в чужом
                 // приложении (#1131). «Создаю событие» звучало продолжающейся работой и
@@ -230,6 +234,21 @@ class EventRealizer @Inject constructor(
                 ActionResult.Done("Открыл календарь — событие создаётся там")
             }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось открыть календарь", recoverable = true) }
         }
+
+    /**
+     * День события — из знания объекта, ближайший к сегодня из найденных.
+     *
+     * Дата в прошлом дверь события не открывает (#651), поэтому берётся первый день, который
+     * ещё впереди; если такого нет — день не называется вовсе, и календарь решит сам.
+     */
+    private fun eventDay(input: PointObject): java.time.LocalDate? {
+        val today = java.time.LocalDate.now()
+        val hint = com.point.core.flow.dayOrderOf(entitySourceText(input))
+        return com.point.core.flow.datesKnown(input.metadata)
+            .mapNotNull { com.point.core.flow.humanDayOf(it, hint) }
+            .filterNot { it.isBefore(today) }
+            .minOrNull()
+    }
 
     private fun eventTitle(input: PointObject): String =
         entitySourceText(input).lineSequence().map { it.trim() }
