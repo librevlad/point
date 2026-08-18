@@ -5,7 +5,6 @@ import com.point.core.flow.Capability
 import com.point.core.flow.CapabilityMeta
 import com.point.core.flow.LlmClient
 import com.point.core.flow.Latency
-import com.point.core.flow.PdfTextExtractor
 import com.point.core.flow.Realizer
 import com.point.core.flow.reportStage
 import com.point.core.flow.labelNeedingKey
@@ -17,7 +16,6 @@ import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.io.File
 import javax.inject.Inject
 
 internal fun translateDefaultTarget(text: String): String {
@@ -51,22 +49,18 @@ class TranslateCapability @Inject constructor(
 
 class TranslateRealizer @Inject constructor(
     private val llm: LlmClient,
-    private val pdfText: PdfTextExtractor,
+    private val known: com.point.core.flow.CurrentKnowledge,
 ) : Realizer {
     override val capabilityId = TranslateCapability.ID
 
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
             runCatching {
-                val text = when (input.state.kind) {
-                    ObjectKind.TEXT -> File(input.uri.value).readText()
 
-                    ObjectKind.PDF -> {
-                        reportStage("Читаю текст PDF")
-                        pdfText.extractText(input)
-                    }
-                    else -> ""
-                }
+                // Переводится то, что Point знает сейчас, а не то, с чего он начал (#1030,
+                // #1138). Прочитанный кадр отвечал «Нет текста для перевода», хотя чтение
+                // лежало в графе и человек видел его на экране.
+                val text = known.textOf(input).orEmpty()
                 if (text.isBlank()) {
                     ActionResult.Failure("Нет текста для перевода", recoverable = true)
                 } else {

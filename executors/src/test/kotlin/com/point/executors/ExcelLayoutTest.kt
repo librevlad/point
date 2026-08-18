@@ -90,7 +90,7 @@ class ExcelLayoutTest {
     }
 
     private fun realizer(vararg answers: String) =
-        ExcelRealizer(answers.map { llm(it) }, writer, noCrops, scratch)
+        ExcelRealizer(answers.map { llm(it) }, writer, noCrops, scratch, testKnowledge())
 
     private fun atom(id: String, text: String, l: Float, t: Float, r: Float, b: Float) =
         Atom(id, text, Box(l, t, r, b))

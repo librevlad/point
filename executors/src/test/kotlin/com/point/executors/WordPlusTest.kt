@@ -91,7 +91,7 @@ class WordPlusTest {
         val obj = PointObject("id", "text/plain", ScratchRef(src.absolutePath), ObjectState(ObjectKind.TEXT))
 
         val ocr = object : TextRecognizer { override suspend fun recognize(obj: PointObject) = "" }
-        val result = WordPlusRealizer(llm, object : PdfTextExtractor { override suspend fun extractText(obj: PointObject) = "" }, writer, ocr).perform(obj, null)
+        val result = WordPlusRealizer(llm, testKnowledge(), writer, ocr).perform(obj, null)
 
         assertTrue(result is ActionResult.Success)
         assertEquals(DocStyle.TITLE, styled!![0].style)
@@ -113,7 +113,7 @@ class WordPlusTest {
         val pdf = PointObject("id", "application/pdf", ScratchRef("/tmp/x.pdf"), ObjectState(ObjectKind.PDF))
         val realizer = WordPlusRealizer(
             llm,
-            object : PdfTextExtractor { override suspend fun extractText(obj: PointObject) = "сырой текст" },
+            testKnowledge(pdfSaying("сырой текст")),
             writer,
             object : TextRecognizer { override suspend fun recognize(obj: PointObject) = "" },
         )
@@ -139,7 +139,7 @@ class WordPlusTest {
         val obj = PointObject("id", "text/plain", ScratchRef(src.absolutePath), ObjectState(ObjectKind.TEXT))
         val realizer = WordPlusRealizer(
             llm,
-            object : PdfTextExtractor { override suspend fun extractText(obj: PointObject) = "" },
+            testKnowledge(),
             writer,
             object : TextRecognizer { override suspend fun recognize(obj: PointObject) = "" },
         )
@@ -193,7 +193,7 @@ class WordPlusTest {
         }
     }
 
-    private val noPdf = object : PdfTextExtractor { override suspend fun extractText(obj: PointObject) = "" }
+    private val noPdf = testKnowledge()
 
     private fun photo(name: String, mode: ReadingMode? = ReadingMode.HANDWRITTEN) = PointObject(
         "id", "image/jpeg", ScratchRef(File(tmp.root, name).apply { writeText("пиксели") }.absolutePath),

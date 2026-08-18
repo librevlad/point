@@ -186,10 +186,15 @@ private fun toLocalDate(m: MatchResult, hint: DayOrder): LocalDate? = runCatchin
     if (dayFirst) LocalDate.of(year, second, first) else LocalDate.of(year, first, second)
 }.getOrNull()
 
+/** Все даты, которые Point знает об объекте: главная и те, что ушли в «ещё». */
+fun datesKnown(metadata: Map<String, String>): List<String> {
+    val key = META_ENTITY_PREFIX + "date"
+    return listOfNotNull(metadata[key]) + moreOf(metadata, key)
+}
+
 /** Есть ли среди дат знания (primary и «ещё») дата сегодня или позже. */
 fun hasUpcomingDate(metadata: Map<String, String>, today: LocalDate): Boolean {
-    val key = META_ENTITY_PREFIX + "date"
-    val values = listOfNotNull(metadata[key]) + moreOf(metadata, key)
+    val values = datesKnown(metadata)
 
     // Порядок частей берётся у самого объекта, а не у телефона (#802): соседние даты и язык
     // его текста. Спорная запись без такой опоры днём не становится.

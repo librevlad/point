@@ -103,6 +103,7 @@ class ExcelRealizer(
     private val writer: SpreadsheetWriter,
     private val cropper: EvidenceCropper,
     private val store: ObjectStore,
+    private val known: com.point.core.flow.CurrentKnowledge,
     private val recropTimeoutMs: Long,
 ) : Realizer {
 
@@ -111,7 +112,8 @@ class ExcelRealizer(
         writer: SpreadsheetWriter,
         cropper: EvidenceCropper,
         store: ObjectStore,
-    ) : this(providers, writer, cropper, store, RECROP_TIMEOUT_MS)
+        known: com.point.core.flow.CurrentKnowledge,
+    ) : this(providers, writer, cropper, store, known, RECROP_TIMEOUT_MS)
 
     override val capabilityId = ExcelCapability.ID
 
@@ -356,10 +358,7 @@ class ExcelRealizer(
         }
     }
 
-    private fun atomLayer(input: PointObject): AtomLayer? =
-        input.metadata[META_OCR_ATOMS_REF]?.let { ref ->
-            runCatching { AtomCodec.decode(File(ref).readText()) }.getOrNull()
-        }
+    private suspend fun atomLayer(input: PointObject): AtomLayer? = known.layerOf(input)
 
     private suspend fun reread(
         input: PointObject,

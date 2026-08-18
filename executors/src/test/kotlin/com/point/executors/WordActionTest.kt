@@ -42,7 +42,7 @@ class WordActionTest {
                 return ScratchRef("/tmp/out.docx")
             }
         }
-        val result = WordRealizer(pdf, docx, noOcr).perform(pdfObj(), null)
+        val result = WordRealizer(testKnowledge(pdf), docx, noOcr).perform(pdfObj(), null)
         assertTrue(result is ActionResult.Success)
         val obj = (result as ActionResult.Success).result
         assertEquals(ObjectKind.OFFICE, obj.type)
@@ -63,7 +63,7 @@ class WordActionTest {
         val ocr = object : TextRecognizer {
             override suspend fun recognize(obj: PointObject) = "Чек\nИТОГО 693,40"
         }
-        val result = WordRealizer(pdf, docx, ocr).perform(imageObj(), null)
+        val result = WordRealizer(testKnowledge(pdf), docx, ocr).perform(imageObj(), null)
         assertTrue(result is ActionResult.Success)
         assertEquals(ObjectKind.OFFICE, (result as ActionResult.Success).result.type)
         assertEquals(listOf("Чек", "ИТОГО 693,40"), paras)
@@ -73,7 +73,7 @@ class WordActionTest {
     fun `a scanned pdf with no text fails with an OCR hint`() = runTest {
         val pdf = object : PdfTextExtractor { override suspend fun extractText(obj: PointObject) = "" }
         val docx = object : DocxWriter { override suspend fun write(paragraphs: List<String>) = ScratchRef("/x") }
-        val result = WordRealizer(pdf, docx, noOcr).perform(pdfObj(), null)
+        val result = WordRealizer(testKnowledge(pdf), docx, noOcr).perform(pdfObj(), null)
         assertTrue(result is ActionResult.Failure)
         assertTrue((result as ActionResult.Failure).reason.contains("распознайте"))
     }
@@ -88,7 +88,7 @@ class WordActionTest {
             override suspend fun extractText(obj: PointObject) = "Строка 1"
         }
 
-        val heard = stagesHeard { WordRealizer(pdf, docxTo("/tmp/out.docx"), noOcr).perform(pdfObj(), null) }
+        val heard = stagesHeard { WordRealizer(testKnowledge(pdf), docxTo("/tmp/out.docx"), noOcr).perform(pdfObj(), null) }
 
         assertEquals(listOf("Читаю текст PDF", "Собираю документ"), heard)
     }
@@ -100,7 +100,7 @@ class WordActionTest {
             override suspend fun recognize(obj: PointObject) = "Чек"
         }
 
-        val heard = stagesHeard { WordRealizer(pdf, docxTo("/tmp/out.docx"), ocr).perform(imageObj(), null) }
+        val heard = stagesHeard { WordRealizer(testKnowledge(pdf), docxTo("/tmp/out.docx"), ocr).perform(imageObj(), null) }
 
         assertEquals(listOf("Распознаю текст на фото", "Собираю документ"), heard)
     }
@@ -109,7 +109,7 @@ class WordActionTest {
     fun `у скана без текста сборки не было — и слова о ней нет`() = runTest {
         val pdf = object : PdfTextExtractor { override suspend fun extractText(obj: PointObject) = "" }
 
-        val heard = stagesHeard { WordRealizer(pdf, docxTo("/x"), noOcr).perform(pdfObj(), null) }
+        val heard = stagesHeard { WordRealizer(testKnowledge(pdf), docxTo("/x"), noOcr).perform(pdfObj(), null) }
 
         assertEquals(listOf("Читаю текст PDF"), heard)
     }
