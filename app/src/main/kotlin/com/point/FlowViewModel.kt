@@ -468,26 +468,63 @@ class FlowViewModel @Inject constructor(
             }
             asked.forEach { (entry, path, _) -> executeForPc(pc, entry.meta, path) }
 
-            when (arrived.size) {
-                0 -> _ui.update { it.copy(busy = null, busyStage = null) }
-                1 -> onShared(
-                    "file://${arrived[0].second}",
-                    arrived[0].first.meta["mime"] ?: "application/octet-stream",
-                    autoAction = arrived[0].first.meta["pc.action"]?.takeIf { it.isNotBlank() },
-                    name = arrived[0].first.meta["name"],
+            // Просьба и знание объекта не теряются в пачке (#1090). Общий набор передать
+            // ими не может: у него один экран на всех. Поэтому объект со своей просьбой или
+            // со своим знанием берётся отдельно, а остальные ждут в очереди компьютера —
+            // не подтверждёнными, то есть не потерянными.
+            val (own, plain) = arrived.partition { hasOwnErrand(it.first.meta) }
+            val taken = mutableListOf<Triple<com.point.core.flow.PcOutboxEntry, String, Boolean>>()
+            taken += asked
 
-                    carried = arrived[0].first.meta - PC_SERVICE_META,
-                )
-                else -> onSharedMultiple(arrived.map { "file://${it.second}" })
+            when {
+                own.isNotEmpty() -> {
+                    val one = own.first()
+                    taken += one
+                    if (own.size == 1) taken += plain
+                    onShared(
+                        "file://${one.second}",
+                        one.first.meta["mime"] ?: "application/octet-stream",
+                        autoAction = one.first.meta["pc.action"]?.takeIf { it.isNotBlank() },
+                        name = one.first.meta["name"],
+                        carried = one.first.meta - PC_SERVICE_META,
+                    )
+                }
+                plain.size == 1 -> {
+                    taken += plain
+                    onShared(
+                        "file://${plain[0].second}",
+                        plain[0].first.meta["mime"] ?: "application/octet-stream",
+                        name = plain[0].first.meta["name"],
+                        carried = plain[0].first.meta - PC_SERVICE_META,
+                    )
+                }
+                plain.isNotEmpty() -> {
+                    taken += plain
+                    onSharedMultiple(plain.map { "file://${it.second}" })
+                }
+                else -> _ui.update { it.copy(busy = null, busyStage = null) }
             }
-            pulled.forEach { (entry, _, _) ->
+
+            // Подтверждается только то, что и правда разобрано: неподтверждённое остаётся
+            // в очереди компьютера и приезжает следующим заходом.
+            taken.forEach { (entry, _, _) ->
                 runCatching { pcTransport.ackOutbox(pc, entry.id) }
                     .recoverCatching { pcTransport.ackOutbox(pc, entry.id) }
             }
-            fromPcEntries = emptyList()
-            _fromPcCount.value = 0
+            val waiting = pulled.filterNot { left -> taken.any { it.first.id == left.first.id } }
+            fromPcEntries = waiting.map { it.first }
+            _fromPcCount.value = waiting.size
         }
     }
+
+    /**
+     * Просьба, привязанная к этому письму (#1090).
+     *
+     * Общий набор просьбу передать не может: у него один экран на всех, и `pc.action`
+     * терялся вместе с обещанием компьютера. Поэтому объект с просьбой берётся отдельно, а
+     * остальные ждут в очереди — не подтверждёнными, то есть не потерянными.
+     */
+    private fun hasOwnErrand(meta: Map<String, String>): Boolean = !meta["pc.action"].isNullOrBlank()
 
     fun hideFromPc() {
         _fromPcCount.value = 0

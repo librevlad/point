@@ -543,6 +543,27 @@ class FlowViewModelTest {
     }
 
     /**
+     * Пачка из очереди компьютера не теряет ни просьб, ни знания (#1090).
+     *
+     * Прежде две и больше записи уходили в общий набор, а `pc.action` и знание объектов не
+     * передавались вовсе — после чего всё подтверждалось и исчезало из очереди компьютера:
+     * повторить было неоткуда.
+     */
+    @Test fun `пачка с просьбами не теряет ни просьб, ни знания`() = runTest(dispatcher) {
+        pcLinks.pc = com.point.core.flow.LinkedPc("pc", "Компьютер")
+        pcTransport.outbox = listOf(
+            com.point.core.flow.PcOutboxEntry(1, mapOf("name" to "первый.txt", "mime" to "text/plain", "pc.action" to "a")),
+            com.point.core.flow.PcOutboxEntry(2, mapOf("name" to "второй.txt", "mime" to "text/plain", "pc.action" to "b")),
+        )
+        val vm = vm()
+
+        vm.pullFromPc(); advanceUntilIdle()
+
+        assertEquals("подтверждено больше, чем разобрано", listOf(1), pcTransport.acked)
+        assertEquals("оставшееся не показано в очереди", 1, vm.fromPcCount.value)
+    }
+
+    /**
      * Разбор не правится из системного потока (#1117).
      *
      * Пропажа и возврат сети приходят с чужого потока — оттуда Point правил стек разбора

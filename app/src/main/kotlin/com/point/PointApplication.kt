@@ -49,8 +49,12 @@ class PointApplication : Application() {
      * Адрес выдаёт Google и меняет, когда захочет, — помнить его нельзя, надо спрашивать.
      * Без настроек Firebase спрашивать не у кого: тогда стука просто нет, и просьба
      * компьютера разбирается, когда человек откроет Point сам.
+     *
+     * Зовётся и при запуске, и сразу после того, как человек разрешил уведомления (#1118):
+     * прежде включённая настройка начинала работать только со следующего запуска, и человек
+     * решал, что она не работает вовсе.
      */
-    private fun tellWhereToKnock() {
+    fun tellWhereToKnock() {
         val account = accounts.current() ?: return
         val app = runCatching { com.google.firebase.FirebaseApp.getApps(this) }.getOrNull()
         if (app.isNullOrEmpty()) return
