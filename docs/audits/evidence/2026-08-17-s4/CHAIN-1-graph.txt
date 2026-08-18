@@ -1,0 +1,3 @@
+flow nodes=1
+- 656aed72 kind=IMAGE mime=image/jpeg via=None name=Изображение, 18 авг 09:36 found=[] rels=[] meta#=14 | entity.qr.src=ocr; entity.qr=https://point.leerio.app/health; entity.url.src=ocr; entity.url=https://point.leerio.app/health; investigated.exif=not_found; investigated.graph-roles=not_found; investigated.image-text=found; investigated.metadata-entities=not_found; investigated.qr-content=found; reading.mode=PRINTED; size=70476
+history lines=0
