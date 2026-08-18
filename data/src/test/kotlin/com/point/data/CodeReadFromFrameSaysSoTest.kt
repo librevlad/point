@@ -54,8 +54,20 @@ class CodeReadFromFrameSaysSoTest {
     }
 
     @Test fun `у штрихкода — как и было`() {
-        val facts = knowledge(ScannedCode("13821702", CodeKind.PRODUCT))
+        val facts = knowledge(ScannedCode("4823063113311", CodeKind.PRODUCT))
 
         assertEquals(Provenance.OCR.wire, facts[META_ENTITY_PREFIX + "barcode" + META_SOURCE_SUFFIX])
+    }
+
+    /**
+     * Код, который сам с собой не сходится, находкой не становится (#940): на фотографии
+     * автомобиля сканер «прочитал» 13821702, и он вставал на экран галочкой рядом с настоящей
+     * датой съёмки. Раньше этот же код стоял в тесте выше как пример штрихкода — и тест
+     * держал ровно то поведение, от которого потом отказались.
+     */
+    @Test fun `код, не сходящийся сам с собой, находкой не становится`() {
+        val facts = knowledge(ScannedCode("13821702", CodeKind.PRODUCT))
+
+        assertEquals(emptyMap<String, String>(), facts)
     }
 }
