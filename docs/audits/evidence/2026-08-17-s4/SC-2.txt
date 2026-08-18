@@ -1,0 +1,4 @@
+flow nodes=2
+- 07d3874e kind=IMAGE mime=image/jpeg via=None name=Изображение, 18 авг 14:40 found=[('Date', '07d3874e'), ('IMAGE', 'b8d37ff3')] rels=['found_in', 'derived_from'] meta#=12 | entity.date=01.12.2020; investigated.exif=found; investigated.graph-roles=not_found; investigated.image-text=found; investigated.metadata-entities=not_found; investigated.qr-content=not_found; ocr.text.ref=/data/user/0/com.point/files/scratch/ad877c0f-d5ee-41f0-a2fc-04fb0169702d.txt; reading.mode=PRINTED; size=3002212
+- b8d37ff3 kind=IMAGE mime=image/jpeg via=Скан name= found=[('IMAGE', '07d3874e')] rels=['derived_from'] meta#=6 | investigated.exif=not_found; investigated.graph-roles=not_found; investigated.metadata-entities=not_found; investigated.qr-content=not_found; size=1364752
+history lines=0

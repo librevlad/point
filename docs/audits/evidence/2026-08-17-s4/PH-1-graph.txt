@@ -1,0 +1,3 @@
+flow nodes=1
+- 70150b09 kind=IMAGE mime=image/jpeg via=None name=Изображение, 18 авг 14:36 found=[] rels=[] meta#=7 | investigated.exif=found; investigated.graph-roles=not_found; investigated.metadata-entities=not_found; investigated.qr-content=not_found; size=3002212
+history lines=0
