@@ -36,6 +36,7 @@ import com.point.core.flow.meterFacts
 import com.point.core.flow.receiptFacts
 import com.point.core.flow.trackFacts
 import com.point.core.flow.by
+import com.point.core.flow.readConfidently
 import com.point.core.flow.locate
 import com.point.core.flow.regionWire
 import com.point.core.flow.META_AT_REGION
@@ -186,15 +187,43 @@ class OcrInvestigationRealizer @Inject constructor(
                 zoom?.let { put(META_READ_UPSCALE, it) }
                 put(META_OCR_TEXT_REF, ref.value)
                 atomsRef?.let { put(META_OCR_ATOMS_REF, it.value) }
+
+                // Сомнение чтения — сомнение значения (#1109). Ридер знает про каждое слово,
+                // насколько он в нём уверен, и это знание кончалось на слое: цифра, прочитанная
+                // плохо, приходила к человеку такой же спокойной, как прочитанная чисто.
+                // Своей системы уверенности здесь не заводится — используется та же улика
+                // значения, какой уже пользуются «Понять» и экран: у сомнительного значения
+                // улик нет, и оно показывается как «возможно».
+                putAll(doubted(this, layer))
             },
 
-            objects = locate(entities.objects + identifiers, layer),
+            // Узел найденного несёт то же сомнение, что и факт: человек входит в значение
+            // и обязан видеть там ровно то, что видел в списке (#1109).
+            objects = locate(entities.objects + identifiers, layer)
+                .map { node -> node.copy(metadata = node.metadata + doubted(node.metadata, layer)) },
             relations = entities.relations + idRelations,
 
             // Кто именно прочитал этот кадр (#1127): у чтения нет одного исполнителя — читает
             // тот движок, которого выбрала цепочка, и по имени видно, чьё это прочтение,
             // когда второй путь прочтёт то же место иначе.
         ).by(readBy(layer))
+    }
+
+    /**
+     * Значения, которые слой прочитал неуверенно.
+     *
+     * Пустая улика — существующий способ сказать «возможно» (`isAssumption`): у значения нет
+     * подтверждающих улик, и оно остаётся значением, а не исчезает. Уже посчитанные улики не
+     * трогаются: там о значении знают больше, чем уверенность отдельных слов.
+     */
+    private fun doubted(facts: Map<String, String>, layer: AtomLayer): Map<String, String> {
+        if (layer.atoms.isEmpty()) return emptyMap()
+        return facts.keys
+            .filter { it.startsWith(META_ENTITY_PREFIX) }
+            .filterNot { com.point.core.flow.isAnnotationKey(it) || com.point.core.flow.isStateKey(it) }
+            .filterNot { facts.containsKey(it + com.point.core.flow.META_EVIDENCE_SUFFIX) }
+            .filter { key -> layer.readConfidently(facts.getValue(key)) == false }
+            .associate { it + com.point.core.flow.META_EVIDENCE_SUFFIX to "" }
     }
 
     /** Имена движков, чьими глазами прочитан этот кадр. */

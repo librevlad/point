@@ -542,6 +542,38 @@ class FlowViewModelTest {
         assertTrue("прерванный шаг не назван-$said", said.contains(bubble("a").title))
     }
 
+    /**
+     * Телефон — исполнитель, а не новый дом объекта (ADR-0001 §7).
+     *
+     * Просьба компьютера «сделай у себя» прежде выглядела переездом: объект открывался на
+     * телефоне, работа шла здесь и здесь же оставалась, а на компьютере шаг ждал вечно.
+     */
+    @Test fun `просьба компьютера исполняется, но объект не переезжает на телефон`() = runTest(dispatcher) {
+        pcLinks.pc = com.point.core.flow.LinkedPc("pc", "Компьютер", "http://pc")
+        pcTransport.outbox = listOf(
+            com.point.core.flow.PcOutboxEntry(
+                1,
+                mapOf(
+                    "name" to "накладная.jpg",
+                    "mime" to "image/jpeg",
+                    com.point.core.flow.PcExecFields.ACTION to "a",
+                    com.point.core.flow.PcExecFields.LABEL to "Убрать фон",
+                    com.point.core.flow.PcExecFields.REQUEST to "r-1",
+                    com.point.core.flow.PcExecFields.HOME to "obj-at-home",
+                ),
+            ),
+        )
+        val vm = vm()
+
+        vm.pullFromPc(); advanceUntilIdle()
+
+        assertNull("объект компьютера не должен открываться на телефоне", vm.ui.value.frame)
+        val back = pcTransport.sent.singleOrNull()
+        assertNotNull("результат не уехал домой", back)
+        assertEquals("obj-at-home", back!![com.point.core.flow.PcExecFields.HOME])
+        assertEquals("r-1", back[com.point.core.flow.PcExecFields.REQUEST])
+    }
+
     @Test fun `назад с экрана входа возвращает в Point, а не закрывает его`() = runTest(dispatcher) {
 
         val vm = vm(account = FakeAccountStore(null), accountClient = CountingSignInClient(readyAfter = Int.MAX_VALUE))
@@ -4096,13 +4128,17 @@ private class FakePcTransport : com.point.core.flow.PcTransport {
     var capsDelayMs = 0L
     val acked = mutableListOf<Int>()
     var pushedPhoneCaps: List<com.point.core.flow.PcRemoteAction> = emptyList()
+    val sent = mutableListOf<Map<String, String>>()
     override suspend fun send(
         pc: com.point.core.flow.LinkedPc,
         obj: com.point.core.model.PointObject,
         fileName: String,
         meta: Map<String, String>,
         action: String?,
-    ): com.point.core.flow.PcSendOutcome = com.point.core.flow.PcSendOutcome.Sent()
+    ): com.point.core.flow.PcSendOutcome {
+        sent += meta
+        return com.point.core.flow.PcSendOutcome.Sent()
+    }
     override suspend fun fetchCaps(pc: com.point.core.flow.LinkedPc): List<com.point.core.flow.PcRemoteAction>? {
         if (capsDelayMs > 0) kotlinx.coroutines.delay(capsDelayMs)
         return listOf(com.point.core.flow.PcRemoteAction("pc-open", "Открыть на компьютере"))

@@ -160,7 +160,21 @@ class DesktopState(
                             mime = late.result.mime,
                             uri = late.result.uri,
                             state = com.point.core.model.ObjectState(late.result.type),
-                            metadata = late.result.metadata,
+
+                            // Долгая работа возвращается тем же объектом, что и быстрая
+                            // (#1112): из чего сделан, чем сделан и каким путём. Прежде
+                            // медленный результат приезжал на телефон сиротой с
+                            // происхождением «дано» — как будто его прислал человек.
+                            metadata = late.result.metadata + com.point.core.flow.lineageMeta(
+                                sourceId = item.obj.metadata[com.point.core.flow.META_ORIGIN_ID]
+                                    ?: item.obj.id,
+                                creator = id,
+                                provenance = late.result.provenance,
+                                executor = PC_EXECUTOR,
+                            ),
+                            sourceObjects = listOf(item.obj.id),
+                            creatorAction = id,
+                            provenance = late.result.provenance,
                         ),
                     )
                 }.onFailure {
@@ -175,6 +189,9 @@ class DesktopState(
 
     companion object {
         const val STILL_WORKING = "Компьютер ещё работает — готовое появится в списке «с компьютера»"
+
+        /** Как компьютер называет себя в происхождении знания (#1127). */
+        const val PC_EXECUTOR = "pc"
 
         /** Имена вопросов, заданных другой поверхностью: её capability здесь не зарегистрированы. */
         private val PHONE_QUESTIONS = mapOf(
@@ -252,6 +269,57 @@ class DesktopState(
 
         note(item, id, if (stationTitle != null) title else "$title · с телефона", result)
         return result
+    }
+
+    /**
+     * Телефон исполнил просьбу и вернул результат домой (ADR-0001 §7, §20).
+     *
+     * Дом объекта не менялся: работа ушла к соседу, а результат материализуется здесь, у
+     * исходного объекта — тем же путём, каким это делает шаг, исполненный на месте. Второй
+     * машины состояний для этого не заводится: то же `landFindings`, тот же `onReceived`,
+     * та же запись шага в журнале.
+     */
+    fun onExecutionResult(
+        homeId: String,
+        meta: Map<String, String>,
+
+        /** Файл результата, уже принятый на диск, — или `null`, если работа его не родила. */
+        born: InboxItem?,
+    ): ActionResult {
+        val item = _items.value.firstOrNull { it.obj.id == homeId }
+            ?: return ActionResult.Failure("объекта уже нет на компьютере", recoverable = false)
+        val f = com.point.core.flow.PcResultFields
+        val action = meta[com.point.core.flow.PcExecFields.ACTION].orEmpty()
+        val label = meta[com.point.core.flow.PcExecFields.LABEL]?.takeIf { it.isNotBlank() }
+            ?: titleOf(action, item)
+
+        val understood = meta
+            .filterKeys { it.startsWith(f.UNDERSTOOD) }
+            .mapKeys { (k, _) -> k.removePrefix(f.UNDERSTOOD) }
+        if (understood.isNotEmpty()) {
+            landFindings(item, com.point.core.model.Findings(metadata = understood))
+        }
+
+        if (meta[f.OUTCOME] == f.FAILED) {
+            val why = meta[f.DETAIL]?.takeIf { it.isNotBlank() } ?: "телефон не смог выполнить «$label»"
+            _message.value = why
+            note(item, action, "$label · на телефоне", ActionResult.Failure(why, recoverable = true))
+            return ActionResult.Failure(why, recoverable = true)
+        }
+
+        // Объект, рождённый работой соседа, ложится сюда как любой другой результат — со
+        // своей родословной, а не новой вещью неизвестного происхождения.
+        if (born != null) {
+            val lineage = com.point.core.flow.withLineage(born.obj, meta).copy(
+                sourceObjects = listOf(item.obj.id),
+                creatorAction = action.takeIf { it.isNotBlank() },
+            )
+            onReceived(born.copy(obj = lineage), ObjectSource.PHONE_RELAY)
+        }
+        val detail = meta[f.DETAIL]?.takeIf { it.isNotBlank() } ?: "$label — готово"
+        _message.value = detail
+        note(item, action, "$label · на телефоне", ActionResult.Done(detail))
+        return ActionResult.Done(detail)
     }
 
     private fun landFindings(item: InboxItem, findings: com.point.core.model.Findings) {
@@ -415,6 +483,7 @@ class DesktopState(
         action: com.point.core.flow.PcRemoteAction,
         silent: Boolean = false,
     ) {
+        val request = java.util.UUID.randomUUID().toString()
         scope.launch(Dispatchers.IO) {
             runCatching {
                 outbox?.add(
@@ -424,7 +493,16 @@ class DesktopState(
                             // Название работы человеческими словами кладёт компьютер: он его
                             // и показывал человеку. Телефону иначе неоткуда взять слова для
                             // уведомления, а звать реестр ради названия — лишний путь.
-                            ("pc.action.label" to action.label),
+                            ("pc.action.label" to action.label) +
+
+                            // Дом объекта здесь, телефон — исполнитель (ADR-0001 §7).
+                            // Прежде просьба выглядела переездом- телефон открывал объект у
+                            // себя, делал работу и там же её оставлял, а на компьютере шаг
+                            // ждал вечно. Теперь по этим полям результат возвращается домой.
+                            (com.point.core.flow.PcExecFields.ACTION to action.id) +
+                            (com.point.core.flow.PcExecFields.LABEL to action.label) +
+                            (com.point.core.flow.PcExecFields.REQUEST to request) +
+                            (com.point.core.flow.PcExecFields.HOME to item.obj.id),
                     )
                 )
             }.onSuccess {

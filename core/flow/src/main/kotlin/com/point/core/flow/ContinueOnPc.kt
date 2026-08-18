@@ -158,6 +158,81 @@ class PcReturned(
     val understanding: Map<String, String> = emptyMap(),
 )
 
+/**
+ * Просьба исполнить действие — не переезд объекта (ADR-0001 §7, §20).
+ *
+ * Дом объекта и место исполнения — разные вещи. Устройство, которое умеет нужное, —
+ * исполнитель, а не новый дом: объект остаётся там, где с ним работает человек, а к соседу
+ * уезжает только то, что нужно для работы, и возвращается результат.
+ *
+ * Своей машины состояний у этого нет: это поля того же письма, каким объекты и знание ездят
+ * между устройствами. По [HOME] результат находит свой объект, по [REQUEST] — свой шаг.
+ */
+object PcExecFields {
+
+    /** Какую способность просят исполнить. */
+    const val ACTION = "exec.action"
+
+    /** Чем эта просьба называется человеку на той стороне. */
+    const val LABEL = "exec.label"
+
+    /** Тождество шага: по нему возвращённый результат находит свою просьбу. */
+    const val REQUEST = "exec.request"
+
+    /** Объект у себя дома — туда вернётся результат. */
+    const val HOME = "exec.home"
+
+    /** Из какого объекта сделан этот результат (родословная, ADR-0001 §2). */
+    const val OF = "exec.of"
+
+    /** Каким действием он сделан. */
+    const val CREATOR = "exec.creator"
+
+    /** Каким путём получен — тем же словарём `Provenance`, что и дома. */
+    const val SOURCE = "exec.src"
+
+    /** Кто именно исполнил (#1127). */
+    const val BY = "exec.executor"
+}
+
+/**
+ * Родословная объекта, уезжающего к другому устройству.
+ *
+ * Поля объекта письмом не ездят — едут только метаданные, — и без этих трёх строк результат
+ * приезжал на ту сторону сиротой: новый идентификатор, происхождение «дано» и ни следа
+ * объекта, из которого он сделан.
+ */
+fun lineageMeta(
+    sourceId: String?,
+    creator: String?,
+    provenance: com.point.core.model.Provenance,
+    executor: String? = null,
+): Map<String, String> = buildMap {
+    sourceId?.takeIf { it.isNotBlank() }?.let { put(PcExecFields.OF, it) }
+    creator?.takeIf { it.isNotBlank() }?.let { put(PcExecFields.CREATOR, it) }
+    put(PcExecFields.SOURCE, provenance.wire)
+    executor?.takeIf { it.isNotBlank() }?.let { put(PcExecFields.BY, it) }
+}
+
+/** Та же родословная, восстановленная на той стороне: приехавший результат — не сирота. */
+fun withLineage(obj: com.point.core.model.PointObject, meta: Map<String, String>): com.point.core.model.PointObject {
+    val of = meta[PcExecFields.OF]?.takeIf { it.isNotBlank() }
+    val creator = meta[PcExecFields.CREATOR]?.takeIf { it.isNotBlank() }
+    val source = meta[PcExecFields.SOURCE]?.let { com.point.core.model.provenanceOf(it) }
+    if (of == null && creator == null && source == null) return obj
+    return obj.copy(
+        provenance = source ?: obj.provenance,
+        sourceObjects = if (of == null) obj.sourceObjects else listOf(of),
+        creatorAction = creator ?: obj.creatorAction,
+    )
+}
+
+/** Что из письма — служебное и знанием об объекте не является. */
+val PC_EXEC_META: Set<String> = setOf(
+    PcExecFields.ACTION, PcExecFields.LABEL, PcExecFields.REQUEST, PcExecFields.HOME,
+    PcExecFields.OF, PcExecFields.CREATOR, PcExecFields.SOURCE, PcExecFields.BY,
+)
+
 object PcResultFields {
     const val NAME = "result.name"
     const val MIME = "result.mime"

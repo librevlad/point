@@ -58,6 +58,59 @@ class DesktopJournalTest {
         receivedAt = at,
     )
 
+    /**
+     * Телефон — исполнитель, а не новый дом объекта (ADR-0001 §7).
+     *
+     * Прежде просьба «сделай у себя» выглядела переездом: телефон открывал объект у себя,
+     * делал работу и там же её оставлял, а на компьютере шаг ждал вечно.
+     */
+    @Test
+    fun `результат телефона возвращается к своему объекту на компьютере`() {
+        val store = FakeJournal()
+        val s = state(store)
+        val home = item()
+        s.onReceived(home, ObjectSource.LOCAL)
+
+        val done = s.onExecutionResult(
+            home.obj.id,
+            mapOf(
+                com.point.core.flow.PcExecFields.HOME to home.obj.id,
+                com.point.core.flow.PcExecFields.ACTION to "cutout",
+                com.point.core.flow.PcExecFields.LABEL to "Убрать фон",
+                com.point.core.flow.PcResultFields.OUTCOME to com.point.core.flow.PcResultFields.DONE,
+                com.point.core.flow.PcResultFields.UNDERSTOOD + "entity.amount" to "7800 UAH",
+            ),
+            born = null,
+        )
+
+        assertTrue(done is ActionResult.Done)
+        val landed = s.items.value.single { it.obj.id == home.obj.id }
+        assertEquals("7800 UAH", landed.obj.metadata["entity.amount"])
+        assertEquals(1, s.items.value.size)
+    }
+
+    @Test
+    fun `неудача на телефоне возвращается исходом, а не молчанием`() {
+        val s = state(FakeJournal())
+        val home = item()
+        s.onReceived(home, ObjectSource.LOCAL)
+
+        val outcome = s.onExecutionResult(
+            home.obj.id,
+            mapOf(
+                com.point.core.flow.PcExecFields.HOME to home.obj.id,
+                com.point.core.flow.PcExecFields.ACTION to "cutout",
+                com.point.core.flow.PcResultFields.OUTCOME to com.point.core.flow.PcResultFields.FAILED,
+                com.point.core.flow.PcResultFields.DETAIL to "телефон не смог",
+            ),
+            born = null,
+        )
+
+        assertTrue(outcome is ActionResult.Failure)
+        val steps = s.journal.value.single { it.path == home.obj.uri.value }.steps
+        assertEquals(StepOutcome.FAILED, steps.last().outcome)
+    }
+
     private fun state(
         journal: JournalStore,
         realizers: Set<Realizer> = emptySet(),

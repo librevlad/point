@@ -256,9 +256,22 @@ fun main(args: Array<String>) {
         clipboardGet = ::readSystemClipboard,
         clipboardSet = ::writeSystemClipboard,
         onObject = { name, mime, meta, bytes, action ->
-            val item = inbox.receive(name, mime, meta, bytes.inputStream())
-            state.onReceived(item, ObjectSource.PHONE_RELAY)
-            action?.let { state.runRemoteActionNow(it, item) }
+
+            // Результат просьбы возвращается ДОМОЙ, к своему объекту, а не приезжает новой
+            // вещью (ADR-0001 §7): дом объекта не менялся, телефон был исполнителем.
+            val home = meta[com.point.core.flow.PcExecFields.HOME]?.takeIf { it.isNotBlank() }
+            if (home != null) {
+                val born = if (com.point.core.flow.PcResultFields.hasObject(meta) && bytes.isNotEmpty()) {
+                    inbox.receive(name, mime, meta - com.point.core.flow.PC_EXEC_META, bytes.inputStream())
+                } else {
+                    null
+                }
+                state.onExecutionResult(home, meta, born)
+            } else {
+                val item = inbox.receive(name, mime, meta, bytes.inputStream())
+                state.onReceived(item, ObjectSource.PHONE_RELAY)
+                action?.let { state.runRemoteActionNow(it, item) }
+            }
         },
         log = { line -> println("[mailbox] " + line) },
         seen = SeenLetters(File(pointDir, "seen-letters")),
