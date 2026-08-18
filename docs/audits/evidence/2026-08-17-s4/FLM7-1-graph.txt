@@ -1,0 +1,5 @@
+flow nodes=1
+- 4a39506d kind=IMAGE mime=image/jpeg via=None name=Изображение, 18 авг 15:09 found=[('Phone', '4a39506d'), ('Phone', '4a39506d'), ('Address', '4a39506d'), ('Date', '4a39506d'), ('Date', '4a39506d'), ('Date', '4a39506d'), ('Identifier', '4a39506d')] rels=['found_in', 'found_in', 'found_in', 'found_in', 'found_in', 'found_in', 'found_in'] meta#=26 | entity.address.ev=semantic; entity.address.src=ocr; entity.address=М. ПАВЛОГРАД, ВУЛ. КОДАЦЬКА, 39.; entity.amount.currency=ГРН.; entity.amount.ev=semantic; entity.amount.src=ocr; entity.amount=140; entity.date.more=17.04.2026
+18.04.2026 09:02:50
+18.04.2026; entity.date=16.04.2026; entity.phone.more=0951183056; entity.phone=0932423759; entity.track.ev=semantic; entity.track.src=ocr; entity.track=59001627808586; investigated.exif=found; investigated.graph-roles=not_found; investigated.image-text=insufficiently_investigated; investigated.metadata-entities=not_found; investigated.qr-content=not_found; ocr.text.ref=/data/user/0/com.point/files/scratch/a4172c87-55b5-4835-93be-59edbf3ea0a2.txt; reading.mode=PRINTED; size=3349303
+history lines=0

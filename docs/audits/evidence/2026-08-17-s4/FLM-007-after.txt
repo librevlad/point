@@ -1,0 +1,8 @@
+flow nodes=1
+- ccf77148 kind=IMAGE mime=image/jpeg via=None name=Изображение, 18 авг 15:09 found=[('Date', 'ccf77148'), ('Date', 'ccf77148'), ('Date', 'ccf77148'), ('Date', 'ccf77148'), ('Date', 'ccf77148'), ('Date', 'ccf77148'), ('Date', 'ccf77148'), ('Identifier', 'ccf77148')] rels=['found_in', 'found_in', 'found_in', 'found_in', 'found_in', 'found_in', 'found_in', 'found_in'] meta#=20 | entity.amount.currency=£; entity.amount.ev=semantic; entity.amount.src=ocr; entity.amount=196; entity.date.more=16.02.2022
+2.03.0023
+14.08.2003
+28.12.23
+14.04.24
+31.07.23; entity.date=16.03.2023; entity.track.ev=semantic; entity.track.src=ocr; entity.track=97036 9015474 14; investigated.exif=found; investigated.graph-roles=not_found; investigated.image-text=insufficiently_investigated; investigated.metadata-entities=not_found; investigated.qr-content=not_found; ocr.text.ref=/data/user/0/com.point/files/scratch/6ea9fa6e-0459-4a87-a43c-52d7524c39c8.txt; reading.mode=PRINTED; size=3176691
+history lines=0
