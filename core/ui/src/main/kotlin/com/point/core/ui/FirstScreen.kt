@@ -523,10 +523,21 @@ const val FOCUS_HERE = "Смотрю сюда"
 
 const val FOCUS_DROP = "Смотреть на весь объект"
 
-fun otherReading(obj: PointObject): String? =
-    obj.metadata.keys.firstOrNull { it.endsWith(META_ALT_SUFFIX) }
-        ?.let { alternativesOf(obj.metadata, it.removeSuffix(META_ALT_SUFFIX)) }
-        ?.firstOrNull { it.trim() != foundHeadline(obj).trim() }
+/**
+ * Расхождение — это другое значение, а не та же запись другими знаками (#1011).
+ *
+ * Строка «или:» показывала первый элемент списка, и им часто оказывалось то же самое, что
+ * уже выбрано: «(918) 682-1561» и «918-682-1561». Тождество здесь спрашивается тем же
+ * `sameFact`, что и в движке, — двух мерок одного вопроса в Point не бывает (#1136).
+ */
+fun otherReading(obj: PointObject): String? {
+    val altKey = obj.metadata.keys.firstOrNull { it.endsWith(META_ALT_SUFFIX) } ?: return null
+    val key = altKey.removeSuffix(META_ALT_SUFFIX)
+    val shown = (obj.metadata[key] ?: foundHeadline(obj)).trim()
+    return alternativesOf(obj.metadata, key)
+        .map(String::trim)
+        .firstOrNull { it.isNotBlank() && !com.point.core.flow.sameFact(key, it, shown) }
+}
 
 private fun roleOf(obj: PointObject, relations: List<Relation>): String? =
     relations.asSequence().filter { it.fromId == obj.id }.mapNotNull { relationLabel(it.type) }.firstOrNull()

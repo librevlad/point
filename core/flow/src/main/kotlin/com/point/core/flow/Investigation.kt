@@ -83,8 +83,14 @@ fun investigationOutcome(
     metadata: Map<String, String>,
     factKeys: Collection<String>,
 ): InvestigationState {
-    val told = factKeys.filterNot { isAnnotationKey(it) || isStateKey(it) || isProcessNote(it) }
+    val told = factKeys.filterNot { isAnnotationKey(it) || isStateKey(it) || isProcessNote(it) || it == META_UNUSABLE_REASON }
     return when {
+
+        // Негодность объекта — ответ про сам объект, а не про заданный вопрос (#988, #1067).
+        // Ридер не смог открыть файл: спросить «есть ли здесь текст» не вышло вовсе, и
+        // закрывать вопрос «найдено» нельзя. Не «смотрели — не нашлось»: не смотрели.
+        told.isEmpty() && META_UNUSABLE_REASON in factKeys ->
+            InvestigationState.INSUFFICIENTLY_INVESTIGATED
         told.isEmpty() -> InvestigationState.NOT_FOUND
         told.any { isDisputed(metadata, it) } -> InvestigationState.CONTRADICTORY
         told.any { isAssumption(metadata, it) } -> InvestigationState.INSUFFICIENTLY_INVESTIGATED
