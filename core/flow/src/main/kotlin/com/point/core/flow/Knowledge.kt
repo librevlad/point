@@ -127,6 +127,11 @@ private fun mergeAnnotation(target: MutableMap<String, String>, key: String, val
                 com.point.core.model.provenanceOf(value),
             ).wire
 
+        // Одно значение, два исполнителя — не спор, а два пути к одному знанию (#1127).
+        // Имена складываются: по ним видно, что вопрос смотрели дважды и ответ сошёлся.
+        key.endsWith(META_ACTOR_SUFFIX) ->
+            target[key] = actorValue(actorList(existing) + actorList(value))
+
         key.endsWith(META_EVIDENCE_SUFFIX) -> {
             val was = evidenceClasses(existing)
             val now = evidenceClasses(value)

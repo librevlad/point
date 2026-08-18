@@ -46,6 +46,8 @@ class MetadataEntityInvestigationRealizer @javax.inject.Inject constructor() : R
 
     override val capabilityId = MetadataEntityInvestigation.ID
 
+    override val meta = com.point.core.flow.RealizerMeta(actor = "file-metadata")
+
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         com.point.core.flow.investigated { findings(input) }
 

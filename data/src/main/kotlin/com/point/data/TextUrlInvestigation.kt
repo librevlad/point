@@ -44,6 +44,8 @@ class TextUrlInvestigationRealizer @Inject constructor() : Realizer {
 
     override val capabilityId = TextUrlInvestigation.ID
 
+    override val meta = com.point.core.flow.RealizerMeta(actor = "url-rules")
+
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         com.point.core.flow.investigated { findings(input) }
 

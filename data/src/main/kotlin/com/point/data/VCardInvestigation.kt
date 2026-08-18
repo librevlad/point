@@ -43,6 +43,8 @@ class VCardInvestigationRealizer @Inject constructor() : Realizer {
 
     override val capabilityId = VCardInvestigation.ID
 
+    override val meta = com.point.core.flow.RealizerMeta(actor = "vcard")
+
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         com.point.core.flow.investigated { findings(input) }
 

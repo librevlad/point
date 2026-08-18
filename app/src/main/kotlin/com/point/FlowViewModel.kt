@@ -27,6 +27,7 @@ import com.point.core.flow.Box
 import com.point.core.flow.FrameTransform
 import com.point.core.flow.InvestigationState
 import com.point.core.flow.investigationStateOf
+import com.point.core.flow.knownBy
 import com.point.core.flow.META_CLOUD_ATOMS_REF
 import com.point.core.flow.META_OCR_ATOMS_REF
 import com.point.core.flow.META_SELECTION_IDS
@@ -935,7 +936,7 @@ class FlowViewModel @Inject constructor(
             quiet = isQuietAction(bubble.capabilityId),
             cancelable = true,
         )
-        dispatch(bubble) { resolver.realizerFor(bubble.capabilityId, top.state).perform(top, null) }
+        dispatch(bubble) { performed(bubble.capabilityId, top, null) }
     }
 
     /**
@@ -1019,7 +1020,7 @@ class FlowViewModel @Inject constructor(
             cancelable = true,
         )
         _ui.update { it.copy(inputSuggestions = emptyList(), needsImage = null) }
-        dispatch(bubble) { resolver.realizerFor(bubble.capabilityId, top.state).perform(top, text) }
+        dispatch(bubble) { performed(bubble.capabilityId, top, text) }
     }
 
     fun cancelInput() {
@@ -1699,6 +1700,17 @@ class FlowViewModel @Inject constructor(
                 .onSuccess { _ui.update { it.copy(busy = null, busyStage = null, message = "Открываю в ${target.label}", messageOutcome = Outcome.DONE) } }
                 .onFailure { e -> _ui.update { it.copy(busy = null, busyStage = null, message = e.message ?: "Не удалось открыть", messageOutcome = Outcome.FAILED) } }
         }
+    }
+
+    /**
+     * Исполнить действие и запомнить, кто именно его исполнил (#1127).
+     *
+     * Тот же шов, что и у исследований (`DefaultEnrichment.run`): имя исполнителя знает
+     * только место, где его выбрал Resolver, и знание уходит в Graph уже с ним.
+     */
+    private suspend fun performed(id: CapabilityId, obj: PointObject, amendment: String?): ActionResult {
+        val realizer = resolver.realizerFor(id, obj.state)
+        return realizer.perform(obj, amendment).knownBy(obj, realizer.meta.actor)
     }
 
     private suspend fun bridge(obj: PointObject, viaCapId: String): PointObject? {

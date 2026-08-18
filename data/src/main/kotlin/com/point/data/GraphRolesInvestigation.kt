@@ -50,6 +50,8 @@ class GraphRolesInvestigationRealizer @Inject constructor() : Realizer {
 
     override val capabilityId = GraphRolesInvestigation.ID
 
+    override val meta = com.point.core.flow.RealizerMeta(actor = "role-rules")
+
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         com.point.core.flow.investigated { findings(input) }
 

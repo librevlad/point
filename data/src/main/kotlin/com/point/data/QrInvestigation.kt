@@ -46,6 +46,8 @@ class QrInvestigationRealizer @Inject constructor(
 
     override val capabilityId = QrInvestigation.ID
 
+    override val meta = com.point.core.flow.RealizerMeta(actor = "qr-reader")
+
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         com.point.core.flow.investigated { findings(input) }
 

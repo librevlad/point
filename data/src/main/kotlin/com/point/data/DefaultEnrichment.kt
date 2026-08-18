@@ -15,6 +15,7 @@ import com.point.core.flow.Resolver
 import com.point.core.flow.cloudScopeOf
 import com.point.core.flow.investigationOutcome
 import com.point.core.flow.investigationStateOf
+import com.point.core.flow.knownBy
 import com.point.core.flow.mergeKnowledge
 import com.point.core.flow.withInvestigation
 import com.point.core.model.ActionResult
@@ -152,8 +153,16 @@ class DefaultEnrichment @Inject constructor(
         )
     }
 
-    private suspend fun run(investigation: Capability, obj: PointObject): ActionResult =
-        resolver.realizerFor(investigation.id, obj.state).perform(obj, null)
+    /**
+     * Кто именно исследовал — часть добытого знания (#1127).
+     *
+     * Исполнителя выбирает Resolver, и знать его имя может только этот шов: само исследование
+     * видит свой вопрос, а не то, кем он был решён в этот раз.
+     */
+    private suspend fun run(investigation: Capability, obj: PointObject): ActionResult {
+        val realizer = resolver.realizerFor(investigation.id, obj.state)
+        return realizer.perform(obj, null).knownBy(obj, realizer.meta.actor)
+    }
 
     /**
      * ADR-0001 §19: автоматическое исследование не пересекает внешнюю границу без заранее

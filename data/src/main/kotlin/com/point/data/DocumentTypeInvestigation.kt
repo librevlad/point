@@ -43,6 +43,8 @@ class DocumentTypeInvestigationRealizer @Inject constructor() : Realizer {
 
     override val capabilityId = DocumentTypeInvestigation.ID
 
+    override val meta = com.point.core.flow.RealizerMeta(actor = "doc-type-rules")
+
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         com.point.core.flow.investigated { findings(input) }
 

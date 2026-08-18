@@ -34,7 +34,8 @@ const val META_LINE_SUFFIX = ".line"
 fun isAnnotationKey(key: String): Boolean =
     key.endsWith(META_ALT_SUFFIX) || key.endsWith(META_MORE_SUFFIX) ||
         key.endsWith(META_EVIDENCE_SUFFIX) || key.endsWith(META_SOURCE_SUFFIX) ||
-        key.endsWith(META_BLOCKED_SUFFIX) || key.endsWith(META_LINE_SUFFIX)
+        key.endsWith(META_BLOCKED_SUFFIX) || key.endsWith(META_LINE_SUFFIX) ||
+        key.endsWith(META_ACTOR_SUFFIX)
 
 fun semanticFits(key: String, value: String): Boolean? {
     val digits = value.count(Char::isDigit)
