@@ -1,0 +1,3 @@
+flow nodes=1
+- 4c6ac892 kind=IMAGE mime=image/jpeg via=None name=fx-broken.jpg found=[] rels=[] meta#=7 | investigated.exif=found; investigated.graph-roles=not_found; investigated.metadata-entities=not_found; investigated.qr-content=not_found; size=1000737
+history lines=0

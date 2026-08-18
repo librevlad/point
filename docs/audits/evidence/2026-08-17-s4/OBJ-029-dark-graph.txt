@@ -1,0 +1,3 @@
+flow nodes=1
+- b3d1f865 kind=IMAGE mime=image/jpeg via=None name=fx-dark.jpg found=[] rels=[] meta#=9 | investigated.exif=not_found; investigated.graph-roles=not_found; investigated.image-text=found; investigated.metadata-entities=not_found; investigated.qr-content=not_found; reading.mode=HANDWRITTEN; size=17799
+history lines=0
