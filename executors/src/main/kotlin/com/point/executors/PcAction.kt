@@ -96,17 +96,24 @@ internal suspend fun travellingMeta(
     obj: PointObject,
     store: com.point.core.flow.ObjectStore,
 ): Map<String, String> {
-    val ref = obj.metadata[com.point.core.flow.META_OCR_TEXT_REF]?.takeIf { it.isNotBlank() }
-        ?: return obj.metadata
+
+    // Тождество едет с объектом (#811, ADR-0001 §20): вернувшись, он должен стать собой,
+    // а не второй копией рядом. Своё имя объект называет один раз — на первом переезде.
+    val identified = obj.metadata + (
+        com.point.core.flow.META_ORIGIN_ID to
+            (obj.metadata[com.point.core.flow.META_ORIGIN_ID] ?: obj.id)
+        )
+    val ref = identified[com.point.core.flow.META_OCR_TEXT_REF]?.takeIf { it.isNotBlank() }
+        ?: return identified
     val text = runCatching {
         store.readText(
             obj.copy(uri = com.point.core.model.ScratchRef(ref)),
             limit = com.point.core.flow.READ_TEXT_TRAVEL_LIMIT,
         )
-    }.getOrNull()?.takeIf { it.isNotBlank() } ?: return obj.metadata
+    }.getOrNull()?.takeIf { it.isNotBlank() } ?: return identified
 
     // Ссылка на чужой scratch на той стороне бессмысленна и только притворяется знанием.
-    return obj.metadata - com.point.core.flow.META_OCR_TEXT_REF +
+    return identified - com.point.core.flow.META_OCR_TEXT_REF +
         (com.point.core.flow.META_READ_TEXT to text)
 }
 

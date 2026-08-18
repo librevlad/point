@@ -156,7 +156,7 @@ class DesktopJournalTest {
         val remembered = JournalEntry(
             "/дом/счёт.pdf", "счёт.pdf", ObjectKind.PDF.name, "application/pdf",
             ObjectSource.PHONE_LAN, 100L,
-            steps = listOf(JournalStep("pc-print", "Напечатать", 200L, ok = true, note = "Напечатано")),
+            steps = listOf(JournalStep("pc-print", "Напечатать", 200L, StepOutcome.DONE, note = "Напечатано")),
         )
         val store = FakeJournal(listOf(remembered))
         val s = state(store, realizers = setOf(realizer), reopen = { path -> item(path, at = 9_000L) })

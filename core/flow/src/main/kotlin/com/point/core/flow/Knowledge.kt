@@ -78,7 +78,7 @@ fun mergeKnowledge(
         when {
             key in refreshable -> merged[key] = value
 
-            isStateKey(key) -> merged[key] = value
+            isStateKey(key) -> merged[key] = keptState(merged[key], value)
 
             isAnnotationKey(key) -> mergeAnnotation(merged, key, value)
         }
@@ -107,6 +107,21 @@ internal fun withPhoneKnowledge(
     out["$key.country"] = country
     PhoneNumbers.kind(value, region)?.let { out["$key.kind"] = it }
     return out
+}
+
+/**
+ * Ответ «нашли» не отменяется чужим «не нашли» (ADR-0001 §9, §20).
+ *
+ * У другого устройства другой набор способностей: компьютер разбирает текст своими
+ * правилами и адреса не находит вовсе. Его «смотрели — не нашлось» приезжало поверх
+ * найденного телефоном и стирало ответ на вопрос, который давно отвечен. «Не смотрели» и
+ * «не нашли» — разные вещи, и ни одна из них не сильнее находки.
+ */
+private fun keptState(known: String?, fresh: String): String {
+    val was = InvestigationState.entries.firstOrNull { it.wire == known }
+    val now = InvestigationState.entries.firstOrNull { it.wire == fresh }
+    val forgets = now == InvestigationState.NOT_FOUND || now == InvestigationState.NOT_INVESTIGATED
+    return if (was == InvestigationState.FOUND && forgets) known!! else fresh
 }
 
 private fun humanSaid(metadata: Map<String, String>, key: String): Boolean =

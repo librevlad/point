@@ -175,7 +175,13 @@ class RemotePcRealizer(
         val name = humanSendName(input)
 
         reportStage(PC_SEND_STAGE)
-        return when (val outcome = transport.send(pc, input, name, input.metadata, action.id)) {
+
+        // Знание едет вместе с объектом (#811, ADR-0001 §20). Прочитанный текст хранится
+        // ссылкой на scratch телефона, и на той стороне такая ссылка ведёт в никуда: там
+        // объект снова выглядел непрочитанным, и компьютер звал читать его заново. Путь
+        // «на компьютер» это уже умел, а действие «сделай у себя» — нет.
+        val travelling = store?.let { travellingMeta(input, it) } ?: input.metadata
+        return when (val outcome = transport.send(pc, input, name, travelling, action.id)) {
 
             is PcSendOutcome.Sent -> materialize(outcome, input) ?: when (val done = outcome.action) {
 

@@ -13,7 +13,7 @@ class Outbox(private val dir: File) {
         dir.mkdirs()
         val id = (ids().maxOrNull() ?: 0) + 1
         File(obj.uri.value).copyTo(File(dir, "$id.bin"), overwrite = false)
-        val meta = obj.metadata + mapOf(
+        val meta = travellingMeta(obj) + mapOf(
             "name" to (obj.metadata["name"] ?: File(obj.uri.value).name),
             "mime" to obj.mime,
         )
@@ -32,6 +32,24 @@ class Outbox(private val dir: File) {
     fun remove(id: Int) {
         File(dir, "$id.meta").delete()
         File(dir, "$id.bin").delete()
+    }
+
+    /**
+     * Знание едет значением (#811, ADR-0001 §20).
+     *
+     * Прочитанный текст лежит файлом на этом компьютере, и ссылка на него на телефоне ведёт
+     * в никуда: там объект снова выглядел непрочитанным. Телефон в обратную сторону это уже
+     * умел — компьютер отвечал ссылкой.
+     */
+    private fun travellingMeta(obj: PointObject): Map<String, String> {
+        val ref = obj.metadata[com.point.core.flow.META_OCR_TEXT_REF]?.takeIf { it.isNotBlank() }
+            ?: return obj.metadata
+        val text = runCatching {
+            File(ref).takeIf(File::isFile)?.readText()?.take(com.point.core.flow.READ_TEXT_TRAVEL_LIMIT)
+        }.getOrNull()?.takeIf { it.isNotBlank() } ?: return obj.metadata - com.point.core.flow.META_OCR_TEXT_REF
+
+        return obj.metadata - com.point.core.flow.META_OCR_TEXT_REF +
+            (com.point.core.flow.META_READ_TEXT to text)
     }
 
     private fun ids(): List<Int> =

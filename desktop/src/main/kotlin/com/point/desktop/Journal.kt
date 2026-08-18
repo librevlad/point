@@ -24,13 +24,34 @@ enum class ObjectSource {
     LOCAL,
 }
 
+/**
+ * Чем кончился шаг — ADR-0001 §18.
+ *
+ * Исхода три, и «ещё не кончился» исходом не является. Прежде в журнале стояла галочка
+ * «получилось»: шаг, поставленный в очередь к телефону, записывался как выполненный,
+ * хотя не принёс ничего и мог ещё не выйти (#1112). Ожидание продолжения — не успех и
+ * не провал, и называть его надо своим словом.
+ */
+enum class StepOutcome(val wire: String) {
+
+    DONE("done"),
+
+    FAILED("failed"),
+
+    AWAITING("awaiting"),
+}
+
 data class JournalStep(
     val capabilityId: String,
     val title: String,
     val at: Long,
-    val ok: Boolean,
+    val outcome: StepOutcome,
     val note: String,
-)
+) {
+
+    /** Совместимость с прежним журналом- галочка достаётся только состоявшемуся шагу. */
+    val ok: Boolean get() = outcome == StepOutcome.DONE
+}
 
 data class JournalEntry(
     val path: String,
@@ -91,12 +112,21 @@ fun recentBesides(
 ): List<JournalEntry> = entries.filterNot { it.path in livePaths }.take(limit)
 
 fun stepOf(capabilityId: String, title: String, at: Long, result: ActionResult): JournalStep = when (result) {
-    is ActionResult.Done -> JournalStep(capabilityId, title, at, ok = true, note = result.message)
-    is ActionResult.Success -> JournalStep(capabilityId, title, at, ok = true, note = "получился новый объект")
-    is ActionResult.Failure -> JournalStep(capabilityId, title, at, ok = false, note = result.reason)
-    is ActionResult.NeedsInput -> JournalStep(capabilityId, title, at, ok = false, note = "остановилось на вопросе: ${result.prompt}")
-    is ActionResult.NeedsImage -> JournalStep(capabilityId, title, at, ok = false, note = "остановилось на выборе картинки")
+    is ActionResult.Done -> JournalStep(capabilityId, title, at, StepOutcome.DONE, result.message)
+    is ActionResult.Success -> JournalStep(capabilityId, title, at, StepOutcome.DONE, "получился новый объект")
+    is ActionResult.Failure -> JournalStep(capabilityId, title, at, StepOutcome.FAILED, result.reason)
+
+    // Вопрос и выбор картинки — ожидание продолжения, а не провал (ADR-0001 §18).
+    is ActionResult.NeedsInput ->
+        JournalStep(capabilityId, title, at, StepOutcome.AWAITING, "остановилось на вопросе: ${result.prompt}")
+
+    is ActionResult.NeedsImage ->
+        JournalStep(capabilityId, title, at, StepOutcome.AWAITING, "остановилось на выборе картинки")
 }
+
+/** Шаг ждёт продолжения на другом устройстве: исхода у него пока нет (#1112). */
+fun awaitingStep(capabilityId: String, title: String, at: Long, note: String): JournalStep =
+    JournalStep(capabilityId, title, at, StepOutcome.AWAITING, note)
 
 fun sourceLabel(source: ObjectSource): String = when (source) {
     ObjectSource.PHONE_LAN, ObjectSource.PHONE_RELAY -> "с телефона"
@@ -171,6 +201,7 @@ fun encodeJournal(entries: List<JournalEntry>): String =
                 put("step.$i.title", step.title)
                 put("step.$i.at", step.at.toString())
                 put("step.$i.ok", if (step.ok) "1" else "0")
+                put("step.$i.outcome", step.outcome.wire)
                 put("step.$i.note", step.note)
             }
             entry.meta.forEach { (key, value) ->
@@ -222,7 +253,9 @@ private fun decodeSteps(meta: Map<String, String>): List<JournalStep> =
             capabilityId = id,
             title = meta["step.$i.title"].orEmpty(),
             at = meta["step.$i.at"]?.toLongOrNull() ?: 0L,
-            ok = meta["step.$i.ok"] != "0",
+            outcome = meta["step.$i.outcome"]
+                ?.let { wire -> StepOutcome.entries.firstOrNull { it.wire == wire } }
+                ?: if (meta["step.$i.ok"] != "0") StepOutcome.DONE else StepOutcome.FAILED,
             note = meta["step.$i.note"].orEmpty(),
         )
     }

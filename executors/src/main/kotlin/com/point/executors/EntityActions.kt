@@ -217,8 +217,13 @@ class EventRealizer @Inject constructor(
         withContext(Dispatchers.IO) {
             runCatching {
                 calendar.insertEvent(eventTitle(input))
-                ActionResult.Done("Создаю событие")
-            }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось создать событие", recoverable = true) }
+
+                // Исход шага — то, что сделал Point, а не то, что случится в чужом
+                // приложении (#1131). «Создаю событие» звучало продолжающейся работой и
+                // висело вечно: человек уходил из календаря ни с чем, а Point всё «создавал».
+                // Событие создаёт человек в календаре, и знать об этом Point не может.
+                ActionResult.Done("Открыл календарь — событие создаётся там")
+            }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось открыть календарь", recoverable = true) }
         }
 
     private fun eventTitle(input: PointObject): String =

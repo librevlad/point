@@ -431,9 +431,12 @@ class DesktopState(
                 _message.value = if (silent) {
                     "${action.label} — ждёт телефона: выполнится, когда вы его откроете"
                 } else {
-                    "${action.label} — ждёт телефона: откройте Point на телефоне и заберите объект"
+                    "${action.label} — ждёт телефона: откройте на телефоне главный экран Point и заберите объект"
                 }
-                note(item, action.id, "${action.label} · ждёт телефона", ActionResult.Done("ждёт телефона"))
+
+                // Шаг поставлен в очередь, а не выполнен (#1112): исхода у него ещё нет, и
+                // галочка «получилось» здесь была неправдой — на компьютере ничего не появилось.
+                noteAwaiting(item, action.id, "${action.label} · ждёт телефона", "ждёт телефона")
                 runCatching { knockPhone() }
             }.onFailure {
                 _message.value = "Не удалось положить в очередь"
@@ -601,6 +604,13 @@ class DesktopState(
     private fun note(item: InboxItem, capabilityId: String, title: String, result: ActionResult) {
         updateJournal {
             recordStep(it, item.obj.uri.value, stepOf(capabilityId, title, clock.now(), result))
+        }
+    }
+
+    /** Шаг ушёл на телефон и ждёт его: исхода нет, и журнал говорит именно это (#1112). */
+    private fun noteAwaiting(item: InboxItem, capabilityId: String, title: String, note: String) {
+        updateJournal {
+            recordStep(it, item.obj.uri.value, awaitingStep(capabilityId, title, clock.now(), note))
         }
     }
 

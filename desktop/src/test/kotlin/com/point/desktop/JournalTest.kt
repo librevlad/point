@@ -32,8 +32,12 @@ class JournalTest {
         at = at,
     )
 
-    private fun step(title: String, at: Long = 2_000L, ok: Boolean = true, note: String = "готово") =
-        JournalStep("pc-print", title, at, ok, note)
+    private fun step(
+        title: String,
+        at: Long = 2_000L,
+        outcome: StepOutcome = StepOutcome.DONE,
+        note: String = "готово",
+    ) = JournalStep("pc-print", title, at, outcome, note)
 
     @Test
     fun `приехавший объект встаёт первым`() {
@@ -115,6 +119,33 @@ class JournalTest {
         assertTrue(made.ok)
     }
 
+    /**
+     * Шаг, ушедший на телефон, не выполнен (#1112): на компьютере от него не появилось
+     * ничего, и галочка «получилось» была неправдой.
+     */
+    @Test
+    fun `шаг, ждущий телефона, не считается выполненным`() {
+        val queued = awaitingStep("cutout", "Убрать фон · ждёт телефона", 7L, "ждёт телефона")
+
+        assertFalse(queued.ok)
+        assertEquals(StepOutcome.AWAITING, queued.outcome)
+    }
+
+    @Test
+    fun `ожидание продолжения — не провал`() {
+        val asked = stepOf("ai", "Спросить AI", 7L, ActionResult.NeedsInput("О чём спросить?"))
+
+        assertEquals(StepOutcome.AWAITING, asked.outcome)
+    }
+
+    @Test
+    fun `состояние шага переживает запись журнала`() {
+        val entry = entry("/a").copy(steps = listOf(awaitingStep("cutout", "Убрать фон", 7L, "ждёт телефона")))
+        val back = decodeJournal(encodeJournal(listOf(entry)))
+
+        assertEquals(StepOutcome.AWAITING, back.single().steps.single().outcome)
+    }
+
     @Test
     fun `в списке было-раньше нет того, что сейчас на экране`() {
         val entries = recordArrival(recordArrival(emptyList(), entry("/a")), entry("/b"))
@@ -127,7 +158,7 @@ class JournalTest {
         val entries = recordStep(
             recordArrival(emptyList(), entry("/дом/накладная.pdf", name = "накладная.pdf", at = 111L)),
             "/дом/накладная.pdf",
-            step("Напечатать", at = 222L, ok = false, note = "нет принтера"),
+            step("Напечатать", at = 222L, outcome = StepOutcome.FAILED, note = "нет принтера"),
         )
 
         val back = decodeJournal(encodeJournal(entries))

@@ -312,7 +312,7 @@ class FlowViewModel @Inject constructor(
 
         syncCircle()
         val voice = claimVoice()
-        makeWayForIncoming()
+        val interrupted = makeWayForIncoming()
 
         // Имя — до копии, и передумать можно (#640): большой файл копируется секундами, и
         // всё это время человек видел голое «Открываю…» без единого способа выйти.
@@ -328,10 +328,16 @@ class FlowViewModel @Inject constructor(
                 if (carried.isEmpty()) {
                     ingested
                 } else {
-                    ingested.copy(
+                    val (landed, knowledge) = withTravelledText(ingested, carried)
+                    landed.copy(
+                        // Тот же объект, а не новая вещь рядом (#811, ADR-0001 §20): если он
+                        // уезжал отсюда, он возвращается своим узлом и знание прирастает к
+                        // нему. Чужой объект приезжает со своим именем и остаётся собой.
+                        id = knowledge[com.point.core.flow.META_ORIGIN_ID]?.takeIf { it.isNotBlank() }
+                            ?: landed.id,
                         metadata = com.point.core.flow.mergeKnowledge(
-                            ingested.metadata,
-                            carried,
+                            landed.metadata,
+                            knowledge,
                             region = phoneRegion.code(),
                         ),
                     )
@@ -361,6 +367,7 @@ class FlowViewModel @Inject constructor(
             }
             runCatching { history.record(obj) }
             pushFrame(obj)
+            tellInterrupted(interrupted)
 
             autoAction?.let { id ->
                 val cap = CapabilityId(id)
@@ -379,7 +386,7 @@ class FlowViewModel @Inject constructor(
     fun onSharedMultiple(sources: List<String>) {
         freshShareArrived = true
         val voice = claimVoice()
-        makeWayForIncoming()
+        val interrupted = makeWayForIncoming()
         raiseBusy("Открываю…", cancelable = false)
         trackWork {
             val obj = runCatching {
@@ -394,6 +401,7 @@ class FlowViewModel @Inject constructor(
             }
 
             pushFrame(obj)
+            tellInterrupted(interrupted)
         }
     }
 
@@ -1770,8 +1778,17 @@ class FlowViewModel @Inject constructor(
 
         busyJob?.cancel()
         val voice = claimVoice()
+        runningStep = bubble.title
         trackWork { runAction(bubble, voice, action) }
     }
+
+    /**
+     * Как называется идущая сейчас работа (#1133).
+     *
+     * У прерванного шага должно быть имя: «молча потерять начатое нельзя» — человек ждал
+     * таблицу, за которую уже заплатил ожиданием и облачным вызовом.
+     */
+    @Volatile private var runningStep: String? = null
 
     private suspend fun runAction(bubble: Bubble, voice: Long, action: suspend () -> ActionResult) {
         runCatching { usage.record(bubble.capabilityId) }
@@ -1784,11 +1801,17 @@ class FlowViewModel @Inject constructor(
             ) { action() }
         }
 
-            .onSuccess { result -> if (owns(voice)) handleResult(result, bubble) }
+            .onSuccess { result ->
+                if (owns(voice)) {
+                    runningStep = null
+                    handleResult(result, bubble)
+                }
+            }
             .onFailure { e ->
 
                 if (e is kotlinx.coroutines.CancellationException) throw e
                 if (!owns(voice)) return@onFailure
+                runningStep = null
 
                 _ui.update { it.copy(busy = null, busyStage = null, message = e.message ?: "Не получилось", messageOutcome = Outcome.FAILED) }
             }
@@ -1995,10 +2018,28 @@ class FlowViewModel @Inject constructor(
      * Показывать нечего — значит и не показываем: остаётся «Открываю…», а объект встаёт на
      * место, как только его есть чем показать.
      */
-    private fun makeWayForIncoming() {
+    /**
+     * Новый объект приходит поверх начатого — прежняя работа обрывается, и у обрыва есть
+     * исход (#1133, ADR-0001 §18).
+     *
+     * Прежде шаг исчезал молча: экран переключался на новое, облачная работа доживала в
+     * пустоту, результат не приходил никуда, и человеку об этом не говорили ни строки.
+     * Отмена руками так себя не ведёт — она честно говорит «Отменено».
+     */
+    private fun makeWayForIncoming(): String? {
+        val interrupted = runningStep?.takeIf { busyJob?.isActive == true }
+        runningStep = null
+        busyJob?.cancel()
         cancelEnrichment()
         stack.clear()
         _ui.update { it.copy(frame = null, focusPreview = null, path = emptyList()) }
+        return interrupted
+    }
+
+    /** Сказать про оборванный шаг, когда новый объект уже открыт и экран освободился. */
+    private fun tellInterrupted(step: String?) {
+        val what = step ?: return
+        _ui.update { it.copy(message = "«$what» прервано — принят новый объект", messageOutcome = Outcome.NONE) }
     }
 
     private fun pushFrame(obj: PointObject, via: CapabilityId? = null, viaTitle: String? = null) {
@@ -2231,6 +2272,28 @@ class FlowViewModel @Inject constructor(
      * фоновым исследованием, молчал: список действий уже знал про текст, а человек — нет и
      * проверить прочитанное не мог.
      */
+    /**
+     * Прочитанное на той стороне остаётся прочитанным здесь (#811, ADR-0001 §20).
+     *
+     * Текст живёт файлом устройства, и ссылка на него в пути не значит ничего: объект
+     * приезжал снова непрочитанным, и вторая сторона предлагала работу, которая уже сделана.
+     * Приехавшее значение здесь снова становится знанием — файлом рядом с объектом и
+     * признаком «текст есть», как это давно делает компьютер на приёме.
+     */
+    private suspend fun withTravelledText(
+        obj: PointObject,
+        carried: Map<String, String>,
+    ): Pair<PointObject, Map<String, String>> {
+        val text = carried[com.point.core.flow.META_READ_TEXT]?.takeIf { it.isNotBlank() }
+            ?: return obj to carried
+        val ref = runCatching {
+            store.newScratchFile("txt").also { java.io.File(it.value).writeText(text) }
+        }.getOrNull() ?: return obj to (carried - com.point.core.flow.META_READ_TEXT)
+
+        return obj.copy(state = obj.state.with(Feature.HAS_TEXT)) to
+            (carried - com.point.core.flow.META_READ_TEXT + (com.point.core.flow.META_OCR_TEXT_REF to ref.value))
+    }
+
     private fun loadTextPreviewIfText(obj: PointObject) {
         val readText = obj.metadata[com.point.core.flow.META_OCR_TEXT_REF]?.takeIf { it.isNotBlank() }
         if (obj.state.kind != ObjectKind.TEXT && readText == null) return
