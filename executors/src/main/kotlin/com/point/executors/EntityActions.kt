@@ -33,7 +33,12 @@ internal fun entitySourceText(input: PointObject): String {
     // Уже добытое знание — источник наравне с сидекаром OCR: текст, который QR уже
     // отдал, «Понять»/«Перевести»/«AI» читают напрямую, а не молчат на пустых байтах
     // картинки. Та же логика, что уже вела «Открыть ссылку» на HAS_URL из QR (#693).
+    // Ссылка в коде хранится ссылкой объекта, а не вторым фактом (#1119) — источник текста
+    // тот же самый: что код отдал, то и читаем.
     input.metadata[META_ENTITY_PREFIX + "qr"]?.takeIf { it.isNotBlank() }?.let { return it }
+    if (input.state.has(Feature.HAS_QR)) {
+        input.metadata[META_ENTITY_PREFIX + "url"]?.takeIf { it.isNotBlank() }?.let { return it }
+    }
 
     if (!input.state.kind.isFileBacked) return input.uri.value
 
