@@ -159,7 +159,13 @@ class OcrInvestigationRealizer @Inject constructor(
 
         val text = stripStatusBar(raw)
 
-        val entities = entityDelta(obj, extractor.extract(text.take(com.point.core.flow.INVESTIGATION_TEXT_CHARS)), text.take(com.point.core.flow.INVESTIGATION_TEXT_CHARS))
+        // Прочитанное с кадра называет себя чтением (#990): путь знания — не путь объекта.
+        val entities = entityDelta(
+            obj,
+            extractor.extract(text.take(com.point.core.flow.INVESTIGATION_TEXT_CHARS)),
+            text.take(com.point.core.flow.INVESTIGATION_TEXT_CHARS),
+            com.point.core.model.Provenance.OCR,
+        )
 
         val trackMeta = trackFacts(text.take(com.point.core.flow.INVESTIGATION_TEXT_CHARS))
         val (identifiers, idRelations) = identifierObjects(obj, text.take(com.point.core.flow.INVESTIGATION_TEXT_CHARS), trackMeta)

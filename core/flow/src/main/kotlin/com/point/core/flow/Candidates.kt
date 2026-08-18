@@ -67,6 +67,44 @@ fun semanticFits(key: String, value: String): Boolean? {
     }
 }
 
+/**
+ * Кандидат становится знанием, только заслужив смысл (#1139).
+ *
+ * Между «нашли строку» и «это факт объекта» не было ни нормализации, ни проверки: значение
+ * попадало в знание как есть, и побеждало то, что встретилось в тексте первым. Отсюда
+ * телефон из номера дома, немецкий номер из товарного штрихкода, ссылка из «com.ua» и
+ * скобки внутри значения.
+ *
+ * Здесь одна воронка на все входы: снять обёртку, спросить форму, вернуть значение или
+ * `null`. Проверка своя у каждого вида знания и там, где правила нет, молчит (`semanticFits`
+ * отвечает `null`) — жизнь богаче правила, и молчание пропускает.
+ *
+ * Тождеством это не занимается: «то же самое?» по-прежнему один `sameFact` (#1136).
+ */
+fun factCandidate(key: String, raw: String): String? {
+    val value = unwrapped(raw)
+    if (value.isEmpty()) return null
+    return if (semanticFits(key, value) == false) null else value
+}
+
+/**
+ * Знаки вокруг значения — запись, а не само значение (#1064).
+ *
+ * Номер в круглых скобках давал вторую находку, и скобки уезжали внутрь факта. Снимается
+ * только парная обёртка целиком: `(067) 123-45-67` обёрткой не является и остаётся собой.
+ */
+fun unwrapped(raw: String): String {
+    var value = raw.trim()
+    while (value.length > 2 && WRAPPERS.any { value.first() == it.first && value.last() == it.second }) {
+        value = value.substring(1, value.length - 1).trim()
+    }
+    return value
+}
+
+private val WRAPPERS: List<Pair<Char, Char>> = listOf(
+    '(' to ')', '[' to ']', '{' to '}', '«' to '»', '“' to '”', '‘' to '’',
+)
+
 fun formEvidence(key: String, value: String): Set<EvidenceClass> = buildSet {
     if (semanticFits(key, value) == true) add(EvidenceClass.SEMANTIC)
     if (key == META_ENTITY_TRACK && s10CheckDigitValid(value) == true) add(EvidenceClass.ARITHMETIC)

@@ -159,6 +159,9 @@ internal fun focusedDelta(
     source: PointObject,
     entities: List<com.point.core.flow.Entity>,
     at: String,
+
+    /** Происхождение знания области — то же правило, что и у полного прохода (#990). */
+    source_: com.point.core.model.Provenance = source.provenance,
 ): Findings {
     if (source.state.kind in EXTRACTED_KINDS) return Findings()
 
@@ -176,7 +179,9 @@ internal fun focusedDelta(
         val key = e.type.asMetaKey() ?: return@forEach
         val suffix = key.removePrefix(META_ENTITY_PREFIX)
         val (kind, feature) = ENTITY_KINDS[suffix] ?: return@forEach
-        val value = e.value.trim().takeIf { it.isNotBlank() } ?: return@forEach
+        // Одна воронка для всех кандидатов (#1139): обёртка снята, форма спрошена. Не
+        // прошедшее проверку знанием не становится — ни фактом, ни узлом с действиями.
+        val value = com.point.core.flow.factCandidate(key, e.value) ?: return@forEach
 
         // «Голое время это никогда не дата, это мусор» (#651): ни фактом, ни узлом.
         if (kind == KIND_DATE && bareTimestamp(value)) return@forEach
@@ -187,6 +192,7 @@ internal fun focusedDelta(
         when {
             known.isNullOrBlank() && key !in facts -> {
                 facts[key] = value
+                facts[key + META_SOURCE_SUFFIX] = source_.wire
                 e.line?.let { facts[key + META_LINE_SUFFIX] = it }
             }
             sameAsKnown || com.point.core.flow.normConsensus(facts[key].orEmpty()) ==
@@ -233,6 +239,14 @@ internal fun entityDelta(
     source: PointObject,
     entities: List<com.point.core.flow.Entity>,
     text: String = "",
+
+    /**
+     * Каким путём пришло значение (#990). Тот, кто кладёт знание, обязан сказать, откуда он
+     * его взял: прочитанное с кадра — `OCR`, вычитанное из присланного текста — путь самого
+     * объекта. Прежде сущности заводились без `.src` вовсе и стояли у человека без галочки,
+     * как знание неизвестного происхождения.
+     */
+    source_: com.point.core.model.Provenance = source.provenance,
 ): Findings {
 
     // «Голое время это никогда не дата, это мусор» (#651): и признака HAS_DATE не даёт.
@@ -265,11 +279,15 @@ internal fun entityDelta(
         meaningful.sortedBy { it.isBareClock() }.forEach { e ->
             e.type.asMetaKey()?.let { key ->
 
-                val value = if (e.type == com.point.core.flow.EntityType.ADDRESS && text.isNotEmpty()) {
+                val raw = if (e.type == com.point.core.flow.EntityType.ADDRESS && text.isNotEmpty()) {
                     expandAddressToLine(e.value, text)
                 } else {
                     e.value
                 }
+
+                // Та же воронка, что и у знания области (#1139): кандидат, не прошедший
+                // проверку формы, дальше не идёт.
+                val value = com.point.core.flow.factCandidate(key, raw) ?: return@let
                 e.line?.let { lines.putIfAbsent(value, it) }
                 val first = this[key]
                 when {
@@ -299,11 +317,12 @@ internal fun entityDelta(
     val disputes = disputed.mapKeys { (key, _) -> key + META_ALT_SUFFIX }
         .mapValues { (_, values) -> altValue(values) }
 
-    val ruled = if (META_ENTITY_ADDRESS in extracted) emptyMap() else addressFacts(text)
+    val told = extracted.keys.associate { it + META_SOURCE_SUFFIX to source_.wire }
+    val ruled = if (META_ENTITY_ADDRESS in extracted) emptyMap() else addressFacts(text, source_)
     val captions = extracted.mapNotNull { (key, value) ->
         lines[value]?.let { key + META_LINE_SUFFIX to it }
     }.toMap()
-    val facts = extracted + moreFacts + disputes + ruled + captions
+    val facts = extracted + told + moreFacts + disputes + ruled + captions
 
     if (ruled.isNotEmpty()) features += Feature.HAS_ADDRESS
     val (objects, relations) = entityObjects(source, facts, creator = ENTITY_CREATOR, lines = lines)

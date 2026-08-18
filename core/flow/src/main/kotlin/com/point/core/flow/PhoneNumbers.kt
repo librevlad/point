@@ -85,8 +85,16 @@ object PhoneNumbers {
     private fun writtenLikeAPhone(text: String): Boolean {
         val clean = text.trim()
         val digits = clean.count(Char::isDigit)
-        val shaped = clean.startsWith("+") || clean.startsWith("0") ||
-            clean.any { it == ' ' || it == '-' || it == '(' || it == ')' }
+
+        // Знак ставит человек, а не случай (#1017). Голая цепочка цифр — идентификатор:
+        // «908771 1329» это номер дома, слипшийся с номером магазина, а «042200002675» —
+        // товарный штрихкод, и в чужой стране оба оказывались настоящими номерами. За
+        // границу идут только те записи, где видно намерение: плюс, разделители внутри или
+        // национальная запись с ведущим нулём и группами — по ней украинский номер узнаётся
+        // и на устройстве с чужой страной.
+        val shaped = clean.startsWith("+") ||
+            clean.any { it == '-' || it == '(' || it == ')' } ||
+            (clean.startsWith("0") && clean.any { it == ' ' })
         return shaped && digits in PHONE_DIGITS
     }
 
