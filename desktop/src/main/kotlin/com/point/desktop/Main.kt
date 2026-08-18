@@ -413,9 +413,10 @@ fun main(args: Array<String>) {
                             }
                         }
                     },
-                    onSweepNow = {
-                        runCatching { inbox.sweep(System.currentTimeMillis() - 24L * 60 * 60 * 1000) }
-                    },
+                    // «Убрать прямо сейчас» убирает всё, что Point помнит здесь, а не только
+                    // файлы старше суток (#1081): само по себе старое по-прежнему уходит при
+                    // запуске, а кнопка делает то, что на ней написано.
+                    onSweepNow = { state.forgetEverything { inbox.wipe() } },
                     onGrabScreen = {
                         compactVisible.value = false
                         Thread.sleep(SCREEN_GRAB_DELAY_MS)

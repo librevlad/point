@@ -74,6 +74,22 @@ class FlowViewModelTest {
         override suspend fun setLevel(level: com.point.core.flow.PrivacyLevel) { this.level = level }
     }
     private val snapshot = FakeFlowSnapshotStore()
+
+    /** Память об объектах одним местом (#1026): в тестах считает, что и сколько забыто. */
+    private val memory = object : com.point.core.flow.PointMemory {
+        var forgotten = 0
+        var kept = com.point.core.flow.HistoryFootprint(2, 2048L)
+        override suspend fun footprint() = kept
+        override suspend fun forgetAll(): com.point.core.flow.HistoryFootprint {
+            forgotten++
+            val was = kept
+            kept = com.point.core.flow.HistoryFootprint(0, 0L)
+            history.clearAll()
+            snapshot.clear()
+            store.clear()
+            return was
+        }
+    }
     private val crashLog = FakeCrashLog()
 
     private val noFrames = object : SelectionFrames {
@@ -106,7 +122,7 @@ class FlowViewModelTest {
         keyNeeding: Set<CapabilityId> = emptySet(),
 
         pdf: com.point.core.flow.PdfRasterizer = FakePdfRasterizer(),
-    ) = FlowViewModel(store, FakeRegistry(caps, cloud, slow, keyNeeding) { userKeys.keys().mine.isNotEmpty() }, resolver, ChatTalk(chatResponder, store), enrichment, history, usage, chosenApps, userKeys, aiFacts, builtInKeys, consent, appLauncher, pdf, sensory, sensorySettings, cloudPrivacy, com.point.core.flow.YoloMode.OFF, snapshot, crashLog, dispatcher, AppIconResolver { null }, pcLinks, pcTransport, pcCaps, linkMonitor, PulledFileFactory { name -> java.io.File(java.io.File(System.getProperty("java.io.tmpdir")), "pulled-" + name).absolutePath }, noFrames, com.point.core.flow.PhoneRegion { "UA" }, keyCheck, account, accountClient, pendingLogins, deviceKeys, browser, sharedTexts)
+    ) = FlowViewModel(store, FakeRegistry(caps, cloud, slow, keyNeeding) { userKeys.keys().mine.isNotEmpty() }, resolver, ChatTalk(chatResponder, store), enrichment, history, usage, chosenApps, userKeys, aiFacts, builtInKeys, consent, appLauncher, pdf, sensory, sensorySettings, cloudPrivacy, com.point.core.flow.YoloMode.OFF, snapshot, crashLog, dispatcher, AppIconResolver { null }, pcLinks, pcTransport, pcCaps, linkMonitor, PulledFileFactory { name -> java.io.File(java.io.File(System.getProperty("java.io.tmpdir")), "pulled-" + name).absolutePath }, noFrames, com.point.core.flow.PhoneRegion { "UA" }, keyCheck, account, accountClient, pendingLogins, deviceKeys, browser, sharedTexts, memory)
 
     private val keyCheck = FakeAiKeyCheck()
 
@@ -521,6 +537,28 @@ class FlowViewModelTest {
 
         assertNull("после ухода работа не продолжается", vm.ui.value.busy)
         assertNull("и её результат не приезжает поверх «Недавнего»", vm.ui.value.frame)
+    }
+
+    /**
+     * «Забыть всё» забывает всё, что обещано (#1026).
+     *
+     * Прежде убирался только перечень: копия объекта, снимок разбора и переписка с моделью
+     * оставались на устройстве, а человек читал «Пока ничего не сохранено». Здесь проверяется
+     * эффект обещания, а не надпись: память спрошена целиком, открытый разбор закрыт (его
+     * копии больше нет), и человеку сказано, чего он лишился.
+     */
+    @Test fun `забыть всё убирает всю память и закрывает разбор`() = runTest(dispatcher) {
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        assertNotNull("объект обязан быть открыт — иначе закрывать нечего", vm.ui.value.frame)
+
+        vm.clearHistory(); advanceUntilIdle()
+
+        assertEquals("память спрошена не целиком", 1, memory.forgotten)
+        assertNull("человек остался на объекте, которого больше нет", vm.ui.value.frame)
+        val said = vm.ui.value.message.orEmpty()
+        assertTrue("о забытом не сказано ни слова-$said", said.contains("Забыто"))
+        assertEquals("сводка памяти не обновилась", 0, vm.ui.value.memory?.count)
     }
 
     /**

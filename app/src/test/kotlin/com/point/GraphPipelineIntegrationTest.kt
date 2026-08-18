@@ -371,6 +371,10 @@ class GraphPipelineIntegrationTest {
             override fun create(text: String): String = ""
             override fun clear() = Unit
         },
+        object : com.point.core.flow.PointMemory {
+            override suspend fun footprint() = com.point.core.flow.HistoryFootprint(0, 0L)
+            override suspend fun forgetAll() = com.point.core.flow.HistoryFootprint(0, 0L)
+        },
     )
 
     private fun frame(vm: FlowViewModel) = vm.ui.value.frame!!

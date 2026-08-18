@@ -244,6 +244,13 @@ fun SettingsPrivacy(
     }
 }
 
+/** Сказанное после уборки: молчание читалось как «не сработало» (#1081). */
+internal fun sweptText(swept: Int?): String = when {
+    swept == null -> "Убрать прямо сейчас"
+    swept == 0 -> "Убирать было нечего"
+    else -> "Убрано объектов: $swept"
+}
+
 /** Экран данных: что лежит и как это убрать. */
 @Composable
 fun SettingsData(swept: Int?, onSweepNow: () -> Unit) {
@@ -253,10 +260,11 @@ fun SettingsData(swept: Int?, onSweepNow: () -> Unit) {
     ) {
         Text(
             "Point не хранит дольше суток: присланное с телефона и сделанное здесь убирается " +
-                "само. Файл, который вы перетащили мышью, не трогается никогда.",
+                "само. Кнопка убирает это прямо сейчас — вместе со списком «Недавнего». " +
+                "Файл, который вы перетащили мышью, не трогается никогда.",
             style = PointType.small,
         )
-        Action(swept?.let { "Убрано: $it" } ?: "Убрать прямо сейчас", onSweepNow)
+        Action(sweptText(swept), onSweepNow)
     }
 }
 

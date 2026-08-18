@@ -238,6 +238,9 @@ abstract class DataModule {
     abstract fun historyStore(impl: FileHistoryStore): HistoryStore
 
     @Binds
+    abstract fun pointMemory(impl: com.point.data.FilesPointMemory): com.point.core.flow.PointMemory
+
+    @Binds
     abstract fun capabilityUsage(impl: FileCapabilityUsage): CapabilityUsage
 
     @Binds
@@ -538,11 +541,11 @@ abstract class DataModule {
         fun llmClient(
             impl: FallbackLlmClient,
             privacy: com.point.core.flow.CloudPrivacySettings,
-            @ApplicationContext context: Context,
+            @LlmLogDir logDir: java.io.File,
         ): LlmClient = com.point.core.flow.PrivacyGuardedLlmClient(
             inner = com.point.core.flow.LoggingLlmClient(
                 inner = impl,
-                dir = java.io.File(context.filesDir, "llm-log"),
+                dir = logDir,
                 enabled = BuildConfig.DEBUG,
             ),
             privacy = privacy,
@@ -732,6 +735,18 @@ abstract class DataModule {
         @FlowSnapshotFile
         fun flowSnapshotFile(@ApplicationContext context: Context): java.io.File =
             java.io.File(context.filesDir, "flow-snapshot.json")
+
+        /** Копии объектов, с которыми человек работает: их же стирает «Забыть всё» (#1026). */
+        @Provides
+        @ScratchDir
+        fun scratchDir(@ApplicationContext context: Context): java.io.File =
+            java.io.File(context.filesDir, "scratch")
+
+        /** Журнал обменов с моделью — тоже память об объектах человека (#1026). */
+        @Provides
+        @LlmLogDir
+        fun llmLogDir(@ApplicationContext context: Context): java.io.File =
+            java.io.File(context.filesDir, "llm-log")
 
         @Provides
         fun ioDispatcher(): kotlinx.coroutines.CoroutineDispatcher = kotlinx.coroutines.Dispatchers.IO
