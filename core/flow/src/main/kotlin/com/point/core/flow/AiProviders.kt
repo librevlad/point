@@ -162,6 +162,21 @@ val AI_PROVIDERS: List<AiProvider> = listOf(
         promiseCheckedAt = "14.08.2026",
     ),
     AiProvider(
+        id = "nvidia",
+        name = "NVIDIA NIM",
+        what = "каталог чужих моделей на своих карточках: мелкие отвечают сразу, крупные ждут запуска",
+        keyUrl = "https://build.nvidia.com/settings/api-keys",
+        baseUrl = "https://integrate.api.nvidia.com/v1",
+        models = "meta/llama-3.1-8b-instruct,meta/llama-3.3-70b-instruct",
+        freeNote = "бесплатные вызовы после регистрации, предел не назван",
+        checkedAt = "18.08.2026",
+
+        // В условиях NVIDIA про обучение на присланном прямо не сказано; молчим, пока не проверено.
+        promise = ReaderPromise.UNKNOWN,
+        promiseSource = "https://build.nvidia.com/legal/terms-of-use",
+        promiseCheckedAt = "18.08.2026",
+    ),
+    AiProvider(
         id = "modelscope",
         name = "ModelScope",
         what = "большие Qwen3-VL даром — читает фото документа целиком",

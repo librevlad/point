@@ -699,6 +699,7 @@ abstract class DataModule {
                 // Место в очереди — за замером, а не за новизной: пока Workers AI не
                 // померян на корпусе, он стоит после тех, кого уже знаем.
                 openAiModels("modelscope", BuildConfig.MODELSCOPE_BASE_URL, BuildConfig.MODELSCOPE_API_KEY, BuildConfig.MODELSCOPE_MODELS) +
+                openAiModels("nvidia", BuildConfig.NVIDIA_BASE_URL, BuildConfig.NVIDIA_API_KEY, BuildConfig.NVIDIA_MODELS) +
                 cloudflareModels()
 
         @Provides
