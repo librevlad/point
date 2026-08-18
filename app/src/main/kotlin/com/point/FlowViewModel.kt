@@ -854,7 +854,19 @@ class FlowViewModel @Inject constructor(
      * Пересборка — тот же самый ход, каким пространство действий расширяется от нового
      * знания: изменилось не знание об объекте, а то, чем его можно обработать.
      */
+    /**
+     * Сеть пропала или вернулась — об этом говорит система, со своего потока (#1117).
+     *
+     * Разбор живёт в одном потоке, как и всё остальное состояние экрана. Прежде этот вызов
+     * правил его прямо оттуда, откуда пришёл, — и Point падал на смене сети с
+     * `IndexOutOfBounds`, теряя объект человека. Никакой второй машины состояний для этого
+     * не нужно: работа возвращается в ту же очередь, что и любое другое изменение разбора.
+     */
     fun networkChanged() {
+        viewModelScope.launch { rebuildForNetwork() }
+    }
+
+    private fun rebuildForNetwork() {
         val index = stack.lastIndex
         val frame = stack.getOrNull(index) ?: return
         val rebuilt = registry.bubblesFor(graphOf(frame))

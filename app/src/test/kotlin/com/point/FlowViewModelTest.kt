@@ -75,6 +75,9 @@ class FlowViewModelTest {
     }
     private val snapshot = FakeFlowSnapshotStore()
 
+    /** Реестр последнего собранного разбора — нужен там, где считают обращения к нему. */
+    private var registry: FakeRegistry? = null
+
     /** Память об объектах одним местом (#1026): в тестах считает, что и сколько забыто. */
     private val memory = object : com.point.core.flow.PointMemory {
         var forgotten = 0
@@ -122,7 +125,7 @@ class FlowViewModelTest {
         keyNeeding: Set<CapabilityId> = emptySet(),
 
         pdf: com.point.core.flow.PdfRasterizer = FakePdfRasterizer(),
-    ) = FlowViewModel(store, FakeRegistry(caps, cloud, slow, keyNeeding) { userKeys.keys().mine.isNotEmpty() }, resolver, ChatTalk(chatResponder, store), enrichment, history, usage, chosenApps, userKeys, aiFacts, builtInKeys, consent, appLauncher, pdf, sensory, sensorySettings, cloudPrivacy, com.point.core.flow.YoloMode.OFF, snapshot, crashLog, dispatcher, AppIconResolver { null }, pcLinks, pcTransport, pcCaps, linkMonitor, PulledFileFactory { name -> java.io.File(java.io.File(System.getProperty("java.io.tmpdir")), "pulled-" + name).absolutePath }, noFrames, com.point.core.flow.PhoneRegion { "UA" }, keyCheck, account, accountClient, pendingLogins, deviceKeys, browser, sharedTexts, memory)
+    ) = FlowViewModel(store, FakeRegistry(caps, cloud, slow, keyNeeding) { userKeys.keys().mine.isNotEmpty() }.also { registry = it }, resolver, ChatTalk(chatResponder, store), enrichment, history, usage, chosenApps, userKeys, aiFacts, builtInKeys, consent, appLauncher, pdf, sensory, sensorySettings, cloudPrivacy, com.point.core.flow.YoloMode.OFF, snapshot, crashLog, dispatcher, AppIconResolver { null }, pcLinks, pcTransport, pcCaps, linkMonitor, PulledFileFactory { name -> java.io.File(java.io.File(System.getProperty("java.io.tmpdir")), "pulled-" + name).absolutePath }, noFrames, com.point.core.flow.PhoneRegion { "UA" }, keyCheck, account, accountClient, pendingLogins, deviceKeys, browser, sharedTexts, memory)
 
     private val keyCheck = FakeAiKeyCheck()
 
@@ -537,6 +540,27 @@ class FlowViewModelTest {
 
         assertNull("после ухода работа не продолжается", vm.ui.value.busy)
         assertNull("и её результат не приезжает поверх «Недавнего»", vm.ui.value.frame)
+    }
+
+    /**
+     * Разбор не правится из системного потока (#1117).
+     *
+     * Пропажа и возврат сети приходят с чужого потока — оттуда Point правил стек разбора
+     * напрямую и падал с `IndexOutOfBounds`, теряя объект человека. Работа обязана попадать
+     * в ту же очередь, что и любое другое изменение разбора.
+     */
+    @Test fun `смена сети не правит разбор из чужого потока`() = runTest(dispatcher) {
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        val before = registry?.asked ?: 0
+
+        val outside = Thread { vm.networkChanged() }
+        outside.start()
+        outside.join()
+
+        assertEquals("разбор пересобран прямо из системного потока", before, registry?.asked)
+        advanceUntilIdle()
+        assertTrue("в своей очереди пересборка так и не случилась", (registry?.asked ?: 0) > before)
     }
 
     /**
@@ -3912,8 +3936,13 @@ private class FakeRegistry(
 
     private val keySet: () -> Boolean = { true },
 ) : CapabilityRegistry {
+
+    /** Сколько раз спрашивали действия: по нему видно, в каком потоке правится разбор (#1117). */
+    var asked = 0
+        private set
+
     override fun bubblesFor(state: ObjectState): List<Bubble> =
-        caps.keys.map { id ->
+        caps.keys.also { asked++ }.map { id ->
 
             val label = com.point.core.flow.labelNeedingKey(
                 "Action ${id.value}",
