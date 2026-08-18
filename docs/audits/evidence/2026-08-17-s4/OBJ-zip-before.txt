@@ -1,0 +1,3 @@
+flow nodes=1
+- cafe93e5 kind=ZIP mime=application/zip via=None name=archive.zip found=[] rels=[] meta#=5 | investigated.graph-roles=not_found; investigated.metadata-entities=not_found; investigated.zip-images=not_found; size=4437206
+history lines=0

@@ -1,0 +1,3 @@
+flow nodes=1
+- 6a1c0016 kind=TEXT mime=text/plain via=None name=korotkiy tekst found=[] rels=[] meta#=9 | investigated.document-type=not_found; investigated.entities=not_found; investigated.graph-roles=not_found; investigated.identifiers=not_found; investigated.metadata-entities=not_found; investigated.url=not_found; investigated.vcard-shape=not_found; size=14
+history lines=0
