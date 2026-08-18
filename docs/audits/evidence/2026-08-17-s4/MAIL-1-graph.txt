@@ -1,0 +1,3 @@
+flow nodes=1
+- 0dcff11b kind=TEXT mime=text/plain via=None name=Napishite na pochtu test@example.com po… found=[('Email', '0dcff11b')] rels=['found_in'] meta#=10 | entity.email=test@example.com; investigated.document-type=not_found; investigated.entities=found; investigated.graph-roles=not_found; investigated.identifiers=not_found; investigated.metadata-entities=not_found; investigated.url=not_found; investigated.vcard-shape=not_found; size=51
+history lines=0

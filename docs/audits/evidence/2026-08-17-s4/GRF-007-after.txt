@@ -1,0 +1,4 @@
+flow nodes=2
+- 0bec1ef6 kind=TEXT mime=text/plain via=None name=Tel 0671112233 i data 18.08.2026 found=[('Phone', '0bec1ef6'), ('Date', '0bec1ef6')] rels=['found_in', 'found_in'] meta#=12 | entity.date=18.08.2026; entity.phone.src=human; entity.phone=0671112233; investigated.document-type=not_found; investigated.entities=found; investigated.graph-roles=not_found; investigated.identifiers=not_found; investigated.metadata-entities=not_found; investigated.url=not_found; investigated.vcard-shape=not_found; size=32
+- 0bec1ef6 kind=Phone mime=text/plain via=None name= found=[] rels=['found_in'] meta#=4 | entity.phone.src=human; entity.phone=0671112233; investigated.graph-roles=not_found; investigated.metadata-entities=found
+history lines=0
