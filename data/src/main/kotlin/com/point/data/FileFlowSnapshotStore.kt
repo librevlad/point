@@ -12,6 +12,7 @@ import com.point.core.model.ValueRef
 import com.point.core.model.isFileBacked
 import com.point.core.model.provenanceOf
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -19,43 +20,75 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import java.io.File
 
+/**
+ * Снимок разбора пишется целиком или не пишется вовсе (#1116).
+ *
+ * Прежде каждое сохранение писало прямо поверх прежнего файла. Два сохранения, попавшие друг
+ * на друга, оставляли склейку двух версий — валидную запись и хвост старой, длиннее новой.
+ * Такой файл не читается, и разбор человека терялся молча при следующем запуске.
+ *
+ * Две границы, обе на месте записи: очередь (одно сохранение за раз) и подмена целиком
+ * (пишем рядом, переименовываем поверх). Второй машины состояний для этого не нужно.
+ */
 @Singleton
 class FileFlowSnapshotStore @Inject constructor(
     @com.point.data.di.FlowSnapshotFile private val file: File,
 ) : FlowSnapshotStore {
 
+    private val writing = kotlinx.coroutines.sync.Mutex()
+
     override suspend fun save(frames: List<FlowSnapshotFrame>): Unit = withContext(Dispatchers.IO) {
-        runCatching {
-            val array = JSONArray()
-            frames.forEach { f ->
-                array.put(
-                    JSONObject()
-                        .put("id", f.id)
-                        .put("kind", f.kind.name)
-                        .put("mime", f.mime)
-                        .put("ref", f.ref)
-                        .put("metadata", JSONObject(f.metadata))
-                        .put("via", f.viaCapabilityId ?: JSONObject.NULL)
-                        .put("viaTitle", f.viaTitle ?: JSONObject.NULL)
-                        .put("found", JSONArray().also { arr -> f.found.forEach { arr.put(foundJson(it)) } })
-                        .put(
-                            "relations",
-                            JSONArray().also { arr ->
-                                f.relations.forEach {
-                                    arr.put(
-                                        JSONObject()
-                                            .put("from", it.fromId)
-                                            .put("type", it.type.name)
-                                            .put("to", it.toId),
-                                    )
-                                }
-                            },
-                        )
-                        .put("focusRegion", f.focusRegion ?: JSONObject.NULL)
-                        .put("focusIds", f.focusIds ?: JSONObject.NULL),
-                )
+        writing.withLock { runCatching { writeWhole(json(frames)) } }
+        Unit
+    }
+
+    private fun json(frames: List<FlowSnapshotFrame>): String {
+        val array = JSONArray()
+        frames.forEach { f ->
+            array.put(
+                JSONObject()
+                    .put("id", f.id)
+                    .put("kind", f.kind.name)
+                    .put("mime", f.mime)
+                    .put("ref", f.ref)
+                    .put("metadata", JSONObject(f.metadata))
+                    .put("via", f.viaCapabilityId ?: JSONObject.NULL)
+                    .put("viaTitle", f.viaTitle ?: JSONObject.NULL)
+                    .put("found", JSONArray().also { arr -> f.found.forEach { arr.put(foundJson(it)) } })
+                    .put(
+                        "relations",
+                        JSONArray().also { arr ->
+                            f.relations.forEach {
+                                arr.put(
+                                    JSONObject()
+                                        .put("from", it.fromId)
+                                        .put("type", it.type.name)
+                                        .put("to", it.toId),
+                                )
+                            }
+                        },
+                    )
+                    .put("focusRegion", f.focusRegion ?: JSONObject.NULL)
+                    .put("focusIds", f.focusIds ?: JSONObject.NULL),
+            )
+        }
+        return array.toString()
+    }
+
+    /**
+     * Записать рядом и подменить целиком: недописанное остаётся черновиком и в дело не идёт.
+     */
+    private fun writeWhole(text: String) {
+        file.parentFile?.mkdirs()
+        val draft = File(file.parentFile, file.name + ".writing")
+        draft.writeText(text)
+        if (!draft.renameTo(file)) {
+            // Не все файловые системы переименовывают поверх существующего.
+            file.delete()
+            if (!draft.renameTo(file)) {
+                file.writeText(text)
+                draft.delete()
             }
-            file.writeText(array.toString())
         }
     }
 
@@ -91,7 +124,10 @@ class FileFlowSnapshotStore @Inject constructor(
     }
 
     override suspend fun clear(): Unit = withContext(Dispatchers.IO) {
-        runCatching { file.delete() }
+        writing.withLock {
+            runCatching { file.delete() }
+            runCatching { File(file.parentFile, file.name + ".writing").delete() }
+        }
     }
 
     private fun foundJson(obj: PointObject) = JSONObject()
