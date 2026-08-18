@@ -103,7 +103,10 @@ fun entityKnowledge(found: List<Entity>, question: CapabilityId): com.point.core
     val metadata = buildMap {
         meaningful.groupBy { it.type }.forEach { (type, list) ->
             val key = type.asMetaKey() ?: return@forEach
-            val values = list.map { it.value.trim() }.filter { it.isNotBlank() }
+            // Одна воронка на обе поверхности (#1139): кандидат, не прошедший проверку
+            // формы, знанием не становится. Прежде побеждал первый по тексту, каким бы он
+            // ни был, — и телефоном чека становился номер дома из адресной строки.
+            val values = list.mapNotNull { com.point.core.flow.factCandidate(key, it.value) }
                 .distinctBy { com.point.core.flow.normConsensus(it) }
             if (values.isEmpty()) return@forEach
             put(key, values.first())

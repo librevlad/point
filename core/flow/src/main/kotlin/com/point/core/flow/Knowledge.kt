@@ -52,7 +52,17 @@ fun mergeKnowledge(
     // ни «отремонтировать» подтверждённое человеком значение.
     val humanFresh = readings.filterKeys { humanSaid(fresh, it) }
     val ontoHuman = readings.filterKeys { it !in humanFresh && humanSaid(known, it) }
-    val machine = readings - humanFresh.keys - ontoHuman.keys
+
+    // Спор, уже разрешённый самим патчем, заново не открывается (#1052).
+    //
+    // «Исправить сильнее» сверяет знание по просьбе человека и возвращает исправленное
+    // значение вместе с прежним в «или» — то есть прежнее оно видело и решение приняло.
+    // Слияние же считало это очередным чтением, оставляло главным прежнее и прятало
+    // исправленное в «ещё»: Point отчитывался «Исправлено: 1», а на экране стояло старое.
+    val decided = readings.filterKeys {
+        it !in humanFresh && it !in ontoHuman && resolvesKnown(known, fresh, it)
+    }
+    val machine = readings - humanFresh.keys - ontoHuman.keys - decided.keys
 
     val merged = LinkedHashMap(mergeFacts(known, machine, region))
 
@@ -62,6 +72,16 @@ fun mergeKnowledge(
             .distinct()
             .filter { normConsensus(it) != normConsensus(merged[key].orEmpty()) }
         if (kept.isNotEmpty()) merged[key + META_ALT_SUFFIX] = altValue(kept)
+    }
+
+    // Разрешённый спор: исправленное становится primary, прежнее уходит в «или» тем же
+    // путём, каким это делает слово человека.
+    decided.forEach { (key, value) ->
+        val kept = (alternativesOf(merged, key) + listOfNotNull(merged[key]))
+            .distinct()
+            .filter { normConsensus(it) != normConsensus(value) }
+        if (kept.isEmpty()) merged.remove(key + META_ALT_SUFFIX) else merged[key + META_ALT_SUFFIX] = altValue(kept)
+        merged[key] = value
     }
 
     // Человеческое слово: становится primary, прежнее значение — в историю, спора нет.
@@ -165,3 +185,16 @@ private fun mergeAnnotation(target: MutableMap<String, String>, key: String, val
 
 private fun evidenceClasses(value: String): List<String> =
     value.split(',').map(String::trim).filter { it.isNotBlank() }
+
+/**
+ * Назвал ли патч прежнее значение своим расхождением (#1052).
+ *
+ * Это признак решения, а не происхождения: тот, кто кладёт знание, уже видел известное и
+ * положил его рядом как «или». Спорить с ним второй раз незачем.
+ */
+private fun resolvesKnown(known: Map<String, String>, fresh: Map<String, String>, key: String): Boolean {
+    val was = known[key]?.trim()?.takeIf { it.isNotEmpty() } ?: return false
+    val declared = alternativesOf(fresh, key)
+    if (declared.isEmpty()) return false
+    return declared.any { normConsensus(it) == normConsensus(was) }
+}

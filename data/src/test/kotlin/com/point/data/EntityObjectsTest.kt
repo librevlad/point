@@ -22,21 +22,24 @@ import org.junit.Test
 class EntityObjectsTest {
 
     // ---- Живой прогон 2026-08-09 (S6): два телефона — два объекта, а не «первый победил» ----
+    //
+    // Номера здесь настоящие по форме: с #1139 кандидат проходит проверку формы, и выдуманная
+    // цепочка цифр телефоном не становится — как и товарный штрихкод на чеке (#1062).
 
     @Test
     fun `два телефона — два узла и ещё-значение, а не потеря и не спор`() {
         val delta = entityDelta(
             source(kind = ObjectKind.TEXT),
             listOf(
-                com.point.core.flow.Entity(com.point.core.flow.EntityType.PHONE, "+380111111111"),
-                com.point.core.flow.Entity(com.point.core.flow.EntityType.PHONE, "+380222222222"),
+                com.point.core.flow.Entity(com.point.core.flow.EntityType.PHONE, "+380671234567"),
+                com.point.core.flow.Entity(com.point.core.flow.EntityType.PHONE, "+380509876543"),
             ),
         )
 
-        assertEquals("+380111111111", delta.metadata[META_ENTITY_PREFIX + "phone"])
+        assertEquals("+380671234567", delta.metadata[META_ENTITY_PREFIX + "phone"])
         assertEquals(
             "второе значение — «ещё», не конфликт прочтений",
-            listOf("+380222222222"),
+            listOf("+380509876543"),
             com.point.core.flow.moreOf(delta.metadata, META_ENTITY_PREFIX + "phone"),
         )
         assertTrue(
@@ -46,7 +49,7 @@ class EntityObjectsTest {
         val phones = delta.objects.filter { it.state.kind == KIND_PHONE }
         assertEquals("узел на каждое значение", 2, phones.size)
         assertEquals(2, phones.map { it.id }.distinct().size)
-        assertEquals(setOf("+380111111111", "+380222222222"), phones.map { it.uri.value }.toSet())
+        assertEquals(setOf("+380671234567", "+380509876543"), phones.map { it.uri.value }.toSet())
         assertTrue(delta.relations.count { it.type == RelationType.FOUND_IN } >= 2)
     }
 
