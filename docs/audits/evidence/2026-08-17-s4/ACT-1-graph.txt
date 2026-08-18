@@ -1,0 +1,3 @@
+flow nodes=1
+- f463ea1c kind=TEXT mime=text/plain via=None name=Schet 4417 ot 18.08.2026. Tel… found=[('Phone', 'f463ea1c'), ('Email', 'f463ea1c'), ('Date', 'f463ea1c')] rels=['found_in', 'found_in', 'found_in'] meta#=14 | entity.date=18.08.2026; entity.email=test@example.com; entity.phone.country=UA; entity.phone.kind=мобильный; entity.phone=+380671112233; investigated.document-type=not_found; investigated.entities=found; investigated.graph-roles=not_found; investigated.identifiers=not_found; investigated.metadata-entities=not_found; investigated.url=not_found; investigated.vcard-shape=not_found; size=117
+history lines=0
