@@ -1,0 +1,10 @@
+flow nodes=2
+- b6e71210 kind=PDF mime=application/pdf via=None name=probe.pdf found=[('TEXT', '51d0787b')] rels=['derived_from'] meta#=5 | investigated.graph-roles=not_found; investigated.metadata-entities=not_found; investigated.pdf-image-shape=not_found; size=499556
+- 51d0787b kind=TEXT mime=text/plain via=Извлечь текст name= found=[('PDF', 'b6e71210'), ('Url', '51d0787b'), ('Url', '51d0787b'), ('Url', '51d0787b'), ('Url', '51d0787b'), ('Url', '51d0787b'), ('Url', '51d0787b'), ('Url', '51d0787b'), ('Url', '51d0787b'), ('Date', '51d0787b'), ('Date', '51d0787b')] rels=['derived_from', 'found_in', 'found_in', 'found_in', 'found_in', 'found_in', 'found_in', 'found_in', 'found_in', 'found_in', 'found_in'] meta#=13 | entity.date.more=25 июля; entity.date=23.07.2026; entity.url.more=RELEASE-PLAN.md
+local.properties
+ROADMAP.md
+CLAUDE.md
+relay.py
+relay.py:14
+relay.py:95; entity.url=-PLAN.md; investigated.document-type=not_found; investigated.entities=found; investigated.graph-roles=not_found; investigated.identifiers=not_found; investigated.metadata-entities=not_found; investigated.url=not_found; investigated.vcard-shape=not_found; size=80498
+history lines=0

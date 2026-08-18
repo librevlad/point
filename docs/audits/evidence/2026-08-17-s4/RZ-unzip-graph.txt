@@ -1,0 +1,4 @@
+flow nodes=2
+- e8e9b632 kind=ZIP mime=application/zip via=None name=archive.zip found=[('COLLECTION', '0a332698')] rels=['contains'] meta#=5 | investigated.graph-roles=not_found; investigated.metadata-entities=not_found; investigated.zip-images=not_found; size=4437206
+- 0a332698 kind=COLLECTION mime=inode/directory via=Распаковать name= found=[] rels=['contains'] meta#=5 | investigated.graph-roles=not_found; investigated.metadata-entities=not_found; size=3452
+history lines=0
