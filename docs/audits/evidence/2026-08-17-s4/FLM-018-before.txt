@@ -1,0 +1,3 @@
+flow nodes=1
+- 9a6eef8b kind=TEXT mime=text/plain via=None name=Proba ssylki Point 18.08.2026 dlya… found=[('Date', '9a6eef8b'), ('URL', '4ec4125e'), ('IMAGE', 'ce297aac'), ('PDF', 'dda041b8'), ('AUDIO', 'ed211710'), ('IMAGE', '2b7bcae3')] rels=['found_in', 'derived_from', 'derived_from', 'derived_from', 'derived_from', 'derived_from'] meta#=12 | entity.date.src=ocr; entity.date=18.08.2026; investigated.document-type=not_found; investigated.entities=found; investigated.graph-roles=not_found; investigated.identifiers=not_found; investigated.metadata-entities=found; investigated.url=not_found; investigated.vcard-shape=not_found; size=59
+history lines=0
