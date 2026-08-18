@@ -587,6 +587,7 @@ class FlowViewModel @Inject constructor(
     private fun maybePreview(bubble: Bubble, top: PointObject) {
         if (asksRepeat(bubble, top)) return
         val voice = claimVoice()
+        runningStep = bubble.title
         raiseBusy(
             bubble.title,
             network = isCloud(bubble.capabilityId),
@@ -615,7 +616,10 @@ class FlowViewModel @Inject constructor(
                 // Само действие идёт этой же работой. Отдельный запуск изнутри уводил отслеживание
                 // на себя, а конец подготовки стирал его- и «Отменить» переставало действовать (#692).
                 runCatching { sensory.tap() }
-                runAction(bubble, voice) { realizer.perform(top, null) }
+
+                // Кто исполнил — часть добытого знания (#1127): тот же шов, что и у
+                // исследований, только исполнитель здесь уже выбран строчкой выше.
+                runAction(bubble, voice) { realizer.perform(top, null).knownBy(top, realizer.meta.actor) }
             } else {
                 pendingPreviewBubble = bubble
                 _ui.update { it.copy(busy = null, busyStage = null, preview = preview) }

@@ -523,6 +523,25 @@ class FlowViewModelTest {
         assertNull("и её результат не приезжает поверх «Недавнего»", vm.ui.value.frame)
     }
 
+    /**
+     * Начатое нельзя терять молча (#1133, ADR-0001 §18).
+     *
+     * Прежде новый объект поверх идущей работы обрывал её без единого слова: экран
+     * переключался, облачная работа доживала в пустоту, результат не приходил никуда.
+     */
+    @Test fun `новый объект поверх идущей работы обрывает её со сказанным исходом`() = runTest(dispatcher) {
+        val vm = vm(slow = setOf(CapabilityId("a")))
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        vm.onBubble(bubble("a"))
+        assertNotNull("работа обязана идти — иначе обрывать нечего", vm.ui.value.busy)
+
+        vm.onShared("uri2", "image/png"); advanceUntilIdle()
+
+        val said = vm.ui.value.message.orEmpty()
+        assertTrue("об обрыве не сказано ни слова-$said", said.isNotBlank())
+        assertTrue("прерванный шаг не назван-$said", said.contains(bubble("a").title))
+    }
+
     @Test fun `назад с экрана входа возвращает в Point, а не закрывает его`() = runTest(dispatcher) {
 
         val vm = vm(account = FakeAccountStore(null), accountClient = CountingSignInClient(readyAfter = Int.MAX_VALUE))
