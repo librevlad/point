@@ -67,6 +67,12 @@ android {
         buildConfigField("String", "CLOUDFLARE_BASE_URL", prop("CLOUDFLARE_BASE_URL", "https://api.cloudflare.com/client/v4/accounts"))
         buildConfigField("String", "CLOUDFLARE_MODELS", prop("CLOUDFLARE_MODELS", "@cf/mistralai/mistral-small-3.1-24b-instruct,@cf/meta/llama-3.3-70b-instruct-fp8-fast"))
 
+        // Каталог NVIDIA говорит по OpenAI-протоколу; крупные модели поднимаются по запросу
+        // и первый ответ может ждать минуту, мелкие отвечают сразу.
+        buildConfigField("String", "NVIDIA_API_KEY", "\"\"")
+        buildConfigField("String", "NVIDIA_BASE_URL", prop("NVIDIA_BASE_URL", "https://integrate.api.nvidia.com/v1"))
+        buildConfigField("String", "NVIDIA_MODELS", prop("NVIDIA_MODELS", "meta/llama-3.1-8b-instruct,meta/llama-3.3-70b-instruct"))
+
         // Домен важен: .cn отвечает на токен 401, международный .ai — работает.
         buildConfigField("String", "MODELSCOPE_API_KEY", "\"\"")
         buildConfigField("String", "MODELSCOPE_BASE_URL", prop("MODELSCOPE_BASE_URL", "https://api-inference.modelscope.ai/v1"))
@@ -104,6 +110,7 @@ android {
             buildConfigField("String", "CLOUDFLARE_API_KEY", prop("CLOUDFLARE_API_KEY"))
             buildConfigField("String", "CLOUDFLARE_ACCOUNT_ID", prop("CLOUDFLARE_ACCOUNT_ID"))
             buildConfigField("String", "MODELSCOPE_API_KEY", prop("MODELSCOPE_API_KEY"))
+            buildConfigField("String", "NVIDIA_API_KEY", prop("NVIDIA_API_KEY"))
             buildConfigField("String", "UNSTRUCTURED_API_KEY", prop("UNSTRUCTURED_API_KEY"))
             buildConfigField("String", "LLAMA_CLOUD_API_KEY", prop("LLAMA_CLOUD_API_KEY"))
             buildConfigField("String", "OVH_API_KEY", prop("OVH_API_KEY"))
