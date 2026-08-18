@@ -21,7 +21,11 @@ class PcActionTest {
     private val noText = object : com.point.core.flow.ObjectStore {
         override suspend fun ingest(sourceUri: String, mime: String) = error("не зовут")
         override suspend fun ingestMultiple(sources: List<String>) = error("не зовут")
-        override suspend fun put(result: com.point.core.model.ResultObject) = error("не зовут")
+        override suspend fun put(
+            result: com.point.core.model.ResultObject,
+            from: com.point.core.model.PointObject?,
+            by: com.point.core.model.CapabilityId?,
+        ) = error("не зовут")
         override suspend fun children(collection: PointObject, limit: Int) = error("не зовут")
         override suspend fun readText(obj: PointObject, limit: Int): String = ""
         override suspend fun newScratchFile(extension: String) = error("не зовут")

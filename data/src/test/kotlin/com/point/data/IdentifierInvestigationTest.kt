@@ -24,9 +24,19 @@ class IdentifierInvestigationTest {
 
     private val enricher = IdentifierInvestigationRealizer()
 
-    private fun textObject(content: String, id: String = "src"): PointObject {
+    private fun textObject(
+        content: String,
+        id: String = "src",
+        source: Provenance = Provenance.OCR,
+    ): PointObject {
         val f = File(tmp.root, "$id.txt").apply { writeText(content) }
-        return PointObject(id, "text/plain", ScratchRef(f.absolutePath), ObjectState(ObjectKind.TEXT))
+        return PointObject(
+            id,
+            "text/plain",
+            ScratchRef(f.absolutePath),
+            ObjectState(ObjectKind.TEXT),
+            provenance = source,
+        )
     }
 
     @Test
@@ -70,6 +80,27 @@ class IdentifierInvestigationTest {
         val found = enricher.look(textObject("20 4514 9154 9395")).objects.single()
 
         assertEquals(Provenance.OCR, found.provenance)
+        assertEquals(
+            found.provenance,
+            com.point.core.flow.provenanceOf(found.metadata, com.point.core.flow.META_ENTITY_TRACK),
+        )
+    }
+
+    /**
+     * Путь значения — путь его источника (#1127).
+     *
+     * То же правило, тот же номер, но текст пришёл строкой от человека, а не со страницы.
+     * Прежде узел всё равно говорил «прочитано с кадра»: так координаты, взятые у системы
+     * геолокации, и дата из набранной строки получали чужое происхождение.
+     */
+    @Test
+    fun `набранный текст не превращает находку в прочитанное с кадра`() = runTest {
+
+        val found = enricher.look(
+            textObject("20 4514 9154 9395", source = Provenance.GIVEN),
+        ).objects.single()
+
+        assertEquals(Provenance.GIVEN, found.provenance)
         assertEquals(
             found.provenance,
             com.point.core.flow.provenanceOf(found.metadata, com.point.core.flow.META_ENTITY_TRACK),

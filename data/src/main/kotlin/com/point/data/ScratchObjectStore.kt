@@ -91,7 +91,11 @@ class ScratchObjectStore @Inject constructor(
             }
         }
 
-    override suspend fun put(result: ResultObject): PointObject =
+    override suspend fun put(
+        result: ResultObject,
+        from: PointObject?,
+        by: com.point.core.model.CapabilityId?,
+    ): PointObject =
         withContext(Dispatchers.IO) {
 
             val size = File(result.uri.value).length()
@@ -102,6 +106,13 @@ class ScratchObjectStore @Inject constructor(
                 state = classifier.classify(result.mime, size),
 
                 metadata = result.metadata + (META_SIZE to size.toString()) + emptyFileFact(size),
+
+                // Откуда взялся и кто сделал — часть самого объекта, а не только кадра на
+                // экране (#1127): по графу должно быть видно происхождение, даже если
+                // человек ушёл из разбора и вернулся в него из «Недавнего».
+                provenance = result.provenance,
+                sourceObjects = listOfNotNull(from?.id),
+                creatorAction = by?.value,
             )
         }
 
@@ -124,6 +135,13 @@ class ScratchObjectStore @Inject constructor(
                     uri = ScratchRef(file.absolutePath),
                     state = classifier.classify(mime, size, file.name, headOf(file)),
                     metadata = mapOf("name" to file.name, META_SIZE to size.toString()) + emptyFileFact(size),
+
+                    // Вещь из коллекции знает свою коллекцию (#1132): страница разложенного
+                    // PDF и файл из архива иначе жили в Graph без источника — открыть их
+                    // можно, а вернуться к документу или объяснить, откуда они, нельзя.
+                    provenance = collection.provenance,
+                    sourceObjects = listOf(collection.id),
+                    creatorAction = collection.creatorAction,
                 )
             }
         }

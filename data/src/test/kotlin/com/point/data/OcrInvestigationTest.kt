@@ -61,7 +61,11 @@ class OcrInvestigationTest {
         }
         override suspend fun ingest(sourceUri: String, mime: String) = throw UnsupportedOperationException()
         override suspend fun ingestMultiple(sources: List<String>) = throw UnsupportedOperationException()
-        override suspend fun put(result: ResultObject) = throw UnsupportedOperationException()
+        override suspend fun put(
+            result: ResultObject,
+            from: com.point.core.model.PointObject?,
+            by: com.point.core.model.CapabilityId?,
+        ) = throw UnsupportedOperationException()
         override suspend fun children(collection: PointObject, limit: Int) = CollectionContent.empty<PointObject>()
         override suspend fun readText(obj: PointObject, limit: Int) = ""
         override suspend fun clear() {}

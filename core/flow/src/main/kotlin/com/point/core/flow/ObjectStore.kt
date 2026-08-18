@@ -19,7 +19,19 @@ interface ObjectStore {
 
     suspend fun ingestMultiple(sources: List<String>): PointObject
 
-    suspend fun put(result: ResultObject): PointObject
+    /**
+     * Объект, рождённый действием, приходит в Graph со своим происхождением (ADR-0001 §2, §8).
+     *
+     * [from] — объект, из которого он получен, [by] — действие, которое его сделало. Без них
+     * результат ложился в Graph сиротой с происхождением «дано»: страница разложенного PDF,
+     * скан и озвучка выглядели так же, как присланное человеком, и по графу нельзя было
+     * сказать, откуда они взялись (#1127, #1132).
+     */
+    suspend fun put(
+        result: ResultObject,
+        from: PointObject? = null,
+        by: com.point.core.model.CapabilityId? = null,
+    ): PointObject
 
     suspend fun children(
         collection: PointObject,

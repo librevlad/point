@@ -24,7 +24,11 @@ class ResultComesBackTest {
     private val store = object : ObjectStore {
         override suspend fun ingest(sourceUri: String, mime: String) = error("не нужен")
         override suspend fun ingestMultiple(sources: List<String>) = error("не нужен")
-        override suspend fun put(result: ResultObject) = error("не нужен")
+        override suspend fun put(
+            result: ResultObject,
+            from: com.point.core.model.PointObject?,
+            by: com.point.core.model.CapabilityId?,
+        ) = error("не нужен")
         override suspend fun children(collection: PointObject, limit: Int) = error("не нужен")
         override suspend fun readText(obj: PointObject, limit: Int) = error("не нужен")
         override suspend fun newScratchFile(extension: String) =

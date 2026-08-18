@@ -66,10 +66,16 @@ class IdentifierInvestigationRealizer @Inject constructor() : Realizer {
         val text = file.readText().take(com.point.core.flow.INVESTIGATION_TEXT_CHARS)
         if (text.isBlank()) return@withContext Findings()
 
-        val facts = trackFacts(text)
+        // Значение не бывает надёжнее источника: путь у него тот же, каким пришёл текст
+        // (#1127). Прежде любое значение из текстового объекта помечалось «прочитано с
+        // кадра» — и координаты, взятые у системы геолокации, и дата из набранной строки.
+        val source = obj.provenance
+
+        val facts = trackFacts(text, source)
         val (objects, relations) = identifierObjects(obj, text, facts)
 
-        val ruleFacts = facts + meterFacts(text) + geoFacts(text) + amountFacts(text) + receiptFacts(text)
+        val ruleFacts = facts + meterFacts(text, source) + geoFacts(text, source) +
+            amountFacts(text, source) + receiptFacts(text, source)
         if (objects.isEmpty() && ruleFacts.isEmpty()) return@withContext Findings()
 
         Findings(objects = objects, relations = relations, metadata = ruleFacts)

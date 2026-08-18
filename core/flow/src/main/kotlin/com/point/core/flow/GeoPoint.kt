@@ -37,12 +37,12 @@ fun geoPoints(text: String): List<String> =
         .distinct()
         .toList()
 
-fun geoFacts(text: String): Map<String, String> {
+fun geoFacts(text: String, source: Provenance = Provenance.OCR): Map<String, String> {
     val points = geoPoints(text)
     val first = points.firstOrNull() ?: return emptyMap()
     return buildMap {
         put(META_ENTITY_GEO, first)
-        put(META_ENTITY_GEO + META_SOURCE_SUFFIX, Provenance.OCR.wire)
+        put(META_ENTITY_GEO + META_SOURCE_SUFFIX, source.wire)
         put(META_ENTITY_GEO + META_EVIDENCE_SUFFIX, EvidenceClass.SEMANTIC.name.lowercase())
         if (points.size > 1) put(META_ENTITY_GEO + META_MORE_SUFFIX, altValue(points))
     }

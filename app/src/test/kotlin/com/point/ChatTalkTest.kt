@@ -38,7 +38,11 @@ class ChatTalkTest {
 
         override suspend fun ingest(sourceUri: String, mime: String) = error("разговор не принимает объектов")
         override suspend fun ingestMultiple(sources: List<String>) = error("разговор не принимает объектов")
-        override suspend fun put(result: com.point.core.model.ResultObject) = error("разговор ничего не кладёт")
+        override suspend fun put(
+            result: com.point.core.model.ResultObject,
+            from: com.point.core.model.PointObject?,
+            by: com.point.core.model.CapabilityId?,
+        ) = error("разговор ничего не кладёт")
         override suspend fun children(collection: PointObject, limit: Int) =
             com.point.core.flow.CollectionContent.empty<PointObject>()
         override suspend fun readText(obj: PointObject, limit: Int): String = ""

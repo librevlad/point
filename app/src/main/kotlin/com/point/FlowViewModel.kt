@@ -1705,7 +1705,9 @@ class FlowViewModel @Inject constructor(
         claimVoice()
         raiseBusy("Преобразую…", cancelable = true)
         val result = runCatching { resolver.realizerFor(CapabilityId(viaCapId), obj.state).perform(obj, null) }.getOrNull()
-        return (result as? ActionResult.Success)?.let { runCatching { store.put(it.result) }.getOrNull() }
+        return (result as? ActionResult.Success)?.let {
+            runCatching { store.put(it.result, from = obj, by = CapabilityId(viaCapId)) }.getOrNull()
+        }
     }
 
     private fun openableMime(kind: ObjectKind): String? = when (kind) {
@@ -1803,7 +1805,9 @@ class FlowViewModel @Inject constructor(
             is ActionResult.Success -> {
                 runCatching { sensory.success() }
 
-                val produced = store.put(result.result)
+                // Происхождение результата — часть Graph, а не только кадра: объект
+                // помнит, из чего и каким действием он сделан (ADR-0001 §2, #1127).
+                val produced = store.put(result.result, from = stack.lastOrNull()?.obj, by = bubble.capabilityId)
                 pushFrame(produced, bubble.capabilityId, bubble.title)
 
                 yieldSurprise(bubble.yields, produced.state.kind, produced.metadata[META_YIELD_NOUN])?.let { note ->
@@ -1978,6 +1982,13 @@ class FlowViewModel @Inject constructor(
 
     private fun pushFrame(obj: PointObject, via: CapabilityId? = null, viaTitle: String? = null) {
         refreshPcCapsInBackground()
+
+        // Объект в разборе один (ADR-0001 §2, #1110). Вход в найденное, которое уже открыто
+        // выше по пути, — возврат к тому же узлу, а не второй его экземпляр: иначе знание
+        // об одном объекте расходилось по двум кадрам, а связь с уже созданным из него
+        // результатом терялась вместе с ним.
+        if (via == null && returnedToOpenNode(obj)) return
+
         val parent = stack.lastOrNull()
         val carried = parent?.takeIf { continuesObject(it.obj, obj) }
         val known = carried?.let { carryKnowledge(it.obj, obj) } ?: obj
@@ -2027,6 +2038,39 @@ class FlowViewModel @Inject constructor(
         loadChildrenIfCollection(known)
         loadTextPreviewIfText(known)
         loadObjectPreview(known)
+    }
+
+    /**
+     * Возврат к уже открытому узлу пути (#1110).
+     *
+     * Знание, пришедшее вместе с находкой, не выбрасывается: оно сливается в узел тем же
+     * merge-путём, что и любое другое (`carryKnowledge`), — расхождения остаются видимыми,
+     * а не создают второй экземпляр объекта со своей половиной правды.
+     */
+    private fun returnedToOpenNode(obj: PointObject): Boolean {
+        val at = stack.indexOfLast { it.obj.id == obj.id }
+        if (at < 0) return false
+
+        while (stack.size > at + 1) stack.removeLast()
+
+        val open = stack.last()
+        val known = carryKnowledge(open.obj, obj)
+        val frame = open.copy(
+            obj = known,
+            bubbles = registry.bubblesFor(
+                com.point.core.flow.GraphState(known, open.found, open.relations),
+            ),
+        )
+        stack[at] = frame
+        _ui.update {
+            it.copy(
+                busy = null, busyStage = null, frame = frame, message = null,
+                messageOutcome = Outcome.NONE, inputPrompt = null, inputSuggestions = emptyList(),
+                needsImage = null, preview = null, path = currentPath(),
+            )
+        }
+        persistJourney()
+        return true
     }
 
     /**

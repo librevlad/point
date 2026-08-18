@@ -81,7 +81,11 @@ class ExcelRealizerTest {
     private val scratch = object : ObjectStore {
         override suspend fun ingest(sourceUri: String, mime: String): PointObject = error("unused")
         override suspend fun ingestMultiple(sources: List<String>): PointObject = error("unused")
-        override suspend fun put(result: ResultObject): PointObject = error("unused")
+        override suspend fun put(
+            result: ResultObject,
+            from: com.point.core.model.PointObject?,
+            by: com.point.core.model.CapabilityId?,
+        ): PointObject = error("unused")
         override suspend fun children(collection: PointObject, limit: Int) = CollectionContent.empty<PointObject>()
         override suspend fun readText(obj: PointObject, limit: Int): String = ""
         override suspend fun newScratchFile(extension: String) = ScratchRef(
