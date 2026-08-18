@@ -1,0 +1,4 @@
+flow nodes=2
+- 9a6eef8b kind=TEXT mime=text/plain via=None name=Proba ssylki Point 18.08.2026 dlya… found=[('Date', '9a6eef8b'), ('URL', '4ec4125e'), ('IMAGE', 'ce297aac')] rels=['found_in', 'derived_from', 'derived_from'] meta#=10 | entity.date=18.08.2026; investigated.document-type=not_found; investigated.entities=found; investigated.graph-roles=not_found; investigated.identifiers=not_found; investigated.metadata-entities=not_found; investigated.url=not_found; investigated.vcard-shape=not_found; size=59
+- ce297aac kind=IMAGE mime=image/png via=QR-код name= found=[('TEXT', '9a6eef8b')] rels=['derived_from'] meta#=8 | entity.qr.src=ocr; entity.qr=Proba ssylki Point 18.08.2026 dlya audita, neytralnyi tekst; investigated.exif=not_found; investigated.graph-roles=not_found; investigated.metadata-entities=not_found; investigated.qr-content=found; size=4347
+history lines=0
