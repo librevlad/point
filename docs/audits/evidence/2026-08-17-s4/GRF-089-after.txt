@@ -1,0 +1,4 @@
+flow nodes=2
+- 3ff05c28 kind=PDF mime=application/pdf via=None name=probe.pdf found=[('COLLECTION', 'b1a06657')] rels=['derived_from'] meta#=5 | investigated.graph-roles=not_found; investigated.metadata-entities=not_found; investigated.pdf-image-shape=not_found; size=499556
+- b1a06657 kind=COLLECTION mime=inode/directory via=Страницы name= found=[('PDF', '3ff05c28')] rels=['derived_from'] meta#=5 | investigated.graph-roles=not_found; investigated.metadata-entities=not_found; size=3452
+history lines=0
