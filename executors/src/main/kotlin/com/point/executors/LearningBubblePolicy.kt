@@ -23,7 +23,7 @@ class LearningBubblePolicy @Inject constructor(
     override fun rank(
         graph: com.point.core.flow.GraphState,
         candidates: List<Capability>,
-    ): List<Capability> = order(graph.state, candidates, graph.intent, backTo(graph, candidates))
+    ): List<Capability> = order(graph.state, candidates, graph.intent, backTo(graph, candidates), graph)
 
     /**
      * Действия, возвращающие исходник, из которого объект и получен (#925). Стоять первым
@@ -44,6 +44,15 @@ class LearningBubblePolicy @Inject constructor(
         candidates: List<Capability>,
         intent: com.point.core.model.Intent?,
         backToSource: Set<CapabilityId> = emptySet(),
+
+        /**
+         * Знание объекта и состояние его исследований (#1140).
+         *
+         * Прежде порядок считался по виду, признакам и Intent — то есть по форме входа, а не
+         * по тому, что Point уже понял. Отсюда «Понять» главным после успешного «Понять» и
+         * «Перевести» главным там, где читать нечего.
+         */
+        graph: com.point.core.flow.GraphState? = null,
     ): List<Capability> {
         val counts = usage.counts()
         val keyless = !runCatching { llm.configured }.getOrDefault(true)
@@ -64,6 +73,14 @@ class LearningBubblePolicy @Inject constructor(
                 // слабое чтение — рукопись, мусор — оставляет облако первым.
                 { if (cloudReadOfAlreadyRead(it, state)) 1 else 0 },
 
+                // Отвеченный вопрос не предлагается заново (#1010, ADR-0001 §9): успешно
+                // выполненное исследование уходит вниз, а не остаётся главным действием.
+                { if (graph != null && alreadyAnswered(it, graph)) 1 else 0 },
+
+                // Действию, которому нечем работать, не быть первым (#996): оно само
+                // говорит, чего ему не хватает, — и уступает тому, кто это даёт.
+                { if (it.missing(state) != null) 1 else 0 },
+
                 // Дальше — общий хвост обоих устройств (#840): намерение, приоритет, имя.
                 // Своя ступень здесь одна: приоритет смягчается тем, как часто человек берёт
                 // это действие.
@@ -73,6 +90,11 @@ class LearningBubblePolicy @Inject constructor(
             ),
         )
     }
+
+    /** Вопрос этого действия уже закрыт находкой для этого объекта. */
+    private fun alreadyAnswered(c: Capability, graph: com.point.core.flow.GraphState): Boolean =
+        com.point.core.flow.investigationStateOf(graph.obj.metadata, c.id) ==
+            com.point.core.flow.InvestigationState.FOUND
 
     private fun cloudReadOfAlreadyRead(c: Capability, state: ObjectState): Boolean =
         state.kind == com.point.core.model.ObjectKind.IMAGE &&

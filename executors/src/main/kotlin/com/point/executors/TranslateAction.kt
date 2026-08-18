@@ -37,12 +37,17 @@ class TranslateCapability @Inject constructor(
         state.kind in setOf(ObjectKind.TEXT, ObjectKind.PDF) || state.has(Feature.HAS_TEXT)
     override fun produces(state: ObjectState) = ObjectState(ObjectKind.TEXT)
 
-    override fun missing(state: ObjectState) =
-        if (state.kind == ObjectKind.IMAGE && !state.has(Feature.HAS_TEXT)) {
-            "сначала распознайте текст"
-        } else {
-            null
-        }
+    /**
+     * Чего не хватает, чтобы переводить, — говорит само действие (#996).
+     *
+     * Не только у снимка: PDF без единого прочитанного слова переводить так же нечем, и
+     * прежде он молчал об этом, стоя главным действием экрана.
+     */
+    override fun missing(state: ObjectState) = when {
+        state.has(Feature.HAS_TEXT) || state.kind == ObjectKind.TEXT -> null
+        state.kind == ObjectKind.IMAGE -> "сначала распознайте текст"
+        else -> "сначала извлеките текст"
+    }
 
     companion object { val ID = CapabilityId("translate") }
 }
