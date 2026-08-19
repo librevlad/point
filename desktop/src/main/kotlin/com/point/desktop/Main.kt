@@ -97,6 +97,7 @@ fun main(args: Array<String>) {
 
     // Сетевая ли способность — знание живёт у самой способности (#855): исполнители
     // «Понять», «Перевести», «Дать ссылку» называют себя местными, хотя отдают байты наружу.
+    var pcCloudReader: PcCloudOcrRealizer? = null
     val capabilities = desktopCapabilities()
 
     // Аккаунт рождается ниже исполнителей; стук подключается, как только он есть (#1079).
@@ -122,7 +123,11 @@ fun main(args: Array<String>) {
             PcOfficeTextRealizer(com.point.core.flow.OoxmlOfficeTextExtractor(), outbox),
             PcShrinkImageRealizer(outbox),
             PcTranscribeRealizer({ speechCall(FilePcConfig(pointDir).load()) }, outbox),
-            PcCloudOcrRealizer({ FilePcConfig(pointDir).load().ocr }, entities),
+            PcCloudOcrRealizer({ FilePcConfig(pointDir).load().ocr }, entities).let { cloudReader ->
+                pcCloudReader = cloudReader
+                cloudReader
+            },
+            PcReadDocumentRealizer(readPage = { page -> pcCloudReader!!.readFrame(page, "image/png") }),
             PcOpenLinkRealizer { url ->
                 runCatching { java.awt.Desktop.getDesktop().browse(java.net.URI(url)) }
             },
