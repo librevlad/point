@@ -91,8 +91,23 @@ class FoundChipDisplayTest {
     }
 
     @Test
-    fun `узел без фактов остаётся на uri`() {
+    fun `узел-значение без фактов показывает своё значение`() {
         assertEquals("111", foundHeadline(node(emptyMap())))
+    }
+
+    @Test
+    fun `узел-файл без имени показывает вид, а не путь в scratch`() {
+        // Путь на диске к человеку не выходит (#1038, #1100): раньше чип без имени
+        // подписывался scratch-идентификатором из uri.
+        val file = com.point.core.model.PointObject(
+            id = "res:1",
+            mime = "image/png",
+            uri = com.point.core.model.ScratchRef("/data/user/0/com.point/files/scratch/4f94c663.png"),
+            state = ObjectState(com.point.core.model.ObjectKind.IMAGE),
+        )
+        val shown = foundHeadline(file)
+        assertTrue("на экран вышел путь: $shown", !shown.contains("/"))
+        assertTrue(shown.isNotBlank())
     }
 
     @Test

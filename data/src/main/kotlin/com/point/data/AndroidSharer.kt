@@ -24,13 +24,17 @@ class AndroidSharer @Inject constructor(
     private fun outboundUri(obj: PointObject): android.net.Uri {
         val authority = "${context.packageName}.fileprovider"
         val file = File(obj.uri.value)
-        val name = obj.metadata["name"]?.takeIf { it.isNotBlank() } ?: unnamed(obj.mime)
-        return FileProvider.getUriForFile(context, authority, file, name)
-    }
+        val name = com.point.core.flow.outboundFileName(obj.metadata["name"], obj.mime)
 
-    private fun unnamed(mime: String): String {
-        val ext = com.point.core.flow.extensionForMime(mime)
-        return if (ext.isBlank()) "объект" else "объект.$ext"
+        // Подсказки displayName системному листу мало (#1111): часть приёмников и сам лист
+        // читают последний сегмент пути — и показывали scratch-идентификатор. Файл уходит
+        // копией под своим именем; копия живёт в scratch и убирается вместе с ним.
+        val named = runCatching {
+            File(file.parentFile, "share").apply { mkdirs() }
+                .let { dir -> File(dir, name) }
+                .also { if (!it.isFile || it.length() != file.length()) file.copyTo(it, overwrite = true) }
+        }.getOrNull()
+        return FileProvider.getUriForFile(context, authority, named ?: file, name)
     }
 
     override suspend fun share(obj: PointObject) {

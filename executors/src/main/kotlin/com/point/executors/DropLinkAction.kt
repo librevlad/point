@@ -27,7 +27,10 @@ class DropLinkRealizer @Inject constructor(
 
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult {
         val file = File(input.uri.value)
-        val name = input.metadata["name"]?.takeIf { it.isNotBlank() } ?: file.name
+
+        // Имя наружу — по общему правилу выхода (#1126): экранная обрезка («…») в настоящее
+        // имя не попадает, scratch-идентификатор — тем более.
+        val name = com.point.core.flow.outboundFileName(input.metadata["name"], input.mime)
 
         reportStage("Загружаю файл")
         val link = drop.give(file.absolutePath, name, input.mime)

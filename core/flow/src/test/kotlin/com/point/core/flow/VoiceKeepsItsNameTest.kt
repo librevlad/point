@@ -79,8 +79,14 @@ class VoiceKeepsItsNameTest {
         val guilty = listOf(
             "desktop/src/main/kotlin/com/point/desktop/Inbox.kt",
             "data/src/main/kotlin/com/point/data/MediaStoreExporter.kt",
+
+            // Лист «Поделиться» берёт имя общим правилом выхода (#1146), внутри которого
+            // живёт та же общая таблица типов.
             "data/src/main/kotlin/com/point/data/AndroidSharer.kt",
-        ).filterNot { File(repo, it).readText().contains("extensionForMime(") }
+        ).filterNot {
+            val text = File(repo, it).readText()
+            text.contains("extensionForMime(") || text.contains("outboundFileName(")
+        }
 
         assertTrue("своя таблица типов: $guilty", guilty.isEmpty())
     }
