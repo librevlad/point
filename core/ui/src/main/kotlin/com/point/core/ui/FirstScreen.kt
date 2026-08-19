@@ -329,7 +329,62 @@ private fun FoundObjects(
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        found.forEach { obj ->
+        // Однородная сотня — строкой-классом (#1058): знание не урезается, меняется
+        // представление. Раскрытый класс можно свернуть обратно.
+        val expanded = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(setOf<com.point.core.model.ObjectKind>()) }
+        val rows = foldFound(found)
+        rows.forEach { row ->
+            if (row is FoundRow.Group && row.kind !in expanded.value) {
+                key("fold:" + row.kind.name) {
+                    Surface(
+                        onClick = { expanded.value = expanded.value + row.kind },
+                        shape = RoundedCornerShape(14.dp),
+                        color = MaterialTheme.colorScheme.surface,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            Icon(
+                                imageVector = kindIcon(row.kind),
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp),
+                            )
+                            Text(
+                                text = kindLabel(row.kind) + " · " + row.items.size,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.weight(1f),
+                            )
+                            Text(
+                                text = "раскрыть ›",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+                return@forEach
+            }
+            val group = (row as? FoundRow.Group)?.items ?: listOf((row as FoundRow.Single).obj)
+            if (row is FoundRow.Group) {
+                key("unfold:" + row.kind.name) {
+                    Text(
+                        text = kindLabel(row.kind) + " · " + row.items.size + " — свернуть",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { expanded.value = expanded.value - row.kind }
+                            .padding(vertical = 4.dp),
+                    )
+                }
+            }
+            group.forEach { obj ->
             key(obj.id) {
                 Surface(
                     onClick = { onFound(obj) },
@@ -392,6 +447,7 @@ private fun FoundObjects(
                         }
                     }
                 }
+            }
             }
         }
     }
