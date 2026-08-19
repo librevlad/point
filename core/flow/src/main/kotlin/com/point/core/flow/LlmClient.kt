@@ -7,6 +7,16 @@ interface LlmClient {
 
     suspend fun run(obj: PointObject, prompt: String): ResultObject
 
+    /**
+     * Тот же вопрос, но сильнее: заход, который старается взять ДРУГОЙ сервис (#1010).
+     *
+     * «Понять» может бесконечно обогащать граф (решение владельца): следующий виток идёт
+     * другой моделью и улучшает результат обычным merge. [avoidServices] — кто уже отвечал;
+     * одиночный клиент второго исполнителя не имеет и честно отвечает собой.
+     */
+    suspend fun run(obj: PointObject, prompt: String, avoidServices: Set<String>): ResultObject =
+        run(obj, prompt)
+
     fun canHandle(obj: PointObject): Boolean = true
 
     val strongVision: Boolean get() = false

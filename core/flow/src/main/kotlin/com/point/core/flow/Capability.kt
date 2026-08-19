@@ -16,6 +16,12 @@ interface Capability {
 
     fun label(state: ObjectState): String
 
+    /**
+     * Имя действия по текущему знанию (#1010): отработавший виток зовётся дальше — «Понять
+     * сильнее», а не тем же обещанием. По умолчанию знание на имя не влияет.
+     */
+    fun label(graph: GraphState): String = label(graph.state)
+
     fun accepts(state: ObjectState): Boolean
 
     /**
