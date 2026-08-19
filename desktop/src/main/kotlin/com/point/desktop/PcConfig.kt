@@ -38,7 +38,7 @@ class FilePcConfig(private val baseDir: File) {
     private val file: File get() = File(baseDir.apply { mkdirs() }, "config")
 
     fun load(): PcConfig {
-        val stored = runCatching { decodePcMeta(file.readText()) }.getOrDefault(emptyMap())
+        val stored = runCatching { SecretVault.revealConfig(decodePcMeta(file.readText())) }.getOrDefault(emptyMap())
         val config = PcConfig(
             name = stored["name"] ?: hostName(),
             server = stored["server"].orEmpty(),
@@ -75,7 +75,7 @@ class FilePcConfig(private val baseDir: File) {
         )
         val merged = mine.mergedWith(theirs)
         if (merged != mine) {
-            val stored = runCatching { decodePcMeta(file.readText()) }.getOrDefault(emptyMap()).toMutableMap()
+            val stored = runCatching { SecretVault.revealConfig(decodePcMeta(file.readText())) }.getOrDefault(emptyMap()).toMutableMap()
             if (merged.aiKey.isNotBlank() && config.aiKeys.mine.none { it.apiKey == merged.aiKey }) {
                 val provider = com.point.core.flow.AI_PROVIDERS.first()
                 stored.putAll(
@@ -93,13 +93,13 @@ class FilePcConfig(private val baseDir: File) {
             if (merged.speechKey.isNotBlank()) stored["speech.key"] = merged.speechKey
             if (merged.ocrKey.isNotBlank()) stored["ocr.key"] = merged.ocrKey
             stored["secrets.at"] = merged.at.toString()
-            file.writeText(encodePcMeta(stored))
+            file.writeText(encodePcMeta(SecretVault.protectConfig(stored)))
         }
         return merged
     }
 
     private fun secretsStamp(): Long =
-        runCatching { decodePcMeta(file.readText())["secrets.at"]?.toLongOrNull() }.getOrNull()
+        runCatching { SecretVault.revealConfig(decodePcMeta(file.readText()))["secrets.at"]?.toLongOrNull() }.getOrNull()
             ?: file.lastModified()
 
     /**
@@ -172,17 +172,17 @@ class FilePcConfig(private val baseDir: File) {
         }
 
     private fun stamp(): Long =
-        runCatching { decodePcMeta(file.readText())["settings.at"]?.toLongOrNull() }.getOrNull() ?: 0L
+        runCatching { SecretVault.revealConfig(decodePcMeta(file.readText()))["settings.at"]?.toLongOrNull() }.getOrNull() ?: 0L
 
     private fun stamp(at: Long) {
-        val stored = runCatching { decodePcMeta(file.readText()) }.getOrDefault(emptyMap()).toMutableMap()
+        val stored = runCatching { SecretVault.revealConfig(decodePcMeta(file.readText())) }.getOrDefault(emptyMap()).toMutableMap()
         stored["settings.at"] = at.toString()
-        file.writeText(encodePcMeta(stored))
+        file.writeText(encodePcMeta(SecretVault.protectConfig(stored)))
     }
 
     @Synchronized
     fun save(config: PcConfig) {
-        val stored = runCatching { decodePcMeta(file.readText()) }.getOrDefault(emptyMap()).toMutableMap()
+        val stored = runCatching { SecretVault.revealConfig(decodePcMeta(file.readText())) }.getOrDefault(emptyMap()).toMutableMap()
 
         // Выбор человека здесь — такое же событие, как приехавшее с сервера (#1085).
         //
@@ -216,7 +216,7 @@ class FilePcConfig(private val baseDir: File) {
         if (sharedPart(stored) != sharedBefore) {
             stored["settings.at"] = System.currentTimeMillis().toString()
         }
-        file.writeText(encodePcMeta(stored))
+        file.writeText(encodePcMeta(SecretVault.protectConfig(stored)))
     }
 
     private fun hostName(): String =

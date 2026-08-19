@@ -43,6 +43,10 @@ dependencies {
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.pdfbox)
 
+    // Секреты на диске защищаются ключом пользователя Windows (DPAPI, #1095): свой шифр
+    // изобретать нельзя, а пароль хранить было бы негде — он лежал бы рядом.
+    implementation(libs.jna.platform)
+
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
 }

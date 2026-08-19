@@ -28,9 +28,13 @@ class SettingsKeepWhatTheyDoNotKnowTest {
 
         store.save(store.load().copy(name = "Рабочий ноутбук"))
 
+        // Секреты сверяются прочтением, а не сырым текстом файла: на диске они теперь
+        // защищены ключом пользователя (#1095), но терять их запись по-прежнему не смеет.
+        val kept = store.load()
+        assertTrue("потерян ключ расшифровки", kept.speech.key == "gsk-секрет")
+        assertTrue("потерян ключ чтения", kept.ocr.key == "ocr-секрет")
+
         val after = File(home, "config").readText()
-        assertTrue("потерян ключ расшифровки: $after", "gsk-секрет" in after)
-        assertTrue("потерян ключ чтения: $after", "ocr-секрет" in after)
         assertTrue("потерян свой адрес сервиса: $after", "свой.адрес" in after)
         assertTrue("потеряна метка ключей: $after", "12345" in after)
         assertTrue("не записано имя: $after", "Рабочий ноутбук" in after)

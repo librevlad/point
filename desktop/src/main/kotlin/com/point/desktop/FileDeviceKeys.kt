@@ -20,14 +20,19 @@ class FileDeviceKeys(private val baseDir: File) : DeviceKeyStore {
     override fun keys(): DeviceKeyPair {
         cache?.let { return it }
         val stored = runCatching { decodePcMeta(file.readText()) }.getOrDefault(emptyMap())
-        val secret = stored["private"]?.takeIf { it.isNotBlank() }
+        val secret = stored["private"]?.takeIf { it.isNotBlank() }?.let(SecretVault::reveal)?.takeIf { it.isNotBlank() }
         val public = stored["public"]?.takeIf { it.isNotBlank() }
         val pair = if (secret != null && public != null) {
             DeviceKeyPair(secret, public)
         } else {
             DeviceKeys.generate().also { fresh ->
                 runCatching {
-                    file.writeText(encodePcMeta(mapOf("private" to fresh.privateKey, "public" to fresh.publicKey)))
+                    // Приватный ключ связки на диске защищён ключом пользователя (#1095).
+                    file.writeText(
+                        encodePcMeta(
+                            mapOf("private" to SecretVault.protect(fresh.privateKey), "public" to fresh.publicKey),
+                        ),
+                    )
                     ownerOnly(file)
                 }
             }

@@ -16,7 +16,7 @@ class FileAccountStore(private val baseDir: File) : AccountStore {
     override fun current(): PointAccount? {
         val stored = runCatching { decodePcMeta(file.readText()) }.getOrNull() ?: return null
         val id = stored["device_id"]?.takeIf { it.isNotBlank() } ?: return null
-        val token = stored["device_token"]?.takeIf { it.isNotBlank() } ?: return null
+        val token = stored["device_token"]?.takeIf { it.isNotBlank() }?.let(SecretVault::reveal) ?: return null
         return PointAccount(
             deviceId = id,
             deviceToken = token,
@@ -32,7 +32,8 @@ class FileAccountStore(private val baseDir: File) : AccountStore {
             encodePcMeta(
                 mapOf(
                     "device_id" to account.deviceId,
-                    "device_token" to account.deviceToken,
+                    // Токен — вход в аккаунт: на диске он защищён ключом пользователя (#1095).
+                    "device_token" to SecretVault.protect(account.deviceToken),
                     "email" to account.email,
                     "name" to account.deviceName,
                 ),
