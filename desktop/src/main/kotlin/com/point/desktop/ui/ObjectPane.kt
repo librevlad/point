@@ -149,6 +149,33 @@ internal fun CompactObject(
             questionName = { id -> state.questionName(id, item.obj.state) },
         )
 
+        // Дети набора — своим разделом; вход раскрывает ребёнка объектом (#1099).
+        val children = com.point.desktop.collectionChildren(item.obj)
+        if (children.isNotEmpty()) {
+            Text("СОДЕРЖИМОЕ · " + children.size, style = PointType.label)
+            children.forEach { path ->
+                val childName = java.io.File(path).name
+                Row(
+                    modifier = Modifier.fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(PointColors.window.copy(alpha = 0.55f))
+                        .clickable { state.openPath(path) }
+                        .padding(horizontal = 12.dp, vertical = 9.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        childName,
+                        style = PointType.small,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text("открыть →", style = PointType.small.copy(color = PointColors.cyan))
+                }
+            }
+        }
+
         // Сам текст — после знания о нём, как на телефоне (#898).
         if (item.obj.state.kind == ObjectKind.TEXT) {
             Text(kindLabel(item.obj.state.kind).uppercase(), style = PointType.label)

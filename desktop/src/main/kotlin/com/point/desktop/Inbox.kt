@@ -74,6 +74,31 @@ class Inbox(private val dir: File, private val pdf: PdfText = PdfBoxText()) {
         return wrap(f, mimeFor(f.name), mapOf("name" to f.name))
     }
 
+    /**
+     * Пачка файлов — один объект-коллекция с детьми, как на телефоне (#1099, решение
+     * владельца: одна модель Graph важнее удобства одной поверхности). Дети живут путями в
+     * манифесте; вход раскрывает их, действия над пачкой работают одинаково.
+     */
+    fun addFiles(paths: List<String>): InboxItem {
+        require(paths.size > 1) { "набор — это больше одного файла" }
+        dir.mkdirs()
+        val safe = uniqueChildName(dir.list()?.toSet() ?: emptySet(), "Набор.list")
+        val manifest = File(dir, safe)
+        manifest.writeText(paths.joinToString(separator = System.lineSeparator()))
+        return InboxItem(
+            com.point.core.model.PointObject(
+                id = java.util.UUID.randomUUID().toString(),
+                mime = COLLECTION_MIME,
+                uri = com.point.core.model.ScratchRef(manifest.absolutePath),
+                state = com.point.core.model.ObjectState(com.point.core.model.ObjectKind.COLLECTION),
+                metadata = mapOf(
+                    "name" to "Набор · " + paths.size,
+                    "collection.size" to paths.size.toString(),
+                ),
+            ),
+        )
+    }
+
     fun sweep(olderThan: Long): Int {
         var removed = 0
         listOf(dir, File(dir, "screens"), File(dir, "downloads")).forEach { where ->
@@ -151,3 +176,12 @@ class Inbox(private val dir: File, private val pdf: PdfText = PdfBoxText()) {
         )
     }
 }
+
+const val COLLECTION_MIME = "application/x-point-collection"
+
+/** Дети набора — пути из манифеста; читаются на месте, реестр не заводится (#1099). */
+fun collectionChildren(obj: com.point.core.model.PointObject): List<String> =
+    if (obj.state.kind != com.point.core.model.ObjectKind.COLLECTION) emptyList()
+    else runCatching {
+        File(obj.uri.value).readLines().map(String::trim).filter { it.isNotBlank() }
+    }.getOrDefault(emptyList())
