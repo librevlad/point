@@ -78,7 +78,14 @@ class DropLinkCapability  : Capability {
     override fun accepts(state: ObjectState) =
         state.kind.isFileBacked && state.kind != ObjectKind.URL
 
-    override fun produces(state: ObjectState) = ObjectState(ObjectKind.URL)
+    // «Выложен» — знание об объекте (#1071): ссылка и срок ложатся на исходник, узел
+    // ссылки рождается находкой. Человек остаётся у своего объекта.
+    override fun produces(state: ObjectState) = state
+
+    override fun intents(state: ObjectState) = setOf(com.point.core.model.Intent.PREPARE)
+
+    override fun yields(state: ObjectState) =
+        com.point.core.model.ActionYield.Same("ссылка на сутки · файл уйдёт на сервер Point")
 
     companion object { val ID = CapabilityId("drop-link") }
 }
