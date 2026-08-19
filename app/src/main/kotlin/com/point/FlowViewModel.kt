@@ -661,7 +661,6 @@ class FlowViewModel @Inject constructor(
     }
 
     private fun maybePreview(bubble: Bubble, top: PointObject) {
-        if (asksRepeat(bubble, top)) return
         val voice = claimVoice()
         runningStep = bubble.title
         raiseBusy(
@@ -703,34 +702,10 @@ class FlowViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Повторное облачное действие спрашивает, а не жжёт квоту молча (#668).
-     *
-     * Спрашиваем только там, где ответ у объекта уже есть: состояние знания по паре
-     * (объект, вопрос) — единственное, что честно отличает «делали» от «не делали».
-     * Действие, не оставляющее состояния, не переспрашивается — иначе вопрос был бы догадкой.
-     * Согласие ведёт в тот же `confirmPreview`, что и обычный предпросмотр, и так же снимается
-     * кнопкой «назад».
-     */
-    private fun asksRepeat(bubble: Bubble, top: PointObject): Boolean {
-        if (!isCloud(bubble.capabilityId)) return false
-        if (investigationStateOf(top.metadata, bubble.capabilityId) == InvestigationState.NOT_INVESTIGATED) {
-            return false
-        }
-        pendingPreviewBubble = bubble
-        _ui.update {
-            it.copy(
-                busy = null,
-                busyStage = null,
-                preview = com.point.core.model.Preview(
-                    title = "«${bubble.title}» здесь уже делали",
-                    lines = listOf("Ответ уже есть. Повтор — ещё одно обращение к облаку."),
-                    confirmLabel = "Повторить",
-                ),
-            )
-        }
-        return true
-    }
+    // Стражника повторного облака больше нет (#1176, решение владельца дословно):
+    // «если повтор добавляет ценность, это не про yolo. а если нет то человек не будет
+    // 10 раз тапать одно и то же. убери его вообще». Виток спирали ценен сам: бриф целит
+    // в незакрытое, исполнитель ротируется, согласие меняет знание (#668 отменено).
 
     fun confirmPreview() {
         val bubble = pendingPreviewBubble ?: return
