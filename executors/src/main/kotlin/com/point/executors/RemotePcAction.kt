@@ -39,7 +39,10 @@ fun remotePcCapabilities(
     val ownIds = own.map { it.id }.toSet()
     return fromPc
         .filterNot { CapabilityId(it.id) in ownIds }
-        .map { RemotePcCapability(it, links, ownIds, fresh) }
+        // Одно умение может объявить несколько дверей «вид × признаки» (#1174):
+        // строки одного id — одна способность, годная объекту через любую из них.
+        .groupBy { it.id }.values
+        .map { rows -> RemotePcCapability(rows.first(), links, ownIds, rows, fresh) }
         .toSet()
 }
 
@@ -53,13 +56,17 @@ fun remotePcRealizers(
     classifier: com.point.core.flow.ObjectClassifier? = null,
 ): Set<Realizer> {
     val ownIds = own.map { it.id }.toSet()
-    return fromPc.map { RemotePcRealizer(it, links, transport, store, classifier, ownIds) }.toSet()
+    return fromPc.distinctBy { it.id }
+        .map { RemotePcRealizer(it, links, transport, store, classifier, ownIds) }.toSet()
 }
 
 class RemotePcCapability(
     private val action: PcRemoteAction,
     private val links: PcLinks,
     ownIds: Set<CapabilityId> = emptySet(),
+
+    /** Все объявленные двери этого умения; объект годится, если открыта любая (#1174). */
+    private val rows: List<PcRemoteAction> = listOf(action),
 
     /**
      * Свежо ли объявление того устройства (#633). Устарело — причина недоступности не
@@ -87,7 +94,7 @@ class RemotePcCapability(
     private fun fitsThisObject(state: ObjectState) =
 
         state.kind != ObjectKind.COLLECTION &&
-            with(com.point.core.flow.PcActionFit) { action.fitsObject(state) } &&
+            with(com.point.core.flow.PcActionFit) { rows.any { it.fitsObject(state) } } &&
             links.current() != null
 
     companion object {

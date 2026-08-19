@@ -353,6 +353,8 @@ class DesktopState(
             // Одно правило применимости на обе стороны (#1092): вид × признаки.
             with(com.point.core.flow.PcActionFit) { action.fitsObject(item.obj.state) } && action.id !in mine
         }
+            // Одно умение может объявить несколько дверей (#1174) — на экране оно одно.
+            .distinctBy { it.id }
     }
 
     /** Одно действие единого списка: здешнее или телефонное, порядок — по пользе (P10). */

@@ -64,6 +64,21 @@ class OneButtonPerCapabilityTest {
         }
     }
 
+    /** Несколько дверей одного умения (#1174) — одна способность, объект открывает любая. */
+    @Test fun `двери одного умения не двоят способность и не сливаются во всеядную`() {
+        val rows = listOf(
+            PcRemoteAction("browse", "browse", kinds = setOf("URL")),
+            PcRemoteAction("browse", "browse", features = setOf("HAS_URL")),
+        )
+
+        val cap = remotePcCapabilities(phoneOwn, rows, pairedPc).single()
+
+        assertTrue(cap.accepts(ObjectState(ObjectKind.URL)))
+        assertTrue(cap.accepts(ObjectState(ObjectKind.TEXT, setOf(com.point.core.model.Feature.HAS_URL))))
+        assertTrue(!cap.accepts(ObjectState(ObjectKind.TEXT)))
+        assertEquals(1, remotePcRealizers(phoneOwn, rows, pairedPc, NoTransport).size)
+    }
+
     private fun registryWithPc(fromPc: List<PcRemoteAction>) = DefaultCapabilityRegistry(
         capabilities = phoneOwn + remotePcCapabilities(phoneOwn, fromPc, pairedPc),
         policy = DefaultBubblePolicy(),
