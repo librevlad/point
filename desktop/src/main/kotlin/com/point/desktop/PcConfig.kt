@@ -159,6 +159,18 @@ class FilePcConfig(private val baseDir: File) {
         )
     }
 
+    /**
+     * То, что едет за человеком, — в отличие от того, что принадлежит этому компьютеру.
+     *
+     * Спрашивается прямо у записи на диске, а не у `load()`: `load()` умеет дописывать имя
+     * и звать `save()` в ответ.
+     */
+    private fun sharedPart(stored: Map<String, String>): Map<String, String> =
+        stored.filterKeys {
+            it == "privacy" || it == "sound" || it == "speech.key" || it == "ocr.key" ||
+                it.startsWith(com.point.core.flow.AiKeyFields.PREFIX)
+        }
+
     private fun stamp(): Long =
         runCatching { decodePcMeta(file.readText())["settings.at"]?.toLongOrNull() }.getOrNull() ?: 0L
 
@@ -171,6 +183,18 @@ class FilePcConfig(private val baseDir: File) {
     @Synchronized
     fun save(config: PcConfig) {
         val stored = runCatching { decodePcMeta(file.readText()) }.getOrDefault(emptyMap()).toMutableMap()
+
+        // Выбор человека здесь — такое же событие, как приехавшее с сервера (#1085).
+        //
+        // Метку времени двигало только `applyAccountSettings`, то есть настройки, приехавшие
+        // снаружи. Местный выбор её не трогал — и в `AccountSettings.mergedWith` никогда не
+        // оказывался новее: «Только на этом устройстве», выбранное на компьютере, не уезжало
+        // ни на сервер, ни на телефон, а следующая сверка молча возвращала прежний уровень.
+        //
+        // Двигается она только тогда, когда изменилось общее — то, что и правда едет за
+        // человеком. Имя компьютера и правый клик остаются здесь и метку не трогают: чужой
+        // выбор перекрывать им нечем.
+        val sharedBefore = sharedPart(stored)
         stored["name"] = config.name
         stored["server"] = config.server
 
@@ -188,6 +212,9 @@ class FilePcConfig(private val baseDir: File) {
             "ocr.key" to config.ocr.key,
         ).forEach { (key, value) ->
             if (value.isBlank()) stored.remove(key) else stored[key] = value
+        }
+        if (sharedPart(stored) != sharedBefore) {
+            stored["settings.at"] = System.currentTimeMillis().toString()
         }
         file.writeText(encodePcMeta(stored))
     }

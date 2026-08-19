@@ -836,6 +836,42 @@ class FlowViewModelTest {
         assertTrue(showsCancel(vm.ui.value))
     }
 
+    /**
+     * У действия есть предел (#1069): «Расшифровать» шло шестнадцать минут и не кончалось
+     * ничем. Дальше предела — честный отказ операции, а не вечное «Идёт»; знание объекта
+     * не трогается (ADR-0001 §9: Failure принадлежит операции).
+     */
+    /** Результат действия — объект человека: он должен находиться в «Недавнем» (#1057). */
+    @Test fun `результат действия попадает в «Недавнее», а вход не задваивается`() = runTest(dispatcher) {
+        resolver.result = ActionResult.Success(
+            ResultObject(ObjectKind.IMAGE, "image/png", ScratchRef("/scan"), mapOf("op" to "scan")),
+        )
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.onBubble(bubble(id = "scan", title = "Скан")); advanceUntilIdle()
+
+        assertEquals("вход и результат — две записи", 2, history.recorded.size)
+        assertEquals("/scan", history.recorded.last().uri.value)
+    }
+
+    @Test fun `действие дольше предела кончается честным отказом, а не вечным «Идёт»`() = runTest(dispatcher) {
+        resolver.holdMs = 10 * 60 * 1000L
+        resolver.uninterruptible = true
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.actionCeilingMs = 60_000
+        vm.onBubble(bubble(id = "a", title = "Расшифровать")); advanceUntilIdle()
+
+        assertEquals(Outcome.FAILED, vm.ui.value.messageOutcome)
+        assertTrue(
+            "отказ не назвал предел: ${vm.ui.value.message}",
+            vm.ui.value.message.orEmpty().contains("не уложилось"),
+        )
+        assertNull("экран остался занят навсегда", vm.ui.value.busy)
+    }
+
     @Test fun `отмена снимает идущую работу, а не законченную`() = runTest(dispatcher) {
         val vm = vm()
         vm.onShared("uri", "image/png"); advanceUntilIdle()

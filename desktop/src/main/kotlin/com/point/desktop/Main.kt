@@ -398,6 +398,11 @@ fun main(args: Array<String>) {
                     onSaveSettings = { changed ->
                         runCatching { FilePcConfig(pointDir).save(changed) }
 
+                        // Выбранное человеком уезжает сейчас, а не при следующем обновлении
+                        // круга (#1085): иначе экран говорит одно, а сервер и телефон знают
+                        // другое.
+                        runCatching { account.syncSettings() }
+
                         runCatching {
                             val exe = installedExecutable(ProcessHandle.current().info().command().orElse(null))
                             when {

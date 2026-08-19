@@ -19,6 +19,8 @@ class PointApplication : Application() {
 
     @Inject lateinit var accountClient: com.point.core.flow.AccountClient
 
+    @Inject lateinit var objects: com.point.core.flow.ObjectStore
+
     override fun onCreate() {
         super.onCreate()
         val started = android.os.SystemClock.uptimeMillis()
@@ -29,6 +31,7 @@ class PointApplication : Application() {
         // этого никто не считал. Конституция требует первый экран за 300 мс и без I/O.
         warmUpScanPack()
         eraseRemovedUsageJournal()
+        forgetAbandonedCopies()
         offMainThread { tellWhereToKnock() }
         val system = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, error ->
@@ -69,6 +72,22 @@ class PointApplication : Application() {
         }
     }
 
+    /**
+     * Брошенная копия объекта не живёт вечно (#1012, решение владельца 15.08.2026).
+     *
+     * Копия временная, но не мгновенная: после смерти процесса Point намеренно возвращает
+     * человека к его последнему объекту, и пустой scratch на старте оставил бы граф без
+     * байтов. Поэтому у копии есть срок — до следующего запуска, но не дольше суток. Всё,
+     * что старше, к этому моменту брошено и просто лежит на диске.
+     */
+    private fun forgetAbandonedCopies() {
+        offMainThread {
+            kotlinx.coroutines.runBlocking {
+                runCatching { objects.forgetOlderThan(System.currentTimeMillis() - COPY_LIFETIME_MS) }
+            }
+        }
+    }
+
     /** Журнал убранной «Приватной статистики» стирается при обновлении (#579). */
     private fun eraseRemovedUsageJournal() {
         offMainThread { removedUsageJournal.erase() }
@@ -98,5 +117,8 @@ class PointApplication : Application() {
     private companion object {
         /** Дольше этого запуск уже мешает человеку, и это стоит увидеть в журнале. */
         const val SLOW_STARTUP_MS = 300
+
+        /** Сутки — срок, названный владельцем: дольше брошенная копия не нужна (#1012). */
+        const val COPY_LIFETIME_MS = 24L * 60 * 60 * 1000
     }
 }

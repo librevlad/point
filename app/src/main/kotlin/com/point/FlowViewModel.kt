@@ -2000,16 +2000,45 @@ class FlowViewModel @Inject constructor(
      */
     @Volatile private var runningStep: String? = null
 
+    /**
+     * Предел одного действия (#1069) — поле, а не константа: тесты с виртуальными часами
+     * гоняют настоящие движки на настоящих потоках, и виртуальные десять минут пролетают
+     * раньше, чем настоящая секунда работы.
+     */
+    internal var actionCeilingMs: Long? = ACTION_CEILING_MS
+
     private suspend fun runAction(bubble: Bubble, voice: Long, action: suspend () -> ActionResult) {
         runCatching { usage.record(bubble.capabilityId) }
         runCatching {
 
-            kotlinx.coroutines.withContext(
-                com.point.core.flow.ActionProgress { stage ->
-                    if (voice == workVoice) _ui.update { it.copy(busyStage = stage) }
-                },
-            ) { action() }
+            // У действия есть предел (#1069). «Расшифровать» шло шестнадцать минут и не
+            // кончалось ничем — сеть была, обменов не прибавлялось, выход был один: отмена
+            // руками. Предел щедрый: таблица на эмуляторе строится минутами, и это законно.
+            // Дальше предела — честный отказ операции, знание не трогается (ADR-0001 §9).
+            val work: suspend () -> ActionResult = {
+                kotlinx.coroutines.withContext(
+                    com.point.core.flow.ActionProgress { stage ->
+                        if (voice == workVoice) _ui.update { it.copy(busyStage = stage) }
+                    },
+                ) { action() }
+            }
+            actionCeilingMs?.let { ceiling -> kotlinx.coroutines.withTimeout(ceiling) { work() } } ?: work()
         }
+            // Потолок — исход операции, а не исключение: TimeoutCancellation дальше по
+            // цепочке приняли бы за отмену человеком и промолчали (см. onFailure ниже).
+            .let { done ->
+                val e = done.exceptionOrNull()
+                if (e is kotlinx.coroutines.TimeoutCancellationException) {
+                    Result.success(
+                        ActionResult.Failure(
+                            "«${bubble.title}» не уложилось в ${(actionCeilingMs ?: ACTION_CEILING_MS) / 60_000} минут — прервано",
+                            recoverable = true,
+                        ),
+                    )
+                } else {
+                    done
+                }
+            }
 
             .onSuccess { result ->
                 if (owns(voice)) {
@@ -2061,7 +2090,18 @@ class FlowViewModel @Inject constructor(
 
                 // Происхождение результата — часть Graph, а не только кадра: объект
                 // помнит, из чего и каким действием он сделан (ADR-0001 §2, #1127).
-                val produced = store.put(result.result, from = stack.lastOrNull()?.obj, by = bubble.capabilityId)
+                val source = stack.lastOrNull()?.obj
+                val produced = store.put(result.result, from = source, by = bubble.capabilityId)
+
+                // Результат — такой же объект человека, как присланный (#1057): скан, взятый
+                // фрагмент или собранный документ должны находиться в «Недавнем» и после
+                // выхода. Прежде туда попадал только вход, и сделанное пропадало бесследно
+                // вместе со scratch. Шаг, продолживший тот же объект («Понять»), записи не
+                // множит — его довозит до истории update; мерка той же, что у pushFrame:
+                // continuesObject.
+                if (source == null || !com.point.core.flow.continuesObject(source, produced)) {
+                    runCatching { history.record(produced) }
+                }
                 pushFrame(produced, bubble.capabilityId, bubble.title)
 
                 yieldSurprise(bubble.yields, produced.state.kind, produced.metadata[META_YIELD_NOUN])?.let { note ->
@@ -2769,6 +2809,14 @@ class FlowViewModel @Inject constructor(
 
         /** Как телефон называет себя в происхождении знания (#1127). */
         const val PHONE_EXECUTOR = "phone"
+
+        /**
+         * Предел одного действия (#1069): дольше — честный отказ, а не вечное «Идёт».
+         *
+         * Щедрый нарочно: таблица на эмуляторе строится минутами, облачный скан — тоже,
+         * и предел должен резать только зависание, а не работу.
+         */
+        const val ACTION_CEILING_MS = 10L * 60 * 1000
 
 
         val REFRESHABLE_META = com.point.core.flow.REFRESHABLE_KNOWLEDGE

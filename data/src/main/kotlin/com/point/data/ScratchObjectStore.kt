@@ -210,6 +210,22 @@ class ScratchObjectStore @Inject constructor(
     }
 
     /**
+     * Брошенная копия убирается при запуске (#1012).
+     *
+     * Свежая остаётся: к ней человек и возвращается после смерти процесса. Старше срока —
+     * значит, к ней уже не вернулись, и она лежит на диске без спроса.
+     */
+    override suspend fun forgetOlderThan(before: Long) {
+        withContext(Dispatchers.IO) {
+            runCatching {
+                scratchDir.listFiles().orEmpty()
+                    .filter { it.lastModified() < before }
+                    .forEach { it.deleteRecursively() }
+            }.onFailure { Log.w(TAG, "не вышло убрать брошенные копии", it) }
+        }
+    }
+
+    /**
      * След остаётся у любого отказа, включая отмену (#939).
      *
      * Отмена не логировалась вовсе — «это же не ошибка». А оказалось, что единственный
