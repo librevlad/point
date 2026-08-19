@@ -208,22 +208,19 @@ class PcActionTest {
      * не вытесняется, машинное — уступает понятой сути.
      */
     @Test fun `человеческое имя не вытесняется сводкой модели`() {
+        val human = "card2.jpg"
+        val summary = "Vizitka dyzainera " + "інтер'єрів"
         val named = obj().copy(
-            metadata = mapOf(
-                "name" to "card2.jpg",
-                com.point.core.flow.META_SEMANTIC_SUMMARY to "Візитка дизайнера інтер'єрів Олени Ковальчук",
-            ),
+            metadata = mapOf("name" to human, com.point.core.flow.META_SEMANTIC_SUMMARY to summary),
         )
-        assertEquals("card2.jpg", humanSendName(named))
+        assertEquals(human, humanSendName(named))
     }
 
     @Test fun `машинное имя по-прежнему называется сутью`() {
+        val summary = "Vizitka dyzainera"
         val machine = obj().copy(
-            metadata = mapOf(
-                "name" to "IMG_20260818_000801.jpg",
-                com.point.core.flow.META_SEMANTIC_SUMMARY to "Візитка дизайнера",
-            ),
+            metadata = mapOf("name" to "IMG_20260818_000801.jpg", com.point.core.flow.META_SEMANTIC_SUMMARY to summary),
         )
-        assertEquals("Візитка дизайнера", humanSendName(machine))
+        assertEquals(summary, humanSendName(machine))
     }
 }
