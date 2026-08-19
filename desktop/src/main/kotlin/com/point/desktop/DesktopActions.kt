@@ -193,13 +193,22 @@ class PcToPhoneCapability : Capability {
     override fun produces(state: ObjectState) = state
 }
 
-class PcToPhoneRealizer(private val outbox: Outbox) : Realizer {
+class PcToPhoneRealizer(
+    private val outbox: Outbox,
+
+    /** Стук телефону: пусть узнает о ждущем сейчас, а не при следующем открытии (#1079). */
+    private val knockPhone: suspend () -> Unit = {},
+) : Realizer {
     override val capabilityId = CapabilityId("pc-to-phone")
 
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         runCatching {
             outbox.add(input)
-            ActionResult.Done("Заберите на телефоне — плашка на главном экране")
+            runCatching { knockPhone() }
+
+            // Слова не опережают сделанное (#1079): письмо легло в очередь, плашка на
+            // телефоне появится, когда он за ним придёт, — а не в момент этого тапа.
+            ActionResult.Done("Ждёт телефона: откройте на телефоне главный экран Point и заберите объект")
         }.getOrElse { ActionResult.Failure("Не удалось отправить — проверьте, что на диске есть место", recoverable = true) }
 }
 

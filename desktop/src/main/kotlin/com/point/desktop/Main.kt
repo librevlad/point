@@ -98,6 +98,9 @@ fun main(args: Array<String>) {
     // Сетевая ли способность — знание живёт у самой способности (#855): исполнители
     // «Понять», «Перевести», «Дать ссылку» называют себя местными, хотя отдают байты наружу.
     val capabilities = desktopCapabilities()
+
+    // Аккаунт рождается ниже исполнителей; стук подключается, как только он есть (#1079).
+    var knockPhoneLate: suspend () -> Unit = {}
     val resolver = DesktopResolver(
         realizers = setOf(
             PcOpenRealizer(opener),
@@ -105,7 +108,7 @@ fun main(args: Array<String>) {
             PcRevealRealizer(revealer),
             PcSaveAsRealizer(saveTarget),
             PcDownloadRealizer(downloader),
-            PcToPhoneRealizer(outbox),
+            PcToPhoneRealizer(outbox, knockPhone = { knockPhoneLate() }),
             PcPrintRealizer(printer),
             PcOfficePdfRealizer(officeToPdf),
             PcPdfTextRealizer(PdfBoxText()),
@@ -194,6 +197,7 @@ fun main(args: Array<String>) {
             if (source == ObjectSource.PHONE_RELAY) portalSound.arrived()
         },
     )
+    knockPhoneLate = account::knockPhones
 
     val shellMenu = RegistryShellMenu()
     val sendTo = ShortcutSendToMenu()

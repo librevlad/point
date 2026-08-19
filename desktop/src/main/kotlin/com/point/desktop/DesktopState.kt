@@ -531,7 +531,26 @@ class DesktopState(
     }
 
     fun onReceived(item: InboxItem, source: ObjectSource = ObjectSource.LOCAL) {
-        _items.update { listOf(item) + it }
+
+        // Тот же объект, присланный второй раз, — возврат к нему, а не вторая копия
+        // (#1027, тем же правилом, что вход в открытый объект на телефоне — #1110).
+        // Тождество даёт происхождение: письмо помнит, чей это объект. Знание прежнего
+        // приезда не теряется — новое ложится поверх обычным merge.
+        val origin = item.obj.metadata[com.point.core.flow.META_ORIGIN_ID]
+        val twin = origin?.let { known ->
+            _items.value.firstOrNull { it.obj.metadata[com.point.core.flow.META_ORIGIN_ID] == known }
+        }
+        val arrived = if (twin == null) {
+            item
+        } else {
+            item.copy(
+                obj = item.obj.copy(
+                    metadata = com.point.core.flow.mergeKnowledge(twin.obj.metadata, item.obj.metadata),
+                ),
+            )
+        }
+        @Suppress("NAME_SHADOWING") val item = arrived
+        _items.update { listOf(item) + it.filterNot { held -> held === twin } }
         _fresh.update { it + item.obj.id }
         rememberArrival(item, source)
         runCatching { announce(item, source) }
