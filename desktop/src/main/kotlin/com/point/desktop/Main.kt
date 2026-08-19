@@ -223,7 +223,10 @@ fun main(args: Array<String>) {
     runCatching { com.point.core.flow.decodePcCaps(phoneCapsFile.readText()) }
         .getOrNull()?.let { state.setPhoneCaps(it, persist = false) }
 
-    val pcUnavailable: Map<String, String?> = mapOf(
+    // Недоступность спрашивается в момент вопроса, а не замораживается при старте (#1092):
+    // человек вошёл в аккаунт, включил принтер, вписал ключ — телефон видит это без
+    // перезапуска компьютера, потому что объявление собирается на каждый запрос заново.
+    fun pcUnavailableNow(): Map<String, String?> = mapOf(
         "pc-download" to if (downloader.available()) null else "на компьютере нет yt-dlp",
 
         "pc-print" to whyCannotPrint(),
@@ -233,14 +236,17 @@ fun main(args: Array<String>) {
 
         "drop-link" to if (accountStore.current() != null) null else "компьютер не вошёл в аккаунт",
     )
-    val pcRemoteActions = com.point.core.flow.advertisedActions(registry.all()).map { action ->
+    val pcBaseActions = com.point.core.flow.advertisedActions(registry.all()).map { action ->
         action.copy(
 
             label = phoneFacingLabel(action),
-            unavailable = pcUnavailable[action.id],
 
             leavesCircle = resolver.leavesDevice(com.point.core.model.CapabilityId(action.id)),
         )
+    }
+    fun pcRemoteActionsNow(): List<com.point.core.flow.PcRemoteAction> {
+        val unavailable = pcUnavailableNow()
+        return pcBaseActions.map { it.copy(unavailable = unavailable[it.id]) }
     }
 
     filesFromArgs(args).forEach { file ->
@@ -248,7 +254,7 @@ fun main(args: Array<String>) {
     }
 
     val requests = RelayRequests(
-        remoteActions = { pcRemoteActions },
+        remoteActions = { pcRemoteActionsNow() },
         outbox = outbox,
         onPhoneCaps = state::setPhoneCaps,
 

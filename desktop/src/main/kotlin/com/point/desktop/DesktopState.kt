@@ -348,14 +348,10 @@ class DesktopState(
 
     fun phoneActionsFor(item: InboxItem): List<com.point.core.flow.PcRemoteAction> {
         val mine = registry.all().map { it.id.value }.toSet()
-        val has = item.obj.state.features.map { it.name }.toSet()
         return _phoneCaps.value.filter { action ->
 
-            (action.kinds.isEmpty() || item.obj.state.kind.name in action.kinds) &&
-
-                (action.features.isEmpty() || action.features.any { it in has }) &&
-
-                action.id !in mine
+            // Одно правило применимости на обе стороны (#1092): вид × признаки.
+            with(com.point.core.flow.PcActionFit) { action.fitsObject(item.obj.state) } && action.id !in mine
         }
     }
 

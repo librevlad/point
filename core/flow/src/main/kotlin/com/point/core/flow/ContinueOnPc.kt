@@ -52,6 +52,19 @@ data class PcRemoteAction(
     val priority: Int = PC_CAP_DEFAULT_PRIORITY,
 )
 
+/**
+ * Годится ли чужое действие этому объекту — одно правило на обе стороны (#1092).
+ *
+ * Компьютер спрашивал вид и признаки, телефон — только вид: действие компьютера «только для
+ * ссылки» на телефоне предлагалось объекту без ссылки. Правило одно: вид совпал, и, если
+ * действие назвало признаки, хотя бы один есть у объекта.
+ */
+object PcActionFit {
+    fun PcRemoteAction.fitsObject(state: com.point.core.model.ObjectState): Boolean =
+        (kinds.isEmpty() || state.kind.name in kinds) &&
+            (features.isEmpty() || features.any { named -> state.features.any { it.name == named } })
+}
+
 const val PC_CAP_DEFAULT_PRIORITY = 1000
 
 fun encodePcCaps(caps: List<PcRemoteAction>): String =

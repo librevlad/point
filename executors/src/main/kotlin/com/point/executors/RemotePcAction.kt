@@ -72,18 +72,22 @@ class RemotePcCapability(
 
     override val meta = CapabilityMeta(priority = 76, latency = Latency.FAST, localOnly = true)
     override fun label(state: ObjectState) = action.label
+    // Недоступное не предлагается кнопкой (#1092): раньше устаревшее объявление делало
+    // его принимаемым, а тап отвечал старой причиной — выдавая прошлое за нынешнее.
     override fun accepts(state: ObjectState) =
-        (action.unavailable == null || !fresh()) && fitsThisObject(state)
+        action.unavailable == null && fitsThisObject(state)
 
     override fun produces(state: ObjectState) = state
 
+    // Причина недоступности показывается только свежая: недельное «компьютер не вошёл в
+    // аккаунт» — выдумка, а не факт (#633). Устарело — действие просто не предлагается.
     override fun missing(state: ObjectState): String? =
         action.unavailable?.takeIf { it.isNotBlank() && fresh() && fitsThisObject(state) }
 
     private fun fitsThisObject(state: ObjectState) =
 
         state.kind != ObjectKind.COLLECTION &&
-            (action.kinds.isEmpty() || state.kind.name in action.kinds) &&
+            with(com.point.core.flow.PcActionFit) { action.fitsObject(state) } &&
             links.current() != null
 
     companion object {
