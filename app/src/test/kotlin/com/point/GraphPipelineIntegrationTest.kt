@@ -249,7 +249,11 @@ class GraphPipelineIntegrationTest {
         return PointObject("img", "image/jpeg", ScratchRef(payload.absolutePath), ObjectState(ObjectKind.IMAGE), metadata)
     }
 
-    private fun vm(): FlowViewModel = FlowViewModel(
+    // Настоящие движки на настоящих потоках + виртуальные часы: десять виртуальных минут
+    // пролетают раньше настоящей секунды, и потолок действия (#1069) резал бы живую работу.
+    private fun vm(): FlowViewModel = vmRaw().apply { actionCeilingMs = null }
+
+    private fun vmRaw(): FlowViewModel = FlowViewModel(
         store, registry, resolver,
         ChatTalk(
             object : AiChatResponder {
