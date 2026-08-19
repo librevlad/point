@@ -62,11 +62,15 @@ internal const val PC_SENT_WHERE = "Отправлено на компьютер
  */
 internal fun humanSendName(input: PointObject): String {
 
-    // «Смысл → файл → дата» (#665, решение владельца 2026-08-09): понятая суть
-    // называет объект лучше, чем «Изображение, 9 авг 17:39».
+    // «Смысл → файл → дата» (#665) — порядок ЗАПАСНЫХ имён (#1107, уточнение владельца
+    // 19.08.2026): сводка называет только безымянное и машинное. Человеческое имя
+    // (card2.jpg) не вытесняется нигде — ни на экране, ни в имени файла на диске; IMG_1234
+    // сводка называет по-прежнему, «Візитка…» лучше машинного номера.
+    val name = input.metadata["name"]?.takeIf { it.isNotBlank() }
+    if (name != null && !com.point.core.flow.looksMachineName(name)) return name
     input.metadata[com.point.core.flow.META_SEMANTIC_SUMMARY]
         ?.takeIf { it.isNotBlank() }?.let { return it.take(60) }
-    input.metadata["name"]?.takeIf { it.isNotBlank() }?.let { return it }
+    name?.let { return it }
     if (input.state.kind == com.point.core.model.ObjectKind.TEXT) {
         val firstLine = runCatching {
             java.io.File(input.uri.value).useLines { lines -> lines.firstOrNull { it.isNotBlank() } }

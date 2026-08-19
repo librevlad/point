@@ -202,4 +202,25 @@ class PcActionTest {
         assertEquals(PcUnreachable.values().size, said.toSet().size)
         assertTrue("отказ обязан говорить, что делать", said.all { it.length > 30 })
     }
+
+    /**
+     * Сводка называет только безымянное (#1107, уточнение решения #665): человеческое имя
+     * не вытесняется, машинное — уступает понятой сути.
+     */
+    @Test fun `человеческое имя не вытесняется сводкой модели`() {
+        val human = "card2.jpg"
+        val summary = "Vizitka dyzainera " + "інтер'єрів"
+        val named = obj().copy(
+            metadata = mapOf("name" to human, com.point.core.flow.META_SEMANTIC_SUMMARY to summary),
+        )
+        assertEquals(human, humanSendName(named))
+    }
+
+    @Test fun `машинное имя по-прежнему называется сутью`() {
+        val summary = "Vizitka dyzainera"
+        val machine = obj().copy(
+            metadata = mapOf("name" to "IMG_20260818_000801.jpg", com.point.core.flow.META_SEMANTIC_SUMMARY to summary),
+        )
+        assertEquals(summary, humanSendName(machine))
+    }
 }
