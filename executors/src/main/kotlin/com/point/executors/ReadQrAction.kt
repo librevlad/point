@@ -20,7 +20,8 @@ import javax.inject.Inject
 class ReadQrCapability @Inject constructor() : Capability {
     override val id = ID
     override val icon = "qr-scan"
-    override val meta = CapabilityMeta(priority = 22)
+    // Отвечает на вопрос чтения кода: содержимое уже показано — действие уходит вниз (#1119).
+    override val meta = CapabilityMeta(priority = 22, answers = com.point.core.model.CapabilityId("qr-content"))
     /** Код называется тем, что он есть: «Считать QR» на QR, «Скопировать цифры кода» на штрихкоде. */
     override fun label(state: ObjectState) =
         if (state.has(Feature.HAS_BARCODE) && !state.has(Feature.HAS_QR)) "Скопировать цифры кода" else "Считать QR"
