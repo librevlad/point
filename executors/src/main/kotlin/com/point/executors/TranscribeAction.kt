@@ -46,7 +46,15 @@ class TranscribeCapability @Inject constructor(
         labelNeedingKey("Расшифровать", readiness.missingKeys().isEmpty())
 
     override fun accepts(state: ObjectState) = state.kind == ObjectKind.AUDIO
-    override fun produces(state: ObjectState) = ObjectState(ObjectKind.TEXT)
+
+    // Расшифровка — знание/представление той же записи, а не новый объект (#1097).
+    override fun produces(state: ObjectState) = state.with(com.point.core.model.Feature.HAS_TEXT)
+
+    override fun yields(state: ObjectState) =
+        com.point.core.model.ActionYield.Same("слова записи · запись уйдёт в сервис")
+
+    // Понимание записи, каким и было: produces больше не TEXT, а intent остался прежним.
+    override fun intents(state: ObjectState) = setOf(com.point.core.model.Intent.UNDERSTAND)
 
     companion object { val ID = com.point.core.flow.KnownCapabilities.TRANSCRIBE }
 }
@@ -80,18 +88,21 @@ class TranscribeRealizer @Inject constructor(
                     ActionResult.Failure("В записи не слышно речи", recoverable = false)
 
                 is Transcription.Heard -> runCatching {
-                    // Расшифровка — обычный текст, а не размеченный документ (#873):
-                    // разделов в ней больше нет, и открывается она проще.
+                    // Расшифровка — знание той же записи, а не новый объект (#1097, GRF-006):
+                    // слова ложатся представлением на исходник тем же ключом, каким лежит
+                    // любое чтение, и экран записи показывает их своим блоком «Текст».
                     val ref = store.newScratchFile("txt")
                     File(ref.value).writeText(transcriptFileText(heard))
-                    ActionResult.Success(
-                        ResultObject(
-                            ObjectKind.TEXT,
-                            "text/plain",
-                            ref,
-                            buildMap {
-                                put("op", "transcribe")
-                                put("name", "Расшифровка")
+                    ActionResult.Done(
+                        "Расшифровано — слова у записи",
+                        com.point.core.model.Findings(
+                            features = setOf(com.point.core.model.Feature.HAS_TEXT),
+                            metadata = buildMap {
+                                put(com.point.core.flow.META_OCR_TEXT_REF, ref.value)
+                                put(
+                                    com.point.core.flow.investigationKey(TranscribeCapability.ID),
+                                    com.point.core.flow.InvestigationState.FOUND.wire,
+                                )
                                 if (heard.summary.isNotBlank()) {
                                     put(META_SEMANTIC_SUMMARY, heard.summary.take(120))
                                 }

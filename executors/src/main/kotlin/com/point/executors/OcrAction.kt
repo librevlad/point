@@ -142,9 +142,13 @@ class CloudOcrCapability @Inject constructor() : Capability {
 
     override fun label(state: ObjectState) = "Прочитать сильнее"
     override fun accepts(state: ObjectState) = state.kind == ObjectKind.IMAGE
-    override fun produces(state: ObjectState) = ObjectState(ObjectKind.TEXT)
 
-    override fun yields(state: ObjectState) = ActionYield.New(ObjectKind.TEXT, "текст · снимок уйдёт в сервис")
+    // Знание того же объекта, а не новый объект (#1097): текст ложится на исходник.
+    override fun produces(state: ObjectState) = state.with(com.point.core.model.Feature.HAS_TEXT)
+
+    override fun yields(state: ObjectState) = ActionYield.Same("текст точнее · снимок уйдёт в сервис")
+
+    override fun intents(state: ObjectState) = setOf(com.point.core.model.Intent.UNDERSTAND)
 
     companion object { val ID = CapabilityId("ocr-cloud") }
 }
@@ -159,12 +163,13 @@ class ExternalEyeCloudOcrRealizer @Inject constructor(
     override fun isAvailable(): Boolean = eye.available()
 
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
-        withContext(Dispatchers.IO) { readWithExternalEye(eye, store, input) }
+        withContext(Dispatchers.IO) { readWithExternalEye(eye, store, input, asKnowledge = true) }
 }
 
 class CloudOcrDirectRealizer @Inject constructor(
     private val llm: LlmClient,
     private val privacy: CloudPrivacySettings,
+    private val store: ObjectStore,
 ) : Realizer {
     override val capabilityId = CloudOcrCapability.ID
     override val meta = RealizerMeta(priority = 10, kind = RealizerKind.CLOUD)
@@ -175,15 +180,59 @@ class CloudOcrDirectRealizer @Inject constructor(
         withContext(Dispatchers.IO) {
             if (!isAvailable()) return@withContext ActionResult.Failure(chainClosed(privacy.level()), recoverable = true)
             reportStage(OCR_CLOUD_STAGE)
-            runCatching { guarded(llm.run(input, ocrPromptFor(input)), "модель") }
-                .getOrElse { ActionResult.Failure(it.message ?: "Ошибка распознавания в облаке", recoverable = true) }
+            runCatching {
+                val answer = llm.run(input, ocrPromptFor(input))
+                val page = runCatching { File(answer.uri.value).readText() }.getOrDefault("")
+                degeneratedReading(page)?.let { why ->
+                    return@runCatching ActionResult.Failure(unreadable("модель", why), recoverable = true)
+                }
+                strongerReadingLands(store.newScratchFile("txt"), com.point.core.flow.stripMarkdownChrome(page))
+            }.getOrElse { ActionResult.Failure(it.message ?: "Ошибка распознавания в облаке", recoverable = true) }
         }
 }
+
+/**
+ * Сильное чтение — знание того же объекта, а не новый объект (#1097, #1009).
+ *
+ * «Прочитать сильнее» рождало дочерний TEXT: исправленная ошибка оставалась у ребёнка, а
+ * исходник продолжал носить неверное значение, и ни один экран не говорил, что есть второе
+ * прочтение. Теперь текст ложится представлением на исходный узел — тем же ключом
+ * `ocr.text.ref`, каким лежит любое чтение, — и цикл понимания перечитывает сущности по
+ * новому тексту: два прочтения встречаются в одном месте, через обычный merge, с сохранённым
+ * расхождением (ADR-0001 §9). Отдельный объект остаётся за явным «Распознать текст».
+ */
+private fun strongerReadingLands(
+    ref: ScratchRef,
+    page: String,
+    extras: Map<String, String> = emptyMap(),
+): ActionResult = runCatching {
+    File(ref.value).writeText(page)
+    ActionResult.Done(
+        "Прочитано сильнее — текст объекта обновлён",
+        com.point.core.model.Findings(
+            features = setOf(com.point.core.model.Feature.HAS_TEXT),
+            metadata = buildMap {
+                put(META_OCR_TEXT_REF, ref.value)
+                put(
+                    com.point.core.flow.investigationKey(com.point.core.flow.KnownCapabilities.IMAGE_TEXT),
+                    com.point.core.flow.InvestigationState.FOUND.wire,
+                )
+                readingDoubts(page).takeIf { it.isNotEmpty() }?.let { doubts ->
+                    put(META_READING_DOUBT, doubts.joinToString("; ") { it.what })
+                }
+                putAll(extras)
+            },
+        ),
+    )
+}.getOrElse { ActionResult.Failure(it.message ?: "Ошибка записи результата", recoverable = true) }
 
 private suspend fun readWithExternalEye(
     eye: ExternalEye,
     store: ObjectStore,
     input: PointObject,
+
+    /** Явный «Распознать текст» рождает вещь; сильное чтение — знание исходника (#1097). */
+    asKnowledge: Boolean = false,
 ): ActionResult {
     reportStage(OCR_CLOUD_STAGE)
     val reading = runCatching { eye.read(input) }.getOrElse {
@@ -196,6 +245,18 @@ private suspend fun readWithExternalEye(
     // Markdown-обёртка провайдера — не текст страницы (#661): «![img-0.jpeg](…)» и
     // «# Відділення 1» уходили в объект и дальше в знание (живой прогон 2026-08-09).
     val page = com.point.core.flow.stripMarkdownChrome(reading.text)
+    if (asKnowledge) {
+        val ref = runCatching { store.newScratchFile("txt") }
+            .getOrElse { return ActionResult.Failure(it.message ?: "Ошибка записи результата", recoverable = true) }
+        return strongerReadingLands(
+            ref,
+            page,
+            buildMap {
+                put("engine", reading.reader)
+                input.metadata[META_READING_MODE]?.let { put(META_READING_MODE, it) }
+            },
+        )
+    }
     return runCatching {
         val ref = store.newScratchFile("txt")
         File(ref.value).writeText(page)

@@ -86,7 +86,7 @@ class ExternalEyeOcrTest {
     fun `в «Распознать в облаке» внешний глаз читает первым`() {
         assertTrue(
             ExternalEyeCloudOcrRealizer(eye { "x" }, store).meta.priority <
-                CloudOcrDirectRealizer(failingLlm(), privacyAt()).meta.priority,
+                CloudOcrDirectRealizer(failingLlm(), privacyAt(), store).meta.priority,
         )
     }
 
@@ -158,7 +158,7 @@ class ExternalEyeOcrTest {
 
     @Test
     fun `строгий уровень — общая цепочка молчит, потому что обещать за неё некому`() = runTest {
-        val realizer = CloudOcrDirectRealizer(failingLlm(), privacyAt(PrivacyLevel.NO_TRAINING))
+        val realizer = CloudOcrDirectRealizer(failingLlm(), privacyAt(PrivacyLevel.NO_TRAINING), store)
 
         assertFalse(realizer.isAvailable())
         assertTrue((realizer.perform(image) as ActionResult.Failure).reason.contains("не учиться на присланном"))

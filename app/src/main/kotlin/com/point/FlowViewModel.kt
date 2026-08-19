@@ -2734,8 +2734,11 @@ class FlowViewModel @Inject constructor(
         _ui.update { if (it.frame?.obj?.id == source.id) it.copy(frame = refreshed) else it }
 
         // Текст приходит обогащением, а не при открытии кадра: снимок читается фоново уже
-        // после того, как экран показан (#792).
-        if (refreshed.textPreview == null) loadTextPreviewIfText(enriched)
+        // после того, как экран показан (#792). Сильное чтение заменяет прочтение целиком
+        // (#1097) — прежнее превью при сменившемся чтении не оставляется.
+        val readingChanged =
+            frame.obj.metadata[com.point.core.flow.META_OCR_TEXT_REF] != newMetadata[com.point.core.flow.META_OCR_TEXT_REF]
+        if (refreshed.textPreview == null || readingChanged) loadTextPreviewIfText(enriched)
         if (objChanged || graphChanged) {
             persistJourney()
         }

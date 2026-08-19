@@ -91,11 +91,10 @@ class TranscribeActionTest {
     }
 
     @Test
-    fun `расшифровка обещает текст — дальше он живёт по общим правилам графа`() {
-        assertEquals(
-            ObjectState(ObjectKind.TEXT),
-            TranscribeCapability(ready).produces(ObjectState(ObjectKind.AUDIO)),
-        )
+    fun `расшифровка обещает знание той же записи, а не новый объект`() {
+        val out = TranscribeCapability(ready).produces(ObjectState(ObjectKind.AUDIO))
+        assertEquals(ObjectKind.AUDIO, out.kind)
+        assertTrue(out.has(com.point.core.model.Feature.HAS_TEXT))
     }
 
     @Test
@@ -134,7 +133,7 @@ class TranscribeActionTest {
      * подписью объекта — сверху и один раз; в файле лежит сама расшифровка (#873).
      */
     @Test
-    fun `один тап приносит и суть, и дословный текст — но каждое в своём месте`() = runTest {
+    fun `один тап приносит и суть, и дословный текст — знанием той же записи`() = runTest {
 
         val said = "Перезвони мне до шести"
         val gist = "Просят перезвонить до шести"
@@ -142,12 +141,13 @@ class TranscribeActionTest {
         val result = TranscribeRealizer(store, engine(Transcription.Heard(said, gist)), ready)
             .perform(recording(1024))
 
-        assertTrue(result is ActionResult.Success)
-        val out = (result as ActionResult.Success).result
-        assertEquals(ObjectKind.TEXT, out.type)
-        val text = File(out.uri.value).readText()
-        assertEquals(said, text.trim())
-        assertEquals(gist, out.metadata[com.point.core.flow.META_SEMANTIC_SUMMARY])
+        // Расшифровка — знание записи, а не новый объект (#1097, GRF-006).
+        assertTrue(result is ActionResult.Done)
+        val found = (result as ActionResult.Done).findings!!
+        val ref = found.metadata.getValue(com.point.core.flow.META_OCR_TEXT_REF)
+        assertEquals(said, File(ref).readText().trim())
+        assertEquals(gist, found.metadata[com.point.core.flow.META_SEMANTIC_SUMMARY])
+        assertTrue(com.point.core.model.Feature.HAS_TEXT in found.features)
     }
 
     @Test
@@ -155,18 +155,18 @@ class TranscribeActionTest {
 
         runTest {
             val heard = Transcription.Heard("Длинный текст", "Просят перезвонить")
-            val out = (TranscribeRealizer(store, engine(heard), ready).perform(recording(1024)) as ActionResult.Success).result
+            val found = (TranscribeRealizer(store, engine(heard), ready).perform(recording(1024)) as ActionResult.Done).findings!!
 
-            assertEquals("Просят перезвонить", out.metadata[META_SEMANTIC_SUMMARY])
+            assertEquals("Просят перезвонить", found.metadata[META_SEMANTIC_SUMMARY])
         }
     }
 
     @Test
     fun `без сути объект не получает пустого обещания`() = runTest {
-        val out = (TranscribeRealizer(store, engine(Transcription.Heard("Только слова")), ready)
-            .perform(recording(1024)) as ActionResult.Success).result
+        val found = (TranscribeRealizer(store, engine(Transcription.Heard("Только слова")), ready)
+            .perform(recording(1024)) as ActionResult.Done).findings!!
 
-        assertFalse(META_SEMANTIC_SUMMARY in out.metadata)
+        assertFalse(META_SEMANTIC_SUMMARY in found.metadata)
     }
 
     @Test

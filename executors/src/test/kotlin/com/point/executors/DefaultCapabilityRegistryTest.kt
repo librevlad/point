@@ -108,7 +108,10 @@ class DefaultCapabilityRegistryTest {
 
         assertEquals(Intent.UNDERSTAND, bubble.intent)
         assertEquals("сетевое — значит уровень AI, каким бы полезным оно ни было", BubbleTier.AI, bubble.tier)
-        assertEquals(ObjectState(ObjectKind.TEXT), bubble.expectedNextState)
+
+        // Расшифровка — знание той же записи (#1097): объект остаётся записью с текстом.
+        assertEquals(ObjectKind.AUDIO, bubble.expectedNextState?.kind)
+        assertTrue(bubble.expectedNextState?.has(com.point.core.model.Feature.HAS_TEXT) == true)
     }
 
     @Test
