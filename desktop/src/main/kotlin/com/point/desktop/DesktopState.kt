@@ -530,6 +530,11 @@ class DesktopState(
         _fresh.update { it - objectId }
     }
 
+    /** Открыть файл по пути — ребёнок набора становится объектом (#1099). */
+    fun openPath(path: String) {
+        reopenPath(path)?.let { onReceived(it, ObjectSource.LOCAL) }
+    }
+
     fun onReceived(item: InboxItem, source: ObjectSource = ObjectSource.LOCAL) {
 
         // Тот же объект, присланный второй раз, — возврат к нему, а не вторая копия

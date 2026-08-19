@@ -127,11 +127,13 @@ fun takeDropped(
  * говорится вслух; один файл открывается сам и в отдельных словах не нуждается.
  */
 fun filesTakenMessage(count: Int): String? =
-    if (count <= 1) null else "Взял $count ${filesWord(count)} — они в списке"
+    if (count <= 1) null else "Взял $count ${filesWord(count)} — они одним набором"
 
-/** Пачка остаётся списком: за человека Point ни один из принесённых не открывает. */
-fun droppedAsBatch(brought: Dropped): Boolean =
-    brought is Dropped.Files && brought.files.size > 1
+/**
+ * Пачка теперь — один объект-коллекция (#1099): открывать её не страшно, выбирает из
+ * детей всё равно человек. Прежнее «не открывать пачку» держало список из N объектов.
+ */
+fun droppedAsBatch(brought: Dropped): Boolean = false
 
 private fun filesWord(count: Int): String = when {
     count % 100 in 11..14 -> "файлов"

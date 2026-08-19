@@ -64,16 +64,19 @@ class DropIntoWindowTest {
     }
 
     @Test
-    fun `пачка названа словами и остаётся списком, а не открывается за человека`() {
+    fun `пачка названа словами и приходит одним набором`() {
+
+        // Решение владельца (#1099): пачка — один объект-коллекция, как на телефоне.
+        // Прежнее «остаётся списком» держало N отдельных объектов и вторую модель.
         val brought = readDropped(
             Brought(mapOf(DataFlavor.javaFileListFlavor to files("а.pdf", "б.pdf", "в.pdf"))),
         )
 
-        assertTrue("пачка обязана лечь списком", droppedAsBatch(brought))
+        assertFalse("набор можно открывать — выбирает из детей человек", droppedAsBatch(brought))
         val heard = Heard()
         heard.take(brought)
 
-        assertEquals("Взял 3 файла — они в списке", heard.said.single())
+        assertEquals("Взял 3 файла — они одним набором", heard.said.single())
     }
 
     @Test
