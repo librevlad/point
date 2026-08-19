@@ -621,6 +621,42 @@ class UnderstandRealizerTest {
         assertEquals("табло электросчётчика", meta["semantic.summary"])
     }
 
+    /** #1176: виток с накопленным знанием прицелен — известное и открытые вопросы едут в промпт. */
+    @Test
+    fun `виток с накопленным знанием прицелен — бриф едет в промпт`() = runTest {
+        val known = textObject(
+            metadata = mapOf(
+                "entity.phone" to "+380671234567",
+                "semantic.summary" to "Визитка юриста",
+            ),
+        )
+
+        realizer("DATE=2026-01-01").perform(known)
+
+        assertTrue("известный телефон не назван: $lastPrompt", lastPrompt!!.contains("PHONE=+380671234567"))
+        assertTrue("ненайденная карта не спрошена: $lastPrompt", lastPrompt!!.contains("CARD"))
+    }
+
+    @Test
+    fun `первый взгляд чист — в промпте нет брифа`() = runTest {
+        realizer("PHONE=+380671234567").perform(textObject())
+
+        assertFalse("бриф родился из пустоты", lastPrompt!!.contains("уже разбирали"))
+    }
+
+    @Test
+    fun `зрячий виток тоже прицелен`() = runTest {
+        val photo = PointObject(
+            "img", "image/jpeg", ScratchRef("/tmp/meter.jpg"), ObjectState(ObjectKind.IMAGE),
+            mapOf("entity.meter" to "20842"),
+        )
+
+        realizer("METER=20843").perform(photo)
+
+        assertTrue("зрячий виток слеп: $lastPrompt", lastPrompt!!.contains("уже разбирали"))
+        assertTrue(lastPrompt!!.contains("METER=20842"))
+    }
+
     /** #1176: зрячее чтение — такое же исследование; без следа «сильнее» не наступало. */
     @Test
     fun `зрячее чтение оставляет след — вопрос отвечен`() = runTest {

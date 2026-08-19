@@ -180,7 +180,11 @@ class UnderstandRealizer @Inject constructor(
                 // слова страницы, даёт и то, и другое.
                 val eyes = input.state.kind == ObjectKind.IMAGE && llm.canHandle(input)
                 reportStage(if (eyes) "Смотрю на снимок" else "Читаю страницу")
-                val (answer, answeredBy) = ask(input, understandPrompt(laidOut, index = index), eyes = eyes)
+                val (answer, answeredBy) = ask(
+                    input,
+                    withBrief(input.metadata, understandPrompt(laidOut, index = index)),
+                    eyes = eyes,
+                )
                 reportStage("Проверяю прочитанное по странице")
                 val parsed = parseFieldCandidates(answer)
                 // Сверять есть с чем всегда, когда Point читал сам: слой слов снимка или
@@ -289,7 +293,7 @@ class UnderstandRealizer @Inject constructor(
 
     private suspend fun readWithEyes(input: PointObject): ActionResult {
         reportStage("Смотрю на снимок")
-        val (answer, answeredBy) = ask(input, VISUAL_PROMPT, eyes = true)
+        val (answer, answeredBy) = ask(input, withBrief(input.metadata, VISUAL_PROMPT), eyes = true)
         val parsed = parseFieldCandidates(answer)
         val judged = judgeFields(parsed.fields, layer = null)
         val fields = judged.won

@@ -19,6 +19,15 @@ internal const val ROLES_MAY_BE_ABSENT =
     "Ролей может не быть ни одной: визитка, вывеска, меню, фотография — не документ " +
         "с отправителем или выдавшим. Ни одной роли лучше, чем натянутая.\n"
 
+/**
+ * Виток с накопленным знанием — прицельный (#1176): бриф говорит модели, что уже
+ * известно и чего не хватает. Первый взгляд остаётся чистым — брифу не из чего родиться.
+ */
+internal fun withBrief(metadata: Map<String, String>, prompt: String): String {
+    val brief = com.point.core.flow.spiralBrief(metadata) ?: return prompt
+    return brief + "\n\n" + prompt
+}
+
 internal fun understandPrompt(
     elements: List<LayoutElement>,
     roles: List<ClassifierRole> = CLASSIFIER_ROLES,
