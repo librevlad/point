@@ -156,11 +156,12 @@ class DefaultCapabilityRegistryTest {
     @Test
     fun `результат «Дать ссылку» не годится ей же на вход`() {
 
+        // «Выложен» — знание об объекте (#1071): человек остаётся у исходника, а узел
+        // ссылки — находка. Родившейся ссылке действие по-прежнему не предлагается.
         val drop = DropLinkCapability()
-        val output = drop.produces(ObjectState(ObjectKind.PDF))
 
-        assertEquals(ObjectState(ObjectKind.URL), output)
-        assertFalse("иначе — ссылка на ссылку", drop.accepts(output))
+        assertEquals(ObjectState(ObjectKind.PDF), drop.produces(ObjectState(ObjectKind.PDF)))
+        assertFalse("иначе — ссылка на ссылку", drop.accepts(ObjectState(ObjectKind.URL)))
     }
 
     @Test

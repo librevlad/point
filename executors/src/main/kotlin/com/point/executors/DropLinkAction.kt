@@ -41,18 +41,50 @@ class DropLinkRealizer @Inject constructor(
 
         val ref = store.newScratchFile("txt")
         File(ref.value).writeText(link)
-        return ActionResult.Success(
-            ResultObject(
-                type = ObjectKind.URL,
-                mime = "text/uri-list",
-                uri = ref,
-                metadata = mapOf(
-                    "name" to "ссылка на $name",
-                    "entity.url" to link,
 
-                    "drop.expires" to "сутки",
+        // «Выложен» — знание об объекте (#1071, решение владельца): ссылка и срок ложатся
+        // на исходник, видны на нём и копируются заново. Узел ссылки рождается находкой —
+        // в него можно войти. Экрана-реестра нет; отзыва раньше срока нет — сутки истекают
+        // сами, это и есть граница.
+        val until = untilTomorrow()
+        val linkNode = PointObject(
+            id = input.id + ":drop-link",
+            mime = "text/uri-list",
+            uri = ref,
+            state = ObjectState(ObjectKind.URL),
+            metadata = mapOf(
+                "name" to "ссылка на $name",
+                "entity.url" to link,
+                "drop.expires" to "сутки",
+            ),
+            sourceObjects = listOf(input.id),
+            creatorAction = DropLinkCapability.ID.value,
+        )
+        return ActionResult.Done(
+            "Выложено до $until — ссылка у объекта",
+            com.point.core.model.Findings(
+                metadata = mapOf(
+                    META_DROP_LINK to link,
+                    META_DROP_UNTIL to until,
+                ),
+                objects = listOf(linkNode),
+                relations = listOf(
+                    com.point.core.model.Relation(
+                        linkNode.id,
+                        com.point.core.model.RelationType.DERIVED_FROM,
+                        input.id,
+                    ),
                 ),
             ),
         )
     }
+
+    /** До какого момента ссылка живёт — словами человека, не миллисекундами. */
+    private fun untilTomorrow(): String =
+        com.point.core.flow.stampLabel(System.currentTimeMillis() + 24L * 60 * 60 * 1000)
 }
+
+/** Знание «объект выложен по ссылке»: адрес и срок — на самом объекте (#1071). */
+const val META_DROP_LINK = "drop.link"
+
+const val META_DROP_UNTIL = "drop.until"
