@@ -2,6 +2,21 @@ package com.point.core.flow
 
 import kotlin.math.roundToInt
 
+/**
+ * Длительность, прочитанная из самой записи (#1123), — знание объекта.
+ *
+ * Прикидка по размеру и типичному битрейту ниже остаётся запасным путём: она врала в
+ * полтора раза там, где точное значение лежало в заголовке файла.
+ */
+const val META_DURATION_SECONDS = "duration.seconds"
+
+/** Точная длительность словами: «16 сек», «2 мин 05 сек». */
+fun exactRecordingLength(seconds: Long): String? {
+    if (seconds <= 0) return null
+    if (seconds < 60) return "$seconds сек"
+    return "%d мин %02d сек".format(seconds / 60, seconds % 60)
+}
+
 fun recordingMinutes(mime: String, sizeBytes: Long, fileName: String? = null): Double? {
     if (sizeBytes <= 0L) return null
     val kbps = typicalKbps(mime, fileName) ?: return null

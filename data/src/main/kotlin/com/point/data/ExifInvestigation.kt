@@ -43,7 +43,10 @@ class ExifInvestigation @Inject constructor() : Capability {
 
     override fun label(state: ObjectState) = ""
 
-    override fun accepts(state: ObjectState) = state.kind == ObjectKind.IMAGE
+    // Медиа-метаданные — один вопрос: у снимка это момент и место съёмки, у записи —
+    // её длительность (#1123). Отдельной способности под каждый заголовок не заводится.
+    override fun accepts(state: ObjectState) =
+        state.kind == ObjectKind.IMAGE || state.kind == ObjectKind.AUDIO
 
     override fun produces(state: ObjectState) = state
 
@@ -64,6 +67,7 @@ class ExifInvestigationRealizer @Inject constructor() : Realizer {
 
     private suspend fun findings(obj: PointObject): Findings = withContext(Dispatchers.IO) {
         val file = File(obj.uri.value).takeIf { it.isFile } ?: return@withContext Findings()
+        if (obj.state.kind == com.point.core.model.ObjectKind.AUDIO) return@withContext heard(file)
         val exif = runCatching { ExifInterface(file.absolutePath) }.getOrNull() ?: return@withContext Findings()
 
         val shot = shotDateLabel(
@@ -85,4 +89,21 @@ class ExifInvestigationRealizer @Inject constructor() : Realizer {
             },
         )
     }
+}
+
+/**
+ * Длительность — из заголовка самой записи (#1123): прикидка по размеру и «типичному»
+ * битрейту врала в полтора раза там, где точное значение записано в файле.
+ */
+private fun heard(file: File): Findings {
+    val millis = runCatching {
+        android.media.MediaMetadataRetriever().use { reader ->
+            reader.setDataSource(file.absolutePath)
+            reader.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull()
+        }
+    }.getOrNull() ?: return Findings()
+    if (millis <= 0) return Findings()
+    return Findings(
+        metadata = mapOf(com.point.core.flow.META_DURATION_SECONDS to (millis / 1000).toString()),
+    )
 }
