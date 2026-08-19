@@ -110,3 +110,12 @@ private fun withoutMarks(
         else -> emptyList()
     }
 }
+
+/**
+ * Сомнение модели становится обычной оговоркой знания (#670): у зрячего чтения нет ни
+ * слоя слов, ни судьи, поэтому подтверждающих улик у значения нет — пустой список улик
+ * и означает «возможно». Значение при этом остаётся значением: сомнение не отменяет факт.
+ */
+internal fun doubts(merged: Map<String, String>, unsure: Set<String>): Map<String, String> =
+    unsure.filter { merged[it]?.isNotBlank() == true }
+        .associate { it + com.point.core.flow.META_EVIDENCE_SUFFIX to "" }

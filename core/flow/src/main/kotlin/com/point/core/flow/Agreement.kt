@@ -152,6 +152,32 @@ private fun editDistance(a: String, b: String, budget: Int): Int {
     return prev[b.length]
 }
 
+/** Отметка улики «этот исполнитель увидел то же значение» (#1176). */
+const val AGREE_MARK = "agree:"
+
+/**
+ * Согласие независимых исполнителей — улика (#1176, решение владельца: спираль).
+ *
+ * Без слоя слов у зрячего чтения улик не было вовсе: единственное прочтение и знание,
+ * подтверждённое двумя разными моделями, выглядели одинаково. Значение, которое увидели
+ * двое и никто не оспорил, получает по отметке на каждого свидетеля — и «посмотрели, но
+ * недостаточно» честно становится «нашли». Спорное согласием не считается: спор виден
+ * спором (P8). Отметки пересчитываются от списка исполнителей — не копятся вслепую.
+ */
+fun agreementEvidence(metadata: Map<String, String>, keys: Collection<String>): Map<String, String> =
+    keys.asSequence()
+        .filterNot { isAnnotationKey(it) || isStateKey(it) }
+        .filter { !metadata[it].isNullOrBlank() }
+        .filter { alternativesOf(metadata, it).isEmpty() }
+        .map { it to actorsOf(metadata, it).distinct() }
+        .filter { (_, actors) -> actors.size >= 2 }
+        .associate { (key, actors) ->
+            val others = metadata[key + META_EVIDENCE_SUFFIX].orEmpty()
+                .split(',').map(String::trim)
+                .filter { it.isNotBlank() && !it.startsWith(AGREE_MARK) }
+            key + META_EVIDENCE_SUFFIX to (others + actors.map { AGREE_MARK + it }).joinToString(",")
+        }
+
 fun mergeFacts(
     known: Map<String, String>,
     fresh: Map<String, String>,
