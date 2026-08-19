@@ -36,6 +36,61 @@ val MULTI_VALUE_FACTS: Set<String> =
 
 fun isMultiValueFact(key: String): Boolean = key in MULTI_VALUE_FACTS
 
+/**
+ * Прицельная часть витка «Понять сильнее» (#1176, решение владельца: «100% важных вещей
+ * корпуса… нужно только правильный подход»).
+ *
+ * Раньше каждый виток читал объект с чистого листа: модель не знала, зачем её позвали
+ * второй раз. Бриф отдаёт ей накопленное знание и открытые вопросы — что уже есть, каких
+ * категорий не нашли, что под сомнением и что в споре, — и виток ищет недостающее и
+ * проверяет шаткое, а не повторяет сделанное. Пока знания нет, брифа нет: первый виток
+ * остаётся чистым взглядом.
+ */
+fun spiralBrief(metadata: Map<String, String>): String? {
+    val known = UNDERSTAND_CONTRACT_KEYS.entries.mapNotNull { (key, suffix) ->
+        metadata[META_ENTITY_PREFIX + suffix]?.takeIf(String::isNotBlank)?.let { key to it }
+    }
+    val summary = metadata[META_SEMANTIC_SUMMARY]?.takeIf(String::isNotBlank)
+    if (known.isEmpty() && summary == null) return null
+
+    return buildString {
+        append("Этот объект уже разбирали. ")
+        summary?.let { append("Суть: ").append(it.take(120)).append(". ") }
+        if (known.isNotEmpty()) {
+            append("Уже известно:").append('\n')
+            known.forEach { (key, value) ->
+                append(key).append('=').append(value.take(160)).append('\n')
+            }
+        }
+
+        val open = UNDERSTAND_CONTRACT_KEYS.entries
+            .filter { (_, suffix) -> metadata[META_ENTITY_PREFIX + suffix].isNullOrBlank() }
+            .map { it.key }
+        if (open.isNotEmpty()) {
+            append("Этих категорий пока не найдено: ").append(open.joinToString(", "))
+            append(". Поищи их ещё раз внимательно; если на объекте их нет — не пиши строку.")
+            append('\n')
+        }
+
+        known.forEach { (key, _) ->
+            val metaKey = META_ENTITY_PREFIX + UNDERSTAND_CONTRACT_KEYS.getValue(key)
+            val disputed = alternativesOf(metadata, metaKey)
+            when {
+                disputed.isNotEmpty() -> {
+                    append("Прочтения ").append(key).append(" спорят: ")
+                    append((listOfNotNull(metadata[metaKey]) + disputed).distinct().joinToString(" | ") { it.take(80) })
+                    append(" — перечитай и дай своё чтение этой строкой.").append('\n')
+                }
+                isAssumption(metadata, metaKey) && provenanceOf(metadata, metaKey) != com.point.core.model.Provenance.HUMAN -> {
+                    append("Значение ").append(key).append(" под сомнением — проверь и подтверди или поправь.")
+                    append('\n')
+                }
+            }
+        }
+        append("Уже известное без нужды не переписывай; новое и исправленное давай теми же KEY.")
+    }
+}
+
 fun parseFieldCandidates(answer: String): ParsedUnderstanding {
     val fields = LinkedHashMap<String, MutableList<FieldCandidate>>()
     val single = LinkedHashMap<String, String>()
