@@ -76,6 +76,30 @@ class UnifiedActionsTest {
         assertEquals("на телефоне нет принтера", actions.last().unavailable)
     }
 
+    /** #1174: голый текст получал телефонное «Открыть ссылку» — двери слились во всеядную. */
+    @Test
+    fun `двери одного умения не пускают негодный объект и не двоятся на экране`() {
+        val st = state("pc-open" to 50)
+        st.setPhoneCaps(
+            listOf(
+                PcRemoteAction("browse", "browse", kinds = setOf("URL"), priority = 10),
+                PcRemoteAction("browse", "browse", features = setOf("HAS_URL"), priority = 10),
+            ),
+        )
+
+        assertEquals(listOf("pc-open"), st.actionsFor(item()).map { it.title })
+
+        val withUrl = InboxItem(
+            PointObject(
+                "o",
+                "text/plain",
+                ScratchRef("/tmp/т.txt"),
+                ObjectState(ObjectKind.TEXT, setOf(com.point.core.model.Feature.HAS_URL)),
+            ),
+        )
+        assertEquals(listOf("browse", "pc-open"), st.actionsFor(withUrl).map { it.title })
+    }
+
     @Test
     fun `телефонное действие помечено стороной исполнения`() {
         val st = state("pc-open" to 50)

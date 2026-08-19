@@ -87,6 +87,36 @@ class AdvertisedActionsTest {
         assertEquals(listOf("c", "a", "b"), advertisedActions(caps).map { it.id })
     }
 
+    /**
+     * #1174: «Открыть ссылку» принимает голый URL и любой объект с HAS_URL. Слитые в
+     * общие kinds+features эти двери делали объявление всеядным — голый текст получал
+     * чужое «Открыть ссылку». Двери объявляются парами «виды - признаки».
+     */
+    @Test fun `дверь по виду и дверь по признаку не сливаются во всеядную`() {
+        val caps = listOf(
+            Cap("open-url", { it.kind == ObjectKind.URL || it.has(com.point.core.model.Feature.HAS_URL) }),
+        )
+
+        val rows = advertisedActions(caps)
+
+        with(PcActionFit) {
+            assertTrue("голый текст прошёл дверь", rows.none { it.fitsObject(ObjectState(ObjectKind.TEXT)) })
+            assertTrue(rows.any { it.fitsObject(ObjectState(ObjectKind.URL)) })
+            assertTrue(rows.any { it.fitsObject(ObjectState(ObjectKind.TEXT, setOf(com.point.core.model.Feature.HAS_URL))) })
+        }
+    }
+
+    @Test fun `обе двери переживают дорогу до второй поверхности`() {
+        val caps = listOf(
+            Cap("open-url", { it.kind == ObjectKind.URL || it.has(com.point.core.model.Feature.HAS_URL) }),
+        )
+
+        val there = decodePcCaps(encodePcCaps(advertisedActions(caps)))
+
+        assertEquals(2, there.size)
+        assertEquals(setOf("open-url"), there.map { it.id }.toSet())
+    }
+
     @Test fun `действие, живущее признаком, объявляет свой признак`() {
 
         val caps = listOf(Cap("call", { it.has(com.point.core.model.Feature.HAS_PHONE) }))
