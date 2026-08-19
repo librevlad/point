@@ -1002,33 +1002,24 @@ class FlowViewModelTest {
             assertEquals("брошенная работа всё-таки приземлилась", 1, vm.ui.value.path.size)
         }
 
-    @Test fun `повторное облачное действие спрашивает, а не жжёт облако молча (#668)`() =
+    /**
+     * Стражника повторного облака больше нет (#1176, решение владельца дословно): «если
+     * повтор добавляет ценность, это не про yolo. а если нет то человек не будет 10 раз
+     * тапать одно и то же. убери его вообще». Прежний #668 отменён: повторный тап — воля
+     * человека, и она исполняется сразу.
+     */
+    @Test fun `повторное облачное действие идёт сразу — воля человека не переспрашивается`() =
         runTest(dispatcher) {
             enrichment.updates = alreadyAsked("a")
             val vm = vm(cloud = setOf(CapabilityId("a")))
             vm.onShared("uri", "image/png"); advanceUntilIdle()
             consent.granted = true
-            val before = resolver.performed.size
 
             vm.onBubble(bubble(id = "a")); advanceUntilIdle()
 
-            assertNotNull("повторный тап обязан спросить", vm.ui.value.preview)
-            assertEquals("а до тех пор — ни одного вызова", before, resolver.performed.size)
+            assertNull("повтор снова упёрся в стражника", vm.ui.value.preview)
+            assertTrue("повторный тап не дошёл до дела", CapabilityId("a") in resolver.performed)
         }
-
-    @Test fun `согласие на повтор доводит облачное действие до конца (#668)`() = runTest(dispatcher) {
-        enrichment.updates = alreadyAsked("a")
-        val vm = vm(cloud = setOf(CapabilityId("a")))
-        vm.onShared("uri", "image/png"); advanceUntilIdle()
-        consent.granted = true
-        vm.onBubble(bubble(id = "a")); advanceUntilIdle()
-        assertNotNull("спросить обязаны до того, как соглашаться", vm.ui.value.preview)
-
-        vm.confirmPreview(); advanceUntilIdle()
-
-        assertNull("вопрос остался висеть после согласия", vm.ui.value.preview)
-        assertTrue("согласились повторить — а вызова не было", CapabilityId("a") in resolver.performed)
-    }
 
     @Test fun `первый раз облачное действие ничего не переспрашивает (#668)`() = runTest(dispatcher) {
         val vm = vm(cloud = setOf(CapabilityId("a")))
