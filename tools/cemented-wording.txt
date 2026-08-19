@@ -146,5 +146,5 @@
 1 executors/src/test/kotlin/com/point/executors/StaleReasonStaysSilentTest.kt
 5 executors/src/test/kotlin/com/point/executors/TranscribeActionTest.kt
 3 executors/src/test/kotlin/com/point/executors/TranslateActionTest.kt
-14 executors/src/test/kotlin/com/point/executors/UnderstandRealizerTest.kt
+13 executors/src/test/kotlin/com/point/executors/UnderstandRealizerTest.kt
 3 executors/src/test/kotlin/com/point/executors/WordPlusTest.kt

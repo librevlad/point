@@ -657,6 +657,21 @@ class UnderstandRealizerTest {
         assertTrue(lastPrompt!!.contains("METER=20842"))
     }
 
+    /** #1176: виток говорит, что прибавилось, — знание не оседает в графе молча. */
+    @Test
+    fun `сообщение витка называет прирост, а не общее «стало понятнее»`() = runTest {
+        val known = textObject(
+            content = "Оплата: карта 4111 1111 1111 1111, телефон +380671234567.",
+            metadata = mapOf("entity.phone" to "+380671234567"),
+        )
+
+        val result = realizer("PHONE=+380671234567\nCARD=4111 1111 1111 1111").perform(known)
+
+        val said = (result as ActionResult.Done).message
+        assertTrue("прирост не назван: $said", said.contains("арта"))
+        assertFalse("найденное раньше выдано за прирост: $said", said.contains("елефон"))
+    }
+
     private fun namedLlm(answer: String, by: String) = object : com.point.core.flow.LlmClient {
         override suspend fun run(obj: PointObject, prompt: String): com.point.core.model.ResultObject {
             val f = File.createTempFile("ans", ".txt").apply { deleteOnExit(); writeText(answer) }
@@ -944,7 +959,9 @@ class UnderstandRealizerTest {
 
         assertTrue(result is ActionResult.Done)
         assertEquals("+380671234567", (result as ActionResult.Done).findings!!.metadata["entity.phone"])
-        assertEquals("Стало понятнее", result.message)
+        // Суть проверки — чтение одним окном: сообщение не зовёт дочитывать. Точная
+        // фраза здесь цементировала немой ответ — виток теперь называет прирост (#1176).
+        assertFalse("чтение разорвалось на окна: ${result.message}", result.message.contains("Прочитан"))
     }
 
     @Test

@@ -285,8 +285,12 @@ class UnderstandRealizer @Inject constructor(
                     ).orEmpty()
 
                     val people = contactNodes(input, (parsed.contacts + owners).distinct())
+
+                    // Виток говорит, что прибавилось (#1176): знание, осевшее только в
+                    // графе, для человека не случилось. Недочитанность важнее дельты —
+                    // она зовёт дочитать.
                     ActionResult.Done(
-                        message ?: UNDERSTOOD,
+                        message ?: com.point.core.flow.spiralDelta(input.metadata, agreed) ?: UNDERSTOOD,
                         Findings(
                             metadata = agreed + progress + state.orEmptyInvestigation(),
                             objects = people.objects,
@@ -316,26 +320,24 @@ class UnderstandRealizer @Inject constructor(
         // Человек с телефоном — узел графа и здесь: иначе номер висел бы без хозяина,
         // ровно как в кейсе наклейки (#747, пункт 12).
         val people = contactNodes(input, parsed.contacts)
+        // Порядок — суть спирали (#1176): имена исполнителей → согласие уликами → суд;
+        // без следа состояния «Понять сильнее» у снимка не наступало.
+        val grown = run {
+            val noted = addActor(
+                merged + doubts(merged, parsed.unsure) +
+                    annotations(merged, fields, judgedByLayer = false, blocked = judged.blocked),
+                values.keys,
+                answeredBy,
+            )
+            val agreed = noted + com.point.core.flow.agreementEvidence(noted, values.keys)
+            agreed +
+                investigationOutcome(agreed, values.keys).orEmptyInvestigation() +
+                (META_READING_MODE to ReadingMode.HANDWRITTEN.name)
+        }
         return ActionResult.Done(
-            UNDERSTOOD,
+            com.point.core.flow.spiralDelta(input.metadata, grown) ?: UNDERSTOOD,
             Findings(
-                metadata = run {
-                    // Зрячее чтение — такое же исследование (#1176): без состояния
-                    // «Понять сильнее» у снимка не наступало, а спираль не знала,
-                    // отвечен ли вопрос. Порядок — суть спирали: сначала имена
-                    // исполнителей, по ним согласие становится уликами, и только
-                    // потом суд — сомнение даёт «недостаточно», согласие — «нашли».
-                    val noted = addActor(
-                        merged + doubts(merged, parsed.unsure) +
-                            annotations(merged, fields, judgedByLayer = false, blocked = judged.blocked),
-                        values.keys,
-                        answeredBy,
-                    )
-                    val agreed = noted + com.point.core.flow.agreementEvidence(noted, values.keys)
-                    agreed +
-                        investigationOutcome(agreed, values.keys).orEmptyInvestigation() +
-                        (META_READING_MODE to ReadingMode.HANDWRITTEN.name)
-                },
+                metadata = grown,
                 objects = people.objects,
                 relations = people.relations,
             ),
