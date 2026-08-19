@@ -103,6 +103,12 @@ fun openQuestions(
             if (state == InvestigationState.FOUND || state == InvestigationState.NOT_INVESTIGATED) {
                 return@mapNotNull null
             }
+
+            // «Не нашлось» не показывается — человек не просил (#1016, решение владельца
+            // дословно: «не нашлось не надо показывать - я не просил»). Знание остаётся в
+            // графе и отличимо от «не смотрели» для машинных решений; наружу выходят только
+            // спор и «посмотрели недостаточно» — им человек обязан не доверять молча (P8).
+            if (state == InvestigationState.NOT_FOUND) return@mapNotNull null
             val name = nameOf(id) ?: return@mapNotNull null
             OpenQuestion(name, state)
         }
