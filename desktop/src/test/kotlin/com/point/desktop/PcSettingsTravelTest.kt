@@ -31,6 +31,42 @@ class PcSettingsTravelTest {
 
     private val speech = "речь"
 
+    /**
+     * Выбор человека здесь — такое же событие, как приехавшее с сервера (#1085).
+     *
+     * Метку времени двигало только приехавшее снаружи, и местный выбор никогда не оказывался
+     * новее: «Только на этом устройстве», выбранное на компьютере, не уезжало ни на сервер,
+     * ни на телефон, а следующая сверка молча возвращала прежний уровень.
+     */
+    @Test
+    fun `выбранный здесь уровень приватности оказывается новее приехавшего`() {
+        val store = config()
+        val was = store.load()
+        store.applyAccountSettings(AccountSettings(privacy = com.point.core.flow.PrivacyLevel.FREE_FIRST, at = 1_000))
+
+        store.save(store.load().copy(privacy = com.point.core.flow.PrivacyLevel.DEVICE_ONLY))
+        val mine = store.accountSettings()
+
+        assertTrue("местный выбор остался старее приехавшего", mine.at > 1_000)
+        assertEquals(
+            "уровень не уехал бы: приехавшее перекрыло бы выбранное человеком",
+            com.point.core.flow.PrivacyLevel.DEVICE_ONLY,
+            mine.mergedWith(AccountSettings(privacy = com.point.core.flow.PrivacyLevel.FREE_FIRST, at = 1_000)).privacy,
+        )
+        assertEquals(was.name, store.load().name)
+    }
+
+    /** Имя компьютера — свойство места, а не предпочтение: чужой выбор перекрывать ему нечем. */
+    @Test
+    fun `имя компьютера метку времени не двигает`() {
+        val store = config()
+        store.applyAccountSettings(AccountSettings(privacy = com.point.core.flow.PrivacyLevel.FREE_FIRST, at = 5_000))
+
+        store.save(store.load().copy(name = "Рабочий"))
+
+        assertEquals(5_000L, store.accountSettings().at)
+    }
+
     @Test
     fun `ключ компьютера уезжает под именем своего сервиса`() {
         val store = config()
