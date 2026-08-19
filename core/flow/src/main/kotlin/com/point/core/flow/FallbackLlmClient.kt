@@ -23,7 +23,9 @@ class FallbackLlmClient(
 
     override val configured: Boolean get() = providers.any { it.configured }
 
-    override suspend fun run(obj: PointObject, prompt: String): ResultObject {
+    override suspend fun run(obj: PointObject, prompt: String): ResultObject = run(obj, prompt, emptySet())
+
+    override suspend fun run(obj: PointObject, prompt: String, avoidServices: Set<String>): ResultObject {
         if (providers.isEmpty()) error("AI не настроен — $AI_KEY_HINT")
 
         // Снимок читает тот, кто видит. В режиме YOLO сильная модель идёт первой всегда
@@ -35,8 +37,13 @@ class FallbackLlmClient(
         // Сначала режим, потом всё остальное: сервис, который режим не пускает, не должен
         // даже пробоваться.
         val level = runCatching { privacy.level() }.getOrDefault(PrivacyLevel.DEFAULT)
-        val allowed = allowedBy(level, ordered) { promiseOfService(it.serviceId) }
-        if (allowed.isEmpty() && ordered.any { it.configured }) error(chainClosedBy(level))
+        val allowedAll = allowedBy(level, ordered) { promiseOfService(it.serviceId) }
+        if (allowedAll.isEmpty() && ordered.any { it.configured }) error(chainClosedBy(level))
+
+        // Виток «сильнее» обходит уже отвечавших (#1010) — но только когда есть кем
+        // заменить: повтор той же моделью лучше отказа.
+        val fresh = allowedAll.filter { it.configured && it.serviceId !in avoidServices && it.canHandle(obj) }
+        val allowed = if (avoidServices.isEmpty() || fresh.isEmpty()) allowedAll else fresh
         val errors = mutableListOf<String>()
         var considered = 0
         var skippedUnconfigured = 0

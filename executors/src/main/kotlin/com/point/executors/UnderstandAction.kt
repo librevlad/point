@@ -85,6 +85,18 @@ class UnderstandCapability @Inject constructor(
     override val meta = CapabilityMeta(priority = 31, cost = Cost.PAID, latency = Latency.SLOW, network = true, auth = true)
     override fun label(state: ObjectState) = labelNeedingKey("Понять", keys.keySet())
 
+    // «Понять» может бесконечно обогащать граф (решение владельца, #1010): после успешного
+    // витка действие зовётся дальше — следующий заход идёт другой моделью и улучшает
+    // результат обычным merge.
+    override fun label(graph: com.point.core.flow.GraphState): String =
+        if (com.point.core.flow.investigationStateOf(graph.obj.metadata, ID) ==
+            com.point.core.flow.InvestigationState.FOUND
+        ) {
+            labelNeedingKey("Понять сильнее", keys.keySet())
+        } else {
+            label(graph.state)
+        }
+
     // Фото без распознанного текста — тоже понимается: реализатор при пустых
     // elements читает снимок глазами (readWithEyes). Дверь была заперта на HAS_TEXT,
     // и счётчики/накладные/рукописи оставались без пути (#664, прогон 2026-08-09).
@@ -321,7 +333,12 @@ class UnderstandRealizer @Inject constructor(
 
     /** [eyes] — отдать модели сам снимок; иначе уходит только текст объекта. */
     private suspend fun ask(input: PointObject, prompt: String, eyes: Boolean = false): Answer {
-        val result = llm.run(if (eyes) input else textOnly(input), prompt)
+
+        // Виток «сильнее» идёт другой моделью (#1010): кто уже понимал этот объект, знает
+        // аннотация сводки — цепочка постарается взять свежего исполнителя, а одиночный
+        // клиент честно ответит собой.
+        val answered = com.point.core.flow.actorsOf(input.metadata, com.point.core.flow.META_SEMANTIC_SUMMARY).toSet()
+        val result = llm.run(if (eyes) input else textOnly(input), prompt, answered)
         return Answer(File(result.uri.value).readText(), result.metadata[META_ANSWERED_BY].orEmpty())
     }
 

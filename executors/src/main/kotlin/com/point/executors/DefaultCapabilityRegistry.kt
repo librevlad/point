@@ -56,7 +56,7 @@ class DefaultCapabilityRegistry @Inject constructor(
         return policy.rank(graph, offered.filter { it.accepts(graph) && blockerFor(it) == null })
             .map { c ->
                 val back = source?.takeIf { com.point.core.flow.givesBackTheSource(c, graph, it) }
-                bubbleOf(c, graph.state, reason ?: back?.let { com.point.core.flow.sourceIsHere(it) })
+                bubbleOf(c, graph.state, reason ?: back?.let { com.point.core.flow.sourceIsHere(it) }, graph)
             }
     }
 
@@ -65,9 +65,16 @@ class DefaultCapabilityRegistry @Inject constructor(
      */
     private val offered: List<Capability> = capabilities.filterNot { it.meta.investigation }
 
-    private fun bubbleOf(c: Capability, state: ObjectState, unusableReason: String? = null) = Bubble(
+    private fun bubbleOf(
+        c: Capability,
+        state: ObjectState,
+        unusableReason: String? = null,
+
+        // Имя действия видит знание (#1010): «Понять» после успеха зовётся «Понять сильнее».
+        graph: com.point.core.flow.GraphState? = null,
+    ) = Bubble(
         icon = c.icon,
-        title = c.label(state),
+        title = graph?.let { c.label(it) } ?: c.label(state),
         capabilityId = c.id,
         expectedNextState = c.produces(state) ?: state,
         tier = tierOf(c.meta),
