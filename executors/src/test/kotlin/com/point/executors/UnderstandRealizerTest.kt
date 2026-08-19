@@ -163,7 +163,13 @@ class UnderstandRealizerTest {
         val result = realizer("Конечно! Отправителем является ТОВ «Агротрейд».").perform(textObject())
 
         assertTrue(result is ActionResult.Done)
-        assertNull("проза не имеет права стать фактом", (result as ActionResult.Done).findings)
+        // След вопроса — не факт (#1176): спираль оставляет состояние «спрашивали»,
+        // но ни одна строка прозы не становится знанием об объекте.
+        val landed = (result as ActionResult.Done).findings?.metadata.orEmpty()
+        assertTrue(
+            "проза не имеет права стать фактом: $landed",
+            landed.keys.all { it.startsWith("investigated.") },
+        )
     }
 
     @Test

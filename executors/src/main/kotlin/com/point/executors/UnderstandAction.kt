@@ -221,15 +221,13 @@ class UnderstandRealizer @Inject constructor(
 
                 if (fields.isEmpty() && parsed.single.isEmpty() && roles.isEmpty() && parsed.contacts.isEmpty()) {
 
-                    // Investigation State (ADR-0001 §9): пока не дочитано — «недостаточно»,
-                    // не «не найдено». Дочитанное продолжение судится по всему накопленному
-                    // знанию, а не только по пустому итогу этого окна — найденное в прошлом
-                    // окне не гаснет. Однократное прочтение целиком не трогает состояние
-                    // вовсе — оно и раньше не заводилось у «Понять» без причины.
-                    val state = when {
-                        !fullyRead -> InvestigationState.INSUFFICIENTLY_INVESTIGATED
-                        resuming -> investigationOutcome(input.metadata, cumulativeFactKeys(input.metadata))
-                        else -> null
+                    // ADR-0001 §9: не дочитано — «недостаточно», не «не найдено».
+                    // Дочитанное судится по всему накопленному — найденное раньше не
+                    // гаснет; вопрос задан — след остаётся (#1176).
+                    val state = if (fullyRead) {
+                        investigationOutcome(input.metadata, cumulativeFactKeys(input.metadata))
+                    } else {
+                        InvestigationState.INSUFFICIENTLY_INVESTIGATED
                     }
                     val extra = progress + state.orEmptyInvestigation()
                     ActionResult.Done(
@@ -267,10 +265,12 @@ class UnderstandRealizer @Inject constructor(
                     )
                     val agreed = named + com.point.core.flow.agreementEvidence(named, values.keys)
 
-                    val state = when {
-                        !fullyRead -> InvestigationState.INSUFFICIENTLY_INVESTIGATED
-                        resuming -> investigationOutcome(agreed, values.keys)
-                        else -> null
+                    // Спираль ведёт состояние всегда (#1176): без следа «Понять
+                    // сильнее» не наступало после первого же полного витка.
+                    val state = if (fullyRead) {
+                        investigationOutcome(agreed, values.keys)
+                    } else {
+                        InvestigationState.INSUFFICIENTLY_INVESTIGATED
                     }
 
                     // «Понять» — знание о том же объекте, а не превращение (ADR-0001 §18):
