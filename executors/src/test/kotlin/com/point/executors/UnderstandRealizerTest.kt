@@ -657,6 +657,64 @@ class UnderstandRealizerTest {
         assertTrue(lastPrompt!!.contains("METER=20842"))
     }
 
+    private fun namedLlm(answer: String, by: String) = object : com.point.core.flow.LlmClient {
+        override suspend fun run(obj: PointObject, prompt: String): com.point.core.model.ResultObject {
+            val f = File.createTempFile("ans", ".txt").apply { deleteOnExit(); writeText(answer) }
+            return com.point.core.model.ResultObject(
+                ObjectKind.TEXT, "text/plain", ScratchRef(f.absolutePath),
+                metadata = mapOf(com.point.core.flow.META_ANSWERED_BY to by),
+            )
+        }
+    }
+
+    /** #1176: спираль сходится — второй исполнитель подтверждает сомнительное, вопрос закрыт. */
+    @Test
+    fun `второй исполнитель подтверждает сомнительное — вопрос закрыт находкой`() = runTest {
+        val photo = PointObject(
+            "img", "image/jpeg", ScratchRef("/tmp/meter.jpg"), ObjectState(ObjectKind.IMAGE),
+        )
+
+        val first = UnderstandRealizer(namedLlm("METER=20842\nUNSURE=METER", "gemini"))
+            .perform(photo) as ActionResult.Done
+        val enriched = photo.copy(metadata = photo.metadata + first.findings!!.metadata)
+        assertEquals(
+            com.point.core.flow.InvestigationState.INSUFFICIENTLY_INVESTIGATED,
+            com.point.core.flow.investigationStateOf(enriched.metadata, UnderstandCapability.ID),
+        )
+
+        val second = UnderstandRealizer(namedLlm("METER=20842", "groq"))
+            .perform(enriched) as ActionResult.Done
+
+        val meta = second.findings!!.metadata
+        assertEquals(
+            com.point.core.flow.InvestigationState.FOUND,
+            com.point.core.flow.investigationStateOf(meta, UnderstandCapability.ID),
+        )
+        val marks = meta["entity.meter" + com.point.core.flow.META_EVIDENCE_SUFFIX].orEmpty()
+        assertTrue("согласие не стало уликой: $marks", marks.contains("agree:gemini") && marks.contains("agree:groq"))
+    }
+
+    @Test
+    fun `исполнители разошлись — спор виден, согласием не подделан`() = runTest {
+        val photo = PointObject(
+            "img", "image/jpeg", ScratchRef("/tmp/meter.jpg"), ObjectState(ObjectKind.IMAGE),
+        )
+        val first = UnderstandRealizer(namedLlm("METER=20842", "gemini")).perform(photo) as ActionResult.Done
+        val enriched = photo.copy(metadata = photo.metadata + first.findings!!.metadata)
+
+        val second = UnderstandRealizer(namedLlm("METER=20843", "groq")).perform(enriched) as ActionResult.Done
+
+        val meta = second.findings!!.metadata
+        assertTrue(
+            "расхождение исчезло молча",
+            !meta["entity.meter" + com.point.core.flow.META_ALT_SUFFIX].isNullOrBlank(),
+        )
+        assertTrue(
+            "спор прикрыт согласием",
+            !meta["entity.meter" + com.point.core.flow.META_EVIDENCE_SUFFIX].orEmpty().contains("agree:"),
+        )
+    }
+
     /** #1176: зрячее чтение — такое же исследование; без следа «сильнее» не наступало. */
     @Test
     fun `зрячее чтение оставляет след — вопрос отвечен`() = runTest {

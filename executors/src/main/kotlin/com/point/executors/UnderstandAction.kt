@@ -255,9 +255,21 @@ class UnderstandRealizer @Inject constructor(
                         .filter { key -> Provenance.MODEL > provenanceOf(merged, key) }
                         .map { key -> key + META_SOURCE_SUFFIX to Provenance.MODEL.wire }
 
+                    // Согласие исполнителей — улика и в текстовом пути (#1176): второй
+                    // виток, увидевший то же значение, подтверждает его отметкой на
+                    // свидетеля; суд продолжения идёт уже по подтверждённому знанию.
+                    val named = addActor(
+                        merged +
+                            annotations(merged, fields, judgedByLayer = layer != null, blocked = blocked) +
+                            roleAlts + roleSources,
+                        values.keys,
+                        answeredBy,
+                    )
+                    val agreed = named + com.point.core.flow.agreementEvidence(named, values.keys)
+
                     val state = when {
                         !fullyRead -> InvestigationState.INSUFFICIENTLY_INVESTIGATED
-                        resuming -> investigationOutcome(merged, values.keys)
+                        resuming -> investigationOutcome(agreed, values.keys)
                         else -> null
                     }
 
@@ -276,13 +288,7 @@ class UnderstandRealizer @Inject constructor(
                     ActionResult.Done(
                         message ?: UNDERSTOOD,
                         Findings(
-                            metadata = addActor(
-                                merged +
-                                    annotations(merged, fields, judgedByLayer = layer != null, blocked = blocked) +
-                                    roleAlts + roleSources + progress + state.orEmptyInvestigation(),
-                                values.keys,
-                                answeredBy,
-                            ),
+                            metadata = agreed + progress + state.orEmptyInvestigation(),
                             objects = people.objects,
                             relations = people.relations,
                         ),
@@ -313,21 +319,23 @@ class UnderstandRealizer @Inject constructor(
         return ActionResult.Done(
             UNDERSTOOD,
             Findings(
-                metadata = addActor(
-                    run {
-                        // Зрячее чтение — такое же исследование (#1176): без состояния
-                        // «Понять сильнее» у снимка не наступало, а спираль не знала,
-                        // отвечен ли вопрос. Судится знание вместе с оговорками —
-                        // сомнение модели честно даёт «недостаточно», не «нашли».
-                        val noted = merged + doubts(merged, parsed.unsure)
-                        noted +
-                            annotations(merged, fields, judgedByLayer = false, blocked = judged.blocked) +
-                            investigationOutcome(noted, values.keys).orEmptyInvestigation() +
-                            (META_READING_MODE to ReadingMode.HANDWRITTEN.name)
-                    },
-                    values.keys,
-                    answeredBy,
-                ),
+                metadata = run {
+                    // Зрячее чтение — такое же исследование (#1176): без состояния
+                    // «Понять сильнее» у снимка не наступало, а спираль не знала,
+                    // отвечен ли вопрос. Порядок — суть спирали: сначала имена
+                    // исполнителей, по ним согласие становится уликами, и только
+                    // потом суд — сомнение даёт «недостаточно», согласие — «нашли».
+                    val noted = addActor(
+                        merged + doubts(merged, parsed.unsure) +
+                            annotations(merged, fields, judgedByLayer = false, blocked = judged.blocked),
+                        values.keys,
+                        answeredBy,
+                    )
+                    val agreed = noted + com.point.core.flow.agreementEvidence(noted, values.keys)
+                    agreed +
+                        investigationOutcome(agreed, values.keys).orEmptyInvestigation() +
+                        (META_READING_MODE to ReadingMode.HANDWRITTEN.name)
+                },
                 objects = people.objects,
                 relations = people.relations,
             ),
@@ -353,15 +361,6 @@ class UnderstandRealizer @Inject constructor(
         val result = llm.run(if (eyes) input else textOnly(input), prompt, answered)
         return Answer(File(result.uri.value).readText(), result.metadata[META_ANSWERED_BY].orEmpty())
     }
-
-    /**
-     * Сомнение модели становится обычной оговоркой знания (#670): у зрячего чтения нет ни
-     * слоя слов, ни судьи, поэтому подтверждающих улик у значения нет — пустой список улик
-     * и означает «возможно». Значение при этом остаётся значением: сомнение не отменяет факт.
-     */
-    private fun doubts(merged: Map<String, String>, unsure: Set<String>): Map<String, String> =
-        unsure.filter { merged[it]?.isNotBlank() == true }
-            .associate { it + META_EVIDENCE_SUFFIX to "" }
 
     private fun annotations(
         merged: Map<String, String>,
