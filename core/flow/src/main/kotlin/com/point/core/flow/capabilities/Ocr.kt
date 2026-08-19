@@ -13,7 +13,12 @@ class OcrCapability : Capability {
     override val id = ID
     override val icon = "ocr"
 
-    override val meta = CapabilityMeta(cost = Cost.FREE, latency = Latency.SLOW)
+    // Отвечает на вопрос «что написано на кадре»: при уже прочитанном уходит вниз (#1119).
+    override val meta = CapabilityMeta(
+        cost = Cost.FREE,
+        latency = Latency.SLOW,
+        answers = com.point.core.flow.KnownCapabilities.IMAGE_TEXT,
+    )
 
     override fun label(state: ObjectState) = "Распознать текст"
     override fun accepts(state: ObjectState) = state.kind == ObjectKind.IMAGE

@@ -69,6 +69,28 @@ class RankingSeesKnowledgeTest {
         assertEquals("успешно выполненное исследование осталось главным", other.id, order.first().id)
     }
 
+    /**
+     * Вопрос — заявленный действием, а не его id (#1119): «Считать QR» отвечает на
+     * qr-content, и при уже показанном содержимом уходит вниз, не исчезая.
+     */
+    @Test fun `действие с чужим id вопроса уступает, когда его вопрос закрыт`() {
+        val readQr = object : Capability {
+            override val id = CapabilityId("read-qr")
+            override val icon = "x"
+            override val meta = CapabilityMeta(priority = 1, answers = CapabilityId("qr-content"))
+            override fun label(state: ObjectState) = "Считать QR"
+            override fun accepts(state: ObjectState) = true
+            override fun produces(state: ObjectState) = state
+        }
+        val other = Simple("excel", weight = 50)
+        val known = withInvestigation(emptyMap(), CapabilityId("qr-content"), InvestigationState.FOUND)
+
+        val order = policy.rank(graph(*known.toList().toTypedArray()), listOf(readQr, other))
+
+        assertEquals("действие стоит над уже показанным содержимым", other.id, order.first().id)
+        assertTrue("действие пропало из списка", order.map { it.id }.contains(readQr.id))
+    }
+
     @Test fun `неотвеченный вопрос своего места не теряет`() {
         val fresh = Simple("understand", weight = 1)
         val other = Simple("excel", weight = 50)
