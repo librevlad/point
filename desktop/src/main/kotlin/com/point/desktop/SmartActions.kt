@@ -47,6 +47,13 @@ class PcEntitiesRealizer(
             ?: return ActionResult.Failure("Файла объекта нет на диске", recoverable = false)
         val found = com.point.core.flow.plausibleEntities(extractor.extract(text), text)
 
+        // Одна воронка на обе поверхности (#1139, #1144): та же, что у телефона, — кандидат,
+        // проверка формы, sameFact, fullerReading, main/.more/.alt, происхождение от самого
+        // объекта. Прежде компьютер держал упрощённую копию: побеждало первое значение по
+        // тексту, спор прочтений не замечался, а происхождение жёстко звалось «прочитано» —
+        // даже у набранного руками текста.
+        val delta = com.point.core.flow.entityDelta(input, found, text)
+
         // Правила знания написаны один раз и работают на обоих устройствах (#935).
         //
         // Сумма, показание, координаты, квитанция и номер накладной разбираются правилами из
@@ -72,20 +79,26 @@ class PcEntitiesRealizer(
                 ),
             )
         }
-        ActionResult.Done(summaryLine(found, byRules), entityFindings(found, byRules))
+        ActionResult.Done(summaryLine(found, byRules), entityFindings(delta, byRules))
     }.getOrElse { ActionResult.Failure("Разобрать текст не вышло — попробуйте ещё раз", recoverable = true) }
 
-    private fun entityFindings(found: List<Entity>, byRules: Map<String, String>): com.point.core.model.Findings {
-        val knowledge = entityKnowledge(found, capabilityId)
-        if (byRules.isEmpty()) return knowledge
-
-        // Нашли правила — вопрос отвечен, даже если движок сущностей промолчал: «не найдено»
-        // при найденной сумме было бы ложью о знании (Конституция §13).
+    private fun entityFindings(
+        delta: com.point.core.model.Findings,
+        byRules: Map<String, String>,
+    ): com.point.core.model.Findings {
         val answered = mapOf(
             com.point.core.flow.investigationKey(capabilityId) to
-                com.point.core.flow.InvestigationState.FOUND.wire,
+                if (delta.metadata.keys.any { it.startsWith(com.point.core.flow.META_ENTITY_PREFIX) } ||
+                    byRules.isNotEmpty()
+                ) {
+                    // Нашли хоть что-то — вопрос отвечен: «не найдено» при найденной сумме
+                    // было бы ложью о знании (Конституция §13).
+                    com.point.core.flow.InvestigationState.FOUND.wire
+                } else {
+                    com.point.core.flow.InvestigationState.NOT_FOUND.wire
+                },
         )
-        return knowledge.copy(metadata = byRules + knowledge.metadata + answered)
+        return delta.copy(metadata = byRules + delta.metadata + answered)
     }
 
     private fun summaryLine(found: List<Entity>, byRules: Map<String, String>): String = when {
@@ -93,46 +106,6 @@ class PcEntitiesRealizer(
             .joinToString(", ") { it.name.lowercase() }
         else -> "Нашёл: " + entitySummary(found)
     }
-}
-
-/** Знание из найденных сущностей: первое значение вида, «ещё»-значения, признаки, состояние вопроса. */
-fun entityKnowledge(found: List<Entity>, question: CapabilityId): com.point.core.model.Findings {
-
-    // «Голое время это никогда не дата, это мусор» (#651).
-    val meaningful = found.filterNot { it.type == EntityType.DATE_TIME && com.point.core.flow.bareClock(it.value) }
-    val metadata = buildMap {
-        meaningful.groupBy { it.type }.forEach { (type, list) ->
-            val key = type.asMetaKey() ?: return@forEach
-            // Одна воронка на обе поверхности (#1139): кандидат, не прошедший проверку
-            // формы, знанием не становится. Прежде побеждал первый по тексту, каким бы он
-            // ни был, — и телефоном чека становился номер дома из адресной строки.
-            val values = list.mapNotNull { com.point.core.flow.factCandidate(key, it.value) }
-                .distinctBy { com.point.core.flow.normConsensus(it) }
-            if (values.isEmpty()) return@forEach
-            put(key, values.first())
-
-            // Откуда значение: вычитано из текста объекта (#948). Без этой строки оно молча
-            // становилось «дано» — как будто человек ввёл его сам, — и показывалось на экране
-            // спокойнее всего, хотя пришло из распознанного кадра.
-            put(key + com.point.core.flow.META_SOURCE_SUFFIX, com.point.core.model.Provenance.OCR.wire)
-            val more = values.drop(1)
-            if (more.isNotEmpty()) {
-                put(key + com.point.core.flow.META_MORE_SUFFIX, com.point.core.flow.altValue(more))
-            }
-        }
-        put(
-            com.point.core.flow.investigationKey(question),
-            if (found.any { it.type.asMetaKey() != null }) {
-                com.point.core.flow.InvestigationState.FOUND.wire
-            } else {
-                com.point.core.flow.InvestigationState.NOT_FOUND.wire
-            },
-        )
-    }
-    return com.point.core.model.Findings(
-        features = meaningful.mapNotNull { it.type.asFeature() }.toSet(),
-        metadata = metadata,
-    )
 }
 
 internal fun entitySummary(found: List<Entity>): String =

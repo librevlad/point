@@ -7,6 +7,7 @@ import com.point.core.model.PointObject
 import com.point.core.model.ScratchRef
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import com.point.core.flow.entityObjects
 
 /**
  * В найденное можно войти (#947).

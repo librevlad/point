@@ -12,6 +12,8 @@ import com.point.core.flow.KIND_EMAIL
 import com.point.core.flow.KIND_PHONE
 import com.point.core.flow.KIND_URL
 import com.point.core.flow.META_ENTITY_PREFIX
+import com.point.core.flow.entityObjects
+import com.point.core.flow.entityDelta
 import com.point.core.model.Feature
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject

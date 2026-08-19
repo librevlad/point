@@ -13,6 +13,7 @@ import com.point.core.model.ScratchRef
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import com.point.core.flow.entityDelta
 
 /**
  * Разбор текста различает прочтения одного факта и разные сущности (#1122, #1109).

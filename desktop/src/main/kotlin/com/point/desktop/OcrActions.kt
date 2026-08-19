@@ -74,7 +74,13 @@ class PcCloudOcrRealizer(
                 // слоем исходника, сущности — его фактами; нового объекта не рождается.
                 val ref = File.createTempFile("pc-ocr-", ".txt").apply { writeText(text) }
                 val found = com.point.core.flow.plausibleEntities(extractor.extract(text), text)
-                val entities = entityKnowledge(found, com.point.core.flow.KnownCapabilities.ENTITIES)
+
+                // Та же воронка, что у телефона (#1139, #1144); прочитанное с кадра
+                // называет себя чтением — путь знания, не путь объекта (#990).
+                val entities = com.point.core.flow.entityDelta(
+                    input, found, text,
+                    com.point.core.model.Provenance.OCR,
+                )
                 ActionResult.Done(
                     "Прочитал снимок" +
                         (if (fitted == null) "" else " · " + shrunkNote(fitted)) +
