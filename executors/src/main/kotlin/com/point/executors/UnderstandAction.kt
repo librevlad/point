@@ -221,15 +221,13 @@ class UnderstandRealizer @Inject constructor(
 
                 if (fields.isEmpty() && parsed.single.isEmpty() && roles.isEmpty() && parsed.contacts.isEmpty()) {
 
-                    // Investigation State (ADR-0001 §9): пока не дочитано — «недостаточно»,
-                    // не «не найдено». Дочитанное продолжение судится по всему накопленному
-                    // знанию, а не только по пустому итогу этого окна — найденное в прошлом
-                    // окне не гаснет. Однократное прочтение целиком не трогает состояние
-                    // вовсе — оно и раньше не заводилось у «Понять» без причины.
-                    val state = when {
-                        !fullyRead -> InvestigationState.INSUFFICIENTLY_INVESTIGATED
-                        resuming -> investigationOutcome(input.metadata, cumulativeFactKeys(input.metadata))
-                        else -> null
+                    // ADR-0001 §9: не дочитано — «недостаточно», не «не найдено».
+                    // Дочитанное судится по всему накопленному — найденное раньше не
+                    // гаснет; вопрос задан — след остаётся (#1176).
+                    val state = if (fullyRead) {
+                        investigationOutcome(input.metadata, cumulativeFactKeys(input.metadata))
+                    } else {
+                        InvestigationState.INSUFFICIENTLY_INVESTIGATED
                     }
                     val extra = progress + state.orEmptyInvestigation()
                     ActionResult.Done(
@@ -267,10 +265,12 @@ class UnderstandRealizer @Inject constructor(
                     )
                     val agreed = named + com.point.core.flow.agreementEvidence(named, values.keys)
 
-                    val state = when {
-                        !fullyRead -> InvestigationState.INSUFFICIENTLY_INVESTIGATED
-                        resuming -> investigationOutcome(agreed, values.keys)
-                        else -> null
+                    // Спираль ведёт состояние всегда (#1176): без следа «Понять
+                    // сильнее» не наступало после первого же полного витка.
+                    val state = if (fullyRead) {
+                        investigationOutcome(agreed, values.keys)
+                    } else {
+                        InvestigationState.INSUFFICIENTLY_INVESTIGATED
                     }
 
                     // «Понять» — знание о том же объекте, а не превращение (ADR-0001 §18):
@@ -285,8 +285,12 @@ class UnderstandRealizer @Inject constructor(
                     ).orEmpty()
 
                     val people = contactNodes(input, (parsed.contacts + owners).distinct())
+
+                    // Виток говорит, что прибавилось (#1176): знание, осевшее только в
+                    // графе, для человека не случилось. Недочитанность важнее дельты —
+                    // она зовёт дочитать.
                     ActionResult.Done(
-                        message ?: UNDERSTOOD,
+                        message ?: com.point.core.flow.spiralDelta(input.metadata, agreed) ?: UNDERSTOOD,
                         Findings(
                             metadata = agreed + progress + state.orEmptyInvestigation(),
                             objects = people.objects,
@@ -316,26 +320,24 @@ class UnderstandRealizer @Inject constructor(
         // Человек с телефоном — узел графа и здесь: иначе номер висел бы без хозяина,
         // ровно как в кейсе наклейки (#747, пункт 12).
         val people = contactNodes(input, parsed.contacts)
+        // Порядок — суть спирали (#1176): имена исполнителей → согласие уликами → суд;
+        // без следа состояния «Понять сильнее» у снимка не наступало.
+        val grown = run {
+            val noted = addActor(
+                merged + doubts(merged, parsed.unsure) +
+                    annotations(merged, fields, judgedByLayer = false, blocked = judged.blocked),
+                values.keys,
+                answeredBy,
+            )
+            val agreed = noted + com.point.core.flow.agreementEvidence(noted, values.keys)
+            agreed +
+                investigationOutcome(agreed, values.keys).orEmptyInvestigation() +
+                (META_READING_MODE to ReadingMode.HANDWRITTEN.name)
+        }
         return ActionResult.Done(
-            UNDERSTOOD,
+            com.point.core.flow.spiralDelta(input.metadata, grown) ?: UNDERSTOOD,
             Findings(
-                metadata = run {
-                    // Зрячее чтение — такое же исследование (#1176): без состояния
-                    // «Понять сильнее» у снимка не наступало, а спираль не знала,
-                    // отвечен ли вопрос. Порядок — суть спирали: сначала имена
-                    // исполнителей, по ним согласие становится уликами, и только
-                    // потом суд — сомнение даёт «недостаточно», согласие — «нашли».
-                    val noted = addActor(
-                        merged + doubts(merged, parsed.unsure) +
-                            annotations(merged, fields, judgedByLayer = false, blocked = judged.blocked),
-                        values.keys,
-                        answeredBy,
-                    )
-                    val agreed = noted + com.point.core.flow.agreementEvidence(noted, values.keys)
-                    agreed +
-                        investigationOutcome(agreed, values.keys).orEmptyInvestigation() +
-                        (META_READING_MODE to ReadingMode.HANDWRITTEN.name)
-                },
+                metadata = grown,
                 objects = people.objects,
                 relations = people.relations,
             ),
