@@ -77,8 +77,11 @@ class KnowledgeRowsTest {
         assertEquals(listOf("entity.phone"), rows.map { it.key })
     }
 
+    // Было: «смотрели, не нашли» выходило строкой на экран. Решение владельца (#1016,
+    // дословно): «не нашлось не надо показывать - я не просил». Знание остаётся в графе,
+    // наружу выходят только спор и «посмотрели недостаточно».
     @Test
-    fun `открытые вопросы - «смотрели, не нашли» отличимо от «не смотрели»`() {
+    fun `открытые вопросы - непрошенное «не нашлось» молчит, спор виден`() {
         val questions = openQuestions(
             mapOf(
                 "investigated.qr-content" to "not_found",
@@ -89,7 +92,7 @@ class KnowledgeRowsTest {
         ) { id -> mapOf("qr-content" to "QR-код", "pc-understand" to "Понимание")[id.value] }
 
         assertEquals(
-            mapOf("QR-код" to InvestigationState.NOT_FOUND, "Понимание" to InvestigationState.CONTRADICTORY),
+            mapOf("Понимание" to InvestigationState.CONTRADICTORY),
             questions.associate { it.name to it.state },
         )
     }
