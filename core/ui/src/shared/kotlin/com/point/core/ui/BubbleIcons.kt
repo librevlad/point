@@ -2,11 +2,13 @@ package com.point.core.ui
 
 import androidx.compose.material.icons.Icons
 import com.point.core.flow.KIND_ADDRESS
+import com.point.core.flow.KIND_AMOUNT
 import com.point.core.flow.KIND_DATE
 import com.point.core.flow.KIND_EMAIL
 import com.point.core.flow.KIND_IDENTIFIER
 import com.point.core.flow.KIND_ORGANIZATION
 import com.point.core.flow.KIND_PERSON
+import com.point.core.flow.KIND_PLACE
 import com.point.core.flow.KIND_PHONE
 import com.point.core.flow.KIND_URL
 import androidx.compose.material.icons.filled.Apps
@@ -205,5 +207,10 @@ fun kindLabel(kind: ObjectKind): String = when (kind) {
     KIND_URL -> "Ссылка"
     KIND_ORGANIZATION -> "Организация"
     KIND_PERSON -> "Человек"
+
+    // Найденное значение носит имя своего вида (#1121): «140 · Объект» не говорил
+    // человеку ничего, тогда как соседние находки назывались «Адрес» и «Дата».
+    KIND_AMOUNT -> "Сумма"
+    KIND_PLACE -> "Место"
     else -> "Объект"
 }

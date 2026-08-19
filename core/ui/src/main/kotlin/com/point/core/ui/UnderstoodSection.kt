@@ -161,6 +161,12 @@ data class ObjectVerdict(val headline: String, val subline: String?, val measure
 
 fun objectMeasure(obj: PointObject): String? {
     if (obj.state.kind != ObjectKind.AUDIO) return null
+
+    // Сначала точное знание из самой записи (#1123): прикидка по размеру врала в полтора
+    // раза, «примерно» рядом с такой ошибкой — не честность, а маскировка.
+    obj.metadata[com.point.core.flow.META_DURATION_SECONDS]?.toLongOrNull()
+        ?.let { com.point.core.flow.exactRecordingLength(it) }
+        ?.let { return it }
     val size = obj.metadata[META_SIZE]?.toLongOrNull() ?: return null
     return recordingLength(obj.mime, size, obj.metadata["name"]) ?: humanWeight(size)
 }
