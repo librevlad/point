@@ -95,19 +95,21 @@ class EyesOnlyCorpusProbe {
                         ScratchRef(File(corpus, "$frame.jpg").absolutePath),
                         ObjectState(ObjectKind.IMAGE),
                     )
-                    // Спираль крутится, пока виток приносит прирост: «нашли» после
-                    // первого взгляда — не конец, прицельный бриф следующего витка
-                    // спрашивает ненайденные категории (кадры 02/03 теряли карту,
-                    // остановившись на первом же «found»).
+                    // Спираль крутится, пока витки приносят прирост, и выдыхается только
+                    // после ДВУХ сухих подряд: свободные модели недетерминированы, и один
+                    // пустой виток — не исчерпание (кадр 03 терял карту, когда прогон
+                    // сдавался после первого же сухого).
                     var rounds = 0
+                    var dry = 0
                     var lastAnswer = ""
-                    while (rounds < MAX_ROUNDS) {
+                    while (rounds < MAX_ROUNDS && dry < 2) {
                         rounds++
                         val outcome = runCatching { realizer.perform(obj, null) }.getOrNull()
                         val found = (outcome as? ActionResult.Done)?.findings
                         if (found == null) {
                             val why = (outcome as? ActionResult.Failure)?.reason ?: "ошибка"
                             say("$frame · виток $rounds не ответил: $why")
+                            dry++
                             continue
                         }
                         lastAnswer = (outcome as ActionResult.Done).message
@@ -116,7 +118,7 @@ class EyesOnlyCorpusProbe {
                             metadata = obj.metadata + found.metadata,
                             state = obj.state.copy(features = obj.state.features + found.features),
                         )
-                        if (rounds > 1 && com.point.core.flow.spiralDelta(before, obj.metadata) == null) break
+                        dry = if (rounds > 1 && com.point.core.flow.spiralDelta(before, obj.metadata) == null) dry + 1 else 0
                     }
                     say(
                         "$frame · витков $rounds · " +
@@ -185,7 +187,7 @@ class EyesOnlyCorpusProbe {
     }
 
     private companion object {
-        const val MAX_ROUNDS = 4
+        const val MAX_ROUNDS = 6
         const val MAX_FRAME_BYTES = 8_000_000
         val PROVIDERS = listOf(
             "OPENROUTER", "SAMBANOVA", "MISTRAL", "CEREBRAS", "GROQ",
