@@ -246,6 +246,7 @@ val ENTITY_KINDS: Map<String, NodeKind> = mapOf(
     "barcode" to NodeKind(com.point.core.flow.KIND_IDENTIFIER, Feature.HAS_BARCODE),
     "meter" to NodeKind(com.point.core.flow.KIND_IDENTIFIER),
     "receipt" to NodeKind(com.point.core.flow.KIND_IDENTIFIER),
+    "serial" to NodeKind(com.point.core.flow.KIND_IDENTIFIER),
     "geo" to NodeKind(com.point.core.flow.KIND_PLACE, Feature.HAS_GEO),
     "place" to NodeKind(com.point.core.flow.KIND_PLACE),
 )
