@@ -21,7 +21,9 @@ class UserKeyLlmClient(
 
     override val configured: Boolean get() = userKeys.keys().mine.isNotEmpty()
 
-    override suspend fun run(obj: PointObject, prompt: String): ResultObject {
+    override suspend fun run(obj: PointObject, prompt: String): ResultObject = run(obj, prompt, emptySet())
+
+    override suspend fun run(obj: PointObject, prompt: String, avoidServices: Set<String>): ResultObject {
         val all = userKeys.keys().mine
         if (all.isEmpty()) error("$AI_KEY_HINT — откройте «$SETTINGS_TITLE» на домашнем экране")
 
@@ -29,12 +31,20 @@ class UserKeyLlmClient(
         val mine = allowedBy(level, all) { promiseOfService(it.providerId) }
         if (mine.isEmpty()) error(chainClosedBy(level))
 
+        // Виток «сильнее» обходит уже отвечавшие сервисы и среди ключей человека —
+        // но только когда есть кем заменить: повтор лучше отказа (#1010, #1176).
+        val freshKeys = mine.filter { it.providerId !in avoidServices }
+        val queue = if (avoidServices.isEmpty() || freshKeys.isEmpty()) mine else freshKeys
+
         val errors = mutableListOf<String>()
-        for (key in mine) {
+        for (key in queue) {
             try {
                 val result = clientFor(key).run(obj, prompt)
                 facts.remember(key.providerId, AiOutcome.ANSWERED)
-                return result
+
+                // Кто ответил — часть ответа (#1127): без имени ответ по ключу человека
+                // не участвовал в обходе следующего витка (#1176).
+                return result.copy(metadata = result.metadata + (META_ANSWERED_BY to key.providerId))
             } catch (e: Exception) {
                 facts.remember(key.providerId, aiOutcomeOf(e))
                 errors += e.message ?: e.javaClass.simpleName

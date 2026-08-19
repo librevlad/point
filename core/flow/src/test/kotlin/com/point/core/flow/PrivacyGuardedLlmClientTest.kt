@@ -27,6 +27,16 @@ class PrivacyGuardedLlmClientTest {
         }
     }
 
+    private class SpyRounds : LlmClient {
+        var avoided: Set<String>? = null
+        override suspend fun run(obj: PointObject, prompt: String) =
+            ResultObject(ObjectKind.TEXT, "text/plain", ScratchRef("/tmp/answer.txt"))
+        override suspend fun run(obj: PointObject, prompt: String, avoidServices: Set<String>): ResultObject {
+            avoided = avoidServices
+            return run(obj, prompt)
+        }
+    }
+
     private class Level(private val level: PrivacyLevel) : CloudPrivacySettings {
         override fun level() = level
         override suspend fun setLevel(level: PrivacyLevel) = Unit
@@ -106,5 +116,26 @@ class PrivacyGuardedLlmClientTest {
         )
 
         assertFalse(guarded.configured)
+    }
+
+    /** #1176: интерфейсный дефолт молча ронял список уже отвечавших — ротация #1010 не работала. */
+    @Test
+    fun `виток проходит сквозь охрану со списком уже отвечавших`() = runBlocking {
+        val spy = SpyRounds()
+        val guarded = PrivacyGuardedLlmClient(spy, Level(PrivacyLevel.FREE_FIRST))
+
+        guarded.run(obj, "прочитай", setOf("gemini"))
+
+        assertEquals(setOf("gemini"), spy.avoided)
+    }
+
+    @Test
+    fun `и с витком режим «только на телефоне» держит дверь закрытой`() = runBlocking {
+        val spy = SpyRounds()
+        val guarded = PrivacyGuardedLlmClient(spy, Level(PrivacyLevel.DEVICE_ONLY))
+
+        val failure = runCatching { guarded.run(obj, "прочитай", setOf("gemini")) }.exceptionOrNull()
+
+        assertTrue(failure != null && spy.avoided == null)
     }
 }

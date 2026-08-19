@@ -220,6 +220,49 @@ class FallbackLlmClientTest {
         assertEquals("/out/weak", client.run(obj, "hi").uri.value)
     }
 
+    /** #1176: составной исполнитель (ключи человека) обходит своих внутри тем же списком. */
+    @Test
+    fun `виток отдаёт обход составному исполнителю внутрь`() = runTest {
+        var inside: Set<String>? = null
+        val composite = object : LlmClient {
+            override suspend fun run(obj: PointObject, prompt: String) =
+                ResultObject(ObjectKind.TEXT, "text/markdown", ScratchRef("/out/composite"))
+            override suspend fun run(obj: PointObject, prompt: String, avoidServices: Set<String>): ResultObject {
+                inside = avoidServices
+                return run(obj, prompt)
+            }
+        }
+        val named = object : LlmClient {
+            override val serviceId = "groq"
+            override suspend fun run(obj: PointObject, prompt: String) =
+                ResultObject(ObjectKind.TEXT, "text/markdown", ScratchRef("/out/groq"))
+        }
+
+        chain(listOf(composite, named)).run(obj, "hi", setOf("gemini"))
+
+        assertEquals(setOf("gemini"), inside)
+    }
+
+    @Test
+    fun `отменённый обход не воскресает этажом ниже`() = runTest {
+        var inside: Set<String>? = null
+        val onlyOne = object : LlmClient {
+            override val serviceId = "gemini"
+            override suspend fun run(obj: PointObject, prompt: String) =
+                ResultObject(ObjectKind.TEXT, "text/markdown", ScratchRef("/out/gemini"))
+            override suspend fun run(obj: PointObject, prompt: String, avoidServices: Set<String>): ResultObject {
+                inside = avoidServices
+                return run(obj, prompt)
+            }
+        }
+
+        // Кроме уже отвечавшего, никого нет — цепочка честно повторяет его же,
+        // и внутрь обход не передаётся: там он снова отрезал бы единственного.
+        chain(listOf(onlyOne)).run(obj, "hi", setOf("gemini"))
+
+        assertEquals(emptySet<String>(), inside)
+    }
+
     private fun spy(tag: String, calls: MutableList<String>) = object : LlmClient {
         override suspend fun run(obj: PointObject, prompt: String): ResultObject {
             calls += tag
