@@ -29,6 +29,19 @@ class HomeActivity : ComponentActivity() {
         startActivity(android.content.Intent(this, com.point.source.SourcePickerActivity::class.java))
     }
 
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        pullIfKnocked(intent)
+    }
+
+    /** Открыто со стука — просьба компьютера забирается сразу, без второго тапа (#1091). */
+    private fun pullIfKnocked(intent: android.content.Intent?) {
+        if (intent?.getBooleanExtra(com.point.knock.Knock.FROM_KNOCK, false) == true) {
+            intent.removeExtra(com.point.knock.Knock.FROM_KNOCK)
+            viewModel.pullFromPc()
+        }
+    }
+
     private fun example() {
         viewModel.openExample(exampleObject(packageName))
     }
@@ -36,6 +49,7 @@ class HomeActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         viewModel.loadRecent()
+        pullIfKnocked(intent)
 
         onBackPressedDispatcher.addCallback(this) {
             when {

@@ -457,7 +457,9 @@ class FlowViewModel @Inject constructor(
             }
             if (!owns(voice)) return@trackWork
             if (pulled.any { !it.third }) {
-                _ui.update { it.copy(busy = null, busyStage = null, message = com.point.core.flow.pcUnreachableText(com.point.core.flow.PcUnreachable.PC_ASLEEP), messageOutcome = Outcome.FAILED) }
+                // Причина называется настоящая (#1018): письмо тянется с сервера, и
+                // выключенный компьютер тут ни при чём.
+                _ui.update { it.copy(busy = null, busyStage = null, message = com.point.core.flow.PC_PULL_FAILED_TEXT, messageOutcome = Outcome.FAILED) }
                 return@trackWork
             }
             // Просьба исполнить — не переезд объекта (ADR-0001 §7). Дом такого объекта

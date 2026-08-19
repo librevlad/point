@@ -27,10 +27,17 @@ object Knock {
 
     private const val CHANNEL = "knock"
 
+    /** Метка «открыто со стука»: по ней главный экран сразу забирает ждущую работу (#1091). */
+    const val FROM_KNOCK = "from-knock"
+
     fun tell(context: Context, text: String) {
         channel(context)
         val open = Intent(context, HomeActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+
+            // Тап по уведомлению — и есть «пришёл за просьбой» (#1091): заставлять человека
+            // нажать ещё и плашку — второй тап по тому же самому согласию.
+            .putExtra(FROM_KNOCK, true)
         val tap = android.app.PendingIntent.getActivity(
             context,
             0,
