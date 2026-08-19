@@ -295,6 +295,27 @@ def create_app(
     def health() -> PlainTextResponse:
         return PlainTextResponse("ok")
 
+    # Ссылка Point у получателя с Point открывается в Point (#1083): Android проверяет
+    # этот файл, прежде чем отдать https-ссылку приложению. Отпечатки — релизный ключ и
+    # debug-ключ стенда; без файла система показывала бы диалог выбора, что хуже обоих.
+    @app.get("/.well-known/assetlinks.json")
+    def assetlinks() -> JSONResponse:
+        return JSONResponse(
+            [
+                {
+                    "relation": ["delegate_permission/common.handle_all_urls"],
+                    "target": {
+                        "namespace": "android_app",
+                        "package_name": "com.point",
+                        "sha256_cert_fingerprints": [
+                            "A9:55:88:14:C0:C1:BC:30:FB:BD:CE:7C:5E:7C:55:50:A7:AB:3D:1D:C4:BE:9A:7F:53:A0:D0:DC:6A:5C:E3:19",
+                            "F3:D9:DF:F6:D8:96:66:BE:F8:79:37:A4:A9:AF:3F:AF:B2:C7:F6:1C:D3:0D:BE:87:8A:FA:7C:27:90:08:20:F3",
+                        ],
+                    },
+                },
+            ],
+        )
+
     # --- обещания о данных -------------------------------------------------------------
     #
     # Обе страницы открыты и не требуют ни пропуска, ни установленного приложения: магазин

@@ -72,3 +72,20 @@ fun outboundFileName(name: String?, mime: String): String {
     if (base.contains('.') && base.substringAfterLast('.').length in 1..5) return base
     return if (ext.isBlank()) base else "$base.$ext"
 }
+
+/**
+ * Имя файла из заголовка Content-Disposition (#1083): выложенное по ссылке приезжает в
+ * Point под своим именем, а не идентификатором адреса. Понимает и простое `filename=`,
+ * и RFC 5987 `filename*=UTF-8''…`.
+ */
+fun fileNameFromDisposition(header: String?): String? {
+    if (header.isNullOrBlank()) return null
+    STAR_NAME.find(header)?.groupValues?.get(1)?.let { raw ->
+        return runCatching { java.net.URLDecoder.decode(raw, "UTF-8") }.getOrNull()?.takeIf { it.isNotBlank() }
+    }
+    return PLAIN_NAME.find(header)?.groupValues?.get(1)?.trim('"', ' ')?.takeIf { it.isNotBlank() }
+}
+
+private val STAR_NAME = Regex("""filename\*\s*=\s*UTF-8''([^;]+)""", RegexOption.IGNORE_CASE)
+
+private val PLAIN_NAME = Regex("""filename\s*=\s*("[^"]+"|[^;]+)""", RegexOption.IGNORE_CASE)
