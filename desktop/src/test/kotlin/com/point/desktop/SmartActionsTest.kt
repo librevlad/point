@@ -350,6 +350,9 @@ class SmartActionsTest {
         "pc-open", "pc-copy", "pc-reveal", "pc-save-as", "pc-download", "pc-to-phone", "pc-print",
         "pc-open-link", "transcribe",
 
+        // Сканированный PDF читается и на ПК (#1014): страницы pdfbox + облачное чтение.
+        "read-document",
+
         // Поиск значений в тексте зовётся так же, как на телефоне (#840): работа одна,
         // исполнители разные.
         "entities",

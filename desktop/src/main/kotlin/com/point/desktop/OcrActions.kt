@@ -99,6 +99,9 @@ class PcCloudOcrRealizer(
             }
         }
 
+    /** Тот же путь чтения для страницы документа (#1014): сцепка, не копия. */
+    internal fun readFrame(file: File, mime: String): String = read(config(), file, mime)
+
     private fun read(cfg: OcrConfig, file: File, mime: String): String {
         val key = cfg.key.ifBlank { DEMO_KEY }
         val body = form(
