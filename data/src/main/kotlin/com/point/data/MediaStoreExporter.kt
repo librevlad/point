@@ -35,7 +35,14 @@ class MediaStoreExporter @Inject constructor(
             values.clear()
             values.put(MediaStore.Downloads.IS_PENDING, 0)
             resolver.update(item, values, null, null)
-            "Downloads/$name"
+
+            // Сказанное совпадает со сделанным (#1051): при совпадении имён система молча
+            // сохраняет под «card (1).jpg» — человеку называется имя, под которым файл
+            // и правда лёг, а не то, которое просили.
+            val saved = resolver.query(item, arrayOf(MediaStore.Downloads.DISPLAY_NAME), null, null, null)
+                ?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
+                ?: name
+            "Downloads/$saved"
         } else {
             val dir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
                 ?: error("Внешнее хранилище недоступно")

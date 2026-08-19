@@ -429,7 +429,12 @@ fun foundHeadline(obj: PointObject): String =
         // Результат чужого исполнителя (ПК) не несёт entity/role-фактов — только имя:
         // без этого запасного шага чип показывал путь до scratch-файла (#681).
         ?: obj.metadata["name"]?.takeIf { it.isNotBlank() }
-        ?: obj.uri.value
+
+        // Узел-значение хранит своё значение прямо в ссылке — оно и есть его лицо.
+        ?: obj.uri.value.takeIf { obj.uri is com.point.core.model.ValueRef }
+
+        // Совсем без имени — вид объекта: путь на диске к человеку не выходит (#1038, #1100).
+        ?: kindMarkLabel(kindMarkOf(obj))
 
 /**
  * Chip прячется, только если ЕГО ФАКТ уже показан строкой выше: сравнение по `uri`

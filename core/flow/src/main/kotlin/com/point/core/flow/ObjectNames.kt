@@ -27,6 +27,10 @@ fun looksMachineName(name: String?): Boolean {
 
     val parts = SEPARATORS.replace(base, " ")
 
+    // Короткое имя — тоже имя (#1049, #1045): `qr.png`, `cv.png`, `id.png` человек назвал
+    // сам, и требование «слово от трёх букв» выбрасывало их в «Изображение, 16 авг».
+    // Машинное — это то, где после чистки служебных слов не остаётся ни одной буквы:
+    // `IMG_1234`, `20260815_093208`, `shared-17553…`.
     return !WORD.containsMatchIn(MACHINE_PREFIX.replace(parts, " "))
 }
 
@@ -35,7 +39,7 @@ private val SEPARATORS = Regex("""[_\-.()\[\]]+""")
 private val MACHINE_PREFIX =
     Regex("""(?i)\b(shared|record|shot|img|image|photo|screenshot|scr|doc|file|tmp|point)\b""")
 
-private val WORD = Regex("""\p{L}{3,}""")
+private val WORD = Regex("""\p{L}""")
 
 /**
  * Имя человеку — не путь на диске (#937).
@@ -53,3 +57,18 @@ private val UNSAFE = Regex("""\p{Cntrl}""")
 private val SPACES = Regex("""\s+""")
 
 private val TRAILING = charArrayOf(' ', ',', '.', ';', '!', '?', '-', '–', '—', '…')
+
+/**
+ * Имя, под которым объект уходит наружу: в файл ссылки, в системный лист, в письмо (#1146).
+ *
+ * Правило одно на все выходы: экранная обрезка («…») в настоящее имя не попадает, путь и
+ * идентификатор — тем более, а расширение достраивается по типу, когда его нет, — адресат
+ * не должен получать «объект» без рода и племени (#1111, #1126).
+ */
+fun outboundFileName(name: String?, mime: String): String {
+    val ext = extensionForMime(mime)
+    val fallback = if (ext.isBlank()) "объект" else "объект.$ext"
+    val base = safeFileName(name?.takeIf { it.isNotBlank() } ?: return fallback, ifBlank = "объект")
+    if (base.contains('.') && base.substringAfterLast('.').length in 1..5) return base
+    return if (ext.isBlank()) base else "$base.$ext"
+}
