@@ -104,6 +104,43 @@ internal fun looksLikeTrackToken(text: String): Boolean {
         s10CheckDigitValid(token) == true
 }
 
+const val META_ENTITY_SERIAL = META_ENTITY_PREFIX + "serial"
+
+/**
+ * Серия «буквы+цифры» — идентификатор, в который можно войти (#1066, #991).
+ *
+ * Госномер BH9249MT, серия паспорта, номер удостоверения — самый уверенный атом кадра
+ * оставался просто текстом: ни у одного правила не было формы для смеси букв и цифр
+ * одним токеном. Отдельного типа «госномер» не заводится (CLAUDE.md): это KIND_IDENTIFIER,
+ * как накладная и квитанция.
+ *
+ * Форма нарочно узкая, чтобы не съедать чужое: один токен 6–10 знаков, только заглавные
+ * буквы и цифры, букв не меньше двух и цифр не меньше трёх, не целиком цифры (это земля
+ * трека/штрихкода/телефона) и не машинный префикс имени файла (IMG_1234, DSC0042).
+ */
+fun serialFacts(text: String, source: Provenance = Provenance.OCR): Map<String, String> {
+    val hits = SERIAL_TOKEN.findAll(text)
+        .map { it.value }
+        .filter { token ->
+            token.count(Char::isDigit) >= 3 &&
+                token.count(Char::isLetter) >= 2 &&
+                MACHINE_NAME_PREFIXES.none { token.startsWith(it) }
+        }
+        .distinct()
+        .toList()
+    if (hits.isEmpty()) return emptyMap()
+    return buildMap {
+        put(META_ENTITY_SERIAL, hits.first())
+        put(META_ENTITY_SERIAL + META_SOURCE_SUFFIX, source.wire)
+        if (hits.size > 1) put(META_ENTITY_SERIAL + META_MORE_SUFFIX, altValue(hits.drop(1)))
+    }
+}
+
+/** Токен серии: слово из заглавных букв и цифр, со всех сторон — граница слова. */
+private val SERIAL_TOKEN = Regex("""(?<![\p{L}\p{N}])[A-ZА-ЯІЇЄ0-9]{6,10}(?![\p{L}\p{N}])""")
+
+private val MACHINE_NAME_PREFIXES = listOf("IMG", "DSC", "PXL", "SCR", "DCIM", "VID")
+
 const val META_ENTITY_TRACK = META_ENTITY_PREFIX + "track"
 
 fun trackFacts(text: String, source: Provenance = Provenance.OCR): Map<String, String> {

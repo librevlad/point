@@ -64,7 +64,8 @@ class PcEntitiesRealizer(
             com.point.core.flow.meterFacts(text) +
             com.point.core.flow.geoFacts(text) +
             com.point.core.flow.receiptFacts(text) +
-            com.point.core.flow.trackFacts(text)
+            com.point.core.flow.trackFacts(text) +
+            com.point.core.flow.serialFacts(text)
 
         if (found.isEmpty() && byRules.isEmpty()) {
 

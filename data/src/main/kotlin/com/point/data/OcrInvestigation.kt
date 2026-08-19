@@ -169,7 +169,8 @@ class OcrInvestigationRealizer @Inject constructor(
             com.point.core.model.Provenance.OCR,
         )
 
-        val trackMeta = trackFacts(text.take(com.point.core.flow.INVESTIGATION_TEXT_CHARS))
+        val trackMeta = trackFacts(text.take(com.point.core.flow.INVESTIGATION_TEXT_CHARS)) +
+            com.point.core.flow.serialFacts(text.take(com.point.core.flow.INVESTIGATION_TEXT_CHARS))
         val (identifiers, idRelations) = identifierObjects(obj, text.take(com.point.core.flow.INVESTIGATION_TEXT_CHARS), trackMeta)
         val url = URL_REGEX.find(text)?.value
         val ref = store.newScratchFile("txt")

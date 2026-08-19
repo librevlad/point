@@ -22,6 +22,7 @@ fun understoodName(key: String): String? = when (key.removePrefix(META_ENTITY_PR
     "geo" -> "Координаты"
     "place" -> "Место"
     "receipt" -> "Квитанция"
+    "serial" -> "Номер"
     "subject" -> "Тема"
     else -> null
 }
