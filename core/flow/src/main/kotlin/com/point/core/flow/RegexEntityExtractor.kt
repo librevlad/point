@@ -43,20 +43,23 @@ class RegexEntityExtractor(
                 """|\b\d{1,2}\s+(?:январ|феврал|март|апрел|ма[йя]|июн|июл|август|сентябр|октябр|ноябр|декабр)[а-яё]*\s+\d{4}\b""",
         )
 
-        fun luhn(digits: String): Boolean {
-            if (digits.length !in 13..19) return false
-            var sum = 0
-            var double = false
-            for (i in digits.indices.reversed()) {
-                var d = digits[i] - '0'
-                if (double) {
-                    d *= 2
-                    if (d > 9) d -= 9
-                }
-                sum += d
-                double = !double
-            }
-            return sum % 10 == 0
-        }
+
     }
+}
+
+/** Контрольная сумма платёжной карты; общая для правил и протокола понимания (#1176). */
+internal fun luhn(digits: String): Boolean {
+    if (digits.length !in 13..19) return false
+    var sum = 0
+    var double = false
+    for (i in digits.indices.reversed()) {
+        var d = digits[i] - '0'
+        if (double) {
+            d *= 2
+            if (d > 9) d -= 9
+        }
+        sum += d
+        double = !double
+    }
+    return sum % 10 == 0
 }

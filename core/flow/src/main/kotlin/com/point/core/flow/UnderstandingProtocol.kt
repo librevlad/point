@@ -91,6 +91,19 @@ fun spiralBrief(metadata: Map<String, String>): String? {
     }
 }
 
+/** Числовые KEY, из которых голая карта переезжает к себе (#657, #1176). */
+private val MIGRATES_TO_CARD = setOf("track", "receipt", "meter")
+
+/**
+ * Голый номер карты: ровно 16 цифр без букв и контрольная сумма Луна сошлась.
+ * Полная уверенность (#657): 15-значные и IBAN не трогаются — там уверенности нет.
+ */
+fun bareCardNumber(value: String): Boolean {
+    if (value.any(Char::isLetter)) return false
+    val digits = value.filter(Char::isDigit)
+    return digits.length == 16 && luhn(digits)
+}
+
 fun parseFieldCandidates(answer: String): ParsedUnderstanding {
     val fields = LinkedHashMap<String, MutableList<FieldCandidate>>()
     val single = LinkedHashMap<String, String>()
@@ -108,8 +121,18 @@ fun parseFieldCandidates(answer: String): ParsedUnderstanding {
         }
 
         // Номер карты — не телефон (#657): 16 цифр в phone рождали «Сохранить
-        // контакт 5169 3351 09…» и светили карту без маски.
-        if (semanticFits(META_ENTITY_PREFIX + "phone", candidate.text) == false) return
+        // контакт 5169 3351 09…». Карта при этом не выбрасывается, а узнаётся (#1176).
+        if (semanticFits(META_ENTITY_PREFIX + "phone", candidate.text) == false) {
+            if (bareCardNumber(candidate.text)) {
+                val bucket = fields.getOrPut(META_ENTITY_PREFIX + "card") { mutableListOf() }
+                if (bucket.none { normConsensus(it.text) == normConsensus(candidate.text) } &&
+                    bucket.size < MAX_FIELD_CANDIDATES
+                ) {
+                    bucket += candidate.copy(person = null)
+                }
+            }
+            return
+        }
         candidate.person?.let { contacts += PersonContact(it, candidate.text) }
 
         val bucket = fields.getOrPut(META_ENTITY_PREFIX + "phone") { mutableListOf() }
@@ -154,9 +177,15 @@ fun parseFieldCandidates(answer: String): ParsedUnderstanding {
                     offerPhone(FieldCandidate(phone, c.ids, person = name))
                 }
             }
-            else -> UNDERSTAND_CONTRACT_KEYS[key]?.let { suffix ->
-                val metaKey = META_ENTITY_PREFIX + suffix
+            else -> UNDERSTAND_CONTRACT_KEYS[key]?.let { rawSuffix ->
                 val candidate = splitCandidate(rest) ?: return@forEach
+
+                // Карта узнаётся по себе (#657, вторая часть; #1176): голые 16 цифр с
+                // сошедшейся контрольной суммой Луна — платёжная карта, каким бы KEY
+                // модель их ни назвала. «5452198100477458» из переписки приходило
+                // треком — и карта терялась, хотя число говорит само за себя.
+                val suffix = if (rawSuffix in MIGRATES_TO_CARD && bareCardNumber(candidate.text)) "card" else rawSuffix
+                val metaKey = META_ENTITY_PREFIX + suffix
 
                 // Отказ-фраза — не значение ни для какого поля (#656).
                 if (startsWithRefusal(candidate.text)) return@forEach
