@@ -40,6 +40,8 @@ import com.point.core.flow.readConfidently
 import com.point.core.flow.locate
 import com.point.core.flow.regionWire
 import com.point.core.flow.META_AT_REGION
+import com.point.core.flow.entityObjects
+import com.point.core.flow.entityDelta
 import com.point.core.model.Feature
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
