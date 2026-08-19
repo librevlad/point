@@ -14,6 +14,21 @@ import org.junit.Test
 
 class CloudOcrRealizerTest {
 
+    private val store = object : com.point.core.flow.ObjectStore {
+        override suspend fun ingest(sourceUri: String, mime: String) = error("unused")
+        override suspend fun ingestMultiple(sources: List<String>) = error("unused")
+        override suspend fun put(
+            result: ResultObject,
+            from: PointObject?,
+            by: com.point.core.model.CapabilityId?,
+        ) = error("unused")
+        override suspend fun children(collection: PointObject, limit: Int) = error("unused")
+        override suspend fun readText(obj: PointObject, limit: Int) = error("unused")
+        override suspend fun newScratchFile(extension: String) =
+            ScratchRef(java.io.File.createTempFile("point-", ".$extension").apply { deleteOnExit() }.absolutePath)
+        override suspend fun clear() = Unit
+    }
+
     private fun llm(answer: ResultObject? = null) = object : LlmClient {
         override suspend fun run(obj: PointObject, prompt: String): ResultObject =
             answer ?: error("нет ключа")
@@ -51,7 +66,7 @@ class CloudOcrRealizerTest {
     fun `отдельная кнопка «Распознать в облаке» говорит теми же словами — работа одна и та же`() = runTest {
         val cloud = ResultObject(ObjectKind.TEXT, "text/markdown", ScratchRef("/out/cloud.md"))
 
-        val heard = stagesHeard { CloudOcrDirectRealizer(llm(cloud), privacyAt()).perform(image) }
+        val heard = stagesHeard { CloudOcrDirectRealizer(llm(cloud), privacyAt(), store).perform(image) }
 
         assertEquals(listOf("Читаю снимок в облаке"), heard)
     }

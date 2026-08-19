@@ -76,7 +76,7 @@ class OcrInvestigation @Inject constructor() : Capability {
         // Не «ocr»: этот id носит пользовательское действие «Распознать текст». Резолвер
         // группирует реализаторы по id, и общий id подсовывал циклу знания реализатор
         // действия — знание превращалось в «вернуло объект вместо знания».
-        val ID = com.point.core.model.CapabilityId("image-text")
+        val ID = com.point.core.flow.KnownCapabilities.IMAGE_TEXT
     }
 }
 

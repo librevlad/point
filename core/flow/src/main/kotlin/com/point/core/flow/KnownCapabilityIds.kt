@@ -29,4 +29,12 @@ object KnownCapabilities {
 
     /** Прочитать слова с кадра. */
     val OCR = CapabilityId("ocr")
+
+    /**
+     * Вопрос «что написано на этом кадре» — исследование чтения.
+     *
+     * Id жил только в `:data` (OcrInvestigation), но состояние этого вопроса ставит и
+     * сильное чтение из `:executors` (#1097): знание одно, и имя вопроса у него одно.
+     */
+    val IMAGE_TEXT = CapabilityId("image-text")
 }

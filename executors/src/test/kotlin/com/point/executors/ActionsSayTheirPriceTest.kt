@@ -174,7 +174,7 @@ class ActionsSayTheirPriceTest {
     fun `цена сетевого чтения по-прежнему сказана подписью`() {
 
         assertEquals(
-            "текст · снимок уйдёт в сервис",
+            "текст точнее · снимок уйдёт в сервис",
             yieldLabel(CloudOcrCapability().yields(image)),
         )
     }
