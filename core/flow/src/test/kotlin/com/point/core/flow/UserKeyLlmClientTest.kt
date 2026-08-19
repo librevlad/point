@@ -119,4 +119,53 @@ class UserKeyLlmClientTest {
 
         assertEquals(AiOutcome.BAD_KEY, facts.seen["groq"])
     }
+
+    /** #1176: виток «сильнее» обходит уже отвечавшие сервисы и среди ключей человека. */
+    @Test
+    fun `виток обходит уже отвечавший ключ, когда есть кем заменить`() = runTest {
+        val hosts = mutableListOf<String>()
+        val http = object : HttpJson {
+            override suspend fun post(u: String, headers: Map<String, String>, b: String): HttpResult {
+                hosts += u
+                return HttpResult(200, okBody)
+            }
+        }
+        val first = UserAiKey("gemini", "k1", model = "m1", baseUrl = "https://a.host/v1")
+        val second = UserAiKey("groq", "k2", model = "m2", baseUrl = "https://b.host/v1")
+
+        val res = UserKeyLlmClient(keys(first, second), http, store, RememberedFacts())
+            .run(obj, "hi", setOf("gemini"))
+
+        assertTrue(hosts.single().startsWith("https://b.host"))
+        assertEquals("groq", res.metadata[META_ANSWERED_BY])
+    }
+
+    @Test
+    fun `все ключи уже отвечали — повтор лучше отказа`() = runTest {
+        val hosts = mutableListOf<String>()
+        val http = object : HttpJson {
+            override suspend fun post(u: String, headers: Map<String, String>, b: String): HttpResult {
+                hosts += u
+                return HttpResult(200, okBody)
+            }
+        }
+        val first = UserAiKey("gemini", "k1", model = "m1", baseUrl = "https://a.host/v1")
+
+        UserKeyLlmClient(keys(first), http, store, RememberedFacts()).run(obj, "hi", setOf("gemini"))
+
+        assertTrue(hosts.single().startsWith("https://a.host"))
+    }
+
+    /** #1127/#1176: без имени ответ по ключу человека не участвовал в обходе следующего витка. */
+    @Test
+    fun `ответ по ключу человека называет сервис`() = runTest {
+        val http = object : HttpJson {
+            override suspend fun post(u: String, headers: Map<String, String>, b: String) = HttpResult(200, okBody)
+        }
+        val mine = UserAiKey("own", "sk-user", model = "my-model", baseUrl = "https://my.host/v1")
+
+        val res = UserKeyLlmClient(keys(mine), http, store, RememberedFacts()).run(obj, "hi")
+
+        assertEquals("own", res.metadata[META_ANSWERED_BY])
+    }
 }

@@ -43,7 +43,8 @@ class FallbackLlmClient(
         // Виток «сильнее» обходит уже отвечавших (#1010) — но только когда есть кем
         // заменить: повтор той же моделью лучше отказа.
         val fresh = allowedAll.filter { it.configured && it.serviceId !in avoidServices && it.canHandle(obj) }
-        val allowed = if (avoidServices.isEmpty() || fresh.isEmpty()) allowedAll else fresh
+        val rotating = avoidServices.isNotEmpty() && fresh.isNotEmpty()
+        val allowed = if (rotating) fresh else allowedAll
         val errors = mutableListOf<String>()
         var considered = 0
         var skippedUnconfigured = 0
@@ -71,7 +72,9 @@ class FallbackLlmClient(
                 // (HttpJson/HttpFiles connectTimeout/readTimeout, #690, #691): молчащий
                 // сервис отпускает очередь за секунды, не за полторы минуты, и это
                 // верно для любого провайдера в цепочке, кем бы он ни был вызван.
-                val result = provider.run(obj, prompt)
+                // Составной исполнитель (ключи человека) обходит своих внутри тем же
+                // списком; отменённый обход не воскресает этажом ниже (#1176).
+                val result = provider.run(obj, prompt, if (rotating) avoidServices else emptySet())
                 facts.remember(provider.serviceId, AiOutcome.ANSWERED)
 
                 // Кто ответил — часть ответа (#1127). Знание, добытое облаком, иначе

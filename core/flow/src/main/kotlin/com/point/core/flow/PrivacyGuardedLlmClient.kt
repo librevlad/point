@@ -31,6 +31,13 @@ class PrivacyGuardedLlmClient(
         return inner.run(obj, prompt)
     }
 
+    // Виток «другой моделью» (#1010) проходит сквозь охрану целиком: интерфейсный
+    // дефолт молча отбрасывал список уже отвечавших, и ротация не доходила до цепочки (#1176).
+    override suspend fun run(obj: PointObject, prompt: String, avoidServices: Set<String>): ResultObject {
+        if (!allowed) error(chainClosedBy(privacy.level()))
+        return inner.run(obj, prompt, avoidServices)
+    }
+
     override fun canHandle(obj: PointObject) = inner.canHandle(obj)
 
     override val strongVision: Boolean get() = inner.strongVision

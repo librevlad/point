@@ -73,4 +73,22 @@ class LlmExchangeLogTest {
         LoggingLlmClient(answering("ok"), silentDir, enabled = false).run(obj(), "тихо")
         assertEquals(null, silentDir.listFiles()?.takeIf { it.isNotEmpty() })
     }
+
+    /** #1176: журнал — прозрачная стенка, список уже отвечавших едет дальше нетронутым. */
+    @Test
+    fun `виток проходит сквозь журнал со списком уже отвечавших`() = kotlinx.coroutines.runBlocking {
+        var avoided: Set<String>? = null
+        val inner = object : LlmClient {
+            override suspend fun run(obj: PointObject, prompt: String) =
+                ResultObject(com.point.core.model.ObjectKind.TEXT, "text/plain", ScratchRef("/tmp/a.txt"))
+            override suspend fun run(obj: PointObject, prompt: String, avoidServices: Set<String>): ResultObject {
+                avoided = avoidServices
+                return run(obj, prompt)
+            }
+        }
+
+        LoggingLlmClient(inner, tempDir(), enabled = false).run(obj(), "prompt", setOf("groq"))
+
+        org.junit.Assert.assertEquals(setOf("groq"), avoided)
+    }
 }

@@ -32,6 +32,13 @@ class LoggingLlmClient(
         return result.getOrThrow()
     }
 
+    // Журнал — прозрачная стенка: список уже отвечавших едет дальше нетронутым (#1176).
+    override suspend fun run(obj: PointObject, prompt: String, avoidServices: Set<String>): ResultObject {
+        val result = runCatching { inner.run(obj, prompt, avoidServices) }
+        if (enabled) runCatching { record(obj, prompt, result) }
+        return result.getOrThrow()
+    }
+
     private fun record(obj: PointObject, prompt: String, result: Result<ResultObject>) {
         dir.mkdirs()
         val answer = result.fold(
