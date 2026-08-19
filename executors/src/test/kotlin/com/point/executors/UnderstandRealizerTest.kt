@@ -621,6 +621,37 @@ class UnderstandRealizerTest {
         assertEquals("табло электросчётчика", meta["semantic.summary"])
     }
 
+    /** #1176: зрячее чтение — такое же исследование; без следа «сильнее» не наступало. */
+    @Test
+    fun `зрячее чтение оставляет след — вопрос отвечен`() = runTest {
+        val photo = PointObject(
+            "img", "image/jpeg", ScratchRef("/tmp/meter.jpg"), ObjectState(ObjectKind.IMAGE),
+        )
+
+        val result = realizer("METER=20842\nSUMMARY=табло электросчётчика").perform(photo)
+
+        val meta = (result as ActionResult.Done).findings!!.metadata
+        assertEquals(
+            com.point.core.flow.InvestigationState.FOUND,
+            com.point.core.flow.investigationStateOf(meta, UnderstandCapability.ID),
+        )
+    }
+
+    @Test
+    fun `зрячее сомнение оставляет вопрос открытым — «недостаточно», не «нашли»`() = runTest {
+        val photo = PointObject(
+            "img", "image/jpeg", ScratchRef("/tmp/meter.jpg"), ObjectState(ObjectKind.IMAGE),
+        )
+
+        val result = realizer("METER=20842\nUNSURE=METER").perform(photo)
+
+        val meta = (result as ActionResult.Done).findings!!.metadata
+        assertEquals(
+            com.point.core.flow.InvestigationState.INSUFFICIENTLY_INVESTIGATED,
+            com.point.core.flow.investigationStateOf(meta, UnderstandCapability.ID),
+        )
+    }
+
     @Test
     fun `зрячее чтение просит отвечать на языке человека (#670)`() = runTest {
         // Живой прогон 2026-08-09: SUMMARY пришло по-английски («blue water meter in dirt»)

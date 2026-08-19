@@ -45,6 +45,22 @@ class UnderstandGrowsForeverTest {
         assertTrue("виток не зовёт сильнее: $after", after.contains("сильнее"))
     }
 
+    /** #1176: вопрос уже задан — «сильнее» честно и после «не нашлось», и после спора. */
+    @Test fun `«сильнее» зовёт после любого заданного вопроса, не только после находки`() {
+        val cap = UnderstandCapability(ready)
+        val states = listOf(
+            InvestigationState.NOT_FOUND,
+            InvestigationState.INSUFFICIENTLY_INVESTIGATED,
+            InvestigationState.CONTRADICTORY,
+        )
+
+        states.forEach { state ->
+            val meta = withInvestigation(emptyMap(), UnderstandCapability.ID, state)
+            val label = cap.label(graph(*meta.toList().toTypedArray()))
+            assertTrue("вопрос уже задан ($state), а виток не зовёт сильнее: $label", label.contains("сильнее"))
+        }
+    }
+
     private fun provider(id: String, log: MutableList<String>) = object : LlmClient {
         override val configured = true
         override val serviceId = id

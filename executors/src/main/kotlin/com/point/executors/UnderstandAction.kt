@@ -85,12 +85,13 @@ class UnderstandCapability @Inject constructor(
     override val meta = CapabilityMeta(priority = 31, cost = Cost.PAID, latency = Latency.SLOW, network = true, auth = true)
     override fun label(state: ObjectState) = labelNeedingKey("Понять", keys.keySet())
 
-    // «Понять» может бесконечно обогащать граф (решение владельца, #1010): после успешного
-    // витка действие зовётся дальше — следующий заход идёт другой моделью и улучшает
-    // результат обычным merge.
+    // «Понять» может бесконечно обогащать граф (решение владельца, #1010): после витка
+    // действие зовётся дальше — следующий заход идёт другой моделью и улучшает результат
+    // обычным merge. «Сильнее» — у всякого уже заданного вопроса (#1176): и у «нашли»,
+    // и у «недостаточно», и у спора, и у «не нашлось» — другая модель вправе найти.
     override fun label(graph: com.point.core.flow.GraphState): String =
-        if (com.point.core.flow.investigationStateOf(graph.obj.metadata, ID) ==
-            com.point.core.flow.InvestigationState.FOUND
+        if (com.point.core.flow.investigationStateOf(graph.obj.metadata, ID) !=
+            com.point.core.flow.InvestigationState.NOT_INVESTIGATED
         ) {
             labelNeedingKey("Понять сильнее", keys.keySet())
         } else {
@@ -309,10 +310,17 @@ class UnderstandRealizer @Inject constructor(
             UNDERSTOOD,
             Findings(
                 metadata = addActor(
-                    merged +
-                        annotations(merged, fields, judgedByLayer = false, blocked = judged.blocked) +
-                        doubts(merged, parsed.unsure) +
-                        (META_READING_MODE to ReadingMode.HANDWRITTEN.name),
+                    run {
+                        // Зрячее чтение — такое же исследование (#1176): без состояния
+                        // «Понять сильнее» у снимка не наступало, а спираль не знала,
+                        // отвечен ли вопрос. Судится знание вместе с оговорками —
+                        // сомнение модели честно даёт «недостаточно», не «нашли».
+                        val noted = merged + doubts(merged, parsed.unsure)
+                        noted +
+                            annotations(merged, fields, judgedByLayer = false, blocked = judged.blocked) +
+                            investigationOutcome(noted, values.keys).orEmptyInvestigation() +
+                            (META_READING_MODE to ReadingMode.HANDWRITTEN.name)
+                    },
                     values.keys,
                     answeredBy,
                 ),
