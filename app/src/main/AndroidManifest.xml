@@ -153,6 +153,24 @@
         </activity>
 
         <!--
+          Ссылка Point у получателя с Point открывается в Point (#1083): выложенное по
+          `point.leerio.app/d/…` приезжает объектом со знанием, а не веб-страницей.
+          `autoVerify` проверяется по /.well-known/assetlinks.json на самом сервере —
+          без диалога выбора. Без Point ссылка остаётся веб-страницей, как была.
+        -->
+        <activity
+            android:name=".source.OpenDropLinkActivity"
+            android:exported="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="point.leerio.app" android:pathPrefix="/d/" />
+            </intent-filter>
+        </activity>
+
+        <!--
           Возврат из браузера после входа (#561). Вход начат на этом же телефоне, поэтому человека
           возвращает приложение, а не он сам: страница подтверждения уходит на `point://signed-in`,
           и Point поднимается на передний план. `singleTask` — чтобы попасть в ЖИВУЮ задачу Point,
