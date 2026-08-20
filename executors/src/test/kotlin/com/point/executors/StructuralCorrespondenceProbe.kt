@@ -63,13 +63,13 @@ class StructuralCorrespondenceProbe {
             val corpus = File(System.getenv("POINT_CORPUS") ?: "C:/Users/User/point-corpus")
             val realizer = UnderstandRealizer(EyesOnlyCorpusProbe.liveChain())
 
+            // «Вопрос без наблюдения» (RFC §11): узел существует якорями, факта нет —
+            // ни плейсхолдера, ни мусора в споре.
             val seeded = buildMap {
                 seeds.forEach { (row, col) ->
                     val key = anchoredCellKey(row, col)
-                    put(key, "—")
                     put(key + META_ANCHOR_ROW_SUFFIX, row)
                     put(key + META_ANCHOR_COL_SUFFIX, col)
-                    put(key + META_EVIDENCE_SUFFIX, "")
                 }
             }
             var obj = PointObject(
@@ -78,9 +78,7 @@ class StructuralCorrespondenceProbe {
                 ObjectState(ObjectKind.IMAGE),
                 seeded,
             )
-            fun nodes(meta: Map<String, String>) = meta.keys
-                .filter { it.startsWith(META_CELL_ANCHOR_PREFIX) && !isAnnotationKey(it) && !com.point.core.flow.isStateKey(it) }
-                .toSet()
+            fun nodes(meta: Map<String, String>) = com.point.core.flow.structuralNodes(meta).toSet()
             val seededKeys = nodes(obj.metadata)
             say("Посеяно якорных вопросов: ${seededKeys.size}")
 
@@ -123,14 +121,14 @@ class StructuralCorrespondenceProbe {
                 val value = obj.metadata[key].orEmpty()
                 val spor = if (obj.metadata[key + META_ALT_SUFFIX].isNullOrBlank()) "" else " · спор жив"
                 val kind = when {
-                    key in seededKeys && value != "—" -> { answered++; "ОТВЕЧЕН" }
+                    key in seededKeys && value.isNotBlank() -> { answered++; "ОТВЕЧЕН" }
                     key in seededKeys -> { open++; "открыт" }
                     else -> "новый"
                 }
                 val expected = truth.entries.firstOrNull { com.point.core.flow.sameFact("cell", it.key, row) }?.value
-                val hit = expected != null && value != "—" &&
+                val hit = expected != null && value.isNotBlank() &&
                     expected.any { com.point.core.flow.sameFact(key, it, value) }
-                if (expected != null && value != "—") { if (hit) truthHits++ else truthMisses++ }
+                if (expected != null && value.isNotBlank()) { if (hit) truthHits++ else truthMisses++ }
                 say("«$row» × «$col» = «$value» · $kind" + (if (hit) " · ЭТАЛОН" else "") + spor)
             }
             say("")

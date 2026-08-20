@@ -110,6 +110,36 @@ class StructuralCorrespondenceTest {
         assertFalse("бриф подсказал проверяемое значение", brief.contains("500"))
     }
 
+    /** «Вопрос без наблюдения» (RFC §11): узел существует якорями, факта ещё нет. */
+    @Test fun `вопросный узел без значения зовётся в бриф как непрочитанный`() {
+        val key = anchoredCellKey("Цукор", "Ціна")
+        val brief = spiralBrief(
+            mapOf(
+                key + META_ANCHOR_ROW_SUFFIX to "Цукор",
+                key + META_ANCHOR_COL_SUFFIX to "Ціна",
+            ),
+        )!!
+
+        assertTrue(brief.contains("ещё не прочитана"))
+        assertTrue(brief.contains("CELL «Цукор» × «Ціна»"))
+    }
+
+    @Test fun `ответ ложится в вопросный узел чисто — без спора и плейсхолдерного мусора`() {
+        val key = anchoredCellKey("Цукор", "Ціна")
+        val question = mapOf(
+            key + META_ANCHOR_ROW_SUFFIX to "Цукор",
+            key + META_ANCHOR_COL_SUFFIX to "Ціна",
+        )
+        val observed = parseFieldCandidates("CELL «Цукор» × «Ціна» = 500").single
+
+        val (values, _) = resolveStructural(question, observed)
+        val merged = mergeFacts(question, values)
+
+        assertEquals("500", merged[key])
+        assertTrue("вопрос родил спор из ничего", merged[key + META_ALT_SUFFIX].isNullOrBlank())
+        assertTrue("первое наблюдение не видно дельтой", spiralDelta(question, merged)!!.contains("Ячейка"))
+    }
+
     @Test fun `узел без якорей в бриф не выходит — спросить его нечем`() {
         val key = anchoredCellKey("х", "у")
         val brief = spiralBrief(
