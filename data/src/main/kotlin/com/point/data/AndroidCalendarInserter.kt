@@ -38,8 +38,8 @@ class AndroidCalendarInserter @Inject constructor(
         }
     }
 
-    private companion object {
-        const val DAY_MS = 24L * 60 * 60 * 1000
+    companion object {
+        private const val DAY_MS = 24L * 60 * 60 * 1000
         const val NO_CALENDAR = "На этом устройстве нет календаря"
     }
 }

@@ -1117,12 +1117,13 @@ class FlowViewModelTest {
      * (линза «без оправданий», #1003).
      */
     @Test fun `возврат с чужого экрана без результата гасит подпись шага молча`() = runTest(dispatcher) {
-        resolver.result = ActionResult.Done("Открыл календарь — событие создаётся там")
+        val handOff = "Открыл календарь — событие создаётся там"
+        resolver.result = ActionResult.Done(handOff)
         val vm = vm()
         vm.onShared("uri", "image/png"); advanceUntilIdle()
         vm.onBubble(bubble(id = com.point.executors.EventCapability.ID.value, title = "Создать событие"))
         advanceUntilIdle()
-        assertEquals("Открыл календарь — событие создаётся там", vm.ui.value.message)
+        assertEquals(handOff, vm.ui.value.message)
 
         vm.returnedToPoint()
 
@@ -1145,19 +1146,21 @@ class FlowViewModelTest {
     }
 
     @Test fun `возврат не трогает подпись шага, который не уводил человека`() = runTest(dispatcher) {
-        resolver.result = ActionResult.Done("Готово")
+        val word = "Готово"
+        resolver.result = ActionResult.Done(word)
         val vm = vm()
         vm.onShared("uri", "image/png"); advanceUntilIdle()
         vm.onBubble(bubble()); advanceUntilIdle()
 
         vm.returnedToPoint()
 
-        assertEquals("Готово", vm.ui.value.message)
+        assertEquals(word, vm.ui.value.message)
         assertEquals(Outcome.DONE, vm.ui.value.messageOutcome)
     }
 
     @Test fun `честный отказ календаря возвратом не гасится`() = runTest(dispatcher) {
-        resolver.result = ActionResult.Failure("На этом устройстве нет календаря", recoverable = true)
+        val refusal = "На этом устройстве нет календаря"
+        resolver.result = ActionResult.Failure(refusal, recoverable = true)
         val vm = vm()
         vm.onShared("uri", "image/png"); advanceUntilIdle()
         vm.onBubble(bubble(id = com.point.executors.EventCapability.ID.value, title = "Создать событие"))
@@ -1165,7 +1168,7 @@ class FlowViewModelTest {
 
         vm.returnedToPoint()
 
-        assertEquals("На этом устройстве нет календаря", vm.ui.value.message)
+        assertEquals(refusal, vm.ui.value.message)
         assertEquals(Outcome.FAILED, vm.ui.value.messageOutcome)
     }
 

@@ -37,7 +37,7 @@ class AndroidCalendarInserterTest {
             runBlocking { inserter.insertEvent("Счёт 4417", LocalDate.of(2026, 8, 18)) }
         }
 
-        assertEquals("На этом устройстве нет календаря", outcome.exceptionOrNull()?.message)
+        assertEquals(AndroidCalendarInserter.NO_CALENDAR, outcome.exceptionOrNull()?.message)
         assertNull("чужой экран не открывался", shadowOf(context as Application).nextStartedActivity)
     }
 
@@ -53,10 +53,11 @@ class AndroidCalendarInserterTest {
             },
         )
 
-        runBlocking { inserter.insertEvent("Счёт 4417", null) }
+        val title = "Счёт 4417"
+        runBlocking { inserter.insertEvent(title, null) }
 
         val started = shadowOf(context as Application).nextStartedActivity
         assertEquals(Intent.ACTION_INSERT, started?.action)
-        assertEquals("Счёт 4417", started?.getStringExtra(CalendarContract.Events.TITLE))
+        assertEquals(title, started?.getStringExtra(CalendarContract.Events.TITLE))
     }
 }
