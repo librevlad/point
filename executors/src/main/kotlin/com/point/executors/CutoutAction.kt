@@ -21,7 +21,10 @@ class CutoutCapability @Inject constructor() : Capability {
     override val id = ID
     override val icon = "cutout"
 
-    override val meta = CapabilityMeta(priority = 40, latency = Latency.FAST)
+    // Долгая работа, а не быстрая (#1128): на медленном телефоне модель сегментации
+    // разворачивается минутами, и «быстрое» объявление оставляло человека перед мёртвым
+    // экраном — без «Идёт N с» и без «Отменить», которые положены всякой долгой работе.
+    override val meta = CapabilityMeta(priority = 40, latency = Latency.SLOW)
     override fun label(state: ObjectState) = "Убрать фон"
     override fun accepts(state: ObjectState) = state.kind == ObjectKind.IMAGE
     override fun produces(state: ObjectState) = ObjectState(ObjectKind.IMAGE)

@@ -23,7 +23,9 @@ class ReplaceBgCapability @Inject constructor() : Capability {
     override val id = ID
     override val icon = "replace-bg"
 
-    override val meta = CapabilityMeta(priority = 42, latency = Latency.FAST)
+    // Долгая работа, как «Убрать фон» (#1128): та же модель сегментации, те же минуты
+    // на медленном телефоне — и тот же экран «Идёт N с» с «Отменить», а не тишина.
+    override val meta = CapabilityMeta(priority = 42, latency = Latency.SLOW)
     override fun label(state: ObjectState) = "Заменить фон"
     override fun accepts(state: ObjectState) = state.kind == ObjectKind.IMAGE
     override fun produces(state: ObjectState) = ObjectState(ObjectKind.IMAGE)
