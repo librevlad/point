@@ -13,7 +13,7 @@ class ProcessTextActivity : FlowHostActivity() {
                 ?: intent.getCharSequenceExtra(Intent.EXTRA_PROCESS_TEXT_READONLY)
             )?.toString().orEmpty()
         if (text.isBlank()) {
-            finish()
+            refuseEmptySelection()
             return
         }
 

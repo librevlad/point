@@ -14,6 +14,17 @@ class ShareActivity : FlowHostActivity() {
     override fun accept(intent: Intent) {
         val stream = IntentCompat.getParcelableExtra(intent, Intent.EXTRA_STREAM, Uri::class.java)
         val streams = IntentCompat.getParcelableArrayListExtra(intent, Intent.EXTRA_STREAM, Uri::class.java)
+        val text = intent.getStringExtra(Intent.EXTRA_TEXT)
+
+        // Шаринг текста, в котором текста нет (пробелы либо вовсе без EXTRA_TEXT), — тот же
+        // пустой вход, что и в меню выделения: слово человеку, без объекта и экрана (#1096).
+        val textShare = intent.action == Intent.ACTION_SEND && stream == null &&
+            (text != null || intent.type?.startsWith("text/") == true)
+        if (textShare && text.isNullOrBlank()) {
+            refuseEmptySelection()
+            return
+        }
+
         when (
             val incoming = incomingOf(
                 action = intent.action,
@@ -21,7 +32,7 @@ class ShareActivity : FlowHostActivity() {
                 type = intent.type ?: intent.data?.let { contentResolver.getType(it) },
                 data = intent.data?.toString(),
                 stream = stream?.toString(),
-                text = intent.getStringExtra(Intent.EXTRA_TEXT),
+                text = text,
                 streams = streams?.map { it.toString() }.orEmpty(),
             )
         ) {

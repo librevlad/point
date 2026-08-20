@@ -5,6 +5,7 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.addCallback
 import androidx.activity.compose.setContent
@@ -24,6 +25,18 @@ abstract class FlowHostActivity : ComponentActivity() {
     protected abstract fun accept(intent: Intent)
 
     protected open val restoresJourney: Boolean get() = false
+
+    /**
+     * Пустое выделение отвечает словом, а не молчанием (#1096, решение владельца 20.08.2026).
+     *
+     * Человек нажал пункт меню — ответ прошен, поэтому короткий тост уместен. Объект не
+     * заводится, экран не поднимается и предыдущий объект молча не восстанавливается:
+     * onCreate после отказа не идёт дальше.
+     */
+    protected fun refuseEmptySelection() {
+        Toast.makeText(this, "Выделение пустое — выделите текст", Toast.LENGTH_SHORT).show()
+        finish()
+    }
 
     /**
      * Пропажа и возврат сети видны на открытом экране, без перезахода в объект (#758).
@@ -57,6 +70,7 @@ abstract class FlowHostActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         if (savedInstanceState == null) accept(intent)
+        if (isFinishing) return
         if (restoresJourney) viewModel.restoreJourney()
 
         onBackPressedDispatcher.addCallback(this) {
