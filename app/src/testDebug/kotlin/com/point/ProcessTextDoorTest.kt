@@ -47,7 +47,7 @@ class ProcessTextDoorTest {
     @Test fun `пустое выделение отвечает словом — объекта нет, экран не поднимается`() {
         val activity = Robolectric.buildActivity(ProcessTextActivity::class.java, selection("   ")).create().get()
 
-        assertEquals("Выделение пустое — выделите текст", ShadowToast.getTextOfLatestToast())
+        assertEquals(EMPTY_SELECTION_WORDS, ShadowToast.getTextOfLatestToast())
         assertTrue("экран не должен подниматься", activity.isFinishing)
         assertTrue("объект из пустоты: появились байты", sharedTextLeftovers().isEmpty())
     }

@@ -34,7 +34,7 @@ abstract class FlowHostActivity : ComponentActivity() {
      * onCreate после отказа не идёт дальше.
      */
     protected fun refuseEmptySelection() {
-        Toast.makeText(this, "Выделение пустое — выделите текст", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, EMPTY_SELECTION_WORDS, Toast.LENGTH_SHORT).show()
         finish()
     }
 
@@ -117,3 +117,6 @@ abstract class FlowHostActivity : ComponentActivity() {
         super.onDestroy()
     }
 }
+
+/** Слово на пустое выделение (#1096): ответ прошен нажатием пункта меню. */
+internal const val EMPTY_SELECTION_WORDS = "Выделение пустое — выделите текст"

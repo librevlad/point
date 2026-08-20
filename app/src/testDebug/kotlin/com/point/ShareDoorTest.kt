@@ -69,7 +69,7 @@ class ShareDoorTest {
     @Test fun `Share текста без текста отвечает словом — объекта нет, экран не поднимается`() {
         val activity = Robolectric.buildActivity(ShareActivity::class.java, shared()).create().get()
 
-        assertEquals("Выделение пустое — выделите текст", ShadowToast.getTextOfLatestToast())
+        assertEquals(EMPTY_SELECTION_WORDS, ShadowToast.getTextOfLatestToast())
         assertTrue("экран не должен подниматься", activity.isFinishing)
         assertTrue("объект из пустоты: появились байты", sharedTextLeftovers().isEmpty())
     }
@@ -78,7 +78,7 @@ class ShareDoorTest {
         val intent = shared().putExtra(Intent.EXTRA_TEXT, "   ")
         val activity = Robolectric.buildActivity(ShareActivity::class.java, intent).create().get()
 
-        assertEquals("Выделение пустое — выделите текст", ShadowToast.getTextOfLatestToast())
+        assertEquals(EMPTY_SELECTION_WORDS, ShadowToast.getTextOfLatestToast())
         assertTrue("экран не должен подниматься", activity.isFinishing)
         assertTrue("объект из пробелов: появились байты", sharedTextLeftovers().isEmpty())
     }
