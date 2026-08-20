@@ -61,19 +61,7 @@ class EyesOnlyCorpusProbe {
                 .first { File(it, "local.properties").isFile }
             val corpus = File(System.getenv("POINT_CORPUS") ?: "C:/Users/User/point-corpus")
 
-            val chain = FallbackLlmClient(
-                visionClients(root),
-                facts = object : AiFacts {
-                    override fun all(): Map<String, AiFact> = emptyMap()
-                    override fun remember(providerId: String, outcome: AiOutcome) = Unit
-                },
-                network = NetworkAvailability { true },
-                yolo = object : YoloMode {
-                    override fun enabled() = true
-                    override suspend fun setEnabled(enabled: Boolean) = Unit
-                },
-            )
-            val realizer = UnderstandRealizer(chain)
+            val realizer = UnderstandRealizer(liveChain())
 
             val cases = mutableListOf<CorpusCase>()
             File(root, "tools/corpus/frames.tsv").readLines()
@@ -143,8 +131,34 @@ class EyesOnlyCorpusProbe {
         }
     }
 
-    /** Та же цепочка, что в приложении: ключи из local.properties, модели из data/build.gradle.kts. */
-    private fun visionClients(root: File): List<OpenAiCompatibleClient> {
+    companion object {
+        const val MAX_ROUNDS = 6
+        const val MAX_FRAME_BYTES = 8_000_000
+        val PROVIDERS = listOf(
+            "OPENROUTER", "SAMBANOVA", "MISTRAL", "CEREBRAS", "GROQ",
+            "ZHIPU", "OPENAI", "MODELSCOPE", "NVIDIA",
+        )
+
+        /** Живая цепочка проб — общая для зрячего корпуса и адресуемой ячейки (#1176). */
+        fun liveChain(): com.point.core.flow.LlmClient {
+            val root = generateSequence(File(System.getProperty("user.dir")).absoluteFile) { it.parentFile }
+                .first { File(it, "local.properties").isFile }
+            return FallbackLlmClient(
+                visionClients(root),
+                facts = object : AiFacts {
+                    override fun all(): Map<String, AiFact> = emptyMap()
+                    override fun remember(providerId: String, outcome: AiOutcome) = Unit
+                },
+                network = NetworkAvailability { true },
+                yolo = object : YoloMode {
+                    override fun enabled() = true
+                    override suspend fun setEnabled(enabled: Boolean) = Unit
+                },
+            )
+        }
+
+        /** Та же цепочка, что в приложении: ключи из local.properties, модели из data/build.gradle.kts. */
+        private fun visionClients(root: File): List<OpenAiCompatibleClient> {
         val props = java.util.Properties().apply { File(root, "local.properties").inputStream().use(::load) }
         val gradle = File(root, "data/build.gradle.kts").readText()
         fun conf(field: String): String =
@@ -179,19 +193,11 @@ class EyesOnlyCorpusProbe {
     }
 
     /** Кадр уходит модели как есть: корпусные снимки невелики, а зрячей пробе дорога каждая буква. */
-    private val jvmFrames = FrameForModel { path, mime ->
+        private val jvmFrames = FrameForModel { path, mime ->
         val bytes = runCatching { File(path).readBytes() }.getOrNull()
             ?.takeIf { it.isNotEmpty() && it.size <= MAX_FRAME_BYTES }
             ?: return@FrameForModel null
         InlineFrame(java.util.Base64.getEncoder().encodeToString(bytes), mime)
-    }
-
-    private companion object {
-        const val MAX_ROUNDS = 6
-        const val MAX_FRAME_BYTES = 8_000_000
-        val PROVIDERS = listOf(
-            "OPENROUTER", "SAMBANOVA", "MISTRAL", "CEREBRAS", "GROQ",
-            "ZHIPU", "OPENAI", "MODELSCOPE", "NVIDIA",
-        )
+        }
     }
 }
