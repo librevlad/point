@@ -240,6 +240,7 @@ fun HomeScreen(
                         items(entries, key = { it.id }) { entry ->
                             RemovableHistoryRow(
                                 entry = entry,
+                                now = now,
                                 onClick = { onOpen(entry) },
                                 onRemove = { onRemove(entry) },
                             )
@@ -431,10 +432,11 @@ private fun ClearRecentPanel(
  * записи есть свои действия.
  */
 @Composable
-private fun RemovableHistoryRow(entry: HistoryEntry, onClick: () -> Unit, onRemove: () -> Unit) {
+private fun RemovableHistoryRow(entry: HistoryEntry, now: Long, onClick: () -> Unit, onRemove: () -> Unit) {
     var open by rememberSaveable(entry.id) { mutableStateOf(false) }
     HistoryRow(
         entry = entry,
+        now = now,
         onClick = onClick,
         trailing = {
 
@@ -462,6 +464,7 @@ private fun RemovableHistoryRow(entry: HistoryEntry, onClick: () -> Unit, onRemo
 @Composable
 private fun HistoryRow(
     entry: HistoryEntry,
+    now: Long,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     trailing: (@Composable () -> Unit)? = null,
@@ -514,7 +517,7 @@ private fun HistoryRow(
                 }
             }
             Text(
-                text = clockLabel(entry.epochMillis),
+                text = clockLabel(entry.epochMillis, now),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
             )
@@ -533,9 +536,12 @@ internal fun rowSubtitle(name: String?, kind: String): String = when {
     else -> "$kind · $name"
 }
 
-/** Час строки: время сказано секцией, здесь остаётся только «когда именно». */
-internal fun clockLabel(epochMillis: Long): String =
-    java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date(epochMillis))
+/**
+ * Подпись времени строки: под «Сейчас / Сегодня / Вчера» — час, под «Раньше» — день (#1056).
+ * Считает общий шов с компьютером в `:core:flow` — вторая формула здесь не живёт.
+ */
+internal fun clockLabel(epochMillis: Long, now: Long): String =
+    com.point.core.flow.rowTimeLabel(epochMillis, now, java.time.ZoneId.systemDefault())
 
 private fun entryFacts(entry: HistoryEntry) = understoodFacts(entryObject(entry))
 

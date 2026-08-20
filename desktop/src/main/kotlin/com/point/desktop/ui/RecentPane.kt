@@ -206,7 +206,7 @@ internal fun CompactList(
                             note = recentNote(line.item.obj.state.kind, line.source),
                             accent = true,
                             kind = line.item.obj.state.kind,
-                            clock = com.point.desktop.clockLabel(line.at, zone),
+                            clock = com.point.core.flow.rowTimeLabel(line.at, now, zone),
                             fresh = line.item.obj.id in fresh,
                         ) { onOpen(line.item) }
 
@@ -220,7 +220,7 @@ internal fun CompactList(
                             accent = false,
                             kind = runCatching { ObjectKind.valueOf(line.entry.kind) }
                                 .getOrDefault(ObjectKind.UNKNOWN),
-                            clock = com.point.desktop.clockLabel(line.at, zone),
+                            clock = com.point.core.flow.rowTimeLabel(line.at, now, zone),
                         ) { state.openAgain(line.entry)?.let(onOpen) }
                     }
                 }
