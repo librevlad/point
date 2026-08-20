@@ -80,7 +80,7 @@ if [ -z "$OUT" ]; then OUT="$WORK/report.md"; fi
 win() { if command -v cygpath > /dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
 
 export JAVA_HOME="${JAVA_HOME:-C:/Program Files/Android/Android Studio/jbr}"
-if ! (cd "$ROOT" && ./gradlew --console=plain -q :core:flow:scoreTable \
+if ! (cd "$ROOT" && ./gradlew --console=plain -q --no-configuration-cache :core:flow:scoreTable \
   -Ptable="$(win "$TSV")" -Pexpected="$(win "$EXPECTED")" -Preport="$(win "$OUT.part")") > "$WORK/gradle.log" 2>&1; then
   echo "_счёт не посчитан: не поднялся ./gradlew (JAVA_HOME=$JAVA_HOME); таблица снята в ${TSV}_" >> "$OUT"
   echo "счёт не посчитан — таблица снята дословно в $TSV" >&2
