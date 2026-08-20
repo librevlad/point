@@ -33,7 +33,7 @@ from dataclasses import dataclass
 from typing import Callable, Iterator
 
 from fastapi import Depends, FastAPI, Request
-from fastapi.exceptions import HTTPException
+from fastapi.exceptions import HTTPException, RequestValidationError
 from fastapi import Response
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
 from pydantic import BaseModel, Field
@@ -278,6 +278,23 @@ def create_app(
             "message": str(exc.detail),
         }
         return JSONResponse(body, status_code=exc.status_code, headers=exc.headers)
+
+    @app.exception_handler(RequestValidationError)
+    async def _validation_error(request: Request, exc: RequestValidationError):
+        """Отказ проверки тела — тем же голосом, что и свои отказы (#1130).
+
+        Стандартный ответ FastAPI — технический английский с `loc`/`ctx` и ЭХОМ присланного
+        (`input`): сервер, который не возит ни байта содержимого, возвращал бы присланное
+        обратно в теле ошибки. Поэтому здесь короткая русская фраза и ничего из запроса.
+        Битый JSON приходит этим же исключением (тип `json_invalid`) — различаем только
+        формулировку, не раскрывая ввод.
+        """
+        unreadable = any(e.get("type") == "json_invalid" for e in exc.errors())
+        if unreadable:
+            body = {"error": "bad_json", "message": "Запрос не читается — проверьте данные и попробуйте ещё раз."}
+        else:
+            body = {"error": "bad_request", "message": "Запрос не подходит по форме — проверьте данные и попробуйте ещё раз."}
+        return JSONResponse(body, status_code=422)
 
     @app.middleware("http")
     async def _hygiene(request: Request, call_next):
