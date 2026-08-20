@@ -81,12 +81,16 @@ fun deviceKindLabel(kind: DeviceKind): String = when (kind) {
     DeviceKind.PC -> "Компьютер"
 }
 
-fun lastSeenLabel(lastSeenMillis: Long?, now: Long): String {
+/**
+ * [checkedNow] — сервер отвечал только что, и «на связи» — проверенный факт. Когда круг
+ * показывается по памяти (#1076), утверждать «на связи» нельзя: связь не проверялась.
+ * «Меньше часа назад» при этом остаётся правдой — последняя связь и впрямь была тогда.
+ */
+fun lastSeenLabel(lastSeenMillis: Long?, now: Long, checkedNow: Boolean = true): String {
     if (lastSeenMillis == null) return "ещё ни разу не выходило на связь"
     val ago = now - lastSeenMillis
     return when {
-        ago < 0 -> "на связи"
-        ago < LIVE_MS -> "на связи"
+        ago < LIVE_MS -> if (checkedNow) "на связи" else "меньше часа назад"
         ago < 60 * 60_000L -> "меньше часа назад"
         ago < 24 * 60 * 60_000L -> "сегодня"
         ago < 48 * 60 * 60_000L -> "вчера"
@@ -131,10 +135,10 @@ val ACCOUNT_REVOKED: SignIn.Refused = SignIn.Refused(
  * строка всё равно писала «это устройство · Компьютер · меньше часа назад» и в узком окне
  * переносилась на три строки ради факта, который не нужен.
  */
-fun deviceLine(device: CircleDevice, now: Long): String = if (device.self) {
+fun deviceLine(device: CircleDevice, now: Long, checkedNow: Boolean = true): String = if (device.self) {
     "это устройство · " + deviceKindLabel(device.kind)
 } else {
-    deviceKindLabel(device.kind) + " · " + lastSeenLabel(device.lastSeenMillis, now)
+    deviceKindLabel(device.kind) + " · " + lastSeenLabel(device.lastSeenMillis, now, checkedNow)
 }
 
 /** Значок вида — из общей таблицы, чтобы устройство выглядело одинаково везде. */

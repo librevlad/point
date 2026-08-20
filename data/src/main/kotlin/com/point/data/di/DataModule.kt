@@ -315,6 +315,11 @@ abstract class DataModule {
     @Singleton
     abstract fun accountStore(impl: com.point.data.EncryptedAccountStore): com.point.core.flow.AccountStore
 
+    /** Последний успешный круг устройств — рядом с пропуском и стирается вместе с ним (#1076). */
+    @Binds
+    @Singleton
+    abstract fun circleStore(impl: com.point.data.EncryptedCircleStore): com.point.core.flow.CircleStore
+
     @Binds
     @Singleton
     abstract fun pendingLogins(impl: com.point.data.EncryptedPendingLogins): com.point.core.flow.PendingLoginStore

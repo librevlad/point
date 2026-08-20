@@ -116,6 +116,7 @@ class FlowViewModelTest {
         linkMonitor: com.point.core.flow.LinkMonitor = com.point.core.flow.RememberingLinkMonitor(),
 
         account: com.point.core.flow.AccountStore = FakeAccountStore(TEST_ACCOUNT),
+        circleStore: com.point.core.flow.CircleStore = com.point.core.flow.InMemoryCircleStore(),
         accountClient: com.point.core.flow.AccountClient = FakeCircleClient(),
 
         pendingLogins: com.point.core.flow.PendingLoginStore = com.point.core.flow.InMemoryPendingLogins(),
@@ -125,7 +126,7 @@ class FlowViewModelTest {
         keyNeeding: Set<CapabilityId> = emptySet(),
 
         pdf: com.point.core.flow.PdfRasterizer = FakePdfRasterizer(),
-    ) = FlowViewModel(store, FakeRegistry(caps, cloud, slow, keyNeeding) { userKeys.keys().mine.isNotEmpty() }.also { registry = it }, resolver, ChatTalk(chatResponder, store), enrichment, history, usage, chosenApps, userKeys, aiFacts, builtInKeys, consent, appLauncher, pdf, sensory, sensorySettings, cloudPrivacy, com.point.core.flow.YoloMode.OFF, snapshot, crashLog, dispatcher, AppIconResolver { null }, pcLinks, pcTransport, pcCaps, linkMonitor, PulledFileFactory { name -> java.io.File(java.io.File(System.getProperty("java.io.tmpdir")), "pulled-" + name).absolutePath }, noFrames, com.point.core.flow.PhoneRegion { "UA" }, keyCheck, account, accountClient, pendingLogins, deviceKeys, browser, sharedTexts, memory)
+    ) = FlowViewModel(store, FakeRegistry(caps, cloud, slow, keyNeeding) { userKeys.keys().mine.isNotEmpty() }.also { registry = it }, resolver, ChatTalk(chatResponder, store), enrichment, history, usage, chosenApps, userKeys, aiFacts, builtInKeys, consent, appLauncher, pdf, sensory, sensorySettings, cloudPrivacy, com.point.core.flow.YoloMode.OFF, snapshot, crashLog, dispatcher, AppIconResolver { null }, pcLinks, pcTransport, pcCaps, linkMonitor, PulledFileFactory { name -> java.io.File(java.io.File(System.getProperty("java.io.tmpdir")), "pulled-" + name).absolutePath }, noFrames, com.point.core.flow.PhoneRegion { "UA" }, keyCheck, account, circleStore, accountClient, pendingLogins, deviceKeys, browser, sharedTexts, memory)
 
     private val keyCheck = FakeAiKeyCheck()
 
@@ -2205,7 +2206,9 @@ class FlowViewModelTest {
 
         val store = FakeAccountStore(TEST_ACCOUNT)
         pcLinks.pc = com.point.core.flow.LinkedPc("d-pc", "Ноутбук", "ключ-ПК")
-        val vm = vm(account = store)
+        val circle = com.point.core.flow.InMemoryCircleStore()
+        circle.save(listOf(com.point.core.flow.CircleDevice("d-pc", com.point.core.flow.DeviceKind.PC, "Ноутбук")))
+        val vm = vm(account = store, circleStore = circle)
 
         vm.openDevices(); advanceUntilIdle()
         vm.signOut(); advanceUntilIdle()
@@ -2213,6 +2216,9 @@ class FlowViewModelTest {
         assertNull(store.current())
         assertNull(pcLinks.pc)
         assertTrue(pcCaps.cleared)
+
+        // Запомненный круг принадлежит аккаунту и не переживает выхода (#1076).
+        assertNull(circle.current())
         assertTrue(vm.ui.value.signIn is com.point.core.flow.SignIn.SignedOut)
     }
 
@@ -2327,6 +2333,42 @@ class FlowViewModelTest {
         assertEquals(1, vm.ui.value.devicesScreen?.devices?.size)
         assertTrue(vm.ui.value.devicesScreen?.error != null)
         assertEquals(false, vm.ui.value.devicesScreen?.loading)
+        vm.closeDevices()
+    }
+
+    @Test fun `сервер молчит — телефон показывает последний запомненный круг, а не пустоту (#1076)`() = runTest(dispatcher) {
+        val circle = com.point.core.flow.InMemoryCircleStore()
+        circle.save(
+            listOf(
+                com.point.core.flow.CircleDevice("d1", com.point.core.flow.DeviceKind.PHONE, "Pixel", self = true),
+                com.point.core.flow.CircleDevice("d2", com.point.core.flow.DeviceKind.PC, "Ноутбук"),
+            ),
+        )
+        val vm = vm(circleStore = circle, accountClient = FakeCircleClient(circle = null))
+
+        vm.openDevices(); advanceUntilIdle()
+
+        // Честная строка об операции остаётся, но незнание не выдаётся за одиночество.
+        assertNotNull(vm.ui.value.devicesScreen?.error)
+        assertEquals(listOf("Pixel", "Ноутбук"), vm.ui.value.devicesScreen?.devices?.map { it.name })
+        vm.closeDevices()
+    }
+
+    @Test fun `успешный ответ сервера остаётся кругом в памяти телефона (#1076)`() = runTest(dispatcher) {
+        val circle = com.point.core.flow.InMemoryCircleStore()
+        val vm = vm(
+            circleStore = circle,
+            accountClient = FakeCircleClient(
+                circle = listOf(
+                    com.point.core.flow.CircleDevice("d1", com.point.core.flow.DeviceKind.PHONE, "Pixel", self = true),
+                    com.point.core.flow.CircleDevice("d2", com.point.core.flow.DeviceKind.PC, "Ноутбук"),
+                ),
+            ),
+        )
+
+        vm.openDevices(); advanceUntilIdle()
+
+        assertEquals(listOf("d1", "d2"), circle.current()?.map { it.id })
         vm.closeDevices()
     }
 

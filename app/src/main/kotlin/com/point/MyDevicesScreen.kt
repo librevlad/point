@@ -110,8 +110,9 @@ fun MyDevicesScreen(
                 PortalRow(
                     title = device.name,
 
-                    // Правило второй строки общее с компьютером (#891).
-                    subtitle = com.point.core.flow.deviceLine(device, now),
+                    // Правило второй строки общее с компьютером (#891). Когда сервер молчит,
+                    // список — последний известный круг: «на связи» из памяти не утверждается (#1076).
+                    subtitle = com.point.core.flow.deviceLine(device, now, checkedNow = state.error == null),
 
                     onClick = { },
                     enabled = false,
@@ -143,6 +144,9 @@ fun MyDevicesScreen(
                 )
             }
 
+            // «Пока вы один» — только когда круга не было никогда либо последний известный
+            // круг и правда из одного этого устройства: при молчании сервера сюда приходит
+            // запомненный круг, и незнание больше не выдаётся за одиночество (#1076).
             if (!state.loading && others.isEmpty()) {
                 Spacer(Modifier.height(6.dp))
                 SectionLabel("Пока вы один")
@@ -265,6 +269,27 @@ private fun PreviewFailed() = PointTheme(darkTheme = true) {
             loading = false,
             error = "Не удалось спросить сервер о ваших устройствах — проверьте интернет",
             devices = listOf(CircleDevice("d1", DeviceKind.PHONE, "Pixel 8", NOW, self = true)),
+        ),
+        onRevoke = {},
+        onSignOut = {},
+        onClose = {},
+        now = NOW,
+    )
+}
+
+@Preview(name = "Мои устройства · сервер молчит, круг по памяти (#1076)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@Composable
+private fun PreviewFailedRemembered() = PointTheme(darkTheme = true) {
+
+    MyDevicesScreen(
+        state = DevicesScreenState(
+            email = "vladimir@example.com",
+            loading = false,
+            error = "Не удалось спросить сервер о ваших устройствах — проверьте интернет",
+            devices = listOf(
+                CircleDevice("d1", DeviceKind.PHONE, "Pixel 8", NOW - 20_000, self = true),
+                CircleDevice("d2", DeviceKind.PC, "Рабочий ноутбук", NOW - 40_000),
+            ),
         ),
         onRevoke = {},
         onSignOut = {},

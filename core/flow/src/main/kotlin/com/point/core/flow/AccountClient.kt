@@ -49,10 +49,32 @@ interface AccountStore {
     suspend fun clear()
 }
 
+/**
+ * Последний успешно полученный круг устройств (#1076).
+ *
+ * Круг живёт на сервере, но без сети список пуст — и экран выдавал незнание за одиночество:
+ * «пока вы один» при живом компьютере в круге. Телефон помнит последний ответ сервера рядом
+ * с пропуском; офлайн показывает его, а не пустоту. `null` — круга не было никогда:
+ * это не то же самое, что «в круге никого нет».
+ */
+interface CircleStore {
+
+    fun current(): List<CircleDevice>?
+    suspend fun save(devices: List<CircleDevice>)
+    suspend fun clear()
+}
+
 interface PendingLoginStore {
     fun current(): PendingLogin?
     suspend fun save(login: PendingLogin)
     suspend fun clear()
+}
+
+class InMemoryCircleStore : CircleStore {
+    private var devices: List<CircleDevice>? = null
+    override fun current(): List<CircleDevice>? = devices
+    override suspend fun save(devices: List<CircleDevice>) { this.devices = devices }
+    override suspend fun clear() { devices = null }
 }
 
 class InMemoryPendingLogins : PendingLoginStore {

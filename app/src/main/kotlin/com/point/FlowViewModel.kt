@@ -130,6 +130,9 @@ class FlowViewModel @Inject constructor(
 
     private val accountStore: com.point.core.flow.AccountStore,
 
+    // Последний успешный круг устройств: без сети экран показывает его, а не «пока вы один» (#1076).
+    private val circleStore: com.point.core.flow.CircleStore,
+
     private val accountClient: com.point.core.flow.AccountClient,
 
     private val pendingLogins: com.point.core.flow.PendingLoginStore,
@@ -1497,13 +1500,25 @@ class FlowViewModel @Inject constructor(
         when (answer) {
             is com.point.core.flow.CircleAnswer.Circle -> {
                 rememberPc(answer.devices)
+                runCatching { circleStore.save(answer.devices) }
                 updateDevices { it.copy(devices = answer.devices, loading = false, error = null) }
             }
-            com.point.core.flow.CircleAnswer.Unreachable -> updateDevices {
-                it.copy(
-                    loading = false,
-                    error = "Не удалось спросить сервер о ваших устройствах — проверьте интернет",
-                )
+            com.point.core.flow.CircleAnswer.Unreachable -> {
+
+                // Молчание сервера — беда операции, а не знание «в круге никого нет»:
+                // ниже честной строки об ошибке стоит последний известный круг (#1076).
+                // «Пока вы один» остаётся только тому, у кого круга не было никогда
+                // или последний известный круг и правда из одного этого устройства.
+                val remembered = withContext(ioDispatcher) {
+                    runCatching { circleStore.current() }.getOrNull()
+                }
+                updateDevices {
+                    it.copy(
+                        loading = false,
+                        error = "Не удалось спросить сервер о ваших устройствах — проверьте интернет",
+                        devices = remembered ?: it.devices,
+                    )
+                }
             }
             com.point.core.flow.CircleAnswer.Revoked -> forgetAccount(com.point.core.flow.ACCOUNT_REVOKED)
         }
@@ -1553,6 +1568,9 @@ class FlowViewModel @Inject constructor(
 
     private suspend fun forgetAccount(next: com.point.core.flow.SignIn) {
         runCatching { accountStore.clear() }
+
+        // Круг принадлежит аккаунту: чужие устройства не переживают выход (#1076).
+        runCatching { circleStore.clear() }
         runCatching { pcLinks.clear() }
         runCatching { pcCaps.clear() }
         runCatching { linkMonitor.forget() }
@@ -1567,7 +1585,10 @@ class FlowViewModel @Inject constructor(
         announceKey(account)
         viewModelScope.launch {
             val answer = runCatching { accountClient.circle(account) }.getOrNull()
-            if (answer is com.point.core.flow.CircleAnswer.Circle) rememberPc(answer.devices)
+            if (answer is com.point.core.flow.CircleAnswer.Circle) {
+                rememberPc(answer.devices)
+                runCatching { circleStore.save(answer.devices) }
+            }
         }
     }
 
