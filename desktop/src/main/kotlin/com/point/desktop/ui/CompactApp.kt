@@ -104,6 +104,10 @@ fun CompactApp(
     var settings by remember { mutableStateOf(config) }
     var showSettings by remember { mutableStateOf(false) }
 
+    // Раздел настроек живёт здесь, а не внутри CompactSettings: Esc обязан вести себя
+    // как «←» текущего экрана, а для этого корню окна нужно знать, где человек стоит (#1025).
+    var settingsPage by remember { mutableStateOf(SettingsPage.ROOT) }
+
     var openedId by remember { mutableStateOf<String?>(null) }
     var invited by remember { mutableStateOf<String?>(null) }
 
@@ -184,7 +188,12 @@ fun CompactApp(
     }
 
     val hotkeys = remember { FocusRequester() }
-    LaunchedEffect(Unit) { hotkeys.requestFocus() }
+
+    // Фокус клавиш просится на каждом фокусе окна, а не один раз при старте (#1025):
+    // окно, показанное без фокуса ОС, съедало единственный requestFocus впустую — Esc
+    // молчал, пока фокус не добывали Tab'ом. Живая Windows, владелец 20.08.2026.
+    val windowFocused = androidx.compose.ui.platform.LocalWindowInfo.current.isWindowFocused
+    LaunchedEffect(windowFocused) { hotkeys.requestFocus() }
 
     // Окно ведёт себя как окно: уход в другое приложение его не закрывает (владелец
     // 12.08.2026: «сделай десктопное окно нормальным, чтобы не пришлось жать кнопку не
@@ -210,7 +219,17 @@ fun CompactApp(
                 if (paste) takeClipboard()
                 if (grab) grabScreen()
                 if (esc) {
-                    if (openedId != null) openedId = null else onHide()
+                    val step = com.point.desktop.escapeStep(
+                        settingsOpen = showSettings,
+                        settingsAtRoot = settingsPage == SettingsPage.ROOT,
+                        objectOpen = openedId != null,
+                    )
+                    when (step) {
+                        com.point.desktop.EscapeStep.SETTINGS_SECTION_BACK -> settingsPage = SettingsPage.ROOT
+                        com.point.desktop.EscapeStep.SETTINGS_CLOSE -> showSettings = false
+                        com.point.desktop.EscapeStep.OBJECT_CLOSE -> openedId = null
+                        com.point.desktop.EscapeStep.WINDOW_HIDE -> onHide()
+                    }
                 }
                 paste || grab || esc
             },
@@ -232,6 +251,8 @@ fun CompactApp(
                 showSettings -> CompactSettings(
                     modifier = Modifier.weight(1f),
                     state = state,
+                    page = settingsPage,
+                    onPage = { settingsPage = it },
                     config = settings,
                     account = account,
                     circle = circle,
@@ -262,7 +283,8 @@ fun CompactApp(
                     onReceiveFile = onReceiveFile,
                     onCopyReceiveLink = { link -> state.copyFact(link) },
                     onCancelReceive = onCancelReceive,
-                    onSettings = { showSettings = true },
+                    // Вход в настройки всегда с корня, как и раньше, когда раздел жил внутри.
+                    onSettings = { settingsPage = SettingsPage.ROOT; showSettings = true },
                     onHide = onHide,
                 )
             }

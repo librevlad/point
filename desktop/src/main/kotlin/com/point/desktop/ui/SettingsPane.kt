@@ -72,6 +72,11 @@ import kotlinx.coroutines.flow.StateFlow
 @Composable
 internal fun CompactSettings(
     state: DesktopState,
+
+    // Какой раздел открыт — знание окна, не этого экрана: Esc в корне окна обязан вести
+    // себя как «←» текущего раздела (#1025).
+    page: SettingsPage,
+    onPage: (SettingsPage) -> Unit,
     config: PcConfig,
     account: com.point.desktop.DesktopAccount,
     circle: List<CircleDevice>,
@@ -85,7 +90,6 @@ internal fun CompactSettings(
 ) = Column(modifier) {
     // Настройки — список разделов со своими экранами, как на телефоне (#886). Слово
     // «Настройки» при этом сказано один раз: шапкой окна, а не ещё и меткой внутри (#878).
-    var page by remember { mutableStateOf(SettingsPage.ROOT) }
     var swept by remember { mutableStateOf<Int?>(null) }
     var cloudAllowed by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -95,7 +99,7 @@ internal fun CompactSettings(
 
     CompactHeader(
         title = page.title,
-        onBack = { if (page == SettingsPage.ROOT) onBack() else page = SettingsPage.ROOT },
+        onBack = { if (page == SettingsPage.ROOT) onBack() else onPage(SettingsPage.ROOT) },
         onHide = onBack,
     )
     Column(
@@ -110,7 +114,7 @@ internal fun CompactSettings(
                 email = account.current()?.email.orEmpty(),
                 cloudAllowed = cloudAllowed,
                 onSave = onSave,
-                onOpen = { page = it },
+                onOpen = onPage,
             )
 
             SettingsPage.DEVICES -> SettingsDevices(config = config, onSave = onSave) {

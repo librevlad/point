@@ -39,6 +39,20 @@ fun peekBounds(work: ScreenArea): WindowBounds = WindowBounds(
 
 const val PEEK_LIFETIME_MS = 8_000L
 
+/**
+ * Куда ведёт Escape (#1025): на один уровень назад, как «←» текущего экрана.
+ * Раздел настроек → корень настроек → список; объект → список; список → спрятать окно.
+ * Прежде Esc из настроек прятал окно целиком — человек терял место, где стоял.
+ */
+enum class EscapeStep { SETTINGS_SECTION_BACK, SETTINGS_CLOSE, OBJECT_CLOSE, WINDOW_HIDE }
+
+fun escapeStep(settingsOpen: Boolean, settingsAtRoot: Boolean, objectOpen: Boolean): EscapeStep = when {
+    settingsOpen && !settingsAtRoot -> EscapeStep.SETTINGS_SECTION_BACK
+    settingsOpen -> EscapeStep.SETTINGS_CLOSE
+    objectOpen -> EscapeStep.OBJECT_CLOSE
+    else -> EscapeStep.WINDOW_HIDE
+}
+
 /** Реакция на новое прибытие: из списка — открыть сразу, из чужой сцены — пригласить. */
 enum class ArrivalReaction { OPEN, INVITE }
 
