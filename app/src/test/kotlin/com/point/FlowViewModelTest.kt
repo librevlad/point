@@ -1111,6 +1111,64 @@ class FlowViewModelTest {
         assertEquals(ObjectKind.IMAGE, vm.ui.value.frame?.obj?.state?.kind)
     }
 
+    /**
+     * Вторая половина #1131: возврат из системного календаря без результата — отмена
+     * человека, а не ошибка. Подпись шага гаснет молча: ни «не вышло», ни «отменено»
+     * (линза «без оправданий», #1003).
+     */
+    @Test fun `возврат с чужого экрана без результата гасит подпись шага молча`() = runTest(dispatcher) {
+        resolver.result = ActionResult.Done("Открыл календарь — событие создаётся там")
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        vm.onBubble(bubble(id = com.point.executors.EventCapability.ID.value, title = "Создать событие"))
+        advanceUntilIdle()
+        assertEquals("Открыл календарь — событие создаётся там", vm.ui.value.message)
+
+        vm.returnedToPoint()
+
+        assertNull(vm.ui.value.message)
+        assertEquals(Outcome.NONE, vm.ui.value.messageOutcome)
+        assertEquals("объект остаётся перед человеком", ObjectKind.IMAGE, vm.ui.value.frame?.obj?.state?.kind)
+    }
+
+    @Test fun `возврат гасит и подпись карточки контакта — тот же шов`() = runTest(dispatcher) {
+        resolver.result = ActionResult.Done("Открыл карточку контакта")
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        vm.onBubble(bubble(id = com.point.executors.VCardCapability.ID.value, title = "Добавить в контакты"))
+        advanceUntilIdle()
+
+        vm.returnedToPoint()
+
+        assertNull(vm.ui.value.message)
+        assertEquals(Outcome.NONE, vm.ui.value.messageOutcome)
+    }
+
+    @Test fun `возврат не трогает подпись шага, который не уводил человека`() = runTest(dispatcher) {
+        resolver.result = ActionResult.Done("Готово")
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        vm.onBubble(bubble()); advanceUntilIdle()
+
+        vm.returnedToPoint()
+
+        assertEquals("Готово", vm.ui.value.message)
+        assertEquals(Outcome.DONE, vm.ui.value.messageOutcome)
+    }
+
+    @Test fun `честный отказ календаря возвратом не гасится`() = runTest(dispatcher) {
+        resolver.result = ActionResult.Failure("На этом устройстве нет календаря", recoverable = true)
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        vm.onBubble(bubble(id = com.point.executors.EventCapability.ID.value, title = "Создать событие"))
+        advanceUntilIdle()
+
+        vm.returnedToPoint()
+
+        assertEquals("На этом устройстве нет календаря", vm.ui.value.message)
+        assertEquals(Outcome.FAILED, vm.ui.value.messageOutcome)
+    }
+
     @Test fun `a Failure step shows its reason, not a dead-end`() = runTest(dispatcher) {
         resolver.result = ActionResult.Failure("Не удалось распознать", recoverable = true)
         val vm = vm()

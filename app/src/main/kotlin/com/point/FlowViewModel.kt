@@ -2060,7 +2060,29 @@ class FlowViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Подпись шага, отдавшего человека чужому экрану (#1131): календарь и карточка
+     * контакта — там работу заканчивает человек, а не Point.
+     *
+     * Возврат в Point без результата — отмена человека, а не ошибка: подпись гаснет
+     * молча, без «не вышло» (линза «без оправданий», #1003).
+     */
+    @Volatile private var handOffMessage: String? = null
+
+    private fun handsOffToSystem(id: CapabilityId) =
+        id == com.point.executors.EventCapability.ID || id == com.point.executors.VCardCapability.ID
+
+    /** Зов из onResume хостов: человек вернулся в Point с чужого экрана. */
+    fun returnedToPoint() {
+        val standing = handOffMessage ?: return
+        handOffMessage = null
+        _ui.update {
+            if (it.message == standing) it.copy(message = null, messageOutcome = Outcome.NONE) else it
+        }
+    }
+
     private suspend fun handleResult(result: ActionResult, bubble: Bubble) {
+        handOffMessage = null
         when (result) {
             is ActionResult.Success -> {
                 runCatching { sensory.success() }
@@ -2094,6 +2116,7 @@ class FlowViewModel @Inject constructor(
                 // ADR-0001 §18: «выполнено» может нести новое знание — оно идёт тем же
                 // merge-путём, что и находки исследований, а не выбрасывается.
                 result.findings?.takeIf { !it.isEmpty }?.let(::landFindings)
+                if (handsOffToSystem(bubble.capabilityId)) handOffMessage = result.message
                 _ui.update { it.copy(busy = null, busyStage = null, message = result.message, messageOutcome = Outcome.DONE) }
             }
             is ActionResult.Failure -> {

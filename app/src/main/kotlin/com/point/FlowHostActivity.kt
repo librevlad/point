@@ -88,6 +88,7 @@ abstract class FlowHostActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        viewModel.returnedToPoint()
         viewModel.resumeSignIn()
     }
 
