@@ -90,7 +90,8 @@ fun CompactApp(
     onCancelReceive: () -> Unit = {},
 
     onWipe: () -> Long = { 0L },
-    onSaveSettings: (PcConfig) -> Unit = {},
+    /** Возвращает, встало ли сохранённое на деле; сейчас правду отвечает пункт меню файла (#1082). */
+    onSaveSettings: (PcConfig) -> Boolean = { true },
     onSweepNow: () -> Int = { 0 },
     onHide: () -> Unit = {},
 ) {

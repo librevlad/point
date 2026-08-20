@@ -83,7 +83,7 @@ internal fun CompactSettings(
     busy: Boolean,
     error: String?,
     onWipe: () -> Unit,
-    onSave: (PcConfig) -> Unit,
+    onSave: (PcConfig) -> Boolean,
     onSweepNow: () -> Int,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,

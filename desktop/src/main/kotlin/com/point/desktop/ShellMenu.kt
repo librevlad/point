@@ -4,11 +4,39 @@ import java.io.File
 
 interface ShellMenu {
     fun registeredCommand(): String?
-    fun register(command: String, title: String)
+
+    /** Записывает пункт и отвечает правдой: `true` — команда действительно читается из реестра. */
+    fun register(command: String, title: String): Boolean
+
     fun unregister()
 }
 
+/** Название пункта в меню файла — одно и при старте, и из настроек. */
+const val SHELL_MENU_TITLE = "Открыть в Point"
+
 fun shellCommandFor(exe: File): String = "\"${exe.absolutePath}\" \"%1\""
+
+/**
+ * Текст .reg-файла с пунктом меню и его командой (#1082).
+ *
+ * Запись идёт `reg import`-ом файла, а не `reg add`-ом аргумента: команда пункта содержит
+ * внутренние кавычки — `"C:\…\Point.exe" "%1"`, — а Java на Windows не экранирует кавычки
+ * внутри аргументов процесса. `reg add` получал битую строку, отвечал `Invalid syntax`, и пункт
+ * оставался без команды — мёртвым. В файле команду искажать некому.
+ */
+fun shellMenuRegFile(command: String, title: String): String = listOf(
+    "Windows Registry Editor Version 5.00",
+    "",
+    "[HKEY_CURRENT_USER\\Software\\Classes\\*\\shell\\Point]",
+    "@=\"${regValue(title)}\"",
+    "",
+    "[HKEY_CURRENT_USER\\Software\\Classes\\*\\shell\\Point\\command]",
+    "@=\"${regValue(command)}\"",
+    "",
+).joinToString("\r\n")
+
+/** Строка в .reg-синтаксисе: обратная косая и кавычка экранируются, больше ничего. */
+private fun regValue(text: String): String = text.replace("\\", "\\\\").replace("\"", "\\\"")
 
 fun shellMenuNeedsUpdate(current: String?, wanted: String): Boolean = current != wanted
 
@@ -20,9 +48,8 @@ fun installedExecutable(command: String?): File? {
 
 class RegistryShellMenu(
     private val run: (List<String>) -> Pair<Int, String> = ::runProcess,
+    private val windows: Boolean = System.getProperty("os.name").orEmpty().lowercase().contains("win"),
 ) : ShellMenu {
-
-    private val windows = System.getProperty("os.name").orEmpty().lowercase().contains("win")
 
     override fun registeredCommand(): String? {
         if (!windows) return null
@@ -36,10 +63,26 @@ class RegistryShellMenu(
             ?.takeIf { it.isNotEmpty() }
     }
 
-    override fun register(command: String, title: String) {
-        if (!windows) return
-        run(listOf("reg", "add", MENU_KEY, "/ve", "/d", title, "/f"))
-        run(listOf("reg", "add", COMMAND_KEY, "/ve", "/d", command, "/f"))
+    override fun register(command: String, title: String): Boolean {
+        if (!windows) return false
+        val file = runCatching {
+            File.createTempFile("point-shell-menu", ".reg").apply {
+                // UTF-16LE с BOM — родная кодировка .reg-файла: название пункта русское.
+                writeBytes(
+                    byteArrayOf(0xFF.toByte(), 0xFE.toByte()) +
+                        shellMenuRegFile(command, title).toByteArray(Charsets.UTF_16LE),
+                )
+            }
+        }.getOrNull() ?: return false
+
+        return try {
+            val (code, _) = run(listOf("reg", "import", file.absolutePath))
+
+            // Сбой больше не глотается: успех — это команда, читаемая обратно из реестра (#1082).
+            code == 0 && registeredCommand() == command
+        } finally {
+            file.delete()
+        }
     }
 
     override fun unregister() {

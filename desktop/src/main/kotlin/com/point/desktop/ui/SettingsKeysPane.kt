@@ -71,7 +71,7 @@ private fun speechSaysWhere(keys: com.point.core.flow.UserAiKeys): String {
 @Composable
 fun SettingsKeys(
     config: PcConfig,
-    onSave: (PcConfig) -> Unit,
+    onSave: (PcConfig) -> Boolean,
     keyCheck: com.point.core.flow.AiKeyCheck =
         com.point.core.flow.HttpAiKeyCheck(com.point.core.flow.UrlConnectionHttpJson()),
     onOpenUrl: (String) -> Unit = {},
