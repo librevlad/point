@@ -3,6 +3,7 @@ package com.point.desktop
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 
 /**
  * Геометрия компакт-окна и peek-плашки: правый нижний угол рабочей области
@@ -44,6 +45,31 @@ enum class ArrivalReaction { OPEN, INVITE }
 
 fun arrivalReaction(openedId: String?): ArrivalReaction =
     if (openedId == null) ArrivalReaction.OPEN else ArrivalReaction.INVITE
+
+/**
+ * Явный зов человека «покажись» (#1019, решение владельца 20.08.2026, вариант B):
+ * «Открыть в Point», пробуждение второй копией, запуск с файлом. Каждый зов — ровно
+ * один подъём окна. Счётчик, а не Boolean: уже видимое, но погребённое под чужими
+ * окнами окно тоже обязано выйти вперёд, а Boolean второй раз не срабатывает.
+ */
+class RaiseSignal {
+
+    private val _calls = MutableStateFlow(0)
+
+    /** Сколько раз позвали: каждое новое значение — повод поднять окно один раз. */
+    val calls: StateFlow<Int> = _calls.asStateFlow()
+
+    fun call() {
+        _calls.update { it + 1 }
+    }
+}
+
+/**
+ * Холодный старт с файлом выходит на сам объект, а не на список (#1019, DSK-001):
+ * прибывшее до готовности UI экран считал «уже виденным верхом списка» и не открывал.
+ * Открывается верх списка — последний принятый, как при тёплом прилёте.
+ */
+fun coldStartObject(received: List<InboxItem>): String? = received.lastOrNull()?.obj?.id
 
 /**
  * Peek — собственная плашка Point, не системное уведомление: прибыло с телефона →
