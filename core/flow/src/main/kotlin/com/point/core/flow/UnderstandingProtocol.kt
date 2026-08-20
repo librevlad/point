@@ -51,10 +51,8 @@ fun spiralBrief(metadata: Map<String, String>): String? {
         metadata[META_ENTITY_PREFIX + suffix]?.takeIf(String::isNotBlank)?.let { key to it }
     }
     val summary = metadata[META_SEMANTIC_SUMMARY]?.takeIf(String::isNotBlank)
-    val hasCells = metadata.keys.any {
-        (cellAddress(it) != null || it.startsWith(META_CELL_ANCHOR_PREFIX)) &&
-            !isAnnotationKey(it) && !isStateKey(it)
-    }
+    val hasCells = structuralNodes(metadata).isNotEmpty() ||
+        metadata.keys.any { cellAddress(it) != null && !isAnnotationKey(it) && !isStateKey(it) }
     if (known.isEmpty() && summary == null && !hasCells) return null
 
     return buildString {
@@ -101,9 +99,8 @@ fun spiralBrief(metadata: Map<String, String>): String? {
         var asked = false
 
         // Канонические узлы спрашиваются якорями — нумерация наблюдателя сюда не входит.
-        metadata.keys
-            .filter { it.startsWith(META_CELL_ANCHOR_PREFIX) && !isAnnotationKey(it) && !isStateKey(it) }
-            .filter { !metadata[it].isNullOrBlank() }
+        // Узел без значения — «вопрос без наблюдения» (RFC §11): место известно, факта нет.
+        structuralNodes(metadata)
             .sorted()
             .forEach { key ->
                 val row = metadata[key + META_ANCHOR_ROW_SUFFIX].orEmpty().take(60)
@@ -111,6 +108,12 @@ fun spiralBrief(metadata: Map<String, String>): String? {
                 if (row.isBlank() || col.isBlank()) return@forEach
                 val disputed = alternativesOf(metadata, key)
                 when {
+                    metadata[key].isNullOrBlank() -> {
+                        asked = true
+                        append("Ячейка строки «$row», колонки «$col» ещё не прочитана — ")
+                        append("прочти её по снимку и ответь CELL «$row» × «$col» = содержимое.")
+                        append('\n')
+                    }
                     disputed.isNotEmpty() -> {
                         asked = true
                         append("Ячейка строки «$row», колонки «$col» — прочтения спорят: ")
@@ -231,8 +234,7 @@ fun structuralCorrespondence(
     colAnchor: String,
 ): Correspondence {
     val exact = anchoredCellKey(rowAnchor, colAnchor)
-    val known = metadata.keys
-        .filter { it.startsWith(META_CELL_ANCHOR_PREFIX) && !isAnnotationKey(it) && !isStateKey(it) }
+    val known = structuralNodes(metadata)
     if (exact in known) return Correspondence.Same(exact)
 
     val near = known.filter { key ->
@@ -245,6 +247,17 @@ fun structuralCorrespondence(
         else -> Correspondence.Unknown(exact, near)
     }
 }
+
+/**
+ * Все канонические узлы, включая ВОПРОСНЫЕ (#1176, «вопрос без наблюдения», RFC §11):
+ * узел существует якорями, а не значением — место, о котором спрошено, но которое ещё
+ * никто не наблюдал, это якорные аннотации без факта.
+ */
+fun structuralNodes(metadata: Map<String, String>): List<String> =
+    metadata.keys
+        .filter { it.startsWith(META_CELL_ANCHOR_PREFIX) && it.endsWith(META_ANCHOR_ROW_SUFFIX) }
+        .map { it.removeSuffix(META_ANCHOR_ROW_SUFFIX) }
+        .distinct()
 
 /** Один якорь «внутри» другого — то же место: «Огірки» и «Огірки свіжі», «Ціна» и «Ціна за кг». */
 private fun nearAnchor(a: String, b: String): Boolean {

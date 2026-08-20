@@ -43,6 +43,14 @@ private fun understoodEntityName(key: String): String? = when (key.removePrefix(
  * `null`: витку без прироста сказать нечего, и он говорит это своими словами.
  */
 fun spiralDelta(before: Map<String, String>, after: Map<String, String>): String? {
+    // Канонический структурный узел именуется своими якорями (#1176): ключ — слаг,
+    // человеку показываются сырые «строка × колонка» из аннотаций.
+    fun name(key: String): String? = understoodName(key)
+        ?: key.takeIf { it.startsWith(META_CELL_ANCHOR_PREFIX) }?.let {
+            val row = after[it + META_ANCHOR_ROW_SUFFIX] ?: before[it + META_ANCHOR_ROW_SUFFIX]
+            val col = after[it + META_ANCHOR_COL_SUFFIX] ?: before[it + META_ANCHOR_COL_SUFFIX]
+            if (row.isNullOrBlank() || col.isNullOrBlank()) null else "Ячейка «${row.take(24)}» × «${col.take(24)}»"
+        }
     val fresh = mutableListOf<String>()
     val refined = mutableListOf<String>()
     val confirmed = mutableListOf<String>()
@@ -50,7 +58,7 @@ fun spiralDelta(before: Map<String, String>, after: Map<String, String>): String
 
     after.forEach { (key, value) ->
         if (isAnnotationKey(key) || isStateKey(key)) return@forEach
-        val name = understoodName(key) ?: return@forEach
+        val name = name(key) ?: return@forEach
         val was = before[key]
         when {
             was.isNullOrBlank() && value.isNotBlank() -> fresh += name
@@ -59,12 +67,12 @@ fun spiralDelta(before: Map<String, String>, after: Map<String, String>): String
     }
     after.keys.filter { it.endsWith(META_ALT_SUFFIX) }.forEach { altKey ->
         val key = altKey.removeSuffix(META_ALT_SUFFIX)
-        val name = understoodName(key) ?: return@forEach
+        val name = name(key) ?: return@forEach
         if (before[altKey].isNullOrBlank() && !after[altKey].isNullOrBlank()) disputed += name
     }
     after.keys.filter { it.endsWith(META_EVIDENCE_SUFFIX) }.forEach { evKey ->
         val key = evKey.removeSuffix(META_EVIDENCE_SUFFIX)
-        val name = understoodName(key) ?: return@forEach
+        val name = name(key) ?: return@forEach
         val grewAgreement = after[evKey].orEmpty().contains(AGREE_MARK) &&
             !before[evKey].orEmpty().contains(AGREE_MARK)
         if (grewAgreement && name !in fresh && name !in refined) confirmed += name
