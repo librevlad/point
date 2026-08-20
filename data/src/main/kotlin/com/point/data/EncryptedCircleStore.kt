@@ -25,17 +25,7 @@ class EncryptedCircleStore internal constructor(
     prefsSource: () -> SharedPreferences?,
 ) : CircleStore {
 
-    @Inject constructor(@ApplicationContext context: Context) : this({
-        runCatching {
-            EncryptedSharedPreferences.create(
-                context,
-                "point_circle",
-                MasterKey.Builder(context).setKeyScheme(MasterKey.KeyScheme.AES256_GCM).build(),
-                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
-            )
-        }.getOrNull()
-    })
+    @Inject constructor(@ApplicationContext context: Context) : this({ encryptedCirclePrefs(context) })
 
     private val prefs: SharedPreferences? by lazy(prefsSource)
 
@@ -89,3 +79,14 @@ class EncryptedCircleStore internal constructor(
         const val PHONE = "phone"
     }
 }
+
+/** Шифрованные prefs круга; не удалось создать — кэша просто нет, круг живёт как раньше. */
+private fun encryptedCirclePrefs(context: Context): SharedPreferences? = runCatching {
+    EncryptedSharedPreferences.create(
+        context,
+        "point_circle",
+        MasterKey.Builder(context).setKeyScheme(MasterKey.KeyScheme.AES256_GCM).build(),
+        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
+    )
+}.getOrNull()
