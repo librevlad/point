@@ -114,10 +114,10 @@ class OneButtonPerCapabilityTest {
             printOnPc,
             PcRemoteAction("pc-open", "Открыть на компьютере"),
             PcRemoteAction("pc-copy", "В буфер компьютера"),
-            PcRemoteAction("pc-reveal", "Показать в папке на ПК"),
+            PcRemoteAction("pc-reveal", "Показать в папке на компьютере"),
             PcRemoteAction("pc-save-as", "Сохранить на компьютере"),
             PcRemoteAction("pc-download", "Скачать видео на компьютер", setOf("URL")),
-            PcRemoteAction("pc-open-link", "Открыть в браузере компьютера", setOf("URL")),
+            PcRemoteAction("pc-open-link", "Открыть в браузере на компьютере", setOf("URL")),
         ) + sharedCapabilities().map { PcRemoteAction(it.id.value, it.label(ObjectState(ObjectKind.IMAGE))) }
 
         object NoTransport : com.point.core.flow.PcTransport {

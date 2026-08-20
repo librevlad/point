@@ -33,11 +33,11 @@ fun desktopCapabilities(): Set<Capability> = setOf(
 private val namedByPlace = mapOf(
     "pc-open" to "Открыть на компьютере",
     "pc-copy" to "В буфер компьютера",
-    "pc-reveal" to "Показать в папке на ПК",
+    "pc-reveal" to "Показать в папке на компьютере",
     "pc-save-as" to "Сохранить на компьютере",
     "pc-print" to "Напечатать на компьютере",
     "pc-download" to "Скачать видео на компьютер",
-    "pc-open-link" to "Открыть в браузере на ПК",
+    "pc-open-link" to "Открыть в браузере на компьютере",
 )
 
 /** Имя, под которым умение компьютера видно в списке на телефоне. */

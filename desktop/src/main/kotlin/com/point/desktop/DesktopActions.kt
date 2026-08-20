@@ -183,7 +183,9 @@ class PcDownloadRealizer(private val downloader: VideoDownloader) : Realizer {
 
 class PcToPhoneCapability : Capability {
     override val id = CapabilityId("pc-to-phone")
-    override val icon = "pc"
+
+    // Знак показывает, куда уйдёт объект, а не где нажали (#1094): телефон, не компьютер.
+    override val icon = "phone"
 
     // Локальное действие компьютера: телефону его не рекламируем — там оно
     // звучало «На телефон на ПК» и не значило ничего (живой прогон 2026-08-09).
