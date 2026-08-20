@@ -65,7 +65,6 @@ fun SettingsRoot(
     config: PcConfig,
     devices: Int,
     email: String,
-    cloudAllowed: Boolean,
     onSave: (PcConfig) -> Unit,
     onOpen: (SettingsPage) -> Unit,
 ) {
@@ -94,9 +93,11 @@ fun SettingsRoot(
             // Согласие на облако компьютер спрашивал и запоминал, но показать его было
             // негде — и забрать обратно тоже. Разрешение без выхода из него нарушает
             // §11: объект уходит с устройства только по живому согласию (#886).
+            // Сводка называет выбранный уровень и не оправдывается состоянием согласия —
+            // те же слова, что на телефоне (#1003); само согласие видно и отзывается внутри.
             PortalRow(
                 title = "Отправка и приватность",
-                subtitle = cloudLine(cloudAllowed) + " · " + config.privacy.title,
+                subtitle = config.privacy.title,
                 onClick = { onOpen(SettingsPage.PRIVACY) },
             )
         }
@@ -183,9 +184,6 @@ fun SettingsDevices(
         }
     }
 }
-
-internal fun cloudLine(allowed: Boolean): String =
-    if (allowed) "Облако разрешено" else "Облако спрашивается каждый раз"
 
 /**
  * Экран отправки: что уже разрешено и как это забрать.

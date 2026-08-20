@@ -108,7 +108,6 @@ internal fun CompactSettings(
                 config = config,
                 devices = circle.size,
                 email = account.current()?.email.orEmpty(),
-                cloudAllowed = cloudAllowed,
                 onSave = onSave,
                 onOpen = { page = it },
             )

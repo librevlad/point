@@ -97,8 +97,9 @@ class SettingsAreAListTest {
 
         assertTrue("на компьютере не видно, разрешено ли облако", root.contains("SettingsPage.PRIVACY"))
         assertTrue("разрешение нельзя забрать", screen.contains("Забрать разрешение"))
-        assertTrue(com.point.desktop.ui.cloudLine(true).contains("разрешено"))
-        assertTrue(com.point.desktop.ui.cloudLine(false).contains("каждый раз"))
+        // Сводка корня называет выбранный уровень и не оправдывается согласием (#1003).
+        assertTrue("сводка не называет выбранный уровень", root.contains("config.privacy.title"))
+        assertTrue("сводка снова оправдывается облаком", !screen.contains("Облако разрешено"))
     }
 
     @Test
