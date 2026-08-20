@@ -236,10 +236,8 @@ class UnderstandRealizer @Inject constructor(
                     )
                 } else {
 
-                    val values = withoutHumanFacts(
-                        fields.mapValues { it.value.text } + parsed.single + roles,
-                        input.metadata,
-                    )
+                    val (values, anchors) =
+                        structuredValues(input, fields.mapValues { it.value.text } + parsed.single + roles)
                     val merged = mergeFacts(input.metadata, values)
 
                     val roleAlts = roleDisputes
@@ -292,7 +290,7 @@ class UnderstandRealizer @Inject constructor(
                     ActionResult.Done(
                         message ?: com.point.core.flow.spiralDelta(input.metadata, agreed) ?: UNDERSTOOD,
                         Findings(
-                            metadata = agreed + progress + state.orEmptyInvestigation(),
+                            metadata = agreed + anchors + progress + state.orEmptyInvestigation(),
                             objects = people.objects,
                             relations = people.relations,
                         ),
@@ -311,10 +309,8 @@ class UnderstandRealizer @Inject constructor(
             return ActionResult.Failure("На снимке ничего не разобрать", recoverable = true)
         }
         val (roles, _) = roleReadings(answer, elements = emptyList(), layer = null)
-        val values = withoutHumanFacts(
-            fields.mapValues { it.value.text } + parsed.single + roles,
-            input.metadata,
-        )
+        val (values, anchors) =
+            structuredValues(input, fields.mapValues { it.value.text } + parsed.single + roles)
         val merged = mergeFacts(input.metadata, values)
 
         // Человек с телефоном — узел графа и здесь: иначе номер висел бы без хозяина,
@@ -330,7 +326,7 @@ class UnderstandRealizer @Inject constructor(
                 answeredBy,
             )
             val agreed = noted + com.point.core.flow.agreementEvidence(noted, values.keys)
-            agreed +
+            agreed + anchors +
                 investigationOutcome(agreed, values.keys).orEmptyInvestigation() +
                 (META_READING_MODE to ReadingMode.HANDWRITTEN.name)
         }
@@ -481,7 +477,7 @@ class UnderstandRealizer @Inject constructor(
  * Слово человека не участвует в машинном премерже: модельное чтение не смеет ни вытеснить,
  * ни «отремонтировать» подтверждённый человеком факт (ADR-0001 §8) — оно просто не претендует.
  */
-private fun withoutHumanFacts(values: Map<String, String>, known: Map<String, String>): Map<String, String> =
+internal fun withoutHumanFacts(values: Map<String, String>, known: Map<String, String>): Map<String, String> =
     values.filterKeys { provenanceOf(known, it) != Provenance.HUMAN }
 
 /**

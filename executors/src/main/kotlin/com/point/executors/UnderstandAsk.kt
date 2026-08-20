@@ -120,3 +120,10 @@ internal fun understandPrompt(
     }
     append("Без пояснений. Если не нашлось вообще ничего — ответь ровно NONE.\n")
 }
+
+/** Якорные наблюдения → канонические узлы до merge (#1176): нумерация — не идентичность. */
+internal fun structuredValues(
+    input: com.point.core.model.PointObject,
+    raw: Map<String, String>,
+): Pair<Map<String, String>, Map<String, String>> =
+    com.point.core.flow.resolveStructural(input.metadata, withoutHumanFacts(raw, input.metadata))

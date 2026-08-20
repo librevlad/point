@@ -51,7 +51,10 @@ fun spiralBrief(metadata: Map<String, String>): String? {
         metadata[META_ENTITY_PREFIX + suffix]?.takeIf(String::isNotBlank)?.let { key to it }
     }
     val summary = metadata[META_SEMANTIC_SUMMARY]?.takeIf(String::isNotBlank)
-    val hasCells = metadata.keys.any { cellAddress(it) != null && !isAnnotationKey(it) && !isStateKey(it) }
+    val hasCells = metadata.keys.any {
+        (cellAddress(it) != null || it.startsWith(META_CELL_ANCHOR_PREFIX)) &&
+            !isAnnotationKey(it) && !isStateKey(it)
+    }
     if (known.isEmpty() && summary == null && !hasCells) return null
 
     return buildString {
@@ -96,6 +99,34 @@ fun spiralBrief(metadata: Map<String, String>): String? {
             .filter { !metadata[it].isNullOrBlank() }
             .sorted()
         var asked = false
+
+        // Канонические узлы спрашиваются якорями — нумерация наблюдателя сюда не входит.
+        metadata.keys
+            .filter { it.startsWith(META_CELL_ANCHOR_PREFIX) && !isAnnotationKey(it) && !isStateKey(it) }
+            .filter { !metadata[it].isNullOrBlank() }
+            .sorted()
+            .forEach { key ->
+                val row = metadata[key + META_ANCHOR_ROW_SUFFIX].orEmpty().take(60)
+                val col = metadata[key + META_ANCHOR_COL_SUFFIX].orEmpty().take(60)
+                if (row.isBlank() || col.isBlank()) return@forEach
+                val disputed = alternativesOf(metadata, key)
+                when {
+                    disputed.isNotEmpty() -> {
+                        asked = true
+                        append("Ячейка строки «$row», колонки «$col» — прочтения спорят: ")
+                        append((listOfNotNull(metadata[key]) + disputed).distinct().joinToString(" | ") { it.take(60) })
+                        append(". Посмотри на снимок и ответь строкой CELL «$row» × «$col» = точное содержимое.")
+                        append('\n')
+                    }
+                    isAssumption(metadata, key) &&
+                        provenanceOf(metadata, key) != com.point.core.model.Provenance.HUMAN -> {
+                        asked = true
+                        append("Ячейка строки «$row», колонки «$col» прочитана неуверенно — ")
+                        append("прочти её по снимку с нуля и ответь CELL «$row» × «$col» = содержимое.")
+                        append('\n')
+                    }
+                }
+            }
         cells.forEach { key ->
             val (row, col) = cellAddress(key) ?: return@forEach
             val disputed = alternativesOf(metadata, key)
@@ -124,7 +155,9 @@ fun spiralBrief(metadata: Map<String, String>): String? {
         }
         if (asked) {
             append("Строки таблицы считай сверху вниз с 1, не считая шапки; колонки — по ячейкам шапки слева направо с 1. ")
-            append("В CELL-ответе давай содержимое дословно; пустая ячейка — не пиши строку.")
+            append("В CELL-ответе давай содержимое дословно; пустая ячейка — не пиши строку. ")
+            append("Форма ответа обязательна, по одной строке на ячейку, например: ")
+            append("CELL «назва рядка» × «назва колонки» = 7")
             append('\n')
         }
 
@@ -153,7 +186,101 @@ fun cellAddress(key: String): Pair<Int, Int>? {
 
 private val CELL_KEY = Regex("""r(\d+)\.c(\d+)""")
 
+private val CELL_ANCHORED_ANSWER =
+    Regex("""(?i)CELL\s*[«"']([^»"']+)[»"']\s*[×xх]\s*[«"']([^»"']+)[»"']""")
+
 private val CELL_ANSWER = Regex("""(?i)CELL\s+r\s*(\d+)\s*[.,]?\s*c\s*(\d+)""")
+
+/**
+ * Каноническое соответствие структурных узлов (#1176, STRUCTURAL NODE CORRESPONDENCE).
+ *
+ * Нумерация r3c5 — локальный адрес одного наблюдения: другой исполнитель считает те же
+ * физические колонки иначе, и одинаковые клетки рождали бы ложно-разные узлы. Каноническая
+ * идентичность ячейки — смысловые якоря: ведущая ячейка строки и заголовок колонки.
+ * Наблюдение A «r3c5 = 78,00» и наблюдение B «„яблоки“ × „Цена“ = 78.00» сходятся в один
+ * узел; «„груши“ × „Цена“» — другой. Неоднозначное совпадение — честное UNKNOWN:
+ * отдельный узел лучше неправильного merge.
+ */
+const val META_CELL_ANCHOR_PREFIX = META_CELL_PREFIX + "a."
+
+/** Сырые якоря при каноническом узле — аннотации, не факты. */
+const val META_ANCHOR_ROW_SUFFIX = ".row"
+const val META_ANCHOR_COL_SUFFIX = ".col"
+
+fun anchoredCellKey(rowAnchor: String, colAnchor: String): String =
+    META_CELL_ANCHOR_PREFIX + anchorSlug(rowAnchor) + "x" + anchorSlug(colAnchor)
+
+private fun anchorSlug(anchor: String): String = normConsensus(anchor).ifBlank { "-" }
+
+sealed interface Correspondence {
+    val key: String
+
+    /** Наблюдение говорит об уже известном узле. */
+    data class Same(override val key: String) : Correspondence
+
+    /** Новый узел: с существующими не совпал. */
+    data class Fresh(override val key: String) : Correspondence
+
+    /** Совпадение неоднозначно — узел кладётся отдельно, merge с кандидатами запрещён. */
+    data class Unknown(override val key: String, val candidates: List<String>) : Correspondence
+}
+
+fun structuralCorrespondence(
+    metadata: Map<String, String>,
+    rowAnchor: String,
+    colAnchor: String,
+): Correspondence {
+    val exact = anchoredCellKey(rowAnchor, colAnchor)
+    val known = metadata.keys
+        .filter { it.startsWith(META_CELL_ANCHOR_PREFIX) && !isAnnotationKey(it) && !isStateKey(it) }
+    if (exact in known) return Correspondence.Same(exact)
+
+    val near = known.filter { key ->
+        nearAnchor(metadata[key + META_ANCHOR_COL_SUFFIX].orEmpty(), colAnchor) &&
+            nearAnchor(metadata[key + META_ANCHOR_ROW_SUFFIX].orEmpty(), rowAnchor)
+    }
+    return when {
+        near.size == 1 -> Correspondence.Same(near.single())
+        near.isEmpty() -> Correspondence.Fresh(exact)
+        else -> Correspondence.Unknown(exact, near)
+    }
+}
+
+/** Один якорь «внутри» другого — то же место: «Огірки» и «Огірки свіжі», «Ціна» и «Ціна за кг». */
+private fun nearAnchor(a: String, b: String): Boolean {
+    val na = anchorSlug(a)
+    val nb = anchorSlug(b)
+    if (na == "-" || nb == "-") return false
+    return na == nb || na.contains(nb) || nb.contains(na)
+}
+
+/**
+ * Свести свежие якорные наблюдения к каноническим узлам существующего знания.
+ *
+ * Возвращает значения с переписанными на канонические ключами и якорные аннотации,
+ * которые нужно положить рядом (merge аннотации не переносит — они не факты).
+ */
+fun resolveStructural(
+    known: Map<String, String>,
+    fresh: Map<String, String>,
+): Pair<Map<String, String>, Map<String, String>> {
+    val values = LinkedHashMap<String, String>()
+    val anchors = LinkedHashMap<String, String>()
+    fresh.forEach { (key, value) ->
+        if (!key.startsWith(META_CELL_ANCHOR_PREFIX) || isAnnotationKey(key)) {
+            if (key.startsWith(META_CELL_ANCHOR_PREFIX)) return@forEach
+            values[key] = value
+            return@forEach
+        }
+        val row = fresh[key + META_ANCHOR_ROW_SUFFIX].orEmpty()
+        val col = fresh[key + META_ANCHOR_COL_SUFFIX].orEmpty()
+        val place = structuralCorrespondence(known, row, col)
+        values[place.key] = value
+        anchors[place.key + META_ANCHOR_ROW_SUFFIX] = row
+        anchors[place.key + META_ANCHOR_COL_SUFFIX] = col
+    }
+    return values to anchors
+}
 
 /** Числовые KEY, из которых голая карта переезжает к себе (#657, #1176). */
 private val MIGRATES_TO_CARD = setOf("track", "receipt", "meter")
@@ -216,6 +343,18 @@ fun parseFieldCandidates(answer: String): ParsedUnderstanding {
         val key = line.substring(0, eq).trim().uppercase()
         val rest = line.substring(eq + 1).trim()
         if (rest.isEmpty()) return@forEach
+        CELL_ANCHORED_ANSWER.matchEntire(line.substring(0, eq).trim())?.let { m ->
+            val row = m.groupValues[1].trim()
+            val col = m.groupValues[2].trim()
+            splitCandidate(rest)?.text?.takeIf { it.isNotBlank() && !startsWithRefusal(it) && !saysNothing(it) }
+                ?.let { value ->
+                    val canonical = anchoredCellKey(row, col)
+                    single.putIfAbsent(canonical, value)
+                    single[canonical + META_ANCHOR_ROW_SUFFIX] = row
+                    single[canonical + META_ANCHOR_COL_SUFFIX] = col
+                }
+            return@forEach
+        }
         val cell = CELL_ANSWER.matchEntire(key.trim())
         if (cell != null) {
             // Ответ по адресу ячейки: тем же путём одиночного факта — merge, спор,
