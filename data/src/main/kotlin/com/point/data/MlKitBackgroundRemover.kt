@@ -1,12 +1,15 @@
 package com.point.data
 
 import android.graphics.Bitmap
+import android.util.Log
+import com.google.mlkit.common.MlKitException
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.segmentation.subject.SubjectSegmentation
 import com.google.mlkit.vision.segmentation.subject.SubjectSegmenterOptions
 import com.point.core.flow.BackgroundRemover
 import com.point.core.flow.ObjectStore
 import com.point.core.model.ScratchRef
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
@@ -25,7 +28,16 @@ class MlKitBackgroundRemover(
     override suspend fun cutout(imagePath: String): ScratchRef = withContext(Dispatchers.IO) {
         val bitmap = decodeBoundedUpright(imagePath, MAX_PX) ?: error("Не удалось прочитать изображение")
         try {
-            val result = segmenter.process(InputImage.fromBitmap(bitmap, 0)).await()
+            val result = try {
+                segmenter.process(InputImage.fromBitmap(bitmap, 0)).await()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // Человеку — свои слова, вендорский текст остаётся в журнале (#686, #992).
+                val code = (e as? MlKitException)?.errorCode
+                Log.w(TAG, "subject segmentation failed" + (code?.let { " (code=$it)" } ?: ""), e)
+                throw IllegalStateException(segmentationFailureWords(code), e)
+            }
             val foreground = result.foregroundBitmap ?: error("Объект на фото не найден")
             val opaque = opaqueRatio(foreground)
 
@@ -60,9 +72,24 @@ class MlKitBackgroundRemover(
     }
 
     private companion object {
+        const val TAG = "PointCutout"
         const val MAX_PX = 2048
         const val GRID = 40
         const val MIN_OPAQUE_RATIO = 0.01
         const val MAX_OPAQUE_RATIO = 0.96
     }
 }
+
+/**
+ * Слова Point для отказа движка сегментации: вендорский текст этого слоя на экран
+ * не выходит дословно (#992). Различаем по коду [MlKitException], не по тексту.
+ *
+ * `UNAVAILABLE` — модуль сегментации ещё качается из Play Services: случай ожидаемый
+ * и лечится ожиданием, поэтому слово зовёт попробовать снова. Всё остальное — общий отказ.
+ */
+internal fun segmentationFailureWords(mlKitErrorCode: Int?): String =
+    if (mlKitErrorCode == MlKitException.UNAVAILABLE) {
+        "Готовлю движок выреза — попробуйте через минуту"
+    } else {
+        "Убрать фон не вышло"
+    }
