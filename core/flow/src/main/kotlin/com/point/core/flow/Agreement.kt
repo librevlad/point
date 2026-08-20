@@ -207,14 +207,17 @@ fun mergeFacts(
             merged.remove(key + META_ALT_SUFFIX)
             return@forEach
         }
-        val verdict = agree(listOf(was, value)) ?: return@forEach
+        // Вердикт — по ВСЕМ накопленным прочтениям, не по паре (#1176, эксперимент CELL):
+        // третий взгляд, совпавший со вторым, раньше не мог победить первое — спор судился
+        // «старое против свежего», и большинство не имело голоса. agree() всегда умела
+        // список; merge теперь отдаёт ей всю историю. Проигравшее остаётся альтернативой.
+        val readings = alternativesOf(known, key).ifEmpty { listOf(was) } + value
+        val verdict = agree(readings) ?: return@forEach
         merged[key] = verdict.value
         if (verdict.agreed) {
             merged.remove(key + META_ALT_SUFFIX)
         } else {
-
-            val all = (alternativesOf(known, key) + verdict.candidates).distinct()
-            merged[key + META_ALT_SUFFIX] = altValue(all)
+            merged[key + META_ALT_SUFFIX] = altValue(verdict.candidates)
         }
     }
     return merged

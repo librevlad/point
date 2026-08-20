@@ -51,7 +51,8 @@ fun spiralBrief(metadata: Map<String, String>): String? {
         metadata[META_ENTITY_PREFIX + suffix]?.takeIf(String::isNotBlank)?.let { key to it }
     }
     val summary = metadata[META_SEMANTIC_SUMMARY]?.takeIf(String::isNotBlank)
-    if (known.isEmpty() && summary == null) return null
+    val hasCells = metadata.keys.any { cellAddress(it) != null && !isAnnotationKey(it) && !isStateKey(it) }
+    if (known.isEmpty() && summary == null && !hasCells) return null
 
     return buildString {
         append("Этот объект уже разбирали. ")
@@ -87,9 +88,72 @@ fun spiralBrief(metadata: Map<String, String>): String? {
                 }
             }
         }
+        // Вопросные ячейки таблицы (#1176, эксперимент CELL): спорные и сомнительные —
+        // прицельно, с адресом; бесспорные в бриф не идут, это шум. Тот же цикл, что у
+        // контрактных KEY, но адрес структурный, а не смысловой.
+        val cells = metadata.keys
+            .filter { cellAddress(it) != null && !isAnnotationKey(it) && !isStateKey(it) }
+            .filter { !metadata[it].isNullOrBlank() }
+            .sorted()
+        var asked = false
+        cells.forEach { key ->
+            val (row, col) = cellAddress(key) ?: return@forEach
+            val disputed = alternativesOf(metadata, key)
+            when {
+                disputed.isNotEmpty() -> {
+                    asked = true
+                    append("Ячейка таблицы (строка $row, колонка $col) — прочтения спорят: ")
+                    append((listOfNotNull(metadata[key]) + disputed).distinct().joinToString(" | ") { it.take(60) })
+                    append(". Посмотри на снимок и ответь строкой CELL r$row c$col = точное содержимое.")
+                    append('\n')
+                }
+                isAssumption(metadata, key) &&
+                    provenanceOf(metadata, key) != com.point.core.model.Provenance.HUMAN -> {
+                    asked = true
+                    // Слепая перепроверка: показанное в брифе значение модель охотно
+                    // возвращает эхом, и два имени актёров дают ОДНО наблюдение —
+                    // согласие с подсказкой уликой не является (RFC Semantic Graph §8,
+                    // живой прогон 20.08: openrouter «подтвердил» все восемь сдвинутых
+                    // ячеек). Спорная ячейка — другое дело: там оба прочтения показаны,
+                    // и модель судит между ними по снимку.
+                    append("Ячейка таблицы (строка $row, колонка $col) прочитана неуверенно — ")
+                    append("прочти её по снимку с нуля и ответь CELL r$row c$col = содержимое.")
+                    append('\n')
+                }
+            }
+        }
+        if (asked) {
+            append("Строки таблицы считай сверху вниз с 1, не считая шапки; колонки — по ячейкам шапки слева направо с 1. ")
+            append("В CELL-ответе давай содержимое дословно; пустая ячейка — не пиши строку.")
+            append('\n')
+        }
+
         append("Уже известное без нужды не переписывай; новое и исправленное давай теми же KEY.")
     }
 }
+
+/**
+ * Адресуемая ячейка таблицы — первый структурный узел Graph (#1176, эксперимент CELL).
+ *
+ * Идентичность ячейки — сам ключ: `cell.r3.c5` и `cell.r3.c6` не сольются по построению,
+ * а «78,00» и «78.00» в одном ключе складывает та же `sameFact`, что и у любого факта.
+ * Никакого отдельного конвейера: ячейка — обычный факт со спором, уликами, актёрами
+ * и согласием.
+ */
+const val META_CELL_PREFIX = "cell."
+
+fun cellKey(row: Int, col: Int): String = META_CELL_PREFIX + "r" + row + ".c" + col
+
+/** Адрес из ключа ячейки: (строка, колонка) — или null, если ключ не ячейка. */
+fun cellAddress(key: String): Pair<Int, Int>? {
+    if (!key.startsWith(META_CELL_PREFIX)) return null
+    val m = CELL_KEY.matchEntire(key.removePrefix(META_CELL_PREFIX)) ?: return null
+    return m.groupValues[1].toInt() to m.groupValues[2].toInt()
+}
+
+private val CELL_KEY = Regex("""r(\d+)\.c(\d+)""")
+
+private val CELL_ANSWER = Regex("""(?i)CELL\s+r\s*(\d+)\s*[.,]?\s*c\s*(\d+)""")
 
 /** Числовые KEY, из которых голая карта переезжает к себе (#657, #1176). */
 private val MIGRATES_TO_CARD = setOf("track", "receipt", "meter")
@@ -152,6 +216,14 @@ fun parseFieldCandidates(answer: String): ParsedUnderstanding {
         val key = line.substring(0, eq).trim().uppercase()
         val rest = line.substring(eq + 1).trim()
         if (rest.isEmpty()) return@forEach
+        val cell = CELL_ANSWER.matchEntire(key.trim())
+        if (cell != null) {
+            // Ответ по адресу ячейки: тем же путём одиночного факта — merge, спор,
+            // улики и согласие достаются бесплатно (#1176).
+            splitCandidate(rest)?.text?.takeIf { it.isNotBlank() && !startsWithRefusal(it) && !saysNothing(it) }
+                ?.let { single.putIfAbsent(cellKey(cell.groupValues[1].toInt(), cell.groupValues[2].toInt()), it) }
+            return@forEach
+        }
         when {
             // «Убрать TYPE вообще» (#663, решение владельца): ярлык от модели —
             // догадка без признаков («Встреча» на переписке об оплате). Суть несёт

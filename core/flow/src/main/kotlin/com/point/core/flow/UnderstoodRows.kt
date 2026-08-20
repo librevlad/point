@@ -8,7 +8,12 @@ package com.point.core.flow
  * код удалён (#840): он выглядел как рабочий путь и приглашал править себя вместо
  * настоящего.
  */
-fun understoodName(key: String): String? = when (key.removePrefix(META_ENTITY_PREFIX)) {
+fun understoodName(key: String): String? {
+    cellAddress(key)?.let { (row, col) -> return "Ячейка $row×$col" }
+    return understoodEntityName(key)
+}
+
+private fun understoodEntityName(key: String): String? = when (key.removePrefix(META_ENTITY_PREFIX)) {
     "phone" -> "Телефон"
     "email" -> "Почта"
     "url" -> "Ссылка"
