@@ -35,7 +35,10 @@ fun isAnnotationKey(key: String): Boolean =
     key.endsWith(META_ALT_SUFFIX) || key.endsWith(META_MORE_SUFFIX) ||
         key.endsWith(META_EVIDENCE_SUFFIX) || key.endsWith(META_SOURCE_SUFFIX) ||
         key.endsWith(META_BLOCKED_SUFFIX) || key.endsWith(META_LINE_SUFFIX) ||
-        key.endsWith(META_ACTOR_SUFFIX)
+        key.endsWith(META_ACTOR_SUFFIX) ||
+
+        // Сырые якоря канонического структурного узла (#1176): подпись места, не факт.
+        key.endsWith(META_ANCHOR_ROW_SUFFIX) || key.endsWith(META_ANCHOR_COL_SUFFIX)
 
 fun semanticFits(key: String, value: String): Boolean? {
     val digits = value.count(Char::isDigit)
