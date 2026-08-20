@@ -88,8 +88,10 @@ class MlKitBackgroundRemover(
  * и лечится ожиданием, поэтому слово зовёт попробовать снова. Всё остальное — общий отказ.
  */
 internal fun segmentationFailureWords(mlKitErrorCode: Int?): String =
-    if (mlKitErrorCode == MlKitException.UNAVAILABLE) {
-        "Готовлю движок выреза — попробуйте через минуту"
-    } else {
-        "Убрать фон не вышло"
-    }
+    if (mlKitErrorCode == MlKitException.UNAVAILABLE) CUTOUT_ENGINE_PREPARING else CUTOUT_FAILED
+
+/** Слово на время скачивания модуля: случай лечится ожиданием, поэтому зовёт попробовать снова. */
+internal const val CUTOUT_ENGINE_PREPARING = "Готовлю движок выреза — попробуйте через минуту"
+
+/** Общий отказ выреза: вендорский текст остаётся в журнале (#686). */
+internal const val CUTOUT_FAILED = "Убрать фон не вышло"
