@@ -41,10 +41,29 @@ class EveryRefusalHasItsOwnNameTest {
     }
 
     @Test
-    fun `три беды — три разных текста`() {
-        val names = setOf(NO_SERVER_ADDRESS_TEXT, NOT_IN_ACCOUNT_TEXT, ODD_ANSWER_TEXT, NO_LINK_TEXT, NO_SERVER_TEXT)
+    fun `у каждой беды своё имя — одинаковых нет`() {
+        val names = setOf(
+            NO_SERVER_ADDRESS_TEXT, NOT_IN_ACCOUNT_TEXT, ODD_ANSWER_TEXT, NO_LINK_TEXT, NO_SERVER_TEXT,
+            REQUEST_BROKE_TEXT,
+        )
 
-        assertEquals("одинаковых имён нет", 5, names.size)
+        assertEquals("одинаковых имён нет", 6, names.size)
+    }
+
+    /**
+     * Сорвался сам вызов (#1077): «сервер не ответил» — только когда разговор с сервером и
+     * правда не состоялся. Сбой на устройстве зовётся устройством и оставляет след — чем именно.
+     */
+    @Test
+    fun `сорвавшийся вызов — молчание сервера зовётся сервером, сбой на устройстве — устройством`() {
+        assertEquals(NO_SERVER_TEXT, dropOpenBroke(java.net.ConnectException("refused")))
+        assertEquals(NO_SERVER_TEXT, dropOpenBroke(java.net.SocketTimeoutException("timeout")))
+
+        val onDevice = dropOpenBroke(IllegalStateException("no network on main thread"))
+
+        assertTrue("сбой на устройстве не зовётся сервером: $onDevice", onDevice != NO_SERVER_TEXT)
+        assertTrue("имя из словаря: $onDevice", onDevice.startsWith(REQUEST_BROKE_TEXT))
+        assertTrue("след — что именно сорвалось: $onDevice", "IllegalStateException" in onDevice)
     }
 
     @Test
