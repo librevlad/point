@@ -15,11 +15,15 @@ data class FocusPoint(val x: Float, val y: Float)
 /**
  * Один мазок в координатах изображения. `width` — толщина кисти: она входит в область,
  * потому что человек метит серединой пальца, а не краем линии.
+ *
+ * `wholeLine` — мазок кистью (#1039): на той стороне ✓ он прилипает к задетым строкам.
+ * Обводка прямоугольником или лассо остаётся как нарисована: там человек целился сам.
  */
 data class FocusStroke(
     val points: List<FocusPoint>,
     val width: Float,
     val erase: Boolean = false,
+    val wholeLine: Boolean = false,
 ) {
     /** Прямоугольник самого мазка — с учётом толщины. */
     fun bounds(): Box? {
@@ -38,6 +42,13 @@ data class FocusStroke(
         return Box(left - half, top - half, right + half, bottom + half)
     }
 }
+
+/**
+ * Показанное место вместе с правилом прилипания для него (#1039): кисть тянет строку, обводка
+ * остаётся как нарисована. Правило едет с местом, потому что инструмент — свойство мазка, а не
+ * экрана: одно место могли показать кистью, соседнее — прямоугольником.
+ */
+data class FocusPart(val box: Box, val wholeLine: Boolean)
 
 data class FocusDraft(
     val strokes: List<FocusStroke> = emptyList(),
@@ -63,12 +74,6 @@ data class FocusDraft(
     fun cleared(): FocusDraft = FocusDraft(emptyList(), past + listOf(strokes), emptyList())
 
     /**
-     * Область, которую человек показал.
-     *
-     * `null` — он ещё ничего не показал. Ластик убирает мазки, которых коснулся: «убрать
-     * часть выделения» без обещания попиксельной точности, которого палец всё равно не даст.
-     */
-    /**
      * Область, которую человек показал, — в координатах изображения.
      *
      * `null` — он ещё ничего не показал. Прилипание к содержимому здесь НЕ делается: за него
@@ -77,29 +82,26 @@ data class FocusDraft(
      * Ластик убирает мазки, которых коснулся: «убрать часть выделения» без обещания
      * попиксельной точности, которого палец всё равно не даст.
      */
-    fun region(pad: Float = 0f, page: Box? = null): Box? {
-        val kept = keptStrokes()
-        val rough = kept.mapNotNull { it.bounds() }.reduceOrNull { a, b -> a.union(b) } ?: return null
-        val padded = Box(rough.left - pad, rough.top - pad, rough.right + pad, rough.bottom + pad)
-        return if (page == null) padded else padded.clampedTo(page)
-    }
+    fun region(pad: Float = 0f, page: Box? = null): Box? =
+        parts(pad, page).map { it.box }.reduceOrNull(Box::union)
 
     /**
      * Показанные места по отдельности (#549): человек обвёл три штуки — это три места,
      * а не один прямоугольник, накрывший половину кадра вместе со всем, что между ними.
      *
-     * Пересекающиеся мазки сливаются: два движения по одному месту — одно место.
+     * Пересекающиеся мазки сливаются: два движения по одному месту — одно место. Если хоть
+     * одно из них — кисть, место тянет строку: обещание кисти держится там, где она прошла.
      */
-    fun parts(pad: Float = 0f, page: Box? = null): List<Box> {
-        val boxes = keptStrokes().mapNotNull { it.bounds() }
-            .map { Box(it.left - pad, it.top - pad, it.right + pad, it.bottom + pad) }
-            .map { if (page == null) it else it.clampedTo(page) }
+    fun parts(pad: Float = 0f, page: Box? = null): List<FocusPart> {
+        val shown = keptStrokes().mapNotNull { stroke ->
+            stroke.bounds()?.let { FocusPart(it.padded(pad, page), stroke.wholeLine) }
+        }
 
-        val merged = mutableListOf<Box>()
-        boxes.forEach { box ->
-            val touching = merged.filter { it.intersects(box) }
+        val merged = mutableListOf<FocusPart>()
+        shown.forEach { part ->
+            val touching = merged.filter { it.box.intersects(part.box) }
             merged.removeAll(touching)
-            merged += touching.fold(box, Box::union)
+            merged += touching.fold(part) { a, b -> FocusPart(a.box.union(b.box), a.wholeLine || b.wholeLine) }
         }
         return merged
     }
@@ -117,6 +119,11 @@ data class FocusDraft(
         return kept
     }
 
+}
+
+private fun Box.padded(pad: Float, page: Box?): Box {
+    val padded = Box(left - pad, top - pad, right + pad, bottom + pad)
+    return if (page == null) padded else padded.clampedTo(page)
 }
 
 private fun Box.clampedTo(page: Box): Box = Box(

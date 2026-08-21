@@ -27,8 +27,12 @@ class FocusDraftTest {
 
     private fun layer(vararg atoms: Atom) = AtomLayer(atoms.toList())
 
-    private fun stroke(vararg points: Pair<Float, Float>, width: Float = 20f, erase: Boolean = false) =
-        FocusStroke(points.map { FocusPoint(it.first, it.second) }, width = width, erase = erase)
+    private fun stroke(
+        vararg points: Pair<Float, Float>,
+        width: Float = 20f,
+        erase: Boolean = false,
+        wholeLine: Boolean = false,
+    ) = FocusStroke(points.map { FocusPoint(it.first, it.second) }, width = width, erase = erase, wholeLine = wholeLine)
 
     @Test
     fun `пустой черновик не даёт области`() {
@@ -83,6 +87,21 @@ class FocusDraftTest {
         assertNull(empty.region())
         assertTrue(empty.canUndo)
         assertEquals(drawn.strokes, empty.undo().strokes)
+    }
+
+    /** #1039: инструмент — свойство мазка, и каждое показанное место уносит своё правило прилипания. */
+    @Test
+    fun `места помнят инструмент — кисть тянет строку, обводка нет, слившиеся с кистью тянут`() {
+        val draft = FocusDraft()
+            .add(stroke(120f to 210f, 200f to 210f, wholeLine = true))
+            .add(stroke(120f to 410f, 200f to 410f))
+            .add(stroke(120f to 610f, 200f to 610f))
+            .add(stroke(150f to 610f, 250f to 610f, wholeLine = true))
+
+        val parts = draft.parts()
+
+        assertEquals(listOf(true, false, true), parts.map { it.wholeLine })
+        assertEquals(draft.region(), parts.map { it.box }.reduce(Box::union))
     }
 
     @Test
