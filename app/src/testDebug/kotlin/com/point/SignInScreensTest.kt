@@ -199,6 +199,31 @@ class SignInScreensTest {
         assertTrue("«Выйти» перестал выходить", signedOut)
     }
 
+    @Test fun `сервер молчит — экран показывает последний круг, а не зовёт человека одиноким`() {
+        devices(
+            DevicesScreenState(
+                email = "me@example.com",
+                loading = false,
+                error = "Не удалось спросить сервер о ваших устройствах — проверьте интернет",
+                devices = listOf(
+                    CircleDevice("d1", DeviceKind.PHONE, "Pixel 8", NOW - 20_000, self = true),
+                    CircleDevice("d2", DeviceKind.PC, "Рабочий ноутбук", NOW - 40_000),
+                ),
+            ),
+        )
+
+        // Оба устройства запомненного круга на месте, честная строка об ошибке тоже.
+        compose.onNodeWithText("Pixel 8").assertExists()
+        compose.onNodeWithText("Рабочий ноутбук").assertExists()
+        compose.onNodeWithText("Не удалось спросить сервер", substring = true).assertExists()
+
+        // Незнание — не одиночество (#1076): при компьютере в круге «пока вы один» — неправда.
+        compose.onNodeWithText("ПОКА ВЫ ОДИН").assertDoesNotExist()
+
+        // Связь не проверялась — «на связи» из памяти не утверждается.
+        compose.onNodeWithText("на связи", substring = true).assertDoesNotExist()
+    }
+
     @Test fun `пока круг едет, экран говорит об этом, а не показывает пустоту`() {
         devices(DevicesScreenState(email = "me@example.com", loading = true))
 

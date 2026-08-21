@@ -365,6 +365,7 @@ class GraphPipelineIntegrationTest {
             override suspend fun check(config: UserAiConfig) = KeyProbe(status = 200, reply = "ok")
         },
         FakeAccountStore(TEST_ACCOUNT),
+        com.point.core.flow.InMemoryCircleStore(),
         FakeCircleClient(),
         com.point.core.flow.InMemoryPendingLogins(),
         object : com.point.core.flow.DeviceKeyStore {

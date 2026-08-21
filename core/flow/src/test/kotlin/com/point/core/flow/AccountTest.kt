@@ -37,6 +37,17 @@ class AccountTest {
         assertEquals("4 дн. назад", lastSeenLabel(now - 4 * 24 * 60 * 60_000L, now))
     }
 
+    @Test fun `круг из памяти не утверждает «на связи» — связь не проверялась`() {
+        val now = 1_000_000_000L
+
+        // Свежая отметка из запомненного круга (#1076): «на связи» — утверждение о сейчас,
+        // из памяти оно не делается. «Меньше часа назад» при этом остаётся правдой.
+        assertTrue(lastSeenLabel(now - 30_000, now, checkedNow = false).contains("назад"))
+        listOf(now - 30_000, now - 10 * 60_000, now - 5 * 60 * 60_000L).forEach { seen ->
+            assertTrue(!lastSeenLabel(seen, now, checkedNow = false).contains("на связи"))
+        }
+    }
+
     @Test fun `вход проходит четыре состояния и сохраняет пропуск`() = runTest {
         val client = FakeAccountClient(readyAfter = 2)
         val store = MemoryAccountStore()
