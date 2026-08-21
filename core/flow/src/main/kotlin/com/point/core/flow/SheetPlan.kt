@@ -46,6 +46,43 @@ fun layoutSheet(layout: DocumentLayout, mode: ReadingMode = ReadingMode.UNKNOWN)
     return SheetPlan(rows, headerRows, candidates)
 }
 
+/**
+ * Несколько страниц набора — одна таблица (#1207).
+ *
+ * Страницы идут одна за другой в порядке набора: строки складываются, номера строк
+ * заголовков и спорных ячеек сдвигаются на длину предыдущих страниц. Шапка, которую
+ * следующая страница повторяет слово в слово за первой прочитанной, второй раз не кладётся —
+ * это та же таблица, а не новая. Другая шапка остаётся: значит, на странице другая таблица.
+ */
+fun stitchSheets(pages: List<SheetPlan>): SheetPlan {
+    if (pages.size == 1) return pages.single()
+    val rows = ArrayList<List<String>>()
+    val headerRows = LinkedHashSet<Int>()
+    val candidates = LinkedHashMap<Pair<Int, Int>, List<String>>()
+    // Эталон шапки — первая страница, у которой шапка есть: первая страница набора могла
+    // не прочитаться вовсе, и тогда её место в таблице — строка без шапки.
+    val leadAt = pages.indexOfFirst { it.headerRows.isNotEmpty() }
+    val leadHeader = pages.getOrNull(leadAt)
+        ?.let { lead -> lead.headerRows.mapNotNull { lead.rows.getOrNull(it) }.map(::rowKey) }
+        .orEmpty()
+        .toSet()
+    pages.forEachIndexed { p, page ->
+        val placed = IntArray(page.rows.size) { -1 }
+        page.rows.forEachIndexed { r, row ->
+            val repeatsLead = p > leadAt && r in page.headerRows && rowKey(row) in leadHeader
+            if (repeatsLead) return@forEachIndexed
+            placed[r] = rows.size
+            rows += row
+            if (r in page.headerRows) headerRows += placed[r]
+        }
+        page.candidates.forEach { (cell, readings) ->
+            val at = placed.getOrElse(cell.first) { -1 }
+            if (at >= 0) candidates[at to cell.second] = readings
+        }
+    }
+    return SheetPlan(rows, headerRows, candidates)
+}
+
 fun coveredClaim(layout: DocumentLayout, plan: SheetPlan, mode: ReadingMode): Boolean? = when {
     mode == ReadingMode.HANDWRITTEN ->
         plan.rows.asSequence().flatten().none { it.any(Char::isDigit) && !marks(it) }

@@ -1091,6 +1091,51 @@ class FlowViewModel @Inject constructor(
         pushFrame(item)
     }
 
+    /**
+     * Перестановка страниц набора — знание набора, а не имя файла (#1207).
+     *
+     * Несколько фото одной накладной приходят в порядке съёмки, и именно этот порядок
+     * нужен «Сканировать в PDF» и «В Excel». Человек двигает страницу на шаг — список на
+     * экране меняется сразу, а порядок ложится в сам объект-набор тем же merge-путём, что и
+     * любое другое знание (`applyEnrichment`): он переживёт возврат к набору и «Недавнее».
+     *
+     * Только в набор: `landFindings` разносит знание и в исходник кадра, а порядок страниц
+     * разложенного PDF — знание набора страниц, не документа. В PDF ему делать нечего.
+     */
+    fun moveItem(item: PointObject, by: Int) {
+        val index = stack.lastIndex
+        val top = stack.getOrNull(index) ?: return
+        if (top.obj.state.kind != ObjectKind.COLLECTION) return
+        val from = top.items.indexOfFirst { it.id == item.id }
+        val to = from + by
+        if (from < 0 || to !in top.items.indices) return
+        val moved = top.items.toMutableList().apply { add(to, removeAt(from)) }
+        val refreshed = top.copy(items = moved)
+        stack[index] = refreshed
+        _ui.update { if (it.frame?.obj?.id == top.obj.id) it.copy(frame = refreshed) else it }
+        applyEnrichment(
+            top.obj,
+            EnrichmentUpdate(
+                features = emptySet(),
+                metadata = mapOf(
+                    com.point.core.flow.META_COLLECTION_ORDER to
+                        com.point.core.flow.collectionOrderValue(moved.mapNotNull { it.metadata["name"] }),
+                ),
+                running = top.enriching,
+            ),
+        )
+        // Карточка «Недавнего» несёт знание набора — порядок обязан дойти и до неё.
+        stack.getOrNull(index)?.obj?.let { set -> viewModelScope.launch { runCatching { history.update(set) } } }
+    }
+
+    /** Миниатюра страницы набора — тем же чтением, что и превью снимка (#1207). */
+    suspend fun itemPreview(item: PointObject): androidx.compose.ui.graphics.ImageBitmap? {
+        if (item.state.kind != ObjectKind.IMAGE) return null
+        return withContext(ioDispatcher) {
+            runCatching { Bitmaps.decodeThumbnail(item.uri.value, ITEM_THUMB_PX)?.asImageBitmap() }.getOrNull()
+        }
+    }
+
     fun onFound(found: PointObject) {
         if (stack.lastOrNull()?.found?.none { it.id == found.id } != false) return
         pushFrame(found)
@@ -2867,6 +2912,9 @@ private val PHONE_ADVERTISED_FALLBACK = listOf(
     com.point.core.flow.PcRemoteAction("event", "Создать событие", kinds = setOf("TEXT")),
 )
 private const val PREVIEW_MAX_PX = 640
+
+/** Миниатюра страницы в списке набора — того же размера, что и в «Недавнем» (#1207). */
+private const val ITEM_THUMB_PX = 96
 
 private const val SELECTION_MAX_PX = 2048
 

@@ -29,5 +29,5 @@ fun survivedHeaderRows(lead: List<List<String>>, consensus: List<List<String>>, 
     return if (same) headerRows else 0
 }
 
-private fun rowKey(row: List<String>): String =
+internal fun rowKey(row: List<String>): String =
     row.joinToString("") { normConsensus(it) }

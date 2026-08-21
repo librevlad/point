@@ -129,6 +129,10 @@ class ScratchObjectStore @Inject constructor(
                 limit = limit,
                 isFile = { it.isFile },
                 name = { it.name },
+
+                // Порядок страниц — знание самого набора (#1207): человек переставил их на
+                // экране, и список идёт так, как он велел; остальное — по имени.
+                order = com.point.core.flow.collectionOrder(collection.metadata),
             ).map { file ->
                 val mime = mimeOf(file.name)
 

@@ -1,5 +1,6 @@
 package com.point.executors
 
+import com.point.core.flow.ActionProgress
 import com.point.core.flow.AtomCodec
 import com.point.core.flow.AtomLayer
 import com.point.core.flow.BlockAnswer
@@ -28,17 +29,24 @@ import com.point.core.flow.META_TABLE_COVERED
 import com.point.core.flow.META_TABLE_FLAGGED
 import com.point.core.flow.META_TABLE_GRID
 import com.point.core.flow.META_TABLE_HEADER
+import com.point.core.flow.META_TABLE_PAGES
+import com.point.core.flow.META_TABLE_PAGES_UNREAD
 import com.point.core.flow.META_TABLE_SCOPE
 import com.point.core.flow.META_TABLE_UNREAD
 import com.point.core.flow.ObjectStore
+import com.point.core.flow.PAGE_KINDS
 import com.point.core.flow.refusalNeedsKey
 import com.point.core.flow.RECROP_TIMEOUT_MS
 import com.point.core.flow.ReadingMode
 import com.point.core.flow.Realizer
 import com.point.core.flow.RecropQuestion
+import com.point.core.flow.SheetPlan
 import com.point.core.flow.SpreadsheetWriter
+import com.point.core.flow.collectionOrder
 import com.point.core.flow.coveredClaim
+import com.point.core.flow.inCollectionOrder
 import com.point.core.flow.recropDisputed
+import com.point.core.flow.stitchSheets
 import com.point.core.flow.bareIndexId
 import com.point.core.flow.grid
 import com.point.core.flow.gridHeaderRows
@@ -81,6 +89,7 @@ import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
+import kotlin.coroutines.coroutineContext
 
 class ExcelCapability @Inject constructor(
     private val keys: AiReadiness,
@@ -89,8 +98,10 @@ class ExcelCapability @Inject constructor(
     override val icon = "excel"
     override val meta = CapabilityMeta(cost = Cost.PAID, latency = Latency.SLOW, network = true, auth = true)
     override fun label(state: ObjectState) = labelNeedingKey("В Excel", keys.keySet())
+    // Набор страниц — тоже источник таблицы (#1207): несколько фото одной накладной сшиваются
+    // в один файл по порядку страниц. Страница набора — то же, что читается и поодиночке.
     override fun accepts(state: ObjectState) =
-        state.kind in setOf(ObjectKind.IMAGE, ObjectKind.PDF, ObjectKind.TEXT)
+        state.kind in PAGE_KINDS || state.kind == ObjectKind.COLLECTION
     override fun produces(state: ObjectState) = ObjectState(ObjectKind.OFFICE)
 
     override fun yields(state: ObjectState) = ActionYield.New(ObjectKind.OFFICE, "таблицу")
@@ -120,177 +131,278 @@ class ExcelRealizer(
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
             runCatching {
-
-                val extra = if (input.state.kind == ObjectKind.TEXT) {
-                    "\n\nТекст:\n" + File(input.uri.value).readText().take(MAX_TEXT)
-                } else {
-                    ""
-                }
-
-                reportStage(if (input.state.kind == ObjectKind.IMAGE) "Читаю страницу" else "Готовлю текст")
-                val layer = atomLayer(input)
-                val index = layer?.promptIndex()
-                val prompt = if (index != null) PROMPT + ADDRESSED + index + extra else PROMPT + extra
-
-                val ordered = providers
-                    .filter { it.configured && it.canHandle(input) }
-                    .sortedByDescending { it.strongVision }
-
-                val layouts = mutableListOf<DocumentLayout>()
-                val tables = mutableListOf<List<List<String>>>()
-
-                val cellCandidates = mutableListOf<Map<Pair<Int, Int>, List<String>>>()
-                val errors = mutableListOf<String>()
-                var next = 0
-                while (layouts.size < CONSENSUS_N && next < ordered.size) {
-
-                    val reads = readTogether(ordered, next, CONSENSUS_N - layouts.size, input, prompt, next == 0)
-                    next = reads.next
-
-                    for (read in reads.answers) {
-                        val raw = read.getOrNull()
-                        if (raw == null) {
-                            val e = read.exceptionOrNull()!!
-                            errors += e.message ?: e.javaClass.simpleName
-                            continue
-                        }
-                        try {
-
-                            val answer = parseLayout(raw) ?: continue
-                            val addressable = layer != null && index != null
-                            val layout =
-                                if (addressable) layer.resolveLayout(answer) else literalLayout(answer)
-                            val gridRows = layout.grid?.rows.orEmpty()
-
-                            val cells = gridRows.flatten()
-                            if (addressable && cells.all { it.isBlank() || it == "⚠" } && "⚠" in cells) {
-                                errors += "Не вышло показать, где эти слова на странице"
-                                continue
-                            }
-                            layouts += layout
-                            if (gridRows.isNotEmpty()) {
-                                tables += gridRows
-                                cellCandidates += layout.grid?.candidates.orEmpty()
-                            }
-                        } catch (e: Exception) {
-                            errors += e.message ?: e.javaClass.simpleName
-                        }
-                    }
-                }
-                if (layouts.isEmpty()) {
-                    ActionResult.Failure(refusalOf(errors, ordered.isEmpty()), recoverable = true)
-                } else {
-                    reportStage(if (tables.size > 1) "Свожу расхождения чтений" else "Собираю таблицу")
-                    val consensus = reconcile(tables)
-
-                    val candidates = (
-                        consensus.candidates.asSequence().map { it.key to it.value } +
-                            cellCandidates.asSequence().flatMap { perModel ->
-                                perModel.asSequence().mapNotNull { (key, cand) ->
-                                    anchorCandidates(key, cand, consensus.rows)?.let { it to cand }
-                                }
-                            }
-                        )
-                        .groupBy({ it.first }, { it.second })
-                        .mapValues { (_, lists) ->
-                            lists.flatten().distinct()
-                                .groupBy(::normConsensus).values
-                                .map { g -> g.firstOrNull { !it.contains('⚠') } ?: g.first() }
-                        }
-
-                    val eyes = ordered.filter { it.strongVision }
-                    val settled = if (input.state.kind == ObjectKind.IMAGE && layer != null && eyes.isNotEmpty()) {
-                        recropDisputed(
-                            Consensus(consensus.rows, candidates, consensus.sources),
-                            layer,
-                            recropTimeoutMs,
-                        ) { question -> reread(input, layer, question, eyes) }
-                    } else {
-                        Consensus(consensus.rows, candidates, consensus.sources)
-                    }
-
-                    val suspect = validateTable(settled.rows)
-                    val rows = settled.rows.mapIndexed { r, row ->
-                        row.mapIndexed { c, v ->
-                            val flagged = (r to c) in suspect || (r to c) in settled.candidates
-                            if (flagged && !v.contains('⚠')) "$v⚠" else v
-                        }
-                    }
-
-                    val read = layouts.first()
-
-                    val structural = if (tables.size == 1) read.grid?.structural.orEmpty() else emptySet()
-
-                    val headerRows = survivedHeaderRows(
-                        read.grid?.rows.orEmpty(),
-                        rows,
-                        read.gridHeaderRows,
-                    )
-                    val document = read.withGrid(
-                        GroundedTable(rows, settled.candidates, structural),
-                        headerRows,
-                    )
-
-                    val gridCells = rows.sumOf { row -> row.count { it.isNotBlank() } }
-                    val disputed = (settled.candidates.keys + suspect).count { (r, c) ->
-                        rows.getOrNull(r)?.getOrNull(c)?.isNotBlank() == true
-                    }
-                    unfitTable(document, disputed, gridCells)?.let {
-                        return@runCatching ActionResult.Failure(it, recoverable = true)
-                    }
-
-                    val mode = readingModeOf(input.metadata).takeIf { it != ReadingMode.UNKNOWN }
-                        ?: readingModeOf(layer)
-                    val plan = layoutSheet(document, mode)
-
-                    if (plan.rows.isEmpty()) {
-                        return@runCatching ActionResult.Failure(
-                            "На странице не нашлось ничего, что можно положить в таблицу",
-                            recoverable = true,
-                        )
-                    }
-
-                    reportStage("Собираю файл")
-                    val ref = writer.write(plan)
-                    val flagged = plan.rows.sumOf { row -> row.count { styleCell(it).flagged } }
-                    val grid = document.grid?.takeIf { it.rows.isNotEmpty() }
-                    ActionResult.Success(
-                        ResultObject(
-                            ObjectKind.OFFICE,
-                            XLSX_MIME,
-                            ref,
-                            buildMap {
-                                put("op", "excel")
-                                put("name", "таблица.xlsx")
-
-                                grid?.let {
-                                    put(META_TABLE_GRID, "${it.rows.size}×${it.rows.maxOf { r -> r.size }}")
-                                    put(
-                                        META_TABLE_HEADER,
-                                        headerLabel(minOf(document.gridHeaderRows, it.rows.size)),
-                                    )
-                                }
-                                document.scope?.let { put(META_TABLE_SCOPE, scopeLabel(it)) }
-
-                                document.unreadWords.takeIf { it > 0 }
-                                    ?.let { put(META_TABLE_UNREAD, it.toString()) }
-
-                                document.chromeWords.takeIf { it > 0 }
-                                    ?.let { put(META_TABLE_CHROME, it.toString()) }
-
-                                if (coveredClaim(document, plan, mode) == true) put(META_TABLE_COVERED, "да")
-                                put(META_TABLE_FLAGGED, flagged.toString())
-
-                                if (mode != ReadingMode.UNKNOWN) put(META_READING_MODE, mode.name)
-                                put("models", layouts.size.toString())
-
-                                put("confirmedBy", consensus.sources.toString())
-                            },
-                        ),
-                    )
-                }
+                if (input.state.kind == ObjectKind.COLLECTION) pagesToSheet(input) else pageToSheet(input)
             }.getOrElse { ActionResult.Failure(it.message ?: "Ошибка разбора в Excel", recoverable = true) }
         }
+
+    private suspend fun pageToSheet(input: PointObject): ActionResult {
+        val read = when (val page = readPage(input)) {
+            is PageRead.Refused -> return ActionResult.Failure(page.reason, recoverable = true)
+            is PageRead.Table -> page
+        }
+        val document = read.document
+        val plan = read.plan
+        val mode = read.mode
+
+        reportStage("Собираю файл")
+        val ref = writer.write(plan)
+        val flagged = plan.rows.sumOf { row -> row.count { styleCell(it).flagged } }
+        val grid = document.grid?.takeIf { it.rows.isNotEmpty() }
+        return ActionResult.Success(
+            ResultObject(
+                ObjectKind.OFFICE,
+                XLSX_MIME,
+                ref,
+                buildMap {
+                    put("op", "excel")
+                    put("name", "таблица.xlsx")
+
+                    grid?.let {
+                        put(META_TABLE_GRID, "${it.rows.size}×${it.rows.maxOf { r -> r.size }}")
+                        put(
+                            META_TABLE_HEADER,
+                            headerLabel(minOf(document.gridHeaderRows, it.rows.size)),
+                        )
+                    }
+                    document.scope?.let { put(META_TABLE_SCOPE, scopeLabel(it)) }
+
+                    document.unreadWords.takeIf { it > 0 }
+                        ?.let { put(META_TABLE_UNREAD, it.toString()) }
+
+                    document.chromeWords.takeIf { it > 0 }
+                        ?.let { put(META_TABLE_CHROME, it.toString()) }
+
+                    if (coveredClaim(document, plan, mode) == true) put(META_TABLE_COVERED, "да")
+                    put(META_TABLE_FLAGGED, flagged.toString())
+
+                    if (mode != ReadingMode.UNKNOWN) put(META_READING_MODE, mode.name)
+                    put("models", read.models.toString())
+
+                    put("confirmedBy", read.sources.toString())
+                },
+            ),
+        )
+    }
+
+    /**
+     * Набор снимков — одна таблица по порядку страниц (#1207).
+     *
+     * Несколько фото одной накладной — это одна накладная: каждая страница читается тем же
+     * путём, что и одиночный снимок (несколько моделей, сверка расхождений), а строки
+     * складываются в порядке набора — в том, какой задал человек на экране набора, иначе по
+     * имени файла. Файл один. Страница, которую прочитать не вышло, не выбрасывается молча:
+     * на её месте в таблице стоит помеченная строка. Не прочиталась ни одна — отказ, а не
+     * пустой файл. Страницы набора — снимки, PDF и тексты: то же, что «В Excel» читает и
+     * поодиночке.
+     */
+    private suspend fun pagesToSheet(input: PointObject): ActionResult {
+        val pages = inCollectionOrder(
+            store.children(input).shown.filter { it.state.kind in PAGE_KINDS },
+            collectionOrder(input.metadata),
+        ) { it.metadata["name"].orEmpty() }
+        if (pages.isEmpty()) {
+            return ActionResult.Failure(
+                "В наборе нет страниц для таблицы — ни снимка, ни PDF, ни текста",
+                recoverable = true,
+            )
+        }
+
+        val reads = pages.mapIndexed { i, page -> onPage(i + 1, pages.size) { readPage(page) } }
+        val refused = reads.filterIsInstance<PageRead.Refused>()
+        if (refused.size == reads.size) {
+            val reason = refused.first().reason
+            return ActionResult.Failure(
+                if (reads.size == 1) reason else "Ни одна из ${reads.size} страниц не прочиталась — $reason",
+                recoverable = true,
+            )
+        }
+
+        reportStage("Собираю файл")
+        val plan = stitchSheets(
+            reads.mapIndexed { i, read ->
+                when (read) {
+                    is PageRead.Table -> read.plan
+                    is PageRead.Refused -> pageGap(i + 1, pages.size)
+                }
+            },
+        )
+        val ref = writer.write(plan)
+        val flagged = plan.rows.sumOf { row -> row.count { styleCell(it).flagged } }
+        return ActionResult.Success(
+            ResultObject(
+                ObjectKind.OFFICE,
+                XLSX_MIME,
+                ref,
+                buildMap {
+                    put("op", "excel")
+                    put("name", "таблица.xlsx")
+                    put(META_TABLE_PAGES, pages.size.toString())
+                    if (refused.isNotEmpty()) put(META_TABLE_PAGES_UNREAD, refused.size.toString())
+                    put(META_TABLE_FLAGGED, flagged.toString())
+                },
+            ),
+        )
+    }
+
+    /**
+     * Место непрочитанной страницы в общей таблице — помеченная строка. Причина отказа в файл
+     * человека не кладётся: это слова модели или транспорта, а не документа. Причина уходит
+     * на экран только когда не прочиталась ни одна страница — тем же отказом, что и у
+     * одиночного снимка.
+     */
+    private fun pageGap(n: Int, total: Int) = SheetPlan(
+        rows = listOf(listOf("⚠ Страница $n из $total не прочиталась — проверьте её отдельно")),
+        headerRows = emptySet(),
+    )
+
+    /** Стадии чтения страницы называют её номер: «Страница 2 из 3 · Читаю таблицу». */
+    private suspend fun <T> onPage(n: Int, total: Int, read: suspend () -> T): T {
+        val outer = coroutineContext[ActionProgress]
+        val page = "Страница $n из $total"
+        outer?.report(page)
+        return withContext(ActionProgress { stage -> outer?.report("$page · $stage") }) { read() }
+    }
+
+    private sealed interface PageRead {
+        class Table(
+            val plan: SheetPlan,
+            val document: DocumentLayout,
+            val mode: ReadingMode,
+            val models: Int,
+            val sources: Int,
+        ) : PageRead
+
+        class Refused(val reason: String) : PageRead
+    }
+
+    /** Одна страница — до листа: чтение несколькими моделями, сверка, пригодность. */
+    private suspend fun readPage(input: PointObject): PageRead {
+
+        val extra = if (input.state.kind == ObjectKind.TEXT) {
+            "\n\nТекст:\n" + File(input.uri.value).readText().take(MAX_TEXT)
+        } else {
+            ""
+        }
+
+        reportStage(if (input.state.kind == ObjectKind.IMAGE) "Читаю страницу" else "Готовлю текст")
+        val layer = atomLayer(input)
+        val index = layer?.promptIndex()
+        val prompt = if (index != null) PROMPT + ADDRESSED + index + extra else PROMPT + extra
+
+        val ordered = providers
+            .filter { it.configured && it.canHandle(input) }
+            .sortedByDescending { it.strongVision }
+
+        val layouts = mutableListOf<DocumentLayout>()
+        val tables = mutableListOf<List<List<String>>>()
+
+        val cellCandidates = mutableListOf<Map<Pair<Int, Int>, List<String>>>()
+        val errors = mutableListOf<String>()
+        var next = 0
+        while (layouts.size < CONSENSUS_N && next < ordered.size) {
+
+            val reads = readTogether(ordered, next, CONSENSUS_N - layouts.size, input, prompt, next == 0)
+            next = reads.next
+
+            for (read in reads.answers) {
+                val raw = read.getOrNull()
+                if (raw == null) {
+                    val e = read.exceptionOrNull()!!
+                    errors += e.message ?: e.javaClass.simpleName
+                    continue
+                }
+                try {
+
+                    val answer = parseLayout(raw) ?: continue
+                    val addressable = layer != null && index != null
+                    val layout =
+                        if (addressable) layer.resolveLayout(answer) else literalLayout(answer)
+                    val gridRows = layout.grid?.rows.orEmpty()
+
+                    val cells = gridRows.flatten()
+                    if (addressable && cells.all { it.isBlank() || it == "⚠" } && "⚠" in cells) {
+                        errors += "Не вышло показать, где эти слова на странице"
+                        continue
+                    }
+                    layouts += layout
+                    if (gridRows.isNotEmpty()) {
+                        tables += gridRows
+                        cellCandidates += layout.grid?.candidates.orEmpty()
+                    }
+                } catch (e: Exception) {
+                    errors += e.message ?: e.javaClass.simpleName
+                }
+            }
+        }
+        if (layouts.isEmpty()) return PageRead.Refused(refusalOf(errors, ordered.isEmpty()))
+
+        reportStage(if (tables.size > 1) "Свожу расхождения чтений" else "Собираю таблицу")
+        val consensus = reconcile(tables)
+
+        val candidates = (
+            consensus.candidates.asSequence().map { it.key to it.value } +
+                cellCandidates.asSequence().flatMap { perModel ->
+                    perModel.asSequence().mapNotNull { (key, cand) ->
+                        anchorCandidates(key, cand, consensus.rows)?.let { it to cand }
+                    }
+                }
+            )
+            .groupBy({ it.first }, { it.second })
+            .mapValues { (_, lists) ->
+                lists.flatten().distinct()
+                    .groupBy(::normConsensus).values
+                    .map { g -> g.firstOrNull { !it.contains('⚠') } ?: g.first() }
+            }
+
+        val eyes = ordered.filter { it.strongVision }
+        val settled = if (input.state.kind == ObjectKind.IMAGE && layer != null && eyes.isNotEmpty()) {
+            recropDisputed(
+                Consensus(consensus.rows, candidates, consensus.sources),
+                layer,
+                recropTimeoutMs,
+            ) { question -> reread(input, layer, question, eyes) }
+        } else {
+            Consensus(consensus.rows, candidates, consensus.sources)
+        }
+
+        val suspect = validateTable(settled.rows)
+        val rows = settled.rows.mapIndexed { r, row ->
+            row.mapIndexed { c, v ->
+                val flagged = (r to c) in suspect || (r to c) in settled.candidates
+                if (flagged && !v.contains('⚠')) "$v⚠" else v
+            }
+        }
+
+        val read = layouts.first()
+
+        val structural = if (tables.size == 1) read.grid?.structural.orEmpty() else emptySet()
+
+        val headerRows = survivedHeaderRows(
+            read.grid?.rows.orEmpty(),
+            rows,
+            read.gridHeaderRows,
+        )
+        val document = read.withGrid(
+            GroundedTable(rows, settled.candidates, structural),
+            headerRows,
+        )
+
+        val gridCells = rows.sumOf { row -> row.count { it.isNotBlank() } }
+        val disputed = (settled.candidates.keys + suspect).count { (r, c) ->
+            rows.getOrNull(r)?.getOrNull(c)?.isNotBlank() == true
+        }
+        unfitTable(document, disputed, gridCells)?.let { return PageRead.Refused(it) }
+
+        val mode = readingModeOf(input.metadata).takeIf { it != ReadingMode.UNKNOWN }
+            ?: readingModeOf(layer)
+        val plan = layoutSheet(document, mode)
+
+        if (plan.rows.isEmpty()) {
+            return PageRead.Refused("На странице не нашлось ничего, что можно положить в таблицу")
+        }
+
+        return PageRead.Table(plan, document, mode, layouts.size, consensus.sources)
+    }
 
     private class Reads(val answers: List<Result<String>>, val next: Int)
 

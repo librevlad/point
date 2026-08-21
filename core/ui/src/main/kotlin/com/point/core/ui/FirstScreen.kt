@@ -34,6 +34,8 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -107,6 +109,15 @@ fun FirstScreen(
 
     itemsTotalAtLeast: Boolean = false,
     onItem: (PointObject) -> Unit = {},
+
+    /**
+     * Перестановка страниц набора (#1207): страница и шаг (−1 — выше, +1 — ниже). Нет
+     * обработчика — нет и стрелок: экран не показывает ручку, за которой ничего не стоит.
+     */
+    onMoveItem: ((PointObject, Int) -> Unit)? = null,
+
+    /** Миниатюра страницы набора — тем же чтением, что и остальные превью; без неё — знак вида. */
+    itemPreviewFor: suspend (PointObject) -> ImageBitmap? = { null },
     found: List<PointObject> = emptyList(),
     relations: List<Relation> = emptyList(),
     onFound: (PointObject) -> Unit = {},
@@ -214,6 +225,8 @@ fun FirstScreen(
                 total = itemsTotal,
                 atLeast = itemsTotalAtLeast,
                 onItem = onItem,
+                onMove = onMoveItem?.takeIf { reorderablePages(items) },
+                previewFor = itemPreviewFor,
             )
             Spacer(Modifier.height(28.dp))
         }
@@ -633,12 +646,26 @@ fun collectionLabel(shown: Int, total: Int, atLeast: Boolean): String = when {
 internal fun grouped(n: Int): String =
     n.toString().reversed().chunked(3).joinToString(" ").reversed()
 
+/**
+ * Набор из нескольких страниц — снимков, PDF, текстов — можно переставлять (#1207): их
+ * порядок читают «В Excel» и «Сканировать в PDF». Одна страница среди файлов архива
+ * набором страниц не является: переставлять там нечего.
+ */
+fun reorderablePages(items: List<PointObject>): Boolean =
+    items.count { it.state.kind in com.point.core.flow.PAGE_KINDS } >= 2
+
+const val PAGE_UP = "Страницу выше"
+
+const val PAGE_DOWN = "Страницу ниже"
+
 @Composable
 private fun CollectionItems(
     items: List<PointObject>,
     total: Int,
     atLeast: Boolean,
     onItem: (PointObject) -> Unit,
+    onMove: ((PointObject, Int) -> Unit)?,
+    previewFor: suspend (PointObject) -> ImageBitmap?,
 ) {
 
     var page by rememberSaveable(items.size) { mutableStateOf(COLLECTION_PAGE) }
@@ -653,38 +680,91 @@ private fun CollectionItems(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        items.take(page).forEach { item ->
-            Surface(
-                onClick = { onItem(item) },
-                shape = RoundedCornerShape(12.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant,
-                tonalElevation = 1.dp,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
+        // Стрелки ходят в пределах показанного: страница не уезжает в скрытую часть списка
+        // за «Показать ещё» — там её не видно и вернуть нечем.
+        val shown = items.take(page)
+        shown.forEachIndexed { index, item ->
+            // Строка привязана к странице, а не к месту в списке: после перестановки
+            // миниатюра едет вместе со страницей, а не читается заново.
+            key(item.id) {
+                CollectionItemRow(
+                    item = item,
+                    onClick = { onItem(item) },
+                    previewFor = previewFor,
+                    onUp = onMove?.takeIf { index > 0 }?.let { move -> { move(item, -1) } },
+                    onDown = onMove?.takeIf { index < shown.lastIndex }?.let { move -> { move(item, +1) } },
+                    arrows = onMove != null,
+                )
+            }
+        }
+        if (page < items.size) {
+            TextButton(onClick = { page += COLLECTION_PAGE }) {
+                Text("Показать ещё · ${grouped(items.size - page)}")
+            }
+        }
+    }
+}
+
+@Composable
+private fun CollectionItemRow(
+    item: PointObject,
+    onClick: () -> Unit,
+    previewFor: suspend (PointObject) -> ImageBitmap?,
+    onUp: (() -> Unit)?,
+    onDown: (() -> Unit)?,
+    arrows: Boolean,
+) {
+    var thumb by remember(item.id) { mutableStateOf<ImageBitmap?>(null) }
+    LaunchedEffect(item.id) { thumb = previewFor(item) }
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        tonalElevation = 1.dp,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            modifier = Modifier.padding(start = 14.dp, end = if (arrows) 4.dp else 14.dp, top = 8.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            // Место под миниатюру одно и то же, пришла она или нет: строка не прыгает по
+            // высоте, когда снимок дочитался.
+            Box(modifier = Modifier.size(44.dp), contentAlignment = Alignment.Center) {
+                val shown = thumb
+                if (shown != null) {
+                    Image(
+                        bitmap = shown,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.size(44.dp).clip(RoundedCornerShape(8.dp)),
+                    )
+                } else {
                     Icon(
                         imageVector = kindIcon(item.state.kind),
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(22.dp),
                     )
-                    Text(
-                        text = item.metadata["name"] ?: kindLabel(item.state.kind),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
                 }
             }
-        }
-        if (page < items.size) {
-            TextButton(onClick = { page += COLLECTION_PAGE }) {
-                Text("Показать ещё · ${grouped(items.size - page)}")
+            Text(
+                text = item.metadata["name"] ?: kindLabel(item.state.kind),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            if (arrows) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = { onUp?.invoke() }, enabled = onUp != null) {
+                        Icon(Icons.Rounded.KeyboardArrowUp, contentDescription = PAGE_UP)
+                    }
+                    IconButton(onClick = { onDown?.invoke() }, enabled = onDown != null) {
+                        Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = PAGE_DOWN)
+                    }
+                }
             }
         }
     }

@@ -3,20 +3,34 @@ package com.point.executors
 import android.graphics.Bitmap
 import android.graphics.pdf.PdfDocument
 import com.point.core.flow.ObjectStore
+import com.point.core.flow.collectionOrder
+import com.point.core.flow.inCollectionOrder
 import com.point.core.flow.reportStage
 import com.point.core.model.ActionResult
 import com.point.core.model.ObjectKind
+import com.point.core.model.PointObject
 import com.point.core.model.ResultObject
 import java.io.File
 
+/**
+ * Файлы набора в порядке страниц (#1207): как велит знание набора (`collection.order`), а
+ * те, о которых знания нет, — за ними по имени. Одна функция для «Сканировать в PDF» и
+ * «Объединить в PDF»: порядок читается из самого объекта-набора, а не из имён.
+ */
+internal fun pagesOf(collection: PointObject): List<File> =
+    inCollectionOrder(
+        File(collection.uri.value).walkTopDown().filter { it.isFile }.toList(),
+        collectionOrder(collection.metadata),
+    ) { it.name }
+
 internal suspend fun imagesToPdf(
     store: ObjectStore,
-    dir: File,
+    collection: PointObject,
     name: String,
     op: String,
     process: (Bitmap) -> Bitmap = { it },
 ): ActionResult {
-    val files = dir.walkTopDown().filter { it.isFile }.sortedBy { it.name.lowercase() }.toList()
+    val files = pagesOf(collection)
 
     val document = PdfDocument()
     var pages = 0

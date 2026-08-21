@@ -467,6 +467,7 @@ private fun PreviewCollection() = PointTheme {
         items = items,
         itemsTotal = items.size,
         onItem = {},
+        onMoveItem = { _, _ -> },
     )
 }
 

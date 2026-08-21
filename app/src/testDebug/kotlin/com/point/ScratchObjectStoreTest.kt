@@ -85,4 +85,27 @@ class ScratchObjectStoreTest {
         assertFalse("рабочая копия пережила уборку", copy.exists())
         assertTrue("в рабочей папке остались файлы: ${files(scratch).map(File::getName)}", files(scratch).isEmpty())
     }
+
+    /** Порядок страниц — знание самого набора (#1207): список идёт так, как велел человек. */
+    @Test fun `страницы набора перечисляются в порядке знания, без знания — по имени`() = runBlocking {
+        val sources = listOf("IMG_3.jpg", "IMG_1.jpg", "IMG_2.jpg").map { link(source(it, "фото $it")) }
+        val set = store.ingestMultiple(sources)
+
+        assertEquals(
+            listOf("IMG_1.jpg", "IMG_2.jpg", "IMG_3.jpg"),
+            store.children(set).shown.map { it.metadata["name"] },
+        )
+
+        val reordered = set.copy(
+            metadata = set.metadata + (
+                com.point.core.flow.META_COLLECTION_ORDER to
+                    com.point.core.flow.collectionOrderValue(listOf("IMG_2.jpg", "IMG_3.jpg"))
+                ),
+        )
+
+        assertEquals(
+            listOf("IMG_2.jpg", "IMG_3.jpg", "IMG_1.jpg"),
+            store.children(reordered).shown.map { it.metadata["name"] },
+        )
+    }
 }
