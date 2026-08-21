@@ -1280,6 +1280,14 @@ class FlowViewModelTest {
         assertEquals(false, quietWork(CapabilityMeta(latency = Latency.SLOW)))
     }
 
+    // Модель сегментации на медленном телефоне разворачивается минутами, и «тихое»
+    // объявление оставляло человека перед мёртвым экраном — без «Идёт N с» и «Отменить» (#1128).
+    @Test fun `вырез фона — не тихая работа, ему положен тот же экран ожидания, что облачным`() {
+        assertEquals(false, quietWork(com.point.executors.CutoutCapability().meta))
+        assertEquals(false, quietWork(com.point.executors.BlurBgCapability().meta))
+        assertEquals(false, quietWork(com.point.executors.ReplaceBgCapability().meta))
+    }
+
     @Test fun `a quiet action speaks on the object — its stage reaches the state`() = runTest(dispatcher) {
         resolver.stage = "Распаковываю архив"
         resolver.holdMs = 1_000

@@ -22,7 +22,9 @@ class BlurBgCapability @Inject constructor() : Capability {
     override val id = ID
     override val icon = "blur"
 
-    override val meta = CapabilityMeta(priority = 41, latency = Latency.FAST)
+    // Долгая работа, как «Убрать фон» (#1128): та же модель сегментации, те же минуты
+    // на медленном телефоне — и тот же экран «Идёт N с» с «Отменить», а не тишина.
+    override val meta = CapabilityMeta(priority = 41, latency = Latency.SLOW)
     override fun label(state: ObjectState) = "Размыть фон"
     override fun accepts(state: ObjectState) = state.kind == ObjectKind.IMAGE
     override fun produces(state: ObjectState) = ObjectState(ObjectKind.IMAGE)
