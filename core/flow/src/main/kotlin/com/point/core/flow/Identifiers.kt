@@ -104,6 +104,25 @@ internal fun looksLikeTrackToken(text: String): Boolean {
         s10CheckDigitValid(token) == true
 }
 
+/**
+ * Накладная — по форме перевозчика или по слову рядом (#1032, решение владельца).
+ *
+ * У ключа `entity.track` было две мерки. Правило-читатель ([trackHits]) брало 13 цифр только
+ * с подписью рядом, а значение от модели проходило по одной длине: номер 8806923102858 из
+ * машиночитаемой зоны удостоверения местный путь не брал, модельный брал — и человеку на
+ * удостоверении личности показывали «Накладную» с предложением отследить. Мерка одна на
+ * ключ: форма перевозчика (14 цифр «Новой пошты», две группы через дробь, S10 — его
+ * контрольную цифру судит суд кандидатов) либо слово-подпись рядом в прочитанном тексте.
+ * Без того и другого число — не накладная.
+ */
+fun looksLikeTrack(value: String, text: String = ""): Boolean {
+    val token = value.trim()
+    if (s10CheckDigitValid(token) != null) return true
+    if (trackHits(token).isNotEmpty()) return true
+    val key = trackKey(token)
+    return key.isNotEmpty() && trackHits(text).any { trackKey(it.value) == key }
+}
+
 const val META_ENTITY_SERIAL = META_ENTITY_PREFIX + "serial"
 
 /**

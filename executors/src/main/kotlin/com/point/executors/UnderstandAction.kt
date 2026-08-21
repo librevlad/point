@@ -186,16 +186,17 @@ class UnderstandRealizer @Inject constructor(
                     eyes = eyes,
                 )
                 reportStage("Проверяю прочитанное по странице")
-                val parsed = parseFieldCandidates(answer)
                 // Сверять есть с чем всегда, когда Point читал сам: слой слов снимка или
-                // окно текста объекта (#809, «нет в тексте — нет знания»).
+                // окно текста объекта (#809, «нет в тексте — нет знания»; #1032 — по нему же
+                // видно, стоит ли у числа слово-подпись накладной).
                 val readText = layer?.text?.takeIf { it.isNotBlank() } ?: window
+                val parsed = parseFieldCandidates(answer, readText)
                 val judged = judgeFields(parsed.fields, layer, readText)
 
                 val retried = judged.retry.takeIf { it.isNotEmpty() }?.let { keys ->
                     reportStage("Контрольная цифра не сошлась — перечитываю")
                     val again = ask(input, retryPrompt(keys, laidOut, index), eyes = eyes).text
-                    judgeFields(parseFieldCandidates(again).fields.filterKeys { it in keys }, layer, readText)
+                    judgeFields(parseFieldCandidates(again, readText).fields.filterKeys { it in keys }, layer, readText)
                 }
                 val readFields = judged.won + retried?.won.orEmpty()
 

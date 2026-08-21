@@ -123,6 +123,31 @@ class UnderstandRealizerTest {
     }
 
     @Test
+    fun `номер удостоверения, названный моделью накладной, доходит до знания номером`() = runTest {
+        // #1032: 13 цифр из машиночитаемой зоны без слова-подписи рядом — не накладная и не
+        // «отследить», а идентификатор «Номер»; та же мерка, что у правила-читателя.
+        val card = "IDFRABERTHIER<<<<<<<<<<<<<<<<<<\n8806923102858CORINNE<<<<<<<<<<<"
+        val result = realizer("TRACK=8806923102858\nSUMMARY=удостоверение").perform(textObject(card)) as ActionResult.Done
+
+        val meta = result.findings!!.metadata
+        assertNull("номер удостоверения остался накладной", meta[META_ENTITY_TRACK])
+        assertEquals("8806923102858", meta[com.point.core.flow.META_ENTITY_SERIAL])
+        assertTrue(
+            "у номера без роли появилось «отследить»",
+            com.point.core.flow.actionReadiness(meta).none { it.schema.id == "track-parcel" },
+        )
+    }
+
+    @Test
+    fun `то же число с подписью накладной на странице остаётся накладной`() = runTest {
+        val waybill = "Експрес-накладна № 8806923102858\nвід 12.07"
+        val result = realizer("TRACK=8806923102858").perform(textObject(waybill)) as ActionResult.Done
+
+        assertEquals("8806923102858", result.findings!!.metadata[META_ENTITY_TRACK])
+        assertNull(result.findings!!.metadata[com.point.core.flow.META_ENTITY_SERIAL])
+    }
+
+    @Test
     fun `METER и GEO — законные ключи контракта там, где правило формы слепо`() = runTest {
 
         val result = realizer("METER=00154\nGEO=50°27'0\"N 30°31'24\"E")
