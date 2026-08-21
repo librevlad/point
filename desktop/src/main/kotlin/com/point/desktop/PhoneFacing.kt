@@ -3,7 +3,10 @@ package com.point.desktop
 import com.point.core.flow.Capability
 import com.point.core.flow.PcRemoteAction
 
-/** Умения компьютера. Общие способности он делит с телефоном, а не заводит свои копии. */
+/**
+ * Умения компьютера. Общие способности он делит с телефоном, а не заводит свои копии; дорогу
+ * чтения снимка в общем словаре называет сам (#1021) — словарь общий, слово — исполнителя.
+ */
 fun desktopCapabilities(): Set<Capability> = setOf(
     PcOpenCapability(), PcCopyCapability(), PcRevealCapability(), PcSaveAsCapability(),
     PcDownloadCapability(), PcToPhoneCapability(), PcPrintCapability(),
@@ -20,7 +23,7 @@ fun desktopCapabilities(): Set<Capability> = setOf(
     // Сканированный PDF читается одним действием и здесь (#1014): страницы рисует pdfbox,
     // читает существующее облачное чтение, знание ложится на сам PDF.
     PcReadDocumentCapability(),
-) + com.point.core.flow.capabilities.sharedCapabilities()
+) + com.point.core.flow.capabilities.sharedCapabilities(ocrPromise = OCR_ON_PC_PROMISE)
 
 /**
  * Имена умений, привязанных к месту исполнения: бумага, файл и окно выходят на компьютере,

@@ -154,7 +154,10 @@ class ActionsSayTheirPriceTest {
             CloudOcrRealizer(silentLlm, devicePrivacy),
         )
         val hasCloudFallback = chain.any { it.meta.kind != RealizerKind.LOCAL }
-        val said = said(OcrCapability(), image)
+
+        // Слово о дороге — телефона, а не общего словаря (#1021): проверяется то, что телефон
+        // и правда подставляет в словарь.
+        val said = said(OcrCapability(OCR_ON_PHONE_PROMISE), image)
 
         assertTrue("первым читает не устройство", chain.first().meta.kind == RealizerKind.LOCAL)
         assertTrue("запасного сетевого пути не стало — проверку пора менять", hasCloudFallback)
@@ -164,7 +167,7 @@ class ActionsSayTheirPriceTest {
     @Test
     fun `местное чтение обещано местным — условие названо условием`() {
 
-        val said = said(OcrCapability(), image)
+        val said = said(OcrCapability(OCR_ON_PHONE_PROMISE), image)
 
         assertTrue(said, "сначала на телефоне" in said)
         assertFalse("сказано как о неизбежном", "уйдёт в сервис" in said)
