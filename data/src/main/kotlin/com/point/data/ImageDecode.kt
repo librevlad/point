@@ -15,12 +15,11 @@ fun decodeSelectionFrame(path: String, maxPx: Int): SelectionFrame? {
     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
     BitmapFactory.decodeFile(path, bounds)
     if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
-    var sample = 1
-    var edge = maxOf(bounds.outWidth, bounds.outHeight)
-    while (edge / 2 >= maxPx) {
-        edge /= 2
-        sample *= 2
-    }
+
+    // Ужатие считается тем же правилом, что и у остальных декодеров (#1013): этот
+    // FrameTransform получают и выделение, и замазывание, и чтение на устройстве —
+    // расхождение хотя бы на шаг сдвинуло бы метку поиска с найденной строки.
+    val sample = com.point.core.flow.sampleSizeFor(bounds.outWidth, bounds.outHeight, maxPx)
     val decoded = BitmapFactory.decodeFile(path, BitmapFactory.Options().apply { inSampleSize = sample })
         ?: return null
     val orientation = runCatching {
