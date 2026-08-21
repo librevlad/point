@@ -169,8 +169,8 @@ class DesktopState(
 
         scope.launch {
             val late = runCatching { work.await() }.getOrNull()
-            if (late is ActionResult.Success) {
-                runCatching {
+            runCatching {
+                if (late is ActionResult.Success) {
                     outbox?.add(
                         com.point.core.model.PointObject(
                             id = java.util.UUID.randomUUID().toString(),
@@ -183,8 +183,7 @@ class DesktopState(
                             // медленный результат приезжал на телефон сиротой с
                             // происхождением «дано» — как будто его прислал человек.
                             metadata = late.result.metadata + com.point.core.flow.lineageMeta(
-                                sourceId = item.obj.metadata[com.point.core.flow.META_ORIGIN_ID]
-                                    ?: item.obj.id,
+                                sourceId = homeOf(item),
                                 creator = id,
                                 provenance = late.result.provenance,
                                 executor = PC_EXECUTOR,
@@ -194,18 +193,49 @@ class DesktopState(
                             provenance = late.result.provenance,
                         ),
                     )
-                }.onFailure {
-                    val why = "Результат не лёг в очередь для телефона — проверьте, что на диске есть место"
-                    _message.value = why
-                    note(item, id, titleOf(id, item) + " · результат в очередь", ActionResult.Failure(why, recoverable = true))
+                } else {
+                    // Исход без объекта — «Отменено» у диалога, «готово» словами, отказ —
+                    // едет телефону той же очередью (#1073). Прежде ехал только файл, и
+                    // обещание «ещё работает» висело на телефоне вечно: компьютер отмену
+                    // записал в журнал, а сказать о ней соседу было нечем.
+                    outbox?.addOutcome(lateOutcomeMeta(id, item, late))
                 }
+            }.onFailure {
+                val why = "Результат не лёг в очередь для телефона — проверьте, что на диске есть место"
+                _message.value = why
+                note(item, id, titleOf(id, item) + " · результат в очередь", ActionResult.Failure(why, recoverable = true))
             }
         }
         return ActionResult.Done(STILL_WORKING)
     }
 
+    /** Каким именем объект знает телефон: просьба приехала с ним, результат по нему найдёт дом. */
+    private fun homeOf(item: InboxItem): String =
+        item.obj.metadata[com.point.core.flow.META_ORIGIN_ID] ?: item.obj.id
+
+    /**
+     * Поздний исход просьбы телефона — словами домой (#1073): чей объект, какая просьба и
+     * чем кончилась. Понятое компьютером едет теми же полями, что и в срочном ответе (PC2).
+     */
+    private fun lateOutcomeMeta(id: String, item: InboxItem, late: ActionResult?): Map<String, String> {
+        val f = com.point.core.flow.PcResultFields
+        val e = com.point.core.flow.PcExecFields
+        val outcome = com.point.core.flow.pcActionOutcomeOf(late)
+            // Работа кончилась ничем — ни исходом, ни объектом: телефону это срыв, а не тишина.
+            ?: com.point.core.flow.PcActionOutcome.Failed(DID_NOT_RUN)
+        val understood = (late as? ActionResult.Done)?.findings?.metadata.orEmpty()
+            .mapKeys { (k, _) -> f.UNDERSTOOD + k }
+        return mapOf(
+            e.HOME to homeOf(item),
+            e.ACTION to id,
+            e.LABEL to titleOf(id, item),
+        ) + f.of(outcome) + understood
+    }
+
     companion object {
         const val STILL_WORKING = "Компьютер ещё работает — готовое появится в списке «с компьютера»"
+
+        private const val DID_NOT_RUN = "Действие не выполнилось — попробуйте ещё раз"
 
         /** Как компьютер называет себя в происхождении знания (#1127). */
         const val PC_EXECUTOR = "pc"
@@ -280,7 +310,7 @@ class DesktopState(
                 if (e is NoWayHere) {
                     ActionResult.Failure(e.why, recoverable = false)
                 } else {
-                    ActionResult.Failure("Действие не выполнилось — попробуйте ещё раз", recoverable = true)
+                    ActionResult.Failure(DID_NOT_RUN, recoverable = true)
                 }
             }
         } catch (e: kotlinx.coroutines.CancellationException) {

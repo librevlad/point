@@ -1,6 +1,7 @@
 package com.point.core.flow
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -166,6 +167,33 @@ class ContinueOnPcTest {
         assertEquals(failed, decodePcReceiveReply(encodePcReceiveReply(failed)))
 
         assertEquals(PcActionOutcome.Done(null), decodePcReceiveReply(encodePcReceiveReply(PcActionOutcome.Done())))
+    }
+
+    /**
+     * Исход без объекта едет полями письма (#1073): так поздняя отмена у диалога на компьютере
+     * доезжает до телефона очередью, в которой прежде лежали только вещи.
+     */
+    @Test
+    fun `исход полями письма переживает дорогу, а письмо без объекта узнаётся как слова домой`() {
+        val cancelled = PcActionOutcome.Done("Отменено")
+        assertEquals(cancelled, PcResultFields.outcomeOf(PcResultFields.of(cancelled)))
+        assertTrue(PcResultFields.outcomeOnly(PcResultFields.of(cancelled)))
+
+        val refused = PcActionOutcome.Failed("На компьютере сейчас нет принтера по умолчанию")
+        assertEquals(refused, PcResultFields.outcomeOf(PcResultFields.of(refused)))
+
+        assertEquals(PcActionOutcome.Done(null), PcResultFields.outcomeOf(PcResultFields.of(PcActionOutcome.Done())))
+        assertEquals(PcActionOutcome.Failed("причина не названа"), PcResultFields.outcomeOf(mapOf(PcResultFields.OUTCOME to PcResultFields.FAILED)))
+    }
+
+    @Test
+    fun `вещь в очереди исходом без объекта не считается, как и письмо без исхода`() {
+        val thing = mapOf("name" to "чек.jpg", "mime" to "image/jpeg")
+        assertNull(PcResultFields.outcomeOf(thing))
+        assertFalse(PcResultFields.outcomeOnly(thing))
+
+        val born = PcResultFields.of(PcActionOutcome.Done()) + (PcResultFields.NAME to "отчёт.pdf")
+        assertFalse("у письма с объектом есть что забирать", PcResultFields.outcomeOnly(born))
     }
 
     @Test

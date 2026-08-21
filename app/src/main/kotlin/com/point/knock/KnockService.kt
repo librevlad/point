@@ -42,7 +42,9 @@ class KnockService : FirebaseMessagingService() {
         val waiting = runBlocking {
             runCatching { transport.fetchOutbox(pc) }.getOrNull().orEmpty()
         }
-        val first = waiting.firstOrNull() ?: return
+
+        // Исход без объекта — слова домой, а не просьба (#1073): звать человека забирать его незачем.
+        val first = waiting.firstOrNull { !com.point.core.flow.PcResultFields.outcomeOnly(it.meta) } ?: return
 
         Knock.tell(
             this,
