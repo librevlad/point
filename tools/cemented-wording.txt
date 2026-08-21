@@ -41,7 +41,7 @@
 1 core/flow/src/test/kotlin/com/point/core/flow/KnowledgeTest.kt
 4 core/flow/src/test/kotlin/com/point/core/flow/LayoutTest.kt
 4 core/flow/src/test/kotlin/com/point/core/flow/LedgerTableQualityTest.kt
-10 core/flow/src/test/kotlin/com/point/core/flow/LinkStateTest.kt
+9 core/flow/src/test/kotlin/com/point/core/flow/LinkStateTest.kt
 1 core/flow/src/test/kotlin/com/point/core/flow/LlmExchangeLogTest.kt
 1 core/flow/src/test/kotlin/com/point/core/flow/MergeKnowledgeTest.kt
 1 core/flow/src/test/kotlin/com/point/core/flow/MeterReadingTest.kt

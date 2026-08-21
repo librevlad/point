@@ -1,6 +1,8 @@
 package com.point.core.flow
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class LinkStateTest {
@@ -29,10 +31,30 @@ class LinkStateTest {
     }
 
     @Test
-    fun `долгое молчание названо, а не спрятано`() {
+    fun `давно не слышали — факт «был на связи N назад», а не диагноз (#1114)`() {
         val state = linkStateOf(now - 10 * minute, now)
         assertEquals(LinkState.Silent(10 * minute), state)
-        assertEquals("не отвечает · молчит 10 минут", linkLabel(state))
+
+        // Живой прогон 18.08.2026: «Телефон · не отвечает · молчит 2 часа» читалось как поломка,
+        // хотя телефон просто лежал с погашенным экраном. Подпись говорит, когда его слышали.
+        val label = linkLabel(state)
+        assertTrue(label, label.startsWith("был на связи") && label.endsWith("назад"))
+        assertTrue(label, "10 минут" in label)
+    }
+
+    @Test
+    fun `ни одна подпись связи не ставит диагноз и не говорит метафорами (#1114)`() {
+        val labels = listOf(
+            linkStateOf(null, now),
+            linkStateOf(now - 5_000, now),
+            linkStateOf(now - 125 * minute, now),
+            linkStateOf(null, now, probing = true),
+            linkStateOf(null, now, knownButUnheard = true),
+        ).map(::linkLabel)
+
+        labels.forEach { label ->
+            assertFalse(label, listOf("не отвечает", "молчит", "нет ответа").any { it in label })
+        }
     }
 
     @Test
@@ -44,14 +66,14 @@ class LinkStateTest {
 
     @Test
     fun `часы вместо ста минут — строка остаётся человеческой`() {
-        assertEquals("не отвечает · молчит 2 часа", linkLabel(linkStateOf(now - 125 * minute, now)))
+        assertEquals("был на связи 2 часа назад", linkLabel(linkStateOf(now - 125 * minute, now)))
     }
 
     @Test
     fun `русский счёт минут, а не машинный вывод`() {
-        assertEquals("не отвечает · молчит 5 минут", linkLabel(linkStateOf(now - 5 * minute, now)))
-        assertEquals("не отвечает · молчит 21 минуту", linkLabel(linkStateOf(now - 21 * minute, now)))
-        assertEquals("не отвечает · молчит 13 минут", linkLabel(linkStateOf(now - 13 * minute, now)))
+        assertEquals("был на связи 5 минут назад", linkLabel(linkStateOf(now - 5 * minute, now)))
+        assertEquals("был на связи 21 минуту назад", linkLabel(linkStateOf(now - 21 * minute, now)))
+        assertEquals("был на связи 13 минут назад", linkLabel(linkStateOf(now - 13 * minute, now)))
     }
 
     @Test

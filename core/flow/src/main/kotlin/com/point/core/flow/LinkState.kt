@@ -39,9 +39,16 @@ private fun settledLink(
     return LinkState.Live(ago)
 }
 
+/**
+ * Подпись состояния связи — одна на телефон и компьютер.
+ *
+ * Давно не слышали — это факт, а не диагноз (#1114). «Не отвечает · молчит 2 часа» читалось как
+ * поломка, хотя телефон просто лежал с погашенным экраном или вышел из сети. Известно здесь
+ * ровно одно — когда его слышали в последний раз, — это и сказано: «был на связи 2 часа назад».
+ */
 fun linkLabel(state: LinkState): String = when (state) {
     is LinkState.Live -> "на связи"
-    is LinkState.Silent -> "не отвечает · молчит ${minutesWord(state.agoMillis)}"
+    is LinkState.Silent -> "был на связи ${minutesWord(state.agoMillis)} назад"
     LinkState.Checking -> "проверяю связь…"
     LinkState.Never -> "ещё не связывались"
     LinkState.Waiting -> "ждёт связи"
