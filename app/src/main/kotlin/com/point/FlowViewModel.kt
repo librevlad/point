@@ -221,6 +221,17 @@ class FlowViewModel @Inject constructor(
     private var lastOutboxFetchMs = 0L
     private var lastCircleSyncMs = 0L
 
+    /**
+     * Слово соседа, сказанное до исхода (#1073): «компьютер ещё работает».
+     *
+     * Исход просьбы соседу может прийти позже ответа — отменой у диалога сохранения, отказом
+     * принтера, готовым файлом. Пока слово стоит на экране, телефон сам заглядывает в очередь
+     * компьютера; пришедший исход гасит слово тихо — отмена человека не ошибка (тот же шов,
+     * что возврат с чужого экрана, #1131), — а отказ называет причину.
+     */
+    @Volatile private var neighbourWord: String? = null
+    private var neighbourWatch: kotlinx.coroutines.Job? = null
+
     private val _clipboard = MutableStateFlow<String?>(null)
 
     val clipboard: StateFlow<String?> = _clipboard.asStateFlow()
@@ -431,8 +442,9 @@ class FlowViewModel @Inject constructor(
         lastOutboxFetchMs = now
         viewModelScope.launch {
             runCatching { pcTransport.fetchOutbox(pc) }.getOrNull()?.let { entries ->
-                fromPcEntries = entries
-                _fromPcCount.value = entries.size
+                val things = takeOutcomesHome(pc, entries)
+                fromPcEntries = things
+                _fromPcCount.value = things.size
             }
         }
     }
@@ -444,7 +456,8 @@ class FlowViewModel @Inject constructor(
         raiseBusy("Забираю с компьютера…", cancelable = true)
         trackWork {
 
-            val entries = runCatching { pcTransport.fetchOutbox(pc) }.getOrNull().orEmpty()
+            // Исходы без объекта уходят домой до забора вещей (#1073): скачивать с них нечего.
+            val entries = takeOutcomesHome(pc, runCatching { pcTransport.fetchOutbox(pc) }.getOrNull().orEmpty())
             if (!owns(voice)) return@trackWork
             if (entries.isEmpty()) {
                 fromPcEntries = emptyList()
@@ -697,7 +710,7 @@ class FlowViewModel @Inject constructor(
 
                 // Кто исполнил — часть добытого знания (#1127): тот же шов, что и у
                 // исследований, только исполнитель здесь уже выбран строчкой выше.
-                runAction(bubble, voice) { realizer.perform(top, null).knownBy(top, realizer.meta.actor) }
+                runAction(bubble, voice) { performBy(realizer, top, null) }
             } else {
                 pendingPreviewBubble = bubble
                 _ui.update { it.copy(busy = null, busyStage = null, preview = preview) }
@@ -1933,9 +1946,23 @@ class FlowViewModel @Inject constructor(
      * Тот же шов, что и у исследований (`DefaultEnrichment.run`): имя исполнителя знает
      * только место, где его выбрал Resolver, и знание уходит в Graph уже с ним.
      */
-    private suspend fun performed(id: CapabilityId, obj: PointObject, amendment: String?): ActionResult {
-        val realizer = resolver.realizerFor(id, obj.state)
-        return realizer.perform(obj, amendment).knownBy(obj, realizer.meta.actor)
+    private suspend fun performed(id: CapabilityId, obj: PointObject, amendment: String?): ActionResult =
+        performBy(resolver.realizerFor(id, obj.state), obj, amendment)
+
+    /**
+     * Шаг выбранным исполнителем — и память о том, кто исполнил (#1127).
+     *
+     * Сосед ответил словом, а не вещью — исход его работы может ещё ехать (#1073): «ещё
+     * работает» сменится в очереди отменой, отказом или готовым файлом, и телефон ждёт этого.
+     */
+    private suspend fun performBy(realizer: com.point.core.flow.Realizer, obj: PointObject, amendment: String?): ActionResult {
+        val result = realizer.perform(obj, amendment).knownBy(obj, realizer.meta.actor)
+        if (realizer is com.point.executors.RemotePcRealizer &&
+            result is ActionResult.Done && result.findings?.objects.isNullOrEmpty()
+        ) {
+            watchNeighbour(result.message)
+        }
+        return result
     }
 
     private suspend fun bridge(obj: PointObject, viaCapId: String): PointObject? {
@@ -2099,6 +2126,77 @@ class FlowViewModel @Inject constructor(
         handOffMessage = null
         _ui.update {
             if (it.message == standing) it.copy(message = null, messageOutcome = Outcome.NONE) else it
+        }
+    }
+
+    /**
+     * Пока слово соседа стоит на экране, телефон заглядывает в очередь компьютера сам (#1073):
+     * иначе отмена у диалога на компьютере доезжала бы только к следующему открытию главного
+     * экрана, а человек всё это время читал бы «ещё работает». У ожидания есть предел —
+     * дальше исход дождётся обычного забора очереди.
+     */
+    private fun watchNeighbour(word: String) {
+        neighbourWord = word
+        neighbourWatch?.cancel()
+        neighbourWatch = viewModelScope.launch {
+            repeat(NEIGHBOUR_CHECKS) {
+                kotlinx.coroutines.delay(NEIGHBOUR_CHECK_MS)
+                if (_ui.value.message != word) return@launch
+                val pc = pcLinks.current() ?: return@launch
+                val entries = runCatching { pcTransport.fetchOutbox(pc) }.getOrNull() ?: return@repeat
+                val things = takeOutcomesHome(pc, entries)
+                fromPcEntries = things
+                _fromPcCount.value = things.size
+                if (things.size < entries.size) return@launch
+            }
+        }
+    }
+
+    /**
+     * Исходы без объекта забираются домой сразу (#1073): это не вещи для списка «с
+     * компьютера», а слова о том, чем кончилась просьба. Подтверждаются тут же — второй раз
+     * их не привезут. Возвращает то, что в очереди осталось вещами.
+     */
+    private suspend fun takeOutcomesHome(
+        pc: com.point.core.flow.LinkedPc,
+        entries: List<com.point.core.flow.PcOutboxEntry>,
+    ): List<com.point.core.flow.PcOutboxEntry> {
+        val (outcomes, things) = entries.partition { com.point.core.flow.PcResultFields.outcomeOnly(it.meta) }
+        outcomes.forEach { entry ->
+            landNeighbourOutcome(entry.meta)
+            runCatching { pcTransport.ackOutbox(pc, entry.id) }
+                .recoverCatching { pcTransport.ackOutbox(pc, entry.id) }
+        }
+        return things
+    }
+
+    /** Исход просьбы соседу вернулся домой — к своему объекту, тем же путём, что и срочный ответ (PC4). */
+    private fun landNeighbourOutcome(meta: Map<String, String>) {
+        val f = com.point.core.flow.PcResultFields
+        val outcome = f.outcomeOf(meta) ?: return
+        val top = stack.lastOrNull()?.obj
+        val mine = top != null &&
+            meta[com.point.core.flow.PcExecFields.HOME] == (top.metadata[com.point.core.flow.META_ORIGIN_ID] ?: top.id)
+        if (mine) {
+            // Понятое компьютером ложится в исходник, пока он перед человеком (PC2).
+            val understood = meta.filterKeys { it.startsWith(f.UNDERSTOOD) }
+                .mapKeys { (k, _) -> k.removePrefix(f.UNDERSTOOD) }
+            if (understood.isNotEmpty()) landFindings(com.point.core.model.Findings(metadata = understood))
+        }
+        when (outcome) {
+            // Отказ не исчезает в молчаливой цепочке: причина словами, как у срочного ответа.
+            is com.point.core.flow.PcActionOutcome.Failed ->
+                _ui.update { it.copy(message = outcome.reason, messageOutcome = Outcome.FAILED) }
+
+            // «Готово» или «Отменено» без объекта гасит слово соседа тихо: отмена человека —
+            // не ошибка, и говорить о ней нечего (#1131).
+            is com.point.core.flow.PcActionOutcome.Done -> {
+                val standing = neighbourWord?.takeIf { mine } ?: return
+                neighbourWord = null
+                _ui.update {
+                    if (it.message == standing) it.copy(message = null, messageOutcome = Outcome.NONE) else it
+                }
+            }
         }
     }
 
@@ -2859,6 +2957,10 @@ class FlowViewModel @Inject constructor(
 private const val MAX_CLIP = 2000
 
 private const val OUTBOX_THROTTLE_MS = 30_000L
+
+/** Как часто и сколько раз телефон заглядывает в очередь компьютера, пока стоит слово соседа (#1073). */
+private const val NEIGHBOUR_CHECK_MS = 5_000L
+private const val NEIGHBOUR_CHECKS = 12
 
 private const val CIRCLE_SYNC_THROTTLE_MS = 5 * 60_000L
 

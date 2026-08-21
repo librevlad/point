@@ -14,6 +14,7 @@ import com.point.core.model.ScratchRef
 import kotlinx.coroutines.CancellationException
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -43,6 +44,9 @@ class SlowPcActionTest {
         private val dir: File,
         private val delayMs: Long,
         private val fail: Boolean = false,
+
+        /** Шаг состоялся словами, без объекта — как отмена у диалога «Сохранить в…» (#1073). */
+        private val saysDone: ActionResult.Done? = null,
     ) : Realizer {
         override val capabilityId = CapabilityId(id)
 
@@ -58,6 +62,7 @@ class SlowPcActionTest {
             }
             finished = true
             if (fail) return ActionResult.Failure("сервис не ответил", recoverable = true)
+            saysDone?.let { return it }
             val out = File(dir, "result.txt").apply { writeText("готово") }
             return ActionResult.Success(
                 ResultObject(
@@ -121,8 +126,12 @@ class SlowPcActionTest {
         assertEquals("знание едет вместе с результатом", "+380671234567", entry.meta["entity.phone"])
     }
 
+    /**
+     * Любой исход просьбы соседу возвращается телефону (#1073, решение владельца) — и отказ
+     * тоже: прежде долгий провал не клал в очередь ничего, и телефон вечно ждал обещанного.
+     */
     @Test
-    fun `долгий провал не кладёт ничего в очередь`() {
+    fun `долгий отказ едет телефону исходом без объекта, а не молчанием`() {
         val outbox = Outbox(temp.newFolder("out-fail"))
         val slow = Slow("read", temp.newFolder("r3"), delayMs = 200, fail = true)
         val (state, item) = harness(slow, outbox)
@@ -130,9 +139,44 @@ class SlowPcActionTest {
         val result = state.runRemoteActionNow("read", item, 50)
 
         assertEquals(DesktopState.STILL_WORKING, (result as ActionResult.Done).message)
-        waitUntil { slow.finished }
-        Thread.sleep(100)
-        assertTrue(outbox.entries().isEmpty())
+        waitUntil { slow.finished && outbox.entries().isNotEmpty() }
+        val entry = outbox.entries().single()
+        val f = com.point.core.flow.PcResultFields
+        assertTrue("исход без объекта — слова домой, не вещь", f.outcomeOnly(entry.meta))
+        assertEquals(com.point.core.flow.PcActionOutcome.Failed("сервис не ответил"), f.outcomeOf(entry.meta))
+        assertNull("файла у исхода нет", outbox.file(entry.id))
+    }
+
+    /**
+     * Отмена у системного диалога на компьютере — `Done("Отменено")` без объекта (#1073): до
+     * телефона она не доезжала никак, и «ещё работает» висело там навсегда. Теперь исход
+     * едет той же очередью, к своему объекту, со знанием, если оно было.
+     */
+    @Test
+    fun `долгое «готово» без объекта — отмена у диалога — едет телефону к своему объекту`() {
+        val outbox = Outbox(temp.newFolder("out-cancel"))
+        val cancelled = "Отменено"
+        val slow = Slow(
+            "pc-save-as", temp.newFolder("r5"), delayMs = 200,
+            saysDone = ActionResult.Done(
+                cancelled,
+                com.point.core.model.Findings(metadata = mapOf("entity.phone" to "+380671234567")),
+            ),
+        )
+        val (state, item) = harness(slow, outbox)
+        val fromPhone = item.copy(obj = item.obj.copy(metadata = mapOf(com.point.core.flow.META_ORIGIN_ID to "phone-obj")))
+
+        val result = state.runRemoteActionNow("pc-save-as", fromPhone, 50)
+
+        assertEquals(DesktopState.STILL_WORKING, (result as ActionResult.Done).message)
+        waitUntil { slow.finished && outbox.entries().isNotEmpty() }
+        val entry = outbox.entries().single()
+        val f = com.point.core.flow.PcResultFields
+        assertEquals(com.point.core.flow.PcActionOutcome.Done(cancelled), f.outcomeOf(entry.meta))
+        assertEquals("исход едет к объекту телефона, а не к копии на компьютере", "phone-obj", entry.meta[com.point.core.flow.PcExecFields.HOME])
+        assertEquals("pc-save-as", entry.meta[com.point.core.flow.PcExecFields.ACTION])
+        assertEquals("понятое едет вместе с исходом", "+380671234567", entry.meta[f.UNDERSTOOD + "entity.phone"])
+        assertNull(outbox.file(entry.id))
     }
 
     @Test

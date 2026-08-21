@@ -125,7 +125,7 @@ fun decodePcReceiveReply(body: String): PcActionOutcome? {
     val detail = line.substringAfter(' ', "").trim()
     return when (verdict) {
         "done" -> PcActionOutcome.Done(detail.takeIf { it.isNotBlank() })
-        "failed" -> PcActionOutcome.Failed(detail.ifBlank { "причина не названа" })
+        "failed" -> PcActionOutcome.Failed(detail.ifBlank { PC_REASON_UNNAMED })
         else -> null
     }
 }
@@ -142,6 +142,9 @@ fun pcActionOutcomeOf(result: com.point.core.model.ActionResult?): PcActionOutco
 private const val PC_RECEIVE_OK = "ok"
 
 const val PC_ACTION_LINE = "action: "
+
+/** Отказ, у которого не нашлось слов, всё равно называется отказом. */
+private const val PC_REASON_UNNAMED = "причина не названа"
 
 private fun oneLine(s: String) = s.replace('\n', ' ').replace('\r', ' ').replace('\t', ' ')
 
@@ -258,4 +261,29 @@ object PcResultFields {
     const val FAILED = "failed"
 
     fun hasObject(meta: Map<String, String>): Boolean = !meta[NAME].isNullOrBlank()
+
+    /**
+     * Исход — полями письма (#1073).
+     *
+     * Тот же словарь, каким телефон возвращает компьютеру исход его просьбы: так и поздний
+     * исход просьбы соседу без объекта — «Отменено» у диалога сохранения, отказ принтера —
+     * едет очередью компьютера домой, а не теряется там, где файла не родилось.
+     */
+    fun of(outcome: PcActionOutcome): Map<String, String> = when (outcome) {
+        is PcActionOutcome.Done -> buildMap {
+            put(OUTCOME, DONE)
+            outcome.detail?.takeIf { it.isNotBlank() }?.let { put(DETAIL, it) }
+        }
+        is PcActionOutcome.Failed -> mapOf(OUTCOME to FAILED, DETAIL to outcome.reason)
+    }
+
+    /** Исход, записанный в полях письма, или `null` — письмо про исход не говорит. */
+    fun outcomeOf(meta: Map<String, String>): PcActionOutcome? = when (meta[OUTCOME]) {
+        DONE -> PcActionOutcome.Done(meta[DETAIL]?.takeIf { it.isNotBlank() })
+        FAILED -> PcActionOutcome.Failed(meta[DETAIL].orEmpty().ifBlank { PC_REASON_UNNAMED })
+        else -> null
+    }
+
+    /** Письмо об одном исходе, без объекта (#1073): забирать с него нечего, это слова домой. */
+    fun outcomeOnly(meta: Map<String, String>): Boolean = outcomeOf(meta) != null && !hasObject(meta)
 }

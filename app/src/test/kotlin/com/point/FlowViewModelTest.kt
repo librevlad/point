@@ -658,6 +658,93 @@ class FlowViewModelTest {
         assertEquals("r-1", back[com.point.core.flow.PcExecFields.REQUEST])
     }
 
+    /** Исполнитель-сосед, каким его заводит телефон: просьба уезжает на компьютер транспортом. */
+    private fun neighbour(action: String = "pc-save-as", label: String = "Сохранить на компьютере") =
+        com.point.executors.RemotePcRealizer(
+            com.point.core.flow.PcRemoteAction(action, label), pcLinks, pcTransport,
+        )
+
+    private fun outcomeEntry(
+        id: Int,
+        outcome: com.point.core.flow.PcActionOutcome,
+        home: String = "in",
+        extra: Map<String, String> = emptyMap(),
+    ) = com.point.core.flow.PcOutboxEntry(
+        id,
+        mapOf(
+            com.point.core.flow.PcExecFields.HOME to home,
+            com.point.core.flow.PcExecFields.ACTION to "pc-save-as",
+        ) + com.point.core.flow.PcResultFields.of(outcome) + extra,
+    )
+
+    /**
+     * Отмена у диалога «Сохранить в…» на компьютере не доезжала до телефона (#1073, живой
+     * прогон 17–18.08): «Компьютер ещё работает — готовое появится…» висело навсегда.
+     * Решение владельца: любой исход просьбы соседу возвращается и гасит обещание тихо —
+     * отмена человека не ошибка. Телефон сам заглядывает в очередь, пока слово стоит.
+     */
+    @Test fun `поздняя отмена на компьютере гасит слово «ещё работает» тихо, а понятое ложится в объект`() = runTest(dispatcher) {
+        pcLinks.pc = com.point.core.flow.LinkedPc("d-pc", "Ноутбук", "ключ-ПК")
+        val stillWorking = "Компьютер ещё работает — готовое появится в списке «с компьютера»"
+        pcTransport.sendOutcome = com.point.core.flow.PcSendOutcome.Sent(
+            action = com.point.core.flow.PcActionOutcome.Done(stillWorking),
+        )
+        resolver.realizer = neighbour()
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        vm.onBubble(bubble(id = "pc-do:pc-save-as", title = "Сохранить на компьютере"))
+        dispatcher.scheduler.advanceTimeBy(1_000); dispatcher.scheduler.runCurrent()
+        assertEquals(stillWorking, vm.ui.value.message)
+
+        // Человек у компьютера закрыл диалог уже после ответа телефону: исход приходит позже.
+        pcTransport.outbox = listOf(
+            outcomeEntry(
+                1, com.point.core.flow.PcActionOutcome.Done("Отменено"),
+                extra = mapOf(com.point.core.flow.PcResultFields.UNDERSTOOD + "entity.phone" to "+380671234567"),
+            ),
+        )
+        dispatcher.scheduler.advanceTimeBy(6_000); advanceUntilIdle()
+
+        assertNull("обещание погашено", vm.ui.value.message)
+        assertEquals(Outcome.NONE, vm.ui.value.messageOutcome)
+        assertEquals("исход подтверждён компьютеру — второй раз его не привезут", listOf(1), pcTransport.acked)
+        assertEquals("исход без объекта — не вещь для списка «с компьютера»", 0, vm.fromPcCount.value)
+        assertEquals("понятое компьютером легло в исходник", "+380671234567", vm.ui.value.frame?.obj?.metadata?.get("entity.phone"))
+        assertEquals("объект остаётся перед человеком", ObjectKind.IMAGE, vm.ui.value.frame?.obj?.state?.kind)
+    }
+
+    /** Отказ соседа не исчезает в молчаливой цепочке: причина доезжает словами, как у срочного ответа. */
+    @Test fun `поздний отказ компьютера доезжает причиной, а не тишиной`() = runTest(dispatcher) {
+        pcLinks.pc = com.point.core.flow.LinkedPc("d-pc", "Ноутбук", "ключ-ПК")
+        val refusal = "Сохранить не вышло — выберите другую папку"
+        pcTransport.outbox = listOf(outcomeEntry(3, com.point.core.flow.PcActionOutcome.Failed(refusal)))
+        val vm = vm()
+
+        vm.loadRecent(); advanceUntilIdle()
+
+        assertEquals(refusal, vm.ui.value.message)
+        assertEquals(Outcome.FAILED, vm.ui.value.messageOutcome)
+        assertEquals(listOf(3), pcTransport.acked)
+        assertEquals(0, vm.fromPcCount.value)
+    }
+
+    /** Исход в очереди не мешает забрать вещи: с него нечего скачивать, и забор не падает. */
+    @Test fun `забор с компьютера берёт вещи, а исход без объекта уходит домой без скачивания`() = runTest(dispatcher) {
+        pcLinks.pc = com.point.core.flow.LinkedPc("d-pc", "Ноутбук", "ключ-ПК")
+        pcTransport.outbox = listOf(
+            outcomeEntry(1, com.point.core.flow.PcActionOutcome.Done("Отменено")),
+            com.point.core.flow.PcOutboxEntry(2, mapOf("name" to "чек.jpg", "mime" to "image/jpeg")),
+        )
+        val vm = vm()
+
+        vm.pullFromPc(); advanceUntilIdle()
+
+        assertEquals(ObjectKind.IMAGE, vm.ui.value.frame?.obj?.state?.kind)
+        assertEquals(listOf(1, 2), pcTransport.acked)
+        assertEquals(0, vm.fromPcCount.value)
+        assertTrue(vm.ui.value.messageOutcome != Outcome.FAILED)
+    }
+
     @Test fun `назад с экрана входа возвращает в Point, а не закрывает его`() = runTest(dispatcher) {
 
         val vm = vm(account = FakeAccountStore(null), accountClient = CountingSignInClient(readyAfter = Int.MAX_VALUE))
@@ -4037,8 +4124,12 @@ private class FakeResolver : Resolver {
     var lastInput: PointObject? = null
     override fun leavesDevice(capabilityId: CapabilityId): Boolean = leavesDevice
 
+    /** Настоящий исполнитель вместо подставного — когда важно, КТО сделал шаг (#1073). */
+    var realizer: Realizer? = null
+
     override fun realizerFor(capabilityId: CapabilityId): Realizer {
         if (noRealizer) error(com.point.core.flow.NO_WAY_HERE_REASON)
+        realizer?.let { return it }
         return object : Realizer {
             override val capabilityId = capabilityId
             override suspend fun perform(input: PointObject, amendment: String?): ActionResult {
@@ -4355,6 +4446,9 @@ private class FakePcTransport : com.point.core.flow.PcTransport {
     val acked = mutableListOf<Int>()
     var pushedPhoneCaps: List<com.point.core.flow.PcRemoteAction> = emptyList()
     val sent = mutableListOf<Map<String, String>>()
+
+    /** Чем компьютер отвечает на просьбу: по умолчанию — «принял», без слов об исходе. */
+    var sendOutcome: com.point.core.flow.PcSendOutcome = com.point.core.flow.PcSendOutcome.Sent()
     override suspend fun send(
         pc: com.point.core.flow.LinkedPc,
         obj: com.point.core.model.PointObject,
@@ -4363,7 +4457,7 @@ private class FakePcTransport : com.point.core.flow.PcTransport {
         action: String?,
     ): com.point.core.flow.PcSendOutcome {
         sent += meta
-        return com.point.core.flow.PcSendOutcome.Sent()
+        return sendOutcome
     }
     override suspend fun fetchCaps(pc: com.point.core.flow.LinkedPc): List<com.point.core.flow.PcRemoteAction>? {
         if (capsDelayMs > 0) kotlinx.coroutines.delay(capsDelayMs)
