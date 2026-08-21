@@ -59,6 +59,15 @@ fun main(args: Array<String>) {
 
     val compactVisible = kotlinx.coroutines.flow.MutableStateFlow(true)
 
+    // Явный зов из проводника: окно видимо и один раз выходит вперёд (#1019, вариант B).
+    // Прежде зов делал ровно compactVisible = true — скрытое показывалось, но не
+    // поднималось, а видимое под чужими окнами не менялось вообще.
+    val raise = RaiseSignal()
+    fun summon() {
+        compactVisible.value = true
+        raise.call()
+    }
+
     // Просьба человека «побудь открытым»: без неё окно уходит по потере фокуса и
     // принести в него файл мышью нечем — за файлом человек уходит в проводник (#546).
     val openRequest = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
@@ -258,8 +267,16 @@ fun main(args: Array<String>) {
         return pcBaseActions.map { it.copy(unavailable = unavailable[it.id]) }
     }
 
-    filesFromArgs(args).forEach { file ->
-        state.onReceived(inbox.addFile(file.absolutePath), ObjectSource.LOCAL)
+    val fromArgs = filesFromArgs(args).map { file ->
+        inbox.addFile(file.absolutePath).also { state.onReceived(it, ObjectSource.LOCAL) }
+    }
+
+    // Холодный старт с файлом — тоже явный зов (#1019, DSK-001): открывается сам объект,
+    // а не список. Прибывший до готовности UI объект открывается тем же швом, что и клик
+    // по peek-плашке, — просьбой openRequest, которую экран исполняет, когда соберётся.
+    coldStartObject(fromArgs)?.let { id ->
+        openRequest.value = id
+        summon()
     }
 
     val requests = RelayRequests(
@@ -313,15 +330,16 @@ fun main(args: Array<String>) {
     val handOffs = Thread({
         while (true) {
             runCatching {
-                SendToRunning.collectHandOffs(pointDir).forEach { file ->
+                val brought = SendToRunning.collectHandOffs(pointDir)
+                brought.forEach { file ->
                     state.onReceived(inbox.addFile(file.absolutePath), ObjectSource.LOCAL)
-
-                    // «Открыть в Point» — человек сам позвал: окошко выходит само.
-                    compactVisible.value = true
                 }
 
+                // «Открыть в Point» — человек сам позвал: окошко выходит само и вперёд.
+                if (brought.isNotEmpty()) summon()
+
                 // Вторая копия не живёт — она будит эту и уходит.
-                if (SendToRunning.takeWake(pointDir)) compactVisible.value = true
+                if (SendToRunning.takeWake(pointDir)) summon()
             }
             runCatching { Thread.sleep(1_000) }.getOrElse { return@Thread }
         }
@@ -378,6 +396,16 @@ fun main(args: Array<String>) {
             title = "Point",
             icon = androidx.compose.runtime.remember { pointGlyph() },
         ) {
+            // Каждый явный зов поднимает окно один раз — и уже видимое, но погребённое
+            // под чужими окнами, тоже (#1019). «Поверх всех» не возвращается; если
+            // Windows вместо подъёма мигнёт панелью задач — принятый системный предел.
+            val raiseCalls by raise.calls.collectAsState()
+            LaunchedEffect(raiseCalls) {
+                if (raiseCalls > 0) {
+                    window.toFront()
+                    window.requestFocus()
+                }
+            }
             com.point.desktop.ui.PointDesktopTheme {
                 com.point.desktop.ui.CompactApp(
                     state = state,
