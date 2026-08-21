@@ -18,6 +18,7 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.Density
 import java.util.concurrent.atomic.AtomicInteger
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -68,5 +69,24 @@ class HotkeyReachesRootTest {
         } finally {
             scene.close()
         }
+    }
+
+    /**
+     * Живая Windows (#1025): окно показывалось без фокуса ОС, единственный requestFocus
+     * при старте уходил в пустоту — Esc молчал, пока фокус не добывали Tab'ом.
+     * Контракт: корень окна просит фокус на каждом фокусе окна, а не один раз при старте.
+     */
+    @Test
+    fun `фокус просится на каждом фокусе окна, а не один раз при старте`() {
+        val root = java.io.File("src/main/kotlin/com/point/desktop/ui/CompactApp.kt").readText()
+
+        assertTrue(
+            "фокус не привязан к фокусу окна — показ без фокуса ОС снова оставит клавиши глухими",
+            root.contains("isWindowFocused"),
+        )
+        assertTrue(
+            "фокус снова просится один раз при старте",
+            !root.contains("LaunchedEffect(Unit) { hotkeys.requestFocus() }"),
+        )
     }
 }
