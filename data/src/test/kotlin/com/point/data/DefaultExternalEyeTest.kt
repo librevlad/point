@@ -72,6 +72,28 @@ class DefaultExternalEyeTest {
     }
 
     @Test
+    fun `служебная пометка читателя — не текст и не победа, очередь идёт дальше`() = runTest {
+        // Дословный ответ OCR.space на кадре без единой надписи (#1054): он ложился
+        // текстом объекта, и Point предлагал «Понять» и «Перевести» чужую отписку.
+        val reading = chain(
+            eye("ocr-space") { "*[No text detected]*" },
+            eye("mistral-ocr") { "текст ведомости" },
+        ).read(pageObject)
+        assertEquals("mistral-ocr", reading.reader)
+    }
+
+    @Test
+    fun `все посмотрели и текста не увидели — чтение пустое, а не срыв`() = runTest {
+        val reading = chain(
+            eye("ocr-space") { "*[No text detected]*" },
+            eye("mistral-ocr") { "" },
+        ).read(pageObject)
+
+        assertTrue("ответ «текста нет» пришёл текстом", reading.text.isBlank())
+        assertEquals("назван первый, кто посмотрел", "ocr-space", reading.reader)
+    }
+
+    @Test
     fun `402 и 429 переводят очередь дальше, а не в кассу`() = runTest {
         val reading = chain(
             eye("исчерпанный") { error("mistral-ocr: лимит (402)") },

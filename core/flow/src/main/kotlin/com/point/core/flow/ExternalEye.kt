@@ -10,6 +10,8 @@ interface ExternalEye {
 }
 
 data class ExternalReading(
+
+    /** Пусто — читатели посмотрели и текста не увидели: ответ «не нашлось», а не срыв (#1054). */
     val text: String,
 
     val reader: String,

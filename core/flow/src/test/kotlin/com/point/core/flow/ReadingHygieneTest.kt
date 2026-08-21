@@ -37,6 +37,37 @@ class ReadingHygieneTest {
     }
 
     @Test
+    fun `служебная пометка читателя узнаётся формой, а не словами`() {
+        // Дословный ответ OCR.space на снимке без единой надписи (#1054).
+        assertTrue(serviceNote("*[No text detected]*"))
+        assertTrue("та же пометка без разметки выделения", serviceNote("[No text detected]"))
+        assertTrue("пометка другого сервиса другими словами", serviceNote("(На изображении текста нет)"))
+        assertTrue("условленный ответ модели", serviceNote("[нет текста]"))
+        assertTrue("пометка в курсиве и с пробелами вокруг", serviceNote("  _[no readable text]_ \n"))
+    }
+
+    @Test
+    fun `текст со страницы пометкой не считается`() {
+        assertFalse("обычная строка", serviceNote("Ведомость выдачи материалов"))
+        assertFalse("скобки внутри, а не вокруг", serviceNote("Петренко (бригадир) 8300,00"))
+        assertFalse("две скобочные группы — не одна пометка", serviceNote("[1] Иванов [2] Петров"))
+        assertFalse("номер в скобках — значение, не замечание", serviceNote("(495)"))
+        assertFalse("многострочный ответ — страница", serviceNote("[Раздел 1]\nСтрока первая\nСтрока вторая"))
+        assertFalse("длинная скобочная строка — уже текст", serviceNote("(" + "слово ".repeat(40) + ")"))
+        assertFalse(serviceNote(""))
+    }
+
+    @Test
+    fun `пустой лист и пометка — один ответ «текста нет», бессмыслица — нет`() {
+        assertTrue(noTextAnswer(""))
+        assertTrue(noTextAnswer("   \n "))
+        assertTrue(noTextAnswer("*[No text detected]*"))
+
+        assertFalse("мусор чтения — не ответ «текста нет», это срыв", noTextAnswer("////////////"))
+        assertFalse(noTextAnswer("Tel: 918-682-1561"))
+    }
+
+    @Test
     fun `арифметика — не сумма, одно число — сумма`() {
         assertTrue(looksLikeExpression("127*4.32=548,64"))
         assertTrue(looksLikeExpression("500+548,64=1048,64"))

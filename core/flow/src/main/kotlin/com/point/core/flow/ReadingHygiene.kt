@@ -33,6 +33,37 @@ fun stripMarkdownChrome(text: String): String = text.lineSequence()
     .joinToString("\n")
     .trim()
 
+/**
+ * Служебная пометка читателя вместо текста страницы (#1054): OCR.space на снимке без единой
+ * надписи отвечал «*[No text detected]*», и эта отписка ложилась текстом объекта — Point
+ * предлагал «Понять» и «Перевести» фразу, которую сам же получил вместо текста. Гейт
+ * бессмыслицы [degeneratedReading] её не ловит: она состоит из нормальных слов.
+ *
+ * Узнаётся не по словам, а по форме: весь ответ — одна короткая строка, целиком взятая в
+ * скобки, с разметкой выделения вокруг или без неё. Так сервис помечает своё замечание о
+ * снимке, а не текст с него: страница одной скобочной строкой не приходит. Словарь известных
+ * отписок здесь не нужен — следующая формулировка у следующего сервиса пройдёт той же формой.
+ */
+fun serviceNote(text: String): Boolean {
+    val line = text.trim()
+    if (line.isEmpty() || line.length > MAX_NOTE || line.any { it == '\n' || it == '\r' }) return false
+    val bare = line.trim { it in EMPHASIS || it.isWhitespace() }
+    if (bare.length < 2) return false
+    val close = NOTE_BRACKETS[bare.first()] ?: return false
+    if (bare.last() != close) return false
+    val inside = bare.substring(1, bare.length - 1)
+    return close !in inside && inside.any(Char::isLetter)
+}
+
+/** Читатель посмотрел и текста не увидел: отдал пустой лист или служебную пометку (#1054). */
+fun noTextAnswer(text: String): Boolean = text.isBlank() || serviceNote(text)
+
+private const val MAX_NOTE = 120
+
+private const val EMPHASIS = "*_~`"
+
+private val NOTE_BRACKETS = mapOf('[' to ']', '(' to ')', '<' to '>', '{' to '}')
+
 private val IMAGE_LINE = Regex("""!\[[^\]]*]\([^)]*\)""")
 private val IMAGE_INLINE = Regex("""!\[[^\]]*]\([^)]*\)""")
 private val FENCE = Regex("""```\w*""")
