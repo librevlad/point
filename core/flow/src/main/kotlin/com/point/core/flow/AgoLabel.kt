@@ -24,7 +24,8 @@ fun stampLabel(epochMillis: Long, zone: java.time.ZoneId = java.time.ZoneId.syst
     return "${t.dayOfMonth} ${MONTHS[t.monthValue - 1]} $hh:$mm"
 }
 
-private val MONTHS = listOf(
+/** Короткие русские месяцы в стиле продукта — «17 авг», «3 мая». Общие для подписей времени. */
+internal val MONTHS = listOf(
     "янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек",
 )
 

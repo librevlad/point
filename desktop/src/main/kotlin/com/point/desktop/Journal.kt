@@ -153,12 +153,6 @@ fun stepsWord(count: Int): String {
     return "$count $word"
 }
 
-/** Час строки: время сказано заголовком секции, здесь остаётся «когда именно» (#880). */
-fun clockLabel(at: Long, zone: ZoneId): String {
-    val day = Instant.ofEpochMilli(at).atZone(zone)
-    return "%02d:%02d".format(day.hour, day.minute)
-}
-
 fun whenLabel(at: Long, now: Long, zone: ZoneId): String {
     val day = Instant.ofEpochMilli(at).atZone(zone)
     val today = Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
