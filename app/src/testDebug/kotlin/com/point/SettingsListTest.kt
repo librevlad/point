@@ -154,14 +154,18 @@ class SettingsListTest {
         settings(keys = savedKey, privacyLevel = PrivacyLevel.DEVICE_ONLY, cloudEnabled = false)
 
         compose.onNodeWithText(PrivacyLevel.DEVICE_ONLY.title, substring = true).assertIsDisplayed()
-        compose.onNodeWithText("Облако выключено", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("Облако выключено", substring = true).assertDoesNotExist()
     }
 
-    @Test fun `разрешённое облако видно строкой вместе с уровнем`() {
+    /**
+     * Сводка называет выбранный уровень и не оправдывается тумблером: «Облако разрешено ·
+     * Только на этом устройстве» читалось противоречием (#1003).
+     */
+    @Test fun `сводка приватности — уровень без «облако разрешено»`() {
         settings(keys = savedKey, cloudEnabled = true, privacyLevel = PrivacyLevel.NO_TRAINING)
 
-        compose.onNodeWithText("Облако разрешено", substring = true).assertIsDisplayed()
         compose.onNodeWithText(PrivacyLevel.NO_TRAINING.title, substring = true).assertIsDisplayed()
+        compose.onNodeWithText("Облако разрешено", substring = true).assertDoesNotExist()
     }
 
     /**

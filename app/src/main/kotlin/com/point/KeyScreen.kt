@@ -150,7 +150,6 @@ fun KeyScreen(
             when (section) {
                 null -> SettingsList(
                     keyLine = aiKeysSummary(screen.keys),
-                    cloudEnabled = cloudEnabled,
                     privacyLevel = privacyLevel,
                     yoloEnabled = yoloEnabled,
                     soundEnabled = soundEnabled,
@@ -226,7 +225,6 @@ private enum class SettingsSection { KEY, PRIVACY, APP, ENTRIES, MEMORY }
 @Composable
 private fun SettingsList(
     keyLine: String,
-    cloudEnabled: Boolean,
     privacyLevel: PrivacyLevel,
     yoloEnabled: Boolean,
     soundEnabled: Boolean,
@@ -267,8 +265,9 @@ private fun SettingsList(
             SettingsRow(
                 title = PRIVACY_SECTION_TITLE,
 
-                subtitle = (if (cloudEnabled) "Облако разрешено" else "Облако выключено") +
-                    " · ${privacyLevel.title}" + (if (yoloEnabled) " · $YOLO_TITLE" else ""),
+                // Сводка называет выбранный уровень и не оправдывается состоянием тумблера:
+                // «Облако разрешено · Только на этом устройстве» читалось противоречием (#1003).
+                subtitle = privacyLevel.title + (if (yoloEnabled) " · $YOLO_TITLE" else ""),
                 onClick = { onOpen(SettingsSection.PRIVACY) },
                 appearIndex = 2,
             )
