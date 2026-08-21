@@ -10,6 +10,8 @@ import com.point.core.flow.Atom
 import com.point.core.flow.AtomLayer
 import com.point.core.flow.AtomRecognizer
 import com.point.core.flow.Box
+import com.point.core.flow.FrameTransform
+import com.point.core.flow.atomLabel
 import com.point.core.model.PointObject
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
@@ -79,30 +81,22 @@ class PaddleOcrRecognizer @Inject constructor(
         // (`readerFailureIsFatal`). Человеческая фраза здесь ломала второе: «повреждён» ни на
         // одно техническое слово не похоже, и негодный снимок уходил разовой неудачей
         // операции вместо знания об объекте. Слово то же, что у соседнего движка.
-        val source = decodeBoundedUpright(obj.uri.value, MAX_PX)
+        //
+        // Кадр для чтения — тот же декодер и тот же перевод координат, что у выделения и
+        // замазывания (#1013): ужатие снимка до MAX_PX считается в одном месте и приходит
+        // сюда готовым FrameTransform, а не угадывается заново.
+        val frame = decodeSelectionFrame(obj.uri.value, MAX_PX)
             ?: return@withContext AtomLayer(emptyList(), incomplete = com.point.core.flow.READER_NOT_DECODED)
+        val source = frame.bitmap
 
         try {
             val lines = runCatching { detect(source) }.getOrElse {
                 return@withContext AtomLayer(emptyList(), incomplete = it.message ?: "detect failed")
             }
-            val atoms = lines.mapIndexedNotNull { index, box ->
-                val reading = runCatching { readLine(source, box) }.getOrNull()
-                reading?.takeIf { it.text.isNotBlank() }?.let {
-                    Atom(
-                        // Метка слова у всех читателей одна и та же (w47): по ней модель ссылается на
-                        // слово страницы, а Point её снимает перед показом человеку. Своя форма
-                        // «ppocr-24» правилу снятия незнакома — и метки уезжали на экран.
-                        id = com.point.core.flow.atomLabel(index),
-                        text = it.text,
-                        box = box,
-                        confidence = it.confidence,
-                        reader = READER,
-                        readerVersion = VERSION,
-                    )
-                }
-            }
-            AtomLayer(atoms)
+            layerInRawFrame(
+                lines.map { box -> box to runCatching { readLine(source, box) }.getOrNull() },
+                frame.transform,
+            )
         } finally {
             source.recycle()
         }
@@ -273,13 +267,7 @@ class PaddleOcrRecognizer @Inject constructor(
         return env.createSession(bytes, OrtSession.SessionOptions())
     }
 
-    private data class Reading(val text: String, val confidence: Float)
-
     private companion object {
-
-        const val READER = "ppocr"
-
-        const val VERSION = "v5-mobile-cyrillic"
 
         const val MAX_PX = 2048
 
@@ -313,6 +301,41 @@ class PaddleOcrRecognizer @Inject constructor(
         val REC_STD = floatArrayOf(0.5f, 0.5f, 0.5f)
     }
 }
+
+/** Что распознаватель прочёл на одной строке кадра и насколько уверенно. */
+internal data class Reading(val text: String, val confidence: Float)
+
+/**
+ * Слой чтения живёт в сыром кадре — как у всех читателей (#1013).
+ *
+ * Детектор и распознаватель видят ужатую копию снимка: длинный скриншот 1080×7200 ложится на
+ * неё вдвое меньше. Прежде слой уходил с координатами этой копии и без записи перевода, и
+ * всё, что рисует строку поверх кадра, промахивалось: метка поиска вставала вдвое выше
+ * найденной строки, а «найти в длинном скриншоте» теряло смысл. Перевод один — тот же
+ * FrameTransform, что декодер отдаёт выделению и замазыванию: каждая строка переводится им
+ * в сырой кадр, и он же записывается в слой, чтобы строки и дальше собирались в стоячем кадре.
+ *
+ * Строка, на которой распознаватель сорвался или промолчал, в слой не попадает.
+ */
+internal fun layerInRawFrame(lines: List<Pair<Box, Reading?>>, transform: FrameTransform): AtomLayer =
+    AtomLayer(
+        lines.mapIndexedNotNull { index, (box, reading) ->
+            reading?.takeIf { it.text.isNotBlank() }?.let {
+                Atom(
+                    // Метка слова у всех читателей одна и та же (w47): по ней модель ссылается на
+                    // слово страницы, а Point её снимает перед показом человеку. Своя форма
+                    // «ppocr-24» правилу снятия незнакома — и метки уезжали на экран.
+                    id = atomLabel(index),
+                    text = it.text,
+                    box = transform.toRaw(box),
+                    confidence = it.confidence,
+                    reader = READER,
+                    readerVersion = VERSION,
+                )
+            }
+        },
+        transform = transform,
+    )
 
 /**
  * Одна строка — один кусок: пятна, стоящие на общей строке рядом, склеиваются.
@@ -376,6 +399,10 @@ internal fun nativeAbiFolder(abi: String?): String = when (abi) {
     "x86" -> "x86"
     else -> ""
 }
+
+private const val READER = "ppocr"
+
+private const val VERSION = "v5-mobile-cyrillic"
 
 private const val ROW_OVERLAP = 0.5f
 

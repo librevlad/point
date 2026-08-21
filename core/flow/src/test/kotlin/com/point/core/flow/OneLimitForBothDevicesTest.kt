@@ -78,6 +78,10 @@ class OneLimitForBothDevicesTest {
         val guilty = listOf(
             "executors/src/main/kotlin/com/point/executors/Bitmaps.kt",
             "data/src/main/kotlin/com/point/data/TesseractTextRecognizer.kt",
+
+            // Кадр выделения, замазывания и чтения на устройстве (#1013): его ужатие и есть
+            // тот перевод координат, по которому метка поиска встаёт на найденную строку.
+            "data/src/main/kotlin/com/point/data/ImageDecode.kt",
         ).filterNot { source(it).contains("sampleSizeFor(") }
 
         assertTrue("расчёт повторён: $guilty", guilty.isEmpty())
