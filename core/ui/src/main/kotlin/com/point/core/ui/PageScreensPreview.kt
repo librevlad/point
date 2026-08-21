@@ -29,36 +29,6 @@ private fun previewPage(): ImageBitmap {
     return bitmap
 }
 
-@Preview(name = "Выделение · захвачено (#461)", showBackground = true, backgroundColor = 0xFF0B0D10)
-@Composable
-private fun PreviewSelectionCaptured() = PointTheme(darkTheme = true) {
-
-    SelectionScreen(
-        image = remember { previewPage() },
-        highlights = listOf(PageBox(60f, 246f, 450f, 261f), PageBox(60f, 290f, 370f, 305f)),
-        capturedText = "Строк захвачено две — и обе видны на самой странице",
-        onSelect = {},
-        onTake = {},
-        onFocus = {},
-        onClose = {},
-    )
-}
-
-@Preview(name = "Выделение · брать ещё нечего (#461)", showBackground = true, backgroundColor = 0xFF0B0D10)
-@Composable
-private fun PreviewSelectionEmpty() = PointTheme(darkTheme = true) {
-
-    SelectionScreen(
-        image = remember { previewPage() },
-        highlights = emptyList(),
-        capturedText = null,
-        onSelect = {},
-        onTake = {},
-        onFocus = {},
-        onClose = {},
-    )
-}
-
 @Preview(name = "Поиск · нашлось (#461)", showBackground = true, backgroundColor = 0xFF0B0D10)
 @Composable
 private fun PreviewFindFound() = PointTheme(darkTheme = true) {
