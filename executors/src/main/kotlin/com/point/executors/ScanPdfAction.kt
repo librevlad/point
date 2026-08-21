@@ -41,6 +41,7 @@ class ScanPdfRealizer @Inject constructor(
                     name = "скан.pdf",
                     op = "scan-pdf",
                     process = ::scanPage,
+                    order = com.point.core.flow.collectionOrder(input.metadata),
                 )
             }.getOrElse { ActionResult.Failure(it.message ?: "Ошибка сканирования в PDF", recoverable = true) }
         }

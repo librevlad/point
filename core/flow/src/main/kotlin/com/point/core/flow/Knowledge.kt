@@ -10,6 +10,10 @@ fun continuesObject(before: PointObject, after: PointObject): Boolean = before.u
  */
 val REFRESHABLE_KNOWLEDGE: Set<String> = setOf(
     META_OCR_TEXT_REF, META_OCR_ATOMS_REF, META_READ_CHARS, META_READ_TOTAL_CHARS,
+
+    // Порядок страниц набора — расположение, заданное человеком, а не прочтение (#1207):
+    // новая перестановка заменяет прежнюю, а не уходит с ней в спор.
+    META_COLLECTION_ORDER,
 )
 
 fun carryKnowledge(

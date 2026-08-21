@@ -10,11 +10,15 @@ import com.point.core.flow.CropPurpose
 import com.point.core.flow.EvidenceCropper
 import com.point.core.flow.EvidenceImage
 import com.point.core.flow.LlmClient
+import com.point.core.flow.META_COLLECTION_ORDER
 import com.point.core.flow.META_OCR_ATOMS_REF
+import com.point.core.flow.META_TABLE_PAGES
+import com.point.core.flow.META_TABLE_PAGES_UNREAD
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.SheetPlan
 import com.point.core.flow.SpreadsheetWriter
 import com.point.core.flow.UNREAD_CAPTION
+import com.point.core.flow.collectionOrderValue
 import com.point.core.model.ActionResult
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
@@ -78,6 +82,9 @@ class ExcelRealizerTest {
         override suspend fun crop(evidence: CropEvidence): EvidenceImage? = null
     }
 
+    /** Страницы набора, как их отдаёт хранилище (#1207). */
+    private var pages: List<PointObject> = emptyList()
+
     private val scratch = object : ObjectStore {
         override suspend fun ingest(sourceUri: String, mime: String): PointObject = error("unused")
         override suspend fun ingestMultiple(sources: List<String>): PointObject = error("unused")
@@ -86,7 +93,7 @@ class ExcelRealizerTest {
             from: com.point.core.model.PointObject?,
             by: com.point.core.model.CapabilityId?,
         ): PointObject = error("unused")
-        override suspend fun children(collection: PointObject, limit: Int) = CollectionContent.empty<PointObject>()
+        override suspend fun children(collection: PointObject, limit: Int) = CollectionContent(pages, pages.size)
         override suspend fun readText(obj: PointObject, limit: Int): String = ""
         override suspend fun newScratchFile(extension: String) = ScratchRef(
             File.createTempFile("point-crop", ".$extension").apply { deleteOnExit() }.absolutePath,
@@ -622,6 +629,112 @@ class ExcelRealizerTest {
         val result = realizer("[]").perform(image)
 
         assertTrue("пустой ответ — отказ действия", result is ActionResult.Failure)
+    }
+
+    // ---- Набор снимков — одна таблица по порядку страниц (#1207) ----
+
+    private fun page(name: String) = PointObject(
+        name, "image/jpeg", ScratchRef("/tmp/$name"), ObjectState(ObjectKind.IMAGE), mapOf("name" to name),
+    )
+
+    private val set = PointObject("set", "inode/directory", ScratchRef("/tmp/set"), ObjectState(ObjectKind.COLLECTION))
+
+    /** Модель, читающая каждую страницу по-своему — по имени снимка; неназванная страница ей не даётся. */
+    private fun readerByPage(answers: Map<String, String>) = object : LlmClient {
+        override suspend fun run(obj: PointObject, prompt: String): ResultObject {
+            val name = obj.metadata["name"]
+            return answerOf(answers[name] ?: error("снимок $name не разобрать"))
+        }
+    }
+
+    @Test
+    fun `«В Excel» принимает набор снимков`() {
+        assertTrue(ExcelCapability { true }.accepts(ObjectState(ObjectKind.COLLECTION)))
+    }
+
+    @Test
+    fun `две страницы набора сшиваются в одну таблицу в порядке набора`() = runTest {
+        pages = listOf(page("IMG_1.jpg"), page("IMG_2.jpg"))
+        val reader = readerByPage(
+            mapOf(
+                "IMG_1.jpg" to """[["Товар","Кол-во"],["Гречка","2"]]""",
+                "IMG_2.jpg" to """[["Товар","Кол-во"],["Соль","3"]]""",
+            ),
+        )
+        val reordered = set.copy(
+            metadata = mapOf(META_COLLECTION_ORDER to collectionOrderValue(listOf("IMG_2.jpg", "IMG_1.jpg"))),
+        )
+
+        val result = ExcelRealizer(listOf(reader), writer, noCrops, scratch, testKnowledge()).perform(reordered)
+
+        assertTrue(result is ActionResult.Success)
+        assertEquals(
+            listOf(listOf("Товар", "Кол-во"), listOf("Соль", "3"), listOf("Гречка", "2")),
+            lastRows,
+        )
+        val meta = (result as ActionResult.Success).result.metadata
+        assertEquals("2", meta[META_TABLE_PAGES])
+        assertNull(meta[META_TABLE_PAGES_UNREAD])
+        assertEquals(ObjectKind.OFFICE, result.result.type)
+    }
+
+    @Test
+    fun `без знания о порядке страницы идут по имени файла`() = runTest {
+        pages = listOf(page("IMG_2.jpg"), page("IMG_1.jpg"))
+        val reader = readerByPage(
+            mapOf(
+                "IMG_1.jpg" to """[["A"],["первая"]]""",
+                "IMG_2.jpg" to """[["A"],["вторая"]]""",
+            ),
+        )
+
+        ExcelRealizer(listOf(reader), writer, noCrops, scratch, testKnowledge()).perform(set)
+
+        assertEquals(listOf(listOf("A"), listOf("первая"), listOf("вторая")), lastRows)
+    }
+
+    @Test
+    fun `страница, которую не прочитать, не выбрасывается молча — её место помечено`() = runTest {
+        pages = listOf(page("IMG_1.jpg"), page("IMG_2.jpg"), page("IMG_3.jpg"))
+        val reader = readerByPage(
+            mapOf(
+                "IMG_1.jpg" to """[["Товар","Кол-во"],["Гречка","2"]]""",
+                "IMG_3.jpg" to """[["Товар","Кол-во"],["Соль","3"]]""",
+            ),
+        )
+
+        val result = ExcelRealizer(listOf(reader), writer, noCrops, scratch, testKnowledge()).perform(set)
+
+        assertTrue(result is ActionResult.Success)
+        val rows = lastRows!!
+        assertEquals(listOf("Гречка", "2"), rows[1])
+        val gap = rows[2].single()
+        assertTrue("место второй страницы помечено: $gap", gap.contains('⚠') && gap.contains("2 из 3"))
+        assertEquals(listOf("Соль", "3"), rows[3])
+        assertEquals("1", (result as ActionResult.Success).result.metadata[META_TABLE_PAGES_UNREAD])
+    }
+
+    @Test
+    fun `не прочиталась ни одна страница — отказ, а не пустой файл`() = runTest {
+        pages = listOf(page("IMG_1.jpg"), page("IMG_2.jpg"))
+
+        val result = realizer("   ").perform(set)
+
+        assertTrue(result is ActionResult.Failure)
+        assertTrue((result as ActionResult.Failure).reason.contains("2 страниц"))
+        assertNull("файл не писался", lastPlan)
+    }
+
+    @Test
+    fun `набор без снимков — честный отказ`() = runTest {
+        pages = listOf(
+            PointObject("a", "text/plain", ScratchRef("/tmp/a.txt"), ObjectState(ObjectKind.TEXT), mapOf("name" to "a.txt")),
+        )
+
+        val result = realizer("""[["A"]]""").perform(set)
+
+        assertTrue(result is ActionResult.Failure)
+        assertNull(lastPlan)
     }
 
     private companion object {

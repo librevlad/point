@@ -74,6 +74,12 @@ fun PointHost(
 
     onOpenObject: () -> Unit = {},
     onItem: (PointObject) -> Unit = {},
+
+    /** Перестановка страниц набора — знание набора (#1207). */
+    onMoveItem: (PointObject, Int) -> Unit = { _, _ -> },
+
+    /** Миниатюра страницы набора (#1207): экран спрашивает, приложение читает. */
+    itemPreviewFor: suspend (PointObject) -> androidx.compose.ui.graphics.ImageBitmap? = { null },
     onFound: (PointObject) -> Unit = {},
     onJumpTo: (Int) -> Unit = {},
     onSaveAiKey: (com.point.core.flow.UserAiKey) -> Unit = {},
@@ -341,6 +347,8 @@ fun PointHost(
                     itemsTotal = current.itemsTotal,
                     itemsTotalAtLeast = current.itemsTotalAtLeast,
                     onItem = onItem,
+                    onMoveItem = onMoveItem,
+                    itemPreviewFor = itemPreviewFor,
                     found = current.found,
                     relations = current.relations,
                     onFound = onFound,

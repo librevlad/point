@@ -35,6 +35,8 @@ fun PointFlow(
         onCancelAction = viewModel::cancelAction,
         onOpenObject = viewModel::openTopObject,
         onItem = viewModel::onItem,
+        onMoveItem = viewModel::moveItem,
+        itemPreviewFor = viewModel::itemPreview,
         onFound = viewModel::onFound,
         onJumpTo = viewModel::jumpTo,
         onSendChat = viewModel::sendChatMessage,

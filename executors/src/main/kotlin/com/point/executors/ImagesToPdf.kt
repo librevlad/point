@@ -3,6 +3,7 @@ package com.point.executors
 import android.graphics.Bitmap
 import android.graphics.pdf.PdfDocument
 import com.point.core.flow.ObjectStore
+import com.point.core.flow.inCollectionOrder
 import com.point.core.flow.reportStage
 import com.point.core.model.ActionResult
 import com.point.core.model.ObjectKind
@@ -15,8 +16,11 @@ internal suspend fun imagesToPdf(
     name: String,
     op: String,
     process: (Bitmap) -> Bitmap = { it },
+
+    // Порядок страниц — знание набора, имя файла — запасной порядок (#1207).
+    order: List<String> = emptyList(),
 ): ActionResult {
-    val files = dir.walkTopDown().filter { it.isFile }.sortedBy { it.name.lowercase() }.toList()
+    val files = inCollectionOrder(dir.walkTopDown().filter { it.isFile }.toList(), order) { it.name }
 
     val document = PdfDocument()
     var pages = 0

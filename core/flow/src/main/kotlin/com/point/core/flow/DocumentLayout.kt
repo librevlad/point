@@ -245,6 +245,12 @@ const val META_TABLE_CHROME = "table.chrome"
 
 const val META_TABLE_FLAGGED = "table.flagged"
 
+/** Сколько страниц набора сшито в таблицу (#1207). */
+const val META_TABLE_PAGES = "table.pages"
+
+/** Сколько из них прочитать не вышло — их место в таблице помечено (#1207). */
+const val META_TABLE_PAGES_UNREAD = "table.pages.unread"
+
 fun scopeLabel(scope: DocScope): String = when (scope) {
     DocScope.FULL -> "документ целиком"
     DocScope.VIEWPORT -> "только то, что в кадре"

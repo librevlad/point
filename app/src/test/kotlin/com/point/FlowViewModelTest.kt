@@ -2801,6 +2801,55 @@ class FlowViewModelTest {
         assertEquals(ObjectKind.IMAGE, vm.ui.value.frame?.obj?.state?.kind)
     }
 
+    /**
+     * Перестановка страниц — знание набора (#1207): список на экране меняется сразу, порядок
+     * ложится в сам объект-набор и доезжает до журнала — его прочтут «В Excel» и «Сканировать
+     * в PDF», а после возврата к набору он не потеряется.
+     */
+    @Test fun `перестановка страницы меняет список и становится знанием набора`() = runTest(dispatcher) {
+        fun page(name: String) = PointObject(
+            name, "image/jpeg", ScratchRef("/$name"), ObjectState(ObjectKind.IMAGE), mapOf("name" to name),
+        )
+        store.content = CollectionContent(shown = listOf(page("1.jpg"), page("2.jpg"), page("3.jpg")), total = 3)
+        val vm = vm()
+        vm.onSharedMultiple(listOf("a", "b", "c")); advanceUntilIdle()
+
+        vm.moveItem(page("3.jpg"), -1); advanceUntilIdle()
+
+        val frame = vm.ui.value.frame!!
+        assertEquals(listOf("1.jpg", "3.jpg", "2.jpg"), frame.items.map { it.metadata["name"] })
+        assertEquals(
+            listOf("1.jpg", "3.jpg", "2.jpg"),
+            com.point.core.flow.collectionOrder(frame.obj.metadata),
+        )
+        assertEquals(
+            "порядок доехал до журнала",
+            listOf("1.jpg", "3.jpg", "2.jpg"),
+            com.point.core.flow.collectionOrder(snapshot.saved.last().first().metadata),
+        )
+
+        // Второй шаг заменяет порядок, а не спорит с первым.
+        vm.moveItem(page("3.jpg"), -1); advanceUntilIdle()
+        val again = vm.ui.value.frame!!
+        assertEquals(listOf("3.jpg", "1.jpg", "2.jpg"), com.point.core.flow.collectionOrder(again.obj.metadata))
+        assertTrue(again.obj.metadata.keys.none { it.startsWith(com.point.core.flow.META_COLLECTION_ORDER + ".") })
+    }
+
+    @Test fun `страницу не увести за край списка`() = runTest(dispatcher) {
+        fun page(name: String) = PointObject(
+            name, "image/jpeg", ScratchRef("/$name"), ObjectState(ObjectKind.IMAGE), mapOf("name" to name),
+        )
+        store.content = CollectionContent(shown = listOf(page("1.jpg"), page("2.jpg")), total = 2)
+        val vm = vm()
+        vm.onSharedMultiple(listOf("a", "b")); advanceUntilIdle()
+
+        vm.moveItem(page("1.jpg"), -1); advanceUntilIdle()
+
+        val frame = vm.ui.value.frame!!
+        assertEquals(listOf("1.jpg", "2.jpg"), frame.items.map { it.metadata["name"] })
+        assertNull(frame.obj.metadata[com.point.core.flow.META_COLLECTION_ORDER])
+    }
+
     @Test fun `objects found by enrichment land on the frame`() = runTest(dispatcher) {
         val vm = vm()
         val waybill = PointObject(

@@ -35,7 +35,13 @@ class MergePdfRealizer @Inject constructor(
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
             runCatching {
-                imagesToPdf(store, File(input.uri.value), name = "документ.pdf", op = "merge-pdf")
+                imagesToPdf(
+                    store,
+                    File(input.uri.value),
+                    name = "документ.pdf",
+                    op = "merge-pdf",
+                    order = com.point.core.flow.collectionOrder(input.metadata),
+                )
             }.getOrElse { ActionResult.Failure(it.message ?: "Ошибка объединения в PDF", recoverable = true) }
         }
 }
