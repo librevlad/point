@@ -3,6 +3,7 @@ package com.point.executors
 import android.graphics.Bitmap
 import android.graphics.pdf.PdfDocument
 import com.point.core.flow.ObjectStore
+import com.point.core.flow.collectionContent
 import com.point.core.flow.reportStage
 import com.point.core.model.ActionResult
 import com.point.core.model.ObjectKind
@@ -16,7 +17,7 @@ internal suspend fun imagesToPdf(
     op: String,
     process: (Bitmap) -> Bitmap = { it },
 ): ActionResult {
-    val files = dir.walkTopDown().filter { it.isFile }.sortedBy { it.name.lowercase() }.toList()
+    val files = pagesOf(dir)
 
     val document = PdfDocument()
     var pages = 0
@@ -52,6 +53,24 @@ internal suspend fun imagesToPdf(
         ),
     )
 }
+
+/**
+ * Из чего складываются страницы PDF: файлы набора в том порядке, в каком набор показан
+ * человеку (#1002, решение владельца — страница на фото).
+ *
+ * Каждому файлу набора — своя страница, и идут они в порядке набора. Порядок берётся из того
+ * же `collectionContent`, которым `ObjectStore.children` строит список набора на экране, а не
+ * из второго похожего сорта рядом: два сорта в разных местах могли разойтись, и страницы PDF
+ * легли бы не так, как человек видит набор. Предела на число нет — в PDF уходит весь набор,
+ * а не первый экран списка.
+ */
+internal fun pagesOf(dir: File): List<File> = collectionContent(
+    entries = dir.walkTopDown(),
+    limit = Int.MAX_VALUE,
+    scanLimit = Int.MAX_VALUE,
+    isFile = { it.isFile },
+    name = { it.name },
+).shown
 
 internal fun scanPage(src: Bitmap): Bitmap =
     if (OpenCvScan.available) {
