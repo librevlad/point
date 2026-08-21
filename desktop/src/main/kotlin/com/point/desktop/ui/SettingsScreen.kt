@@ -65,10 +65,11 @@ fun SettingsRoot(
     config: PcConfig,
     devices: Int,
     email: String,
-    onSave: (PcConfig) -> Unit,
+    onSave: (PcConfig) -> Boolean,
     onOpen: (SettingsPage) -> Unit,
 ) {
     var rightClick by remember { mutableStateOf(config.rightClick) }
+    var rightClickTrouble by remember { mutableStateOf(false) }
     var sound by remember { mutableStateOf(config.sound) }
 
     Column(
@@ -124,15 +125,16 @@ fun SettingsRoot(
         }
 
         // «Показывать · выключить» читалось как загадка: состояние это или действие (#878).
-        // Переключатель говорит состояние словом, а нажатие меняет его.
+        // Переключатель говорит состояние словом, а нажатие меняет его. Слово — правда:
+        // когда запись в реестр не встала, включённый флаг не говорит «Показывается» (#1082).
         Section("Интеграции") {
             SwitchRow(
                 title = "«Открыть в Point» в меню файла",
-                subtitle = if (rightClick) "Показывается" else "Не показывается",
+                subtitle = rightClickLine(rightClick, rightClickTrouble),
                 on = rightClick,
             ) {
                 rightClick = !rightClick
-                onSave(config.copy(rightClick = rightClick))
+                rightClickTrouble = !onSave(config.copy(rightClick = rightClick)) && rightClick
             }
         }
 
@@ -144,6 +146,13 @@ fun SettingsRoot(
             style = PointType.small.copy(color = PointColors.muted),
         )
     }
+}
+
+/** Подпись переключателя правой кнопки: сбой записи виден словом, а не прячется за флагом (#1082). */
+internal fun rightClickLine(on: Boolean, trouble: Boolean): String = when {
+    on && trouble -> "Не удалось включить — запись в меню файла не встала"
+    on -> "Показывается"
+    else -> "Не показывается"
 }
 
 internal fun devicesLine(email: String, devices: Int): String {
@@ -164,7 +173,7 @@ internal fun keysLine(config: PcConfig): String =
 @Composable
 fun SettingsDevices(
     config: PcConfig,
-    onSave: (PcConfig) -> Unit,
+    onSave: (PcConfig) -> Boolean,
     devicesPane: @Composable () -> Unit,
 ) {
     var name by remember { mutableStateOf(config.name) }

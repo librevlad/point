@@ -220,7 +220,10 @@ fun main(args: Array<String>) {
         if (exe != null && FilePcConfig(pointDir).load().rightClick) {
             val wanted = shellCommandFor(exe)
             if (shellMenuNeedsUpdate(shellMenu.registeredCommand(), wanted)) {
-                shellMenu.register(wanted, "Открыть в Point")
+                // При старте человек ничего не нажимал: сбой остаётся следом в логе (#1082).
+                if (!shellMenu.register(wanted, SHELL_MENU_TITLE)) {
+                    println("[shell-menu] пункт меню файла в реестр не встал")
+                }
             }
 
             // «Отправить → Point» — другое меню Windows и живёт своей записью (#255).
@@ -452,20 +455,28 @@ fun main(args: Array<String>) {
                         // другое.
                         runCatching { account.syncSettings() }
 
+                        // Здесь человек нажал сам, поэтому «встал ли пункт» уезжает ответом в
+                        // настройки: переключатель не говорит «Показывается» поверх пустого
+                        // реестра (#1082).
                         runCatching {
                             val exe = installedExecutable(ProcessHandle.current().info().command().orElse(null))
                             when {
                                 !changed.rightClick -> {
                                     shellMenu.unregister()
                                     sendTo.unregister()
+                                    true
                                 }
 
                                 exe != null -> {
-                                    shellMenu.register(shellCommandFor(exe), "Открыть в Point")
+                                    val stood = shellMenu.register(shellCommandFor(exe), SHELL_MENU_TITLE)
                                     sendTo.register(exe)
+                                    stood
                                 }
+
+                                // Запуск из исходников: пункта меню не будет, и врать про него нечего.
+                                else -> false
                             }
-                        }
+                        }.getOrDefault(false)
                     },
                     // «Убрать прямо сейчас» убирает всё, что Point помнит здесь, а не только
                     // файлы старше суток (#1081): само по себе старое по-прежнему уходит при
