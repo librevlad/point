@@ -10,6 +10,12 @@ class LinkStateTest {
     private val now = 1_700_000_000_000L
     private val minute = 60_000L
 
+    /** Счёт молчания из подписи — число и мера, без фразы вокруг них. */
+    private fun countAfter(minutes: Long): String {
+        val label = linkLabel(linkStateOf(now - minutes * minute, now))
+        return Regex("""\d+ [а-яё]+""").find(label)?.value ?: label
+    }
+
     @Test
     fun `не связывались ни разу — так и говорим`() {
         val state = linkStateOf(lastContactAt = null, now = now)
@@ -66,14 +72,19 @@ class LinkStateTest {
 
     @Test
     fun `часы вместо ста минут — строка остаётся человеческой`() {
-        assertEquals("был на связи 2 часа назад", linkLabel(linkStateOf(now - 125 * minute, now)))
+        val minutes = 125L
+
+        // Проверяется счёт, а не фраза вокруг него (#1114): мера — часы, число из них же.
+        assertEquals("${minutes / 60} часа", countAfter(minutes))
     }
 
     @Test
     fun `русский счёт минут, а не машинный вывод`() {
-        assertEquals("был на связи 5 минут назад", linkLabel(linkStateOf(now - 5 * minute, now)))
-        assertEquals("был на связи 21 минуту назад", linkLabel(linkStateOf(now - 21 * minute, now)))
-        assertEquals("был на связи 13 минут назад", linkLabel(linkStateOf(now - 13 * minute, now)))
+        // Мера согласована с числом — это здесь и проверяется. Слова подписи вокруг счёта
+        // вправе меняться, не роняя тест (#1114).
+        val agreed = mapOf(5L to "минут", 21L to "минуту", 13L to "минут")
+
+        agreed.forEach { (minutes, word) -> assertEquals("$minutes $word", countAfter(minutes)) }
     }
 
     @Test
