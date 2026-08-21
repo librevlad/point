@@ -647,11 +647,12 @@ internal fun grouped(n: Int): String =
     n.toString().reversed().chunked(3).joinToString(" ").reversed()
 
 /**
- * Набор из нескольких снимков — это страницы, и их порядок можно менять (#1207). Одиночный
- * снимок среди файлов архива страницей не считается: переставлять там нечего.
+ * Набор из нескольких страниц — снимков, PDF, текстов — можно переставлять (#1207): их
+ * порядок читают «В Excel» и «Сканировать в PDF». Одна страница среди файлов архива
+ * набором страниц не является: переставлять там нечего.
  */
 fun reorderablePages(items: List<PointObject>): Boolean =
-    items.count { it.state.kind == ObjectKind.IMAGE } >= 2
+    items.count { it.state.kind in com.point.core.flow.PAGE_KINDS } >= 2
 
 const val PAGE_UP = "Страницу выше"
 
@@ -679,7 +680,10 @@ private fun CollectionItems(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        items.take(page).forEachIndexed { index, item ->
+        // Стрелки ходят в пределах показанного: страница не уезжает в скрытую часть списка
+        // за «Показать ещё» — там её не видно и вернуть нечем.
+        val shown = items.take(page)
+        shown.forEachIndexed { index, item ->
             // Строка привязана к странице, а не к месту в списке: после перестановки
             // миниатюра едет вместе со страницей, а не читается заново.
             key(item.id) {
@@ -688,7 +692,7 @@ private fun CollectionItems(
                     onClick = { onItem(item) },
                     previewFor = previewFor,
                     onUp = onMove?.takeIf { index > 0 }?.let { move -> { move(item, -1) } },
-                    onDown = onMove?.takeIf { index < items.lastIndex }?.let { move -> { move(item, +1) } },
+                    onDown = onMove?.takeIf { index < shown.lastIndex }?.let { move -> { move(item, +1) } },
                     arrows = onMove != null,
                 )
             }

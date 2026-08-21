@@ -69,4 +69,23 @@ class StitchSheetsTest {
     fun `одна страница остаётся собой`() {
         assertEquals(first, stitchSheets(listOf(first)))
     }
+
+    @Test
+    fun `первая страница не прочиталась — эталон шапки берётся с первой прочитанной`() {
+        val gap = SheetPlan(rows = listOf(listOf("⚠ Страница 1 из 3 не прочиталась")), headerRows = emptySet())
+
+        val plan = stitchSheets(listOf(gap, first, second))
+
+        assertEquals(1, plan.rows.count { it == listOf("Товар", "Кол-во") })
+        assertEquals(setOf(1), plan.headerRows)
+        assertEquals(
+            listOf(
+                listOf("⚠ Страница 1 из 3 не прочиталась"),
+                listOf("Товар", "Кол-во"), listOf("Гречка", "2"), listOf("Рис", "1"),
+                listOf("Соль", "3"),
+            ),
+            plan.rows,
+        )
+        assertEquals(listOf("3", "8"), plan.candidates[4 to 1])
+    }
 }

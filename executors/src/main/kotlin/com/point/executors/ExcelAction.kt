@@ -34,6 +34,7 @@ import com.point.core.flow.META_TABLE_PAGES_UNREAD
 import com.point.core.flow.META_TABLE_SCOPE
 import com.point.core.flow.META_TABLE_UNREAD
 import com.point.core.flow.ObjectStore
+import com.point.core.flow.PAGE_KINDS
 import com.point.core.flow.refusalNeedsKey
 import com.point.core.flow.RECROP_TIMEOUT_MS
 import com.point.core.flow.ReadingMode
@@ -97,10 +98,10 @@ class ExcelCapability @Inject constructor(
     override val icon = "excel"
     override val meta = CapabilityMeta(cost = Cost.PAID, latency = Latency.SLOW, network = true, auth = true)
     override fun label(state: ObjectState) = labelNeedingKey("В Excel", keys.keySet())
-    // Набор снимков — тоже источник таблицы (#1207): несколько фото одной накладной сшиваются
-    // в один файл по порядку страниц.
+    // Набор страниц — тоже источник таблицы (#1207): несколько фото одной накладной сшиваются
+    // в один файл по порядку страниц. Страница набора — то же, что читается и поодиночке.
     override fun accepts(state: ObjectState) =
-        state.kind in setOf(ObjectKind.IMAGE, ObjectKind.PDF, ObjectKind.TEXT, ObjectKind.COLLECTION)
+        state.kind in PAGE_KINDS || state.kind == ObjectKind.COLLECTION
     override fun produces(state: ObjectState) = ObjectState(ObjectKind.OFFICE)
 
     override fun yields(state: ObjectState) = ActionYield.New(ObjectKind.OFFICE, "таблицу")
@@ -190,16 +191,20 @@ class ExcelRealizer(
      * путём, что и одиночный снимок (несколько моделей, сверка расхождений), а строки
      * складываются в порядке набора — в том, какой задал человек на экране набора, иначе по
      * имени файла. Файл один. Страница, которую прочитать не вышло, не выбрасывается молча:
-     * на её месте в таблице стоит помеченная строка с причиной. Не прочиталась ни одна —
-     * отказ, а не пустой файл.
+     * на её месте в таблице стоит помеченная строка. Не прочиталась ни одна — отказ, а не
+     * пустой файл. Страницы набора — снимки, PDF и тексты: то же, что «В Excel» читает и
+     * поодиночке.
      */
     private suspend fun pagesToSheet(input: PointObject): ActionResult {
         val pages = inCollectionOrder(
-            store.children(input).shown.filter { it.state.kind == ObjectKind.IMAGE },
+            store.children(input).shown.filter { it.state.kind in PAGE_KINDS },
             collectionOrder(input.metadata),
         ) { it.metadata["name"].orEmpty() }
         if (pages.isEmpty()) {
-            return ActionResult.Failure("В наборе нет снимков страниц — таблицу читать не с чего", recoverable = true)
+            return ActionResult.Failure(
+                "В наборе нет страниц для таблицы — ни снимка, ни PDF, ни текста",
+                recoverable = true,
+            )
         }
 
         val reads = pages.mapIndexed { i, page -> onPage(i + 1, pages.size) { readPage(page) } }
@@ -217,7 +222,7 @@ class ExcelRealizer(
             reads.mapIndexed { i, read ->
                 when (read) {
                     is PageRead.Table -> read.plan
-                    is PageRead.Refused -> pageGap(i + 1, pages.size, read.reason)
+                    is PageRead.Refused -> pageGap(i + 1, pages.size)
                 }
             },
         )
@@ -239,9 +244,14 @@ class ExcelRealizer(
         )
     }
 
-    /** Место непрочитанной страницы в общей таблице — помеченная строка с причиной. */
-    private fun pageGap(n: Int, total: Int, reason: String) = SheetPlan(
-        rows = listOf(listOf("⚠ Страница $n из $total не прочиталась — $reason")),
+    /**
+     * Место непрочитанной страницы в общей таблице — помеченная строка. Причина отказа в файл
+     * человека не кладётся: это слова модели или транспорта, а не документа. Причина уходит
+     * на экран только когда не прочиталась ни одна страница — тем же отказом, что и у
+     * одиночного снимка.
+     */
+    private fun pageGap(n: Int, total: Int) = SheetPlan(
+        rows = listOf(listOf("⚠ Страница $n из $total не прочиталась — проверьте её отдельно")),
         headerRows = emptySet(),
     )
 

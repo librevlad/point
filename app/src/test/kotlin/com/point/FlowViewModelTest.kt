@@ -2835,6 +2835,49 @@ class FlowViewModelTest {
         assertTrue(again.obj.metadata.keys.none { it.startsWith(com.point.core.flow.META_COLLECTION_ORDER + ".") })
     }
 
+    /**
+     * Порядок страниц разложенного PDF — знание набора страниц, не документа (#1207):
+     * `landFindings` разнёс бы его и в исходник кадра, и в карточку PDF в «Недавнем».
+     */
+    @Test fun `порядок страниц не утекает в исходник набора`() = runTest(dispatcher) {
+        fun page(name: String) = PointObject(
+            name, "image/png", ScratchRef("/$name"), ObjectState(ObjectKind.IMAGE), mapOf("name" to name),
+        )
+        val born = PointObject(
+            "in:pages", "inode/directory", ScratchRef("/pages"), ObjectState(ObjectKind.COLLECTION),
+            mapOf("name" to "Страницы"), sourceObjects = listOf("in"),
+        )
+        resolver.result = ActionResult.Done(
+            "Страницы — готово",
+            com.point.core.model.Findings(
+                objects = listOf(born),
+                relations = listOf(
+                    com.point.core.model.Relation(born.id, com.point.core.model.RelationType.DERIVED_FROM, "in"),
+                ),
+            ),
+        )
+        store.kind = ObjectKind.PDF
+        store.content = CollectionContent(shown = listOf(page("1.png"), page("2.png")), total = 2)
+        val vm = vm()
+        vm.onShared("uri", "application/pdf"); advanceUntilIdle()
+        vm.onBubble(bubble()); advanceUntilIdle()
+        vm.onFound(vm.ui.value.frame!!.found.single()); advanceUntilIdle()
+        assertEquals(ObjectKind.COLLECTION, vm.ui.value.frame?.obj?.state?.kind)
+
+        vm.moveItem(page("2.png"), -1); advanceUntilIdle()
+
+        val key = com.point.core.flow.META_COLLECTION_ORDER
+        assertEquals(listOf("2.png", "1.png"), com.point.core.flow.collectionOrder(vm.ui.value.frame!!.obj.metadata))
+        assertTrue("набор доехал до «Недавнего» со своим порядком", history.updated.any { it.id == born.id && key in it.metadata })
+
+        vm.onBack()
+        val pdf = vm.ui.value.frame!!
+        assertEquals("in", pdf.obj.id)
+        assertNull("порядок страниц — не знание PDF", pdf.obj.metadata[key])
+        assertTrue("в «Недавнее» PDF с порядком не уезжал", history.updated.none { it.id == "in" && key in it.metadata })
+        assertTrue(snapshot.saved.last().none { it.id == "in" && key in it.metadata })
+    }
+
     @Test fun `страницу не увести за край списка`() = runTest(dispatcher) {
         fun page(name: String) = PointObject(
             name, "image/jpeg", ScratchRef("/$name"), ObjectState(ObjectKind.IMAGE), mapOf("name" to name),

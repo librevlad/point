@@ -1096,8 +1096,11 @@ class FlowViewModel @Inject constructor(
      *
      * Несколько фото одной накладной приходят в порядке съёмки, и именно этот порядок
      * нужен «Сканировать в PDF» и «В Excel». Человек двигает страницу на шаг — список на
-     * экране меняется сразу, а порядок ложится в сам объект-набор тем же путём, что и
-     * любое другое знание (`landFindings`): он переживёт возврат к набору и «Недавнее».
+     * экране меняется сразу, а порядок ложится в сам объект-набор тем же merge-путём, что и
+     * любое другое знание (`applyEnrichment`): он переживёт возврат к набору и «Недавнее».
+     *
+     * Только в набор: `landFindings` разносит знание и в исходник кадра, а порядок страниц
+     * разложенного PDF — знание набора страниц, не документа. В PDF ему делать нечего.
      */
     fun moveItem(item: PointObject, by: Int) {
         val index = stack.lastIndex
@@ -1110,14 +1113,19 @@ class FlowViewModel @Inject constructor(
         val refreshed = top.copy(items = moved)
         stack[index] = refreshed
         _ui.update { if (it.frame?.obj?.id == top.obj.id) it.copy(frame = refreshed) else it }
-        landFindings(
-            com.point.core.model.Findings(
+        applyEnrichment(
+            top.obj,
+            EnrichmentUpdate(
+                features = emptySet(),
                 metadata = mapOf(
                     com.point.core.flow.META_COLLECTION_ORDER to
                         com.point.core.flow.collectionOrderValue(moved.mapNotNull { it.metadata["name"] }),
                 ),
+                running = top.enriching,
             ),
         )
+        // Карточка «Недавнего» несёт знание набора — порядок обязан дойти и до неё.
+        stack.getOrNull(index)?.obj?.let { set -> viewModelScope.launch { runCatching { history.update(set) } } }
     }
 
     /** Миниатюра страницы набора — тем же чтением, что и превью снимка (#1207). */

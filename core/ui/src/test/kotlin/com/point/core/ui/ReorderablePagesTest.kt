@@ -8,7 +8,10 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** Стрелки перестановки — у набора страниц, а не у любого списка файлов (#1207). */
+/**
+ * Стрелки перестановки — у набора страниц, а не у любого списка файлов (#1207). Страница —
+ * то, что читается в таблицу и поодиночке: снимок, PDF, текст.
+ */
 class ReorderablePagesTest {
 
     private fun item(kind: ObjectKind, name: String) =
@@ -20,18 +23,20 @@ class ReorderablePagesTest {
     }
 
     @Test
-    fun `снимки среди прочих файлов всё равно страницы`() {
+    fun `снимок, PDF и текст — страницы одного набора, даже среди прочих файлов`() {
         assertTrue(
             reorderablePages(
-                listOf(item(ObjectKind.IMAGE, "1.jpg"), item(ObjectKind.PDF, "a.pdf"), item(ObjectKind.IMAGE, "2.jpg")),
+                listOf(item(ObjectKind.IMAGE, "1.jpg"), item(ObjectKind.ZIP, "a.zip"), item(ObjectKind.PDF, "2.pdf")),
             ),
         )
+        assertTrue(reorderablePages(listOf(item(ObjectKind.TEXT, "a.txt"), item(ObjectKind.TEXT, "b.txt"))))
     }
 
     @Test
-    fun `один снимок или набор без снимков переставлять нечего`() {
+    fun `одна страница или набор без страниц — переставлять нечего`() {
         assertFalse(reorderablePages(listOf(item(ObjectKind.IMAGE, "1.jpg"))))
-        assertFalse(reorderablePages(listOf(item(ObjectKind.TEXT, "a.txt"), item(ObjectKind.PDF, "b.pdf"))))
+        assertFalse(reorderablePages(listOf(item(ObjectKind.IMAGE, "1.jpg"), item(ObjectKind.AUDIO, "b.ogg"))))
+        assertFalse(reorderablePages(listOf(item(ObjectKind.ZIP, "a.zip"), item(ObjectKind.OFFICE, "b.docx"))))
         assertFalse(reorderablePages(emptyList()))
     }
 }

@@ -12,7 +12,6 @@ import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.io.File
 import javax.inject.Inject
 
 class ScanPdfCapability @Inject constructor() : Capability {
@@ -35,14 +34,7 @@ class ScanPdfRealizer @Inject constructor(
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
             runCatching {
-                imagesToPdf(
-                    store,
-                    File(input.uri.value),
-                    name = "скан.pdf",
-                    op = "scan-pdf",
-                    process = ::scanPage,
-                    order = com.point.core.flow.collectionOrder(input.metadata),
-                )
+                imagesToPdf(store, input, name = "скан.pdf", op = "scan-pdf", process = ::scanPage)
             }.getOrElse { ActionResult.Failure(it.message ?: "Ошибка сканирования в PDF", recoverable = true) }
         }
 }

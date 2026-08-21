@@ -12,7 +12,6 @@ import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.io.File
 import javax.inject.Inject
 
 class MergePdfCapability @Inject constructor() : Capability {
@@ -35,13 +34,7 @@ class MergePdfRealizer @Inject constructor(
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
             runCatching {
-                imagesToPdf(
-                    store,
-                    File(input.uri.value),
-                    name = "документ.pdf",
-                    op = "merge-pdf",
-                    order = com.point.core.flow.collectionOrder(input.metadata),
-                )
+                imagesToPdf(store, input, name = "документ.pdf", op = "merge-pdf")
             }.getOrElse { ActionResult.Failure(it.message ?: "Ошибка объединения в PDF", recoverable = true) }
         }
 }

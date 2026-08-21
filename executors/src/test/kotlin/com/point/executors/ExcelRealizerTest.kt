@@ -710,8 +710,24 @@ class ExcelRealizerTest {
         assertEquals(listOf("Гречка", "2"), rows[1])
         val gap = rows[2].single()
         assertTrue("место второй страницы помечено: $gap", gap.contains('⚠') && gap.contains("2 из 3"))
+        assertFalse("сырые слова модели в файл человека не попадают", gap.contains("не разобрать"))
         assertEquals(listOf("Соль", "3"), rows[3])
         assertEquals("1", (result as ActionResult.Success).result.metadata[META_TABLE_PAGES_UNREAD])
+    }
+
+    @Test
+    fun `страницы-тексты набора читаются так же, как снимки`() = runTest {
+        fun textPage(name: String, text: String): PointObject {
+            val f = File.createTempFile("point-page", ".txt").apply { deleteOnExit(); writeText(text) }
+            return PointObject(name, "text/plain", ScratchRef(f.absolutePath), ObjectState(ObjectKind.TEXT), mapOf("name" to name))
+        }
+        pages = listOf(textPage("2.txt", "вторая"), textPage("1.txt", "первая"))
+        val reader = readerByPage(mapOf("1.txt" to """[["A"],["первая"]]""", "2.txt" to """[["A"],["вторая"]]"""))
+
+        val result = ExcelRealizer(listOf(reader), writer, noCrops, scratch, testKnowledge()).perform(set)
+
+        assertTrue(result is ActionResult.Success)
+        assertEquals(listOf(listOf("A"), listOf("первая"), listOf("вторая")), lastRows)
     }
 
     @Test
@@ -726,9 +742,10 @@ class ExcelRealizerTest {
     }
 
     @Test
-    fun `набор без снимков — честный отказ`() = runTest {
+    fun `набор без страниц — ни снимка, ни PDF, ни текста — честный отказ`() = runTest {
         pages = listOf(
-            PointObject("a", "text/plain", ScratchRef("/tmp/a.txt"), ObjectState(ObjectKind.TEXT), mapOf("name" to "a.txt")),
+            PointObject("a", "application/zip", ScratchRef("/tmp/a.zip"), ObjectState(ObjectKind.ZIP), mapOf("name" to "a.zip")),
+            PointObject("b", "audio/ogg", ScratchRef("/tmp/b.ogg"), ObjectState(ObjectKind.AUDIO), mapOf("name" to "b.ogg")),
         )
 
         val result = realizer("""[["A"]]""").perform(set)

@@ -58,6 +58,17 @@ fun <T> collectionContent(
  */
 const val META_COLLECTION_ORDER = "collection.order"
 
+/**
+ * Что в наборе считается страницей (#1207): то, что читается в таблицу и само по себе, —
+ * снимок, PDF, текст. У таких вещей порядок в наборе имеет смысл: его показывают, меняют и
+ * читают действия над набором. Остальное (архив, документ, запись) страницей не является.
+ */
+val PAGE_KINDS: Set<com.point.core.model.ObjectKind> = setOf(
+    com.point.core.model.ObjectKind.IMAGE,
+    com.point.core.model.ObjectKind.PDF,
+    com.point.core.model.ObjectKind.TEXT,
+)
+
 fun collectionOrder(metadata: Map<String, String>): List<String> =
     metadata[META_COLLECTION_ORDER]?.split(ORDER_SEPARATOR)?.filter { it.isNotEmpty() }.orEmpty()
 

@@ -5,6 +5,7 @@ import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import com.point.core.model.ObjectKind
@@ -79,13 +80,28 @@ class PagesCanBeReorderedTest {
     }
 
     @Test
-    fun `список файлов без снимков — не страницы, стрелок нет`() {
+    fun `список файлов без страниц — стрелок нет`() {
         val files = listOf(
-            PointObject("a", "text/plain", ScratchRef("/a.txt"), ObjectState(ObjectKind.TEXT), mapOf("name" to "a.txt")),
-            PointObject("b", "application/pdf", ScratchRef("/b.pdf"), ObjectState(ObjectKind.PDF), mapOf("name" to "b.pdf")),
+            PointObject("a", "application/zip", ScratchRef("/a.zip"), ObjectState(ObjectKind.ZIP), mapOf("name" to "a.zip")),
+            PointObject("b", "audio/ogg", ScratchRef("/b.ogg"), ObjectState(ObjectKind.AUDIO), mapOf("name" to "b.ogg")),
         )
         screen(items = files) { _, _ -> }
 
         compose.onAllNodesWithContentDescription(PAGE_UP).assertCountEquals(0)
+    }
+
+    @Test
+    fun `стрелка вниз ходит в пределах показанного — за «Показать ещё» страница не уезжает`() {
+        val many = (1..COLLECTION_PAGE + 1).map { page("IMG_%02d.jpg".format(it)) }
+        screen(items = many) { _, _ -> }
+
+        compose.onAllNodesWithContentDescription(PAGE_DOWN).assertCountEquals(COLLECTION_PAGE)
+        compose.onAllNodesWithContentDescription(PAGE_DOWN)[COLLECTION_PAGE - 1].assertIsNotEnabled()
+
+        compose.onNodeWithText("Показать ещё", substring = true).performScrollTo().performClick()
+
+        compose.onAllNodesWithContentDescription(PAGE_DOWN).assertCountEquals(COLLECTION_PAGE + 1)
+        compose.onAllNodesWithContentDescription(PAGE_DOWN)[COLLECTION_PAGE - 1].assertIsEnabled()
+        compose.onAllNodesWithContentDescription(PAGE_DOWN)[COLLECTION_PAGE].assertIsNotEnabled()
     }
 }
