@@ -119,7 +119,7 @@ class OcrInvestigationRealizer @Inject constructor(
         val broken = layer.incomplete
         if (broken != null && layer.atoms.isEmpty() && layer.text.isBlank()) {
             // Человеку — свои слова, чужое «decode failed» остаётся в журнале (#686).
-            val reason = readerFailure(broken)
+            val reason = readerFailure(broken, obj.state.kind)
 
             // Годность — часть состояния объекта (#684/#685): когда дело в самом объекте
             // (испорчен, не изображение вовсе), это не провал операции, а знание — оно

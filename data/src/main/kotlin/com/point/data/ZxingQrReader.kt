@@ -10,6 +10,7 @@ import com.point.core.flow.CodeKind
 import com.point.core.flow.QrReader
 import com.point.core.flow.ScannedCode
 import com.point.core.flow.readerFailure
+import com.point.core.model.ObjectKind
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -62,5 +63,6 @@ class ZxingQrReader @Inject constructor() : QrReader {
 
 // Тот же факт, что и у распознавания текста (#686): «файл не открылся» — одними
 // словами, чтобы дедуп в failedNote() схлопывал совпавшие причины, а не печатал
-// одну беду дважды.
-internal val UNREADABLE_IMAGE = readerFailure(null)
+// одну беду дважды. Читатель кодов получает путь к снимку, а не объект, поэтому вид
+// здесь задан контрактом — изображение (#1033).
+internal val UNREADABLE_IMAGE = readerFailure(null, ObjectKind.IMAGE)

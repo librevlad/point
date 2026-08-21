@@ -76,7 +76,7 @@ class PaddleOcrRecognizer @Inject constructor(
             return@withContext AtomLayer(emptyList(), incomplete = FOREIGN_ABI)
         }
         val source = decodeBoundedUpright(obj.uri.value, MAX_PX)
-            ?: return@withContext AtomLayer(emptyList(), incomplete = readerFailure(null))
+            ?: return@withContext AtomLayer(emptyList(), incomplete = readerFailure(null, obj.state.kind))
 
         try {
             val lines = runCatching { detect(source) }.getOrElse {
