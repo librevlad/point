@@ -113,6 +113,7 @@ class HomeActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        viewModel.returnedToPoint()
         if (!viewModel.hasFlow()) viewModel.loadRecent()
 
         viewModel.resumeSignIn()

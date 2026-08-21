@@ -28,12 +28,18 @@ class AndroidCalendarInserter @Inject constructor(
                 .putExtra(CalendarContract.EXTRA_EVENT_END_TIME, from + DAY_MS)
                 .putExtra(CalendarContract.EXTRA_EVENT_ALL_DAY, true)
         }
+        // Слово об отсутствии календаря звучит до чужого экрана (#1131): честный отказ
+        // вместо дороги в системный вход, из которого человек вернётся ни с чем.
+        if (intent.resolveActivity(context.packageManager) == null) error(NO_CALENDAR)
         try {
             context.startActivity(intent)
         } catch (e: ActivityNotFoundException) {
-            error("Нет приложения-календаря")
+            error(NO_CALENDAR)
         }
     }
 
-    private companion object { const val DAY_MS = 24L * 60 * 60 * 1000 }
+    companion object {
+        private const val DAY_MS = 24L * 60 * 60 * 1000
+        const val NO_CALENDAR = "На этом устройстве нет календаря"
+    }
 }
