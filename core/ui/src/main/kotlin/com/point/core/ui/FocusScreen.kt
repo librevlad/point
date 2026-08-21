@@ -66,7 +66,7 @@ internal val FOCUS_TOOL_LABELS = mapOf(
     FocusTool.ERASER to "Ластик",
 )
 
-internal const val FOCUS_TITLE = "Focus"
+internal const val FOCUS_TITLE = "Выделение"
 
 internal const val FOCUS_HINT = "Выделите область, в которой находится нужная информация"
 
