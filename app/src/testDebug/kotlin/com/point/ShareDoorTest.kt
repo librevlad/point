@@ -9,12 +9,14 @@ import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.shadows.ShadowToast
 import java.io.File
 
 @OptIn(ExperimentalTestApi::class)
@@ -54,12 +56,35 @@ class ShareDoorTest {
     }
 
     @Test fun `Share без содержимого объясняет отказ словами`() {
-        val intent = shared()
+        val intent = Intent(context, ShareActivity::class.java).setAction(Intent.ACTION_SEND).setType("image/*")
 
         ActivityScenario.launch<ShareActivity>(intent).use {
             compose.waitUntilAtLeastOneExists(hasText("Point не понял", substring = true), TIMEOUT_MS)
         }
     }
+
+    // Пустой текстовый вход отвечает словом, без объекта и экрана (#1096,
+    // решение владельца 20.08.2026) — тем же, что и пустое выделение в меню текста.
+
+    @Test fun `Share текста без текста отвечает словом — объекта нет, экран не поднимается`() {
+        val activity = Robolectric.buildActivity(ShareActivity::class.java, shared()).create().get()
+
+        assertEquals(EMPTY_SELECTION_WORDS, ShadowToast.getTextOfLatestToast())
+        assertTrue("экран не должен подниматься", activity.isFinishing)
+        assertTrue("объект из пустоты: появились байты", sharedTextLeftovers().isEmpty())
+    }
+
+    @Test fun `Share пробелов не рождает объект из пробелов`() {
+        val intent = shared().putExtra(Intent.EXTRA_TEXT, "   ")
+        val activity = Robolectric.buildActivity(ShareActivity::class.java, intent).create().get()
+
+        assertEquals(EMPTY_SELECTION_WORDS, ShadowToast.getTextOfLatestToast())
+        assertTrue("экран не должен подниматься", activity.isFinishing)
+        assertTrue("объект из пробелов: появились байты", sharedTextLeftovers().isEmpty())
+    }
+
+    private fun sharedTextLeftovers(): List<File> =
+        File(context.cacheDir, "shared-text").walkTopDown().filter(File::isFile).toList()
 
     @Test fun `второй объект в живое приложение открывает второй объект`() {
         val first = shared().putExtra(Intent.EXTRA_TEXT, "Первый объект")
