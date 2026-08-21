@@ -93,3 +93,79 @@ fun fixedMessage(count: Int): String = when {
     count <= 0 -> "Ошибок не нашлось — знание оставлено как было"
     else -> "Исправлено: $count"
 }
+
+/**
+ * Правка самого текста (#1023): у текстового объекта знание — это его текст, и первая ступень
+ * проверяет именно его, а не сводку извлечённых значений. Прежде модели уходил один список
+ * «1 = 17.08.2026», пять опечаток в тексте никто не смотрел, а итог звучал «Ошибок не нашлось».
+ *
+ * Протокол тот же по духу, что и у значений: модель возвращает только пары «было = стало», и
+ * фрагмент, которого в тексте нет, молчит — придумать правку для несуществующего нельзя.
+ */
+data class TextFix(val was: String, val now: String)
+
+/** Текст после правок и сами правки — ровно те, что в него легли: это и есть видимая дельта. */
+data class FixedText(val text: String, val fixes: List<TextFix>)
+
+fun fixTextPrompt(text: String): String = buildString {
+    append("Ниже текст. В нём бывают опечатки и описки: перепутанные, пропущенные или лишние ")
+    append("буквы, слипшиеся или разорванные слова, мусор, вклинившийся в слово.\n\n")
+    append(text)
+    append("\n\n")
+    append("Верни ТОЛЬКО строки вида «было = стало», по одной на строку, и только там, где ")
+    append("действительно нужна правка. «Было» — фрагмент ровно так, как он стоит в тексте ")
+    append("(целое слово или несколько слов подряд), «стало» — тот же фрагмент исправленным. ")
+    append("Смысл, стиль и порядок слов не меняй и ничего не додумывай. ")
+    append("Сами числа, даты и суммы не трогай — только слово, в которое вклинился мусор. ")
+    append("Если править нечего — ответь ровно ").append(FIX_NOTHING).append('.')
+}
+
+/**
+ * Разбор ответа и правка текста в один проход: правка ложится, только если «было» стоит в
+ * тексте целым фрагментом — внутри другого слова оно не трогается («Эт» не правит «Этот»).
+ * Чужие фрагменты, пустые строки и мусор молчат; в дельту попадает лишь то, что легло.
+ */
+fun fixText(text: String, answer: String): FixedText {
+    var current = text
+    val landed = ArrayList<TextFix>()
+    answer.lineSequence().forEach { raw ->
+        val line = raw.trim()
+        val eq = line.indexOf('=')
+        if (eq <= 0) return@forEach
+        val was = line.substring(0, eq).trim()
+        val now = line.substring(eq + 1).trim()
+        if (was.isEmpty() || now.isEmpty() || was == now) return@forEach
+        val replaced = replaceWhole(current, was, now)
+        if (replaced == current) return@forEach
+        current = replaced
+        landed += TextFix(was, now)
+    }
+    return FixedText(current, landed)
+}
+
+/** Итог с видимой дельтой: что было и что стало — человек видит правку, а не только счёт. */
+fun fixedTextMessage(fixes: List<TextFix>): String = when {
+    fixes.isEmpty() -> "Ошибок не нашлось — текст оставлен как был"
+    else -> "Исправлено: ${fixes.size} — " + fixes.joinToString(", ") { "«${it.was}» → «${it.now}»" }
+}
+
+/** Замена всех вхождений [was] целиком: по краям фрагмента не должно продолжаться слово. */
+private fun replaceWhole(text: String, was: String, now: String): String {
+    val out = StringBuilder()
+    var from = 0
+    while (true) {
+        val at = text.indexOf(was, from)
+        if (at < 0) break
+        val end = at + was.length
+        val startsWord = was.first().isLetterOrDigit() && at > 0 && text[at - 1].isLetterOrDigit()
+        val endsWord = was.last().isLetterOrDigit() && end < text.length && text[end].isLetterOrDigit()
+        if (startsWord || endsWord) {
+            out.append(text, from, at + 1)
+            from = at + 1
+            continue
+        }
+        out.append(text, from, at).append(now)
+        from = end
+    }
+    return out.append(text, from, text.length).toString()
+}
