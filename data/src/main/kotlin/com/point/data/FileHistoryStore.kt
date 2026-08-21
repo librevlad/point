@@ -105,7 +105,10 @@ class FileHistoryStore @Inject constructor(
         val file = File(entry.ref.value)
         if (!file.exists()) return@withContext null
         val size = file.length()
-        val fresh = classifier.classify(entry.mime, size, file.name)
+
+        // Байты спрашиваются и при переоткрытии (#999): ссылка, принятая ссылкой по адресу в
+        // файле, без них возвращалась бы из «Недавнего» текстом, а файл без адреса — ссылкой.
+        val fresh = classifier.classify(entry.mime, size, file.name, headOf(file))
         PointObject(
             id = entry.id,
             mime = entry.mime,

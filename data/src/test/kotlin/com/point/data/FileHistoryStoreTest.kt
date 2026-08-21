@@ -362,6 +362,44 @@ class FileHistoryStoreTest {
         assertEquals(50, filesOnDisk().size)
     }
 
+    // ---- #999: ссылка, принятая по адресу в файле, переоткрывается ссылкой — байты читаются и тут. ----
+
+    @Test
+    fun `ссылка файлом возвращается из Недавнего ссылкой со своим адресом`() = runTest {
+        val address = "https://example.com/pointtest?a=1"
+        val file = File.createTempFile("src-", ".uri").apply { writeText("$address\n"); deleteOnExit() }
+        store.record(
+            PointObject(
+                id = "link",
+                mime = "text/uri-list",
+                uri = ScratchRef(file.absolutePath),
+                state = ObjectState(ObjectKind.URL, setOf(Feature.HAS_URL)),
+                metadata = mapOf("name" to "link.txt", "entity.url" to address),
+            ),
+        )
+
+        val reopened = store.open("link")!!
+
+        assertEquals(ObjectKind.URL, reopened.state.kind)
+        assertEquals(address, reopened.metadata["entity.url"])
+    }
+
+    @Test
+    fun `файл под видом ссылки без адреса и из Недавнего возвращается файлом`() = runTest {
+        val file = File.createTempFile("src-", ".uri").apply { writeText("адреса тут нет"); deleteOnExit() }
+        store.record(
+            PointObject(
+                id = "not-a-link",
+                mime = "text/uri-list",
+                uri = ScratchRef(file.absolutePath),
+                state = ObjectState(ObjectKind.TEXT),
+                metadata = mapOf("name" to "not-a-link.txt"),
+            ),
+        )
+
+        assertEquals(ObjectKind.TEXT, store.open("not-a-link")!!.state.kind)
+    }
+
     @Test
     fun `убрать несуществующую запись — не потерять существующие (#543)`() = runTest {
         store.record(textObject("a", "первый", "a.txt"))
