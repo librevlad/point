@@ -3,7 +3,6 @@ package com.point.desktop.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.focusable
 import androidx.compose.foundation.draganddrop.dragAndDropTarget
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -41,13 +40,10 @@ import androidx.compose.ui.draganddrop.DragAndDropEvent
 import androidx.compose.ui.draganddrop.DragAndDropTarget
 import androidx.compose.ui.draganddrop.awtTransferable
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -188,14 +184,6 @@ fun CompactApp(
         }
     }
 
-    val hotkeys = remember { FocusRequester() }
-
-    // Фокус клавиш просится на каждом фокусе окна, а не один раз при старте (#1025):
-    // окно, показанное без фокуса ОС, съедало единственный requestFocus впустую — Esc
-    // молчал, пока фокус не добывали Tab'ом. Живая Windows, владелец 20.08.2026.
-    val windowFocused = androidx.compose.ui.platform.LocalWindowInfo.current.isWindowFocused
-    LaunchedEffect(windowFocused) { hotkeys.requestFocus() }
-
     // Окно ведёт себя как окно: уход в другое приложение его не закрывает (владелец
     // 12.08.2026: «сделай десктопное окно нормальным, чтобы не пришлось жать кнопку не
     // закрывать»). Прежде это был флайаут — потерял фокус и исчез, — и человек, уходивший
@@ -208,9 +196,10 @@ fun CompactApp(
             .border(1.dp, PointColors.border, RoundedCornerShape(16.dp))
             .clip(RoundedCornerShape(16.dp))
             .dragAndDropTarget(shouldStartDragAndDrop = { true }, target = dropTarget)
-            .focusRequester(hotkeys)
-            .focusable()
-            .onPreviewKeyEvent { event ->
+
+            // Клавиши окна — в `windowKeys`: корень слышит их сам, но не выдёргивает
+            // курсор из поля, в которое человек печатает (#1025).
+            .windowKeys { event ->
                 val down = event.type == androidx.compose.ui.input.key.KeyEventType.KeyDown
                 val paste = down && event.isCtrlPressed && event.isShiftPressed &&
                     event.key == androidx.compose.ui.input.key.Key.V
