@@ -8,6 +8,8 @@ import com.point.core.flow.META_UNUSABLE_REASON
 import com.point.core.flow.ObjectClassifier
 import com.point.core.model.Feature
 import com.point.core.model.ObjectKind
+import com.point.core.model.ResultObject
+import com.point.core.model.ScratchRef
 import com.point.data.ScratchObjectStore
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -97,6 +99,17 @@ class ScratchObjectStoreTest {
 
         assertEquals(ObjectKind.URL, obj.state.kind)
         assertEquals(address, obj.metadata[META_ENTITY_PREFIX + "url"])
+    }
+
+    @Test fun `ссылка, сделанная действием, тоже приходит со своим адресом`() = runBlocking {
+        val address = "https://example.com/vylozheno?a=1"
+        val made = File(scratch, "made.uri").apply { parentFile?.mkdirs(); writeText("# сделано действием\r\n$address\r\n") }
+
+        val obj = store.put(ResultObject(ObjectKind.URL, "text/uri-list", ScratchRef(made.absolutePath)))
+
+        assertEquals(ObjectKind.URL, obj.state.kind)
+        assertEquals(address, obj.metadata[META_ENTITY_PREFIX + "url"])
+        assertTrue("адрес есть — признак ссылки обязан стоять", obj.state.has(Feature.HAS_URL))
     }
 
     @Test fun `файл под видом ссылки без адреса — файл, а не ссылка`() = runBlocking {

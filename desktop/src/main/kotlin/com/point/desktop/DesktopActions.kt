@@ -4,7 +4,9 @@ import com.point.core.flow.Capability
 import com.point.core.flow.ClipboardPayload
 import com.point.core.flow.CapabilityMeta
 import com.point.core.flow.Latency
+import com.point.core.flow.META_ENTITY_URL
 import com.point.core.flow.Realizer
+import com.point.core.flow.uriListAddressOf
 import com.point.core.model.ActionResult
 import com.point.core.model.CapabilityId
 import com.point.core.model.ObjectKind
@@ -170,8 +172,13 @@ class PcDownloadRealizer(private val downloader: VideoDownloader) : Realizer {
     override val capabilityId = CapabilityId("pc-download")
 
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult {
-        val url = runCatching { File(input.uri.value).readText() }.getOrDefault("")
-            .lineSequence().map(String::trim).firstOrNull { it.startsWith("http://") || it.startsWith("https://") }
+
+        // Адрес спрашивается у знания объекта, а не у байтов заново (#999): ссылка приходит
+        // сюда со знанием `entity.url`, а если его нет — читается тем же единственным
+        // правилом разбора `text/uri-list`, что и при рождении объекта. Своего разбора здесь
+        // больше нет: два правила разъезжаются молча.
+        val url = input.metadata[META_ENTITY_URL]?.takeIf(String::isNotBlank)
+            ?: uriListAddressOf(input.uri.value)
             ?: return ActionResult.Failure("Здесь нет ссылки — скачивать нечего", recoverable = true)
         return if (downloader.start(url)) {
             ActionResult.Done("Скачиваю: $url")

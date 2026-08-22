@@ -7,15 +7,13 @@ import android.util.Log
 import android.webkit.MimeTypeMap
 import com.point.core.flow.CollectionContent
 import com.point.core.flow.EMPTY_FILE_REASON
-import com.point.core.flow.META_ENTITY_PREFIX
 import com.point.core.flow.META_SIZE
 import com.point.core.flow.META_UNUSABLE_REASON
 import com.point.core.flow.ObjectClassifier
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.collectionContent
-import com.point.core.flow.uriListAddress
-import com.point.core.model.Feature
-import com.point.core.model.ObjectKind
+import com.point.core.flow.fileHead
+import com.point.core.flow.knowingAddress
 import com.point.core.model.PointObject
 import com.point.core.model.ResultObject
 import com.point.core.model.ScratchRef
@@ -58,26 +56,18 @@ class ScratchObjectStore @Inject constructor(
                 // Имя показывается человеку и уезжает дальше — в «Сохранить», в имя копии
                 // на компьютере, в экспорт. Чистится один раз здесь, у входа (#865).
                 val name = displayName(uri)?.let { com.point.core.flow.safeFileName(it) }
-                val state = classifier.classify(mime, size, name, headOf(dest))
-
-                // Ссылка, пришедшая файлом, знает свой адрес с первой секунды (#999): адрес
-                // читается из файла и ложится знанием `entity.url` — тем же, что у ссылки,
-                // присланной текстом. Голова файла решила вид, но длинный адрес в неё может
-                // не влезть — строка читается целиком.
-                val address = if (state.kind == ObjectKind.URL) uriListAddress(textHeadOf(dest, ADDRESS_CHARS)) else null
                 PointObject(
                     id = id,
                     mime = mime,
                     uri = ScratchRef(dest.absolutePath),
-                    state = if (address == null) state else state.with(Feature.HAS_URL),
+                    state = classifier.classify(mime, size, name, headOf(dest)),
 
                     metadata = buildMap {
                         name?.let { put("name", it) }
                         put(META_SIZE, size.toString())
                         putAll(emptyFileFact(size))
-                        address?.let { put(META_ENTITY_PREFIX + "url", it) }
                     },
-                )
+                ).knowingAddress()
             }
         }
 
@@ -114,12 +104,18 @@ class ScratchObjectStore @Inject constructor(
     ): PointObject =
         withContext(Dispatchers.IO) {
 
-            val size = File(result.uri.value).length()
+            val file = File(result.uri.value)
+            val size = file.length()
             PointObject(
                 id = UUID.randomUUID().toString(),
                 mime = result.mime,
                 uri = result.uri,
-                state = classifier.classify(result.mime, size),
+
+                // Результат действия — тоже объект, рождённый из файла: байты спрашиваются и
+                // здесь (#999). Без них ссылка, сделанная действием, приходила бы текстом.
+                // Имя не спрашивается: у результата это человеческая подпись («ссылка на
+                // отчёт.pdf»), а не имя файла, и расширение в ней врёт.
+                state = classifier.classify(result.mime, size, head = headOf(file)),
 
                 metadata = result.metadata + (META_SIZE to size.toString()) + emptyFileFact(size),
 
@@ -129,7 +125,7 @@ class ScratchObjectStore @Inject constructor(
                 provenance = result.provenance,
                 sourceObjects = listOfNotNull(from?.id),
                 creatorAction = by?.value,
-            )
+            ).knowingAddress()
         }
 
     override suspend fun children(collection: PointObject, limit: Int): CollectionContent<PointObject> =
@@ -158,7 +154,7 @@ class ScratchObjectStore @Inject constructor(
                     provenance = collection.provenance,
                     sourceObjects = listOf(collection.id),
                     creatorAction = collection.creatorAction,
-                )
+                ).knowingAddress()
             }
         }
 
@@ -189,23 +185,7 @@ class ScratchObjectStore @Inject constructor(
     }
 
     override suspend fun readText(obj: PointObject, limit: Int): String =
-        withContext(Dispatchers.IO) { textHeadOf(File(obj.uri.value), limit) }
-
-    // Первые символы файла, не больше [limit]; не файл — пустая строка.
-    private fun textHeadOf(file: File, limit: Int): String {
-        if (!file.isFile) return ""
-
-        val out = StringBuilder()
-        val buffer = CharArray(8192)
-        file.bufferedReader().use { reader ->
-            while (out.length < limit) {
-                val n = reader.read(buffer)
-                if (n < 0) break
-                out.append(buffer, 0, minOf(n, limit - out.length))
-            }
-        }
-        return out.toString()
-    }
+        withContext(Dispatchers.IO) { fileHead(obj.uri.value, limit) }
 
     override suspend fun newScratchFile(extension: String): ScratchRef =
         withContext(Dispatchers.IO) {
@@ -258,16 +238,12 @@ class ScratchObjectStore @Inject constructor(
 
     private companion object {
         const val TAG = "PointScratch"
-
-        // Сколько символов читать ради адреса ссылки (#999): любому адресу хватает, а весь
-        // файл читать незачем.
-        const val ADDRESS_CHARS = 64 * 1024
     }
 }
 
 // Первые байты объекта для классификации: имя и mime могут молчать, байты — нет. Одни и
-// те же для приёма и для переоткрытия из «Недавнего» (#999): вид, поставленный по байтам,
-// не должен меняться оттого, что объект открыли второй раз.
+// те же во всех дверях, где объект рождается из файла (#999): вид, поставленный по байтам,
+// не должен меняться оттого, что объект пришёл другой дверью или его открыли второй раз.
 internal fun headOf(file: File): ByteArray = runCatching {
     file.inputStream().use { it.readNBytes(512) }
 }.getOrDefault(ByteArray(0))

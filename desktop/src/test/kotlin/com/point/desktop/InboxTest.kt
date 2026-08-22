@@ -1,5 +1,6 @@
 package com.point.desktop
 
+import com.point.core.flow.META_ENTITY_URL
 import com.point.core.flow.META_UNUSABLE_REASON
 import com.point.core.model.Feature
 import com.point.core.model.ObjectKind
@@ -76,5 +77,20 @@ class InboxTest {
 
         assertFalse(item.obj.state.has(Feature.UNUSABLE))
         assertNull(item.obj.metadata[META_UNUSABLE_REASON])
+    }
+
+    // ---- #999: приём с телефона — такая же дверь рождения объекта, адрес читается и здесь. ----
+
+    @Test
+    fun `ссылка, принятая с телефона, знает свой адрес`() {
+        val address = "https://example.com/pointtest?a=1"
+        val item = Inbox(tmp.root).receive(
+            name = "ссылка.txt", mime = "text/uri-list", meta = emptyMap(),
+            source = "# сохранено из браузера\r\n\r\n$address\r\n".byteInputStream(),
+        )
+
+        assertEquals(ObjectKind.URL, item.obj.state.kind)
+        assertEquals(address, item.obj.metadata[META_ENTITY_URL])
+        assertTrue("адрес есть — признак ссылки обязан стоять", item.obj.state.has(Feature.HAS_URL))
     }
 }

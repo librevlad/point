@@ -5,6 +5,7 @@ import com.point.core.flow.META_OCR_TEXT_REF
 import com.point.core.flow.META_READ_TEXT
 import com.point.core.flow.META_UNUSABLE_REASON
 import com.point.core.flow.ObjectClassifier
+import com.point.core.flow.knowingAddress
 import com.point.core.model.Feature
 import com.point.core.model.ObjectKind
 import com.point.core.model.PointObject
@@ -165,6 +166,9 @@ class Inbox(private val dir: File, private val pdf: PdfText = PdfBoxText()) {
             meta2 to state.with(Feature.HAS_TEXT)
         }
 
+        // Приём с телефона — такая же дверь рождения объекта из файла, как приём на самом
+        // телефоне (#999): ссылка приходит сюда со своим адресом, а не одними байтами,
+        // которые каждое действие разбирало бы само.
         return InboxItem(
             PointObject(
                 id = UUID.randomUUID().toString(),
@@ -172,7 +176,7 @@ class Inbox(private val dir: File, private val pdf: PdfText = PdfBoxText()) {
                 uri = ScratchRef(file.absolutePath),
                 state = landed.second,
                 metadata = landed.first,
-            ),
+            ).knowingAddress(),
         )
     }
 }

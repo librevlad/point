@@ -385,6 +385,27 @@ class FileHistoryStoreTest {
     }
 
     @Test
+    fun `запись без адреса возвращается ссылкой со своим адресом — он читается из файла`() = runTest {
+        val address = "https://example.com/staraya-zapis?a=1"
+        val file = File.createTempFile("src-", ".uri")
+            .apply { writeText("# сохранено из браузера\r\n\r\n$address\r\n"); deleteOnExit() }
+        store.record(
+            PointObject(
+                id = "old-link",
+                mime = "text/uri-list",
+                uri = ScratchRef(file.absolutePath),
+                state = ObjectState(ObjectKind.URL),
+                metadata = mapOf("name" to "link.txt"),
+            ),
+        )
+
+        val reopened = store.open("old-link")!!
+
+        assertEquals(address, reopened.metadata["entity.url"])
+        assertTrue("адрес есть — признак ссылки обязан стоять", reopened.state.has(Feature.HAS_URL))
+    }
+
+    @Test
     fun `файл под видом ссылки без адреса и из Недавнего возвращается файлом`() = runTest {
         val file = File.createTempFile("src-", ".uri").apply { writeText("адреса тут нет"); deleteOnExit() }
         store.record(
