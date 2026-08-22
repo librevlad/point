@@ -7,6 +7,7 @@ import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.segmentation.subject.SubjectSegmentation
 import com.google.mlkit.vision.segmentation.subject.SubjectSegmenterOptions
 import com.point.core.flow.BackgroundRemover
+import com.point.core.flow.ENGINE_PREPARING
 import com.point.core.flow.ObjectStore
 import com.point.core.model.ScratchRef
 import kotlinx.coroutines.CancellationException
@@ -25,30 +26,50 @@ class MlKitBackgroundRemover(
         )
     }
 
+    /**
+     * Печать слоя (#992): наружу выходят либо слова Point, либо ничего.
+     *
+     * Раньше перехватывался один вызов — сегментация, — и текст любого другого сбоя внутри
+     * (нет места на диске, не хватило памяти) уходил человеку в лицо через три действия
+     * сразу. Здесь заперт весь слой: чужой текст остаётся в журнале, а безымянный отказ
+     * называет само действие, которое нажал человек.
+     */
     override suspend fun cutout(imagePath: String): ScratchRef = withContext(Dispatchers.IO) {
-        val bitmap = decodeBoundedUpright(imagePath, MAX_PX) ?: error("Не удалось прочитать изображение")
         try {
-            val result = try {
-                segmenter.process(InputImage.fromBitmap(bitmap, 0)).await()
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                // Человеку — свои слова, вендорский текст остаётся в журнале (#686, #992).
-                val code = (e as? MlKitException)?.errorCode
-                Log.w(TAG, "subject segmentation failed" + (code?.let { " (code=$it)" } ?: ""), e)
-                throw IllegalStateException(segmentationFailureWords(code), e)
-            }
-            val foreground = result.foregroundBitmap ?: error("Объект на фото не найден")
+            segment(imagePath)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: OwnWords) {
+            throw e
+        } catch (e: Throwable) {
+            val code = (e as? MlKitException)?.errorCode
+
+            // Журнал не имеет права стать причиной, по которой человек остался без слов.
+            runCatching { Log.w(TAG, "cutout failed" + (code?.let { " (code=$it)" } ?: ""), e) }
+
+            // `UNAVAILABLE` — модуль сегментации ещё качается из Play Services: работа не
+            // начиналась, и лечится это ожиданием. Случай различается по коду исключения,
+            // не по тексту.
+            if (code == MlKitException.UNAVAILABLE) throw OwnWords(ENGINE_PREPARING, e)
+            throw IllegalStateException(null as String?, e)
+        }
+    }
+
+    private suspend fun segment(imagePath: String): ScratchRef {
+        val bitmap = decodeBoundedUpright(imagePath, MAX_PX) ?: throw OwnWords("Не удалось прочитать изображение")
+        try {
+            val result = segmenter.process(InputImage.fromBitmap(bitmap, 0)).await()
+            val foreground = result.foregroundBitmap ?: throw OwnWords("Объект на фото не найден")
             val opaque = opaqueRatio(foreground)
 
-            if (opaque < MIN_OPAQUE_RATIO) error("Объект на фото не найден")
+            if (opaque < MIN_OPAQUE_RATIO) throw OwnWords("Объект на фото не найден")
             if (opaque > MAX_OPAQUE_RATIO) {
-                error("На фото почти нет фона — объект занимает весь кадр")
+                throw OwnWords("На фото почти нет фона — объект занимает весь кадр")
             }
             val ref = store.newScratchFile("png")
             File(ref.value).outputStream().use { foreground.compress(Bitmap.CompressFormat.PNG, 100, it) }
             foreground.recycle()
-            ref
+            return ref
         } finally {
             bitmap.recycle()
         }
@@ -81,17 +102,9 @@ class MlKitBackgroundRemover(
 }
 
 /**
- * Слова Point для отказа движка сегментации: вендорский текст этого слоя на экран
- * не выходит дословно (#992). Различаем по коду [MlKitException], не по тексту.
+ * Слова Point, сказанные о самом объекте: их печать слоя пропускает наружу как есть (#992).
  *
- * `UNAVAILABLE` — модуль сегментации ещё качается из Play Services: случай ожидаемый
- * и лечится ожиданием, поэтому слово зовёт попробовать снова. Всё остальное — общий отказ.
+ * Всё остальное, что вылетает изнутри, — технический текст движка или платформы, и человеку
+ * он не показывается.
  */
-internal fun segmentationFailureWords(mlKitErrorCode: Int?): String =
-    if (mlKitErrorCode == MlKitException.UNAVAILABLE) CUTOUT_ENGINE_PREPARING else CUTOUT_FAILED
-
-/** Слово на время скачивания модуля: случай лечится ожиданием, поэтому зовёт попробовать снова. */
-internal const val CUTOUT_ENGINE_PREPARING = "Готовлю движок выреза — попробуйте через минуту"
-
-/** Общий отказ выреза: вендорский текст остаётся в журнале (#686). */
-internal const val CUTOUT_FAILED = "Убрать фон не вышло"
+private class OwnWords(words: String, cause: Throwable? = null) : IllegalStateException(words, cause)
