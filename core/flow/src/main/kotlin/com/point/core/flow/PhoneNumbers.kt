@@ -129,7 +129,13 @@ object PhoneNumbers {
         return a == b
     }
 
-    /** Разобрать номер той страной, в которой он существует. */
+    /**
+     * Разобрать номер той страной, в которой он существует.
+     *
+     * Годится там, где ответ нужен машине: тождество записей (`e164`) считается по любой
+     * подошедшей стране и от неё не зависит. Человеку так показывать нельзя (#1029) — первая
+     * подошедшая страна становится на экране утверждением, которого никто не проверял.
+     */
     private fun parseAnywhere(text: String, region: String) =
         countryOf(text, region)?.let { parse(text, it) }
 
@@ -137,9 +143,23 @@ object PhoneNumbers {
     fun e164(text: String, region: String = DEFAULT_REGION): String? =
         parseAnywhere(text, region)?.let { util.format(it, PhoneNumberUtil.PhoneNumberFormat.E164) }
 
-    /** Как номер показывается человеку: так, как он привык его видеть. */
+    /**
+     * Как номер показывается человеку: так, как он привык его видеть.
+     *
+     * Формат даёт только известная страна (#1029). Раньше показ звал `parseAnywhere` и брал
+     * **первую подошедшую** страну: чек из Оклахомы с честным `918-682-1551` в графе выходил
+     * на экран как «+49 9186 821551», а на устройстве с американской локалью — как
+     * «(918) 682-1551». Страна в показе зависела от того, где стоит телефон, а не от того,
+     * что написано в документе, и человек не мог отличить угаданное от прочитанного.
+     *
+     * Решение владельца 21.08.2026: не додумывать страну. Пока подходящих стран несколько,
+     * сказать нечего — номер печатается так, как он записан в документе (`shown`).
+     *
+     * Страна устройства решает здесь единственное: называть ли **уже известный** код — свой
+     * человек и так знает. Дописать код, которого в документе нет, она не может.
+     */
     fun human(text: String, region: String = DEFAULT_REGION): String? =
-        parseAnywhere(text, region)?.let { number ->
+        parsedWithKnownCountry(text, region)?.let { number ->
             val format = if (number.countryCode == countryCodeOf(region)) {
                 PhoneNumberUtil.PhoneNumberFormat.NATIONAL
             } else {
@@ -158,12 +178,20 @@ object PhoneNumbers {
      *
      * Записанный международно — с `+` — сомнений не оставляет, и страна называется всегда.
      */
-    fun country(text: String, region: String = DEFAULT_REGION): String? {
-        val fits = candidateRegions(text, region).mapNotNull { parse(text, it) }
-            .map { util.getRegionCodeForNumber(it) }
-            .distinct()
-        return fits.singleOrNull()
-    }
+    fun country(text: String, region: String = DEFAULT_REGION): String? =
+        parsedWithKnownCountry(text, region)?.let { util.getRegionCodeForNumber(it) }
+
+    /**
+     * Номер, разобранный без сомнений: подходящая страна ровно одна.
+     *
+     * Одно и то же место для знания и для показа (#1029): страна, которой нет в графе, не
+     * смеет появиться на экране.
+     */
+    private fun parsedWithKnownCountry(text: String, region: String) =
+        candidateRegions(text, region).mapNotNull { parse(text, it) }
+            .distinctBy { util.getRegionCodeForNumber(it) }
+            .singleOrNull()
+            ?.takeIf { util.getRegionCodeForNumber(it) != null }
 
     /** Вид номера словами человека: мобильный, городской. Неизвестное молчит. */
     fun kind(text: String, region: String = DEFAULT_REGION): String? =
@@ -202,8 +230,12 @@ object PhoneNumbers {
      *
      * Номер, вычитанный с кадра, приходит покорёженным: `06 1 ) 2 80-44-2 1`. Библиотека его
      * разобрала — иначе он не прошёл бы отбор и не появился бы на экране, — значит
-     * канонический вид у Point есть, и показывать мусор незачем (#932). Что не разобралось,
-     * показывается как есть: выдумывать нельзя.
+     * канонический вид у Point есть, и показывать мусор незачем (#932).
+     *
+     * Канонический вид принадлежит стране, поэтому он есть не всегда (#1029): у номера,
+     * который годится сразу нескольким странам, своей группировки нет — и он показывается
+     * так, как записан в документе. Выдумывать нельзя: это относится и к неразобранному, и
+     * к разобранному наугад.
      */
     fun shown(text: String, region: String = DEFAULT_REGION): String =
         human(text, region) ?: text
