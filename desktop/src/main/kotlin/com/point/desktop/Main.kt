@@ -31,6 +31,12 @@ fun main(args: Array<String>) {
     }
     val opener = SystemOpener { file -> java.awt.Desktop.getDesktop().open(file) }
 
+    // Браузер компьютера — один на всех, кому он нужен (#1087): «Открыть» со ссылкой,
+    // «Открыть в браузере» и вход в аккаунт зовут одну и ту же дверь.
+    val browse: (String) -> Unit = { url ->
+        runCatching { java.awt.Desktop.getDesktop().browse(java.net.URI(url)) }
+    }
+
     val printer = object : Printer {
         override fun name(): String? =
             runCatching { javax.print.PrintServiceLookup.lookupDefaultPrintService()?.name }.getOrNull()
@@ -113,7 +119,7 @@ fun main(args: Array<String>) {
     var knockPhoneLate: suspend () -> Unit = {}
     val resolver = DesktopResolver(
         realizers = setOf(
-            PcOpenRealizer(opener),
+            PcOpenRealizer(opener, browse),
             PcCopyRealizer(clipboard, imageClipboard = ::writeSystemClipboard),
             PcRevealRealizer(revealer),
             PcSaveAsRealizer(saveTarget),
@@ -137,9 +143,7 @@ fun main(args: Array<String>) {
                 cloudReader
             },
             PcReadDocumentRealizer(readPage = { page -> pcCloudReader!!.readFrame(page, "image/png") }),
-            PcOpenLinkRealizer { url ->
-                runCatching { java.awt.Desktop.getDesktop().browse(java.net.URI(url)) }
-            },
+            PcOpenLinkRealizer(browse),
         ),
         capabilityIsNetwork = { id -> capabilities.any { it.id == id && it.meta.network } },
     )
@@ -174,7 +178,7 @@ fun main(args: Array<String>) {
         store = accountStore,
         client = com.point.core.flow.HttpAccountClient(serverUrl, deviceKeys.keys().publicKey),
 
-        browser = { url -> runCatching { java.awt.Desktop.getDesktop().browse(java.net.URI(url)) } },
+        browser = { url -> browse(url) },
         deviceName = config.name,
         keys = deviceKeys,
         mySettings = { FilePcConfig(pointDir).accountSettings() },

@@ -38,13 +38,45 @@ class PcOpenCapability : Capability {
     override fun produces(state: ObjectState) = state
 }
 
-class PcOpenRealizer(private val opener: SystemOpener) : Realizer {
+internal const val META_ENTITY_URL = com.point.core.flow.META_ENTITY_PREFIX + "url"
+
+/**
+ * Адрес, который объект уже знает про себя (#1087).
+ *
+ * Порядок тот же, что у «Открыть ссылку» на телефоне: сначала знание графа (`entity.url`),
+ * потом сам объект-ссылка — его содержимое и есть адрес. Одно правило на оба устройства,
+ * а не своё на каждой поверхности.
+ */
+internal fun knownLink(input: PointObject): String? {
+    input.metadata[META_ENTITY_URL]?.trim()?.takeIf { it.isNotBlank() }?.let { return it }
+    if (input.state.kind != ObjectKind.URL) return null
+    val text = runCatching { File(input.uri.value).takeIf(File::isFile)?.readText() }.getOrNull().orEmpty()
+    return text.lineSequence().map(String::trim).firstOrNull { it.startsWith("http", ignoreCase = true) }
+}
+
+/** Одна дорога в браузер компьютера: и у «Открыть», и у «Открыть в браузере» исход один (#1087). */
+internal fun openInBrowser(browser: (String) -> Unit, url: String): ActionResult = runCatching {
+    browser(url)
+    ActionResult.Done("Открыто в браузере")
+}.getOrElse { ActionResult.Failure("Браузер не открылся — откройте ссылку вручную из буфера", recoverable = true) }
+
+class PcOpenRealizer(
+    private val opener: SystemOpener,
+    private val browser: (String) -> Unit,
+) : Realizer {
     override val capabilityId = CapabilityId("pc-open")
-    override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
-        runCatching {
+
+    // #1087: открывается смысл, а не файл. Объект, который знает свой адрес, уходит в
+    // браузер компьютера; системному обработчику по расширению файл достаётся только
+    // тогда, когда никакого адреса у объекта нет. Действие следует из знания графа:
+    // строка-ссылка с телефона открывалась на ПК текстовым редактором.
+    override suspend fun perform(input: PointObject, amendment: String?): ActionResult {
+        knownLink(input)?.let { url -> return openInBrowser(browser, url) }
+        return runCatching {
             opener.open(File(input.uri.value))
             ActionResult.Done("Открыто")
         }.getOrElse { ActionResult.Failure("Открыть нечем: у этого файла нет программы по умолчанию", recoverable = true) }
+    }
 }
 
 class PcRevealCapability : Capability {
