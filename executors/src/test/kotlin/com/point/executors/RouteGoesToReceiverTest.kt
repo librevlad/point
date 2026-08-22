@@ -7,19 +7,21 @@ import com.point.core.flow.EvidenceClass
 import com.point.core.flow.FieldCandidate
 import com.point.core.flow.META_ENTITY_PLACE
 import com.point.core.flow.META_GRAPH_ROLE_PREFIX
+import com.point.core.flow.belongings
 import com.point.core.flow.findOnPage
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
 /**
- * «Построить маршрут» ведёт к получателю (#772).
+ * «Построить маршрут» ведёт к получателю (#772, #1176).
  *
  * Судья полей выбирает место по уликам страницы, и два отделения наклейки для него
- * одинаковы: побеждает первое, а им оказывается склад отправления. Роль получателя
- * разбирается позже, из того же ответа модели, — здесь проверяется, что эти два знания
+ * одинаковы: побеждает первое, а им оказывается склад отправления. Принадлежность приходит
+ * позже — из ролей того же ответа модели, — и здесь проверяется, что эти два знания
  * встречаются и маршрут разворачивается туда, куда едет посылка.
  *
- * Разрез страницы на столбцы проверен на настоящей наклейке в `PlaceOfReceiverTest`;
+ * Частного правила «место получателя» больше нет: значение выбирает общая связь «прочтение
+ * при своей стороне». Разрез настоящей наклейки на столбцы проверен в `BelongingTest`;
  * здесь важна только сшивка, поэтому раскладка простая.
  */
 class RouteGoesToReceiverTest {
@@ -44,9 +46,13 @@ class RouteGoesToReceiverTest {
 
     private val receiverBranch = place("Відділення №7")
 
-    private val candidates = mapOf(META_ENTITY_PLACE to listOf(senderBranch, receiverBranch))
+    private val roles = mapOf(
+        META_GRAPH_ROLE_PREFIX + "sender" to "Тарасенко",
+        META_GRAPH_ROLE_PREFIX + "receiver" to "Лумброван",
+    )
 
-    private val receiver = mapOf(META_GRAPH_ROLE_PREFIX + "receiver" to "Лумброван")
+    private val belongings =
+        label.belongings(mapOf(META_ENTITY_PLACE to listOf(senderBranch, receiverBranch)), roles)
 
     private fun judged(text: String) = mapOf(
         META_ENTITY_PLACE to JudgedField(
@@ -59,14 +65,14 @@ class RouteGoesToReceiverTest {
 
     @Test
     fun `место отправителя уступает месту получателя`() {
-        val fixed = withPlaceOfReceiver(judged(senderBranch.text), candidates, receiver, label)
+        val fixed = withPartyReadings(judged(senderBranch.text), belongings, label)
 
         assertEquals(receiverBranch.text, fixed[META_ENTITY_PLACE]?.text)
     }
 
     @Test
     fun `прежний выбор остаётся среди прочтений`() {
-        val fixed = withPlaceOfReceiver(judged(senderBranch.text), candidates, receiver, label)
+        val fixed = withPartyReadings(judged(senderBranch.text), belongings, label)
 
         assertEquals(
             listOf(receiverBranch.text, senderBranch.text),
@@ -78,25 +84,40 @@ class RouteGoesToReceiverTest {
     fun `выбранное судьёй место получателя не переписывается`() {
         val already = judged(receiverBranch.text)
 
-        assertEquals(already, withPlaceOfReceiver(already, candidates, receiver, label))
+        assertEquals(already, withPartyReadings(already, belongings, label))
     }
 
     @Test
     fun `без слоя слов ничего не меняется`() {
         val was = judged(senderBranch.text)
 
-        assertEquals(was, withPlaceOfReceiver(was, candidates, receiver, layer = null))
+        assertEquals(was, withPartyReadings(was, belongings, layer = null))
     }
 
     @Test
-    fun `роль получателя не названа — место остаётся прежним`() {
+    fun `связи не нашлось — место остаётся прежним`() {
         val was = judged(senderBranch.text)
 
-        assertEquals(was, withPlaceOfReceiver(was, candidates, roles = emptyMap(), layer = label))
+        assertEquals(was, withPartyReadings(was, belongings = emptyMap(), layer = label))
     }
 
     @Test
     fun `места среди полей нет — правило молчит`() {
-        assertEquals(emptyMap<String, JudgedField>(), withPlaceOfReceiver(emptyMap(), candidates, receiver, label))
+        assertEquals(emptyMap<String, JudgedField>(), withPartyReadings(emptyMap(), belongings, label))
+    }
+
+    /** Сторона решает спор годных прочтений, а забракованное не воскрешает (#809, #1122). */
+    @Test
+    fun `забракованное прочтение не становится значением из-за стороны`() {
+        val was = judged(senderBranch.text)
+
+        val fixed = withPartyReadings(
+            was,
+            belongings,
+            label,
+            blocked = mapOf(META_ENTITY_PLACE to listOf(receiverBranch.text)),
+        )
+
+        assertEquals(was, fixed)
     }
 }
