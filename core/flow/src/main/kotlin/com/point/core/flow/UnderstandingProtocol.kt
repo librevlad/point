@@ -308,7 +308,15 @@ fun bareCardNumber(value: String): Boolean {
     return digits.length == 16 && luhn(digits)
 }
 
-fun parseFieldCandidates(answer: String): ParsedUnderstanding {
+fun parseFieldCandidates(
+    answer: String,
+
+    /**
+     * Всё, что Point прочитал сам (#1032): по нему видно, стоит ли у числа слово-подпись
+     * накладной. Пусто — сверять не с чем, и накладной остаётся только форма перевозчика.
+     */
+    readText: String = "",
+): ParsedUnderstanding {
     val fields = LinkedHashMap<String, MutableList<FieldCandidate>>()
     val single = LinkedHashMap<String, String>()
     val contacts = mutableListOf<PersonContact>()
@@ -408,7 +416,18 @@ fun parseFieldCandidates(answer: String): ParsedUnderstanding {
                 // сошедшейся контрольной суммой Луна — платёжная карта, каким бы KEY
                 // модель их ни назвала. «5452198100477458» из переписки приходило
                 // треком — и карта терялась, хотя число говорит само за себя.
-                val suffix = if (rawSuffix in MIGRATES_TO_CARD && bareCardNumber(candidate.text)) "card" else rawSuffix
+                val suffix = when {
+                    rawSuffix in MIGRATES_TO_CARD && bareCardNumber(candidate.text) -> "card"
+
+                    // Номер без роли — просто номер (#1032, решение владельца): накладной
+                    // число становится только по форме перевозчика или слову рядом — той же
+                    // меркой, что у правила-читателя. Иначе это идентификатор «Номер», и
+                    // «отследить» при нём не появляется: модель назвала номер удостоверения
+                    // накладной, и человеку предлагали отследить то, что никуда не едет.
+                    rawSuffix == "track" && semanticFits(META_ENTITY_TRACK, candidate.text) == true &&
+                        !looksLikeTrack(candidate.text, readText) -> "serial"
+                    else -> rawSuffix
+                }
                 val metaKey = META_ENTITY_PREFIX + suffix
 
                 // Отказ-фраза — не значение ни для какого поля (#656).
