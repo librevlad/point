@@ -55,6 +55,13 @@ internal fun ocrPromptFor(obj: PointObject): String =
 
 internal const val OCR_CLOUD_STAGE = "Читаю снимок в облаке"
 
+/**
+ * Слово телефона о дороге чтения (#1021): первым читает свой движок, в сервис — только после
+ * вопроса. Живёт рядом с цепочкой, которая это и держит, а не в общем словаре — иначе
+ * компьютер показывал его как своё.
+ */
+internal const val OCR_ON_PHONE_PROMISE = "текст · сначала на телефоне, потом спрошу про сервис"
+
 class DeviceOcrRealizer @Inject constructor(
     private val store: ObjectStore,
     private val recognizer: TextRecognizer,

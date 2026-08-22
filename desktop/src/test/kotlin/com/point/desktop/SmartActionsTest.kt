@@ -269,7 +269,7 @@ class SmartActionsTest {
 
     @Test fun `у чтения снимка одна декларация на оба устройства, а компьютер даёт реализацию`() {
 
-        val shared = com.point.core.flow.capabilities.OcrCapability()
+        val shared = desktopCapabilities().first { it.id == com.point.core.flow.capabilities.OcrCapability.ID }
 
         assertEquals(shared.id, PcCloudOcrRealizer({ OcrConfig() }).capabilityId)
         assertEquals("Распознать текст", shared.label(ObjectState(ObjectKind.IMAGE)))
@@ -277,6 +277,21 @@ class SmartActionsTest {
             "цена дороги не названа до тапа",
             shared.yields(ObjectState(ObjectKind.IMAGE)).toString().contains("сервис"),
         )
+    }
+
+    /**
+     * #1021, решение владельца — «обещание по исполнителю». Компьютер показывал под «Распознать
+     * текст» телефонное «сначала на телефоне, потом спрошу про сервис» — шаг, которого на нём
+     * не бывает: своего чтения у компьютера нет, снимок может уйти только в сервис.
+     */
+    @Test fun `на компьютере чтение снимка обещает сервис, а не шаг на телефоне`() {
+
+        val ocr = pcRegistry().bubblesFor(ObjectState(ObjectKind.IMAGE)).first { it.capabilityId.value == "ocr" }
+        val note = com.point.core.flow.yieldLabel(ocr.yields).orEmpty()
+
+        assertEquals(OCR_ON_PC_PROMISE, note)
+        assertTrue("компьютер обещает шаг на телефоне: $note", "телефон" !in note)
+        assertTrue("дорога в сервис не названа до тапа: $note", "сервис" in note)
     }
 
     @Test fun `своей способности про облако у компьютера не осталось`() {
