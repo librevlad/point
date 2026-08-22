@@ -14,7 +14,8 @@ import javax.inject.Inject
 class ShareCapability @Inject constructor() : Capability {
     override val id = ID
     override val icon = "share"
-    override val meta = CapabilityMeta(priority = 80)
+    // Шаг кончается системным диалогом «Поделиться»: дальше выбирает человек (#1131).
+    override val meta = CapabilityMeta(priority = 80, handsOff = true)
     override fun label(state: ObjectState) = "Поделиться"
 
     /**

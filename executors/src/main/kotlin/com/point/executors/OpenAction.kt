@@ -19,7 +19,8 @@ class OpenCapability @Inject constructor() : Capability {
     override val id = ID
     override val icon = "open"
 
-    override val meta = CapabilityMeta(priority = 65, localOnly = true)
+    // Файл открывает чужое приложение — шаг Point кончается его экраном (#1131).
+    override val meta = CapabilityMeta(priority = 65, localOnly = true, handsOff = true)
     override fun label(state: ObjectState) = "Открыть"
     override fun accepts(state: ObjectState) =
         state.kind.isFileBacked && state.kind != ObjectKind.URL
