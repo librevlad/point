@@ -57,6 +57,22 @@ class OutboxTest {
         box.remove(id)
     }
 
+    /** Исход без объекта (#1073): запись из одних слов стоит в очереди наравне с вещами, файла у неё нет. */
+    @Test
+    fun `исход без объекта лежит в очереди словами, без файла, и убирается как все`() {
+        val box = outbox()
+        val thing = box.add(obj("x", "a.txt"))
+        val words = mapOf("result.outcome" to "done", "result.detail" to "Отменено", "exec.home" to "obj-1")
+        val outcome = box.addOutcome(words)
+
+        assertEquals(listOf(thing, outcome), box.entries().map { it.id })
+        assertEquals(words, box.entries().last().meta)
+        assertNull("у исхода нет файла — забирать нечего", box.file(outcome))
+
+        box.remove(outcome)
+        assertEquals(listOf(thing), box.entries().map { it.id })
+    }
+
     @Test
     fun `the source object keeps its file - the outbox owns a copy`() {
         val box = outbox()
