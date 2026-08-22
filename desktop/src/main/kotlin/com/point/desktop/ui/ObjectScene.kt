@@ -137,22 +137,15 @@ internal fun PortalHalo(size: androidx.compose.ui.unit.Dp, intensity: Float = 1f
 internal fun Preview(item: InboxItem) {
     when (item.obj.state.kind) {
         ObjectKind.TEXT -> {
-            val text = remember(item.obj.uri.value) {
-                runCatching { java.io.File(item.obj.uri.value).readText() }.getOrNull()
+            val read = remember(item.obj.uri.value) {
+                runCatching {
+                    com.point.desktop.readTextHead(
+                        java.io.File(item.obj.uri.value),
+                        com.point.core.ui.TEXT_PREVIEW_LOAD_LIMIT,
+                    )
+                }.getOrNull()
             }
-            if (!text.isNullOrBlank()) {
-                Text(
-                    text.take(PREVIEW_CHARS),
-                    style = PointType.body.copy(fontSize = PointType.small.fontSize),
-                    // В окне 475 px четырнадцать строк — это весь экран (#898).
-                    maxLines = 6,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(PointColors.window.copy(alpha = 0.55f))
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
-                )
-            }
+            if (read != null && read.text.isNotBlank()) TextBody(read)
         }
         ObjectKind.IMAGE -> {
             val bitmap = remember(item.obj.uri.value) {
@@ -174,6 +167,56 @@ internal fun Preview(item: InboxItem) {
             }
         }
         else -> Unit
+    }
+}
+
+/**
+ * Текст объекта на компьютере: свёрнут до нескольких строк и раскрывается по просьбе (#1086).
+ *
+ * Раньше здесь были пять строк с многоточием и всё: длинный текст на ПК нельзя было
+ * дочитать, хотя телефон тот же объект раскрывал. Механика взята оттуда целиком — и надписи
+ * тоже, они лежат в общем каталоге, а не переписаны сюда.
+ */
+@Composable
+private fun TextBody(read: com.point.desktop.TextHead) {
+    var expanded by remember(read.text) { mutableStateOf(false) }
+
+    // Текст обрезается дважды: по символам (голова) и по строкам на экране. Кнопка обязана
+    // знать про оба случая — иначе короткий, но высокий текст обрывается без выхода (#871).
+    var clipped by remember(read.text) { mutableStateOf(false) }
+    val head = remember(read.text) { com.point.core.ui.textPreviewHead(read.text) }
+    val shown = if (expanded) read.text else head
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(
+            shown,
+            style = PointType.body.copy(fontSize = PointType.small.fontSize),
+            // В окне 475 px четырнадцать строк — это весь экран (#898).
+            maxLines = if (expanded) Int.MAX_VALUE else PREVIEW_LINES,
+            overflow = TextOverflow.Ellipsis,
+            onTextLayout = { if (it.hasVisualOverflow) clipped = true },
+            modifier = Modifier.fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(PointColors.window.copy(alpha = 0.55f))
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+        )
+        if (clipped || head.length < read.text.length) {
+            Text(
+                if (expanded) {
+                    com.point.core.ui.COLLAPSE_LABEL
+                } else {
+                    com.point.core.ui.expandTextLabel(read.text.length - head.length, read.atLimit)
+                },
+                style = PointType.small.copy(color = PointColors.violet),
+                modifier = Modifier.clip(RoundedCornerShape(8.dp))
+                    .clickable { expanded = !expanded }
+                    .padding(horizontal = 6.dp, vertical = 4.dp),
+            )
+        }
+
+        // Раскрыли — и оно упёрлось в предел чтения: сколько показано, сказано числом.
+        if (expanded && read.atLimit) {
+            Text(com.point.core.ui.truncatedPreviewNotice(read.text.length), style = PointType.small)
+        }
     }
 }
 
@@ -407,4 +450,8 @@ internal fun kindMark(kind: ObjectKind): String = when (kind) {
     else -> "\u2022"
 }
 
-internal const val PREVIEW_CHARS = 2_000
+/**
+ * Сколько строк текста видно в свёрнутом виде. Сколько символов читать и сколько показывать
+ * в голове — общее с телефоном знание (`TEXT_PREVIEW_LOAD_LIMIT`, `textPreviewHead`).
+ */
+internal const val PREVIEW_LINES = 6
