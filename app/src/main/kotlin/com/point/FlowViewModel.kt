@@ -2286,9 +2286,19 @@ class FlowViewModel @Inject constructor(
                 }
             }
             is ActionResult.Failure -> {
-                runCatching { sensory.failure() }
 
-                _ui.update { it.copy(busy = null, busyStage = null, message = result.reason, messageOutcome = Outcome.FAILED) }
+                // Ожидание — не отказ (#992): пока движок готовится, работа ещё не начиналась,
+                // и через минуту она выйдет. Крест и звук провала над просьбой подождать врут
+                // человеку о том, что сломалось. Слово остаётся, исход — просто сообщение.
+                val waiting = com.point.core.flow.failureIsWaiting(result.reason)
+                if (!waiting) runCatching { sensory.failure() }
+
+                _ui.update {
+                    it.copy(
+                        busy = null, busyStage = null, message = result.reason,
+                        messageOutcome = if (waiting) Outcome.NONE else Outcome.FAILED,
+                    )
+                }
             }
             is ActionResult.NeedsInput -> {
                 pendingBubble = bubble
