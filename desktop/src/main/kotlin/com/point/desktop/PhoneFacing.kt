@@ -3,8 +3,13 @@ package com.point.desktop
 import com.point.core.flow.Capability
 import com.point.core.flow.PcRemoteAction
 
-/** Умения компьютера. Общие способности он делит с телефоном, а не заводит свои копии. */
-fun desktopCapabilities(): Set<Capability> = setOf(
+/**
+ * Умения компьютера. Общие способности он делит с телефоном, а не заводит свои копии.
+ *
+ * [signedIn] — есть ли на компьютере аккаунт Point (#1022): «Дать ссылку» без него не
+ * сработает, и человек узнаёт это по тапу, а не после согласия на отправку.
+ */
+fun desktopCapabilities(signedIn: () -> Boolean = { true }): Set<Capability> = setOf(
     PcOpenCapability(), PcCopyCapability(), PcRevealCapability(), PcSaveAsCapability(),
     PcDownloadCapability(), PcToPhoneCapability(), PcPrintCapability(),
     PcOpenLinkCapability(),
@@ -20,7 +25,7 @@ fun desktopCapabilities(): Set<Capability> = setOf(
     // Сканированный PDF читается одним действием и здесь (#1014): страницы рисует pdfbox,
     // читает существующее облачное чтение, знание ложится на сам PDF.
     PcReadDocumentCapability(),
-) + com.point.core.flow.capabilities.sharedCapabilities()
+) + com.point.core.flow.capabilities.sharedCapabilities(signedIn = signedIn)
 
 /**
  * Имена умений, привязанных к месту исполнения: бумага, файл и окно выходят на компьютере,

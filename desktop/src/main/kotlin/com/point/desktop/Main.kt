@@ -107,7 +107,7 @@ fun main(args: Array<String>) {
     // Сетевая ли способность — знание живёт у самой способности (#855): исполнители
     // «Понять», «Перевести», «Дать ссылку» называют себя местными, хотя отдают байты наружу.
     var pcCloudReader: PcCloudOcrRealizer? = null
-    val capabilities = desktopCapabilities()
+    val capabilities = desktopCapabilities { accountStore.current() != null }
 
     // Аккаунт рождается ниже исполнителей; стук подключается, как только он есть (#1079).
     var knockPhoneLate: suspend () -> Unit = {}

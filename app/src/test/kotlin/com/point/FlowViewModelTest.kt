@@ -125,8 +125,11 @@ class FlowViewModelTest {
 
         keyNeeding: Set<CapabilityId> = emptySet(),
 
+        /** Действие видно, но сейчас не сработает и знает почему (#1022). */
+        stopped: Map<CapabilityId, String> = emptyMap(),
+
         pdf: com.point.core.flow.PdfRasterizer = FakePdfRasterizer(),
-    ) = FlowViewModel(store, FakeRegistry(caps, cloud, slow, keyNeeding) { userKeys.keys().mine.isNotEmpty() }.also { registry = it }, resolver, ChatTalk(chatResponder, store), enrichment, history, usage, chosenApps, userKeys, aiFacts, builtInKeys, consent, appLauncher, pdf, sensory, sensorySettings, cloudPrivacy, com.point.core.flow.YoloMode.OFF, snapshot, crashLog, dispatcher, AppIconResolver { null }, pcLinks, pcTransport, pcCaps, linkMonitor, PulledFileFactory { name -> java.io.File(java.io.File(System.getProperty("java.io.tmpdir")), "pulled-" + name).absolutePath }, noFrames, com.point.core.flow.PhoneRegion { "UA" }, keyCheck, account, circleStore, accountClient, pendingLogins, deviceKeys, browser, sharedTexts, memory)
+    ) = FlowViewModel(store, FakeRegistry(caps, cloud, slow, keyNeeding, stopped) { userKeys.keys().mine.isNotEmpty() }.also { registry = it }, resolver, ChatTalk(chatResponder, store), enrichment, history, usage, chosenApps, userKeys, aiFacts, builtInKeys, consent, appLauncher, pdf, sensory, sensorySettings, cloudPrivacy, com.point.core.flow.YoloMode.OFF, snapshot, crashLog, dispatcher, AppIconResolver { null }, pcLinks, pcTransport, pcCaps, linkMonitor, PulledFileFactory { name -> java.io.File(java.io.File(System.getProperty("java.io.tmpdir")), "pulled-" + name).absolutePath }, noFrames, com.point.core.flow.PhoneRegion { "UA" }, keyCheck, account, circleStore, accountClient, pendingLogins, deviceKeys, browser, sharedTexts, memory)
 
     private val keyCheck = FakeAiKeyCheck()
 
@@ -3523,6 +3526,43 @@ class FlowViewModelTest {
         assertEquals("__unset__", resolver.lastAmendment)
     }
 
+    /**
+     * #1022, решение владельца 21.08.2026: «Дать ссылку» без аккаунта Point вела человека
+     * через согласие «файл уедет на сервер Point», грузила файл и отказывала чужими
+     * причинами — про связь и про размер. Действие, которое само знает, что сейчас не
+     * сработает, говорит это по тапу, и согласия у человека не спрашивают.
+     */
+    @Test fun `действие, которое сейчас не сработает, говорит причину вместо экрана согласия`() = runTest(dispatcher) {
+        val reason = "Войдите в аккаунт"
+        resolver.result = ActionResult.Done("готово")
+        val vm = vm(
+            caps = mapOf(CapabilityId("cloudx") to setOf(Intent.PREPARE)),
+            cloud = setOf(CapabilityId("cloudx")),
+            stopped = mapOf(CapabilityId("cloudx") to reason),
+        )
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.onBubble(bubble(id = "cloudx")); advanceUntilIdle()
+
+        assertEquals(reason, vm.ui.value.message)
+        assertEquals(Outcome.FAILED, vm.ui.value.messageOutcome)
+        assertEquals("согласие спрошено зря", false, vm.ui.value.cloudConsent)
+        assertEquals("файл ушёл, хотя выдать ссылку некому", "__unset__", resolver.lastAmendment)
+    }
+
+    @Test fun `действие без препятствия по-прежнему спрашивает согласие`() = runTest(dispatcher) {
+        resolver.result = ActionResult.Done("готово")
+        val vm = vm(
+            caps = mapOf(CapabilityId("cloudx") to setOf(Intent.PREPARE)),
+            cloud = setOf(CapabilityId("cloudx")),
+        )
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.onBubble(bubble(id = "cloudx")); advanceUntilIdle()
+
+        assertTrue("вопрос согласия пропал вместе с починкой", vm.ui.value.cloudConsent)
+    }
+
     @Test fun `confirming consent runs the pending cloud action and persists the grant`() = runTest(dispatcher) {
         resolver.result = ActionResult.Done("готово")
         val vm = cloudVm()
@@ -4166,6 +4206,9 @@ private class FakeCapability(
     private val served: Set<Intent>,
     network: Boolean = false,
     slow: Boolean = false,
+
+    /** Действие видно, но сейчас не сработает, и знает почему (#1022). */
+    private val stopper: String? = null,
 ) : Capability {
     override val icon = "x"
     override val meta = CapabilityMeta(
@@ -4176,6 +4219,7 @@ private class FakeCapability(
     override fun accepts(state: ObjectState) = true
     override fun produces(state: ObjectState) = ObjectState(ObjectKind.TEXT)
     override fun intents(state: ObjectState) = served
+    override fun wontWorkNow(state: ObjectState) = stopper
 }
 
 private class FakeRegistry(
@@ -4184,6 +4228,9 @@ private class FakeRegistry(
     private val slow: Set<CapabilityId> = emptySet(),
 
     private val keyNeeding: Set<CapabilityId> = emptySet(),
+
+    /** Чем действие само объясняет, что сейчас не сработает (#1022). */
+    private val stopped: Map<CapabilityId, String> = emptyMap(),
 
     private val keySet: () -> Boolean = { true },
 ) : CapabilityRegistry {
@@ -4207,7 +4254,7 @@ private class FakeRegistry(
     override fun latentBubblesFor(state: ObjectState) = emptyList<com.point.core.model.LatentBubble>()
 
     override fun byId(id: CapabilityId): Capability =
-        caps[id]?.let { FakeCapability(id, it, id in cloud, id in slow) }
+        caps[id]?.let { FakeCapability(id, it, id in cloud, id in slow, stopped[id]) }
             ?: error("No capability registered for id=${id.value}")
 }
 
