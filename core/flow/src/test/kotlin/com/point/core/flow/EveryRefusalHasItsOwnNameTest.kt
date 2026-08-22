@@ -52,18 +52,36 @@ class EveryRefusalHasItsOwnNameTest {
 
     /**
      * Сорвался сам вызов (#1077): «сервер не ответил» — только когда разговор с сервером и
-     * правда не состоялся. Сбой на устройстве зовётся устройством и оставляет след — чем именно.
+     * правда не состоялся. Сбой на устройстве зовётся устройством.
      */
     @Test
     fun `сорвавшийся вызов — молчание сервера зовётся сервером, сбой на устройстве — устройством`() {
-        assertEquals(NO_SERVER_TEXT, dropOpenBroke(java.net.ConnectException("refused")))
-        assertEquals(NO_SERVER_TEXT, dropOpenBroke(java.net.SocketTimeoutException("timeout")))
+        assertEquals(NO_SERVER_TEXT, dropCallBroke(java.net.ConnectException("refused")))
+        assertEquals(NO_SERVER_TEXT, dropCallBroke(java.net.SocketTimeoutException("timeout")))
 
-        val onDevice = dropOpenBroke(IllegalStateException("no network on main thread"))
+        val onDevice = dropCallBroke(IllegalStateException("no network on main thread"))
 
         assertTrue("сбой на устройстве не зовётся сервером: $onDevice", onDevice != NO_SERVER_TEXT)
-        assertTrue("имя из словаря: $onDevice", onDevice.startsWith(REQUEST_BROKE_TEXT))
-        assertTrue("след — что именно сорвалось: $onDevice", "IllegalStateException" in onDevice)
+        assertEquals(REQUEST_BROKE_TEXT, onDevice)
+    }
+
+    /**
+     * Класс сбоя человеку не показывают (#797): `IllegalStateException` он не заводил, и по
+     * этому слову ему нечего чинить. След живёт в журнале устройства — см. `HttpDropInboxTest`.
+     */
+    @Test
+    fun `имя беды — слово из словаря, латинского класса сбоя на экране нет`() {
+        val dictionary = setOf(NO_SERVER_TEXT, REQUEST_BROKE_TEXT)
+        val names = listOf(
+            dropCallBroke(IllegalStateException("android.os.NetworkOnMainThreadException")),
+            dropCallBroke(NullPointerException()),
+            dropCallBroke(java.net.ConnectException("refused")),
+        )
+
+        names.forEach { said ->
+            assertTrue("класс сбоя человеку не называют: $said", "Exception" !in said)
+            assertTrue("имя — из словаря целиком, без приписок: $said", said in dictionary)
+        }
     }
 
     @Test

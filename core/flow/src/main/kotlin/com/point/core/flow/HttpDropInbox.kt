@@ -29,6 +29,15 @@ class HttpDropInbox(
     private val network: NetworkAvailability = NetworkAvailability { true },
     private val connectTimeoutMs: Int = 8_000,
     private val readTimeoutMs: Int = 15_000,
+
+    /**
+     * След сорвавшегося вызова — в журнал устройства, а не человеку на экран (#1077).
+     *
+     * Человеку — слово из словаря (#797), нам — чем именно сорвалось: класс и сообщение сбоя.
+     * Раньше `ack` и `close` роняли своё падение вообще молча, и закрытая ли дверь — узнать
+     * было нечем.
+     */
+    private val log: (what: String, error: Throwable) -> Unit = { _, _ -> },
 ) : DropInbox {
 
     override suspend fun open(): DropOpen {
@@ -70,8 +79,9 @@ class HttpDropInbox(
                 DropOpen.Opened(DropInboxBox(box, link))
 
             // Сорвался сам вызов — и у этой беды имя по её природе (#1077): разговор не состоялся
-            // (сеть) — про сервер; сломалось на устройстве — про устройство, со следом, что именно.
-            }.getOrElse { e -> DropOpen.Refused(dropOpenBroke(e)) }
+            // (сеть) — про сервер; сломалось на устройстве — про устройство. Чем именно сломалось,
+            // человеку не говорят — это уходит в журнал.
+            }.getOrElse { e -> log(OPEN_STEP, e); DropOpen.Refused(dropCallBroke(e)) }
         }
     }
 
@@ -99,7 +109,10 @@ class HttpDropInbox(
                 // Подтверждение НЕ здесь: пока объект не создан, стирать файл на сервере нельзя —
                 // прислал его чужой человек, и повторить он не сможет (#726).
                 DropWait.Arrived(DropArrival(path, name, mime, fileId.orEmpty()))
-            }.getOrElse { e -> DropWait.Failed(e.message ?: "Нет связи с сервером Point") }
+
+            // Слово из словаря, а не `e.message` (#1077): сообщение сбоя — чужой английский
+            // («Failed to connect to /10.0.2.2»), и на компьютере оно уходило человеку на экран.
+            }.getOrElse { e -> log(AWAIT_STEP, e); DropWait.Failed(dropCallBroke(e)) }
         }
     }
 
@@ -114,7 +127,7 @@ class HttpDropInbox(
                 c.outputStream.close()
                 c.responseCode
                 c.disconnect()
-            }
+            }.onFailure { e -> log(CLOSE_STEP, e) }
         }
     }
 
@@ -131,7 +144,7 @@ class HttpDropInbox(
                 c.outputStream.close()
                 c.responseCode
                 c.disconnect()
-            }
+            }.onFailure { e -> log(ACK_STEP, e) }
         }
     }
 
@@ -163,4 +176,12 @@ class HttpDropInbox(
             readTimeout = readTimeoutMs
             pass()?.let { setRequestProperty("Authorization", "Bearer $it") }
         }
+
+    /** Какой шаг приёма сорвался — это в журнал, человеку от названия шага пользы нет (#1077). */
+    private companion object {
+        const val OPEN_STEP = "приём файла — открыть ящик"
+        const val AWAIT_STEP = "приём файла — дождаться файла"
+        const val ACK_STEP = "приём файла — подтвердить приём"
+        const val CLOSE_STEP = "приём файла — закрыть ящик"
+    }
 }
