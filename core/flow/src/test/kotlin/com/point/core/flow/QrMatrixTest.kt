@@ -61,7 +61,38 @@ class QrMatrixTest {
     fun `the smallest fitting version is chosen`() {
         assertEquals(21, qrMatrix("x".repeat(14))!!.size)
         assertEquals(25, qrMatrix("x".repeat(15))!!.size)
-        assertEquals(41, qrMatrix("x".repeat(QR_MAX_BYTES))!!.size)
+        assertEquals(177, qrMatrix("x".repeat(QR_MAX_BYTES))!!.size)
+    }
+
+    /** #1084: текст растёт — растёт и код, а не упирается в потолок посреди дороги. */
+    @Test
+    fun `the code grows with the text instead of refusing`() {
+        var previous = 0
+        for (length in listOf(20, 100, 300, 700, 1500, QR_MAX_BYTES)) {
+            val size = qrMatrix("x".repeat(length))!!.size
+            assertTrue("$length знаков: код не вырос ($size)", size >= previous)
+            previous = size
+        }
+        assertEquals(177, previous)
+    }
+
+    /** #1084: текст из карточки — около ста семидесяти знаков кириллицы: телефон его кодировал,
+     *  компьютер отвергал на своих ста шести байтах. */
+    @Test
+    fun `the text the phone encoded reads back here too`() {
+        val text = "Оплата 4 500 ₽ до 25.08.2026, тел. +7 900 123-45-67, почта sales@example.org — " +
+            "счёт № 1084 от 17 августа, получатель ООО «Точка», назначение: сканирование листов"
+        assertTrue("тот случай был длиннее прежнего потолка ПК", text.toByteArray().size > 106)
+        assertEquals(text, roundTrip(text))
+    }
+
+    /** #1084: старшие версии — свои квадраты выравнивания, номер версии и неравные блоки. */
+    @Test
+    fun `long texts of every size read back exactly`() {
+        for (length in listOf(120, 200, 400, 800, 1200, 1500, 2000, QR_MAX_BYTES)) {
+            val text = "point-" + "x".repeat(length - 6)
+            assertEquals("$length знаков", text, roundTrip(text))
+        }
     }
 
     @Test

@@ -3,6 +3,8 @@ package com.point.desktop
 import com.point.core.flow.Entity
 import com.point.core.flow.EntityExtractor
 import com.point.core.flow.EntityType
+import com.point.core.flow.QR_MAX_BYTES
+import com.point.core.flow.QR_TOO_LONG
 import com.point.core.model.ActionResult
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
@@ -101,11 +103,28 @@ class SmartActionsTest {
     @Test fun `длинный текст в QR не лезет — и об этом сказано, а не обрезано`() = runTest {
         val box = outbox()
 
-        val result = PcQrRealizer(box).perform(textObject("длинный текст ".repeat(40)), null)
+        // Кириллица — два байта на знак, столько знаков заведомо выше общего потолка (#1084).
+        val over = "длинный текст ".repeat(QR_MAX_BYTES / 10)
+
+        val result = PcQrRealizer(box).perform(textObject(over), null)
 
         assertTrue(result is ActionResult.Failure)
-        assertTrue((result as ActionResult.Failure).reason.contains("длиннее"))
+        // Отказ — теми же словами, что и на телефоне (#1084): потолок в core один на оба.
+        assertEquals(QR_TOO_LONG, (result as ActionResult.Failure).reason)
         assertTrue(box.entries().isEmpty())
+    }
+
+    /** #1084: тот самый текст карточки — телефон делал QR, компьютер отказывал. */
+    @Test fun `текст, который кодирует телефон, кодируется и здесь`() = runTest {
+        val box = outbox()
+        val text = "Оплата 4 500 ₽ до 25.08.2026, тел. +7 900 123-45-67, почта sales@example.org — " +
+            "счёт № 1084 от 17 августа, получатель ООО «Точка», назначение: сканирование"
+
+        val result = PcQrRealizer(box).perform(textObject(text), null)
+
+        assertTrue("QR не собрался: $result", result is ActionResult.Success)
+        val image = javax.imageio.ImageIO.read(File((result as ActionResult.Success).result.uri.value))
+        assertTrue("картинка пустая", image.width > 100 && image.width == image.height)
     }
 
     @Test fun `ссылка кладётся в буфер компьютера — оттуда её и вставляют`() = runTest {

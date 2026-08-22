@@ -1,5 +1,7 @@
 package com.point.executors
 
+import com.point.core.flow.QR_MAX_BYTES
+import com.point.core.flow.QR_TOO_LONG
 import com.point.core.flow.QrEncoder
 import com.point.core.model.ActionResult
 import com.point.core.model.ObjectKind
@@ -50,8 +52,26 @@ class QrActionTest {
     @Test
     fun `over-long text fails without calling the encoder`() = runTest {
         val qr = FakeQrEncoder()
-        val result = QrRealizer(qr).perform(textObject("x".repeat(1001)), null)
+        val result = QrRealizer(qr).perform(textObject("x".repeat(QR_MAX_BYTES + 1)), null)
         assertTrue(result is ActionResult.Failure)
         assertNull(qr.encoded)
+    }
+
+    /** #1084: потолок один и тот же на телефоне и на компьютере — и слова отказа тоже. */
+    @Test
+    fun `the ceiling is the shared one and the refusal says so`() = runTest {
+        val qr = FakeQrEncoder()
+        val result = QrRealizer(qr).perform(textObject("я".repeat(QR_MAX_BYTES)), null)
+        assertEquals(QR_TOO_LONG, (result as ActionResult.Failure).reason)
+    }
+
+    /** #1084: текст, который раньше не проходил тысячу знаков телефона, теперь кодируется. */
+    @Test
+    fun `text longer than the old phone limit is encoded`() = runTest {
+        val qr = FakeQrEncoder()
+        val text = "x".repeat(1200)
+        val result = QrRealizer(qr).perform(textObject(text), null)
+        assertTrue(result is ActionResult.Success)
+        assertEquals(text, qr.encoded)
     }
 }
