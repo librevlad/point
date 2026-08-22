@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import com.point.core.flow.AtomLayer
 import com.point.core.flow.FocusDraft
+import com.point.core.flow.FocusPart
 import com.point.core.flow.FocusPoint
 import com.point.core.flow.FocusStroke
 import com.point.core.flow.Box as PageBox
@@ -78,13 +79,14 @@ internal const val FOCUS_HINT = "Выделите область, в котор�
  * Ластик убирает лишнее. Внутри нет ни предпросмотра распознанного, ни угадывания типов данных:
  * человек показывает место, а не объясняет Point, что там лежит.
  *
- * `✓` — единственное завершение: экран исчезает, наружу уходит область. `×` — отмена.
+ * `✓` — единственное завершение: экран исчезает, наружу уходят показанные места — каждое со
+ * своим инструментом, потому что прилипание на той стороне знает инструмент (#1039). `×` — отмена.
  */
 @Composable
 fun FocusScreen(
     image: ImageBitmap,
     layer: AtomLayer? = null,
-    onDone: (PageBox, List<PageBox>) -> Unit,
+    onDone: (List<FocusPart>) -> Unit,
     onCancel: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -114,7 +116,7 @@ fun FocusScreen(
             canFinish = region != null,
             onUndo = { draft = draft.undo() },
             onRedo = { draft = draft.redo() },
-            onDone = { region?.let { onDone(it, parts) } },
+            onDone = { if (parts.isNotEmpty()) onDone(parts) },
             onCancel = onCancel,
         )
 
@@ -351,7 +353,8 @@ private fun BrushSlider(value: Float, onChange: (Float) -> Unit, modifier: Modif
 
 /**
  * Мазок в координатах изображения. Прямоугольник — те же две точки, лассо — весь путь:
- * область одна и та же, отличается только форма показанного.
+ * область одна и та же, отличается только форма показанного. Кисть помечена отдельно (#1039):
+ * только она тянет строку при прилипании, обводка остаётся как нарисована.
  */
 internal fun strokeOf(
     drawn: List<Offset>,
@@ -374,7 +377,7 @@ internal fun strokeOf(
         FocusTool.RECTANGLE -> 0f
         else -> brush / fit.scale.coerceAtLeast(0.0001f) / zoom
     }
-    return FocusStroke(points, width = width, erase = tool == FocusTool.ERASER)
+    return FocusStroke(points, width = width, erase = tool == FocusTool.ERASER, wholeLine = tool == FocusTool.BRUSH)
 }
 
 private fun unzoomed(at: Offset, zoom: Float, pan: Offset): Offset =

@@ -20,20 +20,20 @@ class SelectionTest {
     )
 
     @Test
-    fun `кривая рамка, зацепившая куски номера, захватывает их целиком в порядке чтения`() {
+    fun `кривая рамка, зацепившая куски номера, берёт их текстом целиком в порядке чтения`() {
 
         val s = layer.snapSelection(Box(30f, 110f, 150f, 125f))
 
         assertEquals("20 4514 9154 9395", s.text)
-        assertEquals(Box(10f, 100f, 190f, 120f), s.region)
+        assertEquals("обводка остаётся как нарисована (#1039)", Box(30f, 110f, 150f, 125f), s.region)
     }
 
     @Test
-    fun `рамка меньше слова захватывает слово целиком`() {
+    fun `рамка меньше слова берёт слово текстом, а область остаётся как нарисована`() {
         val s = layer.snapSelection(Box(60f, 105f, 70f, 115f))
 
         assertEquals("4514 9154", s.text)
-        assertEquals(Box(45f, 100f, 140f, 120f), s.region)
+        assertEquals(Box(60f, 105f, 70f, 115f), s.region)
     }
 
     @Test
@@ -102,7 +102,7 @@ class SelectionTest {
     }
 
     @Test
-    fun `построчные рамки не накрывают незахваченное слово между строк`() {
+    fun `рамка между строк берёт задетые слова текстом и не накрывает незадетое между ними`() {
         val page = AtomLayer(
             listOf(
                 atom("a", "Отправитель:", 10f, 100f, 150f, 120f),
@@ -116,10 +116,7 @@ class SelectionTest {
         assertEquals("Отправитель: Иванов", s.text)
         assertFalse("e" in s.ids)
 
-        assertTrue(s.region.contains(50f, 140f))
-
-        assertTrue(s.lineRegions.none { it.contains(55f, 140f) })
-        assertEquals(2, s.lineRegions.size)
+        assertFalse("область накрыла слово, которого человек не показывал", s.region.contains(50f, 140f))
     }
 
     @Test

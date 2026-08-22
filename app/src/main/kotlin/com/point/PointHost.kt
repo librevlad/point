@@ -130,7 +130,7 @@ fun PointHost(
     onTakeChatAnswer: () -> Unit = {},
     onRunChatOffer: () -> Unit = {},
     onOpenSelection: () -> Unit = {},
-    onSelectRegion: (com.point.core.flow.Box, List<com.point.core.flow.Box>) -> Unit = { _, _ -> },
+    onSelectRegion: (List<com.point.core.flow.FocusPart>) -> Unit = {},
     onClearFocus: () -> Unit = {},
     onTakeSelection: () -> Unit = {},
     onFocusSelection: () -> Unit = {},

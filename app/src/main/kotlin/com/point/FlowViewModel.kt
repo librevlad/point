@@ -24,6 +24,7 @@ import com.point.core.flow.SensorySettings
 import com.point.core.flow.AtomCodec
 import com.point.core.flow.AtomLayer
 import com.point.core.flow.Box
+import com.point.core.flow.FocusPart
 import com.point.core.flow.FrameTransform
 import com.point.core.flow.InvestigationState
 import com.point.core.flow.investigationStateOf
@@ -197,9 +198,6 @@ class FlowViewModel @Inject constructor(
     private var selectionLayer: AtomLayer? = null
     private var selectionTransform: FrameTransform? = null
     private var selectionSnap: SnappedSelection? = null
-
-    /** Обведённые места по отдельности, как их нарисовал палец (#549). */
-    private var selectionParts: List<Box> = emptyList()
 
     private var findLayer: AtomLayer? = null
     private var findTransform: FrameTransform? = null
@@ -766,43 +764,24 @@ class FlowViewModel @Inject constructor(
             selectionLayer = loaded.first
             selectionTransform = loaded.second
             selectionSnap = null
-            selectionParts = emptyList()
             _ui.update { it.copy(selection = SelectionUi(image = loaded.third, layer = loaded.first)) }
         }
     }
 
     /**
-     * ✓ на экране Focus: показанная область становится Focus объекта и экран закрывается
+     * ✓ на экране Focus: показанное становится Focus объекта и экран закрывается
      * (ТЗ владельца 10.08.2026 — «нажал → Focus исчез → Point получает region»).
      *
-     * Мазок кистью тянет строку целиком: человек метит серединой пальца, а не выцеливает
-     * начало и конец.
+     * Каждое место прилипает по правилу своего инструмента и не выше потолка (#1037, #1039):
+     * кисть — к задетым строкам, обводка — как нарисована. Одни и те же прилипшие места
+     * уходят в Focus и для «Замазать», и для «Взять фрагмент», и для перечитывания области.
      */
-    fun onSelectRegion(display: Box, parts: List<Box> = emptyList()) {
+    fun onSelectRegion(parts: List<FocusPart>) {
         val layer = selectionLayer ?: return
         val transform = selectionTransform ?: return
-        val snap = layer.snapSelection(transform.toRaw(display), wholeLine = true)
-        selectionSnap = snap
-
-        // Обведённые места остаются как нарисованы, без прилипания к строкам (#549):
-        // замазывают ровно то, что человек показал, а не строку целиком вокруг него.
-        selectionParts = parts.map(transform::toRaw)
+        if (parts.isEmpty()) return
+        selectionSnap = layer.snapSelection(parts.map { it.copy(box = transform.toRaw(it.box)) })
         focusOnSelection()
-        return
-        _ui.update { state ->
-            val sel = state.selection ?: return@update state
-            state.copy(
-                selection = sel.copy(
-
-                    highlights = if (snap.atoms.isEmpty()) {
-                        listOf(transform.toUpright(snap.region))
-                    } else {
-                        snap.lineRegions.map(transform::toUpright)
-                    },
-                    text = snap.text,
-                ),
-            )
-        }
     }
 
     /**
@@ -820,7 +799,7 @@ class FlowViewModel @Inject constructor(
                 region = snap.region,
                 atomIds = snap.ids,
                 text = snap.text.takeIf { it.isNotBlank() },
-                parts = selectionParts,
+                parts = snap.parts,
             ),
         )
         _ui.update { it.copy(focusPreview = focusPreviewOf(snap.region)) }
@@ -963,7 +942,6 @@ class FlowViewModel @Inject constructor(
         selectionLayer = null
         selectionTransform = null
         selectionSnap = null
-        selectionParts = emptyList()
         _ui.update { it.copy(selection = null) }
     }
 

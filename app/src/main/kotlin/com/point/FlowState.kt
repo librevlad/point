@@ -180,8 +180,6 @@ data class FlowUiState(
 
 data class SelectionUi(
     val image: androidx.compose.ui.graphics.ImageBitmap,
-    val highlights: List<com.point.core.flow.Box> = emptyList(),
-    val text: String? = null,
 
     /** Слой слов кадра: по нему мазок прилипает к строке, а не остаётся кривой линией. */
     val layer: com.point.core.flow.AtomLayer? = null,
