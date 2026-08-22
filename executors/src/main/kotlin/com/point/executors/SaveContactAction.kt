@@ -21,7 +21,9 @@ class SaveContactCapability @Inject constructor() : Capability {
     override val id = ID
     override val icon = "contact"
 
-    override val meta = CapabilityMeta(priority = 17)
+    // Шаг кончается карточкой в приложении контактов — сохраняет её человек (#1131):
+    // возврат ни с чем гасит «Открыл карточку контакта», а не оставляет её висеть.
+    override val meta = CapabilityMeta(priority = 17, handsOff = true)
     override fun label(state: ObjectState) = "Сохранить контакт"
     override fun accepts(state: ObjectState) =
         !state.has(Feature.HAS_VCARD) && (state.has(Feature.HAS_PHONE) || state.has(Feature.HAS_EMAIL))

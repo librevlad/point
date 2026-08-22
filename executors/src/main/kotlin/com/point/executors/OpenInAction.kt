@@ -19,7 +19,9 @@ class OpenInCapability @Inject constructor() : Capability {
     override val id = ID
     override val icon = "open-in"
 
-    override val meta = CapabilityMeta(priority = 60, localOnly = true)
+    // Список приложений — ещё экран Point, но кончается шаг запуском выбранного, то есть
+    // чужим экраном (#1131): подпись «Открываю в …» гаснет возвратом человека.
+    override val meta = CapabilityMeta(priority = 60, localOnly = true, handsOff = true)
 
     override fun label(state: ObjectState) = "Открыть другим приложением"
     override fun accepts(state: ObjectState) =

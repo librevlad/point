@@ -1,6 +1,7 @@
 package com.point.executors
 
 import com.point.core.flow.Capability
+import com.point.core.flow.CapabilityMeta
 import com.point.core.flow.Realizer
 import com.point.core.flow.Sharer
 import com.point.core.model.ActionResult
@@ -18,6 +19,9 @@ import javax.inject.Inject
 class ShareAllCapability @Inject constructor() : Capability {
     override val id = ID
     override val icon = "share"
+
+    // Шаг кончается системным диалогом «Поделиться»: дальше выбирает человек (#1131).
+    override val meta = CapabilityMeta(handsOff = true)
     override fun label(state: ObjectState) = "Поделиться всем"
     override fun accepts(state: ObjectState) = state.kind == ObjectKind.COLLECTION
     override fun produces(state: ObjectState) = state

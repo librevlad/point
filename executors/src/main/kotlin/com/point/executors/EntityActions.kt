@@ -71,7 +71,8 @@ class CallCapability @Inject constructor() : Capability {
 
     // #466: «я всё равно на незнакомый номер звонить не буду». Звонок больше не стоит высоко
     // сам по себе — порядок решает то, чем человек пользуется (обучение на выборах).
-    override val meta = CapabilityMeta(priority = 40)
+    // Шаг кончается набором номера в чужом приложении (#1131).
+    override val meta = CapabilityMeta(priority = 40, handsOff = true)
     override fun label(state: ObjectState) = "Позвонить"
     override fun accepts(state: ObjectState) = state.has(Feature.HAS_PHONE)
     override fun produces(state: ObjectState) = state
@@ -98,7 +99,7 @@ class CallRealizer @Inject constructor(
 class SmsCapability @Inject constructor() : Capability {
     override val id = ID
     override val icon = "message"
-    override val meta = CapabilityMeta(priority = 42)
+    override val meta = CapabilityMeta(priority = 42, handsOff = true)
     override fun label(state: ObjectState) = "Сообщение"
     override fun accepts(state: ObjectState) = state.has(Feature.HAS_PHONE)
     override fun produces(state: ObjectState) = state
@@ -125,7 +126,7 @@ class SmsRealizer @Inject constructor(
 class EmailCapability @Inject constructor() : Capability {
     override val id = ID
     override val icon = "email"
-    override val meta = CapabilityMeta(priority = 13)
+    override val meta = CapabilityMeta(priority = 13, handsOff = true)
     override fun label(state: ObjectState) = "Написать письмо"
     override fun accepts(state: ObjectState) = state.has(Feature.HAS_EMAIL)
     override fun produces(state: ObjectState) = state
@@ -152,7 +153,7 @@ class EmailRealizer @Inject constructor(
 class MapCapability @Inject constructor() : Capability {
     override val id = ID
     override val icon = "map"
-    override val meta = CapabilityMeta(priority = 15)
+    override val meta = CapabilityMeta(priority = 15, handsOff = true)
     override fun label(state: ObjectState) = "Открыть на карте"
     override fun accepts(state: ObjectState) = state.has(Feature.HAS_ADDRESS)
     override fun produces(state: ObjectState) = state
@@ -189,7 +190,7 @@ class EventCapability(
 
     override val id = ID
     override val icon = "event"
-    override val meta = CapabilityMeta(priority = 16)
+    override val meta = CapabilityMeta(priority = 16, handsOff = true)
     override fun label(state: ObjectState) = "Создать событие"
 
     override fun accepts(state: ObjectState) = state.has(Feature.HAS_DATE) || state.has(Feature.IS_MEETING)

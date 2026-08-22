@@ -18,7 +18,8 @@ import kotlinx.coroutines.withContext
 class AppCapability(private val app: ChosenApp) : Capability {
     override val id = idFor(app)
     override val icon = "app:${app.packageName}"
-    override val meta = CapabilityMeta(priority = 70, latency = Latency.INSTANT)
+    // Выбранное приложение и есть чужой экран, которым кончается шаг (#1131).
+    override val meta = CapabilityMeta(priority = 70, latency = Latency.INSTANT, handsOff = true)
     override fun label(state: ObjectState) = app.label
     override fun accepts(state: ObjectState) = state.kind == app.kind
     override fun produces(state: ObjectState) = state

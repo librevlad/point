@@ -1825,7 +1825,10 @@ class FlowViewModel @Inject constructor(
                 return@trackWork
             }
             runCatching { appLauncher.launch(target, toOpen) }
-                .onSuccess { _ui.update { it.copy(busy = null, busyStage = null, message = "Открываю в ${target.label}", messageOutcome = Outcome.DONE) } }
+
+                // Выбранное приложение — тот же уход в чужой экран, что и календарь (#1131):
+                // подпись гаснет возвратом человека, а не висит над объектом.
+                .onSuccess { sayHandingOff("Открываю в ${target.label}") }
                 .onFailure { e -> _ui.update { it.copy(busy = null, busyStage = null, message = e.message ?: "Не удалось открыть", messageOutcome = Outcome.FAILED) } }
         }
     }
@@ -2105,16 +2108,28 @@ class FlowViewModel @Inject constructor(
     }
 
     /**
-     * Подпись шага, отдавшего человека чужому экрану (#1131): календарь и карточка
-     * контакта — там работу заканчивает человек, а не Point.
+     * Подпись шага, отдавшего человека чужому экрану (#1131): календарь, карточка контакта,
+     * карта, диалог «Поделиться», выбранное приложение — там работу заканчивает человек,
+     * а не Point.
      *
      * Возврат в Point без результата — отмена человека, а не ошибка: подпись гаснет
      * молча, без «не вышло» (линза «без оправданий», #1003).
      */
     @Volatile private var handOffMessage: String? = null
 
+    /**
+     * Отдаёт ли шаг человека системе — говорит само действие (`CapabilityMeta.handsOff`),
+     * а не список id здесь: список знал календарь и визитку и не знал «Сохранить контакт»,
+     * который уводит в то же приложение контактов, — и его подпись висела вечно.
+     */
     private fun handsOffToSystem(id: CapabilityId) =
-        id == com.point.executors.EventCapability.ID || id == com.point.executors.VCardCapability.ID
+        runCatching { registry.byId(id).meta.handsOff }.getOrDefault(false)
+
+    /** Исход шага-передачи: подпись стоит, пока человек на чужом экране, и гаснет его возвратом. */
+    private fun sayHandingOff(said: String) {
+        handOffMessage = said
+        _ui.update { it.copy(busy = null, busyStage = null, message = said, messageOutcome = Outcome.DONE) }
+    }
 
     /** Зов из onResume хостов: человек вернулся в Point с чужого экрана. */
     fun returnedToPoint() {
@@ -2160,8 +2175,11 @@ class FlowViewModel @Inject constructor(
                 // ADR-0001 §18: «выполнено» может нести новое знание — оно идёт тем же
                 // merge-путём, что и находки исследований, а не выбрасывается.
                 result.findings?.takeIf { !it.isEmpty }?.let(::landFindings)
-                if (handsOffToSystem(bubble.capabilityId)) handOffMessage = result.message
-                _ui.update { it.copy(busy = null, busyStage = null, message = result.message, messageOutcome = Outcome.DONE) }
+                if (handsOffToSystem(bubble.capabilityId)) {
+                    sayHandingOff(result.message)
+                } else {
+                    _ui.update { it.copy(busy = null, busyStage = null, message = result.message, messageOutcome = Outcome.DONE) }
+                }
             }
             is ActionResult.Failure -> {
                 runCatching { sensory.failure() }
