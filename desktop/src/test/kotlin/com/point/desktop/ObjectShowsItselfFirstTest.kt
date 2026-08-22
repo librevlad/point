@@ -40,11 +40,15 @@ class ObjectShowsItselfFirstTest {
     }
 
     @Test
-    fun `превью не занимает весь экран окна`() {
-        val lines = Regex("""maxLines = (\d+)""").findAll(
-            scene.substringAfter("internal fun Preview(").substringBefore("internal fun Knowledge("),
-        ).map { it.groupValues[1].toInt() }.toList()
+    fun `свёрнутое превью не занимает весь экран окна`() {
+        val body = scene.substringAfter("internal fun Preview(").substringBefore("internal fun Knowledge(")
 
-        assertTrue("превью снова во весь экран: $lines", lines.all { it <= 8 })
+        // Раскрытый текст занимает столько, сколько нужно, — его раскрыл человек (#1086).
+        // Держать нужно свёрнутый: он приходит без спроса.
+        assertTrue("свёрнутый текст больше ничем не ограничен", body.contains("else PREVIEW_LINES"))
+
+        val limit = Regex("""PREVIEW_LINES = (\d+)""").find(scene)?.groupValues?.get(1)?.toInt() ?: 0
+
+        assertTrue("превью снова во весь экран: $limit", limit in 1..8)
     }
 }
