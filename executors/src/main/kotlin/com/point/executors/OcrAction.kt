@@ -60,7 +60,7 @@ internal const val OCR_CLOUD_STAGE = "Читаю снимок в облаке"
  * вопроса. Живёт рядом с цепочкой, которая это и держит, а не в общем словаре — иначе
  * компьютер показывал его как своё.
  */
-const val OCR_ON_PHONE_PROMISE = "текст · сначала на телефоне, потом спрошу про сервис"
+internal const val OCR_ON_PHONE_PROMISE = "текст · сначала на телефоне, потом спрошу про сервис"
 
 class DeviceOcrRealizer @Inject constructor(
     private val store: ObjectStore,

@@ -28,7 +28,7 @@ import java.util.Base64
  * Прежде компьютер показывал телефонное «сначала на телефоне» как своё — шаг, которого здесь
  * не будет.
  */
-const val OCR_ON_PC_PROMISE = "текст · уйдёт в сервис"
+internal const val OCR_ON_PC_PROMISE = "текст · уйдёт в сервис"
 
 class PcCloudOcrRealizer(
     private val config: () -> OcrConfig,
