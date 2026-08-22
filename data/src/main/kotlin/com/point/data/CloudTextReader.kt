@@ -8,6 +8,7 @@ import com.point.core.flow.PrivacyLevel
 import com.point.core.flow.ReaderPrivacy
 import com.point.core.flow.allowedAt
 import com.point.core.flow.allowedBy
+import com.point.core.flow.noTextAnswer
 import com.point.core.model.PointObject
 import javax.inject.Inject
 import com.point.core.flow.summariseCloudErrors
@@ -41,6 +42,8 @@ class DefaultExternalEye @Inject constructor(
         if (allowed.isEmpty()) error(nobodyAllowed())
         val errors = mutableListOf<String>()
         var considered = 0
+        var sawNoText: ExternalReading? = null
+        var failed = false
         for (eye in allowed) {
             if (!eye.canRead(obj)) continue
             considered++
@@ -53,15 +56,26 @@ class DefaultExternalEye @Inject constructor(
 
             try {
                 val text = eye.read(obj)
-                if (text.isNotBlank()) {
+                if (!noTextAnswer(text)) {
                     return ExternalReading(text, eye.reader, eye.privacy.where, eye.privacy.promise.what)
                 }
+
+                // Читатель посмотрел и текста не увидел — пустым листом или служебной
+                // пометкой вроде «*[No text detected]*» (#1054). Пометка — не текст и
+                // не победа: очередь идёт дальше, следующий может увидеть больше.
+                sawNoText = sawNoText ?: ExternalReading("", eye.reader, eye.privacy.where, eye.privacy.promise.what)
                 errors += "${eye.reader}: страница прочитана пустой"
             } catch (e: Exception) {
+                failed = true
                 errors += e.message ?: e.javaClass.simpleName
             }
         }
         if (considered == 0) error(NOT_FOR_THIS_OBJECT)
+
+        // Все, кто мог посмотреть, посмотрели и текста не увидели — это ответ, а не срыв:
+        // чтение возвращается пустым, и вопрос получает честное «не нашлось» (#1054).
+        // Стоило одному сорваться — ответа нет: он мог увидеть то, чего не увидели другие.
+        if (sawNoText != null && !failed) return sawNoText
         error(summariseCloudErrors(errors) + keyHint())
     }
 

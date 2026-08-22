@@ -71,4 +71,21 @@ class StrongerReadingEnrichesSourceTest {
 
         assertTrue(result is ActionResult.Failure)
     }
+
+    @Test fun `отписка сервиса «текста нет» — знание «не нашлось», а не текст исходника`() = runTest {
+        // «Прочитать сильнее» на фото без надписей (#1054): «*[No text detected]*» ложилось
+        // текстом объекта, и Point предлагал «Понять» и «Перевести» чужую отписку.
+        val result = ExternalEyeCloudOcrRealizer(eye("*[No text detected]*"), store).perform(image)
+
+        assertTrue("отписка стала срывом или объектом", result is ActionResult.Done)
+        val found = (result as ActionResult.Done).findings!!
+        assertTrue("нет ни одного нового узла", found.objects.isEmpty())
+        assertTrue("отписка легла текстом исходника", META_OCR_TEXT_REF !in found.metadata)
+        assertTrue("объекту приписан текст, которого нет", Feature.HAS_TEXT !in found.features)
+        assertEquals(
+            "вопрос чтения закрыт честным «не нашлось»",
+            InvestigationState.NOT_FOUND,
+            investigationStateOf(found.metadata, KnownCapabilities.IMAGE_TEXT),
+        )
+    }
 }

@@ -18,8 +18,15 @@ import com.point.core.flow.PrivacyLevel
 import com.point.core.flow.allowedAt
 import com.point.core.flow.META_READING_DOUBT
 import com.point.core.flow.degeneratedReading
+import com.point.core.flow.focusOf
+import com.point.core.flow.investigationKey
+import com.point.core.flow.InvestigationState
+import com.point.core.flow.KnownCapabilities
+import com.point.core.flow.NO_TEXT_CLAUSE
+import com.point.core.flow.noTextAnswer
 import com.point.core.flow.readingDoubts
 import com.point.core.flow.poorlyRead
+import com.point.core.flow.stripMarkdownChrome
 import com.point.core.flow.Realizer
 import com.point.core.flow.RealizerKind
 import com.point.core.flow.RealizerMeta
@@ -28,6 +35,7 @@ import com.point.core.flow.reportStage
 import com.point.core.model.ActionResult
 import com.point.core.model.ActionYield
 import com.point.core.model.CapabilityId
+import com.point.core.model.Findings
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
@@ -48,10 +56,11 @@ internal val OCR_CLOUD_PROMPT: String = com.point.core.flow.CLOUD_READING_PROMPT
  */
 internal const val OCR_FOCUS_PROMPT =
     "На изображении только один фрагмент документа. Прочитай его дословно, целиком и ничего " +
-        "не добавляя от себя. Не додумывай то, что обрезано краем. Верни только текст."
+        "не добавляя от себя. Не додумывай то, что обрезано краем. Верни только текст. " +
+        NO_TEXT_CLAUSE
 
 internal fun ocrPromptFor(obj: PointObject): String =
-    if (com.point.core.flow.focusOf(obj.metadata, obj.id)?.region != null) OCR_FOCUS_PROMPT else OCR_CLOUD_PROMPT
+    if (focusOf(obj.metadata, obj.id)?.region != null) OCR_FOCUS_PROMPT else OCR_CLOUD_PROMPT
 
 internal const val OCR_CLOUD_STAGE = "Читаю снимок в облаке"
 
@@ -130,7 +139,7 @@ class CloudOcrRealizer @Inject constructor(
             if (!isAvailable()) return@withContext ActionResult.Failure(chainClosed(privacy.level()), recoverable = true)
 
             reportStage(OCR_CLOUD_STAGE)
-            runCatching { guarded(llm.run(input, ocrPromptFor(input)), "модель") }
+            runCatching { guarded(input, llm.run(input, ocrPromptFor(input)), "модель") }
                 .getOrElse { ActionResult.Failure(it.message ?: "Ошибка распознавания в облаке", recoverable = true) }
         }
 }
@@ -182,11 +191,12 @@ class CloudOcrDirectRealizer @Inject constructor(
             reportStage(OCR_CLOUD_STAGE)
             runCatching {
                 val answer = llm.run(input, ocrPromptFor(input))
-                val page = runCatching { File(answer.uri.value).readText() }.getOrDefault("")
+                val page = stripMarkdownChrome(File(answer.uri.value).readText())
+                if (noTextAnswer(page)) return@runCatching noTextFound(input)
                 degeneratedReading(page)?.let { why ->
                     return@runCatching ActionResult.Failure(unreadable("модель", why), recoverable = true)
                 }
-                strongerReadingLands(store.newScratchFile("txt"), com.point.core.flow.stripMarkdownChrome(page))
+                strongerReadingLands(store.newScratchFile("txt"), page)
             }.getOrElse { ActionResult.Failure(it.message ?: "Ошибка распознавания в облаке", recoverable = true) }
         }
 }
@@ -238,13 +248,14 @@ private suspend fun readWithExternalEye(
     val reading = runCatching { eye.read(input) }.getOrElse {
         return ActionResult.Failure(it.message ?: "Прочитать снаружи не удалось", recoverable = true)
     }
-    degeneratedReading(reading.text)?.let { why ->
-        return ActionResult.Failure(unreadable(reading.reader, why), recoverable = true)
-    }
 
     // Markdown-обёртка провайдера — не текст страницы (#661): «![img-0.jpeg](…)» и
     // «# Відділення 1» уходили в объект и дальше в знание (живой прогон 2026-08-09).
-    val page = com.point.core.flow.stripMarkdownChrome(reading.text)
+    val page = stripMarkdownChrome(reading.text)
+    if (noTextAnswer(page)) return noTextFound(input)
+    degeneratedReading(page)?.let { why ->
+        return ActionResult.Failure(unreadable(reading.reader, why), recoverable = true)
+    }
     if (asKnowledge) {
         val ref = runCatching { store.newScratchFile("txt") }
             .getOrElse { return ActionResult.Failure(it.message ?: "Ошибка записи результата", recoverable = true) }
@@ -285,11 +296,33 @@ private suspend fun readWithExternalEye(
     }.getOrElse { ActionResult.Failure(it.message ?: "Ошибка записи результата", recoverable = true) }
 }
 
-private fun guarded(result: ResultObject, who: String): ActionResult {
+private fun guarded(input: PointObject, result: ResultObject, who: String): ActionResult {
     val text = runCatching { File(result.uri.value).readText() }.getOrNull() ?: return ActionResult.Success(result)
+    if (noTextAnswer(text)) return noTextFound(input)
     val why = degeneratedReading(text) ?: return ActionResult.Success(result)
     return ActionResult.Failure(unreadable(who, why), recoverable = true)
 }
+
+/**
+ * Читатель посмотрел и текста не увидел (#1054): отдал пустой лист или служебную пометку
+ * вроде «*[No text detected]*». Это ответ на вопрос «что написано на снимке» — «смотрели,
+ * не нашлось», — а не текст: объект не заводится, знание ложится на исходник, и человек
+ * слышит свои слова, а не чужую отписку. Под Focus вопрос другой — «что в этой области», —
+ * и «не нашлось» остаётся в её рамках, а не закрывает вопрос о снимке целиком.
+ *
+ * Не срыв: читатель ответил. Срыв оставил бы вопрос не исследованным (ADR-0001 §9).
+ */
+private fun noTextFound(input: PointObject): ActionResult = ActionResult.Done(
+    NO_TEXT_ON_PICTURE,
+    Findings(
+        metadata = mapOf(
+            investigationKey(KnownCapabilities.IMAGE_TEXT, focusOf(input.metadata, input.id)) to
+                InvestigationState.NOT_FOUND.wire,
+        ),
+    ),
+)
+
+internal const val NO_TEXT_ON_PICTURE = "Текста на снимке не нашлось"
 
 private fun unreadable(who: String, why: String): String =
     "Не смог прочитать этот снимок: $who отдала бессмыслицу ($why). " +
