@@ -286,11 +286,17 @@ abstract class CapabilityModule {
 
         // Дорогу чтения снимка называет телефон сам (#1021): словарь общий, слово — исполнителя.
         @Provides @ElementsIntoSet @OwnCapabilities
-        fun sharedCaps(office: com.point.core.flow.OfficeOrgan): Set<Capability> =
+        fun sharedCaps(
+            office: com.point.core.flow.OfficeOrgan,
+
+            // Аккаунт спрашивается в момент вопроса (#1022): человек входит и выходит,
+            // не перезапуская Point, и «Дать ссылку» обязана видеть нынешнее положение.
+            account: com.point.core.flow.AccountStore,
+        ): Set<Capability> =
             com.point.core.flow.capabilities.sharedCapabilities(
                 office,
                 ocrPromise = com.point.executors.OCR_ON_PHONE_PROMISE,
-            ).toSet()
+            ) { account.current() != null }.toSet()
 
         @Provides @IntoSet
         fun openCvScanR(store: ObjectStore): Realizer = OpenCvScanRealizer(store)

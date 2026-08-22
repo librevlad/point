@@ -151,7 +151,7 @@ class ActionsSayTheirPriceTest {
     // собранная руками с нужным словом, а та, которую телефон и правда раздаёт: общий словарь
     // в том виде, в каком его кладёт в набор CapabilityModule.
     private val phoneOcr: Capability =
-        CapabilityModule.sharedCaps(OfficeAlwaysHere).first { it.id == OcrCapability.ID }
+        CapabilityModule.sharedCaps(OfficeAlwaysHere, AccountForTests()).first { it.id == OcrCapability.ID }
 
     @Test
     fun `«Распознать текст» предупреждает о сервисе, потому что запасной путь сетевой`() {

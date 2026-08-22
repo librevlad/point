@@ -629,6 +629,13 @@ class FlowViewModel @Inject constructor(
             return
         }
 
+        // Действие само знает, что сейчас не сработает (#1022): человек слышит причину по
+        // тапу, а не после экрана согласия, за которым всё равно отказ (линза #1003).
+        wontWorkNow(bubble.capabilityId, top.state)?.let { reason ->
+            _ui.update { it.copy(message = reason, messageOutcome = Outcome.FAILED) }
+            return
+        }
+
         if (com.point.core.flow.labelNeedsKey(bubble.title)) {
             openKeyScreen(
                 KeyErrand(
@@ -1020,6 +1027,15 @@ class FlowViewModel @Inject constructor(
         if (com.point.core.flow.anyoneAllowedAt(level)) return null
         return com.point.core.flow.chainClosedBy(level)
     }
+
+    /**
+     * Почему это действие сейчас не сработает — словами самого действия (#1022).
+     *
+     * Спрашивается у способности: чего не хватает, знает она, а не экран. Молчание —
+     * обычный ход, и тогда всё идёт как прежде.
+     */
+    private fun wontWorkNow(id: CapabilityId, state: ObjectState): String? =
+        runCatching { registry.byId(id).wontWorkNow(state) }.getOrNull()
 
     private fun isCloud(id: CapabilityId) =
         runCatching { registry.byId(id).meta.network }.getOrDefault(false) ||

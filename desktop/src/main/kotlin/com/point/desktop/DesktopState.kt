@@ -615,6 +615,17 @@ class DesktopState(
 
     fun onBubble(item: InboxItem, bubble: Bubble) {
         work = scope.launch(Dispatchers.IO) {
+
+            // Действие само знает, что сейчас не сработает (#1022): человек слышит причину
+            // по тапу, а не после согласия на отправку, которая всё равно не состоится.
+            // То же правило и теми же словами, что на телефоне.
+            val stopper = runCatching {
+                registry.byId(bubble.capabilityId).wontWorkNow(item.obj.state)
+            }.getOrNull()
+            if (stopper != null) {
+                _message.value = stopper
+                return@launch
+            }
             val guard = consent
             if (guard != null && resolver.leavesDevice(bubble.capabilityId)) {
                 // Выбранный человеком режим спрашивается ДО согласия: если он сказал

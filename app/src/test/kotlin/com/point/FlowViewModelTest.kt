@@ -18,6 +18,8 @@ import com.point.core.flow.Realizer
 import com.point.core.flow.Resolver
 import com.point.core.flow.UserAiConfig
 import com.point.core.flow.UserKeyStore
+import com.point.core.flow.capabilities.DropLinkCapability
+import com.point.core.flow.capabilities.NEEDS_ACCOUNT_FOR_LINK
 import com.point.core.model.ActionResult
 import com.point.core.model.Bubble
 import com.point.core.model.CapabilityId
@@ -3767,6 +3769,40 @@ class FlowViewModelTest {
         assertTrue(vm.ui.value.cloudConsent)
         assertNull(vm.ui.value.message)
         assertEquals("__unset__", resolver.lastAmendment)
+    }
+
+    /**
+     * #1022, решение владельца 21.08.2026. «Дать ссылку» без аккаунта Point вела человека через
+     * согласие «файл уедет на сервер Point», грузила файл и отказывала чужими причинами — про
+     * связь и про размер. Действие, которое само знает, что сейчас не сработает, говорит это по
+     * тапу, и согласия у человека не спрашивают (линза #1003 — не оправдываться, а называть).
+     */
+    @Test fun `без аккаунта «Дать ссылку» отвечает причиной, а не вопросом согласия`() = runTest(dispatcher) {
+        val link = DropLinkCapability { false }
+        resolver.result = ActionResult.Done("готово")
+        val vm = vm(own = listOf(link))
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.onBubble(bubble(id = link.id.value, title = link.label(ObjectState(ObjectKind.IMAGE))))
+        advanceUntilIdle()
+
+        assertEquals(NEEDS_ACCOUNT_FOR_LINK, vm.ui.value.message)
+        assertEquals(Outcome.FAILED, vm.ui.value.messageOutcome)
+        assertEquals("согласие спрошено зря", false, vm.ui.value.cloudConsent)
+        assertEquals("файл ушёл, хотя выдать ссылку некому", "__unset__", resolver.lastAmendment)
+    }
+
+    @Test fun `с аккаунтом «Дать ссылку» спрашивает согласие прежним ходом`() = runTest(dispatcher) {
+        val link = DropLinkCapability { true }
+        resolver.result = ActionResult.Done("готово")
+        val vm = vm(own = listOf(link))
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.onBubble(bubble(id = link.id.value, title = link.label(ObjectState(ObjectKind.IMAGE))))
+        advanceUntilIdle()
+
+        assertTrue("вопрос согласия пропал вместе с починкой", vm.ui.value.cloudConsent)
+        assertEquals("файл не должен уйти до «да»", "__unset__", resolver.lastAmendment)
     }
 
     @Test fun `confirming consent runs the pending cloud action and persists the grant`() = runTest(dispatcher) {

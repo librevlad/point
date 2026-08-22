@@ -25,7 +25,7 @@ class RealCapabilityInventoryTest {
     // Общий словарь — ровно тот, что телефон раздаёт через CapabilityModule (#1021): слово о
     // дороге чтения снимка в нём телефонное. Перечисленный руками словарь расходился с боевым
     // набором — держал голое чтение без обещания.
-    private val builtIn: List<Capability> = CapabilityModule.sharedCaps(OfficeAlwaysHere).toList() + listOf(
+    private val builtIn: List<Capability> = CapabilityModule.sharedCaps(OfficeAlwaysHere, AccountForTests()).toList() + listOf(
         AiCapability(aiKeysReady), BlurBgCapability(),
         CallCapability(), CloudOcrCapability(), CopyCapability(), CopyCardCapability(),
         CorrectValueCapability(),

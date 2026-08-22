@@ -7,8 +7,11 @@ import com.point.core.flow.advertisedActions
 /**
  * Умения компьютера. Общие способности он делит с телефоном, а не заводит свои копии; дорогу
  * чтения снимка в общем словаре называет сам (#1021) — словарь общий, слово — исполнителя.
+ *
+ * [signedIn] — есть ли на компьютере аккаунт Point (#1022): «Дать ссылку» без него не
+ * сработает, и человек узнаёт это по тапу, а не после согласия на отправку.
  */
-fun desktopCapabilities(): Set<Capability> = setOf(
+fun desktopCapabilities(signedIn: () -> Boolean = { true }): Set<Capability> = setOf(
     PcOpenCapability(), PcCopyCapability(), PcRevealCapability(), PcSaveAsCapability(),
     PcDownloadCapability(), PcToPhoneCapability(), PcPrintCapability(),
     PcOpenLinkCapability(),
@@ -24,7 +27,10 @@ fun desktopCapabilities(): Set<Capability> = setOf(
     // Сканированный PDF читается одним действием и здесь (#1014): страницы рисует pdfbox,
     // читает существующее облачное чтение, знание ложится на сам PDF.
     PcReadDocumentCapability(),
-) + com.point.core.flow.capabilities.sharedCapabilities(ocrPromise = OCR_ON_PC_PROMISE)
+) + com.point.core.flow.capabilities.sharedCapabilities(
+    ocrPromise = OCR_ON_PC_PROMISE,
+    signedIn = signedIn,
+)
 
 /**
  * Имена умений, привязанных к месту исполнения: бумага, файл и окно выходят на компьютере,

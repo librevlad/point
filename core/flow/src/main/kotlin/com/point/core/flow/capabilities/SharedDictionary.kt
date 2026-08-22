@@ -13,16 +13,20 @@ import com.point.core.flow.OfficeOrgan
  * [ocrPromise] — слово о дороге чтения снимка от того, кто здесь читает (#1021): у телефона
  * первым идёт свой движок, у компьютера — только сервис. Словарь своего обещания не держит,
  * иначе обещание одного устройства показывалось бы на другом как своё.
+ *
+ * [signedIn] — есть ли аккаунт Point на этом устройстве (#1022). Спрашивается в момент
+ * вопроса, а не запоминается: человек входит и выходит, не перезапуская Point.
  */
 fun sharedCapabilities(
     office: OfficeOrgan = OfficeAlwaysHere,
     ocrPromise: String? = null,
+    signedIn: () -> Boolean = { true },
 ): List<Capability> = listOf(
     OcrCapability(ocrPromise),
     QrCapability(),
     ArchiveCapability(),
     OfficeCapability(),
     ImageCapability(),
-    DropLinkCapability(),
+    DropLinkCapability(signedIn),
     PdfCapability(office),
 )
