@@ -5,6 +5,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import com.point.core.flow.AiFacts
 import com.point.core.flow.AiKeyCheck
 import com.point.core.flow.AiReadiness
+import com.point.core.flow.AudioLevel
 import com.point.core.flow.BuiltInAiKeys
 import com.point.core.flow.AppLauncher
 import com.point.core.flow.BackgroundRemover
@@ -69,6 +70,7 @@ import com.point.data.AndroidViewer
 import com.point.data.BitmapEvidenceCropper
 import com.point.core.flow.ClaudeLlmClient
 import com.point.data.CommonsArchiveExtractor
+import com.point.data.DecodedAudioLevel
 import com.point.data.DocumentTypeInvestigation
 import com.point.data.DocumentTypeInvestigationRealizer
 import com.point.data.GraphRolesInvestigation
@@ -210,6 +212,10 @@ abstract class DataModule {
 
     @Binds
     abstract fun evidenceCropper(impl: BitmapEvidenceCropper): EvidenceCropper
+
+    // Уровень звука меряет декодер телефона (#1053) — до того, как запись уедет в сервис.
+    @Binds
+    abstract fun audioLevel(impl: DecodedAudioLevel): AudioLevel
 
     @Binds
     abstract fun qrEncoder(impl: ZxingQrEncoder): QrEncoder
