@@ -44,6 +44,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
@@ -189,6 +190,41 @@ class FlowViewModelTest {
             "В документе нет ни одной страницы",
             obj.metadata[com.point.core.flow.META_UNUSABLE_REASON],
         )
+    }
+
+    /**
+     * #1033 (живьём на эмуляторе 19.08.2026): PDF с целым заголовком и мусорным телом. Первая
+     * страница не отрисовалась, и подзаголовок объяснял поломку словами про картинку — «или
+     * это не изображение» — прямо под подписью «PDF». Головной путь карточки идёт здесь: чем
+     * бы ридер ни отказался, отказ на экране называет вид принесённого объекта.
+     */
+    @Test fun `битый PDF на экране объяснён словами про PDF, а не про изображение`() = runTest(dispatcher) {
+        store.kind = ObjectKind.PDF
+        val broken = "Missing root object specification in trailer"
+        val vm = vm(
+            pdf = object : com.point.core.flow.PdfRasterizer {
+                override suspend fun rasterize(obj: PointObject) = ScratchRef("/pages")
+                override suspend fun rasterizeFirstPage(obj: PointObject): ScratchRef? = error(broken)
+            },
+        )
+
+        vm.onShared("doc.pdf", "application/pdf"); advanceUntilIdle()
+
+        val obj = vm.ui.value.frame?.obj
+        assertNotNull("объект остаётся на экране", obj)
+        assertTrue("негодность — часть состояния объекта", obj!!.state.has(Feature.UNUSABLE))
+        val said = obj.metadata[com.point.core.flow.META_UNUSABLE_REASON]
+        assertEquals(
+            "подзаголовок взял слово из общего словаря по виду объекта",
+            com.point.core.flow.readerFailure(broken, ObjectKind.PDF),
+            said,
+        )
+        assertNotEquals(
+            "словами про картинку PDF больше не объясняют",
+            com.point.core.flow.readerFailure(broken, ObjectKind.IMAGE),
+            said,
+        )
+        assertFalse("чужой текст библиотеки в подзаголовок не попадает", said!!.contains(broken))
     }
 
     /**

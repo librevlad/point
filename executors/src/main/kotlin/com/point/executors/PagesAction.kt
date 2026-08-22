@@ -54,7 +54,7 @@ class PagesRealizer @Inject constructor(
                         ),
                     )
                 }
-            }.getOrElse { ActionResult.Failure(refusal(it.message), recoverable = true) }
+            }.getOrElse { ActionResult.Failure(refusal(input, it.message), recoverable = true) }
         }
 
     /**
@@ -62,8 +62,8 @@ class PagesRealizer @Inject constructor(
      * Всё, чего мы не знаем точно, остаётся прежним отказом разбора, а чужой текст
      * исключения человеку не показывается.
      */
-    private fun refusal(reason: String?): String =
-        if (READER_NO_PAGES in reason.orEmpty()) readerFailure(reason) else NOT_SPLIT
+    private fun refusal(input: PointObject, reason: String?): String =
+        if (READER_NO_PAGES in reason.orEmpty()) readerFailure(reason, input.state.kind) else NOT_SPLIT
 
     private companion object {
         const val NOT_SPLIT = "Не удалось разобрать PDF на страницы"

@@ -1,21 +1,28 @@
 package com.point.core.flow
 
+import com.point.core.model.ObjectKind
+
 /**
  * Своими словами о том, почему снимок не прочитался.
  *
  * Раньше причина от платформы уходила прямо на экран, и человек читал
  * «не удалось прочитать страницу — decode failed» (#686). Техническая причина
  * остаётся в журнале, человеку достаётся одно понятное предложение.
+ *
+ * Отказ говорит о том объекте, который человек принёс (#1033): битый PDF раньше объясняли
+ * словами про картинку — «повреждён или это не изображение» — при подписи «PDF» на том же
+ * экране. Вид объекта обязателен у каждого вызова: умолчание снова подсунуло бы PDF чужие
+ * слова молча.
  */
-fun readerFailure(reason: String?): String {
+fun readerFailure(reason: String?, kind: ObjectKind): String {
     val said = reason.orEmpty().lowercase()
     return when {
-        said.isBlank() -> BROKEN_FILE
+        said.isBlank() -> brokenFile(kind)
         NO_PAGES.any { it in said } -> EMPTY_DOCUMENT
-        NOT_AN_IMAGE.any { it in said } -> BROKEN_FILE
+        NOT_AN_IMAGE.any { it in said } -> brokenFile(kind)
         TOO_SLOW.any { it in said } -> "Чтение заняло слишком долго и оборвалось"
         TOO_BIG.any { it in said } -> "Снимок слишком большой, чтобы его прочитать"
-        else -> BROKEN_FILE
+        else -> brokenFile(kind)
     }
 }
 
@@ -36,7 +43,16 @@ fun readerFailureIsFatal(reason: String?): Boolean {
     return NOT_AN_IMAGE.any { it in said } || NO_PAGES.any { it in said }
 }
 
-private const val BROKEN_FILE = "Файл не открылся — он повреждён или это не изображение"
+/**
+ * Словарь отказа по виду объекта — один на всех потребителей (#1033). Вид без своего слова
+ * получает только факт поломки: догадка «это не …» уместна лишь там, где известно, чем файл
+ * должен был быть.
+ */
+private fun brokenFile(kind: ObjectKind): String = when (kind) {
+    ObjectKind.PDF -> "Файл не открылся — он повреждён или это не PDF"
+    ObjectKind.IMAGE -> "Файл не открылся — он повреждён или это не изображение"
+    else -> "Файл не открылся — он повреждён"
+}
 
 private const val EMPTY_DOCUMENT = "В документе нет ни одной страницы"
 

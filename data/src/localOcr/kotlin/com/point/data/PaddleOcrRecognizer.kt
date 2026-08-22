@@ -10,7 +10,6 @@ import com.point.core.flow.Atom
 import com.point.core.flow.AtomLayer
 import com.point.core.flow.AtomRecognizer
 import com.point.core.flow.Box
-import com.point.core.flow.readerFailure
 import com.point.core.model.PointObject
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
@@ -75,8 +74,13 @@ class PaddleOcrRecognizer @Inject constructor(
         if (!runsNatively) {
             return@withContext AtomLayer(emptyList(), incomplete = FOREIGN_ABI)
         }
+        // `incomplete` — технический канал ридера (#1033): по нему потребитель и переводит
+        // человеку (`readerFailure`), и решает, о самом объекте отказ или о попытке сейчас
+        // (`readerFailureIsFatal`). Человеческая фраза здесь ломала второе: «повреждён» ни на
+        // одно техническое слово не похоже, и негодный снимок уходил разовой неудачей
+        // операции вместо знания об объекте. Слово то же, что у соседнего движка.
         val source = decodeBoundedUpright(obj.uri.value, MAX_PX)
-            ?: return@withContext AtomLayer(emptyList(), incomplete = readerFailure(null))
+            ?: return@withContext AtomLayer(emptyList(), incomplete = "decode failed")
 
         try {
             val lines = runCatching { detect(source) }.getOrElse {
