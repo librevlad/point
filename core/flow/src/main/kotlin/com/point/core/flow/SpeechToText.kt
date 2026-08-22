@@ -38,6 +38,9 @@ sealed interface Transcription {
     data object Silence : Transcription
 }
 
+/** Одни слова про пустую запись на всех путях — и когда услышал телефон, и когда сервис (#1053). */
+const val NO_SPEECH_HEARD = "В записи не слышно речи"
+
 const val NO_AUDIO_MARKER = "NO_AUDIO"
 
 const val NO_SPEECH_MARKER = "NO_SPEECH"

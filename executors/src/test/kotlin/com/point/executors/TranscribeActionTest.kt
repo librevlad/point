@@ -1,9 +1,11 @@
 package com.point.executors
 
+import com.point.core.flow.AudioLevel
 import com.point.core.flow.GROQ_PROVIDER_ID
 import com.point.core.flow.KEY_SETTINGS_CALL
 import com.point.core.flow.LISTENING
 import com.point.core.flow.META_SEMANTIC_SUMMARY
+import com.point.core.flow.NO_SPEECH_HEARD
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.SpeechKeyNeed
 import com.point.core.flow.SpeechReadiness
@@ -58,6 +60,21 @@ class TranscribeActionTest {
     }
 
     private val ready = SpeechReadiness { emptyList() }
+
+    /** Запись, в которой слышно звук: обычный путь — уехать в сервис. */
+    private val audible = AudioLevel { 0.4 }
+
+    /** Цифровая тишина: все сэмплы у нуля. */
+    private val silent = AudioLevel { 0.0 }
+
+    /** Уровень измерить не вышло — формат незнаком, декодер отказал. */
+    private val unmeasured = AudioLevel { null }
+
+    private fun realizer(
+        speech: SpeechToText,
+        readiness: SpeechReadiness,
+        level: AudioLevel = audible,
+    ) = TranscribeRealizer(store, speech, readiness, level)
 
     private val keyless = SpeechReadiness {
         listOf(
@@ -114,7 +131,7 @@ class TranscribeActionTest {
     @Test
     fun `без ключей отказ приходит до ожидания и называет провайдеров`() = runTest {
         val stages = stagesHeard {
-            val result = TranscribeRealizer(store, forbidden, keyless).perform(recording(540 * 1024))
+            val result = realizer(forbidden, keyless).perform(recording(540 * 1024))
 
             assertTrue(result is ActionResult.Failure)
             result as ActionResult.Failure
@@ -138,7 +155,7 @@ class TranscribeActionTest {
         val said = "Перезвони мне до шести"
         val gist = "Просят перезвонить до шести"
 
-        val result = TranscribeRealizer(store, engine(Transcription.Heard(said, gist)), ready)
+        val result = realizer(engine(Transcription.Heard(said, gist)), ready)
             .perform(recording(1024))
 
         // Расшифровка — знание записи, а не новый объект (#1097, GRF-006).
@@ -155,7 +172,7 @@ class TranscribeActionTest {
 
         runTest {
             val heard = Transcription.Heard("Длинный текст", "Просят перезвонить")
-            val found = (TranscribeRealizer(store, engine(heard), ready).perform(recording(1024)) as ActionResult.Done).findings!!
+            val found = (realizer(engine(heard), ready).perform(recording(1024)) as ActionResult.Done).findings!!
 
             assertEquals("Просят перезвонить", found.metadata[META_SEMANTIC_SUMMARY])
         }
@@ -163,15 +180,50 @@ class TranscribeActionTest {
 
     @Test
     fun `без сути объект не получает пустого обещания`() = runTest {
-        val found = (TranscribeRealizer(store, engine(Transcription.Heard("Только слова")), ready)
+        val found = (realizer(engine(Transcription.Heard("Только слова")), ready)
             .perform(recording(1024)) as ActionResult.Done).findings!!
 
         assertFalse(META_SEMANTIC_SUMMARY in found.metadata)
     }
 
+    /**
+     * Whisper на пустой записи выдумывал фразу — «Thank you.» на двадцати секундах цифровой
+     * тишины (#1053). Пустоту слышно и на телефоне, и такая запись сервису не показывается.
+     */
+    @Test
+    fun `в записи нечего слушать — она никуда не едет`() = runTest {
+        val result = realizer(forbidden, ready, silent).perform(recording(1024))
+
+        assertTrue(result is ActionResult.Done)
+        assertEquals(NO_SPEECH_HEARD, (result as ActionResult.Done).message)
+    }
+
+    @Test
+    fun `речи в записи не нашлось — это ответ, а не открытый вопрос`() = runTest {
+        val result = realizer(forbidden, ready, silent).perform(recording(1024)) as ActionResult.Done
+
+        assertEquals(
+            com.point.core.flow.InvestigationState.NOT_FOUND,
+            com.point.core.flow.investigationStateOf(
+                result.findings!!.metadata,
+                TranscribeCapability.ID,
+            ),
+        )
+    }
+
+    @Test
+    fun `уровень измерить не вышло — это не тишина, и запись идёт в сервис`() = runTest {
+        val result = realizer(engine(Transcription.Heard("Перезвони мне")), ready, unmeasured)
+            .perform(recording(1024))
+
+        assertTrue(result is ActionResult.Done)
+        val ref = (result as ActionResult.Done).findings!!.metadata.getValue(com.point.core.flow.META_OCR_TEXT_REF)
+        assertTrue("слова записи на месте", File(ref).readText().isNotBlank())
+    }
+
     @Test
     fun `тишина говорит про запись, и повторять её незачем`() = runTest {
-        val result = TranscribeRealizer(store, engine(Transcription.Silence), ready).perform(recording(1024))
+        val result = realizer(engine(Transcription.Silence), ready).perform(recording(1024))
 
         assertTrue(result is ActionResult.Failure)
         result as ActionResult.Failure
@@ -181,7 +233,7 @@ class TranscribeActionTest {
 
     @Test
     fun `сбой движка доходит до человека его же словами, а не пустым текстом`() = runTest {
-        val result = TranscribeRealizer(store, brokenEngine("Этот формат записи не читается"), ready)
+        val result = realizer(brokenEngine("Этот формат записи не читается"), ready)
             .perform(recording(1024, mime = "audio/amr"))
 
         assertTrue(result is ActionResult.Failure)
@@ -195,7 +247,7 @@ class TranscribeActionTest {
 
         val heard = Transcription.Heard("текст")
         val stages = stagesHeard {
-            TranscribeRealizer(store, engine(heard), ready).perform(recording(540 * 1024))
+            realizer(engine(heard), ready).perform(recording(540 * 1024))
         }
 
         assertEquals(1, stages.size)
@@ -207,7 +259,7 @@ class TranscribeActionTest {
     @Test
     fun `над короткой записью лишних обещаний нет`() = runTest {
         val stages = stagesHeard {
-            TranscribeRealizer(store, engine(Transcription.Heard("текст")), ready).perform(recording(60 * 1024))
+            realizer(engine(Transcription.Heard("текст")), ready).perform(recording(60 * 1024))
         }
 
         assertEquals(listOf(LISTENING), stages)

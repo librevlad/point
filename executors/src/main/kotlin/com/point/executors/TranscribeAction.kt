@@ -1,10 +1,12 @@
 package com.point.executors
 
+import com.point.core.flow.AudioLevel
 import com.point.core.flow.Capability
 import com.point.core.flow.CapabilityMeta
 import com.point.core.flow.Cost
 import com.point.core.flow.Latency
 import com.point.core.flow.META_SEMANTIC_SUMMARY
+import com.point.core.flow.NO_SPEECH_HEARD
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.Realizer
 import com.point.core.flow.RealizerKind
@@ -14,6 +16,7 @@ import com.point.core.flow.SpeechToText
 import com.point.core.flow.Transcription
 import com.point.core.flow.labelNeedingKey
 import com.point.core.flow.listeningStage
+import com.point.core.flow.nothingToHear
 import com.point.core.flow.reportStage
 import com.point.core.flow.speechKeyRefusal
 import com.point.core.flow.transcriptFileText
@@ -63,6 +66,7 @@ class TranscribeRealizer @Inject constructor(
     private val store: ObjectStore,
     private val speech: SpeechToText,
     private val readiness: SpeechReadiness,
+    private val level: AudioLevel,
 ) : Realizer {
     override val capabilityId = TranscribeCapability.ID
     override val meta = RealizerMeta(priority = 10, kind = RealizerKind.CLOUD)
@@ -77,6 +81,15 @@ class TranscribeRealizer @Inject constructor(
 
             reportStage(listeningStage(input.mime, sizeOf(input), input.metadata["name"]))
 
+            // Слушаем сами, прежде чем отдать запись сервису (#1053): на пустой записи
+            // Whisper не молчит, а выдумывает фразу — двадцать секунд цифровой тишины
+            // возвращались как «Thank you.», и выдумка ложилась знанием об объекте.
+            // Пустоту телефон слышит и без облака, поэтому запись, в которой нечего
+            // слушать, дальше не едет. Не измерили — не «тихо»: такая запись идёт как раньше.
+            if (nothingToHear(runCatching { level.peak(input) }.getOrNull())) {
+                return@withContext heardNothing()
+            }
+
             val heard = runCatching { speech.transcribe(input) }
                 .getOrElse { return@withContext ActionResult.Failure(
                     it.message ?: "Не удалось расшифровать запись",
@@ -85,7 +98,7 @@ class TranscribeRealizer @Inject constructor(
 
             when (heard) {
                 is Transcription.Silence ->
-                    ActionResult.Failure("В записи не слышно речи", recoverable = false)
+                    ActionResult.Failure(NO_SPEECH_HEARD, recoverable = false)
 
                 is Transcription.Heard -> runCatching {
                     // Расшифровка — знание той же записи, а не новый объект (#1097, GRF-006):
@@ -114,6 +127,22 @@ class TranscribeRealizer @Inject constructor(
                 }
             }
         }
+
+    /**
+     * «Не нашлось» — знание, а не сбой (Конституция §13).
+     *
+     * Речи в записи нет — это ответ на заданный вопрос, и вопрос расшифровки закрывается
+     * как «смотрели — не нашлось», а не остаётся открытым до следующего тапа.
+     */
+    private fun heardNothing(): ActionResult = ActionResult.Done(
+        NO_SPEECH_HEARD,
+        com.point.core.model.Findings(
+            metadata = mapOf(
+                com.point.core.flow.investigationKey(TranscribeCapability.ID) to
+                    com.point.core.flow.InvestigationState.NOT_FOUND.wire,
+            ),
+        ),
+    )
 
     private fun sizeOf(input: PointObject): Long =
         runCatching { File(input.uri.value).length() }.getOrDefault(0L)
