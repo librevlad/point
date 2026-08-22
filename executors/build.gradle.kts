@@ -26,13 +26,16 @@ kotlin {
 dependencies {
     api(project(":core:model"))
     api(project(":core:flow"))
-    implementation(project(":data"))
 
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
 
     implementation(libs.opencv)
+
+    // #1004: :data нужен только тестам — исполнители его не импортируют,
+    // и схема модулей «стрелки только вниз» не даёт им начать.
+    testImplementation(project(":data"))
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
