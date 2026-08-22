@@ -117,9 +117,11 @@ class GraphRolesInvestigationRealizer @Inject constructor() : Realizer {
             metadata[roleKey + META_ALT_SUFFIX]?.let { put(roleKey + META_ALT_SUFFIX, it) }
         }
 
-        fun nodeId(sourceId: String, value: String) = "$sourceId:party:${normalized(value)}"
+        // Идентичность стороны одна на всех (#1176): формула живёт в core/flow, а не
+        // списывается здесь ещё раз.
+        fun nodeId(sourceId: String, value: String) = com.point.core.flow.partyNodeId(sourceId, value)
 
-        fun normalized(value: String) = value.lowercase().replace(Regex("""\s+"""), " ").trim()
+        fun normalized(value: String) = com.point.core.flow.normalizedParty(value)
     }
 }
 
