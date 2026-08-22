@@ -63,7 +63,16 @@ class ImageCapability  : Capability {
     companion object { val ID = CapabilityId("image") }
 }
 
-class DropLinkCapability  : Capability {
+/**
+ * «Дать ссылку» — ссылку выдаёт сервер Point, а он знает только своих (#1022).
+ *
+ * [signedIn] — есть ли на этом устройстве аккаунт Point прямо сейчас. Без него действие
+ * не исчезает: человек должен видеть, чего он лишён, и услышать это по тапу — вместо
+ * согласия на отправку, которая всё равно не состоится.
+ */
+class DropLinkCapability(
+    private val signedIn: () -> Boolean = { true },
+) : Capability {
     override val id = ID
     override val icon = "link"
     override val meta = CapabilityMeta(
@@ -87,8 +96,14 @@ class DropLinkCapability  : Capability {
     override fun yields(state: ObjectState) =
         com.point.core.model.ActionYield.Same("ссылка на сутки · файл уйдёт на сервер Point")
 
+    override fun wontWorkNow(state: ObjectState): String? =
+        if (signedIn()) null else NEEDS_ACCOUNT_FOR_LINK
+
     companion object { val ID = CapabilityId("drop-link") }
 }
+
+/** Ссылку выдаёт сервер Point — без аккаунта её выдавать некому (#1022, решение владельца). */
+const val NEEDS_ACCOUNT_FOR_LINK = "Войдите в аккаунт — ссылка выдаётся через сервер Point"
 
 /**
  * «В PDF» — и для офисного документа тоже, но только настоящим конвертером (#403).

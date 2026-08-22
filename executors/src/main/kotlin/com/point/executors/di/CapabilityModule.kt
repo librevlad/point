@@ -285,8 +285,16 @@ abstract class CapabilityModule {
         ): com.point.core.flow.OfficeOrgan = com.point.core.flow.PcOfficeOrgan(caps, links)
 
         @Provides @ElementsIntoSet @OwnCapabilities
-        fun sharedCaps(office: com.point.core.flow.OfficeOrgan): Set<Capability> =
-            com.point.core.flow.capabilities.sharedCapabilities(office).toSet()
+        fun sharedCaps(
+            office: com.point.core.flow.OfficeOrgan,
+
+            // Аккаунт спрашивается в момент вопроса (#1022): человек входит и выходит,
+            // не перезапуская Point, и «Дать ссылку» обязана видеть нынешнее положение.
+            account: com.point.core.flow.AccountStore,
+        ): Set<Capability> =
+            com.point.core.flow.capabilities
+                .sharedCapabilities(office) { account.current() != null }
+                .toSet()
 
         @Provides @IntoSet
         fun openCvScanR(store: ObjectStore): Realizer = OpenCvScanRealizer(store)
