@@ -9,7 +9,6 @@ import com.point.core.flow.Capability
 import com.point.core.flow.CapabilityMeta
 import com.point.core.flow.Cost
 import com.point.core.flow.EvidenceClass
-import com.point.core.flow.FieldCandidate
 import com.point.core.flow.InvestigationState
 import com.point.core.flow.KIND_PERSON
 import com.point.core.flow.Latency
@@ -18,7 +17,6 @@ import com.point.core.flow.LlmClient
 import com.point.core.flow.MAX_FIELD_CANDIDATES
 import com.point.core.flow.META_ALT_SUFFIX
 import com.point.core.flow.META_BLOCKED_SUFFIX
-import com.point.core.flow.META_ENTITY_PLACE
 import com.point.core.flow.META_ENTITY_PREFIX
 import com.point.core.flow.META_EVIDENCE_SUFFIX
 import com.point.core.flow.META_GRAPH_ROLE_PREFIX
@@ -37,7 +35,7 @@ import com.point.core.flow.altValue
 import com.point.core.flow.alternativesOf
 import com.point.core.flow.answerLanguageRule
 import com.point.core.flow.bareIndexId
-import com.point.core.flow.fieldEvidence
+import com.point.core.flow.belongings
 import com.point.core.flow.investigationOutcome
 import com.point.core.flow.isRepairOf
 import com.point.core.flow.isRoleLabel
@@ -48,8 +46,7 @@ import com.point.core.flow.normConsensus
 import com.point.core.flow.parseClassification
 import com.point.core.flow.parseFieldCandidates
 import com.point.core.flow.partialReadMessage
-import com.point.core.flow.phoneOwners
-import com.point.core.flow.placeOfReceiver
+import com.point.core.flow.partyNodeId
 import com.point.core.flow.plausiblePersonName
 import com.point.core.flow.promptIndex
 import com.point.core.flow.provenanceOf
@@ -57,7 +54,6 @@ import com.point.core.flow.readProgressOf
 import com.point.core.flow.readWindowOf
 import com.point.core.flow.reportStage
 import com.point.core.flow.resolve
-import com.point.core.flow.ruleEvidence
 import com.point.core.flow.splitCandidate
 import com.point.core.flow.withInvestigation
 import com.point.core.model.ActionResult
@@ -206,10 +202,11 @@ class UnderstandRealizer @Inject constructor(
 
                 val (roles, roleDisputes) = roleReadings(answer, laidOut, layer)
 
-                // Маршрут ведёт туда, куда едет посылка (#772): у наклейки два адреса, и они
-                // не равноправны — шапка склада отправления не место назначения. Роль
-                // получателя к этому месту уже известна, и место в его блоке и есть «куда».
-                val fields = withPlaceOfReceiver(readFields, parsed.fields, roles, layer)
+                // Что с чем связано (#1176): страница держит колонку при её подписи, и
+                // прочтение, стоящее в одном блоке с названной стороной, — про неё. Судья
+                // полей этого не знает: у наклейки два отделения, и для него они одинаковы.
+                val belongings = layer?.belongings(parsed.fields, roles).orEmpty()
+                val fields = withPartyReadings(readFields, belongings, layer, blocked)
 
                 // Курсор для следующего нажатия «Понять» — пока не дочитано, окно сдвигается
                 // дальше; дочитано — курсор больше не нужен (#682/#683).
@@ -252,13 +249,18 @@ class UnderstandRealizer @Inject constructor(
                         .filter { key -> Provenance.MODEL > provenanceOf(merged, key) }
                         .map { key -> key + META_SOURCE_SUFFIX to Provenance.MODEL.wire }
 
+                    // Принадлежность — аннотация ключа, как «кто прочитал» и «откуда»
+                    // (#1176): значение факта не дублируется, названа лишь сторона, к
+                    // которой оно относится.
+                    val owned = com.point.core.flow.belongingFacts(merged, belongings)
+
                     // Согласие исполнителей — улика и в текстовом пути (#1176): второй
                     // виток, увидевший то же значение, подтверждает его отметкой на
                     // свидетеля; суд продолжения идёт уже по подтверждённому знанию.
                     val named = addActor(
                         merged +
                             annotations(merged, fields, judgedByLayer = layer != null, blocked = blocked) +
-                            roleAlts + roleSources,
+                            roleAlts + roleSources + owned,
                         values.keys,
                         answeredBy,
                     )
@@ -275,13 +277,12 @@ class UnderstandRealizer @Inject constructor(
                     // «Понять» — знание о том же объекте, а не превращение (ADR-0001 §18):
                     // человек остаётся на исходнике, факты прирастают. Success здесь ронял
                     // его в дубль-объект со знаком вопроса.
-                    // Телефон принадлежит своему столбцу (#747): на наклейке номер стоит под
-                    // именем отправителя, и «чей он» видно по странице, даже когда модель
-                    // пары не назвала. Роль перевозчика сюда не идёт — служба не человек.
-                    val owners = layer?.phoneOwners(
-                        parsed.fields[META_ENTITY_PREFIX + "phone"].orEmpty(),
-                        roles.filterKeys { it != META_GRAPH_ROLE_PREFIX + "carrier" }.values,
-                    ).orEmpty()
+                    // Телефон, принадлежащий человеку, — его контакт (#1176): пара
+                    // «имя + номер» приходит связью, а не отдельным правилом под наклейку.
+                    val owners = com.point.core.flow.personContacts(
+                        belongings[META_ENTITY_PREFIX + "phone"].orEmpty(),
+                        roles,
+                    )
 
                     val people = contactNodes(input, (parsed.contacts + owners).distinct())
 
@@ -490,9 +491,9 @@ internal fun contactNodes(source: PointObject, contacts: List<com.point.core.flo
     val relations = mutableListOf<Relation>()
     contacts.forEach { contact ->
 
-        // Тот же id-неймспейс, что у ролевых людей (GraphRoles.nodeId): «НОВІК» из
-        // роли отправителя и «НОВІК» из пары — один человек, а не два узла.
-        val id = source.id + ":party:" + contact.name.lowercase().replace(Regex("""\s+"""), " ").trim()
+        // Идентичность стороны одна на всех (#1176, partyNodeId): «НОВІК» из роли
+        // отправителя и «НОВІК» из пары — один человек, а не два узла.
+        val id = partyNodeId(source.id, contact.name)
         objects.getOrPut(id) {
             PointObject(
                 id = id,
@@ -564,37 +565,6 @@ internal fun roleReadings(
 
     fromElements.forEach { (key, text) -> values.putIfAbsent(key, text) }
     return values to disputes
-}
-
-/**
- * Место назначения — при получателе (#772).
- *
- * Судья полей выбирает значение по уликам страницы, и два отделения на наклейке для него
- * одинаковы: побеждает первое. Роль получателя судье неизвестна — она разбирается позже,
- * из того же ответа модели. Здесь эти два знания встречаются: если место стоит в блоке
- * получателя, оно и есть «куда ехать», а прежний выбор остаётся в прочтениях.
- */
-internal fun withPlaceOfReceiver(
-    fields: Map<String, JudgedField>,
-    candidates: Map<String, List<FieldCandidate>>,
-    roles: Map<String, String>,
-    layer: AtomLayer?,
-): Map<String, JudgedField> {
-    val judged = fields[META_ENTITY_PLACE] ?: return fields
-    if (layer == null) return fields
-
-    val receiver = roles[META_GRAPH_ROLE_PREFIX + "receiver"]
-    val chosen = layer.placeOfReceiver(candidates[META_ENTITY_PLACE].orEmpty(), receiver) ?: return fields
-    if (normConsensus(chosen.text) == normConsensus(judged.text)) return fields
-
-    return fields + (
-        META_ENTITY_PLACE to JudgedField(
-            text = chosen.text,
-            evidence = layer.fieldEvidence(META_ENTITY_PLACE, chosen, layer.ruleEvidence()),
-            grounded = true,
-            candidates = (listOf(chosen.text) + judged.candidates).distinct(),
-        )
-        )
 }
 
 internal data class JudgedField(

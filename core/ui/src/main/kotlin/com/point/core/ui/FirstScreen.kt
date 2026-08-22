@@ -430,6 +430,8 @@ private fun FoundObjects(
                                     kindLabel(obj.state.kind),
                                     roleOf(obj, relations),
 
+                                    ownerOfFound(obj, relations, found),
+
                                     provenanceLabel(obj.provenance),
 
                                     "возможно".takeIf { isDoubtful(obj.metadata) },
@@ -615,6 +617,20 @@ fun otherReading(obj: PointObject): String? {
 
 private fun roleOf(obj: PointObject, relations: List<Relation>): String? =
     relations.asSequence().filter { it.fromId == obj.id }.mapNotNull { relationLabel(it.type) }.firstOrNull()
+
+/**
+ * Чьё это найденное (#1176).
+ *
+ * Связь меняет смысл строки: номер отправителя и номер получателя выглядят одинаково, и без
+ * имени рядом человек не знает, кому звонит. Имя берётся у самого узла стороны — второй копии
+ * значения не заводится. Связи нет — и подписи нет: догадка вместо знания хуже молчания.
+ */
+internal fun ownerOfFound(obj: PointObject, relations: List<Relation>, found: List<PointObject>): String? =
+    relations.asSequence()
+        .filter { it.fromId == obj.id && it.type == RelationType.BELONGS_TO }
+        .mapNotNull { relation -> found.firstOrNull { it.id == relation.toId } }
+        .map { foundHeadline(it).trim() }
+        .firstOrNull { it.isNotBlank() }
 
 internal fun relationLabel(type: RelationType): String? = when (type) {
     RelationType.SENDER -> "отправитель"

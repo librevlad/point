@@ -15,6 +15,16 @@ data class ClassifierRole(
 
     val usuallyPerson: Boolean = false,
 
+    /**
+     * Сторона, которой документ адресован (#1176).
+     *
+     * У документа несколько сторон, и знание при них разное: место при отправителе — «откуда»,
+     * место при получателе — «куда». Когда прочтения однозначного факта стоят при разных
+     * сторонах, документ говорит про ту, которой он адресован. Это свойство роли, а не тип
+     * документа: письмо, накладная и счёт написаны получателю одинаково.
+     */
+    val addressed: Boolean = false,
+
     val markers: Set<String> = emptySet(),
 )
 
@@ -43,7 +53,7 @@ val CLASSIFIER_ROLES: List<ClassifierRole> = listOf(
     ),
     ClassifierRole(
         "receiver", KIND_ORGANIZATION, RelationType.RECEIVER, "получатель груза или письма",
-        usuallyPerson = true,
+        usuallyPerson = true, addressed = true,
         markers = setOf("отримувач", "одержувач", "получатель", "receiver", "recipient", "кому", "to"),
     ),
     ClassifierRole(
@@ -57,6 +67,22 @@ val CLASSIFIER_ROLES: List<ClassifierRole> = listOf(
 )
 
 const val META_GRAPH_ROLE_PREFIX = "graph.role."
+
+/** Роль по ключу знания: `graph.role.sender` — это роль отправителя. */
+fun roleOfKey(key: String): ClassifierRole? =
+    CLASSIFIER_ROLES.firstOrNull { META_GRAPH_ROLE_PREFIX + it.key == key }
+
+/**
+ * Идентичность стороны (#1176).
+ *
+ * «НОВІК» из роли отправителя и «НОВІК» из пары «имя + номер» — один человек, а не два узла.
+ * Формула была списана в трёх местах; узел стороны один, значит и формула одна.
+ */
+fun partyNodeId(sourceId: String, name: String): String = "$sourceId:party:${normalizedParty(name)}"
+
+fun normalizedParty(name: String): String = name.lowercase().replace(PARTY_SPACES, " ").trim()
+
+private val PARTY_SPACES = Regex("""\s+""")
 
 data class Classified(val role: ClassifierRole, val element: LayoutElement)
 

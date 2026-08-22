@@ -3,7 +3,9 @@ package com.point.executors
 import com.point.core.flow.AtomAddress
 import com.point.core.flow.AtomLayer
 import com.point.core.flow.FieldCandidate
+import com.point.core.flow.PartyReading
 import com.point.core.flow.bareIndexId
+import com.point.core.flow.chosenByAddressee
 import com.point.core.flow.fieldEvidence
 import com.point.core.flow.formEvidence
 import com.point.core.flow.foundLiterally
@@ -59,6 +61,45 @@ internal fun judgeFields(
         )
     }
     return JudgedFields(won, retry, blockedByKey)
+}
+
+/**
+ * Значение однозначного факта — прочтение стороны, которой документ адресован (#1176).
+ *
+ * Судья полей выбирает по уликам страницы и не знает, чьё прочтение перед ним: два отделения
+ * наклейки для него одинаковы, и побеждало первое — склад отправления, а маршрут вёл не туда,
+ * куда едет посылка (#772). Принадлежность приходит позже, из ролей того же ответа модели, и
+ * здесь эти два знания встречаются. Прежний выбор не пропадает — он остаётся среди прочтений.
+ *
+ * Правило общее: оно ничего не знает ни про место, ни про наклейку — только про то, что у
+ * однозначного факта прочтения спорят, а сторона этот спор решает.
+ *
+ * Сторона решает спор годных прочтений и не воскрешает забракованное: номер, не сошедшийся
+ * с контрольной цифрой ([blocked]), и значение не той формы значением не становятся, в чьей
+ * бы колонке они ни стояли.
+ */
+internal fun withPartyReadings(
+    fields: Map<String, JudgedField>,
+    belongings: Map<String, List<PartyReading>>,
+    layer: AtomLayer?,
+    blocked: Map<String, List<String>> = emptyMap(),
+): Map<String, JudgedField> {
+    if (layer == null || belongings.isEmpty()) return fields
+    val ruleMarks = layer.ruleEvidence()
+    return fields.mapValues { (key, judged) ->
+        val chosen = chosenByAddressee(key, belongings[key].orEmpty())?.reading ?: return@mapValues judged
+        if (normConsensus(chosen.text) == normConsensus(judged.text)) return@mapValues judged
+        if (semanticFits(key, chosen.text) == false) return@mapValues judged
+        if (blocked[key].orEmpty().any { normConsensus(it) == normConsensus(chosen.text) }) {
+            return@mapValues judged
+        }
+        JudgedField(
+            text = chosen.text,
+            evidence = layer.fieldEvidence(key, chosen, ruleMarks),
+            grounded = true,
+            candidates = (listOf(chosen.text) + judged.candidates).distinct(),
+        )
+    }
 }
 
 private fun groundCandidate(
