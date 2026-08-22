@@ -101,4 +101,62 @@ class FixErrorsTest {
     fun `«сильнее» говорит модели, что снимок приложен`() {
         assertTrue("снимком" in fixPrompt(facts(), withObject = true))
     }
+
+    // ---- Правка самого текста (#1023): у текстового объекта знание — его текст ----
+
+    /** Текст из живого прогона владельца: пять опечаток, которых прежде никто не смотрел. */
+    private val typed = "Превет, Иван! Эт тестовый тектс с пятью ашибками и опичатками, проверка 17.08.2026."
+
+    private val typedFixed = "Привет, Иван! Это тестовый текст с пятью ошибками и опечатками, проверка 17.08.2026."
+
+    @Test
+    fun `в модель уходит сам текст, а не сводка значений`() {
+        val prompt = fixTextPrompt(typed)
+
+        assertTrue("текст обязан быть в запросе целиком", typed in prompt)
+        assertTrue("модель не знает, чем ответить, если править нечего", FIX_NOTHING in prompt)
+    }
+
+    @Test
+    fun `правки ложатся в текст, а дельта — то, что легло`() {
+        val answer = "Превет = Привет\nЭт = Это\nтектс = текст\nашибками = ошибками\nопичатками = опечатками"
+
+        val fixed = fixText(typed, answer)
+
+        assertEquals(typedFixed, fixed.text)
+        assertEquals(5, fixed.fixes.size)
+        val said = fixedTextMessage(fixed.fixes)
+        fixed.fixes.forEach { fix ->
+            assertTrue("в итоге не видно, что было: $said", fix.was in said)
+            assertTrue("в итоге не видно, что стало: $said", fix.now in said)
+        }
+        assertTrue("итог не называет счёт правок: $said", "5" in said)
+    }
+
+    @Test
+    fun `фрагмент внутри другого слова не трогается`() {
+        val before = "Эт пример. Этот же — нет."
+        val after = "Это пример. Этот же — нет."
+
+        val fixed = fixText(before, "Эт = Это")
+
+        assertEquals(after, fixed.text)
+        assertEquals(1, fixed.fixes.size)
+    }
+
+    @Test
+    fun `чего в тексте нет — не правится и в дельту не попадает`() {
+        val fixed = fixText(typed, "Првет = Привет\n9 = что-то\nпросто проза\n= пусто\nЭт = Эт")
+
+        assertEquals(typed, fixed.text)
+        assertTrue("дельта выдумана: ${fixed.fixes}", fixed.fixes.isEmpty())
+    }
+
+    @Test
+    fun `нечего править — сказано про текст, который проверили, а не про знание вообще`() {
+        val said = fixedTextMessage(fixText(typed, FIX_NOTHING).fixes)
+
+        assertTrue("без правок итог не может звучать как «исправлено»: $said", "Исправлено" !in said)
+        assertTrue("итог обязан сказать, что именно оставлено: $said", "текст" in said)
+    }
 }
