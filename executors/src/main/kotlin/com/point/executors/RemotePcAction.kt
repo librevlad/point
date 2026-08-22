@@ -9,6 +9,7 @@ import com.point.core.flow.PcLinks
 import com.point.core.flow.PcRemoteAction
 import com.point.core.flow.PcSendOutcome
 import com.point.core.flow.PcTransport
+import com.point.core.flow.knowingAddress
 import com.point.core.flow.pcUnreachableText
 import com.point.core.flow.Realizer
 import com.point.core.flow.reportStage
@@ -143,6 +144,8 @@ class RemotePcRealizer(
             // по mime и байтам не хуже, чем у любого другого объекта (#681).
             val state = classifier?.classify(returned.mime, bytes.size.toLong(), returned.name, bytes.take(64).toByteArray())
                 ?: com.point.core.model.ObjectState(com.point.core.model.ObjectKind.UNKNOWN)
+            // Результат с компьютера — такое же рождение объекта из файла (#999): ссылка,
+            // сделанная там, приезжает сюда со своим адресом, а не одними байтами.
             val produced = PointObject(
                 id = resultId(input.id, returned.name),
                 mime = returned.mime,
@@ -151,7 +154,7 @@ class RemotePcRealizer(
                 metadata = mapOf("name" to returned.name),
                 sourceObjects = listOf(input.id),
                 creatorAction = capabilityId.value,
-            )
+            ).knowingAddress()
             ActionResult.Done(
                 "${action.label} — готово: ${returned.name}",
                 com.point.core.model.Findings(

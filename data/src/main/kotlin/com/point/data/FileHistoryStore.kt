@@ -9,6 +9,7 @@ import com.point.core.flow.META_OCR_ATOMS_REF
 import com.point.core.flow.META_OCR_TEXT_REF
 import com.point.core.flow.META_SIZE
 import com.point.core.flow.ObjectClassifier
+import com.point.core.flow.knowingAddress
 import com.point.core.model.Feature
 import com.point.core.model.HistoryEntry
 import com.point.core.model.ObjectKind
@@ -105,14 +106,19 @@ class FileHistoryStore @Inject constructor(
         val file = File(entry.ref.value)
         if (!file.exists()) return@withContext null
         val size = file.length()
-        val fresh = classifier.classify(entry.mime, size, file.name)
+
+        // Байты спрашиваются и при переоткрытии (#999): ссылка, принятая ссылкой по адресу в
+        // файле, без них возвращалась бы из «Недавнего» текстом, а файл без адреса — ссылкой.
+        // Адрес — то же самое: возврат из «Недавнего» — такое же рождение объекта из файла,
+        // и записи, сделанные до #999, приходят со своим адресом, а не пустыми.
+        val fresh = classifier.classify(entry.mime, size, file.name, headOf(file))
         PointObject(
             id = entry.id,
             mime = entry.mime,
             uri = ScratchRef(file.absolutePath),
             state = entry.features.fold(fresh) { state, feature -> state.with(feature) },
             metadata = restoredMetadata(entry, size),
-        )
+        ).knowingAddress()
     }
 
     /**

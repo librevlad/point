@@ -16,8 +16,29 @@ class ObjectClassifierTest {
         assertEquals(ObjectKind.IMAGE, classifier.classify("image/png").kind)
         assertEquals(ObjectKind.PDF, classifier.classify("application/pdf").kind)
         assertEquals(ObjectKind.ZIP, classifier.classify("application/zip").kind)
-        assertEquals(ObjectKind.URL, classifier.classify("text/uri-list").kind)
+        assertEquals(ObjectKind.URL, classifier.classify("text/uri-list", head = "https://example.com".toByteArray()).kind)
         assertEquals(ObjectKind.TEXT, classifier.classify("text/plain").kind)
+    }
+
+    // ---- #999: ссылка, переданная файлом, — ссылка только когда в байтах есть адрес. ----
+
+    @Test
+    fun `uri-list с адресом в байтах — ссылка`() {
+        val head = "# заметка\r\nhttps://example.com/pointtest?a=1\r\n".toByteArray()
+
+        assertEquals(ObjectKind.URL, classifier.classify("text/uri-list", 42, "link.txt", head).kind)
+    }
+
+    @Test
+    fun `uri-list без адреса — не ссылка, а текстовый файл`() {
+        val head = "просто строка без адреса".toByteArray()
+
+        assertEquals(ObjectKind.TEXT, classifier.classify("text/uri-list", 24, "link.txt", head).kind)
+    }
+
+    @Test
+    fun `uri-list без прочитанных байтов ссылкой не объявляется`() {
+        assertEquals(ObjectKind.TEXT, classifier.classify("text/uri-list").kind)
     }
 
     @Test

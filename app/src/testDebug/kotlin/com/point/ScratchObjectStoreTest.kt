@@ -2,11 +2,14 @@ package com.point
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import com.point.core.flow.META_ENTITY_PREFIX
 import com.point.core.flow.META_SIZE
 import com.point.core.flow.META_UNUSABLE_REASON
 import com.point.core.flow.ObjectClassifier
 import com.point.core.model.Feature
 import com.point.core.model.ObjectKind
+import com.point.core.model.ResultObject
+import com.point.core.model.ScratchRef
 import com.point.data.ScratchObjectStore
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -73,6 +76,50 @@ class ScratchObjectStoreTest {
 
         assertFalse(obj.state.has(Feature.UNUSABLE))
         assertNull(obj.metadata[META_UNUSABLE_REASON])
+    }
+
+    // ---- #999: ссылка, переданная файлом, знает свой адрес; файл без адреса — не ссылка. ----
+
+    @Test fun `ссылка файлом приходит со своим адресом — как ссылка текстом`() = runBlocking {
+        val address = "https://example.com/pointtest?a=1"
+        val shared = source("link.txt", "$address\n")
+
+        val obj = store.ingest(link(shared), "text/uri-list")
+
+        assertEquals(ObjectKind.URL, obj.state.kind)
+        assertEquals(address, obj.metadata[META_ENTITY_PREFIX + "url"])
+        assertTrue("адрес есть — признак ссылки обязан стоять", obj.state.has(Feature.HAS_URL))
+    }
+
+    @Test fun `адрес читается целиком, а не по голове файла`() = runBlocking {
+        val address = "https://example.com/very/long/path?q=" + "a".repeat(900)
+        val shared = source("long-link.txt", "# комментарий перед адресом\r\n$address\r\n")
+
+        val obj = store.ingest(link(shared), "text/uri-list")
+
+        assertEquals(ObjectKind.URL, obj.state.kind)
+        assertEquals(address, obj.metadata[META_ENTITY_PREFIX + "url"])
+    }
+
+    @Test fun `ссылка, сделанная действием, тоже приходит со своим адресом`() = runBlocking {
+        val address = "https://example.com/vylozheno?a=1"
+        val made = File(scratch, "made.uri").apply { parentFile?.mkdirs(); writeText("# сделано действием\r\n$address\r\n") }
+
+        val obj = store.put(ResultObject(ObjectKind.URL, "text/uri-list", ScratchRef(made.absolutePath)))
+
+        assertEquals(ObjectKind.URL, obj.state.kind)
+        assertEquals(address, obj.metadata[META_ENTITY_PREFIX + "url"])
+        assertTrue("адрес есть — признак ссылки обязан стоять", obj.state.has(Feature.HAS_URL))
+    }
+
+    @Test fun `файл под видом ссылки без адреса — файл, а не ссылка`() = runBlocking {
+        val notALink = source("not-a-link.txt", "просто строка, адреса тут нет")
+
+        val obj = store.ingest(link(notALink), "text/uri-list")
+
+        assertEquals(ObjectKind.TEXT, obj.state.kind)
+        assertNull(obj.metadata[META_ENTITY_PREFIX + "url"])
+        assertFalse(obj.state.has(Feature.HAS_URL))
     }
 
     @Test fun `clear уносит байты объекта с диска`() = runBlocking {

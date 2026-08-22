@@ -12,7 +12,7 @@ class ObjectClassifier {
         fileName: String? = null,
         head: ByteArray = EMPTY_HEAD,
     ): ObjectState {
-        val declared = kindOf(mime, fileName)
+        val declared = kindOf(mime, fileName, head)
 
         // Имя и mime промолчали — спрашиваем сами байты (файл без расширения из
         // менеджера иначе становился мёртвым «неизвестным» при читаемом тексте внутри).
@@ -28,7 +28,7 @@ class ObjectClassifier {
         return ObjectState(kind, features)
     }
 
-    private fun kindOf(mime: String, fileName: String?): ObjectKind {
+    private fun kindOf(mime: String, fileName: String?, head: ByteArray): ObjectKind {
         val m = mime.lowercase().substringBefore(';').trim()
         val ext = fileName?.substringAfterLast('.', "")?.lowercase().orEmpty()
         return when {
@@ -41,7 +41,11 @@ class ObjectClassifier {
             m.startsWith("audio/") || m == "application/ogg" || ext in AUDIO_EXTS -> ObjectKind.AUDIO
             m == "application/pdf" -> ObjectKind.PDF
             m in ARCHIVE_MIMES || ext in ARCHIVE_EXTS -> ObjectKind.ZIP
-            m == "text/uri-list" -> ObjectKind.URL
+
+            // Ссылка, переданная файлом, — ссылка только когда в байтах есть адрес (#999):
+            // вид по одному MIME давал «Ссылку» без адреса, и ни одно действие ссылки не
+            // работало. Адрес не прочитался — это не ссылка, а текстовый файл.
+            m == "text/uri-list" && uriListAddress(head) != null -> ObjectKind.URL
             m.startsWith("text/") -> ObjectKind.TEXT
             else -> kindFromExtension(ext)
         }
