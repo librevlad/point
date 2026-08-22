@@ -101,10 +101,11 @@ const val REQUEST_BROKE_TEXT = "Point не смог отправить запр�
  * Имя беде, когда сорвался сам вызов (#1077): разговор с сервером не состоялся — это про сервер;
  * всё остальное случилось на устройстве ещё до выхода наружу, и «сервер не ответил» — неправда.
  *
- * След — класс сбоя в скобках: следующая живая находка объяснит себя сама, без переборки кода.
+ * Класс сбоя человеку не называется: `NetworkOnMainThreadException` он не заводил, и чинить по
+ * этому слову ему нечего (#797). След уходит в журнал устройства — `HttpDropInbox(log = …)`.
  */
-fun dropOpenBroke(error: Throwable): String =
-    if (error is java.io.IOException) NO_SERVER_TEXT else "$REQUEST_BROKE_TEXT (${error::class.java.simpleName})"
+fun dropCallBroke(error: Throwable): String =
+    if (error is java.io.IOException) NO_SERVER_TEXT else REQUEST_BROKE_TEXT
 
 sealed interface DropWait {
 

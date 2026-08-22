@@ -151,6 +151,9 @@ fun main(args: Array<String>) {
         inbox = com.point.core.flow.HttpDropInbox(
             { serverUrl },
             { accountStore.current()?.deviceToken },
+
+            // След сорвавшегося вызова — сюда, а не человеку на экран (#1077).
+            log = { what, e -> println("[drop] " + what + ": " + e) },
         ),
         scope = kotlinx.coroutines.CoroutineScope(
             kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO,

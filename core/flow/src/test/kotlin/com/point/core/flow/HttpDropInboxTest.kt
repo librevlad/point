@@ -69,6 +69,27 @@ class HttpDropInboxTest {
         }
     }
 
+    /**
+     * Устройство, запрещающее сеть с потока [thread] — как Android с главного потока (#1077);
+     * `null` — с любого потока.
+     *
+     * Играет пропуск: его спрашивают дважды — на входе («устройство в аккаунте?») и при сборке
+     * запроса, уже внутри вызова. Запрет стреляет при сборке: ровно так на телефоне рвался сам
+     * вызов — `NetworkOnMainThreadException` из недр `HttpURLConnection`, не `IOException`.
+     */
+    private class NetworkForbiddenOn(private val thread: String?) : () -> String {
+        private var asked = 0
+
+        override fun invoke(): String {
+            val building = asked++ > 0
+            val here = Thread.currentThread().name
+            if (building && (thread == null || here.startsWith(thread))) {
+                throw IllegalStateException("сеть с потока $here запрещена")
+            }
+            return "pass"
+        }
+    }
+
     @Test
     fun `нет сети — ссылку не готовим, и отказ говорит именно про сеть`() = runTest {
         val outcome = inbox(NetworkAvailability { false }).open()
@@ -142,12 +163,81 @@ class HttpDropInboxTest {
         }
     }
 
+    /**
+     * Живая находка #1077 — та самая ветка отказа, воспроизведённая до починки.
+     *
+     * Владелец 18.08.2026: телефон на «Принять файл по ссылке» отвечает «Сервер Point не
+     * ответил», а тот же сервер в ту же минуту открывает ящик компьютеру того же круга. Корень —
+     * запрос, собранный на потоке звонившего: телефон зовёт приём с главного потока, а Android на
+     * нём сеть запрещает — вызов рвётся на устройстве ещё до выхода наружу, и это не `IOException`.
+     *
+     * Здесь запрет играет устройство ([NetworkForbiddenOn]): собрать запрос на потоке звонившего
+     * нельзя. На коде до починки тест падает ровно фразой владельца — отказ «Сервер Point не
+     * ответил» при живом сервере; после — тот же сервер открывает ящик, потому что запрос ушёл
+     * на поток ввода-вывода.
+     */
+    @Test
+    fun `сеть с потока звонившего запрещена, как на телефоне, — а ящик всё равно открывается`() {
+        withProbe { probe ->
+            val caller = Executors.newSingleThreadExecutor { r -> Thread(r, CALLER) }.asCoroutineDispatcher()
+            val inbox = HttpDropInbox({ probe.base() }, NetworkForbiddenOn(CALLER))
+
+            val outcome = runBlocking(caller) { inbox.open() }
+
+            assertTrue(
+                "живой сервер обязан открыть ящик, а человек прочитал бы отказ: $outcome",
+                outcome is DropOpen.Opened,
+            )
+            assertTrue("ящик открыт на сервере, а не сочинён: ${probe.hits}", "POST /u/open" in probe.hits)
+            caller.close()
+        }
+    }
+
+    /**
+     * Сбой на самом устройстве при сборке запроса (#1077): человеку — слово из словаря, класс
+     * сбоя — в журнал. «Сервер не ответил» здесь неправда — до сервера дело не дошло.
+     */
+    @Test
+    fun `сбой на устройстве — человеку слово из словаря, класс сбоя уходит в журнал`() = runTest {
+        withProbe { probe ->
+            val logged = mutableListOf<Pair<String, Throwable>>()
+            val inbox = HttpDropInbox(
+                { probe.base() },
+                NetworkForbiddenOn(thread = null),
+                log = { what, e -> logged += what to e },
+            )
+
+            val refused = inbox.open()
+
+            assertEquals(DropOpen.Refused(REQUEST_BROKE_TEXT), refused)
+            assertTrue("до сервера запрос не дошёл: ${probe.hits}", probe.hits.isEmpty())
+            val said = (refused as DropOpen.Refused).reason
+            assertTrue("класс сбоя человеку не показывают: $said", "Exception" !in said)
+            val (step, error) = logged.single()
+            assertTrue("а в журнал он попадает целиком: $logged", error is IllegalStateException)
+            assertTrue("и с ним — какой шаг сорвался: $logged", step.isNotBlank())
+        }
+    }
+
     /** Сервера на месте нет — вот это и есть «сервер не ответил», своим именем (#1077). */
     @Test
     fun `сервер молчит — отказ зовётся молчанием сервера, а не сбоем устройства`() = runTest {
         val outcome = inbox(NetworkAvailability { true }).open()
 
         assertEquals(DropOpen.Refused(NO_SERVER_TEXT), outcome)
+    }
+
+    /**
+     * Ожидание файла отказывает тем же словарём (#1077). Прежде сюда уходило `e.message` — чужой
+     * английский из недр сети («Failed to connect to /10.0.2.2»), и на компьютере он показывался
+     * человеку как причина.
+     */
+    @Test
+    fun `сервер молчит на ожидании — слово из словаря, а не сообщение сбоя`() = runTest {
+        val outcome = inbox(NetworkAvailability { true })
+            .await(DropInboxBox(BOX, "https://127.0.0.1:1/u/$BOX")) { "unused" }
+
+        assertEquals(DropWait.Failed(NO_SERVER_TEXT), outcome)
     }
 
     /**
