@@ -26,15 +26,26 @@ abstract class FlowHostActivity : ComponentActivity() {
 
     protected open val restoresJourney: Boolean get() = false
 
+    /** Дверь ответила отказом: объекта она не приняла — заканчивать ей нечего (#1096). */
+    private var refusedInput = false
+
     /**
      * Пустое выделение отвечает словом, а не молчанием (#1096, решение владельца 20.08.2026).
      *
      * Человек нажал пункт меню — ответ прошен, поэтому короткий тост уместен. Объект не
      * заводится, экран не поднимается и предыдущий объект молча не восстанавливается:
      * onCreate после отказа не идёт дальше.
+     *
+     * Отказ ничего не заводил, поэтому он ничего и не заканчивает: накопленное знание —
+     * копия объекта, принятый текст, снимок разбора — остаётся на месте. А если объект уже
+     * перед человеком (пустое приезжает в onNewIntent живого Point), экран не закрывается:
+     * слово поверх объекта, а не вместо него.
      */
     protected fun refuseEmptySelection() {
         Toast.makeText(this, EMPTY_SELECTION_WORDS, Toast.LENGTH_SHORT).show()
+        if (viewModel.hasFlow()) return
+
+        refusedInput = true
         finish()
     }
 
@@ -114,7 +125,7 @@ abstract class FlowHostActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
-        if (isFinishing) viewModel.endFlow()
+        if (isFinishing && !refusedInput) viewModel.endFlow()
         super.onDestroy()
     }
 }

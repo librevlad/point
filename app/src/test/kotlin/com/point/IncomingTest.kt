@@ -46,6 +46,32 @@ class IncomingTest {
     }
 
     @Test
+    fun `шаринг пробелов — ничего, текста в них нет`() {
+        val incoming = incomingOf(
+            action = "android.intent.action.SEND",
+            type = "text/plain",
+            data = null,
+            stream = null,
+            text = "   \n\t ",
+            streams = emptyList(),
+        )
+        assertNull(incoming)
+    }
+
+    @Test
+    fun `размеченный текст — тело, а не пустота`() {
+        val incoming = incomingOf(
+            action = "android.intent.action.SEND",
+            type = "text/plain",
+            data = null,
+            stream = null,
+            text = StringBuilder("привет"),
+            streams = emptyList(),
+        )
+        assertEquals(Incoming.Body("привет"), incoming)
+    }
+
+    @Test
     fun `множественный шаринг — список ссылок`() {
         val incoming = incomingOf(
             action = "android.intent.action.SEND_MULTIPLE",

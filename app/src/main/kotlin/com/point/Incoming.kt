@@ -11,19 +11,26 @@ sealed interface Incoming {
 
 const val DEFAULT_MIME = "application/octet-stream"
 
+/**
+ * Текст, в котором текста нет, объектом не становится (#1096).
+ *
+ * Пробелы — такой же пустой вход, как и отсутствующий текст: для человека между ними разницы
+ * нет, и решать это правило обязано одно место, а не каждая дверь по-своему. Текст к тому же
+ * приезжает не только строкой — отправитель вправе положить размеченный CharSequence.
+ */
+fun bodyOf(text: CharSequence?): Incoming.Body? =
+    text?.toString()?.takeUnless(String::isBlank)?.let(Incoming::Body)
+
 fun incomingOf(
     action: String?,
     type: String?,
     data: String?,
     stream: String?,
-    text: String?,
+    text: CharSequence?,
     streams: List<String> = emptyList(),
 ): Incoming? = when (action) {
-    "android.intent.action.SEND" -> when {
-        stream != null -> Incoming.Single(stream, type ?: DEFAULT_MIME)
-        !text.isNullOrEmpty() -> Incoming.Body(text)
-        else -> null
-    }
+    "android.intent.action.SEND" ->
+        if (stream != null) Incoming.Single(stream, type ?: DEFAULT_MIME) else bodyOf(text)
 
     "android.intent.action.SEND_MULTIPLE" ->
         streams.takeIf { it.isNotEmpty() }?.let(Incoming::Many)

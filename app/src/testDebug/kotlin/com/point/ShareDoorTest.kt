@@ -2,20 +2,28 @@ package com.point
 
 import android.content.Context
 import android.content.Intent
+import android.graphics.Typeface
 import android.net.Uri
+import android.text.SpannableString
+import android.text.Spanned
+import android.text.style.StyleSpan
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithText
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.shadows.ShadowLooper
 import org.robolectric.shadows.ShadowToast
 import java.io.File
 
@@ -43,6 +51,21 @@ class ShareDoorTest {
 
         ActivityScenario.launch<ShareActivity>(intent).use {
             compose.waitUntilAtLeastOneExists(hasText("Поделиться"), TIMEOUT_MS)
+        }
+    }
+
+    /**
+     * Текст шарится не только строкой (#1096): отправитель вправе положить размеченный
+     * CharSequence — выделение с жирным словом, ссылкой, цитатой. Это настоящий текст, и
+     * пустым входом он не является.
+     */
+    @Test fun `размеченный текст доезжает до экрана объекта, а не считается пустым`() {
+        val marked: CharSequence = SpannableString("Пришлите договор до пятницы").apply {
+            setSpan(StyleSpan(Typeface.BOLD), 0, 8, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        }
+
+        ActivityScenario.launch<ShareActivity>(shared().putExtra(Intent.EXTRA_TEXT, marked)).use {
+            compose.waitUntilAtLeastOneExists(hasText("Пришлите договор до пятницы"), TIMEOUT_MS)
         }
     }
 
@@ -83,6 +106,55 @@ class ShareDoorTest {
         assertTrue("объект из пробелов: появились байты", sharedTextLeftovers().isEmpty())
     }
 
+    /**
+     * Пустой вход в живой Point — слово поверх открытого объекта, а не закрытая дверь (#1096).
+     *
+     * Дверь singleTop: пустой шаринг приезжает в onNewIntent уже открытого экрана. Отказ там не
+     * имеет права ни закрыть экран, ни увести человека от объекта — человек ничего не заканчивал.
+     */
+    @Test fun `пустой вход в живой Point не закрывает открытый объект`() {
+        val first = shared().putExtra(Intent.EXTRA_TEXT, "Пришлите договор до пятницы")
+        val controller = Robolectric.buildActivity(ShareActivity::class.java, first).setup()
+        compose.waitUntilAtLeastOneExists(hasText("Пришлите договор до пятницы"), TIMEOUT_MS)
+
+        controller.newIntent(shared())
+
+        assertEquals(EMPTY_SELECTION_WORDS, ShadowToast.getTextOfLatestToast())
+        assertFalse("пустой вход закрыл экран с открытым объектом", controller.get().isFinishing)
+        compose.onAllNodesWithText("Пришлите договор до пятницы").onFirst().assertExists()
+        controller.destroy()
+    }
+
+    /**
+     * Пустой вход не уносит байты уже принятого объекта (#1096).
+     *
+     * Копия живёт до следующего запуска именно ради возврата (#1012). Отказ на пустой вход
+     * ничего не заводил — значит, и заканчивать ему нечего: диск он не трогает.
+     */
+    @Test fun `пустой вход не уносит с диска принятый объект`() {
+        val first = shared().putExtra(Intent.EXTRA_TEXT, "Пришлите договор до пятницы")
+        val open = Robolectric.buildActivity(ShareActivity::class.java, first).setup()
+        compose.waitUntilAtLeastOneExists(hasText("Пришлите договор до пятницы"), TIMEOUT_MS)
+        settle()
+
+        val kept = objectBytes(context)
+        val snapshot = File(context.filesDir, SNAPSHOT)
+        assertTrue("объект открылся, но на диске его нет — проверять нечего", kept.isNotEmpty())
+        assertTrue("снимок разбора не записался — проверять нечего", snapshot.isFile)
+
+        // Человек ушёл в другое приложение и поделился оттуда пустым текстом.
+        open.pause().stop()
+        Robolectric.buildActivity(ShareActivity::class.java, shared()).create().destroy()
+        settle()
+
+        assertTrue(
+            "пустой вход унёс с диска: ${(kept - objectBytes(context).toSet()).map(File::getName)}",
+            objectBytes(context).containsAll(kept),
+        )
+        assertTrue("пустой вход унёс снимок разбора", snapshot.isFile)
+        open.destroy()
+    }
+
     private fun sharedTextLeftovers(): List<File> =
         File(context.cacheDir, "shared-text").walkTopDown().filter(File::isFile).toList()
 
@@ -107,9 +179,7 @@ class ScratchWipedTest {
 
     private val context: Context get() = ApplicationProvider.getApplicationContext()
 
-    private fun leftovers(): List<File> =
-        listOf(File(context.filesDir, "scratch"), File(context.cacheDir, "shared-text"))
-            .flatMap { it.walkTopDown().filter(File::isFile) }
+    private fun leftovers(): List<File> = objectBytes(context)
 
     @Test fun `конец флоу уносит байты объекта с диска`() {
         val intent = Intent(context, ShareActivity::class.java)
@@ -139,4 +209,27 @@ class ScratchWipedTest {
     }
 }
 
+/** Байты объекта на диске: копия в scratch и текст, принятый шарингом. */
+private fun objectBytes(context: Context): List<File> =
+    listOf(File(context.filesDir, "scratch"), File(context.cacheDir, "shared-text"))
+        .flatMap { it.walkTopDown().filter(File::isFile) }
+
+/**
+ * Диск живёт вне compose-часов: и запись снимка, и уборка уходят в фон. Даём фону окно,
+ * прокачивая главный looper: за него запись успевает случиться, а уборка, начнись она,
+ * успела бы стать видимой.
+ */
+private fun settle() {
+    val deadline = System.currentTimeMillis() + SETTLE_MS
+    while (System.currentTimeMillis() < deadline) {
+        ShadowLooper.idleMainLooper()
+        Thread.sleep(20)
+    }
+}
+
 private const val TIMEOUT_MS = 10_000L
+
+private const val SETTLE_MS = 500L
+
+/** Снимок разбора — то самое знание, к которому Point возвращает человека (#812, #1096). */
+private const val SNAPSHOT = "flow-snapshot.json"
