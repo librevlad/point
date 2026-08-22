@@ -1,12 +1,20 @@
 package com.point.core.flow
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class LinkStateTest {
 
     private val now = 1_700_000_000_000L
     private val minute = 60_000L
+
+    /** Счёт молчания из подписи — число и мера, без фразы вокруг них. */
+    private fun countAfter(minutes: Long): String {
+        val label = linkLabel(linkStateOf(now - minutes * minute, now))
+        return Regex("""\d+ [а-яё]+""").find(label)?.value ?: label
+    }
 
     @Test
     fun `не связывались ни разу — так и говорим`() {
@@ -29,10 +37,30 @@ class LinkStateTest {
     }
 
     @Test
-    fun `долгое молчание названо, а не спрятано`() {
+    fun `давно не слышали — факт «был на связи N назад», а не диагноз (#1114)`() {
         val state = linkStateOf(now - 10 * minute, now)
         assertEquals(LinkState.Silent(10 * minute), state)
-        assertEquals("не отвечает · молчит 10 минут", linkLabel(state))
+
+        // Живой прогон 18.08.2026: «Телефон · не отвечает · молчит 2 часа» читалось как поломка,
+        // хотя телефон просто лежал с погашенным экраном. Подпись говорит, когда его слышали.
+        val label = linkLabel(state)
+        assertTrue(label, label.startsWith("был на связи") && label.endsWith("назад"))
+        assertTrue(label, "10 минут" in label)
+    }
+
+    @Test
+    fun `ни одна подпись связи не ставит диагноз и не говорит метафорами (#1114)`() {
+        val labels = listOf(
+            linkStateOf(null, now),
+            linkStateOf(now - 5_000, now),
+            linkStateOf(now - 125 * minute, now),
+            linkStateOf(null, now, probing = true),
+            linkStateOf(null, now, knownButUnheard = true),
+        ).map(::linkLabel)
+
+        labels.forEach { label ->
+            assertFalse(label, listOf("не отвечает", "молчит", "нет ответа").any { it in label })
+        }
     }
 
     @Test
@@ -44,14 +72,19 @@ class LinkStateTest {
 
     @Test
     fun `часы вместо ста минут — строка остаётся человеческой`() {
-        assertEquals("не отвечает · молчит 2 часа", linkLabel(linkStateOf(now - 125 * minute, now)))
+        val minutes = 125L
+
+        // Проверяется счёт, а не фраза вокруг него (#1114): мера — часы, число из них же.
+        assertEquals("${minutes / 60} часа", countAfter(minutes))
     }
 
     @Test
     fun `русский счёт минут, а не машинный вывод`() {
-        assertEquals("не отвечает · молчит 5 минут", linkLabel(linkStateOf(now - 5 * minute, now)))
-        assertEquals("не отвечает · молчит 21 минуту", linkLabel(linkStateOf(now - 21 * minute, now)))
-        assertEquals("не отвечает · молчит 13 минут", linkLabel(linkStateOf(now - 13 * minute, now)))
+        // Мера согласована с числом — это здесь и проверяется. Слова подписи вокруг счёта
+        // вправе меняться, не роняя тест (#1114).
+        val agreed = mapOf(5L to "минут", 21L to "минуту", 13L to "минут")
+
+        agreed.forEach { (minutes, word) -> assertEquals("$minutes $word", countAfter(minutes)) }
     }
 
     @Test
