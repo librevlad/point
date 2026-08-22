@@ -1313,6 +1313,25 @@ class FlowViewModelTest {
         assertEquals(listOf("tap", "failure"), sensory.events)
     }
 
+    /**
+     * Ожидание — не отказ (#992).
+     *
+     * При первом «Убрать фон» модуль сегментации ещё качается. Point говорит об этом своими
+     * словами и зовёт вернуться через минуту — а человек видел над этой просьбой красный крест
+     * «Не получилось» и слышал звук провала. Ничего не сломалось — работа ещё не начиналась.
+     */
+    @Test fun `движок ещё готовится — просьба подождать без креста и без звука провала`() = runTest(dispatcher) {
+        resolver.result = ActionResult.Failure(com.point.core.flow.ENGINE_PREPARING, recoverable = true)
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.onBubble(bubble()); advanceUntilIdle()
+
+        assertEquals(com.point.core.flow.ENGINE_PREPARING, vm.ui.value.message)
+        assertEquals(Outcome.NONE, vm.ui.value.messageOutcome)
+        assertEquals(listOf("tap"), sensory.events)
+    }
+
     @Test fun `a Success transformation answers with success too`() = runTest(dispatcher) {
         resolver.result = ActionResult.Success(ResultObject(ObjectKind.TEXT, "text/plain", ScratchRef("/o")))
         val vm = vm()
