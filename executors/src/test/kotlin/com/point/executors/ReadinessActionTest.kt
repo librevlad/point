@@ -34,9 +34,6 @@ class ReadinessActionTest {
         policy = DefaultBubblePolicy(),
     )
 
-    private fun bubbles(vararg features: Feature) =
-        registry.bubblesFor(ObjectState(ObjectKind.TEXT, features.toSet()))
-
     @Test
     fun `каждое объявленное схемой действие есть среди возможностей`() {
         val known = registry.bubblesFor(
