@@ -356,7 +356,6 @@ class GraphPipelineIntegrationTest {
         PulledFileFactory { name -> File(File(System.getProperty("java.io.tmpdir")), "pull-$name").absolutePath },
         object : SelectionFrames {
             override fun frame(path: String, maxPx: Int) = null
-            override fun crop(path: String, left: Int, top: Int, right: Int, bottom: Int) = null
         },
         com.point.core.flow.PhoneRegion { "UA" },
         object : com.point.core.flow.AiKeyCheck {

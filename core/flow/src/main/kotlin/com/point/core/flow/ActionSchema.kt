@@ -1,6 +1,5 @@
 package com.point.core.flow
 
-import com.point.core.model.Bubble
 import com.point.core.model.CapabilityId
 
 data class ActionSchema(

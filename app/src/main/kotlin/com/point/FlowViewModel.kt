@@ -30,10 +30,6 @@ import com.point.core.flow.InvestigationState
 import com.point.core.flow.investigationStateOf
 import com.point.core.flow.knownBy
 import com.point.core.flow.META_OCR_ATOMS_REF
-import com.point.core.flow.META_SELECTION_IDS
-import com.point.core.flow.META_SELECTION_PAGE
-import com.point.core.flow.META_SELECTION_REGION
-import com.point.core.flow.META_SELECTION_SOURCE
 import com.point.core.flow.META_UNUSABLE_REASON
 import com.point.core.flow.META_YIELD_NOUN
 import com.point.core.flow.READER_NOT_DECODED

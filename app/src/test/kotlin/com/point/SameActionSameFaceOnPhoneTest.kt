@@ -1,4 +1,4 @@
-package com.point.core.flow
+package com.point
 
 import java.io.File
 import org.junit.Assert.assertTrue
@@ -15,10 +15,16 @@ import org.junit.Test
  * Сторож сверяет не картинки, а ключи: каждый ключ, которым действие телефона зовёт свой знак,
  * обязан быть известен обеим таблицам — и значка, и тона. Пустые ключи исследований (`icon = ""`)
  * знака в списке действий не рисуют, а `app:` — префикс стороннего приложения, у него своя ветка.
+ *
+ * Живёт в `:app` — модуле, который и так собирает телефон из `executors`, `core/flow` и `core/ui`.
+ * Сторож компьютера так же живёт в `:desktop`. В `:core:flow` он читал модули выше себя, и новая
+ * способность в `:executors` роняла бы тест самого нижнего модуля — падение приезжало не туда,
+ * где ошибка.
  */
 class SameActionSameFaceOnPhoneTest {
 
-    private val repo = File("../..")
+    private val repo: File = generateSequence(File(".").absoluteFile) { it.parentFile }
+        .first { File(it, "settings.gradle.kts").isFile }
 
     private val shared = File(repo, "core/ui/src/shared/kotlin/com/point/core/ui/BubbleIcons.kt").readText()
 
@@ -84,5 +90,12 @@ class SameActionSameFaceOnPhoneTest {
         assertTrue("взятие фрагмента больше не зовёт свой знак", "crop" in used)
         assertTrue("знака нет в таблице", "crop" in keysKnownToIcons())
         assertTrue("тона нет в таблице", "crop" in keysKnownToColors())
+    }
+
+    /** Сторож обязан правда прочитать телефон, а не пустой список. */
+    @Test
+    fun `сторож прочитал действия телефона, а не пустоту`() {
+        assertTrue("действий не нашлось: ${repo.absolutePath}", keysUsedByPhone().size > 10)
+        assertTrue("таблица значков не прочиталась", keysKnownToIcons().size > 10)
     }
 }
