@@ -108,6 +108,14 @@ internal fun recentLines(
         ).sortedByDescending { it.at }
 }
 
+/**
+ * Сколько строк «Недавнего» видно сразу, до просьбы показать ещё (#1098).
+ *
+ * Это страница, а не предел памяти: за ней стоит весь журнал, и «показать ещё» доводит до
+ * последней записи, которую Point помнит.
+ */
+internal const val RECENT_PAGE = 12
+
 /** Вторая строка одна на весь список: что это, и — если известно — откуда пришло. */
 internal fun recentNote(kind: ObjectKind, source: com.point.desktop.ObjectSource?): String =
     listOfNotNull(kindLabel(kind), source?.let { com.point.desktop.sourceShort(it) })
@@ -192,7 +200,11 @@ internal fun CompactList(
         // резать на секции их нужно вместе. Пока каждый резался отдельно, «СЕГОДНЯ» стояло
         // в списке дважды: сначала над живыми объектами, потом над журналом (#884).
         val lines = remember(items, remembered, journal) { recentLines(items, remembered, journal) }
-        com.point.core.flow.byTimeSection(lines, now, zone) { it.at }
+
+        // Список листается до конца памяти (#1098): сразу видна страница, дальше — по просьбе.
+        // Прежде окно обрывалось на восьмой записи молча, и остального будто не существовало.
+        var shown by remember(lines.size) { mutableStateOf(RECENT_PAGE) }
+        com.point.core.flow.byTimeSection(lines.take(shown), now, zone) { it.at }
             .forEach { (section, rows) ->
                 Text(
                     section.label.uppercase(),
@@ -225,6 +237,16 @@ internal fun CompactList(
                     }
                 }
             }
+
+        if (shown < lines.size) {
+            Text(
+                com.point.core.ui.showMoreLabel(lines.size - shown),
+                style = PointType.small.copy(color = PointColors.violet),
+                modifier = Modifier.clip(RoundedCornerShape(8.dp))
+                    .clickable { shown += RECENT_PAGE }
+                    .padding(horizontal = 6.dp, vertical = 6.dp),
+            )
+        }
 
         if (items.isEmpty() && remembered.isEmpty()) {
             Spacer(Modifier.height(8.dp))

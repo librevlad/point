@@ -105,11 +105,17 @@ fun recordKnowledge(
 ): List<JournalEntry> =
     entries.map { entry -> if (entry.path != path) entry else entry.copy(meta = meta) }
 
+/**
+ * Всё, что Point ещё помнит, кроме открытого прямо сейчас (#1098).
+ *
+ * Здесь стоял предел в восемь записей: журнал держал сорок объектов со знанием, а в окне
+ * человек доставал восемь — остальное было недостижимо ни прокруткой, ни поиском. Сколько
+ * строк показать сразу — дело списка, а не памяти: список листается сам.
+ */
 fun recentBesides(
     entries: List<JournalEntry>,
     livePaths: Set<String>,
-    limit: Int = 8,
-): List<JournalEntry> = entries.filterNot { it.path in livePaths }.take(limit)
+): List<JournalEntry> = entries.filterNot { it.path in livePaths }
 
 fun stepOf(capabilityId: String, title: String, at: Long, result: ActionResult): JournalStep = when (result) {
     is ActionResult.Done -> JournalStep(capabilityId, title, at, StepOutcome.DONE, result.message)

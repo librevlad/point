@@ -643,9 +643,6 @@ fun collectionLabel(shown: Int, total: Int, atLeast: Boolean): String = when {
     else -> "Содержимое · ${grouped(shown)} из ${grouped(total)}"
 }
 
-internal fun grouped(n: Int): String =
-    n.toString().reversed().chunked(3).joinToString(" ").reversed()
-
 /**
  * Набор из нескольких страниц — снимков, PDF, текстов — можно переставлять (#1207): их
  * порядок читают «В Excel» и «Сканировать в PDF». Одна страница среди файлов архива
@@ -699,7 +696,7 @@ private fun CollectionItems(
         }
         if (page < items.size) {
             TextButton(onClick = { page += COLLECTION_PAGE }) {
-                Text("Показать ещё · ${grouped(items.size - page)}")
+                Text(showMoreLabel(items.size - page))
             }
         }
     }
@@ -770,42 +767,7 @@ private fun CollectionItemRow(
     }
 }
 
-const val TEXT_PREVIEW_HEAD = 2_000
-
 const val COLLAPSED_PREVIEW_LINES = 3
-
-/**
- * Предел, до которого предпросмотр читает объект (см. вызывающую сторону — она читает
- * ровно столько же). Раньше этот предел знала только вызывающая сторона, а кнопка
- * «Показать целиком» обещала «целиком», даже упёршись в него (#682/#683).
- */
-const val TEXT_PREVIEW_LOAD_LIMIT = 100_000
-
-fun textPreviewHead(text: String, limit: Int = TEXT_PREVIEW_HEAD): String {
-    if (text.length <= limit) return text
-    val head = text.take(limit)
-    val cut = head.lastIndexOf('\n')
-    return if (cut > limit / 2) head.substring(0, cut) else head
-}
-
-/**
- * «Показать целиком» показывает целиком либо честно называет, сколько показывает
- * (#682/#683): если сам предпросмотр упёрся в свой предел чтения, кнопка не обещает
- * «целиком» — за пределом может быть ещё, и число становится нижней границей.
- *
- * Скрытых символов может не быть вовсе, а текст всё равно обрезан — тремя строками на
- * экране (#871). Тогда числа нет: обещать «ещё 0 символов» — врать про то, что человек
- * видит своими глазами.
- */
-fun expandTextLabel(hiddenChars: Int, atLimit: Boolean): String = when {
-    hiddenChars <= 0 -> "Показать целиком"
-    atLimit -> "Показать больше · ещё не менее ${grouped(hiddenChars)} символов"
-    else -> "Показать целиком · ещё ${grouped(hiddenChars)} символов"
-}
-
-/** Подпись под развёрнутым текстом, который сам упёрся в предел чтения. */
-fun truncatedPreviewNotice(shownChars: Int): String =
-    "Показаны первые ${grouped(shownChars)} символов — в объекте может быть ещё"
 
 @Composable
 private fun TextPreview(text: String, markdown: Boolean = false, truncated: Boolean = false) {
@@ -850,7 +812,7 @@ private fun TextPreview(text: String, markdown: Boolean = false, truncated: Bool
     }
     if (clipped || head.length < text.length) {
         TextButton(onClick = { expanded = !expanded }) {
-            Text(if (expanded) "Свернуть" else expandTextLabel(text.length - head.length, truncated))
+            Text(if (expanded) COLLAPSE_LABEL else expandTextLabel(text.length - head.length, truncated))
         }
     }
     if (expanded && truncated) {
