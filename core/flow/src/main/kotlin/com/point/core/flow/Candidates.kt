@@ -64,7 +64,8 @@ fun semanticFits(key: String, value: String): Boolean? {
 
         META_ENTITY_METER -> meterDigitsFit(value)
 
-        META_ENTITY_AMOUNT -> amountDigitsFit(value)
+        // Сумма — число (#1059): слово чека, целая строка и ноль в сумму не годятся.
+        META_ENTITY_AMOUNT -> amountFits(value)
         META_ENTITY_RECEIPT -> receiptNumberShaped(value)
 
         META_ENTITY_GEO -> geoPoints(value).isNotEmpty()
@@ -111,6 +112,16 @@ fun unwrapped(raw: String): String {
 private val WRAPPERS: List<Pair<Char, Char>> = listOf(
     '(' to ')', '[' to ']', '{' to '}', '«' to '»', '“' to '”', '‘' to '’',
 )
+
+/**
+ * Главное значение среди равных по уликам (#1059, решение владельца).
+ *
+ * У суммы главное — итог: наибольшее из чисел, если подпись «итого» не назвала его раньше
+ * уликой. У остальных видов знания главного нет: `null` и означает «выбирать не из чего» —
+ * там, как и было, остаётся первое названное.
+ */
+fun mainFact(key: String, values: List<String>): String? =
+    if (key == META_ENTITY_AMOUNT) mainAmount(values) else null
 
 fun formEvidence(key: String, value: String): Set<EvidenceClass> = buildSet {
     if (semanticFits(key, value) == true) add(EvidenceClass.SEMANTIC)
@@ -214,10 +225,11 @@ internal val FIELD_MARKERS: Map<String, List<String>> = mapOf(
         "координати", "координаты", "coordinates", "gps", "широта", "довгота", "долгота",
     ),
 
-    META_ENTITY_AMOUNT to listOf(
-        "сума", "сумма", "amount", "total", "всього", "итого", "до сплати", "к оплате",
-        "грн", "₴", "uah", "$", "usd", "€", "eur",
-    ),
+    // Подписи итога — те же слова, которыми итог узнаёт правило страницы (#1059): одна
+    // подпись на оба пути, а не два расходящихся списка.
+    META_ENTITY_AMOUNT to (
+        TOTAL_MARKERS + listOf("сума", "сумма", "amount", "грн", "₴", "uah", "$", "usd", "€", "eur")
+        ),
 
     META_ENTITY_RECEIPT to listOf("квитанція", "квитанции", "квитанция", "квитанцію", "receipt"),
     META_ENTITY_SUBJECT to listOf("тема", "subject", "тему"),

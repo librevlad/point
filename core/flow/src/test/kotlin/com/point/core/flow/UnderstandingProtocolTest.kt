@@ -185,6 +185,28 @@ class UnderstandingProtocolTest {
         )
     }
 
+    @Test
+    fun `не-число в сумме — не кандидат ни на одном пути (#1059)`() {
+        // Зрячее чтение снимка идёт без слоя слов и без судьи — разбор ответа и есть его
+        // единственный гейт: слово чека и целая строка документа суммой не становятся.
+        assertEquals(null, parseFieldCandidates("AMOUNT=TAX1").fields[META_ENTITY_AMOUNT])
+        assertEquals(
+            null,
+            parseFieldCandidates("AMOUNT=Line 001 order OR-01001 sum 101.01").fields[META_ENTITY_AMOUNT],
+        )
+        assertEquals(
+            listOf("2.18"),
+            parseFieldCandidates("AMOUNT=TAX1\nAMOUNT=2.18").fields[META_ENTITY_AMOUNT]!!.map { it.text },
+        )
+
+        // Скобки вокруг числа — запись, а не значение (#1064): число возврата «(2.18)»
+        // проходит воронку и остаётся суммой, а не гаснет о новое правило формы.
+        assertEquals(
+            listOf("2.18"),
+            parseFieldCandidates("AMOUNT=(2.18)").fields[META_ENTITY_AMOUNT]!!.map { it.text },
+        )
+    }
+
     private fun cards(answer: String): List<String> =
         parseFieldCandidates(answer).fields[META_ENTITY_PREFIX + "card"].orEmpty().map { it.text }
 

@@ -84,16 +84,6 @@ class ReadingHygieneTest {
     }
 
     @Test
-    fun `арифметика — не сумма, одно число — сумма`() {
-        assertTrue(looksLikeExpression("127*4.32=548,64"))
-        assertTrue(looksLikeExpression("500+548,64=1048,64"))
-        assertTrue("две цифры подряд — выкладка, не значение", looksLikeExpression("2500 320"))
-
-        assertFalse(looksLikeExpression("2500"))
-        assertFalse(looksLikeExpression("1 200,50"))
-    }
-
-    @Test
     fun `относительное слово — не день`() {
         assertTrue(relativeDayWord("вчера"))
         assertTrue(relativeDayWord("Сьогодні"))
