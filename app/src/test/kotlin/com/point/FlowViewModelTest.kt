@@ -2486,6 +2486,65 @@ class FlowViewModelTest {
         assertNull("вопроса больше нет — и ответа на экране быть не должно", vm.ui.value.message)
     }
 
+    /**
+     * Пока Point смотрит в область, человек не ждёт молча: он нажимает действие и слышит о
+     * нём слово. Ответ про область приходит позже — и затирал это слово собой, унося
+     * единственное подтверждение того, что человек только что сделал (#1000).
+     */
+    @Test fun `an area answer does not talk over the word about what the person just did`() = runTest(dispatcher) {
+        val said = "Скопировано"
+        resolver.result = ActionResult.Done(said)
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        val area = com.point.core.flow.Focus(vm.ui.value.frame!!.obj.id, com.point.core.flow.Box(0f, 0f, 50f, 50f))
+        enrichment.updates = listOf(emptyLook(area))
+        enrichment.stepDelayMs = 200
+
+        vm.focusOn(area)
+        dispatcher.scheduler.advanceTimeBy(50)
+        vm.onBubble(bubble())
+        dispatcher.scheduler.advanceTimeBy(50)
+        assertEquals("слово о действии человека не сказано", said, vm.ui.value.message)
+        advanceUntilIdle()
+
+        assertEquals("ответ про область перебил слово о действии человека", said, vm.ui.value.message)
+    }
+
+    /**
+     * Проход под областью сорвался: часть вопросов успела записать «не нашлось», остальные
+     * не спрошены. «В области ничего не нашлось» выдало бы недоделанный разбор за ответ —
+     * сорвавшееся исследование знанием не становится (ADR-0001 §9).
+     */
+    @Test fun `an area whose look broke off is not answered as empty`() = runTest(dispatcher) {
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        val area = com.point.core.flow.Focus(vm.ui.value.frame!!.obj.id, com.point.core.flow.Box(0f, 0f, 50f, 50f))
+        enrichment.updates = listOf(emptyLook(area))
+        enrichment.breaksOff = true
+
+        vm.focusOn(area); advanceUntilIdle()
+
+        assertNull("сорвавшийся проход выдал себя за ответ про область", vm.ui.value.message)
+    }
+
+    /** Вопрос под областью сорвался — спрошено ещё не всё, и объявлять область пустой рано. */
+    @Test fun `an area where a question failed is not answered as empty`() = runTest(dispatcher) {
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        val area = com.point.core.flow.Focus(vm.ui.value.frame!!.obj.id, com.point.core.flow.Box(0f, 0f, 50f, 50f))
+        enrichment.updates = listOf(
+            emptyLook(area).copy(
+                failed = listOf(
+                    com.point.core.flow.FailedInvestigation(CapabilityId("qr-content"), "Ищу QR", "не вышло"),
+                ),
+            ),
+        )
+
+        vm.focusOn(area); advanceUntilIdle()
+
+        assertNull("сорвавшийся вопрос не мешает объявить область пустой", vm.ui.value.message)
+    }
+
     /** Посмотрели в область — и на единственный вопрос под ней ничего не нашлось. */
     private fun emptyLook(area: com.point.core.flow.Focus) = EnrichmentUpdate(
         emptySet(),
@@ -4627,6 +4686,9 @@ private class FakeEnrichment(var features: Set<Feature> = emptySet()) : Enrichme
     var updates: List<EnrichmentUpdate>? = null
     var stepDelayMs: Long = 0
 
+    /** Проход сорвался: часть вопросов успела ответить, разбор до конца не дошёл (#1000). */
+    var breaksOff = false
+
     var understandsOnce = false
     var runs = 0
     val seen = mutableListOf<PointObject>()
@@ -4642,6 +4704,7 @@ private class FakeEnrichment(var features: Set<Feature> = emptySet()) : Enrichme
                 if (stepDelayMs > 0) kotlinx.coroutines.delay(stepDelayMs)
                 emit(u)
             }
+            if (breaksOff) error("проход сорвался")
         }
 }
 
