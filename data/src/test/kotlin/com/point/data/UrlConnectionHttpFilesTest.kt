@@ -28,8 +28,6 @@ class UrlConnectionHttpFilesTest {
     @Volatile private var replyCode = 200
     @Volatile private var replyBody = "[]"
 
-    @Volatile private var route: ((String) -> String)? = null
-
     @Before fun start() {
         server = ServerSocket(0, 0, InetAddress.getByName("127.0.0.1"))
         worker = Thread {
@@ -59,7 +57,7 @@ class UrlConnectionHttpFilesTest {
         seenContentType = seenHeaders["content-type"]
         seenBody = ByteArray(seenHeaders["content-length"]?.toIntOrNull() ?: 0).also { readFully(input, it) }
 
-        val body = (route?.invoke(seenPath) ?: replyBody).toByteArray(Charsets.UTF_8)
+        val body = replyBody.toByteArray(Charsets.UTF_8)
         val header = "HTTP/1.1 $replyCode ${reason(replyCode)}\r\n" +
             "Content-Type: application/json\r\n" +
             "Content-Length: ${body.size}\r\n" +
@@ -99,38 +97,42 @@ class UrlConnectionHttpFilesTest {
         }
     }
 
-    private val jpegLike = byteArrayOf(
-        0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte(), 0xE0.toByte(),
-        0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01,
-        0xFF.toByte(), 0xD9.toByte(),
+    /**
+     * Запись голоса — единственная отправка файла, что есть у продукта (#1252): раньше форму
+     * здесь изображало облачное чтение страницы, которого больше нет.
+     *
+     * Байты нарочно несут `0x0D 0x0A` и два дефиса подряд — ровно то, из чего сложена граница
+     * формы: запись не смеет разъехаться на собственном содержимом.
+     */
+    private val oggLike = byteArrayOf(
+        0x4F, 0x67, 0x67, 0x53, 0x00, 0x02, 0x0D, 0x0A,
+        0x2D, 0x2D, 0x0D, 0x0A, 0xFF.toByte(), 0x00, 0x1F,
     )
 
     @Test
-    fun `форма доезжает дословно — повторённое поле остаётся двумя, а байты кадра не портятся`() = runTest {
+    fun `запись доезжает дословно — адрес, ключ и байты голоса не портятся`() = runTest {
         UrlConnectionHttpFiles().postMultipart(
-            url = "${root()}/general/v0/general",
-            headers = mapOf("unstructured-api-key" to "free-key"),
+            url = "${root()}/openai/v1/audio/transcriptions",
+            headers = mapOf("Authorization" to "Bearer free-key"),
             parts = listOf(
-                FormPart.Binary("files", "page.jpg", "image/jpeg", jpegLike),
-                FormPart.Field("coordinates", "true"),
-                FormPart.Field("strategy", "hi_res"),
-                FormPart.Field("languages", "rus"),
-                FormPart.Field("languages", "eng"),
+                FormPart.Binary("file", "voice.ogg", "audio/ogg", oggLike),
+                FormPart.Field("model", "whisper-large-v3-turbo"),
+                FormPart.Field("response_format", "json"),
             ),
         )
 
-        assertEquals("free-key", seenHeaders["unstructured-api-key"])
+        assertEquals("/openai/v1/audio/transcriptions", seenPath)
+        assertEquals("Bearer free-key", seenHeaders["authorization"])
         val parts = partsOf(seenBody, boundaryOf(seenContentType))
 
-        assertEquals(listOf("rus", "eng"), parts.filter { it.name == "languages" }.map { it.text })
-        assertEquals("true", parts.single { it.name == "coordinates" }.text)
-        assertEquals("hi_res", parts.single { it.name == "strategy" }.text)
+        assertEquals("whisper-large-v3-turbo", parts.single { it.name == "model" }.text)
+        assertEquals("json", parts.single { it.name == "response_format" }.text)
 
-        val file = parts.single { it.name == "files" }
-        assertEquals("page.jpg", file.fileName)
-        assertTrue(file.headers.contains("Content-Type: image/jpeg"))
+        val file = parts.single { it.name == "file" }
+        assertEquals("voice.ogg", file.fileName)
+        assertTrue(file.headers.contains("Content-Type: audio/ogg"))
 
-        assertArrayEquals(jpegLike, file.bytes)
+        assertArrayEquals(oggLike, file.bytes)
     }
 
     @Test
@@ -139,7 +141,7 @@ class UrlConnectionHttpFilesTest {
         replyBody = """{"detail":"payment required"}"""
 
         val res = UrlConnectionHttpFiles().postMultipart(
-            root(), emptyMap(), listOf(FormPart.Field("strategy", "hi_res")),
+            root(), emptyMap(), listOf(FormPart.Field("model", "whisper-large-v3-turbo")),
         )
 
         assertEquals(402, res.code)
@@ -152,83 +154,11 @@ class UrlConnectionHttpFilesTest {
         replyBody = "slow down"
 
         val res = UrlConnectionHttpFiles().postMultipart(
-            root(), emptyMap(), listOf(FormPart.Field("strategy", "hi_res")),
+            root(), emptyMap(), listOf(FormPart.Field("model", "whisper-large-v3-turbo")),
         )
 
         assertEquals(429, res.code)
         assertEquals("slow down", res.body)
-    }
-
-    @Test
-    fun `опрос задачи несёт заголовок и запрошенный путь целиком`() = runTest {
-        replyBody = """{"job":{"status":"COMPLETED"}}"""
-
-        val res = UrlConnectionHttpFiles().get(
-            "${root()}/api/v2/parse/pjb-1?expand=items",
-            mapOf("Authorization" to "Bearer free-key"),
-        )
-
-        assertEquals("/api/v2/parse/pjb-1?expand=items", seenPath)
-        assertEquals("Bearer free-key", seenHeaders["authorization"])
-        assertTrue(res.body.contains("COMPLETED"))
-    }
-
-    @Test
-    fun `путь Unstructured целиком по сокету — от формы до координат в сыром кадре`() = runTest {
-        replyBody = """
-            [{"type":"Table","element_id":"e1","text":"11004",
-              "metadata":{"page_number":1,"detection_class_prob":0.87,
-                "coordinates":{"system":"PixelSpace","layout_width":500,"layout_height":400,
-                  "points":[[100,100],[100,150],[200,150],[200,100]]}}}]
-        """.trimIndent()
-
-        val layer = UnstructuredAtomRecognizer(
-            http = UrlConnectionHttpFiles(),
-            frames = FakeOutboundFrames(sentFrame()),
-            apiKey = "free-key",
-            apiUrl = "${root()}/general/v0/general",
-        ).read(pageObject)
-
-        val parts = partsOf(seenBody, boundaryOf(seenContentType))
-        assertEquals(listOf("rus", "eng"), parts.filter { it.name == "languages" }.map { it.text })
-        assertEquals("true", parts.single { it.name == "coordinates" }.text)
-        assertEquals("page.jpg", parts.single { it.name == "files" }.fileName)
-
-        val atom = layer.atoms.single()
-        assertEquals("11004", atom.text)
-        assertEquals("unstructured", atom.reader)
-        assertEquals(0.87f, atom.confidence, 0.001f)
-        assertEquals(400f, atom.box.left, 0.01f)
-        assertEquals(800f, atom.box.right, 0.01f)
-    }
-
-    @Test
-    fun `путь LlamaParse целиком по сокету — загрузка, опрос, координаты`() = runTest {
-        route = { path ->
-            if (path.contains("/upload")) {
-                """{"id":"pjb-1","status":"PENDING"}"""
-            } else {
-                """
-                {"job":{"id":"pjb-1","status":"COMPLETED"},
-                 "items":{"pages":[{"page_number":1,"page_width":500,"page_height":400,
-                   "items":[{"type":"text","value":"11006","bbox":[{"x":100,"y":100,"w":100,"h":50}]}]}]}}
-                """.trimIndent()
-            }
-        }
-
-        val layer = LlamaParseAtomRecognizer(
-            http = UrlConnectionHttpFiles(),
-            frames = FakeOutboundFrames(sentFrame()),
-            apiKey = "free-key",
-            baseUrl = root(),
-        ).read(pageObject)
-
-        assertEquals("/api/v2/parse/pjb-1?expand=items", seenPath)
-        val atom = layer.atoms.single()
-        assertEquals("11006", atom.text)
-        assertEquals("lp0", atom.id)
-        assertEquals(400f, atom.box.left, 0.01f)
-        assertEquals(600f, atom.box.bottom, 0.01f)
     }
 
     private class Part(val headers: String, val bytes: ByteArray) {

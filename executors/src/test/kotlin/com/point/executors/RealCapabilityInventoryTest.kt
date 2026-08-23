@@ -11,8 +11,22 @@ import com.point.core.flow.derivedYield
 import com.point.core.flow.inventoryProbes
 import com.point.core.flow.yieldLabel
 import com.point.core.model.ActionYield
+import com.point.core.model.CapabilityId
 import com.point.core.model.Intent
 import com.point.core.model.ObjectKind
+import com.point.data.DocumentTypeInvestigation
+import com.point.data.EntityInvestigation
+import com.point.data.ExifInvestigation
+import com.point.data.GraphRolesInvestigation
+import com.point.data.IdentifierInvestigation
+import com.point.data.MetadataEntityInvestigation
+import com.point.data.OcrInvestigation
+import com.point.data.PdfImageInvestigation
+import com.point.data.PeriodInvestigation
+import com.point.data.QrInvestigation
+import com.point.data.TextUrlInvestigation
+import com.point.data.VCardInvestigation
+import com.point.data.ZipImagesInvestigation
 import com.point.executors.di.CapabilityModule
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -25,7 +39,11 @@ class RealCapabilityInventoryTest {
     // Общий словарь — ровно тот, что телефон раздаёт через CapabilityModule (#1021): слово о
     // дороге чтения снимка в нём телефонное. Перечисленный руками словарь расходился с боевым
     // набором — держал голое чтение без обещания.
-    private val builtIn: List<Capability> = CapabilityModule.sharedCaps(OfficeAlwaysHere, AccountForTests()).toList() + listOf(
+    //
+    // Спрашивается он один раз: два вызова подряд расходятся молча, стоит подписи измениться.
+    private val shared: Set<Capability> = CapabilityModule.sharedCaps(OfficeAlwaysHere, AccountForTests())
+
+    private val builtIn: List<Capability> = shared.toList() + listOf(
         AiCapability(aiKeysReady), BlurBgCapability(),
         CallCapability(), CloudOcrCapability(), CopyCapability(), CopyCardCapability(),
         CorrectValueCapability(),
@@ -43,7 +61,27 @@ class RealCapabilityInventoryTest {
         ScanPdfCapability(), ScanPlusCapability(), ShareAllCapability(), ShareCapability(),
         ShoppingListCapability(aiKeysReady), SmsCapability(), TranscribeCapability(keysReady),
         TranslateCapability(aiKeysReady), UnderstandCapability(aiKeysReady), VCardCapability(), WordCapability(),
-        WordPlusCapability(aiKeysReady),
+        WordPlusCapability(aiKeysReady), CleanMetadataCapability(),
+    )
+
+    private val sharedNames: Set<String> = shared.map { it.javaClass.simpleName }.toSet()
+
+    // Исследования продукта — пары «класс и его id». Сверки ниже держат этот список и
+    // `DataModule` вместе поимённо (#1256).
+    private val investigations: List<Pair<Class<*>, CapabilityId>> = listOf(
+        DocumentTypeInvestigation::class.java to DocumentTypeInvestigation.ID,
+        EntityInvestigation::class.java to EntityInvestigation.ID,
+        ExifInvestigation::class.java to ExifInvestigation.ID,
+        GraphRolesInvestigation::class.java to GraphRolesInvestigation.ID,
+        IdentifierInvestigation::class.java to IdentifierInvestigation.ID,
+        MetadataEntityInvestigation::class.java to MetadataEntityInvestigation.ID,
+        OcrInvestigation::class.java to OcrInvestigation.ID,
+        PdfImageInvestigation::class.java to PdfImageInvestigation.ID,
+        PeriodInvestigation::class.java to PeriodInvestigation.ID,
+        QrInvestigation::class.java to QrInvestigation.ID,
+        TextUrlInvestigation::class.java to TextUrlInvestigation.ID,
+        VCardInvestigation::class.java to VCardInvestigation.ID,
+        ZipImagesInvestigation::class.java to ZipImagesInvestigation.ID,
     )
 
     // Пробы шире базовых видов: кадры извлечённых значений — полноправные объекты,
@@ -63,25 +101,49 @@ class RealCapabilityInventoryTest {
      */
     @Test
     fun `id исследований не пересекаются с id действий`() {
-        val investigations = listOf(
-            com.point.data.OcrInvestigation.ID,
-            com.point.data.QrInvestigation.ID,
-            com.point.data.EntityInvestigation.ID,
-            com.point.data.IdentifierInvestigation.ID,
-            com.point.data.GraphRolesInvestigation.ID,
-            com.point.data.DocumentTypeInvestigation.ID,
-            com.point.data.MetadataEntityInvestigation.ID,
-            com.point.data.PeriodInvestigation.ID,
-            com.point.data.TextUrlInvestigation.ID,
-            com.point.data.VCardInvestigation.ID,
-            com.point.data.PdfImageInvestigation.ID,
-            com.point.data.ZipImagesInvestigation.ID,
-        )
         val actions = builtIn.map { it.id }.toSet()
 
-        val clashes = investigations.filter { it in actions }
-        assertEquals("исследование и действие не смеют делить id", emptyList<Any>(), clashes)
+        val clashes = investigations
+            .filter { (_, id) -> id in actions }
+            .map { (cls, id) -> "${cls.simpleName} — «${id.value}»" }
+
+        assertEquals("исследование и действие не смеют делить id", emptyList<String>(), clashes)
     }
+
+    /**
+     * Тот же дефект внутри самого пространства знания: два исследования с одним id резолвер
+     * сложит в одну кучу, и цикл знания получит чужого реализатора.
+     *
+     * Заодно это то, что держит пары «класс и его id» честными: списанный копипастой чужой id
+     * всплывает здесь двойником, а не молча уводит проверку выше мимо новичка.
+     */
+    @Test
+    fun `два исследования не делят один id`() {
+        val twins = investigations.groupBy { (_, id) -> id }
+            .filterValues { it.size > 1 }
+            .map { (id, pairs) -> "«${id.value}» — ${pairs.map { (cls, _) -> cls.simpleName }}" }
+
+        assertEquals("исследования не смеют делить id", emptyList<String>(), twins)
+    }
+
+    /**
+     * Исследования сверяются с реестром поимённо — как и способности ниже (#1256). Счётная
+     * сверка держалась на совпадении: `exif` из списка выпал, а число всё равно сходилось, и
+     * добавить одно исследование, убрав другое, можно было, не тронув счёт, — список молчал бы,
+     * а проверки выше шли бы мимо новичка. Имя — не число: разойдётся, и тест назовёт, кого
+     * именно не хватает.
+     */
+    @Test
+    fun `исследования взяты те же, что связывает DataModule`() {
+        assertEquals(
+            boundInvestigations().map { it.simpleName }.sorted(),
+            investigations.map { (cls, _) -> cls.simpleName }.sorted(),
+        )
+    }
+
+    /** Что раздаёт `DataModule`: одно исследование — одна раздача. */
+    private fun boundInvestigations(): List<Class<*>> =
+        singleCapabilitiesOf(com.point.data.di.DataModule::class.java, com.point.data.di.DataModule.Companion)
 
     @Test
     fun `таблица — что каждая способность принимает и что возвращает`() {
@@ -122,7 +184,7 @@ class RealCapabilityInventoryTest {
         }
     }
 
-    private val reshaped: List<com.point.core.model.CapabilityId> = builtIn.filter { c ->
+    private val reshaped: List<CapabilityId> = builtIn.filter { c ->
         inventoryProbes().filter(c::accepts).any { s -> shapeOf(c.yields(s)) != shapeOf(derivedYield(c, s)) }
     }.map { it.id }
 
@@ -153,14 +215,87 @@ class RealCapabilityInventoryTest {
         else -> "ничего"
     }
 
+    /**
+     * Инвентарь сверяется с DI поимённо, а не по счёту (#1256). Счёт сходился по совпадению:
+     * `@Provides` из companion-объекта в `declaredMethods` абстрактного класса не попадал, и
+     * пропуск в одном месте гасился пропуском в другом — «Очистить метаданные» так и не была
+     * проверена ни одним инвариантом этого файла. Списку способностей нельзя разойтись с тем,
+     * что раздаёт реестр, молча: расходится — тест называет, кого именно не хватает.
+     */
     @Test
-    fun `в таблице ровно столько способностей, сколько раздаёт реестр`() {
+    fun `таблица собрана из тех же способностей, что раздаёт DI`() {
+        val listed = (builtIn.map { it.javaClass.simpleName }.toSet() - sharedNames).sorted()
 
-        val bound = com.point.executors.di.CapabilityModule::class.java.declaredMethods
-            .count { it.returnType == Capability::class.java } +
-            com.point.core.flow.capabilities.sharedCapabilities().size
+        assertEquals(boundSingleCapabilities().map { it.simpleName }.sorted(), listed)
+    }
 
-        assertEquals("в CapabilityModule способностей больше, чем в таблице", bound, builtIn.size)
+    private fun boundSingleCapabilities(): List<Class<*>> =
+        singleCapabilitiesOf(CapabilityModule::class.java, CapabilityModule.Companion)
+
+    /**
+     * Что модуль DI раздаёт по одной способности: `@Binds` самого модуля и `@Provides` из его
+     * companion-объекта (#1256).
+     *
+     * Половины модуля мало. Companion — отдельный класс, и в `declaredMethods` модуля его
+     * методы не попадают, а уезжает туда как раз то, что `@Binds` завести не может: класс с
+     * нативной библиотекой роняет разрешение типов всему модулю KSP. Сверка, читающая только
+     * `@Binds`, о такой способности молчит — а пропущенное ею не проходит ни одной проверки
+     * этого файла: ни на общий id с действием, ни на двойника внутри своего пространства.
+     *
+     * Способность из companion со своими зависимостями завести без Hilt нечем — и это не
+     * повод пропустить её молча: тест обязан назвать её вслух.
+     */
+    private fun singleCapabilitiesOf(module: Class<*>, companion: Any): List<Class<*>> {
+        val binds = module.declaredMethods
+            .filter { it.returnType == Capability::class.java }
+            .map { it.parameterTypes.singleOrNull() ?: error("@Binds берёт не одну реализацию: ${it.name}") }
+
+        val provides = companion.javaClass.declaredMethods
+            .filter { it.returnType == Capability::class.java }
+            .map { method ->
+                assertEquals(
+                    "способность из companion @Provides со своими зависимостями — сверить её нечем: ${method.name}",
+                    0, method.parameterCount,
+                )
+                method.invoke(companion).javaClass
+            }
+
+        return binds + provides
+    }
+
+    /**
+     * Сверка читает модуль целиком (#1256). Исследования сверялись только по `declaredMethods`
+     * самого `DataModule`, то есть по `@Binds`, — ровно та слепота, которую этот срез закрыл
+     * для действий: исследование, отданное из companion, в сверку не попадало, и список рядом
+     * мог о нём молчать. Молчащий список уводит мимо новичка обе проверки id — ту самую пару,
+     * что закрыла живой дефект с общим `ocr`.
+     */
+    @Test
+    fun `сверка видит и привязку модуля, и способность из его companion`() {
+
+        // Ровно то, чем слепота и держалась: в самом модуле метода companion нет.
+        assertTrue(
+            "пример перестал показывать слепоту — companion-метод виден и в самом модуле",
+            HalfSeenModule::class.java.declaredMethods.none { it.name == "saveCap" },
+        )
+
+        assertEquals(
+            listOf("CopyCapability", "SaveCapability"),
+            singleCapabilitiesOf(HalfSeenModule::class.java, HalfSeenModule.Companion)
+                .map { it.simpleName }
+                .sorted(),
+        )
+    }
+
+    /** Модуль формы Hilt: одна способность привязана, вторая отдана из companion. */
+    private abstract class HalfSeenModule {
+
+        abstract fun copyCap(c: CopyCapability): Capability
+
+        companion object {
+
+            fun saveCap(): Capability = SaveCapability()
+        }
     }
 
     @Test

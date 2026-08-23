@@ -76,5 +76,3 @@ const val META_ORIGIN_ID = "origin.id"
 const val READ_TEXT_TRAVEL_LIMIT = 100_000
 
 const val META_OCR_ATOMS_REF = "ocr.atoms.ref"
-
-const val META_CLOUD_ATOMS_REF = "cloud.atoms.ref"

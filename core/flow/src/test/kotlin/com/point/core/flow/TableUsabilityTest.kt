@@ -48,7 +48,29 @@ class TableUsabilityTest {
         assertEquals(3, score.dumpCells)
         assertEquals(3, score.dumpRows)
         assertEquals(4.0 / 7.0, score.usableShare!!, 1e-9)
-        assertTrue("больше четверти листа — непрочитанное", Unfitness.DUMP in score.unfit)
+        assertTrue("больше трети листа — непрочитанное", Unfitness.DUMP in score.unfit)
+    }
+
+    /**
+     * Измеритель мерит то, что получает человек (#1238). Своей доли непрочитанного у него нет:
+     * судьбу таблицы у человека решает `unfitTable`, и порог непрочитанного один на обоих —
+     * иначе прогон корпуса хвалит лист, который продукт человеку уже отдавать отказался.
+     */
+    @Test
+    fun `непрочитанное меряется тем же порогом, каким продукт отказывает от таблицы`() {
+        val cells = 12
+        val unreadAtProductLimit = kotlin.math.ceil(cells * UNFIT_UNREAD_SHARE).toInt()
+        val document = List(cells - unreadAtProductLimit) { listOf("значение") }
+        val dump = List(unreadAtProductLimit) { listOf("непрочитанное") }
+
+        val atLimit = scoreUsable("на пороге", document + listOf(caption) + dump)
+        val below = scoreUsable(
+            "ниже порога",
+            document + listOf(listOf("значение")) + listOf(caption) + dump.drop(1),
+        )
+
+        assertTrue("продукт от такого листа отказывается, а измеритель его считает годным", Unfitness.DUMP in atLimit.unfit)
+        assertFalse("измеритель ругает лист, который продукт человеку отдаёт", Unfitness.DUMP in below.unfit)
     }
 
     @Test

@@ -3,7 +3,6 @@ package com.point.data
 import com.point.core.flow.HistoryFootprint
 import com.point.core.flow.HistoryStore
 import com.point.core.flow.extensionForFile
-import com.point.core.flow.META_CLOUD_ATOMS_REF
 import com.point.core.flow.META_ENTITY_PREFIX
 import com.point.core.flow.META_OCR_ATOMS_REF
 import com.point.core.flow.META_OCR_TEXT_REF
@@ -252,6 +251,6 @@ class FileHistoryStore @Inject constructor(
         const val MAX_ENTRIES = 50
 
 
-        val REF_KEYS = setOf(META_OCR_TEXT_REF, META_OCR_ATOMS_REF, META_CLOUD_ATOMS_REF)
+        val REF_KEYS = setOf(META_OCR_TEXT_REF, META_OCR_ATOMS_REF)
     }
 }

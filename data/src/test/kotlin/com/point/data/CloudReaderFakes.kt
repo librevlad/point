@@ -14,20 +14,15 @@ class SentForm(val url: String, val headers: Map<String, String>, val parts: Lis
     fun field(name: String): String? =
         parts.filterIsInstance<FormPart.Field>().firstOrNull { it.name == name }?.value
 
-    fun fields(name: String): List<String> =
-        parts.filterIsInstance<FormPart.Field>().filter { it.name == name }.map { it.value }
-
     fun file(name: String): FormPart.Binary? =
         parts.filterIsInstance<FormPart.Binary>().firstOrNull { it.name == name }
 }
 
 class FakeHttpFiles(
     private val onPost: (SentForm) -> HttpResult = { HttpResult(200, "[]") },
-    private val onGet: (String) -> HttpResult = { HttpResult(200, "{}") },
 ) : HttpFiles {
 
     val posts = mutableListOf<SentForm>()
-    val gets = mutableListOf<String>()
 
     override suspend fun postMultipart(
         url: String,
@@ -36,11 +31,6 @@ class FakeHttpFiles(
     ): HttpResult = SentForm(url, headers, parts).let {
         posts += it
         onPost(it)
-    }
-
-    override suspend fun get(url: String, headers: Map<String, String>): HttpResult {
-        gets += url
-        return onGet(url)
     }
 }
 

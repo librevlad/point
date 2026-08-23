@@ -1,6 +1,5 @@
 package com.point.data
 
-import com.point.core.flow.META_CLOUD_ATOMS_REF
 import com.point.core.flow.META_GRAPH_ROLE_PREFIX
 import com.point.core.flow.META_OCR_ATOMS_REF
 import com.point.core.flow.META_OCR_TEXT_REF
@@ -168,7 +167,6 @@ class FileHistoryStoreTest {
         store.record(textObject("a", "страница счёта", "скан.txt"))
         val scratchText = File.createTempFile("ocr-", ".txt").apply { writeText("распознанный текст страницы") }
         val scratchAtoms = File.createTempFile("ocr-", ".tsv").apply { writeText("word\t0\t0\t10\t10") }
-        val scratchCloud = File.createTempFile("cloud-", ".tsv").apply { writeText("cloud\t0\t0\t10\t10") }
         store.update(
             textObject("a", "страница счёта", "скан.txt").copy(
                 state = ObjectState(ObjectKind.TEXT, setOf(Feature.HAS_TEXT, Feature.HAS_WORD_LAYER)),
@@ -176,7 +174,6 @@ class FileHistoryStoreTest {
                     "name" to "скан.txt",
                     META_OCR_TEXT_REF to scratchText.absolutePath,
                     META_OCR_ATOMS_REF to scratchAtoms.absolutePath,
-                    META_CLOUD_ATOMS_REF to scratchCloud.absolutePath,
                 ),
             ),
         )
@@ -184,7 +181,6 @@ class FileHistoryStoreTest {
         // Point чистит scratch после каждого flow (ObjectStore.clear()) — здесь это смоделировано явно.
         scratchText.delete()
         scratchAtoms.delete()
-        scratchCloud.delete()
 
         val reopened = store.open("a")!!
 
@@ -194,8 +190,8 @@ class FileHistoryStoreTest {
         assertTrue("улика не пережила очистку scratch", textRef != null && File(textRef).isFile)
         assertNotEquals("это обязана быть копия, а не тот же протухший путь", scratchText.absolutePath, textRef)
         assertEquals("распознанный текст страницы", File(textRef!!).readText())
-        val cloudRef = reopened.metadata[META_CLOUD_ATOMS_REF]
-        assertTrue("облачная улика не пережила очистку scratch", cloudRef != null && File(cloudRef).isFile)
+        val atomsRef = reopened.metadata[META_OCR_ATOMS_REF]
+        assertTrue("улика со словами не пережила очистку scratch", atomsRef != null && File(atomsRef).isFile)
     }
 
     @Test

@@ -19,11 +19,18 @@ sealed interface FormPart {
     ) : FormPart
 }
 
+/**
+ * Отправка файла чужому сервису: запись голоса уходит на расшифровку.
+ *
+ * Запроса за файлом (`get`) у шва нет (#1252). Он жил ради опроса задачи у облачного чтения
+ * со слоем слов — контура, до которого человек не мог дойти ни одним нажатием; вместе с
+ * читалками ушёл и он. Метод, которого не зовёт продукт, — то же обещание без нажатия:
+ * следующий читатель чинит путь, которого нет. Понадобится опрос задачи снова — он вернётся
+ * вместе с тем, кто его зовёт.
+ */
 interface HttpFiles {
 
     suspend fun postMultipart(url: String, headers: Map<String, String>, parts: List<FormPart>): HttpResult
-
-    suspend fun get(url: String, headers: Map<String, String>): HttpResult
 }
 
 class UrlConnectionHttpFiles() : HttpFiles {
@@ -57,18 +64,6 @@ class UrlConnectionHttpFiles() : HttpFiles {
             read()
         }
     }
-
-    override suspend fun get(url: String, headers: Map<String, String>): HttpResult =
-        withContext(Dispatchers.IO) {
-            val conn = (URL(url).openConnection() as HttpURLConnection).apply {
-                requestMethod = "GET"
-                connectTimeout = 10_000
-                readTimeout = 30_000
-                pointHeaders(mapOf("Accept" to "application/json"), headers)
-                    .forEach { (k, v) -> setRequestProperty(k, v) }
-            }
-            conn.callClosingOnCancel { read() }
-        }
 
     private fun HttpURLConnection.read(): HttpResult {
         val status = responseCode

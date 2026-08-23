@@ -4,7 +4,6 @@ import org.junit.Assert.assertEquals
 import com.point.core.flow.PcRemoteAction
 import com.point.core.flow.Capability
 import com.point.core.flow.CapabilityRegistry
-import com.point.core.flow.Entitlements
 import com.point.core.flow.Realizer
 import com.point.core.flow.RealizerKind
 import com.point.core.flow.RealizerMeta
@@ -36,7 +35,7 @@ class ConsentByRealizersTest {
     private fun resolver(vararg realizers: Realizer): DefaultResolver {
         val caps = realizers.mapTo(mutableSetOf<Capability>()) { Cap(it.capabilityId.value) }
         val registry = DefaultCapabilityRegistry(caps, DefaultBubblePolicy())
-        return DefaultResolver(realizers.toSet(), registry, Entitlements { true })
+        return DefaultResolver(realizers.toSet(), registry)
     }
 
     @Test

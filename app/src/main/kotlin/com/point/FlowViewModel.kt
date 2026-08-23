@@ -29,7 +29,6 @@ import com.point.core.flow.FrameTransform
 import com.point.core.flow.InvestigationState
 import com.point.core.flow.investigationStateOf
 import com.point.core.flow.knownBy
-import com.point.core.flow.META_CLOUD_ATOMS_REF
 import com.point.core.flow.META_OCR_ATOMS_REF
 import com.point.core.flow.META_SELECTION_IDS
 import com.point.core.flow.META_SELECTION_PAGE
@@ -956,7 +955,7 @@ class FlowViewModel @Inject constructor(
     fun openFind() {
         val top = stack.lastOrNull()?.obj ?: return
 
-        val atomsRef = top.metadata[META_OCR_ATOMS_REF] ?: top.metadata[META_CLOUD_ATOMS_REF]
+        val atomsRef = top.metadata[META_OCR_ATOMS_REF]
         if (atomsRef == null) {
             _ui.update { it.copy(message = "Страница ещё не прочитана — искать не в чем", messageOutcome = Outcome.FAILED) }
             return

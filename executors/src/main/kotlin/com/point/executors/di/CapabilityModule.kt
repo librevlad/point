@@ -207,6 +207,14 @@ abstract class CapabilityModule {
     @Binds @IntoSet @OwnCapabilities abstract fun wordPlusCap(c: WordPlusCapability): Capability
     @Binds @IntoSet @OwnCapabilities abstract fun jobReplyCap(c: JobReplyCapability): Capability
 
+    // «Очистить метаданные» — такое же своё умение, как остальные (#1256): без квалификатора
+    // оно не попадало в набор для сверки с компьютером, и в день, когда компьютер объявит
+    // `clean-metadata`, телефон счёл бы своё же умение чужим и показал вторую строку на то же
+    // действие. Способность графики Android не трогает — её тут держит @Binds, в отличие от
+    // реализатора ниже.
+    @Binds @IntoSet @OwnCapabilities
+    abstract fun cleanMetadataCap(c: com.point.executors.CleanMetadataCapability): Capability
+
     @Binds @IntoSet abstract fun shareR(r: ShareRealizer): Realizer
     @Binds @IntoSet abstract fun saveR(r: SaveRealizer): Realizer
     @Binds @IntoSet abstract fun saveAllR(r: SaveAllRealizer): Realizer
@@ -318,9 +326,6 @@ abstract class CapabilityModule {
         // роняет разрешение типов во всём модуле KSP — тот же урок, что с OpenCV.
         @Provides @IntoSet
         fun cleanMetadataR(store: ObjectStore): Realizer = com.point.executors.CleanMetadataRealizer(store)
-
-        @Provides @IntoSet
-        fun cleanMetadataCap(): Capability = com.point.executors.CleanMetadataCapability()
 
         @Provides @ElementsIntoSet
         fun appRealizers(chosen: ChosenApps, launcher: AppLauncher): Set<Realizer> =

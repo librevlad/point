@@ -79,12 +79,6 @@ android {
         buildConfigField("String", "MODELSCOPE_MODELS", prop("MODELSCOPE_MODELS", "Qwen/Qwen3-VL-235B-A22B-Instruct,Qwen/Qwen3-VL-8B-Instruct"))
 
 
-        buildConfigField("String", "UNSTRUCTURED_API_KEY", "\"\"")
-        buildConfigField("String", "UNSTRUCTURED_API_URL", prop("UNSTRUCTURED_API_URL", "https://api.unstructuredapp.io/general/v0/general"))
-        buildConfigField("String", "LLAMA_CLOUD_API_KEY", "\"\"")
-        buildConfigField("String", "LLAMA_CLOUD_BASE_URL", prop("LLAMA_CLOUD_BASE_URL", "https://api.cloud.llamaindex.ai"))
-        buildConfigField("String", "LLAMA_CLOUD_TIER", prop("LLAMA_CLOUD_TIER", "cost_effective"))
-
         buildConfigField("String", "OVH_API_KEY", "\"\"")
         buildConfigField("String", "OVH_BASE_URL", prop("OVH_BASE_URL", "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1"))
         buildConfigField("String", "OVH_MODEL", prop("OVH_MODEL", "Qwen2.5-VL-72B-Instruct"))
@@ -111,8 +105,6 @@ android {
             buildConfigField("String", "CLOUDFLARE_ACCOUNT_ID", prop("CLOUDFLARE_ACCOUNT_ID"))
             buildConfigField("String", "MODELSCOPE_API_KEY", prop("MODELSCOPE_API_KEY"))
             buildConfigField("String", "NVIDIA_API_KEY", prop("NVIDIA_API_KEY"))
-            buildConfigField("String", "UNSTRUCTURED_API_KEY", prop("UNSTRUCTURED_API_KEY"))
-            buildConfigField("String", "LLAMA_CLOUD_API_KEY", prop("LLAMA_CLOUD_API_KEY"))
             buildConfigField("String", "OVH_API_KEY", prop("OVH_API_KEY"))
         }
 

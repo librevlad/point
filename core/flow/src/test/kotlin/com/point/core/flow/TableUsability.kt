@@ -1,5 +1,11 @@
 package com.point.core.flow
 
+/**
+ * Измеритель качества таблиц — не путь продукта, а инструмент прогона по корпусу (#1238).
+ * Живёт в тестовом source set: его зовут только `TableScoreCli` и собственный тест, а задача
+ * `scoreTable` и без того собрана на тестовом classpath. В боевом коде он читался как рабочий
+ * путь и приглашал править себя вместо настоящего судьи — `unfitTable` в `TableFitness`.
+ */
 data class UsabilityScore(
     val frame: String,
 
@@ -33,7 +39,7 @@ data class UsabilityScore(
     val unfit: List<Unfitness>
         get() = buildList {
             if (cells == 0) add(Unfitness.EMPTY)
-            if ((dumpShare ?: 0.0) >= DUMP_SHARE) add(Unfitness.DUMP)
+            if ((dumpShare ?: 0.0) >= UNFIT_UNREAD_SHARE) add(Unfitness.DUMP)
             if ((noiseShare ?: 0.0) >= NOISE_SHARE) add(Unfitness.NOISE)
             if ((flaggedShare ?: 0.0) >= WARNING_WALL_SHARE) add(Unfitness.FLAGS)
         }
@@ -41,14 +47,20 @@ data class UsabilityScore(
 
 enum class Unfitness(val reason: String) {
     EMPTY("в файле нет ни одной непустой ячейки"),
-    DUMP("непрочитанного больше четверти листа — человек получил не таблицу, а её обломки"),
+    DUMP("непрочитанного больше трети листа — человек получил не таблицу, а её обломки"),
     NOISE("символьный шум в каждой десятой ячейке и чаще — значения приходится перенабирать"),
 
     FLAGS("предупреждение стоит на трети ячеек и больше — работать с таблицей нельзя, только перепроверять"),
 }
 
-const val DUMP_SHARE: Double = 1.0 / 4.0
-
+/**
+ * Порог шума — свой у измерителя, и продуктовой опоры у него нет (#1238): по символьному шуму
+ * Point таблицу не отклоняет, отклоняет `unfitTable` — по непрочитанному и по разошедшимся
+ * чтениям. Число здесь нужно, чтобы сравнивать прогоны корпуса между собой и видеть, что
+ * шума стало больше или меньше, а не чтобы решать судьбу таблицы у человека. Доли
+ * непрочитанного и меток берутся у настоящего судьи (`UNFIT_UNREAD_SHARE`,
+ * `WARNING_WALL_SHARE`) — измеритель обязан мерить то, что получает человек.
+ */
 const val NOISE_SHARE: Double = 1.0 / 10.0
 
 fun looksNoisy(cell: String): Boolean {

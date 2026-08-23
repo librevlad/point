@@ -4,7 +4,6 @@ import com.point.core.flow.Atom
 import com.point.core.flow.AtomCodec
 import com.point.core.flow.AtomLayer
 import com.point.core.flow.Box
-import com.point.core.flow.META_CLOUD_ATOMS_REF
 import com.point.core.flow.META_OCR_ATOMS_REF
 import com.point.core.model.ActionResult
 import com.point.core.model.Feature
@@ -87,13 +86,6 @@ class FindActionTest {
 
         assertTrue(result is ActionResult.Done)
         assertEquals("Ничего не нашлось", (result as ActionResult.Done).message)
-    }
-
-    @Test
-    fun `облачный слой годится так же, как офлайновый`() = runTest {
-        val obj = page(mapOf(META_CLOUD_ATOMS_REF to dump(*waybill)))
-
-        assertEquals("Нашлось 1 место", (FindRealizer().perform(obj, "спожито") as ActionResult.Done).message)
     }
 
     @Test
