@@ -112,7 +112,7 @@ fun main(args: Array<String>) {
     // Сетевая ли способность — знание живёт у самой способности (#855): исполнители
     // «Понять», «Перевести», «Дать ссылку» называют себя местными, хотя отдают байты наружу.
     var pcCloudReader: PcCloudOcrRealizer? = null
-    val capabilities = desktopCapabilities()
+    val capabilities = desktopCapabilities { accountStore.current() != null }
 
     // Аккаунт рождается ниже исполнителей; стук подключается, как только он есть (#1079).
     var knockPhoneLate: suspend () -> Unit = {}
@@ -260,7 +260,9 @@ fun main(args: Array<String>) {
 
         "transcribe" to speechKeyMissing(pointDir),
 
-        "drop-link" to if (accountStore.current() != null) null else "компьютер не вошёл в аккаунт",
+        // «Дать ссылку» отсюда ушла (#1022, #1034): правило «без аккаунта выдавать некому»
+        // живёт у самой способности и звучит по тапу на том устройстве, где нажали, — а
+        // соседом эта способность больше не исполняется, и объявлять телефону нечего.
     )
     val pcBaseActions = phoneFacingActions(registry.all()).map { action ->
         action.copy(leavesCircle = resolver.leavesDevice(com.point.core.model.CapabilityId(action.id)))
