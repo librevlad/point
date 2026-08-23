@@ -59,6 +59,14 @@ suspend fun previewSource(obj: PointObject, rasterizer: com.point.core.flow.PdfR
         else -> null
     }
 
+/**
+ * Кому позволено НАЧАТЬ работу тихо, оставив объект на экране.
+ *
+ * Это право начать, а не право молчать до конца (#1128): тишина кончается по времени
+ * (`QUIET_GRACE_S`), потому что тяжесть — свойство прогона, а не имени способности. Здесь
+ * решается только, поднимать ли экран ожидания сразу: сеть и заведомо долгая местная работа
+ * говорят о себе с первой секунды, остальным даётся пара секунд не мигать порталом зря.
+ */
 fun quietWork(meta: CapabilityMeta): Boolean = !meta.network && meta.latency != Latency.SLOW
 
 fun showsBusyScreen(ui: FlowUiState): Boolean = ui.busy != null && !ui.busyQuiet

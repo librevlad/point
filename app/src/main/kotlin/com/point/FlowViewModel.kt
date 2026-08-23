@@ -159,9 +159,37 @@ class FlowViewModel @Inject constructor(
     private fun trackWork(work: suspend kotlinx.coroutines.CoroutineScope.() -> Unit): Job {
         val job = viewModelScope.launch(start = kotlinx.coroutines.CoroutineStart.LAZY, block = work)
         busyJob = job
-        job.invokeOnCompletion { if (busyJob === job) busyJob = null }
+        val speaksUp = speakUpWhenSlow(job)
+        job.invokeOnCompletion {
+            speaksUp.cancel()
+            if (busyJob === job) busyJob = null
+        }
         job.start()
         return job
+    }
+
+    /**
+     * Затянувшаяся работа перестаёт быть тихой (#1128).
+     *
+     * Тихо работать можно, пока работа быстрая: объект остаётся на экране, и подменять его
+     * порталом ради доли секунды нельзя. Но право на тишину даётся по времени, а не по имени
+     * способности: «Скан», «Сжать», «В PDF» объявлены быстрыми и на большом файле или на
+     * медленном устройстве идут минутами — и человек не мог отличить «работает» от «тап не
+     * засчитался». Список тяжёлых действий здесь не помогает: тяжесть у одного и того же
+     * действия зависит от прогона.
+     *
+     * Поэтому работа, не уложившаяся в `QUIET_GRACE_S`, показывает себя сама — тем же экраном
+     * ожидания с «Идёт N с», стадией и «Отменить», что у облачных: новых механизмов для этого
+     * не нужно, снимается только право молчать.
+     *
+     * Сторож — эта же работа: закончилась или снята — сторож снят вместе с ней, и вспыхнуть
+     * экрану уже не над чем. Заодно сверяется, что отслеживаемая работа всё ещё эта: сменённая
+     * работа не должна договаривать за новую.
+     */
+    private fun speakUpWhenSlow(job: Job): Job = viewModelScope.launch {
+        kotlinx.coroutines.delay(com.point.core.flow.QUIET_GRACE_S * 1000L)
+        if (busyJob !== job) return@launch
+        _ui.update { if (it.busy != null && it.busyQuiet) it.copy(busyQuiet = false) else it }
     }
 
     private fun raiseBusy(

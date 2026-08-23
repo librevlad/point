@@ -1602,6 +1602,51 @@ class FlowViewModelTest {
         assertTrue(objectWorking(vm.ui.value))
     }
 
+    /**
+     * Тяжесть — свойство прогона, а не имени способности (#1128).
+     *
+     * «Убрать фон» объявили долгим поимённо, а «Скан», «Сжать» и «В PDF» остались быстрыми —
+     * и на большом снимке или на медленном устройстве человек снова смотрел на неподвижный
+     * экран, не понимая, работает Point или тап не засчитался. Здесь действие быстрое по
+     * объявлению, но прогон затянулся: признак работы и «Отменить» обязаны появиться у любого.
+     */
+    @Test fun `затянувшееся местное действие перестаёт молчать — тот же экран ожидания и отмена`() = runTest(dispatcher) {
+        resolver.stage = "Свожу к чёрно-белому"
+        resolver.holdMs = 10 * 60 * 1000L
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.onBubble(bubble())
+        dispatcher.scheduler.advanceTimeBy(50)
+        assertEquals("доли секунды объект остаётся на экране", false, showsBusyScreen(vm.ui.value))
+
+        dispatcher.scheduler.advanceTimeBy(com.point.core.flow.QUIET_GRACE_S * 1000L)
+
+        assertTrue("работа идёт дольше пары секунд — человек обязан это видеть", showsBusyScreen(vm.ui.value))
+        assertTrue("и обязан иметь возможность её прервать", showsCancel(vm.ui.value))
+        assertEquals("чем занят Point, говорит сама работа", resolver.stage, vm.ui.value.busyStage)
+
+        vm.cancelAction()
+        dispatcher.scheduler.advanceTimeBy(50)
+        assertNull("отмена снимает работу, а не только кнопку", vm.ui.value.busy)
+    }
+
+    /** Обратная сторона того же правила (#1128): быстрая работа не мигает порталом. */
+    @Test fun `быстрая местная работа не поднимает экран ожидания ни во время, ни после`() = runTest(dispatcher) {
+        resolver.holdMs = 1_000
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.onBubble(bubble())
+        dispatcher.scheduler.advanceTimeBy(1_500)
+        assertNull("работа кончилась в отпущенную ей тишину", vm.ui.value.busy)
+        assertEquals(false, showsBusyScreen(vm.ui.value))
+
+        dispatcher.scheduler.advanceTimeBy(com.point.core.flow.QUIET_GRACE_S * 1000L)
+
+        assertEquals("законченной работе вспыхивать нечем", false, showsBusyScreen(vm.ui.value))
+    }
+
     @Test fun `slow work keeps the full busy screen — and the object says nothing over it`() = runTest(dispatcher) {
         resolver.stage = "Читаю текст на устройстве"
         resolver.holdMs = 1_000
