@@ -2822,6 +2822,39 @@ class FlowViewModelTest {
         vm.closeDevices()
     }
 
+    @Test fun `человек вышел, пока ответ о круге шёл — вышедший телефон круга не помнит (#1076)`() = runTest(dispatcher) {
+        val circle = com.point.core.flow.InMemoryCircleStore()
+        val client = FakeCircleClient(
+            circle = listOf(
+                com.point.core.flow.CircleDevice("d1", com.point.core.flow.DeviceKind.PHONE, "Pixel", self = true),
+                com.point.core.flow.CircleDevice("d2", com.point.core.flow.DeviceKind.PC, "Ноутбук", 40_000L, key = "ключ-ПК"),
+                com.point.core.flow.CircleDevice("d3", com.point.core.flow.DeviceKind.PHONE, "Старый телефон", 30_000L),
+            ),
+        )
+        val vm = vm(circleStore = circle, accountClient = client)
+        vm.openDevices(); advanceUntilIdle()
+        assertEquals(com.point.core.flow.LinkedPc("d2", "Ноутбук", "ключ-ПК"), pcLinks.pc)
+
+        // Отключён старый телефон. Отключить сервер успел, а уточняющий вопрос о круге
+        // застрял в пути — тот самый молчащий сервер, из-за которого карточку и завели.
+        val onTheWay = kotlinx.coroutines.CompletableDeferred<Unit>()
+        client.circleGate = onTheWay
+        vm.revokeDevice("d3"); advanceUntilIdle()
+
+        // Ждать человеку нечего: кнопки на экране снова живые — и он жмёт «Выйти».
+        assertEquals(false, vm.ui.value.devicesScreen?.busy)
+        vm.signOut(); advanceUntilIdle()
+        assertNull(circle.current())
+        assertNull(pcLinks.pc)
+
+        // Ответ дошёл, когда аккаунта уже нет. Круг принадлежит аккаунту: учить некого.
+        // Иначе вышедший телефон снова помнит чужой компьютер и снова с ним связан.
+        onTheWay.complete(Unit); advanceUntilIdle()
+
+        assertNull(circle.current())
+        assertNull(pcLinks.pc)
+    }
+
     @Test fun `круг устройств встаёт поверх настроек, а не вместо них (#544)`() = runTest(dispatcher) {
 
         val vm = vm(account = FakeAccountStore(TEST_ACCOUNT))
@@ -4798,12 +4831,19 @@ internal class FakeCircleClient(
         com.point.core.flow.LoginStart("l1", "claim-1", "K7-42Q", "https://point.example/login?d=l1")
     override suspend fun poll(loginId: String, claimToken: String): com.point.core.flow.LoginPoll =
         com.point.core.flow.LoginPoll.Ready(TEST_ACCOUNT)
-    override suspend fun circle(account: com.point.core.flow.PointAccount): com.point.core.flow.CircleAnswer =
-        when {
+
+    /** Ответ о круге сервер уже собрал, а идёт он долго — человек за это время успевает выйти (#1076). */
+    var circleGate: kotlinx.coroutines.CompletableDeferred<Unit>? = null
+
+    override suspend fun circle(account: com.point.core.flow.PointAccount): com.point.core.flow.CircleAnswer {
+        val answer = when {
             gone -> com.point.core.flow.CircleAnswer.Revoked
             circle == null -> com.point.core.flow.CircleAnswer.Unreachable
             else -> com.point.core.flow.CircleAnswer.Circle(circle!!)
         }
+        circleGate?.await()
+        return answer
+    }
     override suspend fun enroll(account: com.point.core.flow.PointAccount, publicKey: String): Boolean {
         enrolledKey = publicKey
         return true
