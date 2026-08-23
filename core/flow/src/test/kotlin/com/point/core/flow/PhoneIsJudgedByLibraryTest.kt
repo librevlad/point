@@ -39,9 +39,7 @@ class PhoneIsJudgedByLibraryTest {
     }
 
     @Test
-    fun `хранится единообразно, показывается по-человечески`() {
-        assertEquals("+380676360560", PhoneNumbers.e164("067 636 05 60", "UA"))
-
+    fun `показывается по-человечески`() {
         val shown = PhoneNumbers.human("+380676360560", "UA")
         assertNotNull(shown)
         assertTrue("человеку показывают слипшиеся цифры: $shown", shown!!.contains(" "))

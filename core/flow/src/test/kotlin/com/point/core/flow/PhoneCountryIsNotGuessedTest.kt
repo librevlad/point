@@ -1,6 +1,7 @@
 package com.point.core.flow
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -62,6 +63,93 @@ class PhoneCountryIsNotGuessedTest {
         val row = shownKnowledge(META_ENTITY_PHONE, fromOklahoma, emptyMap(), region = "UA")
 
         assertEquals(fromOklahoma, row)
+    }
+
+    /**
+     * Тот же номер, прочитанный дважды — с кодом и без, — остаётся одним знанием везде.
+     *
+     * Тождество считалось по E.164, а код страны для записи без `+` брался у первой
+     * подошедшей страны. На украинском телефоне `918-682-1551` становился немецким, а
+     * `+1 918-682-1551` рядом — американским: человек видел спор «или:» на месте одного
+     * номера. На американском телефоне тот же чек давал одну строку.
+     */
+    @Test
+    fun `один номер в двух записях не становится спором ни на одном устройстве`() {
+        listOf("UA", "US", "DE", "PL").forEach { device ->
+            val merged = mergeFacts(
+                mapOf(META_ENTITY_PHONE to "+1 918-682-1551"),
+                mapOf(META_ENTITY_PHONE to fromOklahoma),
+                device,
+            )
+
+            assertNull(
+                "на устройстве-$device один номер показан спором-${merged[META_ENTITY_PHONE + META_ALT_SUFFIX]}",
+                merged[META_ENTITY_PHONE + META_ALT_SUFFIX],
+            )
+        }
+    }
+
+    @Test
+    fun `тождество номера не спрашивает, где стоит устройство`() {
+        val pairs = listOf(
+            "+1 918-682-1551" to fromOklahoma,
+            "067 636 05 60" to "+380676360560",
+            "+380676360560" to "+380501112233",
+            fromOklahoma to "(918) 682-1551",
+        )
+
+        pairs.forEach { (left, right) ->
+            val answers = listOf("UA", "US", "DE", "PL")
+                .map { sameFact(META_ENTITY_PHONE, left, right, it) }
+
+            assertEquals(
+                "«одно ли это знание» зависит от устройства-$left-$right-$answers",
+                1,
+                answers.distinct().size,
+            )
+        }
+    }
+
+    /**
+     * Вид номера — тоже свойство страны, и по первой подошедшей он угадывался так же, как
+     * формат: «городской» на украинском телефоне (немецкий городской) и ничего на
+     * американском.
+     */
+    @Test
+    fun `вид номера не угадывается по стране устройства`() {
+        assertNull("вид назван по угаданной стране", PhoneNumbers.kind(fromOklahoma, "UA"))
+        assertEquals(
+            "вид номера зависит от устройства",
+            PhoneNumbers.kind(fromOklahoma, "US"),
+            PhoneNumbers.kind(fromOklahoma, "UA"),
+        )
+    }
+
+    /**
+     * Известную страну устройство вправе не повторять (#1129), но подменить её не может:
+     * на любом устройстве это тот же украинский номер, а не чужой.
+     */
+    @Test
+    fun `устройство не меняет страну известного номера`() {
+        val ukrainian = "+380676360560"
+
+        listOf("UA", "US", "DE", "PL").forEach { device ->
+            val shown = PhoneNumbers.shown(ukrainian, device)
+
+            assertEquals(
+                "страна номера изменилась на устройстве-$device",
+                "UA",
+                PhoneNumbers.country(ukrainian, device),
+            )
+            assertTrue(
+                "на устройстве-$device дописан чужой код-$shown",
+                !shown.contains("+") || shown.startsWith("+380"),
+            )
+            assertTrue(
+                "на устройстве-$device показан другой номер-$shown",
+                PhoneNumbers.same(shown, ukrainian, device),
+            )
+        }
     }
 
     /** Показ и знание отвечают одно и то же: страны, которой нет в графе, нет и на экране. */
