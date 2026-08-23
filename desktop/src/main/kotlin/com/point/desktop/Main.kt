@@ -31,11 +31,10 @@ fun main(args: Array<String>) {
     }
     val opener = SystemOpener { file -> java.awt.Desktop.getDesktop().open(file) }
 
-    // Браузер компьютера — один на всех, кому он нужен (#1087): «Открыть» со ссылкой,
-    // «Открыть в браузере» и вход в аккаунт зовут одну и ту же дверь.
-    val browse: (String) -> Unit = { url ->
-        runCatching { java.awt.Desktop.getDesktop().browse(java.net.URI(url)) }
-    }
+    // Браузер компьютера — одна дверь на всех, кому он нужен (#1087): «Открыть» со ссылкой,
+    // «Открыть в браузере» и вход в аккаунт зовут её же. Отказ дверь не гасит — иначе
+    // «Браузер не открылся» никогда не доходит до человека.
+    val browse = SystemBrowser()
 
     val printer = object : Printer {
         override fun name(): String? =
@@ -178,7 +177,9 @@ fun main(args: Array<String>) {
         store = accountStore,
         client = com.point.core.flow.HttpAccountClient(serverUrl, deviceKeys.keys().publicKey),
 
-        browser = { url -> browse(url) },
+        // Вход в аккаунт браузером не держится: код и адрес человек видит на экране Point,
+        // поэтому здесь отказ двери ожидание не обрывает (#1087).
+        browser = { url -> runCatching { browse.open(url) } },
         deviceName = config.name,
         keys = deviceKeys,
         mySettings = { FilePcConfig(pointDir).accountSettings() },

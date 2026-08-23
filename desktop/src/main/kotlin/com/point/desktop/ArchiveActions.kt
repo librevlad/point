@@ -1,5 +1,6 @@
 package com.point.desktop
 
+import com.point.core.flow.BrowserOpener
 import com.point.core.flow.Capability
 import com.point.core.flow.CapabilityMeta
 import com.point.core.flow.Latency
@@ -77,7 +78,7 @@ class PcOpenLinkCapability : Capability {
     override fun produces(state: ObjectState) = state
 }
 
-class PcOpenLinkRealizer(private val browser: (String) -> Unit) : Realizer {
+class PcOpenLinkRealizer(private val browser: BrowserOpener) : Realizer {
     override val capabilityId = CapabilityId("pc-open-link")
 
     // Где у объекта живёт адрес — знает `knownLink`, один на весь компьютер (#1087):
