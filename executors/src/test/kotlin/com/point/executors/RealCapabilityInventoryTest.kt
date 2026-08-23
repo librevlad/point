@@ -400,6 +400,59 @@ class RealCapabilityInventoryTest {
         )
     }
 
+    /**
+     * Действие, которое отдаёт объект другому устройству, тому устройству не рекламируется
+     * (#920). Владелец увидел на экране компьютера: «На компьютер · телефон пока не выполняет
+     * просьбы с компьютера · на телефоне». Объект уже на компьютере — предлагать отправить
+     * его туда бессмысленно.
+     *
+     * Сторожил это чтение исходника `PcAction.kt` на подстроку `localOnly = true` (#1248):
+     * утверждение о написании файла, а не о поведении. Оно гасло от перестановки строк и не
+     * видело телефонный путь, каким идёт продукт — `advertisedActions(registry.all())` над
+     * боевым набором способностей. Здесь проверяется тот самый путь.
+     */
+    @Test
+    fun `телефон не объявляет компьютеру «На компьютер», а обычные действия объявляет`() {
+
+        val advertised = com.point.core.flow.advertisedActions(builtIn).map { it.id }
+
+        assertTrue("«На компьютер» снова уедет на компьютер", PcCapability.ID.value !in advertised)
+        assertTrue("обычные действия перестали доезжать до компьютера: $advertised", "call" in advertised)
+        assertTrue("обычные действия перестали доезжать до компьютера: $advertised", "event" in advertised)
+    }
+
+    @Test
+    fun `ни одно объявленное телефоном имя не называет чужое устройство`() {
+
+        val named = com.point.core.flow.advertisedActions(builtIn).map { it.label }.filter(::namesOtherDevice)
+
+        assertTrue("компьютер увидит в списке действие про чужое устройство: $named", named.isEmpty())
+    }
+
+    /**
+     * Запасное объявление — то, что телефон говорит о себе, когда собрать список из реестра не
+     * вышло. Оно не фильтруется через `advertisedActions` вовсе, поэтому правило проверяется
+     * прямо на нём, а строки сверяются с настоящим объявлением: список, отставший от боевого
+     * набора, обещает компьютеру то, чего телефон уже не делает.
+     */
+    @Test
+    fun `запасное объявление живёт по тем же правилам, что и настоящее`() {
+
+        val real = com.point.core.flow.advertisedActions(builtIn).associate { it.id to it.label }
+        val fallback = com.point.core.flow.PHONE_ADVERTISED_FALLBACK
+
+        val named = fallback.map { it.label }.filter(::namesOtherDevice)
+        assertTrue("запасное объявление называет чужое устройство: $named", named.isEmpty())
+
+        val stale = fallback.filter { real[it.id] != it.label }
+            .map { "${it.id} · «${it.label}» — у телефона " + (real[it.id]?.let { name -> "«$name»" } ?: "нет такого действия") }
+        assertTrue("запасное объявление отстало от того, что телефон умеет: $stale", stale.isEmpty())
+    }
+
+    /** Имя действия называет устройство, которое человеку в этом списке не своё. */
+    private fun namesOtherDevice(label: String): Boolean =
+        OTHER_DEVICE_WORDS.any { it in label.lowercase() }
+
     @Test
     fun `разговор с объектом — единственная способность с неизвестным выходом`() {
 
@@ -409,6 +462,13 @@ class RealCapabilityInventoryTest {
     }
 
     private companion object {
+
+        /**
+         * Слова, называющие устройство. В списке, который телефон шлёт компьютеру, любое из
+         * них — про чужое место: «компьютер» человек и так видит перед собой, а «телефон» —
+         * та сторона, что этот список прислала.
+         */
+        val OTHER_DEVICE_WORDS = listOf("компьютер", "телефон", " пк")
 
         val pairedPc = object : PcLinks {
             override fun current() = LinkedPc("d-pc", "Домашний ПК", "ключ")

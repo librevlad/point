@@ -1,5 +1,15 @@
 package com.point.desktop
 
+import androidx.compose.ui.semantics.SemanticsNode
+import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.SkikoComposeUiTest
+import androidx.compose.ui.test.runDesktopComposeUiTest
+import com.point.core.flow.PcRemoteAction
+import com.point.core.model.ObjectKind
+import com.point.core.model.ObjectState
+import com.point.core.model.PointObject
+import com.point.core.model.ScratchRef
+import com.point.desktop.ui.CompactObject
 import java.io.File
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -10,12 +20,16 @@ import org.junit.Test
  * Текстовый объект открывался стеной сырого текста в четырнадцать строк: вид, знание и
  * действия оставались за нижним краем окна, и человек видел не объект Point, а кусок файла. На
  * телефоне порядок другой: портал и вид → знание → текст → действия.
+ *
+ * Сторожил этот порядок разбор исходника на подстроки (#1248): кусок `ObjectScene.kt` между
+ * двумя именами функций, а в нём — регэксп по числу строк. Проверка о написании файла, а не о
+ * том, что человек видит: переименуй функцию — и вырезанный кусок станет пустым, а сторож
+ * зелёным. Здесь та же сцена рисуется в окне размером с компакт, и спрашивается она сама.
  */
+@OptIn(ExperimentalTestApi::class)
 class ObjectShowsItselfFirstTest {
 
     private val scene = File("src/main/kotlin/com/point/desktop/ui/ObjectScene.kt").readText()
-
-    private val screen = File("src/main/kotlin/com/point/desktop/ui/ObjectPane.kt").readText()
 
     @Test
     fun `наверху стоит портал, а не текст`() {
@@ -27,28 +41,83 @@ class ObjectShowsItselfFirstTest {
     }
 
     @Test
-    fun `текст стоит после знания и до действий`() {
-        val body = screen.substringAfter("internal fun CompactObject(").substringBefore("private fun ListRow")
+    fun `текст стоит после знания и до действий`() = runDesktopComposeUiTest(COMPACT_WIDTH, COMPACT_HEIGHT) {
+        val nodes = shownObject()
 
-        val knowledge = body.indexOf("Knowledge(")
-        val preview = body.indexOf("            Preview(item)")
-        val actions = body.indexOf("state.actionsFor(item)")
+        val knowledge = nodes.top(AMOUNT) ?: throw AssertionError("знания на экране нет вовсе")
+        val preview = nodes.preview() ?: throw AssertionError("текста на экране нет вовсе")
+        val action = nodes.top(ACTION) ?: throw AssertionError("действий на экране нет вовсе")
 
-        assertTrue("текста нет вовсе", preview > 0)
         assertTrue("текст стоит выше знания", knowledge < preview)
-        assertTrue("текст стоит ниже действий", preview < actions)
+        assertTrue("текст стоит ниже действий", preview < action)
     }
 
+    /**
+     * Свёрнутый текст приходит без спроса, поэтому у него есть предел. Раскрытый занимает
+     * столько, сколько нужно, — его раскрыл человек (#1086), и мерить его нечем и незачем.
+     *
+     * Меряется размер разметки, а не видимые границы: превью без предела строк обрезал бы
+     * родитель ровно по окну, и «во весь экран» было бы не отличить от «в шесть строк».
+     */
     @Test
-    fun `свёрнутое превью не занимает весь экран окна`() {
-        val body = scene.substringAfter("internal fun Preview(").substringBefore("internal fun Knowledge(")
+    fun `свёрнутое превью не занимает весь экран окна`() = runDesktopComposeUiTest(COMPACT_WIDTH, COMPACT_HEIGHT) {
+        val node = shownObject().firstOrNull { it.texts().any { text -> text.startsWith(HEAD) } }
+            ?: throw AssertionError("превью не нашлось — сторож смотрит в пустоту, а не на текст")
 
-        // Раскрытый текст занимает столько, сколько нужно, — его раскрыл человек (#1086).
-        // Держать нужно свёрнутый: он приходит без спроса.
-        assertTrue("свёрнутый текст больше ничем не ограничен", body.contains("else PREVIEW_LINES"))
+        assertTrue(
+            "свёрнутый текст занимает ${node.size.height} из $COMPACT_HEIGHT — это снова весь экран",
+            node.size.height <= COMPACT_HEIGHT / 2,
+        )
+    }
 
-        val limit = Regex("""PREVIEW_LINES = (\d+)""").find(scene)?.groupValues?.get(1)?.toInt() ?: 0
+    /** Сцена длинного текстового объекта — того, из-за которого и завелась беда #898. */
+    private fun SkikoComposeUiTest.shownObject(): List<SemanticsNode> {
+        val item = longText()
+        val st = DesktopState(
+            registry = DesktopRegistry(emptySet()),
+            resolver = DesktopResolver(emptySet()),
+            clipboard = { },
+            journalStore = object : JournalStore {
+                override fun load() = emptyList<JournalEntry>()
+                override fun save(entries: List<JournalEntry>) = Unit
+            },
+        ).apply { setPhoneCaps(listOf(PcRemoteAction("call", ACTION, kinds = setOf("TEXT"), priority = 10))) }
+        st.onReceived(item)
 
-        assertTrue("превью снова во весь экран: $limit", limit in 1..8)
+        showCompact { CompactObject(state = st, item = item, onBack = {}) }
+        return sceneNodes()
+    }
+
+    private fun longText(): InboxItem {
+        val file = File.createTempFile("длинный-", ".txt").apply {
+            writeText(HEAD + " " + (1..400).joinToString(" ") { "слово$it" })
+            deleteOnExit()
+        }
+        return InboxItem(
+            PointObject(
+                id = "long",
+                mime = "text/plain",
+                uri = ScratchRef(file.absolutePath),
+                state = ObjectState(ObjectKind.TEXT),
+                metadata = mapOf("entity.amount" to AMOUNT),
+            ),
+        )
+    }
+
+    /** Где стоит верх узла, на котором написано это. Порядок считается по разметке, не по виду. */
+    private fun List<SemanticsNode>.top(what: String): Float? =
+        firstOrNull { node -> node.texts().any { what in it } }?.positionInRoot?.y
+
+    private fun List<SemanticsNode>.preview(): Float? =
+        firstOrNull { node -> node.texts().any { it.startsWith(HEAD) } }?.positionInRoot?.y
+
+    private companion object {
+
+        /** Начало текста в файле — по нему узнаётся узел превью. */
+        const val HEAD = "Начало длинного письма."
+
+        const val AMOUNT = "500"
+
+        const val ACTION = "Позвонить"
     }
 }

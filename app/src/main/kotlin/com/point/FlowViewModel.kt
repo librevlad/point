@@ -1836,7 +1836,7 @@ class FlowViewModel @Inject constructor(
         runCatching { com.point.core.flow.advertisedActions(registry.all()) }
             .getOrNull()
             ?.takeIf { it.isNotEmpty() }
-            ?: PHONE_ADVERTISED_FALLBACK
+            ?: com.point.core.flow.PHONE_ADVERTISED_FALLBACK
 
     private fun deviceName(): String = "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}".trim()
 
@@ -3170,10 +3170,6 @@ private const val OUTBOX_THROTTLE_MS = 30_000L
 
 private const val CIRCLE_SYNC_THROTTLE_MS = 5 * 60_000L
 
-private val PHONE_ADVERTISED_FALLBACK = listOf(
-    com.point.core.flow.PcRemoteAction("call", "Позвонить", kinds = setOf("TEXT")),
-    com.point.core.flow.PcRemoteAction("event", "Создать событие", kinds = setOf("TEXT")),
-)
 private const val PREVIEW_MAX_PX = 640
 
 /**

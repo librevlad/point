@@ -14,6 +14,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.point.core.flow.MEMORY_TITLE
 import com.point.core.ui.ScreenHeader
 
 /** Раздел «Что Point помнит» на телефоне (#834). */

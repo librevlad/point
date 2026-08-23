@@ -25,10 +25,9 @@ sourceSets.main {
 }
 
 tasks.test {
+    // Свой офисный файл вместо фикстуры из дерева (#1251). `point.test.server`/`point.test.pass`
+    // пробрасывались рядом, но их не читал ни один тест `:desktop` — проброс убран.
     System.getProperty("point.test.office")?.let { systemProperty("point.test.office", it) }
-
-    System.getProperty("point.test.server")?.let { systemProperty("point.test.server", it) }
-    System.getProperty("point.test.pass")?.let { systemProperty("point.test.pass", it) }
 }
 
 dependencies {
@@ -50,9 +49,10 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
 
-    // Окно ПК под тестом (#1056): что человек читает в списке, берётся из собранного экрана —
-    // как на телефоне через Robolectric, — а не из чистой функции рядом с ним. Без этого
-    // проводка подписи проверялась только на телефоне, и вторая поверхность жила на слово.
+    // Окно ПК под тестом (#1056, #1250): что человек читает на экране, берётся из собранного
+    // экрана — как на телефоне через Robolectric, — а не из чистой функции рядом с ним и не из
+    // факта «композиция не упала». Вид объекта, знание и действие в первом кадре спрашиваются
+    // у сцены размером с компакт.
     testImplementation(compose.desktop.uiTestJUnit4)
 }
 

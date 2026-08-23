@@ -41,3 +41,16 @@ fun advertisedActions(
     }
 
 private val ObjectKindCount: Int get() = com.point.core.model.ObjectKind.entries.size
+
+/**
+ * Что телефон объявляет компьютеру, когда собрать объявление из реестра не вышло (#1248).
+ *
+ * Живёт рядом с [advertisedActions], а не в телефонном экране: это тот же список, и правила
+ * у него те же — ни одно имя не называет чужое устройство, а сами строки не расходятся с
+ * настоящим объявлением. Списком, спрятанным в телефоне, его не проверял никто, и он мог
+ * тихо отстать от того, что телефон умеет на самом деле.
+ */
+val PHONE_ADVERTISED_FALLBACK = listOf(
+    PcRemoteAction("call", "Позвонить", kinds = setOf("TEXT")),
+    PcRemoteAction("event", "Создать событие", kinds = setOf("TEXT")),
+)
