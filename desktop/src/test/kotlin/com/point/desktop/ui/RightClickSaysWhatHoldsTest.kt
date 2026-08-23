@@ -23,8 +23,8 @@ class RightClickSaysWhatHoldsTest {
 
     private fun show(
         config: PcConfig,
-        holds: suspend (Boolean) -> Boolean,
-        tap: (Boolean) -> Boolean = { true },
+        holds: suspend (Boolean) -> Boolean?,
+        tap: suspend (Boolean) -> Boolean = { true },
     ) {
         compose.setContent {
             PointDesktopTheme {
@@ -84,11 +84,66 @@ class RightClickSaysWhatHoldsTest {
         show(enabled, holds = { slowRead.await() }, tap = { true })
 
         // Человек выключил, пока реестр ещё читался для прежнего положения.
-        compose.onNodeWithText(rightClickLine(on = true, trouble = false)).performClick()
+        compose.onNodeWithText(rightClickLine(on = true, trouble = null)).performClick()
         compose.waitForIdle()
         slowRead.complete(false)
         compose.waitForIdle()
 
         compose.onNodeWithText(rightClickLine(on = false, trouble = false)).assertExists()
+    }
+
+    /**
+     * Пока реестр читается, знания о пункте нет — и подпись обязана молчать о вердикте.
+     * «Показывается» поверх непрочитанного реестра — та же неправда, что и после перезапуска,
+     * только длиной в секунду: чтение идёт полторы, и всё это время экран утверждает своё.
+     */
+    @Test
+    fun `пока правда не прочитана, экран не выносит вердикта`() {
+        val slowRead = CompletableDeferred<Boolean>()
+        show(enabled, holds = { slowRead.await() })
+
+        compose.onNodeWithText(rightClickLine(on = true, trouble = false)).assertDoesNotExist()
+        compose.onNodeWithText(rightClickLine(on = true, trouble = true)).assertDoesNotExist()
+        compose.onNodeWithText(rightClickLine(on = true, trouble = null)).assertExists()
+
+        slowRead.complete(true)
+        compose.waitForIdle()
+
+        compose.onNodeWithText(rightClickLine(on = true, trouble = false)).assertExists()
+    }
+
+    /** Реестр не прочитался вовсе: вердикта взять неоткуда, и выдумывать его нельзя. */
+    @Test
+    fun `нечитаемый реестр не превращается в «Не показывается»`() {
+        show(enabled.copy(rightClick = false), holds = { null })
+
+        compose.onNodeWithText(rightClickLine(on = false, trouble = false)).assertDoesNotExist()
+        compose.onNodeWithText(rightClickLine(on = false, trouble = true)).assertDoesNotExist()
+        compose.onNodeWithText(rightClickLine(on = false, trouble = null)).assertExists()
+    }
+
+    /**
+     * Тап пишет в реестр и заводит ярлык — это `reg` и PowerShell, секунды. Пока это идёт,
+     * окно живо и перерисовывается, а подпись не утверждает исход, которого ещё нет: раньше
+     * работа шла прямо на потоке кадров, и окно замирало на каждом нажатии.
+     */
+    @Test
+    fun `пока тап делает своё, окно живо и вердикта не выносит`() {
+        val slowTap = CompletableDeferred<Boolean>()
+        show(enabled, holds = { true }, tap = { slowTap.await() })
+
+        compose.onNodeWithText(rightClickLine(on = true, trouble = false)).performClick()
+        compose.waitForIdle()
+
+        // Окно перерисовалось, пока `reg` и PowerShell ещё работают, — на потоке кадров это
+        // было бы невозможно. И ни одного вердикта на экране нет: исход ещё не известен.
+        compose.onNodeWithText(rightClickLine(on = false, trouble = false)).assertDoesNotExist()
+        compose.onNodeWithText(rightClickLine(on = false, trouble = true)).assertDoesNotExist()
+        compose.onNodeWithText(rightClickLine(on = false, trouble = null)).assertExists()
+
+        slowTap.complete(false)
+        compose.waitForIdle()
+
+        compose.onNodeWithText(rightClickLine(on = false, trouble = true)).assertExists()
     }
 }

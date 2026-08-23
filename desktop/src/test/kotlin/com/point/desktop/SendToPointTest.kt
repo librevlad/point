@@ -90,6 +90,18 @@ class SendToPointTest {
         assertEquals("C:/Point.exe", menu(folder, answer = "C:/Point.exe\r\n").target())
     }
 
+    /** Ярлык, о котором Windows промолчала, — оставшийся, а не снятый (#1082). */
+    @Test
+    fun `непрочитанный ярлык снятым не считается`() {
+        val folder = temp.newFolder("mute-sendto")
+        sendToShortcut(folder).writeText("")
+        val silent = ShortcutSendToMenu(folder) { 1 to "" }
+
+        assertNull("Windows промолчала, а ярлык назвал цель", silent.target())
+        assertTrue("ярлык лежит на диске, а сочтён снятым", silent.present())
+        assertFalse("ярлыка нет, а он сочтён лежащим", menu(temp.newFolder("no-sendto")).present())
+    }
+
     @Test
     fun `выключение снимает запись и отвечает по эффекту`() {
         val folder = temp.newFolder("drop-sendto")

@@ -93,13 +93,13 @@ fun CompactApp(
      * встал ли. Это другое действие, чем сохранить настройку: флаг на диске и пункт в реестре —
      * не одно и то же, и правда о пункте живёт в реестре.
      */
-    onRightClick: (Boolean) -> Boolean = { true },
+    onRightClick: suspend (Boolean) -> Boolean = { true },
 
     /**
      * Стоит ли меню файла Windows в этом положении на деле — читается при показе настроек, а
      * не помнится с последнего тапа (#1082): после перезапуска переключатель говорит правду.
      */
-    rightClickHolds: suspend (Boolean) -> Boolean = { true },
+    rightClickHolds: suspend (Boolean) -> Boolean? = { true },
     onSweepNow: () -> Int = { 0 },
     onHide: () -> Unit = {},
 ) {

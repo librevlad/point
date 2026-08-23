@@ -69,23 +69,30 @@ fun SettingsRoot(
     onSave: (PcConfig) -> Unit,
 
     /** Поставить или снять пункт в меню файла Windows; ответ — по эффекту, встал ли (#1082). */
-    onRightClick: (Boolean) -> Boolean,
+    onRightClick: suspend (Boolean) -> Boolean,
 
-    /** Стоит ли меню файла Windows в этом положении на деле (#1082). */
-    rightClickHolds: suspend (Boolean) -> Boolean,
+    /** Стоит ли меню файла Windows в этом положении на деле; `null` — прочитать не удалось (#1082). */
+    rightClickHolds: suspend (Boolean) -> Boolean?,
     onOpen: (SettingsPage) -> Unit,
 ) {
     var rightClick by remember { mutableStateOf(config.rightClick) }
     var sound by remember { mutableStateOf(config.sound) }
 
-    // Правда о пункте меню — факт, прочитанный при показе экрана, а не память последнего тапа
-    // (#1082): после перезапуска включённый флаг не говорит «Показывается» поверх пустого
-    // реестра. `null` — ещё не прочитано. Тап отвечает сам и свежее: его ответ чтение, начатое
-    // до тапа, не перебивает.
+    // Правда о пункте меню — факт, прочитанный при показе экрана и при тапе, а не память
+    // последнего нажатия (#1082): после перезапуска включённый флаг не говорит «Показывается»
+    // поверх пустого реестра. `null` — знания ещё нет, и подпись тогда молчит о вердикте:
+    // «не исследовано» — это не «сбоя нет».
     var rightClickTrouble by remember { mutableStateOf<Boolean?>(null) }
+
+    // Номер вопроса: ответ на прежний вопрос не перебивает ответ на нынешний — ни чтение,
+    // начатое до тапа, ни ответ первого из двух быстрых нажатий.
+    var asked by remember { mutableStateOf(0) }
+    val work = rememberCoroutineScope()
+
     LaunchedEffect(Unit) {
+        val turn = asked
         val holds = rightClickHolds(rightClick)
-        if (rightClickTrouble == null) rightClickTrouble = !holds
+        if (asked == turn) rightClickTrouble = holds?.let { !it }
     }
 
     Column(
@@ -147,12 +154,21 @@ fun SettingsRoot(
         Section("Интеграции") {
             SwitchRow(
                 title = "«Открыть в Point» в меню файла",
-                subtitle = rightClickLine(rightClick, rightClickTrouble == true),
+                subtitle = rightClickLine(rightClick, rightClickTrouble),
                 on = rightClick,
             ) {
                 rightClick = !rightClick
                 onSave(config.copy(rightClick = rightClick))
-                rightClickTrouble = !onRightClick(rightClick)
+
+                // Реестр и ярлык — работа на секунды: на потоке кадров окно замирало бы на
+                // каждом нажатии, а подпись всё это время утверждала бы исход, которого ещё
+                // нет. Пока идёт — знания нет; ответ приходит и называет, что вышло (#1082).
+                val turn = ++asked
+                rightClickTrouble = null
+                work.launch {
+                    val stood = onRightClick(rightClick)
+                    if (asked == turn) rightClickTrouble = !stood
+                }
             }
         }
 
@@ -169,8 +185,13 @@ fun SettingsRoot(
 /**
  * Подпись переключателя правой кнопки: сбой виден словом, а не прячется за флагом (#1082) —
  * и когда запись не встала, и когда не снялась.
+ *
+ * `trouble == null` — правда о пункте ещё не прочитана или пишется прямо сейчас: подпись не
+ * выносит вердикта. Сказать «Показывается», пока никто не смотрел в реестр, — та же неправда,
+ * что прикрыть ею сбой, только короче.
  */
-internal fun rightClickLine(on: Boolean, trouble: Boolean): String = when {
+internal fun rightClickLine(on: Boolean, trouble: Boolean?): String = when {
+    trouble == null -> "Проверяется"
     on && trouble -> "Не удалось включить — запись в меню файла не встала"
     on -> "Показывается"
     trouble -> "Не удалось выключить — пункт остался в меню файла"

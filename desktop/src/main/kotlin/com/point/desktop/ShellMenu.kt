@@ -6,13 +6,22 @@ interface ShellMenu {
     fun registeredCommand(): String?
 
     /**
+     * Стоит ли пункт в меню файла (#1082).
+     *
+     * Пункт в Проводнике живёт своим ключом, а не подключом команды: ключ без команды — это
+     * мёртвый пункт, а не снятый, и спрашивать про снятие надо про ключ. `null` — прочитать
+     * не удалось; «не прочиталось» — это не «не стоит».
+     */
+    fun present(): Boolean?
+
+    /**
      * Записывает пункт и отвечает правдой: `true` — команда действительно читается из реестра.
      * Не встало целиком — не остаётся ничего: половина записи была бы тем самым мёртвым
      * пунктом, с которого началась карточка (#1082).
      */
     fun register(command: String, title: String): Boolean
 
-    /** Снимает пункт и отвечает по эффекту: `true` — команды в реестре больше нет (#1082). */
+    /** Снимает пункт и отвечает по эффекту: `true` — пункта в реестре больше нет (#1082). */
     fun unregister(): Boolean
 }
 
@@ -50,10 +59,23 @@ fun shellMenuNeedsUpdate(current: String?, wanted: String): Boolean = current !=
  * «Открыть в Point» ведёт в эту установку и ярлык «Отправить → Point» тоже; выключено — не
  * осталось ни того, ни другого. Спрашивается у реестра и папки «Отправить», а не у памяти
  * экрана: после перезапуска переключатель говорит то, что есть, а не то, что когда-то нажали.
+ *
+ * `null` — прочитать не удалось: знания нет, и выдавать нечитаемый реестр за пустой нельзя.
+ *
+ * Снятость спрашивается про сам пункт и сам ярлык, а не про их содержимое: ключ без команды и
+ * ярлык, который не прочитался, — это оставшиеся пункты, а не снятые.
  */
-fun rightClickHolds(on: Boolean, exe: File?, command: String?, link: String?): Boolean = when {
-    on -> exe != null && command == shellCommandFor(exe) && link == exe.absolutePath
-    else -> command == null && link == null
+fun rightClickHolds(
+    on: Boolean,
+    exe: File?,
+    menuPresent: Boolean?,
+    command: String?,
+    linkPresent: Boolean,
+    linkTarget: String?,
+): Boolean? = when {
+    menuPresent == null -> null
+    on -> exe != null && command == shellCommandFor(exe) && linkTarget == exe.absolutePath
+    else -> !menuPresent && !linkPresent
 }
 
 fun installedExecutable(command: String?): File? {
@@ -106,17 +128,33 @@ class RegistryShellMenu(
         return stood
     }
 
+    override fun present(): Boolean? {
+        if (!windows) return false
+        val (code, _) = run(listOf("reg", "query", MENU_KEY))
+        if (code == 0) return true
+
+        // `reg query` отвечает ненулевым кодом и когда ключа правда нет, и когда реестр не
+        // читается вовсе — `reg` не запустился, доступа нет. Одно от другого отличает только
+        // контрольное чтение заведомо существующего родителя: читается он — реестр жив, и
+        // ключа действительно нет; не читается — знания нет, и молчание не выдаётся за
+        // отсутствие пункта (#1082).
+        val (parent, _) = run(listOf("reg", "query", CLASSES_KEY))
+        return if (parent == 0) false else null
+    }
+
     override fun unregister(): Boolean {
         if (!windows) return true
         run(listOf("reg", "delete", MENU_KEY, "/f"))
 
-        // Код возврата `reg delete` не ответ: ключа могло не быть и до того. Ответ — реестр,
-        // прочитанный обратно: команды больше нет.
-        return registeredCommand() == null
+        // Код возврата `reg delete` не ответ: ключа могло не быть и до того. Не ответ и
+        // отсутствие команды: пункт в Проводнике живёт ключом меню, и ключ без команды —
+        // мёртвый пункт, а не снятый. Ответ — прочитанный обратно реестр (#1082).
+        return present() == false
     }
 
     private companion object {
 
+        const val CLASSES_KEY = """HKCU\Software\Classes"""
         const val MENU_KEY = """HKCU\Software\Classes\*\shell\Point"""
         const val COMMAND_KEY = """HKCU\Software\Classes\*\shell\Point\command"""
     }
@@ -134,8 +172,17 @@ class RegistryShellMenu(
  */
 interface SendToMenu {
 
-    /** Куда сейчас указывает ярлык «Отправить → Point», или `null` — его нет. */
+    /** Куда сейчас указывает ярлык «Отправить → Point», или `null` — его нет либо не прочёлся. */
     fun target(): String?
+
+    /**
+     * Лежит ли ярлык «Отправить → Point» на диске (#1082).
+     *
+     * Куда он ведёт, спрашивает Windows, и её ответ может не прийти; сам файл виден и без
+     * этого вопроса. Иначе непрочитанный ярлык выглядел бы снятым — та же неправда, что
+     * ключ меню без команды.
+     */
+    fun present(): Boolean
 
     /** Кладёт ярлык и отвечает по эффекту: `true` — ярлык читается обратно и ведёт в `exe` (#1082). */
     fun register(exe: File): Boolean
@@ -169,6 +216,8 @@ class ShortcutSendToMenu(
         val (code, out) = run(powershell(sendToReadScript(link)))
         return if (code != 0) null else out.trim().takeIf { it.isNotEmpty() }
     }
+
+    override fun present(): Boolean = folder?.let(::sendToShortcut)?.isFile == true
 
     override fun register(exe: File): Boolean {
         val place = folder ?: return false

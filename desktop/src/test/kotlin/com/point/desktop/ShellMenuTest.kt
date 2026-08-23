@@ -115,22 +115,42 @@ class ShellMenuTest {
         assertTrue("половина записи осталась в реестре: $calls", calls.any { it.getOrNull(1) == "delete" })
     }
 
+    /**
+     * Живой реестр на столько, на сколько его видит `RegistryShellMenu`: ключ пункта, подключ
+     * команды и заведомо существующий родитель, по которому видно, что чтение вообще идёт.
+     */
+    private fun registry(
+        menuKey: () -> Boolean,
+        commandKey: () -> String?,
+        readable: () -> Boolean = { true },
+        onDelete: () -> Unit = {},
+    ) = RegistryShellMenu(
+        run = { cmd ->
+            when {
+                cmd.getOrNull(1) == "delete" -> { onDelete(); 0 to "" }
+                !readable() -> -1 to ""
+                cmd.getOrNull(2) == CLASSES_KEY -> 0 to CLASSES_KEY
+                cmd.getOrNull(2) == COMMAND_KEY ->
+                    commandKey()?.let { 0 to "    (По умолчанию)    REG_SZ    $it" } ?: (1 to "")
+
+                cmd.getOrNull(2) == MENU_KEY -> if (menuKey()) 0 to MENU_KEY else 1 to ""
+                else -> 1 to ""
+            }
+        },
+        windows = true,
+    )
+
     @Test fun `выключение отвечает по эффекту, а не кодом reg delete`() {
         val command = "\"C:\\Point\\Point.exe\" \"%1\""
         var inRegistry = true
         var deleteWorks = true
-        val menu = RegistryShellMenu(
-            run = { cmd ->
-                when (cmd.getOrNull(1)) {
-                    "delete" -> { if (deleteWorks) inRegistry = false; 0 to "" }
-                    "query" -> if (inRegistry) 0 to "    (По умолчанию)    REG_SZ    $command" else 1 to ""
-                    else -> 1 to ""
-                }
-            },
-            windows = true,
+        val menu = registry(
+            menuKey = { inRegistry },
+            commandKey = { command.takeIf { inRegistry } },
+            onDelete = { if (deleteWorks) inRegistry = false },
         )
 
-        // Команда пережила удаление — выключенный переключатель не скажет «Не показывается».
+        // Пункт пережил удаление — выключенный переключатель не скажет «Не показывается».
         deleteWorks = false
         assertFalse("пункт остался, а выключение сочтено успехом", menu.unregister())
 
@@ -141,6 +161,27 @@ class ShellMenuTest {
         assertTrue("снимать было нечего — это не сбой", menu.unregister())
     }
 
+    @Test fun `снятость спрашивается про ключ пункта, а не про подключ команды`() {
+
+        // Так выглядит мёртвый пункт, с которого началась карточка: строка в меню файла есть,
+        // а команды у неё нет. Прежде выключение спрашивало только про команду — и отвечало
+        // «снято» поверх оставшегося в Проводнике пункта.
+        val menu = registry(menuKey = { true }, commandKey = { null })
+
+        assertFalse("пункт остался в меню файла, а выключение сочтено успехом", menu.unregister())
+        assertEquals("ключ пункта есть, а пункт сочтён снятым", true, menu.present())
+    }
+
+    @Test fun `сбой чтения реестра снятым пунктом не считается`() {
+
+        // `reg` не запустился: про пункт не известно ничего. «Не прочиталось» — это не «снято»,
+        // иначе переключатель уверенно говорит «Не показывается», ни разу не заглянув в реестр.
+        val menu = registry(menuKey = { false }, commandKey = { null }, readable = { false })
+
+        assertNull("нечитаемый реестр ответил, будто пункта в нём нет", menu.present())
+        assertFalse("нечитаемый реестр сочтён пустым", menu.unregister())
+    }
+
     @Test fun `вне Windows реестр не трогается`() {
         var touched = false
         val menu = RegistryShellMenu(run = { touched = true; 0 to "" }, windows = false)
@@ -148,6 +189,7 @@ class ShellMenuTest {
         assertFalse(menu.register("\"C:\\Point\\Point.exe\" \"%1\"", SHELL_MENU_TITLE))
         assertTrue("вне Windows снимать нечего — это не сбой", menu.unregister())
         assertNull(menu.registeredCommand())
+        assertEquals("вне Windows пункт меню файла сочтён стоящим", false, menu.present())
         assertFalse("вне Windows запущен reg", touched)
     }
 
@@ -155,12 +197,78 @@ class ShellMenuTest {
         val exe = File(temp.newFolder("Point"), "Point.exe").apply { writeText("") }
         val command = shellCommandFor(exe)
 
-        assertTrue(rightClickHolds(on = true, exe = exe, command = command, link = exe.absolutePath))
-        assertFalse("реестр пуст, а «включено» сочтено стоящим", rightClickHolds(true, exe, null, exe.absolutePath))
-        assertFalse("ярлыка нет, а «включено» сочтено стоящим", rightClickHolds(true, exe, command, null))
-        assertFalse("из исходников пункта нет — врать про него нечего", rightClickHolds(true, null, command, exe.absolutePath))
-        assertTrue(rightClickHolds(on = false, exe = exe, command = null, link = null))
-        assertFalse("пункт остался, а «выключено» сочтено снятым", rightClickHolds(false, exe, command, null))
+        fun holds(on: Boolean, menu: Boolean?, cmd: String?, link: Boolean, target: String?) =
+            rightClickHolds(on, exe, menuPresent = menu, command = cmd, linkPresent = link, linkTarget = target)
+
+        assertEquals(true, holds(on = true, menu = true, cmd = command, link = true, target = exe.absolutePath))
+        assertEquals(
+            "реестр пуст, а «включено» сочтено стоящим",
+            false,
+            holds(on = true, menu = false, cmd = null, link = true, target = exe.absolutePath),
+        )
+        assertEquals(
+            "ярлыка нет, а «включено» сочтено стоящим",
+            false,
+            holds(on = true, menu = true, cmd = command, link = false, target = null),
+        )
+        assertEquals(
+            "из исходников пункта нет — врать про него нечего",
+            false,
+            rightClickHolds(true, null, menuPresent = true, command = command, linkPresent = true, linkTarget = exe.absolutePath),
+        )
+        assertEquals(true, holds(on = false, menu = false, cmd = null, link = false, target = null))
+
+        // Ключ пункта без команды — оставшийся в Проводнике пункт, а не снятый.
+        assertEquals(
+            "пункт остался в меню файла, а «выключено» сочтено снятым",
+            false,
+            holds(on = false, menu = true, cmd = null, link = false, target = null),
+        )
+
+        // Ярлык на диске лежит, а куда ведёт — Windows не ответила: это тоже не «снято».
+        assertEquals(
+            "ярлык остался, а «выключено» сочтено снятым",
+            false,
+            holds(on = false, menu = false, cmd = null, link = true, target = null),
+        )
+
+        // Реестр не прочитался — знания нет ни за, ни против: подписи вердикта не из чего взять.
+        assertNull(
+            "нечитаемый реестр сошёл за пустой",
+            holds(on = false, menu = null, cmd = null, link = false, target = null),
+        )
+        assertNull(
+            "нечитаемый реестр сошёл за пустой",
+            holds(on = true, menu = null, cmd = command, link = true, target = exe.absolutePath),
+        )
+    }
+
+    /**
+     * Сторож обещания (#1082): переключатель не прикрывает сбой словом об успехе — и не выносит
+     * вердикта, пока правда о пункте не прочитана. Такой тест не цементирует формулировку: он
+     * охраняет отсутствие неправды и потому не удаляется.
+     */
+    @Test fun `переключатель не прикрывает сбой словом об успехе`() {
+        val ok = com.point.desktop.ui.rightClickLine(on = true, trouble = false)
+        val broken = com.point.desktop.ui.rightClickLine(on = true, trouble = true)
+        val off = com.point.desktop.ui.rightClickLine(on = false, trouble = false)
+        val unknown = com.point.desktop.ui.rightClickLine(on = true, trouble = null)
+
+        assertTrue("сбой не назван сбоем", broken.contains("Не удалось"))
+        assertFalse("сбой прикрыт словом об успехе", broken.contains(ok))
+        assertTrue(ok.contains("Показывается"))
+        assertTrue(off.contains("Не показывается"))
+        assertFalse("выключенное выглядит сломанным", off.contains("Не удалось"))
+
+        // Непрочитанное — не «сбоя нет» и не «сбой»: вердикта в подписи нет ни того, ни другого.
+        assertFalse("непрочитанное выдано за успех", unknown.contains(ok))
+        assertFalse("непрочитанное выдано за сбой", unknown.contains("Не удалось"))
+        assertFalse("непрочитанное выдано за снятое", unknown.contains(off))
+        assertEquals(
+            "до чтения включённое и выключенное отвечают по-разному, хотя знания нет ни там, ни там",
+            unknown,
+            com.point.desktop.ui.rightClickLine(on = false, trouble = null),
+        )
     }
 
     @Test fun `выключенная правая кнопка помнится между запусками`() {
@@ -175,5 +283,12 @@ class ShellMenuTest {
 
     @Test fun `по умолчанию правая кнопка включена`() {
         assertTrue(FilePcConfig(temp.newFolder("point-home2")).load().rightClick)
+    }
+
+    private companion object {
+
+        const val CLASSES_KEY = """HKCU\Software\Classes"""
+        const val MENU_KEY = """HKCU\Software\Classes\*\shell\Point"""
+        const val COMMAND_KEY = """HKCU\Software\Classes\*\shell\Point\command"""
     }
 }

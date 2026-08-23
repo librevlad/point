@@ -242,9 +242,16 @@ fun main(args: Array<String>) {
     // Правда о пункте меню — в реестре и в папке «Отправить», а не в памяти экрана (#1082):
     // настройки читают её при показе, и после перезапуска переключатель говорит то, что есть,
     // а не то, что когда-то нажали.
-    val menuHolds: suspend (Boolean) -> Boolean = { on ->
+    val menuHolds: suspend (Boolean) -> Boolean? = { on ->
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-            rightClickHolds(on, installedExe(), shellMenu.registeredCommand(), sendTo.target())
+            rightClickHolds(
+                on = on,
+                exe = installedExe(),
+                menuPresent = shellMenu.present(),
+                command = shellMenu.registeredCommand(),
+                linkPresent = sendTo.present(),
+                linkTarget = sendTo.target(),
+            )
         }
     }
 
@@ -475,26 +482,31 @@ fun main(args: Array<String>) {
                     // поэтому «встал ли пункт» уезжает ответом в настройки — переключатель не
                     // говорит «Показывается» поверх пустого реестра (#1082). Выключение отвечает
                     // по эффекту тоже — снято ли: константа «снято» была бы тем же молчанием.
+                    // Реестр и папка «Отправить» — это `reg` и PowerShell, секунды на нажатие:
+                    // на потоке кадров окно замирало бы на каждом тапе. Работа уходит в IO тем
+                    // же путём, что и чтение при показе (#1082).
                     onRightClick = { on ->
-                        runCatching {
-                            val exe = installedExe()
-                            when {
-                                !on -> {
-                                    val menuGone = shellMenu.unregister()
-                                    val linkGone = sendTo.unregister()
-                                    menuGone && linkGone
-                                }
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                            runCatching {
+                                val exe = installedExe()
+                                when {
+                                    !on -> {
+                                        val menuGone = shellMenu.unregister()
+                                        val linkGone = sendTo.unregister()
+                                        menuGone && linkGone
+                                    }
 
-                                exe != null -> {
-                                    val menuStood = shellMenu.register(shellCommandFor(exe), SHELL_MENU_TITLE)
-                                    val linkStood = sendTo.register(exe)
-                                    menuStood && linkStood
-                                }
+                                    exe != null -> {
+                                        val menuStood = shellMenu.register(shellCommandFor(exe), SHELL_MENU_TITLE)
+                                        val linkStood = sendTo.register(exe)
+                                        menuStood && linkStood
+                                    }
 
-                                // Запуск из исходников: пункта меню не будет, и врать про него нечего.
-                                else -> false
-                            }
-                        }.getOrDefault(false)
+                                    // Запуск из исходников: пункта меню не будет, и врать про него нечего.
+                                    else -> false
+                                }
+                            }.getOrDefault(false)
+                        }
                     },
                     rightClickHolds = menuHolds,
                     // «Убрать прямо сейчас» убирает всё, что Point помнит здесь, а не только
