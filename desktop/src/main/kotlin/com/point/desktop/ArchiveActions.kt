@@ -1,5 +1,6 @@
 package com.point.desktop
 
+import com.point.core.flow.BrowserOpener
 import com.point.core.flow.Capability
 import com.point.core.flow.CapabilityMeta
 import com.point.core.flow.Latency
@@ -77,14 +78,14 @@ class PcOpenLinkCapability : Capability {
     override fun produces(state: ObjectState) = state
 }
 
-class PcOpenLinkRealizer(private val browser: (String) -> Unit) : Realizer {
+class PcOpenLinkRealizer(private val browser: BrowserOpener) : Realizer {
     override val capabilityId = CapabilityId("pc-open-link")
 
-    override suspend fun perform(input: PointObject, amendment: String?): ActionResult = runCatching {
-        val link = File(input.uri.value).takeIf(File::isFile)?.readText()?.trim().orEmpty()
-        val url = link.lineSequence().firstOrNull { it.startsWith("http", ignoreCase = true) }?.trim()
+    // Где у объекта живёт адрес — знает `knownLink`, один на весь компьютер (#1087):
+    // здесь читался только файл, и узел ссылки, знающий адрес знанием, оставался без неё.
+    override suspend fun perform(input: PointObject, amendment: String?): ActionResult {
+        val url = knownLink(input)
             ?: return ActionResult.Failure("В объекте нет ссылки, которую можно открыть", recoverable = false)
-        browser(url)
-        ActionResult.Done("Открыто в браузере")
-    }.getOrElse { ActionResult.Failure("Браузер не открылся — откройте ссылку вручную из буфера", recoverable = true) }
+        return openInBrowser(browser, url)
+    }
 }

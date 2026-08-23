@@ -1,11 +1,14 @@
 package com.point.desktop
 
+import com.point.core.flow.BrowserOpener
 import com.point.core.flow.Capability
 import com.point.core.flow.ClipboardPayload
 import com.point.core.flow.CapabilityMeta
 import com.point.core.flow.Latency
 import com.point.core.flow.META_ENTITY_URL
 import com.point.core.flow.Realizer
+import com.point.core.flow.fileHead
+import com.point.core.flow.uriListAddress
 import com.point.core.flow.uriListAddressOf
 import com.point.core.model.ActionResult
 import com.point.core.model.CapabilityId
@@ -38,13 +41,72 @@ class PcOpenCapability : Capability {
     override fun produces(state: ObjectState) = state
 }
 
-class PcOpenRealizer(private val opener: SystemOpener) : Realizer {
+/** Сколько содержимого спрашивать, проверяя «это и есть адрес»: любому адресу хватает. */
+private const val ADDRESS_CHARS = 8 * 1024
+
+/**
+ * Адрес, которым объект является сам (#1087).
+ *
+ * Правило узкое: ссылка — это объект вида URL либо объект, чьё содержимое целиком и есть
+ * адрес (строка-ссылка с телефона приезжает файлом `.txt` и видом «Текст»). Одного ключа
+ * `entity.url` мало: тот же ключ извлечение сущностей ставит любому объекту, внутри которого
+ * адрес просто встретился, — снимку с QR, документу с адресом в тексте. Найденный внутри
+ * адрес открывается своим действием у своего узла, а снимок остаётся снимком.
+ *
+ * Разбор здесь свой не заводится: адрес из содержимого читает то же единственное правило
+ * `text/uri-list`, что и при рождении объекта (#999) — два правила разъезжаются молча.
+ */
+internal fun knownLink(input: PointObject): String? = when (input.state.kind) {
+
+    // Объект-ссылка: адрес он знает знанием графа — у узла от QR файла может не быть вовсе, —
+    // либо называет его собственным содержимым.
+    ObjectKind.URL -> input.metadata[META_ENTITY_URL]?.takeIf(String::isNotBlank)
+        ?: uriListAddressOf(input.uri.value)
+
+    // Не ссылка по виду — ссылкой считается, только когда в содержимом нет ничего, кроме адреса.
+    ObjectKind.TEXT -> fileHead(input.uri.value, ADDRESS_CHARS).trim()
+        .let { text -> uriListAddress(text)?.takeIf { it == text } }
+
+    else -> null
+}
+
+/**
+ * Одна дверь в браузер компьютера (#1087): «Открыть» со ссылкой, «Открыть в браузере» и вход
+ * в аккаунт зовут её же.
+ *
+ * Отказ дверь не глотает: раньше она гасила исключение у себя, и человеку писалось «Открыто
+ * в браузере» над не открывшимся браузером.
+ */
+class SystemBrowser(
+    private val browse: (java.net.URI) -> Unit = { java.awt.Desktop.getDesktop().browse(it) },
+) : BrowserOpener {
+    override fun open(url: String) = browse(java.net.URI(url))
+}
+
+/** Одна дорога в браузер компьютера: и у «Открыть», и у «Открыть в браузере» исход один (#1087). */
+internal fun openInBrowser(browser: BrowserOpener, url: String): ActionResult = runCatching {
+    browser.open(url)
+    ActionResult.Done("Открыто в браузере")
+}.getOrElse { ActionResult.Failure("Браузер не открылся — откройте ссылку вручную из буфера", recoverable = true) }
+
+class PcOpenRealizer(
+    private val opener: SystemOpener,
+    private val browser: BrowserOpener,
+) : Realizer {
     override val capabilityId = CapabilityId("pc-open")
-    override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
-        runCatching {
+
+    // #1087: открывается смысл, а не файл. Объект, который сам и есть ссылка, уходит в
+    // браузер компьютера; системному обработчику по расширению файл достаётся во всех
+    // остальных случаях — в том числе когда адрес внутри объекта просто найден. Действие
+    // следует из знания графа: строка-ссылка с телефона открывалась на ПК текстовым
+    // редактором.
+    override suspend fun perform(input: PointObject, amendment: String?): ActionResult {
+        knownLink(input)?.let { url -> return openInBrowser(browser, url) }
+        return runCatching {
             opener.open(File(input.uri.value))
             ActionResult.Done("Открыто")
         }.getOrElse { ActionResult.Failure("Открыть нечем: у этого файла нет программы по умолчанию", recoverable = true) }
+    }
 }
 
 class PcRevealCapability : Capability {

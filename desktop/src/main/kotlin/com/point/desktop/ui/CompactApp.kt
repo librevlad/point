@@ -240,7 +240,10 @@ fun CompactApp(
                 state = gate,
                 onSignIn = account::signIn,
                 onCancel = account::cancel,
-                onOpenAgain = { url -> runCatching { java.awt.Desktop.getDesktop().browse(java.net.URI(url)) } },
+                // Та же дверь в браузер, что у действий (#1087), — своей копии вызова здесь
+                // больше нет. Вход в аккаунт браузером не держится: код и адрес человек видит
+                // на этом же экране, поэтому отказ двери его не обрывает.
+                onOpenAgain = { url -> runCatching { com.point.desktop.SystemBrowser().open(url) } },
                 onContinue = account::dismissGate,
             )
             return@Surface
