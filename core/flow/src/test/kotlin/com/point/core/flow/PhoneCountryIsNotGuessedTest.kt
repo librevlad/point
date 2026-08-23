@@ -1,6 +1,7 @@
 package com.point.core.flow
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -66,6 +67,24 @@ class PhoneCountryIsNotGuessedTest {
     }
 
     /**
+     * То же на пути человека и целиком: строка знания, собранная из графа.
+     *
+     * Проверяется не отдельная функция, а то, что стоит в строке экрана: номер, страна словом
+     * и вид — так, как их соберёт `knowledgeRows` из знания, добытого о номере. Один и тот же
+     * чек на четырёх устройствах даёт одну строку, и в ней ровно то, что написано в документе.
+     */
+    @Test
+    fun `строка знания о номере одинакова на любом устройстве`() {
+        val rows = listOf("UA", "US", "DE", "PL").map { device ->
+            val graph = withPhoneKnowledge(mapOf(META_ENTITY_PHONE to fromOklahoma), device)
+            shownKnowledge(META_ENTITY_PHONE, fromOklahoma, graph, device)
+        }
+
+        assertEquals("строка номера зависит от устройства-$rows", 1, rows.distinct().size)
+        assertEquals(fromOklahoma, rows.first())
+    }
+
+    /**
      * Тот же номер, прочитанный дважды — с кодом и без, — остаётся одним знанием везде.
      *
      * Тождество считалось по E.164, а код страны для записи без `+` брался у первой
@@ -111,9 +130,13 @@ class PhoneCountryIsNotGuessedTest {
     }
 
     /**
-     * Вид номера — тоже свойство страны, и по первой подошедшей он угадывался так же, как
-     * формат: «городской» на украинском телефоне (немецкий городской) и ничего на
-     * американском.
+     * Вид номера — тоже свойство страны, и брался он у первой подошедшей, как и формат.
+     *
+     * На экран вид попадал только вместе со страной: [withPhoneKnowledge] спрашивает его
+     * после того, как страна названа, — поэтому угаданный вид человек не видел. Но угадывал
+     * его сам [PhoneNumbers.kind], и первый же новый спрашивающий вынес бы догадку на экран.
+     * Правило проверяется как правило, а не как один вызов: вид назван — значит страна
+     * известна, на любом устройстве и для любого номера.
      */
     @Test
     fun `вид номера не угадывается по стране устройства`() {
@@ -125,8 +148,25 @@ class PhoneCountryIsNotGuessedTest {
         )
     }
 
+    @Test
+    fun `вид называется только там, где названа страна`() {
+        val numbers = listOf(
+            fromOklahoma, "+1 918-682-1551", "067 636 05 60", "+380676360560",
+            "067 123 45 67", "+48221234567", "0932423759",
+        )
+
+        listOf("UA", "US", "DE", "PL").forEach { device ->
+            numbers.filter { PhoneNumbers.kind(it, device) != null }.forEach { named ->
+                assertNotNull(
+                    "вид назван без страны-$named-$device-${PhoneNumbers.kind(named, device)}",
+                    PhoneNumbers.country(named, device),
+                )
+            }
+        }
+    }
+
     /**
-     * Известную страну устройство вправе не повторять (#1129), но подменить её не может:
+     * Известную страну устройство вправе не повторять (#932), но подменить её не может:
      * на любом устройстве это тот же украинский номер, а не чужой.
      */
     @Test
@@ -150,6 +190,35 @@ class PhoneCountryIsNotGuessedTest {
                 PhoneNumbers.same(shown, ukrainian, device),
             )
         }
+    }
+
+    /**
+     * Что устройству на экране всё ещё позволено — и ровно это, не больше (#932).
+     *
+     * Своя страна не называется: человек знает, где живёт, и свой код в номере ему не нужен.
+     * Украинский номер стоит на украинском устройстве строкой без `+380`, а на польском — с
+     * ним и со словом-страной. Знание при этом одно и то же: страна номера `UA` на обоих, и
+     * обе строки — один и тот же номер. Устройство сокращает показ уже известного, но ничего
+     * не дописывает и ничего не подменяет.
+     */
+    @Test
+    fun `устройство сокращает показ известного, но не меняет знание`() {
+        val ukrainian = "+380676360560"
+
+        val rows = listOf("UA", "PL").map { device ->
+            val graph = withPhoneKnowledge(mapOf(META_ENTITY_PHONE to ukrainian), device)
+
+            assertEquals(
+                "страна номера изменилась на устройстве-$device",
+                "UA",
+                graph["$META_ENTITY_PHONE.country"],
+            )
+            shownKnowledge(META_ENTITY_PHONE, ukrainian, graph, device).substringBefore(" ·")
+        }
+
+        assertTrue("дома повторён свой код-${rows[0]}", !rows[0].contains("+380"))
+        assertTrue("за границей код страны потерян-${rows[1]}", rows[1].contains("+380"))
+        assertTrue("устройства показали разные номера-$rows", PhoneNumbers.same(rows[0], rows[1], "UA"))
     }
 
     /** Показ и знание отвечают одно и то же: страны, которой нет в графе, нет и на экране. */
