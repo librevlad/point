@@ -227,13 +227,16 @@ fun main(args: Array<String>) {
             val wanted = shellCommandFor(exe)
             if (shellMenuNeedsUpdate(shellMenu.registeredCommand(), wanted)) {
                 // При старте человек ничего не нажимал: сбой остаётся следом в логе (#1082).
-                if (!shellMenu.register(wanted, SHELL_MENU_TITLE)) {
-                    println("[shell-menu] пункт меню файла в реестр не встал")
+                // Непрочитанный реестр сбоем записи не называется — и в логе тоже.
+                when (shellMenu.register(wanted, SHELL_MENU_TITLE)) {
+                    false -> println("[shell-menu] пункт меню файла в реестр не встал")
+                    null -> println("[shell-menu] реестр не прочитался — про пункт меню файла не известно")
+                    true -> Unit
                 }
             }
 
             // «Отправить → Point» — другое меню Windows и живёт своей записью (#255).
-            if (shellMenuNeedsUpdate(sendTo.target(), exe.absolutePath) && !sendTo.register(exe)) {
+            if (shellMenuNeedsUpdate(sendTo.target(), exe.absolutePath) && sendTo.register(exe) == false) {
                 println("[shell-menu] ярлык «Отправить → Point» не встал")
             }
         }
@@ -487,25 +490,22 @@ fun main(args: Array<String>) {
                     // же путём, что и чтение при показе (#1082).
                     onRightClick = { on ->
                         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                            // Сорвалось — про эффект не известно ничего, и «не встало» из этого не
+                            // следует: сбой операции знанием не является (#1082).
                             runCatching {
                                 val exe = installedExe()
                                 when {
-                                    !on -> {
-                                        val menuGone = shellMenu.unregister()
-                                        val linkGone = sendTo.unregister()
-                                        menuGone && linkGone
-                                    }
+                                    !on -> bothHold(shellMenu.unregister(), sendTo.unregister())
 
-                                    exe != null -> {
-                                        val menuStood = shellMenu.register(shellCommandFor(exe), SHELL_MENU_TITLE)
-                                        val linkStood = sendTo.register(exe)
-                                        menuStood && linkStood
-                                    }
+                                    exe != null -> bothHold(
+                                        shellMenu.register(shellCommandFor(exe), SHELL_MENU_TITLE),
+                                        sendTo.register(exe),
+                                    )
 
                                     // Запуск из исходников: пункта меню не будет, и врать про него нечего.
                                     else -> false
                                 }
-                            }.getOrDefault(false)
+                            }.getOrNull()
                         }
                     },
                     rightClickHolds = menuHolds,

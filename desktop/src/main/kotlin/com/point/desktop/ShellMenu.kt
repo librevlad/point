@@ -18,11 +18,18 @@ interface ShellMenu {
      * Записывает пункт и отвечает правдой: `true` — команда действительно читается из реестра.
      * Не встало целиком — не остаётся ничего: половина записи была бы тем самым мёртвым
      * пунктом, с которого началась карточка (#1082).
+     *
+     * `null` — записали, а прочитать обратно не вышло: реестр молчит. Это не «не встало», и
+     * откатывать по такому ответу нечего — снести исправную запись из-за непрочитанного
+     * ответа было бы тем же сбоем чтения, выданным за сбой записи.
      */
-    fun register(command: String, title: String): Boolean
+    fun register(command: String, title: String): Boolean?
 
-    /** Снимает пункт и отвечает по эффекту: `true` — пункта в реестре больше нет (#1082). */
-    fun unregister(): Boolean
+    /**
+     * Снимает пункт и отвечает по эффекту: `true` — пункта в реестре больше нет; `null` —
+     * реестр не прочитался, и снятость из этого не следует (#1082).
+     */
+    fun unregister(): Boolean?
 }
 
 /** Название пункта в меню файла — одно и при старте, и из настроек. */
@@ -55,6 +62,33 @@ private fun regValue(text: String): String = text.replace("\\", "\\\\").replace(
 fun shellMenuNeedsUpdate(current: String?, wanted: String): Boolean = current != wanted
 
 /**
+ * Стоит ли ярлык там, где его ждут (#1082): `true` — читается и ведёт куда надо, `false` —
+ * знание, что не стоит, `null` — прочитать не удалось.
+ *
+ * Куда ведёт ярлык, спрашивает Windows через COM, и её ответ может не прийти. Лежащий на диске,
+ * но не прочитанный ярлык — не «не встал»: сбой чтения не есть сбой записи. Правило одно и на
+ * чтение при показе экрана, и на ответ самой записи: разъехавшись по путям, оно и дало ту самую
+ * неправду — «Не удалось включить» поверх исправной установки.
+ */
+fun linkHolds(present: Boolean, target: String?, wanted: String?): Boolean? = when {
+    wanted == null -> false
+    target == wanted -> true
+    present && target == null -> null
+    else -> false
+}
+
+/**
+ * Два ответа вместе (#1082): «не вышло» перевешивает — оно знание; «не прочиталось» отвечается
+ * только когда провалов нет. Пункт меню и ярлык «Отправить» ставятся одним движением руки, и
+ * человеку отвечают об этом движении, а не о каждой записи отдельно.
+ */
+fun bothHold(first: Boolean?, second: Boolean?): Boolean? = when {
+    first == false || second == false -> false
+    first == null || second == null -> null
+    else -> true
+}
+
+/**
  * Стоит ли меню файла Windows в этом положении выключателя на деле (#1082): включено — пункт
  * «Открыть в Point» ведёт в эту установку и ярлык «Отправить → Point» тоже; выключено — не
  * осталось ни того, ни другого. Спрашивается у реестра и папки «Отправить», а не у памяти
@@ -81,9 +115,11 @@ fun rightClickHolds(
     linkTarget: String?,
 ): Boolean? = when {
     menuPresent == null -> null
-    on && linkPresent && linkTarget == null -> null
-    on -> exe != null && command == shellCommandFor(exe) && linkTarget == exe.absolutePath
-    else -> !menuPresent && !linkPresent
+    !on -> !menuPresent && !linkPresent
+
+    // Запуск из исходников: установленного Point нет, пункта не будет, и врать про него нечего.
+    exe == null -> false
+    else -> bothHold(command == shellCommandFor(exe), linkHolds(linkPresent, linkTarget, exe.absolutePath))
 }
 
 fun installedExecutable(command: String?): File? {
@@ -109,7 +145,7 @@ class RegistryShellMenu(
             ?.takeIf { it.isNotEmpty() }
     }
 
-    override fun register(command: String, title: String): Boolean {
+    override fun register(command: String, title: String): Boolean? {
         if (!windows) return false
         val file = runCatching {
             File.createTempFile("point-shell-menu", ".reg").apply {
@@ -122,17 +158,26 @@ class RegistryShellMenu(
         }.getOrNull() ?: return false
 
         val stood = try {
-            val (code, _) = run(listOf("reg", "import", file.absolutePath))
+            run(listOf("reg", "import", file.absolutePath))
 
-            // Сбой больше не глотается: успех — это команда, читаемая обратно из реестра (#1082).
-            code == 0 && registeredCommand() == command
+            // Сбой больше не глотается: успех — это команда, читаемая обратно из реестра, а не
+            // код `reg import` (#1082). Но и отрицательный ответ ещё не «не встало»: `reg query`
+            // молчит и когда реестр не читается вовсе. Отличает одно от другого то же
+            // контрольное чтение, что и в `present()`.
+            when {
+                registeredCommand() == command -> true
+                present() == null -> null
+                else -> false
+            }
         } finally {
             file.delete()
         }
 
         // Ответ «не встало» без отката оставлял в реестре то, что успело записаться, — название
         // без команды, то есть мёртвый пункт. Не встало целиком — в меню не остаётся ничего.
-        if (!stood) unregister()
+        // Откат идёт только по знанию: молчание реестра им не является, и сносить по нему
+        // исправную запись нельзя.
+        if (stood == false) unregister()
         return stood
     }
 
@@ -150,14 +195,15 @@ class RegistryShellMenu(
         return if (parent == 0) false else null
     }
 
-    override fun unregister(): Boolean {
+    override fun unregister(): Boolean? {
         if (!windows) return true
         run(listOf("reg", "delete", MENU_KEY, "/f"))
 
         // Код возврата `reg delete` не ответ: ключа могло не быть и до того. Не ответ и
         // отсутствие команды: пункт в Проводнике живёт ключом меню, и ключ без команды —
-        // мёртвый пункт, а не снятый. Ответ — прочитанный обратно реестр (#1082).
-        return present() == false
+        // мёртвый пункт, а не снятый. Ответ — прочитанный обратно реестр; не прочитался —
+        // ответа нет ни «снято», ни «осталось» (#1082).
+        return present()?.let { !it }
     }
 
     private companion object {
@@ -192,8 +238,11 @@ interface SendToMenu {
      */
     fun present(): Boolean
 
-    /** Кладёт ярлык и отвечает по эффекту: `true` — ярлык читается обратно и ведёт в `exe` (#1082). */
-    fun register(exe: File): Boolean
+    /**
+     * Кладёт ярлык и отвечает по эффекту: `true` — ярлык читается обратно и ведёт в `exe`;
+     * `null` — ярлык лежит, а Windows про его цель промолчала (#1082).
+     */
+    fun register(exe: File): Boolean?
 
     /** Снимает ярлык и отвечает по эффекту: `true` — ярлыка больше нет (#1082). */
     fun unregister(): Boolean
@@ -227,13 +276,16 @@ class ShortcutSendToMenu(
 
     override fun present(): Boolean = folder?.let(::sendToShortcut)?.isFile == true
 
-    override fun register(exe: File): Boolean {
+    override fun register(exe: File): Boolean? {
         val place = folder ?: return false
         place.mkdirs()
         run(powershell(sendToScript(exe, sendToShortcut(place))))
 
         // Успех — не код PowerShell, а ярлык, прочитанный обратно: он есть и ведёт в Point.
-        return target() == exe.absolutePath
+        // Правило «не прочиталось — не ответ» здесь то же самое и то же по коду, что и при
+        // чтении для экрана: молчание Windows про цель ярлыка уходило человеку словами
+        // «Не удалось включить» — сбоем записи, которого не было (#1082).
+        return linkHolds(present(), target(), exe.absolutePath)
     }
 
     override fun unregister(): Boolean {

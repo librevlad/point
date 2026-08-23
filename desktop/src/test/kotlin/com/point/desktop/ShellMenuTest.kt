@@ -2,6 +2,7 @@ package com.point.desktop
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -78,7 +79,7 @@ class ShellMenuTest {
             windows = true,
         )
 
-        assertTrue("успешная запись сочтена сбоем", menu.register(command, SHELL_MENU_TITLE))
+        assertEquals("успешная запись сочтена сбоем", true, menu.register(command, SHELL_MENU_TITLE))
 
         val bytes = imported ?: error("reg import не вызывался")
         assertTrue("файл без BOM UTF-16LE — русское название пункта побьётся", bytes.size > 2)
@@ -89,13 +90,22 @@ class ShellMenuTest {
     }
 
     @Test fun `сбой записи виден, а не глотается`() {
+
+        // Реестр читается — родитель отвечает; значит команды в нём правда нет, а не «не видно».
         val menu = RegistryShellMenu(
-            run = { cmd -> if (cmd.getOrNull(1) == "import") 1 to "ERROR: Invalid syntax." else 1 to "" },
+            run = { cmd ->
+                when {
+                    cmd.getOrNull(1) == "import" -> 1 to "ERROR: Invalid syntax."
+                    cmd.getOrNull(2) == CLASSES_KEY -> 0 to CLASSES_KEY
+                    else -> 1 to ""
+                }
+            },
             windows = true,
         )
 
-        assertFalse(
+        assertEquals(
             "сбой регистрации сошёл за успех — переключатель снова соврёт «Показывается»",
+            false,
             menu.register("\"C:\\Point\\Point.exe\" \"%1\"", SHELL_MENU_TITLE),
         )
     }
@@ -105,14 +115,55 @@ class ShellMenuTest {
         // Прежний дефект #1082 в лицах: заголовок записался, команда — нет, exit был проглочен.
         val calls = mutableListOf<List<String>>()
         val menu = RegistryShellMenu(
-            run = { cmd -> calls += cmd; if (cmd.getOrNull(1) == "import") 0 to "" else 1 to "" },
+            run = { cmd ->
+                calls += cmd
+                when {
+                    cmd.getOrNull(1) == "import" -> 0 to ""
+                    cmd.getOrNull(2) == CLASSES_KEY -> 0 to CLASSES_KEY
+                    cmd.getOrNull(2) == MENU_KEY -> 0 to MENU_KEY
+                    else -> 1 to ""
+                }
+            },
             windows = true,
         )
 
-        assertFalse("пункт-пустышка сочтён живым", menu.register("\"C:\\Point\\Point.exe\" \"%1\"", SHELL_MENU_TITLE))
+        assertEquals(
+            "пункт-пустышка сочтён живым",
+            false,
+            menu.register("\"C:\\Point\\Point.exe\" \"%1\"", SHELL_MENU_TITLE),
+        )
 
         // Ответ «не встало» без отката оставлял название без команды — тот самый мёртвый пункт.
         assertTrue("половина записи осталась в реестре: $calls", calls.any { it.getOrNull(1) == "delete" })
+    }
+
+    /**
+     * Откат сносит только то, про что известно, что оно не встало (#1082).
+     *
+     * `reg import` отработал, а прочитать обратно не вышло — реестр молчит целиком. Прежде такой
+     * ответ считался «не встало», и откат сносил исправную запись: пункт пропадал из меню файла
+     * из-за того, что `reg query` не запустился. Сбой чтения — не сбой записи.
+     */
+    @Test fun `непрочитанный реестр не сносит исправную запись`() {
+        val calls = mutableListOf<List<String>>()
+        val menu = RegistryShellMenu(
+            run = { cmd ->
+                calls += cmd
+
+                // Записалось, а читать реестр стало нечем: ни ключ, ни родитель не отвечают.
+                if (cmd.getOrNull(1) == "import") 0 to "" else -1 to ""
+            },
+            windows = true,
+        )
+
+        assertNull(
+            "молчание реестра сочтено не вставшей записью",
+            menu.register("\"C:\\Point\\Point.exe\" \"%1\"", SHELL_MENU_TITLE),
+        )
+        assertTrue(
+            "исправная запись снесена из-за непрочитанного ответа: $calls",
+            calls.none { it.getOrNull(1) == "delete" },
+        )
     }
 
     /**
@@ -152,13 +203,13 @@ class ShellMenuTest {
 
         // Пункт пережил удаление — выключенный переключатель не скажет «Не показывается».
         deleteWorks = false
-        assertFalse("пункт остался, а выключение сочтено успехом", menu.unregister())
+        assertEquals("пункт остался, а выключение сочтено успехом", false, menu.unregister())
 
         deleteWorks = true
-        assertTrue("пункт снят, а выключение сочтено сбоем", menu.unregister())
+        assertEquals("пункт снят, а выключение сочтено сбоем", true, menu.unregister())
 
         // Ключа не было и до того: `reg delete` ругается, но эффект — тот, что просили.
-        assertTrue("снимать было нечего — это не сбой", menu.unregister())
+        assertEquals("снимать было нечего — это не сбой", true, menu.unregister())
     }
 
     @Test fun `снятость спрашивается про ключ пункта, а не про подключ команды`() {
@@ -168,7 +219,7 @@ class ShellMenuTest {
         // «снято» поверх оставшегося в Проводнике пункта.
         val menu = registry(menuKey = { true }, commandKey = { null })
 
-        assertFalse("пункт остался в меню файла, а выключение сочтено успехом", menu.unregister())
+        assertEquals("пункт остался в меню файла, а выключение сочтено успехом", false, menu.unregister())
         assertEquals("ключ пункта есть, а пункт сочтён снятым", true, menu.present())
     }
 
@@ -176,18 +227,19 @@ class ShellMenuTest {
 
         // `reg` не запустился: про пункт не известно ничего. «Не прочиталось» — это не «снято»,
         // иначе переключатель уверенно говорит «Не показывается», ни разу не заглянув в реестр.
+        // И не «осталось»: ответа нет ни за, ни против.
         val menu = registry(menuKey = { false }, commandKey = { null }, readable = { false })
 
         assertNull("нечитаемый реестр ответил, будто пункта в нём нет", menu.present())
-        assertFalse("нечитаемый реестр сочтён пустым", menu.unregister())
+        assertNull("нечитаемый реестр ответил про снятость", menu.unregister())
     }
 
     @Test fun `вне Windows реестр не трогается`() {
         var touched = false
         val menu = RegistryShellMenu(run = { touched = true; 0 to "" }, windows = false)
 
-        assertFalse(menu.register("\"C:\\Point\\Point.exe\" \"%1\"", SHELL_MENU_TITLE))
-        assertTrue("вне Windows снимать нечего — это не сбой", menu.unregister())
+        assertEquals(false, menu.register("\"C:\\Point\\Point.exe\" \"%1\"", SHELL_MENU_TITLE))
+        assertEquals("вне Windows снимать нечего — это не сбой", true, menu.unregister())
         assertNull(menu.registeredCommand())
         assertEquals("вне Windows пункт меню файла сочтён стоящим", false, menu.present())
         assertFalse("вне Windows запущен reg", touched)
@@ -296,12 +348,17 @@ class ShellMenuTest {
      * Сторож обещания (#1082): переключатель не прикрывает сбой словом об успехе — и не выносит
      * вердикта, пока правда о пункте не прочитана. Такой тест не цементирует формулировку: он
      * охраняет отсутствие неправды и потому не удаляется.
+     *
+     * Сюда же попало и слово о длящемся действии: «Проверяется» правда, только пока проверка
+     * идёт. После неудачного чтения проверять уже некому — повтора нет, чтение при входе одно, —
+     * и обещание проверки осталось бы на экране навсегда.
      */
     @Test fun `переключатель не прикрывает сбой словом об успехе`() {
-        val ok = com.point.desktop.ui.rightClickLine(on = true, trouble = false)
-        val broken = com.point.desktop.ui.rightClickLine(on = true, trouble = true)
-        val off = com.point.desktop.ui.rightClickLine(on = false, trouble = false)
-        val unknown = com.point.desktop.ui.rightClickLine(on = true, trouble = null)
+        val ok = com.point.desktop.ui.rightClickLine(on = true, trouble = false, checking = false)
+        val broken = com.point.desktop.ui.rightClickLine(on = true, trouble = true, checking = false)
+        val off = com.point.desktop.ui.rightClickLine(on = false, trouble = false, checking = false)
+        val checking = com.point.desktop.ui.rightClickLine(on = true, trouble = null, checking = true)
+        val unread = com.point.desktop.ui.rightClickLine(on = true, trouble = null, checking = false)
 
         assertTrue("сбой не назван сбоем", broken.contains("Не удалось"))
         assertFalse("сбой прикрыт словом об успехе", broken.contains(ok))
@@ -309,15 +366,21 @@ class ShellMenuTest {
         assertTrue(off.contains("Не показывается"))
         assertFalse("выключенное выглядит сломанным", off.contains("Не удалось"))
 
-        // Непрочитанное — не «сбоя нет» и не «сбой»: вердикта в подписи нет ни того, ни другого.
-        assertFalse("непрочитанное выдано за успех", unknown.contains(ok))
-        assertFalse("непрочитанное выдано за сбой", unknown.contains("Не удалось"))
-        assertFalse("непрочитанное выдано за снятое", unknown.contains(off))
+        // Пока идёт — не «сбоя нет» и не «сбой»: вердикта в подписи нет ни того, ни другого.
+        assertFalse("непрочитанное выдано за успех", checking.contains(ok))
+        assertFalse("непрочитанное выдано за сбой", checking.contains("Не удалось"))
+        assertFalse("непрочитанное выдано за снятое", checking.contains(off))
         assertEquals(
             "до чтения включённое и выключенное отвечают по-разному, хотя знания нет ни там, ни там",
-            unknown,
-            com.point.desktop.ui.rightClickLine(on = false, trouble = null),
+            checking,
+            com.point.desktop.ui.rightClickLine(on = false, trouble = null, checking = true),
         )
+
+        // Прочитать не вышло: это не успех, не сбой записи и не длящаяся проверка.
+        assertFalse("непрочитанное выдано за успех", unread.contains(ok))
+        assertFalse("сбой чтения выдан за сбой записи", unread.contains(broken))
+        assertFalse("непрочитанное выдано за снятое", unread.contains(off))
+        assertNotEquals("после неудачного чтения экран всё ещё обещает проверку", checking, unread)
     }
 
     @Test fun `выключенная правая кнопка помнится между запусками`() {

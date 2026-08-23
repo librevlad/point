@@ -84,7 +84,7 @@ internal fun CompactSettings(
     error: String?,
     onWipe: () -> Unit,
     onSave: (PcConfig) -> Unit,
-    onRightClick: suspend (Boolean) -> Boolean,
+    onRightClick: suspend (Boolean) -> Boolean?,
     rightClickHolds: suspend (Boolean) -> Boolean?,
     onSweepNow: () -> Int,
     onBack: () -> Unit,

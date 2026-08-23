@@ -125,15 +125,38 @@ class SendToPointTest {
             0 to leadsTo + "\r\n"
         }
 
-        assertTrue("ярлык встал и ведёт в Point, а запись сочтена сбоем", windows.register(exe))
+        assertEquals("ярлык встал и ведёт в Point, а запись сочтена сбоем", true, windows.register(exe))
 
         // Windows ответила «готово», а ярлык ведёт не туда: это не успех.
         leadsTo = "C:/Старое/Point.exe"
-        assertFalse("ярлык ведёт мимо Point, а запись сочтена успехом", windows.register(exe))
+        assertEquals("ярлык ведёт мимо Point, а запись сочтена успехом", false, windows.register(exe))
 
         // PowerShell отработал молча, а ярлыка на диске нет — тоже не успех.
         val silent = ShortcutSendToMenu(File(temp.newFolder("home-silent"), "SendTo")) { 0 to "" }
-        assertFalse("ярлыка нет, а запись сочтена успехом", silent.register(exe))
+        assertEquals("ярлыка нет, а запись сочтена успехом", false, silent.register(exe))
+    }
+
+    /**
+     * Ярлык лёг, а куда он ведёт, Windows не сказала (#1082).
+     *
+     * Читает ярлык PowerShell через COM, и этот ответ может не прийти. Прежде запись отвечала
+     * `target() == exe.absolutePath`, и молчание Windows шло на экран словами «Не удалось
+     * включить»: человек с исправной установкой читал про сбой записи, которого не было.
+     * Правило «не прочиталось — не ответ» стояло только на чтении для показа, а путь тапа его
+     * не знал.
+     */
+    @Test
+    fun `молчание Windows про ярлык не выдаётся за не вставшую запись`() {
+        val exe = installed()
+        val folder = File(temp.newFolder("home-mute"), "SendTo")
+        val windows = ShortcutSendToMenu(folder) { command ->
+            if ("Save()" in command.last()) sendToShortcut(folder).writeText("")
+
+            // Ни кода, ни цели: COM не ответил.
+            1 to ""
+        }
+
+        assertNull("молчание Windows сочтено не вставшей записью", windows.register(exe))
     }
 
     @Test

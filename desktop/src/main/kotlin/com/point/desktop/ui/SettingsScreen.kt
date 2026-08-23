@@ -43,6 +43,8 @@ import com.point.core.flow.keyVerdict
 import com.point.core.flow.looksLikeApiKey
 import com.point.desktop.PcConfig
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * Куда человек зашёл внутри настроек (#886).
@@ -68,8 +70,11 @@ fun SettingsRoot(
     email: String,
     onSave: (PcConfig) -> Unit,
 
-    /** Поставить или снять пункт в меню файла Windows; ответ — по эффекту, встал ли (#1082). */
-    onRightClick: suspend (Boolean) -> Boolean,
+    /**
+     * Поставить или снять пункт в меню файла Windows; ответ — по эффекту, встал ли; `null` —
+     * прочитать, что вышло, не удалось (#1082).
+     */
+    onRightClick: suspend (Boolean) -> Boolean?,
 
     /** Стоит ли меню файла Windows в этом положении на деле; `null` — прочитать не удалось (#1082). */
     rightClickHolds: suspend (Boolean) -> Boolean?,
@@ -84,15 +89,28 @@ fun SettingsRoot(
     // «не исследовано» — это не «сбоя нет».
     var rightClickTrouble by remember { mutableStateOf<Boolean?>(null) }
 
+    // Идёт ли чтение или работа прямо сейчас. Без этого «знания нет» звучало одинаково и пока
+    // реестр читается, и когда прочитать его не вышло: слово «Проверяется» оставалось на экране
+    // навсегда, хотя проверять было уже некому — повтора нет, чтение при входе одно (#1082).
+    var rightClickChecking by remember { mutableStateOf(true) }
+
     // Номер вопроса: ответ на прежний вопрос не перебивает ответ на нынешний — ни чтение,
     // начатое до тапа, ни ответ первого из двух быстрых нажатий.
     var asked by remember { mutableStateOf(0) }
     val work = rememberCoroutineScope()
 
+    // Очередь нажатий: реестр и папка «Отправить» — одна вещь на всех, и два быстрых тапа
+    // писали в неё одновременно. Кто из них допишет последним, решал случай, и реестр мог
+    // остаться в положении, обратном переключателю. Ход за ходом (#1082).
+    val queue = remember { Mutex() }
+
     LaunchedEffect(Unit) {
         val turn = asked
         val holds = rightClickHolds(rightClick)
-        if (asked == turn) rightClickTrouble = holds?.let { !it }
+        if (asked == turn) {
+            rightClickTrouble = holds?.let { !it }
+            rightClickChecking = false
+        }
     }
 
     Column(
@@ -154,7 +172,7 @@ fun SettingsRoot(
         Section("Интеграции") {
             SwitchRow(
                 title = "«Открыть в Point» в меню файла",
-                subtitle = rightClickLine(rightClick, rightClickTrouble),
+                subtitle = rightClickLine(rightClick, rightClickTrouble, rightClickChecking),
                 on = rightClick,
             ) {
                 rightClick = !rightClick
@@ -164,10 +182,16 @@ fun SettingsRoot(
                 // каждом нажатии, а подпись всё это время утверждала бы исход, которого ещё
                 // нет. Пока идёт — знания нет; ответ приходит и называет, что вышло (#1082).
                 val turn = ++asked
+                val wanted = rightClick
                 rightClickTrouble = null
+                rightClickChecking = true
                 work.launch {
-                    val stood = onRightClick(rightClick)
-                    if (asked == turn) rightClickTrouble = !stood
+                    // Каждое нажатие делает то, что просило само, и дожидается своей очереди.
+                    val stood = queue.withLock { onRightClick(wanted) }
+                    if (asked == turn) {
+                        rightClickTrouble = stood?.let { !it }
+                        rightClickChecking = false
+                    }
                 }
             }
         }
@@ -186,12 +210,15 @@ fun SettingsRoot(
  * Подпись переключателя правой кнопки: сбой виден словом, а не прячется за флагом (#1082) —
  * и когда запись не встала, и когда не снялась.
  *
- * `trouble == null` — правда о пункте ещё не прочитана или пишется прямо сейчас: подпись не
- * выносит вердикта. Сказать «Показывается», пока никто не смотрел в реестр, — та же неправда,
- * что прикрыть ею сбой, только короче.
+ * Вердикта нет в двух разных случаях, и звучат они по-разному. `checking` — реестр читается или
+ * тап делает своё прямо сейчас: «Проверяется» тут правда. Прочитать не вышло — проверять уже
+ * некому, и слово о длящемся действии осталось бы на экране навсегда: подпись называет это тем,
+ * что оно есть. Сказать «Показывается», пока никто не смотрел в реестр, — та же неправда, что
+ * прикрыть ею сбой, только короче.
  */
-internal fun rightClickLine(on: Boolean, trouble: Boolean?): String = when {
-    trouble == null -> "Проверяется"
+internal fun rightClickLine(on: Boolean, trouble: Boolean?, checking: Boolean): String = when {
+    checking -> "Проверяется"
+    trouble == null -> "Не удалось проверить — Windows не ответила"
     on && trouble -> "Не удалось включить — запись в меню файла не встала"
     on -> "Показывается"
     trouble -> "Не удалось выключить — пункт остался в меню файла"
