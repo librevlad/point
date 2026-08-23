@@ -47,7 +47,14 @@ fun remotePcCapabilities(
         .toSet()
 }
 
-/** Исполнитель заводится на каждое объявленное умение — и на слитое со своим тоже. */
+/**
+ * Исполнитель заводится на каждое объявленное умение — и на слитое со своим тоже.
+ *
+ * Кроме тех способностей, чей результат остаётся у исполнителя (`resultStaysHere`, #1034,
+ * #1106): «Дать ссылку» на телефоне уходила исполняться на компьютер, и ссылка оказывалась
+ * в буфере компьютера, а объект целиком — в его папке, хотя человек просил только ссылку и
+ * только здесь. Сосед у такой способности не запасной путь, а подмена результата.
+ */
 fun remotePcRealizers(
     own: Set<Capability>,
     fromPc: List<PcRemoteAction>,
@@ -57,7 +64,9 @@ fun remotePcRealizers(
     classifier: com.point.core.flow.ObjectClassifier? = null,
 ): Set<Realizer> {
     val ownIds = own.map { it.id }.toSet()
+    val staysHere = own.filter { it.meta.resultStaysHere }.map { it.id }.toSet()
     return fromPc.distinctBy { it.id }
+        .filterNot { CapabilityId(it.id) in staysHere }
         .map { RemotePcRealizer(it, links, transport, store, classifier, ownIds) }.toSet()
 }
 

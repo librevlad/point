@@ -71,6 +71,10 @@ class DropLinkCapability  : Capability {
         cost = Cost.FREE,
         latency = Latency.SLOW,
         network = true,
+
+        // Ссылка остаётся у того, кто её выдал (#1034, #1106): нажали на телефоне — ссылка
+        // нужна на телефоне, а не в буфере компьютера, куда заодно уезжал и сам объект.
+        resultStaysHere = true,
     )
 
     override fun label(state: ObjectState) = "Дать ссылку"
