@@ -1835,6 +1835,44 @@ class FlowViewModelTest {
         assertEquals("112", persisted.found.single().metadata["entity.phone"])
     }
 
+    /**
+     * #1023: человек берёт кусок текста из прочитанного снимка и правит ошибки в нём.
+     * Исправленный текст — прочтение самой вырезки, а страницу целиком никто не перечитывал:
+     * прежде правка фрагмента вставала прочтением родителя, и снимок терял свой текст —
+     * знание об объекте подменялось знанием о его части.
+     */
+    @Test fun `исправленный текст вырезки не подменяет прочтение снимка`() = runTest(dispatcher) {
+        val readKey = com.point.core.flow.META_OCR_TEXT_REF
+        val page = tempFile("Первая строка страницы. Превет, Иван! И ещё три строки ниже.")
+        val piece = tempFile("Превет, Иван!")
+        val fixed = tempFile("Привет, Иван!")
+
+        // Снимок прочитан фоновым исследованием — это и есть прочтение страницы.
+        enrichment.updates = listOf(
+            EnrichmentUpdate(setOf(Feature.HAS_TEXT), mapOf(readKey to page), emptyList()),
+        )
+        enrichment.understandsOnce = true
+        val vm = vm()
+        vm.onShared("uri", "image/jpeg"); advanceUntilIdle()
+        assertEquals("страница прочитана", page, vm.ui.value.frame!!.obj.metadata[readKey])
+
+        // Человек берёт из страницы кусок текста: самостоятельный объект, порождённый снимком.
+        resolver.result = ActionResult.Success(ResultObject(ObjectKind.TEXT, "text/plain", ScratchRef(piece)))
+        vm.onBubble(bubble()); advanceUntilIdle()
+        assertEquals("вырезка помнит, из чего сделана", listOf("in"), vm.ui.value.frame!!.obj.sourceObjects)
+
+        // На вырезке — «Исправить ошибки»: исправленный текст ложится прочтением объекта.
+        resolver.result = ActionResult.Done(
+            "Исправлено",
+            com.point.core.model.Findings(metadata = mapOf(readKey to fixed)),
+        )
+        vm.onBubble(bubble()); advanceUntilIdle()
+        assertEquals("правка легла знанием самой вырезки", fixed, vm.ui.value.frame!!.obj.metadata[readKey])
+
+        vm.onBack()
+        assertEquals("у страницы прежнее прочтение", page, vm.ui.value.frame!!.obj.metadata[readKey])
+    }
+
     @Test fun `правка человека доезжает до карточки «Недавнего», а не только до журнала`() = runTest(dispatcher) {
         val node = PointObject(
             id = "in:email",
@@ -4286,12 +4324,17 @@ private class FakeStore : ObjectStore {
         if (failIngest) error("boom") else PointObject("in", mime, ScratchRef("/in"), ObjectState(kind))
     override suspend fun ingestMultiple(sources: List<String>): PointObject =
         PointObject("coll", "inode/directory", ScratchRef("/coll"), ObjectState(ObjectKind.COLLECTION))
+    /** Родословная — часть самого объекта (#1127): двойник помнит её так же, как настоящий store. */
     override suspend fun put(
             result: ResultObject,
             from: com.point.core.model.PointObject?,
             by: com.point.core.model.CapabilityId?,
         ): PointObject =
-        PointObject("out", result.mime, result.uri, ObjectState(result.type), result.metadata)
+        PointObject(
+            "out", result.mime, result.uri, ObjectState(result.type), result.metadata,
+            sourceObjects = listOfNotNull(from?.id),
+            creatorAction = by?.value,
+        )
 
     var content: CollectionContent<PointObject> = CollectionContent.empty()
     override suspend fun children(collection: PointObject, limit: Int) = content
