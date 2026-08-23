@@ -423,6 +423,122 @@ class FlowViewModelTest {
         assertEquals("родительский кадр цел", 2, vm.ui.value.frame?.found?.size)
     }
 
+    private val ownerName = "Тарасенко Світлана"
+
+    private val owner = PointObject(
+        id = com.point.core.flow.partyNodeId("root", ownerName),
+        mime = "text/plain",
+        uri = ValueRef(ownerName),
+        state = ObjectState(com.point.core.flow.KIND_PERSON),
+        metadata = mapOf(com.point.core.flow.META_GRAPH_ROLE_PREFIX + "sender" to ownerName),
+        sourceObjects = listOf("root"),
+    )
+
+    private fun phoneNode(value: String) = PointObject(
+        id = "root:phone",
+        mime = "text/plain",
+        uri = ValueRef(value),
+        state = ObjectState(com.point.core.flow.KIND_PHONE),
+        metadata = mapOf(com.point.core.flow.META_ENTITY_PHONE to value),
+        sourceObjects = listOf("root"),
+    )
+
+    private fun belongs(node: PointObject, party: PointObject) =
+        com.point.core.model.Relation(node.id, com.point.core.model.RelationType.BELONGS_TO, party.id)
+
+    /**
+     * Принадлежность едет с объектом внутрь (#1176): вход в найденный номер забирает его
+     * окрестность — хозяина и связи с ним, — и внутри по-прежнему видно, чей он.
+     */
+    @Test fun `вход в найденный номер забирает его хозяина вместе со связью`() = runTest(dispatcher) {
+        val phone = phoneNode("067 636 05 60")
+        val stranger = waybill("root:identifier:B", "59 0012 3456 7890", "10.0 120.0 210.0 160.0")
+        enrichment.updates = listOf(
+            EnrichmentUpdate(
+                emptySet(), emptyMap(), emptyList(),
+                objects = listOf(phone, owner, stranger),
+                relations = listOf(
+                    com.point.core.model.Relation(phone.id, com.point.core.model.RelationType.FOUND_IN, "root"),
+                    belongs(phone, owner),
+                    com.point.core.model.Relation(owner.id, com.point.core.model.RelationType.SENDER, "root"),
+                    com.point.core.model.Relation(stranger.id, com.point.core.model.RelationType.FOUND_IN, "root"),
+                ),
+            ),
+        )
+        enrichment.understandsOnce = true
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.onFound(vm.ui.value.frame!!.found.first { it.id == phone.id }); advanceUntilIdle()
+
+        val child = vm.ui.value.frame!!
+        assertEquals(listOf(owner.id), child.found.map { it.id })
+        assertTrue("связь с хозяином доехала", belongs(phone, owner) in child.relations)
+        assertTrue("роль хозяина доехала", child.relations.any { it.fromId == owner.id })
+        assertTrue("чужая находка не доехала", child.relations.none { it.fromId == stranger.id })
+    }
+
+    /**
+     * У номера один хозяин (#1176): второй виток поправляет прежнего, а не добавляет второго
+     * — иначе на экране оставался хозяин с прошлого витка, первый в списке.
+     */
+    @Test fun `свежая принадлежность узла вытесняет прежнюю, а не встаёт второй`() = runTest(dispatcher) {
+        val phone = phoneNode("067 636 05 60")
+        val otherName = "Лумброван Олександр"
+        val other = owner.copy(
+            id = com.point.core.flow.partyNodeId("root", otherName),
+            uri = ValueRef(otherName),
+            metadata = mapOf(com.point.core.flow.META_GRAPH_ROLE_PREFIX + "receiver" to otherName),
+        )
+        enrichment.updates = listOf(
+            EnrichmentUpdate(emptySet(), emptyMap(), emptyList(), objects = listOf(phone, owner, other), relations = listOf(belongs(phone, owner))),
+            EnrichmentUpdate(emptySet(), emptyMap(), emptyList(), relations = listOf(belongs(phone, other))),
+        )
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        val belongings = vm.ui.value.frame!!.relations.filter { it.type == com.point.core.model.RelationType.BELONGS_TO }
+        assertEquals(listOf(belongs(phone, other)), belongings)
+    }
+
+    /**
+     * Принадлежность сказана про значение (#1176): исправленный номер прежнего хозяина не
+     * наследует — ни в знании объекта, ни связью в графе.
+     */
+    @Test fun `исправленный номер прежнего хозяина не наследует`() = runTest(dispatcher) {
+        val phone = phoneNode("067 636 05 60")
+        enrichment.updates = listOf(
+            EnrichmentUpdate(
+                emptySet(),
+                mapOf(
+                    com.point.core.flow.META_ENTITY_PHONE to "067 636 05 60",
+                    com.point.core.flow.META_ENTITY_PHONE + com.point.core.flow.META_OF_SUFFIX to
+                        com.point.core.flow.META_GRAPH_ROLE_PREFIX + "sender",
+                    com.point.core.flow.META_GRAPH_ROLE_PREFIX + "sender" to ownerName,
+                ),
+                emptyList(),
+                objects = listOf(phone, owner),
+                relations = listOf(belongs(phone, owner)),
+            ),
+            EnrichmentUpdate(
+                emptySet(),
+                mapOf(
+                    com.point.core.flow.META_ENTITY_PHONE to "099 111 22 33",
+                    com.point.core.flow.META_ENTITY_PHONE + com.point.core.flow.META_SOURCE_SUFFIX to
+                        com.point.core.model.Provenance.HUMAN.wire,
+                ),
+                emptyList(),
+            ),
+        )
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        val frame = vm.ui.value.frame!!
+        assertEquals("099 111 22 33", frame.found.single { it.id == phone.id }.metadata[com.point.core.flow.META_ENTITY_PHONE])
+        assertNull(frame.obj.metadata[com.point.core.flow.META_ENTITY_PHONE + com.point.core.flow.META_OF_SUFFIX])
+        assertTrue(frame.relations.none { it.type == com.point.core.model.RelationType.BELONGS_TO })
+    }
+
     /**
      * Объект в разборе один (#1110).
      *

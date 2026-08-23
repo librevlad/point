@@ -1099,4 +1099,47 @@ class UnderstandRealizerTest {
         assertTrue(result is ActionResult.Done)
         assertEquals("Point уже прочитал всё, что здесь есть", (result as ActionResult.Done).message)
     }
+
+    /**
+     * Путь человека целиком (#1176): двухколоночная наклейка, один ответ модели с ролями и
+     * телефоном — номер записан при своей стороне, а сторона с этим номером стоит узлом
+     * человека, и «Сохранить контакт» есть кому предлагать.
+     */
+    @Test
+    fun `номер в колонке отправителя записан при нём, а отправитель стал человеком с номером`() = runTest {
+        val sender = "Іваненко Іван"
+        val receiver = "Петренко Петро"
+        val number = "067 636 05 60"
+        val layer = com.point.core.flow.AtomLayer(
+            listOf(
+                com.point.core.flow.Atom("w1", sender, com.point.core.flow.Box(100f, 100f, 450f, 140f)),
+                com.point.core.flow.Atom("w2", receiver, com.point.core.flow.Box(600f, 100f, 950f, 140f)),
+                com.point.core.flow.Atom("w3", number, com.point.core.flow.Box(100f, 160f, 450f, 200f)),
+                com.point.core.flow.Atom("w4", "Відділення №7", com.point.core.flow.Box(600f, 160f, 950f, 200f)),
+            ),
+        )
+        val dump = File.createTempFile("point-atoms", ".tsv").apply {
+            deleteOnExit(); writeText(com.point.core.flow.AtomCodec.encode(layer))
+        }
+        val sidecar = File.createTempFile("point-ocr", ".txt").apply {
+            deleteOnExit(); writeText("$sender  $receiver\n$number  Відділення №7")
+        }
+        val label = PointObject(
+            "label", "image/png", ScratchRef("/tmp/label.png"),
+            ObjectState(ObjectKind.IMAGE, setOf(Feature.HAS_TEXT)),
+            metadata = mapOf(
+                META_OCR_TEXT_REF to sidecar.absolutePath,
+                com.point.core.flow.META_OCR_ATOMS_REF to dump.absolutePath,
+            ),
+        )
+
+        val result = realizer("PHONE=$number [w3]\nsender=$sender [w1]\nreceiver=$receiver [w2]")
+            .perform(label) as ActionResult.Done
+
+        val findings = result.findings!!
+        assertEquals("graph.role.sender", findings.metadata["entity.phone.of"])
+        val owner = findings.objects.single { it.state.kind == com.point.core.flow.KIND_PERSON }
+        assertEquals(sender, owner.uri.value)
+        assertEquals(number, owner.metadata["entity.phone"])
+    }
 }

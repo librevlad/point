@@ -220,5 +220,10 @@ fun mergeFacts(
             merged[key + META_ALT_SUFFIX] = altValue(verdict.candidates)
         }
     }
+
+    // Принадлежность живёт при значении, как и спор (#1176): вердикт сменил факт — прежнее
+    // «чьё» сказано не про него и здесь же снимается. Иначе новый номер стоял бы подписанный
+    // старым хозяином во всех путях, где сливаются факты.
+    staleBelongings(known, merged).forEach(merged::remove)
     return merged
 }

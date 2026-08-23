@@ -624,13 +624,29 @@ private fun roleOf(obj: PointObject, relations: List<Relation>): String? =
  * Связь меняет смысл строки: номер отправителя и номер получателя выглядят одинаково, и без
  * имени рядом человек не знает, кому звонит. Имя берётся у самого узла стороны — второй копии
  * значения не заводится. Связи нет — и подписи нет: догадка вместо знания хуже молчания.
+ *
+ * Связь называется словом, а не голым именем: строка свойств перечисляет категории — вид,
+ * роль, происхождение, — и имя между ними читалось как ещё одна: «Место · Лумброван»
+ * выглядело так, будто место называется Лумброван. Роль стороны уже известна из её узла.
  */
 internal fun ownerOfFound(obj: PointObject, relations: List<Relation>, found: List<PointObject>): String? =
     relations.asSequence()
         .filter { it.fromId == obj.id && it.type == RelationType.BELONGS_TO }
         .mapNotNull { relation -> found.firstOrNull { it.id == relation.toId } }
-        .map { foundHeadline(it).trim() }
-        .firstOrNull { it.isNotBlank() }
+        .mapNotNull { party -> foundHeadline(party).trim().takeIf { it.isNotBlank() }?.let { whoseLabel(party) + it } }
+        .firstOrNull()
+
+/** «Чей» — ролью стороны, когда она названа: номер отправителя — «отправителя: …». */
+private fun whoseLabel(party: PointObject): String {
+    val role = party.metadata.keys.firstNotNullOfOrNull { com.point.core.flow.roleOfKey(it) }?.relation
+    return when (role) {
+        RelationType.SENDER -> "отправителя: "
+        RelationType.RECEIVER -> "получателя: "
+        RelationType.CARRIER -> "перевозчика: "
+        RelationType.ISSUED_BY -> "выдавшего документ: "
+        else -> "чей: "
+    }
+}
 
 internal fun relationLabel(type: RelationType): String? = when (type) {
     RelationType.SENDER -> "отправитель"

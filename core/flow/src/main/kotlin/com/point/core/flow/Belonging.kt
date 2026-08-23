@@ -1,5 +1,9 @@
 package com.point.core.flow
 
+import com.point.core.model.PointObject
+import com.point.core.model.Relation
+import com.point.core.model.RelationType
+
 /**
  * Чьё это знание (#1176, RFC Semantic Graph §6).
  *
@@ -42,6 +46,12 @@ data class PartyReading(val reading: FieldCandidate, val partyKey: String)
  * Правило узкое намеренно. Одноколоночная страница ничего не разделяет; блок с двумя
  * сторонами не отдаёт ни одной; имя, встреченное на странице дважды, места не называет.
  * Догадка о том, кому из двоих принадлежит номер, была бы выдумкой, а не знанием.
+ *
+ * Служба — такая же сторона: прежнее правило (#747) не пускало перевозчика к геометрии, и
+ * его имя в колонке человека ничего не меняло. Теперь оно, как любое второе имя в блоке,
+ * связь снимает: чей номер стоит между человеком и службой — страница не говорит, и Point
+ * не догадывается. На настоящей наклейке это ничего не стоит: среди слов колонок имени
+ * службы нет, и названный перевозчик ни одной связи не меняет (BelongingTest).
  *
  * Слово модели сильнее страницы: если владелец назван при самом значении (пара «номер | имя»),
  * геометрия не спрашивается — её ответ и так не станет главнее.
@@ -115,6 +125,64 @@ fun belongingFacts(
     readings.firstOrNull { normConsensus(it.reading.text) == normConsensus(value) }
         ?.let { key + META_OF_SUFFIX to it.partyKey }
 }.toMap()
+
+/**
+ * Принадлежность сказана про тот факт, который стоял (#1176).
+ *
+ * Прочтение увидели при отправителе — про его номер это и сказано. Стал главным другой факт —
+ * человек исправил номер, виток прочёл иначе, — и прежнее наблюдение уже не про него: новый
+ * номер стоял бы подписанный старым хозяином. Своё наблюдение приносит тот, кто кладёт
+ * значение; не принёс — связи нет, и выдумывать её нечем.
+ *
+ * То же знание, записанное иначе, и починка искажения — тот же факт, и принадлежность при
+ * нём остаётся: мерка та же, что у слияния фактов.
+ */
+fun staleBelongings(known: Map<String, String>, merged: Map<String, String>): Set<String> =
+    known.keys
+        .filter { it.endsWith(META_OF_SUFFIX) }
+        .filterTo(LinkedHashSet()) { ofKey ->
+            val key = ofKey.removeSuffix(META_OF_SUFFIX)
+            val was = known[key].orEmpty()
+            val now = merged[key].orEmpty()
+            !(sameFact(key, was, now) || isRepairOf(was, now))
+        }
+
+/**
+ * Связи кадра после слияния (#1176).
+ *
+ * Связи копятся: находка остаётся находкой. Принадлежность — не «ещё одна связь», а
+ * наблюдение о том, чьё значение сейчас: у номера один хозяин. После второго витка у узла
+ * оказывались две, старая шла первой, и человеку показывался хозяин с прошлого витка.
+ * Свежая занимает место прежней — как `.of` в знании объекта заменяется, а не складывается.
+ *
+ * Узел, чей факт сменился ([renamed]), принадлежности лишается: она была сказана про прежнее
+ * значение, а не про узел вообще, — ровно та же мерка, что у [staleBelongings].
+ */
+fun mergedRelations(
+    known: List<Relation>,
+    fresh: List<Relation>,
+    renamed: Set<String> = emptySet(),
+): List<Relation> {
+    val replaced = fresh.filter { it.type == RelationType.BELONGS_TO }.mapTo(HashSet()) { it.fromId } + renamed
+    return (known.filterNot { it.type == RelationType.BELONGS_TO && it.fromId in replaced } + fresh).distinct()
+}
+
+/** Узлы, чей факт после слияния стал другим: прежнее о значении сказано не про них. */
+fun renamedNodes(before: List<PointObject>, after: List<PointObject>): Set<String> {
+    val now = after.associateBy { it.id }
+    return before.mapNotNullTo(LinkedHashSet()) { was ->
+        val (key, value) = factOf(was.metadata) ?: return@mapNotNullTo null
+        val fresh = now[was.id]?.metadata?.get(key).orEmpty()
+        was.id.takeUnless { sameFact(key, value, fresh) || isRepairOf(value, fresh) }
+    }
+}
+
+/** Лицо узла — его первый смысловой факт: тем же правилом его читают заголовок и правка. */
+fun factOf(metadata: Map<String, String>): Pair<String, String>? =
+    metadata.entries.firstOrNull { (key, value) ->
+        (key.startsWith(META_ENTITY_PREFIX) || key.startsWith(META_GRAPH_ROLE_PREFIX)) &&
+            !isAnnotationKey(key) && !isStateKey(key) && value.isNotBlank()
+    }?.toPair()
 
 /**
  * Телефон, принадлежащий человеку, — его контакт (#653, #1176).

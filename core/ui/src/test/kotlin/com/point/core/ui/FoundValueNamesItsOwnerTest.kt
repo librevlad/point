@@ -9,8 +9,9 @@ import com.point.core.model.PointObject
 import com.point.core.model.Relation
 import com.point.core.model.RelationType
 import com.point.core.model.ValueRef
-import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -50,7 +51,33 @@ class FoundValueNamesItsOwnerTest {
     fun `номер подписан именем своего хозяина`() {
         val relations = listOf(Relation(phone.id, RelationType.BELONGS_TO, person.id))
 
-        assertEquals(name, ownerOfFound(phone, relations, found))
+        assertTrue(ownerOfFound(phone, relations, found)?.endsWith(name) == true)
+    }
+
+    /**
+     * Строка свойств перечисляет категории, и голое имя среди них читается как ещё одна:
+     * «Место · Лумброван» выглядит так, будто место называется Лумброван (#1176). Связь
+     * называется словом — ролью стороны, которая уже известна из её узла.
+     */
+    @Test
+    fun `имя хозяина не встаёт голым среди слов-категорий`() {
+        val relations = listOf(Relation(phone.id, RelationType.BELONGS_TO, person.id))
+
+        val said = ownerOfFound(phone, relations, found)!!
+
+        assertNotEquals(name, said)
+        assertTrue(said.startsWith(relationLabel(RelationType.SENDER)!!.dropLast(1)))
+    }
+
+    @Test
+    fun `роль стороны не названа — подпись всё равно говорит, что это чей-то номер`() {
+        val contact = person.copy(metadata = mapOf(META_GRAPH_ROLE_PREFIX + "contact" to name))
+        val relations = listOf(Relation(phone.id, RelationType.BELONGS_TO, person.id))
+
+        val said = ownerOfFound(phone, relations, listOf(phone, contact))!!
+
+        assertTrue(said.endsWith(name))
+        assertTrue(said.length > name.length)
     }
 
     @Test

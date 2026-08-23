@@ -187,26 +187,32 @@ class UnderstandRealizer @Inject constructor(
                 // Сверять есть с чем всегда, когда Point читал сам: слой слов снимка или
                 // окно текста объекта (#809, «нет в тексте — нет знания»).
                 val readText = layer?.text?.takeIf { it.isNotBlank() } ?: window
-                val judged = judgeFields(parsed.fields, layer, readText)
-
-                val retried = judged.retry.takeIf { it.isNotEmpty() }?.let { keys ->
-                    reportStage("Контрольная цифра не сошлась — перечитываю")
-                    val again = ask(input, retryPrompt(keys, laidOut, index), eyes = eyes).text
-                    judgeFields(parseFieldCandidates(again).fields.filterKeys { it in keys }, layer, readText)
-                }
-                val readFields = judged.won + retried?.won.orEmpty()
-
-                val blocked = (judged.blocked.keys + retried?.blocked?.keys.orEmpty()).associateWith { key ->
-                    (judged.blocked[key].orEmpty() + retried?.blocked?.get(key).orEmpty()).distinct()
-                }
 
                 val (roles, roleDisputes) = roleReadings(answer, laidOut, layer)
 
                 // Что с чем связано (#1176): страница держит колонку при её подписи, и
-                // прочтение, стоящее в одном блоке с названной стороной, — про неё. Судья
-                // полей этого не знает: у наклейки два отделения, и для него они одинаковы.
+                // прочтение, стоящее в одном блоке с названной стороной, — про неё. Связь
+                // известна до суда: судья выбирает значение среди прочтений, и чьё какое —
+                // такая же улика, как форма и опора в словах страницы, а не правка поверх
+                // готового значения в обход воронки.
                 val belongings = layer?.belongings(parsed.fields, roles).orEmpty()
-                val fields = withPartyReadings(readFields, belongings, layer, blocked)
+                val judged = judgeFields(parsed.fields, layer, readText, belongings)
+
+                val retried = judged.retry.takeIf { it.isNotEmpty() }?.let { keys ->
+                    reportStage("Контрольная цифра не сошлась — перечитываю")
+                    val again = ask(input, retryPrompt(keys, laidOut, index), eyes = eyes).text
+                    judgeFields(
+                        parseFieldCandidates(again).fields.filterKeys { it in keys },
+                        layer,
+                        readText,
+                        belongings,
+                    )
+                }
+                val fields = judged.won + retried?.won.orEmpty()
+
+                val blocked = (judged.blocked.keys + retried?.blocked?.keys.orEmpty()).associateWith { key ->
+                    (judged.blocked[key].orEmpty() + retried?.blocked?.get(key).orEmpty()).distinct()
+                }
 
                 // Курсор для следующего нажатия «Понять» — пока не дочитано, окно сдвигается
                 // дальше; дочитано — курсор больше не нужен (#682/#683).

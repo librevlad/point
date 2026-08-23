@@ -98,6 +98,11 @@ fun mergeKnowledge(
         merged[key] = value
     }
 
+    // Слово человека и разрешённый спор меняют факт мимо слияния фактов — принадлежность
+    // снимается и за ними (#1176): «Исправить значение» оставляло новый номер подписанным
+    // прежним хозяином. Свежее «чьё», если его принесли, встанет ниже, среди аннотаций.
+    staleBelongings(known, merged).forEach(merged::remove)
+
     fresh.forEach { (key, value) ->
         when {
             key in refreshable -> merged[key] = value

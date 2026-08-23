@@ -2366,10 +2366,14 @@ class FlowViewModel @Inject constructor(
         val parent = stack.lastOrNull()
         val carried = parent?.takeIf { continuesObject(it.obj, obj) }
         val known = carried?.let { carryKnowledge(it.obj, obj, phoneRegion.code()) } ?: obj
-        val carriedFound = carried?.found.orEmpty()
 
-        val carriedRelations = carried?.relations
-            ?: parent?.relations?.filter { it.fromId == obj.id || it.toId == obj.id }.orEmpty()
+        // Вход в найденное забирает его окрестность графа (#1176): связи узла, тех, с кем он
+        // связан, и их связи — иначе внутри номера оставалась связь «чей он», а сказать, чей,
+        // было некому. Чужие находки при этом не тащатся.
+        val around = parent?.takeIf { carried == null }
+            ?.let { com.point.core.flow.GraphState(it.obj, it.found, it.relations).around(obj.id) }
+        val carriedFound = carried?.found ?: around?.found.orEmpty()
+        val carriedRelations = carried?.relations ?: around?.relations.orEmpty()
 
         // Порождённый объект знает, откуда он взялся (#946). Связь именованная: архив
         // содержит файлы, а запись получена из текста — это не одно и то же, и в графе они
@@ -2755,7 +2759,16 @@ class FlowViewModel @Inject constructor(
             .groupBy { it.id }
             .map { (_, nodes) -> nodes.reduce(::sameNodeKnown) }
             .map { node -> syncNodeFact(node, newMetadata) }
-        val newRelations = (frame.relations + update.relations).distinct()
+        val enriched = frame.obj.copy(state = newState, metadata = newMetadata)
+
+        // Связи копятся, а принадлежность — заменяется и снимается (#1176): у номера один
+        // хозяин, второй виток поправляет прежнего, а не добавляет второго; узел, чей факт
+        // сменился, прежнего хозяина не наследует — как `.of` в знании объекта.
+        val newRelations = com.point.core.flow.mergedRelations(
+            frame.relations,
+            update.relations,
+            renamed = com.point.core.flow.renamedNodes(frame.found + frame.obj, newFound + enriched),
+        )
 
         // Неудача — состояние операции: показывается человеку, но не становится знанием
         // и не переживает журнал. Удавшийся повтор снимает упрёк по своему вопросу.
@@ -2769,7 +2782,6 @@ class FlowViewModel @Inject constructor(
         val graphChanged = newFound != frame.found || newRelations != frame.relations
         if (!objChanged && !graphChanged && update.running == frame.enriching && newFailed == frame.failed) return
 
-        val enriched = frame.obj.copy(state = newState, metadata = newMetadata)
         val newBubbles = if (objChanged) {
             com.point.core.model.keepShownOrder(
                 frame.bubbles,

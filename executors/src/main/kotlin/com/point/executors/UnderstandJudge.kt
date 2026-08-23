@@ -32,6 +32,13 @@ internal fun judgeFields(
      * сверять не с чем, и значение принимается как раньше.
      */
     readText: String = layer?.text.orEmpty(),
+
+    /**
+     * Чьё какое прочтение (#1176). Судья выбирает по уликам страницы и не знает, чьё прочтение
+     * перед ним: у наклейки два отделения, и для него они одинаковы. Сторона это знает — и
+     * спор однозначного факта решает она, но только среди годных прочтений.
+     */
+    belongings: Map<String, List<PartyReading>> = emptyMap(),
 ): JudgedFields {
     val ruleMarks = layer?.ruleEvidence().orEmpty()
     val won = LinkedHashMap<String, JudgedField>()
@@ -51,7 +58,16 @@ internal fun judgeFields(
             val evidence = layer?.fieldEvidence(key, c, ruleMarks) ?: formEvidence(key, c.text)
             Triple(c, isGrounded, evidence)
         }
-        val winner = scored.maxByOrNull { it.third.size }!!
+
+        // Значение однозначного факта — прочтение стороны, которой документ адресован
+        // (#1176). Место при отправителе — «откуда», место при получателе — «куда»: судье
+        // они одинаковы, побеждало первое, то есть склад отправления, и маршрут вёл не туда,
+        // куда едет посылка (#772). Сторона выбирает из тех же прошедших воронку прочтений:
+        // слово страницы вместо слова модели, форма и контрольная цифра уже спрошены выше
+        // (#809), и забракованное сюда не доходит. Прежний выбор остаётся среди прочтений.
+        val addressed = chosenByAddressee(key, belongings[key].orEmpty())?.reading
+        val winner = addressed?.let { chosen -> scored.firstOrNull { sameReading(it.first, chosen) } }
+            ?: scored.maxByOrNull { it.third.size }!!
         won[key] = JudgedField(
             text = winner.first.text,
             evidence = winner.third,
@@ -64,43 +80,14 @@ internal fun judgeFields(
 }
 
 /**
- * Значение однозначного факта — прочтение стороны, которой документ адресован (#1176).
+ * То же прочтение страницы после воронки (#1176).
  *
- * Судья полей выбирает по уликам страницы и не знает, чьё прочтение перед ним: два отделения
- * наклейки для него одинаковы, и побеждало первое — склад отправления, а маршрут вёл не туда,
- * куда едет посылка (#772). Принадлежность приходит позже, из ролей того же ответа модели, и
- * здесь эти два знания встречаются. Прежний выбор не пропадает — он остаётся среди прочтений.
- *
- * Правило общее: оно ничего не знает ни про место, ни про наклейку — только про то, что у
- * однозначного факта прочтения спорят, а сторона этот спор решает.
- *
- * Сторона решает спор годных прочтений и не воскрешает забракованное: номер, не сошедшийся
- * с контрольной цифрой ([blocked]), и значение не той формы значением не становятся, в чьей
- * бы колонке они ни стояли.
+ * Заземление меняет текст кандидата — слово модели уступает слову страницы, — но метки слов
+ * у него те же; по ним прочтение стороны и узнаётся среди годных. Прочтение без меток
+ * страницы сторону иметь не может.
  */
-internal fun withPartyReadings(
-    fields: Map<String, JudgedField>,
-    belongings: Map<String, List<PartyReading>>,
-    layer: AtomLayer?,
-    blocked: Map<String, List<String>> = emptyMap(),
-): Map<String, JudgedField> {
-    if (layer == null || belongings.isEmpty()) return fields
-    val ruleMarks = layer.ruleEvidence()
-    return fields.mapValues { (key, judged) ->
-        val chosen = chosenByAddressee(key, belongings[key].orEmpty())?.reading ?: return@mapValues judged
-        if (normConsensus(chosen.text) == normConsensus(judged.text)) return@mapValues judged
-        if (semanticFits(key, chosen.text) == false) return@mapValues judged
-        if (blocked[key].orEmpty().any { normConsensus(it) == normConsensus(chosen.text) }) {
-            return@mapValues judged
-        }
-        JudgedField(
-            text = chosen.text,
-            evidence = layer.fieldEvidence(key, chosen, ruleMarks),
-            grounded = true,
-            candidates = (listOf(chosen.text) + judged.candidates).distinct(),
-        )
-    }
-}
+private fun sameReading(candidate: FieldCandidate, reading: FieldCandidate): Boolean =
+    candidate.ids.isNotEmpty() && candidate.ids.map(::bareIndexId) == reading.ids.map(::bareIndexId)
 
 private fun groundCandidate(
     key: String,
