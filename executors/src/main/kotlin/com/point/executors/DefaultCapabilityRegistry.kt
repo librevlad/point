@@ -44,7 +44,7 @@ class DefaultCapabilityRegistry @Inject constructor(
     override fun all(): Collection<Capability> = capabilities
 
     override fun bubblesFor(state: ObjectState): List<Bubble> =
-        policy.rank(state, offeredTo(state) { it.accepts(state) })
+        policy.rank(state, offeredTo(state, emptyMap()) { it.accepts(state) })
             .map { c -> bubbleOf(c, state) }
 
     override fun bubblesFor(graph: com.point.core.flow.GraphState): List<Bubble> {
@@ -53,7 +53,7 @@ class DefaultCapabilityRegistry @Inject constructor(
         // Действие, возвращающее исходник, из которого объект получен, не прячется, а уходит
         // вниз и говорит об этом (#925).
         val source = com.point.core.flow.inverseSourceKind(graph)
-        return policy.rank(graph, offeredTo(graph.state) { it.accepts(graph) })
+        return policy.rank(graph, offeredTo(graph.state, graph.facts) { it.accepts(graph) })
             .map { c ->
                 val back = source?.takeIf { com.point.core.flow.givesBackTheSource(c, graph, it) }
                 bubbleOf(c, graph.state, reason ?: back?.let { com.point.core.flow.sourceIsHere(it) }, graph)
@@ -66,11 +66,18 @@ class DefaultCapabilityRegistry @Inject constructor(
     private val offered: List<Capability> = capabilities.filterNot { it.meta.investigation }
 
     /**
-     * Двери для этого объекта: применимые, не закрытые снаружи — и, если объект негоден,
-     * только берущие его как есть (#994): читать негодное не предлагается.
+     * Двери для этого объекта: применимые, не закрытые снаружи — и, если объект негоден и
+     * ничего из содержимого не прочитано, без дверей чтения (#994).
      */
-    private fun offeredTo(state: ObjectState, applies: (Capability) -> Boolean): List<Capability> =
-        com.point.core.flow.offeredWhenUnfit(state, offered.filter { applies(it) && blockerFor(it) == null })
+    private fun offeredTo(
+        state: ObjectState,
+        facts: Map<String, String>,
+        applies: (Capability) -> Boolean,
+    ): List<Capability> = com.point.core.flow.offeredWhenUnfit(
+        state,
+        facts,
+        offered.filter { applies(it) && blockerFor(it) == null },
+    )
 
     private fun bubbleOf(
         c: Capability,

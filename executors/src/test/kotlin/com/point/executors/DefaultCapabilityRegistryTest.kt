@@ -323,7 +323,7 @@ class DefaultCapabilityRegistryTest {
 
     /**
      * Негодному объекту читать себя не предлагается (#994, решение владельца 21.08.2026):
-     * остаются двери, берущие объект как есть, и каждая несёт причину.
+     * остальные двери остаются, и каждая несёт причину.
      */
     @Test
     fun `негодный объект — чтения не предлагаются, остальные двери несут причину`() {
@@ -335,7 +335,7 @@ class DefaultCapabilityRegistryTest {
         assertTrue("действия остаются в списке", bubbles.isNotEmpty())
         assertTrue("негодному предложено чтение", bubbles.none { it.intent == Intent.UNDERSTAND })
         assertTrue(
-            "берущие объект как есть пропали",
+            "двери, которые не читают, пропали",
             bubbles.map { it.capabilityId.value }.containsAll(setOf("share", "save", "open")),
         )
         assertTrue(bubbles.all { it.unusableReason == reason })
@@ -343,15 +343,16 @@ class DefaultCapabilityRegistryTest {
 
     /**
      * Битый снимок предлагал «Понять», «Распознать текст», «Прочитать сильнее» и «AI» —
-     * четыре способа прочитать то, что прочитать нельзя (#994). Остаётся то, что точно
-     * сработает: открыть, поделиться, сохранить.
+     * четыре способа прочитать то, что прочитать нельзя (#994). Решение владельца сказано
+     * про чтения: превращения остаются на месте и несут причину подписью (#582).
      */
     @Test
     fun `битому снимку не предлагают ни распознать, ни AI — открыть и поделиться есть`() {
         val ids = idsFor(ObjectState(ObjectKind.IMAGE, setOf(Feature.UNUSABLE)))
 
-        assertTrue(setOf("ocr", "ai", "scan", "image", "pdf").none { it in ids })
-        assertTrue(ids.containsAll(setOf("share", "save", "open")))
+        assertTrue("негодному предложено чтение", setOf("ocr", "ai").none { it in ids })
+        assertTrue("двери, которые не читают, пропали", ids.containsAll(setOf("share", "save", "open")))
+        assertTrue("превращения ушли вместе с чтениями", ids.containsAll(setOf("scan", "image", "pdf")))
     }
 
     @Test
@@ -359,6 +360,37 @@ class DefaultCapabilityRegistryTest {
         val ids = idsFor(ObjectState(ObjectKind.IMAGE))
 
         assertTrue(ids.containsAll(setOf("ocr", "ai", "share", "save", "open")))
+    }
+
+    /**
+     * Эскиз не отрисовался, снимок не декодировался — это состояние операции, а не знание
+     * (Конституция §13, ADR-0001 §9). У снимка, чей QR уже прочитан, дверь «Считать QR»
+     * обязана остаться: иначе знание есть, а войти в него нечем. Живой путь #1101.
+     */
+    @Test
+    fun `превью не отрисовалось, а QR прочитан — двери чтения остаются`() {
+        val withQr = DefaultCapabilityRegistry(
+            capabilities = setOf(
+                ShareCapability(), OpenCapability(), OcrCapability(),
+                ReadQrCapability(), AiCapability(aiKeysReady),
+            ),
+            policy = DefaultBubblePolicy(),
+        )
+        val obj = objectOf(
+            ObjectState(ObjectKind.IMAGE, setOf(Feature.UNUSABLE, Feature.HAS_QR)),
+            mapOf(
+                META_UNUSABLE_REASON to com.point.core.flow.readerFailure(
+                    com.point.core.flow.READER_NOT_DECODED,
+                    ObjectKind.IMAGE,
+                ),
+                "entity.url" to "https://point.app/x",
+            ),
+        )
+
+        val ids = withQr.bubblesFor(GraphState(obj)).map { it.capabilityId.value }
+
+        assertTrue("знание о QR есть, а войти в него нечем", "read-qr" in ids)
+        assertTrue("прочитанное не вернуло объекту его чтения", ids.containsAll(setOf("ocr", "ai")))
     }
 
     /** #570: обломок вместо архива — но передать его дальше человек по-прежнему может. */
@@ -372,7 +404,6 @@ class DefaultCapabilityRegistryTest {
         val bubbles = registry.bubblesFor(GraphState(obj))
 
         assertTrue("share" in bubbles.map { it.capabilityId.value })
-        assertFalse("обломок предлагают распаковать", "archive" in bubbles.map { it.capabilityId.value })
     }
 
     @Test

@@ -91,7 +91,18 @@ fun actionGroupOrder(useFirst: Boolean = false): List<ActionGroup> = if (useFirs
  * как и требует конституция.
  */
 fun promisesExtraction(bubbles: List<Bubble>): Boolean = bubbles.any {
-    actionGroupOf(it.intent) == ActionGroup.EXTRACT && it.yields != ActionYield.Unknown
+    actionGroupOf(it.intent) == ActionGroup.EXTRACT && promisesResult(it.yields)
+}
+
+/**
+ * Действие называет, что принесёт, — и это разбор по каждому исходу, а не «всё, кроме
+ * одного» (#1101). «Ничего не вернёт» (`None`) обещанием чтения не является ровно так же,
+ * как «вернёт то, что попросите» (`Unknown`): первое обещает пустоту, второе — что угодно.
+ * Новый вид исхода обязан ответить здесь на тот же вопрос, а не унаследовать чужой ответ.
+ */
+private fun promisesResult(yields: ActionYield): Boolean = when (yields) {
+    is ActionYield.New, is ActionYield.Same, ActionYield.Copied -> true
+    ActionYield.None, ActionYield.Unknown -> false
 }
 
 fun actionSections(bubbles: List<Bubble>, useFirst: Boolean = false): List<ActionSection> {

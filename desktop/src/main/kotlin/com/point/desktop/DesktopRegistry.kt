@@ -36,7 +36,7 @@ class DesktopRegistry(
 
         // Негодному объекту читать себя не предлагается — то же правило, что на телефоне
         // (#994): компьютер сам помечает пустой файл при приёме (`Inbox.kt`).
-        return com.point.core.flow.offeredWhenUnfit(state, applicable)
+        return com.point.core.flow.offeredWhenUnfit(state, graph.facts, applicable)
             .sortedWith(com.point.core.flow.byIntentThenPriority(state, intent))
             .map {
                 Bubble(

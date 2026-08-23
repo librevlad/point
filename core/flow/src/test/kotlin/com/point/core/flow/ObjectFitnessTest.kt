@@ -63,43 +63,72 @@ class ObjectFitnessTest {
 
     // ---- Негодному читать себя не предлагается (#994, #1101) ----
 
-    private class Door(
-        id: String,
-        private val understands: Boolean = false,
-        private val makesNew: Boolean = false,
-    ) : Capability {
+    private class Door(id: String, private val makes: (ObjectState) -> ObjectState?) : Capability {
         override val id = com.point.core.model.CapabilityId(id)
         override val icon = ""
         override fun label(state: ObjectState) = id.value
         override fun accepts(state: ObjectState) = true
-        override fun produces(state: ObjectState) = if (makesNew) ObjectState(ObjectKind.TEXT) else state
-        override fun intents(state: ObjectState) =
-            if (understands) setOf(com.point.core.model.Intent.UNDERSTAND) else super.intents(state)
+        override fun produces(state: ObjectState) = makes(state)
     }
 
-    private val share = Door("share")
-    private val understand = Door("understand", understands = true)
-    private val ocr = Door("ocr", makesNew = true)
+    /** Берёт объект как есть и отдаёт его дальше — намерение «отправить». */
+    private val share = Door("share") { it }
+
+    /** Спрашивает у модели: нового объекта не обещано — намерение «понять». */
+    private val ai = Door("ai") { null }
+
+    /** Читает содержимое и отдаёт текст — тоже «понять». */
+    private val ocr = Door("ocr") { ObjectState(ObjectKind.TEXT) }
+
+    /** Превращение: из снимка снимок — намерение «превратить», решения владельца не касается. */
+    private val scan = Door("scan") { ObjectState(ObjectKind.IMAGE) }
+
+    private val doors = listOf(ai, ocr, scan, share)
 
     private val unfit = ObjectState(ObjectKind.IMAGE, setOf(Feature.UNUSABLE))
     private val fit = ObjectState(ObjectKind.IMAGE)
 
     @Test
-    fun `как есть — ни нового объекта, ни обещанного знания`() {
-        assertTrue("поделиться берёт объект как есть", share.takesAsIs(fit))
-        assertFalse("понять обещает знание", understand.takesAsIs(fit))
-        assertFalse("распознать делает новый объект", ocr.takesAsIs(fit))
-    }
-
-    @Test
-    fun `негодному остаются только двери, берущие его как есть`() {
-        assertEquals(listOf(share), offeredWhenUnfit(unfit, listOf(understand, ocr, share)))
+    fun `негодному уходят двери чтения, а превращения и отправка остаются`() {
+        assertEquals(listOf(scan, share), offeredWhenUnfit(unfit, emptyMap(), doors))
     }
 
     @Test
     fun `годному — всё применимое, порядок тот же`() {
-        val all = listOf(understand, ocr, share)
+        assertEquals(doors, offeredWhenUnfit(fit, emptyMap(), doors))
+    }
 
-        assertEquals(all, offeredWhenUnfit(fit, all))
+    /**
+     * Метку негодности ставит и сорвавшаяся операция — не отрисовался эскиз, не декодировался
+     * снимок. Знание от этого не пропадает (Конституция §13): у снимка, чей QR прочитан,
+     * дверь чтения обязана остаться на месте.
+     */
+    @Test
+    fun `прочитанное старше метки — двери чтения остаются`() {
+        val qr = investigationKey(com.point.core.model.CapabilityId("qr"))
+        val answered = mapOf(qr to InvestigationState.FOUND.wire, "entity.url" to "https://point.app/x")
+
+        assertEquals(doors, offeredWhenUnfit(unfit, answered, doors))
+    }
+
+    @Test
+    fun `имя и размер — не рассказ объекта о себе`() {
+        assertFalse(knowsFromContent(mapOf("name" to "bolshoy55.bin", "size" to "55000000")))
+        assertFalse(knowsFromContent(mapOf(META_UNUSABLE_REASON to EMPTY_FILE_REASON)))
+    }
+
+    @Test
+    fun `смотрели и не нашли — тоже не рассказ`() {
+        val looked = investigationKey(com.point.core.model.CapabilityId("image-text"))
+
+        assertFalse(knowsFromContent(mapOf(looked to InvestigationState.NOT_FOUND.wire)))
+        assertTrue(knowsFromContent(mapOf(looked to InvestigationState.FOUND.wire)))
+    }
+
+    @Test
+    fun `сущность и прочитанный текст — рассказ содержимого`() {
+        assertTrue(knowsFromContent(mapOf("entity.url" to "https://point.app/x")))
+        assertTrue(knowsFromContent(mapOf(META_OCR_ATOMS_REF to "/atoms.tsv")))
+        assertFalse("пустое значение знанием не является", knowsFromContent(mapOf("entity.url" to "")))
     }
 }
