@@ -194,9 +194,10 @@ private fun PreviewFoundObjects() = PointTheme {
     )
 }
 
-@Preview(name = "Посылка · не хватает только трека (#260)", showBackground = true)
+// Превью называют то, что рисуют: карточка готовности снята с экрана 11.08.2026 (#1232).
+@Preview(name = "Посылка · известен только перевозчик", showBackground = true)
 @Composable
-private fun PreviewReadinessMissing() = PointTheme {
+private fun PreviewParcelCarrierOnly() = PointTheme {
 
     FirstScreen(
         obj = sampleObject(
@@ -211,9 +212,9 @@ private fun PreviewReadinessMissing() = PointTheme {
     )
 }
 
-@Preview(name = "Карточка готовности · строка = действие (#464)", showBackground = true)
+@Preview(name = "Посылка · найдены трек и телефон", showBackground = true)
 @Composable
-private fun PreviewReadinessActionable() = PointTheme {
+private fun PreviewParcelTrackAndPhone() = PointTheme {
 
     FirstScreen(
         obj = sampleObject(

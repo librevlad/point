@@ -244,8 +244,5 @@ val AI_PROVIDERS: List<AiProvider> = listOf(
 fun providerForBaseUrl(baseUrl: String): AiProvider? =
     AI_PROVIDERS.firstOrNull { it.baseUrl.equals(baseUrl.trim().trimEnd('/'), ignoreCase = true) }
 
-const val AI_KEY_WHY: String =
-    "«Понять», «Перевести», «AI» и расшифровку записи делает модель — она работает на " +
-        "вашем ключе и вашей квоте. У большинства сервисов ключ бесплатный."
-
+// Объяснение про ключ живёт в одном месте — AI_CHAIN_MORE за «Как это работает» (#1262).
 const val AI_KEY_WHY_SHORT: String = "Чтение с фото и распаковка работают и без ключа"

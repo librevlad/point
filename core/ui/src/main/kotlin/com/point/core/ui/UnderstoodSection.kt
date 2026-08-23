@@ -210,8 +210,14 @@ fun objectVerdict(obj: PointObject): ObjectVerdict {
 private fun valueHeadline(obj: PointObject): String? =
     if (obj.uri is com.point.core.model.ValueRef) foundHeadline(obj).takeIf { it.isNotBlank() } else null
 
+/**
+ * Подпись героя берётся у того же детектора, что рисует знак (#1233).
+ *
+ * До этого таблицу узнавали два разных списка форматов, и один экран мог одновременно
+ * показать знак «Таблица» и заголовок «Документ».
+ */
 private fun heroKindLabel(obj: PointObject): String =
-    if (objectMark(obj) == ObjectMark.SPREADSHEET) "Таблица" else kindLabel(obj.state.kind)
+    if (kindMarkOf(obj) == KindMark.SPREADSHEET) kindMarkLabel(KindMark.SPREADSHEET) else kindLabel(obj.state.kind)
 
 private fun String.readableUrl() =
     removePrefix("https://").removePrefix("http://").removePrefix("www.").trimEnd('/')

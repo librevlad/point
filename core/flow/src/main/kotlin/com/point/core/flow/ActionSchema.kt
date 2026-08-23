@@ -97,25 +97,9 @@ fun ActionSchema.readiness(facts: Map<String, String>): Readiness {
     }
 }
 
+// Схемы живут метрикой корпуса (CorpusMetric.scoreCorpus), а не экраном: карточка готовности
+// снята с первого экрана 11.08.2026, и её обвязка ушла вместе с ней (#1232).
 data class ActionReadiness(val schema: ActionSchema, val readiness: Readiness)
-
-fun ActionReadiness.runner(bubbles: List<Bubble>): Bubble? {
-    if (readiness !is Readiness.Ready) return null
-    val id = schema.runs ?: return null
-    return bubbles.firstOrNull { it.capabilityId == id }
-}
-
-fun ActionReadiness.shownField(): FieldReading? =
-    (readiness as? Readiness.Ready)?.present?.firstOrNull { it.spec.critical }
-
-fun readinessShownFacts(
-    facts: Map<String, String>,
-    schemas: List<ActionSchema> = ACTION_SCHEMAS,
-): Map<String, String> = buildMap {
-    actionReadiness(facts, schemas).forEach { row ->
-        row.shownField()?.let { field -> put(field.spec.key, field.value) }
-    }
-}
 
 fun actionReadiness(
     facts: Map<String, String>,
@@ -238,27 +222,3 @@ val ACTION_SCHEMAS: List<ActionSchema> = listOf(
         ),
     ),
 )
-
-// «Мне в буфере целиковые блоки не нужны» (владелец, 2026-08-09): копия строки
-// действия кладёт одно ключевое значение — то же, что строка показывает, — а не
-// склейку всех полей с подписями.
-fun copyableValue(readiness: Readiness): String? {
-    val present = when (readiness) {
-        is Readiness.Ready -> readiness.present
-        is Readiness.Missing -> readiness.present
-    }.filter { it.value.isNotBlank() }
-    return (present.firstOrNull { it.spec.critical } ?: present.singleOrNull())?.value
-}
-
-/**
- * «Или/ещё» под строкой действия — только про собственное (critical) значение
- * действия. Споры вспомогательных полей (дата, валюта) живут на своих узлах и не
- * повторяются под каждым действием: на чеке один спор даты печатался трижды —
- * «это непонятно и неюзабельно» (владелец, 2026-08-09). Знание не прячется (P8):
- * узел поля показывает спор полностью.
- */
-fun ownDisputes(present: List<FieldReading>): List<FieldReading> =
-    present.filter { it.spec.critical && it.alternatives.isNotEmpty() }
-
-fun ownExtras(present: List<FieldReading>): List<FieldReading> =
-    present.filter { it.spec.critical && it.extras.isNotEmpty() }

@@ -119,7 +119,6 @@ fun HomeScreen(
 
     onExample: () -> Unit = {},
 
-    sourceLabels: List<String> = emptyList(),
     onRemove: (HistoryEntry) -> Unit = {},
     onClear: () -> Unit = {},
     crashReport: String? = null,
@@ -177,7 +176,7 @@ fun HomeScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Spacer(Modifier.height(22.dp))
-                    NewObjectDoor(sourceLabels = sourceLabels, onClick = onNewObject)
+                    NewObjectDoor(onClick = onNewObject)
                     Spacer(Modifier.height(9.dp))
                     Text(
                         HOW_TO_SHARE,
@@ -201,7 +200,6 @@ fun HomeScreen(
             ) {
                 item {
                     NewObjectDoor(
-                        sourceLabels = sourceLabels,
                         onClick = onNewObject,
 
                         // Вровень с записями и карточкой компьютера: узкая колонка (340.dp)
@@ -270,7 +268,6 @@ fun HomeScreen(
 
 @Composable
 private fun NewObjectDoor(
-    sourceLabels: List<String>,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     wide: Boolean = false,
@@ -302,9 +299,6 @@ private fun ExampleDoor(onClick: () -> Unit, modifier: Modifier = Modifier) {
         modifier = modifier.widthIn(max = PortalColumnWidth),
     )
 }
-
-internal fun sourcesSubtitle(labels: List<String>): String? =
-    labels.filter { it.isNotBlank() }.takeIf { it.isNotEmpty() }?.joinToString(" · ")
 
 @Composable
 private fun ConnectAiRow(onConnect: () -> Unit, modifier: Modifier = Modifier) {
@@ -605,9 +599,6 @@ private fun HistoryAvatar(entry: HistoryEntry) {
     }
 }
 
-private val PREVIEW_SOURCES =
-    listOf("Буфер обмена", "Голос", "Камера", "Место", "Принять файл")
-
 private fun previewEntry(id: String, name: String, kind: ObjectKind, ago: Long) = HistoryEntry(
     id = id,
     name = name,
@@ -620,7 +611,7 @@ private fun previewEntry(id: String, name: String, kind: ObjectKind, ago: Long) 
 @Preview(name = "Дом · объекта ещё нет (#456)", showBackground = true, backgroundColor = 0xFF0B0D10)
 @Composable
 private fun PreviewHomeEmpty() = PointTheme {
-    HomeScreen(recent = emptyList(), onOpen = {}, onSettings = {}, sourceLabels = PREVIEW_SOURCES)
+    HomeScreen(recent = emptyList(), onOpen = {}, onSettings = {})
 }
 
 @Preview(name = "Дом · недавнее (#462)", showBackground = true, backgroundColor = 0xFF0B0D10)
@@ -633,6 +624,5 @@ private fun PreviewHomeRecent() = PointTheme {
         ),
         onOpen = {},
         onSettings = {},
-        sourceLabels = PREVIEW_SOURCES,
     )
 }

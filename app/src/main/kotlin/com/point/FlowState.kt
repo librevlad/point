@@ -249,5 +249,3 @@ data class DevicesScreenState(
 
     val loading: Boolean = true,
 )
-
-/** Закреплённое действие для показа: чей вид объекта и что закреплено (#821). */

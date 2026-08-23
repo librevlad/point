@@ -70,7 +70,6 @@ import com.point.core.flow.META_LINE_SUFFIX
 import com.point.core.flow.alternativesOf
 import com.point.core.flow.isDoubtful
 import com.point.core.flow.provenanceLabel
-import com.point.core.flow.readinessShownFacts
 import com.point.core.flow.KIND_ADDRESS
 import com.point.core.flow.KIND_DATE
 import com.point.core.flow.KIND_EMAIL

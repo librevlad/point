@@ -71,10 +71,10 @@ fun kindMarkOf(obj: PointObject): KindMark =
     kindMarkOf(obj.state.kind, obj.mime, obj.metadata["name"])
 
 /**
- * Таблица ли это.
+ * Таблица ли это — единственный ответ на этот вопрос во всём модуле (#1233).
  *
- * Своя проверка, а не общая с android-исходниками: марки живут в шве, который компилируют обе
- * стороны, и тянуть за собой android-файл шов не может.
+ * Второй, более узкий детектор жил рядом и кормил подпись героя: один экран мог показать знак
+ * «Таблица» и заголовок «Документ» про один объект. Теперь и знак, и подпись спрашивают здесь.
  */
 private fun isSpreadsheet(mime: String, name: String?): Boolean {
     val m = mime.lowercase().substringBefore(';').trim()
@@ -138,12 +138,7 @@ private fun paletteOf(mark: KindMark): MarkPalette = when (mark) {
     KindMark.UNKNOWN -> MarkPalette(Color(0xFFA8B0C8), Color(0xFF4A5168), Color(0xFF1A1D26), Color(0xFF0B0D12))
 }
 
-/**
- * Фазы рождения марки: плашка, содержимое, наполнение, вспышка.
- *
- * Свои, а не общие с `SpreadsheetMark`: та живёт в android-исходниках, а марки видов — в общем
- * шве, который компилируют обе стороны.
- */
+/** Фазы рождения марки: плашка, содержимое, наполнение, вспышка. */
 private val PLATE = 0f to 0.34f
 private val SHAPE = 0.18f to 0.62f
 private val FILL = 0.38f to 0.88f

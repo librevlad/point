@@ -854,8 +854,8 @@ class FlowViewModel @Inject constructor(
     /**
      * «Смотреть сюда»- Focus как сигнал- ADR-0001 §10.
      *
-     * Объект остаётся прежним со всем уже накопленным знанием- в отличие от [takeSelection],
-     * которое сознательно создаёт из области самостоятельный объект.
+     * Объект остаётся прежним со всем уже накопленным знанием. Самостоятельный объект из
+     * области рождает действие «Взять фрагмент» (TakeFragmentCapability, #742) — не экран.
      */
     fun focusOnSelection() {
         val frame = stack.lastOrNull() ?: return
@@ -988,63 +988,6 @@ class FlowViewModel @Inject constructor(
         stack[index] = refreshed.copy(bubbles = registry.bubblesFor(graphOf(refreshed)))
         _ui.update { withoutAreaAnswer(it).copy(frame = stack[index], focusPreview = null) }
         persistJourney()
-    }
-
-    fun takeSelection() {
-        val top = stack.lastOrNull()?.obj ?: return
-        val snap = selectionSnap ?: return
-        viewModelScope.launch {
-            val derived = withContext(ioDispatcher) {
-                runCatching {
-                    if (snap.text.isNotBlank()) textCapture(top, snap) else fragmentCapture(top, snap)
-                }.getOrNull()
-            }
-            if (derived == null) {
-                _ui.update { it.copy(message = "Не удалось сохранить выделение", messageOutcome = Outcome.FAILED) }
-                return@launch
-            }
-            closeSelection()
-            pushFrame(derived, viaTitle = "Выделение")
-        }
-    }
-
-    private fun selectionOrigin(top: PointObject, snap: SnappedSelection) = buildMap {
-        put(META_SELECTION_SOURCE, top.id)
-        if (snap.ids.isNotEmpty()) put(META_SELECTION_IDS, snap.ids.joinToString(" "))
-        put(META_SELECTION_REGION, snap.region.let { "${it.left} ${it.top} ${it.right} ${it.bottom}" })
-        put(META_SELECTION_PAGE, "0")
-    }
-
-    private suspend fun textCapture(top: PointObject, snap: SnappedSelection): PointObject {
-        val ref = store.newScratchFile("txt")
-        File(ref.value).writeText(snap.text)
-        return PointObject(
-            id = "sel-${top.id}-${snap.ids.hashCode()}",
-            mime = "text/plain",
-            uri = ref,
-            state = ObjectState(ObjectKind.TEXT, features = setOf(Feature.HAS_TEXT)),
-            metadata = selectionOrigin(top, snap),
-            sourceObjects = listOf(top.id),
-        )
-    }
-
-    private suspend fun fragmentCapture(top: PointObject, snap: SnappedSelection): PointObject? {
-        val r = snap.region
-        val bmp = frames.crop(
-            top.uri.value, r.left.toInt(), r.top.toInt(), r.right.toInt(), r.bottom.toInt(),
-        ) ?: return null
-        val ref = store.newScratchFile("jpg")
-        File(ref.value).outputStream().use {
-            bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, FRAGMENT_JPEG_QUALITY, it)
-        }
-        return PointObject(
-            id = "sel-${top.id}-${r.hashCode()}",
-            mime = "image/jpeg",
-            uri = ref,
-            state = ObjectState(ObjectKind.IMAGE),
-            metadata = selectionOrigin(top, snap),
-            sourceObjects = listOf(top.id),
-        )
     }
 
     fun closeSelection() {
@@ -3212,5 +3155,3 @@ private const val PREVIEW_MAX_PX = 640
 private const val ITEM_THUMB_PX = 96
 
 private const val SELECTION_MAX_PX = 2048
-
-private const val FRAGMENT_JPEG_QUALITY = 92

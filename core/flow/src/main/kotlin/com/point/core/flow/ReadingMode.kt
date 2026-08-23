@@ -30,9 +30,3 @@ fun readingModeOf(metadata: Map<String, String>): ReadingMode =
         ?: ReadingMode.UNKNOWN
 
 fun printedGuarantees(mode: ReadingMode): Boolean = mode == ReadingMode.PRINTED
-
-fun readingModeLabel(mode: ReadingMode): String? = when (mode) {
-    ReadingMode.HANDWRITTEN -> "с рукописи"
-    ReadingMode.PRINTED -> null
-    ReadingMode.UNKNOWN -> null
-}
