@@ -211,6 +211,27 @@ class TranscribeActionTest {
         )
     }
 
+    /**
+     * Ответ про пустую запись известен на самом телефоне и бесплатно — ключи к нему
+     * отношения не имеют (#1053). Прежде разговор про ключи шёл первым, и человек без
+     * ключа получал «нужен ключ» там, где ответ уже был на руках.
+     */
+    @Test
+    fun `в записи нечего слушать — ответ приходит и без единого ключа`() = runTest {
+        val result = realizer(forbidden, keyless, silent).perform(recording(1024))
+
+        assertTrue(result is ActionResult.Done)
+        result as ActionResult.Done
+        assertEquals(NO_SPEECH_HEARD, result.message)
+        assertEquals(
+            com.point.core.flow.InvestigationState.NOT_FOUND,
+            com.point.core.flow.investigationStateOf(
+                result.findings!!.metadata,
+                TranscribeCapability.ID,
+            ),
+        )
+    }
+
     @Test
     fun `уровень измерить не вышло — это не тишина, и запись идёт в сервис`() = runTest {
         val result = realizer(engine(Transcription.Heard("Перезвони мне")), ready, unmeasured)
@@ -221,14 +242,25 @@ class TranscribeActionTest {
         assertTrue("слова записи на месте", File(ref).readText().isNotBlank())
     }
 
+    /**
+     * Сервис отработал и ответил «речи нет» — это добытое знание, а не сбой операции
+     * (#1274, решение владельца 23.08.2026). Раньше ответ уезжал `Failure`: крест, звук
+     * провала, ничего в графе — и человек, ткнув ещё раз, снова платил за тот же ответ.
+     */
     @Test
-    fun `тишина говорит про запись, и повторять её незачем`() = runTest {
+    fun `тишина по ответу сервиса — такое же знание, как своя`() = runTest {
         val result = realizer(engine(Transcription.Silence), ready).perform(recording(1024))
 
-        assertTrue(result is ActionResult.Failure)
-        result as ActionResult.Failure
-        assertEquals("В записи не слышно речи", result.reason)
-        assertFalse("повтор тишину не расшифрует", result.recoverable)
+        assertTrue(result is ActionResult.Done)
+        result as ActionResult.Done
+        assertEquals(NO_SPEECH_HEARD, result.message)
+        assertEquals(
+            com.point.core.flow.InvestigationState.NOT_FOUND,
+            com.point.core.flow.investigationStateOf(
+                result.findings!!.metadata,
+                TranscribeCapability.ID,
+            ),
+        )
     }
 
     @Test

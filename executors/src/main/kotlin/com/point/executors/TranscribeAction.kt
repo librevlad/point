@@ -74,21 +74,23 @@ class TranscribeRealizer @Inject constructor(
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
 
+            // Слушаем сами — прежде и сервиса, и разговора про ключи (#1053). На пустой
+            // записи Whisper не молчит, а выдумывает фразу: двадцать секунд цифровой тишины
+            // возвращались как «Thank you.», и выдумка ложилась знанием об объекте. Пустоту
+            // телефон слышит без облака и бесплатно, поэтому ответ про такую запись человек
+            // получает и без единого ключа — отказывать ему ключами там, где ответ уже есть,
+            // значило бы прятать готовое знание за настройками.
+            // Не измерили — не «тихо»: такая запись идёт дальше обычным путём.
+            if (nothingToHear(runCatching { level.peak(input) }.getOrNull())) {
+                return@withContext heardNothing()
+            }
+
             val needs = readiness.missingKeys()
             if (needs.isNotEmpty()) {
                 return@withContext ActionResult.Failure(speechKeyRefusal(needs), recoverable = true)
             }
 
             reportStage(listeningStage(input.mime, sizeOf(input), input.metadata["name"]))
-
-            // Слушаем сами, прежде чем отдать запись сервису (#1053): на пустой записи
-            // Whisper не молчит, а выдумывает фразу — двадцать секунд цифровой тишины
-            // возвращались как «Thank you.», и выдумка ложилась знанием об объекте.
-            // Пустоту телефон слышит и без облака, поэтому запись, в которой нечего
-            // слушать, дальше не едет. Не измерили — не «тихо»: такая запись идёт как раньше.
-            if (nothingToHear(runCatching { level.peak(input) }.getOrNull())) {
-                return@withContext heardNothing()
-            }
 
             val heard = runCatching { speech.transcribe(input) }
                 .getOrElse { return@withContext ActionResult.Failure(
@@ -97,8 +99,9 @@ class TranscribeRealizer @Inject constructor(
                 ) }
 
             when (heard) {
-                is Transcription.Silence ->
-                    ActionResult.Failure(NO_SPEECH_HEARD, recoverable = false)
+                // Сервис отработал и ответил «речи нет» — это тот же ответ, что телефон
+                // слышит сам, и исход у него тот же (#1274, решение владельца 23.08.2026).
+                is Transcription.Silence -> heardNothing()
 
                 is Transcription.Heard -> runCatching {
                     // Расшифровка — знание той же записи, а не новый объект (#1097, GRF-006):
@@ -133,6 +136,9 @@ class TranscribeRealizer @Inject constructor(
      *
      * Речи в записи нет — это ответ на заданный вопрос, и вопрос расшифровки закрывается
      * как «смотрели — не нашлось», а не остаётся открытым до следующего тапа.
+     *
+     * Один исход на обе тишины (#1274): услышал её телефон сам или ответил сервис — знание
+     * об этой записи одно и то же, и человек не платит второй раз за тот же ответ.
      */
     private fun heardNothing(): ActionResult = ActionResult.Done(
         NO_SPEECH_HEARD,

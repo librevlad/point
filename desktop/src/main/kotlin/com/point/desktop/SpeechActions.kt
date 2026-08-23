@@ -40,6 +40,9 @@ class PcTranscribeRealizer(
     private val outbox: Outbox,
     private val connectTimeoutMs: Int = 15_000,
     private val readTimeoutMs: Int = 180_000,
+
+    /** Поход к сервису — за швом: что он ответил, проверяется тестом без сети (как в OcrActions). */
+    private val askOutside: ((SpeechConfig, File, String) -> String)? = null,
 ) : Realizer {
     override val capabilityId = TRANSCRIBE
 
@@ -70,10 +73,21 @@ class PcTranscribeRealizer(
                         recoverable = false,
                     )
                 }
-                val text = post(cfg, file, mime)
+                val text = (askOutside ?: ::post)(cfg, file, mime)
                 if (text.isBlank()) {
 
-                    return@withContext ActionResult.Failure("В записи не разобрано ни слова", recoverable = false)
+                    // «Не нашлось» — знание, а не сбой (Конституция §13). Сервис ответил на
+                    // вопрос: речи в записи нет. Тот же исход, что у телефона (#1274), и теми
+                    // же словами — иначе один ответ на двух устройствах звучал бы по-разному.
+                    return@withContext ActionResult.Done(
+                        com.point.core.flow.NO_SPEECH_HEARD,
+                        com.point.core.model.Findings(
+                            metadata = mapOf(
+                                com.point.core.flow.investigationKey(capabilityId) to
+                                    com.point.core.flow.InvestigationState.NOT_FOUND.wire,
+                            ),
+                        ),
+                    )
                 }
                 val out = File.createTempFile("pc-voice-", ".txt").apply { writeText(text) }
                 ActionResult.Success(
