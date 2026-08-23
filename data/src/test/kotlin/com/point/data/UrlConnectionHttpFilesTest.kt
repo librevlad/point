@@ -28,8 +28,6 @@ class UrlConnectionHttpFilesTest {
     @Volatile private var replyCode = 200
     @Volatile private var replyBody = "[]"
 
-    @Volatile private var route: ((String) -> String)? = null
-
     @Before fun start() {
         server = ServerSocket(0, 0, InetAddress.getByName("127.0.0.1"))
         worker = Thread {
@@ -59,7 +57,7 @@ class UrlConnectionHttpFilesTest {
         seenContentType = seenHeaders["content-type"]
         seenBody = ByteArray(seenHeaders["content-length"]?.toIntOrNull() ?: 0).also { readFully(input, it) }
 
-        val body = (route?.invoke(seenPath) ?: replyBody).toByteArray(Charsets.UTF_8)
+        val body = replyBody.toByteArray(Charsets.UTF_8)
         val header = "HTTP/1.1 $replyCode ${reason(replyCode)}\r\n" +
             "Content-Type: application/json\r\n" +
             "Content-Length: ${body.size}\r\n" +
@@ -171,64 +169,6 @@ class UrlConnectionHttpFilesTest {
         assertEquals("/api/v2/parse/pjb-1?expand=items", seenPath)
         assertEquals("Bearer free-key", seenHeaders["authorization"])
         assertTrue(res.body.contains("COMPLETED"))
-    }
-
-    @Test
-    fun `путь Unstructured целиком по сокету — от формы до координат в сыром кадре`() = runTest {
-        replyBody = """
-            [{"type":"Table","element_id":"e1","text":"11004",
-              "metadata":{"page_number":1,"detection_class_prob":0.87,
-                "coordinates":{"system":"PixelSpace","layout_width":500,"layout_height":400,
-                  "points":[[100,100],[100,150],[200,150],[200,100]]}}}]
-        """.trimIndent()
-
-        val layer = UnstructuredAtomRecognizer(
-            http = UrlConnectionHttpFiles(),
-            frames = FakeOutboundFrames(sentFrame()),
-            apiKey = "free-key",
-            apiUrl = "${root()}/general/v0/general",
-        ).read(pageObject)
-
-        val parts = partsOf(seenBody, boundaryOf(seenContentType))
-        assertEquals(listOf("rus", "eng"), parts.filter { it.name == "languages" }.map { it.text })
-        assertEquals("true", parts.single { it.name == "coordinates" }.text)
-        assertEquals("page.jpg", parts.single { it.name == "files" }.fileName)
-
-        val atom = layer.atoms.single()
-        assertEquals("11004", atom.text)
-        assertEquals("unstructured", atom.reader)
-        assertEquals(0.87f, atom.confidence, 0.001f)
-        assertEquals(400f, atom.box.left, 0.01f)
-        assertEquals(800f, atom.box.right, 0.01f)
-    }
-
-    @Test
-    fun `путь LlamaParse целиком по сокету — загрузка, опрос, координаты`() = runTest {
-        route = { path ->
-            if (path.contains("/upload")) {
-                """{"id":"pjb-1","status":"PENDING"}"""
-            } else {
-                """
-                {"job":{"id":"pjb-1","status":"COMPLETED"},
-                 "items":{"pages":[{"page_number":1,"page_width":500,"page_height":400,
-                   "items":[{"type":"text","value":"11006","bbox":[{"x":100,"y":100,"w":100,"h":50}]}]}]}}
-                """.trimIndent()
-            }
-        }
-
-        val layer = LlamaParseAtomRecognizer(
-            http = UrlConnectionHttpFiles(),
-            frames = FakeOutboundFrames(sentFrame()),
-            apiKey = "free-key",
-            baseUrl = root(),
-        ).read(pageObject)
-
-        assertEquals("/api/v2/parse/pjb-1?expand=items", seenPath)
-        val atom = layer.atoms.single()
-        assertEquals("11006", atom.text)
-        assertEquals("lp0", atom.id)
-        assertEquals(400f, atom.box.left, 0.01f)
-        assertEquals(600f, atom.box.bottom, 0.01f)
     }
 
     private class Part(val headers: String, val bytes: ByteArray) {

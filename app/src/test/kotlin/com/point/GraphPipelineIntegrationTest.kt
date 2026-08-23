@@ -15,7 +15,6 @@ import com.point.core.flow.ChosenApps
 import com.point.core.flow.CloudScope
 import com.point.core.flow.CollectionContent
 import com.point.core.flow.CrashLog
-import com.point.core.flow.Entitlements
 import com.point.core.flow.Entity
 import com.point.core.flow.EntityExtractor
 import com.point.core.flow.EntityType
@@ -174,7 +173,6 @@ class GraphPipelineIntegrationTest {
                 CorrectValueRealizer(),
             ),
             registry = registry,
-            entitlements = Entitlements { true },
         )
         val seenStates = mutableMapOf<CapabilityId, ObjectState>()
 

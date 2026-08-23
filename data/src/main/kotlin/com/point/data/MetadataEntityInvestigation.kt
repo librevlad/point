@@ -64,8 +64,7 @@ class MetadataEntityInvestigationRealizer @javax.inject.Inject constructor() : R
                 com.point.core.flow.SEMANTIC_TYPES[obj.metadata[com.point.core.flow.META_SEMANTIC_TYPE]],
 
                 Feature.HAS_WORD_LAYER.takeIf {
-                    !obj.metadata[com.point.core.flow.META_OCR_ATOMS_REF].isNullOrBlank() ||
-                        !obj.metadata[com.point.core.flow.META_CLOUD_ATOMS_REF].isNullOrBlank()
+                    !obj.metadata[com.point.core.flow.META_OCR_ATOMS_REF].isNullOrBlank()
                 },
             ),
             objects = objects,

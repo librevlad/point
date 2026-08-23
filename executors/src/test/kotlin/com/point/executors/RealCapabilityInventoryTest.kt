@@ -43,8 +43,11 @@ class RealCapabilityInventoryTest {
         ScanPdfCapability(), ScanPlusCapability(), ShareAllCapability(), ShareCapability(),
         ShoppingListCapability(aiKeysReady), SmsCapability(), TranscribeCapability(keysReady),
         TranslateCapability(aiKeysReady), UnderstandCapability(aiKeysReady), VCardCapability(), WordCapability(),
-        WordPlusCapability(aiKeysReady),
+        WordPlusCapability(aiKeysReady), CleanMetadataCapability(),
     )
+
+    private val sharedNames: Set<String> =
+        CapabilityModule.sharedCaps(OfficeAlwaysHere).map { it.javaClass.simpleName }.toSet()
 
     // Пробы шире базовых видов: кадры извлечённых значений — полноправные объекты,
     // и способность, живущая только на них, обязана быть видна инвентарю.
@@ -65,6 +68,7 @@ class RealCapabilityInventoryTest {
     fun `id исследований не пересекаются с id действий`() {
         val investigations = listOf(
             com.point.data.OcrInvestigation.ID,
+            com.point.data.ExifInvestigation.ID,
             com.point.data.QrInvestigation.ID,
             com.point.data.EntityInvestigation.ID,
             com.point.data.IdentifierInvestigation.ID,
@@ -81,6 +85,14 @@ class RealCapabilityInventoryTest {
 
         val clashes = investigations.filter { it in actions }
         assertEquals("исследование и действие не смеют делить id", emptyList<Any>(), clashes)
+
+        // Проверка стоит ровно столько, сколько исследований она видит: `exif` выпал из списка
+        // и не сверялся ни с чем (#1256). Появилось новое исследование — впишите его сюда,
+        // иначе оно проверено не будет.
+        val bound = com.point.data.di.DataModule::class.java.declaredMethods
+            .filter { it.returnType == Capability::class.java }
+            .map { it.parameterTypes.single().simpleName }
+        assertEquals("исследования, которые связывает DataModule: $bound", bound.size, investigations.size)
     }
 
     @Test
@@ -153,14 +165,40 @@ class RealCapabilityInventoryTest {
         else -> "ничего"
     }
 
+    /**
+     * Инвентарь сверяется с DI поимённо, а не по счёту (#1256). Счёт сходился по совпадению:
+     * `@Provides` из companion-объекта в `declaredMethods` абстрактного класса не попадал, и
+     * пропуск в одном месте гасился пропуском в другом — «Очистить метаданные» так и не была
+     * проверена ни одним инвариантом этого файла. Списку способностей нельзя разойтись с тем,
+     * что раздаёт реестр, молча: расходится — тест называет, кого именно не хватает.
+     */
     @Test
-    fun `в таблице ровно столько способностей, сколько раздаёт реестр`() {
+    fun `таблица собрана из тех же способностей, что раздаёт DI`() {
+        val listed = (builtIn.map { it.javaClass.simpleName }.toSet() - sharedNames).sorted()
 
-        val bound = com.point.executors.di.CapabilityModule::class.java.declaredMethods
-            .count { it.returnType == Capability::class.java } +
-            com.point.core.flow.capabilities.sharedCapabilities().size
+        assertEquals(boundSingleCapabilities().map { it.simpleName }.sorted(), listed)
+    }
 
-        assertEquals("в CapabilityModule способностей больше, чем в таблице", bound, builtIn.size)
+    /**
+     * Способность, которую нельзя завести без Hilt, сверить нечем — и это не повод её
+     * пропустить: молчаливый пропуск и есть та дырка, из-за которой список врал.
+     */
+    private fun boundSingleCapabilities(): List<Class<*>> {
+        val binds = CapabilityModule::class.java.declaredMethods
+            .filter { it.returnType == Capability::class.java }
+            .map { it.parameterTypes.singleOrNull() ?: error("@Binds способности берёт не одну реализацию: ${it.name}") }
+
+        val provides = CapabilityModule.Companion::class.java.declaredMethods
+            .filter { it.returnType == Capability::class.java }
+            .map { method ->
+                assertEquals(
+                    "способность из companion @Provides со своими зависимостями — сверить её нечем: ${method.name}",
+                    0, method.parameterCount,
+                )
+                method.invoke(CapabilityModule.Companion).javaClass
+            }
+
+        return binds + provides
     }
 
     @Test

@@ -2,7 +2,6 @@ package com.point.executors
 
 import com.point.core.flow.Capability
 import com.point.core.flow.DropLink
-import com.point.core.flow.Entitlements
 import com.point.core.flow.LinkedPc
 import com.point.core.flow.PcLinks
 import com.point.core.flow.PcRemoteAction
@@ -70,7 +69,7 @@ class LinkStaysWhereAskedTest {
         )
         val realizers = setOf<com.point.core.flow.Realizer>(DropLinkRealizer(NoStore, NoServer)) +
             remotePcRealizers(own, advertisedByPc, pairedPc, transport)
-        return DefaultResolver(realizers, registry, Entitlements { true })
+        return DefaultResolver(realizers, registry)
     }
 
     private class WatchfulTransport : PcTransport {

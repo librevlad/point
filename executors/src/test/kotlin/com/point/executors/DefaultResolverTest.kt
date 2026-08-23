@@ -1,6 +1,5 @@
 package com.point.executors
 
-import com.point.core.flow.Entitlements
 import com.point.core.flow.META_UNUSABLE_REASON
 import com.point.core.flow.Realizer
 import com.point.core.flow.RealizerKind
@@ -41,8 +40,7 @@ class DefaultResolverTest {
             result ?: ActionResult.Done(done)
     }
 
-    private fun resolver(realizers: Set<Realizer>, entitled: Boolean = true) =
-        DefaultResolver(realizers, registry, Entitlements { entitled })
+    private fun resolver(realizers: Set<Realizer>) = DefaultResolver(realizers, registry)
 
     private fun obj() = PointObject("x", "text/plain", ScratchRef("/x"), ObjectState(ObjectKind.TEXT))
 
@@ -117,26 +115,18 @@ class DefaultResolverTest {
         assertEquals(com.point.core.flow.NO_WAY_HERE_REASON, (result as ActionResult.Failure).reason)
     }
 
+    /**
+     * Платного контура в Point нет (#1253): `Cost.PAID` читается как «стоит денег или квоты»,
+     * а не «продаётся человеку». Дорогая способность выполняется по нажатию так же, как
+     * бесплатная, — нигде не остаётся ворот, которые некому открыть.
+     */
     @Test
-    fun `a paid capability resolves to an upsell when not entitled`() = runTest {
-        val r = resolver(setOf(realizer("ai", done = "real AI")), entitled = false)
-        val result = r.realizerFor(AiCapability.ID).perform(obj())
-        assertTrue(result is ActionResult.Failure)
-        assertTrue((result as ActionResult.Failure).recoverable)
-    }
+    fun `дорогая способность выполняется по нажатию так же, как бесплатная`() = runTest {
+        val paid = resolver(setOf(realizer("ai", done = "real AI"))).realizerFor(AiCapability.ID).perform(obj())
+        val free = resolver(setOf(realizer("save", done = "saved"))).realizerFor(SaveCapability.ID).perform(obj())
 
-    @Test
-    fun `a paid capability passes through to the real realizer when entitled`() = runTest {
-        val r = resolver(setOf(realizer("ai", done = "real AI")), entitled = true)
-        val result = r.realizerFor(AiCapability.ID).perform(obj())
-        assertEquals("real AI", (result as ActionResult.Done).message)
-    }
-
-    @Test
-    fun `a free capability is never gated`() = runTest {
-        val r = resolver(setOf(realizer("save", done = "saved")), entitled = false)
-        val result = r.realizerFor(SaveCapability.ID).perform(obj())
-        assertEquals("saved", (result as ActionResult.Done).message)
+        assertTrue("дорогая способность отказала вместо работы", paid is ActionResult.Done)
+        assertTrue("бесплатная способность отказала вместо работы", free is ActionResult.Done)
     }
 
     // ---- #684/#685: годность — часть состояния, а не проверка внутри исполнителя. ----

@@ -17,7 +17,6 @@ import com.point.core.flow.Realizer
 import com.point.core.flow.Enrichment
 import com.point.core.flow.EntityExtractor
 import com.point.core.flow.DocxWriter
-import com.point.core.flow.Entitlements
 import com.point.core.flow.EvidenceCropper
 import com.point.core.flow.Exporter
 import com.point.core.flow.FirstHeardSpeechToText
@@ -75,7 +74,6 @@ import com.point.data.DocumentTypeInvestigationRealizer
 import com.point.data.GraphRolesInvestigation
 import com.point.data.GraphRolesInvestigationRealizer
 import com.point.data.DefaultEnrichment
-import com.point.data.DefaultEntitlements
 import com.point.data.EntityInvestigation
 import com.point.data.EntityInvestigationRealizer
 import com.point.data.IdentifierInvestigation
@@ -97,9 +95,6 @@ import com.point.core.flow.HttpFiles
 import com.point.core.flow.UrlConnectionHttpFiles
 import com.point.data.OutboundFrames
 import com.point.data.BitmapOutboundFrames
-import com.point.data.CloudAtomRecognizer
-import com.point.data.LlamaParseAtomRecognizer
-import com.point.data.UnstructuredAtomRecognizer
 import com.point.data.CloudTextReader
 import com.point.data.DefaultExternalEye
 import com.point.data.MistralOcrReader
@@ -197,9 +192,6 @@ abstract class DataModule {
 
     @Binds
     abstract fun enrichment(impl: DefaultEnrichment): Enrichment
-
-    @Binds
-    abstract fun entitlements(impl: DefaultEntitlements): Entitlements
 
     @Binds
     abstract fun pdfTextExtractor(impl: PdfBoxTextExtractor): PdfTextExtractor
@@ -584,24 +576,6 @@ abstract class DataModule {
 
         @Provides
         fun aiReadiness(llm: LlmClient): AiReadiness = AiReadiness { llm.configured }
-
-        @Provides
-        fun cloudAtomRecognizers(
-            http: HttpFiles,
-            frames: OutboundFrames,
-        ): List<@JvmSuppressWildcards CloudAtomRecognizer> = listOf(
-            UnstructuredAtomRecognizer(
-                http, frames,
-                BuildConfig.UNSTRUCTURED_API_KEY,
-                BuildConfig.UNSTRUCTURED_API_URL,
-            ),
-            LlamaParseAtomRecognizer(
-                http, frames,
-                BuildConfig.LLAMA_CLOUD_API_KEY,
-                BuildConfig.LLAMA_CLOUD_BASE_URL,
-                BuildConfig.LLAMA_CLOUD_TIER,
-            ),
-        ).filter { it.configured }
 
         @Provides
         fun cloudTextReaders(

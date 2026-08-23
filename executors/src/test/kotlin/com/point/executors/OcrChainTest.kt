@@ -1,7 +1,6 @@
 package com.point.executors
 
 import com.point.core.flow.capabilities.OcrCapability
-import com.point.core.flow.Entitlements
 import com.point.core.flow.LlmClient
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.TextRecognizer
@@ -56,7 +55,6 @@ class OcrChainTest {
     private fun resolver(recognized: String, llm: TrackingLlm) = DefaultResolver(
         realizers = setOf(DeviceOcrRealizer(store, recognizer(recognized)), CloudOcrRealizer(llm, privacyAt())),
         registry = registry,
-        entitlements = Entitlements { true },
     )
 
     private val image = PointObject("id", "image/png", ScratchRef("/tmp/x.png"), ObjectState(ObjectKind.IMAGE))

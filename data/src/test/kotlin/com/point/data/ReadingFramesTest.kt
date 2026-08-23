@@ -5,7 +5,6 @@ import com.point.core.flow.AtomCodec
 import com.point.core.flow.AtomLayer
 import com.point.core.flow.Box
 import com.point.core.flow.FrameTransform
-import com.point.core.flow.META_CLOUD_ATOMS_REF
 import com.point.core.flow.META_OCR_ATOMS_REF
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
@@ -36,25 +35,6 @@ class ReadingFramesTest {
         val ref = sidecar(AtomLayer(words(heightPx = 24f)))
 
         assertEquals(24, knownTextHeightPx(image(mapOf(META_OCR_ATOMS_REF to ref))))
-    }
-
-    @Test
-    fun `свой слой предпочитается облачному`() {
-        val obj = image(
-            mapOf(
-                META_OCR_ATOMS_REF to sidecar(AtomLayer(words(heightPx = 24f))),
-                META_CLOUD_ATOMS_REF to sidecar(AtomLayer(words(heightPx = 96f))),
-            ),
-        )
-
-        assertEquals(24, knownTextHeightPx(obj))
-    }
-
-    @Test
-    fun `облачный слой годится, когда своего нет`() {
-        val ref = sidecar(AtomLayer(words(heightPx = 96f)))
-
-        assertEquals(96, knownTextHeightPx(image(mapOf(META_CLOUD_ATOMS_REF to ref))))
     }
 
     @Test

@@ -56,10 +56,6 @@ class MetadataEntityInvestigationTest {
         val offline = MetadataEntityInvestigationRealizer()
             .look(obj(mapOf(com.point.core.flow.META_OCR_ATOMS_REF to "/scratch/atoms.tsv")))
         assertEquals(setOf(Feature.HAS_WORD_LAYER), offline.features)
-
-        val cloud = MetadataEntityInvestigationRealizer()
-            .look(obj(mapOf(com.point.core.flow.META_CLOUD_ATOMS_REF to "/scratch/cloud.tsv")))
-        assertEquals(setOf(Feature.HAS_WORD_LAYER), cloud.features)
     }
 
     @Test

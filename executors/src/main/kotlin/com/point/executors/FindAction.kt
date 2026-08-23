@@ -5,7 +5,6 @@ import com.point.core.flow.AtomLayer
 import com.point.core.flow.Capability
 import com.point.core.flow.CapabilityMeta
 import com.point.core.flow.Latency
-import com.point.core.flow.META_CLOUD_ATOMS_REF
 import com.point.core.flow.META_OCR_ATOMS_REF
 import com.point.core.flow.Realizer
 import com.point.core.flow.findOnPage
@@ -61,7 +60,7 @@ class FindRealizer @Inject constructor() : Realizer {
         }
 
     private fun atomLayer(input: PointObject): AtomLayer? =
-        (input.metadata[META_OCR_ATOMS_REF] ?: input.metadata[META_CLOUD_ATOMS_REF])?.let { ref ->
+        input.metadata[META_OCR_ATOMS_REF]?.let { ref ->
             runCatching { AtomCodec.decode(File(ref).readText()) }.getOrNull()
         }
 }

@@ -1,8 +1,6 @@
 package com.point.executors
 
 import com.point.core.flow.CapabilityRegistry
-import com.point.core.flow.Cost
-import com.point.core.flow.Entitlements
 import com.point.core.flow.Realizer
 import com.point.core.flow.RealizerKind
 import com.point.core.flow.Resolver
@@ -17,7 +15,6 @@ import javax.inject.Inject
 class DefaultResolver @Inject constructor(
     realizers: Set<@JvmSuppressWildcards Realizer>,
     private val registry: CapabilityRegistry,
-    private val entitlements: Entitlements,
 
     private val policy: com.point.core.flow.ExecutionPolicy = com.point.core.flow.DefaultExecutionPolicy(),
 ) : Resolver {
@@ -34,7 +31,6 @@ class DefaultResolver @Inject constructor(
         realizerFor(capabilityId, ANY_OBJECT)
 
     override fun realizerFor(capabilityId: CapabilityId, state: com.point.core.model.ObjectState): Realizer {
-        if (isPaywalled(capabilityId)) return PaywallRealizer(capabilityId)
         // Нет исполнителя — честный отказ словами, а не падение с идентификатором внутри
         // (#857): `FlowViewModel` показывает человеку `e.message`, и туда уезжало
         // `No realizer for capability=…`.
@@ -65,15 +61,6 @@ class DefaultResolver @Inject constructor(
         com.point.core.flow.sendsOutward(realizer) { id ->
             runCatching { registry.byId(id).meta.network }.getOrDefault(false)
         }
-
-    private fun isPaywalled(capabilityId: CapabilityId): Boolean =
-        !entitlements.allowsPaid() &&
-            runCatching { registry.byId(capabilityId).meta.cost == Cost.PAID }.getOrDefault(false)
-}
-
-private class PaywallRealizer(override val capabilityId: CapabilityId) : Realizer {
-    override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
-        ActionResult.Failure("Это Pro-функция — доступна по подписке", recoverable = true)
 }
 
 /**

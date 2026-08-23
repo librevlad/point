@@ -4,7 +4,6 @@ import android.graphics.Bitmap
 import android.util.Log
 import com.point.core.flow.AtomCodec
 import com.point.core.flow.FrameUpscaler
-import com.point.core.flow.META_CLOUD_ATOMS_REF
 import com.point.core.flow.META_OCR_ATOMS_REF
 import com.point.core.flow.ReadyFrame
 import com.point.core.flow.preparedForReading
@@ -26,6 +25,6 @@ internal fun preparedBitmap(bitmap: Bitmap, textHeightPx: Int?): ReadyFrame<Bitm
     }
 
 internal fun knownTextHeightPx(obj: PointObject): Int? =
-    (obj.metadata[META_OCR_ATOMS_REF] ?: obj.metadata[META_CLOUD_ATOMS_REF])
+    obj.metadata[META_OCR_ATOMS_REF]
         ?.let { path -> runCatching { AtomCodec.decode(File(path).readText()) }.getOrNull() }
         ?.let(::typicalTextHeightPx)

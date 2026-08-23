@@ -76,7 +76,6 @@
 6 data/src/test/kotlin/com/point/data/DefaultExternalEyeTest.kt
 3 data/src/test/kotlin/com/point/data/EntityInvestigationTest.kt
 1 data/src/test/kotlin/com/point/data/EntityObjectsTest.kt
-5 data/src/test/kotlin/com/point/data/FallbackAtomRecognizerTest.kt
 2 data/src/test/kotlin/com/point/data/FileFlowSnapshotStoreTest.kt
 7 data/src/test/kotlin/com/point/data/FileHistoryStoreTest.kt
 1 core/flow/src/test/kotlin/com/point/core/flow/GeminiLlmClientTest.kt
@@ -123,7 +122,7 @@
 4 executors/src/test/kotlin/com/point/executors/ExcelLayoutTest.kt
 1 executors/src/test/kotlin/com/point/executors/ExternalEyeOcrTest.kt
 1 executors/src/test/kotlin/com/point/executors/ExtractedObjectActionsTest.kt
-7 executors/src/test/kotlin/com/point/executors/FindActionTest.kt
+6 executors/src/test/kotlin/com/point/executors/FindActionTest.kt
 3 executors/src/test/kotlin/com/point/executors/FixErrorsRealizerTest.kt
 4 executors/src/test/kotlin/com/point/executors/HumanSendNameTest.kt
 1 executors/src/test/kotlin/com/point/executors/LongWorkSaysWhatItDoesTest.kt
