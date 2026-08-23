@@ -5,19 +5,14 @@ import com.point.core.flow.CapabilityMeta
 import com.point.core.flow.Cost
 import com.point.core.flow.KnownCapabilities
 import com.point.core.flow.Latency
-import com.point.core.flow.META_OCR_TEXT_REF
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.PdfRasterizer
 import com.point.core.flow.Realizer
 import com.point.core.flow.TextRecognizer
-import com.point.core.flow.investigationKey
-import com.point.core.flow.InvestigationState
-import com.point.core.flow.reportStage
 import com.point.core.model.ActionResult
 import com.point.core.model.ActionYield
 import com.point.core.model.CapabilityId
 import com.point.core.model.Feature
-import com.point.core.model.Findings
 import com.point.core.model.Intent
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
@@ -72,32 +67,14 @@ class ReadDocumentRealizer @Inject constructor(
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
             runCatching {
-                reportStage("Разбираю PDF на страницы")
-                val dir = rasterizer.rasterize(input)
-                val pages = File(dir.value).walkTopDown().filter { it.isFile }.sortedBy { it.name }.toList()
-                if (pages.isEmpty()) {
+                val pages = readPagesWithEyes(input, rasterizer, recognizer)
+                if (pages.total == 0) {
                     return@withContext ActionResult.Failure(
                         "В документе не нашлось ни одной страницы",
                         recoverable = true,
                     )
                 }
-
-                val read = StringBuilder()
-                var readable = 0
-                pages.forEachIndexed { index, page ->
-                    reportStage("Читаю страницу ${index + 1} из ${pages.size}")
-                    val text = runCatching {
-                        recognizer.recognize(
-                            input.copy(mime = "image/png", uri = com.point.core.model.ScratchRef(page.absolutePath)),
-                        )
-                    }.getOrDefault("")
-                    if (text.isNotBlank()) {
-                        readable++
-                        if (read.isNotEmpty()) read.append("\n\n")
-                        read.append(text.trim())
-                    }
-                }
-                if (readable == 0) {
+                if (pages.nothing) {
                     return@withContext ActionResult.Failure(
                         "Не разобрал текст ни на одной странице",
                         recoverable = true,
@@ -105,21 +82,8 @@ class ReadDocumentRealizer @Inject constructor(
                 }
 
                 val ref = store.newScratchFile("txt")
-                File(ref.value).writeText(read.toString())
-                ActionResult.Done(
-                    "Прочитано страниц: $readable из ${pages.size} — текст у документа",
-                    Findings(
-                        features = setOf(Feature.HAS_TEXT),
-                        metadata = mapOf(
-                            META_OCR_TEXT_REF to ref.value,
-                            investigationKey(KnownCapabilities.IMAGE_TEXT) to readableOutcome(readable, pages.size),
-                        ),
-                    ),
-                )
+                File(ref.value).writeText(pages.text)
+                ActionResult.Done(pages.said(), pages.knowledge(ref))
             }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось прочитать документ", recoverable = true) }
         }
-
-    /** Прочитана часть страниц — вопрос не закрывается находкой целиком (ADR-0001 §9). */
-    private fun readableOutcome(readable: Int, total: Int): String =
-        if (readable == total) InvestigationState.FOUND.wire else InvestigationState.INSUFFICIENTLY_INVESTIGATED.wire
 }

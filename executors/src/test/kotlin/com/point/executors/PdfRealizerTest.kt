@@ -3,6 +3,7 @@ package com.point.executors
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.PdfTextExtractor
 import com.point.core.model.ActionResult
+import com.point.core.model.Feature
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
@@ -42,20 +43,25 @@ class PdfRealizerTest {
         state = ObjectState(ObjectKind.PDF),
     )
 
+    /** Текст PDF — знание самого документа, а не второй объект рядом с ним (#995). */
     @Test
-    fun `pdf with text extracts to a TEXT object`() = runTest {
-        val realizer = PdfRealizer(store, pdfExtractor("Привет из PDF"), NoPages)
+    fun `pdf with text hands the text to the document itself`() = runTest {
+        val realizer = PdfRealizer(store, pdfExtractor("Привет из PDF"), NoPages, NoEyes)
         val result = realizer.perform(pdfObject())
 
-        assertTrue(result is ActionResult.Success)
-        val out = (result as ActionResult.Success).result
-        assertEquals(ObjectKind.TEXT, out.type)
-        assertEquals("Привет из PDF", File(out.uri.value).readText())
+        assertTrue("вышло: $result", result is ActionResult.Done)
+        val found = (result as ActionResult.Done).findings
+        assertTrue(Feature.HAS_TEXT in found!!.features)
+        assertEquals(
+            "Привет из PDF",
+            File(found.metadata[com.point.core.flow.META_OCR_TEXT_REF]!!).readText(),
+        )
     }
 
+    /** Страниц нет вовсе — отрисовать нечего, и это честный сбой операции. */
     @Test
-    fun `scanned pdf with no text is a recoverable failure`() = runTest {
-        val realizer = PdfRealizer(store, pdfExtractor("   "), NoPages)
+    fun `scanned pdf whose pages do not render is a recoverable failure`() = runTest {
+        val realizer = PdfRealizer(store, pdfExtractor("   "), NoPages, NoEyes)
         val result = realizer.perform(pdfObject())
 
         assertTrue(result is ActionResult.Failure)
@@ -65,7 +71,7 @@ class PdfRealizerTest {
     /** Офисный файл этому исполнителю не по зубам — и он честно за него не берётся (#403). */
     @Test
     fun `офисный документ телефон в PDF не превращает`() {
-        val realizer = PdfRealizer(store, pdfExtractor(""), NoPages)
+        val realizer = PdfRealizer(store, pdfExtractor(""), NoPages, NoEyes)
 
         assertTrue(realizer.accepts(ObjectState(ObjectKind.PDF)))
         assertTrue(
@@ -76,7 +82,7 @@ class PdfRealizerTest {
 
     @Test
     fun `извлечение текста из PDF называет себя`() = runTest {
-        val realizer = PdfRealizer(store, pdfExtractor("Привет из PDF"), NoPages)
+        val realizer = PdfRealizer(store, pdfExtractor("Привет из PDF"), NoPages, NoEyes)
 
         val heard = stagesHeard { realizer.perform(pdfObject()) }
 

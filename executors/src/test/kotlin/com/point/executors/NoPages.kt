@@ -1,6 +1,7 @@
 package com.point.executors
 
 import com.point.core.flow.PdfRasterizer
+import com.point.core.flow.TextRecognizer
 import com.point.core.model.PointObject
 import com.point.core.model.ScratchRef
 
@@ -10,4 +11,9 @@ import com.point.core.model.ScratchRef
 object NoPages : PdfRasterizer {
     override suspend fun rasterize(obj: PointObject) = ScratchRef("")
     override suspend fun rasterizeFirstPage(obj: PointObject): ScratchRef? = null
+}
+
+/** Глаза, которым нечего читать: страниц не отрисовалось, читать нечего (#995). */
+object NoEyes : TextRecognizer {
+    override suspend fun recognize(obj: PointObject) = ""
 }

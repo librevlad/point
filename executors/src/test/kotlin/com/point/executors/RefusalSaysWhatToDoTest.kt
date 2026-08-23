@@ -12,21 +12,25 @@ class RefusalSaysWhatToDoTest {
     private val image = ObjectState(ObjectKind.IMAGE)
     private val pdf = ObjectState(ObjectKind.PDF)
 
+    /**
+     * Совета «разложите на страницы, потом распознайте» больше нет (#1257, #995): страницы
+     * читает само действие, и отказ остаётся только там, где читать оказалось нечего.
+     */
     @Test
-    fun `отказ у PDF без текста зовёт действия их же именами`() {
+    fun `отказ у PDF без текста не отсылает человека в два действия`() {
+        val said = PdfRealizer.NO_TEXT_ANYWHERE
 
-        val said = PdfRealizer.NO_TEXT_LAYER
-
-        assertTrue(said, OcrCapability().label(image) in said)
-        assertTrue(said, PagesCapability().label(pdf) in said)
+        assertTrue(said, PagesCapability().label(pdf) !in said)
+        assertTrue(said, OcrCapability().label(image) !in said)
+        assertTrue(said, "ни в файле, ни на страницах" in said)
     }
 
     @Test
     fun `отказ у PDF без текста говорит, что случилось со страницами`() {
-        val said = PdfRealizer.NO_TEXT_LAYER
+        val said = PdfRealizer.NO_TEXT_ANYWHERE
 
-        assertTrue(said, "нет текста" in said)
-        assertTrue("это «не с этим объектом», а не «Point сломался»", "страницы сняты картинкой" in said)
+        assertTrue(said, "Текста не нашлось" in said)
+        assertTrue("это «не с этим объектом», а не «Point сломался»", "страницы пустые" in said)
     }
 
     @Test
@@ -59,7 +63,8 @@ class RefusalSaysWhatToDoTest {
     fun `каждый из этих отказов говорит и что случилось, и что дальше`() {
 
         listOf(
-            PdfRealizer.NO_TEXT_LAYER,
+            PdfRealizer.NO_TEXT_ANYWHERE,
+            PdfRealizer.PAGES_FAILED,
             PdfRealizer.NOT_THIS_OBJECT,
             FallbackRealizer.NOBODY_TO_DO_IT,
             OpenCvScanRealizer.SCAN_FAILED,

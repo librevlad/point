@@ -57,16 +57,39 @@ class PcPdfTextTest {
     private fun pdfObject(file: File, state: ObjectState = ObjectState(ObjectKind.PDF)) =
         PointObject("pdf", "application/pdf", ScratchRef(file.absolutePath), state)
 
+    /** Текст ложится знанием на сам документ — второго объекта не появляется (#995). */
     @Test
-    fun `компьютер извлекает текст из PDF — тот же результат, что на телефоне`() = runTest {
+    fun `компьютер отдаёт текст самому документу — тот же результат, что на телефоне`() = runTest {
         val file = pdfWithText("Invoice 4512 total 320")
 
         val result = PcPdfTextRealizer(PdfBoxText()).perform(pdfObject(file), null)
 
-        assertTrue("ожидался объект с текстом, вышло: $result", result is ActionResult.Success)
-        val produced = (result as ActionResult.Success).result
-        assertEquals(ObjectKind.TEXT, produced.type)
-        assertTrue(File(produced.uri.value).readText().contains("Invoice 4512 total 320"))
+        assertTrue("ожидалось знание документу, вышло: $result", result is ActionResult.Done)
+        val found = (result as ActionResult.Done).findings
+        assertTrue(Feature.HAS_TEXT in found!!.features)
+        val kept = found.metadata[com.point.core.flow.META_OCR_TEXT_REF]!!
+        assertTrue(File(kept).readText().contains("Invoice 4512 total 320"))
+    }
+
+    /**
+     * Слой, который нельзя прочитать, текстовым слоем не является (#933, #995): такой PDF
+     * метится сканом при приёме, и человеку рисуется дверь «Прочитать документ».
+     */
+    @Test
+    fun `PDF с подменённой раскладкой шрифта тоже метится сканом`() {
+        val inbox = Inbox(temp.newFolder("раскладка"))
+
+        val mangled = inbox.addFile(pdfWithText(GARBLED).absolutePath)
+
+        assertTrue("мусор из слоя снова сойдёт за текст", mangled.obj.state.has(Feature.IS_IMAGE_PDF))
+    }
+
+    /** Совет называет шаг, который у документа есть (#1257). */
+    @Test
+    fun `отказ зовёт чтение документа, а не два действия`() {
+        val said = PcPdfTextRealizer.NO_READABLE_LAYER
+
+        assertTrue(said, PcReadDocumentCapability().label(ObjectState(ObjectKind.PDF)) in said)
     }
 
     @Test
@@ -99,5 +122,13 @@ class PcPdfTextTest {
         val result = PcPdfTextRealizer(PdfBoxText()).perform(pdfObject(broken), null)
 
         assertTrue(result is ActionResult.Failure)
+    }
+
+    private companion object {
+
+        /** Слой украинского бухгалтерского PDF с подменённой раскладкой шрифта (#933). */
+        const val GARBLED =
+            "ToeapucrBo 3 o6MexeHop eignoeiganbHicrlo BaxraxoorpxMyBaq cKnaAaHHR " +
+                "flocraqanbHHK e.qPnov Eniqgxtp 3aMoBHHK PaxyHok-cbakrypa"
     }
 }

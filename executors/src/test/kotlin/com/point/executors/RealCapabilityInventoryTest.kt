@@ -203,7 +203,10 @@ class RealCapabilityInventoryTest {
         // следует «ничего не вернёт», — а человеку возвращается понятое. Эти способности
         // говорят о своём выходе сами, и список тут именно для того, чтобы их было видно.
         assertEquals(
-            listOf("drop-link", "fix-errors", "fix-errors-stronger", "ocr-cloud", "read-document", "transcribe", "understand"),
+            listOf(
+                "drop-link", "fix-errors", "fix-errors-stronger", "ocr-cloud", "office", "pdf",
+                "read-document", "transcribe", "understand",
+            ),
             reshaped.map { it.value }.sorted(),
         )
     }

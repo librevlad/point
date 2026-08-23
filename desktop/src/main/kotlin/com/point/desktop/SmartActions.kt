@@ -179,6 +179,11 @@ class PcQrRealizer(private val outbox: Outbox) : Realizer {
     }
 }
 
+/**
+ * Текст офисного документа на компьютере: знание самого документа (#995) и настоящая причина
+ * отказа (#997) — современная .xlsx больше не слышит про старые .doc и .xls, а таблицу читает
+ * свой читатель, которому не нужен общий словарь строк.
+ */
 class PcOfficeTextRealizer(
     private val extractor: com.point.core.flow.OfficeTextExtractor,
     private val outbox: Outbox,
@@ -190,17 +195,16 @@ class PcOfficeTextRealizer(
         if (text.isBlank()) {
 
             return ActionResult.Failure(
-                "В этом документе текста не нашлось — старые .doc и .xls компьютер не открывает",
+                com.point.core.flow.officeTextMissingReason(input.metadata["name"], input.mime),
                 recoverable = false,
             )
         }
         val file = File.createTempFile("pc-office-", ".txt").apply { writeText(text) }
-        ActionResult.Success(
-            com.point.core.model.ResultObject(
-                type = ObjectKind.TEXT,
-                mime = "text/plain",
-                uri = ScratchRef(file.absolutePath),
-                metadata = mapOf("name" to "Текст документа"),
+        ActionResult.Done(
+            PcPdfTextRealizer.PC_TEXT_IS_WITH_DOCUMENT,
+            com.point.core.model.Findings(
+                features = setOf(com.point.core.model.Feature.HAS_TEXT),
+                metadata = mapOf(com.point.core.flow.META_OCR_TEXT_REF to file.absolutePath),
             ),
         )
     }.getOrElse { ActionResult.Failure("Текст не достался — документ повреждён или это не офисный файл", recoverable = true) }

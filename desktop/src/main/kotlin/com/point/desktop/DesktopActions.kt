@@ -287,6 +287,11 @@ class PcToPhoneRealizer(
  * Текст из PDF на компьютере (#631): та же способность и те же слова, что на телефоне.
  * Скан сюда не доходит — его дверь не рисуется вовсе (`IS_IMAGE_PDF` ставится при приёме),
  * и «Извлечь текст» больше не заканчивается пустотой.
+ *
+ * Текст ложится знанием на сам документ (#995): второго объекта рядом не появляется, и
+ * обещание способности («текст документа») на компьютере значит ровно то же, что на телефоне.
+ * Документ с подменённой раскладкой шрифта (#933) сюда тоже не доходит: слой, который нельзя
+ * прочитать, текстовым слоем не является, и такой PDF метится сканом ещё при приёме.
  */
 class PcPdfTextRealizer(
     private val pdf: PdfText,
@@ -300,56 +305,35 @@ class PcPdfTextRealizer(
         val source = File(input.uri.value)
         val text = pdf.of(source)
             ?: return ActionResult.Failure("Компьютер не смог открыть этот PDF", recoverable = true)
-        if (text.isBlank()) {
-            return ActionResult.Failure("В этом PDF нет текстового слоя — это снимки страниц", recoverable = false)
+        if (text.isBlank() || com.point.core.flow.ReadableText.unreadable(text)) {
+            return ActionResult.Failure(NO_READABLE_LAYER, recoverable = false)
         }
 
-        // Слой бывает и нечитаемым: у документа своя раскладка шрифта, и кириллица лежит под
-        // латинскими кодами. Раньше этот мусор становился текстом объекта, и над ним писалось
-        // «ПОНЯЛ» с телефоном и датой, выведенными из бессмыслицы (#933). Так устроены очень
-        // многие украинские бухгалтерские PDF — ровно тот корпус, ради которого Point и нужен.
-        if (com.point.core.flow.ReadableText.unreadable(text)) {
-            val page = runCatching { renderFirstPage(source) }.getOrNull()
-                ?: return ActionResult.Failure(UNREADABLE_LAYER, recoverable = true)
-            return ActionResult.Success(
-                com.point.core.model.ResultObject(
-                    type = ObjectKind.IMAGE,
-                    mime = "image/png",
-                    uri = com.point.core.model.ScratchRef(page.absolutePath),
-                    metadata = mapOf("name" to page.name),
-                ),
-            )
-        }
-        val out = File(source.parentFile, source.nameWithoutExtension + ".txt")
+        val out = File(source.parentFile, source.nameWithoutExtension + " — текст.txt")
         return runCatching {
             out.writeText(text)
-            ActionResult.Success(
-                com.point.core.model.ResultObject(
-                    type = ObjectKind.TEXT,
-                    mime = "text/plain",
-                    uri = com.point.core.model.ScratchRef(out.absolutePath),
-                    metadata = mapOf("name" to out.name),
+            ActionResult.Done(
+                PC_TEXT_IS_WITH_DOCUMENT,
+                com.point.core.model.Findings(
+                    features = setOf(com.point.core.model.Feature.HAS_TEXT),
+                    metadata = mapOf(com.point.core.flow.META_OCR_TEXT_REF to out.absolutePath),
                 ),
             )
         }.getOrElse { ActionResult.Failure("Текст не сохранился — проверьте, что на диске есть место", recoverable = true) }
     }
 
-    /** Первая страница картинкой — её и прочитает распознавание, как любой другой кадр. */
-    private fun renderFirstPage(source: File): File {
-        val out = File(source.parentFile, source.nameWithoutExtension + " — страница.png")
-        org.apache.pdfbox.pdmodel.PDDocument.load(source).use { document ->
-            val image = org.apache.pdfbox.rendering.PDFRenderer(document).renderImageWithDPI(0, PAGE_DPI)
-            javax.imageio.ImageIO.write(image, "png", out)
-        }
-        return out
-    }
+    internal companion object {
 
-    private companion object {
-        const val PAGE_DPI = 200f
+        /** Текст остался у документа, а не ушёл в отдельный объект (#995). */
+        const val PC_TEXT_IS_WITH_DOCUMENT = "Текст прочитан — он у самого документа"
 
-        const val UNREADABLE_LAYER =
-            "Текст в этом PDF нечитаем — у документа своя раскладка шрифта. Прочитать страницу " +
-                "снимком не вышло"
+        /**
+         * Совет называет тот шаг, который здесь есть (#1257): «Прочитать документ» читает
+         * страницы снимком. Прежний совет вёл в два действия, которых у документа нет.
+         */
+        const val NO_READABLE_LAYER =
+            "Из файла этот текст не достаётся — страницы сняты картинкой или у документа своя " +
+                "раскладка шрифта. Прочитайте его действием «Прочитать документ»"
     }
 }
 
