@@ -9,7 +9,6 @@ import com.point.core.flow.capabilities.sharedCapabilities
 import com.point.core.flow.decodePcCaps
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
-import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -107,20 +106,28 @@ class OneButtonPerCapabilityTest {
             TranslateCapability(aiKeysReady),
         ) + sharedCapabilities()
 
-        /** Корень репозитория: снимок лежит у того, кто объявление пишет, — в `:desktop`. */
-        val repo: File = generateSequence(File(".").absoluteFile) { it.parentFile }
-            .first { File(it, "settings.gradle.kts").isFile }
+        /** Снимок ответа компьютера; кладёт его на classpath сборка `:executors` (#1094). */
+        const val PC_CAPS_SNAPSHOT = "phone-facing-actions.txt"
 
         /**
-         * Что компьютер объявляет телефону — дословно то, что `:desktop` шлёт по проводу,
-         * снятое в файл (#1094). Рукописная копия здесь синхронизировалась руками и к боевому
-         * набору отношения не имела; свежесть снимка сторожит PhoneFacingTest в `:desktop`.
+         * Что компьютер отвечает телефону на вопрос «что ты умеешь» — копия того самого
+         * ответа, снятая в файл (#1094). Рукописный список здесь синхронизировался руками и к
+         * боевому объявлению отношения не имел. Копию сторожит `:desktop` (PhoneFacingTest
+         * сверяет её с живым ответом и отказывается стареть молча), а сюда файл кладёт сборка:
+         * читается он с classpath, а не по пути от рабочего каталога, потому что пропавший
+         * файл обязан уронить тест словами, а не оставить телефону пустое объявление. Чтение
+         * отложено до самого теста — из общей инициализации падение доходит до человека одним
+         * именем класса, без единого слова о том, чего не хватило.
          */
-        val advertisedByPc: List<PcRemoteAction> =
-            decodePcCaps(File(repo, "desktop/src/test/resources/phone-facing-actions.txt").readText())
+        val advertisedByPc: List<PcRemoteAction> by lazy {
+            decodePcCaps(
+                OneButtonPerCapabilityTest::class.java.getResource("/$PC_CAPS_SNAPSHOT")?.readText()
+                    ?: error("снимка $PC_CAPS_SNAPSHOT нет на classpath — сверять телефону не с чем"),
+            )
+        }
 
-        val transcribeOnPc = advertisedByPc.first { it.id == TranscribeCapability.ID.value }
-        val printOnPc = advertisedByPc.first { it.id == "pc-print" }
+        val transcribeOnPc by lazy { advertisedByPc.first { it.id == TranscribeCapability.ID.value } }
+        val printOnPc by lazy { advertisedByPc.first { it.id == "pc-print" } }
 
         object NoTransport : com.point.core.flow.PcTransport {
             override suspend fun send(

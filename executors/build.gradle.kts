@@ -17,6 +17,11 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+
+    // Объявление компьютера телефону снято в файл там, где оно и рождается, — в `:desktop`
+    // (#1094). Телефонные тесты берут его с classpath: путь от рабочего каталога зависел от
+    // того, откуда запустили, и пропажа файла читалась бы как «компьютер ничего не умеет».
+    sourceSets.getByName("test").resources.srcDir(rootProject.file("desktop/src/test/resources"))
 }
 
 kotlin {

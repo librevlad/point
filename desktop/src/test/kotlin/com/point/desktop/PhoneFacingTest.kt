@@ -1,11 +1,13 @@
 package com.point.desktop
 
+import com.point.core.flow.RelayRpc
 import com.point.core.flow.advertisedActions
-import com.point.core.flow.encodePcCaps
-import java.io.File
+import com.point.core.flow.decodePcCaps
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 
 /**
  * #628, решение владельца — «одна способность — одна кнопка».
@@ -21,7 +23,12 @@ import org.junit.Test
  */
 class PhoneFacingTest {
 
-    /** То самое объявление, что компьютер шлёт телефону (Main), а не собранное заново рядом. */
+    @get:Rule val tmp = TemporaryFolder()
+
+    /**
+     * То самое объявление, что компьютер шлёт телефону, а не собранное заново рядом: Main
+     * зовёт `phoneFacingActions(registry.all())`, а в реестре окна лежит ровно этот набор.
+     */
     private val advertised = phoneFacingActions(desktopCapabilities())
 
     @Test fun `умение, общее с телефоном, едет своим именем — без приписки об устройстве`() {
@@ -67,22 +74,41 @@ class PhoneFacingTest {
     }
 
     /**
-     * Телефон в своих тестах читает объявление компьютера из снимка (`:executors`,
+     * Телефон в своих тестах читает объявление компьютера из файла (`:executors`,
      * OneButtonPerCapabilityTest), а не переписывает его от руки (#1094): рукописная копия
-     * синхронизировалась вручную и к боевому набору отношения не имела. Снимок — тот самый
-     * провод, которым объявление едет телефону; здесь он сверяется с живым.
+     * синхронизировалась вручную и к боевому набору отношения не имела.
+     *
+     * Файл — не сам провод, а копия ответа в дереве, и живёт она ровно этим сторожем: здесь
+     * телефон спрашивает «что ты умеешь» тем же вызовом, что и по сети (`RelayRequests`,
+     * RelayRpc.CAPS), и с телом ответа сверяется разобранное объявление — то самое, что
+     * телефон получает по сети и что его тесты берут из копии (перевод строки в файле
+     * остаётся делом git). Изменится ответ, а копия нет — падает этот тест и печатает текст,
+     * которым копию переписать.
      */
-    @Test fun `снимок объявления для тестов телефона не отстаёт от живого`() {
+    @Test fun `копия ответа «что ты умеешь» не отстаёт от того, что компьютер отвечает`() {
 
-        val live = encodePcCaps(advertised)
-        val kept = File(SNAPSHOT).takeIf { it.isFile }?.readLines()?.joinToString("\n").orEmpty()
+        val onWire = String(capsReply(), Charsets.UTF_8)
+        val kept = javaClass.getResource("/$SNAPSHOT")?.readText()
+            ?: throw AssertionError(
+                "копии $SNAPSHOT_IN_TREE нет — телефонным тестам нечего читать; заведите её этим текстом:\n$onWire",
+            )
 
         assertEquals(
-            "объявление компьютера изменилось — перепишите $SNAPSHOT этим текстом:\n$live",
-            live,
-            kept,
+            "ответ компьютера изменился — перепишите $SNAPSHOT_IN_TREE этим текстом:\n$onWire",
+            decodePcCaps(onWire),
+            decodePcCaps(kept),
         )
     }
+
+    /** Ответ компьютера телефону на вопрос «что ты умеешь» — тем же путём, что и по сети. */
+    private fun capsReply(): ByteArray = RelayRequests(
+        remoteActions = { advertised },
+        outbox = Outbox(tmp.newFolder()),
+        onPhoneCaps = { },
+        clipboardGet = { null },
+        clipboardSet = { },
+        onObject = { _, _, _, _, _ -> null },
+    ).answer(RelayRpc.CAPS, emptyMap(), ByteArray(0))!!.body
 
     private companion object {
 
@@ -92,7 +118,10 @@ class PhoneFacingTest {
         /** Вторая форма того же места — из списка ушла (#1094). */
         const val SHORT_FORM = "ПК"
 
-        /** Объявление компьютера по проводу, снятое в файл для тестов телефона. */
-        const val SNAPSHOT = "src/test/resources/phone-facing-actions.txt"
+        /** Копия ответа на classpath: её же сборка `:executors` кладёт тестам телефона. */
+        const val SNAPSHOT = "phone-facing-actions.txt"
+
+        /** Где эта копия лежит в дереве — чтобы сообщение сказало, что именно переписать. */
+        const val SNAPSHOT_IN_TREE = "desktop/src/test/resources/$SNAPSHOT"
     }
 }
