@@ -4,6 +4,9 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.point.desktop.PcConfig
+import com.point.desktop.rightClickHolds
+import com.point.desktop.shellCommandFor
+import java.io.File
 import kotlinx.coroutines.CompletableDeferred
 import org.junit.Rule
 import org.junit.Test
@@ -145,5 +148,35 @@ class RightClickSaysWhatHoldsTest {
         compose.waitForIdle()
 
         compose.onNodeWithText(rightClickLine(on = false, trouble = true)).assertExists()
+    }
+
+    /**
+     * Тот же экран, но правду о пункте считает настоящее правило, а не подставной ответ (#1082).
+     *
+     * Пункт в реестре стоит и ведёт в эту установку, ярлык «Отправить → Point» лежит на диске —
+     * а куда он ведёт, Windows не ответила: читает его PowerShell через COM, и этот ответ может
+     * не прийти. Раньше молчание Windows шло на экран словами «Не удалось включить»: человек с
+     * исправной установкой читал про сбой записи, которого не было.
+     */
+    @Test
+    fun `молчание Windows про ярлык не становится на экране сбоем записи`() {
+        val exe = File("C:/Program Files/Point/Point.exe")
+        show(
+            enabled,
+            holds = { on ->
+                rightClickHolds(
+                    on = on,
+                    exe = exe,
+                    menuPresent = true,
+                    command = shellCommandFor(exe),
+                    linkPresent = true,
+                    linkTarget = null,
+                )
+            },
+        )
+
+        compose.onNodeWithText(rightClickLine(on = true, trouble = true)).assertDoesNotExist()
+        compose.onNodeWithText(rightClickLine(on = true, trouble = false)).assertDoesNotExist()
+        compose.onNodeWithText(rightClickLine(on = true, trouble = null)).assertExists()
     }
 }
