@@ -27,6 +27,7 @@ fun partialReadMessage(read: Int, total: Int): String =
         "Нажмите «Понять» ещё раз — прочитаю дальше."
 
 // U+00A0 (неразрывный пробел) — та же конвенция, что у core:ui grouped():
-// большое число не переносится по строкам посреди себя.
-private fun grouped(n: Int): String =
+// большое число не переносится по строкам посреди себя. Одно на все итоги, где называется
+// число знаков (#1023: «проверено начало — N из M символов»).
+internal fun grouped(n: Int): String =
     n.toString().reversed().chunked(3).joinToString(" ").reversed()

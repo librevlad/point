@@ -117,6 +117,9 @@ class FixErrorsTest {
         assertTrue("модель не знает, чем ответить, если править нечего", FIX_NOTHING in prompt)
     }
 
+    /** Итог про текст, проверенный целиком. */
+    private fun whole(fixed: FixedText) = fixedTextMessage(fixed, checked = fixed.text.length, total = fixed.text.length)
+
     @Test
     fun `правки ложатся в текст, а дельта — то, что легло`() {
         val answer = "Превет = Привет\nЭт = Это\nтектс = текст\nашибками = ошибками\nопичатками = опечатками"
@@ -125,7 +128,7 @@ class FixErrorsTest {
 
         assertEquals(typedFixed, fixed.text)
         assertEquals(5, fixed.fixes.size)
-        val said = fixedTextMessage(fixed.fixes)
+        val said = whole(fixed)
         fixed.fixes.forEach { fix ->
             assertTrue("в итоге не видно, что было: $said", fix.was in said)
             assertTrue("в итоге не видно, что стало: $said", fix.now in said)
@@ -145,18 +148,122 @@ class FixErrorsTest {
     }
 
     @Test
-    fun `чего в тексте нет — не правится и в дельту не попадает`() {
+    fun `чего в тексте нет — не правится, но и не молчит — это предложенная правка, которая не легла`() {
         val fixed = fixText(typed, "Првет = Привет\n9 = что-то\nпросто проза\n= пусто\nЭт = Эт")
 
         assertEquals(typed, fixed.text)
         assertTrue("дельта выдумана: ${fixed.fixes}", fixed.fixes.isEmpty())
+        assertTrue("пара, которая не легла, обязана быть видна: ${fixed.missed}", TextFix("Првет", "Привет", places = 0) in fixed.missed)
+        assertTrue("«то же самое» — не правка и не срыв", fixed.missed.none { it.was == "Эт" })
+        assertTrue("проза и пустота — не пары", fixed.missed.none { it.was.isEmpty() || "проза" in it.was })
+    }
+
+    @Test
+    fun `кавычки из образца запроса вокруг сторон или всей строки правку не срывают`() {
+        val quoted = "«Превет» = «Привет»\n«Эт = Это»\n\"тектс\" = \"текст\"\n«ашибками» = ошибками"
+
+        val fixed = fixText(typed, quoted)
+
+        assertEquals(4, fixed.fixes.size)
+        assertTrue("ни одна пара не должна сорваться из-за кавычек: ${fixed.missed}", fixed.missed.isEmpty())
+        assertTrue(fixed.text.startsWith("Привет, Иван! Это тестовый текст с пятью ошибками"))
+    }
+
+    @Test
+    fun `фрагмент, стоящий в тексте в кавычках, правится внутри них`() {
+        val after = "Он сказал «привет» и ушёл."
+
+        val fixed = fixText("Он сказал «превет» и ушёл.", "«превет» = «привет»")
+
+        assertEquals(after, fixed.text)
+    }
+
+    @Test
+    fun `счёт в итоге — по местам, где правка легла, а не по парам`() {
+        val fixed = fixText("Эт раз, эт два, эт три.", "эт = это")
+
+        assertEquals(1, fixed.fixes.size)
+        assertEquals(2, fixed.fixes.single().places)
+        val said = whole(fixed)
+        assertTrue("итог обязан считать места: $said", "Исправлено: 2" in said)
+        assertTrue("повтор обязан быть виден у пары: $said", "×2" in said)
+    }
+
+    @Test
+    fun `перечисление правок ограничено, остальное названо числом`() {
+        val words = (1..30).map { "слово$it" }
+        val text = words.joinToString(" ")
+        val answer = words.joinToString("\n") { "$it = ${it.replace("слово", "слова")}" }
+
+        val fixed = fixText(text, answer)
+        val said = whole(fixed)
+
+        assertEquals(30, fixed.fixes.size)
+        assertTrue("итог разросся без предела: ${said.length}", said.length < 260)
+        assertTrue("остаток обязан быть назван числом: $said", Regex("и ещё \\d+").containsMatchIn(said))
+        assertTrue("счёт — по всем правкам, а не по показанным: $said", "Исправлено: 30" in said)
+    }
+
+    @Test
+    fun `предложенные, но не легшие правки названы числом рядом с легшими`() {
+        val said = whole(fixText(typed, "Превет = Привет\nПрвет = Привет\nЭтт = Это"))
+
+        assertTrue("две правки не легли, и об этом сказано: $said", "2 применить не удалось" in said)
     }
 
     @Test
     fun `нечего править — сказано про текст, который проверили, а не про знание вообще`() {
-        val said = fixedTextMessage(fixText(typed, FIX_NOTHING).fixes)
+        val said = whole(fixText(typed, FIX_NOTHING))
 
         assertTrue("без правок итог не может звучать как «исправлено»: $said", "Исправлено" !in said)
         assertTrue("итог обязан сказать, что именно оставлено: $said", "текст" in said)
+    }
+
+    @Test
+    fun `окно запроса — не весь текст, и итог говорит, какая часть проверена`() {
+        val long = (1..5000).joinToString(" ") { "слово$it" }
+        val window = fixTextWindow(long)
+
+        assertTrue("окно обязано быть короче разведочного предела", window.length <= KNOWN_TEXT_LIMIT)
+        assertTrue("окно не рвёт слово пополам", long.startsWith(window) && long[window.length] == ' ')
+
+        val silent = fixedTextMessage(fixText(long, FIX_NOTHING), checked = window.length, total = long.length)
+        assertTrue("вердикт о непроверенном хвосте недопустим: $silent", "проверено начало" in silent)
+        assertTrue(
+            "«не нашлось» про весь текст нельзя: $silent",
+            !silent.startsWith("Ошибок не нашлось"),
+        )
+
+        val fixed = fixedTextMessage(fixText(long, "слово1 = слова1"), checked = window.length, total = long.length)
+        assertTrue("и при правках проверенная часть названа: $fixed", "проверено начало" in fixed)
+        assertTrue("правка уходит во весь текст, а не только в окно", fixText(long, "слово1 = слова1").text.endsWith("слово5000"))
+    }
+
+    @Test
+    fun `окно целого короткого текста — он сам, и про «начало» итог молчит`() {
+        assertEquals(typed, fixTextWindow(typed))
+        assertTrue("проверено начало" !in whole(fixText(typed, FIX_NOTHING)))
+    }
+
+    // ---- Значения, вычитанные из текста, следуют за его правкой ----
+
+    @Test
+    fun `значение из текста правится теми же парами, что и текст`() {
+        val facts = fixableFacts(known)
+        val fixes = fixText("Відправник: Паринкн, Бритовка, ZeHTpaJIbHa, 586", "Паринкн = Паринкін\nZeHTpaJIbHa = Центральна").fixes
+
+        val patch = fixesForFacts(facts, fixes)
+
+        assertEquals(fixes[0].now, patch[META_GRAPH_ROLE_PREFIX + "sender"])
+        assertEquals(known.getValue(META_ENTITY_ADDRESS).replace(fixes[1].was, fixes[1].now), patch[META_ENTITY_ADDRESS])
+        assertTrue("значение, которого правка не касалась, не трогается", META_ENTITY_PREFIX + "date" !in patch)
+    }
+
+    @Test
+    fun `значение следует за текстом через ту же проверку формы`() {
+        val date = listOf(FixableFact(META_ENTITY_PREFIX + "date", "01.12.2020"))
+
+        // Правка текста превратила бы дату в относительное слово — такое значение датой не бывает (#659).
+        assertTrue(fixesForFacts(date, listOf(TextFix("01.12.2020", "завтра"))).isEmpty())
     }
 }

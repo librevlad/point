@@ -1,6 +1,7 @@
 package com.point.executors
 
 import com.point.core.flow.AiReadiness
+import com.point.core.flow.FIX_TEXT_NOT_APPLIED
 import com.point.core.flow.GraphState
 import com.point.core.flow.LlmClient
 import com.point.core.flow.META_ALT_SUFFIX
@@ -200,5 +201,47 @@ class FixErrorsRealizerTest {
         val cap = FixErrorsCapability(ready)
 
         assertTrue(cap.accepts(GraphState(text(metadata = emptyMap()))))
+    }
+
+    @Test
+    fun `правки предложены, но ни одна не легла — это срыв операции, а не «ошибок не нашлось»`() = runTest {
+        // Модель процитировала фрагмент не так, как он стоит в тексте.
+        val result = fixer("Привет, Иван = Привет, Иван!\nтекстс = текст").perform(text(), null)
+
+        assertTrue("срыв правки выдан за знание: $result", result is ActionResult.Failure)
+        val failure = result as ActionResult.Failure
+        assertTrue("повторить можно — срыв не окончательный", failure.recoverable)
+        assertTrue("«не нашлось» про текст, в котором нашлось: ${failure.reason}", "не нашлось" !in failure.reason)
+        assertEquals(FIX_TEXT_NOT_APPLIED, failure.reason)
+    }
+
+    @Test
+    fun `значения, вычитанные из текста, следуют за его правкой`() = runTest {
+        val cut = text(
+            body = "Відправник: Паринкн, 01.12.2020",
+            metadata = mapOf(sender to "Паринкн", META_ENTITY_PREFIX + "date" to "01.12.2020"),
+        )
+
+        val corrected = "Паринкін"
+
+        val done = fixer("Паринкн = $corrected").perform(cut, null) as ActionResult.Done
+
+        assertEquals(corrected, done.findings!!.metadata[sender])
+        assertTrue("след прежнего значения потерян", done.findings!!.metadata.containsKey(sender + META_ALT_SUFFIX))
+        assertFalse("значение, которого правка не касалась, не трогается", done.findings!!.metadata.containsKey(META_ENTITY_PREFIX + "date"))
+        assertTrue("исправленный текст лёг прочтением", File(done.findings!!.metadata.getValue(META_OCR_TEXT_REF)).readText().startsWith("Відправник: Паринкін"))
+    }
+
+    @Test
+    fun `длинный текст уходит в модель окном, правка ложится на весь текст, итог называет проверенную часть`() = runTest {
+        val long = "Превет, Иван! " + (1..5000).joinToString(" ") { "слово$it" } + " Превет ещё раз."
+
+        val done = fixer("Превет = Привет").perform(text(body = long), null) as ActionResult.Done
+
+        assertTrue("в модель ушёл весь текст без предела: ${lastPrompt!!.length}", lastPrompt!!.length < long.length)
+        assertFalse("хвост текста в запрос не влезал и не должен был", "слово5000" in lastPrompt!!)
+        val landed = File(done.findings!!.metadata.getValue(META_OCR_TEXT_REF)).readText()
+        assertTrue("хвост текста потерян при записи прочтения", landed.endsWith("Привет ещё раз."))
+        assertTrue("итог молчит о том, что проверено не всё: ${done.message}", "проверено начало" in done.message)
     }
 }

@@ -5,6 +5,7 @@ import com.point.core.flow.Capability
 import com.point.core.flow.CapabilityMeta
 import com.point.core.flow.Cost
 import com.point.core.flow.CurrentKnowledge
+import com.point.core.flow.FIX_TEXT_NOT_APPLIED
 import com.point.core.flow.GraphState
 import com.point.core.flow.Latency
 import com.point.core.flow.LlmClient
@@ -15,9 +16,11 @@ import com.point.core.flow.applyFixes
 import com.point.core.flow.fixPrompt
 import com.point.core.flow.fixText
 import com.point.core.flow.fixTextPrompt
+import com.point.core.flow.fixTextWindow
 import com.point.core.flow.fixableFacts
 import com.point.core.flow.fixedMessage
 import com.point.core.flow.fixedTextMessage
+import com.point.core.flow.fixesForFacts
 import com.point.core.flow.hasFixableFacts
 import com.point.core.flow.labelNeedingKey
 import com.point.core.flow.parseFixes
@@ -43,8 +46,9 @@ import javax.inject.Inject
  * (решение владельца). Поэтому применимость смотрит на Graph State, а не на форму объекта.
  *
  * У текстового объекта знание — сам текст (#1023): его и проверяет первая ступень, а
- * исправленный текст ложится знанием того же объекта. Значения здесь вычитаны из текста, который
- * человек прислал сам, — ошибкам распознавания в них взяться неоткуда.
+ * исправленный текст ложится знанием того же объекта. Значения, вычитанные из этого текста,
+ * следуют за его правкой: вырезанный из прочитанного снимка фрагмент несёт ошибки чтения и в
+ * тексте, и в значениях, и второго пути починки у них нет — «Исправить сильнее» текст не берёт.
  */
 class FixErrorsCapability @Inject constructor(
     private val keys: AiReadiness,
@@ -154,6 +158,7 @@ internal fun ownsText(state: ObjectState) = state.kind == ObjectKind.TEXT
  * поверх него, исправленный текст становится прочтением того же объекта — тем же ключом,
  * каким лежит любое чтение (#1097), поэтому экран и следующие действия видят уже его.
  * Исходные байты объекта не трогаются, а что именно изменилось — названо в итоге действия.
+ * Значения, вычитанные из этого текста, следуют за правкой теми же парами (`fixesForFacts`).
  */
 private suspend fun fixOwnText(
     llm: LlmClient,
@@ -162,22 +167,37 @@ private suspend fun fixOwnText(
     input: PointObject,
 ): ActionResult = withContext(Dispatchers.IO) {
 
-    // Правка ложится поверх всего текста, а не его окна: обрезанное прочтение потеряло бы хвост.
+    // Текст берётся целиком: правка ложится поверх всего текста, и обрезанное прочтение
+    // потеряло бы хвост. В запрос же уходит только окно — длинный текст одним вопросом не
+    // проверить, а итог честно говорит, какая часть проверена.
     val text = known.textOf(input, limit = Int.MAX_VALUE)?.takeIf { it.isNotBlank() }
         ?: return@withContext ActionResult.Failure("Исправлять нечего — текста у объекта нет", recoverable = false)
+    val window = fixTextWindow(text)
     reportStage("Проверяю текст")
     runCatching {
-        val answer = File(llm.run(input, fixTextPrompt(text)).uri.value).readText()
+        val answer = File(llm.run(input, fixTextPrompt(window)).uri.value).readText()
         val fixed = fixText(text, answer)
-        if (fixed.fixes.isEmpty()) return@runCatching ActionResult.Done(fixedTextMessage(fixed.fixes))
-        val ref = store.newScratchFile("txt")
-        File(ref.value).writeText(fixed.text)
+        when {
+            fixed.fixes.isNotEmpty() -> {
+                val ref = store.newScratchFile("txt")
+                File(ref.value).writeText(fixed.text)
 
-        // Знание об объекте, а не новый объект (ADR-0001 §18): человек остаётся на месте.
-        ActionResult.Done(
-            fixedTextMessage(fixed.fixes),
-            Findings(metadata = mapOf(META_OCR_TEXT_REF to ref.value)),
-        )
+                // Знание об объекте, а не новый объект (ADR-0001 §18): человек остаётся на месте.
+                ActionResult.Done(
+                    fixedTextMessage(fixed, checked = window.length, total = text.length),
+                    Findings(
+                        metadata = mapOf(META_OCR_TEXT_REF to ref.value) +
+                            applyFixes(input.metadata, fixesForFacts(fixableFacts(input.metadata), fixed.fixes)),
+                    ),
+                )
+            }
+
+            // Правки были, но ни одна не легла — срыв операции, а не знание «ошибок нет»
+            // (Конституция §13): «не нашлось» говорится только там, где не нашлось.
+            fixed.missed.isNotEmpty() -> ActionResult.Failure(FIX_TEXT_NOT_APPLIED, recoverable = true)
+
+            else -> ActionResult.Done(fixedTextMessage(fixed, checked = window.length, total = text.length))
+        }
     }.getOrElse {
         ActionResult.Failure(it.message ?: "Не удалось проверить текст", recoverable = true)
     }
@@ -185,5 +205,4 @@ private suspend fun fixOwnText(
 
 /** Ссылка на слой OCR — не текст объекта: на первой ступени наружу уходит только знание. */
 private fun textOnly(input: PointObject) =
-    if (ownsText(input.state)) input
-    else input.copy(mime = "text/plain", metadata = input.metadata - META_OCR_TEXT_REF)
+    input.copy(mime = "text/plain", metadata = input.metadata - META_OCR_TEXT_REF)
