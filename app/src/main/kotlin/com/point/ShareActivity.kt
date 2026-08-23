@@ -14,16 +14,11 @@ class ShareActivity : FlowHostActivity() {
     override fun accept(intent: Intent) {
         val stream = IntentCompat.getParcelableExtra(intent, Intent.EXTRA_STREAM, Uri::class.java)
         val streams = IntentCompat.getParcelableArrayListExtra(intent, Intent.EXTRA_STREAM, Uri::class.java)
-        val text = intent.getStringExtra(Intent.EXTRA_TEXT)
 
-        // Шаринг текста, в котором текста нет (пробелы либо вовсе без EXTRA_TEXT), — тот же
-        // пустой вход, что и в меню выделения: слово человеку, без объекта и экрана (#1096).
-        val textShare = intent.action == Intent.ACTION_SEND && stream == null &&
-            (text != null || intent.type?.startsWith("text/") == true)
-        if (textShare && text.isNullOrBlank()) {
-            refuseEmptySelection()
-            return
-        }
+        // Текст приезжает не только строкой: отправитель вправе положить размеченный
+        // CharSequence, и getStringExtra отдал бы на нём null — настоящий текст выглядел бы
+        // пустым входом (#1096).
+        val text = intent.getCharSequenceExtra(Intent.EXTRA_TEXT)
 
         when (
             val incoming = incomingOf(
@@ -42,7 +37,14 @@ class ShareActivity : FlowHostActivity() {
             is Incoming.Many -> viewModel.onSharedMultiple(incoming.uris)
             is Incoming.Body -> viewModel.onSharedText(incoming.text)
 
-            null -> viewModel.refuseIncoming()
+            // Пришли текстом, а текста нет (пробелы либо вовсе без EXTRA_TEXT) — тот же пустой
+            // вход, что и пустое выделение в меню: слово человеку, без объекта (#1096). Всё
+            // прочее непонятое остаётся отказом на своих словах.
+            null -> if (textDoor(intent, stream, text)) refuseEmptySelection() else viewModel.refuseIncoming()
         }
     }
+
+    private fun textDoor(intent: Intent, stream: Uri?, text: CharSequence?): Boolean =
+        intent.action == Intent.ACTION_SEND && stream == null &&
+            (text != null || intent.type?.startsWith("text/") == true)
 }
