@@ -2665,6 +2665,13 @@ class FlowViewModel @Inject constructor(
      * Знание из пользовательского действия. Носитель смыслового факта — кадр-источник:
      * правка на кадре извлечённого значения дойдёт и до родителя, иначе следующий пересбор
      * узлов из родительской metadata затёр бы её.
+     *
+     * Прочтение же — своё у каждого объекта (#1023). Вырезка из снимка читается сама по
+     * себе, и её текст прочтением страницы не является: наверх идёт смысловой факт, а
+     * собственное знание объекта — ссылки на его слои, курсор чтения, порядок страниц
+     * ([REFRESHABLE_META]) — остаётся у него. Иначе исправленный текст выделения вставал
+     * прочтением родителя, и страница теряла своё: знание об объекте подменялось знанием
+     * о его части.
      */
     private fun landFindings(findings: com.point.core.model.Findings) {
         val update = EnrichmentUpdate(
@@ -2678,7 +2685,7 @@ class FlowViewModel @Inject constructor(
         applyEnrichment(top.obj, update)
         top.obj.sourceObjects.firstOrNull()
             ?.let { parentId -> stack.lastOrNull { it.obj.id == parentId }?.obj }
-            ?.let { parent -> applyEnrichment(parent, update) }
+            ?.let { parent -> applyEnrichment(parent, update.copy(metadata = update.metadata - REFRESHABLE_META)) }
 
         // Карточка «Недавнего» несёт факты объекта: правка человека обязана дойти и до неё
         // сейчас — фоновое обогащение могло уже завершиться и историю не перепишет.
