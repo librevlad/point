@@ -87,6 +87,26 @@ class DesktopRegistryTest {
         assertEquals("равные по смыслу — по прежнему priority", listOf("open-b", "open-c"), titles.take(2))
     }
 
+    /**
+     * Негодному объекту читать себя не предлагается и на компьютере (#994): пустой файл,
+     * помеченный при приёме, оставляет только двери, берущие его как есть.
+     */
+    @Test
+    fun `негодному на компьютере чтение не предлагается, открыть и сохранить остаются`() {
+        val read = Declared("read", priority = 1, serves = setOf(com.point.core.model.Intent.UNDERSTAND))
+        val registry = DesktopRegistry(setOf(PcOpenCapability(), PcSaveAsCapability(), read))
+        val unfit = ObjectState(ObjectKind.TEXT, setOf(com.point.core.model.Feature.UNUSABLE))
+
+        val ids = registry.bubblesFor(unfit).map { it.capabilityId.value }
+
+        assertEquals(listOf("pc-open", "pc-save-as"), ids)
+        assertEquals(
+            "годному чтение по-прежнему первое",
+            "read",
+            registry.bubblesFor(ObjectState(ObjectKind.TEXT)).first().capabilityId.value,
+        )
+    }
+
     // ---- Фаза A редизайна: двери-обманки исчезают, отказ исполнителя честен ----
 
     private class OfficeOnlyRealizer : com.point.core.flow.Realizer {

@@ -1,5 +1,6 @@
 package com.point.core.ui
 
+import com.point.core.model.ActionYield
 import com.point.core.model.Bubble
 import com.point.core.model.CapabilityId
 import com.point.core.model.Feature
@@ -21,18 +22,20 @@ import org.junit.Test
  */
 class KnowledgeRaisesItsActionTest {
 
-    private fun bubble(title: String, intent: Intent) = Bubble(
+    private fun bubble(title: String, intent: Intent, yields: ActionYield = ActionYield.None) = Bubble(
         icon = "",
         title = title,
         capabilityId = CapabilityId(title),
         expectedNextState = ObjectState(ObjectKind.TEXT),
         intent = intent,
+        yields = yields,
     )
 
     private val open = bubble("Открыть ссылку", Intent.OPEN)
 
     private val offered = listOf(
-        bubble("Понять", Intent.UNDERSTAND),
+        // Чтение обещает знание (#1101) — иначе группе «Извлечь» нечего вести.
+        bubble("Понять", Intent.UNDERSTAND, ActionYield.Same()),
         bubble("В Excel таблицу", Intent.PREPARE),
         open,
         bubble("Дать ссылку", Intent.SEND),

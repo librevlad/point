@@ -60,4 +60,46 @@ class ObjectFitnessTest {
         assertTrue(EMPTY_FILE_REASON.isNotBlank())
         assertFalse(EMPTY_FILE_REASON.any { it in 'a'..'z' || it in 'A'..'Z' })
     }
+
+    // ---- Негодному читать себя не предлагается (#994, #1101) ----
+
+    private class Door(
+        id: String,
+        private val understands: Boolean = false,
+        private val makesNew: Boolean = false,
+    ) : Capability {
+        override val id = com.point.core.model.CapabilityId(id)
+        override val icon = ""
+        override fun label(state: ObjectState) = id.value
+        override fun accepts(state: ObjectState) = true
+        override fun produces(state: ObjectState) = if (makesNew) ObjectState(ObjectKind.TEXT) else state
+        override fun intents(state: ObjectState) =
+            if (understands) setOf(com.point.core.model.Intent.UNDERSTAND) else super.intents(state)
+    }
+
+    private val share = Door("share")
+    private val understand = Door("understand", understands = true)
+    private val ocr = Door("ocr", makesNew = true)
+
+    private val unfit = ObjectState(ObjectKind.IMAGE, setOf(Feature.UNUSABLE))
+    private val fit = ObjectState(ObjectKind.IMAGE)
+
+    @Test
+    fun `как есть — ни нового объекта, ни обещанного знания`() {
+        assertTrue("поделиться берёт объект как есть", share.takesAsIs(fit))
+        assertFalse("понять обещает знание", understand.takesAsIs(fit))
+        assertFalse("распознать делает новый объект", ocr.takesAsIs(fit))
+    }
+
+    @Test
+    fun `негодному остаются только двери, берущие его как есть`() {
+        assertEquals(listOf(share), offeredWhenUnfit(unfit, listOf(understand, ocr, share)))
+    }
+
+    @Test
+    fun `годному — всё применимое, порядок тот же`() {
+        val all = listOf(understand, ocr, share)
+
+        assertEquals(all, offeredWhenUnfit(fit, all))
+    }
 }

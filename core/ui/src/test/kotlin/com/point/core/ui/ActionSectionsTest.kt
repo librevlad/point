@@ -1,5 +1,6 @@
 package com.point.core.ui
 
+import com.point.core.model.ActionYield
 import com.point.core.model.Bubble
 import com.point.core.model.CapabilityId
 import com.point.core.model.Intent
@@ -11,8 +12,10 @@ import org.junit.Test
 
 class ActionSectionsTest {
 
-    private fun bubble(title: String, intent: Intent) =
-        Bubble("i", title, CapabilityId(title), ObjectState(ObjectKind.TEXT), intent = intent)
+    // Настоящее чтение обещает результат (#1101): голое Unknown — «вернёт то, что попросите»,
+    // и с одним таким группа «Извлечь» не ведёт.
+    private fun bubble(title: String, intent: Intent, yields: ActionYield = ActionYield.Unknown) =
+        Bubble("i", title, CapabilityId(title), ObjectState(ObjectKind.TEXT), intent = intent, yields = yields)
 
     @Test
     fun `each intent maps to its section`() {
@@ -26,7 +29,7 @@ class ActionSectionsTest {
 
     @Test
     fun `у значения сначала то, чем им пользуются, а исправления после`() {
-        val bubbles = listOf(bubble("fix", Intent.UNDERSTAND), bubble("call", Intent.OPEN))
+        val bubbles = listOf(bubble("fix", Intent.UNDERSTAND, ActionYield.Same()), bubble("call", Intent.OPEN))
 
         assertEquals(
             listOf(ActionGroup.USE, ActionGroup.EXTRACT),

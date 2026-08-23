@@ -1,5 +1,6 @@
 package com.point.core.ui
 
+import com.point.core.model.ActionYield
 import com.point.core.model.Bubble
 import com.point.core.model.Feature
 import com.point.core.model.Intent
@@ -76,8 +77,25 @@ fun actionGroupOrder(useFirst: Boolean = false): List<ActionGroup> = if (useFirs
     listOf(ActionGroup.EXTRACT, ActionGroup.TRANSFORM, ActionGroup.USE, ActionGroup.SEND)
 }
 
+/**
+ * «Извлечь» ведёт, только когда есть что извлекать (#1101, #994; решение владельца 21.08.2026).
+ *
+ * У архива и у неизвестного файла первым и подсвеченным стояло «AI» — единственное, что
+ * попало в группу «Извлечь»: оно берёт любой файл и не обещает ничего определённого («вернёт
+ * то, что попросите», `ActionYield.Unknown`). Честное местное — «Открыть», «Сохранить»,
+ * «Поделиться» — лежало ниже. А негодному объекту чтения не предлагаются вовсе, и вести
+ * первым становилось «Дать ссылку».
+ *
+ * Читать есть что, когда хоть одно действие чтения обещает результат — текст, знание.
+ * Иначе первым идёт то, что точно сработает. Ничего не прячется — меняется порядок групп,
+ * как и требует конституция.
+ */
+fun promisesExtraction(bubbles: List<Bubble>): Boolean = bubbles.any {
+    actionGroupOf(it.intent) == ActionGroup.EXTRACT && it.yields != ActionYield.Unknown
+}
+
 fun actionSections(bubbles: List<Bubble>, useFirst: Boolean = false): List<ActionSection> {
-    return actionGroupOrder(useFirst).mapNotNull { group ->
+    return actionGroupOrder(useFirst || !promisesExtraction(bubbles)).mapNotNull { group ->
         bubbles.filter { actionGroupOf(it.intent) == group }
             .takeIf { it.isNotEmpty() }
             ?.let { ActionSection(group, it) }

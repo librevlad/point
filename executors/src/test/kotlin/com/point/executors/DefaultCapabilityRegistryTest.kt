@@ -321,20 +321,44 @@ class DefaultCapabilityRegistryTest {
     private fun objectOf(state: ObjectState, metadata: Map<String, String> = emptyMap()) =
         PointObject("id", "text/plain", ScratchRef("/x"), state, metadata)
 
+    /**
+     * Негодному объекту читать себя не предлагается (#994, решение владельца 21.08.2026):
+     * остаются двери, берущие объект как есть, и каждая несёт причину.
+     */
     @Test
-    fun `негодный объект — подпись каждого пузырька несёт причину, а не пропадает`() {
+    fun `негодный объект — чтения не предлагаются, остальные двери несут причину`() {
         val reason = "Файл пустой — в нём нечего читать"
         val obj = objectOf(ObjectState(ObjectKind.TEXT, setOf(Feature.UNUSABLE)), mapOf(META_UNUSABLE_REASON to reason))
 
         val bubbles = registry.bubblesFor(GraphState(obj))
 
         assertTrue("действия остаются в списке", bubbles.isNotEmpty())
-        assertEquals(
-            "то же множество дверей, что и у обычного текста",
-            idsFor(ObjectState(ObjectKind.TEXT)),
-            bubbles.map { it.capabilityId.value }.toSet(),
+        assertTrue("негодному предложено чтение", bubbles.none { it.intent == Intent.UNDERSTAND })
+        assertTrue(
+            "берущие объект как есть пропали",
+            bubbles.map { it.capabilityId.value }.containsAll(setOf("share", "save", "open")),
         )
         assertTrue(bubbles.all { it.unusableReason == reason })
+    }
+
+    /**
+     * Битый снимок предлагал «Понять», «Распознать текст», «Прочитать сильнее» и «AI» —
+     * четыре способа прочитать то, что прочитать нельзя (#994). Остаётся то, что точно
+     * сработает: открыть, поделиться, сохранить.
+     */
+    @Test
+    fun `битому снимку не предлагают ни распознать, ни AI — открыть и поделиться есть`() {
+        val ids = idsFor(ObjectState(ObjectKind.IMAGE, setOf(Feature.UNUSABLE)))
+
+        assertTrue(setOf("ocr", "ai", "scan", "image", "pdf").none { it in ids })
+        assertTrue(ids.containsAll(setOf("share", "save", "open")))
+    }
+
+    @Test
+    fun `годный снимок по-прежнему читается — фильтр негодного его не касается`() {
+        val ids = idsFor(ObjectState(ObjectKind.IMAGE))
+
+        assertTrue(ids.containsAll(setOf("ocr", "ai", "share", "save", "open")))
     }
 
     /** #570: обломок вместо архива — но передать его дальше человек по-прежнему может. */
@@ -348,6 +372,7 @@ class DefaultCapabilityRegistryTest {
         val bubbles = registry.bubblesFor(GraphState(obj))
 
         assertTrue("share" in bubbles.map { it.capabilityId.value })
+        assertFalse("обломок предлагают распаковать", "archive" in bubbles.map { it.capabilityId.value })
     }
 
     @Test

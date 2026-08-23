@@ -198,7 +198,11 @@ internal fun CompactObject(
             // было не видно. Действие без пузыря (просьба к телефону) идёт последней
             // группой — у него нет своего намерения, кроме «отправить».
             val primary = actions.indexOfFirst { it.unavailable == null }
-            val useFirst = com.point.core.ui.knowsUsableValue(item.obj.state)
+
+            // «Извлечь» ведёт, только когда есть что извлекать (#1101) — правило общее с
+            // телефоном.
+            val useFirst = com.point.core.ui.knowsUsableValue(item.obj.state) ||
+                !com.point.core.ui.promisesExtraction(actions.mapNotNull { it.bubble })
             val grouped = com.point.core.ui.actionGroupOrder(useFirst).mapNotNull { group ->
                 actions.filter { choice ->
                     val intent = choice.bubble?.intent
