@@ -1,6 +1,18 @@
 package com.point.desktop
 
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.runComposeUiTest
+import com.point.core.flow.PrivacyLevel
+import com.point.desktop.ui.PointDesktopTheme
 import com.point.desktop.ui.SettingsPage
+import com.point.desktop.ui.SettingsPrivacy
+import com.point.desktop.ui.SettingsRoot
 import com.point.desktop.ui.devicesLine
 import com.point.desktop.ui.keysLine
 import java.io.File
@@ -91,16 +103,108 @@ class SettingsAreAListTest {
         assertTrue("без почты строка не должна начинаться с разделителя", !devicesLine("", 5).startsWith(" ·"))
     }
 
+    /**
+     * Сводка «Отправка и приватность» в корне называет выбранный уровень — и только его
+     * (#1003, решение владельца 20.08.2026: показывается ровно имя уровня, без «Облако
+     * разрешено/выключено»).
+     *
+     * Смотрится экран, а не исходник. Раньше это место сторожила подстрока `config.privacy.title`
+     * в тексте `SettingsScreen.kt`: такой сторож держит букву кода, а не то, что человек читает, —
+     * подпись могла не дойти до окна, и проверка осталась бы зелёной.
+     *
+     * Уровень назван и тогда, когда согласия на облако ещё нет: выбор человека — его состояние,
+     * и оно видно с корня, без захода внутрь. Разные состояния обязаны выглядеть по-разному
+     * (P9): «Не учатся на моём» не должно читаться так же, как «Максимум бесплатного».
+     */
     @Test
-    fun `разрешение на облако можно увидеть и забрать`() {
-        val root = screen.substringAfter("fun SettingsRoot(").substringBefore("internal fun devicesLine")
+    fun `сводка отправки называет выбранный уровень и только его`() {
+        PrivacyLevel.entries.forEach { level ->
+            val seen = shownInRoot(PcConfig(name = "User-PC", privacy = level))
+            val others = PrivacyLevel.entries.filter { it != level }.map { it.title }.filter { it in seen }
 
-        assertTrue("на компьютере не видно, разрешено ли облако", root.contains("SettingsPage.PRIVACY"))
-        assertTrue("разрешение нельзя забрать", screen.contains("Забрать разрешение"))
-        // Сводка корня называет выбранный уровень и не оправдывается согласием (#1003).
-        assertTrue("сводка не называет выбранный уровень", root.contains("config.privacy.title"))
-        assertTrue("сводка снова оправдывается облаком", !screen.contains("Облако разрешено"))
+            assertTrue("выбранное «${level.title}» не дошло до корня — видно $seen", level.title in seen)
+            assertTrue("в корне назван невыбранный уровень $others — видно $seen", others.isEmpty())
+        }
     }
+
+    /** Сторож обещания: «Облако разрешено · Только на этом устройстве» читалось противоречием (#1003). */
+    @Test
+    fun `сводка отправки не оправдывается облаком`() {
+        PrivacyLevel.entries.forEach { level ->
+            val seen = shownInRoot(PcConfig(name = "User-PC", privacy = level))
+
+            assertTrue(
+                "сводка снова оправдывается облаком — видно $seen",
+                seen.none { it.contains("облак", ignoreCase = true) },
+            )
+        }
+    }
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun `строка отправки открывает свой экран`() = runComposeUiTest {
+        val opened = mutableListOf<SettingsPage>()
+        setContent { PointDesktopTheme { rootScreen(PcConfig(name = "User-PC"), onOpen = { opened += it }) } }
+
+        onNodeWithText(SettingsPage.PRIVACY.title).performClick()
+
+        assertEquals(listOf(SettingsPage.PRIVACY), opened)
+    }
+
+    /**
+     * Согласие на облако видно и отзывается на своём экране: разрешение без выхода из него
+     * нарушает §11 — объект уходит с устройства только по живому согласию (#886).
+     */
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun `разрешение на облако видно и отзывается`() = runComposeUiTest {
+        var revoked = false
+        setContent {
+            PointDesktopTheme {
+                SettingsPrivacy(
+                    allowed = true,
+                    level = PrivacyLevel.DEFAULT,
+                    onRevoke = { revoked = true },
+                    onPickLevel = {},
+                )
+            }
+        }
+
+        onNodeWithText(REVOKE).performClick()
+
+        assertTrue("выход из разрешения нажат, а согласие осталось", revoked)
+    }
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun `пока облако не разрешено — забирать нечего`() = runComposeUiTest {
+        setContent {
+            PointDesktopTheme {
+                SettingsPrivacy(allowed = false, level = PrivacyLevel.DEFAULT, onRevoke = {}, onPickLevel = {})
+            }
+        }
+
+        onNodeWithText(REVOKE).assertDoesNotExist()
+    }
+
+    /** Что написано в корне настроек — все надписи собранного экрана, как их читает человек. */
+    @OptIn(ExperimentalTestApi::class)
+    private fun shownInRoot(pc: PcConfig): List<String> {
+        val texts = mutableListOf<String>()
+        runComposeUiTest {
+            setContent { PointDesktopTheme { rootScreen(pc) } }
+            texts += onAllNodes(
+                SemanticsMatcher.keyIsDefined(SemanticsProperties.Text),
+                useUnmergedTree = true,
+            ).fetchSemanticsNodes()
+                .flatMap { node -> node.config.getOrNull(SemanticsProperties.Text).orEmpty().map { it.text } }
+        }
+        return texts
+    }
+
+    @Composable
+    private fun rootScreen(config: PcConfig, onOpen: (SettingsPage) -> Unit = {}) =
+        SettingsRoot(config = config, devices = 0, email = "", onSave = { true }, onOpen = onOpen)
 
     @Test
     fun `строка ключей считает свои ключи так же, как на телефоне`() {
@@ -113,5 +217,11 @@ class SettingsAreAListTest {
         assertEquals(com.point.core.flow.aiKeysSummary(one.aiKeys), keysLine(one))
         assertTrue("ноль не сосчитан", keysLine(empty).contains("0"))
         assertTrue("свой ключ не сосчитан", keysLine(one).contains("1"))
+    }
+
+    private companion object {
+
+        /** Выход из разрешения — им экран и нажимается, как пальцем. */
+        const val REVOKE = "Забрать разрешение"
     }
 }
