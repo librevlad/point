@@ -11,8 +11,22 @@ import com.point.core.flow.derivedYield
 import com.point.core.flow.inventoryProbes
 import com.point.core.flow.yieldLabel
 import com.point.core.model.ActionYield
+import com.point.core.model.CapabilityId
 import com.point.core.model.Intent
 import com.point.core.model.ObjectKind
+import com.point.data.DocumentTypeInvestigation
+import com.point.data.EntityInvestigation
+import com.point.data.ExifInvestigation
+import com.point.data.GraphRolesInvestigation
+import com.point.data.IdentifierInvestigation
+import com.point.data.MetadataEntityInvestigation
+import com.point.data.OcrInvestigation
+import com.point.data.PdfImageInvestigation
+import com.point.data.PeriodInvestigation
+import com.point.data.QrInvestigation
+import com.point.data.TextUrlInvestigation
+import com.point.data.VCardInvestigation
+import com.point.data.ZipImagesInvestigation
 import com.point.executors.di.CapabilityModule
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -49,6 +63,24 @@ class RealCapabilityInventoryTest {
     private val sharedNames: Set<String> =
         CapabilityModule.sharedCaps(OfficeAlwaysHere).map { it.javaClass.simpleName }.toSet()
 
+    // Исследования продукта — пары «класс и его id». Сверки ниже держат этот список и
+    // `DataModule` вместе поимённо (#1256).
+    private val investigations: List<Pair<Class<*>, CapabilityId>> = listOf(
+        DocumentTypeInvestigation::class.java to DocumentTypeInvestigation.ID,
+        EntityInvestigation::class.java to EntityInvestigation.ID,
+        ExifInvestigation::class.java to ExifInvestigation.ID,
+        GraphRolesInvestigation::class.java to GraphRolesInvestigation.ID,
+        IdentifierInvestigation::class.java to IdentifierInvestigation.ID,
+        MetadataEntityInvestigation::class.java to MetadataEntityInvestigation.ID,
+        OcrInvestigation::class.java to OcrInvestigation.ID,
+        PdfImageInvestigation::class.java to PdfImageInvestigation.ID,
+        PeriodInvestigation::class.java to PeriodInvestigation.ID,
+        QrInvestigation::class.java to QrInvestigation.ID,
+        TextUrlInvestigation::class.java to TextUrlInvestigation.ID,
+        VCardInvestigation::class.java to VCardInvestigation.ID,
+        ZipImagesInvestigation::class.java to ZipImagesInvestigation.ID,
+    )
+
     // Пробы шире базовых видов: кадры извлечённых значений — полноправные объекты,
     // и способность, живущая только на них, обязана быть видна инвентарю.
     private val inventory = capabilityInventory(
@@ -66,34 +98,54 @@ class RealCapabilityInventoryTest {
      */
     @Test
     fun `id исследований не пересекаются с id действий`() {
-        val investigations = listOf(
-            com.point.data.OcrInvestigation.ID,
-            com.point.data.ExifInvestigation.ID,
-            com.point.data.QrInvestigation.ID,
-            com.point.data.EntityInvestigation.ID,
-            com.point.data.IdentifierInvestigation.ID,
-            com.point.data.GraphRolesInvestigation.ID,
-            com.point.data.DocumentTypeInvestigation.ID,
-            com.point.data.MetadataEntityInvestigation.ID,
-            com.point.data.PeriodInvestigation.ID,
-            com.point.data.TextUrlInvestigation.ID,
-            com.point.data.VCardInvestigation.ID,
-            com.point.data.PdfImageInvestigation.ID,
-            com.point.data.ZipImagesInvestigation.ID,
-        )
         val actions = builtIn.map { it.id }.toSet()
 
-        val clashes = investigations.filter { it in actions }
-        assertEquals("исследование и действие не смеют делить id", emptyList<Any>(), clashes)
+        val clashes = investigations
+            .filter { (_, id) -> id in actions }
+            .map { (cls, id) -> "${cls.simpleName} — «${id.value}»" }
 
-        // Проверка стоит ровно столько, сколько исследований она видит: `exif` выпал из списка
-        // и не сверялся ни с чем (#1256). Появилось новое исследование — впишите его сюда,
-        // иначе оно проверено не будет.
-        val bound = com.point.data.di.DataModule::class.java.declaredMethods
-            .filter { it.returnType == Capability::class.java }
-            .map { it.parameterTypes.single().simpleName }
-        assertEquals("исследования, которые связывает DataModule: $bound", bound.size, investigations.size)
+        assertEquals("исследование и действие не смеют делить id", emptyList<String>(), clashes)
     }
+
+    /**
+     * Тот же дефект внутри самого пространства знания: два исследования с одним id резолвер
+     * сложит в одну кучу, и цикл знания получит чужого реализатора.
+     *
+     * Заодно это то, что держит пары «класс и его id» честными: списанный копипастой чужой id
+     * всплывает здесь двойником, а не молча уводит проверку выше мимо новичка.
+     */
+    @Test
+    fun `два исследования не делят один id`() {
+        val twins = investigations.groupBy { (_, id) -> id }
+            .filterValues { it.size > 1 }
+            .map { (id, pairs) -> "«${id.value}» — ${pairs.map { (cls, _) -> cls.simpleName }}" }
+
+        assertEquals("исследования не смеют делить id", emptyList<String>(), twins)
+    }
+
+    /**
+     * Исследования сверяются с реестром поимённо — как и способности ниже (#1256). Счётная
+     * сверка держалась на совпадении: `exif` из списка выпал, а число всё равно сходилось, и
+     * добавить одно исследование, убрав другое, можно было, не тронув счёт, — список молчал бы,
+     * а проверки выше шли бы мимо новичка. Имя — не число: разойдётся, и тест назовёт, кого
+     * именно не хватает.
+     */
+    @Test
+    fun `исследования взяты те же, что связывает DataModule`() {
+        assertEquals(
+            boundInvestigations().map { it.simpleName }.sorted(),
+            investigations.map { (cls, _) -> cls.simpleName }.sorted(),
+        )
+    }
+
+    /** Что раздаёт `DataModule`: одна привязка — одно исследование. */
+    private fun boundInvestigations(): List<Class<*>> =
+        com.point.data.di.DataModule::class.java.declaredMethods
+            .filter { it.returnType == Capability::class.java }
+            .map {
+                it.parameterTypes.singleOrNull()
+                    ?: error("@Binds исследования берёт не одну реализацию: ${it.name}")
+            }
 
     @Test
     fun `таблица — что каждая способность принимает и что возвращает`() {
@@ -134,7 +186,7 @@ class RealCapabilityInventoryTest {
         }
     }
 
-    private val reshaped: List<com.point.core.model.CapabilityId> = builtIn.filter { c ->
+    private val reshaped: List<CapabilityId> = builtIn.filter { c ->
         inventoryProbes().filter(c::accepts).any { s -> shapeOf(c.yields(s)) != shapeOf(derivedYield(c, s)) }
     }.map { it.id }
 

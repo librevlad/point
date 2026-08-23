@@ -12,9 +12,12 @@ import org.junit.Test
 
 class ConsentSaysWhatLeavesTest {
 
+    // Настоящий набор тех, кого Point выбирает сам. Список обязан называть живых: `Unstructured`
+    // и `LlamaParse` из него убраны вместе с самими читалками (#1252) — имя сервиса, которого в
+    // продукте нет, ничего не сторожит, зато выдаёт снесённый путь за живой.
     private val pickedByPoint = listOf(
         "Mistral", "OCR.space", "OVH", "Groq", "Gemini", "Qwen", "SambaNova", "Cerebras",
-        "Tesseract", "Whisper", "Unstructured", "LlamaParse",
+        "Tesseract", "Whisper",
     )
 
     private val consentSources = listOf(

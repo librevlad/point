@@ -97,38 +97,42 @@ class UrlConnectionHttpFilesTest {
         }
     }
 
-    private val jpegLike = byteArrayOf(
-        0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte(), 0xE0.toByte(),
-        0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01,
-        0xFF.toByte(), 0xD9.toByte(),
+    /**
+     * Запись голоса — единственная отправка файла, что есть у продукта (#1252): раньше форму
+     * здесь изображало облачное чтение страницы, которого больше нет.
+     *
+     * Байты нарочно несут `0x0D 0x0A` и два дефиса подряд — ровно то, из чего сложена граница
+     * формы: запись не смеет разъехаться на собственном содержимом.
+     */
+    private val oggLike = byteArrayOf(
+        0x4F, 0x67, 0x67, 0x53, 0x00, 0x02, 0x0D, 0x0A,
+        0x2D, 0x2D, 0x0D, 0x0A, 0xFF.toByte(), 0x00, 0x1F,
     )
 
     @Test
-    fun `форма доезжает дословно — повторённое поле остаётся двумя, а байты кадра не портятся`() = runTest {
+    fun `запись доезжает дословно — адрес, ключ и байты голоса не портятся`() = runTest {
         UrlConnectionHttpFiles().postMultipart(
-            url = "${root()}/general/v0/general",
-            headers = mapOf("unstructured-api-key" to "free-key"),
+            url = "${root()}/openai/v1/audio/transcriptions",
+            headers = mapOf("Authorization" to "Bearer free-key"),
             parts = listOf(
-                FormPart.Binary("files", "page.jpg", "image/jpeg", jpegLike),
-                FormPart.Field("coordinates", "true"),
-                FormPart.Field("strategy", "hi_res"),
-                FormPart.Field("languages", "rus"),
-                FormPart.Field("languages", "eng"),
+                FormPart.Binary("file", "voice.ogg", "audio/ogg", oggLike),
+                FormPart.Field("model", "whisper-large-v3-turbo"),
+                FormPart.Field("response_format", "json"),
             ),
         )
 
-        assertEquals("free-key", seenHeaders["unstructured-api-key"])
+        assertEquals("/openai/v1/audio/transcriptions", seenPath)
+        assertEquals("Bearer free-key", seenHeaders["authorization"])
         val parts = partsOf(seenBody, boundaryOf(seenContentType))
 
-        assertEquals(listOf("rus", "eng"), parts.filter { it.name == "languages" }.map { it.text })
-        assertEquals("true", parts.single { it.name == "coordinates" }.text)
-        assertEquals("hi_res", parts.single { it.name == "strategy" }.text)
+        assertEquals("whisper-large-v3-turbo", parts.single { it.name == "model" }.text)
+        assertEquals("json", parts.single { it.name == "response_format" }.text)
 
-        val file = parts.single { it.name == "files" }
-        assertEquals("page.jpg", file.fileName)
-        assertTrue(file.headers.contains("Content-Type: image/jpeg"))
+        val file = parts.single { it.name == "file" }
+        assertEquals("voice.ogg", file.fileName)
+        assertTrue(file.headers.contains("Content-Type: audio/ogg"))
 
-        assertArrayEquals(jpegLike, file.bytes)
+        assertArrayEquals(oggLike, file.bytes)
     }
 
     @Test
@@ -137,7 +141,7 @@ class UrlConnectionHttpFilesTest {
         replyBody = """{"detail":"payment required"}"""
 
         val res = UrlConnectionHttpFiles().postMultipart(
-            root(), emptyMap(), listOf(FormPart.Field("strategy", "hi_res")),
+            root(), emptyMap(), listOf(FormPart.Field("model", "whisper-large-v3-turbo")),
         )
 
         assertEquals(402, res.code)
@@ -150,25 +154,11 @@ class UrlConnectionHttpFilesTest {
         replyBody = "slow down"
 
         val res = UrlConnectionHttpFiles().postMultipart(
-            root(), emptyMap(), listOf(FormPart.Field("strategy", "hi_res")),
+            root(), emptyMap(), listOf(FormPart.Field("model", "whisper-large-v3-turbo")),
         )
 
         assertEquals(429, res.code)
         assertEquals("slow down", res.body)
-    }
-
-    @Test
-    fun `опрос задачи несёт заголовок и запрошенный путь целиком`() = runTest {
-        replyBody = """{"job":{"status":"COMPLETED"}}"""
-
-        val res = UrlConnectionHttpFiles().get(
-            "${root()}/api/v2/parse/pjb-1?expand=items",
-            mapOf("Authorization" to "Bearer free-key"),
-        )
-
-        assertEquals("/api/v2/parse/pjb-1?expand=items", seenPath)
-        assertEquals("Bearer free-key", seenHeaders["authorization"])
-        assertTrue(res.body.contains("COMPLETED"))
     }
 
     private class Part(val headers: String, val bytes: ByteArray) {

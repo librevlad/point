@@ -23,8 +23,18 @@ class HttpCallTest {
         assertTrue("отмена ждала $waited мс", waited < WAITED_TOO_LONG_MS)
     }
 
-    @Test fun `отказ закрывает и запрос за файлом, а не только отправку`() {
-        val waited = waitedAfterCancel { url -> UrlConnectionHttpFiles().get(url, emptyMap()) }
+    // Раньше отмена проверялась на запросе за файлом (`HttpFiles.get`) — на пути, до которого
+    // человек не доходил ни одним нажатием; вместе с облачным чтением по слою слов он снесён
+    // (#1252). Живая отправка файла у шва одна — запись голоса на расшифровку, и ждать её
+    // человеку дольше всего: отмена проверяется на ней.
+    @Test fun `отказ закрывает и отправку записи, а не только запрос словами`() {
+        val waited = waitedAfterCancel { url ->
+            UrlConnectionHttpFiles().postMultipart(
+                url,
+                emptyMap(),
+                listOf(FormPart.Binary("file", "voice.ogg", "audio/ogg", ByteArray(1024))),
+            )
+        }
         assertTrue("отмена ждала $waited мс", waited < WAITED_TOO_LONG_MS)
     }
 
