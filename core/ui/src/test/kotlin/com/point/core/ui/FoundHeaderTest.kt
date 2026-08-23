@@ -1,6 +1,7 @@
 package com.point.core.ui
 
 import com.point.core.flow.FailedInvestigation
+import com.point.core.flow.READER_NOT_DECODED
 import com.point.core.flow.readerFailure
 import com.point.core.model.CapabilityId
 import com.point.core.model.ObjectKind
@@ -35,11 +36,15 @@ class FoundHeaderTest {
         val note = failedNote(
             listOf(
                 FailedInvestigation(CapabilityId("qr"), null, readerFailure("not an image", ObjectKind.IMAGE)),
-                FailedInvestigation(CapabilityId("image-text"), null, readerFailure("decode failed", ObjectKind.IMAGE)),
+                FailedInvestigation(
+                    CapabilityId("image-text"),
+                    null,
+                    readerFailure(READER_NOT_DECODED, ObjectKind.IMAGE),
+                ),
             ),
         )
 
-        assertEquals("Не удалось посмотреть: " + readerFailure(null, ObjectKind.IMAGE), note)
+        assertEquals("Не удалось посмотреть: " + readerFailure(READER_NOT_DECODED, ObjectKind.IMAGE), note)
     }
 
     @Test
@@ -47,11 +52,18 @@ class FoundHeaderTest {
         val note = failedNote(
             listOf(
                 FailedInvestigation(CapabilityId("qr"), null, "документ не читается"),
-                FailedInvestigation(CapabilityId("image-text"), null, readerFailure(null, ObjectKind.IMAGE)),
+                FailedInvestigation(
+                    CapabilityId("image-text"),
+                    null,
+                    readerFailure(READER_NOT_DECODED, ObjectKind.IMAGE),
+                ),
             ),
         )
 
-        assertEquals("Не удалось посмотреть: документ не читается; " + readerFailure(null, ObjectKind.IMAGE), note)
+        assertEquals(
+            "Не удалось посмотреть: документ не читается; " + readerFailure(READER_NOT_DECODED, ObjectKind.IMAGE),
+            note,
+        )
     }
 
     @Test

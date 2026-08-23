@@ -46,6 +46,41 @@ class OcrKnowledgeTest {
         server?.stop(0)
     }
 
+    private fun serveRaw(body: String): String {
+        val s = HttpServer.create(InetSocketAddress(0), 0)
+        s.createContext("/parse") { exchange ->
+            val bytes = body.toByteArray(Charsets.UTF_8)
+            exchange.sendResponseHeaders(200, bytes.size.toLong())
+            exchange.responseBody.use { it.write(bytes) }
+        }
+        s.start()
+        server = s
+        return "http://127.0.0.1:${s.address.port}/parse"
+    }
+
+    /**
+     * Слова отказа живут в одном месте (#1237/#1259).
+     *
+     * Компьютер держал свою копию «Сервис не прочитал снимок» литералом рядом с объявленной
+     * общей — две копии разъезжаются при первой же правке формулировки. И отказ, названный по
+     * существу, накрывался общим «Сервис чтения не ответил — попробуйте позже»: причина
+     * ложная, шаг ложный. Человек шёл ждать вместо того, чтобы поправить ключ.
+     */
+    @Test
+    fun `сервис не принял ключ — так человеку и сказано, а не «не ответил»`() = runTest {
+        val url = serveRaw("""{"IsErroredOnProcessing":true,"ErrorMessage":["Invalid API key"]}""")
+        val realizer = PcCloudOcrRealizer(
+            { OcrConfig(key = "к", url = url) },
+            com.point.core.flow.RegexEntityExtractor(),
+        )
+
+        val result = realizer.perform(snapshot(), null)
+
+        val said = (result as ActionResult.Failure).reason
+        assertEquals(com.point.core.flow.KEY_NOT_TAKEN, said)
+        assertFalse("чужой текст у человека: $said", said.contains("Invalid API key"))
+    }
+
     private fun snapshot(): PointObject {
         val file = temp.newFile("чек.jpg").apply { writeBytes(ByteArray(64)) }
         return PointObject("img", "image/jpeg", ScratchRef(file.absolutePath), ObjectState(ObjectKind.IMAGE))

@@ -599,8 +599,8 @@ class ExcelRealizer(
     }
 }
 
-/** Глагол этой цепочки для общей сводки отказов (#1237). */
-internal const val WHAT_FAILED = "дочитать таблицу"
+/** Глагол этой цепочки для общей сводки отказов (#1237). Своё слово этой дороги — не пакета. */
+private const val WHAT_FAILED = "дочитать таблицу"
 
 internal fun refusalOf(errors: List<String>, noReaders: Boolean): String {
     if (noReaders) return "Читать таблицу некем — $KEY_SETTINGS_CALL"
@@ -608,16 +608,10 @@ internal fun refusalOf(errors: List<String>, noReaders: Boolean): String {
     val chosen = substantive ?: errors.firstOrNull() ?: return "Не удалось распознать таблицу"
 
     // «Software caused connection abort» уходил исходом на экран (живая находка
-    // владельца, 2026-08-09): транспортная ошибка — не слова для человека. Слова про сеть
-    // берутся из общей сводки (#1237): своя фраза здесь рассказывала человеку про ту же
-    // выключенную сеть отдельную историю.
-    if (com.point.core.flow.looksLikeNetworkFailure(chosen)) {
-        return com.point.core.flow.summariseCloudErrors(listOf(chosen), WHAT_FAILED)
-    }
-    if (com.point.core.flow.looksLikeQuotaFailure(chosen)) {
-        return com.point.core.flow.FREE_LIMITS_SPENT_TEXT
-    }
-    return chosen.substringBefore('\n').take(120)
+    // владельца, 2026-08-09): транспортная ошибка — не слова для человека. Признаки разбирает
+    // общая сводка (#1237) — своя ветка здесь рассказывала человеку про ту же оборвавшуюся
+    // связь отдельную историю, а до глагола этой дороги очередь не доходила никогда.
+    return com.point.core.flow.summariseCloudErrors(listOf(chosen), WHAT_FAILED)
 }
 
 internal fun parseTable(raw: String): List<List<String>> {

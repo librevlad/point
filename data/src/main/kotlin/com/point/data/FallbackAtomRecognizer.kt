@@ -25,7 +25,7 @@ class FallbackAtomRecognizer @Inject constructor(
                 val layer = reader.read(obj)
                 if (layer.atoms.isNotEmpty()) return layer
                 // Идентификатор читалки человеку не адресован (#1259).
-                errors += PAGE_READ_EMPTY
+                errors += com.point.core.flow.PAGE_READ_EMPTY
             } catch (e: Exception) {
                 errors += e.message ?: e.javaClass.simpleName
             }
@@ -45,8 +45,5 @@ class FallbackAtomRecognizer @Inject constructor(
 
         /** Глагол этой цепочки для общей сводки отказов (#1237). */
         const val WHAT_FAILED = "прочитать"
-
-        /** Читатель посмотрел и текста не увидел — без имени читателя (#1259). */
-        const val PAGE_READ_EMPTY = "страница прочитана пустой"
     }
 }

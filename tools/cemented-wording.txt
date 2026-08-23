@@ -120,7 +120,7 @@
 3 executors/src/test/kotlin/com/point/executors/DefaultResolverTest.kt
 3 executors/src/test/kotlin/com/point/executors/DeviceOcrRealizerTest.kt
 4 executors/src/test/kotlin/com/point/executors/EntityActionsTest.kt
-5 executors/src/test/kotlin/com/point/executors/ExcelLayoutTest.kt
+4 executors/src/test/kotlin/com/point/executors/ExcelLayoutTest.kt
 1 executors/src/test/kotlin/com/point/executors/ExternalEyeOcrTest.kt
 1 executors/src/test/kotlin/com/point/executors/ExtractedObjectActionsTest.kt
 7 executors/src/test/kotlin/com/point/executors/FindActionTest.kt

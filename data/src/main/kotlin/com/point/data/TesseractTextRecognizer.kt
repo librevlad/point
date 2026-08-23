@@ -41,7 +41,12 @@ class TesseractTextRecognizer @Inject constructor(
         val decoded = decodeBounded(obj.uri.value, OCR_MAX_PX)
         if (decoded == null) {
             Log.w(TAG, "bitmap decode failed: ${obj.mime} @ ${obj.uri.value}")
-            return@withContext done(AtomLayer(emptyList(), incomplete = "decode failed"), budget)
+            // Сигнал «байты не разобрались» объявлен один на всех читателей (#1258): по нему
+            // потребитель и переводит человеку, и решает, о самом объекте отказ.
+            return@withContext done(
+                AtomLayer(emptyList(), incomplete = com.point.core.flow.READER_NOT_DECODED),
+                budget,
+            )
         }
 
         val ready = preparedBitmap(decoded.bitmap, knownTextHeightPx(obj))

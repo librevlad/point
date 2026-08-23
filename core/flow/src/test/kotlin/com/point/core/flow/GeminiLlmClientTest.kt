@@ -74,6 +74,50 @@ class GeminiLlmClientTest {
         assertEquals("код остаётся Point, а не человеку", 429, (e as? AiServiceRefusal)?.status)
     }
 
+    /**
+     * Квота не теряется на смешанном наборе (#1236).
+     *
+     * Наружу уходил последний отказ: первая модель говорила «лимит исчерпан», вторая молчала
+     * пятисотой — и человек читал «сервис сейчас не отвечает», а память сервиса запоминала
+     * «не отвечал». Завтра он вернётся и упрётся в тот же предел, ничего про него не зная.
+     */
+    @Test
+    fun `одна модель упёрлась в предел, другая промолчала — человеку назван предел`() = runTest {
+        val codes = listOf(429, 500)
+        var at = 0
+        val http = object : HttpJson {
+            override suspend fun post(url: String, headers: Map<String, String>, body: String) =
+                HttpResult(codes[at++], "{}")
+        }
+
+        val e = runCatching {
+            GeminiLlmClient(http, store, "key", listOf("m1", "m2")).run(textObj, "hi")
+        }.exceptionOrNull()
+
+        val said = e?.message.orEmpty()
+        assertTrue("предел потерян: «$said»", looksLikeQuotaFailure(said))
+        assertEquals(AiOutcome.LIMIT, aiOutcomeOf(e!!))
+    }
+
+    /**
+     * Спрашивать было нечего — и это не «ключ не задан» (#1236): ключ здесь как раз задан,
+     * а человека звали заводить второй.
+     */
+    @Test
+    fun `спрашивать нечего — про ключ ни слова`() = runTest {
+        val http = object : HttpJson {
+            override suspend fun post(url: String, headers: Map<String, String>, body: String) =
+                HttpResult(200, okBody)
+        }
+
+        val said = runCatching {
+            GeminiLlmClient(http, store, "key", emptyList()).run(textObj, "hi")
+        }.exceptionOrNull()?.message.orEmpty()
+
+        assertFalse("ключ задан, а человека зовут его задать: «$said»", said.contains(AI_KEY_HINT))
+        assertEquals(SERVICE_NOT_SET_UP, said)
+    }
+
     private fun audio(mime: String, name: String? = null) = PointObject(
         "v", mime, ScratchRef("/x.bin"), ObjectState(ObjectKind.AUDIO),
         metadata = name?.let { mapOf("name" to it) } ?: emptyMap(),

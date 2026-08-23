@@ -46,7 +46,10 @@ class LoggingLlmClient(
                 runCatching { File(res.uri.value).takeIf(File::isFile)?.readText() }.getOrNull()
                     ?: "<ответ не текстом>"
             },
-            onFailure = { "<ошибка: ${it.message}>" },
+            // Наши слова отказа — и рядом то, что сервис ответил на самом деле (#1236).
+            // Чужой ответ ушёл из текста исключения, чтобы не попадать человеку на баннер,
+            // и приезжает сюда отдельным каналом: иначе 400 и 500 нечем разобрать.
+            onFailure = { "<ошибка: ${it.message}>" + (serviceSaidIn(it)?.let { said -> "\n$said" } ?: "") },
         )
         File(dir, "llm-%013d-%03d.txt".format(now(), seq.incrementAndGet() % 1000)).writeText(
             "=== OBJECT ===\n${obj.id}\n=== PROMPT ===\n$prompt\n=== ANSWER ===\n$answer\n",

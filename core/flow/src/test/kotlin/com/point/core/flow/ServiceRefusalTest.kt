@@ -77,6 +77,40 @@ class ServiceRefusalTest {
     }
 
     /**
+     * Признак беды один — значит и словарь один (#1236/#1237).
+     *
+     * Словарей «великоват» было два: чтение снимка знало «413», отказ внутри успешного ответа
+     * знал «size exceeds», и один и тот же ответ сервиса на двух дорогах получал разные слова
+     * — на одной «Прочитать сейчас не вышло», хотя дело в размере и человек может уменьшить
+     * снимок.
+     */
+    @Test
+    fun `великоватый снимок узнаётся одинаково на обеих дорогах`() {
+        listOf("File size exceeds limit", "maximum size 1024 KB", "413 payload too large").forEach {
+            assertEquals(serviceRefusal(413), serviceRefusalInAnswer(it))
+            assertEquals(
+                "«$it» про размер, а чтение снимка этого не поняло",
+                readerFailure("413 payload too large", com.point.core.model.ObjectKind.IMAGE),
+                readerFailure(it, com.point.core.model.ObjectKind.IMAGE),
+            )
+        }
+    }
+
+    /**
+     * Третий список признака «ключ не принят» жил рядом с памятью исходов (#1236): отказ,
+     * который разбор чужого ответа называл непринятым ключом, память запоминала как молчание
+     * — и на экране ключей человек читал «не отвечал» там, где надо было поправить ключ.
+     */
+    @Test
+    fun `непринятый ключ узнаётся и словами человеку, и памятью исходов`() {
+        listOf("Invalid API key", "401 Unauthorized", "Forbidden").forEach {
+            assertEquals(serviceRefusal(401), serviceRefusalInAnswer(it))
+            assertEquals("«$it» — про ключ", AiOutcome.BAD_KEY, aiOutcomeOfFailure(it))
+        }
+        assertEquals("наше объявленное слово — тот же признак", AiOutcome.BAD_KEY, aiOutcomeOfFailure(KEY_NOT_TAKEN))
+    }
+
+    /**
      * Сторож шва (#1236): чужой ответ и код протокола не попадают в текст исключения, а
      * значит и на экран — `FlowViewModel` показывает `message` как есть. Раньше правило
      * держалось на ручном списке файлов, и десятый клиент в него просто не попадал.

@@ -71,8 +71,30 @@ class FallbackLlmClientTest {
             List(8) { failing("""Unable to resolve host "api.groq.com": No address associated with hostname""") },
         )
         val error = runCatching { client.run(obj, "hi") }.exceptionOrNull()
-        assertEquals(NO_NETWORK_TEXT, error?.message)
+        assertEquals(CONNECTION_LOST_TEXT, error?.message)
         assertFalse(error?.message?.contains("resolve host") == true)
+    }
+
+    /**
+     * Догадка по чужой строке не выдаётся за факт о телефоне (#1237).
+     *
+     * Сводка ловит «timed out» и «Connection reset» — так отвечает и молчащий сервис при живом
+     * интернете. Человеку говорили «На телефоне нет интернета. Подключитесь» — причина ложная,
+     * и шаг ложный: подключаться ему не к чему, интернет у него есть. Про телефон говорит
+     * только тот, кто телефон и спросил.
+     */
+    @Test
+    fun `сервис молчал, а интернет есть — человеку не говорят, что интернета нет`() = runTest {
+        val client = chain(
+            listOf(failing("Read timed out"), failing("Connection reset by peer")),
+            network = NetworkAvailability { true },
+        )
+
+        val said = runCatching { client.run(obj, "hi") }.exceptionOrNull()?.message.orEmpty()
+
+        assertEquals(CONNECTION_LOST_TEXT, said)
+        assertFalse("телефон этого не подтверждал: «$said»", said == NO_NETWORK_TEXT)
+        assertTrue("шаг человеку назван: «$said»", said.contains("ещё раз"))
     }
 
     @Test
@@ -173,7 +195,11 @@ class FallbackLlmClientTest {
             chain(listOf(unconfigured(), offline())).run(obj, "пойми")
         }.exceptionOrNull()
 
-        assertEquals(NO_NETWORK_TEXT, error?.message)
+        // Телефон в этом прогоне отвечает «сеть есть», поэтому и слово — про оборвавшуюся
+        // связь, а не про выключенный интернет (#1237): утверждать за телефон нечем.
+        assertEquals(CONNECTION_LOST_TEXT, error?.message)
+        assertFalse(error?.message, error?.message?.contains("ключ") == true)
+        assertFalse(error?.message, error?.message?.contains("resolve host") == true)
     }
 
     @Test

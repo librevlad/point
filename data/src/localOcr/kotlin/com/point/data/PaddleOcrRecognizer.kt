@@ -80,7 +80,7 @@ class PaddleOcrRecognizer @Inject constructor(
         // одно техническое слово не похоже, и негодный снимок уходил разовой неудачей
         // операции вместо знания об объекте. Слово то же, что у соседнего движка.
         val source = decodeBoundedUpright(obj.uri.value, MAX_PX)
-            ?: return@withContext AtomLayer(emptyList(), incomplete = "decode failed")
+            ?: return@withContext AtomLayer(emptyList(), incomplete = com.point.core.flow.READER_NOT_DECODED)
 
         try {
             val lines = runCatching { detect(source) }.getOrElse {

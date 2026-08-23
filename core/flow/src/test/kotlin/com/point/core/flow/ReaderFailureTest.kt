@@ -55,7 +55,7 @@ class ReaderFailureTest {
     @Test
     fun `слова про поломку файла звучат ровно там, где дело в самом объекте`() {
         val signals = listOf(
-            null, "", "decode failed", "not an image", "corrupt stream", READER_NO_PAGES,
+            null, "", READER_NOT_DECODED, "not an image", "corrupt stream", READER_NO_PAGES,
             "read timed out", "413 payload too large", "engine init failed",
             "error: OutOfMemoryError", "java.lang.IllegalStateException",
         )
@@ -67,14 +67,24 @@ class ReaderFailureTest {
             assertTrue("«$it» про объект, а сказано «$said»", said == emptyDocument || said.contains("повреждён"))
         }
 
-        // Пустой сигнал — исключение по договорённости: так зовут оттуда, где байты не
-        // декодировались, а путь наружу молчаливый срыв всё равно не закрывает.
-        signals.filterNot { readerFailureIsFatal(it) }
-            .filterNot { it.isNullOrBlank() }
-            .forEach {
-                val said = readerFailure(it, ObjectKind.IMAGE)
-                assertFalse("«$it» не про объект, а сказано «$said»", said.contains("повреждён"))
-            }
+        // Исключений у правила нет — включая молчание. Кто видел неразобранные байты, тот
+        // называет сигнал ([READER_NOT_DECODED]); молчание не доказывает ничего про объект
+        // (#684/#685), и слов про поломку у него быть не может.
+        signals.filterNot { readerFailureIsFatal(it) }.forEach {
+            val said = readerFailure(it, ObjectKind.IMAGE)
+            assertFalse("«$it» не про объект, а сказано «$said»", said.contains("повреждён"))
+        }
+    }
+
+    /**
+     * Тот, кто видел неразобранные байты, говорит об этом сигналом, а не молчанием (#1258):
+     * читатель кодов и очистка снимка звали `readerFailure(null)`, и словарь отвечал «файл
+     * повреждён» там, где годность объекта отвечала «дело не в объекте».
+     */
+    @Test
+    fun `неразобранные байты — про сам объект и словами, и годностью`() {
+        assertTrue(readerFailureIsFatal(READER_NOT_DECODED))
+        assertTrue(readerFailure(READER_NOT_DECODED, ObjectKind.IMAGE).contains("не открылся"))
     }
 
     @Test
@@ -105,13 +115,16 @@ class ReaderFailureTest {
     @Test
     fun `слово по виду не зависит от того, как именно ридер назвал поломку`() {
         val kinds = listOf(ObjectKind.PDF, ObjectKind.IMAGE)
-        val reasons = listOf(null, "", "decode failed", "not an image", "malformed")
+        val reasons = listOf(READER_NOT_DECODED, "not an image", "malformed")
 
         kinds.forEach { kind ->
             val saidForKind = reasons.map { readerFailure(it, kind) }.toSet()
             assertEquals("у вида $kind одно слово отказа на все поломки", 1, saidForKind.size)
         }
-        assertFalse("PDF и изображение объяснены разными словами", readerFailure(null, ObjectKind.PDF) == readerFailure(null, ObjectKind.IMAGE))
+        assertFalse(
+            "PDF и изображение объяснены разными словами",
+            readerFailure(READER_NOT_DECODED, ObjectKind.PDF) == readerFailure(READER_NOT_DECODED, ObjectKind.IMAGE),
+        )
     }
 
     @Test

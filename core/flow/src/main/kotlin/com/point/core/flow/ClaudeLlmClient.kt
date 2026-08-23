@@ -43,9 +43,15 @@ class ClaudeLlmClient(
             )
 
             // Отказ сервиса — общими словами, код остаётся внутри исключения (#1236):
-            // «Claude HTTP 429: {"type":"error"…}» уходил человеку на баннер дословно.
+            // «Claude HTTP 429: {"type":"error"…}» уходил человеку на баннер дословно. Сам
+            // ответ сервиса едет отдельным полем в журнал обменов и человеку не показывается.
             if (res.code !in 200..299) {
-                throw AiServiceRefusal(serviceId, res.code, serviceRefusal(res.code, hintFor(res.code)))
+                throw AiServiceRefusal(
+                    serviceId,
+                    res.code,
+                    serviceRefusal(res.code, hintFor(res.code)),
+                    serviceSaid = res.body,
+                )
             }
             val answer = parseAnswer(res.body)
             val ref = store.newScratchFile("md")

@@ -65,7 +65,12 @@ class CleanMetadataRealizer @Inject constructor(
                 reportStage("Читаю снимок")
                 val source = BitmapFactory.decodeFile(input.uri.value)
                     ?: return@withContext ActionResult.Failure(
-                        com.point.core.flow.readerFailure(null, input.state.kind),
+                        // Байты не разобрались в снимок — сигнал назван, а не передан
+                        // молчанием: словарь и годность объекта читают один разбор (#1258).
+                        com.point.core.flow.readerFailure(
+                            com.point.core.flow.READER_NOT_DECODED,
+                            input.state.kind,
+                        ),
                         recoverable = false,
                     )
 

@@ -46,6 +46,11 @@ class FallbackLlmClient(
         val rotating = avoidServices.isNotEmpty() && fresh.isNotEmpty()
         val allowed = if (rotating) fresh else allowedAll
         val errors = mutableListOf<String>()
+
+        // Чужой ответ дословно — для журнала обменов, не для человека (#1236). Цепочка
+        // единственная, кто видит отказ каждого сервиса: дальше едет уже сводка, и без
+        // этого канала отладочный стенд не узнает, чем сервис ответил на самом деле.
+        val serviceSaid = mutableListOf<String>()
         var considered = 0
         var skippedUnconfigured = 0
         for (provider in allowed) {
@@ -91,6 +96,7 @@ class FallbackLlmClient(
                 // последний настоящий факт, а не догадку (#699).
                 facts.remember(provider.serviceId, aiOutcomeOf(e))
                 errors += e.message ?: e.javaClass.simpleName
+                serviceSaidIn(e)?.let { serviceSaid += "${provider.serviceId}: $it" }
             }
         }
         if (considered == 0) {
@@ -110,7 +116,9 @@ class FallbackLlmClient(
         // интернета нет. Сначала называется то, что он может исправить, — тем же словом,
         // каким Point говорит про сеть до начала действия.
         if (!network.isAvailable()) error(NO_NETWORK_TEXT)
-        error(summariseCloudErrors(errors, WHAT_FAILED))
+        val said = summariseCloudErrors(errors, WHAT_FAILED)
+        if (serviceSaid.isEmpty()) error(said)
+        throw CloudChainRefusal(said, serviceSaid.joinToString("\n\n"))
     }
 
     companion object {

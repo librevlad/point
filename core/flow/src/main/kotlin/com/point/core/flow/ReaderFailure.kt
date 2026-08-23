@@ -15,7 +15,7 @@ import com.point.core.model.ObjectKind
  * слова молча.
  */
 fun readerFailure(reason: String?, kind: ObjectKind): String = when (troubleOf(reason)) {
-    ReaderTrouble.NOTHING_DECODED, ReaderTrouble.BROKEN -> brokenFile(kind)
+    ReaderTrouble.BROKEN -> brokenFile(kind)
     ReaderTrouble.NO_PAGES -> EMPTY_DOCUMENT
     ReaderTrouble.TOO_SLOW -> "Чтение заняло слишком долго и оборвалось"
     ReaderTrouble.TOO_BIG -> "Снимок слишком большой, чтобы его прочитать"
@@ -40,6 +40,16 @@ const val READ_NOT_NOW = "Прочитать сейчас не вышло — п
 const val READER_NO_PAGES = "pdf has no pages"
 
 /**
+ * Технический сигнал ридера: байты не разобрались в снимок (#1258).
+ *
+ * Раньше это место звалось пустым сигналом — `readerFailure(null)`, — и словарь отвечал на
+ * него «файл повреждён», а годность объекта на тот же вход отвечала «дело не в объекте». Обе
+ * функции читают один разбор, поэтому и вход у них один: кто видел неразобранные байты, тот
+ * их и называет. Сам сигнал человеку не показывается — его переводит [readerFailure].
+ */
+const val READER_NOT_DECODED = "decode failed"
+
+/**
  * Только это действительно говорит о самом объекте, а не о попытке прочитать его сейчас
  * (#684/#685): байты не декодируются, это не изображение вовсе, страниц нет ни одной.
  * Долгое чтение, слишком большой снимок, не запустившийся движок — про исполнение здесь и
@@ -55,20 +65,19 @@ fun readerFailureIsFatal(reason: String?): Boolean = when (troubleOf(reason)) {
  * человеку, и на вопрос «дело в самом объекте?». Пока разборов было два, один и тот же
  * сигнал получал «файл повреждён» от первого и «это не про объект» от второго.
  */
-private enum class ReaderTrouble { NOTHING_DECODED, BROKEN, NO_PAGES, TOO_SLOW, TOO_BIG, NOT_NOW }
+private enum class ReaderTrouble { BROKEN, NO_PAGES, TOO_SLOW, TOO_BIG, NOT_NOW }
 
 private fun troubleOf(reason: String?): ReaderTrouble {
+
+    // Отдельной ветки у пустого сигнала нет, и это решение: молчание не закрывает путь наружу
+    // (#684/#685), а раз так — и «повреждён» про него говорить нельзя. Кто действительно видел
+    // неразобранные байты, называет это [READER_NOT_DECODED] (#1258).
     val said = reason.orEmpty().lowercase()
     return when {
-
-        // Сигнала нет вовсе: так зовут оттуда, где байты не декодировались (`readerFailure(null)`
-        // у читателя кодов). Слово про файл, но путь наружу молчаливый срыв не закрывает — на
-        // это нужен названный сигнал (#684/#685).
-        said.isBlank() -> ReaderTrouble.NOTHING_DECODED
         NO_PAGES.any { it in said } -> ReaderTrouble.NO_PAGES
         NOT_AN_IMAGE.any { it in said } -> ReaderTrouble.BROKEN
         TOO_SLOW.any { it in said } -> ReaderTrouble.TOO_SLOW
-        TOO_BIG.any { it in said } -> ReaderTrouble.TOO_BIG
+        looksLikeTooBig(said) -> ReaderTrouble.TOO_BIG
         else -> ReaderTrouble.NOT_NOW
     }
 }
@@ -91,5 +100,3 @@ private val NOT_AN_IMAGE = listOf("decode", "not an image", "unsupported", "corr
 private val NO_PAGES = listOf("no pages")
 
 private val TOO_SLOW = listOf("timeout", "timed out", "deadline")
-
-private val TOO_BIG = listOf("too large", "too big", "size limit", "413")

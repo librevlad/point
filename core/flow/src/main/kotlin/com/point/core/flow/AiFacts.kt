@@ -26,11 +26,16 @@ interface AiFacts {
 /**
  * Отказ конкретного сервиса: человеку — слова, Point — ещё и код ответа, чтобы
  * «лимит исчерпан» не превращался в «не отвечал» при пересказе.
+ *
+ * @param serviceSaid чужой ответ дословно — для журнала обменов, не для человека (#1236).
+ *   Пока он стоял в тексте исключения, он уезжал на баннер; выбросить его совсем значило
+ *   оставить отладочный стенд без единого следа, чем ответил сервис на 400 и 500.
  */
 class AiServiceRefusal(
     val serviceId: String,
     val status: Int?,
     message: String,
+    val serviceSaid: String? = null,
 ) : IllegalStateException(message)
 
 const val KEY_NOT_ACCEPTED = "ключ не принят"
@@ -52,18 +57,32 @@ fun aiOutcomeOfStatus(status: Int?): AiOutcome = when {
 
 fun aiOutcomeOfFailure(message: String): AiOutcome = when {
     looksLikeQuotaFailure(message) -> AiOutcome.LIMIT
-    KEY_FAILURE_MARKS.any { message.contains(it, ignoreCase = true) } -> AiOutcome.BAD_KEY
+
+    // Признак «ключ не приняли» — из общего словаря (#1236): подстроки «HTTP 401/403»
+    // держались здесь за строку с кодом ответа и куском чужого JSON, которую человек читал
+    // на баннере. Теперь такие клиенты бросают [AiServiceRefusal] с кодом, а по тексту
+    // признак узнаётся там же, где его узнаёт разбор чужого ответа.
+    looksLikeKeyRefusal(message) -> AiOutcome.BAD_KEY
     else -> AiOutcome.SILENT
 }
 
 /**
- * Признак «ключ не приняли» — по объявленным словам (#1236). Подстроки «HTTP 401/403» здесь
- * держались за строку с кодом ответа и куском чужого JSON, которую человек читал на баннере; теперь
- * такие клиенты бросают [AiServiceRefusal] с кодом, и исход берётся из кода, а не из текста.
- * Скобки с числом остались для чужих строк, приходящих как есть.
+ * Какой из отказов цепочки пересказывать дальше (#1236).
+ *
+ * Перебор оставлял наружу последний отказ, и на смешанном наборе признак терялся: первая
+ * модель ответила «лимит исчерпан», вторая промолчала пятисотой — и человек читал «сервис не
+ * отвечает», а память сервиса запоминала «не отвечал» вместо «лимит исчерпан». Громче тот,
+ * чей исход человек может изменить: непринятый ключ и исчерпанный предел сильнее молчания.
+ * При равной громкости остаётся первый — он и случился раньше.
  */
-private val KEY_FAILURE_MARKS =
-    listOf(KEY_NOT_ACCEPTED, KEY_NOT_TAKEN, "(401)", "(403)")
+fun louderRefusal(kept: Exception?, next: Exception): Exception =
+    if (kept == null || refusalLoudness(next) > refusalLoudness(kept)) next else kept
+
+private fun refusalLoudness(failure: Throwable): Int = when (aiOutcomeOf(failure)) {
+    AiOutcome.BAD_KEY, AiOutcome.LIMIT -> 2
+    AiOutcome.SILENT -> 1
+    AiOutcome.ANSWERED -> 0
+}
 
 /** Пока к сервису не обращались — говорить о нём в строке нечего (#887). */
 const val NEVER_ASKED = "ещё не обращались"

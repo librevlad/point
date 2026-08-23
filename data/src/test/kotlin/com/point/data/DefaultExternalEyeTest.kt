@@ -202,15 +202,29 @@ class DefaultExternalEyeTest {
         assertFalse(error.message!!, error.message!!.contains("купить"))
     }
 
+    /**
+     * Приписка стоит везде, где ключ может помочь (#1260), а не только у исчерпанного
+     * предела: сервис не принял ключ, сервис посмотрел и текста не отдал, сервис сорвался —
+     * во всех этих случаях сильный читатель ответил бы, и человек об этом узнаёт.
+     */
     @Test
     fun `сильнейший читатель выпал без ключа — об этом сказано вместе с отказом`() = runTest {
-        val chain = chain(
-            eye("сильный", hasKey = false) { error("сюда не доходим") },
-            eye("безключевой") { error(com.point.core.flow.serviceRefusal(429)) },
+        val refusals = listOf(
+            com.point.core.flow.serviceRefusal(429),
+            com.point.core.flow.serviceRefusal(401),
+            com.point.core.flow.SERVICE_DID_NOT_READ,
+            "страница сегодня не по зубам",
         )
-        val error = runCatching { chain.read(pageObject) }.exceptionOrNull()
 
-        assertTrue(error?.message!!, error.message!!.contains("бесплатный ключ Mistral"))
+        refusals.forEach { refusal ->
+            val chain = chain(
+                eye("сильный", hasKey = false) { error("сюда не доходим") },
+                eye("безключевой") { error(refusal) },
+            )
+            val error = runCatching { chain.read(pageObject) }.exceptionOrNull()
+
+            assertTrue("«$refusal» — про ключ не сказано: ${error?.message}", error!!.message!!.contains("ключ Mistral"))
+        }
     }
 
     @Test
@@ -247,8 +261,8 @@ class DefaultExternalEyeTest {
 
         val error = runCatching { chain.read(pageObject) }.exceptionOrNull()
 
-        assertEquals(com.point.core.flow.NO_NETWORK_TEXT, error?.message)
-        assertFalse("совет завести ключ там, где выключен интернет", error?.message!!.contains("ключ Mistral"))
+        assertEquals(com.point.core.flow.CONNECTION_LOST_TEXT, error?.message)
+        assertFalse("совет завести ключ там, где оборвалась связь", error?.message!!.contains("ключ Mistral"))
     }
 
     @Test

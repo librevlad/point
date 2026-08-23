@@ -67,7 +67,7 @@ class DefaultExternalEye @Inject constructor(
 
                 // Идентификатор читалки человеку не адресован (#1259): он остаётся в
                 // metadata `engine` у результата, а не в строке на баннере.
-                errors += PAGE_READ_EMPTY
+                errors += com.point.core.flow.PAGE_READ_EMPTY
             } catch (e: Exception) {
                 failed = true
                 errors += e.message ?: e.javaClass.simpleName
@@ -80,11 +80,17 @@ class DefaultExternalEye @Inject constructor(
         // Стоило одному сорваться — ответа нет: он мог увидеть то, чего не увидели другие.
         if (sawNoText != null && !failed) return sawNoText
 
-        // Приписка про ключ — только там, где ключ и решает (#1260). Офлайн она советовала
-        // идти в настройки и заводить ключ, хотя выключен был интернет: человек тратил ход
-        // на действие, которое ничего не изменит.
+        // Приписка про ключ — только там, где ключ и решает (#1260). Оборвалась связь —
+        // приписка советовала идти в настройки и заводить ключ, хотя ключ там ничего не
+        // меняет: человек тратил ход впустую. Везде, где сильный читатель мог бы ответить —
+        // непринятый ключ, исчерпанный предел, отказ без причины, — про него сказано.
+        //
+        // Решает ветка сводки, а не сравнение готовой строки: сравнение гасило приписку от
+        // любого суффикса и не знало бы про новую ветку (#1260).
         val said = summariseCloudErrors(errors, WHAT_FAILED)
-        error(said + if (said == com.point.core.flow.FREE_LIMITS_SPENT_TEXT) keyHint() else "")
+        val keyMayHelp = com.point.core.flow.cloudRefusalKind(errors) !=
+            com.point.core.flow.CloudRefusalKind.CONNECTION_LOST
+        error(said + if (keyMayHelp) keyHint() else "")
     }
 
     private fun keyHint(): String {
@@ -115,9 +121,6 @@ class DefaultExternalEye @Inject constructor(
 
         /** Глагол этой цепочки для общей сводки отказов (#1237). */
         const val WHAT_FAILED = "прочитать"
-
-        /** Читатель посмотрел и текста не увидел — без имени читателя (#1259). */
-        const val PAGE_READ_EMPTY = "страница прочитана пустой"
 
         const val KEY_HINT =
             ". Есть читатель посильнее — он включится, если задать бесплатный ключ Mistral (см. настройки)"

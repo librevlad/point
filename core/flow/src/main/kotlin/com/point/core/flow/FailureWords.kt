@@ -13,6 +13,31 @@ fun looksLikeQuotaFailure(error: String): Boolean =
     QUOTA_FAILURE_HINTS.any { error.contains(it, ignoreCase = true) }
 
 /**
+ * Признак «великоват» — из одного объявленного места (#1236/#1237).
+ *
+ * Словарей было два: один у чтения снимка ([readerFailure]), другой у отказа, который сервис
+ * прислал внутри успешного ответа. Списки разошлись словами — «size exceeds» знал только
+ * второй, «413» только первый, — и один и тот же ответ сервиса на двух дорогах получал
+ * разные слова. Признак у беды один, значит и словарь один.
+ */
+fun looksLikeTooBig(error: String): Boolean =
+    TOO_BIG_HINTS.any { error.contains(it, ignoreCase = true) }
+
+/**
+ * Признак «ключ не приняли» — из одного объявленного места (#1236).
+ *
+ * Здесь и наши объявленные слова, и следы чужих ответов, приходящих как есть: сервис пишет
+ * про ключ по-английски и кодом внутри успешного ответа, а исход обращения ([aiOutcomeOf])
+ * читает уже нашу фразу. Вопрос один — «ключ не приняли?» — поэтому и словарь один: два
+ * списка расходились, и «Unauthorized» помнил один, а `(401)` другой.
+ *
+ * Не путать с [refusalNeedsKey]: тот отвечает на другой вопрос — «отказ зовёт человека
+ * завести ключ?», и держится на наших подсказках, а не на признаках чужого отказа.
+ */
+fun looksLikeKeyRefusal(error: String): Boolean =
+    KEY_REFUSAL_HINTS.any { error.contains(it, ignoreCase = true) }
+
+/**
  * Нечем открыть — человеческими словами и с выходом (#675/#679): системное
  * «No Activity found to handle Intent { … dat=geo: … }» уходило человеку в лицо.
  */
@@ -64,3 +89,12 @@ private val NETWORK_FAILURE_HINTS = listOf(
  * и объявлена, а коды остались только для чужих строк.
  */
 private val QUOTA_FAILURE_HINTS = listOf(FREE_LIMIT_SPENT, FREE_LIMITS_SPENT_TEXT, "(402)", "(429)")
+
+private val TOO_BIG_HINTS =
+    listOf("too large", "too big", "size limit", "size exceeds", "maximum size", "413")
+
+/** Наши объявленные слова про ключ — и следы чужих ответов, приходящих как есть. */
+private val KEY_REFUSAL_HINTS = listOf(
+    KEY_NOT_ACCEPTED, KEY_NOT_TAKEN, "(401)", "(403)",
+    "api key", "apikey", "api-key", "unauthorized", "not authorized", "invalid key", "forbidden",
+)

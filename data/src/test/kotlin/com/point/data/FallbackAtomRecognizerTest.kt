@@ -132,7 +132,9 @@ class FallbackAtomRecognizerTest {
         )
         val error = runCatching { chain.read(pageObject) }.exceptionOrNull()
 
-        assertEquals(com.point.core.flow.NO_NETWORK_TEXT, error?.message)
+        // Телефон в этом прогоне не спрашивали — сказано ровно то, что видно по чужим
+        // строкам: связь оборвалась (#1237).
+        assertEquals(com.point.core.flow.CONNECTION_LOST_TEXT, error?.message)
         assertFalse(error?.message?.contains("resolve host") == true)
     }
 

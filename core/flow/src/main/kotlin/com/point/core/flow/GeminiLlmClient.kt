@@ -56,11 +56,14 @@ class GeminiLlmClient(
 
                     // Перебор моделей — наша механика, а не событие для человека (#1236):
                     // склейка «m1: …; m2: …» выносила на баннер идентификаторы моделей.
-                    // Наружу уходит последний отказ — уже своими словами.
-                    refused = e
+                    // Наружу уходит самый громкий отказ — своими словами и с кодом: последний
+                    // терял квоту, стоило следующей модели промолчать пятисотой.
+                    refused = louderRefusal(refused, e)
                 }
             }
-            throw refused ?: IllegalStateException("AI не настроен — $AI_KEY_HINT")
+
+            // Спрашивать было нечего — и это не «ключ не задан»: ключ проверен выше (#1236).
+            throw refused ?: IllegalStateException(SERVICE_NOT_SET_UP)
         }
 
     private suspend fun fetch(model: String, obj: PointObject, prompt: String): String {
@@ -75,9 +78,16 @@ class GeminiLlmClient(
 
         // Отказ сервиса — теми же словами, что у остальных клиентов, и с кодом внутри
         // исключения: человеку слова, Point — код, чтобы «лимит исчерпан» не превратился
-        // в «не отвечал» при пересказе (#1236).
+        // в «не отвечал» при пересказе (#1236). Сам ответ сервиса едет третьим полем — в
+        // журнал обменов: на баннер он не попадает, а без него на стенде нечем разобрать,
+        // чем именно сервис ответил на 400 и 500.
         if (res.code !in 200..299) {
-            throw AiServiceRefusal(serviceId, res.code, serviceRefusal(res.code, hintFor(res.code)))
+            throw AiServiceRefusal(
+                serviceId,
+                res.code,
+                serviceRefusal(res.code, hintFor(res.code)),
+                serviceSaid = res.body,
+            )
         }
         return parseAnswer(res.body)
     }
