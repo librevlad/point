@@ -13,24 +13,41 @@ class RefusalSaysWhatToDoTest {
     private val pdf = ObjectState(ObjectKind.PDF)
 
     /**
-     * Совета «разложите на страницы, потом распознайте» больше нет (#1257, #995): страницы
-     * читает само действие, и отказ остаётся только там, где читать оказалось нечего.
+     * Совета «разложите на страницы, потом распознайте» больше нет (#1257, #995): назван один
+     * шаг, который у документа действительно есть, — «Прочитать документ».
      */
     @Test
-    fun `отказ у PDF без текста не отсылает человека в два действия`() {
-        val said = PdfRealizer.NO_TEXT_ANYWHERE
+    fun `отказ у PDF без текста зовёт один существующий шаг, а не два`() {
+        val said = com.point.core.flow.capabilities.NO_READABLE_PDF_LAYER
 
+        assertTrue(said, ReadDocumentCapability().label(pdf) in said)
         assertTrue(said, PagesCapability().label(pdf) !in said)
         assertTrue(said, OcrCapability().label(image) !in said)
-        assertTrue(said, "ни в файле, ни на страницах" in said)
     }
 
+    /** Названный шаг обязан быть у этого документа на месте, иначе совет ведёт в пустоту. */
     @Test
-    fun `отказ у PDF без текста говорит, что случилось со страницами`() {
-        val said = PdfRealizer.NO_TEXT_ANYWHERE
+    fun `шаг, который называет отказ, у такого документа есть`() {
+        val scan = ObjectState(ObjectKind.PDF, setOf(com.point.core.model.Feature.IS_IMAGE_PDF))
 
-        assertTrue(said, "Текста не нашлось" in said)
-        assertTrue("это «не с этим объектом», а не «Point сломался»", "страницы пустые" in said)
+        assertTrue(ReadDocumentCapability().accepts(scan))
+    }
+
+    /**
+     * Отказ офисного документа называет тот формат, который принесли (#997).
+     *
+     * Современная .xlsx слышала про старые .doc и .xls — причину, которая к ней не относится.
+     */
+    @Test
+    fun `отказ офисного документа не валит вину на чужой формат`() {
+        assertTrue(
+            com.point.core.flow.NO_TEXT_IN_OFFICE,
+            ".doc" !in com.point.core.flow.NO_TEXT_IN_OFFICE && ".xls" !in com.point.core.flow.NO_TEXT_IN_OFFICE,
+        )
+        assertTrue(
+            com.point.core.flow.OLD_OFFICE_FORMAT,
+            ".xlsx" in com.point.core.flow.OLD_OFFICE_FORMAT && ".docx" in com.point.core.flow.OLD_OFFICE_FORMAT,
+        )
     }
 
     @Test
@@ -63,8 +80,10 @@ class RefusalSaysWhatToDoTest {
     fun `каждый из этих отказов говорит и что случилось, и что дальше`() {
 
         listOf(
-            PdfRealizer.NO_TEXT_ANYWHERE,
-            PdfRealizer.PAGES_FAILED,
+            com.point.core.flow.capabilities.NO_READABLE_PDF_LAYER,
+            com.point.core.flow.NO_TEXT_IN_OFFICE,
+            com.point.core.flow.OLD_OFFICE_FORMAT,
+            PdfRealizer.PDF_FAILED,
             PdfRealizer.NOT_THIS_OBJECT,
             FallbackRealizer.NOBODY_TO_DO_IT,
             OpenCvScanRealizer.SCAN_FAILED,

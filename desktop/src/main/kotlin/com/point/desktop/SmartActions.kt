@@ -201,7 +201,7 @@ class PcOfficeTextRealizer(
         }
         val file = File.createTempFile("pc-office-", ".txt").apply { writeText(text) }
         ActionResult.Done(
-            PcPdfTextRealizer.PC_TEXT_IS_WITH_DOCUMENT,
+            com.point.core.flow.capabilities.TEXT_IS_WITH_DOCUMENT,
             com.point.core.model.Findings(
                 features = setOf(com.point.core.model.Feature.HAS_TEXT),
                 metadata = mapOf(com.point.core.flow.META_OCR_TEXT_REF to file.absolutePath),

@@ -84,10 +84,10 @@ class PcPdfTextTest {
         assertTrue("мусор из слоя снова сойдёт за текст", mangled.obj.state.has(Feature.IS_IMAGE_PDF))
     }
 
-    /** Совет называет шаг, который у документа есть (#1257). */
+    /** Совет называет шаг, который у документа есть (#1257) — и слова те же, что на телефоне. */
     @Test
     fun `отказ зовёт чтение документа, а не два действия`() {
-        val said = PcPdfTextRealizer.NO_READABLE_LAYER
+        val said = com.point.core.flow.capabilities.NO_READABLE_PDF_LAYER
 
         assertTrue(said, PcReadDocumentCapability().label(ObjectState(ObjectKind.PDF)) in said)
     }

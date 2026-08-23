@@ -136,6 +136,25 @@ class RemotePcRealizer(
     )
 
     /**
+     * Приехавшее знание снова становится знанием этого телефона (#811, #995).
+     *
+     * Компьютер прочитал документ и прислал текст значением: здесь он ложится файлом
+     * устройства, а документ получает признак «текст есть». Без этого попросить компьютер
+     * прочитать документ значило потерять прочитанное: телефон снова считал документ
+     * непрочитанным и звал делать то же самое ещё раз.
+     */
+    private suspend fun landed(understanding: Map<String, String>): com.point.core.model.Findings {
+        val arrived = com.point.core.flow.textArrivedFromTravel(understanding)
+            ?: return com.point.core.model.Findings(metadata = understanding)
+        val kept = store?.let { place ->
+            runCatching {
+                place.newScratchFile("txt").also { java.io.File(it.value).writeText(arrived) }.value
+            }.getOrNull()
+        }
+        return com.point.core.flow.knowledgeArrivedFromTravel(understanding, kept)
+    }
+
+    /**
      * ADR-0001 §20, вариант A (Этап 9): знание с компьютера возвращается ЗНАНИЕМ исходника
      * через `Done.findings`, а произведённый файл — новым объектом Graph. Автоперехода нет:
      * человек остаётся на исходном объекте и видит результат как найденное.
@@ -164,10 +183,10 @@ class RemotePcRealizer(
                 sourceObjects = listOf(input.id),
                 creatorAction = capabilityId.value,
             ).knowingAddress()
+            val known = landed(returned.understanding)
             ActionResult.Done(
                 "${action.label} — готово: ${returned.name}",
-                com.point.core.model.Findings(
-                    metadata = returned.understanding,
+                known.copy(
                     objects = listOf(produced),
                     relations = listOf(
                         com.point.core.model.Relation(
@@ -216,8 +235,7 @@ class RemotePcRealizer(
                         done.detail?.takeIf { it.isNotBlank() } ?: "${action.label} — готово",
                         // Понятое компьютером ложится в исходник тем же путём Done+findings:
                         // перенос не теряет знание (PC2).
-                        com.point.core.model.Findings(metadata = outcome.understanding)
-                            .takeIf { outcome.understanding.isNotEmpty() },
+                        landed(outcome.understanding).takeIf { outcome.understanding.isNotEmpty() },
                     )
                 is PcActionOutcome.Failed -> ActionResult.Failure(
                     done.reason.takeIf { it.isNotBlank() }

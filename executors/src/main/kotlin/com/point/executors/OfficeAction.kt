@@ -45,7 +45,7 @@ class OfficeRealizer @Inject constructor(
                     val ref = store.newScratchFile("txt")
                     File(ref.value).writeText(text)
                     ActionResult.Done(
-                        PdfRealizer.TEXT_IS_WITH_DOCUMENT,
+                        com.point.core.flow.capabilities.TEXT_IS_WITH_DOCUMENT,
                         Findings(
                             features = setOf(Feature.HAS_TEXT),
                             metadata = mapOf(META_OCR_TEXT_REF to ref.value),

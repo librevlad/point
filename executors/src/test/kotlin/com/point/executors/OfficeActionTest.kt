@@ -62,11 +62,19 @@ class OfficeActionTest {
         )
     }
 
+    /**
+     * Причина названа про этот файл, а не про чужой формат (#997).
+     *
+     * Раньше современная .docx слышала «старые .doc и .xls компьютер не открывает» — причину,
+     * которая к ней не относится, и человек искал несуществующую проблему формата.
+     */
     @Test
     fun `пустой документ отказывает с причиной, а не тихим пустым объектом`() = runTest {
         val result = OfficeRealizer(store, extractor("")).perform(docx, null)
 
-        assertTrue(result is ActionResult.Failure)
-        assertTrue((result as ActionResult.Failure).reason.isNotBlank())
+        assertTrue("вышло: $result", result is ActionResult.Failure)
+        val said = (result as ActionResult.Failure).reason
+        assertTrue("причина свалена на чужой формат: $said", ".doc " !in said && ".xls" !in said)
+        assertTrue("сказано, что случилось, но не что дальше: $said", said.split(" — ", ". ").size >= 2)
     }
 }

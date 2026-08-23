@@ -3,9 +3,9 @@ package com.point.executors
 import com.point.core.flow.META_OCR_TEXT_REF
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.OoxmlOfficeTextExtractor
-import com.point.core.flow.PdfRasterizer
 import com.point.core.flow.PdfTextExtractor
-import com.point.core.flow.TextRecognizer
+import com.point.core.flow.capabilities.OfficeCapability
+import com.point.core.flow.capabilities.PdfCapability
 import com.point.core.model.ActionResult
 import com.point.core.model.Feature
 import com.point.core.model.ObjectKind
@@ -29,7 +29,8 @@ import java.util.zip.ZipOutputStream
  * На PDF действие рождало второй объект, который Point тут же объявлял непригодным: папка
  * отрисованных страниц выдавалась за одиночную картинку, объект указывал на каталог и не
  * открывался ни у кого. На современной .xlsx действие падало с причиной про старые .doc и
- * .xls — к этому файлу она не относится вовсе.
+ * .xls — к этому файлу она не относится вовсе. А прочитанный документ оставлял дверь на
+ * месте: три нажатия подряд, и знание объекта не менялось (DSK-040).
  */
 class ExtractTextIsKnowledgeTest {
 
@@ -54,25 +55,6 @@ class ExtractTextIsKnowledgeTest {
         override suspend fun extractText(obj: PointObject) = text
     }
 
-    /** Растеризатор отдаёт папку страниц — ровно так, как он это делает у «Страниц». */
-    private fun pagesFolder(vararg pages: Pair<String, String>): PdfRasterizer {
-        val dir = temp.newFolder("страницы-${System.nanoTime()}")
-        pages.forEach { (name, text) -> File(dir, name).writeText(text) }
-        return object : PdfRasterizer {
-            override suspend fun rasterize(obj: PointObject) = ScratchRef(dir.absolutePath)
-            override suspend fun rasterizeFirstPage(obj: PointObject): ScratchRef? = null
-        }
-    }
-
-    /** Читателю можно подсунуть только файл: каталог не открывается — на этом и падал #995. */
-    private val eyes = object : TextRecognizer {
-        override suspend fun recognize(obj: PointObject): String {
-            val page = File(obj.uri.value)
-            assertTrue("читателю подсунули каталог вместо страницы: $page", page.isFile)
-            return page.readText()
-        }
-    }
-
     private fun pdf() = PointObject(
         id = "pdf",
         mime = "application/pdf",
@@ -95,48 +77,69 @@ class ExtractTextIsKnowledgeTest {
 
     @Test
     fun `текст PDF ложится знанием на сам документ, второго объекта не появляется`() = runTest {
-        val realizer = PdfRealizer(store, layer("Счёт № 12 на 3480 гривен"), pagesFolder(), eyes)
+        val realizer = PdfRealizer(store, layer("Счёт № 12 на 3480 гривен"))
 
         val result = realizer.perform(pdf())
 
         assertTrue(knownText(result).contains("3480"))
     }
 
+    /**
+     * Долгую работу делает то действие, которое её объявляет (#1257).
+     *
+     * «Извлечь текст» обещает «текст документа · без сети» и латентность FAST. Слоя нет или он
+     * нечитаем — страницы рисует и читает «Прочитать документ», у которого объявлены и SLOW, и
+     * вопрос, на который оно отвечает. Отказ называет именно этот шаг, а не путь в два действия.
+     */
     @Test
-    fun `нечитаемый слой не заворачивает папку страниц в картинку — Point читает страницы сам`() = runTest {
-        val realizer = PdfRealizer(
-            store,
-            layer(GARBLED),
-            pagesFolder("page-001.jpg" to "Счёт на 3480", "page-002.jpg" to "Подпись директора"),
-            eyes,
+    fun `нечитаемый слой зовёт «Прочитать документ», а не делает его работу молча`() = runTest {
+        val realizer = PdfRealizer(store, layer(GARBLED))
+
+        val result = realizer.perform(pdf())
+
+        val said = (result as ActionResult.Failure).reason
+        assertTrue(said, ReadDocumentCapability().label(ObjectState(ObjectKind.PDF)) in said)
+        assertFalse(
+            "совет снова ведёт в два действия",
+            PagesCapability().label(ObjectState(ObjectKind.PDF)) in said,
         )
-
-        val known = knownText(realizer.perform(pdf()))
-
-        assertTrue(known, known.contains("Счёт на 3480"))
-        assertTrue("вторая страница потеряна: $known", known.contains("Подпись директора"))
     }
 
+    /**
+     * Дверь долгой работы у такого документа есть — иначе отказ звал бы в пустоту.
+     *
+     * Признак ставит исследование `pdf-image-shape` по общему с компьютером правилу, и
+     * «Извлечь текст» на таком документе больше не рисуется вовсе.
+     */
     @Test
-    fun `пустой слой не отсылает человека в два действия — страницы читаются здесь же`() = runTest {
-        val realizer = PdfRealizer(
-            store,
-            layer("   "),
-            pagesFolder("page-001.jpg" to "Акт выполненных работ"),
-            eyes,
-        )
+    fun `у документа без пригодного слоя дверь чтения открыта, а быстрой двери нет`() {
+        val scan = ObjectState(ObjectKind.PDF, setOf(Feature.IS_IMAGE_PDF))
 
-        assertTrue(knownText(realizer.perform(pdf())).contains("Акт выполненных работ"))
+        assertTrue("читать документ нечем", ReadDocumentCapability().accepts(scan))
+        assertFalse("быстрая дверь обещает то, чего за ней нет", PdfCapability().accepts(scan))
+    }
+
+    /** Второе нажатие ничего не меняло: текст уже знание объекта (#997, DSK-040). */
+    @Test
+    fun `прочитанному документу «Извлечь текст» больше не предлагают`() {
+        val readPdf = ObjectState(ObjectKind.PDF, setOf(Feature.HAS_TEXT))
+        val readOffice = ObjectState(ObjectKind.OFFICE, setOf(Feature.HAS_TEXT))
+
+        assertFalse("дверь осталась на прочитанном PDF", PdfCapability().accepts(readPdf))
+        assertFalse("дверь осталась на прочитанном документе", OfficeCapability().accepts(readOffice))
+        assertTrue("непрочитанный документ дверь потерял", OfficeCapability().accepts(ObjectState(ObjectKind.OFFICE)))
     }
 
     // ——— Таблица: читается своим читателем, отказ называет настоящую причину ———
 
-    private fun xlsx(name: String, sheetXml: String): PointObject {
+    private fun xlsx(name: String, vararg sheets: String): PointObject {
         val file = temp.newFile(name)
         ZipOutputStream(file.outputStream()).use { zos ->
-            zos.putNextEntry(ZipEntry("xl/worksheets/sheet1.xml"))
-            zos.write(sheetXml.toByteArray(Charsets.UTF_8))
-            zos.closeEntry()
+            sheets.forEachIndexed { index, sheetXml ->
+                zos.putNextEntry(ZipEntry("xl/worksheets/sheet${index + 1}.xml"))
+                zos.write(sheetXml.toByteArray(Charsets.UTF_8))
+                zos.closeEntry()
+            }
         }
         return PointObject(
             id = "xlsx",
@@ -158,6 +161,14 @@ class ExtractTextIsKnowledgeTest {
         </sheetData></worksheet>
     """.trimIndent()
 
+    /** Второй лист книги — «Итого»: у сметы владельца сумма и подпись живут именно там. */
+    private val itogo = """
+        <worksheet><sheetData>
+        <row r="1"><c r="A1" t="inlineStr"><is><t>Подпись директора</t></is></c></row>
+        <row r="2"><c r="A2" t="inlineStr"><is><t>К оплате</t></is></c><c r="B2"><v>3480</v></c></row>
+        </sheetData></worksheet>
+    """.trimIndent()
+
     @Test
     fun `смета со строками внутри листа читается — вместе с числами`() = runTest {
         val result = OfficeRealizer(store, OoxmlOfficeTextExtractor())
@@ -166,6 +177,18 @@ class ExtractTextIsKnowledgeTest {
         val known = knownText(result)
         assertTrue(known, known.contains("Работа") && known.contains("Материалы"))
         assertTrue("числа таблицы потеряны: $known", known.contains("3480") && known.contains("250"))
+    }
+
+    /** Книга читается целиком: у неё бывает больше одного листа (#995). */
+    @Test
+    fun `у книги из двух листов читаются оба, а не только первый`() = runTest {
+        val result = OfficeRealizer(store, OoxmlOfficeTextExtractor())
+            .perform(xlsx("смета.xlsx", smeta, itogo), null)
+
+        val known = knownText(result)
+        assertTrue("первый лист потерян: $known", known.contains("Материалы"))
+        assertTrue("второй лист книги потерян: $known", known.contains("Подпись директора"))
+        assertTrue("второй лист потерян вместе с суммой: $known", known.contains("К оплате"))
     }
 
     @Test

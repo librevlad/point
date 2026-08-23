@@ -32,12 +32,6 @@ import javax.inject.Inject
 class PdfRealizer @Inject constructor(
     private val store: ObjectStore,
     private val pdfText: PdfTextExtractor,
-
-    /** Страницы снимком — когда текстового слоя нет или прочитать его нельзя (#933, #995). */
-    private val rasterizer: com.point.core.flow.PdfRasterizer,
-
-    /** Их же читает движок устройства: чтение страниц — не новый механизм, а тот же (#1014). */
-    private val recognizer: com.point.core.flow.TextRecognizer,
 ) : Realizer {
     override val capabilityId = PdfCapability.ID
 
@@ -99,38 +93,32 @@ class PdfRealizer @Inject constructor(
     /**
      * Текст PDF — знание самого документа (#995, решение владельца 21.08.2026).
      *
-     * Второго объекта здесь больше не рождается ни на одном пути. Хуже всего было на запасном:
-     * папка отрисованных страниц выдавалась за одиночную картинку, объект указывал на каталог
-     * и не открывался ни у кого — а настоящая страница лежала внутри и была недостижима.
+     * Второго объекта здесь больше не рождается: раньше на запасном пути папка отрисованных
+     * страниц выдавалась за одиночную картинку — объект указывал на каталог и не открывался
+     * ни у кого, а настоящая страница лежала внутри и была недостижима.
+     *
+     * Из файла достаётся только то, что в файле есть. Слоя нет или он нечитаем (своя
+     * раскладка шрифта, #933) — страницы читает «Прочитать документ» (#1014): там это
+     * объявлено долгой работой, а здесь обещано «текст документа · без сети». Делать долгую
+     * работу за быстрым обещанием — врать человеку, поэтому отказ называет тот шаг, который
+     * у документа есть (#1257), а не второй раз делает его чужими руками.
      */
     private suspend fun pdfToText(input: PointObject): ActionResult {
         reportStage("Извлекаю текст из PDF")
         val text = pdfText.extractText(input)
-
-        // Слой бывает и нечитаемым: у документа своя раскладка шрифта, кириллица лежит под
-        // латинскими кодами, и слой отдаётся мусором вроде `ToeapucrBo 3 o6MexeHop` (#933).
-        // Мусор текстом объекта не становится — Point читает страницы сам, как любой кадр.
-        if (text.isNotBlank() && !com.point.core.flow.ReadableText.unreadable(text)) {
-            val ref = store.newScratchFile("txt")
-            File(ref.value).writeText(text)
-            return ActionResult.Done(
-                TEXT_IS_WITH_DOCUMENT,
-                Findings(
-                    features = setOf(Feature.HAS_TEXT),
-                    metadata = mapOf(com.point.core.flow.META_OCR_TEXT_REF to ref.value),
-                ),
-            )
+        if (com.point.core.flow.pdfLayerUnusable(text)) {
+            return ActionResult.Failure(com.point.core.flow.capabilities.NO_READABLE_PDF_LAYER, recoverable = false)
         }
 
-        reportStage(if (text.isBlank()) NO_LAYER_STAGE else UNREADABLE_STAGE)
-        val pages = runCatching { readPagesWithEyes(input, rasterizer, recognizer) }.getOrNull()
-            ?: return ActionResult.Failure(PAGES_FAILED, recoverable = true)
-        if (pages.total == 0) return ActionResult.Failure(PAGES_FAILED, recoverable = true)
-        if (pages.nothing) return ActionResult.Failure(NO_TEXT_ANYWHERE, recoverable = false)
-
         val ref = store.newScratchFile("txt")
-        File(ref.value).writeText(pages.text)
-        return ActionResult.Done(pages.said(), pages.knowledge(ref))
+        File(ref.value).writeText(text)
+        return ActionResult.Done(
+            com.point.core.flow.capabilities.TEXT_IS_WITH_DOCUMENT,
+            Findings(
+                features = setOf(Feature.HAS_TEXT),
+                metadata = mapOf(com.point.core.flow.META_OCR_TEXT_REF to ref.value),
+            ),
+        )
     }
 
     private suspend fun write(document: PdfDocument): ScratchRef {
@@ -171,20 +159,5 @@ class PdfRealizer @Inject constructor(
         const val NOT_THIS_OBJECT = "В PDF превращаются снимок, текст и документ — этот объект не из них"
 
         const val PDF_FAILED = "PDF не собрался — попробуйте ещё раз"
-
-        /** Текст остался у документа, а не ушёл в отдельный объект (#995). */
-        const val TEXT_IS_WITH_DOCUMENT = "Текст прочитан — он у самого документа"
-
-        /** Слой есть, а прочитать его нельзя: шрифт документа подменяет буквы (#933). */
-        const val UNREADABLE_STAGE = "Текст нечитаем — читаю страницы снимком"
-
-        const val NO_LAYER_STAGE = "Текста в файле нет — читаю страницы снимком"
-
-        const val PAGES_FAILED =
-            "Страницы этого PDF не отрисовались — попробуйте ещё раз или откройте документ целиком"
-
-        const val NO_TEXT_ANYWHERE =
-            "Текста не нашлось ни в файле, ни на страницах — похоже, страницы пустые. " +
-                "Проверьте, тот ли это документ"
     }
 }

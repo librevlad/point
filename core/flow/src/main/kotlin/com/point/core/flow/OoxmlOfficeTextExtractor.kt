@@ -11,8 +11,7 @@ class OoxmlOfficeTextExtractor : OfficeTextExtractor {
     override suspend fun extractText(obj: PointObject): String = withContext(Dispatchers.IO) {
         val out = StringBuilder()
         var shared: String? = null
-        var sheet1: String? = null
-        var anySheet: String? = null
+        val sheets = sortedMapOf<String, String>()
         runCatching {
             ZipInputStream(File(obj.uri.value).inputStream().buffered()).use { zis ->
                 var entry = zis.nextEntry
@@ -23,13 +22,13 @@ class OoxmlOfficeTextExtractor : OfficeTextExtractor {
                             tag != null -> appendTagText(zis.readBytes().toString(Charsets.UTF_8), tag, out)
 
                             // Таблицу разбирает свой читатель (#997): в общем словаре строк
-                            // может не быть вовсе, а чисел там нет никогда.
+                            // может не быть вовсе, а чисел там нет никогда. Листы забираются
+                            // все (#995): у книги их бывает несколько, и текст второго листа
+                            // человеку нужен не меньше, чем текст первого.
                             entry.name == OoxmlSpreadsheetReader.SHARED_STRINGS ->
                                 shared = zis.readBytes().toString(Charsets.UTF_8)
-                            entry.name == OoxmlSpreadsheetReader.FIRST_SHEET ->
-                                sheet1 = zis.readBytes().toString(Charsets.UTF_8)
-                            anySheet == null && OoxmlSpreadsheetReader.isWorksheet(entry.name) ->
-                                anySheet = zis.readBytes().toString(Charsets.UTF_8)
+                            OoxmlSpreadsheetReader.isWorksheet(entry.name) ->
+                                sheets[entry.name] = zis.readBytes().toString(Charsets.UTF_8)
                         }
                     }
                     zis.closeEntry()
@@ -37,7 +36,7 @@ class OoxmlOfficeTextExtractor : OfficeTextExtractor {
                 }
             }
         }
-        val rows = OoxmlSpreadsheetReader.rowsOf(sheet1 ?: anySheet, shared)
+        val rows = OoxmlSpreadsheetReader.rowsOf(sheets, shared)
         if (rows.isEmpty()) {
             out.toString().replace(MULTISPACE, " ").trim()
         } else {

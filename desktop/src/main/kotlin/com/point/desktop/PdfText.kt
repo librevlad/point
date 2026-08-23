@@ -37,10 +37,11 @@ class PdfBoxText : PdfText {
  * Нечитаемый слой считается тем же самым (#933, #995): у документа своя раскладка шрифта,
  * кириллица лежит под латинскими кодами, и «извлечённый» текст — мусор. Такой документ читают
  * страницами, а не файлом, и дверь ему нужна та же, что скану.
+ *
+ * Само правило живёт в `:core:flow` и одно на обе поверхности: телефон спрашивает то же самое
+ * исследованием `pdf-image-shape`. Иначе один документ здесь «скан», а там нет.
  */
-fun looksScanned(pdf: PdfText, file: File): Boolean {
-    val probe = pdf.of(file, pages = SCAN_PROBE_PAGES) ?: return false
-    return probe.isEmpty() || com.point.core.flow.ReadableText.unreadable(probe)
-}
+fun looksScanned(pdf: PdfText, file: File): Boolean =
+    com.point.core.flow.pdfLayerUnusable(pdf.of(file, pages = SCAN_PROBE_PAGES))
 
 private const val SCAN_PROBE_PAGES = 3

@@ -54,7 +54,7 @@ class UnderstoodFactsTest {
     @Test
     fun `describes featureful states without entities`() {
         assertEquals(
-            "Это скан — текст не выделяется",
+            "Текст из файла не достаётся",
             understoodFacts(obj(setOf(Feature.IS_IMAGE_PDF))).single().label,
         )
         assertEquals(

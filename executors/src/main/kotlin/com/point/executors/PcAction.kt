@@ -107,18 +107,16 @@ internal suspend fun travellingMeta(
         com.point.core.flow.META_ORIGIN_ID to
             (obj.metadata[com.point.core.flow.META_ORIGIN_ID] ?: obj.id)
         )
-    val ref = identified[com.point.core.flow.META_OCR_TEXT_REF]?.takeIf { it.isNotBlank() }
-        ?: return identified
+    val ref = com.point.core.flow.textRefForTravel(identified) ?: return identified
     val text = runCatching {
         store.readText(
             obj.copy(uri = com.point.core.model.ScratchRef(ref)),
             limit = com.point.core.flow.READ_TEXT_TRAVEL_LIMIT,
         )
-    }.getOrNull()?.takeIf { it.isNotBlank() } ?: return identified
+    }.getOrNull()
 
     // Ссылка на чужой scratch на той стороне бессмысленна и только притворяется знанием.
-    return identified - com.point.core.flow.META_OCR_TEXT_REF +
-        (com.point.core.flow.META_READ_TEXT to text)
+    return com.point.core.flow.knowledgePackedForTravel(identified, text)
 }
 
 class PcRealizer @Inject constructor(

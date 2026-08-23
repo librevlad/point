@@ -13,13 +13,16 @@ import java.util.zip.ZipInputStream
  * компьютер, — и разбор у них обязан быть один. Строки в .xlsx лежат либо в общем словаре
  * `xl/sharedStrings.xml`, либо прямо в листе (`<is><t>`), а числа — только в листе; читать
  * надо все три случая, иначе современная смета не читается вообще.
+ *
+ * Книга читается целиком, а не первым листом (#995): «Смета» и «Итого» — два листа одного
+ * документа, и человек, открывший книгу, ждёт её содержимое, а не половину. Общий словарь
+ * строк — словарь всей книги, и по одному листу его не разложить.
  */
 class OoxmlSpreadsheetReader : SpreadsheetReader {
 
     override suspend fun readRows(obj: PointObject): List<List<String>> = withContext(Dispatchers.IO) {
         var shared: String? = null
-        var sheet1: String? = null
-        var anySheet: String? = null
+        val sheets = sortedMapOf<String, String>()
         runCatching {
             ZipInputStream(File(obj.uri.value).inputStream().buffered()).use { zis ->
                 var entry = zis.nextEntry
@@ -27,9 +30,8 @@ class OoxmlSpreadsheetReader : SpreadsheetReader {
                     if (!entry.isDirectory) {
                         when {
                             entry.name == SHARED_STRINGS -> shared = zis.readBytes().toString(Charsets.UTF_8)
-                            entry.name == FIRST_SHEET -> sheet1 = zis.readBytes().toString(Charsets.UTF_8)
-                            anySheet == null && isWorksheet(entry.name) ->
-                                anySheet = zis.readBytes().toString(Charsets.UTF_8)
+                            isWorksheet(entry.name) ->
+                                sheets[entry.name] = zis.readBytes().toString(Charsets.UTF_8)
                         }
                     }
                     zis.closeEntry()
@@ -37,22 +39,29 @@ class OoxmlSpreadsheetReader : SpreadsheetReader {
                 }
             }
         }
-        rowsOf(sheet1 ?: anySheet, shared)
+        rowsOf(sheets, shared)
     }
 
     companion object {
 
         const val SHARED_STRINGS = "xl/sharedStrings.xml"
 
-        const val FIRST_SHEET = "xl/worksheets/sheet1.xml"
-
         fun isWorksheet(entryName: String): Boolean = WORKSHEET.matches(entryName)
 
-        /** Разбор без файлов: лист и общий словарь строк уже прочитаны тем, кто открыл пакет. */
-        fun rowsOf(sheetXml: String?, sharedXml: String?): List<List<String>> {
-            val sheet = sheetXml ?: return emptyList()
-            return parseSheet(sheet, sharedXml?.let(::parseShared) ?: emptyList())
+        /**
+         * Разбор без файлов: листы и общий словарь строк уже прочитаны тем, кто открыл пакет.
+         *
+         * Листы идут по своему номеру, а не по порядку записей в архиве: порядок листов —
+         * то, в каком виде человек видит книгу у себя.
+         */
+        fun rowsOf(sheets: Map<String, String>, sharedXml: String?): List<List<String>> {
+            if (sheets.isEmpty()) return emptyList()
+            val shared = sharedXml?.let(::parseShared) ?: emptyList()
+            return sheets.entries.sortedBy { sheetNumber(it.key) }.flatMap { parseSheet(it.value, shared) }
         }
+
+        private fun sheetNumber(entryName: String): Int =
+            WORKSHEET.find(entryName)?.groupValues?.get(1)?.toIntOrNull() ?: Int.MAX_VALUE
 
         private fun parseShared(xml: String): List<String> =
             SI.findAll(xml).map { si -> T.findAll(si.groupValues[1]).joinToString("") { unescape(it.groupValues[1]) } }
@@ -95,7 +104,7 @@ class OoxmlSpreadsheetReader : SpreadsheetReader {
             .replace("&lt;", "<").replace("&gt;", ">")
             .replace("&quot;", "\"").replace("&apos;", "'").replace("&amp;", "&")
 
-        private val WORKSHEET = Regex("""xl/worksheets/sheet\d+\.xml""")
+        private val WORKSHEET = Regex("""xl/worksheets/sheet(\d+)\.xml""")
         private val SI = Regex("""<si\b[^>]*>(.*?)</si>""", RegexOption.DOT_MATCHES_ALL)
         private val ROW = Regex("""<row\b[^>]*>(.*?)</row>""", RegexOption.DOT_MATCHES_ALL)
         private val CELL = Regex("""<c\b([^>]*?)(?:/>|>(.*?)</c>)""", RegexOption.DOT_MATCHES_ALL)

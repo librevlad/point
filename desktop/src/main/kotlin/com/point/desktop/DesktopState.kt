@@ -314,7 +314,7 @@ class DesktopState(
             .filterKeys { it.startsWith(f.UNDERSTOOD) }
             .mapKeys { (k, _) -> k.removePrefix(f.UNDERSTOOD) }
         if (understood.isNotEmpty()) {
-            landFindings(item, com.point.core.model.Findings(metadata = understood))
+            landFindings(item, arrivedKnowledge(item, understood))
         }
 
         if (meta[f.OUTCOME] == f.FAILED) {
@@ -337,6 +337,26 @@ class DesktopState(
         _message.value = detail
         note(item, action, "$label · на телефоне", ActionResult.Done(detail))
         return ActionResult.Done(detail)
+    }
+
+    /**
+     * Прочитанное телефоном ложится здесь файлом рядом с объектом (#811, #995).
+     *
+     * Тот же приём, что и у объекта с телефона (`Inbox`): текст приезжает значением, потому
+     * что ссылка на scratch телефона здесь мертва. Без этого просьба «прочитай у себя»
+     * возвращалась пустой — компьютер снова считал свой документ непрочитанным.
+     */
+    private fun arrivedKnowledge(
+        item: InboxItem,
+        understood: Map<String, String>,
+    ): com.point.core.model.Findings {
+        val arrived = com.point.core.flow.textArrivedFromTravel(understood)
+        val kept = arrived?.let { text ->
+            val own = java.io.File(item.obj.uri.value)
+            val sidecar = java.io.File(own.parentFile, own.nameWithoutExtension + ".read.txt")
+            runCatching { sidecar.writeText(text); sidecar.absolutePath }.getOrNull()
+        }
+        return com.point.core.flow.knowledgeArrivedFromTravel(understood, kept)
     }
 
     private fun landFindings(item: InboxItem, findings: com.point.core.model.Findings) {

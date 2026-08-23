@@ -139,7 +139,10 @@ fun understoodFacts(obj: PointObject): List<UnderstoodFact> {
             add(UnderstoodFact("geo", "Место съёмки", entity("geo"), note("geo")))
         }
         if (state.has(Feature.HAS_VCARD)) add(UnderstoodFact("vcard", "Это визитка"))
-        if (state.has(Feature.IS_IMAGE_PDF)) add(UnderstoodFact("scan", "Это скан — текст не выделяется"))
+        // Признак отвечает на один вопрос: достаётся ли текст из самого файла (#933, #995).
+        // «Текст не выделяется» было правдой только про пустой слой; у документа с подменённой
+        // раскладкой шрифта слой есть и выделяется — мусором. Названо то, что Point проверил.
+        if (state.has(Feature.IS_IMAGE_PDF)) add(UnderstoodFact("scan", "Текст из файла не достаётся"))
         if (state.has(Feature.ZIP_OF_IMAGES)) add(UnderstoodFact("zip-images", "Архив из фотографий"))
 
         // Всё остальное знание — тем же списком (#935).

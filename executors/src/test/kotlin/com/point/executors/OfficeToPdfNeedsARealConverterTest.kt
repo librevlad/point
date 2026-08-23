@@ -66,7 +66,7 @@ class OfficeToPdfNeedsARealConverterTest {
 
     @Test
     fun `свой исполнитель за офисный документ не берётся`() {
-        val realizer = PdfRealizer(NoStore, NoPdfText, NoPages, NoEyes)
+        val realizer = PdfRealizer(NoStore, NoPdfText)
 
         assertFalse("телефон снова пересказывает документ", realizer.accepts(office))
     }
@@ -108,7 +108,7 @@ class OfficeToPdfNeedsARealConverterTest {
             transport = SilentTransport,
         )
         val chosen = com.point.core.flow.DefaultExecutionPolicy()
-            .choose(office, remote.toList() + PdfRealizer(NoStore, NoPdfText, NoPages, NoEyes))
+            .choose(office, remote.toList() + PdfRealizer(NoStore, NoPdfText))
 
         assertEquals(listOf(PdfCapability.ID), chosen.map { it.capabilityId })
         assertTrue("работу снова взял телефон", chosen.single() is RemotePcRealizer)

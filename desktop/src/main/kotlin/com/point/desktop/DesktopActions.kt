@@ -305,35 +305,21 @@ class PcPdfTextRealizer(
         val source = File(input.uri.value)
         val text = pdf.of(source)
             ?: return ActionResult.Failure("Компьютер не смог открыть этот PDF", recoverable = true)
-        if (text.isBlank() || com.point.core.flow.ReadableText.unreadable(text)) {
-            return ActionResult.Failure(NO_READABLE_LAYER, recoverable = false)
+        if (com.point.core.flow.pdfLayerUnusable(text)) {
+            return ActionResult.Failure(com.point.core.flow.capabilities.NO_READABLE_PDF_LAYER, recoverable = false)
         }
 
         val out = File(source.parentFile, source.nameWithoutExtension + " — текст.txt")
         return runCatching {
             out.writeText(text)
             ActionResult.Done(
-                PC_TEXT_IS_WITH_DOCUMENT,
+                com.point.core.flow.capabilities.TEXT_IS_WITH_DOCUMENT,
                 com.point.core.model.Findings(
                     features = setOf(com.point.core.model.Feature.HAS_TEXT),
                     metadata = mapOf(com.point.core.flow.META_OCR_TEXT_REF to out.absolutePath),
                 ),
             )
         }.getOrElse { ActionResult.Failure("Текст не сохранился — проверьте, что на диске есть место", recoverable = true) }
-    }
-
-    internal companion object {
-
-        /** Текст остался у документа, а не ушёл в отдельный объект (#995). */
-        const val PC_TEXT_IS_WITH_DOCUMENT = "Текст прочитан — он у самого документа"
-
-        /**
-         * Совет называет тот шаг, который здесь есть (#1257): «Прочитать документ» читает
-         * страницы снимком. Прежний совет вёл в два действия, которых у документа нет.
-         */
-        const val NO_READABLE_LAYER =
-            "Из файла этот текст не достаётся — страницы сняты картинкой или у документа своя " +
-                "раскладка шрифта. Прочитайте его действием «Прочитать документ»"
     }
 }
 

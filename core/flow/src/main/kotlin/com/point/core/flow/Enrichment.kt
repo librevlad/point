@@ -75,4 +75,45 @@ const val META_ORIGIN_ID = "origin.id"
 /** Длиннее в дорогу не берём: это уже документ, а не знание о нём. */
 const val READ_TEXT_TRAVEL_LIMIT = 100_000
 
+/** Ссылка, по которой лежит прочитанный текст этого устройства, — её и надо прочитать в дорогу. */
+fun textRefForTravel(meta: Map<String, String>): String? =
+    meta[META_OCR_TEXT_REF]?.takeIf { it.isNotBlank() }
+
+/**
+ * Знание собирается в дорогу (#811, #995).
+ *
+ * Ссылка на прочитанный текст — путь в scratch этого устройства, и на той стороне она ведёт
+ * в никуда: объект приезжал «непрочитанным», и там первым делом предлагали прочитать его
+ * заново. Поэтому едет само содержимое, а ссылка не едет вовсе — даже когда прочитать файл
+ * не вышло: мёртвый путь только притворяется знанием.
+ *
+ * [text] — то, что лежит по ссылке; `null`, если прочитать не удалось.
+ */
+fun knowledgePackedForTravel(meta: Map<String, String>, text: String?): Map<String, String> {
+    if (textRefForTravel(meta) == null) return meta
+    val carried = text?.takeIf { it.isNotBlank() } ?: return meta - META_OCR_TEXT_REF
+    return meta - META_OCR_TEXT_REF + (META_READ_TEXT to carried.take(READ_TEXT_TRAVEL_LIMIT))
+}
+
+/** Текст, приехавший значением: его надо положить файлом этого устройства (#811). */
+fun textArrivedFromTravel(meta: Map<String, String>): String? =
+    meta[META_READ_TEXT]?.takeIf { it.isNotBlank() }
+
+/**
+ * Знание приехало и снова становится знанием этой стороны (#811, #995).
+ *
+ * [ref] — куда приехавший текст лёг здесь, или `null`, если положить не вышло. Признак
+ * «текст есть» ставится тут, а не едет отдельным полем протокола: он следует из того, что
+ * текст лёг. Без этого перенос терял понятое — та сторона звала делать уже сделанное.
+ */
+fun knowledgeArrivedFromTravel(meta: Map<String, String>, ref: String?): com.point.core.model.Findings {
+    if (textArrivedFromTravel(meta) == null) return com.point.core.model.Findings(metadata = meta)
+    val kept = ref?.takeIf { it.isNotBlank() }
+        ?: return com.point.core.model.Findings(metadata = meta - META_READ_TEXT)
+    return com.point.core.model.Findings(
+        features = setOf(Feature.HAS_TEXT),
+        metadata = meta - META_READ_TEXT + (META_OCR_TEXT_REF to kept),
+    )
+}
+
 const val META_OCR_ATOMS_REF = "ocr.atoms.ref"
