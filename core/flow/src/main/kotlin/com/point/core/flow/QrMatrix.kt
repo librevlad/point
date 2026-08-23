@@ -41,6 +41,11 @@ private val EC_BLOCKS = intArrayOf(
  * оба»): версия кода растёт под длину текста до самой большой, и отказ наступает только выше
  * этого предела — одинаково на телефоне и на компьютере. Считаются байты UTF-8: в QR помещаются
  * именно они, поэтому кириллическая буква занимает вдвое больше места, чем латинская.
+ *
+ * Число берётся не из общей таблицы вместимости, а из того, что обе поверхности действительно
+ * кодируют: оба кодировщика пишут в код объявление кодировки (см. [ECI_BITS]), и место под него
+ * вычтено здесь же. Обещать байты, которых кодировщик не возьмёт, нельзя — на самом верху человек
+ * получил бы отказ библиотеки вместо честного предела.
  */
 val QR_MAX_BYTES: Int = capacityBytes(QR_MAX_VERSION)
 
@@ -49,6 +54,12 @@ const val QR_TOO_LONG = "Этот текст длиннее, чем помеща
 
 /** Одни и те же слова, когда кодировать нечего (#1084). */
 const val QR_NO_TEXT = "Нет текста для QR-кода"
+
+/**
+ * Одни и те же слова, когда сорвалась сама попытка (#1084). Чужой текст сюда не попадает: он
+ * остаётся в журнале, человеку достаётся одно понятное предложение (#686).
+ */
+const val QR_FAILED = "QR не собрался — попробуйте ещё раз"
 
 fun qrMatrix(text: String): QrMatrix? {
     val data = text.toByteArray(Charsets.UTF_8)
@@ -81,14 +92,31 @@ fun qrMatrix(text: String): QrMatrix? {
 
 private const val QR_MAX_VERSION = 40
 
-/** Сколько байт текста помещается в версию: за вычетом заголовка и счётчика длины (#1084). */
+/**
+ * Сколько байт текста помещается в версию: за вычетом объявления кодировки, заголовка и
+ * счётчика длины (#1084).
+ */
 private fun capacityBytes(version: Int): Int =
-    (dataCodewords(version) * 8 - MODE_BITS - countBits(version)) / 8
+    (dataCodewords(version) * 8 - ECI_BITS - MODE_BITS - countBits(version)) / 8
 
 /** Счётчик длины в байтовом режиме: с десятой версии он вдвое длиннее. */
 private fun countBits(version: Int): Int = if (version < 10) 8 else 16
 
 private const val MODE_BITS = 4
+
+/**
+ * Код называет свою кодировку сам: ECI 26 — это UTF-8 (#1084). Так же поступает кодировщик
+ * телефона, поэтому объявление стоит и здесь: иначе байтовый режим по стандарту означает
+ * латиницу ISO-8859-1, и строгий читатель увидел бы вместо кириллицы кракозябры, а потолок
+ * двух поверхностей разошёлся бы на это самое объявление.
+ */
+private const val ECI_MODE = 0b0111
+
+private const val UTF8_ECI = 26
+
+private const val ECI_VALUE_BITS = 8
+
+private const val ECI_BITS = MODE_BITS + ECI_VALUE_BITS
 
 private fun dataCodewords(version: Int): Int = DATA_CODEWORDS[version - 1]
 
@@ -99,6 +127,9 @@ private fun blocks(version: Int): Int = EC_BLOCKS[version - 1]
 private fun interleave(version: Int, data: ByteArray): IntArray {
     val total = dataCodewords(version)
     val bits = BitBuffer()
+    // Сначала — чем закодировано, потом — чем набрано (#1084).
+    bits.append(ECI_MODE, MODE_BITS)
+    bits.append(UTF8_ECI, ECI_VALUE_BITS)
     bits.append(0b0100, MODE_BITS)
     bits.append(data.size, countBits(version))
     data.forEach { bits.append(it.toInt() and 0xFF, 8) }

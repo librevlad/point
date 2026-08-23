@@ -1,7 +1,11 @@
 package com.point.core.flow
 
+import com.google.zxing.BarcodeFormat
+import com.google.zxing.EncodeHintType
 import com.google.zxing.common.BitMatrix
+import com.google.zxing.qrcode.QRCodeWriter
 import com.google.zxing.qrcode.decoder.Decoder
+import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -20,6 +24,19 @@ class QrMatrixTest {
         BitMatrix(size, size).also { bits ->
             for (y in 0 until size) for (x in 0 until size) if (this[x, y]) bits.set(x, y)
         }
+
+    /** Тот же код, каким его собирает библиотека телефона — уровень коррекции и кодировка те же. */
+    private fun zxingEncoded(text: String): BitMatrix = QRCodeWriter().encode(
+        text,
+        BarcodeFormat.QR_CODE,
+        1,
+        1,
+        mapOf(
+            EncodeHintType.CHARACTER_SET to "UTF-8",
+            EncodeHintType.ERROR_CORRECTION to ErrorCorrectionLevel.M,
+            EncodeHintType.MARGIN to 0,
+        ),
+    )
 
     @Test
     fun `a drop link reads back exactly`() {
@@ -59,9 +76,25 @@ class QrMatrixTest {
 
     @Test
     fun `the smallest fitting version is chosen`() {
-        assertEquals(21, qrMatrix("x".repeat(14))!!.size)
-        assertEquals(25, qrMatrix("x".repeat(15))!!.size)
+        assertEquals(21, qrMatrix("x".repeat(13))!!.size)
+        assertEquals(25, qrMatrix("x".repeat(14))!!.size)
         assertEquals(177, qrMatrix("x".repeat(QR_MAX_BYTES))!!.size)
+    }
+
+    /**
+     * #1084: код называет свою кодировку теми же битами, что и кодировщик телефона. Пока этого
+     * объявления здесь не было, потолок двух поверхностей расходился ровно на его длину — и на
+     * самом верху человек получал отказ библиотеки вместо честного предела.
+     */
+    @Test
+    fun `the code declares its encoding just like the phone encoder does`() {
+        val text = "Привет, Point — счёт № 1084"
+
+        val ours = Decoder().decode(qrMatrix(text)!!.toZxing())
+        val phone = Decoder().decode(zxingEncoded(text))
+
+        assertEquals(phone.symbologyModifier, ours.symbologyModifier)
+        assertEquals(text, ours.text)
     }
 
     /** #1084: текст растёт — растёт и код, а не упирается в потолок посреди дороги. */

@@ -111,6 +111,9 @@ class SmartActionsTest {
         assertTrue(result is ActionResult.Failure)
         // Отказ — теми же словами, что и на телефоне (#1084): потолок в core один на оба.
         assertEquals(QR_TOO_LONG, (result as ActionResult.Failure).reason)
+        // И тем же смыслом для цепочки исполнителей: это приговор тексту, а не этой попытке,
+        // поэтому следующему исполнителю его не передают — ровно как на телефоне (#1084).
+        assertFalse("отказ ушёл дальше по цепочке", result.recoverable)
         assertTrue(box.entries().isEmpty())
     }
 

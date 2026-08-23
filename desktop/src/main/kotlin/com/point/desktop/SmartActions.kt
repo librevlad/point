@@ -7,6 +7,7 @@ import com.point.core.flow.EntityExtractor
 import com.point.core.flow.EntityType
 import com.point.core.flow.asFeature
 import com.point.core.flow.asMetaKey
+import com.point.core.flow.QR_FAILED
 import com.point.core.flow.QR_NO_TEXT
 import com.point.core.flow.QR_TOO_LONG
 import com.point.core.flow.Realizer
@@ -167,8 +168,9 @@ class PcQrRealizer(private val outbox: Outbox) : Realizer {
         )
     }.getOrElse {
         // Длина сюда больше не попадает — её ловит общий потолок выше (#1084): здесь остаётся
-        // только сбой самой операции, и валить его на текст было бы неправдой.
-        ActionResult.Failure("QR не собрался — попробуйте ещё раз", recoverable = true)
+        // только сбой самой операции, и валить его на текст было бы неправдой. Слова — те же,
+        // что и на телефоне, и лежат они там же, где общий потолок.
+        ActionResult.Failure(QR_FAILED, recoverable = true)
     }
 
     private companion object {
