@@ -6,8 +6,10 @@ import com.point.core.flow.PcLinks
 import com.point.core.flow.PcRemoteAction
 import com.point.core.flow.SpeechReadiness
 import com.point.core.flow.capabilities.sharedCapabilities
+import com.point.core.flow.decodePcCaps
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
+import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -51,7 +53,7 @@ class OneButtonPerCapabilityTest {
 
         val titles = registryWithPc(listOf(printOnPc)).bubblesFor(ObjectState(ObjectKind.PDF)).map { it.title }
 
-        assertTrue("действие компьютера пропало с телефона- $titles", "Напечатать на компьютере" in titles)
+        assertTrue("действие компьютера пропало с телефона- $titles", printOnPc.label in titles)
     }
 
     @Test fun `при подключённом компьютере ни одно название не стоит в списке дважды`() {
@@ -105,20 +107,20 @@ class OneButtonPerCapabilityTest {
             TranslateCapability(aiKeysReady),
         ) + sharedCapabilities()
 
-        val transcribeOnPc = PcRemoteAction("transcribe", "Расшифровать", setOf("AUDIO"))
-        val printOnPc = PcRemoteAction("pc-print", "Напечатать на компьютере")
+        /** Корень репозитория: снимок лежит у того, кто объявление пишет, — в `:desktop`. */
+        val repo: File = generateSequence(File(".").absoluteFile) { it.parentFile }
+            .first { File(it, "settings.gradle.kts").isFile }
 
-        /** Что компьютер объявляет телефону- id дословно совпадают с реестром `:desktop`. */
-        val advertisedByPc = listOf(
-            transcribeOnPc,
-            printOnPc,
-            PcRemoteAction("pc-open", "Открыть на компьютере"),
-            PcRemoteAction("pc-copy", "В буфер компьютера"),
-            PcRemoteAction("pc-reveal", "Показать в папке на компьютере"),
-            PcRemoteAction("pc-save-as", "Сохранить на компьютере"),
-            PcRemoteAction("pc-download", "Скачать видео на компьютер", setOf("URL")),
-            PcRemoteAction("pc-open-link", "Открыть в браузере на компьютере", setOf("URL")),
-        ) + sharedCapabilities().map { PcRemoteAction(it.id.value, it.label(ObjectState(ObjectKind.IMAGE))) }
+        /**
+         * Что компьютер объявляет телефону — дословно то, что `:desktop` шлёт по проводу,
+         * снятое в файл (#1094). Рукописная копия здесь синхронизировалась руками и к боевому
+         * набору отношения не имела; свежесть снимка сторожит PhoneFacingTest в `:desktop`.
+         */
+        val advertisedByPc: List<PcRemoteAction> =
+            decodePcCaps(File(repo, "desktop/src/test/resources/phone-facing-actions.txt").readText())
+
+        val transcribeOnPc = advertisedByPc.first { it.id == TranscribeCapability.ID.value }
+        val printOnPc = advertisedByPc.first { it.id == "pc-print" }
 
         object NoTransport : com.point.core.flow.PcTransport {
             override suspend fun send(
