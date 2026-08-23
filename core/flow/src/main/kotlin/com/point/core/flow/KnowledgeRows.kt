@@ -55,7 +55,7 @@ fun shownKnowledge(
 
 private fun shownPhone(value: String, kind: String?, region: String): String {
     val shown = PhoneNumbers.shown(value, region)
-    val abroad = PhoneNumbers.country(value, region)?.takeIf { it != region }
+    val abroad = PhoneNumbers.country(value)?.takeIf { it != region }
         ?.let { PhoneNumbers.countryName(it) }
     return listOfNotNull(shown, abroad, kind).joinToString(" · ")
 }

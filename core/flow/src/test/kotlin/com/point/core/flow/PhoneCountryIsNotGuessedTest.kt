@@ -7,13 +7,18 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Страна номера не додумывается показом (#1029).
+ * Страна номера не додумывается ни показом, ни знанием (#1029).
  *
  * Чек из Оклахомы: в графе лежал честный `918-682-1551` и никакой страны, а на экране стояло
  * «+49 9186 821551». Правило «страна — только когда она одна» соблюдал разбор знания, а показ
  * шёл мимо и брал первую подошедшую страну из списка подсказок. Один и тот же чек читался
  * немецким на телефоне владельца и американским на эмуляторе — по стране устройства, а не по
  * документу.
+ *
+ * Само правило «когда она одна» оказалось той же догадкой с другого конца: список подсказок
+ * начинается со страны устройства, а для записи без разделителей он ею и заканчивается. Тот
+ * же чек, прочитанный как `918 682 1551`, выходил американским на американском телефоне,
+ * немецким на немецком и британским на британском.
  *
  * Решение владельца 21.08.2026: не додумывать страну. Номер без кода страны печатается как в
  * документе; код дописывается только когда страна известна из самого документа.
@@ -23,6 +28,26 @@ class PhoneCountryIsNotGuessedTest {
     /** Номер с чека FAMILY DOLLAR, Muskogee, OK: годится и Америке, и Германии. */
     private val fromOklahoma = "918-682-1551"
 
+    /**
+     * Устройства, на которых читается один и тот же документ.
+     *
+     * Две последние — не из списка близких стран (`NEARBY`), и это важно: страна устройства
+     * попадает в разбор всегда, поэтому правило, проверенное только на странах из списка, не
+     * проверено вовсе.
+     */
+    private val devices = listOf("UA", "US", "DE", "PL", "GB", "FR")
+
+    /**
+     * Записи, чью страну документ не назвал, а прежний код называл сам.
+     *
+     * Тире, скобки и ведущий ноль — знак того, что текст написан как номер, и такой текст
+     * искали сразу по нескольким странам. Без них искали ровно в одной — в стране
+     * устройства, — и она же оказывалась «единственной подошедшей», то есть страной номера.
+     * Но и там, где стран пробовали несколько, подойти могла одна: `050 111 22 33` подходило
+     * только Украине. Оба случая — одна и та же догадка, и здесь они проверяются вместе.
+     */
+    private val countryNotWritten = listOf("918 682 1551", "9186821551", "22 123 45 67", "050 111 22 33")
+
     @Test
     fun `номер без кода страны показывается как в документе`() {
         assertEquals(fromOklahoma, PhoneNumbers.shown(fromOklahoma, "UA"))
@@ -30,20 +55,45 @@ class PhoneCountryIsNotGuessedTest {
 
     @Test
     fun `один документ читается на всех устройствах одинаково`() {
-        val everywhere = listOf("UA", "US", "DE", "PL").map { PhoneNumbers.shown(fromOklahoma, it) }
+        val everywhere = devices.map { PhoneNumbers.shown(fromOklahoma, it) }
 
         assertEquals("страна показа зависит от устройства-$everywhere", 1, everywhere.distinct().size)
+    }
+
+    /**
+     * Запись без кода страны — тот же случай, и раньше он был худшим из всех.
+     *
+     * `918 682 1551` становился «(918) 682-1551» на американском устройстве, «09186 821551» на
+     * немецком и «0918 682 1551» на британском: страна не просто угадана — она угадана по
+     * телефону человека, и на каждом телефоне своя. `22 123 45 67` был польским в Польше,
+     * немецким в Германии и французским во Франции.
+     */
+    @Test
+    fun `запись без кода страны не берёт страну у устройства`() {
+        countryNotWritten.forEach { text ->
+            devices.forEach { device ->
+                assertEquals(
+                    "номер разобран страной устройства-$device-$text",
+                    text,
+                    PhoneNumbers.shown(text, device),
+                )
+            }
+        }
     }
 
     @Test
     fun `страна не приписывается номеру, у которого её нет`() {
         val guessed = listOf("+49", "+1", "+380", "+48")
 
-        guessed.forEach {
-            assertTrue(
-                "номеру дописан код страны-$it",
-                !PhoneNumbers.shown(fromOklahoma, "UA").contains(it),
-            )
+        (listOf(fromOklahoma) + countryNotWritten).forEach { text ->
+            devices.forEach { device ->
+                guessed.forEach {
+                    assertTrue(
+                        "номеру дописан код страны-$it-$text-$device",
+                        !PhoneNumbers.shown(text, device).contains(it),
+                    )
+                }
+            }
         }
     }
 
@@ -70,18 +120,41 @@ class PhoneCountryIsNotGuessedTest {
      * То же на пути человека и целиком: строка знания, собранная из графа.
      *
      * Проверяется не отдельная функция, а то, что стоит в строке экрана: номер, страна словом
-     * и вид — так, как их соберёт `knowledgeRows` из знания, добытого о номере. Один и тот же
-     * чек на четырёх устройствах даёт одну строку, и в ней ровно то, что написано в документе.
+     * и вид — так, как их соберут `mergeKnowledge` и `knowledgeRows` на любом пути, приносящем
+     * знание об объекте. Один и тот же документ на шести устройствах даёт одну строку, и в ней
+     * ровно то, что написано в документе.
      */
     @Test
     fun `строка знания о номере одинакова на любом устройстве`() {
-        val rows = listOf("UA", "US", "DE", "PL").map { device ->
-            val graph = withPhoneKnowledge(mapOf(META_ENTITY_PHONE to fromOklahoma), device)
-            shownKnowledge(META_ENTITY_PHONE, fromOklahoma, graph, device)
-        }
+        (listOf(fromOklahoma) + countryNotWritten).forEach { text ->
+            val rows = devices.map { device ->
+                val graph = mergeKnowledge(emptyMap(), mapOf(META_ENTITY_PHONE to text), region = device)
+                shownKnowledge(META_ENTITY_PHONE, text, graph, device)
+            }
 
-        assertEquals("строка номера зависит от устройства-$rows", 1, rows.distinct().size)
-        assertEquals(fromOklahoma, rows.first())
+            assertEquals("строка номера зависит от устройства-$text-$rows", 1, rows.distinct().size)
+            assertEquals(text, rows.first())
+        }
+    }
+
+    /**
+     * Знание о стране в графе — тоже не свойство устройства.
+     *
+     * Экран берёт страну и вид из графа (`entity.phone.country`, `entity.phone.kind`), и если
+     * туда попала догадка, она выйдет к человеку первым же новым спрашивающим.
+     */
+    @Test
+    fun `страна в графе не зависит от того, где стоит устройство`() {
+        (listOf(fromOklahoma) + countryNotWritten).forEach { text ->
+            devices.forEach { device ->
+                val graph = mergeKnowledge(emptyMap(), mapOf(META_ENTITY_PHONE to text), region = device)
+
+                assertNull(
+                    "страна выдумана на устройстве-$device-$text-${graph["$META_ENTITY_PHONE.country"]}",
+                    graph["$META_ENTITY_PHONE.country"],
+                )
+            }
+        }
     }
 
     /**
@@ -94,7 +167,7 @@ class PhoneCountryIsNotGuessedTest {
      */
     @Test
     fun `один номер в двух записях не становится спором ни на одном устройстве`() {
-        listOf("UA", "US", "DE", "PL").forEach { device ->
+        devices.forEach { device ->
             val merged = mergeFacts(
                 mapOf(META_ENTITY_PHONE to "+1 918-682-1551"),
                 mapOf(META_ENTITY_PHONE to fromOklahoma),
@@ -118,8 +191,7 @@ class PhoneCountryIsNotGuessedTest {
         )
 
         pairs.forEach { (left, right) ->
-            val answers = listOf("UA", "US", "DE", "PL")
-                .map { sameFact(META_ENTITY_PHONE, left, right, it) }
+            val answers = devices.map { sameFact(META_ENTITY_PHONE, left, right, it) }
 
             assertEquals(
                 "«одно ли это знание» зависит от устройства-$left-$right-$answers",
@@ -130,22 +202,53 @@ class PhoneCountryIsNotGuessedTest {
     }
 
     /**
+     * Что устройство в тождестве всё-таки решает — и ровно это, не больше (#936).
+     *
+     * Сравнивает записи библиотека, и страну она не подсказывает. Но прежде сравнения обе
+     * записи должны быть номерами, а «номер ли это вообще» решает тот же отбор, что решает,
+     * попадёт ли текст в граф фактом: `918 682 1551` — номер в Америке и не номер в Украине.
+     * Там, где текст номером не считается, нет и факта, о тождестве которого спрашивать.
+     *
+     * Правило проверяется как правило: среди устройств, где обе записи прошли отбор, ответ
+     * один — и это ответ про сами номера, а не про место, где стоит телефон.
+     */
+    @Test
+    fun `тождество расходится только там, где текст не считается номером`() {
+        val pairs = listOf(
+            "918 682 1551" to "+1 918-682-1551",
+            "9186821551" to fromOklahoma,
+            "22 123 45 67" to "+48221234567",
+            "067 636 05 60" to "+380676360560",
+        )
+
+        pairs.forEach { (left, right) ->
+            val asked = devices.filter { PhoneNumbers.exists(left, it) && PhoneNumbers.exists(right, it) }
+            val answers = asked.map { sameFact(META_ENTITY_PHONE, left, right, it) }
+
+            assertTrue("отбор не пропустил пару ни на одном устройстве-$left-$right", asked.isNotEmpty())
+            assertEquals(
+                "«одно ли это знание» зависит от устройства-$left-$right-$asked-$answers",
+                1,
+                answers.distinct().size,
+            )
+        }
+    }
+
+    /**
      * Вид номера — тоже свойство страны, и брался он у первой подошедшей, как и формат.
      *
-     * На экран вид попадал только вместе со страной: [withPhoneKnowledge] спрашивает его
+     * На экран вид попадал только вместе со страной: `withPhoneKnowledge` спрашивает его
      * после того, как страна названа, — поэтому угаданный вид человек не видел. Но угадывал
      * его сам [PhoneNumbers.kind], и первый же новый спрашивающий вынес бы догадку на экран.
      * Правило проверяется как правило, а не как один вызов: вид назван — значит страна
-     * известна, на любом устройстве и для любого номера.
+     * известна, для любого номера.
      */
     @Test
     fun `вид номера не угадывается по стране устройства`() {
-        assertNull("вид назван по угаданной стране", PhoneNumbers.kind(fromOklahoma, "UA"))
-        assertEquals(
-            "вид номера зависит от устройства",
-            PhoneNumbers.kind(fromOklahoma, "US"),
-            PhoneNumbers.kind(fromOklahoma, "UA"),
-        )
+        assertNull("вид назван по угаданной стране", PhoneNumbers.kind(fromOklahoma))
+        countryNotWritten.forEach {
+            assertNull("вид назван по угаданной стране-$it", PhoneNumbers.kind(it))
+        }
     }
 
     @Test
@@ -153,15 +256,13 @@ class PhoneCountryIsNotGuessedTest {
         val numbers = listOf(
             fromOklahoma, "+1 918-682-1551", "067 636 05 60", "+380676360560",
             "067 123 45 67", "+48221234567", "0932423759",
-        )
+        ) + countryNotWritten
 
-        listOf("UA", "US", "DE", "PL").forEach { device ->
-            numbers.filter { PhoneNumbers.kind(it, device) != null }.forEach { named ->
-                assertNotNull(
-                    "вид назван без страны-$named-$device-${PhoneNumbers.kind(named, device)}",
-                    PhoneNumbers.country(named, device),
-                )
-            }
+        numbers.filter { PhoneNumbers.kind(it) != null }.forEach { named ->
+            assertNotNull(
+                "вид назван без страны-$named-${PhoneNumbers.kind(named)}",
+                PhoneNumbers.country(named),
+            )
         }
     }
 
@@ -173,14 +274,10 @@ class PhoneCountryIsNotGuessedTest {
     fun `устройство не меняет страну известного номера`() {
         val ukrainian = "+380676360560"
 
-        listOf("UA", "US", "DE", "PL").forEach { device ->
+        devices.forEach { device ->
             val shown = PhoneNumbers.shown(ukrainian, device)
 
-            assertEquals(
-                "страна номера изменилась на устройстве-$device",
-                "UA",
-                PhoneNumbers.country(ukrainian, device),
-            )
+            assertEquals("страна номера изменилась-$device", "UA", PhoneNumbers.country(ukrainian))
             assertTrue(
                 "на устройстве-$device дописан чужой код-$shown",
                 !shown.contains("+") || shown.startsWith("+380"),
@@ -206,7 +303,7 @@ class PhoneCountryIsNotGuessedTest {
         val ukrainian = "+380676360560"
 
         val rows = listOf("UA", "PL").map { device ->
-            val graph = withPhoneKnowledge(mapOf(META_ENTITY_PHONE to ukrainian), device)
+            val graph = mergeKnowledge(emptyMap(), mapOf(META_ENTITY_PHONE to ukrainian), region = device)
 
             assertEquals(
                 "страна номера изменилась на устройстве-$device",
@@ -224,14 +321,16 @@ class PhoneCountryIsNotGuessedTest {
     /** Показ и знание отвечают одно и то же: страны, которой нет в графе, нет и на экране. */
     @Test
     fun `показ и знание об одной стране согласны`() {
-        listOf(fromOklahoma, "+1 918-682-1551", "067 123 45 67", "+380676360560").forEach { text ->
-            val known = PhoneNumbers.country(text, "UA") != null
-            val shownAsRead = PhoneNumbers.shown(text, "UA") == text
+        val numbers = listOf(fromOklahoma, "+1 918-682-1551", "067 123 45 67", "+380676360560") +
+            countryNotWritten
 
-            assertTrue(
-                "экран знает про страну больше графа-$text",
-                known || shownAsRead,
-            )
+        numbers.forEach { text ->
+            devices.forEach { device ->
+                val known = PhoneNumbers.country(text) != null
+                val shownAsRead = PhoneNumbers.shown(text, device) == text
+
+                assertTrue("экран знает про страну больше графа-$text-$device", known || shownAsRead)
+            }
         }
     }
 }
