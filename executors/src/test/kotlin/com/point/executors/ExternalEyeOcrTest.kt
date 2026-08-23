@@ -176,6 +176,28 @@ class ExternalEyeOcrTest {
     }
 
     @Test
+    fun `«Прочитать сильнее» прямой моделью — условленная пометка не ложится текстом на снимок`() = runTest {
+        // Путь #1069: внешнего глаза нет, читает модель напрямую и отвечает, как условлено в
+        // контракте, — «[нет текста]». Это такое же «не нашлось», а не текст объекта и не
+        // слой у исходника (#1054).
+        val file = temp.newFile("none-direct.md")
+        file.writeText("[нет текста]")
+        val llm = object : LlmClient {
+            override suspend fun run(obj: PointObject, prompt: String) =
+                ResultObject(ObjectKind.TEXT, "text/markdown", ScratchRef(file.path))
+        }
+
+        val result = CloudOcrDirectRealizer(llm, privacyAt(), store).perform(image)
+
+        assertTrue(result.toString(), result is ActionResult.Done)
+        val found = (result as ActionResult.Done).findings!!
+        assertEquals(InvestigationState.NOT_FOUND, readingStateOf(result))
+        assertFalse("пометка легла слоем текста", found.metadata.containsKey(META_OCR_TEXT_REF))
+        assertTrue("снимку приписан текст, которого нет", found.features.isEmpty())
+        assertFalse("человек видит пометку модели", result.message.contains("нет текста"))
+    }
+
+    @Test
     fun `модели сказано, как ответить, когда текста нет — иначе её проза неотличима от чтения`() = runTest {
         var asked = ""
         val llm = object : LlmClient {

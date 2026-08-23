@@ -37,13 +37,16 @@ class ReadingHygieneTest {
     }
 
     @Test
-    fun `служебная пометка читателя узнаётся формой, а не словами`() {
+    fun `служебная пометка — скобочная форма и слово пустоты внутри`() {
         // Дословный ответ OCR.space на снимке без единой надписи (#1054).
         assertTrue(serviceNote("*[No text detected]*"))
         assertTrue("та же пометка без разметки выделения", serviceNote("[No text detected]"))
         assertTrue("пометка другого сервиса другими словами", serviceNote("(На изображении текста нет)"))
+        assertTrue("отрицание в середине — тем же правилом", serviceNote("(На изображении нет текста)"))
         assertTrue("условленный ответ модели", serviceNote("[нет текста]"))
         assertTrue("пометка в курсиве и с пробелами вокруг", serviceNote("  _[no readable text]_ \n"))
+        assertTrue("отрицание в хвосте по-украински", serviceNote("[Текст відсутній]"))
+        assertTrue("одно слово пустоты", serviceNote("(empty)"))
     }
 
     @Test
@@ -54,7 +57,20 @@ class ReadingHygieneTest {
         assertFalse("номер в скобках — значение, не замечание", serviceNote("(495)"))
         assertFalse("многострочный ответ — страница", serviceNote("[Раздел 1]\nСтрока первая\nСтрока вторая"))
         assertFalse("длинная скобочная строка — уже текст", serviceNote("(" + "слово ".repeat(40) + ")"))
+        assertFalse("слово пустоты без скобок — строка страницы, не пометка", serviceNote("текста нет"))
         assertFalse(serviceNote(""))
+    }
+
+    @Test
+    fun `подпись в скобках — текст человека, а не отписка сервиса`() {
+        // Одной формы мало: настоящая подпись под снимком приходит ровно так же — одной
+        // короткой строкой в скобках, — и «не нашлось» за неё потеряло бы текст (#1054).
+        assertFalse("подпись под фотографией", serviceNote("(фото автора)"))
+        assertFalse("оговорка в цене", serviceNote("(без НДС)"))
+        assertFalse("частица «не» — не слово пустоты", serviceNote("(не для продажи)"))
+        assertFalse("пометка о сроке", serviceNote("[до 31.12.2026]"))
+        assertFalse("отсылка", serviceNote("(см. оборот)"))
+        assertFalse(noTextAnswer("(фото автора)"))
     }
 
     @Test

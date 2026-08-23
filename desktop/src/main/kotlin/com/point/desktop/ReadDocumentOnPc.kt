@@ -91,7 +91,11 @@ class PcReadDocumentRealizer(
                         javax.imageio.ImageIO.write(renderer.renderImageWithDPI(index, PAGE_DPI), "png", page)
                         val text = runCatching { readPage(page) }.getOrDefault("")
                         page.delete()
-                        if (text.isNotBlank()) {
+
+                        // Страница, на которую сервис ответил пометкой «текста нет», прочитанной
+                        // не считается (#1054): иначе отписка ушла бы в текст документа и ещё
+                        // сошла бы за прочитанную страницу в счёте.
+                        if (!com.point.core.flow.noTextAnswer(text)) {
                             readable++
                             if (read.isNotEmpty()) read.append("\n\n")
                             read.append(text.trim())

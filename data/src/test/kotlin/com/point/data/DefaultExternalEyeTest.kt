@@ -94,6 +94,31 @@ class DefaultExternalEyeTest {
     }
 
     @Test
+    fun `все ответили пометкой — чтение пустое, отписка наружу не выходит`() = runTest {
+        // Пометки у сервисов разные, а ответ один: посмотрели и текста не увидели (#1054).
+        val reading = chain(
+            eye("ocr-space") { "*[No text detected]*" },
+            eye("ovh-ocr") { "[нет текста]" },
+        ).read(pageObject)
+
+        assertTrue("чужая пометка ушла в чтение", reading.text.isBlank())
+    }
+
+    @Test
+    fun `после пометки сорвавшийся читатель — отказ, а не «не нашлось»`() = runTest {
+        // Сорвавшийся мог увидеть то, чего не увидел ответивший пометкой: закрывать вопрос
+        // «не нашлось» его срыв не вправе (ADR-0001 §9).
+        val failed = runCatching {
+            chain(
+                eye("ocr-space") { "*[No text detected]*" },
+                eye("mistral-ocr") { error("сеть отвалилась") },
+            ).read(pageObject)
+        }
+
+        assertTrue("срыв растворился в пустом чтении", failed.isFailure)
+    }
+
+    @Test
     fun `402 и 429 переводят очередь дальше, а не в кассу`() = runTest {
         val reading = chain(
             eye("исчерпанный") { error("mistral-ocr: лимит (402)") },
