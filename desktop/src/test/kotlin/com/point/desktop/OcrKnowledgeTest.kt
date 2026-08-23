@@ -12,6 +12,7 @@ import java.net.InetSocketAddress
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -68,6 +69,25 @@ class OcrKnowledgeTest {
         val layer = findings.metadata[com.point.core.flow.META_OCR_TEXT_REF]
         assertTrue("текст лежит слоем у объекта", File(layer!!).readText().contains("+380671234567"))
         assertTrue(done.message.startsWith("Прочитал снимок"))
+    }
+
+    @Test
+    fun `служебная пометка сервиса — то же «не нашлось», что и пустой ответ`() = runTest {
+        // Сервис на ПК тот же, что у телефона, и на кадре без надписей отвечает не пустотой,
+        // а пометкой (#1054). Правило одно на обе поверхности: текстом снимка она не станет.
+        val url = serve("*[No text detected]*")
+        val realizer = PcCloudOcrRealizer(
+            { OcrConfig(key = "к", url = url) },
+            com.point.core.flow.RegexEntityExtractor(),
+        )
+
+        val result = realizer.perform(snapshot(), null)
+
+        assertTrue("пометка стала текстом снимка: $result", result is ActionResult.Done)
+        val findings = (result as ActionResult.Done).findings!!
+        assertEquals("not_found", findings.metadata["investigated.ocr"])
+        assertTrue("отписка легла слоем текста", findings.metadata[com.point.core.flow.META_OCR_TEXT_REF] == null)
+        assertFalse("человек видит чужую отписку", result.message.contains("No text detected"))
     }
 
     @Test

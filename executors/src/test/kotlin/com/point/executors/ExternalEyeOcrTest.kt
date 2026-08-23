@@ -2,9 +2,17 @@ package com.point.executors
 
 import com.point.core.flow.ExternalEye
 import com.point.core.flow.ExternalReading
+import com.point.core.flow.InvestigationState
+import com.point.core.flow.KnownCapabilities
 import com.point.core.flow.LlmClient
+import com.point.core.flow.META_FOCUS_REGION
+import com.point.core.flow.META_OCR_TEXT_REF
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.PrivacyLevel
+import com.point.core.flow.investigationStateOf
+import com.point.core.flow.Box
+import com.point.core.flow.Focus
+import com.point.core.flow.regionWire
 import com.point.core.model.ActionResult
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
@@ -115,10 +123,97 @@ class ExternalEyeOcrTest {
     }
 
     @Test
-    fun `пустой ответ внешнего глаза — тоже отказ`() = runTest {
+    fun `пустой ответ внешнего глаза — «не нашлось» знанием, а не объект и не срыв`() = runTest {
+        // Решение владельца по #1054: пустой лист от читателя — ответ «текста нет».
         val result = ExternalEyeOcrRealizer(eye { "" }, store).perform(image)
-        assertTrue(result is ActionResult.Failure)
+
+        assertTrue(result.toString(), result is ActionResult.Done)
+        assertEquals(InvestigationState.NOT_FOUND, readingStateOf(result))
+        assertTrue("родился объект", (result as ActionResult.Done).findings!!.objects.isEmpty())
     }
+
+    @Test
+    fun `служебная отписка сервиса не становится текстом объекта`() = runTest {
+        // Дословный ответ OCR.space на кадре без единой надписи (#1054): объект «Текст» с
+        // телом «*[No text detected]*», и под ним «Понять», «Перевести».
+        val result = ExternalEyeOcrRealizer(eye(reader = "ocr-space") { "*[No text detected]*" }, store).perform(image)
+
+        assertTrue(result.toString(), result is ActionResult.Done)
+        val found = (result as ActionResult.Done).findings!!
+        assertTrue("объект заведён", found.objects.isEmpty())
+        assertFalse("отписка легла текстом", found.metadata.containsKey(META_OCR_TEXT_REF))
+        assertEquals(InvestigationState.NOT_FOUND, readingStateOf(result))
+        assertTrue("файл результата всё же записан", temp.root.listFiles().isNullOrEmpty())
+
+        assertFalse("человек видит чужую отписку", result.message.contains("No text detected"))
+        assertFalse("человек видит чужую разметку", result.message.contains("*["))
+    }
+
+    @Test
+    fun `под Focus «не нашлось» остаётся в рамках области, а не закрывает вопрос о снимке`() = runTest {
+        val focused = image.copy(metadata = mapOf(META_FOCUS_REGION to regionWire(Box(0.1f, 0.1f, 0.5f, 0.5f))))
+        val result = ExternalEyeOcrRealizer(eye { "[нет текста]" }, store).perform(focused)
+
+        val found = (result as ActionResult.Done).findings!!
+        val focus = Focus(focused.id, Box(0.1f, 0.1f, 0.5f, 0.5f))
+        assertEquals(InvestigationState.NOT_FOUND, investigationStateOf(found.metadata, KnownCapabilities.IMAGE_TEXT, focus))
+        assertEquals(InvestigationState.NOT_INVESTIGATED, investigationStateOf(found.metadata, KnownCapabilities.IMAGE_TEXT))
+    }
+
+    @Test
+    fun `пометка «текста нет» от модели общей цепочки — тоже знание, а не объект`() = runTest {
+        val file = temp.newFile("none.md")
+        file.writeText("[нет текста]")
+        val llm = object : LlmClient {
+            override suspend fun run(obj: PointObject, prompt: String) =
+                ResultObject(ObjectKind.TEXT, "text/markdown", ScratchRef(file.path))
+        }
+
+        val result = CloudOcrRealizer(llm, privacyAt()).perform(image)
+
+        assertTrue(result.toString(), result is ActionResult.Done)
+        assertEquals(InvestigationState.NOT_FOUND, readingStateOf(result))
+    }
+
+    @Test
+    fun `«Прочитать сильнее» прямой моделью — условленная пометка не ложится текстом на снимок`() = runTest {
+        // Путь #1069: внешнего глаза нет, читает модель напрямую и отвечает, как условлено в
+        // контракте, — «[нет текста]». Это такое же «не нашлось», а не текст объекта и не
+        // слой у исходника (#1054).
+        val file = temp.newFile("none-direct.md")
+        file.writeText("[нет текста]")
+        val llm = object : LlmClient {
+            override suspend fun run(obj: PointObject, prompt: String) =
+                ResultObject(ObjectKind.TEXT, "text/markdown", ScratchRef(file.path))
+        }
+
+        val result = CloudOcrDirectRealizer(llm, privacyAt(), store).perform(image)
+
+        assertTrue(result.toString(), result is ActionResult.Done)
+        val found = (result as ActionResult.Done).findings!!
+        assertEquals(InvestigationState.NOT_FOUND, readingStateOf(result))
+        assertFalse("пометка легла слоем текста", found.metadata.containsKey(META_OCR_TEXT_REF))
+        assertTrue("снимку приписан текст, которого нет", found.features.isEmpty())
+        assertFalse("человек видит пометку модели", result.message.contains("нет текста"))
+    }
+
+    @Test
+    fun `модели сказано, как ответить, когда текста нет — иначе её проза неотличима от чтения`() = runTest {
+        var asked = ""
+        val llm = object : LlmClient {
+            override suspend fun run(obj: PointObject, prompt: String): ResultObject {
+                asked = prompt
+                error("нет ключа")
+            }
+        }
+        CloudOcrDirectRealizer(llm, privacyAt(), store).perform(image)
+
+        assertTrue(asked, asked.contains("[нет текста]"))
+        assertTrue("условленная пометка должна узнаваться сторожем", com.point.core.flow.serviceNote("[нет текста]"))
+    }
+
+    private fun readingStateOf(result: ActionResult): InvestigationState =
+        investigationStateOf((result as ActionResult.Done).findings!!.metadata, KnownCapabilities.IMAGE_TEXT)
 
     @Test
     fun `сторож стоит и на общей цепочке моделей, а не только на внешнем глазе`() = runTest {

@@ -85,6 +85,25 @@ class ScannedPdfReadsTest {
         assertTrue(result is ActionResult.Failure)
     }
 
+    @Test fun `пометка сервиса «текста нет» на странице — страница не прочитана, отписка в текст не идёт`() = runBlocking {
+        // Тот же сервис, что у снимка, на пустой странице отвечает не пустотой, а пометкой
+        // (#1054): без сторожа она уходила в текст документа и шла в счёт прочитанных.
+        var page = 0
+        val realizer = PcReadDocumentRealizer(readPage = {
+            page++
+            if (page == 1) "только первая" else "*[No text detected]*"
+        })
+
+        val found = (realizer.perform(scannedPdf(pages = 2), null) as ActionResult.Done).findings!!
+
+        val text = File(found.metadata.getValue(META_OCR_TEXT_REF)).readText()
+        assertTrue("отписка ушла в текст документа", "No text detected" !in text)
+        assertEquals(
+            InvestigationState.INSUFFICIENTLY_INVESTIGATED,
+            investigationStateOf(found.metadata, KnownCapabilities.IMAGE_TEXT),
+        )
+    }
+
     @Test fun `дверь открыта только скан-PDF без текста`() {
         val cap = PcReadDocumentCapability()
 

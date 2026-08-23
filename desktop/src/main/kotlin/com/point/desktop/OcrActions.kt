@@ -63,9 +63,14 @@ class PcCloudOcrRealizer(
                 val cfg = config()
                 val toRead = fitted?.file ?: file
                 val text = (readOutside ?: ::read)(cfg, toRead, if (fitted != null) "image/jpeg" else input.mime)
-                if (text.isBlank()) {
+                if (com.point.core.flow.noTextAnswer(text)) {
 
                     // «Не нашлось» — знание, а не сбой (Конституция §13).
+                    //
+                    // Сервис здесь тот же, что у телефона, и отвечает он так же: на кадре без
+                    // единой надписи — не пустотой, а служебной пометкой «*[No text detected]*»
+                    // (#1054). Пустой лист и пометка — один ответ, и правило одно на обе
+                    // поверхности: пометка текстом снимка не становится.
                     return@withContext ActionResult.Done(
                         "На снимке не нашлось текста" + if (fitted == null) "" else " · " + shrunkNote(fitted),
                         com.point.core.model.Findings(
