@@ -41,13 +41,33 @@ fun investigationKey(capabilityId: CapabilityId, focus: Focus?): String {
 fun focusScope(focus: Focus): String? =
     focus.region?.let(::regionWire) ?: focus.atomIds.takeIf { it.isNotEmpty() }?.joinToString(" ")
 
+private fun stateOfWire(wire: String?): InvestigationState =
+    InvestigationState.entries.firstOrNull { it.wire == wire } ?: InvestigationState.NOT_INVESTIGATED
+
 fun investigationStateOf(
     metadata: Map<String, String>,
     capabilityId: CapabilityId,
     focus: Focus? = null,
-): InvestigationState {
-    val wire = metadata[investigationKey(capabilityId, focus)] ?: return InvestigationState.NOT_INVESTIGATED
-    return InvestigationState.entries.firstOrNull { it.wire == wire } ?: InvestigationState.NOT_INVESTIGATED
+): InvestigationState = stateOfWire(metadata[investigationKey(capabilityId, focus)])
+
+/**
+ * Область спрашивали — и ни на один вопрос под ней ничего не нашлось (#1000).
+ *
+ * Это ответ на вопрос человека «что здесь», а не сбой: «не нашлось» — знание (Конституция
+ * §13). Пока под областью нет ни одного состояния, ответа нет — не смотрели
+ * (`not investigated` ≠ `not found`). Пока хоть один вопрос нашёл, спорит или посмотрел
+ * недостаточно — сказать «ничего» нельзя: что-то под областью есть.
+ *
+ * Считаются только вопросы этой области: у глобальных ключей контекста нет, и ответ про
+ * объект за ответ про область не выдаётся.
+ */
+fun nothingFoundIn(metadata: Map<String, String>, focus: Focus): Boolean {
+    val scope = focusScope(focus) ?: return false
+    val answers = metadata
+        .filterKeys { isStateKey(it) && it.substringAfter('@', missingDelimiterValue = "") == scope }
+        .values
+        .map(::stateOfWire)
+    return answers.isNotEmpty() && answers.all { it == InvestigationState.NOT_FOUND }
 }
 
 fun withInvestigation(

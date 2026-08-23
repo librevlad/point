@@ -2377,6 +2377,127 @@ class FlowViewModelTest {
         assertNull("превью снятой области осталось на экране", vm.ui.value.focusPreview)
     }
 
+    /**
+     * Человек показал область — и тем самым спросил «что здесь» (#1000). Point посмотрел,
+     * не нашёл и прежде молчал: экран после области выглядел ровно так же, как до неё, и
+     * «посмотрел и не нашёл» было не отличить от «не посмотрел вовсе». Прошенное получает
+     * слово.
+     */
+    @Test fun `an area that was looked at and came up empty is answered in words`() = runTest(dispatcher) {
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        val area = com.point.core.flow.Focus(
+            vm.ui.value.frame!!.obj.id,
+            com.point.core.flow.Box(10f, 20f, 110f, 60f),
+        )
+        enrichment.updates = listOf(emptyLook(area))
+
+        vm.focusOn(area); advanceUntilIdle()
+
+        assertEquals(com.point.core.ui.FOCUS_NOTHING_FOUND, vm.ui.value.message)
+        assertTrue("«не нашлось» — знание, а не сбой", vm.ui.value.messageOutcome != Outcome.FAILED)
+    }
+
+    @Test fun `an area where something was found is not answered as empty`() = runTest(dispatcher) {
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        val area = com.point.core.flow.Focus(
+            vm.ui.value.frame!!.obj.id,
+            com.point.core.flow.Box(0f, 0f, 50f, 50f),
+        )
+        enrichment.updates = listOf(
+            EnrichmentUpdate(
+                setOf(Feature.HAS_PHONE),
+                com.point.core.flow.withInvestigation(
+                    mapOf("entity.phone" to "+380671234567"),
+                    CapabilityId("entities"),
+                    com.point.core.flow.InvestigationState.FOUND,
+                    area,
+                ),
+                emptyList(),
+            ),
+        )
+
+        vm.focusOn(area); advanceUntilIdle()
+
+        assertNull("нашлось — говорить «ничего» неправда", vm.ui.value.message)
+    }
+
+    @Test fun `an area nobody looked at is not answered as empty`() = runTest(dispatcher) {
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        enrichment.updates = listOf(EnrichmentUpdate(emptySet(), emptyMap(), emptyList()))
+
+        vm.focusOn(com.point.core.flow.Focus(vm.ui.value.frame!!.obj.id, com.point.core.flow.Box(0f, 0f, 5f, 5f)))
+        advanceUntilIdle()
+
+        assertNull("не смотрели — не «не нашлось»", vm.ui.value.message)
+    }
+
+    /**
+     * Без области вопроса не было — и отвечать не на что (#1016, решение владельца дословно:
+     * «не нашлось не надо показывать - я не просил»).
+     */
+    @Test fun `an unasked not found stays silent`() = runTest(dispatcher) {
+        enrichment.updates = listOf(
+            EnrichmentUpdate(
+                emptySet(),
+                com.point.core.flow.withInvestigation(
+                    emptyMap(),
+                    CapabilityId("qr-content"),
+                    com.point.core.flow.InvestigationState.NOT_FOUND,
+                ),
+                emptyList(),
+            ),
+        )
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        assertNull(vm.ui.value.message)
+    }
+
+    @Test fun `a late empty answer about area A is not spoken under area B`() = runTest(dispatcher) {
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        val id = vm.ui.value.frame!!.obj.id
+        val areaA = com.point.core.flow.Focus(id, com.point.core.flow.Box(0f, 0f, 50f, 50f))
+        val areaB = com.point.core.flow.Focus(id, com.point.core.flow.Box(0f, 100f, 50f, 150f))
+        enrichment.updates = listOf(emptyLook(areaA))
+        enrichment.stepDelayMs = 200
+
+        vm.focusOn(areaA)
+        dispatcher.scheduler.advanceTimeBy(50)
+        vm.focusOn(areaB)
+        advanceUntilIdle()
+
+        assertNull("ответ про область A под областью B — неправда", vm.ui.value.message)
+    }
+
+    @Test fun `clearing the focus takes its answer off the screen`() = runTest(dispatcher) {
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        val area = com.point.core.flow.Focus(vm.ui.value.frame!!.obj.id, com.point.core.flow.Box(0f, 0f, 5f, 5f))
+        enrichment.updates = listOf(emptyLook(area))
+        vm.focusOn(area); advanceUntilIdle()
+        assertEquals(com.point.core.ui.FOCUS_NOTHING_FOUND, vm.ui.value.message)
+
+        vm.clearFocus(); advanceUntilIdle()
+
+        assertNull("вопроса больше нет — и ответа на экране быть не должно", vm.ui.value.message)
+    }
+
+    /** Посмотрели в область — и на единственный вопрос под ней ничего не нашлось. */
+    private fun emptyLook(area: com.point.core.flow.Focus) = EnrichmentUpdate(
+        emptySet(),
+        com.point.core.flow.withInvestigation(
+            emptyMap(),
+            CapabilityId("entities"),
+            com.point.core.flow.InvestigationState.NOT_FOUND,
+            area,
+        ),
+        emptyList(),
+    )
+
     @Test fun `a late result of area A lands while the current focus is already B`() = runTest(dispatcher) {
         enrichment.updates = listOf(
             EnrichmentUpdate(setOf(Feature.HAS_PHONE), mapOf("entity.phone" to "+380671234567"), emptyList()),
