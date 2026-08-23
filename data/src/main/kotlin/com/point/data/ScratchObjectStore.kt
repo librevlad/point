@@ -12,6 +12,8 @@ import com.point.core.flow.META_UNUSABLE_REASON
 import com.point.core.flow.ObjectClassifier
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.collectionContent
+import com.point.core.flow.fileHead
+import com.point.core.flow.knowingAddress
 import com.point.core.model.PointObject
 import com.point.core.model.ResultObject
 import com.point.core.model.ScratchRef
@@ -65,7 +67,7 @@ class ScratchObjectStore @Inject constructor(
                         put(META_SIZE, size.toString())
                         putAll(emptyFileFact(size))
                     },
-                )
+                ).knowingAddress()
             }
         }
 
@@ -102,12 +104,18 @@ class ScratchObjectStore @Inject constructor(
     ): PointObject =
         withContext(Dispatchers.IO) {
 
-            val size = File(result.uri.value).length()
+            val file = File(result.uri.value)
+            val size = file.length()
             PointObject(
                 id = UUID.randomUUID().toString(),
                 mime = result.mime,
                 uri = result.uri,
-                state = classifier.classify(result.mime, size),
+
+                // Результат действия — тоже объект, рождённый из файла: байты спрашиваются и
+                // здесь (#999). Без них ссылка, сделанная действием, приходила бы текстом.
+                // Имя не спрашивается: у результата это человеческая подпись («ссылка на
+                // отчёт.pdf»), а не имя файла, и расширение в ней врёт.
+                state = classifier.classify(result.mime, size, head = headOf(file)),
 
                 metadata = result.metadata + (META_SIZE to size.toString()) + emptyFileFact(size),
 
@@ -117,7 +125,7 @@ class ScratchObjectStore @Inject constructor(
                 provenance = result.provenance,
                 sourceObjects = listOfNotNull(from?.id),
                 creatorAction = by?.value,
-            )
+            ).knowingAddress()
         }
 
     override suspend fun children(collection: PointObject, limit: Int): CollectionContent<PointObject> =
@@ -150,7 +158,7 @@ class ScratchObjectStore @Inject constructor(
                     provenance = collection.provenance,
                     sourceObjects = listOf(collection.id),
                     creatorAction = collection.creatorAction,
-                )
+                ).knowingAddress()
             }
         }
 
@@ -167,11 +175,6 @@ class ScratchObjectStore @Inject constructor(
     private fun emptyFileFact(size: Long): Map<String, String> =
         if (size == 0L) mapOf(META_UNUSABLE_REASON to EMPTY_FILE_REASON) else emptyMap()
 
-    // Первые байты объекта для классификации: имя и mime могут молчать, байты — нет.
-    private fun headOf(file: File): ByteArray = runCatching {
-        file.inputStream().use { it.readNBytes(512) }
-    }.getOrDefault(ByteArray(0))
-
     private fun uniqueFile(dir: File, name: String): File {
         var candidate = File(dir, name)
         if (!candidate.exists()) return candidate
@@ -186,21 +189,7 @@ class ScratchObjectStore @Inject constructor(
     }
 
     override suspend fun readText(obj: PointObject, limit: Int): String =
-        withContext(Dispatchers.IO) {
-            val file = File(obj.uri.value)
-            if (!file.isFile) return@withContext ""
-
-            val out = StringBuilder()
-            val buffer = CharArray(8192)
-            file.bufferedReader().use { reader ->
-                while (out.length < limit) {
-                    val n = reader.read(buffer)
-                    if (n < 0) break
-                    out.append(buffer, 0, minOf(n, limit - out.length))
-                }
-            }
-            out.toString()
-        }
+        withContext(Dispatchers.IO) { fileHead(obj.uri.value, limit) }
 
     override suspend fun newScratchFile(extension: String): ScratchRef =
         withContext(Dispatchers.IO) {
@@ -255,3 +244,10 @@ class ScratchObjectStore @Inject constructor(
         const val TAG = "PointScratch"
     }
 }
+
+// Первые байты объекта для классификации: имя и mime могут молчать, байты — нет. Одни и
+// те же во всех дверях, где объект рождается из файла (#999): вид, поставленный по байтам,
+// не должен меняться оттого, что объект пришёл другой дверью или его открыли второй раз.
+internal fun headOf(file: File): ByteArray = runCatching {
+    file.inputStream().use { it.readNBytes(512) }
+}.getOrDefault(ByteArray(0))
