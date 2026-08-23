@@ -220,8 +220,9 @@ fun main(args: Array<String>) {
 
     val shellMenu = RegistryShellMenu()
     val sendTo = ShortcutSendToMenu()
+    val installedExe = { installedExecutable(ProcessHandle.current().info().command().orElse(null)) }
     runCatching {
-        val exe = installedExecutable(ProcessHandle.current().info().command().orElse(null))
+        val exe = installedExe()
         if (exe != null && FilePcConfig(pointDir).load().rightClick) {
             val wanted = shellCommandFor(exe)
             if (shellMenuNeedsUpdate(shellMenu.registeredCommand(), wanted)) {
@@ -232,7 +233,18 @@ fun main(args: Array<String>) {
             }
 
             // «Отправить → Point» — другое меню Windows и живёт своей записью (#255).
-            if (shellMenuNeedsUpdate(sendTo.target(), exe.absolutePath)) sendTo.register(exe)
+            if (shellMenuNeedsUpdate(sendTo.target(), exe.absolutePath) && !sendTo.register(exe)) {
+                println("[shell-menu] ярлык «Отправить → Point» не встал")
+            }
+        }
+    }
+
+    // Правда о пункте меню — в реестре и в папке «Отправить», а не в памяти экрана (#1082):
+    // настройки читают её при показе, и после перезапуска переключатель говорит то, что есть,
+    // а не то, что когда-то нажали.
+    val menuHolds: suspend (Boolean) -> Boolean = { on ->
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            rightClickHolds(on, installedExe(), shellMenu.registeredCommand(), sendTo.target())
         }
     }
 
@@ -456,23 +468,27 @@ fun main(args: Array<String>) {
                         // круга (#1085): иначе экран говорит одно, а сервер и телефон знают
                         // другое.
                         runCatching { account.syncSettings() }
+                    },
 
-                        // Здесь человек нажал сам, поэтому «встал ли пункт» уезжает ответом в
-                        // настройки: переключатель не говорит «Показывается» поверх пустого
-                        // реестра (#1082).
+                    // Меню Windows трогается по тапу его выключателя, а не каждым сохранением
+                    // настроек: сюда не приходит буква имени компьютера. Человек нажал сам,
+                    // поэтому «встал ли пункт» уезжает ответом в настройки — переключатель не
+                    // говорит «Показывается» поверх пустого реестра (#1082). Выключение отвечает
+                    // по эффекту тоже — снято ли: константа «снято» была бы тем же молчанием.
+                    onRightClick = { on ->
                         runCatching {
-                            val exe = installedExecutable(ProcessHandle.current().info().command().orElse(null))
+                            val exe = installedExe()
                             when {
-                                !changed.rightClick -> {
-                                    shellMenu.unregister()
-                                    sendTo.unregister()
-                                    true
+                                !on -> {
+                                    val menuGone = shellMenu.unregister()
+                                    val linkGone = sendTo.unregister()
+                                    menuGone && linkGone
                                 }
 
                                 exe != null -> {
-                                    val stood = shellMenu.register(shellCommandFor(exe), SHELL_MENU_TITLE)
-                                    sendTo.register(exe)
-                                    stood
+                                    val menuStood = shellMenu.register(shellCommandFor(exe), SHELL_MENU_TITLE)
+                                    val linkStood = sendTo.register(exe)
+                                    menuStood && linkStood
                                 }
 
                                 // Запуск из исходников: пункта меню не будет, и врать про него нечего.
@@ -480,6 +496,7 @@ fun main(args: Array<String>) {
                             }
                         }.getOrDefault(false)
                     },
+                    rightClickHolds = menuHolds,
                     // «Убрать прямо сейчас» убирает всё, что Point помнит здесь, а не только
                     // файлы старше суток (#1081): само по себе старое по-прежнему уходит при
                     // запуске, а кнопка делает то, что на ней написано.

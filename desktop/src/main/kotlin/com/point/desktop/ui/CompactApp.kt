@@ -86,8 +86,20 @@ fun CompactApp(
     onCancelReceive: () -> Unit = {},
 
     onWipe: () -> Long = { 0L },
-    /** Возвращает, встало ли сохранённое на деле; сейчас правду отвечает пункт меню файла (#1082). */
-    onSaveSettings: (PcConfig) -> Boolean = { true },
+    onSaveSettings: (PcConfig) -> Unit = {},
+
+    /**
+     * Выключатель меню файла Windows (#1082): поставить или снять пункт и ответить по эффекту —
+     * встал ли. Это другое действие, чем сохранить настройку: флаг на диске и пункт в реестре —
+     * не одно и то же, и правда о пункте живёт в реестре.
+     */
+    onRightClick: (Boolean) -> Boolean = { true },
+
+    /**
+     * Стоит ли меню файла Windows в этом положении на деле — читается при показе настроек, а
+     * не помнится с последнего тапа (#1082): после перезапуска переключатель говорит правду.
+     */
+    rightClickHolds: suspend (Boolean) -> Boolean = { true },
     onSweepNow: () -> Int = { 0 },
     onHide: () -> Unit = {},
 ) {
@@ -253,6 +265,8 @@ fun CompactApp(
                     error = accountError,
                     onWipe = { state.forgetEverything(onWipe) },
                     onSave = { changed -> settings = changed; onSaveSettings(changed) },
+                    onRightClick = onRightClick,
+                    rightClickHolds = rightClickHolds,
                     onSweepNow = onSweepNow,
                     onBack = { showSettings = false },
                 )

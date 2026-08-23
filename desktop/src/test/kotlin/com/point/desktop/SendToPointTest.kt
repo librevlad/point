@@ -91,13 +91,37 @@ class SendToPointTest {
     }
 
     @Test
-    fun `выключение снимает запись`() {
+    fun `выключение снимает запись и отвечает по эффекту`() {
         val folder = temp.newFolder("drop-sendto")
         sendToShortcut(folder).writeText("")
 
-        menu(folder).unregister()
+        assertTrue("ярлык снят, а выключение сочтено сбоем", menu(folder).unregister())
 
         assertFalse("запись осталась после выключения", sendToShortcut(folder).exists())
+        assertTrue("снимать было нечего — это не сбой", menu(folder).unregister())
+    }
+
+    /** Успех записи — не код PowerShell, а ярлык, прочитанный обратно и ведущий в Point (#1082). */
+    @Test
+    fun `ярлык встал, только когда читается обратно и ведёт в Point`() {
+        val exe = installed()
+        val folder = File(temp.newFolder("home-ok"), "SendTo")
+        var leadsTo = exe.absolutePath
+        val windows = ShortcutSendToMenu(folder) { command ->
+            val script = command.last()
+            if ("CreateShortcut" in script && "Save()" in script) sendToShortcut(folder).writeText("")
+            0 to leadsTo + "\r\n"
+        }
+
+        assertTrue("ярлык встал и ведёт в Point, а запись сочтена сбоем", windows.register(exe))
+
+        // Windows ответила «готово», а ярлык ведёт не туда: это не успех.
+        leadsTo = "C:/Старое/Point.exe"
+        assertFalse("ярлык ведёт мимо Point, а запись сочтена успехом", windows.register(exe))
+
+        // PowerShell отработал молча, а ярлыка на диске нет — тоже не успех.
+        val silent = ShortcutSendToMenu(File(temp.newFolder("home-silent"), "SendTo")) { 0 to "" }
+        assertFalse("ярлыка нет, а запись сочтена успехом", silent.register(exe))
     }
 
     @Test

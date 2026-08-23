@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -65,12 +66,27 @@ fun SettingsRoot(
     config: PcConfig,
     devices: Int,
     email: String,
-    onSave: (PcConfig) -> Boolean,
+    onSave: (PcConfig) -> Unit,
+
+    /** Поставить или снять пункт в меню файла Windows; ответ — по эффекту, встал ли (#1082). */
+    onRightClick: (Boolean) -> Boolean,
+
+    /** Стоит ли меню файла Windows в этом положении на деле (#1082). */
+    rightClickHolds: suspend (Boolean) -> Boolean,
     onOpen: (SettingsPage) -> Unit,
 ) {
     var rightClick by remember { mutableStateOf(config.rightClick) }
-    var rightClickTrouble by remember { mutableStateOf(false) }
     var sound by remember { mutableStateOf(config.sound) }
+
+    // Правда о пункте меню — факт, прочитанный при показе экрана, а не память последнего тапа
+    // (#1082): после перезапуска включённый флаг не говорит «Показывается» поверх пустого
+    // реестра. `null` — ещё не прочитано. Тап отвечает сам и свежее: его ответ чтение, начатое
+    // до тапа, не перебивает.
+    var rightClickTrouble by remember { mutableStateOf<Boolean?>(null) }
+    LaunchedEffect(Unit) {
+        val holds = rightClickHolds(rightClick)
+        if (rightClickTrouble == null) rightClickTrouble = !holds
+    }
 
     Column(
         modifier = Modifier.fillMaxWidth().widthIn(max = 560.dp),
@@ -126,15 +142,17 @@ fun SettingsRoot(
 
         // «Показывать · выключить» читалось как загадка: состояние это или действие (#878).
         // Переключатель говорит состояние словом, а нажатие меняет его. Слово — правда:
-        // когда запись в реестр не встала, включённый флаг не говорит «Показывается» (#1082).
+        // когда запись в реестр не встала, включённый флаг не говорит «Показывается», а когда
+        // не снялась — выключенный не говорит «Не показывается» (#1082).
         Section("Интеграции") {
             SwitchRow(
                 title = "«Открыть в Point» в меню файла",
-                subtitle = rightClickLine(rightClick, rightClickTrouble),
+                subtitle = rightClickLine(rightClick, rightClickTrouble == true),
                 on = rightClick,
             ) {
                 rightClick = !rightClick
-                rightClickTrouble = !onSave(config.copy(rightClick = rightClick)) && rightClick
+                onSave(config.copy(rightClick = rightClick))
+                rightClickTrouble = !onRightClick(rightClick)
             }
         }
 
@@ -148,10 +166,14 @@ fun SettingsRoot(
     }
 }
 
-/** Подпись переключателя правой кнопки: сбой записи виден словом, а не прячется за флагом (#1082). */
+/**
+ * Подпись переключателя правой кнопки: сбой виден словом, а не прячется за флагом (#1082) —
+ * и когда запись не встала, и когда не снялась.
+ */
 internal fun rightClickLine(on: Boolean, trouble: Boolean): String = when {
     on && trouble -> "Не удалось включить — запись в меню файла не встала"
     on -> "Показывается"
+    trouble -> "Не удалось выключить — пункт остался в меню файла"
     else -> "Не показывается"
 }
 
@@ -173,7 +195,7 @@ internal fun keysLine(config: PcConfig): String =
 @Composable
 fun SettingsDevices(
     config: PcConfig,
-    onSave: (PcConfig) -> Boolean,
+    onSave: (PcConfig) -> Unit,
     devicesPane: @Composable () -> Unit,
 ) {
     var name by remember { mutableStateOf(config.name) }

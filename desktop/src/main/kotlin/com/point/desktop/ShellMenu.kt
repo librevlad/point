@@ -5,10 +5,15 @@ import java.io.File
 interface ShellMenu {
     fun registeredCommand(): String?
 
-    /** Записывает пункт и отвечает правдой: `true` — команда действительно читается из реестра. */
+    /**
+     * Записывает пункт и отвечает правдой: `true` — команда действительно читается из реестра.
+     * Не встало целиком — не остаётся ничего: половина записи была бы тем самым мёртвым
+     * пунктом, с которого началась карточка (#1082).
+     */
     fun register(command: String, title: String): Boolean
 
-    fun unregister()
+    /** Снимает пункт и отвечает по эффекту: `true` — команды в реестре больше нет (#1082). */
+    fun unregister(): Boolean
 }
 
 /** Название пункта в меню файла — одно и при старте, и из настроек. */
@@ -39,6 +44,17 @@ fun shellMenuRegFile(command: String, title: String): String = listOf(
 private fun regValue(text: String): String = text.replace("\\", "\\\\").replace("\"", "\\\"")
 
 fun shellMenuNeedsUpdate(current: String?, wanted: String): Boolean = current != wanted
+
+/**
+ * Стоит ли меню файла Windows в этом положении выключателя на деле (#1082): включено — пункт
+ * «Открыть в Point» ведёт в эту установку и ярлык «Отправить → Point» тоже; выключено — не
+ * осталось ни того, ни другого. Спрашивается у реестра и папки «Отправить», а не у памяти
+ * экрана: после перезапуска переключатель говорит то, что есть, а не то, что когда-то нажали.
+ */
+fun rightClickHolds(on: Boolean, exe: File?, command: String?, link: String?): Boolean = when {
+    on -> exe != null && command == shellCommandFor(exe) && link == exe.absolutePath
+    else -> command == null && link == null
+}
 
 fun installedExecutable(command: String?): File? {
     val path = command?.takeIf { it.isNotBlank() } ?: return null
@@ -75,7 +91,7 @@ class RegistryShellMenu(
             }
         }.getOrNull() ?: return false
 
-        return try {
+        val stood = try {
             val (code, _) = run(listOf("reg", "import", file.absolutePath))
 
             // Сбой больше не глотается: успех — это команда, читаемая обратно из реестра (#1082).
@@ -83,11 +99,20 @@ class RegistryShellMenu(
         } finally {
             file.delete()
         }
+
+        // Ответ «не встало» без отката оставлял в реестре то, что успело записаться, — название
+        // без команды, то есть мёртвый пункт. Не встало целиком — в меню не остаётся ничего.
+        if (!stood) unregister()
+        return stood
     }
 
-    override fun unregister() {
-        if (!windows) return
+    override fun unregister(): Boolean {
+        if (!windows) return true
         run(listOf("reg", "delete", MENU_KEY, "/f"))
+
+        // Код возврата `reg delete` не ответ: ключа могло не быть и до того. Ответ — реестр,
+        // прочитанный обратно: команды больше нет.
+        return registeredCommand() == null
     }
 
     private companion object {
@@ -112,9 +137,11 @@ interface SendToMenu {
     /** Куда сейчас указывает ярлык «Отправить → Point», или `null` — его нет. */
     fun target(): String?
 
-    fun register(exe: File)
+    /** Кладёт ярлык и отвечает по эффекту: `true` — ярлык читается обратно и ведёт в `exe` (#1082). */
+    fun register(exe: File): Boolean
 
-    fun unregister()
+    /** Снимает ярлык и отвечает по эффекту: `true` — ярлыка больше нет (#1082). */
+    fun unregister(): Boolean
 }
 
 fun sendToFolder(appData: String? = System.getenv("APPDATA")): File? =
@@ -143,14 +170,19 @@ class ShortcutSendToMenu(
         return if (code != 0) null else out.trim().takeIf { it.isNotEmpty() }
     }
 
-    override fun register(exe: File) {
-        val place = folder ?: return
+    override fun register(exe: File): Boolean {
+        val place = folder ?: return false
         place.mkdirs()
         run(powershell(sendToScript(exe, sendToShortcut(place))))
+
+        // Успех — не код PowerShell, а ярлык, прочитанный обратно: он есть и ведёт в Point.
+        return target() == exe.absolutePath
     }
 
-    override fun unregister() {
-        folder?.let(::sendToShortcut)?.takeIf { it.isFile }?.delete()
+    override fun unregister(): Boolean {
+        val link = folder?.let(::sendToShortcut) ?: return true
+        link.delete()
+        return !link.exists()
     }
 
     private fun powershell(script: String) =

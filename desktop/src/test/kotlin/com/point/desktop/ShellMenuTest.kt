@@ -100,15 +100,45 @@ class ShellMenuTest {
         )
     }
 
-    @Test fun `пункт без команды успехом не считается`() {
+    @Test fun `пункт без команды успехом не считается и в реестре не остаётся`() {
 
         // Прежний дефект #1082 в лицах: заголовок записался, команда — нет, exit был проглочен.
+        val calls = mutableListOf<List<String>>()
         val menu = RegistryShellMenu(
-            run = { cmd -> if (cmd.getOrNull(1) == "import") 0 to "" else 1 to "" },
+            run = { cmd -> calls += cmd; if (cmd.getOrNull(1) == "import") 0 to "" else 1 to "" },
             windows = true,
         )
 
         assertFalse("пункт-пустышка сочтён живым", menu.register("\"C:\\Point\\Point.exe\" \"%1\"", SHELL_MENU_TITLE))
+
+        // Ответ «не встало» без отката оставлял название без команды — тот самый мёртвый пункт.
+        assertTrue("половина записи осталась в реестре: $calls", calls.any { it.getOrNull(1) == "delete" })
+    }
+
+    @Test fun `выключение отвечает по эффекту, а не кодом reg delete`() {
+        val command = "\"C:\\Point\\Point.exe\" \"%1\""
+        var inRegistry = true
+        var deleteWorks = true
+        val menu = RegistryShellMenu(
+            run = { cmd ->
+                when (cmd.getOrNull(1)) {
+                    "delete" -> { if (deleteWorks) inRegistry = false; 0 to "" }
+                    "query" -> if (inRegistry) 0 to "    (По умолчанию)    REG_SZ    $command" else 1 to ""
+                    else -> 1 to ""
+                }
+            },
+            windows = true,
+        )
+
+        // Команда пережила удаление — выключенный переключатель не скажет «Не показывается».
+        deleteWorks = false
+        assertFalse("пункт остался, а выключение сочтено успехом", menu.unregister())
+
+        deleteWorks = true
+        assertTrue("пункт снят, а выключение сочтено сбоем", menu.unregister())
+
+        // Ключа не было и до того: `reg delete` ругается, но эффект — тот, что просили.
+        assertTrue("снимать было нечего — это не сбой", menu.unregister())
     }
 
     @Test fun `вне Windows реестр не трогается`() {
@@ -116,21 +146,21 @@ class ShellMenuTest {
         val menu = RegistryShellMenu(run = { touched = true; 0 to "" }, windows = false)
 
         assertFalse(menu.register("\"C:\\Point\\Point.exe\" \"%1\"", SHELL_MENU_TITLE))
-        menu.unregister()
+        assertTrue("вне Windows снимать нечего — это не сбой", menu.unregister())
         assertNull(menu.registeredCommand())
         assertFalse("вне Windows запущен reg", touched)
     }
 
-    @Test fun `переключатель не прикрывает сбой словом об успехе`() {
-        val ok = com.point.desktop.ui.rightClickLine(on = true, trouble = false)
-        val broken = com.point.desktop.ui.rightClickLine(on = true, trouble = true)
-        val off = com.point.desktop.ui.rightClickLine(on = false, trouble = false)
+    @Test fun `выключатель говорит, что стоит на деле, по реестру и ярлыку`() {
+        val exe = File(temp.newFolder("Point"), "Point.exe").apply { writeText("") }
+        val command = shellCommandFor(exe)
 
-        assertTrue("сбой не назван сбоем", broken.contains("Не удалось"))
-        assertFalse("сбой прикрыт словом об успехе", broken.contains(ok))
-        assertTrue(ok.contains("Показывается"))
-        assertTrue(off.contains("Не показывается"))
-        assertFalse("выключенное выглядит сломанным", off.contains("Не удалось"))
+        assertTrue(rightClickHolds(on = true, exe = exe, command = command, link = exe.absolutePath))
+        assertFalse("реестр пуст, а «включено» сочтено стоящим", rightClickHolds(true, exe, null, exe.absolutePath))
+        assertFalse("ярлыка нет, а «включено» сочтено стоящим", rightClickHolds(true, exe, command, null))
+        assertFalse("из исходников пункта нет — врать про него нечего", rightClickHolds(true, null, command, exe.absolutePath))
+        assertTrue(rightClickHolds(on = false, exe = exe, command = null, link = null))
+        assertFalse("пункт остался, а «выключено» сочтено снятым", rightClickHolds(false, exe, command, null))
     }
 
     @Test fun `выключенная правая кнопка помнится между запусками`() {
