@@ -262,13 +262,8 @@ fun main(args: Array<String>) {
 
         "drop-link" to if (accountStore.current() != null) null else "компьютер не вошёл в аккаунт",
     )
-    val pcBaseActions = com.point.core.flow.advertisedActions(registry.all()).map { action ->
-        action.copy(
-
-            label = phoneFacingLabel(action),
-
-            leavesCircle = resolver.leavesDevice(com.point.core.model.CapabilityId(action.id)),
-        )
+    val pcBaseActions = phoneFacingActions(registry.all()).map { action ->
+        action.copy(leavesCircle = resolver.leavesDevice(com.point.core.model.CapabilityId(action.id)))
     }
     fun pcRemoteActionsNow(): List<com.point.core.flow.PcRemoteAction> {
         val unavailable = pcUnavailableNow()

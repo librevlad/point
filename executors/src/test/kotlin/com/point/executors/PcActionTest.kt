@@ -223,4 +223,21 @@ class PcActionTest {
         )
         assertEquals(summary, humanSendName(machine))
     }
+
+    /**
+     * Знак действия показывает, куда уйдёт объект (#1094, решение владельца): «На компьютер»
+     * носит знак компьютера — получателя, тем же ключом, каким устройство нарисовано в круге.
+     * Зеркало того же правила у «На телефон» в окне компьютера — SignShowsWhereItGoesTest.
+     */
+    @Test fun `«На компьютер» носит знак компьютера — получателя`() {
+        val registry = DefaultCapabilityRegistry(setOf(PcCapability(FakeLinks(linked))), DefaultBubblePolicy())
+
+        val toPc = registry.bubblesFor(ObjectState(ObjectKind.IMAGE)).single { it.capabilityId == PcCapability.ID }
+
+        assertEquals(
+            "знак переезда — знак устройства, куда уйдёт объект",
+            com.point.core.flow.deviceIconKey(com.point.core.flow.DeviceKind.PC),
+            toPc.icon,
+        )
+    }
 }

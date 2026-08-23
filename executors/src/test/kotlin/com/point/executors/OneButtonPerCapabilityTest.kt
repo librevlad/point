@@ -6,6 +6,7 @@ import com.point.core.flow.PcLinks
 import com.point.core.flow.PcRemoteAction
 import com.point.core.flow.SpeechReadiness
 import com.point.core.flow.capabilities.sharedCapabilities
+import com.point.core.flow.decodePcCaps
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import org.junit.Assert.assertEquals
@@ -51,7 +52,7 @@ class OneButtonPerCapabilityTest {
 
         val titles = registryWithPc(listOf(printOnPc)).bubblesFor(ObjectState(ObjectKind.PDF)).map { it.title }
 
-        assertTrue("действие компьютера пропало с телефона- $titles", "Напечатать на компьютере" in titles)
+        assertTrue("действие компьютера пропало с телефона- $titles", printOnPc.label in titles)
     }
 
     @Test fun `при подключённом компьютере ни одно название не стоит в списке дважды`() {
@@ -105,20 +106,28 @@ class OneButtonPerCapabilityTest {
             TranslateCapability(aiKeysReady),
         ) + sharedCapabilities()
 
-        val transcribeOnPc = PcRemoteAction("transcribe", "Расшифровать", setOf("AUDIO"))
-        val printOnPc = PcRemoteAction("pc-print", "Напечатать на компьютере")
+        /** Снимок ответа компьютера; кладёт его на classpath сборка `:executors` (#1094). */
+        const val PC_CAPS_SNAPSHOT = "phone-facing-actions.txt"
 
-        /** Что компьютер объявляет телефону- id дословно совпадают с реестром `:desktop`. */
-        val advertisedByPc = listOf(
-            transcribeOnPc,
-            printOnPc,
-            PcRemoteAction("pc-open", "Открыть на компьютере"),
-            PcRemoteAction("pc-copy", "В буфер компьютера"),
-            PcRemoteAction("pc-reveal", "Показать в папке на компьютере"),
-            PcRemoteAction("pc-save-as", "Сохранить на компьютере"),
-            PcRemoteAction("pc-download", "Скачать видео на компьютер", setOf("URL")),
-            PcRemoteAction("pc-open-link", "Открыть в браузере на компьютере", setOf("URL")),
-        ) + sharedCapabilities().map { PcRemoteAction(it.id.value, it.label(ObjectState(ObjectKind.IMAGE))) }
+        /**
+         * Что компьютер отвечает телефону на вопрос «что ты умеешь» — копия того самого
+         * ответа, снятая в файл (#1094). Рукописный список здесь синхронизировался руками и к
+         * боевому объявлению отношения не имел. Копию сторожит `:desktop` (PhoneFacingTest
+         * сверяет её с живым ответом и отказывается стареть молча), а сюда файл кладёт сборка:
+         * читается он с classpath, а не по пути от рабочего каталога, потому что пропавший
+         * файл обязан уронить тест словами, а не оставить телефону пустое объявление. Чтение
+         * отложено до самого теста — из общей инициализации падение доходит до человека одним
+         * именем класса, без единого слова о том, чего не хватило.
+         */
+        val advertisedByPc: List<PcRemoteAction> by lazy {
+            decodePcCaps(
+                OneButtonPerCapabilityTest::class.java.getResource("/$PC_CAPS_SNAPSHOT")?.readText()
+                    ?: error("снимка $PC_CAPS_SNAPSHOT нет на classpath — сверять телефону не с чем"),
+            )
+        }
+
+        val transcribeOnPc by lazy { advertisedByPc.first { it.id == TranscribeCapability.ID.value } }
+        val printOnPc by lazy { advertisedByPc.first { it.id == "pc-print" } }
 
         object NoTransport : com.point.core.flow.PcTransport {
             override suspend fun send(

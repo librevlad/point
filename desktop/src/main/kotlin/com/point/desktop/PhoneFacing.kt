@@ -2,6 +2,7 @@ package com.point.desktop
 
 import com.point.core.flow.Capability
 import com.point.core.flow.PcRemoteAction
+import com.point.core.flow.advertisedActions
 
 /**
  * Умения компьютера. Общие способности он делит с телефоном, а не заводит свои копии; дорогу
@@ -31,7 +32,8 @@ fun desktopCapabilities(): Set<Capability> = setOf(
  *
  * Всё остальное едет телефону своим именем. Приписка «на ПК» ко всему подряд ставила в
  * список вторую строку на то же самое умение (#628, решение владельца «одна способность —
- * одна кнопка»).
+ * одна кнопка»). Место зовётся одним словом — «компьютер» (#1094): две формы одного
+ * места в одном списке читались как два разных места.
  */
 private val namedByPlace = mapOf(
     "pc-open" to "Открыть на компьютере",
@@ -43,5 +45,13 @@ private val namedByPlace = mapOf(
     "pc-open-link" to "Открыть в браузере на компьютере",
 )
 
+/**
+ * Умения компьютера в том виде, в каком их получает телефон: объявление плюс имена по месту.
+ * Одна точка и для провода (Main), и для сторожей (#1094) — тест смотрит на то же, что едет,
+ * а не собирает объявление заново рядом.
+ */
+fun phoneFacingActions(capabilities: Collection<Capability>): List<PcRemoteAction> =
+    advertisedActions(capabilities).map { it.copy(label = phoneFacingLabel(it)) }
+
 /** Имя, под которым умение компьютера видно в списке на телефоне. */
-fun phoneFacingLabel(action: PcRemoteAction): String = namedByPlace[action.id] ?: action.label
+private fun phoneFacingLabel(action: PcRemoteAction): String = namedByPlace[action.id] ?: action.label
