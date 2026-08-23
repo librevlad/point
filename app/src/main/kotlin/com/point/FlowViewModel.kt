@@ -2552,7 +2552,7 @@ class FlowViewModel @Inject constructor(
             obj,
             EnrichmentUpdate(
                 features = setOf(Feature.UNUSABLE),
-                metadata = mapOf(META_UNUSABLE_REASON to readerFailure(reason)),
+                metadata = mapOf(META_UNUSABLE_REASON to readerFailure(reason, obj.state.kind)),
                 running = emptyList(),
             ),
         )

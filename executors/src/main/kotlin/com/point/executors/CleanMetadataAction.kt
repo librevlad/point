@@ -65,7 +65,7 @@ class CleanMetadataRealizer @Inject constructor(
                 reportStage("Читаю снимок")
                 val source = BitmapFactory.decodeFile(input.uri.value)
                     ?: return@withContext ActionResult.Failure(
-                        com.point.core.flow.readerFailure(null),
+                        com.point.core.flow.readerFailure(null, input.state.kind),
                         recoverable = false,
                     )
 

@@ -3,6 +3,7 @@ package com.point.core.ui
 import com.point.core.flow.FailedInvestigation
 import com.point.core.flow.readerFailure
 import com.point.core.model.CapabilityId
+import com.point.core.model.ObjectKind
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -33,12 +34,12 @@ class FoundHeaderTest {
     fun `одна и та же причина от двух исследований не повторяется`() {
         val note = failedNote(
             listOf(
-                FailedInvestigation(CapabilityId("qr"), null, readerFailure("not an image")),
-                FailedInvestigation(CapabilityId("image-text"), null, readerFailure("decode failed")),
+                FailedInvestigation(CapabilityId("qr"), null, readerFailure("not an image", ObjectKind.IMAGE)),
+                FailedInvestigation(CapabilityId("image-text"), null, readerFailure("decode failed", ObjectKind.IMAGE)),
             ),
         )
 
-        assertEquals("Не удалось посмотреть: " + readerFailure(null), note)
+        assertEquals("Не удалось посмотреть: " + readerFailure(null, ObjectKind.IMAGE), note)
     }
 
     @Test
@@ -46,11 +47,11 @@ class FoundHeaderTest {
         val note = failedNote(
             listOf(
                 FailedInvestigation(CapabilityId("qr"), null, "документ не читается"),
-                FailedInvestigation(CapabilityId("image-text"), null, readerFailure(null)),
+                FailedInvestigation(CapabilityId("image-text"), null, readerFailure(null, ObjectKind.IMAGE)),
             ),
         )
 
-        assertEquals("Не удалось посмотреть: документ не читается; " + readerFailure(null), note)
+        assertEquals("Не удалось посмотреть: документ не читается; " + readerFailure(null, ObjectKind.IMAGE), note)
     }
 
     @Test
