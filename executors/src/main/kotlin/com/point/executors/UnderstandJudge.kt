@@ -2,6 +2,7 @@ package com.point.executors
 
 import com.point.core.flow.AtomAddress
 import com.point.core.flow.AtomLayer
+import com.point.core.flow.EvidenceClass
 import com.point.core.flow.FieldCandidate
 import com.point.core.flow.PartyReading
 import com.point.core.flow.bareIndexId
@@ -45,18 +46,24 @@ internal fun judgeFields(
     val retry = mutableSetOf<String>()
     val blockedByKey = LinkedHashMap<String, List<String>>()
     fields.forEach { (key, rawCandidates) ->
-        val grounded = rawCandidates.flatMap { groundCandidate(key, it, layer, readText) }
-            .distinctBy { it.first.text to it.first.ids }
-        val (blocked, alive) = grounded.partition { (c, _) -> s10CheckDigitValid(c.text) == false }
-        if (blocked.isNotEmpty()) blockedByKey[key] = blocked.map { it.first.text }
+        val parties = belongings[key].orEmpty()
+
+        // Сторона — свойство самого прочтения, а не его текста (#1176): воронка текст меняет
+        // (слово страницы встаёт вместо слова модели, #809), и узнавать прочтение стороны по
+        // тексту потом значило бы терять хозяина ровно там, где судья его и выбрал. Поэтому
+        // сторона едет вместе с прочтением через всю воронку.
+        val grounded = rawCandidates.flatMap { raw ->
+            val party = parties.firstOrNull { it.reading == raw }
+            groundCandidate(key, raw, layer, readText).map { (c, isGrounded) -> Weighed(c, isGrounded, party) }
+        }.distinctBy { it.candidate.text to it.candidate.ids }
+        val (blocked, alive) = grounded.partition { s10CheckDigitValid(it.candidate.text) == false }
+        if (blocked.isNotEmpty()) blockedByKey[key] = blocked.map { it.candidate.text }
         if (alive.isEmpty()) {
             if (grounded.isNotEmpty()) retry += key
             return@forEach
         }
-        val scored = alive.map { (c, isGrounded) ->
-
-            val evidence = layer?.fieldEvidence(key, c, ruleMarks) ?: formEvidence(key, c.text)
-            Triple(c, isGrounded, evidence)
+        val scored = alive.map {
+            it.copy(evidence = layer?.fieldEvidence(key, it.candidate, ruleMarks) ?: formEvidence(key, it.candidate.text))
         }
 
         // Значение однозначного факта — прочтение стороны, которой документ адресован
@@ -65,29 +72,31 @@ internal fun judgeFields(
         // куда едет посылка (#772). Сторона выбирает из тех же прошедших воронку прочтений:
         // слово страницы вместо слова модели, форма и контрольная цифра уже спрошены выше
         // (#809), и забракованное сюда не доходит. Прежний выбор остаётся среди прочтений.
-        val addressed = chosenByAddressee(key, belongings[key].orEmpty())?.reading
-        val winner = addressed?.let { chosen -> scored.firstOrNull { sameReading(it.first, chosen) } }
-            ?: scored.maxByOrNull { it.third.size }!!
+        val addressed = chosenByAddressee(key, parties)
+        val winner = addressed?.let { chosen -> scored.firstOrNull { it.party == chosen } }
+            ?: scored.maxByOrNull { it.evidence.size }!!
         won[key] = JudgedField(
-            text = winner.first.text,
-            evidence = winner.third,
-            grounded = winner.second,
-            candidates = scored.map { it.first.text }.distinct(),
-            line = winner.first.line,
+            text = winner.candidate.text,
+            evidence = winner.evidence,
+            grounded = winner.grounded,
+            candidates = scored.map { it.candidate.text }.distinct(),
+            line = winner.candidate.line,
+
+            // Чьё это значение — то же решение судьи, что и само значение: связь дальше
+            // идёт от него, а не сверяется по тексту постфактум (#1176).
+            owner = winner.party?.let { PartyReading(winner.candidate, it.partyKey) },
         )
     }
     return JudgedFields(won, retry, blockedByKey)
 }
 
-/**
- * То же прочтение страницы после воронки (#1176).
- *
- * Заземление меняет текст кандидата — слово модели уступает слову страницы, — но метки слов
- * у него те же; по ним прочтение стороны и узнаётся среди годных. Прочтение без меток
- * страницы сторону иметь не может.
- */
-private fun sameReading(candidate: FieldCandidate, reading: FieldCandidate): Boolean =
-    candidate.ids.isNotEmpty() && candidate.ids.map(::bareIndexId) == reading.ids.map(::bareIndexId)
+/** Прочтение в воронке судьи: чем стало, оперлось ли на страницу и при какой стороне стояло. */
+private data class Weighed(
+    val candidate: FieldCandidate,
+    val grounded: Boolean,
+    val party: PartyReading?,
+    val evidence: Set<EvidenceClass> = emptySet(),
+)
 
 private fun groundCandidate(
     key: String,

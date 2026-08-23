@@ -48,6 +48,13 @@ class BelongingTest {
 
     private val phone get() = onPage("С57 636 05 50")
 
+    /**
+     * Имя хозяина берётся у самой стороны: `.of` называет её ключ, а не копию имени. Точно так
+     * же его читает и граф — связь ведёт к узлу стороны (`entityObjects`), а имя стоит на нём.
+     */
+    private fun ownerName(facts: Map<String, String>, key: String): String? =
+        ownerKeyOf(facts, key)?.let { facts[it] }
+
     private fun places(vararg readings: FieldCandidate) =
         real.belongings(mapOf(META_ENTITY_PLACE to readings.toList()), parties)[META_ENTITY_PLACE]
             .orEmpty()
@@ -190,10 +197,10 @@ class BelongingTest {
     fun `принадлежность названа ключом стороны, а не копией её имени`() {
         val facts = mapOf(META_ENTITY_PHONE to phone.text, senderKey to senderName)
 
-        val owned = belongingFacts(facts, mapOf(META_ENTITY_PHONE to listOf(PartyReading(phone, senderKey))))
+        val owned = belongingFacts(facts, mapOf(META_ENTITY_PHONE to PartyReading(phone, senderKey)))
 
         assertEquals(mapOf(META_ENTITY_PHONE + META_OF_SUFFIX to senderKey), owned)
-        assertEquals(senderName, ownerOf(facts + owned, META_ENTITY_PHONE))
+        assertEquals(senderName, ownerName(facts + owned, META_ENTITY_PHONE))
     }
 
     @Test
@@ -201,7 +208,7 @@ class BelongingTest {
         val facts = mapOf(META_ENTITY_PHONE to "099 111 22 33", senderKey to senderName)
 
         assertTrue(
-            belongingFacts(facts, mapOf(META_ENTITY_PHONE to listOf(PartyReading(phone, senderKey)))).isEmpty(),
+            belongingFacts(facts, mapOf(META_ENTITY_PHONE to PartyReading(phone, senderKey))).isEmpty(),
         )
     }
 
@@ -215,7 +222,7 @@ class BelongingTest {
 
         val merged = mergeKnowledge(known, mapOf(META_ENTITY_PHONE to phone.text))
 
-        assertEquals(senderName, ownerOf(merged, META_ENTITY_PHONE))
+        assertEquals(senderName, ownerName(merged, META_ENTITY_PHONE))
     }
 
     @Test
@@ -336,7 +343,25 @@ class BelongingTest {
             ),
         )
 
-        assertEquals(receiverName, ownerOf(merged, META_ENTITY_PHONE))
+        assertEquals(receiverName, ownerName(merged, META_ENTITY_PHONE))
+    }
+
+    /**
+     * Хозяин бывает только у знания об объекте (#1176).
+     *
+     * `exec.of` — родословная результата, приехавшего с компьютера: «сделан вот из этого
+     * объекта» (ADR-0001 §2). Факта «exec» не существует, и мерка «сменилось ли значение»
+     * про него всегда отвечала «сменилось» — знание объекта, понятое после возвращения с
+     * компьютера, срезало результату родословную, и он оставался сиротой.
+     */
+    @Test
+    fun `родословная результата с компьютера принадлежностью не считается`() {
+        val known = mapOf(PcExecFields.OF to "doc", META_ENTITY_PHONE to phone.text)
+
+        val understood = mapOf(META_ENTITY_PLACE to receiverBranch.text)
+
+        assertEquals("doc", mergeFacts(known, understood)[PcExecFields.OF])
+        assertEquals("doc", mergeKnowledge(known, understood)[PcExecFields.OF])
     }
 
     /** То же знание, записанное иначе, — тот же факт, и хозяин при нём остаётся. */
@@ -350,7 +375,7 @@ class BelongingTest {
 
         val merged = mergeFacts(known, mapOf(META_ENTITY_PHONE to "+380676360560"))
 
-        assertEquals(senderName, ownerOf(merged, META_ENTITY_PHONE))
+        assertEquals(senderName, ownerName(merged, META_ENTITY_PHONE))
     }
 
     /** Слияние фактов — общий путь витка «Понять»: смена факта снимает хозяина и там. */

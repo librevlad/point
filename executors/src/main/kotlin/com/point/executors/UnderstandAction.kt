@@ -201,12 +201,11 @@ class UnderstandRealizer @Inject constructor(
                 val retried = judged.retry.takeIf { it.isNotEmpty() }?.let { keys ->
                     reportStage("Контрольная цифра не сошлась — перечитываю")
                     val again = ask(input, retryPrompt(keys, laidOut, index), eyes = eyes).text
-                    judgeFields(
-                        parseFieldCandidates(again).fields.filterKeys { it in keys },
-                        layer,
-                        readText,
-                        belongings,
-                    )
+
+                    // Перечитанное — другие прочтения, и стороны у них свои (#1176): связь
+                    // считается по тем прочтениям, которые судятся, а не по прошлым.
+                    val more = parseFieldCandidates(again).fields.filterKeys { it in keys }
+                    judgeFields(more, layer, readText, layer?.belongings(more, roles).orEmpty())
                 }
                 val fields = judged.won + retried?.won.orEmpty()
 
@@ -257,8 +256,12 @@ class UnderstandRealizer @Inject constructor(
 
                     // Принадлежность — аннотация ключа, как «кто прочитал» и «откуда»
                     // (#1176): значение факта не дублируется, названа лишь сторона, к
-                    // которой оно относится.
-                    val owned = com.point.core.flow.belongingFacts(merged, belongings)
+                    // которой оно относится. Хозяина называет то же решение судьи, что и
+                    // значение, — сверки по тексту постфактум нет.
+                    val owned = com.point.core.flow.belongingFacts(
+                        merged,
+                        fields.mapNotNull { (key, field) -> field.owner?.let { key to it } }.toMap(),
+                    )
 
                     // Согласие исполнителей — улика и в текстовом пути (#1176): второй
                     // виток, увидевший то же значение, подтверждает его отметкой на
@@ -581,6 +584,9 @@ internal data class JudgedField(
 
     /** Строка документа вокруг значения — подпись при нём, а не оно само (#782). */
     val line: String? = null,
+
+    /** Чьё это значение (#1176): сторона и то самое прочтение, которое ею стало. */
+    val owner: com.point.core.flow.PartyReading? = null,
 )
 
 internal data class JudgedFields(

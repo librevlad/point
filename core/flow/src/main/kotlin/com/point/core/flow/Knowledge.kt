@@ -186,7 +186,7 @@ private fun mergeAnnotation(target: MutableMap<String, String>, key: String, val
 
         // Принадлежность — не прочтение факта, а наблюдение о том, чьё оно сейчас (#1176):
         // свежее наблюдение заменяет прежнее, спора двух принадлежностей не бывает.
-        key.endsWith(META_OF_SUFFIX) -> target[key] = value
+        isBelongingKey(key) -> target[key] = value
 
         key.endsWith(META_EVIDENCE_SUFFIX) -> {
             val was = evidenceClasses(existing)

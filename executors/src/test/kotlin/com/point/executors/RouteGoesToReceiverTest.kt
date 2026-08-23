@@ -98,6 +98,20 @@ class RouteGoesToReceiverTest {
         assertTrue("значение не опёрто на слова страницы", judged[META_ENTITY_PLACE]?.grounded == true)
     }
 
+    /**
+     * Хозяин — часть решения судьи, а не догадка о нём после (#1176): текст прочтения к этому
+     * времени уже переписан словом страницы, и узнать по нему выбранное прочтение нельзя.
+     */
+    @Test
+    fun `выбранное прочтение приносит и свою сторону`() {
+        val rewritten = FieldCandidate("м. Одеса, відділення №7", receiverBranch.ids)
+
+        val judged = judge(mapOf(META_ENTITY_PLACE to listOf(senderBranch, rewritten)))
+
+        assertEquals(META_GRAPH_ROLE_PREFIX + "receiver", judged[META_ENTITY_PLACE]?.owner?.partyKey)
+        assertEquals(receiverBranch.text, judged[META_ENTITY_PLACE]?.owner?.reading?.text)
+    }
+
     /** Подпись значения едет с выбранным прочтением, а не остаётся от проигравшего (#782). */
     @Test
     fun `подпись значения — от прочтения стороны`() {

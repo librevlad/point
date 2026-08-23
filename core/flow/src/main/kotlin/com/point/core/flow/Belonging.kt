@@ -23,14 +23,26 @@ import com.point.core.model.RelationType
  */
 const val META_OF_SUFFIX = ".of"
 
+/**
+ * Ключ, называющий знание об объекте: сущность, роль стороны, ячейка (#1176).
+ *
+ * Хозяин бывает только у такого знания. Просьба к компьютеру живёт своим пространством имён,
+ * и `exec.of` — родословная приехавшего результата (ADR-0001 §2), а не хозяин факта «exec»,
+ * которого не существует. Без этой мерки снятие устаревшей принадлежности срезало бы заодно
+ * и родословную.
+ */
+fun isKnowledgeKey(key: String): Boolean =
+    key.startsWith(META_ENTITY_PREFIX) ||
+        key.startsWith(META_GRAPH_ROLE_PREFIX) ||
+        key.startsWith(META_CELL_PREFIX)
+
+/** Аннотация принадлежности: `.of` при знании объекта, а не любой ключ с тем же хвостом. */
+fun isBelongingKey(key: String): Boolean = key.endsWith(META_OF_SUFFIX) && isKnowledgeKey(key)
+
 /** Ключ знания, к которому относится [key], — только если то знание и правда есть. */
 fun ownerKeyOf(facts: Map<String, String>, key: String): String? =
     facts[key + META_OF_SUFFIX]
         ?.takeIf { it.isNotBlank() && !facts[it].isNullOrBlank() }
-
-/** Значение знания, к которому относится [key]: имя стороны берётся у неё, а не при факте. */
-fun ownerOf(facts: Map<String, String>, key: String): String? =
-    ownerKeyOf(facts, key)?.let { facts[it] }
 
 /** Прочтение и сторона, при которой оно стоит. */
 data class PartyReading(val reading: FieldCandidate, val partyKey: String)
@@ -114,17 +126,31 @@ val ADDRESSED_PARTIES: Set<String> = CLASSIFIER_ROLES
 /**
  * Принадлежность как аннотация ключа (#1176).
  *
- * Записывается только про то значение, которое у факта сейчас и стоит: если главным осталось
- * другое прочтение, связи нет — и обещать её нечем.
+ * Хозяина называет то самое решение, что и значение: [chosen] — прочтение, ставшее значением,
+ * вместе со стороной, при которой оно стояло. Узнавать это прочтение постфактум по тексту
+ * было нельзя: воронка судьи меняет текст — слово страницы встаёт вместо слова модели (#809),
+ * — и связь, выбранная судьёй, не находилась и молча пропадала. На экране у факта не было
+ * хозяина, который у него есть.
+ *
+ * Записывается только про то знание, которое сейчас и стоит: слияние могло оставить главным
+ * другое прочтение — тогда связи нет, и обещать её нечем. Мерка та же, что у [staleBelongings].
  */
 fun belongingFacts(
     facts: Map<String, String>,
-    belongings: Map<String, List<PartyReading>>,
-): Map<String, String> = belongings.mapNotNull { (key, readings) ->
+    chosen: Map<String, PartyReading>,
+): Map<String, String> = chosen.mapNotNull { (key, party) ->
     val value = facts[key]?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-    readings.firstOrNull { normConsensus(it.reading.text) == normConsensus(value) }
-        ?.let { key + META_OF_SUFFIX to it.partyKey }
+    (key + META_OF_SUFFIX to party.partyKey).takeIf { stillSameFact(key, party.reading.text, value) }
 }.toMap()
+
+/**
+ * То же ли это знание, при котором сказана принадлежность (#1176).
+ *
+ * Одна мерка на три вопроса: записать хозяина, снять устаревшего и понять, что у узла
+ * сменился факт. То же знание, записанное иначе, и починка искажения — тот же факт.
+ */
+fun stillSameFact(key: String, was: String, now: String): Boolean =
+    sameFact(key, was, now) || isRepairOf(was, now)
 
 /**
  * Принадлежность сказана про тот факт, который стоял (#1176).
@@ -139,12 +165,10 @@ fun belongingFacts(
  */
 fun staleBelongings(known: Map<String, String>, merged: Map<String, String>): Set<String> =
     known.keys
-        .filter { it.endsWith(META_OF_SUFFIX) }
+        .filter(::isBelongingKey)
         .filterTo(LinkedHashSet()) { ofKey ->
             val key = ofKey.removeSuffix(META_OF_SUFFIX)
-            val was = known[key].orEmpty()
-            val now = merged[key].orEmpty()
-            !(sameFact(key, was, now) || isRepairOf(was, now))
+            !stillSameFact(key, known[key].orEmpty(), merged[key].orEmpty())
         }
 
 /**
@@ -172,16 +196,14 @@ fun renamedNodes(before: List<PointObject>, after: List<PointObject>): Set<Strin
     val now = after.associateBy { it.id }
     return before.mapNotNullTo(LinkedHashSet()) { was ->
         val (key, value) = factOf(was.metadata) ?: return@mapNotNullTo null
-        val fresh = now[was.id]?.metadata?.get(key).orEmpty()
-        was.id.takeUnless { sameFact(key, value, fresh) || isRepairOf(value, fresh) }
+        was.id.takeUnless { stillSameFact(key, value, now[was.id]?.metadata?.get(key).orEmpty()) }
     }
 }
 
-/** Лицо узла — его первый смысловой факт: тем же правилом его читают заголовок и правка. */
+/** Лицо узла — первое знание о нём: тем же ключом узел и заводился. */
 fun factOf(metadata: Map<String, String>): Pair<String, String>? =
     metadata.entries.firstOrNull { (key, value) ->
-        (key.startsWith(META_ENTITY_PREFIX) || key.startsWith(META_GRAPH_ROLE_PREFIX)) &&
-            !isAnnotationKey(key) && !isStateKey(key) && value.isNotBlank()
+        isKnowledgeKey(key) && !isAnnotationKey(key) && !isStateKey(key) && value.isNotBlank()
     }?.toPair()
 
 /**
