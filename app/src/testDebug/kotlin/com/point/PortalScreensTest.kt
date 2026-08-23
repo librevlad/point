@@ -4,6 +4,8 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.point.core.flow.AppTarget
+import com.point.core.flow.QUIET_GRACE_S
+import com.point.core.flow.waitingLine
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
@@ -119,6 +121,25 @@ class PortalScreensTest {
         compose.onNodeWithText("Какие сроки в нём названы?").performClick()
 
         assertEquals("Какие сроки в нём названы?", calls.sent)
+    }
+
+    /**
+     * Счётчик считает работу, а не время на экране (#1128).
+     *
+     * Тихой местной работе даётся пара секунд не мигать порталом зря — экран поднимается
+     * позже её начала. Секунды же он считал у себя с нуля: человек, прождавший пять секунд,
+     * читал «Идёт 3 с», а первые секунды после подъёма — ещё и «Обрабатываю…». Ждал он всё
+     * это время работу, а не экран.
+     */
+    @Test fun `счётчик ожидания считает от начала работы, а не от появления экрана`() {
+        compose.mainClock.autoAdvance = false
+        host(FlowUiState(busy = "Свожу к чёрно-белому", busySpentS = QUIET_GRACE_S))
+
+        compose.mainClock.advanceTimeBy(1_500)
+        compose.onNodeWithText(waitingLine(QUIET_GRACE_S + 1, network = false)).assertExists()
+
+        compose.mainClock.advanceTimeBy(2_000)
+        compose.onNodeWithText(waitingLine(QUIET_GRACE_S + 3, network = false)).assertExists()
     }
 
     @Test fun `чат — ожидание ответа говорит пульсом, а не многоточием`() {

@@ -1618,13 +1618,18 @@ class FlowViewModelTest {
 
         vm.onBubble(bubble())
         dispatcher.scheduler.advanceTimeBy(50)
-        assertEquals("доли секунды объект остаётся на экране", false, showsBusyScreen(vm.ui.value))
+        assertTrue("доли секунды работа идёт тихо — объект остаётся на экране", objectWorking(vm.ui.value))
 
         dispatcher.scheduler.advanceTimeBy(com.point.core.flow.QUIET_GRACE_S * 1000L)
 
         assertTrue("работа идёт дольше пары секунд — человек обязан это видеть", showsBusyScreen(vm.ui.value))
         assertTrue("и обязан иметь возможность её прервать", showsCancel(vm.ui.value))
         assertEquals("чем занят Point, говорит сама работа", resolver.stage, vm.ui.value.busyStage)
+        assertEquals(
+            "экран поднялся позже начала работы — и обязан знать, сколько она уже шла",
+            com.point.core.flow.QUIET_GRACE_S,
+            vm.ui.value.busySpentS,
+        )
 
         vm.cancelAction()
         dispatcher.scheduler.advanceTimeBy(50)
@@ -1645,6 +1650,33 @@ class FlowViewModelTest {
         dispatcher.scheduler.advanceTimeBy(com.point.core.flow.QUIET_GRACE_S * 1000L)
 
         assertEquals("законченной работе вспыхивать нечем", false, showsBusyScreen(vm.ui.value))
+    }
+
+    /**
+     * Сторож тишины живёт ровно столько, сколько его работа (#1128).
+     *
+     * Иначе быстрое действие оставляет после себя заведённый будильник, и следующее — начатое
+     * сразу за ним — теряет свою пару секунд тишины: объект подменяется порталом на первой же
+     * секунде, хотя новая работа только началась.
+     */
+    @Test fun `быстрая работа не отбирает у следующей её пару секунд тишины`() = runTest(dispatcher) {
+        resolver.holdMs = 1_000
+        val vm = vm(caps = mapOf(CapabilityId("a") to setOf(Intent.PREPARE), CapabilityId("b") to setOf(Intent.PREPARE)))
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.onBubble(bubble(id = "a"))
+        dispatcher.scheduler.advanceTimeBy(1_200)
+        assertNull("первое действие уложилось в отпущенную ему тишину", vm.ui.value.busy)
+
+        resolver.holdMs = 10 * 60 * 1000L
+        vm.onBubble(bubble(id = "b"))
+
+        // Здесь сработал бы сторож ПЕРВОГО действия: две секунды с его начала уже прошли.
+        dispatcher.scheduler.advanceTimeBy(1_000)
+        assertTrue("второе действие идёт секунду — тишина ещё его", objectWorking(vm.ui.value))
+
+        dispatcher.scheduler.advanceTimeBy(1_500)
+        assertTrue("а своя пара секунд кончается у него вовремя", showsBusyScreen(vm.ui.value))
     }
 
     @Test fun `slow work keeps the full busy screen — and the object says nothing over it`() = runTest(dispatcher) {

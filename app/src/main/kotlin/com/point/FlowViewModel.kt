@@ -159,7 +159,7 @@ class FlowViewModel @Inject constructor(
     private fun trackWork(work: suspend kotlinx.coroutines.CoroutineScope.() -> Unit): Job {
         val job = viewModelScope.launch(start = kotlinx.coroutines.CoroutineStart.LAZY, block = work)
         busyJob = job
-        val speaksUp = speakUpWhenSlow(job)
+        val speaksUp = speakUpWhenSlow()
         job.invokeOnCompletion {
             speaksUp.cancel()
             if (busyJob === job) busyJob = null
@@ -182,14 +182,22 @@ class FlowViewModel @Inject constructor(
      * ожидания с «Идёт N с», стадией и «Отменить», что у облачных: новых механизмов для этого
      * не нужно, снимается только право молчать.
      *
-     * Сторож — эта же работа: закончилась или снята — сторож снят вместе с ней, и вспыхнуть
-     * экрану уже не над чем. Заодно сверяется, что отслеживаемая работа всё ещё эта: сменённая
-     * работа не должна договаривать за новую.
+     * Сторож живёт ровно столько, сколько его работа: [trackWork] снимает его, чем бы работа ни
+     * кончилась — успехом, ошибкой или отменой. Иначе быстрое действие оставляло бы после себя
+     * заведённый будильник и отбирало тишину у следующего, начатого сразу за ним.
+     *
+     * Поднятый позже начала работы экран говорит, сколько она уже шла (`busySpentS`): иначе
+     * счётчик врал бы ровно на подаренную тишину.
      */
-    private fun speakUpWhenSlow(job: Job): Job = viewModelScope.launch {
+    private fun speakUpWhenSlow(): Job = viewModelScope.launch {
         kotlinx.coroutines.delay(com.point.core.flow.QUIET_GRACE_S * 1000L)
-        if (busyJob !== job) return@launch
-        _ui.update { if (it.busy != null && it.busyQuiet) it.copy(busyQuiet = false) else it }
+        _ui.update {
+            if (it.busy != null && it.busyQuiet) {
+                it.copy(busyQuiet = false, busySpentS = com.point.core.flow.QUIET_GRACE_S)
+            } else {
+                it
+            }
+        }
     }
 
     private fun raiseBusy(
@@ -201,6 +209,9 @@ class FlowViewModel @Inject constructor(
         _ui.update {
             it.copy(
                 busy = title, busyStage = null, busyNetwork = network, busyQuiet = quiet,
+
+                // Работа начинается сейчас: ждать её человек ещё не начинал (#1128).
+                busySpentS = 0,
                 busyCancelable = cancelable,
                 message = null, messageOutcome = Outcome.NONE, inputPrompt = null,
             )
