@@ -2768,6 +2768,35 @@ class FlowViewModelTest {
         assertNull(pcLinks.pc)
     }
 
+    @Test fun `памяти круга нет, человек ушёл с экрана — отключённый компьютер всё равно уходит из связки (#1076)`() = runTest(dispatcher) {
+
+        // Телефон, у которого шифрованное хранилище круга не создалось: `current()` молчит
+        // всегда. Это не выдумка проверки, а рабочее состояние `EncryptedCircleStore`.
+        val circle = ForgetfulCircleStore()
+        val client = FakeCircleClient(
+            circle = listOf(
+                com.point.core.flow.CircleDevice("d1", com.point.core.flow.DeviceKind.PHONE, "Pixel", self = true),
+                com.point.core.flow.CircleDevice("d2", com.point.core.flow.DeviceKind.PC, "Ноутбук", key = "ключ-ПК"),
+            ),
+        )
+        val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
+        client.revokeGate = gate
+        client.unreachableAfterRevoke = true
+        val vm = vm(circleStore = circle, accountClient = client)
+        vm.openDevices(); advanceUntilIdle()
+
+        vm.revokeDevice("d2"); advanceUntilIdle()
+
+        // Человек отключил компьютер и вышел, не дождавшись сервера, а сервер после этого
+        // замолчал. Памяти круга нет — прежний круг остаётся тем, что человек видел, нажимая
+        // «Отключить»; из пустого экрана он не строится, иначе отключённый компьютер остался
+        // бы связанным с телефоном.
+        vm.closeDevices()
+        gate.complete(Unit); advanceUntilIdle()
+
+        assertNull(pcLinks.pc)
+    }
+
     @Test fun `одно отключение не пишет связку с компьютером в два голоса (#1076)`() = runTest(dispatcher) {
         val circle = com.point.core.flow.InMemoryCircleStore()
         val client = FakeCircleClient(
@@ -4835,6 +4864,13 @@ internal class CountingSignInClient(
     override suspend fun enroll(account: com.point.core.flow.PointAccount, publicKey: String) = true
     override suspend fun revoke(account: com.point.core.flow.PointAccount, deviceId: String) = true
     override suspend fun deleteAccount(account: com.point.core.flow.PointAccount) = true
+}
+
+/** Память круга, которой нет: у `EncryptedCircleStore` не создались шифрованные prefs (#1076). */
+private class ForgetfulCircleStore : com.point.core.flow.CircleStore {
+    override fun current(): List<com.point.core.flow.CircleDevice>? = null
+    override suspend fun save(devices: List<com.point.core.flow.CircleDevice>) = Unit
+    override suspend fun clear() = Unit
 }
 
 private class FakePcLinks : com.point.core.flow.PcLinks {

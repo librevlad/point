@@ -1568,6 +1568,12 @@ class FlowViewModel @Inject constructor(
 
     fun revokeDevice(deviceId: String) {
         val account = accountStore.current() ?: return
+
+        // Круг, каким человек видел его, нажимая «Отключить». Память телефона знает круг лучше,
+        // но её может не быть вовсе — шифрованное хранилище не создалось, и `current()` всегда
+        // молчит. Тогда прежним кругом остаётся этот снимок, а не список на экране в момент
+        // ответа сервера: экран человек вправе закрыть, не дождавшись его (#1076).
+        val seen = _ui.value.devicesScreen?.devices.orEmpty()
         updateDevices { it.copy(busy = true, error = null) }
         viewModelScope.launch {
             val ok = runCatching { accountClient.revoke(account, deviceId) }.getOrDefault(false)
@@ -1585,16 +1591,16 @@ class FlowViewModel @Inject constructor(
             // круга, которое может и не дойти (#1076). Иначе отключённое переживало бы своё
             // отключение в памяти и возвращалось на экран, стоило серверу замолчать.
             //
-            // Прежний круг берётся из памяти, а не из состояния экрана: экран человек вправе
-            // закрыть, пока ответ идёт, и тогда «новым знанием» стал бы пустой список. Экран —
-            // вид на знание, свою строку он убирает сам.
+            // Прежний круг берётся из памяти телефона, а на худой конец — из `seen` выше.
+            // Из состояния экрана его не строят вовсе: экран — вид на знание, а не знание,
+            // и закрытый экран превращал бы «в круге стало на одного меньше» в «круг опустел».
             updateDevices { screen ->
                 screen.copy(busy = false, devices = screen.devices.filterNot { it.id == deviceId })
             }
             val remembered = withContext(ioDispatcher) {
                 runCatching { circleStore.current() }.getOrNull()
             }
-            val previous = remembered ?: _ui.value.devicesScreen?.devices.orEmpty()
+            val previous = remembered ?: seen
             learnCircle(previous.filterNot { it.id == deviceId })
             loadCircle(account)
         }
