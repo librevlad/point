@@ -1538,9 +1538,8 @@ class FlowViewModel @Inject constructor(
             .getOrDefault(com.point.core.flow.CircleAnswer.Unreachable)
         when (answer) {
             is com.point.core.flow.CircleAnswer.Circle -> {
-                rememberPc(answer.devices)
-                runCatching { circleStore.save(answer.devices) }
-                updateDevices { it.copy(devices = answer.devices, loading = false, error = null) }
+                learnCircle(answer.devices)
+                updateDevices { it.copy(devices = answer.devices, checkedNow = true, loading = false, error = null) }
             }
             com.point.core.flow.CircleAnswer.Unreachable -> {
 
@@ -1556,6 +1555,7 @@ class FlowViewModel @Inject constructor(
                         loading = false,
                         error = "Не удалось спросить сервер о ваших устройствах — проверьте интернет",
                         devices = remembered ?: it.devices,
+                        checkedNow = false,
                     )
                 }
             }
@@ -1576,7 +1576,14 @@ class FlowViewModel @Inject constructor(
                 forgetAccount(com.point.core.flow.SignIn.SignedOut)
                 return@launch
             }
-            updateDevices { it.copy(busy = false) }
+
+            // Сервер отключил устройство — это уже знание о круге, а не ожидание ответа:
+            // устройство уходит из списка и из памяти телефона сейчас, а не после повторного
+            // чтения круга, которое может и не дойти (#1076). Иначе отключённое переживало бы
+            // своё отключение в памяти и возвращалось на экран, стоило серверу замолчать.
+            val known = _ui.value.devicesScreen?.devices.orEmpty().filterNot { it.id == deviceId }
+            learnCircle(known)
+            updateDevices { it.copy(busy = false, devices = known) }
             loadCircle(account)
         }
     }
@@ -1624,11 +1631,19 @@ class FlowViewModel @Inject constructor(
         announceKey(account)
         viewModelScope.launch {
             val answer = runCatching { accountClient.circle(account) }.getOrNull()
-            if (answer is com.point.core.flow.CircleAnswer.Circle) {
-                rememberPc(answer.devices)
-                runCatching { circleStore.save(answer.devices) }
-            }
+            if (answer is com.point.core.flow.CircleAnswer.Circle) learnCircle(answer.devices)
         }
+    }
+
+    /**
+     * Новое знание о круге — одним шагом, откуда бы оно ни пришло: ответ сервера или
+     * успешное отключение устройства. Память круга (#1076) и связанный компьютер идут
+     * за знанием вместе; путь, который обновлял бы одно без другого, — и есть дефект,
+     * при котором отключённое устройство оставалось в памяти до следующего ответа сервера.
+     */
+    private suspend fun learnCircle(devices: List<com.point.core.flow.CircleDevice>) {
+        rememberPc(devices)
+        runCatching { circleStore.save(devices) }
     }
 
     private fun rememberPc(devices: List<com.point.core.flow.CircleDevice>) {

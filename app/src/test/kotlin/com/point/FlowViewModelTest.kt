@@ -2685,6 +2685,61 @@ class FlowViewModelTest {
         vm.openDevices(); advanceUntilIdle()
 
         assertEquals(listOf("d1", "d2"), circle.current()?.map { it.id })
+
+        // Список от сервера только что — проверенный; запомненный таким не считается.
+        assertEquals(true, vm.ui.value.devicesScreen?.checkedNow)
+        vm.closeDevices()
+    }
+
+    @Test fun `отключённое устройство не переживает отключения в памяти круга (#1076)`() = runTest(dispatcher) {
+        val circle = com.point.core.flow.InMemoryCircleStore()
+        val client = FakeCircleClient(
+            circle = listOf(
+                com.point.core.flow.CircleDevice("d1", com.point.core.flow.DeviceKind.PHONE, "Pixel", self = true),
+                com.point.core.flow.CircleDevice("d2", com.point.core.flow.DeviceKind.PC, "Ноутбук", key = "ключ-ПК"),
+            ),
+        )
+        pcLinks.pc = com.point.core.flow.LinkedPc("d2", "Ноутбук", "ключ-ПК")
+        val vm = vm(circleStore = circle, accountClient = client)
+        vm.openDevices(); advanceUntilIdle()
+
+        // Сервер отключил компьютер — и тут же замолчал: повторное чтение круга не дошло.
+        client.unreachableAfterRevoke = true
+        vm.revokeDevice("d2"); advanceUntilIdle()
+
+        assertEquals("d2", client.revoked)
+        assertNotNull(vm.ui.value.devicesScreen?.error)
+
+        // «Компьютера в круге больше нет» — знание, и оно не ждёт следующего ответа сервера:
+        // ни в памяти, ни на экране, ни в связке с компьютером отключённого нет.
+        assertEquals(listOf("d1"), circle.current()?.map { it.id })
+        assertEquals(listOf("Pixel"), vm.ui.value.devicesScreen?.devices?.map { it.name })
+        assertNull(pcLinks.pc)
+        vm.closeDevices()
+    }
+
+    @Test fun `офлайн «Отключить» не делает запомненный круг проверенным, пока сервер молчит (#1076)`() = runTest(dispatcher) {
+        val circle = com.point.core.flow.InMemoryCircleStore()
+        circle.save(
+            listOf(
+                com.point.core.flow.CircleDevice("d1", com.point.core.flow.DeviceKind.PHONE, "Pixel", self = true),
+                com.point.core.flow.CircleDevice("d2", com.point.core.flow.DeviceKind.PC, "Ноутбук", System.currentTimeMillis() - 40_000),
+            ),
+        )
+        val client = FakeCircleClient(circle = null).apply { revokeHangs = true }
+        val vm = vm(circleStore = circle, accountClient = client)
+        vm.openDevices(); advanceUntilIdle()
+        assertEquals(false, vm.ui.value.devicesScreen?.checkedNow)
+
+        vm.revokeDevice("d2"); advanceUntilIdle()
+
+        // Ошибка прошлой операции погасла с началом новой, список всё тот же — из памяти.
+        // Свежесть — свойство списка: «на связи» не возвращается оттого, что ошибки нет.
+        val screen = vm.ui.value.devicesScreen!!
+        assertNull(screen.error)
+        assertEquals(true, screen.busy)
+        assertEquals(listOf("Pixel", "Ноутбук"), screen.devices.map { it.name })
+        assertEquals(false, screen.checkedNow)
         vm.closeDevices()
     }
 
@@ -4674,9 +4729,16 @@ internal class FakeCircleClient(
         enrolledKey = publicKey
         return true
     }
+    /** Сервер не отвечает на «Отключить» вовсе — телефон ждёт (#1076). */
+    var revokeHangs = false
+
+    /** Отключить сервер успел, а следующий вопрос о круге уже не дошёл (#1076). */
+    var unreachableAfterRevoke = false
+
     override suspend fun revoke(account: com.point.core.flow.PointAccount, deviceId: String): Boolean {
+        if (revokeHangs) kotlinx.coroutines.awaitCancellation()
         revoked = deviceId
-        circle = circle?.filterNot { it.id == deviceId }
+        circle = if (unreachableAfterRevoke) null else circle?.filterNot { it.id == deviceId }
         return true
     }
     override suspend fun signOut(account: com.point.core.flow.PointAccount): Boolean {

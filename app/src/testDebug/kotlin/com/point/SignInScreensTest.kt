@@ -224,6 +224,41 @@ class SignInScreensTest {
         compose.onNodeWithText("на связи", substring = true).assertDoesNotExist()
     }
 
+    @Test fun `пока сервер не ответил на «Отключить», запомненный компьютер не становится «на связи»`() {
+        val pc = CircleDevice("d2", DeviceKind.PC, "Рабочий ноутбук", NOW - 40_000)
+        devices(
+            DevicesScreenState(
+                loading = false,
+                busy = true,
+                error = null,
+                checkedNow = false,
+                devices = listOf(CircleDevice("d1", DeviceKind.PHONE, "Pixel 8", NOW, self = true), pc),
+            ),
+        )
+
+        // Ошибка погасла с началом операции, а список всё ещё из памяти (#1076): вторая
+        // строка — «как было при последней связи», а не «на связи». Свежесть берётся у
+        // списка, не у отсутствия ошибки.
+        compose.onNodeWithText(com.point.core.flow.deviceLine(pc, NOW, checkedNow = false)).assertExists()
+        compose.onNodeWithText(com.point.core.flow.deviceLine(pc, NOW, checkedNow = true)).assertDoesNotExist()
+    }
+
+    @Test fun `ошибка чужой операции не отнимает у свежего круга «на связи»`() {
+        val pc = CircleDevice("d2", DeviceKind.PC, "Рабочий ноутбук", NOW - 40_000)
+        devices(
+            DevicesScreenState(
+                loading = false,
+                checkedNow = true,
+                error = "Сервер не отключил устройство — попробуйте ещё раз",
+                devices = listOf(CircleDevice("d1", DeviceKind.PHONE, "Pixel 8", NOW, self = true), pc),
+            ),
+        )
+
+        // Сервер отдал список секундами раньше, а отказал в другом (#1076): факт «на связи»
+        // проверен и остаётся, ошибка отключения его не отменяет.
+        compose.onNodeWithText(com.point.core.flow.deviceLine(pc, NOW, checkedNow = true)).assertExists()
+    }
+
     @Test fun `пока круг едет, экран говорит об этом, а не показывает пустоту`() {
         devices(DevicesScreenState(email = "me@example.com", loading = true))
 

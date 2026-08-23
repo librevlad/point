@@ -110,9 +110,11 @@ fun MyDevicesScreen(
                 PortalRow(
                     title = device.name,
 
-                    // Правило второй строки общее с компьютером (#891). Когда сервер молчит,
-                    // список — последний известный круг: «на связи» из памяти не утверждается (#1076).
-                    subtitle = com.point.core.flow.deviceLine(device, now, checkedNow = state.error == null),
+                    // Правило второй строки общее с компьютером (#891). «На связи» утверждается
+                    // только для списка, который сервер отдал только что; запомненный круг —
+                    // нет (#1076). Свежесть — свойство списка, не отсутствия ошибки: ошибка
+                    // гаснет с началом любой операции, а список при этом тот же.
+                    subtitle = com.point.core.flow.deviceLine(device, now, checkedNow = state.checkedNow),
 
                     onClick = { },
                     enabled = false,
@@ -217,6 +219,7 @@ private fun PreviewCircle() = PointTheme(darkTheme = true) {
         state = DevicesScreenState(
             email = "vladimir@example.com",
             loading = false,
+            checkedNow = true,
             devices = listOf(
                 CircleDevice("d1", DeviceKind.PHONE, "Pixel 8", NOW - 20_000, self = true),
                 CircleDevice("d2", DeviceKind.PC, "Рабочий ноутбук", NOW - 40_000),
