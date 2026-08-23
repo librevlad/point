@@ -33,9 +33,13 @@ class AiFactsTest {
     @Test
     fun `сорвавшееся обращение читается по словам отказа`() {
         assertEquals(AiOutcome.LIMIT, aiOutcomeOfFailure("Groq — $FREE_LIMIT_SPENT, вернитесь позже"))
-        assertEquals(AiOutcome.LIMIT, aiOutcomeOfFailure("Gemini HTTP 429 — слишком часто"))
         assertEquals(AiOutcome.BAD_KEY, aiOutcomeOfFailure("Mistral — $KEY_NOT_ACCEPTED"))
-        assertEquals(AiOutcome.BAD_KEY, aiOutcomeOfFailure("Gemini HTTP 401"))
+
+        // Признак держится на объявленных словах, а не на «HTTP 401» в чужой строке (#1236):
+        // клиенты, писавшие код в текст, теперь бросают отказ вместе с самим кодом.
+        assertEquals(AiOutcome.LIMIT, aiOutcomeOfFailure(serviceRefusal(429)))
+        assertEquals(AiOutcome.BAD_KEY, aiOutcomeOfFailure(serviceRefusal(401)))
+        assertEquals(AiOutcome.BAD_KEY, aiOutcomeOf(AiServiceRefusal("gemini", 401, serviceRefusal(401))))
         assertEquals(AiOutcome.SILENT, aiOutcomeOfFailure("нет подключения к интернету"))
     }
 

@@ -107,7 +107,14 @@ class PcCloudOcrRealizer(
                     ),
                 )
             }.getOrElse {
-                ActionResult.Failure("Сервис чтения не ответил — попробуйте позже", recoverable = true)
+
+                // Слой, который знает, что произошло, уже сказал это своими словами (#1225):
+                // «Сервис не принял ключ» накрывалось общим «не ответил», и человек шёл ждать
+                // вместо того, чтобы поправить ключ.
+                ActionResult.Failure(
+                    com.point.core.flow.ownWordsOf(it) ?: "Сервис чтения не ответил — попробуйте позже",
+                    recoverable = true,
+                )
             }
         }
 
@@ -137,7 +144,10 @@ class PcCloudOcrRealizer(
                 ?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
 
             val safe = if (key.isBlank()) raw else raw.replace(key, "…")
-            require(code in 200..299) { refusal(code) }
+
+            // Слово этого слоя объявлено им самим (#1225): иначе общий перехват ниже накрывал
+            // названный отказ сервиса собственным «не ответил» — причина ложная, шаг ложный.
+            if (code !in 200..299) com.point.core.flow.ownWords(refusal(code))
             safe
         } finally {
             connection.disconnect()
@@ -147,12 +157,24 @@ class PcCloudOcrRealizer(
 
     private fun textOf(json: String): String {
         val answer = parseJson(json)
-        if (answer.bool("IsErroredOnProcessing") == true) error("Сервис не прочитал снимок")
+
+        // Сервис отвечает кодом 200 и отказом внутри ответа — по-английски (#1259). Слова
+        // человеку берутся оттуда же, откуда их берёт телефон: своя копия «Сервис не прочитал
+        // снимок» стояла здесь литералом и разошлась бы с общей при первой правке (#1237).
+        if (answer.bool("IsErroredOnProcessing") == true) {
+            com.point.core.flow.ownWords(com.point.core.flow.serviceRefusalInAnswer(errorMessage(answer)))
+        }
         val pages = answer.array("ParsedResults")
         require(pages.isNotEmpty()) { "Сервис вернул ответ без страниц" }
         return pages.mapNotNull { page ->
             (page as? JsonValue.Obj)?.let { it.str("ParsedText") }?.trim()?.ifEmpty { null }
         }.joinToString("\n\n")
+    }
+
+    /** Чужой текст отказа: сервис шлёт его строкой или списком строк. Наружу он не идёт. */
+    private fun errorMessage(answer: JsonValue?): String {
+        val listed = answer.array("ErrorMessage").mapNotNull { (it as? JsonValue.Str)?.value }
+        return listed.ifEmpty { listOfNotNull(answer.str("ErrorMessage")) }.joinToString("; ").trim()
     }
 
     private fun refusal(code: Int): String = com.point.core.flow.serviceRefusal(

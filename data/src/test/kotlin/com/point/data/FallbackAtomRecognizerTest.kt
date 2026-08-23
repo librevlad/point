@@ -52,7 +52,7 @@ class FallbackAtomRecognizerTest {
     fun `402 переводит очередь к следующему слою, а не в кассу`() = runTest {
         val chain = FallbackAtomRecognizer(
             listOf(
-                cloudReader("платный") { error("unstructured HTTP 402") },
+                cloudReader("платный") { error(com.point.core.flow.serviceRefusal(402)) },
                 cloudReader("бесплатный") { layerOf("бесплатный") },
             ),
         )
@@ -63,7 +63,7 @@ class FallbackAtomRecognizerTest {
     fun `429 тоже переводит очередь дальше`() = runTest {
         val chain = FallbackAtomRecognizer(
             listOf(
-                cloudReader("исчерпанный") { error("llamaparse HTTP 429") },
+                cloudReader("исчерпанный") { error(com.point.core.flow.serviceRefusal(429)) },
                 cloudReader("свежий") { layerOf("свежий") },
             ),
         )
@@ -116,8 +116,8 @@ class FallbackAtomRecognizerTest {
     fun `все уперлись в лимит — отказ говорит про лимит и не выдаёт нашу кухню`() = runTest {
         val chain = FallbackAtomRecognizer(
             listOf(
-                cloudReader("a") { error("unstructured HTTP 402") },
-                cloudReader("b") { error("llamaparse HTTP 429") },
+                cloudReader("a") { error(com.point.core.flow.serviceRefusal(402)) },
+                cloudReader("b") { error(com.point.core.flow.serviceRefusal(429)) },
             ),
         )
         val error = runCatching { chain.read(pageObject) }.exceptionOrNull()
@@ -132,7 +132,9 @@ class FallbackAtomRecognizerTest {
         )
         val error = runCatching { chain.read(pageObject) }.exceptionOrNull()
 
-        assertTrue(error?.message?.contains("нет подключения к интернету") == true)
+        // Телефон в этом прогоне не спрашивали — сказано ровно то, что видно по чужим
+        // строкам: связь оборвалась (#1237).
+        assertEquals(com.point.core.flow.CONNECTION_LOST_TEXT, error?.message)
         assertFalse(error?.message?.contains("resolve host") == true)
     }
 
@@ -146,7 +148,7 @@ class FallbackAtomRecognizerTest {
         )
         val error = runCatching { chain.read(pageObject) }.exceptionOrNull()
 
-        assertTrue(error?.message?.contains("Облачное чтение не удалось") == true)
+        assertTrue(error?.message?.contains("Не удалось прочитать") == true)
         assertTrue(error?.message?.contains("прочитана пустой") == true)
     }
 }

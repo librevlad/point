@@ -60,7 +60,7 @@ class VCardInvestigationRealizer @Inject constructor() : Realizer {
     private fun readHead(path: String, limit: Int = 256): String {
         val file = File(path)
 
-        if (!file.isFile) error(com.point.core.flow.NO_TEXT_PAYLOAD)
+        if (!file.isFile) com.point.core.flow.ownWords(com.point.core.flow.NO_TEXT_PAYLOAD)
         return file.inputStream().bufferedReader().use { reader ->
             val buffer = CharArray(limit)
             val read = reader.read(buffer)

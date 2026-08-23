@@ -202,20 +202,34 @@ class DefaultExternalEyeTest {
         assertFalse(error.message!!, error.message!!.contains("купить"))
     }
 
+    /**
+     * Приписка стоит везде, где ключ может помочь (#1260), а не только у исчерпанного
+     * предела: сервис не принял ключ, сервис посмотрел и текста не отдал, сервис сорвался —
+     * во всех этих случаях сильный читатель ответил бы, и человек об этом узнаёт.
+     */
     @Test
     fun `сильнейший читатель выпал без ключа — об этом сказано вместе с отказом`() = runTest {
-        val chain = chain(
-            eye("сильный", hasKey = false) { error("сюда не доходим") },
-            eye("безключевой") { error("ovh HTTP 500") },
+        val refusals = listOf(
+            com.point.core.flow.serviceRefusal(429),
+            com.point.core.flow.serviceRefusal(401),
+            com.point.core.flow.SERVICE_DID_NOT_READ,
+            "страница сегодня не по зубам",
         )
-        val error = runCatching { chain.read(pageObject) }.exceptionOrNull()
 
-        assertTrue(error?.message!!, error.message!!.contains("бесплатный ключ Mistral"))
+        refusals.forEach { refusal ->
+            val chain = chain(
+                eye("сильный", hasKey = false) { error("сюда не доходим") },
+                eye("безключевой") { error(refusal) },
+            )
+            val error = runCatching { chain.read(pageObject) }.exceptionOrNull()
+
+            assertTrue("«$refusal» — про ключ не сказано: ${error?.message}", error!!.message!!.contains("ключ Mistral"))
+        }
     }
 
     @Test
     fun `все ключи на месте — лишнего совета нет`() = runTest {
-        val chain = chain(eye("a") { error("ovh HTTP 500") })
+        val chain = chain(eye("a") { error(com.point.core.flow.serviceRefusal(429)) })
         val error = runCatching { chain.read(pageObject) }.exceptionOrNull()
 
         assertFalse(error?.message!!, error.message!!.contains("ключ"))
@@ -225,7 +239,7 @@ class DefaultExternalEyeTest {
     fun `совет про ключ не даётся там, где ключ всё равно не поможет`() = runTest {
         val chain = chain(
             eye("учащийся без ключа", learns, hasKey = false) { "x" },
-            eye("обещавший") { error("ovh HTTP 500") },
+            eye("обещавший") { error(com.point.core.flow.serviceRefusal(429)) },
             at = PrivacyLevel.NO_TRAINING,
         )
         val error = runCatching { chain.read(pageObject) }.exceptionOrNull()
@@ -233,13 +247,43 @@ class DefaultExternalEyeTest {
         assertFalse(error?.message!!, error.message!!.contains("ключ"))
     }
 
+    /**
+     * Приписка про ключ уводила не туда (#1260): интернета нет, а человеку советовали
+     * идти в настройки и заводить ключ Mistral. Он тратил ход на действие, которое ничего
+     * не изменит. Приписка звучит там, где ключ и решает.
+     */
     @Test
-    fun `все отказали — честный отказ, а не пустой текст`() = runTest {
-        val chain = chain(eye("a") { "" }, eye("b") { error("ovh HTTP 500") })
+    fun `связь оборвалась в пути — про ключи ни слова`() = runTest {
+        val chain = chain(
+            eye("сильный", hasKey = false) { error("сюда не доходим") },
+            eye("свободный") { error("Unable to resolve host \"api.ocr.space\"") },
+        )
+
         val error = runCatching { chain.read(pageObject) }.exceptionOrNull()
 
-        assertTrue(error?.message!!, error.message!!.contains("не удалось"))
+        assertEquals(com.point.core.flow.CONNECTION_LOST_TEXT, error?.message)
+        assertFalse("совет завести ключ там, где оборвалась связь", error?.message!!.contains("ключ Mistral"))
+    }
+
+    @Test
+    fun `все отказали — честный отказ, а не пустой текст`() = runTest {
+        val chain = chain(eye("a") { "" }, eye("b") { error("страница сегодня не по зубам") })
+        val error = runCatching { chain.read(pageObject) }.exceptionOrNull()
+
+        assertTrue(error?.message!!, error.message!!.contains("Не удалось прочитать"))
         assertTrue(error.message!!, error.message!!.contains("прочитана пустой"))
+    }
+
+    /** Идентификатор читалки человеку не адресован (#1259) — он остаётся в metadata. */
+    @Test
+    fun `в отказе нет внутренних имён читалок`() = runTest {
+        val chain = chain(eye("ocr-space") { "" }, eye("ovh-qwen-vl") { "" }, eye("mistral-ocr") { error("сорвалось") })
+        val error = runCatching { chain.read(pageObject) }.exceptionOrNull()
+
+        val said = error?.message.orEmpty()
+        assertFalse(said, said.contains("ocr-space"))
+        assertFalse(said, said.contains("ovh-qwen-vl"))
+        assertFalse(said, said.contains("mistral-ocr"))
     }
 
     @Test
@@ -271,7 +315,7 @@ class DefaultExternalEyeTest {
             ).read(pageObject)
         }.exceptionOrNull()
 
-        assertTrue(error?.message!!, error.message!!.contains("нет подключения к интернету"))
+        assertEquals(com.point.core.flow.NO_NETWORK_TEXT, error?.message)
         assertTrue("офлайн ни один читатель не должен получить запрос", calls.isEmpty())
     }
 }

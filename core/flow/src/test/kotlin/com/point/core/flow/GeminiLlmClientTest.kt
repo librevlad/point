@@ -50,16 +50,72 @@ class GeminiLlmClientTest {
         assertEquals("готово", File(res.uri.value).readText())
     }
 
+    /**
+     * Отказ уходит словами, а перебор моделей остаётся нашей механикой (#1236): раньше на
+     * баннере стояло «Gemini недоступен — m1: Gemini HTTP 429: {…}; m2: …» — код протокола,
+     * кусок чужого JSON и идентификаторы моделей, которых человек не заводил.
+     */
     @Test
-    fun `surfaces a combined error when every model fails`() = runTest {
+    fun `все модели отказали — человеку слова, а не склейка кодов и id моделей`() = runTest {
         val http = object : HttpJson {
-            override suspend fun post(url: String, headers: Map<String, String>, body: String) = HttpResult(429, "quota")
+            override suspend fun post(url: String, headers: Map<String, String>, body: String) =
+                HttpResult(429, """{"error":{"code":429,"message":"Resource exhausted"}}""")
         }
+
+        val e = runCatching {
+            GeminiLlmClient(http, store, "key", listOf("gemini-flash-latest", "gemini-pro-latest")).run(textObj, "hi")
+        }.exceptionOrNull()
+
+        val said = e?.message.orEmpty()
+        assertEquals(serviceRefusal(429), said)
+        assertFalse(said, said.contains("gemini-"))
+        assertFalse(said, said.contains("Resource exhausted"))
+        assertTrue("сводка цепочки узнаёт исчерпанный предел", looksLikeQuotaFailure(said))
+        assertEquals("код остаётся Point, а не человеку", 429, (e as? AiServiceRefusal)?.status)
+    }
+
+    /**
+     * Квота не теряется на смешанном наборе (#1236).
+     *
+     * Наружу уходил последний отказ: первая модель говорила «лимит исчерпан», вторая молчала
+     * пятисотой — и человек читал «сервис сейчас не отвечает», а память сервиса запоминала
+     * «не отвечал». Завтра он вернётся и упрётся в тот же предел, ничего про него не зная.
+     */
+    @Test
+    fun `одна модель упёрлась в предел, другая промолчала — человеку назван предел`() = runTest {
+        val codes = listOf(429, 500)
+        var at = 0
+        val http = object : HttpJson {
+            override suspend fun post(url: String, headers: Map<String, String>, body: String) =
+                HttpResult(codes[at++], "{}")
+        }
+
         val e = runCatching {
             GeminiLlmClient(http, store, "key", listOf("m1", "m2")).run(textObj, "hi")
         }.exceptionOrNull()
-        assertTrue(e?.message?.contains("Gemini недоступен") == true)
-        assertTrue(e?.message?.contains("m1") == true && e?.message?.contains("m2") == true)
+
+        val said = e?.message.orEmpty()
+        assertTrue("предел потерян: «$said»", looksLikeQuotaFailure(said))
+        assertEquals(AiOutcome.LIMIT, aiOutcomeOf(e!!))
+    }
+
+    /**
+     * Спрашивать было нечего — и это не «ключ не задан» (#1236): ключ здесь как раз задан,
+     * а человека звали заводить второй.
+     */
+    @Test
+    fun `спрашивать нечего — про ключ ни слова`() = runTest {
+        val http = object : HttpJson {
+            override suspend fun post(url: String, headers: Map<String, String>, body: String) =
+                HttpResult(200, okBody)
+        }
+
+        val said = runCatching {
+            GeminiLlmClient(http, store, "key", emptyList()).run(textObj, "hi")
+        }.exceptionOrNull()?.message.orEmpty()
+
+        assertFalse("ключ задан, а человека зовут его задать: «$said»", said.contains(AI_KEY_HINT))
+        assertEquals(SERVICE_NOT_SET_UP, said)
     }
 
     private fun audio(mime: String, name: String? = null) = PointObject(
@@ -100,6 +156,12 @@ class GeminiLlmClientTest {
             override suspend fun post(url: String, headers: Map<String, String>, body: String) = HttpResult(200, okBody)
         }
         val e = runCatching { GeminiLlmClient(http, store, "", listOf("m1")).run(textObj, "hi") }.exceptionOrNull()
-        assertTrue(e?.message?.contains("GEMINI_API_KEY не задан") == true)
+
+        // Имя ключа сборки человеку не адресовано (#1236): он не заводил ни GEMINI_API_KEY,
+        // ни local.properties.
+        val said = e?.message.orEmpty()
+        assertTrue(said, said.contains(AI_KEY_HINT))
+        assertFalse(said, said.contains("GEMINI_API_KEY"))
+        assertFalse(said, said.contains("local.properties"))
     }
 }

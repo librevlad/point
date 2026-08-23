@@ -315,6 +315,13 @@ class OcrInvestigationTest {
         val result = OcrInvestigationRealizer(FakeStore(), enginedown, extractor()).perform(image, null)
 
         assertTrue(result is com.point.core.model.ActionResult.Failure)
+
+        // #1258: и слова обязаны говорить то же самое. Человеку сообщали «Файл не открылся —
+        // он повреждён или это не изображение», и он шёл переснимать или удалял «битую»
+        // фотографию, хотя не завёлся наш движок.
+        val said = (result as com.point.core.model.ActionResult.Failure).reason
+        assertFalse("виноват объявлен файл человека: $said", said.contains("повреждён"))
+        assertEquals(com.point.core.flow.READ_NOT_NOW, said)
     }
 
     @Test

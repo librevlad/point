@@ -52,7 +52,7 @@ class DefaultExternalEye @Inject constructor(
             // #691). Нашёлся хоть один настоящий кандидат для этого объекта, и только
             // тогда: без него идти наружу всё равно было не за чем, а офлайн вся
             // очередь читателей одинаково молчит.
-            if (!network.isAvailable()) error(NO_NETWORK)
+            if (!network.isAvailable()) error(com.point.core.flow.NO_NETWORK_TEXT)
 
             try {
                 val text = eye.read(obj)
@@ -64,7 +64,10 @@ class DefaultExternalEye @Inject constructor(
                 // пометкой вроде «*[No text detected]*» (#1054). Пометка — не текст и
                 // не победа: очередь идёт дальше, следующий может увидеть больше.
                 sawNoText = sawNoText ?: ExternalReading("", eye.reader, eye.privacy.where, eye.privacy.promise.what)
-                errors += "${eye.reader}: страница прочитана пустой"
+
+                // Идентификатор читалки человеку не адресован (#1259): он остаётся в
+                // metadata `engine` у результата, а не в строке на баннере.
+                errors += com.point.core.flow.PAGE_READ_EMPTY
             } catch (e: Exception) {
                 failed = true
                 errors += e.message ?: e.javaClass.simpleName
@@ -76,7 +79,18 @@ class DefaultExternalEye @Inject constructor(
         // чтение возвращается пустым, и вопрос получает честное «не нашлось» (#1054).
         // Стоило одному сорваться — ответа нет: он мог увидеть то, чего не увидели другие.
         if (sawNoText != null && !failed) return sawNoText
-        error(summariseCloudErrors(errors) + keyHint())
+
+        // Приписка про ключ — только там, где ключ и решает (#1260). Оборвалась связь —
+        // приписка советовала идти в настройки и заводить ключ, хотя ключ там ничего не
+        // меняет: человек тратил ход впустую. Везде, где сильный читатель мог бы ответить —
+        // непринятый ключ, исчерпанный предел, отказ без причины, — про него сказано.
+        //
+        // Решает ветка сводки, а не сравнение готовой строки: сравнение гасило приписку от
+        // любого суффикса и не знало бы про новую ветку (#1260).
+        val said = summariseCloudErrors(errors, WHAT_FAILED)
+        val keyMayHelp = com.point.core.flow.cloudRefusalKind(errors) !=
+            com.point.core.flow.CloudRefusalKind.CONNECTION_LOST
+        error(said + if (keyMayHelp) keyHint() else "")
     }
 
     private fun keyHint(): String {
@@ -105,8 +119,8 @@ class DefaultExternalEye @Inject constructor(
         const val NOT_FOR_THIS_OBJECT =
             "Чтение снаружи не берётся за этот объект — читают снимок страницы"
 
-        const val NO_NETWORK =
-            "Чтение снаружи недоступно — нет подключения к интернету"
+        /** Глагол этой цепочки для общей сводки отказов (#1237). */
+        const val WHAT_FAILED = "прочитать"
 
         const val KEY_HINT =
             ". Есть читатель посильнее — он включится, если задать бесплатный ключ Mistral (см. настройки)"

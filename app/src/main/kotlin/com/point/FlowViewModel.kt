@@ -37,6 +37,7 @@ import com.point.core.flow.META_SELECTION_REGION
 import com.point.core.flow.META_SELECTION_SOURCE
 import com.point.core.flow.META_UNUSABLE_REASON
 import com.point.core.flow.META_YIELD_NOUN
+import com.point.core.flow.READER_NOT_DECODED
 import com.point.core.flow.readerFailure
 import com.point.core.flow.SnappedSelection
 import com.point.core.flow.AiFacts
@@ -2549,7 +2550,11 @@ class FlowViewModel @Inject constructor(
                     .getOrNull()
             }
             if (bitmap == null) {
-                markPreviewUnusable(obj, failure?.message)
+
+                // Ни одна ступень не бросила, а снимка нет — значит байты не разобрались.
+                // Сигнал назван, а не передан молчанием (#1258): негодность объекта и слова
+                // человеку читают один разбор, и молчание про объект не доказывает ничего.
+                markPreviewUnusable(obj, failure?.message ?: READER_NOT_DECODED)
                 return@launch
             }
 

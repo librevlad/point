@@ -14,17 +14,24 @@ import com.point.core.model.ObjectKind
  * экране. Вид объекта обязателен у каждого вызова: умолчание снова подсунуло бы PDF чужие
  * слова молча.
  */
-fun readerFailure(reason: String?, kind: ObjectKind): String {
-    val said = reason.orEmpty().lowercase()
-    return when {
-        said.isBlank() -> brokenFile(kind)
-        NO_PAGES.any { it in said } -> EMPTY_DOCUMENT
-        NOT_AN_IMAGE.any { it in said } -> brokenFile(kind)
-        TOO_SLOW.any { it in said } -> "Чтение заняло слишком долго и оборвалось"
-        TOO_BIG.any { it in said } -> "Снимок слишком большой, чтобы его прочитать"
-        else -> brokenFile(kind)
-    }
+fun readerFailure(reason: String?, kind: ObjectKind): String = when (troubleOf(reason)) {
+    ReaderTrouble.BROKEN -> brokenFile(kind)
+    ReaderTrouble.NO_PAGES -> EMPTY_DOCUMENT
+    ReaderTrouble.TOO_SLOW -> "Чтение заняло слишком долго и оборвалось"
+    ReaderTrouble.TOO_BIG -> "Снимок слишком большой, чтобы его прочитать"
+    ReaderTrouble.NOT_NOW -> READ_NOT_NOW
 }
+
+/**
+ * Не вышло сейчас — про попытку, а не про файл человека (#1258).
+ *
+ * Сюда попадает всё, чего словарь не опознал: не завёлся движок («engine init failed»),
+ * внутренняя ошибка чтения («error: OutOfMemoryError»), незнакомый сигнал. Раньше все они
+ * шли в «Файл не открылся — он повреждён»: человек шёл переснимать или удалял «битую»
+ * фотографию, хотя сломался наш движок. Обе функции файла теперь читают один разбор, и
+ * «виноват файл» звучит ровно там, где [readerFailureIsFatal] отвечает «да».
+ */
+const val READ_NOT_NOW = "Прочитать сейчас не вышло — попробуйте ещё раз"
 
 /**
  * Технический сигнал ридера: страниц в документе нет вовсе (#570). Человеку его переводит
@@ -33,14 +40,46 @@ fun readerFailure(reason: String?, kind: ObjectKind): String {
 const val READER_NO_PAGES = "pdf has no pages"
 
 /**
+ * Технический сигнал ридера: байты не разобрались в снимок (#1258).
+ *
+ * Раньше это место звалось пустым сигналом — `readerFailure(null)`, — и словарь отвечал на
+ * него «файл повреждён», а годность объекта на тот же вход отвечала «дело не в объекте». Обе
+ * функции читают один разбор, поэтому и вход у них один: кто видел неразобранные байты, тот
+ * их и называет. Сам сигнал человеку не показывается — его переводит [readerFailure].
+ */
+const val READER_NOT_DECODED = "decode failed"
+
+/**
  * Только это действительно говорит о самом объекте, а не о попытке прочитать его сейчас
  * (#684/#685): байты не декодируются, это не изображение вовсе, страниц нет ни одной.
  * Долгое чтение, слишком большой снимок, не запустившийся движок — про исполнение здесь и
  * сейчас, а не про годность объекта, и не должны навсегда закрывать путь наружу.
  */
-fun readerFailureIsFatal(reason: String?): Boolean {
+fun readerFailureIsFatal(reason: String?): Boolean = when (troubleOf(reason)) {
+    ReaderTrouble.BROKEN, ReaderTrouble.NO_PAGES -> true
+    else -> false
+}
+
+/**
+ * Что именно случилось при чтении — один разбор сигнала на оба ответа (#1258): и на слова
+ * человеку, и на вопрос «дело в самом объекте?». Пока разборов было два, один и тот же
+ * сигнал получал «файл повреждён» от первого и «это не про объект» от второго.
+ */
+private enum class ReaderTrouble { BROKEN, NO_PAGES, TOO_SLOW, TOO_BIG, NOT_NOW }
+
+private fun troubleOf(reason: String?): ReaderTrouble {
+
+    // Отдельной ветки у пустого сигнала нет, и это решение: молчание не закрывает путь наружу
+    // (#684/#685), а раз так — и «повреждён» про него говорить нельзя. Кто действительно видел
+    // неразобранные байты, называет это [READER_NOT_DECODED] (#1258).
     val said = reason.orEmpty().lowercase()
-    return NOT_AN_IMAGE.any { it in said } || NO_PAGES.any { it in said }
+    return when {
+        NO_PAGES.any { it in said } -> ReaderTrouble.NO_PAGES
+        NOT_AN_IMAGE.any { it in said } -> ReaderTrouble.BROKEN
+        TOO_SLOW.any { it in said } -> ReaderTrouble.TOO_SLOW
+        looksLikeTooBig(said) -> ReaderTrouble.TOO_BIG
+        else -> ReaderTrouble.NOT_NOW
+    }
 }
 
 /**
@@ -61,5 +100,3 @@ private val NOT_AN_IMAGE = listOf("decode", "not an image", "unsupported", "corr
 private val NO_PAGES = listOf("no pages")
 
 private val TOO_SLOW = listOf("timeout", "timed out", "deadline")
-
-private val TOO_BIG = listOf("too large", "too big", "size limit", "413")

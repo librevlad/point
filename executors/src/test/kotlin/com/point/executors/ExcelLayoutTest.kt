@@ -357,10 +357,18 @@ class ExcelLayoutTest {
 
     @Test
     fun `отказ называет причину по существу, а не первую попавшуюся`() {
-        assertEquals(
-            "Квота на сегодня исчерпана",
-            refusalOf(listOf("AI не настроен — задайте свой ключ", "Квота на сегодня исчерпана"), noReaders = false),
+        val said = refusalOf(
+            listOf("AI не настроен — задайте свой ключ", "Квота на сегодня исчерпана"),
+            noReaders = false,
         )
+
+        assertTrue(said, said.contains("Квота на сегодня исчерпана"))
+        assertFalse("названа не та причина: «$said»", said.contains("задайте свой ключ"))
+
+        // Глагол этой дороги человек и должен прочитать (#1237): пока ветка про сеть стояла
+        // перед общей сводкой, сводка отвечала только про сеть, и «дочитать таблицу» не
+        // появлялось нигде — ни на экране, ни в одном прогоне.
+        assertTrue("человеку не сказано, что именно не вышло: «$said»", said.contains("дочитать таблицу"))
 
         assertTrue(refusalOf(emptyList(), noReaders = true).contains("некем"))
 
@@ -383,7 +391,7 @@ class ExcelLayoutTest {
         assertFalse(said.contains("abort"))
         assertTrue("отказ зовёт попробовать снова: «$said»", said.contains("ещё раз"))
 
-        val quota = refusalOf(listOf("HTTP 429 Too Many Requests"), noReaders = false)
+        val quota = refusalOf(listOf(com.point.core.flow.serviceRefusal(429)), noReaders = false)
         assertFalse(quota.contains("429"))
     }
 }

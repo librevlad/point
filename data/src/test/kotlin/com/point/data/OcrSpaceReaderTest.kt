@@ -63,6 +63,12 @@ class OcrSpaceReaderTest {
         assertEquals("Первая страница\n\nВторая страница", text)
     }
 
+    /**
+     * Сервис отвечает успешным кодом, а отказ кладёт внутрь ответа — по-английски (#1259).
+     * Прежние тесты требовали, чтобы «File size exceeds limit» и «Invalid API key» стояли
+     * на русском экране дословно, то есть цементировали дефект: отказ обязан доходить, но
+     * своими словами и без внутреннего имени читалки.
+     */
     @Test
     fun `отказ с кодом 200 — это отказ, а не пустая страница`() = runTest {
 
@@ -70,7 +76,10 @@ class OcrSpaceReaderTest {
         val error = runCatching { reader(FakeHttpJson { HttpResult(200, body) }).read(pageObject) }
             .exceptionOrNull()
 
-        assertTrue(error?.message!!, error.message!!.contains("File size exceeds limit"))
+        val said = error?.message.orEmpty()
+        assertEquals("сказано про размер, а не «сломалось»", com.point.core.flow.serviceRefusal(413), said)
+        assertFalse(said, said.contains("File size"))
+        assertFalse("внутреннее имя читалки человеку не адресовано", said.contains("ocr-space"))
     }
 
     @Test
@@ -79,7 +88,20 @@ class OcrSpaceReaderTest {
         val error = runCatching { reader(FakeHttpJson { HttpResult(200, body) }).read(pageObject) }
             .exceptionOrNull()
 
-        assertTrue(error?.message!!, error.message!!.contains("Invalid API key"))
+        val said = error?.message.orEmpty()
+        assertEquals(com.point.core.flow.serviceRefusal(401), said)
+        assertFalse(said, said.any { it in 'a'..'z' || it in 'A'..'Z' })
+    }
+
+    @Test
+    fun `непонятный отказ сервиса не пересказывается дословно`() = runTest {
+        val body = """{"IsErroredOnProcessing":true,"ErrorMessage":"E216: Timed out waiting for the worker"}"""
+        val error = runCatching { reader(FakeHttpJson { HttpResult(200, body) }).read(pageObject) }
+            .exceptionOrNull()
+
+        val said = error?.message.orEmpty()
+        assertEquals(com.point.core.flow.SERVICE_DID_NOT_READ, said)
+        assertFalse(said, said.contains("worker"))
     }
 
     @Test

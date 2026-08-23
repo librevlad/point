@@ -8,6 +8,7 @@ import com.point.core.model.ScratchRef
 import java.io.File
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -72,6 +73,52 @@ class LlmExchangeLogTest {
         val silentDir = tempDir()
         LoggingLlmClient(answering("ok"), silentDir, enabled = false).run(obj(), "тихо")
         assertEquals(null, silentDir.listFiles()?.takeIf { it.isNotEmpty() })
+    }
+
+    /**
+     * Чужой ответ разрезан на два канала (#1236).
+     *
+     * Пока тело ответа стояло в тексте исключения, оно ехало человеку на баннер — и оно же
+     * было единственным, что попадало в журнал. Убрать его из слов человека было половиной
+     * дела: без второго канала отладочный стенд остался бы без единого следа, чем сервис
+     * ответил на 400 и 500. Проверяется на той сборке, что живёт в приложении: клиент внутри
+     * цепочки, цепочка внутри журнала.
+     */
+    @Test
+    fun `чужой ответ доезжает до журнала, а человеку остаются наши слова`() = runTest {
+        val dir = tempDir()
+        val answered = """{"error":{"code":400,"message":"API key not valid. Please pass a valid API key."}}"""
+        val gemini = GeminiLlmClient(
+            object : HttpJson {
+                override suspend fun post(url: String, headers: Map<String, String>, body: String) =
+                    HttpResult(400, answered)
+            },
+            noStore(), apiKey = "ключ", models = listOf("m1"),
+        )
+        val chain = FallbackLlmClient(listOf(gemini), TestAiFacts(), NetworkAvailability { true })
+
+        val said = runCatching {
+            LoggingLlmClient(chain, dir, enabled = true).run(obj(), "пойми")
+        }.exceptionOrNull()?.message.orEmpty()
+
+        val entry = dir.listFiles()!!.single().readText()
+        assertTrue("журналу нечем объяснить отказ сервиса: $entry", entry.contains("API key not valid"))
+        assertFalse("чужой ответ у человека: $said", said.contains("API key not valid"))
+        assertFalse("код протокола у человека: $said", said.contains("400"))
+    }
+
+    private fun noStore() = object : ObjectStore {
+        override suspend fun ingest(sourceUri: String, mime: String) = error("unused")
+        override suspend fun ingestMultiple(sources: List<String>) = error("unused")
+        override suspend fun put(
+            result: ResultObject,
+            from: PointObject?,
+            by: com.point.core.model.CapabilityId?,
+        ) = error("unused")
+        override suspend fun children(collection: PointObject, limit: Int) = error("unused")
+        override suspend fun readText(obj: PointObject, limit: Int) = error("unused")
+        override suspend fun newScratchFile(extension: String) = error("unused")
+        override suspend fun clear() = Unit
     }
 
     /** #1176: журнал — прозрачная стенка, список уже отвечавших едет дальше нетронутым. */

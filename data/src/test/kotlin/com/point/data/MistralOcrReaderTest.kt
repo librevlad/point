@@ -93,7 +93,7 @@ class MistralOcrReaderTest {
     fun `без ключа читателя нет — и он этого не скрывает`() = runTest {
         val eye = reader(FakeHttpJson(), key = "")
         assertFalse(eye.configured)
-        assertTrue(runCatching { eye.read(pageObject) }.exceptionOrNull()?.message?.contains("ключ не задан") == true)
+        assertTrue(runCatching { eye.read(pageObject) }.exceptionOrNull()?.message?.contains("Ключ не задан") == true)
     }
 
     @Test

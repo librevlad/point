@@ -46,6 +46,11 @@ class FallbackLlmClient(
         val rotating = avoidServices.isNotEmpty() && fresh.isNotEmpty()
         val allowed = if (rotating) fresh else allowedAll
         val errors = mutableListOf<String>()
+
+        // Чужой ответ дословно — для журнала обменов, не для человека (#1236). Цепочка
+        // единственная, кто видит отказ каждого сервиса: дальше едет уже сводка, и без
+        // этого канала отладочный стенд не узнает, чем сервис ответил на самом деле.
+        val serviceSaid = mutableListOf<String>()
         var considered = 0
         var skippedUnconfigured = 0
         for (provider in allowed) {
@@ -65,7 +70,7 @@ class FallbackLlmClient(
             // идти наружу всё равно было не за чем, а спрашивать раньше — рано.
             // Офлайн все провайдеры в цепочке одинаково молчат — ждать каждого по
             // очереди значит тратить минуты на то, что телефон уже знает сам.
-            if (!network.isAvailable()) error(NO_NETWORK_MESSAGE)
+            if (!network.isAvailable()) error(NO_NETWORK_TEXT)
 
             try {
                 // Короткий предел на попытку живёт не здесь, а в самом транспорте
@@ -91,6 +96,7 @@ class FallbackLlmClient(
                 // последний настоящий факт, а не догадку (#699).
                 facts.remember(provider.serviceId, aiOutcomeOf(e))
                 errors += e.message ?: e.javaClass.simpleName
+                serviceSaidIn(e)?.let { serviceSaid += "${provider.serviceId}: $it" }
             }
         }
         if (considered == 0) {
@@ -109,20 +115,10 @@ class FallbackLlmClient(
         // отказом, и человек читал «сервисы капризничают», хотя настоящая причина —
         // интернета нет. Сначала называется то, что он может исправить, — тем же словом,
         // каким Point говорит про сеть до начала действия.
-        if (!network.isAvailable()) error(NO_NETWORK_MESSAGE)
-        error(summarise(errors))
-    }
-
-    private fun summarise(errors: List<String>): String = when {
-        errors.isNotEmpty() && errors.all { it.isNetworkError() } -> NO_NETWORK_MESSAGE
-        errors.isNotEmpty() && errors.all { it.isQuotaError() } ->
-            FREE_LIMITS_SPENT
-
-        // Живая охота 11.08.2026: на экране всплывало «AI недоступен». Весь остальной
-        // Point говорит про модель и чтение, а не аббревиатурой — человеку она ничего
-        // не объясняет.
-        else -> "Прочитать не вышло — " +
-            errors.map { it.substringBefore('\n').take(120) }.distinct().take(2).joinToString("; ")
+        if (!network.isAvailable()) error(NO_NETWORK_TEXT)
+        val said = summariseCloudErrors(errors, WHAT_FAILED)
+        if (serviceSaid.isEmpty()) error(said)
+        throw CloudChainRefusal(said, serviceSaid.joinToString("\n\n"))
     }
 
     companion object {
@@ -133,10 +129,10 @@ class FallbackLlmClient(
             override suspend fun setLevel(level: PrivacyLevel) = Unit
         }
 
-        /** Одна формулировка на всех, кто её показывает и проверяет. */
-        const val NO_NETWORK_MESSAGE = "Нет интернета — прочитать не получится"
-
         /** Та же, что у облачного чтения: человеку без разницы, кто именно упёрся в лимит. */
         const val FREE_LIMITS_SPENT = FREE_LIMITS_SPENT_TEXT
+
+        /** Глагол этой цепочки для общей сводки отказов (#1237). */
+        internal const val WHAT_FAILED = "прочитать"
     }
 }

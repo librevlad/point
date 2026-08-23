@@ -24,7 +24,8 @@ class FallbackAtomRecognizer @Inject constructor(
             try {
                 val layer = reader.read(obj)
                 if (layer.atoms.isNotEmpty()) return layer
-                errors += "${reader.reader}: страница прочитана пустой"
+                // Идентификатор читалки человеку не адресован (#1259).
+                errors += com.point.core.flow.PAGE_READ_EMPTY
             } catch (e: Exception) {
                 errors += e.message ?: e.javaClass.simpleName
             }
@@ -32,10 +33,8 @@ class FallbackAtomRecognizer @Inject constructor(
 
         if (configured == 0) error(NOT_CONFIGURED)
         if (considered == 0) error(NOT_FOR_THIS_OBJECT)
-        error(summarise(errors))
+        error(summariseCloudErrors(errors, WHAT_FAILED))
     }
-
-    private fun summarise(errors: List<String>): String = summariseCloudErrors(errors)
 
     private companion object {
         const val NOT_CONFIGURED =
@@ -43,5 +42,8 @@ class FallbackAtomRecognizer @Inject constructor(
 
         const val NOT_FOR_THIS_OBJECT =
             "Облачное чтение не берётся за этот объект — бесплатные читатели принимают снимок страницы"
+
+        /** Глагол этой цепочки для общей сводки отказов (#1237). */
+        const val WHAT_FAILED = "прочитать"
     }
 }

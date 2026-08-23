@@ -137,10 +137,15 @@ class DefaultEnrichment @Inject constructor(
                         is ActionResult.Success ->
                             failed += FailedInvestigation(investigation.id, label, WRONG_SHAPE)
 
+                        // Исключение мимо `investigated` — та же граница слов (#1225):
+                        // человеку выходит слово слоя, если он его объявил, а чужой текст
+                        // остаётся на своём слое.
                         null -> failed += FailedInvestigation(
                             investigation.id,
                             label,
-                            outcome.exceptionOrNull()?.message ?: "исследование сорвалось",
+                            outcome.exceptionOrNull()
+                                ?.let { com.point.core.flow.ownWordsOf(it) }
+                                ?: com.point.core.flow.INVESTIGATION_FAILED,
                         )
                     }
                     running -= investigation

@@ -36,8 +36,21 @@ class FirstHeardSpeechToText(
         val distinct = refusals.distinct()
         return when {
             distinct.isEmpty() -> NO_SPEECH_ENGINES
+
+            // Одиночный отказ доходит своими словами: движок уже сказал человеку, что
+            // случилось, и пересказывать его сводкой нечего.
             distinct.size == 1 -> distinct.first()
-            else -> "Расшифровать не удалось — " + distinct.take(2).joinToString("; ")
+
+            // Сводка — общая (#1237). Своей ветки про сеть у речи не было вовсе, и офлайн
+            // человек читал склейку транспортных отказов вместо причины, которую он может
+            // устранить.
+            else -> summariseCloudErrors(distinct, WHAT_FAILED)
         }
+    }
+
+    private companion object {
+
+        /** Глагол этой цепочки для общей сводки отказов (#1237). */
+        const val WHAT_FAILED = "расшифровать"
     }
 }

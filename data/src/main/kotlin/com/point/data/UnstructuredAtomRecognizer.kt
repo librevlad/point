@@ -21,8 +21,8 @@ class UnstructuredAtomRecognizer(
     override val configured: Boolean get() = apiKey.isNotBlank()
 
     override suspend fun read(obj: PointObject): AtomLayer {
-        require(configured) { "$READER: ключ не задан" }
-        val frame = frames.of(obj) ?: error("$READER: кадр не подготовлен — нечего отправлять")
+        require(configured) { "Ключ не задан" }
+        val frame = frames.of(obj) ?: error(com.point.core.flow.FRAME_NOT_READY)
         val res = http.postMultipart(
             url = apiUrl.ifBlank { DEFAULT_URL },
             headers = mapOf("unstructured-api-key" to apiKey),

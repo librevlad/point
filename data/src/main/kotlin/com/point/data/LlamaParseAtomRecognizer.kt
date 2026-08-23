@@ -27,8 +27,8 @@ class LlamaParseAtomRecognizer(
     private val auth: Map<String, String> get() = mapOf("Authorization" to "Bearer $apiKey")
 
     override suspend fun read(obj: PointObject): AtomLayer {
-        require(configured) { "$READER: ключ не задан" }
-        val frame = frames.of(obj) ?: error("$READER: кадр не подготовлен — нечего отправлять")
+        require(configured) { "Ключ не задан" }
+        val frame = frames.of(obj) ?: error(com.point.core.flow.FRAME_NOT_READY)
         val jobId = upload(frame)
         val result = awaitResult(jobId)
         return layerOf(result, frame)
@@ -68,16 +68,18 @@ class LlamaParseAtomRecognizer(
                 "COMPLETED", "SUCCESS" -> return json
                 "ERROR", "FAILED", "CANCELLED", "CANCELED" -> {
 
+                    // Английский `error_message` уходил человеку дословно и с нашим
+                    // внутренним именем впереди (#1259): переводится по признакам.
                     val said = json.optJSONObject("job")?.optString("error_message").orEmpty().trim().take(200)
                     error(
                         if (said.isEmpty()) com.point.core.flow.UNREADABLE_ANSWER
-                        else "$READER: задача не выполнена — $said",
+                        else com.point.core.flow.serviceRefusalInAnswer(said),
                     )
                 }
                 else -> if (status.isEmpty() && json.has("items")) return json
             }
         }
-        error("$READER: страница не прочитана за ${MAX_POLLS * POLL_MS / 1000} с")
+        error("Страница не прочитана за ${MAX_POLLS * POLL_MS / 1000} с")
     }
 
     private fun layerOf(result: JSONObject, frame: OutboundFrame): AtomLayer {

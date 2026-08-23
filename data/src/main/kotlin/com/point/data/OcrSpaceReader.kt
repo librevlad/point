@@ -30,7 +30,7 @@ class OcrSpaceReader(
 
     override suspend fun read(obj: PointObject): String {
         val key = apiKey().ifBlank { DEMO_KEY }
-        val frame = frames.of(obj) ?: error("$READER: кадр не подготовлен — нечего отправлять")
+        val frame = frames.of(obj) ?: error(com.point.core.flow.FRAME_NOT_READY)
         val form = form(
             "apikey" to key,
             "OCREngine" to ENGINE,
@@ -51,9 +51,14 @@ class OcrSpaceReader(
         val answer = runCatching { JSONObject(json) }.getOrElse {
             error(com.point.core.flow.UNREADABLE_ANSWER)
         }
-        if (answer.optBoolean("IsErroredOnProcessing")) error("$READER: ${errorMessage(answer)}")
+        // Сервис отвечает кодом 200 и отказом внутри ответа — по-английски и с нашим
+        // внутренним именем впереди: «ocr-space: Invalid API key» (#1259). Переводится по
+        // признакам, как и отказ с кодом; чужой текст остаётся на своём слое.
+        if (answer.optBoolean("IsErroredOnProcessing")) {
+            error(com.point.core.flow.serviceRefusalInAnswer(errorMessage(answer)))
+        }
         val results = answer.optJSONArray("ParsedResults")
-            ?: error("$READER: в ответе нет страниц — ${errorMessage(answer)}")
+            ?: error(com.point.core.flow.serviceRefusalInAnswer(errorMessage(answer)))
         return (0 until results.length())
             .mapNotNull { results.optJSONObject(it)?.optString("ParsedText")?.trim()?.ifEmpty { null } }
             .joinToString("\n\n")

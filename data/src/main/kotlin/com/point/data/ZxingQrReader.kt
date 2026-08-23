@@ -20,7 +20,7 @@ class ZxingQrReader @Inject constructor() : QrReader {
     override suspend fun decode(imagePath: String): String? = scan(imagePath)?.text
 
     override suspend fun scan(imagePath: String): ScannedCode? = withContext(Dispatchers.IO) {
-        val bitmap = decodeBoundedUpright(imagePath, MAX_PX) ?: error(UNREADABLE_IMAGE)
+        val bitmap = decodeBoundedUpright(imagePath, MAX_PX) ?: com.point.core.flow.ownWords(UNREADABLE_IMAGE)
 
         try {
             val pixels = IntArray(bitmap.width * bitmap.height)
@@ -64,5 +64,6 @@ class ZxingQrReader @Inject constructor() : QrReader {
 // Тот же факт, что и у распознавания текста (#686): «файл не открылся» — одними
 // словами, чтобы дедуп в failedNote() схлопывал совпавшие причины, а не печатал
 // одну беду дважды. Читатель кодов получает путь к снимку, а не объект, поэтому вид
-// здесь задан контрактом — изображение (#1033).
-internal val UNREADABLE_IMAGE = readerFailure(null, ObjectKind.IMAGE)
+// здесь задан контрактом — изображение (#1033). Сигнал назван: байты не разобрались в
+// снимок, и это про сам объект — молчанием такое не передать (#1258).
+internal val UNREADABLE_IMAGE = readerFailure(com.point.core.flow.READER_NOT_DECODED, ObjectKind.IMAGE)

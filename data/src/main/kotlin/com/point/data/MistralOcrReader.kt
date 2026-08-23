@@ -29,8 +29,8 @@ class MistralOcrReader(
 
     override suspend fun read(obj: PointObject): String {
         val key = apiKey()
-        require(key.isNotBlank()) { "$READER: ключ не задан" }
-        val frame = frames.of(obj) ?: error("$READER: кадр не подготовлен — нечего отправлять")
+        require(key.isNotBlank()) { "Ключ не задан" }
+        val frame = frames.of(obj) ?: error(com.point.core.flow.FRAME_NOT_READY)
         val body = JSONObject()
             .put("model", MODEL)
             .put(

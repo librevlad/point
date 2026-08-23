@@ -74,7 +74,7 @@
 5 core/ui/src/test/kotlin/com/point/core/ui/UnderstoodFactsTest.kt
 3 data/src/test/kotlin/com/point/data/ChainedAtomRecognizerTest.kt
 6 data/src/test/kotlin/com/point/data/DefaultExternalEyeTest.kt
-4 data/src/test/kotlin/com/point/data/EntityInvestigationTest.kt
+3 data/src/test/kotlin/com/point/data/EntityInvestigationTest.kt
 1 data/src/test/kotlin/com/point/data/EntityObjectsTest.kt
 5 data/src/test/kotlin/com/point/data/FallbackAtomRecognizerTest.kt
 2 data/src/test/kotlin/com/point/data/FileFlowSnapshotStoreTest.kt
@@ -87,7 +87,7 @@
 1 data/src/test/kotlin/com/point/data/MistralOcrReaderTest.kt
 2 data/src/test/kotlin/com/point/data/OcrSpaceReaderTest.kt
 1 data/src/test/kotlin/com/point/data/OoxmlOfficeTextExtractorTest.kt
-4 core/flow/src/test/kotlin/com/point/core/flow/OpenAiCompatibleClientTest.kt
+1 core/flow/src/test/kotlin/com/point/core/flow/OpenAiCompatibleClientTest.kt
 1 core/flow/src/test/kotlin/com/point/core/flow/PhoneToPcTest.kt
 2 data/src/test/kotlin/com/point/data/SummarizingSpeechToTextTest.kt
 2 desktop/src/test/kotlin/com/point/desktop/ArchiveActionsTest.kt
@@ -120,7 +120,7 @@
 3 executors/src/test/kotlin/com/point/executors/DefaultResolverTest.kt
 3 executors/src/test/kotlin/com/point/executors/DeviceOcrRealizerTest.kt
 4 executors/src/test/kotlin/com/point/executors/EntityActionsTest.kt
-5 executors/src/test/kotlin/com/point/executors/ExcelLayoutTest.kt
+4 executors/src/test/kotlin/com/point/executors/ExcelLayoutTest.kt
 1 executors/src/test/kotlin/com/point/executors/ExternalEyeOcrTest.kt
 1 executors/src/test/kotlin/com/point/executors/ExtractedObjectActionsTest.kt
 7 executors/src/test/kotlin/com/point/executors/FindActionTest.kt

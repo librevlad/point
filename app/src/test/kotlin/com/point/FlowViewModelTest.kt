@@ -44,7 +44,6 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
@@ -222,12 +221,12 @@ class FlowViewModelTest {
             com.point.core.flow.readerFailure(broken, ObjectKind.PDF),
             said,
         )
-        assertNotEquals(
-            "словами про картинку PDF больше не объясняют",
-            com.point.core.flow.readerFailure(broken, ObjectKind.IMAGE),
-            said,
-        )
-        assertFalse("чужой текст библиотеки в подзаголовок не попадает", said!!.contains(broken))
+        assertFalse("словами про картинку PDF больше не объясняют", said!!.contains("изображени"))
+        assertFalse("чужой текст библиотеки в подзаголовок не попадает", said.contains(broken))
+
+        // #1258: сигнала библиотеки словарь не опознал — значит и обвинять файл человека
+        // нечем. «Он повреждён» звучит там, где это про сам объект.
+        assertFalse("непонятный сигнал объявил файл человека битым", said.contains("повреждён"))
     }
 
     /**
