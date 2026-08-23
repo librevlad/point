@@ -98,6 +98,11 @@ fun mergeKnowledge(
         merged[key] = value
     }
 
+    // Слово человека и разрешённый спор меняют факт мимо слияния фактов — принадлежность
+    // снимается и за ними (#1176): «Исправить значение» оставляло новый номер подписанным
+    // прежним хозяином. Свежее «чьё», если его принесли, встанет ниже, среди аннотаций.
+    staleBelongings(known, merged).forEach(merged::remove)
+
     fresh.forEach { (key, value) ->
         when {
             key in refreshable -> merged[key] = value
@@ -178,6 +183,10 @@ private fun mergeAnnotation(target: MutableMap<String, String>, key: String, val
         // Имена складываются: по ним видно, что вопрос смотрели дважды и ответ сошёлся.
         key.endsWith(META_ACTOR_SUFFIX) ->
             target[key] = actorValue(actorList(existing) + actorList(value))
+
+        // Принадлежность — не прочтение факта, а наблюдение о том, чьё оно сейчас (#1176):
+        // свежее наблюдение заменяет прежнее, спора двух принадлежностей не бывает.
+        isBelongingKey(key) -> target[key] = value
 
         key.endsWith(META_EVIDENCE_SUFFIX) -> {
             val was = evidenceClasses(existing)

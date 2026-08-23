@@ -64,6 +64,24 @@ data class GraphState(
 
     fun relatedTo(id: String): List<Relation> = relations.filter { it.fromId == id || it.toId == id }
 
+    /**
+     * Тот же граф, суженный до окрестности узла [id], — то, что едет с ним внутрь (#1176).
+     *
+     * Связь без узла — не связь: входя в найденный номер, человек по-прежнему видит, чей он,
+     * а для этого вместе со связями узла должны доехать и те, с кем он связан, и их связи —
+     * иначе внутри оставалась связь «чей он», а сказать, чей, было некому. Чужие находки
+     * при этом не тащатся: несвязанное с узлом внутрь не едет.
+     */
+    fun around(id: String): GraphState {
+        val own = relatedTo(id)
+        val near = found.filter { node -> node.id != id && own.any { node.id == it.fromId || node.id == it.toId } }
+        val ids = near.mapTo(mutableSetOf(id)) { it.id }
+        return copy(
+            found = near,
+            relations = relations.filter { it.fromId in ids || it.toId in ids },
+        )
+    }
+
     fun investigations(): Map<CapabilityId, InvestigationState> = obj.metadata
         .filterKeys(::isStateKey)
         .entries

@@ -37,6 +37,10 @@ fun isAnnotationKey(key: String): Boolean =
         key.endsWith(META_BLOCKED_SUFFIX) || key.endsWith(META_LINE_SUFFIX) ||
         key.endsWith(META_ACTOR_SUFFIX) ||
 
+        // Принадлежность факта стороне (#1176): связь при знании, а не второе знание.
+        // Только при знании объекта: `exec.of` — родословная просьбы, а не хозяин факта.
+        isBelongingKey(key) ||
+
         // Сырые якоря канонического структурного узла (#1176): подпись места, не факт.
         key.endsWith(META_ANCHOR_ROW_SUFFIX) || key.endsWith(META_ANCHOR_COL_SUFFIX)
 

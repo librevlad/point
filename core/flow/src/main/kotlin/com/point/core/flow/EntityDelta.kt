@@ -212,7 +212,24 @@ fun entityObjects(
         // информативнее. Другие виды дедупятся по своей нормализации.
         (listOfNotNull(primary) + others).dedupedNodes(kind, key)
     }
-    return objects to objects.map { Relation(it.id, RelationType.FOUND_IN, source.id) }
+
+    // Принадлежность факта — связь между узлами (#1176): на документе она аннотация ключа,
+    // в графе — та же связь между найденным значением и стороной, которой оно принадлежит.
+    // Обещания без связи не бывает: пока `.of` не назван, узел стоит сам по себе.
+    //
+    // Связь ведёт к узлу, а не к предположению о нём: узел стороны заводит знание роли, и
+    // только роль здесь проецируется. `.of`, назвавший ключ другого рода, связи в графе не
+    // рождает — она уехала бы на узел `party:<значение>`, которого нет, и молча пропала. Связь
+    // двух фактов между собой — следующий шаг RFC §6 со своими именами, не принадлежность.
+    val owned = ENTITY_KINDS.keys.mapNotNull { suffix ->
+        val key = META_ENTITY_PREFIX + suffix
+        val ownerKey = ownerKeyOf(facts, key)?.takeIf { roleOfKey(it) != null } ?: return@mapNotNull null
+        val owner = facts.getValue(ownerKey)
+        val id = "${source.id}:$suffix"
+        if (objects.none { it.id == id }) return@mapNotNull null
+        Relation(id, RelationType.BELONGS_TO, partyNodeId(source.id, owner))
+    }
+    return objects to (objects.map { Relation(it.id, RelationType.FOUND_IN, source.id) } + owned)
 }
 
 /**
