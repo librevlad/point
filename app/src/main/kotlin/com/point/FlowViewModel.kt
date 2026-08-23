@@ -38,6 +38,7 @@ import com.point.core.flow.META_UNUSABLE_REASON
 import com.point.core.flow.META_YIELD_NOUN
 import com.point.core.flow.READER_NOT_DECODED
 import com.point.core.flow.readerFailure
+import com.point.core.flow.reportStage
 import com.point.core.flow.SnappedSelection
 import com.point.core.flow.AiFacts
 import com.point.core.flow.BuiltInAiKeys
@@ -87,7 +88,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -235,7 +239,14 @@ class FlowViewModel @Inject constructor(
     private fun claimVoice(): Long = ++workVoice
 
     private val stack = ArrayDeque<FlowFrame>()
-    private val enrichJobs = mutableListOf<Job>()
+
+    /**
+     * Фоновое обогащение помнит, какой объект оно обогащает (#1060): суд ждёт чтения ровно
+     * столько, сколько живёт работа, способная это чтение принести.
+     */
+    private class EnrichWork(val objectId: String, val job: Job)
+
+    private val enrichJobs = mutableListOf<EnrichWork>()
     private var pendingBubble: Bubble? = null
 
     private var pendingCloud: (() -> Unit)? = null
@@ -751,7 +762,7 @@ class FlowViewModel @Inject constructor(
 
                 // Кто исполнил — часть добытого знания (#1127): тот же шов, что и у
                 // исследований, только исполнитель здесь уже выбран строчкой выше.
-                runAction(bubble, voice) { realizer.perform(top, null).knownBy(top, realizer.meta.actor) }
+                runAction(bubble, voice, top) { obj -> realizer.perform(obj, null).knownBy(obj, realizer.meta.actor) }
             } else {
                 pendingPreviewBubble = bubble
                 _ui.update { it.copy(busy = null, busyStage = null, preview = preview) }
@@ -1099,7 +1110,7 @@ class FlowViewModel @Inject constructor(
             quiet = isQuietAction(bubble.capabilityId),
             cancelable = true,
         )
-        dispatch(bubble) { performed(bubble.capabilityId, top, null) }
+        dispatch(bubble, top) { obj -> performed(bubble.capabilityId, obj, null) }
     }
 
     /**
@@ -1237,7 +1248,7 @@ class FlowViewModel @Inject constructor(
             cancelable = true,
         )
         _ui.update { it.copy(inputSuggestions = emptyList(), needsImage = null) }
-        dispatch(bubble) { performed(bubble.capabilityId, top, text) }
+        dispatch(bubble, top) { obj -> performed(bubble.capabilityId, obj, text) }
     }
 
     fun cancelInput() {
@@ -2164,13 +2175,13 @@ class FlowViewModel @Inject constructor(
         }
     }
 
-    private fun dispatch(bubble: Bubble, action: suspend () -> ActionResult) {
+    private fun dispatch(bubble: Bubble, top: PointObject, action: suspend (PointObject) -> ActionResult) {
         runCatching { sensory.tap() }
 
         busyJob?.cancel()
         val voice = claimVoice()
         runningStep = bubble.title
-        trackWork { runAction(bubble, voice, action) }
+        trackWork { runAction(bubble, voice, top, action) }
     }
 
     /**
@@ -2188,7 +2199,16 @@ class FlowViewModel @Inject constructor(
      */
     internal var actionCeilingMs: Long? = ACTION_CEILING_MS
 
-    private suspend fun runAction(bubble: Bubble, voice: Long, action: suspend () -> ActionResult) {
+    /**
+     * Действие идёт над объектом, каким он стал к началу работы, а не к моменту тапа (#1060):
+     * `top` — объект под пальцем, `action` получает его уже после `afterReading`.
+     */
+    private suspend fun runAction(
+        bubble: Bubble,
+        voice: Long,
+        top: PointObject,
+        action: suspend (PointObject) -> ActionResult,
+    ) {
         runCatching { usage.record(bubble.capabilityId) }
         runCatching {
 
@@ -2196,12 +2216,13 @@ class FlowViewModel @Inject constructor(
             // кончалось ничем — сеть была, обменов не прибавлялось, выход был один: отмена
             // руками. Предел щедрый: таблица на эмуляторе строится минутами, и это законно.
             // Дальше предела — честный отказ операции, знание не трогается (ADR-0001 §9).
+            // Ожидание чтения (#1060) — тоже внутри предела и под той же кнопкой «Отменить».
             val work: suspend () -> ActionResult = {
                 kotlinx.coroutines.withContext(
                     com.point.core.flow.ActionProgress { stage ->
                         if (voice == workVoice) _ui.update { it.copy(busyStage = stage) }
                     },
-                ) { action() }
+                ) { action(afterReading(bubble.capabilityId, top)) }
             }
             actionCeilingMs?.let { ceiling -> kotlinx.coroutines.withTimeout(ceiling) { work() } } ?: work()
         }
@@ -2235,6 +2256,54 @@ class FlowViewModel @Inject constructor(
 
                 _ui.update { it.copy(busy = null, busyStage = null, message = e.message ?: "Не получилось", messageOutcome = Outcome.FAILED) }
             }
+    }
+
+    /**
+     * Объект, над которым суд идёт на самом деле (#1060).
+     *
+     * «Понять» судит по графу, а нажатое, пока снимок ещё читался, судило по пустому: шло
+     * слепым путём, объявляло «На снимке ничего не разобрать» — и через минуту тот же экран
+     * показывал над этим вердиктом сто двадцать прочитанных адресов. Состояние операции
+     * чтения исполнителю не передаётся — и не должно, это не знание (ADR-0001 §9); поэтому
+     * ждёт тот, кто его видит: суд откладывается тем же экраном «Идёт» со своей стадией и
+     * идёт уже по полному графу.
+     *
+     * Ждётся сам вопрос чтения, а не «сейчас что-то крутится». Исследования идут волнами по
+     * latency: в конце каждой волны идущих нет вовсе, а чтение снимка — последняя, самая
+     * медленная волна. Признак «список идущего пуст» просыпался бы на границе волн, ещё до
+     * начала чтения, и суд снова шёл бы по графу без текста.
+     *
+     * Ждёт только тот, кто судит, и говорит об этом сам: признак `judgesKnowledge` объявляет
+     * Capability, а не сравнение id в экранном слое.
+     */
+    private suspend fun afterReading(id: CapabilityId, tapped: PointObject): PointObject {
+        if (!judgesKnowledge(id) || !unread(tapped)) return tapped
+        val work = enrichJobs.filter { it.objectId == tapped.id && it.job.isActive }.map { it.job }
+        if (work.isEmpty()) return tapped
+        reportStage(waitingForReadingStage(tapped.state.kind))
+        awaitReading(tapped.id, work)
+        return focused()?.takeIf { it.id == tapped.id } ?: tapped
+    }
+
+    /** Судит ли действие об объекте по знанию — спрашивается у самого действия (#1060). */
+    private fun judgesKnowledge(id: CapabilityId): Boolean =
+        runCatching { registry.byId(id).meta.judgesKnowledge }.getOrDefault(false)
+
+    /** Вопрос чтения объекта ещё без ответа: `not investigated` ≠ `not found` (ADR-0001 §9). */
+    private fun unread(obj: PointObject): Boolean =
+        com.point.core.flow.investigationStateOf(obj.metadata, com.point.core.flow.KnownCapabilities.IMAGE_TEXT) ==
+            com.point.core.flow.InvestigationState.NOT_INVESTIGATED
+
+    /**
+     * Ждёт ответа на вопрос чтения — но не дольше, чем живёт работа [work], которая одна его
+     * и принесёт: сорвавшееся чтение ответа не пишет (знание остаётся «не исследовано»), и
+     * держать человека вечно из-за этого нельзя.
+     */
+    private suspend fun awaitReading(objectId: String, work: List<Job>) {
+        kotlinx.coroutines.flow.merge(
+            _ui.map { ui -> ui.frame?.obj?.let { it.id != objectId || !unread(it) } ?: true },
+            kotlinx.coroutines.flow.flow { work.joinAll(); emit(true) },
+        ).first { it }
     }
 
     /**
@@ -2830,7 +2899,7 @@ class FlowViewModel @Inject constructor(
         // Слово, стоявшее на экране в момент вопроса (#1000): всё сказанное человеку после
         // него — свежее ответа про область, и ответ его не перебивает.
         val saidBefore = _ui.value.message
-        enrichJobs += viewModelScope.launch {
+        val job = viewModelScope.launch {
 
             // Состояние операции, а не знания (ADR-0001 §9): сорвался проход целиком или
             // отдельный вопрос под областью — разбор не закончен, и «в области ничего не
@@ -2850,6 +2919,7 @@ class FlowViewModel @Inject constructor(
             // Проход дошёл до конца — у вопроса, заданного областью, есть ответ (#1000).
             if (whole) answerAskedArea(obj, saidBefore)
         }
+        enrichJobs += EnrichWork(obj.id, job)
     }
 
     /**
@@ -2899,7 +2969,7 @@ class FlowViewModel @Inject constructor(
 
     /** Понимание найденного узла: знание ложится в сам узел кадра-хозяина. */
     private fun enrichFoundInBackground(node: PointObject, hostId: String) {
-        enrichJobs += viewModelScope.launch {
+        val job = viewModelScope.launch {
             enrichment.enrich(node)
                 .catch { }
                 .collect { update ->
@@ -2928,6 +2998,7 @@ class FlowViewModel @Inject constructor(
                     persistJourney()
                 }
         }
+        enrichJobs += EnrichWork(node.id, job)
     }
 
     private fun applyEnrichment(source: PointObject, update: EnrichmentUpdate) {
@@ -3091,6 +3162,13 @@ class FlowViewModel @Inject constructor(
          */
         const val ACTION_CEILING_MS = 10L * 60 * 1000
 
+        /**
+         * Стадия суда, который ждёт чтения (#1060): человеку говорится, чего именно ждут.
+         * Снимок — читается; у остальных объектов фоном идёт разбор, не чтение.
+         */
+        internal fun waitingForReadingStage(kind: ObjectKind): String =
+            if (kind == ObjectKind.IMAGE) "Жду чтения снимка" else "Жду разбора объекта"
+
 
         val REFRESHABLE_META = com.point.core.flow.REFRESHABLE_KNOWLEDGE
 
@@ -3100,7 +3178,7 @@ class FlowViewModel @Inject constructor(
     }
 
     private fun cancelEnrichment() {
-        enrichJobs.forEach { it.cancel() }
+        enrichJobs.forEach { it.job.cancel() }
         enrichJobs.clear()
     }
 }

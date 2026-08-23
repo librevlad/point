@@ -3828,6 +3828,112 @@ class FlowViewModelTest {
         assertTrue(vm.ui.value.frame?.obj?.state?.has(Feature.HAS_QR) == true)
     }
 
+    /**
+     * Обогащение снимка, как оно идёт на самом деле (`DefaultEnrichment`): исследования идут
+     * волнами по latency, и в конце каждой волны список идущего пустеет — быстрый поиск QR
+     * уже кончился, медленное чтение ещё не началось. Текст приходит последним, вместе с
+     * ответом на сам вопрос чтения.
+     */
+    private fun readingAfterAWaveGap(): List<EnrichmentUpdate> = listOf(
+        EnrichmentUpdate(emptySet(), emptyMap(), listOf("Ищу QR")),
+        EnrichmentUpdate(emptySet(), emptyMap(), emptyList()),
+        EnrichmentUpdate(emptySet(), emptyMap(), listOf("Распознаю текст…")),
+        EnrichmentUpdate(
+            setOf(Feature.HAS_TEXT),
+            mapOf(
+                com.point.core.flow.META_OCR_TEXT_REF to "/ocr.txt",
+                com.point.core.flow.investigationKey(com.point.core.flow.KnownCapabilities.IMAGE_TEXT) to
+                    com.point.core.flow.InvestigationState.FOUND.wire,
+            ),
+            emptyList(),
+        ),
+    )
+
+    /** Настоящее «Понять»: признак «судит по знанию» объявляет оно само, а не экран (#1060). */
+    private val understand =
+        com.point.executors.UnderstandCapability(com.point.core.flow.AiReadiness { true })
+
+    private fun understandBubble() = bubble(id = understand.id.value, title = "Понять")
+
+    /**
+     * Снимок принят, быстрая волна кончилась, чтение ещё не началось: тап приходится ровно на
+     * промежуток между волнами.
+     */
+    private fun tapMomentBetweenWaves(): FlowViewModel {
+        consent.granted = true
+        enrichment.updates = readingAfterAWaveGap()
+        enrichment.stepDelayMs = 1_000
+        val vm = vm(own = listOf(understand))
+        vm.onShared("/long.png", "image/png")
+        dispatcher.scheduler.advanceTimeBy(2_500)
+        assertTrue("между волнами не идёт ничего", vm.ui.value.frame?.enriching?.isEmpty() == true)
+        assertFalse("текста ещё нет", vm.ui.value.frame?.obj?.state?.has(Feature.HAS_TEXT) == true)
+        return vm
+    }
+
+    /**
+     * Живой прогон #1060: «Понять», нажатое на десятой секунде двухминутного чтения, судило по
+     * пустому графу и объявляло «На снимке ничего не разобрать» — над ста двадцатью прочитанными
+     * адресами. Решение владельца: дождаться чтения и судить по полному графу.
+     *
+     * Тап здесь приходится на промежуток между волнами — там, где не идёт ни одного
+     * исследования, а чтение ещё впереди: «сейчас никто не крутится» не значит «читать некому».
+     */
+    @Test fun `«Понять», нажатое до начала чтения снимка, дожидается текста (#1060)`() = runTest(dispatcher) {
+        val vm = tapMomentBetweenWaves()
+
+        vm.onBubble(understandBubble())
+        dispatcher.scheduler.advanceTimeBy(100)
+
+        assertTrue("ожидание — тем же экраном «Идёт»", showsCancel(vm.ui.value))
+        assertEquals(FlowViewModel.waitingForReadingStage(ObjectKind.IMAGE), vm.ui.value.busyStage)
+        assertTrue("суд не начинается до конца чтения", resolver.performed.isEmpty())
+
+        advanceUntilIdle()
+
+        assertEquals(listOf(understand.id), resolver.performed)
+        assertTrue("суд идёт по полному графу", resolver.lastInput?.state?.has(Feature.HAS_TEXT) == true)
+        assertEquals("/ocr.txt", resolver.lastInput?.metadata?.get(com.point.core.flow.META_OCR_TEXT_REF))
+        assertNull(vm.ui.value.busy)
+    }
+
+    /** Прочитанный снимок ждать нечего: «Понять сильнее» идёт сразу, как шло всегда (#1060). */
+    @Test fun `после чтения «Понять» ничего не ждёт (#1060)`() = runTest(dispatcher) {
+        consent.granted = true
+        enrichment.updates = readingAfterAWaveGap()
+        val vm = vm(own = listOf(understand))
+        vm.onShared("/long.png", "image/png"); advanceUntilIdle()
+        assertTrue("снимок прочитан", vm.ui.value.frame?.obj?.state?.has(Feature.HAS_TEXT) == true)
+
+        vm.onBubble(understandBubble())
+        dispatcher.scheduler.advanceTimeBy(100)
+
+        assertEquals(listOf(understand.id), resolver.performed)
+        assertNull("ждать было нечего", vm.ui.value.busyStage)
+    }
+
+    @Test fun `действие, не судящее знание, чтения снимка не ждёт (#1060)`() = runTest(dispatcher) {
+        val vm = tapMomentBetweenWaves()
+
+        vm.onBubble(bubble())
+        dispatcher.scheduler.advanceTimeBy(100)
+
+        assertEquals(listOf(CapabilityId("a")), resolver.performed)
+    }
+
+    @Test fun `отмена во время ожидания чтения снимает экран, и суд не начинается (#1060)`() = runTest(dispatcher) {
+        val vm = tapMomentBetweenWaves()
+        vm.onBubble(understandBubble())
+        dispatcher.scheduler.advanceTimeBy(100)
+
+        vm.cancelAction()
+        advanceUntilIdle()
+
+        assertNull(vm.ui.value.busy)
+        assertTrue("отменённый суд не начинается и после чтения", resolver.performed.isEmpty())
+        assertTrue("чтение отмена суда не трогает", vm.ui.value.frame?.obj?.state?.has(Feature.HAS_TEXT) == true)
+    }
+
     @Test fun `экран ключей открывается всеми известными сервисами списком`() = runTest(dispatcher) {
         val vm = vm()
         vm.openKeySettings(); advanceUntilIdle()
