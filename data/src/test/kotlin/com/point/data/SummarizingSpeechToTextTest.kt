@@ -66,6 +66,19 @@ class SummarizingSpeechToTextTest {
     }
 
     @Test
+    fun `добираемую суть тоже просят по-русски — правило языка одно (#1036)`() = runTest {
+        // Движок без сути (Whisper) добирает её отдельным вопросом; он просил «на языке
+        // записи», и подзаголовок украинского голосового расходился с подзаголовком снимка.
+        val llm = FakeLlm("Просят перезвонить до шести.")
+        val engine = FakeEngine(Transcription.Heard("Передзвони мені до шостої, і договір захопи, він на столі."))
+
+        SummarizingSpeechToText(engine, llm).transcribe(recording)
+
+        val (_, prompt) = llm.asked.single()
+        assertTrue("модель не просят о сути по-русски", prompt.contains("по-русски"))
+    }
+
+    @Test
     fun `модель не дала сути — расшифровка доезжает без неё, и это не ошибка`() = runTest {
         val engine = FakeEngine(Transcription.Heard(longText))
 

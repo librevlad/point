@@ -35,6 +35,7 @@ import com.point.core.flow.Realizer
 import com.point.core.flow.UNDERSTAND_CONTRACT_KEYS
 import com.point.core.flow.altValue
 import com.point.core.flow.alternativesOf
+import com.point.core.flow.answerLanguageRule
 import com.point.core.flow.bareIndexId
 import com.point.core.flow.fieldEvidence
 import com.point.core.flow.investigationOutcome
@@ -430,7 +431,7 @@ class UnderstandRealizer @Inject constructor(
 
         const val UNDERSTOOD = "Стало понятнее"
 
-        const val VISUAL_PROMPT =
+        val VISUAL_PROMPT =
             "Прочитай, что написано на снимке. Это может быть табло счётчика, рукописная " +
                 "запись, фото документа под углом или бликом. " +
                 "Отвечай ТОЛЬКО строками вида KEY=значение, по одной на строку. Разрешённые KEY: " +
@@ -449,9 +450,9 @@ class UnderstandRealizer @Inject constructor(
                 "вида роль=имя. Ролей может не быть ни одной: визитка, вывеска, меню, " +
                 "фотография — не документ с отправителем. Ни одной роли лучше, чем натянутая. " +
                 "Добавь строку SUMMARY=<что на снимке, 3-6 слов>. " +
-                // Языковое правило одно на оба промпта понимания (#1036, история — при
-                // самой константе): текстовый understandPrompt говорит теми же словами.
-                "$ANSWER_LANGUAGE_RULE " +
+                // Языковое правило общее с текстовым и голосовым путём (#1036, история —
+                // при самом правиле); оговорка про надпись на снимке — своя, зрячая (#670).
+                answerLanguageRule("SUMMARY и любые словесные значения", "надпись на снимке") + " " +
                 "Цифры читай ровно так, как видишь: не додумывай и не выравнивай под привычный " +
                 "формат. Если цифра не видна — не пиши строку вовсе. " +
                 // Сомнение — часть ответа, а не повод молчать (#670).
