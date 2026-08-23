@@ -71,7 +71,7 @@ class CloudPageReadingTest {
 
     @Test
     fun `отказ облака не превращается в пустой слой`() = runTest {
-        val reading = CloudPageReading(store, chain { error("unstructured HTTP 402") })
+        val reading = CloudPageReading(store, chain { error(com.point.core.flow.serviceRefusal(402)) })
         val error = runCatching { reading.read(pageObject) }.exceptionOrNull()
 
         assertTrue(error?.message?.contains("бесплатное чтение закончилось") == true)

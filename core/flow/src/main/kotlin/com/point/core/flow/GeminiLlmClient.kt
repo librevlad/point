@@ -35,10 +35,11 @@ class GeminiLlmClient(
 
     override suspend fun run(obj: PointObject, prompt: String): ResultObject =
         withContext(Dispatchers.IO) {
-            require(apiKey.isNotBlank()) {
-                "GEMINI_API_KEY не задан в local.properties — AI недоступен"
-            }
-            val errors = StringBuilder()
+
+            // Имя ключа сборки человеку не адресовано (#1236): он не заводил ни
+            // `GEMINI_API_KEY`, ни `local.properties`.
+            require(apiKey.isNotBlank()) { "AI не настроен — $AI_KEY_HINT" }
+            var refused: Exception? = null
             for (model in models) {
                 try {
                     val answer = fetch(model, obj, prompt)
@@ -52,10 +53,14 @@ class GeminiLlmClient(
                         metadata = mapOf("source" to "gemini", "model" to model),
                     )
                 } catch (e: Exception) {
-                    errors.append(model).append(": ").append(e.message ?: "error").append("; ")
+
+                    // Перебор моделей — наша механика, а не событие для человека (#1236):
+                    // склейка «m1: …; m2: …» выносила на баннер идентификаторы моделей.
+                    // Наружу уходит последний отказ — уже своими словами.
+                    refused = e
                 }
             }
-            error("Gemini недоступен — $errors")
+            throw refused ?: IllegalStateException("AI не настроен — $AI_KEY_HINT")
         }
 
     private suspend fun fetch(model: String, obj: PointObject, prompt: String): String {
@@ -67,9 +72,17 @@ class GeminiLlmClient(
 
         val url = "https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$apiKey"
         val res = http.post(url, emptyMap(), body)
-        if (res.code !in 200..299) error("Gemini HTTP ${res.code}: ${res.body.take(300)}")
+
+        // Отказ сервиса — теми же словами, что у остальных клиентов, и с кодом внутри
+        // исключения: человеку слова, Point — код, чтобы «лимит исчерпан» не превратился
+        // в «не отвечал» при пересказе (#1236).
+        if (res.code !in 200..299) {
+            throw AiServiceRefusal(serviceId, res.code, serviceRefusal(res.code, hintFor(res.code)))
+        }
         return parseAnswer(res.body)
     }
+
+    private fun hintFor(code: Int): String? = if (code == 401 || code == 403) KEY_SETTINGS_CALL else null
 
     private fun maybeAttachFile(obj: PointObject): JSONObject? {
         val declared = geminiAttachmentMime(obj) ?: return null
@@ -81,16 +94,17 @@ class GeminiLlmClient(
         )
     }
 
+    // Имена полей чужого JSON человеку ничего не объясняют (#1236): непрочитанный ответ
+    // называется одним объявленным словом.
     private fun parseAnswer(json: String): String {
-        val candidates = JSONObject(json).optJSONArray("candidates")
-            ?: error("Gemini не вернул кандидатов")
-        if (candidates.length() == 0) error("Gemini вернул пустой ответ")
+        val candidates = JSONObject(json).optJSONArray("candidates") ?: error(UNREADABLE_ANSWER)
+        if (candidates.length() == 0) error(UNREADABLE_ANSWER)
         val parts = candidates.getJSONObject(0)
             .getJSONObject("content")
             .getJSONArray("parts")
         val out = buildString {
             for (i in 0 until parts.length()) append(parts.getJSONObject(i).optString("text"))
         }
-        return out.ifBlank { error("Gemini вернул пустой текст") }
+        return out.ifBlank { error(UNREADABLE_ANSWER) }
     }
 }

@@ -34,7 +34,7 @@ class MlKitQrReader(
     override suspend fun decode(imagePath: String): String? = scan(imagePath)?.text
 
     override suspend fun scan(imagePath: String): ScannedCode? = withContext(Dispatchers.IO) {
-        val bitmap = decodeBoundedUpright(imagePath, MAX_PX) ?: error(UNREADABLE_IMAGE)
+        val bitmap = decodeBoundedUpright(imagePath, MAX_PX) ?: com.point.core.flow.ownWords(UNREADABLE_IMAGE)
         val viaMlKit = run {
             try {
                 scanner.process(InputImage.fromBitmap(bitmap, 0)).await()

@@ -20,7 +20,7 @@ class ZxingQrReader @Inject constructor() : QrReader {
     override suspend fun decode(imagePath: String): String? = scan(imagePath)?.text
 
     override suspend fun scan(imagePath: String): ScannedCode? = withContext(Dispatchers.IO) {
-        val bitmap = decodeBoundedUpright(imagePath, MAX_PX) ?: error(UNREADABLE_IMAGE)
+        val bitmap = decodeBoundedUpright(imagePath, MAX_PX) ?: com.point.core.flow.ownWords(UNREADABLE_IMAGE)
 
         try {
             val pixels = IntArray(bitmap.width * bitmap.height)

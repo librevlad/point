@@ -20,6 +20,10 @@ import com.point.core.model.Findings
  * одинаково. Достаточно одному вернуть `Done(Findings())` — и сорвавшееся исследование молча
  * объявит «не найдено», а ни один тест этого не увидит: каждый проверяет своё исследование.
  *
+ * Человеку выходит только то, что для него написано (#1225): причина исследования, слово
+ * слоя-источника ([OwnWords]) или общее слово срыва. Чужой текст исключения — «End-of-File,
+ * expected line at offset 25» от разбора PDF — сюда не проходит и остаётся на своём слое.
+ *
  * @param whenFailed своя причина срыва — когда чужой текст исключения показывать нельзя.
  *   В нём бывает и путь из недр, и «Central Directory Entry not found» (#570).
  */
@@ -27,7 +31,7 @@ suspend fun investigated(whenFailed: String? = null, findings: suspend () -> Fin
     runCatching { findings() }.fold(
         onSuccess = { ActionResult.Done("", it) },
         onFailure = {
-            ActionResult.Failure(whenFailed ?: it.message ?: INVESTIGATION_FAILED, recoverable = true)
+            ActionResult.Failure(whenFailed ?: ownWordsOf(it) ?: INVESTIGATION_FAILED, recoverable = true)
         },
     )
 

@@ -30,12 +30,51 @@ class ReaderFailureTest {
         assertEquals("Снимок слишком большой, чтобы его прочитать", readerFailure("413 payload too large", ObjectKind.IMAGE))
     }
 
+    // ---- #1258: не завёлся наш движок — виноват не файл человека. ----
+
     @Test
-    fun `непонятная причина всё равно человеческая`() {
+    fun `непонятная причина — про попытку сейчас, а не про файл человека`() {
         val said = readerFailure("java.lang.IllegalStateException at Foo.kt-42", ObjectKind.IMAGE)
 
         assertFalse(said.contains("Exception"))
-        assertTrue(said.contains("не открылся"))
+        assertFalse("файл человека здесь ни при чём", said.contains("повреждён"))
+        assertEquals(READ_NOT_NOW, said)
+    }
+
+    @Test
+    fun `не завёлся движок и внутренняя ошибка — тоже про попытку`() {
+        assertEquals(READ_NOT_NOW, readerFailure("engine init failed", ObjectKind.IMAGE))
+        assertEquals(READ_NOT_NOW, readerFailure("error: OutOfMemoryError", ObjectKind.IMAGE))
+        assertEquals(READ_NOT_NOW, readerFailure("ppocr build does not match device abi", ObjectKind.PDF))
+    }
+
+    /**
+     * Две функции одного файла давали противоположные ответы на один вход: словарь говорил
+     * «файл повреждён», а годность объекта — «дело не в объекте». Человек шёл переснимать.
+     */
+    @Test
+    fun `слова про поломку файла звучат ровно там, где дело в самом объекте`() {
+        val signals = listOf(
+            null, "", "decode failed", "not an image", "corrupt stream", READER_NO_PAGES,
+            "read timed out", "413 payload too large", "engine init failed",
+            "error: OutOfMemoryError", "java.lang.IllegalStateException",
+        )
+
+        val emptyDocument = readerFailure(READER_NO_PAGES, ObjectKind.PDF)
+
+        signals.filter { readerFailureIsFatal(it) }.forEach {
+            val said = readerFailure(it, ObjectKind.IMAGE)
+            assertTrue("«$it» про объект, а сказано «$said»", said == emptyDocument || said.contains("повреждён"))
+        }
+
+        // Пустой сигнал — исключение по договорённости: так зовут оттуда, где байты не
+        // декодировались, а путь наружу молчаливый срыв всё равно не закрывает.
+        signals.filterNot { readerFailureIsFatal(it) }
+            .filterNot { it.isNullOrBlank() }
+            .forEach {
+                val said = readerFailure(it, ObjectKind.IMAGE)
+                assertFalse("«$it» не про объект, а сказано «$said»", said.contains("повреждён"))
+            }
     }
 
     @Test
@@ -66,7 +105,7 @@ class ReaderFailureTest {
     @Test
     fun `слово по виду не зависит от того, как именно ридер назвал поломку`() {
         val kinds = listOf(ObjectKind.PDF, ObjectKind.IMAGE)
-        val reasons = listOf(null, "", "decode failed", "not an image", "malformed", "java.lang.IllegalStateException")
+        val reasons = listOf(null, "", "decode failed", "not an image", "malformed")
 
         kinds.forEach { kind ->
             val saidForKind = reasons.map { readerFailure(it, kind) }.toSet()

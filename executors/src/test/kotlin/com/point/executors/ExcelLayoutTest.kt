@@ -383,7 +383,7 @@ class ExcelLayoutTest {
         assertFalse(said.contains("abort"))
         assertTrue("отказ зовёт попробовать снова: «$said»", said.contains("ещё раз"))
 
-        val quota = refusalOf(listOf("HTTP 429 Too Many Requests"), noReaders = false)
+        val quota = refusalOf(listOf(com.point.core.flow.serviceRefusal(429)), noReaders = false)
         assertFalse(quota.contains("429"))
     }
 }

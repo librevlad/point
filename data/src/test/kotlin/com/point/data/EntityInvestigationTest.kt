@@ -243,13 +243,17 @@ class EntityInvestigationTest {
     fun `an engine failure is a failed look, not a text without entities`() = runTest {
 
         val brokenModel = object : EntityExtractor {
-            override suspend fun extract(text: String): List<Entity> = error("модель не загрузилась")
+            override suspend fun extract(text: String): List<Entity> =
+                error("Failed to load model from /data/app/lib/libtflite.so at offset 0x1f")
         }
 
         val result = EntityInvestigationRealizer(brokenModel).perform(obj("Звони +380671234567"), null)
 
         assertTrue("сбой движка обязан быть неудачей операции-" + result, result is ActionResult.Failure)
-        assertEquals("модель не загрузилась", (result as ActionResult.Failure).reason)
+
+        // Чужой текст движка человеку не адресован (#1225): своё слово объявляет тот слой,
+        // который знает, что случилось, — остальное получает общее слово срыва.
+        assertEquals(com.point.core.flow.INVESTIGATION_FAILED, (result as ActionResult.Failure).reason)
     }
 
     @Test

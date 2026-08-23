@@ -26,7 +26,7 @@ package com.point.core.flow
  */
 fun serviceRefusal(code: Int, hint: String? = null): String {
     val what = when (code) {
-        401, 403 -> "Сервис не принял ключ"
+        401, 403 -> KEY_NOT_TAKEN
         402, 429 -> FREE_LIMITS_SPENT_TEXT
         404 -> "Сервис не отвечает по этому адресу"
         413 -> "Файл великоват — сервис его не берёт"
@@ -44,3 +44,44 @@ fun serviceRefusal(code: Int, hint: String? = null): String {
  * очереди. Ему адресован сам факт — прочитать не вышло.
  */
 const val UNREADABLE_ANSWER = "Сервис ответил непонятно — прочитать не вышло"
+
+/** Объявленное слово про непринятый ключ: по нему же узнаётся исход обращения (#1236). */
+const val KEY_NOT_TAKEN = "Сервис не принял ключ"
+
+/**
+ * Сервис ответил «всё хорошо» кодом, а внутри ответа — отказ (#1259).
+ *
+ * Так отвечает OCR.space: код 200, `IsErroredOnProcessing=true` и английское поле
+ * `ErrorMessage`, которое уходило человеку дословно — «ocr-space: Invalid API key» на
+ * русском экране. Переводчик кодов сюда не попадал, потому что код был успешный. Разбор —
+ * по тем же признакам, какими Point читает и чужие транспортные строки: чужой текст остаётся
+ * на своём слое, человеку — своё слово.
+ */
+fun serviceRefusalInAnswer(said: String): String {
+    val text = said.lowercase()
+    return when {
+        KEY_REFUSAL_SIGNS.any { it in text } -> KEY_NOT_TAKEN
+        TOO_BIG_SIGNS.any { it in text } -> serviceRefusal(413)
+        looksLikeQuotaFailure(said) -> FREE_LIMITS_SPENT_TEXT
+        else -> SERVICE_DID_NOT_READ
+    }
+}
+
+/** Отказ без названной причины: сервис посмотрел и текста не отдал. */
+const val SERVICE_DID_NOT_READ = "Сервис не прочитал снимок"
+
+/** Сервис принял запрос и отвечать на него отказался — это его решение, а не сбой. */
+const val SERVICE_REFUSED_REQUEST = "Сервис отказался отвечать на этот запрос"
+
+/**
+ * Отправлять нечего — кадр для чужого сервиса не собрался (#1259).
+ *
+ * Пять читалок писали эту фразу у себя и каждая ставила впереди своё внутреннее имя:
+ * «ocr-space: кадр не подготовлен». Человек не заводил ни `ocr-space`, ни `llamaparse`.
+ */
+const val FRAME_NOT_READY = "Кадр не подготовлен — нечего отправлять"
+
+private val KEY_REFUSAL_SIGNS =
+    listOf("api key", "apikey", "api-key", "unauthorized", "not authorized", "invalid key", "forbidden")
+
+private val TOO_BIG_SIGNS = listOf("size exceeds", "too large", "too big", "size limit", "maximum size")

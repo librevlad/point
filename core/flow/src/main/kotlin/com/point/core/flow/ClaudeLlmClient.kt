@@ -33,13 +33,20 @@ class ClaudeLlmClient(
     override suspend fun run(obj: PointObject, prompt: String): ResultObject =
         withContext(Dispatchers.IO) {
             val key = apiKey
-            require(key.isNotBlank()) { "ANTHROPIC_API_KEY не задан" }
+
+            // Имя ключа сборки человеку не адресовано (#1236).
+            require(key.isNotBlank()) { "AI не настроен — $AI_KEY_HINT" }
             val res = http.post(
                 "$baseUrl/v1/messages",
                 mapOf("x-api-key" to key, "anthropic-version" to ANTHROPIC_VERSION),
                 requestBody(obj, prompt),
             )
-            if (res.code !in 200..299) error("Claude HTTP ${res.code}: ${res.body.take(300)}")
+
+            // Отказ сервиса — общими словами, код остаётся внутри исключения (#1236):
+            // «Claude HTTP 429: {"type":"error"…}» уходил человеку на баннер дословно.
+            if (res.code !in 200..299) {
+                throw AiServiceRefusal(serviceId, res.code, serviceRefusal(res.code, hintFor(res.code)))
+            }
             val answer = parseAnswer(res.body)
             val ref = store.newScratchFile("md")
 
@@ -79,17 +86,20 @@ class ClaudeLlmClient(
             .put("source", source)
     }
 
+    private fun hintFor(code: Int): String? = if (code == 401 || code == 403) KEY_SETTINGS_CALL else null
+
+    // Имена полей чужого JSON человеку ничего не объясняют (#1236).
     private fun parseAnswer(json: String): String {
         val root = JSONObject(json)
-        if (root.optString("stop_reason") == "refusal") error("Claude отклонил запрос")
-        val content = root.optJSONArray("content") ?: error("Claude не вернул content")
+        if (root.optString("stop_reason") == "refusal") error(SERVICE_REFUSED_REQUEST)
+        val content = root.optJSONArray("content") ?: error(UNREADABLE_ANSWER)
         val out = buildString {
             for (i in 0 until content.length()) {
                 val block = content.getJSONObject(i)
                 if (block.optString("type") == "text") append(block.optString("text"))
             }
         }
-        return out.ifBlank { error("Claude вернул пустой текст") }
+        return out.ifBlank { error(UNREADABLE_ANSWER) }
     }
 
     private companion object {

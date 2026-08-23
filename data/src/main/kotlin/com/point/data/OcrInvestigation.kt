@@ -132,7 +132,7 @@ class OcrInvestigationRealizer @Inject constructor(
                     metadata = mapOf(META_UNUSABLE_REASON to reason),
                 )
             }
-            error(reason)
+            com.point.core.flow.ownWords(reason)
         }
 
         val atomsRef = if (layer.atoms.isNotEmpty()) {

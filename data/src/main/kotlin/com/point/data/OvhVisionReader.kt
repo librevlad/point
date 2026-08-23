@@ -28,7 +28,7 @@ class OvhVisionReader(
     private val root: String get() = baseUrl.ifBlank { DEFAULT_BASE_URL }.trimEnd('/')
 
     override suspend fun read(obj: PointObject): String {
-        val frame = frames.of(obj) ?: error("$READER: кадр не подготовлен — нечего отправлять")
+        val frame = frames.of(obj) ?: error(com.point.core.flow.FRAME_NOT_READY)
         val image = JSONObject()
             .put("type", "image_url")
             .put(

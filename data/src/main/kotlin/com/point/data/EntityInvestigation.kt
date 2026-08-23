@@ -112,7 +112,7 @@ class EntityInvestigationRealizer(
         }
         val file = File(obj.uri.value)
 
-        if (!file.isFile) error(com.point.core.flow.NO_TEXT_PAYLOAD)
+        if (!file.isFile) com.point.core.flow.ownWords(com.point.core.flow.NO_TEXT_PAYLOAD)
         val text = file.readText().take(com.point.core.flow.INVESTIGATION_TEXT_CHARS)
         if (text.isBlank()) return@withContext Findings()
         entityDelta(obj, extractor.extract(text), text)

@@ -146,7 +146,7 @@ class CloudOcrRealizer @Inject constructor(
             if (!isAvailable()) return@withContext ActionResult.Failure(chainClosed(privacy.level()), recoverable = true)
 
             reportStage(OCR_CLOUD_STAGE)
-            runCatching { guarded(input, llm.run(input, ocrPromptFor(input)), "модель") }
+            runCatching { guarded(input, llm.run(input, ocrPromptFor(input))) }
                 .getOrElse { ActionResult.Failure(it.message ?: "Ошибка распознавания в облаке", recoverable = true) }
         }
 }
@@ -201,7 +201,7 @@ class CloudOcrDirectRealizer @Inject constructor(
                 val page = stripMarkdownChrome(File(answer.uri.value).readText())
                 if (noTextAnswer(page)) return@runCatching noTextFound(input)
                 degeneratedReading(page)?.let { why ->
-                    return@runCatching ActionResult.Failure(unreadable("модель", why), recoverable = true)
+                    return@runCatching ActionResult.Failure(unreadable(why), recoverable = true)
                 }
                 strongerReadingLands(store.newScratchFile("txt"), page)
             }.getOrElse { ActionResult.Failure(it.message ?: "Ошибка распознавания в облаке", recoverable = true) }
@@ -261,7 +261,7 @@ private suspend fun readWithExternalEye(
     val page = stripMarkdownChrome(reading.text)
     if (noTextAnswer(page)) return noTextFound(input)
     degeneratedReading(page)?.let { why ->
-        return ActionResult.Failure(unreadable(reading.reader, why), recoverable = true)
+        return ActionResult.Failure(unreadable(why), recoverable = true)
     }
     if (asKnowledge) {
         val ref = runCatching { store.newScratchFile("txt") }
@@ -303,11 +303,11 @@ private suspend fun readWithExternalEye(
     }.getOrElse { ActionResult.Failure(it.message ?: "Ошибка записи результата", recoverable = true) }
 }
 
-private fun guarded(input: PointObject, result: ResultObject, who: String): ActionResult {
+private fun guarded(input: PointObject, result: ResultObject): ActionResult {
     val text = runCatching { File(result.uri.value).readText() }.getOrNull() ?: return ActionResult.Success(result)
     if (noTextAnswer(text)) return noTextFound(input)
     val why = degeneratedReading(text) ?: return ActionResult.Success(result)
-    return ActionResult.Failure(unreadable(who, why), recoverable = true)
+    return ActionResult.Failure(unreadable(why), recoverable = true)
 }
 
 /**
@@ -334,8 +334,15 @@ private fun noTextFound(input: PointObject): ActionResult = ActionResult.Done(
 
 internal const val NO_TEXT_ON_PICTURE = "Текста на снимке не нашлось"
 
-private fun unreadable(who: String, why: String): String =
-    "Не смог прочитать этот снимок: $who отдала бессмыслицу ($why). " +
+/**
+ * Ответ пришёл, а текста в нём нет (#1259).
+ *
+ * Раньше здесь назывался исполнитель — «Не смог прочитать этот снимок: ovh-qwen-vl отдала
+ * бессмыслицу». Человек не заводил ни `ovh-qwen-vl`, ни `ocr-space`: идентификатор остаётся
+ * в metadata `engine` у результата и в журнале. Ему адресован сам факт и следующий шаг.
+ */
+private fun unreadable(why: String): String =
+    "Не смог прочитать этот снимок — ответ пришёл нечитаемым ($why). " +
         "Лучше переснять при ровном свете и поближе."
 
 /**

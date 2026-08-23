@@ -52,7 +52,7 @@ class DefaultExternalEye @Inject constructor(
             // #691). Нашёлся хоть один настоящий кандидат для этого объекта, и только
             // тогда: без него идти наружу всё равно было не за чем, а офлайн вся
             // очередь читателей одинаково молчит.
-            if (!network.isAvailable()) error(NO_NETWORK)
+            if (!network.isAvailable()) error(com.point.core.flow.NO_NETWORK_TEXT)
 
             try {
                 val text = eye.read(obj)
@@ -64,7 +64,10 @@ class DefaultExternalEye @Inject constructor(
                 // пометкой вроде «*[No text detected]*» (#1054). Пометка — не текст и
                 // не победа: очередь идёт дальше, следующий может увидеть больше.
                 sawNoText = sawNoText ?: ExternalReading("", eye.reader, eye.privacy.where, eye.privacy.promise.what)
-                errors += "${eye.reader}: страница прочитана пустой"
+
+                // Идентификатор читалки человеку не адресован (#1259): он остаётся в
+                // metadata `engine` у результата, а не в строке на баннере.
+                errors += PAGE_READ_EMPTY
             } catch (e: Exception) {
                 failed = true
                 errors += e.message ?: e.javaClass.simpleName
@@ -76,7 +79,12 @@ class DefaultExternalEye @Inject constructor(
         // чтение возвращается пустым, и вопрос получает честное «не нашлось» (#1054).
         // Стоило одному сорваться — ответа нет: он мог увидеть то, чего не увидели другие.
         if (sawNoText != null && !failed) return sawNoText
-        error(summariseCloudErrors(errors) + keyHint())
+
+        // Приписка про ключ — только там, где ключ и решает (#1260). Офлайн она советовала
+        // идти в настройки и заводить ключ, хотя выключен был интернет: человек тратил ход
+        // на действие, которое ничего не изменит.
+        val said = summariseCloudErrors(errors, WHAT_FAILED)
+        error(said + if (said == com.point.core.flow.FREE_LIMITS_SPENT_TEXT) keyHint() else "")
     }
 
     private fun keyHint(): String {
@@ -105,8 +113,11 @@ class DefaultExternalEye @Inject constructor(
         const val NOT_FOR_THIS_OBJECT =
             "Чтение снаружи не берётся за этот объект — читают снимок страницы"
 
-        const val NO_NETWORK =
-            "Чтение снаружи недоступно — нет подключения к интернету"
+        /** Глагол этой цепочки для общей сводки отказов (#1237). */
+        const val WHAT_FAILED = "прочитать"
+
+        /** Читатель посмотрел и текста не увидел — без имени читателя (#1259). */
+        const val PAGE_READ_EMPTY = "страница прочитана пустой"
 
         const val KEY_HINT =
             ". Есть читатель посильнее — он включится, если задать бесплатный ключ Mistral (см. настройки)"

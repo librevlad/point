@@ -45,16 +45,24 @@ class FallbackLlmClientTest {
 
     @Test
     fun `falls back to the next provider when the first fails (e g 429)`() = runTest {
-        val client = chain(listOf(failing("Gemini HTTP 429"), ok("openai")))
+        val client = chain(listOf(failing(serviceRefusal(429)), ok("openai")))
         assertEquals("/out/openai", client.run(obj, "hi").uri.value)
     }
 
+    /**
+     * Отказы доходят все — но словами (#1236). Раньше тест требовал обратного: чтобы на
+     * баннере стояли «Gemini HTTP 429» и «OPENAI_API_KEY», то есть цементировал дефект.
+     */
     @Test
-    fun `surfaces combined errors when all providers fail`() = runTest {
-        val client = chain(listOf(failing("Gemini HTTP 429"), failing("OPENAI_API_KEY не задан")))
-        val error = runCatching { client.run(obj, "hi") }.exceptionOrNull()
-        assertTrue(error?.message?.contains("Gemini HTTP 429") == true)
-        assertTrue(error?.message?.contains("OPENAI_API_KEY") == true)
+    fun `сводка отказов доносит каждый — без кодов протокола и имён ключей сборки`() = runTest {
+        val client = chain(listOf(failing(serviceRefusal(500)), failing("AI не настроен — $AI_KEY_HINT")))
+
+        val said = runCatching { client.run(obj, "hi") }.exceptionOrNull()?.message.orEmpty()
+
+        assertTrue(said, said.contains(serviceRefusal(500)))
+        assertTrue(said, said.contains(AI_KEY_HINT))
+        assertFalse(said, said.contains("HTTP", ignoreCase = true))
+        assertFalse(said, said.contains("API_KEY"))
     }
 
     @Test
@@ -63,7 +71,7 @@ class FallbackLlmClientTest {
             List(8) { failing("""Unable to resolve host "api.groq.com": No address associated with hostname""") },
         )
         val error = runCatching { client.run(obj, "hi") }.exceptionOrNull()
-        assertTrue(error?.message?.contains("Нет интернета") == true)
+        assertEquals(NO_NETWORK_TEXT, error?.message)
         assertFalse(error?.message?.contains("resolve host") == true)
     }
 
@@ -73,7 +81,7 @@ class FallbackLlmClientTest {
         val client = chain(
             listOf(
                 failing("openrouter: бесплатное чтение на сегодня закончилось — попробуйте завтра"),
-                failing("Gemini HTTP 429"),
+                failing(serviceRefusal(429)),
             ),
         )
 
@@ -165,7 +173,7 @@ class FallbackLlmClientTest {
             chain(listOf(unconfigured(), offline())).run(obj, "пойми")
         }.exceptionOrNull()
 
-        assertEquals(FallbackLlmClient.NO_NETWORK_MESSAGE, error?.message)
+        assertEquals(NO_NETWORK_TEXT, error?.message)
     }
 
     @Test
@@ -189,7 +197,7 @@ class FallbackLlmClientTest {
             chain(spies, network = NetworkAvailability { false }).run(obj, "пойми")
         }.exceptionOrNull()
 
-        assertEquals(FallbackLlmClient.NO_NETWORK_MESSAGE, error?.message)
+        assertEquals(NO_NETWORK_TEXT, error?.message)
         assertTrue("офлайн ни один провайдер не должен получить запрос", calls.isEmpty())
     }
 

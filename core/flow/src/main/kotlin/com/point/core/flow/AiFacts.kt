@@ -56,8 +56,14 @@ fun aiOutcomeOfFailure(message: String): AiOutcome = when {
     else -> AiOutcome.SILENT
 }
 
+/**
+ * Признак «ключ не приняли» — по объявленным словам (#1236). Подстроки «HTTP 401/403» здесь
+ * держались за строку с кодом ответа и куском чужого JSON, которую человек читал на баннере; теперь
+ * такие клиенты бросают [AiServiceRefusal] с кодом, и исход берётся из кода, а не из текста.
+ * Скобки с числом остались для чужих строк, приходящих как есть.
+ */
 private val KEY_FAILURE_MARKS =
-    listOf(KEY_NOT_ACCEPTED, "HTTP 401", "HTTP 403", "(401)", "(403)")
+    listOf(KEY_NOT_ACCEPTED, KEY_NOT_TAKEN, "(401)", "(403)")
 
 /** Пока к сервису не обращались — говорить о нём в строке нечего (#887). */
 const val NEVER_ASKED = "ещё не обращались"

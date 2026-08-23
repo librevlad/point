@@ -45,9 +45,9 @@ class StrongerReadingEnrichesSourceTest {
 
     private val image = PointObject("id", "image/jpeg", ScratchRef("/tmp/chek.jpg"), ObjectState(ObjectKind.IMAGE))
 
-    private fun eye(text: String) = object : ExternalEye {
+    private fun eye(text: String, reader: String = "mistral") = object : ExternalEye {
         override fun available() = true
-        override suspend fun read(obj: PointObject) = ExternalReading(text, "mistral", "eu")
+        override suspend fun read(obj: PointObject) = ExternalReading(text, reader, "eu")
     }
 
     @Test fun `сильное чтение ложится знанием на исходник, а не рождает ребёнка`() = runTest {
@@ -70,6 +70,19 @@ class StrongerReadingEnrichesSourceTest {
         val result = ExternalEyeCloudOcrRealizer(eye("////////////"), store).perform(image)
 
         assertTrue(result is ActionResult.Failure)
+    }
+
+    /**
+     * Отказ не называет исполнителя (#1259): на экране стояло «Не смог прочитать этот
+     * снимок: ovh-qwen-vl отдала бессмыслицу». Ни `ovh-qwen-vl`, ни `ocr-space` человек не
+     * заводил — идентификатор остаётся в metadata `engine` и в журнале.
+     */
+    @Test fun `отказ по нечитаемому ответу не называет исполнителя`() = runTest {
+        val result = ExternalEyeCloudOcrRealizer(eye("////////////", reader = "ovh-qwen-vl"), store).perform(image)
+
+        val said = (result as ActionResult.Failure).reason
+        assertTrue(said, said.contains("переснять"))
+        assertEquals("латиница в лице продукта: $said", "", said.filter { it in 'a'..'z' || it in 'A'..'Z' })
     }
 
     @Test fun `отписка сервиса «текста нет» — знание «не нашлось», а не текст исходника`() = runTest {

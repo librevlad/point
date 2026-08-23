@@ -155,7 +155,7 @@ class UnstructuredAtomRecognizerTest {
         val http = FakeHttpFiles()
         val error = runCatching { reader(http, FakeOutboundFrames(null)).read(pageObject) }.exceptionOrNull()
 
-        assertTrue(error?.message?.contains("кадр не подготовлен") == true)
+        assertTrue(error?.message?.contains(com.point.core.flow.FRAME_NOT_READY) == true)
         assertNull(http.posts.firstOrNull())
     }
 }

@@ -63,4 +63,4 @@ private val NETWORK_FAILURE_HINTS = listOf(
  * фразе: переписать фразу по-человечески значило молча потерять признак. Теперь фраза одна
  * и объявлена, а коды остались только для чужих строк.
  */
-private val QUOTA_FAILURE_HINTS = listOf(FREE_LIMIT_SPENT, FREE_LIMITS_SPENT_TEXT, "(402)", "(429)", "HTTP 402", "HTTP 429")
+private val QUOTA_FAILURE_HINTS = listOf(FREE_LIMIT_SPENT, FREE_LIMITS_SPENT_TEXT, "(402)", "(429)")

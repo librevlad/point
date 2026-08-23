@@ -1,6 +1,7 @@
 package com.point.core.flow
 
 import java.io.File
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -54,28 +55,46 @@ class ServiceRefusalTest {
         assertTrue(serviceRefusal(401, KEY_SETTINGS_CALL).contains(KEY_SETTINGS_CALL))
     }
 
+    // ---- #1259: отказ 200-с-ошибкой переводится по признакам, а не пересказывается. ----
+
+    @Test
+    fun `непринятый ключ узнаётся и в ответе с успешным кодом`() {
+        assertEquals(serviceRefusal(401), serviceRefusalInAnswer("Invalid API key"))
+        assertEquals(serviceRefusal(401), serviceRefusalInAnswer("E101: You may not have a valid API key"))
+    }
+
+    @Test
+    fun `великоватый файл назван размером, а не общим отказом`() {
+        assertEquals(serviceRefusal(413), serviceRefusalInAnswer("File size exceeds limit"))
+    }
+
+    @Test
+    fun `неопознанный отказ сервиса — своё слово, а не чужая фраза`() {
+        val said = serviceRefusalInAnswer("Unable to recognize the file format 42")
+
+        assertEquals(SERVICE_DID_NOT_READ, said)
+        assertFalse(said, said.any { it in 'a'..'z' || it in 'A'..'Z' })
+    }
+
     /**
-     * Сторож шва: слова живут в одном месте, а не переписываются в каждом клиенте заново.
-     * Проверяются облачные читалки и расшифровка — те, кто ходит к чужому сервису за
-     * содержимым объекта.
+     * Сторож шва (#1236): чужой ответ и код протокола не попадают в текст исключения, а
+     * значит и на экран — `FlowViewModel` показывает `message` как есть. Раньше правило
+     * держалось на ручном списке файлов, и десятый клиент в него просто не попадал.
      */
     @Test
-    fun `облачные читатели не заводят свой набор слов`() {
+    fun `ни один клиент не кладёт код протокола и чужой ответ в текст исключения`() {
         val repo = File("../..")
-        val guilty = listOf(
-            "data/src/main/kotlin/com/point/data/OcrSpaceReader.kt",
-            "data/src/main/kotlin/com/point/data/MistralOcrReader.kt",
-            "data/src/main/kotlin/com/point/data/OvhVisionReader.kt",
-            "data/src/main/kotlin/com/point/data/UnstructuredAtomRecognizer.kt",
-            "data/src/main/kotlin/com/point/data/LlamaParseAtomRecognizer.kt",
-            "data/src/main/kotlin/com/point/data/GroqWhisperSpeechToText.kt",
-            "desktop/src/main/kotlin/com/point/desktop/OcrActions.kt",
-            "desktop/src/main/kotlin/com/point/desktop/SpeechActions.kt",
-        ).filter { path ->
-            val file = File(repo, path)
-            file.isFile && !file.readText().contains("serviceRefusal(")
-        }
+        val banned = listOf("HTTP ${'$'}", "res.body.take(", "res.body.substring(")
 
-        assertTrue("свой набор слов на отказ: $guilty", guilty.isEmpty())
+        val guilty = listOf("core/flow/src/main", "data/src/main", "desktop/src/main")
+            .map { File(repo, it) }
+            .filter { it.isDirectory }
+            .flatMap { dir -> dir.walkTopDown().filter { it.extension == "kt" }.toList() }
+            .flatMap { file ->
+                val text = file.readText()
+                banned.filter { it in text }.map { "${file.name}: $it" }
+            }
+
+        assertTrue("чужой ответ или код протокола в словах отказа: $guilty", guilty.isEmpty())
     }
 }

@@ -118,8 +118,12 @@ class LlamaParseAtomRecognizerTest {
         val http = FakeHttpFiles(onPost = { created }, onGet = { failed })
         val error = runCatching { reader(http).read(pageObject) }.exceptionOrNull()
 
-        assertTrue(error?.message?.contains("задача не выполнена") == true)
-        assertTrue(error?.message?.contains("bad page") == true)
+        // Отказ доходит, но своими словами (#1259): английский `error_message` сервиса и наше
+        // внутреннее имя читалки стояли на русском экране дословно.
+        val said = error?.message.orEmpty()
+        assertEquals(com.point.core.flow.SERVICE_DID_NOT_READ, said)
+        assertFalse(said, said.contains("bad page"))
+        assertFalse(said, said.contains("llamaparse"))
     }
 
     @Test

@@ -89,7 +89,7 @@ class OpenAiCompatibleClientTest {
     @Test
     fun `отказ по лимиту узнаётся сводкой цепочки как исчерпанная квота`() = runTest {
 
-        assertTrue(refusalFor(429).isQuotaError())
+        assertTrue(looksLikeQuotaFailure(refusalFor(429)))
     }
 
     @Test
@@ -112,13 +112,15 @@ class OpenAiCompatibleClientTest {
             return runCatching { chain.run(textObj, "hi") }.exceptionOrNull()?.message
         }
 
-        assertEquals("Прочитать не вышло — свой ключ: ключ не принят — задайте свой ключ в настройках", said(401))
+        // Сверяется обещание, а не буква: под объектом стоит фраза с инструкцией, а не
+        // кусок чужого JSON. Точную формулировку сводки держит она сама (#584, #1237).
+        listOf(401 to "$KEY_NOT_ACCEPTED — $AI_KEY_HINT в настройках", 402 to "сервис просит оплату", 500 to "сервис сейчас не отвечает")
+            .forEach { (code, phrase) ->
+                val text = said(code).orEmpty()
+                assertTrue(text, text.contains(phrase))
+                assertFalse(text, text.contains("rate_limit"))
+            }
         assertEquals(FallbackLlmClient.FREE_LIMITS_SPENT, said(429))
-        assertEquals(
-            "Прочитать не вышло — свой ключ: сервис просит оплату — у этого ключа нет бесплатного доступа",
-            said(402),
-        )
-        assertEquals("Прочитать не вышло — свой ключ: сервис сейчас не отвечает", said(500))
     }
 
     @Test
