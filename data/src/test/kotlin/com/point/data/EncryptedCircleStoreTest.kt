@@ -56,6 +56,34 @@ class EncryptedCircleStoreTest {
 
         assertNull(store().current())
     }
+
+    /**
+     * Пустой список — незнание круга, а не круг без устройств: в круге всегда есть хотя бы
+     * это устройство (#1076). Правило одно на весь контракт, поэтому и проверка одна на обе
+     * реализации: шифрованная молча ничего не делала, оперативная затирала память, и на
+     * одном и том же вызове проверки видели одно поведение, а телефон человека — другое.
+     */
+    private fun bothStores(): List<Pair<String, CircleStore>> = listOf(
+        "шифрованная память круга" to EncryptedCircleStore({ InMemoryPrefs() }),
+        "оперативная память круга" to com.point.core.flow.InMemoryCircleStore(),
+    )
+
+    @Test fun `пустой список не стирает известный круг — ни в одной реализации`() = runBlocking {
+        bothStores().forEach { (whose, store) ->
+            store.save(circle)
+            store.save(emptyList())
+
+            assertEquals(whose, listOf("d1", "d2"), store.current()?.map { it.id })
+        }
+    }
+
+    @Test fun `пустой список не выдумывает круг там, где его не было — ни в одной реализации`() = runBlocking {
+        bothStores().forEach { (whose, store) ->
+            store.save(emptyList())
+
+            assertNull(whose, store.current())
+        }
+    }
 }
 
 /** Память вместо шифрованных настроек: контракт тот же — пары ключ-значение. */

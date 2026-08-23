@@ -1538,8 +1538,11 @@ class FlowViewModel @Inject constructor(
             .getOrDefault(com.point.core.flow.CircleAnswer.Unreachable)
         when (answer) {
             is com.point.core.flow.CircleAnswer.Circle -> {
-                learnCircle(answer.devices)
+
+                // Экран получает ответ сразу, знание укладывается следом: `learnCircle`
+                // договаривает с компьютером и человека этим ждать незачем (#1076).
                 updateDevices { it.copy(devices = answer.devices, checkedNow = true, loading = false, error = null) }
+                learnCircle(answer.devices)
             }
             com.point.core.flow.CircleAnswer.Unreachable -> {
 
@@ -1578,12 +1581,21 @@ class FlowViewModel @Inject constructor(
             }
 
             // Сервер отключил устройство — это уже знание о круге, а не ожидание ответа:
-            // устройство уходит из списка и из памяти телефона сейчас, а не после повторного
-            // чтения круга, которое может и не дойти (#1076). Иначе отключённое переживало бы
-            // своё отключение в памяти и возвращалось на экран, стоило серверу замолчать.
-            val known = _ui.value.devicesScreen?.devices.orEmpty().filterNot { it.id == deviceId }
-            learnCircle(known)
-            updateDevices { it.copy(busy = false, devices = known) }
+            // устройство уходит из памяти телефона сейчас, а не после повторного чтения
+            // круга, которое может и не дойти (#1076). Иначе отключённое переживало бы своё
+            // отключение в памяти и возвращалось на экран, стоило серверу замолчать.
+            //
+            // Прежний круг берётся из памяти, а не из состояния экрана: экран человек вправе
+            // закрыть, пока ответ идёт, и тогда «новым знанием» стал бы пустой список. Экран —
+            // вид на знание, свою строку он убирает сам.
+            updateDevices { screen ->
+                screen.copy(busy = false, devices = screen.devices.filterNot { it.id == deviceId })
+            }
+            val remembered = withContext(ioDispatcher) {
+                runCatching { circleStore.current() }.getOrNull()
+            }
+            val previous = remembered ?: _ui.value.devicesScreen?.devices.orEmpty()
+            learnCircle(previous.filterNot { it.id == deviceId })
             loadCircle(account)
         }
     }
@@ -1640,39 +1652,43 @@ class FlowViewModel @Inject constructor(
      * успешное отключение устройства. Память круга (#1076) и связанный компьютер идут
      * за знанием вместе; путь, который обновлял бы одно без другого, — и есть дефект,
      * при котором отключённое устройство оставалось в памяти до следующего ответа сервера.
+     *
+     * Шаг доводится до конца там, где его позвали, и не бросает работу вдогонку: одно
+     * отключение приносит два знания подряд — своё и уточнение сервера, — и вторая запись
+     * начинается после первой. Разбегавшиеся корутины писали связку с компьютером наперегонки,
+     * и какое знание выигрывало, решал порядок ответов сети.
+     *
+     * Пустой список — незнание круга, а не круг без устройств: учить нечего.
      */
     private suspend fun learnCircle(devices: List<com.point.core.flow.CircleDevice>) {
-        rememberPc(devices)
+        if (devices.isEmpty()) return
         runCatching { circleStore.save(devices) }
+        rememberPc(devices)
     }
 
-    private fun rememberPc(devices: List<com.point.core.flow.CircleDevice>) {
-
-        if (devices.isEmpty()) return
+    private suspend fun rememberPc(devices: List<com.point.core.flow.CircleDevice>) {
         val pc = devices
             .filter { !it.self && it.kind == com.point.core.flow.DeviceKind.PC }
             .maxByOrNull { it.lastSeenMillis ?: 0L }
-        viewModelScope.launch {
-            if (pc == null) {
+        if (pc == null) {
 
-                runCatching { pcLinks.clear() }
-                runCatching { pcCaps.clear() }
-                return@launch
-            }
-            val known = com.point.core.flow.LinkedPc(pc.id, pc.name, pc.key)
-
-            runCatching { syncSecrets(known) }
-
-            // Объявления обеих сторон освежаются и для давно известного ПК: он мог
-            // обновиться, пока связь жила, — «На телефон на ПК» держалось у телефона
-            // кэшем вечно, до захода в «Устройства» (#627, скрин владельца 2026-08-09).
-            runCatching { pcTransport.fetchCaps(known)?.let { caps -> pcCaps.save(caps) } }
-            runCatching { pcTransport.pushPhoneCaps(known, phoneAdvertised()) }
-
-            if (pcLinks.current() == known) return@launch
-            runCatching { pcLinks.save(known) }
-            refreshFromPc(force = true)
+            runCatching { pcLinks.clear() }
+            runCatching { pcCaps.clear() }
+            return
         }
+        val known = com.point.core.flow.LinkedPc(pc.id, pc.name, pc.key)
+
+        runCatching { syncSecrets(known) }
+
+        // Объявления обеих сторон освежаются и для давно известного ПК: он мог
+        // обновиться, пока связь жила, — «На телефон на ПК» держалось у телефона
+        // кэшем вечно, до захода в «Устройства» (#627, скрин владельца 2026-08-09).
+        runCatching { pcTransport.fetchCaps(known)?.let { caps -> pcCaps.save(caps) } }
+        runCatching { pcTransport.pushPhoneCaps(known, phoneAdvertised()) }
+
+        if (pcLinks.current() == known) return
+        runCatching { pcLinks.save(known) }
+        refreshFromPc(force = true)
     }
 
     private fun announceKey(account: com.point.core.flow.PointAccount) {

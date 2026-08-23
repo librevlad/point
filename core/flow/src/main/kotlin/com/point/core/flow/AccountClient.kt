@@ -56,6 +56,11 @@ interface AccountStore {
  * «пока вы один» при живом компьютере в круге. Телефон помнит последний ответ сервера рядом
  * с пропуском; офлайн показывает его, а не пустоту. `null` — круга не было никогда:
  * это не то же самое, что «в круге никого нет».
+ *
+ * Пустой список — не круг, а его незнание: в круге всегда есть хотя бы это устройство,
+ * пустым он приходит только оттого, что спросить не удалось. Поэтому [save] с пустым
+ * списком ничего не меняет, а [current] никогда не отдаёт пустой список — только `null`.
+ * Забыть круг — дело [clear], у него на это есть право (#1076).
  */
 interface CircleStore {
 
@@ -73,7 +78,11 @@ interface PendingLoginStore {
 class InMemoryCircleStore : CircleStore {
     private var devices: List<CircleDevice>? = null
     override fun current(): List<CircleDevice>? = devices
-    override suspend fun save(devices: List<CircleDevice>) { this.devices = devices }
+
+    /** Пустой список — незнание круга, и оно не стирает то, что уже известно (#1076). */
+    override suspend fun save(devices: List<CircleDevice>) {
+        if (devices.isNotEmpty()) this.devices = devices
+    }
     override suspend fun clear() { devices = null }
 }
 
