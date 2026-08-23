@@ -49,6 +49,11 @@ dependencies {
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
+
+    // Окно ПК под тестом (#1056): что человек читает в списке, берётся из собранного экрана —
+    // как на телефоне через Robolectric, — а не из чистой функции рядом с ним. Без этого
+    // проводка подписи проверялась только на телефоне, и вторая поверхность жила на слово.
+    testImplementation(compose.desktop.uiTestJUnit4)
 }
 
 compose.desktop {
