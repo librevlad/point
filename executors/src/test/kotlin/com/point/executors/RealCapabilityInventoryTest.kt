@@ -39,7 +39,11 @@ class RealCapabilityInventoryTest {
     // Общий словарь — ровно тот, что телефон раздаёт через CapabilityModule (#1021): слово о
     // дороге чтения снимка в нём телефонное. Перечисленный руками словарь расходился с боевым
     // набором — держал голое чтение без обещания.
-    private val builtIn: List<Capability> = CapabilityModule.sharedCaps(OfficeAlwaysHere, AccountForTests()).toList() + listOf(
+    //
+    // Спрашивается он один раз: два вызова подряд расходятся молча, стоит подписи измениться.
+    private val shared: Set<Capability> = CapabilityModule.sharedCaps(OfficeAlwaysHere, AccountForTests())
+
+    private val builtIn: List<Capability> = shared.toList() + listOf(
         AiCapability(aiKeysReady), BlurBgCapability(),
         CallCapability(), CloudOcrCapability(), CopyCapability(), CopyCardCapability(),
         CorrectValueCapability(),
@@ -60,8 +64,7 @@ class RealCapabilityInventoryTest {
         WordPlusCapability(aiKeysReady), CleanMetadataCapability(),
     )
 
-    private val sharedNames: Set<String> =
-        CapabilityModule.sharedCaps(OfficeAlwaysHere).map { it.javaClass.simpleName }.toSet()
+    private val sharedNames: Set<String> = shared.map { it.javaClass.simpleName }.toSet()
 
     // Исследования продукта — пары «класс и его id». Сверки ниже держат этот список и
     // `DataModule` вместе поимённо (#1256).
@@ -138,14 +141,9 @@ class RealCapabilityInventoryTest {
         )
     }
 
-    /** Что раздаёт `DataModule`: одна привязка — одно исследование. */
+    /** Что раздаёт `DataModule`: одно исследование — одна раздача. */
     private fun boundInvestigations(): List<Class<*>> =
-        com.point.data.di.DataModule::class.java.declaredMethods
-            .filter { it.returnType == Capability::class.java }
-            .map {
-                it.parameterTypes.singleOrNull()
-                    ?: error("@Binds исследования берёт не одну реализацию: ${it.name}")
-            }
+        singleCapabilitiesOf(com.point.data.di.DataModule::class.java, com.point.data.di.DataModule.Companion)
 
     @Test
     fun `таблица — что каждая способность принимает и что возвращает`() {
@@ -231,26 +229,73 @@ class RealCapabilityInventoryTest {
         assertEquals(boundSingleCapabilities().map { it.simpleName }.sorted(), listed)
     }
 
-    /**
-     * Способность, которую нельзя завести без Hilt, сверить нечем — и это не повод её
-     * пропустить: молчаливый пропуск и есть та дырка, из-за которой список врал.
-     */
-    private fun boundSingleCapabilities(): List<Class<*>> {
-        val binds = CapabilityModule::class.java.declaredMethods
-            .filter { it.returnType == Capability::class.java }
-            .map { it.parameterTypes.singleOrNull() ?: error("@Binds способности берёт не одну реализацию: ${it.name}") }
+    private fun boundSingleCapabilities(): List<Class<*>> =
+        singleCapabilitiesOf(CapabilityModule::class.java, CapabilityModule.Companion)
 
-        val provides = CapabilityModule.Companion::class.java.declaredMethods
+    /**
+     * Что модуль DI раздаёт по одной способности: `@Binds` самого модуля и `@Provides` из его
+     * companion-объекта (#1256).
+     *
+     * Половины модуля мало. Companion — отдельный класс, и в `declaredMethods` модуля его
+     * методы не попадают, а уезжает туда как раз то, что `@Binds` завести не может: класс с
+     * нативной библиотекой роняет разрешение типов всему модулю KSP. Сверка, читающая только
+     * `@Binds`, о такой способности молчит — а пропущенное ею не проходит ни одной проверки
+     * этого файла: ни на общий id с действием, ни на двойника внутри своего пространства.
+     *
+     * Способность из companion со своими зависимостями завести без Hilt нечем — и это не
+     * повод пропустить её молча: тест обязан назвать её вслух.
+     */
+    private fun singleCapabilitiesOf(module: Class<*>, companion: Any): List<Class<*>> {
+        val binds = module.declaredMethods
+            .filter { it.returnType == Capability::class.java }
+            .map { it.parameterTypes.singleOrNull() ?: error("@Binds берёт не одну реализацию: ${it.name}") }
+
+        val provides = companion.javaClass.declaredMethods
             .filter { it.returnType == Capability::class.java }
             .map { method ->
                 assertEquals(
                     "способность из companion @Provides со своими зависимостями — сверить её нечем: ${method.name}",
                     0, method.parameterCount,
                 )
-                method.invoke(CapabilityModule.Companion).javaClass
+                method.invoke(companion).javaClass
             }
 
         return binds + provides
+    }
+
+    /**
+     * Сверка читает модуль целиком (#1256). Исследования сверялись только по `declaredMethods`
+     * самого `DataModule`, то есть по `@Binds`, — ровно та слепота, которую этот срез закрыл
+     * для действий: исследование, отданное из companion, в сверку не попадало, и список рядом
+     * мог о нём молчать. Молчащий список уводит мимо новичка обе проверки id — ту самую пару,
+     * что закрыла живой дефект с общим `ocr`.
+     */
+    @Test
+    fun `сверка видит и привязку модуля, и способность из его companion`() {
+
+        // Ровно то, чем слепота и держалась: в самом модуле метода companion нет.
+        assertTrue(
+            "пример перестал показывать слепоту — companion-метод виден и в самом модуле",
+            HalfSeenModule::class.java.declaredMethods.none { it.name == "saveCap" },
+        )
+
+        assertEquals(
+            listOf("CopyCapability", "SaveCapability"),
+            singleCapabilitiesOf(HalfSeenModule::class.java, HalfSeenModule.Companion)
+                .map { it.simpleName }
+                .sorted(),
+        )
+    }
+
+    /** Модуль формы Hilt: одна способность привязана, вторая отдана из companion. */
+    private abstract class HalfSeenModule {
+
+        abstract fun copyCap(c: CopyCapability): Capability
+
+        companion object {
+
+            fun saveCap(): Capability = SaveCapability()
+        }
     }
 
     @Test

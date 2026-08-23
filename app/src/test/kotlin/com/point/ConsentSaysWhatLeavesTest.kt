@@ -1,5 +1,6 @@
 package com.point
 
+import com.point.core.flow.AI_PROVIDERS
 import com.point.core.flow.CloudScope
 import com.point.core.flow.cloudAskConfirm
 import com.point.core.flow.cloudAskTitle
@@ -12,12 +13,19 @@ import org.junit.Test
 
 class ConsentSaysWhatLeavesTest {
 
-    // Настоящий набор тех, кого Point выбирает сам. Список обязан называть живых: `Unstructured`
-    // и `LlamaParse` из него убраны вместе с самими читалками (#1252) — имя сервиса, которого в
-    // продукте нет, ничего не сторожит, зато выдаёт снесённый путь за живой.
+    // Имена, которые Point не вправе произнести на экране согласия (#1252): этих исполнителей он
+    // выбирает сам — человек их не выбирал и знать о них не обязан. Настоящим набором «кого
+    // Point выбирает» список не был и быть не должен: имена тут нарочно короче полных, чтобы
+    // ловить подстрокой («Gemini» ловит и «Google Gemini»).
+    //
+    // Список обязан называть живых: `Unstructured` и `LlamaParse` из него убраны вместе с самими
+    // читалками — имя сервиса, которого в продукте нет, ничего не сторожит, зато выдаёт снесённый
+    // путь за живой. И обязан называть всех: по AI-провайдерам полноту держит сверка с реестром
+    // ниже, а не память; читалки снимка и голоса реестра не имеют и вписаны руками.
     private val pickedByPoint = listOf(
         "Mistral", "OCR.space", "OVH", "Groq", "Gemini", "Qwen", "SambaNova", "Cerebras",
-        "Tesseract", "Whisper",
+        "Tesseract", "Whisper", "OpenRouter", "Zhipu", "NVIDIA", "ModelScope", "Cloudflare",
+        "OpenAI", "Anthropic",
     )
 
     private val consentSources = listOf(
@@ -34,17 +42,46 @@ class ConsentSaysWhatLeavesTest {
         assertTrue(guilty.joinToString("\n"), guilty.isEmpty())
     }
 
+    /**
+     * Назвать вслух можно ровно один сервис — тот, чей ключ человек вписал сам: его имя
+     * приходит в вопрос снаружи, из своих ключей. Поэтому оно из текста вычитается, а всё
+     * оставшееся Point сказал от себя — и там имени чужого сервиса быть не смеет.
+     *
+     * Своим сервисом бывает любой из реестра, не только тот, кого вспомнили при написании
+     * теста, — потому в роли выбранного человеком проверяется каждый.
+     */
     @Test
-    fun `ни один готовый вопрос не называет того, кого выбрал Point`() {
+    fun `вопрос называет только тот сервис, чей ключ вписал человек`() {
         val ids = listOf("drop-link", "ocr", "ocr-cloud", "ai", "translate", "excel", "understand")
         val guilty = ids.flatMap { id ->
-            listOf(null, "OpenRouter").flatMap { service ->
-                val text = cloudDestination(CapabilityId(id), aiService = service)
-                pickedByPoint.filter { text.contains(it, ignoreCase = true) }.map { "«$id»: «$it» в «$text»" }
+            (listOf(null) + AI_PROVIDERS.map { it.name }).flatMap { mine ->
+                val text = cloudDestination(CapabilityId(id), aiService = mine)
+                val fromPoint = if (mine == null) text else text.replace(mine, "")
+                pickedByPoint.filter { fromPoint.contains(it, ignoreCase = true) }
+                    .map { "«$id» при своём «$mine»: «$it» в «$text»" }
             }
         }
 
         assertTrue(guilty.joinToString("\n"), guilty.isEmpty())
+    }
+
+    /**
+     * Сторож знает всех, а не тех, кого вспомнили (#1252). Реестр провайдеров растёт, и сервис,
+     * попавший в него после сторожа, не сторожится ничем: его имя можно вписать в вопрос, и
+     * никто не заметит.
+     *
+     * Из двенадцати сервисов реестра список молчал о семи — Z.ai, NVIDIA, ModelScope,
+     * Cloudflare, OpenAI, Anthropic и OpenRouter, — а ключ ко всем ним у Point свой,
+     * встроенный. Шесть первых просто забыли; OpenRouter выпал иначе — он был единственным
+     * именем, которое тест подставлял как своё для человека, и попасть в запретный список не
+     * мог, пока запрет не научился вычитать выбранное человеком.
+     */
+    @Test
+    fun `сторож знает каждый сервис реестра, а не тех, кого вспомнили`() {
+        val unguarded = AI_PROVIDERS.map { it.name }
+            .filter { name -> pickedByPoint.none { name.contains(it, ignoreCase = true) } }
+
+        assertEquals("реестр знает сервис, а сторож про него — нет", emptyList<String>(), unguarded)
     }
 
     @Test
@@ -85,6 +122,7 @@ class ConsentSaysWhatLeavesTest {
             class Sample {
                 fun ok() = "Снимок уйдёт на сервер распознавания и вернётся текстом."
                 fun bad() = "Первым читает Mistral OCR (Франция, ЕС)"
+                fun worse() = "Снимок уйдёт на сервер Cloudflare Workers AI и вернётся текстом."
             }
         """.trimIndent()
 
@@ -94,11 +132,17 @@ class ConsentSaysWhatLeavesTest {
             listOf(
                 "Снимок уйдёт на сервер распознавания и вернётся текстом.",
                 "Первым читает Mistral OCR (Франция, ЕС)",
+                "Снимок уйдёт на сервер Cloudflare Workers AI и вернётся текстом.",
             ),
             said,
         )
+
+        // Обе утечки видны, а не одна: пока сторож не знал Cloudflare, вторая проходила молча.
         assertEquals(
-            listOf("Первым читает Mistral OCR (Франция, ЕС)"),
+            listOf(
+                "Первым читает Mistral OCR (Франция, ЕС)",
+                "Снимок уйдёт на сервер Cloudflare Workers AI и вернётся текстом.",
+            ),
             said.filter { line -> pickedByPoint.any { line.contains(it, ignoreCase = true) } },
         )
     }
