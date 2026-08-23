@@ -18,7 +18,8 @@ import javax.inject.Inject
 class OpenUrlCapability @Inject constructor() : Capability {
     override val id = ID
     override val icon = "link"
-    override val meta = CapabilityMeta(priority = 20)
+    // Ссылку открывает браузер — шаг Point кончается чужим экраном (#1131).
+    override val meta = CapabilityMeta(priority = 20, handsOff = true)
     override fun label(state: ObjectState) = "Открыть ссылку"
     override fun accepts(state: ObjectState) =
         state.kind == ObjectKind.URL || state.has(Feature.HAS_URL)

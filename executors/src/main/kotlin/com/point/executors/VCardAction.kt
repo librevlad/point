@@ -29,7 +29,8 @@ internal fun vCardSummary(text: String): List<String> {
 class VCardCapability @Inject constructor() : Capability {
     override val id = ID
     override val icon = "contact"
-    override val meta = CapabilityMeta(priority = 11)
+    // Шаг кончается карточкой в приложении контактов — сохраняет её человек (#1131).
+    override val meta = CapabilityMeta(priority = 11, handsOff = true)
     override fun label(state: ObjectState) = "Добавить в контакты"
     override fun accepts(state: ObjectState) = state.has(Feature.HAS_VCARD)
     override fun produces(state: ObjectState) = state

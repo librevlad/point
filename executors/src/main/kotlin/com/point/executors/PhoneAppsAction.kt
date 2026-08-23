@@ -33,7 +33,7 @@ import kotlinx.coroutines.withContext
 class PhoneAppsCapability @Inject constructor() : Capability {
     override val id = ID
     override val icon = "call"
-    override val meta = CapabilityMeta(priority = 12, latency = Latency.INSTANT)
+    override val meta = CapabilityMeta(priority = 12, latency = Latency.INSTANT, handsOff = true)
     override fun label(state: ObjectState) = "Открыть номер в приложении"
     override fun accepts(state: ObjectState) = state.has(Feature.HAS_PHONE)
     override fun produces(state: ObjectState) = state

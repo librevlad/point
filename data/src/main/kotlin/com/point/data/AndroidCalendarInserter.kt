@@ -28,9 +28,11 @@ class AndroidCalendarInserter @Inject constructor(
                 .putExtra(CalendarContract.EXTRA_EVENT_END_TIME, from + DAY_MS)
                 .putExtra(CalendarContract.EXTRA_EVENT_ALL_DAY, true)
         }
-        // Слово об отсутствии календаря звучит до чужого экрана (#1131): честный отказ
-        // вместо дороги в системный вход, из которого человек вернётся ни с чем.
-        if (intent.resolveActivity(context.packageManager) == null) error(NO_CALENDAR)
+        // Слово об отсутствии календаря звучит до чужого экрана (#1131): система отказывает
+        // в запуске раньше, чем что-то откроется, и человек остаётся в Point с честным отказом,
+        // а не возвращается ни с чем из системного входа. Спрашивать список приложений заранее
+        // нельзя: Android 11+ прячет календарь от такого вопроса, но не от запуска, — и живой
+        // календарь получал бы «нет календаря».
         try {
             context.startActivity(intent)
         } catch (e: ActivityNotFoundException) {

@@ -126,8 +126,11 @@ class FlowViewModelTest {
 
         keyNeeding: Set<CapabilityId> = emptySet(),
 
+        /** Настоящие действия Point рядом с выдуманными: экран спрашивает их о них самих (#1131). */
+        own: List<Capability> = emptyList(),
+
         pdf: com.point.core.flow.PdfRasterizer = FakePdfRasterizer(),
-    ) = FlowViewModel(store, FakeRegistry(caps, cloud, slow, keyNeeding) { userKeys.keys().mine.isNotEmpty() }.also { registry = it }, resolver, ChatTalk(chatResponder, store), enrichment, history, usage, chosenApps, userKeys, aiFacts, builtInKeys, consent, appLauncher, pdf, sensory, sensorySettings, cloudPrivacy, com.point.core.flow.YoloMode.OFF, snapshot, crashLog, dispatcher, AppIconResolver { null }, pcLinks, pcTransport, pcCaps, linkMonitor, PulledFileFactory { name -> java.io.File(java.io.File(System.getProperty("java.io.tmpdir")), "pulled-" + name).absolutePath }, noFrames, com.point.core.flow.PhoneRegion { "UA" }, keyCheck, account, circleStore, accountClient, pendingLogins, deviceKeys, browser, sharedTexts, memory)
+    ) = FlowViewModel(store, FakeRegistry(caps, cloud, slow, keyNeeding, own) { userKeys.keys().mine.isNotEmpty() }.also { registry = it }, resolver, ChatTalk(chatResponder, store), enrichment, history, usage, chosenApps, userKeys, aiFacts, builtInKeys, consent, appLauncher, pdf, sensory, sensorySettings, cloudPrivacy, com.point.core.flow.YoloMode.OFF, snapshot, crashLog, dispatcher, AppIconResolver { null }, pcLinks, pcTransport, pcCaps, linkMonitor, PulledFileFactory { name -> java.io.File(java.io.File(System.getProperty("java.io.tmpdir")), "pulled-" + name).absolutePath }, noFrames, com.point.core.flow.PhoneRegion { "UA" }, keyCheck, account, circleStore, accountClient, pendingLogins, deviceKeys, browser, sharedTexts, memory)
 
     private val keyCheck = FakeAiKeyCheck()
 
@@ -1154,11 +1157,12 @@ class FlowViewModelTest {
      * (линза «без оправданий», #1003).
      */
     @Test fun `возврат с чужого экрана без результата гасит подпись шага молча`() = runTest(dispatcher) {
+        val event = com.point.executors.EventCapability()
         val handOff = "Открыл календарь — событие создаётся там"
         resolver.result = ActionResult.Done(handOff)
-        val vm = vm()
+        val vm = vm(own = listOf(event))
         vm.onShared("uri", "image/png"); advanceUntilIdle()
-        vm.onBubble(bubble(id = com.point.executors.EventCapability.ID.value, title = "Создать событие"))
+        vm.onBubble(bubble(id = event.id.value, title = event.label(ObjectState(ObjectKind.IMAGE))))
         advanceUntilIdle()
         assertEquals(handOff, vm.ui.value.message)
 
@@ -1169,12 +1173,63 @@ class FlowViewModelTest {
         assertEquals("объект остаётся перед человеком", ObjectKind.IMAGE, vm.ui.value.frame?.obj?.state?.kind)
     }
 
-    @Test fun `возврат гасит и подпись карточки контакта — тот же шов`() = runTest(dispatcher) {
-        resolver.result = ActionResult.Done("Открыл карточку контакта")
+    /**
+     * Тот же шов у каждого действия этого класса (находка адверсарного аудита по #1131).
+     *
+     * Признак «шаг отдал человека системе» принадлежит действию (`CapabilityMeta.handsOff`),
+     * а не списку id в этом экране: список знал календарь и визитку и не знал «Сохранить
+     * контакт», который уводит в то же приложение контактов, — подпись «Открыл карточку
+     * контакта» висела над объектом вечно, и погасить её человеку было нечем.
+     */
+    @Test fun `возврат гасит подпись у каждого действия, отдающего человека системе`() = runTest(dispatcher) {
+        val handsOff = listOf(
+            com.point.executors.SaveContactCapability(),
+            com.point.executors.VCardCapability(),
+            com.point.executors.MapCapability(),
+            com.point.executors.CallCapability(),
+            com.point.executors.SmsCapability(),
+            com.point.executors.EmailCapability(),
+            com.point.executors.OpenUrlCapability(),
+            com.point.executors.OpenCapability(),
+            com.point.executors.ShareCapability(),
+            com.point.executors.ShareAllCapability(),
+            com.point.executors.PhoneAppsCapability(),
+            com.point.executors.AppCapability(
+                com.point.core.flow.ChosenApp(ObjectKind.IMAGE, "com.example.viewer", "Main", "Viewer"),
+            ),
+        )
+
+        for (cap in handsOff) {
+            val said = "Открыл чужой экран: ${cap.id.value}"
+            resolver.result = ActionResult.Done(said)
+            val vm = vm(own = listOf(cap))
+            vm.onShared("uri", "image/png"); advanceUntilIdle()
+            vm.onBubble(bubble(id = cap.id.value, title = cap.label(ObjectState(ObjectKind.IMAGE))))
+            advanceUntilIdle()
+            assertEquals("подпись шага ${cap.id.value} не прозвучала", said, vm.ui.value.message)
+
+            vm.returnedToPoint()
+
+            assertNull("подпись шага ${cap.id.value} висит после возврата", vm.ui.value.message)
+            assertEquals(Outcome.NONE, vm.ui.value.messageOutcome)
+            assertNotNull("объект остаётся перед человеком", vm.ui.value.frame)
+        }
+    }
+
+    /**
+     * «Открыть другим приложением» уводит человека не своим шагом, а выбранным приложением
+     * (#1131): список приложений — ещё экран Point, запуск — уже чужой. Подпись «Открываю в …»
+     * висела над объектом и после возврата.
+     */
+    @Test fun `возврат гасит подпись выбранного приложения`() = runTest(dispatcher) {
+        val viewer = AppTarget("Viewer", "com.example.viewer", "Main")
+        appLauncher.apps = listOf(viewer)
         val vm = vm()
         vm.onShared("uri", "image/png"); advanceUntilIdle()
-        vm.onBubble(bubble(id = com.point.executors.VCardCapability.ID.value, title = "Добавить в контакты"))
-        advanceUntilIdle()
+        vm.onBubble(bubble(id = OpenInCapability.ID.value)); advanceUntilIdle()
+        vm.onPickApp(viewer); advanceUntilIdle()
+        assertEquals(viewer, appLauncher.launched)
+        assertNotNull("подпись ухода не прозвучала", vm.ui.value.message)
 
         vm.returnedToPoint()
 
@@ -1196,11 +1251,12 @@ class FlowViewModelTest {
     }
 
     @Test fun `честный отказ календаря возвратом не гасится`() = runTest(dispatcher) {
+        val event = com.point.executors.EventCapability()
         val refusal = "На этом устройстве нет календаря"
         resolver.result = ActionResult.Failure(refusal, recoverable = true)
-        val vm = vm()
+        val vm = vm(own = listOf(event))
         vm.onShared("uri", "image/png"); advanceUntilIdle()
-        vm.onBubble(bubble(id = com.point.executors.EventCapability.ID.value, title = "Создать событие"))
+        vm.onBubble(bubble(id = event.id.value, title = event.label(ObjectState(ObjectKind.IMAGE))))
         advanceUntilIdle()
 
         vm.returnedToPoint()
@@ -4221,6 +4277,9 @@ private class FakeRegistry(
 
     private val keyNeeding: Set<CapabilityId> = emptySet(),
 
+    /** Настоящие действия Point: отвечают о себе сами, как отвечали бы в приложении. */
+    private val own: List<Capability> = emptyList(),
+
     private val keySet: () -> Boolean = { true },
 ) : CapabilityRegistry {
 
@@ -4243,7 +4302,8 @@ private class FakeRegistry(
     override fun latentBubblesFor(state: ObjectState) = emptyList<com.point.core.model.LatentBubble>()
 
     override fun byId(id: CapabilityId): Capability =
-        caps[id]?.let { FakeCapability(id, it, id in cloud, id in slow) }
+        own.firstOrNull { it.id == id }
+            ?: caps[id]?.let { FakeCapability(id, it, id in cloud, id in slow) }
             ?: error("No capability registered for id=${id.value}")
 }
 
