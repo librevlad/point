@@ -284,9 +284,13 @@ abstract class CapabilityModule {
             links: com.point.core.flow.PcLinks,
         ): com.point.core.flow.OfficeOrgan = com.point.core.flow.PcOfficeOrgan(caps, links)
 
+        // Дорогу чтения снимка называет телефон сам (#1021): словарь общий, слово — исполнителя.
         @Provides @ElementsIntoSet @OwnCapabilities
         fun sharedCaps(office: com.point.core.flow.OfficeOrgan): Set<Capability> =
-            com.point.core.flow.capabilities.sharedCapabilities(office).toSet()
+            com.point.core.flow.capabilities.sharedCapabilities(
+                office,
+                ocrPromise = com.point.executors.OCR_ON_PHONE_PROMISE,
+            ).toSet()
 
         @Provides @IntoSet
         fun openCvScanR(store: ObjectStore): Realizer = OpenCvScanRealizer(store)

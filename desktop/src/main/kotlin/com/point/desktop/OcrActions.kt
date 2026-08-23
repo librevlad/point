@@ -23,6 +23,13 @@ import java.net.URL
 import java.net.URLEncoder
 import java.util.Base64
 
+/**
+ * Слово компьютера о дороге чтения (#1021): своего движка у него нет, снимок уходит в сервис.
+ * Прежде компьютер показывал телефонное «сначала на телефоне» как своё — шаг, которого здесь
+ * не будет.
+ */
+internal const val OCR_ON_PC_PROMISE = "текст · уйдёт в сервис"
+
 class PcCloudOcrRealizer(
     private val config: () -> OcrConfig,
     private val extractor: com.point.core.flow.EntityExtractor = com.point.core.flow.RegexEntityExtractor(),

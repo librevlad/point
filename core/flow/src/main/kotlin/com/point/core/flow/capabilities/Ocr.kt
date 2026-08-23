@@ -9,7 +9,20 @@ import com.point.core.model.CapabilityId
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 
-class OcrCapability : Capability {
+/**
+ * Чтение снимка — одна способность на телефон и компьютер; исполнители у каждого свои.
+ *
+ * Слово о дороге чтения — от того, кто на этом устройстве читает (#1021, решение владельца).
+ * Прежде вторая строка «сначала на телефоне, потом спрошу про сервис» была зашита здесь, в
+ * общем словаре, и компьютер показывал её как свою, хотя своего чтения у него нет и идти он
+ * может только в сервис. Словарь дороги не знает — её называет тот, кто собирает словарь
+ * для своего устройства.
+ */
+class OcrCapability(
+
+    /** Вторая строка под действием — как здесь пойдёт чтение; `null` — исполнитель не сказал. */
+    private val promise: String? = null,
+) : Capability {
     override val id = ID
     override val icon = "ocr"
 
@@ -24,8 +37,7 @@ class OcrCapability : Capability {
     override fun accepts(state: ObjectState) = state.kind == ObjectKind.IMAGE
     override fun produces(state: ObjectState) = ObjectState(ObjectKind.TEXT)
 
-    override fun yields(state: ObjectState) =
-        ActionYield.New(ObjectKind.TEXT, "текст · сначала на телефоне, потом спрошу про сервис")
+    override fun yields(state: ObjectState) = ActionYield.New(ObjectKind.TEXT, promise)
 
     companion object { val ID = CapabilityId("ocr") }
 }

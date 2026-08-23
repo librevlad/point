@@ -1,14 +1,9 @@
 package com.point.executors
 
 import com.point.core.flow.capabilities.PdfCapability
-import com.point.core.flow.capabilities.QrCapability
-import com.point.core.flow.capabilities.ArchiveCapability
-import com.point.core.flow.capabilities.OfficeCapability
-import com.point.core.flow.capabilities.ImageCapability
-import com.point.core.flow.capabilities.DropLinkCapability
-import com.point.core.flow.capabilities.OcrCapability
 import com.point.core.flow.Capability
 import com.point.core.flow.LinkedPc
+import com.point.core.flow.OfficeAlwaysHere
 import com.point.core.flow.PcLinks
 import com.point.core.flow.SpeechReadiness
 import com.point.core.flow.capabilityInventory
@@ -18,6 +13,7 @@ import com.point.core.flow.yieldLabel
 import com.point.core.model.ActionYield
 import com.point.core.model.Intent
 import com.point.core.model.ObjectKind
+import com.point.executors.di.CapabilityModule
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
@@ -26,18 +22,21 @@ import org.junit.Test
 
 class RealCapabilityInventoryTest {
 
-    private val builtIn: List<Capability> = listOf(
-        AiCapability(aiKeysReady), ArchiveCapability(), BlurBgCapability(),
+    // Общий словарь — ровно тот, что телефон раздаёт через CapabilityModule (#1021): слово о
+    // дороге чтения снимка в нём телефонное. Перечисленный руками словарь расходился с боевым
+    // набором — держал голое чтение без обещания.
+    private val builtIn: List<Capability> = CapabilityModule.sharedCaps(OfficeAlwaysHere).toList() + listOf(
+        AiCapability(aiKeysReady), BlurBgCapability(),
         CallCapability(), CloudOcrCapability(), CopyCapability(), CopyCardCapability(),
         CorrectValueCapability(),
         FixErrorsCapability(aiKeysReady), FixErrorsStrongerCapability(aiKeysReady),
-        CutoutCapability(), DropLinkCapability(), EmailCapability(), EventCapability(),
-        ExcelCapability(aiKeysReady), ExtractAllCapability(), FindCapability(), ImageCapability(),
-        JobReplyCapability(aiKeysReady), MapCapability(), MergePdfCapability(), OcrCapability(),
-        OfficeCapability(), OpenCapability(), OpenInCapability(), OpenUrlCapability(),
-        PagesCapability(), PcCapability(pairedPc), PdfCapability(), PhoneAppsCapability(),
+        CutoutCapability(), EmailCapability(), EventCapability(),
+        ExcelCapability(aiKeysReady), ExtractAllCapability(), FindCapability(),
+        JobReplyCapability(aiKeysReady), MapCapability(), MergePdfCapability(),
+        OpenCapability(), OpenInCapability(), OpenUrlCapability(),
+        PagesCapability(), PcCapability(pairedPc), PhoneAppsCapability(),
         ReadDocumentCapability(),
-        QrCapability(), ReadQrCapability(), RenewPeriodCapability(), ReplaceBgCapability(),
+        ReadQrCapability(), RenewPeriodCapability(), ReplaceBgCapability(),
         SaveAllCapability(), SaveCapability(), SaveContactCapability(), ScanCapability(),
         SpeakCapability(),
         TakeFragmentCapability(), HideAreaCapability(),

@@ -3,6 +3,7 @@ package com.point.executors
 import com.point.core.flow.capabilities.OcrCapability
 import com.point.core.flow.Capability
 import com.point.core.flow.KEY_NOTE
+import com.point.core.flow.OfficeAlwaysHere
 import com.point.core.flow.RealizerKind
 import com.point.core.flow.SpeechKeyNeed
 import com.point.core.flow.SpeechReadiness
@@ -10,6 +11,7 @@ import com.point.core.flow.yieldLabel
 import com.point.core.model.Feature
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
+import com.point.executors.di.CapabilityModule
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -145,6 +147,12 @@ class ActionsSayTheirPriceTest {
 
     private val devicePrivacy = privacyAt(com.point.core.flow.PrivacyLevel.DEVICE_ONLY)
 
+    // Слово о дороге чтения — телефона, а не общего словаря (#1021). Проверяется не способность,
+    // собранная руками с нужным словом, а та, которую телефон и правда раздаёт: общий словарь
+    // в том виде, в каком его кладёт в набор CapabilityModule.
+    private val phoneOcr: Capability =
+        CapabilityModule.sharedCaps(OfficeAlwaysHere).first { it.id == OcrCapability.ID }
+
     @Test
     fun `«Распознать текст» предупреждает о сервисе, потому что запасной путь сетевой`() {
 
@@ -154,7 +162,7 @@ class ActionsSayTheirPriceTest {
             CloudOcrRealizer(silentLlm, devicePrivacy),
         )
         val hasCloudFallback = chain.any { it.meta.kind != RealizerKind.LOCAL }
-        val said = said(OcrCapability(), image)
+        val said = said(phoneOcr, image)
 
         assertTrue("первым читает не устройство", chain.first().meta.kind == RealizerKind.LOCAL)
         assertTrue("запасного сетевого пути не стало — проверку пора менять", hasCloudFallback)
@@ -164,7 +172,7 @@ class ActionsSayTheirPriceTest {
     @Test
     fun `местное чтение обещано местным — условие названо условием`() {
 
-        val said = said(OcrCapability(), image)
+        val said = said(phoneOcr, image)
 
         assertTrue(said, "сначала на телефоне" in said)
         assertFalse("сказано как о неизбежном", "уйдёт в сервис" in said)
