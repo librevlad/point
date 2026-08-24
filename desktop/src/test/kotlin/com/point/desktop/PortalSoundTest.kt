@@ -29,7 +29,7 @@ class PortalSoundTest {
 
     @Test
     fun `тот же файл берёт телефон — иначе тембр не совпадёт`() {
-        val shared = java.io.File("../data/src/main/res/raw/point_portal_in.wav")
+        val shared = java.io.File(repo, "data/src/main/res/raw/point_portal_in.wav")
 
         assertTrue(
             "звук компьютера обязан браться из общей папки с телефоном: ${shared.absolutePath}",

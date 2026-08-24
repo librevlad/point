@@ -63,7 +63,7 @@ class LongTextOpensOnPcTest {
 
     @Test
     fun `обещание раскрытия не переписано на ПК заново`() {
-        val shared = File("../core/ui/src/shared/kotlin/com/point/core/ui/TextPreviewText.kt")
+        val shared = File(repo, "core/ui/src/shared/kotlin/com/point/core/ui/TextPreviewText.kt")
 
         assertTrue("общий исходник обещаний пропал: $shared", shared.isFile)
         assertTrue("обещание раскрытия завели на ПК своё", "\"Показать" !in body)

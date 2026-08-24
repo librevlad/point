@@ -24,7 +24,7 @@ class ReaderLayerLivesInRawFrameTest {
         "data/src/main/kotlin/com/point/data/TesseractTextRecognizer.kt",
     )
 
-    private fun source(path: String) = File(File(".."), path).readText()
+    private fun source(path: String) = File(repo, path).readText()
 
     @Test
     fun `движок берёт кадр вместе с его переводом, а не одну картинку`() {

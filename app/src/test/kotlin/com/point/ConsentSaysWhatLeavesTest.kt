@@ -108,7 +108,7 @@ class ConsentSaysWhatLeavesTest {
     fun `сторож правда прочитал оба места, где живёт вопрос`() {
 
         consentSources.forEach { path ->
-            assertTrue("не найден: ${File(root, path).absolutePath}", File(root, path).isFile)
+            assertTrue("не найден: ${File(repo, path).absolutePath}", File(repo, path).isFile)
         }
         assertTrue("человеческих строк не нашлось", consentSpeech().size >= 5)
     }
@@ -147,11 +147,8 @@ class ConsentSaysWhatLeavesTest {
         )
     }
 
-    private val root: File = generateSequence(File(".").absoluteFile) { it.parentFile }
-        .first { File(it, "settings.gradle.kts").isFile }
-
     private fun consentSpeech(): List<Pair<String, String>> = consentSources.flatMap { path ->
-        literalsIn(File(root, path).readText())
+        literalsIn(File(repo, path).readText())
             .filter { CYRILLIC.containsMatchIn(it) }
             .map { path to it }
     }

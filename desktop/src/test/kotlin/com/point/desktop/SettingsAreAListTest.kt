@@ -32,8 +32,6 @@ import org.junit.Test
  */
 class SettingsAreAListTest {
 
-    private val repo = File("..")
-
     private val screen = File("src/main/kotlin/com/point/desktop/ui/SettingsScreen.kt").readText()
 
     private val window = File("src/main/kotlin/com/point/desktop/ui/SettingsPane.kt").readText()

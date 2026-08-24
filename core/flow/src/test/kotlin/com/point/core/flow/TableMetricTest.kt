@@ -368,7 +368,7 @@ class TableMetricTest {
     @Test
     fun `заготовка эталона кадра 23 читается — её правит человек руками`() {
 
-        val file = File("../../tools/corpus/23.expected.tsv")
+        val file = File(repo, "tools/corpus/23.expected.tsv")
         assertTrue("не найден ${file.absolutePath}", file.exists())
 
         val expectation = parseTableExpectation("23", file.readText())
@@ -387,7 +387,7 @@ class TableMetricTest {
 
     @Test
     fun `все эталоны каталога разбираются и называют хотя бы одно сверенное значение`() {
-        val dir = File("../../tools/corpus")
+        val dir = File(repo, "tools/corpus")
         val files = dir.listFiles { f: File -> f.name.endsWith(EXPECTED_SUFFIX) }.orEmpty().sortedBy { it.name }
         assertTrue("нет эталонов в ${dir.absolutePath}", files.isNotEmpty())
 
@@ -436,7 +436,7 @@ class TableMetricTest {
         )
 
         expected.forEach { (frame, shape) ->
-            val file = File("../../tools/corpus/$frame$EXPECTED_SUFFIX")
+            val file = File(repo, "tools/corpus/$frame$EXPECTED_SUFFIX")
             assertTrue("не найден ${file.absolutePath}", file.exists())
             val e = parseTableExpectation(frame, file.readText())
 

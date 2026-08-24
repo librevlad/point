@@ -134,7 +134,7 @@ class TableUsabilityTest {
 
     @Test
     fun `на значениях, переписанных человеком, правило шума молчит`() {
-        val dir = File("../../tools/corpus")
+        val dir = File(repo, "tools/corpus")
         val files = dir.listFiles { f: File -> f.name.endsWith(".expected.tsv") }.orEmpty().sortedBy { it.name }
         assertTrue("нет эталонов в ${dir.absolutePath}", files.isNotEmpty())
 

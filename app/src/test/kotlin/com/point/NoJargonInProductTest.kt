@@ -67,7 +67,7 @@ class NoJargonInProductTest {
         val files = sources()
         val said = productSpeech()
 
-        assertTrue("исходников не нашлось: ${root.absolutePath}", files.size > 100)
+        assertTrue("исходников не нашлось: ${repo.absolutePath}", files.size > 100)
         assertTrue("человеческих строк не нашлось", said.size > 300)
     }
 
@@ -127,11 +127,8 @@ class NoJargonInProductTest {
 
     private data class Said(val where: String, val text: String, val holes: List<String>)
 
-    private val root: File = generateSequence(File(".").absoluteFile) { it.parentFile }
-        .first { File(it, "settings.gradle.kts").isFile }
-
     private fun sources(): List<File> = listOf("app", "core", "data", "executors")
-        .map { File(root, it) }
+        .map { File(repo, it) }
         .flatMap { module ->
             module.walkTopDown()
                 .onEnter { it.name != "build" }
@@ -141,7 +138,7 @@ class NoJargonInProductTest {
         }
 
     private fun productSpeech(): List<Said> = sources()
-        .flatMap { saidIn(it.toRelativeString(root), it.readText()) }
+        .flatMap { saidIn(it.toRelativeString(repo), it.readText()) }
         .filter { CYRILLIC.containsMatchIn(it.text) }
 
     private fun String.containsWord(word: String): Boolean =
