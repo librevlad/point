@@ -836,7 +836,7 @@ class FlowViewModel @Inject constructor(
         val frame = stack.getOrNull(index) ?: return
         val refreshed = frame.copy(focus = focus)
         stack[index] = refreshed.copy(bubbles = registry.bubblesFor(graphOf(refreshed)))
-        _ui.update { it.copy(frame = stack[index]) }
+        _ui.update { withoutAreaAnswer(it).copy(frame = stack[index]) }
         persistJourney()
 
         // Focused-проход- контекст области захватывается сейчас, в metadata копии объекта.
@@ -845,6 +845,48 @@ class FlowViewModel @Inject constructor(
             refreshed.obj.copy(metadata = com.point.core.flow.withFocus(refreshed.obj.metadata, focus)),
         )
     }
+
+    /**
+     * Человек показал область — и тем самым спросил «что здесь» (#1000).
+     *
+     * Point смотрел и не находил ничего, а экран после области выглядел ровно как до неё:
+     * человек не отличал «посмотрел и не нашёл» от «не посмотрел вовсе», хотя ответ в графе
+     * уже был. Прошенное получает слово в момент ответа — в отличие от незапрошенного
+     * «не нашлось», которое экран не показывает (#1016, решение владельца).
+     *
+     * Говорится, только пока стоит та же область: ответ про прежнюю область под новой был бы
+     * неправдой, а без области вопроса уже нет.
+     *
+     * И только в тишину, оставшуюся от вопроса: пока Point смотрел, человек не ждал молча —
+     * он нажимал действия и слышал о них слово. Слово о его шаге сказано ПОСЛЕ вопроса и
+     * потому свежее ответа: перебивать его фоновым «в области ничего» нельзя. [saidBefore] —
+     * то, что стояло на экране в момент вопроса; изменилось — значит Point успел сказать
+     * человеку что-то ещё.
+     */
+    private fun answerAskedArea(asked: PointObject, saidBefore: String?) {
+        val askedFocus = com.point.core.flow.focusOf(asked.metadata, asked.id) ?: return
+        val frame = stack.lastOrNull()?.takeIf { it.obj.id == asked.id } ?: return
+        val standing = frame.focus?.let { com.point.core.flow.focusScope(it) } ?: return
+        if (standing != com.point.core.flow.focusScope(askedFocus)) return
+        if (!com.point.core.flow.nothingFoundIn(frame.obj.metadata, askedFocus)) return
+        _ui.update {
+            if (it.frame?.obj?.id != asked.id || it.message != saidBefore) {
+                it
+            } else {
+
+                // Ответ, а не исход: «не нашлось» — знание, и упрёком его помечать нельзя.
+                it.copy(message = com.point.core.ui.FOCUS_NOTHING_FOUND, messageOutcome = Outcome.NONE)
+            }
+        }
+    }
+
+    /** Вопрос областью снят или сменился — прежний ответ про область больше не к месту (#1000). */
+    private fun withoutAreaAnswer(state: FlowUiState): FlowUiState =
+        if (state.message == com.point.core.ui.FOCUS_NOTHING_FOUND) {
+            state.copy(message = null, messageOutcome = Outcome.NONE)
+        } else {
+            state
+        }
 
     /**
      * Мир снаружи сменился под открытым экраном (#758).
@@ -884,7 +926,7 @@ class FlowViewModel @Inject constructor(
         if (frame.focus == null) return
         val refreshed = frame.copy(focus = null)
         stack[index] = refreshed.copy(bubbles = registry.bubblesFor(graphOf(refreshed)))
-        _ui.update { it.copy(frame = stack[index], focusPreview = null) }
+        _ui.update { withoutAreaAnswer(it).copy(frame = stack[index], focusPreview = null) }
         persistJourney()
     }
 
@@ -2720,14 +2762,29 @@ class FlowViewModel @Inject constructor(
     }
 
     private fun enrichInBackground(obj: PointObject) {
+
+        // Слово, стоявшее на экране в момент вопроса (#1000): всё сказанное человеку после
+        // него — свежее ответа про область, и ответ его не перебивает.
+        val saidBefore = _ui.value.message
         enrichJobs += viewModelScope.launch {
+
+            // Состояние операции, а не знания (ADR-0001 §9): сорвался проход целиком или
+            // отдельный вопрос под областью — разбор не закончен, и «в области ничего не
+            // нашлось» было бы сказано про недоделанное.
+            var whole = true
             enrichment.enrich(obj)
-                .catch {  }
-                .collect { update -> applyEnrichment(obj, update) }
+                .catch { whole = false }
+                .collect { update ->
+                    if (update.failed.isNotEmpty()) whole = false
+                    applyEnrichment(obj, update)
+                }
 
             stack.lastOrNull { it.obj.id == obj.id }?.let { frame ->
                 if (frame.obj.state.features.isNotEmpty()) runCatching { history.update(frame.obj) }
             }
+
+            // Проход дошёл до конца — у вопроса, заданного областью, есть ответ (#1000).
+            if (whole) answerAskedArea(obj, saidBefore)
         }
     }
 

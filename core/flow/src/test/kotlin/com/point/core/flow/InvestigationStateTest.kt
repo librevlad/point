@@ -2,6 +2,8 @@ package com.point.core.flow
 
 import com.point.core.model.CapabilityId
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -98,5 +100,54 @@ class InvestigationStateTest {
             InvestigationState.NOT_FOUND,
             investigationOutcome(after, listOf("entity.phone" + META_SOURCE_SUFFIX)),
         )
+    }
+
+    /**
+     * Ответ «в области ничего» (#1000) — только про ту область, которую спрашивали, и только
+     * когда её спрашивали: `not investigated` ≠ `not found`.
+     */
+    private val area = Focus("obj", Box(10f, 20f, 110f, 60f))
+
+    @Test
+    fun `область, под которой не задано ни одного вопроса, ответом «ничего» не считается`() {
+        assertFalse("не смотрели — не «не нашлось»", nothingFoundIn(emptyMap(), area))
+        assertFalse(
+            "«не нашлось» про объект — не ответ про область",
+            nothingFoundIn(withInvestigation(emptyMap(), qr, InvestigationState.NOT_FOUND), area),
+        )
+    }
+
+    @Test
+    fun `область, где на каждый вопрос не нашлось, отвечает «ничего»`() {
+        val metadata = withInvestigation(
+            withInvestigation(emptyMap(), qr, InvestigationState.NOT_FOUND, area),
+            ocr, InvestigationState.NOT_FOUND, area,
+        )
+
+        assertTrue(nothingFoundIn(metadata, area))
+    }
+
+    @Test
+    fun `хоть одна находка под областью снимает ответ «ничего»`() {
+        val metadata = withInvestigation(
+            withInvestigation(emptyMap(), qr, InvestigationState.NOT_FOUND, area),
+            ocr, InvestigationState.FOUND, area,
+        )
+
+        assertFalse(nothingFoundIn(metadata, area))
+    }
+
+    @Test
+    fun `посмотрели недостаточно — это не «ничего»`() {
+        val metadata = withInvestigation(emptyMap(), qr, InvestigationState.INSUFFICIENTLY_INVESTIGATED, area)
+
+        assertFalse(nothingFoundIn(metadata, area))
+    }
+
+    @Test
+    fun `ответ другой области за эту не считается`() {
+        val other = Focus("obj", Box(0f, 100f, 50f, 150f))
+
+        assertFalse(nothingFoundIn(withInvestigation(emptyMap(), qr, InvestigationState.NOT_FOUND, other), area))
     }
 }
