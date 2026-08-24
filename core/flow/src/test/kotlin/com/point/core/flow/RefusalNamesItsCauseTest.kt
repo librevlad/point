@@ -48,12 +48,38 @@ class RefusalNamesItsCauseTest {
         assertNotEquals(full, offline)
     }
 
+    /**
+     * Сервер ответил отказом и текста не прислал (#1077).
+     *
+     * Тело карточки, владелец 18.08.2026: «Сервер Point не ответил» уместно только когда ответа
+     * действительно не было. Прежде 502 без текста звался молчанием сервера — неправда: разговор
+     * состоялся. Человек шёл проверять связь и сервер вместо того, чтобы повторить позже.
+     */
     @Test
-    fun `сервер промолчал — виноват сервер, а не связь человека`() {
+    fun `сервер ответил отказом без текста — это не молчание сервера`() {
         val said = dropOpenRefusal(status = 502, serverMessage = null, online = true)
 
-        assertEquals(NO_SERVER_TEXT, said)
+        assertEquals(SERVER_REFUSED_TEXT, said)
+        assertNotEquals("разговор состоялся — молчанием его звать нельзя", NO_SERVER_TEXT, said)
         assertTrue(said, "интернет" !in said.lowercase())
+    }
+
+    /** Ответ пришёл неразборным (`responseCode` = -1) — это тоже не молчание сервера (#1077). */
+    @Test
+    fun `ответ неразборный — сказано про непонятный ответ, а не про молчание`() {
+        val said = dropOpenRefusal(status = -1, serverMessage = null, online = true)
+
+        assertEquals(ODD_ANSWER_TEXT, said)
+        assertNotEquals(NO_SERVER_TEXT, said)
+    }
+
+    /**
+     * Молчание сервера осталось при своём имени — там, где разговор и правда не состоялся
+     * (#1077): вызов сорвался `IOException`-ом, наружу ничего не дошло.
+     */
+    @Test
+    fun `молчание сервера зовётся молчанием там, где разговора не было`() {
+        assertEquals(NO_SERVER_TEXT, dropCallBroke(java.net.ConnectException("refused")))
     }
 
     @Test

@@ -433,7 +433,15 @@ abstract class DataModule {
             network: NetworkAvailability,
         ): com.point.core.flow.DropInbox =
             // Приём — один код на телефон и компьютер (#727): своей копии у Android больше нет.
-            com.point.core.flow.HttpDropInbox({ serverUrl() }, devicePass(account), network)
+            com.point.core.flow.HttpDropInbox(
+                { serverUrl() },
+                devicePass(account),
+                network,
+
+                // Человеку на экране — слово из словаря, нам в журнал — чем именно сорвался
+                // вызов (#1077): следующую живую находку можно будет прочитать, а не гадать.
+                log = { what, e -> android.util.Log.w("PointDrop", what, e) },
+            )
 
         @Provides
         @Singleton
