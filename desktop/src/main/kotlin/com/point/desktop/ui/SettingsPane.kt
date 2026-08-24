@@ -83,7 +83,9 @@ internal fun CompactSettings(
     busy: Boolean,
     error: String?,
     onWipe: () -> Unit,
-    onSave: (PcConfig) -> Boolean,
+    onSave: (PcConfig) -> Unit,
+    onRightClick: suspend (Boolean) -> Boolean?,
+    rightClickHolds: suspend (Boolean) -> Boolean?,
     onSweepNow: () -> Int,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
@@ -113,6 +115,8 @@ internal fun CompactSettings(
                 devices = circle.size,
                 email = account.current()?.email.orEmpty(),
                 onSave = onSave,
+                onRightClick = onRightClick,
+                rightClickHolds = rightClickHolds,
                 onOpen = onPage,
             )
 

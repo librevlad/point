@@ -204,7 +204,18 @@ class SettingsAreAListTest {
 
     @Composable
     private fun rootScreen(config: PcConfig, onOpen: (SettingsPage) -> Unit = {}) =
-        SettingsRoot(config = config, devices = 0, email = "", onSave = { true }, onOpen = onOpen)
+        SettingsRoot(
+            config = config,
+            devices = 0,
+            email = "",
+            onSave = { true },
+
+            // Меню файла Windows здесь ни при чём: этот экран смотрят про разделы и сводки.
+            // Пункт отвечает, что стоит, — чтобы подпись не звучала сбоем (#1082).
+            onRightClick = { true },
+            rightClickHolds = { true },
+            onOpen = onOpen,
+        )
 
     @Test
     fun `строка ключей считает свои ключи так же, как на телефоне`() {

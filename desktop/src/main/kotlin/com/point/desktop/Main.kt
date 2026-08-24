@@ -220,21 +220,39 @@ fun main(args: Array<String>) {
 
     val shellMenu = RegistryShellMenu()
     val sendTo = ShortcutSendToMenu()
+    val installedExe = { installedExecutable(ProcessHandle.current().info().command().orElse(null)) }
     runCatching {
-        val exe = installedExecutable(ProcessHandle.current().info().command().orElse(null))
+        val exe = installedExe()
         if (exe != null && FilePcConfig(pointDir).load().rightClick) {
             val wanted = shellCommandFor(exe)
             if (shellMenuNeedsUpdate(shellMenu.registeredCommand(), wanted)) {
                 // При старте человек ничего не нажимал: сбой остаётся следом в логе (#1082).
-                if (!shellMenu.register(wanted, SHELL_MENU_TITLE)) {
-                    println("[shell-menu] пункт меню файла в реестр не встал")
+                // Непрочитанный реестр сбоем записи не называется — и в логе тоже.
+                when (shellMenu.register(wanted, SHELL_MENU_TITLE)) {
+                    false -> println("[shell-menu] пункт меню файла в реестр не встал")
+                    null -> println("[shell-menu] реестр не прочитался — про пункт меню файла не известно")
+                    true -> Unit
                 }
             }
 
             // «Отправить → Point» — другое меню Windows и живёт своей записью (#255).
-            if (shellMenuNeedsUpdate(sendTo.target(), exe.absolutePath)) sendTo.register(exe)
+            // След тот же, что у реестра выше: молчание Windows про ярлык записано молчанием,
+            // а не «не встал», — иначе про ярлык в логе не остаётся ничего (#1082).
+            if (shellMenuNeedsUpdate(sendTo.target(), exe.absolutePath)) {
+                when (sendTo.register(exe)) {
+                    false -> println("[shell-menu] ярлык «Отправить → Point» не встал")
+                    null -> println("[shell-menu] Windows не ответила про ярлык «Отправить → Point»")
+                    true -> Unit
+                }
+            }
         }
     }
+
+    // Правда о пункте меню — в реестре и в папке «Отправить», а не в памяти экрана (#1082):
+    // настройки читают её при показе, и после перезапуска переключатель говорит то, что есть,
+    // а не то, что когда-то нажали. Очередь на реестр и папку «Отправить» живёт здесь, у самого
+    // действия: экран настроек уходит и возвращается, а начатая запись — нет.
+    val rightClick = RightClickSwitch(shellMenu, sendTo, installedExe)
 
     // Беда говорит словами, а не именем класса (#822): системное окно `Error` с
     // `CompactAppKt$CompactApp$18$2$11$1$1` человеку не объясняет ничего. След остаётся на
@@ -456,30 +474,15 @@ fun main(args: Array<String>) {
                         // круга (#1085): иначе экран говорит одно, а сервер и телефон знают
                         // другое.
                         runCatching { account.syncSettings() }
-
-                        // Здесь человек нажал сам, поэтому «встал ли пункт» уезжает ответом в
-                        // настройки: переключатель не говорит «Показывается» поверх пустого
-                        // реестра (#1082).
-                        runCatching {
-                            val exe = installedExecutable(ProcessHandle.current().info().command().orElse(null))
-                            when {
-                                !changed.rightClick -> {
-                                    shellMenu.unregister()
-                                    sendTo.unregister()
-                                    true
-                                }
-
-                                exe != null -> {
-                                    val stood = shellMenu.register(shellCommandFor(exe), SHELL_MENU_TITLE)
-                                    sendTo.register(exe)
-                                    stood
-                                }
-
-                                // Запуск из исходников: пункта меню не будет, и врать про него нечего.
-                                else -> false
-                            }
-                        }.getOrDefault(false)
                     },
+
+                    // Меню Windows трогается по тапу его выключателя, а не каждым сохранением
+                    // настроек: сюда не приходит буква имени компьютера. Человек нажал сам,
+                    // поэтому «встал ли пункт» уезжает ответом в настройки — переключатель не
+                    // говорит «Показывается» поверх пустого реестра (#1082). Выключение отвечает
+                    // по эффекту тоже — снято ли: константа «снято» была бы тем же молчанием.
+                    onRightClick = rightClick::set,
+                    rightClickHolds = rightClick::holds,
                     // «Убрать прямо сейчас» убирает всё, что Point помнит здесь, а не только
                     // файлы старше суток (#1081): само по себе старое по-прежнему уходит при
                     // запуске, а кнопка делает то, что на ней написано.

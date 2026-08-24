@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -65,12 +66,45 @@ fun SettingsRoot(
     config: PcConfig,
     devices: Int,
     email: String,
-    onSave: (PcConfig) -> Boolean,
+    onSave: (PcConfig) -> Unit,
+
+    /**
+     * Поставить или снять пункт в меню файла Windows; ответ — по эффекту, встал ли; `null` —
+     * прочитать, что вышло, не удалось (#1082).
+     */
+    onRightClick: suspend (Boolean) -> Boolean?,
+
+    /** Стоит ли меню файла Windows в этом положении на деле; `null` — прочитать не удалось (#1082). */
+    rightClickHolds: suspend (Boolean) -> Boolean?,
     onOpen: (SettingsPage) -> Unit,
 ) {
     var rightClick by remember { mutableStateOf(config.rightClick) }
-    var rightClickTrouble by remember { mutableStateOf(false) }
     var sound by remember { mutableStateOf(config.sound) }
+
+    // Правда о пункте меню — факт, прочитанный при показе экрана и при тапе, а не память
+    // последнего нажатия (#1082): после перезапуска включённый флаг не говорит «Показывается»
+    // поверх пустого реестра. `null` — знания ещё нет, и подпись тогда молчит о вердикте:
+    // «не исследовано» — это не «сбоя нет».
+    var rightClickTrouble by remember { mutableStateOf<Boolean?>(null) }
+
+    // Идёт ли чтение или работа прямо сейчас. Без этого «знания нет» звучало одинаково и пока
+    // реестр читается, и когда прочитать его не вышло: слово «Проверяется» оставалось на экране
+    // навсегда, хотя проверять было уже некому — повтора нет, чтение при входе одно (#1082).
+    var rightClickChecking by remember { mutableStateOf(true) }
+
+    // Номер вопроса: ответ на прежний вопрос не перебивает ответ на нынешний — ни чтение,
+    // начатое до тапа, ни ответ первого из двух быстрых нажатий.
+    var asked by remember { mutableStateOf(0) }
+    val work = rememberCoroutineScope()
+
+    LaunchedEffect(Unit) {
+        val turn = asked
+        val holds = rightClickHolds(rightClick)
+        if (asked == turn) {
+            rightClickTrouble = holds?.let { !it }
+            rightClickChecking = false
+        }
+    }
 
     Column(
         modifier = Modifier.fillMaxWidth().widthIn(max = 560.dp),
@@ -126,15 +160,35 @@ fun SettingsRoot(
 
         // «Показывать · выключить» читалось как загадка: состояние это или действие (#878).
         // Переключатель говорит состояние словом, а нажатие меняет его. Слово — правда:
-        // когда запись в реестр не встала, включённый флаг не говорит «Показывается» (#1082).
+        // когда запись в реестр не встала, включённый флаг не говорит «Показывается», а когда
+        // не снялась — выключенный не говорит «Не показывается» (#1082).
         Section("Интеграции") {
             SwitchRow(
                 title = "«Открыть в Point» в меню файла",
-                subtitle = rightClickLine(rightClick, rightClickTrouble),
+                subtitle = rightClickLine(rightClick, rightClickTrouble, rightClickChecking),
                 on = rightClick,
             ) {
                 rightClick = !rightClick
-                rightClickTrouble = !onSave(config.copy(rightClick = rightClick)) && rightClick
+                onSave(config.copy(rightClick = rightClick))
+
+                // Реестр и ярлык — работа на секунды: на потоке кадров окно замирало бы на
+                // каждом нажатии, а подпись всё это время утверждала бы исход, которого ещё
+                // нет. Пока идёт — знания нет; ответ приходит и называет, что вышло (#1082).
+                val turn = ++asked
+                val wanted = rightClick
+                rightClickTrouble = null
+                rightClickChecking = true
+                work.launch {
+                    // Каждое нажатие делает то, что просило само, а не то, что стоит на экране
+                    // к моменту его хода. Очередь на реестр и папку «Отправить» — у самого
+                    // действия: экран уходит из композиции и возвращается с новой памятью, а
+                    // начатая запись — нет, и такой уход её очередь обязана пережить (#1082).
+                    val stood = onRightClick(wanted)
+                    if (asked == turn) {
+                        rightClickTrouble = stood?.let { !it }
+                        rightClickChecking = false
+                    }
+                }
             }
         }
 
@@ -148,10 +202,22 @@ fun SettingsRoot(
     }
 }
 
-/** Подпись переключателя правой кнопки: сбой записи виден словом, а не прячется за флагом (#1082). */
-internal fun rightClickLine(on: Boolean, trouble: Boolean): String = when {
+/**
+ * Подпись переключателя правой кнопки: сбой виден словом, а не прячется за флагом (#1082) —
+ * и когда запись не встала, и когда не снялась.
+ *
+ * Вердикта нет в двух разных случаях, и звучат они по-разному. `checking` — реестр читается или
+ * тап делает своё прямо сейчас: «Проверяется» тут правда. Прочитать не вышло — проверять уже
+ * некому, и слово о длящемся действии осталось бы на экране навсегда: подпись называет это тем,
+ * что оно есть. Сказать «Показывается», пока никто не смотрел в реестр, — та же неправда, что
+ * прикрыть ею сбой, только короче.
+ */
+internal fun rightClickLine(on: Boolean, trouble: Boolean?, checking: Boolean): String = when {
+    checking -> "Проверяется"
+    trouble == null -> "Не удалось проверить — Windows не ответила"
     on && trouble -> "Не удалось включить — запись в меню файла не встала"
     on -> "Показывается"
+    trouble -> "Не удалось выключить — пункт остался в меню файла"
     else -> "Не показывается"
 }
 
@@ -173,7 +239,7 @@ internal fun keysLine(config: PcConfig): String =
 @Composable
 fun SettingsDevices(
     config: PcConfig,
-    onSave: (PcConfig) -> Boolean,
+    onSave: (PcConfig) -> Unit,
     devicesPane: @Composable () -> Unit,
 ) {
     var name by remember { mutableStateOf(config.name) }

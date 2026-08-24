@@ -90,14 +90,73 @@ class SendToPointTest {
         assertEquals("C:/Point.exe", menu(folder, answer = "C:/Point.exe\r\n").target())
     }
 
+    /** Ярлык, о котором Windows промолчала, — оставшийся, а не снятый (#1082). */
     @Test
-    fun `выключение снимает запись`() {
+    fun `непрочитанный ярлык снятым не считается`() {
+        val folder = temp.newFolder("mute-sendto")
+        sendToShortcut(folder).writeText("")
+        val silent = ShortcutSendToMenu(folder) { 1 to "" }
+
+        assertNull("Windows промолчала, а ярлык назвал цель", silent.target())
+        assertTrue("ярлык лежит на диске, а сочтён снятым", silent.present())
+        assertFalse("ярлыка нет, а он сочтён лежащим", menu(temp.newFolder("no-sendto")).present())
+    }
+
+    @Test
+    fun `выключение снимает запись и отвечает по эффекту`() {
         val folder = temp.newFolder("drop-sendto")
         sendToShortcut(folder).writeText("")
 
-        menu(folder).unregister()
+        assertTrue("ярлык снят, а выключение сочтено сбоем", menu(folder).unregister())
 
         assertFalse("запись осталась после выключения", sendToShortcut(folder).exists())
+        assertTrue("снимать было нечего — это не сбой", menu(folder).unregister())
+    }
+
+    /** Успех записи — не код PowerShell, а ярлык, прочитанный обратно и ведущий в Point (#1082). */
+    @Test
+    fun `ярлык встал, только когда читается обратно и ведёт в Point`() {
+        val exe = installed()
+        val folder = File(temp.newFolder("home-ok"), "SendTo")
+        var leadsTo = exe.absolutePath
+        val windows = ShortcutSendToMenu(folder) { command ->
+            val script = command.last()
+            if ("CreateShortcut" in script && "Save()" in script) sendToShortcut(folder).writeText("")
+            0 to leadsTo + "\r\n"
+        }
+
+        assertEquals("ярлык встал и ведёт в Point, а запись сочтена сбоем", true, windows.register(exe))
+
+        // Windows ответила «готово», а ярлык ведёт не туда: это не успех.
+        leadsTo = "C:/Старое/Point.exe"
+        assertEquals("ярлык ведёт мимо Point, а запись сочтена успехом", false, windows.register(exe))
+
+        // PowerShell отработал молча, а ярлыка на диске нет — тоже не успех.
+        val silent = ShortcutSendToMenu(File(temp.newFolder("home-silent"), "SendTo")) { 0 to "" }
+        assertEquals("ярлыка нет, а запись сочтена успехом", false, silent.register(exe))
+    }
+
+    /**
+     * Ярлык лёг, а куда он ведёт, Windows не сказала (#1082).
+     *
+     * Читает ярлык PowerShell через COM, и этот ответ может не прийти. Прежде запись отвечала
+     * `target() == exe.absolutePath`, и молчание Windows шло на экран словами «Не удалось
+     * включить»: человек с исправной установкой читал про сбой записи, которого не было.
+     * Правило «не прочиталось — не ответ» стояло только на чтении для показа, а путь тапа его
+     * не знал.
+     */
+    @Test
+    fun `молчание Windows про ярлык не выдаётся за не вставшую запись`() {
+        val exe = installed()
+        val folder = File(temp.newFolder("home-mute"), "SendTo")
+        val windows = ShortcutSendToMenu(folder) { command ->
+            if ("Save()" in command.last()) sendToShortcut(folder).writeText("")
+
+            // Ни кода, ни цели: COM не ответил.
+            1 to ""
+        }
+
+        assertNull("молчание Windows сочтено не вставшей записью", windows.register(exe))
     }
 
     @Test
