@@ -14,6 +14,10 @@ import com.point.core.model.PointObject
 import com.point.core.model.ScratchRef
 import java.io.File
 import java.util.concurrent.atomic.AtomicInteger
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -27,9 +31,17 @@ import org.junit.rules.TemporaryFolder
  * файл наружу. Инвариант 9: объект покидает устройства только после явного «да»,
  * вопрос — в момент выбора, отказ не наказывает (P11).
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class CloudConsentTest {
 
     @get:Rule val temp = TemporaryFolder()
+
+    /**
+     * Клик уходит в работу окна, и вопрос согласия появляется оттуда же. Планировщик
+     * теста доводит эту работу до конца: «вопрос задан» и «файл не ушёл» — события,
+     * а не то, что успело или не успело случиться за отведённые секунды.
+     */
+    private val dispatcher = StandardTestDispatcher()
 
     private val ran = AtomicInteger(0)
 
@@ -47,6 +59,8 @@ class CloudConsentTest {
         DesktopResolver(setOf(CloudRealizer())),
         clipboard = { },
         consent = FileConsent(consentFile),
+        background = dispatcher,
+        io = dispatcher,
     )
 
     private var made = 0
@@ -60,17 +74,12 @@ class CloudConsentTest {
 
     private fun bubble() = Bubble("ai", "Понять", CapabilityId("pc-understand"), ObjectState(ObjectKind.TEXT))
 
-    private fun await(until: () -> Boolean) {
-        val deadline = System.currentTimeMillis() + 3_000
-        while (System.currentTimeMillis() < deadline && !until()) Thread.sleep(20)
-    }
-
     @Test
-    fun `без согласия облачный клик не выполняется — задаётся вопрос словами последствий`() {
+    fun `без согласия облачный клик не выполняется — задаётся вопрос словами последствий`() = runTest(dispatcher) {
         val st = state(File(temp.root, "consent"))
 
         st.onBubble(item(), bubble())
-        await { st.cloudAsk.value != null }
+        advanceUntilIdle()
 
         val ask = st.cloudAsk.value
         assertNotNull("вопрос согласия обязан появиться", ask)
@@ -80,31 +89,31 @@ class CloudConsentTest {
     }
 
     @Test
-    fun `после «да» действие выполняется, и согласие запоминается`() {
+    fun `после «да» действие выполняется, и согласие запоминается`() = runTest(dispatcher) {
         val consentFile = File(temp.root, "consent2")
         val st = state(consentFile)
 
         st.onBubble(item(), bubble())
-        await { st.cloudAsk.value != null }
+        advanceUntilIdle()
         st.approveCloud()
-        await { ran.get() == 1 }
+        advanceUntilIdle()
 
         assertEquals(1, ran.get())
         assertNull(st.cloudAsk.value)
 
         // Второй раз тот же вопрос не задаётся — согласие дано заранее (Конституция §11).
         st.onBubble(item(), bubble())
-        await { ran.get() == 2 }
+        advanceUntilIdle()
         assertEquals(2, ran.get())
         assertNull(st.cloudAsk.value)
     }
 
     @Test
-    fun `отказ не наказывает — ничего не ушло, действие остаётся доступным`() {
+    fun `отказ не наказывает — ничего не ушло, действие остаётся доступным`() = runTest(dispatcher) {
         val st = state(File(temp.root, "consent3"))
 
         st.onBubble(item(), bubble())
-        await { st.cloudAsk.value != null }
+        advanceUntilIdle()
         st.declineCloud()
 
         assertEquals(0, ran.get())
@@ -113,7 +122,7 @@ class CloudConsentTest {
 
         // Действие не исчезло: следующий клик снова задаёт вопрос.
         st.onBubble(item(), bubble())
-        await { st.cloudAsk.value != null }
+        advanceUntilIdle()
         assertNotNull(st.cloudAsk.value)
     }
 }

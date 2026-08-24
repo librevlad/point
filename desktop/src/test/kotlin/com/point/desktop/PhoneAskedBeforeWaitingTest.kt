@@ -5,6 +5,10 @@ import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
 import com.point.core.model.ScratchRef
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -22,9 +26,18 @@ import org.junit.rules.TemporaryFolder
  * вовсе (#785), и это отдельная проверка в конце. Правило же переживёт тот день, когда
  * научится, — иначе его пришлось бы восстанавливать по памяти.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class PhoneAskedBeforeWaitingTest {
 
     @get:Rule val temp = TemporaryFolder()
+
+    /**
+     * Просьба ложится в очередь в работе окна, и планировщик теста доводит эту работу до
+     * конца. Здесь это важнее всего для отрицательных проверок: прежде «просьба не ушла»
+     * доказывалось сном в 200 мс — то есть «не успела уйти» читалось как «не ушла», и
+     * тест зеленел бы и над сломанным правилом.
+     */
+    private val dispatcher = StandardTestDispatcher()
 
     private val action = PcRemoteAction("call", "Позвонить")
 
@@ -47,6 +60,8 @@ class PhoneAskedBeforeWaitingTest {
             outbox = box,
             clock = hands,
             phoneRunsRequests = runsRequests,
+            background = dispatcher,
+            io = dispatcher,
         )
         if (lastContact != null) state.heard()
         hands.at = now
@@ -58,24 +73,24 @@ class PhoneAskedBeforeWaitingTest {
     )
 
     @Test
-    fun `телефон на связи — выбирается молча, без вопросов`() {
+    fun `телефон на связи — выбирается молча, без вопросов`() = runTest(dispatcher) {
         val box = Outbox(temp.newFolder("outbox-live"))
         val state = state(box, now = 10_000, lastContact = 9_000)
 
         state.sendToPhone(item(), action)
-        Thread.sleep(200)
+        advanceUntilIdle()
 
         assertNull("живой телефон спрашивать незачем", state.phoneAsk.value)
         assertEquals("просьба не ушла живому телефону", 1, box.entries().size)
     }
 
     @Test
-    fun `телефон молчит — вопрос до дела, а не отчёт после`() {
+    fun `телефон молчит — вопрос до дела, а не отчёт после`() = runTest(dispatcher) {
         val box = Outbox(temp.newFolder("outbox-silent"))
         val state = state(box, now = 10 * 60_000, lastContact = 0)
 
         state.sendToPhone(item(), action)
-        Thread.sleep(200)
+        advanceUntilIdle()
 
         val ask = state.phoneAsk.value
         assertNotNull("молчащий телефон обязан быть выбором человека, а не нашим", ask)
@@ -84,14 +99,14 @@ class PhoneAskedBeforeWaitingTest {
     }
 
     @Test
-    fun `согласился ждать — просьба уходит в почту телефона`() {
+    fun `согласился ждать — просьба уходит в почту телефона`() = runTest(dispatcher) {
         val box = Outbox(temp.newFolder("outbox-approved"))
         val state = state(box, now = 10 * 60_000, lastContact = 0)
         state.sendToPhone(item(), action)
-        Thread.sleep(200)
+        advanceUntilIdle()
 
         state.approvePhone()
-        Thread.sleep(200)
+        advanceUntilIdle()
 
         assertNull(state.phoneAsk.value)
         assertEquals("согласие не положило просьбу", 1, box.entries().size)
@@ -99,11 +114,11 @@ class PhoneAskedBeforeWaitingTest {
     }
 
     @Test
-    fun `отказался — ничего не уходит, и действие остаётся доступным`() {
+    fun `отказался — ничего не уходит, и действие остаётся доступным`() = runTest(dispatcher) {
         val box = Outbox(temp.newFolder("outbox-declined"))
         val state = state(box, now = 10 * 60_000, lastContact = 0)
         state.sendToPhone(item(), action)
-        Thread.sleep(200)
+        advanceUntilIdle()
 
         state.declinePhone()
 
@@ -114,12 +129,12 @@ class PhoneAskedBeforeWaitingTest {
     }
 
     @Test
-    fun `телефон не отвечал никогда — тоже спрашиваем`() {
+    fun `телефон не отвечал никогда — тоже спрашиваем`() = runTest(dispatcher) {
         val box = Outbox(temp.newFolder("outbox-never"))
         val state = state(box, now = 10_000, lastContact = null)
 
         state.sendToPhone(item(), action)
-        Thread.sleep(200)
+        advanceUntilIdle()
 
         assertNotNull("неизвестный телефон — не молчаливый выбор", state.phoneAsk.value)
         assertTrue(box.entries().isEmpty())
@@ -131,12 +146,12 @@ class PhoneAskedBeforeWaitingTest {
      * подождёт — её сотрут. Ни очереди, ни вопроса: обещание хуже отсутствия действия.
      */
     @Test
-    fun `пока телефон не исполняет просьбы — ни очереди, ни вопроса`() {
+    fun `пока телефон не исполняет просьбы — ни очереди, ни вопроса`() = runTest(dispatcher) {
         val box = Outbox(temp.newFolder("outbox-off"))
         val state = state(box, now = 10_000, lastContact = 9_000, runsRequests = false)
 
         state.sendToPhone(item(), action)
-        Thread.sleep(200)
+        advanceUntilIdle()
 
         assertNull("человека спросили про работу, которой не будет", state.phoneAsk.value)
         assertEquals("просьба ушла в почту, где её сотрут", 0, box.entries().size)

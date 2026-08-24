@@ -11,6 +11,9 @@ import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
 import com.point.core.model.ResultObject
 import com.point.core.model.ScratchRef
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -19,9 +22,18 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class ChainOnPcTest {
 
     @get:Rule val temp = TemporaryFolder()
+
+    /**
+     * Работа окна идёт по планировщику теста: «результат стал объектом» — событие,
+     * которого дожидается `advanceUntilIdle`. Прежде тут стоял опрос со сроком в три
+     * секунды: на занятой машине срок кончается раньше работы, и тест краснеет на
+     * здоровом коде.
+     */
+    private val dispatcher = StandardTestDispatcher()
 
     private class Says(id: String, private val name: String) : Capability {
         override val id = CapabilityId(id)
@@ -51,7 +63,7 @@ class ChainOnPcTest {
         override fun realizerFor(capabilityId: CapabilityId): Realizer = byId.getValue(capabilityId.value)
     }
 
-    @Test fun `результат действия становится объектом на экране компьютера`() = runTest {
+    @Test fun `результат действия становится объектом на экране компьютера`() = runTest(dispatcher) {
         val dir = temp.newFolder("out")
         val first = MakesNew("first", dir, "Первый результат")
         val inbox = Inbox(temp.newFolder("inbox"))
@@ -59,6 +71,8 @@ class ChainOnPcTest {
             DesktopRegistry(setOf(Says("first", "Первый результат"))),
             Pick(mapOf("first" to first)),
             clipboard = { },
+            background = dispatcher,
+            io = dispatcher,
             reopenPath = { path -> File(path).takeIf(File::isFile)?.let { inbox.addFile(it.absolutePath) } },
         )
         val source = temp.newFile("исходный.txt").apply { writeText("исходный текст") }
@@ -66,13 +80,13 @@ class ChainOnPcTest {
 
         state.onBubble(state.items.value.single(), state.bubblesFor(state.items.value.single()).single())
 
-        waitUntil { state.items.value.size == 2 }
+        advanceUntilIdle()
 
         val born = state.items.value.first { it.obj.uri.value.endsWith("Первый результат.txt") }
         assertEquals("Первый результат", born.obj.metadata["name"])
     }
 
-    @Test fun `второе действие работает с результатом первого, а не с исходным объектом`() = runTest {
+    @Test fun `второе действие работает с результатом первого, а не с исходным объектом`() = runTest(dispatcher) {
 
         val dir = temp.newFolder("out")
         val first = MakesNew("first", dir, "Первый результат")
@@ -82,17 +96,19 @@ class ChainOnPcTest {
             DesktopRegistry(setOf(Says("first", "Первый результат"), Says("second", "Второй результат"))),
             Pick(mapOf("first" to first, "second" to second)),
             clipboard = { },
+            background = dispatcher,
+            io = dispatcher,
             reopenPath = { path -> File(path).takeIf(File::isFile)?.let { inbox.addFile(it.absolutePath) } },
         )
         state.onReceived(inbox.addFile(temp.newFile("исходный2.txt").apply { writeText("исходный текст") }.absolutePath))
 
         val start = state.items.value.single()
         state.onBubble(start, state.bubblesFor(start).first { it.capabilityId.value == "first" })
-        waitUntil { state.items.value.size == 2 }
+        advanceUntilIdle()
 
         val born = state.items.value.first { it.obj.uri.value.endsWith("Первый результат.txt") }
         state.onBubble(born, state.bubblesFor(born).first { it.capabilityId.value == "second" })
-        waitUntil { second.sawText != null }
+        advanceUntilIdle()
 
         assertTrue(
             "второе действие взяло исходный объект, а не результат первого: " + second.sawText,
@@ -101,7 +117,7 @@ class ChainOnPcTest {
         assertTrue("второму достался исходный текст", second.sawText != "исходный текст")
     }
 
-    @Test fun `объект, которого нет на диске, на экран не попадает`() = runTest {
+    @Test fun `объект, которого нет на диске, на экран не попадает`() = runTest(dispatcher) {
 
         val inbox = Inbox(temp.newFolder("inbox3"))
         val liar = object : Realizer {
@@ -114,22 +130,18 @@ class ChainOnPcTest {
             DesktopRegistry(setOf(Says("liar", "Врун"))),
             Pick(mapOf("liar" to liar)),
             clipboard = { },
+            background = dispatcher,
+            io = dispatcher,
             reopenPath = { path -> File(path).takeIf(File::isFile)?.let { inbox.addFile(it.absolutePath) } },
         )
         state.onReceived(inbox.addFile(temp.newFile("исходный3.txt").apply { writeText("текст") }.absolutePath))
 
         state.onBubble(state.items.value.single(), state.bubblesFor(state.items.value.single()).single())
-        Thread.sleep(300)
+
+        // Счёт по событию: планировщик доводит начатое до конца, и «объекта не
+        // появилось» — доказанный факт, а не «за 300 мс не успел появиться».
+        advanceUntilIdle()
 
         assertEquals("на экране появился объект без файла", 1, state.items.value.size)
-    }
-
-    private fun waitUntil(timeoutMs: Long = 3_000, condition: () -> Boolean) {
-        val until = System.currentTimeMillis() + timeoutMs
-        while (System.currentTimeMillis() < until) {
-            if (condition()) return
-            Thread.sleep(20)
-        }
-        assertTrue("не дождались: условие не выполнилось за $timeoutMs мс", condition())
     }
 }

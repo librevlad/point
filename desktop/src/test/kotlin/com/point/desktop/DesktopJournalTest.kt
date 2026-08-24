@@ -10,12 +10,24 @@ import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
 import com.point.core.model.ScratchRef
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class DesktopJournalTest {
+
+    /**
+     * Действие идёт в работе окна, и станция пути появляется, когда работа дошла до
+     * журнала. Планировщик теста доводит её до конца — прежде тут стоял опрос со сроком
+     * в пять секунд, который на занятой машине кончался раньше самой работы.
+     */
+    private val dispatcher = StandardTestDispatcher()
 
     private class FakeJournal(private var entries: List<JournalEntry> = emptyList()) : JournalStore {
         var saves = 0
@@ -123,6 +135,8 @@ class DesktopJournalTest {
         journalStore = journal,
         clock = { 5_000L },
         reopenPath = reopen,
+        background = dispatcher,
+        io = dispatcher,
     )
 
     @Test
@@ -153,7 +167,7 @@ class DesktopJournalTest {
     }
 
     @Test
-    fun `выполненное действие становится станцией пути`() {
+    fun `выполненное действие становится станцией пути`() = runTest(dispatcher) {
         val store = FakeJournal()
         val realizer = RecordingRealizer("pc-print", ActionResult.Done("Ушло на HP LaserJet"))
         val s = state(store, realizers = setOf(realizer))
@@ -161,7 +175,7 @@ class DesktopJournalTest {
         s.onReceived(obj, ObjectSource.PHONE_LAN)
 
         s.onBubble(obj, Bubble("open", "Напечатать", CapabilityId("pc-print"), obj.obj.state))
-        waitForSteps(s, obj)
+        advanceUntilIdle()
 
         val step = s.journal.value.single().steps.single()
         assertEquals("Напечатать", step.title)
@@ -171,7 +185,7 @@ class DesktopJournalTest {
     }
 
     @Test
-    fun `неудача записывается неудачей и с причиной`() {
+    fun `неудача записывается неудачей и с причиной`() = runTest(dispatcher) {
         val store = FakeJournal()
         val realizer = RecordingRealizer("pc-print", ActionResult.Failure("нет принтера", recoverable = true))
         val s = state(store, realizers = setOf(realizer))
@@ -179,7 +193,7 @@ class DesktopJournalTest {
         s.onReceived(obj, ObjectSource.PHONE_LAN)
 
         s.onBubble(obj, Bubble("open", "Напечатать", CapabilityId("pc-print"), obj.obj.state))
-        waitForSteps(s, obj)
+        advanceUntilIdle()
 
         val step = s.journal.value.single().steps.single()
         assertFalse(step.ok)
@@ -187,7 +201,7 @@ class DesktopJournalTest {
     }
 
     @Test
-    fun `действие, запущенное с телефона, помечено в пути`() {
+    fun `действие, запущенное с телефона, помечено в пути`() = runTest(dispatcher) {
         val store = FakeJournal()
         val s = state(
             store,
@@ -198,7 +212,7 @@ class DesktopJournalTest {
         s.onReceived(obj, ObjectSource.PHONE_LAN)
 
         s.runRemoteAction("pc-print", obj)
-        waitForSteps(s, obj)
+        advanceUntilIdle()
 
         assertEquals("Напечатать · с телефона", s.journal.value.single().steps.single().title)
     }
@@ -246,14 +260,5 @@ class DesktopJournalTest {
 
         assertEquals("/дом/а.pdf", s.pathOf(first)?.path)
         assertEquals(null, s.pathOf(second))
-    }
-
-    private fun waitForSteps(s: DesktopState, item: InboxItem, expected: Int = 1) {
-        val deadline = System.currentTimeMillis() + 5_000
-        while (System.currentTimeMillis() < deadline) {
-            if ((s.pathOf(item)?.steps?.size ?: 0) >= expected) return
-            Thread.sleep(10)
-        }
-        error("действие не дошло до журнала")
     }
 }
