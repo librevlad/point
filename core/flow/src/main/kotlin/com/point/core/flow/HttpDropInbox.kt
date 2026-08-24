@@ -4,7 +4,9 @@ import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Base64
+import kotlin.coroutines.coroutineContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 
 /**
@@ -22,6 +24,10 @@ import kotlinx.coroutines.withContext
  * главного потока (#1077). При переезде сюда из `:data` (#749) это потерялось: Android на
  * главном потоке сеть запрещает, вызов падал ещё до выхода наружу, а падение звалось «Сервер
  * Point не ответил» — при сервере, который в ту же минуту отвечал другим устройствам.
+ *
+ * Уход человека с экрана обрывает и запрос — через общий [callClosingOnCancel] (#692), как у
+ * соседних `HttpJson` и `HttpFiles`: файл может качаться долго, и досиживать свой предел на
+ * чужом трафике после отказа он не должен.
  */
 class HttpDropInbox(
     private val serverUrl: () -> String?,
@@ -52,36 +58,37 @@ class HttpDropInbox(
         val base = address
         return io {
             runCatching {
-                val c = connect("$base/u/open", "POST").apply {
+                connect("$base/u/open", "POST").apply {
                     doOutput = true
                     setFixedLengthStreamingMode(0)
-                }
-                c.outputStream.close()
-                val status = c.responseCode
-                if (status !in 200..299) {
+                }.callClosingOnCancel {
+                    outputStream.close()
+                    val status = responseCode
+                    if (status !in 200..299) {
 
-                    // Сервер прислал человеческий текст — он и есть причина. Выбрасывать его,
-                    // чтобы напечатать «нет связи», значит отправить человека чинить не то (#729).
-                    val said = runCatching { c.errorStream?.readBytes()?.decodeToString() }.getOrNull()
-                    c.disconnect()
-                    return@runCatching DropOpen.Refused(
-                        dropOpenRefusal(status, said?.let { parseJson(it).str("message") }, online = true),
-                    )
-                }
-                val body = c.inputStream.readBytes().decodeToString()
-                c.disconnect()
+                        // Сервер прислал человеческий текст — он и есть причина. Выбрасывать его,
+                        // чтобы напечатать «нет связи», значит отправить человека чинить не то (#729).
+                        val said = runCatching { errorStream?.readBytes()?.decodeToString() }.getOrNull()
+                        disconnect()
+                        return@callClosingOnCancel DropOpen.Refused(
+                            dropOpenRefusal(status, said?.let { parseJson(it).str("message") }, online = true),
+                        )
+                    }
+                    val body = inputStream.readBytes().decodeToString()
+                    disconnect()
 
-                val answer = parseJson(body)
-                val box = answer.str("box")?.takeIf { it.isNotBlank() }
-                    ?: return@runCatching DropOpen.Refused(ODD_ANSWER_TEXT)
-                val link = answer.str("url")?.takeIf { it.isNotBlank() }
-                    ?: dropInboxLink(base, box) ?: return@runCatching DropOpen.Refused(NO_LINK_TEXT)
-                DropOpen.Opened(DropInboxBox(box, link))
+                    val answer = parseJson(body)
+                    val box = answer.str("box")?.takeIf { it.isNotBlank() }
+                        ?: return@callClosingOnCancel DropOpen.Refused(ODD_ANSWER_TEXT)
+                    val link = answer.str("url")?.takeIf { it.isNotBlank() }
+                        ?: dropInboxLink(base, box) ?: return@callClosingOnCancel DropOpen.Refused(NO_LINK_TEXT)
+                    DropOpen.Opened(DropInboxBox(box, link))
+                }
 
             // Сорвался сам вызов — и у этой беды имя по её природе (#1077): разговор не состоялся
             // (сеть) — про сервер; сломалось на устройстве — про устройство. Чем именно сломалось,
             // человеку не говорят — это уходит в журнал.
-            }.getOrElse { e -> log(OPEN_STEP, e); DropOpen.Refused(dropCallBroke(e)) }
+            }.getOrElse { e -> broke(OPEN_STEP, e); DropOpen.Refused(dropCallBroke(e)) }
         }
     }
 
@@ -90,29 +97,27 @@ class HttpDropInbox(
         val base = base() ?: return DropWait.Failed("Сервер Point не настроен")
         return io {
             runCatching {
-                val c = connect("$base/u/${box.id}/take", "GET")
-                val code = c.responseCode
-                if (code != 200) {
-                    c.disconnect()
-                    return@runCatching if (code == 204) DropWait.Empty else DropWait.Failed(refusal(code))
+                connect("$base/u/${box.id}/take", "GET").callClosingOnCancel {
+                    val code = responseCode
+                    if (code != 200) {
+                        disconnect()
+                        return@callClosingOnCancel if (code == 204) DropWait.Empty else DropWait.Failed(refusal(code))
+                    }
+                    val bytes = inputStream.readBytes()
+                    val fileId = getHeaderField("X-File-Id")
+                    val name = dropFileName(decodeName(getHeaderField("X-File-Name")))
+                    val mime = contentType?.substringBefore(';')?.trim()?.takeIf { it.isNotBlank() }
+                        ?: "application/octet-stream"
+                    disconnect()
+
+                    // Подтверждение НЕ здесь: пока объект не создан, стирать файл на сервере нельзя —
+                    // прислал его чужой человек, и повторить он не сможет (#726).
+                    save(bytes, name, mime, fileId.orEmpty(), target)
                 }
-                val bytes = c.inputStream.readBytes()
-                val fileId = c.getHeaderField("X-File-Id")
-                val name = dropFileName(decodeName(c.getHeaderField("X-File-Name")))
-                val mime = c.contentType?.substringBefore(';')?.trim()?.takeIf { it.isNotBlank() }
-                    ?: "application/octet-stream"
-                c.disconnect()
-
-                val path = target(name)
-                File(path).apply { parentFile?.mkdirs() }.writeBytes(bytes)
-
-                // Подтверждение НЕ здесь: пока объект не создан, стирать файл на сервере нельзя —
-                // прислал его чужой человек, и повторить он не сможет (#726).
-                DropWait.Arrived(DropArrival(path, name, mime, fileId.orEmpty()))
 
             // Слово из словаря, а не `e.message` (#1077): сообщение сбоя — чужой английский
             // («Failed to connect to /10.0.2.2»), и на компьютере оно уходило человеку на экран.
-            }.getOrElse { e -> log(AWAIT_STEP, e); DropWait.Failed(dropCallBroke(e)) }
+            }.getOrElse { e -> broke(AWAIT_STEP, e); DropWait.Failed(dropCallBroke(e)) }
         }
     }
 
@@ -120,14 +125,15 @@ class HttpDropInbox(
         val base = base() ?: return
         io {
             runCatching {
-                val c = connect("$base/u/${box.id}/close", "POST").apply {
+                connect("$base/u/${box.id}/close", "POST").apply {
                     doOutput = true
                     setFixedLengthStreamingMode(0)
+                }.callClosingOnCancel {
+                    outputStream.close()
+                    responseCode
+                    disconnect()
                 }
-                c.outputStream.close()
-                c.responseCode
-                c.disconnect()
-            }.onFailure { e -> log(CLOSE_STEP, e) }
+            }.onFailure { e -> broke(CLOSE_STEP, e) }
         }
     }
 
@@ -136,20 +142,53 @@ class HttpDropInbox(
         val base = base() ?: return
         io {
             runCatching {
-                val c = connect("$base/u/${box.id}/ack", "POST").apply {
+                connect("$base/u/${box.id}/ack", "POST").apply {
                     doOutput = true
                     setRequestProperty("X-File-Id", fileId)
                     setFixedLengthStreamingMode(0)
+                }.callClosingOnCancel {
+                    outputStream.close()
+                    responseCode
+                    disconnect()
                 }
-                c.outputStream.close()
-                c.responseCode
-                c.disconnect()
-            }.onFailure { e -> log(ACK_STEP, e) }
+            }.onFailure { e -> broke(ACK_STEP, e) }
         }
     }
 
+    /**
+     * Файл дошёл — положить его на устройство. Своя беда со своим именем (#1077).
+     *
+     * Под сторожем разговора с сервером эта запись не живёт нарочно: отказ диска — тоже
+     * `IOException`, и человеку печаталось бы «Сервер Point не ответил» при сервере, который
+     * файл честно отдал. На компьютере эта причина видна прямо на экране приёма, и человек
+     * повторял бы приём по кругу вместо того, чтобы освободить место.
+     */
+    private fun save(
+        bytes: ByteArray,
+        name: String,
+        mime: String,
+        fileId: String,
+        target: (name: String) -> String,
+    ): DropWait = runCatching {
+        val path = target(name)
+        File(path).apply { parentFile?.mkdirs() }.writeBytes(bytes)
+        DropWait.Arrived(DropArrival(path, name, mime, fileId))
+    }.getOrElse { e -> log(SAVE_STEP, e); DropWait.Failed(SAVE_BROKE_TEXT) }
+
+    /**
+     * След в журнал — но только настоящей беде (#1077).
+     *
+     * Уход человека с экрана рвёт запрос нарочно ([callClosingOnCancel]); отказ приёма из этого
+     * не делают и в журнал его не пишут — иначе каждый закрытый экран оставлял бы там ложный
+     * след сорвавшегося приёма.
+     */
+    private suspend fun broke(what: String, error: Throwable) {
+        coroutineContext.ensureActive()
+        log(what, error)
+    }
+
     /** Блокирующий HTTP — только на потоке ввода-вывода, с какого бы потока ни позвали (#1077). */
-    private suspend fun <T> io(block: () -> T): T = withContext(Dispatchers.IO) { block() }
+    private suspend fun <T> io(block: suspend () -> T): T = withContext(Dispatchers.IO) { block() }
 
     private fun decodeName(header: String?): String = runCatching {
         if (header.isNullOrBlank()) "" else Base64.getDecoder().decode(header.trim()).decodeToString()
@@ -181,6 +220,7 @@ class HttpDropInbox(
     private companion object {
         const val OPEN_STEP = "приём файла — открыть ящик"
         const val AWAIT_STEP = "приём файла — дождаться файла"
+        const val SAVE_STEP = "приём файла — положить файл на устройство"
         const val ACK_STEP = "приём файла — подтвердить приём"
         const val CLOSE_STEP = "приём файла — закрыть ящик"
     }

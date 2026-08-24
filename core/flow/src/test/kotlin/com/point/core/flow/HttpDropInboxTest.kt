@@ -2,12 +2,22 @@ package com.point.core.flow
 
 import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpServer
+import java.io.File
 import java.net.InetSocketAddress
+import java.util.Base64
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeout
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -27,6 +37,15 @@ class HttpDropInboxTest {
         val hits = mutableListOf<String>()
         val tokens = mutableListOf<String?>()
 
+        /** Что лежит в ящике: имя и байты. Пусто — сервер отвечает «пока ничего». */
+        var file: Pair<String, ByteArray>? = null
+
+        /** Запрос за файлом дошёл до сервера. */
+        val asked = CountDownLatch(1)
+
+        /** Ответ с файлом держится, пока не отпустят: так видно, кончился ли приём раньше. */
+        var holds: CountDownLatch? = null
+
         fun base(): String = "http://127.0.0.1:" + server.address.port
 
         fun start() {
@@ -35,13 +54,30 @@ class HttpDropInboxTest {
             server.start()
         }
 
-        fun stop() = server.stop(0)
+        fun stop() {
+            holds?.countDown()
+            server.stop(0)
+        }
 
         private fun handle(ex: HttpExchange) {
             val path = ex.requestURI.path
             hits += ex.requestMethod + " " + path
             tokens += ex.requestHeaders.getFirst("Authorization")
             ex.requestBody.readBytes()
+            val sending = file
+            if (path == "/u/$BOX/take" && sending != null) {
+                asked.countDown()
+                holds?.await()
+                ex.responseHeaders.add("Content-Type", "application/pdf")
+                ex.responseHeaders.add("X-File-Id", FILE_ID)
+                ex.responseHeaders.add(
+                    "X-File-Name",
+                    Base64.getEncoder().encodeToString(sending.first.toByteArray(Charsets.UTF_8)),
+                )
+                ex.sendResponseHeaders(200, sending.second.size.toLong())
+                ex.responseBody.use { it.write(sending.second) }
+                return
+            }
             val (status, body) = when {
                 path == "/u/open" -> 200 to """{"box":"$BOX","url":"${base()}/u/$BOX"}"""
                 path == "/u/$BOX/take" -> 204 to ""
@@ -240,6 +276,85 @@ class HttpDropInboxTest {
         assertEquals(DropWait.Failed(NO_SERVER_TEXT), outcome)
     }
 
+    /** Файл дошёл и лёг на устройство целиком — с тем именем и теми байтами, что прислал человек. */
+    @Test
+    fun `файл из ящика ложится на устройство — имя, тип и байты те самые`() = runTest {
+        withProbe { probe ->
+            val name = "смета за июль.pdf"
+            val bytes = ByteArray(2048) { (it % 251).toByte() }
+            probe.file = name to bytes
+            val folder = File.createTempFile("point-drop", "-folder").apply { delete(); mkdirs() }
+            val inbox = HttpDropInbox({ probe.base() }, { "pass" })
+
+            val outcome = inbox.await(box(probe)) { asked -> File(folder, asked).absolutePath }
+
+            val arrival = (outcome as DropWait.Arrived).arrival
+            assertEquals(name, arrival.name)
+            assertEquals("application/pdf", arrival.mime)
+            assertEquals(FILE_ID, arrival.fileId)
+            assertArrayEquals("байты те самые", bytes, File(arrival.path).readBytes())
+            folder.deleteRecursively()
+        }
+    }
+
+    /**
+     * Файл сервер отдал, а на устройстве он не улёгся (#1077): места нет, каталога нет, диск занят.
+     *
+     * Отказ записи — тоже `IOException`, и под общим сторожем разговора с сервером он звался бы
+     * молчанием сервера. Человек на компьютере читает эту причину прямо на экране приёма
+     * (`ReceiveOnPc`: `failed = outcome.reason`) — и повторял бы приём по кругу вместо того,
+     * чтобы освободить место. Это ровно та беда, ради которой заведена карточка: виновным
+     * называют сервер, а указывает это не туда.
+     */
+    @Test
+    fun `файл дошёл, а записать его некуда — беда зовётся устройством, а не молчанием сервера`() = runTest {
+        withProbe { probe ->
+            probe.file = "смета.pdf" to ByteArray(64) { 7 }
+            val logged = mutableListOf<Pair<String, Throwable>>()
+            val inbox = HttpDropInbox({ probe.base() }, { "pass" }, log = { what, e -> logged += what to e })
+
+            // На месте каталога лежит обычный файл: положить в него что-либо не выйдет никогда.
+            val busy = File.createTempFile("point-drop", ".busy").apply { deleteOnExit() }
+
+            val outcome = inbox.await(box(probe)) { asked -> File(busy, asked).absolutePath }
+
+            assertEquals(DropWait.Failed(SAVE_BROKE_TEXT), outcome)
+            assertTrue("сервер отдал файл целиком — виноват не он: ${probe.hits}", "GET /u/$BOX/take" in probe.hits)
+            val said = (outcome as DropWait.Failed).reason
+            assertNotEquals("молчанием сервера это звать нельзя", NO_SERVER_TEXT, said)
+            val (step, error) = logged.single()
+            assertTrue("класс сбоя — в журнал, не человеку: $logged", error is java.io.IOException)
+            assertTrue("и с ним — какой шаг сорвался: $step", step.isNotBlank())
+        }
+    }
+
+    /**
+     * Человек ушёл с экрана приёма — запрос кончается вместе с ним (#692).
+     *
+     * `ReceiveActivity.onDestroy` и `ReceiveOnPc.cancel` отменяют шаг приёма, а
+     * `HttpURLConnection` об отмене не знает: файл продолжал качаться на чужом трафике до своего
+     * предела. Здесь сервер держит ответ и сам его не отпускает — если приём кончился раньше,
+     * значит соединение закрыл отказ, а не истёкший предел.
+     */
+    @Test
+    fun `человек ушёл с экрана — приём кончается сразу, а не досиживает свой предел`() {
+        withProbe { probe ->
+            probe.file = "смета.pdf" to ByteArray(64) { 7 }
+            val holds = CountDownLatch(1)
+            probe.holds = holds
+            val inbox = HttpDropInbox({ probe.base() }, { "pass" })
+
+            runBlocking {
+                val step = launch(Dispatchers.IO) { inbox.await(box(probe)) { "unused" } }
+
+                assertTrue("сервер обязан получить запрос", probe.asked.await(5, TimeUnit.SECONDS))
+                withTimeout(5_000) { step.cancelAndJoin() }
+
+                assertEquals("приём кончился, пока сервер ещё держал ответ", 1L, holds.count)
+            }
+        }
+    }
+
     /**
      * Ящик закрывается тем же адресом, каким сервер его закрывает (#729). Разъедутся —
      * дверь останется открытой, и предел в пять ссылок выберется обычным приёмом.
@@ -262,8 +377,11 @@ class HttpDropInboxTest {
         )
     }
 
+    private fun box(probe: Probe) = DropInboxBox(BOX, probe.base() + "/u/" + BOX)
+
     private companion object {
         const val BOX = "aaaaaaaaaaaaaaaaaaaaaa"
         const val CALLER = "caller"
+        const val FILE_ID = "file-1"
     }
 }

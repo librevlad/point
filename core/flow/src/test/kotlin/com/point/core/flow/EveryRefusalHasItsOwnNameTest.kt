@@ -44,10 +44,10 @@ class EveryRefusalHasItsOwnNameTest {
     fun `у каждой беды своё имя — одинаковых нет`() {
         val names = setOf(
             NO_SERVER_ADDRESS_TEXT, NOT_IN_ACCOUNT_TEXT, ODD_ANSWER_TEXT, NO_LINK_TEXT, NO_SERVER_TEXT,
-            REQUEST_BROKE_TEXT,
+            REQUEST_BROKE_TEXT, SERVER_REFUSED_TEXT, SAVE_BROKE_TEXT,
         )
 
-        assertEquals("одинаковых имён нет", 6, names.size)
+        assertEquals("одинаковых имён нет", 8, names.size)
     }
 
     /**
