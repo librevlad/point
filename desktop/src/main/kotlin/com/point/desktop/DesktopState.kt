@@ -6,6 +6,7 @@ import com.point.core.model.ActionResult
 import com.point.core.model.Bubble
 import com.point.core.model.ObjectKind
 import java.io.File
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -74,8 +75,16 @@ class DesktopState(
      * просьба всё равно дождётся — просто человек узнает о ней, открыв Point сам.
      */
     private val knockPhone: suspend () -> Unit = {},
+
+    /**
+     * Чем исполняется фоновая работа окна. В работе это общий пул, под тестом —
+     * планировщик теста: тогда «исследование доведено до конца» проверяется как
+     * состоявшееся событие, а не как истёкший срок в секундах: на занятой машине
+     * срок кончается раньше работы, и тест краснеет на здоровом коде.
+     */
+    private val background: CoroutineDispatcher = Dispatchers.Default,
 ) {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val scope = CoroutineScope(SupervisorJob() + background)
 
     private val _items = MutableStateFlow<List<InboxItem>>(emptyList())
     val items: StateFlow<List<InboxItem>> = _items.asStateFlow()
