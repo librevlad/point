@@ -47,6 +47,8 @@ class EncryptedCircleStore internal constructor(
     }
 
     override suspend fun save(devices: List<CircleDevice>): Unit = withContext(Dispatchers.IO) {
+
+        // Пустой список — незнание круга, а не круг без устройств (контракт [CircleStore]).
         if (devices.isEmpty()) return@withContext
         val array = JSONArray()
         devices.forEach { device ->

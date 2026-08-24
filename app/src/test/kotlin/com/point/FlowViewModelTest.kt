@@ -2685,7 +2685,174 @@ class FlowViewModelTest {
         vm.openDevices(); advanceUntilIdle()
 
         assertEquals(listOf("d1", "d2"), circle.current()?.map { it.id })
+
+        // Список от сервера только что — проверенный; запомненный таким не считается.
+        assertEquals(true, vm.ui.value.devicesScreen?.checkedNow)
         vm.closeDevices()
+    }
+
+    @Test fun `отключённое устройство не переживает отключения в памяти круга (#1076)`() = runTest(dispatcher) {
+        val circle = com.point.core.flow.InMemoryCircleStore()
+        val client = FakeCircleClient(
+            circle = listOf(
+                com.point.core.flow.CircleDevice("d1", com.point.core.flow.DeviceKind.PHONE, "Pixel", self = true),
+                com.point.core.flow.CircleDevice("d2", com.point.core.flow.DeviceKind.PC, "Ноутбук", key = "ключ-ПК"),
+            ),
+        )
+        pcLinks.pc = com.point.core.flow.LinkedPc("d2", "Ноутбук", "ключ-ПК")
+        val vm = vm(circleStore = circle, accountClient = client)
+        vm.openDevices(); advanceUntilIdle()
+
+        // Сервер отключил компьютер — и тут же замолчал: повторное чтение круга не дошло.
+        client.unreachableAfterRevoke = true
+        vm.revokeDevice("d2"); advanceUntilIdle()
+
+        assertEquals("d2", client.revoked)
+        assertNotNull(vm.ui.value.devicesScreen?.error)
+
+        // «Компьютера в круге больше нет» — знание, и оно не ждёт следующего ответа сервера:
+        // ни в памяти, ни на экране, ни в связке с компьютером отключённого нет.
+        assertEquals(listOf("d1"), circle.current()?.map { it.id })
+        assertEquals(listOf("Pixel"), vm.ui.value.devicesScreen?.devices?.map { it.name })
+        assertNull(pcLinks.pc)
+        vm.closeDevices()
+    }
+
+    @Test fun `офлайн «Отключить» не делает запомненный круг проверенным, пока сервер молчит (#1076)`() = runTest(dispatcher) {
+        val circle = com.point.core.flow.InMemoryCircleStore()
+        circle.save(
+            listOf(
+                com.point.core.flow.CircleDevice("d1", com.point.core.flow.DeviceKind.PHONE, "Pixel", self = true),
+                com.point.core.flow.CircleDevice("d2", com.point.core.flow.DeviceKind.PC, "Ноутбук", System.currentTimeMillis() - 40_000),
+            ),
+        )
+        val client = FakeCircleClient(circle = null).apply { revokeHangs = true }
+        val vm = vm(circleStore = circle, accountClient = client)
+        vm.openDevices(); advanceUntilIdle()
+        assertEquals(false, vm.ui.value.devicesScreen?.checkedNow)
+
+        vm.revokeDevice("d2"); advanceUntilIdle()
+
+        // Ошибка прошлой операции погасла с началом новой, список всё тот же — из памяти.
+        // Свежесть — свойство списка: «на связи» не возвращается оттого, что ошибки нет.
+        val screen = vm.ui.value.devicesScreen!!
+        assertNull(screen.error)
+        assertEquals(true, screen.busy)
+        assertEquals(listOf("Pixel", "Ноутбук"), screen.devices.map { it.name })
+        assertEquals(false, screen.checkedNow)
+        vm.closeDevices()
+    }
+
+    @Test fun `человек ушёл с экрана, пока шло «Отключить» — память круга теряет одно устройство (#1076)`() = runTest(dispatcher) {
+        val circle = com.point.core.flow.InMemoryCircleStore()
+        val client = FakeCircleClient(
+            circle = listOf(
+                com.point.core.flow.CircleDevice("d1", com.point.core.flow.DeviceKind.PHONE, "Pixel", self = true),
+                com.point.core.flow.CircleDevice("d2", com.point.core.flow.DeviceKind.PC, "Ноутбук", key = "ключ-ПК"),
+            ),
+        )
+        val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
+        client.revokeGate = gate
+        client.unreachableAfterRevoke = true
+        val vm = vm(circleStore = circle, accountClient = client)
+        vm.openDevices(); advanceUntilIdle()
+
+        vm.revokeDevice("d2"); advanceUntilIdle()
+
+        // Человек нажал «Отключить» и вышел, не дожидаясь сервера. Экрана больше нет —
+        // знание о круге есть, и строить его не из чего, кроме памяти телефона.
+        vm.closeDevices()
+        gate.complete(Unit); advanceUntilIdle()
+
+        assertEquals(listOf("d1"), circle.current()?.map { it.id })
+        assertNull(pcLinks.pc)
+    }
+
+    @Test fun `памяти круга нет, человек ушёл с экрана — отключённый компьютер всё равно уходит из связки (#1076)`() = runTest(dispatcher) {
+
+        // Телефон, у которого шифрованное хранилище круга не создалось: `current()` молчит
+        // всегда. Это не выдумка проверки, а рабочее состояние `EncryptedCircleStore`.
+        val circle = ForgetfulCircleStore()
+        val client = FakeCircleClient(
+            circle = listOf(
+                com.point.core.flow.CircleDevice("d1", com.point.core.flow.DeviceKind.PHONE, "Pixel", self = true),
+                com.point.core.flow.CircleDevice("d2", com.point.core.flow.DeviceKind.PC, "Ноутбук", key = "ключ-ПК"),
+            ),
+        )
+        val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
+        client.revokeGate = gate
+        client.unreachableAfterRevoke = true
+        val vm = vm(circleStore = circle, accountClient = client)
+        vm.openDevices(); advanceUntilIdle()
+
+        vm.revokeDevice("d2"); advanceUntilIdle()
+
+        // Человек отключил компьютер и вышел, не дождавшись сервера, а сервер после этого
+        // замолчал. Памяти круга нет — прежний круг остаётся тем, что человек видел, нажимая
+        // «Отключить»; из пустого экрана он не строится, иначе отключённый компьютер остался
+        // бы связанным с телефоном.
+        vm.closeDevices()
+        gate.complete(Unit); advanceUntilIdle()
+
+        assertNull(pcLinks.pc)
+    }
+
+    @Test fun `одно отключение не пишет связку с компьютером в два голоса (#1076)`() = runTest(dispatcher) {
+        val circle = com.point.core.flow.InMemoryCircleStore()
+        val client = FakeCircleClient(
+            circle = listOf(
+                com.point.core.flow.CircleDevice("d1", com.point.core.flow.DeviceKind.PHONE, "Pixel", self = true),
+                com.point.core.flow.CircleDevice("d2", com.point.core.flow.DeviceKind.PC, "Ноутбук", 40_000L, key = "ключ-ПК"),
+                com.point.core.flow.CircleDevice("d3", com.point.core.flow.DeviceKind.PHONE, "Старый телефон", 30_000L),
+            ),
+        )
+        pcTransport.capsDelayMs = 10
+        val vm = vm(circleStore = circle, accountClient = client)
+        vm.openDevices(); advanceUntilIdle()
+        pcTransport.capsOverlapped = false
+
+        // Отключается не компьютер: круг узнаётся дважды подряд — своё знание об отключении
+        // и уточнение сервера. Пока эти два знания уходили работать вдогонку, связку с
+        // компьютером писали оба разом, и кто победит, решал порядок ответов сети.
+        vm.revokeDevice("d3"); advanceUntilIdle()
+
+        assertEquals(false, pcTransport.capsOverlapped)
+        assertEquals(com.point.core.flow.LinkedPc("d2", "Ноутбук", "ключ-ПК"), pcLinks.pc)
+        assertEquals(listOf("d1", "d2"), circle.current()?.map { it.id })
+        vm.closeDevices()
+    }
+
+    @Test fun `человек вышел, пока ответ о круге шёл — вышедший телефон круга не помнит (#1076)`() = runTest(dispatcher) {
+        val circle = com.point.core.flow.InMemoryCircleStore()
+        val client = FakeCircleClient(
+            circle = listOf(
+                com.point.core.flow.CircleDevice("d1", com.point.core.flow.DeviceKind.PHONE, "Pixel", self = true),
+                com.point.core.flow.CircleDevice("d2", com.point.core.flow.DeviceKind.PC, "Ноутбук", 40_000L, key = "ключ-ПК"),
+                com.point.core.flow.CircleDevice("d3", com.point.core.flow.DeviceKind.PHONE, "Старый телефон", 30_000L),
+            ),
+        )
+        val vm = vm(circleStore = circle, accountClient = client)
+        vm.openDevices(); advanceUntilIdle()
+        assertEquals(com.point.core.flow.LinkedPc("d2", "Ноутбук", "ключ-ПК"), pcLinks.pc)
+
+        // Отключён старый телефон. Отключить сервер успел, а уточняющий вопрос о круге
+        // застрял в пути — тот самый молчащий сервер, из-за которого карточку и завели.
+        val onTheWay = kotlinx.coroutines.CompletableDeferred<Unit>()
+        client.circleGate = onTheWay
+        vm.revokeDevice("d3"); advanceUntilIdle()
+
+        // Ждать человеку нечего: кнопки на экране снова живые — и он жмёт «Выйти».
+        assertEquals(false, vm.ui.value.devicesScreen?.busy)
+        vm.signOut(); advanceUntilIdle()
+        assertNull(circle.current())
+        assertNull(pcLinks.pc)
+
+        // Ответ дошёл, когда аккаунта уже нет. Круг принадлежит аккаунту: учить некого.
+        // Иначе вышедший телефон снова помнит чужой компьютер и снова с ним связан.
+        onTheWay.complete(Unit); advanceUntilIdle()
+
+        assertNull(circle.current())
+        assertNull(pcLinks.pc)
     }
 
     @Test fun `круг устройств встаёт поверх настроек, а не вместо них (#544)`() = runTest(dispatcher) {
@@ -4664,19 +4831,37 @@ internal class FakeCircleClient(
         com.point.core.flow.LoginStart("l1", "claim-1", "K7-42Q", "https://point.example/login?d=l1")
     override suspend fun poll(loginId: String, claimToken: String): com.point.core.flow.LoginPoll =
         com.point.core.flow.LoginPoll.Ready(TEST_ACCOUNT)
-    override suspend fun circle(account: com.point.core.flow.PointAccount): com.point.core.flow.CircleAnswer =
-        when {
+
+    /** Ответ о круге сервер уже собрал, а идёт он долго — человек за это время успевает выйти (#1076). */
+    var circleGate: kotlinx.coroutines.CompletableDeferred<Unit>? = null
+
+    override suspend fun circle(account: com.point.core.flow.PointAccount): com.point.core.flow.CircleAnswer {
+        val answer = when {
             gone -> com.point.core.flow.CircleAnswer.Revoked
             circle == null -> com.point.core.flow.CircleAnswer.Unreachable
             else -> com.point.core.flow.CircleAnswer.Circle(circle!!)
         }
+        circleGate?.await()
+        return answer
+    }
     override suspend fun enroll(account: com.point.core.flow.PointAccount, publicKey: String): Boolean {
         enrolledKey = publicKey
         return true
     }
+    /** Сервер не отвечает на «Отключить» вовсе — телефон ждёт (#1076). */
+    var revokeHangs = false
+
+    /** Отключить сервер успел, а следующий вопрос о круге уже не дошёл (#1076). */
+    var unreachableAfterRevoke = false
+
+    /** Ответ на «Отключить» держится, пока его не отпустят — человек за это время уходит с экрана (#1076). */
+    var revokeGate: kotlinx.coroutines.CompletableDeferred<Unit>? = null
+
     override suspend fun revoke(account: com.point.core.flow.PointAccount, deviceId: String): Boolean {
+        if (revokeHangs) kotlinx.coroutines.awaitCancellation()
+        revokeGate?.await()
         revoked = deviceId
-        circle = circle?.filterNot { it.id == deviceId }
+        circle = if (unreachableAfterRevoke) null else circle?.filterNot { it.id == deviceId }
         return true
     }
     override suspend fun signOut(account: com.point.core.flow.PointAccount): Boolean {
@@ -4721,6 +4906,13 @@ internal class CountingSignInClient(
     override suspend fun deleteAccount(account: com.point.core.flow.PointAccount) = true
 }
 
+/** Память круга, которой нет: у `EncryptedCircleStore` не создались шифрованные prefs (#1076). */
+private class ForgetfulCircleStore : com.point.core.flow.CircleStore {
+    override fun current(): List<com.point.core.flow.CircleDevice>? = null
+    override suspend fun save(devices: List<com.point.core.flow.CircleDevice>) = Unit
+    override suspend fun clear() = Unit
+}
+
 private class FakePcLinks : com.point.core.flow.PcLinks {
     var pc: com.point.core.flow.LinkedPc? = null
     override fun current() = pc
@@ -4747,8 +4939,19 @@ private class FakePcTransport : com.point.core.flow.PcTransport {
         sent += meta
         return com.point.core.flow.PcSendOutcome.Sent()
     }
+
+    /** Два разговора с компьютером шли внахлёст — знание о круге писалось в два голоса (#1076). */
+    var capsOverlapped = false
+    private var capsInFlight = 0
+
     override suspend fun fetchCaps(pc: com.point.core.flow.LinkedPc): List<com.point.core.flow.PcRemoteAction>? {
-        if (capsDelayMs > 0) kotlinx.coroutines.delay(capsDelayMs)
+        capsInFlight++
+        if (capsInFlight > 1) capsOverlapped = true
+        try {
+            if (capsDelayMs > 0) kotlinx.coroutines.delay(capsDelayMs)
+        } finally {
+            capsInFlight--
+        }
         return listOf(com.point.core.flow.PcRemoteAction("pc-open", "Открыть на компьютере"))
     }
     override suspend fun fetchOutbox(pc: com.point.core.flow.LinkedPc): List<com.point.core.flow.PcOutboxEntry>? {
