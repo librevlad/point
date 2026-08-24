@@ -25,9 +25,6 @@ class NoExcusesTest {
      */
     private val explaining = setOf("CloudPrivacy.kt")
 
-    private val repo: File = generateSequence(File(".").absoluteFile) { it.parentFile }
-        .first { File(it, "settings.gradle.kts").isFile }
-
     private fun speech(): List<Pair<String, String>> = product
         .map { File(repo, it) }
         .filter { it.isDirectory }

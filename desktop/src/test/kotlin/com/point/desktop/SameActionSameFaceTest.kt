@@ -17,8 +17,6 @@ import org.junit.Test
  */
 class SameActionSameFaceTest {
 
-    private val repo = File("..")
-
     private val shared = File(repo, "core/ui/src/shared/kotlin/com/point/core/ui/BubbleIcons.kt").readText()
 
     private fun keysKnownToTable(): Set<String> =

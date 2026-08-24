@@ -151,6 +151,6 @@ class CorpusScoreCliTest {
     }
 
     private val realFrameMap: File
-        get() = File("../../tools/corpus/frames.tsv")
+        get() = File(repo, "tools/corpus/frames.tsv")
             .also { assertTrue("не найден ${it.absolutePath}", it.exists()) }
 }
