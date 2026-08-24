@@ -1,17 +1,20 @@
-package com.point
+package com.point.checks
 
-import com.point.core.flow.SETTINGS_TITLE
+import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.io.File
 
+/**
+ * Шестерёнки, которой на экране нет с #462, нет и в словах продукта.
+ *
+ * Живёт в `:checks` (#1293): проверка обходит исходники всего проекта целиком, вместе с
+ * компьютером, а `:app` компьютер не собирает. Тест про имя двери настроек остался в `:app`
+ * — он сверяет константу, а не читает чужие файлы.
+ */
 class NoGearInProductTest {
 
-    private val root: File = generateSequence(File("").absoluteFile) { it.parentFile }
-        .first { File(it, "settings.gradle.kts").isFile }
-
-    private val productSources: List<File> = root.walkTopDown()
+    private val productSources: List<File> = repo.walkTopDown()
         .onEnter { it.name != "build" && !it.name.startsWith(".") }
         .filter { it.isFile && it.extension == "kt" }
         .filter { it.invariantSeparatorsPath.contains("/src/main/") }
@@ -29,14 +32,9 @@ class NoGearInProductTest {
     @Test fun `ни одна строка продукта не зовёт человека к шестерёнке`() {
         val guilty = productSources
             .filter { code(it.readText()).contains("шестерён", ignoreCase = true) }
-            .map { it.toRelativeString(root) }
+            .map { it.toRelativeString(repo) }
 
         assertEquals("эти файлы зовут к шестерёнке, которой на экране нет с #462: $guilty", emptyList<String>(), guilty)
-    }
-
-    @Test fun `дверь настроек названа одним словом на все модули`() {
-
-        assertEquals("Настройки", SETTINGS_TITLE)
     }
 }
 

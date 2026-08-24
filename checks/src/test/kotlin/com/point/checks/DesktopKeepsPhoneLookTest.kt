@@ -1,4 +1,4 @@
-package com.point.desktop.ui
+package com.point.checks
 
 import java.io.File
 import org.junit.Assert.assertFalse
@@ -14,11 +14,14 @@ import org.junit.Test
  *
  * Теперь файл один, а компилируется дважды — каждый раз своим Compose. Сверять стало
  * нечего, и проверять надо не совпадение, а само место склейки: копия не вернулась, общий каталог
- * подключён обеими сторонами. Шов, который никто не держит, разбирают по частям.
+ * подключён обеими сторонами. Место склейки, которое никто не держит, разбирают по частям.
+ *
+ * Живёт в `:checks` (#1293): проверка сравнивает файлы `:core:ui` и `:desktop`, а модуля,
+ * который собирал бы оба, нет — `:desktop` подключает только общий каталог `core/ui/src/shared`.
  */
 class DesktopKeepsPhoneLookTest {
 
-    private val shared = File("../core/ui/src/shared/kotlin/com/point/core/ui/BubbleIcons.kt")
+    private val shared = File(repo, "core/ui/src/shared/kotlin/com/point/core/ui/BubbleIcons.kt")
 
     @Test
     fun `значки и цвета действий объявлены один раз — в общем каталоге`() {
@@ -31,15 +34,15 @@ class DesktopKeepsPhoneLookTest {
 
     @Test
     fun `копия значков на ПК не завелась заново`() {
-        val copy = File("src/main/kotlin/com/point/desktop/ui/BubbleIcons.kt")
+        val copy = File(repo, "desktop/src/main/kotlin/com/point/desktop/ui/BubbleIcons.kt")
 
         assertFalse("копия вернулась — значки снова разъедутся молча", copy.isFile)
     }
 
     @Test
     fun `общий каталог подключён обеими сторонами`() {
-        val here = File("build.gradle.kts").readText()
-        val phone = File("../core/ui/build.gradle.kts").readText()
+        val here = File(repo, "desktop/build.gradle.kts").readText()
+        val phone = File(repo, "core/ui/build.gradle.kts").readText()
 
         assertTrue("ПК не компилирует общий каталог", here.contains("core/ui/src/shared/kotlin"))
         assertTrue("телефон не компилирует общий каталог", phone.contains("src/shared/kotlin"))
@@ -51,7 +54,7 @@ class DesktopKeepsPhoneLookTest {
      */
     @Test
     fun `палитра не набрана литералами второй раз`() {
-        val palette = File("../core/ui/src/shared/kotlin/com/point/core/ui/PointPalette.kt")
+        val palette = File(repo, "core/ui/src/shared/kotlin/com/point/core/ui/PointPalette.kt")
         assertTrue("общая палитра пропала: $palette", palette.isFile)
 
         // Белый — не токен, а отсутствие оттенка: он же стоит контрастом на акценте
@@ -61,8 +64,8 @@ class DesktopKeepsPhoneLookTest {
             .filterNot { it == "0xFFFFFFFF" }
             .toSet()
 
-        val desktop = File("src/main/kotlin/com/point/desktop/ui/PointDesktopTheme.kt")
-        val phone = File("../core/ui/src/main/kotlin/com/point/core/ui/theme/PointTheme.kt")
+        val desktop = File(repo, "desktop/src/main/kotlin/com/point/desktop/ui/PointDesktopTheme.kt")
+        val phone = File(repo, "core/ui/src/main/kotlin/com/point/core/ui/theme/PointTheme.kt")
 
         // У телефона есть ещё светлая схема — там белый и есть белый, а не токен палитры.
         val themes = listOf(
@@ -84,12 +87,12 @@ class DesktopKeepsPhoneLookTest {
      */
     @Test
     fun `тёмная схема собрана один раз — в общем каталоге`() {
-        val shared = File("../core/ui/src/shared/kotlin/com/point/core/ui/PointColorSchemes.kt")
+        val shared = File(repo, "core/ui/src/shared/kotlin/com/point/core/ui/PointColorSchemes.kt")
         assertTrue("общая схема пропала: $shared", shared.isFile)
 
         val themes = listOf(
-            File("src/main/kotlin/com/point/desktop/ui/PointDesktopTheme.kt"),
-            File("../core/ui/src/main/kotlin/com/point/core/ui/theme/PointTheme.kt"),
+            File(repo, "desktop/src/main/kotlin/com/point/desktop/ui/PointDesktopTheme.kt"),
+            File(repo, "core/ui/src/main/kotlin/com/point/core/ui/theme/PointTheme.kt"),
         )
 
         val rebuilt = themes.filter { it.readText().contains("darkColorScheme(") }.map { it.name }
