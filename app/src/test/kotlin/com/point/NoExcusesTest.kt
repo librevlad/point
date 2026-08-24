@@ -1,4 +1,4 @@
-package com.point.core.flow
+package com.point
 
 import java.io.File
 import org.junit.Assert.assertTrue
@@ -10,6 +10,10 @@ import org.junit.Test
  * Владелец: «все экраны пропитаны паранойей из-за того что ты в тексты льешь таски». Продукт
  * защищался там, где его никто не обвинял, — и от постоянных оговорок про «наружу» казалось,
  * что наружу уходит всё.
+ *
+ * Живёт в `:app` (#1293): проверка читает исходники `:app`, `:core:ui`, `:data` и `:executors`
+ * — всё это `:app` и собирает. В `:core:flow` она читала модули выше себя, и оговорка,
+ * написанная в `:executors`, роняла тест самого нижнего модуля.
  */
 class NoExcusesTest {
 
@@ -21,8 +25,11 @@ class NoExcusesTest {
      */
     private val explaining = setOf("CloudPrivacy.kt")
 
+    private val repo: File = generateSequence(File(".").absoluteFile) { it.parentFile }
+        .first { File(it, "settings.gradle.kts").isFile }
+
     private fun speech(): List<Pair<String, String>> = product
-        .map { File("../../$it") }
+        .map { File(repo, it) }
         .filter { it.isDirectory }
         .flatMap { dir -> dir.walkTopDown().filter { it.extension == "kt" }.toList() }
         .filterNot { it.name in explaining }

@@ -1,4 +1,4 @@
-package com.point.core.flow
+package com.point.checks
 
 import java.io.File
 import org.junit.Assert.assertTrue
@@ -18,7 +18,6 @@ import org.junit.Test
  */
 class OneNameForOneWorkTest {
 
-    private val repo = File("../..")
 
     private fun sources(vararg dirs: String): List<Pair<String, String>> = dirs
         .map { File(repo, it) }

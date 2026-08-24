@@ -79,6 +79,10 @@ export JAVA_HOME="C:/Program Files/Android/Android Studio/jbr"
 
 Стрелки только вниз.
 
+Проверка живёт в модуле, который собирает всё, что она читает. Если такого модуля нет —
+она живёт в `:checks`: падение обязано приезжать туда, где ошибка, а не в тот модуль, где
+проверку случайно написали.
+
 - `:core:model` — чистый Kotlin, Android-free.
 - `:core:flow` — Graph/Flow и контракты Capability, Realizer, Resolver, Registry, BubblePolicy.
 - `:core:ui` — Compose UI и дизайн-система, без бизнес-логики.
@@ -86,6 +90,7 @@ export JAVA_HOME="C:/Program Files/Android/Android Studio/jbr"
 - `:executors` — Capability + Realizer и их регистрация.
 - `:app` — Android entry points, navigation, DI.
 - `:desktop` — Compose Desktop поверх `:core:model` и `:core:flow`.
+- `:checks` — проверки, читающие весь проект текстом; ни одной зависимости на продуктовый код.
 
 ## Graph — фундамент Point
 

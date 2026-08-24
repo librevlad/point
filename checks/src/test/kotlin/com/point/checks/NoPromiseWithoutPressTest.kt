@@ -1,4 +1,4 @@
-package com.point.core.flow
+package com.point.checks
 
 import java.io.File
 import org.junit.Assert.assertTrue
@@ -22,7 +22,6 @@ import org.junit.Test
  */
 class NoPromiseWithoutPressTest {
 
-    private val repo = File("../..")
 
     private fun mainSources(): List<Pair<String, String>> = listOf(
         "app/src/main", "core/flow/src/main", "core/model/src/main", "core/ui/src/main",

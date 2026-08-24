@@ -1,4 +1,4 @@
-package com.point.core.flow
+package com.point.checks
 
 import java.io.File
 import org.junit.Assert.assertEquals
@@ -19,6 +19,11 @@ import org.junit.Test
  *
  * Сторож обещания не удаляется никогда: тест, проверяющий ОТСУТСТВИЕ жаргона, оправдания или
  * неправды, — это то, ради чего набор существует, и цементом он не является.
+ *
+ * Живёт в `:checks` (#1293): проверка читает тесты всех модулей сразу, включая компьютер,
+ * а модуля, который собирал бы и телефон, и компьютер, в проекте нет. Пока она лежала в
+ * `:core:flow`, строка, написанная в тестах `:executors` или `:desktop`, роняла тест самого
+ * нижнего модуля — и человек шёл читать ядро вместо того места, где ошибка.
  */
 class CementedWordingDoesNotGrowTest {
 
@@ -26,9 +31,10 @@ class CementedWordingDoesNotGrowTest {
         "app/src/test", "app/src/testDebug",
         "core/flow/src/test", "core/ui/src/test", "core/ui/src/testDebug",
         "data/src/test", "executors/src/test", "desktop/src/test",
-    )
 
-    private val repo = File("../..")
+        // Проверки этого модуля — тоже тесты проекта, и цемент заводится в них так же.
+        "checks/src/test",
+    )
 
     private val listed = File(repo, LIST)
 

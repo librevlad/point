@@ -30,21 +30,6 @@ tasks.test {
     inputs.dir(rootProject.layout.projectDirectory.dir("tools/corpus"))
         .withPropertyName("corpusExpectations")
         .withPathSensitivity(PathSensitivity.RELATIVE)
-
-    // Сторож цемента формулировок (#584) читает тесты всех модулей и список исключений.
-    // Без этого он оставался бы UP-TO-DATE ровно тогда, когда цемент прирос в чужом модуле.
-    inputs.files(
-        fileTree(rootProject.layout.projectDirectory) {
-            include("**/src/test/kotlin/**/*.kt", "**/src/testDebug/kotlin/**/*.kt")
-            exclude("**/build/**")
-        },
-    )
-        .withPropertyName("testsOfAllModules")
-        .withPathSensitivity(PathSensitivity.RELATIVE)
-
-    inputs.file(rootProject.layout.projectDirectory.file("tools/cemented-wording.txt"))
-        .withPropertyName("cementedWordingList")
-        .withPathSensitivity(PathSensitivity.RELATIVE)
 }
 
 tasks.register<JavaExec>("scoreTable") {

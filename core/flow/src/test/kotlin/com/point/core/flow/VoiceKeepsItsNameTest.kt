@@ -1,6 +1,5 @@
 package com.point.core.flow
 
-import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -14,8 +13,6 @@ import org.junit.Test
  * всё это время.
  */
 class VoiceKeepsItsNameTest {
-
-    private val repo = File("../..")
 
     @Test
     fun `у записи есть расширение, а не bin`() {
@@ -72,22 +69,5 @@ class VoiceKeepsItsNameTest {
         val unknown = known.filterNot { mimeForName("x.$it").startsWith("audio/") }
 
         assertTrue("общая таблица не знает: $unknown", unknown.isEmpty())
-    }
-
-    @Test
-    fun `никто не заводит свою таблицу типов заново`() {
-        val guilty = listOf(
-            "desktop/src/main/kotlin/com/point/desktop/Inbox.kt",
-            "data/src/main/kotlin/com/point/data/MediaStoreExporter.kt",
-
-            // Лист «Поделиться» берёт имя общим правилом выхода (#1146), внутри которого
-            // живёт та же общая таблица типов.
-            "data/src/main/kotlin/com/point/data/AndroidSharer.kt",
-        ).filterNot {
-            val text = File(repo, it).readText()
-            text.contains("extensionForMime(") || text.contains("outboundFileName(")
-        }
-
-        assertTrue("своя таблица типов: $guilty", guilty.isEmpty())
     }
 }

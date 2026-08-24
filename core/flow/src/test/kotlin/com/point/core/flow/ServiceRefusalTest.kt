@@ -1,6 +1,5 @@
 package com.point.core.flow
 
-import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -108,27 +107,5 @@ class ServiceRefusalTest {
             assertEquals("«$it» — про ключ", AiOutcome.BAD_KEY, aiOutcomeOfFailure(it))
         }
         assertEquals("наше объявленное слово — тот же признак", AiOutcome.BAD_KEY, aiOutcomeOfFailure(KEY_NOT_TAKEN))
-    }
-
-    /**
-     * Сторож шва (#1236): чужой ответ и код протокола не попадают в текст исключения, а
-     * значит и на экран — `FlowViewModel` показывает `message` как есть. Раньше правило
-     * держалось на ручном списке файлов, и десятый клиент в него просто не попадал.
-     */
-    @Test
-    fun `ни один клиент не кладёт код протокола и чужой ответ в текст исключения`() {
-        val repo = File("../..")
-        val banned = listOf("HTTP ${'$'}", "res.body.take(", "res.body.substring(")
-
-        val guilty = listOf("core/flow/src/main", "data/src/main", "desktop/src/main")
-            .map { File(repo, it) }
-            .filter { it.isDirectory }
-            .flatMap { dir -> dir.walkTopDown().filter { it.extension == "kt" }.toList() }
-            .flatMap { file ->
-                val text = file.readText()
-                banned.filter { it in text }.map { "${file.name}: $it" }
-            }
-
-        assertTrue("чужой ответ или код протокола в словах отказа: $guilty", guilty.isEmpty())
     }
 }

@@ -2,7 +2,6 @@ package com.point.core.flow
 
 import java.io.File
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -61,21 +60,5 @@ class SafeFileNameTest {
     fun `обычное имя не трогается`() {
         assertEquals("Contract 2026.pdf", safeFileName("Contract 2026.pdf"))
         assertEquals("photo_2026-08-12.png", safeFileName("photo_2026-08-12.png"))
-    }
-
-    /**
-     * Сторож шва: правило знали пятью способами в пяти местах, а в шестом не знали вовсе.
-     * Седьмое место не должно завести свой способ.
-     */
-    @Test
-    fun `места приёма чистят имя общей чисткой, а не своей`() {
-        val repo = File("../..")
-        val guilty = listOf(
-            "data/src/main/kotlin/com/point/data/ScratchObjectStore.kt",
-            "app/src/main/kotlin/com/point/ClipboardSyncActivity.kt",
-            "desktop/src/main/kotlin/com/point/desktop/Inbox.kt",
-        ).filterNot { File(repo, it).readText().contains("safeFileName(") }
-
-        assertTrue("своя чистка имени: $guilty", guilty.isEmpty())
     }
 }

@@ -1,4 +1,4 @@
-package com.point
+package com.point.checks
 
 import java.io.File
 import org.junit.Assert.assertEquals
@@ -55,7 +55,7 @@ class NoNetworkJargonTest {
     @Test
     fun `сторож правда прочитал продукт, а не пустоту`() {
 
-        assertTrue("исходников не нашлось: ${root.absolutePath}", sources().size > 100)
+        assertTrue("исходников не нашлось: ${repo.absolutePath}", sources().size > 100)
         assertTrue("человеческих строк не нашлось", productSpeech().size > 300)
         assertTrue(
             "экран компьютера не прочитан — а неправда про круг жила именно там",
@@ -108,11 +108,9 @@ class NoNetworkJargonTest {
 
     private data class Said(val where: String, val text: String)
 
-    private val root: File = generateSequence(File(".").absoluteFile) { it.parentFile }
-        .first { File(it, "settings.gradle.kts").isFile }
 
     private fun sources(): List<File> = listOf("app", "core", "data", "executors", "desktop")
-        .map { File(root, it) }
+        .map { File(repo, it) }
         .flatMap { module ->
             module.walkTopDown()
                 .onEnter { it.name != "build" }
@@ -122,7 +120,7 @@ class NoNetworkJargonTest {
         }
 
     private fun productSpeech(): List<Said> = sources()
-        .flatMap { saidIn(it.toRelativeString(root), it.readText()) }
+        .flatMap { saidIn(it.toRelativeString(repo), it.readText()) }
         .filter { CYRILLIC.containsMatchIn(it.text) }
 
     private fun saidIn(where: String, src: String): List<Said> {

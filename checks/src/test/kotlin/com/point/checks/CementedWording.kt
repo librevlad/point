@@ -1,4 +1,4 @@
-package com.point.core.flow
+package com.point.checks
 
 /**
  * Что считается цементом формулировки (#584, решение владельца 10.08.2026).
