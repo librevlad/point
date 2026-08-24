@@ -3,6 +3,7 @@ package com.point.core.flow
 import com.point.core.model.Provenance
 import java.math.BigDecimal
 import java.math.RoundingMode
+import java.util.Currency
 
 data class MoneyAmount(
 
@@ -29,10 +30,10 @@ internal fun amountDigitsFit(value: String): Boolean =
  * чека «TAX1», и «0» из слипшейся строки «TAX1 0» проходили в сумму и вставали главным
  * фактом чека Family Dollar, а настоящие 2.00, 0.18 и 2.18 уходили в «ещё».
  *
- * Знаком валюты считается любой знак валюты Unicode, а не перечисленные здесь: «¥1200» и
- * «₹250» — такие же числа, как «$2.18», и закрытый список выбрасывал их из знания. Буквы при
- * числе валютой сами по себе не становятся: именно так «TAX1» и вставало суммой, — поэтому
- * словами валюту знают только названные.
+ * Знаком валюты считается любой знак валюты Unicode, а кодом — любой код ISO 4217, а не
+ * перечисленные здесь: «¥1200», «₹250» и «1200 JPY» — такие же числа, как «$2.18», и закрытый
+ * список выбрасывал их из знания. Буквы при числе валютой сами по себе не становятся: именно
+ * так «TAX1» и вставало суммой, — поэтому валюту словом знают только названные и коды.
  */
 fun amountFits(value: String): Boolean =
     AMOUNT_VALUE.matches(value.trim()) && amountDigitsFit(value) && !zeroAmount(value)
@@ -86,33 +87,64 @@ fun mainAmount(values: List<String>): String? {
  * Тогда итог не выбирается вовсе и остаётся первое названное, как было до правила. Валюта,
  * которую документ не назвал, ничему не противоречит: на чеке она стоит раз на строку, а то
  * и одна на весь лист.
+ *
+ * Валюты сравниваются по тому, что они называют, а не по тому, как записаны: «₴» и «грн» —
+ * одна и та же гривня. Прежде здесь стояло само написание пометки, и квитанция со знаком
+ * в шапке и словом в строках молча выключала правило величины.
  */
 private fun biggest(amounts: List<MoneyAmount>): MoneyAmount {
-    val named = amounts.mapNotNull { it.currency.lowercase().ifEmpty { null } }.distinct()
+    val named = amounts.mapNotNull { currencyKey(it.currency) }.distinct()
     if (amounts.size < 2 || named.size > 1) return amounts.first()
     return amounts.maxBy { amountValue(it.value) ?: BigDecimal.ZERO }
 }
 
-/** Валютная пометка при числе: знак валюты Unicode или названное словом; нет — `null`. */
+/** Валютная пометка при числе: знак Unicode, код ISO или слово; пометки нет — `null`. */
 private fun currencyMark(value: String): String? =
     CURRENCY_FOUND.find(value)?.value?.lowercase()
+
+/** Какую валюту называет пометка, как бы её ни записали (#1059); пометки нет — `null`. */
+private fun currencyKey(mark: String): String? {
+    val named = mark.trim().trimEnd('.').lowercase().ifEmpty { return null }
+    return SAME_CURRENCY.firstOrNull { named in it }?.first() ?: named
+}
+
+/** Знак, код и слово одной валюты: три записи одного и того же (#1059). */
+private val SAME_CURRENCY = listOf(
+    listOf("₴", "грн", "uah"),
+    listOf("$", "usd"),
+    listOf("€", "eur"),
+    listOf("£", "gbp"),
+    listOf("₽", "руб", "rub"),
+    listOf("zł", "pln"),
+)
 
 /**
  * Подписана ли эта сумма как итог документа (#1059, решение владельца).
  *
- * Подпись стоит в той же строке или в строке-заголовке над числом — теми же словами, какими
- * её знает судья улик (`FIELD_MARKERS`). Величина одна итога не называет: на чеке Family
- * Dollar наибольшее — «CASH 2.25», отданные деньги, а заплачено 2.18.
+ * Подпись стоит в той же строке или в строке-заголовке над числом. Осматриваются **все**
+ * строки, где стоит именно это число, а не первая встреченная: на чеке с одним товаром цена,
+ * подытог и итог — одно и то же число, и первый раз оно встречается задолго до строки
+ * «TOTAL». Прежде дальше первой такой строки правило не смотрело, подписанных сумм не
+ * находило вовсе — и главной суммой вставали наличные, протянутые кассиру.
+ *
+ * `head` — подпись назвала итог сама («TOTAL», «CASH TOTAL»); иначе за подписью стоит слово,
+ * говорящее, чего именно итог, и это уже другая величина: «TOTAL SAVINGS» — сколько
+ * сэкономлено, «TOTAL TAX» — налог, «TOTAL ITEMS» — штуки. Прямая подпись сильнее такой,
+ * а такая — сильнее величины: чек, где итог назван только «TOTAL DUE», всё равно подписан.
  */
-private fun labelledTotal(lines: List<String>, value: String): Boolean {
-    val at = lines.indexOfFirst { standsIn(it, value) }
-    if (at < 0) return false
-    if (totalWords(lines[at])) return true
+private fun labelledTotal(lines: List<String>, value: String, head: Boolean): Boolean =
+    lines.indices.any { at ->
+        standsIn(lines[at], value) &&
+            (namesTotal(lines[at], head) || namedAbove(lines, at, head))
+    }
 
-    // Строка над числом — подпись колонки, только если своих чисел в ней нет: «Всього, грн»
-    // сверху и число снизу — одна подпись, разорванная переносом.
+/**
+ * Строка над числом — подпись колонки, только если своих чисел в ней нет: «Всього, грн»
+ * сверху и число снизу — одна подпись, разорванная переносом.
+ */
+private fun namedAbove(lines: List<String>, at: Int, head: Boolean): Boolean {
     val above = lines.getOrNull(at - 1) ?: return false
-    return moneyAmounts(above).isEmpty() && totalWords(above)
+    return moneyAmounts(above).isEmpty() && namesTotal(above, head)
 }
 
 /** Стоит ли в строке именно эта сумма: «2.18» внутри «12.18» — другое число, не она. */
@@ -129,16 +161,43 @@ private fun standsIn(line: String, value: String): Boolean {
     return false
 }
 
-private fun totalWords(line: String): Boolean {
-    val words = " " + line.lowercase().replace(NOT_LETTER, " ").trim() + " "
-
-    // Подпись — слово целиком: «SUBTOTAL» итога не объявляет, «CASH TOTAL» объявляет.
-    return TOTAL_MARKERS.any { " $it " in words }
+/**
+ * Называет ли строка итог документа, и называет ли его сама (#1059).
+ *
+ * Подпись — слово целиком: «SUBTOTAL» итога не объявляет, «CASH TOTAL» объявляет. Чего
+ * именно итог — говорят слова после подписи: за «TOTAL SAVINGS» стоит размер скидки, за
+ * «TOTAL TAX» — налог, и человеку под галочкой досталось бы число, которого он не платил
+ * никому. Валюта другой величины не называет: «Всього, грн» — та же подпись итога.
+ */
+private fun namesTotal(line: String, head: Boolean): Boolean {
+    val words = line.replace(NOT_LETTER, " ").trim().split(' ').filter(String::isNotEmpty)
+    val lower = words.map(String::lowercase)
+    return TOTAL_MARKERS.any { marker ->
+        val marked = marker.split(' ')
+        val at = (lower.size - marked.size downTo 0)
+            .firstOrNull { lower.subList(it, it + marked.size) == marked }
+        when {
+            at == null -> false
+            !head -> true
+            else -> words.drop(at + marked.size).all(::currencyWord)
+        }
+    }
 }
+
+/** Названа ли этим словом валюта: код ISO пишут заглавными, местное имя — как придётся. */
+private fun currencyWord(word: String): Boolean =
+    word in CURRENCY_CODES || word.lowercase() in CURRENCY_NAMES
 
 private val NOT_LETTER = Regex("[^\\p{L}]+")
 
-/** Слова, которыми документ называет свой итог (#1059). Одни и те же у правила и у судьи. */
+/**
+ * Слова, которыми документ называет свой итог (#1059).
+ *
+ * Их же берёт судья улик (`FIELD_MARKERS`), добавляя слова, которыми документ называет свою
+ * сумму («сума», «amount»). Читают они по-разному: правило смотрит строку и потому видит, за
+ * каким словом стоит подпись, а судья метит слово страницы поодиночке — подпись из двух слов
+ * до него не доходит.
+ */
 internal val TOTAL_MARKERS = listOf("total", "итого", "всього", "до сплати", "к оплате")
 
 fun moneyAmounts(text: String): List<MoneyAmount> =
@@ -162,7 +221,9 @@ fun amountFacts(text: String, source: Provenance = Provenance.OCR): Map<String, 
     // вставала первая встреченная, и у чека это подытог или налог; одна величина тоже не
     // спасает — на чеке Family Dollar наибольшее это «CASH 2.25», отданные деньги.
     val lines = text.lines()
-    val pool = amounts.filter { labelledTotal(lines, it.value) }.ifEmpty { amounts }
+    val pool = amounts.filter { labelledTotal(lines, it.value, head = true) }
+        .ifEmpty { amounts.filter { labelledTotal(lines, it.value, head = false) } }
+        .ifEmpty { amounts }
     val main = biggest(pool)
     val values = amounts.map { it.value }.distinct()
     return buildMap {
@@ -245,21 +306,31 @@ private val ARITHMETIC_SHAPED = Regex(
         "($AMOUNT_NUMBER)$H_SPACE*=$H_SPACE*($AMOUNT_NUMBER)(?![\\d])(?![.,]\\d)",
 )
 
-private val CURRENCIES = listOf(
-    "₴", "грн.", "грн", "UAH",
-    "$", "USD", "€", "EUR", "£", "GBP",
-    "₽", "руб.", "руб", "RUB",
-    "zł", "PLN",
-)
+/**
+ * Коды валют — ISO 4217, а не список в этом файле (#1059). Прежде валют было шестнадцать,
+ * и «1200 JPY» суммой не считалось вовсе: на пути модели такое значение переставало быть
+ * знанием, хотя число в нём — обычное число. Коды знает JVM, и они не устаревают вместе
+ * с файлом.
+ *
+ * Код читается только заглавными: строчные «all», «try», «top», «cup» — обычные английские
+ * слова, и любое из них сделало бы суммой «TOP 5».
+ */
+private val CURRENCY_CODES: Set<String> =
+    Currency.getAvailableCurrencies().mapTo(sortedSetOf()) { it.currencyCode }
+
+/** Как валюту называют словом там, где кода не пишут: «500 грн», «20 zł». */
+private val CURRENCY_NAMES = listOf("грн.", "грн", "руб.", "руб", "zł")
 
 private val CURRENCY_ALT =
-    CURRENCIES.sortedByDescending { it.length }.joinToString("|") { Regex.escape(it) }
+    CURRENCY_NAMES.sortedByDescending { it.length }.joinToString("|") { Regex.escape(it) }
 
 /**
- * Валюта при числе: любой знак валюты Unicode (`\p{Sc}`) или названная словом (#1059).
- * Список знаков закрытым быть не может — иен, рупий и злотых в мире больше, чем в этом файле.
+ * Валюта при числе: любой знак валюты Unicode (`\p{Sc}`), код ISO 4217 или названная словом
+ * (#1059). Список знаков закрытым быть не может — иен, рупий и злотых в мире больше, чем
+ * в этом файле.
  */
-private val CURRENCY_MARK = "(?:\\p{Sc}|$CURRENCY_ALT)"
+private val CURRENCY_MARK =
+    "(?:\\p{Sc}|(?-i:" + CURRENCY_CODES.joinToString("|") + ")|$CURRENCY_ALT)"
 
 private val CURRENCY_FOUND = Regex("(?iu)$CURRENCY_MARK")
 

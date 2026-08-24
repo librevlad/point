@@ -205,6 +205,13 @@ class UnderstandingProtocolTest {
             listOf("2.18"),
             parseFieldCandidates("AMOUNT=(2.18)").fields[META_ENTITY_AMOUNT]!!.map { it.text },
         )
+
+        // Число остаётся числом при любой валюте: гейт формы, поставленный на этом пути, не
+        // вправе выбросить франки и иены только потому, что их код не назвали в файле правил.
+        assertEquals(
+            listOf("1200 CHF"),
+            parseFieldCandidates("AMOUNT=1200 CHF").fields[META_ENTITY_AMOUNT]!!.map { it.text },
+        )
     }
 
     private fun cards(answer: String): List<String> =

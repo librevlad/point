@@ -368,10 +368,85 @@ class MoneyAmountTest {
         assertEquals("2.18", factCandidate(META_ENTITY_AMOUNT, "(2.18)"))
     }
 
+    @Test
+    fun `подпись итога ищется во всех строках с этим числом, а не в первой (#1059)`() {
+        // Одно и то же число стоит на чеке несколько раз: цена единственного товара, подытог
+        // и итог совпадают, а налог уже включён в цену. Осматривалась только первая такая
+        // строка — строку «TOTAL» правило не читало вовсе, подписанных сумм не находило,
+        // и главной суммой вставали наличные, которые протянули кассиру.
+        assertEquals(
+            "2,50",
+            amountFacts("CAFE ROMA\nESPRESSO 2,50 EUR\nTOTAL 2,50 EUR\nBAR 5,00 EUR")[META_ENTITY_AMOUNT],
+        )
+        assertEquals(
+            "2.18",
+            amountFacts("DRINK \$2.18\nCASH TOTAL \$2.18\nCASH \$5.00\nCHANGE \$2.82")[META_ENTITY_AMOUNT],
+        )
+        assertEquals(
+            "2.18",
+            amountFacts("ITEM A \$2.18\nSUBTOTAL \$2.18\nTOTAL \$2.18\nCASH \$2.25")[META_ENTITY_AMOUNT],
+        )
+    }
+
+    @Test
+    fun `подпись говорит, чего именно итог — сэкономленное итогом не становится (#1059)`() {
+        // «TOTAL SAVINGS» — сколько человек сэкономил, а не сколько заплатил. Слово «итог»
+        // ловилось где угодно в строке, скидка получала подпись итога и как бо́льшая вставала
+        // главной: под галочкой стояло число, которого человек не платил никому.
+        val savings = """
+            FAMILY DOLLAR
+            SUBTOTAL ${'$'}7.18
+            TOTAL SAVINGS ${'$'}5.00
+            CASH TOTAL ${'$'}2.18
+            CASH ${'$'}2.25
+            CHANGE ${'$'}0.07
+        """.trimIndent()
+
+        assertEquals("2.18", amountFacts(savings)[META_ENTITY_AMOUNT])
+        assertEquals("12.00", amountFacts("TOTAL TAX \$1.00\nTOTAL \$12.00\nCASH \$20.00")[META_ENTITY_AMOUNT])
+        assertEquals(
+            "12.00",
+            amountFacts("TOTAL ITEMS 3\nTOTAL DISCOUNT \$5.00\nCASH TOTAL \$12.00")[META_ENTITY_AMOUNT],
+        )
+
+        // Подпись при слове, которое другой величины не называет, итог называет по-прежнему:
+        // «TOTAL DUE» — тот же итог, и другой подписи на этом чеке нет.
+        assertEquals("12.00", amountFacts("TOTAL DUE \$12.00\nCASH \$20.00")[META_ENTITY_AMOUNT])
+    }
+
+    @Test
+    fun `одна валюта, записанная двумя способами, — та же валюта (#1059)`() {
+        // Сравнивалось написание пометки: «₴» и «грн» считались разными валютами, правило
+        // величины молча выключалось и возвращало «первое названное» — на квитанции со знаком
+        // в шапке и словом в строках главной вставала не та сумма.
+        assertEquals("1000 ₴", mainAmount(listOf("500 грн", "1000 ₴")))
+        assertEquals("900,00", amountFacts("Аванс ₴100,00\nРешта 900,00 грн")[META_ENTITY_AMOUNT])
+        assertEquals("9.00 USD", mainAmount(listOf("\$5.00", "9.00 USD")))
+    }
+
+    @Test
+    fun `валюту знает ISO, а не список в этом файле (#1059)`() {
+        // Валют в мире больше, чем записей в любом рукописном списке: «1200 JPY» и «1200 CHF»
+        // суммой не считались вовсе, а после гейта разбора ответа переставали быть знанием.
+        assertEquals(true, semanticFits(META_ENTITY_AMOUNT, "1200 JPY"))
+        assertEquals(true, semanticFits(META_ENTITY_AMOUNT, "1200 CHF"))
+        assertEquals(true, semanticFits(META_ENTITY_AMOUNT, "CHF 1200"))
+        assertEquals("1200", amountFacts("Итого 1200 CHF")[META_ENTITY_AMOUNT])
+
+        // Буквы при числе валютой сами по себе не становятся — иначе «TAX1» снова сумма.
+        assertEquals(false, semanticFits(META_ENTITY_AMOUNT, "TAX1"))
+        assertEquals(false, semanticFits(META_ENTITY_AMOUNT, "sum 101.01"))
+        assertEquals(false, semanticFits(META_ENTITY_AMOUNT, "BAR 5,00"))
+    }
+
     /**
-     * Чек Family Dollar с карточки #1059. Пять сумм — дословно из ответа модели в живом логе
-     * 17.08.2026 («AMOUNT=2.00 … AMOUNT=0.07»), подписи строк — из текста чтения, названного
-     * там же: подытог, налог, итог — и рядом отданные кассиру деньги со сдачей.
+     * Чек Family Dollar с карточки #1059 — восстановленный, а не дословный.
+     *
+     * Дословны здесь пять сумм: они выписаны из ответа модели в живом логе 17.08.2026
+     * («AMOUNT=2.00 … AMOUNT=0.07»). Подписи строк названы в карточке цитатой чтения
+     * («SUBTOTAL / TAX1 0 / CASH TOTAL 0 / CHANGE»), а вот кто из чисел под какой подписью
+     * стоял и где на строке стоял доллар — восстановлено. Самого текста чтения в репозитории
+     * нет: `entity.ocr.text.ref` в графе прогона указывает на файл в памяти телефона.
      */
     private val familyDollar = """
         FAMILY DOLLAR
