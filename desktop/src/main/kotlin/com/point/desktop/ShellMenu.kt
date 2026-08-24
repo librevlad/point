@@ -1,6 +1,10 @@
 package com.point.desktop
 
 import java.io.File
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 interface ShellMenu {
     fun registeredCommand(): String?
@@ -126,6 +130,68 @@ fun installedExecutable(command: String?): File? {
     val path = command?.takeIf { it.isNotBlank() } ?: return null
     val exe = File(path)
     return exe.takeIf { it.isFile && it.extension.equals("exe", ignoreCase = true) }
+}
+
+/**
+ * Выключатель меню файла: и вопрос «стоит ли», и сама постановка — одно действие (#1082).
+ *
+ * Реестр и папка «Отправить» — одна вещь на всё приложение, а ходят к ней двое: чтение при
+ * показе настроек и запись по нажатию. Очередь поэтому живёт здесь, у самого действия, а не в
+ * памяти экрана: экран настроек уходит из композиции, когда человек входит в «Мои устройства»,
+ * и возвращается с новой памятью — а начатая запись при этом не прерывается, `reg` и PowerShell
+ * отмены корутины не знают. Очередь в экране такого ухода не переживала: нажатие после возврата
+ * писало в реестр вместе с ещё идущим, чтение при показе шло поверх незаконченной записи, и чей
+ * ответ ляжет последним, решал случай — реестр оставался в положении, обратном переключателю.
+ *
+ * Работа уходит в IO: `reg` и PowerShell — это секунды, и на потоке кадров окно замирало бы на
+ * каждом нажатии.
+ */
+class RightClickSwitch(
+    private val menu: ShellMenu,
+    private val sendTo: SendToMenu,
+    private val installedExe: () -> File?,
+) {
+
+    private val turn = Mutex()
+
+    /** Стоит ли меню файла в этом положении выключателя на деле; `null` — прочитать не удалось. */
+    suspend fun holds(on: Boolean): Boolean? = withContext(Dispatchers.IO) {
+        turn.withLock {
+            rightClickHolds(
+                on = on,
+                exe = installedExe(),
+                menuPresent = menu.present(),
+                command = menu.registeredCommand(),
+                linkPresent = sendTo.present(),
+                linkTarget = sendTo.target(),
+            )
+        }
+    }
+
+    /**
+     * Ставит или снимает пункт и отвечает по эффекту; `null` — прочитать, что вышло, не удалось.
+     *
+     * Сорвалось — про эффект не известно ничего, и «не встало» из этого не следует: сбой
+     * операции знанием не является.
+     */
+    suspend fun set(on: Boolean): Boolean? = withContext(Dispatchers.IO) {
+        turn.withLock {
+            runCatching {
+                val exe = installedExe()
+                when {
+                    !on -> bothHold(menu.unregister(), sendTo.unregister())
+
+                    exe != null -> bothHold(
+                        menu.register(shellCommandFor(exe), SHELL_MENU_TITLE),
+                        sendTo.register(exe),
+                    )
+
+                    // Запуск из исходников: пункта меню не будет, и врать про него нечего.
+                    else -> false
+                }
+            }.getOrNull()
+        }
+    }
 }
 
 class RegistryShellMenu(

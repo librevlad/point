@@ -43,8 +43,6 @@ import com.point.core.flow.keyVerdict
 import com.point.core.flow.looksLikeApiKey
 import com.point.desktop.PcConfig
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 
 /**
  * Куда человек зашёл внутри настроек (#886).
@@ -98,11 +96,6 @@ fun SettingsRoot(
     // начатое до тапа, ни ответ первого из двух быстрых нажатий.
     var asked by remember { mutableStateOf(0) }
     val work = rememberCoroutineScope()
-
-    // Очередь нажатий: реестр и папка «Отправить» — одна вещь на всех, и два быстрых тапа
-    // писали в неё одновременно. Кто из них допишет последним, решал случай, и реестр мог
-    // остаться в положении, обратном переключателю. Ход за ходом (#1082).
-    val queue = remember { Mutex() }
 
     LaunchedEffect(Unit) {
         val turn = asked
@@ -186,8 +179,11 @@ fun SettingsRoot(
                 rightClickTrouble = null
                 rightClickChecking = true
                 work.launch {
-                    // Каждое нажатие делает то, что просило само, и дожидается своей очереди.
-                    val stood = queue.withLock { onRightClick(wanted) }
+                    // Каждое нажатие делает то, что просило само, а не то, что стоит на экране
+                    // к моменту его хода. Очередь на реестр и папку «Отправить» — у самого
+                    // действия: экран уходит из композиции и возвращается с новой памятью, а
+                    // начатая запись — нет, и такой уход её очередь обязана пережить (#1082).
+                    val stood = onRightClick(wanted)
                     if (asked == turn) {
                         rightClickTrouble = stood?.let { !it }
                         rightClickChecking = false

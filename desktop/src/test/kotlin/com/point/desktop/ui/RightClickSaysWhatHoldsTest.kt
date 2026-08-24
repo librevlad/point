@@ -1,16 +1,28 @@
 package com.point.desktop.ui
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.point.desktop.PcConfig
+import com.point.desktop.RightClickSwitch
+import com.point.desktop.SendToMenu
+import com.point.desktop.ShellMenu
 import com.point.desktop.ShortcutSendToMenu
 import com.point.desktop.rightClickHolds
 import com.point.desktop.sendToShortcut
 import com.point.desktop.shellCommandFor
 import java.io.File
+import java.util.Collections
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CompletableDeferred
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -220,25 +232,79 @@ class RightClickSaysWhatHoldsTest {
      * остаться в положении, обратном переключателю.
      */
     @Test
-    fun `второе нажатие ждёт своей очереди, а не пишет вместе с первым`() {
-        val gate = CompletableDeferred<Unit>()
-        val turns = mutableListOf<Boolean>()
-        show(enabled, holds = { true }, tap = { on -> turns += on; gate.await(); true })
+    fun `второе нажатие ждёт своей очереди, а не пишет вместе с первым`() = twoPresses(leavingScreen = false)
 
-        compose.onNodeWithText(rightClickLine(on = true, trouble = false, checking = false)).performClick()
+    /**
+     * Очередь переживает уход с экрана (#1082).
+     *
+     * Очередь жила в памяти экрана — одна на показ корня настроек. Человек нажимал переключатель,
+     * входил в «Мои устройства» (корень уходит из композиции целиком) и возвращался «←»: экран
+     * собирался заново с новой очередью, а начатая запись никуда не девалась — `reg` и PowerShell
+     * отмены корутины не знают и доделывают своё. Нажатие после возврата писало в реестр вместе с
+     * ней, а чтение при показе шло поверх незаконченной записи. Тот же жест PR предлагал как
+     * повтор проверки — он же и выносил нажатие за очередь.
+     */
+    @Test
+    fun `нажатие после возврата на экран ждёт того, что начато до ухода`() = twoPresses(leavingScreen = true)
+
+    /**
+     * Два нажатия подряд — с уходом с экрана между ними и без него. Правду о пункте считает
+     * настоящее действие (`RightClickSwitch`) над медленным реестром, а не подставной ответ.
+     */
+    private fun twoPresses(leavingScreen: Boolean) {
+        val registry = SlowRegistry(File(temp.newFolder("Point"), "Point.exe").apply { writeText("") })
+        val switch = RightClickSwitch(SlowShellMenu(registry), SlowSendTo(registry)) { registry.exe }
+
+        var config by mutableStateOf(enabled)
+        var atRoot by mutableStateOf(true)
+        compose.setContent {
+            PointDesktopTheme {
+                // Тот же `when (page)`, что в SettingsPane: вход в раздел уносит корень настроек
+                // из композиции целиком, вместе со всей его памятью.
+                if (atRoot) {
+                    SettingsRoot(
+                        config = config,
+                        devices = 0,
+                        email = "",
+                        onSave = { config = it },
+                        onRightClick = switch::set,
+                        rightClickHolds = switch::holds,
+                        onOpen = { atRoot = false },
+                    )
+                }
+            }
+        }
         compose.waitForIdle()
-        compose.onNodeWithText(rightClickLine(on = false, trouble = null, checking = true)).performClick()
+
+        // Человек выключает пункт — запись в реестр пошла и ещё идёт.
+        compose.onNodeWithText(RIGHT_CLICK_ROW).performClick()
+        assertEquals("первое нажатие в реестр не пошло", false, registry.started.poll(5, TimeUnit.SECONDS))
+
+        if (leavingScreen) {
+            compose.onNodeWithText(DEVICES_ROW).performClick()
+            compose.waitForIdle()
+
+            // «←» из раздела: корень настроек собирается заново.
+            compose.runOnUiThread { atRoot = true }
+            compose.waitForIdle()
+        }
+
+        // Нажимает снова. Очередь живёт у действия, а не у экрана, — второе нажатие ждёт первого.
+        compose.onNodeWithText(RIGHT_CLICK_ROW).performClick()
         compose.waitForIdle()
+        assertNull(
+            "второе нажатие полезло в реестр, не дождавшись первого",
+            registry.started.poll(2, TimeUnit.SECONDS),
+        )
 
-        // Первый тап держит очередь — второй в реестр ещё не полез.
-        assertEquals(listOf(false), turns)
+        // Первая запись дописала — доходит очередь до второй.
+        registry.holdOff.countDown()
+        assertEquals("второе нажатие до реестра не дошло", true, registry.started.poll(5, TimeUnit.SECONDS))
+        compose.waitUntil(timeoutMillis = 5_000) { registry.steps.size == 4 }
 
-        gate.complete(Unit)
-        compose.waitForIdle()
-
-        // Ход за ходом, и каждый сделал то, что просил сам, а не то, что стоит на экране сейчас.
-        assertEquals(listOf(false, true), turns)
-        compose.onNodeWithText(rightClickLine(on = true, trouble = false, checking = false)).assertExists()
+        // Ход за ходом, и каждое нажатие сделало то, что просило само.
+        assertEquals(listOf("снимает", "снял", "ставит", "поставил"), registry.steps.toList())
+        assertTrue("реестр остался в положении, обратном переключателю", registry.stands)
     }
 
     /**
@@ -253,4 +319,65 @@ class RightClickSaysWhatHoldsTest {
         compose.onNodeWithText(rightClickLine(on = true, trouble = null, checking = true)).assertDoesNotExist()
         compose.onNodeWithText(rightClickLine(on = true, trouble = null, checking = false)).assertExists()
     }
+
+    private companion object {
+
+        /** Строки, по которым человек находит нажимаемое: названия, а не подписи-вердикты. */
+        const val RIGHT_CLICK_ROW = "«Открыть в Point» в меню файла"
+
+        const val DEVICES_ROW = "Мои устройства"
+    }
+}
+
+/**
+ * Реестр и папка «Отправить» на время теста (#1082).
+ *
+ * Запись идёт не мгновенно — как `reg import` и PowerShell, — и отменой корутины не прерывается:
+ * её держит занятый поток, а не приостановка. Уход с экрана настоящую запись не останавливает, и
+ * очередь обязана считаться именно с этим.
+ */
+private class SlowRegistry(val exe: File) {
+
+    /** Стоит ли пункт «Открыть в Point» на деле. */
+    @Volatile var stands = true
+
+    /** След записей по порядку: что пошло и что легло. */
+    val steps: MutableList<String> = Collections.synchronizedList(mutableListOf<String>())
+
+    /** События «запись пошла»: их ждут, а не отсчитывают время. */
+    val started = LinkedBlockingQueue<Boolean>()
+
+    /** Первая запись держится, пока её не отпустят: столько же держит окно живой `reg`. */
+    val holdOff = CountDownLatch(1)
+
+    fun write(value: Boolean): Boolean {
+        steps += if (value) "ставит" else "снимает"
+        started.put(value)
+        if (!value) holdOff.await()
+        stands = value
+        steps += if (value) "поставил" else "снял"
+        return true
+    }
+}
+
+private class SlowShellMenu(private val registry: SlowRegistry) : ShellMenu {
+
+    override fun registeredCommand(): String? = shellCommandFor(registry.exe).takeIf { registry.stands }
+
+    override fun present(): Boolean = registry.stands
+
+    override fun register(command: String, title: String): Boolean = registry.write(true)
+
+    override fun unregister(): Boolean = registry.write(false)
+}
+
+private class SlowSendTo(private val registry: SlowRegistry) : SendToMenu {
+
+    override fun target(): String? = registry.exe.absolutePath.takeIf { registry.stands }
+
+    override fun present(): Boolean = registry.stands
+
+    override fun register(exe: File): Boolean = true
+
+    override fun unregister(): Boolean = true
 }

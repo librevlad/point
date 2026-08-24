@@ -236,27 +236,23 @@ fun main(args: Array<String>) {
             }
 
             // «Отправить → Point» — другое меню Windows и живёт своей записью (#255).
-            if (shellMenuNeedsUpdate(sendTo.target(), exe.absolutePath) && sendTo.register(exe) == false) {
-                println("[shell-menu] ярлык «Отправить → Point» не встал")
+            // След тот же, что у реестра выше: молчание Windows про ярлык записано молчанием,
+            // а не «не встал», — иначе про ярлык в логе не остаётся ничего (#1082).
+            if (shellMenuNeedsUpdate(sendTo.target(), exe.absolutePath)) {
+                when (sendTo.register(exe)) {
+                    false -> println("[shell-menu] ярлык «Отправить → Point» не встал")
+                    null -> println("[shell-menu] Windows не ответила про ярлык «Отправить → Point»")
+                    true -> Unit
+                }
             }
         }
     }
 
     // Правда о пункте меню — в реестре и в папке «Отправить», а не в памяти экрана (#1082):
     // настройки читают её при показе, и после перезапуска переключатель говорит то, что есть,
-    // а не то, что когда-то нажали.
-    val menuHolds: suspend (Boolean) -> Boolean? = { on ->
-        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-            rightClickHolds(
-                on = on,
-                exe = installedExe(),
-                menuPresent = shellMenu.present(),
-                command = shellMenu.registeredCommand(),
-                linkPresent = sendTo.present(),
-                linkTarget = sendTo.target(),
-            )
-        }
-    }
+    // а не то, что когда-то нажали. Очередь на реестр и папку «Отправить» живёт здесь, у самого
+    // действия: экран настроек уходит и возвращается, а начатая запись — нет.
+    val rightClick = RightClickSwitch(shellMenu, sendTo, installedExe)
 
     // Беда говорит словами, а не именем класса (#822): системное окно `Error` с
     // `CompactAppKt$CompactApp$18$2$11$1$1` человеку не объясняет ничего. След остаётся на
@@ -485,30 +481,8 @@ fun main(args: Array<String>) {
                     // поэтому «встал ли пункт» уезжает ответом в настройки — переключатель не
                     // говорит «Показывается» поверх пустого реестра (#1082). Выключение отвечает
                     // по эффекту тоже — снято ли: константа «снято» была бы тем же молчанием.
-                    // Реестр и папка «Отправить» — это `reg` и PowerShell, секунды на нажатие:
-                    // на потоке кадров окно замирало бы на каждом тапе. Работа уходит в IO тем
-                    // же путём, что и чтение при показе (#1082).
-                    onRightClick = { on ->
-                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                            // Сорвалось — про эффект не известно ничего, и «не встало» из этого не
-                            // следует: сбой операции знанием не является (#1082).
-                            runCatching {
-                                val exe = installedExe()
-                                when {
-                                    !on -> bothHold(shellMenu.unregister(), sendTo.unregister())
-
-                                    exe != null -> bothHold(
-                                        shellMenu.register(shellCommandFor(exe), SHELL_MENU_TITLE),
-                                        sendTo.register(exe),
-                                    )
-
-                                    // Запуск из исходников: пункта меню не будет, и врать про него нечего.
-                                    else -> false
-                                }
-                            }.getOrNull()
-                        }
-                    },
-                    rightClickHolds = menuHolds,
+                    onRightClick = rightClick::set,
+                    rightClickHolds = rightClick::holds,
                     // «Убрать прямо сейчас» убирает всё, что Point помнит здесь, а не только
                     // файлы старше суток (#1081): само по себе старое по-прежнему уходит при
                     // запуске, а кнопка делает то, что на ней написано.
