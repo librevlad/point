@@ -83,6 +83,14 @@ class DesktopState(
      * срок кончается раньше работы, и тест краснеет на здоровом коде.
      */
     private val background: CoroutineDispatcher = Dispatchers.Default,
+
+    /**
+     * Чем исполняется работа с диском и сетью: очередь телефону, чтение и запись файлов,
+     * стук в телефон. В работе это дисковый пул; под тестом сюда передают тот же
+     * планировщик, что и в [background], и тогда «просьба легла в очередь» — состоявшееся
+     * событие, которого дожидаются, а не срок, который истёк.
+     */
+    private val io: CoroutineDispatcher = Dispatchers.IO,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + background)
 
@@ -491,7 +499,7 @@ class DesktopState(
         silent: Boolean = false,
     ) {
         val request = java.util.UUID.randomUUID().toString()
-        scope.launch(Dispatchers.IO) {
+        scope.launch(io) {
             runCatching {
                 outbox?.add(
                     item.obj.copy(
@@ -623,7 +631,7 @@ class DesktopState(
     val cloudAsk: StateFlow<CloudAsk?> = _cloudAsk.asStateFlow()
 
     fun onBubble(item: InboxItem, bubble: Bubble) {
-        work = scope.launch(Dispatchers.IO) {
+        work = scope.launch(io) {
 
             // Действие само знает, что сейчас не сработает (#1022): человек слышит причину
             // по тапу, а не после согласия на отправку, которая всё равно не состоится.
@@ -664,7 +672,7 @@ class DesktopState(
     fun approveCloud() {
         val ask = _cloudAsk.value ?: return
         _cloudAsk.value = null
-        work = scope.launch(Dispatchers.IO) {
+        work = scope.launch(io) {
             runCatching { consent?.allow(ask.scope) }
             perform(ask.bubble.capabilityId.value, ask.item, ask.bubble.title)
         }

@@ -13,6 +13,10 @@ import com.point.core.model.PointObject
 import com.point.core.model.ScratchRef
 import java.io.File
 import java.util.concurrent.atomic.AtomicInteger
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -26,9 +30,17 @@ import org.junit.rules.TemporaryFolder
  * сервер Point, и без аккаунта её выдавать некому: причина называется по тапу, согласия
  * никто не спрашивает, файл никуда не идёт.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class LinkWithoutAccountAsksNothingTest {
 
     @get:Rule val temp = TemporaryFolder()
+
+    /**
+     * Ответ на тап рождается в работе окна: и названная причина, и вопрос согласия.
+     * Планировщик теста доводит её до конца, поэтому «согласия не спрашивали» —
+     * проверенный факт, а не срок, который истёк раньше вопроса.
+     */
+    private val dispatcher = StandardTestDispatcher()
 
     private val ran = AtomicInteger(0)
 
@@ -46,6 +58,8 @@ class LinkWithoutAccountAsksNothingTest {
         DesktopResolver(setOf(DropRealizer())),
         clipboard = { },
         consent = FileConsent(File(temp.root, "consent-$signedIn")),
+        background = dispatcher,
+        io = dispatcher,
     )
 
     private var made = 0
@@ -60,17 +74,12 @@ class LinkWithoutAccountAsksNothingTest {
     private fun bubble() =
         Bubble("link", "Дать ссылку", DropLinkCapability.ID, ObjectState(ObjectKind.IMAGE))
 
-    private fun await(until: () -> Boolean) {
-        val deadline = System.currentTimeMillis() + 3_000
-        while (System.currentTimeMillis() < deadline && !until()) Thread.sleep(20)
-    }
-
     @Test
-    fun `без аккаунта тап отвечает причиной, а не вопросом согласия`() {
+    fun `без аккаунта тап отвечает причиной, а не вопросом согласия`() = runTest(dispatcher) {
         val st = state(signedIn = false)
 
         st.onBubble(item(), bubble())
-        await { st.message.value != null }
+        advanceUntilIdle()
 
         assertEquals(NEEDS_ACCOUNT_FOR_LINK, st.message.value)
         assertNull("согласие спрошено зря", st.cloudAsk.value)
@@ -78,11 +87,11 @@ class LinkWithoutAccountAsksNothingTest {
     }
 
     @Test
-    fun `с аккаунтом всё идёт прежним ходом — согласие спрашивается`() {
+    fun `с аккаунтом всё идёт прежним ходом — согласие спрашивается`() = runTest(dispatcher) {
         val st = state(signedIn = true)
 
         st.onBubble(item(), bubble())
-        await { st.cloudAsk.value != null }
+        advanceUntilIdle()
 
         assertNotNull("вопрос согласия пропал вместе с починкой", st.cloudAsk.value)
         assertEquals("файл не должен уйти до «да»", 0, ran.get())

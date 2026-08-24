@@ -5,6 +5,10 @@ import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
 import com.point.core.model.ScratchRef
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -23,9 +27,16 @@ import org.junit.rules.TemporaryFolder
  * Половина контракта связки хуже его отсутствия — поэтому обещание должно быть точным:
  * просьба ждёт, пока человек откроет Point на телефоне и заберёт объект.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class PhoneDoesNotPretendTest {
 
     @get:Rule val temp = TemporaryFolder()
+
+    /**
+     * Просьба ложится в очередь в работе окна: планировщик теста доводит её до конца,
+     * и «просьба легла» — событие, а не то, что успело случиться за 400 мс.
+     */
+    private val dispatcher = StandardTestDispatcher()
 
     private val knocks = java.util.concurrent.atomic.AtomicInteger()
 
@@ -35,6 +46,8 @@ class PhoneDoesNotPretendTest {
         clipboard = { },
         outbox = box,
         knockPhone = { knocks.incrementAndGet() },
+        background = dispatcher,
+        io = dispatcher,
     )
 
     /** Объект настоящий: очередь копирует файл, и мнимый путь в неё не ляжет. */
@@ -68,7 +81,7 @@ class PhoneDoesNotPretendTest {
     }
 
     @Test
-    fun `телефон не на связи — сначала спрашивают, потом кладут в очередь`() {
+    fun `телефон не на связи — сначала спрашивают, потом кладут в очередь`() = runTest(dispatcher) {
         val box = Outbox(temp.newFolder("outbox"))
         val pc = state(box)
         val call = PcRemoteAction("call", "Позвонить")
@@ -82,7 +95,7 @@ class PhoneDoesNotPretendTest {
         assertEquals("положили, не спросив", 0, box.entries().size)
 
         pc.approvePhone()
-        Thread.sleep(400)
+        advanceUntilIdle()
 
         assertEquals("согласие не положило просьбу в очередь", 1, box.entries().size)
         val left = box.entries().single()
@@ -97,7 +110,7 @@ class PhoneDoesNotPretendTest {
 
     /** Стук — про своевременность, а не про работу: он не должен решать, случится ли она. */
     @Test
-    fun `молчание стука не отменяет просьбу`() {
+    fun `молчание стука не отменяет просьбу`() = runTest(dispatcher) {
         val box = Outbox(temp.newFolder("outbox"))
         val pc = DesktopState(
             registry = DesktopRegistry(emptySet()),
@@ -105,11 +118,13 @@ class PhoneDoesNotPretendTest {
             clipboard = { },
             outbox = box,
             knockPhone = { error("сервер молчит") },
+            background = dispatcher,
+            io = dispatcher,
         )
 
         pc.sendToPhone(item(), PcRemoteAction("call", "Позвонить"))
         pc.approvePhone()
-        Thread.sleep(400)
+        advanceUntilIdle()
 
         assertEquals("просьба пропала из-за неудачного стука", 1, box.entries().size)
     }
