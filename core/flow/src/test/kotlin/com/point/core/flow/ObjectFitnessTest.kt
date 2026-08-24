@@ -88,14 +88,50 @@ class ObjectFitnessTest {
     private val unfit = ObjectState(ObjectKind.IMAGE, setOf(Feature.UNUSABLE))
     private val fit = ObjectState(ObjectKind.IMAGE)
 
+    /** Объекту сказано, что дело в его содержимом: «он повреждён или это не изображение». */
+    private val brokenContent =
+        mapOf(META_UNUSABLE_REASON to readerFailure(READER_NOT_DECODED, ObjectKind.IMAGE))
+
     @Test
     fun `негодному уходят двери чтения, а превращения и отправка остаются`() {
-        assertEquals(listOf(scan, share), offeredWhenUnfit(unfit, emptyMap(), doors))
+        assertEquals(listOf(scan, share), offeredWhenUnfit(unfit, brokenContent, doors))
     }
 
     @Test
     fun `годному — всё применимое, порядок тот же`() {
-        assertEquals(doors, offeredWhenUnfit(fit, emptyMap(), doors))
+        assertEquals(doors, offeredWhenUnfit(fit, brokenContent, doors))
+    }
+
+    /**
+     * Живой объект #1101: PDF под паролем. Предпросмотр срывается и метит объект негодным
+     * без гарда `readerFailureIsFatal` (#1271), но человеку сказано «Прочитать сейчас не
+     * вышло — попробуйте ещё раз». Отнять при этом ВСЕ чтения — оставить человека без того,
+     * чем пробовать: ни «Прочитать документ», ни «Понять», ни «AI».
+     */
+    @Test
+    fun `сорвавшаяся попытка чтения дверь чтения не закрывает`() {
+        val attempt = mapOf(META_UNUSABLE_REASON to readerFailure("Password required", ObjectKind.PDF))
+
+        assertEquals(doors, offeredWhenUnfit(unfit, attempt, doors))
+        assertEquals(doors, offeredWhenUnfit(unfit, mapOf(META_UNUSABLE_REASON to READ_TOO_SLOW), doors))
+        assertEquals(doors, offeredWhenUnfit(unfit, mapOf(META_UNUSABLE_REASON to READ_TOO_BIG), doors))
+    }
+
+    /** Метка без слов ничего не сказала: «не исследовано» — не «нечего читать». */
+    @Test
+    fun `метка молчит — двери чтения остаются`() {
+        assertEquals(doors, offeredWhenUnfit(unfit, emptyMap(), doors))
+        assertEquals(doors, offeredWhenUnfit(unfit, mapOf(META_UNUSABLE_REASON to " "), doors))
+    }
+
+    /** Пустой файл и обломок архива о содержимом сказали — чтения им не предлагаются. */
+    @Test
+    fun `пустому файлу и битому архиву чтения не предлагаются`() {
+        val empty = mapOf(META_UNUSABLE_REASON to EMPTY_FILE_REASON)
+        val archive = mapOf(META_UNUSABLE_REASON to BROKEN_ARCHIVE_REASON)
+
+        assertEquals(listOf(scan, share), offeredWhenUnfit(unfit, empty, doors))
+        assertEquals(listOf(scan, share), offeredWhenUnfit(unfit, archive, doors))
     }
 
     /**
@@ -106,7 +142,8 @@ class ObjectFitnessTest {
     @Test
     fun `прочитанное старше метки — двери чтения остаются`() {
         val qr = investigationKey(com.point.core.model.CapabilityId("qr"))
-        val answered = mapOf(qr to InvestigationState.FOUND.wire, "entity.url" to "https://point.app/x")
+        val answered = brokenContent +
+            mapOf(qr to InvestigationState.FOUND.wire, "entity.url" to "https://point.app/x")
 
         assertEquals(doors, offeredWhenUnfit(unfit, answered, doors))
     }

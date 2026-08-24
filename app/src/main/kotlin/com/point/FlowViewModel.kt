@@ -1459,9 +1459,13 @@ class FlowViewModel @Inject constructor(
     private fun refreshTopBubbles() {
         val index = stack.lastIndex
         val frame = stack.getOrNull(index) ?: return
+        val graph = graphOf(frame)
         val refreshed = frame.copy(
-            bubbles = registry.bubblesFor(graphOf(frame)),
-            latent = registry.latentBubblesFor(frame.obj.state),
+            bubbles = registry.bubblesFor(graph),
+
+            // Подсказка спрашивается по тому же графу, что и двери (#1101): иначе экран
+            // отказывается предлагать чтение и тут же подсказывает, как к нему подготовиться.
+            latent = registry.latentBubblesFor(graph),
         )
         stack[index] = refreshed
         _ui.update { it.copy(frame = refreshed) }
@@ -2504,15 +2508,16 @@ class FlowViewModel @Inject constructor(
                 carriedFound.none { seen -> seen.id == it.id }
         }
         val found = carriedFound + listOfNotNull(cameFrom)
-        val bubbles = registry.bubblesFor(
-            com.point.core.flow.GraphState(known, found, relations),
-        )
+        val graph = com.point.core.flow.GraphState(known, found, relations)
+        val bubbles = registry.bubblesFor(graph)
         val frame = FlowFrame(
             known, bubbles, via, viaTitle,
 
             found = found,
             relations = relations,
-            latent = registry.latentBubblesFor(known.state),
+
+            // Двери и подсказки считаются по одному графу (#1101).
+            latent = registry.latentBubblesFor(graph),
         )
 
         // Исходник помнит, что из него вышло: вернулся человек назад — узел на месте, и
@@ -2922,23 +2927,25 @@ class FlowViewModel @Inject constructor(
         val graphChanged = newFound != frame.found || newRelations != frame.relations
         if (!objChanged && !graphChanged && update.running == frame.enriching && newFailed == frame.failed) return
 
-        val newBubbles = if (objChanged) {
-            com.point.core.model.keepShownOrder(
-                frame.bubbles,
-                registry.bubblesFor(
-                    graphOf(
-                        frame.copy(found = newFound, relations = newRelations, enriching = update.running),
-                        enriched,
-                    ),
-                ),
+        val newGraph = if (objChanged) {
+            graphOf(
+                frame.copy(found = newFound, relations = newRelations, enriching = update.running),
+                enriched,
             )
+        } else {
+            null
+        }
+        val newBubbles = if (newGraph != null) {
+            com.point.core.model.keepShownOrder(frame.bubbles, registry.bubblesFor(newGraph))
         } else {
             frame.bubbles
         }
         val refreshed = frame.copy(
             obj = enriched,
             bubbles = newBubbles,
-            latent = if (objChanged) registry.latentBubblesFor(newState) else frame.latent,
+
+            // Подсказки видят то же знание, что и двери (#1101).
+            latent = if (newGraph != null) registry.latentBubblesFor(newGraph) else frame.latent,
             enriching = update.running,
             found = newFound,
             relations = newRelations,
