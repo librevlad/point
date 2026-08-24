@@ -9,6 +9,8 @@ import com.google.mlkit.vision.segmentation.subject.SubjectSegmenterOptions
 import com.point.core.flow.BackgroundRemover
 import com.point.core.flow.ENGINE_PREPARING
 import com.point.core.flow.ObjectStore
+import com.point.core.flow.OwnWords
+import com.point.core.flow.ownWords
 import com.point.core.model.ScratchRef
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -27,12 +29,16 @@ class MlKitBackgroundRemover(
     }
 
     /**
-     * Печать слоя (#992): наружу выходят либо слова Point, либо ничего.
+     * Печать слоя (#992): наружу выходят либо слова Point — [OwnWords], — либо ничего.
      *
      * Раньше перехватывался один вызов — сегментация, — и текст любого другого сбоя внутри
      * (нет места на диске, не хватило памяти) уходил человеку в лицо через три действия
      * сразу. Здесь заперт весь слой: чужой текст остаётся в журнале, а безымянный отказ
      * называет само действие, которое нажал человек.
+     *
+     * Граница «своё / чужое» проходит по объявленному примитиву [OwnWords] (#1225), а не по
+     * тексту сообщения: по `message` её не видно. Второго такого механизма в `:data` нет —
+     * соседи по модулю говорят человеку тем же способом.
      */
     override suspend fun cutout(imagePath: String): ScratchRef = withContext(Dispatchers.IO) {
         try {
@@ -50,21 +56,25 @@ class MlKitBackgroundRemover(
             // `UNAVAILABLE` — модуль сегментации ещё качается из Play Services: работа не
             // начиналась, и лечится это ожиданием. Случай различается по коду исключения,
             // не по тексту.
-            if (code == MlKitException.UNAVAILABLE) throw OwnWords(ENGINE_PREPARING, e)
+            if (code == MlKitException.UNAVAILABLE) ownWords(ENGINE_PREPARING)
             throw IllegalStateException(null as String?, e)
         }
     }
 
     private suspend fun segment(imagePath: String): ScratchRef {
-        val bitmap = decodeBoundedUpright(imagePath, MAX_PX) ?: throw OwnWords("Не удалось прочитать изображение")
+
+        // Байты не разобрались в снимок — тот же признак, что видят оба читателя кодов, и
+        // слово о нём одно на всех (#992, #1236/#1237). Свой литерал здесь заводил второй
+        // словарь на один и тот же случай.
+        val bitmap = decodeBoundedUpright(imagePath, MAX_PX) ?: ownWords(UNREADABLE_IMAGE)
         try {
             val result = segmenter.process(InputImage.fromBitmap(bitmap, 0)).await()
-            val foreground = result.foregroundBitmap ?: throw OwnWords("Объект на фото не найден")
+            val foreground = result.foregroundBitmap ?: ownWords("Объект на фото не найден")
             val opaque = opaqueRatio(foreground)
 
-            if (opaque < MIN_OPAQUE_RATIO) throw OwnWords("Объект на фото не найден")
+            if (opaque < MIN_OPAQUE_RATIO) ownWords("Объект на фото не найден")
             if (opaque > MAX_OPAQUE_RATIO) {
-                throw OwnWords("На фото почти нет фона — объект занимает весь кадр")
+                ownWords("На фото почти нет фона — объект занимает весь кадр")
             }
             val ref = store.newScratchFile("png")
             File(ref.value).outputStream().use { foreground.compress(Bitmap.CompressFormat.PNG, 100, it) }
@@ -100,11 +110,3 @@ class MlKitBackgroundRemover(
         const val MAX_OPAQUE_RATIO = 0.96
     }
 }
-
-/**
- * Слова Point, сказанные о самом объекте: их печать слоя пропускает наружу как есть (#992).
- *
- * Всё остальное, что вылетает изнутри, — технический текст движка или платформы, и человеку
- * он не показывается.
- */
-private class OwnWords(words: String, cause: Throwable? = null) : IllegalStateException(words, cause)

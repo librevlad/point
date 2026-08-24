@@ -2,6 +2,7 @@ package com.point.data
 
 import com.point.core.flow.CollectionContent
 import com.point.core.flow.ObjectStore
+import com.point.core.flow.OwnWords
 import com.point.core.model.CapabilityId
 import com.point.core.model.PointObject
 import com.point.core.model.ResultObject
@@ -19,23 +20,39 @@ import org.junit.Test
  * человеку в лицо чужим техническим текстом, и сразу через три действия: «Убрать фон»,
  * «Размыть фон», «Заменить фон» ходят одним движком.
  *
- * Проверяется сам слой на пути человека: что бы внутри ни сломалось, наружу выходят либо
- * слова Point, либо ничего — и тогда отказ называет само действие, которое нажал человек.
+ * Проверяется сам слой на пути человека: что бы внутри ни сломалось, наружу выходит либо
+ * объявленное слово Point ([OwnWords], #1225), либо отказ без слов — и тогда его называет
+ * само действие, которое нажал человек.
  */
 class BackgroundEngineIsSealedTest {
 
     @Test
-    fun `платформа сломалась внутри слоя — её текст наружу не выходит`() = runTest {
+    fun `платформа сломалась внутри слоя — наружу вышло либо слово Point, либо ничего`() = runTest {
         val remover = MlKitBackgroundRemover(FakeStore())
 
         val thrown = runCatching { remover.cutout("/нет/такого/файла.jpg") }.exceptionOrNull()
 
         assertNotNull("слой обязан отказать, а не вернуть картинку", thrown)
-        val said = thrown!!.message
         assertTrue(
-            "из слоя вышел чужой технический текст: «$said»",
-            said == null || said.any { it in 'А'..'я' },
+            "из слоя вышел не объявленный текст: «${thrown!!.message}»",
+            thrown is OwnWords || thrown.message == null,
         )
+    }
+
+    @Test
+    fun `слово слоя не называет чужое действие`() = runTest {
+        val remover = MlKitBackgroundRemover(FakeStore())
+
+        val thrown = runCatching { remover.cutout("/нет/такого/файла.jpg") }.exceptionOrNull()
+
+        assertNotNull("слой обязан отказать, а не вернуть картинку", thrown)
+        val said = thrown!!.message.orEmpty()
+
+        // Движок один, действий три: слово про вырез человек читает и на «Размыть фон».
+        val named = listOf("вырез", "убрать фон", "размыть", "заменить фон")
+            .filter { said.contains(it, ignoreCase = true) }
+
+        assertTrue("слой назвал действие сам: $named в «$said»", named.isEmpty())
     }
 
     private class FakeStore : ObjectStore {
