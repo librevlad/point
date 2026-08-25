@@ -5,6 +5,7 @@ import com.point.core.flow.AtomAddress
 import com.point.core.flow.AtomCodec
 import com.point.core.flow.AtomLayer
 import com.point.core.flow.CLASSIFIER_ROLES
+import com.point.core.flow.CONTACT_ROLE
 import com.point.core.flow.Capability
 import com.point.core.flow.CapabilityMeta
 import com.point.core.flow.Cost
@@ -38,6 +39,7 @@ import com.point.core.flow.alternativesOf
 import com.point.core.flow.answerLanguageRule
 import com.point.core.flow.bareIndexId
 import com.point.core.flow.belongings
+import com.point.core.flow.contactParty
 import com.point.core.flow.investigationOutcome
 import com.point.core.flow.isRepairOf
 import com.point.core.flow.isRoleLabel
@@ -195,7 +197,13 @@ class UnderstandRealizer @Inject constructor(
                 // окно текста объекта (#809, «нет в тексте — нет знания»).
                 val readText = layer?.text?.takeIf { it.isNotBlank() } ?: window
 
-                val (roles, roleDisputes) = roleReadings(answer, laidOut, layer)
+                val (named, roleDisputes) = roleReadings(answer, laidOut, layer)
+
+                // Человек, названный при номере, — сторона самого объекта (#993): его
+                // имя знал только узел человека, а объект, на котором стоит «Сохранить
+                // контакт», оставался без имени. Стороны, названные прежде, — тоже знание
+                // объекта: второй раз тот же человек второй стороной не встаёт.
+                val roles = named + contactParty(parsed.contacts, input.metadata + named, readText)
 
                 // Что с чем связано (#1176): страница держит колонку при её подписи, и
                 // прочтение, стоящее в одном блоке с названной стороной, — про неё. Связь
@@ -326,7 +334,12 @@ class UnderstandRealizer @Inject constructor(
         if (fields.isEmpty() && parsed.single.isEmpty()) {
             return ActionResult.Failure("На снимке ничего не разобрать", recoverable = true)
         }
-        val (roles, _) = roleReadings(answer, elements = emptyList(), layer = null)
+        val (named, _) = roleReadings(answer, elements = emptyList(), layer = null)
+
+        // Состав знания один, кто бы его ни добыл (#993): зрячий путь тоже спрашивает
+        // CONTACT, и названный при номере человек — сторона объекта и здесь. Своего текста
+        // у зрячего чтения нет — сверять слово модели не с чем (#809), и оно остаётся.
+        val roles = named + contactParty(parsed.contacts, input.metadata + named, readText = "")
         val (values, anchors) =
             structuredValues(input, fields.mapValues { it.value.text } + parsed.single + roles)
         val merged = mergeFacts(input.metadata, values)
@@ -525,8 +538,8 @@ internal fun contactNodes(source: PointObject, contacts: List<com.point.core.flo
                 uri = ValueRef(contact.name),
                 state = ObjectState(KIND_PERSON, setOf(Feature.HAS_PHONE)),
                 metadata = linkedMapOf(
-                    META_GRAPH_ROLE_PREFIX + "contact" to contact.name,
-                    META_GRAPH_ROLE_PREFIX + "contact" + META_SOURCE_SUFFIX to Provenance.MODEL.wire,
+                    META_GRAPH_ROLE_PREFIX + CONTACT_ROLE to contact.name,
+                    META_GRAPH_ROLE_PREFIX + CONTACT_ROLE + META_SOURCE_SUFFIX to Provenance.MODEL.wire,
                     META_ENTITY_PREFIX + "phone" to contact.phone,
                     META_ENTITY_PREFIX + "phone" + META_SOURCE_SUFFIX to Provenance.MODEL.wire,
                 ),

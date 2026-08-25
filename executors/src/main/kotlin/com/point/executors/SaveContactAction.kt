@@ -1,5 +1,6 @@
 package com.point.executors
 
+import com.point.core.flow.ACTION_SCHEMAS
 import com.point.core.flow.Capability
 import com.point.core.flow.CapabilityMeta
 import com.point.core.flow.ContactInserter
@@ -7,6 +8,7 @@ import com.point.core.flow.EntityExtractor
 import com.point.core.flow.EntityType
 import com.point.core.flow.META_ENTITY_PREFIX
 import com.point.core.flow.Realizer
+import com.point.core.flow.personNameOf
 import com.point.core.model.ActionResult
 import com.point.core.model.CapabilityId
 import com.point.core.model.Feature
@@ -64,13 +66,21 @@ class SaveContactRealizer @Inject constructor(
             }
         }
 
-    /** Имя человека из знания: подписанный контакт (#653) или роль на объекте. */
-    private fun personName(input: PointObject): String? = input.metadata.entries
-        .firstOrNull {
-            it.key.startsWith(com.point.core.flow.META_GRAPH_ROLE_PREFIX) &&
-                !com.point.core.flow.isAnnotationKey(it.key) &&
-                com.point.core.flow.plausiblePersonName(it.value)
-        }?.value
+    /**
+     * Имя человека — из знания объекта (#993, решение владельца «имя из графа»).
+     *
+     * Раньше именем становилась первая попавшаяся сторона объекта: на наклейке с двумя
+     * сторонами в карточку уезжал не хозяин сохраняемого номера, а тот, чей ключ оказался
+     * в metadata раньше. Кого сохраняют — решает знание: чьё это знание карточки, а если
+     * хозяин не назван — единственный человек объекта.
+     *
+     * Какое знание уезжает в карточку, объявлено один раз — схемой самого действия: второй
+     * список тех же полей рядом с исполнителем расходился бы с ней молча.
+     */
+    private fun personName(input: PointObject): String? = personNameOf(
+        input.metadata,
+        ACTION_SCHEMAS.firstOrNull { it.runs == capabilityId }?.fields?.map { it.key }.orEmpty(),
+    )
 
     private suspend fun contactValue(input: PointObject, key: String, type: EntityType): String? =
         input.metadata[META_ENTITY_PREFIX + key]?.takeIf { it.isNotBlank() }
