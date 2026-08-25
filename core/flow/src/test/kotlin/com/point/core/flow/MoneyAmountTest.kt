@@ -418,10 +418,16 @@ class MoneyAmountTest {
     fun `одна валюта, записанная двумя способами, — та же валюта (#1059)`() {
         // Сравнивалось написание пометки: «₴» и «грн» считались разными валютами, правило
         // величины молча выключалось и возвращало «первое названное» — на квитанции со знаком
-        // в шапке и словом в строках главной вставала не та сумма.
+        // в шапке и словом в строках главной вставала не та сумма. Знак и код одной валюты
+        // сводит ISO, а не список семей в файле правил: шести семей на мир не хватает.
         assertEquals("1000 ₴", mainAmount(listOf("500 грн", "1000 ₴")))
         assertEquals("900,00", amountFacts("Аванс ₴100,00\nРешта 900,00 грн")[META_ENTITY_AMOUNT])
         assertEquals("9.00 USD", mainAmount(listOf("\$5.00", "9.00 USD")))
+        assertEquals("1000 ₽", mainAmount(listOf("500 руб", "1000 ₽")))
+        assertEquals("1500 JPY", mainAmount(listOf("¥1200", "1500 JPY")))
+        assertEquals("500 INR", mainAmount(listOf("₹250", "500 INR")))
+        assertEquals("900 KRW", mainAmount(listOf("₩250", "900 KRW")))
+        assertEquals("900 ILS", mainAmount(listOf("₪250", "900 ILS")))
     }
 
     @Test
@@ -430,13 +436,43 @@ class MoneyAmountTest {
         // суммой не считались вовсе, а после гейта разбора ответа переставали быть знанием.
         assertEquals(true, semanticFits(META_ENTITY_AMOUNT, "1200 JPY"))
         assertEquals(true, semanticFits(META_ENTITY_AMOUNT, "1200 CHF"))
-        assertEquals(true, semanticFits(META_ENTITY_AMOUNT, "CHF 1200"))
         assertEquals("1200", amountFacts("Итого 1200 CHF")[META_ENTITY_AMOUNT])
 
         // Буквы при числе валютой сами по себе не становятся — иначе «TAX1» снова сумма.
         assertEquals(false, semanticFits(META_ENTITY_AMOUNT, "TAX1"))
         assertEquals(false, semanticFits(META_ENTITY_AMOUNT, "sum 101.01"))
         assertEquals(false, semanticFits(META_ENTITY_AMOUNT, "BAR 5,00"))
+    }
+
+    @Test
+    fun `заголовок суммой не становится — код валюты стоит после числа (#1059)`() {
+        // «TOP» — тонганская паанга, «ALL» — албанский лек, «CUP», «TRY», «PEN» — тоже коды
+        // ISO, а заглавными пишут заголовки. Стоя перед числом, любой такой код делал суммой
+        // обычный английский заголовок: под галочкой на скриншоте статьи вставало «Сумма 5».
+        assertEquals(false, semanticFits(META_ENTITY_AMOUNT, "TOP 5"))
+        assertEquals(false, semanticFits(META_ENTITY_AMOUNT, "ALL 3"))
+        assertEquals(false, semanticFits(META_ENTITY_AMOUNT, "CHF 1200"))
+        assertTrue(moneyAmounts("TOP 5 GAMES OF 2026").isEmpty())
+        assertTrue(amountFacts("TOP 5 GAMES OF 2026\nALL 3 SEASONS").isEmpty())
+
+        // Хуже величины: выдуманная валюта «TOP» рядом с настоящей делала валюты разными,
+        // правило величины молча выключалось — и главной вставала первая, а не итог.
+        assertEquals(
+            "2.18",
+            amountFacts("TOP 5 GAMES\nОплата \$2.00\nДоплата \$2.18")[META_ENTITY_AMOUNT],
+        )
+    }
+
+    @Test
+    fun `валюта местными буквами числа не отменяет (#1059)`() {
+        // Гейт разбора ответа модели спрашивает судью формы — и, заперев валюты в списке,
+        // судья отнимал знание вовсе: «1200 kr» переставало быть суммой, тогда как число
+        // в нём — обычное число. Какими буквами написана валюта, судью формы не касается.
+        assertEquals(true, semanticFits(META_ENTITY_AMOUNT, "1200 kr"))
+        assertEquals(true, semanticFits(META_ENTITY_AMOUNT, "1200 Kč"))
+        assertEquals(true, semanticFits(META_ENTITY_AMOUNT, "1200 Ft"))
+        assertEquals(true, semanticFits(META_ENTITY_AMOUNT, "1200 лв"))
+        assertEquals("1200 kr", factCandidate(META_ENTITY_AMOUNT, "1200 kr"))
     }
 
     /**

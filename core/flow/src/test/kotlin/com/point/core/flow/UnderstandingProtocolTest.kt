@@ -207,11 +207,21 @@ class UnderstandingProtocolTest {
         )
 
         // Число остаётся числом при любой валюте: гейт формы, поставленный на этом пути, не
-        // вправе выбросить франки и иены только потому, что их код не назвали в файле правил.
+        // вправе выбросить франки, иены и кроны только потому, что их не назвали в файле
+        // правил. Какими буквами написана валюта, гейта не касается.
         assertEquals(
             listOf("1200 CHF"),
             parseFieldCandidates("AMOUNT=1200 CHF").fields[META_ENTITY_AMOUNT]!!.map { it.text },
         )
+        assertEquals(
+            listOf("1200 kr", "1200 Kč", "1200 лв"),
+            parseFieldCandidates("AMOUNT=1200 kr\nAMOUNT=1200 Kč\nAMOUNT=1200 лв")
+                .fields[META_ENTITY_AMOUNT]!!.map { it.text },
+        )
+
+        // А заголовок суммой не становится: «TOP» — код тонганской паанги, и стоя перед
+        // числом он делал суммой обычную английскую строку.
+        assertEquals(null, parseFieldCandidates("AMOUNT=TOP 5").fields[META_ENTITY_AMOUNT])
     }
 
     private fun cards(answer: String): List<String> =

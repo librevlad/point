@@ -76,7 +76,7 @@ internal fun judgeFields(
         val addressed = chosenByAddressee(key, parties)
 
         val winner = addressed?.let { chosen -> scored.firstOrNull { it.party == chosen } }
-            ?: mainOf(key, scored)
+            ?: mainOf(key, scored, readText)
         won[key] = JudgedField(
             text = winner.candidate.text,
             evidence = winner.evidence,
@@ -94,14 +94,15 @@ internal fun judgeFields(
 
 /**
  * Побеждают улики; среди равных по уликам главным становится то, что назвал `mainFact`
- * (#1059): у суммы это итог — наибольшее из чисел, если подпись «итого» не назвала его
- * раньше уликой. У прочих видов знания главного нет, и среди равных, как и прежде, остаётся
- * первое названное.
+ * (#1059): у суммы это итог — подписанный «итого» на самой странице, а если подписи нет,
+ * наибольшее из чисел. Подпись `mainFact` ищет в прочитанном тексте — том же, который читает
+ * правило страницы, и тем же правилом: иначе одна страница даёт два ответа. У прочих видов
+ * знания главного нет, и среди равных, как и прежде, остаётся первое названное.
  */
-private fun mainOf(key: String, scored: List<Weighed>): Weighed {
+private fun mainOf(key: String, scored: List<Weighed>, readText: String): Weighed {
     val best = scored.maxOf { it.evidence.size }
     val equal = scored.filter { it.evidence.size == best }
-    val main = mainFact(key, equal.map { it.candidate.text })
+    val main = mainFact(key, equal.map { it.candidate.text }, readText)
     return equal.firstOrNull { it.candidate.text == main } ?: equal.first()
 }
 

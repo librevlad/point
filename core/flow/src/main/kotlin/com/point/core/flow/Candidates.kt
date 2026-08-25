@@ -116,12 +116,14 @@ private val WRAPPERS: List<Pair<Char, Char>> = listOf(
 /**
  * Главное значение среди равных по уликам (#1059, решение владельца).
  *
- * У суммы главное — итог: наибольшее из чисел, если подпись «итого» не назвала его раньше
- * уликой. У остальных видов знания главного нет: `null` и означает «выбирать не из чего» —
- * там, как и было, остаётся первое названное.
+ * У суммы главное — итог: подписанный «итого» на самой странице, а если подписи нет —
+ * наибольшее из чисел. Подпись ищется тем же правилом и в том же прочитанном тексте, что и у
+ * правила чтения страницы: иначе одна страница даёт два ответа, и второй — число, которого
+ * человек никому не платил. У остальных видов знания главного нет: `null` и означает
+ * «выбирать не из чего» — там, как и было, остаётся первое названное.
  */
-fun mainFact(key: String, values: List<String>): String? =
-    if (key == META_ENTITY_AMOUNT) mainAmount(values) else null
+fun mainFact(key: String, values: List<String>, page: String = ""): String? =
+    if (key == META_ENTITY_AMOUNT) mainAmount(values, page) else null
 
 fun formEvidence(key: String, value: String): Set<EvidenceClass> = buildSet {
     if (semanticFits(key, value) == true) add(EvidenceClass.SEMANTIC)
@@ -176,7 +178,16 @@ fun AtomLayer.fieldEvidence(
     val valueLines = resolved.atoms.mapNotNull { lineOf[it.id] }.toSet()
     if (valueLines.isEmpty()) return classes
 
-    fun isMarker(atom: Atom) = atom.text.trim().trimEnd(':', '.').lowercase() in markers
+    // Подпись у суммы читается фразой, а не словом поодиночке (#1059): «TOTAL» судья видел, а
+    // стоящего рядом «SAVINGS» — нет, и строка скидки получала ту же улику подписи, что строка
+    // итога. Правило страницы читает ту же подпись тем же `namesAmount` — одна страница, один
+    // ответ. У прочих видов знания подпись — одно слово, и фраза ничего не меняет.
+    fun namesIt(label: List<Atom>): Boolean =
+        if (key == META_ENTITY_AMOUNT) {
+            namesAmount(label.joinToString(" ") { it.text })
+        } else {
+            label.any { it.text.trim().trimEnd(':', '.').lowercase() in markers }
+        }
 
     val valueBox = resolved.atoms.map { it.box }.reduce(Box::union)
     valueLines.forEach { li ->
@@ -184,18 +195,19 @@ fun AtomLayer.fieldEvidence(
         val valueRunIdx = runs.indices.filter { i -> runs[i].any { it.id in valueIds } }
         runs.forEachIndexed { ri, run ->
             val holdsValue = ri in valueRunIdx
-            val marker = run.any { it.id !in valueIds && isMarker(it) }
+            val marker = namesIt(run.filter { it.id !in valueIds })
             if (marker && holdsValue) classes += EvidenceClass.LEXICAL
             if (marker && !holdsValue && valueRunIdx.any { kotlin.math.abs(it - ri) == 1 }) {
                 classes += EvidenceClass.GEOMETRIC
             }
         }
-        pageLines.getOrNull(li - 1).orEmpty().forEach { atom ->
+        val above = pageLines.getOrNull(li - 1).orEmpty().filter { atom ->
             val overlapsX = atom.box.left <= valueBox.right && valueBox.left <= atom.box.right
             val closeAbove = valueBox.top - atom.box.bottom <=
                 maxOf(atom.box.height, valueBox.height) * LABEL_GAP_HEIGHTS
-            if (overlapsX && closeAbove && isMarker(atom)) classes += EvidenceClass.GEOMETRIC
+            overlapsX && closeAbove
         }
+        if (namesIt(above)) classes += EvidenceClass.GEOMETRIC
     }
     return classes
 }
@@ -225,12 +237,11 @@ internal val FIELD_MARKERS: Map<String, List<String>> = mapOf(
         "координати", "координаты", "coordinates", "gps", "широта", "довгота", "долгота",
     ),
 
-    // Подписи суммы — слова итога, которыми его узнаёт правило страницы (#1059), и слова,
-    // которыми документ называет свою сумму. Валюты здесь больше нет: знак и слово валюты
-    // стоят при КАЖДОЙ сумме документа, поэтому подписанной оказывалась и строка полученных
-    // денег, улик выходило поровну, и главной судья ставил бо́льшую — не ту, что заплачена.
-    // Валюта — часть значения, а не подпись при нём.
-    META_ENTITY_AMOUNT to (TOTAL_MARKERS + listOf("сума", "сумма", "amount")),
+    // Подписи суммы — те же слова, которыми её узнаёт правило страницы (#1059). Валюты здесь
+    // больше нет: знак и слово валюты стоят при КАЖДОЙ сумме документа, поэтому подписанной
+    // оказывалась и строка полученных денег, улик выходило поровну, и главной судья ставил
+    // бо́льшую — не ту, что заплачена. Валюта — часть значения, а не подпись при нём.
+    META_ENTITY_AMOUNT to AMOUNT_MARKERS,
 
     META_ENTITY_RECEIPT to listOf("квитанція", "квитанции", "квитанция", "квитанцію", "receipt"),
     META_ENTITY_SUBJECT to listOf("тема", "subject", "тему"),

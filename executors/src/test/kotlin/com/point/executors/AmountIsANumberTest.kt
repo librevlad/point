@@ -39,9 +39,14 @@ class AmountIsANumberTest {
     private val receipt = layerOf("receipt_family_dollar")
 
     /**
-     * Ответ модели дословно из живого лога карточки (`llm-1786919509897-001.txt`): пять сумм
-     * чека. Числа названы верно, а метки указывают на слова страницы — в этом слое `w11` это
-     * подпись «SUBTOTAL», `w12` — слипшийся ноль, `w14` — «TOTAL».
+     * Ответ модели: пять сумм чека, выписанных дословно из живого лога карточки
+     * (`llm-1786919509897-001.txt`, прогон 17.08.2026).
+     *
+     * Метки слов здесь — не из того лога: слова страницы нумерует каждое чтение заново, а слой
+     * ниже снят другим прогоном, 24.08.2026. Поэтому метки поставлены на слова **этого** слоя —
+     * так, чтобы каждая села туда же, куда села в карточке: `w11` — подпись «SUBTOTAL», `w12` —
+     * слипшийся ноль, `w14` — «TOTAL». Дословны здесь числа модели и весь слой слов; на какое
+     * слово указывает метка, собрано руками.
      */
     private val answer = """
         AMOUNT=2.00 [w11]
@@ -121,6 +126,28 @@ class AmountIsANumberTest {
 
         assertEquals("500,00", judgeFields(said, receiptLayer).won.getValue(META_ENTITY_AMOUNT).text)
         assertEquals("500,00", amountFacts(receiptLayer.text)[META_ENTITY_AMOUNT])
+    }
+
+    @Test
+    fun `сэкономленное итогом не становится и у судьи — одна страница, один ответ (#1059)`() {
+        // Чек той же сети: «TOTAL SAVINGS $5.00» — сколько человек сэкономил, «CASH TOTAL
+        // $2.18» — сколько заплатил. Судья метил слово «TOTAL» поодиночке и стоящего рядом
+        // «SAVINGS» не видел: обе строки получали улику подписи, улик выходило поровну, и
+        // среди равных побеждала бо́льшая. Под галочкой у человека вставало 5.00 — число,
+        // которого он не платил никому, — тогда как правило страницы на том же чеке
+        // называло 2.18.
+        val savings = AtomLayer(
+            listOf(
+                word("s1", "TOTAL", 100f, 100f), word("s2", "SAVINGS", 260f, 100f),
+                word("s3", "\$5.00", 600f, 100f),
+                word("s4", "CASH", 100f, 200f), word("s5", "TOTAL", 260f, 200f),
+                word("s6", "\$2.18", 600f, 200f),
+            ),
+        )
+        val said = parseFieldCandidates("AMOUNT=5.00 [s3]\nAMOUNT=2.18 [s6]").fields
+
+        assertEquals("\$2.18", judgeFields(said, savings).won.getValue(META_ENTITY_AMOUNT).text)
+        assertEquals("2.18", amountFacts(savings.text)[META_ENTITY_AMOUNT])
     }
 
     @Test
