@@ -156,9 +156,6 @@ class WordPlusRealizer @Inject constructor(
             }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось оформить документ", recoverable = true) }
         }
 
-    private fun textStandIn(input: PointObject) =
-        if (input.state.kind == ObjectKind.TEXT) input else input.copy(mime = "text/plain")
-
     private companion object {
         const val MAX_TEXT = 20_000
         const val DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"

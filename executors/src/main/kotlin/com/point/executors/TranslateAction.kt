@@ -73,7 +73,11 @@ class TranslateRealizer @Inject constructor(
                     val prompt = "Переведи текст на $target. Верни только перевод, без пояснений.\n\n$text"
 
                     reportStage("Перевожу на $target")
-                    ActionResult.Success(llm.run(input, prompt))
+
+                    // Переводятся символы, а не пиксели (#1244): текст уже в запросе, и
+                    // снимок или PDF рядом с ним — лишние байты наружу и отброшенные
+                    // текстовые модели, которые перевели бы мгновенно.
+                    ActionResult.Success(llm.run(textStandIn(input), prompt))
                 }
             }.getOrElse { ActionResult.Failure(it.message ?: "Ошибка перевода", recoverable = true) }
         }

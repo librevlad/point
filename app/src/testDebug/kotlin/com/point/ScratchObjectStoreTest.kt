@@ -2,6 +2,7 @@ package com.point
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import com.point.core.flow.FrameForModel
 import com.point.core.flow.META_ENTITY_PREFIX
 import com.point.core.flow.META_SIZE
 import com.point.core.flow.META_UNUSABLE_REASON
@@ -27,7 +28,7 @@ class ScratchObjectStoreTest {
 
     private val context: Context = ApplicationProvider.getApplicationContext()
     private val scratch = File(context.filesDir, "scratch")
-    private val store = ScratchObjectStore(context, ObjectClassifier(), scratch)
+    private val store = ScratchObjectStore(context, ObjectClassifier(), scratch, FrameForModel.NONE)
 
     private fun source(name: String, text: String): File =
         File(context.cacheDir, name).apply { parentFile?.mkdirs(); writeText(text) }

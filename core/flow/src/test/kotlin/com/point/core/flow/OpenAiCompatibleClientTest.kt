@@ -168,10 +168,19 @@ class OpenAiCompatibleClientTest {
         assertTrue(textOnly.canHandle(textObj))
     }
 
+    private val frames = FrameForModel { _, mime -> InlineFrame("0J/RgNC40LLQtdGC", mime) }
+
+    /**
+     * #1239: видеть модель может, а показать ей нечего — снимок такому клиенту не по силам.
+     * Иначе попытка уходит без картинки и сгорает впустую.
+     */
     @Test
-    fun `a vision model can handle an image`() {
-        val vision = OpenAiCompatibleClient(http(200, okBody), store, provider.copy(vision = true))
-        assertTrue(vision.canHandle(image))
+    fun `a vision model handles an image only when there is a frame to send`() {
+        val blind = OpenAiCompatibleClient(http(200, okBody), store, provider.copy(vision = true))
+        assertFalse(blind.canHandle(image))
+
+        val seeing = OpenAiCompatibleClient(http(200, okBody), store, provider.copy(vision = true), frames)
+        assertTrue(seeing.canHandle(image))
     }
 
     @Test

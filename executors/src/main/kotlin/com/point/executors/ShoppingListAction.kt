@@ -47,7 +47,9 @@ class ShoppingListRealizer @Inject constructor(
                 val text = entitySourceText(input).take(MAX_CHARS)
                 if (text.isBlank()) return@withContext ActionResult.Failure("Нет текста рецепта", recoverable = true)
                 reportStage("Собираю список")
-                ActionResult.Success(llm.run(input, SHOPPING_LIST_PROMPT + text))
+
+                // Рецепт уже в запросе — снимок страницы модели не нужен (#1244).
+                ActionResult.Success(llm.run(textStandIn(input), SHOPPING_LIST_PROMPT + text))
             }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось составить список", recoverable = true) }
         }
 

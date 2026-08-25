@@ -21,7 +21,6 @@ import com.point.core.flow.META_ENTITY_PREFIX
 import com.point.core.flow.META_EVIDENCE_SUFFIX
 import com.point.core.flow.META_GRAPH_ROLE_PREFIX
 import com.point.core.flow.META_OCR_ATOMS_REF
-import com.point.core.flow.META_OCR_TEXT_REF
 import com.point.core.flow.META_READING_MODE
 import com.point.core.flow.META_READ_CHARS
 import com.point.core.flow.META_READ_TOTAL_CHARS
@@ -372,7 +371,7 @@ class UnderstandRealizer @Inject constructor(
         // аннотация сводки — цепочка постарается взять свежего исполнителя, а одиночный
         // клиент честно ответит собой.
         val answered = com.point.core.flow.actorsOf(input.metadata, com.point.core.flow.META_SEMANTIC_SUMMARY).toSet()
-        val result = llm.run(if (eyes) input else textOnly(input), prompt, answered)
+        val result = llm.run(if (eyes) input else textStandIn(input), prompt, answered)
         return Answer(File(result.uri.value).readText(), result.metadata[META_ANSWERED_BY].orEmpty())
     }
 
@@ -413,10 +412,6 @@ class UnderstandRealizer @Inject constructor(
             if (texts.isNotEmpty()) put(key + META_BLOCKED_SUFFIX, altValue(texts))
         }
     }
-
-    private fun textOnly(input: PointObject) =
-        if (input.state.kind == ObjectKind.TEXT) input
-        else input.copy(mime = "text/plain", metadata = input.metadata - META_OCR_TEXT_REF)
 
     private fun atomLayer(input: PointObject): AtomLayer? =
         input.metadata[META_OCR_ATOMS_REF]?.let { ref ->

@@ -135,8 +135,8 @@ internal suspend fun fix(llm: LlmClient, input: PointObject, withObject: Boolean
         runCatching {
 
             // Первой ступени снимок не нужен: она правит опечатки в самом знании, и
-            // отправлять наружу больше, чем требуется, незачем (Конституция §11).
-            val asked = if (withObject) input else textOnly(input)
+            // отправлять наружу больше, чем требуется, незачем (принцип #1244).
+            val asked = if (withObject) input else textStandIn(input)
             val answer = File(llm.run(asked, fixPrompt(facts, withObject)).uri.value).readText()
             val fixes = parseFixes(answer, facts)
 
@@ -202,7 +202,3 @@ private suspend fun fixOwnText(
         ActionResult.Failure(it.message ?: "Не удалось проверить текст", recoverable = true)
     }
 }
-
-/** Ссылка на слой OCR — не текст объекта: на первой ступени наружу уходит только знание. */
-private fun textOnly(input: PointObject) =
-    input.copy(mime = "text/plain", metadata = input.metadata - META_OCR_TEXT_REF)
