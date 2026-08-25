@@ -12,12 +12,59 @@ class QrMatrix internal constructor(
         x in 0 until size && y in 0 until size && modules[y * size + x]
 }
 
-const val QR_MAX_BYTES = 106
+// Таблицы уровня коррекции M (ISO/IEC 18004), версии 1..40. Стоят раньше потолка: потолок
+// считается по ним, а значения в файле вычисляются сверху вниз.
+
+private val DATA_CODEWORDS = intArrayOf(
+    16, 28, 44, 64, 86, 108, 124, 154, 182, 216,
+    254, 290, 334, 365, 415, 453, 507, 563, 627, 669,
+    714, 782, 860, 914, 1000, 1062, 1128, 1193, 1267, 1373,
+    1455, 1541, 1631, 1725, 1812, 1914, 1992, 2102, 2216, 2334,
+)
+
+private val EC_CODEWORDS = intArrayOf(
+    10, 16, 26, 18, 24, 16, 18, 22, 22, 26,
+    30, 22, 22, 24, 24, 28, 28, 26, 26, 26,
+    26, 28, 28, 28, 28, 28, 28, 28, 28, 28,
+    28, 28, 28, 28, 28, 28, 28, 28, 28, 28,
+)
+
+private val EC_BLOCKS = intArrayOf(
+    1, 1, 1, 2, 2, 4, 4, 4, 5, 5,
+    5, 8, 9, 9, 10, 10, 11, 13, 14, 16,
+    17, 17, 18, 20, 21, 23, 25, 26, 28, 29,
+    31, 33, 35, 37, 38, 40, 43, 45, 47, 49,
+)
+
+/**
+ * Общий потолок QR для всех поверхностей (#1084, решение владельца 21.08.2026 «один потолок на
+ * оба»): версия кода растёт под длину текста до самой большой, и отказ наступает только выше
+ * этого предела — одинаково на телефоне и на компьютере. Считаются байты UTF-8: в QR помещаются
+ * именно они, поэтому кириллическая буква занимает вдвое больше места, чем латинская.
+ *
+ * Число берётся не из общей таблицы вместимости, а из того, что обе поверхности действительно
+ * кодируют: оба кодировщика пишут в код объявление кодировки (см. [ECI_BITS]), и место под него
+ * вычтено здесь же. Обещать байты, которых кодировщик не возьмёт, нельзя — на самом верху человек
+ * получил бы отказ библиотеки вместо честного предела.
+ */
+val QR_MAX_BYTES: Int = capacityBytes(QR_MAX_VERSION)
+
+/** Одни и те же слова отказа на обеих поверхностях (#1084). */
+const val QR_TOO_LONG = "Этот текст длиннее, чем помещается в QR-код — сократите его"
+
+/** Одни и те же слова, когда кодировать нечего (#1084). */
+const val QR_NO_TEXT = "Нет текста для QR-кода"
+
+/**
+ * Одни и те же слова, когда сорвалась сама попытка (#1084). Чужой текст сюда не попадает: он
+ * остаётся в журнале, человеку достаётся одно понятное предложение (#686).
+ */
+const val QR_FAILED = "QR не собрался — попробуйте ещё раз"
 
 fun qrMatrix(text: String): QrMatrix? {
     val data = text.toByteArray(Charsets.UTF_8)
     if (data.isEmpty() || data.size > QR_MAX_BYTES) return null
-    val version = (1..QR_MAX_VERSION).first { data.size <= dataCodewords(it) - 2 }
+    val version = (1..QR_MAX_VERSION).first { data.size <= capacityBytes(it) }
     val codewords = interleave(version, data)
 
     val size = 4 * version + 17
@@ -43,22 +90,48 @@ fun qrMatrix(text: String): QrMatrix? {
     return QrMatrix(size, modules)
 }
 
-private const val QR_MAX_VERSION = 6
+private const val QR_MAX_VERSION = 40
 
-private fun dataCodewords(version: Int): Int =
-    intArrayOf(16, 28, 44, 64, 86, 108)[version - 1]
+/**
+ * Сколько байт текста помещается в версию: за вычетом объявления кодировки, заголовка и
+ * счётчика длины (#1084).
+ */
+private fun capacityBytes(version: Int): Int =
+    (dataCodewords(version) * 8 - ECI_BITS - MODE_BITS - countBits(version)) / 8
 
-private fun ecCodewords(version: Int): Int =
-    intArrayOf(10, 16, 26, 18, 24, 16)[version - 1]
+/** Счётчик длины в байтовом режиме: с десятой версии он вдвое длиннее. */
+private fun countBits(version: Int): Int = if (version < 10) 8 else 16
 
-private fun blocks(version: Int): Int =
-    intArrayOf(1, 1, 1, 2, 2, 4)[version - 1]
+private const val MODE_BITS = 4
+
+/**
+ * Код называет свою кодировку сам: ECI 26 — это UTF-8 (#1084). Так же поступает кодировщик
+ * телефона, поэтому объявление стоит и здесь: иначе байтовый режим по стандарту означает
+ * латиницу ISO-8859-1, и строгий читатель увидел бы вместо кириллицы кракозябры, а потолок
+ * двух поверхностей разошёлся бы на это самое объявление.
+ */
+private const val ECI_MODE = 0b0111
+
+private const val UTF8_ECI = 26
+
+private const val ECI_VALUE_BITS = 8
+
+private const val ECI_BITS = MODE_BITS + ECI_VALUE_BITS
+
+private fun dataCodewords(version: Int): Int = DATA_CODEWORDS[version - 1]
+
+private fun ecCodewords(version: Int): Int = EC_CODEWORDS[version - 1]
+
+private fun blocks(version: Int): Int = EC_BLOCKS[version - 1]
 
 private fun interleave(version: Int, data: ByteArray): IntArray {
     val total = dataCodewords(version)
     val bits = BitBuffer()
-    bits.append(0b0100, 4)
-    bits.append(data.size, 8)
+    // Сначала — чем закодировано, потом — чем набрано (#1084).
+    bits.append(ECI_MODE, MODE_BITS)
+    bits.append(UTF8_ECI, ECI_VALUE_BITS)
+    bits.append(0b0100, MODE_BITS)
+    bits.append(data.size, countBits(version))
     data.forEach { bits.append(it.toInt() and 0xFF, 8) }
     bits.append(0, minOf(4, total * 8 - bits.size))
     bits.append(0, (8 - bits.size % 8) % 8)
@@ -68,15 +141,25 @@ private fun interleave(version: Int, data: ByteArray): IntArray {
         pad = pad xor (0xEC xor 0x11)
     }
 
-    val perBlock = total / blocks(version)
+    // Со старших версий блоки коррекции неравны: последние `longer` штук на кодовое слово
+    // длиннее остальных (#1084).
+    val count = blocks(version)
+    val shorter = total / count
+    val longer = total % count
     val ecLen = ecCodewords(version)
-    val dataBlocks = Array(blocks(version)) { b -> IntArray(perBlock) { i -> bits.byteAt(b * perBlock + i) } }
+    var taken = 0
+    val dataBlocks = Array(count) { b ->
+        val len = shorter + if (b >= count - longer) 1 else 0
+        IntArray(len) { i -> bits.byteAt(taken + i) }.also { taken += len }
+    }
     val divisor = rsDivisor(ecLen)
-    val ecBlocks = Array(blocks(version)) { b -> rsRemainder(dataBlocks[b], divisor) }
+    val ecBlocks = Array(count) { b -> rsRemainder(dataBlocks[b], divisor) }
 
-    val out = IntArray(total + ecLen * blocks(version))
+    val out = IntArray(total + ecLen * count)
     var k = 0
-    for (i in 0 until perBlock) for (block in dataBlocks) out[k++] = block[i]
+    for (i in 0 until shorter + if (longer > 0) 1 else 0) {
+        for (block in dataBlocks) if (i < block.size) out[k++] = block[i]
+    }
     for (i in 0 until ecLen) for (block in ecBlocks) out[k++] = block[i]
     return out
 }
@@ -155,12 +238,51 @@ private fun drawFunctionPatterns(
         }
     }
 
-    if (version >= 2) {
-        val c = size - 7
-        for (dy in -2..2) for (dx in -2..2) set(c + dx, c + dy, max(abs(dx), abs(dy)) != 1)
+    // Выравнивающие квадраты: их число и шаг растут вместе с версией (#1084).
+    val axis = alignmentPositions(version)
+    val last = axis.size - 1
+    for (i in axis.indices) for (j in axis.indices) {
+        val underFinder = (i == 0 && j == 0) || (i == 0 && j == last) || (i == last && j == 0)
+        if (underFinder) continue
+        for (dy in -2..2) for (dx in -2..2) {
+            set(axis[i] + dx, axis[j] + dy, max(abs(dx), abs(dy)) != 1)
+        }
     }
 
+    if (version >= FIRST_VERSION_WITH_VERSION_BITS) drawVersionBits(version, size, ::set)
+
     drawFormatBits(size, modules, function, 0)
+}
+
+/** Координаты выравнивающих квадратов версии (ISO/IEC 18004, приложение E). */
+private fun alignmentPositions(version: Int): List<Int> {
+    if (version == 1) return emptyList()
+    val count = version / 7 + 2
+    val step = if (version == 32) 26 else (version * 4 + count * 2 + 1) / (count * 2 - 2) * 2
+    val positions = ArrayList<Int>(count)
+    var pos = 4 * version + 17 - 7
+    repeat(count - 1) {
+        positions.add(0, pos)
+        pos -= step
+    }
+    positions.add(0, 6)
+    return positions
+}
+
+private const val FIRST_VERSION_WITH_VERSION_BITS = 7
+
+/** С седьмой версии код называет свой номер отдельными восемнадцатью модулями. */
+private fun drawVersionBits(version: Int, size: Int, set: (Int, Int, Boolean) -> Unit) {
+    var rem = version
+    repeat(12) { rem = (rem shl 1) xor ((rem ushr 11) * 0x1F25) }
+    val bits = (version shl 12) or rem
+    for (i in 0 until 18) {
+        val dark = (bits ushr i) and 1 != 0
+        val a = size - 11 + i % 3
+        val b = i / 3
+        set(a, b, dark)
+        set(b, a, dark)
+    }
 }
 
 private fun drawFormatBits(size: Int, modules: BooleanArray, function: BooleanArray, mask: Int) {

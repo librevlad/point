@@ -1,5 +1,8 @@
 package com.point.executors
 
+import com.point.core.flow.QR_FAILED
+import com.point.core.flow.QR_MAX_BYTES
+import com.point.core.flow.QR_TOO_LONG
 import com.point.core.flow.QrEncoder
 import com.point.core.model.ActionResult
 import com.point.core.model.ObjectKind
@@ -8,6 +11,7 @@ import com.point.core.model.PointObject
 import com.point.core.model.ScratchRef
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -15,10 +19,11 @@ import java.io.File
 
 class QrActionTest {
 
-    private class FakeQrEncoder : QrEncoder {
+    private class FakeQrEncoder(private val blowsUp: Throwable? = null) : QrEncoder {
         var encoded: String? = null
         override suspend fun encode(text: String): ScratchRef {
             encoded = text
+            blowsUp?.let { throw it }
             return ScratchRef("/tmp/qr.png")
         }
     }
@@ -50,8 +55,64 @@ class QrActionTest {
     @Test
     fun `over-long text fails without calling the encoder`() = runTest {
         val qr = FakeQrEncoder()
-        val result = QrRealizer(qr).perform(textObject("x".repeat(1001)), null)
+        val result = QrRealizer(qr).perform(textObject("x".repeat(QR_MAX_BYTES + 1)), null)
         assertTrue(result is ActionResult.Failure)
         assertNull(qr.encoded)
+    }
+
+    /** #1084: потолок один и тот же на телефоне и на компьютере — и слова отказа тоже. */
+    @Test
+    fun `the ceiling is the shared one and the refusal says so`() = runTest {
+        val qr = FakeQrEncoder()
+        val result = QrRealizer(qr).perform(textObject("я".repeat(QR_MAX_BYTES)), null)
+        assertEquals(QR_TOO_LONG, (result as ActionResult.Failure).reason)
+    }
+
+    /**
+     * #1084/#686: сорвалась библиотека — человек читает наши слова, а не её текст. Раньше сюда
+     * уходило `it.message`, и на экране оказывалось английское «Data too big».
+     */
+    @Test
+    fun `a library blow-up is told in our own words`() = runTest {
+        val qr = FakeQrEncoder(IllegalStateException("Data too big"))
+
+        val result = QrRealizer(qr).perform(textObject("https://example.com"), null)
+
+        val reason = (result as ActionResult.Failure).reason
+        assertEquals(QR_FAILED, reason)
+        assertFalse("чужой текст дошёл до человека — $reason", reason.contains("Data too big"))
+        assertTrue("повторить попытку человеку не дают", result.recoverable)
+    }
+
+    /**
+     * #1084: приговор тексту одинаков на телефоне и на компьютере — и по словам, и по смыслу
+     * для цепочки исполнителей. Пока телефон звал этот отказ поправимым, следующий исполнитель
+     * брался за тот же текст и отвечал по-своему.
+     */
+    @Test
+    fun `a verdict about the text is not deferred to the next realizer`() = runTest {
+        val tooLong = QrRealizer(FakeQrEncoder())
+            .perform(textObject("я".repeat(QR_MAX_BYTES)), null) as ActionResult.Failure
+        val noText = QrRealizer(FakeQrEncoder())
+            .perform(textObject("   "), null) as ActionResult.Failure
+
+        assertFalse("слишком длинный текст ушёл дальше по цепочке", tooLong.recoverable)
+        assertFalse("пустой текст ушёл дальше по цепочке", noText.recoverable)
+    }
+
+    /**
+     * #1084: текст, который раньше не проходил тысячу знаков телефона, доходит до кодировщика.
+     *
+     * Здесь стоит подделка, и доказан этим только гейт по длине. Что настоящий кодировщик
+     * телефона берёт ровно общий потолок и ни байтом больше — доказано там, где он живёт:
+     * `com.point.data.ZxingQrEncoderTest`.
+     */
+    @Test
+    fun `text longer than the old phone limit reaches the encoder`() = runTest {
+        val qr = FakeQrEncoder()
+        val text = "x".repeat(1200)
+        val result = QrRealizer(qr).perform(textObject(text), null)
+        assertTrue(result is ActionResult.Success)
+        assertEquals(text, qr.encoded)
     }
 }

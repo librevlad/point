@@ -7,6 +7,9 @@ import com.point.core.flow.EntityExtractor
 import com.point.core.flow.EntityType
 import com.point.core.flow.asFeature
 import com.point.core.flow.asMetaKey
+import com.point.core.flow.QR_FAILED
+import com.point.core.flow.QR_NO_TEXT
+import com.point.core.flow.QR_TOO_LONG
 import com.point.core.flow.Realizer
 import com.point.core.flow.qrMatrix
 import com.point.core.model.ActionResult
@@ -134,11 +137,10 @@ class PcQrRealizer(private val outbox: Outbox) : Realizer {
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult = runCatching {
         val text = File(input.uri.value).takeIf(File::isFile)?.readText()?.trim()
             ?: return ActionResult.Failure("Файла объекта нет на диске", recoverable = false)
-        val matrix = qrMatrix(text)
-            ?: return ActionResult.Failure(
-                "В QR помещается короткая ссылка или строка — этот текст длиннее",
-                recoverable = false,
-            )
+        if (text.isEmpty()) return ActionResult.Failure(QR_NO_TEXT, recoverable = false)
+        // Потолок и слова отказа — общие с телефоном (#1084): раньше компьютер держал свои сто
+        // с небольшим байт и отвергал текст, который телефон кодировал.
+        val matrix = qrMatrix(text) ?: return ActionResult.Failure(QR_TOO_LONG, recoverable = false)
         val quiet = 4
         val side = (matrix.size + quiet * 2) * SCALE
         val image = BufferedImage(side, side, BufferedImage.TYPE_INT_RGB)
@@ -164,7 +166,12 @@ class PcQrRealizer(private val outbox: Outbox) : Realizer {
                 metadata = mapOf("name" to "QR-код"),
             ),
         )
-    }.getOrElse { ActionResult.Failure("QR не собрался — попробуйте текст покороче", recoverable = true) }
+    }.getOrElse {
+        // Длина сюда больше не попадает — её ловит общий потолок выше (#1084): здесь остаётся
+        // только сбой самой операции, и валить его на текст было бы неправдой. Слова — те же,
+        // что и на телефоне, и лежат они там же, где общий потолок.
+        ActionResult.Failure(QR_FAILED, recoverable = true)
+    }
 
     private companion object {
 

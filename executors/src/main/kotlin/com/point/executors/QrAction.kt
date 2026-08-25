@@ -3,6 +3,10 @@ package com.point.executors
 import com.point.core.flow.capabilities.QrCapability
 import com.point.core.flow.Capability
 import com.point.core.flow.CapabilityMeta
+import com.point.core.flow.QR_FAILED
+import com.point.core.flow.QR_MAX_BYTES
+import com.point.core.flow.QR_NO_TEXT
+import com.point.core.flow.QR_TOO_LONG
 import com.point.core.flow.QrEncoder
 import com.point.core.flow.Realizer
 import com.point.core.model.ActionResult
@@ -27,18 +31,22 @@ class QrRealizer @Inject constructor(
             runCatching {
                 val text = File(input.uri.value).takeIf { it.exists() }?.readText()?.trim().orEmpty()
                 when {
-                    text.isBlank() -> ActionResult.Failure("Нет текста для QR-кода", recoverable = true)
-                    text.length > MAX_QR_CHARS ->
-                        ActionResult.Failure("Слишком длинный текст для QR-кода", recoverable = true)
+                    // Пустой и слишком длинный текст — приговор самому тексту, а не этой
+                    // попытке: следующему исполнителю в цепочке он тоже не по зубам, и слова
+                    // отказа у него были бы другие. Поэтому `recoverable = false` — так же,
+                    // как на компьютере (#1084).
+                    text.isBlank() -> ActionResult.Failure(QR_NO_TEXT, recoverable = false)
+                    // Потолок один на телефон и на компьютер (#1084): раньше здесь стояла своя
+                    // тысяча знаков, и текст, который телефон кодировал, компьютер отвергал.
+                    text.toByteArray(Charsets.UTF_8).size > QR_MAX_BYTES ->
+                        ActionResult.Failure(QR_TOO_LONG, recoverable = false)
                     else -> ActionResult.Success(
                         ResultObject(ObjectKind.IMAGE, "image/png", qr.encode(text), mapOf("op" to "qr")),
                     )
                 }
-            }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось создать QR-код", recoverable = true) }
+                // Сорвалась сама попытка — её можно повторить, и об этом говорится своими
+                // словами (#1084/#686): текст исключения библиотеки человеку ничего не
+                // объясняет, он остаётся в журнале там, где эта библиотека и живёт.
+            }.getOrElse { ActionResult.Failure(QR_FAILED, recoverable = true) }
         }
-
-    private companion object {
-
-        const val MAX_QR_CHARS = 1000
-    }
 }
