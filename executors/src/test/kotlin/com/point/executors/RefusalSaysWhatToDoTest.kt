@@ -25,12 +25,27 @@ class RefusalSaysWhatToDoTest {
         assertTrue(said, OcrCapability().label(image) !in said)
     }
 
-    /** Названный шаг обязан быть у этого документа на месте, иначе совет ведёт в пустоту. */
+    /**
+     * Названный шаг обязан быть у этого документа на месте, иначе совет ведёт в пустоту.
+     *
+     * Отказ и дверь выведены из одного правила `pdfLayerUnusable`: по нему же ставится
+     * признак «текст файлом не достаётся» — исследованием `pdf-image-shape` на телефоне и
+     * приёмом на компьютере. Слой, на котором «Извлечь текст» отказывает, — ровно тот слой,
+     * из-за которого документ получает признак, а с ним и дверь «Прочитать документ».
+     */
     @Test
     fun `шаг, который называет отказ, у такого документа есть`() {
-        val scan = ObjectState(ObjectKind.PDF, setOf(com.point.core.model.Feature.IS_IMAGE_PDF))
+        assertTrue(
+            "правило отказа не считает такой слой негодным — тогда отказа и не будет",
+            com.point.core.flow.pdfLayerUnusable(GARBLED),
+        )
 
-        assertTrue(ReadDocumentCapability().accepts(scan))
+        val named = ObjectState(ObjectKind.PDF, setOf(com.point.core.model.Feature.IS_IMAGE_PDF))
+        assertTrue("названной двери у такого документа нет", ReadDocumentCapability().accepts(named))
+        assertFalse(
+            "быстрая дверь осталась там, где текста в файле нет",
+            com.point.core.flow.capabilities.PdfCapability().accepts(named),
+        )
     }
 
     /**
@@ -92,5 +107,13 @@ class RefusalSaysWhatToDoTest {
             assertTrue("одна половина вместо двух: $said", halves.size >= 2)
             assertTrue("вторая половина пуста: $said", halves.last().isNotBlank())
         }
+    }
+
+    private companion object {
+
+        /** Слой украинского бухгалтерского PDF с подменённой раскладкой шрифта (#933). */
+        const val GARBLED =
+            "ToeapucrBo 3 o6MexeHop eignoeiganbHicrlo BaxraxoorpxMyBaq cKnaAaHHR " +
+                "flocraqanbHHK e.qPnov Eniqgxtp 3aMoBHHK PaxyHok-cbakrypa"
     }
 }

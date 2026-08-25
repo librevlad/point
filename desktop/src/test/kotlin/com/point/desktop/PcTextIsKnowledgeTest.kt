@@ -13,6 +13,7 @@ import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
 import com.point.core.model.ScratchRef
 import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -58,7 +59,7 @@ class PcTextIsKnowledgeTest {
         metadata = mapOf("name" to file.name),
     )
 
-    private fun realizer() = PcOfficeTextRealizer(OoxmlOfficeTextExtractor(), Outbox(temp.newFolder()))
+    private fun realizer() = PcOfficeTextRealizer(OoxmlOfficeTextExtractor())
 
     private fun knownText(result: ActionResult): String {
         assertTrue("ожидалось знание документу, вышло: $result", result is ActionResult.Done)
@@ -100,6 +101,27 @@ class PcTextIsKnowledgeTest {
         assertTrue("второй лист книги потерян: $known", known.contains("Подпись директора"))
     }
 
+    /**
+     * Знание документа не живёт в системной временной папке (#995).
+     *
+     * `ocr.text.ref` — постоянная ссылка знания объекта, а не временное тело результата:
+     * уборка `%TEMP%` молча убила бы прочитанное, и телефон, попросивший компьютер прочитать
+     * документ, получил бы ответ без текста — мёртвая ссылка в дорогу не едет.
+     */
+    @Test
+    fun `прочитанное компьютером лежит рядом с документом, а не в системном временном`() = runTest {
+        val file = xlsx("смета.xlsx", smeta)
+
+        val result = realizer().perform(officeObject(file), null)
+
+        val ref = File((result as ActionResult.Done).findings!!.metadata[META_OCR_TEXT_REF]!!)
+        assertEquals(
+            "знание объекта легло не рядом с документом, а в чужую папку: $ref",
+            file.parentFile,
+            ref.parentFile,
+        )
+    }
+
     @Test
     fun `современной таблице компьютер не рассказывает про старые doc и xls`() = runTest {
         val empty = xlsx("смета.xlsx", "<worksheet><sheetData></sheetData></worksheet>")
@@ -136,7 +158,7 @@ class PcTextIsKnowledgeTest {
         val inbox = Inbox(temp.newFolder("inbox"))
         val state = DesktopState(
             registry = DesktopRegistry(setOf(OfficeCapability())),
-            resolver = DesktopResolver(setOf(PcOfficeTextRealizer(OoxmlOfficeTextExtractor(), outbox))),
+            resolver = DesktopResolver(setOf(PcOfficeTextRealizer(OoxmlOfficeTextExtractor()))),
             clipboard = { },
             outbox = outbox,
         )

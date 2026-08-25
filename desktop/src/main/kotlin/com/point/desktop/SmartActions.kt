@@ -186,7 +186,6 @@ class PcQrRealizer(private val outbox: Outbox) : Realizer {
  */
 class PcOfficeTextRealizer(
     private val extractor: com.point.core.flow.OfficeTextExtractor,
-    private val outbox: Outbox,
 ) : Realizer {
     override val capabilityId = com.point.core.flow.capabilities.OfficeCapability.ID
 
@@ -199,7 +198,10 @@ class PcOfficeTextRealizer(
                 recoverable = false,
             )
         }
-        val file = File.createTempFile("pc-office-", ".txt").apply { writeText(text) }
+
+        // Знание живёт рядом с документом, а не в `%TEMP%`: ссылка постоянная, и уборка
+        // операционной системой не должна её убивать (#995).
+        val file = textBesideDocument(File(input.uri.value)).apply { writeText(text) }
         ActionResult.Done(
             com.point.core.flow.capabilities.TEXT_IS_WITH_DOCUMENT,
             com.point.core.model.Findings(

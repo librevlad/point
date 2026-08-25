@@ -12,6 +12,16 @@ import java.io.File
  */
 data class TextHead(val text: String, val atLimit: Boolean)
 
+/**
+ * Куда компьютер кладёт прочитанный текст документа (#995).
+ *
+ * Рядом с самим документом, а не в системную временную папку: `ocr.text.ref` — постоянная
+ * ссылка знания объекта, и уборка `%TEMP%` молча убила бы прочитанное. Телефон, попросивший
+ * компьютер прочитать документ, получил бы ответ без текста: мёртвая ссылка в дорогу не едет.
+ */
+fun textBesideDocument(source: File): File =
+    File(source.parentFile, source.nameWithoutExtension + " — текст.txt")
+
 /** Читает не больше `limit` символов: окно не обязано держать в памяти файл целиком. */
 fun readTextHead(file: File, limit: Int): TextHead {
     if (!file.isFile) return TextHead("", false)

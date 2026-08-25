@@ -91,6 +91,58 @@ class RenewPeriodRealizerTest {
         assertEquals("ничего не записано", null, written)
     }
 
+    /**
+     * Бланк собирается из одной таблицы, а не из склейки листов (#995).
+     *
+     * «Прочитать книгу» и «взять таблицу» — разные вопросы: текст книги — это весь её текст,
+     * а бланк строится из той таблицы, в которой нашёлся столбец дат. Склей туда второй лист
+     * — и в бланк уедет чужая таблица, а даты будут искаться в смеси.
+     */
+    @Test
+    fun `у книги из двух листов бланк собирается из первой таблицы, а не из смеси`() = runTest {
+        val second = listOf(
+            listOf("Арт.№", "Найменування", "Рота зв'язку"),
+            listOf("11004", "Буряк столовий свіжий", "6,003"),
+        )
+        val book = xlsxOf(sheet, second)
+
+        val result = RenewPeriodRealizer(com.point.core.flow.OoxmlSpreadsheetReader(), writer).perform(book, null)
+        val rows = checkNotNull(written)
+
+        assertTrue("бланк не собрался вовсе: $result", result is ActionResult.Success)
+        assertEquals("шапка бланка не от той таблицы", sheet[0], rows[0])
+        assertEquals("в бланк уехали строки второго листа", sheet.size, rows.size)
+        assertTrue(
+            "второй лист книги попал в бланк: $rows",
+            rows.none { row -> row.any { "Буряк" in it || "Найменування" in it } },
+        )
+    }
+
+    /** Настоящая книга .xlsx: строки лежат внутри листов, общего словаря строк нет. */
+    private fun xlsxOf(vararg sheets: List<List<String>>): PointObject {
+        val file = File.createTempFile("point-книга", ".xlsx").apply { deleteOnExit() }
+        java.util.zip.ZipOutputStream(file.outputStream()).use { zos ->
+            sheets.forEachIndexed { index, rows ->
+                zos.putNextEntry(java.util.zip.ZipEntry("xl/worksheets/sheet${index + 1}.xml"))
+                zos.write(sheetXml(rows).toByteArray(Charsets.UTF_8))
+                zos.closeEntry()
+            }
+        }
+        return table.copy(uri = ScratchRef(file.absolutePath))
+    }
+
+    private fun sheetXml(rows: List<List<String>>): String = buildString {
+        append("<worksheet><sheetData>")
+        rows.forEachIndexed { r, row ->
+            append("""<row r="${r + 1}">""")
+            row.forEachIndexed { c, cell ->
+                append("""<c r="${'A' + c}${r + 1}" t="inlineStr"><is><t>$cell</t></is></c>""")
+            }
+            append("</row>")
+        }
+        append("</sheetData></worksheet>")
+    }
+
     @Test
     fun `пузырёк живёт только там, где период прочитан`() {
         val capability = RenewPeriodCapability()

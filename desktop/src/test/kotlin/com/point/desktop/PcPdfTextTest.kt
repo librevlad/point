@@ -45,6 +45,26 @@ class PcPdfTextTest {
         return file
     }
 
+    /** Многостраничный документ: у каждой страницы свой текст. */
+    private fun pdfOfPages(name: String, pages: List<String>): File {
+        val file = temp.newFile(name)
+        PDDocument().use { doc ->
+            pages.forEach { text ->
+                val page = PDPage()
+                doc.addPage(page)
+                PDPageContentStream(doc, page).use { out ->
+                    out.beginText()
+                    out.setFont(PDType1Font.HELVETICA, 12f)
+                    out.newLineAtOffset(50f, 700f)
+                    out.showText(text)
+                    out.endText()
+                }
+            }
+            doc.save(file)
+        }
+        return file
+    }
+
     private fun pdfWithoutText(): File {
         val file = temp.newFile("скан.pdf")
         PDDocument().use { doc ->
@@ -115,6 +135,34 @@ class PcPdfTextTest {
         assertFalse("документ с текстом сканом не является", real.obj.state.has(Feature.IS_IMAGE_PDF))
     }
 
+    /**
+     * Отказ зовёт дверь, которая у документа есть на самом деле (#995, #1257).
+     *
+     * Приём судил документ по первым трём страницам, а исполнитель — по всему файлу: у счёта
+     * с читаемым началом и подменённой раскладкой дальше приём отвечал «не скан», рисовалась
+     * быстрая дверь, «Извлечь текст» по нажатию отказывало и звало «Прочитать документ» —
+     * а этого действия рядом не было. Улика теперь одна: весь документ, как и на телефоне.
+     */
+    @Test
+    fun `у документа с читаемым началом и подменённой раскладкой дальше дверь чтения на месте`() {
+        val trap = pdfOfPages("счёт.pdf", List(3) { READABLE_PAGE } + List(4) { GARBLED })
+
+        val item = Inbox(temp.newFolder("ловушка")).addFile(trap.absolutePath)
+
+        assertTrue(
+            "документ, из которого текст файлом не достаётся, таким не назван",
+            item.obj.state.has(Feature.IS_IMAGE_PDF),
+        )
+        assertFalse(
+            "быстрая дверь обещает текст, которого в файле нет",
+            PcPdfTextRealizer(PdfBoxText()).accepts(item.obj.state),
+        )
+        assertTrue(
+            "дверь, которую называет отказ, у документа отсутствует",
+            PcReadDocumentCapability().accepts(item.obj.state),
+        )
+    }
+
     @Test
     fun `нечитаемый PDF — честный отказ, а не пустой текст`() = runTest {
         val broken = temp.newFile("битый.pdf").apply { writeText("не pdf вовсе") }
@@ -125,6 +173,9 @@ class PcPdfTextTest {
     }
 
     private companion object {
+
+        /** Страница, которая читается: первые страницы счёта из корпуса владельца в порядке. */
+        const val READABLE_PAGE = "Invoice for repair works total amount"
 
         /** Слой украинского бухгалтерского PDF с подменённой раскладкой шрифта (#933). */
         const val GARBLED =

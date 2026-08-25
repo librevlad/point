@@ -176,9 +176,11 @@ internal fun CompactObject(
             }
         }
 
-        // Сам текст — после знания о нём, как на телефоне (#898).
-        if (item.obj.state.kind == ObjectKind.TEXT) {
-            Text(kindLabel(item.obj.state.kind).uppercase(), style = PointType.label)
+        // Сам текст — после знания о нём, как на телефоне (#898). Прочитанное видно у любого
+        // объекта, а не только у текстового (#995): «Извлечь текст» кладёт текст знанием на
+        // сам документ, и человеку он нужен на том же экране, где он нажал.
+        if (com.point.core.flow.shownTextRef(item.obj) != null) {
+            Text(kindLabel(ObjectKind.TEXT).uppercase(), style = PointType.label)
             Preview(item)
         }
 

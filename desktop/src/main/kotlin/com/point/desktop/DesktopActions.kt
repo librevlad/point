@@ -309,7 +309,7 @@ class PcPdfTextRealizer(
             return ActionResult.Failure(com.point.core.flow.capabilities.NO_READABLE_PDF_LAYER, recoverable = false)
         }
 
-        val out = File(source.parentFile, source.nameWithoutExtension + " — текст.txt")
+        val out = textBesideDocument(source)
         return runCatching {
             out.writeText(text)
             ActionResult.Done(

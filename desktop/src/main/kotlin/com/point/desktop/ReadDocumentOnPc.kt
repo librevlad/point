@@ -109,7 +109,7 @@ class PcReadDocumentRealizer(
                     )
                 }
 
-                val out = File(source.parentFile, source.nameWithoutExtension + " — текст.txt")
+                val out = textBesideDocument(source)
                 out.writeText(read.toString())
                 ActionResult.Done(
                     "Прочитано страниц: $readable из $total — текст у документа",

@@ -2824,11 +2824,12 @@ class FlowViewModel @Inject constructor(
     }
 
     private fun loadTextPreviewIfText(obj: PointObject) {
-        val readText = obj.metadata[com.point.core.flow.META_OCR_TEXT_REF]?.takeIf { it.isNotBlank() }
-        if (obj.state.kind != ObjectKind.TEXT && readText == null) return
+        // Откуда брать текст объекта, решает общее с компьютером правило (#995): прочитанное,
+        // а если его нет — собственное содержимое там, где оно и есть текст.
+        val ref = com.point.core.flow.shownTextRef(obj) ?: return
         viewModelScope.launch {
             val limit = com.point.core.ui.TEXT_PREVIEW_LOAD_LIMIT
-            val source = readText?.let { obj.copy(uri = com.point.core.model.ScratchRef(it)) } ?: obj
+            val source = if (ref == obj.uri.value) obj else obj.copy(uri = com.point.core.model.ScratchRef(ref))
             val raw = runCatching { store.readText(source, limit = limit) }.getOrDefault("")
             if (raw.isBlank()) return@launch
             val text = sanitizeTextPreview(raw)

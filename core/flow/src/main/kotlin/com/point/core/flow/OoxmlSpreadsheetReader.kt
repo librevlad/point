@@ -14,12 +14,15 @@ import java.util.zip.ZipInputStream
  * `xl/sharedStrings.xml`, либо прямо в листе (`<is><t>`), а числа — только в листе; читать
  * надо все три случая, иначе современная смета не читается вообще.
  *
- * Книга читается целиком, а не первым листом (#995): «Смета» и «Итого» — два листа одного
- * документа, и человек, открывший книгу, ждёт её содержимое, а не половину. Общий словарь
- * строк — словарь всей книги, и по одному листу его не разложить.
+ * «Прочитать книгу» и «взять таблицу» — разные вопросы (#995). Текст книги — это весь её
+ * текст, все листы: «Смета» и «Итого» — два листа одного документа, и человек, открывший
+ * книгу, ждёт её содержимое, а не половину; за это отвечает [rowsOf]. А [readRows] отдаёт
+ * одну таблицу — ту, с которой работают «На новый период» и поиск столбца дат: склей туда
+ * второй лист, и бланк соберётся из двух разных таблиц, а даты будут искаться в смеси.
  */
 class OoxmlSpreadsheetReader : SpreadsheetReader {
 
+    /** Одна таблица документа — первый лист книги. Весь её текст спрашивают у [rowsOf]. */
     override suspend fun readRows(obj: PointObject): List<List<String>> = withContext(Dispatchers.IO) {
         var shared: String? = null
         val sheets = sortedMapOf<String, String>()
@@ -39,7 +42,8 @@ class OoxmlSpreadsheetReader : SpreadsheetReader {
                 }
             }
         }
-        rowsOf(sheets, shared)
+        val first = sheets.entries.minByOrNull { sheetNumber(it.key) }
+        rowsOf(listOfNotNull(first).associate { it.key to it.value }, shared)
     }
 
     companion object {
@@ -49,7 +53,7 @@ class OoxmlSpreadsheetReader : SpreadsheetReader {
         fun isWorksheet(entryName: String): Boolean = WORKSHEET.matches(entryName)
 
         /**
-         * Разбор без файлов: листы и общий словарь строк уже прочитаны тем, кто открыл пакет.
+         * Весь текст книги: листы и общий словарь строк уже прочитаны тем, кто открыл пакет.
          *
          * Листы идут по своему номеру, а не по порядку записей в архиве: порядок листов —
          * то, в каком виде человек видит книгу у себя.
