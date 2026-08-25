@@ -82,7 +82,7 @@ class TranscribeRealizer @Inject constructor(
             // значило бы прятать готовое знание за настройками.
             // Не измерили — не «тихо»: такая запись идёт дальше обычным путём.
             if (nothingToHear(runCatching { level.peak(input) }.getOrNull())) {
-                return@withContext heardNothing()
+                return@withContext heardNothing(measuredHere = true)
             }
 
             val needs = readiness.missingKeys()
@@ -101,7 +101,9 @@ class TranscribeRealizer @Inject constructor(
             when (heard) {
                 // Сервис отработал и ответил «речи нет» — это тот же ответ, что телефон
                 // слышит сам, и исход у него тот же (#1274, решение владельца 23.08.2026).
-                is Transcription.Silence -> heardNothing()
+                // Знание о самой записи он при этом не приносит: сказано про речь, не про
+                // звук, — и следующий исполнитель за ним ещё может услышать (#1054).
+                is Transcription.Silence -> heardNothing(measuredHere = false)
 
                 is Transcription.Heard -> runCatching {
                     // Расшифровка — знание той же записи, а не новый объект (#1097, GRF-006):
@@ -139,14 +141,24 @@ class TranscribeRealizer @Inject constructor(
      *
      * Один исход на обе тишины (#1274): услышал её телефон сам или ответил сервис — знание
      * об этой записи одно и то же, и человек не платит второй раз за тот же ответ.
+     *
+     * Различаются они не исходом, а тем, что узнано о самой записи (#1053).
+     * [measuredHere] — телефон разобрал запись до сэмплов и намерил тишину: это знание о
+     * содержимом, и оно едет в Graph вместе с ответом. Оттого измеренная тишина закрывает и
+     * очередь исполнителей: следующему достанутся те же байты, и уступать ему нечего —
+     * иначе запись уезжала бы на компьютер и оттуда в сервис ровно за той выдумкой, ради
+     * которой её и слушали. Ответ сервиса про речь такого знания о записи не даёт.
      */
-    private fun heardNothing(): ActionResult = ActionResult.Done(
+    private fun heardNothing(measuredHere: Boolean): ActionResult = ActionResult.Done(
         NO_SPEECH_HEARD,
         com.point.core.model.Findings(
-            metadata = mapOf(
-                com.point.core.flow.investigationKey(TranscribeCapability.ID) to
+            metadata = buildMap {
+                if (measuredHere) put(com.point.core.flow.META_AUDIO_SILENT, "true")
+                put(
+                    com.point.core.flow.investigationKey(TranscribeCapability.ID),
                     com.point.core.flow.InvestigationState.NOT_FOUND.wire,
-            ),
+                )
+            },
         ),
     )
 

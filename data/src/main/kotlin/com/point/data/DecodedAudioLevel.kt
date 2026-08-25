@@ -6,6 +6,7 @@ import android.media.MediaExtractor
 import android.media.MediaFormat
 import com.point.core.flow.AUDIBLE_PEAK
 import com.point.core.flow.AudioLevel
+import com.point.core.flow.measuredPeak
 import com.point.core.model.PointObject
 import java.io.File
 import java.nio.ByteBuffer
@@ -24,7 +25,9 @@ import kotlinx.coroutines.withContext
  *
  * Не смогли — говорим «не измерили» ([AudioLevel.peak] возвращает `null`), а не «тихо»:
  * незнакомый формат, отказавший декодер и затянувшееся измерение не должны молча отнимать у
- * человека расшифровку.
+ * человека расшифровку. Сюда же относится разбор, не давший ни одного сэмпла: пустая выдача
+ * экстрактора и конец потока без единого куска PCM — это несостоявшееся измерение, и оно
+ * никогда не выдаётся за тишину (`measuredPeak`, ADR-0001 §9).
  */
 class DecodedAudioLevel @Inject constructor() : AudioLevel {
 
@@ -57,14 +60,19 @@ class DecodedAudioLevel @Inject constructor() : AudioLevel {
         val buffer = ByteBuffer.allocate(CHUNK_BYTES)
         val until = System.currentTimeMillis() + LISTEN_LIMIT_MS
         var peak = 0.0
+
+        // Прошёл ли через уши хоть один сэмпл (#1053): без этого первая же пустая выдача
+        // отдавала ноль, и несостоявшееся измерение выдавалось за тишину.
+        var heardAny = false
         while (true) {
             buffer.clear()
             val read = extractor.readSampleData(buffer, 0)
-            if (read <= 0) return peak
+            if (read <= 0) return measuredPeak(peak, heardAny)
             peak = maxOf(peak, peakOf(buffer, 0, read, encoding) ?: return null)
+            heardAny = true
             if (peak >= AUDIBLE_PEAK) return peak
             if (System.currentTimeMillis() > until) return null
-            if (!extractor.advance()) return peak
+            if (!extractor.advance()) return measuredPeak(peak, heardAny)
         }
     }
 
@@ -73,6 +81,10 @@ class DecodedAudioLevel @Inject constructor() : AudioLevel {
         val until = System.currentTimeMillis() + LISTEN_LIMIT_MS
         var encoding = encodingOf(format)
         var peak = 0.0
+
+        // Декодер мог не отдать ни куска PCM — тогда мерить было нечего, и конец потока это
+        // не тишина, а «не измерили» (#1053).
+        var heardAny = false
         try {
             codec.configure(format, null, null, 0)
             codec.start()
@@ -92,10 +104,13 @@ class DecodedAudioLevel @Inject constructor() : AudioLevel {
                 val heard = codec.getOutputBuffer(index)?.let { peakOf(it, info.offset, info.size, encoding) }
                 codec.releaseOutputBuffer(index, false)
                 if (heard == null && info.size > 0) return null
-                peak = maxOf(peak, heard ?: 0.0)
+                if (info.size > 0) {
+                    peak = maxOf(peak, heard ?: 0.0)
+                    heardAny = true
+                }
 
                 if (peak >= AUDIBLE_PEAK) return peak
-                if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) return peak
+                if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) return measuredPeak(peak, heardAny)
             }
         } catch (e: Exception) {
             return null
