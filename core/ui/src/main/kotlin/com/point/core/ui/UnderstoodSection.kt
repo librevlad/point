@@ -89,9 +89,13 @@ fun understoodFacts(obj: PointObject): List<UnderstoodFact> {
         if (state.has(Feature.IS_PURCHASE)) add(UnderstoodFact("semantic", "Это покупка", summary))
         if (state.has(Feature.IS_RECIPE)) add(UnderstoodFact("semantic", "Это рецепт", summary))
         if (state.has(Feature.IS_JOB)) add(UnderstoodFact("semantic", "Это вакансия", summary))
-        // Номер показывается по-человечески (#932): разобранным, а не так, как он лежал в
-        // покорёженном тексте кадра — `06 1 ) 2 80-44-2 1`. Рядом то, что про номер известно:
-        // вид и чужая страна словом. Своя страна не называется — человек знает, где живёт.
+        // Строку номера собирает знание, а не экран (#932): рядом с номером — то, что про
+        // него известно, вид и чужая страна словом. Своя страна не называется — человек
+        // знает, где живёт.
+        //
+        // Разобранный вид, страна и вид есть только у номера, чью страну назвал документ
+        // (#1029). Номер без кода страны — обычный случай кадра — показывается как прочитан,
+        // покорёженный `06 1 ) 2 80-44-2 1` тоже: принятая цена, карточка #1294.
         if (state.has(Feature.HAS_PHONE)) {
             val phone = entity("phone")
                 ?.let { com.point.core.flow.shownKnowledge(com.point.core.flow.META_ENTITY_PHONE, it, obj.metadata) }

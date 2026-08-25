@@ -112,7 +112,7 @@ fun mergeKnowledge(
             isAnnotationKey(key) -> mergeAnnotation(merged, key, value)
         }
     }
-    return withPhoneKnowledge(merged, region)
+    return withPhoneKnowledge(merged)
 }
 
 /**
@@ -124,17 +124,17 @@ fun mergeKnowledge(
  *
  * Оператор и город библиотека тоже умеет, но их метаданные тяжёлые и после переноса номера
  * между операторами расходятся с правдой. Их здесь нет намеренно.
+ *
+ * Страну спрашивают у документа, а не у устройства (#1029), поэтому подсказки здесь и нет:
+ * знание о номере на всех устройствах одно и то же.
  */
-internal fun withPhoneKnowledge(
-    metadata: Map<String, String>,
-    region: String = PhoneNumbers.DEFAULT_REGION,
-): Map<String, String> {
+internal fun withPhoneKnowledge(metadata: Map<String, String>): Map<String, String> {
     val key = META_ENTITY_PHONE
     val value = metadata[key]?.takeIf { it.isNotBlank() } ?: return metadata
-    val country = PhoneNumbers.country(value, region) ?: return metadata
+    val country = PhoneNumbers.country(value) ?: return metadata
     val out = LinkedHashMap(metadata)
     out["$key.country"] = country
-    PhoneNumbers.kind(value, region)?.let { out["$key.kind"] = it }
+    PhoneNumbers.kind(value)?.let { out["$key.kind"] = it }
     return out
 }
 

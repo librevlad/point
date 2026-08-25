@@ -39,9 +39,7 @@ class PhoneIsJudgedByLibraryTest {
     }
 
     @Test
-    fun `хранится единообразно, показывается по-человечески`() {
-        assertEquals("+380676360560", PhoneNumbers.e164("067 636 05 60", "UA"))
-
+    fun `показывается по-человечески`() {
         val shown = PhoneNumbers.human("+380676360560", "UA")
         assertNotNull(shown)
         assertTrue("человеку показывают слипшиеся цифры: $shown", shown!!.contains(" "))
@@ -49,9 +47,9 @@ class PhoneIsJudgedByLibraryTest {
 
     @Test
     fun `у номера видно страну и вид`() {
-        assertEquals("UA", PhoneNumbers.country("+380676360560", "UA"))
+        assertEquals("UA", PhoneNumbers.country("+380676360560"))
 
-        val kind = PhoneNumbers.kind("+380676360560", "UA")
+        val kind = PhoneNumbers.kind("+380676360560")
         assertNotNull("вид номера не назван", kind)
         assertTrue("мобильный не узнан: $kind", kind!!.contains("мобиль"))
     }
@@ -65,7 +63,7 @@ class PhoneIsJudgedByLibraryTest {
 
     @Test
     fun `чужая страна не выдаётся за свою`() {
-        assertEquals("PL", PhoneNumbers.country("+48221234567", "UA"))
+        assertEquals("PL", PhoneNumbers.country("+48221234567"))
     }
 
     /**
@@ -80,10 +78,10 @@ class PhoneIsJudgedByLibraryTest {
         assertTrue("номер потерян из-за страны телефона", PhoneNumbers.exists("067 636 05 60", "US"))
     }
 
-    /** Страна названа, когда телефон человека и документ из одной страны — обычный случай. */
+    /** Страну называет документ, а не устройство (#1029): написан код — названа страна. */
     @Test
-    fun `страна называется, когда сомнений нет`() {
-        assertEquals("UA", PhoneNumbers.country("+380 67 636 05 60", "UA"))
+    fun `страна называется, когда её написал документ`() {
+        assertEquals("UA", PhoneNumbers.country("+380 67 636 05 60"))
     }
 
     @Test
@@ -92,13 +90,14 @@ class PhoneIsJudgedByLibraryTest {
     }
 
     /**
-     * Существование проверяется по нескольким странам — значит номер может подойти сразу
-     * двум. Выдумывать одну из них нельзя: номер есть, страна неизвестна.
+     * Номер без кода страны о своей стране не говорит: `918-682-1551` настоящий и в Америке,
+     * и в Германии. Прочитать такую запись можно только подсказкой устройства, а выдумывать
+     * по ней страну нельзя (#1029): номер есть, страна неизвестна.
      */
     @Test
-    fun `страна не называется, когда номер годится нескольким странам`() {
-        assertNull(PhoneNumbers.country("918-682-1551", "UA"))
-        assertEquals("US", PhoneNumbers.country("+1 918-682-1551", "UA"))
+    fun `страна не называется, когда её не написал документ`() {
+        assertNull(PhoneNumbers.country("918-682-1551"))
+        assertEquals("US", PhoneNumbers.country("+1 918-682-1551"))
     }
 
     /** Что номером не является, номером не становится ни в одной стране. */

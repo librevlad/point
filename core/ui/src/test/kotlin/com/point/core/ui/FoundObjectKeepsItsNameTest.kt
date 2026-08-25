@@ -46,8 +46,10 @@ class FoundObjectKeepsItsNameTest {
     fun `телефон человека виден внутри него`() {
         val facts = understoodFacts(person("Думброван Олександр Миколайович"))
 
-        // Показывается по-человечески (#932) — так, как номер разобрала библиотека.
-        assertEquals(listOf("067 636 0560"), facts.filter { it.key == "phone" }.map { it.value })
+        // Показывается по-человечески (#932), но без выдуманной страны (#1029): страну номера
+        // называет сам документ, а здесь он её не назвал — значит на экране номер стоит так,
+        // как прочитан.
+        assertEquals(listOf("067 636 05 60"), facts.filter { it.key == "phone" }.map { it.value })
     }
 
     @Test
