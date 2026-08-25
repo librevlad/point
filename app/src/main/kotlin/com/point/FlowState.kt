@@ -44,7 +44,10 @@ data class FlowFrame(
 
     val focus: com.point.core.flow.Focus? = null,
 
-    /** Состояние операций, не знания: исследования, которые не удались (ADR-0001 §9, §18). */
+    /**
+     * Состояние операций, не знания: шаги, которые не удались (ADR-0001 §9, §18). Не только
+     * выбранные человеком действия — сорвавшийся показ объекта тоже здесь (#1271).
+     */
     val failed: List<com.point.core.flow.FailedInvestigation> = emptyList(),
 )
 
@@ -54,7 +57,15 @@ data class FlowFrame(
  */
 suspend fun previewSource(obj: PointObject, rasterizer: com.point.core.flow.PdfRasterizer): String? =
     when (obj.state.kind) {
-        ObjectKind.IMAGE -> obj.uri.value
+        ObjectKind.IMAGE -> obj.uri.value.also { path ->
+
+            // Файл мог уйти вместе со scratch, пока кадр оставался открытым (#812).
+            // `BitmapFactory` на пропавшем пути молча отдаёт `null`, и «читать было нечего»
+            // становилось неотличимо от «байты не разобрались»: годный снимок объявлялся
+            // негодным на весь сеанс (#1271). О пропаже говорит тот, кто её видит, — так же,
+            // как о ней говорит открытие PDF.
+            if (!java.io.File(path).isFile) throw java.io.FileNotFoundException(path)
+        }
         ObjectKind.PDF -> rasterizer.rasterizeFirstPage(obj)?.value
         else -> null
     }
