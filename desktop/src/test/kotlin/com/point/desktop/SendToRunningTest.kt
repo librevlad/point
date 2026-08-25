@@ -1,6 +1,7 @@
 package com.point.desktop
 
 import java.io.File
+import java.util.concurrent.atomic.AtomicInteger
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -76,6 +77,53 @@ class SendToRunningTest {
         assertTrue("сигнал одноразовый", !SendToRunning.takeWake(dir))
 
         alive!!.release()
+    }
+
+    /**
+     * «Открыть в Point», когда Point уже живёт: вторая копия отдала файл и ушла (#1019).
+     * Живая принимает принесённое и зовёт окно один раз — письмо с файлами и сигнал
+     * «покажись» оставлены одним нажатием человека.
+     *
+     * Сторож нормы владельца «`toFront()`/`requestFocus()` один раз», а не починка того,
+     * что человек видел: двух подъёмов подряд он от одного не отличит.
+     */
+    @Test
+    fun `открыть в Point у живой копии — файл принят, окно позвано один раз`() {
+        val dir = tempDir()
+        val alive = SendToRunning.takeLock(dir)
+        val file = tempFile("счёт.pdf")
+        assertTrue("живому Point файл отдан", SendToRunning.handOff(listOf(file), dir))
+
+        val received = mutableListOf<File>()
+        val summoned = AtomicInteger(0)
+        try {
+            SendToRunning.serveHandOffs(dir, receive = received::add, summon = { summoned.incrementAndGet() })
+            assertEquals(listOf(file), received)
+            assertEquals("один зов человека — один подъём окна, а не за письмо и за сигнал порознь", 1, summoned.get().toLong())
+
+            SendToRunning.serveHandOffs(dir, receive = received::add, summon = { summoned.incrementAndGet() })
+            assertEquals("без нового зова окно не дёргается", 1, summoned.get().toLong())
+        } finally {
+            runCatching { alive?.release() }
+        }
+    }
+
+    /** Пробуждение второй копией без файла — тоже зов: показывать нечего, выйти вперёд надо. */
+    @Test
+    fun `второй запуск без файла зовёт окно вперёд`() {
+        val dir = tempDir()
+        val alive = SendToRunning.takeLock(dir)
+        assertTrue("при живом Point второй обязан уйти", SendToRunning.handOff(emptyList(), dir))
+
+        val received = mutableListOf<File>()
+        val summoned = AtomicInteger(0)
+        try {
+            SendToRunning.serveHandOffs(dir, receive = received::add, summon = { summoned.incrementAndGet() })
+            assertTrue("принимать было нечего", received.isEmpty())
+            assertEquals("голое «покажись» окно не позвало", 1, summoned.get().toLong())
+        } finally {
+            runCatching { alive?.release() }
+        }
     }
 
     @Test

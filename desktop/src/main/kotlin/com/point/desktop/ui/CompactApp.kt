@@ -126,7 +126,12 @@ fun CompactApp(
 
     // Прибывшее из списка раскрывается само; человека внутри другого объекта
     // не выдёргивают — ему предлагают (аудит компакта, раунд 2).
-    var lastTop by remember { mutableStateOf(items.firstOrNull()?.obj?.id) }
+    //
+    // До первой сборки экрана человек не видел ещё ничего (#1019, DSK-001): объект,
+    // принятый раньше, чем экран собрался, — запуск с файлом — такое же прибытие, а не
+    // «уже виденный верх списка». Прежде стартовое значение бралось из самого списка,
+    // и холодный старт с файлом выходил на список вместо объекта.
+    var lastTop by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(items.firstOrNull()?.obj?.id) {
         val top = items.firstOrNull()?.obj?.id
         if (top != null && top != lastTop) {

@@ -51,6 +51,21 @@ object SendToRunning {
         }
     }
 
+    /**
+     * Один проход живой копии за тем, что оставила вторая (#1019): принесённые файлы
+     * принимаются, и на явный зов человека — с файлами или голое «покажись» — окно
+     * зовётся ровно один раз. Один зов человека оставляет и письмо с файлами, и сигнал
+     * «покажись»; считать их порознь — два зова окна на одно нажатие. Это исполнение
+     * нормы владельца «`toFront()`/`requestFocus()` один раз», а не починка увиденного
+     * симптома: двух подъёмов подряд человек от одного не отличит.
+     */
+    fun serveHandOffs(pointDir: File, receive: (File) -> Unit, summon: () -> Unit) {
+        val brought = collectHandOffs(pointDir)
+        brought.forEach(receive)
+        val woken = takeWake(pointDir)
+        if (brought.isNotEmpty() || woken) summon()
+    }
+
     private const val LOCK = "lock"
     private const val HANDOFF = "handoff"
     private const val WAKE = "wake"
