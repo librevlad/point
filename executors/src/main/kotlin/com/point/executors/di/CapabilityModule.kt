@@ -313,10 +313,7 @@ abstract class CapabilityModule {
         fun scanPlusR(store: ObjectStore): Realizer = ScanPlusRealizer(store)
 
         @Provides
-        fun aiChatResponder(
-            llm: com.point.core.flow.LlmClient,
-            pdfText: com.point.core.flow.PdfTextExtractor,
-        ): AiChatResponder = AiChatResponderImpl(llm, pdfText)
+        fun aiChatResponder(llm: com.point.core.flow.LlmClient): AiChatResponder = AiChatResponderImpl(llm)
 
         @Provides @ElementsIntoSet @OwnCapabilities
         fun appCapabilities(chosen: ChosenApps): Set<Capability> =

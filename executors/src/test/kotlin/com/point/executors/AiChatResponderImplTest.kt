@@ -1,7 +1,6 @@
 package com.point.executors
 
 import com.point.core.flow.LlmClient
-import com.point.core.flow.PdfTextExtractor
 import com.point.core.model.ChatMessage
 import com.point.core.model.ChatRole
 import com.point.core.model.ObjectKind
@@ -19,12 +18,6 @@ class AiChatResponderImplTest {
 
     private val image = PointObject("i", "image/png", ScratchRef("/tmp/x.png"), ObjectState(ObjectKind.IMAGE))
 
-    private fun pdfSaying(text: String) = object : PdfTextExtractor {
-        override suspend fun extractText(obj: PointObject) = text
-    }
-
-    private val noPdf = pdfSaying("")
-
     private fun answering(seen: (String) -> Unit): LlmClient {
         val answerFile = File.createTempFile("ai-reply", ".md").apply {
             writeText("ответ")
@@ -39,35 +32,19 @@ class AiChatResponderImplTest {
     }
 
     /**
-     * Разговор о документе идёт с документом в руках (#780).
-     *
-     * Экран был открыт над «3. План проведення перевірки.pdf», а модель отвечала «мне нужно
-     * знать, о каком документе идёт речь»: содержимое читалось только у текстового вида, и
-     * PDF уходил в запрос пустым. Документ лежал у Point и в разговор не попадал.
+     * Содержимое объекта уходит модели вместе с вопросом (#780). Добывает его разговор и
+     * подаёт сюда готовым (#1241): ответчик зовётся на каждую реплику и второй раз тот же
+     * документ не разбирает.
      */
     @Test
-    fun `PDF доходит до модели вместе с вопросом`() = runTest {
+    fun `поданное содержимое доходит до модели`() = runTest {
         val pdf = PointObject("d", "application/pdf", ScratchRef("/tmp/plan.pdf"), ObjectState(ObjectKind.PDF))
         var seenPrompt = ""
 
-        AiChatResponderImpl(answering { seenPrompt = it }, pdfSaying("План проведення перевірки"))
-            .reply(pdf, emptyList(), "главные тезисы")
+        AiChatResponderImpl(answering { seenPrompt = it })
+            .reply(pdf, "План проведення перевірки", emptyList(), "главные тезисы")
 
         assertTrue("документ не дошёл до модели: $seenPrompt", "План проведення перевірки" in seenPrompt)
-    }
-
-    @Test
-    fun `прочитанное раньше берётся, а файл второй раз не читается`() = runTest {
-        val sidecar = File.createTempFile("ocr", ".txt").apply {
-            writeText("текст со снимка")
-            deleteOnExit()
-        }
-        val shot = image.copy(metadata = mapOf(com.point.core.flow.META_OCR_TEXT_REF to sidecar.path))
-        var seenPrompt = ""
-
-        AiChatResponderImpl(answering { seenPrompt = it }, noPdf).reply(shot, emptyList(), "что тут?")
-
-        assertTrue("сидекар OCR не дошёл до модели", "текст со снимка" in seenPrompt)
     }
 
     @Test
@@ -85,7 +62,7 @@ class AiChatResponderImplTest {
             ChatMessage(ChatRole.ASSISTANT, "чек магазина"),
         )
 
-        val reply = AiChatResponderImpl(llm, noPdf).reply(image, history, "на сколько?")
+        val reply = AiChatResponderImpl(llm).reply(image, null, history, "на сколько?")
 
         assertEquals("Это чек на 693 грн.", reply)
         assertTrue("new message reaches the model", "на сколько?" in seenPrompt)

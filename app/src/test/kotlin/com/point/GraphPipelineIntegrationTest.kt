@@ -113,13 +113,23 @@ class GraphPipelineIntegrationTest {
     private class ScriptedQr : QrReader {
         var value: String? = null
         var broken = false
+
+        /** Сколько раз картинку пришлось раскодировать: цена вопроса видна счётом (#1240). */
+        var decoded = 0
+
         override suspend fun decode(imagePath: String): String? {
+            decoded++
             if (broken) error("сканер сломан")
             return value
         }
     }
 
     private val qrEngine = ScriptedQr()
+
+    /** Разговору в этих проверках нечего читать: документов здесь нет. */
+    private val noPdfText = object : com.point.core.flow.PdfTextExtractor {
+        override suspend fun extractText(obj: PointObject) = ""
+    }
 
     private val phoneEngine = object : EntityExtractor {
         override suspend fun extract(text: String): List<Entity> =
@@ -257,11 +267,13 @@ class GraphPipelineIntegrationTest {
             object : AiChatResponder {
                 override suspend fun reply(
                     obj: PointObject,
+                    content: String?,
                     history: List<com.point.core.model.ChatMessage>,
                     message: String,
                 ) = "ok"
             },
             store,
+            com.point.core.flow.GraphKnowledge(store, noPdfText),
         ),
         enrichment,
         object : HistoryStore {
@@ -441,6 +453,44 @@ class GraphPipelineIntegrationTest {
         assertEquals("объект назвал действие", ReadQrCapability.ID.value, store.lastBy)
         assertEquals(listOf(enriched.obj.id), produced.obj.sourceObjects)
         assertEquals(ReadQrCapability.ID.value, produced.obj.creatorAction)
+
+        shutdown(vm)
+    }
+
+    /**
+     * Повторный вход в тот же объект не декодирует картинку заново ради QR (#1240).
+     *
+     * «Не нашлось» — такой же ответ, как «нашлось», и переспрашивать его стоит дороже всего:
+     * при пустом ответе кадр раскодируется дважды, крупнее и внимательнее. Крутилки человек
+     * при этом не видит — тратится тихо. Мерка стоимости у исследования теперь по работе
+     * исполнителя, и гейт по знанию включается сам.
+     */
+    @Test
+    fun `A - повторный вход в объект не сканирует картинку заново`() = runTest(dispatcher) {
+        qrEngine.value = null
+        store.next = imageObject()
+        val vm = vm()
+
+        vm.onShared("uri", "image/jpeg"); advanceUntilIdle()
+
+        val looked = frame(vm)
+        assertEquals(
+            "вопрос закрыт ответом «не нашлось»",
+            InvestigationState.NOT_FOUND,
+            investigationStateOf(looked.obj.metadata, QrInvestigation.ID),
+        )
+        assertTrue("сканер вообще не смотрел", qrEngine.decoded > 0)
+        val scanned = qrEngine.decoded
+
+        // Человек вернулся к тому же объекту — из «Недавнего» он приходит со своим знанием.
+        store.next = imageObject(looked.obj.metadata)
+        vm.onShared("uri", "image/jpeg"); advanceUntilIdle()
+
+        assertEquals(
+            "картинку раскодировали ради уже отвеченного вопроса",
+            scanned,
+            qrEngine.decoded,
+        )
 
         shutdown(vm)
     }

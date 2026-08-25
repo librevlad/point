@@ -49,13 +49,22 @@ class GraphKnowledge(
         reading(obj, limit)?.let { return it }
         return when (obj.state.kind) {
             ObjectKind.TEXT -> runCatching { store.readText(obj, limit) }.getOrNull()
-            ObjectKind.PDF -> runCatching {
 
-                // Единственное место здесь, где работа заметна человеку: текстовый слой PDF
-                // достаётся не мгновенно, и молчать об этом нельзя (#555).
-                reportStage("Читаю текст PDF")
-                pdfText.extractText(obj).take(limit)
-            }.getOrNull()
+            // Про документ, у которого текст файлом не достаётся, это уже известно (#1241):
+            // `IS_IMAGE_PDF` — найденный ответ, а не «ещё не смотрели». Прежде каждый вопрос
+            // («Перевести», «В Word», реплика разговора) гонял все страницы ради заведомой
+            // пустоты — секунды за уже отвеченное.
+            ObjectKind.PDF -> if (obj.state.has(com.point.core.model.Feature.IS_IMAGE_PDF)) {
+                null
+            } else {
+                runCatching {
+
+                    // Единственное место здесь, где работа заметна человеку: текстовый слой PDF
+                    // достаётся не мгновенно, и молчать об этом нельзя (#555).
+                    reportStage("Читаю текст PDF")
+                    pdfText.extractText(obj).take(limit)
+                }.getOrNull()
+            }
             else -> null
         }?.takeIf { it.isNotBlank() }
     }
@@ -65,9 +74,15 @@ class GraphKnowledge(
             runCatching { AtomCodec.decode(File(ref).readText()) }.getOrNull()
         }?.takeIf { it.atoms.isNotEmpty() }
 
-    /** Прочитанное с кадра — знание объекта, а не чужой файл рядом. */
+    /**
+     * Прочитанное с кадра — знание объекта, а не чужой файл рядом.
+     *
+     * Читается ровно столько, сколько спросили (#1241): прежде прочтение поднималось в
+     * память целиком и обрезалось уже после — на каждый вопрос и на каждую реплику
+     * разговора о большом объекте.
+     */
     private fun reading(obj: PointObject, limit: Int): String? =
-        obj.metadata[META_OCR_TEXT_REF]?.takeIf { it.isNotBlank() }?.let { ref ->
-            runCatching { File(ref).takeIf(File::isFile)?.readText()?.take(limit) }.getOrNull()
-        }?.takeIf { it.isNotBlank() }
+        obj.metadata[META_OCR_TEXT_REF]?.takeIf { it.isNotBlank() }
+            ?.let { ref -> fileHead(ref, limit) }
+            ?.takeIf { it.isNotBlank() }
 }

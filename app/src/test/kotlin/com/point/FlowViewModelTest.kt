@@ -130,7 +130,7 @@ class FlowViewModelTest {
         own: List<Capability> = emptyList(),
 
         pdf: com.point.core.flow.PdfRasterizer = FakePdfRasterizer(),
-    ) = FlowViewModel(store, FakeRegistry(caps, cloud, slow, keyNeeding, own) { userKeys.keys().mine.isNotEmpty() }.also { registry = it }, resolver, ChatTalk(chatResponder, store), enrichment, history, usage, chosenApps, userKeys, aiFacts, builtInKeys, consent, appLauncher, pdf, sensory, sensorySettings, cloudPrivacy, com.point.core.flow.YoloMode.OFF, snapshot, crashLog, dispatcher, AppIconResolver { null }, pcLinks, pcTransport, pcCaps, linkMonitor, PulledFileFactory { name -> java.io.File(java.io.File(System.getProperty("java.io.tmpdir")), "pulled-" + name).absolutePath }, noFrames, com.point.core.flow.PhoneRegion { "UA" }, keyCheck, account, circleStore, accountClient, pendingLogins, deviceKeys, browser, sharedTexts, memory)
+    ) = FlowViewModel(store, FakeRegistry(caps, cloud, slow, keyNeeding, own) { userKeys.keys().mine.isNotEmpty() }.also { registry = it }, resolver, ChatTalk(chatResponder, store, com.point.core.flow.GraphKnowledge(store, chatPdfText)), enrichment, history, usage, chosenApps, userKeys, aiFacts, builtInKeys, consent, appLauncher, pdf, sensory, sensorySettings, cloudPrivacy, com.point.core.flow.YoloMode.OFF, snapshot, crashLog, dispatcher, AppIconResolver { null }, pcLinks, pcTransport, pcCaps, linkMonitor, PulledFileFactory { name -> java.io.File(java.io.File(System.getProperty("java.io.tmpdir")), "pulled-" + name).absolutePath }, noFrames, com.point.core.flow.PhoneRegion { "UA" }, keyCheck, account, circleStore, accountClient, pendingLogins, deviceKeys, browser, sharedTexts, memory)
 
     private val keyCheck = FakeAiKeyCheck()
 
@@ -151,6 +151,11 @@ class FlowViewModelTest {
     }
 
     private val chatResponder = FakeChatResponder()
+
+    /** Разговору здесь читать нечего: проверяется сам разговор, а не содержимое объекта. */
+    private val chatPdfText = object : com.point.core.flow.PdfTextExtractor {
+        override suspend fun extractText(obj: PointObject) = ""
+    }
     private val pcCaps = FakePcCaps()
     private val pcLinks = FakePcLinks()
     private val deviceKeys = object : com.point.core.flow.DeviceKeyStore {
@@ -5382,7 +5387,12 @@ private class FakeChatResponder : com.point.core.flow.AiChatResponder {
     var text = "ответ"
     var inFlight: kotlinx.coroutines.CompletableDeferred<String>? = null
     var calls = 0
-    override suspend fun reply(obj: PointObject, history: List<com.point.core.model.ChatMessage>, message: String): String {
+    override suspend fun reply(
+        obj: PointObject,
+        content: String?,
+        history: List<com.point.core.model.ChatMessage>,
+        message: String,
+    ): String {
         calls++
         return inFlight?.await() ?: text
     }

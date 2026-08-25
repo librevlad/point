@@ -7,7 +7,19 @@ import com.point.core.model.PointObject
 
 fun interface AiChatResponder {
 
-    suspend fun reply(obj: PointObject, history: List<ChatMessage>, message: String): String
+    /**
+     * [content] — содержимое объекта, каким Point знает его сейчас; `null` — знания нет.
+     *
+     * Добывает его разговор, и один раз на разговор (#1241): прежде каждая реплика заново
+     * поднимала весь документ или весь текстовый файл ради одних и тех же первых
+     * [MAX_CHAT_CONTENT] символов.
+     */
+    suspend fun reply(
+        obj: PointObject,
+        content: String?,
+        history: List<ChatMessage>,
+        message: String,
+    ): String
 }
 
 private fun chatSystemPrompt(kind: ObjectKind): String {
@@ -50,4 +62,5 @@ fun buildChatPrompt(
     append("\nАссистент:")
 }
 
-private const val MAX_CHAT_CONTENT = 16_000
+/** Сколько содержимого объекта уходит модели вместе с вопросом — столько и добывается. */
+const val MAX_CHAT_CONTENT: Int = 16_000

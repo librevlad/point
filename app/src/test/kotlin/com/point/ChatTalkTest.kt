@@ -49,9 +49,32 @@ class ChatTalkTest {
         override suspend fun clear() = Unit
     }
 
-    private fun talk(reply: String = "ответ модели") = ChatTalk(
-        responder = AiChatResponder { _, _, _ -> reply },
+    /** Читатель документа, который помнит, сколько раз его позвали. */
+    private class Pdf(private val text: String) : com.point.core.flow.PdfTextExtractor {
+        var asked = 0
+        override suspend fun extractText(obj: PointObject): String {
+            asked++
+            return text
+        }
+    }
+
+    private val noPdf = Pdf("")
+
+    /**
+     * Знание объекта в разговоре — настоящее (#1138): тот же `GraphKnowledge`, которым
+     * пользуется продукт, а не подменённый источник текста.
+     */
+    private fun talk(
+        reply: String = "ответ модели",
+        pdf: com.point.core.flow.PdfTextExtractor = noPdf,
+        seen: (String?) -> Unit = {},
+    ) = ChatTalk(
+        responder = AiChatResponder { _, content, _, _ ->
+            seen(content)
+            reply
+        },
         store = store(),
+        knowledge = com.point.core.flow.GraphKnowledge(store(), pdf),
     )
 
     private val knowsPdf: (CapabilityId, ObjectState) -> String? =
@@ -84,6 +107,62 @@ class ChatTalkTest {
 
         assertNull(answered.offer)
         assertEquals(ChatRole.ASSISTANT, answered.messages.last().role)
+    }
+
+    /**
+     * Разговор о документе идёт с документом в руках (#780).
+     *
+     * Экран был открыт над «3. План проведення перевірки.pdf», а модель отвечала «мне нужно
+     * знать, о каком документе идёт речь». Документ лежал у Point и в вопрос не попадал.
+     */
+    @Test
+    fun `содержимое документа уходит модели вместе с вопросом`() = runTest {
+        val seen = mutableListOf<String?>()
+        val talk = talk(pdf = Pdf("План проведення перевірки"), seen = { seen += it })
+        val said = talk.said(ChatState(obj = obj), "главные тезисы")
+
+        talk.answered(said, "главные тезисы", said.messages, knowsPdf)
+
+        assertEquals(listOf("План проведення перевірки"), seen)
+    }
+
+    /**
+     * Содержимое добывается один раз на разговор (#1241).
+     *
+     * Каждая реплика заново разбирала весь PDF: длинный документ — секунды мёртвого времени
+     * до того, как вопрос вообще ушёл с телефона, и так на каждый ход.
+     */
+    @Test
+    fun `документ разбирается один раз на разговор, а не на каждую реплику`() = runTest {
+        val pdf = Pdf("Договор №42 от 2026 года")
+        val seen = mutableListOf<String?>()
+        val talk = talk(pdf = pdf, seen = { seen += it })
+
+        val first = talk.answered(talk.said(ChatState(obj = obj), "о чём это?"), "о чём это?", emptyList(), knowsPdf)
+        talk.answered(talk.said(first, "а сумма?"), "а сумма?", first.messages, knowsPdf)
+
+        assertEquals("документ разобрали на каждую реплику", 1, pdf.asked)
+        assertEquals(
+            "вторая реплика ушла без документа",
+            listOf("Договор №42 от 2026 года", "Договор №42 от 2026 года"),
+            seen,
+        )
+    }
+
+    /** Прочитанное раньше — то же знание объекта: файл второй раз не читается. */
+    @Test
+    fun `прочитанное с кадра уходит модели, а документ не разбирается`() = runTest {
+        val sidecar = temp.newFile("ocr.txt").apply { writeText("текст со снимка") }
+        val shot = obj.copy(metadata = mapOf(com.point.core.flow.META_OCR_TEXT_REF to sidecar.absolutePath))
+        val pdf = Pdf("текстовый слой")
+        val seen = mutableListOf<String?>()
+        val talk = talk(pdf = pdf, seen = { seen += it })
+
+        val said = talk.said(ChatState(obj = shot), "что тут?")
+        talk.answered(said, "что тут?", said.messages, knowsPdf)
+
+        assertEquals(listOf("текст со снимка"), seen)
+        assertEquals("документ читали, хотя прочтение уже было", 0, pdf.asked)
     }
 
     @Test
