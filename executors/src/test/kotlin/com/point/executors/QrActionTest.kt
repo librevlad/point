@@ -100,9 +100,15 @@ class QrActionTest {
         assertFalse("пустой текст ушёл дальше по цепочке", noText.recoverable)
     }
 
-    /** #1084: текст, который раньше не проходил тысячу знаков телефона, теперь кодируется. */
+    /**
+     * #1084: текст, который раньше не проходил тысячу знаков телефона, доходит до кодировщика.
+     *
+     * Здесь стоит подделка, и доказан этим только гейт по длине. Что настоящий кодировщик
+     * телефона берёт ровно общий потолок и ни байтом больше — доказано там, где он живёт:
+     * `com.point.data.ZxingQrEncoderTest`.
+     */
     @Test
-    fun `text longer than the old phone limit is encoded`() = runTest {
+    fun `text longer than the old phone limit reaches the encoder`() = runTest {
         val qr = FakeQrEncoder()
         val text = "x".repeat(1200)
         val result = QrRealizer(qr).perform(textObject(text), null)
