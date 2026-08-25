@@ -96,8 +96,13 @@ class CompactRenderTest {
             assertTrue("имя объекта не видно без прокрутки: $seen", frame.shows(NAME))
 
             // Знание — то, что продукт сам считает понятым об этом объекте, а не список,
-            // переписанный в тест руками.
-            val unseen = knowledgeRows(item.obj.metadata).filterNot { frame.shows(it.value) }
+            // переписанный в тест руками. Отдай продукт пустой список — и проверка ниже
+            // осталась бы зелёной на экране без единой строки знания, поэтому сначала
+            // спрашивается, что строки вообще есть: фикстура кладёт два факта, телефон и сумму.
+            val rows = knowledgeRows(item.obj.metadata)
+            assertTrue("продукт не отдал строк знания об этом объекте — проверять нечего: $rows", rows.size >= 2)
+
+            val unseen = rows.filterNot { frame.shows(it.value) }
             assertTrue("строки знания уехали под сгиб: ${unseen.map { it.name }} · видно $seen", unseen.isEmpty())
 
             assertTrue("первое действие не видно без прокрутки: $seen", frame.shows(phoneActions.first().label))

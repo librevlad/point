@@ -432,21 +432,40 @@ class RealCapabilityInventoryTest {
     /**
      * Запасное объявление — то, что телефон говорит о себе, когда собрать список из реестра не
      * вышло. Оно не фильтруется через `advertisedActions` вовсе, поэтому правило проверяется
-     * прямо на нём, а строки сверяются с настоящим объявлением: список, отставший от боевого
-     * набора, обещает компьютеру то, чего телефон уже не делает.
+     * прямо на нём, а каждая строка сверяется с настоящим объявлением целиком — вместе с видом
+     * и признаками.
+     *
+     * Сверка одних имён этого не ловила (#1248): запасное «Позвонить» стояло на любом тексте,
+     * а настоящее — на признаке номера. Компьютер по такому списку предлагал позвонить тексту
+     * без номера: обещал то, чего телефон не сделает. Годность объекту считает `PcActionFit` по
+     * виду и признакам — значит и сверять надо их, а не только слово на кнопке.
      */
     @Test
     fun `запасное объявление живёт по тем же правилам, что и настоящее`() {
 
-        val real = com.point.core.flow.advertisedActions(builtIn).associate { it.id to it.label }
+        val real = com.point.core.flow.advertisedActions(builtIn)
         val fallback = com.point.core.flow.PHONE_ADVERTISED_FALLBACK
+
+        // Пустой список прошёл бы обе проверки ниже молча: сначала спрашивается, что
+        // объявлять телефону вообще есть чем.
+        assertTrue("запасного объявления нет вовсе — сверять нечего", fallback.isNotEmpty())
 
         val named = fallback.map { it.label }.filter(::namesOtherDevice)
         assertTrue("запасное объявление называет чужое устройство: $named", named.isEmpty())
 
-        val stale = fallback.filter { real[it.id] != it.label }
-            .map { "${it.id} · «${it.label}» — у телефона " + (real[it.id]?.let { name -> "«$name»" } ?: "нет такого действия") }
+        val stale = fallback.filterNot { it in real }.map { spare ->
+            val theirs = real.filter { it.id == spare.id }.map(::said)
+            "${spare.id} · запасное ${said(spare)} — у телефона " +
+                (theirs.takeIf { it.isNotEmpty() }?.joinToString(" · ") ?: "нет такого действия")
+        }
         assertTrue("запасное объявление отстало от того, что телефон умеет: $stale", stale.isEmpty())
+    }
+
+    /** Строка объявления словами: имя, вид, признаки и место — всё, чем живёт чужое действие. */
+    private fun said(action: com.point.core.flow.PcRemoteAction): String {
+        val kinds = action.kinds.takeIf { it.isNotEmpty() }?.joinToString("/") ?: "любой"
+        val features = action.features.takeIf { it.isNotEmpty() }?.joinToString("/") ?: "любые"
+        return "«${action.label}» вид $kinds признаки $features место ${action.priority}"
     }
 
     /** Имя действия называет устройство, которое человеку в этом списке не своё. */
@@ -467,6 +486,9 @@ class RealCapabilityInventoryTest {
          * Слова, называющие устройство. В списке, который телефон шлёт компьютеру, любое из
          * них — про чужое место: «компьютер» человек и так видит перед собой, а «телефон» —
          * та сторона, что этот список прислала.
+         *
+         * Единственный дом этого списка (#1248): второй такой же стоял в `:core:flow`, на
+         * фикстуре с придуманным именем, и от продукта не зависел вовсе.
          */
         val OTHER_DEVICE_WORDS = listOf("компьютер", "телефон", " пк")
 

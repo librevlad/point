@@ -150,11 +150,14 @@ class AdvertisedActionsTest {
      * бессмысленно. Это зеркало беды, чинённой на телефоне: там компьютерное «На телефон»
      * звучало «На телефон на ПК».
      *
-     * Сторожим класс, а не два случая: всё, что называет чужое устройство в своём имени,
-     * рекламироваться не должно.
+     * Здесь проверяется механизм: способность, помеченная `localOnly`, из объявления выпадает,
+     * а обычная остаётся. Само правило про слова живёт одним домом — в `:executors`, поверх
+     * боевого набора способностей (`RealCapabilityInventoryTest`), где имена пишет продукт, а
+     * не фикстура. Второй список слов стоял здесь, на фикстуре, чьё имя написал сам тест, и
+     * молча разошёлся бы с первым (#1248).
      */
     @Test
-    fun `действие про чужое устройство не уезжает на это устройство`() {
+    fun `способность про чужое устройство в объявление не попадает`() {
         val caps = listOf(
             Cap("pc", { true }, CapabilityMeta(localOnly = true), { "На компьютер" }),
             Cap("understand", { true }, name = { "Понять" }),
@@ -162,13 +165,7 @@ class AdvertisedActionsTest {
 
         val advertised = advertisedActions(caps)
 
-        val aboutOtherDevice = advertised.filter { action ->
-            listOf("компьютер", "телефон", " пк").any { action.label.lowercase().contains(it) }
-        }
-        assertTrue(
-            "рекламируется действие про чужое устройство: ${aboutOtherDevice.map { it.label }}",
-            aboutOtherDevice.isEmpty(),
-        )
+        assertEquals(listOf("understand"), advertised.map { it.id })
     }
 
 }
