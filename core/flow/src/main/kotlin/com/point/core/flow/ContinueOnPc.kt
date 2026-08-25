@@ -130,6 +130,15 @@ fun decodePcReceiveReply(body: String): PcActionOutcome? {
     }
 }
 
+/**
+ * Просьба соседа ждёт ответа человека — отправлять ли наружу (#1269).
+ *
+ * Согласие спрашивается там, где действие исполняется, и до «да» объект никуда не уходит.
+ * Исход у такого шага честный: не «сделано» и не «не вышло», а «ждёт». Иначе устройство,
+ * попросившее сделать, показывало галочку, хотя работа ещё не начиналась.
+ */
+const val AWAITS_CONSENT_TEXT = "Ждёт вашего ответа на телефоне: отправлять ли наружу"
+
 fun pcActionOutcomeOf(result: com.point.core.model.ActionResult?): PcActionOutcome? = when (result) {
     null -> null
     is com.point.core.model.ActionResult.Done -> PcActionOutcome.Done(result.message)

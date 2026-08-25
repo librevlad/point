@@ -923,6 +923,78 @@ class FlowViewModelTest {
         assertEquals("r-1", back[com.point.core.flow.PcExecFields.REQUEST])
     }
 
+    /**
+     * Просьба компьютера входит в те же две двери, что и тап человека здесь (#1269).
+     *
+     * Человек закрыл дорогу наружу, а телефон по просьбе компьютера всё равно отправлял:
+     * `executeForPc` шёл мимо режима и мимо согласия. Конституция §11 — объект покидает
+     * устройства только с согласия человека, и выбранный режим это согласие уже отменил.
+     */
+    @Test fun `просьба компьютера в закрытом режиме не исполняется — компьютер узнаёт причину`() = runTest(dispatcher) {
+        cloudPrivacy.level = com.point.core.flow.PrivacyLevel.DEVICE_ONLY
+        pcLinks.pc = com.point.core.flow.LinkedPc("pc", "Компьютер", "http://pc")
+        pcTransport.outbox = listOf(asksPc())
+        val vm = vm(cloud = setOf(CapabilityId("a")))
+
+        vm.pullFromPc(); advanceUntilIdle()
+
+        assertTrue("объект уехал наружу вопреки выбранному режиму", resolver.performed.isEmpty())
+        val back = pcTransport.sent.singleOrNull()
+        assertNotNull("компьютер не узнал ничего — шаг у него ждёт вечно", back)
+        assertEquals(
+            com.point.core.flow.PcResultFields.FAILED,
+            back!![com.point.core.flow.PcResultFields.OUTCOME],
+        )
+        assertEquals(
+            com.point.core.flow.chainClosedBy(com.point.core.flow.PrivacyLevel.DEVICE_ONLY),
+            back[com.point.core.flow.PcResultFields.DETAIL],
+        )
+    }
+
+    /**
+     * Согласие на облако спрашивается там, где действие исполняется (#1269).
+     *
+     * До «да» объект никуда не уходит, а компьютер видит честное «ждёт», а не галочку
+     * «сделано»: у него шаг ещё не состоялся. Сказанное «да» доводит ту же работу.
+     */
+    @Test fun `облачная просьба компьютера сначала спрашивает человека здесь`() = runTest(dispatcher) {
+        pcLinks.pc = com.point.core.flow.LinkedPc("pc", "Компьютер", "http://pc")
+        pcTransport.outbox = listOf(asksPc())
+        val vm = vm(cloud = setOf(CapabilityId("a")))
+
+        vm.pullFromPc(); advanceUntilIdle()
+
+        assertTrue("вопрос об отправке не задан ни на одном экране", vm.ui.value.cloudConsent)
+        assertTrue("объект ушёл наружу без ответа человека", resolver.performed.isEmpty())
+        assertEquals(
+            com.point.core.flow.AWAITS_CONSENT_TEXT,
+            pcTransport.sent.single()[com.point.core.flow.PcResultFields.DETAIL],
+        )
+
+        vm.confirmCloud(); advanceUntilIdle()
+
+        assertEquals("после «да» работа не пошла", listOf(CapabilityId("a")), resolver.performed)
+        val done = pcTransport.sent.last()
+        assertEquals(
+            com.point.core.flow.PcResultFields.DONE,
+            done[com.point.core.flow.PcResultFields.OUTCOME],
+        )
+        assertEquals("результат ушёл не к тому объекту", "obj-at-home", done[com.point.core.flow.PcExecFields.HOME])
+    }
+
+    /** Письмо компьютера с просьбой — такое же, каким его шлёт настоящий (`queueForPhone`). */
+    private fun asksPc() = com.point.core.flow.PcOutboxEntry(
+        1,
+        mapOf(
+            "name" to "накладная.jpg",
+            "mime" to "image/jpeg",
+            com.point.core.flow.PcExecFields.ACTION to "a",
+            com.point.core.flow.PcExecFields.LABEL to "Убрать фон",
+            com.point.core.flow.PcExecFields.REQUEST to "r-1",
+            com.point.core.flow.PcExecFields.HOME to "obj-at-home",
+        ),
+    )
+
     @Test fun `назад с экрана входа возвращает в Point, а не закрывает его`() = runTest(dispatcher) {
 
         val vm = vm(account = FakeAccountStore(null), accountClient = CountingSignInClient(readyAfter = Int.MAX_VALUE))

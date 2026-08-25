@@ -1,5 +1,6 @@
 package com.point.desktop
 
+import com.point.core.flow.PrivacyLevel
 import com.point.core.flow.RelayRpc
 import com.point.core.flow.advertisedActions
 import com.point.core.flow.decodePcCaps
@@ -74,6 +75,43 @@ class PhoneFacingTest {
     }
 
     /**
+     * Причина видна телефону до тапа, а не приходит отказом после (#1269).
+     *
+     * Режим — ответ человека, данный заранее, и он известен уже в момент объявления. Прежде
+     * компьютер объявлял уходящее наружу доступным при любом режиме: телефон предлагал
+     * действие, человек ждал, и вместо работы приезжал отказ.
+     */
+    @Test fun `в закрытом режиме уходящее из круга объявлено недоступным словами режима`() {
+        val outward = advertised.map { it.copy(leavesCircle = it.id == OUTWARD) }
+
+        val announced = withWayOutClosed(outward, PrivacyLevel.DEVICE_ONLY)
+
+        assertEquals(
+            com.point.core.flow.chainClosedBy(PrivacyLevel.DEVICE_ONLY),
+            announced.first { it.id == OUTWARD }.unavailable,
+        )
+        assertTrue(
+            "закрылось не только то, что уходит наружу- " +
+                announced.filterNot { it.leavesCircle }.filter { it.unavailable != null }.map { it.id },
+            announced.filterNot { it.leavesCircle }.all { it.unavailable == null },
+        )
+    }
+
+    @Test fun `открытый режим объявление не трогает`() {
+        val outward = advertised.map { it.copy(leavesCircle = true) }
+
+        assertEquals(outward, withWayOutClosed(outward, PrivacyLevel.FREE_FIRST))
+    }
+
+    /** Своя причина точнее общей: «нет yt-dlp» режимом не затирается (#1269). */
+    @Test fun `названная причина недоступности сильнее закрытого режима`() {
+        val own = "тут своя причина"
+        val action = advertised.first().copy(leavesCircle = true, unavailable = own)
+
+        assertEquals(own, withWayOutClosed(listOf(action), PrivacyLevel.DEVICE_ONLY).single().unavailable)
+    }
+
+    /**
      * Телефон в своих тестах читает объявление компьютера из файла (`:executors`,
      * OneButtonPerCapabilityTest), а не переписывает его от руки (#1094): рукописная копия
      * синхронизировалась вручную и к боевому набору отношения не имела.
@@ -117,6 +155,9 @@ class PhoneFacingTest {
 
         /** Вторая форма того же места — из списка ушла (#1094). */
         const val SHORT_FORM = "ПК"
+
+        /** Умение, чей единственный путь — наружу: на нём и проверяется закрытый режим. */
+        const val OUTWARD = "transcribe"
 
         /** Копия ответа на classpath: её же сборка `:executors` кладёт тестам телефона. */
         const val SNAPSHOT = "phone-facing-actions.txt"

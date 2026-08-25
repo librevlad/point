@@ -305,7 +305,13 @@ fun main(args: Array<String>) {
     }
     fun pcRemoteActionsNow(): List<com.point.core.flow.PcRemoteAction> {
         val unavailable = pcUnavailableNow()
-        return pcBaseActions.map { it.copy(unavailable = unavailable[it.id]) }
+
+        // Режим спрашивается тут же, а не помнится копией (#1269): человек закрыл дорогу
+        // наружу — телефон видит причину в самом объявлении, до тапа.
+        return withWayOutClosed(
+            pcBaseActions.map { it.copy(unavailable = unavailable[it.id]) },
+            FilePcConfig(pointDir).load().privacy,
+        )
     }
 
     // Запуск с файлом — такой же явный зов (#1019): окно выходит вперёд. Сам объект экран

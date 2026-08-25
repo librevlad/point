@@ -1951,6 +1951,11 @@ class FlowViewModel @Inject constructor(
      *
      * Своего жизненного цикла у этого нет: тот же Resolver, тот же Realizer, тот же
      * `ActionResult` — меняется только то, куда возвращается результат.
+     *
+     * И тот же шов, что у нажатия человека здесь (#1269): сначала режим, потом согласие.
+     * Просьба соседа не привилегия — она входит в те же две двери, что и тап. Прежде она
+     * шла мимо обеих: человек на компьютере нажимал «Понять», и телефон молча отправлял
+     * документ чужой модели, ни о чём не спросив (Конституция §11).
      */
     private suspend fun executeForPc(
         pc: com.point.core.flow.LinkedPc,
@@ -1961,6 +1966,71 @@ class FlowViewModel @Inject constructor(
         val capability = ask[f.ACTION]?.takeIf { it.isNotBlank() } ?: return
         val home = ask[f.HOME]?.takeIf { it.isNotBlank() } ?: return
         val label = ask[f.LABEL]?.takeIf { it.isNotBlank() } ?: capability
+        val id = CapabilityId(capability)
+
+        // Режим закрыл дорогу наружу — работа не начинается, а компьютер получает причину
+        // словами режима, а не молчаливое «сделано» (#943, #1269).
+        wayOutClosed(id)?.let { reason ->
+            val told = answerPc(pc, ask, home, capability, label, ActionResult.Failure(reason, recoverable = false))
+            _ui.update {
+                it.copy(
+                    message = if (told) "«$label» для компьютера: $reason" else "«$label» — ответ не доехал до компьютера",
+                    messageOutcome = Outcome.FAILED,
+                )
+            }
+            return
+        }
+
+        // Облачное спрашивается здесь, у человека с телефоном: объект уходит наружу только
+        // после явного «да». Пока ответа нет, компьютер видит честное «ждёт», а не Done;
+        // сказанное «да» доводит ту же работу и возвращает результат домой обычным путём.
+        if (isCloud(id) && !cloudAlreadyAllowed(id)) {
+            requireCloudConsent(id) {
+                viewModelScope.launch { runForPc(pc, ask, path, capability, home, label) }
+            }
+            val told = answerPc(
+                pc, ask, home, capability, label,
+                ActionResult.Failure(com.point.core.flow.AWAITS_CONSENT_TEXT, recoverable = true),
+            )
+            _ui.update {
+                it.copy(
+                    message = if (told) "«$label» для компьютера — ответьте, отправлять ли наружу" else "«$label» — ответ не доехал до компьютера",
+                    messageOutcome = if (told) Outcome.NONE else Outcome.FAILED,
+                )
+            }
+            return
+        }
+        runForPc(pc, ask, path, capability, home, label)
+    }
+
+    /** Дано ли согласие на облако заранее — тем же вопросом, что задаёт тап (#1269). */
+    private suspend fun cloudAlreadyAllowed(id: CapabilityId): Boolean =
+        runCatching { consent.allowed(com.point.core.flow.cloudScopeOf(id)) }.getOrDefault(false)
+
+    /**
+     * Исход без работы уезжает домой, к объекту компьютера, а не гаснет здесь.
+     *
+     * Отвечает, дошёл ли ответ: не дошёл — там шаг остался ждать, и человеку об этом
+     * говорят теми же словами, что и о недоехавшем результате.
+     */
+    private suspend fun answerPc(
+        pc: com.point.core.flow.LinkedPc,
+        ask: Map<String, String>,
+        home: String,
+        capability: String,
+        label: String,
+        result: ActionResult,
+    ): Boolean = runCatching { sendExecutionResult(pc, ask, home, capability, label, result, null) }.isSuccess
+
+    /** Сама работа для компьютера: объект принимается в scratch и исполняется здесь. */
+    private suspend fun runForPc(
+        pc: com.point.core.flow.LinkedPc,
+        ask: Map<String, String>,
+        path: String,
+        capability: String,
+        home: String,
+        label: String,
+    ) {
         val mime = ask["mime"] ?: "application/octet-stream"
 
         _ui.update { it.copy(message = "«$label» — делаю для компьютера", messageOutcome = Outcome.NONE) }
@@ -2032,7 +2102,7 @@ class FlowViewModel @Inject constructor(
                 metadata = made.metadata,
                 provenance = made.provenance,
             )
-        } ?: worked ?: return
+        } ?: worked
 
         val meta = head + understood + com.point.core.flow.lineageMeta(
             sourceId = home,
@@ -2047,8 +2117,8 @@ class FlowViewModel @Inject constructor(
             is ActionResult.Done -> mapOf(f.OUTCOME to f.DONE, f.DETAIL to result.message)
             is ActionResult.Success -> mapOf(
                 f.OUTCOME to f.DONE,
-                f.NAME to (produced?.metadata?.get("name") ?: "$label.result"),
-                f.MIME to (produced?.mime ?: body.mime),
+                f.NAME to (result.result.metadata["name"] ?: "$label.result"),
+                f.MIME to result.result.mime,
             )
             else -> mapOf(f.OUTCOME to f.FAILED, f.DETAIL to "«$label» ждёт продолжения на телефоне")
         }
@@ -2056,7 +2126,8 @@ class FlowViewModel @Inject constructor(
         // Пустой шаг без нового объекта отправляет только знание: файла у него нет, и
         // компьютеру он приезжает как знание своего объекта, а не как вещь.
         val nameForFile = (meta[f.NAME] ?: "$label.txt")
-        pcTransport.send(pc, if (result is ActionResult.Success) body else emptyBody(body), nameForFile, meta)
+        val letter = if (result is ActionResult.Success && body != null) body else emptyBody(body, home)
+        pcTransport.send(pc, letter, nameForFile, meta)
     }
 
     /** Прочитанное здесь едет компьютеру содержимым: ссылка на scratch телефона там мертва (#811). */
@@ -2076,11 +2147,17 @@ class FlowViewModel @Inject constructor(
         return com.point.core.flow.knowledgePackedForTravel(knowledge, text)
     }
 
-    /** Тело письма, когда объекта у результата нет: знание едет, вещь не рождается. */
-    private suspend fun emptyBody(sample: PointObject): PointObject {
+    /**
+     * Тело письма, когда объекта у результата нет: знание едет, вещь не рождается.
+     *
+     * Объекта может не быть вовсе (#1269): отказ по режиму и «ждёт ответа» рождаются до
+     * приёма объекта. Молчать здесь нельзя — шаг на компьютере ждал бы вечно.
+     */
+    private suspend fun emptyBody(sample: PointObject?, home: String): PointObject {
         val ref = store.newScratchFile("txt")
         java.io.File(ref.value).writeText("")
-        return sample.copy(uri = ref, mime = "text/plain")
+        return sample?.copy(uri = ref, mime = "text/plain")
+            ?: PointObject(home, "text/plain", ref, ObjectState(ObjectKind.TEXT))
     }
 
     /**
