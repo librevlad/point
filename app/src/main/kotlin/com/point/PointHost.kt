@@ -268,6 +268,7 @@ fun PointHost(
                     stage = state.busyStage,
                     network = state.busyNetwork,
 
+                    spent = state.busySpentS,
                     onCancel = onCancelAction.takeIf { showsCancel(state) },
                 )
 
@@ -421,9 +422,16 @@ fun PointHost(
     }
 }
 
+/**
+ * «Идёт N с» — про работу, а не про экран (#1128).
+ *
+ * Экран может подняться позже начала работы: тихой местной работе даётся пара секунд не
+ * мигать порталом зря. Эти секунды человек всё равно прождал, поэтому счёт начинается не с
+ * нуля, а с того, сколько работа уже шла (`spent`).
+ */
 @Composable
-private fun BusyScreen(title: String, stage: String?, network: Boolean, onCancel: (() -> Unit)?) {
-    var elapsed by remember(title) { mutableIntStateOf(0) }
+private fun BusyScreen(title: String, stage: String?, network: Boolean, spent: Int, onCancel: (() -> Unit)?) {
+    var elapsed by remember(title) { mutableIntStateOf(spent) }
     LaunchedEffect(title) {
         while (true) {
             delay(1000)

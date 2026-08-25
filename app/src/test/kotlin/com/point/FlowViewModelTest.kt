@@ -1569,8 +1569,9 @@ class FlowViewModelTest {
         assertEquals(false, quietWork(CapabilityMeta(latency = Latency.SLOW)))
     }
 
-    // Модель сегментации на медленном телефоне разворачивается минутами, и «тихое»
-    // объявление оставляло человека перед мёртвым экраном — без «Идёт N с» и «Отменить» (#1128).
+    // Модель сегментации на медленном телефоне разворачивается минутами, и «тихое» объявление
+    // оставляло человека перед экраном, на котором не менялось ничего: в живом прогоне
+    // (AND-068) тап не дал ни строки состояния, ни счётчика, ни отмены (#1128).
     @Test fun `вырез фона — не тихая работа, ему положен тот же экран ожидания, что облачным`() {
         assertEquals(false, quietWork(com.point.executors.CutoutCapability().meta))
         assertEquals(false, quietWork(com.point.executors.BlurBgCapability().meta))
@@ -1600,6 +1601,113 @@ class FlowViewModelTest {
 
         assertEquals(false, showsBusyScreen(vm.ui.value))
         assertTrue(objectWorking(vm.ui.value))
+    }
+
+    /**
+     * Тяжесть — свойство прогона, а не имени способности (#1128).
+     *
+     * «Убрать фон» объявили долгим поимённо, а «Скан», «Сжать» и «В PDF» остались быстрыми —
+     * и на большом снимке или на медленном устройстве человек ждал у объекта минутами, а на
+     * экране не менялось ничего. Счёта секунд и «Отменить» в тишине нет вовсе, а два знака,
+     * которые в коде у неё есть, в живом прогоне (AND-068) до человека не дошли. Здесь
+     * действие быстрое по объявлению, но прогон затянулся: счёт ожидания и «Отменить» обязаны
+     * прийти к любому.
+     */
+    @Test fun `затянувшееся местное действие перестаёт молчать — тот же экран ожидания и отмена`() = runTest(dispatcher) {
+        resolver.stage = "Свожу к чёрно-белому"
+        resolver.holdMs = 10 * 60 * 1000L
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.onBubble(bubble())
+        dispatcher.scheduler.advanceTimeBy(50)
+        assertTrue("доли секунды работа идёт тихо — объект остаётся на экране", objectWorking(vm.ui.value))
+
+        dispatcher.scheduler.advanceTimeBy(com.point.core.flow.QUIET_GRACE_S * 1000L)
+
+        assertTrue("работа идёт дольше пары секунд — человек обязан это видеть", showsBusyScreen(vm.ui.value))
+        assertTrue("и обязан иметь возможность её прервать", showsCancel(vm.ui.value))
+        assertEquals("чем занят Point, говорит сама работа", resolver.stage, vm.ui.value.busyStage)
+        assertEquals(
+            "экран поднялся позже начала работы — и обязан знать, сколько она уже шла",
+            com.point.core.flow.QUIET_GRACE_S,
+            vm.ui.value.busySpentS,
+        )
+
+        vm.cancelAction()
+        dispatcher.scheduler.advanceTimeBy(50)
+        assertNull("отмена снимает работу, а не только кнопку", vm.ui.value.busy)
+    }
+
+    /**
+     * У тишины есть предел, названный в секундах человека, а не в имени константы (#1128).
+     *
+     * Соседняя проверка берёт срок тишины из `QUIET_GRACE_S` и потому переживёт любое его
+     * расширение. А расширить его как раз и захочется: в коде у тихой работы два знака — гаснет
+     * список действий и пишется строка стадии, — и по коду кажется, что человеку сказано
+     * достаточно. Живой прогон говорит обратное: на медленном устройстве до человека не дошёл
+     * ни один знак, экран не менялся вовсе (AND-068). Поэтому здесь секунда живая: сколько бы
+     * ни стал `QUIET_GRACE_S`, к третьей секунде ожидания счёт и «Отменить» обязаны быть на
+     * экране.
+     */
+    @Test fun `к третьей секунде ожидания у человека уже есть счёт и «Отменить»`() = runTest(dispatcher) {
+        resolver.holdMs = 10 * 60 * 1000L
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.onBubble(bubble())
+        dispatcher.scheduler.advanceTimeBy(3_000)
+
+        assertTrue("три секунды немого ожидания человек читает как мёртвый экран", showsBusyScreen(vm.ui.value))
+        assertTrue("и всё это время не знает, как его прервать", showsCancel(vm.ui.value))
+    }
+
+    /**
+     * Обратная сторона того же правила (#1128): уложившаяся в тишину работа портала не поднимает.
+     *
+     * Сторож заведён теперь у каждой местной работы, поэтому мало проверить первую секунду —
+     * тишина обязана дожить до конца самой работы. Смотрим в последний тихий миг у самой
+     * границы и на исход: человек читает его на объекте, а не в портале.
+     */
+    @Test fun `работа, уложившаяся в тишину, не поднимает портал до самого исхода`() = runTest(dispatcher) {
+        resolver.holdMs = com.point.core.flow.QUIET_GRACE_S * 1000L - 100
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.onBubble(bubble())
+        dispatcher.scheduler.advanceTimeBy(com.point.core.flow.QUIET_GRACE_S * 1000L - 150)
+        assertTrue("последний миг отпущенной тишины — объект всё ещё на экране", objectWorking(vm.ui.value))
+
+        advanceUntilIdle()
+        assertNull("работа кончилась, не потревожив экран", vm.ui.value.busy)
+        assertEquals("исход человек читает на объекте, а не в портале", Outcome.DONE, vm.ui.value.messageOutcome)
+    }
+
+    /**
+     * Сторож тишины живёт ровно столько, сколько его работа (#1128).
+     *
+     * Иначе быстрое действие оставляет после себя заведённый будильник, и следующее — начатое
+     * сразу за ним — теряет свою пару секунд тишины: объект подменяется порталом на первой же
+     * секунде, хотя новая работа только началась.
+     */
+    @Test fun `быстрая работа не отбирает у следующей её пару секунд тишины`() = runTest(dispatcher) {
+        resolver.holdMs = 1_000
+        val vm = vm(caps = mapOf(CapabilityId("a") to setOf(Intent.PREPARE), CapabilityId("b") to setOf(Intent.PREPARE)))
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.onBubble(bubble(id = "a"))
+        dispatcher.scheduler.advanceTimeBy(1_200)
+        assertNull("первое действие уложилось в отпущенную ему тишину", vm.ui.value.busy)
+
+        resolver.holdMs = 10 * 60 * 1000L
+        vm.onBubble(bubble(id = "b"))
+
+        // Здесь сработал бы сторож ПЕРВОГО действия: две секунды с его начала уже прошли.
+        dispatcher.scheduler.advanceTimeBy(1_000)
+        assertTrue("второе действие идёт секунду — тишина ещё его", objectWorking(vm.ui.value))
+
+        dispatcher.scheduler.advanceTimeBy(1_500)
+        assertTrue("а своя пара секунд кончается у него вовремя", showsBusyScreen(vm.ui.value))
     }
 
     @Test fun `slow work keeps the full busy screen — and the object says nothing over it`() = runTest(dispatcher) {

@@ -159,9 +159,55 @@ class FlowViewModel @Inject constructor(
     private fun trackWork(work: suspend kotlinx.coroutines.CoroutineScope.() -> Unit): Job {
         val job = viewModelScope.launch(start = kotlinx.coroutines.CoroutineStart.LAZY, block = work)
         busyJob = job
-        job.invokeOnCompletion { if (busyJob === job) busyJob = null }
+        val speaksUp = speakUpWhenSlow()
+        job.invokeOnCompletion {
+            speaksUp.cancel()
+            if (busyJob === job) busyJob = null
+        }
         job.start()
         return job
+    }
+
+    /**
+     * Затянувшаяся работа перестаёт быть тихой (#1128).
+     *
+     * Тихо работать можно, пока работа быстрая: объект остаётся на экране, и подменять его
+     * порталом ради доли секунды нельзя. Но право на тишину даётся по времени, а не по имени
+     * способности: «Скан», «Сжать», «В PDF» объявлены быстрыми и на большом файле или на
+     * медленном устройстве идут минутами. Список тяжёлых действий здесь не помогает: тяжесть у
+     * одного и того же действия зависит от прогона.
+     *
+     * Тихой работы человеку не хватило — это установлено живым прогоном, а не рассуждением. В
+     * коде у неё два знака: список действий гаснет вполовину и перестаёт нажиматься, а
+     * назвавшая себя работа пишет строку стадии; оба были заведены и в сборке, на которой
+     * написана карточка. В живом прогоне на медленном устройстве до человека не дошёл ни один:
+     * запись прогона (AND-068 в `docs/audits/live-review-967-coverage.md`, та же сборка и тот
+     * же эмулятор) говорит, что тап не дал ни строки состояния, ни счётчика, ни отмены, и через
+     * две, четыре и пять минут экран был тот же. Почему знаки не дошли — не выяснено. Поэтому
+     * «объект и так показывает занятость» — не довод, чтобы раздвинуть `QUIET_GRACE_S`: в
+     * живом прогоне ни один знак человеку не показался, а счёта секунд и «Отменить» в тишине
+     * нет и в коде.
+     *
+     * Поэтому работа, не уложившаяся в `QUIET_GRACE_S`, показывает себя сама — тем же экраном
+     * ожидания с «Идёт N с», стадией и «Отменить», что у облачных: новых механизмов для этого
+     * не нужно, снимается только право молчать.
+     *
+     * Сторож живёт ровно столько, сколько его работа: [trackWork] снимает его, чем бы работа ни
+     * кончилась — успехом, ошибкой или отменой. Иначе быстрое действие оставляло бы после себя
+     * заведённый будильник и отбирало тишину у следующего, начатого сразу за ним.
+     *
+     * Поднятый позже начала работы экран говорит, сколько она уже шла (`busySpentS`): иначе
+     * счётчик врал бы ровно на подаренную тишину.
+     */
+    private fun speakUpWhenSlow(): Job = viewModelScope.launch {
+        kotlinx.coroutines.delay(com.point.core.flow.QUIET_GRACE_S * 1000L)
+        _ui.update {
+            if (it.busy != null && it.busyQuiet) {
+                it.copy(busyQuiet = false, busySpentS = com.point.core.flow.QUIET_GRACE_S)
+            } else {
+                it
+            }
+        }
     }
 
     private fun raiseBusy(
@@ -173,6 +219,9 @@ class FlowViewModel @Inject constructor(
         _ui.update {
             it.copy(
                 busy = title, busyStage = null, busyNetwork = network, busyQuiet = quiet,
+
+                // Работа начинается сейчас: ждать её человек ещё не начинал (#1128).
+                busySpentS = 0,
                 busyCancelable = cancelable,
                 message = null, messageOutcome = Outcome.NONE, inputPrompt = null,
             )
