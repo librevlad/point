@@ -87,6 +87,41 @@ class DesktopRegistryTest {
         assertEquals("равные по смыслу — по прежнему priority", listOf("open-b", "open-c"), titles.take(2))
     }
 
+    /**
+     * Негодному объекту читать себя не предлагается и на компьютере (#994): пустой файл,
+     * помеченный при приёме, оставляет только двери, берущие его как есть.
+     */
+    @Test
+    fun `негодному на компьютере чтение не предлагается, открыть и сохранить остаются`() {
+        val read = Declared("read", priority = 1, serves = setOf(com.point.core.model.Intent.UNDERSTAND))
+        val registry = DesktopRegistry(setOf(PcOpenCapability(), PcSaveAsCapability(), read))
+
+        val ids = registry.bubblesFor(empty()).map { it.capabilityId.value }
+
+        assertEquals(listOf("pc-open", "pc-save-as"), ids)
+        assertEquals(
+            "годному чтение по-прежнему первое",
+            "read",
+            registry.bubblesFor(ObjectState(ObjectKind.TEXT)).first().capabilityId.value,
+        )
+    }
+
+    /**
+     * Пустой файл, помеченный при приёме (`Inbox`): и метка, и её слова — то, что компьютер
+     * действительно кладёт на объект.
+     */
+    private fun empty() = com.point.core.flow.GraphState(
+        com.point.core.model.PointObject(
+            id = "empty",
+            mime = "text/plain",
+            uri = com.point.core.model.ValueRef(""),
+            state = ObjectState(ObjectKind.TEXT, setOf(com.point.core.model.Feature.UNUSABLE)),
+            metadata = mapOf(
+                com.point.core.flow.META_UNUSABLE_REASON to com.point.core.flow.EMPTY_FILE_REASON,
+            ),
+        ),
+    )
+
     // ---- Фаза A редизайна: двери-обманки исчезают, отказ исполнителя честен ----
 
     private class OfficeOnlyRealizer : com.point.core.flow.Realizer {

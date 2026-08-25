@@ -17,10 +17,16 @@ import com.point.core.model.ObjectKind
 fun readerFailure(reason: String?, kind: ObjectKind): String = when (troubleOf(reason)) {
     ReaderTrouble.BROKEN -> brokenFile(kind)
     ReaderTrouble.NO_PAGES -> EMPTY_DOCUMENT
-    ReaderTrouble.TOO_SLOW -> "Чтение заняло слишком долго и оборвалось"
-    ReaderTrouble.TOO_BIG -> "Снимок слишком большой, чтобы его прочитать"
+    ReaderTrouble.TOO_SLOW -> READ_TOO_SLOW
+    ReaderTrouble.TOO_BIG -> READ_TOO_BIG
     ReaderTrouble.NOT_NOW -> READ_NOT_NOW
 }
+
+/** Чтение оборвалось по времени — про попытку, а не про файл человека (#684/#685). */
+const val READ_TOO_SLOW = "Чтение заняло слишком долго и оборвалось"
+
+/** Снимок не влез в чтение здесь и сейчас — тоже про попытку, а не про сам снимок. */
+const val READ_TOO_BIG = "Снимок слишком большой, чтобы его прочитать"
 
 /**
  * Не вышло сейчас — про попытку, а не про файл человека (#1258).
@@ -59,6 +65,24 @@ fun readerFailureIsFatal(reason: String?): Boolean = when (troubleOf(reason)) {
     ReaderTrouble.BROKEN, ReaderTrouble.NO_PAGES -> true
     else -> false
 }
+
+/**
+ * Тот же вопрос, что и [readerFailureIsFatal], но по уже сказанным человеку словам (#1101).
+ *
+ * Технический сигнал живёт ровно один вызов: с объектом остаётся фраза, которой ему
+ * объяснили негодность (`META_UNUSABLE_REASON`). Дальше по ней и приходится решать — при
+ * выборе дверей сигнала уже нет, а вопрос тот же: дело в самом файле или в попытке
+ * прочитать его сейчас. Второго разбора здесь нет: [readerFailure] — единственный, кто эти
+ * слова произносит, и «про попытку» их ровно три. Совпадение обоих ответов на всём словаре
+ * закреплено тестом.
+ *
+ * Незнакомая фраза — не наша: так говорят о содержимом пустой файл и обломок архива, и это
+ * знание первого захода, а не исход операции.
+ */
+fun saidFailureIsFatal(said: String?): Boolean =
+    !said.isNullOrBlank() && said !in ONLY_ABOUT_THE_ATTEMPT
+
+private val ONLY_ABOUT_THE_ATTEMPT = setOf(READ_NOT_NOW, READ_TOO_SLOW, READ_TOO_BIG)
 
 /**
  * Что именно случилось при чтении — один разбор сигнала на оба ответа (#1258): и на слова

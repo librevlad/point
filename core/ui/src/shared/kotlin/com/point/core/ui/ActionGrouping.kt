@@ -1,5 +1,6 @@
 package com.point.core.ui
 
+import com.point.core.model.ActionYield
 import com.point.core.model.Bubble
 import com.point.core.model.Feature
 import com.point.core.model.Intent
@@ -76,8 +77,52 @@ fun actionGroupOrder(useFirst: Boolean = false): List<ActionGroup> = if (useFirs
     listOf(ActionGroup.EXTRACT, ActionGroup.TRANSFORM, ActionGroup.USE, ActionGroup.SEND)
 }
 
-fun actionSections(bubbles: List<Bubble>, useFirst: Boolean = false): List<ActionSection> {
-    return actionGroupOrder(useFirst).mapNotNull { group ->
+/**
+ * «Извлечь» ведёт, только когда есть что извлекать (#1101, #994; решение владельца 21.08.2026).
+ *
+ * У архива и у неизвестного файла первым и подсвеченным стояло «AI» — единственное, что
+ * попало в группу «Извлечь»: оно берёт любой файл и не обещает ничего определённого («вернёт
+ * то, что попросите», `ActionYield.Unknown`). Честное местное — «Открыть», «Сохранить»,
+ * «Поделиться» — лежало ниже. А негодному объекту чтения не предлагаются вовсе, и вести
+ * первым становилось «Дать ссылку».
+ *
+ * Читать есть что, когда хоть одно действие чтения обещает результат — текст, знание, — и
+ * сам объект не сказал о себе, что с ним не вышло. Иначе первым идёт то, что точно
+ * сработает. Ничего не прячется — меняется порядок групп, как и требует конституция.
+ *
+ * Про негодного решение владельца сказано тем же предложением: «У негодного/неизвестного
+ * объекта герой — то, что точно сработает». Двери чтения у негодного могут и остаться —
+ * когда негодность сказана о сорвавшейся попытке, экран зовёт попробовать ещё раз, и
+ * пробовать должно быть чем (`offeredWhenUnfit`). Но вести первым им нечего: попытка только
+ * что не удалась. Живой объект #994 — битый PDF: предпросмотр не открыл документ, а героем
+ * стояло «Извлечь текст», рядом «Перевести» и «AI».
+ *
+ * Оговорки, которая есть у дверей — «а вдруг из содержимого уже что-то прочитано», — здесь
+ * намеренно нет: там от неё зависело, исчезнет ли дверь совсем, а тут не исчезает ничего.
+ * Меняется порядок, и цена ошибки — чтение вторым, а не пропавшее чтение.
+ */
+fun promisesExtraction(bubbles: List<Bubble>, state: ObjectState): Boolean =
+    !state.has(Feature.UNUSABLE) && bubbles.any {
+        actionGroupOf(it.intent) == ActionGroup.EXTRACT && promisesResult(it.yields)
+    }
+
+/**
+ * Действие называет, что принесёт, — и это разбор по каждому исходу, а не «всё, кроме
+ * одного» (#1101). «Ничего не вернёт» (`None`) обещанием чтения не является ровно так же,
+ * как «вернёт то, что попросите» (`Unknown`): первое обещает пустоту, второе — что угодно.
+ * Новый вид исхода обязан ответить здесь на тот же вопрос, а не унаследовать чужой ответ.
+ */
+private fun promisesResult(yields: ActionYield): Boolean = when (yields) {
+    is ActionYield.New, is ActionYield.Same, ActionYield.Copied -> true
+    ActionYield.None, ActionYield.Unknown -> false
+}
+
+fun actionSections(
+    bubbles: List<Bubble>,
+    state: ObjectState,
+    useFirst: Boolean = false,
+): List<ActionSection> {
+    return actionGroupOrder(useFirst || !promisesExtraction(bubbles, state)).mapNotNull { group ->
         bubbles.filter { actionGroupOf(it.intent) == group }
             .takeIf { it.isNotEmpty() }
             ?.let { ActionSection(group, it) }

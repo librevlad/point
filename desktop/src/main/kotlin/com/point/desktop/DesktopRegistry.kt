@@ -28,11 +28,15 @@ class DesktopRegistry(
     override fun bubblesFor(graph: com.point.core.flow.GraphState): List<Bubble> {
         val state = graph.state
         val intent = graph.intent
-        return capabilities
+        val applicable = capabilities
 
             .filterNot { it.meta.investigation }
             .filter { it.accepts(state) }
             .filter { runnable(it.id, state) }
+
+        // Негодному объекту читать себя не предлагается — то же правило, что на телефоне
+        // (#994): компьютер сам помечает пустой файл при приёме (`Inbox.kt`).
+        return com.point.core.flow.offeredWhenUnfit(state, graph.facts, applicable)
             .sortedWith(com.point.core.flow.byIntentThenPriority(state, intent))
             .map {
                 Bubble(

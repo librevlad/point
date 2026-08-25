@@ -321,20 +321,163 @@ class DefaultCapabilityRegistryTest {
     private fun objectOf(state: ObjectState, metadata: Map<String, String> = emptyMap()) =
         PointObject("id", "text/plain", ScratchRef("/x"), state, metadata)
 
+    /**
+     * Негодному объекту читать себя не предлагается (#994, решение владельца 21.08.2026):
+     * остальные двери остаются, и каждая несёт причину.
+     */
     @Test
-    fun `негодный объект — подпись каждого пузырька несёт причину, а не пропадает`() {
+    fun `негодный объект — чтения не предлагаются, остальные двери несут причину`() {
         val reason = "Файл пустой — в нём нечего читать"
         val obj = objectOf(ObjectState(ObjectKind.TEXT, setOf(Feature.UNUSABLE)), mapOf(META_UNUSABLE_REASON to reason))
 
         val bubbles = registry.bubblesFor(GraphState(obj))
 
         assertTrue("действия остаются в списке", bubbles.isNotEmpty())
-        assertEquals(
-            "то же множество дверей, что и у обычного текста",
-            idsFor(ObjectState(ObjectKind.TEXT)),
-            bubbles.map { it.capabilityId.value }.toSet(),
+        assertTrue("негодному предложено чтение", bubbles.none { it.intent == Intent.UNDERSTAND })
+        assertTrue(
+            "двери, которые не читают, пропали",
+            bubbles.map { it.capabilityId.value }.containsAll(setOf("share", "save", "open")),
         )
         assertTrue(bubbles.all { it.unusableReason == reason })
+    }
+
+    /**
+     * Битый снимок предлагал «Понять», «Распознать текст», «Прочитать сильнее» и «AI» —
+     * четыре способа прочитать то, что прочитать нельзя (#994). Решение владельца сказано
+     * про чтения: превращения остаются на месте и несут причину подписью (#582).
+     */
+    @Test
+    fun `битому снимку не предлагают ни распознать, ни AI — открыть и поделиться есть`() {
+        val ids = idsOf(unfitImage(com.point.core.flow.READER_NOT_DECODED))
+
+        assertTrue("негодному предложено чтение", setOf("ocr", "ai").none { it in ids })
+        assertTrue("двери, которые не читают, пропали", ids.containsAll(setOf("share", "save", "open")))
+        assertTrue("превращения ушли вместе с чтениями", ids.containsAll(setOf("scan", "image", "pdf")))
+    }
+
+    @Test
+    fun `годный снимок по-прежнему читается — фильтр негодного его не касается`() {
+        val ids = idsFor(ObjectState(ObjectKind.IMAGE))
+
+        assertTrue(ids.containsAll(setOf("ocr", "ai", "share", "save", "open")))
+    }
+
+    /** Снимок, помеченный негодным по сигналу [signal], — так, как это делает предпросмотр. */
+    private fun unfitImage(signal: String) = objectOf(
+        ObjectState(ObjectKind.IMAGE, setOf(Feature.UNUSABLE)),
+        mapOf(META_UNUSABLE_REASON to com.point.core.flow.readerFailure(signal, ObjectKind.IMAGE)),
+    )
+
+    private fun idsOf(obj: PointObject) =
+        registry.bubblesFor(GraphState(obj)).map { it.capabilityId.value }.toSet()
+
+    /**
+     * PDF под паролем. `previewSource` бросает, предпросмотр метит объект негодным без гарда
+     * `readerFailureIsFatal` (#1271) — а человеку сказано «Прочитать сейчас не вышло —
+     * попробуйте ещё раз». Отнять при этом все чтения значит позвать пробовать и не оставить
+     * чем: ни «Прочитать документ», ни «Понять», ни «AI».
+     *
+     * Дверь снимает сказанное о содержимом, а не голая метка. Ровно сюда же попадает и битый
+     * PDF — живой объект #994: `PdfRenderer` бросает на нём `IOException` без слов словаря, и
+     * чтения ему пока предлагаются. Героем при этом не становятся — «Извлечь» у негодного не
+     * ведёт (`promisesExtraction`). Совсем чтения уйдут, когда #1271 приведёт сигналы
+     * предпросмотра к словарю ридера и битый PDF назовут повреждённым: правило здесь править
+     * для этого не придётся.
+     */
+    @Test
+    fun `предпросмотр сорвался попыткой — чтения PDF остаются на месте`() {
+        val locked = objectOf(
+            ObjectState(ObjectKind.PDF, setOf(Feature.UNUSABLE)),
+            mapOf(
+                META_UNUSABLE_REASON to com.point.core.flow.readerFailure(
+                    "Password required or incorrect password",
+                    ObjectKind.PDF,
+                ),
+            ),
+        )
+
+        val bubbles = registry.bubblesFor(GraphState(locked))
+        val ids = bubbles.map { it.capabilityId.value }
+
+        assertTrue("человека зовут попробовать ещё раз, а пробовать нечем", "ai" in ids)
+        assertTrue("причина по-прежнему сказана подписью", bubbles.all { it.unusableReason != null })
+    }
+
+    /**
+     * Подсказка не переживает саму дверь (#1101): у негодного PDF «Найти в документе» не
+     * предлагается — значит и «разложите на страницы» под ним не подсказывается. Иначе экран
+     * одной строкой отказывает в чтении, а другой учит к нему готовиться.
+     */
+    @Test
+    fun `негодному не подсказывают, как подготовиться к чтению`() {
+        val withFind = DefaultCapabilityRegistry(
+            capabilities = setOf(ShareCapability(), OpenCapability(), FindCapability()),
+            policy = DefaultBubblePolicy(),
+        )
+        val broken = objectOf(
+            ObjectState(ObjectKind.PDF, setOf(Feature.UNUSABLE)),
+            mapOf(
+                META_UNUSABLE_REASON to com.point.core.flow.readerFailure(
+                    com.point.core.flow.READER_NOT_DECODED,
+                    ObjectKind.PDF,
+                ),
+            ),
+        )
+        val fine = objectOf(ObjectState(ObjectKind.PDF))
+
+        assertTrue(
+            "подсказка чтения пережила само чтение",
+            withFind.latentBubblesFor(GraphState(broken)).isEmpty(),
+        )
+        assertTrue(
+            "годному подсказку отняли заодно",
+            withFind.latentBubblesFor(GraphState(fine)).isNotEmpty(),
+        )
+    }
+
+    /**
+     * Список по одной форме объекта — не список человеку, а вопрос Discovery «откроет ли это
+     * исследование новую дверь» (`DefaultEnrichment`). Годность там судить нечем, и судить не
+     * надо: исследование, чья единственная новая дверь — чтение, у негодного объекта иначе
+     * молча перестало бы считаться стоящим, и знание, возвращающее чтения, не пришло бы
+     * никогда (#1101).
+     */
+    @Test
+    fun `спекулятивный список Discovery негодность не судит`() {
+        val ids = idsFor(ObjectState(ObjectKind.IMAGE, setOf(Feature.UNUSABLE)))
+
+        assertTrue("Discovery потеряла чтение как новую дверь", ids.containsAll(setOf("ocr", "ai")))
+    }
+
+    /**
+     * Эскиз не отрисовался, снимок не декодировался — это состояние операции, а не знание
+     * (Конституция §13, ADR-0001 §9). У снимка, чей QR уже прочитан, дверь «Считать QR»
+     * обязана остаться: иначе знание есть, а войти в него нечем. Живой путь #1101.
+     */
+    @Test
+    fun `превью не отрисовалось, а QR прочитан — двери чтения остаются`() {
+        val withQr = DefaultCapabilityRegistry(
+            capabilities = setOf(
+                ShareCapability(), OpenCapability(), OcrCapability(),
+                ReadQrCapability(), AiCapability(aiKeysReady),
+            ),
+            policy = DefaultBubblePolicy(),
+        )
+        val obj = objectOf(
+            ObjectState(ObjectKind.IMAGE, setOf(Feature.UNUSABLE, Feature.HAS_QR)),
+            mapOf(
+                META_UNUSABLE_REASON to com.point.core.flow.readerFailure(
+                    com.point.core.flow.READER_NOT_DECODED,
+                    ObjectKind.IMAGE,
+                ),
+                "entity.url" to "https://point.app/x",
+            ),
+        )
+
+        val ids = withQr.bubblesFor(GraphState(obj)).map { it.capabilityId.value }
+
+        assertTrue("знание о QR есть, а войти в него нечем", "read-qr" in ids)
+        assertTrue("прочитанное не вернуло объекту его чтения", ids.containsAll(setOf("ocr", "ai")))
     }
 
     /** #570: обломок вместо архива — но передать его дальше человек по-прежнему может. */

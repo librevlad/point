@@ -43,6 +43,17 @@ class DefaultCapabilityRegistry @Inject constructor(
 
     override fun all(): Collection<Capability> = capabilities
 
+    /**
+     * Список по одной форме объекта — без его фактов, а значит и без суда о годности (#1101).
+     *
+     * Этим вопросом спрашивает не только экран: `DefaultEnrichment` складывает в состояние
+     * ещё не полученное знание и смотрит, открылась ли новая дверь, — стоит ли ради этого
+     * запускать медленное исследование. Годность там судить нечем: слов о ней в голом
+     * состоянии нет, а по одной метке дверь не снимается (`offeredWhenUnfit`). И не надо:
+     * исследование, чья единственная новая дверь — чтение (прочитанный QR), у негодного
+     * объекта иначе молча перестало бы считаться стоящим — и знание, которое вернуло бы ему
+     * чтения, не пришло бы никогда. Человеку двери считает [bubblesFor] по графу.
+     */
     override fun bubblesFor(state: ObjectState): List<Bubble> =
         policy.rank(state, offered.filter { it.accepts(state) && blockerFor(it) == null })
             .map { c -> bubbleOf(c, state) }
@@ -53,7 +64,7 @@ class DefaultCapabilityRegistry @Inject constructor(
         // Действие, возвращающее исходник, из которого объект получен, не прячется, а уходит
         // вниз и говорит об этом (#925).
         val source = com.point.core.flow.inverseSourceKind(graph)
-        return policy.rank(graph, offered.filter { it.accepts(graph) && blockerFor(it) == null })
+        return policy.rank(graph, offeredTo(graph.state, graph.facts) { it.accepts(graph) })
             .map { c ->
                 val back = source?.takeIf { com.point.core.flow.givesBackTheSource(c, graph, it) }
                 bubbleOf(c, graph.state, reason ?: back?.let { com.point.core.flow.sourceIsHere(it) }, graph)
@@ -64,6 +75,20 @@ class DefaultCapabilityRegistry @Inject constructor(
      * Исследования человеку не предлагаются- их выбирает Discovery, а не Planner (ADR-0001 §11).
      */
     private val offered: List<Capability> = capabilities.filterNot { it.meta.investigation }
+
+    /**
+     * Двери для этого объекта: применимые, не закрытые снаружи — и, если о содержимом
+     * сказано, что читать в нём нечего, без дверей чтения (#994, #1101).
+     */
+    private fun offeredTo(
+        state: ObjectState,
+        facts: Map<String, String>,
+        applies: (Capability) -> Boolean,
+    ): List<Capability> = com.point.core.flow.offeredWhenUnfit(
+        state,
+        facts,
+        offered.filter { applies(it) && blockerFor(it) == null },
+    )
 
     private fun bubbleOf(
         c: Capability,
@@ -123,8 +148,18 @@ class DefaultCapabilityRegistry @Inject constructor(
 
     private fun blockerFor(c: Capability): String? = availability.blockerFor(c.id)
 
-    override fun latentBubblesFor(state: ObjectState): List<LatentBubble> {
-        val hints = offered.sortedBy { it.meta.priority }
+    override fun latentBubblesFor(state: ObjectState): List<LatentBubble> = hintsOf(state, offered)
+
+    /**
+     * Подсказка не переживает саму дверь (#1101): негодному объекту чтения не предлагаются —
+     * значит и «разложите на страницы» у него не подсказывается. Одно и то же правило на
+     * дверь и на подсказку, чтобы экран не отказывал строкой и не звал строкой ниже.
+     */
+    override fun latentBubblesFor(graph: com.point.core.flow.GraphState): List<LatentBubble> =
+        hintsOf(graph.state, com.point.core.flow.offeredWhenUnfit(graph.state, graph.facts, offered))
+
+    private fun hintsOf(state: ObjectState, from: List<Capability>): List<LatentBubble> {
+        val hints = from.sortedBy { it.meta.priority }
             .mapNotNull { c -> missingFor(c, state)?.let { LatentBubble(c.icon, c.label(state), it) } }
 
         val byReason = hints.groupBy(LatentBubble::missing).values.toList()

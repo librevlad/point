@@ -176,4 +176,45 @@ class ReaderFailureTest {
     fun `документ без страниц — это про сам объект`() {
         assertTrue(readerFailureIsFatal(READER_NO_PAGES))
     }
+
+    // ---- #1101: тот же ответ по уже сказанным словам, когда сигнала больше нет. ----
+
+    /**
+     * Технический сигнал живёт один вызов, а с объектом остаётся фраза человеку. Дверь
+     * чтения снимают по ней, и разойтись эти два ответа не имеют права: иначе экран говорит
+     * «попробуйте ещё раз» там, где пробовать уже нечем, — или наоборот.
+     */
+    @Test
+    fun `по сказанным словам ответ тот же, что и по сигналу`() {
+        val signals = listOf(
+            null, "", READER_NOT_DECODED, "not an image", "corrupt stream", "malformed", READER_NO_PAGES,
+            "read timed out", "deadline exceeded", "413 payload too large", "engine init failed",
+            "error: OutOfMemoryError", "java.lang.IllegalStateException", "Password required",
+            "cannot create document: file not in PDF format",
+        )
+
+        ObjectKind.entries.forEach { kind ->
+            signals.forEach { signal ->
+                val said = readerFailure(signal, kind)
+                assertEquals(
+                    "«$signal» у вида $kind: по сигналу и по словам «$said» ответы разошлись",
+                    readerFailureIsFatal(signal),
+                    saidFailureIsFatal(said),
+                )
+            }
+        }
+    }
+
+    /**
+     * Пустой файл и обломок архива говорят о содержимом сами, без ридера, — и это знание
+     * первого захода. Молчание же не сказало ничего: метка без слов дверь не закрывает.
+     */
+    @Test
+    fun `свои слова о содержимом фатальны, а молчание — нет`() {
+        assertTrue(saidFailureIsFatal(EMPTY_FILE_REASON))
+        assertTrue(saidFailureIsFatal(BROKEN_ARCHIVE_REASON))
+        assertFalse(saidFailureIsFatal(null))
+        assertFalse(saidFailureIsFatal(""))
+        assertFalse(saidFailureIsFatal("   "))
+    }
 }
