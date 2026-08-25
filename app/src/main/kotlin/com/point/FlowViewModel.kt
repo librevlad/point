@@ -2273,6 +2273,12 @@ class FlowViewModel @Inject constructor(
      * медленная волна. Признак «список идущего пуст» просыпался бы на границе волн, ещё до
      * начала чтения, и суд снова шёл бы по графу без текста.
      *
+     * Правило одно на любой объект, а не на снимок: суд идёт, когда работа над этим объектом
+     * либо ответила на вопрос чтения, либо кончилась вся. Снимок и сканированный PDF отвечают
+     * на этот вопрос раньше конца прохода ([unread]) — им дальше ждать нечего; объекту, у
+     * которого вопроса чтения нет вовсе, ожидание кончает конец разбора. Ждётся ровно та
+     * работа, которая ещё может изменить граф, — дольше не держат нигде.
+     *
      * Ждёт только тот, кто судит, и говорит об этом сам: признак `judgesKnowledge` объявляет
      * Capability, а не сравнение id в экранном слое.
      */
@@ -2289,7 +2295,14 @@ class FlowViewModel @Inject constructor(
     private fun judgesKnowledge(id: CapabilityId): Boolean =
         runCatching { registry.byId(id).meta.judgesKnowledge }.getOrDefault(false)
 
-    /** Вопрос чтения объекта ещё без ответа: `not investigated` ≠ `not found` (ADR-0001 §9). */
+    /**
+     * Вопрос чтения объекта ещё без ответа: `not investigated` ≠ `not found` (ADR-0001 §9).
+     *
+     * Вопрос один и тот же у снимка и у сканированного документа — на `image-text` отвечают
+     * и `ocr`, и `read-document` (`CapabilityMeta.answers`), поэтому здесь не спрашивается
+     * про вид объекта. У объекта, которому этот вопрос не задают, ответа не будет никогда —
+     * и ожидание такого объекта кончает не он, а конец разбора ([awaitReading]).
+     */
     private fun unread(obj: PointObject): Boolean =
         com.point.core.flow.investigationStateOf(obj.metadata, com.point.core.flow.KnownCapabilities.IMAGE_TEXT) ==
             com.point.core.flow.InvestigationState.NOT_INVESTIGATED

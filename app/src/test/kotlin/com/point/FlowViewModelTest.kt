@@ -3921,6 +3921,44 @@ class FlowViewModelTest {
         assertEquals(listOf(CapabilityId("a")), resolver.performed)
     }
 
+    /**
+     * Тот же разбор над объектом, которому вопроса чтения не задают вовсе: быстрая волна
+     * кончилась, знание придёт последней.
+     */
+    private fun findingAfterAWaveGap(): List<EnrichmentUpdate> = listOf(
+        EnrichmentUpdate(emptySet(), emptyMap(), listOf("Ищу ссылки")),
+        EnrichmentUpdate(emptySet(), emptyMap(), emptyList()),
+        EnrichmentUpdate(emptySet(), emptyMap(), listOf("Ищу телефоны")),
+        EnrichmentUpdate(setOf(Feature.HAS_PHONE), emptyMap(), emptyList()),
+    )
+
+    /**
+     * Правило — про судящее действие над любым объектом, а не про снимок (#1060). У текста
+     * вопроса чтения нет вовсе, и ответа на него не будет никогда: ожидание кончает конец
+     * разбора, и суд всё равно видит то, что нашла последняя волна.
+     */
+    @Test fun `«Понять» на объекте без чтения ждёт конца разбора (#1060)`() = runTest(dispatcher) {
+        consent.granted = true
+        store.kind = ObjectKind.TEXT
+        enrichment.updates = findingAfterAWaveGap()
+        enrichment.stepDelayMs = 1_000
+        val vm = vm(own = listOf(understand))
+        vm.onShared("uri", "text/plain")
+        dispatcher.scheduler.advanceTimeBy(2_500)
+        assertTrue("между волнами не идёт ничего", vm.ui.value.frame?.enriching?.isEmpty() == true)
+
+        vm.onBubble(understandBubble())
+        dispatcher.scheduler.advanceTimeBy(100)
+
+        assertEquals(FlowViewModel.waitingForReadingStage(ObjectKind.TEXT), vm.ui.value.busyStage)
+        assertTrue("суд не начинается посреди разбора", resolver.performed.isEmpty())
+
+        advanceUntilIdle()
+
+        assertEquals(listOf(understand.id), resolver.performed)
+        assertTrue("суд идёт по полному графу", resolver.lastInput?.state?.has(Feature.HAS_PHONE) == true)
+    }
+
     @Test fun `отмена во время ожидания чтения снимает экран, и суд не начинается (#1060)`() = runTest(dispatcher) {
         val vm = tapMomentBetweenWaves()
         vm.onBubble(understandBubble())
