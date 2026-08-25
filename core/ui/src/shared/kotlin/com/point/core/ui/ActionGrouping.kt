@@ -86,13 +86,25 @@ fun actionGroupOrder(useFirst: Boolean = false): List<ActionGroup> = if (useFirs
  * «Поделиться» — лежало ниже. А негодному объекту чтения не предлагаются вовсе, и вести
  * первым становилось «Дать ссылку».
  *
- * Читать есть что, когда хоть одно действие чтения обещает результат — текст, знание.
- * Иначе первым идёт то, что точно сработает. Ничего не прячется — меняется порядок групп,
- * как и требует конституция.
+ * Читать есть что, когда хоть одно действие чтения обещает результат — текст, знание, — и
+ * сам объект не сказал о себе, что с ним не вышло. Иначе первым идёт то, что точно
+ * сработает. Ничего не прячется — меняется порядок групп, как и требует конституция.
+ *
+ * Про негодного решение владельца сказано тем же предложением: «У негодного/неизвестного
+ * объекта герой — то, что точно сработает». Двери чтения у негодного могут и остаться —
+ * когда негодность сказана о сорвавшейся попытке, экран зовёт попробовать ещё раз, и
+ * пробовать должно быть чем (`offeredWhenUnfit`). Но вести первым им нечего: попытка только
+ * что не удалась. Живой объект #994 — битый PDF: предпросмотр не открыл документ, а героем
+ * стояло «Извлечь текст», рядом «Перевести» и «AI».
+ *
+ * Оговорки, которая есть у дверей — «а вдруг из содержимого уже что-то прочитано», — здесь
+ * намеренно нет: там от неё зависело, исчезнет ли дверь совсем, а тут не исчезает ничего.
+ * Меняется порядок, и цена ошибки — чтение вторым, а не пропавшее чтение.
  */
-fun promisesExtraction(bubbles: List<Bubble>): Boolean = bubbles.any {
-    actionGroupOf(it.intent) == ActionGroup.EXTRACT && promisesResult(it.yields)
-}
+fun promisesExtraction(bubbles: List<Bubble>, state: ObjectState): Boolean =
+    !state.has(Feature.UNUSABLE) && bubbles.any {
+        actionGroupOf(it.intent) == ActionGroup.EXTRACT && promisesResult(it.yields)
+    }
 
 /**
  * Действие называет, что принесёт, — и это разбор по каждому исходу, а не «всё, кроме
@@ -105,8 +117,12 @@ private fun promisesResult(yields: ActionYield): Boolean = when (yields) {
     ActionYield.None, ActionYield.Unknown -> false
 }
 
-fun actionSections(bubbles: List<Bubble>, useFirst: Boolean = false): List<ActionSection> {
-    return actionGroupOrder(useFirst || !promisesExtraction(bubbles)).mapNotNull { group ->
+fun actionSections(
+    bubbles: List<Bubble>,
+    state: ObjectState,
+    useFirst: Boolean = false,
+): List<ActionSection> {
+    return actionGroupOrder(useFirst || !promisesExtraction(bubbles, state)).mapNotNull { group ->
         bubbles.filter { actionGroupOf(it.intent) == group }
             .takeIf { it.isNotEmpty() }
             ?.let { ActionSection(group, it) }

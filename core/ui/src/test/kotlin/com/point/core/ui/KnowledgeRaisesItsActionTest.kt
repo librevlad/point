@@ -44,7 +44,7 @@ class KnowledgeRaisesItsActionTest {
     @Test fun `в тексте нашлась ссылка — открыть стоит первым`() {
         val text = ObjectState(ObjectKind.TEXT, setOf(Feature.HAS_URL))
 
-        val sections = actionSections(offered, useFirst = knowsUsableValue(text))
+        val sections = actionSections(offered, text, useFirst = knowsUsableValue(text))
 
         assertEquals(ActionGroup.USE, sections.first().group)
         assertEquals(open.capabilityId, sections.first().bubbles.single().capabilityId)
@@ -53,7 +53,7 @@ class KnowledgeRaisesItsActionTest {
     @Test fun `ничего такого не известно — порядок прежний`() {
         val text = ObjectState(ObjectKind.TEXT)
 
-        val sections = actionSections(offered, useFirst = knowsUsableValue(text))
+        val sections = actionSections(offered, text, useFirst = knowsUsableValue(text))
 
         assertEquals(ActionGroup.EXTRACT, sections.first().group)
     }
@@ -61,7 +61,7 @@ class KnowledgeRaisesItsActionTest {
     @Test fun `ничего не спрятано — список тот же, изменился только порядок`() {
         val text = ObjectState(ObjectKind.TEXT, setOf(Feature.HAS_PHONE))
 
-        val raised = actionSections(offered, useFirst = knowsUsableValue(text))
+        val raised = actionSections(offered, text, useFirst = knowsUsableValue(text))
             .flatMap { it.bubbles }.map { it.title }
 
         assertEquals(offered.map { it.title }.toSet(), raised.toSet())

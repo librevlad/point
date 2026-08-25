@@ -250,7 +250,11 @@ fun FirstScreen(
         } else {
 
             ObjectActions(
-                sections = actionSections(bubbles, useFirst = obj.uri is ValueRef || knowsUsableValue(obj.state)),
+                sections = actionSections(
+                    bubbles,
+                    obj.state,
+                    useFirst = obj.uri is ValueRef || knowsUsableValue(obj.state),
+                ),
                 working = working,
                 onBubble = onBubble,
                 appIconFor = appIconFor,

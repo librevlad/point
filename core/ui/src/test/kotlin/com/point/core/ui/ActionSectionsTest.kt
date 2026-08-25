@@ -12,6 +12,9 @@ import org.junit.Test
 
 class ActionSectionsTest {
 
+    /** Годный объект: о негодности разговора нет, порядок решают сами действия (#1101). */
+    private val text = ObjectState(ObjectKind.TEXT)
+
     // Настоящее чтение обещает результат (#1101): голое Unknown — «вернёт то, что попросите»,
     // и с одним таким группа «Извлечь» не ведёт.
     private fun bubble(title: String, intent: Intent, yields: ActionYield = ActionYield.Unknown) =
@@ -33,11 +36,11 @@ class ActionSectionsTest {
 
         assertEquals(
             listOf(ActionGroup.USE, ActionGroup.EXTRACT),
-            actionSections(bubbles, useFirst = true).map { it.group },
+            actionSections(bubbles, text, useFirst = true).map { it.group },
         )
         assertEquals(
             listOf(ActionGroup.EXTRACT, ActionGroup.USE),
-            actionSections(bubbles).map { it.group },
+            actionSections(bubbles, text).map { it.group },
         )
     }
 
@@ -49,7 +52,7 @@ class ActionSectionsTest {
             bubble("pdf", Intent.PREPARE),
             bubble("ai", Intent.UNDERSTAND),
         )
-        val sections = actionSections(bubbles)
+        val sections = actionSections(bubbles, text)
 
         assertEquals(
             listOf(ActionGroup.EXTRACT, ActionGroup.TRANSFORM, ActionGroup.SEND),
@@ -61,14 +64,14 @@ class ActionSectionsTest {
 
     @Test
     fun `a single group yields exactly one section`() {
-        val sections = actionSections(listOf(bubble("ocr", Intent.UNDERSTAND)))
+        val sections = actionSections(listOf(bubble("ocr", Intent.UNDERSTAND)), text)
         assertEquals(1, sections.size)
         assertEquals(ActionGroup.EXTRACT, sections.single().group)
     }
 
     @Test
     fun `empty input yields no sections`() {
-        assertTrue(actionSections(emptyList()).isEmpty())
+        assertTrue(actionSections(emptyList(), text).isEmpty())
     }
 
     @Test

@@ -202,7 +202,10 @@ internal fun CompactObject(
             // «Извлечь» ведёт, только когда есть что извлекать (#1101) — правило общее с
             // телефоном.
             val useFirst = com.point.core.ui.knowsUsableValue(item.obj.state) ||
-                !com.point.core.ui.promisesExtraction(actions.mapNotNull { it.bubble })
+                !com.point.core.ui.promisesExtraction(
+                    actions.mapNotNull { it.bubble },
+                    item.obj.state,
+                )
             val grouped = com.point.core.ui.actionGroupOrder(useFirst).mapNotNull { group ->
                 actions.filter { choice ->
                     val intent = choice.bubble?.intent
