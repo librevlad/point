@@ -345,6 +345,78 @@ class PhoneCountryIsNotGuessedTest {
         }
     }
 
+    /**
+     * Вторая грань той же цены, и платит за неё человек потерей номера (#1303).
+     *
+     * Тождество считает библиотека, и когда код страны назвала только одна запись, она
+     * перечитывает вторую **в стране первой**, снимая её национальный ноль. Тем же способом
+     * одним знанием становятся не только три записи одного номера, но и два разных: запись
+     * без кода `067 636 05 60` — «то же самое» и для украинского `+380676360560`, и для
+     * настоящего немецкого `+49 6763 60560`, хотя между собой эти двое разные. Слияние
+     * оставляет пришедшего первым, снимает спор — и второго номера не остаётся нигде: ни
+     * строкой, ни `.alt`, ни `.more`.
+     *
+     * До решения по #1029 эти двое расходились по угаданной стране и жили спором на пяти
+     * устройствах из шести — а на немецком сливались и тогда (замер на коде `main`,
+     * 25.08.2026). То есть догадка не спасала, а делала потерю зависящей от того, где стоит
+     * телефон. Развести их честно нечем: назвать страну записи без кода и значит угадать.
+     *
+     * Тест стоит здесь, чтобы цена падала вместе с решением, а не жила одним текстом в
+     * описании: пока правило живо, второй номер обязан исчезать, и видно это на пути
+     * человека — в графе и в строке экрана.
+     */
+    @Test
+    fun `два разных номера сливаются в один, и один исчезает`() {
+        val fromDocument = "067 636 05 60"
+        val ukrainian = "+380676360560"
+        val german = "+49 6763 60560"
+
+        assertTrue("это один и тот же номер", !PhoneNumbers.same(ukrainian, german, "UA"))
+
+        devices.forEach { device ->
+            assertTrue(
+                "своя запись перестала быть тем же номером-$device",
+                PhoneNumbers.same(fromDocument, ukrainian, device),
+            )
+            assertTrue(
+                "чужой номер отличён от записи без кода-$device",
+                PhoneNumbers.same(fromDocument, german, device),
+            )
+
+            listOf(german to fromDocument, fromDocument to german).forEach { (first, second) ->
+                val graph = mergeKnowledge(
+                    mapOf(META_ENTITY_PHONE to first),
+                    mapOf(META_ENTITY_PHONE to second),
+                    region = device,
+                )
+
+                assertEquals(
+                    "выжил не первый прочитанный-$device-$graph",
+                    first,
+                    graph[META_ENTITY_PHONE],
+                )
+                assertNull(
+                    "спор о номере сохранён-$device-${graph[META_ENTITY_PHONE + META_ALT_SUFFIX]}",
+                    graph[META_ENTITY_PHONE + META_ALT_SUFFIX],
+                )
+                assertTrue("второй номер уцелел-$device-$graph", graph.values.none { it == second })
+            }
+
+            val graph = mergeKnowledge(
+                mapOf(META_ENTITY_PHONE to german),
+                mapOf(META_ENTITY_PHONE to fromDocument),
+                region = device,
+            )
+            val row = shownKnowledge(META_ENTITY_PHONE, graph.getValue(META_ENTITY_PHONE), graph, device)
+
+            assertTrue("номер из документа остался на экране-$device-$row", !row.contains("636 05 60"))
+            assertTrue(
+                "на экране не тот номер, что уцелел-$device-$row",
+                PhoneNumbers.same(row.substringBefore(" ·"), german, device),
+            )
+        }
+    }
+
     /** Показ и знание отвечают одно и то же: страны, которой нет в графе, нет и на экране. */
     @Test
     fun `показ и знание об одной стране согласны`() {
