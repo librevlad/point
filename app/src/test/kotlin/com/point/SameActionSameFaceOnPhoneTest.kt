@@ -16,15 +16,13 @@ import org.junit.Test
  * обязан быть известен обеим таблицам — и значка, и тона. Пустые ключи исследований (`icon = ""`)
  * знака в списке действий не рисуют, а `app:` — префикс стороннего приложения, у него своя ветка.
  *
- * Живёт в `:app` — модуле, который и так собирает телефон из `executors`, `core/flow` и `core/ui`.
- * Сторож компьютера так же живёт в `:desktop`. В `:core:flow` он читал модули выше себя, и новая
- * способность в `:executors` роняла бы тест самого нижнего модуля — падение приезжало не туда,
- * где ошибка.
+ * Живёт в `:app` — модуле, который и так собирает телефон из `executors`, `core/flow` и `core/ui`,
+ * то есть всё, что сторож читает; в `:checks` (#1293) переезжают только те проверки, которым
+ * такого модуля нет. Сторож компьютера так же живёт в `:desktop`. В `:core:flow` он читал бы
+ * модули выше себя, и новая способность в `:executors` роняла бы тест самого нижнего модуля —
+ * падение приезжало не туда, где ошибка.
  */
 class SameActionSameFaceOnPhoneTest {
-
-    private val repo: File = generateSequence(File(".").absoluteFile) { it.parentFile }
-        .first { File(it, "settings.gradle.kts").isFile }
 
     private val shared = File(repo, "core/ui/src/shared/kotlin/com/point/core/ui/BubbleIcons.kt").readText()
 
