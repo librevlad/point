@@ -475,6 +475,24 @@ class MoneyAmountTest {
         assertEquals("1200 kr", factCandidate(META_ENTITY_AMOUNT, "1200 kr"))
     }
 
+    @Test
+    fun `валюта, написанная словом, — та же сумма, а длина слова ничего не решает (#1059)`() {
+        // Судья мерил пометку длиной — не больше четырёх букв, — и резал знание ровно тем же
+        // образом, что и список валют до него: «20 евро» проходило, «100 долларов» нет.
+        // Человеку это стоило факта: гейт разбора ответа выбрасывал такое значение вовсе.
+        assertTrue(amountFits("20 евро"))
+        assertTrue(amountFits("500 гривень"))
+        assertTrue(amountFits("1500 рублей"))
+        assertTrue(amountFits("100 долларов"))
+        assertTrue(amountFits("1200 dollars"))
+
+        // Граница есть, и она одна: пометка — слово, а не фраза. Целая строка чека суммой
+        // не становится, как не становилась и раньше.
+        assertEquals(false, amountFits("2.18 CASH TOTAL"))
+        assertEquals(false, amountFits("2.18 paid in cash"))
+        assertEquals(false, amountFits("TAX1"))
+    }
+
     /**
      * Чек Family Dollar с карточки #1059 — восстановленный, а не дословный.
      *

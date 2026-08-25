@@ -219,6 +219,15 @@ class UnderstandingProtocolTest {
                 .fields[META_ENTITY_AMOUNT]!!.map { it.text },
         )
 
+        // Валюта, написанная словом, — тоже валюта, и длина слова знания не решает: «20 евро»
+        // проходило, а «100 долларов» гейт выбрасывал вовсе — тот же дефект, только строкой
+        // ниже.
+        assertEquals(
+            listOf("500 гривень", "100 долларов", "1200 dollars"),
+            parseFieldCandidates("AMOUNT=500 гривень\nAMOUNT=100 долларов\nAMOUNT=1200 dollars")
+                .fields[META_ENTITY_AMOUNT]!!.map { it.text },
+        )
+
         // А заголовок суммой не становится: «TOP» — код тонганской паанги, и стоя перед
         // числом он делал суммой обычную английскую строку.
         assertEquals(null, parseFieldCandidates("AMOUNT=TOP 5").fields[META_ENTITY_AMOUNT])
