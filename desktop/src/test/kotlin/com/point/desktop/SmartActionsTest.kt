@@ -229,6 +229,30 @@ class SmartActionsTest {
         assertFalse(result.recoverable)
     }
 
+    /**
+     * Компьютер отвечает про пустую запись тем же, чем телефон (#1274): сервис отработал и
+     * сказал «речи нет» — это знание, а не сбой, и вопрос расшифровки закрывается им.
+     */
+    @Test fun `сервис не разобрал ни слова — компьютер запоминает это знанием`() = runTest {
+        val realizer = PcTranscribeRealizer(
+            { SpeechConfig(key = "есть") },
+            outbox(),
+            askOutside = { _, _, _ -> "   " },
+        )
+
+        val result = realizer.perform(audioObject(), null)
+
+        assertTrue("тишина — не сбой операции: $result", result is ActionResult.Done)
+        assertEquals(com.point.core.flow.NO_SPEECH_HEARD, (result as ActionResult.Done).message)
+        assertEquals(
+            com.point.core.flow.InvestigationState.NOT_FOUND,
+            com.point.core.flow.investigationStateOf(
+                result.findings!!.metadata,
+                com.point.core.flow.KnownCapabilities.TRANSCRIBE,
+            ),
+        )
+    }
+
     @Test fun `формат, который движок не читает, отсекается до сети`() = runTest {
         val realizer = PcTranscribeRealizer({ SpeechConfig(key = "есть") }, outbox())
 
