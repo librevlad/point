@@ -294,8 +294,9 @@ class FlowViewModel @Inject constructor(
      *
      * Исход просьбы соседу может прийти позже ответа — отменой у диалога сохранения, отказом
      * принтера, готовым файлом. Пока слово стоит на экране, телефон сам заглядывает в очередь
-     * компьютера; пришедший исход гасит слово тихо — отмена человека не ошибка (тот же шов,
-     * что возврат с чужого экрана, #1131), — а отказ называет причину.
+     * компьютера; пришедший исход говорит человеку то же, что сказал бы срочный ответ той же
+     * просьбы — «Сохранено: C:\…», причину отказа, — и только отмена человека гасит слово
+     * тихо: она не ошибка (тот же шов, что возврат с чужого экрана, #1131).
      */
     @Volatile private var neighbourWord: String? = null
     private var neighbourWatch: kotlinx.coroutines.Job? = null
@@ -2299,12 +2300,13 @@ class FlowViewModel @Inject constructor(
     private suspend fun performBy(realizer: com.point.core.flow.Realizer, obj: PointObject, amendment: String?): ActionResult {
         val result = realizer.perform(obj, amendment).knownBy(obj, realizer.meta.actor)
 
-        // Признак «исход может прийти позже» объявляет сам исполнитель (`RealizerMeta`), а
-        // экран его спрашивает: сверять класс исполнителя значило бы ждать позднего исхода
-        // ровно у одного известного экрану типа и ни у какого другого.
-        if (realizer.meta.outcomeMayArriveLater &&
-            result is ActionResult.Done && result.findings?.objects.isNullOrEmpty()
-        ) {
+        // «Может прийти позже» — свойство самого ответа, а не исполнителя целиком: стеречь
+        // стоит ровно тот ответ, которым сосед сказал, что работает прямо сейчас. Признак на
+        // исполнителе заставлял телефон минуту стучаться в очередь реле и после
+        // законченного «Скопировано в буфер компьютера» — двенадцать запросов ни о чём.
+        // Отложенное письмо («заберёт, когда включится») тоже не стерегут: компьютер
+        // выключен, и за эту минуту исходу взяться неоткуда.
+        if (result is ActionResult.Done && result.message == com.point.core.flow.PC_STILL_WORKING) {
             watchNeighbour(result.message)
         }
         return result
@@ -2569,7 +2571,13 @@ class FlowViewModel @Inject constructor(
         neighbourWatch = viewModelScope.launch {
             repeat(NEIGHBOUR_CHECKS) {
                 kotlinx.coroutines.delay(NEIGHBOUR_CHECK_MS)
-                if (_ui.value.message != word) return@launch
+
+                // Слово соседа ушло с экрана — гасить больше нечего, и поле не остаётся
+                // висеть со старым словом до следующего приземлившегося исхода.
+                if (_ui.value.message != word) {
+                    if (neighbourWord == word) neighbourWord = null
+                    return@launch
+                }
                 val pc = pcLinks.current() ?: return@launch
                 val entries = runCatching { pcTransport.fetchOutbox(pc) }.getOrNull() ?: return@repeat
                 val things = takeOutcomesHome(pc, entries)
@@ -2625,24 +2633,40 @@ class FlowViewModel @Inject constructor(
 
         val standing = neighbourWord
         neighbourWord = null
+
+        // Исход называет просьбу, к которой относится: «Напечатать на компьютере — …».
+        // Человек нажимал её минуты назад, и голая строка над объектом ему ничего не
+        // объясняет. Имя кладёт компьютер — то самое, что человек нажал на телефоне.
+        val about = meta[com.point.core.flow.PcExecFields.LABEL]?.takeIf { it.isNotBlank() }
+        fun aboutRequest(words: String) = about?.let { "$it — $words" } ?: words
         when (outcome) {
 
-            // Отказ не исчезает в молчаливой цепочке — и говорит, к чему он относится:
-            // «Напечатать на компьютере — …». Просьба была минуты назад, и без имени
-            // действия красная строка над объектом ничего человеку не объясняет.
-            is com.point.core.flow.PcActionOutcome.Failed -> {
-                val about = meta[com.point.core.flow.PcExecFields.LABEL]?.takeIf { it.isNotBlank() }
-                val said = about?.let { "$it — ${outcome.reason}" } ?: outcome.reason
-                _ui.update { it.copy(message = said, messageOutcome = Outcome.FAILED) }
-            }
+            // Отказ не исчезает в молчаливой цепочке.
+            is com.point.core.flow.PcActionOutcome.Failed ->
+                _ui.update { it.copy(message = aboutRequest(outcome.reason), messageOutcome = Outcome.FAILED) }
 
-            // «Готово» или «Отменено» без объекта гасит слово соседа тихо: отмена человека —
-            // не ошибка, и говорить о ней нечего (#1131).
-            is com.point.core.flow.PcActionOutcome.Done -> _ui.update {
-                if (standing != null && it.message == standing) {
-                    it.copy(message = null, messageOutcome = Outcome.NONE)
-                } else {
-                    it
+            // Поздний «готово» говорит то же, что сказал бы срочный ответ той же просьбы:
+            // «Сохранить на компьютере — Сохранено: C:\…». Иначе один и тот же тап давал бы
+            // человеку разный продукт по секундомеру — уложился компьютер в отпущенные ему
+            // секунды, значит человек знает, где искать файл (PC3), не уложился (а системный
+            // диалог «Сохранить в:» перешагивает этот срок обычно, а не изредка) — не знает
+            // ничего, и отличить сохранение от отмены нечем.
+            //
+            // Молча гаснет только отмена человека: сделано ничего, и говорить не о чем
+            // (решение владельца 21.08.2026 — отмена человека не ошибка, #1131).
+            is com.point.core.flow.PcActionOutcome.Done -> {
+                val words = outcome.detail
+                    ?.takeIf { it.isNotBlank() && it != com.point.core.flow.PC_CANCELLED }
+                _ui.update { ui ->
+                    when {
+                        words != null ->
+                            ui.copy(message = aboutRequest(words), messageOutcome = Outcome.DONE)
+
+                        standing != null && ui.message == standing ->
+                            ui.copy(message = null, messageOutcome = Outcome.NONE)
+
+                        else -> ui
+                    }
                 }
             }
         }

@@ -117,7 +117,7 @@ class SlowPcActionTest {
 
         val result = state.runRemoteActionNow("read", item, 50)
 
-        assertEquals(DesktopState.STILL_WORKING, (result as ActionResult.Done).message)
+        assertEquals(com.point.core.flow.PC_STILL_WORKING, (result as ActionResult.Done).message)
 
         waitUntil { slow.finished && outbox.entries().isNotEmpty() }
         assertFalse("работа не смеет отменяться бюджетом ответа", slow.cancelled)
@@ -138,7 +138,7 @@ class SlowPcActionTest {
 
         val result = state.runRemoteActionNow("read", item, 50)
 
-        assertEquals(DesktopState.STILL_WORKING, (result as ActionResult.Done).message)
+        assertEquals(com.point.core.flow.PC_STILL_WORKING, (result as ActionResult.Done).message)
         waitUntil { slow.finished && outbox.entries().isNotEmpty() }
         val entry = outbox.entries().single()
         val f = com.point.core.flow.PcResultFields
@@ -155,7 +155,7 @@ class SlowPcActionTest {
     @Test
     fun `долгое «готово» без объекта — отмена у диалога — едет телефону к своему объекту`() {
         val outbox = Outbox(temp.newFolder("out-cancel"))
-        val cancelled = "Отменено"
+        val cancelled = com.point.core.flow.PC_CANCELLED
         val slow = Slow(
             "pc-save-as", temp.newFolder("r5"), delayMs = 200,
             saysDone = ActionResult.Done(
@@ -168,7 +168,7 @@ class SlowPcActionTest {
 
         val result = state.runRemoteActionNow("pc-save-as", fromPhone, 50)
 
-        assertEquals(DesktopState.STILL_WORKING, (result as ActionResult.Done).message)
+        assertEquals(com.point.core.flow.PC_STILL_WORKING, (result as ActionResult.Done).message)
         waitUntil { slow.finished && outbox.entries().isNotEmpty() }
         val entry = outbox.entries().single()
         val f = com.point.core.flow.PcResultFields
@@ -184,6 +184,24 @@ class SlowPcActionTest {
         )
         assertEquals("понятое едет вместе с исходом", "+380671234567", entry.meta[f.UNDERSTOOD + "entity.phone"])
         assertNull(outbox.file(entry.id))
+    }
+
+    /**
+     * Два исхода одного диалога «Сохранить в…» (#1073): человек передумал — слово отмены
+     * объявленное, и телефон по нему знает, что говорить не о чем; человек сохранил —
+     * компьютер называет место, и это место телефон человеку повторяет (PC3).
+     */
+    @Test
+    fun `сохранение называет место, а отмена — объявленное слово`() {
+        val file = temp.newFile("акт.docx")
+        val obj = PointObject("o-1", "application/octet-stream", ScratchRef(file.absolutePath), ObjectState(ObjectKind.OFFICE))
+        val where = "C:/Users/User/Документы/акт.docx"
+
+        val saved = kotlinx.coroutines.runBlocking { PcSaveAsRealizer { where }.perform(obj, null) }
+        assertEquals("человек не знает, где искать файл", "Сохранено: $where", (saved as ActionResult.Done).message)
+
+        val gaveUp = kotlinx.coroutines.runBlocking { PcSaveAsRealizer { null }.perform(obj, null) }
+        assertEquals(com.point.core.flow.PC_CANCELLED, (gaveUp as ActionResult.Done).message)
     }
 
     @Test

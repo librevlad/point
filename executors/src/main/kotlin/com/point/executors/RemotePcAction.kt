@@ -133,10 +133,6 @@ class RemotePcRealizer(
 
     override val meta = com.point.core.flow.RealizerMeta(
         kind = if (action.leavesCircle) com.point.core.flow.RealizerKind.CLOUD else com.point.core.flow.RealizerKind.LOCAL,
-
-        // Сосед может ответить словом раньше, чем кончит работу (#1073): «ещё работает»
-        // сменяется отменой у диалога, отказом или готовым файлом уже в очереди компьютера.
-        outcomeMayArriveLater = true,
     )
 
     /**

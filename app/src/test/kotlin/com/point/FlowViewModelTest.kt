@@ -1216,7 +1216,7 @@ class FlowViewModelTest {
      */
     @Test fun `поздняя отмена на компьютере гасит слово «ещё работает» тихо, а понятое ложится в объект`() = runTest(dispatcher) {
         pcLinks.pc = com.point.core.flow.LinkedPc("d-pc", "Ноутбук", "ключ-ПК")
-        val stillWorking = "Компьютер ещё работает — готовое появится в списке «с компьютера»"
+        val stillWorking = com.point.core.flow.PC_STILL_WORKING
         pcTransport.outcome = com.point.core.flow.PcSendOutcome.Sent(
             action = com.point.core.flow.PcActionOutcome.Done(stillWorking),
         )
@@ -1230,7 +1230,7 @@ class FlowViewModelTest {
         // Человек у компьютера закрыл диалог уже после ответа телефону: исход приходит позже.
         pcTransport.outbox = listOf(
             outcomeEntry(
-                1, com.point.core.flow.PcActionOutcome.Done("Отменено"),
+                1, com.point.core.flow.PcActionOutcome.Done(com.point.core.flow.PC_CANCELLED),
                 extra = mapOf(com.point.core.flow.PcResultFields.UNDERSTOOD + "entity.phone" to "+380671234567"),
             ),
         )
@@ -1292,7 +1292,7 @@ class FlowViewModelTest {
         pcLinks.pc = com.point.core.flow.LinkedPc("d-pc", "Ноутбук", "ключ-ПК")
         pcTransport.outbox = listOf(
             outcomeEntry(
-                7, com.point.core.flow.PcActionOutcome.Done("Отменено"),
+                7, com.point.core.flow.PcActionOutcome.Done(com.point.core.flow.PC_CANCELLED),
                 extra = mapOf(com.point.core.flow.PcResultFields.UNDERSTOOD + "entity.phone" to "+380671234567"),
             ),
         )
@@ -1316,7 +1316,7 @@ class FlowViewModelTest {
     @Test fun `забор с компьютера берёт вещи и не спотыкается об исход без объекта`() = runTest(dispatcher) {
         pcLinks.pc = com.point.core.flow.LinkedPc("d-pc", "Ноутбук", "ключ-ПК")
         pcTransport.outbox = listOf(
-            outcomeEntry(1, com.point.core.flow.PcActionOutcome.Done("Отменено"), home = "другой-объект"),
+            outcomeEntry(1, com.point.core.flow.PcActionOutcome.Done(com.point.core.flow.PC_CANCELLED), home = "другой-объект"),
             com.point.core.flow.PcOutboxEntry(2, mapOf("name" to "чек.jpg", "mime" to "image/jpeg")),
         )
         val vm = vm()
@@ -1327,6 +1327,64 @@ class FlowViewModelTest {
         assertEquals("забирается вещь, а исход не скачивается", listOf(2), pcTransport.acked)
         assertEquals(0, vm.fromPcCount.value)
         assertTrue(vm.ui.value.messageOutcome != Outcome.FAILED)
+    }
+
+    /**
+     * Настоящее сохранение доезжает словами (#1073, адверсарное ревью): системный диалог
+     * «Сохранить в:» перешагивает срок срочного ответа обычно, а не изредка — человек
+     * двадцать секунд выбирал папку, сохранил, а телефон молчал. Один и тот же тап давал
+     * разный продукт по секундомеру: успел компьютер — человек знает, где лежит файл (PC3),
+     * не успел — не знает ничего, и отличить сохранение от отмены нечем.
+     */
+    @Test fun `поздний исход сохранения называет человеку место файла, а не молчит`() = runTest(dispatcher) {
+        pcLinks.pc = com.point.core.flow.LinkedPc("d-pc", "Ноутбук", "ключ-ПК")
+        pcTransport.outcome = com.point.core.flow.PcSendOutcome.Sent(
+            action = com.point.core.flow.PcActionOutcome.Done(com.point.core.flow.PC_STILL_WORKING),
+        )
+        resolver.realizer = neighbour()
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        vm.onBubble(bubble(id = "pc-do:pc-save-as", title = "Сохранить на компьютере"))
+        dispatcher.scheduler.advanceTimeBy(1_000); dispatcher.scheduler.runCurrent()
+        assertEquals(com.point.core.flow.PC_STILL_WORKING, vm.ui.value.message)
+
+        // Человек выбрал папку и сохранил — компьютер называет место, куда лёг файл.
+        val saved = "Сохранено: C:/Users/User/Документы/акт.docx"
+        pcTransport.outbox = listOf(outcomeEntry(2, com.point.core.flow.PcActionOutcome.Done(saved)))
+        dispatcher.scheduler.advanceTimeBy(6_000); advanceUntilIdle()
+
+        assertEquals(
+            "человек не знает, где искать сохранённый файл",
+            "Сохранить на компьютере — $saved", vm.ui.value.message,
+        )
+        assertEquals(Outcome.DONE, vm.ui.value.messageOutcome)
+        assertEquals("исход подтверждён компьютеру — второй раз его не привезут", listOf(2), pcTransport.acked)
+        assertEquals("исход без объекта — не вещь для списка «с компьютера»", 0, vm.fromPcCount.value)
+    }
+
+    /**
+     * Ждать позднего исхода стоит у того ответа, который сам говорит, что работа не кончилась
+     * (#1073, адверсарное ревью). Признак на исполнителе целиком заставлял телефон целую
+     * минуту стучаться в очередь реле — двенадцать запросов — и после законченного
+     * «Скопировано в буфер компьютера», у которого продолжения не будет никогда.
+     */
+    @Test fun `законченный ответ соседа не заставляет телефон стучаться в очередь`() = runTest(dispatcher) {
+        pcLinks.pc = com.point.core.flow.LinkedPc("d-pc", "Ноутбук", "ключ-ПК")
+        pcTransport.outcome = com.point.core.flow.PcSendOutcome.Sent(
+            action = com.point.core.flow.PcActionOutcome.Done("Скопировано в буфер компьютера"),
+        )
+        resolver.realizer = neighbour(action = "pc-clipboard", label = "В буфер компьютера")
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        val knocks = pcTransport.outboxFetches
+
+        vm.onBubble(bubble(id = "pc-do:pc-clipboard", title = "В буфер компьютера"))
+        dispatcher.scheduler.advanceTimeBy(60_000); advanceUntilIdle()
+
+        assertEquals(
+            "телефон стучится в очередь по действию, которое уже кончилось",
+            knocks, pcTransport.outboxFetches,
+        )
     }
 
     @Test fun `назад с экрана входа возвращает в Point, а не закрывает его`() = runTest(dispatcher) {

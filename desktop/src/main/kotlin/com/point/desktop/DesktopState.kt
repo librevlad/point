@@ -206,7 +206,7 @@ class DesktopState(
                 note(item, id, titleOf(id, item) + " · результат в очередь", ActionResult.Failure(why, recoverable = true))
             }
         }
-        return ActionResult.Done(STILL_WORKING)
+        return ActionResult.Done(com.point.core.flow.PC_STILL_WORKING)
     }
 
     /** Каким именем объект знает телефон: просьба приехала с ним, результат по нему найдёт дом. */
@@ -236,7 +236,6 @@ class DesktopState(
     }
 
     companion object {
-        const val STILL_WORKING = "Компьютер ещё работает — готовое появится в списке «с компьютера»"
 
         private const val DID_NOT_RUN = "Действие не выполнилось — попробуйте ещё раз"
 
