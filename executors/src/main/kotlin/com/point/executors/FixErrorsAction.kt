@@ -138,7 +138,10 @@ internal suspend fun fix(llm: LlmClient, input: PointObject, withObject: Boolean
             // отправлять наружу больше, чем требуется, незачем (принцип #1244).
             val asked = if (withObject) input else textStandIn(input)
             val answer = File(llm.run(asked, fixPrompt(facts, withObject)).uri.value).readText()
-            val fixes = parseFixes(answer, facts)
+            // Гейт формы у обоих путей один (#666, #1032): исправленное судится по той же
+            // странице, что и найденное впервые, — иначе «Понять» брала 13-значную накладную
+            // по слову рядом, а «Исправить ошибки» ту же накладную молча отказывалась править.
+            val fixes = parseFixes(answer, facts, entitySourceText(input))
 
             // Знание об объекте, а не новый объект (ADR-0001 §18): человек остаётся на месте.
             ActionResult.Done(

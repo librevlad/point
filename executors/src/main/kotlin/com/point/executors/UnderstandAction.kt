@@ -28,6 +28,7 @@ import com.point.core.flow.META_SEMANTIC_PREFIX
 import com.point.core.flow.META_SOURCE_SUFFIX
 import com.point.core.flow.META_UNUSABLE_REASON
 import com.point.core.flow.addActor
+import com.point.core.flow.isAnnotationKey
 import com.point.core.flow.isKnowledgeKey
 import com.point.core.flow.ReadingMode
 import com.point.core.flow.Realizer
@@ -183,12 +184,13 @@ class UnderstandRealizer @Inject constructor(
                     eyes = eyes,
                 )
                 reportStage("Проверяю прочитанное по странице")
-                val parsed = parseFieldCandidates(answer)
                 // Сверять есть с чем всегда, когда Point читал сам: слой слов снимка или
-                // окно текста объекта (#809, «нет в тексте — нет знания»).
+                // окно текста объекта (#809, «нет в тексте — нет знания»; #1032 — по нему же
+                // видно, стоит ли у числа слово-подпись накладной).
                 val readText = layer?.text?.takeIf { it.isNotBlank() } ?: window
+                val parsed = parseFieldCandidates(answer, readText)
 
-                val (answered, roleDisputes) = roleReadings(answer, laidOut, layer)
+                val (answered, roleDisputes, roleBlocked) = roleReadings(answer, laidOut, layer)
 
                 // Человек, названный при номере, — сторона самого объекта (#993): его имя
                 // знал только узел человека, а объект, где стоит «Сохранить контакт», нет.
@@ -208,14 +210,18 @@ class UnderstandRealizer @Inject constructor(
 
                     // Перечитанное — другие прочтения, и стороны у них свои (#1176): связь
                     // считается по тем прочтениям, которые судятся, а не по прошлым.
-                    val more = parseFieldCandidates(again).fields.filterKeys { it in keys }
+                    val more = parseFieldCandidates(again, readText).fields.filterKeys { it in keys }
                     judgeFields(more, layer, readText, layer?.belongings(more, roles).orEmpty())
                 }
                 val fields = judged.won + retried?.won.orEmpty()
 
-                val blocked = (judged.blocked.keys + retried?.blocked?.keys.orEmpty()).associateWith { key ->
-                    (judged.blocked[key].orEmpty() + retried?.blocked?.get(key).orEmpty()).distinct()
-                }
+                // Отклонённое проверкой не исчезает (#1032): номер с несошедшейся контрольной
+                // и роль со словом из смешанных алфавитов остаются одним следом `.blocked`.
+                val blocked = (judged.blocked.keys + retried?.blocked?.keys.orEmpty() + roleBlocked.keys)
+                    .associateWith { key ->
+                        (judged.blocked[key].orEmpty() + retried?.blocked?.get(key).orEmpty() + roleBlocked[key].orEmpty())
+                            .distinct()
+                    }
 
                 // Курсор для следующего нажатия «Понять» — пока не дочитано, окно сдвигается
                 // дальше; дочитано — курсор больше не нужен (#682/#683).
@@ -230,13 +236,17 @@ class UnderstandRealizer @Inject constructor(
 
                     // ADR-0001 §9: не дочитано — «недостаточно», не «не найдено».
                     // Дочитанное судится по всему накопленному — найденное раньше не
-                    // гаснет; вопрос задан — след остаётся (#1176).
+                    // гаснет; вопрос задан — след остаётся (#1176). Отброшенное проверкой
+                    // прочтение — тоже след (#1032): с ним вопрос «исследован недостаточно»,
+                    // а не «не нашлось». След этого витка и заявляется — чужой `.blocked` в
+                    // накопленном ответа за «Понять» не держит.
+                    val trace = blockedTrace(blocked)
                     val state = if (fullyRead) {
-                        investigationOutcome(input.metadata, cumulativeFactKeys(input.metadata))
+                        investigationOutcome(input.metadata + trace, cumulativeFactKeys(input.metadata) + trace.keys)
                     } else {
                         InvestigationState.INSUFFICIENTLY_INVESTIGATED
                     }
-                    val extra = progress + state.orEmptyInvestigation()
+                    val extra = progress + trace + state.orEmptyInvestigation()
                     ActionResult.Done(
                         message ?: NOTHING_NEW,
                         extra.takeIf { it.isNotEmpty() }?.let { Findings(metadata = it) },
@@ -412,10 +422,14 @@ class UnderstandRealizer @Inject constructor(
             // Обрезанная до даты фраза не исчезает — она остаётся подписью значения (#782).
             field.line?.let { put(key + com.point.core.flow.META_LINE_SUFFIX, it) }
         }
-        blocked.forEach { (key, texts) ->
-            if (texts.isNotEmpty()) put(key + META_BLOCKED_SUFFIX, altValue(texts))
-        }
+        putAll(blockedTrace(blocked))
     }
+
+    /** След отклонённых проверкой прочтений — `ключ.blocked`, существующий шов S10 (#1032). */
+    private fun blockedTrace(blocked: Map<String, List<String>>): Map<String, String> =
+        blocked.filterValues { it.isNotEmpty() }
+            .map { (key, texts) -> key + META_BLOCKED_SUFFIX to altValue(texts) }
+            .toMap()
 
     private fun atomLayer(input: PointObject): AtomLayer? =
         input.metadata[META_OCR_ATOMS_REF]?.let { ref ->
@@ -440,10 +454,17 @@ class UnderstandRealizer @Inject constructor(
      * сам, — но видеть её он обязан: на файле, который не открылся, «смотрели — не нашлось»
      * такая же неправда, как «найдено» (#988, #1067). Без неё вопрос закрывался бы намертво
      * там, где его вовсе не сумели задать.
+     *
+     * Аннотации сюда не входят (#1032): «ещё», «или», «откуда» и след отброшенного прочтения
+     * — подписи при знании, а не ответы на вопрос. Прежде они и не считались — их отсеивал
+     * сам судья; но с тех пор как след `.blocked` держит вопрос открытым, чужой след из
+     * накопленного стал бы отвечать за «Понять»: номер, отклонённый правилом-читателем
+     * офлайн, вечно держал бы витки «Понять» в «исследовано недостаточно».
      */
     private fun cumulativeFactKeys(metadata: Map<String, String>): Set<String> =
         metadata.keys.filterTo(mutableSetOf()) {
-            isKnowledgeKey(it) || it.startsWith(META_SEMANTIC_PREFIX) || it == META_UNUSABLE_REASON
+            (isKnowledgeKey(it) || it.startsWith(META_SEMANTIC_PREFIX) || it == META_UNUSABLE_REASON) &&
+                !isAnnotationKey(it)
         }
 
     private companion object {

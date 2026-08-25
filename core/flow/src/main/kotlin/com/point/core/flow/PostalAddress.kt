@@ -39,10 +39,21 @@ fun addressFacts(text: String, source: Provenance = Provenance.OCR): Map<String,
 fun plausibleAddress(value: String): Boolean {
     val line = value.trim()
     if (line.isEmpty()) return false
-    if (line.words().any(::mixedScriptWord)) return false
+    if (hasMixedScriptWord(line)) return false
     if (addressForm(line) != null) return true
     return line.hasStreetMarker() && line.any(Char::isDigit)
 }
+
+/**
+ * Слово, в котором смешаны алфавиты, — огрех чтения, а не значение (#632, #1032).
+ *
+ * Судья один на все словесные значения: адрес им отсеивал «ZeHTpaJIbHa», а роль проходила
+ * без него, и организацией документа становилось «РÉPUBLIOUEFRANCAISE» — кириллические Р и О
+ * внутри латинского слова. Такого слова нет ни в одном языке, и это видно бесплатно, без
+ * словарей и модели. Цена — настоящие смешанные написания вроде «Яndex» отсеются; редкий
+ * случай против частого мусора, принят владельцем сознательно.
+ */
+fun hasMixedScriptWord(value: String): Boolean = value.words().any(::mixedScriptWord)
 
 private fun mixedScriptWord(word: String): Boolean {
     val letters = word.filter(Char::isLetter)

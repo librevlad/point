@@ -28,10 +28,13 @@ data class PersonContact(val name: String, val phone: String)
  * Несколько значений этих видов — несколько объектов, а не спор прочтений одного
  * (#652): второй телефон в переписке — не конфликт первого. Сумма здесь же (#662):
  * разные числа — разные суммы документа («сумма — ещё: 300»), а спор остаётся только
- * неразличимым прочтениям одного числа. Спор по-прежнему у трека, показания, квитанции.
+ * неразличимым прочтениям одного числа. Номер здесь же (#1032): у объекта бывает несколько
+ * идентификаторов — госномер от правила и номер удостоверения от модели не спорят, это два
+ * разных номера («номер — ещё»), как у правила-читателя ([serialFacts]). Спор по-прежнему у
+ * трека, показания, квитанции.
  */
 val MULTI_VALUE_FACTS: Set<String> =
-    setOf("phone", "email", "url", "card", "date", "amount")
+    setOf("phone", "email", "url", "card", "date", "amount", "serial")
         .mapTo(mutableSetOf()) { META_ENTITY_PREFIX + it }
 
 fun isMultiValueFact(key: String): Boolean = key in MULTI_VALUE_FACTS
@@ -308,7 +311,23 @@ fun bareCardNumber(value: String): Boolean {
     return digits.length == 16 && luhn(digits)
 }
 
-fun parseFieldCandidates(answer: String): ParsedUnderstanding {
+/**
+ * Число формы трека, которое гейт накладной не пустил (#1032): это и не слово, и не счёт
+ * (форма IBAN по-прежнему гаснет целиком — «NO93 8601 1117 947» номером не становится),
+ * а просто номер — идентификатор «Номер» без роли.
+ */
+private fun trackShapedNumber(value: String): Boolean =
+    semanticFits(META_ENTITY_TRACK, value) == true && !looksLikeIban(value)
+
+fun parseFieldCandidates(
+    answer: String,
+
+    /**
+     * Всё, что Point прочитал сам (#1032): по нему видно, стоит ли у числа слово-подпись
+     * накладной. Пусто — сверять не с чем, и накладной остаётся только форма перевозчика.
+     */
+    readText: String = "",
+): ParsedUnderstanding {
     val fields = LinkedHashMap<String, MutableList<FieldCandidate>>()
     val single = LinkedHashMap<String, String>()
     val contacts = mutableListOf<PersonContact>()
@@ -414,6 +433,11 @@ fun parseFieldCandidates(answer: String): ParsedUnderstanding {
                 // Отказ-фраза — не значение ни для какого поля (#656).
                 if (startsWithRefusal(candidate.text)) return@forEach
 
+                // Слово со смешанными алфавитами — огрех чтения, не значение ни для какого
+                // поля (#1032, решение владельца): место и тема судятся тем же правилом,
+                // что роль и адрес.
+                if (garbledWord(metaKey, candidate.text)) return@forEach
+
                 // Относительное слово — не дата (#659).
                 if (suffix == "date" && relativeDayWord(candidate.text)) return@forEach
 
@@ -428,10 +452,6 @@ fun parseFieldCandidates(answer: String): ParsedUnderstanding {
                     null
                 }
 
-                // Форма IBAN — не трек: «UA79…» с квитанции становился готовым
-                // «Отследить отправление» (живой прогон 2026-08-09).
-                if (suffix == "track" && looksLikeIban(candidate.text)) return@forEach
-
                 // «Голое время это никогда не дата, это мусор» (#651): 11:09 из чата
                 // становилось «Нашёл дату».
                 if (suffix == "date" && bareClock(candidate.text)) return@forEach
@@ -443,10 +463,6 @@ fun parseFieldCandidates(answer: String): ParsedUnderstanding {
                 // беднее жизни — градусные координаты падали первым же тестом.
                 // Типизация «номер»/Луна/миграция типов — следующий срез #657.
                 if (suffix == "date" && semanticFits(metaKey, candidate.text) == false) return@forEach
-
-                // Трек — это цифры, а не слово: «квитанцію» и «№ 7 36ір…» с кадров прогона
-                // становились трек-номерами, и Point предлагал отследить несуществующее.
-                if (suffix == "track" && semanticFits(metaKey, candidate.text) == false) return@forEach
                 if (suffix == "address" && !plausibleAddress(candidate.text)) return@forEach
 
                 // Дата — не карта (#747): «ВІД: 29.07/12:59» с почтовой наклейки становилось
@@ -470,7 +486,21 @@ fun parseFieldCandidates(answer: String): ParsedUnderstanding {
                     pieces.forEach(::offerPhone)
                     return@let
                 }
-                val bucket = fields.getOrPut(metaKey) { mutableListOf() }
+
+                // Трек судится общим гейтом формы — той же меркой, что правило-читатель
+                // (#657, #1032): слово («квитанцію», «№ 7 36ір…» с кадров прогона) и форма
+                // IBAN («UA79…» с квитанции становился готовым «Отследить отправление») не
+                // проходят и никуда не идут. Число формы трека без формы перевозчика и без
+                // слова-подписи рядом — тоже не накладная, но оно не выбрасывается: номер без
+                // роли — просто номер (решение владельца), идентификатор «Номер» без
+                // «отследить». Модель назвала номер удостоверения накладной, и человеку
+                // предлагали отследить то, что никуда не едет.
+                val placed = when {
+                    suffix != "track" || factFits(metaKey, candidate.text, readText) -> metaKey
+                    trackShapedNumber(candidate.text) -> META_ENTITY_SERIAL
+                    else -> return@forEach
+                }
+                val bucket = fields.getOrPut(placed) { mutableListOf() }
                 pieces.forEach { piece ->
                     if (bucket.size < MAX_FIELD_CANDIDATES && bucket.none { it.text == piece.text && it.ids == piece.ids }) {
                         bucket += piece

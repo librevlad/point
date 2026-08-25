@@ -11,6 +11,7 @@ import com.point.core.flow.KIND_PERSON
 import com.point.core.flow.kindFor
 import com.point.core.flow.EXTRACTED_KINDS
 import com.point.core.flow.META_ALT_SUFFIX
+import com.point.core.flow.META_BLOCKED_SUFFIX
 import com.point.core.flow.META_EVIDENCE_SUFFIX
 import com.point.core.flow.META_GRAPH_ROLE_PREFIX
 import com.point.core.flow.META_SOURCE_SUFFIX
@@ -88,12 +89,23 @@ class GraphRolesInvestigationRealizer @Inject constructor() : Realizer {
             }
             relations += Relation(id, role.relation, obj.id)
         }
-        if (objects.isEmpty()) return Findings()
+        if (objects.isEmpty()) return Findings(metadata = blockedRoleReadings(obj.metadata))
         return Findings(objects = objects.values.toList(), relations = relations)
     }
 
     private companion object {
         const val CREATOR = "classifier"
+
+        /**
+         * Отброшенное прочтение роли — след, а не пустые руки (#1032): роль прочиталась, но
+         * правдоподобия не прошла («РÉPUBLIOUEFRANCAISE»). Без следа вопрос «кто играет
+         * роли» закрывался бы как «не нашлось»; со следом он остаётся «исследован
+         * недостаточно» — смотрели, ответа не приняли.
+         */
+        fun blockedRoleReadings(metadata: Map<String, String>): Map<String, String> =
+            CLASSIFIER_ROLES.map { META_GRAPH_ROLE_PREFIX + it.key + META_BLOCKED_SUFFIX }
+                .filter { !metadata[it].isNullOrBlank() }
+                .associateWith { metadata.getValue(it) }
 
         /**
          * Роль назвала модель — так и записываем.

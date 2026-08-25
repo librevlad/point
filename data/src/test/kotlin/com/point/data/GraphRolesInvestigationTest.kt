@@ -129,6 +129,28 @@ class GraphRolesInvestigationTest {
     }
 
     @Test
+    fun `отброшенное прочтение роли — след, и вопрос остаётся «исследован недостаточно»`() = runTest {
+        // #1032: роль прочиталась, но правдоподобия не прошла; узла нет, но и «не нашлось» —
+        // неправда: смотрели, ответа не приняли.
+        val garbled = "РÉPUBLIOUEFRANCAISE"
+        val blockedKey = META_GRAPH_ROLE_PREFIX + "issuer" + com.point.core.flow.META_BLOCKED_SUFFIX
+        val rejected = doc().copy(metadata = mapOf(blockedKey to garbled))
+
+        val delta = enricher.look(rejected)
+
+        assertTrue(delta.objects.isEmpty())
+        assertEquals(garbled, delta.metadata[blockedKey])
+        assertEquals(
+            com.point.core.flow.InvestigationState.INSUFFICIENTLY_INVESTIGATED,
+            com.point.core.flow.investigationOutcome(delta.metadata, delta.metadata.keys),
+        )
+
+        // Принятая роль отвечает на вопрос — след другой роли его заново не открывает.
+        val answered = doc("carrier" to "Нова Пошта").let { it.copy(metadata = it.metadata + (blockedKey to garbled)) }
+        assertTrue(enricher.look(answered).metadata.isEmpty())
+    }
+
+    @Test
     fun `an organisation is not classified out of again`() = runTest {
         val org = doc("sender" to "Нова Пошта", kind = KIND_ORGANIZATION)
 

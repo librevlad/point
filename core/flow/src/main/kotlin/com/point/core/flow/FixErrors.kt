@@ -51,8 +51,11 @@ fun fixPrompt(facts: List<FixableFact>, withObject: Boolean): String = buildStri
 
 /**
  * Разбор ответа: номер → исправленное значение. Чужие номера и мусор молчат.
+ *
+ * [readText] — всё, что Point прочитал сам: гейт формы судит исправленное той же меркой, что
+ * и найденное впервые (#666, #1032), и слово-подпись накладной ищет там же, на странице.
  */
-fun parseFixes(answer: String, facts: List<FixableFact>): Map<String, String> {
+fun parseFixes(answer: String, facts: List<FixableFact>, readText: String = ""): Map<String, String> {
     val byIndex = facts.withIndex().associate { (i, f) -> i + 1 to f }
     val fixes = LinkedHashMap<String, String>()
     answer.lineSequence().forEach { raw ->
@@ -63,7 +66,7 @@ fun parseFixes(answer: String, facts: List<FixableFact>): Map<String, String> {
         val fact = byIndex[n] ?: return@forEach
         val fixed = line.substring(eq + 1).trim()
         if (fixed.isEmpty() || normConsensus(fixed) == normConsensus(fact.value)) return@forEach
-        if (!factFits(fact.key, fixed)) return@forEach
+        if (!factFits(fact.key, fixed, readText)) return@forEach
         fixes[fact.key] = fixed
     }
     return fixes
