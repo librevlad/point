@@ -214,8 +214,12 @@ class DesktopState(
         item.obj.metadata[com.point.core.flow.META_ORIGIN_ID] ?: item.obj.id
 
     /**
-     * Поздний исход просьбы телефона — словами домой (#1073): чей объект, какая просьба и
-     * чем кончилась. Понятое компьютером едет теми же полями, что и в срочном ответе (PC2).
+     * Поздний исход просьбы телефона — словами домой (#1073): чей объект, как просьба
+     * называлась и чем кончилась. Понятое компьютером едет теми же полями, что и в срочном
+     * ответе (PC2).
+     *
+     * Название просьбы едет ради слов человеку: отказ у телефона говорит, к чему он
+     * относится. Больше в записи нет ничего — того, чего никто не читает, здесь не кладут.
      */
     private fun lateOutcomeMeta(id: String, item: InboxItem, late: ActionResult?): Map<String, String> {
         val f = com.point.core.flow.PcResultFields
@@ -227,8 +231,7 @@ class DesktopState(
             .mapKeys { (k, _) -> f.UNDERSTOOD + k }
         return mapOf(
             e.HOME to homeOf(item),
-            e.ACTION to id,
-            e.LABEL to titleOf(id, item),
+            e.LABEL to phoneFacingLabel(id, titleOf(id, item)),
         ) + f.of(outcome) + understood
     }
 

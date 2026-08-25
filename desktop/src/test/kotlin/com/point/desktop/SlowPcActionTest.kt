@@ -174,7 +174,14 @@ class SlowPcActionTest {
         val f = com.point.core.flow.PcResultFields
         assertEquals(com.point.core.flow.PcActionOutcome.Done(cancelled), f.outcomeOf(entry.meta))
         assertEquals("исход едет к объекту телефона, а не к копии на компьютере", "phone-obj", entry.meta[com.point.core.flow.PcExecFields.HOME])
-        assertEquals("pc-save-as", entry.meta[com.point.core.flow.PcExecFields.ACTION])
+
+        // Просьба названа так, как её видел человек на телефоне: он нажимал «Сохранить на
+        // компьютере», а не то, как это же умение зовётся здесь.
+        assertEquals(
+            "исход называет просьбу не тем именем, под которым она объявлена телефону",
+            phoneFacingLabel("pc-save-as", "pc-save-as"),
+            entry.meta[com.point.core.flow.PcExecFields.LABEL],
+        )
         assertEquals("понятое едет вместе с исходом", "+380671234567", entry.meta[f.UNDERSTOOD + "entity.phone"])
         assertNull(outbox.file(entry.id))
     }

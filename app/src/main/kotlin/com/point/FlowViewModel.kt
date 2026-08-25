@@ -2298,7 +2298,11 @@ class FlowViewModel @Inject constructor(
      */
     private suspend fun performBy(realizer: com.point.core.flow.Realizer, obj: PointObject, amendment: String?): ActionResult {
         val result = realizer.perform(obj, amendment).knownBy(obj, realizer.meta.actor)
-        if (realizer is com.point.executors.RemotePcRealizer &&
+
+        // Признак «исход может прийти позже» объявляет сам исполнитель (`RealizerMeta`), а
+        // экран его спрашивает: сверять класс исполнителя значило бы ждать позднего исхода
+        // ровно у одного известного экрану типа и ни у какого другого.
+        if (realizer.meta.outcomeMayArriveLater &&
             result is ActionResult.Done && result.findings?.objects.isNullOrEmpty()
         ) {
             watchNeighbour(result.message)
@@ -2571,15 +2575,22 @@ class FlowViewModel @Inject constructor(
                 val things = takeOutcomesHome(pc, entries)
                 fromPcEntries = things
                 _fromPcCount.value = things.size
-                if (things.size < entries.size) return@launch
+
+                // Исход доехал — ждать больше нечего.
+                if (neighbourWord == null) return@launch
             }
         }
     }
 
     /**
-     * Исходы без объекта забираются домой сразу (#1073): это не вещи для списка «с
-     * компьютера», а слова о том, чем кончилась просьба. Подтверждаются тут же — второй раз
-     * их не привезут. Возвращает то, что в очереди осталось вещами.
+     * Исходы без объекта забираются домой (#1073): это не вещи для списка «с компьютера», а
+     * слова о том, чем кончилась просьба. Возвращает то, что в очереди осталось вещами.
+     *
+     * Подтверждается только то, что и правда приземлено, — тот же уговор, что и у забора
+     * вещей ниже. Исход, чей объект сейчас не перед человеком, остаётся в очереди
+     * компьютера и доезжает входом в этот объект: у главного экрана свой разбор с пустым
+     * стеком, и безусловное подтверждение выбрасывало бы там понятое компьютером вместе с
+     * записью — навсегда (PC2).
      */
     private suspend fun takeOutcomesHome(
         pc: com.point.core.flow.LinkedPc,
@@ -2587,41 +2598,55 @@ class FlowViewModel @Inject constructor(
     ): List<com.point.core.flow.PcOutboxEntry> {
         val (outcomes, things) = entries.partition { com.point.core.flow.PcResultFields.outcomeOnly(it.meta) }
         outcomes.forEach { entry ->
-            landNeighbourOutcome(entry.meta)
+            if (!landNeighbourOutcome(entry.meta)) return@forEach
             runCatching { pcTransport.ackOutbox(pc, entry.id) }
                 .recoverCatching { pcTransport.ackOutbox(pc, entry.id) }
         }
         return things
     }
 
-    /** Исход просьбы соседу вернулся домой — к своему объекту, тем же путём, что и срочный ответ (PC4). */
-    private fun landNeighbourOutcome(meta: Map<String, String>) {
+    /**
+     * Исход просьбы соседу вернулся домой — к своему объекту, тем же путём, что и срочный
+     * ответ (PC4). `false` — объекта просьбы перед человеком нет, и исход ждёт его дальше.
+     */
+    private fun landNeighbourOutcome(meta: Map<String, String>): Boolean {
         val f = com.point.core.flow.PcResultFields
-        val outcome = f.outcomeOf(meta) ?: return
-        val top = stack.lastOrNull()?.obj
-        val mine = top != null &&
-            meta[com.point.core.flow.PcExecFields.HOME] == (top.metadata[com.point.core.flow.META_ORIGIN_ID] ?: top.id)
-        if (mine) {
-            // Понятое компьютером ложится в исходник, пока он перед человеком (PC2).
-            val understood = meta.filterKeys { it.startsWith(f.UNDERSTOOD) }
-                .mapKeys { (k, _) -> k.removePrefix(f.UNDERSTOOD) }
-            if (understood.isNotEmpty()) landFindings(com.point.core.model.Findings(metadata = understood))
-        }
+        val outcome = f.outcomeOf(meta) ?: return false
+        val top = stack.lastOrNull()?.obj ?: return false
+
+        // Человек остаётся в своём контексте (PC4): исход по объекту A не всплывает поверх
+        // объекта B и поверх главного экрана, где объекта нет вовсе.
+        if (meta[com.point.core.flow.PcExecFields.HOME] != (top.metadata[com.point.core.flow.META_ORIGIN_ID] ?: top.id)) return false
+
+        // Понятое компьютером ложится в исходник (PC2).
+        val understood = meta.filterKeys { it.startsWith(f.UNDERSTOOD) }
+            .mapKeys { (k, _) -> k.removePrefix(f.UNDERSTOOD) }
+        if (understood.isNotEmpty()) landFindings(com.point.core.model.Findings(metadata = understood))
+
+        val standing = neighbourWord
+        neighbourWord = null
         when (outcome) {
-            // Отказ не исчезает в молчаливой цепочке: причина словами, как у срочного ответа.
-            is com.point.core.flow.PcActionOutcome.Failed ->
-                _ui.update { it.copy(message = outcome.reason, messageOutcome = Outcome.FAILED) }
+
+            // Отказ не исчезает в молчаливой цепочке — и говорит, к чему он относится:
+            // «Напечатать на компьютере — …». Просьба была минуты назад, и без имени
+            // действия красная строка над объектом ничего человеку не объясняет.
+            is com.point.core.flow.PcActionOutcome.Failed -> {
+                val about = meta[com.point.core.flow.PcExecFields.LABEL]?.takeIf { it.isNotBlank() }
+                val said = about?.let { "$it — ${outcome.reason}" } ?: outcome.reason
+                _ui.update { it.copy(message = said, messageOutcome = Outcome.FAILED) }
+            }
 
             // «Готово» или «Отменено» без объекта гасит слово соседа тихо: отмена человека —
             // не ошибка, и говорить о ней нечего (#1131).
-            is com.point.core.flow.PcActionOutcome.Done -> {
-                val standing = neighbourWord?.takeIf { mine } ?: return
-                neighbourWord = null
-                _ui.update {
-                    if (it.message == standing) it.copy(message = null, messageOutcome = Outcome.NONE) else it
+            is com.point.core.flow.PcActionOutcome.Done -> _ui.update {
+                if (standing != null && it.message == standing) {
+                    it.copy(message = null, messageOutcome = Outcome.NONE)
+                } else {
+                    it
                 }
             }
         }
+        return true
     }
 
     private suspend fun handleResult(result: ActionResult, bubble: Bubble) {
@@ -2907,6 +2932,13 @@ class FlowViewModel @Inject constructor(
             )
         }
         persistJourney()
+
+        // Объект встал перед человеком — и телефон смотрит, не ждёт ли его в очереди
+        // компьютера исход прежней просьбы соседу (#1073). Исход, чей объект был не перед
+        // человеком, остался в очереди неподтверждённым, и доехать он может только здесь;
+        // обычный срок между взглядами в очередь тут не годится — главный экран заглянул в
+        // неё секунду назад. Вход в находку новым объектом перед человеком не считается.
+        if (stack.size == 1) refreshFromPc(force = true)
         enrichInBackground(known)
         loadChildrenIfCollection(known)
         loadTextPreviewIfText(known)

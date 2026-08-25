@@ -1193,16 +1193,18 @@ class FlowViewModelTest {
             com.point.core.flow.PcRemoteAction(action, label), pcLinks, pcTransport,
         )
 
+    /** Запись-исход, какой её кладёт компьютер: чей объект, как просьба звалась, чем кончилась. */
     private fun outcomeEntry(
         id: Int,
         outcome: com.point.core.flow.PcActionOutcome,
         home: String = "in",
+        label: String = "Сохранить на компьютере",
         extra: Map<String, String> = emptyMap(),
     ) = com.point.core.flow.PcOutboxEntry(
         id,
         mapOf(
             com.point.core.flow.PcExecFields.HOME to home,
-            com.point.core.flow.PcExecFields.ACTION to "pc-save-as",
+            com.point.core.flow.PcExecFields.LABEL to label,
         ) + com.point.core.flow.PcResultFields.of(outcome) + extra,
     )
 
@@ -1242,26 +1244,79 @@ class FlowViewModelTest {
         assertEquals("объект остаётся перед человеком", ObjectKind.IMAGE, vm.ui.value.frame?.obj?.state?.kind)
     }
 
-    /** Отказ соседа не исчезает в молчаливой цепочке: причина доезжает словами, как у срочного ответа. */
-    @Test fun `поздний отказ компьютера доезжает причиной, а не тишиной`() = runTest(dispatcher) {
+    /**
+     * Отказ соседа не исчезает в молчаливой цепочке — и приходит к своему объекту, назвав
+     * просьбу: человек нажимал её минуты назад, и голая красная строка над объектом ему
+     * ничего не объясняет. Имя просьбы кладёт компьютер — то самое, что человек нажал.
+     */
+    @Test fun `поздний отказ компьютера доезжает к своему объекту причиной и называет просьбу`() = runTest(dispatcher) {
         pcLinks.pc = com.point.core.flow.LinkedPc("d-pc", "Ноутбук", "ключ-ПК")
-        val refusal = "Сохранить не вышло — выберите другую папку"
-        pcTransport.outbox = listOf(outcomeEntry(3, com.point.core.flow.PcActionOutcome.Failed(refusal)))
+        val refusal = "на компьютере нет принтера по умолчанию"
+        pcTransport.outbox = listOf(
+            outcomeEntry(3, com.point.core.flow.PcActionOutcome.Failed(refusal), label = "Напечатать на компьютере"),
+        )
+        val vm = vm()
+
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        assertEquals("отказ не говорит, к чему относится", "Напечатать на компьютере — $refusal", vm.ui.value.message)
+        assertEquals(Outcome.FAILED, vm.ui.value.messageOutcome)
+        assertEquals("исход доехал — вот теперь он подтверждён", listOf(3), pcTransport.acked)
+        assertEquals("исход без объекта — не вещь для списка «с компьютера»", 0, vm.fromPcCount.value)
+    }
+
+    /**
+     * Человек остаётся в своём контексте (PC4): отказ по объекту A не всплывает поверх
+     * объекта B и поверх главного экрана, где объекта нет вовсе, — он ждёт своего объекта.
+     */
+    @Test fun `отказ по чужому объекту не всплывает поверх экрана без него`() = runTest(dispatcher) {
+        pcLinks.pc = com.point.core.flow.LinkedPc("d-pc", "Ноутбук", "ключ-ПК")
+        pcTransport.outbox = listOf(
+            outcomeEntry(5, com.point.core.flow.PcActionOutcome.Failed("сервис не ответил"), home = "другой-объект"),
+        )
         val vm = vm()
 
         vm.loadRecent(); advanceUntilIdle()
 
-        assertEquals(refusal, vm.ui.value.message)
-        assertEquals(Outcome.FAILED, vm.ui.value.messageOutcome)
-        assertEquals(listOf(3), pcTransport.acked)
-        assertEquals(0, vm.fromPcCount.value)
+        assertNull("отказ по чужому объекту встал красной строкой поверх главного экрана", vm.ui.value.message)
+        assertTrue("отказ подтверждён компьютеру, так и не доехав до своего объекта", pcTransport.acked.isEmpty())
+    }
+
+    /**
+     * Исход приезжает, когда его объекта перед человеком нет (#1073, адверсарное ревью): у
+     * главного экрана свой разбор с пустым стеком, и подтверждённый там исход уносил бы с
+     * собой понятое компьютером — знание и запись пропадали бы разом и навсегда (PC2).
+     * Запись ждёт в очереди компьютера и доезжает входом в свой объект.
+     */
+    @Test fun `исход без своего объекта на экране ждёт в очереди и доезжает входом в объект`() = runTest(dispatcher) {
+        pcLinks.pc = com.point.core.flow.LinkedPc("d-pc", "Ноутбук", "ключ-ПК")
+        pcTransport.outbox = listOf(
+            outcomeEntry(
+                7, com.point.core.flow.PcActionOutcome.Done("Отменено"),
+                extra = mapOf(com.point.core.flow.PcResultFields.UNDERSTOOD + "entity.phone" to "+380671234567"),
+            ),
+        )
+        val vm = vm()
+
+        vm.loadRecent(); advanceUntilIdle()
+
+        assertTrue("исход подтверждён там, где его объекта нет", pcTransport.acked.isEmpty())
+        assertNull("исход чужого объекта заговорил поверх главного экрана", vm.ui.value.message)
+
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        assertEquals("исход не доехал входом в свой объект", listOf(7), pcTransport.acked)
+        assertEquals(
+            "понятое компьютером потеряно при переносе",
+            "+380671234567", vm.ui.value.frame?.obj?.metadata?.get("entity.phone"),
+        )
     }
 
     /** Исход в очереди не мешает забрать вещи: с него нечего скачивать, и забор не падает. */
-    @Test fun `забор с компьютера берёт вещи, а исход без объекта уходит домой без скачивания`() = runTest(dispatcher) {
+    @Test fun `забор с компьютера берёт вещи и не спотыкается об исход без объекта`() = runTest(dispatcher) {
         pcLinks.pc = com.point.core.flow.LinkedPc("d-pc", "Ноутбук", "ключ-ПК")
         pcTransport.outbox = listOf(
-            outcomeEntry(1, com.point.core.flow.PcActionOutcome.Done("Отменено")),
+            outcomeEntry(1, com.point.core.flow.PcActionOutcome.Done("Отменено"), home = "другой-объект"),
             com.point.core.flow.PcOutboxEntry(2, mapOf("name" to "чек.jpg", "mime" to "image/jpeg")),
         )
         val vm = vm()
@@ -1269,7 +1324,7 @@ class FlowViewModelTest {
         vm.pullFromPc(); advanceUntilIdle()
 
         assertEquals(ObjectKind.IMAGE, vm.ui.value.frame?.obj?.state?.kind)
-        assertEquals(listOf(1, 2), pcTransport.acked)
+        assertEquals("забирается вещь, а исход не скачивается", listOf(2), pcTransport.acked)
         assertEquals(0, vm.fromPcCount.value)
         assertTrue(vm.ui.value.messageOutcome != Outcome.FAILED)
     }
@@ -5897,7 +5952,11 @@ private class FakePcTransport : com.point.core.flow.PcTransport {
         java.io.File(targetPath).apply { parentFile?.mkdirs(); writeText("pulled-$id") }
         return true
     }
-    override suspend fun ackOutbox(pc: com.point.core.flow.LinkedPc, id: Int) { acked += id }
+    /** Подтверждённое исчезает из очереди, как на реле: второй раз его телефону не привезут. */
+    override suspend fun ackOutbox(pc: com.point.core.flow.LinkedPc, id: Int) {
+        acked += id
+        outbox = outbox.filterNot { it.id == id }
+    }
     override suspend fun pushPhoneCaps(pc: com.point.core.flow.LinkedPc, caps: List<com.point.core.flow.PcRemoteAction>): Boolean {
         pushedPhoneCaps = caps
         return true

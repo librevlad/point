@@ -57,10 +57,15 @@ private val namedByPlace = mapOf(
  * а не собирает объявление заново рядом.
  */
 fun phoneFacingActions(capabilities: Collection<Capability>): List<PcRemoteAction> =
-    advertisedActions(capabilities).map { it.copy(label = phoneFacingLabel(it)) }
+    advertisedActions(capabilities).map { it.copy(label = phoneFacingLabel(it.id, it.label)) }
 
-/** Имя, под которым умение компьютера видно в списке на телефоне. */
-private fun phoneFacingLabel(action: PcRemoteAction): String = namedByPlace[action.id] ?: action.label
+/**
+ * Имя, под которым умение компьютера видно человеку на телефоне.
+ *
+ * Одно место и для объявления, и для слов об исходе (#1073): человек нажал «Сохранить на
+ * компьютере», и отказ обязан назвать нажатое, а не то, как это же умение зовётся здесь.
+ */
+fun phoneFacingLabel(id: String, own: String): String = namedByPlace[id] ?: own
 
 /**
  * Умение, уходящее из круга, объявляется недоступным, пока режим закрыл дорогу наружу (#1269).
