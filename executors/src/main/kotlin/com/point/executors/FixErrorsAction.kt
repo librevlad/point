@@ -190,7 +190,15 @@ private suspend fun fixOwnText(
                     fixedTextMessage(fixed, checked = window.length, total = text.length),
                     Findings(
                         metadata = mapOf(META_OCR_TEXT_REF to ref.value) +
-                            applyFixes(input.metadata, fixesForFacts(fixableFacts(input.metadata), fixed.fixes)),
+                            applyFixes(
+                                input.metadata,
+
+                                // Страница для гейта формы — сам исправленный текст (#1032):
+                                // у текстового объекта значение вычитано из него, и слово-подпись
+                                // накладной стоит там же. Без страницы правка знания молча
+                                // выбрасывалась, а «Отследить» уходило по старому номеру.
+                                fixesForFacts(fixableFacts(input.metadata), fixed.fixes, fixed.text),
+                            ),
                     ),
                 )
             }

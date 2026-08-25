@@ -167,6 +167,22 @@ class UnderstandRealizerTest {
     }
 
     @Test
+    fun `два номера из одного ответа модели — два номера, а не спор прочтений`() = runTest {
+        // #1032: переехавшие в «Номер» числа стоят в одном ведре кандидатов, и судья
+        // оставляет на ключ одного победителя. Проигравший не спорит с ним как прочтение
+        // того же значения: «номер» — многозначный факт, второе число идёт «ещё».
+        val serial = com.point.core.flow.META_ENTITY_SERIAL
+        val card = "IDFRABERTHIER<<<<<<<<<<<<<<<<<<\n8806923102858CORINNE<<<<<<<<<<<\n5401237788990"
+
+        val result = realizer("TRACK=8806923102858\nTRACK=5401237788990").perform(textObject(card)) as ActionResult.Done
+
+        val meta = result.findings!!.metadata
+        val numbers = listOfNotNull(meta[serial]) + com.point.core.flow.moreOf(meta, serial)
+        assertTrue("второй номер потерялся: $numbers", "8806923102858" in numbers && "5401237788990" in numbers)
+        assertFalse("два разных номера стали спором", com.point.core.flow.isDisputed(meta, serial))
+    }
+
+    @Test
     fun `отброшенная роль оставляет след, а вопрос — «исследован недостаточно», не «не нашлось»`() = runTest {
         // #1032: «РÉPUBLIOUEFRANCAISE» не становится выдавшей документ организацией — но и не
         // исчезает молча: прочтение остаётся следом `.blocked`, и вопрос не закрывается.

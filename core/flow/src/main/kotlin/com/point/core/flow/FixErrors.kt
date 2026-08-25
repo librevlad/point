@@ -170,11 +170,16 @@ fun fixText(text: String, answer: String): FixedText {
  * единственный путь починки: вырезанный из прочитанного снимка фрагмент несёт ошибки чтения и
  * в тексте, и в вычитанных из него значениях. Ложится теми же парами, теми же границами слова
  * и через ту же проверку формы, что и правка значений напрямую.
+ *
+ * [readText] — текст после правки: гейт формы судит исправленное значение по той же странице,
+ * на которой оно стоит (#1032). Без страницы слово-подпись накладной сверять не с чем, и
+ * тринадцатизначный номер, взятый по подписи рядом, терял бы единственный путь починки —
+ * человек читал «Исправлено», а «Отследить отправление» уходило по старому номеру.
  */
-fun fixesForFacts(facts: List<FixableFact>, fixes: List<TextFix>): Map<String, String> =
+fun fixesForFacts(facts: List<FixableFact>, fixes: List<TextFix>, readText: String = ""): Map<String, String> =
     facts.mapNotNull { fact ->
         val fixed = fixes.fold(fact.value) { value, fix -> replaceWhole(value, fix.was, fix.now).first }
-        fixed.takeIf { normConsensus(it) != normConsensus(fact.value) && factFits(fact.key, it) }
+        fixed.takeIf { normConsensus(it) != normConsensus(fact.value) && factFits(fact.key, it, readText) }
             ?.let { fact.key to it }
     }.toMap()
 

@@ -7,6 +7,7 @@ import com.point.core.flow.LlmClient
 import com.point.core.flow.META_ALT_SUFFIX
 import com.point.core.flow.META_ENTITY_PREFIX
 import com.point.core.flow.META_GRAPH_ROLE_PREFIX
+import com.point.core.flow.META_ENTITY_TRACK
 import com.point.core.flow.META_OCR_TEXT_REF
 import com.point.core.model.ActionResult
 import com.point.core.model.ObjectKind
@@ -230,6 +231,27 @@ class FixErrorsRealizerTest {
         assertTrue("след прежнего значения потерян", done.findings!!.metadata.containsKey(sender + META_ALT_SUFFIX))
         assertFalse("значение, которого правка не касалась, не трогается", done.findings!!.metadata.containsKey(META_ENTITY_PREFIX + "date"))
         assertTrue("исправленный текст лёг прочтением", File(done.findings!!.metadata.getValue(META_OCR_TEXT_REF)).readText().startsWith("Відправник: Паринкін"))
+    }
+
+    /**
+     * Живой путь #1032: у текстового объекта накладная берётся по слову-подписи рядом, и
+     * страница, на которой это слово стоит, — сам текст. Без неё правка знания молча
+     * выбрасывалась гейтом формы, человек читал «Исправлено», а «Отследить отправление»
+     * уходило по старому номеру.
+     */
+    @Test
+    fun `накладная со словом-подписью едет за правкой текста, а не остаётся старым номером`() = runTest {
+        val was = "8806923102858"
+        val now = "8806923102859"
+        val parcel = text(
+            body = "Експрес-накладна № $was",
+            metadata = mapOf(META_ENTITY_TRACK to was),
+        )
+
+        val done = fixer("$was = $now").perform(parcel, null) as ActionResult.Done
+
+        assertEquals("отслеживание осталось бы по старому номеру", now, done.findings!!.metadata[META_ENTITY_TRACK])
+        assertEquals(now, File(done.findings!!.metadata.getValue(META_OCR_TEXT_REF)).readText().takeLast(now.length))
     }
 
     @Test

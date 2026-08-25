@@ -266,4 +266,17 @@ class FixErrorsTest {
         // Правка текста превратила бы дату в относительное слово — такое значение датой не бывает (#659).
         assertTrue(fixesForFacts(date, listOf(TextFix("01.12.2020", "завтра"))).isEmpty())
     }
+
+    @Test
+    fun `накладная судится по той же странице, что и найденная впервые`() {
+        val was = "8806923102858"
+        val now = "8806923102859"
+        val track = listOf(FixableFact(META_ENTITY_TRACK, was))
+        val fixes = listOf(TextFix(was, now))
+
+        // Тринадцать цифр — накладная только по слову рядом (#1032). Страница у правки та же,
+        // что и у первого чтения, иначе правка знания молча выбрасывалась бы гейтом формы.
+        assertEquals(now, fixesForFacts(track, fixes, "Експрес-накладна № $now")[META_ENTITY_TRACK])
+        assertTrue("без слова рядом тринадцать цифр накладной не становятся", fixesForFacts(track, fixes, now).isEmpty())
+    }
 }
