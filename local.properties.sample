@@ -101,9 +101,10 @@ GITHUB_MODELS=
 # Компьютер читает свой адрес из `~/.point-pc/config` (ключ `server`), а не отсюда.
 RELAY_URL=
 
-# Живой прогон сетевых тестов `:desktop` (#473) — СВОЙСТВАМИ ЗАПУСКА, не отсюда:
-#   ./gradlew :desktop:test -Dpoint.test.server=https://point.leerio.app -Dpoint.test.pass=<пропуск>
-# Нет свойств — тесты сами себя пропускают, как на CI.
+# Свой офисный файл для превращения в PDF (#1251) — СВОЙСТВОМ ЗАПУСКА, не отсюда:
+#   ./gradlew :desktop:test -Dpoint.test.office=C:/путь/к/файлу.pptx
+# Без свойства берётся фикстура из дерева, и на машине с PowerPoint или LibreOffice
+# превращение всё равно исполняется; где конвертера нет (CI) — прогон пропускается.
 
 # Release signing (#11): absolute path to the keystore + its passwords.
 # Generate once (keytool -genkeypair), store OUTSIDE the repo, BACK IT UP -

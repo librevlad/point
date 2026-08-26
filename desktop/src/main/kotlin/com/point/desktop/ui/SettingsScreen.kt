@@ -37,7 +37,12 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.point.core.flow.AI_PROVIDERS
 import com.point.core.flow.AiProvider
+import com.point.core.flow.KEY_SECTION_TITLE
 import com.point.core.flow.KeyVerdict
+import com.point.core.flow.MEMORY_TITLE
+import com.point.core.flow.MY_DEVICES_TITLE
+import com.point.core.flow.PRIVACY_SECTION_TITLE
+import com.point.core.flow.SETTINGS_TITLE
 import com.point.core.flow.UserAiConfig
 import com.point.core.flow.keyVerdict
 import com.point.core.flow.looksLikeApiKey
@@ -51,13 +56,17 @@ import kotlinx.coroutines.launch
  * устройств, имя компьютера, одиннадцать сервисов AI, три поля ключей, данные, интеграции.
  * Тот, кто пришёл переименовать компьютер, прокручивал мимо чужой ему инфраструктуры.
  * Разделы те же, что на телефоне, и открываются так же — строкой.
+ *
+ * И зовутся теми же словами (#1249): имена берутся из общих констант, а не набираются здесь
+ * заново. Набранные заново, они совпадали случайно — переименование в одном месте меняло имя
+ * только в одном окне, и перешедший за компьютер искал раздел под старым названием.
  */
 enum class SettingsPage(val title: String) {
-    ROOT("Настройки"),
-    DEVICES("Мои устройства"),
-    KEYS("Ключи AI"),
-    PRIVACY("Отправка и приватность"),
-    DATA("Что Point помнит"),
+    ROOT(SETTINGS_TITLE),
+    DEVICES(MY_DEVICES_TITLE),
+    KEYS(KEY_SECTION_TITLE),
+    PRIVACY(PRIVACY_SECTION_TITLE),
+    DATA(MEMORY_TITLE),
 }
 
 /** Корень настроек: пять разделов, за строками — свои экраны. */
@@ -113,7 +122,7 @@ fun SettingsRoot(
         // Порядок и слова разделов — те же, что на телефоне (#881).
         Section("Аккаунт и устройства") {
             PortalRow(
-                title = "Мои устройства",
+                title = MY_DEVICES_TITLE,
                 subtitle = devicesLine(email, devices),
                 onClick = { onOpen(SettingsPage.DEVICES) },
             )
@@ -121,7 +130,7 @@ fun SettingsRoot(
 
         Section("AI и приватность") {
             PortalRow(
-                title = "Ключи AI",
+                title = KEY_SECTION_TITLE,
                 subtitle = keysLine(config),
                 onClick = { onOpen(SettingsPage.KEYS) },
             )
@@ -131,7 +140,7 @@ fun SettingsRoot(
             // Сводка называет выбранный уровень и не оправдывается состоянием согласия —
             // те же слова, что на телефоне (#1003); само согласие видно и отзывается внутри.
             PortalRow(
-                title = "Отправка и приватность",
+                title = PRIVACY_SECTION_TITLE,
                 subtitle = config.privacy.title,
                 onClick = { onOpen(SettingsPage.PRIVACY) },
             )
@@ -152,7 +161,7 @@ fun SettingsRoot(
 
         Section("Данные") {
             PortalRow(
-                title = "Что Point помнит",
+                title = MEMORY_TITLE,
                 subtitle = "Убирается через сутки · перетащенный файл не трогается",
                 onClick = { onOpen(SettingsPage.DATA) },
             )

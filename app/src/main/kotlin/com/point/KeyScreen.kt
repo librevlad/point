@@ -41,9 +41,12 @@ import com.point.core.flow.AI_PROVIDERS
 import com.point.core.flow.AiFact
 import com.point.core.flow.AiOutcome
 import com.point.core.flow.AiProvider
+import com.point.core.flow.KEY_SECTION_TITLE
 import com.point.core.flow.KeyVerdict
+import com.point.core.flow.MEMORY_TITLE
 import com.point.core.flow.MY_DEVICES_TITLE
 import com.point.core.flow.OWN_SERVICE_ID
+import com.point.core.flow.PRIVACY_SECTION_TITLE
 import com.point.core.flow.PrivacyLevel
 import com.point.core.flow.SETTINGS_TITLE
 import com.point.core.flow.UserAiKey
@@ -362,8 +365,9 @@ internal fun BackToList(onBack: () -> Unit) {
 private const val AI_GROUP_TITLE = "AI и приватность"
 private const val ACCOUNT_GROUP_TITLE = "Аккаунт и устройства"
 
-internal const val KEY_SECTION_TITLE = "Ключи AI"
-internal const val PRIVACY_SECTION_TITLE = "Отправка и приватность"
+// Имена разделов «Ключи AI», «Отправка и приватность» и «Что Point помнит» переехали в
+// :core:flow к SETTINGS_TITLE (#1249): те же разделы открываются в окне компьютера, и слово
+// у них теперь одно на оба устройства.
 internal const val APP_SECTION_TITLE = "Поведение Point"
 
 private const val DATA_GROUP_TITLE = "Данные"
@@ -372,7 +376,6 @@ private const val INTEGRATIONS_GROUP_TITLE = "Интеграции"
 internal const val SOUND_TITLE = "Звук действий"
 
 internal const val ENTRIES_TITLE = "Точки входа"
-internal const val MEMORY_TITLE = "Что Point помнит"
 
 
 internal const val SHARE_ENTRY = "Системное «Поделиться» — Point принимает объект из любого приложения."

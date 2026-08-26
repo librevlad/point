@@ -5,7 +5,6 @@
 1 app/src/test/kotlin/com/point/GraphPipelineIntegrationTest.kt
 3 app/src/test/kotlin/com/point/HomeDoorsTest.kt
 5 app/src/test/kotlin/com/point/RecentSaysMeaningTest.kt
-1 app/src/test/kotlin/com/point/SettingsDoorHasOneNameTest.kt
 3 app/src/test/kotlin/com/point/print/PrintedJobTest.kt
 1 app/src/test/kotlin/com/point/source/PlaceTextTest.kt
 2 app/src/testDebug/kotlin/com/point/InputSurvivesRotationTest.kt
