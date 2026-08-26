@@ -135,6 +135,31 @@ class FixErrorsRealizerTest {
         assertTrue("человеку сказали, что править было нечего: ${first.message}", "не нашлось" !in first.message)
     }
 
+    /**
+     * Тот же живой путь дальше (#1032). Первая дверь правку положила, но сидекар она не
+     * трогает — на странице по-прежнему стоит прочитанное число. Обе двери остаются на экране,
+     * и человек жмёт «Исправить сильнее», где модель видит сам снимок и цифру чинит
+     * по-настоящему. Прежнего прочтения на странице уже нет, и вторая правка выбрасывалась
+     * молча: «Ошибок не нашлось», а «Отследить отправление» продолжало уходить по неверному
+     * номеру первой двери.
+     */
+    @Test
+    fun `правка поверх правки ложится, а не гаснет на прежней странице`() = runTest {
+        val read = "8806923102858"
+        val once = "8806923102859"
+        val right = "8806923102851"
+        val page = temp.newFile().apply { writeText("Експрес-накладна № $read") }
+        val parcel = photo(mapOf(META_ENTITY_TRACK to read, META_OCR_TEXT_REF to page.absolutePath))
+
+        val first = fixer("1 = $once").perform(parcel, null) as ActionResult.Done
+        val fixedOnce = parcel.copy(metadata = parcel.metadata + first.findings!!.metadata)
+
+        val stronger = FixErrorsStrongerRealizer(llm("1 = $right")).perform(fixedOnce, null) as ActionResult.Done
+
+        assertEquals("вторая правка погасла на старой странице", right, stronger.findings?.metadata?.get(META_ENTITY_TRACK))
+        assertTrue("человеку сказали, что править было нечего: ${stronger.message}", "не нашлось" !in stronger.message)
+    }
+
     @Test
     fun `подтверждённое человеком в модель не уходит`() = runTest {
         val confirmed = photo(

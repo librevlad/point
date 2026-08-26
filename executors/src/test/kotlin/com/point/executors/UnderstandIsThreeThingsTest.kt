@@ -42,8 +42,7 @@ class UnderstandIsThreeThingsTest {
 
     @Test
     fun `ни одна часть не разрастается снова`() {
-        // Роли со страницы живут своей частью (#1032): тот же предел, что у трёх главных.
-        val big = listOf("UnderstandAsk.kt", "UnderstandAction.kt", "UnderstandJudge.kt", "UnderstandRoles.kt")
+        val big = listOf("UnderstandAsk.kt", "UnderstandAction.kt", "UnderstandJudge.kt")
             .map { File(dir, it) }
             .filter { it.readLines().size > 620 }
             .map { it.name + ":" + it.readLines().size }

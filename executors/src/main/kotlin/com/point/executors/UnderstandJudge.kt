@@ -181,20 +181,37 @@ internal fun doubts(merged: Map<String, String>, unsure: Set<String>): Map<Strin
         .associate { it + com.point.core.flow.META_EVIDENCE_SUFFIX to "" }
 
 /**
+ * Кто играет роли на странице (#835, #1176).
+ *
+ * [values] — принятые роли; [disputes] — роль, где страница и модель прочли разное;
+ * [blocked] — прочтения, не прошедшие правдоподобия имени (#1032). След обязателен: прежде
+ * отброшенное исчезало молча, ролей не оставалось вовсе, и вопрос «кто играет роли»
+ * закрывался как «не нашлось» — а его смотрели и ответа не приняли.
+ */
+internal data class RoleReadings(
+    val values: Map<String, String>,
+    val disputes: Map<String, List<String>>,
+    val blocked: Map<String, List<String>> = emptyMap(),
+)
+
+/**
  * Роли: что из названного моделью встаёт стороной документа (#835, #1176).
  *
  * Тот же суд, что и у полей: слово модели против слова страницы, — и живёт он там же.
- * Расхождение остаётся спором, а не гасится молча.
+ * Расхождение остаётся спором, а не гасится молча; неправдоподобное имя остаётся следом (#1032).
  */
 internal fun roleReadings(
     answer: String,
     elements: List<LayoutElement>,
     layer: AtomLayer?,
-): Pair<Map<String, String>, Map<String, List<String>>> {
-    val fromElements = parseClassification(answer, elements)
+): RoleReadings {
+    val named = parseClassification(answer, elements)
         .associate { META_GRAPH_ROLE_PREFIX + it.role.key to it.element.text }
-        .filterValues(::plausiblePartyName)
-    if (layer == null) return fromElements to emptyMap()
+    val (plausible, implausible) = named.entries.partition { plausiblePartyName(it.value) }
+    val fromElements = plausible.associate { it.key to it.value }
+    val blocked = LinkedHashMap<String, MutableList<String>>()
+    implausible.forEach { blocked.getOrPut(it.key) { mutableListOf() }.add(it.value) }
+    if (layer == null) return RoleReadings(fromElements, emptyMap(), blocked)
 
     val byKey = CLASSIFIER_ROLES.associateBy { it.key }
     val values = LinkedHashMap<String, String>()
@@ -228,11 +245,13 @@ internal fun roleReadings(
         }
         if (!plausiblePartyName(chosen)) {
             disputes.remove(metaKey)
+            val seen = blocked.getOrPut(metaKey) { mutableListOf() }
+            if (chosen !in seen) seen.add(chosen)
             return@forEach
         }
         values[metaKey] = chosen
     }
 
     fromElements.forEach { (key, text) -> values.putIfAbsent(key, text) }
-    return values to disputes
+    return RoleReadings(values, disputes, blocked)
 }

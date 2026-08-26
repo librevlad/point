@@ -9,8 +9,12 @@ import com.point.core.model.Provenance
  *
  * Протокол нумерованный, а не по именам полей: модель не может придумать поле, которого нет,
  * и не может переименовать существующее — номер возвращается ровно тот, что был выдан.
+ *
+ * [earlier] — прочтения этого же знания, которые правка уже заменила: след «или», куда
+ * [applyFixes] кладёт прежнее значение. На странице стоит именно оно, а не сегодняшнее значение, и
+ * заземление правка наследует от него (#1032, [fixFits]).
  */
-data class FixableFact(val key: String, val value: String)
+data class FixableFact(val key: String, val value: String, val earlier: List<String> = emptyList())
 
 /**
  * Что вообще можно исправлять: значения знания, кроме подтверждённых человеком.
@@ -24,7 +28,10 @@ fun fixableFacts(metadata: Map<String, String>): List<FixableFact> =
         .filterNot { isAnnotationKey(it) || isStateKey(it) }
         .filterNot { provenanceOf(metadata, it) == Provenance.HUMAN }
         .sorted()
-        .mapNotNull { key -> metadata[key]?.trim()?.takeIf { it.isNotEmpty() }?.let { FixableFact(key, it) } }
+        .mapNotNull { key ->
+            metadata[key]?.trim()?.takeIf { it.isNotEmpty() }
+                ?.let { FixableFact(key, it, alternativesOf(metadata, key)) }
+        }
 
 /** Есть ли что исправлять: без знания дверь не показывается вовсе (решение владельца). */
 fun hasFixableFacts(metadata: Map<String, String>): Boolean = fixableFacts(metadata).isNotEmpty()
@@ -52,8 +59,10 @@ fun fixPrompt(facts: List<FixableFact>, withObject: Boolean): String = buildStri
 /**
  * Разбор ответа: номер → исправленное значение. Чужие номера и мусор молчат.
  *
- * [readText] — всё, что Point прочитал сам: гейт формы судит исправленное той же меркой, что
- * и найденное впервые (#666, #1032), и слово-подпись накладной ищет там же, на странице.
+ * [readText] — всё, что Point прочитал сам: гейт судит исправленное той же меркой, что и
+ * найденное впервые (#666, #1032), и слово-подпись накладной ищет там же, на странице. Текст
+ * объекта на этом пути не правится, поэтому на странице стоит прежнее прочтение, а не
+ * исправленное: заземление наследуется от него (`fixFits`).
  */
 fun parseFixes(answer: String, facts: List<FixableFact>, readText: String = ""): Map<String, String> {
     val byIndex = facts.withIndex().associate { (i, f) -> i + 1 to f }
@@ -66,25 +75,11 @@ fun parseFixes(answer: String, facts: List<FixableFact>, readText: String = ""):
         val fact = byIndex[n] ?: return@forEach
         val fixed = line.substring(eq + 1).trim()
         if (fixed.isEmpty() || normConsensus(fixed) == normConsensus(fact.value)) return@forEach
-        if (!factFits(fact.key, fixed, pageWith(readText, fact.value, fixed))) return@forEach
+        if (!fixFits(fact.key, listOf(fact.value) + fact.earlier, fixed, readText)) return@forEach
         fixes[fact.key] = fixed
     }
     return fixes
 }
-
-/**
- * Страница, на которой стоит исправленное значение (#1032).
- *
- * Здесь текст объекта не правится — правится само значение, и смысл пути ровно в том, что
- * исправленное отличается от прочитанного. Судить его по старой странице нельзя: у накладной
- * Укрпошты слово-подпись стоит рядом со старым числом, а гейт формы ищет на странице новое —
- * и правка молча выбрасывалась, «Отследить отправление» продолжало уходить по неверному
- * номеру. Приём тот же, каким правка текста ведёт за собой знание ([fixesForFacts] судит по
- * уже исправленному тексту): прежнее значение заменяется на исправленное теми же границами
- * слова. Значения, которого на странице нет, замена не касается — страница остаётся как была.
- */
-private fun pageWith(readText: String, was: String, now: String): String =
-    if (readText.isEmpty()) readText else replaceWhole(readText, was, now).first
 
 /**
  * «Авто + след» (решение владельца): исправленное становится главным значением, прежнее

@@ -65,9 +65,9 @@ class NumberWithoutRoleTest {
         assertTrue("14 → 13 цифр без подписи стало накладной", parseFixes("1 = 2045149154939", facts).isEmpty())
         assertEquals("20 4514 9154 9396", parseFixes("1 = 20 4514 9154 9396", facts)[META_ENTITY_TRACK])
 
-        // Страница на этом пути — старая: текст объекта не правится, там стоит прежнее число.
-        // Гейт судит исправленное значение по странице, где оно стоит, — иначе 13-значную
-        // накладную, взятую по слову рядом, «Исправить ошибки» не починила бы никогда.
+        // Страница на этом пути — старая: текст объекта не правится, там стоит прежнее
+        // прочтение. Заземление исправленное наследует от него — иначе 13-значную накладную,
+        // взятую по слову рядом, «Исправить ошибки» не починила бы никогда.
         val marked = listOf(FixableFact(META_ENTITY_TRACK, idNumber))
         assertEquals(
             "8806923102859",
@@ -76,6 +76,33 @@ class NumberWithoutRoleTest {
         assertTrue(
             "13 цифр без слова рядом стали накладной за счёт правки",
             parseFixes("1 = 8806923102859", marked, "Рахунок $idNumber сплачено").isEmpty(),
+        )
+    }
+
+    @Test fun `правка поверх правки ложится — заземление наследуется от прежнего прочтения`() {
+        // Остаток того же дефекта (#1032): первая правка легла, сидекар остался прежним, и
+        // прежнего прочтения на странице больше нет. Вторая дверь («Исправить сильнее», где
+        // модель видит сам снимок) возвращала верное число, гейт искал его на старой странице,
+        // не находил и выбрасывал правку молча — человек читал «Ошибок не нашлось».
+        val page = "Експрес-накладна № $idNumber"
+        val once = listOf(FixableFact(META_ENTITY_TRACK, "8806923102859", earlier = listOf(idNumber)))
+
+        assertEquals("8806923102851", parseFixes("1 = 8806923102851", once, page)[META_ENTITY_TRACK])
+
+        // Тот же провал у числа, которое стоит на странице не теми пробелами, что в значении:
+        // заземление ищет число на странице целиком, а не дословным совпадением.
+        val spaced = listOf(FixableFact(META_ENTITY_TRACK, idNumber))
+        assertEquals(
+            "8806923102859",
+            parseFixes("1 = 8806923102859", spaced, "Експрес-накладна № 880 692 310 2858")[META_ENTITY_TRACK],
+        )
+
+        // Прочтение, которому страница не нужна вовсе (14 цифр — накладная по себе),
+        // заземления не передаёт: 13 цифр без слова рядом накладной не станут и за счёт следа.
+        val carrier = listOf(FixableFact(META_ENTITY_TRACK, "20 4514 9154 9395", earlier = listOf("20 4514 9154 9394")))
+        assertTrue(
+            "13 цифр без слова рядом стали накладной за счёт следа",
+            parseFixes("1 = 2045149154939", carrier, "Накладна 20 4514 9154 9394").isEmpty(),
         )
     }
 
@@ -131,11 +158,12 @@ class NumberWithoutRoleTest {
 
     @Test fun `организация и имя — только правдоподобная строка, тем же судьёй, что адрес`() {
         assertTrue(hasMixedScriptWord(garbled))
-        assertFalse("искажённая строка стала организацией", plausiblePersonName(garbled))
+        assertFalse("искажённая строка стала организацией", plausiblePartyName(garbled))
+        assertFalse("искажённая строка стала именем человека", plausiblePersonName(garbled))
         assertFalse("судья адреса и судья имени расходятся", plausibleAddress("Бритовка, $garbled, 5"))
 
-        assertTrue(plausiblePersonName("RÉPUBLIQUE FRANÇAISE"))
-        assertTrue(plausiblePersonName("ТОВ «Агротрейд»"))
+        assertTrue(plausiblePartyName("RÉPUBLIQUE FRANÇAISE"))
+        assertTrue("организация осталась правдоподобной стороной", plausiblePartyName("ТОВ «Агротрейд»"))
         assertTrue("два алфавита в разных словах — не смешение", plausiblePersonName("Іваненко Ivan"))
         assertTrue("одиночная цифра в слове — искажение, но ещё имя", plausiblePersonName("1ваненко ван"))
     }
