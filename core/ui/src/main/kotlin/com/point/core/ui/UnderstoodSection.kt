@@ -236,7 +236,7 @@ private fun String.readableUrl() =
 fun failedNote(failed: List<com.point.core.flow.FailedInvestigation>): String? {
     val reasons = failed.map { it.reason.trim() }.filter { it.isNotBlank() }.distinct()
     if (reasons.isEmpty()) return null
-    return com.point.core.flow.INVESTIGATION_FAILED_HEAD + ": " + reasons.joinToString("; ")
+    return com.point.core.flow.investigationFailedNote(reasons.joinToString("; "))
 }
 
 @Composable

@@ -270,7 +270,7 @@ class DesktopState(
         // человеку названа словами исследования, автошага в «ПУТЬ» нет.
         wayOutClosed(com.point.core.model.CapabilityId(id))?.let { why ->
             val closed = ActionResult.Failure(why, recoverable = false)
-            _message.value = if (quiet) com.point.core.flow.INVESTIGATION_FAILED_HEAD + ": " + why else why
+            _message.value = if (quiet) com.point.core.flow.investigationFailedNote(why) else why
             if (!quiet) note(item, id, step, closed)
             return closed
         }
@@ -349,7 +349,7 @@ class DesktopState(
             // Отказ не скрывается ни на одном заходе (#1272). Тихому нужны ещё и слова про то,
             // что это было: человек ничего не нажимал, и одна голая причина ему не адресована.
             result is ActionResult.Failure && quiet ->
-                com.point.core.flow.INVESTIGATION_FAILED_HEAD + ": " + result.reason
+                com.point.core.flow.investigationFailedNote(result.reason)
 
             result is ActionResult.Failure -> result.reason
 
