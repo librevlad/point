@@ -112,6 +112,29 @@ class FixErrorsRealizerTest {
         assertTrue("модель не предупреждена, что источник приложен", "снимком" in lastPrompt!!)
     }
 
+    /**
+     * Живой путь #1032: фото накладной Укрпошты, OCR прочёл «Експрес-накладна № …» со сбитой
+     * последней цифрой, и «Понять» взяло 13-значный номер по слову рядом. Человек жмёт
+     * «Исправить ошибки» (или «Исправить сильнее», где модель сверяет знание со снимком) — правка
+     * обязана лечь. Текст объекта на этом пути не правится, и по старой странице исправленное
+     * число не подтверждается ничем: единственный путь починки номера закрывался молча, а
+     * «Отследить отправление» продолжало уходить по неверному номеру.
+     */
+    @Test
+    fun `правка накладной над значениями ложится, а не гасится старой страницей`() = runTest {
+        val was = "8806923102858"
+        val now = "8806923102859"
+        val page = temp.newFile().apply { writeText("Експрес-накладна № $was") }
+        val parcel = photo(mapOf(META_ENTITY_TRACK to was, META_OCR_TEXT_REF to page.absolutePath))
+
+        val first = fixer("1 = $now").perform(parcel, null) as ActionResult.Done
+        val stronger = FixErrorsStrongerRealizer(llm("1 = $now")).perform(parcel, null) as ActionResult.Done
+
+        assertEquals("«Исправить ошибки» оставила старый номер", now, first.findings!!.metadata[META_ENTITY_TRACK])
+        assertEquals("«Исправить сильнее» оставила старый номер", now, stronger.findings!!.metadata[META_ENTITY_TRACK])
+        assertTrue("человеку сказали, что править было нечего: ${first.message}", "не нашлось" !in first.message)
+    }
+
     @Test
     fun `подтверждённое человеком в модель не уходит`() = runTest {
         val confirmed = photo(

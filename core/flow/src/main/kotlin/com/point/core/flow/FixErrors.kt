@@ -66,11 +66,25 @@ fun parseFixes(answer: String, facts: List<FixableFact>, readText: String = ""):
         val fact = byIndex[n] ?: return@forEach
         val fixed = line.substring(eq + 1).trim()
         if (fixed.isEmpty() || normConsensus(fixed) == normConsensus(fact.value)) return@forEach
-        if (!factFits(fact.key, fixed, readText)) return@forEach
+        if (!factFits(fact.key, fixed, pageWith(readText, fact.value, fixed))) return@forEach
         fixes[fact.key] = fixed
     }
     return fixes
 }
+
+/**
+ * Страница, на которой стоит исправленное значение (#1032).
+ *
+ * Здесь текст объекта не правится — правится само значение, и смысл пути ровно в том, что
+ * исправленное отличается от прочитанного. Судить его по старой странице нельзя: у накладной
+ * Укрпошты слово-подпись стоит рядом со старым числом, а гейт формы ищет на странице новое —
+ * и правка молча выбрасывалась, «Отследить отправление» продолжало уходить по неверному
+ * номеру. Приём тот же, каким правка текста ведёт за собой знание ([fixesForFacts] судит по
+ * уже исправленному тексту): прежнее значение заменяется на исправленное теми же границами
+ * слова. Значения, которого на странице нет, замена не касается — страница остаётся как была.
+ */
+private fun pageWith(readText: String, was: String, now: String): String =
+    if (readText.isEmpty()) readText else replaceWhole(readText, was, now).first
 
 /**
  * «Авто + след» (решение владельца): исправленное становится главным значением, прежнее
