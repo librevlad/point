@@ -89,15 +89,3 @@ private val IMAGE_LINE = Regex("""!\[[^\]]*]\([^)]*\)""")
 private val IMAGE_INLINE = Regex("""!\[[^\]]*]\([^)]*\)""")
 private val FENCE = Regex("""```\w*""")
 private val HEADING_MARK = Regex("""^#{1,6}\s+""")
-
-/**
- * Арифметика — не сумма (#662): «127*4.32=548,64» и «500+548,64=1048,64» с чека
- * приходили кандидатами суммы. Значение суммы — одно число, а не выкладка.
- */
-fun looksLikeExpression(value: String): Boolean =
-    EXPRESSION_SIGNS.containsMatchIn(value) || NUMBER_RUN.findAll(value).count() > 1
-
-private val EXPRESSION_SIGNS = Regex("""[*/=×]|\d\s*[+\-]\s*\d""")
-
-// Пробел внутри числа — разряды («1 200,50» — одна сумма), а не второе число.
-private val NUMBER_RUN = Regex("""\d{1,3}(?:[  ]\d{3})+(?:[.,]\d+)?|\d+(?:[.,]\d+)?""")

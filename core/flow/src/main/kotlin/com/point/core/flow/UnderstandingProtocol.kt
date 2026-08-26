@@ -414,12 +414,19 @@ fun parseFieldCandidates(answer: String): ParsedUnderstanding {
                 // Отказ-фраза — не значение ни для какого поля (#656).
                 if (startsWithRefusal(candidate.text)) return@forEach
 
-                // Относительное слово — не дата (#659); арифметика — не сумма (#662).
+                // Относительное слово — не дата (#659).
                 if (suffix == "date" && relativeDayWord(candidate.text)) return@forEach
-                if (suffix == "amount" && looksLikeExpression(candidate.text)) return@forEach
 
-                // Ноль — не сумма документа (#662): комиссия-ноль вставала «ещё»-суммой.
-                if (suffix == "amount" && zeroAmount(candidate.text)) return@forEach
+                // Сумма — число (#1059): арифметика и ноль — не сумма (#662), слово чека
+                // «TAX1» — тем более. Судья формы тот же, что у заземления по странице и у
+                // зрячего чтения: не-число в сумме — не факт ни на одном пути. Спрашивают
+                // его воронкой значения (#1064) — скобки вокруг числа это запись, а не само
+                // значение: «(2.18)» с чека возврата становится 2.18, а не пропадает.
+                val amount = if (suffix == "amount") {
+                    factCandidate(metaKey, candidate.text) ?: return@forEach
+                } else {
+                    null
+                }
 
                 // Форма IBAN — не трек: «UA79…» с квитанции становился готовым
                 // «Отследить отправление» (живой прогон 2026-08-09).
@@ -451,12 +458,13 @@ fun parseFieldCandidates(answer: String): ParsedUnderstanding {
                 // Дата читается тем же правилом, что и на любом другом входе знания (#782):
                 // фраза обрезается до дня, интервал даёт два дня, слипшиеся «26.04.2026
                 // 26.04.2026» с чека не рождают спор. Обёртка остаётся подписью.
-                val pieces = if (suffix == "date") {
-                    readDates(candidate.text).map { day ->
+                val pieces = when {
+                    suffix == "date" -> readDates(candidate.text).map { day ->
                         candidate.copy(text = day, line = candidate.text.trim().takeIf { it != day })
                     }
-                } else {
-                    listOf(candidate)
+
+                    amount != null -> listOf(candidate.copy(text = amount))
+                    else -> listOf(candidate)
                 }
                 if (suffix == "phone") {
                     pieces.forEach(::offerPhone)

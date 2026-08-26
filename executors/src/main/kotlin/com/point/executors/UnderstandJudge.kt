@@ -11,6 +11,7 @@ import com.point.core.flow.fieldEvidence
 import com.point.core.flow.formEvidence
 import com.point.core.flow.foundLiterally
 import com.point.core.flow.isRepairOf
+import com.point.core.flow.mainFact
 import com.point.core.flow.normConsensus
 import com.point.core.flow.resolve
 import com.point.core.flow.ruleEvidence
@@ -73,8 +74,9 @@ internal fun judgeFields(
         // слово страницы вместо слова модели, форма и контрольная цифра уже спрошены выше
         // (#809), и забракованное сюда не доходит. Прежний выбор остаётся среди прочтений.
         val addressed = chosenByAddressee(key, parties)
+
         val winner = addressed?.let { chosen -> scored.firstOrNull { it.party == chosen } }
-            ?: scored.maxByOrNull { it.evidence.size }!!
+            ?: mainOf(key, scored, readText)
         won[key] = JudgedField(
             text = winner.candidate.text,
             evidence = winner.evidence,
@@ -88,6 +90,20 @@ internal fun judgeFields(
         )
     }
     return JudgedFields(won, retry, blockedByKey)
+}
+
+/**
+ * Побеждают улики; среди равных по уликам главным становится то, что назвал `mainFact`
+ * (#1059): у суммы это итог — подписанный «итого» на самой странице, а если подписи нет,
+ * наибольшее из чисел. Подпись `mainFact` ищет в прочитанном тексте — том же, который читает
+ * правило страницы, и тем же правилом: иначе одна страница даёт два ответа. У прочих видов
+ * знания главного нет, и среди равных, как и прежде, остаётся первое названное.
+ */
+private fun mainOf(key: String, scored: List<Weighed>, readText: String): Weighed {
+    val best = scored.maxOf { it.evidence.size }
+    val equal = scored.filter { it.evidence.size == best }
+    val main = mainFact(key, equal.map { it.candidate.text }, readText)
+    return equal.firstOrNull { it.candidate.text == main } ?: equal.first()
 }
 
 /** Прочтение в воронке судьи: чем стало, оперлось ли на страницу и при какой стороне стояло. */

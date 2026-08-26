@@ -185,6 +185,54 @@ class UnderstandingProtocolTest {
         )
     }
 
+    @Test
+    fun `не-число в сумме — не кандидат ни на одном пути (#1059)`() {
+        // Зрячее чтение снимка идёт без слоя слов и без судьи — разбор ответа и есть его
+        // единственный гейт: слово чека и целая строка документа суммой не становятся.
+        assertEquals(null, parseFieldCandidates("AMOUNT=TAX1").fields[META_ENTITY_AMOUNT])
+        assertEquals(
+            null,
+            parseFieldCandidates("AMOUNT=Line 001 order OR-01001 sum 101.01").fields[META_ENTITY_AMOUNT],
+        )
+        assertEquals(
+            listOf("2.18"),
+            parseFieldCandidates("AMOUNT=TAX1\nAMOUNT=2.18").fields[META_ENTITY_AMOUNT]!!.map { it.text },
+        )
+
+        // Скобки вокруг числа — запись, а не значение (#1064): число возврата «(2.18)»
+        // проходит воронку и остаётся суммой, а не гаснет о новое правило формы.
+        assertEquals(
+            listOf("2.18"),
+            parseFieldCandidates("AMOUNT=(2.18)").fields[META_ENTITY_AMOUNT]!!.map { it.text },
+        )
+
+        // Число остаётся числом при любой валюте: гейт формы, поставленный на этом пути, не
+        // вправе выбросить франки, иены и кроны только потому, что их не назвали в файле
+        // правил. Какими буквами написана валюта, гейта не касается.
+        assertEquals(
+            listOf("1200 CHF"),
+            parseFieldCandidates("AMOUNT=1200 CHF").fields[META_ENTITY_AMOUNT]!!.map { it.text },
+        )
+        assertEquals(
+            listOf("1200 kr", "1200 Kč", "1200 лв"),
+            parseFieldCandidates("AMOUNT=1200 kr\nAMOUNT=1200 Kč\nAMOUNT=1200 лв")
+                .fields[META_ENTITY_AMOUNT]!!.map { it.text },
+        )
+
+        // Валюта, написанная словом, — тоже валюта, и длина слова знания не решает: «20 евро»
+        // проходило, а «100 долларов» гейт выбрасывал вовсе — тот же дефект, только строкой
+        // ниже.
+        assertEquals(
+            listOf("500 гривень", "100 долларов", "1200 dollars"),
+            parseFieldCandidates("AMOUNT=500 гривень\nAMOUNT=100 долларов\nAMOUNT=1200 dollars")
+                .fields[META_ENTITY_AMOUNT]!!.map { it.text },
+        )
+
+        // А заголовок суммой не становится: «TOP» — код тонганской паанги, и стоя перед
+        // числом он делал суммой обычную английскую строку.
+        assertEquals(null, parseFieldCandidates("AMOUNT=TOP 5").fields[META_ENTITY_AMOUNT])
+    }
+
     private fun cards(answer: String): List<String> =
         parseFieldCandidates(answer).fields[META_ENTITY_PREFIX + "card"].orEmpty().map { it.text }
 

@@ -104,6 +104,18 @@ class RealOcrTest {
     }
 
     @Test
+    fun `слово чека и слипшийся ноль суммой не становятся и на дословном чтении (#1059)`() {
+        // Чек Family Dollar карточки #1059, снятый устройством 24.08.2026: строки слиплись,
+        // числа оторвались от подписей — «TAX1 0», «CASH TOTAL 0». Правило страницы на такой
+        // странице честно молчит: сумм, которые можно прочитать, здесь нет вовсе. Ни подпись,
+        // ни ноль вместо суммы не встают — иначе человек увидел бы под галочкой «TAX1».
+        val facts = amountFacts(ocr("receipt_family_dollar"))
+
+        assertNull(facts[META_ENTITY_AMOUNT])
+        assertTrue(moneyAmounts(ocr("receipt_family_dollar")).isEmpty())
+    }
+
+    @Test
     fun `сумма перевода читается там, где валюты на странице нет вовсе`() {
         val facts = amountFacts(ocr("chat_calc"))
 
