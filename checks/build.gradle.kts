@@ -41,4 +41,33 @@ tasks.test {
     inputs.file(rootProject.layout.projectDirectory.file("tools/cemented-wording.txt"))
         .withPropertyName("cementedWordingList")
         .withPathSensitivity(PathSensitivity.RELATIVE)
+
+    /**
+     * Сторож живых ссылок (#1234) читает не только Kotlin: мёртвый адрес заводится в шаблоне PR,
+     * в таблицах корпуса, на лендинге и в сервере на Python. Список исключений повторяет список
+     * самого сторожа: своя сборка, служебные каталоги, чужая копия репозитория рядом и двоичное.
+     */
+    inputs.files(
+        fileTree(rootProject.layout.projectDirectory) {
+            exclude(
+                "**/build", "**/build/**",
+                ".git", ".git/**",
+                ".gradle", ".gradle/**",
+                ".idea", ".idea/**",
+                ".kotlin", ".kotlin/**",
+                "**/worktrees", "**/worktrees/**",
+                "**/node_modules", "**/node_modules/**",
+                "**/.venv", "**/.venv/**",
+                "**/__pycache__", "**/__pycache__/**",
+                "**/*.png", "**/*.jpg", "**/*.jpeg", "**/*.gif", "**/*.webp", "**/*.ico",
+                "**/*.pdf", "**/*.zip", "**/*.jar", "**/*.apk", "**/*.aab", "**/*.so",
+                "**/*.ttf", "**/*.otf", "**/*.woff", "**/*.woff2",
+                "**/*.wav", "**/*.mp3", "**/*.mp4", "**/*.ogg",
+                "**/*.onnx", "**/*.traineddata", "**/*.keystore", "**/*.jks",
+                "**/*.bin", "**/*.class", "**/*.db",
+            )
+        },
+    )
+        .withPropertyName("textOfWholeProject")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
 }

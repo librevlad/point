@@ -17,9 +17,21 @@ set -eu
 
 HOST="${POINT_SERVER_HOST:-user@35.185.31.106}"
 DST="${POINT_SERVER_DIR:-/home/librevlad/point-server}"
-SRC="$(cd "$(dirname "$0")/../relay" && pwd)"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+SRC="$ROOT/relay"
 CHECK=false
 [ "${1:-}" = "--check" ] && CHECK=true
+
+# Отпечаток выкладываемого кода (#1231): коммит последней правки серверных файлов. Именно его
+# сервер потом называет в /health, а прогон CI сверяет с main — расхождение видно само, без
+# чужой памяти. Правки, не попавшие ни в один коммит, названы прямо: выкладывать их можно,
+# делать вид, что на сервере main, — нельзя.
+# Имя нарочно не `STAMP`: так на той стороне зовётся отметка времени для имени резервной копии.
+DEPLOYED=$(git -C "$ROOT" log -1 --format=%H -- relay/point_server relay/requirements.txt relay/point-server-start.sh 2>/dev/null || true)
+[ -n "$DEPLOYED" ] || DEPLOYED="неизвестен"
+if [ -n "$(git -C "$ROOT" status --porcelain -- relay/point_server relay/requirements.txt relay/point-server-start.sh 2>/dev/null)" ]; then
+  DEPLOYED="$DEPLOYED+правки"
+fi
 
 say() { printf '→ %s\n' "$1"; }
 
@@ -61,6 +73,7 @@ ssh -o BatchMode=yes "$HOST" "set -e
   done
   sudo install -o librevlad -g librevlad -m 644 /tmp/point-new/requirements.txt $DST/requirements.txt
   sudo install -o librevlad -g librevlad -m 755 /tmp/point-new/point-server-start.sh $DST/start.sh
+  printf '%s\n' '$DEPLOYED' | sudo -u librevlad tee $DST/deployed.txt >/dev/null
   sudo rm -rf $DST/point_server/__pycache__
   sudo -u librevlad bash -c 'cd $DST && ./.venv/bin/pip install -q -r requirements.txt'
   sudo pkill -f \"uvicorn point_\"'server.main' || true
@@ -71,6 +84,12 @@ ssh -o BatchMode=yes "$HOST" "set -e
   rm -rf /tmp/point-new /tmp/point-deploy.tgz"
 
 say "проверка снаружи"
-CODE=$(curl -s -o /dev/null -w '%{http_code}' https://point.leerio.app/health)
-[ "$CODE" = "200" ] || { echo "  /health отвечает $CODE" >&2; exit 1; }
+ANSWER=$(curl -s -m 20 -w '\n%{http_code}' https://point.leerio.app/health)
+STATUS=${ANSWER##*$'\n'}
+SAYS=${ANSWER%$'\n'*}
+[ "$STATUS" = "200" ] || { echo "  /health отвечает $STATUS" >&2; exit 1; }
 echo "  /health 200 — сервер живой"
+# Сервер обязан назвать ровно тот код, который сейчас выложили: иначе выкладка «прошла», а
+# что на машине — снова неизвестно (#1231).
+[ "${SAYS#ok }" = "$DEPLOYED" ] || { echo "  сервер называет не тот код: ${SAYS#ok } вместо $DEPLOYED" >&2; exit 1; }
+echo "  сервер называет выложенный код: $DEPLOYED"

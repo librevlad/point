@@ -211,6 +211,37 @@ def _readable_text(mime: str, data: bytes) -> bool:
     return bool(text.strip()) and "\x00" not in text
 
 
+# Отпечаток выложенного кода (#1231): его кладёт рядом с кодом `tools/deploy-server.sh`.
+DEPLOYED_FILE = "deployed.txt"
+DEPLOYED_UNKNOWN = "неизвестен"
+
+# Ищется он именно рядом с кодом, а не в `POINT_SERVER_ROOT`: каталог данных службы и каталог,
+# куда легли `.py`, — не обязательно одно и то же, а отпечаток обязан лежать ровно у того кода,
+# который сейчас работает.
+CODE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _deployed_code(code_dir: str) -> str:
+    """
+    Какой код работает на этой машине.
+
+    Между «слито в main» и «работает у человека» не было ни одного сигнала: код правился в
+    репозитории, а на боевой машине жила копия постарше — так страница приёма файла неделю
+    отвечала 500 (#723), а человеческие ответы на ошибки прожили недели английскими (#1130).
+    Оба раза расхождение нашёл человек, а не прогон. Теперь сервер называет себя сам, и
+    сверить его с main может кто угодно, у кого есть публичный адрес.
+
+    Файла нет — значит выкладывали не скриптом, и назвать код нечем. Это тоже ответ: он
+    честнее молчания и роняет сверку так же, как расхождение.
+    """
+    try:
+        with open(os.path.join(code_dir, DEPLOYED_FILE), encoding="utf-8") as stamp:
+            first = stamp.readline().strip()
+    except OSError:
+        return DEPLOYED_UNKNOWN
+    return first[:120] if first else DEPLOYED_UNKNOWN
+
+
 def create_app(
     settings: Settings | None = None,
     google: google_mod.GoogleIdentity | None = None,
@@ -310,7 +341,9 @@ def create_app(
 
     @app.get("/health")
     def health() -> PlainTextResponse:
-        return PlainTextResponse("ok")
+        # Второе слово — выложенный код (#1231). Читается на каждом запросе: ответ про то, какой
+        # код работает, не должен зависеть от того, когда службу поднимали в последний раз.
+        return PlainTextResponse("ok " + _deployed_code(CODE_DIR))
 
     # Ссылка Point у получателя с Point открывается в Point (#1083): Android проверяет
     # этот файл, прежде чем отдать https-ссылку приложению. Отпечатки — релизный ключ и

@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Прогон кадра через зрячую модель тремя способами (см. README.md рядом).
+"""Прогон кадра через зрячую модель тремя способами (`--way whole|parts|both`).
+
+Счёт по полученному выводу — `score.py` рядом; README у харнесса нет (#1234).
 
   python tools/vision/run.py --frames <папка> --way whole --provider gemini --out <каталог>
 

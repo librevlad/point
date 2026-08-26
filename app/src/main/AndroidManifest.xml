@@ -71,10 +71,9 @@
         </activity>
 
         <!--
-          ShareActivity receives Android Share for the MVP object types — the
-          other entry point beside the HomeActivity launcher above.
-          (A debug-only SandboxActivity with a launcher icon is added by the
-          `debug` source set for testing without re-sharing / re-flashing.)
+          Дверь «Поделиться» и «Открыть с помощью». Дверей у Point заметно больше двух:
+          весь перечень с ролями — в CLAUDE.md, раздел «Сборка и тесты» (#1267). Прежний
+          текст называл эту «другой, кроме лаунчера», и по нему выходило, что входов два.
         -->
         <activity
             android:name=".ShareActivity"
