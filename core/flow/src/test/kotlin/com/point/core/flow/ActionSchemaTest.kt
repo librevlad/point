@@ -1,9 +1,6 @@
 package com.point.core.flow
 
-import com.point.core.model.Bubble
 import com.point.core.model.CapabilityId
-import com.point.core.model.ObjectKind
-import com.point.core.model.ObjectState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -401,44 +398,6 @@ class ActionSchemaTest {
         assertTrue(labels.contains("координаты") || labels.contains("место"))
     }
 
-    private fun bubbleOf(id: String) = Bubble(
-        icon = id,
-        title = id,
-        capabilityId = CapabilityId(id),
-        expectedNextState = ObjectState(ObjectKind.IMAGE),
-    )
-
-    @Test
-    fun `готовая строка запускается тем же пузырём, что стоит в списке действий`() {
-
-        val row = actionReadiness(mapOf(META_ENTITY_PREFIX + "phone" to "+380504327707"))
-            .single { it.schema.id == "save-contact" }
-
-        val runner = row.runner(listOf(bubbleOf("map"), bubbleOf("save-contact")))
-
-        assertEquals(CapabilityId("save-contact"), runner?.capabilityId)
-    }
-
-    @Test
-    fun `действия объекту не предложили — строка кнопкой не притворяется`() {
-
-        val row = actionReadiness(mapOf(META_ENTITY_GEO to "50.4501, 30.5234"))
-            .single { it.schema.id == "route" }
-
-        assertTrue(row.readiness is Readiness.Ready)
-        assertNull(row.runner(emptyList()))
-        assertEquals(CapabilityId("map"), row.runner(listOf(bubbleOf("map")))?.capabilityId)
-    }
-
-    @Test
-    fun `неготовая строка остаётся раскрытием «чего не хватает», а не запуском`() {
-        val row = actionReadiness(mapOf(META_ENTITY_PREFIX + "email" to "olena@example.com"))
-            .single { it.schema.id == "save-contact" }
-
-        assertTrue(row.readiness is Readiness.Missing)
-        assertNull(row.runner(listOf(bubbleOf("save-contact"))))
-    }
-
     @Test
     fun `действие без реализации кнопкой не становится — глагол без действия и был находкой`() {
 
@@ -448,7 +407,7 @@ class ActionSchemaTest {
         assertEquals(tails, all.filterValues { it == null }.keys)
         val parcel = actionReadiness(mapOf(META_ENTITY_TRACK to "20 4514 9154 9395")).single()
         assertTrue(parcel.readiness is Readiness.Ready)
-        assertNull(parcel.runner(listOf(bubbleOf("share"), bubbleOf("copy"))))
+        assertNull("схема без runs исполнителя не называет", parcel.schema.runs)
     }
 
     @Test
@@ -523,21 +482,6 @@ class ActionSchemaTest {
     }
 
     @Test
-    fun `или-ещё под действием — только про собственное значение действия`() {
-
-        // Скрин владельца 2026-08-09: один спор даты печатался под тремя действиями —
-        // «это непонятно и неюзабельно». Спор вспомогательного поля живёт на узле.
-        val present = listOf(
-            FieldReading(FieldSpec("entity.card", "карта", critical = true), "•• 5427", alternatives = listOf("•• 7189")),
-            FieldReading(FieldSpec("entity.date", "дата"), "26.04.2026", alternatives = listOf("28.04.2026")),
-            FieldReading(FieldSpec("entity.amount", "сумма", critical = true), "500", extras = listOf("300")),
-        )
-
-        assertEquals(listOf("entity.card"), ownDisputes(present).map { it.spec.key })
-        assertEquals(listOf("entity.amount"), ownExtras(present).map { it.spec.key })
-    }
-
-    @Test
     fun `переслать квитанцию — настоящая дверь, объект уходит шарингом`() {
 
         // Живой прогон 2026-08-09: «✓ Переслать квитанцию PPA5…» обещал готовое,
@@ -546,7 +490,7 @@ class ActionSchemaTest {
 
         val row = actionReadiness(mapOf(META_ENTITY_RECEIPT to "PPA5-0M79-APX4-5X6H"))
             .single { it.schema.id == "forward-receipt" }
-        assertEquals("share", row.runner(listOf(bubbleOf("share")))?.capabilityId?.value)
+        assertTrue("квитанция с номером готова к пересылке", row.readiness is Readiness.Ready)
     }
 
     @Test
@@ -556,50 +500,4 @@ class ActionSchemaTest {
         assertEquals(CapabilityId("map"), ACTION_SCHEMAS.single { it.id == "route" }.runs)
     }
 
-    @Test
-    fun `карточка готовности называет ключевое значение — по нему и узнаётся дубль`() {
-
-        val shown = readinessShownFacts(
-            mapOf(
-                META_ENTITY_PREFIX + "phone" to "+380 67 123 45 67",
-                META_ENTITY_PREFIX + "email" to "olena@tihiy-dvor.example",
-                META_ENTITY_PREFIX + "address" to "Київ, вулиця Ярославська, 14",
-            ),
-        )
-
-        assertEquals(mapOf(META_ENTITY_PREFIX + "phone" to "+380 67 123 45 67"), shown)
-    }
-
-    @Test
-    fun `неготовое действие ничего не называет — прятать ниже нечего`() {
-
-        assertTrue(readinessShownFacts(mapOf(META_GRAPH_ROLE_PREFIX + "carrier" to "Нова Пошта")).isEmpty())
-        assertTrue(readinessShownFacts(emptyMap()).isEmpty())
-    }
-
-    @Test
-    fun `названо ровно одно значение на готовое действие — побочные поля не прячутся`() {
-
-        val shown = readinessShownFacts(
-            mapOf(
-                META_ENTITY_PREFIX + "card" to "4111 1111 1111 1111",
-                META_ENTITY_AMOUNT to "300",
-            ),
-        )
-
-        assertEquals(mapOf(META_ENTITY_PREFIX + "card" to "4111 1111 1111 1111"), shown)
-    }
-
-    @Test
-    fun `названное значение — то же самое, что печатает строка карточки`() {
-
-        val facts = mapOf(META_ENTITY_TRACK to "20 4514 9154 9395", META_GRAPH_ROLE_PREFIX + "carrier" to "Нова Пошта")
-        val row = actionReadiness(facts).single { it.schema.id == "track-parcel" }
-
-        assertEquals(row.shownField()?.value, readinessShownFacts(facts)[META_ENTITY_TRACK])
-        assertNull(
-            "у неготовой строки печатать нечего",
-            actionReadiness(mapOf(META_GRAPH_ROLE_PREFIX + "carrier" to "Нова Пошта")).single().shownField(),
-        )
-    }
 }

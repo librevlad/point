@@ -6,10 +6,6 @@ import com.point.core.flow.Entity
 import com.point.core.flow.EntityExtractor
 import com.point.core.flow.EntityType
 import com.point.core.flow.META_ENTITY_PREFIX
-import com.point.core.flow.META_ENTITY_SUBJECT
-import com.point.core.flow.Readiness
-import com.point.core.flow.actionReadiness
-import com.point.core.flow.runner
 import com.point.core.model.ActionResult
 import com.point.core.model.Feature
 import com.point.core.model.ObjectKind
@@ -18,8 +14,6 @@ import com.point.core.model.PointObject
 import com.point.core.model.ScratchRef
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -40,9 +34,6 @@ class ReadinessActionTest {
         policy = DefaultBubblePolicy(),
     )
 
-    private fun bubbles(vararg features: Feature) =
-        registry.bubblesFor(ObjectState(ObjectKind.TEXT, features.toSet()))
-
     @Test
     fun `каждое объявленное схемой действие есть среди возможностей`() {
         val known = registry.bubblesFor(
@@ -55,36 +46,6 @@ class ReadinessActionTest {
         ACTION_SCHEMAS.mapNotNull { it.runs }.forEach { id ->
             assertTrue("схема объявила несуществующее действие $id", id in known)
         }
-    }
-
-    @Test
-    fun `контакт с телефона — строка карточки и пузырь это одно действие`() {
-        val row = actionReadiness(mapOf(META_ENTITY_PREFIX + "phone" to "+380504327707"))
-            .single { it.schema.id == "save-contact" }
-
-        val runner = row.runner(bubbles(Feature.HAS_PHONE))
-
-        assertNotNull("«✓ Сохранить контакт» обязано запускаться тапом", runner)
-        assertEquals("Сохранить контакт", runner!!.title)
-    }
-
-    @Test
-    fun `ответ по адресу почты запускает письмо`() {
-        val row = actionReadiness(
-            mapOf(META_ENTITY_SUBJECT to "Refund", META_ENTITY_PREFIX + "email" to "liz@example.com"),
-        ).single { it.schema.id == "reply" }
-
-        assertEquals("Написать письмо", row.runner(bubbles(Feature.HAS_EMAIL))?.title)
-    }
-
-    @Test
-    fun `маршрут по одним координатам кнопкой не становится`() {
-
-        val row = actionReadiness(mapOf(com.point.core.flow.META_ENTITY_GEO to "50.4501, 30.5234"))
-            .single { it.schema.id == "route" }
-
-        assertTrue(row.readiness is Readiness.Ready)
-        assertNull(row.runner(bubbles(Feature.HAS_DATE)))
     }
 
     private fun textObject(text: String, metadata: Map<String, String> = emptyMap()): PointObject {

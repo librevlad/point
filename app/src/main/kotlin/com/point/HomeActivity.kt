@@ -19,12 +19,8 @@ class HomeActivity : ComponentActivity() {
 
     private val viewModel: FlowViewModel by viewModels()
 
-    @javax.inject.Inject lateinit var sources: Set<@JvmSuppressWildcards com.point.source.ObjectSource>
-
-    private val sourceLabels: List<String> by lazy {
-        sources.filter { it.isAvailable(this) }.map { it.label }.sorted()
-    }
-
+    // Источники дом не перечисляет — их спрашивает экран выбора (#1232): подпись двери
+    // берётся из WHAT_YOU_HAVE, и опрашивать доступность источников на старте незачем.
     private fun newObject() {
         startActivity(android.content.Intent(this, com.point.source.SourcePickerActivity::class.java))
     }
@@ -85,7 +81,6 @@ class HomeActivity : ComponentActivity() {
                             onSettings = viewModel::openKeySettings,
                             onNewObject = ::newObject,
                             onExample = ::example,
-                            sourceLabels = sourceLabels,
                             onRemove = { viewModel.removeFromHistory(it.id) },
                             onClear = viewModel::clearHistory,
                             crashReport = crash,

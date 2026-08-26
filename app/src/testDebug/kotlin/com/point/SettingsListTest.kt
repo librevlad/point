@@ -11,7 +11,7 @@ import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
-import com.point.core.flow.AI_KEY_WHY
+import com.point.core.flow.AI_CHAIN_WHAT
 import com.point.core.flow.AI_PROVIDERS
 import com.point.core.flow.MY_DEVICES_TITLE
 import com.point.core.flow.PRIVACY_SETTING_HINT
@@ -130,7 +130,8 @@ class SettingsListTest {
     @Test fun `на общем экране нет ни одного абзаца — они внутри разделов`() {
         settings(keys = savedKey)
 
-        compose.onNodeWithText(AI_KEY_WHY, substring = true).assertDoesNotExist()
+        // Вступление раздела ключей рисуется только внутри самого раздела (#1262).
+        compose.onNodeWithText(AI_CHAIN_WHAT, substring = true).assertDoesNotExist()
         compose.onNodeWithText("Проверить и включить").assertDoesNotExist()
         compose.onNodeWithText("Проверить все").assertDoesNotExist()
         compose.onNodeWithText(PRIVACY_SETTING_HINT, substring = true).assertDoesNotExist()

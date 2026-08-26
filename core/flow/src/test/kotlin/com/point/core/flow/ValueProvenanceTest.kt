@@ -65,7 +65,6 @@ class ValueProvenanceTest {
     fun `принесённый человеком файл не подписывается — норма молчит`() {
 
         assertNull(provenanceLabel(Provenance.GIVEN))
-        assertNull(readingModeLabel(ReadingMode.PRINTED))
     }
 
     @Test

@@ -2,7 +2,6 @@ package com.point.core.flow
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -22,7 +21,6 @@ class ReadingModeTest {
     fun `слой со словами — печать`() {
         assertEquals(ReadingMode.PRINTED, readingModeOf(printed))
         assertTrue(printedGuarantees(readingModeOf(printed)))
-        assertNull("печать не подписывается — она норма", readingModeLabel(ReadingMode.PRINTED))
     }
 
     @Test
@@ -36,14 +34,12 @@ class ReadingModeTest {
 
         assertEquals(ReadingMode.HANDWRITTEN, readingModeOf(soup))
         assertFalse("печатных гарантий на рукописи нет", printedGuarantees(readingModeOf(soup)))
-        assertEquals("с рукописи", readingModeLabel(ReadingMode.HANDWRITTEN))
     }
 
     @Test
     fun `слоя нет — не знаем, и не врём ни в одну сторону`() {
         assertEquals(ReadingMode.UNKNOWN, readingModeOf(null as AtomLayer?))
         assertFalse(printedGuarantees(ReadingMode.UNKNOWN))
-        assertNull(readingModeLabel(ReadingMode.UNKNOWN))
     }
 
     private fun ocr(name: String): String =

@@ -69,8 +69,6 @@ fun PointFlow(
         onOpenSelection = viewModel::openSelection,
         onSelectRegion = viewModel::onSelectRegion,
         onClearFocus = viewModel::clearFocus,
-        onTakeSelection = viewModel::takeSelection,
-        onFocusSelection = viewModel::focusOnSelection,
         onCloseSelection = viewModel::closeSelection,
         onFindQuery = viewModel::onFindQuery,
         onCloseFind = viewModel::closeFind,

@@ -1,27 +1,9 @@
 package com.point
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
 import org.junit.Test
 
 class HomeDoorsTest {
-
-    @Test fun `подпись перечисляет источники поимённо`() {
-        assertEquals(
-            "Буфер обмена · Голос · Камера",
-            sourcesSubtitle(listOf("Буфер обмена", "Голос", "Камера")),
-        )
-    }
-
-    @Test fun `без источников подписи нет вовсе`() {
-
-        assertNull(sourcesSubtitle(emptyList()))
-    }
-
-    @Test fun `источник без имени не оставляет дырки в перечислении`() {
-        assertEquals("Камера · Место", sourcesSubtitle(listOf("Камера", "  ", "Место")))
-        assertNull(sourcesSubtitle(listOf("", " ")))
-    }
 
     /**
      * Время ушло в заголовок секции (#880): строка говорит сначала «что это», потом имя —

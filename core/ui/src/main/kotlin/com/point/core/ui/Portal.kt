@@ -48,12 +48,6 @@ internal val PortalCore = Color(0xFFEAF0FF)
 private val PortalBackdrop = Color(0xFF07070C)
 private val PortalText = Color(0xFFEAF0FF)
 private val PortalMuted = Color(0xFF9AA3B2)
-private val PortalDim = Color(0xFF565C6E)
-
-fun portalStep(elapsedSeconds: Int, stepCount: Int, secondsPerStep: Int = 4): Int {
-    if (stepCount <= 1) return 0
-    return (elapsedSeconds / secondsPerStep).coerceIn(0, stepCount - 1)
-}
 
 @Composable
 fun Portal(modifier: Modifier = Modifier, size: Dp = 200.dp, intensity: Float = 1f) {
@@ -126,12 +120,18 @@ fun Portal(modifier: Modifier = Modifier, size: Dp = 200.dp, intensity: Float = 
     }
 }
 
+/**
+ * Экран ожидания: портал, подпись и текущая стадия одной строкой.
+ *
+ * Списка шагов здесь нет и быть не может: заранее их Point не знает, а стадии приходят от
+ * самого действия по одной (#810). Многошаговый чек-лист с галочками был недостижим ни при
+ * каком состоянии и рисовал вид подключённого механизма (#1232).
+ */
 @Composable
 fun BusyPortal(
     title: String,
     subtitle: String,
-    steps: List<String>,
-    activeStep: Int,
+    stage: String?,
     modifier: Modifier = Modifier,
 
     onCancel: (() -> Unit)? = null,
@@ -158,9 +158,9 @@ fun BusyPortal(
                 Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = PortalMuted)
             }
 
-            if (steps.isNotEmpty()) {
+            if (!stage.isNullOrBlank()) {
                 Spacer(Modifier.height(28.dp))
-                StepChecklist(steps, activeStep)
+                StageLine(stage)
             }
             if (onCancel != null) {
                 Spacer(Modifier.height(32.dp))
@@ -179,51 +179,28 @@ fun BusyPortal(
 }
 
 @Composable
-private fun StepChecklist(steps: List<String>, active: Int) {
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        steps.forEachIndexed { i, step ->
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                StepMarker(done = i < active, current = i == active)
-                Text(
-                    text = step,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = when {
-                        i == active -> PortalText
-                        i < active -> PortalMuted
-                        else -> PortalDim
-                    },
-                )
-            }
-        }
+private fun StageLine(stage: String) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        StageMarker()
+        Text(text = stage, style = MaterialTheme.typography.bodyMedium, color = PortalText)
     }
 }
 
 @Composable
-private fun StepMarker(done: Boolean, current: Boolean) {
+private fun StageMarker() {
     val motion = rememberMotionEnabled()
     Box(Modifier.size(18.dp), contentAlignment = Alignment.Center) {
-        when {
-            done -> Text(
-                "✓",
-                color = PortalGlow,
-                fontWeight = FontWeight.Bold,
-                style = MaterialTheme.typography.labelMedium,
-            )
-            current -> {
-                val alpha = if (motion) {
-                    rememberInfiniteTransition(label = "step").animateFloat(
-                        0.35f, 1f, infiniteRepeatable(tween(700), RepeatMode.Reverse), label = "step-a",
-                    ).value
-                } else {
-                    1f
-                }
-                Box(Modifier.size(10.dp).graphicsLayer { this.alpha = alpha }.clip(CircleShape).background(PortalGlow))
-            }
-            else -> Box(Modifier.size(7.dp).clip(CircleShape).background(PortalDim))
+        val alpha = if (motion) {
+            rememberInfiniteTransition(label = "stage").animateFloat(
+                0.35f, 1f, infiniteRepeatable(tween(700), RepeatMode.Reverse), label = "stage-a",
+            ).value
+        } else {
+            1f
         }
+        Box(Modifier.size(10.dp).graphicsLayer { this.alpha = alpha }.clip(CircleShape).background(PortalGlow))
     }
 }
 
@@ -233,13 +210,12 @@ private fun PreviewBusyPortalNetwork() = PointTheme(darkTheme = true) {
     BusyPortal(
         title = "Распознаём текст…",
         subtitle = "Это займёт несколько секунд",
-        steps = listOf("Отправляю в облако…", "Читаю…", "Собираю ответ…"),
-        activeStep = 1,
+        stage = "Читаю…",
     )
 }
 
-@Preview(name = "Портал · один шаг", showBackground = true, backgroundColor = 0xFF07070C)
+@Preview(name = "Портал · стадии ещё нет", showBackground = true, backgroundColor = 0xFF07070C)
 @Composable
 private fun PreviewBusyPortalLocal() = PointTheme(darkTheme = true) {
-    BusyPortal(title = "Обрабатываю…", subtitle = "Это займёт несколько секунд", steps = listOf("Обрабатываю…"), activeStep = 0)
+    BusyPortal(title = "Обрабатываю…", subtitle = "Это займёт несколько секунд", stage = null)
 }

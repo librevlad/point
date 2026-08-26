@@ -3,12 +3,10 @@ package com.point.core.ui
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -134,7 +132,6 @@ fun PortalPlate(
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun PortalRow(
     title: String,
@@ -155,7 +152,6 @@ fun PortalRow(
     /** Место в очереди перед именем: метка, а не часть названия (#911). */
     place: Int = 0,
     appearIndex: Int = 0,
-    onLongClick: (() -> Unit)? = null,
     trailing: (@Composable () -> Unit)? = null,
 ) {
     val motion = rememberMotionEnabled()
@@ -189,7 +185,8 @@ fun PortalRow(
     }
 
     Box(
-        modifier = body.combinedClickable(enabled = enabled, onClick = onClick, onLongClick = onLongClick),
+        // Строка действия отвечает на одно нажатие: долгое нажатие ушло вместе с закреплениями (#1261).
+        modifier = body.clickable(enabled = enabled, onClick = onClick),
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 13.dp),

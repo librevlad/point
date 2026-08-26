@@ -3,7 +3,7 @@
 2 app/src/test/kotlin/com/point/ConsentSaysWhatLeavesTest.kt
 61 app/src/test/kotlin/com/point/FlowViewModelTest.kt
 1 app/src/test/kotlin/com/point/GraphPipelineIntegrationTest.kt
-5 app/src/test/kotlin/com/point/HomeDoorsTest.kt
+3 app/src/test/kotlin/com/point/HomeDoorsTest.kt
 5 app/src/test/kotlin/com/point/RecentSaysMeaningTest.kt
 1 app/src/test/kotlin/com/point/SettingsDoorHasOneNameTest.kt
 3 app/src/test/kotlin/com/point/print/PrintedJobTest.kt
@@ -55,7 +55,6 @@
 3 core/flow/src/test/kotlin/com/point/core/flow/ReaderFailureTest.kt
 2 core/flow/src/test/kotlin/com/point/core/flow/ReadingBudgetTest.kt
 1 core/flow/src/test/kotlin/com/point/core/flow/ReadingHygieneTest.kt
-1 core/flow/src/test/kotlin/com/point/core/flow/ReadingModeTest.kt
 2 core/flow/src/test/kotlin/com/point/core/flow/ReadingNoiseTest.kt
 4 core/flow/src/test/kotlin/com/point/core/flow/RecordingTest.kt
 1 core/flow/src/test/kotlin/com/point/core/flow/RotatedFrameOrderTest.kt
@@ -134,7 +133,7 @@
 1 executors/src/test/kotlin/com/point/executors/PdfRealizerTest.kt
 1 executors/src/test/kotlin/com/point/executors/PhoneAppsTest.kt
 1 executors/src/test/kotlin/com/point/executors/ReadQrActionTest.kt
-4 executors/src/test/kotlin/com/point/executors/ReadinessActionTest.kt
+2 executors/src/test/kotlin/com/point/executors/ReadinessActionTest.kt
 3 executors/src/test/kotlin/com/point/executors/RealizerAvailabilityTest.kt
 7 executors/src/test/kotlin/com/point/executors/RemotePcActionTest.kt
 1 executors/src/test/kotlin/com/point/executors/RenewPeriodRealizerTest.kt

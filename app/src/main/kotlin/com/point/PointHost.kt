@@ -59,7 +59,6 @@ import com.point.core.ui.ThinkingDot
 import com.point.core.ui.bubbleIcon
 import com.point.core.ui.livingBackground
 import com.point.core.ui.portalCard
-import com.point.core.ui.portalStep
 import com.point.core.ui.theme.PointTheme
 import kotlinx.coroutines.delay
 
@@ -99,7 +98,6 @@ fun PointHost(
 
     onToggleCloud: (Boolean) -> Unit = {},
     onToggleYolo: (Boolean) -> Unit = {},
-    onUnpin: (com.point.core.model.ObjectKind) -> Unit = {},
     onForgetAll: () -> Unit = {},
     tileAdded: Boolean = false,
 
@@ -132,8 +130,6 @@ fun PointHost(
     onOpenSelection: () -> Unit = {},
     onSelectRegion: (List<com.point.core.flow.FocusPart>) -> Unit = {},
     onClearFocus: () -> Unit = {},
-    onTakeSelection: () -> Unit = {},
-    onFocusSelection: () -> Unit = {},
     onCloseSelection: () -> Unit = {},
     onFindQuery: (String) -> Unit = {},
     onCloseFind: () -> Unit = {},
@@ -442,8 +438,7 @@ private fun BusyScreen(title: String, stage: String?, network: Boolean, spent: I
     BusyPortal(
         title = title,
         subtitle = waitingSubtitle(elapsed, network, cancelable = onCancel != null),
-        steps = listOfNotNull(stage),
-        activeStep = 0,
+        stage = stage,
         onCancel = onCancel,
     )
 }

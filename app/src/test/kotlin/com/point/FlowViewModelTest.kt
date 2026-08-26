@@ -105,7 +105,6 @@ class FlowViewModelTest {
             askedPath = path
             return null
         }
-        override fun crop(path: String, left: Int, top: Int, right: Int, bottom: Int) = null
     }
 
     @Before fun setUp() = Dispatchers.setMain(dispatcher)
