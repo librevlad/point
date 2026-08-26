@@ -247,9 +247,20 @@ class FlowViewModel @Inject constructor(
     private val enrichJobs = mutableListOf<EnrichWork>()
     private var pendingBubble: Bubble? = null
 
-    private var pendingCloud: (() -> Unit)? = null
+    /**
+     * Вопрос «отправлять ли наружу», уже стоящий на экране (#1269).
+     *
+     * Ответов у него два, и оба обязаны доехать туда, откуда вопрос пришёл: «да» доводит
+     * работу, «нет» — тоже ответ, и просивший его ждёт. Прежде здесь лежало только «да», и
+     * отказ гас на телефоне, а у соседа навсегда оставалось «ждёт вашего ответа».
+     */
+    private class PendingCloud(
+        val scope: com.point.core.flow.CloudScope,
+        val onGranted: () -> Unit,
+        val onDeclined: () -> Unit,
+    )
 
-    private var pendingCloudScope: com.point.core.flow.CloudScope = com.point.core.flow.CloudScope.MODELS
+    private var pendingCloud: PendingCloud? = null
 
     private var pendingPreviewBubble: Bubble? = null
 
@@ -527,7 +538,10 @@ class FlowViewModel @Inject constructor(
             val (asked, arrived) = pulled.partition {
                 !it.first.meta[com.point.core.flow.PcExecFields.REQUEST].isNullOrBlank()
             }
-            asked.forEach { (entry, path, _) -> executeForPc(pc, entry.meta, path) }
+            // Просьба, которую сейчас не разобрать (вопрос человеку уже стоит на экране, и
+            // второй ему не задать), не подтверждается: она остаётся в очереди компьютера,
+            // там шаг честно ждёт телефона, и она приедет следующим заходом (#1269).
+            val handled = asked.filter { (entry, path, _) -> executeForPc(pc, entry.meta, path) }
 
             // Просьба и знание объекта не теряются в пачке (#1090). Общий набор передать
             // ими не может: у него один экран на всех. Поэтому объект со своей просьбой или
@@ -535,7 +549,7 @@ class FlowViewModel @Inject constructor(
             // не подтверждёнными, то есть не потерянными.
             val (own, plain) = arrived.partition { hasOwnErrand(it.first.meta) }
             val taken = mutableListOf<Triple<com.point.core.flow.PcOutboxEntry, String, Boolean>>()
-            taken += asked
+            taken += handled
 
             when {
                 own.isNotEmpty() -> {
@@ -710,7 +724,7 @@ class FlowViewModel @Inject constructor(
         }
         if (bubble.capabilityId == AiCapability.ID) {
 
-            requireCloudConsent { openChat(top) }
+            requireCloudConsent(about = aboutOf(bubble.title, top)) { openChat(top) }
             return
         }
         if (bubble.capabilityId == FindCapability.ID) {
@@ -720,7 +734,7 @@ class FlowViewModel @Inject constructor(
         }
         if (isCloud(bubble.capabilityId)) {
 
-            requireCloudConsent(bubble.capabilityId) { maybePreview(bubble, top) }
+            requireCloudConsent(bubble.capabilityId, about = aboutOf(bubble.title, top)) { maybePreview(bubble, top) }
             return
         }
         maybePreview(bubble, top)
@@ -1096,26 +1110,49 @@ class FlowViewModel @Inject constructor(
 
     private fun requireCloudConsent(
         capabilityId: com.point.core.model.CapabilityId? = null,
+        about: String = "",
         onGranted: () -> Unit,
     ) {
         val id = capabilityId ?: com.point.core.model.CapabilityId("ai")
-        val scope = com.point.core.flow.cloudScopeOf(id)
         viewModelScope.launch {
-            if (runCatching { consent.allowed(scope) }.getOrDefault(false)) {
+            if (runCatching { consent.allowed(com.point.core.flow.cloudScopeOf(id)) }.getOrDefault(false)) {
                 onGranted()
             } else {
-                pendingCloud = onGranted
-                pendingCloudScope = scope
-                _ui.update {
-                    it.copy(
-                        cloudConsent = true,
-                        cloudDestination = com.point.core.flow.cloudDestination(id, chosenAiService()),
-                        cloudTitle = com.point.core.flow.cloudAskTitle(scope),
-                        cloudConfirm = com.point.core.flow.cloudAskConfirm(scope),
-                    )
-                }
+                askCloud(id, about, onGranted = onGranted, onDeclined = {})
             }
         }
+    }
+
+    /**
+     * Поднять вопрос об отправке наружу. Отвечает, взят ли вопрос (#1269).
+     *
+     * Вопрос на экране один, и второй его не затирает: прежде вторая облачная просьба
+     * молча съедала первую — её продолжение пропадало вместе с лямбдой, а просивший ждал
+     * ответа, которого уже не будет. Тем же полем затирался и вопрос, поднятый тапом
+     * человека: «да» делало работу для соседа вместо того, что человек нажал.
+     *
+     * Ответ «не взят» достаётся на деле только просьбе соседа: экран согласия закрывает
+     * собой объект, и, пока вопрос стоит, тапнуть здесь нечего.
+     */
+    private fun askCloud(
+        id: com.point.core.model.CapabilityId,
+        about: String,
+        onGranted: () -> Unit,
+        onDeclined: () -> Unit,
+    ): Boolean {
+        if (pendingCloud != null) return false
+        val scope = com.point.core.flow.cloudScopeOf(id)
+        pendingCloud = PendingCloud(scope, onGranted, onDeclined)
+        _ui.update {
+            it.copy(
+                cloudConsent = true,
+                cloudAbout = about,
+                cloudDestination = com.point.core.flow.cloudDestination(id, chosenAiService()),
+                cloudTitle = com.point.core.flow.cloudAskTitle(scope),
+                cloudConfirm = com.point.core.flow.cloudAskConfirm(scope),
+            )
+        }
+        return true
     }
 
     private fun chosenAiService(): String? = runCatching {
@@ -1841,22 +1878,24 @@ class FlowViewModel @Inject constructor(
     private fun deviceName(): String = "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}".trim()
 
     fun confirmCloud() {
-        val run = pendingCloud ?: return
-        val scope = pendingCloudScope
+        val asked = pendingCloud ?: return
         pendingCloud = null
-        _ui.update { it.copy(cloudConsent = false) }
+        _ui.update { it.copy(cloudConsent = false, cloudAbout = "") }
         viewModelScope.launch {
 
-            runCatching { consent.allow(scope) }
-            run()
+            runCatching { consent.allow(asked.scope) }
+            asked.onGranted()
         }
     }
 
+    /** «Нет» — ответ, и он доезжает туда, откуда пришёл вопрос (#1269). */
     fun declineCloud() {
+        val asked = pendingCloud
         pendingCloud = null
         _ui.update {
-            it.copy(cloudConsent = false, message = CLOUD_DECLINED, messageOutcome = Outcome.NONE)
+            it.copy(cloudConsent = false, cloudAbout = "", message = CLOUD_DECLINED, messageOutcome = Outcome.NONE)
         }
+        asked?.onDeclined?.invoke()
     }
 
     fun setCloudAllowed(allowed: Boolean) {
@@ -1956,15 +1995,20 @@ class FlowViewModel @Inject constructor(
      * Просьба соседа не привилегия — она входит в те же две двери, что и тап. Прежде она
      * шла мимо обеих: человек на компьютере нажимал «Понять», и телефон молча отправлял
      * документ чужой модели, ни о чём не спросив (Конституция §11).
+     *
+     * Отвечает, разобрана ли просьба. Не разобрана она в одном случае: вопрос человеку уже
+     * стоит на экране, и второй ему сейчас не задать. Тогда письмо остаётся в очереди
+     * компьютера — там шаг честно ждёт телефона и приедет следующим заходом. Прежде такая
+     * просьба подтверждалась наравне с исполненной и пропадала навсегда.
      */
     private suspend fun executeForPc(
         pc: com.point.core.flow.LinkedPc,
         ask: Map<String, String>,
         path: String,
-    ) {
+    ): Boolean {
         val f = com.point.core.flow.PcExecFields
-        val capability = ask[f.ACTION]?.takeIf { it.isNotBlank() } ?: return
-        val home = ask[f.HOME]?.takeIf { it.isNotBlank() } ?: return
+        val capability = ask[f.ACTION]?.takeIf { it.isNotBlank() } ?: return true
+        val home = ask[f.HOME]?.takeIf { it.isNotBlank() } ?: return true
         val label = ask[f.LABEL]?.takeIf { it.isNotBlank() } ?: capability
         val id = CapabilityId(capability)
 
@@ -1978,19 +2022,39 @@ class FlowViewModel @Inject constructor(
                     messageOutcome = Outcome.FAILED,
                 )
             }
-            return
+            return true
         }
 
         // Облачное спрашивается здесь, у человека с телефоном: объект уходит наружу только
         // после явного «да». Пока ответа нет, компьютер видит честное «ждёт», а не Done;
-        // сказанное «да» доводит ту же работу и возвращает результат домой обычным путём.
+        // сказанное «да» доводит ту же работу и возвращает результат домой обычным путём,
+        // а сказанное «нет» тоже уезжает туда — там человек ждёт ответа, а не молчания.
         if (isCloud(id) && !cloudAlreadyAllowed(id)) {
-            requireCloudConsent(id) {
-                viewModelScope.launch { runForPc(pc, ask, path, capability, home, label) }
-            }
+            val asked = askCloud(
+                id,
+                about = aboutForPc(label, ask),
+                onGranted = { viewModelScope.launch { runForPc(pc, ask, path, capability, home, label) } },
+                onDeclined = {
+                    viewModelScope.launch {
+                        val heard = answerPc(
+                            pc, ask, home, capability, label,
+                            ActionResult.Failure(com.point.core.flow.CONSENT_DECLINED_TEXT, recoverable = true),
+                        )
+                        if (!heard) {
+                            _ui.update {
+                                it.copy(
+                                    message = "«$label» — ответ не доехал до компьютера",
+                                    messageOutcome = Outcome.FAILED,
+                                )
+                            }
+                        }
+                    }
+                },
+            )
+            if (!asked) return false
             val told = answerPc(
                 pc, ask, home, capability, label,
-                ActionResult.Failure(com.point.core.flow.AWAITS_CONSENT_TEXT, recoverable = true),
+                ActionResult.NeedsInput(com.point.core.flow.AWAITS_CONSENT_TEXT),
             )
             _ui.update {
                 it.copy(
@@ -1998,10 +2062,26 @@ class FlowViewModel @Inject constructor(
                     messageOutcome = if (told) Outcome.NONE else Outcome.FAILED,
                 )
             }
-            return
+            return true
         }
         runForPc(pc, ask, path, capability, home, label)
+        return true
     }
+
+    /**
+     * О чём спрашивают, когда объекта на этом экране нет (#1269).
+     *
+     * Экран согласия закрывает собой всё остальное, и по стуку компьютера человек приходит
+     * к голому «Отправить в облако?» про вещь, которой он не выбирал и не видел. Значит имя
+     * работы и имя объекта обязаны стоять в самом вопросе.
+     */
+    private fun aboutForPc(label: String, ask: Map<String, String>): String =
+        "«$label» для компьютера" + (ask["name"]?.takeIf { it.isNotBlank() }?.let { " · $it" } ?: "")
+
+    /** То же и для тапа: экран согласия убирает объект с глаз, и вопрос называет его сам (#1269). */
+    private fun aboutOf(title: String, obj: PointObject): String =
+        "«$title» · " +
+            (obj.metadata["name"]?.takeIf { it.isNotBlank() } ?: com.point.core.ui.kindLabel(obj.state.kind))
 
     /** Дано ли согласие на облако заранее — тем же вопросом, что задаёт тап (#1269). */
     private suspend fun cloudAlreadyAllowed(id: CapabilityId): Boolean =
@@ -2120,7 +2200,12 @@ class FlowViewModel @Inject constructor(
                 f.NAME to (result.result.metadata["name"] ?: "$label.result"),
                 f.MIME to result.result.mime,
             )
-            else -> mapOf(f.OUTCOME to f.FAILED, f.DETAIL to "«$label» ждёт продолжения на телефоне")
+            // Незавершённый шаг терминальным исходом не является (ADR-0001 §18): компьютеру
+            // едет «ждёт», а не «не вышло» (#1269). Вопрос, на котором шаг остановился, —
+            // это и есть то, чего он ждёт, и компьютер называет его человеку своими словами.
+            is ActionResult.NeedsInput -> mapOf(f.OUTCOME to f.AWAITING, f.DETAIL to result.prompt)
+            is ActionResult.NeedsImage ->
+                mapOf(f.OUTCOME to f.AWAITING, f.DETAIL to "«$label» ждёт продолжения на телефоне")
         }
 
         // Пустой шаг без нового объекта отправляет только знание: файла у него нет, и

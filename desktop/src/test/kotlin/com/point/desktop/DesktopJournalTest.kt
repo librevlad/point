@@ -123,6 +123,50 @@ class DesktopJournalTest {
         assertEquals(StepOutcome.FAILED, steps.last().outcome)
     }
 
+    /**
+     * «Ждёт согласия» — не провал (#1269, ADR-0001 §18).
+     *
+     * Телефон спрашивает своего человека, отправлять ли объект наружу. Пока ответа нет,
+     * шаг здесь не состоялся и не сорвался — он ждёт. Приезжало это как «не вышло» и
+     * ложилось поверх честного «ждёт телефона»: человек за компьютером читал провал
+     * работы, которая ещё не начиналась, а на один шаг набегали три записи.
+     */
+    @Test
+    fun `просьба, ждущая ответа на телефоне, ждёт и в журнале компьютера`() {
+        val s = state(FakeJournal())
+        val home = item()
+        s.onReceived(home, ObjectSource.LOCAL)
+
+        s.onExecutionResult(
+            home.obj.id,
+            reply(home.obj.id, com.point.core.flow.PcResultFields.AWAITING, com.point.core.flow.AWAITS_CONSENT_TEXT),
+            born = null,
+        )
+
+        val waiting = s.journal.value.single { it.path == home.obj.uri.value }.steps.single()
+        assertEquals(StepOutcome.AWAITING, waiting.outcome)
+        assertEquals(com.point.core.flow.AWAITS_CONSENT_TEXT, waiting.note)
+
+        s.onExecutionResult(
+            home.obj.id,
+            reply(home.obj.id, com.point.core.flow.PcResultFields.DONE, "Фон убран"),
+            born = null,
+        )
+
+        val steps = s.journal.value.single { it.path == home.obj.uri.value }.steps
+        assertEquals("один шаг — одна строка, а не три записи об одном и том же", 1, steps.size)
+        assertEquals(StepOutcome.DONE, steps.single().outcome)
+    }
+
+    /** Ответ телефона на просьбу — такой же, каким его шлёт настоящий (`sendExecutionResult`). */
+    private fun reply(home: String, outcome: String, detail: String) = mapOf(
+        com.point.core.flow.PcExecFields.HOME to home,
+        com.point.core.flow.PcExecFields.ACTION to "cutout",
+        com.point.core.flow.PcExecFields.LABEL to "Убрать фон",
+        com.point.core.flow.PcResultFields.OUTCOME to outcome,
+        com.point.core.flow.PcResultFields.DETAIL to detail,
+    )
+
     private fun state(
         journal: JournalStore,
         realizers: Set<Realizer> = emptySet(),

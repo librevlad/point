@@ -966,6 +966,14 @@ class FlowViewModelTest {
 
         assertTrue("вопрос об отправке не задан ни на одном экране", vm.ui.value.cloudConsent)
         assertTrue("объект ушёл наружу без ответа человека", resolver.performed.isEmpty())
+
+        // Незавершённый шаг терминальным исходом не является (ADR-0001 §18): «ждёт» — не
+        // «не вышло», иначе на компьютере поверх честного «ждёт телефона» ложится провал
+        // работы, которая ещё не начиналась (#1269).
+        assertEquals(
+            com.point.core.flow.PcResultFields.AWAITING,
+            pcTransport.sent.single()[com.point.core.flow.PcResultFields.OUTCOME],
+        )
         assertEquals(
             com.point.core.flow.AWAITS_CONSENT_TEXT,
             pcTransport.sent.single()[com.point.core.flow.PcResultFields.DETAIL],
@@ -982,16 +990,91 @@ class FlowViewModelTest {
         assertEquals("результат ушёл не к тому объекту", "obj-at-home", done[com.point.core.flow.PcExecFields.HOME])
     }
 
+    /**
+     * Сказанное «нет» — тоже ответ, и его ждут на том конце (#1269).
+     *
+     * Отказ гас там, где его произнесли: на компьютере навсегда оставалось «ждёт вашего
+     * ответа на телефоне», и человек там ждал ответа, которого уже не будет.
+     */
+    @Test fun `сказанное «нет» доезжает до компьютера`() = runTest(dispatcher) {
+        pcLinks.pc = com.point.core.flow.LinkedPc("pc", "Компьютер", "http://pc")
+        pcTransport.outbox = listOf(asksPc())
+        val vm = vm(cloud = setOf(CapabilityId("a")))
+        vm.pullFromPc(); advanceUntilIdle()
+
+        vm.declineCloud(); advanceUntilIdle()
+
+        assertTrue("объект ушёл наружу после отказа", resolver.performed.isEmpty())
+        assertEquals("компьютер не узнал об отказе — там ждут ответа вечно", 2, pcTransport.sent.size)
+        val last = pcTransport.sent.last()
+        assertEquals(
+            com.point.core.flow.PcResultFields.FAILED,
+            last[com.point.core.flow.PcResultFields.OUTCOME],
+        )
+        assertEquals(
+            com.point.core.flow.CONSENT_DECLINED_TEXT,
+            last[com.point.core.flow.PcResultFields.DETAIL],
+        )
+    }
+
+    /**
+     * Две облачные просьбы в одной пачке — обе целы (#1269).
+     *
+     * Вопрос на экране один, и второй затирал первый: продолжение первой просьбы пропадало
+     * вместе с лямбдой, а из очереди компьютера подтверждались обе. Первая не выполнялась
+     * никогда, повторить её с компьютера было нечем, и там навсегда висело «ждёт ответа».
+     */
+    @Test fun `вторая облачная просьба не съедает первую`() = runTest(dispatcher) {
+        pcLinks.pc = com.point.core.flow.LinkedPc("pc", "Компьютер", "http://pc")
+        pcTransport.outbox = listOf(asksPc(), asksPc(id = 2, request = "r-2", home = "obj-второй"))
+        val vm = vm(cloud = setOf(CapabilityId("a")))
+
+        vm.pullFromPc(); advanceUntilIdle()
+
+        assertEquals("просьба ушла из очереди компьютера, а сделана не была", listOf(1), pcTransport.acked)
+        assertEquals("неразобранная просьба потерялась — забрать её нечем", 1, vm.fromPcCount.value)
+
+        vm.confirmCloud(); advanceUntilIdle()
+
+        assertEquals("«да» сделало не ту работу, о которой спрашивали", listOf(CapabilityId("a")), resolver.performed)
+        val home = com.point.core.flow.PcExecFields.HOME
+        assertEquals("результат уехал не к тому объекту", "obj-at-home", pcTransport.sent.last()[home])
+    }
+
+    /**
+     * Вопрос об отправке называет, о чём он (#1269).
+     *
+     * Экран согласия показывается вместо объекта, а по стуку компьютера человек приходит к
+     * нему с другого экрана: без имени работы и имени вещи он решает судьбу того, чего не
+     * выбирал и не видит. Пояснение клалось в сообщение — а сообщение этим же экраном и
+     * подменялось.
+     */
+    @Test fun `вопрос об отправке называет работу и объект`() = runTest(dispatcher) {
+        pcLinks.pc = com.point.core.flow.LinkedPc("pc", "Компьютер", "http://pc")
+        pcTransport.outbox = listOf(asksPc())
+        val vm = vm(cloud = setOf(CapabilityId("a")))
+
+        vm.pullFromPc(); advanceUntilIdle()
+
+        val about = vm.ui.value.cloudAbout
+        assertTrue("вопрос не назвал работу: «$about»", about.contains("Убрать фон"))
+        assertTrue("вопрос не назвал объект: «$about»", about.contains("накладная.jpg"))
+    }
+
     /** Письмо компьютера с просьбой — такое же, каким его шлёт настоящий (`queueForPhone`). */
-    private fun asksPc() = com.point.core.flow.PcOutboxEntry(
-        1,
+    private fun asksPc(
+        id: Int = 1,
+        request: String = "r-1",
+        home: String = "obj-at-home",
+    ) = com.point.core.flow.PcOutboxEntry(
+        id,
         mapOf(
             "name" to "накладная.jpg",
             "mime" to "image/jpeg",
             com.point.core.flow.PcExecFields.ACTION to "a",
             com.point.core.flow.PcExecFields.LABEL to "Убрать фон",
-            com.point.core.flow.PcExecFields.REQUEST to "r-1",
-            com.point.core.flow.PcExecFields.HOME to "obj-at-home",
+            com.point.core.flow.PcExecFields.REQUEST to request,
+            com.point.core.flow.PcExecFields.HOME to home,
         ),
     )
 

@@ -201,6 +201,7 @@ fun PointHost(
                 destination = state.cloudDestination,
                 title = state.cloudTitle,
                 confirm = state.cloudConfirm,
+                about = state.cloudAbout,
             )
 
             state.appPicker != null -> AppPickerScreen(
