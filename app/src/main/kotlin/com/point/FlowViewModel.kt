@@ -290,13 +290,15 @@ class FlowViewModel @Inject constructor(
     private var lastCircleSyncMs = 0L
 
     /**
-     * Слово соседа, сказанное до исхода (#1073): «компьютер ещё работает».
+     * Слово на экране, за которым ещё едет исход просьбы соседу (#1073): сперва сказанное
+     * компьютером «ещё работает», после сторожа — своё «пока не ответил».
      *
      * Исход просьбы соседу может прийти позже ответа — отменой у диалога сохранения, отказом
      * принтера, готовым файлом. Пока слово стоит на экране, телефон сам заглядывает в очередь
-     * компьютера; пришедший исход говорит человеку то же, что сказал бы срочный ответ той же
-     * просьбы — «Сохранено: C:\…», причину отказа, — и только отмена человека гасит слово
-     * тихо: она не ошибка (тот же шов, что возврат с чужого экрана, #1131).
+     * компьютера и заглядывает туда же возвратом человека в Point; пришедший исход говорит
+     * человеку то же, что сказал бы срочный ответ той же просьбы — «Сохранено: C:\…», причину
+     * отказа, — и только отмена человека гасит слово тихо: она не ошибка (тот же шов, что
+     * возврат с чужого экрана, #1131).
      */
     @Volatile private var neighbourWord: String? = null
     private var neighbourWatch: kotlinx.coroutines.Job? = null
@@ -2226,24 +2228,28 @@ class FlowViewModel @Inject constructor(
             creator = capability,
             provenance = produced?.provenance ?: com.point.core.model.Provenance.RULE,
             executor = PHONE_EXECUTOR,
-        ) + when (result) {
-            is ActionResult.Failure -> mapOf(
-                f.OUTCOME to f.FAILED,
-                f.DETAIL to result.reason,
-            )
-            is ActionResult.Done -> mapOf(f.OUTCOME to f.DONE, f.DETAIL to result.message)
-            is ActionResult.Success -> mapOf(
-                f.OUTCOME to f.DONE,
-                f.NAME to (result.result.metadata["name"] ?: "$label.result"),
-                f.MIME to result.result.mime,
-            )
-            // Незавершённый шаг терминальным исходом не является (ADR-0001 §18): компьютеру
-            // едет «ждёт», а не «не вышло» (#1269). Вопрос, на котором шаг остановился, —
-            // это и есть то, чего он ждёт, и компьютер называет его человеку своими словами.
-            is ActionResult.NeedsInput -> mapOf(f.OUTCOME to f.AWAITING, f.DETAIL to result.prompt)
-            is ActionResult.NeedsImage ->
-                mapOf(f.OUTCOME to f.AWAITING, f.DETAIL to "«$label» ждёт продолжения на телефоне")
-        }
+        ) +
+
+            // Слова провода об исходе пишет один словарь на оба направления (#1073): теми же
+            // полями исход просьбы соседу приезжает обратно на телефон.
+            when (result) {
+                is ActionResult.Done -> f.of(com.point.core.flow.PcActionOutcome.Done(result.message))
+                is ActionResult.Failure -> f.of(com.point.core.flow.PcActionOutcome.Failed(result.reason))
+
+                // У вещи исход один — она родилась; чем она называется, письмо говорит
+                // отдельно, и словарь исхода про имя с mime ничего не знает.
+                is ActionResult.Success -> f.of(com.point.core.flow.PcActionOutcome.Done(null)) + mapOf(
+                    f.NAME to (result.result.metadata["name"] ?: "$label.result"),
+                    f.MIME to result.result.mime,
+                )
+
+                // Незавершённый шаг терминальным исходом не является (ADR-0001 §18): компьютеру
+                // едет «ждёт», а не «не вышло» (#1269). Словарь исхода такого слова не знает и
+                // знать не должен — он про три терминальных исхода операции.
+                is ActionResult.NeedsInput -> mapOf(f.OUTCOME to f.AWAITING, f.DETAIL to result.prompt)
+                is ActionResult.NeedsImage ->
+                    mapOf(f.OUTCOME to f.AWAITING, f.DETAIL to "«$label» ждёт продолжения на телефоне")
+            }
 
         // Пустой шаг без нового объекта отправляет только знание: файла у него нет, и
         // компьютеру он приезжает как знание своего объекта, а не как вещь.
@@ -2552,6 +2558,14 @@ class FlowViewModel @Inject constructor(
 
     /** Зов из onResume хостов: человек вернулся в Point с чужого экрана. */
     fun returnedToPoint() {
+
+        // Чужой экран, с которого вернулся человек, бывает и на другом устройстве (#1073):
+        // человек ушёл к компьютеру выбирать папку и вернулся к телефону. Пока слово ожидания
+        // стоит, телефон смотрит в очередь этим же возвратом — сторож к этой минуте обычно
+        // уже кончился, а сам собой в очередь никто не смотрит, пока объект открыт: главный
+        // экран сюда не заглядывает, и человеку пришлось бы выйти из объекта и войти снова.
+        neighbourWord?.let { if (waitingForNeighbour(it)) refreshFromPc(force = true) }
+
         val standing = handOffMessage ?: return
         handOffMessage = null
         _ui.update {
@@ -2563,7 +2577,7 @@ class FlowViewModel @Inject constructor(
      * Пока слово соседа стоит на экране, телефон заглядывает в очередь компьютера сам (#1073):
      * иначе отмена у диалога на компьютере доезжала бы только к следующему открытию главного
      * экрана, а человек всё это время читал бы «ещё работает». У ожидания есть предел —
-     * дальше исход дождётся обычного забора очереди.
+     * дальше исход дождётся возврата в Point, входа в объект или обычного забора очереди.
      */
     private fun watchNeighbour(word: String) {
         neighbourWord = word
@@ -2571,14 +2585,11 @@ class FlowViewModel @Inject constructor(
         neighbourWatch = viewModelScope.launch {
             repeat(NEIGHBOUR_CHECKS) {
                 kotlinx.coroutines.delay(NEIGHBOUR_CHECK_MS)
+                if (!waitingForNeighbour(word)) return@launch
 
-                // Слово соседа ушло с экрана — гасить больше нечего, и поле не остаётся
-                // висеть со старым словом до следующего приземлившегося исхода.
-                if (_ui.value.message != word) {
-                    if (neighbourWord == word) neighbourWord = null
-                    return@launch
-                }
-                val pc = pcLinks.current() ?: return@launch
+                // Связи с компьютером сейчас нет — взгляд пропущен, но ожидание всё равно
+                // кончится словом, а не обещанием, оставленным навсегда.
+                val pc = pcLinks.current() ?: return@repeat
                 val entries = runCatching { pcTransport.fetchOutbox(pc) }.getOrNull() ?: return@repeat
                 val things = takeOutcomesHome(pc, entries)
                 fromPcEntries = things
@@ -2587,7 +2598,33 @@ class FlowViewModel @Inject constructor(
                 // Исход доехал — ждать больше нечего.
                 if (neighbourWord == null) return@launch
             }
+
+            // Сторож кончился, а исхода нет — и слово соседа больше не говорится за соседа:
+            // «ещё работает» — то, что компьютер сказал минуту назад, а не то, что телефон
+            // знает сейчас. Оставленное дальше, оно и было вечным обещанием из #1073.
+            // Ждать телефон не перестаёт: исход доедет возвратом в Point, входом в объект
+            // или забором очереди — и скажет своё поверх этого слова.
+            if (waitingForNeighbour(word)) {
+                neighbourWord = com.point.core.flow.PC_NO_ANSWER_YET
+                _ui.update {
+                    it.copy(message = com.point.core.flow.PC_NO_ANSWER_YET, messageOutcome = Outcome.NONE)
+                }
+            }
         }
+    }
+
+    /**
+     * Ждёт ли телефон исхода дальше: слово соседа всё ещё то же и всё ещё на экране (#1073).
+     *
+     * Ушло — ждать нечего, и поле не остаётся висеть со старым словом до следующего
+     * приземлившегося исхода. Правило одно на оба выхода сторожа: и на ранний, и на тот,
+     * где сторож досмотрел до конца.
+     */
+    private fun waitingForNeighbour(word: String): Boolean {
+        if (neighbourWord != word) return false
+        if (_ui.value.message == word) return true
+        neighbourWord = null
+        return false
     }
 
     /**

@@ -46,6 +46,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
@@ -1385,6 +1386,71 @@ class FlowViewModelTest {
             "телефон стучится в очередь по действию, которое уже кончилось",
             knocks, pcTransport.outboxFetches,
         )
+    }
+
+    /** Просьба соседу отправлена, сосед ответил «ещё работает» — и телефон ждёт исхода. */
+    private fun kotlinx.coroutines.test.TestScope.askedNeighbourToSave(): FlowViewModel {
+        pcLinks.pc = com.point.core.flow.LinkedPc("d-pc", "Ноутбук", "ключ-ПК")
+        pcTransport.outcome = com.point.core.flow.PcSendOutcome.Sent(
+            action = com.point.core.flow.PcActionOutcome.Done(com.point.core.flow.PC_STILL_WORKING),
+        )
+        resolver.realizer = neighbour()
+        val vm = vm()
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+        vm.onBubble(bubble(id = "pc-do:pc-save-as", title = "Сохранить на компьютере"))
+        dispatcher.scheduler.advanceTimeBy(1_000); dispatcher.scheduler.runCurrent()
+        assertEquals(com.point.core.flow.PC_STILL_WORKING, vm.ui.value.message)
+        return vm
+    }
+
+    /**
+     * Человек ушёл к компьютеру и вернулся к телефону (#1073, второе адверсарное ревью):
+     * системное окно «Сохранить в:» он держал открытым дольше, чем телефон сторожил очередь.
+     * Сторож кончался молча, а обещание за соседа оставалось на экране навсегда: пока объект
+     * открыт, в очередь не смотрит больше никто — ни главный экран, ни возврат в Point, — и
+     * человеку нечем было отличить сохранение от отмены, не выйдя из объекта и не войдя снова.
+     */
+    @Test fun `исход после сторожа доезжает возвратом человека в Point и называет место файла`() = runTest(dispatcher) {
+        val vm = askedNeighbourToSave()
+
+        // Полторы минуты у компьютера: человек выбирает папку, сторож телефона кончается.
+        dispatcher.scheduler.advanceTimeBy(90_000); advanceUntilIdle()
+        assertNotEquals(
+            "обещание за соседа пережило сторожа и обещает дальше",
+            com.point.core.flow.PC_STILL_WORKING, vm.ui.value.message,
+        )
+
+        // Человек сохранил файл и взял телефон в руки.
+        val saved = "Сохранено: C:/Users/User/Документы/акт.docx"
+        pcTransport.outbox = listOf(outcomeEntry(2, com.point.core.flow.PcActionOutcome.Done(saved)))
+        vm.returnedToPoint(); advanceUntilIdle()
+
+        assertEquals(
+            "человек так и не узнал, где искать сохранённый файл",
+            "Сохранить на компьютере — $saved", vm.ui.value.message,
+        )
+        assertEquals(Outcome.DONE, vm.ui.value.messageOutcome)
+        assertEquals("исход подтверждён компьютеру — второй раз его не привезут", listOf(2), pcTransport.acked)
+    }
+
+    /**
+     * Слово, которым телефон сменяет обещание соседа, — такое же слово ожидания (#1073): оно
+     * тоже гаснет отменой человека и тоже тихо. Иначе вечная строка возвращалась бы на экран
+     * другими словами.
+     */
+    @Test fun `поздняя отмена гасит и своё слово телефона, не только обещание соседа`() = runTest(dispatcher) {
+        val vm = askedNeighbourToSave()
+        dispatcher.scheduler.advanceTimeBy(90_000); advanceUntilIdle()
+        assertNotNull("телефону нечего сказать про начатую просьбу", vm.ui.value.message)
+
+        pcTransport.outbox = listOf(
+            outcomeEntry(4, com.point.core.flow.PcActionOutcome.Done(com.point.core.flow.PC_CANCELLED)),
+        )
+        vm.returnedToPoint(); advanceUntilIdle()
+
+        assertNull("отмена человека оставила на экране слово ожидания", vm.ui.value.message)
+        assertEquals(Outcome.NONE, vm.ui.value.messageOutcome)
+        assertEquals(listOf(4), pcTransport.acked)
     }
 
     @Test fun `назад с экрана входа возвращает в Point, а не закрывает его`() = runTest(dispatcher) {
