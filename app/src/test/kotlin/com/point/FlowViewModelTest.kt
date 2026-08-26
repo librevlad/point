@@ -1061,6 +1061,115 @@ class FlowViewModelTest {
         assertTrue("вопрос не назвал объект: «$about»", about.contains("накладная.jpg"))
     }
 
+    /**
+     * Компьютер узнаёт «ждёт» раньше, чем вопрос встаёт человеку под палец (#1269).
+     *
+     * Отправка — сетевой круг, и на нём этот шов спит. Пока он спал, вопрос уже стоял на
+     * экране: человек говорил «да», работа делалась, «готово» уезжало вторым письмом — и
+     * стоило «ждёт» доехать последним, на компьютере навсегда оставалось «Ждёт вашего
+     * ответа на телефоне» поверх сделанной работы (`recordStep` законченный шаг не трогает).
+     * Порядок писем на проводе телефон не выбирает — он выбирает, когда дать ответить.
+     */
+    @Test fun `компьютер узнаёт «ждёт» раньше, чем вопрос встаёт под палец`() = runTest(dispatcher) {
+        pcLinks.pc = com.point.core.flow.LinkedPc("pc", "Компьютер", "http://pc")
+        pcTransport.outbox = listOf(asksPc())
+        val vm = vm(cloud = setOf(CapabilityId("a")))
+        var askedWhileTelling: Boolean? = null
+        pcTransport.atSend = { meta ->
+            if (meta[com.point.core.flow.PcResultFields.OUTCOME] == com.point.core.flow.PcResultFields.AWAITING) {
+                askedWhileTelling = vm.ui.value.cloudConsent
+            }
+        }
+
+        vm.pullFromPc(); advanceUntilIdle()
+
+        assertEquals(
+            "компьютер не узнал «ждёт» вовсе",
+            com.point.core.flow.PcResultFields.AWAITING,
+            pcTransport.sent.single()[com.point.core.flow.PcResultFields.OUTCOME],
+        )
+        assertEquals(
+            "вопрос стоял под пальцем, пока «ждёт» было в пути — сказанное «да» обгонит его",
+            false,
+            askedWhileTelling,
+        )
+    }
+
+    /**
+     * Недоехавший отказ не выдаётся за доставленный (#1269).
+     *
+     * Транспорт исключений не бросает: выключенный компьютер приезжает обычным значением
+     * `Unreachable`. Прежде здесь спрашивали «не упало ли», слышали «дошло» всегда — и
+     * сказанное «нет» пропадало молча, а на компьютере оставалось вечное «ждёт ответа».
+     */
+    @Test fun `недоехавший отказ не выдаётся за доставленный`() = runTest(dispatcher) {
+        pcLinks.pc = com.point.core.flow.LinkedPc("pc", "Компьютер", "http://pc")
+        pcTransport.outbox = listOf(asksPc())
+        val vm = vm(cloud = setOf(CapabilityId("a")))
+        vm.pullFromPc(); advanceUntilIdle()
+        pcTransport.outcome = com.point.core.flow.PcSendOutcome.Unreachable(
+            "спит",
+            com.point.core.flow.PcUnreachable.PC_ASLEEP,
+        )
+
+        vm.declineCloud(); advanceUntilIdle()
+
+        val said = vm.ui.value.message.orEmpty()
+        assertEquals(
+            "отказ не доехал, а человеку это выдано не за провал — он уверен, что компьютер знает",
+            Outcome.FAILED,
+            vm.ui.value.messageOutcome,
+        )
+        assertTrue("не сказано, о какой работе речь-$said", said.contains("Убрать фон"))
+    }
+
+    /**
+     * Недоехавший результат тоже не выдаётся за сделанное (#1269).
+     *
+     * «Сделано для компьютера» про письмо, которое никуда не ушло, посылает человека
+     * искать результат там, где его нет.
+     */
+    @Test fun `недоехавший результат для компьютера не выдаётся за сделанное`() = runTest(dispatcher) {
+        pcLinks.pc = com.point.core.flow.LinkedPc("pc", "Компьютер", "http://pc")
+        pcTransport.outbox = listOf(asksPc())
+        pcTransport.outcome = com.point.core.flow.PcSendOutcome.Unreachable(
+            "спит",
+            com.point.core.flow.PcUnreachable.PC_ASLEEP,
+        )
+        val vm = vm()
+
+        vm.pullFromPc(); advanceUntilIdle()
+
+        val said = vm.ui.value.message.orEmpty()
+        assertEquals(
+            "результат не доехал, а человеку сказано «сделано» — он пойдёт искать его на компьютере",
+            Outcome.FAILED,
+            vm.ui.value.messageOutcome,
+        )
+        assertTrue("не сказано, о какой работе речь-$said", said.contains("Убрать фон"))
+    }
+
+    /**
+     * Лежащее на сервере письмо — доехало (#672, #1269).
+     *
+     * Выключенный компьютер — обычное дело: письмо ждёт его на сервере и будет прочитано.
+     * Назвать это «не доехало» значило бы пугать человека на самом частом пути.
+     */
+    @Test fun `письмо, ждущее компьютер на сервере, считается доехавшим`() = runTest(dispatcher) {
+        pcLinks.pc = com.point.core.flow.LinkedPc("pc", "Компьютер", "http://pc")
+        pcTransport.outbox = listOf(asksPc())
+        pcTransport.outcome = com.point.core.flow.PcSendOutcome.Parked
+        val vm = vm()
+
+        vm.pullFromPc(); advanceUntilIdle()
+
+        assertEquals(
+            "письмо ждёт компьютер на сервере, а человеку сказано «не доехало» — он отправит заново",
+            Outcome.DONE,
+            vm.ui.value.messageOutcome,
+        )
+    }
+
     /** Письмо компьютера с просьбой — такое же, каким его шлёт настоящий (`queueForPhone`). */
     private fun asksPc(
         id: Int = 1,
@@ -5655,6 +5764,13 @@ private class FakePcTransport : com.point.core.flow.PcTransport {
     val acked = mutableListOf<Int>()
     var pushedPhoneCaps: List<com.point.core.flow.PcRemoteAction> = emptyList()
     val sent = mutableListOf<Map<String, String>>()
+
+    /** Судьба письма — обычное значение, а не исключение: выключенный компьютер молчит, не падает. */
+    var outcome: com.point.core.flow.PcSendOutcome = com.point.core.flow.PcSendOutcome.Sent()
+
+    /** Что видно на экране, пока письмо ещё в пути (#1269): отправка — сетевой круг. */
+    var atSend: ((Map<String, String>) -> Unit)? = null
+
     override suspend fun send(
         pc: com.point.core.flow.LinkedPc,
         obj: com.point.core.model.PointObject,
@@ -5662,8 +5778,9 @@ private class FakePcTransport : com.point.core.flow.PcTransport {
         meta: Map<String, String>,
         action: String?,
     ): com.point.core.flow.PcSendOutcome {
+        atSend?.invoke(meta)
         sent += meta
-        return com.point.core.flow.PcSendOutcome.Sent()
+        return outcome
     }
 
     /** Два разговора с компьютером шли внахлёст — знание о круге писалось в два голоса (#1076). */

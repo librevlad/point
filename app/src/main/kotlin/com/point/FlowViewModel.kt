@@ -11,6 +11,7 @@ import com.point.core.flow.ChosenApp
 import com.point.core.flow.ChosenApps
 import com.point.core.flow.CollectionContent
 import com.point.core.flow.CrashLog
+import com.point.core.flow.delivered
 import com.point.core.flow.Enrichment
 import com.point.core.flow.EnrichmentUpdate
 import com.point.core.flow.FailedInvestigation
@@ -2030,6 +2031,18 @@ class FlowViewModel @Inject constructor(
         // сказанное «да» доводит ту же работу и возвращает результат домой обычным путём,
         // а сказанное «нет» тоже уезжает туда — там человек ждёт ответа, а не молчания.
         if (isCloud(id) && !cloudAlreadyAllowed(id)) {
+
+            // «Ждёт» уезжает ДО того, как вопрос встал на экране (#1269). Отправка — сетевой
+            // круг, и на нём этот шов спит; экран согласия выскакивает прямо под палец.
+            // Спроси раньше — человек успеет сказать «да», работа сделается и «готово»
+            // уедет, а «ждёт» доедет вторым и останется на компьютере последним словом:
+            // `recordStep` законченный шаг не трогает. Порядок и есть лекарство. Письмо
+            // безвредно и когда вопрос не взят: просьба тогда не подтверждается, и шаг на
+            // компьютере всё равно ждёт телефона.
+            val told = answerPc(
+                pc, ask, home, capability, label,
+                ActionResult.NeedsInput(com.point.core.flow.AWAITS_CONSENT_TEXT),
+            )
             val asked = askCloud(
                 id,
                 about = aboutForPc(label, ask),
@@ -2052,10 +2065,6 @@ class FlowViewModel @Inject constructor(
                 },
             )
             if (!asked) return false
-            val told = answerPc(
-                pc, ask, home, capability, label,
-                ActionResult.NeedsInput(com.point.core.flow.AWAITS_CONSENT_TEXT),
-            )
             _ui.update {
                 it.copy(
                     message = if (told) "«$label» для компьютера — ответьте, отправлять ли наружу" else "«$label» — ответ не доехал до компьютера",
@@ -2091,7 +2100,10 @@ class FlowViewModel @Inject constructor(
      * Исход без работы уезжает домой, к объекту компьютера, а не гаснет здесь.
      *
      * Отвечает, дошёл ли ответ: не дошёл — там шаг остался ждать, и человеку об этом
-     * говорят теми же словами, что и о недоехавшем результате.
+     * говорят теми же словами, что и о недоехавшем результате. Судьбу письма спрашивают у
+     * самого письма (#1269): транспорт не бросает исключений, и «выключенный компьютер»
+     * приезжает обычным значением `Unreachable` — прежде оно читалось как «дошло», и
+     * сказанное «нет» пропадало молча.
      */
     private suspend fun answerPc(
         pc: com.point.core.flow.LinkedPc,
@@ -2100,7 +2112,9 @@ class FlowViewModel @Inject constructor(
         capability: String,
         label: String,
         result: ActionResult,
-    ): Boolean = runCatching { sendExecutionResult(pc, ask, home, capability, label, result, null) }.isSuccess
+    ): Boolean = runCatching { sendExecutionResult(pc, ask, home, capability, label, result, null) }
+        .getOrNull()
+        .delivered()
 
     /** Сама работа для компьютера: объект принимается в scratch и исполняется здесь. */
     private suspend fun runForPc(
@@ -2133,21 +2147,30 @@ class FlowViewModel @Inject constructor(
         }
 
         val (result, worked) = outcome
-        val sent = runCatching { sendExecutionResult(pc, ask, home, capability, label, result, worked) }
+
+        // Судьбу письма знает само письмо, а не «не бросило исключения» (#1269).
+        val arrived = runCatching { sendExecutionResult(pc, ask, home, capability, label, result, worked) }
+            .getOrNull()
+            .delivered()
         val said = when {
-            sent.isFailure -> "«$label» — результат не доехал до компьютера"
+            !arrived -> "«$label» — результат не доехал до компьютера"
             result is ActionResult.Failure -> "«$label» — не вышло, компьютер об этом знает"
             else -> "«$label» — сделано для компьютера"
         }
         _ui.update {
             it.copy(
                 message = said,
-                messageOutcome = if (sent.isFailure) Outcome.FAILED else Outcome.DONE,
+                messageOutcome = if (!arrived) Outcome.FAILED else Outcome.DONE,
             )
         }
     }
 
-    /** Результат уезжает домой — к объекту компьютера, а не остаётся здесь. */
+    /**
+     * Результат уезжает домой — к объекту компьютера, а не остаётся здесь.
+     *
+     * Отдаёт судьбу письма наверх (#1269): звавшему нужно знать, доехало ли, — иначе он
+     * скажет человеку «компьютер знает» про письмо, которое никуда не ушло.
+     */
     private suspend fun sendExecutionResult(
         pc: com.point.core.flow.LinkedPc,
         ask: Map<String, String>,
@@ -2156,7 +2179,7 @@ class FlowViewModel @Inject constructor(
         label: String,
         result: ActionResult,
         worked: PointObject?,
-    ) {
+    ): com.point.core.flow.PcSendOutcome {
         val f = com.point.core.flow.PcResultFields
         val e = com.point.core.flow.PcExecFields
         val head = mapOf(
@@ -2212,7 +2235,7 @@ class FlowViewModel @Inject constructor(
         // компьютеру он приезжает как знание своего объекта, а не как вещь.
         val nameForFile = (meta[f.NAME] ?: "$label.txt")
         val letter = if (result is ActionResult.Success && body != null) body else emptyBody(body, home)
-        pcTransport.send(pc, letter, nameForFile, meta)
+        return pcTransport.send(pc, letter, nameForFile, meta)
     }
 
     /** Прочитанное здесь едет компьютеру содержимым: ссылка на scratch телефона там мертва (#811). */
