@@ -45,8 +45,10 @@ Point не является AI-чатом, менеджером файлов и�
 - Squash-merge только при зелёном CI.
 - PR-title = Conventional-Commit subject + `Closes #N`.
 - Трекер: GitHub Issues + Projects.
-- CI — две задачи, зелёными должны быть обе: `./gradlew test assembleDebug` и сервер
-  (`python -m pip install -r relay/requirements-dev.txt`, затем `cd relay && python -m pytest tests -q`).
+- CI (`.github/workflows/ci.yml`) — задача `build`: `./gradlew test assembleDebug`; задача `server`:
+  `python -m pip install -r relay/requirements-dev.txt`, затем `cd relay && python -m pytest tests -q`.
+  Зелёными для слияния должны быть обе. Задача `deployed` (`python3 tools/check_server_deployed.py`)
+  идёт только на `main` и говорит не про код в репозитории, а про боевую машину (#1231).
 - Релиз: тег `v*` → `.github/workflows/release.yml`; перед публикацией обязательны release gates и `tools/release-scan.sh`.
 
 ## Сборка и тесты
