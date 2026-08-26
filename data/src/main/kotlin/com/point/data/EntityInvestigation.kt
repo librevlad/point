@@ -99,7 +99,7 @@ class EntityInvestigationRealizer(
 
     override val capabilityId = EntityInvestigation.ID
 
-    override val meta = com.point.core.flow.RealizerMeta(actor = "entities")
+    override val meta = com.point.core.flow.RealizerMeta(actor = com.point.core.flow.ENTITY_RULES_ACTOR)
 
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         com.point.core.flow.investigated { findings(input) }

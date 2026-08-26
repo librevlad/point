@@ -43,6 +43,11 @@ class PcEntitiesRealizer(
 ) : Realizer {
     override val capabilityId = com.point.core.flow.KnownCapabilities.ENTITIES
 
+    // Знание уходит подписанным исполнителем (#1273): имя тут по движку, а не по устройству.
+    // Правила те же, что зовёт телефон, — значит и свидетель один: назовись компьютер своим
+    // именем, и два прочтения одними правилами сошли бы за два независимых подтверждения.
+    override val meta = com.point.core.flow.RealizerMeta(actor = com.point.core.flow.ENTITY_RULES_ACTOR)
+
     // «Найти в тексте» — исследование: результат — знание на исходнике, а не новый
     // объект-отчёт (Конституция §4; аудит 2026-08-09, блок 1.1).
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult = runCatching {

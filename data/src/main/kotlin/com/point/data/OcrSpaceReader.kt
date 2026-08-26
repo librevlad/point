@@ -83,7 +83,7 @@ class OcrSpaceReader(
     private fun base64(bytes: ByteArray): String = Base64.getEncoder().encodeToString(bytes)
 
     private companion object {
-        const val READER = "ocr-space"
+        const val READER = com.point.core.flow.OCR_SPACE_ACTOR
         const val DEFAULT_URL = "https://api.ocr.space/parse/image"
         const val FORM_TYPE = "application/x-www-form-urlencoded; charset=utf-8"
 

@@ -228,11 +228,15 @@ private fun String.readableUrl() =
 /**
  * «Не удалось посмотреть» — не «не найдено»: причина от ридера уже человеческая
  * (Этап 4), объект жив, повтор возможен. Пусто — молчим.
+ *
+ * Сами слова объявлены в `:core:flow` (#1272): ими же о сорвавшемся исследовании говорит
+ * компьютер, а до этого фраза стояла здесь литералом — на второй поверхности она была бы
+ * копией и разошлась бы с этой при первой правке.
  */
 fun failedNote(failed: List<com.point.core.flow.FailedInvestigation>): String? {
     val reasons = failed.map { it.reason.trim() }.filter { it.isNotBlank() }.distinct()
     if (reasons.isEmpty()) return null
-    return "Не удалось посмотреть: " + reasons.joinToString("; ")
+    return com.point.core.flow.INVESTIGATION_FAILED_HEAD + ": " + reasons.joinToString("; ")
 }
 
 @Composable
