@@ -314,7 +314,7 @@ class DesktopState(
             .filterKeys { it.startsWith(f.UNDERSTOOD) }
             .mapKeys { (k, _) -> k.removePrefix(f.UNDERSTOOD) }
         if (understood.isNotEmpty()) {
-            landFindings(item, com.point.core.model.Findings(metadata = understood))
+            landFindings(item, arrivedKnowledge(item, understood))
         }
 
         if (meta[f.OUTCOME] == f.FAILED) {
@@ -337,6 +337,26 @@ class DesktopState(
         _message.value = detail
         note(item, action, "$label · на телефоне", ActionResult.Done(detail))
         return ActionResult.Done(detail)
+    }
+
+    /**
+     * Прочитанное телефоном ложится здесь файлом рядом с объектом (#811, #995).
+     *
+     * Тот же приём, что и у объекта с телефона (`Inbox`): текст приезжает значением, потому
+     * что ссылка на scratch телефона здесь мертва. Без этого просьба «прочитай у себя»
+     * возвращалась пустой — компьютер снова считал свой документ непрочитанным.
+     *
+     * Место у знания одно и то же, кто бы его ни клал (#995): `keepTextBesideDocument`.
+     */
+    private fun arrivedKnowledge(
+        item: InboxItem,
+        understood: Map<String, String>,
+    ): com.point.core.model.Findings {
+        val arrived = com.point.core.flow.textArrivedFromTravel(understood)
+        val kept = arrived?.let { text ->
+            keepTextBesideDocument(java.io.File(item.obj.uri.value), text)?.absolutePath
+        }
+        return com.point.core.flow.knowledgeArrivedFromTravel(understood, kept)
     }
 
     private fun landFindings(item: InboxItem, findings: com.point.core.model.Findings) {
@@ -549,10 +569,24 @@ class DesktopState(
         _fresh.update { it - objectId }
     }
 
-    /** Открыть файл по пути — ребёнок набора становится объектом (#1099). */
-    fun openPath(path: String) {
-        reopenPath(path)?.let { onReceived(it, ObjectSource.LOCAL) }
+    /**
+     * Родить объект из принесённого файла — не останавливая окно (#995).
+     *
+     * Рождение объекта читает файл: у PDF — целиком, потому что признак «текст файлом не
+     * достаётся» судит весь документ, как и исполнитель. Звали его прямо из обработчика
+     * броска и из входа в ребёнка набора — то есть тем самым потоком, который рисует окно:
+     * толстый PDF останавливал окно до конца чтения. Чтение уходит на дисковый шов, объект
+     * приходит в ленту сам — тем же прогрессивным пониманием, что и на телефоне.
+     */
+    fun receive(source: ObjectSource, born: () -> InboxItem?) {
+        scope.launch(io) {
+            val item = runCatching { born() }.getOrNull() ?: return@launch
+            onReceived(item, source)
+        }
     }
+
+    /** Открыть файл по пути — ребёнок набора становится объектом (#1099). */
+    fun openPath(path: String) = receive(ObjectSource.LOCAL) { reopenPath(path) }
 
     fun onReceived(item: InboxItem, source: ObjectSource = ObjectSource.LOCAL) {
 
@@ -688,22 +722,41 @@ class DesktopState(
     /**
      * Клик по истории всегда отвечает: живым объектом ленты, переоткрытым файлом
      * или честным «файла больше нет». Молчание выглядело мёртвой кнопкой
-     * (живой прогон 2026-08-09) — выбор возвращённого делает вызвавший экран.
+     * (живой прогон 2026-08-09) — выбор возвращённого делает вызвавший экран, [onOpen].
+     *
+     * Переоткрытие читает файл — у PDF весь, потому что признак «текст файлом не достаётся»
+     * судит весь документ. Звали его прямо из обработчика нажатия по строке «Недавнего», то
+     * есть потоком, который рисует окно: толстый PDF останавливал окно до конца чтения
+     * (Конституция: первый экран без I/O). Дверь рождения объекта здесь та же, что у броска
+     * и у входа в ребёнка набора, — и шов у неё тот же дисковый. Живой объект ленты отвечает
+     * сразу: он уже здесь, и диск для ответа не нужен.
      */
-    fun openAgain(entry: JournalEntry): InboxItem? {
+    fun openAgain(entry: JournalEntry, onOpen: (InboxItem) -> Unit) {
         val live = _items.value.firstOrNull { it.obj.uri.value == entry.path }
-        if (live != null) return live
-        val reopened = runCatching { reopenPath(entry.path) }.getOrNull()
-        if (reopened == null) {
-
-            _message.value = "Файла больше нет: ${entry.name}"
-            return null
+        if (live != null) {
+            onOpen(live)
+            return
         }
+        scope.launch(io) {
+            val reopened = runCatching { reopenPath(entry.path) }.getOrNull()
+            if (reopened == null) {
 
-        // Переоткрытый файл — тот же объект: журнальное знание и имя возвращаются к нему (PC2/PC5).
-        val item = reopened.copy(obj = reopened.obj.copy(metadata = reopened.obj.metadata + entry.meta))
-        _items.update { listOf(item) + it }
-        return item
+                _message.value = "Файла больше нет: ${entry.name}"
+                return@launch
+            }
+
+            // Переоткрытый файл — тот же объект: журнальное знание и имя возвращаются к нему
+            // (PC2/PC5). Признак «текст прочитан» в журнал не ложится — он свойство состояния;
+            // его возвращает та же улика, что и хранится, — файл с текстом (#995). Заодно это
+            // отвечает и на обратный случай: улику убрали из своей папки — знания больше нет,
+            // и дверь «Извлечь текст» рисуется снова, а не молчит над пустотой.
+            val known = reopened.obj.copy(metadata = reopened.obj.metadata + entry.meta)
+            val item = reopened.copy(
+                obj = com.point.core.flow.knowledgeOfReadText(known) { java.io.File(it).isFile },
+            )
+            _items.update { listOf(item) + it }
+            onOpen(item)
+        }
     }
 
     fun pathOf(item: InboxItem): JournalEntry? =
@@ -787,6 +840,22 @@ class DesktopState(
 
     fun dismissMessage() {
         _message.value = null
+    }
+}
+
+/**
+ * Принесённые файлы становятся объектами: пачка — одним объектом-коллекцией с детьми, как на
+ * телефоне (#1099), одиночный файл — собой.
+ *
+ * Правило живёт здесь, а не в обработчике броска: окно исполняет его тем же вызовом, каким
+ * проверяет тест. Рождение объекта читает файл — у PDF весь — и потому идёт не потоком окна
+ * (#995).
+ */
+fun DesktopState.receiveFiles(inbox: Inbox, paths: List<String>, source: ObjectSource) {
+    if (paths.size > 1) {
+        receive(source) { inbox.addFiles(paths) }
+    } else {
+        paths.forEach { path -> receive(source) { inbox.addFile(path) } }
     }
 }
 

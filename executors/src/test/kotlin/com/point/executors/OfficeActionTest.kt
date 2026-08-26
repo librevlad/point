@@ -49,21 +49,32 @@ class OfficeActionTest {
         assertEquals(listOf(OFFICE_READ_STAGE), heard)
     }
 
+    /** Текст остаётся у самого документа, а не уезжает во второй объект (#995). */
     @Test
-    fun `извлечённый текст становится текстовым объектом`() = runTest {
+    fun `извлечённый текст становится знанием документа`() = runTest {
         val result = OfficeRealizer(store, extractor("Акт выполненных работ")).perform(docx, null)
 
-        val out = (result as ActionResult.Success).result
-        assertEquals(ObjectKind.TEXT, out.type)
-        assertEquals("Акт выполненных работ", File(out.uri.value).readText())
+        val found = (result as ActionResult.Done).findings
+        assertTrue(com.point.core.model.Feature.HAS_TEXT in found!!.features)
+        assertEquals(
+            "Акт выполненных работ",
+            File(found.metadata[com.point.core.flow.META_OCR_TEXT_REF]!!).readText(),
+        )
     }
 
+    /**
+     * Причина названа про этот файл, а не про чужой формат (#997).
+     *
+     * Раньше современная .docx слышала «старые .doc и .xls компьютер не открывает» — причину,
+     * которая к ней не относится, и человек искал несуществующую проблему формата.
+     */
     @Test
-    fun `старый формат отдаёт пустоту — отказ с причиной, а не тихий пустой объект`() = runTest {
+    fun `пустой документ отказывает с причиной, а не тихим пустым объектом`() = runTest {
         val result = OfficeRealizer(store, extractor("")).perform(docx, null)
 
-        assertTrue(result is ActionResult.Failure)
-        assertTrue((result as ActionResult.Failure).recoverable)
-        assertTrue(result.reason.contains(".doc"))
+        assertTrue("вышло: $result", result is ActionResult.Failure)
+        val said = (result as ActionResult.Failure).reason
+        assertTrue("причина свалена на чужой формат: $said", ".doc " !in said && ".xls" !in said)
+        assertTrue("сказано, что случилось, но не что дальше: $said", said.split(" — ", ". ").size >= 2)
     }
 }

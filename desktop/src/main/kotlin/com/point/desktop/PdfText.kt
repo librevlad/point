@@ -9,31 +9,36 @@ import java.io.File
 fun interface PdfText {
 
     /** `null` — прочитать не вышло; пустая строка — текстового слоя нет (скан). */
-    fun of(file: File, pages: Int?): String?
+    fun of(file: File): String?
 }
-
-fun PdfText.of(file: File): String? = of(file, null)
 
 class PdfBoxText : PdfText {
 
-    override fun of(file: File, pages: Int?): String? = runCatching {
+    override fun of(file: File): String? = runCatching {
         org.apache.pdfbox.pdmodel.PDDocument.load(file).use { document ->
-            val stripper = org.apache.pdfbox.text.PDFTextStripper()
-            if (pages != null) {
-                stripper.startPage = 1
-                stripper.endPage = pages
-            }
-            stripper.getText(document).trim()
+            org.apache.pdfbox.text.PDFTextStripper().getText(document).trim()
         }
     }.getOrNull()
 }
 
 /**
- * Скан — PDF без текстового слоя. Спрашивается при приёме, а не исследованием: своего
- * цикла обогащения у компьютера нет, а знать это нужно до того, как человек увидит двери
- * (иначе «Извлечь текст» на скане заканчивается пустотой вместо честного отсутствия двери).
- * Хватает первых страниц: слой либо есть, либо его нет.
+ * Скан — PDF, из которого текст не достаётся файлом. Спрашивается при приёме, а не
+ * исследованием: своего цикла обогащения у компьютера нет, а знать это нужно до того, как
+ * человек увидит двери (иначе «Извлечь текст» на скане заканчивается пустотой вместо честного
+ * отсутствия двери).
+ *
+ * Нечитаемый слой считается тем же самым (#933, #995): у документа своя раскладка шрифта,
+ * кириллица лежит под латинскими кодами, и «извлечённый» текст — мусор. Такой документ читают
+ * страницами, а не файлом, и дверь ему нужна та же, что скану.
+ *
+ * Само правило живёт в `:core:flow` и одно на обе поверхности: телефон спрашивает то же самое
+ * исследованием `pdf-image-shape`. Иначе один документ здесь «скан», а там нет.
+ *
+ * Спрашивается весь документ, а не первые страницы (#995). Проба в три страницы судила не тот
+ * документ, что исполнитель: у счёта с читаемой первой страницей и подменённой раскладкой
+ * дальше приём отвечал «не скан», рисовалась быстрая дверь, а «Извлечь текст» по нажатию
+ * отказывало и звало «Прочитать документ» — дверь, которой рядом не было. Телефон здесь тоже
+ * читает слой целиком: одно правило значит и одну улику.
  */
-fun looksScanned(pdf: PdfText, file: File): Boolean = pdf.of(file, pages = SCAN_PROBE_PAGES) == ""
-
-private const val SCAN_PROBE_PAGES = 3
+fun looksScanned(pdf: PdfText, file: File): Boolean =
+    com.point.core.flow.pdfLayerUnusable(pdf.of(file))

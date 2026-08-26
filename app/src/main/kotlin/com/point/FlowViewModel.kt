@@ -2017,7 +2017,11 @@ class FlowViewModel @Inject constructor(
         )
         val produced = (result as? ActionResult.Success)?.result
         val findings = (result as? ActionResult.Done)?.findings
-        val understood = findings?.metadata.orEmpty().mapKeys { (k, _) -> f.UNDERSTOOD + k }
+
+        // Знание едет компьютеру значением, а не ссылкой на scratch этого телефона (#811,
+        // #995): прочитанный здесь текст на той стороне жил мёртвым путём, и компьютер снова
+        // считал свой документ непрочитанным. Дорога в обе стороны одна.
+        val understood = packedForPc(findings?.metadata.orEmpty()).mapKeys { (k, _) -> f.UNDERSTOOD + k }
 
         val body = produced?.let { made ->
             PointObject(
@@ -2053,6 +2057,23 @@ class FlowViewModel @Inject constructor(
         // компьютеру он приезжает как знание своего объекта, а не как вещь.
         val nameForFile = (meta[f.NAME] ?: "$label.txt")
         pcTransport.send(pc, if (result is ActionResult.Success) body else emptyBody(body), nameForFile, meta)
+    }
+
+    /** Прочитанное здесь едет компьютеру содержимым: ссылка на scratch телефона там мертва (#811). */
+    private suspend fun packedForPc(knowledge: Map<String, String>): Map<String, String> {
+        val ref = com.point.core.flow.textRefForTravel(knowledge) ?: return knowledge
+        val text = runCatching {
+            store.readText(
+                PointObject(
+                    id = "read",
+                    mime = "text/plain",
+                    uri = com.point.core.model.ScratchRef(ref),
+                    state = com.point.core.model.ObjectState(ObjectKind.TEXT),
+                ),
+                limit = com.point.core.flow.READ_TEXT_TRAVEL_LIMIT,
+            )
+        }.getOrNull()
+        return com.point.core.flow.knowledgePackedForTravel(knowledge, text)
     }
 
     /** Тело письма, когда объекта у результата нет: знание едет, вещь не рождается. */
@@ -2822,22 +2843,22 @@ class FlowViewModel @Inject constructor(
         obj: PointObject,
         carried: Map<String, String>,
     ): Pair<PointObject, Map<String, String>> {
-        val text = carried[com.point.core.flow.META_READ_TEXT]?.takeIf { it.isNotBlank() }
-            ?: return obj to carried
-        val ref = runCatching {
-            store.newScratchFile("txt").also { java.io.File(it.value).writeText(text) }
-        }.getOrNull() ?: return obj to (carried - com.point.core.flow.META_READ_TEXT)
+        val text = com.point.core.flow.textArrivedFromTravel(carried) ?: return obj to carried
+        val kept = runCatching {
+            store.newScratchFile("txt").also { java.io.File(it.value).writeText(text) }.value
+        }.getOrNull()
 
-        return obj.copy(state = obj.state.with(Feature.HAS_TEXT)) to
-            (carried - com.point.core.flow.META_READ_TEXT + (com.point.core.flow.META_OCR_TEXT_REF to ref.value))
+        val landed = com.point.core.flow.knowledgeArrivedFromTravel(carried, kept)
+        return obj.copy(state = landed.features.fold(obj.state) { acc, f -> acc.with(f) }) to landed.metadata
     }
 
     private fun loadTextPreviewIfText(obj: PointObject) {
-        val readText = obj.metadata[com.point.core.flow.META_OCR_TEXT_REF]?.takeIf { it.isNotBlank() }
-        if (obj.state.kind != ObjectKind.TEXT && readText == null) return
+        // Откуда брать текст объекта, решает общее с компьютером правило (#995): прочитанное,
+        // а если его нет — собственное содержимое там, где оно и есть текст.
+        val ref = com.point.core.flow.shownTextRef(obj) ?: return
         viewModelScope.launch {
             val limit = com.point.core.ui.TEXT_PREVIEW_LOAD_LIMIT
-            val source = readText?.let { obj.copy(uri = com.point.core.model.ScratchRef(it)) } ?: obj
+            val source = if (ref == obj.uri.value) obj else obj.copy(uri = com.point.core.model.ScratchRef(ref))
             val raw = runCatching { store.readText(source, limit = limit) }.getOrDefault("")
             if (raw.isBlank()) return@launch
             val text = sanitizeTextPreview(raw)

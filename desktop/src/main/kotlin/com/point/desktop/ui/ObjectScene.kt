@@ -47,7 +47,7 @@ internal fun PortalPreview(item: InboxItem) {
     // сырого текста занимали весь экран, а вид, знание и действия оставались за нижним краем. Текст
     // теперь стоит там же, где на телефоне, — ниже знания (#898).
     if (item.obj.state.kind == ObjectKind.IMAGE) {
-        Preview(item)
+        ImagePreview(item)
     } else {
         // Кольцо было пустым, и объект узнавался только по имени файла в шапке (#879).
         // Значок вида — тот же, что на телефоне: он лежит в общей таблице с #849.
@@ -132,41 +132,43 @@ internal fun PortalHalo(size: androidx.compose.ui.unit.Dp, intensity: Float = 1f
     }
 }
 
-/** Сам объект виден сразу: текст читается, картинка показана (P2/P3). */
+/**
+ * Текст, который Point знает у этого объекта (P2/P3, #995).
+ *
+ * Прочитанное показывается у любого объекта, а не только у текстового: текст документа —
+ * знание самого документа, и человек, нажавший «Извлечь текст», обязан увидеть его здесь же.
+ * Откуда его брать, решает общее с телефоном правило `shownTextRef`.
+ */
 @Composable
 internal fun Preview(item: InboxItem) {
-    when (item.obj.state.kind) {
-        ObjectKind.TEXT -> {
-            val read = remember(item.obj.uri.value) {
-                runCatching {
-                    com.point.desktop.readTextHead(
-                        java.io.File(item.obj.uri.value),
-                        com.point.core.ui.TEXT_PREVIEW_LOAD_LIMIT,
-                    )
-                }.getOrNull()
+    val ref = com.point.core.flow.shownTextRef(item.obj) ?: return
+    val read = remember(ref) {
+        runCatching {
+            com.point.desktop.readTextHead(java.io.File(ref), com.point.core.ui.TEXT_PREVIEW_LOAD_LIMIT)
+        }.getOrNull()
+    }
+    if (read != null && read.text.isNotBlank()) TextBody(read)
+}
+
+/** Снимок сам себе опознание — его видно наверху, вместо портала. */
+@Composable
+internal fun ImagePreview(item: InboxItem) {
+    val bitmap = remember(item.obj.uri.value) {
+        runCatching {
+            java.io.File(item.obj.uri.value).inputStream().use {
+                androidx.compose.ui.res.loadImageBitmap(it)
             }
-            if (read != null && read.text.isNotBlank()) TextBody(read)
-        }
-        ObjectKind.IMAGE -> {
-            val bitmap = remember(item.obj.uri.value) {
-                runCatching {
-                    java.io.File(item.obj.uri.value).inputStream().use {
-                        androidx.compose.ui.res.loadImageBitmap(it)
-                    }
-                }.getOrNull()
-            }
-            if (bitmap != null) {
-                androidx.compose.foundation.Image(
-                    bitmap = bitmap,
-                    contentDescription = null,
-                    contentScale = androidx.compose.ui.layout.ContentScale.Fit,
-                    modifier = Modifier.fillMaxWidth()
-                        .heightIn(max = 300.dp)
-                        .clip(RoundedCornerShape(12.dp)),
-                )
-            }
-        }
-        else -> Unit
+        }.getOrNull()
+    }
+    if (bitmap != null) {
+        androidx.compose.foundation.Image(
+            bitmap = bitmap,
+            contentDescription = null,
+            contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+            modifier = Modifier.fillMaxWidth()
+                .heightIn(max = 300.dp)
+                .clip(RoundedCornerShape(12.dp)),
+        )
     }
 }
 

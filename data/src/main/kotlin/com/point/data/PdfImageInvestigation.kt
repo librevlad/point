@@ -50,9 +50,17 @@ class PdfImageInvestigationRealizer @Inject constructor(
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         com.point.core.flow.investigated { findings(input) }
 
+    /**
+     * Вопрос один: достаётся ли текст из самого файла (#933, #995).
+     *
+     * Пустого слоя мало: у части документов слой есть, но в нём подменена раскладка шрифта —
+     * «извлечённый» текст оказывается мусором. Правило живёт в `:core:flow` и одно с
+     * компьютером, который спрашивает то же самое при приёме: иначе тот же документ здесь и
+     * там — разный объект с разными дверями.
+     */
     private suspend fun findings(obj: PointObject): Findings = withContext(Dispatchers.IO) {
         val text = pdfText.extractText(obj)
-        if (text.isBlank()) Findings(setOf(Feature.IS_IMAGE_PDF)) else Findings()
+        if (com.point.core.flow.pdfLayerUnusable(text)) Findings(setOf(Feature.IS_IMAGE_PDF)) else Findings()
     }
 }
 

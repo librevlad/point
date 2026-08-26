@@ -80,4 +80,85 @@ const val META_ORIGIN_ID = "origin.id"
 /** Длиннее в дорогу не берём: это уже документ, а не знание о нём. */
 const val READ_TEXT_TRAVEL_LIMIT = 100_000
 
+/** Ссылка, по которой лежит прочитанный текст этого устройства, — её и надо прочитать в дорогу. */
+fun textRefForTravel(meta: Map<String, String>): String? =
+    meta[META_OCR_TEXT_REF]?.takeIf { it.isNotBlank() }
+
+/**
+ * Файл с текстом, который человек должен видеть у этого объекта, — или `null` (#995).
+ *
+ * Текст — знание документа, а не второй объект рядом с ним, и показывать его надо у самого
+ * документа. Компьютер показывал текст только у объекта вида «текст» и только из его
+ * собственного файла: человек нажимал «Извлечь текст», слышал «текст у самого документа» —
+ * и не видел на экране ни строчки. Правило одно на обе поверхности: сначала прочитанное,
+ * потом собственное содержимое там, где оно и есть текст.
+ */
+fun shownTextRef(obj: PointObject): String? =
+    textRefForTravel(obj.metadata)
+        ?: obj.uri.value.takeIf { obj.state.kind == com.point.core.model.ObjectKind.TEXT && it.isNotBlank() }
+
+/**
+ * Знание собирается в дорогу (#811, #995).
+ *
+ * Ссылка на прочитанный текст — путь в scratch этого устройства, и на той стороне она ведёт
+ * в никуда: объект приезжал «непрочитанным», и там первым делом предлагали прочитать его
+ * заново. Поэтому едет само содержимое, а ссылка не едет вовсе — даже когда прочитать файл
+ * не вышло: мёртвый путь только притворяется знанием.
+ *
+ * [text] — то, что лежит по ссылке; `null`, если прочитать не удалось.
+ */
+fun knowledgePackedForTravel(meta: Map<String, String>, text: String?): Map<String, String> {
+    if (textRefForTravel(meta) == null) return meta
+    val carried = text?.takeIf { it.isNotBlank() } ?: return meta - META_OCR_TEXT_REF
+    return meta - META_OCR_TEXT_REF + (META_READ_TEXT to carried.take(READ_TEXT_TRAVEL_LIMIT))
+}
+
+/** Текст, приехавший значением: его надо положить файлом этого устройства (#811). */
+fun textArrivedFromTravel(meta: Map<String, String>): String? =
+    meta[META_READ_TEXT]?.takeIf { it.isNotBlank() }
+
+/**
+ * Знание приехало и снова становится знанием этой стороны (#811, #995).
+ *
+ * [ref] — куда приехавший текст лёг здесь, или `null`, если положить не вышло. Признак
+ * «текст есть» ставится тут, а не едет отдельным полем протокола: он следует из того, что
+ * текст лёг. Без этого перенос терял понятое — та сторона звала делать уже сделанное.
+ */
+fun knowledgeArrivedFromTravel(meta: Map<String, String>, ref: String?): com.point.core.model.Findings {
+    if (textArrivedFromTravel(meta) == null) return com.point.core.model.Findings(metadata = meta)
+    val kept = ref?.takeIf { it.isNotBlank() }
+        ?: return com.point.core.model.Findings(metadata = meta - META_READ_TEXT)
+    return com.point.core.model.Findings(
+        features = setOf(Feature.HAS_TEXT),
+        metadata = meta - META_READ_TEXT + (META_OCR_TEXT_REF to kept),
+    )
+}
+
+/**
+ * Признак «текст документа прочитан» выводится из своей улики, а не помнится отдельно (#995).
+ *
+ * Улика знания — файл, где этот текст лежит (`ocr.text.ref`). Помнились они врозь, и врозь
+ * же расходились в обе стороны:
+ *
+ * - ссылка переживает перезапуск (она метаданные и ложится в журнал), а признак `HAS_TEXT` —
+ *   свойство состояния и не переживает: у уже прочитанного документа дверь «Извлечь текст»
+ *   рисовалась заново (DSK-040), ради чего `accepts` на признак и завязали;
+ * - файл лежит в папке самого человека, и он вправе его убрать или перенести — тогда
+ *   признак оставался, дверь не рисовалась, а показывать было нечего.
+ *
+ * Улика на месте — знание есть; улики нет — знания нет, и вопрос снова **не исследован**, а
+ * не «исследован, не найдено» (Конституция: `not investigated` ≠ `not found`). Поэтому
+ * мёртвая ссылка уходит вместе с признаком: она уже ничего не свидетельствует.
+ *
+ * [textAlive] — есть ли ещё файл по ссылке; спрашивается у той стороны, у которой свой диск.
+ */
+fun knowledgeOfReadText(obj: PointObject, textAlive: (String) -> Boolean): PointObject {
+    val ref = textRefForTravel(obj.metadata) ?: return obj
+    if (textAlive(ref)) return obj.copy(state = obj.state.with(Feature.HAS_TEXT))
+    return obj.copy(
+        state = obj.state.copy(features = obj.state.features - Feature.HAS_TEXT),
+        metadata = obj.metadata - META_OCR_TEXT_REF,
+    )
+}
+
 const val META_OCR_ATOMS_REF = "ocr.atoms.ref"

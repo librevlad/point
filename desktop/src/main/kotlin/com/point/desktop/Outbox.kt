@@ -42,14 +42,11 @@ class Outbox(private val dir: File) {
      * умел — компьютер отвечал ссылкой.
      */
     private fun travellingMeta(obj: PointObject): Map<String, String> {
-        val ref = obj.metadata[com.point.core.flow.META_OCR_TEXT_REF]?.takeIf { it.isNotBlank() }
-            ?: return obj.metadata
+        val ref = com.point.core.flow.textRefForTravel(obj.metadata) ?: return obj.metadata
         val text = runCatching {
             File(ref).takeIf(File::isFile)?.readText()?.take(com.point.core.flow.READ_TEXT_TRAVEL_LIMIT)
-        }.getOrNull()?.takeIf { it.isNotBlank() } ?: return obj.metadata - com.point.core.flow.META_OCR_TEXT_REF
-
-        return obj.metadata - com.point.core.flow.META_OCR_TEXT_REF +
-            (com.point.core.flow.META_READ_TEXT to text)
+        }.getOrNull()
+        return com.point.core.flow.knowledgePackedForTravel(obj.metadata, text)
     }
 
     private fun ids(): List<Int> =

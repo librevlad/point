@@ -1,8 +1,6 @@
 package com.point.desktop
 
 import com.point.core.flow.EMPTY_FILE_REASON
-import com.point.core.flow.META_OCR_TEXT_REF
-import com.point.core.flow.META_READ_TEXT
 import com.point.core.flow.META_UNUSABLE_REASON
 import com.point.core.flow.ObjectClassifier
 import com.point.core.flow.knowingAddress
@@ -152,19 +150,12 @@ class Inbox(private val dir: File, private val pdf: PdfText = PdfBoxText()) {
         // Прочитанное на телефоне приезжает значением и здесь снова становится знанием
         // (#811): текст ложится файлом рядом с объектом, а объект получает признак «текст
         // есть». Иначе компьютер предлагал распознать заново то, что уже прочитано.
-        val arrivedText = withFitness[META_READ_TEXT]?.takeIf { it.isNotBlank() }
-        val landed = if (arrivedText == null) {
-            withFitness to state
-        } else {
-            val sidecar = File(file.parentFile, file.nameWithoutExtension + ".read.txt")
-            val kept = runCatching { sidecar.writeText(arrivedText); sidecar.absolutePath }.getOrNull()
-            val meta2 = if (kept == null) {
-                withFitness - META_READ_TEXT
-            } else {
-                withFitness - META_READ_TEXT + (META_OCR_TEXT_REF to kept)
-            }
-            meta2 to state.with(Feature.HAS_TEXT)
-        }
+        // Место знания у документа одно на всех, кто его кладёт (#995): своё имя здесь
+        // рождало второе место, а имя без расширения — общее место у «смета.xlsx» и
+        // «смета.pdf», где текст одного затирал текст другого.
+        val arrivedText = com.point.core.flow.textArrivedFromTravel(withFitness)
+        val kept = arrivedText?.let { keepTextBesideDocument(file, it)?.absolutePath }
+        val landed = com.point.core.flow.knowledgeArrivedFromTravel(withFitness, kept)
 
         // Приём с телефона — такая же дверь рождения объекта из файла, как приём на самом
         // телефоне (#999): ссылка приходит сюда со своим адресом, а не одними байтами,
@@ -174,8 +165,8 @@ class Inbox(private val dir: File, private val pdf: PdfText = PdfBoxText()) {
                 id = UUID.randomUUID().toString(),
                 mime = mime,
                 uri = ScratchRef(file.absolutePath),
-                state = landed.second,
-                metadata = landed.first,
+                state = landed.features.fold(state) { acc, feature -> acc.with(feature) },
+                metadata = landed.metadata,
             ).knowingAddress(),
         )
     }

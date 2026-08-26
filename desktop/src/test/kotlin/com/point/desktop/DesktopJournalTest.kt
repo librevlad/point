@@ -218,7 +218,7 @@ class DesktopJournalTest {
     }
 
     @Test
-    fun `открыть заново возвращает объект на экран и ничего не выполняет`() {
+    fun `открыть заново возвращает объект на экран и ничего не выполняет`() = runTest(dispatcher) {
         val realizer = RecordingRealizer("pc-print", ActionResult.Done("Напечатано"))
         val remembered = JournalEntry(
             "/дом/счёт.pdf", "счёт.pdf", ObjectKind.PDF.name, "application/pdf",
@@ -228,7 +228,8 @@ class DesktopJournalTest {
         val store = FakeJournal(listOf(remembered))
         val s = state(store, realizers = setOf(realizer), reopen = { path -> item(path, at = 9_000L) })
 
-        s.openAgain(remembered)
+        s.openAgain(remembered) { }
+        advanceUntilIdle()
 
         assertEquals(listOf("/дом/счёт.pdf"), s.items.value.map { it.obj.uri.value })
         assertEquals(0, realizer.calls)
@@ -238,14 +239,15 @@ class DesktopJournalTest {
     }
 
     @Test
-    fun `исчезнувший файл говорит об этом словами, а не открывает пустоту`() {
+    fun `исчезнувший файл говорит об этом словами, а не открывает пустоту`() = runTest(dispatcher) {
         val remembered = JournalEntry(
             "/дом/унесли.pdf", "унесли.pdf", ObjectKind.PDF.name, "application/pdf",
             ObjectSource.DROPPED, 100L,
         )
         val s = state(FakeJournal(listOf(remembered)), reopen = { null })
 
-        s.openAgain(remembered)
+        s.openAgain(remembered) { }
+        advanceUntilIdle()
 
         assertTrue(s.items.value.isEmpty())
         assertEquals("Файла больше нет: унесли.pdf", s.message.value)

@@ -28,20 +28,35 @@ class RelayRequests(
 
     class Reply(val meta: Map<String, String> = emptyMap(), val body: ByteArray = ByteArray(0))
 
+    /**
+     * Знание едет телефону значением, а не ссылкой на диск этого компьютера (#811, #995).
+     *
+     * `ocr.text.ref` — путь в файловой системе ПК, и на телефоне он ведёт в никуда: телефон
+     * попросил прочитать документ, получал в ответ мёртвый путь и снова считал документ
+     * непрочитанным. Исходящий объект это давно умеет (`Outbox`), ответ на просьбу — нет.
+     */
+    private fun packed(meta: Map<String, String>): Map<String, String> {
+        val ref = com.point.core.flow.textRefForTravel(meta) ?: return meta
+        val text = runCatching {
+            java.io.File(ref).takeIf(java.io.File::isFile)?.readText()?.take(com.point.core.flow.READ_TEXT_TRAVEL_LIMIT)
+        }.getOrNull()
+        return com.point.core.flow.knowledgePackedForTravel(meta, text)
+    }
+
     private fun replyFor(result: com.point.core.model.ActionResult?): Reply {
         val born = (result as? com.point.core.model.ActionResult.Success)?.result
         val file = born?.let { java.io.File(it.uri.value).takeIf(java.io.File::isFile) }
         if (born == null || file == null) {
             // Знание из Done едет телефону теми же understood-полями, что и объект-результат:
             // перенос не теряет понятое (PC2; аудит 2026-08-09).
-            val understood = (result as? com.point.core.model.ActionResult.Done)?.findings?.metadata.orEmpty()
+            val understood = packed((result as? com.point.core.model.ActionResult.Done)?.findings?.metadata.orEmpty())
                 .mapKeys { (k, _) -> com.point.core.flow.PcResultFields.UNDERSTOOD + k }
             return Reply(
                 meta = understood,
                 body = encodePcReceiveReply(com.point.core.flow.pcActionOutcomeOf(result)).toByteArray(Charsets.UTF_8),
             )
         }
-        val understood = born.metadata
+        val understood = packed(born.metadata)
             .filterKeys { it != "name" }
             .mapKeys { (k, _) -> com.point.core.flow.PcResultFields.UNDERSTOOD + k }
         return Reply(

@@ -4,20 +4,13 @@ import com.point.core.flow.capabilities.PdfCapability
 import android.graphics.Paint
 import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
-import com.point.core.flow.Capability
-import com.point.core.flow.CapabilityMeta
-import com.point.core.flow.Latency
-import com.point.core.flow.META_YIELD_NOUN
 import com.point.core.flow.ObjectStore
-import com.point.core.flow.OfficeTextExtractor
 import com.point.core.flow.PdfTextExtractor
-import com.point.core.flow.SpreadsheetReader
 import com.point.core.flow.Realizer
 import com.point.core.flow.reportStage
 import com.point.core.model.ActionResult
-import com.point.core.model.ActionYield
-import com.point.core.model.CapabilityId
 import com.point.core.model.Feature
+import com.point.core.model.Findings
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
@@ -39,9 +32,6 @@ import javax.inject.Inject
 class PdfRealizer @Inject constructor(
     private val store: ObjectStore,
     private val pdfText: PdfTextExtractor,
-
-    /** Страница снимком — когда текстовый слой есть, но прочитать его нельзя (#933). */
-    private val rasterizer: com.point.core.flow.PdfRasterizer,
 ) : Realizer {
     override val capabilityId = PdfCapability.ID
 
@@ -100,40 +90,36 @@ class PdfRealizer @Inject constructor(
         return ActionResult.Success(ResultObject(ObjectKind.PDF, "application/pdf", ref))
     }
 
+    /**
+     * Текст PDF — знание самого документа (#995, решение владельца 21.08.2026).
+     *
+     * Второго объекта здесь больше не рождается: раньше на запасном пути папка отрисованных
+     * страниц выдавалась за одиночную картинку — объект указывал на каталог и не открывался
+     * ни у кого, а настоящая страница лежала внутри и была недостижима.
+     *
+     * Из файла достаётся только то, что в файле есть. Слоя нет или он нечитаем (своя
+     * раскладка шрифта, #933) — страницы читает «Прочитать документ» (#1014): там это
+     * объявлено долгой работой, а здесь обещано «текст документа · без сети». Делать долгую
+     * работу за быстрым обещанием — врать человеку, поэтому отказ называет тот шаг, который
+     * у документа есть (#1257), а не второй раз делает его чужими руками.
+     */
     private suspend fun pdfToText(input: PointObject): ActionResult {
         reportStage("Извлекаю текст из PDF")
         val text = pdfText.extractText(input)
-        if (text.isBlank()) {
-            return ActionResult.Failure(NO_TEXT_LAYER, recoverable = true)
+        if (com.point.core.flow.pdfLayerUnusable(text)) {
+            return ActionResult.Failure(com.point.core.flow.capabilities.NO_READABLE_PDF_LAYER, recoverable = false)
         }
 
-        // У части документов внутри своя раскладка шрифта: кириллица лежит под латинскими
-        // кодами, и слой отдаётся мусором вроде `ToeapucrBo 3 o6MexeHop`. Раньше этот мусор
-        // становился текстом объекта, и над ним писалось «ПОНЯЛ» (#933). Решение владельца
-        // 13.08.2026: «Заметить и самому прочитать снимком» — страница отдаётся снимком, и
-        // дальше её читает OCR, как любой другой кадр.
-        if (com.point.core.flow.ReadableText.unreadable(text)) {
-            reportStage(UNREADABLE_STAGE)
-            val page = runCatching { rasterizer.rasterize(input) }.getOrNull()
-                ?: return ActionResult.Failure(UNREADABLE_LAYER, recoverable = true)
-            return ActionResult.Success(
-                ResultObject(
-                    ObjectKind.IMAGE, "image/png", page,
-                    mapOf("op" to "pdf-unreadable", "name" to pageName(input)),
-                ),
-            )
-        }
         val ref = store.newScratchFile("txt")
         File(ref.value).writeText(text)
-        return ActionResult.Success(
-            ResultObject(ObjectKind.TEXT, "text/plain", ref, mapOf("op" to "pdf-extract")),
+        return ActionResult.Done(
+            com.point.core.flow.capabilities.TEXT_IS_WITH_DOCUMENT,
+            Findings(
+                features = setOf(Feature.HAS_TEXT),
+                metadata = mapOf(com.point.core.flow.META_OCR_TEXT_REF to ref.value),
+            ),
         )
     }
-
-    /** Имя снимка страницы — от документа: человек ищет в списке свой счёт, а не «страницу». */
-    private fun pageName(input: PointObject): String =
-        (input.metadata["name"]?.substringBeforeLast('.')?.takeIf { it.isNotBlank() } ?: "Документ") +
-            " — страница.png"
 
     private suspend fun write(document: PdfDocument): ScratchRef {
         val ref = store.newScratchFile("pdf")
@@ -173,16 +159,5 @@ class PdfRealizer @Inject constructor(
         const val NOT_THIS_OBJECT = "В PDF превращаются снимок, текст и документ — этот объект не из них"
 
         const val PDF_FAILED = "PDF не собрался — попробуйте ещё раз"
-
-        /** Слой есть, а прочитать его нельзя: шрифт документа подменяет буквы (#933). */
-        const val UNREADABLE_LAYER =
-            "Текст в этом PDF нечитаем — у документа своя раскладка шрифта. Прочитать страницу " +
-                "снимком не вышло, попробуйте ещё раз"
-
-        const val UNREADABLE_STAGE = "Текст нечитаем — читаю страницу снимком"
-
-        const val NO_TEXT_LAYER =
-            "В этом PDF нет текста — страницы сняты картинкой. Разложите его действием «Страницы», " +
-                "потом «Распознать текст»"
     }
 }

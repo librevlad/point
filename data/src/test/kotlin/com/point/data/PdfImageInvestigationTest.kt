@@ -30,6 +30,20 @@ class PdfImageInvestigationTest {
         assertTrue(Feature.IS_IMAGE_PDF in features)
     }
 
+    /**
+     * Слой, который нельзя прочитать, текстовым слоем не является (#933, #995).
+     *
+     * У части бухгалтерских PDF внутри своя раскладка шрифта, и «извлечённый» текст — мусор.
+     * Компьютер метит такой файл сканом при приёме; телефон считал его обычным документом, и
+     * один и тот же файл на двух устройствах становился разным объектом с разными дверями.
+     */
+    @Test
+    fun `подменённая раскладка шрифта — тот же признак, что и пустой слой`() = runTest {
+        val features = PdfImageInvestigationRealizer(extractorOf(GARBLED)).look(pdf).features
+
+        assertTrue("мусор из слоя снова сойдёт за текст", Feature.IS_IMAGE_PDF in features)
+    }
+
     @Test
     fun `no flag when the PDF has extractable text`() = runTest {
         val features = PdfImageInvestigationRealizer(extractorOf("Договор №42 от 2026 года")).look(pdf).features
@@ -42,5 +56,13 @@ class PdfImageInvestigationTest {
         assertTrue(PdfImageInvestigation().accepts(ObjectState(ObjectKind.PDF)))
         assertFalse(PdfImageInvestigation().accepts(ObjectState(ObjectKind.IMAGE)))
         assertFalse(PdfImageInvestigation().accepts(ObjectState(ObjectKind.TEXT)))
+    }
+
+    private companion object {
+
+        /** Слой украинского бухгалтерского PDF с подменённой раскладкой шрифта (#933). */
+        const val GARBLED =
+            "ToeapucrBo 3 o6MexeHop eignoeiganbHicrlo BaxraxoorpxMyBaq cKnaAaHHR " +
+                "flocraqanbHHK e.qPnov Eniqgxtp 3aMoBHHK PaxyHok-cbakrypa"
     }
 }

@@ -38,17 +38,51 @@ class ArchiveCapability  : Capability {
     companion object { val ID = CapabilityId("archive") }
 }
 
+/**
+ * «Извлечь текст» у офисного документа — знание, а не новый объект (#995, решение владельца).
+ *
+ * Текст документа рождал второй объект, который жил своей жизнью: у него не было ни имени
+ * документа, ни его знания, а сам документ оставался «непрочитанным». Текст ложится на сам
+ * документ тем же ключом, каким ложится любое чтение (#1157).
+ */
 class OfficeCapability  : Capability {
     override val id = ID
     override val icon = "office"
 
     override val meta = CapabilityMeta(latency = Latency.FAST, revealsInside = true)
     override fun label(state: ObjectState) = "Извлечь текст"
-    override fun accepts(state: ObjectState) = state.kind == ObjectKind.OFFICE
-    override fun produces(state: ObjectState) = ObjectState(ObjectKind.TEXT)
+
+    // Текст уже у документа — извлекать нечего (#997, DSK-040): дверь оставалась на месте, и
+    // три нажатия подряд ничего не меняли в объекте. Так же уходит вниз «Прочитать документ».
+    override fun accepts(state: ObjectState) =
+        state.kind == ObjectKind.OFFICE && !state.has(Feature.HAS_TEXT)
+    override fun produces(state: ObjectState) = state.with(Feature.HAS_TEXT)
+    override fun yields(state: ObjectState) = ActionYield.Same(TEXT_OF_DOCUMENT_NOTE)
+
+    // Прочитать документ — понять его: знание о том же объекте механически читается как
+    // «ничего не вернёт», и намерение приходится называть вслух (как у расшифровки, #1097).
+    override fun intents(state: ObjectState) = setOf(Intent.UNDERSTAND)
 
     companion object { val ID = CapabilityId("office") }
 }
+
+/** Что обещает «Извлечь текст» на обеих поверхностях: текст остаётся у самого документа. */
+const val TEXT_OF_DOCUMENT_NOTE = "текст документа · без сети"
+
+/** И чем оно заканчивается — тоже одинаково на обеих поверхностях (#995). */
+const val TEXT_IS_WITH_DOCUMENT = "Текст прочитан — он у самого документа"
+
+/**
+ * Из файла текст не достаётся — читать надо страницы (#933, #995, #1257).
+ *
+ * Совет называет шаг, который у документа есть: «Прочитать документ» (#1014). Прежний вёл в
+ * два действия — «Страницы», потом «Распознать текст», — которых у PDF нет уже давно. Строка
+ * одна на обе поверхности: телефон и компьютер отказывают одному и тому же документу по
+ * одной причине, и слышать он должен одно и то же.
+ */
+const val NO_READABLE_PDF_LAYER =
+    "Из файла этот текст не достаётся — страницы сняты картинкой или у документа своя " +
+        "раскладка шрифта. Прочитайте его действием «Прочитать документ»"
 
 class ImageCapability  : Capability {
     override val id = ID
@@ -122,23 +156,40 @@ class PdfCapability(private val office: OfficeOrgan = OfficeAlwaysHere) : Capabi
     override val meta = CapabilityMeta(latency = Latency.FAST)
     override fun label(state: ObjectState) =
         if (state.kind == ObjectKind.PDF) "Извлечь текст" else "В PDF"
+
+    /**
+     * На PDF действие достаёт текст из самого файла — и только его (#995).
+     *
+     * Документ, у которого текст из файла не достаётся, помечен `IS_IMAGE_PDF`: его читает
+     * «Прочитать документ», объявляющее долгую работу вслух. Обещание «текст документа ·
+     * без сети» здесь остаётся правдой — быстро и без страниц. Уже прочитанному документу
+     * дверь не рисуется вовсе: второе нажатие ничего не меняло.
+     */
     override fun accepts(state: ObjectState) =
         state.kind in setOf(ObjectKind.IMAGE, ObjectKind.TEXT) ||
             (state.kind == ObjectKind.OFFICE && office.missing() == null) ||
 
-            (state.kind == ObjectKind.PDF && !state.has(Feature.IS_IMAGE_PDF))
+            (
+                state.kind == ObjectKind.PDF &&
+                    !state.has(Feature.IS_IMAGE_PDF) && !state.has(Feature.HAS_TEXT)
+                )
 
     /** Органа нет — «Почти доступно» с причиной, а не тишина в списке действий. */
     override fun missing(state: ObjectState): String? =
         if (state.kind == ObjectKind.OFFICE) office.missing() else null
 
+    /** Текст PDF — знание самого документа, а не второй объект рядом с ним (#995). */
     override fun produces(state: ObjectState) =
-        if (state.kind == ObjectKind.PDF) ObjectState(ObjectKind.TEXT) else ObjectState(ObjectKind.PDF)
+        if (state.kind == ObjectKind.PDF) state.with(Feature.HAS_TEXT) else ObjectState(ObjectKind.PDF)
 
     override fun yields(state: ObjectState) = when (state.kind) {
-        ObjectKind.PDF -> ActionYield.New(ObjectKind.TEXT)
+        ObjectKind.PDF -> ActionYield.Same(TEXT_OF_DOCUMENT_NOTE)
         else -> ActionYield.New(ObjectKind.PDF)
     }
+
+    // Из PDF достают текст, чтобы понять документ; из снимка делают PDF, чтобы его отправить.
+    override fun intents(state: ObjectState) =
+        if (state.kind == ObjectKind.PDF) setOf(Intent.UNDERSTAND) else setOf(Intent.PREPARE)
 
     companion object { val ID = CapabilityId("pdf") }
 }

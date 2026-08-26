@@ -118,6 +118,51 @@ class PcKnowledgeComesBackTest {
         assertTrue("в сообщении видно имя результата", result.message.contains("страница.txt"))
     }
 
+    /**
+     * Прочитанное компьютером ложится знанием документа здесь (#811, #995).
+     *
+     * Компьютер читает документ по просьбе телефона и присылает текст значением — ссылка на
+     * его диск здесь мертва. Раньше приезжала именно ссылка: документ на телефоне оставался
+     * «непрочитанным», и телефон снова звал делать уже сделанное.
+     */
+    @Test
+    fun `текст, прочитанный компьютером, становится знанием документа на телефоне`() = runTest {
+        val transport = object : PcTransport by Returning(null) {
+            override suspend fun send(
+                pc: LinkedPc,
+                obj: PointObject,
+                fileName: String,
+                meta: Map<String, String>,
+                action: String?,
+            ) = PcSendOutcome.Sent(
+                action = com.point.core.flow.PcActionOutcome.Done("Текст прочитан"),
+                understanding = mapOf(com.point.core.flow.META_READ_TEXT to "Счёт № 12 на 3480 гривен"),
+            )
+        }
+        val realizer = RemotePcRealizer(
+            action = PcRemoteAction("office", "Извлечь текст"),
+            links = object : PcLinks {
+                override fun current() = pc
+                override suspend fun save(pc: LinkedPc) = Unit
+                override suspend fun clear() = Unit
+            },
+            transport = transport,
+            store = scratch(),
+        )
+
+        val result = realizer.perform(page, null)
+
+        val findings = (result as ActionResult.Done).findings!!
+        assertTrue("документ не получил признака «текст есть»", com.point.core.model.Feature.HAS_TEXT in findings.features)
+        val ref = findings.metadata[com.point.core.flow.META_OCR_TEXT_REF]
+        assertTrue("текста у документа нет: ${findings.metadata}", !ref.isNullOrBlank())
+        assertTrue("текст доехал не целиком", File(ref!!).readText().contains("3480"))
+        assertTrue(
+            "значение осталось притворяться знанием",
+            com.point.core.flow.META_READ_TEXT !in findings.metadata,
+        )
+    }
+
     @Test
     fun `what the phone already knows travels to the computer with the object`() = runTest {
         val transport = Returning(returned = null)

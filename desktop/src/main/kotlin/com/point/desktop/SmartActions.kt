@@ -179,29 +179,46 @@ class PcQrRealizer(private val outbox: Outbox) : Realizer {
     }
 }
 
+/**
+ * Текст офисного документа на компьютере: знание самого документа (#995) и настоящая причина
+ * отказа (#997) — современная .xlsx больше не слышит про старые .doc и .xls, а таблицу читает
+ * свой читатель, которому не нужен общий словарь строк.
+ */
 class PcOfficeTextRealizer(
     private val extractor: com.point.core.flow.OfficeTextExtractor,
-    private val outbox: Outbox,
 ) : Realizer {
     override val capabilityId = com.point.core.flow.capabilities.OfficeCapability.ID
 
-    override suspend fun perform(input: PointObject, amendment: String?): ActionResult = runCatching {
-        val text = extractor.extractText(input)
+    override suspend fun perform(input: PointObject, amendment: String?): ActionResult {
+
+        // Прочитать и записать — две работы с разными бедами (#995, #997). Пока они лежали
+        // в одном `runCatching`, осечка записи выходила человеку как «документ повреждён»:
+        // документ был цел, а виноватым назначали его.
+        val text = runCatching { extractor.extractText(input) }
+            .getOrElse {
+                return ActionResult.Failure(
+                    "Текст не достался — документ повреждён или это не офисный файл",
+                    recoverable = true,
+                )
+            }
         if (text.isBlank()) {
 
             return ActionResult.Failure(
-                "В этом документе текста не нашлось — старые .doc и .xls компьютер не открывает",
+                com.point.core.flow.officeTextMissingReason(input.metadata["name"], input.mime),
                 recoverable = false,
             )
         }
-        val file = File.createTempFile("pc-office-", ".txt").apply { writeText(text) }
-        ActionResult.Success(
-            com.point.core.model.ResultObject(
-                type = ObjectKind.TEXT,
-                mime = "text/plain",
-                uri = ScratchRef(file.absolutePath),
-                metadata = mapOf("name" to "Текст документа"),
+
+        // Знание живёт рядом с документом, а не в `%TEMP%`: ссылка постоянная, и уборка
+        // операционной системой не должна её убивать (#995).
+        val file = keepTextBesideDocument(File(input.uri.value), text)
+            ?: return ActionResult.Failure(TEXT_NOT_KEPT, recoverable = true)
+        return ActionResult.Done(
+            com.point.core.flow.capabilities.TEXT_IS_WITH_DOCUMENT,
+            com.point.core.model.Findings(
+                features = setOf(com.point.core.model.Feature.HAS_TEXT),
+                metadata = mapOf(com.point.core.flow.META_OCR_TEXT_REF to file.absolutePath),
             ),
         )
-    }.getOrElse { ActionResult.Failure("Текст не достался — документ повреждён или это не офисный файл", recoverable = true) }
+    }
 }
