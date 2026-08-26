@@ -5,7 +5,8 @@ import urllib.parse
 
 
 def test_здоровье_отвечает_без_пропуска(point):
-    assert point.client.get("/health").text == "ok"
+    # Второе слово ответа — выложенный код (#1231), про него отдельно в test_deployed_code.py.
+    assert point.client.get("/health").text.startswith("ok")
 
 
 def test_вход_проходит_целиком_и_выдаёт_пропуск(point):

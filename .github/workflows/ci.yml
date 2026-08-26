@@ -65,3 +65,20 @@ jobs:
       - name: Server tests
         working-directory: relay
         run: python -m pytest tests -q
+
+  # Боевой сервер и main не должны расходиться (#1231). Задача проверяет не код в репозитории,
+  # а ВЫЛОЖЕННОЕ: сервер называет свой код в /health, шаг сверяет его с main. Ключа от боевой
+  # машины здесь нет — только публичный адрес, поэтому новой поверхности доступа не появляется.
+  # Только на main: на ветке сверять нечего, там код ещё и не должен быть выложен.
+  deployed:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Нужна история: отпечаток — коммит последней правки серверных файлов, а он почти
+          # никогда не последний коммит вообще.
+          fetch-depth: 0
+
+      - name: Боевой сервер и main не должны расходиться
+        run: python3 tools/check_server_deployed.py

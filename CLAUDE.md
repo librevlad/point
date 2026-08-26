@@ -45,7 +45,8 @@ Point не является AI-чатом, менеджером файлов и�
 - Squash-merge только при зелёном CI.
 - PR-title = Conventional-Commit subject + `Closes #N`.
 - Трекер: GitHub Issues + Projects.
-- CI: `./gradlew test assembleDebug`.
+- CI — две задачи, зелёными должны быть обе: `./gradlew test assembleDebug` и сервер
+  (`python -m pip install -r relay/requirements-dev.txt`, затем `cd relay && python -m pytest tests -q`).
 - Релиз: тег `v*` → `.github/workflows/release.yml`; перед публикацией обязательны release gates и `tools/release-scan.sh`.
 
 ## Сборка и тесты
@@ -67,7 +68,23 @@ export JAVA_HOME="C:/Program Files/Android/Android Studio/jbr"
 ./gradlew :executors:testDebugUnitTest --tests "com.point.executors.DefaultCapabilityRegistryTest"
 ```
 
-Точки входа: `HomeActivity`, `ShareActivity`, debug-only `SandboxActivity`.
+Поверхности — все двери, которыми система зовёт Point (`app/src/main/AndroidManifest.xml`):
+
+- «Поделиться» и «Открыть с помощью» — `ShareActivity`;
+- значок приложения — `HomeActivity`;
+- выделенный текст в чужом приложении — `ProcessTextActivity`;
+- ссылка Point `/d/…` от другого человека — `source.OpenDropLinkActivity`;
+- возврат из браузера после входа — `SignedInActivity`;
+- печать из любого приложения — `print.PointPrintService`;
+- две плитки шторки — `source.PointTileService` и `ClipboardTileService`;
+- стук компьютера — `knock.KnockService`, не экспортирован;
+- внутренние двери рождения объекта — `source.SourcePickerActivity`, `ClipboardSyncActivity`,
+  `source.ReceiveActivity`, `source.RecordAudioActivity`;
+- debug-only (`app/src/debug/AndroidManifest.xml`) — `SandboxActivity`, `PrintProbeActivity`, там же
+  экспортируется `SourcePickerActivity`.
+
+Правя приём объекта, проверять все, а не только Share: половину этих дверей человек открывает
+не из списка «Поделиться».
 
 Для быстрого тестирования использовать Compose `@Preview`, `SandboxActivity` и JVM-тесты.
 
@@ -75,6 +92,7 @@ export JAVA_HOME="C:/Program Files/Android/Android Studio/jbr"
 
 ```text
 :core:model ← :core:flow ← { :data, :executors, :core:ui } ← :app
+                        ← :desktop
 ```
 
 Стрелки только вниз.
@@ -91,6 +109,11 @@ export JAVA_HOME="C:/Program Files/Android/Android Studio/jbr"
 - `:app` — Android entry points, navigation, DI.
 - `:desktop` — Compose Desktop поверх `:core:model` и `:core:flow`.
 - `:checks` — проверки, читающие весь проект текстом; ни одной зависимости на продуктовый код.
+
+Кроме gradle-модулей в репозитории живёт `relay/` — сервер аккаунтов и круга устройств
+(`point.leerio.app`): Python, gradle его не видит, тесты — `relay/tests` под pytest. Через него
+проходят чужие объекты, поэтому приватностная норма проекта касается его в первую очередь.
+Выкладка — `tools/deploy-server.sh` руками; какой код выложен, называет `/health` (#1231).
 
 ## Graph — фундамент Point
 
@@ -311,6 +334,9 @@ Point не превращается в:
 ## Секреты
 
 Gemini key — только в `local.properties` (`GEMINI_API_KEY`), никогда не хардкодить и не коммитить.
+
+`RELAY_URL` — адрес сервера аккаунтов, тоже из `local.properties` и тоже попадает в сборку
+(`data/build.gradle.kts`).
 
 Release-артефакты не должны содержать секреты.
 
