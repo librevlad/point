@@ -1,67 +1,72 @@
 package com.point.desktop
 
-import com.point.core.model.ObjectKind
-import com.point.core.model.ObjectState
-import com.point.core.model.PointObject
-import com.point.core.model.ScratchRef
+import androidx.compose.ui.ImageComposeScene
+import androidx.compose.ui.unit.Density
+import java.util.concurrent.atomic.AtomicInteger
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Явный зов из проводника поднимает окно и показывает объект (#1019, вариант B).
+ * Явный зов человека выводит окно вперёд (#1019, решение владельца 20.08.2026, вариант B).
  *
- * Прежде «Открыть в Point» делал ровно `compactVisible = true`: скрытое окно
- * показывалось, но не поднималось, а видимое, погребённое под чужими окнами,
- * не менялось вообще. Холодный старт с файлом выходил на список (DSK-001).
+ * Проверяется подъём окна, а не счётчик рядом с ним: сигнал зова подан — окно ОС обязано
+ * получить `toFront()`. Прежде этот файл сверял значение `RaiseSignal.calls` — то самое
+ * поле, которое завёл чинивший PR: ни подъёма окна, ни открытого объекта не касался ни один
+ * из тестов.
+ *
+ * Сам выход окна на передний план — дело Windows; здесь проверено «когда зовём», предел ОС
+ * («поверх всех» не возвращаем, мигание в панели задач принято) остаётся за окном.
  */
+@OptIn(
+    androidx.compose.ui.ExperimentalComposeUiApi::class,
+    androidx.compose.ui.InternalComposeUiApi::class,
+)
 class RaiseOnCallTest {
 
-    private fun item(id: String) = InboxItem(
-        PointObject(id, "text/plain", ScratchRef("/tmp/$id.txt"), ObjectState(ObjectKind.TEXT)),
-        receivedAt = 0L,
-    )
-
+    /**
+     * Окно уже видимо, но погребено под чужими: повторный зов обязан поднять его снова.
+     * Булев признак «показать» второй раз не срабатывает — человек жмёт и не видит ничего.
+     */
     @Test
-    fun `без зова окно не дёргается`() {
-        assertEquals(0, RaiseSignal().calls.value)
-    }
-
-    @Test
-    fun `каждый явный зов — ровно один подъём`() {
+    fun `каждый зов выводит окно вперёд — и уже видимое, но погребённое, тоже`() {
         val raise = RaiseSignal()
+        val front = AtomicInteger(0)
+        val scene = raiseWindow(raise) { front.incrementAndGet() }
+        try {
+            scene.frames()
+            assertEquals("без зова окно лезет вперёд само", 0, front.get().toLong())
 
-        raise.call()
-        assertEquals(1, raise.calls.value)
+            raise.call()
+            scene.frames()
+            assertEquals("зов не вывел окно вперёд", 1, front.get().toLong())
 
-        raise.call()
-        raise.call()
-        assertEquals(3, raise.calls.value)
+            raise.call()
+            scene.frames()
+            assertEquals("повторный зов потерян — погребённое окно так и не поднимется", 2, front.get().toLong())
+        } finally {
+            scene.close()
+        }
     }
 
-    /** Уже видимое, но погребённое окно тоже поднимается: сигнал — счётчик, не Boolean. */
+    /** Запуск с файлом зовёт раньше, чем окно собрано: зов исполняется первым кадром. */
     @Test
-    fun `повторный зов при видимом окне не теряется`() {
+    fun `зов до сборки окна не пропадает`() {
         val raise = RaiseSignal()
         raise.call()
-        val alreadyVisible = raise.calls.value
 
-        raise.call()
-
-        assertTrue(
-            "второй зов слился с первым — погребённое окно не поднимется",
-            raise.calls.value != alreadyVisible,
-        )
+        val front = AtomicInteger(0)
+        val scene = raiseWindow(raise) { front.incrementAndGet() }
+        try {
+            scene.frames()
+            assertEquals("зов, случившийся до сборки окна, пропал", 1, front.get().toLong())
+        } finally {
+            scene.close()
+        }
     }
 
-    @Test
-    fun `холодный старт с файлом открывает сам объект — верх списка`() {
-        assertEquals("b", coldStartObject(listOf(item("a"), item("b"))))
-    }
-
-    @Test
-    fun `холодный старт без файла остаётся на списке`() {
-        assertNull(coldStartObject(emptyList()))
-    }
+    /** Только шов подъёма: сигнал зова и окно ОС, которое обязано выйти вперёд. */
+    private fun raiseWindow(raise: RaiseSignal, bringToFront: () -> Unit) =
+        ImageComposeScene(width = 10, height = 10, density = Density(1f)) {
+            RaiseOnCall(raise, bringToFront)
+        }
 }

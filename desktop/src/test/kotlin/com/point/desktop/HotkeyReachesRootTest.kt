@@ -92,19 +92,6 @@ class HotkeyReachesRootTest {
         )
     }
 
-    /**
-     * Несколько кадров подряд: ответ окна на фокус — это цепочка (событие → перерисовка →
-     * эффект), и одним кадром она не проходит.
-     */
-    private var frame = 0L
-
-    private fun ImageComposeScene.frames() {
-        repeat(5) {
-            frame += 16_000_000L
-            render(frame)
-        }
-    }
-
     private fun ImageComposeScene.click(at: Offset) {
         sendPointerEvent(PointerEventType.Press, at)
         sendPointerEvent(PointerEventType.Release, at)

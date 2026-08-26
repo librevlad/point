@@ -1,5 +1,6 @@
 package com.point.desktop
 
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -15,6 +16,20 @@ import java.awt.datatransfer.StringSelection
 import java.io.File
 
 private const val SCREEN_GRAB_DELAY_MS = 220L
+
+/**
+ * Окно выходит вперёд на каждый явный зов (#1019, решение владельца 20.08.2026, вариант B):
+ * и скрытое, и уже видимое, но погребённое под чужими окнами. Зов, случившийся раньше, чем
+ * окно собрано (запуск с файлом), не пропадает — исполняется первым кадром. Сам подъём —
+ * дело окна ОС, здесь только «когда».
+ */
+@Composable
+internal fun RaiseOnCall(raise: RaiseSignal, bringToFront: () -> Unit) {
+    val calls by raise.calls.collectAsState()
+    LaunchedEffect(calls) {
+        if (calls > 0) bringToFront()
+    }
+}
 
 fun main(args: Array<String>) {
     val pointDir = File(System.getProperty("user.home"), ".point-pc")
@@ -293,17 +308,11 @@ fun main(args: Array<String>) {
         return pcBaseActions.map { it.copy(unavailable = unavailable[it.id]) }
     }
 
-    val fromArgs = filesFromArgs(args).map { file ->
-        inbox.addFile(file.absolutePath).also { state.onReceived(it, ObjectSource.LOCAL) }
-    }
-
-    // Холодный старт с файлом — тоже явный зов (#1019, DSK-001): открывается сам объект,
-    // а не список. Прибывший до готовности UI объект открывается тем же швом, что и клик
-    // по peek-плашке, — просьбой openRequest, которую экран исполняет, когда соберётся.
-    coldStartObject(fromArgs)?.let { id ->
-        openRequest.value = id
-        summon()
-    }
+    // Запуск с файлом — такой же явный зов (#1019): окно выходит вперёд. Сам объект экран
+    // открывает как любое прибытие: принятое до его сборки — не «уже виденное» (DSK-001).
+    val fromArgs = filesFromArgs(args)
+    fromArgs.forEach { file -> state.onReceived(inbox.addFile(file.absolutePath), ObjectSource.LOCAL) }
+    if (fromArgs.isNotEmpty()) summon()
 
     val requests = RelayRequests(
         remoteActions = { pcRemoteActionsNow() },
@@ -355,17 +364,14 @@ fun main(args: Array<String>) {
 
     val handOffs = Thread({
         while (true) {
+            // «Открыть в Point» — человек сам позвал: окошко выходит само и вперёд.
+            // Вторая копия не живёт: она отдаёт принесённое этой и уходит.
             runCatching {
-                val brought = SendToRunning.collectHandOffs(pointDir)
-                brought.forEach { file ->
-                    state.onReceived(inbox.addFile(file.absolutePath), ObjectSource.LOCAL)
-                }
-
-                // «Открыть в Point» — человек сам позвал: окошко выходит само и вперёд.
-                if (brought.isNotEmpty()) summon()
-
-                // Вторая копия не живёт — она будит эту и уходит.
-                if (SendToRunning.takeWake(pointDir)) summon()
+                SendToRunning.serveHandOffs(
+                    pointDir,
+                    receive = { file -> state.onReceived(inbox.addFile(file.absolutePath), ObjectSource.LOCAL) },
+                    summon = ::summon,
+                )
             }
             runCatching { Thread.sleep(1_000) }.getOrElse { return@Thread }
         }
@@ -422,15 +428,11 @@ fun main(args: Array<String>) {
             title = "Point",
             icon = androidx.compose.runtime.remember { pointGlyph() },
         ) {
-            // Каждый явный зов поднимает окно один раз — и уже видимое, но погребённое
-            // под чужими окнами, тоже (#1019). «Поверх всех» не возвращается; если
-            // Windows вместо подъёма мигнёт панелью задач — принятый системный предел.
-            val raiseCalls by raise.calls.collectAsState()
-            LaunchedEffect(raiseCalls) {
-                if (raiseCalls > 0) {
-                    window.toFront()
-                    window.requestFocus()
-                }
+            // «Поверх всех» не возвращается (#1019); если Windows вместо подъёма мигнёт
+            // панелью задач — это принятый системный предел.
+            RaiseOnCall(raise) {
+                window.toFront()
+                window.requestFocus()
             }
             com.point.desktop.ui.PointDesktopTheme {
                 com.point.desktop.ui.CompactApp(
