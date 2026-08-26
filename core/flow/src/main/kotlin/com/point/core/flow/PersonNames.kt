@@ -1,11 +1,13 @@
 package com.point.core.flow
 
 /**
- * Роль без правдоподобного имени — не человек (#654): модель, отвечая ролью на целый
- * текст или номер, не рождает «человека» из документа. Общее правило обеих сторон
- * протокола понимания (#653: пары «имя+номер» фильтруются им же).
+ * Правдоподобное имя стороны (#654): модель, отвечая ролью на целый текст или номер, не
+ * рождает стороны из документа. Общее правило обеих сторон протокола понимания.
+ *
+ * Сторона бывает и организацией: отправителем накладной стоит «ТОВ «Агротрейд»» — имя
+ * настоящее, человека за ним нет. Кто из сторон человек, отвечает [plausiblePersonName].
  */
-fun plausiblePersonName(text: String): Boolean {
+fun plausiblePartyName(text: String): Boolean {
     val t = text.trim()
     if (t.isEmpty() || t.length > 60) return false
     if (!t.any(Char::isLetter)) return false
@@ -17,11 +19,24 @@ fun plausiblePersonName(text: String): Boolean {
     return t.split(Regex("""\s+""")).size <= 5
 }
 
+/**
+ * Имя человека, а не всякой стороны (#654, #993).
+ *
+ * Человеком строку делала одна форма записи — два слова с заглавных без цифр, — и «ТОВ
+ * «Агротрейд»» проходило её насквозь: правовую форму в названии видел только реестр ролей,
+ * а пара «номер | имя» и сторона `graph.role.contact` реестру неизвестны. Кто человек,
+ * решает само имя: у объекта появлялась сторона-человек с названием фирмы, и системная
+ * карточка открывалась строкой «Открыл карточку контакта: ТОВ «Агротрейд»».
+ */
+fun plausiblePersonName(text: String): Boolean =
+    plausiblePartyName(text) && !namesOrganization(text)
+
 /** Сторона «чей это контакт» — ею подписан и узел человека, и объект, где он найден. */
 const val CONTACT_ROLE = "contact"
 
 /**
- * Человек, названный при номере, — знание самого объекта (#993).
+ * Стороны, названные витком «Понять»: роли из ответа [answered] и человек, названный при
+ * номере (#993).
  *
  * Пара «номер | имя» рождала только узел человека, и на визитке, где стоит «Сохранить
  * контакт», имени не оставалось: системная карточка открывалась с пустыми полями, и
@@ -32,25 +47,25 @@ const val CONTACT_ROLE = "contact"
  * Названный один — знание объекта; названных несколько — «того самого» человека у объекта
  * нет, и каждый остаётся при своём узле: выбрать одного из троих значило бы выдумать.
  *
- * [parties] — стороны, названные УЖЕ: и этим витком, и прежним знанием объекта. Сверяться
- * только с ответом текущего витка было мало: второй «Понять», не повторивший строку роли,
- * заводил тому же человеку вторую сторону — один человек оказывался и отправителем, и
- * контактом одного объекта.
+ * [known] — прежнее знание объекта. Сверяться только с ответом текущего витка было мало:
+ * второй «Понять», не повторивший строку роли, заводил тому же человеку вторую сторону —
+ * один человек оказывался и отправителем, и контактом одного объекта.
  *
  * Слово модели становится знанием самого объекта, поэтому спрашивается с него так же, как с
  * прочтения поля (#809, «нет в тексте — нет знания»): Point прочитал страницу — имя обязано в
  * ней стоять, иначе ошибка модели уехала бы в системную карточку контакта как факт. Читать
  * нечем ([readText] пуст, зрячее чтение снимка) — сверять не с чем, и слово модели остаётся.
  */
-fun contactParty(
+fun namedParties(
+    answered: Map<String, String>,
     contacts: List<PersonContact>,
-    parties: Map<String, String>,
+    known: Map<String, String>,
     readText: String,
 ): Map<String, String> {
-    val name = contacts.map { it.name }.distinctBy(::normalizedParty).singleOrNull() ?: return emptyMap()
-    if (readText.isNotBlank() && !standsInReadText(name, readText)) return emptyMap()
-    if (partyValues(parties).any { normalizedParty(it) == normalizedParty(name) }) return emptyMap()
-    return mapOf(META_GRAPH_ROLE_PREFIX + CONTACT_ROLE to name)
+    val name = contacts.map { it.name }.distinctBy(::normalizedParty).singleOrNull() ?: return answered
+    if (readText.isNotBlank() && !standsInReadText(name, readText)) return answered
+    if (partyValues(known + answered).any { normalizedParty(it) == normalizedParty(name) }) return answered
+    return answered + (META_GRAPH_ROLE_PREFIX + CONTACT_ROLE to name)
 }
 
 /**
@@ -92,5 +107,9 @@ private fun partyValues(facts: Map<String, String>, persons: Boolean = false): L
 private fun isPartyKey(key: String): Boolean =
     key.startsWith(META_GRAPH_ROLE_PREFIX) && !isAnnotationKey(key) && !isStateKey(key)
 
+/**
+ * Роль реестру известна — вид узла называет она («кто выдал» человеком не бывает); роль
+ * своя, как `contact`, — судит само имя (#993), а не запасное «раз роли нет, значит человек».
+ */
 private fun isPersonParty(key: String, value: String): Boolean =
     plausiblePersonName(value) && (roleOfKey(key)?.kindFor(value) ?: KIND_PERSON) == KIND_PERSON

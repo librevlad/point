@@ -32,11 +32,18 @@ fun ClassifierRole.isRoleLabel(word: String): Boolean =
     word.trim().trimEnd(':', '.', '—', '-').lowercase() in markers
 
 fun ClassifierRole.kindFor(value: String): ObjectKind =
-    if (usuallyPerson && value.split(WORD_SPLIT).none { it.trim('«', '»', '"', '\'', '(', ')').lowercase() in LEGAL_FORMS }) {
-        KIND_PERSON
-    } else {
-        kind
-    }
+    if (usuallyPerson && !namesOrganization(value)) KIND_PERSON else kind
+
+/**
+ * Правовая форма в названии — организация, а не человек (#654, #993).
+ *
+ * Мерка была заперта внутри роли и работала только там, где роль известна реестру: пара
+ * «номер | имя» и сторона `graph.role.contact` реестру неизвестны, и «ТОВ «Агротрейд»»
+ * уезжало в системную карточку контакта именем человека. Организацию узнаёт название, а
+ * не то, под каким ключом оно записано, — формула одна и живёт здесь.
+ */
+fun namesOrganization(name: String): Boolean =
+    name.split(WORD_SPLIT).any { it.trim('«', '»', '"', '\'', '(', ')').lowercase() in LEGAL_FORMS }
 
 private val LEGAL_FORMS = setOf(
     "тов", "фоп", "пп", "ат", "пат", "прат", "кп", "ооо", "ип", "зао", "оао", "ано",

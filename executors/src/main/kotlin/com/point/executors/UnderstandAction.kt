@@ -1,10 +1,8 @@
 package com.point.executors
 
 import com.point.core.flow.AiReadiness
-import com.point.core.flow.AtomAddress
 import com.point.core.flow.AtomCodec
 import com.point.core.flow.AtomLayer
-import com.point.core.flow.CLASSIFIER_ROLES
 import com.point.core.flow.CONTACT_ROLE
 import com.point.core.flow.Capability
 import com.point.core.flow.CapabilityMeta
@@ -37,28 +35,21 @@ import com.point.core.flow.UNDERSTAND_CONTRACT_KEYS
 import com.point.core.flow.altValue
 import com.point.core.flow.alternativesOf
 import com.point.core.flow.answerLanguageRule
-import com.point.core.flow.bareIndexId
 import com.point.core.flow.belongings
-import com.point.core.flow.contactParty
 import com.point.core.flow.investigationOutcome
-import com.point.core.flow.isRepairOf
-import com.point.core.flow.isRoleLabel
 import com.point.core.flow.labelNeedingKey
 import com.point.core.flow.layoutOf
 import com.point.core.flow.mergeFacts
+import com.point.core.flow.namedParties
 import com.point.core.flow.normConsensus
-import com.point.core.flow.parseClassification
 import com.point.core.flow.parseFieldCandidates
 import com.point.core.flow.partialReadMessage
 import com.point.core.flow.partyNodeId
-import com.point.core.flow.plausiblePersonName
 import com.point.core.flow.promptIndex
 import com.point.core.flow.provenanceOf
 import com.point.core.flow.readProgressOf
 import com.point.core.flow.readWindowOf
 import com.point.core.flow.reportStage
-import com.point.core.flow.resolve
-import com.point.core.flow.splitCandidate
 import com.point.core.flow.withInvestigation
 import com.point.core.model.ActionResult
 import com.point.core.model.ActionYield
@@ -197,13 +188,11 @@ class UnderstandRealizer @Inject constructor(
                 // окно текста объекта (#809, «нет в тексте — нет знания»).
                 val readText = layer?.text?.takeIf { it.isNotBlank() } ?: window
 
-                val (named, roleDisputes) = roleReadings(answer, laidOut, layer)
+                val (answered, roleDisputes) = roleReadings(answer, laidOut, layer)
 
-                // Человек, названный при номере, — сторона самого объекта (#993): его
-                // имя знал только узел человека, а объект, на котором стоит «Сохранить
-                // контакт», оставался без имени. Стороны, названные прежде, — тоже знание
-                // объекта: второй раз тот же человек второй стороной не встаёт.
-                val roles = named + contactParty(parsed.contacts, input.metadata + named, readText)
+                // Человек, названный при номере, — сторона самого объекта (#993): его имя
+                // знал только узел человека, а объект, где стоит «Сохранить контакт», нет.
+                val roles = namedParties(answered, parsed.contacts, input.metadata, readText)
 
                 // Что с чем связано (#1176): страница держит колонку при её подписи, и
                 // прочтение, стоящее в одном блоке с названной стороной, — про неё. Связь
@@ -334,12 +323,11 @@ class UnderstandRealizer @Inject constructor(
         if (fields.isEmpty() && parsed.single.isEmpty()) {
             return ActionResult.Failure("На снимке ничего не разобрать", recoverable = true)
         }
-        val (named, _) = roleReadings(answer, elements = emptyList(), layer = null)
+        val (answered, _) = roleReadings(answer, elements = emptyList(), layer = null)
 
-        // Состав знания один, кто бы его ни добыл (#993): зрячий путь тоже спрашивает
-        // CONTACT, и названный при номере человек — сторона объекта и здесь. Своего текста
-        // у зрячего чтения нет — сверять слово модели не с чем (#809), и оно остаётся.
-        val roles = named + contactParty(parsed.contacts, input.metadata + named, readText = "")
+        // Состав знания один, кто бы его ни добыл (#993): своего текста у зрячего чтения
+        // нет — сверять слово модели не с чем (#809), и оно остаётся.
+        val roles = namedParties(answered, parsed.contacts, input.metadata, readText = "")
         val (values, anchors) =
             structuredValues(input, fields.mapValues { it.value.text } + parsed.single + roles)
         val merged = mergeFacts(input.metadata, values)
@@ -551,57 +539,6 @@ internal fun contactNodes(source: PointObject, contacts: List<com.point.core.flo
         relations += Relation(id, RelationType.FOUND_IN, source.id)
     }
     return Findings(objects = objects.values.toList(), relations = relations.toList())
-}
-
-internal fun roleReadings(
-    answer: String,
-    elements: List<LayoutElement>,
-    layer: AtomLayer?,
-): Pair<Map<String, String>, Map<String, List<String>>> {
-    val fromElements = parseClassification(answer, elements)
-        .associate { META_GRAPH_ROLE_PREFIX + it.role.key to it.element.text }
-        .filterValues(::plausiblePersonName)
-    if (layer == null) return fromElements to emptyMap()
-
-    val byKey = CLASSIFIER_ROLES.associateBy { it.key }
-    val values = LinkedHashMap<String, String>()
-    val disputes = LinkedHashMap<String, List<String>>()
-    answer.lineSequence().forEach { raw ->
-        val line = raw.trim()
-        val eq = line.indexOf('=')
-        if (eq <= 0) return@forEach
-        val role = byKey[line.substring(0, eq).trim().lowercase()] ?: return@forEach
-        val metaKey = META_GRAPH_ROLE_PREFIX + role.key
-        if (metaKey in values) return@forEach
-        val candidate = splitCandidate(line.substring(eq + 1).trim()) ?: return@forEach
-        if (candidate.ids.isEmpty()) return@forEach
-
-        val idsByAtom = layer.atoms.associateBy { it.id }
-        val pointed = candidate.ids.map(::bareIndexId)
-        val withoutLabel = pointed.filterNot { id ->
-            idsByAtom[id]?.text?.let { role.isRoleLabel(it) } == true
-        }
-        val resolved = layer.resolve(AtomAddress.ByIds(withoutLabel.ifEmpty { pointed }))
-        if (resolved.atoms.isEmpty()) return@forEach
-        val page = resolved.text
-        val model = candidate.text
-        val chosen = when {
-            normConsensus(model) == normConsensus(page) -> page
-            isRepairOf(page, model) -> model
-            else -> {
-                if (plausiblePersonName(page)) disputes[metaKey] = listOf(page, model)
-                page
-            }
-        }
-        if (!plausiblePersonName(chosen)) {
-            disputes.remove(metaKey)
-            return@forEach
-        }
-        values[metaKey] = chosen
-    }
-
-    fromElements.forEach { (key, text) -> values.putIfAbsent(key, text) }
-    return values to disputes
 }
 
 internal data class JudgedField(
