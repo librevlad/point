@@ -11,6 +11,8 @@ class OoxmlOfficeTextExtractor : OfficeTextExtractor {
     override suspend fun extractText(obj: PointObject): String = withContext(Dispatchers.IO) {
         val out = StringBuilder()
         var shared: String? = null
+        var workbook: String? = null
+        var relations: String? = null
         val sheets = sortedMapOf<String, String>()
         runCatching {
             ZipInputStream(File(obj.uri.value).inputStream().buffered()).use { zis ->
@@ -24,9 +26,14 @@ class OoxmlOfficeTextExtractor : OfficeTextExtractor {
                             // Таблицу разбирает свой читатель (#997): в общем словаре строк
                             // может не быть вовсе, а чисел там нет никогда. Листы забираются
                             // все (#995): у книги их бывает несколько, и текст второго листа
-                            // человеку нужен не меньше, чем текст первого.
+                            // человеку нужен не меньше, чем текст первого. Порядок вкладок
+                            // книга рассказывает о себе сама — им и выходит её текст.
                             entry.name == OoxmlSpreadsheetReader.SHARED_STRINGS ->
                                 shared = zis.readBytes().toString(Charsets.UTF_8)
+                            entry.name == OoxmlSpreadsheetReader.WORKBOOK ->
+                                workbook = zis.readBytes().toString(Charsets.UTF_8)
+                            entry.name == OoxmlSpreadsheetReader.WORKBOOK_RELS ->
+                                relations = zis.readBytes().toString(Charsets.UTF_8)
                             OoxmlSpreadsheetReader.isWorksheet(entry.name) ->
                                 sheets[entry.name] = zis.readBytes().toString(Charsets.UTF_8)
                         }
@@ -36,7 +43,11 @@ class OoxmlOfficeTextExtractor : OfficeTextExtractor {
                 }
             }
         }
-        val rows = OoxmlSpreadsheetReader.rowsOf(sheets, shared)
+        val rows = OoxmlSpreadsheetReader.rowsOf(
+            sheets,
+            shared,
+            OoxmlSpreadsheetReader.sheetOrder(workbook, relations),
+        )
         if (rows.isEmpty()) {
             out.toString().replace(MULTISPACE, " ").trim()
         } else {

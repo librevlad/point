@@ -569,10 +569,24 @@ class DesktopState(
         _fresh.update { it - objectId }
     }
 
-    /** Открыть файл по пути — ребёнок набора становится объектом (#1099). */
-    fun openPath(path: String) {
-        reopenPath(path)?.let { onReceived(it, ObjectSource.LOCAL) }
+    /**
+     * Родить объект из принесённого файла — не останавливая окно (#995).
+     *
+     * Рождение объекта читает файл: у PDF — целиком, потому что признак «текст файлом не
+     * достаётся» судит весь документ, как и исполнитель. Звали его прямо из обработчика
+     * броска и из входа в ребёнка набора — то есть тем самым потоком, который рисует окно:
+     * толстый PDF останавливал окно до конца чтения. Чтение уходит на дисковый шов, объект
+     * приходит в ленту сам — тем же прогрессивным пониманием, что и на телефоне.
+     */
+    fun receive(source: ObjectSource, born: () -> InboxItem?) {
+        scope.launch(io) {
+            val item = runCatching { born() }.getOrNull() ?: return@launch
+            onReceived(item, source)
+        }
     }
+
+    /** Открыть файл по пути — ребёнок набора становится объектом (#1099). */
+    fun openPath(path: String) = receive(ObjectSource.LOCAL) { reopenPath(path) }
 
     fun onReceived(item: InboxItem, source: ObjectSource = ObjectSource.LOCAL) {
 
@@ -807,6 +821,22 @@ class DesktopState(
 
     fun dismissMessage() {
         _message.value = null
+    }
+}
+
+/**
+ * Принесённые файлы становятся объектами: пачка — одним объектом-коллекцией с детьми, как на
+ * телефоне (#1099), одиночный файл — собой.
+ *
+ * Правило живёт здесь, а не в обработчике броска: окно исполняет его тем же вызовом, каким
+ * проверяет тест. Рождение объекта читает файл — у PDF весь — и потому идёт не потоком окна
+ * (#995).
+ */
+fun DesktopState.receiveFiles(inbox: Inbox, paths: List<String>, source: ObjectSource) {
+    if (paths.size > 1) {
+        receive(source) { inbox.addFiles(paths) }
+    } else {
+        paths.forEach { path -> receive(source) { inbox.addFile(path) } }
     }
 }
 

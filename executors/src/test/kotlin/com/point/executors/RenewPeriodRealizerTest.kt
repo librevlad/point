@@ -118,6 +118,63 @@ class RenewPeriodRealizerTest {
         )
     }
 
+    /**
+     * Первая таблица книги — первая вкладка, а не `sheet1.xml` (#995).
+     *
+     * Номер в имени файла внутри архива помнит, каким лист создавали; переставили вкладки —
+     * и порядки разошлись. Бланк собирался из файла `sheet1.xml`, то есть из листа, который
+     * человек у себя видит вторым: «На новый период» отказывало на книге, где график —
+     * первая вкладка.
+     */
+    @Test
+    fun `у книги с переставленными вкладками бланк собирается из первой вкладки`() = runTest {
+        val ledger = listOf(
+            listOf("Арт.№", "Найменування", "Рота зв'язку"),
+            listOf("11004", "Буряк столовий свіжий", "6,003"),
+        )
+        val book = xlsxOfTabs(sheet, ledger)
+
+        val result = RenewPeriodRealizer(com.point.core.flow.OoxmlSpreadsheetReader(), writer).perform(book, null)
+
+        assertTrue("бланк не собрался вовсе: $result", result is ActionResult.Success)
+        val rows = checkNotNull(written)
+        assertEquals("шапка бланка не от первой вкладки", sheet[0], rows[0])
+        assertTrue(
+            "в бланк уехал лист, который человек видит вторым: $rows",
+            rows.none { row -> row.any { "Буряк" in it || "Найменування" in it } },
+        )
+    }
+
+    /**
+     * Книга, у которой порядок вкладок разошёлся с номерами файлов: первая вкладка лежит в
+     * `sheet2.xml`. Порядок вкладок книга рассказывает о себе сама — в `xl/workbook.xml`.
+     */
+    private fun xlsxOfTabs(vararg tabs: List<List<String>>): PointObject {
+        val file = File.createTempFile("point-вкладки", ".xlsx").apply { deleteOnExit() }
+        java.util.zip.ZipOutputStream(file.outputStream()).use { zos ->
+            tabs.forEachIndexed { index, rows ->
+                zos.putNextEntry(java.util.zip.ZipEntry("xl/worksheets/sheet${tabs.size - index}.xml"))
+                zos.write(sheetXml(rows).toByteArray(Charsets.UTF_8))
+                zos.closeEntry()
+            }
+            zos.putNextEntry(java.util.zip.ZipEntry("xl/workbook.xml"))
+            zos.write(
+                tabs.indices.joinToString("", "<workbook><sheets>", "</sheets></workbook>") {
+                    """<sheet name="Лист${it + 1}" sheetId="${it + 1}" r:id="rId${it + 1}"/>"""
+                }.toByteArray(Charsets.UTF_8),
+            )
+            zos.closeEntry()
+            zos.putNextEntry(java.util.zip.ZipEntry("xl/_rels/workbook.xml.rels"))
+            zos.write(
+                tabs.indices.joinToString("", "<Relationships>", "</Relationships>") {
+                    """<Relationship Id="rId${it + 1}" Target="worksheets/sheet${tabs.size - it}.xml"/>"""
+                }.toByteArray(Charsets.UTF_8),
+            )
+            zos.closeEntry()
+        }
+        return table.copy(uri = ScratchRef(file.absolutePath))
+    }
+
     /** Настоящая книга .xlsx: строки лежат внутри листов, общего словаря строк нет. */
     private fun xlsxOf(vararg sheets: List<List<String>>): PointObject {
         val file = File.createTempFile("point-книга", ".xlsx").apply { deleteOnExit() }

@@ -109,8 +109,10 @@ class PcReadDocumentRealizer(
                     )
                 }
 
-                val out = textBesideDocument(source)
-                out.writeText(read.toString())
+                // Записать прочитанное — своя работа со своей бедой (#995): осечка записи не
+                // должна выходить человеку отказом «документ повреждён» — страницы прочитаны.
+                val out = keepTextBesideDocument(source, read.toString())
+                    ?: return@withContext ActionResult.Failure(TEXT_NOT_KEPT, recoverable = true)
                 ActionResult.Done(
                     "Прочитано страниц: $readable из $total — текст у документа",
                     Findings(

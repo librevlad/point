@@ -442,13 +442,7 @@ fun main(args: Array<String>) {
                     openObject = openRequest,
                     onObjectOpened = { openRequest.value = null },
                     onFilesDropped = { files ->
-
-                        // Пачка — один объект-коллекция с детьми, как на телефоне (#1099).
-                        if (files.size > 1) {
-                            state.onReceived(inbox.addFiles(files.map { it.absolutePath }), ObjectSource.DROPPED)
-                        } else {
-                            files.forEach { state.onReceived(inbox.addFile(it.absolutePath), ObjectSource.DROPPED) }
-                        }
+                        state.receiveFiles(inbox, files.map { it.absolutePath }, ObjectSource.DROPPED)
                     },
                     onTextDropped = { text -> state.onReceived(inbox.addText(text), ObjectSource.DROPPED) },
 

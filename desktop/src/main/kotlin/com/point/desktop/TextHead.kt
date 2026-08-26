@@ -22,6 +22,23 @@ data class TextHead(val text: String, val atLimit: Boolean)
 fun textBesideDocument(source: File): File =
     File(source.parentFile, source.nameWithoutExtension + " — текст.txt")
 
+/**
+ * Положить прочитанное рядом с документом. `null` — записать не вышло (#995, #997).
+ *
+ * Запись — своя работа со своей бедой, и в один `runCatching` с чтением её класть нельзя.
+ * Документ на компьютере лежит там, где человек его взял: `Inbox` не копирует файл к себе, а
+ * оборачивает на месте. Папка бывает только для чтения, диск — сетевым, файл — занятым Office
+ * или OneDrive, места — не остаться. Документ в эту минуту цел, и отказ «документ повреждён»
+ * назвал бы виноватым не того — ровно то, из-за чего заведена #997.
+ */
+fun keepTextBesideDocument(source: File, text: String): File? =
+    runCatching { textBesideDocument(source).apply { writeText(text) } }.getOrNull()
+
+/** Что слышит человек, когда текст прочитан, а лечь на диск не смог: причина записи (#995). */
+const val TEXT_NOT_KEPT =
+    "Текст прочитан, но не сохранился рядом с документом — папка может быть только для чтения " +
+        "или на диске нет места. Перенесите документ в свою папку и повторите"
+
 /** Читает не больше `limit` символов: окно не обязано держать в памяти файл целиком. */
 fun readTextHead(file: File, limit: Int): TextHead {
     if (!file.isFile) return TextHead("", false)

@@ -51,6 +51,37 @@ class PcTextIsKnowledgeTest {
         return file
     }
 
+    /**
+     * Книга, у которой порядок вкладок разошёлся с номерами файлов внутри архива: первая на
+     * экране вкладка лежит в `sheet2.xml`. Так выглядит любая книга, где листы переставляли
+     * или удаляли: номер в имени файла помнит, каким лист создавали, а не каким его видят.
+     */
+    private fun xlsxWithTabs(name: String, vararg tabs: String): File {
+        val file = temp.newFile(name)
+        ZipOutputStream(file.outputStream()).use { zos ->
+            tabs.forEachIndexed { index, sheetXml ->
+                zos.putNextEntry(ZipEntry("xl/worksheets/sheet${tabs.size - index}.xml"))
+                zos.write(sheetXml.toByteArray(Charsets.UTF_8))
+                zos.closeEntry()
+            }
+            zos.putNextEntry(ZipEntry("xl/workbook.xml"))
+            zos.write(
+                tabs.indices.joinToString("", "<workbook><sheets>", "</sheets></workbook>") {
+                    """<sheet name="Лист${it + 1}" sheetId="${it + 1}" r:id="rId${it + 1}"/>"""
+                }.toByteArray(Charsets.UTF_8),
+            )
+            zos.closeEntry()
+            zos.putNextEntry(ZipEntry("xl/_rels/workbook.xml.rels"))
+            zos.write(
+                tabs.indices.joinToString("", "<Relationships>", "</Relationships>") {
+                    """<Relationship Id="rId${it + 1}" Target="worksheets/sheet${tabs.size - it}.xml"/>"""
+                }.toByteArray(Charsets.UTF_8),
+            )
+            zos.closeEntry()
+        }
+        return file
+    }
+
     private fun officeObject(file: File) = PointObject(
         id = "xlsx",
         mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -120,6 +151,50 @@ class PcTextIsKnowledgeTest {
             file.parentFile,
             ref.parentFile,
         )
+    }
+
+    /**
+     * Текст книги выходит в том порядке, в каком человек видит вкладки у себя (#995).
+     *
+     * Порядок брался из имён файлов внутри архива (`sheet1.xml`, `sheet2.xml`) — а это след
+     * того, каким лист создавали, а не того, каким его видят. У книги с переставленными
+     * вкладками текст выходил задом наперёд, хотя код обещал человеку обратное.
+     */
+    @Test
+    fun `текст книги идёт в порядке вкладок, а не в порядке файлов внутри архива`() = runTest {
+        val book = xlsxWithTabs("книга.xlsx", smeta, itogo)
+
+        val known = knownText(realizer().perform(officeObject(book), null))
+
+        assertTrue("первая вкладка потеряна: $known", known.contains("Работа"))
+        assertTrue("вторая вкладка потеряна: $known", known.contains("Подпись директора"))
+        assertTrue(
+            "книга вышла порядком файлов архива, а не порядком вкладок: $known",
+            known.indexOf("Работа") < known.indexOf("Подпись директора"),
+        )
+    }
+
+    /**
+     * Осечка записи не назначает виноватым целый документ (#995, #997).
+     *
+     * Документ на компьютере лежит там, где человек его взял: `Inbox` не копирует файл к
+     * себе, а оборачивает на месте. Папка бывает только для чтения, диск — сетевым, файл —
+     * занятым Office или OneDrive, места — не остаться. Пока чтение и запись лежали в одном
+     * `runCatching`, человек слышал «документ повреждён или это не офисный файл» — про целый
+     * документ, который только что прочитался.
+     */
+    @Test
+    fun `текст прочитан, а лечь на диск не смог — отказ говорит про запись, а не про документ`() = runTest {
+        val file = xlsx("смета.xlsx", smeta)
+
+        // Место знания занято папкой: запись не пройдёт, а документ при этом цел.
+        assertTrue("подготовить ловушку не вышло", textBesideDocument(file).mkdir())
+
+        val result = realizer().perform(officeObject(file), null)
+
+        val said = (result as ActionResult.Failure).reason
+        assertFalse("виноватым назначен целый документ: $said", "повреждён" in said)
+        assertEquals(TEXT_NOT_KEPT, said)
     }
 
     @Test

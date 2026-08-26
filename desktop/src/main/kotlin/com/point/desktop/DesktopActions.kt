@@ -309,17 +309,15 @@ class PcPdfTextRealizer(
             return ActionResult.Failure(com.point.core.flow.capabilities.NO_READABLE_PDF_LAYER, recoverable = false)
         }
 
-        val out = textBesideDocument(source)
-        return runCatching {
-            out.writeText(text)
-            ActionResult.Done(
-                com.point.core.flow.capabilities.TEXT_IS_WITH_DOCUMENT,
-                com.point.core.model.Findings(
-                    features = setOf(com.point.core.model.Feature.HAS_TEXT),
-                    metadata = mapOf(com.point.core.flow.META_OCR_TEXT_REF to out.absolutePath),
-                ),
-            )
-        }.getOrElse { ActionResult.Failure("Текст не сохранился — проверьте, что на диске есть место", recoverable = true) }
+        val out = keepTextBesideDocument(source, text)
+            ?: return ActionResult.Failure(TEXT_NOT_KEPT, recoverable = true)
+        return ActionResult.Done(
+            com.point.core.flow.capabilities.TEXT_IS_WITH_DOCUMENT,
+            com.point.core.model.Findings(
+                features = setOf(com.point.core.model.Feature.HAS_TEXT),
+                metadata = mapOf(com.point.core.flow.META_OCR_TEXT_REF to out.absolutePath),
+            ),
+        )
     }
 }
 
