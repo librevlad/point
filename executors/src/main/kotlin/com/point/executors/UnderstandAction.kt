@@ -79,7 +79,12 @@ class UnderstandCapability @Inject constructor(
 ) : Capability {
     override val id = ID
     override val icon = "ai"
-    override val meta = CapabilityMeta(priority = 31, cost = Cost.PAID, latency = Latency.SLOW, network = true, auth = true)
+    // judgesKnowledge (#1060): ответ «Понять» — про сам объект, поэтому судить по ещё не
+    // добытому знанию нельзя. Чтение снимка идёт фоном и приходит позже тапа.
+    override val meta = CapabilityMeta(
+        priority = 31, cost = Cost.PAID, latency = Latency.SLOW, network = true, auth = true,
+        judgesKnowledge = true,
+    )
     override fun label(state: ObjectState) = labelNeedingKey("Понять", keys.keySet())
 
     // «Понять» может бесконечно обогащать граф (решение владельца, #1010): после витка
