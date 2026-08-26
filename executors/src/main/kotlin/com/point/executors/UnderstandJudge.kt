@@ -2,8 +2,11 @@ package com.point.executors
 
 import com.point.core.flow.AtomAddress
 import com.point.core.flow.AtomLayer
+import com.point.core.flow.CLASSIFIER_ROLES
 import com.point.core.flow.EvidenceClass
 import com.point.core.flow.FieldCandidate
+import com.point.core.flow.LayoutElement
+import com.point.core.flow.META_GRAPH_ROLE_PREFIX
 import com.point.core.flow.PartyReading
 import com.point.core.flow.bareIndexId
 import com.point.core.flow.chosenByAddressee
@@ -11,12 +14,16 @@ import com.point.core.flow.fieldEvidence
 import com.point.core.flow.formEvidence
 import com.point.core.flow.foundLiterally
 import com.point.core.flow.isRepairOf
+import com.point.core.flow.isRoleLabel
 import com.point.core.flow.mainFact
 import com.point.core.flow.normConsensus
+import com.point.core.flow.parseClassification
+import com.point.core.flow.plausiblePartyName
 import com.point.core.flow.resolve
 import com.point.core.flow.ruleEvidence
 import com.point.core.flow.s10CheckDigitValid
 import com.point.core.flow.semanticFits
+import com.point.core.flow.splitCandidate
 import com.point.core.flow.standsInReadText
 
 /**
@@ -172,3 +179,60 @@ private fun withoutMarks(
 internal fun doubts(merged: Map<String, String>, unsure: Set<String>): Map<String, String> =
     unsure.filter { merged[it]?.isNotBlank() == true }
         .associate { it + com.point.core.flow.META_EVIDENCE_SUFFIX to "" }
+
+/**
+ * Роли: что из названного моделью встаёт стороной документа (#835, #1176).
+ *
+ * Тот же суд, что и у полей: слово модели против слова страницы, — и живёт он там же.
+ * Расхождение остаётся спором, а не гасится молча.
+ */
+internal fun roleReadings(
+    answer: String,
+    elements: List<LayoutElement>,
+    layer: AtomLayer?,
+): Pair<Map<String, String>, Map<String, List<String>>> {
+    val fromElements = parseClassification(answer, elements)
+        .associate { META_GRAPH_ROLE_PREFIX + it.role.key to it.element.text }
+        .filterValues(::plausiblePartyName)
+    if (layer == null) return fromElements to emptyMap()
+
+    val byKey = CLASSIFIER_ROLES.associateBy { it.key }
+    val values = LinkedHashMap<String, String>()
+    val disputes = LinkedHashMap<String, List<String>>()
+    answer.lineSequence().forEach { raw ->
+        val line = raw.trim()
+        val eq = line.indexOf('=')
+        if (eq <= 0) return@forEach
+        val role = byKey[line.substring(0, eq).trim().lowercase()] ?: return@forEach
+        val metaKey = META_GRAPH_ROLE_PREFIX + role.key
+        if (metaKey in values) return@forEach
+        val candidate = splitCandidate(line.substring(eq + 1).trim()) ?: return@forEach
+        if (candidate.ids.isEmpty()) return@forEach
+
+        val idsByAtom = layer.atoms.associateBy { it.id }
+        val pointed = candidate.ids.map(::bareIndexId)
+        val withoutLabel = pointed.filterNot { id ->
+            idsByAtom[id]?.text?.let { role.isRoleLabel(it) } == true
+        }
+        val resolved = layer.resolve(AtomAddress.ByIds(withoutLabel.ifEmpty { pointed }))
+        if (resolved.atoms.isEmpty()) return@forEach
+        val page = resolved.text
+        val model = candidate.text
+        val chosen = when {
+            normConsensus(model) == normConsensus(page) -> page
+            isRepairOf(page, model) -> model
+            else -> {
+                if (plausiblePartyName(page)) disputes[metaKey] = listOf(page, model)
+                page
+            }
+        }
+        if (!plausiblePartyName(chosen)) {
+            disputes.remove(metaKey)
+            return@forEach
+        }
+        values[metaKey] = chosen
+    }
+
+    fromElements.forEach { (key, text) -> values.putIfAbsent(key, text) }
+    return values to disputes
+}

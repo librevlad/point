@@ -1,7 +1,7 @@
 package com.point.executors
 
 import com.point.core.flow.LayoutElement
-import com.point.core.flow.plausiblePersonName
+import com.point.core.flow.plausiblePartyName
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -45,14 +45,14 @@ class RoleNamePlausibilityTest {
     }
 
     @Test
-    fun `правдоподобие имени — без цифр, коротко, со словами`() {
-        assertTrue(plausiblePersonName("Іваненко Іван"))
-        assertTrue(plausiblePersonName("ДУМБРОВАН Олександр Миколайович"))
-        assertTrue("OCR-искажение с одиночной цифрой — ещё имя", plausiblePersonName("1ваненко ван"))
-        assertTrue(!plausiblePersonName(wholeText))
-        assertTrue(!plausiblePersonName("+380671234567"))
-        assertTrue(!plausiblePersonName("Оплата 2500 грн"))
-        assertTrue(!plausiblePersonName(""))
-        assertTrue(!plausiblePersonName("и это очень длинная строка из очень многих слов подряд без шанса быть именем"))
+    fun `правдоподобие имени стороны — без цифр, коротко, со словами`() {
+        assertTrue(plausiblePartyName("Іваненко Іван"))
+        assertTrue(plausiblePartyName("ДУМБРОВАН Олександр Миколайович"))
+        assertTrue("OCR-искажение с одиночной цифрой — ещё имя", plausiblePartyName("1ваненко ван"))
+        assertTrue(!plausiblePartyName(wholeText))
+        assertTrue(!plausiblePartyName("+380671234567"))
+        assertTrue(!plausiblePartyName("Оплата 2500 грн"))
+        assertTrue(!plausiblePartyName(""))
+        assertTrue(!plausiblePartyName("и это очень длинная строка из очень многих слов подряд без шанса быть именем"))
     }
 }
