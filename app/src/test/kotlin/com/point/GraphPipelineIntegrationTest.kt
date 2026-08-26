@@ -63,6 +63,8 @@ import com.point.data.EntityInvestigation
 import com.point.data.EntityInvestigationRealizer
 import com.point.data.MetadataEntityInvestigation
 import com.point.data.MetadataEntityInvestigationRealizer
+import com.point.data.PdfImageInvestigation
+import com.point.data.PdfImageInvestigationRealizer
 import com.point.data.QrInvestigation
 import com.point.data.QrInvestigationRealizer
 import com.point.executors.CallCapability
@@ -71,8 +73,10 @@ import com.point.executors.CorrectValueRealizer
 import com.point.executors.DefaultCapabilityRegistry
 import com.point.executors.DefaultResolver
 import com.point.executors.LearningBubblePolicy
+import com.point.executors.ReadDocumentCapability
 import com.point.executors.ReadQrCapability
 import com.point.executors.ReadQrRealizer
+import com.point.executors.UnderstandCapability
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -126,10 +130,21 @@ class GraphPipelineIntegrationTest {
 
     private val qrEngine = ScriptedQr()
 
-    /** Разговору в этих проверках нечего читать: документов здесь нет. */
-    private val noPdfText = object : com.point.core.flow.PdfTextExtractor {
-        override suspend fun extractText(obj: PointObject) = ""
+    /**
+     * Читатель текстового слоя, который считает разборы: цена «один раз» проверяется счётом,
+     * а не обещанием (#1241).
+     */
+    private class ScriptedPdf : com.point.core.flow.PdfTextExtractor {
+        var layer = ""
+        var read = 0
+
+        override suspend fun extractText(obj: PointObject): String {
+            read++
+            return layer
+        }
     }
+
+    private val pdfEngine = ScriptedPdf()
 
     private val phoneEngine = object : EntityExtractor {
         override suspend fun extract(text: String): List<Entity> =
@@ -155,7 +170,9 @@ class GraphPipelineIntegrationTest {
     private val registry = DefaultCapabilityRegistry(
         capabilities = setOf(
             QrInvestigation(), EntityInvestigation(), MetadataEntityInvestigation(),
+            PdfImageInvestigation(),
             ReadQrCapability(), CallCapability(), CorrectValueCapability(),
+            ReadDocumentCapability(), UnderstandCapability(com.point.core.flow.AiReadiness { true }),
             Probe("probe-understand", priority = 90, serves = setOf(Intent.UNDERSTAND)),
             Probe("probe-send", priority = 10, serves = setOf(Intent.SEND)),
         ),
@@ -179,6 +196,7 @@ class GraphPipelineIntegrationTest {
                 QrInvestigationRealizer(qrEngine),
                 EntityInvestigationRealizer(phoneEngine, dispatcher),
                 MetadataEntityInvestigationRealizer(),
+                PdfImageInvestigationRealizer(pdfEngine, store),
                 ReadQrRealizer(store, qrEngine),
                 CorrectValueRealizer(),
             ),
@@ -238,7 +256,11 @@ class GraphPipelineIntegrationTest {
             )
         }
         override suspend fun children(collection: PointObject, limit: Int) = CollectionContent.empty<PointObject>()
-        override suspend fun readText(obj: PointObject, limit: Int): String = ""
+
+        /** Экран показывает то, что лежит по ссылке знания, — значит и здесь читается файл. */
+        override suspend fun readText(obj: PointObject, limit: Int): String =
+            runCatching { File(obj.uri.value).takeIf(File::isFile)?.readText()?.take(limit) }.getOrNull().orEmpty()
+
         override suspend fun newScratchFile(extension: String) =
             ScratchRef(File.createTempFile("pipeline-", ".$extension").apply { deleteOnExit() }.absolutePath)
         override suspend fun clear() = Unit
@@ -257,6 +279,13 @@ class GraphPipelineIntegrationTest {
         return PointObject("img", "image/jpeg", ScratchRef(payload.absolutePath), ObjectState(ObjectKind.IMAGE), metadata)
     }
 
+    private fun pdfObject(metadata: Map<String, String> = emptyMap()): PointObject {
+        val payload = File.createTempFile("doc-", ".pdf").apply { writeText("%PDF"); deleteOnExit() }
+        return PointObject(
+            "doc", "application/pdf", ScratchRef(payload.absolutePath), ObjectState(ObjectKind.PDF), metadata,
+        )
+    }
+
     // Настоящие движки на настоящих потоках + виртуальные часы: десять виртуальных минут
     // пролетают раньше настоящей секунды, и потолок действия (#1069) резал бы живую работу.
     private fun vm(): FlowViewModel = vmRaw().apply { actionCeilingMs = null }
@@ -273,7 +302,7 @@ class GraphPipelineIntegrationTest {
                 ) = "ok"
             },
             store,
-            com.point.core.flow.GraphKnowledge(store, noPdfText),
+            com.point.core.flow.GraphKnowledge(store, pdfEngine),
         ),
         enrichment,
         object : HistoryStore {
@@ -491,6 +520,78 @@ class GraphPipelineIntegrationTest {
             scanned,
             qrEngine.decoded,
         )
+
+        shutdown(vm)
+    }
+
+    /**
+     * Человек поделился документом с текстовым слоем (#1241).
+     *
+     * Прежде этот слой разбирался ради одного булева ответа «скан или нет» и выбрасывался:
+     * экран текста не показывал, «Понять» над документом не открывалось, а «Перевести», «В
+     * Word» и каждая реплика разговора поднимали документ заново. Теперь слой ложится знанием
+     * объекта — тем же ключом, каким ложится любое прочтение, — и достаётся один раз.
+     *
+     * Реестр здесь настоящий: цена исследования названа SLOW, а значит гейт по знанию решает,
+     * запускать ли его вовсе, по объявленным находкам (`mayYield`).
+     */
+    @Test
+    fun `A - у документа со слоем текст встал на экран, а разобран документ один раз`() = runTest(dispatcher) {
+        pdfEngine.layer = "Договор №42 от 2026 года"
+        store.next = pdfObject()
+        val vm = vm()
+
+        vm.onShared("uri", "application/pdf"); advanceUntilIdle()
+        settle { vm.ui.value.frame?.textPreview != null }
+
+        val read = frame(vm)
+        assertTrue("слой не стал знанием документа", read.obj.state.has(Feature.HAS_TEXT))
+        assertFalse("документ со слоем назван сканом", read.obj.state.has(Feature.IS_IMAGE_PDF))
+        assertEquals("экран не показал прочитанное", pdfEngine.layer, read.textPreview)
+        assertTrue(
+            "над прочитанным документом не открылось «Понять»",
+            read.bubbles.any { it.capabilityId == UnderstandCapability.ID },
+        )
+        assertFalse(
+            "прочитанному документу предлагают прочитать его снова",
+            read.bubbles.any { it.capabilityId == ReadDocumentCapability.ID },
+        )
+        assertEquals("документ разобрали больше одного раза", 1, pdfEngine.read)
+
+        shutdown(vm)
+    }
+
+    /**
+     * Человек поделился сканом, а потом вернулся к нему (#1240, #1241).
+     *
+     * Слоя нет — на экран встаёт «Прочитать документ». Второй вход в тот же документ разбором
+     * больше не оплачивается: цена исследования названа по работе исполнителя, и гейт по
+     * знанию включается сам. Прежде документ в сотню страниц разбирался заново при каждом
+     * входе, и крутилки человек при этом не видел.
+     */
+    @Test
+    fun `A - скан узнан, а повторный вход в него не разбирает документ заново`() = runTest(dispatcher) {
+        pdfEngine.layer = ""
+        store.next = pdfObject()
+        val vm = vm()
+
+        vm.onShared("uri", "application/pdf"); advanceUntilIdle()
+        settle { vm.ui.value.frame?.obj?.state?.has(Feature.IS_IMAGE_PDF) == true }
+
+        val scan = frame(vm)
+        assertTrue("скан не узнан настоящим стеком", scan.obj.state.has(Feature.IS_IMAGE_PDF))
+        assertTrue(
+            "скану не предложено прочитать его страницами",
+            scan.bubbles.any { it.capabilityId == ReadDocumentCapability.ID },
+        )
+        val stripped = pdfEngine.read
+        assertTrue("документ вообще не разбирали", stripped > 0)
+
+        // Человек вернулся к тому же документу — из «Недавнего» он приходит со своим знанием.
+        store.next = pdfObject(scan.obj.metadata)
+        vm.onShared("uri", "application/pdf"); advanceUntilIdle()
+
+        assertEquals("документ разобрали ради уже отвеченного вопроса", stripped, pdfEngine.read)
 
         shutdown(vm)
     }
