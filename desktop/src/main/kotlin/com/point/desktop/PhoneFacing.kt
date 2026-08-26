@@ -61,3 +61,23 @@ fun phoneFacingActions(capabilities: Collection<Capability>): List<PcRemoteActio
 
 /** Имя, под которым умение компьютера видно в списке на телефоне. */
 private fun phoneFacingLabel(action: PcRemoteAction): String = namedByPlace[action.id] ?: action.label
+
+/**
+ * Умение, уходящее из круга, объявляется недоступным, пока режим закрыл дорогу наружу (#1269).
+ *
+ * Режим — это ответ человека, данный заранее, и он известен ещё в момент объявления. Значит
+ * причина видна телефону до тапа, а не приходит отказом после напрасного ожидания. Своя,
+ * более точная причина сильнее: «на компьютере нет yt-dlp» она не затирает.
+ *
+ * Мерка — та же, которой откажет сам компьютер (`DesktopState.wayOutClosed`), и другой она
+ * быть не вправе: объявление обязано совпасть с тем, что случится по тапу. Телефонная
+ * мерка мягче, и взять её сюда значило бы обещать телефону работу, которой не будет.
+ */
+fun withWayOutClosed(
+    actions: List<PcRemoteAction>,
+    level: com.point.core.flow.PrivacyLevel,
+): List<PcRemoteAction> {
+    if (com.point.core.flow.allowedAt(level, com.point.core.flow.AI_CHAIN_PRIVACY)) return actions
+    val why = com.point.core.flow.chainClosedBy(level)
+    return actions.map { if (it.leavesCircle && it.unavailable == null) it.copy(unavailable = why) else it }
+}

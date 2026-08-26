@@ -923,6 +923,270 @@ class FlowViewModelTest {
         assertEquals("r-1", back[com.point.core.flow.PcExecFields.REQUEST])
     }
 
+    /**
+     * Просьба компьютера входит в те же две двери, что и тап человека здесь (#1269).
+     *
+     * Человек закрыл дорогу наружу, а телефон по просьбе компьютера всё равно отправлял:
+     * `executeForPc` шёл мимо режима и мимо согласия. Конституция §11 — объект покидает
+     * устройства только с согласия человека, и выбранный режим это согласие уже отменил.
+     */
+    @Test fun `просьба компьютера в закрытом режиме не исполняется — компьютер узнаёт причину`() = runTest(dispatcher) {
+        cloudPrivacy.level = com.point.core.flow.PrivacyLevel.DEVICE_ONLY
+        pcLinks.pc = com.point.core.flow.LinkedPc("pc", "Компьютер", "http://pc")
+        pcTransport.outbox = listOf(asksPc())
+        val vm = vm(cloud = setOf(CapabilityId("a")))
+
+        vm.pullFromPc(); advanceUntilIdle()
+
+        assertTrue("объект уехал наружу вопреки выбранному режиму", resolver.performed.isEmpty())
+        val back = pcTransport.sent.singleOrNull()
+        assertNotNull("компьютер не узнал ничего — шаг у него ждёт вечно", back)
+        assertEquals(
+            com.point.core.flow.PcResultFields.FAILED,
+            back!![com.point.core.flow.PcResultFields.OUTCOME],
+        )
+        assertEquals(
+            com.point.core.flow.chainClosedBy(com.point.core.flow.PrivacyLevel.DEVICE_ONLY),
+            back[com.point.core.flow.PcResultFields.DETAIL],
+        )
+    }
+
+    /**
+     * Согласие на облако спрашивается там, где действие исполняется (#1269).
+     *
+     * До «да» объект никуда не уходит, а компьютер видит честное «ждёт», а не галочку
+     * «сделано»: у него шаг ещё не состоялся. Сказанное «да» доводит ту же работу.
+     */
+    @Test fun `облачная просьба компьютера сначала спрашивает человека здесь`() = runTest(dispatcher) {
+        pcLinks.pc = com.point.core.flow.LinkedPc("pc", "Компьютер", "http://pc")
+        pcTransport.outbox = listOf(asksPc())
+        val vm = vm(cloud = setOf(CapabilityId("a")))
+
+        vm.pullFromPc(); advanceUntilIdle()
+
+        assertTrue("вопрос об отправке не задан ни на одном экране", vm.ui.value.cloudConsent)
+        assertTrue("объект ушёл наружу без ответа человека", resolver.performed.isEmpty())
+
+        // Незавершённый шаг терминальным исходом не является (ADR-0001 §18): «ждёт» — не
+        // «не вышло», иначе на компьютере поверх честного «ждёт телефона» ложится провал
+        // работы, которая ещё не начиналась (#1269).
+        assertEquals(
+            com.point.core.flow.PcResultFields.AWAITING,
+            pcTransport.sent.single()[com.point.core.flow.PcResultFields.OUTCOME],
+        )
+        assertEquals(
+            com.point.core.flow.AWAITS_CONSENT_TEXT,
+            pcTransport.sent.single()[com.point.core.flow.PcResultFields.DETAIL],
+        )
+
+        vm.confirmCloud(); advanceUntilIdle()
+
+        assertEquals("после «да» работа не пошла", listOf(CapabilityId("a")), resolver.performed)
+        val done = pcTransport.sent.last()
+        assertEquals(
+            com.point.core.flow.PcResultFields.DONE,
+            done[com.point.core.flow.PcResultFields.OUTCOME],
+        )
+        assertEquals("результат ушёл не к тому объекту", "obj-at-home", done[com.point.core.flow.PcExecFields.HOME])
+    }
+
+    /**
+     * Сказанное «нет» — тоже ответ, и его ждут на том конце (#1269).
+     *
+     * Отказ гас там, где его произнесли: на компьютере навсегда оставалось «ждёт вашего
+     * ответа на телефоне», и человек там ждал ответа, которого уже не будет.
+     */
+    @Test fun `сказанное «нет» доезжает до компьютера`() = runTest(dispatcher) {
+        pcLinks.pc = com.point.core.flow.LinkedPc("pc", "Компьютер", "http://pc")
+        pcTransport.outbox = listOf(asksPc())
+        val vm = vm(cloud = setOf(CapabilityId("a")))
+        vm.pullFromPc(); advanceUntilIdle()
+
+        vm.declineCloud(); advanceUntilIdle()
+
+        assertTrue("объект ушёл наружу после отказа", resolver.performed.isEmpty())
+        assertEquals("компьютер не узнал об отказе — там ждут ответа вечно", 2, pcTransport.sent.size)
+        val last = pcTransport.sent.last()
+        assertEquals(
+            com.point.core.flow.PcResultFields.FAILED,
+            last[com.point.core.flow.PcResultFields.OUTCOME],
+        )
+        assertEquals(
+            com.point.core.flow.CONSENT_DECLINED_TEXT,
+            last[com.point.core.flow.PcResultFields.DETAIL],
+        )
+    }
+
+    /**
+     * Две облачные просьбы в одной пачке — обе целы (#1269).
+     *
+     * Вопрос на экране один, и второй затирал первый: продолжение первой просьбы пропадало
+     * вместе с лямбдой, а из очереди компьютера подтверждались обе. Первая не выполнялась
+     * никогда, повторить её с компьютера было нечем, и там навсегда висело «ждёт ответа».
+     */
+    @Test fun `вторая облачная просьба не съедает первую`() = runTest(dispatcher) {
+        pcLinks.pc = com.point.core.flow.LinkedPc("pc", "Компьютер", "http://pc")
+        pcTransport.outbox = listOf(asksPc(), asksPc(id = 2, request = "r-2", home = "obj-второй"))
+        val vm = vm(cloud = setOf(CapabilityId("a")))
+
+        vm.pullFromPc(); advanceUntilIdle()
+
+        assertEquals("просьба ушла из очереди компьютера, а сделана не была", listOf(1), pcTransport.acked)
+        assertEquals("неразобранная просьба потерялась — забрать её нечем", 1, vm.fromPcCount.value)
+
+        vm.confirmCloud(); advanceUntilIdle()
+
+        assertEquals("«да» сделало не ту работу, о которой спрашивали", listOf(CapabilityId("a")), resolver.performed)
+        val home = com.point.core.flow.PcExecFields.HOME
+        assertEquals("результат уехал не к тому объекту", "obj-at-home", pcTransport.sent.last()[home])
+    }
+
+    /**
+     * Вопрос об отправке называет, о чём он (#1269).
+     *
+     * Экран согласия показывается вместо объекта, а по стуку компьютера человек приходит к
+     * нему с другого экрана: без имени работы и имени вещи он решает судьбу того, чего не
+     * выбирал и не видит. Пояснение клалось в сообщение — а сообщение этим же экраном и
+     * подменялось.
+     */
+    @Test fun `вопрос об отправке называет работу и объект`() = runTest(dispatcher) {
+        pcLinks.pc = com.point.core.flow.LinkedPc("pc", "Компьютер", "http://pc")
+        pcTransport.outbox = listOf(asksPc())
+        val vm = vm(cloud = setOf(CapabilityId("a")))
+
+        vm.pullFromPc(); advanceUntilIdle()
+
+        val about = vm.ui.value.cloudAbout
+        assertTrue("вопрос не назвал работу: «$about»", about.contains("Убрать фон"))
+        assertTrue("вопрос не назвал объект: «$about»", about.contains("накладная.jpg"))
+    }
+
+    /**
+     * Компьютер узнаёт «ждёт» раньше, чем вопрос встаёт человеку под палец (#1269).
+     *
+     * Отправка — сетевой круг, и на нём этот шов спит. Пока он спал, вопрос уже стоял на
+     * экране: человек говорил «да», работа делалась, «готово» уезжало вторым письмом — и
+     * стоило «ждёт» доехать последним, на компьютере навсегда оставалось «Ждёт вашего
+     * ответа на телефоне» поверх сделанной работы (`recordStep` законченный шаг не трогает).
+     * Порядок писем на проводе телефон не выбирает — он выбирает, когда дать ответить.
+     */
+    @Test fun `компьютер узнаёт «ждёт» раньше, чем вопрос встаёт под палец`() = runTest(dispatcher) {
+        pcLinks.pc = com.point.core.flow.LinkedPc("pc", "Компьютер", "http://pc")
+        pcTransport.outbox = listOf(asksPc())
+        val vm = vm(cloud = setOf(CapabilityId("a")))
+        var askedWhileTelling: Boolean? = null
+        pcTransport.atSend = { meta ->
+            if (meta[com.point.core.flow.PcResultFields.OUTCOME] == com.point.core.flow.PcResultFields.AWAITING) {
+                askedWhileTelling = vm.ui.value.cloudConsent
+            }
+        }
+
+        vm.pullFromPc(); advanceUntilIdle()
+
+        assertEquals(
+            "компьютер не узнал «ждёт» вовсе",
+            com.point.core.flow.PcResultFields.AWAITING,
+            pcTransport.sent.single()[com.point.core.flow.PcResultFields.OUTCOME],
+        )
+        assertEquals(
+            "вопрос стоял под пальцем, пока «ждёт» было в пути — сказанное «да» обгонит его",
+            false,
+            askedWhileTelling,
+        )
+    }
+
+    /**
+     * Недоехавший отказ не выдаётся за доставленный (#1269).
+     *
+     * Транспорт исключений не бросает: выключенный компьютер приезжает обычным значением
+     * `Unreachable`. Прежде здесь спрашивали «не упало ли», слышали «дошло» всегда — и
+     * сказанное «нет» пропадало молча, а на компьютере оставалось вечное «ждёт ответа».
+     */
+    @Test fun `недоехавший отказ не выдаётся за доставленный`() = runTest(dispatcher) {
+        pcLinks.pc = com.point.core.flow.LinkedPc("pc", "Компьютер", "http://pc")
+        pcTransport.outbox = listOf(asksPc())
+        val vm = vm(cloud = setOf(CapabilityId("a")))
+        vm.pullFromPc(); advanceUntilIdle()
+        pcTransport.outcome = com.point.core.flow.PcSendOutcome.Unreachable(
+            "спит",
+            com.point.core.flow.PcUnreachable.PC_ASLEEP,
+        )
+
+        vm.declineCloud(); advanceUntilIdle()
+
+        val said = vm.ui.value.message.orEmpty()
+        assertEquals(
+            "отказ не доехал, а человеку это выдано не за провал — он уверен, что компьютер знает",
+            Outcome.FAILED,
+            vm.ui.value.messageOutcome,
+        )
+        assertTrue("не сказано, о какой работе речь-$said", said.contains("Убрать фон"))
+    }
+
+    /**
+     * Недоехавший результат тоже не выдаётся за сделанное (#1269).
+     *
+     * «Сделано для компьютера» про письмо, которое никуда не ушло, посылает человека
+     * искать результат там, где его нет.
+     */
+    @Test fun `недоехавший результат для компьютера не выдаётся за сделанное`() = runTest(dispatcher) {
+        pcLinks.pc = com.point.core.flow.LinkedPc("pc", "Компьютер", "http://pc")
+        pcTransport.outbox = listOf(asksPc())
+        pcTransport.outcome = com.point.core.flow.PcSendOutcome.Unreachable(
+            "спит",
+            com.point.core.flow.PcUnreachable.PC_ASLEEP,
+        )
+        val vm = vm()
+
+        vm.pullFromPc(); advanceUntilIdle()
+
+        val said = vm.ui.value.message.orEmpty()
+        assertEquals(
+            "результат не доехал, а человеку сказано «сделано» — он пойдёт искать его на компьютере",
+            Outcome.FAILED,
+            vm.ui.value.messageOutcome,
+        )
+        assertTrue("не сказано, о какой работе речь-$said", said.contains("Убрать фон"))
+    }
+
+    /**
+     * Лежащее на сервере письмо — доехало (#672, #1269).
+     *
+     * Выключенный компьютер — обычное дело: письмо ждёт его на сервере и будет прочитано.
+     * Назвать это «не доехало» значило бы пугать человека на самом частом пути.
+     */
+    @Test fun `письмо, ждущее компьютер на сервере, считается доехавшим`() = runTest(dispatcher) {
+        pcLinks.pc = com.point.core.flow.LinkedPc("pc", "Компьютер", "http://pc")
+        pcTransport.outbox = listOf(asksPc())
+        pcTransport.outcome = com.point.core.flow.PcSendOutcome.Parked
+        val vm = vm()
+
+        vm.pullFromPc(); advanceUntilIdle()
+
+        assertEquals(
+            "письмо ждёт компьютер на сервере, а человеку сказано «не доехало» — он отправит заново",
+            Outcome.DONE,
+            vm.ui.value.messageOutcome,
+        )
+    }
+
+    /** Письмо компьютера с просьбой — такое же, каким его шлёт настоящий (`queueForPhone`). */
+    private fun asksPc(
+        id: Int = 1,
+        request: String = "r-1",
+        home: String = "obj-at-home",
+    ) = com.point.core.flow.PcOutboxEntry(
+        id,
+        mapOf(
+            "name" to "накладная.jpg",
+            "mime" to "image/jpeg",
+            com.point.core.flow.PcExecFields.ACTION to "a",
+            com.point.core.flow.PcExecFields.LABEL to "Убрать фон",
+            com.point.core.flow.PcExecFields.REQUEST to request,
+            com.point.core.flow.PcExecFields.HOME to home,
+        ),
+    )
+
     @Test fun `назад с экрана входа возвращает в Point, а не закрывает его`() = runTest(dispatcher) {
 
         val vm = vm(account = FakeAccountStore(null), accountClient = CountingSignInClient(readyAfter = Int.MAX_VALUE))
@@ -5500,6 +5764,13 @@ private class FakePcTransport : com.point.core.flow.PcTransport {
     val acked = mutableListOf<Int>()
     var pushedPhoneCaps: List<com.point.core.flow.PcRemoteAction> = emptyList()
     val sent = mutableListOf<Map<String, String>>()
+
+    /** Судьба письма — обычное значение, а не исключение: выключенный компьютер молчит, не падает. */
+    var outcome: com.point.core.flow.PcSendOutcome = com.point.core.flow.PcSendOutcome.Sent()
+
+    /** Что видно на экране, пока письмо ещё в пути (#1269): отправка — сетевой круг. */
+    var atSend: ((Map<String, String>) -> Unit)? = null
+
     override suspend fun send(
         pc: com.point.core.flow.LinkedPc,
         obj: com.point.core.model.PointObject,
@@ -5507,8 +5778,9 @@ private class FakePcTransport : com.point.core.flow.PcTransport {
         meta: Map<String, String>,
         action: String?,
     ): com.point.core.flow.PcSendOutcome {
+        atSend?.invoke(meta)
         sent += meta
-        return com.point.core.flow.PcSendOutcome.Sent()
+        return outcome
     }
 
     /** Два разговора с компьютером шли внахлёст — знание о круге писалось в два голоса (#1076). */

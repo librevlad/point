@@ -17,6 +17,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.point.core.ui.PortalColumnWidth
@@ -34,6 +35,14 @@ fun ConsentScreen(
     destination: String = "",
     title: String = "",
     confirm: String = "",
+
+    /**
+     * О чём спрашивают: что делаем и с чем (#1269).
+     *
+     * Экран показывается вместо объекта, а по стуку компьютера человек приходит сюда вовсе
+     * с другого экрана — и без этой строки решает судьбу вещи, которой не видит.
+     */
+    about: String = "",
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -45,6 +54,16 @@ fun ConsentScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
 
+        if (about.isNotBlank()) {
+            Text(
+                about,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.widthIn(max = PortalColumnWidth),
+            )
+            Spacer(Modifier.height(18.dp))
+        }
         PortalPlate(
             accent = MaterialTheme.colorScheme.tertiary,
             icon = bubbleIcon(CLOUD_ICON),
@@ -84,6 +103,17 @@ private const val CLOUD_ICON = "cloud"
 @Composable
 private fun PreviewConsent() = PointTheme(darkTheme = true) {
     ConsentScreen(onAllow = {}, onDecline = {})
+}
+
+@Preview(name = "Облако · просьба компьютера (#1269)", showBackground = true, backgroundColor = 0xFF0B0D10)
+@Composable
+private fun PreviewConsentForPc() = PointTheme(darkTheme = true) {
+
+    ConsentScreen(
+        onAllow = {},
+        onDecline = {},
+        about = "«Убрать фон» для компьютера · накладная.jpg",
+    )
 }
 
 @Preview(name = "Облако · выложить по ссылке (#461)", showBackground = true, backgroundColor = 0xFF0B0D10)

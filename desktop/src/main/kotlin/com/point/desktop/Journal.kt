@@ -87,6 +87,14 @@ fun recordArrival(
     return (listOf(merged) + entries.filterNot { it.path == arrival.path }).take(limit)
 }
 
+/**
+ * Записать шаг в журнал объекта.
+ *
+ * Шаг, который ещё ждёт, не размножается (#1269): «ждёт телефона» → «ждёт согласия» →
+ * «готово» — это один шаг, менявший состояние, а не три разных. Пока последняя запись того
+ * же умения ждёт, новая её заменяет; законченный шаг не трогается никогда, и история
+ * прежних запусков остаётся целой.
+ */
 fun recordStep(
     entries: List<JournalEntry>,
     path: String,
@@ -94,7 +102,15 @@ fun recordStep(
     stepsLimit: Int = JOURNAL_STEPS_LIMIT,
 ): List<JournalEntry> =
     entries.map { entry ->
-        if (entry.path != path) entry else entry.copy(steps = (entry.steps + step).takeLast(stepsLimit))
+        if (entry.path != path) {
+            entry
+        } else {
+            val stillWaiting = entry.steps.lastOrNull()
+                ?.let { it.outcome == StepOutcome.AWAITING && it.capabilityId == step.capabilityId }
+                ?: false
+            val steps = if (stillWaiting) entry.steps.dropLast(1) + step else entry.steps + step
+            entry.copy(steps = steps.takeLast(stepsLimit))
+        }
     }
 
 /** Знание объекта после merge: журнал держит уже слитое состояние, не дельту. */

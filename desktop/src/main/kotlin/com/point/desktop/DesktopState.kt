@@ -219,8 +219,40 @@ class DesktopState(
         )
     }
 
+    /**
+     * Почему это действие сейчас наружу не пойдёт — словами выбранного режима (#893).
+     *
+     * Одно правило в одном месте — и для клика по экрану, и для просьбы соседа (#1269).
+     *
+     * Мерка здесь строже телефонной, и намеренно. Телефон спрашивает «пускает ли режим
+     * наружу хоть кого-нибудь» (`anyoneAllowedAt`, #945) и ниже по цепочке отбирает
+     * читателей по обещанию: до сервиса, не обещавшего не учиться на присланном, объект у
+     * него не доедет. На компьютере такого отбора нет — цепочка здесь ничьих обещаний не
+     * несёт, и её приватность ровно `AI_CHAIN_PRIVACY`. Спросить телефонную мерку значило
+     * бы в режиме «Не учатся на моём» отправить объект туда, где этого никто не обещал:
+     * приватность важнее удобства.
+     */
+    private fun wayOutClosed(id: com.point.core.model.CapabilityId): String? {
+        if (!runCatching { resolver.leavesDevice(id) }.getOrDefault(false)) return null
+        val level = privacyLevel()
+        if (com.point.core.flow.allowedAt(level, com.point.core.flow.AI_CHAIN_PRIVACY)) return null
+        return com.point.core.flow.chainClosedBy(level)
+    }
+
     private suspend fun perform(id: String, item: InboxItem, stationTitle: String? = null): ActionResult? {
         val title = stationTitle ?: titleOf(id, item)
+        val step = if (stationTitle != null) title else "$title · с телефона"
+
+        // Одна воронка на все входы (#1269): режим проверяется здесь, а не только на пути
+        // клика по экрану. Просьба телефона была единственным входом мимо него — человек
+        // закрыл компьютеру дорогу наружу, а компьютер по просьбе соседа всё равно
+        // отправлял страницы чужому сервису (Конституция §11).
+        wayOutClosed(com.point.core.model.CapabilityId(id))?.let { why ->
+            val closed = ActionResult.Failure(why, recoverable = false)
+            _message.value = why
+            note(item, id, step, closed)
+            return closed
+        }
         _message.value = null
         _working.value = Working(
             title,
@@ -284,7 +316,7 @@ class DesktopState(
             else -> _message.value
         }
 
-        note(item, id, if (stationTitle != null) title else "$title · с телефона", result)
+        note(item, id, step, result)
         return result
     }
 
@@ -322,6 +354,16 @@ class DesktopState(
             _message.value = why
             note(item, action, "$label · на телефоне", ActionResult.Failure(why, recoverable = true))
             return ActionResult.Failure(why, recoverable = true)
+        }
+
+        // «Ждёт» исходом не является (ADR-0001 §18): шаг не кончился и не сорвался — там
+        // спрашивают человека. Прежде это приезжало как «не вышло», и на компьютере поверх
+        // честного «ждёт телефона» ложился провал работы, которая ещё не начиналась (#1269).
+        if (meta[f.OUTCOME] == f.AWAITING) {
+            val why = meta[f.DETAIL]?.takeIf { it.isNotBlank() } ?: "«$label» ждёт продолжения на телефоне"
+            _message.value = why
+            noteAwaiting(item, action, "$label · на телефоне", why)
+            return ActionResult.NeedsInput(why)
         }
 
         // Объект, рождённый работой соседа, ложится сюда как любой другой результат — со
@@ -682,9 +724,8 @@ class DesktopState(
                 // Выбранный человеком режим спрашивается ДО согласия: если он сказал
                 // «только на этом устройстве», спрашивать «отправить?» уже поздно и
                 // нечестно — объект туда не поедет в любом случае (#893).
-                val level = privacyLevel()
-                if (!com.point.core.flow.allowedAt(level, com.point.core.flow.AI_CHAIN_PRIVACY)) {
-                    _message.value = com.point.core.flow.chainClosedBy(level)
+                wayOutClosed(bubble.capabilityId)?.let { why ->
+                    _message.value = why
                     return@launch
                 }
                 val needed = com.point.core.flow.cloudScopeOf(bubble.capabilityId)

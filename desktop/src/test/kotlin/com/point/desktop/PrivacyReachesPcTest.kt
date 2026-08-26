@@ -4,7 +4,6 @@ import com.point.core.flow.AI_CHAIN_PRIVACY
 import com.point.core.flow.AccountSettings
 import com.point.core.flow.PrivacyLevel
 import com.point.core.flow.allowedAt
-import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -17,6 +16,12 @@ import org.junit.rules.TemporaryFolder
  * Человек выбирал на телефоне «Только на этом устройстве», а компьютер про этот выбор не
  * знал вовсе: `PrivacyLevel` не встречался в его коде ни разу. Расшифровка записи и чтение
  * снимка — облачные и здесь, значит объект уходил на чужой сервер вопреки сказанному.
+ *
+ * Здесь — дорога выбора: доезжает ли он до компьютера и что означает сам по себе. Что режим
+ * на компьютере действует, доказано поведением окна в `CloudConsentTest`, а на просьбе
+ * телефона — в `PhoneRequestStaysInTheModeTest` (#1247, #1269). Прежде на этом месте стояла
+ * сверка порядка двух строк в исходнике `DesktopState.kt`: она пережила бы и пропавший
+ * `return`, и неверную константу, и переименование самого метода.
  */
 class PrivacyReachesPcTest {
 
@@ -48,17 +53,6 @@ class PrivacyReachesPcTest {
         assertTrue(!allowedAt(PrivacyLevel.DEVICE_ONLY, AI_CHAIN_PRIVACY))
         assertTrue(!allowedAt(PrivacyLevel.NO_TRAINING, AI_CHAIN_PRIVACY))
         assertTrue(allowedAt(PrivacyLevel.FREE_FIRST, AI_CHAIN_PRIVACY))
-    }
-
-    @Test
-    fun `окно спрашивает режим до вопроса о согласии`() {
-        val source = File("src/main/kotlin/com/point/desktop/DesktopState.kt").readText()
-        val onBubble = source.substringAfter("fun onBubble(").substringBefore("fun approveCloud")
-
-        val level = onBubble.indexOf("privacyLevel()")
-        val ask = onBubble.indexOf("_cloudAsk.value = CloudAsk")
-        assertTrue("режим не спрашивается вовсе", level >= 0)
-        assertTrue("сначала спрашивают согласие, потом режим — поздно", level < ask)
     }
 
     @Test

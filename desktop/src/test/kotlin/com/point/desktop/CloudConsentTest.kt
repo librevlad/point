@@ -1,10 +1,12 @@
 package com.point.desktop
 
 import com.point.core.flow.CloudScope
+import com.point.core.flow.PrivacyLevel
 import com.point.core.flow.Realizer
 import com.point.core.flow.RealizerKind
 import com.point.core.flow.RealizerMeta
 import com.point.core.flow.Resolver
+import com.point.core.flow.chainClosedBy
 import com.point.core.model.ActionResult
 import com.point.core.model.Bubble
 import com.point.core.model.CapabilityId
@@ -30,6 +32,12 @@ import org.junit.rules.TemporaryFolder
  * Аудит 2026-08-09, блок 1.2 — самое тяжёлое: клик по облачному действию сразу слал
  * файл наружу. Инвариант 9: объект покидает устройства только после явного «да»,
  * вопрос — в момент выбора, отказ не наказывает (P11).
+ *
+ * Дверей на этом пути две, и обе проверяются здесь (#1247, #1269). Первая — выбранный
+ * человеком режим: согласие, данное заранее, конституция (§11) разрешает, а вот
+ * подразумевать его нельзя, и «Только на этом устройстве» закрывает дорогу наружу до
+ * всякого вопроса. Вторая — само «да». Проверяются они в одной воронке `perform`, а не
+ * только на пути клика: иначе «да», сказанное до переключения режима, проносило объект мимо.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class CloudConsentTest {
@@ -54,11 +62,17 @@ class CloudConsentTest {
         }
     }
 
-    private fun state(consentFile: File) = DesktopState(
+    private fun state(
+        consentFile: File,
+
+        /** Режим спрашивается на каждом действии — как и в работе: переключили, подействовало. */
+        level: () -> PrivacyLevel = { PrivacyLevel.DEFAULT },
+    ) = DesktopState(
         DesktopRegistry(emptySet()),
         DesktopResolver(setOf(CloudRealizer())),
         clipboard = { },
         consent = FileConsent(consentFile),
+        privacyLevel = level,
         background = dispatcher,
         io = dispatcher,
     )
@@ -124,5 +138,64 @@ class CloudConsentTest {
         st.onBubble(item(), bubble())
         advanceUntilIdle()
         assertNotNull(st.cloudAsk.value)
+    }
+
+    /**
+     * Режим «Только на этом устройстве» — ответ человека, данный заранее (#1247, #893).
+     *
+     * Спрашивать в нём «отправить?» поздно и нечестно: объект туда не поедет в любом случае.
+     * Прежде это держалось на одном `if`, который ни один тест не исполнял, — сверялся лишь
+     * порядок двух строк в исходнике.
+     */
+    @Test
+    fun `в режиме «только на этом устройстве» облачный клик не спрашивает и не отправляет`() = runTest(dispatcher) {
+        val st = state(File(temp.root, "consent-device-only")) { PrivacyLevel.DEVICE_ONLY }
+
+        st.onBubble(item(), bubble())
+        advanceUntilIdle()
+
+        assertEquals("файл ушёл наружу вопреки выбранному режиму", 0, ran.get())
+        assertNull("вопрос об отправке в закрытом режиме — обман", st.cloudAsk.value)
+        assertEquals(chainClosedBy(PrivacyLevel.DEVICE_ONLY), st.message.value)
+    }
+
+    /** Согласие, данное когда-то, не сильнее режима, выбранного сейчас (#1247). */
+    @Test
+    fun `согласие уже лежит, а режим закрыт — облако всё равно не открывается`() = runTest(dispatcher) {
+        val consentFile = File(temp.root, "consent-kept")
+        val open = state(consentFile)
+        open.onBubble(item(), bubble()); advanceUntilIdle()
+        open.approveCloud(); advanceUntilIdle()
+        assertEquals("согласие обязано было лечь на диск", 1, ran.get())
+
+        val closed = state(consentFile) { PrivacyLevel.DEVICE_ONLY }
+        closed.onBubble(item(), bubble())
+        advanceUntilIdle()
+
+        assertEquals("режим не удержал объект, за который уже сказано «да»", 1, ran.get())
+        assertNull("согласие есть, а вопрос всё равно задан", closed.cloudAsk.value)
+        assertEquals(chainClosedBy(PrivacyLevel.DEVICE_ONLY), closed.message.value)
+    }
+
+    /**
+     * Воронка одна: режим спрашивается в самом `perform`, а не только на пути клика (#1269).
+     *
+     * Человек нажал при открытом режиме, задумался над вопросом и закрыл дорогу наружу в
+     * настройках. Сказанное после этого «да» относилось к прошлому состоянию — и проносило
+     * объект мимо только что выбранного режима.
+     */
+    @Test
+    fun `режим, закрытый пока висел вопрос, останавливает и сказанное «да»`() = runTest(dispatcher) {
+        var level = PrivacyLevel.DEFAULT
+        val st = state(File(temp.root, "consent-switched")) { level }
+
+        st.onBubble(item(), bubble()); advanceUntilIdle()
+        assertNotNull("вопрос обязан был появиться", st.cloudAsk.value)
+
+        level = PrivacyLevel.DEVICE_ONLY
+        st.approveCloud(); advanceUntilIdle()
+
+        assertEquals("объект уехал мимо только что выбранного режима", 0, ran.get())
+        assertEquals(chainClosedBy(PrivacyLevel.DEVICE_ONLY), st.message.value)
     }
 }

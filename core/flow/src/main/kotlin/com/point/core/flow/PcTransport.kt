@@ -31,6 +31,16 @@ sealed interface PcSendOutcome {
 /** Судьба письма, а не статус RPC: доставлено и ждёт получателя (#672). */
 const val PC_PARKED_TEXT = "Отправлено — компьютер заберёт, когда включится"
 
+/**
+ * Дошло ли письмо до получателя (#1269).
+ *
+ * Лежащее на сервере доставлено: компьютер придёт за ним и прочитает. Отказ и недоступность
+ * — не дошло, и это не исключение, а обычное значение: спросить `runCatching { }.isSuccess`
+ * значит услышать «дошло» при выключенном компьютере. `null` — отправка сорвалась.
+ */
+fun PcSendOutcome?.delivered(): Boolean =
+    this is PcSendOutcome.Sent || this is PcSendOutcome.Parked
+
 enum class PcUnreachable {
 
     NOT_IN_CIRCLE,

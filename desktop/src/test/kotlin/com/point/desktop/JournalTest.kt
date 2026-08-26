@@ -37,7 +37,33 @@ class JournalTest {
         at: Long = 2_000L,
         outcome: StepOutcome = StepOutcome.DONE,
         note: String = "готово",
-    ) = JournalStep("pc-print", title, at, outcome, note)
+        capabilityId: String = "pc-print",
+    ) = JournalStep(capabilityId, title, at, outcome, note)
+
+    /**
+     * Один шаг — одна строка, пока он ждёт (#1269).
+     *
+     * «Ждёт телефона» → «ждёт согласия» → «готово» — это один шаг, менявший состояние, а
+     * не три разных дела: в журнале на него ложились три записи подряд. Законченного шага
+     * правило не касается — история прежних запусков остаётся целой.
+     */
+    @Test
+    fun `ждущий шаг заменяется следующей вестью о себе, законченный остаётся`() {
+        val waiting = recordStep(
+            recordArrival(emptyList(), entry("/a")),
+            "/a",
+            awaitingStep("cutout", "Убрать фон", 7L, "ждёт телефона"),
+        )
+
+        val finished = recordStep(waiting, "/a", step("Убрать фон", at = 9L, capabilityId = "cutout"))
+        assertEquals(listOf(StepOutcome.DONE), finished.single().steps.map { it.outcome })
+
+        val twice = recordStep(finished, "/a", step("Убрать фон", at = 11L, capabilityId = "cutout"))
+        assertEquals("законченный шаг стёрли — история запусков потеряна", 2, twice.single().steps.size)
+
+        val alongside = recordStep(waiting, "/a", step("Напечатать", at = 9L))
+        assertEquals("чужой шаг съел чужое ожидание", 2, alongside.single().steps.size)
+    }
 
     @Test
     fun `приехавший объект встаёт первым`() {
