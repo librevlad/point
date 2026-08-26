@@ -156,6 +156,48 @@ class UserKeyLlmClientTest {
         assertTrue(hosts.single().startsWith("https://a.host"))
     }
 
+    private val image = PointObject("i", "image/png", ScratchRef("/x.png"), ObjectState(ObjectKind.IMAGE))
+
+    private val frames = FrameForModel { _, mime -> InlineFrame("0JrQsNC00YA", mime) }
+
+    /**
+     * #1239: по снимку ключ человека идёт первым — и уходил без картинки.
+     *
+     * Бесплатная попытка человека и ожидание сгорали на запрос, в котором изображения нет,
+     * а экран ключей записывал исправному ключу «не ответил».
+     */
+    @Test
+    fun `снимок по ключу человека уходит вместе с кадром`() = runTest {
+        var body = ""
+        val http = object : HttpJson {
+            override suspend fun post(u: String, headers: Map<String, String>, b: String): HttpResult {
+                body = b
+                return HttpResult(200, okBody)
+            }
+        }
+        val mine = UserAiKey("own", "sk-user", model = "my-model", baseUrl = "https://my.host/v1")
+
+        UserKeyLlmClient(keys(mine), http, store, RememberedFacts(), frames = frames).run(image, "прочитай")
+
+        assertTrue("кадр не уехал — модель получила один текст: $body", body.contains("0JrQsNC00YA"))
+        assertTrue(body.contains("data:image/png;base64,"))
+    }
+
+    /** #1239: готовить кадр нечем — снимок не берётся вовсе, а не тратит попытку впустую. */
+    @Test
+    fun `без готовилки кадра ключ человека за снимок не берётся`() {
+        val mine = UserAiKey("own", "sk-user")
+        val http = object : HttpJson {
+            override suspend fun post(u: String, headers: Map<String, String>, b: String) = HttpResult(200, okBody)
+        }
+
+        val blind = UserKeyLlmClient(keys(mine), http, store, RememberedFacts())
+        assertTrue(blind.canHandle(obj))
+        assertTrue("снимок без кадра остался попыткой", !blind.canHandle(image))
+
+        assertTrue(UserKeyLlmClient(keys(mine), http, store, RememberedFacts(), frames = frames).canHandle(image))
+    }
+
     /** #1127/#1176: без имени ответ по ключу человека не участвовал в обходе следующего витка. */
     @Test
     fun `ответ по ключу человека называет сервис`() = runTest {

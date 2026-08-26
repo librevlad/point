@@ -81,8 +81,14 @@ class OpenAiCompatibleClient(
 
     override val serviceId: String = provider.id
 
+    /**
+     * Кадр готовить нечем — значит, снимок этому клиенту не по силам, как бы хорошо ни
+     * видела сама модель (#1239): запрос без картинки тратит попытку впустую.
+     */
+    private val blind: Boolean = frames === FrameForModel.NONE
+
     override fun canHandle(obj: PointObject): Boolean = when {
-        isImage(obj) -> provider.vision
+        isImage(obj) -> provider.vision && !blind
         obj.mime == "application/pdf" -> false
 
         isAudio(obj) -> false

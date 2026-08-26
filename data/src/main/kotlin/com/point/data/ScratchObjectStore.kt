@@ -7,6 +7,7 @@ import android.util.Log
 import android.webkit.MimeTypeMap
 import com.point.core.flow.CollectionContent
 import com.point.core.flow.EMPTY_FILE_REASON
+import com.point.core.flow.FrameForModel
 import com.point.core.flow.META_SIZE
 import com.point.core.flow.META_UNUSABLE_REASON
 import com.point.core.flow.ObjectClassifier
@@ -32,6 +33,9 @@ class ScratchObjectStore @Inject constructor(
     // Каталог копий называется одним местом (#1026): его же стирает «Забыть всё», и
     // разъехаться этим двоим нельзя.
     @com.point.data.di.ScratchDir private val place: File,
+
+    // Кадр для модели сделан из этой самой копии (#1245) — значит, и отпускается вместе с ней.
+    private val frames: FrameForModel,
 ) : ObjectStore {
 
     private val scratchDir: File
@@ -198,7 +202,16 @@ class ScratchObjectStore @Inject constructor(
             ScratchRef(File(scratchDir, name).absolutePath)
         }
 
+    /**
+     * Копия отпущена — отпущен и кадр, сделанный из неё (#1245).
+     *
+     * Готовый кадр помнится, чтобы цепочка не кодировала один снимок на каждого провайдера.
+     * Но это строка base64 — заметно больше самого файла, у которого потолок 15 МБ, — и без
+     * этого вызова она оставалась бы в памяти до следующего объекта или до смерти процесса,
+     * уже после того, как работа закончилась. Байты объекта и байты кадра живут один срок.
+     */
     override suspend fun clear() {
+        frames.forget()
         withContext(Dispatchers.IO) { scratchDir.deleteRecursively() }
     }
 

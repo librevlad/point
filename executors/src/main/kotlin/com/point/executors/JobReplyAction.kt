@@ -55,7 +55,11 @@ class JobReplyRealizer @Inject constructor(
                 val about = amendment.takeIf { it.isNotBlank() }
                     ?.let { "\n\nО кандидате: $it" }.orEmpty()
                 reportStage("Пишу отклик")
-                ActionResult.Success(llm.run(input, JOB_REPLY_PROMPT + about + "\n\nВакансия:\n" + vacancy))
+
+                // Вакансия уже в запросе — снимок объявления модели не нужен (#1244).
+                ActionResult.Success(
+                    llm.run(textStandIn(input), JOB_REPLY_PROMPT + about + "\n\nВакансия:\n" + vacancy),
+                )
             }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось написать отклик", recoverable = true) }
         }
     }

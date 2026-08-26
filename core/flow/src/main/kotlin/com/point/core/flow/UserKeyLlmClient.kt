@@ -15,11 +15,25 @@ class UserKeyLlmClient(
 
     /** Режим приватности сужает и ключи человека: у каждого сервиса своё обещание (#945). */
     private val privacy: CloudPrivacySettings = FallbackLlmClient.OPEN_TO_EVERYONE,
+
+    /** Готовилка кадра — та же, что у остальной цепочки (#1239): без неё снимок не уедет. */
+    private val frames: FrameForModel = FrameForModel.NONE,
 ) : LlmClient {
 
     override val strongVision = true
 
     override val configured: Boolean get() = userKeys.keys().mine.isNotEmpty()
+
+    /**
+     * Снимок без кадра — сожжённая квота человека (#1239).
+     *
+     * Ключ человека идёт по снимку первым, и запрос без картинки не бесполезен, а вреден:
+     * послушная модель отвечает NO_IMAGE, непослушная сочиняет чтение документа, которого
+     * не видела, а бесплатная попытка и до 30 с ожидания уже потрачены. Готовить кадр
+     * нечем — значит, снимок этому исполнителю не по силам, и цепочка идёт дальше.
+     */
+    override fun canHandle(obj: PointObject): Boolean =
+        !obj.mime.startsWith("image/") || frames !== FrameForModel.NONE
 
     override suspend fun run(obj: PointObject, prompt: String): ResultObject = run(obj, prompt, emptySet())
 
@@ -70,6 +84,7 @@ class UserKeyLlmClient(
                 strongVision = true,
                 id = key.providerId,
             ),
+            frames,
         )
     }
 

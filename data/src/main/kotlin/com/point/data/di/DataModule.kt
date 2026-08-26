@@ -86,6 +86,7 @@ import com.point.data.FileChosenApps
 import com.point.data.FilePcCaps
 import com.point.data.FilePcLinks
 import com.point.core.flow.HttpAiKeyCheck
+import com.point.core.flow.oncePerPath
 import com.point.data.FileCapabilityUsage
 import com.point.data.FileHistoryStore
 import com.point.core.flow.GeminiLlmClient
@@ -663,6 +664,12 @@ abstract class DataModule {
         @Provides
         fun httpAiKeyCheck(http: HttpJson): HttpAiKeyCheck = HttpAiKeyCheck(http)
 
+        /**
+         * Ключу человека нужна та же готовилка кадра, что и остальной цепочке (#1239).
+         *
+         * Без неё запрос по снимку уходил чистым текстом: бесплатная попытка человека и
+         * ожидание сгорали на вызов, в котором картинки нет, — а он идёт по снимку первым.
+         */
         @Provides
         fun userKeyLlmClient(
             userKeys: UserKeyStore,
@@ -670,7 +677,8 @@ abstract class DataModule {
             store: ObjectStore,
             facts: AiFacts,
             privacy: com.point.core.flow.CloudPrivacySettings,
-        ): UserKeyLlmClient = UserKeyLlmClient(userKeys, http, store, facts, privacy)
+            frames: com.point.core.flow.FrameForModel,
+        ): UserKeyLlmClient = UserKeyLlmClient(userKeys, http, store, facts, privacy, frames)
 
         @Provides
         fun fallbackLlmClient(
@@ -681,12 +689,20 @@ abstract class DataModule {
             privacy: com.point.core.flow.CloudPrivacySettings,
         ): FallbackLlmClient = FallbackLlmClient(providers, facts, network, yolo, privacy)
 
-        /** Ужать снимок умеет телефон — цепочка провайдеров об этом не знает (#828). */
+        /**
+         * Ужать снимок умеет телефон — цепочка провайдеров об этом не знает (#828).
+         *
+         * Готовится кадр один раз на путь (#1245): готовилка у всей цепочки одна, поэтому
+         * и память одна — иначе каждый следующий провайдер декодирует и кодирует тот же
+         * неизменный снимок заново. Одна она и с хранилищем копий: `ObjectStore.clear()`
+         * отпускает копию объекта и вместе с ней готовый кадр.
+         */
         @Provides
+        @Singleton
         fun frameForModel(): com.point.core.flow.FrameForModel =
             com.point.core.flow.FrameForModel { path, mime ->
                 com.point.data.inlineFrame(path, mime)
-            }
+            }.oncePerPath()
 
         /**
          * Workers AI отвечает по OpenAI-совместимому адресу, но живёт под номером аккаунта:
