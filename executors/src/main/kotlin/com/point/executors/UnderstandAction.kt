@@ -25,8 +25,11 @@ import com.point.core.flow.META_READING_MODE
 import com.point.core.flow.META_READ_CHARS
 import com.point.core.flow.META_READ_TOTAL_CHARS
 import com.point.core.flow.META_ANSWERED_BY
+import com.point.core.flow.META_SEMANTIC_PREFIX
 import com.point.core.flow.META_SOURCE_SUFFIX
+import com.point.core.flow.META_UNUSABLE_REASON
 import com.point.core.flow.addActor
+import com.point.core.flow.isKnowledgeKey
 import com.point.core.flow.ReadingMode
 import com.point.core.flow.Realizer
 import com.point.core.flow.UNDERSTAND_CONTRACT_KEYS
@@ -423,12 +426,24 @@ class UnderstandRealizer @Inject constructor(
         this?.let { withInvestigation(emptyMap(), UnderstandCapability.ID, it) }.orEmpty()
 
     /**
-     * Все накопленные ключи знания без пересчитываемых ссылок и курсора чтения — курсор
-     * («сколько уже прочитано») и ссылка на слой OCR не факты о содержимом и не обязаны
-     * считаться находкой при итоговом суде.
+     * Накопленное о содержимом знание — и только оно (#1270).
+     *
+     * Итог дочитанного витка судится по всему, что уже известно об объекте, а «всё, что
+     * лежит в метаданных» знанием не является: у любого принятого объекта там стоят имя
+     * файла, его размер и адрес, откуда он приехал, — служебка приёма и переноса. По ней
+     * первое же «Понять» с пустым ответом закрывало вопрос находкой, и «Понять сильнее»
+     * пропадало как уже отвеченное. Знание — то, что сказано о содержимом: сущности, роли,
+     * ячейки ([isKnowledgeKey]) и суть витка (`semantic.*`).
+     *
+     * Негодность объекта находкой не станет — `investigationOutcome` вычитает её из находок
+     * сам, — но видеть её он обязан: на файле, который не открылся, «смотрели — не нашлось»
+     * такая же неправда, как «найдено» (#988, #1067). Без неё вопрос закрывался бы намертво
+     * там, где его вовсе не сумели задать.
      */
     private fun cumulativeFactKeys(metadata: Map<String, String>): Set<String> =
-        metadata.keys - com.point.core.flow.REFRESHABLE_KNOWLEDGE
+        metadata.keys.filterTo(mutableSetOf()) {
+            isKnowledgeKey(it) || it.startsWith(META_SEMANTIC_PREFIX) || it == META_UNUSABLE_REASON
+        }
 
     private companion object {
 

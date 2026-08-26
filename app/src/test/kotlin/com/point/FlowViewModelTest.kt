@@ -200,14 +200,18 @@ class FlowViewModelTest {
      * страница не отрисовалась, и подзаголовок объяснял поломку словами про картинку — «или
      * это не изображение» — прямо под подписью «PDF». Головной путь карточки идёт здесь: чем
      * бы ридер ни отказался, отказ на экране называет вид принесённого объекта.
+     *
+     * Документ, который не собрался из байтов, ридер называет сам — тем же словом словаря,
+     * каким чтение снимка называет неразобранные байты (#1258, #1271). Так его и приносит
+     * сюда `PdfRendererRasterizer`, поймав `IOException` от `PdfRenderer`.
      */
     @Test fun `битый PDF на экране объяснён словами про PDF, а не про изображение`() = runTest(dispatcher) {
         store.kind = ObjectKind.PDF
-        val broken = "Missing root object specification in trailer"
         val vm = vm(
             pdf = object : com.point.core.flow.PdfRasterizer {
                 override suspend fun rasterize(obj: PointObject) = ScratchRef("/pages")
-                override suspend fun rasterizeFirstPage(obj: PointObject): ScratchRef? = error(broken)
+                override suspend fun rasterizeFirstPage(obj: PointObject): ScratchRef? =
+                    error(com.point.core.flow.READER_NOT_DECODED)
             },
         )
 
@@ -219,15 +223,121 @@ class FlowViewModelTest {
         val said = obj.metadata[com.point.core.flow.META_UNUSABLE_REASON]
         assertEquals(
             "подзаголовок взял слово из общего словаря по виду объекта",
-            com.point.core.flow.readerFailure(broken, ObjectKind.PDF),
+            com.point.core.flow.readerFailure(com.point.core.flow.READER_NOT_DECODED, ObjectKind.PDF),
             said,
         )
         assertFalse("словами про картинку PDF больше не объясняют", said!!.contains("изображени"))
-        assertFalse("чужой текст библиотеки в подзаголовок не попадает", said.contains(broken))
+    }
 
-        // #1258: сигнала библиотеки словарь не опознал — значит и обвинять файл человека
-        // нечем. «Он повреждён» звучит там, где это про сам объект.
-        assertFalse("непонятный сигнал объявил файл человека битым", said.contains("повреждён"))
+    /**
+     * #1271: приговор объекту выносит только ридер, и только о самом объекте.
+     *
+     * Полный телефон: документ разобрался, страница отрисовалась, а записать её в scratch
+     * не вышло — `IOException` «No space left on device». Пока предпросмотр судил по типу
+     * исключения, этот отказ был неотличим от отказа `PdfRenderer` разобрать байты: целый
+     * документ получал `Feature.UNUSABLE` и «Файл не открылся — он повреждён или это не
+     * PDF» до конца сеанса, потому что снять метку нечем. Место кончилось не у документа.
+     */
+    @Test fun `страница не записалась — виноват не документ`() = runTest(dispatcher) {
+        store.kind = ObjectKind.PDF
+        val vm = vm(
+            pdf = object : com.point.core.flow.PdfRasterizer {
+                override suspend fun rasterize(obj: PointObject) = ScratchRef("/pages")
+                override suspend fun rasterizeFirstPage(obj: PointObject): ScratchRef? =
+                    throw java.io.IOException("No space left on device")
+            },
+        )
+
+        vm.onShared("doc.pdf", "application/pdf"); advanceUntilIdle()
+
+        val frame = vm.ui.value.frame
+        assertNotNull("объект остаётся на экране", frame)
+        assertFalse("кончившееся место объявило документ негодным", frame!!.obj.state.has(Feature.UNUSABLE))
+        assertNull(
+            "объекту приписали негодность словами о попытке",
+            frame.obj.metadata[com.point.core.flow.META_UNUSABLE_REASON],
+        )
+        assertTrue(
+            "человеку не сказали, что посмотреть не вышло: " + frame.failed,
+            frame.failed.any { it.reason == com.point.core.flow.READ_NOT_NOW },
+        )
+    }
+
+    /**
+     * #1271: исход операции не подменяет знание об объекте (Конституция §13, §18.13;
+     * CLAUDE.md: «`Failure` принадлежит операции»).
+     *
+     * Предпросмотр метил негодным ЛЮБОЙ свой срыв — PDF под паролем, исчезнувший файл,
+     * редкий OOM, — и человек читал «Файл не открылся — он повреждён» на целом документе.
+     * Снять метку в сеансе нечем: `without(Feature.UNUSABLE)` в продукте нет ни одного.
+     * Поэтому она и ставится только там, где дело в самом файле; остальное — упрёк
+     * операции: сказано, что не вышло, и путь наружу остаётся открытым.
+     *
+     * #1258 здесь же: словарь не опознал сигнал — значит и обвинять файл человека нечем.
+     */
+    @Test fun `сорвавшийся предпросмотр не объявляет годный документ негодным`() = runTest(dispatcher) {
+        store.kind = ObjectKind.PDF
+        val vm = vm(
+            pdf = object : com.point.core.flow.PdfRasterizer {
+                override suspend fun rasterize(obj: PointObject) = ScratchRef("/pages")
+                override suspend fun rasterizeFirstPage(obj: PointObject): ScratchRef? =
+                    throw SecurityException("password required")
+            },
+        )
+
+        vm.onShared("doc.pdf", "application/pdf"); advanceUntilIdle()
+
+        val frame = vm.ui.value.frame
+        assertNotNull("объект остаётся на экране", frame)
+        assertFalse("сорвавшаяся попытка объявила объект негодным", frame!!.obj.state.has(Feature.UNUSABLE))
+        assertNull(
+            "объекту приписали негодность словами о попытке",
+            frame.obj.metadata[com.point.core.flow.META_UNUSABLE_REASON],
+        )
+        assertTrue(
+            "человеку не сказали, что посмотреть не вышло: " + frame.failed,
+            frame.failed.any { it.reason == com.point.core.flow.READ_NOT_NOW },
+        )
+    }
+
+    /**
+     * #812 + #1271: пропажа файла и порча файла — разные ответы человеку.
+     *
+     * `BitmapFactory` на пропавшем пути молча отдаёт `null` — ровно то же, что на
+     * неразобранных байтах. Пока предпросмотр читал это молчание как приговор, снимок,
+     * файл которого ушёл вместе со scratch, объявлялся повреждённым на весь сеанс: снять
+     * `Feature.UNUSABLE` в продукте нечем. Читать было нечего — это про попытку.
+     *
+     * Вторая половина сторожит, чтобы сужение не отняло у ридера его собственное слово:
+     * файл на месте, а снимок из него не собрался — вот это и есть негодный объект.
+     */
+    @Test fun `исчезнувший снимок — про попытку, а испорченный — про сам снимок`() = runTest(dispatcher) {
+        val gone = vm()
+        gone.onShared("uri", "image/jpeg"); advanceUntilIdle()
+
+        val vanished = gone.ui.value.frame!!
+        assertFalse("пропажу файла назвали негодностью снимка", vanished.obj.state.has(Feature.UNUSABLE))
+        assertNull(
+            "объекту приписали негодность там, где читать было нечего",
+            vanished.obj.metadata[com.point.core.flow.META_UNUSABLE_REASON],
+        )
+        assertTrue(
+            "человеку не сказали, что посмотреть не вышло: " + vanished.failed,
+            vanished.failed.any { it.reason == com.point.core.flow.READ_NOT_NOW },
+        )
+
+        store.path = java.io.File.createTempFile("point-shot", ".jpg")
+            .apply { deleteOnExit(); writeBytes(ByteArray(8)) }
+            .absolutePath
+        val broken = vm()
+        broken.onShared("uri", "image/jpeg"); advanceUntilIdle()
+
+        val obj = broken.ui.value.frame!!.obj
+        assertTrue("байты на месте и не разобрались — это про сам снимок", obj.state.has(Feature.UNUSABLE))
+        assertEquals(
+            com.point.core.flow.readerFailure(com.point.core.flow.READER_NOT_DECODED, ObjectKind.IMAGE),
+            obj.metadata[com.point.core.flow.META_UNUSABLE_REASON],
+        )
     }
 
     /**
@@ -2110,7 +2220,10 @@ class FlowViewModelTest {
         vm.onShared("uri", "image/png"); advanceUntilIdle()
 
         val failed = vm.ui.value.frame!!.failed
-        assertEquals(listOf("изображение не открылось"), failed.map { it.reason })
+        assertEquals(
+            listOf("изображение не открылось"),
+            failed.filter { it.id == CapabilityId("qr") }.map { it.reason },
+        )
     }
 
     @Test fun `a successful retry clears the failed note for that question`() = runTest(dispatcher) {
@@ -2134,7 +2247,8 @@ class FlowViewModelTest {
         val vm = vm()
         vm.onShared("uri", "image/png"); advanceUntilIdle()
 
-        assertTrue("получилось — упрёк снят", vm.ui.value.frame!!.failed.isEmpty())
+        val failed = vm.ui.value.frame!!.failed
+        assertTrue("получилось — упрёк снят: $failed", failed.none { it.id == CapabilityId("qr") })
         assertEquals("https://x", vm.ui.value.frame!!.obj.metadata["entity.qr"])
     }
 
@@ -4971,9 +5085,12 @@ private class FakeStore : ObjectStore {
     /** Приём отдаёт снимок, пока тест не скажет иначе. Для PDF важен именно вид объекта. */
     var kind = ObjectKind.IMAGE
 
+    /** Где лежит копия. По умолчанию — нигде: тестам с файлом важен путь, который есть. */
+    var path = "/in"
+
     var clearedTimes = 0
     override suspend fun ingest(sourceUri: String, mime: String): PointObject =
-        if (failIngest) error("boom") else PointObject("in", mime, ScratchRef("/in"), ObjectState(kind))
+        if (failIngest) error("boom") else PointObject("in", mime, ScratchRef(path), ObjectState(kind))
     override suspend fun ingestMultiple(sources: List<String>): PointObject =
         PointObject("coll", "inode/directory", ScratchRef("/coll"), ObjectState(ObjectKind.COLLECTION))
     /** Родословная — часть самого объекта (#1127): двойник помнит её так же, как настоящий store. */

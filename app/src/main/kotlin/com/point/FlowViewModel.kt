@@ -13,6 +13,7 @@ import com.point.core.flow.CollectionContent
 import com.point.core.flow.CrashLog
 import com.point.core.flow.Enrichment
 import com.point.core.flow.EnrichmentUpdate
+import com.point.core.flow.FailedInvestigation
 import com.point.core.flow.FlowSnapshotStore
 import com.point.core.flow.HistoryStore
 import com.point.core.flow.ObjectStore
@@ -34,6 +35,7 @@ import com.point.core.flow.META_UNUSABLE_REASON
 import com.point.core.flow.META_YIELD_NOUN
 import com.point.core.flow.READER_NOT_DECODED
 import com.point.core.flow.readerFailure
+import com.point.core.flow.readerFailureIsFatal
 import com.point.core.flow.reportStage
 import com.point.core.flow.SnappedSelection
 import com.point.core.flow.AiFacts
@@ -2738,11 +2740,7 @@ class FlowViewModel @Inject constructor(
                     .getOrNull()
             }
             if (bitmap == null) {
-
-                // Ни одна ступень не бросила, а снимка нет — значит байты не разобрались.
-                // Сигнал назван, а не передан молчанием (#1258): негодность объекта и слова
-                // человеку читают один разбор, и молчание про объект не доказывает ничего.
-                markPreviewUnusable(obj, failure?.message ?: READER_NOT_DECODED)
+                notePreviewFailure(obj, previewTrouble(failure))
                 return@launch
             }
 
@@ -2755,21 +2753,52 @@ class FlowViewModel @Inject constructor(
     }
 
     /**
-     * Неудачный предпросмотр — тоже знание об объекте (#685), не разовая надпись экрана:
-     * снимок или страница, которые не открылись, остаются негодными и после этого кадра, а
-     * не только в момент, когда предпросмотр только что сорвался. Уже отмеченный объект не
-     * переотмечается — сюда можно попасть дважды при повторном открытии одного узла.
+     * Чем именно сорвался предпросмотр — словами того, кто это видел (#1271).
+     *
+     * Дальше решает одно правило [readerFailureIsFatal], общее с чтением снимка. Своих слов
+     * у этого разбора нет и быть не может: «байты не разобрались» произносит только тот, кто
+     * их видел (#1258). На пути предпросмотра кроме ридера есть и запись готовой страницы в
+     * scratch, и пропавший файл — их отказы про попытку, и выдавать их за приговор объекту
+     * нельзя: снять метку негодности в сеансе нечем.
+     *
+     * Ни одна ступень не бросила, файл был на месте, а снимка нет — вот это и значит, что
+     * байты не разобрались: сигнал назван, а не передан молчанием.
      */
-    private fun markPreviewUnusable(obj: PointObject, reason: String?) {
+    private fun previewTrouble(failure: Throwable?): String =
+        if (failure == null) READER_NOT_DECODED else failure.message.orEmpty()
+
+    /**
+     * Сорвавшийся предпросмотр говорит либо о самом объекте, либо о попытке (#685, #1271).
+     *
+     * Испорченный файл, документ без страниц — знание: оно остаётся с объектом и после этого
+     * кадра, а не гаснет вместе с надписью. Пароль, исчезнувший файл, нехватка памяти —
+     * состояние операции (Конституция §13, §18.13): человеку сказано, что не вышло, но
+     * объект негодным не объявляется, иначе до конца сеанса ему нечем попробовать ещё раз.
+     * Правило то же, каким пользуется чтение снимка, — второго разбора негодности нет.
+     *
+     * Уже отмеченный объект не переотмечается: сюда можно попасть дважды при повторном
+     * открытии одного узла.
+     */
+    private fun notePreviewFailure(obj: PointObject, trouble: String) {
         val known = stack.lastOrNull { it.obj.id == obj.id }?.obj ?: return
         if (known.state.has(Feature.UNUSABLE)) return
+        val said = readerFailure(trouble, obj.state.kind)
         applyEnrichment(
             obj,
-            EnrichmentUpdate(
-                features = setOf(Feature.UNUSABLE),
-                metadata = mapOf(META_UNUSABLE_REASON to readerFailure(reason, obj.state.kind)),
-                running = emptyList(),
-            ),
+            if (readerFailureIsFatal(trouble)) {
+                EnrichmentUpdate(
+                    features = setOf(Feature.UNUSABLE),
+                    metadata = mapOf(META_UNUSABLE_REASON to said),
+                    running = emptyList(),
+                )
+            } else {
+                EnrichmentUpdate(
+                    features = emptySet(),
+                    metadata = emptyMap(),
+                    running = emptyList(),
+                    failed = listOf(FailedInvestigation(PREVIEW, null, said)),
+                )
+            },
         )
     }
 
@@ -3146,6 +3175,15 @@ private val PHONE_ADVERTISED_FALLBACK = listOf(
     com.point.core.flow.PcRemoteAction("event", "Создать событие", kinds = setOf("TEXT")),
 )
 private const val PREVIEW_MAX_PX = 640
+
+/**
+ * Чьей неудачей назван сорвавшийся предпросмотр (#1271).
+ *
+ * Показ объекта способностью не объявляется — человек его не выбирает. Имя здесь нужно
+ * ровно затем, зачем оно нужно всякой неудаче операции: чтобы упрёк не слился с чужим и
+ * повторный срыв не удвоил строку на экране.
+ */
+private val PREVIEW = CapabilityId("preview")
 
 /** Миниатюра страницы в списке набора — того же размера, что и в «Недавнем» (#1207). */
 private const val ITEM_THUMB_PX = 96

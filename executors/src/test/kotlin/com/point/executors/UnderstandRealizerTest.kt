@@ -1101,6 +1101,56 @@ class UnderstandRealizerTest {
     }
 
     /**
+     * #1270: имя файла и его размер стоят в метаданных у КАЖДОГО принятого объекта — их
+     * пишет приём, а не чтение. Пока итог дочитанного витка судился по всему, что лежит в
+     * метаданных, первое же «Понять» с пустым ответом закрывало вопрос находкой: «Понять
+     * сильнее» пропадало как уже отвеченное, и упрёк о неудаче снимался.
+     */
+    @Test
+    fun `имя файла и размер не закрывают «Понять» находкой при пустых руках`() = runTest {
+        val accepted = textObject(
+            metadata = mapOf("name" to "skan.txt", com.point.core.flow.META_SIZE to "20480"),
+        )
+
+        val result = realizer("NONE").perform(accepted) as ActionResult.Done
+
+        assertEquals(
+            com.point.core.flow.InvestigationState.NOT_FOUND,
+            com.point.core.flow.investigationStateOf(result.findings!!.metadata, UnderstandCapability.ID),
+        )
+    }
+
+    /**
+     * #988/#1067: на объекте, который не открылся, «смотрели — не нашлось» такая же
+     * неправда, как «найдено».
+     *
+     * Путь человека: снимок прочитан — текст лежит сидекаром, — а показать сам файл не
+     * вышло, и Point записал негодность объекта. «Понять» дочитывает этот текст до конца и
+     * не находит в нём ничего. Вопрос «что здесь» обязан остаться открытым: спросить его как
+     * следует не удалось. Пока негодность не доходила до суда, ответ был «не нашлось», и
+     * переспросить было нечем — «Понять сильнее» уходит как уже отвеченное.
+     */
+    @Test
+    fun `негодный объект оставляет «Понять» открытым, а не «не нашлось»`() = runTest {
+        val read = File.createTempFile("point-read", ".txt").apply { deleteOnExit(); writeText("· · ·") }
+        val unopened = PointObject(
+            "shot", "image/jpeg", ScratchRef("/tmp/shot.jpg"), ObjectState(ObjectKind.IMAGE),
+            metadata = mapOf(
+                META_OCR_TEXT_REF to read.absolutePath,
+                com.point.core.flow.META_UNUSABLE_REASON to
+                    com.point.core.flow.readerFailure(com.point.core.flow.READER_NOT_DECODED, ObjectKind.IMAGE),
+            ),
+        )
+
+        val result = realizer("NONE").perform(unopened) as ActionResult.Done
+
+        assertEquals(
+            com.point.core.flow.InvestigationState.INSUFFICIENTLY_INVESTIGATED,
+            com.point.core.flow.investigationStateOf(result.findings!!.metadata, UnderstandCapability.ID),
+        )
+    }
+
+    /**
      * Путь человека целиком (#1176): двухколоночная наклейка, один ответ модели с ролями и
      * телефоном — номер записан при своей стороне, а сторона с этим номером стоит узлом
      * человека, и «Сохранить контакт» есть кому предлагать.

@@ -5,12 +5,20 @@ import com.point.core.flow.AtomCodec
 import com.point.core.flow.AtomLayer
 import com.point.core.flow.AtomRecognizer
 import com.point.core.flow.Box
+import com.point.core.flow.Capability
+import com.point.core.flow.CapabilityRegistry
+import com.point.core.flow.CloudScope
 import com.point.core.flow.CollectionContent
 import com.point.core.flow.Entity
 import com.point.core.flow.EntityExtractor
 import com.point.core.flow.EntityType
 import com.point.core.flow.FrameTransform
 import com.point.core.flow.INCOMPLETE_TIMEOUT
+import com.point.core.flow.InvestigationState
+import com.point.core.flow.PrivacyConsent
+import com.point.core.flow.Realizer
+import com.point.core.flow.Resolver
+import com.point.core.flow.investigationStateOf
 import com.point.core.flow.META_ENTITY_PREFIX
 import com.point.core.flow.META_OCR_ATOMS_REF
 import com.point.core.flow.META_OCR_TEXT_REF
@@ -18,12 +26,16 @@ import com.point.core.flow.META_READ_UPSCALE
 import com.point.core.flow.META_READING_MODE
 import com.point.core.flow.ReadingMode
 import com.point.core.flow.ObjectStore
+import com.point.core.model.Bubble
+import com.point.core.model.CapabilityId
 import com.point.core.model.Feature
+import com.point.core.model.LatentBubble
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
 import com.point.core.model.ResultObject
 import com.point.core.model.ScratchRef
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -69,6 +81,37 @@ class OcrInvestigationTest {
         override suspend fun children(collection: PointObject, limit: Int) = CollectionContent.empty<PointObject>()
         override suspend fun readText(obj: PointObject, limit: Int) = ""
         override suspend fun clear() {}
+    }
+
+    /**
+     * Настоящий здесь сам цикл знания, а не его окружение (#1270): [DefaultEnrichment]
+     * прогоняет настоящие [OcrInvestigation] и [OcrInvestigationRealizer] — от кадра до
+     * состояния знания. Реестр, Resolver и согласие — двойники на один шаг: они лишь
+     * доводят цикл до чтения и о самом исходе ничего не решают.
+     */
+    private fun enrichmentOf(reading: Realizer): DefaultEnrichment {
+        val registry = object : CapabilityRegistry {
+
+            // Прочитанное открывает новую дверь — иначе дорогое чтение и не запускается.
+            override fun bubblesFor(state: ObjectState) =
+                if (state.features.isEmpty()) emptyList()
+                else listOf(Bubble("icon", "Прочитанное", CapabilityId("read"), state))
+
+            override fun latentBubblesFor(state: ObjectState) = emptyList<LatentBubble>()
+            override fun byId(id: CapabilityId) = throw UnsupportedOperationException()
+            override fun all() = listOf<Capability>(OcrInvestigation())
+        }
+        val resolver = object : Resolver {
+            override fun realizerFor(capabilityId: CapabilityId) = reading
+            override fun realizerFor(capabilityId: CapabilityId, state: ObjectState) = reading
+            override fun leavesDevice(capabilityId: CapabilityId) = false
+        }
+        val consent = object : PrivacyConsent {
+            override suspend fun allowed(scope: CloudScope) = false
+            override suspend fun allow(scope: CloudScope) = Unit
+            override suspend fun revoke(scope: CloudScope) = Unit
+        }
+        return DefaultEnrichment(registry, resolver, consent, com.point.core.flow.DEFAULT_PHONE_REGION)
     }
 
     private val realText = "Встреча завтра в 18:00, ул. Крещатик, 12. Звони +380671234567, детали https://point.app/x"
@@ -141,6 +184,31 @@ class OcrInvestigationTest {
         assertEquals(setOf(META_OCR_ATOMS_REF, META_READING_MODE), delta.metadata.keys)
         assertEquals(ReadingMode.HANDWRITTEN.name, delta.metadata[META_READING_MODE])
         assertEquals(listOf(atom), AtomCodec.decode(File(delta.metadata[META_OCR_ATOMS_REF]!!).readText()).atoms)
+    }
+
+    /**
+     * Пустые руки — не находка (#1270).
+     *
+     * Путь человека: снимок принят, фоновое исследование прочитало кадр и не разобрало на
+     * нём ни слова. Координаты слов остаются уликой — по ним «Найти» встаёт на строку, — но
+     * прочитано не было ничего, и вопрос «что написано на снимке» обязан остаться отвеченным
+     * честно: смотрели, не нашлось (#1067, #1135). Прежде ссылка на слой засчитывалась за
+     * находку, вопрос закрывался «найдено», и переспросить его было нечем: дорогое
+     * исследование больше не запускается, а «Распознать текст» уходит как уже отвеченное.
+     */
+    @Test
+    fun `слой слов без единого прочитанного слова не закрывает вопрос находкой`() = runTest {
+        val garbage = "; i= © © - O = & E =. are © = E oS 2 (a9) ous © E pa ae Pl ans BS &§ я OE в > 3EE:"
+        val atom = Atom("w0", "©", Box(0f, 0f, 5f, 5f), 0.2f)
+        val reading = OcrInvestigationRealizer(FakeStore(), recognizer(garbage, atoms = listOf(atom)), extractor())
+
+        val last = enrichmentOf(reading).enrich(image).toList().last()
+
+        assertTrue("улика слоя слов потеряна", Feature.HAS_WORD_LAYER in last.features)
+        assertEquals(
+            InvestigationState.NOT_FOUND,
+            investigationStateOf(last.metadata, OcrInvestigation.ID),
+        )
     }
 
     @Test

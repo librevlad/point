@@ -8,11 +8,13 @@ import android.util.Log
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.PdfRasterizer
 import com.point.core.flow.READER_NO_PAGES
+import com.point.core.flow.READER_NOT_DECODED
 import com.point.core.model.PointObject
 import com.point.core.model.ScratchRef
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.IOException
 import javax.inject.Inject
 
 class PdfRendererRasterizer @Inject constructor(
@@ -65,7 +67,7 @@ class PdfRendererRasterizer @Inject constructor(
      */
     override suspend fun rasterizeFirstPage(obj: PointObject): ScratchRef? = withContext(Dispatchers.IO) {
         ParcelFileDescriptor.open(File(obj.uri.value), ParcelFileDescriptor.MODE_READ_ONLY).use { pfd ->
-            val renderer = PdfRenderer(pfd)
+            val renderer = opened(pfd)
             try {
                 if (renderer.pageCount == 0) error(READER_NO_PAGES)
                 val page = renderer.openPage(0)
@@ -88,6 +90,27 @@ class PdfRendererRasterizer @Inject constructor(
                 renderer.close()
             }
         }
+    }
+
+    /**
+     * Документ не собрался из байтов — это про сам объект, и говорит это тот, кто байты
+     * видел (#1258, #1271).
+     *
+     * `PdfRenderer` отвечает на негодный документ `IOException`. Тем же `IOException` дальше
+     * по этому пути говорит запись готовой страницы в scratch — на полном телефоне «места
+     * нет» превращалось в приговор «файл повреждён», и снять его в сеансе нечем. Поэтому
+     * отказ разобрать документ ридер называет сам, ровно как уже называет «страниц нет»:
+     * слова человеку из этого сигнала делает `readerFailure`, наружу он не выходит.
+     *
+     * Нужно это там, где по ответу решают годность объекта, — на пути первой страницы.
+     * Разбор всего документа судьёй годности не бывает: его отказ уходит неудачей операции,
+     * и подменять сигнал незачем.
+     */
+    private fun opened(pfd: ParcelFileDescriptor): PdfRenderer = try {
+        PdfRenderer(pfd)
+    } catch (e: IOException) {
+        Log.w(TAG, "PDF did not parse", e)
+        error(READER_NOT_DECODED)
     }
 
     private companion object {
