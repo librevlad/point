@@ -424,7 +424,14 @@ class RealCapabilityInventoryTest {
     @Test
     fun `ни одно объявленное телефоном имя не называет чужое устройство`() {
 
-        val named = com.point.core.flow.advertisedActions(builtIn).map { it.label }.filter(::namesOtherDevice)
+        val advertised = com.point.core.flow.advertisedActions(builtIn)
+
+        // На пустом объявлении «ни одно имя не называет чужое устройство» истинно по
+        // определению (#1248): сначала спрашивается, что телефону вообще есть что объявлять —
+        // тем же правилом, каким живут запасное объявление и сторожа ниже.
+        assertTrue("объявления телефона нет вовсе — сверять нечего", advertised.isNotEmpty())
+
+        val named = advertised.map { it.label }.filter(::namesOtherDevice)
 
         assertTrue("компьютер увидит в списке действие про чужое устройство: $named", named.isEmpty())
     }
