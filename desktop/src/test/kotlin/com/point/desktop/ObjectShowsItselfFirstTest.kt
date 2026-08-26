@@ -77,15 +77,8 @@ class ObjectShowsItselfFirstTest {
     /** Сцена длинного текстового объекта — того, из-за которого и завелась беда #898. */
     private fun SkikoComposeUiTest.shownObject(): List<SemanticsNode> {
         val item = longText()
-        val st = DesktopState(
-            registry = DesktopRegistry(emptySet()),
-            resolver = DesktopResolver(emptySet()),
-            clipboard = { },
-            journalStore = object : JournalStore {
-                override fun load() = emptyList<JournalEntry>()
-                override fun save(entries: List<JournalEntry>) = Unit
-            },
-        ).apply { setPhoneCaps(listOf(PcRemoteAction("call", ACTION, kinds = setOf("TEXT"), priority = 10))) }
+        val st = desktopState()
+            .apply { setPhoneCaps(listOf(PcRemoteAction("call", ACTION, kinds = setOf("TEXT"), priority = 10))) }
         st.onReceived(item)
 
         showCompact { CompactObject(state = st, item = item, onBack = {}) }
