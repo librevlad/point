@@ -15,9 +15,10 @@ import java.io.File
  * Окно не стоит, пока рождается объект (#995).
  *
  * Рождение объекта читает файл: у PDF — весь, потому что признак «текст файлом не достаётся»
- * судит весь документ, как и исполнитель. Звали его прямо из обработчика броска и из входа в
- * ребёнка набора — тем самым потоком, который рисует окно. Толстый PDF останавливал окно до
- * конца чтения, и человек смотрел на неподвижный экран (Конституция: первый экран без I/O).
+ * судит весь документ, как и исполнитель. Звали его прямо из обработчика броска, из входа в
+ * ребёнка набора и из нажатия по строке «Недавнего» — тем самым потоком, который рисует окно.
+ * Толстый PDF останавливал окно до конца чтения, и человек смотрел на неподвижный экран
+ * (Конституция: первый экран без I/O).
  *
  * Работа окна идёт по планировщику теста: «объект родился» — состоявшееся событие, которого
  * дожидается `advanceUntilIdle`, а не истёкший срок в секундах.
@@ -72,6 +73,41 @@ class WindowDoesNotWaitForTheFileTest {
         advanceUntilIdle()
 
         assertEquals(brought.absolutePath, window.items.value.single().obj.uri.value)
+    }
+
+    /**
+     * Третья дверь рождения объекта — нажатие по строке «Недавнего», которой уже нет в ленте.
+     *
+     * Она звала переоткрытие прямо из обработчика нажатия: на этом пути окно стояло и раньше,
+     * а с этой карточкой стало стоять дольше — признак «текст файлом не достаётся» судит весь
+     * документ, и толстый PDF читается секундами.
+     */
+    @Test
+    fun `нажатие по недавнему отпускает окно раньше, чем файл прочитан`() = runTest(dispatcher) {
+        val inbox = Inbox(temp.newFolder("недавнее"))
+        val kept = temp.newFile("забытый.txt").apply { writeText("вчерашнее") }
+        val read = mutableListOf<String>()
+        val window = windowWith(inbox, read)
+        val entry = JournalEntry(
+            path = kept.absolutePath,
+            name = kept.name,
+            kind = com.point.core.model.ObjectKind.TEXT.name,
+            mime = "text/plain",
+            source = ObjectSource.DROPPED,
+            at = 1L,
+        )
+
+        var opened: InboxItem? = null
+        window.openAgain(entry) { opened = it }
+
+        assertTrue("окно читало файл своим потоком — толстый PDF остановил бы его", read.isEmpty())
+        assertTrue("объект родился до того, как окно отпустили", window.items.value.isEmpty())
+
+        advanceUntilIdle()
+
+        assertEquals(listOf(kept.absolutePath), read)
+        assertEquals(kept.absolutePath, opened!!.obj.uri.value)
+        assertEquals(kept.absolutePath, window.items.value.single().obj.uri.value)
     }
 
     /** Пачка остаётся одним объектом-коллекцией (#1099) — шов приёма её не разбирает. */

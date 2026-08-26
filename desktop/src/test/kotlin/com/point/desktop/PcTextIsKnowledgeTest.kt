@@ -82,6 +82,22 @@ class PcTextIsKnowledgeTest {
         return file
     }
 
+    /**
+     * Книга, чьи листы внутри архива названы не `sheetN.xml`. Имя части пакета выбирает тот,
+     * кто записал книгу: `sheet1.xml` — привычка Excel, а не правило OOXML.
+     */
+    private fun xlsxNamedParts(name: String, parts: Map<String, String>): File {
+        val file = temp.newFile(name)
+        ZipOutputStream(file.outputStream()).use { zos ->
+            parts.forEach { (part, xml) ->
+                zos.putNextEntry(ZipEntry(part))
+                zos.write(xml.toByteArray(Charsets.UTF_8))
+                zos.closeEntry()
+            }
+        }
+        return file
+    }
+
     private fun officeObject(file: File) = PointObject(
         id = "xlsx",
         mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -171,6 +187,68 @@ class PcTextIsKnowledgeTest {
         assertTrue(
             "книга вышла порядком файлов архива, а не порядком вкладок: $known",
             known.indexOf("Работа") < known.indexOf("Подпись директора"),
+        )
+    }
+
+    /**
+     * Лист книги узнаётся по месту в пакете, а не по привычному имени файла (#995).
+     *
+     * Пока лист искали строгим `xl/worksheets/sheetN.xml`, книга с иначе названными листами
+     * теряла их все: человек слышал «В этом документе текста нет — внутри только оформление и
+     * картинки» на файле, где текст есть.
+     */
+    @Test
+    fun `книга с иначе названными листами читается, а не объявляется пустой`() = runTest {
+        val book = xlsxNamedParts(
+            "своя-книга.xlsx",
+            mapOf(
+                "xl/worksheets/Лист сметы.xml" to smeta,
+                "xl/workbook.xml" to
+                    """<workbook><sheets><sheet name="Смета" sheetId="1" r:id="rId1"/></sheets></workbook>""",
+                "xl/_rels/workbook.xml.rels" to
+                    """<Relationships><Relationship Id="rId1" Target="worksheets/Лист сметы.xml"/></Relationships>""",
+            ),
+        )
+
+        val known = knownText(realizer().perform(officeObject(book), null))
+
+        assertTrue("текст листа потерян: $known", known.contains("Работа"))
+        assertTrue("числа таблицы потеряны: $known", known.contains("3480"))
+    }
+
+    /**
+     * У каждого документа своё место знания (#995).
+     *
+     * Место считалось от имени без расширения, а «смета.xlsx» и «смета.pdf» — обычная пара
+     * «книга и её выгрузка в PDF» в одной папке. Чтение второго молча затирало текст первого:
+     * `ocr.text.ref` у обоих объектов вёл в один файл, и у одного документа на экране
+     * показывался текст другого.
+     */
+    @Test
+    fun `книга и её выгрузка в PDF не делят один файл с прочитанным`() = runTest {
+        val book = xlsx("смета.xlsx", smeta)
+        val print = temp.newFile("смета.pdf").apply { writeText("байты pdf") }
+        val printObject = PointObject(
+            id = "pdf",
+            mime = "application/pdf",
+            uri = ScratchRef(print.absolutePath),
+            state = ObjectState(ObjectKind.PDF),
+            metadata = mapOf("name" to print.name),
+        )
+
+        val fromBook = realizer().perform(officeObject(book), null)
+        val fromPrint = PcPdfTextRealizer { "Выгрузка сметы в PDF" }.perform(printObject, null)
+
+        val bookRef = (fromBook as ActionResult.Done).findings!!.metadata[META_OCR_TEXT_REF]!!
+        val printRef = (fromPrint as ActionResult.Done).findings!!.metadata[META_OCR_TEXT_REF]!!
+        assertTrue("оба документа указывают на один файл: $bookRef", bookRef != printRef)
+        assertTrue(
+            "у книги на экране показался бы текст её выгрузки",
+            File(bookRef).readText().contains("3480"),
+        )
+        assertTrue(
+            "у выгрузки на экране показался бы текст книги",
+            File(printRef).readText().contains("Выгрузка сметы в PDF"),
         )
     }
 

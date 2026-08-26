@@ -345,6 +345,8 @@ class DesktopState(
      * Тот же приём, что и у объекта с телефона (`Inbox`): текст приезжает значением, потому
      * что ссылка на scratch телефона здесь мертва. Без этого просьба «прочитай у себя»
      * возвращалась пустой — компьютер снова считал свой документ непрочитанным.
+     *
+     * Место у знания одно и то же, кто бы его ни клал (#995): `keepTextBesideDocument`.
      */
     private fun arrivedKnowledge(
         item: InboxItem,
@@ -352,9 +354,7 @@ class DesktopState(
     ): com.point.core.model.Findings {
         val arrived = com.point.core.flow.textArrivedFromTravel(understood)
         val kept = arrived?.let { text ->
-            val own = java.io.File(item.obj.uri.value)
-            val sidecar = java.io.File(own.parentFile, own.nameWithoutExtension + ".read.txt")
-            runCatching { sidecar.writeText(text); sidecar.absolutePath }.getOrNull()
+            keepTextBesideDocument(java.io.File(item.obj.uri.value), text)?.absolutePath
         }
         return com.point.core.flow.knowledgeArrivedFromTravel(understood, kept)
     }
@@ -722,22 +722,41 @@ class DesktopState(
     /**
      * Клик по истории всегда отвечает: живым объектом ленты, переоткрытым файлом
      * или честным «файла больше нет». Молчание выглядело мёртвой кнопкой
-     * (живой прогон 2026-08-09) — выбор возвращённого делает вызвавший экран.
+     * (живой прогон 2026-08-09) — выбор возвращённого делает вызвавший экран, [onOpen].
+     *
+     * Переоткрытие читает файл — у PDF весь, потому что признак «текст файлом не достаётся»
+     * судит весь документ. Звали его прямо из обработчика нажатия по строке «Недавнего», то
+     * есть потоком, который рисует окно: толстый PDF останавливал окно до конца чтения
+     * (Конституция: первый экран без I/O). Дверь рождения объекта здесь та же, что у броска
+     * и у входа в ребёнка набора, — и шов у неё тот же дисковый. Живой объект ленты отвечает
+     * сразу: он уже здесь, и диск для ответа не нужен.
      */
-    fun openAgain(entry: JournalEntry): InboxItem? {
+    fun openAgain(entry: JournalEntry, onOpen: (InboxItem) -> Unit) {
         val live = _items.value.firstOrNull { it.obj.uri.value == entry.path }
-        if (live != null) return live
-        val reopened = runCatching { reopenPath(entry.path) }.getOrNull()
-        if (reopened == null) {
-
-            _message.value = "Файла больше нет: ${entry.name}"
-            return null
+        if (live != null) {
+            onOpen(live)
+            return
         }
+        scope.launch(io) {
+            val reopened = runCatching { reopenPath(entry.path) }.getOrNull()
+            if (reopened == null) {
 
-        // Переоткрытый файл — тот же объект: журнальное знание и имя возвращаются к нему (PC2/PC5).
-        val item = reopened.copy(obj = reopened.obj.copy(metadata = reopened.obj.metadata + entry.meta))
-        _items.update { listOf(item) + it }
-        return item
+                _message.value = "Файла больше нет: ${entry.name}"
+                return@launch
+            }
+
+            // Переоткрытый файл — тот же объект: журнальное знание и имя возвращаются к нему
+            // (PC2/PC5). Признак «текст прочитан» в журнал не ложится — он свойство состояния;
+            // его возвращает та же улика, что и хранится, — файл с текстом (#995). Заодно это
+            // отвечает и на обратный случай: улику убрали из своей папки — знания больше нет,
+            // и дверь «Извлечь текст» рисуется снова, а не молчит над пустотой.
+            val known = reopened.obj.copy(metadata = reopened.obj.metadata + entry.meta)
+            val item = reopened.copy(
+                obj = com.point.core.flow.knowledgeOfReadText(known) { java.io.File(it).isFile },
+            )
+            _items.update { listOf(item) + it }
+            onOpen(item)
+        }
     }
 
     fun pathOf(item: InboxItem): JournalEntry? =

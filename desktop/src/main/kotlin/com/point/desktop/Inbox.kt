@@ -150,11 +150,11 @@ class Inbox(private val dir: File, private val pdf: PdfText = PdfBoxText()) {
         // Прочитанное на телефоне приезжает значением и здесь снова становится знанием
         // (#811): текст ложится файлом рядом с объектом, а объект получает признак «текст
         // есть». Иначе компьютер предлагал распознать заново то, что уже прочитано.
+        // Место знания у документа одно на всех, кто его кладёт (#995): своё имя здесь
+        // рождало второе место, а имя без расширения — общее место у «смета.xlsx» и
+        // «смета.pdf», где текст одного затирал текст другого.
         val arrivedText = com.point.core.flow.textArrivedFromTravel(withFitness)
-        val kept = arrivedText?.let {
-            val sidecar = File(file.parentFile, file.nameWithoutExtension + ".read.txt")
-            runCatching { sidecar.writeText(it); sidecar.absolutePath }.getOrNull()
-        }
+        val kept = arrivedText?.let { keepTextBesideDocument(file, it)?.absolutePath }
         val landed = com.point.core.flow.knowledgeArrivedFromTravel(withFitness, kept)
 
         // Приём с телефона — такая же дверь рождения объекта из файла, как приём на самом

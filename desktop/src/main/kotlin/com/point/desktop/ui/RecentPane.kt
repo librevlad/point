@@ -233,7 +233,7 @@ internal fun CompactList(
                             kind = runCatching { ObjectKind.valueOf(line.entry.kind) }
                                 .getOrDefault(ObjectKind.UNKNOWN),
                             clock = com.point.core.flow.rowTimeLabel(line.at, now, zone),
-                        ) { state.openAgain(line.entry)?.let(onOpen) }
+                        ) { state.openAgain(line.entry, onOpen) }
                     }
                 }
             }

@@ -129,4 +129,31 @@ fun knowledgeArrivedFromTravel(meta: Map<String, String>, ref: String?): com.poi
     )
 }
 
+/**
+ * Признак «текст документа прочитан» выводится из своей улики, а не помнится отдельно (#995).
+ *
+ * Улика знания — файл, где этот текст лежит (`ocr.text.ref`). Помнились они врозь, и врозь
+ * же расходились в обе стороны:
+ *
+ * - ссылка переживает перезапуск (она метаданные и ложится в журнал), а признак `HAS_TEXT` —
+ *   свойство состояния и не переживает: у уже прочитанного документа дверь «Извлечь текст»
+ *   рисовалась заново (DSK-040), ради чего `accepts` на признак и завязали;
+ * - файл лежит в папке самого человека, и он вправе его убрать или перенести — тогда
+ *   признак оставался, дверь не рисовалась, а показывать было нечего.
+ *
+ * Улика на месте — знание есть; улики нет — знания нет, и вопрос снова **не исследован**, а
+ * не «исследован, не найдено» (Конституция: `not investigated` ≠ `not found`). Поэтому
+ * мёртвая ссылка уходит вместе с признаком: она уже ничего не свидетельствует.
+ *
+ * [textAlive] — есть ли ещё файл по ссылке; спрашивается у той стороны, у которой свой диск.
+ */
+fun knowledgeOfReadText(obj: PointObject, textAlive: (String) -> Boolean): PointObject {
+    val ref = textRefForTravel(obj.metadata) ?: return obj
+    if (textAlive(ref)) return obj.copy(state = obj.state.with(Feature.HAS_TEXT))
+    return obj.copy(
+        state = obj.state.copy(features = obj.state.features - Feature.HAS_TEXT),
+        metadata = obj.metadata - META_OCR_TEXT_REF,
+    )
+}
+
 const val META_OCR_ATOMS_REF = "ocr.atoms.ref"

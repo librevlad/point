@@ -67,7 +67,20 @@ class OoxmlSpreadsheetReader : SpreadsheetReader {
         /** Связи книги: по ним `r:id` листа превращается в файл внутри архива. */
         const val WORKBOOK_RELS = "xl/_rels/workbook.xml.rels"
 
-        fun isWorksheet(entryName: String): Boolean = WORKSHEET.matches(entryName)
+        /**
+         * Лист ли это книги (#995).
+         *
+         * Лист — часть пакета в папке листов, а как её назвали внутри архива, решает тот, кто
+         * записал книгу: `sheet1.xml` — привычка Excel, а не правило OOXML. Пока спрашивалось
+         * строгое имя `sheetN.xml`, книга с иначе названными листами теряла их все и человек
+         * слышал «в этом документе текста нет» на файле, где текст есть.
+         *
+         * Служебные связи листа (`xl/worksheets/_rels/…`) — не лист: это разметка о нём.
+         */
+        fun isWorksheet(entryName: String): Boolean =
+            entryName.startsWith(WORKSHEETS) &&
+                entryName.endsWith(".xml", ignoreCase = true) &&
+                !entryName.removePrefix(WORKSHEETS).contains('/')
 
         /**
          * Порядок листов книги: имена файлов листов в том порядке, в каком человек видит
@@ -88,8 +101,8 @@ class OoxmlSpreadsheetReader : SpreadsheetReader {
          * Весь текст книги: листы и общий словарь строк уже прочитаны тем, кто открыл пакет.
          *
          * [order] — порядок вкладок из самой книги ([sheetOrder]). Лист, которого в нём нет,
-         * идёт следом по номеру в имени файла: потерять лист молча хуже, чем показать его
-         * последним.
+         * идёт следом по номеру в имени файла, а без номера — как лежит в архиве: потерять
+         * лист молча хуже, чем показать его последним.
          */
         fun rowsOf(
             sheets: Map<String, String>,
@@ -155,6 +168,9 @@ class OoxmlSpreadsheetReader : SpreadsheetReader {
         private fun unescape(s: String): String = s
             .replace("&lt;", "<").replace("&gt;", ">")
             .replace("&quot;", "\"").replace("&apos;", "'").replace("&amp;", "&")
+
+        /** Папка листов пакета: всё, что лежит прямо в ней, — лист книги. */
+        private const val WORKSHEETS = "xl/worksheets/"
 
         private val WORKSHEET = Regex("""xl/worksheets/sheet(\d+)\.xml""")
         private val SHEET = Regex("""<sheet\b([^>]*)>""")
