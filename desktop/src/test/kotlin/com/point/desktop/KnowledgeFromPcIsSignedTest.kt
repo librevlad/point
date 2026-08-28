@@ -31,6 +31,11 @@ import org.junit.rules.TemporaryFolder
  * Имя — по движку, а не по устройству: правила поиска значений у обеих поверхностей одни
  * и те же, поэтому и свидетель один. Отдельное «pc» сделало бы из одного прочтения два
  * независимых подтверждения.
+ *
+ * Проверяется здесь половина пути — та, что принадлежит компьютеру: `:desktop` не видит ни
+ * `:executors`, ни `:app`. Дальше подпись едет без отбора ключей: `RelayPcTransport` снимает
+ * у ответа префикс `understood.` целиком, а `RemotePcAction.landed()` кладёт понимание
+ * знанием исходного объекта — эта половина стоит на `PcKnowledgeComesBackTest` (`:executors`).
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class KnowledgeFromPcIsSignedTest {
@@ -71,7 +76,7 @@ class KnowledgeFromPcIsSignedTest {
     }
 
     @Test
-    fun `знание, сделанное компьютером по просьбе, приезжает на телефон подписанным`() {
+    fun `знание, сделанное компьютером по просьбе, уезжает на телефон подписанным`() {
         val pc = Pc(temp)
 
         val reply = pc.requests.answer(
@@ -86,7 +91,7 @@ class KnowledgeFromPcIsSignedTest {
         )!!
 
         assertEquals(
-            "знание приехало на телефон безымянным",
+            "знание ушло на телефон безымянным",
             ENTITY_RULES_ACTOR,
             reply.meta[PcResultFields.UNDERSTOOD + phone + META_ACTOR_SUFFIX],
         )
