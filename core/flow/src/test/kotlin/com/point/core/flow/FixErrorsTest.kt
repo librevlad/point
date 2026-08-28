@@ -25,9 +25,9 @@ class FixErrorsTest {
 
     @Test
     fun `исправленное становится главным, прежнее остаётся в «или»`() {
-        val fixes = parseFixes("${numberOf(META_GRAPH_ROLE_PREFIX + "sender")} = Паринкін", facts())
+        val fixed = parseFixes("${numberOf(META_GRAPH_ROLE_PREFIX + "sender")} = Паринкін", facts())
 
-        val patch = applyFixes(known, fixes)
+        val patch = applyFixes(known, fixed.fixes)
 
         assertEquals("Паринкін", patch[META_GRAPH_ROLE_PREFIX + "sender"])
         assertEquals(
@@ -53,30 +53,48 @@ class FixErrorsTest {
     @Test
     fun `исправленное проходит те же проверки формы, что и найденное впервые`() {
         // Модель «исправила» дату в относительное слово — такое значение датой не бывает (#659).
-        val fixes = parseFixes("${numberOf(META_ENTITY_PREFIX + "date")} = завтра", facts())
+        val fixed = parseFixes("${numberOf(META_ENTITY_PREFIX + "date")} = завтра", facts())
 
-        assertTrue("негодная форма прошла как исправление", fixes.isEmpty())
+        assertTrue("негодная форма прошла как исправление", fixed.fixes.isEmpty())
     }
 
     @Test
     fun `номер не из выданных и мусор молчат`() {
-        val fixes = parseFixes("9 = что-то\nпросто проза\n= пусто", facts())
+        val fixed = parseFixes("9 = что-то\nпросто проза\n= пусто", facts())
 
-        assertTrue(fixes.isEmpty())
+        assertTrue(fixed.fixes.isEmpty())
+        assertTrue("мусор выдан за отброшенную правку — модель ничего не предлагала", fixed.missed.isEmpty())
+    }
+
+    /**
+     * Отброшенная гейтом правка не исчезает молча (#1032, Конституция §13). У текста эта форма
+     * есть с #1023 — `FixedText.missed` и `FIX_TEXT_NOT_APPLIED`; у значений её не было, и
+     * человеку отвечали «Ошибок не нашлось» про то самое значение, которое он пришёл чинить.
+     */
+    @Test
+    fun `отброшенная правка названа, а не выдана за «ошибок не нашлось»`() {
+        val dropped = parseFixes("${numberOf(META_ENTITY_PREFIX + "date")} = завтра", facts())
+
+        assertTrue("правка исчезла молча", dropped.missed.isNotEmpty())
+        assertEquals(FIX_FACTS_NOT_APPLIED, fixedMessage(dropped))
+
+        val half = FixedFacts(mapOf(META_ENTITY_ADDRESS to "Бритовка, Центральна, 586"), listOf("завтра"))
+        assertTrue("отброшенное не названо в итоге: ${fixedMessage(half)}", "ещё 1" in fixedMessage(half))
     }
 
     @Test
     fun `то же самое значение исправлением не считается`() {
-        val fixes = parseFixes("${numberOf(META_GRAPH_ROLE_PREFIX + "sender")} = Паринкн", facts())
+        val fixed = parseFixes("${numberOf(META_GRAPH_ROLE_PREFIX + "sender")} = Паринкн", facts())
 
-        assertTrue(fixes.isEmpty())
-        assertTrue(applyFixes(known, fixes).isEmpty())
+        assertTrue(fixed.fixes.isEmpty())
+        assertTrue("то же значение выдано за отброшенную правку", fixed.missed.isEmpty())
+        assertTrue(applyFixes(known, fixed.fixes).isEmpty())
     }
 
     @Test
     fun `нечего исправлять — про это сказано словами, а не пустотой`() {
-        assertEquals("Ошибок не нашлось — знание оставлено как было", fixedMessage(0))
-        assertEquals("Исправлено: 2", fixedMessage(2))
+        assertEquals("Ошибок не нашлось — знание оставлено как было", fixedMessage(FixedFacts(emptyMap())))
+        assertEquals("Исправлено: 2", fixedMessage(FixedFacts(mapOf("a" to "1", "b" to "2"))))
     }
 
     @Test
@@ -265,5 +283,18 @@ class FixErrorsTest {
 
         // Правка текста превратила бы дату в относительное слово — такое значение датой не бывает (#659).
         assertTrue(fixesForFacts(date, listOf(TextFix("01.12.2020", "завтра"))).isEmpty())
+    }
+
+    @Test
+    fun `накладная судится по той же странице, что и найденная впервые`() {
+        val was = "8806923102858"
+        val now = "8806923102859"
+        val track = listOf(FixableFact(META_ENTITY_TRACK, was))
+        val fixes = listOf(TextFix(was, now))
+
+        // Тринадцать цифр — накладная только по слову рядом (#1032). Страница у правки та же,
+        // что и у первого чтения, иначе правка знания молча выбрасывалась бы гейтом формы.
+        assertEquals(now, fixesForFacts(track, fixes, "Експрес-накладна № $now")[META_ENTITY_TRACK])
+        assertTrue("без слова рядом тринадцать цифр накладной не становятся", fixesForFacts(track, fixes, now).isEmpty())
     }
 }

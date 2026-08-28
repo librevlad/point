@@ -27,6 +27,21 @@ class RoleNamePlausibilityTest {
     }
 
     @Test
+    fun `искажённая строка со смешанными алфавитами организацией не становится`() {
+        // #1032: «РÉPUBLIOUEFRANCAISE» — кириллические Р и О внутри латинского слова —
+        // вставало выдавшей документ организацией. Тот же судья, что у адреса. Отброшенное
+        // не исчезает молча: прочтение остаётся следом, чтобы вопрос не закрылся «не нашлось».
+        val garbled = "РÉPUBLIOUEFRANCAISE"
+        val elements = listOf(LayoutElement("e1", garbled))
+
+        val (roles, disputes, blocked) = roleReadings("issuer=e1", elements, layer = null)
+
+        assertTrue("огрех чтения занял место знания: $roles", roles.isEmpty())
+        assertTrue(disputes.isEmpty())
+        assertEquals(listOf(garbled), blocked["graph.role.issuer"])
+    }
+
+    @Test
     fun `роль с человеческим именем остаётся`() {
         val elements = listOf(LayoutElement("e1", "Іваненко Іван Петрович"))
 

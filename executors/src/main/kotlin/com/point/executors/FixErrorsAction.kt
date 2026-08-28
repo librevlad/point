@@ -138,13 +138,28 @@ internal suspend fun fix(llm: LlmClient, input: PointObject, withObject: Boolean
             // отправлять наружу больше, чем требуется, незачем (принцип #1244).
             val asked = if (withObject) input else textStandIn(input)
             val answer = File(llm.run(asked, fixPrompt(facts, withObject)).uri.value).readText()
-            val fixes = parseFixes(answer, facts)
+            // Гейт тот же, что у находки (#666, #1032), и страница ему нужна та же:
+            // слово-подпись накладной стоит в прочитанном тексте. Текст объекта на этом пути
+            // не правится — правится значение, — поэтому на странице стоит прежнее прочтение,
+            // и заземление исправленное наследует от него (`fixFits`).
+            val fixed = parseFixes(answer, facts, entitySourceText(input))
 
-            // Знание об объекте, а не новый объект (ADR-0001 §18): человек остаётся на месте.
-            ActionResult.Done(
-                fixedMessage(fixes.size),
-                Findings(metadata = applyFixes(input.metadata, fixes)).takeIf { fixes.isNotEmpty() },
-            )
+            when {
+
+                // Правки были, но ни одна не легла — срыв операции, а не знание «ошибок нет»
+                // (Конституция §13, #1032): «не нашлось» говорится только там, где не нашлось.
+                // Прежде отброшенная гейтом правка исчезала молча, и человек читал приговор
+                // про то самое значение, которое пришёл чинить.
+                fixed.fixes.isEmpty() && fixed.missed.isNotEmpty() ->
+                    ActionResult.Failure(fixedMessage(fixed), recoverable = true)
+
+                // Знание об объекте, а не новый объект (ADR-0001 §18): человек остаётся на месте.
+                else -> ActionResult.Done(
+                    fixedMessage(fixed),
+                    Findings(metadata = applyFixes(input.metadata, fixed.fixes))
+                        .takeIf { fixed.fixes.isNotEmpty() },
+                )
+            }
         }.getOrElse {
             ActionResult.Failure(it.message ?: "Не удалось проверить знание", recoverable = true)
         }
@@ -187,7 +202,15 @@ private suspend fun fixOwnText(
                     fixedTextMessage(fixed, checked = window.length, total = text.length),
                     Findings(
                         metadata = mapOf(META_OCR_TEXT_REF to ref.value) +
-                            applyFixes(input.metadata, fixesForFacts(fixableFacts(input.metadata), fixed.fixes)),
+                            applyFixes(
+                                input.metadata,
+
+                                // Страница для гейта формы — сам исправленный текст (#1032):
+                                // у текстового объекта значение вычитано из него, и слово-подпись
+                                // накладной стоит там же. Без страницы правка знания молча
+                                // выбрасывалась, а «Отследить» уходило по старому номеру.
+                                fixesForFacts(fixableFacts(input.metadata), fixed.fixes, fixed.text),
+                            ),
                     ),
                 )
             }

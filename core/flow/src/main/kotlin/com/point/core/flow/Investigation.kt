@@ -117,6 +117,18 @@ fun investigationOutcome(
         // закрывать вопрос «найдено» нельзя. Не «смотрели — не нашлось»: не смотрели.
         told.isEmpty() && META_UNUSABLE_REASON in factKeys ->
             InvestigationState.INSUFFICIENTLY_INVESTIGATED
+
+        // Отброшенное прочтение — след, а не пустые руки (#1032): что-то прочиталось, но
+        // проверку не прошло — S10 с несошедшейся контрольной, роль со словом из смешанных
+        // алфавитов. Вопрос смотрели, ответа не приняли: это «исследовано недостаточно», и
+        // «не нашлось» ответом считаться не может — иначе вопрос закрылся бы и больше не
+        // задавался (Конституция: `not investigated` ≠ `not found`).
+        //
+        // Считается след только этого вопроса: [factKeys] — то, что заявило о себе само
+        // исследование, а чужой `.blocked` из накопленного состояния сюда не попадает и
+        // ответа на этот вопрос не держит.
+        told.isEmpty() && factKeys.any { it.endsWith(META_BLOCKED_SUFFIX) && !metadata[it].isNullOrBlank() } ->
+            InvestigationState.INSUFFICIENTLY_INVESTIGATED
         told.isEmpty() -> InvestigationState.NOT_FOUND
         told.any { isDisputed(metadata, it) } -> InvestigationState.CONTRADICTORY
         told.any { isAssumption(metadata, it) } -> InvestigationState.INSUFFICIENTLY_INVESTIGATED

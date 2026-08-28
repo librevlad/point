@@ -16,6 +16,11 @@ fun plausiblePartyName(text: String): Boolean {
     // распознавания («1ваненко ван»), это ещё имя.
     if (Regex("""\d{2,}""").containsMatchIn(t)) return false
     if (t.count(Char::isDigit) > t.length / 5) return false
+
+    // Смешанные алфавиты в одном слове — огрех чтения, не имя и не организация (#1032):
+    // тот же судья, что у адреса, — иначе «РÉPUBLIOUEFRANCAISE» вставало выдавшей документ
+    // организацией.
+    if (hasMixedScriptWord(t)) return false
     return t.split(Regex("""\s+""")).size <= 5
 }
 

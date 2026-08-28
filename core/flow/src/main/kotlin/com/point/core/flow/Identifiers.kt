@@ -98,10 +98,50 @@ private val TRACK_MARKER_STEMS = listOf(
 
 private val FOLDED_TRACK_MARKERS = TRACK_MARKER_STEMS.map(::foldOcr)
 
+/**
+ * Форма накладной — улика для атома страницы (RuleEvidence).
+ *
+ * Мерка нарочно уже, чем у [looksLikeTrack]: атом метится уликой «это трек», только когда
+ * он целиком и есть номер — две группы через дробь или S10 с сошедшейся контрольной. Улика
+ * питает заземление значений, и расширять её вместе с гейтом ключа нельзя: голый прогон
+ * цифр в ячейке и номер, найденный подстрокой, уликой не были и не становятся (#1032).
+ */
 internal fun looksLikeTrackToken(text: String): Boolean {
     val token = text.trim()
     return (SPLIT_SHAPED.matches(token) && token.count(Char::isDigit) in SHORT_TRACK_DIGITS..WAYBILL_DIGITS) ||
         s10CheckDigitValid(token) == true
+}
+
+/**
+ * Накладная — по форме перевозчика или по слову рядом (#1032, решение владельца).
+ *
+ * У ключа `entity.track` было две мерки. Правило-читатель ([trackHits]) брало 13 цифр только
+ * с подписью рядом, а значение от модели проходило по одной длине: номер 8806923102858 из
+ * машиночитаемой зоны удостоверения местный путь не брал, модельный брал — и человеку на
+ * удостоверении личности показывали «Накладную» с предложением отследить. Мерка одна на
+ * ключ: форма перевозчика (14 цифр «Новой пошты», две группы через дробь, S10 — его
+ * контрольную цифру судит суд кандидатов) либо слово-подпись рядом в прочитанном тексте.
+ * Без того и другого число — не накладная.
+ */
+fun looksLikeTrack(value: String, text: String = ""): Boolean {
+    val token = value.trim()
+    if (s10CheckDigitValid(token) != null) return true
+    if (trackHits(token).isNotEmpty()) return true
+    val key = trackKey(token)
+    return key.isNotEmpty() && trackHits(text).any { trackKey(it.value) == key }
+}
+
+/**
+ * Стоит ли число на странице со словом-подписью рядом (#1032).
+ *
+ * Это то, что страница даёт **месту**, а не самому числу: слово рядом одинаково верно для
+ * любого прочтения этого места, и правка его наследует ([fixFits]). Форма перевозчика —
+ * свойство самого числа: 14 цифр накладная по себе, но с исправленными 13 цифрами этой
+ * формой не поделиться.
+ */
+internal fun markedTrackOnPage(value: String, text: String): Boolean {
+    val key = trackKey(value.trim())
+    return key.isNotEmpty() && trackHits(text).any { trackKey(it.value) == key && markerNear(text, it.at) }
 }
 
 const val META_ENTITY_SERIAL = META_ENTITY_PREFIX + "serial"

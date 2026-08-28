@@ -9,8 +9,12 @@ import com.point.core.model.Provenance
  *
  * Протокол нумерованный, а не по именам полей: модель не может придумать поле, которого нет,
  * и не может переименовать существующее — номер возвращается ровно тот, что был выдан.
+ *
+ * [earlier] — прочтения этого же знания, которые правка уже заменила: след «или», куда
+ * [applyFixes] кладёт прежнее значение. На странице стоит именно оно, а не сегодняшнее значение, и
+ * заземление правка наследует от него (#1032, [fixFits]).
  */
-data class FixableFact(val key: String, val value: String)
+data class FixableFact(val key: String, val value: String, val earlier: List<String> = emptyList())
 
 /**
  * Что вообще можно исправлять: значения знания, кроме подтверждённых человеком.
@@ -24,7 +28,10 @@ fun fixableFacts(metadata: Map<String, String>): List<FixableFact> =
         .filterNot { isAnnotationKey(it) || isStateKey(it) }
         .filterNot { provenanceOf(metadata, it) == Provenance.HUMAN }
         .sorted()
-        .mapNotNull { key -> metadata[key]?.trim()?.takeIf { it.isNotEmpty() }?.let { FixableFact(key, it) } }
+        .mapNotNull { key ->
+            metadata[key]?.trim()?.takeIf { it.isNotEmpty() }
+                ?.let { FixableFact(key, it, alternativesOf(metadata, key)) }
+        }
 
 /** Есть ли что исправлять: без знания дверь не показывается вовсе (решение владельца). */
 fun hasFixableFacts(metadata: Map<String, String>): Boolean = fixableFacts(metadata).isNotEmpty()
@@ -50,11 +57,27 @@ fun fixPrompt(facts: List<FixableFact>, withObject: Boolean): String = buildStri
 }
 
 /**
- * Разбор ответа: номер → исправленное значение. Чужие номера и мусор молчат.
+ * Правки значений: [fixes] — те, что легли, [missed] — предложенные моделью, но отброшенные
+ * гейтом формы. Вторые не молчат: «предложено, но не легло» — исход операции, а не знание
+ * «ошибок нет» (Конституция §13). У текста эта форма уже была ([FixedText.missed], #1023),
+ * у значений её не было — отброшенная правка исчезала, и человеку отвечали «Ошибок не
+ * нашлось» про то самое значение, которое он пришёл чинить (#1032).
  */
-fun parseFixes(answer: String, facts: List<FixableFact>): Map<String, String> {
+data class FixedFacts(val fixes: Map<String, String>, val missed: List<String> = emptyList())
+
+/**
+ * Разбор ответа: номер → исправленное значение. Чужие номера и мусор молчат — там модель
+ * ничего и не предложила; отброшенное гейтом — не молчит.
+ *
+ * [readText] — всё, что Point прочитал сам: гейт судит исправленное той же меркой, что и
+ * найденное впервые (#666, #1032), и слово-подпись накладной ищет там же, на странице. Текст
+ * объекта на этом пути не правится, поэтому на странице стоит прежнее прочтение, а не
+ * исправленное: заземление наследуется от него (`fixFits`).
+ */
+fun parseFixes(answer: String, facts: List<FixableFact>, readText: String = ""): FixedFacts {
     val byIndex = facts.withIndex().associate { (i, f) -> i + 1 to f }
     val fixes = LinkedHashMap<String, String>()
+    val missed = ArrayList<String>()
     answer.lineSequence().forEach { raw ->
         val line = raw.trim()
         val eq = line.indexOf('=')
@@ -63,10 +86,13 @@ fun parseFixes(answer: String, facts: List<FixableFact>): Map<String, String> {
         val fact = byIndex[n] ?: return@forEach
         val fixed = line.substring(eq + 1).trim()
         if (fixed.isEmpty() || normConsensus(fixed) == normConsensus(fact.value)) return@forEach
-        if (!factFits(fact.key, fixed)) return@forEach
+        if (!fixFits(fact.key, listOf(fact.value) + fact.earlier, fixed, readText)) {
+            missed += fixed
+            return@forEach
+        }
         fixes[fact.key] = fixed
     }
-    return fixes
+    return FixedFacts(fixes, missed)
 }
 
 /**
@@ -88,11 +114,23 @@ fun applyFixes(metadata: Map<String, String>, fixes: Map<String, String>): Map<S
     }
 }
 
-/** Итог одной строкой (решение владельца), без перечисления полей. */
-fun fixedMessage(count: Int): String = when {
-    count <= 0 -> "Ошибок не нашлось — знание оставлено как было"
-    else -> "Исправлено: $count"
+/**
+ * Итог одной строкой (решение владельца), без перечисления полей. Отброшенное гейтом названо
+ * числом: «ошибок не нашлось» говорится только там, где модель ничего и не предложила (#1032).
+ */
+fun fixedMessage(fixed: FixedFacts): String = when {
+    fixed.fixes.isEmpty() && fixed.missed.isEmpty() -> "Ошибок не нашлось — знание оставлено как было"
+    fixed.fixes.isEmpty() -> FIX_FACTS_NOT_APPLIED
+    fixed.missed.isEmpty() -> "Исправлено: ${fixed.fixes.size}"
+    else -> "Исправлено: ${fixed.fixes.size}; ещё ${fixed.missed.size} применить не удалось"
 }
+
+/**
+ * Правки предложены, но ни одна не легла: исправленное не годится этому виду знания по форме.
+ * Это срыв операции, а не знание «ошибок нет» — повторить можно. Тот же ответ, что у текста
+ * ([FIX_TEXT_NOT_APPLIED], #1023): молчаливых цепочек в Point нет (Конституция §13).
+ */
+const val FIX_FACTS_NOT_APPLIED = "Проверил знание, но применить правки не удалось — знание оставлено как было"
 
 /**
  * Правка самого текста (#1023): у текстового объекта знание — это его текст, и первая ступень
@@ -167,11 +205,16 @@ fun fixText(text: String, answer: String): FixedText {
  * единственный путь починки: вырезанный из прочитанного снимка фрагмент несёт ошибки чтения и
  * в тексте, и в вычитанных из него значениях. Ложится теми же парами, теми же границами слова
  * и через ту же проверку формы, что и правка значений напрямую.
+ *
+ * [readText] — текст после правки: гейт формы судит исправленное значение по той же странице,
+ * на которой оно стоит (#1032). Без страницы слово-подпись накладной сверять не с чем, и
+ * тринадцатизначный номер, взятый по подписи рядом, терял бы единственный путь починки —
+ * человек читал «Исправлено», а «Отследить отправление» уходило по старому номеру.
  */
-fun fixesForFacts(facts: List<FixableFact>, fixes: List<TextFix>): Map<String, String> =
+fun fixesForFacts(facts: List<FixableFact>, fixes: List<TextFix>, readText: String = ""): Map<String, String> =
     facts.mapNotNull { fact ->
         val fixed = fixes.fold(fact.value) { value, fix -> replaceWhole(value, fix.was, fix.now).first }
-        fixed.takeIf { normConsensus(it) != normConsensus(fact.value) && factFits(fact.key, it) }
+        fixed.takeIf { normConsensus(it) != normConsensus(fact.value) && factFits(fact.key, it, readText) }
             ?.let { fact.key to it }
     }.toMap()
 

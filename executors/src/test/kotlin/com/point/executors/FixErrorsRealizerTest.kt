@@ -1,12 +1,14 @@
 package com.point.executors
 
 import com.point.core.flow.AiReadiness
+import com.point.core.flow.FIX_FACTS_NOT_APPLIED
 import com.point.core.flow.FIX_TEXT_NOT_APPLIED
 import com.point.core.flow.GraphState
 import com.point.core.flow.LlmClient
 import com.point.core.flow.META_ALT_SUFFIX
 import com.point.core.flow.META_ENTITY_PREFIX
 import com.point.core.flow.META_GRAPH_ROLE_PREFIX
+import com.point.core.flow.META_ENTITY_TRACK
 import com.point.core.flow.META_OCR_TEXT_REF
 import com.point.core.model.ActionResult
 import com.point.core.model.ObjectKind
@@ -109,6 +111,93 @@ class FixErrorsRealizerTest {
 
         assertTrue("снимок обязан уйти на сверку", lastObject!!.mime.startsWith("image/"))
         assertTrue("модель не предупреждена, что источник приложен", "снимком" in lastPrompt!!)
+    }
+
+    /**
+     * Живой путь #1032: фото накладной Укрпошты, OCR прочёл «Експрес-накладна № …» со сбитой
+     * последней цифрой, и «Понять» взяло 13-значный номер по слову рядом. Человек жмёт
+     * «Исправить ошибки» (или «Исправить сильнее», где модель сверяет знание со снимком) — правка
+     * обязана лечь. Текст объекта на этом пути не правится, и по старой странице исправленное
+     * число не подтверждается ничем: единственный путь починки номера закрывался молча, а
+     * «Отследить отправление» продолжало уходить по неверному номеру.
+     */
+    @Test
+    fun `правка накладной над значениями ложится, а не гасится старой страницей`() = runTest {
+        val was = "8806923102858"
+        val now = "8806923102859"
+        val page = temp.newFile().apply { writeText("Експрес-накладна № $was") }
+        val parcel = photo(mapOf(META_ENTITY_TRACK to was, META_OCR_TEXT_REF to page.absolutePath))
+
+        val first = fixer("1 = $now").perform(parcel, null) as ActionResult.Done
+        val stronger = FixErrorsStrongerRealizer(llm("1 = $now")).perform(parcel, null) as ActionResult.Done
+
+        assertEquals("«Исправить ошибки» оставила старый номер", now, first.findings!!.metadata[META_ENTITY_TRACK])
+        assertEquals("«Исправить сильнее» оставила старый номер", now, stronger.findings!!.metadata[META_ENTITY_TRACK])
+        assertTrue("человеку сказали, что править было нечего: ${first.message}", "не нашлось" !in first.message)
+    }
+
+    /**
+     * Тот же живой путь дальше (#1032). Первая дверь правку положила, но сидекар она не
+     * трогает — на странице по-прежнему стоит прочитанное число. Обе двери остаются на экране,
+     * и человек жмёт «Исправить сильнее», где модель видит сам снимок и цифру чинит
+     * по-настоящему. Прежнего прочтения на странице уже нет, и вторая правка выбрасывалась
+     * молча: «Ошибок не нашлось», а «Отследить отправление» продолжало уходить по неверному
+     * номеру первой двери.
+     */
+    @Test
+    fun `правка поверх правки ложится, а не гаснет на прежней странице`() = runTest {
+        val read = "8806923102858"
+        val once = "8806923102859"
+        val right = "8806923102851"
+        val page = temp.newFile().apply { writeText("Експрес-накладна № $read") }
+        val parcel = photo(mapOf(META_ENTITY_TRACK to read, META_OCR_TEXT_REF to page.absolutePath))
+
+        val first = fixer("1 = $once").perform(parcel, null) as ActionResult.Done
+        val fixedOnce = parcel.copy(metadata = parcel.metadata + first.findings!!.metadata)
+
+        val stronger = FixErrorsStrongerRealizer(llm("1 = $right")).perform(fixedOnce, null) as ActionResult.Done
+
+        assertEquals("вторая правка погасла на старой странице", right, stronger.findings?.metadata?.get(META_ENTITY_TRACK))
+        assertTrue("человеку сказали, что править было нечего: ${stronger.message}", "не нашлось" !in stronger.message)
+    }
+
+    /**
+     * Тот же живой путь с самой обычной ошибкой длинного прогона цифр (#1032): OCR склеил
+     * лишнюю цифру, и 13-значная накладная Укрпошты стала 14-значной — накладной по форме
+     * перевозчика. Человек жмёт «Исправить сильнее», где модель видит сам снимок и возвращает
+     * верные 13 цифр. Правка выбрасывалась молча: «Ошибок не нашлось», а «Отследить
+     * отправление» продолжало уходить по номеру, которого не существует.
+     */
+    @Test
+    fun `правка лишней цифры в накладной ложится — слово-подпись стоит на странице рядом с числом`() = runTest {
+        val misread = "88069231028580"
+        val right = "8806923102858"
+        val page = temp.newFile().apply { writeText("Експрес-накладна № $misread") }
+        val parcel = photo(mapOf(META_ENTITY_TRACK to misread, META_OCR_TEXT_REF to page.absolutePath))
+
+        val done = FixErrorsStrongerRealizer(llm("1 = $right")).perform(parcel, null) as ActionResult.Done
+
+        assertEquals("«Отследить» осталось бы по несуществующему номеру", right, done.findings?.metadata?.get(META_ENTITY_TRACK))
+        assertTrue("человеку сказали, что править было нечего: ${done.message}", "не нашлось" !in done.message)
+    }
+
+    /**
+     * Отброшенная гейтом правка не исчезает молча (#1032, Конституция §13). Модель «исправила»
+     * дату в относительное слово — датой такое значение не бывает, и правка не ложится. Прежде
+     * человеку отвечали «Ошибок не нашлось» — приговором знанию, которое он как раз пришёл
+     * чинить, — и повторять попытку было незачем. У текста эта форма есть с #1023.
+     */
+    @Test
+    fun `правка предложена, но гейт её отверг — это срыв операции, а не «ошибок не нашлось»`() = runTest {
+        val dated = photo(mapOf(META_ENTITY_PREFIX + "date" to "ад! 01.12.2020"))
+
+        val result = fixer("1 = завтра").perform(dated, null)
+
+        assertTrue("отброшенная правка выдана за приговор знанию: $result", result is ActionResult.Failure)
+        val failure = result as ActionResult.Failure
+        assertTrue("повторить можно — срыв не окончательный", failure.recoverable)
+        assertTrue("«не нашлось» про правку, которую выбросили: ${failure.reason}", "не нашлось" !in failure.reason)
+        assertEquals(FIX_FACTS_NOT_APPLIED, failure.reason)
     }
 
     @Test
@@ -230,6 +319,27 @@ class FixErrorsRealizerTest {
         assertTrue("след прежнего значения потерян", done.findings!!.metadata.containsKey(sender + META_ALT_SUFFIX))
         assertFalse("значение, которого правка не касалась, не трогается", done.findings!!.metadata.containsKey(META_ENTITY_PREFIX + "date"))
         assertTrue("исправленный текст лёг прочтением", File(done.findings!!.metadata.getValue(META_OCR_TEXT_REF)).readText().startsWith("Відправник: Паринкін"))
+    }
+
+    /**
+     * Живой путь #1032: у текстового объекта накладная берётся по слову-подписи рядом, и
+     * страница, на которой это слово стоит, — сам текст. Без неё правка знания молча
+     * выбрасывалась гейтом формы, человек читал «Исправлено», а «Отследить отправление»
+     * уходило по старому номеру.
+     */
+    @Test
+    fun `накладная со словом-подписью едет за правкой текста, а не остаётся старым номером`() = runTest {
+        val was = "8806923102858"
+        val now = "8806923102859"
+        val parcel = text(
+            body = "Експрес-накладна № $was",
+            metadata = mapOf(META_ENTITY_TRACK to was),
+        )
+
+        val done = fixer("$was = $now").perform(parcel, null) as ActionResult.Done
+
+        assertEquals("отслеживание осталось бы по старому номеру", now, done.findings!!.metadata[META_ENTITY_TRACK])
+        assertEquals(now, File(done.findings!!.metadata.getValue(META_OCR_TEXT_REF)).readText().takeLast(now.length))
     }
 
     @Test
