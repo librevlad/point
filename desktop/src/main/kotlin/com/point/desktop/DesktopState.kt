@@ -2,6 +2,7 @@ package com.point.desktop
 
 import com.point.core.flow.CapabilityRegistry
 import com.point.core.flow.Resolver
+import com.point.core.flow.knownBy
 import com.point.core.model.ActionResult
 import com.point.core.model.Bubble
 import com.point.core.model.ObjectKind
@@ -271,7 +272,24 @@ class DesktopState(
         return com.point.core.flow.chainClosedBy(level)
     }
 
-    private suspend fun perform(id: String, item: InboxItem, stationTitle: String? = null): ActionResult? {
+    /**
+     * Один путь исполнения на оба входа — рука человека и автоматическое исследование (#1272).
+     *
+     * [quiet] — тихий заход. От громкого он отличается только тем, чего человек не заказывал:
+     * не показывает индикатор операции, не обнуляет сказанное до него и не пишет шаг в «ПУТЬ»
+     * (телефон сорвавшиеся исследования в журнал тоже не пишет — знанием они не стали). Про
+     * удачу тихий заход молчит: добытое говорит за себя фактами объекта.
+     *
+     * Не молчит он об одном — о беде. Отказ, съеденный тишиной, ничем не отличается от
+     * исследования, которого не было (Конституция, инвариант 8), а то же исследование, нажатое
+     * рукой, о своём отказе докладывает.
+     */
+    private suspend fun perform(
+        id: String,
+        item: InboxItem,
+        stationTitle: String? = null,
+        quiet: Boolean = false,
+    ): ActionResult? {
         val title = stationTitle ?: titleOf(id, item)
         val step = if (stationTitle != null) title else "$title · с телефона"
 
@@ -279,32 +297,47 @@ class DesktopState(
         // клика по экрану. Просьба телефона была единственным входом мимо него — человек
         // закрыл компьютеру дорогу наружу, а компьютер по просьбе соседа всё равно
         // отправлял страницы чужому сервису (Конституция §11).
+        //
+        // Тихий заход выходит отсюда так же, как из любого другого отказа (#1272): причина
+        // человеку названа словами исследования, автошага в «ПУТЬ» нет.
         wayOutClosed(com.point.core.model.CapabilityId(id))?.let { why ->
             val closed = ActionResult.Failure(why, recoverable = false)
-            _message.value = why
-            note(item, id, step, closed)
+            _message.value = if (quiet) com.point.core.flow.investigationFailedNote(why) else why
+            if (!quiet) note(item, id, step, closed)
             return closed
         }
-        _message.value = null
-        _working.value = Working(
-            title,
-            stage = null,
-            startedAt = clock.now(),
-            objectId = item.obj.id,
-            network = runCatching { resolver.leavesDevice(com.point.core.model.CapabilityId(id)) }.getOrDefault(false),
-        )
+        if (!quiet) {
+            _message.value = null
+            _working.value = Working(
+                title,
+                stage = null,
+                startedAt = clock.now(),
+                objectId = item.obj.id,
+                network = runCatching {
+                    resolver.leavesDevice(com.point.core.model.CapabilityId(id))
+                }.getOrDefault(false),
+            )
+        }
         val result = try {
             runCatching {
 
                 kotlinx.coroutines.withContext(
                     com.point.core.flow.ActionProgress { stage ->
-                        _working.value = _working.value?.copy(stage = stage)
+
+                        // Тихий заход не трогает индикатор — в том числе чужой: рядом может
+                        // идти нажатое человеком действие, и его стадия не его дело.
+                        if (!quiet) _working.value = _working.value?.copy(stage = stage)
                     } +
 
-                        com.point.core.flow.RequestOrigin(here = stationTitle != null),
+                        com.point.core.flow.RequestOrigin(here = quiet || stationTitle != null),
                 ) {
-                    resolver.realizerFor(com.point.core.model.CapabilityId(id), item.obj.state)
-                        .perform(item.obj, null)
+                    val realizer =
+                        resolver.realizerFor(com.point.core.model.CapabilityId(id), item.obj.state)
+
+                    // Кто добыл знание, знает только этот шов (#1273): исследование видит свой
+                    // вопрос, а не того, кем он решён в этот раз. Тот же шов, что у телефона в
+                    // `DefaultEnrichment`.
+                    realizer.perform(item.obj, null).knownBy(item.obj, realizer.meta.actor)
                 }
             }.getOrElse { e ->
 
@@ -316,12 +349,14 @@ class DesktopState(
                 }
             }
         } catch (e: kotlinx.coroutines.CancellationException) {
-            _working.value = null
-            _message.value = "Отменено"
-            note(item, id, title, ActionResult.Failure("отменено", recoverable = true))
+            if (!quiet) {
+                _working.value = null
+                _message.value = "Отменено"
+                note(item, id, title, ActionResult.Failure("отменено", recoverable = true))
+            }
             throw e
         } finally {
-            _working.value = null
+            if (!quiet) _working.value = null
         }
 
         if (result is ActionResult.Success) {
@@ -341,14 +376,27 @@ class DesktopState(
         // (Конституция §4: обогащение не создаёт версию объекта; аудит 2026-08-09, блок 1.1).
         val findings = (result as? ActionResult.Done)?.findings
         if (findings != null && !findings.isEmpty) landFindings(item, findings)
-        _message.value = when (result) {
-            is ActionResult.Done -> result.message
-            is ActionResult.Failure -> result.reason
-            is ActionResult.Success -> result.result.metadata["name"] ?: "Готово"
+        _message.value = when {
+
+            // Отказ не скрывается ни на одном заходе (#1272). Тихому нужны ещё и слова про то,
+            // что это было: человек ничего не нажимал, и одна голая причина ему не адресована.
+            result is ActionResult.Failure && quiet ->
+                com.point.core.flow.investigationFailedNote(result.reason)
+
+            result is ActionResult.Failure -> result.reason
+
+            // Про удачу тихий заход молчит: знание видно фактами, а рождённый объект — сам
+            // собой, своим появлением в списке.
+            quiet -> _message.value
+
+            result is ActionResult.Done -> result.message
+            result is ActionResult.Success -> result.result.metadata["name"] ?: "Готово"
             else -> _message.value
         }
 
-        note(item, id, step, result)
+        // Автоматический шаг в «ПУТЬ» не пишется (решение владельца 23.08.2026): журнал —
+        // память о сделанном человеком, и телефон сорвавшиеся исследования тоже не помнит.
+        if (!quiet) note(item, id, step, result)
         return result
     }
 
@@ -706,6 +754,10 @@ class DesktopState(
      * Единообразно, а не по одному жёстко зашитому id (владелец, 10.08.2026): любая
      * Capability компьютера с `investigation = true`, подходящая объекту, подключается
      * сама — новой способности обогащения на ПК не нужна отдельная правка здесь.
+     *
+     * Идёт оно общим путём [perform] тихим заходом (#1272). Своей укороченной дороги здесь
+     * больше нет: она глотала и отказ исполнителя, и «нечем это сделать» от резолвера —
+     * сорвавшееся исследование выглядело как не начатое.
      */
     private fun autoInvestigate(item: InboxItem) {
         val questions = registry.all()
@@ -715,12 +767,16 @@ class DesktopState(
             val asked = com.point.core.flow.investigationStateOf(item.obj.metadata, question)
             if (asked != com.point.core.flow.InvestigationState.NOT_INVESTIGATED) return@forEach
             scope.launch {
-                val realizer = runCatching { resolver.realizerFor(question, item.obj.state) }.getOrNull()
-                    ?: return@launch
-                if (realizer.meta.kind == com.point.core.flow.RealizerKind.CLOUD) return@launch
-                val result = runCatching { realizer.perform(item.obj, null) }.getOrNull()
-                val findings = (result as? ActionResult.Done)?.findings ?: return@launch
-                if (!findings.isEmpty) landFindings(item, findings)
+
+                // Автоматизм не пересекает границу устройств (ADR-0001 §19). Исполнителя
+                // здесь только спрашивают о дороге: если его нет вовсе, молчать об этом
+                // нельзя — пусть общий путь назовёт человеку причину.
+                val outside = runCatching {
+                    resolver.realizerFor(question, item.obj.state).meta.kind ==
+                        com.point.core.flow.RealizerKind.CLOUD
+                }.getOrDefault(false)
+                if (outside) return@launch
+                perform(question.value, item, quiet = true)
             }
         }
     }

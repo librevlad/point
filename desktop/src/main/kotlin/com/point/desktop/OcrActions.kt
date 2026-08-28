@@ -41,7 +41,12 @@ class PcCloudOcrRealizer(
 ) : Realizer {
     override val capabilityId = com.point.core.flow.capabilities.OcrCapability.ID
 
-    override val meta = com.point.core.flow.RealizerMeta(kind = com.point.core.flow.RealizerKind.CLOUD)
+    // Прочитанное подписано тем, кто читал (#1273): снимок уходит в ocr.space — туда же, куда
+    // его отправляет телефон. Сервис один, значит и имя одно, а не «компьютер».
+    override val meta = com.point.core.flow.RealizerMeta(
+        kind = com.point.core.flow.RealizerKind.CLOUD,
+        actor = com.point.core.flow.OCR_SPACE_ACTOR,
+    )
 
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {

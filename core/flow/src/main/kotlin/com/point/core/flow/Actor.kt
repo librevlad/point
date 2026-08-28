@@ -28,6 +28,24 @@ const val META_ACTOR_SUFFIX = ".by"
  */
 const val META_ANSWERED_BY = "answered" + META_ACTOR_SUFFIX
 
+/**
+ * Имя движка правил, которым Point находит значения в тексте (#1273).
+ *
+ * Исполнитель называется по движку, а не по устройству: правила у телефона и компьютера
+ * одни и те же, значит и свидетель один. Два разных имени сделали бы из одного прочтения
+ * двух независимых свидетелей, и совпадение стало бы ложным подтверждением — согласие
+ * считается как раз по разным именам (`agreementEvidence`).
+ */
+const val ENTITY_RULES_ACTOR = "entities"
+
+/**
+ * Имя сервиса чтения, к которому ходят обе поверхности (#1273).
+ *
+ * Снимок, прочитанный ocr.space с телефона и с компьютера, прочитан одним и тем же —
+ * второго свидетеля здесь нет.
+ */
+const val OCR_SPACE_ACTOR = "ocr-space"
+
 private const val ACTOR_SEPARATOR = ","
 
 fun actorsOf(metadata: Map<String, String>, key: String): List<String> = actorList(metadata[key + META_ACTOR_SUFFIX])

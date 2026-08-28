@@ -64,7 +64,12 @@ class PcReadDocumentRealizer(
 ) : Realizer {
     override val capabilityId = PcReadDocumentCapability.ID
 
-    override val meta = com.point.core.flow.RealizerMeta(kind = com.point.core.flow.RealizerKind.CLOUD)
+    // Страницы читает тот же облачный читатель, что и одиночный снимок (`Main.kt` даёт сюда
+    // `PcCloudOcrRealizer.readFrame`), — и подписывается прочитанное его именем (#1273).
+    override val meta = com.point.core.flow.RealizerMeta(
+        kind = com.point.core.flow.RealizerKind.CLOUD,
+        actor = com.point.core.flow.OCR_SPACE_ACTOR,
+    )
 
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
