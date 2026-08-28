@@ -181,8 +181,11 @@ class PcSaveAsRealizer(private val target: SaveTarget) : Realizer {
     override val capabilityId = CapabilityId("pc-save-as")
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         runCatching {
+            // Человек закрыл системное окно: слово отмены — объявленное, одно на оба
+            // устройства (#1073). По нему телефон узнаёт, что говорить не о чем, и гасит
+            // обещание тихо; настоящее «Сохранено: <путь>» он человеку повторяет.
             val saved = target.pickAndSave(File(input.uri.value))
-                ?: return ActionResult.Done("Отменено")
+                ?: return ActionResult.Done(com.point.core.flow.PC_CANCELLED)
             ActionResult.Done("Сохранено: $saved")
         }.getOrElse { ActionResult.Failure("Сохранить не вышло — выберите другую папку", recoverable = true) }
 }

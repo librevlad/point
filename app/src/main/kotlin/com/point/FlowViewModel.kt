@@ -289,6 +289,20 @@ class FlowViewModel @Inject constructor(
     private var lastOutboxFetchMs = 0L
     private var lastCircleSyncMs = 0L
 
+    /**
+     * Слово на экране, за которым ещё едет исход просьбы соседу (#1073): сперва сказанное
+     * компьютером «ещё работает», после сторожа — своё «пока не ответил».
+     *
+     * Исход просьбы соседу может прийти позже ответа — отменой у диалога сохранения, отказом
+     * принтера, готовым файлом. Пока слово стоит на экране, телефон сам заглядывает в очередь
+     * компьютера и заглядывает туда же возвратом человека в Point; пришедший исход говорит
+     * человеку то же, что сказал бы срочный ответ той же просьбы — «Сохранено: C:\…», причину
+     * отказа, — и только отмена человека гасит слово тихо: она не ошибка (тот же шов, что
+     * возврат с чужого экрана, #1131).
+     */
+    @Volatile private var neighbourWord: String? = null
+    private var neighbourWatch: kotlinx.coroutines.Job? = null
+
     private val _clipboard = MutableStateFlow<String?>(null)
 
     val clipboard: StateFlow<String?> = _clipboard.asStateFlow()
@@ -499,8 +513,9 @@ class FlowViewModel @Inject constructor(
         lastOutboxFetchMs = now
         viewModelScope.launch {
             runCatching { pcTransport.fetchOutbox(pc) }.getOrNull()?.let { entries ->
-                fromPcEntries = entries
-                _fromPcCount.value = entries.size
+                val things = takeOutcomesHome(pc, entries)
+                fromPcEntries = things
+                _fromPcCount.value = things.size
             }
         }
     }
@@ -512,7 +527,8 @@ class FlowViewModel @Inject constructor(
         raiseBusy("Забираю с компьютера…", cancelable = true)
         trackWork {
 
-            val entries = runCatching { pcTransport.fetchOutbox(pc) }.getOrNull().orEmpty()
+            // Исходы без объекта уходят домой до забора вещей (#1073): скачивать с них нечего.
+            val entries = takeOutcomesHome(pc, runCatching { pcTransport.fetchOutbox(pc) }.getOrNull().orEmpty())
             if (!owns(voice)) return@trackWork
             if (entries.isEmpty()) {
                 fromPcEntries = emptyList()
@@ -775,7 +791,7 @@ class FlowViewModel @Inject constructor(
 
                 // Кто исполнил — часть добытого знания (#1127): тот же шов, что и у
                 // исследований, только исполнитель здесь уже выбран строчкой выше.
-                runAction(bubble, voice, top) { obj -> realizer.perform(obj, null).knownBy(obj, realizer.meta.actor) }
+                runAction(bubble, voice, top) { obj -> performBy(realizer, obj, null) }
             } else {
                 pendingPreviewBubble = bubble
                 _ui.update { it.copy(busy = null, busyStage = null, preview = preview) }
@@ -2212,24 +2228,28 @@ class FlowViewModel @Inject constructor(
             creator = capability,
             provenance = produced?.provenance ?: com.point.core.model.Provenance.RULE,
             executor = PHONE_EXECUTOR,
-        ) + when (result) {
-            is ActionResult.Failure -> mapOf(
-                f.OUTCOME to f.FAILED,
-                f.DETAIL to result.reason,
-            )
-            is ActionResult.Done -> mapOf(f.OUTCOME to f.DONE, f.DETAIL to result.message)
-            is ActionResult.Success -> mapOf(
-                f.OUTCOME to f.DONE,
-                f.NAME to (result.result.metadata["name"] ?: "$label.result"),
-                f.MIME to result.result.mime,
-            )
-            // Незавершённый шаг терминальным исходом не является (ADR-0001 §18): компьютеру
-            // едет «ждёт», а не «не вышло» (#1269). Вопрос, на котором шаг остановился, —
-            // это и есть то, чего он ждёт, и компьютер называет его человеку своими словами.
-            is ActionResult.NeedsInput -> mapOf(f.OUTCOME to f.AWAITING, f.DETAIL to result.prompt)
-            is ActionResult.NeedsImage ->
-                mapOf(f.OUTCOME to f.AWAITING, f.DETAIL to "«$label» ждёт продолжения на телефоне")
-        }
+        ) +
+
+            // Слова провода об исходе пишет один словарь на оба направления (#1073): теми же
+            // полями исход просьбы соседу приезжает обратно на телефон.
+            when (result) {
+                is ActionResult.Done -> f.of(com.point.core.flow.PcActionOutcome.Done(result.message))
+                is ActionResult.Failure -> f.of(com.point.core.flow.PcActionOutcome.Failed(result.reason))
+
+                // У вещи исход один — она родилась; чем она называется, письмо говорит
+                // отдельно, и словарь исхода про имя с mime ничего не знает.
+                is ActionResult.Success -> f.of(com.point.core.flow.PcActionOutcome.Done(null)) + mapOf(
+                    f.NAME to (result.result.metadata["name"] ?: "$label.result"),
+                    f.MIME to result.result.mime,
+                )
+
+                // Незавершённый шаг терминальным исходом не является (ADR-0001 §18): компьютеру
+                // едет «ждёт», а не «не вышло» (#1269). Словарь исхода такого слова не знает и
+                // знать не должен — он про три терминальных исхода операции.
+                is ActionResult.NeedsInput -> mapOf(f.OUTCOME to f.AWAITING, f.DETAIL to result.prompt)
+                is ActionResult.NeedsImage ->
+                    mapOf(f.OUTCOME to f.AWAITING, f.DETAIL to "«$label» ждёт продолжения на телефоне")
+            }
 
         // Пустой шаг без нового объекта отправляет только знание: файла у него нет, и
         // компьютеру он приезжает как знание своего объекта, а не как вещь.
@@ -2274,9 +2294,28 @@ class FlowViewModel @Inject constructor(
      * Тот же шов, что и у исследований (`DefaultEnrichment.run`): имя исполнителя знает
      * только место, где его выбрал Resolver, и знание уходит в Graph уже с ним.
      */
-    private suspend fun performed(id: CapabilityId, obj: PointObject, amendment: String?): ActionResult {
-        val realizer = resolver.realizerFor(id, obj.state)
-        return realizer.perform(obj, amendment).knownBy(obj, realizer.meta.actor)
+    private suspend fun performed(id: CapabilityId, obj: PointObject, amendment: String?): ActionResult =
+        performBy(resolver.realizerFor(id, obj.state), obj, amendment)
+
+    /**
+     * Шаг выбранным исполнителем — и память о том, кто исполнил (#1127).
+     *
+     * Сосед ответил словом, а не вещью — исход его работы может ещё ехать (#1073): «ещё
+     * работает» сменится в очереди отменой, отказом или готовым файлом, и телефон ждёт этого.
+     */
+    private suspend fun performBy(realizer: com.point.core.flow.Realizer, obj: PointObject, amendment: String?): ActionResult {
+        val result = realizer.perform(obj, amendment).knownBy(obj, realizer.meta.actor)
+
+        // «Может прийти позже» — свойство самого ответа, а не исполнителя целиком: стеречь
+        // стоит ровно тот ответ, которым сосед сказал, что работает прямо сейчас. Признак на
+        // исполнителе заставлял телефон минуту стучаться в очередь реле и после
+        // законченного «Скопировано в буфер компьютера» — двенадцать запросов ни о чём.
+        // Отложенное письмо («заберёт, когда включится») тоже не стерегут: компьютер
+        // выключен, и за эту минуту исходу взяться неоткуда.
+        if (result is ActionResult.Done && result.message == com.point.core.flow.PC_STILL_WORKING) {
+            watchNeighbour(result.message)
+        }
+        return result
     }
 
     private suspend fun bridge(obj: PointObject, viaCapId: String): PointObject? {
@@ -2519,11 +2558,156 @@ class FlowViewModel @Inject constructor(
 
     /** Зов из onResume хостов: человек вернулся в Point с чужого экрана. */
     fun returnedToPoint() {
+
+        // Чужой экран, с которого вернулся человек, бывает и на другом устройстве (#1073):
+        // человек ушёл к компьютеру выбирать папку и вернулся к телефону. Пока слово ожидания
+        // стоит, телефон смотрит в очередь этим же возвратом — сторож к этой минуте обычно
+        // уже кончился, а сам собой в очередь никто не смотрит, пока объект открыт: главный
+        // экран сюда не заглядывает, и человеку пришлось бы выйти из объекта и войти снова.
+        neighbourWord?.let { if (waitingForNeighbour(it)) refreshFromPc(force = true) }
+
         val standing = handOffMessage ?: return
         handOffMessage = null
         _ui.update {
             if (it.message == standing) it.copy(message = null, messageOutcome = Outcome.NONE) else it
         }
+    }
+
+    /**
+     * Пока слово соседа стоит на экране, телефон заглядывает в очередь компьютера сам (#1073):
+     * иначе отмена у диалога на компьютере доезжала бы только к следующему открытию главного
+     * экрана, а человек всё это время читал бы «ещё работает». У ожидания есть предел —
+     * дальше исход дождётся возврата в Point, входа в объект или обычного забора очереди.
+     */
+    private fun watchNeighbour(word: String) {
+        neighbourWord = word
+        neighbourWatch?.cancel()
+        neighbourWatch = viewModelScope.launch {
+            repeat(NEIGHBOUR_CHECKS) {
+                kotlinx.coroutines.delay(NEIGHBOUR_CHECK_MS)
+                if (!waitingForNeighbour(word)) return@launch
+
+                // Связи с компьютером сейчас нет — взгляд пропущен, но ожидание всё равно
+                // кончится словом, а не обещанием, оставленным навсегда.
+                val pc = pcLinks.current() ?: return@repeat
+                val entries = runCatching { pcTransport.fetchOutbox(pc) }.getOrNull() ?: return@repeat
+                val things = takeOutcomesHome(pc, entries)
+                fromPcEntries = things
+                _fromPcCount.value = things.size
+
+                // Исход доехал — ждать больше нечего.
+                if (neighbourWord == null) return@launch
+            }
+
+            // Сторож кончился, а исхода нет — и слово соседа больше не говорится за соседа:
+            // «ещё работает» — то, что компьютер сказал минуту назад, а не то, что телефон
+            // знает сейчас. Оставленное дальше, оно и было вечным обещанием из #1073.
+            // Ждать телефон не перестаёт: исход доедет возвратом в Point, входом в объект
+            // или забором очереди — и скажет своё поверх этого слова.
+            if (waitingForNeighbour(word)) {
+                neighbourWord = com.point.core.flow.PC_NO_ANSWER_YET
+                _ui.update {
+                    it.copy(message = com.point.core.flow.PC_NO_ANSWER_YET, messageOutcome = Outcome.NONE)
+                }
+            }
+        }
+    }
+
+    /**
+     * Ждёт ли телефон исхода дальше: слово соседа всё ещё то же и всё ещё на экране (#1073).
+     *
+     * Ушло — ждать нечего, и поле не остаётся висеть со старым словом до следующего
+     * приземлившегося исхода. Правило одно на оба выхода сторожа: и на ранний, и на тот,
+     * где сторож досмотрел до конца.
+     */
+    private fun waitingForNeighbour(word: String): Boolean {
+        if (neighbourWord != word) return false
+        if (_ui.value.message == word) return true
+        neighbourWord = null
+        return false
+    }
+
+    /**
+     * Исходы без объекта забираются домой (#1073): это не вещи для списка «с компьютера», а
+     * слова о том, чем кончилась просьба. Возвращает то, что в очереди осталось вещами.
+     *
+     * Подтверждается только то, что и правда приземлено, — тот же уговор, что и у забора
+     * вещей ниже. Исход, чей объект сейчас не перед человеком, остаётся в очереди
+     * компьютера и доезжает входом в этот объект: у главного экрана свой разбор с пустым
+     * стеком, и безусловное подтверждение выбрасывало бы там понятое компьютером вместе с
+     * записью — навсегда (PC2).
+     */
+    private suspend fun takeOutcomesHome(
+        pc: com.point.core.flow.LinkedPc,
+        entries: List<com.point.core.flow.PcOutboxEntry>,
+    ): List<com.point.core.flow.PcOutboxEntry> {
+        val (outcomes, things) = entries.partition { com.point.core.flow.PcResultFields.outcomeOnly(it.meta) }
+        outcomes.forEach { entry ->
+            if (!landNeighbourOutcome(entry.meta)) return@forEach
+            runCatching { pcTransport.ackOutbox(pc, entry.id) }
+                .recoverCatching { pcTransport.ackOutbox(pc, entry.id) }
+        }
+        return things
+    }
+
+    /**
+     * Исход просьбы соседу вернулся домой — к своему объекту, тем же путём, что и срочный
+     * ответ (PC4). `false` — объекта просьбы перед человеком нет, и исход ждёт его дальше.
+     */
+    private fun landNeighbourOutcome(meta: Map<String, String>): Boolean {
+        val f = com.point.core.flow.PcResultFields
+        val outcome = f.outcomeOf(meta) ?: return false
+        val top = stack.lastOrNull()?.obj ?: return false
+
+        // Человек остаётся в своём контексте (PC4): исход по объекту A не всплывает поверх
+        // объекта B и поверх главного экрана, где объекта нет вовсе.
+        if (meta[com.point.core.flow.PcExecFields.HOME] != (top.metadata[com.point.core.flow.META_ORIGIN_ID] ?: top.id)) return false
+
+        // Понятое компьютером ложится в исходник (PC2).
+        val understood = meta.filterKeys { it.startsWith(f.UNDERSTOOD) }
+            .mapKeys { (k, _) -> k.removePrefix(f.UNDERSTOOD) }
+        if (understood.isNotEmpty()) landFindings(com.point.core.model.Findings(metadata = understood))
+
+        val standing = neighbourWord
+        neighbourWord = null
+
+        // Исход называет просьбу, к которой относится: «Напечатать на компьютере — …».
+        // Человек нажимал её минуты назад, и голая строка над объектом ему ничего не
+        // объясняет. Имя кладёт компьютер — то самое, что человек нажал на телефоне.
+        val about = meta[com.point.core.flow.PcExecFields.LABEL]?.takeIf { it.isNotBlank() }
+        fun aboutRequest(words: String) = about?.let { "$it — $words" } ?: words
+        when (outcome) {
+
+            // Отказ не исчезает в молчаливой цепочке.
+            is com.point.core.flow.PcActionOutcome.Failed ->
+                _ui.update { it.copy(message = aboutRequest(outcome.reason), messageOutcome = Outcome.FAILED) }
+
+            // Поздний «готово» говорит то же, что сказал бы срочный ответ той же просьбы:
+            // «Сохранить на компьютере — Сохранено: C:\…». Иначе один и тот же тап давал бы
+            // человеку разный продукт по секундомеру — уложился компьютер в отпущенные ему
+            // секунды, значит человек знает, где искать файл (PC3), не уложился (а системный
+            // диалог «Сохранить в:» перешагивает этот срок обычно, а не изредка) — не знает
+            // ничего, и отличить сохранение от отмены нечем.
+            //
+            // Молча гаснет только отмена человека: сделано ничего, и говорить не о чем
+            // (решение владельца 21.08.2026 — отмена человека не ошибка, #1131).
+            is com.point.core.flow.PcActionOutcome.Done -> {
+                val words = outcome.detail
+                    ?.takeIf { it.isNotBlank() && it != com.point.core.flow.PC_CANCELLED }
+                _ui.update { ui ->
+                    when {
+                        words != null ->
+                            ui.copy(message = aboutRequest(words), messageOutcome = Outcome.DONE)
+
+                        standing != null && ui.message == standing ->
+                            ui.copy(message = null, messageOutcome = Outcome.NONE)
+
+                        else -> ui
+                    }
+                }
+            }
+        }
+        return true
     }
 
     private suspend fun handleResult(result: ActionResult, bubble: Bubble) {
@@ -2809,6 +2993,13 @@ class FlowViewModel @Inject constructor(
             )
         }
         persistJourney()
+
+        // Объект встал перед человеком — и телефон смотрит, не ждёт ли его в очереди
+        // компьютера исход прежней просьбы соседу (#1073). Исход, чей объект был не перед
+        // человеком, остался в очереди неподтверждённым, и доехать он может только здесь;
+        // обычный срок между взглядами в очередь тут не годится — главный экран заглянул в
+        // неё секунду назад. Вход в находку новым объектом перед человеком не считается.
+        if (stack.size == 1) refreshFromPc(force = true)
         enrichInBackground(known)
         loadChildrenIfCollection(known)
         loadTextPreviewIfText(known)
@@ -3373,6 +3564,10 @@ class FlowViewModel @Inject constructor(
 private const val MAX_CLIP = 2000
 
 private const val OUTBOX_THROTTLE_MS = 30_000L
+
+/** Как часто и сколько раз телефон заглядывает в очередь компьютера, пока стоит слово соседа (#1073). */
+private const val NEIGHBOUR_CHECK_MS = 5_000L
+private const val NEIGHBOUR_CHECKS = 12
 
 private const val CIRCLE_SYNC_THROTTLE_MS = 5 * 60_000L
 
