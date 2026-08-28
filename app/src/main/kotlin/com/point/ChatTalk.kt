@@ -1,6 +1,8 @@
 package com.point
 
 import com.point.core.flow.AiChatResponder
+import com.point.core.flow.CurrentKnowledge
+import com.point.core.flow.MAX_CHAT_CONTENT
 import com.point.core.flow.ObjectStore
 import com.point.core.model.CapabilityId
 import com.point.core.model.ChatMessage
@@ -29,6 +31,9 @@ import java.io.File
 class ChatTalk @javax.inject.Inject constructor(
     private val responder: AiChatResponder,
     private val store: ObjectStore,
+
+    /** О чём идёт разговор: текущее знание объекта, а не исходный файл (#1138, #1241). */
+    private val knowledge: CurrentKnowledge,
 ) {
 
     /** Начало разговора: прежняя переписка о том же объекте продолжается, чужая — нет. */
@@ -61,15 +66,28 @@ class ChatTalk @javax.inject.Inject constructor(
             val title = actionTitle(target, chat.obj.state)
             if (title != null) return chat.copy(pending = false, offer = ChatOffer(target, title))
         }
+        // Содержимое объекта уходит модели вместе с вопросом (#780) — и добывается один раз
+        // на разговор (#1241): объект за разговор не меняется, а каждая реплика заново
+        // разбирала весь PDF и целиком поднимала прочтение ради одних и тех же первых
+        // символов. Спрашивается текущее знание объекта, а не исходный файл: прочитанный
+        // кадр и текстовый слой документа уже лежат в Graph.
+        val known = chat.content ?: knownTextOf(chat.obj)
+
         var failed = false
-        val reply = runCatching { responder.reply(chat.obj, history, message) }
+        val reply = runCatching { responder.reply(chat.obj, known.takeIf(String::isNotBlank), history, message) }
             .getOrElse {
                 if (it is kotlinx.coroutines.CancellationException) throw it
                 failed = true
                 "Не получилось ответить: ${it.message ?: "ошибка"}"
             }
-        return heard(chat, reply, failed)
+        return heard(chat.copy(content = known), reply, failed)
     }
+
+    /** Не добылось — разговор идёт без содержимого, а не срывается. */
+    private suspend fun knownTextOf(obj: PointObject): String =
+        runCatching { knowledge.textOf(obj, MAX_CHAT_CONTENT) }
+            .getOrElse { if (it is kotlinx.coroutines.CancellationException) throw it else null }
+            .orEmpty()
 
     /** Слово модели встало в переписку. */
     fun heard(chat: ChatState, text: String, failed: Boolean = false): ChatState = chat.copy(
