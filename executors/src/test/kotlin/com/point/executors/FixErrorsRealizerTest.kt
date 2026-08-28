@@ -1,6 +1,7 @@
 package com.point.executors
 
 import com.point.core.flow.AiReadiness
+import com.point.core.flow.FIX_FACTS_NOT_APPLIED
 import com.point.core.flow.FIX_TEXT_NOT_APPLIED
 import com.point.core.flow.GraphState
 import com.point.core.flow.LlmClient
@@ -158,6 +159,45 @@ class FixErrorsRealizerTest {
 
         assertEquals("вторая правка погасла на старой странице", right, stronger.findings?.metadata?.get(META_ENTITY_TRACK))
         assertTrue("человеку сказали, что править было нечего: ${stronger.message}", "не нашлось" !in stronger.message)
+    }
+
+    /**
+     * Тот же живой путь с самой обычной ошибкой длинного прогона цифр (#1032): OCR склеил
+     * лишнюю цифру, и 13-значная накладная Укрпошты стала 14-значной — накладной по форме
+     * перевозчика. Человек жмёт «Исправить сильнее», где модель видит сам снимок и возвращает
+     * верные 13 цифр. Правка выбрасывалась молча: «Ошибок не нашлось», а «Отследить
+     * отправление» продолжало уходить по номеру, которого не существует.
+     */
+    @Test
+    fun `правка лишней цифры в накладной ложится — слово-подпись стоит на странице рядом с числом`() = runTest {
+        val misread = "88069231028580"
+        val right = "8806923102858"
+        val page = temp.newFile().apply { writeText("Експрес-накладна № $misread") }
+        val parcel = photo(mapOf(META_ENTITY_TRACK to misread, META_OCR_TEXT_REF to page.absolutePath))
+
+        val done = FixErrorsStrongerRealizer(llm("1 = $right")).perform(parcel, null) as ActionResult.Done
+
+        assertEquals("«Отследить» осталось бы по несуществующему номеру", right, done.findings?.metadata?.get(META_ENTITY_TRACK))
+        assertTrue("человеку сказали, что править было нечего: ${done.message}", "не нашлось" !in done.message)
+    }
+
+    /**
+     * Отброшенная гейтом правка не исчезает молча (#1032, Конституция §13). Модель «исправила»
+     * дату в относительное слово — датой такое значение не бывает, и правка не ложится. Прежде
+     * человеку отвечали «Ошибок не нашлось» — приговором знанию, которое он как раз пришёл
+     * чинить, — и повторять попытку было незачем. У текста эта форма есть с #1023.
+     */
+    @Test
+    fun `правка предложена, но гейт её отверг — это срыв операции, а не «ошибок не нашлось»`() = runTest {
+        val dated = photo(mapOf(META_ENTITY_PREFIX + "date" to "ад! 01.12.2020"))
+
+        val result = fixer("1 = завтра").perform(dated, null)
+
+        assertTrue("отброшенная правка выдана за приговор знанию: $result", result is ActionResult.Failure)
+        val failure = result as ActionResult.Failure
+        assertTrue("повторить можно — срыв не окончательный", failure.recoverable)
+        assertTrue("«не нашлось» про правку, которую выбросили: ${failure.reason}", "не нашлось" !in failure.reason)
+        assertEquals(FIX_FACTS_NOT_APPLIED, failure.reason)
     }
 
     @Test

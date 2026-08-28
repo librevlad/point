@@ -131,6 +131,19 @@ fun looksLikeTrack(value: String, text: String = ""): Boolean {
     return key.isNotEmpty() && trackHits(text).any { trackKey(it.value) == key }
 }
 
+/**
+ * Стоит ли число на странице со словом-подписью рядом (#1032).
+ *
+ * Это то, что страница даёт **месту**, а не самому числу: слово рядом одинаково верно для
+ * любого прочтения этого места, и правка его наследует ([fixFits]). Форма перевозчика —
+ * свойство самого числа: 14 цифр накладная по себе, но с исправленными 13 цифрами этой
+ * формой не поделиться.
+ */
+internal fun markedTrackOnPage(value: String, text: String): Boolean {
+    val key = trackKey(value.trim())
+    return key.isNotEmpty() && trackHits(text).any { trackKey(it.value) == key && markerNear(text, it.at) }
+}
+
 const val META_ENTITY_SERIAL = META_ENTITY_PREFIX + "serial"
 
 /**

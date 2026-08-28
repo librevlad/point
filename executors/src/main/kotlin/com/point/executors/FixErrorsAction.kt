@@ -142,13 +142,24 @@ internal suspend fun fix(llm: LlmClient, input: PointObject, withObject: Boolean
             // слово-подпись накладной стоит в прочитанном тексте. Текст объекта на этом пути
             // не правится — правится значение, — поэтому на странице стоит прежнее прочтение,
             // и заземление исправленное наследует от него (`fixFits`).
-            val fixes = parseFixes(answer, facts, entitySourceText(input))
+            val fixed = parseFixes(answer, facts, entitySourceText(input))
 
-            // Знание об объекте, а не новый объект (ADR-0001 §18): человек остаётся на месте.
-            ActionResult.Done(
-                fixedMessage(fixes.size),
-                Findings(metadata = applyFixes(input.metadata, fixes)).takeIf { fixes.isNotEmpty() },
-            )
+            when {
+
+                // Правки были, но ни одна не легла — срыв операции, а не знание «ошибок нет»
+                // (Конституция §13, #1032): «не нашлось» говорится только там, где не нашлось.
+                // Прежде отброшенная гейтом правка исчезала молча, и человек читал приговор
+                // про то самое значение, которое пришёл чинить.
+                fixed.fixes.isEmpty() && fixed.missed.isNotEmpty() ->
+                    ActionResult.Failure(fixedMessage(fixed), recoverable = true)
+
+                // Знание об объекте, а не новый объект (ADR-0001 §18): человек остаётся на месте.
+                else -> ActionResult.Done(
+                    fixedMessage(fixed),
+                    Findings(metadata = applyFixes(input.metadata, fixed.fixes))
+                        .takeIf { fixed.fixes.isNotEmpty() },
+                )
+            }
         }.getOrElse {
             ActionResult.Failure(it.message ?: "Не удалось проверить знание", recoverable = true)
         }

@@ -57,16 +57,27 @@ fun fixPrompt(facts: List<FixableFact>, withObject: Boolean): String = buildStri
 }
 
 /**
- * Разбор ответа: номер → исправленное значение. Чужие номера и мусор молчат.
+ * Правки значений: [fixes] — те, что легли, [missed] — предложенные моделью, но отброшенные
+ * гейтом формы. Вторые не молчат: «предложено, но не легло» — исход операции, а не знание
+ * «ошибок нет» (Конституция §13). У текста эта форма уже была ([FixedText.missed], #1023),
+ * у значений её не было — отброшенная правка исчезала, и человеку отвечали «Ошибок не
+ * нашлось» про то самое значение, которое он пришёл чинить (#1032).
+ */
+data class FixedFacts(val fixes: Map<String, String>, val missed: List<String> = emptyList())
+
+/**
+ * Разбор ответа: номер → исправленное значение. Чужие номера и мусор молчат — там модель
+ * ничего и не предложила; отброшенное гейтом — не молчит.
  *
  * [readText] — всё, что Point прочитал сам: гейт судит исправленное той же меркой, что и
  * найденное впервые (#666, #1032), и слово-подпись накладной ищет там же, на странице. Текст
  * объекта на этом пути не правится, поэтому на странице стоит прежнее прочтение, а не
  * исправленное: заземление наследуется от него (`fixFits`).
  */
-fun parseFixes(answer: String, facts: List<FixableFact>, readText: String = ""): Map<String, String> {
+fun parseFixes(answer: String, facts: List<FixableFact>, readText: String = ""): FixedFacts {
     val byIndex = facts.withIndex().associate { (i, f) -> i + 1 to f }
     val fixes = LinkedHashMap<String, String>()
+    val missed = ArrayList<String>()
     answer.lineSequence().forEach { raw ->
         val line = raw.trim()
         val eq = line.indexOf('=')
@@ -75,10 +86,13 @@ fun parseFixes(answer: String, facts: List<FixableFact>, readText: String = ""):
         val fact = byIndex[n] ?: return@forEach
         val fixed = line.substring(eq + 1).trim()
         if (fixed.isEmpty() || normConsensus(fixed) == normConsensus(fact.value)) return@forEach
-        if (!fixFits(fact.key, listOf(fact.value) + fact.earlier, fixed, readText)) return@forEach
+        if (!fixFits(fact.key, listOf(fact.value) + fact.earlier, fixed, readText)) {
+            missed += fixed
+            return@forEach
+        }
         fixes[fact.key] = fixed
     }
-    return fixes
+    return FixedFacts(fixes, missed)
 }
 
 /**
@@ -100,11 +114,23 @@ fun applyFixes(metadata: Map<String, String>, fixes: Map<String, String>): Map<S
     }
 }
 
-/** Итог одной строкой (решение владельца), без перечисления полей. */
-fun fixedMessage(count: Int): String = when {
-    count <= 0 -> "Ошибок не нашлось — знание оставлено как было"
-    else -> "Исправлено: $count"
+/**
+ * Итог одной строкой (решение владельца), без перечисления полей. Отброшенное гейтом названо
+ * числом: «ошибок не нашлось» говорится только там, где модель ничего и не предложила (#1032).
+ */
+fun fixedMessage(fixed: FixedFacts): String = when {
+    fixed.fixes.isEmpty() && fixed.missed.isEmpty() -> "Ошибок не нашлось — знание оставлено как было"
+    fixed.fixes.isEmpty() -> FIX_FACTS_NOT_APPLIED
+    fixed.missed.isEmpty() -> "Исправлено: ${fixed.fixes.size}"
+    else -> "Исправлено: ${fixed.fixes.size}; ещё ${fixed.missed.size} применить не удалось"
 }
+
+/**
+ * Правки предложены, но ни одна не легла: исправленное не годится этому виду знания по форме.
+ * Это срыв операции, а не знание «ошибок нет» — повторить можно. Тот же ответ, что у текста
+ * ([FIX_TEXT_NOT_APPLIED], #1023): молчаливых цепочек в Point нет (Конституция §13).
+ */
+const val FIX_FACTS_NOT_APPLIED = "Проверил знание, но применить правки не удалось — знание оставлено как было"
 
 /**
  * Правка самого текста (#1023): у текстового объекта знание — это его текст, и первая ступень

@@ -62,8 +62,8 @@ class NumberWithoutRoleTest {
     @Test fun `исправление ошибок судит накладную той же меркой, что и находка`() {
         val facts = listOf(FixableFact(META_ENTITY_TRACK, "20 4514 9154 9395"))
 
-        assertTrue("14 → 13 цифр без подписи стало накладной", parseFixes("1 = 2045149154939", facts).isEmpty())
-        assertEquals("20 4514 9154 9396", parseFixes("1 = 20 4514 9154 9396", facts)[META_ENTITY_TRACK])
+        assertTrue("14 → 13 цифр без подписи стало накладной", parseFixes("1 = 2045149154939", facts).fixes.isEmpty())
+        assertEquals("20 4514 9154 9396", parseFixes("1 = 20 4514 9154 9396", facts).fixes[META_ENTITY_TRACK])
 
         // Страница на этом пути — старая: текст объекта не правится, там стоит прежнее
         // прочтение. Заземление исправленное наследует от него — иначе 13-значную накладную,
@@ -71,11 +71,11 @@ class NumberWithoutRoleTest {
         val marked = listOf(FixableFact(META_ENTITY_TRACK, idNumber))
         assertEquals(
             "8806923102859",
-            parseFixes("1 = 8806923102859", marked, "Номер накладної $idNumber від 12.07")[META_ENTITY_TRACK],
+            parseFixes("1 = 8806923102859", marked, "Номер накладної $idNumber від 12.07").fixes[META_ENTITY_TRACK],
         )
         assertTrue(
             "13 цифр без слова рядом стали накладной за счёт правки",
-            parseFixes("1 = 8806923102859", marked, "Рахунок $idNumber сплачено").isEmpty(),
+            parseFixes("1 = 8806923102859", marked, "Рахунок $idNumber сплачено").fixes.isEmpty(),
         )
     }
 
@@ -87,22 +87,32 @@ class NumberWithoutRoleTest {
         val page = "Експрес-накладна № $idNumber"
         val once = listOf(FixableFact(META_ENTITY_TRACK, "8806923102859", earlier = listOf(idNumber)))
 
-        assertEquals("8806923102851", parseFixes("1 = 8806923102851", once, page)[META_ENTITY_TRACK])
+        assertEquals("8806923102851", parseFixes("1 = 8806923102851", once, page).fixes[META_ENTITY_TRACK])
 
         // Тот же провал у числа, которое стоит на странице не теми пробелами, что в значении:
         // заземление ищет число на странице целиком, а не дословным совпадением.
         val spaced = listOf(FixableFact(META_ENTITY_TRACK, idNumber))
         assertEquals(
             "8806923102859",
-            parseFixes("1 = 8806923102859", spaced, "Експрес-накладна № 880 692 310 2858")[META_ENTITY_TRACK],
+            parseFixes("1 = 8806923102859", spaced, "Експрес-накладна № 880 692 310 2858").fixes[META_ENTITY_TRACK],
         )
 
-        // Прочтение, которому страница не нужна вовсе (14 цифр — накладная по себе),
-        // заземления не передаёт: 13 цифр без слова рядом накладной не станут и за счёт следа.
-        val carrier = listOf(FixableFact(META_ENTITY_TRACK, "20 4514 9154 9395", earlier = listOf("20 4514 9154 9394")))
+        // Самая обычная ошибка длинного прогона цифр: OCR склеил лишнюю цифру, и 13-значная
+        // накладная Укрпошты стала 14-значной — накладной по форме перевозчика. Верных 13 цифр
+        // на странице нет, но слово-подпись стоит рядом с числом, и правка обязана лечь.
+        val misread = listOf(FixableFact(META_ENTITY_TRACK, "88069231028580"))
+        assertEquals(
+            idNumber,
+            parseFixes("1 = $idNumber", misread, "Експрес-накладна № 88069231028580").fixes[META_ENTITY_TRACK],
+        )
+
+        // Наследуется только то, что страница дала месту: слово-подпись рядом верно для любого
+        // прочтения этого места. Форма перевозчика принадлежит самому числу, и поделиться ею с
+        // другим числом нельзя — на странице без слова 13 цифр накладной не станут.
+        val carrier = listOf(FixableFact(META_ENTITY_TRACK, "20 4514 9154 9395"))
         assertTrue(
-            "13 цифр без слова рядом стали накладной за счёт следа",
-            parseFixes("1 = 2045149154939", carrier, "Накладна 20 4514 9154 9394").isEmpty(),
+            "13 цифр стали накладной за счёт формы прежнего числа, а не слова на странице",
+            parseFixes("1 = 2045149154939", carrier, "Рахунок 20 4514 9154 9395 сплачено").fixes.isEmpty(),
         )
     }
 
