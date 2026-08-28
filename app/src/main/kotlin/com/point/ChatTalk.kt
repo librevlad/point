@@ -1,6 +1,8 @@
 package com.point
 
 import com.point.core.flow.AiChatResponder
+import com.point.core.flow.CurrentKnowledge
+import com.point.core.flow.MAX_CHAT_CONTENT
 import com.point.core.flow.ObjectStore
 import com.point.core.model.CapabilityId
 import com.point.core.model.ChatMessage
@@ -31,7 +33,7 @@ class ChatTalk @javax.inject.Inject constructor(
     private val store: ObjectStore,
 
     /** О чём идёт разговор: текущее знание объекта, а не исходный файл (#1138, #1241). */
-    private val knowledge: com.point.core.flow.CurrentKnowledge,
+    private val knowledge: CurrentKnowledge,
 ) {
 
     /** Начало разговора: прежняя переписка о том же объекте продолжается, чужая — нет. */
@@ -83,7 +85,7 @@ class ChatTalk @javax.inject.Inject constructor(
 
     /** Не добылось — разговор идёт без содержимого, а не срывается. */
     private suspend fun knownTextOf(obj: PointObject): String =
-        runCatching { knowledge.textOf(obj, com.point.core.flow.MAX_CHAT_CONTENT) }
+        runCatching { knowledge.textOf(obj, MAX_CHAT_CONTENT) }
             .getOrElse { if (it is kotlinx.coroutines.CancellationException) throw it else null }
             .orEmpty()
 

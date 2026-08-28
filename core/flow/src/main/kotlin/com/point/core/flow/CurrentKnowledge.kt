@@ -1,5 +1,6 @@
 package com.point.core.flow
 
+import com.point.core.model.Feature
 import com.point.core.model.ObjectKind
 import com.point.core.model.PointObject
 import java.io.File
@@ -54,7 +55,7 @@ class GraphKnowledge(
             // `IS_IMAGE_PDF` — найденный ответ, а не «ещё не смотрели». Прежде каждый вопрос
             // («Перевести», «В Word», реплика разговора) гонял все страницы ради заведомой
             // пустоты — секунды за уже отвеченное.
-            ObjectKind.PDF -> if (obj.state.has(com.point.core.model.Feature.IS_IMAGE_PDF)) {
+            ObjectKind.PDF -> if (obj.state.has(Feature.IS_IMAGE_PDF)) {
                 null
             } else {
                 runCatching {
