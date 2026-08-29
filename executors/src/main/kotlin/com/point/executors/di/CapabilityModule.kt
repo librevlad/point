@@ -121,6 +121,7 @@ import com.point.executors.VCardCapability
 import com.point.executors.VCardRealizer
 import com.point.core.flow.ObjectClassifier
 import com.point.core.flow.ObjectStore
+import com.point.executors.OpenCvStraightFrame
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
@@ -320,6 +321,15 @@ abstract class CapabilityModule {
             PageScanRealizer(ScanCapability.ID, "scan", store),
             PageScanRealizer(ScanPlusCapability.ID, "scan-plus", store),
         )
+
+        /**
+         * Кадр для второго захода чтения (#1041): обработка снимков живёт здесь, а понимание
+         * кадра — в исследовании, и встречаются они на шве. @Provides, а не @Binds: тот же
+         * урок, что с остальным, что трогает OpenCV.
+         */
+        @Provides
+        fun straightFrame(store: ObjectStore): com.point.core.flow.StraightFrame =
+            OpenCvStraightFrame(store)
 
         @Provides
         fun aiChatResponder(llm: com.point.core.flow.LlmClient): AiChatResponder = AiChatResponderImpl(llm)
