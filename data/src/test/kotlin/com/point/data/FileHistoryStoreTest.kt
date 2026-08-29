@@ -5,8 +5,12 @@ import com.point.core.flow.META_OCR_ATOMS_REF
 import com.point.core.flow.META_OCR_TEXT_REF
 import com.point.core.flow.META_SEMANTIC_SUMMARY
 import com.point.core.flow.META_SIZE
+import com.point.core.flow.META_STRENGTH_SUFFIX
 import com.point.core.flow.ObjectClassifier
 import com.point.core.flow.InvestigationState
+import com.point.core.flow.READING_STRONG
+import com.point.core.flow.REFRESHABLE_KNOWLEDGE
+import com.point.core.flow.mergeKnowledge
 import com.point.core.flow.withInvestigation
 import com.point.core.model.CapabilityId
 import com.point.core.model.Feature
@@ -160,6 +164,42 @@ class FileHistoryStoreTest {
         assertTrue("сущность потеряна вместе с ним", Feature.HAS_PHONE in reopened.state.features)
         assertNull("несуществующий путь к улике приехал в новый прогон", reopened.metadata[META_OCR_TEXT_REF])
         assertNull("несуществующий путь к слою слов приехал в новый прогон", reopened.metadata[META_OCR_ATOMS_REF])
+    }
+
+    /**
+     * #1242: улика, потерявшая свой файл, не воскресает — а пометка силы при ней воскресала.
+     * Объект возвращался из «Недавнего» с «здесь прочитано сильнее» при пустом месте, и первое
+     * же его чтение уходило в «или»: текста у объекта не оставалось вовсе, и снять пометку было
+     * нечем.
+     */
+    @Test
+    fun `пометка силы не переживает прочтение, к которому относится (#1242)`() = runTest {
+        val strengthKey = META_OCR_TEXT_REF + META_STRENGTH_SUFFIX
+        store.record(textObject("a", "текст", "скан.txt"))
+        store.update(
+            textObject("a", "текст", "скан.txt").copy(
+                state = ObjectState(ObjectKind.TEXT, setOf(Feature.HAS_TEXT)),
+                metadata = mapOf(
+                    "name" to "скан.txt",
+                    META_OCR_TEXT_REF to "/scratch/сильное.txt",
+                    strengthKey to READING_STRONG,
+                ),
+            ),
+        )
+
+        val reopened = store.open("a")!!
+
+        assertNull("прочтение воскресло висящим путём", reopened.metadata[META_OCR_TEXT_REF])
+        assertNull("пометка силы пережила своё прочтение", reopened.metadata[strengthKey])
+
+        // Первое чтение объекта после возврата обязано стать его текстом, а не расхождением.
+        val read = "/scratch/новое.txt"
+        val merged = mergeKnowledge(
+            reopened.metadata,
+            mapOf(META_OCR_TEXT_REF to read),
+            refreshable = REFRESHABLE_KNOWLEDGE,
+        )
+        assertEquals("после «Недавнего» у объекта нет прочтения вовсе", read, merged[META_OCR_TEXT_REF])
     }
 
     @Test

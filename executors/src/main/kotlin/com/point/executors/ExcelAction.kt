@@ -43,6 +43,7 @@ import com.point.core.flow.Realizer
 import com.point.core.flow.RecropQuestion
 import com.point.core.flow.SheetPlan
 import com.point.core.flow.SpreadsheetWriter
+import com.point.core.flow.TABLE_READ_BUDGET_MS
 import com.point.core.flow.collectionOrder
 import com.point.core.flow.coveredClaim
 import com.point.core.flow.inCollectionOrder
@@ -117,6 +118,10 @@ class ExcelRealizer(
     private val store: ObjectStore,
     private val known: com.point.core.flow.CurrentKnowledge,
     private val recropTimeoutMs: Long,
+
+    /** Сколько времени заход читает страницы набора и когда он их читает (#1243). */
+    private val pagesBudgetMs: Long = TABLE_READ_BUDGET_MS,
+    private val clock: () -> Long = System::currentTimeMillis,
 ) : Realizer {
 
     @Inject constructor(
@@ -195,6 +200,11 @@ class ExcelRealizer(
      * на её месте в таблице стоит помеченная строка. Не прочиталась ни одна — отказ, а не
      * пустой файл. Страницы набора — снимки, PDF и тексты: то же, что «В Excel» читает и
      * поодиночке.
+     *
+     * Заход кончается сам — по числу страниц или по своему времени (#1243), — а не тем, что
+     * его отменяет потолок действия: отменённое действие не отдаёт ничего, и набор пропадал
+     * целиком вместе с уже оплаченной квотой. Сколько минут уйдёт на страницу, решают чужие
+     * бесплатные провайдеры, поэтому предела страниц мало: время считается тоже.
      */
     private suspend fun pagesToSheet(input: PointObject): ActionResult {
         val pages = inCollectionOrder(
@@ -213,7 +223,17 @@ class ExcelRealizer(
         val read = pages.take(MAX_TABLE_PAGES)
         reportStage(pagesAheadStage(read.size, pages.size))
 
-        val reads = read.mapIndexed { i, page -> onPage(i + 1, pages.size) { readPage(page) } }
+        // Следующая страница берётся, только если по уже прочитанным видно, что она успеет
+        // (#1243). Не «пока время не вышло»: страница, начатая на последней минуте, вынесла бы
+        // заход за потолок действия — и человек снова остался бы без файла. Первая читается
+        // всегда: без неё отдавать нечего.
+        val startedMs = clock()
+        val reads = mutableListOf<PageRead>()
+        for ((i, page) in read.withIndex()) {
+            val spentMs = clock() - startedMs
+            if (i > 0 && spentMs + spentMs / i > pagesBudgetMs) break
+            reads += onPage(i + 1, pages.size) { readPage(page) }
+        }
         val refused = reads.filterIsInstance<PageRead.Refused>()
         if (refused.size == reads.size) {
             val reason = refused.first().reason
@@ -224,14 +244,16 @@ class ExcelRealizer(
         }
 
         reportStage("Собираю файл")
-        val beyond = pages.size - read.size
+        val beyond = pages.size - reads.size
         val plan = stitchSheets(
             reads.mapIndexed { i, page ->
                 when (page) {
                     is PageRead.Table -> page.plan
                     is PageRead.Refused -> pageGap(i + 1, pages.size)
                 }
-            } + listOfNotNull(pagesBeyondLimit(read.size + 1, pages.size).takeIf { beyond > 0 }),
+            } + listOfNotNull(
+                pagesNotRead(reads.size + 1, pages.size, ranOutOfTime = reads.size < read.size).takeIf { beyond > 0 },
+            ),
         )
         val unread = refused.size + beyond
         val ref = writer.write(plan)
@@ -264,26 +286,35 @@ class ExcelRealizer(
     )
 
     /**
-     * Хвост за пределом захода (#1243): эти страницы не читали, и файл говорит об этом сам.
+     * Хвост, до которого заход не дошёл (#1243): эти страницы не читали, и файл говорит об
+     * этом сам — вместе с тем, почему.
      *
      * Раньше набор, не уложившийся в потолок действия, пропадал целиком — вместе с уже
      * оплаченными облачными чтениями. Теперь прочитанное доходит до человека файлом, а
      * непрочитанное названо одной строкой: у набора в пятьсот снимков четыре сотни
      * одинаковых предупреждений — не забота, а мусор в его таблице. Остаток он запустит
-     * отдельным набором.
+     * отдельным набором — и по этой строке видит, что делать: ждать меньше страниц или
+     * повторить те же, когда провайдеры отвечают быстрее.
      */
-    private fun pagesBeyondLimit(from: Int, total: Int) = SheetPlan(
-        rows = listOf(
-            listOf(
-                if (from == total) {
-                    "⚠ Страница $total не читалась — за один заход читается не больше $MAX_TABLE_PAGES"
-                } else {
-                    "⚠ Страницы $from–$total не читались — за один заход читается не больше $MAX_TABLE_PAGES"
-                },
+    private fun pagesNotRead(from: Int, total: Int, ranOutOfTime: Boolean): SheetPlan {
+        val why = if (ranOutOfTime) {
+            "за один заход чтение идёт не дольше ${pagesBudgetMs / 60_000} минут"
+        } else {
+            "за один заход читается не больше $MAX_TABLE_PAGES"
+        }
+        return SheetPlan(
+            rows = listOf(
+                listOf(
+                    if (from == total) {
+                        "⚠ Страница $total не читалась — $why"
+                    } else {
+                        "⚠ Страницы $from–$total не читались — $why"
+                    },
+                ),
             ),
-        ),
-        headerRows = emptySet(),
-    )
+            headerRows = emptySet(),
+        )
+    }
 
     /** Стадии чтения страницы называют её номер: «Страница 2 из 3 · Читаю таблицу». */
     private suspend fun <T> onPage(n: Int, total: Int, read: suspend () -> T): T {

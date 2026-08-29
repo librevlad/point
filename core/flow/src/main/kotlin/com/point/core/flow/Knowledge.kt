@@ -37,6 +37,21 @@ const val READING_STRONG = "strong"
 fun readStrongly(metadata: Map<String, String>, key: String): Boolean =
     metadata[key + META_STRENGTH_SUFFIX] == READING_STRONG
 
+/**
+ * Знание без названных ключей — и без пометок при них (#1242).
+ *
+ * У прочтения есть пометки: сила, расхождение, кто читал. Уносить ключ, оставляя их, нельзя.
+ * Осиротевшая `ocr.text.ref.strength` говорит слиянию «здесь прочитано сильнее», а текста
+ * при ней нет: первое же прочтение объекта уходит в «или», и у страницы не остаётся текста
+ * вовсе. Снять такую пометку потом нечем — аннотация при уже существующем значении не
+ * переписывается ([mergeAnnotation]).
+ *
+ * Пользуются этим все, кто отдаёт знание дальше урезанным: кадр — родителю, журнал —
+ * следующему запуску.
+ */
+fun withoutKnowledge(metadata: Map<String, String>, keys: Set<String>): Map<String, String> =
+    metadata.filterKeys { key -> keys.none { it == key || key.startsWith("$it.") } }
+
 fun carryKnowledge(
     known: PointObject,
     produced: PointObject,
@@ -130,7 +145,11 @@ fun mergeKnowledge(
             // Позднее слабое прочтение не замещает сильное (#1242). Оно и не пропадает:
             // расхождение остаётся «или» — тем же путём, каким слияние хранит всякое второе
             // прочтение, — а главным остаётся то, за которым человек пошёл сам.
-            key in refreshable && readStrongly(merged, key) && !readStrongly(fresh, key) -> {
+            //
+            // Защищать нечего, пока сильного прочтения нет: пометка силы, дошедшая до объекта
+            // без своего текста, не смеет отправить в «или» первое же его прочтение и оставить
+            // страницу вовсе без текста.
+            key in refreshable && merged[key] != null && readStrongly(merged, key) && !readStrongly(fresh, key) -> {
                 val kept = (alternativesOf(merged, key) + value)
                     .distinct()
                     .filter { it != merged[key] }

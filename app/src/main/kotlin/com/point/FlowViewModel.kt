@@ -3,7 +3,7 @@ package com.point
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.ensureActive
-import com.point.core.flow.ANSWERED_STATES
+import com.point.core.flow.ACTION_CEILING_MS
 import com.point.core.flow.AppLauncher
 import com.point.core.flow.AppTarget
 import com.point.core.flow.CapabilityRegistry
@@ -265,10 +265,20 @@ class FlowViewModel @Inject constructor(
     private fun questionsAnsweredFor(objectId: String): Flow<CapabilityId> =
         answeredElsewhere.filter { it.first == objectId }.map { it.second }
 
-    /** Вопросы, которые это знание закрывает ответом, — «не нашлось» такой же ответ (#669). */
+    /**
+     * Вопросы, на которые это знание ответило находкой (#1242).
+     *
+     * Прерывать идущее чтение вправе только ответ сильнее — найденное. «Смотрели, не нашлось»
+     * ответ тоже (#669), и заново вопрос из-за него не задают, но силы остановить чужого
+     * читателя у него нет: облако вернуло пустой лист, а Тессеракт — база OCR проекта — читал
+     * тот же снимок и мог найти текст. Прежде такое «не нашлось» рубило его на полуслове, и
+     * найденное им выбрасывалось целиком; у объекта оставалось `not_found` от того, кто видит
+     * слабее. Ровно об этом говорит и сам `noTextFound`: пустой ответ одного читателя не
+     * закрывает вопрос за тех, кто видит сильнее.
+     */
     private fun answeredQuestionsOf(metadata: Map<String, String>): List<CapabilityId> = metadata.keys
         .mapNotNull(::capabilityOfStateKey)
-        .filter { investigationStateOf(metadata, it) in ANSWERED_STATES }
+        .filter { investigationStateOf(metadata, it) == com.point.core.flow.InvestigationState.FOUND }
 
     private var pendingBubble: Bubble? = null
 
@@ -3335,6 +3345,11 @@ class FlowViewModel @Inject constructor(
      * ([REFRESHABLE_META]) — остаётся у него. Иначе исправленный текст выделения вставал
      * прочтением родителя, и страница теряла своё: знание об объекте подменялось знанием
      * о его части.
+     *
+     * Остаётся вместе с пометками при нём (`withoutKnowledge`, #1242): «Скан» кладёт кадр
+     * поверх снимка, и «Прочитать сильнее» на скане отправляло наверх одну голую пометку
+     * силы. Снимок оставался с «здесь прочитано сильнее» без текста — и его собственное
+     * чтение уходило в «или», не оставляя странице текста вовсе.
      */
     private fun landFindings(findings: com.point.core.model.Findings) {
         val update = EnrichmentUpdate(
@@ -3356,7 +3371,12 @@ class FlowViewModel @Inject constructor(
         }
         top.obj.sourceObjects.firstOrNull()
             ?.let { parentId -> stack.lastOrNull { it.obj.id == parentId }?.obj }
-            ?.let { parent -> applyEnrichment(parent, update.copy(metadata = update.metadata - REFRESHABLE_META)) }
+            ?.let { parent ->
+                applyEnrichment(
+                    parent,
+                    update.copy(metadata = com.point.core.flow.withoutKnowledge(update.metadata, REFRESHABLE_META)),
+                )
+            }
 
         // Карточка «Недавнего» несёт факты объекта: правка человека обязана дойти и до неё
         // сейчас — фоновое обогащение могло уже завершиться и историю не перепишет.
@@ -3563,14 +3583,6 @@ class FlowViewModel @Inject constructor(
 
         /** Как телефон называет себя в происхождении знания (#1127). */
         const val PHONE_EXECUTOR = "phone"
-
-        /**
-         * Предел одного действия (#1069): дольше — честный отказ, а не вечное «Идёт».
-         *
-         * Щедрый нарочно: таблица на эмуляторе строится минутами, облачный скан — тоже,
-         * и предел должен резать только зависание, а не работу.
-         */
-        const val ACTION_CEILING_MS = 10L * 60 * 1000
 
         /**
          * Стадия суда, который ждёт чтения (#1060): человеку говорится, чего именно ждут.

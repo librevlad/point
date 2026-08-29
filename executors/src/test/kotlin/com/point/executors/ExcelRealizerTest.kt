@@ -8,9 +8,12 @@ import com.point.core.flow.CollectionContent
 import com.point.core.flow.CropEvidence
 import com.point.core.flow.CropPurpose
 import com.point.core.flow.EvidenceCropper
+import com.point.core.flow.ACTION_CEILING_MS
 import com.point.core.flow.EvidenceImage
 import com.point.core.flow.LlmClient
 import com.point.core.flow.MAX_TABLE_PAGES
+import com.point.core.flow.RECROP_TIMEOUT_MS
+import com.point.core.flow.TABLE_READ_BUDGET_MS
 import com.point.core.flow.META_COLLECTION_ORDER
 import com.point.core.flow.META_OCR_ATOMS_REF
 import com.point.core.flow.META_TABLE_PAGES
@@ -813,6 +816,48 @@ class ExcelRealizerTest {
         assertFalse(
             "человеку назван предел, до которого ему далеко: ${heard.first()}",
             "$MAX_TABLE_PAGES" in heard.first(),
+        )
+    }
+
+    /**
+     * #1243, решение владельца: «при пределе/обрыве — честная остановка с частичным файлом».
+     *
+     * Сколько минут уйдёт на страницу, решают чужие бесплатные провайдеры, а не Point: предела
+     * страниц мало. Заход, читающий по минуте с четвертью на страницу, упирался в потолок
+     * действия — а отменённое действие не отдаёт ничего: файла нет, квота на уже прочитанные
+     * страницы потрачена. Заход обязан кончиться сам и отдать прочитанное.
+     */
+    @Test
+    fun `медленный набор кончается сам внутри потолка действия и отдаёт прочитанное (#1243)`() = runTest {
+        pages = (1..MAX_TABLE_PAGES).map { page("IMG_$it.jpg") }
+        var spentMs = 0L
+        val perPageMs = ACTION_CEILING_MS / 8
+        val slow = object : LlmClient {
+            override suspend fun run(obj: PointObject, prompt: String): ResultObject {
+                spentMs += perPageMs
+                return answerOf("""[["Товар"],["Гречка"]]""")
+            }
+        }
+
+        val result = ExcelRealizer(
+            listOf(slow), writer, noCrops, scratch, testKnowledge(),
+            recropTimeoutMs = RECROP_TIMEOUT_MS, clock = { spentMs },
+        ).perform(set)
+
+        assertTrue("прочитанные страницы пропали вместе с файлом", result is ActionResult.Success)
+        assertTrue("заход вышел за потолок действия: $spentMs мс", spentMs < ACTION_CEILING_MS)
+        val unread = (result as ActionResult.Success).result.metadata[META_TABLE_PAGES_UNREAD]?.toInt() ?: 0
+        assertTrue("заход не остановился сам — читал все страницы подряд", unread > 0)
+        val readPages = pages.size - unread
+        assertTrue("не прочитано ни одной страницы", readPages > 0)
+        val tail = lastRows!!.last().single()
+        assertTrue(
+            "страницы, до которых заход не дошёл, пропали из файла молча: $tail",
+            tail.contains('⚠') && tail.contains("${readPages + 1}–${pages.size}"),
+        )
+        assertTrue(
+            "человеку не сказано, почему заход остановился: $tail",
+            "${TABLE_READ_BUDGET_MS / 60_000}" in tail,
         )
     }
 

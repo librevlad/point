@@ -145,6 +145,39 @@ class MergeKnowledgeTest {
         assertTrue("сила прочтения не записана", readStrongly(merged, META_OCR_TEXT_REF))
     }
 
+    /**
+     * #1242: пометка силы доезжала до объекта без самого прочтения — из кадра-родителя, из
+     * записи «Недавнего». Защищать было нечего, а первое же чтение объекта она отправляла в
+     * «или»: у страницы не оставалось текста вовсе.
+     */
+    @Test
+    fun `пометка силы без прочтения не запирает первое чтение объекта (#1242)`() {
+        val orphan = mapOf(META_OCR_TEXT_REF + META_STRENGTH_SUFFIX to READING_STRONG)
+
+        val merged = mergeKnowledge(
+            orphan,
+            mapOf(META_OCR_TEXT_REF to offlineText),
+            refreshable = setOf(META_OCR_TEXT_REF),
+        )
+
+        assertEquals("у объекта не осталось прочтения вовсе", offlineText, merged[META_OCR_TEXT_REF])
+        assertEquals(emptyList<String>(), alternativesOf(merged, META_OCR_TEXT_REF))
+    }
+
+    /** Ключ знания уходит вместе с пометками при нём — сиротам взяться неоткуда (#1242). */
+    @Test
+    fun `знание уносится с пометками при нём, а не одними значениями (#1242)`() {
+        val known = mapOf(
+            META_OCR_TEXT_REF to strongText,
+            META_OCR_TEXT_REF + META_STRENGTH_SUFFIX to READING_STRONG,
+            phone to "+380671234567",
+        )
+
+        val left = withoutKnowledge(known, setOf(META_OCR_TEXT_REF))
+
+        assertEquals(mapOf(phone to "+380671234567"), left)
+    }
+
     @Test
     fun `сила прочтения — не находка и не строка на экран (#1242)`() {
         assertTrue(isAnnotationKey(META_OCR_TEXT_REF + META_STRENGTH_SUFFIX))

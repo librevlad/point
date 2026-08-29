@@ -9,6 +9,7 @@ import com.point.core.flow.META_OCR_TEXT_REF
 import com.point.core.flow.META_SIZE
 import com.point.core.flow.ObjectClassifier
 import com.point.core.flow.knowingAddress
+import com.point.core.flow.withoutKnowledge
 import com.point.core.model.Feature
 import com.point.core.model.HistoryEntry
 import com.point.core.model.ObjectKind
@@ -77,14 +78,16 @@ class FileHistoryStore @Inject constructor(
      * подобные) — исключение: это путь к scratch-файлу, которого после flow не станет
      * (ObjectStore.clear()). Копируем содержимое рядом с самим объектом и переписываем путь на
      * постоянный; источника нет — ключ не переживает запись: висящий путь хуже честно забытого
-     * факта.
+     * факта. Уходит он вместе с пометками при нём (#1242): пометка силы, пережившая свой текст,
+     * говорит слиянию «здесь прочитано сильнее» при пустом месте, и следующее чтение объекта
+     * уходит в «или».
      */
     private fun persistedMetadata(id: String, metadata: Map<String, String>): Map<String, String> =
         REF_KEYS.fold(metadata) { acc, key ->
             val value = acc[key]
             if (value.isNullOrBlank()) return@fold acc
             val copied = copyEvidence(id, key, value)
-            if (copied != null) acc + (key to copied) else acc - key
+            if (copied != null) acc + (key to copied) else withoutKnowledge(acc, setOf(key))
         }
 
     /**
@@ -138,11 +141,13 @@ class FileHistoryStore @Inject constructor(
     /**
      * Улики, потерявшие свой файл — записанные до #687 (путь никогда не копировался) или
      * переживающие сбой копирования, — не воскресают: висящий путь хуже честно забытого факта.
+     * Не воскресают и пометки при них (#1242): «прочитано сильнее» без самого прочтения
+     * отправляет в «или» первое же чтение объекта, и после «Недавнего» текста у него нет вовсе.
      */
     private fun restoredMetadata(entry: HistoryEntry, size: Long): Map<String, String> {
         val alive = REF_KEYS.fold(entry.metadata) { acc, key ->
             val value = acc[key]
-            if (value != null && !File(value).isFile) acc - key else acc
+            if (value != null && !File(value).isFile) withoutKnowledge(acc, setOf(key)) else acc
         }
         return buildMap {
             putAll(alive)
