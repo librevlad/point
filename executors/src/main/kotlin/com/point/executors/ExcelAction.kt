@@ -22,6 +22,7 @@ import com.point.core.flow.GroundedTable
 import com.point.core.flow.Latency
 import com.point.core.flow.LayoutAnswer
 import com.point.core.flow.LlmClient
+import com.point.core.flow.MAX_TABLE_PAGES
 import com.point.core.flow.META_OCR_ATOMS_REF
 import com.point.core.flow.META_READING_MODE
 import com.point.core.flow.META_TABLE_CHROME
@@ -42,6 +43,7 @@ import com.point.core.flow.Realizer
 import com.point.core.flow.RecropQuestion
 import com.point.core.flow.SheetPlan
 import com.point.core.flow.SpreadsheetWriter
+import com.point.core.flow.TABLE_READ_BUDGET_MS
 import com.point.core.flow.collectionOrder
 import com.point.core.flow.coveredClaim
 import com.point.core.flow.inCollectionOrder
@@ -83,6 +85,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -116,6 +119,10 @@ class ExcelRealizer(
     private val store: ObjectStore,
     private val known: com.point.core.flow.CurrentKnowledge,
     private val recropTimeoutMs: Long,
+
+    /** Сколько времени заход читает страницы набора и когда он их читает (#1243). */
+    private val pagesBudgetMs: Long = TABLE_READ_BUDGET_MS,
+    private val clock: () -> Long = System::currentTimeMillis,
 ) : Realizer {
 
     @Inject constructor(
@@ -194,6 +201,13 @@ class ExcelRealizer(
      * на её месте в таблице стоит помеченная строка. Не прочиталась ни одна — отказ, а не
      * пустой файл. Страницы набора — снимки, PDF и тексты: то же, что «В Excel» читает и
      * поодиночке.
+     *
+     * Заход кончается сам — по числу страниц или по своему времени (#1243), — а не тем, что
+     * его отменяет потолок действия: отменённое действие не отдаёт ничего, и набор пропадал
+     * целиком вместе с уже оплаченной квотой. Сколько минут уйдёт на страницу, решают чужие
+     * бесплатные провайдеры, поэтому предела страниц мало: время считается тоже — и считается
+     * пределом, а не прикидкой. Страница, зависшая у чужого провайдера, обрывается вместе со
+     * временем захода, а прочитанные до неё доходят до человека файлом.
      */
     private suspend fun pagesToSheet(input: PointObject): ActionResult {
         val pages = inCollectionOrder(
@@ -207,7 +221,38 @@ class ExcelRealizer(
             )
         }
 
-        val reads = pages.mapIndexed { i, page -> onPage(i + 1, pages.size) { readPage(page) } }
+        // Сколько страниц будет прочитано — говорится до первого облачного вызова (#1243):
+        // за чтение платит ожиданием и квотой человек, и узнавать цену он вправе заранее.
+        val read = pages.take(MAX_TABLE_PAGES)
+        reportStage(pagesAheadStage(read.size, pages.size))
+
+        // Своё время захода — предел, а не прикидка (#1243): чтение кончается по нему в любом
+        // случае, и уже прочитанные страницы остаются на руках. Иначе одна страница, зависшая
+        // у чужого провайдера, уносила с собой весь заход: потолок действия отменяет работу
+        // целиком, файла из-под себя не отдаёт, и человек оставался и без таблицы, и без
+        // бесплатной квоты, потраченной на прочитанное.
+        //
+        // Оценка по уже прочитанным — не второй предел, а бережливость: страницу, которая по
+        // ним не успевает, незачем и начинать — её облачные чтения потратят квоту на результат,
+        // который всё равно не доедет. Первая читается всегда: без неё отдавать нечего.
+        val reads = mutableListOf<PageRead>()
+        withTimeoutOrNull(pagesBudgetMs) {
+            val startedMs = clock()
+            for ((i, page) in read.withIndex()) {
+                val spentMs = clock() - startedMs
+                if (i > 0 && spentMs + spentMs / i > pagesBudgetMs) break
+                reads += onPage(i + 1, pages.size) { readPage(page) }
+            }
+        }
+
+        // Не успела даже первая страница — честный отказ, а не пустой файл: тем же правилом,
+        // что и у набора, где не прочиталась ни одна.
+        if (reads.isEmpty()) {
+            return ActionResult.Failure(
+                "Первая страница не прочиталась за ${pagesBudgetMs / 60_000} минут — попробуйте её отдельно",
+                recoverable = true,
+            )
+        }
         val refused = reads.filterIsInstance<PageRead.Refused>()
         if (refused.size == reads.size) {
             val reason = refused.first().reason
@@ -218,14 +263,18 @@ class ExcelRealizer(
         }
 
         reportStage("Собираю файл")
+        val beyond = pages.size - reads.size
         val plan = stitchSheets(
-            reads.mapIndexed { i, read ->
-                when (read) {
-                    is PageRead.Table -> read.plan
+            reads.mapIndexed { i, page ->
+                when (page) {
+                    is PageRead.Table -> page.plan
                     is PageRead.Refused -> pageGap(i + 1, pages.size)
                 }
-            },
+            } + listOfNotNull(
+                pagesNotRead(reads.size + 1, pages.size, ranOutOfTime = reads.size < read.size).takeIf { beyond > 0 },
+            ),
         )
+        val unread = refused.size + beyond
         val ref = writer.write(plan)
         val flagged = plan.rows.sumOf { row -> row.count { styleCell(it).flagged } }
         return ActionResult.Success(
@@ -237,7 +286,7 @@ class ExcelRealizer(
                     put("op", "excel")
                     put("name", "таблица.xlsx")
                     put(META_TABLE_PAGES, pages.size.toString())
-                    if (refused.isNotEmpty()) put(META_TABLE_PAGES_UNREAD, refused.size.toString())
+                    if (unread > 0) put(META_TABLE_PAGES_UNREAD, unread.toString())
                     put(META_TABLE_FLAGGED, flagged.toString())
                 },
             ),
@@ -254,6 +303,37 @@ class ExcelRealizer(
         rows = listOf(listOf("⚠ Страница $n из $total не прочиталась — проверьте её отдельно")),
         headerRows = emptySet(),
     )
+
+    /**
+     * Хвост, до которого заход не дошёл (#1243): эти страницы не читали, и файл говорит об
+     * этом сам — вместе с тем, почему.
+     *
+     * Раньше набор, не уложившийся в потолок действия, пропадал целиком — вместе с уже
+     * оплаченными облачными чтениями. Теперь прочитанное доходит до человека файлом, а
+     * непрочитанное названо одной строкой: у набора в пятьсот снимков четыре сотни
+     * одинаковых предупреждений — не забота, а мусор в его таблице. Остаток он запустит
+     * отдельным набором — и по этой строке видит, что делать: ждать меньше страниц или
+     * повторить те же, когда провайдеры отвечают быстрее.
+     */
+    private fun pagesNotRead(from: Int, total: Int, ranOutOfTime: Boolean): SheetPlan {
+        val why = if (ranOutOfTime) {
+            "за один заход чтение идёт не дольше ${pagesBudgetMs / 60_000} минут"
+        } else {
+            "за один заход читается не больше $MAX_TABLE_PAGES"
+        }
+        return SheetPlan(
+            rows = listOf(
+                listOf(
+                    if (from == total) {
+                        "⚠ Страница $total не читалась — $why"
+                    } else {
+                        "⚠ Страницы $from–$total не читались — $why"
+                    },
+                ),
+            ),
+            headerRows = emptySet(),
+        )
+    }
 
     /** Стадии чтения страницы называют её номер: «Страница 2 из 3 · Читаю таблицу». */
     private suspend fun <T> onPage(n: Int, total: Int, read: suspend () -> T): T {
@@ -734,6 +814,19 @@ internal fun parseAddressedCells(raw: String): List<List<CellAnswer>>? {
         }
     }.getOrNull()?.takeIf { it.isNotEmpty() }
 }
+
+/**
+ * Слово до старта: сколько страниц набора будет прочитано (#1243).
+ *
+ * «Пределы, которые человек чувствует» обязаны быть сказаны вслух: за чтение он платит
+ * ожиданием и бесплатной квотой сервисов, а узнавал цену задним числом — по пропавшему файлу.
+ */
+internal fun pagesAheadStage(reading: Int, total: Int): String =
+    if (reading < total) {
+        "Читаю страницы — $reading из $total, дальше за один заход не выйдет"
+    } else {
+        "Читаю страницы — $total"
+    }
 
 internal fun anchorCandidates(
     key: Pair<Int, Int>,

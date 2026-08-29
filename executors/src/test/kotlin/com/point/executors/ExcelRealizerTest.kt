@@ -8,8 +8,12 @@ import com.point.core.flow.CollectionContent
 import com.point.core.flow.CropEvidence
 import com.point.core.flow.CropPurpose
 import com.point.core.flow.EvidenceCropper
+import com.point.core.flow.ACTION_CEILING_MS
 import com.point.core.flow.EvidenceImage
 import com.point.core.flow.LlmClient
+import com.point.core.flow.MAX_TABLE_PAGES
+import com.point.core.flow.RECROP_TIMEOUT_MS
+import com.point.core.flow.TABLE_READ_BUDGET_MS
 import com.point.core.flow.META_COLLECTION_ORDER
 import com.point.core.flow.META_OCR_ATOMS_REF
 import com.point.core.flow.META_TABLE_PAGES
@@ -37,6 +41,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 import java.util.concurrent.ConcurrentLinkedQueue
+import kotlin.time.Duration.Companion.seconds
 
 class ExcelRealizerTest {
 
@@ -741,6 +746,176 @@ class ExcelRealizerTest {
         assertNull("файл не писался", lastPlan)
     }
 
+    // ---- #1243: у набора есть названный предел страниц, и файл доходит до человека ----
+
+    @Test
+    fun `набор длиннее предела читается до предела, а не пропадает целиком (#1243)`() = runTest {
+        val over = 3
+        pages = (1..MAX_TABLE_PAGES + over).map { page("IMG_$it.jpg") }
+        var asked = 0
+        val reader = object : LlmClient {
+            override suspend fun run(obj: PointObject, prompt: String): ResultObject {
+                asked++
+                return answerOf("""[["Товар"],["Гречка"]]""")
+            }
+        }
+
+        var result: ActionResult? = null
+        stagesHeard {
+            result = ExcelRealizer(listOf(reader), writer, noCrops, scratch, testKnowledge()).perform(set)
+        }
+
+        assertEquals("облако спрошено про страницы за пределом", MAX_TABLE_PAGES, asked)
+        assertTrue("прочитанные страницы пропали вместе с файлом", result is ActionResult.Success)
+        val meta = (result as ActionResult.Success).result.metadata
+        assertEquals((MAX_TABLE_PAGES + over).toString(), meta[META_TABLE_PAGES])
+        assertEquals("непрочитанные страницы не сосчитаны", over.toString(), meta[META_TABLE_PAGES_UNREAD])
+        val tail = lastRows!!.last().single()
+        assertTrue(
+            "страницы за пределом пропали из файла молча: $tail",
+            tail.contains('⚠') && tail.contains("${MAX_TABLE_PAGES + 1}–${MAX_TABLE_PAGES + over}") &&
+                tail.contains("$MAX_TABLE_PAGES"),
+        )
+        assertEquals(
+            "на каждую непрочитанную страницу пришлось по строке-предупреждению",
+            1,
+            lastRows!!.count { it.size == 1 && it.single().contains("не читал") },
+        )
+    }
+
+    @Test
+    fun `до первого облачного вызова сказано, сколько страниц будет прочитано (#1243)`() = runTest {
+        pages = (1..MAX_TABLE_PAGES + 2).map { page("IMG_$it.jpg") }
+
+        val heard = stagesHeard {
+            ExcelRealizer(listOf(llm("""[["Товар"],["Гречка"]]""")), writer, noCrops, scratch, testKnowledge())
+                .perform(set)
+        }
+
+        assertEquals(
+            "цена захода названа задним числом",
+            pagesAheadStage(MAX_TABLE_PAGES, MAX_TABLE_PAGES + 2),
+            heard.firstOrNull(),
+        )
+        assertTrue(
+            "человеку не названы ни сколько прочтётся, ни сколько всего: ${heard.first()}",
+            "$MAX_TABLE_PAGES" in heard.first() && "${MAX_TABLE_PAGES + 2}" in heard.first(),
+        )
+    }
+
+    @Test
+    fun `набор в пределах предела о пределе не говорит, но страницы называет (#1243)`() = runTest {
+        pages = listOf(page("IMG_1.jpg"), page("IMG_2.jpg"))
+
+        val heard = stagesHeard {
+            ExcelRealizer(listOf(llm("""[["Товар"],["Гречка"]]""")), writer, noCrops, scratch, testKnowledge())
+                .perform(set)
+        }
+
+        assertEquals("цена захода не названа до первого чтения", pagesAheadStage(2, 2), heard.first())
+        assertTrue("сколько страниц читается — не сказано: ${heard.first()}", "2" in heard.first())
+        assertFalse(
+            "человеку назван предел, до которого ему далеко: ${heard.first()}",
+            "$MAX_TABLE_PAGES" in heard.first(),
+        )
+    }
+
+    /**
+     * #1243, решение владельца: «при пределе/обрыве — честная остановка с частичным файлом».
+     *
+     * Сколько минут уйдёт на страницу, решают чужие бесплатные провайдеры, а не Point: предела
+     * страниц мало. Заход, читающий по минуте с четвертью на страницу, упирался в потолок
+     * действия — а отменённое действие не отдаёт ничего: файла нет, квота на уже прочитанные
+     * страницы потрачена. Заход обязан кончиться сам и отдать прочитанное.
+     */
+    @Test
+    fun `медленный набор кончается сам внутри потолка действия и отдаёт прочитанное (#1243)`() = runTest {
+        pages = (1..MAX_TABLE_PAGES).map { page("IMG_$it.jpg") }
+        var spentMs = 0L
+        val perPageMs = ACTION_CEILING_MS / 8
+        val slow = object : LlmClient {
+            override suspend fun run(obj: PointObject, prompt: String): ResultObject {
+                spentMs += perPageMs
+                return answerOf("""[["Товар"],["Гречка"]]""")
+            }
+        }
+
+        val result = ExcelRealizer(
+            listOf(slow), writer, noCrops, scratch, testKnowledge(),
+            recropTimeoutMs = RECROP_TIMEOUT_MS, clock = { spentMs },
+        ).perform(set)
+
+        assertTrue("прочитанные страницы пропали вместе с файлом", result is ActionResult.Success)
+        assertTrue("заход вышел за потолок действия: $spentMs мс", spentMs < ACTION_CEILING_MS)
+        val unread = (result as ActionResult.Success).result.metadata[META_TABLE_PAGES_UNREAD]?.toInt() ?: 0
+        assertTrue("заход не остановился сам — читал все страницы подряд", unread > 0)
+        val readPages = pages.size - unread
+        assertTrue("не прочитано ни одной страницы", readPages > 0)
+        val tail = lastRows!!.last().single()
+        assertTrue(
+            "страницы, до которых заход не дошёл, пропали из файла молча: $tail",
+            tail.contains('⚠') && tail.contains("${readPages + 1}–${pages.size}"),
+        )
+        assertTrue(
+            "человеку не сказано, почему заход остановился: $tail",
+            "${TABLE_READ_BUDGET_MS / 60_000}" in tail,
+        )
+    }
+
+    /**
+     * #1243, решение владельца: «при пределе/обрыве — честная остановка с частичным файлом».
+     *
+     * Оценка по уже прочитанным верхней границы не даёт: страница у чужого бесплатного
+     * провайдера упирается в отказ по лимиту и уходит по цепочке дольше, чем все прочитанные
+     * вместе. Такая одна страница уносила с собой весь заход — потолок действия отменял его
+     * целиком, — и человек оставался и без таблицы, и без квоты, потраченной на прочитанное.
+     */
+    @Test
+    fun `зависшая страница не уносит с собой уже прочитанные (#1243)`() = runTest(timeout = 30.seconds) {
+        pages = (1..4).map { page("IMG_$it.jpg") }
+        val stuck = object : LlmClient {
+            override suspend fun run(obj: PointObject, prompt: String): ResultObject {
+                if (obj.metadata["name"] == "IMG_3.jpg") awaitCancellation()
+                return answerOf("""[["Товар"],["Гречка"]]""")
+            }
+        }
+
+        val result = ExcelRealizer(
+            listOf(stuck), writer, noCrops, scratch, testKnowledge(),
+            recropTimeoutMs = RECROP_TIMEOUT_MS, pagesBudgetMs = BUDGET_MS,
+        ).perform(set)
+
+        assertTrue("прочитанные страницы пропали вместе с зависшей", result is ActionResult.Success)
+        val rows = lastRows!!
+        assertTrue("прочитанного в файле нет: $rows", rows.any { it == listOf("Гречка") })
+        val unread = (result as ActionResult.Success).result.metadata[META_TABLE_PAGES_UNREAD]!!.toInt()
+        assertTrue("зависшая страница и хвост за ней не сосчитаны: $unread", unread >= 2)
+        val readPages = pages.size - unread
+        assertTrue("не прочитано ни одной страницы", readPages > 0)
+        val tail = rows.last().single()
+        assertTrue(
+            "страницы, до которых заход не дошёл, пропали из файла молча: $tail",
+            tail.contains('⚠') && tail.contains("${readPages + 1}–${pages.size}"),
+        )
+    }
+
+    @Test
+    fun `не дочиталась даже первая страница — отказ, а не пустой файл (#1243)`() = runTest(timeout = 30.seconds) {
+        pages = listOf(page("IMG_1.jpg"), page("IMG_2.jpg"))
+        val stuck = object : LlmClient {
+            override suspend fun run(obj: PointObject, prompt: String): ResultObject = awaitCancellation()
+        }
+
+        val result = ExcelRealizer(
+            listOf(stuck), writer, noCrops, scratch, testKnowledge(),
+            recropTimeoutMs = RECROP_TIMEOUT_MS, pagesBudgetMs = BUDGET_MS,
+        ).perform(set)
+
+        assertTrue("человек получил файл без единой прочитанной страницы", result is ActionResult.Failure)
+        assertTrue("отказ не даёт повторить", (result as ActionResult.Failure).recoverable)
+        assertNull("файл писался, хотя читать было нечего", lastPlan)
+    }
+
     @Test
     fun `набор без страниц — ни снимка, ни PDF, ни текста — честный отказ`() = runTest {
         pages = listOf(
@@ -759,5 +934,8 @@ class ExcelRealizerTest {
         const val READ_MS = 300L
 
         const val STUCK_MS = 5_000L
+
+        /** Своё время захода по набору (#1243) — в тесте короткое: ждать девять минут некому. */
+        const val BUDGET_MS = 500L
     }
 }

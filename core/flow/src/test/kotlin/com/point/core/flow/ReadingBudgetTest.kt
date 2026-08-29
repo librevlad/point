@@ -1,5 +1,6 @@
 package com.point.core.flow
 
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
 import org.junit.Assert.assertEquals
@@ -218,6 +219,38 @@ class ReadingBudgetTest {
             ),
             heard,
         )
+    }
+
+    /**
+     * #1242: на вопрос ответили сильнее, пока страница читалась. Отменённое чтение бралось за
+     * следующий заход как ни в чём не бывало — телефон грелся минуты ради ненужного ответа, —
+     * а обрывок, отданный остановленным движком, ложился знанием поверх сильного прочтения.
+     */
+    @Test
+    fun `прерванное чтение не берётся за следующий заход и знанием не становится (#1242)`() = runTest {
+        val clock = FakeClock()
+        val probe = SlowEngine(clock, 1_000) { goodPage() }
+        var reading: kotlinx.coroutines.Job? = null
+        val full = object : (Int, Long) -> CappedRead {
+            var calls = 0
+            override fun invoke(angleDegrees: Int, capMs: Long): CappedRead {
+                calls++
+
+                // Пока страница читалась, вопрос закрыли сильнее — работу отменили. Движок
+                // остановлен на полуслове и отдаёт прочитанное как обычный полный заход.
+                reading?.cancel()
+                clock.now += capMs
+                return CappedRead(goodPage(), cut = false)
+            }
+        }
+        var landed: PlannedReading? = null
+
+        reading = launch { landed = readWithBudget(ReadingBudget(180_000, clock), full, probe) }
+        reading.join()
+
+        assertEquals(1, full.calls)
+        assertTrue("после отмены Point взялся читать снова: ${probe.calls}", probe.calls.isEmpty())
+        assertNull("обрывок прерванного чтения всё равно стал знанием", landed)
     }
 
     @Test

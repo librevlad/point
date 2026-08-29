@@ -38,6 +38,16 @@ fun investigationKey(capabilityId: CapabilityId, focus: Focus?): String {
     return investigationKey(capabilityId) + "@" + scope
 }
 
+/**
+ * Вопрос объекта, о состоянии которого говорит ключ, — или `null`, если ключ не об этом (#1242).
+ *
+ * Обратная сторона [investigationKey]: тот, кто принёс знание, называет вопрос ключом, а тот,
+ * кто по этому знанию решает, — читает из ключа сам вопрос. Ключ с областью (`@`) вопросом
+ * объекта не считается: «что в этой области» — другой вопрос, и закрывают его отдельно.
+ */
+fun capabilityOfStateKey(key: String): CapabilityId? =
+    if (!isStateKey(key) || '@' in key) null else CapabilityId(key.removePrefix(META_INVESTIGATED_PREFIX))
+
 fun focusScope(focus: Focus): String? =
     focus.region?.let(::regionWire) ?: focus.atomIds.takeIf { it.isNotEmpty() }?.joinToString(" ")
 

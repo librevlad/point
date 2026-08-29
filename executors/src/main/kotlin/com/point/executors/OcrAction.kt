@@ -230,6 +230,11 @@ private fun strongerReadingLands(
             features = setOf(com.point.core.model.Feature.HAS_TEXT),
             metadata = buildMap {
                 put(META_OCR_TEXT_REF, ref.value)
+
+                // Прочтение называет свою силу (#1242): офлайн-чтение, начатое раньше и
+                // дошедшее позже, вставало поверх этого текста и молча его заменяло. Теперь
+                // слияние видит, что здесь прочитано сильнее, и позднее слабое уходит в «или».
+                put(META_OCR_TEXT_REF + com.point.core.flow.META_STRENGTH_SUFFIX, com.point.core.flow.READING_STRONG)
                 put(
                     com.point.core.flow.investigationKey(com.point.core.flow.KnownCapabilities.IMAGE_TEXT),
                     com.point.core.flow.InvestigationState.FOUND.wire,

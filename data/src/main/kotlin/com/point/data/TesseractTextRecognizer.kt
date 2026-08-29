@@ -68,18 +68,32 @@ class TesseractTextRecognizer @Inject constructor(
             }
             val version = runCatching { tess.version ?: "" }.getOrDefault("")
 
+            // Отмена доводится до самого движка (#1242): чтение идёт в нативном коде без
+            // единой точки приостановки, и отменённая корутина переставала лишь записывать
+            // результат — телефон грелся до конца бюджета над вопросом, на который уже
+            // ответили. `stop()` умеет прервать чтение, и сторож зовёт его не только по сроку.
+            val reading = coroutineContext[kotlinx.coroutines.Job]
+            val stillWanted = { reading?.isActive != false }
+
             val planned = readWithBudget(
                 budget,
-                readFull = { angle, capMs -> cappedReadAt(tess, bitmap, frame, angle, 1, version, capMs) },
+                readFull = { angle, capMs ->
+                    cappedReadAt(tess, bitmap, frame, angle, 1, version, capMs, stillWanted)
+                },
                 readProbe = { angle, capMs ->
                     val source = probe ?: probeSource(bitmap).also { probe = it }
                     val factor = if (source === bitmap) 1 else 2
-                    cappedReadAt(tess, source, frame, angle, factor, version, capMs)
+                    cappedReadAt(tess, source, frame, angle, factor, version, capMs, stillWanted)
                 },
             )
             if (planned.angleDegrees != 0) Log.i(TAG, "OCR orientation: +${planned.angleDegrees}°")
             dumpForAcceptance(planned.layer)
             done(planned.layer, budget)
+        } catch (stopped: kotlinx.coroutines.CancellationException) {
+
+            // Отмена — не ошибка чтения (#1242): она идёт дальше как была. Проглоченная, она
+            // превращалась в пустой слой, и на него дальше вставало знание объекта.
+            throw stopped
         } catch (e: Throwable) {
             Log.w(TAG, "OCR error", e)
             done(AtomLayer(emptyList(), incomplete = "error: ${e.javaClass.simpleName}"), budget)
@@ -103,6 +117,7 @@ class TesseractTextRecognizer @Inject constructor(
         sampleFactor: Int,
         version: String,
         capMs: Long,
+        stillWanted: () -> Boolean,
     ): CappedRead {
         val image = source.rotated(extraRotation)
         try {
@@ -110,9 +125,23 @@ class TesseractTextRecognizer @Inject constructor(
             val fired = AtomicBoolean(false)
             val watchdog = Thread {
                 try {
-                    Thread.sleep(capMs.coerceAtLeast(1))
-                    fired.set(true)
-                    runCatching { tess.stop() }
+                    val deadline = System.currentTimeMillis() + capMs.coerceAtLeast(1)
+                    while (true) {
+                        val left = deadline - System.currentTimeMillis()
+                        if (left <= 0) {
+                            fired.set(true)
+                            runCatching { tess.stop() }
+                            return@Thread
+                        }
+
+                        // Чтения больше никто не ждёт — движок останавливается сейчас, а не
+                        // через оставшиеся минуты бюджета (#1242).
+                        if (!stillWanted()) {
+                            runCatching { tess.stop() }
+                            return@Thread
+                        }
+                        Thread.sleep(minOf(left, WATCH_STEP_MS))
+                    }
                 } catch (_: InterruptedException) {
 
                 }
@@ -253,6 +282,9 @@ class TesseractTextRecognizer @Inject constructor(
         const val OCR_MAX_PX = 2048
 
         const val PROBE_HALF_MIN_EDGE = 1600
+
+        /** Как часто сторож смотрит, ждут ли ещё это чтение (#1242). */
+        const val WATCH_STEP_MS = 200L
 
         val EMPTY = AtomLayer(emptyList())
 
