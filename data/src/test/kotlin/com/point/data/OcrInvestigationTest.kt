@@ -22,6 +22,7 @@ import com.point.core.flow.investigationStateOf
 import com.point.core.flow.META_ENTITY_PREFIX
 import com.point.core.flow.META_OCR_ATOMS_REF
 import com.point.core.flow.META_OCR_TEXT_REF
+import com.point.core.flow.META_READ_STRAIGHTENED
 import com.point.core.flow.META_READ_UPSCALE
 import com.point.core.flow.META_READING_MODE
 import com.point.core.flow.ReadingMode
@@ -317,6 +318,121 @@ class OcrInvestigationTest {
 
         assertFalse("каша объявлена текстом снимка", Feature.HAS_TEXT in delta.features)
         assertFalse("каша сохранена чтением объекта", META_OCR_TEXT_REF in delta.metadata)
+    }
+
+    /**
+     * Длинный счёт, прочитанный почти целиком, но неуверенно (#1041).
+     *
+     * Больше половины слов — догадки движка, из-за них медианная уверенность ниже порога
+     * годности, и знанием такое чтение не станет. Но прочитано на нём почти всё, и терять
+     * это ради десяти слов из угла нельзя.
+     */
+    private fun weaklyReadReceipt(): AtomLayer {
+        val words = listOf(
+            "Супермаркет", "Сільпо", "вул", "Хрещатик", "12", "Чек", "0042", "молоко",
+            "селянське", "27.50", "хліб", "житній", "18.90", "кава", "мелена", "142.00",
+            "сир", "твердий", "231.40", "вода", "негазована", "16.20", "Разом", "436.00",
+            "Готівка", "500.00", "Решта", "64.00", "Дякуємо", "Каса",
+        )
+        // Догадок больше половины: медианная уверенность ложится на них, и по ней чтение
+        // признаётся плохим — ровно тот повод, по которому кадр и выпрямляется.
+        val guessed = words.size * 3 / 5
+        return AtomLayer(
+            words.mapIndexed { i, word ->
+                Atom(
+                    "w$i",
+                    word,
+                    Box(10f, i * 30f, 10f + word.length * 10f, i * 30f + 20f),
+                    if (i < guessed) 0.35f else 0.9f,
+                )
+            },
+        )
+    }
+
+    /**
+     * Второй заход беднее первого — знанием остаётся первое чтение (#1041).
+     *
+     * Путь человека: он поделился длинным счётом. Первый заход прочитал его почти целиком,
+     * но неуверенно, и по этой неуверенности чтение признано плохим — кадр выпрямляется.
+     * На выпрямлении границей листа стал не лист, а чек внутри кадра — обычный промах поиска
+     * границ, — и второй заход отдал чистые десять слов из угла.
+     *
+     * Взять последнее чтение значило бы молча потерять почти весь счёт и закрыть вопрос
+     * «что написано на снимке» углом страницы. Карточка требует лучшего чтения, а не
+     * второго: полнее — первое, и знанием становится оно.
+     */
+    @Test
+    fun `второй заход беднее первого — знанием он не становится`() = runTest {
+        val straight = "/tmp/straight.jpg"
+        val corner = "Дякуємо за покупку! Чекаємо знову. Каса 12 Зміна 3 Термінал 44"
+        val reading = object : AtomRecognizer {
+            override suspend fun read(obj: PointObject) =
+                if (obj.uri.value == straight) AtomLayer(emptyList(), readerText = corner)
+                else weaklyReadReceipt()
+        }
+        val enricher = OcrInvestigationRealizer(
+            FakeStore(),
+            reading,
+            extractor(Entity(EntityType.PHONE, "+380671234567")),
+            StraightFrame { straight },
+        )
+
+        val delta = enricher.look(image)
+
+        assertFalse("угол кадра объявлен текстом снимка", Feature.HAS_TEXT in delta.features)
+        assertFalse("угол кадра сохранён чтением объекта", META_OCR_TEXT_REF in delta.metadata)
+        assertFalse("найденное в углу выдано за знание о счёте", Feature.HAS_PHONE in delta.features)
+        assertTrue("улика первого чтения потеряна", Feature.HAS_WORD_LAYER in delta.features)
+    }
+
+    /**
+     * Снимок без текста за чужую кривизну не платит (#1041).
+     *
+     * Фото кота, селфи, кадр видео — самый частый объект в Point, и текста на нём нет вовсе.
+     * Пустое чтение — тоже плохое чтение, и без этого условия каждый такой снимок уходил бы
+     * в выпрямление и второе полное чтение. «Текст был, но не дался» отличимо от «текста
+     * нет» единственным сигналом: движок увидел на кадре хоть что-то.
+     */
+    @Test
+    fun `снимок без текста не выпрямляется`() = runTest {
+        var asked = 0
+        val enricher = OcrInvestigationRealizer(
+            FakeStore(),
+            recognizer(""),
+            extractor(),
+            StraightFrame { asked++; null },
+        )
+
+        enricher.look(image)
+
+        assertEquals("выпрямлять кадр, на котором движок не увидел ни слова, незачем", 0, asked)
+    }
+
+    /**
+     * Текст пришёл с кадра, которого человек не видел — и это записано (#1041).
+     *
+     * Тот же след работы, что и чтение увеличенного кадра (`read.upscale`): без него понять
+     * происхождение знания нечем — оно выглядит прочитанным с того снимка, которым
+     * поделились. Человеку эта пометка не показывается: provenance внутренний.
+     */
+    @Test
+    fun `чтение с выпрямленного кадра видно в метаданных объекта`() = runTest {
+        val straight = "/tmp/straight.jpg"
+        val enricher = OcrInvestigationRealizer(
+            FakeStore(),
+            crookedReading(straight),
+            extractor(),
+            StraightFrame { straight },
+        )
+
+        assertEquals("1", enricher.look(image).metadata[META_READ_STRAIGHTENED])
+    }
+
+    @Test
+    fun `чтение с кадра человека пометки о выпрямлении не оставляет`() = runTest {
+        val delta = OcrInvestigationRealizer(FakeStore(), recognizer(realText), extractor(), asIs).look(image)
+
+        assertFalse(META_READ_STRAIGHTENED in delta.metadata)
     }
 
     @Test

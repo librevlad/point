@@ -30,15 +30,12 @@ class OpenCvStraightFrame(private val store: ObjectStore) : StraightFrame {
 
         val saved = runCatching {
             val ref = store.newScratchFile("jpg")
-            File(ref.value).outputStream().use { straight.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, it) }
+            File(ref.value).outputStream().use {
+                straight.compress(Bitmap.CompressFormat.JPEG, Bitmaps.JPEG_QUALITY, it)
+            }
             ref.value
         }.getOrNull()
         straight.recycle()
         saved
-    }
-
-    private companion object {
-
-        const val JPEG_QUALITY = 92
     }
 }

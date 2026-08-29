@@ -1,5 +1,6 @@
 package com.point.core.flow
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -53,5 +54,36 @@ class PoorReadingTest {
         val silent = AtomLayer(emptyList(), readerText = ". aa - 11 ВЕНЕ")
 
         assertTrue(poorlyRead(silent.text, silent))
+    }
+
+    /**
+     * Из двух чтений одного кадра знанием становится то, где живого больше (#1041).
+     *
+     * Второй заход по выпрямленной копии бывает беднее первого: рамкой листа стал чек внутри
+     * кадра, и вместо счёта пришли чистые десять слов из угла. «Не каша» — ещё не «лучше».
+     */
+    @Test
+    fun `полнее то чтение, где живых слов больше`() {
+        val corner = AtomLayer(emptyList(), readerText = "Дякуємо за покупку Каса 12")
+
+        assertEquals(confident, betterReading(confident, corner))
+        assertEquals(confident, betterReading(corner, confident))
+    }
+
+    /**
+     * Уверенность решает, что вообще прочитано: слово-догадка дойдёт до человека мусором,
+     * и считать его прочитанным нельзя — иначе полным окажется чтение, которого нет.
+     */
+    @Test
+    fun `догадки движка полнотой чтения не считаются`() {
+        val corner = AtomLayer(emptyList(), readerText = "Дякуємо за покупку Каса 12")
+
+        assertEquals(corner, betterReading(guessed, corner))
+    }
+
+    /** Поровну — остаётся первое: оно с того кадра, которым поделился человек (#1013). */
+    @Test
+    fun `при равном чтении остаётся первое`() {
+        assertEquals(confident, betterReading(confident, AtomLayer(confident.atoms)))
     }
 }

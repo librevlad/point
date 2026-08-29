@@ -11,6 +11,9 @@ object Bitmaps {
 
     const val SCAN_PLUS_MAX_PX = 2600
 
+    /** Чем сохраняется обработанный снимок: одно качество на всю обработку, а не по копии. */
+    const val JPEG_QUALITY = 92
+
     fun decodeUpright(path: String, maxPx: Int = PROCESS_MAX_PX): Bitmap? = decodeBounded(path, maxPx)
 
     fun decodeThumbnail(path: String, maxPx: Int): Bitmap? = decodeBounded(path, maxPx)
