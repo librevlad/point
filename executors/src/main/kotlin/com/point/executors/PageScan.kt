@@ -71,7 +71,7 @@ internal class OpenCvPageScan(private val store: ObjectStore) : PageScan {
     private suspend fun saved(page: Bitmap, wholeFrame: Boolean): ScannedPage {
         reportStage("Сохраняю")
         val ref = store.newScratchFile("jpg")
-        File(ref.value).outputStream().use { page.compress(Bitmap.CompressFormat.JPEG, 92, it) }
+        File(ref.value).outputStream().use { page.compress(Bitmap.CompressFormat.JPEG, Bitmaps.JPEG_QUALITY, it) }
         page.recycle()
         return ScannedPage(ref, wholeFrame)
     }

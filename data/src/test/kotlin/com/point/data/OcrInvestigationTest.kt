@@ -220,11 +220,24 @@ class OcrInvestigationTest {
         )
     }
 
+    /**
+     * Слой, каким его отдаёт читатель телефона: слова с их местом и уверенностью.
+     *
+     * Оба захода делает один и тот же читатель, и атомы приходят с обоих (#1041): пара
+     * «атомы против голого текста» бывает только там, где читает облако.
+     */
+    private fun readLayer(text: String, confidence: Float) = AtomLayer(
+        text.split(" ").filter { it.isNotBlank() }.mapIndexed { i, word ->
+            Atom("w$i", word, Box(10f, i * 30f, 10f + word.length * 10f, i * 30f + 20f), confidence)
+        },
+        readerText = text,
+    )
+
     /** Кадр, снятый под углом: сырой читается кашей, выпрямленный — как надо (#1041). */
     private fun crookedReading(straightPath: String) = object : AtomRecognizer {
         override suspend fun read(obj: PointObject) =
             if (obj.uri.value == straightPath) {
-                AtomLayer(emptyList(), readerText = realText)
+                readLayer(realText, confidence = 0.92f)
             } else {
                 AtomLayer(listOf(garbageAtom), readerText = garbage)
             }
@@ -256,11 +269,49 @@ class OcrInvestigationTest {
         assertEquals(realText, File(delta.metadata[META_OCR_TEXT_REF]!!).readText())
         assertTrue("найденное со второго захода — знание того же снимка", Feature.HAS_PHONE in delta.features)
 
-        // Координаты слов остаются от сырого кадра: у выпрямленной копии своя геометрия, и
-        // метка поиска по её словам встала бы мимо строки (#1013).
-        assertEquals(
-            listOf(garbageAtom),
-            AtomCodec.decode(File(delta.metadata[META_OCR_ATOMS_REF]!!).readText()).atoms,
+        // Слой слов — часть принятого чтения, а не проигравшего ему. Каша с сырого кадра
+        // словами объекта не остаётся, а места слов выпрямленной копии на снимке человека
+        // нет — и слоя у такого чтения нет вовсе (#1013, #1332).
+        assertFalse("каша с сырого кадра осталась словами объекта", META_OCR_ATOMS_REF in delta.metadata)
+        assertFalse(Feature.HAS_WORD_LAYER in delta.features)
+    }
+
+    /**
+     * Дальше по пути человека читается принятое чтение, а не проигравшее ему (#1041).
+     *
+     * За текстом объекта действия ходят одним входом (#1138), и слой слов в нём — сам текст
+     * объекта: «Понять» проверяет им прочитанное моделью («нет в тексте — нет знания», #809)
+     * и показывает модели страницу его блоками, «В Word» строит из него документ, «В Excel»
+     * адресует по нему ячейки.
+     *
+     * Пока слой оставался от сырого кадра, а текст приходил с выпрямленного, объект нёс два
+     * разных чтения двух разных кадров: человек, нажав «Понять» над выпрямленным счётом,
+     * получал ровно ту кашу, ради ухода от которой кадр и выпрямляли.
+     */
+    @Test
+    fun `слова объекта не спорят с его текстом после второго захода`() = runTest {
+        val straight = "/tmp/straight.jpg"
+        val store = FakeStore()
+        val enricher = OcrInvestigationRealizer(
+            store,
+            crookedReading(straight),
+            extractor(Entity(EntityType.PHONE, "+380671234567")),
+            StraightFrame { straight },
+        )
+
+        val read = image.copy(metadata = image.metadata + enricher.look(image).metadata)
+        val known = com.point.core.flow.GraphKnowledge(
+            store,
+            object : com.point.core.flow.PdfTextExtractor {
+                override suspend fun extractText(obj: PointObject) = ""
+            },
+        )
+        val words = known.layerOf(read)?.text
+
+        assertEquals("знанием стало не лучшее чтение", realText, known.textOf(read))
+        assertTrue(
+            "слой слов спорит с текстом объекта, а «Понять», «В Word» и «В Excel» читают именно его-" + words,
+            words == null || words == realText,
         )
     }
 
@@ -367,7 +418,7 @@ class OcrInvestigationTest {
         val corner = "Дякуємо за покупку! Чекаємо знову. Каса 12 Зміна 3 Термінал 44"
         val reading = object : AtomRecognizer {
             override suspend fun read(obj: PointObject) =
-                if (obj.uri.value == straight) AtomLayer(emptyList(), readerText = corner)
+                if (obj.uri.value == straight) readLayer(corner, confidence = 0.9f)
                 else weaklyReadReceipt()
         }
         val enricher = OcrInvestigationRealizer(
@@ -406,6 +457,29 @@ class OcrInvestigationTest {
         enricher.look(image)
 
         assertEquals("выпрямлять кадр, на котором движок не увидел ни слова, незачем", 0, asked)
+    }
+
+    /**
+     * Оборванное чтение — не плохое чтение, а недочитанное (#1041, ADR-0001 §9).
+     *
+     * Кадр, не уложившийся в срок, отдаёт снятые до обрыва атомы и обрывок текста — по виду
+     * то же плохое чтение, что и каша. Но второй заход стоит выпрямления и ещё одного полного
+     * чтения того же кадра, то есть вдвое больше срока, в который уже не уложились, и судить
+     * по недочитанному о кривизне кадра нечем.
+     */
+    @Test
+    fun `оборванное чтение кадр не выпрямляет`() = runTest {
+        var asked = 0
+        val enricher = OcrInvestigationRealizer(
+            FakeStore(),
+            recognizer(garbage, atoms = listOf(garbageAtom), incomplete = INCOMPLETE_TIMEOUT),
+            extractor(),
+            StraightFrame { asked++; null },
+        )
+
+        enricher.look(image)
+
+        assertEquals("недочитанный кадр заплатил за второй заход", 0, asked)
     }
 
     /**
