@@ -106,15 +106,11 @@ class ObjectClassifier {
 
         const val LARGE_THRESHOLD_BYTES = 20L * 1024 * 1024
 
-        val OFFICE_MIMES = setOf(
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-            "application/msword",
-            "application/vnd.ms-excel",
-            "application/vnd.ms-powerpoint",
-        )
         val OFFICE_EXTS = setOf("docx", "xlsx", "pptx", "doc", "xls", "ppt")
+
+        // Тип каждого из этих расширений называет единственная таблица (#840): свой перечень
+        // тех же шести строк расходился бы с ней молча — первой же правкой таблицы.
+        val OFFICE_MIMES = OFFICE_EXTS.map(::mimeForExtension).filterNot { it == UNKNOWN_MIME }.toSet()
 
         val AUDIO_EXTS = setOf(
             "ogg", "oga", "opus", "m4a", "mp3", "wav", "amr", "aac", "flac", "aiff", "aif", "3gp", "wma",

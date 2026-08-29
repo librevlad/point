@@ -31,22 +31,33 @@ class OoxmlOfficeTextExtractor : OfficeTextExtractor {
     /**
      * Слайды презентации по порядку — части одного объекта (#1105).
      *
-     * Позиция в списке и есть номер слайда: слайд без текста остаётся в списке пустой
-     * строкой, иначе четвёртый слайд назвался бы третьим. Не презентация — пустой список.
+     * Каждый слайд идёт со своим номером: номер — знание самого слайда, а не его место в
+     * списке. В списке — только те слайды, что в файле действительно нашлись: сплошным рядом
+     * от первого номера до самого большого крошечный файл с единственной частью
+     * `slide2000000000.xml` заставлял бы телефон по одному тапу человека выложить два
+     * миллиарда пустых строк. Не презентация — пустой список.
+     *
+     * Оборванный архив целым не притворяется: обрыв чтения доходит до вызывающего
+     * (инвариант 8) — три части побитой колоды из десяти были бы неполным объектом, выданным
+     * за полный.
      */
-    override suspend fun slides(obj: PointObject): List<String> = withContext(Dispatchers.IO) {
-        val found = read(obj).slides
-        val last = found.keys.maxOrNull() ?: return@withContext emptyList()
-        (1..last).map { found[it].orEmpty() }
+    override suspend fun slides(obj: PointObject): List<Pair<Int, String>> = withContext(Dispatchers.IO) {
+        val read = read(obj)
+        read.broken?.let { throw it }
+        read.slides.map { (number, text) -> number to text }
     }
 
     /**
      * Один проход по файлу: он читается с диска, и второй раз ради того же ответа его
      * открывать незачем.
+     *
+     * Обрыв чтения не выдаётся за честный конец файла: он остаётся в [OoxmlParts.broken], и
+     * тот, кому куска мало, отказывает вслух. Текст документа при этом берёт то, что успело
+     * прочитаться, — прочитанные слова человеку полезны и без остальных.
      */
     private fun read(obj: PointObject): OoxmlParts {
         val parts = OoxmlParts()
-        runCatching {
+        parts.broken = runCatching {
             ZipInputStream(File(obj.uri.value).inputStream().buffered()).use { zis ->
                 var entry = zis.nextEntry
                 while (entry != null) {
@@ -81,7 +92,7 @@ class OoxmlOfficeTextExtractor : OfficeTextExtractor {
                     entry = zis.nextEntry
                 }
             }
-        }
+        }.exceptionOrNull()
         return parts
     }
 
@@ -122,6 +133,9 @@ class OoxmlOfficeTextExtractor : OfficeTextExtractor {
         var shared: String? = null
         var workbook: String? = null
         var relations: String? = null
+
+        /** На чём проход оборвался, или `null` — архив дочитан до конца. */
+        var broken: Throwable? = null
     }
 
     private companion object {

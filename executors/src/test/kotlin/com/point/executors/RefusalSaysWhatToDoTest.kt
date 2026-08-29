@@ -11,6 +11,7 @@ class RefusalSaysWhatToDoTest {
 
     private val image = ObjectState(ObjectKind.IMAGE)
     private val pdf = ObjectState(ObjectKind.PDF)
+    private val presentation = ObjectState(ObjectKind.OFFICE, setOf(com.point.core.model.Feature.IS_PRESENTATION))
 
     /**
      * Совета «разложите на страницы, потом распознайте» больше нет (#1257, #995): назван один
@@ -91,6 +92,25 @@ class RefusalSaysWhatToDoTest {
         assertTrue("нет совета, как переснять", "при ровном свете" in said)
     }
 
+    /**
+     * Человек нажал «Слайды» — и слышит про слайды (#1105, §13).
+     *
+     * Колода из одних картинок получала «В этом документе текста нет»: ответ про текст на
+     * вопрос про слайды, да ещё и отменяющий сами слайды — они-то есть. Названная дверь у
+     * презентации при этом на месте: «Открыть» принимает любой файловый объект.
+     */
+    @Test
+    fun `отказ «Слайдов» говорит про слайды и зовёт дверь, которая у презентации есть`() {
+        val said = SlidesRealizer.NO_WORDS_ON_SLIDES
+
+        assertTrue(said, "лайд" in said)
+        assertFalse("это ответ про текст, а не про слайды", said == com.point.core.flow.NO_TEXT_IN_OFFICE)
+        listOf(said, SlidesRealizer.NOT_SPLIT).forEach {
+            assertTrue("отказ не зовёт никуда: $it", "откройте" in it.lowercase())
+        }
+        assertTrue("названной двери у презентации нет", OpenCapability().accepts(presentation))
+    }
+
     @Test
     fun `каждый из этих отказов говорит и что случилось, и что дальше`() {
 
@@ -98,6 +118,8 @@ class RefusalSaysWhatToDoTest {
             com.point.core.flow.capabilities.NO_READABLE_PDF_LAYER,
             com.point.core.flow.NO_TEXT_IN_OFFICE,
             com.point.core.flow.OLD_OFFICE_FORMAT,
+            SlidesRealizer.NOT_SPLIT,
+            SlidesRealizer.NO_WORDS_ON_SLIDES,
             PdfRealizer.PDF_FAILED,
             PdfRealizer.NOT_THIS_OBJECT,
             FallbackRealizer.NOBODY_TO_DO_IT,

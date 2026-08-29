@@ -5,6 +5,7 @@ import com.point.core.flow.OoxmlOfficeTextExtractor
 import com.point.core.flow.capabilities.OfficeCapability
 import com.point.core.flow.collectionOrder
 import com.point.core.model.ActionResult
+import com.point.core.model.Feature
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
@@ -84,6 +85,36 @@ class SlidesActionTest {
     private fun slideXml(text: String) =
         "<p:sld><p:cSld><p:spTree><a:t>$text</a:t></p:spTree></p:cSld></p:sld>"
 
+    /** Старый .ppt — двоичный формат, который Point не открывает вовсе. */
+    private fun ppt(): PointObject {
+        val file = File(tmp.newFolder(), OLD_NAME)
+        file.writeBytes(ByteArray(OLD_HEAD_BYTES) { if (it == 0) 0xD0.toByte() else 0xCF.toByte() })
+        return PointObject(
+            id = "p",
+            mime = PPT,
+            uri = ScratchRef(file.absolutePath),
+            state = classifier.classify(PPT, file.length(), file.name),
+            metadata = mapOf("name" to file.name),
+        )
+    }
+
+    /**
+     * Та же презентация, оборванная посреди второго слайда: первый слайд в файле целый — его
+     * и отдавали за весь набор, — а дальше архив кончается на полуслове, как у недокачанного
+     * или побитого файла.
+     */
+    private fun cutInsideSecondSlide(obj: PointObject): PointObject {
+        val file = File(obj.uri.value)
+        val bytes = file.readBytes()
+        val part = "ppt/slides/slide2.xml".toByteArray(Charsets.UTF_8)
+        file.writeBytes(bytes.copyOf(bytes.startOf(part) + part.size + INSIDE_PART_BYTES))
+        return obj
+    }
+
+    /** Где в архиве начинается запись с этим именем: сразу за именем идут её байты. */
+    private fun ByteArray.startOf(name: ByteArray): Int =
+        (0..size - name.size).first { at -> name.indices.all { this[at + it] == name[it] } }
+
     private suspend fun split(obj: PointObject) =
         SlidesRealizer(store, OoxmlOfficeTextExtractor()).perform(obj, null)
 
@@ -132,41 +163,97 @@ class SlidesActionTest {
     }
 
     /**
-     * Номер части — номер слайда в презентации, а не место в списке уцелевших: слайд без
-     * текста в набор не идёт (войти в пустоту нечем), но следующий за ним не занимает его
-     * номер. Порядок при этом — знание набора (#1207): по имени «Слайд 10» встал бы вторым.
+     * Обычная колода: заголовок, фотография, текст. Слайд с одной фотографией из набора не
+     * пропадает (§13 и инвариант 13) — «слов не нашлось» это не «такого слайда нет»: иначе
+     * человек не увидел бы второго слайда ни в списке, ни в порядке и не смог бы войти в
+     * него, чтобы продолжить понимание. Порядок — знание набора (#1207): по имени «Слайд 10»
+     * встал бы между первым и вторым.
      */
     @Test
-    fun `слайд без текста не сдвигает номера, а десятый не встаёт между первым и вторым`() = runTest {
+    fun `слайд с одной фотографией остаётся в наборе, а десятый не встаёт вторым`() = runTest {
         val obj = pptx(1 to "первый", 2 to "", 3 to "третий", 10 to "десятый")
 
         val out = (split(obj) as ActionResult.Success).result
 
+        assertEquals("4", out.metadata["count"])
         assertEquals(
-            listOf(1, 3, 10).map { SlidesRealizer.slideName(it) },
+            listOf(1, 2, 3, 10).map { SlidesRealizer.slideName(it) },
             collectionOrder(out.metadata),
         )
     }
 
     /**
-     * Пустой набор успехом не считается: в презентации из одних картинок читать нечего, и
-     * человеку это говорится про сам документ, а не про сорвавшуюся попытку.
+     * Слайд без слов честно непригоден, а не выдуман: часть пустая, и негодность её видна
+     * тем же нулевым сигналом, каким Point видит любой пустой файл (#684). Придумать вместо
+     * текста фразу «здесь текста нет» нельзя — это было бы знание, которого в слайде нет.
      */
     @Test
-    fun `презентация без текста говорит, что читать нечего, а не рождает пустой набор`() = runTest {
+    fun `часть слайда без слов пуста, и пустота названа своими словами`() = runTest {
+        val out = (split(pptx(1 to "первый", 2 to "")) as ActionResult.Success).result
+
+        val empty = File(out.uri.value, SlidesRealizer.slideName(2))
+        assertTrue("слайда без слов нет в наборе — войти в него нечем", empty.isFile)
+        assertEquals(0L, empty.length())
+        assertTrue(
+            "человек войдёт в такой слайд и не услышит, почему он пуст",
+            classifier.classify("text/plain", empty.length(), empty.name).has(Feature.UNUSABLE),
+        )
+    }
+
+    /**
+     * Человек нажал «Слайды» — и слышит про слайды (#1105, §13).
+     *
+     * Колода из одних картинок отвечала «В этом документе текста нет»: ответ про текст на
+     * вопрос про слайды, да ещё и отменяющий сами слайды — они-то есть.
+     */
+    @Test
+    fun `колода из одних картинок говорит про слайды, а не про документ без текста`() = runTest {
         val result = split(pptx(1 to "", 2 to ""))
 
-        assertEquals(com.point.core.flow.NO_TEXT_IN_OFFICE, (result as ActionResult.Failure).reason)
-        assertFalse("это про сам документ, а не про сорвавшуюся попытку", result.recoverable)
+        assertEquals(SlidesRealizer.NO_WORDS_ON_SLIDES, (result as ActionResult.Failure).reason)
+        assertFalse("это про саму презентацию, а не про сорвавшуюся попытку", result.recoverable)
+    }
+
+    /** Старый .ppt Point не открывает вовсе — и причина названа его, а не чужая (#997). */
+    @Test
+    fun `у старого формата причина своя — формат, а не отсутствие слов`() = runTest {
+        val result = split(ppt())
+
+        assertEquals(com.point.core.flow.OLD_OFFICE_FORMAT, (result as ActionResult.Failure).reason)
+    }
+
+    /**
+     * Побитая презентация не притворяется целой (инвариант 8): чтение архива оборвалось на
+     * втором слайде — и человеку сказано, что разобрать не вышло, а не выдан набор из
+     * одной части с подписью «слайдов: 1».
+     */
+    @Test
+    fun `побитая презентация отказывает, а не выдаёт неполный набор за целый`() = runTest {
+        val obj = cutInsideSecondSlide(pptx(1 to "первый", 2 to "второй", 3 to "третий"))
+
+        val result = split(obj)
+
+        assertEquals(SlidesRealizer.NOT_SPLIT, (result as ActionResult.Failure).reason)
+        assertTrue("оборванное чтение — про попытку, а не про сам файл", result.recoverable)
     }
 
     private companion object {
 
         const val NAME = "презентация.pptx"
 
+        const val OLD_NAME = "старая.ppt"
+
         const val SIZE = 3_032L
 
+        /** Столько байт двоичного .ppt: больше заголовка записи архива, чтобы читатель дошёл до сути. */
+        const val OLD_HEAD_BYTES = 64
+
+        /** Сколько байт второго слайда остаётся в оборванном файле — начало без продолжения. */
+        const val INSIDE_PART_BYTES = 4
+
         const val PPTX = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+
+        const val PPT = "application/vnd.ms-powerpoint"
 
         const val DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     }

@@ -4,11 +4,12 @@ import com.point.core.flow.Capability
 import com.point.core.flow.CapabilityMeta
 import com.point.core.flow.Latency
 import com.point.core.flow.META_COLLECTION_ORDER
+import com.point.core.flow.OLD_OFFICE_FORMAT
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.OfficeTextExtractor
 import com.point.core.flow.Realizer
 import com.point.core.flow.collectionOrderValue
-import com.point.core.flow.officeTextMissingReason
+import com.point.core.flow.isModernOffice
 import com.point.core.flow.reportStage
 import com.point.core.model.ActionResult
 import com.point.core.model.CapabilityId
@@ -61,43 +62,56 @@ class SlidesRealizer @Inject constructor(
             runCatching {
                 reportStage(SPLIT_STAGE)
                 val slides = officeText.slides(input)
+                when {
 
-                // Слайд без текста частью не становится: войти в него нечем, а пустой
-                // непригодный кусок в наборе — мусор. Номер при этом остаётся настоящим:
-                // текста нет на втором слайде — третий так и зовётся третьим.
-                val parts = slides.withIndex().filter { (_, text) -> text.isNotBlank() }
-                if (parts.isEmpty()) {
+                    // Слайдов не нашлось вовсе. У старого .ppt виной формат — Point его не
+                    // открывает совсем (#997); у прочих файлов не удался сам разбор, и это
+                    // про попытку, а не про документ.
+                    slides.isEmpty() && !isModernOffice(input.metadata["name"], input.mime) ->
+                        ActionResult.Failure(OLD_OFFICE_FORMAT, recoverable = false)
 
-                    // Читать нечего — и причина называется та, что есть на самом деле
-                    // (#997): у старого .ppt это формат, у презентации из одних картинок —
-                    // отсутствие текста.
-                    ActionResult.Failure(
-                        officeTextMissingReason(input.metadata["name"], input.mime),
-                        recoverable = false,
-                    )
-                } else {
-                    val dir = File(store.newScratchFile("slides").value).apply { mkdirs() }
-                    val names = parts.map { (index, text) ->
-                        slideName(index + 1).also { File(dir, it).writeText(text) }
-                    }
-                    ActionResult.Success(
-                        ResultObject(
-                            ObjectKind.COLLECTION,
-                            "inode/directory",
-                            ScratchRef(dir.absolutePath),
-                            mapOf(
-                                "op" to "slides",
-                                "count" to names.size.toString(),
+                    slides.isEmpty() -> ActionResult.Failure(NOT_SPLIT, recoverable = true)
 
-                                // Порядок слайдов — знание самого набора (#1207): по имени
-                                // «Слайд 10» встал бы между первым и вторым.
-                                META_COLLECTION_ORDER to collectionOrderValue(names),
-                            ),
-                        ),
-                    )
+                    // Слайды есть, а слов на них нет: человек нажал «Слайды», и отвечать ему
+                    // «в этом документе текста нет» значит говорить не о том, о чём спросили.
+                    slides.none { (_, text) -> text.isNotBlank() } ->
+                        ActionResult.Failure(NO_WORDS_ON_SLIDES, recoverable = false)
+
+                    else -> collection(slides)
                 }
             }.getOrElse { ActionResult.Failure(NOT_SPLIT, recoverable = true) }
         }
+
+    /**
+     * Набор частей, где слайд остаётся слайдом.
+     *
+     * Слайд без текста из набора не выкидывается (§13 и инвариант 13): «слов не нашлось» —
+     * это не «такого слайда не существует», а войти в слайд с одной фотографией и продолжить
+     * понимание (фотография → автомобиль → госномер) человек вправе. Пустая часть честно
+     * непригодна сама: нулевой размер `ObjectStore` называет своими словами, как у любого
+     * пустого файла.
+     */
+    private suspend fun collection(slides: List<Pair<Int, String>>): ActionResult {
+        val dir = File(store.newScratchFile("slides").value).apply { mkdirs() }
+        val names = slides.map { (number, text) ->
+            slideName(number).also { File(dir, it).writeText(text) }
+        }
+        return ActionResult.Success(
+            ResultObject(
+                ObjectKind.COLLECTION,
+                "inode/directory",
+                ScratchRef(dir.absolutePath),
+                mapOf(
+                    "op" to "slides",
+                    "count" to names.size.toString(),
+
+                    // Порядок слайдов — знание самого набора (#1207): по имени «Слайд 10»
+                    // встал бы между первым и вторым.
+                    META_COLLECTION_ORDER to collectionOrderValue(names),
+                ),
+            ),
+        )
+    }
 
     internal companion object {
 
@@ -106,6 +120,18 @@ class SlidesRealizer @Inject constructor(
 
         const val SPLIT_STAGE = "Разбираю презентацию на слайды"
 
-        const val NOT_SPLIT = "Не удалось разобрать презентацию на слайды"
+        /** Что случилось — и что дальше: дверь «Открыть» у презентации есть всегда. */
+        const val NOT_SPLIT =
+            "Не удалось разобрать презентацию на слайды — откройте её целиком, чтобы посмотреть глазами"
+
+        /**
+         * Колода из одних картинок: слайды у человека есть, слов на них нет (#1105).
+         *
+         * Прежде здесь звучало «в этом документе текста нет» — ответ про текст на вопрос про
+         * слайды, да ещё и отменяющий сами слайды.
+         */
+        const val NO_WORDS_ON_SLIDES =
+            "Слайды есть, а текста на них нет — Point достаёт из презентации только слова. " +
+                "Откройте её целиком, чтобы посмотреть глазами"
     }
 }
