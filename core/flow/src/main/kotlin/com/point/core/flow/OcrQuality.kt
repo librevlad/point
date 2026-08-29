@@ -37,6 +37,36 @@ private fun shortReadingIsGarbage(text: String): Boolean {
     return !SHORT_WORD.containsMatchIn(text)
 }
 
+/**
+ * Лучшее из двух чтений одного и того же кадра (#1041).
+ *
+ * Второе чтение — второй заход по выпрямленной копии, и «не каша» ещё не значит «лучше».
+ * Поиск границ листа промахивается обычным своим промахом: рамкой становится не лист, а чек
+ * или карточка внутри кадра. Тогда со второго захода приходят чистые десять слов из угла — а
+ * первым заходом длинный счёт прочитался почти целиком, просто неуверенно. Взять последнее
+ * чтение значило бы молча потерять прочитанное.
+ *
+ * Мера у обоих одна: сколько живого человек из чтения получит. Живое — слово в три буквы или
+ * число в две цифры; обрывок в один-два знака (`©`, `&`, `E`) находкой не был ни на одном
+ * кадре. Считаются только слова, которым движок верит: догадка ниже [CONFIDENT_WORD] дойдёт
+ * до человека мусором. Уверенности нет вовсе (чтение снаружи её не возвращает) — судится
+ * сам текст.
+ *
+ * Поровну — остаётся первое: оно с того самого кадра, которым поделился человек, и его
+ * координаты слов стоят там, куда он смотрит (#1013).
+ */
+fun betterReading(first: AtomLayer, second: AtomLayer): AtomLayer =
+    if (liveWords(second) > liveWords(first)) second else first
+
+private fun liveWords(layer: AtomLayer): Int {
+    if (layer.atoms.isEmpty()) return LIVE.findAll(layer.text).count()
+    return layer.atoms
+        .filter { it.confidence >= CONFIDENT_WORD }
+        .sumOf { LIVE.findAll(it.text).count() }
+}
+
+private val LIVE = Regex("""\p{L}{3,}|\d{2,}""")
+
 fun weaklyRead(layer: AtomLayer): Boolean {
     val text = layer.text
     val confidences = layer.atoms.filter { it.text.isNotBlank() }.map { it.confidence }.sorted()

@@ -1,5 +1,6 @@
 package com.point.core.flow
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -53,5 +54,59 @@ class PoorReadingTest {
         val silent = AtomLayer(emptyList(), readerText = ". aa - 11 ВЕНЕ")
 
         assertTrue(poorlyRead(silent.text, silent))
+    }
+
+    /**
+     * Чистый угол кадра: рамкой листа стал не лист, а чек внутри кадра — обычный промах
+     * поиска границ. Читал его тот же движок телефона, и слова с уверенностью пришли и
+     * отсюда: пара «атомы против атомов» — единственная, какая бывает на устройстве.
+     */
+    private val corner = layer(
+        "Дякуємо" to 0.9f, "за" to 0.9f, "покупку" to 0.9f, "Каса" to 0.9f, "12" to 0.9f,
+    )
+
+    /**
+     * Из двух чтений одного кадра знанием становится то, где живого больше (#1041).
+     *
+     * Второй заход по выпрямленной копии бывает беднее первого: вместо счёта приходят чистые
+     * слова из угла. «Не каша» — ещё не «лучше».
+     */
+    @Test
+    fun `полнее то чтение, где живых слов больше`() {
+        assertEquals(confident, betterReading(confident, corner))
+        assertEquals(confident, betterReading(corner, confident))
+    }
+
+    /**
+     * Уверенность решает, что вообще прочитано: слово-догадка дойдёт до человека мусором,
+     * и считать его прочитанным нельзя — иначе полным окажется чтение, которого нет.
+     */
+    @Test
+    fun `догадки движка полнотой чтения не считаются`() {
+        assertEquals(corner, betterReading(guessed, corner))
+    }
+
+    /**
+     * Уверенности нет вовсе — судится сам текст (#1041).
+     *
+     * Так отвечает чтение снаружи: слова с их местом и уверенностью оно не возвращает, и
+     * судить полноту по ним нечем. Мера остаётся одна — сколько живого человек получит.
+     */
+    @Test
+    fun `у чтения без уверенности полнота считается по самому тексту`() {
+        val short = AtomLayer(emptyList(), readerText = "Каса 12")
+        val whole = AtomLayer(
+            emptyList(),
+            readerText = "Накладна 59000123456789 від 12.05.2026 отримувач Іваненко",
+        )
+
+        assertEquals(whole, betterReading(short, whole))
+        assertEquals(whole, betterReading(whole, short))
+    }
+
+    /** Поровну — остаётся первое: оно с того кадра, которым поделился человек (#1013). */
+    @Test
+    fun `при равном чтении остаётся первое`() {
+        assertEquals(confident, betterReading(confident, AtomLayer(confident.atoms)))
     }
 }

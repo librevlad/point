@@ -22,10 +22,12 @@ import com.point.core.flow.investigationStateOf
 import com.point.core.flow.META_ENTITY_PREFIX
 import com.point.core.flow.META_OCR_ATOMS_REF
 import com.point.core.flow.META_OCR_TEXT_REF
+import com.point.core.flow.META_READ_STRAIGHTENED
 import com.point.core.flow.META_READ_UPSCALE
 import com.point.core.flow.META_READING_MODE
 import com.point.core.flow.ReadingMode
 import com.point.core.flow.ObjectStore
+import com.point.core.flow.StraightFrame
 import com.point.core.model.Bubble
 import com.point.core.model.CapabilityId
 import com.point.core.model.Feature
@@ -63,6 +65,9 @@ class OcrInvestigationTest {
     private fun extractor(vararg entities: Entity) = object : EntityExtractor {
         override suspend fun extract(text: String) = entities.toList()
     }
+
+    /** Кадр не выпрямляется: в этих проверках речь о самом чтении (#1041). */
+    private val asIs = StraightFrame { null }
 
     private class FakeStore : ObjectStore {
         val created = mutableListOf<File>()
@@ -116,6 +121,12 @@ class OcrInvestigationTest {
 
     private val realText = "Встреча завтра в 18:00, ул. Крещатик, 12. Звони +380671234567, детали https://point.app/x"
 
+    /** Дословный ответ движка с кадра, на котором читать нечего: ни одного живого слова. */
+    private val garbage =
+        "; i= © © - O = & E =. are © = E oS 2 (a9) ous © E pa ae Pl ans BS &§ я OE в > 3EE:"
+
+    private val garbageAtom = Atom("w0", "©", Box(0f, 0f, 5f, 5f), 0.2f)
+
     @Test
     fun `flags entities on the image and keeps the recognised text as a sidecar`() = runTest {
         val store = FakeStore()
@@ -127,6 +138,7 @@ class OcrInvestigationTest {
                 Entity(EntityType.DATE_TIME, "завтра в 18:00"),
                 Entity(EntityType.ADDRESS, "ул. Крещатик, 12"),
             ),
+            asIs,
         )
         val delta = enricher.look(image)
 
@@ -140,7 +152,7 @@ class OcrInvestigationTest {
 
     @Test
     fun `flags a link found in the recognised text`() = runTest {
-        val enricher = OcrInvestigationRealizer(FakeStore(), recognizer(realText), extractor())
+        val enricher = OcrInvestigationRealizer(FakeStore(), recognizer(realText), extractor(), asIs)
         assertTrue(Feature.HAS_URL in enricher.look(image).features)
     }
 
@@ -150,6 +162,7 @@ class OcrInvestigationTest {
             FakeStore(),
             recognizer(realText),
             extractor(Entity(EntityType.PHONE, "+380671234567")),
+            asIs,
         )
         val meta = enricher.look(image).metadata
         assertEquals("+380671234567", meta[META_ENTITY_PREFIX + "phone"])
@@ -162,7 +175,7 @@ class OcrInvestigationTest {
         val page = "Особовий рахунок 305412\n" +
             "Показання лічильника електроенергії 20842 кВт·ч\n" +
             "Точка обліку 50.4501, 30.5234"
-        val enricher = OcrInvestigationRealizer(FakeStore(), recognizer(page), extractor())
+        val enricher = OcrInvestigationRealizer(FakeStore(), recognizer(page), extractor(), asIs)
 
         val meta = enricher.look(image).metadata
 
@@ -174,16 +187,14 @@ class OcrInvestigationTest {
     @Test
     fun `discards gibberish from features but keeps the atom evidence`() = runTest {
         val store = FakeStore()
-        val garbage = "; i= © © - O = & E =. are © = E oS 2 (a9) ous © E pa ae Pl ans BS &§ я OE в > 3EE:"
-        val atom = Atom("w0", "©", Box(0f, 0f, 5f, 5f), 0.2f)
-        val enricher = OcrInvestigationRealizer(store, recognizer(garbage, atoms = listOf(atom)), extractor(Entity(EntityType.PHONE, "x")))
+        val enricher = OcrInvestigationRealizer(store, recognizer(garbage, atoms = listOf(garbageAtom)), extractor(Entity(EntityType.PHONE, "x")), asIs)
         val delta = enricher.look(image)
 
         assertEquals(setOf(Feature.HAS_WORD_LAYER), delta.features)
 
         assertEquals(setOf(META_OCR_ATOMS_REF, META_READING_MODE), delta.metadata.keys)
         assertEquals(ReadingMode.HANDWRITTEN.name, delta.metadata[META_READING_MODE])
-        assertEquals(listOf(atom), AtomCodec.decode(File(delta.metadata[META_OCR_ATOMS_REF]!!).readText()).atoms)
+        assertEquals(listOf(garbageAtom), AtomCodec.decode(File(delta.metadata[META_OCR_ATOMS_REF]!!).readText()).atoms)
     }
 
     /**
@@ -198,9 +209,7 @@ class OcrInvestigationTest {
      */
     @Test
     fun `слой слов без единого прочитанного слова не закрывает вопрос находкой`() = runTest {
-        val garbage = "; i= © © - O = & E =. are © = E oS 2 (a9) ous © E pa ae Pl ans BS &§ я OE в > 3EE:"
-        val atom = Atom("w0", "©", Box(0f, 0f, 5f, 5f), 0.2f)
-        val reading = OcrInvestigationRealizer(FakeStore(), recognizer(garbage, atoms = listOf(atom)), extractor())
+        val reading = OcrInvestigationRealizer(FakeStore(), recognizer(garbage, atoms = listOf(garbageAtom)), extractor(), asIs)
 
         val last = enrichmentOf(reading).enrich(image).toList().last()
 
@@ -211,6 +220,295 @@ class OcrInvestigationTest {
         )
     }
 
+    /**
+     * Слой, каким его отдаёт читатель телефона: слова с их местом и уверенностью.
+     *
+     * Оба захода делает один и тот же читатель, и атомы приходят с обоих (#1041): пара
+     * «атомы против голого текста» бывает только там, где читает облако.
+     */
+    private fun readLayer(text: String, confidence: Float) = AtomLayer(
+        text.split(" ").filter { it.isNotBlank() }.mapIndexed { i, word ->
+            Atom("w$i", word, Box(10f, i * 30f, 10f + word.length * 10f, i * 30f + 20f), confidence)
+        },
+        readerText = text,
+    )
+
+    /** Кадр, снятый под углом: сырой читается кашей, выпрямленный — как надо (#1041). */
+    private fun crookedReading(straightPath: String) = object : AtomRecognizer {
+        override suspend fun read(obj: PointObject) =
+            if (obj.uri.value == straightPath) {
+                readLayer(realText, confidence = 0.92f)
+            } else {
+                AtomLayer(listOf(garbageAtom), readerText = garbage)
+            }
+    }
+
+    /**
+     * Плохое чтение — не тупик, а повод выпрямить кадр и прочитать снова (#1041).
+     *
+     * Путь человека: он поделился счётом, снятым под углом. Первый заход по сырому кадру
+     * отдаёт кашу, и раньше на этом всё кончалось — выпрямить кадр он должен был догадаться
+     * сам: нажать «Скан», войти в родившуюся картинку и прочитать уже её. Знание после этого
+     * оставалось на другом объекте, а не на снимке, которым он поделился.
+     *
+     * Теперь второй заход делает сам Point, и лучшее чтение ложится знанием того же снимка:
+     * телефон со счёта ищется в объекте, которым поделились.
+     */
+    @Test
+    fun `плохо прочитанный кадр выпрямляется и читается снова — знанием того же снимка`() = runTest {
+        val straight = "/tmp/straight.jpg"
+        val enricher = OcrInvestigationRealizer(
+            FakeStore(),
+            crookedReading(straight),
+            extractor(Entity(EntityType.PHONE, "+380671234567")),
+            StraightFrame { straight },
+        )
+
+        val delta = enricher.look(image)
+
+        assertEquals(realText, File(delta.metadata[META_OCR_TEXT_REF]!!).readText())
+        assertTrue("найденное со второго захода — знание того же снимка", Feature.HAS_PHONE in delta.features)
+
+        // Слой слов — часть принятого чтения, а не проигравшего ему. Каша с сырого кадра
+        // словами объекта не остаётся, а места слов выпрямленной копии на снимке человека
+        // нет — и слоя у такого чтения нет вовсе (#1013, #1332).
+        assertFalse("каша с сырого кадра осталась словами объекта", META_OCR_ATOMS_REF in delta.metadata)
+        assertFalse(Feature.HAS_WORD_LAYER in delta.features)
+    }
+
+    /**
+     * Дальше по пути человека читается принятое чтение, а не проигравшее ему (#1041).
+     *
+     * За текстом объекта действия ходят одним входом (#1138), и слой слов в нём — сам текст
+     * объекта: «Понять» проверяет им прочитанное моделью («нет в тексте — нет знания», #809)
+     * и показывает модели страницу его блоками, «В Word» строит из него документ, «В Excel»
+     * адресует по нему ячейки.
+     *
+     * Пока слой оставался от сырого кадра, а текст приходил с выпрямленного, объект нёс два
+     * разных чтения двух разных кадров: человек, нажав «Понять» над выпрямленным счётом,
+     * получал ровно ту кашу, ради ухода от которой кадр и выпрямляли.
+     */
+    @Test
+    fun `слова объекта не спорят с его текстом после второго захода`() = runTest {
+        val straight = "/tmp/straight.jpg"
+        val store = FakeStore()
+        val enricher = OcrInvestigationRealizer(
+            store,
+            crookedReading(straight),
+            extractor(Entity(EntityType.PHONE, "+380671234567")),
+            StraightFrame { straight },
+        )
+
+        val read = image.copy(metadata = image.metadata + enricher.look(image).metadata)
+        val known = com.point.core.flow.GraphKnowledge(
+            store,
+            object : com.point.core.flow.PdfTextExtractor {
+                override suspend fun extractText(obj: PointObject) = ""
+            },
+        )
+        val words = known.layerOf(read)?.text
+
+        assertEquals("знанием стало не лучшее чтение", realText, known.textOf(read))
+        assertTrue(
+            "слой слов спорит с текстом объекта, а «Понять», «В Word» и «В Excel» читают именно его-" + words,
+            words == null || words == realText,
+        )
+    }
+
+    /** Тот же путь целиком: вопрос «что написано на снимке» закрывается находкой (#1041). */
+    @Test
+    fun `выпрямленный кадр отвечает на вопрос о снимке, а не оставляет пустые руки`() = runTest {
+        val straight = "/tmp/straight.jpg"
+        val reading = OcrInvestigationRealizer(
+            FakeStore(),
+            crookedReading(straight),
+            extractor(Entity(EntityType.PHONE, "+380671234567")),
+            StraightFrame { straight },
+        )
+
+        val last = enrichmentOf(reading).enrich(image).toList().last()
+
+        assertEquals(
+            InvestigationState.FOUND,
+            investigationStateOf(last.metadata, OcrInvestigation.ID),
+        )
+    }
+
+    /** Ровный кадр ничего не теряет и ничего не платит: второго захода у него нет (#1041). */
+    @Test
+    fun `прочитанный кадр не выпрямляется`() = runTest {
+        var asked = 0
+        val enricher = OcrInvestigationRealizer(
+            FakeStore(),
+            recognizer(realText),
+            extractor(),
+            StraightFrame { asked++; null },
+        )
+
+        enricher.look(image)
+
+        assertEquals("выпрямлять прочитанное незачем", 0, asked)
+    }
+
+    /**
+     * И выпрямленный кадр прочитался кашей — вопрос остаётся открытым (#988, #1041).
+     *
+     * Второе прочтение не лучше первого, и объявлять находкой то же самое, от чего уходили,
+     * нельзя: на бессмыслице дальше строились бы действия.
+     */
+    @Test
+    fun `каша и после выпрямления не становится знанием`() = runTest {
+        val enricher = OcrInvestigationRealizer(
+            FakeStore(),
+            recognizer(garbage, atoms = listOf(garbageAtom)),
+            extractor(Entity(EntityType.PHONE, "+380671234567")),
+            StraightFrame { "/tmp/straight.jpg" },
+        )
+
+        val delta = enricher.look(image)
+
+        assertFalse("каша объявлена текстом снимка", Feature.HAS_TEXT in delta.features)
+        assertFalse("каша сохранена чтением объекта", META_OCR_TEXT_REF in delta.metadata)
+    }
+
+    /**
+     * Длинный счёт, прочитанный почти целиком, но неуверенно (#1041).
+     *
+     * Больше половины слов — догадки движка, из-за них медианная уверенность ниже порога
+     * годности, и знанием такое чтение не станет. Но прочитано на нём почти всё, и терять
+     * это ради десяти слов из угла нельзя.
+     */
+    private fun weaklyReadReceipt(): AtomLayer {
+        val words = listOf(
+            "Супермаркет", "Сільпо", "вул", "Хрещатик", "12", "Чек", "0042", "молоко",
+            "селянське", "27.50", "хліб", "житній", "18.90", "кава", "мелена", "142.00",
+            "сир", "твердий", "231.40", "вода", "негазована", "16.20", "Разом", "436.00",
+            "Готівка", "500.00", "Решта", "64.00", "Дякуємо", "Каса",
+        )
+        // Догадок больше половины: медианная уверенность ложится на них, и по ней чтение
+        // признаётся плохим — ровно тот повод, по которому кадр и выпрямляется.
+        val guessed = words.size * 3 / 5
+        return AtomLayer(
+            words.mapIndexed { i, word ->
+                Atom(
+                    "w$i",
+                    word,
+                    Box(10f, i * 30f, 10f + word.length * 10f, i * 30f + 20f),
+                    if (i < guessed) 0.35f else 0.9f,
+                )
+            },
+        )
+    }
+
+    /**
+     * Второй заход беднее первого — знанием остаётся первое чтение (#1041).
+     *
+     * Путь человека: он поделился длинным счётом. Первый заход прочитал его почти целиком,
+     * но неуверенно, и по этой неуверенности чтение признано плохим — кадр выпрямляется.
+     * На выпрямлении границей листа стал не лист, а чек внутри кадра — обычный промах поиска
+     * границ, — и второй заход отдал чистые десять слов из угла.
+     *
+     * Взять последнее чтение значило бы молча потерять почти весь счёт и закрыть вопрос
+     * «что написано на снимке» углом страницы. Карточка требует лучшего чтения, а не
+     * второго: полнее — первое, и знанием становится оно.
+     */
+    @Test
+    fun `второй заход беднее первого — знанием он не становится`() = runTest {
+        val straight = "/tmp/straight.jpg"
+        val corner = "Дякуємо за покупку! Чекаємо знову. Каса 12 Зміна 3 Термінал 44"
+        val reading = object : AtomRecognizer {
+            override suspend fun read(obj: PointObject) =
+                if (obj.uri.value == straight) readLayer(corner, confidence = 0.9f)
+                else weaklyReadReceipt()
+        }
+        val enricher = OcrInvestigationRealizer(
+            FakeStore(),
+            reading,
+            extractor(Entity(EntityType.PHONE, "+380671234567")),
+            StraightFrame { straight },
+        )
+
+        val delta = enricher.look(image)
+
+        assertFalse("угол кадра объявлен текстом снимка", Feature.HAS_TEXT in delta.features)
+        assertFalse("угол кадра сохранён чтением объекта", META_OCR_TEXT_REF in delta.metadata)
+        assertFalse("найденное в углу выдано за знание о счёте", Feature.HAS_PHONE in delta.features)
+        assertTrue("улика первого чтения потеряна", Feature.HAS_WORD_LAYER in delta.features)
+    }
+
+    /**
+     * Снимок без текста за чужую кривизну не платит (#1041).
+     *
+     * Фото кота, селфи, кадр видео — самый частый объект в Point, и текста на нём нет вовсе.
+     * Пустое чтение — тоже плохое чтение, и без этого условия каждый такой снимок уходил бы
+     * в выпрямление и второе полное чтение. «Текст был, но не дался» отличимо от «текста
+     * нет» единственным сигналом: движок увидел на кадре хоть что-то.
+     */
+    @Test
+    fun `снимок без текста не выпрямляется`() = runTest {
+        var asked = 0
+        val enricher = OcrInvestigationRealizer(
+            FakeStore(),
+            recognizer(""),
+            extractor(),
+            StraightFrame { asked++; null },
+        )
+
+        enricher.look(image)
+
+        assertEquals("выпрямлять кадр, на котором движок не увидел ни слова, незачем", 0, asked)
+    }
+
+    /**
+     * Оборванное чтение — не плохое чтение, а недочитанное (#1041, ADR-0001 §9).
+     *
+     * Кадр, не уложившийся в срок, отдаёт снятые до обрыва атомы и обрывок текста — по виду
+     * то же плохое чтение, что и каша. Но второй заход стоит выпрямления и ещё одного полного
+     * чтения того же кадра, то есть вдвое больше срока, в который уже не уложились, и судить
+     * по недочитанному о кривизне кадра нечем.
+     */
+    @Test
+    fun `оборванное чтение кадр не выпрямляет`() = runTest {
+        var asked = 0
+        val enricher = OcrInvestigationRealizer(
+            FakeStore(),
+            recognizer(garbage, atoms = listOf(garbageAtom), incomplete = INCOMPLETE_TIMEOUT),
+            extractor(),
+            StraightFrame { asked++; null },
+        )
+
+        enricher.look(image)
+
+        assertEquals("недочитанный кадр заплатил за второй заход", 0, asked)
+    }
+
+    /**
+     * Текст пришёл с кадра, которого человек не видел — и это записано (#1041).
+     *
+     * Тот же след работы, что и чтение увеличенного кадра (`read.upscale`): без него понять
+     * происхождение знания нечем — оно выглядит прочитанным с того снимка, которым
+     * поделились. Человеку эта пометка не показывается: provenance внутренний.
+     */
+    @Test
+    fun `чтение с выпрямленного кадра видно в метаданных объекта`() = runTest {
+        val straight = "/tmp/straight.jpg"
+        val enricher = OcrInvestigationRealizer(
+            FakeStore(),
+            crookedReading(straight),
+            extractor(),
+            StraightFrame { straight },
+        )
+
+        assertEquals("1", enricher.look(image).metadata[META_READ_STRAIGHTENED])
+    }
+
+    @Test
+    fun `чтение с кадра человека пометки о выпрямлении не оставляет`() = runTest {
+        val delta = OcrInvestigationRealizer(FakeStore(), recognizer(realText), extractor(), asIs).look(image)
+
+        assertFalse(META_READ_STRAIGHTENED in delta.metadata)
+    }
+
     @Test
     fun `persists the atom layer as a sidecar next to the text`() = runTest {
         val store = FakeStore()
@@ -218,7 +516,7 @@ class OcrInvestigationTest {
             Atom("w0", "20", Box(10f, 10f, 30f, 24f), 0.9f, "tesseract", "5.3", 0),
             Atom("w1", "4514", Box(34f, 10f, 80f, 24f), 0.8f, "tesseract", "5.3", 0),
         )
-        val enricher = OcrInvestigationRealizer(store, recognizer(realText, atoms = atoms), extractor())
+        val enricher = OcrInvestigationRealizer(store, recognizer(realText, atoms = atoms), extractor(), asIs)
         val delta = enricher.look(image)
 
         val ref = delta.metadata[META_OCR_ATOMS_REF]
@@ -238,14 +536,14 @@ class OcrInvestigationTest {
                 transform = FrameTransform(sample = 1, uprightWidth = 3000, uprightHeight = 2250, upscale = 3),
             )
         }
-        val delta = OcrInvestigationRealizer(FakeStore(), enlarged, extractor()).look(image)
+        val delta = OcrInvestigationRealizer(FakeStore(), enlarged, extractor(), asIs).look(image)
 
         assertEquals("3", delta.metadata[META_READ_UPSCALE])
     }
 
     @Test
     fun `неувеличенный кадр не оставляет пометки об увеличении`() = runTest {
-        val delta = OcrInvestigationRealizer(FakeStore(), recognizer(realText), extractor()).look(image)
+        val delta = OcrInvestigationRealizer(FakeStore(), recognizer(realText), extractor(), asIs).look(image)
 
         assertFalse(META_READ_UPSCALE in delta.metadata)
     }
@@ -265,6 +563,7 @@ class OcrInvestigationTest {
                 Entity(EntityType.PHONE, "+380671234567"),
                 Entity(EntityType.EMAIL, "hello@example.org"),
             ),
+            asIs,
         )
         val delta = enricher.look(image)
 
@@ -293,6 +592,7 @@ class OcrInvestigationTest {
             FakeStore(),
             recognizer("+380671234567\n+380671234567", atoms = atoms),
             extractor(Entity(EntityType.PHONE, "+380671234567")),
+            asIs,
         )
         val delta = enricher.look(image)
 
@@ -306,7 +606,7 @@ class OcrInvestigationTest {
     @Test
     fun `blank recognition yields nothing but the honest reading mode`() = runTest {
 
-        val enricher = OcrInvestigationRealizer(FakeStore(), recognizer("   "), extractor())
+        val enricher = OcrInvestigationRealizer(FakeStore(), recognizer("   "), extractor(), asIs)
         val delta = enricher.look(image)
         assertTrue(delta.features.isEmpty())
         assertEquals(ReadingMode.HANDWRITTEN.name, delta.metadata[META_READING_MODE])
@@ -316,7 +616,7 @@ class OcrInvestigationTest {
     @Test
     fun `an engine failure is a failure, not an empty reading — a crash is not handwriting`() = runTest {
 
-        val enricher = OcrInvestigationRealizer(FakeStore(), recognizer("", fail = true), extractor())
+        val enricher = OcrInvestigationRealizer(FakeStore(), recognizer("", fail = true), extractor(), asIs)
         val result = enricher.perform(image, null)
 
         assertTrue("сбой движка обязан остаться сбоем, а не пустым знанием-" + result,
@@ -329,7 +629,7 @@ class OcrInvestigationTest {
             override suspend fun read(obj: PointObject) =
                 AtomLayer(emptyList(), incomplete = INCOMPLETE_TIMEOUT)
         }
-        val result = OcrInvestigationRealizer(FakeStore(), timedOut, extractor()).perform(image, null)
+        val result = OcrInvestigationRealizer(FakeStore(), timedOut, extractor(), asIs).perform(image, null)
 
         assertTrue("обрыв без находок обязан быть неудачей-" + result,
             result is com.point.core.model.ActionResult.Failure)
@@ -339,7 +639,7 @@ class OcrInvestigationTest {
     fun `таймаут с уже прочитанными словами оставляет частичное знание`() = runTest {
         val atoms = listOf(Atom("w1", "+380671234567", Box(10f, 20f, 210f, 40f), confidence = 0.99f))
         val partial = recognizer("+380671234567", atoms = atoms, incomplete = INCOMPLETE_TIMEOUT)
-        val delta = OcrInvestigationRealizer(FakeStore(), partial, extractor()).look(image)
+        val delta = OcrInvestigationRealizer(FakeStore(), partial, extractor(), asIs).look(image)
 
         assertTrue("частичное чтение — всё ещё знание", delta.metadata.isNotEmpty())
 
@@ -354,7 +654,7 @@ class OcrInvestigationTest {
         // знание остаётся с объектом (Feature.UNUSABLE) и после этого тапа — не гаснет
         // разовым отказом, как раньше.
         val broken = recognizer("", incomplete = "decode failed")
-        val delta = OcrInvestigationRealizer(FakeStore(), broken, extractor()).look(image)
+        val delta = OcrInvestigationRealizer(FakeStore(), broken, extractor(), asIs).look(image)
 
         assertEquals(setOf(Feature.UNUSABLE), delta.features)
 
@@ -369,7 +669,7 @@ class OcrInvestigationTest {
     @Test
     fun `не изображение вовсе — та же негодность, что и битые байты`() = runTest {
         val notAnImage = recognizer("", incomplete = "not an image")
-        val delta = OcrInvestigationRealizer(FakeStore(), notAnImage, extractor()).look(image)
+        val delta = OcrInvestigationRealizer(FakeStore(), notAnImage, extractor(), asIs).look(image)
 
         assertEquals(setOf(Feature.UNUSABLE), delta.features)
     }
@@ -380,7 +680,7 @@ class OcrInvestigationTest {
         // В отличие от битых байт — это про попытку сейчас (устройство, движок), а не про
         // содержимое: закрывать путь наружу навсегда здесь нельзя (#684/#685).
         val enginedown = recognizer("", incomplete = "engine init failed")
-        val result = OcrInvestigationRealizer(FakeStore(), enginedown, extractor()).perform(image, null)
+        val result = OcrInvestigationRealizer(FakeStore(), enginedown, extractor(), asIs).perform(image, null)
 
         assertTrue(result is com.point.core.model.ActionResult.Failure)
 
@@ -399,7 +699,7 @@ class OcrInvestigationTest {
             override suspend fun read(obj: PointObject) =
                 AtomLayer(atoms, readerText = realText, incomplete = INCOMPLETE_TIMEOUT)
         }
-        val delta = OcrInvestigationRealizer(FakeStore(), partial, extractor()).look(image)
+        val delta = OcrInvestigationRealizer(FakeStore(), partial, extractor(), asIs).look(image)
 
         assertEquals(atoms, AtomCodec.decode(File(delta.metadata[META_OCR_ATOMS_REF]!!).readText()).atoms)
         assertEquals(realText, File(delta.metadata[META_OCR_TEXT_REF]!!).readText())
@@ -408,7 +708,7 @@ class OcrInvestigationTest {
 
     @Test
     fun `applies only to images and declares slow, labelled work`() {
-        val enricher = OcrInvestigationRealizer(FakeStore(), recognizer(""), extractor())
+        val enricher = OcrInvestigationRealizer(FakeStore(), recognizer(""), extractor(), asIs)
         assertTrue(OcrInvestigation().accepts(ObjectState(ObjectKind.IMAGE)))
         assertFalse(OcrInvestigation().accepts(ObjectState(ObjectKind.TEXT)))
         val declared = OcrInvestigation()

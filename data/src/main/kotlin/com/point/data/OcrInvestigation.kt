@@ -23,13 +23,16 @@ import com.point.core.flow.EntityExtractor
 import com.point.core.flow.META_ENTITY_PREFIX
 import com.point.core.flow.META_OCR_ATOMS_REF
 import com.point.core.flow.META_OCR_TEXT_REF
+import com.point.core.flow.META_READ_STRAIGHTENED
 import com.point.core.flow.META_READ_UPSCALE
 import com.point.core.flow.META_READING_MODE
 import com.point.core.flow.META_UNUSABLE_REASON
 import com.point.core.flow.readerFailureIsFatal
 import com.point.core.flow.readingModeOf
 import com.point.core.flow.ObjectStore
+import com.point.core.flow.StraightFrame
 import com.point.core.flow.amountFacts
+import com.point.core.flow.betterReading
 import com.point.core.flow.geoFacts
 import com.point.core.flow.poorlyRead
 import com.point.core.flow.meterFacts
@@ -86,6 +89,9 @@ class OcrInvestigationRealizer @Inject constructor(
     private val store: ObjectStore,
     private val recognizer: AtomRecognizer,
     private val extractor: EntityExtractor,
+
+    // Плохое чтение — повод выпрямить кадр и прочитать снова (#1041).
+    private val straight: StraightFrame,
 ) : Realizer {
 
     private val crops = FocusCrop(store)
@@ -111,13 +117,14 @@ class OcrInvestigationRealizer @Inject constructor(
         // Человек показал область — читаем её, а не страницу целиком (#426). Мелкое на большом
         // кадре иначе не читается вовсе: вопрос «что на странице» неправильный, когда нужное
         // занимает считанные проценты кадра.
-        val layer = recognizer.read(focused(obj) ?: obj)
+        val frame = focused(obj) ?: obj
+        val onFrame = recognizer.read(frame)
 
         // Ридер честно сигналит, что не смог посмотреть (decode failed / not an image /
         // таймаут). Пусто И оборвано = не «текста нет», а «не смогли посмотреть» (ADR-0001 §9).
         // Частичное чтение с атомами остаётся частичным знанием.
-        val broken = layer.incomplete
-        if (broken != null && layer.atoms.isEmpty() && layer.text.isBlank()) {
+        val broken = onFrame.incomplete
+        if (broken != null && onFrame.atoms.isEmpty() && onFrame.text.isBlank()) {
             // Человеку — свои слова, чужое «decode failed» остаётся в журнале (#686).
             val reason = readerFailure(broken, obj.state.kind)
 
@@ -135,7 +142,50 @@ class OcrInvestigationRealizer @Inject constructor(
             com.point.core.flow.ownWords(reason)
         }
 
-        val atomsRef = if (layer.atoms.isNotEmpty()) {
+        // Плохое чтение — не тупик, а повод выпрямить кадр и прочитать снова (#1041). Снятый
+        // под углом счёт кашей и оставался: выпрямить его человек должен был догадаться сам,
+        // нажав «Скан», а знание после этого ложилось на родившуюся картинку, а не на снимок,
+        // которым он поделился. Ровный кадр за это не платит: второго захода у него нет.
+        //
+        // Платит только кадр, на котором движок вообще что-то увидел. «Текст был, но не дался»
+        // отличимо от «текста нет» единственным сигналом — пустотой чтения, — и без этого
+        // условия за выпрямление и второе полное чтение платил бы каждый снимок без текста:
+        // кот, селфи, кадр видео, то есть самый частый объект в Point.
+        //
+        // И платит только дочитанный кадр. Оборванное чтение — не плохое чтение, а
+        // недочитанное (ADR-0001 §9): судить о нём как о плохом нечем, а второй заход стоит
+        // выпрямления и ещё одного полного чтения — вдвое больше того срока, в который уже
+        // не уложились.
+        val sawSomething = onFrame.atoms.isNotEmpty() || onFrame.text.isNotBlank()
+        val readToTheEnd = onFrame.incomplete == null
+        val straightened =
+            if (readToTheEnd && sawSomething && poorlyRead(onFrame.text, onFrame)) {
+                straightRead(frame)
+            } else {
+                null
+            }
+
+        // Знанием становится лучшее из двух чтений, а не последнее: второй заход бывает
+        // беднее первого, когда границей листа стал чек внутри кадра (#1041).
+        val layer = straightened?.let { betterReading(onFrame, it) } ?: onFrame
+
+        // Читали выпрямленную копию — это происхождение знания, и назвать его нужно так же,
+        // как называется чтение с увеличенного кадра (#1041).
+        val straightenedRead = layer !== onFrame
+
+        // Слой слов — часть того чтения, которое стало знанием, а не того, которое ему
+        // проиграло (#1041). Иначе объект нёс бы два разных чтения двух разных кадров: текст
+        // с выпрямленной копии и слова с сырого. Дальше по пути человека слой и есть текст
+        // объекта: «Понять» проверяет им прочитанное моделью («нет в тексте — нет знания»,
+        // #809) и показывает модели страницу его блоками, «В Word» строит из него документ,
+        // «В Excel» адресует по нему ячейки, — и человек снова получил бы ту самую кашу, от
+        // которой уходил.
+        //
+        // Координаты слов принадлежат тому кадру, на котором сняты (#1013), и перенести их с
+        // выпрямленной копии на снимок человека нечем, пока `enhance` не отдаёт своё
+        // преобразование. Поэтому у чтения со второго захода слоя слов нет вовсе (#1332):
+        // рамка не на том месте хуже, чем её отсутствие.
+        val atomsRef = if (!straightenedRead && layer.atoms.isNotEmpty()) {
             store.newScratchFile("atoms.tsv").also { File(it.value).writeText(AtomCodec.encode(layer)) }
         } else {
             null
@@ -151,12 +201,17 @@ class OcrInvestigationRealizer @Inject constructor(
                 atomsRef?.let { put(META_OCR_ATOMS_REF, it.value) }
                 mode?.let { put(META_READING_MODE, it.name) }
                 zoom?.let { put(META_READ_UPSCALE, it) }
+
+                // Пометки о выпрямлении здесь не бывает: сюда приходит только чтение,
+                // признанное плохим, а второй заход годным чтением и становится (#1041).
             },
         )
         val raw = layer.text
 
         // Неудачное чтение не должно объявляться знанием: вопрос «что написано на снимке»
-        // закрылся бы навсегда, а на бессмыслице дальше строились бы действия (#694).
+        // закрылся бы навсегда, а на бессмыслице дальше строились бы действия (#694). Сюда
+        // приходит и кадр, который не дался и выпрямленным: такой вопрос остаётся открытым
+        // (#988, #1041), а не закрывается находкой.
         if (poorlyRead(raw, layer)) return@withContext evidenceOnly
 
         val text = stripStatusBar(raw)
@@ -194,6 +249,7 @@ class OcrInvestigationRealizer @Inject constructor(
                 putAll(receiptFacts(text.take(com.point.core.flow.INVESTIGATION_TEXT_CHARS)))
                 mode?.let { put(META_READING_MODE, it.name) }
                 zoom?.let { put(META_READ_UPSCALE, it) }
+                if (straightenedRead) put(META_READ_STRAIGHTENED, "1")
                 put(META_OCR_TEXT_REF, ref.value)
                 atomsRef?.let { put(META_OCR_ATOMS_REF, it.value) }
 
@@ -207,8 +263,12 @@ class OcrInvestigationRealizer @Inject constructor(
             },
 
             // Узел найденного несёт то же сомнение, что и факт: человек входит в значение
-            // и обязан видеть там ровно то, что видел в списке (#1109).
-            objects = locate(entities.objects + identifiers, layer)
+            // и обязан видеть там ровно то, что видел в списке (#1109). Место ищется по
+            // словам сырого кадра — только они стоят там, где смотрит человек (#1013).
+            // Значение, которое оба чтения прочли одинаково, место так и получает; всё
+            // остальное со второго захода остаётся без места, пока `enhance` не отдаёт
+            // своё преобразование (#1332).
+            objects = locate(entities.objects + identifiers, onFrame)
                 .map { node -> node.copy(metadata = node.metadata + doubted(node.metadata, layer)) },
             relations = entities.relations + idRelations,
 
@@ -216,6 +276,28 @@ class OcrInvestigationRealizer @Inject constructor(
             // тот движок, которого выбрала цепочка, и по имени видно, чьё это прочтение,
             // когда второй путь прочтёт то же место иначе.
         ).by(readBy(layer))
+    }
+
+    /**
+     * Второй заход по выпрямленному кадру (#1041).
+     *
+     * Тот же читатель и тот же кадр — только без перспективы и с выбеленной бумагой. Новый
+     * объект из этого не рождается: выпрямленная копия лежит в scratch и уходит вместе с ним,
+     * как вырезка по показанной области, а знанием становится текст — знанием того же снимка.
+     *
+     * Возвращается только годное чтение: если и выпрямленный кадр прочитался кашей, второе
+     * прочтение не лучше первого и вопрос обязан остаться открытым (#988) — иначе Point
+     * объявил бы находкой то же самое, от чего и уходил.
+     *
+     * Годное — ещё не значит лучшее: какое из двух чтений станет знанием, решает
+     * [betterReading], а не порядок заходов.
+     */
+    private suspend fun straightRead(frame: PointObject): AtomLayer? {
+        val path = runCatching { straight.of(frame.uri.value) }.getOrNull() ?: return null
+        val again = runCatching {
+            recognizer.read(frame.copy(uri = com.point.core.model.ScratchRef(path)))
+        }.getOrNull() ?: return null
+        return again.takeUnless { poorlyRead(it.text, it) }
     }
 
     /**
