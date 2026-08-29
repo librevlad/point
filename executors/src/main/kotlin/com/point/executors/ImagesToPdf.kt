@@ -107,9 +107,13 @@ internal fun PdfDocument.addPage(bitmap: Bitmap, number: Int) {
  * Страница под лист: чёткость и оттенки — по тому, что на ней самой (#1047).
  *
  * Чёрно-белую страницу отдаём как есть, и это замер, а не догадка: на снимке документа
- * ужатие бинаризованной страницы до предела листа меняет её вес на −2 %…+1 % и добавляет
- * буквам серые края. Цветную ужимаем до чёткости листа и округляем ей оттенки — снимок с
- * шумом матрицы иначе едет в PDF почти несжатым.
+ * ужатие бинаризованной страницы до предела листа меняет её вес на −2 %…+3 % и добавляет
+ * буквам серые края. Цветную ужимаем до чёткости листа (150 dpi) и округляем ей оттенки —
+ * снимок с шумом матрицы иначе едет в PDF почти несжатым.
+ *
+ * Лишней памяти страница при этом не берёт: оттенки округляются на месте, в том же массиве
+ * пикселей, — второй такой же стоил бы ещё ~9 МБ на страницу, а `PdfDocument` держит все
+ * собранные страницы разом.
  */
 private fun fittedToSheet(bitmap: Bitmap, sheet: Sheet): Bitmap {
     if (inkOnPaper(rowSample(bitmap))) return bitmap
@@ -129,9 +133,8 @@ private fun fittedToSheet(bitmap: Bitmap, sheet: Sheet): Bitmap {
 
     val pixels = IntArray(scaled.width * scaled.height)
     scaled.getPixels(pixels, 0, scaled.width, 0, 0, scaled.width, scaled.height)
-    val toned = Bitmap.createBitmap(
-        fewerTones(pixels), scaled.width, scaled.height, Bitmap.Config.ARGB_8888,
-    )
+    fewerTones(pixels)
+    val toned = Bitmap.createBitmap(pixels, scaled.width, scaled.height, Bitmap.Config.ARGB_8888)
     if (scaled !== bitmap) scaled.recycle()
     return toned
 }
