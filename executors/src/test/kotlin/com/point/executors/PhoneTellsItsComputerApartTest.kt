@@ -175,6 +175,10 @@ class PhoneTellsItsComputerApartTest {
      * вход в это правило: назовись он здешним, он делил бы ступень с собственной работой
      * телефона, и их разводило бы имя класса — ровно та случайность, ради которой #1088 и
      * заводился. Уход за круг устройств — отдельный вопрос, и ответ на него прежний.
+     *
+     * Здесь проверяется признак, а не экран: спрашивают ли согласие у человека, тапнувшего
+     * «На компьютер», решает `FlowViewModel`, и это доказано на его пути —
+     * `FlowViewModelTest.«На компьютер» не спрашивает про облако`.
      */
     @Test
     fun `«На компьютер» — второе устройство человека, а не сам телефон`() {
@@ -186,7 +190,10 @@ class PhoneTellsItsComputerApartTest {
             listOf(RealizerKind.LOCAL, RealizerKind.REMOTE, RealizerKind.CLOUD),
             order.map { it.meta.kind },
         )
-        assertFalse("«На компьютер» стало спрашивать согласие", resolver(toPc).leavesDevice(PcCapability.ID))
+        assertFalse(
+            "«На компьютер» стало объявлять уход за круг устройств",
+            resolver(toPc).leavesDevice(PcCapability.ID),
+        )
     }
 
     /**
