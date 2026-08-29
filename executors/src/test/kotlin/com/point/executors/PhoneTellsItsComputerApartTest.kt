@@ -19,6 +19,7 @@ import com.point.core.model.ScratchRef
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -52,8 +53,9 @@ private class AaaService : Realizer {
  * Исполнитель компьютера звался то здешним, то облачным — смотря по тому, отправит ли
  * компьютер объект дальше, — а `RealizerKind.REMOTE` не использовался нигде. Поэтому при
  * равной объявленной цене порядок между своим исполнителем и соседским решало имя класса по
- * алфавиту: `EntityInvestigation` выигрывал у `RemotePcRealizer` случайно, и переименование
- * класса меняло, кто делает работу и где оказывается объект.
+ * алфавиту: живая пара `ExternalEyeOcrRealizer` и `RemotePcRealizer` делит способность «ocr»
+ * и цену 50, и снимок уходил в чужой сервис случайно — потому что `E` раньше `R`. Здесь эта
+ * пара проверена как есть, а работа под именем «entities» — та же связка на упрощённой паре.
  */
 class PhoneTellsItsComputerApartTest {
 
@@ -162,5 +164,76 @@ class PhoneTellsItsComputerApartTest {
 
         assertEquals(RealizerKind.REMOTE, stays.meta.kind)
         assertFalse(resolver(stays).leavesDevice(work))
+    }
+
+    /**
+     * «На компьютер» — действие, которое буквально увозит объект на второе устройство
+     * человека, и его исполнитель обязан называться этим устройством.
+     *
+     * Сегодня у способности `pc` исполнитель один, и порядок между ним и кем-то ещё не
+     * возникает. Но правило близости одно на всех, а подпись исполнителя — его единственный
+     * вход в это правило: назовись он здешним, он делил бы ступень с собственной работой
+     * телефона, и их разводило бы имя класса — ровно та случайность, ради которой #1088 и
+     * заводился. Уход за круг устройств — отдельный вопрос, и ответ на него прежний.
+     */
+    @Test
+    fun `«На компьютер» — второе устройство человека, а не сам телефон`() {
+        val toPc = PcRealizer(Circle(), Knock(), unusedStore)
+
+        val order = DefaultExecutionPolicy().choose(anything, listOf(AaaService(), toPc, ZzzOwnWork()))
+
+        assertEquals(
+            listOf(RealizerKind.LOCAL, RealizerKind.REMOTE, RealizerKind.CLOUD),
+            order.map { it.meta.kind },
+        )
+        assertFalse("«На компьютер» стало спрашивать согласие", resolver(toPc).leavesDevice(PcCapability.ID))
+    }
+
+    /**
+     * Живая пара одной цены, а не выдуманная (#1088).
+     *
+     * «Распознать текст» на снимке умеют и чужой глаз (`ExternalEyeOcrRealizer`), и компьютер
+     * человека, объявивший телефону то же умение: у обоих исполнителей объявленная цена 50.
+     * Разводил их алфавит имён классов — `E` раньше `R`, — и снимок уходил в чужой сервис
+     * мимо своего компьютера. Теперь при равной цене первым идёт компьютер.
+     */
+    @Test
+    fun `при равной цене снимок читает свой компьютер, а не чужой глаз`() {
+        val eye = ExternalEyeOcrRealizer(openEye, unusedStore)
+        val pc = remotePcRealizers(
+            own = setOf(com.point.core.flow.capabilities.OcrCapability()),
+
+            // Так это умение и приезжает с компьютера: тем же именем, что своё, и с честным
+            // «дальше уйдёт наружу» — читает-то там сервис (`DesktopRegistry.leavesDevice`).
+            fromPc = listOf(PcRemoteAction("ocr", "Распознать текст", leavesCircle = true)),
+            links = Circle(),
+            transport = Knock(),
+        ).single()
+
+        val order = DefaultExecutionPolicy().choose(ObjectState(ObjectKind.IMAGE), listOf(eye, pc))
+
+        assertEquals("цена у пары разошлась — проверка больше не о близости", eye.meta.priority, pc.meta.priority)
+        assertSame("снимок ушёл в чужой сервис мимо своего компьютера", pc, order.first())
+    }
+
+    /** Чужой глаз — сервис вне круга, читать его тут не зовут. */
+    private val openEye = object : com.point.core.flow.ExternalEye {
+        override fun available() = true
+        override suspend fun read(obj: PointObject) = error("не зовут")
+    }
+
+    /** Порядок исполнителей считается без единого обращения к байтам. */
+    private val unusedStore = object : com.point.core.flow.ObjectStore {
+        override suspend fun ingest(sourceUri: String, mime: String) = error("не зовут")
+        override suspend fun ingestMultiple(sources: List<String>) = error("не зовут")
+        override suspend fun put(
+            result: com.point.core.model.ResultObject,
+            from: PointObject?,
+            by: CapabilityId?,
+        ) = error("не зовут")
+        override suspend fun children(collection: PointObject, limit: Int) = error("не зовут")
+        override suspend fun readText(obj: PointObject, limit: Int) = error("не зовут")
+        override suspend fun newScratchFile(extension: String) = error("не зовут")
+        override suspend fun clear() = Unit
     }
 }

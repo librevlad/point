@@ -71,13 +71,13 @@ class DefaultResolverTest {
     /**
      * Цену исполнитель объявляет приоритетом, и она решает первой — дешёвое и быстрое впереди
      * дорогого. Правило близости (сначала я, потом мой компьютер, потом чужой сервис, #1088)
-     * разбирает уже равных по цене.
+     * разбирает уже равных по цене, а вида, который сам по себе отменял бы цену, нет.
      */
     @Test
-    fun `среди равных по близости порядок задают объявленные приоритеты`() = runTest {
+    fun `цена решает раньше близости — дешёвый чужой сервис впереди дорогого своего`() = runTest {
 
         val cheap = realizer("ai", priority = 10, kind = RealizerKind.CLOUD, done = "по приоритету 10")
-        val dear = realizer("ai", priority = 90, kind = RealizerKind.CLOUD, done = "по приоритету 90")
+        val dear = realizer("ai", priority = 90, kind = RealizerKind.LOCAL, done = "по приоритету 90")
 
         val result = resolver(setOf(dear, cheap)).realizerFor(CapabilityId("ai")).perform(obj())
 
