@@ -121,6 +121,7 @@ import com.point.executors.VCardCapability
 import com.point.executors.VCardRealizer
 import com.point.core.flow.ObjectClassifier
 import com.point.core.flow.ObjectStore
+import com.point.executors.OpenCvPaperWhitener
 import com.point.executors.OpenCvStraightFrame
 import dagger.Binds
 import dagger.Module
@@ -330,6 +331,18 @@ abstract class CapabilityModule {
         @Provides
         fun straightFrame(store: ObjectStore): com.point.core.flow.StraightFrame =
             OpenCvStraightFrame(store)
+
+        /**
+         * Первая ступень того же второго захода — ровный свет без правки геометрии (#1046).
+         * Живёт рядом со «Сканом» по той же причине, что и выпрямление: обработка снимков
+         * здесь, а понимание кадра — в исследовании.
+         *
+         * @Provides, а не @Binds: класс трогает OpenCV, и @Binds роняет разрешение типов во
+         * всём модуле KSP.
+         */
+        @Provides
+        fun paperWhitener(store: ObjectStore): com.point.core.flow.PaperWhitener =
+            OpenCvPaperWhitener(store)
 
         @Provides
         fun aiChatResponder(llm: com.point.core.flow.LlmClient): AiChatResponder = AiChatResponderImpl(llm)

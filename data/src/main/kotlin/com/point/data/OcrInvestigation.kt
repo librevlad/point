@@ -23,10 +23,18 @@ import com.point.core.flow.EntityExtractor
 import com.point.core.flow.META_ENTITY_PREFIX
 import com.point.core.flow.META_OCR_ATOMS_REF
 import com.point.core.flow.META_OCR_TEXT_REF
-import com.point.core.flow.META_READ_STRAIGHTENED
+import com.point.core.flow.INCOMPLETE_TIMEOUT
+import com.point.core.flow.META_READ_PREPARED
 import com.point.core.flow.META_READ_UPSCALE
 import com.point.core.flow.META_READING_MODE
 import com.point.core.flow.META_UNUSABLE_REASON
+import com.point.core.flow.OCR_READ_BUDGET_MS
+import com.point.core.flow.OcrClock
+import com.point.core.flow.PaperWhitener
+import com.point.core.flow.ReadingBudget
+import com.point.core.flow.READ_PREPARED_STRAIGHTENED
+import com.point.core.flow.READ_PREPARED_WHITENED
+import com.point.core.flow.inSourceFrame
 import com.point.core.flow.readerFailureIsFatal
 import com.point.core.flow.readingModeOf
 import com.point.core.flow.ObjectStore
@@ -90,8 +98,14 @@ class OcrInvestigationRealizer @Inject constructor(
     private val recognizer: AtomRecognizer,
     private val extractor: EntityExtractor,
 
-    // Плохое чтение — повод выпрямить кадр и прочитать снова (#1041).
+    // Плохое чтение — повод подготовить кадр и прочитать снова (#1041, #1046). Две ступени
+    // одного захода: ровный свет слова не двигает, выпрямление двигает.
     private val straight: StraightFrame,
+    private val whitener: PaperWhitener,
+
+    // Часы захода (#861, #1046): предел чтения один на все его ступени, а не по пределу на
+    // ступень. Системное время — за швом, иначе проверить это можно было бы только ожиданием.
+    private val clock: OcrClock,
 ) : Realizer {
 
     private val crops = FocusCrop(store)
@@ -113,6 +127,13 @@ class OcrInvestigationRealizer @Inject constructor(
         com.point.core.flow.investigated { findings(input) }
 
     private suspend fun findings(obj: PointObject): Findings = withContext(Dispatchers.IO) {
+
+        // Часы у захода одни на все его ступени (#861, #1046). Читатель отмеряет свой предел
+        // каждому чтению заново, поэтому цепочка «прочитать → подготовить → прочитать снова»
+        // сама по себе множит предел на число ступеней, а тап человека ждёт под потолком
+        // действия в десять минут (`ACTION_CEILING_MS`) — и вместо ответа он получил бы
+        // «не уложилось». Предел, который человек чувствует, обязан остаться одним числом.
+        val budget = ReadingBudget(OCR_READ_BUDGET_MS, clock)
 
         // Человек показал область — читаем её, а не страницу целиком (#426). Мелкое на большом
         // кадре иначе не читается вовсе: вопрос «что на странице» неправильный, когда нужное
@@ -142,51 +163,28 @@ class OcrInvestigationRealizer @Inject constructor(
             com.point.core.flow.ownWords(reason)
         }
 
-        // Плохое чтение — не тупик, а повод выпрямить кадр и прочитать снова (#1041). Снятый
-        // под углом счёт кашей и оставался: выпрямить его человек должен был догадаться сам,
-        // нажав «Скан», а знание после этого ложилось на родившуюся картинку, а не на снимок,
-        // которым он поделился. Ровный кадр за это не платит: второго захода у него нет.
-        //
-        // Платит только кадр, на котором движок вообще что-то увидел. «Текст был, но не дался»
-        // отличимо от «текста нет» единственным сигналом — пустотой чтения, — и без этого
-        // условия за выпрямление и второе полное чтение платил бы каждый снимок без текста:
-        // кот, селфи, кадр видео, то есть самый частый объект в Point.
-        //
-        // И платит только дочитанный кадр. Оборванное чтение — не плохое чтение, а
-        // недочитанное (ADR-0001 §9): судить о нём как о плохом нечем, а второй заход стоит
-        // выпрямления и ещё одного полного чтения — вдвое больше того срока, в который уже
-        // не уложились.
-        val sawSomething = onFrame.atoms.isNotEmpty() || onFrame.text.isNotBlank()
-        val readToTheEnd = onFrame.incomplete == null
-        val straightened =
-            if (readToTheEnd && sawSomething && poorlyRead(onFrame.text, onFrame)) {
-                straightRead(frame)
-            } else {
-                null
-            }
+        // Плохое чтение — не тупик, а повод подготовить кадр и прочитать снова (#1041, #1046).
+        // Снятый под углом счёт кашей и оставался, а фото акта с тенью от руки не разбиралось
+        // вовсе: и выпрямить, и выбелить кадр человек должен был догадаться сам, нажав «Скан»,
+        // а знание после этого ложилось на родившуюся картинку, а не на снимок, которым он
+        // поделился. Ровный кадр за это не платит: второго захода у него нет.
+        val again = if (worthSecondRead(onFrame, budget)) secondRead(frame, budget) else null
 
         // Знанием становится лучшее из двух чтений, а не последнее: второй заход бывает
         // беднее первого, когда границей листа стал чек внутри кадра (#1041).
-        val layer = straightened?.let { betterReading(onFrame, it) } ?: onFrame
+        val layer = again?.let { betterReading(onFrame, it.layer) } ?: onFrame
 
-        // Читали выпрямленную копию — это происхождение знания, и назвать его нужно так же,
-        // как называется чтение с увеличенного кадра (#1041).
-        val straightenedRead = layer !== onFrame
+        // Второй заход победил — тогда с ним приходят и его слова, и имя его кадра.
+        val won = again?.takeIf { layer !== onFrame }
 
-        // Слой слов — часть того чтения, которое стало знанием, а не того, которое ему
-        // проиграло (#1041). Иначе объект нёс бы два разных чтения двух разных кадров: текст
-        // с выпрямленной копии и слова с сырого. Дальше по пути человека слой и есть текст
-        // объекта: «Понять» проверяет им прочитанное моделью («нет в тексте — нет знания»,
-        // #809) и показывает модели страницу его блоками, «В Word» строит из него документ,
-        // «В Excel» адресует по нему ячейки, — и человек снова получил бы ту самую кашу, от
-        // которой уходил.
-        //
-        // Координаты слов принадлежат тому кадру, на котором сняты (#1013), и перенести их с
-        // выпрямленной копии на снимок человека нечем, пока `enhance` не отдаёт своё
-        // преобразование. Поэтому у чтения со второго захода слоя слов нет вовсе (#1332):
-        // рамка не на том месте хуже, чем её отсутствие.
-        val atomsRef = if (!straightenedRead && layer.atoms.isNotEmpty()) {
-            store.newScratchFile("atoms.tsv").also { File(it.value).writeText(AtomCodec.encode(layer)) }
+        // Слой слов берётся у того кадра, чья геометрия — геометрия снимка (#1013, #1046). У
+        // выбеленной копии она такая: свет по листу выровняли, слова не двигали, и они
+        // возвращаются на снимок вместе с прочитанным. У выпрямленной — своя: её слова встали
+        // бы мимо строки, а слова проигравшего чтения спорили бы с текстом объекта (#1041), и
+        // слоя не остаётся вовсе (#1332).
+        val words = if (won == null) onFrame else won.words
+        val atomsRef = if (words != null && words.atoms.isNotEmpty()) {
+            store.newScratchFile("atoms.tsv").also { File(it.value).writeText(AtomCodec.encode(words)) }
         } else {
             null
         }
@@ -202,8 +200,8 @@ class OcrInvestigationRealizer @Inject constructor(
                 mode?.let { put(META_READING_MODE, it.name) }
                 zoom?.let { put(META_READ_UPSCALE, it) }
 
-                // Пометки о выпрямлении здесь не бывает: сюда приходит только чтение,
-                // признанное плохим, а второй заход годным чтением и становится (#1041).
+                // Пометки о подготовке кадра здесь не бывает: сюда приходит только чтение,
+                // признанное плохим, а второй заход годным чтением и становится (#1041, #1046).
             },
         )
         val raw = layer.text
@@ -249,7 +247,7 @@ class OcrInvestigationRealizer @Inject constructor(
                 putAll(receiptFacts(text.take(com.point.core.flow.INVESTIGATION_TEXT_CHARS)))
                 mode?.let { put(META_READING_MODE, it.name) }
                 zoom?.let { put(META_READ_UPSCALE, it) }
-                if (straightenedRead) put(META_READ_STRAIGHTENED, "1")
+                won?.let { put(META_READ_PREPARED, it.prep) }
                 put(META_OCR_TEXT_REF, ref.value)
                 atomsRef?.let { put(META_OCR_ATOMS_REF, it.value) }
 
@@ -263,12 +261,12 @@ class OcrInvestigationRealizer @Inject constructor(
             },
 
             // Узел найденного несёт то же сомнение, что и факт: человек входит в значение
-            // и обязан видеть там ровно то, что видел в списке (#1109). Место ищется по
-            // словам сырого кадра — только они стоят там, где смотрит человек (#1013).
-            // Значение, которое оба чтения прочли одинаково, место так и получает; всё
-            // остальное со второго захода остаётся без места, пока `enhance` не отдаёт
-            // своё преобразование (#1332).
-            objects = locate(entities.objects + identifiers, onFrame)
+            // и обязан видеть там ровно то, что видел в списке (#1109). Место ищется по тем
+            // словам, которые стоят там, где смотрит человек (#1013): по словам снимка или
+            // по перенесённым на снимок словам выбеленной копии. После выпрямления таких слов
+            // нет — уликой остаётся сырое чтение, а найденное со второго захода остаётся без
+            // места, пока `enhance` не отдаёт своё преобразование (#1332).
+            objects = locate(entities.objects + identifiers, words ?: onFrame)
                 .map { node -> node.copy(metadata = node.metadata + doubted(node.metadata, layer)) },
             relations = entities.relations + idRelations,
 
@@ -279,25 +277,77 @@ class OcrInvestigationRealizer @Inject constructor(
     }
 
     /**
-     * Второй заход по выпрямленному кадру (#1041).
+     * Стоит ли плохое чтение второго захода (#1041, #1046).
      *
-     * Тот же читатель и тот же кадр — только без перспективы и с выбеленной бумагой. Новый
-     * объект из этого не рождается: выпрямленная копия лежит в scratch и уходит вместе с ним,
-     * как вырезка по показанной области, а знанием становится текст — знанием того же снимка.
+     * Платит только кадр, на котором движок вообще что-то увидел. «Текст был, но не дался»
+     * отличимо от «текста нет» единственным сигналом — пустотой чтения, — и без этого условия
+     * за подготовку кадра и второе полное чтение платил бы каждый снимок без текста: кот,
+     * селфи, кадр видео, то есть самый частый объект в Point.
      *
-     * Возвращается только годное чтение: если и выпрямленный кадр прочитался кашей, второе
-     * прочтение не лучше первого и вопрос обязан остаться открытым (#988) — иначе Point
-     * объявил бы находкой то же самое, от чего и уходил.
+     * И платит только дочитанный кадр. Оборванное чтение — не плохое чтение, а недочитанное
+     * (ADR-0001 §9): судить о нём как о плохом нечем, а второй заход стоит подготовки кадра и
+     * ещё одного полного чтения — вдвое больше того срока, в который уже не уложились.
      *
-     * Годное — ещё не значит лучшее: какое из двух чтений станет знанием, решает
-     * [betterReading], а не порядок заходов.
+     * И только пока у захода есть часы: [budget] один на все ступени, и кадр, чьё первое
+     * чтение съело весь предел, второго не получает, даже если движок дочитал до конца сам.
      */
-    private suspend fun straightRead(frame: PointObject): AtomLayer? {
+    private fun worthSecondRead(onFrame: AtomLayer, budget: ReadingBudget): Boolean {
+        val sawSomething = onFrame.atoms.isNotEmpty() || onFrame.text.isNotBlank()
+        val readToTheEnd = onFrame.incomplete == null
+        return sawSomething &&
+            readToTheEnd &&
+            poorlyRead(onFrame.text, onFrame) &&
+            budget.leftMs() > 0
+    }
+
+    /**
+     * Второй заход по подготовленному кадру (#1041, #1046).
+     *
+     * Ступени идут от бережной к решительной, и порядок здесь — часть поведения. Сперва ровный
+     * свет: он не двигает слова, поэтому прочитанное возвращается на снимок вместе с
+     * координатами и по нему по-прежнему можно подсветить найденное и вырезать ячейку. Не
+     * помогло — снимается перспектива, и за это платят словами: у выпрямленной копии своя
+     * геометрия, знанием остаётся только текст (#1332).
+     *
+     * Тот же читатель и тот же кадр — новых объектов из этого не рождается: обе копии лежат в
+     * scratch и уходят вместе с ним, как вырезка по показанной области.
+     *
+     * Ступень отдаёт только годное чтение: если и подготовленный кадр прочитался кашей, второе
+     * прочтение не лучше первого и вопрос обязан остаться открытым (#988) — иначе Point
+     * объявил бы находкой то же самое, от чего и уходил. Годное — ещё не значит лучшее: какое
+     * из двух чтений станет знанием, решает [betterReading], а не порядок заходов.
+     */
+    private suspend fun secondRead(frame: PointObject, budget: ReadingBudget): SecondRead? {
+        val white = runCatching { whitener.whitened(frame.uri.value) }.getOrNull()
+        val onWhite = white?.let { readCopy(frame, it.path, budget) }
+        if (white != null && onWhite != null && !poorlyRead(onWhite.text, onWhite)) {
+            val onSource = onWhite.inSourceFrame(white.shrink)
+            return SecondRead(onSource, words = onSource, prep = READ_PREPARED_WHITENED)
+        }
+
+        // Ровный свет не помог. Дальше идут только те, у кого остались часы: упёршееся в
+        // предел чтение выбеленной копии выпрямления уже не получает, и не получает его кадр,
+        // на который у захода не осталось времени. Иначе выпрямление считалось бы даром — его
+        // копию всё равно некому было бы прочитать.
+        if (onWhite?.incomplete == INCOMPLETE_TIMEOUT || budget.leftMs() <= 0) return null
+
         val path = runCatching { straight.of(frame.uri.value) }.getOrNull() ?: return null
-        val again = runCatching {
+        val onStraight = readCopy(frame, path, budget)?.takeUnless { poorlyRead(it.text, it) } ?: return null
+        return SecondRead(onStraight, words = null, prep = READ_PREPARED_STRAIGHTENED)
+    }
+
+    /**
+     * Тот же читатель по копии кадра — пока у захода есть часы (#861, #1046).
+     *
+     * Читатель отмеряет свой предел каждому чтению заново и о предыдущих ступенях не знает.
+     * Здесь про них знают: исчерпан предел захода — следующего чтения нет, и ответ у человека
+     * остаётся тем, каким был, а не приезжает втрое позже.
+     */
+    private suspend fun readCopy(frame: PointObject, path: String, budget: ReadingBudget): AtomLayer? {
+        if (budget.leftMs() <= 0) return null
+        return runCatching {
             recognizer.read(frame.copy(uri = com.point.core.model.ScratchRef(path)))
-        }.getOrNull() ?: return null
-        return again.takeUnless { poorlyRead(it.text, it) }
+        }.getOrNull()
     }
 
     /**
@@ -339,4 +389,16 @@ class OcrInvestigationRealizer @Inject constructor(
         val URL_REGEX = Regex("""https?://\S+""")
     }
 }
+
+/**
+ * Чтение со второго захода и то, годятся ли его слова снимку (#1041, #1046).
+ *
+ * [words] — слой в координатах снимка человека, и он есть только там, где кадр готовили без
+ * правки геометрии. Иначе слоя слов у объекта не остаётся вовсе: подсветка найденного и
+ * вырезка ячейки считают по снимку, чужие координаты встали бы мимо строки (#1013, #1332), а
+ * слова проигравшего чтения спорили бы с текстом объекта (#1041).
+ *
+ * [prep] — каким кадром добыт текст: улика происхождения знания, а не слово для человека.
+ */
+private class SecondRead(val layer: AtomLayer, val words: AtomLayer?, val prep: String)
 
