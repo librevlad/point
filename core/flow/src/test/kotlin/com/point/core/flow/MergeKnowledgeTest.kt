@@ -1,7 +1,11 @@
 package com.point.core.flow
 
 import com.point.core.model.CapabilityId
+import com.point.core.model.ObjectKind
+import com.point.core.model.ObjectState
+import com.point.core.model.PointObject
 import com.point.core.model.Provenance
+import com.point.core.model.ScratchRef
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -20,6 +24,11 @@ class MergeKnowledgeTest {
     private val strongText = "/scratch/сильное.txt"
 
     private val offlineText = "/scratch/офлайн.txt"
+
+    /** Два обычных прочтения того же документа на той стороне: первое и перечитывание (#1242). */
+    private val pcText = "/pc/первое.txt"
+
+    private val pcReread = "/pc/второе.txt"
 
     @Test
     fun `two sources reading the same value agree without alternatives`() {
@@ -162,6 +171,95 @@ class MergeKnowledgeTest {
 
         assertEquals("у объекта не осталось прочтения вовсе", offlineText, merged[META_OCR_TEXT_REF])
         assertEquals(emptyList<String>(), alternativesOf(merged, META_OCR_TEXT_REF))
+    }
+
+    /**
+     * #1242: человек прочитал страницу сильнее и отправил её на компьютер, а файл с текстом
+     * на телефоне уже не читается. Ссылка в дорогу не едет — а пометка при ней ехала, и на
+     * компьютере ложная подпись «здесь прочитано сильнее» оставалась навсегда: снять её
+     * нечем, и второе обычное перечитывание уходило в «или» вместо замены.
+     */
+    @Test
+    fun `мёртвая ссылка не увозит на компьютер пометку силы (#1242)`() {
+        val known = mapOf(
+            META_OCR_TEXT_REF to strongText,
+            META_OCR_TEXT_REF + META_STRENGTH_SUFFIX to READING_STRONG,
+        )
+
+        val packed = knowledgePackedForTravel(known, text = null)
+        val firstReadingOnPc = mergeKnowledge(
+            packed,
+            mapOf(META_OCR_TEXT_REF to pcText),
+            refreshable = setOf(META_OCR_TEXT_REF),
+        )
+        val reread = mergeKnowledge(
+            firstReadingOnPc,
+            mapOf(META_OCR_TEXT_REF to pcReread),
+            refreshable = setOf(META_OCR_TEXT_REF),
+        )
+
+        assertEquals("на компьютер уехала подпись без своего прочтения", emptyMap<String, String>(), packed)
+        assertEquals("перечитывание на компьютере не обновило текст", pcReread, reread[META_OCR_TEXT_REF])
+    }
+
+    /**
+     * #1242: файл с прочитанным текстом лежит у самого человека, и он вправе его убрать. Ссылка
+     * тогда уже ничего не свидетельствует — и пометка при ней тоже: без неё перечитывание того
+     * же документа на этом же устройстве уходило в «или» вместо замены.
+     */
+    @Test
+    fun `потерянный файл текста уносит и пометку силы (#1242)`() {
+        val obj = PointObject(
+            "id",
+            "image/jpeg",
+            ScratchRef("/scratch/страница.jpg"),
+            ObjectState(ObjectKind.IMAGE),
+            metadata = mapOf(
+                META_OCR_TEXT_REF to strongText,
+                META_OCR_TEXT_REF + META_STRENGTH_SUFFIX to READING_STRONG,
+            ),
+        )
+
+        val forgotten = knowledgeOfReadText(obj) { false }
+        val reread = mergeKnowledge(
+            forgotten.metadata,
+            mapOf(META_OCR_TEXT_REF to offlineText),
+            refreshable = setOf(META_OCR_TEXT_REF),
+        )
+
+        assertEquals("пометка осталась без своего прочтения", emptyMap<String, String>(), forgotten.metadata)
+        assertEquals("перечитывание не обновило текст", offlineText, reread[META_OCR_TEXT_REF])
+    }
+
+    /**
+     * #1242: текст приехал на компьютер, но лечь файлом там не смог. Знания о прочтении на
+     * той стороне нет — и подписи «прочитано сильнее» при нём тоже: иначе объект на
+     * компьютере навсегда оставался с чужой силой поверх пустого места.
+     */
+    @Test
+    fun `не легший на той стороне текст не оставляет пометку силы (#1242)`() {
+        val packed = knowledgePackedForTravel(
+            mapOf(
+                META_OCR_TEXT_REF to strongText,
+                META_OCR_TEXT_REF + META_STRENGTH_SUFFIX to READING_STRONG,
+            ),
+            text = "Гречка 2 кг",
+        )
+
+        val landed = knowledgeArrivedFromTravel(packed, ref = null)
+        val readOnPc = mergeKnowledge(
+            landed.metadata,
+            mapOf(META_OCR_TEXT_REF to pcText),
+            refreshable = setOf(META_OCR_TEXT_REF),
+        )
+        val reread = mergeKnowledge(
+            readOnPc,
+            mapOf(META_OCR_TEXT_REF to pcReread),
+            refreshable = setOf(META_OCR_TEXT_REF),
+        )
+
+        assertEquals("подпись осталась без всякого текста", emptyMap<String, String>(), landed.metadata)
+        assertEquals("перечитывание на компьютере не обновило текст", pcReread, reread[META_OCR_TEXT_REF])
     }
 
     /** Ключ знания уходит вместе с пометками при нём — сиротам взяться неоткуда (#1242). */

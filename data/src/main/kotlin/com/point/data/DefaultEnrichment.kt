@@ -1,6 +1,5 @@
 package com.point.data
 
-import com.point.core.flow.ANSWERED_STATES
 import com.point.core.flow.AwaitingInvestigation
 import com.point.core.flow.Capability
 import com.point.core.flow.CapabilityRegistry
@@ -90,7 +89,7 @@ class DefaultEnrichment @Inject constructor(
                 if (latency == Latency.SLOW) {
                     wave.filter {
 
-                        investigationStateOf(obj.metadata, it.id, focus) !in ANSWERED_STATES &&
+                        investigationStateOf(obj.metadata, it.id, focus) !in ANSWERED &&
                             worthRunning(soFar, objects, it)
                     }
                 } else {
@@ -315,5 +314,17 @@ class DefaultEnrichment @Inject constructor(
         const val WRONG_SHAPE = "исследование вернуло объект вместо знания"
 
         val ANY = com.point.core.model.ObjectState(ObjectKind.UNKNOWN)
+
+        /**
+         * Вопрос считается отвеченным, и дорогое исследование не задаёт его снова, пока объект
+         * не изменился (#669). «Не нашлось» — такой же ответ, как «нашлось»: гонять Тессеракт
+         * заново при каждом входе в тот же объект значит тратить батарею на уже известное.
+         * «Недостаточно» и «спорят» ответом не считаются — там смотреть ещё есть смысл.
+         *
+         * Чтобы прервать уже идущее исследование, этого мало (#1242): не задавать вопрос заново
+         * и оборвать чужого читателя на полуслове — разные права, и второе даёт только
+         * найденное (`FlowViewModel.answeredQuestionsOf`).
+         */
+        val ANSWERED = setOf(InvestigationState.FOUND, InvestigationState.NOT_FOUND)
     }
 }

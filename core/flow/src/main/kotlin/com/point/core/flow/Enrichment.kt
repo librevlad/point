@@ -114,13 +114,17 @@ fun shownTextRef(obj: PointObject): String? =
  * Ссылка на прочитанный текст — путь в scratch этого устройства, и на той стороне она ведёт
  * в никуда: объект приезжал «непрочитанным», и там первым делом предлагали прочитать его
  * заново. Поэтому едет само содержимое, а ссылка не едет вовсе — даже когда прочитать файл
- * не вышло: мёртвый путь только притворяется знанием.
+ * не вышло: мёртвый путь только притворяется знанием. Не едут тогда и пометки при нём
+ * ([withoutKnowledge], #1242): «здесь прочитано сильнее» без самого прочтения — ложная
+ * подпись, и на той стороне она отправляет в «или» уже второе обычное перечитывание, а снять
+ * её нечем. Текст доехал — пометки едут с ним: прочтение было сильным на самом деле.
  *
  * [text] — то, что лежит по ссылке; `null`, если прочитать не удалось.
  */
 fun knowledgePackedForTravel(meta: Map<String, String>, text: String?): Map<String, String> {
     if (textRefForTravel(meta) == null) return meta
-    val carried = text?.takeIf { it.isNotBlank() } ?: return meta - META_OCR_TEXT_REF
+    val carried = text?.takeIf { it.isNotBlank() }
+        ?: return withoutKnowledge(meta, setOf(META_OCR_TEXT_REF))
     return meta - META_OCR_TEXT_REF + (META_READ_TEXT to carried.take(READ_TEXT_TRAVEL_LIMIT))
 }
 
@@ -134,11 +138,16 @@ fun textArrivedFromTravel(meta: Map<String, String>): String? =
  * [ref] — куда приехавший текст лёг здесь, или `null`, если положить не вышло. Признак
  * «текст есть» ставится тут, а не едет отдельным полем протокола: он следует из того, что
  * текст лёг. Без этого перенос терял понятое — та сторона звала делать уже сделанное.
+ *
+ * Текст не лёг — знания о прочтении здесь нет, и пометок при нём тоже (#1242): приехавшая
+ * «здесь прочитано сильнее» осталась бы без всякого текста и заперла бы перечитывание.
  */
 fun knowledgeArrivedFromTravel(meta: Map<String, String>, ref: String?): com.point.core.model.Findings {
     if (textArrivedFromTravel(meta) == null) return com.point.core.model.Findings(metadata = meta)
     val kept = ref?.takeIf { it.isNotBlank() }
-        ?: return com.point.core.model.Findings(metadata = meta - META_READ_TEXT)
+        ?: return com.point.core.model.Findings(
+            metadata = withoutKnowledge(meta, setOf(META_READ_TEXT, META_OCR_TEXT_REF)),
+        )
     return com.point.core.model.Findings(
         features = setOf(Feature.HAS_TEXT),
         metadata = meta - META_READ_TEXT + (META_OCR_TEXT_REF to kept),
@@ -159,7 +168,9 @@ fun knowledgeArrivedFromTravel(meta: Map<String, String>, ref: String?): com.poi
  *
  * Улика на месте — знание есть; улики нет — знания нет, и вопрос снова **не исследован**, а
  * не «исследован, не найдено» (Конституция: `not investigated` ≠ `not found`). Поэтому
- * мёртвая ссылка уходит вместе с признаком: она уже ничего не свидетельствует.
+ * мёртвая ссылка уходит вместе с признаком — и вместе с пометками при ней ([withoutKnowledge],
+ * #1242): «прочитано сильнее» без самого прочтения отправляет в «или» следующее обычное
+ * перечитывание, и текст документа перестаёт обновляться вовсе.
  *
  * [textAlive] — есть ли ещё файл по ссылке; спрашивается у той стороны, у которой свой диск.
  */
@@ -168,7 +179,7 @@ fun knowledgeOfReadText(obj: PointObject, textAlive: (String) -> Boolean): Point
     if (textAlive(ref)) return obj.copy(state = obj.state.with(Feature.HAS_TEXT))
     return obj.copy(
         state = obj.state.copy(features = obj.state.features - Feature.HAS_TEXT),
-        metadata = obj.metadata - META_OCR_TEXT_REF,
+        metadata = withoutKnowledge(obj.metadata, setOf(META_OCR_TEXT_REF)),
     )
 }
 

@@ -41,6 +41,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 import java.util.concurrent.ConcurrentLinkedQueue
+import kotlin.time.Duration.Companion.seconds
 
 class ExcelRealizerTest {
 
@@ -861,6 +862,60 @@ class ExcelRealizerTest {
         )
     }
 
+    /**
+     * #1243, решение владельца: «при пределе/обрыве — честная остановка с частичным файлом».
+     *
+     * Оценка по уже прочитанным верхней границы не даёт: страница у чужого бесплатного
+     * провайдера упирается в отказ по лимиту и уходит по цепочке дольше, чем все прочитанные
+     * вместе. Такая одна страница уносила с собой весь заход — потолок действия отменял его
+     * целиком, — и человек оставался и без таблицы, и без квоты, потраченной на прочитанное.
+     */
+    @Test
+    fun `зависшая страница не уносит с собой уже прочитанные (#1243)`() = runTest(timeout = 30.seconds) {
+        pages = (1..4).map { page("IMG_$it.jpg") }
+        val stuck = object : LlmClient {
+            override suspend fun run(obj: PointObject, prompt: String): ResultObject {
+                if (obj.metadata["name"] == "IMG_3.jpg") awaitCancellation()
+                return answerOf("""[["Товар"],["Гречка"]]""")
+            }
+        }
+
+        val result = ExcelRealizer(
+            listOf(stuck), writer, noCrops, scratch, testKnowledge(),
+            recropTimeoutMs = RECROP_TIMEOUT_MS, pagesBudgetMs = BUDGET_MS,
+        ).perform(set)
+
+        assertTrue("прочитанные страницы пропали вместе с зависшей", result is ActionResult.Success)
+        val rows = lastRows!!
+        assertTrue("прочитанного в файле нет: $rows", rows.any { it == listOf("Гречка") })
+        val unread = (result as ActionResult.Success).result.metadata[META_TABLE_PAGES_UNREAD]!!.toInt()
+        assertTrue("зависшая страница и хвост за ней не сосчитаны: $unread", unread >= 2)
+        val readPages = pages.size - unread
+        assertTrue("не прочитано ни одной страницы", readPages > 0)
+        val tail = rows.last().single()
+        assertTrue(
+            "страницы, до которых заход не дошёл, пропали из файла молча: $tail",
+            tail.contains('⚠') && tail.contains("${readPages + 1}–${pages.size}"),
+        )
+    }
+
+    @Test
+    fun `не дочиталась даже первая страница — отказ, а не пустой файл (#1243)`() = runTest(timeout = 30.seconds) {
+        pages = listOf(page("IMG_1.jpg"), page("IMG_2.jpg"))
+        val stuck = object : LlmClient {
+            override suspend fun run(obj: PointObject, prompt: String): ResultObject = awaitCancellation()
+        }
+
+        val result = ExcelRealizer(
+            listOf(stuck), writer, noCrops, scratch, testKnowledge(),
+            recropTimeoutMs = RECROP_TIMEOUT_MS, pagesBudgetMs = BUDGET_MS,
+        ).perform(set)
+
+        assertTrue("человек получил файл без единой прочитанной страницы", result is ActionResult.Failure)
+        assertTrue("отказ не даёт повторить", (result as ActionResult.Failure).recoverable)
+        assertNull("файл писался, хотя читать было нечего", lastPlan)
+    }
+
     @Test
     fun `набор без страниц — ни снимка, ни PDF, ни текста — честный отказ`() = runTest {
         pages = listOf(
@@ -879,5 +934,8 @@ class ExcelRealizerTest {
         const val READ_MS = 300L
 
         const val STUCK_MS = 5_000L
+
+        /** Своё время захода по набору (#1243) — в тесте короткое: ждать девять минут некому. */
+        const val BUDGET_MS = 500L
     }
 }

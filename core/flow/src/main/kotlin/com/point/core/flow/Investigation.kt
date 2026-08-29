@@ -23,19 +23,6 @@ enum class InvestigationState(val wire: String) {
 
 const val META_INVESTIGATED_PREFIX = "investigated."
 
-/**
- * Вопрос считается отвеченным, и дорогое исследование не задаёт его снова, пока объект не
- * изменился (#669). «Не нашлось» — такой же ответ, как «нашлось»: гонять Тессеракт заново при
- * каждом входе в тот же объект значит тратить батарею на уже известное. «Недостаточно» и
- * «спорят» ответом не считаются — там смотреть ещё есть смысл.
- *
- * Чтобы прервать уже идущее исследование, этого мало (#1242): не задавать вопрос заново и
- * оборвать чужого читателя на полуслове — разные права. Идущее чтение останавливает только
- * ответ сильнее — [InvestigationState.FOUND]; «не нашлось» от одного читателя не отвечает за
- * тех, кто видит сильнее.
- */
-val ANSWERED_STATES = setOf(InvestigationState.FOUND, InvestigationState.NOT_FOUND)
-
 fun isStateKey(key: String): Boolean = key.startsWith(META_INVESTIGATED_PREFIX)
 
 fun investigationKey(capabilityId: CapabilityId): String = META_INVESTIGATED_PREFIX + capabilityId.value

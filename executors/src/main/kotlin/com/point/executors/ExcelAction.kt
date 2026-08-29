@@ -85,6 +85,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -204,7 +205,9 @@ class ExcelRealizer(
      * Заход кончается сам — по числу страниц или по своему времени (#1243), — а не тем, что
      * его отменяет потолок действия: отменённое действие не отдаёт ничего, и набор пропадал
      * целиком вместе с уже оплаченной квотой. Сколько минут уйдёт на страницу, решают чужие
-     * бесплатные провайдеры, поэтому предела страниц мало: время считается тоже.
+     * бесплатные провайдеры, поэтому предела страниц мало: время считается тоже — и считается
+     * пределом, а не прикидкой. Страница, зависшая у чужого провайдера, обрывается вместе со
+     * временем захода, а прочитанные до неё доходят до человека файлом.
      */
     private suspend fun pagesToSheet(input: PointObject): ActionResult {
         val pages = inCollectionOrder(
@@ -223,16 +226,32 @@ class ExcelRealizer(
         val read = pages.take(MAX_TABLE_PAGES)
         reportStage(pagesAheadStage(read.size, pages.size))
 
-        // Следующая страница берётся, только если по уже прочитанным видно, что она успеет
-        // (#1243). Не «пока время не вышло»: страница, начатая на последней минуте, вынесла бы
-        // заход за потолок действия — и человек снова остался бы без файла. Первая читается
-        // всегда: без неё отдавать нечего.
-        val startedMs = clock()
+        // Своё время захода — предел, а не прикидка (#1243): чтение кончается по нему в любом
+        // случае, и уже прочитанные страницы остаются на руках. Иначе одна страница, зависшая
+        // у чужого провайдера, уносила с собой весь заход: потолок действия отменяет работу
+        // целиком, файла из-под себя не отдаёт, и человек оставался и без таблицы, и без
+        // бесплатной квоты, потраченной на прочитанное.
+        //
+        // Оценка по уже прочитанным — не второй предел, а бережливость: страницу, которая по
+        // ним не успевает, незачем и начинать — её облачные чтения потратят квоту на результат,
+        // который всё равно не доедет. Первая читается всегда: без неё отдавать нечего.
         val reads = mutableListOf<PageRead>()
-        for ((i, page) in read.withIndex()) {
-            val spentMs = clock() - startedMs
-            if (i > 0 && spentMs + spentMs / i > pagesBudgetMs) break
-            reads += onPage(i + 1, pages.size) { readPage(page) }
+        withTimeoutOrNull(pagesBudgetMs) {
+            val startedMs = clock()
+            for ((i, page) in read.withIndex()) {
+                val spentMs = clock() - startedMs
+                if (i > 0 && spentMs + spentMs / i > pagesBudgetMs) break
+                reads += onPage(i + 1, pages.size) { readPage(page) }
+            }
+        }
+
+        // Не успела даже первая страница — честный отказ, а не пустой файл: тем же правилом,
+        // что и у набора, где не прочиталась ни одна.
+        if (reads.isEmpty()) {
+            return ActionResult.Failure(
+                "Первая страница не прочиталась за ${pagesBudgetMs / 60_000} минут — попробуйте её отдельно",
+                recoverable = true,
+            )
         }
         val refused = reads.filterIsInstance<PageRead.Refused>()
         if (refused.size == reads.size) {
