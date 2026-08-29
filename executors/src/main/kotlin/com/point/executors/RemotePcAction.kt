@@ -131,8 +131,18 @@ class RemotePcRealizer(
 ) : Realizer {
     override val capabilityId = RemotePcCapability.idFor(action, ownIds)
 
+    /**
+     * Это второе устройство человека, а не облако и не сам телефон (#1088).
+     *
+     * Раньше исполнитель компьютера звался то здешним, то облачным — смотря по тому, отправит
+     * ли компьютер объект дальше. Обе подписи неправда: телефон переставал отличать свой
+     * компьютер от чужого сервиса и от себя, а порядок между ним и своим исполнителем решало
+     * имя класса по алфавиту. Уход наружу остался отдельным признаком — согласие спрашивается
+     * по нему, а не по виду.
+     */
     override val meta = com.point.core.flow.RealizerMeta(
-        kind = if (action.leavesCircle) com.point.core.flow.RealizerKind.CLOUD else com.point.core.flow.RealizerKind.LOCAL,
+        kind = com.point.core.flow.RealizerKind.REMOTE,
+        leavesCircle = action.leavesCircle,
     )
 
     /**

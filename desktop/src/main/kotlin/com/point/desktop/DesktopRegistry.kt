@@ -82,8 +82,10 @@ class DesktopResolver(
     override fun realizerFor(capabilityId: CapabilityId): Realizer =
         realizerFor(capabilityId, ObjectState(com.point.core.model.ObjectKind.UNKNOWN))
 
+    // Тот же вопрос и то же правило, что на телефоне (#1088): наружу уходит объявивший это
+    // исполнитель, а не всякий, кто не здешний.
     override fun leavesDevice(capabilityId: CapabilityId): Boolean =
-        byCapability[capabilityId]?.any { it.meta.kind == com.point.core.flow.RealizerKind.CLOUD } ?: false
+        byCapability[capabilityId]?.any { it.meta.leavesCircle } ?: false
 
     fun canRun(capabilityId: CapabilityId, state: ObjectState): Boolean =
         byCapability[capabilityId].orEmpty().any { it.isAvailable() && it.accepts(state) }

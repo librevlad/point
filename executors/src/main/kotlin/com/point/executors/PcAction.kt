@@ -9,6 +9,8 @@ import com.point.core.flow.PcSendOutcome
 import com.point.core.flow.PcTransport
 import com.point.core.flow.PcUnreachable
 import com.point.core.flow.Realizer
+import com.point.core.flow.RealizerKind
+import com.point.core.flow.RealizerMeta
 import com.point.core.flow.pcUnreachableText
 import com.point.core.flow.reportStage
 import com.point.core.model.ActionResult
@@ -125,6 +127,16 @@ class PcRealizer @Inject constructor(
     private val store: com.point.core.flow.ObjectStore,
 ) : Realizer {
     override val capabilityId = PcCapability.ID
+
+    /**
+     * «На компьютер» исполняет компьютер — не сам телефон (#1088).
+     *
+     * Исполнитель, который увозит объект на второе устройство человека, звался здешним, и по
+     * общему правилу близости стоял бы рядом с собственной работой телефона: их развело бы
+     * имя класса. Наружу, за круг устройств, он объект не отдаёт — это отдельный признак, и
+     * он остаётся прежним.
+     */
+    override val meta = RealizerMeta(kind = RealizerKind.REMOTE)
 
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult {
         val pc = links.current()

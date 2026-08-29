@@ -424,6 +424,50 @@ class RealCapabilityInventoryTest {
         assertTrue("обычные действия перестали доезжать до компьютера: $advertised", "event" in advertised)
     }
 
+    /**
+     * Второе дело того же признака: он гасит человеку вопрос про облако (#1088).
+     *
+     * «На компьютер» объявлено сетевым честно — до второй машины оно дотягивается через
+     * сервер (#569). Сетевая работа обычно поднимает «Отправить в облако?»: это запасной
+     * ответ для способностей, чей единственный исполнитель зовёт модель, назвавшись здешним.
+     * Для действия своего круга запасной ответ погашен — согласия спрашивать не о чем, объект
+     * от человека не уходит.
+     *
+     * Значит, правду про уход наружу сказать больше некому, кроме исполнителя. Пометь завтра
+     * облачную работу этим признаком ради одной лишь нерекламы компьютеру — и вопрос человеку
+     * пропадёт молча, а объект уедет к чужим. Здесь проверено обратное: у каждой такой
+     * способности исполнитель назвал себя сам — либо вторым устройством человека, либо тем,
+     * кто увезёт объект наружу и спросит согласие.
+     */
+    @Test
+    fun `у сетевой способности своего круга уход наружу объявляет исполнитель`() {
+
+        // Не список разрешений, а требование доказательства: способность, попавшая в набор
+        // ниже без исполнителя здесь, роняет проверку — назови его и посмотри, что он
+        // говорит про уход наружу.
+        val performers: Map<CapabilityId, com.point.core.flow.Realizer> = mapOf(
+            PcCapability.ID to PcRealizer(pairedPc, silentPc, bytesNotRead),
+        )
+
+        val quiet = builtIn.filter { it.meta.localOnly && it.meta.network }
+        assertTrue("сверять нечего — таких способностей не осталось вовсе", quiet.isNotEmpty())
+
+        val unnamed = quiet.mapNotNull { cap ->
+            val meta = performers[cap.id]?.meta
+            when {
+                meta == null -> "${cap.id.value} — исполнитель не назван"
+                meta.kind == com.point.core.flow.RealizerKind.REMOTE || meta.leavesCircle -> null
+                else -> "${cap.id.value} — исполнитель зовёт себя ${meta.kind}"
+            }
+        }
+
+        assertEquals(
+            "вопрос про облако у этой способности погашен, а про уход наружу не сказал никто",
+            emptyList<String>(),
+            unnamed,
+        )
+    }
+
     @Test
     fun `ни одно объявленное телефоном имя не называет чужое устройство`() {
 
@@ -505,6 +549,45 @@ class RealCapabilityInventoryTest {
         val pairedPc = object : PcLinks {
             override fun current() = LinkedPc("d-pc", "Домашний ПК", "ключ")
             override suspend fun save(pc: LinkedPc) = Unit
+            override suspend fun clear() = Unit
+        }
+
+        /** Дорога до компьютера: здесь спрашивают только объявленное, отправлять нечего. */
+        val silentPc = object : com.point.core.flow.PcTransport {
+            override suspend fun send(
+                pc: LinkedPc,
+                obj: com.point.core.model.PointObject,
+                fileName: String,
+                meta: Map<String, String>,
+                action: String?,
+            ) = error("не зовут")
+
+            override suspend fun fetchCaps(pc: LinkedPc) = error("не зовут")
+            override suspend fun fetchOutbox(pc: LinkedPc) = error("не зовут")
+            override suspend fun downloadOutboxFile(pc: LinkedPc, id: Int, targetPath: String) = error("не зовут")
+            override suspend fun ackOutbox(pc: LinkedPc, id: Int) = error("не зовут")
+            override suspend fun pushPhoneCaps(pc: LinkedPc, caps: List<com.point.core.flow.PcRemoteAction>) =
+                error("не зовут")
+
+            override suspend fun exchangeSecrets(pc: LinkedPc, mine: com.point.core.flow.SharedSecrets) =
+                error("не зовут")
+        }
+
+        /** Байты объекта здесь не читают: сверяется объявленное, а не работа. */
+        val bytesNotRead = object : com.point.core.flow.ObjectStore {
+            override suspend fun ingest(sourceUri: String, mime: String) = error("не зовут")
+            override suspend fun ingestMultiple(sources: List<String>) = error("не зовут")
+            override suspend fun put(
+                result: com.point.core.model.ResultObject,
+                from: com.point.core.model.PointObject?,
+                by: CapabilityId?,
+            ) = error("не зовут")
+
+            override suspend fun children(collection: com.point.core.model.PointObject, limit: Int) =
+                error("не зовут")
+
+            override suspend fun readText(obj: com.point.core.model.PointObject, limit: Int) = error("не зовут")
+            override suspend fun newScratchFile(extension: String) = error("не зовут")
             override suspend fun clear() = Unit
         }
 

@@ -5265,6 +5265,38 @@ class FlowViewModelTest {
         assertEquals("готово", vm.ui.value.message)
     }
 
+    /**
+     * Путь человека (#1088): он тапнул «На компьютер», чтобы объект оказался на его же второй
+     * машине, — и читал «Отправить в облако?» с «Объект уйдёт на чужой сервер». Одно
+     * «Разрешить» открывало дорогу заодно всем облачным моделям: согласие берётся областью
+     * (`CloudScope.MODELS`), а не действием.
+     *
+     * Способность здесь настоящая и отвечает о себе сама: сетевой она объявлена потому, что до
+     * компьютера дотягивается через сервер (#569), — а объект остаётся в круге устройств
+     * человека, и его исполнитель говорит это отдельным признаком. Сеть при этом никуда не
+     * делась: экран ожидания считает секунды с первой, как у всякой сетевой работы.
+     */
+    @Test fun `«На компьютер» не спрашивает про облако — это вторая машина человека`() = runTest(dispatcher) {
+        resolver.result = ActionResult.Done("готово")
+        resolver.leavesDevice = false
+        pcLinks.pc = com.point.core.flow.LinkedPc("d-pc", "Мой ПК", "ключ")
+        val pc = com.point.executors.PcCapability(pcLinks)
+        val vm = vm(caps = mapOf(pc.id to setOf(Intent.PREPARE)), own = listOf(pc))
+        vm.onShared("uri", "image/png"); advanceUntilIdle()
+
+        vm.onBubble(bubble(id = pc.id.value, title = pc.label(ObjectState(ObjectKind.IMAGE))))
+
+        assertEquals(
+            "вместо отправки на свой компьютер встал вопрос про облако",
+            pc.label(ObjectState(ObjectKind.IMAGE)),
+            vm.ui.value.busy,
+        )
+        assertTrue("«На компьютер» перестало считаться сетевой работой", vm.ui.value.busyNetwork)
+        advanceUntilIdle()
+        assertEquals("свой компьютер спросили как чужое облако", false, vm.ui.value.cloudConsent)
+        assertTrue("объект так и не поехал на компьютер", pc.id in resolver.performed)
+    }
+
     @Test fun `tapping AI opens the multi-turn chat, not a one-shot action (#4)`() = runTest(dispatcher) {
         consent.granted = true
         val vm = cloudVm()

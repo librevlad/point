@@ -783,7 +783,7 @@ class FlowViewModel @Inject constructor(
             openFind()
             return
         }
-        if (isCloud(bubble.capabilityId)) {
+        if (leavesCircle(bubble.capabilityId)) {
 
             requireCloudConsent(bubble.capabilityId, about = aboutOf(bubble.title, top)) { maybePreview(bubble, top) }
             return
@@ -796,7 +796,7 @@ class FlowViewModel @Inject constructor(
         runningStep = bubble.title
         raiseBusy(
             bubble.title,
-            network = isCloud(bubble.capabilityId),
+            network = overNetwork(bubble.capabilityId),
             quiet = isQuietAction(bubble.capabilityId),
             cancelable = true,
         )
@@ -1112,7 +1112,7 @@ class FlowViewModel @Inject constructor(
     private fun runOnObject(bubble: Bubble, top: PointObject) {
         raiseBusy(
             bubble.title,
-            network = isCloud(bubble.capabilityId),
+            network = overNetwork(bubble.capabilityId),
             quiet = isQuietAction(bubble.capabilityId),
             cancelable = true,
         )
@@ -1126,9 +1126,11 @@ class FlowViewModel @Inject constructor(
      * наружу вообще.
      */
     private fun wayOutClosed(id: CapabilityId): String? {
-        if (!isCloud(id)) return null
+        if (!leavesCircle(id)) return null
 
-        // Своё устройство — не «наружу»: «На компьютер» режим не закрывает.
+        // Работу, которую делает компьютер круга, режим здесь не закрывает: наружу её уводит
+        // уже вторая машина. «На компьютер» до этой строки больше не доходит — за круг оно не
+        // уходит вовсе (#1088).
         if (runCatching { registry.byId(id).meta.localOnly }.getOrDefault(false)) return null
         val level = runCatching { cloudPrivacy.level() }
             .getOrDefault(com.point.core.flow.PrivacyLevel.DEFAULT)
@@ -1145,7 +1147,37 @@ class FlowViewModel @Inject constructor(
     private fun wontWorkNow(id: CapabilityId, state: ObjectState): String? =
         runCatching { registry.byId(id).wontWorkNow(state) }.getOrNull()
 
-    private fun isCloud(id: CapabilityId) =
+    /**
+     * Уйдёт ли объект за круг устройств человека — и надо ли спрашивать согласие (#1088).
+     *
+     * Первым отвечает исполнитель: он один знает, отдаст ли байты наружу
+     * (`RealizerMeta.leavesCircle`). Объявление способности — запасной ответ для тех, чей
+     * единственный исполнитель зовёт модель, назвавшись здешним.
+     *
+     * Но `network` у способности значит «нужна сеть», а не «уйдёт к чужим». «На компьютер»
+     * дотягивается до второй машины человека через сервер и потому объявлено сетевым — а
+     * объект остаётся в круге его устройств. Пока запасной ответ применялся и к нему, человек,
+     * отправляя снимок на свой же компьютер, читал «Отправить в облако?» и «Объект уйдёт на
+     * чужой сервер», а одно «Разрешить» открывало дорогу заодно всем облачным моделям:
+     * согласие берётся областью (`CloudScope.MODELS`), а не действием. Компьютер круга — не
+     * чужой сервис (ADR-0001 §13), и у действия своего устройства (`localOnly`) правду про
+     * уход наружу говорит исполнитель — у «На компьютер» он называет себя вторым устройством,
+     * а сетевым действие при этом остаётся ([overNetwork]).
+     */
+    private fun leavesCircle(id: CapabilityId): Boolean {
+        if (runCatching { resolver.leavesDevice(id) }.getOrDefault(false)) return true
+        if (runCatching { registry.byId(id).meta.localOnly }.getOrDefault(false)) return false
+        return runCatching { registry.byId(id).meta.network }.getOrDefault(false)
+    }
+
+    /**
+     * Работа идёт через сеть — и ждать её человек будет со счётом секунд (#690, #1128).
+     *
+     * Это другой вопрос, чем [leavesCircle]: «На компьютер» без интернета не работает, хотя
+     * объект не покидает круг устройств. Пока вопрос был один, ответ на него служил и
+     * согласию, и подписи ожидания — и ошибался ровно в одном из двух.
+     */
+    private fun overNetwork(id: CapabilityId) =
         runCatching { registry.byId(id).meta.network }.getOrDefault(false) ||
             runCatching { resolver.leavesDevice(id) }.getOrDefault(false)
 
@@ -1272,7 +1304,7 @@ class FlowViewModel @Inject constructor(
         pendingBubble = null
         raiseBusy(
             bubble.title,
-            network = isCloud(bubble.capabilityId),
+            network = overNetwork(bubble.capabilityId),
             quiet = isQuietAction(bubble.capabilityId),
             cancelable = true,
         )
@@ -2080,7 +2112,7 @@ class FlowViewModel @Inject constructor(
         // после явного «да». Пока ответа нет, компьютер видит честное «ждёт», а не Done;
         // сказанное «да» доводит ту же работу и возвращает результат домой обычным путём,
         // а сказанное «нет» тоже уезжает туда — там человек ждёт ответа, а не молчания.
-        if (isCloud(id) && !cloudAlreadyAllowed(id)) {
+        if (leavesCircle(id) && !cloudAlreadyAllowed(id)) {
 
             // «Ждёт» уезжает ДО того, как вопрос встал на экране (#1269). Отправка — сетевой
             // круг, и на нём этот шов спит; экран согласия выскакивает прямо под палец.
