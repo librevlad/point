@@ -218,7 +218,7 @@ class SmartActionsTest {
     }
 
     @Test fun `без ключа расшифровка не идёт в сеть и называет нужный сервис`() = runTest {
-        val realizer = PcTranscribeRealizer({ SpeechConfig(key = "") }, outbox())
+        val realizer = PcTranscribeRealizer({ SpeechConfig(key = "") })
 
         val result = realizer.perform(audioObject(), null)
 
@@ -236,7 +236,6 @@ class SmartActionsTest {
     @Test fun `сервис не разобрал ни слова — компьютер запоминает это знанием`() = runTest {
         val realizer = PcTranscribeRealizer(
             { SpeechConfig(key = "есть") },
-            outbox(),
             askOutside = { _, _, _ -> "   " },
         )
 
@@ -254,7 +253,7 @@ class SmartActionsTest {
     }
 
     @Test fun `формат, который движок не читает, отсекается до сети`() = runTest {
-        val realizer = PcTranscribeRealizer({ SpeechConfig(key = "есть") }, outbox())
+        val realizer = PcTranscribeRealizer({ SpeechConfig(key = "есть") })
 
         val result = realizer.perform(audioObject(name = "запись.amr", mime = "audio/amr"), null)
 

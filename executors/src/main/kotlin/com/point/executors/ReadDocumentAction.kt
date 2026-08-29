@@ -11,11 +11,14 @@ import com.point.core.flow.PdfRasterizer
 import com.point.core.flow.Realizer
 import com.point.core.flow.TextRecognizer
 import com.point.core.flow.investigationKey
-import com.point.core.flow.InvestigationState
+import com.point.core.flow.noTextAnswer
+import com.point.core.flow.ownWordsOf
+import com.point.core.flow.pagesRead
+import com.point.core.flow.READER_NO_PAGES
+import com.point.core.flow.readerFailure
 import com.point.core.flow.reportStage
 import com.point.core.model.ActionResult
 import com.point.core.model.ActionYield
-import com.point.core.model.CapabilityId
 import com.point.core.model.Feature
 import com.point.core.model.Findings
 import com.point.core.model.Intent
@@ -59,7 +62,8 @@ class ReadDocumentCapability @Inject constructor() : Capability {
 
     override fun yields(state: ObjectState) = ActionYield.Same("текст всех страниц · на телефоне")
 
-    companion object { val ID = CapabilityId("read-document") }
+    // Имя работы — из общего словаря: одна работа на двух устройствах зовётся одинаково (#1254).
+    companion object { val ID = KnownCapabilities.READ_DOCUMENT }
 }
 
 class ReadDocumentRealizer @Inject constructor(
@@ -77,49 +81,73 @@ class ReadDocumentRealizer @Inject constructor(
                 val pages = File(dir.value).walkTopDown().filter { it.isFile }.sortedBy { it.name }.toList()
                 if (pages.isEmpty()) {
                     return@withContext ActionResult.Failure(
-                        "В документе не нашлось ни одной страницы",
+                        readerFailure(READER_NO_PAGES, ObjectKind.PDF),
                         recoverable = true,
                     )
                 }
 
                 val read = StringBuilder()
                 var readable = 0
+                var broken = 0
+                var brokenSaid: String? = null
                 pages.forEachIndexed { index, page ->
                     reportStage("Читаю страницу ${index + 1} из ${pages.size}")
                     val text = runCatching {
                         recognizer.recognize(
                             input.copy(mime = "image/png", uri = com.point.core.model.ScratchRef(page.absolutePath)),
                         )
-                    }.getOrDefault("")
-                    if (text.isNotBlank()) {
+                    }.getOrElse { trouble ->
+
+                        // Сорвавшаяся страница — не пустая (#1254). Прежде «getOrDefault("")»
+                        // превращал не заведшийся движок в страницу без текста, и документ, на
+                        // котором не прочиталось ничего, получал утверждение о себе — «не
+                        // разобрал текст» — вместо правды о том, что чтения не было.
+                        broken++
+                        brokenSaid = brokenSaid ?: (ownWordsOf(trouble) ?: readerFailure(trouble.message, ObjectKind.PDF))
+                        null
+                    }
+                    if (text != null && !noTextAnswer(text)) {
                         readable++
                         if (read.isNotEmpty()) read.append("\n\n")
                         read.append(text.trim())
                     }
                 }
+
+                // Правило «сколько прочитано → в каком состоянии вопрос» — общее с компьютером (#1254).
+                val outcome = pagesRead(pages.size, readable, broken, brokenSaid)
+                val state = outcome.state
+                    ?: return@withContext ActionResult.Failure(outcome.said, recoverable = true)
                 if (readable == 0) {
-                    return@withContext ActionResult.Failure(
-                        "Не разобрал текст ни на одной странице",
-                        recoverable = true,
+                    return@withContext ActionResult.Done(
+                        outcome.said,
+                        Findings(
+                            metadata = mapOf(
+                                investigationKey(KnownCapabilities.IMAGE_TEXT) to state.wire,
+                            ),
+                        ),
                     )
                 }
 
                 val ref = store.newScratchFile("txt")
                 File(ref.value).writeText(read.toString())
                 ActionResult.Done(
-                    "Прочитано страниц: $readable из ${pages.size} — текст у документа",
+                    outcome.said,
                     Findings(
                         features = setOf(Feature.HAS_TEXT),
                         metadata = mapOf(
                             META_OCR_TEXT_REF to ref.value,
-                            investigationKey(KnownCapabilities.IMAGE_TEXT) to readableOutcome(readable, pages.size),
+                            investigationKey(KnownCapabilities.IMAGE_TEXT) to state.wire,
                         ),
                     ),
                 )
-            }.getOrElse { ActionResult.Failure(it.message ?: "Не удалось прочитать документ", recoverable = true) }
-        }
 
-    /** Прочитана часть страниц — вопрос не закрывается находкой целиком (ADR-0001 §9). */
-    private fun readableOutcome(readable: Int, total: Int): String =
-        if (readable == total) InvestigationState.FOUND.wire else InvestigationState.INSUFFICIENTLY_INVESTIGATED.wire
+                // Чужой текст библиотеки на экран не выходит (#686/#1254): на битом PDF здесь
+                // стояло `it.message` — английский хвост от разбора документа.
+            }.getOrElse {
+                ActionResult.Failure(
+                    ownWordsOf(it) ?: readerFailure(it.message, ObjectKind.PDF),
+                    recoverable = true,
+                )
+            }
+        }
 }

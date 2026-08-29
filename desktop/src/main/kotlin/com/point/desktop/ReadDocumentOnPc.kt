@@ -3,16 +3,19 @@ package com.point.desktop
 import com.point.core.flow.Capability
 import com.point.core.flow.CapabilityMeta
 import com.point.core.flow.Cost
-import com.point.core.flow.InvestigationState
 import com.point.core.flow.KnownCapabilities
 import com.point.core.flow.Latency
 import com.point.core.flow.META_OCR_TEXT_REF
 import com.point.core.flow.Realizer
 import com.point.core.flow.investigationKey
+import com.point.core.flow.noTextAnswer
+import com.point.core.flow.ownWordsOf
+import com.point.core.flow.pagesRead
+import com.point.core.flow.READER_NO_PAGES
+import com.point.core.flow.readerFailure
 import com.point.core.flow.reportStage
 import com.point.core.model.ActionResult
 import com.point.core.model.ActionYield
-import com.point.core.model.CapabilityId
 import com.point.core.model.Feature
 import com.point.core.model.Findings
 import com.point.core.model.Intent
@@ -54,7 +57,8 @@ class PcReadDocumentCapability : Capability {
 
     override fun yields(state: ObjectState) = ActionYield.Same("текст всех страниц · страницы уйдут в сервис")
 
-    companion object { val ID = CapabilityId("read-document") }
+    // Имя работы — из общего словаря: одна работа на двух устройствах зовётся одинаково (#1254).
+    companion object { val ID = KnownCapabilities.READ_DOCUMENT }
 }
 
 class PcReadDocumentRealizer(
@@ -81,11 +85,13 @@ class PcReadDocumentRealizer(
                 val read = StringBuilder()
                 var total = 0
                 var readable = 0
+                var broken = 0
+                var brokenSaid: String? = null
                 org.apache.pdfbox.pdmodel.PDDocument.load(source).use { document ->
                     total = document.numberOfPages
                     if (total == 0) {
                         return@withContext ActionResult.Failure(
-                            "В документе не нашлось ни одной страницы",
+                            readerFailure(READER_NO_PAGES, ObjectKind.PDF),
                             recoverable = true,
                         )
                     }
@@ -94,23 +100,42 @@ class PcReadDocumentRealizer(
                         reportStage("Читаю страницу ${index + 1} из $total")
                         val page = File.createTempFile("page-", ".png").apply { deleteOnExit() }
                         javax.imageio.ImageIO.write(renderer.renderImageWithDPI(index, PAGE_DPI), "png", page)
-                        val text = runCatching { readPage(page) }.getOrDefault("")
+
+                        // Отказ сервиса на странице — не пустая страница (#1255). Прежде
+                        // «getOrDefault("")» превращал 401 и таймаут в страницу без текста:
+                        // документ, где сервис не ответил ни разу, получал приговор «не
+                        // разобрал текст», а причина не доезжала до человека вовсе.
+                        val text = runCatching { readPage(page) }.getOrElse { trouble ->
+                            broken++
+                            brokenSaid = brokenSaid
+                                ?: (ownWordsOf(trouble) ?: readerFailure(trouble.message, ObjectKind.PDF))
+                            null
+                        }
                         page.delete()
 
                         // Страница, на которую сервис ответил пометкой «текста нет», прочитанной
                         // не считается (#1054): иначе отписка ушла бы в текст документа и ещё
                         // сошла бы за прочитанную страницу в счёте.
-                        if (!com.point.core.flow.noTextAnswer(text)) {
+                        if (text != null && !noTextAnswer(text)) {
                             readable++
                             if (read.isNotEmpty()) read.append("\n\n")
                             read.append(text.trim())
                         }
                     }
                 }
+
+                // Правило «сколько прочитано → в каком состоянии вопрос» — общее с телефоном (#1254).
+                val outcome = pagesRead(total, readable, broken, brokenSaid)
+                val state = outcome.state
+                    ?: return@withContext ActionResult.Failure(outcome.said, recoverable = true)
                 if (readable == 0) {
-                    return@withContext ActionResult.Failure(
-                        "Не разобрал текст ни на одной странице",
-                        recoverable = true,
+                    return@withContext ActionResult.Done(
+                        outcome.said,
+                        Findings(
+                            metadata = mapOf(
+                                investigationKey(KnownCapabilities.IMAGE_TEXT) to state.wire,
+                            ),
+                        ),
                     )
                 }
 
@@ -119,21 +144,25 @@ class PcReadDocumentRealizer(
                 val out = keepTextBesideDocument(source, read.toString())
                     ?: return@withContext ActionResult.Failure(TEXT_NOT_KEPT, recoverable = true)
                 ActionResult.Done(
-                    "Прочитано страниц: $readable из $total — текст у документа",
+                    outcome.said,
                     Findings(
                         features = setOf(Feature.HAS_TEXT),
                         metadata = mapOf(
                             META_OCR_TEXT_REF to out.absolutePath,
-                            investigationKey(KnownCapabilities.IMAGE_TEXT) to
-                                if (readable == total) {
-                                    InvestigationState.FOUND.wire
-                                } else {
-                                    InvestigationState.INSUFFICIENTLY_INVESTIGATED.wire
-                                },
+                            investigationKey(KnownCapabilities.IMAGE_TEXT) to state.wire,
                         ),
                     ),
                 )
-            }.getOrElse { ActionResult.Failure("Не удалось прочитать документ — он повреждён или страница не отрисовалась", recoverable = true) }
+
+                // Своё слово того слоя, который видел беду, — наружу как есть (#1225/#1254):
+                // одна фраза «повреждён или страница не отрисовалась» накрывала и отказ
+                // сервиса, и осечку отрисовки, и битый файл.
+            }.getOrElse {
+                ActionResult.Failure(
+                    ownWordsOf(it) ?: readerFailure(it.message, ObjectKind.PDF),
+                    recoverable = true,
+                )
+            }
         }
 
     private companion object {

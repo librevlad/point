@@ -1,15 +1,21 @@
 package com.point.data
 
+import com.point.core.flow.HttpJson
+import com.point.core.flow.OCR_SPACE_ACTOR
+import com.point.core.flow.OcrSpaceTalk
 import com.point.core.flow.ReaderPrivacy
 import com.point.core.flow.ReaderPromise
+import com.point.core.flow.FRAME_NOT_READY
 import com.point.core.flow.withoutKey
 import com.point.core.model.PointObject
-import org.json.JSONArray
-import org.json.JSONObject
-import java.net.URLEncoder
-import java.util.Base64
-import com.point.core.flow.HttpJson
 
+/**
+ * Телефонная половина разговора с OCR.space: собрать кадр и сходить в сеть (#1255).
+ *
+ * Что говорится сервису и как читается его ответ, знает [OcrSpaceTalk] — одно место на оба
+ * устройства. Здесь остаётся то, что у сторон и правда разное: телефон собирает кадр из
+ * `Bitmap`, компьютер читает файл с диска.
+ */
 class OcrSpaceReader(
     private val http: HttpJson,
     private val frames: OutboundFrames,
@@ -17,7 +23,7 @@ class OcrSpaceReader(
     private val baseUrl: String,
 ) : CloudTextReader {
 
-    override val reader = READER
+    override val reader = OCR_SPACE_ACTOR
 
     override val privacy = ReaderPrivacy(
         where = "OCR.space (a9t9 software), Германия (ЕС)",
@@ -26,70 +32,21 @@ class OcrSpaceReader(
 
     override val configured = true
 
-    private val root: String get() = baseUrl.ifBlank { DEFAULT_URL }.trim()
+    private val root: String get() = baseUrl.ifBlank { OcrSpaceTalk.DEFAULT_URL }.trim()
 
     override suspend fun read(obj: PointObject): String {
-        val key = apiKey().ifBlank { DEMO_KEY }
-        val frame = frames.of(obj) ?: error(com.point.core.flow.FRAME_NOT_READY)
-        val form = form(
-            "apikey" to key,
-            "OCREngine" to ENGINE,
-            "language" to LANGUAGE,
-            "isTable" to "true",
-            "base64Image" to "data:${frame.mime};base64,${base64(frame.bytes)}",
+        val key = OcrSpaceTalk.keyOrDemo(apiKey())
+        val frame = frames.of(obj) ?: error(FRAME_NOT_READY)
+
+        val res = http.post(
+            root,
+            mapOf("Content-Type" to OcrSpaceTalk.FORM_TYPE),
+            OcrSpaceTalk.form(key, frame.mime, frame.bytes),
         )
 
-        val res = http.post(root, mapOf("Content-Type" to FORM_TYPE), form)
-
+        // Ключ не возвращается на экран, даже если сервис вернул его в тексте отказа.
         val body = withoutKey(res.body, key)
-        if (res.code !in 200..299) error(refusal(res.code))
-        return textOf(body)
-    }
-
-    private fun textOf(json: String): String {
-
-        val answer = runCatching { JSONObject(json) }.getOrElse {
-            error(com.point.core.flow.UNREADABLE_ANSWER)
-        }
-        // Сервис отвечает кодом 200 и отказом внутри ответа — по-английски и с нашим
-        // внутренним именем впереди: «ocr-space: Invalid API key» (#1259). Переводится по
-        // признакам, как и отказ с кодом; чужой текст остаётся на своём слое.
-        if (answer.optBoolean("IsErroredOnProcessing")) {
-            error(com.point.core.flow.serviceRefusalInAnswer(errorMessage(answer)))
-        }
-        val results = answer.optJSONArray("ParsedResults")
-            ?: error(com.point.core.flow.serviceRefusalInAnswer(errorMessage(answer)))
-        return (0 until results.length())
-            .mapNotNull { results.optJSONObject(it)?.optString("ParsedText")?.trim()?.ifEmpty { null } }
-            .joinToString("\n\n")
-    }
-
-    private fun errorMessage(answer: JSONObject): String {
-        val message = when (val raw = answer.opt("ErrorMessage")) {
-            is JSONArray -> (0 until raw.length()).joinToString("; ") { raw.optString(it) }
-            is String -> raw
-            else -> ""
-        }.trim()
-        return message.ifBlank { "чтение не удалось" }.take(300)
-    }
-
-    private fun refusal(code: Int): String = com.point.core.flow.serviceRefusal(code)
-
-    private fun form(vararg fields: Pair<String, String>): String =
-        fields.joinToString("&") { (name, value) -> "$name=${encode(value)}" }
-
-    private fun encode(value: String): String = URLEncoder.encode(value, Charsets.UTF_8.name())
-
-    private fun base64(bytes: ByteArray): String = Base64.getEncoder().encodeToString(bytes)
-
-    private companion object {
-        const val READER = com.point.core.flow.OCR_SPACE_ACTOR
-        const val DEFAULT_URL = "https://api.ocr.space/parse/image"
-        const val FORM_TYPE = "application/x-www-form-urlencoded; charset=utf-8"
-
-        const val DEMO_KEY = "helloworld"
-
-        const val ENGINE = "3"
-        const val LANGUAGE = "rus"
+        if (res.code !in 200..299) OcrSpaceTalk.refuse(res.code)
+        return OcrSpaceTalk.textOf(body)
     }
 }

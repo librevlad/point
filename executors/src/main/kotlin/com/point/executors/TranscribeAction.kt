@@ -112,7 +112,10 @@ class TranscribeRealizer @Inject constructor(
                     val ref = store.newScratchFile("txt")
                     File(ref.value).writeText(transcriptFileText(heard))
                     ActionResult.Done(
-                        "Расшифровано — слова у записи",
+
+                        // Слова о сделанном — из общего словаря (#1097): ту же работу делает
+                        // компьютер, и звучать она обязана одинаково.
+                        com.point.core.flow.SPEECH_IS_KNOWLEDGE,
                         com.point.core.model.Findings(
                             features = setOf(com.point.core.model.Feature.HAS_TEXT),
                             metadata = buildMap {

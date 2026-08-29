@@ -151,7 +151,7 @@ fun main(args: Array<String>) {
             PcUnzipRealizer(revealer),
             PcOfficeTextRealizer(com.point.core.flow.OoxmlOfficeTextExtractor()),
             PcShrinkImageRealizer(outbox),
-            PcTranscribeRealizer({ speechCall(FilePcConfig(pointDir).load()) }, outbox),
+            PcTranscribeRealizer({ speechCall(FilePcConfig(pointDir).load()) }),
             PcCloudOcrRealizer({ FilePcConfig(pointDir).load().ocr }, entities).let { cloudReader ->
                 pcCloudReader = cloudReader
                 cloudReader

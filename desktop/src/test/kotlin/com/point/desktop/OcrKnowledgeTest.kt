@@ -81,6 +81,55 @@ class OcrKnowledgeTest {
         assertFalse("чужой текст у человека: $said", said.contains("Invalid API key"))
     }
 
+    /**
+     * Одна форма запроса на оба устройства (#1255).
+     *
+     * Компьютер писал разговор с OCR.space заново и уже разъехался с телефоном: слал движок
+     * «2» — неизмеренный, без комментария и без теста, — тогда как «3» выбран замером
+     * (`tools/vision/freeprobe.py`) и на телефоне держится тестом. Один снимок на двух
+     * устройствах читался разными движками.
+     */
+    @Test
+    fun `наружу уходит та же форма, что и с телефона — движком из замера`() = runTest {
+        var sent = ""
+        val s = HttpServer.create(InetSocketAddress(0), 0)
+        s.createContext("/parse") { exchange ->
+            sent = exchange.requestBody.readBytes().toString(Charsets.UTF_8)
+            val body = """{"IsErroredOnProcessing":false,"ParsedResults":[{"ParsedText":"текст"}]}"""
+                .toByteArray(Charsets.UTF_8)
+            exchange.sendResponseHeaders(200, body.size.toLong())
+            exchange.responseBody.use { it.write(body) }
+        }
+        s.start()
+        server = s
+
+        PcCloudOcrRealizer({ OcrConfig(url = "http://127.0.0.1:${s.address.port}/parse") })
+            .perform(snapshot(), null)
+
+        val form = sent.split('&').associate { pair ->
+            val (name, value) = pair.split('=', limit = 2)
+            name to java.net.URLDecoder.decode(value, "UTF-8")
+        }
+        assertEquals("движок не тот, что выбран замером и стоит на телефоне", "3", form["OCREngine"])
+        assertEquals("rus", form["language"])
+        assertEquals("true", form["isTable"])
+        assertEquals("без своего ключа читаем демо-ключом, как телефон", "helloworld", form["apikey"])
+    }
+
+    /**
+     * Сервис ответил успешно, а страниц в ответе нет (#1255). Здесь стоял `require`, и общий
+     * перехват подменял названную причину своим «Сервис чтения не ответил — попробуйте
+     * позже»: человек шёл ждать вместо того, чтобы понять, что произошло.
+     */
+    @Test
+    fun `ответ без страниц — отказ сервиса, а не «не ответил»`() = runTest {
+        val url = serveRaw("""{"IsErroredOnProcessing":false,"OCRExitCode":1}""")
+
+        val result = PcCloudOcrRealizer({ OcrConfig(url = url) }).perform(snapshot(), null)
+
+        assertEquals(com.point.core.flow.SERVICE_DID_NOT_READ, (result as ActionResult.Failure).reason)
+    }
+
     private fun snapshot(): PointObject {
         val file = temp.newFile("чек.jpg").apply { writeBytes(ByteArray(64)) }
         return PointObject("img", "image/jpeg", ScratchRef(file.absolutePath), ObjectState(ObjectKind.IMAGE))

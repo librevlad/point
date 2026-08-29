@@ -3,9 +3,9 @@ package com.point.core.flow.capabilities
 import com.point.core.flow.Capability
 import com.point.core.flow.CapabilityMeta
 import com.point.core.flow.Cost
+import com.point.core.flow.KnownCapabilities
 import com.point.core.flow.Latency
 import com.point.core.model.ActionYield
-import com.point.core.model.CapabilityId
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 
@@ -39,5 +39,6 @@ class OcrCapability(
 
     override fun yields(state: ObjectState) = ActionYield.New(ObjectKind.TEXT, promise)
 
-    companion object { val ID = CapabilityId("ocr") }
+    // Имя работы берётся из общего словаря, а не пишется литералом заново (#1254).
+    companion object { val ID = KnownCapabilities.OCR }
 }
