@@ -37,6 +37,7 @@ import com.point.core.ui.Outcome
 import com.point.executors.OpenInCapability
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -3473,6 +3474,42 @@ class FlowViewModelTest {
         assertNull(vm.ui.value.frame)
     }
 
+    /**
+     * #1242: человек нажал «Прочитать сильнее», облако ответило за секунды — а начатое до
+     * того офлайн-чтение того же снимка грело телефон до конца своего бюджета и клало поверх
+     * сильного своё слабое. Ответ обязан дойти до идущего прохода, пока тот ещё идёт.
+     */
+    @Test fun `ответ сильнее доходит до идущего чтения — и только по своему вопросу (#1242)`() = runTest(dispatcher) {
+        enrichment.updates = listOf(EnrichmentUpdate(setOf(Feature.HAS_TEXT), emptyMap(), emptyList()))
+        enrichment.stepDelayMs = 10_000
+        resolver.result = ActionResult.Done(
+            "Прочитано",
+            com.point.core.model.Findings(
+                metadata = mapOf(
+                    com.point.core.flow.investigationKey(CapabilityId("image-text")) to
+                        com.point.core.flow.InvestigationState.FOUND.wire,
+
+                    // Вопрос под областью — другой вопрос: «что здесь», а не «что в объекте».
+                    com.point.core.flow.investigationKey(
+                        CapabilityId("qr-content"),
+                        com.point.core.flow.Focus("x", atomIds = listOf("a1")),
+                    ) to com.point.core.flow.InvestigationState.FOUND.wire,
+                ),
+            ),
+        )
+        val vm = vm()
+        vm.onShared("uri", "image/png")
+        dispatcher.scheduler.advanceTimeBy(50)
+
+        vm.onBubble(bubble()); advanceUntilIdle()
+
+        assertEquals(
+            "идущее чтение не узнало, что на его вопрос уже ответили сильнее",
+            listOf(CapabilityId("image-text")),
+            enrichment.toldAnswered,
+        )
+    }
+
     @Test fun `«Выйти» стирает всё, что устройство знало про аккаунт и про свой компьютер (#472)`() = runTest(dispatcher) {
 
         val store = FakeAccountStore(TEST_ACCOUNT)
@@ -5790,7 +5827,19 @@ private class FakeEnrichment(var features: Set<Feature> = emptySet()) : Enrichme
     var understandsOnce = false
     var runs = 0
     val seen = mutableListOf<PointObject>()
-    override fun enrich(obj: PointObject): kotlinx.coroutines.flow.Flow<EnrichmentUpdate> =
+
+    /**
+     * Вопросы, о закрытии которых идущему проходу успели сказать (#1242).
+     *
+     * Настоящий проход по такому вопросу прерывает своё исследование; фальшивому довольно
+     * услышать — прерывание доказано там, где оно живёт (`DefaultEnrichmentTest`).
+     */
+    val toldAnswered = mutableListOf<com.point.core.model.CapabilityId>()
+
+    override fun enrich(
+        obj: PointObject,
+        answeredElsewhere: kotlinx.coroutines.flow.Flow<com.point.core.model.CapabilityId>,
+    ): kotlinx.coroutines.flow.Flow<EnrichmentUpdate> =
         kotlinx.coroutines.flow.flow {
             runs++
             seen += obj
@@ -5798,11 +5847,18 @@ private class FakeEnrichment(var features: Set<Feature> = emptySet()) : Enrichme
                 understandsOnce && runs > 1 -> listOf(EnrichmentUpdate(emptySet(), emptyMap(), emptyList()))
                 else -> updates ?: listOf(EnrichmentUpdate(features, emptyMap(), emptyList()))
             }
-            for (u in script) {
-                if (stepDelayMs > 0) kotlinx.coroutines.delay(stepDelayMs)
-                emit(u)
+            kotlinx.coroutines.coroutineScope {
+                val listening = launch { answeredElsewhere.collect { toldAnswered += it } }
+                try {
+                    for (u in script) {
+                        if (stepDelayMs > 0) kotlinx.coroutines.delay(stepDelayMs)
+                        emit(u)
+                    }
+                    if (breaksOff) error("проход сорвался")
+                } finally {
+                    listening.cancel()
+                }
             }
-            if (breaksOff) error("проход сорвался")
         }
 }
 

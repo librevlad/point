@@ -1,5 +1,6 @@
 package com.point.data
 
+import com.point.core.flow.ANSWERED_STATES
 import com.point.core.flow.AwaitingInvestigation
 import com.point.core.flow.Capability
 import com.point.core.flow.CapabilityRegistry
@@ -25,9 +26,13 @@ import com.point.core.model.Findings
 import com.point.core.model.ObjectKind
 import com.point.core.model.PointObject
 import com.point.core.model.Relation
+import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -48,7 +53,10 @@ class DefaultEnrichment @Inject constructor(
     private val region: com.point.core.flow.PhoneRegion,
 ) : Enrichment {
 
-    override fun enrich(obj: PointObject): Flow<EnrichmentUpdate> = flow {
+    override fun enrich(
+        obj: PointObject,
+        answeredElsewhere: Flow<CapabilityId>,
+    ): Flow<EnrichmentUpdate> = flow {
         val found = mutableSetOf<Feature>()
         var metadata: Map<String, String> = emptyMap()
         val objects = mutableListOf<PointObject>()
@@ -82,7 +90,7 @@ class DefaultEnrichment @Inject constructor(
                 if (latency == Latency.SLOW) {
                     wave.filter {
 
-                        investigationStateOf(obj.metadata, it.id, focus) !in ANSWERED &&
+                        investigationStateOf(obj.metadata, it.id, focus) !in ANSWERED_STATES &&
                             worthRunning(soFar, objects, it)
                     }
                 } else {
@@ -91,9 +99,18 @@ class DefaultEnrichment @Inject constructor(
             if (toRun.isEmpty()) continue
 
             coroutineScope {
-                val results = Channel<Pair<Capability, Result<ActionResult>>>(Channel.UNLIMITED)
+                val results = Channel<Pair<Capability, Result<ActionResult?>>>(Channel.UNLIMITED)
                 for (investigation in toRun) launch {
-                    results.send(investigation to runCatching { run(investigation, obj) })
+
+                    // Отмена на уровне «объект + вопрос» (#1242): исследование прерывается,
+                    // когда на его вопрос уже ответили мимо прохода. Прерывается ровно оно —
+                    // соседние вопросы этой же волны идут дальше, и их поздний результат
+                    // остаётся знанием объекта.
+                    //
+                    // Вопрос под областью — другой вопрос («что здесь», а не «что в
+                    // объекте»), и закрывают его отдельно: focused-проход отмену не слушает.
+                    val stop = if (focus == null) answeredElsewhere else emptyFlow()
+                    results.send(investigation to runCatching { until(stop, investigation.id) { run(investigation, obj) } })
                 }
                 val running = toRun.toMutableList()
                 emit(snapshot(found, metadata, objects, relations, running, failed, awaiting))
@@ -140,13 +157,17 @@ class DefaultEnrichment @Inject constructor(
                         // Исключение мимо `investigated` — та же граница слов (#1225):
                         // человеку выходит слово слоя, если он его объявил, а чужой текст
                         // остаётся на своём слое.
-                        null -> failed += FailedInvestigation(
-                            investigation.id,
-                            label,
-                            outcome.exceptionOrNull()
-                                ?.let { com.point.core.flow.ownWordsOf(it) }
-                                ?: com.point.core.flow.INVESTIGATION_FAILED,
-                        )
+                        //
+                        // Прерванное по чужому ответу исключения не приносит и упрёком не
+                        // становится (#1242): это не срыв, а закрытый другим путём вопрос —
+                        // знание о нём уже пришло, и говорить человеку не о чем.
+                        null -> outcome.exceptionOrNull()?.let { thrown ->
+                            failed += FailedInvestigation(
+                                investigation.id,
+                                label,
+                                com.point.core.flow.ownWordsOf(thrown) ?: com.point.core.flow.INVESTIGATION_FAILED,
+                            )
+                        }
                     }
                     running -= investigation
                     emit(snapshot(found, metadata, objects, relations, running, failed, awaiting))
@@ -159,6 +180,35 @@ class DefaultEnrichment @Inject constructor(
                 failed.toList(), awaiting.toList(),
             ),
         )
+    }
+
+    /**
+     * Работа до своего ответа: `null`, если ответ на этот вопрос пришёл раньше со стороны
+     * (#1242).
+     *
+     * Отменяется только сама работа — тот, кто её вёл, остаётся жив и докладывает, что его
+     * больше не ждут. Чужая отмена (человек ушёл с объекта, кончился проход) сюда не
+     * заворачивается: она идёт дальше как была.
+     */
+    private suspend fun <T> until(
+        answered: Flow<CapabilityId>,
+        question: CapabilityId,
+        work: suspend () -> T,
+    ): T? = coroutineScope {
+        val running = async { work() }
+
+        // Ждём именно свой вопрос — и переживаем то, что его так и не назвали: у прохода без
+        // сторонних ответов поток пуст и кончается сразу, и «не дождались» здесь нормальный
+        // исход, а не срыв исследования.
+        val watch = launch { answered.firstOrNull { it == question }?.let { running.cancel() } }
+        try {
+            running.await()
+        } catch (stopped: kotlinx.coroutines.CancellationException) {
+            coroutineContext.ensureActive()
+            null
+        } finally {
+            watch.cancel()
+        }
     }
 
     /**
@@ -265,13 +315,5 @@ class DefaultEnrichment @Inject constructor(
         const val WRONG_SHAPE = "исследование вернуло объект вместо знания"
 
         val ANY = com.point.core.model.ObjectState(ObjectKind.UNKNOWN)
-
-        /**
-         * Вопрос считается отвеченным, и дорогое исследование не задаёт его снова, пока объект
-         * не изменился (#669). «Не нашлось» — такой же ответ, как «нашлось»: гонять Тессеракт
-         * заново при каждом входе в тот же объект значит тратить батарею на уже известное.
-         * «Недостаточно» и «спорят» ответом не считаются — там смотреть ещё есть смысл.
-         */
-        val ANSWERED = setOf(InvestigationState.FOUND, InvestigationState.NOT_FOUND)
     }
 }

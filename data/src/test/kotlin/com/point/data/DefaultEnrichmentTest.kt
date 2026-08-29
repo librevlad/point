@@ -131,6 +131,65 @@ class DefaultEnrichmentTest {
         assertEquals(setOf(Feature.HAS_QR, Feature.HAS_PHONE), featureSteps.last())
     }
 
+    /**
+     * #1242: человек нажал «Прочитать сильнее», облако ответило за секунды — а начатое до
+     * того чтение того же снимка грело телефон до конца своего бюджета и клало поверх
+     * сильного своё слабое.
+     */
+    @Test
+    fun `ответ со стороны прерывает своё исследование — и только его (#1242)`() = runTest {
+        val reading = Look(
+            CapabilityMeta(investigation = true, latency = Latency.FAST),
+            delayMs = 100_000,
+            delta = Findings(setOf(Feature.HAS_TEXT)),
+            id = CapabilityId("image-text"),
+            label = "Распознаю текст…",
+        )
+        val neighbour = Look(
+            CapabilityMeta(investigation = true, latency = Latency.FAST),
+            delayMs = 200,
+            delta = Findings(setOf(Feature.HAS_QR)),
+            id = CapabilityId("qr-content"),
+        )
+        val answeredElsewhere = kotlinx.coroutines.flow.flow {
+            delay(50)
+            emit(CapabilityId("image-text"))
+        }
+
+        val updates = enrichmentOf(setOf(reading, neighbour)).enrich(obj, answeredElsewhere).toList()
+
+        assertTrue("телефон дочитывал уже отвеченное: $currentTime мс", currentTime < 100_000)
+        assertEquals(
+            "соседний вопрос выбросили вместе с отменённым",
+            setOf(Feature.HAS_QR),
+            updates.last().features,
+        )
+        assertFalse(
+            "знание прерванного чтения всё равно легло",
+            Feature.HAS_TEXT in updates.last().features,
+        )
+        assertTrue("прерванное стало упрёком: ${updates.last().failed}", updates.last().failed.isEmpty())
+        assertTrue("исследование осталось идущим", updates.last().running.isEmpty())
+    }
+
+    @Test
+    fun `чужой ответ не трогает исследование другого вопроса (#1242)`() = runTest {
+        val reading = Look(
+            CapabilityMeta(investigation = true, latency = Latency.FAST),
+            delayMs = 100,
+            delta = Findings(setOf(Feature.HAS_TEXT)),
+            id = CapabilityId("image-text"),
+        )
+        val answeredElsewhere = kotlinx.coroutines.flow.flow {
+            delay(10)
+            emit(CapabilityId("qr-content"))
+        }
+
+        val updates = enrichmentOf(setOf(reading)).enrich(obj, answeredElsewhere).toList()
+
+        assertEquals(setOf(Feature.HAS_TEXT), updates.last().features)
+    }
+
     @Test
     fun `runs cheaper waves before expensive ones`() = runTest {
         var slowStartedAt = -1L

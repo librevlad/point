@@ -55,7 +55,13 @@ class FileHistoryStore @Inject constructor(
 
     override suspend fun update(obj: PointObject): Unit = withContext(Dispatchers.IO) {
         mutex.withLock {
-            val existing = readEntries()[obj.id] ?: return@withLock
+            val journal = readIndex()
+            val existing = journal.entries[obj.id] ?: return@withLock
+
+            // Один визит к объекту дописывает 3–5 строк, а записей в перечне столько же
+            // (#1246): уплотнение по числу **различных** объектов их не считало, и перечень
+            // рос между шарингами. Уплотняем до записи — дописанная строка уже свежее всех.
+            if (journal.rows >= MAX_ROWS) rewriteIndex(journal.entries.values.toList())
             index.appendText(
                 row(
                     existing.id, existing.mime, existing.kind.name, existing.name, existing.epochMillis,
@@ -81,9 +87,18 @@ class FileHistoryStore @Inject constructor(
             if (copied != null) acc + (key to copied) else acc - key
         }
 
+    /**
+     * Улика, уже лежащая копией рядом с объектом, копируется не заново, а никуда (#1246).
+     *
+     * После открытия из «Недавнего» путь улики ведёт в саму эту копию, и `copyTo` получал
+     * источник, равный цели: он сначала удаляет цель, а потом открывает источник — тот же
+     * самый файл, — и распознанный текст исчезал с диска, а ключ выпадал из записи. Второй
+     * визит к объекту стирал понятое, хотя Point обещал обратное.
+     */
     private fun copyEvidence(id: String, key: String, path: String): String? {
         val source = File(path).takeIf { it.isFile } ?: return null
         val dest = evidenceFile(id, key)
+        if (source.absoluteFile == dest.absoluteFile) return dest.absolutePath
         return runCatching {
             source.copyTo(dest, overwrite = true)
             dest.absolutePath
@@ -209,11 +224,18 @@ class FileHistoryStore @Inject constructor(
         .put("meta", JSONObject(metadata))
         .toString()
 
-    private fun readEntries(): Map<String, HistoryEntry> {
-        if (!index.exists()) return emptyMap()
+    private fun readEntries(): Map<String, HistoryEntry> = readIndex().entries
+
+    /** Перечень целиком: сами записи и то, сколькими строками они записаны (#1246). */
+    private class Journal(val entries: Map<String, HistoryEntry>, val rows: Int)
+
+    private fun readIndex(): Journal {
+        if (!index.exists()) return Journal(emptyMap(), 0)
         val result = LinkedHashMap<String, HistoryEntry>()
+        var rows = 0
         index.forEachLine { line ->
             if (line.isBlank()) return@forEachLine
+            rows++
             runCatching {
                 val json = JSONObject(line)
                 val id = json.getString("id")
@@ -234,7 +256,7 @@ class FileHistoryStore @Inject constructor(
                 )
             }
         }
-        return result
+        return Journal(result, rows)
     }
 
     private fun JSONObject.toMetadata(): Map<String, String> =
@@ -250,6 +272,14 @@ class FileHistoryStore @Inject constructor(
 
         const val MAX_ENTRIES = 50
 
+        /**
+         * Сколько строк перечень держит до уплотнения (#1246).
+         *
+         * Строка на запись — только у нетронутого объекта: каждый визит дописывает знание
+         * заново, и живые снимки с телефона дают 51–72 строки на полсотни записей. Три
+         * строки на запись — тот же обещанный полтинник, только без вечного роста.
+         */
+        const val MAX_ROWS = MAX_ENTRIES * 3
 
         val REF_KEYS = setOf(META_OCR_TEXT_REF, META_OCR_ATOMS_REF)
     }

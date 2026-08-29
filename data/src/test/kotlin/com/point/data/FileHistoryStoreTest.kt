@@ -426,6 +426,40 @@ class FileHistoryStoreTest {
         assertEquals(listOf("a"), store.recent().map { it.id })
     }
 
+    // ---- #1246: возврат к объекту не стирает то, что о нём уже понято. ----
+
+    @Test
+    fun `второй визит в объект из «Недавнего» не стирает распознанный текст (#1246)`() = runTest {
+        val read = "распознанный текст ведомости"
+        withEvidence("a", "скан.txt", read)
+
+        // Человек открыл объект из «Недавнего»: путь улики ведёт теперь в саму историю.
+        val fromHistory = store.open("a")!!
+        assertEquals(
+            "улика не переехала в историю — сцена не та",
+            dir.absolutePath,
+            File(fromHistory.metadata.getValue(META_OCR_TEXT_REF)).parentFile?.absolutePath,
+        )
+
+        // Конец фонового обогащения дописывает запись тем же путём — как при каждом визите.
+        store.update(fromHistory)
+
+        val ref = store.open("a")?.metadata?.get(META_OCR_TEXT_REF)
+        assertTrue("распознанное пропало со второго визита", ref != null && File(ref).isFile)
+        assertEquals("распознанное подменилось на второй заход", read, File(ref!!).readText())
+    }
+
+    @Test
+    fun `перечень уплотняется и по числу строк — один визит дописывает их пачкой (#1246)`() = runTest {
+        store.record(textObject("a", "страница", "скан.txt"))
+
+        repeat(200) { store.update(textObject("a", "страница", "скан.txt")) }
+
+        val rows = File(dir, "index.jsonl").readLines().count { it.isNotBlank() }
+        assertTrue("перечень растёт без границы: $rows строк на одну запись", rows <= 150)
+        assertEquals(listOf("a"), store.recent().map { it.id })
+    }
+
     @Test
     fun `убранная запись не возвращается после перезапуска — журнал переписан (#543)`() = runTest {
         store.record(textObject("a", "первый", "a.txt"))

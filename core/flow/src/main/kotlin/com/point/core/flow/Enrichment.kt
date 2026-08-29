@@ -5,6 +5,7 @@ import com.point.core.model.Feature
 import com.point.core.model.PointObject
 import com.point.core.model.Relation
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 
 /**
  * Порт цикла Progressive Understanding (RFC §11).
@@ -13,7 +14,17 @@ import kotlinx.coroutines.flow.Flow
  * исследования не существует (ADR-0001 §11).
  */
 interface Enrichment {
-    fun enrich(obj: PointObject): Flow<EnrichmentUpdate>
+
+    /**
+     * [answeredElsewhere] — вопросы этого объекта, на которые ответ пришёл мимо прохода
+     * (#1242).
+     *
+     * «Прочитать сильнее» закрывает вопрос чтения за секунды, а начатое до него офлайн-чтение
+     * того же снимка греет телефон ещё минуты и кладёт поверх сильного своё слабое. Пришедший
+     * сюда вопрос прерывает **своё** исследование и только его: соседние вопросы прохода идут
+     * дальше, и их поздний результат остаётся знанием объекта.
+     */
+    fun enrich(obj: PointObject, answeredElsewhere: Flow<CapabilityId> = emptyFlow()): Flow<EnrichmentUpdate>
 }
 
 data class EnrichmentUpdate(

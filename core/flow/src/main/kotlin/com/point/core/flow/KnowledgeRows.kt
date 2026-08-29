@@ -98,9 +98,8 @@ fun openQuestions(
     nameOf: (CapabilityId) -> String?,
 ): List<OpenQuestion> =
     metadata.keys
-        .filter { it.startsWith(META_INVESTIGATED_PREFIX) && '@' !in it }
-        .mapNotNull { key ->
-            val id = CapabilityId(key.removePrefix(META_INVESTIGATED_PREFIX))
+        .mapNotNull(::capabilityOfStateKey)
+        .mapNotNull { id ->
             val state = investigationStateOf(metadata, id)
             if (state == InvestigationState.FOUND || state == InvestigationState.NOT_INVESTIGATED) {
                 return@mapNotNull null

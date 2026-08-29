@@ -3,6 +3,7 @@ package com.point
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.ensureActive
+import com.point.core.flow.ANSWERED_STATES
 import com.point.core.flow.AppLauncher
 import com.point.core.flow.AppTarget
 import com.point.core.flow.CapabilityRegistry
@@ -10,6 +11,7 @@ import com.point.core.flow.CapabilityUsage
 import com.point.core.flow.ChosenApp
 import com.point.core.flow.ChosenApps
 import com.point.core.flow.CollectionContent
+import com.point.core.flow.capabilityOfStateKey
 import com.point.core.flow.CrashLog
 import com.point.core.flow.delivered
 import com.point.core.flow.Enrichment
@@ -83,10 +85,13 @@ import androidx.compose.ui.graphics.asImageBitmap
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
@@ -246,6 +251,25 @@ class FlowViewModel @Inject constructor(
     private class EnrichWork(val objectId: String, val job: Job)
 
     private val enrichJobs = mutableListOf<EnrichWork>()
+
+    /**
+     * Вопросы, на которые ответили мимо фонового прохода (#1242).
+     *
+     * Пара «объект + вопрос»: прерывается ровно то исследование, чей ответ уже получен, —
+     * соседние идут дальше и своё позднее знание всё равно приносят. Прошлое не хранится
+     * намеренно: проход, начатый позже, спрашивает состояние знания сам.
+     */
+    private val answeredElsewhere = MutableSharedFlow<Pair<String, CapabilityId>>(extraBufferCapacity = 16)
+
+    /** Ответы, пришедшие мимо прохода именно по этому объекту. */
+    private fun questionsAnsweredFor(objectId: String): Flow<CapabilityId> =
+        answeredElsewhere.filter { it.first == objectId }.map { it.second }
+
+    /** Вопросы, которые это знание закрывает ответом, — «не нашлось» такой же ответ (#669). */
+    private fun answeredQuestionsOf(metadata: Map<String, String>): List<CapabilityId> = metadata.keys
+        .mapNotNull(::capabilityOfStateKey)
+        .filter { investigationStateOf(metadata, it) in ANSWERED_STATES }
+
     private var pendingBubble: Bubble? = null
 
     /**
@@ -3283,7 +3307,7 @@ class FlowViewModel @Inject constructor(
             // отдельный вопрос под областью — разбор не закончен, и «в области ничего не
             // нашлось» было бы сказано про недоделанное.
             var whole = true
-            enrichment.enrich(obj)
+            enrichment.enrich(obj, questionsAnsweredFor(obj.id))
                 .catch { whole = false }
                 .collect { update ->
                     if (update.failed.isNotEmpty()) whole = false
@@ -3322,6 +3346,14 @@ class FlowViewModel @Inject constructor(
         )
         val top = stack.lastOrNull() ?: return
         applyEnrichment(top.obj, update)
+
+        // Вопрос закрыт мимо фонового прохода — идущее исследование того же вопроса больше
+        // не нужно (#1242): «Прочитать сильнее» отвечает за секунды, а начатое до него
+        // офлайн-чтение того же снимка греет телефон ещё минуты. Говорится до перезапуска
+        // разбора: новый проход отвеченного уже не спросит, а старый его ещё ведёт.
+        answeredQuestionsOf(findings.metadata).forEach { question ->
+            answeredElsewhere.tryEmit(top.obj.id to question)
+        }
         top.obj.sourceObjects.firstOrNull()
             ?.let { parentId -> stack.lastOrNull { it.obj.id == parentId }?.obj }
             ?.let { parent -> applyEnrichment(parent, update.copy(metadata = update.metadata - REFRESHABLE_META)) }

@@ -16,6 +16,11 @@ class MergeKnowledgeTest {
 
     private val phone = "entity.phone"
 
+    /** Два прочтения одного снимка: то, за которым человек пошёл сам, и офлайн-чтение (#1242). */
+    private val strongText = "/scratch/сильное.txt"
+
+    private val offlineText = "/scratch/офлайн.txt"
+
     @Test
     fun `two sources reading the same value agree without alternatives`() {
         val known = mapOf(phone to "+380671234567")
@@ -95,6 +100,58 @@ class MergeKnowledgeTest {
 
         assertEquals("/scratch/new.txt", merged[META_OCR_TEXT_REF])
         assertEquals(emptyList<String>(), alternativesOf(merged, META_OCR_TEXT_REF))
+    }
+
+    /**
+     * #1242: человек нажал «Прочитать сильнее», облако ответило за секунды — а начатое до
+     * того офлайн-чтение дошло позже и молча встало поверх сильного прочтения.
+     */
+    @Test
+    fun `позднее слабое прочтение не замещает сильное, а остаётся расхождением (#1242)`() {
+        val strong = mapOf(
+            META_OCR_TEXT_REF to strongText,
+            META_OCR_TEXT_REF + META_STRENGTH_SUFFIX to READING_STRONG,
+        )
+
+        val merged = mergeKnowledge(
+            strong,
+            mapOf(META_OCR_TEXT_REF to offlineText),
+            refreshable = setOf(META_OCR_TEXT_REF),
+        )
+
+        assertEquals("сильное прочтение подменили поздним слабым", strongText, merged[META_OCR_TEXT_REF])
+        assertEquals(
+            "второе прочтение пропало вместо того, чтобы остаться расхождением",
+            listOf(offlineText),
+            alternativesOf(merged, META_OCR_TEXT_REF),
+        )
+        assertTrue("сила прочтения потеряна", readStrongly(merged, META_OCR_TEXT_REF))
+    }
+
+    @Test
+    fun `сильное прочтение замещает прежнее — за ним человек и пошёл (#1242)`() {
+        val known = mapOf(META_OCR_TEXT_REF to offlineText)
+
+        val merged = mergeKnowledge(
+            known,
+            mapOf(
+                META_OCR_TEXT_REF to strongText,
+                META_OCR_TEXT_REF + META_STRENGTH_SUFFIX to READING_STRONG,
+            ),
+            refreshable = setOf(META_OCR_TEXT_REF),
+        )
+
+        assertEquals("прочтение, за которым пошёл человек, не стало главным", strongText, merged[META_OCR_TEXT_REF])
+        assertTrue("сила прочтения не записана", readStrongly(merged, META_OCR_TEXT_REF))
+    }
+
+    @Test
+    fun `сила прочтения — не находка и не строка на экран (#1242)`() {
+        assertTrue(isAnnotationKey(META_OCR_TEXT_REF + META_STRENGTH_SUFFIX))
+        assertEquals(
+            InvestigationState.NOT_FOUND,
+            investigationOutcome(emptyMap(), listOf(META_OCR_TEXT_REF + META_STRENGTH_SUFFIX)),
+        )
     }
 
     @Test

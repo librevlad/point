@@ -22,6 +22,7 @@ import com.point.core.flow.GroundedTable
 import com.point.core.flow.Latency
 import com.point.core.flow.LayoutAnswer
 import com.point.core.flow.LlmClient
+import com.point.core.flow.MAX_TABLE_PAGES
 import com.point.core.flow.META_OCR_ATOMS_REF
 import com.point.core.flow.META_READING_MODE
 import com.point.core.flow.META_TABLE_CHROME
@@ -207,7 +208,12 @@ class ExcelRealizer(
             )
         }
 
-        val reads = pages.mapIndexed { i, page -> onPage(i + 1, pages.size) { readPage(page) } }
+        // Сколько страниц будет прочитано — говорится до первого облачного вызова (#1243):
+        // за чтение платит ожиданием и квотой человек, и узнавать цену он вправе заранее.
+        val read = pages.take(MAX_TABLE_PAGES)
+        reportStage(pagesAheadStage(read.size, pages.size))
+
+        val reads = read.mapIndexed { i, page -> onPage(i + 1, pages.size) { readPage(page) } }
         val refused = reads.filterIsInstance<PageRead.Refused>()
         if (refused.size == reads.size) {
             val reason = refused.first().reason
@@ -218,14 +224,16 @@ class ExcelRealizer(
         }
 
         reportStage("Собираю файл")
+        val beyond = pages.size - read.size
         val plan = stitchSheets(
-            reads.mapIndexed { i, read ->
-                when (read) {
-                    is PageRead.Table -> read.plan
+            reads.mapIndexed { i, page ->
+                when (page) {
+                    is PageRead.Table -> page.plan
                     is PageRead.Refused -> pageGap(i + 1, pages.size)
                 }
-            },
+            } + listOfNotNull(pagesBeyondLimit(read.size + 1, pages.size).takeIf { beyond > 0 }),
         )
+        val unread = refused.size + beyond
         val ref = writer.write(plan)
         val flagged = plan.rows.sumOf { row -> row.count { styleCell(it).flagged } }
         return ActionResult.Success(
@@ -237,7 +245,7 @@ class ExcelRealizer(
                     put("op", "excel")
                     put("name", "таблица.xlsx")
                     put(META_TABLE_PAGES, pages.size.toString())
-                    if (refused.isNotEmpty()) put(META_TABLE_PAGES_UNREAD, refused.size.toString())
+                    if (unread > 0) put(META_TABLE_PAGES_UNREAD, unread.toString())
                     put(META_TABLE_FLAGGED, flagged.toString())
                 },
             ),
@@ -252,6 +260,28 @@ class ExcelRealizer(
      */
     private fun pageGap(n: Int, total: Int) = SheetPlan(
         rows = listOf(listOf("⚠ Страница $n из $total не прочиталась — проверьте её отдельно")),
+        headerRows = emptySet(),
+    )
+
+    /**
+     * Хвост за пределом захода (#1243): эти страницы не читали, и файл говорит об этом сам.
+     *
+     * Раньше набор, не уложившийся в потолок действия, пропадал целиком — вместе с уже
+     * оплаченными облачными чтениями. Теперь прочитанное доходит до человека файлом, а
+     * непрочитанное названо одной строкой: у набора в пятьсот снимков четыре сотни
+     * одинаковых предупреждений — не забота, а мусор в его таблице. Остаток он запустит
+     * отдельным набором.
+     */
+    private fun pagesBeyondLimit(from: Int, total: Int) = SheetPlan(
+        rows = listOf(
+            listOf(
+                if (from == total) {
+                    "⚠ Страница $total не читалась — за один заход читается не больше $MAX_TABLE_PAGES"
+                } else {
+                    "⚠ Страницы $from–$total не читались — за один заход читается не больше $MAX_TABLE_PAGES"
+                },
+            ),
+        ),
         headerRows = emptySet(),
     )
 
@@ -734,6 +764,19 @@ internal fun parseAddressedCells(raw: String): List<List<CellAnswer>>? {
         }
     }.getOrNull()?.takeIf { it.isNotEmpty() }
 }
+
+/**
+ * Слово до старта: сколько страниц набора будет прочитано (#1243).
+ *
+ * «Пределы, которые человек чувствует» обязаны быть сказаны вслух: за чтение он платит
+ * ожиданием и бесплатной квотой сервисов, а узнавал цену задним числом — по пропавшему файлу.
+ */
+internal fun pagesAheadStage(reading: Int, total: Int): String =
+    if (reading < total) {
+        "Читаю страницы — $reading из $total, дальше за один заход не выйдет"
+    } else {
+        "Читаю страницы — $total"
+    }
 
 internal fun anchorCandidates(
     key: Pair<Int, Int>,

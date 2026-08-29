@@ -16,6 +16,27 @@ val REFRESHABLE_KNOWLEDGE: Set<String> = setOf(
     META_COLLECTION_ORDER,
 )
 
+/**
+ * Сила прочтения (#1242).
+ *
+ * Прочтений у одного снимка бывает несколько, и они не равны: «Прочитать сильнее» — отдельный
+ * дорогой путь, за который человек заплатил ожиданием и согласием отправить снимок наружу.
+ * Ложится оно ключом-ссылкой ([REFRESHABLE_KNOWLEDGE]), а такой ключ всегда обновлялся свежим
+ * значением — и офлайн-чтение, начатое раньше, а дошедшее позже, молча вставало поверх
+ * сильного («Не уничтожать конфликтующие результаты молчаливой заменой»).
+ *
+ * Сравнить двух читателей по имени слияние не может (см. `Actor.kt`), поэтому силу называет
+ * сам добывший — здесь, рядом со своим прочтением. У обычного прочтения такой пометки нет
+ * вовсе: всё, что было раньше, работает по-прежнему.
+ */
+const val META_STRENGTH_SUFFIX = ".strength"
+
+/** Прочтение, за которым человек пошёл отдельным действием. */
+const val READING_STRONG = "strong"
+
+fun readStrongly(metadata: Map<String, String>, key: String): Boolean =
+    metadata[key + META_STRENGTH_SUFFIX] == READING_STRONG
+
 fun carryKnowledge(
     known: PointObject,
     produced: PointObject,
@@ -105,6 +126,17 @@ fun mergeKnowledge(
 
     fresh.forEach { (key, value) ->
         when {
+
+            // Позднее слабое прочтение не замещает сильное (#1242). Оно и не пропадает:
+            // расхождение остаётся «или» — тем же путём, каким слияние хранит всякое второе
+            // прочтение, — а главным остаётся то, за которым человек пошёл сам.
+            key in refreshable && readStrongly(merged, key) && !readStrongly(fresh, key) -> {
+                val kept = (alternativesOf(merged, key) + value)
+                    .distinct()
+                    .filter { it != merged[key] }
+                if (kept.isNotEmpty()) merged[key + META_ALT_SUFFIX] = altValue(kept)
+            }
+
             key in refreshable -> merged[key] = value
 
             isStateKey(key) -> merged[key] = keptState(merged[key], value)

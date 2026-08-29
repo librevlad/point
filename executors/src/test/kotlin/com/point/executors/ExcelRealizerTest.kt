@@ -10,6 +10,7 @@ import com.point.core.flow.CropPurpose
 import com.point.core.flow.EvidenceCropper
 import com.point.core.flow.EvidenceImage
 import com.point.core.flow.LlmClient
+import com.point.core.flow.MAX_TABLE_PAGES
 import com.point.core.flow.META_COLLECTION_ORDER
 import com.point.core.flow.META_OCR_ATOMS_REF
 import com.point.core.flow.META_TABLE_PAGES
@@ -739,6 +740,80 @@ class ExcelRealizerTest {
         assertTrue(result is ActionResult.Failure)
         assertTrue((result as ActionResult.Failure).reason.contains("2 страниц"))
         assertNull("файл не писался", lastPlan)
+    }
+
+    // ---- #1243: у набора есть названный предел страниц, и файл доходит до человека ----
+
+    @Test
+    fun `набор длиннее предела читается до предела, а не пропадает целиком (#1243)`() = runTest {
+        val over = 3
+        pages = (1..MAX_TABLE_PAGES + over).map { page("IMG_$it.jpg") }
+        var asked = 0
+        val reader = object : LlmClient {
+            override suspend fun run(obj: PointObject, prompt: String): ResultObject {
+                asked++
+                return answerOf("""[["Товар"],["Гречка"]]""")
+            }
+        }
+
+        var result: ActionResult? = null
+        stagesHeard {
+            result = ExcelRealizer(listOf(reader), writer, noCrops, scratch, testKnowledge()).perform(set)
+        }
+
+        assertEquals("облако спрошено про страницы за пределом", MAX_TABLE_PAGES, asked)
+        assertTrue("прочитанные страницы пропали вместе с файлом", result is ActionResult.Success)
+        val meta = (result as ActionResult.Success).result.metadata
+        assertEquals((MAX_TABLE_PAGES + over).toString(), meta[META_TABLE_PAGES])
+        assertEquals("непрочитанные страницы не сосчитаны", over.toString(), meta[META_TABLE_PAGES_UNREAD])
+        val tail = lastRows!!.last().single()
+        assertTrue(
+            "страницы за пределом пропали из файла молча: $tail",
+            tail.contains('⚠') && tail.contains("${MAX_TABLE_PAGES + 1}–${MAX_TABLE_PAGES + over}") &&
+                tail.contains("$MAX_TABLE_PAGES"),
+        )
+        assertEquals(
+            "на каждую непрочитанную страницу пришлось по строке-предупреждению",
+            1,
+            lastRows!!.count { it.size == 1 && it.single().contains("не читал") },
+        )
+    }
+
+    @Test
+    fun `до первого облачного вызова сказано, сколько страниц будет прочитано (#1243)`() = runTest {
+        pages = (1..MAX_TABLE_PAGES + 2).map { page("IMG_$it.jpg") }
+
+        val heard = stagesHeard {
+            ExcelRealizer(listOf(llm("""[["Товар"],["Гречка"]]""")), writer, noCrops, scratch, testKnowledge())
+                .perform(set)
+        }
+
+        assertEquals(
+            "цена захода названа задним числом",
+            pagesAheadStage(MAX_TABLE_PAGES, MAX_TABLE_PAGES + 2),
+            heard.firstOrNull(),
+        )
+        assertTrue(
+            "человеку не названы ни сколько прочтётся, ни сколько всего: ${heard.first()}",
+            "$MAX_TABLE_PAGES" in heard.first() && "${MAX_TABLE_PAGES + 2}" in heard.first(),
+        )
+    }
+
+    @Test
+    fun `набор в пределах предела о пределе не говорит, но страницы называет (#1243)`() = runTest {
+        pages = listOf(page("IMG_1.jpg"), page("IMG_2.jpg"))
+
+        val heard = stagesHeard {
+            ExcelRealizer(listOf(llm("""[["Товар"],["Гречка"]]""")), writer, noCrops, scratch, testKnowledge())
+                .perform(set)
+        }
+
+        assertEquals("цена захода не названа до первого чтения", pagesAheadStage(2, 2), heard.first())
+        assertTrue("сколько страниц читается — не сказано: ${heard.first()}", "2" in heard.first())
+        assertFalse(
+            "человеку назван предел, до которого ему далеко: ${heard.first()}",
+            "$MAX_TABLE_PAGES" in heard.first(),
+        )
     }
 
     @Test

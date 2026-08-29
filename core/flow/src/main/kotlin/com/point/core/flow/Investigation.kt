@@ -23,6 +23,17 @@ enum class InvestigationState(val wire: String) {
 
 const val META_INVESTIGATED_PREFIX = "investigated."
 
+/**
+ * Вопрос считается отвеченным, и дорогое исследование не задаёт его снова, пока объект не
+ * изменился (#669). «Не нашлось» — такой же ответ, как «нашлось»: гонять Тессеракт заново при
+ * каждом входе в тот же объект значит тратить батарею на уже известное. «Недостаточно» и
+ * «спорят» ответом не считаются — там смотреть ещё есть смысл.
+ *
+ * Тем же правилом прерывается и уже идущее исследование, когда ответ на его вопрос пришёл
+ * другим путём (#1242): чтение, начатое до «Прочитать сильнее», больше никому не нужно.
+ */
+val ANSWERED_STATES = setOf(InvestigationState.FOUND, InvestigationState.NOT_FOUND)
+
 fun isStateKey(key: String): Boolean = key.startsWith(META_INVESTIGATED_PREFIX)
 
 fun investigationKey(capabilityId: CapabilityId): String = META_INVESTIGATED_PREFIX + capabilityId.value
@@ -37,6 +48,16 @@ fun investigationKey(capabilityId: CapabilityId, focus: Focus?): String {
     val scope = focus?.let(::focusScope) ?: return investigationKey(capabilityId)
     return investigationKey(capabilityId) + "@" + scope
 }
+
+/**
+ * Вопрос объекта, о состоянии которого говорит ключ, — или `null`, если ключ не об этом (#1242).
+ *
+ * Обратная сторона [investigationKey]: тот, кто принёс знание, называет вопрос ключом, а тот,
+ * кто по этому знанию решает, — читает из ключа сам вопрос. Ключ с областью (`@`) вопросом
+ * объекта не считается: «что в этой области» — другой вопрос, и закрывают его отдельно.
+ */
+fun capabilityOfStateKey(key: String): CapabilityId? =
+    if (!isStateKey(key) || '@' in key) null else CapabilityId(key.removePrefix(META_INVESTIGATED_PREFIX))
 
 fun focusScope(focus: Focus): String? =
     focus.region?.let(::regionWire) ?: focus.atomIds.takeIf { it.isNotEmpty() }?.joinToString(" ")
