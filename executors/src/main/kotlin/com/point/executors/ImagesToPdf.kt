@@ -106,14 +106,16 @@ internal fun PdfDocument.addPage(bitmap: Bitmap, number: Int) {
 /**
  * Страница под лист: чёткость и оттенки — по тому, что на ней самой (#1047).
  *
- * Чёрно-белую страницу оставляем как есть: сглаживание при ужатии добавило бы буквам серые
- * края, а с ними и вес. Цветную ужимаем до чёткости листа и округляем ей оттенки — снимок с
+ * Чёрно-белую страницу отдаём как есть, и это замер, а не догадка: на снимке документа
+ * ужатие бинаризованной страницы до предела листа меняет её вес на −2 %…+1 % и добавляет
+ * буквам серые края. Цветную ужимаем до чёткости листа и округляем ей оттенки — снимок с
  * шумом матрицы иначе едет в PDF почти несжатым.
  */
 private fun fittedToSheet(bitmap: Bitmap, sheet: Sheet): Bitmap {
-    val ink = inkOnPaper(rowSample(bitmap))
+    if (inkOnPaper(rowSample(bitmap))) return bitmap
+
     val longEdge = maxOf(bitmap.width, bitmap.height)
-    val maxPx = sheet.pageMaxPx(ink)
+    val maxPx = sheet.pageMaxPx()
     val scaled = if (longEdge <= maxPx) {
         bitmap
     } else {
@@ -121,10 +123,9 @@ private fun fittedToSheet(bitmap: Bitmap, sheet: Sheet): Bitmap {
             bitmap,
             (bitmap.width.toLong() * maxPx / longEdge).toInt().coerceAtLeast(1),
             (bitmap.height.toLong() * maxPx / longEdge).toInt().coerceAtLeast(1),
-            !ink,
+            true,
         )
     }
-    if (ink) return scaled
 
     val pixels = IntArray(scaled.width * scaled.height)
     scaled.getPixels(pixels, 0, scaled.width, 0, 0, scaled.width, scaled.height)
