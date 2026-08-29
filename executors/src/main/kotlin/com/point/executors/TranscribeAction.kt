@@ -53,8 +53,10 @@ class TranscribeCapability @Inject constructor(
     // Расшифровка — знание/представление той же записи, а не новый объект (#1097).
     override fun produces(state: ObjectState) = state.with(com.point.core.model.Feature.HAS_TEXT)
 
+    // Обещание человеку — из общего словаря (#1254): ту же работу делает компьютер, и до тапа
+    // она обязана обещать одно и то же. Литерал стоял в обоих файлах, и сверял их никто.
     override fun yields(state: ObjectState) =
-        com.point.core.model.ActionYield.Same("слова записи · запись уйдёт в сервис")
+        com.point.core.model.ActionYield.Same(com.point.core.flow.SPEECH_PROMISE)
 
     // Понимание записи, каким и было: produces больше не TEXT, а intent остался прежним.
     override fun intents(state: ObjectState) = setOf(com.point.core.model.Intent.UNDERSTAND)
@@ -112,7 +114,10 @@ class TranscribeRealizer @Inject constructor(
                     val ref = store.newScratchFile("txt")
                     File(ref.value).writeText(transcriptFileText(heard))
                     ActionResult.Done(
-                        "Расшифровано — слова у записи",
+
+                        // Слова о сделанном — из общего словаря (#1097): ту же работу делает
+                        // компьютер, и звучать она обязана одинаково.
+                        com.point.core.flow.SPEECH_IS_KNOWLEDGE,
                         com.point.core.model.Findings(
                             features = setOf(com.point.core.model.Feature.HAS_TEXT),
                             metadata = buildMap {

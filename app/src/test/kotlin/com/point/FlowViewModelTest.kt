@@ -1273,6 +1273,46 @@ class FlowViewModelTest {
     }
 
     /**
+     * Расшифровка на компьютере дольше бюджета ответа приходит исходом из очереди (#1097).
+     * Текст передаётся значением, и здесь он снова становится знанием этой записи: файл на
+     * этом телефоне и признак «текст есть».
+     *
+     * Прежде исход из очереди клал полученное как есть, и текст оставался полем протокола: у
+     * человека блок «Текст» не появлялся, а вопрос рядом стоял закрытым — второй раз
+     * расшифровать ему уже не предлагали (CLAUDE.md, «Продолжение на компьютере»).
+     */
+    @Test fun `текст из очереди компьютера становится текстом самой записи`() = runTest(dispatcher) {
+        pcLinks.pc = com.point.core.flow.LinkedPc("d-pc", "Ноутбук", "ключ-ПК")
+        val heard = "Встречаемся в четверг"
+        pcTransport.outbox = listOf(
+            outcomeEntry(
+                7, com.point.core.flow.PcActionOutcome.Done(null), label = "Расшифровать",
+                extra = mapOf(
+                    com.point.core.flow.PcResultFields.UNDERSTOOD + com.point.core.flow.META_READ_TEXT to heard,
+                    com.point.core.flow.PcResultFields.UNDERSTOOD +
+                        com.point.core.flow.investigationKey(com.point.core.flow.KnownCapabilities.TRANSCRIBE) to
+                        com.point.core.flow.InvestigationState.FOUND.wire,
+                ),
+            ),
+        )
+        val vm = vm()
+
+        vm.onShared("uri", "audio/ogg"); advanceUntilIdle()
+
+        val obj = vm.ui.value.frame?.obj
+        val ref = obj?.metadata?.get(com.point.core.flow.META_OCR_TEXT_REF)
+        assertNotNull("текст с компьютера не лёг файлом этого телефона: ${obj?.metadata}", ref)
+        assertEquals("у записи оказался не тот текст", heard, java.io.File(ref!!).readText())
+        assertTrue("у записи не появилось признака «текст есть»", obj.state.has(Feature.HAS_TEXT))
+        assertNull("поле протокола осталось знанием объекта", obj.metadata[com.point.core.flow.META_READ_TEXT])
+        assertEquals(
+            "вопрос расшифровки не получен закрытым",
+            com.point.core.flow.InvestigationState.FOUND,
+            com.point.core.flow.investigationStateOf(obj.metadata, com.point.core.flow.KnownCapabilities.TRANSCRIBE),
+        )
+    }
+
+    /**
      * Человек остаётся в своём контексте (PC4): отказ по объекту A не всплывает поверх
      * объекта B и поверх главного экрана, где объекта нет вовсе, — он ждёт своего объекта.
      */

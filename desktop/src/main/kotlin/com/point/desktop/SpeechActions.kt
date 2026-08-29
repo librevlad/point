@@ -8,11 +8,9 @@ import com.point.core.flow.modelReadableAudio
 import com.point.core.flow.parseJson
 import com.point.core.flow.str
 import com.point.core.model.ActionResult
-import com.point.core.model.CapabilityId
 import com.point.core.model.ObjectKind
 import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
-import com.point.core.model.ScratchRef
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -32,12 +30,22 @@ class PcTranscribeCapability : Capability {
     override val meta = CapabilityMeta(priority = 21, latency = Latency.SLOW, network = true, auth = true)
     override fun label(state: ObjectState) = "Расшифровать"
     override fun accepts(state: ObjectState) = state.kind == ObjectKind.AUDIO
-    override fun produces(state: ObjectState) = ObjectState(ObjectKind.TEXT)
+
+    // Расшифровка — знание той же записи, а не новый объект (#1097): решение #1157 было
+    // сделано только на телефоне, и компьютер продолжал рождать «Расшифровку» отдельной
+    // вещью — а через связку этот узел приезжал на телефон вместо знания.
+    override fun produces(state: ObjectState) = state.with(com.point.core.model.Feature.HAS_TEXT)
+
+    // Обещание человеку — из общего словаря (#1254): ту же работу делает телефон, и до тапа
+    // она обязана обещать одно и то же. Литерал стоял в обоих файлах, и сверял их никто.
+    override fun yields(state: ObjectState) =
+        com.point.core.model.ActionYield.Same(com.point.core.flow.SPEECH_PROMISE)
+
+    override fun intents(state: ObjectState) = setOf(com.point.core.model.Intent.UNDERSTAND)
 }
 
 class PcTranscribeRealizer(
     private val config: () -> SpeechConfig,
-    private val outbox: Outbox,
     private val connectTimeoutMs: Int = 15_000,
     private val readTimeoutMs: Int = 180_000,
 
@@ -89,17 +97,33 @@ class PcTranscribeRealizer(
                         ),
                     )
                 }
+                // Расшифровка — знание той же записи, а не новый объект (#1097, GRF-006).
+                // Решение #1157 доехало только до телефона: компьютер рождал «Расшифровку»
+                // отдельной вещью, у самой записи не появлялось ни текста, ни закрытого
+                // вопроса, а телефон через связку получал чужой узел вместо своего знания.
+                // Ключи те же, что кладёт телефон, — иначе одно знание звалось бы двумя
+                // именами и на той стороне читалось бы как неисследованное.
                 val out = File.createTempFile("pc-voice-", ".txt").apply { writeText(text) }
-                ActionResult.Success(
-                    com.point.core.model.ResultObject(
-                        type = ObjectKind.TEXT,
-                        mime = "text/plain",
-                        uri = ScratchRef(out.absolutePath),
-                        metadata = mapOf("name" to "Расшифровка"),
+                ActionResult.Done(
+                    com.point.core.flow.SPEECH_IS_KNOWLEDGE,
+                    com.point.core.model.Findings(
+                        features = setOf(com.point.core.model.Feature.HAS_TEXT),
+                        metadata = mapOf(
+                            com.point.core.flow.META_OCR_TEXT_REF to out.absolutePath,
+                            com.point.core.flow.investigationKey(capabilityId) to
+                                com.point.core.flow.InvestigationState.FOUND.wire,
+                        ),
                     ),
                 )
+
+                // Отказ, названный по существу, наружу как есть (#1255): «нужен ключ Groq, а не
+                // OpenRouter» и «бесплатное на сегодня кончилось» накрывались общим «попробуйте
+                // позже» — человек жал снова и снова там, где сегодня уже не заработает.
             }.getOrElse {
-                ActionResult.Failure("Сервис расшифровки не ответил — попробуйте позже", recoverable = true)
+                ActionResult.Failure(
+                    com.point.core.flow.ownWordsOf(it) ?: "Сервис расшифровки не ответил — попробуйте позже",
+                    recoverable = true,
+                )
             }
         }
 
@@ -136,7 +160,10 @@ class PcTranscribeRealizer(
             val code = connection.responseCode
             val body = (if (code in 200..299) connection.inputStream else connection.errorStream)
                 ?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
-            require(code in 200..299) { refusal(code) }
+
+            // Слово этого слоя объявлено им самим (#1225/#1255): `require` бросал обычное
+            // исключение, и общий перехват выше подменял названную причину своим «не ответил».
+            if (code !in 200..299) com.point.core.flow.ownWords(refusal(code))
             parseJson(body).str("text").orEmpty().trim()
         } finally {
             connection.disconnect()

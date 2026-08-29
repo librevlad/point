@@ -1,27 +1,15 @@
 package com.point.desktop
 
-import com.point.core.flow.Capability
-import com.point.core.flow.CapabilityMeta
-import com.point.core.flow.JsonValue
-import com.point.core.flow.Latency
+import com.point.core.flow.OcrSpaceTalk
 import com.point.core.flow.Realizer
-import com.point.core.flow.array
-import com.point.core.flow.bool
-import com.point.core.flow.parseJson
-import com.point.core.flow.str
+import com.point.core.flow.withoutKey
 import com.point.core.model.ActionResult
-import com.point.core.model.CapabilityId
-import com.point.core.model.ObjectKind
-import com.point.core.model.ObjectState
 import com.point.core.model.PointObject
-import com.point.core.model.ScratchRef
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
-import java.net.URLEncoder
-import java.util.Base64
 
 /**
  * Слово компьютера о дороге чтения (#1021): своего движка у него нет, снимок уходит в сервис.
@@ -123,24 +111,43 @@ class PcCloudOcrRealizer(
             }
         }
 
-    /** Тот же путь чтения для страницы документа (#1014): сцепка, не копия. */
-    internal fun readFrame(file: File, mime: String): String = read(config(), file, mime)
+    /**
+     * Тот же путь чтения для страницы документа (#1014): сцепка, не копия.
+     *
+     * Уложить в предел сервиса — часть этого пути, а не особенность одиночного снимка (#1255).
+     * Страницу Point рисует сам, и скан такого размера почти всегда тяжелее предела: без
+     * ужатия человек получал «Файл великоват — сервис его не берёт» на картинку, которую он
+     * не выбирал и уменьшить не может, и документ оставался непрочитанным целиком.
+     *
+     * Уменьшенная копия живёт ровно один поход к сервису и удаляется сразу: страниц у
+     * документа бывают сотни.
+     */
+    internal fun readFrame(file: File, mime: String): String {
+        val fitted = ImageFit.toFit(file, MAX_BYTES)
+        return try {
+            read(config(), fitted?.file ?: file, if (fitted == null) mime else "image/jpeg")
+        } finally {
+            fitted?.file?.delete()
+        }
+    }
 
+    /**
+     * Компьютерная половина разговора с OCR.space (#1255): доставка байтов и http.
+     *
+     * Что говорится сервису и как читается его ответ, знает [OcrSpaceTalk] — одно место на оба
+     * устройства. Здесь эта половина была написана заново и уже разъехалась с телефонной:
+     * компьютер слал движок «2» — неизмеренный, без комментария и без теста, — а телефон «3»,
+     * выбранный замером. Один снимок на двух устройствах читался разными движками.
+     */
     private fun read(cfg: OcrConfig, file: File, mime: String): String {
-        val key = cfg.key.ifBlank { DEMO_KEY }
-        val body = form(
-            "apikey" to key,
-            "OCREngine" to "2",
-            "language" to "rus",
-            "isTable" to "true",
-            "base64Image" to "data:$mime;base64," + Base64.getEncoder().encodeToString(file.readBytes()),
-        )
+        val key = OcrSpaceTalk.keyOrDemo(cfg.key)
+        val body = OcrSpaceTalk.form(key, mime, file.readBytes())
         val connection = (URL(cfg.url).openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
             doOutput = true
             connectTimeout = connectTimeoutMs
             readTimeout = readTimeoutMs
-            setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
+            setRequestProperty("Content-Type", OcrSpaceTalk.FORM_TYPE)
         }
         val reply = try {
             connection.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
@@ -148,59 +155,30 @@ class PcCloudOcrRealizer(
             val raw = (if (code in 200..299) connection.inputStream else connection.errorStream)
                 ?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
 
-            val safe = if (key.isBlank()) raw else raw.replace(key, "…")
+            // Ключ не возвращается на экран, даже если сервис вернул его в тексте отказа.
+            val safe = withoutKey(raw, key)
 
             // Слово этого слоя объявлено им самим (#1225): иначе общий перехват ниже накрывал
             // названный отказ сервиса собственным «не ответил» — причина ложная, шаг ложный.
-            if (code !in 200..299) com.point.core.flow.ownWords(refusal(code))
+            // Где лежит ключ, знает только эта сторона — подсказку она и добавляет.
+            if (code !in 200..299) OcrSpaceTalk.refuse(code, hintFor(code))
             safe
         } finally {
             connection.disconnect()
         }
-        return textOf(reply)
+        return OcrSpaceTalk.textOf(reply)
     }
 
-    private fun textOf(json: String): String {
-        val answer = parseJson(json)
-
-        // Сервис отвечает кодом 200 и отказом внутри ответа — по-английски (#1259). Слова
-        // человеку берутся оттуда же, откуда их берёт телефон: своя копия «Сервис не прочитал
-        // снимок» стояла здесь литералом и разошлась бы с общей при первой правке (#1237).
-        if (answer.bool("IsErroredOnProcessing") == true) {
-            com.point.core.flow.ownWords(com.point.core.flow.serviceRefusalInAnswer(errorMessage(answer)))
-        }
-        val pages = answer.array("ParsedResults")
-        require(pages.isNotEmpty()) { "Сервис вернул ответ без страниц" }
-        return pages.mapNotNull { page ->
-            (page as? JsonValue.Obj)?.let { it.str("ParsedText") }?.trim()?.ifEmpty { null }
-        }.joinToString("\n\n")
+    private fun hintFor(code: Int): String? = when (code) {
+        401, 403 -> "проверьте ocr.key в ~/.point-pc/config"
+        404 -> "проверьте ocr.url там же"
+        else -> null
     }
-
-    /** Чужой текст отказа: сервис шлёт его строкой или списком строк. Наружу он не идёт. */
-    private fun errorMessage(answer: JsonValue?): String {
-        val listed = answer.array("ErrorMessage").mapNotNull { (it as? JsonValue.Str)?.value }
-        return listed.ifEmpty { listOfNotNull(answer.str("ErrorMessage")) }.joinToString("; ").trim()
-    }
-
-    private fun refusal(code: Int): String = com.point.core.flow.serviceRefusal(
-        code,
-        hint = when (code) {
-            401, 403 -> "проверьте ocr.key в ~/.point-pc/config"
-            404 -> "проверьте ocr.url там же"
-            else -> null
-        },
-    )
-
-    private fun form(vararg fields: Pair<String, String>): String =
-        fields.joinToString("&") { (k, v) ->
-            URLEncoder.encode(k, "UTF-8") + "=" + URLEncoder.encode(v, "UTF-8")
-        }
 
     private companion object {
 
-        const val DEMO_KEY = "helloworld"
-
-        const val MAX_BYTES = 1024L * 1024
+        /** Предел сервиса знают оба устройства из одного места (#1255). */
+        val MAX_BYTES = OcrSpaceTalk.MAX_BYTES
     }
 }
 
@@ -209,6 +187,8 @@ data class OcrConfig(
     val url: String = DEFAULT_URL,
 ) {
     companion object {
-        const val DEFAULT_URL = "https://api.ocr.space/parse/image"
+
+        /** Ручка сервиса — одна на оба устройства (#1255). */
+        const val DEFAULT_URL = OcrSpaceTalk.DEFAULT_URL
     }
 }

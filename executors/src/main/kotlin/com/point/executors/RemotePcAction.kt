@@ -153,16 +153,8 @@ class RemotePcRealizer(
      * прочитать документ значило потерять прочитанное: телефон снова считал документ
      * непрочитанным и звал делать то же самое ещё раз.
      */
-    private suspend fun landed(understanding: Map<String, String>): com.point.core.model.Findings {
-        val arrived = com.point.core.flow.textArrivedFromTravel(understanding)
-            ?: return com.point.core.model.Findings(metadata = understanding)
-        val kept = store?.let { place ->
-            runCatching {
-                place.newScratchFile("txt").also { java.io.File(it.value).writeText(arrived) }.value
-            }.getOrNull()
-        }
-        return com.point.core.flow.knowledgeArrivedFromTravel(understanding, kept)
-    }
+    private suspend fun landed(understanding: Map<String, String>): com.point.core.model.Findings =
+        com.point.core.flow.knowledgeLandedFromTravel(understanding, store)
 
     /**
      * ADR-0001 §20, вариант A (Этап 9): знание с компьютера возвращается ЗНАНИЕМ исходника
