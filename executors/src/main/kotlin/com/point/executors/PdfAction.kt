@@ -53,9 +53,8 @@ class PdfRealizer @Inject constructor(
         reportStage("Читаю изображение")
         val bitmap = Bitmaps.decodeUpright(input.uri.value) ?: error("Не удалось прочитать изображение")
         val document = PdfDocument()
-        val page = document.startPage(PdfDocument.PageInfo.Builder(bitmap.width, bitmap.height, 1).create())
-        page.canvas.drawBitmap(bitmap, 0f, 0f, null)
-        document.finishPage(page)
+        // Одиночный снимок становится страницей по тем же правилам, что и набор (#1047).
+        document.addPage(bitmap, 1)
         val ref = write(document)
         bitmap.recycle()
         return ActionResult.Success(ResultObject(ObjectKind.PDF, "application/pdf", ref))
@@ -67,7 +66,7 @@ class PdfRealizer @Inject constructor(
             if (mono) typeface = Typeface.MONOSPACE
         }
         reportStage("Раскладываю по страницам")
-        val lines = wrap(text, paint, PAGE_WIDTH - 2 * MARGIN)
+        val lines = wrap(text, paint, A4.width - 2 * MARGIN)
 
         val document = PdfDocument()
         var index = 0
@@ -75,10 +74,10 @@ class PdfRealizer @Inject constructor(
         do {
             reportStage("Страница $pageNumber")
             val page = document.startPage(
-                PdfDocument.PageInfo.Builder(PAGE_WIDTH, PAGE_HEIGHT, pageNumber++).create(),
+                PdfDocument.PageInfo.Builder(A4.width, A4.height, pageNumber++).create(),
             )
             var y = MARGIN + LINE_HEIGHT
-            while (index < lines.size && y < PAGE_HEIGHT - MARGIN) {
+            while (index < lines.size && y < A4.height - MARGIN) {
                 page.canvas.drawText(lines[index], MARGIN, y, paint)
                 y += LINE_HEIGHT
                 index++
@@ -151,8 +150,6 @@ class PdfRealizer @Inject constructor(
     }
 
     internal companion object {
-        const val PAGE_WIDTH = 595
-        const val PAGE_HEIGHT = 842
         const val MARGIN = 32f
         const val LINE_HEIGHT = 16f
 

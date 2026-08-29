@@ -1,6 +1,7 @@
 package com.point.executors
 
 import android.graphics.Bitmap
+import android.graphics.RectF
 import android.graphics.pdf.PdfDocument
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.META_WHOLE_FRAME
@@ -54,11 +55,7 @@ internal suspend fun imagesToPdf(
         val straight = straighten(src)
         if (straight == null) wholeFrames++
         val bitmap = straight ?: wholeFrame(src)
-        val page = document.startPage(
-            PdfDocument.PageInfo.Builder(bitmap.width, bitmap.height, pages + 1).create(),
-        )
-        page.canvas.drawBitmap(bitmap, 0f, 0f, null)
-        document.finishPage(page)
+        document.addPage(bitmap, pages + 1)
         bitmap.recycle()
         if (bitmap !== src) src.recycle()
         pages++
@@ -88,6 +85,71 @@ internal suspend fun imagesToPdf(
         ),
     )
 }
+
+/**
+ * Снимок страницей документа: на листе, а не на матрице камеры, и сжатый по тому, что на
+ * нём (#1047).
+ *
+ * Одно место на все PDF из снимков — и на набор страниц, и на одиночный снимок: человек
+ * отправляет один и тот же документ, каким бы действием он его ни собрал.
+ */
+internal fun PdfDocument.addPage(bitmap: Bitmap, number: Int) {
+    val sheet = sheetFor(bitmap.width, bitmap.height)
+    val fitted = fittedToSheet(bitmap, sheet)
+    val box = sheet.boxFor(fitted.width, fitted.height)
+    val page = startPage(PdfDocument.PageInfo.Builder(sheet.width, sheet.height, number).create())
+    page.canvas.drawBitmap(fitted, null, RectF(box.left, box.top, box.right, box.bottom), null)
+    finishPage(page)
+    if (fitted !== bitmap) fitted.recycle()
+}
+
+/**
+ * Страница под лист: чёткость и оттенки — по тому, что на ней самой (#1047).
+ *
+ * Чёрно-белую страницу оставляем как есть: сглаживание при ужатии добавило бы буквам серые
+ * края, а с ними и вес. Цветную ужимаем до чёткости листа и округляем ей оттенки — снимок с
+ * шумом матрицы иначе едет в PDF почти несжатым.
+ */
+private fun fittedToSheet(bitmap: Bitmap, sheet: Sheet): Bitmap {
+    val ink = inkOnPaper(rowSample(bitmap))
+    val longEdge = maxOf(bitmap.width, bitmap.height)
+    val maxPx = sheet.pageMaxPx(ink)
+    val scaled = if (longEdge <= maxPx) {
+        bitmap
+    } else {
+        Bitmap.createScaledBitmap(
+            bitmap,
+            (bitmap.width.toLong() * maxPx / longEdge).toInt().coerceAtLeast(1),
+            (bitmap.height.toLong() * maxPx / longEdge).toInt().coerceAtLeast(1),
+            !ink,
+        )
+    }
+    if (ink) return scaled
+
+    val pixels = IntArray(scaled.width * scaled.height)
+    scaled.getPixels(pixels, 0, scaled.width, 0, 0, scaled.width, scaled.height)
+    val toned = Bitmap.createBitmap(
+        fewerTones(pixels), scaled.width, scaled.height, Bitmap.Config.ARGB_8888,
+    )
+    if (scaled !== bitmap) scaled.recycle()
+    return toned
+}
+
+/**
+ * Несколько строк страницы поперёк всего снимка: по ним видно, краска это на бумаге или
+ * цветная печать. Читать ради этого весь снимок незачем — разные цвета встретятся сразу.
+ */
+private fun rowSample(bitmap: Bitmap): IntArray {
+    val rows = minOf(SAMPLE_ROWS, bitmap.height)
+    val step = bitmap.height / rows
+    val sample = IntArray(rows * bitmap.width)
+    for (row in 0 until rows) {
+        bitmap.getPixels(sample, row * bitmap.width, bitmap.width, 0, row * step, bitmap.width, 1)
+    }
+    return sample
+}
+
+private const val SAMPLE_ROWS = 32
 
 /**
  * Страница скана из снимка (#1333): `null` — страницы на снимке не нашли.
