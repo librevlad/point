@@ -1,6 +1,7 @@
 package com.point.executors
 
 import android.graphics.Bitmap
+import android.graphics.RectF
 import android.graphics.pdf.PdfDocument
 import com.point.core.flow.ObjectStore
 import com.point.core.flow.META_WHOLE_FRAME
@@ -54,11 +55,7 @@ internal suspend fun imagesToPdf(
         val straight = straighten(src)
         if (straight == null) wholeFrames++
         val bitmap = straight ?: wholeFrame(src)
-        val page = document.startPage(
-            PdfDocument.PageInfo.Builder(bitmap.width, bitmap.height, pages + 1).create(),
-        )
-        page.canvas.drawBitmap(bitmap, 0f, 0f, null)
-        document.finishPage(page)
+        document.addPage(bitmap, pages + 1)
         bitmap.recycle()
         if (bitmap !== src) src.recycle()
         pages++
@@ -88,6 +85,87 @@ internal suspend fun imagesToPdf(
         ),
     )
 }
+
+/**
+ * Снимок страницей документа: на листе, а не на матрице камеры, и сжатый по тому, что на
+ * нём (#1047).
+ *
+ * Одно место на все PDF из снимков — и на набор страниц, и на одиночный снимок: человек
+ * отправляет один и тот же документ, каким бы действием он его ни собрал.
+ */
+internal fun PdfDocument.addPage(bitmap: Bitmap, number: Int) {
+    val sheet = sheetFor(bitmap.width, bitmap.height)
+    val fitted = fittedToSheet(bitmap, sheet)
+    val box = sheet.boxFor(fitted.width, fitted.height)
+    val page = startPage(PdfDocument.PageInfo.Builder(sheet.width, sheet.height, number).create())
+    page.canvas.drawBitmap(fitted, null, RectF(box.left, box.top, box.right, box.bottom), null)
+    finishPage(page)
+    if (fitted !== bitmap) fitted.recycle()
+}
+
+/**
+ * Страница под лист: чёткость и оттенки — по тому, что на ней самой (#1047).
+ *
+ * Чёрно-белую страницу отдаём как есть, и это замер, а не догадка: на снимке документа
+ * ужатие бинаризованной страницы до предела листа меняет её вес на −2 %…+3 % и добавляет
+ * буквам серые края. Цветную ужимаем до чёткости листа (150 dpi) и округляем ей оттенки —
+ * снимок с шумом матрицы иначе едет в PDF почти несжатым.
+ *
+ * Во что это обходится по памяти, пока страница собирается. Снимок 12 Мп `decodeUpright`
+ * отдаёт как 1500×2000, это 12 МБ; сверх него живут два буфера ужатой копии — сама копия
+ * 1315×1754 (~9 МБ) и массив её пикселей (~9 МБ). Оттенки округляются в этом массиве и
+ * ложатся обратно в ту же копию — третьего полноразмерного буфера нет, он стоил бы ещё
+ * ~9 МБ. Оба живут только эту страницу: копию `addPage` освобождает сразу после отрисовки,
+ * массив уходит на выходе отсюда. Через страницы накапливаются собранные страницы внутри
+ * `PdfDocument`, а не эти буферы, — «Объединить в PDF» на десятке снимков платит за них по
+ * одному разу.
+ *
+ * Снимок, который и так мельче листа, ужимать не во что, и оттенки ему приходится увозить в
+ * новую копию: сам снимок ещё живой у вызвавшего и вдобавок может быть неизменяемым — тот же
+ * `Bitmap.createBitmap` из массива и отдаёт неизменяемый. Ужатая копия такого вопроса не
+ * ставит: `createScaledBitmap` рисует её сквозь `Canvas`, а значит отдаёт изменяемой.
+ */
+private fun fittedToSheet(bitmap: Bitmap, sheet: Sheet): Bitmap {
+    if (inkOnPaper(rowSample(bitmap))) return bitmap
+
+    val longEdge = maxOf(bitmap.width, bitmap.height)
+    val maxPx = sheet.pageMaxPx()
+    val scaled = if (longEdge <= maxPx) {
+        bitmap
+    } else {
+        Bitmap.createScaledBitmap(
+            bitmap,
+            (bitmap.width.toLong() * maxPx / longEdge).toInt().coerceAtLeast(1),
+            (bitmap.height.toLong() * maxPx / longEdge).toInt().coerceAtLeast(1),
+            true,
+        )
+    }
+
+    val pixels = IntArray(scaled.width * scaled.height)
+    scaled.getPixels(pixels, 0, scaled.width, 0, 0, scaled.width, scaled.height)
+    fewerTones(pixels)
+    if (scaled !== bitmap) {
+        scaled.setPixels(pixels, 0, scaled.width, 0, 0, scaled.width, scaled.height)
+        return scaled
+    }
+    return Bitmap.createBitmap(pixels, bitmap.width, bitmap.height, Bitmap.Config.ARGB_8888)
+}
+
+/**
+ * Несколько строк страницы поперёк всего снимка: по ним видно, краска это на бумаге или
+ * цветная печать. Читать ради этого весь снимок незачем — разные цвета встретятся сразу.
+ */
+private fun rowSample(bitmap: Bitmap): IntArray {
+    val rows = minOf(SAMPLE_ROWS, bitmap.height)
+    val step = bitmap.height / rows
+    val sample = IntArray(rows * bitmap.width)
+    for (row in 0 until rows) {
+        bitmap.getPixels(sample, row * bitmap.width, bitmap.width, 0, row * step, bitmap.width, 1)
+    }
+    return sample
+}
+
+private const val SAMPLE_ROWS = 32
 
 /**
  * Страница скана из снимка (#1333): `null` — страницы на снимке не нашли.
