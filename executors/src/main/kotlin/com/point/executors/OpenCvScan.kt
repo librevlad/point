@@ -21,12 +21,51 @@ object OpenCvScan {
 
     val available: Boolean by lazy { runCatching { OpenCVLoader.initLocal() }.getOrDefault(false) }
 
-    fun process(src: Bitmap): Bitmap {
+    /**
+     * Выпрямленная страница, сведённая к чёрно-белому, или `null` — страницы не нашлось (#1333).
+     *
+     * Правило здесь то же, что у [enhance], и это важнее сходства кода: этим путём идёт
+     * «Скан в PDF», и прежде он молча подставлял исходный кадр (`?: rgba`) — неисправленный
+     * снимок уезжал страницей скана, и человеку он был неотличим от выпрямленной страницы.
+     */
+    fun process(src: Bitmap): Bitmap? = binarised(src) { rgba, scratch -> detectDocument(rgba, scratch) }
+
+    /**
+     * Кадр целиком, сведённый к чёрно-белому (#1333): страницы не нашли, но работа не пропадает.
+     *
+     * Зовут это, только когда [process] уже ответил «не нашлось», и результат уезжает с
+     * пометкой [com.point.core.flow.META_WHOLE_FRAME] — за выпрямленную страницу он не выдаётся.
+     */
+    fun processAsIs(src: Bitmap): Bitmap? = binarised(src) { rgba, _ -> rgba }
+
+    /**
+     * Выпрямленная и подготовленная страница или `null` — страницы на снимке не нашлось (#1333).
+     *
+     * Прежде неудача молча возвращала исходник (`?: rgba`), и снаружи она была неотличима от
+     * успеха: кривой кадр уезжал дальше как «скан». Теперь «не нашлось» — это ответ, а не
+     * молчание: по нему кадр обрабатывается целиком ([enhanceAsIs]) и результат помечается
+     * [com.point.core.flow.META_WHOLE_FRAME], а не выдаётся за выпрямленную страницу.
+     */
+    suspend fun enhance(src: Bitmap): Bitmap? = prepared(src) { rgba, scratch ->
+        reportStage("Ищу страницу на снимке")
+        dewarpByTps(rgba, scratch) ?: detectDocument(rgba, scratch)
+    }
+
+    /**
+     * Подготовка кадра без выравнивания (#1333) — то самое, что раньше пряталось за `?: rgba`.
+     *
+     * Страницы не нашёл никто, но выбеливание, снятие бликов и увеличение кадру всё равно
+     * помогают: человек не остаётся ни с чем, а результат называет себя пометкой.
+     */
+    suspend fun enhanceAsIs(src: Bitmap): Bitmap? = prepared(src) { rgba, _ -> rgba }
+
+    /** Общий хвост чёрно-белых путей: найденную страницу и кадр целиком сводит одна бинаризация. */
+    private fun binarised(src: Bitmap, align: (Mat, MutableList<Mat>) -> Mat?): Bitmap? {
         val rgba = Mat()
         Utils.bitmapToMat(src, rgba)
         val scratch = mutableListOf(rgba)
         try {
-            val document = detectDocument(rgba, scratch) ?: rgba
+            val document = align(rgba, scratch) ?: return null
             val scanned = binarise(document, scratch)
             val out = Bitmap.createBitmap(scanned.cols(), scanned.rows(), Bitmap.Config.ARGB_8888)
             Utils.matToBitmap(scanned, out)
@@ -36,15 +75,16 @@ object OpenCvScan {
         }
     }
 
-    suspend fun enhance(src: Bitmap): Bitmap {
+    /** Общий хвост цветных путей: выбелить бумагу и увеличить мелкое (#1333). */
+    private suspend fun prepared(
+        src: Bitmap,
+        align: suspend (Mat, MutableList<Mat>) -> Mat?,
+    ): Bitmap? {
         val rgba = Mat()
         Utils.bitmapToMat(src, rgba)
         val scratch = mutableListOf(rgba)
         try {
-            reportStage("Ищу страницу на снимке")
-            val straight = dewarpByTps(rgba, scratch)
-                ?: detectDocument(rgba, scratch)
-                ?: rgba
+            val straight = align(rgba, scratch) ?: return null
             reportStage("Выбеливаю бумагу")
             val finished = whitenFinish(straight, scratch)
             val scaled = upscale(finished, scratch)

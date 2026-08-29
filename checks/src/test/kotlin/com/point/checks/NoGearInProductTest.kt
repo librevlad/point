@@ -20,9 +20,6 @@ class NoGearInProductTest {
         .filter { it.invariantSeparatorsPath.contains("/src/main/") }
         .toList()
 
-    private fun code(text: String): String =
-        text.replace(BLOCK_COMMENT, " ").lines().joinToString("\n") { it.substringBefore("//") }
-
     @Test fun `поиск и правда смотрит на исходники, а не на пустоту`() {
 
         assertTrue("исходников продукта не нашлось — сломан поиск, а не продукт", productSources.size > 100)
@@ -91,4 +88,3 @@ class NoGearInProductTest {
     }
 }
 
-private val BLOCK_COMMENT = Regex("/\\*.*?\\*/", RegexOption.DOT_MATCHES_ALL)

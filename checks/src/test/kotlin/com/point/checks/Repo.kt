@@ -12,3 +12,15 @@ import java.io.File
  */
 val repo: File = generateSequence(File(".").absoluteFile) { it.parentFile }
     .first { File(it, "settings.gradle.kts").isFile }
+
+/**
+ * Исходник без комментариев (#1333).
+ *
+ * Проверки этого модуля читают проект текстом, а комментарий нарочно цитирует то, чего в коде
+ * быть не должно: «прежде здесь стояло `?: rgba`». Считай его кодом — и сторож падал бы на
+ * объяснении, почему он существует.
+ */
+fun code(text: String): String =
+    text.replace(BLOCK_COMMENT, " ").lines().joinToString("\n") { it.substringBefore("//") }
+
+private val BLOCK_COMMENT = Regex("/\\*.*?\\*/", RegexOption.DOT_MATCHES_ALL)

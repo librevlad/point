@@ -4,6 +4,8 @@ import com.point.core.flow.META_SEMANTIC_SUMMARY
 import com.point.core.flow.META_SEMANTIC_TYPE
 import com.point.core.flow.META_SIZE
 import com.point.core.flow.META_UNUSABLE_REASON
+import com.point.core.flow.META_WHOLE_FRAME
+import com.point.core.flow.WHOLE_FRAME_INSTEAD_OF_PAGE
 import com.point.core.flow.TYPE_PARCEL
 import com.point.core.model.Feature
 import com.point.core.model.ObjectKind
@@ -188,6 +190,32 @@ class ObjectVerdictTest {
         val o = obj(metadata = mapOf("name" to "note.txt", META_UNUSABLE_REASON to "залежавшийся ключ"))
 
         assertEquals("note.txt", objectVerdict(o).subline)
+    }
+
+    /**
+     * Страницу на снимке не нашли, и человеку отдан весь кадр (#1333).
+     *
+     * Выбеленный кадр целиком выглядит как выбеленная страница: без этой строки «не нашлось»
+     * снаружи неотличимо от удавшегося скана — а переснять стоит именно такой снимок.
+     */
+    @Test
+    fun `скан, на котором страницы не нашли, говорит об этом подписью`() {
+        val o = obj(metadata = mapOf(META_WHOLE_FRAME to WHOLE_FRAME_INSTEAD_OF_PAGE))
+
+        assertEquals(WHOLE_FRAME_INSTEAD_OF_PAGE, objectVerdict(o).subline)
+    }
+
+    @Test
+    fun `про ненайденную страницу сказано раньше, чем пересказ модели`() {
+        val o = obj(
+            metadata = mapOf(
+                META_SEMANTIC_SUMMARY to "Счёт из магазина",
+                META_WHOLE_FRAME to WHOLE_FRAME_INSTEAD_OF_PAGE,
+                "name" to "скан.jpg",
+            ),
+        )
+
+        assertEquals(WHOLE_FRAME_INSTEAD_OF_PAGE, objectVerdict(o).subline)
     }
 
     @Test
