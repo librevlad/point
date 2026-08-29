@@ -53,8 +53,29 @@ private val MIME_BY_EXT: Map<String, String> = mapOf(
 const val UNKNOWN_MIME = "application/octet-stream"
 
 /** Тип файла по его имени. Незнакомое — поток байтов, а не догадка. */
-fun mimeForName(fileName: String): String =
-    MIME_BY_EXT[fileName.substringAfterLast('.', "").lowercase()] ?: UNKNOWN_MIME
+fun mimeForName(fileName: String): String = mimeForExtension(fileName.substringAfterLast('.', ""))
+
+/** Тип файла по расширению — та же единственная таблица, что и по имени (#840). */
+fun mimeForExtension(ext: String): String = MIME_BY_EXT[ext.lowercase()] ?: UNKNOWN_MIME
+
+/**
+ * Состоит ли документ из слайдов (#1105).
+ *
+ * Спрашиваются и имя, и mime: mime бывает общим («application/octet-stream» от файлового
+ * менеджера), а имени может не быть вовсе. Своего перечня типов здесь нет — расширения
+ * называет [PRESENTATION_EXTS], а тип каждого из них говорит единственная таблица (#840),
+ * как это уже сделано у `isModernOffice`. Второй список молча разошёлся бы с первой же
+ * правкой таблицы. Ни одного байта при этом не читается, поэтому ответ годится для первого
+ * экрана.
+ */
+fun isPresentation(fileName: String?, mime: String): Boolean {
+    val ext = fileName?.substringAfterLast('.', "")?.lowercase().orEmpty()
+    if (ext in PRESENTATION_EXTS) return true
+    val declared = mime.lowercase().substringBefore(';').trim()
+    return declared != UNKNOWN_MIME && PRESENTATION_EXTS.any { mimeForExtension(it) == declared }
+}
+
+private val PRESENTATION_EXTS = setOf("pptx", "ppt")
 
 /**
  * Расширение для файла этого типа — чтобы копия открывалась тем же приложением, что и

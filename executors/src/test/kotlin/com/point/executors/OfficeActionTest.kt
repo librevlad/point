@@ -33,6 +33,9 @@ class OfficeActionTest {
 
     private fun extractor(text: String) = object : OfficeTextExtractor {
         override suspend fun extractText(obj: PointObject) = text
+
+        // Тут проверяется чтение текста, а не разбор на слайды (#1105).
+        override suspend fun slides(obj: PointObject) = emptyList<Pair<Int, String>>()
     }
 
     private val docx = PointObject(

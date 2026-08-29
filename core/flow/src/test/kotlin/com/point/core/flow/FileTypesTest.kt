@@ -1,6 +1,8 @@
 package com.point.core.flow
 
+import com.point.core.model.ObjectKind
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -58,5 +60,32 @@ class FileTypesTest {
     @Test
     fun `подпись объекта не путается с расширением — длинный хвост именем не считается`() {
         assertEquals("pdf", extensionForFile("файл.оченьдлинныйхвост", "application/pdf"))
+    }
+
+    /**
+     * Из чего состоит документ, спрашивается у той же таблицы (#1105, #840).
+     *
+     * Свой перечень типов презентации разошёлся бы с ней первой же правкой: тип поменяли в
+     * таблице — дверь «Слайды» тихо перестала бы появляться. Здесь ответ вопроса и ответ
+     * таблицы сверяются друг с другом, а не с переписанными строками.
+     */
+    @Test
+    fun `состоит ли документ из слайдов — знает та же таблица типов`() {
+        listOf("колода.pptx", "старая.PPT").forEach { name ->
+            assertTrue(name, isPresentation(name, UNKNOWN_MIME))
+            assertTrue(name, isPresentation(null, mimeForName(name)))
+        }
+
+        assertFalse("акт назван презентацией", isPresentation("акт.docx", mimeForName("акт.docx")))
+        assertFalse("файл без имени и типа назван презентацией", isPresentation(null, UNKNOWN_MIME))
+    }
+
+    /** Вид объекта тоже спрашивает таблицу: офисные типы вторым списком не переписаны. */
+    @Test
+    fun `офисный документ узнаётся по тому же типу, который называет таблица`() {
+        listOf("акт.docx", "смета.xlsx", "колода.pptx", "старый.doc", "старая.xls", "старая.ppt")
+            .forEach { name ->
+                assertEquals(name, ObjectKind.OFFICE, ObjectClassifier().classify(mimeForName(name)).kind)
+            }
     }
 }

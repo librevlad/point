@@ -9,19 +9,69 @@ import java.util.zip.ZipInputStream
 class OoxmlOfficeTextExtractor : OfficeTextExtractor {
 
     override suspend fun extractText(obj: PointObject): String = withContext(Dispatchers.IO) {
-        val out = StringBuilder()
-        var shared: String? = null
-        var workbook: String? = null
-        var relations: String? = null
-        val sheets = sortedMapOf<String, String>()
-        runCatching {
+        val read = read(obj)
+        val rows = OoxmlSpreadsheetReader.rowsOf(
+            read.sheets,
+            read.shared,
+            OoxmlSpreadsheetReader.sheetOrder(read.workbook, read.relations),
+        )
+        when {
+            rows.isNotEmpty() ->
+                rows.joinToString("\n") { row -> row.joinToString("\t").trimEnd() }
+                    .lines().filter(String::isNotBlank).joinToString("\n")
+
+            // Текст презентации — это её слайды по порядку (#1105): каждый со своей строки.
+            // Одним куском было не разобрать, где кончился первый слайд и начался второй.
+            read.slides.isNotEmpty() -> read.slides.values.filter { it.isNotBlank() }.joinToString("\n")
+
+            else -> read.words.toString().replace(MULTISPACE, " ").trim()
+        }
+    }
+
+    /**
+     * Слайды презентации по порядку — части одного объекта (#1105).
+     *
+     * Каждый слайд идёт со своим номером: номер — знание самого слайда, а не его место в
+     * списке. В списке — только те слайды, что в файле действительно нашлись: сплошным рядом
+     * от первого номера до самого большого крошечный файл с единственной частью
+     * `slide2000000000.xml` заставлял бы телефон по одному тапу человека выложить два
+     * миллиарда пустых строк. Не презентация — пустой список.
+     *
+     * Оборванный архив целым не притворяется: обрыв чтения доходит до вызывающего
+     * (инвариант 8) — три части побитой колоды из десяти были бы неполным объектом, выданным
+     * за полный.
+     */
+    override suspend fun slides(obj: PointObject): List<Pair<Int, String>> = withContext(Dispatchers.IO) {
+        val read = read(obj)
+        read.broken?.let { throw it }
+        read.slides.map { (number, text) -> number to text }
+    }
+
+    /**
+     * Один проход по файлу: он читается с диска, и второй раз ради того же ответа его
+     * открывать незачем.
+     *
+     * Обрыв чтения не выдаётся за честный конец файла: он остаётся в [OoxmlParts.broken], и
+     * тот, кому куска мало, отказывает вслух. Текст документа при этом берёт то, что успело
+     * прочитаться, — прочитанные слова человеку полезны и без остальных.
+     */
+    private fun read(obj: PointObject): OoxmlParts {
+        val parts = OoxmlParts()
+        parts.broken = runCatching {
             ZipInputStream(File(obj.uri.value).inputStream().buffered()).use { zis ->
                 var entry = zis.nextEntry
                 while (entry != null) {
                     if (!entry.isDirectory) {
-                        val tag = textTagFor(entry.name)
+                        val slide = slideNumberOf(entry.name)
                         when {
-                            tag != null -> appendTagText(zis.readBytes().toString(Charsets.UTF_8), tag, out)
+                            entry.name == WORD_DOCUMENT ->
+                                appendTagText(zis.readBytes().toString(Charsets.UTF_8), "w:t", parts.words)
+
+                            // Слайды складываются по своему номеру, а не по порядку в архиве:
+                            // `slide10.xml` лежит там раньше `slide2.xml`, и текст выходил
+                            // вперемешку.
+                            slide != null ->
+                                parts.slides[slide] = tagText(zis.readBytes().toString(Charsets.UTF_8), "a:t")
 
                             // Таблицу разбирает свой читатель (#997): в общем словаре строк
                             // может не быть вовсе, а чисел там нет никогда. Листы забираются
@@ -29,38 +79,29 @@ class OoxmlOfficeTextExtractor : OfficeTextExtractor {
                             // человеку нужен не меньше, чем текст первого. Порядок вкладок
                             // книга рассказывает о себе сама — им и выходит её текст.
                             entry.name == OoxmlSpreadsheetReader.SHARED_STRINGS ->
-                                shared = zis.readBytes().toString(Charsets.UTF_8)
+                                parts.shared = zis.readBytes().toString(Charsets.UTF_8)
                             entry.name == OoxmlSpreadsheetReader.WORKBOOK ->
-                                workbook = zis.readBytes().toString(Charsets.UTF_8)
+                                parts.workbook = zis.readBytes().toString(Charsets.UTF_8)
                             entry.name == OoxmlSpreadsheetReader.WORKBOOK_RELS ->
-                                relations = zis.readBytes().toString(Charsets.UTF_8)
+                                parts.relations = zis.readBytes().toString(Charsets.UTF_8)
                             OoxmlSpreadsheetReader.isWorksheet(entry.name) ->
-                                sheets[entry.name] = zis.readBytes().toString(Charsets.UTF_8)
+                                parts.sheets[entry.name] = zis.readBytes().toString(Charsets.UTF_8)
                         }
                     }
                     zis.closeEntry()
                     entry = zis.nextEntry
                 }
             }
-        }
-        val rows = OoxmlSpreadsheetReader.rowsOf(
-            sheets,
-            shared,
-            OoxmlSpreadsheetReader.sheetOrder(workbook, relations),
-        )
-        if (rows.isEmpty()) {
-            out.toString().replace(MULTISPACE, " ").trim()
-        } else {
-            rows.joinToString("\n") { row -> row.joinToString("\t").trimEnd() }
-                .lines().filter(String::isNotBlank).joinToString("\n")
-        }
+        }.exceptionOrNull()
+        return parts
     }
 
-    private fun textTagFor(entryName: String): String? = when {
-        entryName == "word/document.xml" -> "w:t"
-        entryName.startsWith("ppt/slides/slide") && entryName.endsWith(".xml") -> "a:t"
-        else -> null
-    }
+    /** Номер слайда по имени части архива, или `null` — это не слайд. */
+    private fun slideNumberOf(entryName: String): Int? =
+        SLIDE_ENTRY.matchEntire(entryName)?.groupValues?.get(1)?.toIntOrNull()
+
+    private fun tagText(xml: String, tag: String): String =
+        StringBuilder().also { appendTagText(xml, tag, it) }.toString().replace(MULTISPACE, " ").trim()
 
     private fun appendTagText(xml: String, tag: String, out: StringBuilder) {
         val regex = Regex("<$tag(?:\\s[^>]*)?>(.*?)</$tag>", RegexOption.DOT_MATCHES_ALL)
@@ -84,7 +125,24 @@ class OoxmlOfficeTextExtractor : OfficeTextExtractor {
         .replace("&quot;", "\"").replace("&apos;", "'")
         .replace("&amp;", "&")
 
+    /** Части OOXML-файла, собранные за один проход по архиву. */
+    private class OoxmlParts {
+        val words = StringBuilder()
+        val slides = sortedMapOf<Int, String>()
+        val sheets = sortedMapOf<String, String>()
+        var shared: String? = null
+        var workbook: String? = null
+        var relations: String? = null
+
+        /** На чём проход оборвался, или `null` — архив дочитан до конца. */
+        var broken: Throwable? = null
+    }
+
     private companion object {
+        const val WORD_DOCUMENT = "word/document.xml"
+
+        val SLIDE_ENTRY = Regex("ppt/slides/slide(\\d+)\\.xml")
+
         val MULTISPACE = Regex("\\s{2,}")
 
         val NUMERIC_ENTITY = Regex("&#(x?[0-9A-Fa-f]+);")

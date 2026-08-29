@@ -85,6 +85,8 @@ import com.point.executors.PagesCapability
 import com.point.executors.ReadDocumentCapability
 import com.point.executors.ReadDocumentRealizer
 import com.point.executors.PagesRealizer
+import com.point.executors.SlidesCapability
+import com.point.executors.SlidesRealizer
 import com.point.executors.PdfRealizer
 import com.point.executors.ReplaceBgCapability
 import com.point.executors.ReplaceBgRealizer
@@ -174,6 +176,9 @@ abstract class CapabilityModule {
     @Binds @IntoSet @OwnCapabilities abstract fun findCap(c: FindCapability): Capability
     @Binds @IntoSet @OwnCapabilities abstract fun pagesCap(c: PagesCapability): Capability
 
+    // «Слайды» раскладывают презентацию так же, как «Страницы» — PDF (#1105).
+    @Binds @IntoSet @OwnCapabilities abstract fun slidesCap(c: SlidesCapability): Capability
+
     // Сканированный PDF читается одним действием (#1014): страницы → чтение → знание на PDF.
     @Binds @IntoSet @OwnCapabilities abstract fun readDocumentCap(c: ReadDocumentCapability): Capability
     @Binds @IntoSet abstract fun readDocumentReal(r: ReadDocumentRealizer): Realizer
@@ -238,6 +243,7 @@ abstract class CapabilityModule {
     @Binds @IntoSet abstract fun imageR(r: ImageRealizer): Realizer
     @Binds @IntoSet abstract fun pdfR(r: PdfRealizer): Realizer
     @Binds @IntoSet abstract fun pagesR(r: PagesRealizer): Realizer
+    @Binds @IntoSet abstract fun slidesR(r: SlidesRealizer): Realizer
     @Binds @IntoSet abstract fun officeR(r: OfficeRealizer): Realizer
     @Binds @IntoSet abstract fun archiveR(r: ArchiveRealizer): Realizer
     @Binds @IntoSet abstract fun translateR(r: TranslateRealizer): Realizer

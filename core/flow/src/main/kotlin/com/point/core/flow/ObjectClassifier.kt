@@ -24,6 +24,11 @@ class ObjectClassifier {
             // Годность — часть состояния объекта (#684): нулевой размер виден без единого
             // чтения. COLLECTION — папка, у неё «размер» ничего не значит и это не она.
             if (sizeBytes == 0L && kind != ObjectKind.COLLECTION) add(Feature.UNUSABLE)
+
+            // Из чего состоит документ, видно по тому же нулевому сигналу (#1105): у
+            // презентации есть слайды, и дверь к ним открывается с первого экрана, не
+            // дожидаясь ни одного прочитанного байта.
+            if (kind == ObjectKind.OFFICE && isPresentation(fileName, mime)) add(Feature.IS_PRESENTATION)
         }
         return ObjectState(kind, features)
     }
@@ -101,15 +106,11 @@ class ObjectClassifier {
 
         const val LARGE_THRESHOLD_BYTES = 20L * 1024 * 1024
 
-        val OFFICE_MIMES = setOf(
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-            "application/msword",
-            "application/vnd.ms-excel",
-            "application/vnd.ms-powerpoint",
-        )
         val OFFICE_EXTS = setOf("docx", "xlsx", "pptx", "doc", "xls", "ppt")
+
+        // Тип каждого из этих расширений называет единственная таблица (#840): свой перечень
+        // тех же шести строк расходился бы с ней молча — первой же правкой таблицы.
+        val OFFICE_MIMES = OFFICE_EXTS.map(::mimeForExtension).filterNot { it == UNKNOWN_MIME }.toSet()
 
         val AUDIO_EXTS = setOf(
             "ogg", "oga", "opus", "m4a", "mp3", "wav", "amr", "aac", "flac", "aiff", "aif", "3gp", "wma",

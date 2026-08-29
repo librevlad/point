@@ -7,4 +7,5 @@ import javax.inject.Inject
 class OoxmlOfficeTextExtractor @Inject constructor() : OfficeTextExtractor {
     private val delegate = com.point.core.flow.OoxmlOfficeTextExtractor()
     override suspend fun extractText(obj: PointObject): String = delegate.extractText(obj)
+    override suspend fun slides(obj: PointObject): List<Pair<Int, String>> = delegate.slides(obj)
 }
