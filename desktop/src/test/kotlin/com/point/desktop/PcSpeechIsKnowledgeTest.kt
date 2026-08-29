@@ -17,6 +17,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -110,6 +111,56 @@ class PcSpeechIsKnowledgeTest {
 
         assertTrue(said, com.point.core.flow.looksLikeQuotaFailure(said))
         assertFalse("код протокола человеку ни о чём не говорит: $said", said.contains("429"))
+    }
+
+    /**
+     * Медленный ответ сервиса — обычный случай для живого голосового (#1097): бюджет
+     * синхронного ответа телефону 10 с, а расшифровка объявлена медленной и ждёт до трёх
+     * минут. Результат попадает телефону через очередь, и знание в нём — текстом, а не путём
+     * к файлу на диске этого компьютера.
+     *
+     * Прежде отправка через очередь этой замены не делала: телефон получал неоткрываемый путь
+     * и рядом закрытый вопрос — ни строчки текста и никакого предложения расшифровать ещё раз.
+     */
+    @Test fun `медленная расшифровка едет телефону словами, а не путём на чужом диске`() {
+        val heard = "Встречаемся в четверг"
+        val outbox = Outbox(temp.newFolder("out-speech"))
+        val realizer = PcTranscribeRealizer(
+            { SpeechConfig(key = "есть") },
+            askOutside = { _, _, _ ->
+                Thread.sleep(300)
+                heard
+            },
+        )
+        val state = DesktopState(
+            DesktopRegistry(setOf(PcTranscribeCapability())),
+            object : com.point.core.flow.Resolver {
+                override fun realizerFor(capabilityId: com.point.core.model.CapabilityId) = realizer
+            },
+            clipboard = { },
+            outbox = outbox,
+        )
+        val item = InboxItem(recording().copy(metadata = mapOf(com.point.core.flow.META_ORIGIN_ID to "phone-aud")))
+
+        val answer = state.runRemoteActionNow(KnownCapabilities.TRANSCRIBE.value, item, budgetMs = 50)
+
+        assertEquals(com.point.core.flow.PC_STILL_WORKING, (answer as ActionResult.Done).message)
+        val deadline = System.currentTimeMillis() + 5_000
+        while (outbox.entries().isEmpty() && System.currentTimeMillis() < deadline) Thread.sleep(20)
+        assertTrue("исход медленной работы не лёг в очередь телефону", outbox.entries().isNotEmpty())
+        val meta = outbox.entries().single().meta
+        val u = com.point.core.flow.PcResultFields.UNDERSTOOD
+
+        assertEquals("текста записи телефон не получил", heard, meta[u + com.point.core.flow.META_READ_TEXT])
+        assertNull(
+            "телефону отправлен путь к файлу на этом компьютере — там он не открывается",
+            meta[u + META_OCR_TEXT_REF],
+        )
+        assertEquals(
+            "вопрос отправлен закрытым — а текста при нём нет",
+            InvestigationState.FOUND.wire,
+            meta[u + com.point.core.flow.investigationKey(KnownCapabilities.TRANSCRIBE)],
+        )
     }
 
     /** Ключ не принят — и подсказка про нужный сервис доходит, а не остаётся мёртвым текстом. */

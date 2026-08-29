@@ -135,6 +135,32 @@ fun knowledgeArrivedFromTravel(meta: Map<String, String>, ref: String?): com.poi
 }
 
 /**
+ * Полученное с другого устройства знание становится знанием этого — одним правилом (#1097).
+ *
+ * Текст приходит значением, и здесь ему нужен файл: `knowledgeArrivedFromTravel` ставит
+ * признак «текст есть» только вместе со ссылкой на него. Мест приёма несколько, и каждое
+ * писало эту пару шагов себе; место, которое их не написало (`landNeighbourOutcome` —
+ * результат работы, не уложившейся в бюджет ответа), оставляло текст полем протокола: файла
+ * с ним не появлялось, признака тоже, а состояние вопроса рядом приходило как «найдено» —
+ * закрытый вопрос без единой строки текста у человека.
+ *
+ * [store] — куда положить текст здесь. Не получилось — знание не принято, и признак не
+ * ставится: ссылка, которая никуда не ведёт, знанием не является.
+ */
+suspend fun knowledgeLandedFromTravel(
+    meta: Map<String, String>,
+    store: ObjectStore?,
+): com.point.core.model.Findings {
+    val arrived = textArrivedFromTravel(meta) ?: return com.point.core.model.Findings(metadata = meta)
+    val kept = store?.let { place ->
+        runCatching {
+            place.newScratchFile("txt").also { java.io.File(it.value).writeText(arrived) }.value
+        }.getOrNull()
+    }
+    return knowledgeArrivedFromTravel(meta, kept)
+}
+
+/**
  * Признак «текст документа прочитан» выводится из своей улики, а не помнится отдельно (#995).
  *
  * Улика знания — файл, где этот текст лежит (`ocr.text.ref`). Помнились они врозь, и врозь

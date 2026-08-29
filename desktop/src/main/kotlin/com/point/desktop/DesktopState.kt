@@ -221,6 +221,12 @@ class DesktopState(
      *
      * Название просьбы едет ради слов человеку: отказ у телефона говорит, к чему он
      * относится. Больше в записи нет ничего — того, чего никто не читает, здесь не кладут.
+     *
+     * Понятое отправляется тем же правилом, что и в срочном ответе (`packedForTravel`, #1097):
+     * прочитанный текст лежит файлом здесь, и путь к нему на телефоне не открывается. Медленная
+     * расшифровка попадает телефону именно отсюда — бюджет ответа 10 с, а сервис отвечает
+     * дольше, — и без замены телефон получал неоткрываемый путь вместе с закрытым вопросом:
+     * текста у человека нет, а повторно предложить расшифровку уже некому.
      */
     private fun lateOutcomeMeta(id: String, item: InboxItem, late: ActionResult?): Map<String, String> {
         val f = com.point.core.flow.PcResultFields
@@ -228,7 +234,7 @@ class DesktopState(
         val outcome = com.point.core.flow.pcActionOutcomeOf(late)
             // Работа кончилась ничем — ни исходом, ни объектом: телефону это срыв, а не тишина.
             ?: com.point.core.flow.PcActionOutcome.Failed(DID_NOT_RUN)
-        val understood = (late as? ActionResult.Done)?.findings?.metadata.orEmpty()
+        val understood = packedForTravel((late as? ActionResult.Done)?.findings?.metadata.orEmpty())
             .mapKeys { (k, _) -> f.UNDERSTOOD + k }
         return mapOf(
             e.HOME to homeOf(item),

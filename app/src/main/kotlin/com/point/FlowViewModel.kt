@@ -2654,7 +2654,7 @@ class FlowViewModel @Inject constructor(
      * Исход просьбы соседу вернулся домой — к своему объекту, тем же путём, что и срочный
      * ответ (PC4). `false` — объекта просьбы перед человеком нет, и исход ждёт его дальше.
      */
-    private fun landNeighbourOutcome(meta: Map<String, String>): Boolean {
+    private suspend fun landNeighbourOutcome(meta: Map<String, String>): Boolean {
         val f = com.point.core.flow.PcResultFields
         val outcome = f.outcomeOf(meta) ?: return false
         val top = stack.lastOrNull()?.obj ?: return false
@@ -2663,10 +2663,14 @@ class FlowViewModel @Inject constructor(
         // объекта B и поверх главного экрана, где объекта нет вовсе.
         if (meta[com.point.core.flow.PcExecFields.HOME] != (top.metadata[com.point.core.flow.META_ORIGIN_ID] ?: top.id)) return false
 
-        // Понятое компьютером ложится в исходник (PC2).
+        // Понятое компьютером ложится в исходник (PC2) — тем же правилом приёма, что и знание
+        // срочного ответа (#1097): текст приходит значением и здесь снова становится файлом
+        // этого телефона с признаком «текст есть». Раньше исход из очереди клал полученное как
+        // есть, и текст расшифровки оставался полем протокола: блок «Текст» у записи не
+        // появлялся, а вопрос рядом стоял закрытым.
         val understood = meta.filterKeys { it.startsWith(f.UNDERSTOOD) }
             .mapKeys { (k, _) -> k.removePrefix(f.UNDERSTOOD) }
-        if (understood.isNotEmpty()) landFindings(com.point.core.model.Findings(metadata = understood))
+        if (understood.isNotEmpty()) landFindings(com.point.core.flow.knowledgeLandedFromTravel(understood, store))
 
         val standing = neighbourWord
         neighbourWord = null
@@ -3213,18 +3217,15 @@ class FlowViewModel @Inject constructor(
      * Текст живёт файлом устройства, и ссылка на него в пути не значит ничего: объект
      * приезжал снова непрочитанным, и вторая сторона предлагала работу, которая уже сделана.
      * Приехавшее значение здесь снова становится знанием — файлом рядом с объектом и
-     * признаком «текст есть», как это давно делает компьютер на приёме.
+     * признаком «текст есть», как это давно делает компьютер на приёме. Сам приём — одно общее
+     * правило на все места, где телефон получает знание извне (#1097): пока каждое место писало
+     * его себе, приём исхода из очереди компьютера его просто не выполнял.
      */
     private suspend fun withTravelledText(
         obj: PointObject,
         carried: Map<String, String>,
     ): Pair<PointObject, Map<String, String>> {
-        val text = com.point.core.flow.textArrivedFromTravel(carried) ?: return obj to carried
-        val kept = runCatching {
-            store.newScratchFile("txt").also { java.io.File(it.value).writeText(text) }.value
-        }.getOrNull()
-
-        val landed = com.point.core.flow.knowledgeArrivedFromTravel(carried, kept)
+        val landed = com.point.core.flow.knowledgeLandedFromTravel(carried, store)
         return obj.copy(state = landed.features.fold(obj.state) { acc, f -> acc.with(f) }) to landed.metadata
     }
 
