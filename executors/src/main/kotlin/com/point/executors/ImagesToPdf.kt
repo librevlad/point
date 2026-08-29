@@ -3,9 +3,11 @@ package com.point.executors
 import android.graphics.Bitmap
 import android.graphics.pdf.PdfDocument
 import com.point.core.flow.ObjectStore
+import com.point.core.flow.META_WHOLE_FRAME
 import com.point.core.flow.collectionOrder
 import com.point.core.flow.inCollectionOrder
 import com.point.core.flow.reportStage
+import com.point.core.flow.wholeFrameNote
 import com.point.core.model.ActionResult
 import com.point.core.model.ObjectKind
 import com.point.core.model.PointObject
@@ -28,16 +30,30 @@ internal suspend fun imagesToPdf(
     collection: PointObject,
     name: String,
     op: String,
-    process: (Bitmap) -> Bitmap = { it },
+
+    /** Выпрямленная страница или `null` — страницы на снимке не нашли (#1333). */
+    straighten: (Bitmap) -> Bitmap? = { it },
+
+    /**
+     * Кадр целиком — когда страницы не нашли (#1333).
+     *
+     * Работа при этом не пропадает: снимок уже обрезанного листа страницей не считается, а
+     * выбелить и свести к чёрно-белому его всё равно стоит. Но за выпрямленную страницу
+     * такой кадр не выдаётся — о нём говорит пометка результата.
+     */
+    wholeFrame: (Bitmap) -> Bitmap = { it },
 ): ActionResult {
     val files = pagesOf(collection)
 
     val document = PdfDocument()
     var pages = 0
+    var wholeFrames = 0
     for (file in files) {
         val src = Bitmaps.decodeUpright(file.absolutePath) ?: continue
         reportStage("Страница ${pages + 1}")
-        val bitmap = process(src)
+        val straight = straighten(src)
+        if (straight == null) wholeFrames++
+        val bitmap = straight ?: wholeFrame(src)
         val page = document.startPage(
             PdfDocument.PageInfo.Builder(bitmap.width, bitmap.height, pages + 1).create(),
         )
@@ -62,14 +78,38 @@ internal suspend fun imagesToPdf(
             ObjectKind.PDF,
             "application/pdf",
             ref,
-            mapOf("op" to op, "pages" to pages.toString(), "name" to name),
+
+            // Кадры, на которых страницы не нашли, названы прямо на результате (#1333):
+            // прежде они уезжали страницами скана молча, и человеку это было неотличимо от
+            // выпрямленных страниц.
+            mapOf("op" to op, "pages" to pages.toString(), "name" to name) + listOfNotNull(
+                wholeFrameNote(wholeFrames, pages)?.let { META_WHOLE_FRAME to it },
+            ),
         ),
     )
 }
 
-internal fun scanPage(src: Bitmap): Bitmap =
+/**
+ * Страница скана из снимка (#1333): `null` — страницы на снимке не нашли.
+ *
+ * Правило то же, что у «Скана» поодиночке: ненайденная страница исходным кадром не
+ * подменяется. Прежде здесь стояло `detectDocument(...) ?: rgba`, и неисправленный снимок
+ * уезжал страницей PDF как настоящая выпрямленная страница.
+ */
+internal fun scanPage(src: Bitmap): Bitmap? =
     if (OpenCvScan.available) {
         runCatching { OpenCvScan.process(src) }.getOrElse { scanFilterPage(src) }
+    } else {
+
+        // Своим зрением страницу здесь никто не искал, и сказать «не нашли» было бы
+        // неправдой: «не исследовано» ≠ «не найдено». Кадр сводится к чёрно-белому, как и был.
+        scanFilterPage(src)
+    }
+
+/** Кадр целиком, когда страницы не нашли (#1333): бумагу всё равно видно лучше. */
+internal fun wholeFramePage(src: Bitmap): Bitmap =
+    if (OpenCvScan.available) {
+        runCatching { OpenCvScan.processAsIs(src) }.getOrNull() ?: scanFilterPage(src)
     } else {
         scanFilterPage(src)
     }

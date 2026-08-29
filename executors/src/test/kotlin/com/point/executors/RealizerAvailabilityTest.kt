@@ -73,7 +73,7 @@ class RealizerAvailabilityTest {
     @Test
     fun `«Скан с цветом» умеет объяснить свою тишину`() {
 
-        val realizer = ScanPlusRealizer(store = FakeStore)
+        val realizer = PageScanRealizer(ScanPlusCapability.ID, op = "scan-plus", store = FakeStore)
 
         assertEquals("нужен пакет обработки снимков", realizer.unavailableReason())
     }

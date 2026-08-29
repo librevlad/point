@@ -44,6 +44,7 @@ import com.point.core.flow.META_ENTITY_PREFIX
 import com.point.core.flow.META_SEMANTIC_SUMMARY
 import com.point.core.flow.META_SEMANTIC_TYPE
 import com.point.core.flow.META_SIZE
+import com.point.core.flow.META_WHOLE_FRAME
 import com.point.core.flow.unusableReasonOf
 import com.point.core.flow.documentLabel
 import com.point.core.flow.humanWeight
@@ -193,6 +194,11 @@ fun objectVerdict(obj: PointObject): ObjectVerdict {
     // Годность — часть состояния объекта (#684/#685): человек читает её здесь же, до
     // первого тапа, — она важнее названия файла или того, что успела сказать модель.
     val unusable = unusableReasonOf(obj.metadata).takeIf { state.has(Feature.UNUSABLE) }
+
+    // Страницу на снимке не нашли, и человеку отдан весь кадр (#1333). Это он читает здесь
+    // же: выбеленный кадр целиком выглядит как выбеленная страница, и без этой строки скан
+    // «не нашлось» был бы неотличим от удавшегося — а переснять стоит именно такой.
+    val wholeFrame = obj.metadata[META_WHOLE_FRAME]?.takeIf { it.isNotBlank() }
     val summary = obj.metadata[META_SEMANTIC_SUMMARY]?.takeIf { it.isNotBlank() }
     val name = obj.metadata["name"]?.takeIf { it.isNotBlank() && it != headline }
 
@@ -201,7 +207,7 @@ fun objectVerdict(obj: PointObject): ObjectVerdict {
     // главное, что о человеке известно. Вид при этом не пропадает: он уходит подписью.
     val own = valueHeadline(obj)
     if (own != null) return ObjectVerdict(own, unusable ?: headline, objectMeasure(obj))
-    return ObjectVerdict(headline, unusable ?: summary ?: name, objectMeasure(obj))
+    return ObjectVerdict(headline, unusable ?: wholeFrame ?: summary ?: name, objectMeasure(obj))
 }
 
 /**

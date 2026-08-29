@@ -98,7 +98,7 @@ import com.point.executors.RenewPeriodRealizer
 import com.point.executors.ScanCapability
 import com.point.executors.ScanRealizer
 import com.point.executors.ScanPlusCapability
-import com.point.executors.ScanPlusRealizer
+import com.point.executors.PageScanRealizer
 import com.point.executors.ScanPdfCapability
 import com.point.executors.ScanPdfRealizer
 import com.point.executors.SaveAllCapability
@@ -121,7 +121,6 @@ import com.point.executors.VCardCapability
 import com.point.executors.VCardRealizer
 import com.point.core.flow.ObjectClassifier
 import com.point.core.flow.ObjectStore
-import com.point.executors.OpenCvScanRealizer
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
@@ -312,11 +311,15 @@ abstract class CapabilityModule {
                 ocrPromise = com.point.executors.OCR_ON_PHONE_PROMISE,
             ) { account.current() != null }.toSet()
 
-        @Provides @IntoSet
-        fun openCvScanR(store: ObjectStore): Realizer = OpenCvScanRealizer(store)
-
-        @Provides @IntoSet
-        fun scanPlusR(store: ObjectStore): Realizer = ScanPlusRealizer(store)
+        /**
+         * «Скан» и «Скан с цветом» выравнивает один исполнитель (#1333): они отличались
+         * только именем способности и пометкой `op`, а делали одно и то же.
+         */
+        @Provides @ElementsIntoSet
+        fun pageScanRealizers(store: ObjectStore): Set<Realizer> = setOf(
+            PageScanRealizer(ScanCapability.ID, "scan", store),
+            PageScanRealizer(ScanPlusCapability.ID, "scan-plus", store),
+        )
 
         @Provides
         fun aiChatResponder(llm: com.point.core.flow.LlmClient): AiChatResponder = AiChatResponderImpl(llm)

@@ -34,7 +34,14 @@ class ScanPdfRealizer @Inject constructor(
     override suspend fun perform(input: PointObject, amendment: String?): ActionResult =
         withContext(Dispatchers.IO) {
             runCatching {
-                imagesToPdf(store, input, name = "скан.pdf", op = "scan-pdf", process = ::scanPage)
+                imagesToPdf(
+                    store,
+                    input,
+                    name = "скан.pdf",
+                    op = "scan-pdf",
+                    straighten = ::scanPage,
+                    wholeFrame = ::wholeFramePage,
+                )
             }.getOrElse { ActionResult.Failure(it.message ?: "Ошибка сканирования в PDF", recoverable = true) }
         }
 }

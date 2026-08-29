@@ -86,7 +86,7 @@ class RefusalSaysWhatToDoTest {
 
     @Test
     fun `неудавшийся скан говорит про снимок, а не про свой конвейер`() {
-        val said = OpenCvScanRealizer.SCAN_FAILED
+        val said = PageScanRealizer.SCAN_FAILED
 
         assertTrue(said, "Страницу на снимке не удалось выпрямить" in said)
         assertTrue("нет совета, как переснять", "при ровном свете" in said)
@@ -123,7 +123,7 @@ class RefusalSaysWhatToDoTest {
             PdfRealizer.PDF_FAILED,
             PdfRealizer.NOT_THIS_OBJECT,
             FallbackRealizer.NOBODY_TO_DO_IT,
-            OpenCvScanRealizer.SCAN_FAILED,
+            PageScanRealizer.SCAN_FAILED,
         ).forEach { said ->
             val halves = said.split(" — ", ". ")
             assertTrue("одна половина вместо двух: $said", halves.size >= 2)
