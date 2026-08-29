@@ -424,6 +424,16 @@ abstract class DataModule {
             ?: tesseract
 
 
+        /**
+         * Часы чтения (#861, #1046): системное время за швом.
+         *
+         * Предел чтения — про ожидание человека, поэтому у захода он один на все ступени, а
+         * проверять это ожиданием в тестах нельзя: срок в тесте — это тот же срок в жизни.
+         */
+        @Provides
+        fun ocrClock(): com.point.core.flow.OcrClock =
+            com.point.core.flow.OcrClock { System.currentTimeMillis() }
+
         @Provides
         fun objectClassifier(): ObjectClassifier = ObjectClassifier()
 
