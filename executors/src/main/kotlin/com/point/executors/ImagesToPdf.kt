@@ -111,9 +111,19 @@ internal fun PdfDocument.addPage(bitmap: Bitmap, number: Int) {
  * буквам серые края. Цветную ужимаем до чёткости листа (150 dpi) и округляем ей оттенки —
  * снимок с шумом матрицы иначе едет в PDF почти несжатым.
  *
- * Лишней памяти страница при этом не берёт: оттенки округляются на месте, в том же массиве
- * пикселей, — второй такой же стоил бы ещё ~9 МБ на страницу, а `PdfDocument` держит все
- * собранные страницы разом.
+ * Во что это обходится по памяти, пока страница собирается. Снимок 12 Мп `decodeUpright`
+ * отдаёт как 1500×2000, это 12 МБ; сверх него живут два буфера ужатой копии — сама копия
+ * 1315×1754 (~9 МБ) и массив её пикселей (~9 МБ). Оттенки округляются в этом массиве и
+ * ложатся обратно в ту же копию — третьего полноразмерного буфера нет, он стоил бы ещё
+ * ~9 МБ. Оба живут только эту страницу: копию `addPage` освобождает сразу после отрисовки,
+ * массив уходит на выходе отсюда. Через страницы накапливаются собранные страницы внутри
+ * `PdfDocument`, а не эти буферы, — «Объединить в PDF» на десятке снимков платит за них по
+ * одному разу.
+ *
+ * Снимок, который и так мельче листа, ужимать не во что, и оттенки ему приходится увозить в
+ * новую копию: сам снимок ещё живой у вызвавшего и вдобавок может быть неизменяемым — тот же
+ * `Bitmap.createBitmap` из массива и отдаёт неизменяемый. Ужатая копия такого вопроса не
+ * ставит: `createScaledBitmap` рисует её сквозь `Canvas`, а значит отдаёт изменяемой.
  */
 private fun fittedToSheet(bitmap: Bitmap, sheet: Sheet): Bitmap {
     if (inkOnPaper(rowSample(bitmap))) return bitmap
@@ -134,9 +144,11 @@ private fun fittedToSheet(bitmap: Bitmap, sheet: Sheet): Bitmap {
     val pixels = IntArray(scaled.width * scaled.height)
     scaled.getPixels(pixels, 0, scaled.width, 0, 0, scaled.width, scaled.height)
     fewerTones(pixels)
-    val toned = Bitmap.createBitmap(pixels, scaled.width, scaled.height, Bitmap.Config.ARGB_8888)
-    if (scaled !== bitmap) scaled.recycle()
-    return toned
+    if (scaled !== bitmap) {
+        scaled.setPixels(pixels, 0, scaled.width, 0, 0, scaled.width, scaled.height)
+        return scaled
+    }
+    return Bitmap.createBitmap(pixels, bitmap.width, bitmap.height, Bitmap.Config.ARGB_8888)
 }
 
 /**

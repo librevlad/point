@@ -113,6 +113,39 @@ class PdfIsWorthSendingTest {
         }
     }
 
+    /**
+     * Ужатая копия страницы уже своя — оттенки обязаны лечь обратно в неё.
+     *
+     * Иначе цветная страница держит разом четыре буфера: снимок, ужатую копию, массив её
+     * пикселей и ещё одну копию под округлённые оттенки. Лишние ~9 МБ приходятся на каждую
+     * страницу и складываются с уже собранными, которые `PdfDocument` держит разом, — платит
+     * за это «Объединить в PDF» на десятке снимков.
+     *
+     * Позвать `fittedToSheet` отсюда нечем: это Android `Bitmap`, которого на JVM нет, а
+     * Robolectric в `:executors` тоже нет. Поэтому сверяется её собственный текст — как и
+     * текст обеих дверей выше. Буфер вернётся молча, и заметить это иначе не на чем.
+     */
+    @Test
+    fun `ужатая страница не заводит ещё одного буфера под оттенки`() {
+        val fitted = File("src/main/kotlin/com/point/executors/ImagesToPdf.kt").readText()
+            .substringAfter("private fun fittedToSheet")
+            .substringBefore("\n}")
+
+        assertTrue(
+            "оттенки не ложатся обратно в ужатую копию — страница держит лишний буфер",
+            fitted.contains("scaled.setPixels(pixels"),
+        )
+
+        // Новый `Bitmap` остаётся только для ветки «снимок и так мельче листа»: там править
+        // на месте нечего — снимок ещё живой у вызвавшего и вдобавок может быть неизменяемым.
+        val backIntoCopy = fitted.indexOf("return scaled")
+        val anotherBitmap = fitted.indexOf("Bitmap.createBitmap(")
+        assertTrue(
+            "ужатая копия страницы уезжает ещё в один Bitmap",
+            backIntoCopy > 0 && (anotherBitmap < 0 || anotherBitmap > backIntoCopy),
+        )
+    }
+
     @Test
     fun `чёрно-белый текст и цветная печать жмутся по-разному`() {
         val ink = inkPage(1240, 1754)
