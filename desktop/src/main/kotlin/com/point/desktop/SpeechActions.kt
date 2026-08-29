@@ -36,8 +36,10 @@ class PcTranscribeCapability : Capability {
     // вещью — а через связку этот узел приезжал на телефон вместо знания.
     override fun produces(state: ObjectState) = state.with(com.point.core.model.Feature.HAS_TEXT)
 
+    // Обещание человеку — из общего словаря (#1254): ту же работу делает телефон, и до тапа
+    // она обязана обещать одно и то же. Литерал стоял в обоих файлах, и сверял их никто.
     override fun yields(state: ObjectState) =
-        com.point.core.model.ActionYield.Same("слова записи · запись уйдёт в сервис")
+        com.point.core.model.ActionYield.Same(com.point.core.flow.SPEECH_PROMISE)
 
     override fun intents(state: ObjectState) = setOf(com.point.core.model.Intent.UNDERSTAND)
 }

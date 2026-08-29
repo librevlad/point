@@ -131,6 +131,23 @@ class OcrSpaceReaderTest {
         assertFalse(error?.message!!, error.message!!.contains("секретный-ключ-владельца"))
     }
 
+    /**
+     * Сервис ответил успешно, а страниц в ответе нет (#1255).
+     *
+     * Прежде телефон разбирал такой ответ в пустой текст, и снимок получал знание «текста не
+     * нашлось» — ответ за сервис, который не отдал ничего. Сорвавшееся исследование в
+     * «не нашлось» не переводится (CLAUDE.md, «Investigation State»), и теперь оба устройства
+     * отвечают на пустой список одинаково: сервис не прочитал.
+     */
+    @Test
+    fun `ответ без страниц — отказ сервиса, а не «текста нет»`() = runTest {
+        val body = """{"IsErroredOnProcessing":false,"ParsedResults":[],"OCRExitCode":1}"""
+        val error = runCatching { reader(FakeHttpJson { HttpResult(200, body) }).read(pageObject) }
+            .exceptionOrNull()
+
+        assertEquals(com.point.core.flow.SERVICE_DID_NOT_READ, error?.message)
+    }
+
     @Test
     fun `битый ответ — отказ, а не пустая страница`() = runTest {
         val error = runCatching { reader(FakeHttpJson { HttpResult(200, "не json") }).read(pageObject) }
