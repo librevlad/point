@@ -57,6 +57,24 @@ fun mimeForName(fileName: String): String =
     MIME_BY_EXT[fileName.substringAfterLast('.', "").lowercase()] ?: UNKNOWN_MIME
 
 /**
+ * Состоит ли документ из слайдов (#1105).
+ *
+ * Спрашиваются и имя, и mime: mime бывает общим («application/octet-stream» от файлового
+ * менеджера), а имени может не быть вовсе. Расширение читается той же таблицей типов (#840) —
+ * второго списка расширений в проекте не заводится. Ни одного байта при этом не читается,
+ * поэтому ответ годится для первого экрана.
+ */
+fun isPresentation(fileName: String?, mime: String): Boolean {
+    val declared = mime.lowercase().substringBefore(';').trim()
+    return declared in PRESENTATION_MIMES || mimeForName(fileName.orEmpty()) in PRESENTATION_MIMES
+}
+
+private val PRESENTATION_MIMES = setOf(
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "application/vnd.ms-powerpoint",
+)
+
+/**
  * Расширение для файла этого типа — чтобы копия открывалась тем же приложением, что и
  * исходник. Пусто — расширения не будет: пустое честнее выдуманного.
  */

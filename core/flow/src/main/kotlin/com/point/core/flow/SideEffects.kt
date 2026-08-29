@@ -202,6 +202,15 @@ interface PdfRasterizer {
 
 interface OfficeTextExtractor {
     suspend fun extractText(obj: PointObject): String
+
+    /**
+     * Части, из которых документ состоит: слайды презентации по порядку (#1105).
+     *
+     * Тот же орган, что и чтение текста, — читатель офисного файла один. Ответ обязателен,
+     * а не подразумевается пустотой: молчаливое «слайдов нет» у читателя, который просто не
+     * умеет их доставать, человек прочитал бы как «в презентации ничего нет».
+     */
+    suspend fun slides(obj: PointObject): List<String>
 }
 
 interface ArchiveExtractor {

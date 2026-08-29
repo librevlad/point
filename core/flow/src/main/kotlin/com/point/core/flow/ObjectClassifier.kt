@@ -24,6 +24,11 @@ class ObjectClassifier {
             // Годность — часть состояния объекта (#684): нулевой размер виден без единого
             // чтения. COLLECTION — папка, у неё «размер» ничего не значит и это не она.
             if (sizeBytes == 0L && kind != ObjectKind.COLLECTION) add(Feature.UNUSABLE)
+
+            // Из чего состоит документ, видно по тому же нулевому сигналу (#1105): у
+            // презентации есть слайды, и дверь к ним открывается с первого экрана, не
+            // дожидаясь ни одного прочитанного байта.
+            if (kind == ObjectKind.OFFICE && isPresentation(fileName, mime)) add(Feature.IS_PRESENTATION)
         }
         return ObjectState(kind, features)
     }
