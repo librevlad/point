@@ -61,19 +61,24 @@ class ConsentByRealizersTest {
         assertFalse(r.leavesDevice(CapabilityId("pc")))
     }
 
+    /**
+     * Согласие спрашивается по объявленному уходу наружу, а не по виду исполнителя (#1088):
+     * компьютер остаётся своим вторым устройством в обоих случаях.
+     */
     @Test
     fun `компьютер сказал, что увезёт наружу — телефон спросит согласие до отправки`() {
-        val outward = PcRemoteAction("pc-ocr", "Прочитать на ПК", leavesCircle = true)
-        val inward = PcRemoteAction("pc-print", "Напечатать на ПК")
+        val outward = RemotePcRealizer(
+            PcRemoteAction("pc-ocr", "Прочитать на ПК", leavesCircle = true),
+            NoLinks,
+            NoTransport,
+        )
+        val inward = RemotePcRealizer(PcRemoteAction("pc-print", "Напечатать на ПК"), NoLinks, NoTransport)
 
-        assertEquals(
-            RealizerKind.CLOUD,
-            RemotePcRealizer(outward, NoLinks, NoTransport).meta.kind,
-        )
-        assertEquals(
-            RealizerKind.LOCAL,
-            RemotePcRealizer(inward, NoLinks, NoTransport).meta.kind,
-        )
+        assertTrue(resolver(outward).leavesDevice(outward.capabilityId))
+        assertFalse(resolver(inward).leavesDevice(inward.capabilityId))
+
+        assertEquals(RealizerKind.REMOTE, outward.meta.kind)
+        assertEquals(RealizerKind.REMOTE, inward.meta.kind)
     }
 
     private object NoLinks : com.point.core.flow.PcLinks {

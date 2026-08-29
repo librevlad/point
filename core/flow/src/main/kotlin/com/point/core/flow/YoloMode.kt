@@ -54,9 +54,11 @@ fun privacyLevelIn(yolo: Boolean, chosen: PrivacyLevel): PrivacyLevel =
 /**
  * Порядок исполнителей, когда человек попросил лучшее.
  *
- * Обычный порядок бережёт: местное перед облачным, дешёвое перед дорогим. Здесь наоборот —
- * вперёд идёт тот, кто даёт лучший результат: облако, затем компьютер, затем сам телефон.
- * Внутри каждой ступени порядок прежний, по приоритету.
+ * Обычный порядок бережёт ([carefulOrder]): дешёвое перед дорогим, а при равной цене — своё
+ * перед соседским и соседское перед чужим. Здесь наоборот — вперёд идёт тот, кто даёт лучший
+ * результат: облако, затем компьютер, затем сам телефон. Внутри каждой ступени порядок
+ * прежний, по приоритету. Лестница исполнителей одна на оба режима ([nearness], #1088),
+ * поэтому режимы не могут разъехаться по третьему виду исполнителя.
  *
  * Это только порядок, а не отказ от запасного пути: не вышло у первого — [FallbackRealizer]
  * спускается к следующему, ровно как и без режима.
@@ -64,14 +66,8 @@ fun privacyLevelIn(yolo: Boolean, chosen: PrivacyLevel): PrivacyLevel =
 fun yoloOrder(candidates: List<Realizer>): List<Realizer> =
     candidates.sortedWith(
         compareBy(
-            { strength(it.meta.kind) },
+            { -nearness(it.meta.kind) },
             { it.meta.priority },
             { it::class.java.name },
         ),
     )
-
-private fun strength(kind: RealizerKind): Int = when (kind) {
-    RealizerKind.CLOUD -> 0
-    RealizerKind.REMOTE -> 1
-    RealizerKind.LOCAL -> 2
-}

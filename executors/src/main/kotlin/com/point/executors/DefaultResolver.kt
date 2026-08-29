@@ -2,7 +2,6 @@ package com.point.executors
 
 import com.point.core.flow.CapabilityRegistry
 import com.point.core.flow.Realizer
-import com.point.core.flow.RealizerKind
 import com.point.core.flow.Resolver
 import com.point.core.flow.staysHomeWhenUnfit
 import com.point.core.flow.unusableReasonOf
@@ -54,8 +53,11 @@ class DefaultResolver @Inject constructor(
         }
     }
 
+    // Согласие спрашивается по объявленному уходу наружу, а не по виду исполнителя (#1088):
+    // свой компьютер круга объектом наружу не торгует, но, если он сам сказал, что отправит
+    // дальше, вопрос остаётся тем же.
     override fun leavesDevice(capabilityId: CapabilityId): Boolean =
-        byCapability[capabilityId]?.any { it.meta.kind == RealizerKind.CLOUD } ?: false
+        byCapability[capabilityId]?.any { it.meta.leavesCircle } ?: false
 
     private fun sendsOutward(realizer: Realizer): Boolean =
         com.point.core.flow.sendsOutward(realizer) { id ->

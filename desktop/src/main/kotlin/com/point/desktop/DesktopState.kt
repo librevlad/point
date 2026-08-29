@@ -768,12 +768,13 @@ class DesktopState(
             if (asked != com.point.core.flow.InvestigationState.NOT_INVESTIGATED) return@forEach
             scope.launch {
 
-                // Автоматизм не пересекает границу устройств (ADR-0001 §19). Исполнителя
-                // здесь только спрашивают о дороге: если его нет вовсе, молчать об этом
-                // нельзя — пусть общий путь назовёт человеку причину.
+                // Внешний Realizer не выбирается молча (ADR-0001 §19). Спрашивается объявленный
+                // уход наружу, а не вид исполнителя (#1088): среди своих устройств выбор может
+                // быть автоматическим, за круг — только с согласия. Исполнителя здесь только
+                // спрашивают о дороге: если его нет вовсе, молчать об этом нельзя — пусть общий
+                // путь назовёт человеку причину.
                 val outside = runCatching {
-                    resolver.realizerFor(question, item.obj.state).meta.kind ==
-                        com.point.core.flow.RealizerKind.CLOUD
+                    resolver.realizerFor(question, item.obj.state).meta.leavesCircle
                 }.getOrDefault(false)
                 if (outside) return@launch
                 perform(question.value, item, quiet = true)

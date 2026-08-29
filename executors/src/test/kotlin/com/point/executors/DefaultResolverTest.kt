@@ -68,13 +68,18 @@ class DefaultResolverTest {
         assertSame(cloud, resolver(setOf(local, cloud)).realizerFor(CapabilityId("ocr")))
     }
 
+    /**
+     * Цену исполнитель объявляет приоритетом, и она решает первой — дешёвое и быстрое впереди
+     * дорогого. Правило близости (сначала я, потом мой компьютер, потом чужой сервис, #1088)
+     * разбирает уже равных по цене.
+     */
     @Test
-    fun `порядок задают объявленные приоритеты, а не вид реализации`() = runTest {
+    fun `среди равных по близости порядок задают объявленные приоритеты`() = runTest {
 
-        val local = realizer("ai", priority = 10, kind = RealizerKind.CLOUD, done = "по приоритету 10")
-        val cloud = realizer("ai", priority = 90, kind = RealizerKind.LOCAL, done = "по приоритету 90")
+        val cheap = realizer("ai", priority = 10, kind = RealizerKind.CLOUD, done = "по приоритету 10")
+        val dear = realizer("ai", priority = 90, kind = RealizerKind.CLOUD, done = "по приоритету 90")
 
-        val result = resolver(setOf(cloud, local)).realizerFor(CapabilityId("ai")).perform(obj())
+        val result = resolver(setOf(dear, cheap)).realizerFor(CapabilityId("ai")).perform(obj())
 
         assertEquals("по приоритету 10", (result as ActionResult.Done).message)
     }
