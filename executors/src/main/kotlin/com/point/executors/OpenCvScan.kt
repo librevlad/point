@@ -96,6 +96,34 @@ object OpenCvScan {
         }
     }
 
+    /**
+     * Ровный свет и белая бумага — без выпрямления и без увеличения (#1046).
+     *
+     * Тот же выбеливатель, что и в «Скане»: он снимает тень от руки и градиент от окна,
+     * из-за которых движок не видит строк, и оставляет цвет — синяя печать остаётся синей,
+     * потому что цвет здесь доказательство подлинности, а не грязь.
+     *
+     * Геометрия кадра не трогается: слова остаются ровно там, где стояли на снимке, поэтому
+     * прочитанное по такой копии можно вернуть исходнику.
+     *
+     * Лист приходит развёрнутым — как и всюду в этом конвейере. Содержимое защищается по
+     * строкам, а строки ищутся горизонтальными прогонами: у бокового кадра они не находятся
+     * вовсе, и полоса вдоль краёв стирает в белое то, что в ней лежит.
+     */
+    fun whiten(src: Bitmap): Bitmap {
+        val rgba = Mat()
+        Utils.bitmapToMat(src, rgba)
+        val scratch = mutableListOf(rgba)
+        try {
+            val finished = whitenFinish(rgba, scratch)
+            val out = Bitmap.createBitmap(finished.cols(), finished.rows(), Bitmap.Config.ARGB_8888)
+            Utils.matToBitmap(finished, out)
+            return out
+        } finally {
+            scratch.forEach { it.release() }
+        }
+    }
+
     private suspend fun upscale(mat: Mat, scratch: MutableList<Mat>): Mat {
         val longSide = maxOf(mat.rows(), mat.cols())
         if (longSide >= UPSCALE_TARGET) return mat

@@ -22,11 +22,14 @@ import com.point.core.flow.investigationStateOf
 import com.point.core.flow.META_ENTITY_PREFIX
 import com.point.core.flow.META_OCR_ATOMS_REF
 import com.point.core.flow.META_OCR_TEXT_REF
-import com.point.core.flow.META_READ_STRAIGHTENED
+import com.point.core.flow.META_READ_PREPARED
+import com.point.core.flow.READ_PREPARED_STRAIGHTENED
 import com.point.core.flow.META_READ_UPSCALE
 import com.point.core.flow.META_READING_MODE
 import com.point.core.flow.ReadingMode
 import com.point.core.flow.ObjectStore
+import com.point.core.flow.OcrClock
+import com.point.core.flow.PaperWhitener
 import com.point.core.flow.StraightFrame
 import com.point.core.model.Bubble
 import com.point.core.model.CapabilityId
@@ -68,6 +71,12 @@ class OcrInvestigationTest {
 
     /** Кадр не выпрямляется: в этих проверках речь о самом чтении (#1041). */
     private val asIs = StraightFrame { null }
+
+    /** И не выбеливается — первая ступень того же захода (#1046). */
+    private val noWhitening = PaperWhitener { null }
+
+    /** Часы стоят: здесь заходу меряют ходы, а не время (#861, #1046). */
+    private val stoppedClock = OcrClock { 0L }
 
     private class FakeStore : ObjectStore {
         val created = mutableListOf<File>()
@@ -139,6 +148,8 @@ class OcrInvestigationTest {
                 Entity(EntityType.ADDRESS, "ул. Крещатик, 12"),
             ),
             asIs,
+            noWhitening,
+            stoppedClock,
         )
         val delta = enricher.look(image)
 
@@ -152,7 +163,7 @@ class OcrInvestigationTest {
 
     @Test
     fun `flags a link found in the recognised text`() = runTest {
-        val enricher = OcrInvestigationRealizer(FakeStore(), recognizer(realText), extractor(), asIs)
+        val enricher = OcrInvestigationRealizer(FakeStore(), recognizer(realText), extractor(), asIs, noWhitening, stoppedClock)
         assertTrue(Feature.HAS_URL in enricher.look(image).features)
     }
 
@@ -163,6 +174,8 @@ class OcrInvestigationTest {
             recognizer(realText),
             extractor(Entity(EntityType.PHONE, "+380671234567")),
             asIs,
+            noWhitening,
+            stoppedClock,
         )
         val meta = enricher.look(image).metadata
         assertEquals("+380671234567", meta[META_ENTITY_PREFIX + "phone"])
@@ -175,7 +188,7 @@ class OcrInvestigationTest {
         val page = "Особовий рахунок 305412\n" +
             "Показання лічильника електроенергії 20842 кВт·ч\n" +
             "Точка обліку 50.4501, 30.5234"
-        val enricher = OcrInvestigationRealizer(FakeStore(), recognizer(page), extractor(), asIs)
+        val enricher = OcrInvestigationRealizer(FakeStore(), recognizer(page), extractor(), asIs, noWhitening, stoppedClock)
 
         val meta = enricher.look(image).metadata
 
@@ -187,7 +200,7 @@ class OcrInvestigationTest {
     @Test
     fun `discards gibberish from features but keeps the atom evidence`() = runTest {
         val store = FakeStore()
-        val enricher = OcrInvestigationRealizer(store, recognizer(garbage, atoms = listOf(garbageAtom)), extractor(Entity(EntityType.PHONE, "x")), asIs)
+        val enricher = OcrInvestigationRealizer(store, recognizer(garbage, atoms = listOf(garbageAtom)), extractor(Entity(EntityType.PHONE, "x")), asIs, noWhitening, stoppedClock)
         val delta = enricher.look(image)
 
         assertEquals(setOf(Feature.HAS_WORD_LAYER), delta.features)
@@ -209,7 +222,7 @@ class OcrInvestigationTest {
      */
     @Test
     fun `слой слов без единого прочитанного слова не закрывает вопрос находкой`() = runTest {
-        val reading = OcrInvestigationRealizer(FakeStore(), recognizer(garbage, atoms = listOf(garbageAtom)), extractor(), asIs)
+        val reading = OcrInvestigationRealizer(FakeStore(), recognizer(garbage, atoms = listOf(garbageAtom)), extractor(), asIs, noWhitening, stoppedClock)
 
         val last = enrichmentOf(reading).enrich(image).toList().last()
 
@@ -262,6 +275,8 @@ class OcrInvestigationTest {
             crookedReading(straight),
             extractor(Entity(EntityType.PHONE, "+380671234567")),
             StraightFrame { straight },
+            noWhitening,
+            stoppedClock,
         )
 
         val delta = enricher.look(image)
@@ -297,6 +312,8 @@ class OcrInvestigationTest {
             crookedReading(straight),
             extractor(Entity(EntityType.PHONE, "+380671234567")),
             StraightFrame { straight },
+            noWhitening,
+            stoppedClock,
         )
 
         val read = image.copy(metadata = image.metadata + enricher.look(image).metadata)
@@ -324,6 +341,8 @@ class OcrInvestigationTest {
             crookedReading(straight),
             extractor(Entity(EntityType.PHONE, "+380671234567")),
             StraightFrame { straight },
+            noWhitening,
+            stoppedClock,
         )
 
         val last = enrichmentOf(reading).enrich(image).toList().last()
@@ -343,6 +362,8 @@ class OcrInvestigationTest {
             recognizer(realText),
             extractor(),
             StraightFrame { asked++; null },
+            noWhitening,
+            stoppedClock,
         )
 
         enricher.look(image)
@@ -363,6 +384,8 @@ class OcrInvestigationTest {
             recognizer(garbage, atoms = listOf(garbageAtom)),
             extractor(Entity(EntityType.PHONE, "+380671234567")),
             StraightFrame { "/tmp/straight.jpg" },
+            noWhitening,
+            stoppedClock,
         )
 
         val delta = enricher.look(image)
@@ -426,6 +449,8 @@ class OcrInvestigationTest {
             reading,
             extractor(Entity(EntityType.PHONE, "+380671234567")),
             StraightFrame { straight },
+            noWhitening,
+            stoppedClock,
         )
 
         val delta = enricher.look(image)
@@ -452,6 +477,8 @@ class OcrInvestigationTest {
             recognizer(""),
             extractor(),
             StraightFrame { asked++; null },
+            noWhitening,
+            stoppedClock,
         )
 
         enricher.look(image)
@@ -475,6 +502,8 @@ class OcrInvestigationTest {
             recognizer(garbage, atoms = listOf(garbageAtom), incomplete = INCOMPLETE_TIMEOUT),
             extractor(),
             StraightFrame { asked++; null },
+            noWhitening,
+            stoppedClock,
         )
 
         enricher.look(image)
@@ -497,16 +526,18 @@ class OcrInvestigationTest {
             crookedReading(straight),
             extractor(),
             StraightFrame { straight },
+            noWhitening,
+            stoppedClock,
         )
 
-        assertEquals("1", enricher.look(image).metadata[META_READ_STRAIGHTENED])
+        assertEquals(READ_PREPARED_STRAIGHTENED, enricher.look(image).metadata[META_READ_PREPARED])
     }
 
     @Test
-    fun `чтение с кадра человека пометки о выпрямлении не оставляет`() = runTest {
-        val delta = OcrInvestigationRealizer(FakeStore(), recognizer(realText), extractor(), asIs).look(image)
+    fun `чтение с кадра человека пометки о подготовке не оставляет`() = runTest {
+        val delta = OcrInvestigationRealizer(FakeStore(), recognizer(realText), extractor(), asIs, noWhitening, stoppedClock).look(image)
 
-        assertFalse(META_READ_STRAIGHTENED in delta.metadata)
+        assertFalse(META_READ_PREPARED in delta.metadata)
     }
 
     @Test
@@ -516,7 +547,7 @@ class OcrInvestigationTest {
             Atom("w0", "20", Box(10f, 10f, 30f, 24f), 0.9f, "tesseract", "5.3", 0),
             Atom("w1", "4514", Box(34f, 10f, 80f, 24f), 0.8f, "tesseract", "5.3", 0),
         )
-        val enricher = OcrInvestigationRealizer(store, recognizer(realText, atoms = atoms), extractor(), asIs)
+        val enricher = OcrInvestigationRealizer(store, recognizer(realText, atoms = atoms), extractor(), asIs, noWhitening, stoppedClock)
         val delta = enricher.look(image)
 
         val ref = delta.metadata[META_OCR_ATOMS_REF]
@@ -536,14 +567,14 @@ class OcrInvestigationTest {
                 transform = FrameTransform(sample = 1, uprightWidth = 3000, uprightHeight = 2250, upscale = 3),
             )
         }
-        val delta = OcrInvestigationRealizer(FakeStore(), enlarged, extractor(), asIs).look(image)
+        val delta = OcrInvestigationRealizer(FakeStore(), enlarged, extractor(), asIs, noWhitening, stoppedClock).look(image)
 
         assertEquals("3", delta.metadata[META_READ_UPSCALE])
     }
 
     @Test
     fun `неувеличенный кадр не оставляет пометки об увеличении`() = runTest {
-        val delta = OcrInvestigationRealizer(FakeStore(), recognizer(realText), extractor(), asIs).look(image)
+        val delta = OcrInvestigationRealizer(FakeStore(), recognizer(realText), extractor(), asIs, noWhitening, stoppedClock).look(image)
 
         assertFalse(META_READ_UPSCALE in delta.metadata)
     }
@@ -564,6 +595,8 @@ class OcrInvestigationTest {
                 Entity(EntityType.EMAIL, "hello@example.org"),
             ),
             asIs,
+            noWhitening,
+            stoppedClock,
         )
         val delta = enricher.look(image)
 
@@ -593,6 +626,8 @@ class OcrInvestigationTest {
             recognizer("+380671234567\n+380671234567", atoms = atoms),
             extractor(Entity(EntityType.PHONE, "+380671234567")),
             asIs,
+            noWhitening,
+            stoppedClock,
         )
         val delta = enricher.look(image)
 
@@ -606,7 +641,7 @@ class OcrInvestigationTest {
     @Test
     fun `blank recognition yields nothing but the honest reading mode`() = runTest {
 
-        val enricher = OcrInvestigationRealizer(FakeStore(), recognizer("   "), extractor(), asIs)
+        val enricher = OcrInvestigationRealizer(FakeStore(), recognizer("   "), extractor(), asIs, noWhitening, stoppedClock)
         val delta = enricher.look(image)
         assertTrue(delta.features.isEmpty())
         assertEquals(ReadingMode.HANDWRITTEN.name, delta.metadata[META_READING_MODE])
@@ -616,7 +651,7 @@ class OcrInvestigationTest {
     @Test
     fun `an engine failure is a failure, not an empty reading — a crash is not handwriting`() = runTest {
 
-        val enricher = OcrInvestigationRealizer(FakeStore(), recognizer("", fail = true), extractor(), asIs)
+        val enricher = OcrInvestigationRealizer(FakeStore(), recognizer("", fail = true), extractor(), asIs, noWhitening, stoppedClock)
         val result = enricher.perform(image, null)
 
         assertTrue("сбой движка обязан остаться сбоем, а не пустым знанием-" + result,
@@ -629,7 +664,7 @@ class OcrInvestigationTest {
             override suspend fun read(obj: PointObject) =
                 AtomLayer(emptyList(), incomplete = INCOMPLETE_TIMEOUT)
         }
-        val result = OcrInvestigationRealizer(FakeStore(), timedOut, extractor(), asIs).perform(image, null)
+        val result = OcrInvestigationRealizer(FakeStore(), timedOut, extractor(), asIs, noWhitening, stoppedClock).perform(image, null)
 
         assertTrue("обрыв без находок обязан быть неудачей-" + result,
             result is com.point.core.model.ActionResult.Failure)
@@ -639,7 +674,7 @@ class OcrInvestigationTest {
     fun `таймаут с уже прочитанными словами оставляет частичное знание`() = runTest {
         val atoms = listOf(Atom("w1", "+380671234567", Box(10f, 20f, 210f, 40f), confidence = 0.99f))
         val partial = recognizer("+380671234567", atoms = atoms, incomplete = INCOMPLETE_TIMEOUT)
-        val delta = OcrInvestigationRealizer(FakeStore(), partial, extractor(), asIs).look(image)
+        val delta = OcrInvestigationRealizer(FakeStore(), partial, extractor(), asIs, noWhitening, stoppedClock).look(image)
 
         assertTrue("частичное чтение — всё ещё знание", delta.metadata.isNotEmpty())
 
@@ -654,7 +689,7 @@ class OcrInvestigationTest {
         // знание остаётся с объектом (Feature.UNUSABLE) и после этого тапа — не гаснет
         // разовым отказом, как раньше.
         val broken = recognizer("", incomplete = "decode failed")
-        val delta = OcrInvestigationRealizer(FakeStore(), broken, extractor(), asIs).look(image)
+        val delta = OcrInvestigationRealizer(FakeStore(), broken, extractor(), asIs, noWhitening, stoppedClock).look(image)
 
         assertEquals(setOf(Feature.UNUSABLE), delta.features)
 
@@ -669,7 +704,7 @@ class OcrInvestigationTest {
     @Test
     fun `не изображение вовсе — та же негодность, что и битые байты`() = runTest {
         val notAnImage = recognizer("", incomplete = "not an image")
-        val delta = OcrInvestigationRealizer(FakeStore(), notAnImage, extractor(), asIs).look(image)
+        val delta = OcrInvestigationRealizer(FakeStore(), notAnImage, extractor(), asIs, noWhitening, stoppedClock).look(image)
 
         assertEquals(setOf(Feature.UNUSABLE), delta.features)
     }
@@ -680,7 +715,7 @@ class OcrInvestigationTest {
         // В отличие от битых байт — это про попытку сейчас (устройство, движок), а не про
         // содержимое: закрывать путь наружу навсегда здесь нельзя (#684/#685).
         val enginedown = recognizer("", incomplete = "engine init failed")
-        val result = OcrInvestigationRealizer(FakeStore(), enginedown, extractor(), asIs).perform(image, null)
+        val result = OcrInvestigationRealizer(FakeStore(), enginedown, extractor(), asIs, noWhitening, stoppedClock).perform(image, null)
 
         assertTrue(result is com.point.core.model.ActionResult.Failure)
 
@@ -699,7 +734,7 @@ class OcrInvestigationTest {
             override suspend fun read(obj: PointObject) =
                 AtomLayer(atoms, readerText = realText, incomplete = INCOMPLETE_TIMEOUT)
         }
-        val delta = OcrInvestigationRealizer(FakeStore(), partial, extractor(), asIs).look(image)
+        val delta = OcrInvestigationRealizer(FakeStore(), partial, extractor(), asIs, noWhitening, stoppedClock).look(image)
 
         assertEquals(atoms, AtomCodec.decode(File(delta.metadata[META_OCR_ATOMS_REF]!!).readText()).atoms)
         assertEquals(realText, File(delta.metadata[META_OCR_TEXT_REF]!!).readText())
@@ -708,7 +743,7 @@ class OcrInvestigationTest {
 
     @Test
     fun `applies only to images and declares slow, labelled work`() {
-        val enricher = OcrInvestigationRealizer(FakeStore(), recognizer(""), extractor(), asIs)
+        val enricher = OcrInvestigationRealizer(FakeStore(), recognizer(""), extractor(), asIs, noWhitening, stoppedClock)
         assertTrue(OcrInvestigation().accepts(ObjectState(ObjectKind.IMAGE)))
         assertFalse(OcrInvestigation().accepts(ObjectState(ObjectKind.TEXT)))
         val declared = OcrInvestigation()
