@@ -280,7 +280,9 @@ fun main(args: Array<String>) {
         runCatching { state.say(troubleWords(error)) }
     }
 
-    runCatching { inbox.sweep(System.currentTimeMillis() - 24L * 60 * 60 * 1000) }
+    // Брошенное на компьютере забывается само и по одному сроку (#1317, решение владельца
+    // 29.08.2026): и то, что легло в папку, и то, что ждёт телефона в очереди.
+    forgetAbandoned(inbox, outbox, System.currentTimeMillis())
 
     runCatching { com.point.core.flow.decodePcCaps(phoneCapsFile.readText()) }
         .getOrNull()?.let { state.setPhoneCaps(it, persist = false) }
