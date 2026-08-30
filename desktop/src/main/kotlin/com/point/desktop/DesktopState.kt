@@ -11,10 +11,12 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 
 data class Working(
@@ -27,6 +29,20 @@ data class Working(
 
     /** Уходит ли работа наружу: от этого зависит, что честно сказать про ожидание (#901). */
     val network: Boolean = false,
+
+    /**
+     * Сама идущая работа — ею же она и прекращается (#1319).
+     *
+     * Признак работы и её отменяемость — одно свойство одной работы, а не два независимых
+     * поля. Пока признак ставился здесь, а «Отменить» гасило отдельное поле, заполненное
+     * только на пути клика по этому экрану, кнопка над работой по просьбе телефона
+     * обещала и не делала ничего: человек считал, что отменил, а просьба доводилась до
+     * конца и уезжала исходом соседу.
+     *
+     * Показанной, но неотменяемой работы теперь не бывает: на экран её ставит тот самый
+     * заход, который её и выполняет.
+     */
+    val job: kotlinx.coroutines.Job,
 )
 
 class DesktopState(
@@ -106,10 +122,13 @@ class DesktopState(
 
     val working: StateFlow<Working?> get() = _working.asStateFlow()
 
-    private var work: kotlinx.coroutines.Job? = null
-
+    /**
+     * Человек прекращает ту работу, которую видит (#1319), — кем бы она ни была начата:
+     * рукой за этим компьютером или просьбой телефона. Отдельного поля «что отменять»
+     * больше нет: отменяется работа, стоящая на экране.
+     */
     fun cancelWork() {
-        work?.cancel()
+        _working.value?.job?.cancel()
     }
 
     private val _message = MutableStateFlow<String?>(null)
@@ -159,10 +178,28 @@ class DesktopState(
      * scope компьютера, а готовый результат уезжает существующей очередью
      * ПК→телефон вместе со знанием (Product Constitution PC2/PC4). Телефону сразу
      * уходит честное «ещё работаю» вместо ложного «отправлено».
+     *
+     * Отменённая человеком просьба — такой же исход, как любой другой (#1319): телефону
+     * она возвращается тем же путём (#1073), отказом с объявленным словом отмены. Работа,
+     * прерванная на полпути, не родила ничего, и молчание про неё оставило бы телефону
+     * обещание «компьютер ещё работает» навсегда.
      */
     fun runRemoteActionNow(id: String, item: InboxItem, budgetMs: Long = 10_000): ActionResult? {
         val work = kotlinx.coroutines.CompletableDeferred<ActionResult?>()
-        scope.launch { work.complete(runCatching { perform(id, item) }.getOrNull()) }
+        scope.launch {
+            val outcome = try {
+                perform(id, item)
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+
+                // Человек прекратил показанную работу — это отказ, а не пропавшая просьба.
+                ActionResult.Failure(com.point.core.flow.PC_CANCELLED, recoverable = true)
+            } catch (broken: Throwable) {
+
+                // Прочее — беда операции: исход назовёт общий путь ниже, как и раньше.
+                null
+            }
+            work.complete(outcome)
+        }
         val quick = kotlinx.coroutines.runBlocking {
             kotlinx.coroutines.withTimeoutOrNull(budgetMs) { work.await() }
         }
@@ -322,6 +359,10 @@ class DesktopState(
                 network = runCatching {
                     resolver.leavesDevice(com.point.core.model.CapabilityId(id))
                 }.getOrDefault(false),
+
+                // Показанная работа несёт себя саму (#1319): «Отменить» гасит именно тот
+                // заход, который человек сейчас видит, а не последний, начатый кликом.
+                job = currentCoroutineContext().job,
             )
         }
         val result = try {
@@ -802,7 +843,7 @@ class DesktopState(
     val cloudAsk: StateFlow<CloudAsk?> = _cloudAsk.asStateFlow()
 
     fun onBubble(item: InboxItem, bubble: Bubble) {
-        work = scope.launch(io) {
+        scope.launch(io) {
 
             // Действие само знает, что сейчас не сработает (#1022): человек слышит причину
             // по тапу, а не после согласия на отправку, которая всё равно не состоится.
@@ -842,7 +883,7 @@ class DesktopState(
     fun approveCloud() {
         val ask = _cloudAsk.value ?: return
         _cloudAsk.value = null
-        work = scope.launch(io) {
+        scope.launch(io) {
             runCatching { consent?.allow(ask.scope) }
             perform(ask.bubble.capabilityId.value, ask.item, ask.bubble.title)
         }
