@@ -48,6 +48,11 @@ class LimitsAreWrittenOnceTest {
      * Спрашивается и то, и другое: имя общего числа — на месте, а само число рядом с уборкой
      * не набрано. Одного упоминания мало — сторож с ним оставался зелёным ровно тогда, когда
      * сутки вписывали руками второй раз.
+     *
+     * Держат срок и вычитают его — разные места, и спрашивается с них разное. Имя общего числа
+     * есть только там, где срок объявлен; запуск компьютера его не называет — он зовёт уборку,
+     * — но набрать сутки числом прямо там можно так же легко, и тогда очередь начнёт забывать
+     * по своему числу, а телефон по общему (#1317).
      */
     @Test
     fun `срок брошенного не набран числом второй раз`() {
@@ -58,7 +63,8 @@ class LimitsAreWrittenOnceTest {
         val guilty = places.filterNot { code(source(it)).contains("COPY_LIFETIME_MS") }
         assertTrue("срок объявлен заново: $guilty", guilty.isEmpty())
 
-        val typed = places.filter { DAY_TYPED_AGAIN.containsMatchIn(code(source(it))) }
+        val counting = places + "desktop/src/main/kotlin/com/point/desktop/Main.kt"
+        val typed = counting.filter { dayTypedAgain(code(source(it))) }
         assertTrue("сутки набраны числом рядом с уборкой: $typed", typed.isEmpty())
     }
 
@@ -77,5 +83,24 @@ class LimitsAreWrittenOnceTest {
     }
 }
 
-/** Сутки, набранные руками, — миллисекундами или произведением часов. */
-private val DAY_TYPED_AGAIN = Regex("""24L?\s*\*\s*60|86[_ ]?400[_ ]?000""")
+/** Сутки миллисекундами — то самое число, второго набора которого сторож и не хочет. */
+private const val DAY_MS = 86_400_000L
+
+/**
+ * Набраны ли здесь сутки руками — в любом написании (#1317).
+ *
+ * Сторож сверял буквы и ловил два написания из многих: `1000L * 60 * 60 * 24` и `86400L * 1000`
+ * проходили мимо него молча. Написаний у одного числа столько, сколько способов его
+ * перемножить, и списком они не кончаются — поэтому считается само произведение. Цепочка из
+ * одного числа тоже произведение: `86_400_000` попадается ею же.
+ */
+private fun dayTypedAgain(code: String): Boolean = PRODUCT.findAll(code).any { chain ->
+    runCatching {
+        chain.value.split('*')
+            .map { it.trim().trimEnd('L', 'l').replace("_", "").toLong() }
+            .reduce(Math::multiplyExact)
+    }.getOrNull() == DAY_MS
+}
+
+/** Цепочка целых чисел через `*` — самая длинная, какая нашлась с этого места. */
+private val PRODUCT = Regex("""\d[\d_]*[Ll]?(?:\s*\*\s*\d[\d_]*[Ll]?)*""")
