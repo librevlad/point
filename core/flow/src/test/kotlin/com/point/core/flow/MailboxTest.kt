@@ -5,6 +5,7 @@ import com.sun.net.httpserver.HttpServer
 import java.net.InetSocketAddress
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -120,21 +121,55 @@ class MailboxTest {
     }
 
     /**
-     * Письмо говорит, сколько оно пролежало (#1321). Без этого получатель не отличает
-     * просьбу, которой ждут ответа прямо сейчас, от той, что пролежала в ящике, пока его
-     * не было: обе выглядят одинаково, и исход второй уезжает кадром в никуда.
+     * Ящик отдаёт письмо вместе со своими часами (#1321). Без них получатель не отличает
+     * просьбу, которой ждут ответа прямо сейчас, от той, что пролежала, пока его не было:
+     * обе выглядят одинаково, и исход второй уезжает кадром в никуда.
      */
     @Test
-    fun `имя письма говорит, когда его положили в ящик`() {
-        val put = 1_756_000_000_000L
+    fun `ящик отдаёт письмо вместе со своими часами`() = withBox { box ->
+        val letter = Mailbox(box.base(), { "пропуск" }).take("dev-1") { }
 
-        assertEquals(put, letterPostedAtMs("%020d-aa".format(put * 1_000_000)))
+        val said = letter.serverNowMs
+        assertNotNull("ящик ответил без своего времени — возраст письма считать нечем", said)
+        assertTrue(
+            "время ящика ни на что не похоже — оно не разобрано",
+            kotlin.math.abs(said!! - System.currentTimeMillis()) < DAY,
+        )
+    }
+
+    /**
+     * Возраст письма считается одними часами с обеих сторон вычитания — серверными.
+     *
+     * Часы компьютера с ними не сверены: ушедшие вперёд после сна или на машине без
+     * синхронизации, они выдали бы живую просьбу за пролежавшую сутки — и человек, стоящий
+     * перед экраном, получил бы обещание работы вместо слов исхода.
+     */
+    @Test
+    fun `возраст письма считается часами сервера, а не своими`() {
+        val put = 1_756_000_000_000L
+        val name = "%020d-aa".format(put * 1_000_000)
+
+        assertEquals(5_000L, letterAgeMs(name, serverNowMs = put + 5_000))
+
+        // Своё время тут не спрашивают вовсе: за час до того, как письмо положили, ему нуль
+        // лет, а не отрицательный возраст и не час.
+        assertEquals(0L, letterAgeMs(name, serverNowMs = put - HOUR))
     }
 
     @Test
-    fun `имя, собранное иначе, о времени не врёт`() {
-        assertNull(letterPostedAtMs("b-1"))
-        assertNull(letterPostedAtMs(""))
-        assertNull(letterPostedAtMs("99999999999999999999999999-aa"))
+    fun `возраст, которого не знаешь, не выдумывается`() {
+        val name = "%020d-aa".format(1_756_000_000_000L * 1_000_000)
+
+        assertNull("ответ без времени выдал возраст", letterAgeMs(name, serverNowMs = null))
+        assertNull(letterAgeMs("b-1", 1L))
+        assertNull(letterAgeMs("", 1L))
+        assertNull(letterAgeMs("99999999999999999999999999-aa", 1L))
+    }
+
+    private companion object {
+
+        const val HOUR = 60L * 60 * 1000
+
+        const val DAY = 24 * HOUR
     }
 }

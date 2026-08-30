@@ -68,18 +68,24 @@ class RelayPoller(
 
         // Сначала на диск, потом подтверждение. Пока письмо не сохранено, сервер его не
         // отпускает; сохранённое подтверждается сразу — второй раз его не привезут (#680).
-        val arrived = mailbox.take(me.deviceId) { letter ->
+        val answer = mailbox.take(me.deviceId) { letter ->
             letters.keep(letter.id, letter.blob ?: ByteArray(0))
-        }.blob != null
+        }
 
         // Разбор — отдельный шаг. Он читает письмо с диска, поэтому падение на нём
         // (в живом прогоне 2026-08-09 — падение приложения целиком) стоит времени,
         // а не объекта: непонятое письмо дождётся следующего запуска.
-        val sorted = sortOut(mailbox)
-        return arrived || sorted
+        val sorted = sortOut(mailbox, answer.serverNowMs)
+        return answer.blob != null || sorted
     }
 
-    private fun sortOut(mailbox: Mailbox): Boolean {
+    /**
+     * [serverNowMs] — часы сервера в тот миг, когда ящик отвечал (#1321). Свои часы здесь не
+     * спрашиваются вовсе: возраст письма считается той же меркой, какой поставлено время в
+     * его имени. Часы ящика достаются и письмам, пролежавшим с прошлого запуска, — они лежат
+     * на диске, а разбирают их тем же заходом.
+     */
+    private fun sortOut(mailbox: Mailbox, serverNowMs: Long?): Boolean {
         var any = false
         letters.waiting().forEach { id ->
             val blob = letters.blob(id)
@@ -90,7 +96,7 @@ class RelayPoller(
             if (letters.tried(id) >= letters.tries) {
                 log("письмо не удаётся разобрать — эта попытка последняя, дальше оно просто полежит")
             }
-            handle(mailbox, blob, askedAgoMs(id))
+            handle(mailbox, blob, com.point.core.flow.letterAgeMs(id, serverNowMs) ?: 0)
             letters.done(id)
             any = true
         }
@@ -98,23 +104,12 @@ class RelayPoller(
     }
 
     /**
-     * Сколько письмо пролежало, прежде чем до него дошли руки (#1321).
-     *
-     * По этому сроку видно, ждёт ли ещё ответа тот, кто просил: выключенный компьютер
-     * забирает просьбу часами позже, чем телефон перестал слушать.
-     *
-     * Часов тут двое: письмо помечено сервером, «сейчас» — своё. Ушедшие вперёд свои часы
-     * заставят ответить очередью вместо срочного кадра — исход при этом доезжает и вторым
-     * разом не приезжает: срочный ответ и очередь — разные дороги одного исхода, а не две
-     * копии. Сильно отставшие свои часы покажут старое письмо свежим, и останется как было.
-     * Имя, о времени не говорящее, тоже считается свежим — выдумывать возраст, которого не
-     * знаешь, нельзя.
+     * [askedAgoMs] — сколько письмо пролежало, прежде чем до него дошли руки (#1321). По
+     * этому сроку видно, ждёт ли ещё ответа тот, кто просил: выключенный компьютер забирает
+     * просьбу часами позже, чем телефон перестал слушать. Возраста, которого не знаем (ответ
+     * без даты, имя без времени), не выдумываем — такое письмо считается только что
+     * положенным, как считалось всегда.
      */
-    private fun askedAgoMs(letterId: String): Long =
-        com.point.core.flow.letterPostedAtMs(letterId)
-            ?.let { (System.currentTimeMillis() - it).coerceAtLeast(0) }
-            ?: 0
-
     private fun handle(mailbox: Mailbox, blob: ByteArray, askedAgoMs: Long) {
         val opened = tryOpen(blob) ?: run {
             runCatching { onUnknownSender() }
