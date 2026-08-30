@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -116,7 +115,7 @@ fun SettingsRoot(
     }
 
     Column(
-        modifier = Modifier.fillMaxWidth().widthIn(max = 560.dp),
+        modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         // Порядок и слова разделов — те же, что на телефоне (#881).
@@ -254,7 +253,7 @@ fun SettingsDevices(
     var name by remember { mutableStateOf(config.name) }
 
     Column(
-        modifier = Modifier.fillMaxWidth().widthIn(max = 560.dp),
+        modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         devicesPane()
@@ -284,7 +283,7 @@ fun SettingsPrivacy(
     onPickLevel: (com.point.core.flow.PrivacyLevel) -> Unit,
 ) {
     Column(
-        modifier = Modifier.fillMaxWidth().widthIn(max = 560.dp),
+        modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         // Те же три режима и те же слова, что на телефоне (#893). Раньше выбор человека
@@ -337,7 +336,7 @@ internal fun sweptText(swept: Int?): String = when {
 @Composable
 fun SettingsData(swept: Int?, onSweepNow: () -> Unit) {
     Column(
-        modifier = Modifier.fillMaxWidth().widthIn(max = 560.dp),
+        modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text(
