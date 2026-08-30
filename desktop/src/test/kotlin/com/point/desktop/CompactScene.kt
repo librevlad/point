@@ -180,6 +180,16 @@ internal fun SkikoComposeUiTest.showCompact(content: @Composable () -> Unit) {
             Box(Modifier.fillMaxSize().background(PointColors.window)) { content() }
         }
     }
+    settle()
+}
+
+/**
+ * Дать сцене доиграть ответ на то, что человек только что сделал (#1314).
+ *
+ * Время в этих тестах двигается руками, поэтому нажатие само по себе экрана не перерисует:
+ * после него сцену сдвигают на то же появление, что и при первом показе.
+ */
+internal fun SkikoComposeUiTest.settle() {
     mainClock.advanceTimeBy(APPEAR_MS)
 }
 
@@ -197,6 +207,16 @@ internal fun SemanticsNode.texts(): List<String> = config
     ?.let { it as? List<*> }
     ?.mapNotNull { (it as? AnnotatedString)?.text }
     .orEmpty()
+
+/**
+ * Чем зовётся узел без слов (#1314): знак вида несёт подпись, а не текст, и в дереве
+ * семантики он виден только по ней.
+ */
+internal fun SemanticsNode.label(): String? = config
+    .firstOrNull { it.key == SemanticsProperties.ContentDescription }
+    ?.value
+    ?.let { it as? List<*> }
+    ?.firstNotNullOfOrNull { it as? String }
 
 /**
  * Строки, которые человек и правда видит без прокрутки: узел, уехавший под сгиб, обрезан
