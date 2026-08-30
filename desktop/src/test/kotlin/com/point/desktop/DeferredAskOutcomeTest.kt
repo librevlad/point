@@ -238,14 +238,20 @@ class DeferredAskOutcomeTest {
         ),
     )
 
-    private fun poller(box: Box, pc: Pc) = RelayPoller(
-        serverUrl = box.base(),
+    private fun poller(box: Box, pc: Pc) = poller(box.base(), KeptLetters(temp.newFolder()), pc)
+
+    private fun poller(serverUrl: String, letters: KeptLetters, pc: Pc) = RelayPoller(
+        serverUrl = serverUrl,
         account = { me },
         peers = { listOf(phone) },
         secrets = { key },
         requests = pc.requests,
-        letters = KeptLetters(temp.newFolder()),
+        letters = letters,
     )
+
+    /** Адрес, по которому никто не отвечает — связи с ящиком в этот миг нет. */
+    private fun deadBox(): String =
+        ServerSocket(0, 0, InetAddress.getLoopbackAddress()).use { "http://127.0.0.1:" + it.localPort }
 
     private fun waitUntil(timeoutMs: Long = 5_000, what: () -> Boolean) {
         val deadline = System.currentTimeMillis() + timeoutMs
@@ -392,6 +398,39 @@ class DeferredAskOutcomeTest {
                 PcResultFields.outcomeOf(pc.queueAsPhoneSeesIt().single().meta),
             )
         }
+    }
+
+    /**
+     * Возраст, которого не знает никто, — не нуль.
+     *
+     * Прошлый запуск успел сохранить письмо на диск и не успел его разобрать (так и задумано
+     * в #680: сначала на диск, потом подтверждение). Компьютер запускается снова, а связи с
+     * ящиком в этот миг нет: письмо на диске есть, а спросить, сколько оно там пролежало,
+     * не у кого — часы ящика приходят его же ответом.
+     *
+     * Пока такое письмо считалось только что положенным, исход уходил срочным кадром — а
+     * кадр на мёртвой сети не уходит никуда, и разобранное письмо тут же стиралось: от
+     * исхода не оставалось ничего. Очередь ПК→телефон лежит на диске самого компьютера и
+     * дождётся и телефона, и сети.
+     */
+    @Test
+    fun `исход просьбы, чьего возраста не знает никто, ложится в очередь, а не пропадает`() {
+        val said = "В буфер компьютера — готово"
+        val pc = Pc(temp, ID) { ActionResult.Done(said) }
+
+        // Так письмо и лежит после прошлого запуска: сохранено, но не разобрано. Имя его
+        // говорит «положено только что» — и всё равно этого мало, пока часов ящика нет.
+        val kept = KeptLetters(temp.newFolder())
+        kept.keep(letterPut(agoMs = 0), asksFor(ID.value, "заметка.txt", "текст"))
+
+        poller(deadBox(), kept, pc).once()
+
+        waitUntil { pc.queueAsPhoneSeesIt().isNotEmpty() }
+        assertEquals(
+            "исход пропал совсем — его отдали срочным ответом, которому некуда ехать",
+            PcActionOutcome.Done(said),
+            PcResultFields.outcomeOf(pc.queueAsPhoneSeesIt().single().meta),
+        )
     }
 
     private fun madeOf(born: File) = ActionResult.Success(

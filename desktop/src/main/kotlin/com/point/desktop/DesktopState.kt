@@ -203,8 +203,15 @@ class DesktopState(
         item: InboxItem,
         budgetMs: Long = 10_000,
 
-        /** Как давно попросили: письмо могло пролежать в ящике, пока компьютера не было. */
-        askedAgoMs: Long = 0,
+        /**
+         * Как давно попросили: письмо могло пролежать в ящике, пока компьютера не было.
+         *
+         * `null` — сколько оно пролежало, неизвестно (ящик не ответил или ответил без своего
+         * времени). Незнание — не нуль: нуль означал бы «попросивший ещё слушает», а из двух
+         * заблуждений это дорогое. Поэтому срочный ответ уходит только тому, про кого
+         * известно, что он ещё слушает.
+         */
+        askedAgoMs: Long? = 0,
     ): ActionResult? {
         val work = kotlinx.coroutines.CompletableDeferred<ActionResult?>()
         scope.launch {
@@ -227,9 +234,12 @@ class DesktopState(
         }
 
         // Сколько просьбе лет к тому мигу, когда ответ готов: сколько письмо пролежало плюс
-        // сколько шла работа. Второе — своя длительность, своими же часами и меряется.
-        val answerAgeMs = askedAgoMs + (clock.now() - startedAt).coerceAtLeast(0)
-        if (quick != null && answerAgeMs < com.point.core.flow.PC_ANSWER_HEARD_MS) return quick
+        // сколько шла работа. Второе — своя длительность, своими же часами и меряется. Не
+        // зная первого, не знаем и всего возраста — и молчим о нём, а не зовём его нулём.
+        val answerAgeMs = askedAgoMs?.plus((clock.now() - startedAt).coerceAtLeast(0))
+        if (quick != null && answerAgeMs != null && answerAgeMs < com.point.core.flow.PC_ANSWER_HEARD_MS) {
+            return quick
+        }
 
         scope.launch {
             val late = runCatching { work.await() }.getOrNull()

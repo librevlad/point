@@ -18,7 +18,7 @@ class RelayRequests(
     private val clipboardGet: () -> ClipboardPayload?,
     private val clipboardSet: (ClipboardPayload) -> Unit,
 
-    private val onObject: (name: String, mime: String, meta: Map<String, String>, bytes: ByteArray, action: String?, askedAgoMs: Long) -> com.point.core.model.ActionResult?,
+    private val onObject: (name: String, mime: String, meta: Map<String, String>, bytes: ByteArray, action: String?, askedAgoMs: Long?) -> com.point.core.model.ActionResult?,
 
     private val onSecrets: (com.point.core.flow.SharedSecrets) -> com.point.core.flow.SharedSecrets = { it },
     private val log: (String) -> Unit = {},
@@ -57,9 +57,10 @@ class RelayRequests(
     /**
      * [askedAgoMs] — сколько письмо пролежало в ящике (#1321). Просьбу, которую забрали
      * позже, чем попросивший перестал ждать, срочным ответом не догнать: исполнитель об
-     * этом должен знать, чтобы отправить исход очередью, а не кадром в никуда.
+     * этом должен знать, чтобы отправить исход очередью, а не кадром в никуда. `null` —
+     * возраст неизвестен, и это не то же самое, что нуль.
      */
-    fun answer(kind: String, meta: Map<String, String>, bytes: ByteArray, askedAgoMs: Long = 0): Reply? = when (kind) {
+    fun answer(kind: String, meta: Map<String, String>, bytes: ByteArray, askedAgoMs: Long? = 0): Reply? = when (kind) {
         RelayRpc.OBJECT -> {
             val letterId = meta[RelayRpc.ID].orEmpty()
             if (letterId.isNotBlank() && seen?.firstTime(letterId) == false) {
