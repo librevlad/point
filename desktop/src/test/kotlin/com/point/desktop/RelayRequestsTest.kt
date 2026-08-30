@@ -40,7 +40,7 @@ class RelayRequestsTest {
         onPhoneCaps = { phoneCaps = it },
         clipboardGet = { clip },
         clipboardSet = { clip = it },
-        onObject = { name, mime, meta, bytes, action ->
+        onObject = { name, mime, meta, bytes, action, _ ->
             received += Triple(name, mime, String(bytes, Charsets.UTF_8))
             assertEquals("понимание доезжает целиком", "693,40", meta["entity.money"])
             assertNull("служебные поля дороги в объект не попадают", meta[RelayRpc.KIND])
@@ -108,7 +108,7 @@ class RelayRequestsTest {
             onPhoneCaps = {},
             clipboardGet = { null },
             clipboardSet = {},
-            onObject = { _, _, _, _, _ -> error("диск переполнен") },
+            onObject = { _, _, _, _, _, _ -> error("диск переполнен") },
         )
 
         val reply = broken.answer(RelayRpc.OBJECT, mapOf("name" to "ч.txt"), ByteArray(0))

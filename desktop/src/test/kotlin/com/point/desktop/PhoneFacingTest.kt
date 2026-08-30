@@ -145,7 +145,7 @@ class PhoneFacingTest {
         onPhoneCaps = { },
         clipboardGet = { null },
         clipboardSet = { },
-        onObject = { _, _, _, _, _ -> null },
+        onObject = { _, _, _, _, _, _ -> null },
     ).answer(RelayRpc.CAPS, emptyMap(), ByteArray(0))!!.body
 
     private companion object {

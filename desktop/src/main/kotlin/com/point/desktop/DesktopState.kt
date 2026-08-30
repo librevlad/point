@@ -183,8 +183,22 @@ class DesktopState(
      * она возвращается тем же путём (#1073), отказом с объявленным словом отмены. Работа,
      * прерванная на полпути, не родила ничего, и молчание про неё оставило бы телефону
      * обещание «компьютер ещё работает» навсегда.
+     *
+     * Отвечать при этом есть кому, только пока попросивший слушает (#1321). Он ждёт
+     * `PC_ANSWER_WAIT_MS` с того мига, как отправил письмо, и уходит; просьбу, пролежавшую в
+     * ящике дольше (компьютер был выключен), никакая скорость не спасает — срочный ответ
+     * уедет кадром тому, кто уже не спрашивает, и исход пропадёт совсем. Поэтому секундомер
+     * решает одно — успеть ли ответить сразу, — а не стоит ли говорить вообще: исход, ответа
+     * на который никто не ждёт, едет той же очередью, что и поздний (#1073).
      */
-    fun runRemoteActionNow(id: String, item: InboxItem, budgetMs: Long = 10_000): ActionResult? {
+    fun runRemoteActionNow(
+        id: String,
+        item: InboxItem,
+        budgetMs: Long = 10_000,
+
+        /** Как давно попросили: письмо могло пролежать в ящике, пока компьютера не было. */
+        askedAgoMs: Long = 0,
+    ): ActionResult? {
         val work = kotlinx.coroutines.CompletableDeferred<ActionResult?>()
         scope.launch {
             val outcome = try {
@@ -203,7 +217,10 @@ class DesktopState(
         val quick = kotlinx.coroutines.runBlocking {
             kotlinx.coroutines.withTimeoutOrNull(budgetMs) { work.await() }
         }
-        if (quick != null) return quick
+
+        // Терпение попросившего считается с его отправки, а не с того мига, когда компьютер
+        // взялся за дело: успеть ответить — значит успеть до того, как он перестанет слушать.
+        if (quick != null && askedAgoMs + budgetMs <= com.point.core.flow.PC_ANSWER_WAIT_MS) return quick
 
         scope.launch {
             val late = runCatching { work.await() }.getOrNull()

@@ -118,4 +118,23 @@ class MailboxTest {
         assertEquals(Mailbox.NETWORK, letter.code)
         assertEquals(0, saves)
     }
+
+    /**
+     * Письмо говорит, сколько оно пролежало (#1321). Без этого получатель не отличает
+     * просьбу, которой ждут ответа прямо сейчас, от той, что пролежала в ящике, пока его
+     * не было: обе выглядят одинаково, и исход второй уезжает кадром в никуда.
+     */
+    @Test
+    fun `имя письма говорит, когда его положили в ящик`() {
+        val put = 1_756_000_000_000L
+
+        assertEquals(put, letterPostedAtMs("%020d-aa".format(put * 1_000_000)))
+    }
+
+    @Test
+    fun `имя, собранное иначе, о времени не врёт`() {
+        assertNull(letterPostedAtMs("b-1"))
+        assertNull(letterPostedAtMs(""))
+        assertNull(letterPostedAtMs("99999999999999999999999999-aa"))
+    }
 }

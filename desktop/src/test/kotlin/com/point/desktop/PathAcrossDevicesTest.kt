@@ -91,7 +91,7 @@ class PathAcrossDevicesTest {
             onPhoneCaps = { },
             clipboardGet = { null },
             clipboardSet = { },
-            onObject = { name, mime, meta, bytes, action ->
+            onObject = { name, mime, meta, bytes, action, _ ->
                 val item = inbox.receive(name, mime, meta, bytes.inputStream())
                 state.onReceived(item, ObjectSource.PHONE_RELAY)
                 action?.let { state.runRemoteActionNow(it, item) }
@@ -167,7 +167,7 @@ class PathAcrossDevicesTest {
             onPhoneCaps = { },
             clipboardGet = { null },
             clipboardSet = { },
-            onObject = { name, mime, meta, bytes, action ->
+            onObject = { name, mime, meta, bytes, action, _ ->
                 val item = pc.inbox.receive(name, mime, meta, bytes.inputStream())
                 pc.state.onReceived(item, ObjectSource.PHONE_RELAY)
                 action?.let { pc.state.runRemoteActionNow(it, item) }
@@ -193,7 +193,7 @@ class PathAcrossDevicesTest {
             onPhoneCaps = { },
             clipboardGet = { null },
             clipboardSet = { },
-            onObject = { _, _, _, _, _ -> error("на компьютере не вышло") },
+            onObject = { _, _, _, _, _, _ -> error("на компьютере не вышло") },
         )
 
         val reply = requests.answer(

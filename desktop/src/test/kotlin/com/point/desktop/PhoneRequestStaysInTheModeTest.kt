@@ -76,7 +76,7 @@ class PhoneRequestStaysInTheModeTest {
             onPhoneCaps = { },
             clipboardGet = { null },
             clipboardSet = { },
-            onObject = { name, mime, meta, bytes, action ->
+            onObject = { name, mime, meta, bytes, action, _ ->
                 val item = inbox.receive(name, mime, meta, bytes.inputStream())
                 state.onReceived(item, ObjectSource.PHONE_RELAY)
                 action?.let { state.runRemoteActionNow(it, item, budgetMs = 10_000) }

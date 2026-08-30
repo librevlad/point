@@ -18,7 +18,7 @@ class RelayRequests(
     private val clipboardGet: () -> ClipboardPayload?,
     private val clipboardSet: (ClipboardPayload) -> Unit,
 
-    private val onObject: (name: String, mime: String, meta: Map<String, String>, bytes: ByteArray, action: String?) -> com.point.core.model.ActionResult?,
+    private val onObject: (name: String, mime: String, meta: Map<String, String>, bytes: ByteArray, action: String?, askedAgoMs: Long) -> com.point.core.model.ActionResult?,
 
     private val onSecrets: (com.point.core.flow.SharedSecrets) -> com.point.core.flow.SharedSecrets = { it },
     private val log: (String) -> Unit = {},
@@ -54,7 +54,12 @@ class RelayRequests(
         )
     }
 
-    fun answer(kind: String, meta: Map<String, String>, bytes: ByteArray): Reply? = when (kind) {
+    /**
+     * [askedAgoMs] — сколько письмо пролежало в ящике (#1321). Просьбу, которую забрали
+     * позже, чем попросивший перестал ждать, срочным ответом не догнать: исполнитель об
+     * этом должен знать, чтобы отправить исход очередью, а не кадром в никуда.
+     */
+    fun answer(kind: String, meta: Map<String, String>, bytes: ByteArray, askedAgoMs: Long = 0): Reply? = when (kind) {
         RelayRpc.OBJECT -> {
             val letterId = meta[RelayRpc.ID].orEmpty()
             if (letterId.isNotBlank() && seen?.firstTime(letterId) == false) {
@@ -69,7 +74,14 @@ class RelayRequests(
 
                 val understanding = meta - setOf("name", "mime", "action", RelayRpc.KIND, RelayRpc.ID)
                 val done = runCatching {
-                    onObject(name, meta["mime"] ?: "application/octet-stream", understanding, bytes, meta["action"])
+                    onObject(
+                        name,
+                        meta["mime"] ?: "application/octet-stream",
+                        understanding,
+                        bytes,
+                        meta["action"],
+                        askedAgoMs,
+                    )
                 }.getOrElse { e ->
                     log("объект не принят: ${e.javaClass.simpleName}")
                     com.point.core.model.ActionResult.Failure("компьютер не смог принять объект", recoverable = true)

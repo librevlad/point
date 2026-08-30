@@ -96,7 +96,7 @@ class RelayPollerTest {
             onPhoneCaps = {},
             clipboardGet = { null },
             clipboardSet = {},
-            onObject = { name, _, _, _, _ ->
+            onObject = { name, _, _, _, _, _ ->
                 received += name
                 null
             },

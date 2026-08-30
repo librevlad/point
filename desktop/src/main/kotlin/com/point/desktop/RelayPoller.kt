@@ -90,14 +90,32 @@ class RelayPoller(
             if (letters.tried(id) >= letters.tries) {
                 log("письмо не удаётся разобрать — эта попытка последняя, дальше оно просто полежит")
             }
-            handle(mailbox, blob)
+            handle(mailbox, blob, askedAgoMs(id))
             letters.done(id)
             any = true
         }
         return any
     }
 
-    private fun handle(mailbox: Mailbox, blob: ByteArray) {
+    /**
+     * Сколько письмо пролежало, прежде чем до него дошли руки (#1321).
+     *
+     * По этому сроку видно, ждёт ли ещё ответа тот, кто просил: выключенный компьютер
+     * забирает просьбу часами позже, чем телефон перестал слушать.
+     *
+     * Часов тут двое: письмо помечено сервером, «сейчас» — своё. Ушедшие вперёд свои часы
+     * заставят ответить очередью вместо срочного кадра — исход при этом доезжает и вторым
+     * разом не приезжает: срочный ответ и очередь — разные дороги одного исхода, а не две
+     * копии. Сильно отставшие свои часы покажут старое письмо свежим, и останется как было.
+     * Имя, о времени не говорящее, тоже считается свежим — выдумывать возраст, которого не
+     * знаешь, нельзя.
+     */
+    private fun askedAgoMs(letterId: String): Long =
+        com.point.core.flow.letterPostedAtMs(letterId)
+            ?.let { (System.currentTimeMillis() - it).coerceAtLeast(0) }
+            ?: 0
+
+    private fun handle(mailbox: Mailbox, blob: ByteArray, askedAgoMs: Long) {
         val opened = tryOpen(blob) ?: run {
             runCatching { onUnknownSender() }
             tryOpen(blob)
@@ -124,7 +142,7 @@ class RelayPoller(
 
         val kind = frame.meta[RelayRpc.KIND] ?: return
         val requestId = frame.meta[RelayRpc.ID].orEmpty()
-        val reply = requests.answer(kind, frame.meta, frame.bytes) ?: return
+        val reply = requests.answer(kind, frame.meta, frame.bytes, askedAgoMs) ?: return
         send(mailbox, peer, key, requestId, reply)
     }
 

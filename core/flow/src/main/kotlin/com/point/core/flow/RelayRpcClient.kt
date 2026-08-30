@@ -19,7 +19,8 @@ class RelayRpcClient(
 
     private val network: NetworkAvailability = NetworkAvailability { true },
 
-    private val waitSeconds: Int = 25,
+    /** Тот же срок, по которому вторая сторона судит, ждут ли ещё её ответа (#1321). */
+    private val waitSeconds: Int = (PC_ANSWER_WAIT_MS / 1_000).toInt(),
 
     private val pollMillis: Long = 1_000,
     private val connectTimeoutMs: Int = 5_000,
