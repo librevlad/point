@@ -328,7 +328,7 @@ fun main(args: Array<String>) {
         onSecrets = { theirs -> FilePcConfig(pointDir).mergeSecrets(theirs) },
         clipboardGet = ::readSystemClipboard,
         clipboardSet = ::writeSystemClipboard,
-        onObject = { name, mime, meta, bytes, action ->
+        onObject = { name, mime, meta, bytes, action, askedAgoMs ->
 
             // Результат просьбы возвращается ДОМОЙ, к своему объекту, а не приезжает новой
             // вещью (ADR-0001 §7): дом объекта не менялся, телефон был исполнителем.
@@ -343,7 +343,7 @@ fun main(args: Array<String>) {
             } else {
                 val item = inbox.receive(name, mime, meta, bytes.inputStream())
                 state.onReceived(item, ObjectSource.PHONE_RELAY)
-                action?.let { state.runRemoteActionNow(it, item) }
+                action?.let { state.runRemoteActionNow(it, item, askedAgoMs = askedAgoMs) }
             }
         },
         log = { line -> println("[mailbox] " + line) },

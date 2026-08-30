@@ -68,18 +68,24 @@ class RelayPoller(
 
         // Сначала на диск, потом подтверждение. Пока письмо не сохранено, сервер его не
         // отпускает; сохранённое подтверждается сразу — второй раз его не привезут (#680).
-        val arrived = mailbox.take(me.deviceId) { letter ->
+        val answer = mailbox.take(me.deviceId) { letter ->
             letters.keep(letter.id, letter.blob ?: ByteArray(0))
-        }.blob != null
+        }
 
         // Разбор — отдельный шаг. Он читает письмо с диска, поэтому падение на нём
         // (в живом прогоне 2026-08-09 — падение приложения целиком) стоит времени,
         // а не объекта: непонятое письмо дождётся следующего запуска.
-        val sorted = sortOut(mailbox)
-        return arrived || sorted
+        val sorted = sortOut(mailbox, answer.serverNowMs)
+        return answer.blob != null || sorted
     }
 
-    private fun sortOut(mailbox: Mailbox): Boolean {
+    /**
+     * [serverNowMs] — часы сервера в тот миг, когда ящик отвечал (#1321). Свои часы здесь не
+     * спрашиваются вовсе: возраст письма считается той же меркой, какой поставлено время в
+     * его имени. Часы ящика достаются и письмам, пролежавшим с прошлого запуска, — они лежат
+     * на диске, а разбирают их тем же заходом.
+     */
+    private fun sortOut(mailbox: Mailbox, serverNowMs: Long?): Boolean {
         var any = false
         letters.waiting().forEach { id ->
             val blob = letters.blob(id)
@@ -90,14 +96,26 @@ class RelayPoller(
             if (letters.tried(id) >= letters.tries) {
                 log("письмо не удаётся разобрать — эта попытка последняя, дальше оно просто полежит")
             }
-            handle(mailbox, blob)
+            handle(mailbox, blob, com.point.core.flow.letterAgeMs(id, serverNowMs))
             letters.done(id)
             any = true
         }
         return any
     }
 
-    private fun handle(mailbox: Mailbox, blob: ByteArray) {
+    /**
+     * [askedAgoMs] — сколько письмо пролежало, прежде чем до него дошли руки (#1321). По
+     * этому сроку видно, ждёт ли ещё ответа тот, кто просил: выключенный компьютер забирает
+     * просьбу часами позже, чем телефон перестал слушать.
+     *
+     * `null` — возраста не знаем: ящик не ответил вовсе (тогда разбираются письма, оставшиеся
+     * на диске с прошлого запуска) либо ответил без своего времени. Нуль вместо незнания
+     * означал бы «попросивший ещё слушает» — то самое дорогое заблуждение: исход ушёл бы
+     * срочным кадром, а он на мёртвой сети не уходит, и после разбора письма от исхода не
+     * осталось бы ничего. Незнание едет дальше незнанием, и исход ложится в очередь, которая
+     * лежит на диске ПК и телефона дождётся.
+     */
+    private fun handle(mailbox: Mailbox, blob: ByteArray, askedAgoMs: Long?) {
         val opened = tryOpen(blob) ?: run {
             runCatching { onUnknownSender() }
             tryOpen(blob)
@@ -124,7 +142,7 @@ class RelayPoller(
 
         val kind = frame.meta[RelayRpc.KIND] ?: return
         val requestId = frame.meta[RelayRpc.ID].orEmpty()
-        val reply = requests.answer(kind, frame.meta, frame.bytes) ?: return
+        val reply = requests.answer(kind, frame.meta, frame.bytes, askedAgoMs) ?: return
         send(mailbox, peer, key, requestId, reply)
     }
 
