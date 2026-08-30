@@ -44,15 +44,22 @@ class LimitsAreWrittenOnceTest {
      * Число суток жило только у телефона, и очередь ПК→телефон осталась вовсе без срока:
      * брошенные вещи и записи-исходы копились в папке годами. Записанный по копии на
      * устройство, срок разъедется так же молча, как пределы веса.
+     *
+     * Спрашивается и то, и другое: имя общего числа — на месте, а само число рядом с уборкой
+     * не набрано. Одного упоминания мало — сторож с ним оставался зелёным ровно тогда, когда
+     * сутки вписывали руками второй раз.
      */
     @Test
     fun `срок брошенного не набран числом второй раз`() {
-        val guilty = listOf(
+        val places = listOf(
             "app/src/main/kotlin/com/point/PointApplication.kt",
-            "desktop/src/main/kotlin/com/point/desktop/Main.kt",
-        ).filterNot { source(it).contains("COPY_LIFETIME_MS") }
-
+            "desktop/src/main/kotlin/com/point/desktop/Abandoned.kt",
+        )
+        val guilty = places.filterNot { code(source(it)).contains("COPY_LIFETIME_MS") }
         assertTrue("срок объявлен заново: $guilty", guilty.isEmpty())
+
+        val typed = places.filter { DAY_TYPED_AGAIN.containsMatchIn(code(source(it))) }
+        assertTrue("сутки набраны числом рядом с уборкой: $typed", typed.isEmpty())
     }
 
     @Test
@@ -69,3 +76,6 @@ class LimitsAreWrittenOnceTest {
         assertTrue("расчёт повторён: $guilty", guilty.isEmpty())
     }
 }
+
+/** Сутки, набранные руками, — миллисекундами или произведением часов. */
+private val DAY_TYPED_AGAIN = Regex("""24L?\s*\*\s*60|86[_ ]?400[_ ]?000""")

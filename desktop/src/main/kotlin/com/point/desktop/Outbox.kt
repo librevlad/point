@@ -35,7 +35,18 @@ class Outbox(private val dir: File) {
         return id
     }
 
-    private fun nextId(): Int = (ids().maxOrNull() ?: 0) + 1
+    /**
+     * Номер занят, пока в папке лежит хоть один его файл (#1317).
+     *
+     * Считался он по одним записям — а байты свою запись переживают: `add` кладёт `.bin` и
+     * `.meta` двумя движениями, `remove` двумя же их убирает, и между движениями бывает и
+     * смерть процесса, и Windows, не отдавшая файл. Номер, у которого остался один `.bin`,
+     * для счёта по записям свободен — и следующая отправка упиралась в него насмерть: чужие
+     * байты `add` не перезаписывает, а номер дальше не сдвигался, и каждое «На телефон»
+     * отвечало «Не удалось отправить», пока файл не уберут руками. С уборкой очереди
+     * вернуться к брошенному номеру стало обычным делом: очередь пустеет при каждом запуске.
+     */
+    private fun nextId(): Int = (numbered().keys.maxOrNull() ?: 0) + 1
 
     @Synchronized
     fun entries(): List<PcOutboxEntry> = ids().sorted().mapNotNull { id ->
@@ -54,13 +65,17 @@ class Outbox(private val dir: File) {
      *
      * Срок берётся не новый: тот же `COPY_LIFETIME_MS`, что у копии объекта на телефоне, — и
      * одно правило на вещи и на записи-исходы, потому что для человека это одинаково брошенное.
-     * [before] — момент, старше которого запись брошена; возвращает, сколько убрано.
+     *
+     * Брошенное считается по тому, что лежит в папке, а не по одним записям: байты, оставшиеся
+     * без своей записи, — те же байты объекта человека, и убрать их больше некому — уборка
+     * папки `~/Point` внутрь очереди не заходит. Номер уходит целиком и судится по самому
+     * свежему своему файлу. [before] — момент, старше которого лежащее брошено.
      */
     @Synchronized
-    fun forgetOlderThan(before: Long): Int {
-        val abandoned = ids().filter { File(dir, "$it.meta").lastModified() < before }
-        abandoned.forEach(::remove)
-        return abandoned.size
+    fun forgetOlderThan(before: Long) {
+        numbered()
+            .filterValues { files -> files.all { it.lastModified() < before } }
+            .keys.forEach(::remove)
     }
 
     @Synchronized
@@ -69,7 +84,19 @@ class Outbox(private val dir: File) {
         File(dir, "$id.bin").delete()
     }
 
-    private fun ids(): List<Int> =
-        dir.listFiles()?.mapNotNull { it.name.removeSuffix(".meta").toIntOrNull().takeIf { _ -> it.name.endsWith(".meta") } }
-            ?: emptyList()
+    /** Записи очереди — по `.meta`: запись это слова, а файл у неё бывает, а бывает нет (#1073). */
+    private fun ids(): List<Int> = dir.listFiles().orEmpty()
+        .filter { it.name.endsWith(".meta") }
+        .mapNotNull { it.name.removeSuffix(".meta").toIntOrNull() }
+
+    /** Всё, что лежит в папке номером: слова записи, байты вещи — и то, что пережило пару. */
+    private fun numbered(): Map<Int, List<File>> = dir.listFiles().orEmpty()
+        .mapNotNull { file -> numberOf(file)?.let { it to file } }
+        .groupBy({ it.first }, { it.second })
+
+    private fun numberOf(file: File): Int? = when {
+        file.name.endsWith(".meta") -> file.name.removeSuffix(".meta").toIntOrNull()
+        file.name.endsWith(".bin") -> file.name.removeSuffix(".bin").toIntOrNull()
+        else -> null
+    }
 }
