@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -100,7 +99,7 @@ fun SettingsKeys(
     val lines = com.point.core.flow.aiServiceLines(keys, emptySet(), emptyMap(), 0L)
 
     Column(
-        modifier = Modifier.fillMaxWidth().widthIn(max = 560.dp),
+        modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         // Панель состояния, а не документация (#902): наверху две мысли, подробности —
