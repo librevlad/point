@@ -1308,13 +1308,18 @@ class FlowViewModel @Inject constructor(
             quiet = isQuietAction(bubble.capabilityId),
             cancelable = true,
         )
-        _ui.update { it.copy(inputSuggestions = emptyList(), needsImage = null) }
+        _ui.update { it.copy(inputSuggestions = emptyList(), needsImage = null, needsImageFrom = null) }
         dispatch(bubble, top) { obj -> performed(bubble.capabilityId, obj, text) }
     }
 
     fun cancelInput() {
         pendingBubble = null
-        _ui.update { it.copy(inputPrompt = null, inputSuggestions = emptyList(), needsImage = null, busy = null) }
+        _ui.update {
+            it.copy(
+                inputPrompt = null, inputSuggestions = emptyList(),
+                needsImage = null, needsImageFrom = null, busy = null,
+            )
+        }
     }
 
     /**
@@ -2843,7 +2848,12 @@ class FlowViewModel @Inject constructor(
             is ActionResult.NeedsImage -> {
 
                 pendingBubble = bubble
-                _ui.update { it.copy(busy = null, busyStage = null, needsImage = result.prompt) }
+                _ui.update {
+                    it.copy(
+                        busy = null, busyStage = null,
+                        needsImage = result.prompt, needsImageFrom = result.from,
+                    )
+                }
             }
         }
     }
@@ -3055,11 +3065,16 @@ class FlowViewModel @Inject constructor(
         // Исходник помнит, что из него вышло: вернулся человек назад — узел на месте, и
         // пространство действий исходника считается уже с ним.
         parent?.let { rememberBorn(it, known, born) }
-        stack.addLast(frame)
+
+        // Объект в разборе один (ADR-0001 §2). Шаг, продолживший тот же объект, занимает его
+        // кадр, а не встаёт вторым его экземпляром: «Снять ещё страницу» кладёт страницу в
+        // тот же набор (#1042), и второй кадр той же папки означал бы, что «назад» показывает
+        // тот же набор без только что снятой страницы.
+        if (carried != null) stack[stack.lastIndex] = frame else stack.addLast(frame)
         _ui.update {
             it.copy(
                 busy = null, busyStage = null, frame = frame, message = null, messageOutcome = Outcome.NONE, inputPrompt = null, inputSuggestions = emptyList(),
-                needsImage = null, preview = null, path = currentPath(),
+                needsImage = null, needsImageFrom = null, preview = null, path = currentPath(),
             )
         }
         persistJourney()
@@ -3069,7 +3084,8 @@ class FlowViewModel @Inject constructor(
         // человеком, остался в очереди неподтверждённым, и доехать он может только здесь;
         // обычный срок между взглядами в очередь тут не годится — главный экран заглянул в
         // неё секунду назад. Вход в находку новым объектом перед человеком не считается.
-        if (stack.size == 1) refreshFromPc(force = true)
+        // Продолжение того же объекта — тоже: перед человеком стоит та же вещь, что и секунду назад.
+        if (carried == null && stack.size == 1) refreshFromPc(force = true)
         enrichInBackground(known)
         loadChildrenIfCollection(known)
         loadTextPreviewIfText(known)
@@ -3102,7 +3118,7 @@ class FlowViewModel @Inject constructor(
             it.copy(
                 busy = null, busyStage = null, frame = frame, message = null,
                 messageOutcome = Outcome.NONE, inputPrompt = null, inputSuggestions = emptyList(),
-                needsImage = null, preview = null, path = currentPath(),
+                needsImage = null, needsImageFrom = null, preview = null, path = currentPath(),
             )
         }
         persistJourney()

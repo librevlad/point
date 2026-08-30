@@ -2169,6 +2169,56 @@ class FlowViewModelTest {
         assertEquals("content://bg/1", resolver.lastAmendment)
     }
 
+    /**
+     * «Снять ещё страницу» ждёт снимка листа, а не картинки из галереи (#1042): шаг называет
+     * дверь, которой его продолжают, и приложение открывает камеру.
+     */
+    @Test fun `шаг, которому нужен снимок листа, зовёт камеру`() = runTest(dispatcher) {
+        resolver.result = ActionResult.NeedsImage(
+            "Снимите следующую страницу",
+            from = com.point.core.flow.SOURCE_CAMERA,
+        )
+        val vm = vm()
+        vm.onShared("uri", "image/jpeg"); advanceUntilIdle()
+        vm.onBubble(bubble(id = "shoot-more", title = "Снять ещё страницу")); advanceUntilIdle()
+
+        assertEquals(com.point.core.flow.SOURCE_CAMERA, vm.ui.value.needsImageFrom)
+
+        resolver.result = ActionResult.Done("готово")
+        vm.submitAmendment("/next.jpg"); advanceUntilIdle()
+
+        assertNull(vm.ui.value.needsImage)
+        assertNull(vm.ui.value.needsImageFrom)
+        assertEquals("/next.jpg", resolver.lastAmendment)
+    }
+
+    /**
+     * Снятая страница видна в наборе, а путь не двоится (#1042): шаг положил страницу в тот
+     * же набор — объект в разборе остался один (ADR-0001 §2), и «назад» не показывает ту же
+     * папку без только что снятой страницы.
+     */
+    @Test fun `страница, снятая в набор, видна в нём, а кадр набора не двоится`() = runTest(dispatcher) {
+        fun pages(n: Int) = CollectionContent(
+            shown = (1..n).map {
+                PointObject("p$it", "image/jpeg", ScratchRef("/p$it"), ObjectState(ObjectKind.IMAGE))
+            },
+            total = n,
+        )
+        store.content = pages(1)
+        val vm = vm()
+        vm.onSharedMultiple(listOf("a")); advanceUntilIdle()
+        val steps = vm.ui.value.path.size
+
+        store.content = pages(2)
+        resolver.result = ActionResult.Success(
+            ResultObject(ObjectKind.COLLECTION, "inode/directory", ScratchRef("/coll")),
+        )
+        vm.onBubble(bubble(id = "shoot-more", title = "Снять ещё страницу")); advanceUntilIdle()
+
+        assertEquals(2, vm.ui.value.frame?.items?.size)
+        assertEquals(steps, vm.ui.value.path.size)
+    }
+
     @Test fun `the busy label is the action title while it runs`() = runTest(dispatcher) {
         val vm = vm()
         vm.onShared("uri", "image/png"); advanceUntilIdle()
@@ -2483,6 +2533,10 @@ class FlowViewModelTest {
         val vm = vm()
         vm.onShared("uri", "image/png"); advanceUntilIdle()
         vm.onBubble(bubble()); advanceUntilIdle()
+
+        // Второй шаг делает ДРУГУЮ вещь: шаг, вернувший ту же самую копию, объект не меняет
+        // и узла пути не добавляет (#1042).
+        resolver.result = ActionResult.Success(ResultObject(ObjectKind.TEXT, "text/plain", ScratchRef("/o2")))
         vm.onBubble(bubble()); advanceUntilIdle()
         assertEquals(3, vm.ui.value.path.size)
 
