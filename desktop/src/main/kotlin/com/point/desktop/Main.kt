@@ -280,7 +280,13 @@ fun main(args: Array<String>) {
         runCatching { state.say(troubleWords(error)) }
     }
 
-    runCatching { inbox.sweep(System.currentTimeMillis() - 24L * 60 * 60 * 1000) }
+    // Брошенное на компьютере забывается само и по одному сроку (#1317, решение владельца
+    // 29.08.2026): и то, что легло в папку, и то, что ждёт телефона в очереди. У очереди
+    // срока не было вовсе — уйти из неё можно было только забором с телефона, и вещи вместе
+    // с записями-исходами копились там невидимо для обеих сторон.
+    val abandonedBefore = System.currentTimeMillis() - com.point.core.flow.COPY_LIFETIME_MS
+    runCatching { inbox.sweep(abandonedBefore) }
+    runCatching { outbox.forgetOlderThan(abandonedBefore) }
 
     runCatching { com.point.core.flow.decodePcCaps(phoneCapsFile.readText()) }
         .getOrNull()?.let { state.setPhoneCaps(it, persist = false) }

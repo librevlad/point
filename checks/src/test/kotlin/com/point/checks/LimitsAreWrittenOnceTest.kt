@@ -38,6 +38,23 @@ class LimitsAreWrittenOnceTest {
         assertTrue("предел объявлен заново: $guilty", guilty.isEmpty())
     }
 
+    /**
+     * Срок брошенного — один на телефон и компьютер (#1317, решение владельца 29.08.2026).
+     *
+     * Число суток жило только у телефона, и очередь ПК→телефон осталась вовсе без срока:
+     * брошенные вещи и записи-исходы копились в папке годами. Записанный по копии на
+     * устройство, срок разъедется так же молча, как пределы веса.
+     */
+    @Test
+    fun `срок брошенного не набран числом второй раз`() {
+        val guilty = listOf(
+            "app/src/main/kotlin/com/point/PointApplication.kt",
+            "desktop/src/main/kotlin/com/point/desktop/Main.kt",
+        ).filterNot { source(it).contains("COPY_LIFETIME_MS") }
+
+        assertTrue("срок объявлен заново: $guilty", guilty.isEmpty())
+    }
+
     @Test
     fun `цикл уменьшения не вписан руками второй раз`() {
         val guilty = listOf(

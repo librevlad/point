@@ -1,6 +1,7 @@
 package com.point
 
 import android.app.Application
+import com.point.core.flow.COPY_LIFETIME_MS
 import com.point.core.flow.CrashLog
 import com.point.core.flow.formatCrashReport
 import com.point.data.RemovedUsageJournal
@@ -117,8 +118,5 @@ class PointApplication : Application() {
     private companion object {
         /** Дольше этого запуск уже мешает человеку, и это стоит увидеть в журнале. */
         const val SLOW_STARTUP_MS = 300
-
-        /** Сутки — срок, названный владельцем: дольше брошенная копия не нужна (#1012). */
-        const val COPY_LIFETIME_MS = 24L * 60 * 60 * 1000
     }
 }
