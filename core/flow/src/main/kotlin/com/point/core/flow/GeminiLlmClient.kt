@@ -42,10 +42,10 @@ class GeminiLlmClient(
             var refused: Exception? = null
             for (model in models) {
                 try {
-                    val answer = fetch(model, obj, prompt)
+                    val answer = answerOnly(fetch(model, obj, prompt))
                     val ref = store.newScratchFile("md")
 
-            File(ref.value).writeText(withoutPreamble(answer))
+                    File(ref.value).writeText(answer)
                     return@withContext ResultObject(
                         type = ObjectKind.TEXT,
                         mime = "text/markdown",

@@ -6,6 +6,8 @@ import com.point.core.model.PointObject
 import com.point.core.model.ResultObject
 import com.point.core.model.ScratchRef
 import kotlinx.coroutines.test.runTest
+import org.json.JSONArray
+import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -53,6 +55,33 @@ class OpenAiCompatibleClientTest {
         assertEquals("openrouter", res.metadata["source"])
         assertEquals("some-model", res.metadata["model"])
         assertEquals("привет", File(res.uri.value).readText())
+    }
+
+    private fun answered(content: String) =
+        JSONObject().put(
+            "choices",
+            JSONArray().put(JSONObject().put("message", JSONObject().put("content", content))),
+        ).toString()
+
+    @Test
+    fun `ход мысли вслух в ответ человеку не попадает`() = runTest {
+        val answer = "Рахунок №7 — Гречка, 2 кг"
+
+        val res = client(
+            http(200, answered("<think>Okay, the user wants me to read the document.</think>\n\n$answer")),
+        ).run(textObj, "hi")
+
+        assertEquals(answer, File(res.uri.value).readText())
+    }
+
+    @Test
+    fun `ответ из одного рассуждения — отказ обращения, а не ответ`() = runTest {
+        val cut = "<think>Okay, the user wants me to extract the table. Гречка 2 шт"
+
+        val said = runCatching { client(http(200, answered(cut))).run(textObj, "hi") }
+            .exceptionOrNull()?.message
+
+        assertEquals(ONLY_REASONING, said)
     }
 
     private suspend fun refusalFor(code: Int, body: String = RATE_LIMIT_JSON): String =

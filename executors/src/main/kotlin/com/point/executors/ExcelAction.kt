@@ -393,7 +393,15 @@ class ExcelRealizer(
                 }
                 try {
 
-                    val answer = parseLayout(raw) ?: continue
+                    val answer = parseLayout(raw)
+                    if (answer == null) {
+
+                        // Ответ пришёл, а таблицы в нём нет: это не сорвавшаяся попытка, и
+                        // молчать об этом нельзя (#1320) — иначе человек прочтёт общее «не
+                        // удалось» там, где случилось понятное и называемое.
+                        errors += NOT_A_TABLE
+                        continue
+                    }
                     val addressable = layer != null && index != null
                     val layout =
                         if (addressable) layer.resolveLayout(answer) else literalLayout(answer)
@@ -682,6 +690,9 @@ class ExcelRealizer(
 /** Глагол этой цепочки для общей сводки отказов (#1237). Своё слово этой дороги — не пакета. */
 private const val WHAT_FAILED = "дочитать таблицу"
 
+/** Ответ был, таблицы в нём не было (#1320): человеку это говорится, а не подменяется файлом. */
+internal const val NOT_A_TABLE = "модель ответила текстом, а не таблицей"
+
 internal fun refusalOf(errors: List<String>, noReaders: Boolean): String {
     if (noReaders) return "Читать таблицу некем — $KEY_SETTINGS_CALL"
     val substantive = errors.firstOrNull { !refusalNeedsKey(it) }
@@ -701,8 +712,13 @@ internal fun parseTable(raw: String): List<List<String>> {
 
     if (cleaned.startsWith("[") || cleaned.startsWith("{")) return emptyList()
 
+    // Строка без разделителя — не строка сетки, а строка прозы (#1320). Пока разбор резал по
+    // табам любую непустую строку, таблицей становился любой текст: извинение модели, отказ,
+    // ход мысли вслух — всё уезжало человеку строками в лист Excel. Разделителя нет нигде —
+    // значит таблицы в ответе нет вовсе, и честнее сказать это, чем отдать файл с чужим
+    // текстом.
     return cleaned.lineSequence()
-        .filter { it.isNotBlank() }
+        .filter { it.isNotBlank() && '\t' in it }
         .map { line -> line.split('\t').map { it.trim() } }
         .toList()
 }

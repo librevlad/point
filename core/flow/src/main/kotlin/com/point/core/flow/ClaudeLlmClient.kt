@@ -53,10 +53,10 @@ class ClaudeLlmClient(
                     serviceSaid = res.body,
                 )
             }
-            val answer = parseAnswer(res.body)
+            val answer = answerOnly(parseAnswer(res.body))
             val ref = store.newScratchFile("md")
 
-            File(ref.value).writeText(withoutPreamble(answer))
+            File(ref.value).writeText(answer)
             ResultObject(
                 type = ObjectKind.TEXT,
                 mime = "text/markdown",
