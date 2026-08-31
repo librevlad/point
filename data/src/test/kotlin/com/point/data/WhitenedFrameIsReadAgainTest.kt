@@ -21,6 +21,7 @@ import com.point.core.flow.PaperWhitener
 import com.point.core.flow.READ_PREPARED_STRAIGHTENED
 import com.point.core.flow.READ_PREPARED_WHITENED
 import com.point.core.flow.StraightFrame
+import com.point.core.flow.StraightenedFrame
 import com.point.core.flow.WhitenedFrame
 import com.point.core.model.Feature
 import com.point.core.model.ObjectKind
@@ -109,9 +110,9 @@ class WhitenedFrameIsReadAgainTest {
 
         var asks = 0
 
-        override suspend fun of(path: String): String? {
+        override suspend fun of(path: String): StraightenedFrame? {
             asks++
-            return this.path
+            return this.path?.let { StraightenedFrame(it, page = null, width = 0, height = 0) }
         }
     }
 
