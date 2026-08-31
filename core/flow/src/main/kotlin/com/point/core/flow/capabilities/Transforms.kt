@@ -131,8 +131,12 @@ class DropLinkCapability(
 
     override fun intents(state: ObjectState) = setOf(com.point.core.model.Intent.PREPARE)
 
-    override fun yields(state: ObjectState) =
-        com.point.core.model.ActionYield.Same("ссылка на сутки · файл уйдёт на сервер Point")
+    // Предел назван числом и назван ДО отправки (#1284): человек читает его в обещании
+    // действия, а не узнаёт после того, как пятьдесят пять мегабайт уже уехали на сервер.
+    override fun yields(state: ObjectState) = com.point.core.model.ActionYield.Same(
+        "ссылка на сутки · файл уйдёт на сервер Point · до " +
+            com.point.core.flow.megabytes(com.point.core.flow.MAX_DROP_BYTES),
+    )
 
     override fun wontWorkNow(state: ObjectState): String? =
         if (signedIn()) null else NEEDS_ACCOUNT_FOR_LINK

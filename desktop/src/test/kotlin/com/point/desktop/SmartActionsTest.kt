@@ -133,7 +133,7 @@ class SmartActionsTest {
     @Test fun `ссылка кладётся в буфер компьютера — оттуда её и вставляют`() = runTest {
         var copied: String? = null
         val realizer = PcDropRealizer(
-            drop = { _, _, _ -> "https://point.leerio.app/d/abc" },
+            drop = { _, _, _ -> com.point.core.flow.DropOutcome.Given("https://point.leerio.app/d/abc") },
             clipboard = { text -> copied = text },
         )
 
@@ -145,17 +145,27 @@ class SmartActionsTest {
         assertTrue((result as ActionResult.Done).message.contains("сутки"))
     }
 
-    @Test fun `ссылки не вышло — сказано, что с этим делать, а не почему так вышло`() = runTest {
+    /**
+     * Отказ называет то, что произошло, и ровно одно (#1284).
+     *
+     * Прежде здесь перечислялись три догадки — вход, интернет, размер, — и ни одна не была
+     * верной: человек вошёл, интернет был, файл был в 880 раз меньше предела. Причину знает
+     * тот, кто ходил наружу; она и доезжает.
+     */
+    @Test fun `ссылки не вышло — назван тот, кто отказал, а не список догадок`() = runTest {
         var copied: String? = null
-        val realizer = PcDropRealizer(drop = { _, _, _ -> null }, clipboard = { copied = it })
+        val refusal = com.point.core.flow.serverRefusedDrop("")
+        val realizer = PcDropRealizer(
+            drop = { _, _, _ -> com.point.core.flow.DropOutcome.Refused(refusal) },
+            clipboard = { copied = it },
+        )
 
         val result = realizer.perform(textObject("отчёт"), null)
 
         assertTrue(result is ActionResult.Failure)
         val message = (result as ActionResult.Failure).reason
 
-        assertTrue("отказ не назвал вход: $message", message.contains("войдите"))
-        assertTrue("отказ не назвал размер: $message", message.contains("50 МБ"))
+        assertEquals("причина не доехала до человека", refusal, message)
         assertEquals("в буфер положили пустоту", null, copied)
     }
 

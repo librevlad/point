@@ -121,8 +121,10 @@ class LinkStaysWhereAskedTest {
             override suspend fun clear() = Unit
         }
 
-        /** Сервер Point недостижим- своя попытка честно возвращает пустоту. */
-        val NoServer = DropLink { _, _, _ -> null }
+        /** Сервер Point недостижим — попытка честно называет, кто отказал (#1284). */
+        val NoServer = DropLink { _, _, _ ->
+            com.point.core.flow.DropOutcome.Refused(com.point.core.flow.CONNECTION_LOST_TEXT)
+        }
 
         val NoStore = object : com.point.core.flow.ObjectStore {
             override suspend fun ingest(sourceUri: String, mime: String) = error("unused")
